@@ -55,6 +55,17 @@
 //       channel, within ONE CODE of the oracle's at its own value (1 % over the store's floor, kGiBrickFloor) - two paths
 //       to one world. RED while a side was derived as twice a stored mean minus the back (a dim side cancelled: 9 codes
 //       in cascade 0, 50 in cascade 1).
+//   (6c) THE PICTURE IS A WORLD FUNCTION AT THE PLACEMENTS THE ENGINE CAN REACH (PHOTON-7 stage 10-3, the lead's ruling;
+//       L1 is the picture's law; the row gi.cache_level_picture): a LIT, CARDED scene - the shells fixture's floor, plate
+//       and wall carded, blocks straddling cascade 0's faces at both placements, a back wall, a sun with its shadows and a
+//       sky - the camera still, cascade 0 built at its two reachable lattice placements, the gathering picture at rest
+//       looking both ways along the placements' axis: every channel of every pixel within ONE CODE of the other
+//       placement's. It holds the caches' footprint level (a cache's rays read a camera-independent level, so a read
+//       crossing a box face differs by placement) to what reaches a reader. Its ground and roof are UNCARDED, so the
+//       picture's rays read the voxel store there, and the store is lit by sunlit fins in the strips between the two
+//       placements' faces. RED-CAPABLE (scratch arms, 10-3, one run each): cascade 0's cache reads three levels too
+//       coarse - 3 codes, 2,629 channels over one; the clipmap fade removed (a hard switch at the box face) stays
+//       within a code - two cascades' level 0 agree there, so that switch does not reach the picture.
 // THE MARKS' VISIBILITY (Jahshaka/FieldAccumulate: the probe's depth moments - each ray's march's end, the support of
 // its radiance - bound the share of its rays a moved box can reach) is what (3) and (4) read.
 // A fixture (the engine alone, one small offscreen view). Counted in frames. THREE ROWS (PHOTON-7 stage 7: whole, past a
@@ -156,7 +167,7 @@ int main(int argc, char **argv)
     // (THE MEASURING HOOK of 10-2e's margin: JAH_HIT_LEVEL_MARGIN=<cells> sets the door gi.hitLevelMargin for the run)
     if (const char *m = std::getenv("JAH_HIT_LEVEL_MARGIN")) e->setArm("gi.hitLevelMargin", std::atof(m));
     const bool doStep = part.empty() || part == "step", doMarks = part.empty() || part == "marks",
-               doShells = part.empty() || part == "shells";
+               doShells = part.empty() || part == "shells", doPicture = part.empty() || part == "picture";
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
@@ -878,6 +889,120 @@ int main(int argc, char **argv)
             s6->setGlobalIllumination(off);
             run(2);
         }
+    }
+    if (doPicture) {
+        // (6c) THE PICTURE AT CASCADE 0's TWO REACHABLE PLACEMENTS, THE CAMERA STILL
+        View *v7 = e->createOffscreenView("cache_level_picture", 256, 256, Colour(0, 0, 0));
+        Scene *s7 = e->createScene("cache_level_picture");
+        if (!v7 || !s7) { std::printf("FAIL: the picture's view/scene\n"); return 1; }
+        v7->setScene(s7);
+        {
+            PostFxDesc fx;
+            fx.allowOffscreen = true;
+            fx.ssr = 1;
+            v7->setPostFx(fx);
+        }
+        v7->setOffscreenContract(OffscreenContract::StillPicture);   // the gathering picture, its readers the gather's hits
+        float sh7[27] = { 0 };
+        sh7[0] = sh7[1] = sh7[2] = 0.05f;
+        s7->setAmbientSh(sh7);
+        using enginetest::leakroom::addSlab;
+        addSlab(s7, Colour(0.6f, 0.6f, 0.6f), Vec3(0, -0.1f, 0), Vec3(40.0f, 0.2f, 40.0f), false);   // (the voxel store answers it)
+        addSlab(s7, Colour(0.6f, 0.6f, 0.6f), Vec3(7.25f, 2.0f, 0.0f), Vec3(0.1f, 4.0f, 10.0f), true);   // the plate
+        addSlab(s7, Colour(0.8f, 0.8f, 0.8f), Vec3(5.0f, 2.0f, 0.0f), Vec3(0.4f, 4.0f, 10.0f), true);    // the wall
+        // blocks straddling cascade 0's faces at the two placements (7.5 and 15 m), a wall behind, a wall beside
+        addSlab(s7, Colour(0.7f, 0.5f, 0.4f), Vec3(7.6f, 0.6f, 2.5f), Vec3(1.2f, 1.2f, 1.2f), true);
+        addSlab(s7, Colour(0.4f, 0.6f, 0.7f), Vec3(15.0f, 1.0f, -2.0f), Vec3(1.5f, 2.0f, 1.5f), true);
+        addSlab(s7, Colour(0.6f, 0.6f, 0.5f), Vec3(17.0f, 2.0f, 0.0f), Vec3(0.4f, 4.0f, 10.0f), true);
+        addSlab(s7, Colour(0.5f, 0.5f, 0.5f), Vec3(11.0f, 2.0f, 4.0f), Vec3(10.0f, 4.0f, 0.4f), true);
+        // THE INDIRECT PATH THE CACHES CARRY: a roof shading the camera's ground (UNCARDED, as the ground: the voxel store
+        // answers what the picture's rays hit there, and the store's own rays gather it), so the picture sees it lit by
+        // the bounce alone - and the bounce's sources are SUNLIT FINS (thin: a coarse level averages them with the dark
+        // around them; uncarded) standing in the strips between the two placements' c0 faces, out of the camera's sight
+        addSlab(s7, Colour(0.5f, 0.5f, 0.5f), Vec3(11.5f, 4.1f, -2.0f), Vec3(12.0f, 0.2f, 8.0f), false);   // the roof
+        for (float fx : { 5.8f, 6.6f, 15.4f, 16.2f })
+            addSlab(s7, Colour(0.9f, 0.9f, 0.9f), Vec3(fx, 1.8f, -3.0f), Vec3(0.1f, 3.6f, 2.0f), false);
+        {
+            const NodeId sun = enginetest::addDirectionalLight(s7, Vec3(-0.45f, -1.0f, 0.3f), 2.0f);
+            LightDesc l;
+            l.type = LightType::Directional;
+            l.colour = Colour(1.f, 1.f, 1.f);
+            l.intensity = 2.0f / 3.14159265f;
+            l.castShadows = true;
+            if (!sun || !s7->setLight(sun, l)) { std::printf("FAIL: the sun\n"); return 1; }
+        }
+        GiParams g7 = gi;
+        g7.cards = true;
+        // cascade 0's step at this tier (the placement lattice's), read off a first build
+        enginetest::testCameraLookAt(v7, Vec3(11.5f, 1.6f, -1.0f), Vec3(10.5f, 1.2f, -0.6f));
+        if (!s7->setGlobalIllumination(g7)) { std::printf("FAIL: the picture's GI\n"); return 1; }
+        run(2);
+        const GiStatus first = s7->published().gi;
+        const float step0 = first.cascades.empty() ? 0.0f : first.cascades[0].step;
+        // (the camera at the band's edge past a midpoint of c0's lattice, (6b)'s: both lattice points either side are
+        // placements it can hold)
+        const float camX = 4.59f * step0;
+        const auto settle7 = [&]() {
+            int quiet = 0, f = 0;
+            for (; f < 1500 && quiet < 30; ++f) {
+                run(1);
+                quiet = s7->published().gi.giAtRest ? quiet + 1 : 0;
+            }
+            return quiet >= 30 ? f - quiet : -1;
+        };
+        Image pics[2][2];
+        int rests[2][2] = { { -1, -1 }, { -1, -1 } };
+        double lo[2] = { 0.0, 0.0 }, hi[2] = { 0.0, 0.0 };
+        for (int a = 0; a < 2; ++a) {
+            const float c0x = (a == 0 ? 4.0f : 5.0f) * step0;
+            enginetest::testCameraLookAt(v7, Vec3(camX, 1.6f, -1.0f), Vec3(camX - 1.0f, 1.2f, -0.6f));
+            GiPlacementPin pin;
+            pin.on = true;
+            pin.cascadeBuiltCam = { Vec3(c0x, 1.6f, -1.0f), Vec3(camX, 1.6f, -1.0f), Vec3(camX, 1.6f, -1.0f),
+                                    Vec3(camX, 1.6f, -1.0f), Vec3(camX, 1.6f, -1.0f), Vec3(camX, 1.6f, -1.0f) };
+            s7->setGiPlacementPin(pin);
+            s7->setGlobalIllumination(off);
+            run(2);
+            if (!s7->setGlobalIllumination(g7)) { std::printf("FAIL: the picture's GI\n"); return 1; }
+            e->waitForAsyncShaders();
+            rests[a][0] = settle7();
+            v7->readPixels(pics[a][0]);
+            enginetest::testCameraLookAt(v7, Vec3(camX, 1.6f, -1.0f), Vec3(camX + 1.0f, 1.2f, -0.6f));
+            rests[a][1] = settle7();
+            v7->readPixels(pics[a][1]);
+            const GiStatus st = s7->published().gi;
+            lo[a] = st.cascades.empty() ? 0.0 : double(st.cascades[0].centre.x - st.cascades[0].halfSize);
+            hi[a] = st.cascades.empty() ? 0.0 : double(st.cascades[0].centre.x + st.cascades[0].halfSize);
+            std::printf("   (6c) placement %c: cascade 0 built at x %.2f (its box %.2f .. %.2f), at rest in %d / %d frames, "
+                        "%u cards resident\n", a ? 'B' : 'A', c0x, lo[a], hi[a], rests[a][0], rests[a][1],
+                        st.cards.cardsResident);
+        }
+        const bool placed = step0 > 0.0f && rests[0][0] >= 0 && rests[0][1] >= 0 && rests[1][0] >= 0 && rests[1][1] >= 0 &&
+                            lo[0] != lo[1];
+        for (int d = 0; d < 2; ++d) {
+            const Image &A = pics[0][d], &B = pics[1][d];
+            int worst = 0;
+            size_t over = 0, px = 0;
+            double mean = 0.0;
+            if (A.width == B.width && A.height == B.height)
+                for (size_t i = 0; i + 3 < A.rgba.size(); i += 4) {
+                    ++px;
+                    mean += A.rgba[i + 1];
+                    for (int ch = 0; ch < 3; ++ch) {
+                        const int dd = std::abs(int(A.rgba[i + ch]) - int(B.rgba[i + ch]));
+                        worst = std::max(worst, dd);
+                        over += dd > 1 ? 1u : 0u;
+                    }
+                }
+            std::printf("   (6c) looking %s: the picture's green mean %.1f codes; the two placements': worst %d codes, %zu "
+                        "channels over one, of %zu pixels\n", d ? "+x" : "-x", px ? mean / px : -1.0, worst, over, px);
+            CHECK(placed && px > 0u && mean / double(px) > 32.0 && over == 0u,
+                  d ? "(6c) THE PICTURE IS A WORLD FUNCTION AT REACHABLE PLACEMENTS (looking +x): within one code"
+                    : "(6c) THE PICTURE IS A WORLD FUNCTION AT REACHABLE PLACEMENTS (looking -x): within one code");
+        }
+        s7->setGiPlacementPin(GiPlacementPin());
+        s7->setGlobalIllumination(off);
+        run(2);
     }
     std::printf("\nframes %d\n%s (%d failure%s)\n", frames, failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");

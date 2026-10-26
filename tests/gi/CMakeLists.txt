@@ -362,11 +362,16 @@ jah_gpu_row(gi.field_oracle_marks CLASS engine COMMAND test_gi_field_oracle mark
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 jah_gpu_row(gi.field_oracle_shells CLASS engine COMMAND test_gi_field_oracle shells
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.field_oracle gi.field_oracle_marks gi.field_oracle_shells PROPERTIES
+# gi.cache_level_picture (PHOTON-7 stage 10-3, the lead's ruling): (6c), the picture at cascade 0's two reachable
+# placements, the camera still - the caches' camera-independent footprint level held to what reaches a reader.
+jah_gpu_row(gi.cache_level_picture CLASS engine COMMAND test_gi_field_oracle picture
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.field_oracle gi.field_oracle_marks gi.field_oracle_shells gi.cache_level_picture PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.field_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 780)
 set_tests_properties(gi.field_oracle_marks PROPERTIES JAHSHAKA_TEST_FRAMES 1508)
 set_tests_properties(gi.field_oracle_shells PROPERTIES JAHSHAKA_TEST_FRAMES 979)
+set_tests_properties(gi.cache_level_picture PROPERTIES JAHSHAKA_TEST_FRAMES 666)
 
 # gi.card_residency (PHOTON-7 stage 5, 5-2) — THE CARDS RESIDENT ARE THE ONES THE READERS READ, AND A WALK EQUALS A
 # TELEPORT ON THEM: two sealed carded rooms that do not both fit the atlas, the gather's hits the readers; a walk from one
