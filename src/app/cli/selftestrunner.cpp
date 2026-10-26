@@ -341,6 +341,12 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // MEASUREMENT switch, not a mode: read here and nowhere else, and without
     // it this function runs exactly the verbs it always ran.
     const bool sunContactArm = qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_SUN_CONTACT");
+    // THE SHORT RUN (app.engine_selftest_validation, PHOTON-7 stage 10; the row was 58-60 s against its 60 s at every
+    // commit): the validation layer guards the Vulkan API the poses exercise, not their pictures - its hashes are printed,
+    // never asserted - so the GENEROUS fixed frame counts before a settle shrink to a quarter (pose 2's document frames,
+    // fixture B's settle frames with the rays and without, the mover's warm-up). Every settle to rest stays whole, so a
+    // pose still reaches the same paths at rest. The shipped hashes are the plain run's, which this never touches.
+    const bool shortRun = qEnvironmentVariableIsSet("JAHSHAKA_SELFTEST_SHORT");
     if (sunContactArm) {
         ScriptEngine *armHost = window.scripting();
         const ScriptResult r = armHost
@@ -498,7 +504,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                              "the second pose cannot settle\n");
         return 1;
     }
-    window.viewport()->renderFrames(240, 1.0f / 60.0f);
+    window.viewport()->renderFrames(shortRun ? 60 : 240, 1.0f / 60.0f);
     // ...AND UNTIL GI IS AT REST (PHOTON-FIELD-ROTATE-1): the 240 frames move the
     // document; the ONE settle predicate then decides when the picture has stopped
     // moving - the cascade steps, the chain's settle and the irradiance field's
@@ -632,8 +638,11 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // The arm's row, set before the fixture's 300 settling frames so B1/B2 are
     // taken after the same frame count as the shipped pair.
     QByteArray fixtureB(kFixtureBScript);
+    if (shortRun) fixtureB.replace("editor.frame(300);", "editor.frame(75);");
     if (sunContactArm)
-        fixtureB.replace("editor.frame(300);", "world.sunContact({ enabled: true });\neditor.frame(300);");
+        fixtureB.replace(shortRun ? "editor.frame(75);" : "editor.frame(300);",
+                         shortRun ? "world.sunContact({ enabled: true });\neditor.frame(75);"
+                                  : "world.sunContact({ enabled: true });\neditor.frame(300);");
     if (!runFixtureStep(fixtureB.constData(), "build + settle")) return 1;
     app.processEvents();
 
@@ -672,7 +681,9 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     std::fprintf(stderr, "engine-selftest: pose B1 (rays) sha256 %s (%s)\n",
                  qPrintable(hashB1), qPrintable(b1Png));
 
-    if (!runFixtureStep(kFixtureBNoRaysScript, "rays off + settle")) return 1;
+    QByteArray fixtureB2(kFixtureBNoRaysScript);
+    if (shortRun) fixtureB2.replace("editor.frame(300);", "editor.frame(75);");
+    if (!runFixtureStep(fixtureB2.constData(), "rays off + settle")) return 1;
     app.processEvents();
 
     const QString b2Png = taggedPath(outPng, QStringLiteral("B2"));
@@ -694,7 +705,9 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // mover branches, the velocity a history reprojects by) never run in either. Rays back on and
     // settled on the fixed clock, then a glossy sphere crosses the floor 0.1 m per frame for 30
     // frames and the VIEWPORT-grade shot is taken mid-move, no settle.
-    if (!runFixtureStep(kFixtureMoverScript, "mover")) return 1;
+    QByteArray fixtureMover(kFixtureMoverScript);
+    if (shortRun) fixtureMover.replace("editor.frame(120);", "editor.frame(30);");
+    if (!runFixtureStep(fixtureMover.constData(), "mover")) return 1;
     app.processEvents();
     const QString moverPng = taggedPath(outPng, QStringLiteral("mover"));
     QImage imgMover = window.viewport()->takeScreenshot(256, 256,
@@ -730,8 +743,8 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     const QColor centreB1 = imgB1.pixelColor(imgB1.width() / 2, imgB1.height() / 2);
     const QColor centreB2 = imgB2.pixelColor(imgB2.width() / 2, imgB2.height() / 2);
     std::fprintf(stderr, "engine-selftest: pose B (glossy floor, cascade crossing, emissive 3.0, "
-                         "mirror pillar; 300 frames each): centre B1 (%d,%d,%d), B2 (%d,%d,%d); "
-                         "the rays moved %d of %d pixels, worst %d/255\n",
+                         "mirror pillar; %d frames each): centre B1 (%d,%d,%d), B2 (%d,%d,%d); "
+                         "the rays moved %d of %d pixels, worst %d/255\n", shortRun ? 75 : 300,
                  centreB1.red(), centreB1.green(), centreB1.blue(),
                  centreB2.red(), centreB2.green(), centreB2.blue(),
                  movedPixels, imgB1.width() * imgB1.height(), worstCode);

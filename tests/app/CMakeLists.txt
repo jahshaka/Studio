@@ -54,8 +54,8 @@ jah_gpu_row(app.engine_selftest_validation SHIP CLASS selftest
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"
          WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
 set_tests_properties(app.engine_selftest_validation PROPERTIES
-    ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"
-    TIMEOUT 60 LABELS "app")  # the 60 s cap (URGENT #48)
+    ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAHSHAKA_SELFTEST_SHORT=1"
+    TIMEOUT 60 LABELS "app")  # the 60 s cap (URGENT #48); the short run (PHOTON-7 stage 10: the fixed frames a quarter)
 
 # app.startup_quiet (archived: archive/tests/app) — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
 # 6a/6b/6c). Three noise sources were fixed together and all three are only
@@ -155,7 +155,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 # method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
 # the one empty frame a headless engine walks.
 if(TEST app.engine_selftest_validation)
-    set_property(TEST app.engine_selftest_validation PROPERTY JAHSHAKA_TEST_FRAMES 2196)
+    set_property(TEST app.engine_selftest_validation PROPERTY JAHSHAKA_TEST_FRAMES 1633)
 endif()
 if(TEST app.test_needs_boot)
     set_property(TEST app.test_needs_boot PROPERTY JAHSHAKA_TEST_FRAMES 710)

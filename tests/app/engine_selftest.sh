@@ -135,7 +135,9 @@ fi
 echo "engine_selftest: pose motion       $motion"
 echo "engine_selftest: pose mover        $mover"
 
-JAHSHAKA_SELFTEST_BREAK_GROUND=1 \
+# (OFF THE LAYER, PHOTON-7 stage 10: the arm proves the ground assertion bites, before the frame pump - the API guard is
+# arm 1's; under the layer this boot cost the row its margin under the 60 s)
+env -u VK_INSTANCE_LAYERS JAHSHAKA_SELFTEST_BREAK_GROUND=1 \
     "$BIN" --engine-selftest "$OUT/selftest_broken_ground.png" > "$OUT/broken_ground.log" 2>&1
 brc=$?
 if [ "$brc" -ne 1 ] || ! grep -q "engine-selftest: the default scene's ground" "$OUT/broken_ground.log"; then
