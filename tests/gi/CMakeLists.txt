@@ -370,7 +370,7 @@ set_tests_properties(gi.field_oracle gi.field_oracle_marks gi.field_oracle_shell
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.field_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 780)
 set_tests_properties(gi.field_oracle_marks PROPERTIES JAHSHAKA_TEST_FRAMES 1508)
-set_tests_properties(gi.field_oracle_shells PROPERTIES JAHSHAKA_TEST_FRAMES 979)
+set_tests_properties(gi.field_oracle_shells PROPERTIES JAHSHAKA_TEST_FRAMES 949)
 set_tests_properties(gi.cache_level_picture PROPERTIES JAHSHAKA_TEST_FRAMES 666)
 
 # gi.card_residency (PHOTON-7 stage 5, 5-2) — THE CARDS RESIDENT ARE THE ONES THE READERS READ, AND A WALK EQUALS A
