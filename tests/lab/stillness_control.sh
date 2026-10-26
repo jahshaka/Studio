@@ -16,7 +16,8 @@
 #   (2) THE HOLD WAITS FOR THE DECISION (R3's ruling: the readers' hold waits on the rest decision's work): the stop's one
 #       rest decision is taken, and no held frame comes before the decision's last GI row;
 #   (3) LIVENESS, the bound R3's design writes: the first hold comes within
-#           16 (the readers' rest demand, N) + 9 (the read-back's due: the period 4 + the ring 3 + 1 + 1)
+#           16 + 9 (the readers' DEMAND SPAN L = N + the due: each reader's rest indices [1, L], PHOTON-7 stage 10's
+#           per-reader snapshot) + 9 (the read-back's due after it: the period 4 + the ring 3 + 1 + 1)
 #         + W (the decision's own work: its captures and card-to-card rounds, from the decision to its last GI row)
 #         + 16 (the re-rest after that work) + 1 (the hold's own frame)
 #       of the readers' FIRST REST frame; a view that never holds is red - and W'S PACE LAW (the lead's correction: W is
@@ -92,9 +93,9 @@ if first_hold is not None:
               % (first_hold, t_dec, work_end))
         if first_rest is not None:
             W = work_end - t_dec
-            bound = 16 + 9 + W + 16 + 1
+            bound = (16 + 9) + 9 + W + 16 + 1
             check(first_hold - first_rest <= bound, "(3) LIVENESS: the first hold %d frames after the first rest, within "
-                  "16 + 9 + W %d + 16 + 1 = %d" % (first_hold - first_rest, W, bound))
+                  "(16 + 9) + 9 + W %d + 16 + 1 = %d" % (first_hold - first_rest, W, bound))
             # W'S PACE: the rounds' pages from the frames' own counts (a frame's round: its deepest)
             page = int(ctl[t_dec].get("cards_page_size") or 0) ** 2
             P = int(ctl[t_dec].get("cards_indirect_texels") or 0) // max(page, 1)

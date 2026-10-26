@@ -872,10 +872,25 @@ int main(int argc, char **argv)
         for (const CardRadiance &k : pnd.cards) if (idP.count(k.node)) inP[{ idP.at(k.node), k.card }] = &k;
         size_t onlyW = 0, onlyP = 0, commonP = 0, overP = 0;
         double worstP = 0.0;
+        // (each card in one set only, NAMED: its object, card, face, size, last read against its run's newest frame, and
+        // its face's read rate over the readers' rest-16 in each run - a card at the demand window's edge reads late
+        // and rare, a real residency difference reads inside the rest)
+        const auto name = [&](const char *which, const Run &r, const Run &other, const CardRadiance &c, int obj) {
+            const auto rr = r.restRate.find({ c.node, c.bucket });
+            NodeId otherNode = 0;
+            for (const auto &kv : (&other == &w ? idW : idP)) if (kv.second == obj) otherNode = kv.first;
+            const auto ro = other.restRate.find({ otherNode, c.bucket });
+            std::printf("     only in the %s: object %d card %u face %u size %u - last read %llu (its run's newest %llu: %lld "
+                        "frames before), last relit %llu; the face's rest-16 read rate %.3f a frame here, %.3f in the other "
+                        "run\n", which, obj, c.card, c.bucket, c.size, (unsigned long long)c.lastRead,
+                        (unsigned long long)r.newest, (long long)r.newest - (long long)c.lastRead,
+                        (unsigned long long)c.lastRelit, rr != r.restRate.end() ? rr->second : -1.0,
+                        ro != other.restRate.end() ? ro->second : -1.0);
+        };
         for (const auto &kv : inW)
-            if (!inP.count(kv.first)) ++onlyW;
+            if (!inP.count(kv.first)) { ++onlyW; name("walk", w, pnd, *kv.second, kv.first.first); }
         for (const auto &kv : inP)
-            if (!inW.count(kv.first)) ++onlyP;
+            if (!inW.count(kv.first)) { ++onlyP; name("pinned", pnd, w, *kv.second, kv.first.first); }
         for (const auto &kv : inW) {
             auto it = inP.find(kv.first);
             if (it == inP.end() || it->second->size != kv.second->size) continue;
