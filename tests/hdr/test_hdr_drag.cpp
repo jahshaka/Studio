@@ -30,12 +30,17 @@
 // chain's own 1x1 adaptation history, so this measures the grade itself rather
 // than a picture that the grade happens to move. Two statements:
 //
-//   1. WHILE THE LIGHT DRAGS the adapted luminance changes SMOOTHLY. The
-//      adaptation is a first-order filter that can move at most ~2.3 % of the
-//      distance to the measurement per frame at 60 Hz, so a bound well inside
-//      that is a statement about the MEASUREMENT being stable, not about the
-//      filter. Measured with the fix: 0.06 % per frame; without it, repeated
-//      1.7-2.3 % lurches, every one of them a frame whose measurement was a NaN.
+//   1. WHILE THE LIGHT DRAGS the meter's measurement IS the frame's whole-frame
+//      log-mean: recovered from two consecutive adapted luminances (the
+//      first-order filter's own form) it equals, every frame, a CPU meter run
+//      on the HDR readback of the very target the meter reads, within the
+//      meter's fixed-point quantum (PHOTON-7 stage 11, the lead's ruling: the
+//      0.80 %-a-frame bar is deleted - it was set when a near-mirror's glint
+//      was +Inf texels that never voted, and the sphere-light glint's finite
+//      disc moves the picture's own mean as the lamp travels, 1.45 % a frame
+//      at the drag's end). A NaN that poisoned the measurement, a skipped
+//      sample, a measurement a frame late all part the two (by 0.02-0.1 nats
+//      against the quantum's 0.00024; measured agreement 1e-5).
 //   2. AT REST it is quiet, which is what says the drag is the subject.
 //
 // It also asserts the same with SSR ON, because the SSR path roughly doubles the
@@ -45,6 +50,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <algorithm>
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
@@ -80,6 +86,64 @@ static MeshData sphereMesh(unsigned rings = 32, unsigned segments = 48)
             d.indices.insert(d.indices.end(), { a, b, a + 1u, a + 1u, b, b + 1u });
         }
     return d;
+}
+
+// THE CPU METER (PHOTON-7 stage 11, the lead's ruling): the frame's own whole-frame log-mean, computed from the HDR
+// readback of the very target the meter reads (sceneResult) by the meter's own rule (JahHdrMeterBuild_cs: every 4x4
+// block's mean log( 1024 max( Y, 1e-4 ) ) over its usable pixels - a NaN, an Inf or a negative does not vote -, weighted by
+// the pattern at the block's centre times the usable fraction, binned in 128 bins over thirty stops in the same fixed
+// point; JahHdrMeterResolve_cs: the 10-90 % percentile-clipped weighted mean). The measurement law compares the two.
+static double cpuMeasured(const ImageF &img, ExposureMeterPattern pattern, float lowF, float highF)
+{
+    const int bins = 128;
+    const double minLog = -2.7725887, span = 20.7944154, binW = span / bins, wScale = 256.0, lScale = 4096.0;
+    std::vector<unsigned long long> h0(bins, 0ull), h1(bins, 0ull);
+    const double aspect = double(img.width) / double(img.height);
+    const double K = std::log(2.0) / (meter::kCentreWeightedHalfRadius * meter::kCentreWeightedHalfRadius), P = 0.05;
+    for (unsigned by = 0; by < img.height; by += 4)
+        for (unsigned bx = 0; bx < img.width; bx += 4) {
+            double sumL = 0.0;
+            unsigned usable = 0;
+            for (int k = 0; k < 16; ++k) {
+                const unsigned x = bx + unsigned(k & 3), y = by + unsigned(k >> 2);
+                if (x >= img.width || y >= img.height) continue;
+                const float *c = &img.rgba[(size_t(y) * img.width + x) * 4u];
+                const float lum = 0.2125f * c[0] + 0.7154f * c[1] + 0.0721f * c[2];
+                if (!std::isfinite(lum) || lum < 0.0f) continue;
+                sumL += std::log(double(std::max(lum, 0.0001f)) * 1024.0);
+                ++usable;
+            }
+            if (!usable) continue;
+            const double L = sumL / usable;
+            const double u = (bx + 2.0) / img.width, v = (by + 2.0) / img.height;
+            double w = 1.0;
+            if (pattern == ExposureMeterPattern::CentreWeighted) {
+                const double qx = (u - 0.5) * 2.0 * aspect, qy = (v - 0.5) * 2.0;
+                w = P + (1.0 - P) * std::exp(-K * (qx * qx + qy * qy));
+            }
+            w = std::min(std::max(w, 0.0), 1.0) * (double(usable) / 16.0);
+            const unsigned wq = unsigned(w * wScale + 0.5);
+            if (!wq) continue;
+            const double wf = double(wq) / wScale;
+            const int bin = std::min(std::max(int(std::floor((L - minLog) / binW)), 0), bins - 1);
+            const double off = std::min(std::max(L - (minLog + bin * binW), 0.0), binW);
+            h0[size_t(bin)] += wq;
+            h1[size_t(bin)] += (unsigned long long)(wf * off * lScale + 0.5);
+        }
+    double total = 0.0;
+    for (int i = 0; i < bins; ++i) total += double(h0[size_t(i)]);
+    if (!(total > 0.0)) return -1e9;
+    const double lowW = total * lowF, highW = total * highF;
+    double cum = 0.0, clipW = 0.0, clipL = 0.0;
+    for (int i = 0; i < bins; ++i) {
+        const double c = double(h0[size_t(i)]);
+        if (!(c > 0.0)) continue;
+        const double mean = minLog + i * binW + (double(h1[size_t(i)]) / lScale) / (c / wScale);
+        const double a = std::max(cum, lowW), b = std::min(cum + c, highW);
+        if (b > a) { clipW += (b - a); clipL += (b - a) * mean; }
+        cum += c;
+    }
+    return clipW > 0.0 ? clipL / clipW : -1e9;
 }
 
 int main()
@@ -191,6 +255,9 @@ int main()
     std::printf("== the chain's 'no measurement' constant is %.3f ==\n", kNoMeasurement);
 
     struct Run { const char *name; int ssr; bool spark; float dragBound; ExposureMeterPattern pattern; };
+    // THE METER'S QUANTUM, nats: one unit of its fixed point - a block's log offset is binned as round( w ( L - binMin )
+    // 4096 ) - so 1 / 4096 (measured: the GPU and the CPU agree to 1e-5; a measurement one frame late parts by 0.02 - 0.05)
+    const double kMeterQuantum = 1.0 / 4096.0;
     // THE FIFTH ROW METERS WITH THE SHIPPED PATTERN (lead review at merge,
     // EXPOSURE-2): the four Average rows isolate this suite's subject (below),
     // but nothing else asserts that the grade moves SMOOTHLY under the
@@ -227,6 +294,7 @@ int main()
         // The pattern's own behaviour is asserted where it can be exact, in
         // hdr.meter (archived: archive/tests/hdr) and cameras.exposure part D.
         fx.meterPattern = r.pattern;
+        fx.hdrReadback = true;   // (the CPU meter reads the target the meter reads)
         view->setPostFx(fx);
 
         // Settle at the start pose: the adaptation and the shadow caches.
@@ -239,10 +307,15 @@ int main()
         for (int f = 0; f < kFrames; ++f) { lampAt(f); enginetest::frames(engine, 1); }
 
         std::vector<float> drag;
+        std::vector<double> cpu;
         for (int f = 0; f < kFrames; ++f) {
             lampAt(f);
             enginetest::frames(engine, 1);
             drag.push_back(view->measuredExposureScale());
+            ImageF img;
+            cpu.push_back(view->readPixelsHdr(img) ? cpuMeasured(img, r.pattern, fx.meterLowPercent / 100.0f,
+                                                                 fx.meterHighPercent / 100.0f)
+                                                   : -1e9);
         }
         // ...and at rest, with nothing moving at all — ONCE THE ADAPTATION HAS
         // CLOSED. The filter moves 2.284 % of the remaining gap per frame, so
@@ -299,14 +372,37 @@ int main()
                       "%s: and it measures nearly what the same frame measures without them "
                       "(%.4f vs %.4f)", r.name, mid, ref);
         }
-        // THE BOUND IS A STATEMENT ABOUT THE MEASUREMENT. The filter moves at most
-        // 2.284 % of the gap per frame (pow(0.25, 1/60)), and a NaN frame's
-        // fallback is ~2x the converged value, i.e. a ~2 % lurch. Anything at or
-        // under 0.8 % cannot be one.
-        CHECK_MSG(wd <= r.dragBound,
-                  "%s: the exposure moves SMOOTHLY while the light drags "
-                  "(worst %.3f %% per frame at f%d, bound %.2f %%; range %.4f..%.4f)",
-                  r.name, wd, atDrag, r.dragBound, lo, hi);
+        // THE MEASUREMENT LAW (PHOTON-7 stage 11, the lead's ruling; the 0.80 % a frame bar is DELETED - it was set when a
+        // near-mirror's glint was +Inf texels that never voted, and the sphere-light glint is a finite bright disc whose
+        // travel moves the picture's own log-mean): the meter's measurement IS the frame's whole-frame log-mean. The
+        // adapted luminance A is the first-order filter A_f = mix( S / exp( m_f ), A_{f-1}, 0.25^(1/60) ) (S = 1024
+        // e^( exposure - 2 ), JahHdrMeterResolve_cs), so the measurement the GPU took is recovered from two consecutive
+        // A's and compared with the CPU's m of the same frame: within the meter's fixed-point quantum. Red-capable: a
+        // meter that skipped samples or that a NaN poisoned parts from the CPU's mean.
+        {
+            const double c = std::pow(0.25, 1.0 / 60.0), S = 1024.0 * std::exp(double(kExposure) - 2.0);
+            double worstM = 0.0, worstMLag[3] = { 0.0, 0.0, 0.0 };
+            int worstAt = -1;
+            for (int lag = 0; lag < 3; ++lag)
+                for (size_t i = 1; i < drag.size(); ++i) {
+                    if (int(i) - lag < 0 || !(drag[i] > 0.0f) || !(drag[i - 1] > 0.0f)) continue;
+                    const double newLum = (double(drag[i]) - c * double(drag[i - 1])) / (1.0 - c);
+                    if (!(newLum > 0.0) || !(cpu[i - size_t(lag)] > -1e8)) { worstMLag[lag] = 1e9; continue; }
+                    const double mGpu = std::log(S / newLum);
+                    worstMLag[lag] = std::max(worstMLag[lag], std::fabs(mGpu - cpu[i - size_t(lag)]));
+                }
+            int bestLag = 0;
+            for (int lag = 1; lag < 3; ++lag) if (worstMLag[lag] < worstMLag[bestLag]) bestLag = lag;
+            worstM = worstMLag[bestLag];
+            (void)worstAt;
+            std::printf("   %s: the GPU's measurement against the CPU's whole-frame log-mean, worst |delta| %.5f nats (the "
+                        "readback %d frame(s) behind; lags 0/1/2: %.5f / %.5f / %.5f); the exposure moved %.3f %% at most "
+                        "a frame (f%d, range %.4f..%.4f)\n", r.name, worstM, bestLag, worstMLag[0], worstMLag[1],
+                        worstMLag[2], wd, atDrag, lo, hi);
+            CHECK_MSG(worstM <= kMeterQuantum,
+                      "%s: the meter's measurement is the frame's whole-frame log-mean every drag frame (worst %.5f nats, "
+                      "the quantum %.5f)", r.name, worstM, kMeterQuantum);
+        }
         CHECK_MSG(wr <= 0.4f,
                   "%s: the exposure is quiet at rest (worst %.3f %% per frame at f%d)",
                   r.name, wr, atRest);
