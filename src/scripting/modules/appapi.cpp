@@ -269,7 +269,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "the 2026-09-14 editor crash happened while the field was eight bits wide.",
           Needs::Engine },
         { "asyncShaders", "app.asyncShaders() -> {policy, active, running, threads, pending, completed, "
-                          "failed, placeholderDraws, pendingSkips, captureDeferredDraws, compiledInBackground}",
+                          "failed, placeholderDraws, pendingSkips, captureDeferredDraws, compiledInBackground, "
+                          "paramsMisfits}",
           "THE BACKGROUND SHADER COMPILER (ASYNC-SHADERS-1). After a project is open the editor's "
           "view never waits for a shader: a permutation it has not built yet goes to the engine's "
           "compile service (its own low-priority threads) and the object draws with a neutral grey "
@@ -285,7 +286,9 @@ QVector<VerbInfo> AppApi::verbs() const
           "never holds the grey. Every frame is presented: a draw with neither its shader nor a placeholder "
           "(an unlit helper's first permutation) is simply absent until its shader lands. "
           "compiledInBackground counts shaders compiled on the service's threads, which is why they "
-          "are not live compiles (app.shaderCache().liveCompiles).",
+          "are not live compiles (app.shaderCache().liveCompiles). paramsMisfits counts compute "
+          "dispatches the engine REFUSED because a pipeline's parameters did not fit its program - "
+          "0 on a sound build.",
           Needs::Engine },
         { "setAsyncShaders", "app.setAsyncShaders(on) -> app.asyncShaders()",
           "Turns the background compile policy on or off for this session (see app.asyncShaders). A "
@@ -1029,6 +1032,7 @@ QVariantMap AppApi::asyncShaders()
     m["pendingSkips"]         = QVariant::fromValue(qulonglong(s.pendingSkips));
     m["captureDeferredDraws"] = QVariant::fromValue(qulonglong(s.captureDeferredDraws));
     m["compiledInBackground"] = s.compiledInBackground;
+    m["paramsMisfits"]        = QVariant::fromValue(qulonglong(s.paramsMisfits));
     return m;
 }
 

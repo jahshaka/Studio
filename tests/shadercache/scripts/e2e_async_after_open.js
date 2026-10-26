@@ -66,5 +66,14 @@ phase("material", function () {
 phase("tier", function () { world.gi({ tier: "low" }); });
 r.live = live();
 r.final = st();
+// THE MISFIT COUNTER'S NEGATIVE CONTROL (stage 5's read W5): the arm shader.forceParamsMisfit refuses the next compute
+// dispatch as a parameters misfit, each time it comes on - the count reads exactly one more under the door, and no
+// further one once it is off (a counter a row asserts 0 must be seen non-zero, or the row proves the copy)
+engine.arm("shader.forceParamsMisfit", 1);
+for (var k = 0; k < 30 && st().paramsMisfits === r.final.paramsMisfits; ++k) editor.frame(1);   // a bound in frames
+r.misfitDoor = st().paramsMisfits;
+engine.arm("shader.forceParamsMisfit", 0);
+editor.frame(10);
+r.misfitAfter = st().paramsMisfits;
 console.log("ASYNCAFTEROPEN " + JSON.stringify(r));
 app.quit();
