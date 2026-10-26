@@ -619,6 +619,18 @@ std::string Session::statusJson()
       << gi.cards.invalidIndirect << ",\"invalidMaterial\":" << gi.cards.invalidMaterial << ",\"invalidTransform\":"
       << gi.cards.invalidTransform << ",\"pages\":" << gi.cards.pages << ",\"pagesUsed\":" << gi.cards.pagesUsed
       << ",\"instancesResident\":" << gi.cards.instancesResident << ",\"cardsResident\":" << gi.cards.cardsResident
+      << ",\"residentHash\":\"" << std::hex << gi.cards.residentHash << std::dec << "\",\"restDecisions\":" << gi.cards.restDecisions
+      << ",\"decisionRefused\":" << gi.cards.decisionRefused
+      // ...and THE ROUNDS (PHOTON-7 stage 10-3, the round chain's read): the newest relight reading's largest move in codes
+      // and the cache frame it was relit at, the deepest round among the last plan's roots and those roots (kind+frame),
+      // the visible and sub-quantum relight frames
+      << ",\"moveCodesLast\":" << gi.cards.moveCodesLast << ",\"moveCodesFrame\":" << gi.cards.moveCodesFrame
+      << ",\"workRound\":" << gi.cards.workRound << ",\"workRoots\":\"" << [&gi] {
+             std::string r;
+             for (const auto &w : gi.cards.workRoots) r += std::string(1, w.kind) + std::to_string(w.frame) + " ";
+             return r;
+         }() << "\",\"visibleRelights\":" << gi.cards.visibleRelights << ",\"subQuantumRelights\":"
+      << gi.cards.subQuantumRelights << ",\"cacheFrame\":" << gi.cards.cacheFrame
       << ",\"indirectReported\":" << gi.cards.indirectReported << ",\"indirectByRegion\":" << gi.cards.indirectByRegion
       << ",\"indirectOverflows\":" << gi.cards.indirectOverflows << ",\"admitted\":" << gi.cards.admitted
       << ",\"evicted\":" << gi.cards.evicted << ",\"compactionMoves\":" << gi.cards.compactionMoves
