@@ -785,6 +785,38 @@ endforeach()
 set_tests_properties(gi.glass_pass PROPERTIES JAHSHAKA_TEST_FRAMES 328)
 set_tests_properties(gi.glass_pass_noray PROPERTIES JAHSHAKA_TEST_FRAMES 201)
 
+# gi.photon_window (PHOTON-7 10-4, item 2; L9) — A WINDOW PASSES THE LIGHT ITS MATERIAL PASSES, ON EVERY PATH: gi.sealed_sky's
+# room with a 1 m pane in its roof (Glass / Blend / Refractive at alpha 0.1) against a hole, under a white sky and a sun
+# through the opening; every reader (the sun patch, the room's diffuse and the mirror's specular in the pixel, the cards, the
+# voxels, the field) = (1 - alpha) x the hole's within the paired readings' 2 SE + a code (test_gi_photon_window.cpp says the
+# laws; red on the base on every traced path: the caches, the shadow maps and the traced sun hold the pane opaque). A
+# fixture, one row a tier.
+add_executable(test_gi_photon_window test_gi_photon_window.cpp)
+set_target_properties(test_gi_photon_window PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_photon_window PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_photon_window PRIVATE JahshakaEngine)
+add_dependencies(test_gi_photon_window JahshakaEngineMedia)
+foreach(_row ray noray)
+    if(_row STREQUAL "ray")
+        set(_name gi.photon_window)
+    else()
+        set(_name gi.photon_window_${_row})
+    endif()
+    jah_gpu_row(${_name} CLASS engine COMMAND test_gi_photon_window ${_row}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                         TIMEOUT 60 LABELS "engine")
+endforeach()
+set_tests_properties(gi.photon_window PROPERTIES JAHSHAKA_TEST_FRAMES 368)
+set_tests_properties(gi.photon_window_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)
+
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
 # rq.hitListCap holding the records to a third FORCES drops and the floor stays within one code (the picture's
