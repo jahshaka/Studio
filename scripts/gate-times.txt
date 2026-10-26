@@ -131,6 +131,7 @@ import.shutdown 33.63  quiet n=43
 import.shutdown.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 importer.meshformats 1.76  quiet n=42
 input.actions 0.00  ship 3a0422b4e (2026-10-13)
+lab.card_set_binds 7.44  solo, the card lock held, :72 (PHOTON-7 stage 10-3, 2026-10-26: atom-street at 1920 x 1080, the atlas full; rest at a pose, a far pose, back - RED before F3 + the fit: the set back at the pose was not the first rest's)
 lab.camera_cut 4.55  spec.sh test photon-2 --subsystem lab, the card lock held, :74, warm (PHOTON-2 round 2 N3's row, priced in round 4, 2026-10-22: it had no line)
 lab.boots_and_shoots 2.68  solo, the card lock held, :73, warm (LAB-1 stage 1, 2026-10-22; 11.38 s on the run that warmed the shared cache)
 lab.dolly_matches_probe 1.99  solo, the card lock held, :73 (LAB-1 stage 3, 2026-10-22; the lab run itself, dolly.sh + the box set at two stops)

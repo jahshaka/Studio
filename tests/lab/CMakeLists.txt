@@ -24,6 +24,14 @@ jah_gpu_row(lab.monitor CLASS engine FRAMES 127
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.monitor PROPERTIES TIMEOUT 60 LABELS "lab")
 
+# lab.card_set_binds (PHOTON-7 stage 10-3, F3 and its fit) - THE REST SET IS THE POSE's AT ONE FRUSTUM, BY TWO PATHS, WHERE
+# THE ATLAS BINDS: atom-street at 1920 x 1080 (its demand fills the 256 pages), at rest at the street's pose, then a far
+# pose and back; the set back at the pose is the first rest's (card_set_binds.sh). 1200 frames.
+jah_gpu_row(lab.card_set_binds CLASS engine FRAMES 1200
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/card_set_binds.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/card_set_binds
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.card_set_binds PROPERTIES TIMEOUT 60 LABELS "lab")
+
 # lab.script_stops (URGENT #50) — A REFUSED SCRIPT LINE STOPS THE SCRIPT, nonzero, naming the line and its reason; a
 # `try` line opts out (script_stops.sh). Three sessions of a frame on photon-contact at 320x180.
 jah_gpu_row(lab.script_stops CLASS engine FRAMES 3
