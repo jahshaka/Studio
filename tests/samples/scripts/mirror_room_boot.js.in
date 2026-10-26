@@ -10,4 +10,11 @@ editor.frame(600, 1 / 60);
 var s = editor.screenshot("@SHOT@", 960, 540, [], "scene");
 if (!s || !s.width) throw new Error("the screenshot failed: " + app.lastError());
 console.log("mirror_room_boot: shot @SHOT@");
+// (the shot's settle and the cards' state, said - PHOTON-7 stage 10: a settle that ends at its cap is GI still moving,
+// and two boots then photograph two pictures)
+var c = world.giStatus().cards;
+console.log("mirror_room_boot: the shot settled " + s.settleFrames + " frames, at rest " + s.atRest + "; the cards: " +
+            c.restDecisions + " rest decision(s), " + c.relights + " relights (" + c.visibleRelights + " visible), " +
+            c.cards + " resident");
+if (s.atRest !== true) throw new Error("the shot settled to its cap, not to rest (" + s.settleFrames + " frames)");
 "ok";

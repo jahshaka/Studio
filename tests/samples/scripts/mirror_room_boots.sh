@@ -27,6 +27,7 @@ if [ $rc -ne 0 ] || [ ! -s "$shot" ]; then
 fi
 sha=$(sha256sum "$shot" | cut -c1-16)
 echo "boot $K: $sha"
+grep -E '^mirror_room_boot: the shot settled' "$WORK/boot-$K.log" | head -1
 rm -rf "$dr"
 [ "$K" = 1 ] && exit 0
 first=$(sha256sum "$WORK/shot-1.png" | cut -c1-16)
