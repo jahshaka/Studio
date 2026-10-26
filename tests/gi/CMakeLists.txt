@@ -803,16 +803,22 @@ target_compile_definitions(test_gi_photon_window PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_photon_window PRIVATE JahshakaEngine)
 add_dependencies(test_gi_photon_window JahshakaEngineMedia)
-foreach(_row ray noray)
-    if(_row STREQUAL "ray")
+# One row a tier and a light: gi.photon_window(_noray) the sky and the sun (R8's sun patch), gi.photon_window_sky(_noray)
+# the sky alone (R7's transmission of the sky's light).
+foreach(_light sun sky)
+    foreach(_row ray noray)
         set(_name gi.photon_window)
-    else()
-        set(_name gi.photon_window_${_row})
-    endif()
-    jah_gpu_row(${_name} CLASS engine COMMAND test_gi_photon_window ${_row}
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                         TIMEOUT 60 LABELS "engine")
+        if(_light STREQUAL "sky")
+            string(APPEND _name "_sky")
+        endif()
+        if(_row STREQUAL "noray")
+            string(APPEND _name "_noray")
+        endif()
+        jah_gpu_row(${_name} CLASS engine COMMAND test_gi_photon_window ${_row} ${_light}
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                             TIMEOUT 60 LABELS "engine")
+    endforeach()
 endforeach()
 set_tests_properties(gi.photon_window PROPERTIES JAHSHAKA_TEST_FRAMES 368)
 set_tests_properties(gi.photon_window_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)

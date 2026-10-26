@@ -9,6 +9,8 @@
 // inside the room is linear in what enters through the opening.
 //
 // THE LAW, per reader, per arm, at each tier (argv[1]: "ray" the ray tier at High, "noray" the no-ray tier as it ships):
+// (argv[2]: "sky" the sky alone - the transmission of the sky's light into the room, R7's; "sun" the sky and the sun -
+// the sun patch too, the shadow maps' and the traced sun's, R8's)
 // the arm's reading equals T times the hole's, |G - T H| <= 2 SE + H / 255, where SE is the standard error of the mean of the
 // reader's PAIRED differences (sample by sample, G_i - T H_i: the hole's own noise and the arm's, measured, not picked) and
 // H / 255 is one code at the reading's level (the display's quantum: L8 R3). The readers (every one a mean over its points):
@@ -90,6 +92,11 @@ int main(int argc, char **argv)
     const std::string mode = argc > 1 ? argv[1] : "ray";
     if (mode != "ray" && mode != "noray") { std::printf("FAIL: the mode is ray or noray, not '%s'\n", mode.c_str()); return 2; }
     const bool rays = mode == "ray";
+    // THE LIGHT (argv[2]): "sky" the sky alone (the transmission of the sky's light, every cache's, R7), "sun" the sky
+    // and the sun (the sun patch too: the shadow maps and the traced sun, R8)
+    const std::string light = argc > 2 ? argv[2] : "sun";
+    if (light != "sky" && light != "sun") { std::printf("FAIL: the light is sky or sun, not '%s'\n", light.c_str()); return 2; }
+    const bool sun = light == "sun";
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-photon-window-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -149,7 +156,7 @@ int main(int argc, char **argv)
     }
     if (!pane) { std::printf("FAIL: the pane\n"); return 1; }
     // the sun, 60 degrees up, travelling towards -x: its beam through the opening lands on the floor at x [-1.63, -0.86]
-    enginetest::addDirectionalLight(scene, Vec3(-0.5f, -0.8660254f, 0.0f), 3.0f);
+    if (sun) enginetest::addDirectionalLight(scene, Vec3(-0.5f, -0.8660254f, 0.0f), 3.0f);
     {
         SkyDesc sky;
         sky.mode = SkyMode::Cubemap;
@@ -303,7 +310,7 @@ int main(int argc, char **argv)
         return v.empty() ? 0.0 : s / double(v.size());
     };
 
-    std::printf("== %s, High\n", mode.c_str());
+    std::printf("== %s, High, the %s\n", mode.c_str(), sun ? "sky and the sun" : "sky alone");
     // THE HOLE
     scene->setNodeVisible(pane, false);
     const int restHole = settle();
@@ -311,11 +318,12 @@ int main(int argc, char **argv)
     const std::vector<Reading> hole = readArm(holeSun);
     std::printf("   the hole: at rest after %d frames; the cards' sun term at the patch %.4f\n", restHole, holeSun);
     for (int k = 0; k < NumReaders; ++k)
-        if (rays || (k != CardPatch && k != CardBeside))
+        if ((rays || (k != CardPatch && k != CardBeside)) && (sun || (k != PixPatch && k != CardPatch && k != VoxPatch)))
             std::printf("     %-40s %zu samples, mean %.6f\n", names[k], hole[k].v.size(), mean(hole[k].v));
     check(restHole >= 0, "the hole arm comes to rest");
-    check(hole[PixPatch].ok && mean(hole[PixPatch].v) > 2.0 * mean(hole[PixBeside].v),
-          "the control: the sun patch under the opening is lit by the sun");
+    if (sun)
+        check(hole[PixPatch].ok && mean(hole[PixPatch].v) > 2.0 * mean(hole[PixBeside].v),
+              "the control: the sun patch under the opening is lit by the sun");
     scene->setNodeVisible(pane, true);
 
     struct Arm { PbrAlphaMode m; const char *name; };
@@ -329,13 +337,14 @@ int main(int argc, char **argv)
         if (!scene->setPbrMaterial(paneMat, p)) { check(false, "the arm's material"); continue; }
         e->waitForAsyncShaders();
         const int rest = settle();
-        double sun = -1.0;
-        const std::vector<Reading> g = readArm(sun);
+        double sunTerm = -1.0;
+        const std::vector<Reading> g = readArm(sunTerm);
         std::printf("   %s (alpha %.1f, T %.2f): at rest after %d frames; the cards' sun term at the patch %.4f (the hole's "
-                    "%.4f)\n", a.name, alpha, T, rest, sun, holeSun);
+                    "%.4f)\n", a.name, alpha, T, rest, sunTerm, holeSun);
         check(rest >= 0, "the arm comes to rest");
         for (int k = 0; k < NumReaders; ++k) {
             if (!rays && (k == CardPatch || k == CardBeside)) continue;
+            if (!sun && (k == PixPatch || k == CardPatch || k == VoxPatch)) continue;   // no sun patch under the sky alone
             const Reading &h = hole[k], &r = g[k];
             const size_t n = std::min(h.v.size(), r.v.size());
             double sd = 0.0, md = 0.0;
