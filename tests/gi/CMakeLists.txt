@@ -622,6 +622,26 @@ jah_gpu_row(gi.emitter_energy CLASS engine FRAMES 110 COMMAND test_gi_emitter_en
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.emitter_energy PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
+# gi.small_emitter (PHOTON-7 stage 10-3; L9 is physics) - A SMALL OBJECT IS GEOMETRY AT EVERY CASCADE: a 0.20 m emitter
+# 3 m from a mirror is in cascades 2 and 3 (their stores hold it by its coverage) and the mirror shows it as at 1.2 m
+# (test_gi_small_emitter.cpp says the laws). RED before: the sub-voxel cull (rule 2) left it out of c2 and c3, and every
+# ray past 1.9 m passed through it. A fixture.
+add_executable(test_gi_small_emitter test_gi_small_emitter.cpp)
+set_target_properties(test_gi_small_emitter PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_small_emitter PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_small_emitter PRIVATE JahshakaEngine)
+add_dependencies(test_gi_small_emitter JahshakaEngineMedia)
+jah_gpu_row(gi.small_emitter CLASS engine FRAMES 400 COMMAND test_gi_small_emitter
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.small_emitter PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
 # SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive
 # walls at albedo 0.5 - the feedback at its rest within one code of a 64-pass Jacobi over cascade 0 (the measuring door

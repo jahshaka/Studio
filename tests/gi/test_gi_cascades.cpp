@@ -674,8 +674,8 @@ int main()
     // =====================================================================
     // CASE 10 — `items` IS WHAT THIS REBUILD VOXELISED
     // =====================================================================
-    // `GiStatus::cascades[].items` promises "inside its box and big enough to
-    // fill half a voxel of it". It used to be counted inside setCascadeItems,
+    // `GiStatus::cascades[].items` promises "inside its box" (every size, at every
+    // cascade: the sub-voxel cull is deleted, PHOTON-7 10-3). It used to be counted inside setCascadeItems,
     // which by rule 1 runs only when the ATTACH SET changes — so the number
     // froze at the last selection and a cascade that scrolled across a room
     // went on reporting the contents of the room it had left (round-2 review
