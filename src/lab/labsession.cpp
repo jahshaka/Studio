@@ -1370,9 +1370,18 @@ bool Session::monitor(const Command &c)
         // SUBMITTED inside it (submitted:<name>=1: its own time holds the GPU's wait for the CPU, a bubble)
         // ...and an OVERRUN (overrun:<name>=ms): its children sum past it beyond the rounding - an overlap or a double count
         // ...and staging:<name>=1 when the UPLOAD STAGING submitted inside its own stretches (the submission's cause)
-        const auto selfOf = [&](const std::string &n, float ms, float self, bool measured, bool submitted, bool staging) {
+        // ...and THE MEASURED BUBBLE (urgent #64, the fork's own timestamp pair at each flush): bubble:<name> its own
+        // stretches' (what its own time holds of the GPU's idle), bubblelost:<name>=1 where the fork could not measure
+        // one, and bubblenosub:<name> - THE SANITY LAW's breach - a bubble on a row (or its own stretches) with no
+        // submission inside: a credit the queue's counters never saw
+        const auto selfOf = [&](const std::string &n, float ms, float self, bool measured, bool submitted, bool staging,
+                                float bubbleWhole, float bubbleOwn, bool inside) {
             if (submitted) names[word("submitted:" + n)] = 1.0;   // a leaf too: its time holds a bubble
             if (staging) names[word("staging:" + n)] = 1.0;
+            if (bubbleOwn < 0.0f) names[word("bubblelost:" + n)] = 1.0;
+            else if (bubbleOwn > 0.0f) names[word("bubble:" + n)] += double(bubbleOwn);
+            if (!inside && bubbleWhole != 0.0f) names[word("bubblenosub:" + n)] += std::fabs(double(bubbleWhole));
+            if (!submitted && bubbleOwn > 0.0f) names[word("bubblenosub:" + n)] += double(bubbleOwn);
             if (!measured || ms < 0.0f) return;
             if (self < 0.0f) { names[word("overrun:" + n)] += -double(self); return; }
             if (double(ms) - double(self) < 1e-4) return;   // a leaf: its own time IS its time
@@ -1382,7 +1391,8 @@ bool Session::monitor(const Command &c)
             if (p.gpuMs < 0.0f) continue;   // not measured (never faked as 0)
             const std::string n = (p.topLevel ? "pass:" : "nested:") + p.node + "/" + p.pass;
             names[word(n)] += p.gpuMs;
-            selfOf(n, p.gpuMs, p.selfGpuMs, p.selfMeasured, p.selfSubmitted, p.selfStaging);
+            selfOf(n, p.gpuMs, p.selfGpuMs, p.selfMeasured, p.selfSubmitted, p.selfStaging, p.bubbleGpuMs,
+                   p.selfBubbleGpuMs, p.insideSubmitted);
             if (p.topLevel) passes += p.gpuMs;
         }
         std::map<std::string, double> untimed;   // the frame's work with no GPU time of its own (inside a row's time)
@@ -1405,7 +1415,7 @@ bool Session::monitor(const Command &c)
             }
             names[word((w.topLevel ? "row:" : "nested-row:") + w.detail)] += w.gpuMs;
             selfOf((w.topLevel ? "row:" : "nested-row:") + w.detail, w.gpuMs, w.selfGpuMs, w.selfMeasured,
-                   w.selfSubmitted, w.selfStaging);
+                   w.selfSubmitted, w.selfStaging, w.bubbleGpuMs, w.selfBubbleGpuMs, w.insideSubmitted);
             if (w.topLevel) rows += w.gpuMs;
         }
         dropped += r.gpuMarksDropped;

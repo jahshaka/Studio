@@ -12,9 +12,13 @@
 #   (3) THE FRAME ADDS UP: on every frame the top-level passes and rows and the unnamed gaps sum to the busy GPU span
 #       within 2 % (or 0.01 ms) - a row inside a pass is in that pass's time, never counted twice;
 #   (4) NOTHING UNNAMED (PHOTON-7's naming step): on every frame the gaps no row names (unattr) are at most 0.1 ms, and
-#       every GPU row that encloses others (gi.step) leaves at most 0.1 ms of its own time to no child (self:, unless it
-#       submitted inside it - a bubble, the GPU waiting for the CPU, submitted:) - a dispatch through the Photon door
-#       directly inside gi.step files its own row (photonDispatch);
+#       every GPU row that encloses others (gi.step) leaves at most 0.1 ms of its own time to no child LESS ITS MEASURED
+#       BUBBLE (self: - bubble:; urgent #64: a submission inside it is no longer an exemption - the bubble is the fork's
+#       own timestamp pair at each flush, the flushed buffer's last BOTTOM_OF_PIPE to the next one's first TOP_OF_PIPE,
+#       never a CPU-side estimate; a row whose bubble could not be measured, bubblelost:, is red) - a dispatch through
+#       the Photon door directly inside gi.step files its own row (photonDispatch);
+#   (4b) THE BUBBLE's SANITY: a row with no submission inside carries a bubble of EXACTLY 0, and so do a row's own
+#       stretches with none (bubblenosub: is the breach - a credit the queue's own counters never saw);
 #   (5) NO OVERRUN: no row's children sum past it beyond the timestamps' rounding (1e-3 ms; overrun:) - an overlap or a
 #       double count the monitor reports and never clamps.
 # usage: monitor.sh <jahlab> <work dir>
@@ -32,6 +36,8 @@ import os, re, sys
 wd = sys.argv[1]
 fails = []
 names = {}
+bubbles = {}     # part -> row -> the worst own-stretch bubble measured on a frame
+worst_own = {}   # part -> the worst own time less its bubble
 for part, n in (('boot', 30), ('step', 30)):
     lines = open(os.path.join(wd, part + '.txt')).read().split('\n')
     F = [l for l in lines if l.startswith('F ')]
@@ -55,9 +61,26 @@ for part, n in (('boot', 30), ('step', 30)):
         if unattr > 0.1: fails.append('(4) %s frame %s: %.4f ms of gaps no row names (the widest %s ms between %s)' % (
             part, kv.get('F', '?'), unattr, where.group(1) if where else '?', where.group(2) if where else '?'))
         for name, ms in tok.items():
-            if name.startswith(('self:row:', 'self:nested-row:')) and float(ms) > 0.1 and \
-                    ('submitted:' + name[5:]) not in tok:
-                fails.append('(4) %s frame %s: %s leaves %.4f ms to no child' % (part, kv.get('F', '?'), name[5:], float(ms)))
+            if not name.startswith(('self:row:', 'self:nested-row:')):
+                continue
+            row = name[5:]
+            if ('bubblelost:' + row) in tok:
+                fails.append('(4) %s frame %s: %s - its bubble was not measured (the law cannot be judged)'
+                             % (part, kv.get('F', '?'), row))
+                continue
+            bubble = float(tok.get('bubble:' + row, 0.0))
+            own = float(ms) - bubble
+            if own > 0.1:
+                fails.append('(4) %s frame %s: %s leaves %.4f ms to no child (its own time %.4f less its measured '
+                             'bubble %.4f)' % (part, kv.get('F', '?'), row, own, float(ms), bubble))
+            worst_own[part] = max(worst_own.get(part, 0.0), own)
+        for name, ms in tok.items():
+            if name.startswith('bubble:'):
+                b = bubbles.setdefault(part, {})
+                b[name[7:]] = max(b.get(name[7:], 0.0), float(ms))
+            if name.startswith('bubblenosub:'):
+                fails.append('(4b) %s frame %s: %s carries %.4f ms of bubble with no submission inside' % (
+                    part, kv.get('F', '?'), name[12:], float(ms)))
         for name, ms in tok.items():
             if name.startswith('overrun:'):
                 fails.append('(5) %s frame %s: the children of %s overrun it by %.4f ms' % (part, kv.get('F', '?'), name[8:], float(ms)))
@@ -65,8 +88,11 @@ for part, n in (('boot', 30), ('step', 30)):
         names['__worst_self_' + part] = max(names.get('__worst_self_' + part, 0.0), worst_self)
         names['__worst_unattr_' + part] = max(names.get('__worst_unattr_' + part, 0.0), unattr)
     print('%s: the frame adds up - the worst |passes + rows + gaps - busy| / busy %.3f %%; the worst unnamed gap %.4f ms, '
-          'the worst row own time left to no child %.4f ms' % (part, 100 * worst, names.get('__worst_unattr_' + part, 0.0),
-                                                                 names.get('__worst_self_' + part, 0.0)))
+          'the worst row own time left to no child %.4f ms (%.4f ms less its measured bubble)' % (
+              part, 100 * worst, names.get('__worst_unattr_' + part, 0.0), names.get('__worst_self_' + part, 0.0),
+              worst_own.get(part, 0.0)))
+    for row, b in sorted(bubbles.get(part, {}).items(), key=lambda kv: -kv[1]):
+        print('%s:   measured bubble %-44s worst %.4f ms a frame' % (part, row, b))
 want = [('the injection', r'vct\.inject\.'), ('the bounce feedback', r'vct\.feedback'),
         ('the cards\' capture', r'^pass:JahCardCapture'), ('the cards\' relight', r'cards\.relight$'),
         ('the gather\'s trace', r'gather\.trace$'), ('the gather\'s integrate', r'gather\.integrate$'),
@@ -74,7 +100,7 @@ want = [('the injection', r'vct\.inject\.'), ('the bounce feedback', r'vct\.feed
         ('the reflection\'s resolve', r'rq\.reflect\.resolve$'), ('the area visibility\'s trace', r'area\.vis$'),
         ('the area visibility\'s resolve', r'area\.resolve$')]
 for label, pat in want:
-    hit = {k: v for k, v in names.items() if re.search(pat, k) and not k.startswith(('self:', 'submitted:', 'overrun:', '__'))}
+    hit = {k: v for k, v in names.items() if re.search(pat, k) and k.startswith(('pass:', 'nested:', 'row:', 'nested-row:'))}
     best = max(hit.values()) if hit else 0.0
     print('  %-30s %s' % (label, ('%d row(s), max %.4f ms' % (len(hit), best)) if hit else 'NONE'))
     if not hit or not best > 0.0: fails.append('(2) %s: no positive time (%s)' % (label, pat))
