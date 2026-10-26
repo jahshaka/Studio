@@ -982,6 +982,12 @@ public:
             unsigned reflectShotRestFrames = 0;
             bool    reflectShotHeld = false;
             unsigned reflectShotRests = 0;
+            /// THE REST'S STILL-CONVERGING AND CAPPED TEXELS (-1 none read), ITS BOUND (-1 until 2N is read) and THE NEE
+            /// (PHOTON-7 stage 11; RayQueryStatus's).
+            int reflectRestActive = -1, reflectRestCapped = -1, reflectRestBound = -1;
+            unsigned reflectRestBoundOwed = 0, reflectRestNeedMax = 0;
+            int reflectEmitters = -1;
+            unsigned long long reflectNeeRays = 0, reflectNeeHits = 0;
             /// THE HIT DECODE's list (PLANAR-RECORDS-1): records appended in the
             /// last read-back frame, of those dropped because the list was full,
             /// and the list's size (RayQueryStatus::hitRecords/hitDropped/hitCapacity).
