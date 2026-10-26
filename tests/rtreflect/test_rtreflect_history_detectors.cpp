@@ -114,7 +114,7 @@ static float meanDiff(const Image &a, const Image &b, unsigned y0, unsigned y1)
 }
 
 /// The sources this row measures (its bars are Both's).
-static constexpr ReflectSources kSources = ReflectSources::Rays;   // MEASURING ARM 11-0 (c)
+static constexpr ReflectSources kSources = ReflectSources::Both;
 /// (a)'s law: the reflection arrives within this many frames of its source (the restated law, PHOTON-7 stage 5).
 static constexpr int kArrivalLagFrames = 16;
 
