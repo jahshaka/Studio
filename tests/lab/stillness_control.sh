@@ -28,6 +28,13 @@
 #       round's listings landing while the last one's pages relight), so one due covers the chain, and the per-round
 #       form, sum ceil(pages_r / P) + rounds x 9, is printed beside it (it allows a due's stall at every round: 261
 #       frames against the work's 72). How MANY rounds a stop takes is not this row's law (the card-to-card rest row's).
+#   (4) EVERY REST RESTART HAS A CAUSE (PHOTON-7 stage 10, the lead's ruling: R3 (a)'s display quantum applies to every
+#       reader): from each reader's first rest on (the gather's rest_frames, the reflection's refl_rest_frames), every
+#       frame it restarts (its rest 0) has one at that frame or the one before - a VISIBLE relight read back (a card texel
+#       moved a code since its last report: cards_visible), a capture or a still trace (cards_captures, a cards.capture /
+#       cards.still row), a real change (a GI writer that is not the cards': a light's, the field's, the voxels'), or the
+#       teleport itself. A relight whose every texel stayed under a code (cards_subquantum) is NOT a cause: a reader that
+#       restarts on one is red - the count of such relight-frame restarts is printed for each reader.
 # On the rig's display, at 960x540.
 # usage: stillness_control.sh <jahlab> <work dir>
 set -u
@@ -105,6 +112,40 @@ if first_hold is not None:
                   [(r, round(tx / max(page, 1), 1)) for r, tx in rounds], P, pace, perRound))
             check(page > 0 and P > 0 and len(rounds) > 0 and W <= pace,
                   "(3) W'S PACE: the decision's work (%d frames) within ceil(%.1f pages / %d) + 9 = %d" % (W, pages, P, pace))
+# (4) EVERY REST RESTART HAS A CAUSE
+num = lambda r, k: int(float(r.get(k) or 0))
+vis = [num(r, "cards_visible") for r in ctl]
+sub = [num(r, "cards_subquantum") for r in ctl]
+cap = [num(r, "cards_captures") for r in ctl]
+rel = [num(r, "cards_relights") for r in ctl]
+def moved(a, i): return i > 0 and a[i] != a[i - 1]
+def writer(i):
+    parts = [p for p in ctl[i]["gi_rows"].split(",") if ":" in p] if ctl[i]["gi_rows"] != "-" else []
+    return any(not p.startswith("cards.") for p in parts), any(p.startswith(("cards.capture:", "cards.still:")) for p in parts)
+def cause(i):
+    for j in (i, i - 1):
+        if j <= 1: return "the teleport"
+        w, c = writer(j)
+        if moved(vis, j): return "a visible relight"
+        if moved(cap, j) or c: return "a capture"
+        if w: return "a GI writer"
+    return None
+print("the readings: %d relight frames VISIBLE (%d unmeasured), %d SUB-QUANTUM; the largest move %s codes" % (
+    vis[-1] - vis[0], num(ctl[-1], "cards_unmeasured") - num(ctl[0], "cards_unmeasured"), sub[-1] - sub[0],
+    max((float(r.get("cards_move_codes") or 0) for r in ctl), default=0.0)))
+for label, key in (("the gather", "rest_frames"), ("the reflection", "refl_rest_frames")):
+    rs = [num(r, key) for r in ctl]
+    start = next((i for i, n in enumerate(rs) if n >= 1), None)
+    if start is None:
+        check(False, "(4) %s rests in the window" % label)
+        continue
+    restarts = [i for i in range(start, len(rs)) if rs[i] == 0]
+    blind = [i for i in restarts if cause(i) is None]
+    on_relight = [i for i in blind if moved(rel, i) or moved(rel, i - 1)]
+    print("  %s: %d restart frames after its first rest (%d), %d with no cause, %d of them on a relight frame%s" % (
+        label, len(restarts), start, len(blind), len(on_relight), (" - frames %s" % blind[:12]) if blind else ""))
+    check(not blind, "(4) EVERY REST RESTART HAS A CAUSE: %s - %d restart(s) with none (%d on a sub-quantum relight)" % (
+        label, len(blind), len(on_relight)))
 held2 = list(csv.DictReader(open(os.path.join(wd, "data", "stillness", "held.tsv")), delimiter="\t"))
 check(len(held2) == 13 and all(r["held"] == "1" and int(r["all_max"]) == 0 and r["gi_rows"] == "-" for r in held2),
       "(1b) the held stop's window: 13 frames held, 0 codes, no GI row")
