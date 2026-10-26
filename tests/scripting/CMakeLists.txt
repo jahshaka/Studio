@@ -979,6 +979,22 @@ set_tests_properties(scripting.e2e.change_then_shot PROPERTIES
     FIXTURES_REQUIRED changeThenShotHome
     LABELS "scripting" TIMEOUT 60)
 
+# scripting.e2e.second_project_capture (PHOTON-7 stage 10-3, R0) - A SECOND PROJECT IN ONE SESSION, SHOT AT ONCE, NEVER
+# LOSES THE DEVICE: fixture B built in a new project and shot, then again in a second new project and shot (the shot's
+# capture workspace in its first frame against new textures). RED before the fix: Xid 13 and VK_ERROR_DEVICE_LOST at the
+# second shot (a new D32 written only by its render-pass clear, loaded read-only by the next pass; the script says the
+# whole cause). 2 x (12 + 120) frames and the shots' settles; a device loss exits 3 and fails the row.
+set(_spcHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-second_project_capture)
+jah_fresh_home_fixture(scripting.e2e.second_project_capture.fresh_home secondProjectCaptureHome "${_spcHome}" LABELS "scripting")
+file(MAKE_DIRECTORY ${_spcHome}/run)
+jah_gpu_row(scripting.e2e.second_project_capture CLASS app TIER epic NEEDS photon FRAMES 600
+    COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_second_project_capture.js
+    WORKING_DIRECTORY ${_spcHome}/run)
+set_tests_properties(scripting.e2e.second_project_capture PROPERTIES
+    ENVIRONMENT "HOME=${_spcHome};JAHSHAKA_DATA_ROOT=${_spcHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED secondProjectCaptureHome
+    LABELS "scripting" TIMEOUT 60)
+
 # scripting.e2e.paused_shot (PHOTON-7 stage 10-3, the lead's ruling) - A SHOT OF A PAUSED ANIMATED SCENE IS AT REST: a
 # lamp's intensity animated in play-in-place; the shot freezes the document clock while it settles, so it ends at rest
 # and equals, to the code, a shot of the scene stopped and posed at the same document time. 60 + 37 + 10 frames and the

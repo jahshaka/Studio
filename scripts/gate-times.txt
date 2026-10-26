@@ -237,6 +237,8 @@ scripting.e2e.resize_rest.c 29.75  solo, the card lock held, :72, warm (PHOTON-7
 scripting.e2e.world_stillness.fresh_home 0.01  solo (PHOTON-2 stage 0, 2026-10-22)
 scripting.e2e.change_then_shot 41.44  solo, the card lock held, :72, a fresh home (PHOTON-7 stage 10-3, 2026-10-26: the default scene at rest, the camera 5 cm and a shot at once - RED before the liveness fix: the shot at its 2,002-frame cap)
 scripting.e2e.change_then_shot.fresh_home 0.01  solo (PHOTON-7 stage 10-3, 2026-10-26)
+scripting.e2e.second_project_capture 44.36  solo, the card lock held, :72, a fresh home (PHOTON-7 stage 10-3 R0, 2026-10-26: fixture B in two new projects, each shot at once - RED before the depth seed: Xid 13, VK_ERROR_DEVICE_LOST at the second shot)
+scripting.e2e.second_project_capture.fresh_home 0.02  solo (PHOTON-7 stage 10-3 R0, 2026-10-26)
 scripting.e2e.paused_shot 43.96  solo, the card lock held, :72, a fresh home (PHOTON-7 stage 10-3, 2026-10-26: a lamp pulsing in play-in-place, a shot during play and one stopped at the same time, compared)
 scripting.e2e.paused_shot.fresh_home 0.01  solo (PHOTON-7 stage 10-3, 2026-10-26)
 scripting.live 10.56  quiet n=49
