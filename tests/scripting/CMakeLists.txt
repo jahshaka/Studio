@@ -961,6 +961,21 @@ set_tests_properties(scripting.e2e.world_stillness PROPERTIES
     FIXTURES_REQUIRED worldStillnessHome
     LABELS "scripting" TIMEOUT 60)
 
+# scripting.e2e.change_then_shot (PHOTON-7 stage 10-3; L1, liveness) - A SCREENSHOT TAKEN AT ONCE AFTER A CAMERA MOVE
+# SETTLES TO REST, NEVER TO ITS CAP: the default scene at the self-test's second pose, at rest, the camera 5 cm along x and
+# the shot at once (its own view the cards' only reader). RED before the fix: the cards' demand window held open by a
+# reader whose clock froze after one graze, the shot at its 2,002-frame cap. 240 frames, the rest, the shot's settle.
+set(_ctsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-change_then_shot)
+jah_fresh_home_fixture(scripting.e2e.change_then_shot.fresh_home changeThenShotHome "${_ctsHome}" LABELS "scripting")
+file(MAKE_DIRECTORY ${_ctsHome}/run)
+jah_gpu_row(scripting.e2e.change_then_shot CLASS app TIER epic NEEDS photon FRAMES 400
+    COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js
+    WORKING_DIRECTORY ${_ctsHome}/run)
+set_tests_properties(scripting.e2e.change_then_shot PROPERTIES
+    ENVIRONMENT "HOME=${_ctsHome};JAHSHAKA_DATA_ROOT=${_ctsHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED changeThenShotHome
+    LABELS "scripting" TIMEOUT 60)
+
 # scripting.e2e.paused_shot (PHOTON-7 stage 10-3, the lead's ruling) - A SHOT OF A PAUSED ANIMATED SCENE IS AT REST: a
 # lamp's intensity animated in play-in-place; the shot freezes the document clock while it settles, so it ends at rest
 # and equals, to the code, a shot of the scene stopped and posed at the same document time. 60 + 37 + 10 frames and the

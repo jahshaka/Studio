@@ -233,6 +233,8 @@ scripting.e2e.resize_history.b 21.54  solo, the card lock held, :72, warm (PHOTO
 scripting.e2e.resize_rest.a 25.04  solo, the card lock held, :72, warm (PHOTON-7 stage 10-3, 2026-10-26: boot a, the Mirror Room opened in a 1280 x 800 window, rested, its scene shot kept)
 scripting.e2e.resize_rest.b 25.44  solo, the card lock held, :72, warm (PHOTON-7 stage 10-3, 2026-10-26: boot b, 700 x 520 then 1280 x 800 inside the open's settle, rested, compared - RED before F1: the rest decision armed with readers 0, 0 cards resident)
 scripting.e2e.world_stillness.fresh_home 0.01  solo (PHOTON-2 stage 0, 2026-10-22)
+scripting.e2e.change_then_shot 41.44  solo, the card lock held, :72, a fresh home (PHOTON-7 stage 10-3, 2026-10-26: the default scene at rest, the camera 5 cm and a shot at once - RED before the liveness fix: the shot at its 2,002-frame cap)
+scripting.e2e.change_then_shot.fresh_home 0.01  solo (PHOTON-7 stage 10-3, 2026-10-26)
 scripting.e2e.paused_shot 43.96  solo, the card lock held, :72, a fresh home (PHOTON-7 stage 10-3, 2026-10-26: a lamp pulsing in play-in-place, a shot during play and one stopped at the same time, compared)
 scripting.e2e.paused_shot.fresh_home 0.01  solo (PHOTON-7 stage 10-3, 2026-10-26)
 scripting.live 10.56  quiet n=49
