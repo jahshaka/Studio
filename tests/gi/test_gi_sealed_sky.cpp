@@ -31,6 +31,18 @@
 //       the middle of the picture inside the room, its brightest pixel under 1 % of R. RED before the pixel's diffuse
 //       became the caches' ray integral (the refresh's paths 4 and 7): the four cones' escape read 31.5 % of R. (The
 //       specular cone's share - paths 6 and 9, 10-3's - is inside the number: 0.3 % here.)
+//   (7) THE PIXEL, DIFFUSE AND SPECULAR (PHOTON-7 stage 10-3, item 1; at every tier the room is read at): the composed HDR
+//       picture inside the room at rest - its DIFFUSE the matte middle (the two panels' pixels left out), its SPECULAR the
+//       two METAL panels on the back wall (metalness 1: every pixel of theirs is the specular term), a smooth one
+//       (roughness 0.05: the sky cube at a narrow lobe, REFLECT-1 / PCC-1) and a rough one (0.5: the rough lobe through a
+//       shell) - each one's brightest pixel under 1 % of R.
+//   (8) THE TELEPORT INTO THE BOX (stage 10's (1), 2026-10-26: a ray no cascade holds reads OUTSIDE = the sky, so before a
+//       cascade is built around a new pose a sealed room's nearby rays read the sky): the camera jumps from the settled
+//       pose above the box to the one inside, and EVERY frame of the window until the room is at rest is read - the
+//       picture's middle (the matte and the panels alike), its brightest pixel at most 1 % of R in every frame.
+// THE TIERS: the ray tier at High and at Epic (laws 1-4, 6-8); the NO-RAY tier as it ships (rays off, the field on, no
+// cards: laws 1's roof, 3, 4, 7, 8); and the no-ray route with the field off ((5) with 7, rebuilt inside: the screen
+// integrate's cones answer every pixel).
 // RED ON THE BASE (the caches' cones: the card relight's sixteen-cone sky share and four-cone escape, the bounce's -
 // and the bounce's mean of a voxel's two sides, which let half of each sky-lit outer face light the inside).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
@@ -43,6 +55,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <functional>
 #include <string>
 #include <vector>
 using namespace jahshaka::engine;
@@ -103,6 +116,20 @@ int main()
     box(scene, Vec3(0.0f, 1.5f, -2.2f), Vec3(4.8f, 3.0f, 0.4f), matte);
     const NodeId wzp = box(scene, Vec3(0.0f, 1.5f, 2.2f), Vec3(4.8f, 3.0f, 0.4f), matte);
     box(scene, Vec3(0.0f, -0.6f, 0.0f), Vec3(20.0f, 0.4f, 20.0f), matte);   // the ground the box stands on
+    // (7)'s SPECULAR: two metal panels on the back wall's inside, 4 cm thick, their front face 5 cm off the wall, filling
+    // the inside camera's middle - the smooth one on the left (x < 0), the rough one on the right
+    struct Panel { float x0, x1, y0, y1, z; const char *name; };
+    const Panel panels[2] = { { -1.05f, -0.05f, 0.6f, 1.8f, -1.95f, "the smooth panel (roughness 0.05)" },
+                              { 0.05f, 1.05f, 0.6f, 1.8f, -1.95f, "the rough panel (roughness 0.5)" } };
+    for (int k = 0; k < 2; ++k) {
+        PbrParams metal;
+        metal.albedo = Colour(0.9f, 0.9f, 0.9f);
+        metal.metalness = 1.0f;
+        metal.roughness = k == 0 ? 0.05f : 0.5f;
+        const Panel &q = panels[k];
+        box(scene, Vec3(0.5f * (q.x0 + q.x1), 0.5f * (q.y0 + q.y1), q.z - 0.02f),
+            Vec3(q.x1 - q.x0, q.y1 - q.y0, 0.04f), metal);
+    }
     float sh[27] = { 0 };
     sh[0] = sh[1] = sh[2] = 1.0f;   // a uniform white sky of radiance 1
     scene->setAmbientSh(sh);
@@ -111,11 +138,12 @@ int main()
     // and relit nothing, for 30 frames in a row - past the readers' window (S = 10) and the demand read-back's worst
     // landing (period + lag + 1 = 9: tests/support/owed_rows.py), so the resident set the reads ask for has arrived
     bool cardsOn = true;   // the rays off (5): no cards, the chain and the field alone
-    const auto settle = [&]() {
+    const auto settle = [&](const std::function<void(int)> &each = {}) {
         unsigned long long relights = ~0ull, admitted = ~0ull;
         int quiet = 0, f = 0;
         for (; f < 1200 && quiet < 30; ++f) {
             run(1);
+            if (each) each(f);
             const GiStatus g = scene->published().gi;
             const bool cardsStill = !cardsOn || (g.cards.built && g.cards.relights == relights &&
                                                  g.cards.admitted == admitted && g.cards.queueLength == 0u);
@@ -193,6 +221,177 @@ int main()
         return r;
     };
 
+    // (3) THE VOXELS of cascades 0 and 1 inside the room, against R (every tier the room is read at)
+    const auto voxelLaw = [&](double R) {
+        double vWorst = 0.0;
+        bool vOk = true;
+        for (int c = 0; c < 2; ++c) {
+            const VoxRead vr = readVoxels(c);
+            std::printf("   (3) cascade %d: %zu voxels inside the room, the brightest %.6f (%.4f %% of R)\n", c, vr.cells,
+                        vr.peak, R > 0.0 ? 100.0 * vr.peak / R : -1.0);
+            vOk = vOk && vr.ok && vr.cells > 0;
+            vWorst = std::max(vWorst, vr.peak);
+        }
+        check(vOk && R > 0.0 && vWorst < 0.01 * R,
+              "(3) THE VOXELS: no voxel of cascades 0 and 1 inside the sealed room reads 1 % of the roof's");
+    };
+    // (4) THE FIELD's probes inside the room (gi.field_oracle's slot rule: the window's slot to its lattice point)
+    const auto fieldLaw = [&](double R) {
+        const GiStatus st = scene->published().gi;
+        GiFieldAtlas a;
+        unsigned inside = 0u, above = 0u;
+        double fWorst = 0.0, fAbove = 0.0;
+        const bool fok = st.ifdBound && scene->giFieldAtlas(a) && a.available && a.irradBytesPerTexel == 8u;
+        if (fok) {
+            const unsigned count = a.probes[0] * a.probes[1] * a.probes[2], res = a.irradBordered - 2u;
+            const float sz[3] = { st.ifdMax.x - st.ifdMin.x, st.ifdMax.y - st.ifdMin.y, st.ifdMax.z - st.ifdMin.z };
+            const float o0[3] = { st.ifdMin.x, st.ifdMin.y, st.ifdMin.z };
+            for (unsigned p = 0; p < count; ++p) {
+                const unsigned sl[3] = { p % a.probes[0], (p / a.probes[0]) % a.probes[1], p / (a.probes[0] * a.probes[1]) };
+                float wp[3];
+                for (int k = 0; k < 3; ++k) {
+                    const unsigned n = a.probes[k];
+                    const unsigned local = (sl[k] + n - a.windowOffset[k] % n) & (n - 1u);
+                    const float block = sz[k] / float(n), spacing = (sz[k] + 2.0f * block) / float(n);
+                    wp[k] = o0[k] - block + float(local) * spacing;
+                }
+                const bool in = std::fabs(wp[0]) < 2.0f && std::fabs(wp[2]) < 2.0f && wp[1] > 0.0f && wp[1] < 3.0f;
+                const bool up = wp[1] > 4.5f;   // the control: open sky above the box
+                if (!in && !up) continue;
+                ++(in ? inside : above);
+                double &worstHere = in ? fWorst : fAbove;
+                const unsigned x0 = (p * a.irradBordered) % a.irradWidth + 1u;
+                const unsigned y0 = ((p * a.irradBordered) / a.irradWidth) * a.irradBordered + 1u;
+                for (unsigned t = 0; t < res * res; ++t) {
+                    const unsigned x = x0 + t % res, y = y0 + t / res;
+                    uint16_t h[4];
+                    std::memcpy(h, &a.irradiance[(size_t(y) * a.irradWidth + x) * 8u], sizeof(h));
+                    for (int c = 0; c < 3; ++c) {
+                        // a half's bits to its value (normal, subnormal; the field holds no Inf or NaN here)
+                        const int ex = (h[c] >> 10) & 0x1f, man = h[c] & 0x3ff;
+                        const double v = ex ? std::ldexp(1.0 + man / 1024.0, ex - 15) : std::ldexp(man / 1024.0, -14);
+                        worstHere = std::max(worstHere, (h[c] & 0x8000) ? -v : v);
+                    }
+                }
+            }
+        }
+        std::printf("   (4) the field: bound %d, %u probes inside the room, the brightest texel %.6f (%.4f %% of R); "
+                    "the control, %u probes in the open above, the brightest %.4f\n",
+                    int(st.ifdBound), inside, fWorst, R > 0.0 ? 100.0 * fWorst / R : -1.0, above, fAbove);
+        check(fok && above > 0u && fAbove > 0.5, "(4) the control: the field's probes in the open above the box hold the sky");
+        check(fok && inside > 0u && R > 0.0 && fWorst < 0.01 * R,
+              "(4) THE FIELD: no probe inside the sealed room holds 1 % of the roof's");
+    };
+
+    // THE INSIDE CAMERA and where a world point lands in its picture (testCameraDescLookAt's basis, 45 degrees vertical,
+    // the view's square aspect; top-left origin)
+    const Vec3 inPos(0.0f, 1.5f, 1.4f), inAt(0.0f, 1.0f, -2.0f);
+    const auto toPixel = [&](const Vec3 &w, unsigned W, unsigned H, double &px, double &py) {
+        double f[3] = { inAt.x - inPos.x, inAt.y - inPos.y, inAt.z - inPos.z };
+        const double fl = std::sqrt(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
+        for (double &c : f) c /= fl;
+        double r[3] = { -f[2], 0.0, f[0] };   // f x (0, 1, 0)
+        const double rl = std::sqrt(r[0] * r[0] + r[2] * r[2]);
+        r[0] /= rl; r[2] /= rl;
+        const double u[3] = { r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0] };
+        const double d[3] = { w.x - inPos.x, w.y - inPos.y, w.z - inPos.z };
+        const double xc = d[0] * r[0] + d[1] * r[1] + d[2] * r[2], yc = d[0] * u[0] + d[1] * u[1] + d[2] * u[2],
+                     zc = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
+        const double t = std::tan(0.5 * 45.0 * 3.14159265358979 / 180.0), aspect = double(W) / double(H);
+        px = (0.5 + 0.5 * xc / (zc * t * aspect)) * W;
+        py = (0.5 - 0.5 * yc / (zc * t)) * H;
+    };
+    // a panel's pixels: the rectangle inside its four projected corners, 3 px in (`outer`: the corners' bounds, 2 px out)
+    struct Rect { int x0 = 0, y0 = 0, x1 = -1, y1 = -1; bool has(int x, int y) const { return x >= x0 && x <= x1 && y >= y0 && y <= y1; } };
+    const auto panelRect = [&](const Panel &q, unsigned W, unsigned H, bool outer) {
+        double ax[4], ay[4];
+        const Vec3 c[4] = { Vec3(q.x0, q.y0, q.z), Vec3(q.x1, q.y0, q.z), Vec3(q.x0, q.y1, q.z), Vec3(q.x1, q.y1, q.z) };
+        for (int k = 0; k < 4; ++k) toPixel(c[k], W, H, ax[k], ay[k]);
+        Rect r;
+        if (outer) {
+            r.x0 = int(std::floor(std::min(std::min(ax[0], ax[1]), std::min(ax[2], ax[3])))) - 2;
+            r.x1 = int(std::ceil(std::max(std::max(ax[0], ax[1]), std::max(ax[2], ax[3])))) + 2;
+            r.y0 = int(std::floor(std::min(std::min(ay[0], ay[1]), std::min(ay[2], ay[3])))) - 2;
+            r.y1 = int(std::ceil(std::max(std::max(ay[0], ay[1]), std::max(ay[2], ay[3])))) + 2;
+        } else {
+            r.x0 = int(std::ceil(std::max(ax[0], ax[2]))) + 3;   // the left corners' innermost
+            r.x1 = int(std::floor(std::min(ax[1], ax[3]))) - 3;
+            r.y0 = int(std::ceil(std::max(ay[2], ay[3]))) + 3;   // the top corners (y1) lie higher: smaller rows
+            r.y1 = int(std::floor(std::min(ay[0], ay[1]))) - 3;
+        }
+        return r;
+    };
+    // (7)'s read of one picture: the matte middle's brightest pixel (the panels left out) and each panel's
+    struct PixRead {
+        bool ok = false;
+        double diffuse = 0.0, spec[2] = { 0.0, 0.0 }, border = 0.0, middle = 0.0;
+        unsigned specPx[2] = { 0u, 0u };
+        int borderAt[2] = { -1, -1 };
+    };
+    const auto readPicture = [&]() {
+        PixRead r;
+        ImageF pic;
+        if (!view->readPixelsHdr(pic) || pic.width < 64u || pic.height < 64u) return r;
+        r.ok = true;
+        const Rect in[2] = { panelRect(panels[0], pic.width, pic.height, false), panelRect(panels[1], pic.width, pic.height, false) };
+        const Rect out[2] = { panelRect(panels[0], pic.width, pic.height, true), panelRect(panels[1], pic.width, pic.height, true) };
+        for (unsigned y = 0; y < pic.height; ++y)
+            for (unsigned x = 0; x < pic.width; ++x) {
+                const Colour c = pic.at(x, y);
+                const double v = std::max(c.r, std::max(c.g, c.b));
+                const bool mid = x >= pic.width / 4u && x < pic.width * 3u / 4u && y >= pic.height / 4u && y < pic.height * 3u / 4u;
+                if (mid) r.middle = std::max(r.middle, v);
+                bool inner = false, outerHit = false;
+                for (int k = 0; k < 2; ++k) {
+                    if (in[k].has(int(x), int(y))) { r.spec[k] = std::max(r.spec[k], v); ++r.specPx[k]; inner = true; }
+                    outerHit = outerHit || out[k].has(int(x), int(y));
+                }
+                // THE PANELS' BORDERS: their edges and side faces (metal, seen at a grazing angle) and the wall beside them
+                if (outerHit && !inner && v > r.border) { r.border = v; r.borderAt[0] = int(x); r.borderAt[1] = int(y); }
+                if (mid && !outerHit) r.diffuse = std::max(r.diffuse, v);
+            }
+        return r;
+    };
+    // (7) THE PIXEL at rest inside, diffuse and specular, against R
+    const auto pixelLaw = [&](double R, const char *tier) {
+        const PixRead p = readPicture();
+        std::printf("   (7) %s, the picture inside at rest: the matte middle's brightest %.6f (%.4f %% of R); %s %.6f "
+                    "(%.4f %%, %u px), %s %.6f (%.4f %%, %u px); the panels' borders %.6f (%.4f %%) at (%d, %d)\n", tier,
+                    p.diffuse, R > 0.0 ? 100.0 * p.diffuse / R : -1.0, panels[0].name, p.spec[0],
+                    R > 0.0 ? 100.0 * p.spec[0] / R : -1.0, p.specPx[0], panels[1].name, p.spec[1],
+                    R > 0.0 ? 100.0 * p.spec[1] / R : -1.0, p.specPx[1], p.border, R > 0.0 ? 100.0 * p.border / R : -1.0,
+                    p.borderAt[0], p.borderAt[1]);
+        check(p.ok && R > 0.0 && p.diffuse < 0.01 * R,
+              "(7) THE PIXEL'S DIFFUSE: no matte pixel inside the sealed room reads 1 % of the roof's");
+        check(p.ok && R > 0.0 && p.specPx[0] > 100u && p.specPx[1] > 100u && p.spec[0] < 0.01 * R && p.spec[1] < 0.01 * R,
+              "(7) THE PIXEL'S SPECULAR: no pixel of either metal panel inside the sealed room reads 1 % of the roof's");
+        check(p.ok && R > 0.0 && p.border < 0.01 * R,
+              "(7) THE PANELS' BORDERS (their grazing edges and the wall beside them) read under 1 % of the roof's");
+    };
+    // (8) THE TELEPORT WINDOW: the camera jumps inside, and every frame until the room is at rest is read
+    struct Window { int frames = 0, worstFrame = -1, laterFrame = -1; double worst = 0.0, first = -1.0, later = 0.0, last = 0.0; bool ok = true; };
+    const auto teleportIn = [&](Window &w) {
+        enginetest::testCameraLookAt(view, inPos, inAt);
+        return settle([&](int f) {
+            const PixRead p = readPicture();
+            w.ok = w.ok && p.ok;
+            ++w.frames;
+            if (p.middle > w.worst) { w.worst = p.middle; w.worstFrame = f; }
+            if (f == 0) w.first = p.middle;
+            else if (p.middle > w.later) { w.later = p.middle; w.laterFrame = f; }
+            w.last = p.middle;
+        });
+    };
+    const auto teleportLaw = [&](const Window &w, double R, const char *tier) {
+        const double k = R > 0.0 ? 100.0 / R : -1.0;
+        std::printf("   (8) %s, the teleport into the box: %d frames read to rest, the picture's middle at its brightest %.6f "
+                    "(%.4f %% of R) at frame %d after the jump; the first frame %.4f %%, the brightest later %.4f %% (frame "
+                    "%d), the last %.4f %%\n", tier, w.frames, w.worst, k * w.worst, w.worstFrame, k * w.first,
+                    k * w.later, w.laterFrame, k * w.last);
+        check(w.ok && w.frames > 0 && R > 0.0 && w.worst <= 0.01 * R,
+              "(8) THE TELEPORT INTO THE BOX: no frame of the window until rest reads 1 % of the roof's");
+    };
+
     const GiQuality tiers[2] = { GiQuality::High, GiQuality::Epic };
     const char *tierName[2] = { "High", "Epic" };
     for (int t = 0; t < 2; ++t) {
@@ -232,9 +431,9 @@ int main()
         check(restOut >= 0 && out0.ok && R > 0.5 * kAlbedo && outerMean > 0.25 * R,
               "(1) THE CONTROL - THE SKY IS ON: the roof's voxels read over half the albedo times the sky, the outer "
               "walls' cards over a quarter of that");
-        // inside: its gather reads (and so keeps resident) the room's faces
-        enginetest::testCameraLookAt(view, Vec3(0.0f, 1.5f, 1.4f), Vec3(0.0f, 1.0f, -2.0f));
-        const int restIn = settle();
+        // inside: its gather reads (and so keeps resident) the room's faces - the jump there is (8)'s teleport
+        Window win;
+        const int restIn = teleportIn(win);
         // THE ROOM'S VISIBLE FACES, sampled where a reader can hit them: an 8 x 8 grid on each inner face, 0.15 m in from
         // its edges (a card also captures the parts of a face a neighbouring box covers - the floor under the walls -
         // whose texels gather from inside a solid and no ray can read: they are not the room's)
@@ -293,69 +492,48 @@ int main()
             check(innerPoints > 0u && innerCounted == innerPoints && innerEscaped == 0u,
                   "(6) THE e = 0 COUNTER: no ray of a carded point inside the sealed room escapes");
         }
-        double vWorst = 0.0;
-        bool vOk = true;
-        for (int c = 0; c < 2; ++c) {
-            const VoxRead vr = readVoxels(c);
-            std::printf("   (3) cascade %d: %zu voxels inside the room, the brightest %.6f (%.4f %% of R)\n", c, vr.cells,
-                        vr.peak, R > 0.0 ? 100.0 * vr.peak / R : -1.0);
-            vOk = vOk && vr.ok && vr.cells > 0;
-            vWorst = std::max(vWorst, vr.peak);
-        }
-        check(vOk && R > 0.0 && vWorst < 0.01 * R,
-              "(3) THE VOXELS: no voxel of cascades 0 and 1 inside the sealed room reads 1 % of the roof's");
-        // (4) THE FIELD's probes inside the room (gi.field_oracle's slot rule: the window's slot to its lattice point)
-        {
-            const GiStatus st = scene->published().gi;
-            GiFieldAtlas a;
-            unsigned inside = 0u, above = 0u;
-            double fWorst = 0.0, fAbove = 0.0;
-            const bool fok = st.ifdBound && scene->giFieldAtlas(a) && a.available && a.irradBytesPerTexel == 8u;
-            if (fok) {
-                const unsigned count = a.probes[0] * a.probes[1] * a.probes[2], res = a.irradBordered - 2u;
-                const float sz[3] = { st.ifdMax.x - st.ifdMin.x, st.ifdMax.y - st.ifdMin.y, st.ifdMax.z - st.ifdMin.z };
-                const float o0[3] = { st.ifdMin.x, st.ifdMin.y, st.ifdMin.z };
-                for (unsigned p = 0; p < count; ++p) {
-                    const unsigned sl[3] = { p % a.probes[0], (p / a.probes[0]) % a.probes[1], p / (a.probes[0] * a.probes[1]) };
-                    float wp[3];
-                    for (int k = 0; k < 3; ++k) {
-                        const unsigned n = a.probes[k];
-                        const unsigned local = (sl[k] + n - a.windowOffset[k] % n) & (n - 1u);
-                        const float block = sz[k] / float(n), spacing = (sz[k] + 2.0f * block) / float(n);
-                        wp[k] = o0[k] - block + float(local) * spacing;
-                    }
-                    const bool in = std::fabs(wp[0]) < 2.0f && std::fabs(wp[2]) < 2.0f && wp[1] > 0.0f && wp[1] < 3.0f;
-                    const bool up = wp[1] > 4.5f;   // the control: open sky above the box
-                    if (!in && !up) continue;
-                    ++(in ? inside : above);
-                    double &worstHere = in ? fWorst : fAbove;
-                    const unsigned x0 = (p * a.irradBordered) % a.irradWidth + 1u;
-                    const unsigned y0 = ((p * a.irradBordered) / a.irradWidth) * a.irradBordered + 1u;
-                    for (unsigned t = 0; t < res * res; ++t) {
-                        const unsigned x = x0 + t % res, y = y0 + t / res;
-                        uint16_t h[4];
-                        std::memcpy(h, &a.irradiance[(size_t(y) * a.irradWidth + x) * 8u], sizeof(h));
-                        for (int c = 0; c < 3; ++c) {
-                            // a half's bits to its value (normal, subnormal; the field holds no Inf or NaN here)
-                            const int ex = (h[c] >> 10) & 0x1f, man = h[c] & 0x3ff;
-                            const double v = ex ? std::ldexp(1.0 + man / 1024.0, ex - 15) : std::ldexp(man / 1024.0, -14);
-                            worstHere = std::max(worstHere, (h[c] & 0x8000) ? -v : v);
-                        }
-                    }
-                }
-            }
-            std::printf("   (4) the field: bound %d, %u probes inside the room, the brightest texel %.6f (%.4f %% of R); "
-                        "the control, %u probes in the open above, the brightest %.4f\n",
-                        int(st.ifdBound), inside, fWorst, R > 0.0 ? 100.0 * fWorst / R : -1.0, above, fAbove);
-            check(fok && above > 0u && fAbove > 0.5, "(4) the control: the field's probes in the open above the box hold the sky");
-            check(fok && inside > 0u && R > 0.0 && fWorst < 0.01 * R,
-                  "(4) THE FIELD: no probe inside the sealed room holds 1 % of the roof's");
-        }
+        voxelLaw(R);
+        fieldLaw(R);
+        pixelLaw(R, tierName[t]);
+        teleportLaw(win, R, tierName[t]);
     }
-    // (5) printed: the no-ray route (rays off, the field off), High, the picture's middle inside against R
+    // THE NO-RAY TIER AS IT SHIPS (rays off, the field on, no cards): the roof's control, then inside - the voxels, the
+    // field, the pixel and the teleport window
+    double Rnoray = 0.0;
     {
+        std::printf("== High, no rays (the field on)\n");
         scene->setRayTracing(RayTracingMode::Off);
         cardsOn = false;
+        GiParams gi;
+        gi.mode = GiMode::Vct;
+        gi.quality = GiQuality::High;
+        gi.ddgi = GiToggle::On;
+        gi.cards = true;
+        gi.bounces = true;
+        gi.updateBudget = 0;
+        check(scene->setGlobalIllumination(gi), "the no-ray tier's GI builds");
+        e->waitForAsyncShaders();
+        enginetest::testCameraLookAt(view, Vec3(6.0f, 7.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f));
+        const int restOut = settle();
+        const VoxRead out0 = readVoxels(0);
+        const double R = out0.roofMean;
+        Rnoray = R;
+        std::printf("   (1) above: at rest after %d frames; the roof's top voxels (%zu) read %.4f\n", restOut, out0.roofCells, R);
+        check(restOut >= 0 && out0.ok && R > 0.5 * kAlbedo,
+              "(1) THE CONTROL at the no-ray tier: the roof's voxels read over half the albedo times the sky");
+        Window win;
+        const int restIn = teleportIn(win);
+        std::printf("   inside: at rest after %d frames\n", restIn);
+        check(restIn >= 0, "the no-ray tier's room comes to rest");
+        voxelLaw(R);
+        fieldLaw(R);
+        pixelLaw(R, "no rays");
+        teleportLaw(win, R, "no rays");
+    }
+    // (5) printed: the no-ray route (rays off, the field off), High, the picture's middle inside against R - rebuilt
+    // where the camera stands, inside (the teleport is the shipped no-ray tier's, above; R is that tier's roof)
+    {
+        std::printf("== High, no rays, the field off\n");
         GiParams gi;
         gi.mode = GiMode::Vct;
         gi.quality = GiQuality::High;
@@ -366,10 +544,7 @@ int main()
         check(scene->setGlobalIllumination(gi), "(5) the no-ray route's GI builds");
         {
             e->waitForAsyncShaders();
-            enginetest::testCameraLookAt(view, Vec3(6.0f, 7.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f));
-            settle();
-            const double R = readVoxels(0).roofMean;
-            enginetest::testCameraLookAt(view, Vec3(0.0f, 1.5f, 1.4f), Vec3(0.0f, 1.0f, -2.0f));
+            const double R = Rnoray;
             const int rest = settle();
             double mean = -1.0;
             middle(mean);
@@ -383,6 +558,7 @@ int main()
                         R > 0.0 ? 100.0 * mean / R : -1.0, R > 0.0 ? 100.0 * peak / R : -1.0, R);
             check(rest >= 0 && mean >= 0.0 && R > 0.5 * kAlbedo && peak < 0.01 * R,
                   "(5) THE NO-RAY ROUTE: no pixel of the picture inside the sealed room reads 1 % of the roof's");
+            pixelLaw(R, "no rays, the field off");
         }
     }
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);

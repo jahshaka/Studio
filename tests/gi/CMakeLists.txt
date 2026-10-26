@@ -719,7 +719,9 @@ set_tests_properties(gi.voxel_ray_wall PROPERTIES JAHSHAKA_TEST_FRAMES 93)
 
 # gi.sealed_sky (PHOTON-7 stage 10; L9) — THE SKY CANNOT LIGHT A SEALED ROOM, on every store that carries it: a closed box
 # under a uniform sky at High and Epic, its control the roof (test_gi_sealed_sky.cpp says the laws; red on the base: the
-# card relight's sixteen-cone sky share passed the walls, 10-0's P1). A fixture.
+# card relight's sixteen-cone sky share passed the walls, 10-0's P1). A fixture. 10-3 item 1: the pixel's diffuse and
+# specular (two metal panels), the no-ray tier as it ships, the teleport into the box (every frame of the window read) -
+# RED where a path still leaks (10-3 item 2's table).
 add_executable(test_gi_sealed_sky test_gi_sealed_sky.cpp)
 set_target_properties(test_gi_sealed_sky PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -736,7 +738,7 @@ jah_gpu_row(gi.sealed_sky CLASS engine COMMAND test_gi_sealed_sky
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sealed_sky PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 469)
+set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 581)
 
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
