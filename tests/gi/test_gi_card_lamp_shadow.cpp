@@ -162,12 +162,22 @@ int main(int argc, char **argv)
             scene->setLight(lamp, l);
         }
         enginetest::testCameraLookAt(view, Vec3(0.0f, 3.5f, 5.0f), Vec3(0.0f, 0.5f, -1.0f));
+        // (each settle's card work, said: the relights and the indirect ones it ran, and the deepest round it saw - the
+        // series' length after a change)
+        unsigned long long settleRelights = 0ull, settleIndirect = 0ull;
+        unsigned settleRound = 0u;
         const auto settle = [&]() {
             unsigned long long relights = ~0ull, admitted = ~0ull;
+            const GiStatus g0 = scene->published().gi;
+            const unsigned long long r0 = g0.cards.relights, i0 = g0.cards.indirectRelights;
+            settleRound = 0u;
             int quiet = 0, f = 0;
             for (; f < 1500 && quiet < 60; ++f) {
                 run(1);
                 const GiStatus g = scene->published().gi;
+                settleRelights = g.cards.relights - r0;
+                settleIndirect = g.cards.indirectRelights - i0;
+                settleRound = std::max(settleRound, g.cards.workRound);
                 const bool still = !g.chainOwed && !g.feedbackOwed && g.cards.built && g.cards.relights == relights &&
                                    g.cards.admitted == admitted && g.cards.queueLength == 0u;
                 relights = g.cards.relights;
@@ -238,6 +248,8 @@ int main(int argc, char **argv)
         blockerAt[1] = Vec3(1.2f, 1.2f, 1.0f);
         enginetest::setNodePosition(scene, mover, blockerAt[1]);
         const int rest1 = settle();
+        const unsigned long long movedRelights = settleRelights, movedIndirect = settleIndirect;
+        const unsigned movedRound = settleRound;
         std::vector<double> r1, ro, n1, no;
         size_t ok1 = 0, okO = 0;
         read(r1, ok1);
@@ -252,6 +264,9 @@ int main(int argc, char **argv)
         scene->setGlobalIllumination(gi);
         e->waitForAsyncShaders();
         const int rest2 = settle();
+        std::printf("   the series after the move: %llu relights (%llu indirect), the deepest round %u; the re-solve's: %llu "
+                    "relights (%llu indirect), the deepest round %u\n", movedRelights, movedIndirect, movedRound,
+                    settleRelights, settleIndirect, settleRound);
         read(ro, okO);
         no = lastIndirect;
         scene->readCardRadiance(setO, setFrame);
