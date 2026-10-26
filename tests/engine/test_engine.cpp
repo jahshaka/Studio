@@ -2284,7 +2284,6 @@ void ies_profile_shapes_a_spot() {
     d.spotAngleDegrees = 170.0f;
     d.spotSoftness = 0.0588f;    // inner ~160 deg
     d.castShadows = false;
-    d.sourceRadius = 0.001f;   // MEASURING ARM
     CHECK(s->setLight(lightNode, d));
     render(fx.e); Image img; REQUIRE(v->readPixels(img));
     auto lum = [&](unsigned x, unsigned y) { const Colour c = img.at(x, y); return c.r + c.g + c.b; };
