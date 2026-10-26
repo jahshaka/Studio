@@ -7,11 +7,13 @@ arrives after the stop, and admitting it is right; a plane the window entered be
     GiQualityFacts::cardDemandSettleFrames, the record's cards_settle_frames), and rule (b): free room takes a face at
     its first mark. So an arrival is legitimate when its newest mark predates the stop and it lands within the
     read-back's period + lag + 1 of the stop (CardCacheStatus::demandReadEvery + demandReadLag, and the frame a stamp
-    on an issue frame waits: judge() says why), OR its newest mark falls after the stop but within S of it and it lands
-    within the period + lag + 1 of that mark (a reader's first post-stop
-    graze inside its window: the gather's one hit 6 frames after a room walk's stop, the photon-7r merge's ruling). (The
-    reader's first stamp is not in the record: a newest mark within S proves the first within S; one past S is read
-    stray - the judge errs strict there.) Its n cards are captured at the capture budget,
+    on an issue frame waits: judge() says why), OR its newest mark falls after the stop, it lands within the period +
+    lag + 1 of that mark, no change followed the stop's own, and THE CACHE's DEMAND WINDOW WAS OPEN at its frame - judged by
+    the cache's ONE FORMULA, SurfaceCache::demandWindowOpen (window_open below, line for line), on the record's inputs
+    (cards_change, cards_first_*, cards_newest_*, cards_open_lag): a reader's post-stop grazes inside its window (the
+    gather's one hit 6 frames after a room walk's stop, the photon-7r merge's ruling). (PHOTON-7 stage 10-3, the exact
+    judge: it replaced a stand-in, "newest mark <= stop + S", stricter than the cache's rule - which counts S from the
+    READER's first stamp since the change, a frame or more past the stop.) Its n cards are captured at the capture budget,
     C = cardBudgetTexels / page^2 cards a frame, and their indirect at the indirect budget, I = cardIndirectTexels /
     page^2 a frame (the tier table's, as the stillness record carries them - a card is at most a page, so the bound is
     an upper one), the arrivals in their order (a later one's work queues behind an earlier one's) - through frame
@@ -39,6 +41,21 @@ arrives after the stop, and admitting it is right; a plane the window entered be
 """
 
 
+def window_open(r, S):
+    """THE CACHE's DEMAND WINDOW at the record's frame - SurfaceCache::demandWindowOpen (OgreSurfaceCache.cpp), line for
+    line, on its published inputs: open while no reader has stamped since the change and the frame is within S + the
+    period + the lag of it, or while a reader's first stamp fell within S + the period of the change, its newest has not
+    passed that first by S, and the frame is within S + the period + the lag of that first (the liveness clause)."""
+    frame, change = int(r["cards_frame"]), int(r["cards_change"])
+    every, lag = int(r["cards_demand_every"]), int(r["cards_open_lag"])
+    first = (int(r["cards_first_reflect"]), int(r["cards_first_gather"]))
+    newest = (int(r["cards_newest_reflect"]), int(r["cards_newest_gather"]))
+    if not first[0] and not first[1]:
+        return frame < change + S + every + lag
+    return any(first[k] and first[k] < change + S + every and newest[k] < first[k] + S and frame < first[k] + S + every + lag
+               for k in (0, 1))
+
+
 def rows_of(r):
     """The GI rows a stillness frame ran, by name."""
     return [] if r["gi_rows"] == "-" else [it.split(":")[0] for it in r["gi_rows"].split(",")]
@@ -55,7 +72,10 @@ def judge(w):
     # that arrival stray). A stamp one frame after an issue lands at period + lag, so this is the bound's worst case.
     L = int(w[0]["cards_demand_every"]) + int(w[0]["cards_demand_lag"]) + 1
     S = int(w[0]["cards_settle_frames"])
-    legit = lambda c, m: (m <= stop and c - stop <= L) or (stop < m <= stop + S and c - m <= L)
+    # (the stop's own demand change is the first still frame's plan - row 0's cards_frame, stop + 1, where the eye is first
+    # read at its last pose - and no later change may have reopened the window)
+    legit = lambda c, m, r: (m <= stop and c - stop <= L) or (stop < m and c - m <= L and
+                                                              int(r["cards_change"]) <= stop + 1 and window_open(r, S))
     page = int(w[0]["cards_page_size"]) ** 2
     C = max(1, int(w[0]["cards_budget_texels"]) // page) if page else 1
     I = max(1, int(w[0]["cards_indirect_texels"]) // page) if page else 1
@@ -63,17 +83,18 @@ def judge(w):
     follows0 = int(w[0]["ifd_follows"])
     # (window frame, cache frame, the arrivals' newest mark, cards) - a DEMAND's arrivals: the rest's decision's admission
     # (its row's cards_decisions moving, R3 (b)) is no demand arrival - its work is judged by its root, 'd'
-    arrivals = []
+    arrivals, row_of = [], {}
     for k in range(len(w)):
         got = int(w[k]["cards_admitted"]) - int(w[k - 1]["cards_admitted"]) if k else 0
         dec_moved = k and int(w[k].get("cards_decisions", "0") or 0) > int(w[k - 1].get("cards_decisions", "0") or 0)
         if got > 0 and not dec_moved:
             arrivals.append((int(w[k]["frame"]), int(w[k]["cards_frame"]), int(w[k]["cards_arrival_mark"]), got))
+            row_of[int(w[k]["cards_frame"])] = w[k]
     # EACH LEGITIMATE ARRIVAL'S WORK WINDOW: its captures and its indirect at the budgets, queued behind the earlier ones
     windows = []   # (first frame, last frame, the arrival)
     cap_end = ind_end = None
     for a, c, m, n in arrivals:
-        if not legit(c, m):
+        if not legit(c, m, row_of[c]):
             continue
         cap_end = max(a - 1, cap_end if cap_end is not None else a - 1) + -(-n // C)
         ind_end = max(a - 1, ind_end if ind_end is not None else a - 1) + -(-n // I)
@@ -90,7 +111,7 @@ def judge(w):
             return True, "%s (the motion's: born before the stop)" % root
         if kind == "a":
             x = by_cache.get(born)
-            return (x is not None and legit(x[1], x[2])), "%s (the arrival at frame %s)" % (root, x[0] if x else "none")
+            return (x is not None and legit(x[1], x[2], row_of[x[1]])), "%s (the arrival at frame %s)" % (root, x[0] if x else "none")
         if kind == "d":
             return decisions <= 1, "%s (the rest's decision, %d after the stop)" % (root, decisions)
         if kind == "w":
@@ -111,7 +132,7 @@ def judge(w):
         other = [n for n in names if not n.startswith("cards.") and not n.startswith("ifd.")]
         if cards:
             own = [x for x in windows if x[0] <= f <= x[1]]
-            late = [x for x in arrivals if x[0] <= f and x[0] >= f - 1 and not legit(x[1], x[2])]
+            late = [x for x in arrivals if x[0] <= f and x[0] >= f - 1 and not legit(x[1], x[2], row_of[x[1]])]
             roots = [] if r.get("cards_roots", "-") in ("-", "") else r["cards_roots"].split(";")
             judged = [root_owed(x) for x in roots]
             own_row = (decided and decisions <= 1) or (window_drained and drains <= 1)
