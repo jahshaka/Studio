@@ -57,6 +57,7 @@
 #include <cmath>
 #include <cstdio>
 #include <string>
+#include <set>
 #include <vector>
 
 using namespace jahshaka::engine;
@@ -187,14 +188,18 @@ int main(int argc, char **argv)
             }
             cls = inside ? 1 : (near ? 0 : 2);
         };
-        // (each point's three channels; -1 where the card does not answer)
+        // (each point's three channels; -1 where the card does not answer) - and its INDIRECT half beside (the worst
+        // point's breakdown: which half of the card's value disagrees)
+        std::vector<double> lastIndirect;
         const auto read = [&](std::vector<double> &out, size_t &okCount) {
             out.assign(pts.size() * 3u, -1.0);
+            lastIndirect.assign(pts.size() * 3u, -1.0);
             okCount = 0;
             for (size_t i = 0; i < pts.size(); ++i) {
                 CardSample s;
                 if (!scene->readCardAt(pts[i], Vec3(0, 1, 0), s) || !s.ok || !s.lit) continue;
                 for (int c = 0; c < 3; ++c) out[i * 3u + c] = double(s.radiance[c]);
+                for (int c = 0; c < 3; ++c) lastIndirect[i * 3u + c] = double(s.indirect[c]);
                 ++okCount;
             }
         };
@@ -233,17 +238,27 @@ int main(int argc, char **argv)
         blockerAt[1] = Vec3(1.2f, 1.2f, 1.0f);
         enginetest::setNodePosition(scene, mover, blockerAt[1]);
         const int rest1 = settle();
-        std::vector<double> r1, ro;
+        std::vector<double> r1, ro, n1, no;
         size_t ok1 = 0, okO = 0;
         read(r1, ok1);
+        n1 = lastIndirect;
+        // (the resident set of each state: a source card resident in one and voxel-read in the other is not an
+        // unreported drift - the breakdown's question)
+        std::vector<CardRadiance> set1, setO;
+        unsigned long long setFrame = 0ull;
+        scene->readCardRadiance(set1, setFrame);
         scene->setGlobalIllumination(off);
         run(2);
         scene->setGlobalIllumination(gi);
         e->waitForAsyncShaders();
         const int rest2 = settle();
         read(ro, okO);
+        no = lastIndirect;
+        scene->readCardRadiance(setO, setFrame);
         size_t compared = 0, over = 0;
         double worst = 0.0;
+        size_t worstAt = 0;
+        int worstCh = 0;
         for (size_t i = 0; i < pts.size(); ++i) {
             if (r1[i * 3u] < 0.0 || ro[i * 3u] < 0.0) continue;
             ++compared;
@@ -251,13 +266,57 @@ int main(int argc, char **argv)
             for (int c = 0; c < 3; ++c) {   // per channel: a code past one step of the radiance store (RGBA16F, 10-2d)
                 const double o = std::max(ro[i * 3u + c], 5.9604645e-6);
                 const double step = std::ldexp(o, -10);
-                codes = std::max(codes, std::max(0.0, std::fabs(r1[i * 3u + c] - ro[i * 3u + c]) - step) / (0.01 * o));
+                const double cc = std::max(0.0, std::fabs(r1[i * 3u + c] - ro[i * 3u + c]) - step) / (0.01 * o);
+                if (cc > codes) { codes = cc; if (codes > worst) worstCh = c; }
             }
+            if (codes > worst) worstAt = i;
             worst = std::max(worst, codes);
             over += codes > 1.0 ? 1u : 0u;
         }
         std::printf("   the mover stepped: at rest in %d frames; the re-solve at rest in %d: %zu points compared, worst %.3f "
                     "codes, %zu over a code\n", rest1, rest2, compared, worst, over);
+        {
+            // THE WORST POINT, BROKEN DOWN (the card's value = direct + indirect + flat; the moved state against the re-solve)
+            const size_t i = worstAt;
+            int cls = 0;
+            classify(pts[i], cls);
+            std::printf("   the worst point (%.2f, %.2f) %s, channel %d: radiance moved %.6g %.6g %.6g / re-solve %.6g %.6g %.6g; "
+                        "indirect moved %.6g %.6g %.6g / re-solve %.6g %.6g %.6g\n", pts[i].x, pts[i].z,
+                        cls == 1 ? "UMBRA" : cls == 2 ? "LIT" : "penumbra", worstCh, r1[i * 3u], r1[i * 3u + 1], r1[i * 3u + 2],
+                        ro[i * 3u], ro[i * 3u + 1], ro[i * 3u + 2], n1[i * 3u], n1[i * 3u + 1], n1[i * 3u + 2], no[i * 3u],
+                        no[i * 3u + 1], no[i * 3u + 2]);
+            // (the over-a-code points by class, and the radiance's and the indirect's own worst codes over them)
+            size_t byCls[3] = { 0, 0, 0 };
+            double worstInd = 0.0;
+            for (size_t k = 0; k < pts.size(); ++k) {
+                if (r1[k * 3u] < 0.0 || ro[k * 3u] < 0.0) continue;
+                double cd = 0.0, ci = 0.0;
+                for (int c = 0; c < 3; ++c) {
+                    const double o = std::max(ro[k * 3u + c], 5.9604645e-6);
+                    cd = std::max(cd, std::max(0.0, std::fabs(r1[k * 3u + c] - ro[k * 3u + c]) - std::ldexp(o, -10)) / (0.01 * o));
+                    ci = std::max(ci, std::fabs(n1[k * 3u + c] - no[k * 3u + c]) / (0.01 * o));
+                }
+                if (cd > 1.0) { int kc = 0; classify(pts[k], kc); ++byCls[kc]; worstInd = std::max(worstInd, ci); }
+            }
+            std::printf("   over a code: %zu umbra, %zu lit, %zu penumbra; over them the INDIRECT half's change reaches %.3f codes "
+                        "of the radiance\n", byCls[1], byCls[2], byCls[0], worstInd);
+            std::set<std::pair<NodeId, unsigned>> a, b;
+            for (const CardRadiance &c : set1) a.insert({ c.node, c.card });
+            for (const CardRadiance &c : setO) b.insert({ c.node, c.card });
+            size_t onlyMoved = 0, onlyResolve = 0;
+            for (const auto &k : a) onlyMoved += b.count(k) ? 0u : 1u;
+            for (const auto &k : b) onlyResolve += a.count(k) ? 0u : 1u;
+            std::printf("   resident: the moved state %zu cards, the re-solve %zu - %zu only in the moved, %zu only in the re-solve\n",
+                        a.size(), b.size(), onlyMoved, onlyResolve);
+            for (const CardRadiance &c : set1)
+                if (!b.count({ c.node, c.card }))
+                    std::printf("     only in the moved: node %llu card %u face %u size %u, last read %llu\n",
+                                (unsigned long long)c.node, c.card, c.bucket, c.size, (unsigned long long)c.lastRead);
+            for (const CardRadiance &c : setO)
+                if (!a.count({ c.node, c.card }))
+                    std::printf("     only in the re-solve: node %llu card %u face %u size %u, last read %llu\n",
+                                (unsigned long long)c.node, c.card, c.bucket, c.size, (unsigned long long)c.lastRead);
+        }
         CHECK(rest1 >= 0 && rest2 >= 0 && compared > 100 && over == 0u,
               "(2) THE SHADOW FOLLOWS THE MOVED MOVER: every point within a code of a whole re-solve");
 
