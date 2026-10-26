@@ -4,6 +4,9 @@
 // is a function of the pose and the rest index alone. THE LAWS: a shot taken while play runs (a lamp's intensity keyed
 // 1 -> 20 -> 1, looping) ends AT REST (not at the settle's cap), and it equals - to the code - a shot of the same scene
 // stopped and posed at the same document time.
+// RED-CAPABLE (an arm, measured 2026-10-26, spikes/photon-7/stage10/10-3/resize-row/arm-clock-runs.diff): with the
+// settle letting the document clock RUN (the viewport's syncFrame before each settle frame) the shot during play is a
+// picture of a later time - 10,753 px over one code of 16,384, max 144.
 var g = project.create(project.nextFreeName("paused-shot"), { template: "empty" });
 if (!g || g.length < 10) throw new Error("project.create refused");
 var sun = scene.addLight("directional", { position: { x: 0, y: 12, z: 0 }, rotation: { x: -52, y: 28, z: 0 },
