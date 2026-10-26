@@ -510,8 +510,8 @@
   {
    "case": "F7 a line of the pixel's screen cone read selects the gi rows that test it",
    "file": "irisgl/engine/media/Hlms/Jahshaka/JahScreenCone_piece_ps.any",
-   "old": "\tconst bool jahConeRoughLobe = max( 0.0f, tan( jahConeRoughness * 0.5f * 3.141592654f * 0.99f ) ) > 1.0f;\n",
-   "new": "\tconst bool jahConeRoughLobe = max( 0.0f, tan( jahConeRoughness * 0.5f * 3.141592654f * 0.98f ) ) > 1.0f;\n",
+   "old": "\tconst float vctRoughOcclusion = 1.0f - jahConeTexel.w;\n",
+   "new": "\tconst float vctRoughOcclusion = 0.999f - jahConeTexel.w;\n",
    "must": [
     "gi.screen_integrate",
     "gi.card_lamp_shadow_area",
