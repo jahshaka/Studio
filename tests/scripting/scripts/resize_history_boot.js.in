@@ -94,9 +94,16 @@ editor.frame(12);
 buildFixtureB();
 var s = editor.screenshot("@SHOT@", 256, 256, [], "viewport");
 if (!s || !s.width) throw new Error("the shot failed: " + app.lastError());
-var gs = world.giStatus().gather || {};
+var st = world.giStatus();
+var gs = st.gather || {}, rq = st.rayQuery || {};
 console.log("resize_history: boot " + mode + " shot settled " + s.settleFrames + " frames, at rest " + s.atRest +
             "; the gather's starved pixels at the hold: " + gs.starvedDiffuse + " diffuse, " + gs.starvedRough + " rough specular");
+// (what the shot photographed, through the shot-view fold - PHOTON-7 stage 10-3, carrier 2: the shot's settle and the
+// reflection's rest index at the shot, one frame domain or not; the gather's starved counts at its hold)
+console.log("resize_history: boot " + mode + " the shot's own (the shot-view fold, valid " + gs.shotValid + "/" +
+            rq.reflectShotValid + "): the gather's starved " + gs.shotStarvedDiffuse + " diffuse, " + gs.shotStarvedRough +
+            " rough; the reflection's rest " + rq.reflectShotRestFrames + " frames, held " + rq.reflectShotHeld + ", rest #" +
+            rq.reflectShotRests + "; the shot settled " + s.settleFrames + " frames");
 if (s.atRest !== true) throw new Error("the shot settled to its cap, not to rest (" + s.settleFrames + " frames)");
 if (mode === "b") {
     var c = app.compareImages("@SHOT_A@", "@SHOT@", 1);

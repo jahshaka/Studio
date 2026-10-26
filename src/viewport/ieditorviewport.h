@@ -964,6 +964,18 @@ public:
             bool    reflect = false;  ///< the reflect trace ran this frame (needs an SSR chain)
             int     reflectRays = 0;  ///< rays the last reflect dispatch traced (its own resolution)
             float   reflectMs = -1.0f;///< GPU ms of that dispatch; -1 until measured
+            /// THE REFLECTION'S REST as the latest view of the scene drew it (PHOTON-7 stage 10-3, the shot-view fold:
+            /// a screenshot's shot view, destroyed after its readback, is still the latest): its rest frames (0 = moving),
+            /// whether it holds, and the rest's serial (RayQueryStatus::reflectRestFrames / reflectHeld / reflectRests).
+            unsigned reflectRestFrames = 0;
+            bool    reflectHeld = false;
+            unsigned reflectRests = 0;
+            /// ...and THE LAST SHOT's (the shot-view fold: RayQueryStatus::reflectShot*): a screenshot's rest as it
+            /// photographed it, kept past its shot view; shotValid false = none yet.
+            bool    reflectShotValid = false;
+            unsigned reflectShotRestFrames = 0;
+            bool    reflectShotHeld = false;
+            unsigned reflectShotRests = 0;
             /// THE HIT DECODE's list (PLANAR-RECORDS-1): records appended in the
             /// last read-back frame, of those dropped because the list was full,
             /// and the list's size (RayQueryStatus::hitRecords/hitDropped/hitCapacity).
@@ -1010,6 +1022,9 @@ public:
             int   historyAge = 0, restFrames = 0, sinceRestart = 0, settleFrames = 0;
             /// the pixels starved of a rest sample at the hold (PHOTON-7 stage 10-3: NO SAMPLE there)
             int   starvedDiffuse = 0, starvedRough = 0;
+            /// ...and the LAST SHOT's (the shot-view fold: GatherStatus::shotStarved*); shotValid false = none yet.
+            bool  shotValid = false;
+            int   shotStarvedDiffuse = 0, shotStarvedRough = 0;
             bool  settled = true;
             QString error;           ///< why it is not running, when it is not
         };

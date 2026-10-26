@@ -3156,6 +3156,13 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.reflect      = rq.reflect;
         out.rayQuery.reflectRays  = rq.reflectRays;
         out.rayQuery.reflectMs    = rq.reflectMs;
+        out.rayQuery.reflectRestFrames = rq.reflectRestFrames;
+        out.rayQuery.reflectHeld  = rq.reflectHeld;
+        out.rayQuery.reflectRests = rq.reflectRests;
+        out.rayQuery.reflectShotValid = rq.reflectShotValid;
+        out.rayQuery.reflectShotRestFrames = rq.reflectShotRestFrames;
+        out.rayQuery.reflectShotHeld = rq.reflectShotHeld;
+        out.rayQuery.reflectShotRests = rq.reflectShotRests;
         out.rayQuery.hitRecords   = quint64(rq.hitRecords);
         out.rayQuery.hitDropped   = quint64(rq.hitDropped);
         out.rayQuery.hitCapacity  = quint64(rq.hitCapacity);
@@ -3200,6 +3207,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
     out.gather.historyAge   = int(std::min(st.gather.historyAge, 1u << 30));
     out.gather.starvedDiffuse = int(std::min(st.gather.starvedDiffuse, 1u << 30));
     out.gather.starvedRough   = int(std::min(st.gather.starvedRough, 1u << 30));
+    out.gather.shotValid      = st.gather.shotValid;
+    out.gather.shotStarvedDiffuse = int(std::min(st.gather.shotStarvedDiffuse, 1u << 30));
+    out.gather.shotStarvedRough   = int(std::min(st.gather.shotStarvedRough, 1u << 30));
     out.gather.restFrames   = int(std::min(st.gather.restFrames, 1u << 30));
     out.gather.sinceRestart = int(std::min(st.gather.sinceRestart, 1u << 30));
     out.gather.settleFrames = int(st.gather.settleFrames);
