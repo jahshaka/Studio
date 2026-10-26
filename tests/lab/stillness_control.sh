@@ -35,6 +35,12 @@
 #       cards.still row), a real change (a GI writer that is not the cards': a light's, the field's, the voxels'), or the
 #       teleport itself. A relight whose every texel stayed under a code (cards_subquantum) is NOT a cause: a reader that
 #       restarts on one is red - the count of such relight-frame restarts is printed for each reader.
+#   (5) THE SERIES STOPS (the lead's ruling (B) on the card-to-card rest): after the window's last VISIBLE relight
+#       reading, the relights end, and the window then holds at least 9 (one read-back due) + 16 (a reader's rest) frames
+#       with no relight. PRINTED, NOT ASSERTED: the largest move read (dL0, codes), photon-room's albedo (rho_max 0.5,
+#       every surface matte), the chain depth (cards_round's deepest - a chain's, not a root's) and the readings' tail.
+#       (The bound ceil(ln(dL0/q)/ln(1/rho_max)) was withdrawn: the quantum is the READER's 1 %, the report cumulative,
+#       cards_round a chain depth.)
 # On the rig's display, at 960x540.
 # usage: stillness_control.sh <jahlab> <work dir>
 set -u
@@ -146,6 +152,19 @@ for label, key in (("the gather", "rest_frames"), ("the reflection", "refl_rest_
         label, len(restarts), start, len(blind), len(on_relight), (" - frames %s" % blind[:12]) if blind else ""))
     check(not blind, "(4) EVERY REST RESTART HAS A CAUSE: %s - %d restart(s) with none (%d on a sub-quantum relight)" % (
         label, len(blind), len(on_relight)))
+# (5) THE SERIES STOPS
+t_vis = max((i for i in range(1, len(ctl)) if moved(vis, i)), default=None)
+t_rel = max((i for i in range(1, len(ctl)) if moved(rel, i)), default=None)
+quiet = len(ctl) - 1 - t_rel if t_rel is not None else len(ctl) - 1
+codes = [float(r.get("cards_move_codes") or 0) for r in ctl]
+tail = [round(codes[i], 3) for i in range(1, len(ctl)) if moved(vis, i) or moved(sub, i)][-8:]
+vtail = [round(codes[i], 3) for i in range(1, len(ctl)) if moved(vis, i)][-6:]
+depth = max((int(r["cards_round"]) for r in ctl if (r.get("cards_round") or "").isdigit()), default=0)
+print("the series: the last visible reading at %s, the last relight at %s, then %d quiet frames; dL0 %.1f codes, rho_max 0.5 "
+      "(photon-room, matte), the chain depth %d, the readings' tail %s (the visible ones' %s)" % (t_vis, t_rel, quiet, max(codes), depth, tail, vtail))
+check(t_vis is not None and t_rel is not None and quiet >= 9 + 16,
+      "(5) THE SERIES STOPS: after the last visible reading (%s) the relights end (%s) and %d frames follow with none "
+      "(at least 9 + 16)" % (t_vis, t_rel, quiet))
 held2 = list(csv.DictReader(open(os.path.join(wd, "data", "stillness", "held.tsv")), delimiter="\t"))
 check(len(held2) == 13 and all(r["held"] == "1" and int(r["all_max"]) == 0 and r["gi_rows"] == "-" for r in held2),
       "(1b) the held stop's window: 13 frames held, 0 codes, no GI row")
