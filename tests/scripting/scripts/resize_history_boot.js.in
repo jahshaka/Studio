@@ -1,0 +1,106 @@
+// scripting.e2e.resize_history.a / .b (PHOTON-7 stage 10-3; L1: THE SAME POSE GIVES THE SAME PICTURE) - A WINDOW's
+// RESIZE HISTORY LEAVES NO TRACE IN THE PICTURE AT REST. ONE BOOT A ROW (the runner: resize_history_boots.sh), a fixture
+// chain: boot A sets up the picture, boot B requires it.
+//
+// THE DEFECT IT GUARDS (10-3's bistable top face): the screen-probe gather's integrate answered a pixel that took NO REST
+// SAMPLE with its PRE-REST EMA at the hold (rq_probe_integrate.comp, the diffuse and the rough specular alike) - an
+// estimate of the path, not of the pose: which frames the view traced before its rest began, which the scene's rest
+// timing and so another view's state (the main window's size history) set. A one-pixel sliver (the self-test's
+// fixture B, the blue pillar's top face seen edge-on) is the typical starved pixel: 56 codes between a fresh process and
+// one whose window went through pose 2's swapchain test (700 x 520 and back).
+// THE LAW: fixture B (the self-test's, verbatim), the main window at 1280 x 800 in both boots - boot A straight, boot B
+// after the window went to 700 x 520 for 12 frames and back BEFORE the fixture - and the two shots at the viewport grade
+// (the self-test's B1 grade) at rest: no pixel more than ONE code apart in any channel. Each shot's settle length is
+// printed (the readers' coupling across views, named at 10-3, is not this row's law).
+// (WHY TWO BOOTS: the same history inside ONE process - fixture B, the resizes, fixture B again - lost the device at the
+// second open, Xid 13 "3D WIDTH ZT Violation", 10-3's finding of its own.)
+function buildFixtureB() {
+    // A FREE NAME (PROJECT-NAMES-1): names are unique in a library, and a data root
+    // that has run the self-test before already holds a "selftest-fixture-B".
+    var g = project.create(project.nextFreeName("selftest-fixture-B"), { template: "empty" });
+    if (!g || g.length < 10) throw new Error("project.create refused");
+
+    // The sun FIRST: the realistic sky takes its sun position from the scene's sun
+    // (the first directional light), so the light has to exist before the sky is
+    // asked for. A fixed rotation, because a fence may not depend on a default.
+    var sun = scene.addLight("directional", { position: { x: 0, y: 12, z: 0 },
+                                              rotation: { x: -52, y: 28, z: 0 },
+                                              intensity: 3.0 });
+    if (!sun) throw new Error("scene.addLight(directional) refused");
+    if (!world.sky("realistic", {}))
+        throw new Error("world.sky(realistic) refused");
+
+    // THE GLOSSY FLOOR, 60 x 60 m, lifted 2 cm so it is unambiguously above y = 0.
+    var floor = scene.addPrimitive("plane", { position: { x: 0, y: 0.02, z: 0 },
+                                             scale: { x: 60, y: 1, z: 60 } });
+    if (!material.set(floor, { baseColor: "#d8d8d8", metallic: 1.0, roughness: 0.2 }))
+        throw new Error("material.set(floor) refused");
+
+    // SEVEN PILLARS at x = -12 .. 12 step 4, z = -2. #4 (index 3) is the emissive
+    // above the clip; #7 (index 6) is the mirror.
+    var cols = ["#ff3030", "#30ff30", "#3060ff", "#ffffff", "#ff30ff", "#20e0e0", "#ffffff"];
+    for (var i = 0; i < 7; ++i) {
+        var c = scene.addPrimitive("cube", { position: { x: -12 + i * 4, y: 1.5, z: -2 },
+                                            scale: { x: 1, y: 3, z: 1 } });
+        if (i === 3) {
+            if (!material.set(c, { baseColor: "#101010", roughness: 0.9,
+                                   emissiveColor: "#ffffff", emissiveIntensity: 3.0 }))
+                throw new Error("material.set(emissive pillar) refused");
+        } else if (i === 6) {
+            if (!material.set(c, { baseColor: "#ffffff", metallic: 1.0, roughness: 0.0 }))
+                throw new Error("material.set(mirror pillar) refused");
+        } else {
+            if (!material.set(c, { baseColor: cols[i], roughness: 0.6 }))
+                throw new Error("material.set(pillar) refused");
+        }
+    }
+
+    // THE MATTE WALL at z = -9: a receiver for the floor's bounce BEYOND cascade 0's
+    // 5 m half-extent.
+    var wall = scene.addPrimitive("cube", { position: { x: 0, y: 2, z: -9 },
+                                           scale: { x: 12, y: 4, z: 0.3 } });
+    if (!material.set(wall, { baseColor: "#f0f0f0", metallic: 0.0, roughness: 1.0 }))
+        throw new Error("material.set(wall) refused");
+
+    var ph = world.photon({ enabled: true, tier: "high" });
+    if (!ph || ph.enabled !== true || ph.tier !== "high")
+        throw new Error("world.photon(high) did not take: " + JSON.stringify(ph));
+    // SCREEN-SPACE REFLECTIONS ON, EXPLICITLY. The row being ON is what B1 needs: an
+    // SSR row that is off is honoured at every tier — no trace, no march — and the
+    // `ssr` row's tier column is the WORLD MODE's, not Photon's, so a Photon tier
+    // does not set it. Its VALUE shapes only B2: at High with rays the trace runs at
+    // the tier's own resolution whatever lq/hq says (GiQualityFacts::reflectTrace,
+    // D4-PHOTON-TIERS), and with the rays off B2 is the screen march at hq.
+    var ssr = world.override({ id: "ssr", value: "hq" });
+    if (world.settings().ssr.valueId !== "hq")
+        throw new Error("world.override(ssr=hq) did not take: " + JSON.stringify(ssr));
+    if (world.rayTracing("auto") !== "auto") throw new Error("world.rayTracing(auto) refused");
+    editor.setCamera({ position: { x: 0, y: 5, z: 14 }, lookAt: { x: 0, y: 1, z: 0 } });
+
+    // SETTLE IN FRAMES, on the fixed clock, and generously: the cascade scheduler
+    // spends one cascade per frame, the incremental settle pays one injection per
+    // frame after that, and the ray tier's history has its own warm-up. 300 frames
+    // is many times what any of them owes.
+    editor.frame(300);
+}
+
+var mode = "@MODE@";
+if (mode === "b") {
+    app.resizeWindow(700, 520);
+    editor.frame(12);
+}
+app.resizeWindow(1280, 800);
+editor.frame(12);
+buildFixtureB();
+var s = editor.screenshot("@SHOT@", 256, 256, [], "viewport");
+if (!s || !s.width) throw new Error("the shot failed: " + app.lastError());
+console.log("resize_history: boot " + mode + " shot settled " + s.settleFrames + " frames, at rest " + s.atRest);
+if (s.atRest !== true) throw new Error("the shot settled to its cap, not to rest (" + s.settleFrames + " frames)");
+if (mode === "b") {
+    var c = app.compareImages("@SHOT_A@", "@SHOT@", 1);
+    console.log("resize_history: the two boots' pictures: " + c.over + " pixels over one code of " + (c.width * c.height) +
+                ", max " + c.maxDelta + ", mean " + c.meanDelta);
+    if (c.over !== 0)
+        throw new Error("A RESIZE HISTORY LEFT A TRACE: " + c.over + " pixels over one code (max " + c.maxDelta + ")");
+}
+"ok";

@@ -911,6 +911,23 @@ if(TEST scripting.e2e.editor_controls.timing)
     set_property(TEST scripting.e2e.editor_controls.timing PROPERTY JAHSHAKA_TEST_FRAMES 2581)
 endif()
 
+# scripting.e2e.resize_history.a / .b (PHOTON-7 stage 10-3; L1) — A WINDOW's RESIZE HISTORY LEAVES NO TRACE IN THE PICTURE
+# AT REST: the self-test's fixture B in two boots at a 1280 x 800 window, boot b after 700 x 520 and back first, the two
+# viewport-grade shots within one code (resize_history_boot.js.in says the defect: the gather's starved pixels held their
+# pre-rest EMA). One boot a row, a fixture chain (the runner: scripts/resize_history_boots.sh).
+foreach(_k a b)
+    # (FRAMES ESTIMATED, not counted: the mirror-room boot's measured shape - its boot and open about 500 frames - plus
+    # the resizes, fixture B's 300 settle frames and its shot's settle; no frame counter reaches a script row)
+    jah_gpu_row(scripting.e2e.resize_history.${_k} CLASS app TIER epic NEEDS photon FRAMES 900
+             COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resize_history_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                     ${CMAKE_CURRENT_SOURCE_DIR}/scripts/resize_history_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/resize-history ${_k}
+             WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+endforeach()
+set_tests_properties(scripting.e2e.resize_history.a PROPERTIES LABELS "scripting" TIMEOUT 60
+    FIXTURES_SETUP scripting_resize_history_a)
+set_tests_properties(scripting.e2e.resize_history.b PROPERTIES LABELS "scripting" TIMEOUT 60
+    FIXTURES_REQUIRED scripting_resize_history_a DEPENDS scripting.e2e.resize_history.a)
+
 # scripting.e2e.world_stillness (PHOTON-2 stage 0) — THE STILLNESS DOOR THROUGH THE SCRIPTING HOST (API-first: the verb a
 # Bistro measurement drives): world.stillness on a new Basic project, a 0.5 m walk, the stop, a 120-frame window and the
 # path check — the door's shape and its invariants (e2e_world_stillness.js says which) and THE HOLD (PHOTON-2 K6: each
