@@ -106,6 +106,17 @@ jah_gpu_row(rtreflect.sphere_glint CLASS engine COMMAND test_sphere_glint
 set_tests_properties(rtreflect.sphere_glint PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(rtreflect.sphere_glint PROPERTIES JAHSHAKA_TEST_FRAMES 37)
+# rtreflect.sphere_glint_energy (CPU) — A SPHERE LIGHT'S GLINT CARRIES THE POINT'S ENERGY: the fork's JahBrdf read (its k
+# and its table of mu T), its jahSphereLightWiden mirrored, the widened glint's energy integrated over view directions
+# against the exact sphere (4,096 cone directions) - within 1 % at cos 0.6 / 0.9, R/d 0.01 / 0.04 / 0.1, roughness 0.05
+# and 0.2; Karis's representative point (the form built first) out of 1 % at cos 0.6 (the negative control).
+add_executable(test_sphere_glint_energy test_sphere_glint_energy.cpp)
+set_target_properties(test_sphere_glint_energy PROPERTIES CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_definitions(test_sphere_glint_energy PRIVATE
+    JAH_FORK_HLMS_PBS_ANY="${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/Samples/Media/Hlms/Pbs/Any")
+add_test(NAME rtreflect.sphere_glint_energy COMMAND test_sphere_glint_energy WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(rtreflect.sphere_glint_energy PROPERTIES LABELS "engine" TIMEOUT 60)
+jah_no_display(rtreflect.sphere_glint_energy)
 
 # rtreflect.far_record (PHOTON-7 stage 6, READ_B finding 1) — A FAR HIT IS RECORDED AS A FAR HIT: a mirror's reflection of a
 # two-level sphere 93 m behind the camera (past the 50 m near length: the far copies, a record) against the sphere seen
