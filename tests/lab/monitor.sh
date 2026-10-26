@@ -9,8 +9,11 @@
 #       cards' capture (their capture workspace's pass) and relight (cards.relight), the gather (gather.trace,
 #       gather.integrate), the field (ifd.*), the reflection (rq.reflect.trace, rq.reflect.resolve), the area
 #       visibility (area.vis, area.resolve);
-#   (3) THE FRAME ADDS UP: on every frame the top-level passes and rows and the unnamed gaps sum to the busy GPU span
-#       within 2 % (or 0.01 ms) - a row inside a pass is in that pass's time, never counted twice;
+#   (3) THE FRAME ADDS UP: on every frame the WORK - the top-level passes and rows less their measured bubbles
+#       (rbubble), and the unnamed gaps - plus the IDLE (the gaps that crossed a submission and the rows' measured
+#       bubbles) is the frame's GPU span within the timestamps' resolution: 1e-3 ms (law (5)'s rounding) a sample
+#       boundary, two a top-level sample and its gap (2 x tops + 2). A row inside a pass is in that pass's time, never
+#       counted twice; the busy span (span - idle) holds no wait for the CPU (urgent #64);
 #   (4) NOTHING UNNAMED (PHOTON-7's naming step): on every frame the gaps no row names (unattr) are at most 0.1 ms, and
 #       every GPU row that encloses others (gi.step) leaves at most 0.1 ms of its own time to no child LESS ITS MEASURED
 #       BUBBLE (self: - bubble:; urgent #64: a submission inside it is no longer an exemption - the bubble is the fork's
@@ -49,11 +52,17 @@ for part, n in (('boot', 30), ('step', 30)):
     worst = 0.0
     for l in F:
         kv = dict(re.findall(r'(\w+) (-?[\d.]+(?:e-?\d+)?|nan)', l.split('|')[0]))
-        busy, passes, rows, unattr = (float(kv[k]) for k in ('busy', 'passes', 'rows', 'unattr'))
-        err = abs(passes + rows + unattr - busy)
-        worst = max(worst, err / max(busy, 1e-9))
-        if err > max(0.02 * busy, 0.01): fails.append('(3) %s frame %s: passes %.4f + rows %.4f + gaps %.4f vs busy %.4f'
-                                                      % (part, kv['F'] if 'F' in kv else '?', passes, rows, unattr, busy))
+        span, idle, busy, passes, rows, rbubble, unattr = (float(kv[k]) for k in (
+            'span', 'idle', 'busy', 'passes', 'rows', 'rbubble', 'unattr'))
+        tops = int(kv['tops'])
+        work = passes + rows - rbubble + unattr
+        err = abs(work + idle - span)
+        tol = (2 * tops + 2) * 1e-3
+        worst = max(worst, err)
+        if not err <= tol or abs(busy + idle - span) > 1e-3:
+            fails.append('(3) %s frame %s: work %.4f (passes %.4f + rows %.4f - their bubbles %.4f + gaps %.4f) + idle '
+                         '%.4f vs span %.4f: %.4f ms off, over the resolution %.4f (busy %.4f)' % (
+                             part, kv.get('F', '?'), work, passes, rows, rbubble, unattr, idle, span, err, tol, busy))
         tok = dict(re.findall(r' (\S+)=(-?[\d.eE+-]+)', l.split('|', 1)[1] if '|' in l else ''))
         for name, ms in tok.items():
             names[name] = max(names.get(name, 0.0), float(ms))
@@ -87,9 +96,9 @@ for part, n in (('boot', 30), ('step', 30)):
         worst_self = max([float(v) for k, v in tok.items() if k.startswith(('self:row:', 'self:nested-row:'))] + [0.0])
         names['__worst_self_' + part] = max(names.get('__worst_self_' + part, 0.0), worst_self)
         names['__worst_unattr_' + part] = max(names.get('__worst_unattr_' + part, 0.0), unattr)
-    print('%s: the frame adds up - the worst |passes + rows + gaps - busy| / busy %.3f %%; the worst unnamed gap %.4f ms, '
+    print('%s: the frame adds up - the worst |work + idle - span| %.4f ms; the worst unnamed gap %.4f ms, '
           'the worst row own time left to no child %.4f ms (%.4f ms less its measured bubble)' % (
-              part, 100 * worst, names.get('__worst_unattr_' + part, 0.0), names.get('__worst_self_' + part, 0.0),
+              part, worst, names.get('__worst_unattr_' + part, 0.0), names.get('__worst_self_' + part, 0.0),
               worst_own.get(part, 0.0)))
     for row, b in sorted(bubbles.get(part, {}).items(), key=lambda kv: -kv[1]):
         print('%s:   measured bubble %-44s worst %.4f ms a frame' % (part, row, b))

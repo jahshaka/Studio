@@ -1366,6 +1366,7 @@ bool Session::monitor(const Command &c)
         // (a name is one word in the file: its spaces become '_' - Ogre's pass ids carry them)
         const auto word = [](std::string n) { std::replace(n.begin(), n.end(), ' ', '_'); return n; };
         double passes = 0.0, rows = 0.0;
+        unsigned tops = 0u;   // the top-level passes and rows (the frame's sample boundaries: law (3)'s resolution)
         // A ROW'S OWN TIME where it encloses others (self:<name>, the work none of its children names) and whether it
         // SUBMITTED inside it (submitted:<name>=1: its own time holds the GPU's wait for the CPU, a bubble)
         // ...and an OVERRUN (overrun:<name>=ms): its children sum past it beyond the rounding - an overlap or a double count
@@ -1393,7 +1394,7 @@ bool Session::monitor(const Command &c)
             names[word(n)] += p.gpuMs;
             selfOf(n, p.gpuMs, p.selfGpuMs, p.selfMeasured, p.selfSubmitted, p.selfStaging, p.bubbleGpuMs,
                    p.selfBubbleGpuMs, p.insideSubmitted);
-            if (p.topLevel) passes += p.gpuMs;
+            if (p.topLevel) { passes += p.gpuMs; ++tops; }
         }
         std::map<std::string, double> untimed;   // the frame's work with no GPU time of its own (inside a row's time)
         // WHAT TRIGGERED A GI ROW (why:<name>:<WorkReason>=units) and its CPU ms (cpu:<name>) - the hitch table's columns
@@ -1416,18 +1417,23 @@ bool Session::monitor(const Command &c)
             names[word((w.topLevel ? "row:" : "nested-row:") + w.detail)] += w.gpuMs;
             selfOf((w.topLevel ? "row:" : "nested-row:") + w.detail, w.gpuMs, w.selfGpuMs, w.selfMeasured,
                    w.selfSubmitted, w.selfStaging, w.bubbleGpuMs, w.selfBubbleGpuMs, w.insideSubmitted);
-            if (w.topLevel) rows += w.gpuMs;
+            if (w.topLevel) { rows += w.gpuMs; ++tops; }
         }
         dropped += r.gpuMarksDropped;
         const double busy = r.frameGpuMs >= 0.0f && r.gpuIdleMs >= 0.0f ? double(r.frameGpuMs - r.gpuIdleMs) : -1.0;
         // (NaN where it is not measured: a negative overlap is a reading - the clocks' quantum - not a flag)
+        // THE ROWS' MEASURED BUBBLES (rbubble, urgent #64) are idle, not work: the top-level rows' times hold them and
+        // the busy span does not (MonitorRecord::rowBubbleGpuMs)
+        const double rbubble = r.rowBubbleGpuMs >= 0.0f ? double(r.rowBubbleGpuMs) : std::nan("");
         const double overlap = busy >= 0.0 && r.unattributedGpuMs >= 0.0f
-                                   ? passes + rows + double(r.unattributedGpuMs) - busy : std::nan("");
+                                   ? passes + rows - rbubble + double(r.unattributedGpuMs) - busy : std::nan("");
         if (busy < 0.0) ++unmeasured;
-        std::fprintf(out, "F %d frame %llu span %.4f idle %.4f busy %.4f passes %.4f rows %.4f unattr %.4f overlap %.4f "
+        std::fprintf(out, "F %d frame %llu span %.4f idle %.4f busy %.4f passes %.4f rows %.4f rbubble %.4f tops %u "
+                          "unattr %.4f overlap %.4f "
                           "dropped %u rebuilds %u compiles %u wall %.2f sflush %u swrap %u swait %u swaitsub %u swaitms %.3f "
                           "skb %.0f qflush %u qfenced %u qdrain %u qdrainms %.3f gap %.4f %s |", index, r.frame,
-                     double(r.frameGpuMs), double(r.gpuIdleMs), busy, passes, rows, double(r.unattributedGpuMs), overlap,
+                     double(r.frameGpuMs), double(r.gpuIdleMs), busy, passes, rows, rbubble, tops,
+                     double(r.unattributedGpuMs), overlap,
                      r.gpuMarksDropped, r.cascadeRebuilds, r.shaderCompiles, double(r.totalMs), r.stagingFlushes,
                      r.stagingWraps, r.stagingWaits, r.stagingWaitSubmits, double(r.stagingWaitMs),
                      double(r.stagingBytes) / 1024.0, r.queueFlushes, r.queueFencedFlushes, r.queueSelfDrains,
