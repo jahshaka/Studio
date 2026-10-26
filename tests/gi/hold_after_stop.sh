@@ -25,8 +25,10 @@
 #     and 0 codes after it;
 #   COURT, the 15 m crossing (cascade commits inside the walk), after the stop: (a) the per-frame change
 #     non-increasing over 10-frame windows until the hold (0.01-code tolerance, J5); (b) 0 codes after the hold - no
-#     burst; (c) the hold <= the last frame the hold waited on + 17 (the door's hold_key: the gather's rest key moved -
-#     every write, a ray-level refit or a light write with no GI row included - or its inputs owed work); (g) NO READER
+#     burst; (c) THE GATHER's hold <= the last frame it waited on + 17 (the door's hold_key: the gather's rest key moved -
+#     every write, a ray-level refit or a light write with no GI row included - or its inputs owed work; its OWN hold,
+#     gather_held - PHOTON-7 stage 10, the contract: the view holds when EVERY reader holds, so the view's hold is at
+#     or after the gather's and the reflection's own, and (b) reads the view's); (g) NO READER
 #     WEIGHT BELOW 1 (PHOTON-7 stage 5, 5-5: the window's guard band keeps up with the eye) - the field's read region
 #     holds no empty probe (GiStatus::ifdReadUnheld) on any frame of the move's trail and after it; the field's
 #     law (the room's, above; the 40 frames deleted with the rest budget); the rest frames' GPU against the moving
@@ -75,8 +77,8 @@ import owed_rows, rise_law
 def window(name, part="walk"):
     return [r for r in csv.DictReader(open(os.path.join(wd, "data", "stillness", name + ".tsv")), delimiter="\t") if r["window"] == part]
 rows_of = owed_rows.rows_of
-def held_from(w):
-    return next((int(r["frame"]) for r in w if r["held"] == "1"), None)
+def held_from(w, col="held"):
+    return next((int(r["frame"]) for r in w if r[col] == "1"), None)
 def windows_to(w, h):
     chg = [float(r["all_mean"]) for r in w]
     end = h if h is not None else len(w)
@@ -160,8 +162,16 @@ print("court crossing: held from %s; the last frame the hold waited on %d (hold 
 if rises: fails.append("(a) court: the per-frame change non-increasing over 10-frame windows (0.01 tolerance): rises %s" % rises)
 if h is None: fails.append("(b) court: the picture never held")
 elif after: fails.append("(b) court: no change after the hold: %d frames from %d" % (len(after), after[0]))
-if h is not None and h > lastw + 17: fails.append("(c) court: the hold <= the last frame it waited on + 17: %d > %d" % (h, lastw + 17))
-if h is not None and h <= lastw: fails.append("(c) court: the hold after the last frame it waited on: %d <= %d" % (h, lastw))
+# (c) THE GATHER's OWN HOLD against what it waited on; THE VIEW's (every reader's) at or after each reader's own
+hg = held_from(w, "gather_held")
+hr = held_from(w, "refl_held")
+print("court crossing: the gather held from %s, the reflection from %s, the view from %s" % (hg, hr, h))
+if hg is None: fails.append("(c) court: the gather never held")
+if hg is not None and hg > lastw + 17: fails.append("(c) court: the gather's hold <= the last frame it waited on + 17: %d > %d" % (hg, lastw + 17))
+if hg is not None and hg <= lastw: fails.append("(c) court: the gather's hold after the last frame it waited on: %d <= %d" % (hg, lastw))
+if h is not None and ((hg is not None and h < hg) or (hr is not None and h < hr)):
+    fails.append("(c) court: THE VIEW HOLDS WHEN EVERY READER HOLDS: the view's hold %d before a reader's (the gather %s, "
+                 "the reflection %s)" % (h, hg, hr))
 print("court crossing: THE LAW: the store at rest from frame %s, %s integrations owed then at a grant of %s, so the field's last write <= %s - its last write %d; frames spending under the grant while restarts were owed: %s; the rest frames' GPU (information: stage 0's whole-frame law is the hitch guard) largest %.2f ms against the moving frames' median %.2f (twice it %.2f)"
       % (cR, cW, cG, cbound, clast, cshort[:6] or "none", max([g for _, g in restg] or [-1.0]), mmed, 2.0 * mmed))
 print("court crossing: the walk's marks (the cone-shell commit's baseline): %d probes marked by the moves over %d outer commits (%.0f a commit)"

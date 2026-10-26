@@ -39,20 +39,27 @@ assert(px.all > 0 && px.upper > 0 && px.lower > 0 && px.upper + px.lower === px.
 var st = world.giStatus();
 if (st.gather && st.gather.running === true)
     assert(r.windows[0].visibleFromGather === true, "the walk window's mask is the gather's own history count");
-// THE HOLD (PHOTON-2 stage 2's round, H1; K6; round 2's L7): the gather SETTLES while its inputs are written - every
+// THE HOLD (PHOTON-2 stage 2's round, H1; K6; round 2's L7): the GATHER SETTLES while its inputs are written - every
 // write, the ones that file no GI row included (a ray-level refit, a shadow scan, a light write) - or owe work, and
 // HOLDS the settle after the last such frame (the door's lastHoldKeyFrame): at most that frame (the stop, frame 0, when
-// none came after it) + the settle N + 1, and never before it nor before the last GI row. A window long enough to
-// hold (120 frames) that never holds FAILS - it is never skipped.
+// none came after it) + the settle N + 1, and never before it nor before the last GI row - its OWN hold
+// (gatherHoldFrame). THE VIEW HOLDS WHEN EVERY READER HOLDS (PHOTON-7 stage 10, the contract): its hold (holdFrame) is
+// at or after the gather's and, where the reflection traces, the reflection's own (reflHoldFrame; its length is the
+// reflection's rest rule, stage 11's to bound). A window long enough to hold (120 frames) that never holds FAILS.
 for (var w = 0; w < 2; ++w) {
     var win = r.windows[w];
     var lastWrite = Math.max(0, win.lastHoldKeyFrame);
     assert(win.settleFrames > 0, win.name + ": the gather's settle N is read (" + win.settleFrames + ")");
-    assert(win.holdFrame >= 0, win.name + ": the view holds inside its " + win.frames + " frames (last GI row " +
-           win.lastGiRowFrame + ", last hold key " + win.lastHoldKeyFrame + ")");
-    assert(win.holdFrame > win.lastGiRowFrame && win.holdFrame > win.lastHoldKeyFrame &&
-           win.holdFrame <= lastWrite + win.settleFrames + 1,
-           win.name + ": the hold is the settle after the last write (" + win.holdFrame + ", last hold key " +
+    assert(win.gatherHoldFrame >= 0 && win.holdFrame >= 0, win.name + ": the gather and the view hold inside its " +
+           win.frames + " frames (the gather " + win.gatherHoldFrame + ", the reflection " + win.reflHoldFrame +
+           ", the view " + win.holdFrame + "; last GI row " + win.lastGiRowFrame + ", last hold key " +
+           win.lastHoldKeyFrame + ")");
+    assert(win.holdFrame >= win.gatherHoldFrame && (win.reflHoldFrame < 0 || win.holdFrame >= win.reflHoldFrame),
+           win.name + ": THE VIEW HOLDS WHEN EVERY READER HOLDS (the view " + win.holdFrame + ", the gather " +
+           win.gatherHoldFrame + ", the reflection " + win.reflHoldFrame + ")");
+    assert(win.gatherHoldFrame > win.lastGiRowFrame && win.gatherHoldFrame > win.lastHoldKeyFrame &&
+           win.gatherHoldFrame <= lastWrite + win.settleFrames + 1,
+           win.name + ": the gather's hold is the settle after the last write (" + win.gatherHoldFrame + ", last hold key " +
            win.lastHoldKeyFrame + ", last row " + win.lastGiRowFrame + ", settle " + win.settleFrames + ")");
 }
 assert(typeof r.tsv === "string" && r.tsv.length > 0, "the TSV path: " + r.tsv);
