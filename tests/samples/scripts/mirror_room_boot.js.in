@@ -16,5 +16,11 @@ var c = world.giStatus().cards;
 console.log("mirror_room_boot: the shot settled " + s.settleFrames + " frames, at rest " + s.atRest + "; the cards: " +
             c.restDecisions + " rest decision(s), " + c.relights + " relights (" + c.visibleRelights + " visible), " +
             c.cards + " resident");
+// (the sky's deferred light reads, said - PHOTON-7 stage 10-3, item 0: a read taken at a GPU-paced frame was the boot
+// pair's leading suspect; nonzero = the open took that path, now at a fixed due frame)
+var sky = world.clouds().live || {};
+console.log("mirror_room_boot: the sky's deferred reads: SH " + sky.skyShDeferredReads + ", cloud clear " +
+            sky.cloudClearDeferredReads + "; scroll captures " + sky.scrollCaptures + ", change captures " +
+            sky.changeCaptures);
 if (s.atRest !== true) throw new Error("the shot settled to its cap, not to rest (" + s.settleFrames + " frames)");
 "ok";
