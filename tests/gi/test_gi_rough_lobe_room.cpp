@@ -10,11 +10,12 @@
 // THE FIXTURE: a closed room 4 x 2.6 x 4 m (walls, floor and ceiling 1 m boxes), a point light inside, a cubemap sky
 // outside; the floor a normal-mapped metal (perceptual 0.50: under tan 1's 0.505, its map's detail near the pixel rate -
 // the widening carries it over). High, rays off, a 256 x 256 still picture from inside looking down at the floor.
-// THE LAW, against the same room's floor WITHOUT its map (its lobe narrow, 0.50 unwidened - the cube's reflection the
-// pixel does not occlude at all: jahGlobalEnvVisibility gates the rough lobe only): under a sky ten times brighter the
-// normal-mapped floor rises by less than HALF the bare floor's - its widened lobe read as the rough one it is, the cube
-// through the voxels' let-through share alone. Before the fix it was read as a narrow cone's and rose by the cube's
-// whole reflection (more than the bare floor: the widened lobe reflects more of the cube).
+// THE LAW (restated at stage 10-3 R1, the roughness split): under a sky ten times brighter NEITHER floor of the closed
+// room rises - the normal-mapped one (its widened lobe) nor its bare twin (its narrow one) - by a half-float step. It
+// was "the mapped floor rises by less than HALF the bare floor's", the bare floor's narrow lobe then reading the cube
+// unoccluded (jahGlobalEnvVisibility gated the rough lobe only); the split gates it at every lobe, and that yardstick
+// was the leak itself. Before the F4 fix the mapped floor was read as a narrow cone's and rose by the cube's whole
+// reflection.
 // PRINTED: both rises - the rough lobe's residual in a closed one-metre shell and the narrow lobe's unoccluded cube
 // (REFLECT-1 / PCC-1's "occluded sky reflections inside rooms") are the record's, not this row's law.
 // A fixture (the engine alone, one offscreen view). Counted in frames.
@@ -195,9 +196,15 @@ int main()
                 "%d, the narrow lobe): %.5f, %+.2f %%\n", rest[1], base[1], 100.0 * rise[1], rest[0], base[0],
                 100.0 * rise[0]);
     CHECK(rest[1] >= 0 && base[1] > 0.0, "premise: the mapped room at rest, its floor lit");
-    CHECK(rest[0] >= 0 && rise[0] > 0.0 && rise[1] < 0.5 * rise[0],
-          "under a sky ten times brighter the normal-mapped floor rises by less than half its bare twin's: the widened "
-          "lobe is the rough one in the producer AND the pixel (occluded), never a narrow cone's (unoccluded)");
+    // THE LAW RESTATED (PHOTON-7 stage 10-3 R1, the roughness split): the room is CLOSED, so a sky ten times brighter
+    // moves NEITHER floor - the exact answer is no rise, mapped or bare - within one half-float step of the picture
+    // (2^-10 relative). The narrow lobe no longer reads the cube unoccluded (the split's open share gates the cube at
+    // EVERY lobe: the bare twin's rise, this row's old yardstick, was that leak), and the pixel decides nothing from a
+    // roughness of its own any more (the integrate's law alone, from the G-buffer's widened alpha).
+    const double kQuantum = 1.0 / 1024.0;
+    CHECK(rest[0] >= 0 && std::fabs(rise[0]) <= kQuantum && std::fabs(rise[1]) <= kQuantum,
+          "under a sky ten times brighter neither floor of the closed room rises by a half-float step: the mapped "
+          "floor's widened lobe and the bare floor's narrow one are both occluded by the room");
     e->destroyView(v);
     run(2);
     std::printf("\ngi.rough_lobe_room: %d frames, %d failure(s)\n", frames, failures);
