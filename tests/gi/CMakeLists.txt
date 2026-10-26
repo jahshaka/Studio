@@ -403,11 +403,11 @@ foreach(_row walk pinned crowded late held truth)
     set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                          TIMEOUT 60 LABELS "engine")
 endforeach()
-set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 1048)
-set_tests_properties(gi.card_residency_pinned PROPERTIES JAHSHAKA_TEST_FRAMES 977)
-set_tests_properties(gi.card_residency_crowded PROPERTIES JAHSHAKA_TEST_FRAMES 566)
-set_tests_properties(gi.card_residency_late PROPERTIES JAHSHAKA_TEST_FRAMES 643)
-set_tests_properties(gi.card_residency_held PROPERTIES JAHSHAKA_TEST_FRAMES 937)
+set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 843)
+set_tests_properties(gi.card_residency_pinned PROPERTIES JAHSHAKA_TEST_FRAMES 772)
+set_tests_properties(gi.card_residency_crowded PROPERTIES JAHSHAKA_TEST_FRAMES 399)
+set_tests_properties(gi.card_residency_late PROPERTIES JAHSHAKA_TEST_FRAMES 669)
+set_tests_properties(gi.card_residency_held PROPERTIES JAHSHAKA_TEST_FRAMES 943)
 set_tests_properties(gi.card_truth PROPERTIES JAHSHAKA_TEST_FRAMES 5012)
 
 # gi.gather_sliver (PHOTON-7 stage 10) — THE GRID ANSWERS EVERY PIXEL: a 1-px sliver of a wall seen past two black

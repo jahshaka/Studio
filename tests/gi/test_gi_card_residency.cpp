@@ -63,7 +63,8 @@
 //       fills the atlas with quarter-page cards) to room B (whole pages): the arrivals find no free page and the atlas
 //       merges its sub-cut pages (compaction moves > 0, each moved card re-captured), and B comes to rest carded.
 // THE ROWS (PHOTON-7 stage 10, the lead's ruling: one binary, one row a law group, each within the fixture's 10 s, every
-// run the fewest frames its law needs - AT REST is the cache's one rest decision since the stop plus 30 quiet frames):
+// run the fewest frames its law needs - AT REST is the cache's one rest decision since the stop and the cache owing its
+// readers nothing, held kQuiet frames):
 // gi.card_residency (argv walk: the walk and the teleport - (1) (2) (3) (7)), gi.card_residency_pinned (the walk and the
 // pinned teleport - (6)), _crowded ((4)), _late (the teleport and the late reader - (5)), _held (the band card held in
 // and out, both runs AT B - (8)); every row checks (7)'s store at rest over its own runs.
@@ -213,8 +214,11 @@ static bool gStartAtB = false;
 static int gCaptureWait = 8;
 /// (7)'s convex edge's Jacobi reference: the walk row's alone (64 frames the pinned row's walk does not need)
 static bool gEdgeReference = false;
-/// AT REST's quiet frames after the rest decision (settle)
-static const int kQuiet = 30;
+/// AT REST's frames (settle): the cache's own "owes nothing" (CardCacheStatus::readersHoldOwed false: the decision's
+/// work done, no report in flight) held over 2 frames, since the published status is a frame late. It replaced 30 quiet
+/// frames of no relight and no admission (PHOTON-7 stage 10: a heuristic that cost 28 frames a settle, and the row its
+/// fixture's 10 s once the decision moved a due later).
+static const int kQuiet = 2;
 /// THE WALK's frames from A to B (24 m; 120 before the rows' split - the law reads B's rest, not the walk's pace)
 static const int kWalkFrames = 60;
 /// gi.card_truth's TRUTH: the estimators at this many rays (gi.truthRays)
@@ -261,9 +265,10 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     gi.bounces = true;
     gi.updateBudget = 0;
     // AT REST: the cache's ONE rest decision taken since the stop (R3 (b): its drains and admissions are the rest's last
-    // residency move) and then kQuiet frames of nothing - no chain or feedback owed, no relight, no admission, an empty
-    // queue (90 quiet frames before the decision existed; the row's budget, the lead's ruling: the fewest frames the law
-    // needs)
+    // residency move), and THE CACHE OWES ITS READERS NOTHING (readersHoldOwed false: no capture, relight or round to run,
+    // no report in flight - so no listing can still come), no chain or feedback owed, an empty queue, held kQuiet frames
+    // (90 quiet frames before the decision existed, then 30; the row's budget, the lead's ruling: the fewest frames the
+    // law needs)
     // THE REST-16'S READS (B's settle): the faces' cumulative hits at the gather's FIRST rest frame and at its 17th - the
     // reads in between are the rest sequence's first 16 frames (the harvest's lag shifts both ends alike); a rest that
     // restarts before its 17th frame starts the window again
@@ -285,7 +290,7 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
             if (watchRest) restWatch(g);
             const bool still = !g.chainOwed && !g.feedbackOwed && g.cards.built && g.cards.relights == relights &&
                                g.cards.admitted == admitted && g.cards.queueLength == 0u &&
-                               g.cards.restDecisions > decisionsAtStop;
+                               g.cards.restDecisions > decisionsAtStop && !g.cards.readersHoldOwed;
             relights = g.cards.relights;
             admitted = g.cards.admitted;
             quiet = still ? quiet + 1 : 0;
@@ -320,7 +325,20 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         scene->setGiPlacementPin(pin);
     }
     e->waitForAsyncShaders();
-    out.restA = gStartAtB ? 0 : settle(0ull, false);
+    // A: THE WALK LEAVES ONCE A's CARDS ARE RESIDENT AND CAPTURED (the cache built, its queue empty, cards resident;
+    // PHOTON-7 stage 10, the row's budget): every law reads B, so A's card-to-card rounds, its rest, its decision and the
+    // quiet after them were frames no law read - and a walk that leaves while A's rounds still run is a history the
+    // walk = teleport law must hold all the same. (Was: A at rest, as B: 345 frames.)
+    const auto captured = [&]() {
+        int f = 0;
+        for (; f < 1500; ++f) {
+            run(1);
+            const GiStatus g = scene->published().gi;
+            if (g.cards.built && g.cards.cardsResident > 0u && g.cards.queueLength == 0u) break;
+        }
+        return f < 1500 ? f : -1;
+    };
+    out.restA = gStartAtB ? 0 : captured();
     if (gatherLate) e->setArm("cards.gatherLate", double(gatherLate));   // (5): the gather reads first N frames late
     if (walk) {
         for (int f = 1; f <= kWalkFrames; ++f) {
@@ -535,7 +553,10 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
             Image prev, cur;
             bool havePrev = view->readPixels(prev);
             int worst = 0, quiet = 0;
+            // (the transition ends EARLY once the picture has rested 30 frames AND the cache owes its readers nothing - no
+            // pop can still come from it; PHOTON-7 stage 10, the row's budget: the fixed 120 frames ran on past both)
             for (int f = 0; f < 120; ++f) {
+                if (quiet >= 30 && !scene->published().gi.cards.readersHoldOwed) break;
                 run(1);
                 if (!view->readPixels(cur)) continue;
                 int frameMax = 0;
