@@ -64,6 +64,60 @@ set_tests_properties(rtreflect.history_detectors PROPERTIES ENVIRONMENT "QT_QPA_
 set_tests_properties(rtreflect.history_detectors PROPERTIES JAHSHAKA_TEST_FRAMES 578)
 jah_ship_row(rtreflect.history_detectors)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
+# rtreflect.emitters — THE EMITTER TABLE (PHOTON-7 stage 11, 11-1a): the reflection's NEE targets as the hit table carries
+# them - seven emissive pillars are seven targets (their row's radiance bit for bit, their world box's sphere, ordered by
+# slot); a move is no new set; the pillars dark are zero (the negative control); the tier's cap keeps the brightest and
+# counts the rest.
+add_executable(test_rtreflect_emitters test_rtreflect_emitters.cpp)
+set_target_properties(test_rtreflect_emitters PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_rtreflect_emitters PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_rtreflect_emitters PRIVATE JahshakaEngine)
+add_dependencies(test_rtreflect_emitters JahshakaEngineMedia)
+jah_gpu_row(rtreflect.emitters CLASS engine COMMAND test_rtreflect_emitters
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(rtreflect.emitters PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(rtreflect.emitters PROPERTIES JAHSHAKA_TEST_FRAMES 57)
+
+# rtreflect.sphere_glint — A LAMP HAS A SIZE (PHOTON-7 stage 11, the sphere-light glint): a polished metal floor under one
+# point lamp, the pixel's direct specular alone; the glint's half-maximum disc at R 0.1 m within 0.8-2.0 x the lamp's
+# angular radius through the mirror, R 0.1 against R 0.05 1.5-2.5 x, a point (R 0.001) under half R 0.05's.
+add_executable(test_sphere_glint test_sphere_glint.cpp)
+set_target_properties(test_sphere_glint PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_sphere_glint PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_sphere_glint PRIVATE JahshakaEngine)
+add_dependencies(test_sphere_glint JahshakaEngineMedia)
+jah_gpu_row(rtreflect.sphere_glint CLASS engine COMMAND test_sphere_glint
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(rtreflect.sphere_glint PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(rtreflect.sphere_glint PROPERTIES JAHSHAKA_TEST_FRAMES 37)
+# rtreflect.sphere_glint_energy (CPU) — A SPHERE LIGHT'S GLINT CARRIES THE POINT'S ENERGY: the fork's JahBrdf read (its k
+# and its table of mu T), its jahSphereLightWiden mirrored, the widened glint's energy integrated over view directions
+# against the exact sphere (4,096 cone directions) - within 1 % at cos 0.6 / 0.9, R/d 0.01 / 0.04 / 0.1, roughness 0.05
+# and 0.2; Karis's representative point (the form built first) out of 1 % at cos 0.6 (the negative control).
+add_executable(test_sphere_glint_energy test_sphere_glint_energy.cpp)
+set_target_properties(test_sphere_glint_energy PROPERTIES CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_compile_definitions(test_sphere_glint_energy PRIVATE
+    JAH_FORK_HLMS_PBS_ANY="${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/Samples/Media/Hlms/Pbs/Any")
+add_test(NAME rtreflect.sphere_glint_energy COMMAND test_sphere_glint_energy WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(rtreflect.sphere_glint_energy PROPERTIES LABELS "engine" TIMEOUT 60)
+jah_no_display(rtreflect.sphere_glint_energy)
+
 # rtreflect.far_record (PHOTON-7 stage 6, READ_B finding 1) — A FAR HIT IS RECORDED AS A FAR HIT: a mirror's reflection of a
 # two-level sphere 93 m behind the camera (past the 50 m near length: the far copies, a record) against the sphere seen
 # directly from the mirrored camera - its lit and dark halves where they are, not the shuffled level-0 triangles a
@@ -203,6 +257,16 @@ if(TARGET jahlab)
                 ${CMAKE_CURRENT_BINARY_DIR}/work/lamp_step_held
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.lamp_step_held PROPERTIES TIMEOUT 60 LABELS "engine")
+    # rtreflect.nee_firefly (PHOTON-7 stage 11, 11-1b) - THE REFLECTION FINDS ITS EMITTERS BY NEXT-EVENT ESTIMATION:
+    # photon-firefly (one small bright emitter over a rough metal plate), Both, the arm reflect.nee on and off: (a) the
+    # table's one emitter, NEE rays with it on and none off, the cone's hit rate printed; (b) at rest frame 300 NEE's
+    # still-converging texels at most a quarter of the BRDF-only's; (c) NEE's hold inside the window with no capped
+    # texel, the control's none (nee_firefly.sh). 480x270; two jahlab sessions - about 1,500 frames.
+    jah_gpu_row(rtreflect.nee_firefly CLASS engine FRAMES 1500
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/nee_firefly.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/nee_firefly
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.nee_firefly PROPERTIES TIMEOUT 60 LABELS "engine")
     # rtreflect.contact (PHOTON-7 stage 6, AB E15 / ONE_PICTURE C3; READ_A findings 1-2) - THE CONTACT MEETS ITS
     # REFLECTION AND NO RAY HITS ITS OWN SURFACE: the post foot's reflection starts at the contact line and its top edge
     # lies where the mirror puts it (Rays: the lifted mirror; Both: the interval to the plain one), within 1 px, from

@@ -456,7 +456,10 @@ set_tests_properties(scripting.e2e.tray_panel PROPERTIES
 set(JAH_ONE_WRITER_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/gi_one_writer.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
-jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" LABELS scripting)
+# THE HOME VIRGIN, THE SHADER CACHE WARM (PHOTON-7 stage 11, the lead's ruling): the row's law is the one-writer rule,
+# not a cold boot (COLD-BOOT's rows own that) - cold, it compiled 113 shaders in 21.8 s of its 60 and timed out once a
+# fork bump grew every PBS permutation (the glint's table).
+jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" WARM LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(gi.one_writer SHIP CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js

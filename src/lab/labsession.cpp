@@ -682,6 +682,17 @@ std::string Session::statusJson()
           << ",\"tolerance\":" << mLastProbe.tolerance << ",\"viewportHeight\":" << mLastProbe.viewportHeight << "}";
     else
         o << ",\"probe\":null";
+    {
+        // THE REFLECTION'S REST AND ITS NEE (PHOTON-7 stage 11): the rest as the last view drew it, the emitter table and
+        // the cone's hit rate (RayQueryStatus)
+        const RayQueryStatus &rq = mScene->published().rayQuery;
+        o << ",\"reflect\":{\"sources\":" << rq.reflectSources << ",\"restFrames\":" << rq.reflectRestFrames
+          << ",\"held\":" << (rq.reflectHeld ? "true" : "false") << ",\"restActive\":" << rq.reflectRestActive
+          << ",\"restCapped\":" << rq.reflectRestCapped << ",\"emitters\":" << rq.reflectEmitters
+          << ",\"emittersOver\":" << rq.reflectEmittersOver << ",\"neeRays\":" << rq.reflectNeeRays
+          << ",\"neeHits\":" << rq.reflectNeeHits << ",\"restBound\":" << rq.reflectRestBound
+          << ",\"restBoundOwed\":" << rq.reflectRestBoundOwed << ",\"restNeedMax\":" << rq.reflectRestNeedMax << "}";
+    }
     o << "}";
     return o.str();
 }

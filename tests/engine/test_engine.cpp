@@ -2298,7 +2298,14 @@ void ies_profile_shapes_a_spot() {
     const float iesAxis = lum(48, 48), iesOff = lum(48, 24);
     std::printf("    spot on-axis/off-axis: plain %.3f/%.3f  profiled %.3f/%.3f\n",
                 plainAxis, plainOff, iesAxis, iesOff);
-    CHECK_MSG(plainAxis > plainOff + 0.05f, "an unprofiled spot is brightest on its axis");
+    // THE LAW (PHOTON-7 stage 11, the lead's ruling: the +0.05 margin was a number from the old picture, and the sphere
+    // light's glint - a lamp has a size - lowered the axis by 0.012 with the physics intact): the unprofiled spot is
+    // brighter on its axis than off it by more than the readback's quantum - one 8-bit code on each of the three
+    // channels this sum adds (3 / 255). The row cannot evaluate the spot's whole falloff host-side (the wall's lit
+    // radiance at the camera takes the BRDF, the cone, the distance and the incidence), so the law is the order, not
+    // a ratio. Red-capable: the ring profile below is NOT brightest on its axis (its own check).
+    CHECK_MSG(plainAxis > plainOff + 3.0f / 255.0f, "an unprofiled spot is brightest on its axis (%.3f vs %.3f, by more "
+              "than one code a channel)", plainAxis, plainOff);
     CHECK_MSG(iesAxis < plainAxis * 0.5f, "the ring profile must darken the light's axis");
     CHECK_MSG(iesOff > iesAxis + 0.05f, "with a ring profile the OFF-axis ring is the bright part");
 

@@ -1348,6 +1348,17 @@ static QVariantMap rayQueryToJs(const IEditorViewport::GiStatusInfo::RayQueryInf
                         { QStringLiteral("reflectShotRestFrames"), double(rq.reflectShotRestFrames) },
                         { QStringLiteral("reflectShotHeld"), rq.reflectShotHeld },
                         { QStringLiteral("reflectShotRests"), double(rq.reflectShotRests) },
+                        // ...ITS STILL-CONVERGING TEXELS, ITS BOUND AND ITS NEE (PHOTON-7 stage 11: the newest read-back
+                        // frame's active and capped texels, -1 none read; the rest bound at 2N, -1 until read; the
+                        // emitter table and the NEE cone's rays and hits)
+                        { QStringLiteral("reflectRestActive"), rq.reflectRestActive },
+                        { QStringLiteral("reflectRestCapped"), rq.reflectRestCapped },
+                        { QStringLiteral("reflectRestBound"), rq.reflectRestBound },
+                        { QStringLiteral("reflectRestBoundOwed"), double(rq.reflectRestBoundOwed) },
+                        { QStringLiteral("reflectRestNeedMax"), double(rq.reflectRestNeedMax) },
+                        { QStringLiteral("reflectEmitters"), rq.reflectEmitters },
+                        { QStringLiteral("reflectNeeRays"), double(rq.reflectNeeRays) },
+                        { QStringLiteral("reflectNeeHits"), double(rq.reflectNeeHits) },
                         // THE HIT DECODE'S LIST (PLANAR-RECORDS-1): what the ray jobs
                         // appended, what a full list dropped, and its size.
                         { QStringLiteral("hitRecords"), double(rq.hitRecords) },
