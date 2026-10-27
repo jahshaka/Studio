@@ -20,8 +20,18 @@
 //       cascades hold their rest, so both answers are fixed points of one operator), every voxel within 1 % of the
 //       Jacobi's radiance - the stop law's own bound (a brick stops once the tail of its series is under a code); the
 //       door is seen to run (every brick of cascade 0 a frame, the outer cascades held);
-//   (2) BOTH WITHIN 3 % OF E / (1 - a'(1 - e)), e the sky-leak arm's (the physics with its leak, the spec's bar);
-//   (2b) THE OPERATOR'S ARM WITHIN 3 % OF S*: the bounce operator's energy, independent of the escape;
+//   (2) THE SERIES' LIMIT WITH NO ESCAPE (PHOTON-7 10-3 R12: physics, not a picked 3 % around a measured e): a sealed
+//       room escapes nothing, so the reference is E / (1 - a'), a' the material's WHOLE lobe by direct integration (the
+//       diffuse hemispherical albedo x rho + the dielectric's 4 % specular layer, F0 A-bar + B-bar - the store re-emits
+//       both) - the Jacobi within ONE STORE STEP of it (2^(floor(log2 L) - 10)), the feedback within that and its stop
+//       law's code. The voxels are read on their ROOM-FACING side (the preflight's W3: a two-sided voxel's light is its
+//       two sides' mean, which averaged the void-lit outer face in - the old "escape": now c0 e = 0.000 exactly).
+//       DECLARED RED (2026-10-27): the store holds -0.60 % of the limit at High (a' 0.36781 against 0.37161) - the
+//       diffuse fit's own -0.5 % at r = 1 (jahDiffuseAlbedoHemi 0.7018 against the integral 0.7052) and a specular
+//       share of 0.0169 against the integral's 0.0190 (cause unmeasured: the lead's ruling owed);
+//   (2b) THE OPERATOR'S ARM AT THE SAME LIMIT (E 1, S = S*): with no escape the sky is never seen, so its store holds
+//       (2)'s limit whatever S is, within a step and the stop law's code;
+//   (2c) THE INJECTION ALONE (R12): the bounces off, the inner walls hold E within a store step (measured 1.000000);
 //   (3) THE FEEDBACK STOPS: the chain owes nothing at its rest (its brick-passes printed; the old "fewer than the
 //       Jacobi's 64 a brick" could not fail - 1.2-2.1 a brick - and is DELETED: the stop and resume rules are (1)'s and
 //       (4)'s).
@@ -143,7 +153,27 @@ Reading read(Scene *s, int cascade = 0)
                 const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
                 const float c = v.light[i + 3];
                 if (!(c > 0.5f)) continue;
-                const float L = std::max(std::max(v.light[i], v.light[i + 1]), v.light[i + 2]) / c;
+                // THE ROOM-FACING SIDE (PHOTON-7 10-3 R12, the preflight's W3): a two-sided voxel's `light` is the MEAN
+                // of its two sides, so a wall cell read whole averaged the outer face (lit by the void) into the inner
+                // one - the "escape" the old law measured. The side whose face looks INTO the room is read: the store's
+                // front where the voxeliser's canonical normal points inward, its back where it points out.
+                float in[3] = { 0.0f, 0.0f, 0.0f };   // the inward normal of the face the cell lies on
+                const float dx = kHalfX - std::fabs(p[0]), dz = kHalfZ - std::fabs(p[2]), dy0 = p[1],
+                            dy1 = kHeight - p[1];
+                const float dmin = std::min(std::min(std::fabs(dx), std::fabs(dz)), std::min(std::fabs(dy0), std::fabs(dy1)));
+                if (dmin == std::fabs(dy0)) in[1] = 1.0f;
+                else if (dmin == std::fabs(dy1)) in[1] = -1.0f;
+                else if (dmin == std::fabs(dx)) in[0] = p[0] > 0.0f ? -1.0f : 1.0f;
+                else in[2] = p[2] > 0.0f ? -1.0f : 1.0f;
+                const float *side = v.light.data() + i;
+                if (v.normal.size() == v.light.size() && v.lightFront.size() == v.light.size() &&
+                    v.lightBack.size() == v.light.size() && v.normal[i + 3] > 0.5f) {
+                    const float n[3] = { 2.0f * v.normal[i] - 1.0f, 2.0f * v.normal[i + 1] - 1.0f,
+                                         2.0f * v.normal[i + 2] - 1.0f };
+                    const bool frontIn = n[0] * in[0] + n[1] * in[1] + n[2] * in[2] >= 0.0f;
+                    side = (frontIn ? v.lightFront.data() : v.lightBack.data()) + i;
+                }
+                const float L = std::max(std::max(side[0], side[1]), side[2]) / c;
                 r.L.push_back(L);
                 r.mean += L;
             }
@@ -177,7 +207,7 @@ int main(int argc, char **argv)
         std::vector<Reading> cascades;
     };
     // (the store's door downloads every volume of a cascade: an arm reads only the cascades its law needs)
-    const auto arm = [&](GiQuality tier, float E, float S, bool everyCascade) {
+    const auto arm = [&](GiQuality tier, float E, float S, bool everyCascade, bool bounces = true) {
         Arm a;
         a.view = e->createOffscreenView("bounce_series", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
         a.scene = e->createScene("bounce_series");
@@ -200,7 +230,7 @@ int main(int argc, char **argv)
         gi.quality = tier;
         gi.ddgi = GiToggle::Off;
         gi.cards = false;
-        gi.bounces = true;
+        gi.bounces = bounces;
         gi.updateBudget = 0;
         if (!s->setGlobalIllumination(gi)) return a;
         e->waitForAsyncShaders();
@@ -662,10 +692,38 @@ int main(int argc, char **argv)
         std::printf("   the operator's arm (E 1, S* = E / (1 - a') = %.5f): the store %.5f (%+.2f %% of S*)\n", sStar, lOp,
                     100.0 * (lOp / sStar - 1.0));
         CHECK(over == 0u, "(1) FEEDBACK = A 64-PASS JACOBI WITHIN ONE CODE at every inner-wall voxel");
-        CHECK(std::fabs(fb.mean / limit - 1.0) <= 0.03 && std::fabs(j64.mean / limit - 1.0) <= 0.03,
-              "(2) BOTH WITHIN 3 % OF E / (1 - a'(1 - e)), e the room's measured escape (the sky-leak arm)");
-        CHECK(std::fabs(lOp / sStar - 1.0) <= 0.03,
-              "(2b) THE OPERATOR'S ARM WITHIN 3 % OF S*: the bounce's energy, whatever the escape");
+        // THE PHYSICS' OWN LIMIT (R12): a sealed room escapes NOTHING, so the reference is e = 0 - L = E / (1 - a') - and
+        // the bar the store's QUANTUM at it (one half-float step: 2^(floor(log2 L) - 10)) beside the Jacobi's 64-pass
+        // truncation (a'^64 L, nothing) - never a picked 3 % around a measured escape. The feedback adds its stop law's
+        // own bound, (1)'s one code.
+        // a' IS THE MATERIAL's WHOLE LOBE, by direct integration (the store re-emits both, the bounce's own rule): the
+        // diffuse hemispherical albedo x rho, plus the dielectric's 4 % specular layer, F0 A-bar + B-bar (kS 1). The
+        // diffuse-only a' (the fit's 0.3509) left the specular share out - the 2.7 % the store read "above" it.
+        double sA = 0.0, sB = 0.0;
+        enginetest::ggxSpecularAlbedoHemi(1.0, sA, sB);
+        const double aTrue = kRho * enginetest::disneyDiffuseAlbedoHemi(1.0) + 0.04 * sA + sB;
+        const double limit0 = kE / (1.0 - aTrue);
+        const double q0 = std::ldexp(1.0, int(std::floor(std::log2(limit0))) - 10);
+        std::printf("   THE e = 0 LIMIT E / (1 - a'), a' %.5f (diffuse %.5f + specular %.5f, by integration) = %.5f (q %.6f): the "
+                    "Jacobi-64 %+.6f (%+.3f %%), the feedback %+.6f, the operator's arm %.5f; the store's own a' %.5f\n", aTrue,
+                    kRho * enginetest::disneyDiffuseAlbedoHemi(1.0), 0.04 * sA + sB, limit0, q0, j64.mean - limit0,
+                    100.0 * (j64.mean / limit0 - 1.0), fb.mean - limit0, lOp, j64.mean > 0.0 ? 1.0 - kE / j64.mean : -1.0);
+        CHECK(std::fabs(j64.mean - limit0) <= q0 && std::fabs(fb.mean - limit0) <= q0 + 0.01 * limit0,
+              "(2) THE SERIES' LIMIT WITH NO ESCAPE: the Jacobi within one store step of E / (1 - a'), the feedback within "
+              "that and its stop law's code");
+        CHECK(std::fabs(lOp - limit0) <= q0 + 0.01 * limit0,
+              "(2b) THE OPERATOR'S ARM AT THE SAME LIMIT, within a store step and the stop law's code (a sealed room's sky "
+              "is never seen: whatever S is)");
+        {   // (2c) THE INJECTION ALONE (R12): the bounces off - the direct store holds the emission E, exactly
+            Arm d = arm(tiers[t], kE, 0.0f, false, false);
+            const double lD = d.scene && !d.cascades.empty() && d.cascades[0].ok ? d.cascades[0].mean : -1.0;
+            drop(d);
+            const double qE = std::ldexp(1.0, int(std::floor(std::log2(double(kE)))) - 10);
+            std::printf("   the injection alone (the bounces off): the store %.6f against E %.1f (%+.3f %%)\n", lD,
+                        double(kE), 100.0 * (lD / kE - 1.0));
+            CHECK(lD >= 0.0 && std::fabs(lD - kE) <= qE,
+                  "(2c) THE INJECTION: with the bounces off the inner walls hold E within a store step");
+        }
         if (lampArm) {
             CHECK(lampOk && lampRest >= 0 && lampMovedOutside > 0u,
                   "(4) the resume arm: the lamp's light moves inner-wall voxels outside its range, and the feedback comes to rest");
