@@ -177,6 +177,15 @@ if(Python3_Interpreter_FOUND)
     jah_ship_row(gate.selection)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(gate.selection PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(gate.selection)
+    # source.shaders_spirv_valid (URGENT #89, PHOTON-7 10-4) - EVERY GENERATED SHADER IS VALID SPIR-V, not only what the
+    # driver accepts: the app warm-up's dump of its Hlms permutations (scripts/warm-app-cache.sh, at the build's cache
+    # key) through glslang and spirv-val, its negative control the fault's own pattern (shaders_spirv_valid.py says why:
+    # the fog march's depth-image mismatch the NVIDIA driver swallowed and only the validation layer's row saw).
+    add_test(NAME source.shaders_spirv_valid
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/shaders_spirv_valid.py"
+                     "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" "${JAH_GLSLANG_VALIDATOR}")
+    set_tests_properties(source.shaders_spirv_valid PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(source.shaders_spirv_valid)
     # gate.serve_red (URGENT #54) — A RED AT THE SAME INPUT IS SERVED-RED, NEVER RE-RUN: ci_gate_check.py serve's
     # decision on synthetic records (a red result at this tree with equal configuration / declaration / data hashes is
     # served-red; an ancestor's red runs; a PASS serves as before; NOTRUN / NOADMIT are not results). No build, no git.
