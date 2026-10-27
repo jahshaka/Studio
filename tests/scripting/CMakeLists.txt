@@ -456,7 +456,9 @@ set_tests_properties(scripting.e2e.tray_panel PROPERTIES
 set(JAH_ONE_WRITER_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/gi_one_writer.js.in ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
-jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" LABELS scripting)
+# (WARM: the boot's shader cache from the tree's shared app cache - cold, the row compiled ~330 shaders and every ray
+# pipeline per run and sat at its 60 s cap, 53-58 s on the base; PHOTON-7 10-4: timed out there, URGENT #76's class)
+jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" WARM LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(gi.one_writer SHIP CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js
