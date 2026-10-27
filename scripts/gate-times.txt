@@ -209,8 +209,8 @@ samples.cleanstart.Showroom_2 41.44  quiet n=48
 samples.cleanstart.Skeletal_Animation 45.50  quiet n=44
 samples.cleanstart.Tornado 46.08  quiet n=18
 samples.cleanstart.World_Background 55.08  quiet n=46
-samples.cold_open 47.34  solo, the card lock held, :72, COLD (URGENT #48 follow-up, the lead's ruling (b), 2026-10-24: Showroom 2 from a virgin home on a cold shader cache - 331 shaders, 15 UI-thread stalls, the longest 10.6 s)
-samples.mirror_room_boots.boot1 31.75  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+samples.cold_open 56.18  the card lock held, :74, by ctest, load ~4.9, THE FIRST RUN AFTER THE NVIDIA CACHE WAS CLEARED AND ITS CAP RAISED (URGENT #91, PHOTON-7 10-4 2026-10-27 20:20; it had been full since 10-20: every new SPIR-V compiled cold) - was: 47.34 solo, the card lock held, :72, COLD (URGENT #48 follow-up, the lead's ruling (b), 2026-10-24: Showroom 2 from a virgin home on a cold shader cache - 331 shaders, 15 UI-thread stalls, the longest 10.6 s)
+samples.mirror_room_boots.boot1 49.17  the card lock held, :74, by ctest, load ~4.9, THE FIRST RUN AFTER THE NVIDIA CACHE WAS CLEARED AND ITS CAP RAISED (URGENT #91, PHOTON-7 10-4 2026-10-27 20:20; it had been full since 10-20: every new SPIR-V compiled cold) - was: 31.75 solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 samples.mirror_room_boots.boot2 32.06  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 scale.cpu_walks 15.07  quiet n=46
 scene.reopen_fidelity 47.36  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
@@ -260,7 +260,7 @@ services.memory 0.10  ship 3a0422b4e (2026-10-13)
 settings.store 0.56  quiet n=12
 shader.async_after_open 28.57  solo 2026-10-20 (TOOLING-7: the seed split out; 64.06 s solo before on the same fresh tree, the seed made inside the row)
 shader.async_after_open.seed 28.22  solo 2026-10-20 (TOOLING-7: the seed-MAKING run, a fresh tree; a tree that has its seed answers in ~0 s)
-shadercache.app 51.38  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+shadercache.app 48.36  the card lock held, :74, by ctest, load ~4.9, THE FIRST RUN AFTER THE NVIDIA CACHE WAS CLEARED AND ITS CAP RAISED (URGENT #91, PHOTON-7 10-4 2026-10-27 20:20; it had been full since 10-20: every new SPIR-V compiled cold) - was: 51.38 median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadergraph.emitter_parity 3.14  quiet n=47
 shadow.cutout_caster 52.10  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadow.pane_lamp 1.5  the card lock held, :74, warm, by hand (PHOTON-7 10-4 R8 (2) 2026-10-27: a point lamp and a spot, the hole, a glass and an opaque pane; 25 frames)
