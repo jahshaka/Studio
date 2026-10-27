@@ -14,13 +14,13 @@
 //       the reference R; and the card path carries the sky: the box's OUTER wall cards (read from the ground the box
 //       stands on) read over a quarter of R;
 //   (2) THE CARDS - the card the readers hit at every point of an 8 x 8 grid on each of the room's six faces (0.15 m in
-//       from its edges: Scene::readCardAt, the hit's own pick) reads under 1 % of R;
+//       from its edges: Scene::readCardAt, the hit's own pick) reads under one store step of R (q: the half float's step at R, R12);
 //   (3) THE VOXELS - every occupied voxel of cascades 0 and 1 whose centre lies inside the room (its inner faces' cells:
-//       the walls are two or more of those cells thick) reads under 1 % of R. (The coarser cascades' voxels hold both
+//       the walls are two or more of those cells thick) reads under q. (The coarser cascades' voxels hold both
 //       faces of a wall in one cell, their sides by orientation, not by inside and outside - the outermost's mix the
 //       sky-lit roof with the ceiling: 10-1's evidence, spikes/photon-7/stage10/10-1.)
 //   (4) THE FIELD - the field on (every shipped tier runs it): every probe whose lattice point lies inside the room
-//       holds no texel of 1 % of R (its irradiance over pi, the store's units). RED before 10-1's probe rays: the
+//       holds no texel of q (its irradiance over pi, the store's units). RED before 10-1's probe rays: the
 //       aperture-0 march's escape let the sky through the walls (10-0's P3).
 //   (6) THE e = 0 COUNTER (10-2a: at the ray tier the cards' indirect is gathered by TLAS rays, rq_card_gather.comp) -
 //       the cards' TLAS gather ran (its dispatches and rays counted, read back: GiStatus::cards.gather) and the relight
@@ -28,29 +28,36 @@
 //       (CardSample::gatherSky, the per-card counter: inside a watertight room no ray misses); the control: the outer
 //       +x wall's cards (seen in (1)) send rays to the sky.
 //   (5) THE NO-RAY ROUTE'S PICTURE (High, the rays off and the field off: the screen integrate answers every pixel) -
-//       the middle of the picture inside the room, its brightest pixel under 1 % of R. RED before the pixel's diffuse
+//       the middle of the picture inside the room, its brightest pixel under q. RED before the pixel's diffuse
 //       became the caches' ray integral (the refresh's paths 4 and 7): the four cones' escape read 31.5 % of R. (The
 //       specular cone's share - paths 6 and 9, 10-3's - is inside the number: 0.3 % here.)
 //   (7) THE PIXEL, DIFFUSE AND SPECULAR (PHOTON-7 stage 10-3, item 1; at every tier the room is read at): the composed HDR
 //       picture inside the room at rest - its DIFFUSE the matte middle (the two panels' pixels left out), its SPECULAR the
 //       two METAL panels on the back wall (metalness 1: every pixel of theirs is the specular term), a smooth one
 //       (roughness 0.05: the sky cube at a narrow lobe, REFLECT-1 / PCC-1) and a rough one (0.5: the rough lobe through a
-//       shell) - each one's brightest pixel under 1 % of R.
+//       shell) - each one's brightest pixel under q.
 //   (9) THE CAPTURED CUBE (PHOTON-7 stage 10-3, the lead's condition: the sky cube at a narrow lobe measured, never
 //       assumed): the same sky as a CUBEMAP of radiance 1 (the engine captures it: the environment cube the pixel's
 //       specular reads - jahGlobalEnvVisibility gates it - and the SH beside it), the camera inside at rest: (7)'s three
-//       reads again, each under 1 % of R (R the roof's, the same sky's radiance). Last in each row (the ray tier at Epic;
+//       reads again, each under q (R the roof's, the same sky's radiance). Last in each row (the ray tier at Epic;
 //       the no-ray tier as it ships, rebuilt).
 //   (8) THE TELEPORT INTO THE BOX (stage 10's (1), 2026-10-26: a ray no cascade holds reads OUTSIDE = the sky, so before a
 //       cascade is built around a new pose a sealed room's nearby rays read the sky): the camera jumps from the settled
 //       pose above the box to the one inside, and EVERY frame of the window until the room is at rest is read - the
-//       picture's middle (the matte and the panels alike), its brightest pixel at most 1 % of R in every frame.
+//       picture's middle (the matte and the panels alike), its brightest pixel at most q in every frame.
 // THE TIERS, ONE ROW EACH (argv[1]): gi.sealed_sky the ray tier at High and at Epic (laws 1-4, 6-8); gi.sealed_sky_noray
 // the NO-RAY tier as it ships (rays off, the field on, no
 // cards: laws 1's roof, 3, 4, 7, 8); and the no-ray route with the field off ((5) with 7, rebuilt inside: the screen
 // integrate's cones answer every pixel).
 // RED ON THE BASE (the caches' cones: the card relight's sixteen-cone sky share and four-cone escape, the bounce's -
 // and the bounce's mean of a voxel's two sides, which let half of each sky-lit outer face light the inside).
+// THE BARS ARE PHYSICS (PHOTON-7 10-3 R12): every law above reads against q, one half-float step at R (0.000244 at the
+// measured R 0.4595; it was a picked 1 % of R). DECLARED RED, MEASURED 2026-10-27, one cause - THE COARSE TWO-SIDED
+// CELLS (10-3's item 5: a cell holding both faces of a wall, the sky-lit outer one averaged into the inner; on the
+// owner's review list, R13): the ray tier's (3) voxels c0 1.48 % of R and c1 0.60 %, (4) the field 0.081 % (its rays
+// read those cells), (8) the teleport's first frame after the jump 0.46 % (the old pose's coarse cells); the no-ray
+// tier's (3) c0 0.37 %, (7) / (9) the matte middle 0.10 % and (8) the same. Green against q: the cards (the brightest
+// 0.0006 % - their TLAS rays never miss inside), the ray tier's pixel ((7) 0.0008 %, (9)), (5) and the field-off picture.
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -68,6 +75,11 @@ using namespace jahshaka::engine;
 
 namespace {
 int g_fail = 0;
+/// THE BAR (PHOTON-7 10-3 R12, the rows re-pointed at physics): the exact answer inside a sealed room is 0, so the bar
+/// is what the readback can resolve against the scene's own light - ONE STEP of the stores' half float at the roof's R
+/// (the cards, the voxels, the field and the HDR picture are all RGBA16F): 2^(floor(log2 R) - 10). It replaced a picked
+/// 1 % of R.
+double quantumOf(double R) { return R > 0.0 ? std::ldexp(1.0, int(std::floor(std::log2(R))) - 10) : 0.0; }
 void check(bool ok, const char *what)
 {
     std::printf("%s %s\n", ok ? "  ok  " : "  FAIL", what);
@@ -250,8 +262,8 @@ int main(int argc, char **argv)
             std::printf("   (3) the buried origins skipped: %llu voxel sides, %llu card texels\n", g.voxelSides.buried,
                         g.cards.gather.buried);
         }
-        check(vOk && R > 0.0 && vWorst < 0.01 * R,
-              "(3) THE VOXELS: no voxel of cascades 0 and 1 inside the sealed room reads 1 % of the roof's");
+        check(vOk && R > 0.0 && vWorst < quantumOf(R),
+              "(3) THE VOXELS: no voxel of cascades 0 and 1 inside the sealed room reads one store step of the roof's");
     };
     // (4) THE FIELD's probes inside the room (gi.field_oracle's slot rule: the window's slot to its lattice point)
     const auto fieldLaw = [&](double R) {
@@ -297,8 +309,8 @@ int main(int argc, char **argv)
                     "the control, %u probes in the open above, the brightest %.4f\n",
                     int(st.ifdBound), inside, fWorst, R > 0.0 ? 100.0 * fWorst / R : -1.0, above, fAbove);
         check(fok && above > 0u && fAbove > 0.5, "(4) the control: the field's probes in the open above the box hold the sky");
-        check(fok && inside > 0u && R > 0.0 && fWorst < 0.01 * R,
-              "(4) THE FIELD: no probe inside the sealed room holds 1 % of the roof's");
+        check(fok && inside > 0u && R > 0.0 && fWorst < quantumOf(R),
+              "(4) THE FIELD: no probe inside the sealed room holds one store step of the roof's");
     };
 
     // THE INSIDE CAMERA and where a world point lands in its picture (testCameraDescLookAt's basis, 45 degrees vertical,
@@ -379,12 +391,12 @@ int main(int argc, char **argv)
                     R > 0.0 ? 100.0 * p.spec[0] / R : -1.0, p.specPx[0], panels[1].name, p.spec[1],
                     R > 0.0 ? 100.0 * p.spec[1] / R : -1.0, p.specPx[1], p.border, R > 0.0 ? 100.0 * p.border / R : -1.0,
                     p.borderAt[0], p.borderAt[1]);
-        check(p.ok && R > 0.0 && p.diffuse < 0.01 * R,
-              "(7) THE PIXEL'S DIFFUSE: no matte pixel inside the sealed room reads 1 % of the roof's");
-        check(p.ok && R > 0.0 && p.specPx[0] > 100u && p.specPx[1] > 100u && p.spec[0] < 0.01 * R && p.spec[1] < 0.01 * R,
-              "(7) THE PIXEL'S SPECULAR: no pixel of either metal panel inside the sealed room reads 1 % of the roof's");
-        check(p.ok && R > 0.0 && p.border < 0.01 * R,
-              "(7) THE PANELS' BORDERS (their grazing edges and the wall beside them) read under 1 % of the roof's");
+        check(p.ok && R > 0.0 && p.diffuse < quantumOf(R),
+              "(7) THE PIXEL'S DIFFUSE: no matte pixel inside the sealed room reads one store step of the roof's");
+        check(p.ok && R > 0.0 && p.specPx[0] > 100u && p.specPx[1] > 100u && p.spec[0] < quantumOf(R) && p.spec[1] < quantumOf(R),
+              "(7) THE PIXEL'S SPECULAR: no pixel of either metal panel inside the sealed room reads one store step of the roof's");
+        check(p.ok && R > 0.0 && p.border < quantumOf(R),
+              "(7) THE PANELS' BORDERS (their grazing edges and the wall beside them) read under one store step of the roof's");
     };
     // (8) THE TELEPORT WINDOW: the camera jumps inside, and every frame until the room is at rest is read
     struct Window { int frames = 0, worstFrame = -1, laterFrame = -1; double worst = 0.0, first = -1.0, later = 0.0, last = 0.0; bool ok = true; };
@@ -406,8 +418,8 @@ int main(int argc, char **argv)
                     "(%.4f %% of R) at frame %d after the jump; the first frame %.4f %%, the brightest later %.4f %% (frame "
                     "%d), the last %.4f %%\n", tier, w.frames, w.worst, k * w.worst, w.worstFrame, k * w.first,
                     k * w.later, w.laterFrame, k * w.last);
-        check(w.ok && w.frames > 0 && R > 0.0 && w.worst <= 0.01 * R,
-              "(8) THE TELEPORT INTO THE BOX: no frame of the window until rest reads 1 % of the roof's");
+        check(w.ok && w.frames > 0 && R > 0.0 && w.worst <= quantumOf(R),
+              "(8) THE TELEPORT INTO THE BOX: no frame of the window until rest reads one store step of the roof's");
     };
 
     // (9) THE CAPTURED CUBE: a uniform white cubemap sky (radiance 1, the SH's sky as a cube), the camera where it stands
@@ -426,12 +438,12 @@ int main(int argc, char **argv)
                     p.diffuse, R > 0.0 ? 100.0 * p.diffuse / R : -1.0, panels[0].name, p.spec[0],
                     R > 0.0 ? 100.0 * p.spec[0] / R : -1.0, panels[1].name, p.spec[1], R > 0.0 ? 100.0 * p.spec[1] / R : -1.0,
                     p.border, R > 0.0 ? 100.0 * p.border / R : -1.0);
-        check(set && rest >= 0 && p.ok && R > 0.0 && p.diffuse < 0.01 * R,
-              "(9) THE CAPTURED CUBE, THE DIFFUSE: no matte pixel inside the sealed room reads 1 % of the roof's");
-        check(set && rest >= 0 && p.ok && R > 0.0 && p.spec[0] < 0.01 * R && p.spec[1] < 0.01 * R,
-              "(9) THE CAPTURED CUBE, THE SPECULAR: no pixel of either metal panel inside the sealed room reads 1 % of the roof's");
-        check(set && rest >= 0 && p.ok && R > 0.0 && p.border < 0.01 * R,
-              "(9) THE CAPTURED CUBE, THE PANELS' BORDERS read under 1 % of the roof's");
+        check(set && rest >= 0 && p.ok && R > 0.0 && p.diffuse < quantumOf(R),
+              "(9) THE CAPTURED CUBE, THE DIFFUSE: no matte pixel inside the sealed room reads one store step of the roof's");
+        check(set && rest >= 0 && p.ok && R > 0.0 && p.spec[0] < quantumOf(R) && p.spec[1] < quantumOf(R),
+              "(9) THE CAPTURED CUBE, THE SPECULAR: no pixel of either metal panel inside the sealed room reads one store step of the roof's");
+        check(set && rest >= 0 && p.ok && R > 0.0 && p.border < quantumOf(R),
+              "(9) THE CAPTURED CUBE, THE PANELS' BORDERS read under one store step of the roof's");
     };
 
     const GiQuality tiers[2] = { GiQuality::High, GiQuality::Epic };
@@ -516,8 +528,8 @@ int main(int argc, char **argv)
         }
         std::printf("   (2) inside: at rest after %d frames, %u of 6 faces carded; the brightest point %.4f %% of R\n",
                     restIn, facesRead, R > 0.0 ? 100.0 * worst / R : -1.0);
-        check(restIn >= 0 && facesRead == 6u && R > 0.0 && worst < 0.01 * R,
-              "(2) THE CARDS: no card point of the sealed room's faces reads 1 % of the roof's");
+        check(restIn >= 0 && facesRead == 6u && R > 0.0 && worst < quantumOf(R),
+              "(2) THE CARDS: no card point of the sealed room's faces reads one store step of the roof's");
         {
             const GiStatus st = scene->published().gi;
             const CardCacheStatus::GatherCounts &gc = st.cards.gather;
@@ -599,8 +611,8 @@ int main(int argc, char **argv)
             std::printf("   (5) the no-ray route inside (rays off, the field off, High): at rest after %d frames, the "
                         "picture's middle mean %.6f, peak %.6f (%.4f %% / %.4f %% of R %.4f)\n", rest, mean, peak,
                         R > 0.0 ? 100.0 * mean / R : -1.0, R > 0.0 ? 100.0 * peak / R : -1.0, R);
-            check(rest >= 0 && mean >= 0.0 && R > 0.5 * kAlbedo && peak < 0.01 * R,
-                  "(5) THE NO-RAY ROUTE: no pixel of the picture inside the sealed room reads 1 % of the roof's");
+            check(rest >= 0 && mean >= 0.0 && R > 0.5 * kAlbedo && peak < quantumOf(R),
+                  "(5) THE NO-RAY ROUTE: no pixel of the picture inside the sealed room reads one store step of the roof's");
             pixelLaw(R, "no rays, the field off");
         }
     }
