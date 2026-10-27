@@ -114,7 +114,7 @@ echo "warm-app-cache: booting $BIN --engine-selftest on $DISPLAY (home $HOME_DIR
 t0=$(date +%s)
 LOG="$TESTS/warm-app-cache.log"
 ( cd "$BUILD/bin" && HOME="$HOME_DIR" JAHSHAKA_DATA_ROOT="$HOME_DIR/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
-      nice -n 19 "$SRC/scripts/gpu-exclusive.sh" --label warm-app-cache \
+      nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --label warm-app-cache \
       sh "$SRC/tests/support/fresh_home.sh" --warm "$HOME_DIR" -- \
       "$BIN" --engine-selftest "$HOME_DIR/run/warm.png" ) > "$LOG" 2>&1
 rc=$?
