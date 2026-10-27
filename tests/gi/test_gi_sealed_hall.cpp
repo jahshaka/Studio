@@ -12,6 +12,12 @@
 //           20.2 codes at rest (the sky alone), 203 with the area light. The share is gathered by the chain's rays
 //           now (R3 (b)). DECLARED RED until 10-4's R7 reaches photon-7: 18.9 codes over 9 px at rest - those rays
 //           crossing the hall's coarse mixed cells at 22 m (the class of gi.sealed_sky (3)).
+//           (2) THE FIRST FRAME AFTER THE GI SWITCH draws with its producers: no pixel reads one code of R. RED before:
+//           the ray tier opened inside the frame, after the views had synced, so the first frame drew the ray chain
+//           with no listener - no gather, no area visibility: the area light lit the inside through the roof, 1.74
+//           over 25,484 px (OgreEngine::ensureRayTier now opens it before the views sync).
+//   "late"  (the hall built after the GI is on, the area light alone: R3 (B)'s case) - no frame from the hall's
+//           arrival to rest lights its inside one code of R.
 //   "noray" (gi.sealed_hall_noray), the no-ray tier at High: (1) NO PIXEL INSIDE READS THE AREA LIGHT UNOBSTRUCTED
 //           (its visibility product's diffuse share at 255) at rest. RED before: a pixel no stratum was seen for (U = 0)
 //           read "unshadowed", and the light's LTC lit the inside through the roof - 1,038 pixels at 203 codes of R; a
@@ -60,12 +66,16 @@ void box(Scene *s, const Vec3 &at, const Vec3 &size)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray" && mode != "noray") { std::printf("FAIL: the mode is ray or noray, not '%s'\n", mode.c_str()); return 2; }
+    if (mode != "ray" && mode != "noray" && mode != "late") {
+        std::printf("FAIL: the mode is ray, noray or late, not '%s'\n", mode.c_str());
+        return 2;
+    }
+    const bool late = mode == "late";
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-sealed-hall-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->setRayTracing(mode == "ray");
+    e->setRayTracing(mode != "noray");
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
@@ -82,21 +92,24 @@ int main(int argc, char **argv)
     }
     if (mode == "noray") s->setRayTracing(RayTracingMode::Off);
     float sh[27] = { 0 };
-    sh[0] = sh[1] = sh[2] = 1.0f;   // a uniform white sky of radiance 1
+    sh[0] = sh[1] = sh[2] = late ? 0.0f : 1.0f;   // a uniform white sky of radiance 1 (late: none - the area light alone)
     s->setAmbientSh(sh);
-    // the hall: floor, roof, four walls (0.4 m), every joint overlapped
     const float hx = 12.0f, hz = 12.0f, hy = 5.0f, t = 0.4f;
-    box(s, Vec3(0.0f, -0.5f * t, 0.0f), Vec3(2.0f * hx + 2.0f * t, t, 2.0f * hz + 2.0f * t));
-    box(s, Vec3(0.0f, hy + 0.5f * t, 0.0f), Vec3(2.0f * hx + 2.0f * t, t, 2.0f * hz + 2.0f * t));
-    box(s, Vec3(-hx - 0.5f * t, 0.5f * hy, 0.0f), Vec3(t, hy + 2.0f * t, 2.0f * hz + 2.0f * t));
-    box(s, Vec3(hx + 0.5f * t, 0.5f * hy, 0.0f), Vec3(t, hy + 2.0f * t, 2.0f * hz + 2.0f * t));
-    box(s, Vec3(0.0f, 0.5f * hy, -hz - 0.5f * t), Vec3(2.0f * hx + 2.0f * t, hy + 2.0f * t, t));
-    box(s, Vec3(0.0f, 0.5f * hy, hz + 0.5f * t), Vec3(2.0f * hx + 2.0f * t, hy + 2.0f * t, t));
-    // pillars and blocks: the screen's silhouettes, where a probe's plane weights fail
-    for (const float x : { -4.0f, 4.0f })
-        for (const float z : { -8.0f, -2.0f, 4.0f }) box(s, Vec3(x, 0.5f * hy, z), Vec3(0.6f, hy, 0.6f));
-    box(s, Vec3(1.5f, 0.5f, -5.0f), Vec3(1.0f, 1.0f, 1.0f));
-    box(s, Vec3(-2.0f, 0.75f, -10.0f), Vec3(1.5f, 1.5f, 1.5f));
+    const auto buildHall = [&]() {
+        // the hall: floor, roof, four walls (0.4 m), every joint overlapped
+        box(s, Vec3(0.0f, -0.5f * t, 0.0f), Vec3(2.0f * hx + 2.0f * t, t, 2.0f * hz + 2.0f * t));
+        box(s, Vec3(0.0f, hy + 0.5f * t, 0.0f), Vec3(2.0f * hx + 2.0f * t, t, 2.0f * hz + 2.0f * t));
+        box(s, Vec3(-hx - 0.5f * t, 0.5f * hy, 0.0f), Vec3(t, hy + 2.0f * t, 2.0f * hz + 2.0f * t));
+        box(s, Vec3(hx + 0.5f * t, 0.5f * hy, 0.0f), Vec3(t, hy + 2.0f * t, 2.0f * hz + 2.0f * t));
+        box(s, Vec3(0.0f, 0.5f * hy, -hz - 0.5f * t), Vec3(2.0f * hx + 2.0f * t, hy + 2.0f * t, t));
+        box(s, Vec3(0.0f, 0.5f * hy, hz + 0.5f * t), Vec3(2.0f * hx + 2.0f * t, hy + 2.0f * t, t));
+        // pillars and blocks: the screen's silhouettes, where a probe's plane weights fail
+        for (const float x : { -4.0f, 4.0f })
+            for (const float z : { -8.0f, -2.0f, 4.0f }) box(s, Vec3(x, 0.5f * hy, z), Vec3(0.6f, hy, 0.6f));
+        box(s, Vec3(1.5f, 0.5f, -5.0f), Vec3(1.0f, 1.0f, 1.0f));
+        box(s, Vec3(-2.0f, 0.75f, -10.0f), Vec3(1.5f, 1.5f, 1.5f));
+    };
+    if (!late) buildHall();
     // the area light over the roof, facing down onto it
     {
         const NodeId lamp = s->createNode();
@@ -120,10 +133,17 @@ int main(int argc, char **argv)
     gi.updateBudget = 0;
     if (!s->setGlobalIllumination(gi)) { std::printf("FAIL: GI\n"); return 1; }
     if (mode == "noray") e->setArm("area.visReadback", 1.0);
+    if (late) e->setArm("area.visReadback", 1.0);
+    if (late) {
+        // THE HALL BUILT AFTER THE GI IS ON (R3 (B)): the chain and the ray structures exist and hold nothing, then
+        // the hall arrives - read from its first frame
+        run(12);
+        buildHall();
+    }
     const double R = double(kAlbedo), bar = R / 255.0;
     // EVERY FRAME from the build to rest (shader compiles included: a frame drawn while a permutation builds is a frame
     // the user sees): the picture's brightest pixel and the count over the bar
-    double worst = 0.0, last = 0.0;
+    double worst = 0.0, last = 0.0, first = -1.0;
     int worstFrame = -1, rest = -1;
     unsigned worstOver = 0, lastOver = 0;
     unsigned long long relights = ~0ull, admitted = ~0ull;
@@ -141,6 +161,7 @@ int main(int argc, char **argv)
                     if (v > bar) ++over;
                 }
         if (peak > worst) { worst = peak; worstFrame = f; worstOver = over; }
+        if (f == 0) first = peak;
         last = peak;
         lastOver = over;
         const GiStatus g = s->published().gi;
@@ -156,11 +177,18 @@ int main(int argc, char **argv)
                 "over one code; at rest %.6f (%.3f codes), %u px over\n", mode.c_str(), rest, worst, worst / bar,
                 worstFrame, worstOver, last, last / bar, lastOver);
     CHECK(rest >= 0, "the hall comes to rest");
-    if (mode == "ray") {
+    if (late) {
+        CHECK(worst <= bar, "(1) no frame from the hall's arrival to rest lights its inside one code of R: a light whose "
+                            "visibility is not known yet gives nothing");
+    } else if (mode == "ray") {
         if (last > bar)
             std::printf("   ray: the residue at rest - %u px over one code, the brightest %.3f codes: the chain's rays "
                         "through the coarse mixed cells (10-4's R7)\n", lastOver, last / bar);
         CHECK(last <= bar, "(1) at rest no pixel inside the sealed hall reads one code of R");
+        std::printf("   ray: the first frame after the GI switch, its brightest pixel %.6f (%.3f codes of R)\n", first,
+                    first / bar);
+        CHECK(first >= 0.0 && first <= bar, "(2) the first frame after the GI switch draws with its producers: no pixel "
+                                            "lit through the roof by the area light");
     } else {
         const AreaVisStatus a = s->published().areaVis;
         unsigned open = 0, read = 0;
@@ -171,7 +199,7 @@ int main(int argc, char **argv)
         std::printf("   noray: the area light's visibility at rest - %u of %u pixels read unobstructed\n", open, read);
         CHECK(read > 0u && open == 0u, "(1) no pixel inside the sealed hall reads the area light unobstructed");
     }
-    if (mode == "noray") e->setArm("area.visReadback", 0.0);
+    if (mode == "noray" || late) e->setArm("area.visReadback", 0.0);
     GiParams off;
     off.mode = GiMode::Off;
     s->setGlobalIllumination(off);
