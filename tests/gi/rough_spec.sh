@@ -14,10 +14,18 @@
 #                 sources: the n = v = r isotropic lobe against the true view-stretched one (wide lobes, grazing
 #                 views), the lerp between levels 0.2 apart, and the clamp at the last level (0.7: the 0.75 strip). A
 #                 level weighting or a normalisation error shifts the mean - the law fails.
-#   --reference   gi.rough_reference - THE LOBE AGAINST THE TRUTH: the held picture against the traced reflection's
-#                 reference (cutoff 100, the rays alone, reflect.restReference: 4,096 raw GGX samples a texel at rest,
-#                 composited unfiltered), the rough class beating THE CONE'S RECORDED error (mean 26.60 codes, p99 62:
-#                 the producer the lobe replaced, spikes/photon-7/stage7/7-3/M1.txt); per strip printed.
+#   --reference   gi.rough_reference - THE LOBE AGAINST THE TRUTH (re-pointed in 10-3, R12): the held picture against
+#                 the traced reflection's reference (cutoff 100, the rays alone, reflect.restReference: 4,096 raw GGX
+#                 samples a texel at rest, composited unfiltered). THE LAW: the rough class's and every strip's mean SIGNED
+#                 error (the energy, the channels' mean) within the reference's SE of the mean + 1 code (the SE from the
+#                 reference's own pixel noise: a pixel against its four neighbours' mean); the per-pixel error printed
+#                 (the split sum's blur and the probe map's resolution). DECLARED RED (2026-10-27): +5.27 codes (every
+#                 strip +4.9 to +5.9; the plain floor +0.9) - its cause, by the estimators' arithmetic (an exact
+#                 reference not yet run), the REFERENCE's weighting: its VNDF samples are
+#                 averaged unweighted (jah_reflect_draw.glsl: "the estimator weight F G2 / G1 - NEITHER applied") and the
+#                 mean multiplied by the split DFG, where the lobe and its brute-force quadrature weigh the probe map by
+#                 D G2; a grazing view's VNDF mean leans to the darker horizon. With reflect.nee 0 the reference reads
+#                 1.5 codes brighter on the strips than with NEE on (the emitter table's MIS against the BRDF-only).
 # usage: rough_spec.sh <jahlab> <work dir> --quadrature|--reference
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}; MODE=${3:?--quadrature|--reference}

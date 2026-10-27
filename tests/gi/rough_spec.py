@@ -73,15 +73,26 @@ if mode == 'quadrature':
           a[4])
 elif mode == 'reference':
     L, R = img('lobe.png'), img('ref.png')
+    # THE REFERENCE'S OWN NOISE: its 4,096 samples a texel are composited unfiltered, so a pixel's deviation from its
+    # four neighbours' mean is its noise (the signal is smooth across a strip's interior): the per-pixel standard error
+    # SE_px = std(p - mean4) / sqrt(1 + 1/4), and the class mean's SE_px / sqrt(n)
+    Rf = R.astype(np.float64)
+    nb = (np.roll(Rf, 1, 0) + np.roll(Rf, -1, 0) + np.roll(Rf, 1, 1) + np.roll(Rf, -1, 1)) / 4.0
+    inner = rough & np.roll(rough, 1, 0) & np.roll(rough, -1, 0) & np.roll(rough, 1, 1) & np.roll(rough, -1, 1)
+    sePx = float(np.std((Rf - nb)[inner]) / math.sqrt(1.25))
     print('   the held picture against the traced reflection\'s reference (4,096 raw GGX samples a texel; 8-bit codes, max '
-          'channel |lobe - ref|, the signed mean of the larger channel):')
+          'channel |lobe - ref|, the signed mean of the larger channel, THE ENERGY - the signed mean over the channels); '
+          'the reference\'s per-pixel SE %.2f codes:' % sePx)
     res = {}
     for n, m in [('rough (all)', rough)] + strips:
         res[n] = err(L, R, m)
-        print('   %-12s %6d px  mean %.2f  p99 %.1f  bias %+.2f' % (n, res[n][3], res[n][0], res[n][1], res[n][2]))
+        print('   %-12s %6d px  mean %.2f  p99 %.1f  bias %+.2f  energy %+.2f' % (n, res[n][3], res[n][0], res[n][1],
+                                                                          res[n][2], res[n][4]))
+    print('   (the per-pixel error is the split sum\'s blur and the probe map\'s resolution - printed, never the law)')
     a = res['rough (all)']
     check(a[3] > 10000, 'not vacuous: the rough class covers the strips (%d px)' % a[3])
-    check(a[0] < 26.60 and a[1] < 62.0,
-          'THE LOBE BEATS THE CONE\'S RECORDED ERROR: mean %.2f < 26.60, p99 %.1f < 62 (spikes/photon-7/stage7/7-3/M1.txt)' %
-          (a[0], a[1]))
+    seMean = sePx / math.sqrt(max(a[3], 1))
+    ok = all(abs(res[n][4]) <= sePx / math.sqrt(max(res[n][3], 1)) + 1.0 for n, _ in [('rough (all)', rough)] + strips)
+    check(ok, 'THE LOBE HOLDS THE TRUTH\'S ENERGY: the rough class\'s and every strip\'s mean signed error within the '
+              'reference\'s SE (%.3f codes) + 1 code (the class %+.2f)' % (seMean, a[4]))
 sys.exit(1 if fails else 0)

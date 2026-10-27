@@ -940,7 +940,8 @@ endif()
 
 # gi.rough_lobe_quadrature / gi.rough_reference (PHOTON-7 stage 7, 7-3) — THE ROUGH SPECULAR'S TWO LAWS (rough_spec.sh):
 # the split sum's own error - the shipped read against the brute-force quadrature of the same probe map, within a code -
-# and the lobe at rest against the traced reflection's 4,096-sample reference, beating the cone's recorded error.
+# and the lobe at rest against the traced reflection's 4,096-sample reference, its energy within the reference's SE + 1
+# code (R12; declared red - rough_spec.sh says why).
 if(TARGET jahlab)
     jah_gpu_row(gi.rough_lobe_quadrature CLASS engine TOKENS 8 FRAMES 270
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_spec.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/rough_quad --quadrature

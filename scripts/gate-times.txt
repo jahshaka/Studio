@@ -120,7 +120,7 @@ gi.walk_bistro 48.09  solo, the card lock held, :77, Bistro's own data root warm
 gi.walk_rough 28.03  solo, the card lock held, :71 (PHOTON-7 stage 7, 7-3: photon-rough's walk, the probes' prefiltered lobe - the live residual at or under the cone's recorded 48.32 %, M1 and the settle after a cut printed; four sessions)
 gi.walk_area 25.90  solo, the card lock held, :71, warm (PHOTON-7 stage 7: photon-area's penumbra walk - M1 and the live residual per class printed, the walk's own laws; three sessions)
 gi.rough_lobe_quadrature 3.95  solo, the card lock held, :71 (PHOTON-7 stage 7, 7-3: the split sum keeps the energy - the shipped read against the brute-force quadrature of the same probe map, one session)
-gi.rough_reference 19.74  solo, the card lock held, :71 (PHOTON-7 stage 7, 7-3: the held lobe against the traced reflection's 4,096-sample reference, beating the cone's recorded error; two sessions)
+gi.rough_reference 25.14  solo, the card lock held, :72 (PHOTON-7 10-3 R12, 2026-10-27: the held lobe against the traced reflection's 4,096-sample reference, its energy within the reference's SE + 1 code; two sessions)
 gi.low_gather 12.40  solo, the card lock held, :71 (PHOTON-7 stage 7, 7-4: Low gains the gather - at Medium its own row against Low's by the arms, two rest seeds each; the Low tier's shape; GPU rows over a 30-frame walk)
 gizmo.overlay 1.60  quiet n=44
 gpu.cutout_soak.primitives 37.35  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
