@@ -102,6 +102,7 @@ int main(int argc, char **argv) {
     doc->sunDiscVisible = false;
     doc->fogEnabled = false;
     doc->hdrEnabled = false;
+    iris::PbrMaterialPtr groundMat;
     {
         auto ground = iris::MeshNode::create();
         ground->setName("ground");
@@ -112,6 +113,7 @@ int main(int argc, char **argv) {
         mat->setRoughnessFactor(1.0f);
         mat->setMetallicFactor(0.0f);
         ground->setMaterial(mat);
+        groundMat = mat;
         doc->getRootNode()->addChild(ground);
     }
     auto skyLight = iris::LightNode::create();
@@ -239,6 +241,30 @@ int main(int argc, char **argv) {
         CHECK(l3, "(3) a DOME Sky Light lights the ground as its cubemap would as the World sky, while the camera sees "
                   "the World sky as drawn");
         CHECK(l4, "(4) a BACKDROP World sky is drawn as it is and lights nothing: the ground 0");
+        // (5) A DOME UNDER NO WORLD SKY, THEN HIDDEN (the 10-3 read's F1): the dome alone lights the scene (R5b's
+        // headline case, a product lit by an HDRI against black) - the ground a white METAL at roughness 0.3, so the
+        // REFLECTION cube is what it shows; hiding the Sky Light removes the dome, and with no sky there is nothing
+        // to photograph: the ambient AND the reflection go, the ground 0. RED before the fix: the capture's
+        // "nothing to photograph" branch kept the dome's convolved cube bound under SkyMode::NoSky.
+        doc->skyType = iris::SkyType::NONE;
+        groundMat->setBaseColor(QColor(255, 255, 255));
+        groundMat->setMetallicFactor(1.0f);
+        groundMat->setRoughnessFactor(0.3f);
+        skyLight->setVisible(true);
+        doc->getRootNode()->addChild(skyLight);
+        Reading lit, hidden;
+        const bool s6 = settle(lit);
+        skyLight->setVisible(false);
+        const bool s7 = settle(hidden);
+        for (const auto &[name, r] : { std::pair<const char *, const Reading &>{ "no World sky, the orange dome", lit },
+                                       { "no World sky, the dome hidden", hidden } })
+            std::printf("   GI off, a white metal ground, %s: the sky %.4f %.4f %.4f, the ground %.4f %.4f %.4f\n", name,
+                        r.sky[0], r.sky[1], r.sky[2], r.ground[0], r.ground[1], r.ground[2]);
+        CHECK(s6 && s7, "premise: the no-sky dome's arms settle");
+        CHECK(lit.ground[0] > 4.0 * code, "premise: the dome alone lights (and is reflected by) the metal ground");
+        CHECK(hidden.ground[0] == 0.0 && hidden.ground[1] == 0.0 && hidden.ground[2] == 0.0,
+              "(5) a dome hidden under no World sky takes its reflection with it: the metal ground 0");
+        doc->getRootNode()->removeChild(skyLight);
         QDir(dir).removeRecursively();
     }
     mirror.reset();
