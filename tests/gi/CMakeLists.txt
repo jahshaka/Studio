@@ -825,6 +825,27 @@ set_tests_properties(gi.photon_window_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)
 set_tests_properties(gi.photon_window_sky PROPERTIES JAHSHAKA_TEST_FRAMES 329)
 set_tests_properties(gi.photon_window_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)
 
+# gi.lamps_outside (PHOTON-7 10-4, R9; L9) — SEVENTEEN LAMPS OUTSIDE A SEALED BOX LIGHT NOTHING INSIDE IT: a closed box in a
+# black world, seventeen casting point lamps around it, the shadow-map budget at 2 (fifteen Forward+ lamps); through an
+# opening they light the inside (the control), sealed every pixel inside reads 0 within a code (test_gi_lamps_outside.cpp
+# says the laws; red on the base: a Forward+ lamp had no visibility). A fixture, one row a tier.
+add_executable(test_gi_lamps_outside test_gi_lamps_outside.cpp)
+set_target_properties(test_gi_lamps_outside PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_lamps_outside PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_lamps_outside PRIVATE JahshakaEngine)
+add_dependencies(test_gi_lamps_outside JahshakaEngineMedia)
+jah_gpu_row(gi.lamps_outside CLASS engine COMMAND test_gi_lamps_outside ray
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.lamps_outside PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 17)
+
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
 # rq.hitListCap holding the records to a third FORCES drops and the floor stays within one code (the picture's
