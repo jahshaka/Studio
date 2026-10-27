@@ -786,6 +786,26 @@ jah_gpu_row(gi.sealed_hall_noray CLASS engine FRAMES 430 COMMAND test_gi_sealed_
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sealed_hall_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
+# gi.long_hall (PHOTON-7 stage 10-3, R4; L9: "ran out of distance" is not a miss) - A SEALED HALL LONGER THAN THE
+# CASCADES' REACH IS DARK IN ITS SURFACE CACHE: no inner-face card texel holds one code of the roof's (the cards' rays
+# run to the world's exit; test_gi_long_hall.cpp says the law). RED before: a ray that reached the outermost cascade's
+# radius read the sky. A fixture.
+add_executable(test_gi_long_hall test_gi_long_hall.cpp)
+set_target_properties(test_gi_long_hall PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_long_hall PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_long_hall PRIVATE JahshakaEngine)
+add_dependencies(test_gi_long_hall JahshakaEngineMedia)
+jah_gpu_row(gi.long_hall CLASS engine FRAMES 510 COMMAND test_gi_long_hall
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.long_hall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.sealed_sky (PHOTON-7 stage 10; L9) — THE SKY CANNOT LIGHT A SEALED ROOM, on every store that carries it: a closed box
 # under a uniform sky at High and Epic, its control the roof (test_gi_sealed_sky.cpp says the laws; red on the base: the
 # card relight's sixteen-cone sky share passed the walls, 10-0's P1). A fixture. 10-3 item 1: the pixel's diffuse and
