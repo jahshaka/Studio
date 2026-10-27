@@ -20,6 +20,13 @@
 //     share: jahSkyVis): every pixel reads 0 within one code at the fog's own open level (no light of either reaches
 //     the medium inside). RED without the measured sky visibility (V_sky 1: the sky's share glowed, mean 0.306).
 //   "sealed_noray" - the same at the no-ray tier: the screen integrate's diffuse rays measure the sky share.
+//   "far" (the one read's F9) - A SEALED HALL PAST THE SHADOW DISTANCE: a closed hall 200 x 100 m inside and 910 m long
+//     (10 m walls, black), the eye inside at its mid-height looking down its length, the sun alone (s = 1), the fog thin
+//     (0.0015 exp2 a metre), GI off at the ray tier; the picture's middle eighth sees the far end 900 m off, so most of
+//     its eye rays lie past the PSSM's 500 m. Every pixel reads 0 within one code at the fog's own open level over 900 m.
+//     RED ON THE BASE: the march read the sun as open past its last split (the hall's far fog glowed, its whole share
+//     past 500 m). (The no-ray tier's march past the split is the voxel chain's, which ends far inside 500 m: there the
+//     sun past the chain is open - the chain's named limit, no row.)
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -61,8 +68,8 @@ double oneCodeAt(double L)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "shaft";
-    if (mode != "shaft" && mode != "sealed" && mode != "sealed_noray") {
-        std::printf("FAIL: the mode is shaft, sealed or sealed_noray, not '%s'\n", mode.c_str());
+    if (mode != "shaft" && mode != "sealed" && mode != "sealed_noray" && mode != "far") {
+        std::printf("FAIL: the mode is shaft, sealed, sealed_noray or far, not '%s'\n", mode.c_str());
         return 2;
     }
     const bool noRay = mode == "sealed_noray";
@@ -91,6 +98,54 @@ int main(int argc, char **argv)
     black.albedo = Colour(0.0f, 0.0f, 0.0f);
     black.roughness = 1.0f;
     const MaterialId wall = scene->createPbrMaterial(black);
+    if (mode == "far") {
+        // THE HALL: inside x [-100, 100], y [0, 100], z [-900, 10]; 10 m walls (the far end inside the camera's 1 km)
+        slab(scene, -110.0f, -10.0f, -910.0f, 110.0f, 0.0f, 20.0f, wall);
+        slab(scene, -110.0f, 100.0f, -910.0f, 110.0f, 110.0f, 20.0f, wall);
+        slab(scene, -110.0f, 0.0f, -910.0f, -100.0f, 100.0f, 20.0f, wall);
+        slab(scene, 100.0f, 0.0f, -910.0f, 110.0f, 100.0f, 20.0f, wall);
+        slab(scene, -100.0f, 0.0f, -910.0f, 100.0f, 100.0f, -900.0f, wall);
+        slab(scene, -100.0f, 0.0f, 10.0f, 100.0f, 100.0f, 20.0f, wall);
+        enginetest::addDirectionalLight(scene, Vec3(-0.5f, -0.8660254f, 0.0f), 3.0f);
+        float none[27] = { 0 };
+        scene->setAmbientSh(none);
+        SkyDesc sky;
+        sky.mode = SkyMode::NoSky;
+        scene->setSky(sky);
+        FogDesc fog;
+        fog.enabled = true;
+        fog.colour = Colour(1.0f, 1.0f, 1.0f);
+        fog.density = 0.0015f;
+        scene->setFog(fog);
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 50.0f, 0.0f), Vec3(0.0f, 50.0f, -100.0f));
+        e->waitForAsyncShaders();
+        run(8);
+        e->waitForAsyncShaders();
+        run(8);
+        ImageF img;
+        double mean = 0.0, peak = 0.0;
+        size_t n = 0;
+        const bool ok = view->readPixelsHdr(img) && img.width >= 64u && img.height >= 64u;
+        if (ok)
+            for (unsigned y = 7u * img.height / 16u; y < 9u * img.height / 16u; ++y)
+                for (unsigned x = 7u * img.width / 16u; x < 9u * img.width / 16u; ++x) {
+                    const Colour c = img.at(x, y);
+                    const double v = std::max(c.r, std::max(c.g, c.b));
+                    mean += v;
+                    peak = std::max(peak, v);
+                    ++n;
+                }
+        mean = n ? mean / double(n) : 0.0;
+        const double openLevel = 1.0 - std::exp2(-0.0015 * 900.0);
+        std::printf("== far: the sealed hall past the shadow distance: the middle eighth's mean %.6f, peak %.6f; one code "
+                    "at the open level %.3f is %.6f (%d frames)\n", mean, peak, openLevel, oneCodeAt(openLevel), frames);
+        char w[256];
+        std::snprintf(w, sizeof(w), "the sealed hall's far fog is dark past the shadow distance: every pixel 0 (peak %.6f) "
+                      "within one code at %.3f (%.6f)", peak, openLevel, oneCodeAt(openLevel));
+        check(ok && n > 0 && peak <= oneCodeAt(openLevel), w);
+        std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+        return g_fail ? 1 : 0;
+    }
     // the room: inside x, z in [-2, 2], y in [0, 3]; the roof (y 3.0 .. 3.4) around the opening x [-0.6, 1.4],
     // z [-1.4, 0.6]
     slab(scene, -2.4f, -0.4f, -2.4f, 2.4f, 0.0f, 2.4f, wall);

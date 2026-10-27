@@ -936,6 +936,12 @@ jah_gpu_row(gi.fog_sealed_noray CLASS engine COMMAND test_gi_fog_inscatter seale
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.fog_sealed_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 113)
+# ...and THE SEALED HALL PAST THE SHADOW DISTANCE (the one read's F9): its far fog is dark - the march past its last split
+# takes the sun's TLAS ray (red on the base: the sun read open past 500 m)
+jah_gpu_row(gi.fog_far_hall CLASS engine COMMAND test_gi_fog_inscatter far
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.fog_far_hall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 17)
 
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
