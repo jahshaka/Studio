@@ -204,19 +204,15 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
            "air."));
 
     shadowType = this->addComboBox("Shadow Type");
-    // "Off (fill light)" rather than "None" (owner decision Q4): the switch is
-    // named for what it is FOR — a light you deliberately add for fill and do
-    // not want a second set of shadows from — and not as a performance dial.
-    // Shadows are ON for every new light; this is how you say otherwise.
-    shadowType->addItem("Off (fill light)");
+    // THE SHADOW'S FILTER - every light casts one (PHOTON-7 10-4 R9; L9: a light is blocked by geometry on every
+    // path). "Off (fill light)" is DELETED: the engine traces every lamp the shadow maps do not hold, so no setting
+    // lets a light through a wall.
     shadowType->addItem("Hard");
 	shadowType->addItem("Soft");
 	shadowType->addItem("Very Soft");
     shadowType->setToolTip(
-        tr("Every new light casts soft shadows. \"Off (fill light)\" is the deliberate "
-           "exception: the light still lights everything it reaches, straight through walls and "
-           "floors, which is what a fill light is for and is also the commonest cause of a room "
-           "that is lit from outside."));
+        tr("How soft this light's shadow is. Every light casts one: geometry blocks every light, "
+           "whatever this says."));
     shadowSize = this->addComboBox("Shadow Size");
     shadowSize->addItem("512");
     shadowSize->addItem("1024");
@@ -497,8 +493,6 @@ void LightPropertyWidget::refreshSunRows()
 QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
 {
     switch(shadowType){
-    case iris::ShadowMapType::None:
-        return "Off (fill light)";
     case iris::ShadowMapType::Hard:
         return "Hard";
     case iris::ShadowMapType::Soft:
@@ -507,17 +501,15 @@ QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
         return "Very Soft";
     }
 
-    return "Off (fill light)";
+    return "Soft";
 }
 
 iris::ShadowMapType LightPropertyWidget::evalShadowMapType(QString shadowType)
 {
     if (shadowType=="Hard")
         return iris::ShadowMapType::Hard;
-    if (shadowType=="Soft")
-        return iris::ShadowMapType::Soft;
     if (shadowType=="Very Soft")
         return iris::ShadowMapType::VerySoft;
 
-    return iris::ShadowMapType::None;
+    return iris::ShadowMapType::Soft;
 }

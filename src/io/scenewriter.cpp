@@ -972,8 +972,6 @@ QJsonObject SceneWriter::jsonVector4(iris::Vec4 vec)
 QString evalShadowTypeName(iris::ShadowMapType shadowType)
 {
     switch(shadowType){
-    case iris::ShadowMapType::None:
-        return "none";
     case iris::ShadowMapType::Hard:
         return "hard";
     case iris::ShadowMapType::Soft:
@@ -982,7 +980,7 @@ QString evalShadowTypeName(iris::ShadowMapType shadowType)
         return "verysoft";
     }
 
-    return "none";
+    return "soft";
 }
 
 void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr lightNode)

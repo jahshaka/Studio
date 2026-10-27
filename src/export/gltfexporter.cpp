@@ -920,14 +920,13 @@ QJsonObject shadowExtras(iris::LightNode *light)
 {
     QJsonObject sh;
     const iris::ShadowMap &sm = light->shadowMap;
-    QString filter = "none";
+    QString filter = "soft";
     switch (sm.shadowType) {
     case iris::ShadowMapType::Hard:     filter = "hard"; break;
     case iris::ShadowMapType::Soft:     filter = "soft"; break;
     case iris::ShadowMapType::VerySoft: filter = "verysoft"; break;
-    default: break;
     }
-    sh["castShadow"] = light->lightType != iris::LightType::Area && filter != "none";
+    sh["castShadow"] = light->lightType != iris::LightType::Area;   // every other light casts (10-4 R9)
     sh["filter"] = filter;
     sh["mapSize"] = sm.resolution;
     // (NO `bias` KEY. The document's per-light shadow bias is deleted — the

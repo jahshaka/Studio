@@ -1338,15 +1338,14 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 // stated two different defaults for one question. Our own writer always writes
 // the key, so only a hand-edited file or a future importer could reach the
 // divergence; that is exactly the kind of thing that is discovered late.
-// An explicit "none" still means none, and always will.
+// ("none" is DELETED with the setting - PHOTON-7 10-4 R9, every light casts: an old file's "none" reads Soft, as any
+// word the reader does not know.)
 iris::ShadowMapType evalShadowMapType(QString shadowType)
 {
     if (shadowType=="hard")
         return iris::ShadowMapType::Hard;
     if (shadowType=="verysoft")
         return iris::ShadowMapType::VerySoft;
-    if (shadowType=="none")
-        return iris::ShadowMapType::None;
 
     return iris::ShadowMapType::Soft;
 }

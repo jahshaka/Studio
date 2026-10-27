@@ -789,11 +789,15 @@ int main(int argc, char **argv)
         mirror.setHighlightedNodes({});
 
         // Point-light shadow controls (the panel unhides Type/Size in engine
-        // mode): the Shadow Type combo drives castShadows through toLightDesc.
-        point->shadowMap.shadowType = iris::ShadowMapType::Soft;
-        CHECK(SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=Soft casts shadows");
-        point->shadowMap.shadowType = iris::ShadowMapType::None;
-        CHECK(!SceneMirror::toLightDesc(point.data()).castShadows, "point light Shadow Type=None stops casting");
+        // mode): every filter casts - no Shadow Type lets a light through a wall (PHOTON-7 10-4 R9: None is deleted),
+        // and the document refuses a value outside the three.
+        for (iris::ShadowMapType t : { iris::ShadowMapType::Hard, iris::ShadowMapType::Soft, iris::ShadowMapType::VerySoft }) {
+            point->shadowMap.shadowType = t;
+            CHECK(SceneMirror::toLightDesc(point.data()).castShadows, "a point light casts at every Shadow Type");
+        }
+        CHECK(!point->setPropertyValue(QStringLiteral("shadowMapType"), 0) &&
+                  point->shadowMap.shadowType == iris::ShadowMapType::VerySoft,
+              "shadowMapType 0 (the deleted None) is refused, the filter kept");
 
         // (The STATIC SHADOW flag and the transform-write counter the mirror
         // watched for it are gone — ENGINE_CACHE_POLICY_SPEC P2/P3: every

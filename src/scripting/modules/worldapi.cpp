@@ -2829,8 +2829,7 @@ QVariantMap WorldApi::sun()
     out[QStringLiteral("explicit")] = !scene->sunLightGuid.isEmpty();
     out[QStringLiteral("reason")] = scene->sunReason();
     out[QStringLiteral("priority")] = sun ? sun->forwardShadingPriority : -1;
-    out[QStringLiteral("castsShadows")] =
-        sun && sun->shadowMap.shadowType != iris::ShadowMapType::None;
+    out[QStringLiteral("castsShadows")] = bool(sun);   // every light casts (PHOTON-7 10-4 R9: None is deleted)
     // The direction the sun TRAVELS, in world space — what the realistic sky's
     // bake and the sun disc are both placed from (D15).
     if (sun) {

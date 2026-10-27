@@ -151,9 +151,6 @@ public:
     ///   * `sun.tie` — two or more directional lights claim the same forward
     ///     shading priority, so which one is the sun is decided by a tie-break
     ///     the author never chose;
-    ///   * `shadow.leak` — a light whose shadows are switched off stands close
-    ///     enough to opaque geometry to light straight through it (the
-    ///     Showroom's lamp above a sealed roof, which nothing ever mentioned);
     ///   * `sky.duplicate` — a second Sky Light, which lights nothing;
     ///   * `rays.absent` — the project's Ray Tracing row says ON (it
     ///     was AUTHORED for rays) and this machine has none. The one issue that
@@ -166,9 +163,8 @@ public:
     ///     the file returns or the slot is re-linked.
     ///
     /// THE NODE CHECKS FOLLOW THE DOCUMENT'S OWN DIRT, NEVER THE CLOCK
-    /// (BISTRO-ENGINE-1 stage 5, finding 14). The two node conditions —
-    /// `shadow.leak` (each solid node's world box) and `texture.missing` (each
-    /// mesh's material) — used to walk the whole scene on every call, and the
+    /// (BISTRO-ENGINE-1 stage 5, finding 14). The node condition —
+    /// `texture.missing` (each mesh's material) — used to walk the whole scene on every call, and the
     /// editor calls this once a second: ~0.2 s of UI thread per second at
     /// 6,000 meshes in a Debug build (the owner's Bistro session, 218 heartbeat
     /// lines of ~430 ms). Each node's answer is now CACHED, and a pass
@@ -191,7 +187,6 @@ public:
         int passes = 0;          ///< scan() calls with a scene, ever
         int walks = 0;           ///< passes that visited any node, ever
         bool fullWalk = false;   ///< the last pass walked the whole scene
-        bool leakEvaluated = false;   ///< the last pass re-tested the lamps against the boxes
         int nodesVisited = 0;    ///< nodes the last pass re-checked
         qint64 visitedTotal = 0; ///< nodes re-checked by every pass, ever
     };
@@ -225,8 +220,6 @@ private:
     struct NodeCheck
     {
         QWeakPointer<iris::SceneNode> node;
-        bool blocker = false;          ///< visible, casts a shadow, has a box
-        iris::Vec3 mn, mx;             ///< its world box (blockers only)
         QWeakPointer<iris::Material> material;
         quint32 materialRevision = 0;
         QStringList paths;             ///< the texture files the check asked about
@@ -238,8 +231,6 @@ private:
     /// one reader among the mirrors and the physics worlds, never a second record (ENGINE-UPGRADE-1's one journal).
     iris::graph::WriteJournalReader mJournal{ true };
     quint64 mMaterialsSeen = 0;
-    bool mLeakDirty = true;
-    QHash<QString, SceneIssue> mLeakLines;   ///< by issue id
     ScanStats mStats;
     /// Re-derives one node's cached answers (and raises/updates its line).
     void checkNode(iris::SceneNode *node);

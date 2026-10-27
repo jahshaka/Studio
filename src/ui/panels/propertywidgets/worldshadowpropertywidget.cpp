@@ -93,14 +93,13 @@ void WorldShadowPropertyWidget::setSceneView(IEditorViewport *sceneView)
 int WorldShadowPropertyWidget::derivedFromLights() const
 {
     if (!scene) return 0;
-    // SceneMirror's policy, verbatim: area lights cannot cast, "None" does not
-    // ask, and the largest remaining request wins.
+    // SceneMirror's policy, verbatim: area lights cannot cast, and the largest
+    // remaining request wins.
     int best = 0;
     for (const auto &l : scene->lights) {
         // A Sky Light cannot cast either — it has no place to cast FROM.
         if (l.isNull() || l->lightType == iris::LightType::Area ||
             l->lightType == iris::LightType::Sky) continue;
-        if (l->shadowMap.shadowType == iris::ShadowMapType::None) continue;
         best = std::max(best, l->shadowMap.resolution);
     }
     return best;

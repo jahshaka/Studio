@@ -800,7 +800,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "raiseIssue", "editor.raiseIssue({kind, node, message, action, id}) -> id",
           "Raises a scene issue, or does NOTHING and returns the same id when one with that id is "
           "already live. `kind` is required and is the machine-readable class (\"sun.tie\", "
-          "\"shadow.leak\", or your own); `message` is required and is what is wrong in plain "
+          "\"texture.missing\", or your own); `message` is required and is what is wrong in plain "
           "words; `node` is the guid of the object it is about, `action` what to do about it, and "
           "`id` defaults to \"<kind>:<node>\", which is what makes repeats free. Use it for "
           "conditions a user can fix — never for engine diagnostics, which belong in the log.",
@@ -811,14 +811,12 @@ QVector<VerbInfo> EditorApi::verbs() const
           "(editor.checkScene) does this for its own kinds by itself, which is how a line leaves "
           "the viewport's error area — there is no dismiss. False when there is no such issue.",
           Needs::Document },
-        { "checkScene", "editor.checkScene() -> {issues, raised:[id], list:[...], walked:{full, leak, nodes, visited, passes, walks}}",
+        { "checkScene", "editor.checkScene() -> {issues, raised:[id], list:[...], walked:{full, nodes, visited, passes, walks}}",
           "Runs the scene checker once against the open scene and returns what is live afterwards "
           "— the same thing the editor does on a timer, exposed so a script or a test can drive "
           "it. The conditions it knows (SceneIssues::scan): \"sun.tie\", two directional "
           "lights set to the same Forward Shading Priority, so which one is the sun comes out of "
-          "a tie-break the author never chose; \"shadow.leak\", a light whose shadows are "
-          "switched off standing close enough to solid geometry to light straight through it; "
-          "\"sky.duplicate\", a second Sky Light, which lights nothing; \"rays.absent\", a "
+          "a tie-break the author never chose; \"sky.duplicate\", a second Sky Light, which lights nothing; \"rays.absent\", a "
           "project whose Ray Tracing row says On on a machine with none; \"vr.colour\", a VR "
           "runtime encoding the picture twice; and \"texture.missing\", a material's texture file gone from disk "
           "(one issue per mesh node, naming each missing slot and its file; it clears when the "
@@ -827,13 +825,12 @@ QVector<VerbInfo> EditorApi::verbs() const
           "call as often as you like. `raised` names the issues this call raised for the first "
           "time (empty on a second identical call — the never-repeat rule), and `list` is every "
           "live issue in the order the error area lists them. THE NODE CHECKS FOLLOW THE "
-          "DOCUMENT'S WRITES, NOT THE CLOCK: each node's answers (\"shadow.leak\"'s box, "
-          "\"texture.missing\"'s files) are cached, and a pass re-checks only the nodes the "
+          "DOCUMENT'S WRITES, NOT THE CLOCK: each node's answers (\"texture.missing\"'s files) "
+          "are cached, and a pass re-checks only the nodes the "
           "node graph's write journal names as written since the last pass (a moved node with "
           "its subtree), those whose material changed and those whose file the disk reported "
           "— nothing written, nothing visited. `walked` says what THIS pass did: `full` whether "
-          "it walked the whole scene (a new scene), `leak` whether it re-tested the lamps "
-          "against the boxes, `nodes` how many nodes it re-checked (0 for an idle pass); "
+          "it walked the whole scene (a new scene), `nodes` how many nodes it re-checked (0 for an idle pass); "
           "`visited`, `passes` and `walks` the totals since launch (the editor's own 1 Hz pass "
           "included).",
           Needs::Document },
@@ -3130,7 +3127,6 @@ QVariantMap EditorApi::checkScene()
         if (!before.contains(i.id)) raised.append(i.id);
     const SceneIssues::ScanStats stats = store.lastScan();
     const QVariantMap walked{ { QStringLiteral("full"), stats.fullWalk },
-                              { QStringLiteral("leak"), stats.leakEvaluated },
                               { QStringLiteral("nodes"), stats.nodesVisited },
                               { QStringLiteral("visited"), double(stats.visitedTotal) },
                               { QStringLiteral("passes"), stats.passes },
