@@ -186,6 +186,27 @@ jah_gpu_row(gi.card_sun_lift CLASS engine COMMAND test_card_sun_lift
 set_tests_properties(gi.card_sun_lift PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(gi.card_sun_lift PROPERTIES JAHSHAKA_TEST_FRAMES 49)
+# gi.card_contact_lift — A CARD'S SUN RAY STARTS ON ITS SURFACE (PHOTON-7 stage 10-3, R10 / B1): a 10-cm slab on a
+# carded 16 m floor under a 12-degree sun - its whole analytic contact shadow on the floor's card, nothing past its
+# edge shadowed, the planar floor's lift its depth quantum alone (test_card_contact_lift.cpp states the laws and the
+# base's red: 39 of 129 umbra points lit while the lift carried a card texel).
+add_executable(test_card_contact_lift test_card_contact_lift.cpp)
+set_target_properties(test_card_contact_lift PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_card_contact_lift PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_card_contact_lift PRIVATE JahshakaEngine)
+add_dependencies(test_card_contact_lift JahshakaEngineMedia)
+jah_gpu_row(gi.card_contact_lift CLASS engine COMMAND test_card_contact_lift
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_contact_lift PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(gi.card_contact_lift PROPERTIES JAHSHAKA_TEST_FRAMES 108)
 add_executable(test_sun_contact_acne test_sun_contact_acne.cpp)
 set_target_properties(test_sun_contact_acne PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
