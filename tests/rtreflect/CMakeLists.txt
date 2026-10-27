@@ -239,8 +239,8 @@ endif()
 
 # rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and round 2's R1, rev 6's bars; split in round 4) — THE
 # GLASS IS STILL AFTER A STOP: jahlab's stillness door on photon-glass after a walk inside one lattice cell and the
-# path's teleport at equal placements — (a) the glossy change <= 0.05 codes from frame 17 and decreasing to the hold
-# (J5's 0.01-code tolerance), (b') the hold inside the window, 0 codes from it, no capped texel at it, (c) the mirror's estimator
+# path's teleport at equal placements — (a) no rise to the hold (the rise law), (a2) the lag law at the stop (each frame
+# within its noise of the hold, R12), (b') the hold inside the window, 0 codes from it, no capped texel at it, (c) the mirror's estimator
 # fixed, (d) walk vs teleport on the glossy panes; (f), the 4,096-sample reference, is a measurement over a row's
 # minute (still_after_stop.sh says the law and the base). 960x540; one jahlab session: 231 frames to the stop, two
 # 600-frame windows and the path's bridge - 1,436 frames.

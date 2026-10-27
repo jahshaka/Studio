@@ -18,6 +18,12 @@
 #       its frames - a burst of any length is a rise). (Its "<= 0.05 codes from frame 17" is DELETED, the lead's ruling:
 #       a moving estimate holds <= 12 samples, so the rest's refinement must move the mean by up to its SE, ~sigma /
 #       sqrt 12 - no honest estimator reaches 0.05 at frame 17; it read 0.30 on the base.)
+#   (a2) THE LAG LAW AT A STOP (PHOTON-7 10-3 R12, the lead's ruling: the rise law says the change shrinks, this one
+#       that the picture is the world's within its noise): the eye still, the converged picture does not move, so per
+#       glossy pixel at frames 17 / 24 / 32 / 48 / 64 / 96 after the stop |frame(k) - hold| <= 3 sqrt( SE^2 + 1 ) + 1
+#       (SE the moving mean's standard error at the stop - the trail's last frame's .rse; the rest mean's at k is no
+#       larger - the hold's own error under a code, the +1 two 8-bit pictures' rounding), the breaking share <= 1 %
+#       (the dump's window frames, dumpwin=; measured 2026-10-27: 0.001-0.08 %, |frame - hold| p99 1-3 codes);
 #   (b') the HOLD - no texel left converging (the door's refl_held: the rest's active count 0, never the picture's
 #       stationarity) - reached inside the window, from it on the glossy panes and the mirror change 0 codes, and at the
 #       hold NO CAPPED TEXEL (the door's refl_rest_capped 0: every texel stopped by its own standard error within its
@@ -42,10 +48,11 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 rm -rf "$WD"; mkdir -p "$WD"
 POSE=1.5,1.8,3.4,1.5,0.5,-3
 WIN=600
+LAGK=17,24,32,48,64,96   # (a2)'s frames after the stop: from the rest's hand-over (2N / 4 frames) + its 16
 # (the sources this row's bars are Both's: set, never assumed - the mode label below asserts what ran)
 cat > "$WD/run.lab" <<S
 reflections both
-stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WIN path out=still
+stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WIN path trail=1 dump=still dumpwin=$LAGK,$WIN out=still
 quit
 S
 for run in run; do
@@ -58,7 +65,7 @@ grep '^LAB STILLNESS' "$WD/run.log" | cut -c1-400
 HERE=$(cd "$(dirname "$0")" && pwd)
 python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/still.tsv" -- both || {
     echo "rtreflect.still_after_stop: FAIL (the mode label)"; exit 1; }
-python3 -I - "$WD" "$WIN" "$HERE/../support" <<'PY'
+LAGK=$LAGK python3 -I - "$WD" "$WIN" "$HERE/../support" <<'PY'
 import csv, math, os, re, sys
 wd, win = sys.argv[1], int(sys.argv[2])
 sys.path.insert(0, sys.argv[3])
@@ -152,8 +159,43 @@ else:
     print("(d) walk vs teleport at equal placements: glossy %s mirror %s" % (cls["glossy"], cls["mirror"]))
     if cls["glossy"][0] > 0.5 or cls["glossy"][1] > 2: fails.append("(d) glossy mean <= 0.5 and p99 <= 2: %s" % (cls["glossy"],))
     print("(d) the mirror's half is stage 5's (R2), not judged here: %s" % (cls["mirror"],))
+# (a2) THE LAG LAW AT A STOP (PHOTON-7 10-3 R12, the lead's ruling: the picture is the world's within its noise): the
+# eye still, the converged picture does not move (conv(k+1) - conv(k) = 0), so per glossy pixel at each listed frame k
+# after the hand-over |frame(k) - hold| <= 3 sqrt( SE^2 + 1 ) + 1 - SE the moving mean's standard error at the stop (the
+# stop frame's .rse: the rest mean's at k, which has taken 4 rays a frame since, is no larger), the hold's own error under
+# a code (the stop law's), the +1 the two 8-bit pictures' rounding; the breaking share <= 1 % of the glossy pixels.
+try:
+    import numpy as np
+    dd = os.path.join(wd, "data", "stillness", "dump-still")
+    W, H = 960, 540
+    base = os.path.join(dd, "still-t000")
+    rsz = open(base + ".rsize").read().split()
+    rw, rh = int(rsz[0]), int(rsz[1])
+    se = np.fromfile(base + ".rse", dtype=np.float32).reshape(rh, rw)
+    if (rw, rh) != (W, H):
+        se = se[(np.arange(H) * rh // H)][:, (np.arange(W) * rw // W)]
+    last = win   # the window's last frame (0 the stop, 1 .. win after it): the hold
+    hold = np.fromfile(os.path.join(dd, "still-w0-f%03d.rgb" % last), dtype=np.uint8).reshape(H, W, 3).astype(np.int32)
+    cls = np.fromfile(os.path.join(dd, "still-w0-f%03d.cls" % last), dtype=np.uint8).reshape(H, W)
+    glossy = cls == 3
+    bound = 3.0 * np.sqrt(se.astype(np.float64) ** 2 + 1.0) + 1.0
+    for k in [int(x) for x in os.environ.get("LAGK", "").split(",") if x]:
+        f = np.fromfile(os.path.join(dd, "still-w0-f%03d.rgb" % k), dtype=np.uint8).reshape(H, W, 3).astype(np.int32)
+        lhs = np.abs(f - hold).max(axis=2)
+        breaks = glossy & (lhs > bound)
+        share = breaks.sum() / max(1, glossy.sum())
+        print("(a2) frame %d after the stop: glossy %d px, SE at the stop median %.2f (p90 %.2f) codes, |frame - hold| "
+              "mean %.3f p99 %.1f; breaking %.3f %% (bar 1 %%)" % (k, glossy.sum(), np.median(se[glossy]),
+              np.percentile(se[glossy], 90), lhs[glossy].mean(), np.percentile(lhs[glossy], 99), 100.0 * share))
+        if glossy.sum() < 10000: fails.append("(a2) frame %d: %d glossy pixels - the fixture moved" % (k, glossy.sum()))
+        elif share > 0.01: fails.append("(a2) frame %d: %.2f %% of the glossy pixels off their held picture past their noise" % (k, 100.0 * share))
+except Exception as ex:
+    fails.append("(a2) the lag law's dump: %s" % ex)
 print("(f) the held picture against the 4,096-sample reference: a measurement (the arm reflect.restReference), not this row")
 for f in fails: print("FAIL:", f)
 print("rtreflect.still_after_stop: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)
 PY
+rc=$?
+rm -rf "$WD/data/stillness/dump-"*   # (the dumped pictures, once their numbers are printed)
+exit $rc
