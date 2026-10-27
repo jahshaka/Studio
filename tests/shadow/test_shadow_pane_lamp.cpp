@@ -15,6 +15,9 @@
 // within one code at T x H (the display's sRGB code width there: the picture's quantum) plus T's own quantum in the
 // layer (8 bits: 1/510 of H); and with the pane OPAQUE it reads 0 within the same code (the layer never lights a
 // solid caster's shadow).
+// THE FIX ROUND's ARMS (the one read's F2 and F8): Blend, Glass and Refractive at alpha 1 on the STOCK caster's path (the
+// pane culled at the front) read 0 like the opaque pane (red before F2: the hole, 0.107738 - the copy wrote no depth);
+// ADDITIVE at alpha 0.5 reads the hole within a code (red before F8: 0.000001 - an additive surface absorbs nothing).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -155,6 +158,22 @@ int main()
         p.alphaMode = PbrAlphaMode::Glass;
         p.alpha = 0.5f;
         ok = scene->setPbrMaterial(paneMat, p) && (settle(), read(glass)) && ok;
+        // THE BLENDED MODES AT ALPHA 1 (the one read's F2): a surface that passes nothing of what lies behind it in the
+        // pixel casts the shadow of an opaque one - on the STOCK caster's path too (the pane's faces culled at the front:
+        // a caster the Atom cut cannot draw, OgreScene::atomCasterThroughCut; a skinned item takes the same path); and
+        // ADDITIVE (F8) absorbs nothing at any alpha: it casts no shadow
+        double atOne[3] = { 0.0, 0.0, 0.0 }, additive = 0.0;
+        const PbrAlphaMode oneModes[3] = { PbrAlphaMode::Blend, PbrAlphaMode::Glass, PbrAlphaMode::Refractive };
+        scene->setNodeFaceCull(pane, FaceCull::Front);
+        for (int k = 0; k < 3; ++k) {
+            p.alphaMode = oneModes[k];
+            p.alpha = 1.0f;
+            ok = scene->setPbrMaterial(paneMat, p) && (settle(), read(atOne[k])) && ok;
+        }
+        scene->setNodeFaceCull(pane, FaceCull::Material);
+        p.alphaMode = PbrAlphaMode::Additive;
+        p.alpha = 0.5f;
+        ok = scene->setPbrMaterial(paneMat, p) && (settle(), read(additive)) && ok;
         p.alphaMode = PbrAlphaMode::Opaque;
         p.alpha = 1.0f;
         ok = scene->setPbrMaterial(paneMat, p) && (settle(), read(opaque)) && ok;
@@ -169,6 +188,19 @@ int main()
         check(ok && std::fabs(glass - T * hole) <= bar, what);
         std::snprintf(what, sizeof(what), "%s: under an opaque pane the floor reads 0 within a code", l.name);
         check(ok && opaque <= oneCodeAt(T * hole), what);
+        const char *oneNames[3] = { "BLEND", "GLASS", "REFRACTIVE" };
+        for (int k = 0; k < 3; ++k) {
+            std::printf("   %s: %s at alpha 1, the stock caster %.6f (an opaque caster's 0, the bar %.6f)\n", l.name, oneNames[k], atOne[k],
+                        oneCodeAt(T * hole));
+            std::snprintf(what, sizeof(what), "%s: a %s surface at alpha 1 casts an opaque shadow (0 within a code)", l.name,
+                          oneNames[k]);
+            check(ok && atOne[k] <= oneCodeAt(T * hole), what);
+        }
+        std::printf("   %s: ADDITIVE at alpha 0.5 %.6f against the hole %.6f (%+.6f)\n", l.name, additive, hole,
+                    additive - hole);
+        std::snprintf(what, sizeof(what), "%s: an ADDITIVE surface absorbs nothing: the floor under it reads the hole "
+                      "within a code", l.name);
+        check(ok && std::fabs(additive - hole) <= oneCodeAt(hole) + hole / 510.0, what);
         paneP.alphaMode = PbrAlphaMode::Opaque;
     }
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
