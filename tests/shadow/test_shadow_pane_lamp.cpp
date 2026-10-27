@@ -18,6 +18,9 @@
 // THE FIX ROUND's ARMS (the one read's F2 and F8): Blend, Glass and Refractive at alpha 1 on the STOCK caster's path (the
 // pane culled at the front) read 0 like the opaque pane (red before F2: the hole, 0.107738 - the copy wrote no depth);
 // ADDITIVE at alpha 0.5 reads the hole within a code (red before F8: 0.000001 - an additive surface absorbs nothing).
+// THE ALPHA DRAG (F12): Glass through 0.3, 0.4, 0.6 and 0.7 builds no shader (the process's compiled and cached
+// counters stand still: ONE pane caster for every alpha) and each alpha reads (1 - alpha) x the hole within a code (red
+// before F12: every new alpha level was a caster permutation of its own, built while its shadow was missing).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -158,6 +161,19 @@ int main()
         p.alphaMode = PbrAlphaMode::Glass;
         p.alpha = 0.5f;
         ok = scene->setPbrMaterial(paneMat, p) && (settle(), read(glass)) && ok;
+        // THE ALPHA DRAG (the one read's F12): ONE pane caster shader for every alpha - its transmittance read from its
+        // material, never baked into its permutation - so a drag through four alphas builds and loads no shader (the
+        // process's compiled and cached counters stand still) and each alpha's shadow is its own (1 - alpha)
+        const float dragAlphas[4] = { 0.3f, 0.4f, 0.6f, 0.7f };
+        double drag[4] = { 0.0, 0.0, 0.0, 0.0 };
+        unsigned compiled0 = 0, cached0 = 0, expected0 = 0, compiled1 = 0, cached1 = 0, expected1 = 0;
+        e->shaderBuildProgress(compiled0, cached0, expected0);
+        for (int k = 0; k < 4; ++k) {
+            p.alpha = dragAlphas[k];
+            ok = scene->setPbrMaterial(paneMat, p) && (settle(), read(drag[k])) && ok;
+        }
+        e->shaderBuildProgress(compiled1, cached1, expected1);
+        p.alpha = 0.5f;
         // THE BLENDED MODES AT ALPHA 1 (the one read's F2): a surface that passes nothing of what lies behind it in the
         // pixel casts the shadow of an opaque one - on the STOCK caster's path too (the pane's faces culled at the front:
         // a caster the Atom cut cannot draw, OgreScene::atomCasterThroughCut; a skinned item takes the same path); and
@@ -188,6 +204,19 @@ int main()
         check(ok && std::fabs(glass - T * hole) <= bar, what);
         std::snprintf(what, sizeof(what), "%s: under an opaque pane the floor reads 0 within a code", l.name);
         check(ok && opaque <= oneCodeAt(T * hole), what);
+        const unsigned built = (compiled1 - compiled0) + (cached1 - cached0);
+        bool dragged = true;
+        for (int k = 0; k < 4; ++k) {
+            const double want = (1.0 - double(dragAlphas[k])) * hole, b = oneCodeAt(want) + hole / 510.0;
+            std::printf("   %s: THE DRAG, GLASS %.1f %.6f against (1 - alpha) x H %.6f (%+.6f; the bar %.6f)\n", l.name,
+                        double(dragAlphas[k]), drag[k], want, drag[k] - want, b);
+            dragged = dragged && std::fabs(drag[k] - want) <= b;
+        }
+        std::printf("   %s: THE DRAG built %u shaders (compiled %u, from the cache %u)\n", l.name, built,
+                    compiled1 - compiled0, cached1 - cached0);
+        std::snprintf(what, sizeof(what), "%s: an alpha drag through four alphas builds no shader and each alpha casts its "
+                      "own (1 - alpha) within a code (F12)", l.name);
+        check(ok && dragged && built == 0u, what);
         const char *oneNames[3] = { "BLEND", "GLASS", "REFRACTIVE" };
         for (int k = 0; k < 3; ++k) {
             std::printf("   %s: %s at alpha 1, the stock caster %.6f (an opaque caster's 0, the bar %.6f)\n", l.name, oneNames[k], atOne[k],
