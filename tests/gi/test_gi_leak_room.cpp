@@ -482,9 +482,12 @@ int main()
                 CardSample c;
                 if (s->readCardAt(p, Vec3(0, 0, nz), c) && c.ok && c.lit) {
                     const bool shaded = behindPanel(p, greenAt);   // the panel's own shadow of the inside lamp
-                    for (unsigned k = 0; k < c.lampCount && k < 16u; ++k) {   // the two lamps' bits, by their world ids
-                        if (c.lampIds[k] == redId) { ++r.redTabled; r.redLit += (c.lampMask >> k) & 1u; }
-                        if (c.lampIds[k] == greenId && !shaded) { ++r.greenSeen; r.greenLit += (c.lampMask >> k) & 1u; }
+                    for (unsigned k = 0; k < c.lampCount && k < 48u; ++k) {   // the two lamps' bits, by their world ids
+                        if (c.lampIds[k] == redId) { ++r.redTabled; r.redLit += unsigned((c.lampMask >> k) & 1ull); }
+                        if (c.lampIds[k] == greenId && !shaded) {
+                            ++r.greenSeen;
+                            r.greenLit += unsigned((c.lampMask >> k) & 1ull);
+                        }
                     }
                     r.directR += c.radiance[0] - c.indirect[0] - c.flat[0];   // the direct half (the lamps')
                     r.cardR += c.radiance[0];

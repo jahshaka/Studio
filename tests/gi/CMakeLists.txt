@@ -845,6 +845,12 @@ jah_gpu_row(gi.lamps_outside CLASS engine COMMAND test_gi_lamps_outside ray
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.lamps_outside PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 17)
+# ...and its CARDS arm (R9 (3)): eight green lamps inside beside the seventeen red outside - more than sixteen lamps reach
+# the floor's cards, each its own traced bit in the 48-lamp table: no red reaches the floor's card texels
+jah_gpu_row(gi.lamps_outside_cards CLASS engine COMMAND test_gi_lamps_outside cards
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.lamps_outside_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 120)
 
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm

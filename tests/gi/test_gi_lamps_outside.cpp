@@ -60,7 +60,8 @@ double oneCodeAt(double L)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray") { std::printf("FAIL: the mode is ray, not '%s'\n", mode.c_str()); return 2; }
+    if (mode != "ray" && mode != "cards") { std::printf("FAIL: the mode is ray or cards, not '%s'\n", mode.c_str()); return 2; }
+    const bool cardsMode = mode == "cards";
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-lamps-outside-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -117,8 +118,26 @@ int main(int argc, char **argv)
         ld.intensity = 3.0f;
         ld.range = 30.0f;
         ld.castShadows = k != 0;   // lamp 0 casts no shadow map: a Forward+ lamp, traced all the same
+        if (cardsMode) ld.colour = Colour(1, 0, 0);   // (the cards arm: the outside lamps RED)
         if (!scene->setLight(lamp, ld)) { std::printf("FAIL: lamp %d\n", k); return 1; }
     }
+    // THE CARDS ARM (R9 (3)): twelve dim GREEN lamps INSIDE besides - twenty-nine reach the floor's cards, past the old
+    // 16-lamp table, whose overflow (the smallest shares: the dim green lamps and a red one) shared ONE visibility, the
+    // green's - so the red one leaked. Every lamp keeps its own traced bit now (the 48-lamp table): no red may reach the
+    // floor's card texels.
+    if (cardsMode)
+        for (int k = 0; k < 12; ++k) {
+            const float a = 6.2831853f * float(k) / 12.0f;
+            const NodeId lamp = scene->createNode();
+            scene->setNodeTransform(lamp, Vec3(1.2f * std::sin(a), 2.4f, 1.2f * std::cos(a)), Quat(), Vec3(1, 1, 1));
+            LightDesc ld;
+            ld.type = LightType::Point;
+            ld.colour = Colour(0, 1, 0);
+            ld.intensity = 0.25f;
+            ld.range = 30.0f;
+            ld.castShadows = true;
+            if (!scene->setLight(lamp, ld)) { std::printf("FAIL: inside lamp %d\n", k); return 1; }
+        }
     float sh[27] = { 0 };   // no sky, no ambient
     scene->setAmbientSh(sh);
     // the eye inside, near the +z wall, looking at the floor and the back wall
@@ -145,6 +164,53 @@ int main(int argc, char **argv)
         return p;
     };
     const auto settle = [&]() { e->waitForAsyncShaders(); run(8); };
+
+    if (cardsMode) {
+        GiParams gi;
+        gi.mode = GiMode::Vct;
+        gi.quality = GiQuality::High;
+        gi.ddgi = GiToggle::Off;
+        gi.cards = true;
+        gi.bounces = false;   // the direct half alone: what the lamp table's bits gate
+        gi.updateBudget = 0;
+        if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
+        unsigned long long relights = ~0ull, admitted = ~0ull;
+        int quiet = 0, f = 0;
+        for (; f < 900 && quiet < 30; ++f) {
+            run(1);
+            const GiStatus g = scene->published().gi;
+            const bool still = !g.chainOwed && g.cards.built && g.cards.relights == relights &&
+                               g.cards.admitted == admitted && g.cards.queueLength == 0u;
+            relights = g.cards.relights;
+            admitted = g.cards.admitted;
+            quiet = still ? quiet + 1 : 0;
+        }
+        double red = 0.0, green = 0.0;
+        size_t n = 0, tabled = 0, maxCount = 0;
+        for (int i = -3; i <= 3; ++i)
+            for (int j = -3; j <= 3; ++j) {
+                CardSample c;
+                if (!scene->readCardAt(Vec3(0.45f * float(i), 0.0f, 0.45f * float(j)), Vec3(0, 1, 0), c) || !c.ok || !c.lit)
+                    continue;
+                red += c.radiance[0] - c.indirect[0] - c.flat[0];
+                green += c.radiance[1] - c.indirect[1] - c.flat[1];
+                tabled += c.lampCount;
+                maxCount = std::max<size_t>(maxCount, c.lampCount);
+                ++n;
+            }
+        const double mr = n ? red / double(n) : -1.0, mg = n ? green / double(n) : 0.0;
+        std::printf("== cards: at rest after %d frames; %zu floor texels, %zu lamps a table at most; the direct half: red %.6f, "
+                    "green %.6f (one code at the green %.6f)\n", quiet >= 30 ? f - quiet : -1, n, maxCount, mr, mg,
+                    oneCodeAt(mg));
+        check(n > 20 && mg > 0.01, "the cards arm: the inside lamps light the floor's cards");
+        check(maxCount > 16, "the cards arm: more than sixteen lamps reach a card (past the old table)");
+        char w[256];
+        std::snprintf(w, sizeof(w), "(2) THE CARDS: no red outside lamp reaches the floor's card texels (red direct %.6f "
+                      "within one code at the green's level %.6f)", mr, oneCodeAt(mg));
+        check(n > 0 && std::fabs(mr) <= oneCodeAt(mg), w);
+        std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+        return g_fail ? 1 : 0;
+    }
 
     // (0) THE CONTROL: the +z wall hidden
     scene->setNodeVisible(front, false);
