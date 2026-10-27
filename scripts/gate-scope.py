@@ -214,7 +214,7 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: ["lights", "gi", "*picture"] for f in ("setAmbient", "setAmbientSh", "applyAmbientSh")},
     **{f: ["gi", "sky", "lights"] for f in ("applyVctEnvironment", "applyCascadeEnvironment", "rayEnvironment",
                                             "noteEnvironmentChanged", "setEnvironmentLight")},
-    **{f: _REFL for f in ("refreshEnvmapScale", "hasAuthoredReflectionMap", "envmapScaleForPass")},
+    "refreshSkyEnv": _REFL,
     **{f: _NODES for f in ("createDocumentNode", "applyNodeRecords", "applyNodeRecord", "enforceGraphClass",
                            "enforceSubtreeClass", "switchNodeClass", "setOrientationExact", "publishFrame")},
     **{f: _NODES for f in ("removeNode", "createNode", "setNodeParent", "setNodeTransform", "registryNode",

@@ -355,7 +355,7 @@ int main()
                   "(f) NO SKY IS BLACK and lights nothing (background %.6f, box %.6f)", luma(skyNone),
                   luma(boxNone));
         r.s->setNodeVisible(box, false);
-        r.s->setEnvironmentLight(Colour(0.0f, 0.0f, 0.0f));
+        r.s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));   // the default gain (R5: there is no "sky that does not light")
     }
 
     // ---- g. THE HAZE IS THE SKY'S, NOT THE SCENE'S (owner 2026-09-30) ---------
@@ -491,7 +491,7 @@ int main()
                   direct2, direct1);
         r.s->setNodeVisible(floor, false);
         sunL.intensity = 0.0f; r.s->setLight(lightNode, sunL);
-        r.s->setEnvironmentLight(Colour(0.0f, 0.0f, 0.0f));
+        r.s->setEnvironmentLight(Colour(1.0f, 1.0f, 1.0f));   // the default gain (R5: there is no "sky that does not light")
         r.v->setCamera(level);
     }
 

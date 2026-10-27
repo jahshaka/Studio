@@ -1204,10 +1204,11 @@ int main(int argc, char **argv)
               "putting the red BELOW the horizon moves it to the lower hemisphere");
 
         // End to end: the same sky, a matte white cube, no lights touched. With a
-        // SKY LIGHT in the document the cube is lit red-from-above; REMOVE the
-        // Sky Light and the cube goes dark — ambient is the skylight and nothing
-        // else (SKY_LIGHT_SPEC.md §2; this case used to toggle `ambientFromSky`
-        // and compare against a flat grey Ambient Color, neither of which exists).
+        // SKY LIGHT in the document the cube is lit red-from-above. THE SKY LIGHT
+        // IS ONE GAIN ON THE SKY ITSELF (PHOTON-7 10-3 R5): at intensity 0 the sky
+        // AND its light go to 0 together (the sky emits what it shows), and hidden
+        // - no Sky Light - the gain is 1: the sky as authored, lighting the cube
+        // exactly as the white intensity-1 Sky Light did.
         doc->setSkyTexture(iris::Texture2D::load(redSkyPath));
         doc->skyType = iris::SkyType::EQUIRECTANGULAR;
         mirror.sync(mirrorframe::sky(view));
@@ -1244,22 +1245,29 @@ int main(int argc, char **argv)
         settleEnv(3);
         view->readPixels(img); show("matte cube, sky light ON", img);
         const Colour skyLit = centre(img);
+        docSkyLight->intensity = 0.0f;
+        mirror.sync();
+        settleEnv(3);
+        view->readPixels(img); show("matte cube, sky light at 0", img);
+        const Colour atZero = centre(img), skyAtZero = corner(img);
+        docSkyLight->intensity = 1.0f;
         docSkyLight->setVisible(false);
         mirror.sync();
         settleEnv(3);
-        view->readPixels(img); show("matte cube, sky light HIDDEN", img);
-        const Colour noAmbient = centre(img);
+        view->readPixels(img); show("matte cube, no sky light", img);
+        const Colour noNode = centre(img);
         docSkyLight->setVisible(true);
         mirror.sync();
-        std::printf("    cube top: skylight %.3f %.3f %.3f  no skylight %.3f %.3f %.3f\n",
-                    skyLit.r, skyLit.g, skyLit.b, noAmbient.r, noAmbient.g, noAmbient.b);
-        // The reflection cubemap contributes SPECULAR from the same red sky in
-        // both frames (Ogre's cubemaps-as-diffuse-GI is off), so the ambient's
-        // own colour is the honest signal.
+        std::printf("    cube top: skylight %.3f %.3f %.3f  at 0 %.3f %.3f %.3f (the sky %.3f %.3f %.3f)  no skylight "
+                    "%.3f %.3f %.3f\n", skyLit.r, skyLit.g, skyLit.b, atZero.r, atZero.g, atZero.b, skyAtZero.r,
+                    skyAtZero.g, skyAtZero.b, noNode.r, noNode.g, noNode.b);
         CHECK(skyLit.r > skyLit.b + 0.08f && skyLit.r > skyLit.g + 0.08f,
               "a red sky reddens the surface it lights (the Sky Light's SH)");
-        CHECK(noAmbient.r < skyLit.r - 0.05f,
-              "removing the Sky Light makes the top face dark: no Sky Light, no ambient");
+        CHECK(atZero.r < skyLit.r - 0.05f && skyAtZero.r + skyAtZero.g + skyAtZero.b == 0.0f,
+              "a Sky Light at 0 puts the sky out AND its light: the top face dark, the sky black");
+        CHECK(std::fabs(noNode.r - skyLit.r) <= 1.0f / 255.0f && std::fabs(noNode.g - skyLit.g) <= 1.0f / 255.0f &&
+                  std::fabs(noNode.b - skyLit.b) <= 1.0f / 255.0f,
+              "no Sky Light is gain 1: the cube lit as the white intensity-1 Sky Light lit it");
 
         // The two hemispheres are separate colours end to end: move the red
         // BELOW the horizon (a different file, or Texture2D's path cache would
@@ -1393,14 +1401,12 @@ int main(int argc, char **argv)
                     settledSh[2], ws0);
         CHECK(settled.mode == SkyMode::Equirectangular && settled.equirect != 0,
               "a gradient sky bakes to an equirect image the engine holds");
-        // THE HOST NO LONGER RESAMPLES ANYTHING (SKY-GPU): the reflection half
-        // of the description is empty because the ENGINE captures the sky it
-        // drew into a cubemap and convolves that. The proof is the chrome cube
-        // below (and the metal cube above), plus the integral being non-zero.
-        CHECK(!settled.reflections && settled.reflectionFaces[0] == 0,
-              "...and the host pushes no reflection faces: the engine captures its own sky");
+        // THE HOST NO LONGER RESAMPLES ANYTHING (SKY-GPU): the ENGINE captures
+        // the sky it drew into a cubemap and convolves that. The proof is the
+        // chrome cube below (and the metal cube above), plus the integral being
+        // non-zero.
         CHECK(target->published().copySkyAmbientSh(settledSh) && settledSh[0] > 0.0f,
-              "...which it also integrates for the ambient");
+              "...and the engine integrates the sky it drew for the ambient");
         for (int i = 0; i < 5; ++i) {
             mirror.sync(mirrorframe::sky(view));
             mirror.sync(mirrorframe::environment(view));

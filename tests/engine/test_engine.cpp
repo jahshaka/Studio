@@ -1786,14 +1786,12 @@ void cubemap_sky_faces_match_directions() {
 // SKY-SH-1 / audit ON-14).
 //
 // THE PATH THIS COVERS, and it is the one lifetime in the deferred read that is
-// not obvious. For every sky but a cubemap (and but an explicit
-// `reflectionFaces`), the capture cube is handed to buildReflectionCubemapFrom
-// and freed by applyPendingIbl at the top of the NEXT frame. For a CUBEMAP sky
-// the cube is scratch — its own faces are already the environment — so
-// applyPendingSkyCapture destroys it IMMEDIATELY after integrateSkyShFromCube,
-// in the same frame, which under the deferred read means destroying a texture
-// whose `vkCmdCopyImageToBuffer` is sitting in an open copy encoder that nobody
-// has submitted yet.
+// not obvious. The capture cube - every sky's environment, a cubemap sky's too,
+// captured at its faces' size (PHOTON-7 10-3 R5) - is handed to
+// buildReflectionCubemapFrom and freed by the convolution IN THE CAPTURE'S OWN
+// FRAME, right after integrateSkyShFromCube, which under the deferred read means
+// destroying a texture whose `vkCmdCopyImageToBuffer` is sitting in an open copy
+// encoder that nobody has submitted yet.
 //
 // The pin handles exactly this: `VulkanQueue::notifyTextureDestroyed` finds the
 // texture in `mCopyDownloadTextures` and FLUSHES the encoder (submits, does not
@@ -1850,8 +1848,8 @@ void cubemap_sky_drag_survives_the_cube_dying_under_the_readback() {
     // is "no NEW error", which is the honest form of it.
     const std::string errorBefore = fx.e->lastError();
 
-    // The FIRST cubemap sky: synchronous read, cube destroyed in the same frame
-    // (this is how it has always worked, and the control for the numbers below).
+    // The FIRST cubemap sky: synchronous read, the capture destroyed in the same
+    // frame (the control for the numbers below).
     CHECK_MSG(s->setSky(cubemapSkyDesc(dim)), "%s", fx.e->lastError().c_str());
     render(fx.e, 1);
     const float first = band0();
@@ -3092,10 +3090,10 @@ void per_material_reflection_cubemap_overrides_the_sky() {
     TextureId heroFaces[6]; solidFaces(255, 40, 40, heroFaces);   // a RED world
     for (int i = 0; i < 6; ++i) { REQUIRE(skyFaces[i] != 0); REQUIRE(heroFaces[i] != 0); }
 
-    // The reflection half of a SkyDesc alone: no sky, six IBL faces.
-    SkyDesc skyIbl; skyIbl.reflections = true;
-    for (int i = 0; i < 6; ++i) skyIbl.reflectionFaces[i] = skyFaces[i];
-    CHECK_MSG(s->setSky(skyIbl), "setSky (reflections only): %s", fx.e->lastError().c_str());
+    // A DRAWN dark grey sky: its capture is the environment the plain material
+    // reflects (PHOTON-7 10-3 R5 deleted the reflection-only description - an
+    // environment the sky does not show).
+    CHECK_MSG(s->setSky(cubemapSkyDesc(skyFaces)), "setSky (a grey cubemap sky): %s", fx.e->lastError().c_str());
     const TextureId heroCube = s->createCubemap(heroFaces);
     CHECK_MSG(heroCube != 0, "createCubemap: %s", fx.e->lastError().c_str());
 
