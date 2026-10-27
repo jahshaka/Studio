@@ -1091,6 +1091,17 @@ bool Session::stillness(const Command &c)
             spec.dumpDir = dir.toStdString();
             spec.dumpName = name;
         }
+        else if (a.rfind("dumpwin=", 0) == 0) {
+            // THE WINDOW FRAMES DUMPED (StillnessSpec::dumpWindowFrames): a comma list of indices from the stop
+            const std::string list = a.substr(8);
+            size_t at = 0;
+            while (at < list.size()) {
+                const size_t comma = list.find(',', at);
+                spec.dumpWindowFrames.push_back(unsigned(std::max(0, std::atoi(list.substr(at, comma - at).c_str()))));
+                if (comma == std::string::npos) break;
+                at = comma + 1;
+            }
+        }
         else if (a.rfind("out=", 0) == 0) {
             // A NAME, never a path: the files stay in <data-root>/stillness (Studio's world.stillness does the same)
             out = a.substr(4);
@@ -1098,7 +1109,7 @@ bool Session::stillness(const Command &c)
                 if (!std::isalnum(static_cast<unsigned char>(ch)) && ch != '-' && ch != '_') ch = '_';
             if (out.empty()) out = "stillness";
         }
-        else { labFail("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, dump=<name>, dumprgb=<name>, freeze, freeze=world, out=<name>)\n", a.c_str()); return false; }
+        else { labFail("LAB REFUSED stillness: '%s' (path, age=N, trail=N, restarts, dump=<name>, dumprgb=<name>, dumpwin=<i,j,...>, freeze, freeze=world, out=<name>)\n", a.c_str()); return false; }
     }
     std::vector<StillnessMove> moves;
     std::string err;
