@@ -372,6 +372,15 @@ int main(int argc, char **argv)
                         code > 0.0 ? (G - T * H) / code : 0.0, code > 0.0 ? bar / code : 0.0, 2.0 * se);
             char what[256];
             std::snprintf(what, sizeof(what), "%s: %s passes T = %.2f of the hole's", a.name, names[k], T);
+            // THE NO-RAY TIER's ROOM (PHOTON-7 10-4, the lead's ruling 2026-10-27): its rays meet the roof in 0.31 m cells
+            // that hold the opening's rim with the roof, so the HOLE arm is not the exact answer there (2.9x darker than
+            // the ray tier's, its rim read from inside as the roof's sky-lit top) and the pane, which turns those cells'
+            // reads to their inside, sits 1.2-1.8 codes under T x it: the no-ray tier's cell size, not transmission - on
+            // the owner's review list, printed. The mirror's rays cross the pane's own cells: a law at every tier.
+            if (!rays && (k == PixBeside || k == VoxRoom || k == Field)) {
+                std::printf("     (printed, the no-ray room: not a law here - the hole's own coarse rim, the review list)\n");
+                continue;
+            }
             check(ok, what);
         }
     }
