@@ -321,6 +321,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// named constant the field's initialiser uses, so the two cannot drift
 	// apart (the reader-defaults trap this file's header records).
 	scene->sunDiscVisible = sceneObj.value("sunDiscVisible").toBool(scene->sunDiscVisible);
+	scene->skyLighting = sceneObj.value("skyLighting").toBool(scene->skyLighting);   // (R5b: absent = the sky lights)
 	scene->sunDiscInProbes = sceneObj.value("sunDiscInProbes").toBool(scene->sunDiscInProbes);
 	scene->sunDiscSize = float(qBound(double(iris::kMinSunDiscSize),
 	                                  sceneObj.value("sunDiscSize")
@@ -1388,6 +1389,13 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     lightNode->iesProfilePath = resolveAssetPath(lightNode->iesProfileGuid);
     lightNode->iesNormalisation =
         LightBindings::normalisationFor(lightNode->iesProfileGuid, handle);
+    // THE SKY LIGHT's SOURCE (R5b): the dome's guids are the fact; its six faces are loaded here, from the store.
+    if (nodeObj.value("skySource").toString() == QLatin1String("cubemap")) {
+        lightNode->skySource = iris::SkyLightSource::Cubemap;
+        lightNode->skyCubeFaces = nodeObj.value("skyCubeFaces").toObject();
+        lightNode->skyCubeTexture = LightBindings::loadSkyCube(
+            lightNode->skyCubeFaces, [this](const QString &guid) { return resolveAssetPath(guid); });
+    }
     lightNode->color = iris::colorFromJson(nodeObj["color"].toObject());
 	lightNode->setVisible(nodeObj["visible"].toBool(lightNode->isVisible()));
 

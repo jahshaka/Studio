@@ -91,6 +91,9 @@ QVector<sceneprops::Field> buildFields()
     // THE SUN PIN and THE SUN DISC — scene-level rows the World panel writes.
     add("sunLight", [](const ScenePtr &s) { return QVariant(s->sunLightGuid); },
         [](const ScenePtr &s, const QVariant &v) { s->sunLightGuid = v.toString(); });
+    // THE WORLD SKY's LIGHTING (PHOTON-7 10-3 R5b): false = an unlit backdrop (drawn, lighting nothing).
+    add("skyLighting", [](const ScenePtr &s) { return QVariant(s->skyLighting); },
+        [](const ScenePtr &s, const QVariant &v) { s->skyLighting = v.toBool(); });
     add("sunDiscVisible", [](const ScenePtr &s) { return QVariant(s->sunDiscVisible); },
         [](const ScenePtr &s, const QVariant &v) { s->sunDiscVisible = v.toBool(); });
     add("sunDiscInProbes", [](const ScenePtr &s) { return QVariant(s->sunDiscInProbes); },

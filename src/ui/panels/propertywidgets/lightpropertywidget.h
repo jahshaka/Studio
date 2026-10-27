@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef LIGHTPROPERTYWIDGET_H
 #define LIGHTPROPERTYWIDGET_H
 
+#include <QJsonObject>
 #include <QWidget>
 #include <QSharedPointer>
 #include "ui/controls/accordionbladewidget.h"
@@ -78,6 +79,10 @@ private:
     /// renderer has no profile term there). It is silent in the renderer, so
     /// the panel has to say it out loud.
     void refreshBindingRows();
+    /// THE SKY LIGHT's SOURCE (R5b): the scene's sky, or a dome's six faces through LightBindings::bindSkyCube (the
+    /// verb node.setSkyLightSource's own call), one undo step.
+    void bindSkyDome(const QJsonObject &faces);
+    void refreshSkySourceRows();
 
     QString evalShadowTypeName(iris::ShadowMapType shadowType);
     iris::ShadowMapType evalShadowMapType(QString shadowType);
@@ -112,6 +117,9 @@ private:
 	bool mPointShadowsSupported = false;   // engine mode: point lights get Shadow Type/Size
 
     Database *db = nullptr;
+    class ComboBoxWidget *skySourceRow = nullptr;
+    class CubeMapWidget *domeFacesRow = nullptr;
+    QJsonObject pendingDome;   ///< the faces dropped so far; bound once all six are there
     QWidget *profileRow = nullptr;
     QLabel *profileLabel = nullptr;
     QPushButton *profilePick = nullptr;

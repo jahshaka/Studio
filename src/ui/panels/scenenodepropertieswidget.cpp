@@ -623,7 +623,7 @@ QWidget *SceneNodePropertiesWidget::worldSectionForKey(const QString &key) const
         QStringLiteral("ambientMusicVolume"), QStringLiteral("gravity"),
         QStringLiteral("playMode"), QStringLiteral("rayTracing"),
         QStringLiteral("sunDiscVisible"), QStringLiteral("sunDiscInProbes"),
-        QStringLiteral("sunDiscSize") };
+        QStringLiteral("sunDiscSize"), QStringLiteral("skyLighting") };
     if (kWorld.contains(key)) return worldPropView;
     if (key.startsWith(QLatin1String("fog")) || key == QLatin1String("shadowEnabled"))
         return fogPropView;

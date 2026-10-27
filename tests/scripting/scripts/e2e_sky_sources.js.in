@@ -1,0 +1,46 @@
+// scripting.e2e (editor pool arm sky_sources) — THE SKY's TWO AUTHOR TOOLS THROUGH THEIR VERBS (PHOTON-7 10-3 R5b,
+// API-first: the verbs the World and light panels call). On a new Basic project:
+//   world.skyLighting: "on" by default, "backdrop" accepted and reported, an unknown mode refused, ONE undo step;
+//   node.setSkyLightSource on the scene's Sky Light: "sky" by default; "cubemap" with fewer than six faces refused and
+//   nothing changed; with six library textures accepted, reported with its faces, ONE undo step; "sky" clears it;
+//   a non-Sky light refused. The PHYSICS of both (the dome lights, the backdrop lights nothing) is
+//   sky.emits_what_it_shows' (3) and (4); this arm is the verbs' contract.
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function refused(call) { try { return call() === false; } catch (e) { return true; } }
+function pushes() { return editor.undoState().pushes; }
+
+var guid = project.create(project.nextFreeName("sky-sources"), { template: "basic" });
+assert(guid && guid.length > 10, "project.create -> " + guid);
+
+// ---- the World sky's lighting -----------------------------------------------------------------------------------
+assert(world.skyLighting() === "on", "a new scene's sky lights it");
+var before = pushes();
+assert(world.skyLighting("backdrop") === "backdrop", "world.skyLighting(backdrop) accepted and reported");
+assert(pushes() === before + 1, "...as ONE undo step");
+assert(world.skyLighting() === "backdrop", "...and the document holds it");
+assert(refused(function () { return world.skyLighting("dim"); }), "an unknown mode is refused");
+assert(world.skyLighting("on") === "on", "and back on");
+
+// ---- the Sky Light's source ---------------------------------------------------------------------------------------
+var sky = world.skyLight().light;
+assert(sky && sky.length > 0, "the Basic scene carries its Sky Light: " + sky);
+assert(node.skyLightSource(sky).source === "sky", "its source is the scene's sky by default");
+var tex = assets.importFile("@SOURCE_DIR@/tests/scripting/fixtures/tiny.png");
+assert(tex && tex.length > 10, "a library texture for the dome's faces: " + tex);
+assert(refused(function () { return node.setSkyLightSource(sky, "cubemap", { front: tex, back: tex }); }),
+       "a dome with two faces is refused");
+assert(node.skyLightSource(sky).source === "sky", "...and nothing changed");
+var faces = { front: tex, back: tex, top: tex, bottom: tex, left: tex, right: tex };
+before = pushes();
+assert(node.setSkyLightSource(sky, "cubemap", faces), "a dome of six library textures is accepted");
+assert(pushes() === before + 1, "...as ONE undo step");
+var src = node.skyLightSource(sky);
+assert(src.source === "cubemap" && src.faces.front === tex && src.faces.right === tex,
+       "...and reported with its faces: " + JSON.stringify(src));
+assert(node.setSkyLightSource(sky, "sky"), "the scene's sky again");
+assert(node.skyLightSource(sky).source === "sky", "...reported");
+var point = scene.addLight("point");
+assert(refused(function () { return node.setSkyLightSource(point, "cubemap", faces); }), "a point light is refused");

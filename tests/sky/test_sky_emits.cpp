@@ -19,8 +19,15 @@
 // intensity-1 arm's, each within one code (plus the half code the 8-bit read rounds).
 // MEASURED (2026-10-27): the sky 0.0471 0.1569 0.5765 with no node and at 1, 0.0235 0.0784 0.2902 at 0.5; the ground
 // 0.0078 0.0310 0.1152 and 0.0039 0.0157 0.0577 (the VCT tier's: 0.1151 and 0.0576).
+// THE TWO AUTHOR TOOLS (PHOTON-7 10-3 R5b; the one-radiance law above stays the default): (3) A DOME - a white Sky Light
+// of 1 whose source is six orange cubemap faces, under the blue World sky - lights the ground exactly as an orange World
+// sky with no Sky Light does, each channel within a code, while the camera's sky pixel stays the blue sky as drawn;
+// (4) A BACKDROP - the World sky's lighting off, no Sky Light - draws the blue sky as it is and lights the ground 0.
+// MEASURED (2026-10-27): the orange reference's ground 0.1423 0.0371 0.0039 and the dome's the same; the backdrop's 0.
 // A fixture (the engine and the mirror, one 96 x 96 offscreen view; 10 s budget). Counted in frames.
+#include <QDir>
 #include <QGuiApplication>
+#include <QImage>
 
 #include "../support/testmesh.h"
 #include <algorithm>
@@ -31,6 +38,7 @@
 #include <string>
 
 #include "irisgl/core/color.h"
+#include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
@@ -181,6 +189,57 @@ int main(int argc, char **argv) {
         std::snprintf(msg, sizeof(msg), "(2) %s: at a gain of 0.5 the sky AND the ground it lights are both halved",
                       tier);
         CHECK(l2, msg);
+    }
+    // ---- THE TWO AUTHOR TOOLS (R5b): a DOME and a BACKDROP ------------------------------------------------------
+    {
+        doc->giMode = iris::GiMode::OFF;
+        // the reference: no Sky Light under a uniform ORANGE World sky - what an orange dome must light the ground as
+        const QColor kDome(220, 120, 40);
+        if (skyLight->getParent()) doc->getRootNode()->removeChild(skyLight);
+        doc->skyColor = kDome;
+        Reading orange;
+        const bool s3 = settle(orange);
+        // the dome: the World sky blue again, a white Sky Light of 1 whose source is six orange faces
+        const QString dir = QDir::temp().filePath(QStringLiteral("jah_sky_emits_dome"));
+        QDir().mkpath(dir);
+        QString paths[6];
+        for (int i = 0; i < 6; ++i) {
+            QImage face(16, 16, QImage::Format_RGBA8888);
+            face.fill(kDome);
+            paths[i] = QDir(dir).filePath(QStringLiteral("face%1.png").arg(i));
+            face.save(paths[i]);
+        }
+        QImage info(paths[0]);
+        doc->skyColor = kSky;
+        skyLight->intensity = 1.0f;
+        skyLight->skySource = iris::SkyLightSource::Cubemap;
+        skyLight->skyCubeTexture = iris::Texture2D::createCubeMap(paths[0], paths[1], paths[2], paths[3], paths[4],
+                                                                  paths[5], &info);
+        doc->getRootNode()->addChild(skyLight);
+        Reading dome;
+        const bool s4 = settle(dome);
+        // the backdrop: no Sky Light, the World sky's lighting off
+        doc->getRootNode()->removeChild(skyLight);
+        doc->skyLighting = false;
+        Reading backdrop;
+        const bool s5 = settle(backdrop);
+        doc->skyLighting = true;
+        for (const auto &[name, r] : { std::pair<const char *, const Reading &>{ "an orange World sky, no Sky Light", orange },
+                                       { "a blue World sky, an orange dome Sky Light", dome },
+                                       { "a blue World sky, a backdrop", backdrop } })
+            std::printf("   GI off, %s: the sky %.4f %.4f %.4f, the ground %.4f %.4f %.4f\n", name, r.sky[0], r.sky[1],
+                        r.sky[2], r.ground[0], r.ground[1], r.ground[2]);
+        CHECK(s3 && s4 && s5, "premise: the dome's and the backdrop's arms settle");
+        bool l3 = orange.ground[0] > 4.0 * code, l4 = true;
+        for (int c = 0; c < 3; ++c) {
+            const double w = c == 0 ? want.r : c == 1 ? want.g : want.b;
+            l3 = l3 && std::fabs(dome.ground[c] - orange.ground[c]) <= code && std::fabs(dome.sky[c] - w) <= code;
+            l4 = l4 && backdrop.ground[c] == 0.0 && std::fabs(backdrop.sky[c] - w) <= code;
+        }
+        CHECK(l3, "(3) a DOME Sky Light lights the ground as its cubemap would as the World sky, while the camera sees "
+                  "the World sky as drawn");
+        CHECK(l4, "(4) a BACKDROP World sky is drawn as it is and lights nothing: the ground 0");
+        QDir(dir).removeRecursively();
     }
     mirror.reset();
     std::printf("\nsky.emits_what_it_shows: %d frames, %d failure(s)\n", frames, failures);

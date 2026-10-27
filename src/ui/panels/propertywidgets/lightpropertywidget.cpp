@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/rowundo.h"
 #include "ui/controls/libraryassetpicker.h"
 #include "services/lightbindings.h"
+#include "ui/panels/propertywidgets/cubemapwidget.h"
 #include "data/database/database.h"
 #include "data/project.h"
 
@@ -150,6 +151,31 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
     rectWidth = this->addFloatValueSlider("Rect Width", 0.05f, 20.f);
     rectHeight = this->addFloatValueSlider("Rect Height", 0.05f, 20.f);
     doubleSided = this->addCheckBox("Double Sided");
+
+    // THE SKY LIGHT's SOURCE (R5b; Sky lights only): the scene's sky (the default), or an invisible DOME - six faces
+    // dropped on the cube below light the scene while the camera sees the World sky as drawn.
+    skySourceRow = this->addComboBox("Source");
+    skySourceRow->addItem(tr("Scene Sky"));
+    skySourceRow->addItem(tr("Cubemap (Dome)"));
+    skySourceRow->setToolTip(tr("Scene Sky: the sky you see lights the scene (picture and light together). Cubemap: "
+                                "an invisible dome - the six faces below light the scene and fill its reflections, "
+                                "while the camera still sees the World sky as drawn."));
+    domeFacesRow = this->addCubeMapWidget();
+    connect(skySourceRow, qOverload<int>(&ComboBoxWidget::currentIndexChanged), this, [this](int index) {
+        if (loading || !lightNode) return;
+        if (index == 0) { pendingDome = QJsonObject(); bindSkyDome(QJsonObject()); }
+        else if (pendingDome.size() == 6) bindSkyDome(pendingDome);
+        refreshSkySourceRows();
+    });
+    connect(domeFacesRow, &CubeMapWidget::valuesChanged, this, [this](QString value, QString guid, CubeMapPosition pos) {
+        if (loading || !lightNode) return;
+        static const char *roles[6] = { "front", "back", "left", "right", "top", "bottom" };   // CubeMapPosition's order
+        const int k = static_cast<int>(pos);
+        if (k < 0 || k > 5) return;
+        if (value.isEmpty() || guid.isEmpty()) pendingDome.remove(QLatin1String(roles[k]));
+        else pendingDome.insert(QLatin1String(roles[k]), guid);
+        if (pendingDome.size() == 6) bindSkyDome(pendingDome);
+    });
 
     // The asset binding. The panel owns only the widgets: resolution, the project
     // dependency pin and the photometric re-calibration all live in
@@ -342,6 +368,7 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         }
 
         refreshBindingRows();
+        refreshSkySourceRows();
 
         shadowSize->setCurrentItem(QString("%1").arg(lightNode->shadowMap.resolution));
         shadowType->setCurrentItem(evalShadowTypeName(lightNode->shadowMap.shadowType));
@@ -395,6 +422,42 @@ void LightPropertyWidget::lightChannelsChanged(quint32 mask)
 }
 
 // --- Asset bindings -------------------------------------------------------
+
+void LightPropertyWidget::bindSkyDome(const QJsonObject &faces)
+{
+    if (!lightNode) return;
+    const QJsonObject before = lightNode->skySource == iris::SkyLightSource::Cubemap ? lightNode->skyCubeFaces
+                                                                                       : QJsonObject();
+    if (before == faces) return;
+    QString error;
+    if (!LightBindings::bindSkyCube(lightNode, faces, db, project, &error)) {
+        if (domeFacesRow) domeFacesRow->setToolTip(error);
+        return;
+    }
+    auto node = lightNode;
+    Database *database = db;
+    Project *proj = project;
+    panelundo::pushEdit(services, tr("Sky Light Source"),
+                        [node, faces, database, proj]() { LightBindings::bindSkyCube(node, faces, database, proj); },
+                        [node, before, database, proj]() { LightBindings::bindSkyCube(node, before, database, proj); });
+}
+
+void LightPropertyWidget::refreshSkySourceRows()
+{
+    if (!skySourceRow || !domeFacesRow) return;
+    const bool sky = lightNode && lightNode->getLightType() == iris::LightType::Sky;
+    PropertyRows::setPanelVisible(skySourceRow, sky);
+    const bool dome = sky && (lightNode->skySource == iris::SkyLightSource::Cubemap ||
+                              skySourceRow->getCurrentItem() == tr("Cubemap (Dome)"));
+    PropertyRows::setPanelVisible(domeFacesRow, dome);
+    if (!sky) return;
+    const bool wasLoading = loading;
+    loading = true;
+    if (lightNode->skySource == iris::SkyLightSource::Cubemap) skySourceRow->setCurrentIndex(1);
+    else if (!dome) skySourceRow->setCurrentIndex(0);
+    domeFacesRow->project = project;
+    loading = wasLoading;
+}
 
 void LightPropertyWidget::refreshBindingRows()
 {

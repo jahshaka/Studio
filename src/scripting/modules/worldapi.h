@@ -96,6 +96,7 @@ public:
     Q_INVOKABLE QVariantMap skyLight();
     /// THE SUN DISC, a scene-level switch pair (§3, owner picks 2 and 4).
     Q_INVOKABLE QVariantMap sunDisc(const QVariantMap &params = QVariantMap());
+    Q_INVOKABLE QString skyLighting(const QString &mode = QString());
     Q_INVOKABLE QVariantMap ambience(const QVariantMap &params = QVariantMap());
     /// THE 2D CLOUD LAYER (CLOUDS-2D-1; iris::CloudLayer). Reads with no
     /// argument; every key is validated before anything is written.

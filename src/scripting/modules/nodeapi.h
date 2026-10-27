@@ -64,6 +64,9 @@ public:
     Q_INVOKABLE QString skinningMode(const QString &id);
     Q_INVOKABLE bool setLightProfile(const QString &id, const QString &assetGuid);
     Q_INVOKABLE QVariant lightProfile(const QString &id);
+    Q_INVOKABLE bool setSkyLightSource(const QString &id, const QString &source,
+                                       const QVariantMap &faces = QVariantMap());
+    Q_INVOKABLE QVariant skyLightSource(const QString &id);
     Q_INVOKABLE bool setDecalTexture(const QString &id, const QString &assetGuid);
     Q_INVOKABLE QVariant decalTexture(const QString &id);
     Q_INVOKABLE bool setDecalMaps(const QString &id, const QVariant &maps);

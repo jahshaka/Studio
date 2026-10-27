@@ -203,6 +203,12 @@ QVector<VerbInfo> NodeApi::verbs() const
         { "setLightProfile", "node.setLightProfile(id, lightProfileGuid) -> bool",
           "Binds an IES photometric profile (a 'lightprofile' library asset) to a light, shaping its falloff; '' clears it. The asset is pinned into the project as a DEPENDENCY (no companion material is created). Intensity is re-calibrated by the profile's own peak candela scale, so binding one changes the SHAPE of the falloff and not the brightness. RENDERER LIMITS: spot lights always honour a profile; point lights honour it only while they cast NO shadows (a shadow-casting point light is shaded from a code path with no profile term); directional and area lights never do. Undoable (the project pin it creates is not removed again — an unused pin is inert).",
           Needs::Document },
+        { "setSkyLightSource", "node.setSkyLightSource(id, \"sky\" | \"cubemap\", {front, back, top, bottom, left, right}?) -> bool",
+          "THE SKY LIGHT's SOURCE (an author tool on top of the one-radiance law; Unreal's Sky Light Source Type). \"sky\" (the default): the World sky as drawn lights the scene, x the light's tint x intensity - the sky emits what it shows. \"cubemap\": an INVISIBLE DOME LIGHT - six texture asset guids (all six faces, world.sky's cubemap keys) light the scene and fill its reflections x the same gain, while the camera sees the World sky as drawn (a studio HDRI lighting a product against a black sky: world.sky(\"none\") or world.skyLighting(\"backdrop\")). The faces are pinned to the project as DEPENDENCIES. Sky lights only; a missing or non-texture face is refused and nothing changes. Undoable.",
+          Needs::Document },
+        { "skyLightSource", "node.skyLightSource(id) -> {source, faces}",
+          "The Sky Light's source: \"sky\" or \"cubemap\", and the dome's six face guids under their roles (empty for \"sky\").",
+          Needs::Document },
         { "lightProfile", "node.lightProfile(id) -> {guid, path, normalisation, applies}",
           "The light's bound IES profile: the library guid, the resolved file, the photometric scale intensity is divided by, and whether this light type/shadow combination actually honours it. Empty guid = none.",
           Needs::Document },
@@ -1328,6 +1334,37 @@ bool NodeApi::setLightProfile(const QString &id, const QString &assetGuid)
                    [light, now, db, project]() { LightBindings::bindProfile(light, now, db, project); },
                    [light, was, db, project]() { LightBindings::bindProfile(light, was, db, project); });
     return true;
+}
+
+bool NodeApi::setSkyLightSource(const QString &id, const QString &source, const QVariantMap &faces)
+{
+    auto light = lightOrFail(id, QStringLiteral("node.setSkyLightSource"));
+    if (!light) return false;
+    if (source != QLatin1String("sky") && source != QLatin1String("cubemap"))
+        return fail(QStringLiteral("node.setSkyLightSource: '%1' is not \"sky\" or \"cubemap\"").arg(source));
+    const QJsonObject now = source == QLatin1String("sky") ? QJsonObject() : QJsonObject::fromVariantMap(faces);
+    if (source == QLatin1String("cubemap") && now.isEmpty())
+        return fail(QStringLiteral("node.setSkyLightSource: a cubemap source needs its six faces "
+                                   "{front, back, top, bottom, left, right}"));
+    const QJsonObject was = light->skySource == iris::SkyLightSource::Cubemap ? light->skyCubeFaces : QJsonObject();
+    QString error;
+    if (!LightBindings::bindSkyCube(light, now, host.db, host.project, &error))
+        return fail(QStringLiteral("node.setSkyLightSource: %1").arg(error));
+    Database *db = host.db;
+    Project *project = host.project;
+    recordNodeEdit(QStringLiteral("sky light source"),
+                   [light, now, db, project]() { LightBindings::bindSkyCube(light, now, db, project); },
+                   [light, was, db, project]() { LightBindings::bindSkyCube(light, was, db, project); });
+    return true;
+}
+
+QVariant NodeApi::skyLightSource(const QString &id)
+{
+    auto light = lightOrFail(id, QStringLiteral("node.skyLightSource"));
+    if (!light) return QVariant();
+    const bool cube = light->skySource == iris::SkyLightSource::Cubemap;
+    return QVariantMap{ { "source", cube ? QStringLiteral("cubemap") : QStringLiteral("sky") },
+                        { "faces", cube ? light->skyCubeFaces.toVariantMap() : QVariantMap() } };
 }
 
 QVariant NodeApi::lightProfile(const QString &id)

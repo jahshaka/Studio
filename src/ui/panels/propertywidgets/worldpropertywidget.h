@@ -63,6 +63,7 @@ private:
     QAction *gridAction = nullptr;
     QAction *groundPlaneAction = nullptr;
     CheckBoxWidget *sunDiscVisible = nullptr;    // the sun disc, a world setting (§3)
+    CheckBoxWidget *skyLighting = nullptr;       // R5b: off = the sky an unlit backdrop
     CheckBoxWidget *sunDiscInProbes = nullptr;   // ... and whether probes capture it
     DragFloatWidget *sunDiscSize = nullptr;      // ... and how wide it is drawn (degrees)
     HFloatSliderWidget *worldGravity;

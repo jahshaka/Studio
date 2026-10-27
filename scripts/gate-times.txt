@@ -186,6 +186,7 @@ pool.editor::material_drop 5.02  quiet n=43
 pool.editor::new_scene 4.76  quiet n=46
 pool.editor::physics 1.39  quiet n=45
 pool.editor::primitives 0.89  quiet n=44
+pool.editor::sky_sources 0.71  solo, the card lock held, :72 (PHOTON-7 10-3 R5b, 2026-10-27)
 pool.editor::tier 0.92  quiet n=44
 pool.editor::undo_macro 1.63  quiet n=45
 preview.lifecycle 1.86  quiet n=45
@@ -261,7 +262,7 @@ shortcuts.registry 0.00  ship 3a0422b4e (2026-10-13)
 skeletal.gpu_clips 1.52  quiet n=44
 skeletal.share_asan 0.04  quiet n=43
 sky.atmosphere 3.42  quiet n=41
-sky.emits_what_it_shows 2.91  solo, the card lock held, :72 (PHOTON-7 10-3 R5, 2026-10-27)
+sky.emits_what_it_shows 4.71  solo, the card lock held, :72, load 17 (a sibling's build) (PHOTON-7 10-3 R5b, 2026-10-27: the dome and backdrop arms; before 2.91 at R5)
 sky.sun_transmittance_asan 8.79  quiet n=42
 sockets.e2e 24.50  ship 3a0422b4e (2026-10-13)
 sockets.e2e.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

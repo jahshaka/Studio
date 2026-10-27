@@ -60,7 +60,8 @@ set_tests_properties(sky.atmosphere PROPERTIES TIMEOUT 60 LABELS "engine")
 set_tests_properties(sky.atmosphere PROPERTIES JAHSHAKA_TEST_FRAMES 231)
 
 # sky.emits_what_it_shows — THE SKY LIGHT IS ONE GAIN ON THE SKY ITSELF (PHOTON-7 stage 10-3, R5): with no Sky Light
-# the sky lights the scene (gain 1), and at every gain the sky and its light move together. Mirror-linked: the
+# the sky lights the scene (gain 1), and at every gain the sky and its light move together; R5b's dome and backdrop
+# arms (the two author tools). Mirror-linked: the
 # document's Sky Light through the mirror is the product's path. The file header carries the laws.
 add_executable(test_sky_emits test_sky_emits.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
@@ -83,4 +84,4 @@ jah_gpu_row(sky.emits_what_it_shows CLASS engine COMMAND test_sky_emits
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.emits_what_it_shows PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(sky.emits_what_it_shows PROPERTIES JAHSHAKA_TEST_FRAMES 15)
+set_tests_properties(sky.emits_what_it_shows PROPERTIES JAHSHAKA_TEST_FRAMES 28)

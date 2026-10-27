@@ -116,6 +116,8 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // THE SUN PIN: which directional light is the sun; empty = automatic.
     sceneObj["sunLight"] = scene->sunLightGuid;
     sceneObj["sunDiscVisible"] = scene->sunDiscVisible;
+    // THE WORLD SKY's LIGHTING (R5b): written only for a backdrop - an absent key is the default, the sky lights.
+    if (!scene->skyLighting) sceneObj["skyLighting"] = false;
     sceneObj["sunDiscInProbes"] = scene->sunDiscInProbes;
     sceneObj["sunDiscSize"] = scene->sunDiscSize;
     // HARDWARE RAY TRACING (ledger §425), as the stable string the enum's ints
@@ -1014,6 +1016,11 @@ void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr
     // The asset BINDING travels as a guid; the resolved path and the profile's
     // photometric scale are runtime state the reader re-derives from the store.
     sceneNodeObject["iesProfile"] = lightNode->iesProfileGuid;
+    // THE SKY LIGHT's SOURCE (R5b): a dome's six texture guids under their roles; nothing for the default (the sky).
+    if (lightNode->lightType == iris::LightType::Sky && lightNode->skySource == iris::SkyLightSource::Cubemap) {
+        sceneNodeObject["skySource"] = QStringLiteral("cubemap");
+        sceneNodeObject["skyCubeFaces"] = lightNode->skyCubeFaces;
+    }
 	sceneNodeObject["color"] = iris::colorToJson(lightNode->color);
 
     // (`shadowAlpha`, `shadowColor` and `shadowBias` are no longer written —

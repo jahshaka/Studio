@@ -516,6 +516,9 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "skyLight", "world.skyLight() -> {light, name, intensity, tint, reason, skyType, count}",
           "THE SCENE'S SKYLIGHT — ONE GAIN ON THE SKY ITSELF. There is no flat \"ambient colour\": the scene's ambient is the World sky's own light, and the sky emits what it shows. A Sky Light (a light node of type \"sky\", scene.addLight(\"sky\")) scales the sky's picture and its light together; a scene with none is at gain 1. `light`/`name` are the resolved one (the FIRST VISIBLE Sky Light in creation order) and `reason` says how it was chosen: \"first\", \"allHidden\" (every Sky Light in the scene is hidden: a hidden one does nothing, gain 1) or \"none\". `intensity` is the gain (1.0 = the sky as authored, 0 = a black sky that lights nothing) and `tint` its colour, per channel. `skyType` is the sky it scales and `count` how many Sky Lights the scene holds — more than one raises the `sky.duplicate` scene issue, because only the first acts. Both rows are ordinary light properties: node.property(id, \"intensity\", 2) doubles the skylight and is keyable.",
           Needs::Document },
+        { "skyLighting", "world.skyLighting(mode?) -> \"on\" | \"backdrop\"",
+          "THE WORLD SKY's LIGHTING (an author tool on top of the one-radiance law; the film renderers' backdrop): \"on\" (the default) - the sky emits what it shows, its picture lights the scene and fills every reflection; \"backdrop\" - the sky is drawn as it is and lights NOTHING (with no cubemap Sky Light the scene has no sky light at all). A Sky Light whose source is a cubemap (node.setSkyLightSource) still lights the scene from its own cubemap. With no argument it reports; an unknown mode is refused. Undoable.",
+          Needs::Document },
         { "sunDisc", "world.sunDisc({visible, inProbes, size}) -> {visible, inProbes, size}",
           "THE SUN DISC — the bright disc drawn in the sky where the scene's sun light points. It is the SUN's, not the sky's: one mechanism, drawn over EVERY sky type (colour, gradient, realistic, equirect, cubemap), and it moves when the light is rotated. `visible` (default true) is the scene-level switch. `size` is its ANGULAR DIAMETER IN DEGREES, 0.1 to 10, default 2.12: the real sun is 0.53 degrees across, but a photograph's sun looks several times larger because glare in the lens and in the eye spreads the saturated core, so the default is four times the physical angle. THE SIZE COSTS NO LIGHT: the disc's radiance is normalised per solid angle, so a wider disc spreads the SAME energy over more of the sky — bloom and an `inProbes` capture read the same total at every size, and only the sun light's own colour and intensity say how bright it is. NOTE for image skies: an equirect or cubemap sky usually has a sun PAINTED into it, and the disc will only line up with it if you aim the sun light at it — otherwise the scene shows two suns, so either align the light or turn the disc off here. `inProbes` (default FALSE) says whether reflection-probe captures contain it: off, because the sun's energy already reaches glossy surfaces through the directional light's own specular highlight, and capturing the disc as well paints a SECOND sun on everything the probes light. Turn it on if you want probe-lit mirrors to show the disc. A sun that has set draws no disc at all. Called with no argument it reads. One undo step.",
           Needs::Document },
@@ -2891,6 +2894,22 @@ QVariantMap WorldApi::skyLight()
     out[QStringLiteral("skyType")] = scene->skyTypeToStr.at(typeIndex);
     out[QStringLiteral("count")] = scene->skyLights().size();
     return out;
+}
+
+QString WorldApi::skyLighting(const QString &mode)
+{
+    auto scene = sceneOrFail(QStringLiteral("world.skyLighting"));
+    if (!scene) return QString();
+    if (!mode.isEmpty()) {
+        if (mode != QLatin1String("on") && mode != QLatin1String("backdrop")) {
+            fail(QStringLiteral("world.skyLighting: '%1' is not \"on\" or \"backdrop\"").arg(mode));
+            return QString();
+        }
+        WorldEdit edit(scene, { QStringLiteral("skyLighting") });
+        sceneprops::set(scene, QStringLiteral("skyLighting"), mode == QLatin1String("on"));
+        edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("Sky Lights the Scene"));
+    }
+    return scene->skyLighting ? QStringLiteral("on") : QStringLiteral("backdrop");
 }
 
 QVariantMap WorldApi::sunDisc(const QVariantMap &params)

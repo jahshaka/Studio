@@ -674,6 +674,11 @@ set_tests_properties(scripting.e2e.player_bounce PROPERTIES
 # as a document one, and the empty world has to be built by the same route.
 jah_pool_arm(editor new_scene ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_new_scene.js 16)
 
+# THE SKY's TWO AUTHOR TOOLS' VERBS (PHOTON-7 10-3 R5b): world.skyLighting and node.setSkyLightSource - defaults,
+# refusals, one undo step each (e2e_sky_sources.js.in says which). Their physics is sky.emits_what_it_shows (3) (4).
+configure_file(scripts/e2e_sky_sources.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_sky_sources.js @ONLY)
+jah_pool_arm(editor sky_sources ${CMAKE_CURRENT_BINARY_DIR}/e2e_sky_sources.js 3)
+
 # scripting.e2e.primitives — the ONE primitive table through the VERB (owner
 # review R6 / answer Q4). The table's own contract — the meshes, the tangents,
 # the tile icons, the old-guid mapping — is defaults.primitive_table (archived: archive/tests/defaults); this is

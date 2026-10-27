@@ -58,6 +58,13 @@ WorldPropertyWidget::WorldPropertyWidget()
     // is drawn on — its SIZE included, since the drawn disc is a picture of the
     // sun and not the sun's geometry (lane SUN-DISC-1 retired the light
     // panel's Sun Angle row).
+    // THE SKY's LIGHTING (PHOTON-7 10-3 R5b): on by default - the sky emits what it shows; off, the sky is an
+    // unlit BACKDROP, still drawn.
+    skyLighting = this->addCheckBox("Sky Lights the Scene", true);
+    skyLighting->setToolTip(QStringLiteral(
+        "On (the default): the sky you see is the light that arrives - its picture lights the scene and fills every "
+        "reflection. Off: the sky is a BACKDROP - drawn as it is, lighting nothing. A Sky Light whose source is a "
+        "cubemap still lights the scene from its own cubemap."));
     sunDiscVisible = this->addCheckBox("Sun Disc", true);
     sunDiscVisible->setToolTip(QStringLiteral(
         "Draw the sun as a bright disc in the sky, where the scene's sun light points. NOTE for "
@@ -157,6 +164,7 @@ WorldPropertyWidget::WorldPropertyWidget()
 	}));
 	rowundo::bind(ambientMusicVolume, rows(QStringLiteral("ambientMusicVolume"), tr("Ambience Volume")));
 	rowundo::bind(worldGravity, rows(QStringLiteral("gravity"), tr("Gravity")));
+	rowundo::bind(skyLighting, rows(QStringLiteral("skyLighting"), tr("Sky Lights the Scene")));
 	rowundo::bind(sunDiscVisible, rows(QStringLiteral("sunDiscVisible"), tr("Sun Disc")));
 	rowundo::bind(sunDiscInProbes, rows(QStringLiteral("sunDiscInProbes"), tr("Sun Disc in Reflections")));
 	rowundo::bind(sunDiscSize, rows(QStringLiteral("sunDiscSize"), tr("Sun Disc Size")));
@@ -228,6 +236,7 @@ void WorldPropertyWidget::refreshRows()
     // In place, never a rebuild: these rows outlive every selection, so an undo
     // repaints numbers instead of destroying and re-wiring the blade.
     loading = true;
+    skyLighting->setValue(scene->skyLighting);
     sunDiscVisible->setValue(scene->sunDiscVisible);
     sunDiscInProbes->setValue(scene->sunDiscInProbes);
     sunDiscSize->setValue(scene->sunDiscSize);
