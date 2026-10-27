@@ -806,7 +806,7 @@ jah_gpu_row(gi.glass_escape CLASS engine COMMAND test_gi_glass_escape
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.glass_escape PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.glass_escape PROPERTIES JAHSHAKA_TEST_FRAMES 713)
+set_tests_properties(gi.glass_escape PROPERTIES JAHSHAKA_TEST_FRAMES 829)
 
 # gi.photon_window (PHOTON-7 10-4, item 2; L9) — A WINDOW PASSES THE LIGHT ITS MATERIAL PASSES, ON EVERY PATH: gi.sealed_sky's
 # room with a 1 m pane in its roof (Glass / Blend / Refractive at alpha 0.1) against a hole, under a white sky and a sun

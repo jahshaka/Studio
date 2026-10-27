@@ -19,6 +19,8 @@
 // every blend at alpha 0.5 - Blend, Glass, Refractive, Additive - lit with the record (the escape's miss reads the sky)
 // equals the same arm lit by the fragment's own environment term (the door), within its noise plus one code: the record's
 // weight is what the pixel would have taken of the share (BRDF_EnvMap's albedo, the eye leg's media, the blend's alpha).
+// THE HIDDEN PANE (a law): the pane behind an opaque box - the depth test runs before an appending fragment, so a hidden
+// pane appends no record: the picture equals the door's within one code, no record counted.
 // THE NAMED LIMIT, MEASURED (not a law: the review list's stacked glass): a second, plain glass pane (alpha 0.5, black)
 // between the camera and the mirror pane at Glass alpha 0.5 - the deferred add lands ON TOP of the front pane, so the
 // mirror's traced light is not passed by the front pane's 1 - alpha: printed is the two-pane mean against the exact
@@ -122,6 +124,14 @@ int main()
     const NodeId front = box(scene, Vec3(0.0f, 1.5f, -1.5f), Vec3(1.2f, 1.2f, 0.02f), frontMat);
     if (!front) { std::printf("FAIL: the front pane\n"); return 1; }
     scene->setNodeVisible(front, false);
+    // THE OCCLUDER of the depth arm (hidden until then): an opaque black matte box between the camera and the pane
+    PbrParams occP;
+    occP.albedo = Colour(0.0f, 0.0f, 0.0f);
+    occP.roughness = 1.0f;
+    const MaterialId occMat = scene->createPbrMaterial(occP);
+    const NodeId occluder = box(scene, Vec3(0.0f, 1.5f, -2.0f), Vec3(1.2f, 1.2f, 0.05f), occMat);
+    if (!occluder) { std::printf("FAIL: the occluder\n"); return 1; }
+    scene->setNodeVisible(occluder, false);
     float sh[27] = { 0 };   // no sky
     scene->setAmbientSh(sh);
     GiParams gi;
@@ -243,6 +253,33 @@ int main()
                     "pane's alpha x the traced light is %.6f at most\n", one.mean, two.mean, one.mean, exact, over,
                     oneCodeAt(exact) > 0.0 ? over / oneCodeAt(exact) : -1.0, 0.5 * one.mean);
     }
+    // THE DEPTH ARM: the pane (Glass, alpha 1) hidden behind an opaque box - a fragment the depth test rejects appends no
+    // record and lights nothing: the picture with the escapes equals the picture without them (the door)
+    {
+        PbrParams p = paneP;
+        p.alphaMode = PbrAlphaMode::Glass;
+        p.alpha = 1.0f;
+        scene->setPbrMaterial(paneMat, p);
+        scene->setNodeVisible(front, false);
+        scene->setNodeVisible(occluder, true);
+        Pic pic[2];
+        RayQueryStatus rq[2];
+        for (int door = 0; door < 2; ++door) {
+            e->setArm("rq.glassEscapeOff", door ? 1.0 : 0.0);
+            e->waitForAsyncShaders();
+            settle();
+            pic[door] = read();
+            rq[door] = counts(door ? "THE HIDDEN PANE (the door)" : "THE HIDDEN PANE");
+        }
+        e->setArm("rq.glassEscapeOff", 0.0);
+        scene->setNodeVisible(occluder, false);
+        const double d = pic[0].mean - pic[1].mean, c = oneCodeAt(std::max(pic[1].mean, 0.0));
+        std::printf("   THE HIDDEN PANE: behind an opaque box, the picture %.6f against the door's %.6f (%+.2f codes); %llu "
+                    "records\n", pic[0].mean, pic[1].mean, c > 0.0 ? d / c : -1.0, rq[0].escapeRecords);
+        check(pic[0].ok && pic[1].ok && std::fabs(d) <= c && rq[0].escapeRecords == 0ull,
+              "the hidden pane: a fragment behind an opaque surface appends no record and lights nothing");
+    }
+
     // THE RED (the door): the same blended arms with no record
     e->setArm("rq.glassEscapeOff", 1.0);
     for (const Arm &a : arms) {
