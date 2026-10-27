@@ -164,7 +164,8 @@ set_tests_properties(rtreflect.tilted_normal PROPERTIES JAHSHAKA_TEST_FRAMES 61)
 
 # rtreflect.hit_area_shadow (PHOTON-7, 7-H at the photon-7r merge; L9) — AN AREA LIGHT SEEN IN A REFLECTION IS SHADOWED BY
 # THE STRATA LAW: a matte floor under a screen with a 0.1 m hole on an area light's centre line, seen in a mirror, reads
-# under a tenth of the unscreened floor (the light through the hole only) - RED before 7-H, whose one ray to the centre
+# the unscreened floor times the analytic form-factor ratio through the hole (R12; declared red: the reflection's
+# history under-reads the sparse sample - test_hit_area_shadow.cpp) - RED before 7-H, whose one ray to the centre
 # passed the hole. Two arms (the screen hidden, shown) in one process; 256x144.
 add_executable(test_hit_area_shadow test_hit_area_shadow.cpp)
 set_target_properties(test_hit_area_shadow PROPERTIES
@@ -182,7 +183,7 @@ jah_gpu_row(rtreflect.hit_area_shadow CLASS engine COMMAND test_hit_area_shadow
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(rtreflect.hit_area_shadow PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
-set_tests_properties(rtreflect.hit_area_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 224)
+set_tests_properties(rtreflect.hit_area_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 160)
 
 # rtreflect.odd_size (PHOTON-7 stage 6 commit 7) — EVERY PIXEL OF THE REFLECTION IS WRITTEN EVERY FRAME: an odd 257 x 145
 # view at half-resolution rays, its remainder column and row against their neighbours over a glossy floor's reflection.

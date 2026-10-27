@@ -7,8 +7,11 @@
 // THE LAWS (the floor's card read at world points through Scene::readCardAt; each point UMBRA when its segment to the
 // lamp crosses a blocker shrunk by 0.1 m, LIT when it misses both grown by 0.2 m; the radiance normalised by the lamp's
 // direct shape h / d^3 - the cosine over the square of the distance):
-//   (1) BOTH SHADOWS ARE ON THE CARD: the umbra's normalised radiance under a quarter of the lit points' - the lamp's
-//       direct is zero there and its bounce is what is left (unshadowed, the umbra reads like the lit: the ratio ~1.1);
+//   (1) BOTH SHADOWS ARE ON THE CARD, AGAINST THE ANALYTIC UMBRA (R12; it was "under a quarter of the lit points'"):
+//       each point's DIRECT half (the radiance less its indirect and flat halves) - (a) at every umbra point 0 within
+//       the stores' steps (q of the RGBA16F radiance plus the R11G11B10F halves' half steps; measured: the worst 0.95 of
+//       it), (b) at the lit points the lamp's closed form at the texel's own point, I mu atten(d) rho Dd(L, N), their
+//       mean within q (measured -0.04 %, 0.59 q);
 //   (2) THE SHADOW FOLLOWS THE MOVED MOVER: the mover stepped 1.0 m along +z inside the lamp's range (its LampShadow
 //       region stales the direct of the cards in the lamp's sphere; a mover changes no voxel, so no bounce change lists
 //       the floor), at rest every sampled point within one code of a whole re-solve (the GI torn down and built again)
@@ -25,9 +28,10 @@
 // THE PIXEL'S ARMS (PHOTON-7 stage 7, 7-A: the pixel takes the cards' law - the ray tier's jahAreaVis, the ratio over
 // the same strata, the fork's hook multiplying the LTC terms): the same half-occluded light, the camera moved UNDER the
 // plate (it hides the floor's umbra from above), the visibility read back (the test door area.visReadback):
-//   (6) THE PIXEL BEHIND THE PLATE READS NO DIRECT: the floor's full-umbra pixels (x in [-0.9, -0.6]) against the lit
-//       ones at the mirrored distance (x in [0.6, 0.9]) in the picture's radiance - under a quarter (the direct is zero
-//       there and the bounce is what is left). RED before 7-A: the LTC light reached the umbra whole (ratio ~1).
+//   (6) THE PIXEL BEHIND THE PLATE READS NO DIRECT, AGAINST THE ANALYTIC UMBRA (R12; it was "under a quarter"): at the
+//       floor's full-umbra pixels (x in [-0.9, -0.6]) the read-back visibility of light 0 is the numeric visible
+//       fraction 0, at their mirrors (x in [0.6, 0.9]) 1, to the RGBA8 store's half step; the picture's umbra radiance
+//       over the lit's printed. RED before 7-A: the LTC light reached the umbra whole (the radiance ratio ~1).
 //   (7) THE PIXEL'S PENUMBRA: along the floor's z = 0 line, the read-back visibility of light 0 against the truth - the
 //       numeric visible form factor over the full one - within the strata law's bound (4)'s, plus the RGBA8 store's
 //       half step, plus the truth's own range over the resolve's footprint (+-1.5 trace texels); over the band the
@@ -42,7 +46,7 @@
 // THE NO-RAY ROUTE'S ARMS (PHOTON-7 stage 7, 7-6 item 2; the owner's law: every light is blocked by a wall on every
 // path): rays off, the same half-occluded light, the matte floor again - the visibility the screen job marches through
 // the voxel chain (Jahshaka/ScreenAreaVis, the ray tier's law in one text), read back:
-//   (9) THE NO-RAY PIXEL BEHIND THE PLATE READS NO DIRECT: (6)'s bar. RED before 7-6 item 2: a no-ray chain bound no
+//   (9) THE NO-RAY PIXEL BEHIND THE PLATE READS NO DIRECT: (6)'s law. RED before 7-6 item 2: a no-ray chain bound no
 //       visibility - the umbra read 0.9974 of the lit floor's radiance;
 //   (10) PRINTED: its penumbra against (7)'s numeric truth - its error the voxel cell (the march's start a cell off the
 //       surface) and VOXEL-LEAK-1's thin wall, named; and both producers' GPU time at 1080p (the ray tier's GPU rows, the
@@ -214,9 +218,6 @@ int main(int argc, char **argv)
                 ++okCount;
             }
         };
-        const auto peak = [](const std::vector<double> &r, size_t i) {
-            return std::max(std::max(r[i * 3u], r[i * 3u + 1u]), r[i * 3u + 2u]);
-        };
 
         if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
         e->waitForAsyncShaders();
@@ -224,26 +225,64 @@ int main(int argc, char **argv)
         std::vector<double> r0;
         size_t ok0 = 0;
         read(r0, ok0);
-        double umbraSum = 0.0, litSum = 0.0;
-        size_t umbraN = 0, litN = 0;
+        // (1) THE ANALYTIC UMBRA: each point's DIRECT half (the radiance less its indirect and flat halves) - in the
+        // umbra exactly 0, lit the lamp's closed form at the texel's own point, I mu atten(d) rho Dd(L, N) (the card
+        // holds the direct at V = N; the falloff the Karis window with the 0.1 m source clamp)
+        const auto qOf = [](double R) { return R > 0.0 ? std::ldexp(1.0, int(std::floor(std::log2(R))) - 10) : 0.0; };
+        // the half step of the R11G11B10F layers (Indirect, Flat): a 6-bit mantissa in r and g, 5 in b
+        const auto halfR11 = [](double v, int c) {
+            return v > 0.0 ? std::ldexp(1.0, int(std::floor(std::log2(v))) - (c == 2 ? 6 : 7)) : 0.0;
+        };
+        const auto lampDirect = [&](const float P[3]) {
+            const double lx = lampPos.x - P[0], ly = lampPos.y - P[1], lz = lampPos.z - P[2];
+            const double d = std::sqrt(lx * lx + ly * ly + lz * lz), mu = std::max(0.0, ly / d);
+            double H[3] = { lx / d, ly / d + 1.0, lz / d };
+            const double hl = std::sqrt(H[0] * H[0] + H[1] * H[1] + H[2] * H[2]);
+            const double NoH = hl > 0.0 ? H[1] / hl : 0.0, r = 0.9;
+            const double ef = 1.0 + (1.0 / 1.51 - 1.0) * r, fd90 = 0.5 * r + 2.0 * NoH * NoH * r;
+            const double dd = (1.0 + (fd90 - 1.0) * std::pow(1.0 - mu, 5.0)) * ef;   // viewScatter 1 at V = N
+            const double x = d / 6.0, w = std::min(1.0, std::max(0.0, 1.0 - x * x * x * x));
+            return 30.0 * mu * (w * w) / std::max(d * d, 0.01) * 0.6 * dd;
+        };
+        size_t umbraN = 0, litN = 0, umbraOver = 0;
+        double umbraWorst = 0.0, litGot = 0.0, litRef = 0.0, litWorst = 0.0;
         for (size_t i = 0; i < pts.size(); ++i) {
-            if (r0[i * 3u] < 0.0) continue;
             int cls = 0;
             classify(pts[i], cls);
             if (!cls) continue;
-            const double dx = lampPos.x - pts[i].x, dy = lampPos.y - pts[i].y, dz = lampPos.z - pts[i].z;
-            const double dist = std::sqrt(dx * dx + dy * dy + dz * dz);
-            const double shape = double(lampPos.y) / (dist * dist * dist);
-            if (cls == 1) { umbraSum += peak(r0, i) / shape; ++umbraN; }
-            else { litSum += peak(r0, i) / shape; ++litN; }
+            CardSample cs;
+            if (!scene->readCardAt(pts[i], Vec3(0, 1, 0), cs) || !cs.ok || !cs.lit) continue;
+            if (cls == 1) {
+                ++umbraN;
+                bool over = false;
+                for (int c = 0; c < 3; ++c) {
+                    const double direct = double(cs.radiance[c]) - cs.indirect[c] - cs.flat[c];
+                    const double bar = qOf(cs.radiance[c]) + halfR11(cs.indirect[c], c) + halfR11(cs.flat[c], c);
+                    over = over || std::fabs(direct) > bar;
+                    umbraWorst = std::max(umbraWorst, std::fabs(direct) / std::max(bar, 1e-12));
+                }
+                umbraOver += over ? 1u : 0u;
+            } else {
+                ++litN;
+                const double a = lampDirect(cs.position), got = double(cs.radiance[1]) - cs.indirect[1] - cs.flat[1];
+                litGot += got;
+                litRef += a;
+                litWorst = std::max(litWorst, std::fabs(got / a - 1.0));
+            }
         }
         const GiStatus g0 = scene->published().gi;
-        const double ratio = umbraN && litN && litSum > 0.0 ? (umbraSum / double(umbraN)) / (litSum / double(litN)) : -1.0;
+        const double litMeanGot = litN ? litGot / double(litN) : 0.0, litMeanRef = litN ? litRef / double(litN) : 0.0;
         std::printf("   at rest in %d frames (%u cards resident; the lamps traced on %llu relights): %zu of %zu points read "
-                    "(umbra %zu, lit %zu) | the umbra's normalised radiance over the lit points': %.3f\n", rest0,
-                    g0.cards.cardsResident, (unsigned long long)g0.cards.lampTraces, ok0, pts.size(), umbraN, litN, ratio);
+                    "| the UMBRA: %zu points, %zu with a direct half over its bar (the worst %.2f of it) | the LIT: %zu "
+                    "points, the direct half's mean %.6f against the analytic %.6f (%+.4f %%, %.2f q; the worst point "
+                    "%.3f %%)\n", rest0, g0.cards.cardsResident, (unsigned long long)g0.cards.lampTraces, ok0, pts.size(),
+                    umbraN, umbraOver, umbraWorst, litN, litMeanGot, litMeanRef, 100.0 * (litMeanGot / litMeanRef - 1.0),
+                    std::fabs(litMeanGot - litMeanRef) / std::max(qOf(litMeanRef), 1e-12), 100.0 * litWorst);
         CHECK(rest0 >= 0 && umbraN > 40 && litN > 40, "the floor comes to rest carded and its points read");
-        CHECK(ratio >= 0.0 && ratio < 0.25, "(1) BOTH SHADOWS ARE ON THE CARD: the umbra under a quarter of the lit points");
+        CHECK(umbraOver == 0u, "(1a) BOTH SHADOWS ARE ON THE CARD: every umbra point's direct half 0 within the stores' "
+                               "steps (q of the radiance, the R11G11B10F halves' half steps)");
+        CHECK(litN > 40 && std::fabs(litMeanGot - litMeanRef) <= qOf(litMeanRef),
+              "(1b) ...and the lit points' direct half the lamp's closed form: its mean within q of the analytic");
 
         // (2) THE MOVED MOVER, against a whole re-solve
         blockerAt[1] = Vec3(1.2f, 1.2f, 1.0f);
@@ -639,9 +678,12 @@ int main(int argc, char **argv)
         // penumbra of the picture `pic` and the read-back visibility `avs`
         const auto pixelArms = [&](const AreaVisStatus &avs, int restX, double areaTraceMs, double areaResolveMs,
                                    bool noRay) {
-            // (6) the umbra against the lit, in the picture's radiance (green)
-            double pxUmbraSum = 0.0, pxLitSum = 0.0;
-            size_t pxUmbraN = 0, pxLitN = 0;
+            // (6) THE ANALYTIC UMBRA: at the full-umbra points (x in [-0.9, -0.6]) the plate hides the whole rectangle - the
+            // numeric visible fraction 0 - and at their mirrors (x in [0.6, 0.9]) none of it (1): the read-back
+            // visibility of light 0 equals it to the RGBA8 store's half step; the picture's radiance ratio printed
+            const bool visRead = avs.vis.size() == size_t(avs.visW) * avs.visH * 8u && avs.visW == pic.width;
+            double pxUmbraSum = 0.0, pxLitSum = 0.0, exactWorst = 0.0;
+            size_t pxUmbraN = 0, pxLitN = 0, exactN = 0, exactOver = 0;
             for (int i = 0; i <= 6; ++i)
                 for (int k = -3; k <= 3; ++k) {
                     const double ax = 0.6 + 0.05 * i, az = 0.1 * k;
@@ -651,20 +693,34 @@ int main(int argc, char **argv)
                     pxLitSum += pic.at(unsigned(lx), unsigned(ly)).g;
                     ++pxUmbraN;
                     ++pxLitN;
+                    for (const int side : { -1, 1 }) {
+                        const int ix = side < 0 ? ux : lx, iy = side < 0 ? uy : ly;
+                        const double full = formFactor(side * ax, az, false);
+                        if (!visRead || !(full > 0.0)) continue;
+                        const double truth = formFactor(side * ax, az, true) / full;
+                        const double vis = avs.vis[(size_t(iy) * avs.visW + size_t(ix)) * 8u] / 255.0;
+                        ++exactN;
+                        exactWorst = std::max(exactWorst, std::fabs(vis - truth));
+                        exactOver += std::fabs(vis - truth) > 0.5 / 255.0 ? 1u : 0u;
+                    }
                 }
             const double pxUmbraRatio = pxLitSum > 0.0 ? pxUmbraSum / pxLitSum : 1.0;
             std::printf("   %s: the visibility %s (%u lights, n = %u, the trace %ux%u, held %d, %.1f MB; moving: the "
                         "trace %.3f ms, the resolve %.3f ms the frame's largest); %zu umbra / %zu lit floor pixels: the umbra's "
-                        "radiance %.4f of the lit's\n",
+                        "radiance %.4f of the lit's (printed); the visibility at %zu of them against the analytic 0 / 1: the "
+                        "worst %.4f, %zu over half a byte\n",
                         noRay ? "(9) the NO-RAY pixel's umbra" : "(6) the pixel's umbra",
                         avs.running ? "running" : avs.reason.c_str(), avs.lights, avs.strata, avs.traceW, avs.traceH,
-                        avs.held ? 1 : 0, double(avs.vramBytes) / 1e6, areaTraceMs, areaResolveMs, pxUmbraN, pxLitN, pxUmbraRatio);
+                        avs.held ? 1 : 0, double(avs.vramBytes) / 1e6, areaTraceMs, areaResolveMs, pxUmbraN, pxLitN, pxUmbraRatio,
+                        exactN, exactWorst, exactOver);
             if (noRay)
-                CHECK(restX >= 0 && avs.running && pxUmbraN > 20u && pxUmbraRatio < 0.25,
-                      "(9) THE NO-RAY PIXEL BEHIND THE PLATE READS NO DIRECT: the umbra's radiance under a quarter of the lit's");
+                CHECK(restX >= 0 && avs.running && exactN > 40u && exactOver == 0u,
+                      "(9) THE NO-RAY PIXEL BEHIND THE PLATE READS NO DIRECT: its visibility the analytic 0 in the umbra and 1 "
+                      "past it, to the store's half step");
             else
-                CHECK(restX >= 0 && avs.running && pxUmbraN > 20u && pxUmbraRatio < 0.25,
-                      "(6) THE PIXEL BEHIND THE PLATE READS NO DIRECT: the umbra's radiance under a quarter of the lit's");
+                CHECK(restX >= 0 && avs.running && exactN > 40u && exactOver == 0u,
+                      "(6) THE PIXEL BEHIND THE PLATE READS NO DIRECT: its visibility the analytic 0 in the umbra and 1 past "
+                      "it, to the store's half step");
             // (7) the penumbra's visibility against the numeric truth
             const bool visOk = avs.vis.size() == size_t(avs.visW) * avs.visH * 8u && avs.visW == pic.width;
             size_t xRead = 0, xBand = 0, xPast = 0;

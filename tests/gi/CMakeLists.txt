@@ -476,7 +476,7 @@ set_tests_properties(gi.gather_sliver PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=of
 set_tests_properties(gi.gather_sliver PROPERTIES JAHSHAKA_TEST_FRAMES 833)
 
 # gi.card_lamp_shadow (PHOTON-7 stage 5, 5-3) — THE CARDS SEE LAMP SHADOWS, TRACED: a blocker between a lamp and a
-# carded floor - the umbra on the floor's card under a quarter of the lit ring (the lamp's direct shape taken out), and
+# carded floor - the card's direct half 0 in the umbra and the lamp's closed form past it (R12), and
 # the shadow following the moved MOVER (the movable channel: its LampShadow region, inside the lamp's range) within a
 # code of a whole re-solve
 # (test_gi_card_lamp_shadow.cpp says the laws). A fixture.
@@ -501,8 +501,8 @@ jah_gpu_row(gi.card_lamp_shadow_area CLASS engine COMMAND test_gi_card_lamp_shad
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_lamp_shadow gi.card_lamp_shadow_area PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_lamp_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 243)
-set_tests_properties(gi.card_lamp_shadow_area PROPERTIES JAHSHAKA_TEST_FRAMES 793)
+set_tests_properties(gi.card_lamp_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 283)
+set_tests_properties(gi.card_lamp_shadow_area PROPERTIES JAHSHAKA_TEST_FRAMES 893)
 
 # gi.leak_room (restored for PHOTON-7 stage 5, 5-3; held at 163d90223 in archive/tests/gi) — THE LEAK THROUGH A WALL,
 # the field's and THE CARDS': a sealed room with a lamp inside and a red one outside, the red that reaches the inside

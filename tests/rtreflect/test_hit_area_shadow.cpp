@@ -11,12 +11,20 @@
 // point under it sees the light through the hole only - at most 1.3 % of the rectangle's form factor at the spot under
 // the hole (the hole's projection), nothing elsewhere; the centre ray passed the hole for a 1 x 1 m spot. A vertical
 // mirror (a metal, roughness 0) at x = 2 under the screen; the camera between, under the screen, looking at the
-// mirror, which shows the floor. The rays on, the reflection's sources Rays, a still picture.
+// mirror, which shows the floor. The rays on, the reflection's sources Rays, a still picture, the GI's bounce OFF (the
+// floor's radiance is the light's direct alone, so the analytic ratio is the whole of the screened arm's).
 // TWO ARMS IN ONE PROCESS: the CONTROL (the screen hidden: the floor lit, the premise that the mirror shows the
 // light's floor) and the SCREEN.
-// THE LAW: over the mirror's pixels that show the lit floor in the control (over a quarter of its brightest), the
-// screen arm's mean under 0.1 of the control's and its 99th percentile under 0.25 of the control's mean - the strata's
-// truth is ~0.013 plus the bounce under the screen. RED BEFORE 7-H: the spot under the hole read the light whole.
+// THE LAW (R12: the form-factor ratio; it was "under 0.1 of the control, p99 under 0.25"): over the mirror's pixels that
+// show the lit floor in the control (over a quarter of its brightest), each pixel's floor point found through the mirror
+// and its ANALYTIC RATIO - the light's part seen through the hole over the whole (the hole's top and bottom squares
+// projected onto the light's plane, intersected with it, form factors numerically) - the screened arm's mean against the
+// control's times that ratio within q + 3 SE. DECLARED RED (2026-10-27): the shipped reflection at rest reads -32 %
+// (0.000678 against 0.000991, 7.5 SE) - while the hit's strata are exact: with the reflection's 4,096-sample unfiltered
+// reference (reflect.restReference, measured once, 8,632 frames) the same mean reads 0.001027, +3.5 %, 0.8 SE. So the
+// light through a small gap is under-read by the reflection's history and filter (a sparse sample: the strata pick the
+// hole's stratum ~1 % of the frames), not by the hit's direct. RED BEFORE 7-H: the spot under the hole read the light
+// whole.
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -50,6 +58,40 @@ NodeId box(Scene *s, const Vec3 &at, const Vec3 &size, const PbrParams &p) {
     return node;
 }
 float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
+
+// THE FIXTURE'S GEOMETRY for the analytic ratio: the light's rectangle (1 x 1 m at y 2.05 over (-1, 0), facing down) and
+// the hole (0.1 m square at x -1, z 0, through the screen's 0.05 m, y 1.80 .. 1.85)
+const double kLx = -1.0, kLy = 2.05, kLz = 0.0, kHalfL = 0.5, kHoleHalf = 0.05, kHoleLo = 1.80, kHoleHi = 1.85;
+/// the form factor of the axis-aligned rectangle [x0, x1] x [z0, z1] at height y, facing down, at the floor point P
+/// (facing up): cos cos / (pi r^2) over it, n x n midpoints (the integrand is smooth over a rectangle this size)
+double rectFF(double px, double pz, double x0, double x1, double z0, double z1, double y, int n)
+{
+    if (!(x1 > x0) || !(z1 > z0)) return 0.0;
+    double sum = 0.0;
+    const double dx = (x1 - x0) / n, dz = (z1 - z0) / n;
+    for (int i = 0; i < n; ++i)
+        for (int k = 0; k < n; ++k) {
+            const double qx = x0 + (i + 0.5) * dx - px, qz = z0 + (k + 0.5) * dz - pz, r2 = qx * qx + y * y + qz * qz;
+            sum += y * y / (3.14159265358979 * r2 * r2) * dx * dz;
+        }
+    return sum;
+}
+/// THE ANALYTIC RATIO at the floor point P: the light's part seen through the hole over the whole - the hole's top and
+/// bottom squares projected from P onto the light's plane (each an axis-aligned square), their intersection with the
+/// rectangle, its form factor over the rectangle's
+double holeRatio(double px, double pz)
+{
+    double x0 = kLx - kHalfL, x1 = kLx + kHalfL, z0 = kLz - kHalfL, z1 = kLz + kHalfL;
+    for (const double yh : { kHoleLo, kHoleHi }) {
+        const double k = kLy / yh;   // P + (hole point - P) k reaches y = kLy (P on y = 0)
+        x0 = std::max(x0, px + (kLx - kHoleHalf - px) * k);
+        x1 = std::min(x1, px + (kLx + kHoleHalf - px) * k);
+        z0 = std::max(z0, pz + (kLz - kHoleHalf - pz) * k);
+        z1 = std::min(z1, pz + (kLz + kHoleHalf - pz) * k);
+    }
+    const double full = rectFF(px, pz, kLx - kHalfL, kLx + kHalfL, kLz - kHalfL, kLz + kHalfL, kLy, 64);
+    return full > 0.0 ? rectFF(px, pz, x0, x1, z0, z1, kLy, 32) / full : 0.0;
+}
 }   // namespace
 
 int main()
@@ -108,12 +150,14 @@ int main()
         s->setLight(lamp, l);
     }
     s->setAmbient(Colour(0.0f, 0.0f, 0.0f), Colour(0.0f, 0.0f, 0.0f));
+    // NO BOUNCE (the floor's radiance the area light's direct alone: the analytic ratio is the whole of the screened arm's)
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    gi.bounces = true;
+    gi.bounces = false;
     if (!s->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
-    enginetest::testCameraLookAt(v, Vec3(1.0f, 0.8f, 0.0f), Vec3(2.0f, 0.6f, 0.0f));
+    const Vec3 eye(1.0f, 0.8f, 0.0f), at(2.0f, 0.6f, 0.0f);
+    enginetest::testCameraLookAt(v, eye, at);
     e->waitForAsyncShaders();
 
     std::vector<float> pic[2];
@@ -124,7 +168,7 @@ int main()
             run(1);
             const GiStatus g = s->published().gi;
             quiet = !g.chainOwed && !g.feedbackOwed && !g.cascades.empty() ? quiet + 1 : 0;
-            if (quiet >= 12) { rest = f - quiet; break; }
+            if (quiet >= 12) { rest = f + 1 - quiet; break; }   // (the first quiet frame's index: 0 when quiet from the start)
         }
         run(64);   // the reflection's samples (one a texel a frame) at the GI's rest
         ImageF img;
@@ -141,36 +185,60 @@ int main()
         std::printf("\nrtreflect.hit_area_shadow: %d frames, FAIL\n", frames);
         return 1;
     }
-    // THE MIRROR'S LIT FLOOR in the control: below the picture's horizon row (the floor), over a quarter of its peak
+    // THE MIRROR'S LIT FLOOR in the control (below the picture's horizon row, over a quarter of its peak), each pixel's
+    // floor point found through the mirror (the plane x = 2.0: the view ray reflected, on to y = 0) and its analytic
+    // ratio - the light seen through the hole over the whole
     float peak = 0.0f;
     for (unsigned y = kHeight / 2; y < kHeight; ++y)
         for (unsigned x = 0; x < kWidth; ++x) peak = std::max(peak, pic[0][size_t(y) * kWidth + x]);
-    std::vector<float> screened;
-    double sumC = 0.0, sumS = 0.0;
-    unsigned spotX = 0, spotY = 0;
-    float spotV = -1.0f;
+    const double fx0 = at.x - eye.x, fy0 = at.y - eye.y, fz0 = at.z - eye.z;
+    const double fl = std::sqrt(fx0 * fx0 + fy0 * fy0 + fz0 * fz0);
+    const double F[3] = { fx0 / fl, fy0 / fl, fz0 / fl };
+    double R[3] = { -F[2], 0.0, F[0] };
+    const double rl = std::sqrt(R[0] * R[0] + R[2] * R[2]);
+    R[0] /= rl;
+    R[2] /= rl;
+    const double U[3] = { R[1] * F[2] - R[2] * F[1], R[2] * F[0] - R[0] * F[2], R[0] * F[1] - R[1] * F[0] };
+    const double tanY = std::tan(22.5 * 3.14159265358979 / 180.0), tanX = tanY * double(kWidth) / double(kHeight);
+    double sumC = 0.0, sumS = 0.0, sumRef = 0.0, sumD2 = 0.0, ratioMax = 0.0;
+    size_t n = 0;
+    std::vector<double> dev;
     for (unsigned y = kHeight / 2; y < kHeight; ++y)
         for (unsigned x = 0; x < kWidth; ++x) {
             const size_t i = size_t(y) * kWidth + x;
             if (!(pic[0][i] > 0.25f * peak)) continue;
+            const double nx = (2.0 * (x + 0.5) / kWidth - 1.0) * tanX, ny = (1.0 - 2.0 * (y + 0.5) / kHeight) * tanY;
+            double d[3] = { F[0] + R[0] * nx + U[0] * ny, F[1] + R[1] * nx + U[1] * ny, F[2] + R[2] * nx + U[2] * ny };
+            if (!(d[0] > 0.0)) continue;
+            const double tm = (2.0 - eye.x) / d[0];
+            const double my = eye.y + d[1] * tm, mz = eye.z + d[2] * tm;
+            if (my < 0.0 || my > 1.8 || std::fabs(mz) > 6.0) continue;   // not the mirror
+            d[0] = -d[0];
+            if (!(d[1] < 0.0)) continue;
+            const double tf = -my / d[1];
+            const double px = 2.0 + d[0] * tf, pz = mz + d[2] * tf;
+            if (px < -6.0 || px > 2.0) continue;
+            const double ratio = holeRatio(px, pz), ref = double(pic[0][i]) * ratio;
+            ratioMax = std::max(ratioMax, ratio);
             sumC += pic[0][i];
             sumS += pic[1][i];
-            screened.push_back(pic[1][i]);
-            if (pic[1][i] > spotV) { spotV = pic[1][i]; spotX = x; spotY = y; }
+            sumRef += ref;
+            dev.push_back(double(pic[1][i]) - ref);
+            ++n;
         }
-    const size_t n = screened.size();
-    std::sort(screened.begin(), screened.end());
     const double meanC = n ? sumC / double(n) : 0.0, meanS = n ? sumS / double(n) : 0.0;
-    const double p99 = n ? double(screened[std::min(n - 1, size_t(0.99 * double(n)))]) : 0.0;
-    std::printf("   the mirror's lit floor (control > 0.25 x its peak %.4f): %zu px; the control's mean %.4f; the "
-                "screen's mean %.4f (%.4f of it), p99 %.4f (%.4f), max %.4f (%.4f) at (%u, %u)\n",
-                double(peak), n, meanC, meanS, meanC > 0 ? meanS / meanC : 0.0, p99, meanC > 0 ? p99 / meanC : 0.0,
-                double(spotV), meanC > 0 ? double(spotV) / meanC : 0.0, spotX, spotY);
+    const double meanRef = n ? sumRef / double(n) : 0.0;
+    for (const double dv : dev) sumD2 += (dv - (meanS - meanRef)) * (dv - (meanS - meanRef));
+    const double seMean = n > 1 ? std::sqrt(sumD2 / double(n - 1) / double(n)) : 0.0;
+    const double q = meanRef > 0.0 ? std::ldexp(1.0, int(std::floor(std::log2(meanRef))) - 10) : 0.0;
+    std::printf("   the mirror's lit floor (control > 0.25 x its peak %.4f): %zu px, the control's mean %.4f; the screened "
+                "mean %.6f against the analytic %.6f (the hole's ratio at each pixel's floor point, its largest %.4f): "
+                "%+.6f, %.2f SE (%.6f), q %.6f\n", double(peak), n, meanC, meanS, meanRef, ratioMax, meanS - meanRef,
+                seMean > 0 ? std::fabs(meanS - meanRef) / seMean : 0.0, seMean, q);
     CHECK(n > 1500u && meanC > 1e-3, "premise: the mirror shows the light's floor (%zu px, mean %.4f)", n, meanC);
-    CHECK(meanS < 0.1 * meanC, "the screened floor in the mirror reads under 0.1 of the lit one (%.4f) - the light "
-          "reaches it through the hole only (L9)", meanC > 0 ? meanS / meanC : 0.0);
-    CHECK(p99 < 0.25 * meanC, "no spot of it reads the light through the gap whole: p99 %.4f of the lit mean (< 0.25)",
-          meanC > 0 ? p99 / meanC : 0.0);
+    CHECK(std::fabs(meanS - meanRef) <= q + 3.0 * seMean,
+          "THE STRATA'S RATIO: the screened floor in the mirror the control's times the analytic form-factor ratio through "
+          "the hole, the mean within q + 3 SE (L9)");
     v->setScene(nullptr);
     e->destroyView(v);
     e->destroyScene(s);
