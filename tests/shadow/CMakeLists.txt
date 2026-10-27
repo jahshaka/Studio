@@ -80,3 +80,24 @@ foreach(_row_frames
     endif()
 endforeach()
 
+
+# shadow.second_directional (PHOTON-7 10-4, R8 (3); L9) — A SECOND DIRECTIONAL CASTS ITS SHADOW AND THE SUN KEEPS THE
+# CASCADES: a post on a ground slab in a black world under the sun A and a secondary B (created first); each light's shadow
+# reads 0 under it alone, the two lights add on every square, slot 0 holds A and a focused slot B
+# (test_shadow_second_directional.cpp says the laws; red on the base: B cast nothing). A fixture.
+add_executable(test_shadow_second_directional test_shadow_second_directional.cpp)
+set_target_properties(test_shadow_second_directional PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_shadow_second_directional PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_shadow_second_directional PRIVATE JahshakaEngine)
+add_dependencies(test_shadow_second_directional JahshakaEngineMedia)
+jah_gpu_row(shadow.second_directional CLASS engine COMMAND test_shadow_second_directional
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadow.second_directional PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")

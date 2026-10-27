@@ -1097,7 +1097,7 @@ public:
         int  pssmSplits = 0;
         int  focusedMaps = 0;    ///< point/spot maps the atlas has room for
         int  lightSlots = 0;     ///< 1 + focusedMaps: the length of `mapped`
-        int  casters = 0;        ///< shadow-casting point/spot lights in the scene
+        int  casters = 0;        ///< focused-map casters: point/spot lights, directionals after the sun
         int  budget = 0;         ///< the effective ceiling (resolution-capped)
         int  requestedBudget = 0;
         int  atlasWidth = 0, atlasHeight = 0;

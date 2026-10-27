@@ -404,18 +404,9 @@ void LightPropertyWidget::refreshBindingRows()
         setBindingLabel(profileLabel, lightNode->iesProfileGuid,
                         lightNode->iesProfilePath, db);
         profileClear->setEnabled(!lightNode->iesProfileGuid.isEmpty());
-        // THE user-facing gotcha: turning shadows on a point light silently
-        // removes its profile, because a shadow-casting point light is shaded
-        // from a code path that has no profile term. There is no engine signal
-        // for it, so the panel is the only place this can be said.
-        const bool shadows = lightNode->shadowMap.shadowType != iris::ShadowMapType::None;
-        const bool lost = type == iris::LightType::Point && shadows;
-        PropertyRows::setPanelVisible(profileNote, lost);
-        if (lost)
-            profileNote->setText(tr("Shadow-casting point lights ignore their IES profile — "
-                                    "the renderer has no photometric term on that path. Set "
-                                    "Shadow Type to None, or use a spotlight."));
-        profileLabel->setEnabled(!lost);
+        // (the note row carries a binding error only: a spot or point light honours
+        // its profile, shadowed or not)
+        PropertyRows::setPanelVisible(profileNote, false);
     }
 }
 
@@ -481,9 +472,9 @@ void LightPropertyWidget::refreshSunRows()
     auto sun = scene ? scene->sunLight() : iris::LightNodePtr();
     const bool isSun = sun && sun.data() == lightNode.data();
     // FOLLOWS ATMOSPHERE IS THE SUN'S: it tints THE SUN's direct light, and a
-    // secondary directional is not the sun — it draws no disc and casts no
-    // shadow, so the row on one would say nothing true (round-2 review item
-    // 11). It follows the RESOLVER, like the readout below.
+    // secondary directional is not the sun — it draws no disc and the sky is
+    // not lit by it, so the row on one would say nothing true (round-2 review
+    // item 11). It follows the RESOLVER, like the readout below.
     PropertyRows::setPanelVisible(followsAtmosphere, isSun);
     followsAtmosphere->setValue(lightNode->followsAtmosphere);
 

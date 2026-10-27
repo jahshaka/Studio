@@ -2311,24 +2311,28 @@ void ies_profile_shapes_a_spot() {
     std::printf("    profile cleared: axis %.3f (was %.3f plain)\n", clearedAxis, plainAxis);
     CHECK(std::fabs(clearedAxis - plainAxis) < 0.05f);
 
-    // The documented limitation, asserted rather than merely written down: a
-    // shadow-casting POINT light is shaded from the pass buffer, whose point
-    // loop has no profile term, so the engine must not pretend otherwise.
+    // A SHADOW CHANGES ONLY WHAT GEOMETRY BLOCKS (PHOTON-7 10-4 R8 (4)): a
+    // shadow-casting POINT light is shaded from the pass buffer's point loop,
+    // which reads the profile row too (the fork's 800.PixelShader), so with
+    // nothing between the lamp and the wall its picture is the unshadowed
+    // one's - within one code a channel (the readback's quantum; lum sums
+    // three). On the base it LOST the profile (this check used to assert it: the
+    // shadowed axis read over 0.05 brighter, the ring's dark centre gone).
     d.type = LightType::Point;
     d.castShadows = false;
     d.iesProfilePath = ies;
     CHECK(s->setLight(lightNode, d));
     render(fx.e, 2); REQUIRE(v->readPixels(img));
-    const float pointProfiled = lum(48, 48);
+    const float pointProfiled = lum(48, 48), pointProfiledOff = lum(48, 24);
     d.castShadows = true;
     CHECK(s->setLight(lightNode, d));
     render(fx.e, 3); REQUIRE(v->readPixels(img));
-    const float pointShadowed = lum(48, 48);
-    std::printf("    point light axis: no shadows %.3f  shadows on %.3f\n",
-                pointProfiled, pointShadowed);
-    CHECK_MSG(pointShadowed > pointProfiled + 0.05f,
-              "shadow-casting point lights LOSE their profile (no shader block) — "
-              "if this ever fails, Ogre gained one and the UI warning can go");
+    const float pointShadowed = lum(48, 48), pointShadowedOff = lum(48, 24);
+    std::printf("    point light axis/off-axis: no shadows %.3f/%.3f  shadows on %.3f/%.3f\n",
+                pointProfiled, pointProfiledOff, pointShadowed, pointShadowedOff);
+    CHECK_MSG(std::fabs(pointShadowed - pointProfiled) <= 3.0f / 255.0f + 1e-4f &&
+                  std::fabs(pointShadowedOff - pointProfiledOff) <= 3.0f / 255.0f + 1e-4f,
+              "a shadow-casting point light keeps its profile: its unoccluded picture is the unshadowed one's");
 
     CHECK(s->removeLight(lightNode));
     std::remove(ies.c_str());
