@@ -53,8 +53,11 @@
 //       channel) at most the largest |L_card - L_voxel| over the band face's hits - a reader's radiance moves by its
 //       albedo x its share of rays on the face x the face's move, both at most 1. The face's hits are the gather's own,
 //       frozen (gather.freezeFrame + gather.hitsReadback) with the camera on the +x wall behind the face, matched ray by
-//       ray across the two runs. THE CAUSE (measured 2026-10-26 against the card estimator at 128 rays): both caches'
-//       fixed 16-ray quadrature, the voxel side's single surface point the worse (-13 % at the band face).
+//       ray across the two runs. A PROPAGATION LAW (10-3 R12, the lead's ruling): its input - the face's card-voxel
+//       disagreement - is MEASURED here (printed), never a picked bar; the two caches' truth against physics is
+//       gi.card_truth's (the analytic direct, the same rays on the CPU, a brute-force hemisphere). (Measured 2026-10-26
+//       against the card estimator at 128 rays: both caches' fixed 16-ray quadrature, the voxel side's single surface
+//       point the worse, -13 % at the band face.)
 //       AND THE NO POP: at the held-out run's rest the card is let in, then held out again - no pixel moves more than 1
 //       code a frame through either. DECLARED RED FOR STAGE 8 (its no-pop law for a cache refinement): a card's writes
 //       move the readers' view-wide rest keys, so a held view drops to the settling EMA for as long as the rounds run
