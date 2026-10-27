@@ -154,7 +154,7 @@ public:
     ///   * `shadow.leak` — a light whose shadows are switched off stands close
     ///     enough to opaque geometry to light straight through it (the
     ///     Showroom's lamp above a sealed roof, which nothing ever mentioned);
-    ///   * `sky.duplicate` — a second Sky Light, which lights nothing;
+    ///   * `sky.duplicate` — a second Sky Light, which does nothing;
     ///   * `rays.absent` — the project's Ray Tracing row says ON (it
     ///     was AUTHORED for rays) and this machine has none. The one issue that
     ///     is about the PROJECT rather than an object, so it names no node —

@@ -244,7 +244,7 @@ void SkyPropertyWidget::skyTypeChanged(int index)
 			                       "does not haze the scene — that is the World fog."));
 			skyBrightness = addFloatValueSlider("Brightness", 0.f, 10.f, defaults.skyBrightness);
 			skyBrightness->setToolTip(tr("The sky's brightness: 1 is the physical sky. It scales "
-			                             "the sky, its light on the scene (the Sky Light) and its "
+			                             "the sky, its light on the scene and its "
 			                             "reflections — never the sun's own light."));
 			aerialScale  = addFloatValueSlider("Scene Air", 0.f, 1.f, defaults.aerialScale);
 			aerialScale->setToolTip(tr("Aerial perspective on the scene: the atmosphere's own air "

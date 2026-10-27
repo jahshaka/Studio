@@ -648,8 +648,8 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                 issue.node = light->getGUID();
                 issue.nodeName = light->getName();
                 issue.message =
-                    tr("\"%1\" is a second Sky Light. Only \"%2\" lights the scene — a scene "
-                       "has one skylight.")
+                    tr("\"%1\" is a second Sky Light. Only \"%2\" sets the sky's gain — a "
+                       "scene has one skylight.")
                         .arg(light->getName(),
                              theSkylight ? theSkylight->getName() : tr("the first one"));
                 issue.action = tr("Delete this Sky Light, or hide it. A hidden Sky Light does "

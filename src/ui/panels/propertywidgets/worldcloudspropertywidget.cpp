@@ -40,7 +40,7 @@ WorldCloudsPropertyWidget::WorldCloudsPropertyWidget()
     enabled = this->addCheckBox("Clouds", false);
     enabled->setToolTip(QStringLiteral(
         "A sheet of cloud at a fixed altitude, drawn over the Colour, Gradient and Realistic skies. "
-        "It is part of the sky: the Sky Light's ambient and every reflection see it, and it shades "
+        "It is part of the sky: the sky's light on the scene and every reflection see it, and it shades "
         "the sun's light on the ground. It runs at every World Mode tier and in VR. A full overcast "
         "changes the scene's light and therefore its exposure, which is correct: the key moves."));
     PropertyRows::describe(enabled, { QStringLiteral("clouds"), QStringLiteral("weather"),

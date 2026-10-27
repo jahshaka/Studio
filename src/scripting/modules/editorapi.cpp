@@ -818,7 +818,7 @@ QVector<VerbInfo> EditorApi::verbs() const
           "lights set to the same Forward Shading Priority, so which one is the sun comes out of "
           "a tie-break the author never chose; \"shadow.leak\", a light whose shadows are "
           "switched off standing close enough to solid geometry to light straight through it; "
-          "\"sky.duplicate\", a second Sky Light, which lights nothing; \"rays.absent\", a "
+          "\"sky.duplicate\", a second Sky Light, which does nothing; \"rays.absent\", a "
           "project whose Ray Tracing row says On on a machine with none; \"vr.colour\", a VR "
           "runtime encoding the picture twice; and \"texture.missing\", a material's texture file gone from disk "
           "(one issue per mesh node, naming each missing slot and its file; it clears when the "

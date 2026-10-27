@@ -298,11 +298,20 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
         lightChannels->setMask(lightNode->getLightMask());
 
         // A SKY LIGHT HAS TWO ROWS (SKY_LIGHT_SPEC.md §2): Color, which is a
-        // TINT on the sky's own light, and Intensity, which is the strength.
-        // Everything else on this blade describes a light that has a PLACE in
-        // the world, which this one does not — it is the sky.
+        // TINT, and Intensity - together ONE GAIN ON THE SKY ITSELF (PHOTON-7
+        // 10-3 R5): the sky's picture and its light move together, because the
+        // sky emits what it shows. Everything else on this blade describes a
+        // light that has a PLACE in the world, which this one does not — it is
+        // the sky.
         const bool isSky = lightNode->getLightType() == iris::LightType::Sky;
         lightColor->setLabel(isSky ? tr("Tint") : tr("Color"));
+        intensity->setToolTip(isSky ? tr("The sky's gain: its picture and its light together. 1 is the "
+                                         "sky as authored (and what a scene with no Sky Light gets); "
+                                         "0 is a black sky that lights nothing.")
+                                    : QString());
+        lightColor->setToolTip(isSky ? tr("The sky's tint: it colours the sky's picture and its light "
+                                          "together.")
+                                     : QString());
         PropertyRows::setPanelVisible(distance, !isSky);
         PropertyRows::setPanelVisible(sourceRadius,
                                       lightNode->getLightType() == iris::LightType::Point ||

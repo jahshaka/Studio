@@ -140,9 +140,9 @@ public:
     void addSpotLight();
     void addDirectionalLight();
     void addAreaLight();
-    /// THE SKY LIGHT (SKY_LIGHT_SPEC.md §2): the light that reads the World sky
-    /// and fills the scene with its diffuse ambient. One per scene — a second
-    /// raises the `sky.duplicate` scene issue and lights nothing.
+    /// THE SKY LIGHT (SKY_LIGHT_SPEC.md §2; PHOTON-7 10-3 R5): one gain on the
+    /// World sky itself, its picture and its light together. One per scene — a second
+    /// raises the `sky.duplicate` scene issue and does nothing.
     void addSkyLight();
 
     void addEmpty();

@@ -314,8 +314,9 @@ void pushAmbient(jahshaka::engine::Scene *scene)
 {
     if (!scene) return;
     // THE GAIN ONLY (Engine.h, setEnvironmentLight; PHOTON-SKY-TRANSIENT-1):
-    // the engine forms the ambient itself from the studio sky it captured, times
-    // this gain, in the frame the capture lands — the same image this file's
+    // the engine forms the ambient itself from the studio sky it captured - the
+    // sky as drawn at this gain (PHOTON-7 10-3 R5) - in the frame the capture
+    // lands — the same image this file's
     // CPU integral reads (which stays: the exposure and the fallback colour are
     // derived from it before any frame exists). Pushing that CPU SH here as
     // well was a second writer the engine's landing overwrote.
