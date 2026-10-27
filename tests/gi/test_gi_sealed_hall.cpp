@@ -9,7 +9,9 @@
 //   "ray"   (gi.sealed_hall), the ray tier at High: (1) AT REST no pixel reads one code of R. RED before: the gather's
 //           integrate fell back, for a pixel no probe answered, to the field's cage plus the ENVIRONMENT's diffuse x
 //           (1 - confidence) - past the field's window the sky's irradiance, unoccluded (rq_probe_integrate.comp):
-//           20.2 codes at rest (the sky alone), 203 with the area light; no sample now: 0.
+//           20.2 codes at rest (the sky alone), 203 with the area light. The share is gathered by the chain's rays
+//           now (R3 (b)). DECLARED RED until 10-4's R7 reaches photon-7: 18.9 codes over 9 px at rest - those rays
+//           crossing the hall's coarse mixed cells at 22 m (the class of gi.sealed_sky (3)).
 //   "noray" (gi.sealed_hall_noray), the no-ray tier at High: (1) NO PIXEL INSIDE READS THE AREA LIGHT UNOBSTRUCTED
 //           (its visibility product's diffuse share at 255) at rest. RED before: a pixel no stratum was seen for (U = 0)
 //           read "unshadowed", and the light's LTC lit the inside through the roof - 1,038 pixels at 203 codes of R; a
@@ -155,6 +157,9 @@ int main(int argc, char **argv)
                 worstFrame, worstOver, last, last / bar, lastOver);
     CHECK(rest >= 0, "the hall comes to rest");
     if (mode == "ray") {
+        if (last > bar)
+            std::printf("   ray: the residue at rest - %u px over one code, the brightest %.3f codes: the chain's rays "
+                        "through the coarse mixed cells (10-4's R7)\n", lastOver, last / bar);
         CHECK(last <= bar, "(1) at rest no pixel inside the sealed hall reads one code of R");
     } else {
         const AreaVisStatus a = s->published().areaVis;
