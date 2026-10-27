@@ -7,6 +7,23 @@
 # usage: resize_rest_boots.sh <app> <boot.js.in> <workdir> <a|b|c>
 set -u
 APP="$1"; SCRIPT_IN="$2"; WORK="$3"; K="$4"
+# THE SHADER CACHE COMES WARM (2026-10-27, the same form as a fixture's WARM: tests/support/fresh_home.sh --warm): the
+# virgin data root links the tree's ONE shared app cache (<build>/tests/.shadercache, under its lock, shared; the cache
+# writes by rename, so a link is never written through; its lock file never linked) - the row's law is the resize's, not
+# a cold boot's; cold, each boot compiled ~300 shaders (40 s) and the rows sat at their 60 s cap.
+seed_shaders() {   # seed_shaders <data root>
+    local shared
+    shared="$(cd "$(dirname "$APP")/.." && pwd)/tests/.shadercache"
+    [ -d "$shared" ] || return 0
+    mkdir -p "$1/shadercache"
+    (
+        flock -s -w 60 9 || exit 0
+        ( cd "$shared" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
+            mkdir -p "$1/shadercache/$(dirname "$f")"
+            ln "$shared/$f" "$1/shadercache/$f" 2>/dev/null || cp -p "$shared/$f" "$1/shadercache/$f" 2>/dev/null || true
+        done
+    ) 9>"$shared.lock"
+}
 case "$K" in
     a) rm -rf "$WORK"; mkdir -p "$WORK" || exit 1 ;;
     b|c) [ -s "$WORK/shot-a.png" ] && grep -q 'SET-A ' "$WORK/boot-a.log" ||
@@ -20,6 +37,7 @@ if [ "$K" != a ]; then
 fi
 dr="$WORK/dr-$K"; js="$WORK/boot-$K.js"
 rm -rf "$dr"; mkdir -p "$dr"
+seed_shaders "$dr"
 sed -e "s#@WORK@#$WORK#g" -e "s#@MODE@#$K#g" -e "s#@SET_A@#$setA#g" -e "s#@VIEWPORT_A@#$vpA#g" "$SCRIPT_IN" > "$js"
 ( cd "$(dirname "$APP")" && env JAHSHAKA_NO_DITHER=1 timeout -k 10 300 "$APP" --data-root "$dr" --script "$js" \
     > "$WORK/boot-$K.log" 2>&1 )

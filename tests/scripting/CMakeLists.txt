@@ -972,7 +972,7 @@ set_tests_properties(scripting.e2e.world_stillness PROPERTIES
 # the shot at once (its own view the cards' only reader). RED before the fix: the cards' demand window held open by a
 # reader whose clock froze after one graze, the shot at its 2,002-frame cap. 240 frames, the rest, the shot's settle.
 set(_ctsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-change_then_shot)
-jah_fresh_home_fixture(scripting.e2e.change_then_shot.fresh_home changeThenShotHome "${_ctsHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.change_then_shot.fresh_home changeThenShotHome "${_ctsHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_ctsHome}/run)
 jah_gpu_row(scripting.e2e.change_then_shot CLASS app TIER epic NEEDS photon FRAMES 400
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js
@@ -988,7 +988,7 @@ set_tests_properties(scripting.e2e.change_then_shot PROPERTIES
 # second shot (a new D32 written only by its render-pass clear, loaded read-only by the next pass; the script says the
 # whole cause). 2 x (12 + 120) frames and the shots' settles; a device loss exits 3 and fails the row.
 set(_spcHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-second_project_capture)
-jah_fresh_home_fixture(scripting.e2e.second_project_capture.fresh_home secondProjectCaptureHome "${_spcHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.second_project_capture.fresh_home secondProjectCaptureHome "${_spcHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_spcHome}/run)
 jah_gpu_row(scripting.e2e.second_project_capture CLASS app TIER epic NEEDS photon FRAMES 600
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_second_project_capture.js
@@ -1003,7 +1003,7 @@ set_tests_properties(scripting.e2e.second_project_capture PROPERTIES
 # and equals, to the code, a shot of the scene stopped and posed at the same document time. 60 + 37 + 10 frames and the
 # two shots' settles.
 set(_psHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-paused_shot)
-jah_fresh_home_fixture(scripting.e2e.paused_shot.fresh_home pausedShotHome "${_psHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.paused_shot.fresh_home pausedShotHome "${_psHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_psHome}/run)
 jah_gpu_row(scripting.e2e.paused_shot CLASS app TIER epic NEEDS photon FRAMES 400
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js
