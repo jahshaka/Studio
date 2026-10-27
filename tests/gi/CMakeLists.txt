@@ -850,7 +850,8 @@ set_tests_properties(gi.photon_window_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 
 
 # gi.pane_stack (PHOTON-7 10-4 fix round, the one read's F4; L9) — A RAY THROUGH MORE PANES THAN A LIST HOLDS IS NEVER
 # BLOCKED BY THEIR COUNT: twelve glass slabs over a floor, a Forward+ lamp above them - the floor reads T^12 of the hole
-# (test_gi_pane_stack.cpp says the laws; red on the base: the ninth pane was confirmed opaque, the floor read 0). A fixture.
+# (test_gi_pane_stack.cpp says the laws; red on the base: the ninth pane was confirmed opaque, the floor read 0); the GI on,
+# a reading ray through them is counted past its list (rayQuery.panesOverflow). A fixture.
 add_executable(test_gi_pane_stack test_gi_pane_stack.cpp)
 set_target_properties(test_gi_pane_stack PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

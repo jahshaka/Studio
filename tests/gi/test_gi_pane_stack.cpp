@@ -13,7 +13,9 @@
 //   (0) THE HOLE - the slabs hidden: the floor's mean H, over a code;
 //   (1) THE STACK - the GI off, the pixel's direct light alone: the floor's mean is T^12 H (T as the pane word stores it,
 //       on 2047 steps), within ONE CODE at T^12 H's level (the display's sRGB code width there) plus the readback's half
-//       code of H.
+//       code of H;
+//   (2) THE READING RAYS - the GI on at High (the screen probe gather traces from the floor up through the stack): the
+//       overflow counter moves (a reading ray met more than eight panes and was counted, not blocked).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -122,6 +124,7 @@ int main()
         return n > 0 && std::isfinite(mean);
     };
     const auto settle = [&]() { e->waitForAsyncShaders(); run(8); };
+    const auto overflow = [&]() { return scene->published().rayQuery.panesOverflow; };
 
     // (0) THE HOLE
     for (NodeId n : slabs) scene->setNodeVisible(n, false);
@@ -130,18 +133,31 @@ int main()
     bool ok = read(hole);
     for (NodeId n : slabs) scene->setNodeVisible(n, true);
     settle();
+    const unsigned long long before = overflow();
     // (1) THE STACK, the direct light alone
     double stack = 0.0;
     ok = read(stack) && ok;
     const double T = std::round(0.9 * 2047.0) / 2047.0, want = std::pow(T, double(kSlabs)) * hole;
     const double bar = oneCodeAt(want) + 0.5 * oneCodeAt(hole);
-    std::printf("== the hole: mean %.6f; twelve panes: mean %.6f, T^12 x the hole %.6f (bar %.6f)\n", hole, stack, want,
-                bar);
+    std::printf("== the hole: mean %.6f; twelve panes: mean %.6f, T^12 x the hole %.6f (bar %.6f); the overflow counter "
+                "%llu\n", hole, stack, want, bar, before);
     check(ok && hole > 0.01, "(0) the hole: the lamp lights the floor");
     char what[256];
     std::snprintf(what, sizeof(what), "(1) THE LIGHT RAY: twelve panes pass T^12 of the lamp (%.6f against %.6f, within %.6f)",
                   stack, want, bar);
     check(ok && std::fabs(stack - want) <= bar, what);
+    // (2) THE READING RAYS: the GI on at High
+    GiParams gi;
+    gi.mode = GiMode::Vct;
+    gi.quality = GiQuality::High;
+    if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
+    unsigned long long after = before;
+    for (int f = 0; f < 240 && after == before; ++f) {
+        run(1);
+        after = overflow();
+    }
+    std::printf("== the GI on: the overflow counter %llu -> %llu (%d frames)\n", before, after, frames);
+    check(after > before, "(2) THE READING RAYS: a ray through twelve panes is counted past the list, never blocked");
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
     return g_fail ? 1 : 0;
 }

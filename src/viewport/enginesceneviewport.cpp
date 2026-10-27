@@ -3171,6 +3171,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.hitDropped   = quint64(rq.hitDropped);
         out.rayQuery.hitCapacity  = quint64(rq.hitCapacity);
         out.rayQuery.escapeRecords  = quint64(rq.escapeRecords);
+        out.rayQuery.panesOverflow  = quint64(rq.panesOverflow);
         out.rayQuery.escapeDropped  = quint64(rq.escapeDropped);
         out.rayQuery.escapeCapacity = quint64(rq.escapeCapacity);
         out.rayQuery.escapeTraced   = quint64(rq.escapeTraced);
