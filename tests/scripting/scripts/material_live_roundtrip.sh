@@ -14,6 +14,10 @@
 # usage: material_live_roundtrip.sh <app> <script.js.in> <fixture.png> <workdir> <author|import|restore>
 set -u
 APP="$1"; SCRIPT_IN="$2"; FIXTURE="$3"; WORK="$4"; ROW="$5"
+# THE DRIVER'S SHADER CACHE IS THE BOX'S (2026-10-27, the lead's tool line): the scratch XDG_CACHE_HOME below would move
+# the NVIDIA driver's disk cache into the fresh home - cold on every run (61-62 s at the 60 s cap) - and the row's law
+# is the live graph's persistence, never the driver's: the real home's GLCache, named before HOME is replaced
+REAL_GLCACHE="${__GL_SHADER_DISK_CACHE_PATH:-$HOME/.cache/nvidia/GLCache}"
 # THE SHADER CACHE COMES WARM (2026-10-27): each stage's data root links the tree's ONE shared app cache
 # (<build>/tests/.shadercache, tests/support/fresh_home.sh --warm's: linked under its lock, shared; the cache writes by
 # rename, so a link is never written through; its lock file never linked) - the row's law is the live graph's
@@ -35,6 +39,7 @@ seed_shaders() {   # seed_shaders <data root>
 run() {   # run <stage> <data root>
     sed -e "s#@STAGE@#$1#g" -e "s#@WORK@#$WORK#g" -e "s#@FIXTURE@#$FIXTURE#g" "$SCRIPT_IN" > "$WORK/$1.js"
     ( cd "$(dirname "$APP")" && env HOME="$WORK/home" XDG_CACHE_HOME="$WORK/home/.cache" \
+          __GL_SHADER_DISK_CACHE_PATH="$REAL_GLCACHE" \
           timeout -k 10 300 "$APP" --data-root "$2" --script "$WORK/$1.js" > "$WORK/$1.log" 2>&1 )
     local rc=$?
     grep -E '^ok:|assert failed' "$WORK/$1.log"
