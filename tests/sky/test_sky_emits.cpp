@@ -265,6 +265,34 @@ int main(int argc, char **argv) {
         CHECK(hidden.ground[0] == 0.0 && hidden.ground[1] == 0.0 && hidden.ground[2] == 0.0,
               "(5) a dome hidden under no World sky takes its reflection with it: the metal ground 0");
         doc->getRootNode()->removeChild(skyLight);
+        // (6) A DRAG, THEN A BACKDROP (the 10-3 read's F2): a Sky Light's intensity dragged frame by frame takes its
+        // captures ASYNC (the SH read back frames later), and a backdrop set on the frame after the drag photographs
+        // nothing - the SH read still in flight must die with it, or it lands the dragged sky's ambient under the
+        // backdrop. The ground (the matte one again) must be 0 and stay 0.
+        doc->skyType = iris::SkyType::SINGLE_COLOR;
+        groundMat->setBaseColor(QColor(128, 128, 128));
+        groundMat->setMetallicFactor(0.0f);
+        groundMat->setRoughnessFactor(1.0f);
+        skyLight->setVisible(true);
+        skyLight->skySource = iris::SkyLightSource::Sky;
+        skyLight->intensity = 1.0f;
+        doc->getRootNode()->addChild(skyLight);
+        Reading before, dragged;
+        const bool s8 = settle(before);
+        for (int k = 1; k <= 6; ++k) {
+            skyLight->intensity = 1.0f - 0.08f * float(k);
+            frame();
+        }
+        doc->skyLighting = false;
+        const bool s9 = settle(dragged);
+        doc->skyLighting = true;
+        std::printf("   GI off, a drag then a backdrop: the ground %.4f %.4f %.4f (before the drag %.4f %.4f %.4f)\n",
+                    dragged.ground[0], dragged.ground[1], dragged.ground[2], before.ground[0], before.ground[1],
+                    before.ground[2]);
+        CHECK(s8 && s9 && before.ground[2] > 4.0 * code, "premise: the drag's arms settle, the sky lighting the ground");
+        CHECK(dragged.ground[0] == 0.0 && dragged.ground[1] == 0.0 && dragged.ground[2] == 0.0,
+              "(6) a backdrop set right after a drag lights nothing: no SH read in flight lands the dragged sky's ambient");
+        doc->getRootNode()->removeChild(skyLight);
         QDir(dir).removeRecursively();
     }
     mirror.reset();

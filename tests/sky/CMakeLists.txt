@@ -84,4 +84,4 @@ jah_gpu_row(sky.emits_what_it_shows CLASS engine COMMAND test_sky_emits
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.emits_what_it_shows PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(sky.emits_what_it_shows PROPERTIES JAHSHAKA_TEST_FRAMES 37)
+set_tests_properties(sky.emits_what_it_shows PROPERTIES JAHSHAKA_TEST_FRAMES 52)
