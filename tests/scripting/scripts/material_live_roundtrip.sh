@@ -16,8 +16,9 @@ set -u
 APP="$1"; SCRIPT_IN="$2"; FIXTURE="$3"; WORK="$4"; ROW="$5"
 # THE DRIVER'S SHADER CACHE IS THE BOX'S (2026-10-27, the lead's tool line): the scratch XDG_CACHE_HOME below would move
 # the NVIDIA driver's disk cache into the fresh home - cold on every run (61-62 s at the 60 s cap) - and the row's law
-# is the live graph's persistence, never the driver's: the real home's GLCache, named before HOME is replaced
-REAL_GLCACHE="${__GL_SHADER_DISK_CACHE_PATH:-$HOME/.cache/nvidia/GLCache}"
+# is the live graph's persistence, never the driver's: the real home's cache, named before HOME is replaced (the
+# driver APPENDS "GLCache" to the path it is given: the value is the directory above it)
+REAL_GLCACHE="${__GL_SHADER_DISK_CACHE_PATH:-$HOME/.cache/nvidia}"
 # THE SHADER CACHE COMES WARM (2026-10-27): each stage's data root links the tree's ONE shared app cache
 # (<build>/tests/.shadercache, tests/support/fresh_home.sh --warm's: linked under its lock, shared; the cache writes by
 # rename, so a link is never written through; its lock file never linked) - the row's law is the live graph's

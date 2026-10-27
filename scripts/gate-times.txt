@@ -157,7 +157,7 @@ log.engine 15.75  quiet n=46
 log.engine.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 looks.engine 1.73  quiet n=43
 looks.engine_asan 9.59  quiet n=42
-material.live_roundtrip.author 26.40  solo, the card lock held, :72, warm (2026-10-27: the NVIDIA driver's disk cache pointed at the real home's GLCache - the scratch XDG_CACHE_HOME made it cold, 61-62 s at the cap; and its data roots seeded from the tree's shared app cache)
+material.live_roundtrip.author 27.00  solo, the card lock held, :72, warm (2026-10-27: the NVIDIA driver's disk cache pointed at the real home's .cache/nvidia (the driver appends GLCache) - the scratch XDG_CACHE_HOME made it cold, 61-62 s at the cap; and its data roots seeded from the tree's shared app cache)
 material.live_roundtrip.import 17.11  solo, the card lock held, :72, warm (2026-10-27: the shared app cache seeded)
 material.live_roundtrip.restore 13.12  solo, the card lock held, :72, warm (2026-10-27: the shared app cache seeded)
 materialpreview.engine 2.55  quiet n=46
