@@ -993,7 +993,7 @@ public:
             /// by the environment instead), the lists' size, and what answered the traced ones.
             quint64 escapeRecords = 0, escapeDropped = 0, escapeCapacity = 0, escapeTraced = 0;
             quint64 escapeCard = 0, escapeVoxel = 0, escapeDirect = 0, escapeFar = 0, escapeSky = 0;
-            quint64 escapeBack = 0, escapeNoSample = 0;
+            quint64 escapeBack = 0, escapeNoSample = 0, escapeSaturated = 0;
             /// THE PANE LIST'S OVERFLOW (RayQueryStatus::panesOverflow): reading rays that met more panes than
             /// they list, cumulative.
             quint64 panesOverflow = 0;

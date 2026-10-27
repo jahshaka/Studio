@@ -669,6 +669,7 @@ std::string Session::statusJson()
           << ",\"capacity\":" << rq.escapeCapacity << ",\"traced\":" << rq.escapeTraced << ",\"card\":" << rq.escapeCard
           << ",\"voxel\":" << rq.escapeVoxel << ",\"direct\":" << rq.escapeDirect << ",\"far\":" << rq.escapeFar
           << ",\"sky\":" << rq.escapeSky << ",\"back\":" << rq.escapeBack << ",\"noSample\":" << rq.escapeNoSample
+          << ",\"saturated\":" << rq.escapeSaturated
           << "}";
         o << ",\"panesOverflow\":" << rq.panesOverflow;
         // ...and THE RAY STRUCTURES (PHOTON-7 stage 6, one ray level per mesh): the near and far copies, the bottom

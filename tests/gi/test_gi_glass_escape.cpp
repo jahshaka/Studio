@@ -371,9 +371,17 @@ int main()
         const double d = pic[0].mean - pic[1].mean, c = oneCodeAt(pic[1].mean) + pic[1].mean / 1024.0;
         const double n = std::max(moved[0], moved[1]);
         std::printf("   THE BRIGHT SKY (2000), GLASS at alpha 0.5: the record %.6f against the fragment's environment term "
-                    "%.6f (%+.6f; the bar %.6f, the noise %.6f)\n", pic[0].mean, pic[1].mean, d, c, n);
-        check(pic[0].ok && pic[1].ok && pic[1].mean > 512.0 && std::fabs(d) <= n + c && rq.escapeTraced > 0ull,
+                    "%.6f (%+.6f; the bar %.6f, the noise %.6f); %llu adds saturated\n", pic[0].mean, pic[1].mean, d, c, n,
+                    rq.escapeSaturated);
+        check(pic[0].ok && pic[1].ok && pic[1].mean > 512.0 && std::fabs(d) <= n + c && rq.escapeTraced > 0ull &&
+                  rq.escapeSaturated == 0ull,
               "THE BRIGHT SKY: a miss reads the fragment's own environment term, unbounded (F11)");
+        sky(140000.0f);
+        settle();
+        const RayQueryStatus top = counts("THE SKY PAST THE TOP");
+        std::printf("   THE SKY PAST THE TOP (140000): %llu adds saturated\n", top.escapeSaturated);
+        check(top.escapeTraced > 0ull && top.escapeSaturated > 0ull,
+              "THE SKY PAST THE TOP: a pixel's sum past its fixed point's top saturates, counted (F11)");
         sky(0.5f);
     }
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);

@@ -3182,6 +3182,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.escapeSky      = quint64(rq.escapeSky);
         out.rayQuery.escapeBack     = quint64(rq.escapeBack);
         out.rayQuery.escapeNoSample = quint64(rq.escapeNoSample);
+        out.rayQuery.escapeSaturated = quint64(rq.escapeSaturated);
         for (const auto &v : rq.hitViews) {
             IEditorViewport::GiStatusInfo::RayQueryInfo::HitListView h;
             h.eyes = int(v.eyes);
