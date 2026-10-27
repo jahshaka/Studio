@@ -7,8 +7,26 @@
 # usage: shadow_casters.sh <cutout|twosided> <app> <script.js.in> <fixture.png> <workdir> <runs>
 set -u
 WHAT="$1"; APP="$2"; SCRIPT_IN="$3"; FIXTURE="$4"; WORK="$5"; RUNS="$6"
+# THE SHADER CACHE COMES WARM (2026-10-27, the same form as a fixture's WARM: tests/support/fresh_home.sh --warm): the
+# virgin data root links the tree's ONE shared app cache (<build>/tests/.shadercache, under its lock, shared; the cache
+# writes by rename, so a link is never written through; its lock file never linked) - the row's law is the cut-out's shadow, not
+# a cold boot's; cold, each boot compiled ~300 shaders (40 s) and the rows sat at their 60 s cap.
+seed_shaders() {   # seed_shaders <data root>
+    local shared
+    shared="$(cd "$(dirname "$APP")/.." && pwd)/tests/.shadercache"
+    [ -d "$shared" ] || return 0
+    mkdir -p "$1/shadercache"
+    (
+        flock -s -w 60 9 || exit 0
+        ( cd "$shared" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
+            mkdir -p "$1/shadercache/$(dirname "$f")"
+            ln "$shared/$f" "$1/shadercache/$f" 2>/dev/null || cp -p "$shared/$f" "$1/shadercache/$f" 2>/dev/null || true
+        done
+    ) 9>"$shared.lock"
+}
 rm -rf "$WORK"; mkdir -p "$WORK" || exit 1
 for i in $(seq 1 "$RUNS"); do
+    seed_shaders "$WORK/root$i"
     sed -e "s#@OUT@#$WORK/r$i#g" -e "s#@FIXTURE@#$FIXTURE#g" -e "s#@WHAT@#$WHAT#g" "$SCRIPT_IN" > "$WORK/r$i.js"
     ( cd "$(dirname "$APP")" && timeout -k 10 300 "$APP" --data-root "$WORK/root$i" --script "$WORK/r$i.js" \
           > "$WORK/r$i.log" 2>&1 )
