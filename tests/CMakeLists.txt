@@ -1094,7 +1094,6 @@ set(JAH_MEASURE_ROWS
     bundle.writer
     gpu.cutout_soak.primitives
     gpu.cutout_soak.tornado
-    gi.card_truth
     math.parity
     test_engine
 )

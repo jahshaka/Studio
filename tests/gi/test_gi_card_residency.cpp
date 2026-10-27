@@ -53,8 +53,8 @@
 //       channel) at most the largest |L_card - L_voxel| over the band face's hits - a reader's radiance moves by its
 //       albedo x its share of rays on the face x the face's move, both at most 1. The face's hits are the gather's own,
 //       frozen (gather.freezeFrame + gather.hitsReadback) with the camera on the +x wall behind the face, matched ray by
-//       ray across the two runs. THE CAUSE (gi.card_truth's table against the estimators' 128-ray truth): both caches'
-//       fixed 16-ray quadrature, the voxel side's single surface point the worse (-13 % red at the band face).
+//       ray across the two runs. THE CAUSE (measured 2026-10-26 against the card estimator at 128 rays): both caches'
+//       fixed 16-ray quadrature, the voxel side's single surface point the worse (-13 % at the band face).
 //       AND THE NO POP: at the held-out run's rest the card is let in, then held out again - no pixel moves more than 1
 //       code a frame through either. DECLARED RED FOR STAGE 8 (its no-pop law for a cache refinement): a card's writes
 //       move the readers' view-wide rest keys, so a held view drops to the settling EMA for as long as the rounds run
@@ -68,21 +68,6 @@
 // gi.card_residency (argv walk: the walk and the teleport - (1) (2) (3) (7)), gi.card_residency_pinned (the walk and the
 // pinned teleport - (6)), _crowded ((4)), _late (the teleport and the late reader - (5)), _held (the band card held in
 // and out, both runs AT B - (8)); every row checks (7)'s store at rest over its own runs.
-// gi.card_truth (THE SAME BINARY, argv truth; a `measure` row: run by 10-3 and at the ship) - THE TWO CACHES AGAINST
-// THE TRUTH: six teleport runs into room B (deterministic), at B's rest the gather frozen with its ray readback as in
-// (8): the band card held in / out and every card of B's +x wall held out (cards.force card 63), each at the tier's 16
-// rays and at the TRUTH's 128 (the door gi.truthRays: the cards' indirect gather and the voxel sides' gather - the
-// estimators' high-sample limit). Printed: THE TRUTH TABLE, each hit's answer against the card estimator at 128 rays,
-// per-ray mean error - at the band face (indirect only) the card at 16, the voxel at 16 and at 128; at the lamp-lit +x
-// wall the same. Measured (2026-10-26): the band face card16 +3/+3/+6 %, voxel16 -13/-7/-2 % (the voxel side's
-// single surface point and its 16 fixed directions: the optimisation list, the fix a side's rays over several points
-// of its surface, stratified), voxel128 -2/+3/+4 %; the wall card16 +2/+1/+1 %, voxel16 -7/-6/-3 %, voxel128
-// -8/-6/-3 % - A BIAS, not quadrature.
-//   (T1) THE INSTRUMENT: the six runs at rest, >= 100 band and >= 1000 wall hits matched, each answered by its run's
-//        intended source;
-//   (T2) THE VOXEL'S ANSWER AT A LIT WALL IS UNBIASED: at 128 rays within a code (1 %) of the truth, every channel -
-//        DECLARED RED FOR 10-3 (its cause to find and fix: the injection's coverage normalisation, its shadow march's
-//        start or self-occlusion, the store's rounding).
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -199,19 +184,16 @@ struct Run {
     /// pixel in one frame through each (display codes), and whether the picture came to rest again after each
     int popIn = -1, popOut = -1;
     bool popInRest = false, popOutRest = false;
-    /// (8)'s FACE HITS and gi.card_truth's: the frozen gather's rays that hit the band face (pillar 8's +x face) and room
-    /// B's +x wall, by the ray's index in the readback - what answered each (GatherRay::Source) and its radiance
+    /// (8)'s FACE HITS: the frozen gather's rays that hit the band face (pillar 8's +x face), by the ray's index in the
+    /// readback - what answered each (GatherRay::Source) and its radiance
     struct HitRay { unsigned char src = 0; float rgb[3] = { 0.f, 0.f, 0.f }; };
-    std::map<unsigned, HitRay> face, wall;
+    std::map<unsigned, HitRay> face;
     bool hitsOk = false;
 };
-/// gi.card_truth's runs: every run captures its hits (the residency row's held runs always do), and the +x wall's cards
-/// held absent (cards.force card 63) so its hits read the voxels
-static bool gCaptureHits = false, gWallHeldOut = false;
 /// gi.card_residency_held's runs start AT B (no room A, no move: (8)'s law needs the rest at B alone)
 static bool gStartAtB = false;
-/// the frames between turning the camera to the wall behind the band face and reading its hits (the truth table's 120)
-static int gCaptureWait = 8;
+/// the frames between turning the camera to the wall behind the band face and reading its hits
+static const int kCaptureWait = 8;
 /// (7)'s convex edge's Jacobi reference: the walk row's alone (64 frames the pinned row's walk does not need)
 static bool gEdgeReference = false;
 /// AT REST's frames (settle): the cache's own "owes nothing" (CardCacheStatus::readersHoldOwed false: the decision's
@@ -221,8 +203,6 @@ static bool gEdgeReference = false;
 static const int kQuiet = 2;
 /// THE WALK's frames from A to B (24 m; 120 before the rows' split - the law reads B's rest, not the walk's pace)
 static const int kWalkFrames = 60;
-/// gi.card_truth's TRUTH: the estimators at this many rays (gi.truthRays)
-static const unsigned kTruthRays = 128u;
 /// the edge's world point: the walk's cascade 0 cell 67,93,84 at B (the readback's, spikes/photon-7/stage10/10-2)
 static const float kEdgeWorld[3] = { 12.30f, 4.02f, 4.10f };
 
@@ -250,8 +230,6 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     // (8)'s ARMS: room B's pillar 8's +x face (its card 1, the band face the measurements found) HELD resident or absent
     if (holdCard && out.b.pillars.size() > 8u)
         e->setArm("cards.force", double(holdCard) * double(unsigned(out.b.pillars[8]) * 64u + 1u));
-    if (gWallHeldOut && out.b.walls.size() > 2u)   // (gi.card_truth: every card of B's +x wall held absent)
-        e->setArm("cards.force", -double(unsigned(out.b.walls[2].node) * 64u + 63u));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     const auto look = [&](float x) {
         enginetest::testCameraLookAt(view, Vec3(x, 1.7f, 2.5f), Vec3(x + 0.5f, 1.5f, -2.0f));
@@ -573,10 +551,10 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
             (phase == 0 ? out.popInRest : out.popOutRest) = quiet >= 30;
         }
     }
-    if ((holdCard || gCaptureHits) && out.b.pillars.size() > 8u) {
-        // THE FACE HITS ((8)'s bar, gi.card_truth's table): the gather frozen (one ray set, the same in every run) with its
-        // ray readback - first the view as it rests (room B's +x wall in it), then the camera on the +x wall behind pillar
-        // 8, whose probes' rays hit the band face; a ray is kept where a card or the voxels answered it on the surface
+    if (holdCard && out.b.pillars.size() > 8u) {
+        // THE FACE HITS ((8)'s bar): the gather frozen (one ray set, the same in every run) with its ray readback - first
+        // the view as it rests, then the camera on the +x wall behind pillar 8, whose probes' rays hit the band face; a ray
+        // is kept where a card or the voxels answered it on the surface
         e->setArm("gather.freezeFrame", 1.0);
         e->setArm("gather.hitsReadback", 1.0);
         const auto take = [&](bool faceToo) {
@@ -587,11 +565,10 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
                 Run::HitRay h;
                 h.src = r.source;
                 for (int c = 0; c < 3; ++c) h.rgb[c] = r.radiance[c];
-                const float fx = out.b.centre.x + 2.4f + 0.2f, fz = out.b.centre.z + 2.4f, wx = out.b.centre.x + 4.0f;
+                const float fx = out.b.centre.x + 2.4f + 0.2f, fz = out.b.centre.z + 2.4f;
                 if (faceToo && std::fabs(r.hitPos[0] - fx) < 0.03f && std::fabs(r.hitPos[2] - fz) < 0.2f &&
                     r.hitPos[1] > 0.0f && r.hitPos[1] < 3.5f && r.hitNormal[0] > 0.9f)
                     out.face[unsigned(i)] = h;
-                if (!faceToo && std::fabs(r.hitPos[0] - wx) < 0.03f && r.hitNormal[0] < -0.9f) out.wall[unsigned(i)] = h;
             }
             return !gs.rays.empty();
         };
@@ -599,14 +576,13 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         const bool okWall = take(false);
         enginetest::testCameraLookAt(view, Vec3(out.b.centre.x + 3.3f, 1.75f, out.b.centre.z + 0.6f),
                                      Vec3(out.b.centre.x + 4.0f, 1.75f, out.b.centre.z + 2.6f));
-        // (the frozen rays' readback is a few frames late; the held row reads the two runs' answers at one moment - the
-        // truth table waits for the caches to settle on the new view's demand)
-        run(gCaptureWait);
+        // (the frozen rays' readback is a few frames late; the held row reads the two runs' answers at one moment)
+        run(kCaptureWait);
         out.hitsOk = okWall && take(true);
         e->setArm("gather.hitsReadback", 0.0);
         e->setArm("gather.freezeFrame", 0.0);
     }
-    if (holdCard || gWallHeldOut) e->setArm("cards.force", 0.0);
+    if (holdCard) e->setArm("cards.force", 0.0);
     if (gEdgeReference && walk && !crowded && !pinTo && !gatherLate && out.edgeOk) {
         // (7)'s REFERENCE for the convex edge: the same placement re-solved by THE JACOBI DOOR (gi.bounceJacobi: every
         // cascade restarted from its direct term, every brick a pass a frame) - the fixed point by another path, the
@@ -646,10 +622,10 @@ int main(int argc, char **argv)
 {
     // THE ROW (one binary, one row a law group - each within the fixture's budget: the lead's ruling): walk = the walk
     // and the teleport, (1) (2) (3) (7); pinned = the walk and the pinned teleport, (6); crowded = (4); late = the
-    // teleport and the late reader, (5); held = the band card held in and out at B, (8); truth = gi.card_truth's table
+    // teleport and the late reader, (5); held = the band card held in and out at B, (8)
     const std::string mode = argc > 1 ? argv[1] : "walk";
-    if (mode != "walk" && mode != "pinned" && mode != "crowded" && mode != "late" && mode != "held" && mode != "truth") {
-        std::printf("FAIL: unknown row '%s' (walk | pinned | crowded | late | held | truth)\n", mode.c_str());
+    if (mode != "walk" && mode != "pinned" && mode != "crowded" && mode != "late" && mode != "held") {
+        std::printf("FAIL: unknown row '%s' (walk | pinned | crowded | late | held)\n", mode.c_str());
         return 1;
     }
     std::string err;
@@ -664,79 +640,6 @@ int main(int argc, char **argv)
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
 
-    // ---- gi.card_truth: THE TRUTH TABLE (the header's second half) --------------------------------------------------
-    if (mode == "truth") {
-        gCaptureHits = true;
-        gCaptureWait = 120;
-        Run r16in, r16out, r16wall, rTin, rTout, rTwall;
-        bool ok = runOnce(e, false, r16in, frames, false, 0, nullptr, +1);
-        ok = runOnce(e, false, r16out, frames, false, 0, nullptr, -1) && ok;
-        gWallHeldOut = true;
-        ok = runOnce(e, false, r16wall, frames) && ok;
-        gWallHeldOut = false;
-        e->setArm("gi.truthRays", double(kTruthRays));
-        ok = runOnce(e, false, rTin, frames, false, 0, nullptr, +1) && ok;
-        ok = runOnce(e, false, rTout, frames, false, 0, nullptr, -1) && ok;
-        gWallHeldOut = true;
-        ok = runOnce(e, false, rTwall, frames) && ok;
-        gWallHeldOut = false;
-        e->setArm("gi.truthRays", 0.0);
-        // the band card's own hits: the rays the held-out run's voxels answered
-        std::map<unsigned, Run::HitRay> b16in, b16out, bTin, bTout;
-        for (const auto &kv : r16out.face) {
-            if (kv.second.src != GatherRay::Voxel) continue;
-            if (!r16in.face.count(kv.first) || !rTin.face.count(kv.first) || !rTout.face.count(kv.first)) continue;
-            b16out[kv.first] = kv.second;
-            b16in[kv.first] = r16in.face.at(kv.first);
-            bTin[kv.first] = rTin.face.at(kv.first);
-            bTout[kv.first] = rTout.face.at(kv.first);
-        }
-        struct Err { unsigned n = 0, srcOk = 0; double mean[3] = { 0, 0, 0 }; };
-        const auto cmp = [](const std::map<unsigned, Run::HitRay> &a, const std::map<unsigned, Run::HitRay> &truth,
-                            unsigned char want) {
-            Err r;
-            for (const auto &kv : a) {
-                auto it = truth.find(kv.first);
-                if (it == truth.end() || it->second.src != GatherRay::Card) continue;
-                ++r.n;
-                r.srcOk += kv.second.src == want ? 1u : 0u;
-                for (int c = 0; c < 3; ++c)
-                    r.mean[c] += (double(kv.second.rgb[c]) - double(it->second.rgb[c])) /
-                                 std::max(double(it->second.rgb[c]), 5.9604645e-6);
-            }
-            for (int c = 0; c < 3; ++c) r.mean[c] = r.n ? 100.0 * r.mean[c] / double(r.n) : 0.0;
-            return r;
-        };
-        const Err bc16 = cmp(b16in, bTin, GatherRay::Card), bv16 = cmp(b16out, bTin, GatherRay::Voxel),
-                  bvT = cmp(bTout, bTin, GatherRay::Voxel);
-        const Err wc16 = cmp(r16in.wall, rTin.wall, GatherRay::Card), wv16 = cmp(r16wall.wall, rTin.wall, GatherRay::Voxel),
-                  wvT = cmp(rTwall.wall, rTin.wall, GatherRay::Voxel);
-        const auto row = [](const char *what, const Err &r) {
-            std::printf("   %-44s %5u rays (%5u by the intended source): %+7.2f %+7.2f %+7.2f %%\n", what, r.n, r.srcOk,
-                        r.mean[0], r.mean[1], r.mean[2]);
-        };
-        std::printf("   THE TRUTH TABLE (the per-ray mean error against the card estimator at %u rays, the band card held in):\n",
-                    kTruthRays);
-        row("BAND FACE (pillar 8 +x, indirect) card16", bc16);
-        row("BAND FACE voxel16", bv16);
-        row("BAND FACE voxel at the truth's rays", bvT);
-        row("+x WALL (lamp-lit) card16", wc16);
-        row("+x WALL voxel16 (its cards held absent)", wv16);
-        row("+x WALL voxel at the truth's rays", wvT);
-        const bool instrument = ok && bc16.n >= 100u && bc16.srcOk == bc16.n && bv16.srcOk == bv16.n && bvT.srcOk == bvT.n &&
-                                wc16.n >= 1000u && wc16.srcOk == wc16.n && wv16.srcOk == wv16.n && wvT.srcOk == wvT.n;
-        CHECK(instrument, "(T1) THE INSTRUMENT: six runs at rest, >= 100 band and >= 1000 wall hits matched, each answered by "
-                          "the source its run intends");
-        bool unbiased = instrument;
-        for (int c = 0; c < 3; ++c) unbiased = unbiased && std::fabs(wvT.mean[c]) <= 1.0;
-        // (DECLARED RED FOR 10-3 - the lead's ruling: a BIAS, not noise; its cause to find - the injection's coverage
-        // normalisation, its shadow march's start or self-occlusion, the store's rounding - and fix, measured here)
-        CHECK(unbiased, "(T2) THE VOXEL'S ANSWER AT A LIT WALL IS UNBIASED: at the truth's rays within a code (1 %) of the "
-                        "truth, every channel");
-        std::printf("\nframes %d\n%s (%d failure%s)\n", frames, failures ? "FAILED" : "PASSED", failures,
-                    failures == 1 ? "" : "s");
-        return failures ? 1 : 0;
-    }
     gEdgeReference = mode == "walk";
     Run w, t, c, l, pnd, hin, hout;
     bool okW = true, okT = true, okP = true, okC = true, okL = true, okHin = true, okHout = true;
@@ -966,8 +869,8 @@ int main(int argc, char **argv)
     //     both, and every reader texel's |delta L| at most the largest |L_card - L_voxel| over the band face's hits (a
     //     reader's radiance moves by its albedo x its share of rays on the face x the face's move, both at most 1). (Red
     //     with the voxel read along the RAY: 98 codes, the pillar's lit -z face read into its +x face; then 5.2 codes with
-    //     the read along the hit's normal - against a code, the bar before it was derived. The cause, gi.card_truth: both
-    //     caches' fixed 16-ray quadrature, the voxel side's single surface point -13 % red against the 128-ray truth.)
+    //     the read along the hit's normal - against a code, the bar before it was derived. The cause, measured against the
+    //     card estimator at 128 rays: both caches' fixed 16-ray quadrature, the voxel side's single surface point -13 %.)
     if (mode == "held") {
         const std::map<NodeId, int> idI = key(hin), idO = key(hout);
         std::map<std::pair<int, unsigned>, const CardRadiance *> inI, inO;

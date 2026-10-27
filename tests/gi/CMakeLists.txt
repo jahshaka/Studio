@@ -207,6 +207,27 @@ jah_gpu_row(gi.card_contact_lift CLASS engine COMMAND test_card_contact_lift
 set_tests_properties(gi.card_contact_lift PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(gi.card_contact_lift PROPERTIES JAHSHAKA_TEST_FRAMES 108)
+# gi.card_truth — THE TWO WORLD CACHES AGAINST THE ANALYTIC DIRECT AND A BRUTE-FORCE HEMISPHERE (PHOTON-7 stage 10-3,
+# R12): a lamp-lit wall read by a small patch - each cache's answer to a gather ray against the wall's closed-form
+# radiance toward it, and the patch card's gather against the same rays and a dense hemisphere traced on the CPU through
+# the fixture's boxes (test_gi_card_truth.cpp states the laws, the declared red and the red before the kD format fix).
+add_executable(test_gi_card_truth test_gi_card_truth.cpp)
+set_target_properties(test_gi_card_truth PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_card_truth PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_card_truth PRIVATE JahshakaEngine)
+add_dependencies(test_gi_card_truth JahshakaEngineMedia)
+jah_gpu_row(gi.card_truth CLASS engine COMMAND test_gi_card_truth
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_truth PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(gi.card_truth PROPERTIES JAHSHAKA_TEST_FRAMES 261)
 add_executable(test_sun_contact_acne test_sun_contact_acne.cpp)
 set_target_properties(test_sun_contact_acne PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -414,13 +435,10 @@ target_link_libraries(test_gi_card_residency PRIVATE JahshakaEngine)
 add_dependencies(test_gi_card_residency JahshakaEngineMedia)
 # ONE ROW A LAW GROUP (PHOTON-7 stage 10, the lead's ruling: each within the fixture's 10 s, every run the fewest frames
 # its law needs): gi.card_residency the walk and the teleport ((1) (2) (3) (7)), _pinned the history part (6), _crowded
-# the compaction (4), _late the late first reader (5), _held the band card held in and out at B (8); gi.card_truth the
-# two caches against the 128-ray truth - a `measure` row (JAH_MEASURE_ROWS: its table and its red for 10-3).
-foreach(_row walk pinned crowded late held truth)
+# the compaction (4), _late the late first reader (5), _held the band card held in and out at B (8).
+foreach(_row walk pinned crowded late held)
     if(_row STREQUAL "walk")
         set(_name gi.card_residency)
-    elseif(_row STREQUAL "truth")
-        set(_name gi.card_truth)
     else()
         set(_name gi.card_residency_${_row})
     endif()
@@ -434,7 +452,6 @@ set_tests_properties(gi.card_residency_pinned PROPERTIES JAHSHAKA_TEST_FRAMES 77
 set_tests_properties(gi.card_residency_crowded PROPERTIES JAHSHAKA_TEST_FRAMES 399)
 set_tests_properties(gi.card_residency_late PROPERTIES JAHSHAKA_TEST_FRAMES 669)
 set_tests_properties(gi.card_residency_held PROPERTIES JAHSHAKA_TEST_FRAMES 943)
-set_tests_properties(gi.card_truth PROPERTIES JAHSHAKA_TEST_FRAMES 5012)
 
 # gi.gather_sliver (PHOTON-7 stage 10) — THE GRID ANSWERS EVERY PIXEL: a 1-px sliver of a wall seen past two black
 # plates (between them, and at the view's edge) is answered by a probe on every settling frame, its noise within the
