@@ -785,6 +785,29 @@ endforeach()
 set_tests_properties(gi.glass_pass PROPERTIES JAHSHAKA_TEST_FRAMES 328)
 set_tests_properties(gi.glass_pass_noray PROPERTIES JAHSHAKA_TEST_FRAMES 201)
 
+# gi.glass_escape (PHOTON-7 10-4, the R4 carry, design (D); L9) — A BLENDED PANE'S REFLECTION OF WHAT LIES BEYOND THE VOXEL
+# CHAIN IS WHAT IS THERE: a metal mirror pane in a black world turned onto an emissive wall 120 m out (past the outermost
+# cascade); Blend, Glass and Refractive at alpha 1 against the same pane opaque (the traced reflection's answer), and the
+# stacked-glass limit measured (test_gi_glass_escape.cpp says the laws; red before (D): the blended pane's escapes read the
+# black environment). A fixture, the ray tier.
+add_executable(test_gi_glass_escape test_gi_glass_escape.cpp)
+set_target_properties(test_gi_glass_escape PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_glass_escape PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_glass_escape PRIVATE JahshakaEngine)
+add_dependencies(test_gi_glass_escape JahshakaEngineMedia)
+jah_gpu_row(gi.glass_escape CLASS engine COMMAND test_gi_glass_escape
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.glass_escape PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.glass_escape PROPERTIES JAHSHAKA_TEST_FRAMES 713)
+
 # gi.photon_window (PHOTON-7 10-4, item 2; L9) — A WINDOW PASSES THE LIGHT ITS MATERIAL PASSES, ON EVERY PATH: gi.sealed_sky's
 # room with a 1 m pane in its roof (Glass / Blend / Refractive at alpha 0.1) against a hole, under a white sky and a sun
 # through the opening; every reader (the sun patch, the room's diffuse and the mirror's specular in the pixel, the cards, the
