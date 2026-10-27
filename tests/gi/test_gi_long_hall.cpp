@@ -11,6 +11,10 @@
 // sky: what a sky-lit face of this albedo reads). The exact answer is 0: no path from the sky reaches the inside.
 // RED before: 13.2 codes of R, 366,970 texels of the 80 inner-face cards holding light - their rays along the hall's
 // length stopped at the reach and read the sky.
+// "noray" (gi.long_hall_noray; R4 (a)): a sealed HANGAR 300 m on every side (1 m slabs), wider than the whole voxel
+// chain in every direction, at the no-ray tier; the camera inside looking at the floor. (2) No pixel reads one code of
+// R. RED before: 215.8 codes, the mean 0.455 - every voxel ray that left the chain inside the world read the sky; an
+// escape is the sky only past the world's exit now (jah_voxel_ray.glsl's jahEscapeIsExit).
 // A fixture (the engine alone, one 128 x 128 offscreen view; 10 s budget). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -49,13 +53,16 @@ NodeId box(Scene *s, const Vec3 &at, const Vec3 &size)
 }
 }   // namespace
 
-int main(int, char **)
+int main(int argc, char **argv)
 {
+    const std::string mode = argc > 1 ? argv[1] : "ray";
+    if (mode != "ray" && mode != "noray") { std::printf("FAIL: the mode is ray or noray, not '%s'\n", mode.c_str()); return 2; }
+    const bool noray = mode == "noray";
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-long-hall-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->setRayTracing(true);
+    e->setRayTracing(mode == "ray");
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
@@ -63,6 +70,7 @@ int main(int, char **)
     Scene *s = e->createScene("long_hall");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);
+    if (mode == "noray") s->setRayTracing(RayTracingMode::Off);
     {
         PostFxDesc fx;
         fx.allowOffscreen = true;
@@ -73,7 +81,11 @@ int main(int, char **)
     float sh[27] = { 0 };
     sh[0] = sh[1] = sh[2] = 1.0f;   // a uniform white sky of radiance 1
     s->setAmbientSh(sh);
-    const float hx = 5.0f, hz = 120.0f, hy = 5.0f, t = 0.4f;
+    // ray: a hall 10 x 5 x 240 m (longer than the cards' reach); noray: a HANGAR 300 m on every side, 1 m slabs - wider
+    // than the whole chain (High's outermost box is 120 m) in every direction, so the voxel rays leave the chain inside
+    // the world everywhere
+    const float hx = noray ? 150.0f : 5.0f, hz = noray ? 150.0f : 120.0f, hy = noray ? 300.0f : 5.0f,
+                t = noray ? 1.0f : 0.4f;
     // the six slabs, every joint overlapped; each one's INNER face by its card bucket (2 x axis + negative)
     struct Face { NodeId node; unsigned bucket; const char *name; };
     std::vector<Face> inner;
@@ -85,7 +97,14 @@ int main(int, char **)
     const NodeId endNear = box(s, Vec3(0.0f, 0.5f * hy, hz + 0.5f * t), Vec3(2.0f * hx + 2.0f * t, hy + 2.0f * t, t));
     inner = { { floorN, 2u, "the floor" }, { roofN, 3u, "the roof" }, { wallL, 0u, "the left wall" },
               { wallR, 1u, "the right wall" }, { endFar, 4u, "the far end" }, { endNear, 5u, "the near end" } };
-    enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, hz - 10.0f), Vec3(0.0f, 2.0f, -hz));
+    // ray: inside near one end looking down the length (the cards of the whole hall resident); noray: 40 m from the
+    // near end looking AT it - every surface in view inside the chain (a start the chain does not hold keeps the sky at
+    // the no-ray tier: its estimator limit, R4 (b)), its rays down the hall's length leaving the chain long before the
+    // world
+    if (mode == "noray")
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 6.0f, 0.0f), Vec3(0.0f, 0.0f, -8.0f));
+    else
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, hz - 10.0f), Vec3(0.0f, 2.0f, -hz));
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
@@ -104,6 +123,28 @@ int main(int, char **)
         admitted = g.cards.admitted;
         quiet = (!g.cascades.empty() && !g.chainOwed && !g.feedbackOwed && !g.ifdWorking && cardsStill) ? quiet + 1 : 0;
         if (quiet >= 30) { rest = f - quiet; break; }
+    }
+    if (mode == "noray") {
+        // THE NO-RAY TIER (R4 (a)): the picture inside at rest - the voxel rays' escapes along the hall
+        ImageF pic;
+        double peak = 0.0, sum = 0.0;
+        size_t n = 0;
+        if (view->readPixelsHdr(pic))
+            for (unsigned y = 0; y < pic.height; ++y)
+                for (unsigned x = 0; x < pic.width; ++x) {
+                    const Colour c = pic.at(x, y);
+                    const double v = std::max(c.r, std::max(c.g, c.b));
+                    peak = std::max(peak, v);
+                    sum += v;
+                    ++n;
+                }
+        const double R = double(kAlbedo), bar = R / 255.0;
+        std::printf("   noray: at rest after %d frames; the picture's brightest %.6f (%.3f codes of R), mean %.6f\n", rest,
+                    peak, peak / bar, n ? sum / double(n) : 0.0);
+        CHECK(rest >= 0, "the hall comes to rest");
+        CHECK(peak <= bar, "(2) at the no-ray tier no pixel inside the sealed hall reads one code of R");
+        std::printf("\ngi.long_hall (noray): %d frames, %d failure(s)\n", frames, failures);
+        return failures ? 1 : 0;
     }
     std::vector<CardRadiance> all;
     unsigned long long cacheFrame = 0ull;

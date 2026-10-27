@@ -802,9 +802,12 @@ target_compile_definitions(test_gi_long_hall PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_long_hall PRIVATE JahshakaEngine)
 add_dependencies(test_gi_long_hall JahshakaEngineMedia)
-jah_gpu_row(gi.long_hall CLASS engine FRAMES 510 COMMAND test_gi_long_hall
+jah_gpu_row(gi.long_hall CLASS engine FRAMES 510 COMMAND test_gi_long_hall ray
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.long_hall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+jah_gpu_row(gi.long_hall_noray CLASS engine FRAMES 510 COMMAND test_gi_long_hall noray
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.long_hall_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
 # gi.sealed_sky (PHOTON-7 stage 10; L9) — THE SKY CANNOT LIGHT A SEALED ROOM, on every store that carries it: a closed box
 # under a uniform sky at High and Epic, its control the roof (test_gi_sealed_sky.cpp says the laws; red on the base: the
