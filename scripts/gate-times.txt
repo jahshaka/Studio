@@ -205,7 +205,7 @@ samples.cleanstart.World_Background 55.08  quiet n=46
 samples.cold_open 47.34  solo, the card lock held, :72, COLD (URGENT #48 follow-up, the lead's ruling (b), 2026-10-24: Showroom 2 from a virgin home on a cold shader cache - 331 shaders, 15 UI-thread stalls, the longest 10.6 s)
 samples.mirror_room_boots.boot1 30.85  solo, the card lock held, :81, WARM (PHOTON-7 stage 11, 2026-10-27: the data root virgin, the shader cache warm - the lead's ruling; was 31.75 cold, 2026-10-20)
 samples.mirror_room_boots.boot2 26.02  solo, the card lock held, :81, WARM (PHOTON-7 stage 11, 2026-10-27: the data root virgin, the shader cache warm; was 32.06 cold, 2026-10-20)
-scale.cpu_walks 15.07  quiet n=46
+scale.cpu_walks 34.63  solo, the card lock held, :72, load 4.3 (PHOTON-7 10-3, 2026-10-27, the lead's re-price: the measured quiet run after the six walk fixes and the churn fix - the 10k world's remainders on the perf-audit list; before: 15.07 quiet n=46)
 scene.reopen_fidelity 47.36  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 scene.reopen_fidelity.high_sky 39.53  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
 scene.reopen_fidelity.high_sky.fresh_home 0.02  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
