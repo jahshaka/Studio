@@ -270,7 +270,7 @@ QVector<VerbInfo> AppApi::verbs() const
           Needs::Engine },
         { "asyncShaders", "app.asyncShaders() -> {policy, active, running, threads, pending, completed, "
                           "failed, placeholderDraws, pendingSkips, captureDeferredDraws, compiledInBackground, "
-                          "paramsMisfits}",
+                          "paramsMisfits, compileErrors}",
           "THE BACKGROUND SHADER COMPILER (ASYNC-SHADERS-1). After a project is open the editor's "
           "view never waits for a shader: a permutation it has not built yet goes to the engine's "
           "compile service (its own low-priority threads) and the object draws with a neutral grey "
@@ -288,7 +288,9 @@ QVector<VerbInfo> AppApi::verbs() const
           "compiledInBackground counts shaders compiled on the service's threads, which is why they "
           "are not live compiles (app.shaderCache().liveCompiles). paramsMisfits counts compute "
           "dispatches the engine REFUSED because a pipeline's parameters did not fit its program - "
-          "0 on a sound build.",
+          "0 on a sound build. compileErrors counts program loads, of every shader of the process, that "
+          "FAILED to compile (the engine logs and survives one: a compute job whose shader fails never "
+          "runs) - 0 on a sound build.",
           Needs::Engine },
         { "setAsyncShaders", "app.setAsyncShaders(on) -> app.asyncShaders()",
           "Turns the background compile policy on or off for this session (see app.asyncShaders). A "
@@ -1033,6 +1035,7 @@ QVariantMap AppApi::asyncShaders()
     m["captureDeferredDraws"] = QVariant::fromValue(qulonglong(s.captureDeferredDraws));
     m["compiledInBackground"] = s.compiledInBackground;
     m["paramsMisfits"]        = QVariant::fromValue(qulonglong(s.paramsMisfits));
+    m["compileErrors"]        = QVariant::fromValue(qulonglong(s.compileErrors));
     return m;
 }
 
