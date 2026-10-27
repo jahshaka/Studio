@@ -10,6 +10,8 @@
 // each such lamp's term is multiplied by ONE ray from the pixel to it (the fork's hook custom_ps_fwdplus_lamp,
 // JahLampRay_piece_ps.any): the ray tier's TLAS, by its device address.
 //
+// THE MIRROR PILLAR (R9 (2)): a metal pillar inside, its reflection the inside walls - ray hits, decoded with the WORLD
+// lamp list, each lamp traced from the hit (the hit's Forward+ cell deleted): the pillar's pixels are in the law below.
 // THE LAW (argv[1]: "ray" the ray tier at High), from the HDR readback (linear radiance), the inside view at rest:
 //   (0) THE CONTROL - the box's +z wall hidden (an opening), the same lamps light the floor and the back wall inside:
 //       the brightest channel's mean over the picture's middle half is R, over a code;
@@ -77,6 +79,7 @@ int main(int argc, char **argv)
         PostFxDesc fx;
         fx.allowOffscreen = true;
         fx.hdrReadback = true;
+        fx.ssr = 1;   // the reflections: the mirror pillar's hits are decoded (their lamps traced from the hit)
         view->setPostFx(fx);
     }
     PbrParams matte;
@@ -91,6 +94,18 @@ int main(int argc, char **argv)
     box(scene, Vec3(0.0f, 1.5f, -2.2f), Vec3(4.8f, 3.0f, 0.4f), wall);                  // -z
     const NodeId front = box(scene, Vec3(0.0f, 1.5f, 2.2f), Vec3(4.8f, 3.0f, 0.4f), wall);   // +z (the control's opening)
     if (!front) { std::printf("FAIL: the box\n"); return 1; }
+    // THE MIRROR PILLAR inside, in the picture's middle (R9 (2)): its reflection is the inside walls - ray HITS, whose
+    // lamps the hit decode shades from the world list, each traced from the hit
+    {
+        PbrParams mirror;
+        mirror.albedo = Colour(0.95f, 0.95f, 0.95f);
+        mirror.metalness = 1.0f;
+        mirror.roughness = 0.05f;
+        if (!box(scene, Vec3(0.0f, 1.0f, -0.6f), Vec3(0.5f, 2.0f, 0.5f), scene->createPbrMaterial(mirror))) {
+            std::printf("FAIL: the pillar\n");
+            return 1;
+        }
+    }
     // SEVENTEEN LAMPS on a ring 5 m out, at the room's mid height (lamp 0 with castShadows off)
     for (int k = 0; k < 17; ++k) {
         const float a = 6.2831853f * float(k) / 17.0f;
