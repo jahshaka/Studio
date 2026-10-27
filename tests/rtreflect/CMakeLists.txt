@@ -86,6 +86,27 @@ set_tests_properties(rtreflect.far_record PROPERTIES ENVIRONMENT "QT_QPA_PLATFOR
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(rtreflect.far_record PROPERTIES JAHSHAKA_TEST_FRAMES 66)
 
+# rtreflect.pane_record (PHOTON-7 10-4 fix round, the one read's F6) — A REFLECTION'S RECORD SEEN THROUGH GLASS IS SHADED
+# THROUGH IT: a mirror's far block (a record) behind a glass slab shows T of the block's light (test_pane_record.cpp says
+# the law; red on the base: a record behind a pane was no sample). 256x144, 121 frames.
+add_executable(test_pane_record test_pane_record.cpp)
+set_target_properties(test_pane_record PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_pane_record PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_pane_record PRIVATE JahshakaEngine)
+add_dependencies(test_pane_record JahshakaEngineMedia)
+jah_gpu_row(rtreflect.pane_record CLASS engine COMMAND test_pane_record
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(rtreflect.pane_record PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(rtreflect.pane_record PROPERTIES JAHSHAKA_TEST_FRAMES 121)
+
 # rtreflect.tilted_normal (PHOTON-7 stage 6, READ_B finding 6) — A SHADING NORMAL FAR FROM THE SURFACE NEVER VOIDS THE
 # FOLD: a mirror floor whose vertex normals tilt 70 degrees still reflects the wall its drawn plane faces (the geometric
 # normal falls back to the shading one only where the depth's reconstruction fails), against the untilted control.
