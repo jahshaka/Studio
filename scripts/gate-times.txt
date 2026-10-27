@@ -254,6 +254,7 @@ shader.async_after_open.seed 28.22  solo 2026-10-20 (TOOLING-7: the seed-MAKING 
 shadercache.app 51.38  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
 shadergraph.emitter_parity 3.14  quiet n=47
 shadow.cutout_caster 52.10  median of 3, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+shadow.pane_lamp 1.5  the card lock held, :74, warm, by hand (PHOTON-7 10-4 R8 (2) 2026-10-27: a point lamp and a spot, the hole, a glass and an opaque pane; 25 frames)
 shadow.second_directional 1.51  the card lock held, :74, warm (PHOTON-7 10-4 R8 (3) 2026-10-27: a post under the sun and a secondary directional, three arms; 13 frames)
 shell.contract 0.00  ship 3a0422b4e (2026-10-13)
 shortcuts.registry 0.00  ship 3a0422b4e (2026-10-13)
