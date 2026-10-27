@@ -17,7 +17,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 # left by an older build carries an older schema — the app's reset keeps the storages, wants their sidecar directory, an
 # older AssetStore has none, and the library is REFUSED (exit 4): "--dump-api-docs exited 4" on main's build-linux, green
 # in a fresh ship tree. A row owns its own state (the same fault as shadercache.app, 67cefee33).
-jah_fresh_home_fixture(api.contract.fresh_home api_contract_home "${_home}" LABELS "scripting")
+jah_fresh_home_fixture(api.contract.fresh_home api_contract_home "${_home}" WARM LABELS "scripting")
 jah_ship_row(api.contract.fresh_home)   # a ship row's setup runs in the ship set too
 add_test(NAME api.contract
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/api_contract.sh"

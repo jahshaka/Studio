@@ -415,7 +415,7 @@ configure_file(scripts/e2e_one_asset.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_a
 # "one animation row"), and a home that persists across gates accumulates a
 # second copy of everything.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_asset)
-jah_fresh_home_fixture(scripting.e2e.one_asset.fresh_home one_asset_home "${_home}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.one_asset.fresh_home one_asset_home "${_home}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.one_asset
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js --headless
@@ -435,7 +435,7 @@ set_tests_properties(scripting.e2e.one_asset PROPERTIES
 # A FRESH home per run: it asserts exact tile sets.
 configure_file(scripts/e2e_tray_panel.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tray_panel)
-jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" LABELS scripting)
+jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" WARM LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
 jah_gpu_row(scripting.e2e.tray_panel SHIP CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
@@ -711,7 +711,7 @@ file(MAKE_DIRECTORY ${_mbHome}/run)
 set(SHARE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_share.jbundle)
 configure_file(scripts/e2e_material_share.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js @ONLY)
 set(_msHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share)
-jah_fresh_home_fixture(scripting.e2e.material_share.fresh_home materialShareHome "${_msHome}" ARGS --rm "${SHARE_PATH}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.material_share.fresh_home materialShareHome "${_msHome}" WARM ARGS --rm "${SHARE_PATH}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_msHome}/run)
 add_test(NAME scripting.e2e.material_share
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js --headless
@@ -726,7 +726,7 @@ set_tests_properties(scripting.e2e.material_share PROPERTIES
 configure_file(scripts/e2e_material_share_import.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js @ONLY)
 set(_msiHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share_import)
-jah_fresh_home_fixture(scripting.e2e.material_share_import.fresh_home materialShareImportHome "${_msiHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.material_share_import.fresh_home materialShareImportHome "${_msiHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_msiHome}/run)
 add_test(NAME scripting.e2e.material_share_import
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
@@ -752,7 +752,7 @@ file(MAKE_DIRECTORY ${_mbiHome}/run)
 # Document verbs only -> --headless. A FRESH HOME, because the load-bearing
 # first assertion is that NOTHING is seeded until a preset is used.
 set(_paHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_apply)
-jah_fresh_home_fixture(scripting.e2e.preset_apply.fresh_home presetApplyHome "${_paHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.preset_apply.fresh_home presetApplyHome "${_paHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_paHome}/run)
 add_test(NAME scripting.e2e.preset_apply
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
@@ -956,7 +956,7 @@ set_tests_properties(scripting.e2e.resize_rest.b scripting.e2e.resize_rest.c PRO
 # window holds, the settle after its last GI write; a window that never holds fails). A fresh home (its own data root:
 # the verb writes its TSV there). 31 frames of move, 2 x 120 window frames, the 5-frame bridge.
 set(_wsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_stillness)
-jah_fresh_home_fixture(scripting.e2e.world_stillness.fresh_home worldStillnessHome "${_wsHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.world_stillness.fresh_home worldStillnessHome "${_wsHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_wsHome}/run)
 jah_gpu_row(scripting.e2e.world_stillness CLASS app TIER epic NEEDS photon FRAMES 276
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_stillness.js
@@ -971,7 +971,7 @@ set_tests_properties(scripting.e2e.world_stillness PROPERTIES
 # the shot at once (its own view the cards' only reader). RED before the fix: the cards' demand window held open by a
 # reader whose clock froze after one graze, the shot at its 2,002-frame cap. 240 frames, the rest, the shot's settle.
 set(_ctsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-change_then_shot)
-jah_fresh_home_fixture(scripting.e2e.change_then_shot.fresh_home changeThenShotHome "${_ctsHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.change_then_shot.fresh_home changeThenShotHome "${_ctsHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_ctsHome}/run)
 jah_gpu_row(scripting.e2e.change_then_shot CLASS app TIER epic NEEDS photon FRAMES 400
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js
@@ -987,7 +987,7 @@ set_tests_properties(scripting.e2e.change_then_shot PROPERTIES
 # second shot (a new D32 written only by its render-pass clear, loaded read-only by the next pass; the script says the
 # whole cause). 2 x (12 + 120) frames and the shots' settles; a device loss exits 3 and fails the row.
 set(_spcHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-second_project_capture)
-jah_fresh_home_fixture(scripting.e2e.second_project_capture.fresh_home secondProjectCaptureHome "${_spcHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.second_project_capture.fresh_home secondProjectCaptureHome "${_spcHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_spcHome}/run)
 jah_gpu_row(scripting.e2e.second_project_capture CLASS app TIER epic NEEDS photon FRAMES 600
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_second_project_capture.js
@@ -1002,7 +1002,7 @@ set_tests_properties(scripting.e2e.second_project_capture PROPERTIES
 # and equals, to the code, a shot of the scene stopped and posed at the same document time. 60 + 37 + 10 frames and the
 # two shots' settles.
 set(_psHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-paused_shot)
-jah_fresh_home_fixture(scripting.e2e.paused_shot.fresh_home pausedShotHome "${_psHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.paused_shot.fresh_home pausedShotHome "${_psHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_psHome}/run)
 jah_gpu_row(scripting.e2e.paused_shot CLASS app TIER epic NEEDS photon FRAMES 400
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js
