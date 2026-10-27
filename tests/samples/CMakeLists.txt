@@ -74,7 +74,9 @@ jah_gpu_row(samples.cold_open CLASS app TIER document
 set_tests_properties(samples.cold_open PROPERTIES
     ENVIRONMENT "HOME=${_chome};JAHSHAKA_DATA_ROOT=${_chome}/.local/share/Jahshaka"
     LABELS "scripting"
-    TIMEOUT 60)
+    TIMEOUT 60
+    # the owner's cold first run is the subject: source.testing_rules R13 lets this root boot cold
+    JAHSHAKA_COLD_BY_SUBJECT TRUE)
 # (its frames, counted once in a scratch tree off the tip with a per-process renderOneFrame counter, never committed:
 # 706 - the startup gate's 523 and the open's and the script's 120 among them)
 set_property(TEST samples.cold_open PROPERTY JAHSHAKA_TEST_FRAMES 706)

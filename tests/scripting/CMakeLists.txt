@@ -192,7 +192,9 @@ jah_gpu_row(scripting.e2e.sky_swap_transient SHIP CLASS app TIER epic NEEDS phot
 set_tests_properties(scripting.e2e.sky_swap_transient PROPERTIES
     ENVIRONMENT "HOME=${_sstHome};JAHSHAKA_DATA_ROOT=${_sstHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED skySwapTransientFreshHome
-    LABELS "scripting" TIMEOUT 60)
+    LABELS "scripting" TIMEOUT 60
+    # the cold path is the subject (above): source.testing_rules R13 lets this root boot cold
+    JAHSHAKA_COLD_BY_SUBJECT TRUE)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.
