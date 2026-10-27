@@ -822,6 +822,8 @@ foreach(_light sun sky)
 endforeach()
 set_tests_properties(gi.photon_window PROPERTIES JAHSHAKA_TEST_FRAMES 368)
 set_tests_properties(gi.photon_window_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)
+set_tests_properties(gi.photon_window_sky PROPERTIES JAHSHAKA_TEST_FRAMES 329)
+set_tests_properties(gi.photon_window_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)
 
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm

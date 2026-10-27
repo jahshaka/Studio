@@ -100,7 +100,7 @@ add_dependencies(test_shadow_second_directional JahshakaEngineMedia)
 jah_gpu_row(shadow.second_directional CLASS engine COMMAND test_shadow_second_directional
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.second_directional PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 13)
 
 # shadow.pane_lamp (PHOTON-7 10-4, R8 (2); L9) — A LAMP'S SHADOW THROUGH A PANE IS THE PANE'S TRANSMITTANCE: a point lamp and a
 # spot above a floor, a horizontal pane between; the floor under a glass pane at alpha 0.5 reads (1 - alpha) x the hole's,
@@ -120,4 +120,4 @@ add_dependencies(test_shadow_pane_lamp JahshakaEngineMedia)
 jah_gpu_row(shadow.pane_lamp CLASS engine COMMAND test_shadow_pane_lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.pane_lamp PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 25)
