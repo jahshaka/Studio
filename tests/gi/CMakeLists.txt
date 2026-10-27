@@ -762,6 +762,30 @@ set_tests_properties(gi.voxel_ray_wall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.voxel_ray_wall PROPERTIES JAHSHAKA_TEST_FRAMES 93)
 
+# gi.sealed_hall / gi.sealed_hall_noray (PHOTON-7 stage 10-3, R3; L9: a sky read with no visibility is light through a
+# wall) - A SEALED HALL WIDER THAN THE FIELD'S WINDOW IS DARK INSIDE in every frame from the GI's build to rest, an area
+# light over its roof and the sky outside (test_gi_sealed_hall.cpp says the laws). RED before: the ray tier's integrate
+# fell back to the environment's diffuse past the field's window; the no-ray tier's first frames took the environment
+# and an unshadowed area light. One row a tier. A fixture.
+add_executable(test_gi_sealed_hall test_gi_sealed_hall.cpp)
+set_target_properties(test_gi_sealed_hall PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_sealed_hall PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_sealed_hall PRIVATE JahshakaEngine)
+add_dependencies(test_gi_sealed_hall JahshakaEngineMedia)
+jah_gpu_row(gi.sealed_hall CLASS engine FRAMES 430 COMMAND test_gi_sealed_hall ray
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sealed_hall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+jah_gpu_row(gi.sealed_hall_noray CLASS engine FRAMES 430 COMMAND test_gi_sealed_hall noray
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.sealed_hall_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.sealed_sky (PHOTON-7 stage 10; L9) — THE SKY CANNOT LIGHT A SEALED ROOM, on every store that carries it: a closed box
 # under a uniform sky at High and Epic, its control the roof (test_gi_sealed_sky.cpp says the laws; red on the base: the
 # card relight's sixteen-cone sky share passed the walls, 10-0's P1). A fixture. 10-3 item 1: the pixel's diffuse and
