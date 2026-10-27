@@ -14,6 +14,24 @@
 # usage: material_live_roundtrip.sh <app> <script.js.in> <fixture.png> <workdir> <author|import|restore>
 set -u
 APP="$1"; SCRIPT_IN="$2"; FIXTURE="$3"; WORK="$4"; ROW="$5"
+# THE SHADER CACHE COMES WARM (2026-10-27): each stage's data root links the tree's ONE shared app cache
+# (<build>/tests/.shadercache, tests/support/fresh_home.sh --warm's: linked under its lock, shared; the cache writes by
+# rename, so a link is never written through; its lock file never linked) - the row's law is the live graph's
+# PERSISTENCE, and the PIECE cache it empties (ShaderPieces) is another store. Cold, the author boot compiled 297
+# shaders (43 s) and the row crossed its 60 s cap.
+seed_shaders() {   # seed_shaders <data root>
+    local shared
+    shared="$(cd "$(dirname "$APP")/.." && pwd)/tests/.shadercache"
+    [ -d "$shared" ] || return 0
+    mkdir -p "$1/shadercache"
+    (
+        flock -s -w 60 9 || exit 0
+        ( cd "$shared" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
+            mkdir -p "$1/shadercache/$(dirname "$f")"
+            ln "$shared/$f" "$1/shadercache/$f" 2>/dev/null || cp -p "$shared/$f" "$1/shadercache/$f" 2>/dev/null || true
+        done
+    ) 9>"$shared.lock"
+}
 run() {   # run <stage> <data root>
     sed -e "s#@STAGE@#$1#g" -e "s#@WORK@#$WORK#g" -e "s#@FIXTURE@#$FIXTURE#g" "$SCRIPT_IN" > "$WORK/$1.js"
     ( cd "$(dirname "$APP")" && env HOME="$WORK/home" XDG_CACHE_HOME="$WORK/home/.cache" \
@@ -27,6 +45,7 @@ run() {   # run <stage> <data root>
 case "$ROW" in
 author)
     rm -rf "$WORK"; mkdir -p "$WORK/home/.cache" || exit 1
+    seed_shaders "$WORK/root-a"
     run author "$WORK/root-a"
     [ -d "$WORK/root-a/ShaderPieces" ] || { echo "FAIL: the author stage wrote no piece cache under its data root"; exit 1; }
     rm -rf "$WORK/root-a/ShaderPieces"
@@ -58,6 +77,7 @@ PYEOF
     rm -rf "$WORK/root-a.bak"
     echo "material.live_roundtrip: restore PASS"; exit 0
 fi
+seed_shaders "$WORK/root-b"
 run import "$WORK/root-b"
 python3 - "$WORK" <<'EOF'
 import sys

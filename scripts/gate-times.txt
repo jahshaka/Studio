@@ -155,9 +155,9 @@ log.engine 15.75  quiet n=46
 log.engine.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 looks.engine 1.73  quiet n=43
 looks.engine_asan 9.59  quiet n=42
-material.live_roundtrip.author 39.27  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
-material.live_roundtrip.import 21.17  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
-material.live_roundtrip.restore 12.48  solo, the card lock held, :74 (TEST-CUT-1 stage 3, 2026-10-20)
+material.live_roundtrip.author 29.60  solo, the card lock held, :72, warm (2026-10-27: its data roots seeded from the tree's shared app cache - cold it compiled 297 shaders, 43 s, and crossed the 60 s cap)
+material.live_roundtrip.import 17.11  solo, the card lock held, :72, warm (2026-10-27: the shared app cache seeded)
+material.live_roundtrip.restore 13.12  solo, the card lock held, :72, warm (2026-10-27: the shared app cache seeded)
 materialpreview.engine 2.55  quiet n=46
 materials.bundle 0.00  ship 3a0422b4e (2026-10-13)
 math.parity 20.37  quiet n=23
