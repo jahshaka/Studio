@@ -19,6 +19,8 @@
 // every blend at alpha 0.5 - Blend, Glass, Refractive, Additive - lit with the record (the escape's miss reads the sky)
 // equals the same arm lit by the fragment's own environment term (the door), within its noise plus one code: the record's
 // weight is what the pixel would have taken of the share (BRDF_EnvMap's albedo, the eye leg's media, the blend's alpha).
+// THE BRIGHT SKY (the one read's F11, a law): a sky of 2000 - the record's picture equals the door's (a miss is the
+// fragment's own environment term, never clamped), and a sky of 140000 saturates the pixel's fixed-point sum, counted.
 // THE HIDDEN PANE (a law): the pane behind an opaque box - the depth test runs before an appending fragment, so a hidden
 // pane appends no record: the picture equals the door's within one code, no record counted.
 // THE NAMED LIMIT, MEASURED (not a law: the review list's stacked glass): a second, plain glass pane (alpha 0.5, black)
@@ -336,6 +338,43 @@ int main()
         std::snprintf(what, sizeof(what), "%s: the record's weight is the pixel's own take of the open share (the "
                       "record's picture within one code of the environment term's)", a.name);
         check(pic[0].ok && pic[1].ok && pic[1].mean > 0.0 && std::fabs(d) <= n + c && rq.escapeTraced > 0ull, what);
+    }
+    // THE BRIGHT SKY (the one read's F11): a miss is the environment the fragment itself takes, unbounded as its own term
+    // is - the escape used to clamp it at the reflections' radiance bound (1024), so a sun glint in glass read differently
+    // with the escape. A sky of radiance 2000 (band 0), Glass at alpha 0.5: the record's picture equals the door's (the
+    // fragment's own environment term) within its noise plus one code plus the record's weight as halves (2^-10 of the
+    // level: an 11-bit mantissa); no add saturated. Then a sky of 140000: the pixel's sum passes the fixed point's top
+    // (65536 a channel - past the colour target's half-float range too) and SATURATES, counted, never wrapping.
+    {
+        PbrParams p = paneP;
+        p.alphaMode = PbrAlphaMode::Glass;
+        p.alpha = 0.5f;
+        scene->setPbrMaterial(paneMat, p);
+        const auto sky = [&](float L) {
+            float skySh[27] = { 0 };
+            skySh[0] = skySh[1] = skySh[2] = L;
+            scene->setAmbientSh(skySh);
+        };
+        sky(2000.0f);
+        Pic pic[2];
+        double moved[2] = { 0.0, 0.0 };
+        RayQueryStatus rq;
+        for (int door = 1; door >= 0; --door) {
+            e->setArm("rq.glassEscapeOff", door ? 1.0 : 0.0);
+            e->waitForAsyncShaders();
+            settle();
+            pic[door] = read();
+            if (!door) rq = counts("THE BRIGHT SKY");
+            run(1);
+            moved[door] = std::fabs(read().mean - pic[door].mean);
+        }
+        const double d = pic[0].mean - pic[1].mean, c = oneCodeAt(pic[1].mean) + pic[1].mean / 1024.0;
+        const double n = std::max(moved[0], moved[1]);
+        std::printf("   THE BRIGHT SKY (2000), GLASS at alpha 0.5: the record %.6f against the fragment's environment term "
+                    "%.6f (%+.6f; the bar %.6f, the noise %.6f)\n", pic[0].mean, pic[1].mean, d, c, n);
+        check(pic[0].ok && pic[1].ok && pic[1].mean > 512.0 && std::fabs(d) <= n + c && rq.escapeTraced > 0ull,
+              "THE BRIGHT SKY: a miss reads the fragment's own environment term, unbounded (F11)");
+        sky(0.5f);
     }
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
     return g_fail ? 1 : 0;
