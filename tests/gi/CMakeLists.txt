@@ -563,9 +563,10 @@ jah_gpu_row(gi.opaque_bindings CLASS engine FRAMES 745 COMMAND test_gi_opaque_bi
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.opaque_bindings PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
-# gi.screen_integrate (PHOTON-7 stage 7, 7-6) — THE NO-RAY ROUTE'S PRODUCER MOVED, THE PHYSICS DID NOT: the screen
-# integrate's picture against the voxel route the pixel ran before 7-6 (the door gi.screenIntegrateOff), paired in one
-# process at the GI's rest, High, rays off (test_gi_screen_integrate.cpp says the laws). A fixture.
+# gi.screen_integrate (PHOTON-7 stage 7, 7-6; R12) — THE NO-RAY ROUTE'S PRODUCER MOVED, THE PHYSICS DID NOT: the screen
+# integrate's picture and the voxel route the pixel ran before 7-6 (the door gi.screenIntegrateOff), both against a
+# high-ray TLAS reference of the same arrangement at the ray tier, in one process at the GI's rest, High
+# (test_gi_screen_integrate.cpp says the laws and the no-ray route's declared distance). A fixture.
 add_executable(test_gi_screen_integrate test_gi_screen_integrate.cpp)
 set_target_properties(test_gi_screen_integrate PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -578,7 +579,7 @@ target_compile_definitions(test_gi_screen_integrate PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_screen_integrate PRIVATE JahshakaEngine)
 add_dependencies(test_gi_screen_integrate JahshakaEngineMedia)
-jah_gpu_row(gi.screen_integrate CLASS engine FRAMES 400 COMMAND test_gi_screen_integrate
+jah_gpu_row(gi.screen_integrate CLASS engine FRAMES 637 COMMAND test_gi_screen_integrate
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.screen_integrate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 

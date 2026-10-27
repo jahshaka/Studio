@@ -1,24 +1,36 @@
-// gi.screen_integrate (PHOTON-7 stage 7, 7-6) - THE NO-RAY ROUTE'S PRODUCER MOVED, THE PHYSICS DID NOT.
+// gi.screen_integrate (PHOTON-7 stage 7, 7-6; re-pointed at physics in 10-3, R12) - THE NO-RAY ROUTE'S PRODUCER MOVED,
+// THE PHYSICS DID NOT.
 //
 // On a chain that does not gather, the opaque passes read the screen integrate's products (the diffuse, the cone's
-// specular and its hit) in place of the voxel cascades (L4 on every chain). THE A/B, in one process on one scene: the
-// shipped route against the voxel route the pixel ran before 7-6 (the measuring door gi.screenIntegrateOff), each at
-// the GI's rest, the scene radiance read in float (hdrReadback), and the voxel route's OWN NOISE beside them: its
-// picture again with the camera one millimetre aside.
-// THE FIXTURE: a floor, a back wall and three boxes (two coloured, one white), a sun and a sky (SH), High, rays off, a
-// still picture with the chain (selftest B2's class), in TWO ARRANGEMENTS, each its own scene:
+// specular and its hit) in place of the voxel cascades (L4 on every chain). THE A/B, in one process: the shipped route
+// against the voxel route the pixel ran before 7-6 (the measuring door gi.screenIntegrateOff), each at the GI's rest,
+// the scene radiance read in float (hdrReadback), the voxel route's OWN NOISE beside them (its picture again with the
+// camera one millimetre aside) - and both against THE HIGH-RAY REFERENCE (R12; the pre-7-6 picture was the reference
+// before): the same arrangement, its own scene, at the ray tier, its screen gather's rest mean over 64 frames of its
+// jittered 64-ray probes (gather.restFrames: 4,096 TLAS rays a probe) and the cards' gather at 128 rays (gi.truthRays)
+// - every hit's answer an exact estimator of its ray (gi.card_truth). With the GI off the two tiers' pictures are
+// identical in every region (measured, 0.00 %): the sun, its shadows and the sky agree, the differences are the GI's.
+// THE FIXTURE: a floor, a back wall and three boxes (two coloured, one white), all matte with NO SPECULAR LOBE (kS = 0:
+// the reference traces its reflections and the no-ray route takes the cone's - the laws are the diffuse bounce's), a sun
+// and a sky (SH), High, a still picture with the chain (selftest B2's class), in TWO ARRANGEMENTS, each its own scene:
 //   AXIS-ALIGNED (B2's own case): every diffuse cone of its surfaces is a 45-degree cone, a TIE of the march's stepping
-//     axis (jahVoxelAxis) - which the pixel's frame, built through a float rotation, used to break by its rounding per
-//     pixel (two answers up to ~15 % apart in the voxels' share: the sides read 5-7.6 % off) and the producer's exact
-//     frame always one way. The tie is DECIDED now (jahVoxelAxis's tolerance), so the two routes agree here too.
+//     axis (jahVoxelAxis) - DECIDED (jahVoxelAxis's tolerance), so the two routes agree here too.
 //   TURNED 21 degrees about a generic axis: no surface on a voxel axis, no tie - the producer away from the seam.
+// THE BAR IS THE STORE'S QUANTUM q (the lead's ruling, R12): one half-float step at the reference's value.
 // THE LAWS, per arrangement:
 //   (1) the door: the shipped route's opaque pass reads the producer's three products and no voxel volume, the voxel
 //       route's reads the cascades and not the producer;
-//   (2) THE PICTURE: every region's mean radiance (the floor, the wall, the boxes' fronts and their sides toward the
-//       middle) within 1 % of the voxel route's, per channel;
-//   (3) WITHIN THE CONE'S OWN NOISE: over the whole picture, the mean relative difference and the pixels more than 5 %
-//       apart no more than the voxel route's own under a one-millimetre camera move.
+//   (2) THE PRODUCER MOVED, THE PHYSICS DID NOT: every region's mean (the floor, the wall, the boxes' fronts and their
+//       sides toward the middle), per channel, no further from the reference than the voxel route's, by q and that
+//       route's own 1 mm noise (measured: the two routes within 0.01-0.08 % of each other);
+//   (2') THE NO-RAY ROUTE'S DIFFUSE IS THE PHYSICS: every region within q of the reference - DECLARED RED (the lead's
+//       ruling, 2026-10-27), owned by 10-4's R7 (the one-cell rule), re-measured at its merge; what it leaves is the
+//       no-ray tier's measured limit. Measured (the worst channel): axis-aligned 1.3-6.7 % (the fronts ~4 % bright,
+//       the sides ~6 % dark); turned 2.0-51.4 % - the magenta side 0.116 against 0.219, darker than the GI-off
+//       picture (0.170), the blue side 20 %, the wall 8-10 %; over the whole picture 4.9 % mean (axis-aligned) and
+//       9.3 % (turned) from the reference;
+//   (3) OVER THE PICTURE: the producer's mean relative distance to the reference and its pixels over 5 % no more than
+//       the voxel route's, by that route's own 1 mm noise.
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/PhotonStatus.h"
@@ -75,8 +87,14 @@ PbrParams matte(float r, float g, float b, float rough = 0.8f) {
     PbrParams p;
     p.albedo = Colour(r, g, b);
     p.roughness = rough;
+    // NO SPECULAR LOBE (kS = 0): the reference traces its reflections and the no-ray route takes the cone's - the law is
+    // the diffuse bounce's, so the specular routes stay out of it
+    p.workflow = PbrParams::Workflow::Specular;
+    p.ior = 1.0f;
+    p.specularColour = Colour(0.0f, 0.0f, 0.0f);
     return p;
 }
+double quantumOf(double R) { return R > 0.0 ? std::ldexp(1.0, int(std::floor(std::log2(R))) - 10) : 0.0; }
 struct Region { const char *name; unsigned x0, y0, x1, y1; };
 }   // namespace
 
@@ -87,7 +105,7 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->setRayTracing(false);
+    e->setRayTracing(true);   // (the reference arm traces; the two routes' scenes are the no-ray tier: setRayTracing Off)
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
@@ -117,29 +135,58 @@ int main()
     for (const Arrangement &arr : arrangements) {
         std::printf("\n-- %s --\n", arr.name);
         const Turn turn(arr.deg);
-        Scene *scene = e->createScene("screen_integrate");
-        if (!scene) { std::printf("FAIL: scene\n"); return 1; }
-        view->setScene(scene);
-        scene->setRayTracing(RayTracingMode::Off);
-        box(scene, turn, Vec3(0.0f, -0.05f, 0.0f), Vec3(10.0f, 0.1f, 10.0f), matte(0.7f, 0.7f, 0.7f));   // the floor
-        box(scene, turn, Vec3(0.0f, 2.0f, -3.0f), Vec3(10.0f, 4.0f, 0.2f), matte(0.6f, 0.6f, 0.6f));     // the wall
-        box(scene, turn, Vec3(-1.6f, 1.0f, -1.5f), Vec3(0.8f, 2.0f, 0.8f), matte(0.2f, 0.3f, 0.8f));     // blue
-        box(scene, turn, Vec3(0.0f, 1.0f, -1.5f), Vec3(0.8f, 2.0f, 0.8f), matte(0.8f, 0.8f, 0.8f));      // white
-        box(scene, turn, Vec3(1.6f, 1.0f, -1.5f), Vec3(0.8f, 2.0f, 0.8f), matte(0.8f, 0.2f, 0.7f));      // magenta
-        enginetest::addDirectionalLight(scene, Vec3(-0.3f, -0.8f, -0.5f), 3.0f);
-        {
-            float sh[27] = { 0 };
-            sh[0] = 0.25f; sh[1] = 0.3f; sh[2] = 0.4f;   // a dim blue sky
-            scene->setAmbientSh(sh);
-        }
         const Vec3 eye = turn(Vec3(0.0f, 1.6f, 4.0f)), at = turn(Vec3(0.0f, 1.0f, -2.0f));
-        enginetest::testCameraLookAt(view, eye, at);
-        GiParams gi;
-        gi.mode = GiMode::Vct;
-        gi.quality = GiQuality::High;
-        gi.bounces = true;
-        if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
-        e->waitForAsyncShaders();
+        const auto build = [&](bool rays) {
+            Scene *scene = e->createScene(rays ? "screen_integrate_reference" : "screen_integrate");
+            if (!scene) return scene;
+            view->setScene(scene);
+            scene->setRayTracing(rays ? RayTracingMode::On : RayTracingMode::Off);
+            box(scene, turn, Vec3(0.0f, -0.05f, 0.0f), Vec3(10.0f, 0.1f, 10.0f), matte(0.7f, 0.7f, 0.7f));   // the floor
+            box(scene, turn, Vec3(0.0f, 2.0f, -3.0f), Vec3(10.0f, 4.0f, 0.2f), matte(0.6f, 0.6f, 0.6f));     // the wall
+            box(scene, turn, Vec3(-1.6f, 1.0f, -1.5f), Vec3(0.8f, 2.0f, 0.8f), matte(0.2f, 0.3f, 0.8f));     // blue
+            box(scene, turn, Vec3(0.0f, 1.0f, -1.5f), Vec3(0.8f, 2.0f, 0.8f), matte(0.8f, 0.8f, 0.8f));      // white
+            box(scene, turn, Vec3(1.6f, 1.0f, -1.5f), Vec3(0.8f, 2.0f, 0.8f), matte(0.8f, 0.2f, 0.7f));      // magenta
+            enginetest::addDirectionalLight(scene, Vec3(-0.3f, -0.8f, -0.5f), 3.0f);
+            {
+                float sh[27] = { 0 };
+                sh[0] = 0.25f; sh[1] = 0.3f; sh[2] = 0.4f;   // a dim blue sky
+                scene->setAmbientSh(sh);
+            }
+            enginetest::testCameraLookAt(view, eye, at);
+            GiParams gi;
+            gi.mode = GiMode::Vct;
+            gi.quality = GiQuality::High;
+            gi.bounces = true;
+            gi.cards = rays;
+            if (!scene->setGlobalIllumination(gi)) return static_cast<Scene *>(nullptr);
+            e->waitForAsyncShaders();
+            return scene;
+        };
+        // THE REFERENCE FIRST (its own scene): the ray tier, its screen gather's rest mean over 64 frames of its jittered
+        // 64-ray probes (4096 rays a probe through the TLAS) and the cards' gather at 128 rays (gi.truthRays) - the
+        // hemisphere's high-ray limit, every hit's answer an exact estimator of its ray (gi.card_truth)
+        ImageF ref;
+        int restR = -1;
+        {
+            e->setArm("gather.restFrames", 64.0);
+            e->setArm("gi.truthRays", 128.0);
+            Scene *rs = build(true);
+            if (!rs) { std::printf("FAIL: the reference's GI builds\n"); return 1; }
+            run(10);
+            int f = 0, quiet = 0;
+            for (; f < 900 && quiet < 30; ++f) {
+                run(1);
+                quiet = rs->published().gi.giAtRest ? quiet + 1 : 0;
+            }
+            restR = quiet >= 30 && view->readPixelsHdr(ref) ? f - quiet : -1;
+            e->setArm("gather.restFrames", 0.0);
+            e->setArm("gi.truthRays", 0.0);
+            view->setScene(nullptr);
+            e->destroyScene(rs);
+            run(2);
+        }
+        Scene *scene = build(false);
+        if (!scene) { std::printf("FAIL: the GI builds\n"); return 1; }
 
         const auto settled = [&](bool voxelRoute, ImageF &pic, std::vector<PhotonPassBindingRecord> &recs) {
             e->setArm("gi.screenIntegrateOff", voxelRoute ? 1.0 : 0.0);
@@ -172,8 +219,8 @@ int main()
                         if (t.compare(0, std::strlen(name), name) == 0) return true;
             return false;
         };
-        std::printf("   the voxel route at rest after %d frames (again, 1 mm aside: %d), the screen integrate after %d\n",
-                    restA, restA2, restB);
+        std::printf("   the reference at rest after %d frames; the voxel route after %d (again, 1 mm aside: %d), the "
+                    "screen integrate after %d\n", restR, restA, restA2, restB);
         char msg[384];
         std::snprintf(msg, sizeof msg,
                       "[%s] (1) the door: the shipped route's opaque pass reads the producer's three products and no "
@@ -182,40 +229,58 @@ int main()
                   binds(rb, "jahConeHit") && !binds(rb, "vctProbes") && binds(ra, "vctProbes") &&
                   !binds(ra, "jahConeHit"),
               msg);
-        bool within = a.width == b.width && a.width > 0;
+        bool within = a.width == b.width && a.width > 0 && ref.width == a.width && restR >= 0, physical = within;
         for (size_t ri = 0; ri < arr.nRegions; ++ri) {
             const Region &r = arr.regions[ri];
-            double sa[3] = { 0, 0, 0 }, sb[3] = { 0, 0, 0 };
+            double sa[3] = { 0, 0, 0 }, sb[3] = { 0, 0, 0 }, sr[3] = { 0, 0, 0 }, s2[3] = { 0, 0, 0 };
             unsigned n = 0;
             for (unsigned y = r.y0; y < r.y1 && y < a.height; ++y)
                 for (unsigned x = r.x0; x < r.x1 && x < a.width; ++x) {
-                    const auto pa = a.at(x, y), pb = b.at(x, y);
+                    const auto pa = a.at(x, y), pb = b.at(x, y), pr = ref.at(x, y), p2 = a2.at(x, y);
                     sa[0] += pa.r; sa[1] += pa.g; sa[2] += pa.b;
                     sb[0] += pb.r; sb[1] += pb.g; sb[2] += pb.b;
+                    sr[0] += pr.r; sr[1] += pr.g; sr[2] += pr.b;
+                    s2[0] += p2.r; s2[1] += p2.g; s2[2] += p2.b;
                     ++n;
                 }
-            double worst = 0.0;
+            double worst = 0.0, eV = 0.0, eS = 0.0, eN = 0.0;
             for (int c = 0; c < 3; ++c) {
                 sa[c] /= std::max(n, 1u);
                 sb[c] /= std::max(n, 1u);
+                sr[c] /= std::max(n, 1u);
+                s2[c] /= std::max(n, 1u);
+                // (2) the producer no further from the reference than the route it replaced, by q and that route's
+                // own 1 mm noise; (2') the route itself within q of the reference
+                const double q = quantumOf(sr[c]);
+                within = within && std::fabs(sb[c] - sr[c]) <= std::fabs(sa[c] - sr[c]) + q + std::fabs(s2[c] - sa[c]);
+                physical = physical && std::fabs(sb[c] - sr[c]) <= q;
                 worst = std::max(worst, std::fabs(sb[c] - sa[c]) / std::max(sa[c], 1e-6));
+                eV = std::max(eV, std::fabs(sa[c] - sr[c]) / std::max(sr[c], 1e-6));
+                eS = std::max(eS, std::fabs(sb[c] - sr[c]) / std::max(sr[c], 1e-6));
+                eN = std::max(eN, std::fabs(s2[c] - sa[c]) / std::max(sa[c], 1e-6));
             }
-            std::printf("   %-14s voxel route %.4f %.4f %.4f, screen integrate %.4f %.4f %.4f - worst %.2f %%\n", r.name,
-                        sa[0], sa[1], sa[2], sb[0], sb[1], sb[2], 100.0 * worst);
-            within = within && n > 0u && worst <= 0.01;
+            std::printf("   %-14s reference %.4f %.4f %.4f | voxel route %.4f %.4f %.4f (%+.2f %%) | screen integrate "
+                        "%.4f %.4f %.4f (%.2f %%) - S vs V %.2f %%, V 1 mm %.3f %%\n", r.name, sr[0], sr[1], sr[2],
+                        sa[0], sa[1], sa[2], 100.0 * eV, sb[0], sb[1], sb[2], 100.0 * eS, 100.0 * worst, 100.0 * eN);
+            within = within && n > 0u;
         }
         std::snprintf(msg, sizeof msg,
-                      "[%s] (2) THE PRODUCER MOVED, THE PHYSICS DID NOT: every region within 1 %% of the voxel route's",
-                      arr.name);
+                      "[%s] (2) THE PRODUCER MOVED, THE PHYSICS DID NOT: every region's mean, per channel, no further from "
+                      "the high-ray reference than the voxel route's, by q and that route's own 1 mm noise", arr.name);
         CHECK(within, msg);
+        // (DECLARED RED - the lead's ruling, 2026-10-27: owned by 10-4's R7 one-cell rule, re-measured at its merge)
+        std::snprintf(msg, sizeof msg,
+                      "[%s] (2') THE NO-RAY ROUTE'S DIFFUSE IS THE PHYSICS: every region's mean, per channel, within q of "
+                      "the high-ray reference", arr.name);
+        CHECK(physical, msg);
         {
             // over every lit pixel: the relative difference of the brightest channel
             struct Spread { double mean = 0.0; unsigned over5 = 0, n = 0; };
-            const auto spread = [&](const ImageF &x) {
+            const auto spread = [&](const ImageF &x, const ImageF &base) {
                 Spread sp;
-                for (unsigned y = 0; y < a.height && y < x.height; ++y)
-                    for (unsigned xx = 0; xx < a.width && xx < x.width; ++xx) {
-                        const auto pa = a.at(xx, y), px = x.at(xx, y);
+                for (unsigned y = 0; y < base.height && y < x.height; ++y)
+                    for (unsigned xx = 0; xx < base.width && xx < x.width; ++xx) {
+                        const auto pa = base.at(xx, y), px = x.at(xx, y);
                         const double ref = std::max({ double(pa.r), double(pa.g), double(pa.b) });
                         if (!(ref > 1e-3)) continue;
                         const double d = std::max({ std::fabs(double(px.r) - pa.r), std::fabs(double(px.g) - pa.g),
@@ -227,13 +292,15 @@ int main()
                 sp.mean /= std::max(sp.n, 1u);
                 return sp;
             };
-            const Spread sb = spread(b), s2 = spread(a2);
-            std::printf("   over %u lit pixels: the screen integrate %.4f %% mean, %u over 5 %%; the voxel route 1 mm "
-                        "aside %.4f %% mean, %u over 5 %%\n", sb.n, 100.0 * sb.mean, sb.over5, 100.0 * s2.mean, s2.over5);
+            const Spread sS = spread(b, ref), sV = spread(a, ref), s2 = spread(a2, a);
+            std::printf("   over %u lit pixels, against the reference: the screen integrate %.4f %% mean, %u over 5 %%; the "
+                        "voxel route %.4f %% mean, %u over 5 %%; the voxel route against itself 1 mm aside %.4f %% mean, "
+                        "%u over 5 %%\n", sS.n, 100.0 * sS.mean, sS.over5, 100.0 * sV.mean, sV.over5, 100.0 * s2.mean,
+                        s2.over5);
             std::snprintf(msg, sizeof msg,
-                          "[%s] (3) WITHIN THE CONE'S OWN NOISE: the producer no further from the voxel route than the "
-                          "voxel route from itself one millimetre aside", arr.name);
-            CHECK(sb.n > 1000u && sb.mean <= s2.mean && sb.over5 <= s2.over5, msg);
+                          "[%s] (3) OVER THE PICTURE: the producer no further from the reference than the voxel route, by "
+                          "that route's own 1 mm noise (the mean and the pixels over 5 %%)", arr.name);
+            CHECK(sS.n > 1000u && sS.mean <= sV.mean + s2.mean && sS.over5 <= sV.over5 + s2.over5, msg);
         }
         e->setArm("gi.screenIntegrateOff", 0.0);
         view->setScene(nullptr);
