@@ -408,7 +408,15 @@ struct Doc {
         meshNode->setLocalScale(iris::Vec3(1.0f / (r > 0.0f ? r : 1.0f),
                                            1.0f / (r > 0.0f ? r : 1.0f),
                                            1.0f / (r > 0.0f ? r : 1.0f)));
-        meshNode->setMaterial(iris::PbrMaterial::create());
+        // THE SUBJECT, at 0.31 of white: the ambient below is the whole sky's
+        // light now (PHOTON-7 10-3 R5), 3.2x the 0.117 this fixture used to
+        // carry, so the cube carries the 0.31 its Sky Light used to - the same
+        // backlit subject (D4's premise) under the sky that lights it.
+        {
+            auto subject = iris::PbrMaterial::create();
+            subject->setBaseColor(QColor(150, 150, 150));   // linear 0.305
+            meshNode->setMaterial(subject);
+        }
         scene->getRootNode()->addChild(meshNode);
 
         // RE-BASELINED for SKY_LIGHT_SPEC.md §2 and §4, and the two halves are
@@ -422,15 +430,12 @@ struct Doc {
         // 0.376 — the same backdrop radiance this fixture always had, said in
         // the colour space the renderer now speaks.
         scene->skyColor = QColor(163, 163, 163);
-        // THE AMBIENT. It is a LIGHT now, and without one this fixture would
-        // have none at all. 0.31 over that 0.376 sky is 0.117 of ambient
-        // radiance — the level the flat 96-grey ambient it replaces carried
-        // (0.376 through HlmsPbs' 1/pi split).
-        auto skyLight = iris::LightNode::create();
-        skyLight->setName("Sky Light");
-        skyLight->setLightType(iris::LightType::Sky);
-        skyLight->intensity = 0.31f;
-        scene->getRootNode()->addChild(skyLight);
+        // THE AMBIENT is that sky's own light (PHOTON-7 10-3 R5: the Sky Light
+        // is one gain on the sky itself, and the sky emits what it shows). This
+        // fixture used to hold its ambient at 0.31 of a 0.376 backdrop with a
+        // Sky Light of 0.31 - a sky brighter than its light, which the law
+        // deletes; a Sky Light of 0.31 now draws the backdrop at 0.117 and took
+        // B2's bloom range below its 2-code bar (1.5). No Sky Light: gain 1.
 
         auto light = iris::LightNode::create();
         light->setName("sun");
