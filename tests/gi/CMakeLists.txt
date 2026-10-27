@@ -938,12 +938,13 @@ if(TARGET jahlab)
     set_tests_properties(gi.walk PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
-# gi.walk_rough (PHOTON-7 stage 7, 7-3) — THE ROUGH SPECULAR'S WALK: walk.sh --rough on photon-rough (its four rough
-# metal strips): the rough class's LIVE RESIDUAL at or under the cone's recorded 48.32 % over a code, M1 and the settle
-# after a cut printed; the walk's own laws asserted. 960x540; four sessions.
+# gi.walk_rough (PHOTON-7 stage 7, 7-3; R12) — THE ROUGH SPECULAR'S WALK LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS
+# MEMORY AND ITS NOISE: rough_lag.sh on photon-rough (its four rough metal strips, the lobe alone): at walk frames 14 /
+# 28 / 59 per rough pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1, breaking <= 1 % (the lag
+# law; N the gather's history count, SE_walk its raw lobe's sigma / sqrt N). 960x540; two sessions.
 if(TARGET jahlab)
-    jah_gpu_row(gi.walk_rough CLASS engine TOKENS 8 FRAMES 1740
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough --rough
+    jah_gpu_row(gi.walk_rough CLASS engine TOKENS 8 FRAMES 4314
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_rough PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()

@@ -43,7 +43,6 @@
 #          9.06 % (15); wall 8.4 / 10.2 / 13.1 (0 over), GPU busy 10.0 / 12.3 / 23.9 (1 over); the fly 8.3 / 9.3 / 9.3
 #          and 9.2 / 10.9 / 10.9 (0 over)
 # usage: walk.sh <jahlab> <work dir>
-#        walk.sh <jahlab> <work dir> --rough   (gi.walk_rough: photon-rough's walk, the rough specular's live residual - 7-3)
 #        walk.sh <jahlab> <work dir> --area    (gi.walk_area: photon-area's penumbra walk, M1 and the live residual printed)
 #        walk.sh <jahlab> <work dir> --bistro <model.fbx> <data root>   (gi.walk_bistro, the MEASURE row: its own
 #        data root - the bake and the shader cache of Bistro, never the fixtures' - and no class map: M1 'all' only)
@@ -160,48 +159,6 @@ if [ "$MODE" = "--area" ]; then
     cat "$WD/area-m1.out"
     rm -rf "$WD/data/stillness/dump-"*
     echo "gi.walk_area: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
-    exit $rc
-fi
-if [ "$MODE" = "--rough" ]; then
-    # gi.walk_rough (PHOTON-7 stage 7, 7-3): THE ROUGH SPECULAR'S WALK - photon-rough's four rough metal strips (0.45 -
-    # 0.75), a 2 m walk along them, 0,1.6,2.4 -> 0,1.6,0.4 looking at 0,0,-3, 60 frames; its hold the glass's (600: the
-    # 0.45 strip's ray reflection held before the frozen walk). THE LAW: THE LIVE RESIDUAL (walk_m1.py: the live arm's
-    # own frame-to-frame residual - M1 alone is blind to noise both arms draw alike) of the rough class over one code at
-    # or under THE CONE'S RECORDED 48.32 % (the voxel cone, the producer the probes' prefiltered lobe replaced: the A/B
-    # of the lead's ruling, spikes/photon-7/stage7/7-3/M1.txt); M1 printed (a history's lag on a view-dependent term
-    # reads in it: 5.37 % against the cone's 3.40 % at the ruling), and THE SETTLE - a camera cut onto the start pose,
-    # the still camera's per-frame change of the rough class until the gather holds (0.60 a frame over 22 frames at the
-    # ruling, the cone's 0.00) - printed. The walk's own laws (L2, L3).
-    walk rough "--data-root $WD/data --env photon-rough" 600 0,1.6,2.4 0,0,-3 0,1.6,0.4 0,0,-3 60 "" 60 live frozen
-    # (the settle's session: the GI at rest at the start pose first - 300 frames - then the cut away and back)
-    printf 'camera 0,1.6,2.4,0,0,-3\nframes 300\ncamera 0,1.6,0.4,0,0,-3\nframes 30\nstillness teleport:0,1.6,2.4,0,0,-3/hold:1 60 age=1 out=rough-settle\nquit\n' \
-        > "$WD/rough-settle.lab"
-    session rough-settle --data-root "$WD/data" --env photon-rough
-    python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" rough rough-live rough-frozen \
-        --tsv "$WD/data/stillness/rough-live.tsv" --classes > "$WD/rough-m1.out" 2>&1
-    rc=$?
-    cat "$WD/rough-m1.out"
-    python3 -I - "$WD/rough-m1.out" "$WD/data/stillness/rough-settle.tsv" <<'PYEOF' || rc=1
-import csv, re, sys
-live = None
-for line in open(sys.argv[1]):
-    m = re.search(r'live residual rough +mean ([0-9.]+) +p99 ([0-9.]+) +>1 code ([0-9.]+) %', line)
-    if m: live = tuple(float(x) for x in m.groups())
-rows = list(csv.reader(open(sys.argv[2]), delimiter='\t'))
-rs = [dict(zip(rows[0], r)) for r in rows[1:] if r and r[0] == 'walk' and int(r[1]) >= 1]
-pre = [r for r in rs if r['held'] not in ('1', 'true')]
-held = next((int(r['frame']) for r in rs if r['held'] in ('1', 'true')), None)
-if pre:
-    v = [float(r['rough_mean']) for r in pre]
-    print('rough SETTLE after a cut: held from frame %s; before the hold the rough class changes %.3f a frame (the '
-          'largest frame %.3f) over %d frames' % (held, sum(v) / len(v), max(v), len(pre)))
-ok = live is not None and live[2] <= 48.32
-print('  %s THE LIVE RESIDUAL: the rough class over one code %s %% <= the cone\'s recorded 48.32 %%' %
-      ('ok  ' if ok else 'FAIL', '%.2f' % live[2] if live else '(missing)'))
-sys.exit(0 if ok else 1)
-PYEOF
-    rm -rf "$WD/data/stillness/dump-"*
-    echo "gi.walk_rough: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
     exit $rc
 fi
 SETTLE=160    # the court: its cards' last relight at frame 127 + the gather's 17-frame hold, rounded up (PHOTON-7 10-2: the
