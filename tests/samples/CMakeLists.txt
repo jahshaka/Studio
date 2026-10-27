@@ -97,6 +97,9 @@ file(MAKE_DIRECTORY ${_shome}/run)
 # taken after (~1,130 frames a boot, unchanged) — and the two run as two rows, a fixture chain: boot 1 sets up the
 # picture, boot 2 requires it (DEPENDS + FIXTURES_REQUIRED), so neither row is over the minute. Measured once each
 # (2026-10-20, solo, the card lock held): 31.8 s / 1,122 frames and 32.1 s / 1,124. TIMEOUT 6 x the solo run, rounded up.
+# THE SHADER CACHE WARM (PHOTON-7 stage 11, the lead's ruling): the data root stays virgin (settings, library, store) and
+# the boots take the tree's shared shader cache (fresh_home.sh --warm) - the cache is not this law's; a compile-timed
+# picture is COLD-BOOT-2's class, with its own cold row (mirror_room_boots.sh's header says why). 30.9 s / 26.0 s warm.
 jah_gpu_row(samples.mirror_room_boots.boot1 SHIP CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 1
