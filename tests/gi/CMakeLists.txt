@@ -864,10 +864,16 @@ target_compile_definitions(test_gi_pane_stack PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_pane_stack PRIVATE JahshakaEngine)
 add_dependencies(test_gi_pane_stack JahshakaEngineMedia)
-jah_gpu_row(gi.pane_stack CLASS engine COMMAND test_gi_pane_stack
+jah_gpu_row(gi.pane_stack CLASS engine COMMAND test_gi_pane_stack ray
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pane_stack PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 17)
+# ...and its CARDS arm (the one read's F3): the cards' direct half through the stack (T^12) and through one pane at 0.3
+# (0.7) - red on the base: a table lamp through glass read 1 above T 0.5 and 0 below it
+jah_gpu_row(gi.pane_stack_cards CLASS engine COMMAND test_gi_pane_stack cards
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pane_stack_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 120)
 # gi.lamps_outside (PHOTON-7 10-4, R9; L9) — SEVENTEEN LAMPS OUTSIDE A SEALED BOX LIGHT NOTHING INSIDE IT: a closed box in a
 # black world, seventeen casting point lamps around it, the shadow-map budget at 2 (fifteen Forward+ lamps); through an
 # opening they light the inside (the control), sealed every pixel inside reads 0 within a code (test_gi_lamps_outside.cpp

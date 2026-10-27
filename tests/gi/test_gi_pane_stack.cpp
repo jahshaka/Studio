@@ -16,6 +16,12 @@
 //       code of H;
 //   (2) THE READING RAYS - the GI on at High (the screen probe gather traces from the floor up through the stack): the
 //       overflow counter moves (a reading ray met more than eight panes and was counted, not blocked).
+// THE CARDS ARM (argv[1] "cards"; the one read's F3: the cards saw a lamp through glass as 0 or 1 by a > 0.5 test - its
+// table bit - so a lamp behind T = 0.7 read 1 and one behind T^12 = 0.28 read 0): the GI on with the cards, their direct
+// half alone (no bounce), the cards at rest; over the floor's card texels under the stack, the direct half's mean D:
+//   (3) the hole: D0 over a code; (4) twelve panes: D = T^12 D0; (5) ONE pane at alpha 0.3: D = 0.7 D0 - each within
+//       ONE CODE at its level plus the texel's byte (the transmitted lamps' visibility is stored on 255 steps: half a
+//       step of D0).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -56,8 +62,10 @@ double oneCodeAt(double L)
 }
 }   // namespace
 
-int main()
+int main(int argc, char **argv)
 {
+    const std::string mode = argc > 1 ? argv[1] : "ray";
+    if (mode != "ray" && mode != "cards") { std::printf("FAIL: the mode is ray or cards, not '%s'\n", mode.c_str()); return 2; }
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-pane-stack-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -125,6 +133,69 @@ int main()
     };
     const auto settle = [&]() { e->waitForAsyncShaders(); run(8); };
     const auto overflow = [&]() { return scene->published().rayQuery.panesOverflow; };
+
+    if (mode == "cards") {
+        GiParams gi;
+        gi.mode = GiMode::Vct;
+        gi.quality = GiQuality::High;
+        gi.ddgi = GiToggle::Off;
+        gi.cards = true;
+        gi.bounces = false;   // the direct half alone: what the lamp's traced visibility gates
+        gi.updateBudget = 0;
+        if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
+        // the cards at rest: built, no relight or admission moving, the queue empty, for 30 frames
+        const auto atRest = [&]() {
+            unsigned long long relights = ~0ull, admitted = ~0ull;
+            int quiet = 0;
+            for (int f = 0; f < 600 && quiet < 30; ++f) {
+                run(1);
+                const GiStatus g = scene->published().gi;
+                const bool still = !g.chainOwed && g.cards.built && g.cards.relights == relights &&
+                                   g.cards.admitted == admitted && g.cards.queueLength == 0u;
+                relights = g.cards.relights;
+                admitted = g.cards.admitted;
+                quiet = still ? quiet + 1 : 0;
+            }
+            return quiet >= 30;
+        };
+        // the direct half's mean over the floor's card texels under the stack (its middle 1.6 x 1.6 m)
+        const auto direct = [&](double &mean) {
+            double sum = 0.0;
+            size_t n = 0;
+            for (int i = -4; i <= 4; ++i)
+                for (int j = -4; j <= 4; ++j) {
+                    CardSample c;
+                    if (!scene->readCardAt(Vec3(0.2f * float(i), 0.0f, 0.2f * float(j)), Vec3(0, 1, 0), c) || !c.ok || !c.lit)
+                        continue;
+                    sum += c.radiance[1] - c.indirect[1] - c.flat[1];
+                    ++n;
+                }
+            mean = n ? sum / double(n) : 0.0;
+            return n > 40;
+        };
+        for (NodeId n : slabs) scene->setNodeVisible(n, false);
+        double d0 = 0.0, d12 = 0.0, d1 = 0.0;
+        bool ok = atRest() && direct(d0);
+        for (NodeId n : slabs) scene->setNodeVisible(n, true);
+        ok = atRest() && direct(d12) && ok;
+        for (size_t k = 1; k < slabs.size(); ++k) scene->setNodeVisible(slabs[k], false);
+        PbrParams one = glass;
+        one.alpha = 0.3f;
+        ok = scene->setPbrMaterial(glassMat, one) && atRest() && direct(d1) && ok;
+        const double T12 = std::pow(std::round(0.9 * 2047.0) / 2047.0, double(kSlabs)) * d0;
+        const double T1 = std::round(0.7 * 2047.0) / 2047.0 * d0;
+        const double byte = 0.5 / 255.0 * d0;
+        std::printf("== cards: the direct half, the hole %.6f; twelve panes %.6f (T^12 x %.6f); one pane at 0.3 %.6f "
+                    "(0.7 x %.6f); %d frames\n", d0, d12, T12, d1, T1, frames);
+        check(ok && d0 > 0.005, "(3) the hole: the lamp lights the floor's cards (at rest, the texels read)");
+        char w[256];
+        std::snprintf(w, sizeof(w), "(4) the cards through twelve panes: T^12 of the lamp (%.6f against %.6f)", d12, T12);
+        check(ok && std::fabs(d12 - T12) <= oneCodeAt(T12) + byte, w);
+        std::snprintf(w, sizeof(w), "(5) the cards through one pane at 0.3: 0.7 of the lamp (%.6f against %.6f)", d1, T1);
+        check(ok && std::fabs(d1 - T1) <= oneCodeAt(T1) + byte, w);
+        std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+        return g_fail ? 1 : 0;
+    }
 
     // (0) THE HOLE
     for (NodeId n : slabs) scene->setNodeVisible(n, false);
