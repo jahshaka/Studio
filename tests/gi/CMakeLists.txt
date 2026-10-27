@@ -860,8 +860,9 @@ set_tests_properties(gi.lamps_outside_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATF
 
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
-# a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark (test_gi_fog_inscatter.cpp
-# says the laws; red on the base: the fog scattered its colour with no visibility). A fixture, one row a law.
+# a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark at both tiers, its control
+# (the sky alone through the opening) lit (test_gi_fog_inscatter.cpp says the laws; red on the base: the fog scattered its
+# colour with no visibility). A fixture, one row a law.
 add_executable(test_gi_fog_inscatter test_gi_fog_inscatter.cpp)
 set_target_properties(test_gi_fog_inscatter PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -881,7 +882,11 @@ set_tests_properties(gi.fog_shaft PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscr
 jah_gpu_row(gi.fog_sealed CLASS engine COMMAND test_gi_fog_inscatter sealed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.fog_sealed PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 9)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 118)
+jah_gpu_row(gi.fog_sealed_noray CLASS engine COMMAND test_gi_fog_inscatter sealed_noray
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.fog_sealed_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 113)
 
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm

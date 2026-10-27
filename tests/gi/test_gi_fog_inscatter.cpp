@@ -16,9 +16,10 @@
 //         (the sun reaches no point of any eye ray);
 //     (2) THE PANE in the opening (Glass, alpha 0.5: Ogre's blend passes 1 - alpha; the shadow node's transmittance
 //         layer carries it, R8): the picture is (1 - alpha) times the opening's - its mean within one code at that level.
-//   "sealed" - the sun and a Sky Light (s < 1), the roof closed: every pixel reads 0 within one code at the fog's own
-//     open level (no light of either reaches the medium inside). RED until the measured sky visibility lands (jahSkyVis,
-//     R11's second half: V_sky stands at 1 until then).
+//   "sealed" - the sun and a Sky Light (s < 1), the roof closed, the GI on at the ray tier (the gather measures the sky
+//     share: jahSkyVis): every pixel reads 0 within one code at the fog's own open level (no light of either reaches
+//     the medium inside). RED without the measured sky visibility (V_sky 1: the sky's share glowed, mean 0.306).
+//   "sealed_noray" - the same at the no-ray tier: the screen integrate's diffuse rays measure the sky share.
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -26,6 +27,7 @@
 #include <algorithm>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
 #include <string>
 using namespace jahshaka::engine;
 
@@ -59,12 +61,17 @@ double oneCodeAt(double L)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "shaft";
-    if (mode != "shaft" && mode != "sealed") { std::printf("FAIL: the mode is shaft or sealed, not '%s'\n", mode.c_str()); return 2; }
-    const bool sealedMode = mode == "sealed";
+    if (mode != "shaft" && mode != "sealed" && mode != "sealed_noray") {
+        std::printf("FAIL: the mode is shaft, sealed or sealed_noray, not '%s'\n", mode.c_str());
+        return 2;
+    }
+    const bool noRay = mode == "sealed_noray";
+    const bool sealedMode = mode == "sealed" || noRay;
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-fog-inscatter-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
+    e->setRayTracing(true);
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
@@ -73,6 +80,7 @@ int main(int argc, char **argv)
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
     view->setShadows(true);
+    if (noRay) scene->setRayTracing(RayTracingMode::Off);   // the no-ray tier as it ships: its integrate measures the sky
     {
         PostFxDesc fx;
         fx.allowOffscreen = true;
@@ -105,7 +113,7 @@ int main(int argc, char **argv)
     const NodeId pane = slab(scene, ox0, 3.19f, oz0, ox1, 3.21f, oz1, scene->createPbrMaterial(paneP));
     if (!tile || !pane) { std::printf("FAIL: the room\n"); return 1; }
     // the sun, 60 degrees up, travelling towards -x
-    enginetest::addDirectionalLight(scene, Vec3(-0.5f, -0.8660254f, 0.0f), 3.0f);
+    const NodeId sunNode = enginetest::addDirectionalLight(scene, Vec3(-0.5f, -0.8660254f, 0.0f), 3.0f);
     float sh[27] = { 0 };   // no Sky Light in the shaft arms (s = 1); the sealed arm's sky below
     if (sealedMode) sh[0] = sh[1] = sh[2] = 0.3f;
     scene->setAmbientSh(sh);
@@ -144,8 +152,23 @@ int main(int argc, char **argv)
     const auto settle = [&]() { e->waitForAsyncShaders(); run(8); };
 
     if (sealedMode) {
+        // THE SKY'S SHARE IS MEASURED (jahSkyVis): the gather runs - the GI on, at the ray tier (the probes' rays that
+        // meet nothing are the sky's share) - and the chain at rest before the reading
+        GiParams gi;
+        gi.mode = GiMode::Vct;
+        gi.quality = GiQuality::High;
+        if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
         scene->setNodeVisible(pane, false);
         settle();
+        {
+            int quiet = 0, f = 0;
+            for (; f < 600 && quiet < 30; ++f) {
+                run(1);
+                const GiStatus g = scene->published().gi;
+                quiet = g.chainOwed || g.feedbackOwed ? 0 : quiet + 1;
+            }
+            check(quiet >= 30, "the GI at rest before the reading");
+        }
         const Pic sealed = read();
         // the fog's own open level: its colour (1) times what the middle half's rays scatter in over ~4 m, fully lit
         const double openLevel = 1.0 - std::exp2(-0.25 * 4.0);
@@ -155,6 +178,22 @@ int main(int argc, char **argv)
         std::snprintf(w, sizeof(w), "the sealed room's fog is dark: every pixel 0 (peak %.6f) within one code at %.3f (%.6f)",
                       sealed.peak, openLevel, oneCodeAt(openLevel));
         check(sealed.ok && sealed.peak <= oneCodeAt(openLevel), w);
+        // THE CONTROL - THE SKY'S SHARE IS MEASURED, NOT ZERO: the sun hidden (s = 0: the sky alone lights the medium),
+        // the roof opened - the fog under the opening is lit by the sky it sees
+        scene->setNodeVisible(sunNode, false);
+        scene->setNodeVisible(tile, false);
+        settle();
+        {
+            int quiet = 0, f = 0;
+            for (; f < 600 && quiet < 30; ++f) {
+                run(1);
+                const GiStatus g = scene->published().gi;
+                quiet = g.chainOwed || g.feedbackOwed ? 0 : quiet + 1;
+            }
+        }
+        const Pic skyOnly = read();
+        std::printf("== the control: the sky alone, the roof open: mean %.6f, peak %.6f\n", skyOnly.mean, skyOnly.peak);
+        check(skyOnly.ok && skyOnly.mean > oneCodeAt(skyOnly.mean), "the control: the sky alone lights the fog through the opening");
         std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
         return g_fail ? 1 : 0;
     }
