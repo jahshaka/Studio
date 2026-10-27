@@ -119,7 +119,9 @@ endif()
 set(JAH_BLOOM_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")
 configure_file(scripts/bloom_showroom.js.in ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js @ONLY)
 set(_bloom_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-bloom_showroom)
-jah_fresh_home_fixture(hdr.bloom_showroom.fresh_home bloomShowroomHome "${_bloom_home}" LABELS "scripting")
+# (WARM: the boot's shader cache from the tree's shared app cache - cold, the row compiled every shader and ray
+# pipeline it draws and sat at its 60 s cap on a loaded box; PHOTON-7 10-4: timed out there)
+jah_fresh_home_fixture(hdr.bloom_showroom.fresh_home bloomShowroomHome "${_bloom_home}" WARM LABELS "scripting")
 jah_gpu_row(hdr.bloom_showroom SHIP CLASS app TIER document
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/bloom_showroom.js
          WORKING_DIRECTORY ${_bloom_home}/run)
