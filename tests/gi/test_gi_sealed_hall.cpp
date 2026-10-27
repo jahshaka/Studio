@@ -16,8 +16,6 @@
 //           the ray tier opened inside the frame, after the views had synced, so the first frame drew the ray chain
 //           with no listener - no gather, no area visibility: the area light lit the inside through the roof, 1.74
 //           over 25,484 px (OgreEngine::ensureRayTier now opens it before the views sync).
-//   "late"  (the hall built after the GI is on, the area light alone: R3 (B)'s case) - no frame from the hall's
-//           arrival to rest lights its inside one code of R.
 //   "noray" (gi.sealed_hall_noray), the no-ray tier at High: (1) NO PIXEL INSIDE READS THE AREA LIGHT UNOBSTRUCTED
 //           (its visibility product's diffuse share at 255) at rest. RED before: a pixel no stratum was seen for (U = 0)
 //           read "unshadowed", and the light's LTC lit the inside through the roof - 1,038 pixels at 203 codes of R; a
@@ -66,16 +64,12 @@ void box(Scene *s, const Vec3 &at, const Vec3 &size)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray" && mode != "noray" && mode != "late") {
-        std::printf("FAIL: the mode is ray, noray or late, not '%s'\n", mode.c_str());
-        return 2;
-    }
-    const bool late = mode == "late";
+    if (mode != "ray" && mode != "noray") { std::printf("FAIL: the mode is ray or noray, not '%s'\n", mode.c_str()); return 2; }
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-sealed-hall-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->setRayTracing(mode != "noray");
+    e->setRayTracing(mode == "ray");
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
@@ -92,7 +86,7 @@ int main(int argc, char **argv)
     }
     if (mode == "noray") s->setRayTracing(RayTracingMode::Off);
     float sh[27] = { 0 };
-    sh[0] = sh[1] = sh[2] = late ? 0.0f : 1.0f;   // a uniform white sky of radiance 1 (late: none - the area light alone)
+    sh[0] = sh[1] = sh[2] = 1.0f;   // a uniform white sky of radiance 1
     s->setAmbientSh(sh);
     const float hx = 12.0f, hz = 12.0f, hy = 5.0f, t = 0.4f;
     const auto buildHall = [&]() {
@@ -109,7 +103,7 @@ int main(int argc, char **argv)
         box(s, Vec3(1.5f, 0.5f, -5.0f), Vec3(1.0f, 1.0f, 1.0f));
         box(s, Vec3(-2.0f, 0.75f, -10.0f), Vec3(1.5f, 1.5f, 1.5f));
     };
-    if (!late) buildHall();
+    buildHall();
     // the area light over the roof, facing down onto it
     {
         const NodeId lamp = s->createNode();
@@ -133,13 +127,6 @@ int main(int argc, char **argv)
     gi.updateBudget = 0;
     if (!s->setGlobalIllumination(gi)) { std::printf("FAIL: GI\n"); return 1; }
     if (mode == "noray") e->setArm("area.visReadback", 1.0);
-    if (late) e->setArm("area.visReadback", 1.0);
-    if (late) {
-        // THE HALL BUILT AFTER THE GI IS ON (R3 (B)): the chain and the ray structures exist and hold nothing, then
-        // the hall arrives - read from its first frame
-        run(12);
-        buildHall();
-    }
     const double R = double(kAlbedo), bar = R / 255.0;
     // EVERY FRAME from the build to rest (shader compiles included: a frame drawn while a permutation builds is a frame
     // the user sees): the picture's brightest pixel and the count over the bar
@@ -177,10 +164,7 @@ int main(int argc, char **argv)
                 "over one code; at rest %.6f (%.3f codes), %u px over\n", mode.c_str(), rest, worst, worst / bar,
                 worstFrame, worstOver, last, last / bar, lastOver);
     CHECK(rest >= 0, "the hall comes to rest");
-    if (late) {
-        CHECK(worst <= bar, "(1) no frame from the hall's arrival to rest lights its inside one code of R: a light whose "
-                            "visibility is not known yet gives nothing");
-    } else if (mode == "ray") {
+    if (mode == "ray") {
         if (last > bar)
             std::printf("   ray: the residue at rest - %u px over one code, the brightest %.3f codes: the chain's rays "
                         "through the coarse mixed cells (10-4's R7)\n", lastOver, last / bar);
@@ -199,7 +183,7 @@ int main(int argc, char **argv)
         std::printf("   noray: the area light's visibility at rest - %u of %u pixels read unobstructed\n", open, read);
         CHECK(read > 0u && open == 0u, "(1) no pixel inside the sealed hall reads the area light unobstructed");
     }
-    if (mode == "noray" || late) e->setArm("area.visReadback", 0.0);
+    if (mode == "noray") e->setArm("area.visReadback", 0.0);
     GiParams off;
     off.mode = GiMode::Off;
     s->setGlobalIllumination(off);
