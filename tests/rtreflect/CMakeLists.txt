@@ -44,7 +44,8 @@ endif()
 
 
 # rtreflect.history_detectors — THE REFLECTION HISTORY'S TWO DETECTORS (PHOTON-5 stage 4): a lamp step reaches a
-# still glossy floor's reflection within 2 x kWarmupFrames frames (the radiance cap); a 0.25 m slide leaves no trail (a guard).
+# still glossy floor's reflection within N + due of its source (R12: the moving window's 95 % time, 35 frames at
+# MaxFrames 12, after the source's own arrival); a 0.25 m slide leaves no trail (a guard).
 add_executable(test_rtreflect_history_detectors test_rtreflect_history_detectors.cpp)
 set_target_properties(test_rtreflect_history_detectors PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

@@ -317,7 +317,7 @@ vr.hit_list_stereo 23.52  solo, the card lock held, :71, warm fixture home (PHOT
 vr.mirror_live 46.39  solo 2026-10-20 (TOOLING-7: 90 + 60 frames to the law; 62.48 s solo before, both on a fresh tree's cold cache)
 vr.mirror_live.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 gi.probe_court 4.27  solo, the card lock held (PHOTON-5 stage 1, 2026-10-21; the lead's promotion at the merge)
-rtreflect.history_detectors 6.63  solo, the card lock held, :83 (PHOTON-7 stage 6 commit 6, 2026-10-23; was 3.93, PHOTON-5 stage 4)
+rtreflect.history_detectors 3.66  solo, the card lock held, :72 (PHOTON-7 10-3 R12, 2026-10-27: (a)'s bar derived - N + due, the window's 95 % time after the source's arrival; 578 frames)
 rtreflect.emitters 1.24  solo, the card lock held, :81, warm (PHOTON-7 stage 11, 11-1a, 2026-10-26; the cold first run 13.69 s, 151 compiles)
 rtreflect.nee_firefly 15.42  solo, the card lock held, :81 (PHOTON-7 stage 11, 11-1b, 2026-10-26: jahlab on photon-firefly, 480x270, two sessions of 750 frames)
 rtreflect.sphere_glint 2.04  solo, the card lock held, :81 (PHOTON-7 stage 11, the energy-exact glint, 2026-10-27: three scenes of 12 frames, 960x540)

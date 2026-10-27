@@ -20,8 +20,10 @@
 //       picture the screen march reads - are read in HDR every frame; each one's number is the
 //       frames from the step until it holds 95 % of its own settled change. THE LAW (PHOTON-7
 //       stage 5, the lead's ruling; rule #21 - a bar measures only what its own code decides): the
-//       reflection arrives within 16 frames of the frame ITS SOURCE does (kArrivalLagFrames: the
-//       deleted warm-up's 2 x 8). The source's own catch-up is the GI's - the box's diffuse indirect is
+//       reflection arrives within N + due of the frame ITS SOURCE does (R12: the bar DERIVED - the
+//       moving history's 95 % time at its window, ceil( ln 0.05 / ln( 1 - 1/12 ) ) = 35 frames,
+//       counted from the source's arrival, the frames due before the reflection's input holds; it
+//       was 16, "the deleted warm-up's 2 x 8"). Measured 2026-10-27: the source 4, the reflection 10. The source's own catch-up is the GI's - the box's diffuse indirect is
 //       the gather's, settling while the relight is spread over GiQualityFacts::lightWorkFrames (L7: a
 //       lamp's indirect catching up over frames is not a pop), bounded by the GI's own laws
 //       (gi.hold_after_stop) - never the detectors'. Measured at stage 5: the source at 14, the
@@ -116,7 +118,13 @@ static float meanDiff(const Image &a, const Image &b, unsigned y0, unsigned y1)
 /// The sources this row measures (its bars are Both's).
 static constexpr ReflectSources kSources = ReflectSources::Both;
 /// (a)'s law: the reflection arrives within this many frames of its source (the restated law, PHOTON-7 stage 5).
-static constexpr int kArrivalLagFrames = 16;
+/// (a)'s BAR, DERIVED (R12; it was 16 frames, picked as "the deleted warm-up's 2 x 8"): the moving history blends its
+/// input in at no less than 1 / MaxFrames a frame (rq_reflect_temporal.comp: N = min( N_hist c + 1, MaxFrames ), the blend
+/// 1 / N; MaxFrames 12, OgreRayQuery.cpp's kReflectMaxFrames, restated), so a step in its input holds 95 % within
+/// ceil( ln 0.05 / ln( 1 - 1 / 12 ) ) = 35 frames of the input's own arrival - and its input is the surface its source
+/// shows (the frames the source took are what is due before the reflection can follow).
+static constexpr int kReflectWindow = 12;
+static const int kArrivalLagFrames = int(std::ceil(std::log(0.05) / std::log(1.0 - 1.0 / double(kReflectWindow))));
 
 static void rayTier(Scene *s, View *view)
 {
@@ -315,8 +323,8 @@ int main()
     }
 
     const LampStepArrivals a = lampStep(e, view);
-    // THE LAW (the header; PHOTON-7 stage 5, the lead's ruling, restated): the reflection holds 95 % of a radiance
-    // change within kArrivalLagFrames of the frame its SOURCE does. Measured from the step alone: 24 at the base (the
+    // THE LAW (the header; PHOTON-7 stage 5, the lead's ruling, restated; the bar derived in 10-3 R12): the reflection
+    // holds 95 % of a radiance change within kArrivalLagFrames (the window's 95 % time) of the frame its SOURCE does. Measured from the step alone: 24 at the base (the
     // 1/32 floor's drain), 11 with the radiance cap (PHOTON-5), 7 with the clamp and its confidence (PHOTON-2 1b); at
     // stage 5 the source 14, the reflection 24; 33 under Lumen's denoiser in Both (stage 6, the step alone).
     CHECK_MSG(a.source > 0 && a.reflection > 0, "(a) both arrivals measured (the source %d, the reflection %d)",
