@@ -182,11 +182,6 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->fogHeightFalloff = v.toFloat(); });
     add("fogHeightLevel", [](const ScenePtr &s) { return QVariant(s->fogHeightLevel); },
         [](const ScenePtr &s, const QVariant &v) { s->fogHeightLevel = v.toFloat(); });
-    add("fogBreakMinBrightness",
-        [](const ScenePtr &s) { return QVariant(s->fogBreakMinBrightness); },
-        [](const ScenePtr &s, const QVariant &v) { s->fogBreakMinBrightness = v.toFloat(); });
-    add("fogBreakFalloff", [](const ScenePtr &s) { return QVariant(s->fogBreakFalloff); },
-        [](const ScenePtr &s, const QVariant &v) { s->fogBreakFalloff = v.toFloat(); });
     add("shadowEnabled", [](const ScenePtr &s) { return QVariant(s->shadowEnabled); },
         [](const ScenePtr &s, const QVariant &v) { s->shadowEnabled = v.toBool(); });
 

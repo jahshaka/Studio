@@ -71,6 +71,8 @@ gi.glass_pass_noray 1.22  solo, the card lock held, :74, warm (PHOTON-7 10-4 R6 
 gi.lamps_outside 1.20  the card lock held, :74, by ctest (PHOTON-7 10-4 R9 (1) 2026-10-27: a sealed box, seventeen lamps outside, fifteen of them Forward+; the opening and the sealed arm; 17 frames; the mirror pillar since R9 (2))
 gi.lamps_outside_cards 2.24  the card lock held, :74, by ctest (PHOTON-7 10-4 R9 (3) 2026-10-27: 29 lamps reach the floor's cards, the 48-lamp table; 120 frames)
 gi.lamps_outside_noray 4.75  the card lock held, :74, by ctest (PHOTON-7 10-4 R9 at the no-ray tier 2026-10-27: the voxel chain's shadow march to each Forward+ lamp; the black shell, the chain at rest before each reading; 77 frames)
+gi.fog_shaft 1.14  the card lock held, :74, by ctest (PHOTON-7 10-4 R11 2026-10-27: a black room, the fog its only light, the sun through a roof opening - the opening, the roof closed, a pane; 25 frames)
+gi.fog_sealed 1.20  the card lock held, :74, by ctest (PHOTON-7 10-4 R11 2026-10-27: the sealed room with the sun and a Sky Light; 9 frames; red until jahSkyVis)
 gi.photon_window 8.01  the card lock held, :74, warm, in its subsystem's run (PHOTON-7 10-4 item 2 2026-10-26: the ray tier at High - the hole and three pane materials, two views, eight readers; 368 frames; RED until R7/R8)
 gi.photon_window_noray 5.69  the card lock held, :74, warm, in its subsystem's run (PHOTON-7 10-4 item 2 2026-10-26: the no-ray tier as it ships - the hole and three pane materials, six readers; 199 frames; RED until R7/R8)
 gi.photon_window_sky 9.09  the card lock held, :74, warm, by hand (PHOTON-7 10-4 R7 2026-10-27: the ray tier at High - the sky alone, the hole and three pane materials; 329 frames)

@@ -34,8 +34,7 @@
 //      5 against the reference);
 //  4b. THE AERIAL SCALE: 0 reads T = 1 (no air) at 125 m and 2 km, 0.5 the air
 //      of half the distance, paired against 1, and it moves no sky pixel;
-//   5. the World fog ADDS: fog density D on top gives T_air x 2^(-D d); and its
-//      breakthrough never bends the AIR (a bright surface at 2 km);
+//   5. the World fog ADDS: fog density D on top gives T_air x 2^(-D d);
 //   6. THE HEIGHT LAYER IS SKY-COLOURED under the realistic sky — a magenta
 //      authored colour shows green — and its colour at sunset differs from
 //      noon (redder); under the single-colour sky it is the authored colour;
@@ -327,7 +326,6 @@ int main()
         fog.enabled = true;
         fog.colour = Colour(1.0f, 0.0f, 1.0f);
         fog.density = 0.001f;          // exp2 per metre: half gone at 1 km on its own
-        fog.breakFalloff = 0.0f;       // the law, not the breakthrough's bend of it
         r.s->setFog(fog);
         const double t = transmittance(r, 500.0f);
         const double ref = airT(1.0, 500.0) * std::exp2(-0.001 * 500.0);
@@ -342,30 +340,6 @@ int main()
                   "...and switching the World fog off leaves the air (%.4f against %.4f)", back, air);
     }
 
-    // ---- 5b. THE BREAKTHROUGH BENDS THE WORLD FOG, NEVER THE AIR ------------
-    // (the fix round's F4) The World fog ON at the constructor's breakthrough
-    // pair (0.25 / 0.1) but with NO density of its own, and a box glowing at
-    // luminance ~4 at 2 km. Before the fix the breakthrough weight multiplied
-    // the WHOLE exponential — air included — so a bright surface kept a
-    // quarter of the air's haze off. The air is pure extinction whatever the
-    // pixel's brightness: T(2 km) is exp(-sigma d) at emissive 4.0 / 4.5 too.
-    {
-        FogDesc fog;
-        fog.enabled = true;
-        fog.colour = Colour(1.0f, 0.0f, 1.0f);
-        fog.density = 0.0f;
-        fog.breakMinBrightness = 0.25f;
-        fog.breakFalloff = 0.1f;
-        r.s->setFog(fog);
-        const double t = transmittance(r, 2000.0f, nullptr, 4.0f, 4.5f);
-        const double ref = airT(1.0, 2000.0);
-        CHECK_MSG(std::fabs(t - ref) <= kTolT,
-                  "a surface at luminance ~4 under the World fog's breakthrough keeps the AIR's "
-                  "haze: T(2 km) %.4f against the model's %.4f", t, ref);
-        fog.enabled = false;
-        r.s->setFog(fog);
-    }
-
     // ---- 6. THE HEIGHT LAYER IS SKY-COLOURED -------------------------------
     // A height layer with no falloff and no distance fog: a uniform medium of
     // the height layer's own colour. The authored colour is magenta (no green),
@@ -377,7 +351,6 @@ int main()
         fog.density = 0.0f;
         fog.heightDensity = 0.004f;
         fog.heightFalloff = 0.0f;
-        fog.breakFalloff = 0.0f;
         r.s->setFog(fog);
         Colour noon, sunset, authored;
         r.s->setSky(realisticSky(60.0f, 0.0f, 1.0f));
@@ -435,7 +408,6 @@ int main()
         FogDesc fog;
         fog.enabled = true;
         fog.density = 0.1f;            // 2^-33 at the ground's nearest visible row
-        fog.breakFalloff = 0.0f;
         r.s->setFog(fog);
         r.s->setSky(realisticSky(3.0f, 60.0f, 1.0f));
         ImageF img;

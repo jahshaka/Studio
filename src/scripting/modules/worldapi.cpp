@@ -246,12 +246,13 @@ QVector<VerbInfo> WorldApi::verbs() const
         { "gravity", "world.gravity(value) -> bool",
           "Sets world gravity (drives the physics world too). One undo step — the World panel's own.",
           Needs::Document },
-        { "fog", "world.fog({enabled, color, density, heightDensity, heightFalloff, heightLevel, breakMinBrightness, breakFalloff}) -> bool",
+        { "fog", "world.fog({enabled, color, density, heightDensity, heightFalloff, heightLevel}) -> bool",
           "Sets any subset of the fog settings. Fog is EXPONENTIAL: transmittance = 2^(-distance * density), "
           "so density is the loss per world unit (a surface 1/density away keeps half its colour). "
           "heightDensity > 0 adds a second layer of the same colour whose density falls off with world Y "
-          "(density(y) = heightDensity * 2^(-(y - heightLevel) * heightFalloff)). breakMinBrightness/"
-          "breakFalloff let bright pixels resist the fog (breakFalloff 0 = pure exponential). "
+          "(density(y) = heightDensity * 2^(-(y - heightLevel) * heightFalloff)). A FOG IS LIT BY WHAT REACHES "
+          "IT: its colour is the medium fully lit, and along each eye ray it takes the sun's shadow and the "
+          "measured sky visibility (a sealed room's fog is dark; a sun shaft through a window glows). "
           "THE SKY DECIDES THE COLOUR, AND UNDER THE REALISTIC SKY THE AIR IS ALWAYS THERE: that sky "
           "is the planet's atmosphere, so its own AERIAL PERSPECTIVE hazes every lit surface with "
           "distance whether or not this fog is enabled — the light the air scatters in and what of "

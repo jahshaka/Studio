@@ -3417,12 +3417,9 @@ void fog_transmittance_is_exponential() {
     CHECK_MSG(!near(far0, kMagenta, 30),
               "baseline far surface is not fog-coloured: %d %d %d", far0.r, far0.g, far0.b);
 
-    // Breakthrough off for the law: it deliberately bends the curve (see the
-    // breakthrough test below), and the law is about the curve.
     FogDesc fog;
     fog.enabled = true;
     fog.colour = kMagenta;
-    fog.breakFalloff = 0.0f;
     fog.density = 0.12f;
     s->setFog(fog);
     render(fx.e); REQUIRE(v->readPixels(img));
@@ -3783,7 +3780,6 @@ void fog_atmosphere_colour_follows_the_sky() {
     FogDesc fog;
     fog.enabled = true;
     fog.colour = kMagenta;
-    fog.breakFalloff = 0.0f;
     fog.density = 0.2f;
     s->setFog(fog);
     render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
@@ -4050,7 +4046,6 @@ void fog_atmosphere_colour_is_the_skys() {
     FogDesc fog;
     fog.enabled = true;
     fog.colour = kMagenta;
-    fog.breakFalloff = 0.0f;
     fog.density = 0.2f;
     // (1) THE DISTANCE LAYER.
     const Px distAuthored = shoot(image, fog);
@@ -4090,7 +4085,6 @@ void fog_height_layer() {
     FogDesc fog;
     fog.enabled = true;
     fog.colour = kMagenta;
-    fog.breakFalloff = 0.0f;
 
     // (1) Distance fog alone.
     fog.density = 0.15f;
@@ -4144,50 +4138,6 @@ void fog_height_layer() {
               "no height layer is exactly plain distance fog: %d %d %d vs %d %d %d",
               noHeight.r, noHeight.g, noHeight.b, distanceOnly.r, distanceOnly.g, distanceOnly.b);
 }
-
-void fog_breakthrough_spares_bright_surfaces() {
-    Fixture fx;
-    View *v = fx.view("fog-b-view", 96, 96, kBlue); REQUIRE(v);
-    Scene *s = fx.scene("fog-b-scene");             REQUIRE(s);
-    v->setScene(s);
-    populate(s, kOrange);
-    aim(v);
-    // A big EMISSIVE backdrop: emissive is part of the colour the fog sees, so
-    // this surface is bright enough to break through.
-    const NodeId farNode = s->createNode();
-    REQUIRE(farNode != 0);
-    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
-    PbrParams p;
-    p.albedo = Colour(0.05f, 0.05f, 0.05f);
-    p.emissive = Colour(0.0f, 3.0f, 0.0f);      // green, well past breakMinBrightness
-    const MaterialId mat = s->createPbrMaterial(p);
-    REQUIRE(mesh != 0); REQUIRE(mat != 0);
-    REQUIRE(s->attachMesh(farNode, mesh, mat));
-    enginetest::setNodePosition(s, farNode, Vec3(-28.6f, -23.4f, -33.8f));
-    enginetest::setNodeScale(s, farNode, Vec3(60.0f, 60.0f, 60.0f));
-
-    Image img;
-    FogDesc fog;
-    fog.enabled = true;
-    fog.colour = kMagenta;
-    fog.density = 0.25f;
-    fog.breakFalloff = 0.0f;                    // plain exponential
-    s->setFog(fog);
-    render(fx.e); REQUIRE(v->readPixels(img));
-    const Px plain = px(img, img.width / 2, 6);
-
-    fog.breakMinBrightness = 0.25f;
-    fog.breakFalloff = 2.0f;                    // bright pixels resist
-    s->setFog(fog);
-    render(fx.e); REQUIRE(v->readPixels(img));
-    const Px broken = px(img, img.width / 2, 6);
-    std::printf("    emissive backdrop: plain %d %d %d, breakthrough %d %d %d\n",
-                plain.r, plain.g, plain.b, broken.r, broken.g, broken.b);
-    CHECK_MSG(broken.g > plain.g + 2,
-              "a bright surface keeps more of itself with breakthrough on: %d vs %d",
-              broken.g, plain.g);
-}
-
 
 // ---------------------------------------------------------------------------
 // The compositor chain (POST_CHAIN_SPEC.md phases 0-1).
@@ -6672,7 +6622,6 @@ int main(int argc, char **argv) {
         { "fog_atmosphere_colour_is_the_skys",       fog_atmosphere_colour_is_the_skys },
         { "fog_atmosphere_colour_follows_the_sky",   fog_atmosphere_colour_follows_the_sky },
         { "sun_disc_stays_out_of_the_skys_ambient",  sun_disc_stays_out_of_the_skys_ambient },
-        { "fog_breakthrough_spares_bright_surfaces", fog_breakthrough_spares_bright_surfaces },
         { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
         { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },
         { "msaa_runtime_toggle_and_clamping",       msaa_runtime_toggle_and_clamping },

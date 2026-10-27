@@ -858,6 +858,31 @@ jah_gpu_row(gi.lamps_outside_noray CLASS engine COMMAND test_gi_lamps_outside no
 set_tests_properties(gi.lamps_outside_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 77)
 
+# gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
+# fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
+# a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark (test_gi_fog_inscatter.cpp
+# says the laws; red on the base: the fog scattered its colour with no visibility). A fixture, one row a law.
+add_executable(test_gi_fog_inscatter test_gi_fog_inscatter.cpp)
+set_target_properties(test_gi_fog_inscatter PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_fog_inscatter PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_fog_inscatter PRIVATE JahshakaEngine)
+add_dependencies(test_gi_fog_inscatter JahshakaEngineMedia)
+jah_gpu_row(gi.fog_shaft CLASS engine COMMAND test_gi_fog_inscatter shaft
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.fog_shaft PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 25)
+jah_gpu_row(gi.fog_sealed CLASS engine COMMAND test_gi_fog_inscatter sealed
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.fog_sealed PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 9)
+
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
 # rq.hitListCap holding the records to a third FORCES drops and the floor stays within one code (the picture's

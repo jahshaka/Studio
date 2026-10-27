@@ -471,9 +471,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogHeightDensity = sceneObj.value("fogHeightDensity").toDouble(scene->fogHeightDensity);
     scene->fogHeightFalloff = sceneObj.value("fogHeightFalloff").toDouble(scene->fogHeightFalloff);
     scene->fogHeightLevel = sceneObj.value("fogHeightLevel").toDouble(scene->fogHeightLevel);
-    scene->fogBreakMinBrightness =
-        sceneObj.value("fogBreakMinBrightness").toDouble(scene->fogBreakMinBrightness);
-    scene->fogBreakFalloff = sceneObj.value("fogBreakFalloff").toDouble(scene->fogBreakFalloff);
 
     // Global illumination: absent (older scenes) or unknown values mean OFF.
     {
