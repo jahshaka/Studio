@@ -190,7 +190,10 @@ jah_gpu_row(scripting.e2e.sky_swap_transient SHIP CLASS app TIER epic NEEDS phot
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
          WORKING_DIRECTORY ${_sstHome}/run)
 set_tests_properties(scripting.e2e.sky_swap_transient PROPERTIES
-    ENVIRONMENT "HOME=${_sstHome};JAHSHAKA_DATA_ROOT=${_sstHome}/.local/share/Jahshaka"
+    # (THE DRIVER'S CACHE STAYS THE USER'S: the wiped home is the APP's shader cache, the subject; the NVIDIA driver's
+    # layer below it was warm when the row was priced, until its 1 GiB cap filled on 10-20 - URGENT #91. The driver
+    # appends GLCache to this path.)
+    ENVIRONMENT "HOME=${_sstHome};JAHSHAKA_DATA_ROOT=${_sstHome}/.local/share/Jahshaka;__GL_SHADER_DISK_CACHE_PATH=$ENV{HOME}/.cache/nvidia"
     FIXTURES_REQUIRED skySwapTransientFreshHome
     LABELS "scripting" TIMEOUT 60
     # the cold path is the subject (above): source.testing_rules R13 lets this root boot cold
