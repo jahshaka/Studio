@@ -36,6 +36,10 @@ __pycache__/
 
 # an agent's Xvfb pidfile lives in the worktree root (the rig law): never dirt, never committed
 *.pid
+# A SCREENSHOT AT THE TREE'S ROOT (PHOTON-7 stage 11, measured: an app run by hand from the root - its cwd - wrote
+# editor.screenshot's relative PNGs there, the build stamped DIRTY at its next BUILT_FROM, and every spec.sh record of the
+# next 2.5 h of card time was dropped as a dirty build's): never dirt, never committed. No tracked file is a root PNG.
+/*.png
 
 # THE DEMO SCENES (owner 2026-10-12): Bistro, San Miguel, Namaqualand are PROJECTS built into a data root from
 # ~/Downloads/demo-scenes (3 GB of ORCA / Poly Haven sources) — never in the tree, never on GitHub; the tracked
