@@ -1,5 +1,5 @@
 // gi.photon_window (PHOTON-7 10-4, item 2; L9: THE RENDERER FOLLOWS THE RAY) — A WINDOW PASSES THE LIGHT ITS MATERIAL PASSES,
-// ON EVERY PATH. gi.sealed_sky's room (4 x 3 x 4 m inside, 0.4 m walls, albedo 0.6, on a ground) with a 1 x 1 m opening in
+// ON EVERY PATH. gi.sealed_sky's room (4 x 3 x 4 m inside, 0.4 m walls, albedo 0.6, on a ground) with a 2 x 2 m opening in
 // its roof, off centre, and a 2 cm PANE in the opening; a white sky of radiance 1 (a cubemap: the environment the
 // reflections read and the SH beside it) and a sun 60 degrees up, intensity 3, whose beam through the opening lands on the
 // floor; a mirror (metal, roughness 0.05) on the floor, seen from a camera inside along the ray that reflects through the
@@ -11,9 +11,10 @@
 // THE LAW, per reader, per arm, at each tier (argv[1]: "ray" the ray tier at High, "noray" the no-ray tier as it ships):
 // (argv[2]: "sky" the sky alone - the transmission of the sky's light into the room, R7's; "sun" the sky and the sun -
 // the sun patch too, the shadow maps' and the traced sun's, R8's)
-// the arm's reading equals T times the hole's, |G - T H| <= 2 SE + H / 255, where SE is the standard error of the mean of the
-// reader's PAIRED differences (sample by sample, G_i - T H_i: the hole's own noise and the arm's, measured, not picked) and
-// H / 255 is one code at the reading's level (the display's quantum: L8 R3). The readers (every one a mean over its points):
+// the arm's reading equals T times the hole's, |G - T H| <= 2 SE + one code, where SE is the standard error of the mean of
+// the reader's PAIRED differences (sample by sample, G_i - T H_i: the hole's own noise and the arm's, measured, not
+// picked) and one code is the display's 8-bit sRGB step at T H (the encoding's own quantum at the reading's level, what a
+// user can see change there: L8 R3; the readings are radiance, the picture's unit). The readers (every one a mean over its points):
 //   (1) THE SUN PATCH under the opening, on the floor: the PIXEL (the HDR readback: the shadow map's direct + the gather),
 //       the CARDS (Scene::readCardAt: the card's radiance; its traced sun term printed), the VOXELS (cascade 0's floor cells:
 //       the injection's direct + the bounce);
@@ -85,6 +86,15 @@ bool toPixel(const Vec3 &eye, const Vec3 &at, const Vec3 &w, unsigned W, unsigne
     return px >= 0 && py >= 0 && px < int(W) && py < int(H);
 }
 double brightest(const float *c) { return std::max(c[0], std::max(c[1], c[2])); }
+// ONE CODE AT A LEVEL: the display's 8-bit sRGB step at linear radiance L (the encode's own quantum: the next code's
+// linear value minus L) - what a user can see change at that level, derived from the encoding, never picked
+double srgbEncode(double L) { return L <= 0.0031308 ? 12.92 * L : 1.055 * std::pow(L, 1.0 / 2.4) - 0.055; }
+double srgbDecode(double v) { return v <= 0.04045 ? v / 12.92 : std::pow((v + 0.055) / 1.055, 2.4); }
+double oneCodeAt(double L)
+{
+    const double code = std::floor(srgbEncode(std::max(L, 0.0)) * 255.0);
+    return std::max(srgbDecode(std::min(code + 1.0, 255.0) / 255.0) - std::max(L, 0.0), 1e-9);
+}
 }   // namespace
 
 int main(int argc, char **argv)
@@ -132,8 +142,10 @@ int main(int argc, char **argv)
     box(scene, Vec3(0.0f, 1.5f, -2.2f), Vec3(4.8f, 3.0f, 0.4f), wall);
     box(scene, Vec3(0.0f, 1.5f, 2.2f), Vec3(4.8f, 3.0f, 0.4f), wall);
     box(scene, Vec3(0.0f, -0.6f, 0.0f), Vec3(20.0f, 0.4f, 20.0f), wall);
-    // the roof (y 3.0 .. 3.4) around the 1 x 1 m opening at x [0.1, 1.1], z [-1.1, -0.1]
-    const float ox0 = 0.1f, ox1 = 1.1f, oz0 = -1.1f, oz1 = -0.1f;
+    // the roof (y 3.0 .. 3.4) around the 2 x 2 m opening at x [-0.6, 1.4], z [-1.4, 0.6] (2 m: the no-ray tier's coarse
+    // cells - 0.31 m where its rays meet the roof - hold the opening's rim with the roof, and a 1 m opening is mostly
+    // rim there: both arms' rays stop at it, the hole's own estimate far from the exact answer)
+    const float ox0 = -0.6f, ox1 = 1.4f, oz0 = -1.4f, oz1 = 0.6f;
     slab(scene, -2.4f, 3.0f, -2.4f, ox0, 3.4f, 2.4f, wall);
     slab(scene, ox1, 3.0f, -2.4f, 2.4f, 3.4f, 2.4f, wall);
     slab(scene, ox0, 3.0f, -2.4f, ox1, 3.4f, oz0, wall);
@@ -146,7 +158,7 @@ int main(int argc, char **argv)
     const NodeId pane = slab(scene, ox0, 3.19f, oz0, ox1, 3.21f, oz1, paneMat);
     // the mirror on the floor where the eye's reflected ray meets the opening's centre
     const Vec3 eye(1.6f, 2.2f, 1.8f);
-    const Vec3 mirrorAt(1.18f, 0.0f, 0.78f);
+    const Vec3 mirrorAt(1.09f, 0.0f, 0.87f);
     {
         PbrParams metal;
         metal.albedo = Colour(0.95f, 0.95f, 0.95f);
@@ -155,7 +167,8 @@ int main(int argc, char **argv)
         box(scene, Vec3(mirrorAt.x, 0.01f, mirrorAt.z), Vec3(0.6f, 0.02f, 0.6f), scene->createPbrMaterial(metal));
     }
     if (!pane) { std::printf("FAIL: the pane\n"); return 1; }
-    // the sun, 60 degrees up, travelling towards -x: its beam through the opening lands on the floor at x [-1.63, -0.86]
+    // the sun, 60 degrees up, travelling towards -x: its beam through the opening lands on the floor at x [-2, -0.56],
+    // z [-1.4, 0.6] (and on the -x wall below the beam's far edge)
     if (sun) enginetest::addDirectionalLight(scene, Vec3(-0.5f, -0.8660254f, 0.0f), 3.0f);
     {
         SkyDesc sky;
@@ -172,7 +185,7 @@ int main(int argc, char **argv)
     gi.bounces = true;
     gi.updateBudget = 0;
     if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
-    const Vec3 atA(-1.25f, 0.0f, 0.1f);
+    const Vec3 atA(-1.25f, 0.0f, 0.45f);
     enginetest::testCameraLookAt(viewA, eye, atA);
     enginetest::testCameraLookAt(viewB, eye, mirrorAt);
     e->waitForAsyncShaders();
@@ -200,8 +213,8 @@ int main(int argc, char **argv)
     std::vector<Vec3> patch, beside, mirror;
     for (int a = 0; a < 4; ++a)
         for (int b = 0; b < 4; ++b) {
-            patch.push_back(Vec3(-1.5f + 0.5f * a / 3.0f, 0.0f, -0.9f + 0.6f * b / 3.0f));
-            beside.push_back(Vec3(-1.5f + 0.5f * a / 3.0f, 0.0f, 0.4f + 0.6f * b / 3.0f));
+            patch.push_back(Vec3(-1.6f + 0.6f * a / 3.0f, 0.0f, -1.1f + 1.4f * b / 3.0f));
+            beside.push_back(Vec3(-1.5f + 0.5f * a / 3.0f, 0.0f, 1.0f + 0.6f * b / 3.0f));
         }
     for (int a = 0; a < 5; ++a)
         for (int b = 0; b < 5; ++b) mirror.push_back(Vec3(mirrorAt.x - 0.08f + 0.04f * a, 0.02f, mirrorAt.z - 0.08f + 0.04f * b));
@@ -247,7 +260,7 @@ int main(int argc, char **argv)
                         if (!(cOcc > 0.0f)) continue;
                         const double cx = v.origin[0] + (x + 0.5) * v.cell[0], cy = v.origin[1] + (y + 0.5) * v.cell[1],
                                      cz = v.origin[2] + (z + 0.5) * v.cell[2];
-                        const bool inPatch = cx > -1.55 && cx < -0.95 && cz > -0.95 && cz < -0.25;
+                        const bool inPatch = cx > -1.65 && cx < -0.95 && cz > -1.15 && cz < 0.35;
                         const float L[3] = { v.light[i] / cOcc, v.light[i + 1] / cOcc, v.light[i + 2] / cOcc };
                         if (c == 0 && inPatch && cy - 0.5 * v.cell[1] <= 0.0 && cy + 0.5 * v.cell[1] > 0.0)
                             patchR.v.push_back(brightest(L));
@@ -352,7 +365,7 @@ int main(int argc, char **argv)
             md = n ? md / double(n) : 0.0;
             for (size_t i = 0; i < n; ++i) sd += (r.v[i] - T * h.v[i] - md) * (r.v[i] - T * h.v[i] - md);
             const double se = n > 1 ? std::sqrt(sd / double(n - 1) / double(n)) : 0.0;
-            const double H = mean(h.v), G = mean(r.v), code = H / 255.0, bar = 2.0 * se + code;
+            const double H = mean(h.v), G = mean(r.v), code = oneCodeAt(T * H), bar = 2.0 * se + code;
             const bool ok = h.ok && r.ok && n > 0 && h.v.size() == r.v.size() && H > 0.0 && std::fabs(G - T * H) <= bar;
             std::printf("     %-40s %s: %.6f against T x the hole's %.6f (ratio %.4f; %+.2f codes; the bar %.2f codes: "
                         "2 SE %.6f + a code)\n", names[k], ok ? "ok  " : "FAIL", G, T * H, H > 0.0 ? G / H : -1.0,
