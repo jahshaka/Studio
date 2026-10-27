@@ -1,6 +1,6 @@
 #!/bin/bash
-# warm-app-cache.sh <build-dir> [--check] [--tests-dir <dir>] — THE TREE'S SHARED APP SHADER CACHE, WARM AT ITS KEY
-# (URGENT #52, 2026-10-24).
+# warm-app-cache.sh <build-dir> [--check] [--tests-dir <dir>] — THE TREE'S TWO SHARED SHADER CACHES, WARM AT THEIR KEY
+# (URGENT #52, 2026-10-24; the engine rows' cache and the ray tier's SPIR-V in the key: PHOTON-7 11-2, 2026-10-28).
 #
 # WHY. Every app row boots on the tree's ONE shared app cache (<build>/tests/.shadercache; tests/support/fresh_home.sh
 # --warm) and a GREEN run promotes what it compiled. Under the 60 s cap (URGENT #48) a row whose boot compiles cold past
@@ -11,7 +11,10 @@
 #
 # THE KEY: what the engine's shader-cache layer keys are made of (irisgl/engine/src/OgreShaderCache.cpp configure() and
 # load()), read from the build without booting - the engine build id (<build>/engine/generated/
-# jahshaka_engine_build_id.h: the engine's own sources, kCacheFormat among them), the fork commit the engine was compiled
+# jahshaka_engine_build_id.h: the engine's own sources, kCacheFormat among them), THE RAY TIER's BUILT-IN SPIR-V
+# (<build>/engine/generated/rayquery/*_spv.h: compiled into the engine, not media, and outside the build id - an
+# rq_reflect edit left both caches "warm" while every boot paid ~30 s building the reflection's two pipelines cold, and
+# a row at the cap timed out and promoted nothing: gi.rough_reference 60 s, 2026-10-28), the fork commit the engine was compiled
 # against (compile_commands.json's JAHSHAKA_OGRE_FORK_COMMIT), the staged Hlms and Photon media (<build>/bin/media, the
 # directories the engine hashes), glslang's build_info.h, the build type, and the GPU (name and driver). sha256 of
 # those, its first 16 hex digits.
@@ -32,36 +35,43 @@
 # silently), or nothing to promote (the boot compiled nothing the shared cache lacked). A promotion fresh_home SKIPPED -
 # its rule (3), "NOT replaced" (another home promoted since this one was seeded), or its lock not had ("no promotion") -
 # leaves the stamp unwritten: the cache stays cold at the key and the next call warms again (exit 0: the boot passed).
-# THE BOOT: `Jahshaka --engine-selftest` - the app's own startup warm-up gate (the born World's set: Epic, every
-# feature) PLUS the self-test's six poses (the default scene, fixture B with the rays on and off, the motion pose, the
-# mover) - a superset of the warm-up path, and the set of the row the cap broke first (app.engine_selftest_validation).
+# THE BOOTS, one a cache, each only where its cache is cold:
+#   app     <tests-dir>/.shadercache (the app rows', fresh_home --warm), stamp .shadercache.warm-key: `Jahshaka
+#           --engine-selftest` - the app's own startup warm-up gate (the born World's set: Epic, every feature) PLUS the
+#           self-test's six poses (the default scene, fixture B with the rays on and off, the motion pose, the mover) - a
+#           superset of the warm-up path, and the set of the row the cap broke first (app.engine_selftest_validation).
+#   engine  <tests-dir>/.shadercache-engine (the CLASS engine rows', fresh_home --warm --cache engine, tests/CMakeLists.txt
+#           jah_gpu_row), stamp .shadercache-engine.warm-key: jahlab on photon-rough at Epic in Both, a few frames - the
+#           ray tier's every pipeline (the gather, the reflection and its compact pass, the resolve, the temporal, the
+#           filter) and the photon envs' Hlms set the lab rows share (--lab <exe>, default <build>/bin/jahlab).
 # A row booting a test tier with features off (JAHSHAKA_TEST_NEEDS) compiles its own variants once more; what it adds is
-# promoted by its own green run.
+# promoted by its own green run. ONE answer for both: "warm at <key>" when both are, else "cold at <key>: <the cold
+# ones' whys>" (exit 3 under --check; else their boots, exit 0 when every boot passed).
 set -u
-BUILD=""; CHECK=0; TESTS=""; APP=""
+BUILD=""; CHECK=0; TESTS=""; APP=""; LAB=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
         --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; shift 2 ;;
         --app) APP="${2:?--app needs an executable}"; shift 2 ;;
+        --lab) LAB="${2:?--lab needs an executable}"; shift 2 ;;
         -*) echo "warm-app-cache: unknown flag $1" >&2; exit 64 ;;
         *) BUILD="$1"; shift ;;
     esac
 done
-[ -n "$BUILD" ] && [ -d "$BUILD" ] || { echo "usage: warm-app-cache.sh <build-dir> [--check] [--tests-dir <dir>] [--app <exe>]" >&2; exit 64; }
+[ -n "$BUILD" ] && [ -d "$BUILD" ] || { echo "usage: warm-app-cache.sh <build-dir> [--check] [--tests-dir <dir>] [--app <exe>] [--lab <exe>]" >&2; exit 64; }
 BUILD=$(cd "$BUILD" && pwd)
 HERE=$(cd "$(dirname "$0")" && pwd)
 SRC=$(cd "$HERE/.." && pwd)
 TESTS=${TESTS:-$BUILD/tests}
 mkdir -p "$TESTS"
-SHARED="$TESTS/.shadercache"
-STAMP="$TESTS/.shadercache.warm-key"
 
 # ---- THE KEY ------------------------------------------------------------------------------------------------------
 key_inputs() {
     local id="$BUILD/engine/generated/jahshaka_engine_build_id.h"
     [ -f "$id" ] || { echo "warm-app-cache: no engine build id at $id (build the tree first)" >&2; return 1; }
     echo "build-id $(sha256sum < "$id" | cut -c1-64)"
+    echo "rq-spirv $(cd "$BUILD/engine/generated" 2>/dev/null && find rayquery -name '*_spv.h' -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0 -r sha256sum | sha256sum | cut -c1-64)"
     echo "fork $(grep -o -m1 'JAHSHAKA_OGRE_FORK_COMMIT=[^ ]*' "$BUILD/compile_commands.json" 2>/dev/null | grep -oE '[0-9a-f]{40}' | head -1)"
     local d
     for d in Hlms Photon; do
@@ -79,23 +89,28 @@ KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
 layer_keys() {   # the shared cache's per-layer keys (its manifest's last column), sorted, one line
     [ -f "$1/cache-manifest.txt" ] && awk '$1 == "file" { print $NF }' "$1/cache-manifest.txt" | LC_ALL=C sort -u | tr '\n' ' '
 }
-why=""
-if [ ! -f "$STAMP" ]; then why="no warm-up recorded"
-elif [ "$(sed -n 1p "$STAMP")" != "$KEY" ]; then why="the key moved (warmed at $(sed -n 1p "$STAMP"))"
-elif [ ! -f "$SHARED/cache-manifest.txt" ]; then why="the shared cache is gone"
-elif [ "$(sed -n 2p "$STAMP")" != "$(layer_keys "$SHARED")" ]; then why="the shared cache was replaced at another key since"
-fi
-if [ -z "$why" ]; then
+cold_why() {   # <shared> <stamp>: empty when warm at the key, else why not
+    if [ ! -f "$2" ]; then echo "no warm-up recorded"
+    elif [ "$(sed -n 1p "$2")" != "$KEY" ]; then echo "the key moved (warmed at $(sed -n 1p "$2"))"
+    elif [ ! -f "$1/cache-manifest.txt" ]; then echo "the shared cache is gone"
+    elif [ "$(sed -n 2p "$2")" != "$(layer_keys "$1")" ]; then echo "the shared cache was replaced at another key since"
+    fi
+}
+APP_SHARED="$TESTS/.shadercache"; APP_STAMP="$TESTS/.shadercache.warm-key"
+ENG_SHARED="$TESTS/.shadercache-engine"; ENG_STAMP="$TESTS/.shadercache-engine.warm-key"
+app_why=$(cold_why "$APP_SHARED" "$APP_STAMP")
+eng_why=$(cold_why "$ENG_SHARED" "$ENG_STAMP")
+if [ -z "$app_why" ] && [ -z "$eng_why" ]; then
     echo "warm at $KEY"
     exit 0
 fi
+why=""
+[ -n "$app_why" ] && why="$app_why"
+[ -n "$eng_why" ] && why="${why:+$why; }the engine rows' cache: $eng_why"
 echo "cold at $KEY: $why"
 [ "$CHECK" = 1 ] && exit 3
 
-# ---- THE BOOT (once, uncapped: not a test) -------------------------------------------------------------------------
-BIN="${APP:-$BUILD/bin/Jahshaka}"
-[ -x "$BIN" ] || { echo "warm-app-cache: no app at $BIN" >&2; exit 2; }
-HOME_DIR="$TESTS/warm-app-cache-home"
+# ---- THE BOOTS (once each, uncapped: not a test) -------------------------------------------------------------------
 XPID=""
 cleanup() { [ -n "$XPID" ] && kill "$XPID" 2>/dev/null; }
 trap cleanup EXIT
@@ -110,31 +125,60 @@ if [ -z "${DISPLAY:-}" ]; then
     done
     [ -n "${DISPLAY:-}" ] || { echo "warm-app-cache: no free display in 60-99" >&2; exit 2; }
 fi
-echo "warm-app-cache: booting $BIN --engine-selftest on $DISPLAY (home $HOME_DIR)"
-t0=$(date +%s)
-LOG="$TESTS/warm-app-cache.log"
-( cd "$BUILD/bin" && HOME="$HOME_DIR" JAHSHAKA_DATA_ROOT="$HOME_DIR/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
-      nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --label warm-app-cache \
-      sh "$SRC/tests/support/fresh_home.sh" --warm "$HOME_DIR" -- \
-      "$BIN" --engine-selftest "$HOME_DIR/run/warm.png" ) > "$LOG" 2>&1
-rc=$?
-wall=$(( $(date +%s) - t0 ))
-grep -E 'fresh_home.sh|^engine-selftest: .*-> (PASS|FAIL)' "$LOG" | head -5
-if [ $rc -ne 0 ]; then
-    echo "warm-app-cache: the boot FAILED (exit $rc) after ${wall} s - its log $LOG; the cache is not warm"
-    exit 1
+# boot <name> <shared> <stamp> <home> <log> <command...>: the boot through fresh_home (its --warm args in FH_ARGS), the
+# stamp only on a promotion; 0 passed (stamped or not), 1 failed
+boot() {
+    local name=$1 shared=$2 stamp=$3 home=$4 log=$5; shift 5
+    echo "warm-app-cache: booting the $name cache: $1 on $DISPLAY (home $home)"
+    local t0 rc wall skipped
+    t0=$(date +%s)
+    ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
+          nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --label "warm-app-cache ($name)" \
+          sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
+    rc=$?
+    wall=$(( $(date +%s) - t0 ))
+    grep -E 'fresh_home.sh|^engine-selftest: .*-> (PASS|FAIL)|^LAB (END|FAILED)' "$log" | head -5
+    if [ $rc -ne 0 ]; then
+        echo "warm-app-cache: the $name boot FAILED (exit $rc) after ${wall} s - its log $log; the cache is not warm"
+        return 1
+    fi
+    if [ ! -f "$shared/cache-manifest.txt" ]; then
+        echo "warm-app-cache: the $name boot passed but no shared cache was promoted ($shared) - not warm"
+        return 1
+    fi
+    skipped=$(grep -m1 -E 'fresh_home.sh: the shared cache NOT replaced|fresh_home.sh: .*no promotion' "$log")
+    if [ -n "$skipped" ]; then
+        echo "warm-app-cache: the $name boot passed in ${wall} s but its cache was NOT promoted (${skipped#fresh_home.sh: }) -" \
+             "not stamped: the cache stays cold at $KEY and the next call warms again"
+        return 0
+    fi
+    printf '%s\n%s\n' "$KEY" "$(layer_keys "$shared")" > "$stamp"
+    echo "warm-app-cache: the $name cache warm at $KEY - the boot ${wall} s, $(du -sh "$shared" | cut -f1)" \
+         "($(sed -n 's/^shaders //p' "$shared/cache-manifest.txt") shaders)"
+    return 0
+}
+fails=0
+if [ -n "$app_why" ]; then
+    BIN="${APP:-$BUILD/bin/Jahshaka}"
+    [ -x "$BIN" ] || { echo "warm-app-cache: no app at $BIN" >&2; exit 2; }
+    H="$TESTS/warm-app-cache-home"
+    FH_ARGS="--warm"
+    boot app "$APP_SHARED" "$APP_STAMP" "$H" "$TESTS/warm-app-cache.log" "$BIN" --engine-selftest "$H/run/warm.png" || fails=1
 fi
-if [ ! -f "$SHARED/cache-manifest.txt" ]; then
-    echo "warm-app-cache: the boot passed but no shared cache was promoted ($SHARED) - not warm"
-    exit 1
+if [ -n "$eng_why" ]; then
+    LABX="${LAB:-$BUILD/bin/jahlab}"
+    [ -x "$LABX" ] || { echo "warm-app-cache: no lab at $LABX" >&2; exit 2; }
+    H="$TESTS/warm-engine-cache-home"
+    FH_ARGS="--warm --cache engine"
+    mkdir -p "$TESTS"
+    printf 'reflections both\nframes 4\nquit\n' > "$TESTS/warm-engine-cache.lab"
+    boot engine "$ENG_SHARED" "$ENG_STAMP" "$H" "$TESTS/warm-engine-cache.log" \
+         env "JAHSHAKA_SHADER_CACHE_DIR=$H/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0 \
+         "$LABX" --headless --no-stdin --size 960x540 --data-root "$H/run/lab" --env photon-rough --tier epic \
+         --script "$TESTS/warm-engine-cache.lab" || fails=1
 fi
-skipped=$(grep -m1 -E 'fresh_home.sh: the shared cache NOT replaced|fresh_home.sh: .*no promotion' "$LOG")
-if [ -n "$skipped" ]; then
-    echo "warm-app-cache: the boot passed in ${wall} s but its cache was NOT promoted (${skipped#fresh_home.sh: }) - not" \
-         "stamped: the cache stays cold at $KEY and the next call warms again"
-    exit 0
+[ $fails = 0 ] || exit 1
+if [ -z "$(cold_why "$APP_SHARED" "$APP_STAMP")" ] && [ -z "$(cold_why "$ENG_SHARED" "$ENG_STAMP")" ]; then
+    echo "warm-app-cache: warm at $KEY - both caches"
 fi
-printf '%s\n%s\n' "$KEY" "$(layer_keys "$SHARED")" > "$STAMP"
-echo "warm-app-cache: warm at $KEY - the boot ${wall} s, the shared cache $(du -sh "$SHARED" | cut -f1)" \
-     "($(sed -n 's/^shaders //p' "$SHARED/cache-manifest.txt") shaders)"
 exit 0
