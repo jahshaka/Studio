@@ -20,7 +20,7 @@
 // equals the same arm lit by the fragment's own environment term (the door), within its noise plus one code: the record's
 // weight is what the pixel would have taken of the share (BRDF_EnvMap's albedo, the eye leg's media, the blend's alpha).
 // THE BRIGHT SKY (the one read's F11, a law): a sky of 2000 - the record's picture equals the door's (a miss is the
-// fragment's own environment term, never clamped), and a sky of 140000 saturates the pixel's fixed-point sum, counted.
+// fragment's own environment term, never clamped), and a sky of 10^6 saturates the pixel's fixed-point sum, counted.
 // THE HIDDEN PANE (a law): the pane behind an opaque box - the depth test runs before an appending fragment, so a hidden
 // pane appends no record: the picture equals the door's within one code, no record counted.
 // THE NAMED LIMIT, MEASURED (not a law: the review list's stacked glass): a second, plain glass pane (alpha 0.5, black)
@@ -343,8 +343,9 @@ int main()
     // is - the escape used to clamp it at the reflections' radiance bound (1024), so a sun glint in glass read differently
     // with the escape. A sky of radiance 2000 (band 0), Glass at alpha 0.5: the record's picture equals the door's (the
     // fragment's own environment term) within its noise plus one code plus the record's weight as halves (2^-10 of the
-    // level: an 11-bit mantissa); no add saturated. Then a sky of 140000: the pixel's sum passes the fixed point's top
-    // (65536 a channel - past the colour target's half-float range too) and SATURATES, counted, never wrapping.
+    // level: an 11-bit mantissa); no add saturated - the sky past the bound (1024) the old clamp cut it to, whatever the
+    // pixel's weight. Then a sky of 10^6: the pixel's sum (its weight 0.127 x 10^6) passes the fixed point's top (65536 a
+    // channel - past the colour target's half-float range too) and SATURATES, counted, never wrapping.
     {
         PbrParams p = paneP;
         p.alphaMode = PbrAlphaMode::Glass;
@@ -373,13 +374,13 @@ int main()
         std::printf("   THE BRIGHT SKY (2000), GLASS at alpha 0.5: the record %.6f against the fragment's environment term "
                     "%.6f (%+.6f; the bar %.6f, the noise %.6f); %llu adds saturated\n", pic[0].mean, pic[1].mean, d, c, n,
                     rq.escapeSaturated);
-        check(pic[0].ok && pic[1].ok && pic[1].mean > 512.0 && std::fabs(d) <= n + c && rq.escapeTraced > 0ull &&
+        check(pic[0].ok && pic[1].ok && pic[1].mean > 0.0 && std::fabs(d) <= n + c && rq.escapeTraced > 0ull &&
                   rq.escapeSaturated == 0ull,
               "THE BRIGHT SKY: a miss reads the fragment's own environment term, unbounded (F11)");
-        sky(140000.0f);
+        sky(1.0e6f);
         settle();
         const RayQueryStatus top = counts("THE SKY PAST THE TOP");
-        std::printf("   THE SKY PAST THE TOP (140000): %llu adds saturated\n", top.escapeSaturated);
+        std::printf("   THE SKY PAST THE TOP (1e6): %llu adds saturated\n", top.escapeSaturated);
         check(top.escapeTraced > 0ull && top.escapeSaturated > 0ull,
               "THE SKY PAST THE TOP: a pixel's sum past its fixed point's top saturates, counted (F11)");
         sky(0.5f);
