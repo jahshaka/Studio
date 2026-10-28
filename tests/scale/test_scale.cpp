@@ -376,7 +376,6 @@ static void lightListArms(Env &env)
         env.doc->getRootNode()->addChild(l);
         l->setPropertyValue(QStringLiteral("intensity"), intensity);
         l->setPropertyValue(QStringLiteral("distance"), range);
-        l->shadowMap.shadowType = iris::ShadowMapType::None;
         return l;
     };
     auto settle = [&] {
@@ -529,7 +528,6 @@ static void lightListArms(Env &env)
         area->setPropertyValue(QStringLiteral("distance"), 10.0f);
         area->setPropertyValue(QStringLiteral("rectWidth"), rectW);
         area->setPropertyValue(QStringLiteral("rectHeight"), rectH);
-        area->shadowMap.shadowType = iris::ShadowMapType::None;
         auto spot = [&](const QString &name, float x) {
             auto l = iris::LightNode::create();
             l->setLightType(iris::LightType::Spot);
@@ -541,7 +539,6 @@ static void lightListArms(Env &env)
             l->setPropertyValue(QStringLiteral("intensity"), 0.5f);
             l->setPropertyValue(QStringLiteral("distance"), 8.0f);
             l->setPropertyValue(QStringLiteral("spotCutOff"), 30.0f);
-            l->shadowMap.shadowType = iris::ShadowMapType::None;
         };
         if (spots) {
             // 7 m outside the box's +x / -x faces (inside the 8 m range).
@@ -779,7 +776,6 @@ static int lightsMain()
             env.doc->getRootNode()->addChild(l);
             l->setPropertyValue(QStringLiteral("intensity"), 0.25f);
             l->setPropertyValue(QStringLiteral("distance"), nearFillers ? 3.0f : 4.0f);
-            l->shadowMap.shadowType = iris::ShadowMapType::None;
         }
         auto key = iris::LightNode::create();
         key->setLightType(iris::LightType::Point);
@@ -788,7 +784,6 @@ static int lightsMain()
         env.doc->getRootNode()->addChild(key);
         key->setPropertyValue(QStringLiteral("intensity"), 6.0f);
         key->setPropertyValue(QStringLiteral("distance"), 10.0f);
-        key->shadowMap.shadowType = iris::ShadowMapType::None;
         env.doc->getRootNode()->applyStaticDefaults();
         setCamera(env, eye, iris::Vec3(0, 1, -2));
         auto settle = [&] {
@@ -899,7 +894,6 @@ static int lightsCostMain()
             env.doc->getRootNode()->addChild(l);
             l->setPropertyValue(QStringLiteral("intensity"), 0.5f);
             l->setPropertyValue(QStringLiteral("distance"), 30.0f);
-            l->shadowMap.shadowType = iris::ShadowMapType::None;
         }
         for (int f = 0; f < 600; ++f) {
             frame(env, 1);

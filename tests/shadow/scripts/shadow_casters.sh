@@ -25,17 +25,20 @@ seed_shaders() {   # seed_shaders <data root>
     ) 9>"$shared.lock"
 }
 rm -rf "$WORK"; mkdir -p "$WORK" || exit 1
+# EACH PROCESS'S HOME IS FRESH AND ITS SHADER CACHE COMES WARM (fresh_home.sh --warm: the tree's one shared app cache,
+# a green run's growth promoted). Booted cold the row compiled ~375 shaders and every ray pipeline per process and sat
+# at its 60 s cap on a loaded box (PHOTON-7 10-4: timed out there); the data root is still new each process.
+FRESH_HOME="$(cd "$(dirname "$0")/../../support" && pwd)/fresh_home.sh"
 for i in $(seq 1 "$RUNS"); do
     seed_shaders "$WORK/root$i"
     sed -e "s#@OUT@#$WORK/r$i#g" -e "s#@FIXTURE@#$FIXTURE#g" -e "s#@WHAT@#$WHAT#g" "$SCRIPT_IN" > "$WORK/r$i.js"
-    ( cd "$(dirname "$APP")" && timeout -k 10 300 "$APP" --data-root "$WORK/root$i" --script "$WORK/r$i.js" \
-          > "$WORK/r$i.log" 2>&1 )
+    sh "$FRESH_HOME" --warm "$WORK/home$i" -- sh -c 'cd "$(dirname "$1")" && exec timeout -k 10 300 "$1" --data-root "$2" --script "$3"' \
+        sh "$APP" "$WORK/home$i/.local/share/Jahshaka" "$WORK/r$i.js" > "$WORK/r$i.log" 2>&1
     rc=$?
     if [ $rc -ne 0 ] || ! grep -q "shadow_casters: PASS" "$WORK/r$i.log"; then
         echo "FAIL: run $i exited $rc (log: $WORK/r$i.log)"; grep -E 'assert failed|DEVICE WAS LOST' "$WORK/r$i.log" | head -3
         exit 1
     fi
-    rm -rf "$WORK/root$i"
 done
 python3 - "$WHAT" "$WORK" "$RUNS" <<'PY'
 import sys

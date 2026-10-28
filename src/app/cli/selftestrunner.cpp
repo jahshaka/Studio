@@ -793,5 +793,14 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                      (unsigned long long)gi.cascadeCommitShaderWaits, gi.cascadeCommitShaderWaits == 0 ? "PASS" : "FAIL");
         if (gi.cascadeCommitShaderWaits != 0) return 1;
     }
+    // EVERY SHADER COMPILED (URGENT #83): the engine logs a program that fails to compile and survives it, so a
+    // compute job whose shader fails never dispatches and the pictures above are merely wrong - a piece left out of
+    // the light injection's list moved three hashes while every line here read PASS. Counted since the boot.
+    if (const auto eng = EngineHost::instance().engine()) {
+        const unsigned long long failed = eng->published().shaders.compileErrors;
+        std::fprintf(stderr, "engine-selftest: shader compile failures %llu (%s)\n", failed,
+                     failed == 0 ? "PASS" : "FAIL");
+        if (failed != 0) return 1;
+    }
     return 0;
 }

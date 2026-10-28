@@ -53,8 +53,6 @@ FogPropertyWidget::FogPropertyWidget()
         paramSliders.append(ps);
     }
 
-    shadowEnabled   = this->addCheckBox("Enable Shadows", true);
-
     // The rows, bound to their world properties. A row's LIVE write and its
     // undo step come from the same key, so the two can never disagree.
     rowundo::bind(fogColor->getPicker(), rows(QStringLiteral("fogColor"), tr("Fog Colour")));
@@ -69,7 +67,6 @@ FogPropertyWidget::FogPropertyWidget()
         };
         rowundo::bind(fogEnabled, enabled);
     }
-    rowundo::bind(shadowEnabled,     rows(QStringLiteral("shadowEnabled"), tr("Enable Shadows")));
 }
 
 void FogPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
@@ -95,7 +92,6 @@ void FogPropertyWidget::refreshRows()
         if (p && ps.slider) ps.slider->setValue(float(p->get(scene)));
     }
     fogEnabled->setValue(scene->fogEnabled);
-    shadowEnabled->setValue(scene->shadowEnabled);
     applyEnabledStates();
     loading = false;
 }

@@ -156,7 +156,6 @@ for (var pi = 0; pi < PROJECTS.length; ++pi) {
     if (!sun) fail("the Basic template brought no sun");
     node.transform(sun, {rotation: {x: 90 - P.sunElevation, y: P.sunAzimuth, z: 0}});
     node.setProperty(sun, "lightColor", hex([1.0, 0.794, 0.514]));
-    world.shadows({enabled: true});
     world.postFx({exposureEv: P.ev});
     // The FBX's four interior point lights (metres, warm 0.70/0.57/0.31; Maya's 40000 has no unit here).
     var lights = 0;

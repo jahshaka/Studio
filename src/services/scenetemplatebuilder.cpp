@@ -208,7 +208,6 @@ iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
     // of radiance against the old flat path's 0.120).
     scene->skyColor = QColor(96, 96, 96);
     scene->fogColor = QColor(96, 96, 96);
-    scene->shadowEnabled = true;
     // THE EXPONENTIAL HEIGHT FOG ON (SKY-DEFAULTS-1; the owner's Unreal Basic
     // level): the world's medium at iris::HeightFog's dials — Unreal's density
     // and falloff, from 100 m, so the floor is untouched and the far world, the

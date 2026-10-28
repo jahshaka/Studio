@@ -201,7 +201,7 @@ QVector<VerbInfo> NodeApi::verbs() const
           "How the node deforms: \"gpu\" when it carries a rig (the vertex shader skins position, normal and tangent from bone matrices), \"none\" when it is static. Diagnostic.",
           Needs::Document },
         { "setLightProfile", "node.setLightProfile(id, lightProfileGuid) -> bool",
-          "Binds an IES photometric profile (a 'lightprofile' library asset) to a light, shaping its falloff; '' clears it. The asset is pinned into the project as a DEPENDENCY (no companion material is created). Intensity is re-calibrated by the profile's own peak candela scale, so binding one changes the SHAPE of the falloff and not the brightness. RENDERER LIMITS: spot lights always honour a profile; point lights honour it only while they cast NO shadows (a shadow-casting point light is shaded from a code path with no profile term); directional and area lights never do. Undoable (the project pin it creates is not removed again — an unused pin is inert).",
+          "Binds an IES photometric profile (a 'lightprofile' library asset) to a light, shaping its falloff; '' clears it. The asset is pinned into the project as a DEPENDENCY (no companion material is created). Intensity is re-calibrated by the profile's own peak candela scale, so binding one changes the SHAPE of the falloff and not the brightness. RENDERER LIMITS: spot and point lights honour a profile, shadowed or not; directional and area lights never do. Undoable (the project pin it creates is not removed again — an unused pin is inert).",
           Needs::Document },
         { "setSkyLightSource", "node.setSkyLightSource(id, \"sky\" | \"cubemap\", {front, back, top, bottom, left, right}?) -> bool",
           "THE SKY LIGHT's SOURCE (an author tool on top of the one-radiance law; Unreal's Sky Light Source Type). \"sky\" (the default): the World sky as drawn lights the scene, x the light's tint x intensity - the sky emits what it shows. \"cubemap\": an INVISIBLE DOME LIGHT - six texture asset guids (all six faces, world.sky's cubemap keys) light the scene and fill its reflections x the same gain, while the camera sees the World sky as drawn (a studio HDRI lighting a product against a black sky: world.sky(\"none\") or world.skyLighting(\"backdrop\")). The faces are pinned to the project as DEPENDENCIES. Sky lights only; a missing or non-texture face is refused and nothing changes. Undoable.",
@@ -210,7 +210,7 @@ QVector<VerbInfo> NodeApi::verbs() const
           "The Sky Light's source: \"sky\" or \"cubemap\", and the dome's six face guids under their roles (empty for \"sky\").",
           Needs::Document },
         { "lightProfile", "node.lightProfile(id) -> {guid, path, normalisation, applies}",
-          "The light's bound IES profile: the library guid, the resolved file, the photometric scale intensity is divided by, and whether this light type/shadow combination actually honours it. Empty guid = none.",
+          "The light's bound IES profile: the library guid, the resolved file, the photometric scale intensity is divided by, and whether this light type actually honours it (spot and point lights do). Empty guid = none.",
           Needs::Document },
         { "setDecalTexture", "node.setDecalTexture(id, textureGuid) -> bool",
           "Binds an image asset as a DECAL's projected picture; '' clears it (the decal then draws its wire box and projects nothing). Pinned as a BINDING (a dependency row, no companion material). All decal images share one reserved 512x512 sRGB pool, 32 distinct images per process, and whatever image is bound is resampled into it aspect-preserved with transparent padding; the 33rd is REFUSED rather than silently sampling another decal's picture. Undoable (the project pin it creates is not removed again — an unused pin is inert)."
@@ -1371,12 +1371,11 @@ QVariant NodeApi::lightProfile(const QString &id)
 {
     auto light = lightOrFail(id, QStringLiteral("node.lightProfile"));
     if (!light) return QVariant();
-    // The renderer's own rule, reported rather than hidden: shadow-casting
-    // point lights lose their profile, and only spot/point carry one at all.
-    const bool shadows = light->shadowMap.shadowType != iris::ShadowMapType::None;
+    // The renderer's own rule, reported rather than hidden: only spot and point
+    // lights carry a profile (shadowed or not).
     const bool applies = !light->iesProfileGuid.isEmpty() &&
                          (light->lightType == iris::LightType::Spot ||
-                          (light->lightType == iris::LightType::Point && !shadows));
+                          light->lightType == iris::LightType::Point);
     return QVariantMap{ { "guid", light->iesProfileGuid },
                         { "path", light->iesProfilePath },
                         { "normalisation", light->iesNormalisation },

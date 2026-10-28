@@ -190,9 +190,14 @@ jah_gpu_row(scripting.e2e.sky_swap_transient SHIP CLASS app TIER epic NEEDS phot
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
          WORKING_DIRECTORY ${_sstHome}/run)
 set_tests_properties(scripting.e2e.sky_swap_transient PROPERTIES
-    ENVIRONMENT "HOME=${_sstHome};JAHSHAKA_DATA_ROOT=${_sstHome}/.local/share/Jahshaka"
+    # (THE DRIVER'S CACHE STAYS THE USER'S: the wiped home is the APP's shader cache, the subject; the NVIDIA driver's
+    # layer below it was warm when the row was priced, until its 1 GiB cap filled on 10-20 - URGENT #91. The driver
+    # appends GLCache to this path.)
+    ENVIRONMENT "HOME=${_sstHome};JAHSHAKA_DATA_ROOT=${_sstHome}/.local/share/Jahshaka;__GL_SHADER_DISK_CACHE_PATH=$ENV{HOME}/.cache/nvidia"
     FIXTURES_REQUIRED skySwapTransientFreshHome
-    LABELS "scripting" TIMEOUT 60)
+    LABELS "scripting" TIMEOUT 60
+    # the cold path is the subject (above): source.testing_rules R13 lets this root boot cold
+    JAHSHAKA_COLD_BY_SUBJECT TRUE)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
 # repo paths (a mesh to import, a shipped .effect) — configured in.
@@ -285,6 +290,22 @@ set_tests_properties(scripting.e2e.tex_ref PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 60)   # three processes, like clip_ref's two (98 s cold, 8 s warm)
+
+# scripting.e2e.lamps_unshadowed (PHOTON-7 10-4 fix round, F7) - A LAMP NOTHING SHADOWS IS NAMED: GI off, rays off, six
+# lamps over a shadow-map budget of two - one lamps.unshadowed scene issue per unmapped lamp; GI on, none
+# (e2e_lamps_unshadowed.js says the law).
+set(_luHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-lamps_unshadowed)
+file(MAKE_DIRECTORY ${_luHome}/run)
+# (its home wiped and warmed before it boots: source.testing_rules R12 / R13)
+jah_fresh_home_fixture(scripting.e2e.lamps_unshadowed.fresh_home lamps_unshadowed_home "${_luHome}" WARM LABELS "scripting")
+jah_gpu_row(scripting.e2e.lamps_unshadowed CLASS app TIER low NEEDS NONE NEEDS_WHY "the issue reads the view's shadow maps, GI is the script's own switch"
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
+                 ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lamps_unshadowed.js
+         WORKING_DIRECTORY ${_luHome}/run)
+set_tests_properties(scripting.e2e.lamps_unshadowed PROPERTIES
+    ENVIRONMENT "HOME=${_luHome};JAHSHAKA_DATA_ROOT=${_luHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED lamps_unshadowed_home
+    LABELS "scripting" TIMEOUT 60 JAHSHAKA_TEST_FRAMES 20)
 
 # scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
 # (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle (archived: archive/tests/perf):

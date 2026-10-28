@@ -472,9 +472,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     scene->fogHeightDensity = sceneObj.value("fogHeightDensity").toDouble(scene->fogHeightDensity);
     scene->fogHeightFalloff = sceneObj.value("fogHeightFalloff").toDouble(scene->fogHeightFalloff);
     scene->fogHeightLevel = sceneObj.value("fogHeightLevel").toDouble(scene->fogHeightLevel);
-    scene->fogBreakMinBrightness =
-        sceneObj.value("fogBreakMinBrightness").toDouble(scene->fogBreakMinBrightness);
-    scene->fogBreakFalloff = sceneObj.value("fogBreakFalloff").toDouble(scene->fogBreakFalloff);
 
     // Global illumination: absent (older scenes) or unknown values mean OFF.
     {
@@ -558,7 +555,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             scene->giTier = ok ? int(t) : scene->giTier;
         }
     }
-    scene->shadowEnabled = sceneObj.value("shadowEnabled").toBool(scene->shadowEnabled);
     // Anti-aliasing: absent (a document written before the key existed) reads
     // the CONSTRUCTOR's default — the fallback IS scene->antiAliasing rather
     // than a second literal, so the reader-defaults trap (an absent-key
@@ -706,8 +702,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int pres =
             sceneObj.value("planarReflectionResolution").toInt(scene->planarReflectionResolution);
         scene->planarReflectionResolution = pres <= 0 ? 0 : qBound(256, pres, 2048);
-        const int ps = sceneObj.value("planarReflectionShadows").toInt(scene->planarReflectionShadows);
-        scene->planarReflectionShadows = (ps == 0 || ps == 1) ? ps : -1;
     }
     // World Mode (POST_CHAIN_SPEC §9). The fields above were just read from
     // the document and ARE the resolved values; no tier is re-applied, so a
@@ -1339,15 +1333,14 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 // stated two different defaults for one question. Our own writer always writes
 // the key, so only a hand-edited file or a future importer could reach the
 // divergence; that is exactly the kind of thing that is discovered late.
-// An explicit "none" still means none, and always will.
+// ("none" is DELETED with the setting - PHOTON-7 10-4 R9, every light casts: an old file's "none" reads Soft, as any
+// word the reader does not know.)
 iris::ShadowMapType evalShadowMapType(QString shadowType)
 {
     if (shadowType=="hard")
         return iris::ShadowMapType::Hard;
     if (shadowType=="verysoft")
         return iris::ShadowMapType::VerySoft;
-    if (shadowType=="none")
-        return iris::ShadowMapType::None;
 
     return iris::ShadowMapType::Soft;
 }

@@ -93,21 +93,6 @@ QString textureSlotName(const QString &slot)
     return slot.startsWith(QLatin1String("u_")) ? slot.mid(2) : slot;
 }
 
-/// Does a sphere touch an axis-aligned box?
-bool sphereTouchesBox(const iris::Vec3 &c, float r, const iris::Vec3 &mn, const iris::Vec3 &mx)
-{
-    const float dx = qMax(0.0f, qMax(mn.x() - c.x(), c.x() - mx.x()));
-    const float dy = qMax(0.0f, qMax(mn.y() - c.y(), c.y() - mx.y()));
-    const float dz = qMax(0.0f, qMax(mn.z() - c.z(), c.z() - mx.z()));
-    return dx * dx + dy * dy + dz * dz <= r * r;
-}
-
-bool boxContains(const iris::Vec3 &p, const iris::Vec3 &mn, const iris::Vec3 &mx)
-{
-    return p.x() >= mn.x() && p.x() <= mx.x() && p.y() >= mn.y() && p.y() <= mx.y() &&
-           p.z() >= mn.z() && p.z() <= mx.z();
-}
-
 }   // namespace
 
 QVariantMap SceneIssue::toMap() const
@@ -273,8 +258,6 @@ void SceneIssues::forgetWalks()
 {
     mChecks.clear();
     mCheckedScene.clear();
-    mLeakLines.clear();
-    mLeakDirty = true;
 }
 
 int SceneIssues::clearKind(const QString &kind)
@@ -369,9 +352,7 @@ QVariantList SceneIssues::toVariant() const
 
 int SceneIssues::count() const { return mIssues.size(); }
 
-// ONE NODE'S ANSWERS. A blocker's box is its OWN mesh's (the eight corners of
-// the mesh's bounds through the node's world matrix): a child is a blocker of
-// its own when it casts. The texture line is the same existence test the
+// ONE NODE'S ANSWERS. The texture line is the same existence test the
 // mirror makes (SceneMirror::textureFor: a Qt resource and a live texture have
 // no file and are not ours to judge), over every texture slot of the node's
 // material; ONE line per node, naming each slot and its file, so the user fixes
@@ -382,7 +363,6 @@ void SceneIssues::checkNode(iris::SceneNode *node)
 {
     ++mStats.nodesVisited;
     ++mStats.visitedTotal;
-    mLeakDirty = true;   // a box, a lamp or a flag may have moved
     const iris::SceneNodeType type = node->getSceneNodeType();
     if (type != iris::SceneNodeType::Mesh && type != iris::SceneNodeType::ParticleSystem) {
         mChecks.remove(node);
@@ -393,21 +373,6 @@ void SceneIssues::checkNode(iris::SceneNode *node)
     QStringList missing;
     if (type == iris::SceneNodeType::Mesh) {
         auto *meshNode = static_cast<iris::MeshNode *>(node);
-        if (node->isVisible() && node->getShadowCastingEnabled() && meshNode->getMesh()) {
-            const iris::AABB local = meshNode->getMesh()->getAABB();
-            const iris::Vec3 lo = local.getMin(), hi = local.getMax();
-            const iris::Mat4 m = node->getGlobalTransform();
-            iris::Vec3 mn(1e30f, 1e30f, 1e30f), mx(-1e30f, -1e30f, -1e30f);
-            for (int k = 0; k < 8; ++k) {
-                const iris::Vec3 p = m * iris::Vec3((k & 1) ? hi.x() : lo.x(), (k & 2) ? hi.y() : lo.y(),
-                                                     (k & 4) ? hi.z() : lo.z());
-                mn = iris::Vec3(qMin(mn.x(), p.x()), qMin(mn.y(), p.y()), qMin(mn.z(), p.z()));
-                mx = iris::Vec3(qMax(mx.x(), p.x()), qMax(mx.y(), p.y()), qMax(mx.z(), p.z()));
-            }
-            c.blocker = true;
-            c.mn = mn;
-            c.mx = mx;
-        }
         const iris::MaterialPtr material = meshNode->getMaterial();
         if (material) {
             c.material = material.toWeakRef();
@@ -469,14 +434,12 @@ void SceneIssues::checkNode(iris::SceneNode *node)
         if (indexOf(c.texture.id) >= 0) update(c.texture.id, c.texture.message);
         else raise(c.texture);
     }
-    if (!c.blocker && c.material.isNull() && c.texture.id.isEmpty()) mChecks.remove(node);
+    if (c.material.isNull() && c.texture.id.isEmpty()) mChecks.remove(node);
     else mChecks.insert(node, c);
 }
 
 void SceneIssues::forgetSubtree(iris::SceneNode *node)
 {
-    // Anything that left may have been a blocker or a lamp: re-test.
-    mLeakDirty = true;
     mChecks.remove(node);
     const int kids = node->childCount();
     for (int i = 0; i < kids; ++i)
@@ -497,7 +460,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
 
     QSet<QString> live;    // the ids this pass justifies
     ++mStats.passes;
-    mStats.fullWalk = mStats.leakEvaluated = false;
+    mStats.fullWalk = false;
     mStats.nodesVisited = 0;
 
     // ---- THE NODE CHECKS: what the document wrote since the last pass ------
@@ -554,7 +517,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             // Destroyed since their write: their entries hold dead weak refs.
             if (gone) {
                 for (auto it = mChecks.begin(); it != mChecks.end();) {
-                    if (it->node.isNull()) { it = mChecks.erase(it); mLeakDirty = true; }
+                    if (it->node.isNull()) it = mChecks.erase(it);
                     else ++it;
                 }
             }
@@ -662,79 +625,31 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         }
     }
 
-    // ---- shadow.leak: an unshadowed lamp reaching through something -------
-    // The Showroom's lamp above a sealed roof lit the floor through it, and
-    // nothing in the editor ever said so (SUN_AND_LIGHT_DEFAULTS §0). This is a
-    // deliberately cheap PROXY — it reports a light that CAN shine through
-    // something, not a proof that a pixel is wrong — so it names one blocker
-    // per light: the NEAREST box its reach touches. The boxes are the node
-    // checks' (each blocker's own world box, refreshed when the node is
-    // written); the lamps are re-tested only when a check moved one.
+    // ---- lamps.unshadowed: a lamp nothing shadows (PHOTON-7 10-4 fix round, the one read's F7) ----------
+    // A point or spot light the shadow maps do not hold is shadowed by a TRACE: a ray at the ray tier, the GI voxels'
+    // march where the GI is on. With GI off and no ray tracing (the machine has none, or the World's Ray Tracing row
+    // is Off) nothing traces it, and its light reaches through every wall - the one place the renderer still lets a
+    // light through geometry, and a scene the user can fix in one action. One issue per such lamp, naming it.
     {
-        QList<iris::LightNodePtr> leakers;
-        for (const auto &light : scene->lights) {
-            if (light.isNull() || !light->isVisible()) continue;
-            if (light->lightType != iris::LightType::Point &&
-                light->lightType != iris::LightType::Spot)
-                continue;
-            if (light->shadowMap.shadowType != iris::ShadowMapType::None)
-                continue;
-            leakers.append(light);
-        }
-        // A LAMP THAT IS GONE OR NOW CASTS takes its line with it, whatever
-        // else is dirty: a deleted light is not a node any check visits.
-        for (auto it = mLeakLines.begin(); it != mLeakLines.end();) {
-            const bool still = std::any_of(leakers.cbegin(), leakers.cend(), [&](const iris::LightNodePtr &l) {
-                return l->getGUID() == it->node;
-            });
-            if (still) ++it;
-            else it = mLeakLines.erase(it);
-        }
-        if (leakers.isEmpty()) {
-            mLeakLines.clear();
-        } else if (mLeakDirty) {
-            mStats.leakEvaluated = true;
-            mLeakLines.clear();
-            for (const auto &light : leakers) {
-                const iris::Vec3 pos = light->getGlobalPosition();
-                const float reach = qMax(0.01f, light->distance);
-                const NodeCheck *nearest = nullptr;
-                iris::SceneNodePtr nearestNode;
-                float nearestD2 = 0.0f;
-                for (auto it = mChecks.cbegin(); it != mChecks.cend(); ++it) {
-                    const NodeCheck &c = *it;
-                    if (!c.blocker) continue;
-                    // Inside the thing is not "through" it (a lamp modelled into
-                    // a fitting, a bulb inside a shade).
-                    if (boxContains(pos, c.mn, c.mx)) continue;
-                    if (!sphereTouchesBox(pos, reach, c.mn, c.mx)) continue;
-                    const iris::SceneNodePtr n = c.node.toStrongRef();
-                    if (!n) continue;
-                    const float dx = qMax(0.0f, qMax(c.mn.x() - pos.x(), pos.x() - c.mx.x()));
-                    const float dy = qMax(0.0f, qMax(c.mn.y() - pos.y(), pos.y() - c.mx.y()));
-                    const float dz = qMax(0.0f, qMax(c.mn.z() - pos.z(), pos.z() - c.mx.z()));
-                    const float d2 = dx * dx + dy * dy + dz * dz;
-                    if (nearest && (d2 > nearestD2 ||
-                                    (d2 == nearestD2 && n->getGUID() >= nearestNode->getGUID())))
-                        continue;
-                    nearest = &c; nearestNode = n; nearestD2 = d2;
-                }
-                if (!nearest) continue;
+        const bool traces = machineRayTracing() == 1 && scene->rayTracing != iris::RayTracingMode::Off;
+        if (!traces && scene->giMode == iris::GiMode::OFF && mUnmappedLamps) {
+            const QStringList unmapped = mUnmappedLamps();
+            for (const auto &light : scene->lights) {
+                if (light.isNull() || !unmapped.contains(light->getGUID())) continue;
                 SceneIssue issue;
-                issue.kind = QStringLiteral("shadow.leak");
+                issue.kind = QStringLiteral("lamps.unshadowed");
                 issue.node = light->getGUID();
                 issue.nodeName = light->getName();
-                issue.message = tr("\"%1\" casts no shadow, and its light reaches straight "
-                                   "through \"%2\".")
-                                    .arg(light->getName(), nearestNode->getName());
-                issue.action = tr("Set this light's Shadow Type to Soft so the geometry blocks "
-                                  "it, or reduce its Range so it no longer reaches that far.");
+                issue.message = tr("\"%1\" has no shadow map (the scene has more lamps than shadow maps), and with "
+                                   "Global Illumination off and no ray tracing nothing else shadows it: its light "
+                                   "passes through walls.").arg(light->getName());
+                issue.action = tr("Turn Global Illumination on (its voxels shadow every lamp), or use ray "
+                                  "tracing where the machine has it, or remove lamps this view does not need.");
                 issue.id = issue.kind + QLatin1Char(':') + issue.node;
-                mLeakLines.insert(issue.id, issue);
+                raise(issue);
+                live.insert(issue.id);
             }
         }
-        mLeakDirty = false;
-        for (const SceneIssue &issue : std::as_const(mLeakLines)) keepUp(issue);
     }
 
     // ---- rays.absent: the project asked for rays this machine has not -----
@@ -809,9 +724,10 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     // ---- clear what the scene no longer justifies -------------------------
     // Only the kinds this scanner owns: an issue raised by a verb or by another
     // producer is not ours to forget.
-    static const QStringList kScanned{ QStringLiteral("sun.tie"), QStringLiteral("shadow.leak"),
+    static const QStringList kScanned{ QStringLiteral("sun.tie"),
                                        QStringLiteral("sky.duplicate"),
                                        QStringLiteral("rays.absent"),
+                                       QStringLiteral("lamps.unshadowed"),
                                        QStringLiteral("vr.colour"),
                                        QStringLiteral("texture.missing") };
     bool removed = false;
@@ -822,6 +738,6 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         removed = true;            // ONE signal for the whole pass, not one per row
     }
     if (removed) emit changed();
-    if (mStats.nodesVisited || mStats.leakEvaluated) ++mStats.walks;
+    if (mStats.nodesVisited) ++mStats.walks;
     return mIssues.size();
 }

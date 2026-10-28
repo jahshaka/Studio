@@ -119,7 +119,6 @@ log("foliage cut", cut);
 var sun = world.sunLight();
 if (!sun) fail("the World template brought no sun");
 node.transform(sun, {rotation: {x: 90 - SUN_ELEVATION, y: SUN_AZIMUTH, z: 0}});
-world.shadows({enabled: true});
 world.postFx({exposureEv: DEMO_EV});
 
 // ---- the tier, the first view, the save ----
