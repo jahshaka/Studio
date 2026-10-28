@@ -23,10 +23,11 @@
 // fragment's own environment term, never clamped), and a sky of 10^6 saturates the pixel's fixed-point sum, counted.
 // THE HIDDEN PANE (a law): the pane behind an opaque box - the depth test runs before an appending fragment, so a hidden
 // pane appends no record: the picture equals the door's within one code, no record counted.
-// THE NAMED LIMIT, MEASURED (not a law: the review list's stacked glass): a second, plain glass pane (alpha 0.5, black)
-// between the camera and the mirror pane at Glass alpha 0.5 - the deferred add lands ON TOP of the front pane, so the
-// mirror's traced light is not passed by the front pane's 1 - alpha: printed is the two-pane mean against the exact
-// (1 - 0.5) x the one-pane mean, and the over-count against the front pane's alpha x the traced light.
+// THE STACKED PANES (a law since the fix round's F5; it was a named limit): a second, plain glass pane (alpha 0.5,
+// black) between the camera and the mirror pane at Glass alpha 0.5 - the deferred add lands on top of the front pane,
+// so the record's light must be passed by the front pane's 1 - alpha itself (the escape's eye ray, rq_glass_escape.comp):
+// the two-pane mean equals T x the one-pane mean (T as the pane word stores 0.5: 1024/2047) within the noise plus one
+// code. RED BEFORE F5: +35.42 codes (the front pane's alpha x the traced light, over).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -249,11 +250,12 @@ int main()
         settle();
         const Pic two = read();
         counts("THE STACKED PANES");
-        const double exact = 0.5 * one.mean, over = two.mean - exact;
-        std::printf("   THE LIMIT (stacked glass, the review list): the mirror pane at Glass 0.5 alone %.6f; behind a black "
-                    "Glass 0.5 pane %.6f against the exact (1 - 0.5) x %.6f = %.6f: over by %+.6f (%.2f codes) - the front "
-                    "pane's alpha x the traced light is %.6f at most\n", one.mean, two.mean, one.mean, exact, over,
-                    oneCodeAt(exact) > 0.0 ? over / oneCodeAt(exact) : -1.0, 0.5 * one.mean);
+        const double exact = 1024.0 / 2047.0 * one.mean, over = two.mean - exact;
+        std::printf("   THE STACKED PANES: the mirror pane at Glass 0.5 alone %.6f; behind a black Glass 0.5 pane %.6f "
+                    "against T x %.6f = %.6f: %+.6f (%.2f codes; the noise %.6f)\n", one.mean, two.mean, one.mean, exact,
+                    over, oneCodeAt(exact) > 0.0 ? over / oneCodeAt(exact) : -1.0, noise);
+        check(one.ok && two.ok && one.mean > 0.01 && std::fabs(over) <= noise + oneCodeAt(exact),
+              "THE STACKED PANES: the front pane passes T of the mirror pane's traced light (F5)");
     }
     // THE DEPTH ARM: the pane (Glass, alpha 1) hidden behind an opaque box - a fragment the depth test rejects appends no
     // record and lights nothing: the picture with the escapes equals the picture without them (the door)
