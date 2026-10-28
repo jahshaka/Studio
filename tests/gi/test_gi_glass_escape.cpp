@@ -71,8 +71,13 @@ double oneCodeAt(double L)
 }
 }   // namespace
 
-int main()
+int main(int argc, char **argv)
 {
+    // THE TWO ROWS (each fixture under its 10 s budget, source.row_budget): "trace" the escapes' laws (the reference,
+    // the blends, the stacked panes, the hidden pane, the red by the door), "weight" the record's weight against the
+    // fragment's own environment term (the four blends, the bright sky, the sky past the top)
+    const std::string mode = argc > 1 ? argv[1] : "trace";
+    if (mode != "trace" && mode != "weight") { std::printf("FAIL: the mode is trace or weight, not '%s'\n", mode.c_str()); return 2; }
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-glass-escape-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -200,6 +205,8 @@ int main()
         return rq;
     };
 
+    struct Arm { PbrAlphaMode m; const char *name; };
+    if (mode == "trace") {
     // (0) THE REFERENCE: the pane opaque, its reflection the traced reflection's
     const int restRef = settle();
     const Pic ref = read();
@@ -212,7 +219,6 @@ int main()
                 ref.v.size(), ref.mean, noise, code, double(wallX));
     check(restRef >= 0 && ref.ok && ref.mean > 0.5, "(0) the opaque mirror reflects the emissive wall (the traced reflection)");
 
-    struct Arm { PbrAlphaMode m; const char *name; };
     const Arm arms[3] = { { PbrAlphaMode::Blend, "BLEND (Fade)" },
                           { PbrAlphaMode::Glass, "GLASS (Transparent)" },
                           { PbrAlphaMode::Refractive, "REFRACTIVE (the refractives' list)" } };
@@ -302,6 +308,10 @@ int main()
         check(pic.ok && std::fabs(d) > noise + code, what);
     }
     e->setArm("rq.glassEscapeOff", 0.0);
+
+    std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+    return g_fail ? 1 : 0;
+    }
 
     // THE RECORD'S WEIGHT: the wall hidden, a uniform sky; each blend at alpha 0.5, the record against the door
     scene->setNodeVisible(front, false);

@@ -802,11 +802,16 @@ target_compile_definitions(test_gi_glass_escape PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_glass_escape PRIVATE JahshakaEngine)
 add_dependencies(test_gi_glass_escape JahshakaEngineMedia)
-jah_gpu_row(gi.glass_escape CLASS engine COMMAND test_gi_glass_escape
+jah_gpu_row(gi.glass_escape CLASS engine COMMAND test_gi_glass_escape trace
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.glass_escape PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.glass_escape PROPERTIES JAHSHAKA_TEST_FRAMES 971)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 548)
+# ...and its WEIGHT half (a row of its own: each fixture under the 10 s budget): the record's weight against the fragment's
+# own environment term, the bright sky and the sky past the fixed point's top (the fix round's F11)
+jah_gpu_row(gi.glass_escape_weight CLASS engine COMMAND test_gi_glass_escape weight
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.glass_escape_weight PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 422)
 
 # gi.photon_window (PHOTON-7 10-4, item 2; L9) — A WINDOW PASSES THE LIGHT ITS MATERIAL PASSES, ON EVERY PATH: gi.sealed_sky's
 # room with a 1 m pane in its roof (Glass / Blend / Refractive at alpha 0.1) against a hole, under a white sky and a sun
