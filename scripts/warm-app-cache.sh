@@ -31,6 +31,10 @@
 #   --check          the answer alone, never a boot: exit 0 warm, 3 cold.
 #   --tests-dir <d>  the shared cache's directory (default <build>/tests) - the guard row's own scratch.
 #   --app <exe>      the app the boot runs (default <build>/bin/Jahshaka) - the guard row's fake, which compiles nothing.
+#   --only app|engine  ONE cache alone (URGENT #102's tool fix, 2026-10-28): a cold tree's two boots measured 382 s + 332 s
+#                    = 714 s with the driver cache off (#100) - past a builder's 10-min foreground call, which the harness
+#                    then moved to the background. Each boot fits one call: `--only app`, then `--only engine`. With
+#                    --check it answers for that cache alone.
 # THE STAMP IS WRITTEN ONLY WHEN THE BOOT'S CACHE IS THE SHARED ONE: promoted (fresh_home.sh: "REPLACED", or its rule (2)
 # silently), or nothing to promote (the boot compiled nothing the shared cache lacked). A promotion fresh_home SKIPPED -
 # its rule (3), "NOT replaced" (another home promoted since this one was seeded), or its lock not had ("no promotion") -
@@ -48,18 +52,20 @@
 # promoted by its own green run. ONE answer for both: "warm at <key>" when both are, else "cold at <key>: <the cold
 # ones' whys>" (exit 3 under --check; else their boots, exit 0 when every boot passed).
 set -u
-BUILD=""; CHECK=0; TESTS=""; APP=""; LAB=""
+BUILD=""; CHECK=0; TESTS=""; APP=""; LAB=""; ONLY=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
         --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; shift 2 ;;
         --app) APP="${2:?--app needs an executable}"; shift 2 ;;
         --lab) LAB="${2:?--lab needs an executable}"; shift 2 ;;
+        --only) ONLY="${2:?--only needs app or engine}"; shift 2
+                case "$ONLY" in app|engine) ;; *) echo "warm-app-cache: --only app|engine, not $ONLY" >&2; exit 64 ;; esac ;;
         -*) echo "warm-app-cache: unknown flag $1" >&2; exit 64 ;;
         *) BUILD="$1"; shift ;;
     esac
 done
-[ -n "$BUILD" ] && [ -d "$BUILD" ] || { echo "usage: warm-app-cache.sh <build-dir> [--check] [--tests-dir <dir>] [--app <exe>] [--lab <exe>]" >&2; exit 64; }
+[ -n "$BUILD" ] && [ -d "$BUILD" ] || { echo "usage: warm-app-cache.sh <build-dir> [--check] [--tests-dir <dir>] [--app <exe>] [--lab <exe>] [--only app|engine]" >&2; exit 64; }
 BUILD=$(cd "$BUILD" && pwd)
 HERE=$(cd "$(dirname "$0")" && pwd)
 SRC=$(cd "$HERE/.." && pwd)
@@ -100,6 +106,9 @@ APP_SHARED="$TESTS/.shadercache"; APP_STAMP="$TESTS/.shadercache.warm-key"
 ENG_SHARED="$TESTS/.shadercache-engine"; ENG_STAMP="$TESTS/.shadercache-engine.warm-key"
 app_why=$(cold_why "$APP_SHARED" "$APP_STAMP")
 eng_why=$(cold_why "$ENG_SHARED" "$ENG_STAMP")
+# --only: the other cache is not this call's (its state is not read as cold, its boot never runs)
+[ "$ONLY" = engine ] && app_why=""
+[ "$ONLY" = app ] && eng_why=""
 if [ -z "$app_why" ] && [ -z "$eng_why" ]; then
     echo "warm at $KEY"
     exit 0
