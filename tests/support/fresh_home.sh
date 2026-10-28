@@ -89,9 +89,16 @@ done
 cache_rel=.local/share/Jahshaka/shadercache
 shared=""
 [ -n "$tests_dir" ] && shared="$tests_dir/.shadercache${key:+-$key}"
-# A CACHE'S GENERATION: the hash of its manifest (every save rewrites it: `saved <ms>`), `none` without one
+# A CACHE'S GENERATION: the hash of its manifest (every save rewrites it: `saved <ms>`) and of the startup gate's
+# global-pass record beside it (warm-pass.key, src/app/shaderbuildgate.cpp, URGENT #104: a run whose pass completed
+# over a warm cache saves no layer but writes the record - that run must promote it, or every row re-runs the pass),
+# `none` without a manifest
 generation() {
-    if [ -f "$1/cache-manifest.txt" ]; then sha256sum < "$1/cache-manifest.txt" | cut -c1-64; else echo none; fi
+    if [ -f "$1/cache-manifest.txt" ]; then
+        cat "$1/cache-manifest.txt" "$1/warm-pass.key" 2>/dev/null | sha256sum | cut -c1-64
+    else
+        echo none
+    fi
 }
 # A LAYER BOTH CACHES HOLD UNDER ANOTHER KEY (exit 0): the manifests' file lines carry each file's layer key (the fifth
 # field); the layers are pipeline.cache, microcode.cache and the hlms.N.bin files (one key)

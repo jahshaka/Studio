@@ -30,7 +30,12 @@
 #include <optional>
 
 #include <QApplication>
+#include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
+#include <QFileInfo>
+
+#include <cstdio>
 
 using namespace jahshaka::engine;
 
@@ -353,6 +358,42 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
     return frames;
 }
 
+// THE GLOBAL PASS's RECORD LIVES IN THE CACHE IT DESCRIBES (URGENT #104, 2026-10-28). It was the setting
+// shader_warm_pass, in the SETTINGS file - and every test row boots on a fresh home (tests/support/fresh_home.sh wipes
+// it) with the tree's shared cache linked in, so the record never survived: every app row ran the whole pass over a
+// warm cache, 25-31 s under the validation layer (a control on the same exe skipped it in 1.1 s). Here it is a file
+// in the shader cache directory: linked and promoted with the cache (fresh_home's generation names it), deleted with
+// it (a wipe at a fingerprint change, app.clearShaderCache, the preference's clear), absent when the cache is off -
+// a missing record runs the pass. Written by temp + rename, never synced: derived data on the UI thread
+// (SHADER-WARM-2), and a lost record costs one pass.
+QString warmPassRecordPath()
+{
+    if (!EngineHost::shaderCacheEnabled()) return QString();
+    const QString dir = EngineHost::shaderCacheDirectory();
+    return dir.isEmpty() ? QString() : QDir(dir).filePath(QStringLiteral("warm-pass.key"));
+}
+
+QString readWarmPassRecord()
+{
+    QFile f(warmPassRecordPath());
+    if (f.fileName().isEmpty() || !f.open(QIODevice::ReadOnly)) return QString();
+    return QString::fromUtf8(f.readAll()).trimmed();
+}
+
+void writeWarmPassRecord(const QString &key)
+{
+    const QString path = warmPassRecordPath();
+    if (path.isEmpty() || !QDir().mkpath(QFileInfo(path).absolutePath())) return;
+    const QString tmp = path + QStringLiteral(".tmp");
+    QFile f(tmp);
+    if (!f.open(QIODevice::WriteOnly | QIODevice::Truncate)) return;
+    const QByteArray bytes = key.toUtf8() + '\n';
+    const bool written = f.write(bytes) == bytes.size();
+    f.close();
+    if (!written || std::rename(QFile::encodeName(tmp).constData(), QFile::encodeName(path).constData()) != 0)
+        QFile::remove(tmp);
+}
+
 }  // namespace
 
 unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash, Database *db)
@@ -596,11 +637,10 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // change to a preset, a template or a helper shader left Ogre's cache warm and the
     // pass skipped — and the change compiled LIVE. The key of the last COMPLETED pass is
     // the Studio commit plus the cache fingerprint; a cold cache runs it as well.
-    SettingsManager *settings = SettingsManager::getDefaultManager();
     std::string fingerprint;
     engine->request([&](jahshaka::engine::Engine &e) { fingerprint = e.shaderCacheStats().fingerprint; });   // a REQUEST (U3 stage 3)
     const QString passKey = QStringLiteral(GIT_COMMIT_HASH) + QLatin1Char('|') + QString::fromStdString(fingerprint);
-    const bool keyMoved = settings->get(settingkeys::shaderWarmPass) != passKey;
+    const bool keyMoved = readWarmPassRecord() != passKey;   // the record in the cache it describes (URGENT #104)
     const bool runPass = compiled > 0 || keyMoved;
     if (keyMoved && compiled == 0)
         qInfo("startup shader build: the global pass's key moved (a new Studio build) — running it "
@@ -740,7 +780,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
                   static_cast<long long>(worldTimer.elapsed()), compiled - before);
         }
         // Recorded only once the pass has COMPLETED: a launch killed half way runs it again.
-        settings->set(settingkeys::shaderWarmPass, passKey);
+        writeWarmPassRecord(passKey);
     }
 
     // THE RECORDED SET IS GONE (WARMUPSET-2, 2026-09-21). A replay used to run
