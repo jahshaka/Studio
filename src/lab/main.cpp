@@ -3,6 +3,7 @@
 // sky — and ONE command surface (labcommands.h) that the keys, --script and stdin share. Links the engine, irisgl's
 // document / import / mirror and Qt Core/Gui; nothing of Studio's src/ (no services, no UI, no scripting host, no
 // QCoreApplication, no widgets).
+#include "jahshaka/engine/ProcessExit.h"
 #include "labcommands.h"
 #include "labsession.h"
 #include "envs/env.h"
@@ -135,6 +136,14 @@ int main(int argc, char **argv)
     if (opt.file.isEmpty() && opt.env.isEmpty()) return usage("no scene file (or --env <name>)");
     if (opt.tier.isEmpty() && (!opt.env.isEmpty() || !opt.file.endsWith(QStringLiteral(".jlab"), Qt::CaseInsensitive)))
         opt.tier = QStringLiteral("epic");
-    lab::Session session;
-    return session.run(opt);
+    // MEASURING ARM (URGENT #102's ABBA, to be reverted): JAH_U102_FASTEXIT=1 ends the run by the exit-only teardown.
+    const bool fastExit = qEnvironmentVariableIntValue("JAH_U102_FASTEXIT") == 1;
+    if (fastExit) jahshaka::engine::markProcessExit();
+    int rc = 0;
+    {
+        lab::Session session;
+        rc = session.run(opt);
+    }
+    if (fastExit) { std::fflush(nullptr); std::_Exit(rc); }
+    return rc;
 }
