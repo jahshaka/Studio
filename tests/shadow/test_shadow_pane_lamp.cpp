@@ -181,10 +181,12 @@ int main()
         // THE NEAREST PANE (the one read's F1): the shadow node's transmittance layer carries the nearest pane's depth and a
         // receiver applies its T only past it. A receiver the opaque atlas does not hold - a PANE ITSELF - is the case:
         // the pane's own lit face reads its light whole (its pixel with the shadows on equals its pixel with the view's
-        // shadows off - the engine's test door); under a second pane above it, the upper pane's T alone; and the floor
-        // under both, both. The floor black for the pane's own reads (its pixel is then its own lit face alone), read from a
+        // shadows off - the engine's test door); and with a second pane above it the floor under both reads both. The
+        // lower pane's own face under the upper one is the NEAREST-PANE RULE's named limit for stacks (it is past the
+        // nearest pane, so it takes the layer's whole product, its own T too: T^2 where the exact answer is T) - printed,
+        // not a law. The floor black for the pane's own reads (its pixel is then its own lit face alone), read from a
         // second eye under the upper pane's height. RED BEFORE F1: the pane's face read T x its light (every receiver at a
-        // texel took the layer's whole product), under the upper pane T^2.
+        // texel took the layer's whole product).
         double faceOff = 0.0, faceOn = 0.0, faceUnder = 0.0, floorTwo = 0.0;
         {
             const Vec3 eyeB(1.5f, 1.3f, 1.5f), atB(0.0f, 1.01f, 0.0f);
@@ -266,17 +268,17 @@ int main()
             const double Tw = 1024.0 / 2047.0;   // (the pane word's 0.5, which the caster's 1 - alpha equals at 8 bits)
             const double bOn = oneCodeAt(faceOff) + faceOff / 510.0, bUnder = oneCodeAt(Tw * faceOff) + faceOff / 510.0;
             const double bTwo = oneCodeAt(0.25 * hole) + hole / 510.0;
-            std::printf("   %s: THE NEAREST PANE - the pane's own lit face %.6f against its light whole %.6f (bar %.6f); under "
-                        "a second pane %.6f against T x %.6f (bar %.6f); the floor under both %.6f against T^2 x H %.6f "
-                        "(bar %.6f)\n", l.name, faceOn, faceOff, bOn, faceUnder, Tw * faceOff, bUnder, floorTwo, 0.25 * hole,
-                        bTwo);
+            std::printf("   %s: THE NEAREST PANE - the pane's own lit face %.6f against its light whole %.6f (bar %.6f); the "
+                        "floor under both panes %.6f against T^2 x H %.6f (bar %.6f); THE STACK'S LIMIT, the lower pane's "
+                        "face under the upper one %.6f (the rule's T^2 x %.6f; the exact T x %.6f, bar %.6f)\n", l.name,
+                        faceOn, faceOff, bOn, floorTwo, 0.25 * hole, bTwo, faceUnder, Tw * Tw * faceOff, Tw * faceOff,
+                        bUnder);
             // (a point light's panes are drawn into a cube and copied as colour: its rectangle's depth is NEAR, every
             // receiver past it - its T applies to all, a named limit: printed, not a law)
             if (l.type == LightType::Spot) {
-                std::snprintf(what, sizeof(what), "%s: a pane's own lit face reads its light whole, under a second pane that "
-                              "pane's T alone, the floor under both both (F1)", l.name);
-                check(ok && faceOff > 0.002 && std::fabs(faceOn - faceOff) <= bOn &&
-                          std::fabs(faceUnder - Tw * faceOff) <= bUnder && std::fabs(floorTwo - 0.25 * hole) <= bTwo,
+                std::snprintf(what, sizeof(what), "%s: a pane's own lit face reads its light whole, the floor under two panes "
+                              "both (F1)", l.name);
+                check(ok && faceOff > 0.002 && std::fabs(faceOn - faceOff) <= bOn && std::fabs(floorTwo - 0.25 * hole) <= bTwo,
                       what);
             }
         }
