@@ -116,7 +116,7 @@ gi.ray_level_fixed 2.35  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A
 gi.rayquery_asan 9.73  quiet n=41
 gi.rt_reflect_asan 13.72  solo, the card lock held, :83 (PHOTON-7 stage 6 commit 6, 2026-10-23: arm 6b deleted, TIMEOUT 60; was 16.07 quiet n=41)
 gi.sun_contact_acne 1.70  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A W1, 2026-10-23: one engine fixture, a two-level sphere, three pictures, 49 frames)
-gi.hit_specular_mobility 4.03  solo, the card lock held, :72, warm, nice 10 (PHOTON-7 11-2 (3), 2026-10-28: C2 - four arms, a scene each: the slab still / as a mover / metalness 0.49 / 0.51; 597 frames)
+gi.hit_specular_mobility 4.83  solo, the card lock held, :72, warm, nice 10 (PHOTON-7 11-2 (3b), 2026-10-28: C2 always traced - six arms, a scene each: the slab still / as a mover / metalness 0.49 / 0.51 / still and a mover through a rough mirror; 895 frames)
 gi.walk_court 37.49  solo, the card lock held, :72, warm, nice 10, a loaded box (load 13-19) (PHOTON-7, 2026-10-28: the split of gi.walk, one row per proof - the court prime + live + frozen + frozen2 and its M1; 700 frames)
 gi.walk_glass 45.63  solo, the card lock held, :72, warm, nice 10, a loaded box (load 13-19) (PHOTON-7, 2026-10-28: the split of gi.walk, one row per proof - the glass prime + live + frozen + frozen2, its M1 and L1; 2020 frames)
 gi.walk_bistro 48.09  solo, the card lock held, :77, Bistro's own data root warm (PHOTON-7 stage 0, 2026-10-22; a MEASURE: two jahlab sessions on Bistro Exterior, 960x540; 54.62 s on its first run, the page cache cold)

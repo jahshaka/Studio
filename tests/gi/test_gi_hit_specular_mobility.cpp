@@ -18,7 +18,8 @@
 // (RED before C2: the still slab lacked its reflection of the panel). (2) THE CONTINUUM: the slab as a metal at 0.49
 // and at 0.51 (base 0.6 grey), its mean in the mirror changing by no more than the material's own change predicts plus
 // q + 3 SE (the split DFG's F0 moves 2 % of the way from 0.04 to the base: |m51 - m49| <= 0.05 |m49| + q + 3 SE, a
-// bound five times the linear change; RED before C2: 0.51 decoded, 0.49 the store's).
+// bound five times the linear change; RED before C2: 0.51 decoded, 0.49 the store's). (3) (1) again through a
+// ROUGH mirror (0.12: its draw a VNDF sample the denoiser averages - the case that convicted C2's roulette, (3b)).
 // A fixture (the engine alone, one offscreen view a scene). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -67,7 +68,7 @@ struct Reading {
 
 /// ONE ARM: its own scene and view, the slab's material and mobility as given, run to the GI's rest and the
 /// reflection's samples, the slab's pixels in the mirror read (their floor point found through the mirror plane x = 2)
-Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, bool mover) {
+Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, bool mover, float mirrorRough = 0.0f) {
     Reading r;
     Scene *s = e->createScene(name);
     View *v = e->createOffscreenView(name, kWidth, kHeight, Colour(0, 0, 0), OffscreenContract::StillPicture);
@@ -85,7 +86,7 @@ Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, 
     PbrParams mirror;
     mirror.albedo = Colour(0.95f, 0.95f, 0.95f);
     mirror.metalness = 1.0f;
-    mirror.roughness = 0.0f;
+    mirror.roughness = mirrorRough;
     PbrParams panel;
     panel.albedo = Colour(0.0f, 0.0f, 0.0f);
     panel.roughness = 1.0f;
@@ -193,13 +194,21 @@ int main()
     m51.metalness = 0.51f;
     const Reading r49 = arm(e, frames, "spec_m49", m49, false);
     const Reading r51 = arm(e, frames, "spec_m51", m51, false);
+    // (3) THE SAME THROUGH A ROUGH MIRROR (0.12: a VNDF draw, not the centre ray - the denoiser averages it): a Russian
+    // roulette on C2 read the still slab 20 % dark here (0.897 against 1.127 always traced: Jensen through the
+    // compressive denoiser space, the lead's ruling (3b))
+    const Reading roughStill = arm(e, frames, "spec_rough_still", lacquer, false, 0.12f);
+    const Reading roughMover = arm(e, frames, "spec_rough_mover", lacquer, true, 0.12f);
     for (const auto &[name, r] : { std::pair<const char *, const Reading &>{ "the lacquer, still", still },
                                    { "the lacquer, a mover", moving },
                                    { "metalness 0.49, still", r49 },
-                                   { "metalness 0.51, still", r51 } })
+                                   { "metalness 0.51, still", r51 },
+                                   { "the lacquer, still, a rough mirror", roughStill },
+                                   { "the lacquer, a mover, a rough mirror", roughMover } })
         std::printf("   %-24s GI at rest after %d frames; the slab in the mirror %zu px, mean %.6f (SE %.6f)\n", name,
                     r.rest, r.n, r.mean, r.se);
-    CHECK(still.ok && moving.ok && r49.ok && r51.ok, "premise: every arm rests and the mirror shows the slab");
+    CHECK(still.ok && moving.ok && r49.ok && r51.ok && roughStill.ok && roughMover.ok,
+          "premise: every arm rests and the mirror shows the slab");
     const double se1 = std::sqrt(still.se * still.se + moving.se * moving.se);
     const double q1 = quantum(std::max(still.mean, moving.mean));
     CHECK(std::fabs(still.mean - moving.mean) <= q1 + 3.0 * se1,
@@ -210,6 +219,11 @@ int main()
     CHECK(std::fabs(r51.mean - r49.mean) <= 0.05 * std::fabs(r49.mean) + q2 + 3.0 * se2,
           "(2) THE CONTINUUM: metalness 0.49 -> 0.51 moves the slab's reflection by %+.6f (%.2f %% of 0.49's; bar 5 %% + q + "
           "3 SE)", r51.mean - r49.mean, r49.mean > 0 ? 100.0 * (r51.mean - r49.mean) / r49.mean : 0.0);
+    const double se3 = std::sqrt(roughStill.se * roughStill.se + roughMover.se * roughMover.se);
+    const double q3 = quantum(std::max(roughStill.mean, roughMover.mean));
+    CHECK(std::fabs(roughStill.mean - roughMover.mean) <= q3 + 3.0 * se3,
+          "(3) THE MOBILITY THROUGH A ROUGH MIRROR (0.12): still against a mover (%+.6f, %.2f SE; bar q + 3 SE)",
+          roughStill.mean - roughMover.mean, se3 > 0 ? std::fabs(roughStill.mean - roughMover.mean) / se3 : 0.0);
     std::printf("\ngi.hit_specular_mobility: %d frames, %s\n", frames, failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;
 }
