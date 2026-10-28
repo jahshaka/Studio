@@ -9,10 +9,12 @@
 //            intensity step lists exactly its one sphere.
 //   MOVER:   a movable cube's step lists its SWEPT box (this frame's bounds joined with last frame's) as a Mover, the same
 //            box as its sun shadow (MoverShadow) with the sun's direction in the header (toSun = -the light's direction),
-//            and the range sphere of the lamp whose range meets it (LampShadow) - and no Edit; THE NEXT FRAME (the table
-//            carries the step: PHOTON-7 stage 8A, a mover IS GI geometry) its REGION REBUILD lists, in EVERY cascade the
-//            swept box meets, an Edit of that cascade alone covering the swept box (its re-voxelised cells), and no mover.
-//   EDIT:    a still cube moved by script lists its old box joined with its new as an Edit; a MATERIAL edit (A19 deleted)
+//            and the range sphere of the lamp whose range meets it (LampShadow) - and, IN THE SAME FRAME (PHOTON-7 stage
+//            8A: a mover IS GI geometry, re-voxelised after the frame's own table is committed), its REGION REBUILD's
+//            Edits: in EVERY cascade the swept box meets, an Edit of that cascade alone covering the swept box cut to it
+//            (its re-voxelised cells); the frame after lists no mover and no Edit.
+//   EDIT:    a still cube moved by script lists its old box joined with its new as an Edit (beside, the same frame, its
+//            region rebuild's per-cascade Edits); a MATERIAL edit (A19 deleted)
 //            lists the wearer's box and re-voxelises only the cascades that hold it (the inner cascade it lies outside of
 //            keeps its rebuild count); the mover's material edited lists the mover's box (a GI wearer since stage 8A: by
 //            the dirty path at the refresh, as a still's).
@@ -404,13 +406,13 @@ int main()
               "...AND ITS SUN SHADOW: the same box with the sun's direction in the header (MoverShadow, toSun)");
         CHECK(countKind(r, GiRegionKind::LampShadow) == 1u && ls && same(*ls, sphere(lampPos, lampDesc.range)),
               "...and the range sphere of the lamp whose range meets it (LampShadow)");
-        CHECK(countKind(r, GiRegionKind::Edit) == 0u && !r.overflow, "...and no Edit on the step's frame, no overflow");
+        CHECK(!r.overflow, "...no overflow");
         run(1);
         const GiChangedRegions r2 = regions();
-        dump(r2, "the frame after the step (the region rebuild's)");
+        dump(r2, "the frame after the step");
         CHECK(!countKind(r2, GiRegionKind::Mover) && !countKind(r2, GiRegionKind::MoverShadow) &&
-                  !countKind(r2, GiRegionKind::LampShadow),
-              "the frame after the step lists no mover");
+                  !countKind(r2, GiRegionKind::LampShadow) && !countKind(r2, GiRegionKind::Edit),
+              "the frame after the step lists no mover and no Edit");
         {
             // THE REGION REBUILD (stage 8A): every cascade the swept box meets lists an Edit of its own bit covering it
             // (the swept box CUT TO the cascade's own box: a cascade re-voxelises its cells only)
@@ -425,12 +427,12 @@ int main()
                               std::max(cut.lo.z, cs.centre.z - cs.halfSize));
                 cut.hi = Vec3(std::min(cut.hi.x, cs.centre.x + cs.halfSize), std::min(cut.hi.y, cs.centre.y + cs.halfSize),
                               std::min(cut.hi.z, cs.centre.z + cs.halfSize));
-                for (const GiChangedRegion &g : r2.regions)
+                for (const GiChangedRegion &g : r.regions)
                     if (g.kind == GiRegionKind::Edit && g.cascadeMask == (1u << k) && inside(cut, g)) covered |= 1u << k;
             }
             std::printf("   the swept box meets cascades 0x%x; region rebuilds listed over it: 0x%x\n", meets, covered);
             CHECK(meets != 0u && covered == meets,
-                  "THE NEXT FRAME A MOVER'S REGION REBUILD LISTS AN EDIT COVERING ITS SWEPT BOX IN EVERY CASCADE IT MEETS");
+                  "IN ITS OWN FRAME A MOVER'S REGION REBUILD LISTS AN EDIT COVERING ITS SWEPT BOX IN EVERY CASCADE IT MEETS");
         }
         settle(600);
         // ITS MATERIAL EDITED (stage 3's read F6; stage 8A: a mover is a GI wearer - the dirty path lists its box at the
@@ -460,8 +462,13 @@ int main()
         run(1);
         const GiChangedRegions r = regions();
         dump(r, "the move's frame");
-        const GiChangedRegion *ed = firstKind(r, GiRegionKind::Edit);
-        CHECK(countKind(r, GiRegionKind::Edit) == 1u && ed && same(*ed, join(before, cubeAt(propPos, Vec3(1, 1, 1))), 1e-3f),
+        // (the dirty path's Edit - the box as told - and, in the same frame since PHOTON-7 stage 8A, its region rebuild's:
+        // one Edit of one cascade's bit per cascade it meets, the re-voxelised cells; the told one is the cascade-less one)
+        const GiChangedRegion *ed = nullptr;
+        unsigned told = 0u;
+        for (const GiChangedRegion &g : r.regions)
+            if (g.kind == GiRegionKind::Edit && __builtin_popcount(g.cascadeMask) != 1) { ed = &g; ++told; }
+        CHECK(told == 1u && ed && same(*ed, join(before, cubeAt(propPos, Vec3(1, 1, 1))), 1e-3f),
               "A STILL PROP MOVED LISTS ITS OLD BOX JOINED WITH ITS NEW (Edit)");
         CHECK(!r.overflow, "...no overflow");
         settle(900);
