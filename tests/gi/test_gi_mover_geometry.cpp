@@ -218,6 +218,7 @@ int main(int argc, char **argv)
         CHECK(bus != 0, "the bus (movable) arrives");
         run(2);   // (it drives at once: the oracle is the final scene's, whatever the arrival owed)
         // THE DRIVE: 3 m along +x over 30 frames, its region rebuilds' GPU priced
+        const GiStatus gDrive0 = scene->published().gi;
         if (geometryLaw) e->setFrameMonitor(MonitorLevel::Review);   // (the price: the geometry row's)
         for (int f = 1; f <= 30; ++f) {
             busAt.x = -3.0f + 0.1f * float(f);
@@ -259,7 +260,9 @@ int main(int argc, char **argv)
             }
             std::printf("\n   THE REGION'S OWN BOUNCE while it drives (A2, printed):");
             for (size_t k = 0; k < g.cascades.size() && k < 8u; ++k)
-                std::printf("  c%zu %u rebuilds, %.1f passes each, %.3f ms each", k, bcount[k],
+                std::printf("  c%zu %u rebuilds, %.1f passes each to its convergence (cap %.0f), %.3f ms each", k, bcount[k],
+                            bcount[k] ? double(g.cascades[k].regionBouncePasses - gDrive0.cascades[k].regionBouncePasses) /
+                                            bcount[k] : 0.0,
                             bcount[k] ? bpasses[k] / bcount[k] : 0.0, bcount[k] ? bms[k] / bcount[k] : 0.0);
             std::printf("\n");
         }
