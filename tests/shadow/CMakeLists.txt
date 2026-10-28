@@ -120,4 +120,4 @@ add_dependencies(test_shadow_pane_lamp JahshakaEngineMedia)
 jah_gpu_row(shadow.pane_lamp CLASS engine COMMAND test_shadow_pane_lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadow.pane_lamp PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 25)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 89)

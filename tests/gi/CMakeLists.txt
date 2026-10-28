@@ -806,7 +806,7 @@ jah_gpu_row(gi.glass_escape CLASS engine COMMAND test_gi_glass_escape
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.glass_escape PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.glass_escape PROPERTIES JAHSHAKA_TEST_FRAMES 829)
+set_tests_properties(gi.glass_escape PROPERTIES JAHSHAKA_TEST_FRAMES 971)
 
 # gi.photon_window (PHOTON-7 10-4, item 2; L9) — A WINDOW PASSES THE LIGHT ITS MATERIAL PASSES, ON EVERY PATH: gi.sealed_sky's
 # room with a 1 m pane in its roof (Glass / Blend / Refractive at alpha 0.1) against a hole, under a white sky and a sun
@@ -867,13 +867,13 @@ add_dependencies(test_gi_pane_stack JahshakaEngineMedia)
 jah_gpu_row(gi.pane_stack CLASS engine COMMAND test_gi_pane_stack ray
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pane_stack PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 17)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 19)
 # ...and its CARDS arm (the one read's F3): the cards' direct half through the stack (T^12) and through one pane at 0.3
 # (0.7) - red on the base: a table lamp through glass read 1 above T 0.5 and 0 below it
 jah_gpu_row(gi.pane_stack_cards CLASS engine COMMAND test_gi_pane_stack cards
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pane_stack_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 120)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 197)
 # gi.lamps_outside (PHOTON-7 10-4, R9; L9) — SEVENTEEN LAMPS OUTSIDE A SEALED BOX LIGHT NOTHING INSIDE IT: a closed box in a
 # black world, seventeen casting point lamps around it, the shadow-map budget at 2 (fifteen Forward+ lamps); through an
 # opening they light the inside (the control), sealed every pixel inside reads 0 within a code (test_gi_lamps_outside.cpp
