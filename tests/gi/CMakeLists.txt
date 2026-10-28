@@ -1030,3 +1030,26 @@ add_test(NAME gi.inject_fold COMMAND test_inject_fold WORKING_DIRECTORY "${CMAKE
 set_tests_properties(gi.inject_fold PROPERTIES LABELS "gi" TIMEOUT 60)
 set_tests_properties(gi.inject_fold PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(gi.inject_fold)
+
+# gi.hit_specular_mobility (PHOTON-7 11-2 (3), C2: THE HIT'S OWN SPECULAR) — A SURFACE SEEN IN A REFLECTION REFLECTS THE
+# WORLD THE SAME STILL AND AS A MOVER, AND CONTINUOUSLY IN ITS METALNESS: a glossy slab under an emissive ceiling panel,
+# seen in a mirror; (1) still against a mover within q + 3 SE, (2) metalness 0.49 against 0.51 within 5 % + q + 3 SE
+# (test_gi_hit_specular_mobility.cpp; RED before C2: the still hit's store held the indirect specular only as its lobe's
+# integral, and the metal switch decoded 0.51). Four arms, a scene each, in one process; 256x144.
+add_executable(test_gi_hit_specular_mobility test_gi_hit_specular_mobility.cpp)
+set_target_properties(test_gi_hit_specular_mobility PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_hit_specular_mobility PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_hit_specular_mobility PRIVATE JahshakaEngine)
+add_dependencies(test_gi_hit_specular_mobility JahshakaEngineMedia)
+jah_gpu_row(gi.hit_specular_mobility CLASS engine COMMAND test_gi_hit_specular_mobility
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_specular_mobility PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(gi.hit_specular_mobility PROPERTIES JAHSHAKA_TEST_FRAMES 597)
