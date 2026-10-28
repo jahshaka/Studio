@@ -21,6 +21,9 @@
 //       10-2d) - RED where the LampShadow region does not reach the cards, or the store keeps the mover where it was.
 // (An EDIT inside a lamp's range stales the same sphere; a still caster's move also moves the store, whose change
 // relights the floor through the GPU's accumulation, so no arm here can tell the two apart.)
+//   (2b) A MOVER'S BOUNCE IS IN THE CARDS AT REST (PHOTON-7 8A, A4): the floor's cards within 1.5 m of the mover change
+//       by more than four codes on average when it is hidden - the cache rays see a mover (its occlusion and its bounce).
+//       RED before A4 (the rays passed through it).
 //   (3) AN AREA LIGHT'S FORM FACTOR ON A CARD (a second fixture, below): the card's direct within the stored values'
 //       half steps of D x a numeric form factor x the window at every floor point;
 //   (4) ITS PENUMBRA (the 5-3 fix: an area light's visibility fractional, n x n ratio rays a texel): the same light
@@ -55,7 +58,7 @@
 //       surface) and VOXEL-LEAK-1's thin wall, named; and both producers' GPU time at 1080p (the ray tier's GPU rows, the
 //       no-ray route's passes' own timestamp pairs - which enclose a barrier's wait on the screen integrate in front).
 // A fixture (the engine alone, one offscreen view). Counted in frames. TWO ROWS (PHOTON-7 stage 7: whole, past a
-// fixture's 10 s budget), each its own fixture: gi.card_lamp_shadow (`lamp`: (1), (2)), gi.card_lamp_shadow_area
+// fixture's 10 s budget), each its own fixture: gi.card_lamp_shadow (`lamp`: (1), (2), (2b)), gi.card_lamp_shadow_area
 // (`area`: (3)-(10)); every bar as written above.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -414,6 +417,41 @@ int main(int argc, char **argv)
         }
         CHECK(rest1 >= 0 && rest2 >= 0 && compared > 100 && over == 0u,
               "(2) THE SHADOW FOLLOWS THE MOVED MOVER: every point within a code of a whole re-solve");
+
+        // (2b) A MOVER'S BOUNCE IS IN THE CARDS AT REST (PHOTON-7 8A, A4: the cache rays see movers - the cards' gather
+        // and the voxel sides trace the world, movers in it, and a hit's own sun rays every caster): the floor's cards
+        // within 1.5 m of the mover's footprint read the mover - its occlusion of what stands behind it and its own bounce -
+        // against the same floor with the mover hidden: the mean change over those points past four codes (a code: 1 % of
+        // the radiance, one step of the store aside), printed with the worst. RED before A4: the cache rays passed through
+        // the mover, so the floor's cards were the hidden state's to the store's step.
+        {
+            std::vector<double> rm, rh;
+            size_t okM = 0, okH = 0;
+            read(rm, okM);
+            scene->setNodeVisible(mover, false);
+            const int rest3 = settle();
+            read(rh, okH);
+            size_t near = 0;
+            double sum = 0.0, worstB = 0.0;
+            for (size_t i = 0; i < pts.size(); ++i) {
+                if (rm[i * 3u] < 0.0 || rh[i * 3u] < 0.0) continue;
+                if (std::fabs(pts[i].x - blockerAt[1].x) > 1.5f || std::fabs(pts[i].z - blockerAt[1].z) > 1.5f) continue;
+                ++near;
+                double codes = 0.0;
+                for (int c = 0; c < 3; ++c) {
+                    const double o = std::max(rh[i * 3u + c], 5.9604645e-6);
+                    codes += std::max(0.0, std::fabs(rm[i * 3u + c] - rh[i * 3u + c]) - std::ldexp(o, -10)) / (0.01 * o) / 3.0;
+                }
+                sum += codes;
+                worstB = std::max(worstB, codes);
+            }
+            const double meanB = near ? sum / double(near) : 0.0;
+            std::printf("   (2b) the mover hidden: at rest in %d frames, %zu floor points within 1.5 m of it: the mover changes their "
+                        "cards by %.2f codes on average, %.2f at the most\n", rest3, near, meanB, worstB);
+            CHECK(rest3 >= 0 && near > 100 && meanB > 4.0,
+                  "(2b) A MOVER'S BOUNCE IS IN THE CARDS AT REST: the floor's cards beside it read it");
+            scene->setNodeVisible(mover, true);
+        }
 
         scene->setGlobalIllumination(off);
         run(2);
