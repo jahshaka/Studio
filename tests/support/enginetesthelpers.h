@@ -28,6 +28,7 @@
 #include <vector>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/ProcessExit.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "jahshaka/engine/Types.h"
 
@@ -64,6 +65,10 @@ struct EngineOverrides {
     EngineOverrides &shaderCacheDir(std::string dir) { mShaderCacheDir = std::move(dir); return *this; }
     /// The persistent shader cache OFF on purpose — whatever the harness hook would set.
     EngineOverrides &shaderCacheOff() { mShaderCacheDir = std::string(); return *this; }
+    /// THE REAL DESTROY, kept (URGENT #102): this fixture destroys its engine to test the destroy itself and/or makes
+    /// another in the same process (test_engine's teardown_is_clean, test_engine_recreate) — it never takes the
+    /// exit-only teardown (takeExitOnlyTeardown below).
+    EngineOverrides &realDestroy() { mRealDestroy = true; return *this; }
 
     bool mHeadless = false;
     NativeDisplayHandle mDisplay = 0;
@@ -71,6 +76,7 @@ struct EngineOverrides {
     EngineLogSink mLogSink;
     std::optional<std::string> mHlmsMediaDir;
     std::optional<std::string> mShaderCacheDir;   ///< unset = the harness's choice (the hook)
+    bool mRealDestroy = false;
 };
 
 /// THE HARNESS HOOK (ENGINE-UPGRADE-1 stage 1, BOOT): what every fixture shares and no
@@ -102,6 +108,27 @@ inline void applyHarnessDefaults(EngineConfig &cfg)
 /// that does not compile is logged and survived, and its draws simply never happen - a black reading that a law of
 /// "nothing lit here" calls green (gi.fog_sealed passed that way while its colour pass's shader was refused). At the
 /// process's exit, whatever its laws said, a fixture whose engine logged a failed compile prints the count and exits 1.
+/// THE EXIT-ONLY TEARDOWN, every fixture's (URGENT #102, jahshaka/engine/ProcessExit.h): the process is marked, so
+/// the fixture's engine — destroyed at main's end as always — tears down with its caches saved and joined but keeps
+/// Root (no vkDestroyDevice, which waits for the NVIDIA driver's background compile: 10-20 s on a fixture's first run
+/// after a shader change, measured); then exit()'s handlers run LIFO — every one registered after this (the shader-
+/// compile check below among them) first — and this one ends the process with std::_Exit(status), before the
+/// driver's and Ogre's finalizers would run against the live device. glibc's on_exit is the one handler that is
+/// handed the exit status; without it (macOS) the fixture keeps the real destroy. The driver's per-exe cache of a
+/// fixture is still cold on its first run after a shader change and pays that compile once — stored DURING the
+/// run (measured), never awaited at the exit. A fixture whose subject is the destroy says realDestroy().
+inline void takeExitOnlyTeardown()
+{
+#if defined(__GLIBC__)
+    static const bool once = [] {
+        markProcessExit();
+        on_exit([](int status, void *) { std::fflush(nullptr); std::_Exit(status); }, nullptr);
+        return true;
+    }();
+    (void)once;
+#endif
+}
+
 inline void requireEveryShaderCompiled()
 {
     static const bool once = [] {
@@ -120,6 +147,7 @@ inline void requireEveryShaderCompiled()
 
 inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides &o = EngineOverrides())
 {
+    if (!o.mRealDestroy) takeExitOnlyTeardown();   // FIRST: its handler must run after the compile check's
     requireEveryShaderCompiled();
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;

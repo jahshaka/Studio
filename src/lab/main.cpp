@@ -3,6 +3,7 @@
 // sky — and ONE command surface (labcommands.h) that the keys, --script and stdin share. Links the engine, irisgl's
 // document / import / mirror and Qt Core/Gui; nothing of Studio's src/ (no services, no UI, no scripting host, no
 // QCoreApplication, no widgets).
+#include "jahshaka/engine/ProcessExit.h"
 #include "labcommands.h"
 #include "labsession.h"
 #include "envs/env.h"
@@ -135,6 +136,15 @@ int main(int argc, char **argv)
     if (opt.file.isEmpty() && opt.env.isEmpty()) return usage("no scene file (or --env <name>)");
     if (opt.tier.isEmpty() && (!opt.env.isEmpty() || !opt.file.endsWith(QStringLiteral(".jlab"), Qt::CaseInsensitive)))
         opt.tier = QStringLiteral("epic");
-    lab::Session session;
-    return session.run(opt);
+    // THE EXIT-ONLY TEARDOWN (URGENT #102, jahshaka/engine/ProcessExit.h): the lab makes one engine a process and
+    // destroys it at its end - its caches saved and joined, Root (the device) kept, then _Exit with the run's code,
+    // never vkDestroyDevice's wait on the driver's background compile nor exit()'s finalizers against the live device.
+    jahshaka::engine::markProcessExit();
+    int rc = 0;
+    {
+        lab::Session session;
+        rc = session.run(opt);
+    }
+    std::fflush(nullptr);
+    std::_Exit(rc);
 }
