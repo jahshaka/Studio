@@ -24,7 +24,8 @@ bound=(); [ -n "$rt" ] && bound=(timeout -k 10 "$rt")
 # THE DRIVER's SHADER CACHE REACHES EVERY GPU RUN (URGENT #91 + #99, 2026-10-28): /etc/profile.d is not sourced in an agent's
 # shell, and a row's fresh HOME has no driver cache at all, so every run redid the driver's work. Every GPU run passes here.
 export __GL_SHADER_DISK_CACHE_SIZE="${__GL_SHADER_DISK_CACHE_SIZE:-8589934592}"
-export __GL_SHADER_DISK_CACHE_PATH="${__GL_SHADER_DISK_CACHE_PATH:-/home/jahshaka/.cache/nvidia/GLCache}"
+# the driver appends GLCache/ itself: the path is the PARENT, so the rows share the box's own cache (#97's diagnosis)
+export __GL_SHADER_DISK_CACHE_PATH="${__GL_SHADER_DISK_CACHE_PATH:-/home/jahshaka/.cache/nvidia}"
 lock="${JAH_GPU_LOCK:-/tmp/jah-gpu.lock}"
 exec 9>>"$lock"
 if ! flock -n 9; then
