@@ -159,6 +159,7 @@ int main()
     const Vec3 eye(1.0f, 0.8f, 0.0f), at(2.0f, 0.6f, 0.0f);
     enginetest::testCameraLookAt(v, eye, at);
     e->waitForAsyncShaders();
+    std::printf("   MEASURING ARM reflect.restNoStop: %d\n", int(e->setArm("reflect.restNoStop", 1.0)));
 
     std::vector<float> pic[2];
     for (int arm = 0; arm < 2; ++arm) {
