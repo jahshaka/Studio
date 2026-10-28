@@ -77,9 +77,9 @@ Built buildRoom(unsigned seed, bool bake)
 //     8 m behind them do (fixture B's shape: a glossy floor with occluders standing on it);
 //   * A MIRROR on the far wall facing the room (metal, roughness 0): a mirror takes each frame whole, so every
 //     stochastic term of its hit shading shows raw;
-//   * ONE DECLARED MOVER (Movable, standing still): the ray tier's mover gate opens only in a scene with movers
-//     (OgreRayQuery.cpp rayMoversOf), and with it the per-frame-rotated mover-visibility rays a mirror shows; a still
-//     mover keeps every cache's rest (a moving one would re-trace the cards' movers term every frame).
+//   * ONE DECLARED MOVER (Movable, standing still): the store holds it at its pose like any geometry (PHOTON-7 8A; the
+//     mover hit gate is deleted) and the cards trace it in their movers term; a still mover keeps every cache's rest (a
+//     moving one would re-trace the cards' movers term and re-voxelise its region every frame).
 // THE EXPECTATION: the keep rule only — every probe of the sealed shell sees geometry in >= 2 faces.
 Built buildGlass(unsigned seed, bool bake)
 {
