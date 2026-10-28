@@ -18,7 +18,8 @@
 //      nothing else). (A's three-axis commit cannot see a stale interior: its pass region's box is the whole cube.)
 //   C. AN EDIT that reaches only the box being built drops the scroll, and the next one builds the edited scene.
 //   E. TWO SCROLLS WITH NO REBUILD BETWEEN: a whole build's store; a scroll whose LIVE box is edited mid-flight is
-//      dropped for the edit's whole rebuild.
+//      dropped, the edit served by its REGION rebuild (PHOTON-7 8A: an edit rebuilds its region, never the whole
+//      cascade) and the scroll issued again after it, the committed store a whole build's.
 //   F. A SHIFT THAT THROWS HALF WAY (gi.cascadeFaultCommit): the live store is torn, so the cascade scrolls no more
 //      until a WHOLE rebuild has made it one box's again. F2. ...and when that rebuild fails twice the store is
 //      cleared and the cascade stands down.
@@ -531,12 +532,16 @@ int main()
         enginetest::setNodePosition(scene, propNodes[0], Vec3(pre2.cascades[0].centre.x - 0.4f, 0.7f, 1.0f));
         const int n = untilSettled(400);
         const GiStatus post = scene->published().gi;
-        std::printf("   in flight when edited: %d; aborts %llu -> %llu; scrolls %llu -> %llu; settled after %d frames\n",
+        std::printf("   in flight when edited: %d; aborts %llu -> %llu; scrolls %llu -> %llu; region rebuilds %llu -> %llu;"
+                    " settled after %d frames\n",
                     int(flying), pre2.cascadeScrollAborts, post.cascadeScrollAborts, pre2.cascades[0].scrolls,
-                    post.cascades[0].scrolls, n);
+                    post.cascades[0].scrolls, (unsigned long long)pre2.cascades[0].regionRebuilds,
+                    (unsigned long long)post.cascades[0].regionRebuilds, n);
         CHECK(flying, "the scroll was in flight when its live box was edited");
         CHECK(post.cascadeScrollAborts > pre2.cascadeScrollAborts, "THE LIVE-BOX EDIT DROPPED THE SCROLL");
-        CHECK(post.cascades[0].scrolls == pre2.cascades[0].scrolls, "...for the edit's whole rebuild (no scroll committed)");
+        CHECK(post.cascades[0].regionRebuilds > pre2.cascades[0].regionRebuilds,
+              "...the edit served by its REGION rebuild (PHOTON-7 8A: never the whole cascade)");
+        CHECK(post.cascades[0].scrolls == pre2.cascades[0].scrolls + 1u, "...and the scroll issued again after it, committed");
         e->setArm("gi.scrollFrames", 0.0);
         run(2);
         CHECK(scene->giVoxelVolume(0, scrolled), "the store reads back");

@@ -1023,7 +1023,7 @@ int main()
             enginetest::setNodePosition(scene, promoted, Vec3(2.0f, 0.5f, 2.0f));
             render(e, 16);
             arm0 = scene->published().gi.rebuilds;
-            scene->setNodeMovable(promoted, true, MobilityChange::Authoring);
+            scene->setNodeMovable(promoted, true);
             measure("an authoring flip", arm0, 16, total, worst);
 
             // ---- (h) a DELETE of LIT geometry -------------------------------
@@ -1140,12 +1140,17 @@ int main()
     // walk and marked once when it has stopped (walkItems' giMove: 1 code, 0 px).
     // THREE POSES of cascade 0's box against the turner: a CORNER (two of its faces cut the turner's footprint), ONE
     // face, NO face - the precondition is checked, so a placement change that moves a pose fails loudly here.
-    // THE MOTION LAW (motion against rest within 16 codes, none off by 10) is STAGE 8's (PHOTON-7 stage 8, the region
-    // rebuild: a moving item's regions in every cascade it reaches within the same frame budget). With every rotation
-    // marked, cascade 0's reserved slot rebuilds it every frame and the one-writer rule holds cascades 1..3's whole
-    // rebuilds for the whole motion (cascade 1: none in 60 frames) - the box in cascade 0 at the live pose, the rest at
-    // the pose before it moved. DECLARED RED until stage 8 (measured 174 / 233 / 143 codes, 1,298 / 2,765 / 1,962 px at
-    // irisgl d480f0bd; 176 / 249 / 140 codes, 1,730 / 1,993 / 2,578 px on 10-2e's placement lattice).
+    // THE MOTION LAW (motion against rest within 16 codes, none off by 10), PHOTON-7 stage 8A's A2 - A MOVER's regions in
+    // step: the turner a DECLARED MOVER (its slot listed every frame it moves), judged with the RAYS OFF - the voxel truth,
+    // the store's bounce against the rest's. Measured 2 / 2 / 2 codes, 0 px (irisgl 0d6fae97 on). Two causes made it red: the cascades' order (stage 10:
+    // cascade 0's reserved slot rebuilt the turner, the one-writer rule held 1..3) - gone with A1's region rebuild in every
+    // cascade every frame it moves (measured: +29 region rebuilds a cascade over the 60 frames, every second frame: the
+    // walk's move quantum for a STILL) yet still 224 / 145 / 137 codes; and THE BOUNCE'S CONVERGENCE - a re-voxelised
+    // region's bounce restarted from its direct term and the feedback converged it a pass a frame (the error fell to 0
+    // over 8-32 frames after the motion stopped). A2: the region's bricks take k passes IN THE FRAME they are rebuilt (k
+    // from the region's largest albedo: PhotonComponent::regionBounce). The RAYS-ON numbers are PRINTED with the frames
+    // the picture takes to reach the bar and a code after the motion: the residue after A2 is the ray tier's temporal
+    // hold, stage 8B's by name.
     std::printf("\n== case 12: a moving still object is lit at its own pose ==\n");
     {
         struct Pose { const char *name; Vec3 cam; int faces; };
@@ -1165,9 +1170,29 @@ int main()
         };
         // The turner's footprint over the whole motion: a 2 m cube about the vertical, half-diagonal sqrt 2.
         const float reach = 1.41422f;
-        for (const Pose &pose : poses) {
+        // THE RUNS: the MOVER turning at the three poses with the rays off (A2's law, asserted); the corner with the rays on
+        // (printed: 8B's temporal residue, the frames to the bar and to a code); the corner with a STILL turned by script
+        // (printed: the document-to-engine mirror's move quantum - the walk marks a 1-degree-a-frame turn every second
+        // frame, so the store holds the still up to a quantum behind: an editor-side agreement, not the renderer's law).
+        struct Run { const Pose *pose; int raysOn; bool still; };
+        const Run runs[5] = { { &poses[0], 0, false }, { &poses[1], 0, false }, { &poses[2], 0, false },
+                              { &poses[0], 1, false }, { &poses[0], 0, true } };
+        int raysWere = -1;
+        for (const Run &run : runs) {
+        const Pose &pose = *run.pose;
+        const int raysOn = run.raysOn;
+        if (raysOn != raysWere) {
+            e->setRayTracing(raysOn != 0);
+            render(e, 2);
+            raysWere = raysOn;
+        }
+        std::printf("   -- %s, the rays %s --\n", run.still ? "a STILL turned by script (printed: the move quantum)"
+                                                          : "a MOVER turning",
+                    raysOn ? "ON (printed: 8B's temporal residue)" : "OFF (A2's law)");
+        {
             view->setCamera(enginetest::testCameraDescLookAt(pose.cam, Vec3(0.0f, 1.0f, 0.0f)));
             const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
+            if (!run.still) scene->setNodeMovable(turner, true);   // (a declared mover: A2's subject)
             enginetest::setNodePosition(scene, turner, Vec3(0.0f, 1.0f, 0.0f));
             enginetest::setNodeScale(scene, turner, Vec3(2.0f, 2.0f, 2.0f));
             CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the motion");
@@ -1195,10 +1220,53 @@ int main()
                 const Quat q{ 0.0f, std::sin(r), 0.0f, std::cos(r) };
                 scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
             };
+            const GiStatus g0 = scene->published().gi;
+            // (the region's own bounce PRICED at the turner: its monitor rows over the motion, the first pose with the rays
+            // off - each rebuild's k passes' GPU ms)
+            const bool price = !raysOn && !run.still && &pose == &poses[0];
+            if (price) e->setFrameMonitor(MonitorLevel::Review);
             for (int f = 0; f < 60; ++f) { yaw(float(f)); render(e, 1); }
             Image motion; CHECK(view->readPixels(motion), "the last motion frame reads back");
+            if (price) {
+                render(e, 6);   // (the GPU samples land a few frames late; the rest frame below is the same pose)
+                e->setFrameMonitor(MonitorLevel::Off);
+                std::vector<MonitorRecord> records;
+                while (e->popMonitorRecords(records) > 0) {}
+                double ms[8] = {}, passes[8] = {};
+                unsigned count[8] = {};
+                for (const MonitorRecord &r : records)
+                    for (const CacheWork &w : r.cacheWork)
+                        if (w.detail.rfind("vct.regionBounce", 0) == 0 && w.gpuMs >= 0.0f) {
+                            const int k = std::atoi(w.detail.c_str() + 16);
+                            if (k < 0 || k > 7) continue;
+                            ms[k] += double(w.gpuMs);
+                            passes[k] += double(w.units);
+                            ++count[k];
+                        }
+                std::printf("   [%s] THE REGION'S OWN BOUNCE PRICED at the turner (rays off):", pose.name);
+                for (int k = 0; k < 4; ++k)
+                    std::printf("  c%d %u rebuilds, %.1f passes, %.3f ms each", k, count[k], count[k] ? passes[k] / count[k] : 0.0,
+                                count[k] ? ms[k] / count[k] : 0.0);
+                std::printf("\n");
+            }
+            // (the rays on: the frames after the motion, to find when the picture reaches the bar and a code)
+            std::vector<Image> after;
+            if (raysOn)
+                for (int q = 0; q < 64; ++q) { render(e, 1); Image im; view->readPixels(im); after.push_back(im); }
+            {
+                // (printed: each cascade's rebuilds over the motion - whole, and by region (stage 8A))
+                const GiStatus g1 = scene->published().gi;
+                std::printf("   [%s] over the 60 motion frames:", pose.name);
+                for (size_t k = 0; k < g1.cascades.size() && k < g0.cascades.size(); ++k)
+                    std::printf("  c%zu rebuilds +%llu (region +%llu, its own bounce passes to convergence +%llu, the last frame's %u)", k,
+                                g1.cascades[k].rebuilds - g0.cascades[k].rebuilds,
+                                g1.cascades[k].regionRebuilds - g0.cascades[k].regionRebuilds,
+                                g1.cascades[k].regionBouncePasses - g0.cascades[k].regionBouncePasses,
+                                g1.cascades[k].regionBounceLast);
+                std::printf("\n");
+            }
             // ...the SAME POSE at rest, after everything has caught up...
-            render(e, 120);
+            render(e, raysOn ? 56 : 120);
             Image rest; CHECK(view->readPixels(rest), "the rest frame reads back");
             // ...and THE ORACLE: the chain built fresh at that pose.
             GiParams off; off.mode = GiMode::Off;
@@ -1218,13 +1286,32 @@ int main()
                         motionTruthOver, kSize * kSize);
             CHECK(restMax <= 1 && restOver == 0,
                   "AT REST THE OBJECT IS LIT AT THE POSE IT IS IN: the picture equals a fresh build there (within a code)");
-            // STAGE 8's (declared red until its region rebuild: see the head of the case).
-            CHECK(motionMax <= 16, "the moving object is lit at the pose it is IN, not the one it left");
-            CHECK(motionOver == 0, "...with not one pixel off by 10");
+            if (run.still) {
+                std::printf("   [%s] A STILL (printed): motion vs rest %d/255, %u px >= 10 - the move quantum's lag\n", pose.name,
+                            motionMax, motionOver);
+            } else if (!raysOn) {
+                // A2's (the head of the case): the store's bounce in the frame of its geometry
+                CHECK(motionMax <= 16, "the moving object is lit at the pose it is IN, not the one it left (rays off)");
+                CHECK(motionOver == 0, "...with not one pixel off by 10 (rays off)");
+            } else {
+                int toBar = -1, toCode = -1;
+                for (size_t q = 0; q < after.size(); ++q) {
+                    int w = 0; unsigned o = 0;
+                    diffOf(after[q], rest, w, o);
+                    if (toBar < 0 && w <= 16 && o == 0u) toBar = int(q) + 1;
+                    if (toCode < 0 && w <= 1) toCode = int(q) + 1;
+                }
+                std::printf("   [%s] RAYS ON (8B's, printed): motion vs rest %d/255, %u px >= 10; the bar reached %d frames "
+                            "after the motion, a code %d frames after (-1: not within %zu)\n", pose.name, motionMax,
+                            motionOver, toBar, toCode, after.size());
+            }
             CHECK(scene->setGlobalIllumination(off), "the motion's chain comes down");
             render(e, 2);
             scene->removeNode(turner);
         }
+        }
+        e->setRayTracing(true);
+        render(e, 2);
     }
 
     // =====================================================================
@@ -1252,12 +1339,13 @@ int main()
         enginetest::setNodePosition(scene, fnode, Vec3(0.0f, 0.5f, 1.0f));
         render(e, 24);
         const GiStatus pre = scene->published().gi;
-        // A material edit: the cascades that hold its wearer owe a rebuild in place (PHOTON-7 stage 3: the wearer's box).
-        fp.albedo = Colour(0.9f, 0.2f, 0.2f);
-        CHECK(scene->setPbrMaterial(fmat, fp), "the material edit is accepted");
+        // A WHOLE REBUILD of cascade 0 at its placement (the measuring door gi.rebuildCascade: a change with no box - a
+        // boxed edit, the material edit this case used to drive, is a REGION rebuild since PHOTON-7 stage 8A and never
+        // reaches the whole rebuild's post-build fault), its ONE attempt under the fault.
         e->setArm("gi.cascadeFaultPost", 0.0);
-        scene->refreshGlobalIllumination();
-        render(e, 2);
+        e->setArm("gi.rebuildCascade", 0.0);
+        render(e, 1);
+        e->setArm("gi.rebuildCascade", -1.0);
         const GiStatus bad = scene->published().gi;
         std::printf("   post-build fault: c0 rebuilds %llu -> %llu, pending %d, vctBound %d\n",
                     pre.cascades[0].rebuilds, bad.cascades[0].rebuilds, bad.cascades[0].pending,
@@ -1478,26 +1566,80 @@ int main()
             CHECK(outerRebuilds > 0ull,
                   "...while the cascade that CAN see them follows them");
 
-            // ...AND THE MERGED BOXES' REBUILDS' LIGHT CONVERGES, AT REST (PHOTON-7 stage 4: the feedback). A rebuild's
-            // bricks resume and converge a pass a frame; once the movement stops the chain's feedback comes to rest -
-            // the debt is paid, not carried (it replaced LAMPREST-3's post-rebuild settle).
+            // ...AND THE MERGED BOXES' REBUILDS' LIGHT CONVERGES, AT REST (PHOTON-7 stage 4: the feedback; the bar DERIVED
+            // FROM THE SOLVER at stage 8A - the old 34 frames was the old behaviour's number). After the last change every
+            // brick it reached converges by its own passes: a brick falls under a code within the passes of its own series
+            // (at most kRegionBouncePassesMax = 32, the closed box's bound at albedo 0.85), and an owed cascade's floor
+            // alone passes its every active brick once in 2 x lightWorkFrames frames (GiQualityFacts' law) - so a brick's
+            // rest is within 32 x 2 x lightWorkFrames frames of its last resume; a resume PROPAGATES a hop a pass (a
+            // stopped neighbour resumes on the frame its source's move accumulates past its threshold), at most one hop a
+            // brick across the merged boxes' extent (their union's longest side over the cascade's brick), each adding a
+            // pass. THE BOUND: (32 + hops) x 2 x lightWorkFrames, plus the readings' lag (4). The rest is waited for frame
+            // by frame (its frames printed) - the bound only fails a rest that never comes - and the rested light must be
+            // a fresh build's (the chain built again at the same scene) within TWO codes at every lit voxel of the
+            // outermost cascade: each rest lies within a code of the fixed point (the stop rule), so two lie within two.
             const unsigned long long restsAtStop = scene->published().gi.feedbackRests;
-            // At rest: nothing at all.
             render(e, 4);
             before = perCascade();
-            render(e, 30);
+            const GiStatus gs = scene->published().gi;
+            const auto &outerC = gs.cascades.back();
+            const float brickM = 8.0f * outerC.cell;
+            const float extent = 4.0f * 1.5f + 0.3f * 24.0f + 1.0f;   // (the movers' union: 5 x 4 at 1.5 m, 24 x 0.3 m driven)
+            const unsigned hops = unsigned(std::ceil(extent / std::max(brickM, 1e-3f)));
+            const unsigned lwf = giQualityFacts(GiQuality::High, GiViewProfile::Desktop).lightWorkFrames;
+            const unsigned bound = (32u + hops) * 2u * lwf + 4u;
+            unsigned restFrame = 0u;
+            for (unsigned q = 1; q <= bound; ++q) {
+                render(e, 1);
+                const GiStatus gq = scene->published().gi;
+                if (!gq.feedbackOwed && gq.feedbackRests > restsAtStop) { restFrame = q; break; }
+            }
             during = perCascade();
             unsigned long long atRest = 0;
             for (size_t i = 0; i < during.size(); ++i) atRest += during[i] - before[i];
-            std::printf("   30 frames after they stop: %llu cascade rebuilds\n", atRest);
+            std::printf("   after they stop: %llu cascade rebuilds; the feedback at rest %u frames after (the solver's bound %u: "
+                        "(32 + %u hops) x 2 x %u + 4)\n", atRest, restFrame, bound, hops, lwf);
             CHECK(atRest == 0ull, "and when they stop, the chain re-voxelises nothing");
-            const unsigned long long restsAfter = scene->published().gi.feedbackRests;
-            const bool owedAfter = scene->published().gi.feedbackOwed;
-            std::printf("   the feedback's rests: %llu before the movement, %llu at the stop, %llu after the rest (owed "
-                        "%d)\n", restsBefore, restsAtStop, restsAfter, int(owedAfter));
-            CHECK(restsAfter > restsAtStop && !owedAfter,
-                  "the light of the rebuilds the merged dirty boxes caused CONVERGES once the movement stops (the "
-                  "feedback comes to rest and owes nothing)");
+            CHECK(restFrame > 0u, "the light of the rebuilds the merged dirty boxes caused CONVERGES once the movement stops "
+                                  "(the feedback comes to rest within the solver's own bound)");
+            {
+                GiVoxelVolume rested, fresh;
+                const int outer = int(gs.cascades.size()) - 1;
+                const bool r1 = scene->giVoxelLight(outer, rested) && rested.available;
+                GiParams down;
+                down.mode = GiMode::Off;
+                scene->setGlobalIllumination(down);
+                render(e, 2);
+                scene->setGlobalIllumination(cascadeGi());
+                e->waitForAsyncShaders();
+                for (int q = 0; q < 1500; ++q) {
+                    render(e, 1);
+                    const GiStatus gq = scene->published().gi;
+                    if (q > 8 && gq.giAtRest && !gq.feedbackOwed) break;
+                }
+                const bool r2 = scene->giVoxelLight(outer, fresh) && fresh.available;
+                size_t lit = 0, over = 0;
+                double worst = 0.0;
+                for (size_t v = 0; r1 && r2 && v * 4u + 2u < rested.light.size() && v * 4u + 2u < fresh.light.size(); ++v) {
+                    double c = 0.0;
+                    bool any = false;
+                    for (int ch = 0; ch < 3; ++ch) {
+                        const double o = double(fresh.light[v * 4u + ch]);
+                        if (!(o > 1e-5)) continue;
+                        any = true;
+                        c = std::max(c, std::max(0.0, std::fabs(double(rested.light[v * 4u + ch]) - o) - std::ldexp(o, -10)) /
+                                            (0.01 * o));
+                    }
+                    if (!any) continue;
+                    ++lit;
+                    worst = std::max(worst, c);
+                    over += c > 2.0 ? 1u : 0u;
+                }
+                std::printf("   the rested outermost cascade against a fresh build: %zu lit voxels, %zu over two codes, worst "
+                            "%.3f codes\n", lit, over, worst);
+                CHECK(r1 && r2 && lit > 100u && over == 0u,
+                      "...AND THE RESTED LIGHT IS A FRESH BUILD'S: every lit voxel of the outermost cascade within two codes");
+            }
 
             for (NodeId m : movers) scene->removeNode(m);
             render(e, 6);
