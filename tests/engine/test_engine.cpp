@@ -2316,24 +2316,28 @@ void ies_profile_shapes_a_spot() {
     std::printf("    profile cleared: axis %.3f (was %.3f plain)\n", clearedAxis, plainAxis);
     CHECK(std::fabs(clearedAxis - plainAxis) < 0.05f);
 
-    // The documented limitation, asserted rather than merely written down: a
-    // shadow-casting POINT light is shaded from the pass buffer, whose point
-    // loop has no profile term, so the engine must not pretend otherwise.
+    // A SHADOW CHANGES ONLY WHAT GEOMETRY BLOCKS (PHOTON-7 10-4 R8 (4)): a
+    // shadow-casting POINT light is shaded from the pass buffer's point loop,
+    // which reads the profile row too (the fork's 800.PixelShader), so with
+    // nothing between the lamp and the wall its picture is the unshadowed
+    // one's - within one code a channel (the readback's quantum; lum sums
+    // three). On the base it LOST the profile (this check used to assert it: the
+    // shadowed axis read over 0.05 brighter, the ring's dark centre gone).
     d.type = LightType::Point;
     d.castShadows = false;
     d.iesProfilePath = ies;
     CHECK(s->setLight(lightNode, d));
     render(fx.e, 2); REQUIRE(v->readPixels(img));
-    const float pointProfiled = lum(48, 48);
+    const float pointProfiled = lum(48, 48), pointProfiledOff = lum(48, 24);
     d.castShadows = true;
     CHECK(s->setLight(lightNode, d));
     render(fx.e, 3); REQUIRE(v->readPixels(img));
-    const float pointShadowed = lum(48, 48);
-    std::printf("    point light axis: no shadows %.3f  shadows on %.3f\n",
-                pointProfiled, pointShadowed);
-    CHECK_MSG(pointShadowed > pointProfiled + 0.05f,
-              "shadow-casting point lights LOSE their profile (no shader block) — "
-              "if this ever fails, Ogre gained one and the UI warning can go");
+    const float pointShadowed = lum(48, 48), pointShadowedOff = lum(48, 24);
+    std::printf("    point light axis/off-axis: no shadows %.3f/%.3f  shadows on %.3f/%.3f\n",
+                pointProfiled, pointProfiledOff, pointShadowed, pointShadowedOff);
+    CHECK_MSG(std::fabs(pointShadowed - pointProfiled) <= 3.0f / 255.0f + 1e-4f &&
+                  std::fabs(pointShadowedOff - pointProfiledOff) <= 3.0f / 255.0f + 1e-4f,
+              "a shadow-casting point light keeps its profile: its unoccluded picture is the unshadowed one's");
 
     CHECK(s->removeLight(lightNode));
     std::remove(ies.c_str());
@@ -3418,12 +3422,9 @@ void fog_transmittance_is_exponential() {
     CHECK_MSG(!near(far0, kMagenta, 30),
               "baseline far surface is not fog-coloured: %d %d %d", far0.r, far0.g, far0.b);
 
-    // Breakthrough off for the law: it deliberately bends the curve (see the
-    // breakthrough test below), and the law is about the curve.
     FogDesc fog;
     fog.enabled = true;
     fog.colour = kMagenta;
-    fog.breakFalloff = 0.0f;
     fog.density = 0.12f;
     s->setFog(fog);
     render(fx.e); REQUIRE(v->readPixels(img));
@@ -3784,7 +3785,6 @@ void fog_atmosphere_colour_follows_the_sky() {
     FogDesc fog;
     fog.enabled = true;
     fog.colour = kMagenta;
-    fog.breakFalloff = 0.0f;
     fog.density = 0.2f;
     s->setFog(fog);
     render(fx.e); render(fx.e); REQUIRE(v->readPixels(img));
@@ -4051,7 +4051,6 @@ void fog_atmosphere_colour_is_the_skys() {
     FogDesc fog;
     fog.enabled = true;
     fog.colour = kMagenta;
-    fog.breakFalloff = 0.0f;
     fog.density = 0.2f;
     // (1) THE DISTANCE LAYER.
     const Px distAuthored = shoot(image, fog);
@@ -4091,7 +4090,6 @@ void fog_height_layer() {
     FogDesc fog;
     fog.enabled = true;
     fog.colour = kMagenta;
-    fog.breakFalloff = 0.0f;
 
     // (1) Distance fog alone.
     fog.density = 0.15f;
@@ -4145,50 +4143,6 @@ void fog_height_layer() {
               "no height layer is exactly plain distance fog: %d %d %d vs %d %d %d",
               noHeight.r, noHeight.g, noHeight.b, distanceOnly.r, distanceOnly.g, distanceOnly.b);
 }
-
-void fog_breakthrough_spares_bright_surfaces() {
-    Fixture fx;
-    View *v = fx.view("fog-b-view", 96, 96, kBlue); REQUIRE(v);
-    Scene *s = fx.scene("fog-b-scene");             REQUIRE(s);
-    v->setScene(s);
-    populate(s, kOrange);
-    aim(v);
-    // A big EMISSIVE backdrop: emissive is part of the colour the fog sees, so
-    // this surface is bright enough to break through.
-    const NodeId farNode = s->createNode();
-    REQUIRE(farNode != 0);
-    const MeshId mesh = s->createMesh(enginetest::unitCubeMesh());
-    PbrParams p;
-    p.albedo = Colour(0.05f, 0.05f, 0.05f);
-    p.emissive = Colour(0.0f, 3.0f, 0.0f);      // green, well past breakMinBrightness
-    const MaterialId mat = s->createPbrMaterial(p);
-    REQUIRE(mesh != 0); REQUIRE(mat != 0);
-    REQUIRE(s->attachMesh(farNode, mesh, mat));
-    enginetest::setNodePosition(s, farNode, Vec3(-28.6f, -23.4f, -33.8f));
-    enginetest::setNodeScale(s, farNode, Vec3(60.0f, 60.0f, 60.0f));
-
-    Image img;
-    FogDesc fog;
-    fog.enabled = true;
-    fog.colour = kMagenta;
-    fog.density = 0.25f;
-    fog.breakFalloff = 0.0f;                    // plain exponential
-    s->setFog(fog);
-    render(fx.e); REQUIRE(v->readPixels(img));
-    const Px plain = px(img, img.width / 2, 6);
-
-    fog.breakMinBrightness = 0.25f;
-    fog.breakFalloff = 2.0f;                    // bright pixels resist
-    s->setFog(fog);
-    render(fx.e); REQUIRE(v->readPixels(img));
-    const Px broken = px(img, img.width / 2, 6);
-    std::printf("    emissive backdrop: plain %d %d %d, breakthrough %d %d %d\n",
-                plain.r, plain.g, plain.b, broken.r, broken.g, broken.b);
-    CHECK_MSG(broken.g > plain.g + 2,
-              "a bright surface keeps more of itself with breakthrough on: %d vs %d",
-              broken.g, plain.g);
-}
-
 
 // ---------------------------------------------------------------------------
 // The compositor chain (POST_CHAIN_SPEC.md phases 0-1).
@@ -6673,7 +6627,6 @@ int main(int argc, char **argv) {
         { "fog_atmosphere_colour_is_the_skys",       fog_atmosphere_colour_is_the_skys },
         { "fog_atmosphere_colour_follows_the_sky",   fog_atmosphere_colour_follows_the_sky },
         { "sun_disc_stays_out_of_the_skys_ambient",  sun_disc_stays_out_of_the_skys_ambient },
-        { "fog_breakthrough_spares_bright_surfaces", fog_breakthrough_spares_bright_surfaces },
         { "msaa_offscreen_views_default_to_one_sample", msaa_offscreen_views_default_to_one_sample },
         { "msaa_4x_blends_silhouette_edges",        msaa_4x_blends_silhouette_edges },
         { "msaa_runtime_toggle_and_clamping",       msaa_runtime_toggle_and_clamping },

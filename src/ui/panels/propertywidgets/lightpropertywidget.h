@@ -74,10 +74,7 @@ private:
     /// Binds (or clears) the IES profile through LightBindings and records ONE
     /// undo step. The pick and clear buttons are two front ends on it.
     void bindProfile(const QString &guid);
-    /// Repaints the binding row from the node, INCLUDING the honesty
-    /// annotation: a profile does nothing on a shadow-casting point light (the
-    /// renderer has no profile term there). It is silent in the renderer, so
-    /// the panel has to say it out loud.
+    /// Repaints the binding row from the node (its note row: a binding error).
     void refreshBindingRows();
     /// THE SKY LIGHT's SOURCE (R5b): the scene's sky, or a dome's six faces through LightBindings::bindSkyCube (the
     /// verb node.setSkyLightSource's own call), one undo step.

@@ -313,8 +313,11 @@ def boot_ci(a, b=None, rng=None):
     return (pct(out, 0.025), pct(out, 0.975)) if out else (float("nan"), float("nan"))
 
 
-def analyse(blocks, labels):
-    """blocks: [(res, arm, bundle)] -> {res: [row dicts]}."""
+def analyse(blocks, labels, top=None):
+    """blocks: [(res, arm, bundle)] -> {res: [row dicts]}. THE BOOTSTRAP ONLY WHERE IT IS PRINTED (PHOTON-7 10-4's tool
+    fault: 2000 resamples x three CIs x every one of a frame's few hundred rows in pure Python took the analysis past
+    four minutes for a 16-block run - past a foreground call): the medians and the deltas for every row, the CIs for
+    the frame rows and the `top` largest moves (all rows when top is None)."""
     per = {}
     for res, arm, bundle in blocks:
         for rec in read_bundle(bundle):
@@ -326,19 +329,30 @@ def analyse(blocks, labels):
         out = []
         for k, arms in rows.items():
             a, b = arms.get(a_lab, []), arms.get(b_lab, [])
-            row = {"row": k}
+            row = {"row": k, "_a": a, "_b": b}
             for lab, v in ((a_lab, a), (b_lab, b)):
                 row[lab] = {"n": len(v), "median": statistics.median(v) if v else None,
-                            "p95": pct(v, 0.95) if v else None, "ci": boot_ci(v) if len(v) >= 5 else None}
+                            "p95": pct(v, 0.95) if v else None, "ci": None}
             if a and b and statistics.median(a) > 0:
                 ma, mb = statistics.median(a), statistics.median(b)
                 row["deltaMs"] = mb - ma
                 row["deltaPct"] = 100.0 * (mb / ma - 1.0)
-                lo, hi = boot_ci(a, b) if len(a) >= 5 and len(b) >= 5 else (float("nan"), float("nan"))
-                row["deltaPctCi"] = (100.0 * lo, 100.0 * hi)
             out.append(row)
         # the frame rows first, then by the size of the move
         out.sort(key=lambda r: (0 if r["row"].startswith("frame") else 1, -abs(r.get("deltaMs", 0.0))))
+        shown = 0
+        for r in out:
+            frame = r["row"].startswith("frame")
+            if frame or top is None or shown < top:
+                a, b = r["_a"], r["_b"]
+                for lab, v in ((a_lab, a), (b_lab, b)):
+                    r[lab]["ci"] = boot_ci(v) if len(v) >= 5 else None
+                if "deltaMs" in r:
+                    lo, hi = boot_ci(a, b) if len(a) >= 5 and len(b) >= 5 else (float("nan"), float("nan"))
+                    r["deltaPctCi"] = (100.0 * lo, 100.0 * hi)
+                if not frame:
+                    shown += 1
+            del r["_a"], r["_b"]
         tables[res] = out
     return tables
 
@@ -496,7 +510,7 @@ def main():
               "fixture": a.fixture, "tier": a.tier, "frames": a.frames, "settle": a.settle, "warm": a.warm,
               "order": order, "arms": a.arm, "viewports": viewports, "wallS": round(time.time() - t0, 1),
               "exit": rc}
-    tables = analyse(blocks, labels)
+    tables = analyse(blocks, labels, a.top)
     report = render(header, tables, labels, a.top)
     with open(os.path.join(out, "report.txt"), "w") as f:
         f.write(report)

@@ -18,6 +18,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdio>
 #include <cstdlib>
 #include <map>
 #include <optional>
@@ -97,8 +98,29 @@ inline void applyHarnessDefaults(EngineConfig &cfg)
 #if defined(JAHSHAKA_TEST_PLUGIN_DIR) && defined(JAHSHAKA_TEST_MEDIA_DIR)
 /// The fixture's EngineConfig: the shared defaults, the harness hook, then the
 /// fixture's overrides. `logFile` is every fixture's own (each names its log).
+/// A FIXTURE WHOSE ENGINE FAILED TO COMPILE A SHADER FAILS (URGENT #83's law for the fixtures, PHOTON-7 10-4): a program
+/// that does not compile is logged and survived, and its draws simply never happen - a black reading that a law of
+/// "nothing lit here" calls green (gi.fog_sealed passed that way while its colour pass's shader was refused). At the
+/// process's exit, whatever its laws said, a fixture whose engine logged a failed compile prints the count and exits 1.
+inline void requireEveryShaderCompiled()
+{
+    static const bool once = [] {
+        std::atexit([] {
+            const unsigned long long failed = Engine::processShaderCompileErrors();
+            if (failed == 0) return;
+            std::fprintf(stderr, "FAIL: %llu shader program(s) failed to compile in this fixture (its readings are of "
+                                 "draws that never happened) - see its Ogre log\n", failed);
+            std::fflush(stderr);
+            std::_Exit(1);
+        });
+        return true;
+    }();
+    (void)once;
+}
+
 inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides &o = EngineOverrides())
 {
+    requireEveryShaderCompiled();
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;

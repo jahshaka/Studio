@@ -230,19 +230,17 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
            "air."));
 
     shadowType = this->addComboBox("Shadow Type");
-    // "Off (fill light)" rather than "None" (owner decision Q4): the switch is
-    // named for what it is FOR — a light you deliberately add for fill and do
-    // not want a second set of shadows from — and not as a performance dial.
-    // Shadows are ON for every new light; this is how you say otherwise.
-    shadowType->addItem("Off (fill light)");
+    // THE SHADOW'S FILTER - every light casts one (PHOTON-7 10-4 R9; L9: a light is blocked by geometry on every
+    // path). "Off (fill light)" is DELETED: the engine traces every lamp the shadow maps do not hold (a ray at the ray
+    // tier, the voxels' march where the GI is on) - with GI off and no ray tracing, the lamps beyond the shadow maps are
+    // unshadowed, and the scene issue `lamps.unshadowed` names them.
     shadowType->addItem("Hard");
 	shadowType->addItem("Soft");
 	shadowType->addItem("Very Soft");
     shadowType->setToolTip(
-        tr("Every new light casts soft shadows. \"Off (fill light)\" is the deliberate "
-           "exception: the light still lights everything it reaches, straight through walls and "
-           "floors, which is what a fill light is for and is also the commonest cause of a room "
-           "that is lit from outside."));
+        tr("How soft this light's shadow is. Every light casts one. A lamp beyond the scene's shadow "
+           "maps is shadowed by ray tracing, or by Global Illumination's voxels; with GI off and no ray "
+           "tracing it is unshadowed, and the scene's issue bar names it."));
     shadowSize = this->addComboBox("Shadow Size");
     shadowSize->addItem("512");
     shadowSize->addItem("1024");
@@ -476,18 +474,9 @@ void LightPropertyWidget::refreshBindingRows()
         setBindingLabel(profileLabel, lightNode->iesProfileGuid,
                         lightNode->iesProfilePath, db);
         profileClear->setEnabled(!lightNode->iesProfileGuid.isEmpty());
-        // THE user-facing gotcha: turning shadows on a point light silently
-        // removes its profile, because a shadow-casting point light is shaded
-        // from a code path that has no profile term. There is no engine signal
-        // for it, so the panel is the only place this can be said.
-        const bool shadows = lightNode->shadowMap.shadowType != iris::ShadowMapType::None;
-        const bool lost = type == iris::LightType::Point && shadows;
-        PropertyRows::setPanelVisible(profileNote, lost);
-        if (lost)
-            profileNote->setText(tr("Shadow-casting point lights ignore their IES profile — "
-                                    "the renderer has no photometric term on that path. Set "
-                                    "Shadow Type to None, or use a spotlight."));
-        profileLabel->setEnabled(!lost);
+        // (the note row carries a binding error only: a spot or point light honours
+        // its profile, shadowed or not)
+        PropertyRows::setPanelVisible(profileNote, false);
     }
 }
 
@@ -553,9 +542,9 @@ void LightPropertyWidget::refreshSunRows()
     auto sun = scene ? scene->sunLight() : iris::LightNodePtr();
     const bool isSun = sun && sun.data() == lightNode.data();
     // FOLLOWS ATMOSPHERE IS THE SUN'S: it tints THE SUN's direct light, and a
-    // secondary directional is not the sun — it draws no disc and casts no
-    // shadow, so the row on one would say nothing true (round-2 review item
-    // 11). It follows the RESOLVER, like the readout below.
+    // secondary directional is not the sun — it draws no disc and the sky is
+    // not lit by it, so the row on one would say nothing true (round-2 review
+    // item 11). It follows the RESOLVER, like the readout below.
     PropertyRows::setPanelVisible(followsAtmosphere, isSun);
     followsAtmosphere->setValue(lightNode->followsAtmosphere);
 
@@ -578,8 +567,6 @@ void LightPropertyWidget::refreshSunRows()
 QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
 {
     switch(shadowType){
-    case iris::ShadowMapType::None:
-        return "Off (fill light)";
     case iris::ShadowMapType::Hard:
         return "Hard";
     case iris::ShadowMapType::Soft:
@@ -588,17 +575,15 @@ QString LightPropertyWidget::evalShadowTypeName(iris::ShadowMapType shadowType)
         return "Very Soft";
     }
 
-    return "Off (fill light)";
+    return "Soft";
 }
 
 iris::ShadowMapType LightPropertyWidget::evalShadowMapType(QString shadowType)
 {
     if (shadowType=="Hard")
         return iris::ShadowMapType::Hard;
-    if (shadowType=="Soft")
-        return iris::ShadowMapType::Soft;
     if (shadowType=="Very Soft")
         return iris::ShadowMapType::VerySoft;
 
-    return iris::ShadowMapType::None;
+    return iris::ShadowMapType::Soft;
 }

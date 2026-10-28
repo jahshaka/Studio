@@ -112,7 +112,6 @@ void AvatarPreviewModel::buildDocument()
     // is process-wide, so a preview scene that enabled it would take the
     // binding from the editor scene.
     mDocument = iris::Scene::create();
-    mDocument->shadowEnabled = false;
 
     // ONE ceiling AREA panel instead of the old key/fill directionals (owner,
     // 2026-09-05): directionals lit whichever wall they faced and starved the
