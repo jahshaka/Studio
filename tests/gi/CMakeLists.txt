@@ -925,17 +925,26 @@ if(TARGET jahlab)
     set_tests_properties(gi.light_is_world PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
-# gi.walk (PHOTON-7 stage 0, L6: THE WALK IS THE PRODUCT) — THE WALKING ROW: jahlab's stillness door on photon-court's
-# 15 m crossing and photon-glass's 2.4 m walk, each a LIVE and two GI-FROZEN walks on one warm cache (a prime session
-# first); M1 per class (live less frozen per pixel: mean / p99 / share over one code) and the hitch law on the wall and
-# the GPU clock PRINTED - the bars are the later stages'; it asserts only its instrument's laws: frozen = frozen, the arms
-# start equal, the classes cover the counted pixels (walk.sh says the laws and the base). 960x540; eight sessions:
-# court 7 + 3 x 231 frames, glass 7 + 3 x 710. ALL THE CARD'S SLOTS (TOKENS 8): its GPU clock is read alone.
+# gi.walk_court / gi.walk_glass (PHOTON-7 stage 0, L6: THE WALK IS THE PRODUCT) — THE WALKING ROWS, ONE A SCENE (ONE ROW
+# PER PROOF, the lead's ruling 2026-10-28: the combined gi.walk's frames were already the fewest its laws need and its
+# wall reached 70-87 s on a loaded box): jahlab's stillness door on photon-court's 15 m crossing and on photon-glass's
+# 2.4 m walk, each a LIVE and two GI-FROZEN walks on one warm cache (a prime session first); M1 per class (live less
+# frozen per pixel: mean / p99 / share over one code) and the hitch law on the wall and the GPU clock PRINTED - the bars
+# are the later stages'; each asserts only its instrument's laws: frozen = frozen, the arms start equal, the classes
+# cover the counted pixels (walk.sh says the laws and the base). 960x540; four sessions each: the prime's 7 frames and
+# three walks of the hold + teleport + hold:1 + the 60-frame walk + the 8-frame window + 1 (LAB END: the court 231, the
+# glass 671). ALL THE CARD'S SLOTS (TOKENS 8): their GPU clocks are read alone.
 if(TARGET jahlab)
-    jah_gpu_row(gi.walk CLASS engine TOKENS 8 FRAMES 1274
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk
+    jah_gpu_row(gi.walk_court CLASS engine TOKENS 8 SHIP FRAMES 700
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_court
+                --court
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(gi.walk PROPERTIES TIMEOUT 60 LABELS "engine")
+    set_tests_properties(gi.walk_court PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_gpu_row(gi.walk_glass CLASS engine TOKENS 8 SHIP FRAMES 2020
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
+                --glass
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_glass PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
 # gi.walk_rough (PHOTON-7 stage 7, 7-3; R12) — THE ROUGH SPECULAR'S WALK LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS

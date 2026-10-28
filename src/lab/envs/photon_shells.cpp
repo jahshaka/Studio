@@ -1,5 +1,5 @@
 // photon-shells and photon-roof — PHOTON-7 stage 1's fixtures for LIGHT IS A WORLD FUNCTION (SPECS/PHOTON_7_SPEC.md L1;
-// spikes/photon-7/PREFLIGHT_1_2.md §2.2). Not the court: gi.walk crosses photon-court and its base is recorded there.
+// spikes/photon-7/PREFLIGHT_1_2.md §2.2). Not the court: gi.walk_court crosses photon-court and its base is recorded there.
 // Not dollied; `--env-list` prints the law, and gi.light_is_world (tests/gi/light_is_world.sh) measures it through the
 // lab's `pin` and `voxels` doors.
 //

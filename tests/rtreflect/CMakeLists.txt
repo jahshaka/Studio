@@ -208,7 +208,7 @@ set_tests_properties(rtreflect.odd_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
 set_tests_properties(rtreflect.odd_size PROPERTIES JAHSHAKA_TEST_FRAMES 91)
 
 # rtreflect.walk_world / rtreflect.walk_world_both (PHOTON-7 stage 6 commit 7; the lead's rulings: two labelled arms after
-# REFLECT-MOVING-1, round 5's measures) — THE REFLECTION'S WALKING BARS: gi.walk's glass walk with THE WORLD HELD
+# REFLECT-MOVING-1, round 5's measures) — THE REFLECTION'S WALKING BARS: gi.walk_glass's walk with THE WORLD HELD
 # (gi.freeze = 2: no cache work, the gather held, the reflections live), seeds 0 and 7919, against the frozen walk -
 # GLOSSY by the NOISE MAP (rA - rB) / sqrt 2 and THE MIRROR by whole M1, each p99 <= 2 codes and share over one code
 # <= 1 % (whole glossy M1 printed as information: the noise plus the signal) (walk_world.sh, walk_noise.py). One arm a

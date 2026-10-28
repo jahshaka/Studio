@@ -1,6 +1,6 @@
 #!/bin/bash
 # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row; the lead's law and its noise term) — THE MOVING
-# REFLECTION LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS MEMORY AND ITS OWN NOISE: gi.walk's glass walk (photon-glass,
+# REFLECTION LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS MEMORY AND ITS OWN NOISE: gi.walk_glass's walk (photon-glass,
 # -1.2,1.8,3.4 -> 1.2,1.8,1.0 looking at 0,0.5,-3, 60 frames from a converged hold) in RAYS with the hits flattened (the
 # arm reflect.flatHits: the reflection's own estimator, the hit caches out) and the world held; at walk frames k = 14,
 # 28 and 59, per glossy pixel

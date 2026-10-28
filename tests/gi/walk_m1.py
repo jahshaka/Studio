@@ -1,4 +1,4 @@
-"""gi.walk's analysis (PHOTON-7 stage 0; walk.sh says the laws): THE WALKING FLICKER M1 per class and THE HITCH LAW.
+"""gi.walk_court's and gi.walk_glass's analysis (PHOTON-7 stage 0; walk.sh says the laws): THE WALKING FLICKER M1 per class and THE HITCH LAW.
 
 M1 (PHOTON-2 round 2's method): per trail pair (i-1, i), on the pixels the gather's own test saw in both frames (frame i's
 history accepted, .flg bit 0), this frame's picture against the previous frame's reprojected through the gather's view

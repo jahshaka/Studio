@@ -1080,7 +1080,7 @@ bool Session::stillness(const Command &c)
         }
         else if (a.rfind("dump=", 0) == 0 || a.rfind("dumprgb=", 0) == 0) {
             // THE MOVING WINDOW'S RAW MATERIAL (PHOTON-2 round 2, M1): <data-root>/stillness/dump-<name>/, emptied;
-            // dumprgb= the pictures alone (a walk compared byte for byte: gi.walk's second frozen walk, PHOTON-7 stage 5)
+            // dumprgb= the pictures alone (a walk compared byte for byte: the walk rows' second frozen walk, PHOTON-7 stage 5)
             spec.dumpRgbOnly = a.rfind("dumprgb=", 0) == 0;
             std::string name = a.substr(spec.dumpRgbOnly ? 8 : 5);
             for (char &ch : name)

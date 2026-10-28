@@ -1,6 +1,9 @@
 #!/bin/bash
-# gi.walk (PHOTON-7 stage 0; SPECS/PHOTON_7_SPEC.md L6: THE WALK IS THE PRODUCT) — THE WALKING ROW: what a walk through
-# the world's light shows, per material class, and what each moving frame costs on both clocks.
+# gi.walk_court / gi.walk_glass (PHOTON-7 stage 0; SPECS/PHOTON_7_SPEC.md L6: THE WALK IS THE PRODUCT) — THE WALKING
+# ROWS: what a walk through the world's light shows, per material class, and what each moving frame costs on both clocks.
+# ONE ROW PER PROOF (the lead's ruling, 2026-10-28): the two scenes were one row, gi.walk, whose frame counts are already
+# the fewest its laws need and whose wall reached 70-87 s on a loaded box (its 60 s cap); each scene is its own row now,
+# the same sessions, the same laws, the same analyses (--court, --glass).
 # jahlab at Epic, 960x540, on two of its environments through the stillness door's moving dump (trail + dump) and its
 # GI-freeze arm (freeze: the gather and the reflection keep their histories and take no sample, no GI cache works):
 #   photon-court: the 15 m crossing, 0,3,18 -> 0,3,3 looking down the court, 60 frames;
@@ -42,12 +45,13 @@
 #   Bistro (gi.walk_bistro, the measure): the 4 m walk all +0.064 / 9.31 / 7.52 % (90 pairs), the fly +0.029 / 8.78 /
 #          9.06 % (15); wall 8.4 / 10.2 / 13.1 (0 over), GPU busy 10.0 / 12.3 / 23.9 (1 over); the fly 8.3 / 9.3 / 9.3
 #          and 9.2 / 10.9 / 10.9 (0 over)
-# usage: walk.sh <jahlab> <work dir>
+# usage: walk.sh <jahlab> <work dir> --court   (gi.walk_court: the court's prime + live + frozen + frozen2, its M1, laws, clocks)
+#        walk.sh <jahlab> <work dir> --glass   (gi.walk_glass: the glass's prime + live + frozen + frozen2, its M1 and L1)
 #        walk.sh <jahlab> <work dir> --area    (gi.walk_area: photon-area's penumbra walk, M1 and the live residual printed)
 #        walk.sh <jahlab> <work dir> --bistro <model.fbx> <data root>   (gi.walk_bistro, the MEASURE row: its own
 #        data root - the bake and the shader cache of Bistro, never the fixtures' - and no class map: M1 'all' only)
 set -u
-LAB=${1:?jahlab}; WD=${2:?work dir}; MODE=${3:-envs}
+LAB=${1:?jahlab}; WD=${2:?work dir}; MODE=${3:?--court|--glass|--area|--bistro}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 rm -rf "$WD"; mkdir -p "$WD"
@@ -164,22 +168,33 @@ fi
 SETTLE=160    # the court: its cards' last relight at frame 127 + the gather's 17-frame hold, rounded up (PHOTON-7 10-2: the
               # card-to-card re-listing's rounds at 4 cards a frame, the RGBA16F store's quantum - was the GI's rest at 80)
 GSETTLE=600   # the glass: its reflection HELD before a frozen walk (the door's precondition: rest from ~frame 80, + K_max + 1)
-walk court "--data-root $WD/data --env photon-court" $SETTLE 0,3,18 0,3,-6 0,3,3 0,3,-21 60 "" 60 live frozen frozen2
-walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 live
-# (the analyses are CPU work: they run beside the glass's FROZEN sessions, which read no clock - never beside a live
-# arm, whose wall and GPU clocks the hitch law reads; the glass's M1 beside its second frozen walk, its L1 after it)
-analyse court & apid=$!
-PRIME=0   # (primed above, with the glass's live arm)
-walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 frozen
-python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" glass glass-live glass-frozen \
-    --tsv "$WD/data/stillness/glass-live.tsv" --classes > "$WD/glass-m1.out" 2>&1 & gpid=$!
-walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 frozen2
-fails=0
-wait $apid || fails=1
-wait $gpid || fails=1
-python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" glass glass-live glass-frozen glass-frozen2 --l1-only \
-    > "$WD/glass-l1.out" 2>&1 || fails=1
-cat "$WD/court-m1.out" "$WD/glass-l1.out" "$WD/glass-m1.out"
-rm -rf "$WD/data/stillness/dump-"*   # the dumps (~270 MB a walk) once their numbers are printed
-echo "gi.walk: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
-exit $fails
+if [ "$MODE" = "--court" ]; then
+    walk court "--data-root $WD/data --env photon-court" $SETTLE 0,3,18 0,3,-6 0,3,3 0,3,-21 60 "" 60 live frozen frozen2
+    # (the analysis is CPU work, after the court's last session: no live arm's clock beside it)
+    fails=0
+    analyse court || fails=1
+    cat "$WD/court-m1.out"
+    rm -rf "$WD/data/stillness/dump-"*   # the dumps (~270 MB a walk) once their numbers are printed
+    echo "gi.walk_court: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
+    exit $fails
+fi
+if [ "$MODE" = "--glass" ]; then
+    walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 live
+    PRIME=0   # (primed above, with the live arm)
+    walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 frozen
+    # (the glass's M1 is CPU work: it runs beside the SECOND FROZEN walk, which reads no clock - never beside a live arm,
+    # whose wall and GPU clocks the hitch law reads; its L1 after it)
+    python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" glass glass-live glass-frozen \
+        --tsv "$WD/data/stillness/glass-live.tsv" --classes > "$WD/glass-m1.out" 2>&1 & gpid=$!
+    walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 frozen2
+    fails=0
+    wait $gpid || fails=1
+    python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" glass glass-live glass-frozen glass-frozen2 --l1-only \
+        > "$WD/glass-l1.out" 2>&1 || fails=1
+    cat "$WD/glass-l1.out" "$WD/glass-m1.out"
+    rm -rf "$WD/data/stillness/dump-"*
+    echo "gi.walk_glass: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
+    exit $fails
+fi
+echo "FAIL: walk.sh: unknown mode '$MODE' (--court, --glass, --area, --bistro)"
+exit 1

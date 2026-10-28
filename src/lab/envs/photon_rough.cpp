@@ -1,5 +1,5 @@
 // photon-rough — THE ROUGH SPECULAR'S FIXTURE (PHOTON-7 stage 7, 7-3; the lead's ruling 2026-10-24: photon-ramp's strips
-// run 0.00-0.15, every one glossy, and no environment held a rough surface - gi.walk's base reads no rough pixel).
+// run 0.00-0.15, every one glossy, and no environment held a rough surface - the walk rows' base reads no rough pixel).
 //
 // photon-room's sealed shell (envbuild.h roomShell: the 8 m cube, its opening, the lamp 6 m up) with photon-ramp's
 // lighting - the shell's lamp and THE EDGE, the white emitter panel on the far wall from y 3.3 m up to 7.9 m - and FOUR

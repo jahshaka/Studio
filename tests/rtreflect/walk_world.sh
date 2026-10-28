@@ -1,7 +1,7 @@
 #!/bin/bash
 # rtreflect.walk_world / rtreflect.walk_world_both (PHOTON-7 stage 6 commit 7; the lead's rulings: the walk bar has two
 # owners, two labelled arms after REFLECT-MOVING-1, the measures of round 5, ledger §2849) — THE REFLECTION'S WALKING
-# BARS: gi.walk's glass walk (photon-glass, -1.2,1.8,3.4 -> 1.2,1.8,1.0 looking at 0,0.5,-3, 60 frames from a converged
+# BARS: gi.walk_glass's walk (photon-glass, -1.2,1.8,3.4 -> 1.2,1.8,1.0 looking at 0,0.5,-3, 60 frames from a converged
 # hold) with THE WORLD HELD - the arm gi.freeze = 2 from the walk's first frame (the stillness door's freeze=world): no
 # GI cache works and the gather keeps its histories, so no hit radiance can change, while the reflections run live -
 # twice, with the lobe draw's seed 0 and 7919, against the fully frozen walk (walk_noise.py, walk_m1.py's residual):
@@ -19,7 +19,7 @@
 # MEASURED at the stage's tip: raysflat glossy noise 0.71 / 0.39 %, mirror 0.00 / 0.00 % (whole glossy M1 2.90 / 2.83 %);
 # both 0.92 / 0.98 %, 0.00 / 0.00 % (2.41 / 4.59 %).
 # (The split by arm, not by measure: the noise map needs the frozen walk the mirror's M1 reads, so each arm's three
-# walks serve both measures. The unfrozen walk - the world's half - is gi.walk's.) The spatial filter's GPU time over the
+# walks serve both measures. The unfrozen walk - the world's half - is gi.walk_glass's.) The spatial filter's GPU time over the
 # world-held walk printed. jahlab at Epic, 960x540; four sessions: a prime and the frozen and two world-held walks
 # (6 + 3 x 570 frames).
 # usage: walk_world.sh <jahlab> <work dir> <raysflat|both>

@@ -1,7 +1,7 @@
 #!/bin/bash
 # gi.low_gather (PHOTON-7 stage 7, 7-4; SPECS/PHOTON_7_SPEC.md stage 7: "LOW GAINS THE GATHER at stride 32 with 8 x 8 rays
 # a probe") — LOW'S GATHER AGAINST MEDIUM'S ON THE COURT, WITHIN THEIR SAMPLING NOISE.
-# jahlab on photon-court, 960x540, at the gi.walk court's start pose (0,3,18 looking down the court). THE GATHER ALONE IS
+# jahlab on photon-court, 960x540, at gi.walk_court's start pose (0,3,18 looking down the court). THE GATHER ALONE IS
 # COMPARED: the two World tiers differ in every post row and in their caches (Low's two cascades), so the comparison is
 # made at ONE tier (Medium) between its own gather row (16 px, 6x6) and LOW'S ROW put on it by the test door's arms
 # (gather.stride 32, gather.octRes 8) - each the converged rest picture at the rest sequence's seed 0 and then 1 (the arm
@@ -33,7 +33,7 @@ session() {   # name, tier, the script's lines
 }
 POSE="camera 0,3,18,0,3,-6"
 WALK="stillness teleport:0,3,18,0,3,-6/hold:1/walk:0,3,3,0,3,-21:30 8 trail=30"
-# (each shot after 300 frames: the court's GI rests at ~80 and the gather holds 17 later - gi.walk's measure - and a
+# (each shot after 300 frames: the court's GI rests at ~80 and the gather holds 17 later - gi.walk_court's measure - and a
 # seed or a row switched restarts the gather's history)
 session low low "$POSE" "frames 300" "status" "$WALK out=low" "status"
 session medium medium "$POSE" "frames 300" "status" "shot medium-0.png" "arm gather.restSeed 1" "frames 300" "status" \
