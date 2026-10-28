@@ -643,11 +643,11 @@ QVector<VerbInfo> WorldApi::verbs() const
           "covers); an unknown mode name is refused rather than guessed; an unknown KEY is "
           "refused and nothing is written. One call is one undo step.",
           Needs::Document },
-        { "planarReflections", "world.planarReflections() -> {enabled, budget, resolution, shadows, activeActors}",
-          "Reads the scene's planar-reflection settings. 'budget' is how many mirror planes may render (the resolved value: a scene that never set one follows its World Mode). 'resolution' and 'shadows' are the per-plane render-target size and whether shadows are drawn inside the reflections; both report the value in force, derived from the budget when the scene has not pinned them. 'activeActors' is how many planes ACTUALLY rendered in the last frame — planes off screen are culled — and is 0 without a live engine viewport. Individual objects become mirror planes through node.setPlanarReflector.",
+        { "planarReflections", "world.planarReflections() -> {enabled, budget, resolution, activeActors}",
+          "Reads the scene's planar-reflection settings. 'budget' is how many mirror planes may render (the resolved value: a scene that never set one follows its World Mode). 'resolution' is the per-plane render-target size, the value in force (derived from the budget when the scene has not pinned it); a mirror's shadows always follow the scene's (there is no switch: a mirror without them showed every light through every wall). 'activeActors' is how many planes ACTUALLY rendered in the last frame — planes off screen are culled — and is 0 without a live engine viewport. Individual objects become mirror planes through node.setPlanarReflector.",
           Needs::Document },
-        { "setPlanarReflections", "world.setPlanarReflections({budget, resolution, shadows}) -> object",
-          "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). shadows: true/false, or \"auto\" to follow the budget (on from 2 planes up); shadows inside reflections cost a private half-resolution shadow atlas PER PLANE. An explicit value is pinned and survives World Mode switches, exactly like world.override. The returned activeActors is the last frame's: the verb steps no frame (ENGINE-UPGRADE-U3 stage 2), so read planarReflections() again after editor.frame.",
+        { "setPlanarReflections", "world.setPlanarReflections({budget, resolution}) -> object",
+          "Sets any subset of the planar-reflection settings and returns the new state, as in world.planarReflections(). budget: 0 (off) to 8, or -1 / \"auto\" to follow the World Mode; EACH ACTIVE PLANE IS A WHOLE EXTRA SCENE RENDER EVERY FRAME, and changing the budget recompiles the PBR shaders (expect a pause on the next frame). resolution: 256..2048, or 0 / \"auto\" to follow the budget (1024 from 2 planes up, 512 below). An explicit value is pinned and survives World Mode switches, exactly like world.override. The returned activeActors is the last frame's: the verb steps no frame (ENGINE-UPGRADE-U3 stage 2), so read planarReflections() again after editor.frame.",
           Needs::Document },
         { "sky", "world.sky(type, {...}) -> bool",
           "Sets the sky. Types: none {} (no sky at all: a black background, no environment and no ambient from a sky — the Empty template's); color {color}; gradient {top, mid, bottom, offset}; realistic {sunHaze, skyBrightness, aerialScale, groundAlbedo, rayleighScale, ozone}; equirectangular {texture}; cubemap {front, back, left, right, top, bottom} (textures = texture asset guids — assets.list({type:\"texture\"}) lists them; a file name is not an identity and is refused). world.skyPreset applies one of the shipped cube skies. THE REALISTIC SKY IS THE PLANET'S ATMOSPHERE, a physical model drawn on the GPU (Hillaire's, what Unreal's Sky Atmosphere is): a planet under a shell of air with Rayleigh and Mie scattering and an ozone layer, and ONE model answers the sky's pixels (a sharp horizon over the darker planet below it), the sun's colour (a low sun turns red and dim), the environment the Sky Light captures, the cloud sheet's air and the AERIAL PERSPECTIVE on every lit surface (distant geometry fades into exactly the sky behind it). THE SKY HAS NO SUN OF ITS OWN: its sun is the scene's SUN — the first directional light — which both places it and LIGHTS it (a brighter sun is a brighter sky, and a scene with no sun light has a night sky); rotate that light to move the sun, and the sun DISC is world.sunDisc. The dials mean physical things and 1 is the clear Earth of the reference for each scale: sunHaze is the SKY's haze as a multiple of the reference's very clear air (0 = none, 1 = very clean, 10 = the default, a clean ordinary day with an aerosol optical depth of 0.053, ~50 hazy, up to 100; the aerosol is grey — it dims and whitens, the air's molecules redden): it moves the sky, the horizon's whiteness, the glow round the sun, the sunlight's colour and the Sky Light, and NOT how hazed a scene surface is — that is the World fog's job; skyBrightness (0..10, default 1 = the physical sky, Unreal's sky luminance factor) scales the light the air scatters — the sky's pixels, the Sky Light and reflections, the scene air's in-scatter — and never the sun's direct light or its colour; aerialScale (0..1, default 0 = off) puts this atmosphere's own air on the scene as a distance scale — 1 the real air, 0 none at all — and moves no sky pixel; groundAlbedo (0..1, default 0.3) is the planet's surface under the horizon; rayleighScale (0..10, default 1) is the air's blue; ozone (true/false, default true) is the ozone layer. EVERY dial is held inside its band — the document clamps, so world.get() reports what the renderer actually has. The old density/diffusion/horizon/skyColour/power dials belonged to a non-physical model that is gone and are refused by name. Every sky LIGHTS the scene through the Sky Light (world.skyLight), the single-colour sky included. One call is one undo step (the sky block, the texture it bound); a refused call changes nothing.",
@@ -3507,7 +3507,6 @@ namespace {
 /// the verb reports what the renderer will actually do, not what the document
 /// literally stores.
 int autoPlanarResolution(int budget) { return budget >= 2 ? 1024 : 512; }
-bool autoPlanarShadows(int budget)   { return budget >= 2; }
 
 /// Accepts a number, or "auto"/"" for the follow-the-mode sentinel. Returns
 /// false when the value is neither.
@@ -3531,9 +3530,6 @@ QVariantMap WorldApi::planarReflections()
     const int resolution = scene->planarReflectionResolution > 0
                                ? scene->planarReflectionResolution
                                : autoPlanarResolution(budget);
-    const bool shadows = scene->planarReflectionShadows >= 0
-                             ? scene->planarReflectionShadows != 0
-                             : autoPlanarShadows(budget);
     // The ACHIEVED count, like world.antiAliasing() and world.shadowResolution():
     // the renderer culls planes that are off screen, so this is usually lower
     // than the budget and that is the point of reporting it.
@@ -3542,7 +3538,6 @@ QVariantMap WorldApi::planarReflections()
     return QVariantMap{ { QStringLiteral("enabled"), budget > 0 },
                         { QStringLiteral("budget"), budget },
                         { QStringLiteral("resolution"), resolution },
-                        { QStringLiteral("shadows"), shadows },
                         { QStringLiteral("activeActors"), active } };
 }
 
@@ -3597,11 +3592,6 @@ QVariantMap WorldApi::setPlanarReflections(const QVariantMap &params)
         }
     }
 
-    if (params.contains(QStringLiteral("shadows"))) {
-        const QVariant v = params.value(QStringLiteral("shadows"));
-        if (planarAuto(v)) scene->planarReflectionShadows = -1;
-        else               scene->planarReflectionShadows = v.toBool() ? 1 : 0;
-    }
 
     // NO FRAMES HERE (ENGINE-UPGRADE-U3 stage 2): the arm is rebuilt at the next sync, so activeActors in the
     // returned state is the last frame's until the script steps (editor.frame) and reads planarReflections() again.

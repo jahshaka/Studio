@@ -701,8 +701,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
         const int pres =
             sceneObj.value("planarReflectionResolution").toInt(scene->planarReflectionResolution);
         scene->planarReflectionResolution = pres <= 0 ? 0 : qBound(256, pres, 2048);
-        const int ps = sceneObj.value("planarReflectionShadows").toInt(scene->planarReflectionShadows);
-        scene->planarReflectionShadows = (ps == 0 || ps == 1) ? ps : -1;
     }
     // World Mode (POST_CHAIN_SPEC §9). The fields above were just read from
     // the document and ARE the resolved values; no tier is re-applied, so a

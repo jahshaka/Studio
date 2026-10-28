@@ -222,7 +222,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // explicit per-scene value the user pinned.
     sceneObj["planarReflectionBudget"] = scene->planarReflectionBudget;
     sceneObj["planarReflectionResolution"] = scene->planarReflectionResolution;
-    sceneObj["planarReflectionShadows"] = scene->planarReflectionShadows;
     // World Mode (POST_CHAIN_SPEC §9): the tier, as a stable string, plus the
     // rows the user pinned. "custom" means no tier — the fields above are the
     // truth. Written as strings so the enum ints stay free to be reordered.
