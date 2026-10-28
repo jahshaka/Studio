@@ -296,7 +296,7 @@ set_tests_properties(scripting.e2e.tex_ref PROPERTIES
 # (e2e_lamps_unshadowed.js says the law).
 set(_luHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-lamps_unshadowed)
 file(MAKE_DIRECTORY ${_luHome}/run)
-jah_gpu_row(scripting.e2e.lamps_unshadowed CLASS app TIER low NEEDS NONE NEEDS_WHY "the issue reads the view's shadow maps; GI is the script's own switch"
+jah_gpu_row(scripting.e2e.lamps_unshadowed CLASS app TIER low NEEDS NONE NEEDS_WHY "the issue reads the view's shadow maps, GI is the script's own switch"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lamps_unshadowed.js
          WORKING_DIRECTORY ${_luHome}/run)
