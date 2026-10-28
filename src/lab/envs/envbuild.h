@@ -55,6 +55,9 @@ public:
     iris::PbrMaterialPtr material(float r, float g, float b, float roughness = 0.9f, float metallic = 0.0f);
     /// An EMITTER (PHOTON-2 fix F2/F4's fixtures): a matte material glowing white at `intensity`. Hashed.
     iris::PbrMaterialPtr emitter(float intensity);
+    /// A PURE EMITTER (PHOTON-7 11-2, rtreflect.contact's law (c)): the emission alone - no diffuse (black base), no
+    /// specular (kS 0) - so what a ray sees of it is its emission in every direction: one uniform image.
+    iris::PbrMaterialPtr pureEmitter(float intensity);
     /// A CUT-OUT (PHOTON-2 K5's foliage): material() alpha-tested (alphaMode 1, cutoff 0.5) through a LEAF MASK on its
     /// base colour map - `cells` x `cells` leaves over the 0..1 UV square, each an ellipse of a fixed generator's
     /// size and tilt, opaque inside and clear between (a live texture: no file). Hashed.

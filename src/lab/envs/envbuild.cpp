@@ -276,6 +276,17 @@ iris::PbrMaterialPtr Builder::emitter(float intensity)
     return mat;
 }
 
+iris::PbrMaterialPtr Builder::pureEmitter(float intensity)
+{
+    iris::PbrMaterialPtr mat = material(0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
+    mat->setSpecularColor(QColor::fromRgbF(0.0, 0.0, 0.0));
+    mat->setValue("emissiveColor", QColor::fromRgbF(1.0, 1.0, 1.0));
+    mat->setValue("emissiveIntensity", intensity);
+    mHash.addData(QByteArray("pure-emitter"));
+    hashFloats(mHash, &intensity, 1);
+    return mat;
+}
+
 iris::PbrMaterialPtr Builder::cutout(float r, float g, float b, float roughness, int cells)
 {
     iris::PbrMaterialPtr mat = material(r, g, b, roughness, 0.0f);
