@@ -12,7 +12,8 @@
 # is THE SHIP SET's (205 rows; the rest are in the lead repo's archive/tests/<prefix>/ with their last prices).
 api.contract.fresh_home 0.01  main cd0587fdc (2026-10-20)
 api.contract 3.40  ship 3a0422b4e (2026-10-13)
-app.engine_selftest_validation 44.61  solo, the card lock held, :72, warm (PHOTON-7 stage 10, 2026-10-26: REBUILT to fewer frames - the short run, JAHSHAKA_SELFTEST_SHORT: the generous fixed frames before a settle a quarter, every settle whole; the broken-ground arm off the layer; 1633 frames over its two processes, measured; before: 58-60 s at every commit of stage 10, 2196 frames) - was: 48.90  solo, :72, WARM (URGENT #48 follow-up 85c6b09ee + #52: fresh_home --warm on the shared app cache after scripts/warm-app-cache.sh; 0 compiles; 2026-10-24). Cold it was 54.17 (2026-10-20) and over 60 s on the photon-7r merge's tree
+app.engine_selftest_validation.default 31.51  solo, the card lock held, :72, warm, nice 10 (PHOTON-7 11-2, 2026-10-28: the combined row split, one row per proof - the default scene's pose 1, pose 2, motion under the layer, and the broken-ground arm)
+app.engine_selftest_validation.fixture 33.50  solo, the card lock held, :72, warm, nice 10 (PHOTON-7 11-2, 2026-10-28: the combined row split, one row per proof - pose pair B and the mover under the layer)
 app.test_needs_boot 33.40  ship 3a0422b4e (2026-10-13)
 archive.responsive.timing 49.60  ship 3a0422b4e (2026-10-13)
 archive.responsive.timing.fresh_home 0.02  quiet n=3

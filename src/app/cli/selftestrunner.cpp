@@ -361,86 +361,6 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: SUN CONTACT ARM - world.sunContact is ON\n");
     }
 
-    // Forty frames on the fixed clock, the resizes delivered between them.
-    QElapsedTimer clock;
-    clock.start();
-    // Resize twice on the way (the layout does this to the viewport in real use):
-    // the engine must survive a swapchain rebuild without a stale depth buffer.
-    QSize afterFirstResize, afterSecondResize;
-    QSize widgetAfterFirst, widgetAfterSecond;
-    for (int frame = 0; frame < 40; ++frame) {
-        if (frame == 10) window.resize(1100, 760);
-        if (frame == 25) window.resize(700, 520);
-        if (frame == 20) { afterFirstResize  = window.viewport()->renderTargetSize();
-                           widgetAfterFirst  = window.viewport()->asWidget()->size(); }
-        if (frame == 35) { afterSecondResize = window.viewport()->renderTargetSize();
-                           widgetAfterSecond = window.viewport()->asWidget()->size(); }
-        app.processEvents();                                   // the resize, delivered
-        window.viewport()->renderFrames(1, 1.0f / 60.0f);      // ONE frame, one clock step
-    }
-    app.processEvents();
-
-    // On-screen coverage that does NOT assert pixels (MACOS_VIEWPORT_SPEC §5.1):
-    // the pixel assertion below deliberately goes through a separate OFFSCREEN
-    // view, so without this the selftest would pass just as happily with a blank
-    // widget. Platforms where the on-screen path is a swapchain window must prove
-    // the view is not offscreen and that it survived both resizes with a real size.
-//
-// LINUX TOO since the swapchain lane (deep audit area 7 F3). renderTargetSize()
-// used to report the values the widget had pushed down, so this block could only
-// ever have compared them with themselves; it now reads the live render target,
-// which is what makes the size comparison below an assertion rather than a
-// tautology. Windows joins when it grows a window backend.
-#if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
-    if (window.viewport()->isOffscreen()) {
-        std::fprintf(stderr, "engine-selftest: the editor viewport is OFFSCREEN — the on-screen "
-                             "window backend did not take\n");
-        return 1;
-    }
-    if (afterFirstResize.isEmpty() || afterSecondResize.isEmpty()) {
-        std::fprintf(stderr, "engine-selftest: viewport lost its render target across a resize "
-                             "(%dx%d then %dx%d)\n",
-                     afterFirstResize.width(), afterFirstResize.height(),
-                     afterSecondResize.width(), afterSecondResize.height());
-        return 1;
-    }
-    // THE assertion: the render target tracks the widget. Not "the two resizes
-    // produced different numbers" — a window manager is entitled to refuse a
-    // resize, and then the widget did not change either and there is nothing to
-    // report. What must never happen is the swapchain being a different size
-    // from the window it presents into: that is the stale-swapchain state the
-    // viewport gets stuck in when nothing but Ogre's OUT_OF_DATE self-heal is
-    // driving the rebuild.
-    if (afterFirstResize != widgetAfterFirst || afterSecondResize != widgetAfterSecond) {
-        std::fprintf(stderr,
-                     "engine-selftest: the render target did not follow the viewport across a "
-                     "resize — target %dx%d vs widget %dx%d, then target %dx%d vs widget %dx%d\n",
-                     afterFirstResize.width(), afterFirstResize.height(),
-                     widgetAfterFirst.width(), widgetAfterFirst.height(),
-                     afterSecondResize.width(), afterSecondResize.height(),
-                     widgetAfterSecond.width(), widgetAfterSecond.height());
-        return 1;
-    }
-    std::fprintf(stderr, "engine-selftest: on-screen view survived resizes: %dx%d then %dx%d "
-                         "(widget %dx%d then %dx%d)\n",
-                 afterFirstResize.width(), afterFirstResize.height(),
-                 afterSecondResize.width(), afterSecondResize.height(),
-                 widgetAfterFirst.width(), widgetAfterFirst.height(),
-                 widgetAfterSecond.width(), widgetAfterSecond.height());
-#endif
-
-    settleShotIfGathering(window);
-    QImage img = window.viewport()->takeScreenshot(256, 256);
-    if (img.isNull()) {
-        std::fprintf(stderr, "engine-selftest: takeScreenshot returned a null image after %lld ms\n",
-                     static_cast<long long>(clock.elapsed()));
-        return 1;
-    }
-    if (!reportShotSettle(window, "pose 1")) return 1;
-    if (!img.save(outPng, "PNG")) {
-        std::fprintf(stderr, "engine-selftest: could not save %s\n", qPrintable(outPng));
-        return 1;
-    }
     // THE CLEAR AS THE SHOT SHOWS IT (SRGB-ENCODE-1): the view clears to the LINEAR
     // (0.10, 0.11, 0.14) and the shot is a display picture, so the guard compares
     // against the sRGB encode of that clear — (89, 93, 105) — not the linear bytes.
@@ -455,324 +375,422 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                qAbs(c.green() - clear.green()) > tolerance ||
                qAbs(c.blue() - clear.blue()) > tolerance;
     };
-    const QColor centre = img.pixelColor(img.width() / 2, img.height() / 2);
-    const bool differs = isPicture(img);
-    std::fprintf(stderr, "engine-selftest: %dx%d image, centre pixel (%d,%d,%d), clear (%d,%d,%d) -> %s\n",
-                 img.width(), img.height(), centre.red(), centre.green(), centre.blue(),
-                 clear.red(), clear.green(), clear.blue(), differs ? "PASS" : "FAIL");
-    const QString hash1 = fileSha256(outPng);
-    std::fprintf(stderr, "engine-selftest: pose 1 sha256 %s (%s)\n",
-                 qPrintable(hash1), qPrintable(outPng));
-    if (!differs) return 1;
+    // THE HALVES (the lead's ruling, 2026-10-28: ONE ROW PER PROOF - app.engine_selftest_validation was a cap item at
+    // 54-60 s, the validation layer's own cost on the six poses): JAHSHAKA_SELFTEST_POSES=default runs the default scene's
+    // poses (1, 2, motion: with the on-screen view's resizes), =fixture pose pair B and the mover (the scripting verbs'
+    // fixture); unset, all six - the shipped six-hash run, unchanged. Anything else is refused.
+    const QByteArray posesSel = qgetenv("JAHSHAKA_SELFTEST_POSES");
+    if (!posesSel.isEmpty() && posesSel != "default" && posesSel != "fixture") {
+        std::fprintf(stderr, "engine-selftest: JAHSHAKA_SELFTEST_POSES='%s' - default, fixture or unset\n",
+                     posesSel.constData());
+        return 1;
+    }
+    const bool runDefault = posesSel != "fixture", runFixture = posesSel != "default";
+    if (!runDefault || !runFixture)
+        std::fprintf(stderr, "engine-selftest: the %s half of the poses (JAHSHAKA_SELFTEST_POSES)\n", posesSel.constData());
 
-    // ---- THE SECOND POSE (lane ENGINE-SMALL-B item 5) ----------------------
-    //
-    // WHY A SECOND POSE AT ALL. The hash CLAUDE.md's law is stated in describes
-    // ONE picture of the default scene from ONE camera that has never moved, so
-    // the whole camera-relative half of this renderer is outside it: a cascade
-    // chain that has scrolled, a probe/field placement that has followed, and
-    // the settle that a re-voxelisation owes are all invisible to it. Six lanes
-    // in a row have had to prove "the hash is exact" about code whose subject
-    // the hash cannot see. This adds the cheapest possible second observation:
-    // the same scene, one camera move, one turn, settled, hashed.
-    //
-    // FIVE METRES AND A TURN, and the number is not arbitrary: the innermost
-    // cascade's step at the default (Medium) tier is 5 m, so this crosses at
-    // least cascade 0's step plane and re-centres it — the scroll path — while
-    // the turn puts different geometry in front of the camera. The frames after
-    // it are the SETTLE: the scheduler spends one cascade per frame and
-    // LAMPREST-3's incremental settle pays one injection per frame after that,
-    // so a short pump would hash a picture that is still converging (and would
-    // be a flake, not a gate). 240 frames on the fixed clock is many times
-    // what either owes.
-    //
-    // IT CANNOT MOVE THE FIRST POSE'S HASH: the first image is saved, read and
-    // hashed above, and the second pose writes a SECOND FILE.
-    const QString pose2Png = posePath(outPng);
-    EditorCameraPose pose;
-    pose.position = iris::Vec3(5.0f, 5.0f, 14.0f);
-    pose.hasPosition = true;
-    pose.lookAt = iris::Vec3(-2.0f, 0.5f, -3.0f);
-    pose.hasLookAt = true;
-    if (!window.viewport()->setCameraPose(pose)) {
-        std::fprintf(stderr, "engine-selftest: the viewport refused the second pose — "
-                             "no editor camera\n");
-        return 1;
-    }
-    if (!window.viewport()->canRenderFrames()) {
-        std::fprintf(stderr, "engine-selftest: the viewport cannot render frames — "
-                             "the second pose cannot settle\n");
-        return 1;
-    }
-    window.viewport()->renderFrames(shortRun ? 60 : 240, 1.0f / 60.0f);
-    // ...AND UNTIL GI IS AT REST (PHOTON-FIELD-ROTATE-1): the 240 frames move the
-    // document; the ONE settle predicate then decides when the picture has stopped
-    // moving - the cascade steps, the chain's settle and the irradiance field's
-    // refinement passes all paid. At dt 0, so the document's clock stays where
-    // the 240 frames left it. (Pose 2 used to be captured at a fixed frame count
-    // with a 23-40 frame margin over the field's convergence - determinism by
-    // luck, not by construction.)
-    int restFrames = 0;
-    for (; restFrames < 4000 && !window.viewport()->giStatus().giAtRest; ++restFrames)
-        window.viewport()->renderFrames(1, 0.0f);
-    if (!window.viewport()->giStatus().giAtRest) {
-        std::fprintf(stderr, "engine-selftest: pose 2's GI never came to rest (%d frames)\n",
-                     restFrames);
-        return 1;
-    }
-    std::fprintf(stderr, "engine-selftest: pose 2's GI at rest after %d frames\n", restFrames);
-    app.processEvents();
-    settleShotIfGathering(window);
-    QImage img2 = window.viewport()->takeScreenshot(256, 256);
-    if (img2.isNull() || !img2.save(pose2Png, "PNG")) {
-        std::fprintf(stderr, "engine-selftest: could not take or save the second pose (%s)\n",
-                     qPrintable(pose2Png));
-        return 1;
-    }
-    if (!reportShotSettle(window, "pose 2")) return 1;
-    const QColor centre2 = img2.pixelColor(img2.width() / 2, img2.height() / 2);
-    const bool differs2 = isPicture(img2);
-    const QString hash2 = fileSha256(pose2Png);
-    std::fprintf(stderr, "engine-selftest: pose 2 sha256 %s (%s)\n",
-                 qPrintable(hash2), qPrintable(pose2Png));
-    std::fprintf(stderr, "engine-selftest: pose 2 (camera +5 m in x, turned, 240 frames + GI at rest): "
-                         "%dx%d image, centre pixel (%d,%d,%d) -> %s\n",
-                 img2.width(), img2.height(), centre2.red(), centre2.green(), centre2.blue(),
-                 differs2 ? "PASS" : "FAIL");
-    if (!differs2) return 1;
-    // A MOVED CAMERA THAT PRODUCES THE SAME BYTES DID NOT MOVE. The pose could
-    // be refused silently by a viewport that returns true and ignores it, and a
-    // second hash equal to the first would then be a gate on nothing.
-    if (!hash1.isEmpty() && hash1 == hash2) {
-        std::fprintf(stderr, "engine-selftest: the two poses hash IDENTICALLY — the camera move "
-                             "did not take\n");
-        return 1;
-    }
-
-    // ---- THE MOTION POSE (TESTING-CLEANUP-2 H5) -----------------------------
-    // Poses 1 and 2 are pictures AT REST; every per-frame path the renderer runs while the camera
-    // MOVES (the cascade scroll mid-step, the field's follow, a temporal history that has not
-    // converged) is invisible to both. So a WALK: from pose 2's place, 0.1 m along -x per frame for
-    // 30 frames on the fixed clock, the shot taken at the 30th with NO settle — a picture
-    // in motion, deterministic because every frame before it is a counted, fixed-step frame.
-    const QString motionPng = taggedPath(outPng, QStringLiteral("motion"));
-    for (int step = 1; step <= 30; ++step) {
-        EditorCameraPose walk;
-        walk.position = iris::Vec3(5.0f - 0.1f * float(step), 5.0f, 14.0f);
-        walk.hasPosition = true;
-        walk.lookAt = iris::Vec3(-2.0f - 0.1f * float(step), 0.5f, -3.0f);
-        walk.hasLookAt = true;
-        window.viewport()->setCameraPose(walk);
-        window.viewport()->renderFrames(1, 1.0f / 60.0f);
-    }
-    QImage imgMotion = window.viewport()->takeScreenshot(256, 256);
-    if (imgMotion.isNull() || !imgMotion.save(motionPng, "PNG")) {
-        std::fprintf(stderr, "engine-selftest: could not take or save the motion pose (%s)\n",
-                     qPrintable(motionPng));
-        return 1;
-    }
-    const QString hashMotion = fileSha256(motionPng);
-    std::fprintf(stderr, "engine-selftest: pose motion sha256 %s (%s)\n",
-                 qPrintable(hashMotion), qPrintable(motionPng));
-    // THE SCROLLS THE TWO MOVING POSES PAID (ENGINE-UPGRADE-U5, the reader's decision 11 e): each a
-    // count and the frames its slabs took - every one commits in its first frame here (the spread is a
-    // pure function of the scene), which is why the hashes above hold; a change in these is a change in
-    // when the voxels land.
-    {
-        const auto gi = window.viewport()->giStatus();
-        for (int i = 0; i < gi.cascades.size(); ++i)
-            std::fprintf(stderr, "engine-selftest: cascade %d: %llu scrolls over %llu chunk frames, %llu rebuilds\n", i,
-                         (unsigned long long)gi.cascades[i].scrolls, (unsigned long long)gi.cascades[i].scrollFrames,
-                         (unsigned long long)gi.cascades[i].rebuilds);
-        // ...AND NO COMMIT WAITED ON A COMPILE'S WALL TIME (PHOTON-7 stage 2's read D3): the selftest's scenes compile in
-        // the frame, so a scroll's commit lands on a frame count, never on how fast a background compile ran.
-        std::fprintf(stderr, "engine-selftest: default scene's commit shader waits %llu (%s)\n",
-                     (unsigned long long)gi.cascadeCommitShaderWaits, gi.cascadeCommitShaderWaits == 0 ? "PASS" : "FAIL");
-        if (gi.cascadeCommitShaderWaits != 0) return 1;
-    }
-    if (!isPicture(imgMotion) || hashMotion == hash2) {
-        std::fprintf(stderr, "engine-selftest: the motion pose is %s\n",
-                     !isPicture(imgMotion) ? "the CLEAR COLOUR" : "pose 2's picture — the walk did not take");
-        return 1;
-    }
-
-    // ---- POSE PAIR B (lane FENCE-1) ---------------------------------------
-    // See kFixtureBScript's header for what the fixture is and why each element
-    // of it is there. It runs LAST and writes its own files, so it cannot move
-    // poses 1 and 2: both are saved, read and hashed above.
-    ScriptEngine *scripting = window.scripting();
-    if (!scripting) {
-        std::fprintf(stderr, "engine-selftest: no scripting host — fixture B is built through the "
-                             "verbs and cannot be built without one\n");
-        return 1;
-    }
-    const auto runFixtureStep = [&](const char *source, const char *what) {
-        // ScriptRunPolicy::Off, like `--script`: the driver takes no tick of its
-        // own, so the ONLY frames drawn are the ones `editor.frame(n)` asks for.
-        // That is what makes a hash of this fixture a statement about a frame
-        // count rather than about how fast this box happens to be.
-        const ScriptResult r = scripting->evaluate(QString::fromUtf8(source),
-                                                  QStringLiteral("selftest-fixture-B"), true, 0,
-                                                  ScriptRunPolicy::Off);
-        if (!r.ok) {
-            std::fprintf(stderr, "engine-selftest: fixture B (%s) failed: %s\n", what,
-                         qPrintable(r.toString()));
-            if (!r.stack.isEmpty()) std::fprintf(stderr, "%s\n", qPrintable(r.stack));
+    if (runDefault) {
+        // Forty frames on the fixed clock, the resizes delivered between them.
+        QElapsedTimer clock;
+        clock.start();
+        // Resize twice on the way (the layout does this to the viewport in real use):
+        // the engine must survive a swapchain rebuild without a stale depth buffer.
+        QSize afterFirstResize, afterSecondResize;
+        QSize widgetAfterFirst, widgetAfterSecond;
+        for (int frame = 0; frame < 40; ++frame) {
+            if (frame == 10) window.resize(1100, 760);
+            if (frame == 25) window.resize(700, 520);
+            if (frame == 20) { afterFirstResize  = window.viewport()->renderTargetSize();
+                               widgetAfterFirst  = window.viewport()->asWidget()->size(); }
+            if (frame == 35) { afterSecondResize = window.viewport()->renderTargetSize();
+                               widgetAfterSecond = window.viewport()->asWidget()->size(); }
+            app.processEvents();                                   // the resize, delivered
+            window.viewport()->renderFrames(1, 1.0f / 60.0f);      // ONE frame, one clock step
         }
-        return r.ok;
-    };
-    // A REAL VIEWPORT FIRST. Pose 2 leaves the window at 700x520 and the
-    // viewport at 726x131 — the two deliberate resizes above are a swapchain
-    // test, and what they leave behind is a 131-pixel-tall view. Fixture B is
-    // about SCREEN-SPACE reflections and a ray prepass that rides them, so it
-    // gets a window of a stated size, and the size is part of the fence.
-    window.resize(1280, 800);
-    for (int frame = 0; frame < 12; ++frame) {
         app.processEvents();
-        window.viewport()->renderFrames(1, 1.0f / 60.0f);
-    }
-    std::fprintf(stderr, "engine-selftest: fixture B renders at %dx%d (window 1280x800)\n",
-                 window.viewport()->renderTargetSize().width(),
-                 window.viewport()->renderTargetSize().height());
 
-    // The arm's row, set before the fixture's 300 settling frames so B1/B2 are
-    // taken after the same frame count as the shipped pair.
-    QByteArray fixtureB(kFixtureBScript);
-    if (shortRun) fixtureB.replace("editor.frame(300);", "editor.frame(75);");
-    if (sunContactArm)
-        fixtureB.replace(shortRun ? "editor.frame(75);" : "editor.frame(300);",
-                         shortRun ? "world.sunContact({ enabled: true });\neditor.frame(75);"
-                                  : "world.sunContact({ enabled: true });\neditor.frame(300);");
-    if (!runFixtureStep(fixtureB.constData(), "build + settle")) return 1;
-    app.processEvents();
-
-    // THE GRADE IS PART OF THE FENCE, and this is the one thing about fixture B
-    // that had to be discovered rather than designed.
+        // On-screen coverage that does NOT assert pixels (MACOS_VIEWPORT_SPEC §5.1):
+        // the pixel assertion below deliberately goes through a separate OFFSCREEN
+        // view, so without this the selftest would pass just as happily with a blank
+        // widget. Platforms where the on-screen path is a swapchain window must prove
+        // the view is not offscreen and that it survived both resizes with a real size.
     //
-    // `takeScreenshot(w, h)` is the TONEMAP grade (EngineSceneViewport's
-    // two-argument door: the deterministic filmic grade at the scene's exposure,
-    // display-encoded since SRGB-ENCODE-1, and nothing else). Poses 1 and 2 are
-    // such shots, and that is right for them: they are exactly reproducible.
-    // But that minimal chain has no SSR prepass, and the RAY tier rides that
-    // prepass — measured on this tree: a fixture B with a glossy floor, a
-    // mirror pillar and the ray tier on hashed IDENTICALLY with rays on and off
-    // in the minimal grade, 0 of 65,536 pixels different. Such a hash
-    // structurally cannot see the half of this renderer PHOTON's P3 and P5
-    // exist to change.
-    //
-    // So B1/B2 are the VIEWPORT grade: the scene's whole chain — SSAO, SSR, the
-    // ray tier, bloom, SMAA, the looks stack, HDR and the tonemap — with the
-    // exposure RE-SEEDED from the description rather than carried over from the
-    // on-screen view. `Scene` would have been the other candidate and is the
-    // wrong one here: it pins the shot to the on-screen view's MEASURED exposure,
-    // which is a temporal filter's state, and a fence may not depend on one.
-    // Viewport is deterministic by construction (`resetExposureHistory`).
-    const QString b1Png = taggedPath(outPng, QStringLiteral("B1"));
-    settleShotIfGathering(window);
-    QImage imgB1 = window.viewport()->takeScreenshot(256, 256,
-                                                     IEditorViewport::ScreenshotGrade::Viewport);
-    if (imgB1.isNull() || !imgB1.save(b1Png, "PNG")) {
-        std::fprintf(stderr, "engine-selftest: could not take or save pose B1 (%s)\n",
-                     qPrintable(b1Png));
-        return 1;
-    }
-    if (!reportShotSettle(window, "pose B1")) return 1;
-    const QString hashB1 = fileSha256(b1Png);
-    std::fprintf(stderr, "engine-selftest: pose B1 (rays) sha256 %s (%s)\n",
-                 qPrintable(hashB1), qPrintable(b1Png));
-
-    QByteArray fixtureB2(kFixtureBNoRaysScript);
-    if (shortRun) fixtureB2.replace("editor.frame(300);", "editor.frame(75);");
-    if (!runFixtureStep(fixtureB2.constData(), "rays off + settle")) return 1;
-    app.processEvents();
-
-    const QString b2Png = taggedPath(outPng, QStringLiteral("B2"));
-    settleShotIfGathering(window);
-    QImage imgB2 = window.viewport()->takeScreenshot(256, 256,
-                                                     IEditorViewport::ScreenshotGrade::Viewport);
-    if (imgB2.isNull() || !imgB2.save(b2Png, "PNG")) {
-        std::fprintf(stderr, "engine-selftest: could not take or save pose B2 (%s)\n",
-                     qPrintable(b2Png));
-        return 1;
-    }
-    if (!reportShotSettle(window, "pose B2")) return 1;
-    const QString hashB2 = fileSha256(b2Png);
-    std::fprintf(stderr, "engine-selftest: pose B2 (no rays) sha256 %s (%s)\n",
-                 qPrintable(hashB2), qPrintable(b2Png));
-
-    // ---- THE MOVER POSE (TESTING-CLEANUP-2 H5) ------------------------------
-    // B1/B2 are a still fixture: the moving-object paths (the march's object motion, the trace's
-    // mover branches, the velocity a history reprojects by) never run in either. Rays back on and
-    // settled on the fixed clock, then a glossy sphere crosses the floor 0.1 m per frame for 30
-    // frames and the VIEWPORT-grade shot is taken mid-move, no settle.
-    QByteArray fixtureMover(kFixtureMoverScript);
-    if (shortRun) fixtureMover.replace("editor.frame(120);", "editor.frame(30);");
-    if (!runFixtureStep(fixtureMover.constData(), "mover")) return 1;
-    app.processEvents();
-    const QString moverPng = taggedPath(outPng, QStringLiteral("mover"));
-    QImage imgMover = window.viewport()->takeScreenshot(256, 256,
-                                                        IEditorViewport::ScreenshotGrade::Viewport);
-    if (imgMover.isNull() || !imgMover.save(moverPng, "PNG")) {
-        std::fprintf(stderr, "engine-selftest: could not take or save the mover pose (%s)\n",
-                     qPrintable(moverPng));
-        return 1;
-    }
-    const QString hashMover = fileSha256(moverPng);
-    std::fprintf(stderr, "engine-selftest: pose mover sha256 %s (%s)\n",
-                 qPrintable(hashMover), qPrintable(moverPng));
-    if (!isPicture(imgMover) || hashMover == hashB1) {
-        std::fprintf(stderr, "engine-selftest: the mover pose is %s\n",
-                     !isPicture(imgMover) ? "the CLEAR COLOUR" : "B1's picture — the sphere did not reach it");
-        return 1;
-    }
-
-    // HOW MUCH THE RAYS MOVED, in pixels and codes. The hashes say "different";
-    // this says whether the difference is a reflection or a rounding, which is
-    // what a reviewer needs from a fence they cannot look at.
-    int movedPixels = 0, worstCode = 0;
-    if (imgB1.size() == imgB2.size()) {
-        for (int y = 0; y < imgB1.height(); ++y)
-            for (int x = 0; x < imgB1.width(); ++x) {
-                const QColor a = imgB1.pixelColor(x, y), b = imgB2.pixelColor(x, y);
-                const int d = qMax(qMax(qAbs(a.red() - b.red()), qAbs(a.green() - b.green())),
-                                   qAbs(a.blue() - b.blue()));
-                if (d > 0) ++movedPixels;
-                worstCode = qMax(worstCode, d);
-            }
-    }
-    const QColor centreB1 = imgB1.pixelColor(imgB1.width() / 2, imgB1.height() / 2);
-    const QColor centreB2 = imgB2.pixelColor(imgB2.width() / 2, imgB2.height() / 2);
-    std::fprintf(stderr, "engine-selftest: pose B (glossy floor, cascade crossing, emissive 3.0, "
-                         "mirror pillar; %d frames each): centre B1 (%d,%d,%d), B2 (%d,%d,%d); "
-                         "the rays moved %d of %d pixels, worst %d/255\n", shortRun ? 75 : 300,
-                 centreB1.red(), centreB1.green(), centreB1.blue(),
-                 centreB2.red(), centreB2.green(), centreB2.blue(),
-                 movedPixels, imgB1.width() * imgB1.height(), worstCode);
-    if (!isPicture(imgB1) || !isPicture(imgB2)) {
-        std::fprintf(stderr, "engine-selftest: fixture B rendered the CLEAR COLOUR — the fixture "
-                             "did not reach the screen\n");
-        return 1;
-    }
-    // IDENTICAL B1/B2 MEANS THE RAYS DID NOTHING — unless this machine has none,
-    // in which case it is the correct answer and is said so rather than asserted
-    // away. The engine is the authority on whether the tier is live: a host-side
-    // guess would be a second source of truth.
-    // THE ENGINE IS THE AUTHORITY, read the same way the `machine.rayTracing`
-    // scene issue reads it (src/services/sceneissues.cpp): the process latch
-    // (`--no-ray-query` / JAHSHAKA_NO_RAY_QUERY) keeps the extensions off the
-    // device entirely, so a run under it IS a machine without the hardware.
-    bool raysLive = false;
-    if (const auto eng = EngineHost::instance().engine())
-        raysLive = eng->rayTracing() && eng->rayQueryAvailable();
-    if (!hashB1.isEmpty() && hashB1 == hashB2) {
-        if (raysLive) {
-            std::fprintf(stderr, "engine-selftest: pose B1 and B2 hash IDENTICALLY while this "
-                                 "machine HAS ray queries — the ray tier moved no pixel of a "
-                                 "fixture built to show it\n");
+    // LINUX TOO since the swapchain lane (deep audit area 7 F3). renderTargetSize()
+    // used to report the values the widget had pushed down, so this block could only
+    // ever have compared them with themselves; it now reads the live render target,
+    // which is what makes the size comparison below an assertion rather than a
+    // tautology. Windows joins when it grows a window backend.
+    #if defined(Q_OS_MACOS) || defined(Q_OS_LINUX)
+        if (window.viewport()->isOffscreen()) {
+            std::fprintf(stderr, "engine-selftest: the editor viewport is OFFSCREEN — the on-screen "
+                                 "window backend did not take\n");
             return 1;
         }
-        std::fprintf(stderr, "engine-selftest: pose B1 == B2, and this machine has no ray query — "
-                             "that is the correct answer, not a failure\n");
+        if (afterFirstResize.isEmpty() || afterSecondResize.isEmpty()) {
+            std::fprintf(stderr, "engine-selftest: viewport lost its render target across a resize "
+                                 "(%dx%d then %dx%d)\n",
+                         afterFirstResize.width(), afterFirstResize.height(),
+                         afterSecondResize.width(), afterSecondResize.height());
+            return 1;
+        }
+        // THE assertion: the render target tracks the widget. Not "the two resizes
+        // produced different numbers" — a window manager is entitled to refuse a
+        // resize, and then the widget did not change either and there is nothing to
+        // report. What must never happen is the swapchain being a different size
+        // from the window it presents into: that is the stale-swapchain state the
+        // viewport gets stuck in when nothing but Ogre's OUT_OF_DATE self-heal is
+        // driving the rebuild.
+        if (afterFirstResize != widgetAfterFirst || afterSecondResize != widgetAfterSecond) {
+            std::fprintf(stderr,
+                         "engine-selftest: the render target did not follow the viewport across a "
+                         "resize — target %dx%d vs widget %dx%d, then target %dx%d vs widget %dx%d\n",
+                         afterFirstResize.width(), afterFirstResize.height(),
+                         widgetAfterFirst.width(), widgetAfterFirst.height(),
+                         afterSecondResize.width(), afterSecondResize.height(),
+                         widgetAfterSecond.width(), widgetAfterSecond.height());
+            return 1;
+        }
+        std::fprintf(stderr, "engine-selftest: on-screen view survived resizes: %dx%d then %dx%d "
+                             "(widget %dx%d then %dx%d)\n",
+                     afterFirstResize.width(), afterFirstResize.height(),
+                     afterSecondResize.width(), afterSecondResize.height(),
+                     widgetAfterFirst.width(), widgetAfterFirst.height(),
+                     widgetAfterSecond.width(), widgetAfterSecond.height());
+    #endif
+
+        settleShotIfGathering(window);
+        QImage img = window.viewport()->takeScreenshot(256, 256);
+        if (img.isNull()) {
+            std::fprintf(stderr, "engine-selftest: takeScreenshot returned a null image after %lld ms\n",
+                         static_cast<long long>(clock.elapsed()));
+            return 1;
+        }
+        if (!reportShotSettle(window, "pose 1")) return 1;
+        if (!img.save(outPng, "PNG")) {
+            std::fprintf(stderr, "engine-selftest: could not save %s\n", qPrintable(outPng));
+            return 1;
+        }
+        const QColor centre = img.pixelColor(img.width() / 2, img.height() / 2);
+        const bool differs = isPicture(img);
+        std::fprintf(stderr, "engine-selftest: %dx%d image, centre pixel (%d,%d,%d), clear (%d,%d,%d) -> %s\n",
+                     img.width(), img.height(), centre.red(), centre.green(), centre.blue(),
+                     clear.red(), clear.green(), clear.blue(), differs ? "PASS" : "FAIL");
+        const QString hash1 = fileSha256(outPng);
+        std::fprintf(stderr, "engine-selftest: pose 1 sha256 %s (%s)\n",
+                     qPrintable(hash1), qPrintable(outPng));
+        if (!differs) return 1;
+
+        // ---- THE SECOND POSE (lane ENGINE-SMALL-B item 5) ----------------------
+        //
+        // WHY A SECOND POSE AT ALL. The hash CLAUDE.md's law is stated in describes
+        // ONE picture of the default scene from ONE camera that has never moved, so
+        // the whole camera-relative half of this renderer is outside it: a cascade
+        // chain that has scrolled, a probe/field placement that has followed, and
+        // the settle that a re-voxelisation owes are all invisible to it. Six lanes
+        // in a row have had to prove "the hash is exact" about code whose subject
+        // the hash cannot see. This adds the cheapest possible second observation:
+        // the same scene, one camera move, one turn, settled, hashed.
+        //
+        // FIVE METRES AND A TURN, and the number is not arbitrary: the innermost
+        // cascade's step at the default (Medium) tier is 5 m, so this crosses at
+        // least cascade 0's step plane and re-centres it — the scroll path — while
+        // the turn puts different geometry in front of the camera. The frames after
+        // it are the SETTLE: the scheduler spends one cascade per frame and
+        // LAMPREST-3's incremental settle pays one injection per frame after that,
+        // so a short pump would hash a picture that is still converging (and would
+        // be a flake, not a gate). 240 frames on the fixed clock is many times
+        // what either owes.
+        //
+        // IT CANNOT MOVE THE FIRST POSE'S HASH: the first image is saved, read and
+        // hashed above, and the second pose writes a SECOND FILE.
+        const QString pose2Png = posePath(outPng);
+        EditorCameraPose pose;
+        pose.position = iris::Vec3(5.0f, 5.0f, 14.0f);
+        pose.hasPosition = true;
+        pose.lookAt = iris::Vec3(-2.0f, 0.5f, -3.0f);
+        pose.hasLookAt = true;
+        if (!window.viewport()->setCameraPose(pose)) {
+            std::fprintf(stderr, "engine-selftest: the viewport refused the second pose — "
+                                 "no editor camera\n");
+            return 1;
+        }
+        if (!window.viewport()->canRenderFrames()) {
+            std::fprintf(stderr, "engine-selftest: the viewport cannot render frames — "
+                                 "the second pose cannot settle\n");
+            return 1;
+        }
+        window.viewport()->renderFrames(shortRun ? 60 : 240, 1.0f / 60.0f);
+        // ...AND UNTIL GI IS AT REST (PHOTON-FIELD-ROTATE-1): the 240 frames move the
+        // document; the ONE settle predicate then decides when the picture has stopped
+        // moving - the cascade steps, the chain's settle and the irradiance field's
+        // refinement passes all paid. At dt 0, so the document's clock stays where
+        // the 240 frames left it. (Pose 2 used to be captured at a fixed frame count
+        // with a 23-40 frame margin over the field's convergence - determinism by
+        // luck, not by construction.)
+        int restFrames = 0;
+        for (; restFrames < 4000 && !window.viewport()->giStatus().giAtRest; ++restFrames)
+            window.viewport()->renderFrames(1, 0.0f);
+        if (!window.viewport()->giStatus().giAtRest) {
+            std::fprintf(stderr, "engine-selftest: pose 2's GI never came to rest (%d frames)\n",
+                         restFrames);
+            return 1;
+        }
+        std::fprintf(stderr, "engine-selftest: pose 2's GI at rest after %d frames\n", restFrames);
+        app.processEvents();
+        settleShotIfGathering(window);
+        QImage img2 = window.viewport()->takeScreenshot(256, 256);
+        if (img2.isNull() || !img2.save(pose2Png, "PNG")) {
+            std::fprintf(stderr, "engine-selftest: could not take or save the second pose (%s)\n",
+                         qPrintable(pose2Png));
+            return 1;
+        }
+        if (!reportShotSettle(window, "pose 2")) return 1;
+        const QColor centre2 = img2.pixelColor(img2.width() / 2, img2.height() / 2);
+        const bool differs2 = isPicture(img2);
+        const QString hash2 = fileSha256(pose2Png);
+        std::fprintf(stderr, "engine-selftest: pose 2 sha256 %s (%s)\n",
+                     qPrintable(hash2), qPrintable(pose2Png));
+        std::fprintf(stderr, "engine-selftest: pose 2 (camera +5 m in x, turned, 240 frames + GI at rest): "
+                             "%dx%d image, centre pixel (%d,%d,%d) -> %s\n",
+                     img2.width(), img2.height(), centre2.red(), centre2.green(), centre2.blue(),
+                     differs2 ? "PASS" : "FAIL");
+        if (!differs2) return 1;
+        // A MOVED CAMERA THAT PRODUCES THE SAME BYTES DID NOT MOVE. The pose could
+        // be refused silently by a viewport that returns true and ignores it, and a
+        // second hash equal to the first would then be a gate on nothing.
+        if (!hash1.isEmpty() && hash1 == hash2) {
+            std::fprintf(stderr, "engine-selftest: the two poses hash IDENTICALLY — the camera move "
+                                 "did not take\n");
+            return 1;
+        }
+
+        // ---- THE MOTION POSE (TESTING-CLEANUP-2 H5) -----------------------------
+        // Poses 1 and 2 are pictures AT REST; every per-frame path the renderer runs while the camera
+        // MOVES (the cascade scroll mid-step, the field's follow, a temporal history that has not
+        // converged) is invisible to both. So a WALK: from pose 2's place, 0.1 m along -x per frame for
+        // 30 frames on the fixed clock, the shot taken at the 30th with NO settle — a picture
+        // in motion, deterministic because every frame before it is a counted, fixed-step frame.
+        const QString motionPng = taggedPath(outPng, QStringLiteral("motion"));
+        for (int step = 1; step <= 30; ++step) {
+            EditorCameraPose walk;
+            walk.position = iris::Vec3(5.0f - 0.1f * float(step), 5.0f, 14.0f);
+            walk.hasPosition = true;
+            walk.lookAt = iris::Vec3(-2.0f - 0.1f * float(step), 0.5f, -3.0f);
+            walk.hasLookAt = true;
+            window.viewport()->setCameraPose(walk);
+            window.viewport()->renderFrames(1, 1.0f / 60.0f);
+        }
+        QImage imgMotion = window.viewport()->takeScreenshot(256, 256);
+        if (imgMotion.isNull() || !imgMotion.save(motionPng, "PNG")) {
+            std::fprintf(stderr, "engine-selftest: could not take or save the motion pose (%s)\n",
+                         qPrintable(motionPng));
+            return 1;
+        }
+        const QString hashMotion = fileSha256(motionPng);
+        std::fprintf(stderr, "engine-selftest: pose motion sha256 %s (%s)\n",
+                     qPrintable(hashMotion), qPrintable(motionPng));
+        // THE SCROLLS THE TWO MOVING POSES PAID (ENGINE-UPGRADE-U5, the reader's decision 11 e): each a
+        // count and the frames its slabs took - every one commits in its first frame here (the spread is a
+        // pure function of the scene), which is why the hashes above hold; a change in these is a change in
+        // when the voxels land.
+        {
+            const auto gi = window.viewport()->giStatus();
+            for (int i = 0; i < gi.cascades.size(); ++i)
+                std::fprintf(stderr, "engine-selftest: cascade %d: %llu scrolls over %llu chunk frames, %llu rebuilds\n", i,
+                             (unsigned long long)gi.cascades[i].scrolls, (unsigned long long)gi.cascades[i].scrollFrames,
+                             (unsigned long long)gi.cascades[i].rebuilds);
+            // ...AND NO COMMIT WAITED ON A COMPILE'S WALL TIME (PHOTON-7 stage 2's read D3): the selftest's scenes compile in
+            // the frame, so a scroll's commit lands on a frame count, never on how fast a background compile ran.
+            std::fprintf(stderr, "engine-selftest: default scene's commit shader waits %llu (%s)\n",
+                         (unsigned long long)gi.cascadeCommitShaderWaits, gi.cascadeCommitShaderWaits == 0 ? "PASS" : "FAIL");
+            if (gi.cascadeCommitShaderWaits != 0) return 1;
+        }
+        if (!isPicture(imgMotion) || hashMotion == hash2) {
+            std::fprintf(stderr, "engine-selftest: the motion pose is %s\n",
+                         !isPicture(imgMotion) ? "the CLEAR COLOUR" : "pose 2's picture — the walk did not take");
+            return 1;
+        }
+
+    }
+    if (runFixture) {
+        // ---- POSE PAIR B (lane FENCE-1) ---------------------------------------
+        // See kFixtureBScript's header for what the fixture is and why each element
+        // of it is there. It runs LAST and writes its own files, so it cannot move
+        // poses 1 and 2: both are saved, read and hashed above.
+        ScriptEngine *scripting = window.scripting();
+        if (!scripting) {
+            std::fprintf(stderr, "engine-selftest: no scripting host — fixture B is built through the "
+                                 "verbs and cannot be built without one\n");
+            return 1;
+        }
+        const auto runFixtureStep = [&](const char *source, const char *what) {
+            // ScriptRunPolicy::Off, like `--script`: the driver takes no tick of its
+            // own, so the ONLY frames drawn are the ones `editor.frame(n)` asks for.
+            // That is what makes a hash of this fixture a statement about a frame
+            // count rather than about how fast this box happens to be.
+            const ScriptResult r = scripting->evaluate(QString::fromUtf8(source),
+                                                      QStringLiteral("selftest-fixture-B"), true, 0,
+                                                      ScriptRunPolicy::Off);
+            if (!r.ok) {
+                std::fprintf(stderr, "engine-selftest: fixture B (%s) failed: %s\n", what,
+                             qPrintable(r.toString()));
+                if (!r.stack.isEmpty()) std::fprintf(stderr, "%s\n", qPrintable(r.stack));
+            }
+            return r.ok;
+        };
+        // A REAL VIEWPORT FIRST. Pose 2 leaves the window at 700x520 and the
+        // viewport at 726x131 — the two deliberate resizes above are a swapchain
+        // test, and what they leave behind is a 131-pixel-tall view. Fixture B is
+        // about SCREEN-SPACE reflections and a ray prepass that rides them, so it
+        // gets a window of a stated size, and the size is part of the fence.
+        window.resize(1280, 800);
+        for (int frame = 0; frame < 12; ++frame) {
+            app.processEvents();
+            window.viewport()->renderFrames(1, 1.0f / 60.0f);
+        }
+        std::fprintf(stderr, "engine-selftest: fixture B renders at %dx%d (window 1280x800)\n",
+                     window.viewport()->renderTargetSize().width(),
+                     window.viewport()->renderTargetSize().height());
+
+        // The arm's row, set before the fixture's 300 settling frames so B1/B2 are
+        // taken after the same frame count as the shipped pair.
+        QByteArray fixtureB(kFixtureBScript);
+        if (shortRun) fixtureB.replace("editor.frame(300);", "editor.frame(75);");
+        if (sunContactArm)
+            fixtureB.replace(shortRun ? "editor.frame(75);" : "editor.frame(300);",
+                             shortRun ? "world.sunContact({ enabled: true });\neditor.frame(75);"
+                                      : "world.sunContact({ enabled: true });\neditor.frame(300);");
+        if (!runFixtureStep(fixtureB.constData(), "build + settle")) return 1;
+        app.processEvents();
+
+        // THE GRADE IS PART OF THE FENCE, and this is the one thing about fixture B
+        // that had to be discovered rather than designed.
+        //
+        // `takeScreenshot(w, h)` is the TONEMAP grade (EngineSceneViewport's
+        // two-argument door: the deterministic filmic grade at the scene's exposure,
+        // display-encoded since SRGB-ENCODE-1, and nothing else). Poses 1 and 2 are
+        // such shots, and that is right for them: they are exactly reproducible.
+        // But that minimal chain has no SSR prepass, and the RAY tier rides that
+        // prepass — measured on this tree: a fixture B with a glossy floor, a
+        // mirror pillar and the ray tier on hashed IDENTICALLY with rays on and off
+        // in the minimal grade, 0 of 65,536 pixels different. Such a hash
+        // structurally cannot see the half of this renderer PHOTON's P3 and P5
+        // exist to change.
+        //
+        // So B1/B2 are the VIEWPORT grade: the scene's whole chain — SSAO, SSR, the
+        // ray tier, bloom, SMAA, the looks stack, HDR and the tonemap — with the
+        // exposure RE-SEEDED from the description rather than carried over from the
+        // on-screen view. `Scene` would have been the other candidate and is the
+        // wrong one here: it pins the shot to the on-screen view's MEASURED exposure,
+        // which is a temporal filter's state, and a fence may not depend on one.
+        // Viewport is deterministic by construction (`resetExposureHistory`).
+        const QString b1Png = taggedPath(outPng, QStringLiteral("B1"));
+        settleShotIfGathering(window);
+        QImage imgB1 = window.viewport()->takeScreenshot(256, 256,
+                                                         IEditorViewport::ScreenshotGrade::Viewport);
+        if (imgB1.isNull() || !imgB1.save(b1Png, "PNG")) {
+            std::fprintf(stderr, "engine-selftest: could not take or save pose B1 (%s)\n",
+                         qPrintable(b1Png));
+            return 1;
+        }
+        if (!reportShotSettle(window, "pose B1")) return 1;
+        const QString hashB1 = fileSha256(b1Png);
+        std::fprintf(stderr, "engine-selftest: pose B1 (rays) sha256 %s (%s)\n",
+                     qPrintable(hashB1), qPrintable(b1Png));
+
+        QByteArray fixtureB2(kFixtureBNoRaysScript);
+        if (shortRun) fixtureB2.replace("editor.frame(300);", "editor.frame(75);");
+        if (!runFixtureStep(fixtureB2.constData(), "rays off + settle")) return 1;
+        app.processEvents();
+
+        const QString b2Png = taggedPath(outPng, QStringLiteral("B2"));
+        settleShotIfGathering(window);
+        QImage imgB2 = window.viewport()->takeScreenshot(256, 256,
+                                                         IEditorViewport::ScreenshotGrade::Viewport);
+        if (imgB2.isNull() || !imgB2.save(b2Png, "PNG")) {
+            std::fprintf(stderr, "engine-selftest: could not take or save pose B2 (%s)\n",
+                         qPrintable(b2Png));
+            return 1;
+        }
+        if (!reportShotSettle(window, "pose B2")) return 1;
+        const QString hashB2 = fileSha256(b2Png);
+        std::fprintf(stderr, "engine-selftest: pose B2 (no rays) sha256 %s (%s)\n",
+                     qPrintable(hashB2), qPrintable(b2Png));
+
+        // ---- THE MOVER POSE (TESTING-CLEANUP-2 H5) ------------------------------
+        // B1/B2 are a still fixture: the moving-object paths (the march's object motion, the trace's
+        // mover branches, the velocity a history reprojects by) never run in either. Rays back on and
+        // settled on the fixed clock, then a glossy sphere crosses the floor 0.1 m per frame for 30
+        // frames and the VIEWPORT-grade shot is taken mid-move, no settle.
+        QByteArray fixtureMover(kFixtureMoverScript);
+        if (shortRun) fixtureMover.replace("editor.frame(120);", "editor.frame(30);");
+        if (!runFixtureStep(fixtureMover.constData(), "mover")) return 1;
+        app.processEvents();
+        const QString moverPng = taggedPath(outPng, QStringLiteral("mover"));
+        QImage imgMover = window.viewport()->takeScreenshot(256, 256,
+                                                            IEditorViewport::ScreenshotGrade::Viewport);
+        if (imgMover.isNull() || !imgMover.save(moverPng, "PNG")) {
+            std::fprintf(stderr, "engine-selftest: could not take or save the mover pose (%s)\n",
+                         qPrintable(moverPng));
+            return 1;
+        }
+        const QString hashMover = fileSha256(moverPng);
+        std::fprintf(stderr, "engine-selftest: pose mover sha256 %s (%s)\n",
+                     qPrintable(hashMover), qPrintable(moverPng));
+        if (!isPicture(imgMover) || hashMover == hashB1) {
+            std::fprintf(stderr, "engine-selftest: the mover pose is %s\n",
+                         !isPicture(imgMover) ? "the CLEAR COLOUR" : "B1's picture — the sphere did not reach it");
+            return 1;
+        }
+
+        // HOW MUCH THE RAYS MOVED, in pixels and codes. The hashes say "different";
+        // this says whether the difference is a reflection or a rounding, which is
+        // what a reviewer needs from a fence they cannot look at.
+        int movedPixels = 0, worstCode = 0;
+        if (imgB1.size() == imgB2.size()) {
+            for (int y = 0; y < imgB1.height(); ++y)
+                for (int x = 0; x < imgB1.width(); ++x) {
+                    const QColor a = imgB1.pixelColor(x, y), b = imgB2.pixelColor(x, y);
+                    const int d = qMax(qMax(qAbs(a.red() - b.red()), qAbs(a.green() - b.green())),
+                                       qAbs(a.blue() - b.blue()));
+                    if (d > 0) ++movedPixels;
+                    worstCode = qMax(worstCode, d);
+                }
+        }
+        const QColor centreB1 = imgB1.pixelColor(imgB1.width() / 2, imgB1.height() / 2);
+        const QColor centreB2 = imgB2.pixelColor(imgB2.width() / 2, imgB2.height() / 2);
+        std::fprintf(stderr, "engine-selftest: pose B (glossy floor, cascade crossing, emissive 3.0, "
+                             "mirror pillar; %d frames each): centre B1 (%d,%d,%d), B2 (%d,%d,%d); "
+                             "the rays moved %d of %d pixels, worst %d/255\n", shortRun ? 75 : 300,
+                     centreB1.red(), centreB1.green(), centreB1.blue(),
+                     centreB2.red(), centreB2.green(), centreB2.blue(),
+                     movedPixels, imgB1.width() * imgB1.height(), worstCode);
+        if (!isPicture(imgB1) || !isPicture(imgB2)) {
+            std::fprintf(stderr, "engine-selftest: fixture B rendered the CLEAR COLOUR — the fixture "
+                                 "did not reach the screen\n");
+            return 1;
+        }
+        // IDENTICAL B1/B2 MEANS THE RAYS DID NOTHING — unless this machine has none,
+        // in which case it is the correct answer and is said so rather than asserted
+        // away. The engine is the authority on whether the tier is live: a host-side
+        // guess would be a second source of truth.
+        // THE ENGINE IS THE AUTHORITY, read the same way the `machine.rayTracing`
+        // scene issue reads it (src/services/sceneissues.cpp): the process latch
+        // (`--no-ray-query` / JAHSHAKA_NO_RAY_QUERY) keeps the extensions off the
+        // device entirely, so a run under it IS a machine without the hardware.
+        bool raysLive = false;
+        if (const auto eng = EngineHost::instance().engine())
+            raysLive = eng->rayTracing() && eng->rayQueryAvailable();
+        if (!hashB1.isEmpty() && hashB1 == hashB2) {
+            if (raysLive) {
+                std::fprintf(stderr, "engine-selftest: pose B1 and B2 hash IDENTICALLY while this "
+                                     "machine HAS ray queries — the ray tier moved no pixel of a "
+                                     "fixture built to show it\n");
+                return 1;
+            }
+            std::fprintf(stderr, "engine-selftest: pose B1 == B2, and this machine has no ray query — "
+                                 "that is the correct answer, not a failure\n");
+        }
     }
     // THE PICTURES ARE COMPLETE (ASYNC-SHADERS-1): no frame of the selftest drew the background
     // compiler's placeholder or skipped a draw for a shader still building. Its views compile
@@ -786,12 +804,14 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                      ph, skips, ph == 0 && skips == 0 ? "PASS" : "FAIL");
         if (ph != 0 || skips != 0) return 1;
     }
-    // ...and fixture B's commits waited on no compile either (read D3).
-    {
-        const auto gi = window.viewport()->giStatus();
-        std::fprintf(stderr, "engine-selftest: fixture B's commit shader waits %llu (%s)\n",
-                     (unsigned long long)gi.cascadeCommitShaderWaits, gi.cascadeCommitShaderWaits == 0 ? "PASS" : "FAIL");
-        if (gi.cascadeCommitShaderWaits != 0) return 1;
+    if (runFixture) {
+        // ...and fixture B's commits waited on no compile either (read D3).
+        {
+            const auto gi = window.viewport()->giStatus();
+            std::fprintf(stderr, "engine-selftest: fixture B's commit shader waits %llu (%s)\n",
+                         (unsigned long long)gi.cascadeCommitShaderWaits, gi.cascadeCommitShaderWaits == 0 ? "PASS" : "FAIL");
+            if (gi.cascadeCommitShaderWaits != 0) return 1;
+        }
     }
     // EVERY SHADER COMPILED (URGENT #83): the engine logs a program that fails to compile and survives it, so a
     // compute job whose shader fails never dispatches and the pictures above are merely wrong - a piece left out of

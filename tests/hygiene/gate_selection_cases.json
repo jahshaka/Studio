@@ -38,7 +38,8 @@
     "api.contract"
    ],
    "env": [
-    "app.engine_selftest_validation"
+    "app.engine_selftest_validation.default",
+    "app.engine_selftest_validation.fixture"
    ],
    "note": "api.contract red at the merge (SCRIPTING.md kept from the wrong side); the fork pin moved: the MERGE tier by rule — since TEST-SELECTOR-1 T2 the pin bump selects by the fork diff's reach (the full tier runs once, at the merge: --fork-tier) | TEST-CUT-1: the range's registrations of rows the cut archived resolve to nothing here and fall to their test directory, as a tip-only row does (rows_at_tip_only)",
    "fork_reach": true,
@@ -184,7 +185,8 @@
    "new": "            set_property(SOURCE \"${_s}\" TARGET_DIRECTORY ${target} PROPERTY OBJECT_DEPENDS ${_deps})\n",
    "must": [],
    "must_not": [
-    "app.engine_selftest_validation"
+    "app.engine_selftest_validation.default",
+    "app.engine_selftest_validation.fixture"
    ]
   },
   {
@@ -275,7 +277,8 @@
    "old": "set(JAH_VR_OK OFF)\n",
    "new": "add_compile_options(-ffast-math)\nset(JAH_VR_OK OFF)\n",
    "must": [
-    "app.engine_selftest_validation"
+    "app.engine_selftest_validation.default",
+    "app.engine_selftest_validation.fixture"
    ],
    "must_not": [],
    "why_has": [
@@ -297,7 +300,8 @@
    "old": "set(JAH_VR_OK OFF)\n",
    "new": "set(CMAKE_CXX_FLAGS \"${CMAKE_CXX_FLAGS} -ffast-math\")\nset(JAH_VR_OK OFF)\n",
    "must": [
-    "app.engine_selftest_validation"
+    "app.engine_selftest_validation.default",
+    "app.engine_selftest_validation.fixture"
    ],
    "must_not": [],
    "why_has": [
@@ -310,7 +314,8 @@
    "old": "set(JAH_VR_OK OFF)\n",
    "new": "set_source_files_properties(${CMAKE_SOURCE_DIR}/src/app/main.cpp DIRECTORY ${CMAKE_SOURCE_DIR} PROPERTIES COMPILE_DEFINITIONS JAH_PROBE=1)\nset(JAH_VR_OK OFF)\n",
    "must": [
-    "app.engine_selftest_validation"
+    "app.engine_selftest_validation.default",
+    "app.engine_selftest_validation.fixture"
    ],
    "must_not": []
   },
@@ -347,7 +352,8 @@
    "old": "set(JAH_VR_OK OFF)\n",
    "new": "add_compile_options(-ffast-math)\nadd_definitions(-DJAH_PROBE=1)\nset(JAH_VR_OK OFF)\n",
    "must": [
-    "app.engine_selftest_validation"
+    "app.engine_selftest_validation.default",
+    "app.engine_selftest_validation.fixture"
    ],
    "must_not": [],
    "why_has": [
@@ -423,7 +429,8 @@
    "old": "set(JAH_VR_OK OFF)\n",
    "new": "unset(CMAKE_CXX_FLAGS)\nset(JAH_VR_OK OFF)\n",
    "must": [
-    "app.engine_selftest_validation"
+    "app.engine_selftest_validation.default",
+    "app.engine_selftest_validation.fixture"
    ],
    "must_not": []
   },
@@ -441,7 +448,8 @@
    "old": "set(_body \"\")",
    "new": "set(_body \" \")",
    "must": [
-    "app.engine_selftest_validation"
+    "app.engine_selftest_validation.default",
+    "app.engine_selftest_validation.fixture"
    ],
    "must_not": []
   },
