@@ -695,7 +695,7 @@ std::string Session::statusJson()
         const RayQueryStatus &rq = mScene->published().rayQuery;
         o << ",\"reflect\":{\"sources\":" << rq.reflectSources << ",\"restFrames\":" << rq.reflectRestFrames
           << ",\"held\":" << (rq.reflectHeld ? "true" : "false") << ",\"restActive\":" << rq.reflectRestActive
-          << ",\"restCapped\":" << rq.reflectRestCapped << ",\"emitters\":" << rq.reflectEmitters
+          << ",\"restCapped\":" << rq.reflectRestCapped << ",\"emitters\":" << rq.reflectEmitters << ",\"portals\":" << rq.reflectPortals
           << ",\"emittersOver\":" << rq.reflectEmittersOver << ",\"neeRays\":" << rq.reflectNeeRays
           << ",\"neeHits\":" << rq.reflectNeeHits << ",\"restBound\":" << rq.reflectRestBound
           << ",\"restBoundOwed\":" << rq.reflectRestBoundOwed << ",\"restNeedMax\":" << rq.reflectRestNeedMax << "}";
@@ -834,6 +834,37 @@ bool Session::exec(const Command &c)
             out << js << "\n";
             ok = bool(out);
             std::printf("LAB STATUS -> %s\n", qPrintable(path));
+        }
+    } else if (c.verb == "sideshares") {
+        GiVoxelVolume vol;
+        GiVoxelSideShares sh;
+        ok = mScene->giVoxelLight(0, vol) && vol.available && mScene->giVoxelSideShares(sh) && sh.available &&
+             sh.width == vol.width && sh.height == vol.height && sh.depth == vol.depth;
+        if (!ok) {
+            labFail("LAB FAILED sideshares: no cascade-0 volume or shares (or their grids differ)\n");
+        } else if (FILE *f = std::fopen(a0.c_str(), "w")) {
+            std::fprintf(f, "# x y z  cx cy cz  nx ny nz  front back twoSided  (cell %.4f %.4f %.4f)\n", vol.cell[0],
+                         vol.cell[1], vol.cell[2]);
+            unsigned n = 0u;
+            for (int z = 0; z < vol.depth; ++z)
+                for (int y = 0; y < vol.height; ++y)
+                    for (int x = 0; x < vol.width; ++x) {
+                        const size_t i = (size_t(z) * vol.height + y) * vol.width + x;
+                        const uint32_t w = sh.words[i];
+                        if (!(w & (1u << 16u))) continue;
+                        const float *nr = &vol.normal[i * 4u];
+                        std::fprintf(f, "%d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d\n", x, y, z,
+                                     vol.origin[0] + (x + 0.5f) * vol.cell[0], vol.origin[1] + (y + 0.5f) * vol.cell[1],
+                                     vol.origin[2] + (z + 0.5f) * vol.cell[2], nr[0] * 2.0f - 1.0f, nr[1] * 2.0f - 1.0f,
+                                     nr[2] * 2.0f - 1.0f, float(w & 255u) / 255.0f, float((w >> 8u) & 255u) / 255.0f,
+                                     int((w >> 17u) & 1u));
+                        ++n;
+                    }
+            std::fclose(f);
+            std::printf("LAB SIDESHARES %u voxels -> %s (grid %dx%dx%d)\n", n, a0.c_str(), vol.width, vol.height, vol.depth);
+        } else {
+            ok = false;
+            labFail("LAB FAILED sideshares: cannot write %s\n", a0.c_str());
         }
     } else if (c.verb == "cards") {
         std::vector<CardRadiance> cards;

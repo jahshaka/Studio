@@ -39,6 +39,10 @@ const std::vector<VerbDoc> &verbs()
           "the surface cache's resident cards per object: its name, the cards resident and their faces (+x -x +y -y +z "
           "-z), the frame each face was last read (Scene::readCardRadiance; PHOTON-7 stage 5's residency by the "
           "readers' demand), appended to <file> (stdout without one)" },
+        { "sideshares", "sideshares file", 1, 1,
+          "cascade 0's surface voxels as the ray tier's sides' gather last left them (PHOTON-7 11-2 (6), the openings' "
+          "instrument): one line a written voxel - its cell, its world centre, its normal (two-sided: the front's), the "
+          "front and back escape shares (Scene::giVoxelSideShares) - to <file>" },
         { "envcam", "envcam D", 1, 1, "an environment's dolly camera at stop D metres (envs/<name>.cpp stop())" },
         { "probe", "probe [file]", 0, 1,
           "the Atom cut probe of the next frame: drawn triangles, clusters and visible pixels per object, and its visible pixels by DAG depth (appended to file)" },
