@@ -219,6 +219,36 @@ int main()
             ok = (settle(), read(floorTwo)) && ok;
             scene->setNodeVisible(upper, false);
         }
+        // THE BLENDED MODES AT ALPHA 1 (the one read's F2): a surface that passes nothing of what lies behind it in the
+        // pixel casts the shadow of an opaque one - on the STOCK caster's path too (the pane's faces culled at the front:
+        // a caster the Atom cut cannot draw, OgreScene::atomCasterThroughCut; a skinned item takes the same path); and
+        // ADDITIVE (F8) absorbs nothing at any alpha: it casts no shadow
+        double atOne[3] = { 0.0, 0.0, 0.0 }, additive = 0.0;
+        const PbrAlphaMode oneModes[3] = { PbrAlphaMode::Blend, PbrAlphaMode::Glass, PbrAlphaMode::Refractive };
+        scene->setNodeFaceCull(pane, FaceCull::Front);
+        for (int k = 0; k < 3; ++k) {
+            p.alphaMode = oneModes[k];
+            p.alpha = 1.0f;
+            ok = scene->setPbrMaterial(paneMat, p) && (settle(), read(atOne[k])) && ok;
+        }
+        scene->setNodeFaceCull(pane, FaceCull::Material);
+        p.alphaMode = PbrAlphaMode::Additive;
+        p.alpha = 0.5f;
+        ok = scene->setPbrMaterial(paneMat, p) && (settle(), read(additive)) && ok;
+        p.alphaMode = PbrAlphaMode::Opaque;
+        p.alpha = 1.0f;
+        ok = scene->setPbrMaterial(paneMat, p) && (settle(), read(opaque)) && ok;
+        const double T = 0.5, bar = oneCodeAt(T * hole) + hole / 510.0;
+        std::printf("== %s: the hole %.6f; GLASS 0.5 %.6f against T x H %.6f (%+.6f; the bar %.6f); OPAQUE %.6f (the bar "
+                    "%.6f)\n", l.name, hole, glass, T * hole, glass - T * hole, bar, opaque, oneCodeAt(T * hole));
+        char what[256];
+        std::snprintf(what, sizeof(what), "%s: the floor under the pane is lit without it (the hole %.6f)", l.name, hole);
+        check(ok && hole > 0.02, what);
+        std::snprintf(what, sizeof(what), "%s: through a glass pane at alpha 0.5 the floor reads (1 - alpha) x the hole "
+                      "within a code", l.name);
+        check(ok && std::fabs(glass - T * hole) <= bar, what);
+        std::snprintf(what, sizeof(what), "%s: under an opaque pane the floor reads 0 within a code", l.name);
+        check(ok && opaque <= oneCodeAt(T * hole), what);
         const unsigned built = (compiled1 - compiled0) + (cached1 - cached0);
         bool dragged = true;
         for (int k = 0; k < 4; ++k) {
