@@ -114,6 +114,13 @@ int main()
         std::printf("FAIL: the floor and the pane\n");
         return 1;
     }
+    // THE NEAREST PANE's ARMS (the one read's F1, below): a matte block resting on the pane, and a second pane above it
+    // (hidden until then)
+    const NodeId block = box(scene, Vec3(0.0f, 1.06f, 0.0f), Vec3(0.3f, 0.1f, 0.3f), floorMat);
+    const NodeId upper = box(scene, Vec3(0.0f, 1.4f, 0.0f), Vec3(1.2f, 0.02f, 1.2f), paneMat);
+    if (!block || !upper) { std::printf("FAIL: the block and the upper pane\n"); return 1; }
+    scene->setNodeVisible(block, false);
+    scene->setNodeVisible(upper, false);
     float sh[27] = { 0 };   // no sky, no ambient
     scene->setAmbientSh(sh);
     const NodeId lamp = scene->createNode();
@@ -174,6 +181,44 @@ int main()
         }
         e->shaderBuildProgress(compiled1, cached1, expected1);
         p.alpha = 0.5f;
+        // THE NEAREST PANE (the one read's F1): the shadow node's transmittance layer carries the nearest pane's depth and a
+        // receiver applies its T only past it. A matte block RESTING ON the pane (its top face between the lamp and the
+        // pane) reads the light whole; with a second pane above it, the block reads the upper pane's T alone and the floor
+        // both. Read from a second eye under the upper pane's height, looking at the block's top face. RED BEFORE F1: the
+        // block read T x its light (every receiver at a texel took the layer's whole product).
+        double blockHole = 0.0, blockOn = 0.0, blockUnder = 0.0, floorTwo = 0.0;
+        {
+            const Vec3 eyeB(1.5f, 1.3f, 1.5f), atB(0.0f, 1.11f, 0.0f);
+            const auto readBlock = [&](double &mean) {
+                ImageF img;
+                if (!view->readPixelsHdr(img) || img.width < 64u || img.height < 64u) return false;
+                double sum = 0.0;
+                int n = 0;
+                for (float x = -0.08f; x <= 0.08f + 1e-4f; x += 0.04f)
+                    for (float z = -0.08f; z <= 0.08f + 1e-4f; z += 0.04f) {
+                        int px, py;
+                        if (!toPixel(eyeB, atB, Vec3(x, 1.11f, z), img.width, img.height, px, py)) return false;
+                        const Colour c = img.at(unsigned(px), unsigned(py));
+                        sum += std::max(c.r, std::max(c.g, c.b));
+                        ++n;
+                    }
+                mean = n ? sum / n : 0.0;
+                return n > 0;
+            };
+            ok = scene->setPbrMaterial(paneMat, p) && ok;
+            scene->setNodeVisible(block, true);
+            enginetest::testCameraLookAt(view, eyeB, atB);
+            scene->setNodeVisible(pane, false);
+            ok = (settle(), readBlock(blockHole)) && ok;
+            scene->setNodeVisible(pane, true);
+            ok = (settle(), readBlock(blockOn)) && ok;
+            scene->setNodeVisible(upper, true);
+            ok = (settle(), readBlock(blockUnder)) && ok;
+            scene->setNodeVisible(block, false);
+            enginetest::testCameraLookAt(view, eye, at);
+            ok = (settle(), read(floorTwo)) && ok;
+            scene->setNodeVisible(upper, false);
+        }
         // THE BLENDED MODES AT ALPHA 1 (the one read's F2): a surface that passes nothing of what lies behind it in the
         // pixel casts the shadow of an opaque one - on the STOCK caster's path too (the pane's faces culled at the front:
         // a caster the Atom cut cannot draw, OgreScene::atomCasterThroughCut; a skinned item takes the same path); and
@@ -217,6 +262,24 @@ int main()
         std::snprintf(what, sizeof(what), "%s: an alpha drag through four alphas builds no shader and each alpha casts its "
                       "own (1 - alpha) within a code (F12)", l.name);
         check(ok && dragged && built == 0u, what);
+        {
+            const double Tw = 1024.0 / 2047.0;   // (the pane word's 0.5, which the caster's 1 - alpha equals at 8 bits)
+            const double bOn = oneCodeAt(blockHole) + blockHole / 510.0, bUnder = oneCodeAt(Tw * blockHole) + blockHole / 510.0;
+            const double bTwo = oneCodeAt(0.25 * hole) + hole / 510.0;
+            std::printf("   %s: THE NEAREST PANE - the block on the pane %.6f against its light whole %.6f (bar %.6f); under a "
+                        "second pane %.6f against T x %.6f (bar %.6f); the floor under both %.6f against T^2 x H %.6f (bar "
+                        "%.6f)\n", l.name, blockOn, blockHole, bOn, blockUnder, Tw * blockHole, bUnder, floorTwo, 0.25 * hole,
+                        bTwo);
+            // (a point light's panes are drawn into a cube and copied as colour: its rectangle's depth is NEAR, every
+            // receiver past it - its T applies to all, a named limit: printed, not a law)
+            if (l.type == LightType::Spot) {
+                std::snprintf(what, sizeof(what), "%s: a receiver resting on a pane reads the light whole; under a second pane, "
+                              "that pane's T alone; the floor under both, both (F1)", l.name);
+                check(ok && blockHole > 0.02 && std::fabs(blockOn - blockHole) <= bOn &&
+                          std::fabs(blockUnder - Tw * blockHole) <= bUnder && std::fabs(floorTwo - 0.25 * hole) <= bTwo,
+                      what);
+            }
+        }
         const char *oneNames[3] = { "BLEND", "GLASS", "REFRACTIVE" };
         for (int k = 0; k < 3; ++k) {
             std::printf("   %s: %s at alpha 1, the stock caster %.6f (an opaque caster's 0, the bar %.6f)\n", l.name, oneNames[k], atOne[k],
