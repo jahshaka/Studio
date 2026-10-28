@@ -920,14 +920,13 @@ QJsonObject shadowExtras(iris::LightNode *light)
 {
     QJsonObject sh;
     const iris::ShadowMap &sm = light->shadowMap;
-    QString filter = "none";
+    QString filter = "soft";
     switch (sm.shadowType) {
     case iris::ShadowMapType::Hard:     filter = "hard"; break;
     case iris::ShadowMapType::Soft:     filter = "soft"; break;
     case iris::ShadowMapType::VerySoft: filter = "verysoft"; break;
-    default: break;
     }
-    sh["castShadow"] = light->lightType != iris::LightType::Area && filter != "none";
+    sh["castShadow"] = light->lightType != iris::LightType::Area;   // every other light casts (10-4 R9)
     sh["filter"] = filter;
     sh["mapSize"] = sm.resolution;
     // (NO `bias` KEY. The document's per-light shadow bias is deleted — the
@@ -1499,7 +1498,6 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // — CRUD law — and `exp2Density` above is what the viewer reads.)
         jahScene["fog"] = fog;
     }
-    jahScene["shadowEnabled"] = scene->shadowEnabled;
     // Post chain (POST_CHAIN_SPEC.md §10). The web viewer cannot reproduce the
     // engine's SSAO/SMAA/refraction, but it CAN match the grade — which is the
     // part a viewer notices — so the tonemapper and its exposure travel.

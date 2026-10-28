@@ -927,6 +927,199 @@ endforeach()
 set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 409)
 set_tests_properties(gi.sealed_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 335)
 
+# gi.glass_pass (PHOTON-7 10-4, R6; L9) — A PANE IS SHADED BY THE LIGHT THAT REACHES IT, NEVER BY THE SURFACE BEHIND IT: a
+# pane before a lamp-lit niche in a black world, its four blending modes against the hole (test_gi_glass_pass.cpp says the
+# laws; red on the base: Glass, Additive and Modulate drew in the opaque pass and read the screen products of the wall
+# behind them). A fixture, one row a tier.
+add_executable(test_gi_glass_pass test_gi_glass_pass.cpp)
+set_target_properties(test_gi_glass_pass PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_glass_pass PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_glass_pass PRIVATE JahshakaEngine)
+add_dependencies(test_gi_glass_pass JahshakaEngineMedia)
+foreach(_row ray noray)
+    if(_row STREQUAL "ray")
+        set(_name gi.glass_pass)
+    else()
+        set(_name gi.glass_pass_${_row})
+    endif()
+    jah_gpu_row(${_name} CLASS engine COMMAND test_gi_glass_pass ${_row}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                         TIMEOUT 60 LABELS "engine")
+endforeach()
+set_tests_properties(gi.glass_pass PROPERTIES JAHSHAKA_TEST_FRAMES 328)
+set_tests_properties(gi.glass_pass_noray PROPERTIES JAHSHAKA_TEST_FRAMES 201)
+
+# gi.glass_escape (PHOTON-7 10-4, the R4 carry, design (D); L9) — A BLENDED PANE'S REFLECTION OF WHAT LIES BEYOND THE VOXEL
+# CHAIN IS WHAT IS THERE: a metal mirror pane in a black world turned onto an emissive wall 120 m out (past the outermost
+# cascade); Blend, Glass and Refractive at alpha 1 against the same pane opaque (the traced reflection's answer), and the
+# stacked-glass limit measured (test_gi_glass_escape.cpp says the laws; red before (D): the blended pane's escapes read the
+# black environment). A fixture, the ray tier.
+add_executable(test_gi_glass_escape test_gi_glass_escape.cpp)
+set_target_properties(test_gi_glass_escape PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_glass_escape PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_glass_escape PRIVATE JahshakaEngine)
+add_dependencies(test_gi_glass_escape JahshakaEngineMedia)
+jah_gpu_row(gi.glass_escape CLASS engine COMMAND test_gi_glass_escape trace
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.glass_escape PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 548)
+# ...and its WEIGHT half (a row of its own: each fixture under the 10 s budget): the record's weight against the fragment's
+# own environment term, the bright sky and the sky past the fixed point's top (the fix round's F11)
+jah_gpu_row(gi.glass_escape_weight CLASS engine COMMAND test_gi_glass_escape weight
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.glass_escape_weight PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 422)
+
+# gi.photon_window (PHOTON-7 10-4, item 2; L9) — A WINDOW PASSES THE LIGHT ITS MATERIAL PASSES, ON EVERY PATH: gi.sealed_sky's
+# room with a 1 m pane in its roof (Glass / Blend / Refractive at alpha 0.1) against a hole, under a white sky and a sun
+# through the opening; every reader (the sun patch, the room's diffuse and the mirror's specular in the pixel, the cards, the
+# voxels, the field) = (1 - alpha) x the hole's within the paired readings' 2 SE + a code (test_gi_photon_window.cpp says the
+# laws; red on the base on every traced path: the caches, the shadow maps and the traced sun hold the pane opaque). A
+# fixture, one row a tier.
+add_executable(test_gi_photon_window test_gi_photon_window.cpp)
+set_target_properties(test_gi_photon_window PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_photon_window PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_photon_window PRIVATE JahshakaEngine)
+add_dependencies(test_gi_photon_window JahshakaEngineMedia)
+# One row a tier and a light: gi.photon_window(_noray) the sky and the sun (R8's sun patch), gi.photon_window_sky(_noray)
+# the sky alone (R7's transmission of the sky's light).
+foreach(_light sun sky)
+    foreach(_row ray noray)
+        set(_name gi.photon_window)
+        if(_light STREQUAL "sky")
+            string(APPEND _name "_sky")
+        endif()
+        if(_row STREQUAL "noray")
+            string(APPEND _name "_noray")
+        endif()
+        jah_gpu_row(${_name} CLASS engine COMMAND test_gi_photon_window ${_row} ${_light}
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                             TIMEOUT 60 LABELS "engine")
+    endforeach()
+endforeach()
+set_tests_properties(gi.photon_window PROPERTIES JAHSHAKA_TEST_FRAMES 368)
+set_tests_properties(gi.photon_window_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)
+set_tests_properties(gi.photon_window_sky PROPERTIES JAHSHAKA_TEST_FRAMES 329)
+set_tests_properties(gi.photon_window_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)
+
+# gi.pane_stack (PHOTON-7 10-4 fix round, the one read's F4; L9) — A RAY THROUGH MORE PANES THAN A LIST HOLDS IS NEVER
+# BLOCKED BY THEIR COUNT: twelve glass slabs over a floor, a Forward+ lamp above them - the floor reads T^12 of the hole
+# (test_gi_pane_stack.cpp says the laws; red on the base: the ninth pane was confirmed opaque, the floor read 0); the GI on,
+# a reading ray through them is counted past its list (rayQuery.panesOverflow). A fixture.
+add_executable(test_gi_pane_stack test_gi_pane_stack.cpp)
+set_target_properties(test_gi_pane_stack PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_pane_stack PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_pane_stack PRIVATE JahshakaEngine)
+add_dependencies(test_gi_pane_stack JahshakaEngineMedia)
+jah_gpu_row(gi.pane_stack CLASS engine COMMAND test_gi_pane_stack ray
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pane_stack PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 19)
+# ...and its CARDS arm (the one read's F3): the cards' direct half through the stack (T^12) and through one pane at 0.3
+# (0.7) - red on the base: a table lamp through glass read 1 above T 0.5 and 0 below it
+jah_gpu_row(gi.pane_stack_cards CLASS engine COMMAND test_gi_pane_stack cards
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pane_stack_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 197)
+# gi.lamps_outside (PHOTON-7 10-4, R9; L9) — SEVENTEEN LAMPS OUTSIDE A SEALED BOX LIGHT NOTHING INSIDE IT: a closed box in a
+# black world, seventeen casting point lamps around it, the shadow-map budget at 2 (fifteen Forward+ lamps); through an
+# opening they light the inside (the control), sealed every pixel inside reads 0 within a code (test_gi_lamps_outside.cpp
+# says the laws; red on the base: a Forward+ lamp had no visibility). A fixture, one row a tier.
+add_executable(test_gi_lamps_outside test_gi_lamps_outside.cpp)
+set_target_properties(test_gi_lamps_outside PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_lamps_outside PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_lamps_outside PRIVATE JahshakaEngine)
+add_dependencies(test_gi_lamps_outside JahshakaEngineMedia)
+jah_gpu_row(gi.lamps_outside CLASS engine COMMAND test_gi_lamps_outside ray
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.lamps_outside PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 17)
+# ...and its CARDS arm (R9 (3)): twelve green lamps inside beside the seventeen red outside - more than sixteen lamps reach
+# the floor's cards, each its own traced bit in the 48-lamp table: no red reaches the floor's card texels
+jah_gpu_row(gi.lamps_outside_cards CLASS engine COMMAND test_gi_lamps_outside cards
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.lamps_outside_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 120)
+# ...and its NO-RAY arm (R9 at the no-ray tier): no TLAS, the voxel chain bound - each Forward+ lamp seen through the
+# chain's own shadow march (jah_inject_visibility.glsl), the same two laws
+jah_gpu_row(gi.lamps_outside_noray CLASS engine COMMAND test_gi_lamps_outside noray
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.lamps_outside_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 77)
+
+# gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
+# fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
+# a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark at both tiers, its control
+# (the sky alone through the opening) lit (test_gi_fog_inscatter.cpp says the laws; red on the base: the fog scattered its
+# colour with no visibility). A fixture, one row a law.
+add_executable(test_gi_fog_inscatter test_gi_fog_inscatter.cpp)
+set_target_properties(test_gi_fog_inscatter PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_fog_inscatter PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_fog_inscatter PRIVATE JahshakaEngine)
+add_dependencies(test_gi_fog_inscatter JahshakaEngineMedia)
+jah_gpu_row(gi.fog_shaft CLASS engine COMMAND test_gi_fog_inscatter shaft
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.fog_shaft PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 25)
+jah_gpu_row(gi.fog_sealed CLASS engine COMMAND test_gi_fog_inscatter sealed
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.fog_sealed PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 118)
+jah_gpu_row(gi.fog_sealed_noray CLASS engine COMMAND test_gi_fog_inscatter sealed_noray
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.fog_sealed_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 113)
+# ...and THE SEALED HALL PAST THE SHADOW DISTANCE (the one read's F9): its far fog is dark - the march past its last split
+# takes the sun's TLAS ray (red on the base: the sun read open past 500 m)
+jah_gpu_row(gi.fog_far_hall CLASS engine COMMAND test_gi_fog_inscatter far
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.fog_far_hall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 17)
+
 # gi.hit_list_demand (PHOTON-2 stage 2's tail, 1.6 A2; PHOTON-7 stage 0: its forced-overflow arm only) — A DROPPED HIT
 # RECORD IS NO SAMPLE: jahlab on photon-room with every gather ray a record (gather.decodeHits); the overflow arm
 # rq.hitListCap holding the records to a third FORCES drops and the floor stays within one code (the picture's
@@ -1058,3 +1251,26 @@ add_test(NAME gi.inject_fold COMMAND test_inject_fold WORKING_DIRECTORY "${CMAKE
 set_tests_properties(gi.inject_fold PROPERTIES LABELS "gi" TIMEOUT 60)
 set_tests_properties(gi.inject_fold PROPERTIES JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(gi.inject_fold)
+
+# gi.hit_specular_mobility (PHOTON-7 11-2 (3), C2: THE HIT'S OWN SPECULAR) — A SURFACE SEEN IN A REFLECTION REFLECTS THE
+# WORLD THE SAME STILL AND AS A MOVER, AND CONTINUOUSLY IN ITS METALNESS: a glossy slab under an emissive ceiling panel,
+# seen in a mirror; (1) still against a mover within q + 3 SE, (2) metalness 0.49 against 0.51 within 5 % + q + 3 SE
+# (test_gi_hit_specular_mobility.cpp; RED before C2: the still hit's store held the indirect specular only as its lobe's
+# integral, and the metal switch decoded 0.51). Four arms, a scene each, in one process; 256x144.
+add_executable(test_gi_hit_specular_mobility test_gi_hit_specular_mobility.cpp)
+set_target_properties(test_gi_hit_specular_mobility PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_hit_specular_mobility PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_hit_specular_mobility PRIVATE JahshakaEngine)
+add_dependencies(test_gi_hit_specular_mobility JahshakaEngineMedia)
+jah_gpu_row(gi.hit_specular_mobility CLASS engine COMMAND test_gi_hit_specular_mobility
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.hit_specular_mobility PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(gi.hit_specular_mobility PROPERTIES JAHSHAKA_TEST_FRAMES 895)

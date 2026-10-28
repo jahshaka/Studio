@@ -93,14 +93,13 @@ void WorldShadowPropertyWidget::setSceneView(IEditorViewport *sceneView)
 int WorldShadowPropertyWidget::derivedFromLights() const
 {
     if (!scene) return 0;
-    // SceneMirror's policy, verbatim: area lights cannot cast, "None" does not
-    // ask, and the largest remaining request wins.
+    // SceneMirror's policy, verbatim: area lights cannot cast, and the largest
+    // remaining request wins.
     int best = 0;
     for (const auto &l : scene->lights) {
         // A Sky Light cannot cast either — it has no place to cast FROM.
         if (l.isNull() || l->lightType == iris::LightType::Area ||
             l->lightType == iris::LightType::Sky) continue;
-        if (l->shadowMap.shadowType == iris::ShadowMapType::None) continue;
         best = std::max(best, l->shadowMap.resolution);
     }
     return best;
@@ -290,9 +289,9 @@ void WorldShadowPropertyWidget::refreshRows()
             for (const auto &l : others)
                 names << QStringLiteral("%1 (%2)").arg(l->getName()).arg(l->forwardShadingPriority);
             secondaryRow->setText(
-                QStringLiteral("%1 directional lights. Only the sun casts a shadow — the "
-                               "renderer has one directional slot. The others: %2. Set Forward "
-                               "Shading Priority on a light to choose.")
+                QStringLiteral("%1 directional lights. The sun's shadow has the cascades; each "
+                               "other casting directional takes one shadow map. The others: %2. "
+                               "Set Forward Shading Priority on a light to choose the sun.")
                     .arg(others.size() + 1)
                     .arg(names.join(QStringLiteral(", "))));
             PropertyRows::setPanelVisible(secondaryRow, true);

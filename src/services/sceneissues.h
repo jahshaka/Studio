@@ -63,6 +63,7 @@ For more information see the LICENSE file
 // there is one editor window and one open scene.
 
 #include <QHash>
+#include <functional>
 #include <QObject>
 #include <QSet>
 #include <QString>
@@ -121,6 +122,11 @@ public:
     /// Forgets everything — a scene close, or a test between cases.
     void reset();
 
+    /// THE SHADOW MAPS' UNHELD LAMPS (`lamps.unshadowed`): the open view's point and spot lights that hold no shadow
+    /// map this frame (IEditorViewport::shadowStatus().unmapped, GUIDs) - set by whoever owns the view (the shell's
+    /// watch); none set = no such lamps known.
+    void setUnmappedLampSource(std::function<QStringList()> source) { mUnmappedLamps = std::move(source); }
+
     /// One `model.missing` issue per model file (FORWARD-ONLY-1): a model with
     /// no current bake that could not be rebuilt from its source — the open's
     /// SceneReader::missingModels(), and a library placement's.
@@ -151,24 +157,23 @@ public:
     ///   * `sun.tie` — two or more directional lights claim the same forward
     ///     shading priority, so which one is the sun is decided by a tie-break
     ///     the author never chose;
-    ///   * `shadow.leak` — a light whose shadows are switched off stands close
-    ///     enough to opaque geometry to light straight through it (the
-    ///     Showroom's lamp above a sealed roof, which nothing ever mentioned);
     ///   * `sky.duplicate` — a second Sky Light, which does nothing;
     ///   * `rays.absent` — the project's Ray Tracing row says ON (it
     ///     was AUTHORED for rays) and this machine has none. The one issue that
     ///     is about the PROJECT rather than an object, so it names no node —
     ///     and the entire reason the On state exists, since On and Auto render
     ///     the same picture and differ only in whether the author is told.
+    ///   * `lamps.unshadowed` — a lamp the shadow maps do not hold, with GI off
+    ///     and no ray tracing: nothing shadows it (one issue per lamp; the view's
+    ///     unmapped list, setUnmappedLampSource);
     ///   * `texture.missing` — a material's texture file is gone from disk
     ///     (the document keeps the path; the mirror binds nothing). One issue
     ///     per mesh node, naming each missing slot and file; it clears when
     ///     the file returns or the slot is re-linked.
     ///
     /// THE NODE CHECKS FOLLOW THE DOCUMENT'S OWN DIRT, NEVER THE CLOCK
-    /// (BISTRO-ENGINE-1 stage 5, finding 14). The two node conditions —
-    /// `shadow.leak` (each solid node's world box) and `texture.missing` (each
-    /// mesh's material) — used to walk the whole scene on every call, and the
+    /// (BISTRO-ENGINE-1 stage 5, finding 14). The node condition —
+    /// `texture.missing` (each mesh's material) — used to walk the whole scene on every call, and the
     /// editor calls this once a second: ~0.2 s of UI thread per second at
     /// 6,000 meshes in a Debug build (the owner's Bistro session, 218 heartbeat
     /// lines of ~430 ms). Each node's answer is now CACHED, and a pass
@@ -191,7 +196,6 @@ public:
         int passes = 0;          ///< scan() calls with a scene, ever
         int walks = 0;           ///< passes that visited any node, ever
         bool fullWalk = false;   ///< the last pass walked the whole scene
-        bool leakEvaluated = false;   ///< the last pass re-tested the lamps against the boxes
         int nodesVisited = 0;    ///< nodes the last pass re-checked
         qint64 visitedTotal = 0; ///< nodes re-checked by every pass, ever
     };
@@ -203,6 +207,7 @@ signals:
 
 private:
     SceneIssues() = default;
+    std::function<QStringList()> mUnmappedLamps;
     int indexOf(const QString &id) const;
     /// texture.missing's view of the disk (see the scanner): whether each
     /// texture path exists, as last asked; forgotten per directory when the
@@ -225,8 +230,6 @@ private:
     struct NodeCheck
     {
         QWeakPointer<iris::SceneNode> node;
-        bool blocker = false;          ///< visible, casts a shadow, has a box
-        iris::Vec3 mn, mx;             ///< its world box (blockers only)
         QWeakPointer<iris::Material> material;
         quint32 materialRevision = 0;
         QStringList paths;             ///< the texture files the check asked about
@@ -238,8 +241,6 @@ private:
     /// one reader among the mirrors and the physics worlds, never a second record (ENGINE-UPGRADE-1's one journal).
     iris::graph::WriteJournalReader mJournal{ true };
     quint64 mMaterialsSeen = 0;
-    bool mLeakDirty = true;
-    QHash<QString, SceneIssue> mLeakLines;   ///< by issue id
     ScanStats mStats;
     /// Re-derives one node's cached answers (and raises/updates its line).
     void checkNode(iris::SceneNode *node);

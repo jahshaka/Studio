@@ -54,6 +54,16 @@ tree and the build's registration, each with its name in the failure line:
      — and three ship rows went red that way on main's long-lived build-linux (shadercache.app 67cefee33, api.contract
      cd0587fdc, app.engine_selftest_validation f4ad56a90) and green in a fresh ship tree. RED ON BASE f4ad56a90:
      scripting.e2e.editor_controls.timing.
+  R13 AN APP ROW WITH ITS OWN DATA ROOT BOOTS WARM (URGENT #76 / #78 / #79 / #82's class, the lead 2026-10-27). Every row
+     that boots the app (its command names the Jahshaka binary; jahlab and the fixtures are not app rows) and carries
+     its OWN data root - `--data-root <dir>` in its command, or JAHSHAKA_DATA_ROOT / HOME in its ENVIRONMENT - takes the
+     tree's shared warm app cache for it: its command is fresh_home.sh --warm of a home that root sits in, or it
+     FIXTURES_REQUIRES a fixture whose setup is fresh_home.sh --warm of one (jah_fresh_home_fixture's WARM). WHY: a
+     root of its own is a virgin shader cache - ~300 shaders, 30-50 s of every boot, never healed - and four sweeps
+     in one day found twenty-four app rows at or past the 60 s cap that way. A row whose SUBJECT is the cold path says
+     so with the test property JAHSHAKA_COLD_BY_SUBJECT TRUE (samples.cold_open, scripting.e2e.sky_swap_transient).
+     What ctest cannot see is not read: a root a row's own script makes (material.live_roundtrip's stages) is the
+     script's, warmed there.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -341,6 +351,64 @@ def r12_bad(tests, build):
     return bad
 
 
+COLD_BY_SUBJECT = "JAHSHAKA_COLD_BY_SUBJECT"
+
+
+def _fresh_home_warm(cmd):
+    """The homes a fresh_home.sh command seeds WARM (its <home> and every --reset dir, when it carries --warm), or []."""
+    at = next((i for i, c in enumerate(cmd) if os.path.basename(c) == "fresh_home.sh"), None)
+    if at is None:
+        return []
+    args = cmd[at + 1:]
+    args = args[:args.index("--")] if "--" in args else args
+    return list(_fresh_home_wipes(cmd) or []) if "--warm" in args else []
+
+
+def _app_boot(cmd):
+    """True when a command boots the app: an element that IS the Jahshaka binary (a launcher or a script may sit in
+    front of it, its path an argument)."""
+    return any(os.path.basename(c) == "Jahshaka" for c in cmd)
+
+
+def r13_bad(tests):
+    """[`row (VAR=root)`] for every app row carrying its own data root (`--data-root` in its command, JAHSHAKA_DATA_ROOT
+    or HOME in its ENVIRONMENT) that boots it cold: no fresh_home.sh --warm of a home holding it, in the row or in a
+    fixture it requires, and no JAHSHAKA_COLD_BY_SUBJECT TRUE. `tests`: ctest's json-v1 `tests` list. A relative root
+    is the row's WORKING_DIRECTORY's."""
+    warm = {}
+    for t in tests:
+        w = _fresh_home_warm(t.get("command") or [])
+        for f in _list(_props(t).get("FIXTURES_SETUP")):
+            if w:
+                warm.setdefault(f, []).extend(w)
+    bad = []
+    for t in sorted(tests, key=lambda x: x["name"]):
+        cmd = t.get("command") or []
+        P = _props(t)
+        if not _app_boot(cmd) or str(P.get(COLD_BY_SUBJECT, "")).strip().upper() in ("TRUE", "ON", "1", "YES"):
+            continue
+        wd = P.get("WORKING_DIRECTORY") or "/"
+        roots = []
+        for e in _list(P.get("ENVIRONMENT")):
+            k, _, v = e.partition("=")
+            if k in ROOT_VARS and v:
+                roots.append((k, v))
+        for i, c in enumerate(cmd):
+            if c == "--data-root" and i + 1 < len(cmd):
+                roots.append(("--data-root", cmd[i + 1]))
+            elif c.startswith("--data-root="):
+                roots.append(("--data-root", c.partition("=")[2]))
+        if not roots:
+            continue
+        homes = list(_fresh_home_warm(cmd))
+        for f in _list(P.get("FIXTURES_REQUIRED")):
+            homes += warm.get(f, [])
+        for k, v in roots:
+            if not any(_under(os.path.join(wd, v), os.path.join(wd, h)) for h in homes):
+                bad.append("%s (%s=%s)" % (t["name"], k, v))
+    return bad
+
+
 def the_rules_catch():
     """Each rule, fed one violation and its correction: a lint that cannot fail guards nothing."""
     print("the rules catch (synthetic inputs):")
@@ -425,6 +493,25 @@ def the_rules_catch():
           "R12 flags a row whose scratch root under the build dir has no wipe (none, a fixture wiping another root, an "
           "in-row wipe of another home), never one wiped in-row, by its fixture (home or --reset), kept with a reason, "
           "or outside the build dir (%s)" % r12)
+    app = "/b/bin/Jahshaka"
+    r13 = r13_bad([C("cold", [app, "--data-root", "/b/tests/x/d"]),
+                   C("coldenv", ["bash", "/s/x.sh", app], ENVIRONMENT=["HOME=/b/tests/x/h"]),
+                   C("inrow", ["sh", fh, "--warm", "/b/tests/x/h", "--", app, "--data-root", "/b/tests/x/h/d"]),
+                   C("inrowcold", ["sh", fh, "/b/tests/x/h", "--", app, "--data-root", "/b/tests/x/h/d"]),
+                   C("w.setup", ["sh", fh, "--setup", "--warm", "/b/tests/x/w"], FIXTURES_SETUP=["wfx"]),
+                   C("c.setup", ["sh", fh, "--setup", "/b/tests/x/c"], FIXTURES_SETUP=["cfx"]),
+                   C("fixtured", [app, "--data-root=/b/tests/x/w/d"], FIXTURES_REQUIRED=["wfx"]),
+                   C("fixturedcold", [app], ENVIRONMENT=["JAHSHAKA_DATA_ROOT=/b/tests/x/c"], FIXTURES_REQUIRED=["cfx"]),
+                   C("relative", [app, "--data-root", "d"], WORKING_DIRECTORY="/b/tests/x/w", FIXTURES_REQUIRED=["wfx"]),
+                   C("subject", [app, "--data-root", "/b/tests/x/s"], JAHSHAKA_COLD_BY_SUBJECT="TRUE"),
+                   C("fixture", ["/b/tests/gi/test_x"], ENVIRONMENT=["HOME=/b/tests/x/z"]),
+                   C("lab", ["/b/bin/jahlab", "--data-root", "/b/tests/x/l"]),
+                   C("shared", [app, "--script", "x.js"])])
+    check(r13 == ["cold (--data-root=/b/tests/x/d)", "coldenv (HOME=/b/tests/x/h)",
+                  "fixturedcold (JAHSHAKA_DATA_ROOT=/b/tests/x/c)", "inrowcold (--data-root=/b/tests/x/h/d)"],
+          "R13 flags an app row booting its own data root cold (a bare root, an in-row or fixture wipe without --warm), "
+          "never one warmed in-row or by its fixture (a relative root read from its WORKING_DIRECTORY), one cold by "
+          "subject, a fixture, jahlab or a row on no root of its own (%s)" % r13)
     check(r6_bad([T("a"), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a"])]) == ["a.twin (DEPENDS a)"]
           and not r6_bad([T("a", FIXTURES_SETUP=["run_a"]), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a", "run_a"])])
           and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")]),
@@ -668,6 +755,9 @@ def main(source, build):
     bad = r12_bad(tests, build) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     check(not bad, "R12 every row with a scratch root under the build dir declares its wipe (fresh_home.sh in the row or "
           "a required fresh_home fixture of that root) or %s with its reason (%d without: %s)" % (KEEPS_HOME, len(bad), bad[:12]))
+    bad = r13_bad(tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
+    check(not bad, "R13 every app row with its own data root boots warm (fresh_home.sh --warm in the row or a WARM "
+          "fixture of a home holding it) or states %s TRUE (%d cold: %s)" % (COLD_BY_SUBJECT, len(bad), bad[:16]))
     inspect = []
     for root in ("src", os.path.join("irisgl", "mirror")):
         for dirpath, _dirs, names in os.walk(os.path.join(source, root)):

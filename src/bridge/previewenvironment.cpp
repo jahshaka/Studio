@@ -300,10 +300,9 @@ void apply(const iris::ScenePtr &scene)
         scene->skyType = iris::SkyType::EQUIRECTANGULAR;
     }
     // A PREVIEW IS A PHOTOGRAPH OF AN ASSET, not of a world: no sun in the sky
-    // (SKY_LIGHT_SPEC round-2 item 9), no air, no shadows.
+    // (SKY_LIGHT_SPEC round-2 item 9), no air. (Its shadows are on: the scene-wide switch is deleted, PHOTON-7 10-4 F7.)
     scene->sunDiscVisible = false;
     scene->fogEnabled = false;
-    scene->shadowEnabled = false;
     // THE GRADE. Manual, at the studio's own EV, so every preview surface —
     // the dock, a material tile, an asset tile — develops the same picture.
     scene->exposureMode = iris::ExposureMode::Manual;

@@ -25,7 +25,10 @@
 #   (c) NO RAY HITS ITS OWN FLOOR (READ_A finding 2; READ_B F4, the lead's round-7 ruling): inside the band where each
 #       mirror floor reflects the emitter panel over the far wall (y 0.8-7.9; a 0.15 m margin, 5 cm either side of the
 #       floors' seam, the post, the foot, the block and the walls kept out) the picture is the mirror image of one
-#       uniform emitter: no pixel more than 3 codes from its row's median (the metal's Fresnel drifts 2 codes from row to
+#       uniform emitter - THE PANEL IS A PURE EMITTER BY DESIGN (PHOTON-7 11-2, the lead's ruling (b): no diffuse, no
+#       specular, envs photon_room.cpp pureEmitter; a dielectric emitter reflects the floor and what lies behind it, C2's
+#       traced lobe, gi.hit_specular_mobility's proof), so its band is one uniform image and the law catches the trace's
+#       self-hits: no pixel more than 3 codes from its row's median (the metal's Fresnel drifts 2 codes from row to
 #       row over the band, which the row's median follows) - the encode's dither, 2 codes a channel, and the luminance's
 #       mix of independently dithered channels, which puts a row's median up to a code off an integer (measured: 2.07 at
 #       most) - a ray started inside the traced level 0 hits it from below and reads some other radiance (measured: up

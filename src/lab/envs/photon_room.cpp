@@ -267,7 +267,10 @@ Built buildContact(unsigned seed, bool bake)
     fixedBox(b, unit, "post-foot", V(xc - 0.05f, 0.02f, -3.15f), V(xc + 0.05f, 0.12f, -3.0f),
              b.material(0.02f, 0.02f, 0.02f, 1.0f));
     fixedBox(b, unit, "post", V(xc - 0.05f, 0.12f, -3.15f), V(xc + 0.05f, 0.62f, -3.0f), b.emitter(1.0f));
-    fixedBox(b, unit, "panel", V(-3.9f, 0.8f, -3.99f), V(3.9f, 7.9f, -3.95f), b.emitter(1.0f));
+    // THE PANEL IS A PURE EMITTER BY DESIGN (PHOTON-7 11-2, the lead's ruling (b)): no diffuse, no specular - its mirror
+    // image is one uniform image, so rtreflect.contact's law (c) reads a non-uniform band as the trace's self-hits (a
+    // dielectric emitter reflects the floor and what lies behind it: C2 traces that lobe, gi.hit_specular_mobility's proof)
+    fixedBox(b, unit, "panel", V(-3.9f, 0.8f, -3.99f), V(3.9f, 7.9f, -3.95f), b.pureEmitter(1.0f));
     // the crease: a bright matte block standing on the chained mirror (its base meets the floor within the corrugation)
     fixedBox(b, unit, "crease-block", V(1.0f, 0.02f, -2.57f), V(2.8f, 0.8f, -2.17f), b.material(0.8f, 0.8f, 0.8f, 0.9f));
     return b.finish();

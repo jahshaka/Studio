@@ -989,6 +989,15 @@ public:
             quint64 hitRecords = 0;
             quint64 hitDropped = 0;
             quint64 hitCapacity = 0;
+            /// THE BLENDED PASSES' ESCAPE LISTS (PHOTON-7 10-4 R4; RayQueryStatus::escape*): records the
+            /// blended fragments appended in the newest read-back frame, of those dropped by a full list (lit
+            /// by the environment instead), the lists' size, and what answered the traced ones.
+            quint64 escapeRecords = 0, escapeDropped = 0, escapeCapacity = 0, escapeTraced = 0;
+            quint64 escapeCard = 0, escapeVoxel = 0, escapeDirect = 0, escapeFar = 0, escapeSky = 0;
+            quint64 escapeBack = 0, escapeNoSample = 0, escapeSaturated = 0;
+            /// THE PANE LIST'S OVERFLOW (RayQueryStatus::panesOverflow): reading rays that met more panes than
+            /// they list, cumulative.
+            quint64 panesOverflow = 0;
             /// ...and PER LIVE VIEW (RayQueryStatus::hitViews, PHOTON-7 stage 0's read R4).
             struct HitListView {
                 int     eyes = 1;
@@ -1098,7 +1107,7 @@ public:
         int  pssmSplits = 0;
         int  focusedMaps = 0;    ///< point/spot maps the atlas has room for
         int  lightSlots = 0;     ///< 1 + focusedMaps: the length of `mapped`
-        int  casters = 0;        ///< shadow-casting point/spot lights in the scene
+        int  casters = 0;        ///< focused-map casters: point/spot lights, directionals after the sun
         int  budget = 0;         ///< the effective ceiling (resolution-capped)
         int  requestedBudget = 0;
         int  atlasWidth = 0, atlasHeight = 0;

@@ -3177,6 +3177,19 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.hitRecords   = quint64(rq.hitRecords);
         out.rayQuery.hitDropped   = quint64(rq.hitDropped);
         out.rayQuery.hitCapacity  = quint64(rq.hitCapacity);
+        out.rayQuery.escapeRecords  = quint64(rq.escapeRecords);
+        out.rayQuery.panesOverflow  = quint64(rq.panesOverflow);
+        out.rayQuery.escapeDropped  = quint64(rq.escapeDropped);
+        out.rayQuery.escapeCapacity = quint64(rq.escapeCapacity);
+        out.rayQuery.escapeTraced   = quint64(rq.escapeTraced);
+        out.rayQuery.escapeCard     = quint64(rq.escapeCard);
+        out.rayQuery.escapeVoxel    = quint64(rq.escapeVoxel);
+        out.rayQuery.escapeDirect   = quint64(rq.escapeDirect);
+        out.rayQuery.escapeFar      = quint64(rq.escapeFar);
+        out.rayQuery.escapeSky      = quint64(rq.escapeSky);
+        out.rayQuery.escapeBack     = quint64(rq.escapeBack);
+        out.rayQuery.escapeNoSample = quint64(rq.escapeNoSample);
+        out.rayQuery.escapeSaturated = quint64(rq.escapeSaturated);
         for (const auto &v : rq.hitViews) {
             IEditorViewport::GiStatusInfo::RayQueryInfo::HitListView h;
             h.eyes = int(v.eyes);

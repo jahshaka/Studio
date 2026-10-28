@@ -48,14 +48,20 @@ set(JAH_SELFTEST_ENV "${JAH_SELFTEST_ENV}HOME=${_selftest_home};JAHSHAKA_DATA_RO
 # Vulkan API guard is whole; the cold path's own work (glslang's CPU, the async workers' concurrent creations) is TSan's
 # (the cold validation of a subset: the leftover list). The wipe fixture (app.engine_selftest_validation.fresh_root) is
 # deleted: the wrapper wipes inside the row.
-jah_gpu_row(app.engine_selftest_validation SHIP CLASS selftest
-         COMMAND sh ${JAH_FRESH_HOME} --warm ${_selftest_home} --
-                 bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}"
-         WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
-set_tests_properties(app.engine_selftest_validation PROPERTIES
-    ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAHSHAKA_SELFTEST_SHORT=1"
-    TIMEOUT 60 LABELS "app")  # the 60 s cap (URGENT #48); the short run (PHOTON-7 stage 10: the fixed frames a quarter)
+# ONE ROW PER PROOF (the lead's ruling, 2026-10-28): the combined app.engine_selftest_validation ran 54-60 s - the layer's
+# own cost on six poses - so it is TWO ROWS, a half of the poses each (JAHSHAKA_SELFTEST_POSES, selftestrunner.cpp):
+# .default the default scene's pose 1, pose 2 and motion (with the on-screen view's resizes and the broken-ground arm),
+# .fixture pose pair B and the mover. THE FOUR ARE FOUR, a property of the full set, is the six-hash step's.
+foreach(_half default fixture)
+    jah_gpu_row(app.engine_selftest_validation.${_half} SHIP CLASS selftest
+             COMMAND sh ${JAH_FRESH_HOME} --warm ${_selftest_home} --
+                     bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest.sh"
+                     "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}" ${_half}
+             WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
+    set_tests_properties(app.engine_selftest_validation.${_half} PROPERTIES
+        ENVIRONMENT "${JAH_SELFTEST_ENV}VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation;JAHSHAKA_SELFTEST_SHORT=1"
+        TIMEOUT 60 LABELS "app")  # the 60 s cap (URGENT #48); the short run (PHOTON-7 stage 10: the fixed frames a quarter)
+endforeach()
 
 # app.startup_quiet (archived: archive/tests/app) — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
 # 6a/6b/6c). Three noise sources were fixed together and all three are only
@@ -154,8 +160,13 @@ file(MAKE_DIRECTORY ${_home}/run)
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
 # method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
 # the one empty frame a headless engine walks.
-if(TEST app.engine_selftest_validation)
-    set_property(TEST app.engine_selftest_validation PROPERTY JAHSHAKA_TEST_FRAMES 1633)
+# (the halves' counts SPLIT from the combined row's measured 1633: the boot's ~1003 each - the broken-ground arm fails
+# before the frame pump - plus each half's own printed frames, default 336 / fixture 294; PHOTON-7 11-2, 2026-10-28)
+if(TEST app.engine_selftest_validation.default)
+    set_property(TEST app.engine_selftest_validation.default PROPERTY JAHSHAKA_TEST_FRAMES 1339)
+endif()
+if(TEST app.engine_selftest_validation.fixture)
+    set_property(TEST app.engine_selftest_validation.fixture PROPERTY JAHSHAKA_TEST_FRAMES 1297)
 endif()
 if(TEST app.test_needs_boot)
     set_property(TEST app.test_needs_boot PROPERTY JAHSHAKA_TEST_FRAMES 710)

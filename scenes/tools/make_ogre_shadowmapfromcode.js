@@ -45,7 +45,7 @@ photonOff();
 // THE SHADOW SETTINGS ARE THE SAMPLE. Five casters need a budget that admits
 // the four lamps (the directional does not use an atlas slot); the filter and
 // the resolution are their starting pair.
-assert(world.shadows({ enabled: true, mapBudget: 8 }), "shadows on, budget 8 lamps");
+assert(world.shadows({ mapBudget: 8 }), "budget 8 lamps");
 assert(world.setShadowResolution(2048) === 2048, "their 2048 atlas");
 // Their starting filter is PCF 2x2. Our row is a SOFTNESS vocabulary
 // (auto|hard|soft|verysoft) rather than a filter-kernel name — the renderer

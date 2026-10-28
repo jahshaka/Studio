@@ -665,6 +665,13 @@ std::string Session::statusJson()
         const RayQueryStatus &rq = mScene->published().rayQuery;
         o << ",\"hits\":{\"records\":" << rq.hitRecords << ",\"dropped\":" << rq.hitDropped << ",\"capacity\":"
           << rq.hitCapacity << "}";
+        o << ",\"escapes\":{\"records\":" << rq.escapeRecords << ",\"dropped\":" << rq.escapeDropped
+          << ",\"capacity\":" << rq.escapeCapacity << ",\"traced\":" << rq.escapeTraced << ",\"card\":" << rq.escapeCard
+          << ",\"voxel\":" << rq.escapeVoxel << ",\"direct\":" << rq.escapeDirect << ",\"far\":" << rq.escapeFar
+          << ",\"sky\":" << rq.escapeSky << ",\"back\":" << rq.escapeBack << ",\"noSample\":" << rq.escapeNoSample
+          << ",\"saturated\":" << rq.escapeSaturated
+          << "}";
+        o << ",\"panesOverflow\":" << rq.panesOverflow;
         // ...and THE RAY STRUCTURES (PHOTON-7 stage 6, one ray level per mesh): the near and far copies, the bottom
         // levels held and their bytes, the ones built from a level above 0 (the far copies'), the top level, and the
         // bottom-level builds ever

@@ -61,7 +61,6 @@ void EngineAssetScene::buildDocument()
     // THE GROUND IS THE EDITOR'S GROUND PLANE WIDGET (WORLD-MODEL-1), switched on
     // in configureMirror — no floor node in the document.
     mDocument = iris::Scene::create();
-    mDocument->shadowEnabled = true;
 
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
@@ -105,7 +104,6 @@ void EngineAssetScene::buildDocument()
     // document write reached nothing and always had.)
     mDocument->fogColor = QColor(25, 25, 25);
     mDocument->fogEnabled = false;
-    mDocument->shadowEnabled = true;
 
     mCamera->update(0);
     mDocument->refresh();
@@ -239,14 +237,12 @@ void EngineAssetScene::setBackdrop(unsigned int id)
     switch (id) {
     case 1:
         mDocument->fogEnabled = false;
-        mDocument->shadowEnabled = false;
         mDocument->setSkyColor(QColor(25, 25, 25));
         mGroundPlane = false;
         mShadows = false;
         break;
     case 2:
         mDocument->fogEnabled = false;
-        mDocument->shadowEnabled = false;
         mDocument->setSkyColor(QColor(82, 82, 82));
         mGroundPlane = false;
         mShadows = false;
@@ -255,7 +251,6 @@ void EngineAssetScene::setBackdrop(unsigned int id)
         mDocument->setSkyColor(QColor(25, 25, 25));
         mDocument->fogEnabled = true;          // exponential, at the document default density
         mDocument->fogColor = QColor(25, 25, 25);
-        mDocument->shadowEnabled = true;
         mGroundPlane = true;
         mShadows = true;
         break;

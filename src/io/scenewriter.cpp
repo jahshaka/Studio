@@ -157,9 +157,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["fogHeightDensity"] = scene->fogHeightDensity;
     sceneObj["fogHeightFalloff"] = scene->fogHeightFalloff;
     sceneObj["fogHeightLevel"] = scene->fogHeightLevel;
-    sceneObj["fogBreakMinBrightness"] = scene->fogBreakMinBrightness;
-    sceneObj["fogBreakFalloff"] = scene->fogBreakFalloff;
-    sceneObj["shadowEnabled"] = scene->shadowEnabled;
 
     // Anti-aliasing: the REQUESTED MSAA sample count (1 = off). The achieved
     // count is a per-machine runtime fact and is never serialized.
@@ -227,7 +224,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // explicit per-scene value the user pinned.
     sceneObj["planarReflectionBudget"] = scene->planarReflectionBudget;
     sceneObj["planarReflectionResolution"] = scene->planarReflectionResolution;
-    sceneObj["planarReflectionShadows"] = scene->planarReflectionShadows;
     // World Mode (POST_CHAIN_SPEC §9): the tier, as a stable string, plus the
     // rows the user pinned. "custom" means no tier — the fields above are the
     // truth. Written as strings so the enum ints stay free to be reordered.
@@ -974,8 +970,6 @@ QJsonObject SceneWriter::jsonVector4(iris::Vec4 vec)
 QString evalShadowTypeName(iris::ShadowMapType shadowType)
 {
     switch(shadowType){
-    case iris::ShadowMapType::None:
-        return "none";
     case iris::ShadowMapType::Hard:
         return "hard";
     case iris::ShadowMapType::Soft:
@@ -984,7 +978,7 @@ QString evalShadowTypeName(iris::ShadowMapType shadowType)
         return "verysoft";
     }
 
-    return "none";
+    return "soft";
 }
 
 void SceneWriter::writeLightData(QJsonObject& sceneNodeObject,iris::LightNodePtr lightNode)

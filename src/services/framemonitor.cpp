@@ -487,6 +487,8 @@ void FrameMonitor::Bundle::writeFrame(const MonitorRecord &r)
         { "shadowPassesProbe", int(r.shadowPassesProbe) },
         { "planarRenders", int(r.planarRenders) },
         { "shaderCompiles", int(r.shaderCompiles) },
+        // the process's failed program loads so far (above 0: a dead shader in the running app, URGENT #83)
+        { "shaderCompileErrors", double(r.shaderCompileErrors) },
         // Was the render system COUNTING while this frame rendered? Recording
         // is off in Ogre until something asks for renderStats(), and a frame
         // rendered with it off reports zeros for every geometry counter.

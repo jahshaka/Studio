@@ -483,7 +483,7 @@ void frame(Env &env, int count)
             fx.allowOffscreen = true;
             if (env.fxOverride) env.fxOverride(fx);
             if (fx != jahshaka::engine::inspect::view(env.view)->postFx()) env.view->setPostFx(fx);
-            if (jahshaka::engine::inspect::view(env.view)->shadows() != env.doc->shadowEnabled) env.view->setShadows(env.doc->shadowEnabled);
+            if (!jahshaka::engine::inspect::view(env.view)->shadows()) env.view->setShadows(true);   // (the mirror's: always on)
         } else {
             env.mirror->sync(mirrorframe::environment(env.view));
             if (env.fxOverride) {
@@ -617,7 +617,6 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     doc->setSkyRealistic(iris::SkyRealistic::defaults());
     doc->skyColor = QColor(96, 96, 96);
     doc->fogColor = QColor(96, 96, 96);
-    doc->shadowEnabled = true;
     worldmodes::setMode(doc, worldmodes::Mode(int(spec.tier)));
     worldmodes::setPhoton(doc, true, spec.tier);
 
@@ -704,7 +703,6 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
         l->setPropertyValue(QStringLiteral("distance"), 15.0f);
         l->setPropertyValue(QStringLiteral("lightColor"),
                             QColor(255, 200 + (i * 7) % 55, 160 + (i * 13) % 95));
-        l->shadowMap.shadowType = iris::ShadowMapType::None;
         world.lights.push_back(l);
     }
     doc->getRootNode()->applyStaticDefaults();

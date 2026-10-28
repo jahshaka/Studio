@@ -163,7 +163,18 @@ if [ -n "$app_why" ]; then
     [ -x "$BIN" ] || { echo "warm-app-cache: no app at $BIN" >&2; exit 2; }
     H="$TESTS/warm-app-cache-home"
     FH_ARGS="--warm"
-    boot app "$APP_SHARED" "$APP_STAMP" "$H" "$TESTS/warm-app-cache.log" "$BIN" --engine-selftest "$H/run/warm.png" || fails=1
+    # THE PERMUTATIONS THE BOOT GENERATES, DUMPED (URGENT #89): every Hlms vertex and pixel shader of the warm-up and the
+    # self-test's poses, written by the engine (JAHSHAKA_HLMS_DEBUG_DIR, OgreEngine.cpp) into <tests>/.hlms-dump and stamped
+    # with this key after a passed boot - source.shaders_spirv_valid validates them (tests/hygiene/shaders_spirv_valid.py);
+    # the dump is the boot's at this key, promoted or not: the shaders are the build's
+    DUMP="$TESTS/.hlms-dump"
+    rm -rf "$DUMP"; mkdir -p "$DUMP"
+    if boot app "$APP_SHARED" "$APP_STAMP" "$H" "$TESTS/warm-app-cache.log" \
+            env "JAHSHAKA_HLMS_DEBUG_DIR=$DUMP/" "$BIN" --engine-selftest "$H/run/warm.png"; then
+        echo "$KEY" > "$DUMP/.key"
+    else
+        fails=1
+    fi
 fi
 if [ -n "$eng_why" ]; then
     LABX="${LAB:-$BUILD/bin/jahlab}"
