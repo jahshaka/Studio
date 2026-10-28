@@ -43,6 +43,16 @@ const std::vector<VerbDoc> &verbs()
           "cascade 0's surface voxels as the ray tier's sides' gather last left them (PHOTON-7 11-2 (6), the openings' "
           "instrument): one line a written voxel - its cell, its world centre, its normal (two-sided: the front's), the "
           "front and back escape shares (Scene::giVoxelSideShares) - to <file>" },
+        { "pick", "pick x y frames file", 4, 4,
+          "THE PICK (PHOTON-7 11-2, the reds' instrument): the reflection's trace texel holding full-resolution pixel (x, y) "
+          "kept over `frames` frames (at most 60) - each frame's sample (its direction, hit distance and slot, the traced "
+          "radiance, C2's traced lobe, the NEE part, the record and its flags) and the temporal pass's rest terms (the "
+          "count v, the stop count, the standard error e against its share, the answer, the sample) - one line a frame "
+          "to <file> (the arm reflect.pick)" },
+        { "histdump", "histdump file", 1, 1,
+          "the reflection's per-texel history count (the state's N / 8 + v, the arm reflect.historyReadback's copy; the "
+          "trace's grid, the eyes side by side) as one header line (W H frame) and one row of counts a line to <file> - "
+          "two dumps' difference names the texels still converging (PHOTON-7 11-2, with `pick`)" },
         { "envcam", "envcam D", 1, 1, "an environment's dolly camera at stop D metres (envs/<name>.cpp stop())" },
         { "probe", "probe [file]", 0, 1,
           "the Atom cut probe of the next frame: drawn triangles, clusters and visible pixels per object, and its visible pixels by DAG depth (appended to file)" },

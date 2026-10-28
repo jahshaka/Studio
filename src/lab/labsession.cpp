@@ -866,6 +866,62 @@ bool Session::exec(const Command &c)
             ok = false;
             labFail("LAB FAILED sideshares: cannot write %s\n", a0.c_str());
         }
+    } else if (c.verb == "pick") {
+        const int px = std::atoi(c.args[0].c_str()), py = std::atoi(c.args[1].c_str());
+        const int n = std::min(std::max(std::atoi(c.args[2].c_str()), 1), 60);
+        const double v = 1.0 + double(px) + 4096.0 * double(py);
+        mEngine->request([&](Engine &e) { ok = e.setArm("reflect.pick", v); });
+        if (ok) {
+            renderFrames(n + 4);   // (+ the ring's frames in flight: the last n slots have landed)
+            const RayQueryStatus rq = mScene->published().rayQuery;
+            mEngine->request([&](Engine &e) { e.setArm("reflect.pick", 0.0); });
+            FILE *f = std::fopen(c.args[3].c_str(), "w");
+            if (!f || rq.reflectPick.size() < 64u * 64u || rq.reflectPickFrames.size() < 64u) {
+                ok = false;
+                labFail("LAB FAILED pick: %s\n", f ? "no ring published (no ray tier's reflection?)" : "cannot write the file");
+                if (f) std::fclose(f);
+            } else {
+                std::vector<unsigned> order;
+                for (unsigned i = 0; i < 64u; ++i) if (rq.reflectPick[i * 64u] || rq.reflectPick[i * 64u + 32u]) order.push_back(i);
+                std::sort(order.begin(), order.end(), [&](unsigned a, unsigned b) { return rq.reflectPickFrames[a] < rq.reflectPickFrames[b]; });
+                const auto fv = [&](unsigned i, unsigned k) { float x; std::memcpy(&x, &rq.reflectPick[i * 64u + k], 4); return x; };
+                std::fprintf(f, "# frame flags slot src hitT  L.xyz  traced.rgb  c2.rgb  nee.rgb  screen.r vouch gain delta.r  vNow restStop prim"
+                                " | e share v stop flags LD answer.rgb m2 sample.rgb\n");
+                for (unsigned i : order) {
+                    const uint32_t *w = &rq.reflectPick[i * 64u];
+                    std::fprintf(f, "%u %u %u %u %.4f  %.4f %.4f %.4f  %.5f %.5f %.5f  %.5f %.5f %.5f  %.5f %.5f %.5f  %.5f %.3f %.3f %.5f  %u %u %u |",
+                                 rq.reflectPickFrames[i], w[1], w[2], w[3], fv(i, 4), fv(i, 5), fv(i, 6), fv(i, 7), fv(i, 8), fv(i, 9),
+                                 fv(i, 10), fv(i, 11), fv(i, 12), fv(i, 13), fv(i, 14), fv(i, 15), fv(i, 16), fv(i, 17), fv(i, 18),
+                                 fv(i, 19), fv(i, 20), w[21], w[22], w[23]);
+                    if (w[32])
+                        std::fprintf(f, " %.6f %.6f %.0f %u %u %.5f  %.5f %.5f %.5f  %.6f  %.5f %.5f %.5f", fv(i, 33), fv(i, 34),
+                                     fv(i, 35), w[36], w[37], fv(i, 38), fv(i, 39), fv(i, 40), fv(i, 41), fv(i, 42), fv(i, 43),
+                                     fv(i, 44), fv(i, 45));
+                    std::fprintf(f, "\n");
+                }
+                std::fclose(f);
+                std::printf("LAB PICK (%d, %d) %zu frames -> %s\n", px, py, order.size(), c.args[3].c_str());
+            }
+        } else {
+            labFail("LAB REFUSED pick: no arm reflect.pick\n");
+        }
+    } else if (c.verb == "histdump") {
+        const RayQueryStatus rq = mScene->published().rayQuery;
+        FILE *f = std::fopen(a0.c_str(), "w");
+        if (!f || rq.reflectHistoryCount.empty() || !rq.reflectHistoryW) {
+            ok = false;
+            labFail("LAB FAILED histdump: %s\n", f ? "no history copy (arm reflect.historyReadback 1 first)" : "cannot write");
+            if (f) std::fclose(f);
+        } else {
+            std::fprintf(f, "%u %u %u\n", rq.reflectHistoryW, rq.reflectHistoryH, rq.reflectHistoryFrame);
+            for (unsigned y = 0; y < rq.reflectHistoryH; ++y) {
+                for (unsigned x = 0; x < rq.reflectHistoryW; ++x)
+                    std::fprintf(f, "%u ", unsigned(rq.reflectHistoryCount[size_t(y) * rq.reflectHistoryW + x]));
+                std::fprintf(f, "\n");
+            }
+            std::fclose(f);
+            std::printf("LAB HISTDUMP %ux%u frame %u -> %s\n", rq.reflectHistoryW, rq.reflectHistoryH, rq.reflectHistoryFrame, a0.c_str());
+        }
     } else if (c.verb == "cards") {
         std::vector<CardRadiance> cards;
         unsigned long long cacheFrame = 0ull;
