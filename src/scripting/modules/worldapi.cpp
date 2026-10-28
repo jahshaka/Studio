@@ -275,8 +275,9 @@ QVector<VerbInfo> WorldApi::verbs() const
           "(an unknown key or an unreadable colour) changes nothing. One call is one undo step, "
           "whatever subset it sets.",
           Needs::Document },
-        { "shadows", "world.shadows({enabled, mapBudget}) -> bool",
-          "Shadow rendering for the scene. 'enabled' toggles it. "
+        { "shadows", "world.shadows({mapBudget}) -> bool",
+          "Shadow rendering for the scene - always on: there is no switch (a scene without shadow maps let every light "
+          "through every wall; PHOTON-7 10-4 F7). "
           "'mapBudget' is HOW MANY POINT AND SPOT LIGHTS MAY HOLD A SHADOW MAP AT ONCE — 2..16, or "
           "\"auto\" (the default) to follow the World Mode tier, which asks for 2/4/8/8 at "
           "low/medium/high/epic. It matters because the renderer keeps ONE shadow atlas with a fixed "
@@ -806,13 +807,12 @@ bool WorldApi::shadows(const QVariantMap &params)
 {
     auto scene = sceneOrFail(QStringLiteral("world.shadows"));
     if (!scene) return false;
-    static const QStringList known = { QStringLiteral("enabled"), QStringLiteral("mapBudget") };
+    static const QStringList known = { QStringLiteral("mapBudget") };
     const QString refusal = refuseUnknownKeys(
         QStringLiteral("world.shadows"), params, known,
-        QStringLiteral("Shadow RESOLUTION is world.setShadowResolution; the per-light filter and "
-                       "bias rows are node.setProperty on the light."));
+        QStringLiteral("Shadows are always on (no 'enabled'); shadow RESOLUTION is world.setShadowResolution; the "
+                       "per-light filter and bias rows are node.setProperty on the light."));
     if (!refusal.isEmpty()) return fail(refusal);
-    if (params.contains("enabled")) scene->shadowEnabled = params.value("enabled").toBool();
     // HOW MANY point/spot lights may hold a shadow map at once
     // (SHADOW_TOOLING_SPEC.md §4.1). A CEILING: the engine derives the actual
     // count from the scene's casters, steps it {2,4,8,16} up to this value and
@@ -3849,7 +3849,6 @@ QVariantMap WorldApi::get()
     out["sunContact"] = sunContact(QVariantMap());
     out["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     out["gravity"] = scene->gravity;
-    out["shadows"] = scene->shadowEnabled;
     out["antiAliasing"] = scene->antiAliasing;   // requested; world.antiAliasing() reads achieved
     out["shadowResolution"] = scene->shadowResolution;   // 0 = Auto; the verb reads the applied value
     out["shadowMapBudget"] = scene->shadowMapBudget;     // 0 = Auto (the World Mode tier's value)

@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "shell/sceneissuewatch.h"
 
+#include <QPointer>
 #include <QTimer>
 #include <QWidget>
 
@@ -30,6 +31,11 @@ void SceneIssueWatch::setScene(SceneEditService *sceneEdit, IEditorViewport *vie
 {
     mSceneEdit = sceneEdit;
     mViewport = viewport;
+    // (the lamps no shadow map holds this frame: the view's own answer, `lamps.unshadowed`'s input)
+    QPointer<QObject> guard = this;
+    SceneIssues::instance().setUnmappedLampSource([this, guard]() {
+        return guard && mViewport ? mViewport->shadowStatus().unmapped : QStringList();
+    });
 }
 
 void SceneIssueWatch::start()

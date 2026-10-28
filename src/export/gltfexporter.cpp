@@ -1498,7 +1498,6 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // — CRUD law — and `exp2Density` above is what the viewer reads.)
         jahScene["fog"] = fog;
     }
-    jahScene["shadowEnabled"] = scene->shadowEnabled;
     // Post chain (POST_CHAIN_SPEC.md §10). The web viewer cannot reproduce the
     // engine's SSAO/SMAA/refraction, but it CAN match the grade — which is the
     // part a viewer notices — so the tonemapper and its exposure travel.

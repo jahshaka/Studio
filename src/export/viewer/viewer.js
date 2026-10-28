@@ -287,7 +287,7 @@
         }
 
         if (filters.length) {
-            renderer.shadowMap.enabled = jah.shadowEnabled !== false;
+            renderer.shadowMap.enabled = true;   // (shadows are always on: the scene-wide switch is deleted)
             renderer.shadowMap.type = strongestFilter(filters);
             scene.traverse(function (o) {
                 if (o.isMesh) { o.castShadow = true; o.receiveShadow = true; }

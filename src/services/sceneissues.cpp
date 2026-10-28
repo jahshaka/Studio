@@ -625,8 +625,32 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         }
     }
 
-    // (shadow.leak - "a light that casts no shadow reaches through something" - is DELETED with the setting it reported:
-    // PHOTON-7 10-4 R9, every light is blocked by geometry on every path)
+    // ---- lamps.unshadowed: a lamp nothing shadows (PHOTON-7 10-4 fix round, the one read's F7) ----------
+    // A point or spot light the shadow maps do not hold is shadowed by a TRACE: a ray at the ray tier, the GI voxels'
+    // march where the GI is on. With GI off and no ray tracing (the machine has none, or the World's Ray Tracing row
+    // is Off) nothing traces it, and its light reaches through every wall - the one place the renderer still lets a
+    // light through geometry, and a scene the user can fix in one action. One issue per such lamp, naming it.
+    {
+        const bool traces = machineRayTracing() == 1 && scene->rayTracing != iris::RayTracingMode::Off;
+        if (!traces && scene->giMode == iris::GiMode::OFF && mUnmappedLamps) {
+            const QStringList unmapped = mUnmappedLamps();
+            for (const auto &light : scene->lights) {
+                if (light.isNull() || !unmapped.contains(light->getGUID())) continue;
+                SceneIssue issue;
+                issue.kind = QStringLiteral("lamps.unshadowed");
+                issue.node = light->getGUID();
+                issue.nodeName = light->getName();
+                issue.message = tr("\"%1\" has no shadow map (the scene has more lamps than shadow maps), and with "
+                                   "Global Illumination off and no ray tracing nothing else shadows it: its light "
+                                   "passes through walls.").arg(light->getName());
+                issue.action = tr("Turn Global Illumination on (its voxels shadow every lamp), or use ray "
+                                  "tracing where the machine has it, or remove lamps this view does not need.");
+                issue.id = issue.kind + QLatin1Char(':') + issue.node;
+                raise(issue);
+                live.insert(issue.id);
+            }
+        }
+    }
 
     // ---- rays.absent: the project asked for rays this machine has not -----
     // The one issue here that is not about an OBJECT: it is about the project,
@@ -703,6 +727,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     static const QStringList kScanned{ QStringLiteral("sun.tie"),
                                        QStringLiteral("sky.duplicate"),
                                        QStringLiteral("rays.absent"),
+                                       QStringLiteral("lamps.unshadowed"),
                                        QStringLiteral("vr.colour"),
                                        QStringLiteral("texture.missing") };
     bool removed = false;

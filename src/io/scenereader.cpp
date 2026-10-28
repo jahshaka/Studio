@@ -554,7 +554,6 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
             scene->giTier = ok ? int(t) : scene->giTier;
         }
     }
-    scene->shadowEnabled = sceneObj.value("shadowEnabled").toBool(scene->shadowEnabled);
     // Anti-aliasing: absent (a document written before the key existed) reads
     // the CONSTRUCTOR's default — the fallback IS scene->antiAliasing rather
     // than a second literal, so the reader-defaults trap (an absent-key

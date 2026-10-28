@@ -612,7 +612,7 @@ bool SceneNodePropertiesWidget::eventFilter(QObject *watched, QEvent *event)
 
 // THE SECTION THAT SHOWS A sceneprops KEY. Enumerated from the rows each
 // section binds: World (ambience volume, gravity, play mode, ray tracing, the
-// three sun-disc rows), Fog (the fog* rows and Receive Shadows' shadowEnabled),
+// three sun-disc rows), Fog (the fog* rows),
 // Clouds (clouds), Height Fog (heightFog), Sky (sky — only while the section shows the SCENE's sky, not
 // a library asset), Photon (the gi* rows), Post Process (postFx.* and looks),
 // Shadows (sunContact), VR (vr.*). The keys no section shows (sunLight,
@@ -625,7 +625,7 @@ QWidget *SceneNodePropertiesWidget::worldSectionForKey(const QString &key) const
         QStringLiteral("sunDiscVisible"), QStringLiteral("sunDiscInProbes"),
         QStringLiteral("sunDiscSize") };
     if (kWorld.contains(key)) return worldPropView;
-    if (key.startsWith(QLatin1String("fog")) || key == QLatin1String("shadowEnabled"))
+    if (key.startsWith(QLatin1String("fog")))
         return fogPropView;
     if (key == QLatin1String("clouds")) return cloudsPropView;
     if (key == QLatin1String("heightFog")) return heightFogPropView;

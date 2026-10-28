@@ -179,7 +179,6 @@ var sun = world.sunLight();
 if (!sun) fail("the Basic template brought no sun");
 node.transform(sun, {rotation: {x: 90 - SUN_ELEVATION, y: SUN_AZIMUTH, z: 0}});
 log("sun", J(world.sun()));
-world.shadows({enabled: true});
 // EXPOSURE: 0 EV is the grade for a SUNLIT grey card; the courtyard is mostly in the shade of its own
 // arcades, which a photographer opens up by about two stops (the reference is exposed for the shade).
 // WHITE BALANCE: light in the shade is the blue sky's (7500 K and up) and the walls are pale lavender

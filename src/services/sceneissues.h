@@ -63,6 +63,7 @@ For more information see the LICENSE file
 // there is one editor window and one open scene.
 
 #include <QHash>
+#include <functional>
 #include <QObject>
 #include <QSet>
 #include <QString>
@@ -121,6 +122,11 @@ public:
     /// Forgets everything — a scene close, or a test between cases.
     void reset();
 
+    /// THE SHADOW MAPS' UNHELD LAMPS (`lamps.unshadowed`): the open view's point and spot lights that hold no shadow
+    /// map this frame (IEditorViewport::shadowStatus().unmapped, GUIDs) - set by whoever owns the view (the shell's
+    /// watch); none set = no such lamps known.
+    void setUnmappedLampSource(std::function<QStringList()> source) { mUnmappedLamps = std::move(source); }
+
     /// One `model.missing` issue per model file (FORWARD-ONLY-1): a model with
     /// no current bake that could not be rebuilt from its source — the open's
     /// SceneReader::missingModels(), and a library placement's.
@@ -157,6 +163,9 @@ public:
     ///     is about the PROJECT rather than an object, so it names no node —
     ///     and the entire reason the On state exists, since On and Auto render
     ///     the same picture and differ only in whether the author is told.
+    ///   * `lamps.unshadowed` — a lamp the shadow maps do not hold, with GI off
+    ///     and no ray tracing: nothing shadows it (one issue per lamp; the view's
+    ///     unmapped list, setUnmappedLampSource);
     ///   * `texture.missing` — a material's texture file is gone from disk
     ///     (the document keeps the path; the mirror binds nothing). One issue
     ///     per mesh node, naming each missing slot and file; it clears when
@@ -198,6 +207,7 @@ signals:
 
 private:
     SceneIssues() = default;
+    std::function<QStringList()> mUnmappedLamps;
     int indexOf(const QString &id) const;
     /// texture.missing's view of the disk (see the scanner): whether each
     /// texture path exists, as last asked; forgotten per directory when the

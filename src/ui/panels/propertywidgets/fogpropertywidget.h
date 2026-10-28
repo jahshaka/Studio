@@ -68,7 +68,6 @@ private:
     panelundo::SceneRows rows;
 
     CheckBoxWidget* fogEnabled = nullptr;
-    CheckBoxWidget* shadowEnabled = nullptr;
     ColorValueWidget* fogColor = nullptr;
     /// One slider per fog table row, in the table's order.
     struct ParamSlider {

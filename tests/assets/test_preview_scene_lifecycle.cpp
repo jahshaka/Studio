@@ -64,7 +64,6 @@ public:
             skyLight->intensity = 1.0f;
             mDocument->getRootNode()->addChild(skyLight);
         }
-        mDocument->shadowEnabled = false;
 
         auto light = iris::LightNode::create();
         light->setLightType(iris::LightType::Directional);

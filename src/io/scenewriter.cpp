@@ -155,7 +155,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["fogHeightDensity"] = scene->fogHeightDensity;
     sceneObj["fogHeightFalloff"] = scene->fogHeightFalloff;
     sceneObj["fogHeightLevel"] = scene->fogHeightLevel;
-    sceneObj["shadowEnabled"] = scene->shadowEnabled;
 
     // Anti-aliasing: the REQUESTED MSAA sample count (1 = off). The achieved
     // count is a per-machine runtime fact and is never serialized.

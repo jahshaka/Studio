@@ -205,14 +205,16 @@ LightPropertyWidget::LightPropertyWidget(QWidget* parent):
 
     shadowType = this->addComboBox("Shadow Type");
     // THE SHADOW'S FILTER - every light casts one (PHOTON-7 10-4 R9; L9: a light is blocked by geometry on every
-    // path). "Off (fill light)" is DELETED: the engine traces every lamp the shadow maps do not hold, so no setting
-    // lets a light through a wall.
+    // path). "Off (fill light)" is DELETED: the engine traces every lamp the shadow maps do not hold (a ray at the ray
+    // tier, the voxels' march where the GI is on) - with GI off and no ray tracing, the lamps beyond the shadow maps are
+    // unshadowed, and the scene issue `lamps.unshadowed` names them.
     shadowType->addItem("Hard");
 	shadowType->addItem("Soft");
 	shadowType->addItem("Very Soft");
     shadowType->setToolTip(
-        tr("How soft this light's shadow is. Every light casts one: geometry blocks every light, "
-           "whatever this says."));
+        tr("How soft this light's shadow is. Every light casts one. A lamp beyond the scene's shadow "
+           "maps is shadowed by ray tracing, or by Global Illumination's voxels; with GI off and no ray "
+           "tracing it is unshadowed, and the scene's issue bar names it."));
     shadowSize = this->addComboBox("Shadow Size");
     shadowSize->addItem("512");
     shadowSize->addItem("1024");

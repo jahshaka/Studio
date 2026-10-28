@@ -467,7 +467,6 @@ void addSkyAndLights(const iris::ScenePtr &doc, bool wantSun)
     doc->setSkyRealistic(iris::SkyRealistic::defaults());
     doc->skyColor = QColor(96, 96, 96);
     doc->fogColor = QColor(96, 96, 96);
-    doc->shadowEnabled = true;
     doc->heightFog = iris::HeightFog();
     doc->heightFog.enabled = true;
 }

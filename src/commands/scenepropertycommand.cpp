@@ -182,8 +182,6 @@ QVector<sceneprops::Field> buildFields()
         [](const ScenePtr &s, const QVariant &v) { s->fogHeightFalloff = v.toFloat(); });
     add("fogHeightLevel", [](const ScenePtr &s) { return QVariant(s->fogHeightLevel); },
         [](const ScenePtr &s, const QVariant &v) { s->fogHeightLevel = v.toFloat(); });
-    add("shadowEnabled", [](const ScenePtr &s) { return QVariant(s->shadowEnabled); },
-        [](const ScenePtr &s, const QVariant &v) { s->shadowEnabled = v.toBool(); });
 
     // ---- Photon (the rows the tier does NOT own) ---------------------------
     add("giCascadeInstanceCap", [](const ScenePtr &s) { return QVariant(s->giCascadeInstanceCap); },

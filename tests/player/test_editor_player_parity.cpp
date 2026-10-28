@@ -188,7 +188,6 @@ int main(int argc, char **argv)
         skyLight->intensity = 2.0f;
         doc->rootNode->addChild(skyLight);
     }
-    doc->shadowEnabled  = true;
     doc->fogEnabled     = true;                   // fog is the environment's, not the sky's
     doc->fogColor       = QColor(40, 220, 120);
     doc->fogDensity     = 0.06f;
