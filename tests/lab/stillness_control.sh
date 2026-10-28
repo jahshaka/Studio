@@ -16,6 +16,8 @@
 #   (2) THE HOLD WAITS FOR THE DECISION (R3's ruling: the readers' hold waits on the rest decision's work): the stop's one
 #       rest decision is taken, and no held frame comes before the decision's last GI row;
 #   (3) LIVENESS, the bound R3's design writes (since PHOTON-7 stage 10-3 computed ONCE, in the door -
+#       counted since PHOTON-7 stage 8B (B1) from THE REST THE DECISION READ: the later of the readers' rests that ran
+#       unbroken to the decision - the gather rests per cell and restarts on every input reaching a cell -
 #       jahshaka::engine::stillnessDeriveLiveness - and read here from the LAB STILLNESS line): the first hold comes within
 #           16 + 9 (the readers' DEMAND SPAN L = N + the due: each reader's rest indices [1, L], PHOTON-7 stage 10's
 #           per-reader snapshot) + 9 (the read-back's due after it: the period 4 + the ring 3 + 1 + 1)
@@ -78,6 +80,21 @@ dec = [int(r.get("cards_decisions") or 0) for r in ctl]
 first_hold = next((i for i, h in enumerate(held) if h), None)
 first_rest = next((i for i, n in enumerate(rest) if n >= 1), None)
 t_dec = next((i for i in range(1, len(dec)) if dec[i] > dec[i - 1]), None)
+# THE REST THE DECISION READ (PHOTON-7 stage 8B, B1; the door's stillnessDeriveLiveness): the gather rests per cell and
+# restarts on every input that reaches a cell, and the decision waits for every reader's demand - so the liveness bound
+# counts from the later of the readers' (the gather's rest_frames, the reflection's refl_rest_frames) rests that ran
+# unbroken to the decision, each one's last start before it (the decision's own frame may restart both)
+if t_dec is not None and first_rest is not None:
+    refl = [int(r.get("refl_rest_frames") or 0) for r in ctl]
+    start = first_rest
+    for series in (rest, refl):
+        for i in range(t_dec - 1, 0, -1):
+            if series[i] >= 1 and (series[i - 1] == 0 or series[i] < series[i - 1]):
+                start = max(start, i)
+                break
+            if series[i] == 0:
+                break
+    first_rest = start
 last_gi = max((i for i, g in enumerate(gi) if g), default=None)
 print("frames from the teleport: the readers' first rest %s, the decision %s, its last GI row %s, the FIRST HOLD %s"
       % (first_rest, t_dec, last_gi, first_hold))
