@@ -33,8 +33,9 @@
 #   --app <exe>      the app the boot runs (default <build>/bin/Jahshaka) - the guard row's fake, which compiles nothing.
 #   --only app|engine  ONE cache alone (URGENT #102's tool fix, 2026-10-28): a cold tree's two boots measured 382 s + 332 s
 #                    = 714 s with the driver cache off (#100) - past a builder's 10-min foreground call, which the harness
-#                    then moved to the background. Each boot fits one call: `--only app`, then `--only engine`. With
-#                    --check it answers for that cache alone.
+#                    then moved to the background. Each cache fits one call: `--only app`, then `--only engine` (its
+#                    cache-off boot, then its driver-cache boot of the same exe, below). With --check it answers for
+#                    that cache alone.
 # THE STAMP IS WRITTEN ONLY WHEN THE BOOT'S CACHE IS THE SHARED ONE: promoted (fresh_home.sh: "REPLACED", or its rule (2)
 # silently), or nothing to promote (the boot compiled nothing the shared cache lacked). A promotion fresh_home SKIPPED -
 # its rule (3), "NOT replaced" (another home promoted since this one was seeded), or its lock not had ("no promotion") -
@@ -141,8 +142,10 @@ boot() {
     echo "warm-app-cache: booting the $name cache: $1 on $DISPLAY (home $home)"
     local t0 rc wall skipped
     t0=$(date +%s)
+    # THE DRIVER's CACHE OFF for this boot (URGENT #100, here since #102): every pipeline is compiled into the
+    # engine's VkPipelineCache, which every exe loads - a driver-cache hit would leave it out of it
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
-          nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --label "warm-app-cache ($name)" \
+          __GL_SHADER_DISK_CACHE=0 nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --label "warm-app-cache ($name)" \
           sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
     rc=$?
     wall=$(( $(date +%s) - t0 ))
@@ -166,6 +169,33 @@ boot() {
          "($(sed -n 's/^shaders //p' "$shared/cache-manifest.txt") shaders)"
     return 0
 }
+# THE SECOND BOOT, THE DRIVER's CACHE ON (URGENT #102's class fix, 2026-10-28): the NVIDIA driver keeps a disk cache
+# PER EXECUTABLE (GLCache/<...>/<exe key>.bin) and the cache-off boot above stores nothing in it, so after a shader
+# change the first rows of THIS exe compiled every pipeline in the driver from cold - past the 60-s cap at BOOT (8 app
+# rows on urgent-102), and a row killed at the cap stored nothing: the loop. One boot of the SAME exe with the driver's
+# cache on (warm on the engine's cache now, ~1 min) stores the driver's compile DURING the run (measured: written
+# mid-run, the exit-only teardown loses nothing). THE RESIDUE: every other exe (each test fixture) keeps a cold driver
+# cache after a shader change and pays that compile ONCE on its first run - stored during the run, never awaited at
+# its exit (the exit-only teardown, tests/support/enginetesthelpers.h).
+driver_boot() {
+    local name=$1 home=$2 log=$3; shift 3
+    local t0 rc wall b0 b1 dpath
+    dpath="${__GL_SHADER_DISK_CACHE_PATH:-/home/jahshaka/.cache/nvidia}"
+    b0=$(du -sb "$dpath" 2>/dev/null | cut -f1)
+    t0=$(date +%s)
+    ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
+          env -u __GL_SHADER_DISK_CACHE nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --label "warm-app-cache ($name, driver)" \
+          sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
+    rc=$?
+    wall=$(( $(date +%s) - t0 ))
+    b1=$(du -sb "$dpath" 2>/dev/null | cut -f1)
+    if [ $rc -ne 0 ]; then
+        echo "warm-app-cache: the $name driver-cache boot FAILED (exit $rc) after ${wall} s - its log $log"
+        return 1
+    fi
+    echo "warm-app-cache: the $name exe's driver cache stored - the boot ${wall} s, the driver cache $(( (${b1:-0} - ${b0:-0}) / 1048576 )) MB grown"
+    return 0
+}
 fails=0
 if [ -n "$app_why" ]; then
     BIN="${APP:-$BUILD/bin/Jahshaka}"
@@ -181,6 +211,7 @@ if [ -n "$app_why" ]; then
     if boot app "$APP_SHARED" "$APP_STAMP" "$H" "$TESTS/warm-app-cache.log" \
             env "JAHSHAKA_HLMS_DEBUG_DIR=$DUMP/" "$BIN" --engine-selftest "$H/run/warm.png"; then
         echo "$KEY" > "$DUMP/.key"
+        driver_boot app "$H" "$TESTS/warm-app-cache-driver.log" "$BIN" --engine-selftest "$H/run/warm.png" || fails=1
     else
         fails=1
     fi
@@ -192,10 +223,14 @@ if [ -n "$eng_why" ]; then
     FH_ARGS="--warm --cache engine"
     mkdir -p "$TESTS"
     printf 'reflections both\nframes 4\nquit\n' > "$TESTS/warm-engine-cache.lab"
-    boot engine "$ENG_SHARED" "$ENG_STAMP" "$H" "$TESTS/warm-engine-cache.log" \
-         env "JAHSHAKA_SHADER_CACHE_DIR=$H/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0 \
-         "$LABX" --headless --no-stdin --size 960x540 --data-root "$H/run/lab" --env photon-rough --tier epic \
-         --script "$TESTS/warm-engine-cache.lab" || fails=1
+    LABCMD=(env "JAHSHAKA_SHADER_CACHE_DIR=$H/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0
+            "$LABX" --headless --no-stdin --size 960x540 --data-root "$H/run/lab" --env photon-rough --tier epic
+            --script "$TESTS/warm-engine-cache.lab")
+    if boot engine "$ENG_SHARED" "$ENG_STAMP" "$H" "$TESTS/warm-engine-cache.log" "${LABCMD[@]}"; then
+        driver_boot engine "$H" "$TESTS/warm-engine-cache-driver.log" "${LABCMD[@]}" || fails=1
+    else
+        fails=1
+    fi
 fi
 [ $fails = 0 ] || exit 1
 if [ -z "$(cold_why "$APP_SHARED" "$APP_STAMP")" ] && [ -z "$(cold_why "$ENG_SHARED" "$ENG_STAMP")" ]; then
