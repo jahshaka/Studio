@@ -552,6 +552,10 @@ jah_gpu_row(gi.mover_lamp_step CLASS engine COMMAND test_gi_mover_geometry lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.soft_mover_ghost gi.mover_bus_geometry gi.mover_bus_sky gi.mover_lamp_step PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.soft_mover_ghost PROPERTIES JAHSHAKA_TEST_FRAMES 148)
+set_tests_properties(gi.mover_bus_geometry PROPERTIES JAHSHAKA_TEST_FRAMES 138)
+set_tests_properties(gi.mover_bus_sky PROPERTIES JAHSHAKA_TEST_FRAMES 138)
+set_tests_properties(gi.mover_lamp_step PROPERTIES JAHSHAKA_TEST_FRAMES 101)
 
 # gi.leak_room (restored for PHOTON-7 stage 5, 5-3; held at 163d90223 in archive/tests/gi) — THE LEAK THROUGH A WALL,
 # the field's and THE CARDS': a sealed room with a lamp inside and a red one outside, the red that reaches the inside

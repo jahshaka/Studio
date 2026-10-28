@@ -409,6 +409,7 @@ int main(int argc, char **argv)
     e->destroyView(view);
     e->destroyScene(scene);
     run(1);
+    std::printf("\nframes %d\n", frames);
     std::printf(failures ? "FAILED (%d failures)\n" : "ALL PASSED (%d failures)\n", failures);
     return failures ? 1 : 0;
 }
