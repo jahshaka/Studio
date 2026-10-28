@@ -225,10 +225,18 @@ int main(int argc, char **argv)
             e->setFrameMonitor(MonitorLevel::Off);
             std::vector<MonitorRecord> records;
             while (e->popMonitorRecords(records) > 0) {}
-            double ms[8] = {}, kcells[8] = {};
-            unsigned count[8] = {};
+            double ms[8] = {}, kcells[8] = {}, bms[8] = {}, bpasses[8] = {};
+            unsigned count[8] = {}, bcount[8] = {};
             for (const MonitorRecord &r : records)
-                for (const CacheWork &w : r.cacheWork)
+                for (const CacheWork &w : r.cacheWork) {
+                    if (w.detail.rfind("vct.regionBounce", 0) == 0 && w.gpuMs >= 0.0f) {
+                        const int k = std::atoi(w.detail.c_str() + 16);
+                        if (k < 0 || k > 7) continue;
+                        bms[k] += double(w.gpuMs);
+                        bpasses[k] += double(w.units);
+                        ++bcount[k];
+                        continue;
+                    }
                     if (w.detail.rfind("vct.region", 0) == 0 && w.gpuMs >= 0.0f) {
                         const int k = std::atoi(w.detail.c_str() + 10);
                         if (k < 0 || k > 7) continue;
@@ -236,6 +244,7 @@ int main(int argc, char **argv)
                         kcells[k] += double(w.units);
                         ++count[k];
                     }
+                }
             const GiStatus g = scene->published().gi;
             std::printf("   THE REGION'S PRICE while it drives (printed):");
             for (size_t k = 0; k < g.cascades.size() && k < 8u; ++k) {
@@ -244,6 +253,10 @@ int main(int argc, char **argv)
                 std::printf("  c%zu %u rebuilds %.3f ms each, %.6f ms/m^3", k, count[k], count[k] ? ms[k] / count[k] : 0.0,
                             m3 > 0.0 ? ms[k] / m3 : 0.0);
             }
+            std::printf("\n   THE REGION'S OWN BOUNCE while it drives (A2, printed):");
+            for (size_t k = 0; k < g.cascades.size() && k < 8u; ++k)
+                std::printf("  c%zu %u rebuilds, %.1f passes each, %.3f ms each", k, bcount[k],
+                            bcount[k] ? bpasses[k] / bcount[k] : 0.0, bcount[k] ? bms[k] / bcount[k] : 0.0);
             std::printf("\n");
         }
         const int rest1 = settle(1200);

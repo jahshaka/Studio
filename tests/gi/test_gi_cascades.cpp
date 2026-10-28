@@ -1140,12 +1140,16 @@ int main()
     // walk and marked once when it has stopped (walkItems' giMove: 1 code, 0 px).
     // THREE POSES of cascade 0's box against the turner: a CORNER (two of its faces cut the turner's footprint), ONE
     // face, NO face - the precondition is checked, so a placement change that moves a pose fails loudly here.
-    // THE MOTION LAW (motion against rest within 16 codes, none off by 10) is STAGE 8's (PHOTON-7 stage 8, the region
-    // rebuild: a moving item's regions in every cascade it reaches within the same frame budget). With every rotation
-    // marked, cascade 0's reserved slot rebuilds it every frame and the one-writer rule holds cascades 1..3's whole
-    // rebuilds for the whole motion (cascade 1: none in 60 frames) - the box in cascade 0 at the live pose, the rest at
-    // the pose before it moved. DECLARED RED until stage 8 (measured 174 / 233 / 143 codes, 1,298 / 2,765 / 1,962 px at
-    // irisgl d480f0bd; 176 / 249 / 140 codes, 1,730 / 1,993 / 2,578 px on 10-2e's placement lattice).
+    // THE MOTION LAW (motion against rest within 16 codes, none off by 10), PHOTON-7 stage 8A's A2, judged with the RAYS
+    // OFF - the voxel truth, the store's bounce against the rest's. Two causes made it red: the cascades' order (stage 10:
+    // cascade 0's reserved slot rebuilt the turner, the one-writer rule held 1..3) - gone with A1's region rebuild in every
+    // cascade every frame it moves (measured: +29 region rebuilds a cascade over the 60 frames, every second frame: the
+    // walk's move quantum for a STILL) yet still 224 / 145 / 137 codes; and THE BOUNCE'S CONVERGENCE - a re-voxelised
+    // region's bounce restarted from its direct term and the feedback converged it a pass a frame (the error fell to 0
+    // over 8-32 frames after the motion stopped). A2: the region's bricks take k passes IN THE FRAME they are rebuilt (k
+    // from the region's largest albedo: PhotonComponent::regionBounce). The RAYS-ON numbers are PRINTED with the frames
+    // the picture takes to reach the bar and a code after the motion: the residue after A2 is the ray tier's temporal
+    // hold, stage 8B's by name.
     std::printf("\n== case 12: a moving still object is lit at its own pose ==\n");
     {
         struct Pose { const char *name; Vec3 cam; int faces; };
@@ -1165,6 +1169,10 @@ int main()
         };
         // The turner's footprint over the whole motion: a 2 m cube about the vertical, half-diagonal sqrt 2.
         const float reach = 1.41422f;
+        for (int raysOn = 0; raysOn < 2; ++raysOn) {
+        e->setRayTracing(raysOn != 0);
+        render(e, 2);
+        std::printf("   -- the rays %s --\n", raysOn ? "ON (printed: the residue is 8B's temporal hold)" : "OFF (A2's law)");
         for (const Pose &pose : poses) {
             view->setCamera(enginetest::testCameraDescLookAt(pose.cam, Vec3(0.0f, 1.0f, 0.0f)));
             const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
@@ -1196,21 +1204,52 @@ int main()
                 scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
             };
             const GiStatus g0 = scene->published().gi;
+            // (the region's own bounce PRICED at the turner: its monitor rows over the motion, the first pose with the rays
+            // off - each rebuild's k passes' GPU ms)
+            const bool price = !raysOn && &pose == &poses[0];
+            if (price) e->setFrameMonitor(MonitorLevel::Review);
             for (int f = 0; f < 60; ++f) { yaw(float(f)); render(e, 1); }
             Image motion; CHECK(view->readPixels(motion), "the last motion frame reads back");
+            if (price) {
+                render(e, 6);   // (the GPU samples land a few frames late; the rest frame below is the same pose)
+                e->setFrameMonitor(MonitorLevel::Off);
+                std::vector<MonitorRecord> records;
+                while (e->popMonitorRecords(records) > 0) {}
+                double ms[8] = {}, passes[8] = {};
+                unsigned count[8] = {};
+                for (const MonitorRecord &r : records)
+                    for (const CacheWork &w : r.cacheWork)
+                        if (w.detail.rfind("vct.regionBounce", 0) == 0 && w.gpuMs >= 0.0f) {
+                            const int k = std::atoi(w.detail.c_str() + 16);
+                            if (k < 0 || k > 7) continue;
+                            ms[k] += double(w.gpuMs);
+                            passes[k] += double(w.units);
+                            ++count[k];
+                        }
+                std::printf("   [%s] THE REGION'S OWN BOUNCE PRICED at the turner (rays off):", pose.name);
+                for (int k = 0; k < 4; ++k)
+                    std::printf("  c%d %u rebuilds, %.1f passes, %.3f ms each", k, count[k], count[k] ? passes[k] / count[k] : 0.0,
+                                count[k] ? ms[k] / count[k] : 0.0);
+                std::printf("\n");
+            }
+            // (the rays on: the frames after the motion, to find when the picture reaches the bar and a code)
+            std::vector<Image> after;
+            if (raysOn)
+                for (int q = 0; q < 64; ++q) { render(e, 1); Image im; view->readPixels(im); after.push_back(im); }
             {
                 // (printed: each cascade's rebuilds over the motion - whole, and by region (stage 8A))
                 const GiStatus g1 = scene->published().gi;
                 std::printf("   [%s] over the 60 motion frames:", pose.name);
                 for (size_t k = 0; k < g1.cascades.size() && k < g0.cascades.size(); ++k)
-                    std::printf("  c%zu rebuilds +%llu (region +%llu, owed %u/%u, active %u)", k,
+                    std::printf("  c%zu rebuilds +%llu (region +%llu, its own bounce passes +%llu, last k %u)", k,
                                 g1.cascades[k].rebuilds - g0.cascades[k].rebuilds,
-                                g1.cascades[k].regionRebuilds - g0.cascades[k].regionRebuilds, g1.cascades[k].regionOwed,
-                                g1.cascades[k].marchOwed, g1.cascades[k].feedbackActive);
+                                g1.cascades[k].regionRebuilds - g0.cascades[k].regionRebuilds,
+                                g1.cascades[k].regionBouncePasses - g0.cascades[k].regionBouncePasses,
+                                g1.cascades[k].regionBounceLast);
                 std::printf("\n");
             }
             // ...the SAME POSE at rest, after everything has caught up...
-            render(e, 120);
+            render(e, raysOn ? 56 : 120);
             Image rest; CHECK(view->readPixels(rest), "the rest frame reads back");
             // ...and THE ORACLE: the chain built fresh at that pose.
             GiParams off; off.mode = GiMode::Off;
@@ -1230,13 +1269,29 @@ int main()
                         motionTruthOver, kSize * kSize);
             CHECK(restMax <= 1 && restOver == 0,
                   "AT REST THE OBJECT IS LIT AT THE POSE IT IS IN: the picture equals a fresh build there (within a code)");
-            // STAGE 8's (declared red until its region rebuild: see the head of the case).
-            CHECK(motionMax <= 16, "the moving object is lit at the pose it is IN, not the one it left");
-            CHECK(motionOver == 0, "...with not one pixel off by 10");
+            if (!raysOn) {
+                // A2's (the head of the case): the store's bounce in the frame of its geometry
+                CHECK(motionMax <= 16, "the moving object is lit at the pose it is IN, not the one it left (rays off)");
+                CHECK(motionOver == 0, "...with not one pixel off by 10 (rays off)");
+            } else {
+                int toBar = -1, toCode = -1;
+                for (size_t q = 0; q < after.size(); ++q) {
+                    int w = 0; unsigned o = 0;
+                    diffOf(after[q], rest, w, o);
+                    if (toBar < 0 && w <= 16 && o == 0u) toBar = int(q) + 1;
+                    if (toCode < 0 && w <= 1) toCode = int(q) + 1;
+                }
+                std::printf("   [%s] RAYS ON (8B's, printed): motion vs rest %d/255, %u px >= 10; the bar reached %d frames "
+                            "after the motion, a code %d frames after (-1: not within %zu)\n", pose.name, motionMax,
+                            motionOver, toBar, toCode, after.size());
+            }
             CHECK(scene->setGlobalIllumination(off), "the motion's chain comes down");
             render(e, 2);
             scene->removeNode(turner);
         }
+        }
+        e->setRayTracing(true);
+        render(e, 2);
     }
 
     // =====================================================================
