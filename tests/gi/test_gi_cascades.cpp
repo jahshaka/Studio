@@ -39,7 +39,6 @@
 // (7-6) - this suite measures the voxel chain, the field, the cones and the probes beneath it, never the gather.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
-#include "../support/endprocess.h"
 
 #include <algorithm>
 #include <cmath>
@@ -2018,5 +2017,5 @@ int main()
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");
-    return enginetest::endProcess(engine, failures ? 1 : 0);   // the exit-only teardown (URGENT #102)
+    return failures ? 1 : 0;
 }

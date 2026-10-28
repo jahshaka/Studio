@@ -61,7 +61,7 @@ int gChecks   = 0;
     } while (0)
 
 EngineConfig testConfig() {
-    return enginetest::testEngineConfig("test_engine-ogre.log");
+    return enginetest::testEngineConfig("test_engine-ogre.log", enginetest::EngineOverrides().realDestroy());
 }
 
 /// ONE Engine for the whole process. Tests do not each create their own: Ogre's
