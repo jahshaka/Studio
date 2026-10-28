@@ -25,7 +25,7 @@ lock="${JAH_GPU_LOCK:-/tmp/jah-gpu.lock}"
 exec 9>>"$lock"
 if ! flock -n 9; then
     echo "gpu-lock: waiting for the card (held by: $(cat "$lock.holder" 2>/dev/null || echo '?'))"
-    t0=$(date +%s); flock 9; echo "gpu-lock: waited $(( $(date +%s) - t0 )) s"
+    t0=$(date +%s.%N); flock 9; echo "gpu-lock: waited $(awk -v a="$t0" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}') s"
 fi
 echo "pid $$ ${label:-$1} since $(date '+%F %T')" > "$lock.holder"
 start=$(date +%s)
