@@ -351,4 +351,5 @@ gi.pane_stack 7.20  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F
 gi.pane_stack_cards 3.29  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F3 2026-10-28: the cards' direct half through twelve slabs and through one pane at 0.3, the cards at rest; 197 frames)
 rtreflect.pane_record 4.44  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F6 2026-10-28: a mirror's far block - a record - with and without a glass slab, the block shown and hidden; 121 frames at 256x144)
 gi.fog_far_hall 2.56  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F9 2026-10-28: a sealed 910 m hall, the eye 50 m under its roof, thin fog past the 500 m shadow distance; 17 frames)
+scripting.e2e.lamps_unshadowed.fresh_home 0.02  the wipe and the warm of its home (PHOTON-7 10-4 fix round F7 2026-10-28: a fixture, no card)
 scripting.e2e.lamps_unshadowed 13.51  the card lock held, :74, by ctest, warm (PHOTON-7 10-4 fix round F7 2026-10-28: GI off, rays off, six lamps over a shadow-map budget of two - the issue per unmapped lamp, then GI on; its first, cold boot 53.83 s)
