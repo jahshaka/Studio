@@ -635,6 +635,7 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-gi-card-residency-" + mode + "-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
+    if (std::getenv("ARM_CARDS_C2OFF")) { engine->setArm("cards.c2Off", 1.0); std::printf("ARM: cards.c2Off 1\n"); }   // MEASURING ARM (reverted)
     Engine *e = engine.get();
     e->setRayTracing(true);
     e->setArm("cards.demandCount", 1.0);   // the readers' hits counted: the read rates (2) reads
