@@ -14,11 +14,11 @@
 //       lights: the feedback stops each brick within one code of the fixed point (PhotonBrickFeedback_cs.glsl's stop
 //       rule), so two rests reached by two paths - the moved store's and the fresh build's - lie within two. RED
 //       ON THE BASE: the soft promotion left the door's voxels at the closed pose (the ghost) and the oracle has none.
-//   `bus` (gi.mover_bus_sky): A BUS 10 m AWAY OCCLUDES THE FLOOR'S SKY SHARE. A movable 2.5 x 2.5 x 10 m box drives
+//   `bus_geometry` (gi.mover_bus_geometry) and `bus` (gi.mover_bus_sky): A BUS 10 m AWAY OCCLUDES THE FLOOR'S SKY SHARE. A movable 2.5 x 2.5 x 10 m box drives
 //       3 m along x, 10 m from the camera (past the mover hit gate's 4 m reach), and stops; the court is lit by the sky
 //       alone. At rest every cascade's geometry is the oracle's bit for bit (no cell it drove through keeps a face - a
 //       face on a cell boundary is written into the cell past it too: the region takes a cell past the box), and the
-//       floor's voxels beside its final pose equal the oracle's within two codes (the store took the
+//       floor's voxels beside its final pose (cascade 1's light: `bus`) equal the oracle's within two codes (the store took the
 //       bus where it stopped) AND read darker than the same floor with no bus by more than four codes on average (the
 //       bus occludes their sky share - the law A1 makes true: RED ON THE BASE, a mover was in no store). PRINTED: the
 //       region rebuilds' price while it drives - each cascade's vct.regionN GPU ms per m^3 of the cells re-voxelised.
@@ -120,7 +120,12 @@ int main(int argc, char **argv)
         }
         return quiet >= 8 ? n : -1;
     };
-    const auto oracle = [&](Store &out, size_t cascades) {
+    // THE LIGHT OF ONE CASCADE ALONE (Scene::giVoxelLight: a row that judges one cascade's light reads no more)
+    const auto readLight = [&](size_t cascades, size_t k, Store &out) {
+        out.c.assign(cascades, GiVoxelVolume());
+        return k < cascades && scene->giVoxelLight(int(k), out.c[k]) && out.c[k].available;
+    };
+    const auto oracle = [&](Store &out, size_t cascades, int lightOf) {
         GiParams off;
         off.mode = GiMode::Off;
         scene->setGlobalIllumination(off);
@@ -128,7 +133,7 @@ int main(int argc, char **argv)
         scene->setGlobalIllumination(chainGi());
         e->waitForAsyncShaders();
         const int r = settle(1200);
-        return r >= 0 && readStore(scene, cascades, out);
+        return r >= 0 && (lightOf >= 0 ? readLight(cascades, size_t(lightOf), out) : readStore(scene, cascades, out));
     };
 
     if (arm.empty() || arm == "ghost") {
@@ -152,7 +157,7 @@ int main(int argc, char **argv)
         const int rest1 = settle(1200);
         Store moved, truth;
         const bool readMoved = readStore(scene, n, moved);
-        const bool readTruth = oracle(truth, n);
+        const bool readTruth = oracle(truth, n, -1);
         CHECK(rest1 >= 0 && readMoved && readTruth, "the opened door comes to rest, and the oracle is built and read");
         size_t geomOff = 0, lightOver = 0, lit = 0, doorCells = 0;
         double worst = 0.0;
@@ -189,8 +194,13 @@ int main(int argc, char **argv)
         run(2);
     }
 
-    if (arm.empty() || arm == "bus") {
-        std::printf("\n== bus: a bus 10 m away ==\n");
+    if (arm.empty() || arm == "bus" || arm == "bus_geometry") {
+        // TWO ROWS, one proof each (each under the engine fixture's 10 s): `bus_geometry` reads every cascade's geometry
+        // (the moved store's and the oracle's), `bus` the light of cascade 1 alone (the floor beside the bus: the empty
+        // court's, the moved store's, the oracle's).
+        const bool geometryLaw = arm != "bus", skyLaw = arm != "bus_geometry";
+        const size_t floorCascade = 1u;   // (the bus 10 m out: cascade 1 holds the floor beside it, cascade 0 ends at 5 m)
+        std::printf("\n== bus: a bus 10 m away (%s) ==\n", arm.empty() ? "both laws" : arm.c_str());
         const Vec3 busSize(10.0f, 2.5f, 2.5f);
         Vec3 busAt(-3.0f, 1.25f, -10.0f);
         CHECK(scene->setGlobalIllumination(chainGi()), "the empty court is up");
@@ -198,21 +208,21 @@ int main(int argc, char **argv)
         const int rest0 = settle(1200);
         const size_t n = scene->published().gi.cascades.size();
         Store empty;
-        const bool readEmpty = readStore(scene, n, empty);
+        const bool readEmpty = !skyLaw || readLight(n, floorCascade, empty);
         CHECK(rest0 >= 0 && readEmpty, "the empty court comes to rest and is read");
         const NodeId bus = addBox(scene, busAt, busSize, Colour(0.3f, 0.35f, 0.4f), true);
         CHECK(bus != 0, "the bus (movable) arrives");
         run(2);   // (it drives at once: the oracle is the final scene's, whatever the arrival owed)
         // THE DRIVE: 3 m along +x over 30 frames, its region rebuilds' GPU priced
-        e->setFrameMonitor(MonitorLevel::Review);
+        if (geometryLaw) e->setFrameMonitor(MonitorLevel::Review);   // (the price: the geometry row's)
         for (int f = 1; f <= 30; ++f) {
             busAt.x = -3.0f + 0.1f * float(f);
             scene->setNodeTransform(bus, busAt, Quat(), busSize);
             run(1);
         }
         run(6);   // the GPU samples land a few frames late
-        e->setFrameMonitor(MonitorLevel::Off);
-        {
+        if (geometryLaw) {
+            e->setFrameMonitor(MonitorLevel::Off);
             std::vector<MonitorRecord> records;
             while (e->popMonitorRecords(records) > 0) {}
             double ms[8] = {}, kcells[8] = {};
@@ -238,10 +248,11 @@ int main(int argc, char **argv)
         }
         const int rest1 = settle(1200);
         Store moved, truth;
-        const bool readMoved = readStore(scene, n, moved);
-        const bool readTruth = oracle(truth, n);
+        const int lightOf = geometryLaw ? -1 : int(floorCascade);
+        const bool readMoved = lightOf >= 0 ? readLight(n, floorCascade, moved) : readStore(scene, n, moved);
+        const bool readTruth = oracle(truth, n, lightOf);
         CHECK(rest1 >= 0 && readMoved && readTruth, "the bus comes to rest, and the oracle is built and read");
-        {
+        if (geometryLaw) {
             size_t geomOff = 0;
             for (size_t k = 0; k < n && readMoved && readTruth; ++k) {
                 const GiVoxelVolume &a = moved.c[k], &b = truth.c[k];
@@ -257,24 +268,10 @@ int main(int argc, char **argv)
         // THE FLOOR BESIDE IT: the floor's top voxels within 0.5-3 m of the bus's long sides, under it never
         size_t pts = 0, over = 0;
         double worst = 0.0, darker = 0.0;
-        for (size_t k = 0; k < n && readMoved && readTruth && readEmpty; ++k) {
+        for (size_t k = floorCascade; skyLaw && k == floorCascade && k < n && readMoved && readTruth && readEmpty; ++k) {
             const GiVoxelVolume &a = moved.c[k], &b = truth.c[k], &z = empty.c[k];
-            if (a.light.size() != b.light.size() || a.light.size() != z.light.size()) continue;
+            if (a.light.empty() || a.light.size() != b.light.size() || a.light.size() != z.light.size()) continue;
             const float cell = a.cell[1];
-            // (the finest cascade holding the point decides: a voxel inside an inner cascade's box is read there)
-            const auto heldInner = [&](const Vec3 &p) {
-                for (size_t j = 0; j < k; ++j) {
-                    const GiVoxelVolume &q = moved.c[j];
-                    bool in = true;
-                    for (int ax = 0; ax < 3; ++ax) {
-                        const float pa = ax == 0 ? p.x : (ax == 1 ? p.y : p.z);
-                        const float lo = q.origin[ax], hi = q.origin[ax] + q.cell[ax] * float(ax == 0 ? q.width : ax == 1 ? q.height : q.depth);
-                        in = in && pa >= lo && pa < hi;
-                    }
-                    if (in) return true;
-                }
-                return false;
-            };
             // THE FLOOR'S SURFACE LAYER: of the two layers either side of its top (y = 0, a cell boundary), the one the
             // store lights (its coverage and its light both there) - the upper where the voxeliser put the face in both
             const int y0 = int(std::floor(-a.origin[1] / cell));
@@ -282,7 +279,7 @@ int main(int argc, char **argv)
             for (int yy : { y0, y0 - 1 }) {
                 if (yy < 0 || yy >= a.height || y >= 0) continue;
                 const size_t v = (size_t(a.depth / 2) * size_t(a.height) + size_t(yy)) * size_t(a.width) + size_t(a.width / 2);
-                if (z.albedo[v * 4u + 3u] > 0.0f && z.light[v * 4u] > 1e-5f) y = yy;
+                if (z.light[v * 4u] > 1e-5f) y = yy;
             }
             if (y < 0 || y >= a.height) continue;
             for (int zi = 0; zi < a.depth; ++zi)
@@ -290,9 +287,9 @@ int main(int argc, char **argv)
                     const Vec3 p(a.origin[0] + (float(xi) + 0.5f) * a.cell[0], 0.0f, a.origin[2] + (float(zi) + 0.5f) * a.cell[2]);
                     const float dz = std::fabs(p.z - busAt.z) - 0.5f * busSize.z;
                     const bool beside = dz > 0.5f && dz < 3.0f && std::fabs(p.x - busAt.x) < 0.5f * busSize.x - 0.5f;
-                    if (!beside || heldInner(p)) continue;
+                    if (!beside) continue;
                     const size_t v = (size_t(zi) * size_t(a.height) + size_t(y)) * size_t(a.width) + size_t(xi);
-                    if (!(b.albedo[v * 4u + 3u] > 0.0f) || !(z.light[v * 4u] > 1e-5f)) continue;
+                    if (!(b.light[v * 4u] > 1e-5f) || !(z.light[v * 4u] > 1e-5f)) continue;
                     ++pts;
                     double c = 0.0, d = 0.0;
                     for (int ch = 0; ch < 3; ++ch) {
@@ -305,11 +302,13 @@ int main(int argc, char **argv)
                 }
         }
         const double meanDarker = pts ? darker / double(pts) : 0.0;
-        std::printf("   at rest in %d frames: %zu floor voxels beside the bus: against the oracle %zu over two codes, worst %.3f; "
+        if (skyLaw) std::printf("   at rest in %d frames: %zu floor voxels beside the bus: against the oracle %zu over two codes, worst %.3f; "
                     "darker than the empty court by %.2f codes on average\n", rest1, pts, over, worst, meanDarker);
+        if (skyLaw) {
         CHECK(pts > 20u && over == 0u, "THE STORE TOOK THE BUS WHERE IT STOPPED: the floor beside it within two codes of the oracle");
         CHECK(meanDarker > 4.0, "A BUS 10 m AWAY OCCLUDES THE FLOOR'S SKY SHARE: the floor beside it darker than the empty "
                                 "court's by more than four codes");
+        }
         scene->removeNode(bus);
         GiParams off;
         off.mode = GiMode::Off;

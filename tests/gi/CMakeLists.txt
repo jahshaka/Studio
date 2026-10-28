@@ -529,7 +529,7 @@ set_tests_properties(gi.card_lamp_shadow_area PROPERTIES JAHSHAKA_TEST_FRAMES 89
 # a door opened in play leaves no closed-door voxel or bounce (the store at rest is a fresh build's - geometry bit for
 # bit, light within a code), and a bus 10 m away occludes the floor's sky share (the store took it where it stopped,
 # the floor beside it darker than the empty court's), the region's price printed
-# (test_gi_mover_geometry.cpp says the laws). A fixture, two rows.
+# (test_gi_mover_geometry.cpp says the laws). A fixture, three rows (one proof each, each under the fixture's 10 s).
 add_executable(test_gi_mover_geometry test_gi_mover_geometry.cpp)
 set_target_properties(test_gi_mover_geometry PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -544,9 +544,11 @@ target_link_libraries(test_gi_mover_geometry PRIVATE JahshakaEngine)
 add_dependencies(test_gi_mover_geometry JahshakaEngineMedia)
 jah_gpu_row(gi.soft_mover_ghost CLASS engine COMMAND test_gi_mover_geometry ghost
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.mover_bus_geometry CLASS engine COMMAND test_gi_mover_geometry bus_geometry
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 jah_gpu_row(gi.mover_bus_sky CLASS engine COMMAND test_gi_mover_geometry bus
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.soft_mover_ghost gi.mover_bus_sky PROPERTIES
+set_tests_properties(gi.soft_mover_ghost gi.mover_bus_geometry gi.mover_bus_sky PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
 # gi.leak_room (restored for PHOTON-7 stage 5, 5-3; held at 163d90223 in archive/tests/gi) — THE LEAK THROUGH A WALL,
