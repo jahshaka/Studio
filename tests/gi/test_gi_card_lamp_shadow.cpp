@@ -21,9 +21,9 @@
 //       10-2d) - RED where the LampShadow region does not reach the cards, or the store keeps the mover where it was.
 // (An EDIT inside a lamp's range stales the same sphere; a still caster's move also moves the store, whose change
 // relights the floor through the GPU's accumulation, so no arm here can tell the two apart.)
-//   (2b) A MOVER'S BOUNCE IS IN THE CARDS AT REST (PHOTON-7 8A, A4): the floor's cards within 1.5 m of the mover change
-//       by more than four codes on average when it is hidden - the cache rays see a mover (its occlusion and its bounce).
-//       RED before A4 (the rays passed through it).
+//   (2b) A MOVER'S BOUNCE IS IN THE CARDS AT REST (PHOTON-7 8A, A4): the floor's cards' INDIRECT half within 1.5 m of the
+//       mover changes by more than four codes of it on average when it is hidden - the cache rays see a mover (its
+//       occlusion and its bounce). RED before A4 (1.06 codes: the rays passed through it); 99.0 with it.
 //   (3) AN AREA LIGHT'S FORM FACTOR ON A CARD (a second fixture, below): the card's direct within the stored values'
 //       half steps of D x a numeric form factor x the window at every floor point;
 //   (4) ITS PENUMBRA (the 5-3 fix: an area light's visibility fractional, n x n ratio rays a texel): the same light
@@ -419,18 +419,20 @@ int main(int argc, char **argv)
               "(2) THE SHADOW FOLLOWS THE MOVED MOVER: every point within a code of a whole re-solve");
 
         // (2b) A MOVER'S BOUNCE IS IN THE CARDS AT REST (PHOTON-7 8A, A4: the cache rays see movers - the cards' gather
-        // and the voxel sides trace the world, movers in it, and a hit's own sun rays every caster): the floor's cards
-        // within 1.5 m of the mover's footprint read the mover - its occlusion of what stands behind it and its own bounce -
-        // against the same floor with the mover hidden: the mean change over those points past four codes (a code: 1 % of
-        // the radiance, one step of the store aside), printed with the worst. RED before A4: the cache rays passed through
-        // the mover, so the floor's cards were the hidden state's to the store's step.
+        // and the voxel sides trace the world, movers in it, and a hit's own sun rays every caster): the floor's cards'
+        // INDIRECT half (their gather: the cache rays' subject - the direct half is the lamp's traced shadow, which saw
+        // the mover before A4) within 1.5 m of the mover's footprint, against the same floor with the mover hidden: the
+        // mean change over those points past four codes of the indirect. RED before A4 (measured by a committed arm:
+        // 1.06 codes mean - the rays passed through the mover); 99.0 with it.
         {
             std::vector<double> rm, rh;
             size_t okM = 0, okH = 0;
             read(rm, okM);
+            rm = lastIndirect;   // THE INDIRECT HALF: the cards' gather (the cache rays' subject); the direct half is the lamp's
             scene->setNodeVisible(mover, false);
             const int rest3 = settle();
             read(rh, okH);
+            rh = lastIndirect;
             size_t near = 0;
             double sum = 0.0, worstB = 0.0;
             for (size_t i = 0; i < pts.size(); ++i) {
@@ -447,7 +449,7 @@ int main(int argc, char **argv)
             }
             const double meanB = near ? sum / double(near) : 0.0;
             std::printf("   (2b) the mover hidden: at rest in %d frames, %zu floor points within 1.5 m of it: the mover changes their "
-                        "cards by %.2f codes on average, %.2f at the most\n", rest3, near, meanB, worstB);
+                        "cards' INDIRECT by %.2f codes of it on average, %.2f at the most\n", rest3, near, meanB, worstB);
             CHECK(rest3 >= 0 && near > 100 && meanB > 4.0,
                   "(2b) A MOVER'S BOUNCE IS IN THE CARDS AT REST: the floor's cards beside it read it");
             scene->setNodeVisible(mover, true);
