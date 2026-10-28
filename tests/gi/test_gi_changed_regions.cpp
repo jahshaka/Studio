@@ -9,10 +9,13 @@
 //            intensity step lists exactly its one sphere.
 //   MOVER:   a movable cube's step lists its SWEPT box (this frame's bounds joined with last frame's) as a Mover, the same
 //            box as its sun shadow (MoverShadow) with the sun's direction in the header (toSun = -the light's direction),
-//            and the range sphere of the lamp whose range meets it (LampShadow) - and no Edit (movers are not GI geometry).
+//            and the range sphere of the lamp whose range meets it (LampShadow) - and no Edit; THE NEXT FRAME (the table
+//            carries the step: PHOTON-7 stage 8A, a mover IS GI geometry) its REGION REBUILD lists, in EVERY cascade the
+//            swept box meets, an Edit of that cascade alone covering the swept box (its re-voxelised cells), and no mover.
 //   EDIT:    a still cube moved by script lists its old box joined with its new as an Edit; a MATERIAL edit (A19 deleted)
 //            lists the wearer's box and re-voxelises only the cascades that hold it (the inner cascade it lies outside of
-//            keeps its rebuild count); the mover's material edited lists the mover's box (a ray-only wearer, F6).
+//            keeps its rebuild count); the mover's material edited lists the mover's box (a GI wearer since stage 8A: by
+//            the dirty path at the refresh, as a still's).
 //   SUN/SKY: a sun turn and a 2x sun step are the sun's overflow without a restart, a 5x sun step restarts; a 2x sky step
 //            (the ambient's constant band) is the sky's overflow without a restart, a 5x one restarts (Lumen's 4x).
 //   CAP:     129 movers stepping in one frame merge into at most 128 regions with no overflow, and every mover's swept box
@@ -401,22 +404,50 @@ int main()
               "...AND ITS SUN SHADOW: the same box with the sun's direction in the header (MoverShadow, toSun)");
         CHECK(countKind(r, GiRegionKind::LampShadow) == 1u && ls && same(*ls, sphere(lampPos, lampDesc.range)),
               "...and the range sphere of the lamp whose range meets it (LampShadow)");
-        CHECK(countKind(r, GiRegionKind::Edit) == 0u && !r.overflow, "...and no Edit (a mover is no GI geometry), no overflow");
+        CHECK(countKind(r, GiRegionKind::Edit) == 0u && !r.overflow, "...and no Edit on the step's frame, no overflow");
         run(1);
         const GiChangedRegions r2 = regions();
+        dump(r2, "the frame after the step (the region rebuild's)");
         CHECK(!countKind(r2, GiRegionKind::Mover) && !countKind(r2, GiRegionKind::MoverShadow) &&
                   !countKind(r2, GiRegionKind::LampShadow),
               "the frame after the step lists no mover");
+        {
+            // THE REGION REBUILD (stage 8A): every cascade the swept box meets lists an Edit of its own bit covering it
+            // (the swept box CUT TO the cascade's own box: a cascade re-voxelises its cells only)
+            uint32_t meets = 0u, covered = 0u;
+            if (m) meets = m->cascadeMask;
+            const GiStatus gs = scene->published().gi;
+            for (size_t k = 0; k < gs.cascades.size() && k < 32u; ++k) {
+                if (!(meets & (1u << k))) continue;
+                const GiStatus::CascadeStatus &cs = gs.cascades[k];
+                Box cut = swept;
+                cut.lo = Vec3(std::max(cut.lo.x, cs.centre.x - cs.halfSize), std::max(cut.lo.y, cs.centre.y - cs.halfSize),
+                              std::max(cut.lo.z, cs.centre.z - cs.halfSize));
+                cut.hi = Vec3(std::min(cut.hi.x, cs.centre.x + cs.halfSize), std::min(cut.hi.y, cs.centre.y + cs.halfSize),
+                              std::min(cut.hi.z, cs.centre.z + cs.halfSize));
+                for (const GiChangedRegion &g : r2.regions)
+                    if (g.kind == GiRegionKind::Edit && g.cascadeMask == (1u << k) && inside(cut, g)) covered |= 1u << k;
+            }
+            std::printf("   the swept box meets cascades 0x%x; region rebuilds listed over it: 0x%x\n", meets, covered);
+            CHECK(meets != 0u && covered == meets,
+                  "THE NEXT FRAME A MOVER'S REGION REBUILD LISTS AN EDIT COVERING ITS SWEPT BOX IN EVERY CASCADE IT MEETS");
+        }
         settle(600);
-        // ITS MATERIAL EDITED (stage 3's read F6): a ray-only wearer (no GI geometry, no dirty path) is listed at its box.
+        // ITS MATERIAL EDITED (stage 3's read F6; stage 8A: a mover is a GI wearer - the dirty path lists its box at the
+        // refresh, as a still wearer's).
         moverP.albedo = Colour(0.3f, 0.8f, 0.2f);
         scene->setPbrMaterial(moverMat, moverP);
-        run(1);
-        const GiChangedRegions r3 = regions();
+        scene->refreshGlobalIllumination();   // the host's refresh (a fixture drains no scheduler record)
+        GiChangedRegions r3;
+        bool listed3 = false;
+        for (int f = 0; f < 120 && !listed3; ++f) {
+            run(1);
+            r3 = regions();
+            for (const GiChangedRegion &g : r3.regions)
+                if (g.kind == GiRegionKind::Edit && same(g, cubeAt(moverPos, moverScale), 1e-3f)) listed3 = true;
+        }
         dump(r3, "the mover's material edit");
-        const GiChangedRegion *e3 = firstKind(r3, GiRegionKind::Edit);
-        CHECK(countKind(r3, GiRegionKind::Edit) == 1u && e3 && same(*e3, cubeAt(moverPos, moverScale), 1e-3f) && !r3.overflow,
-              "A MATERIAL EDIT ON A RAY-ONLY WEARER (a mover) LISTS ITS BOX (Edit), no overflow");
+        CHECK(listed3 && !r3.overflow, "A MATERIAL EDIT ON A MOVER (a GI wearer) LISTS ITS BOX (Edit), no overflow");
         settle(600);
     }
 

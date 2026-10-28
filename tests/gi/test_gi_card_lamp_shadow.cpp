@@ -1,8 +1,8 @@
 // gi.card_lamp_shadow (PHOTON-7 stage 5, 5-3; SPECS/PHOTON_7_SPEC.md stage 5) - THE CARDS SEE LAMP SHADOWS, TRACED.
 //
 // THE FIXTURE: a carded 8 m floor and back wall, a lamp of 30 (range 6 m) 2.4 m over the floor's centre, and two 0.8 m
-// blockers 0.8-1.6 m over the floor - a STILL one at x = -1.2 and a MOVER (the movable channel: never in the voxel
-// store) at x = +1.2. The chain at High, the rays on, the gather on (its hits make the floor resident), the field off,
+// blockers 0.8-1.6 m over the floor - a STILL one at x = -1.2 and a MOVER (the movable channel: GI geometry, in the
+// voxel store by REGION since PHOTON-7 stage 8A) at x = +1.2. The chain at High, the rays on, the gather on (its hits make the floor resident), the field off,
 // no sun.
 // THE LAWS (the floor's card read at world points through Scene::readCardAt; each point UMBRA when its segment to the
 // lamp crosses a blocker shrunk by 0.1 m, LIT when it misses both grown by 0.2 m; the radiance normalised by the lamp's
@@ -12,10 +12,13 @@
 //       the stores' steps (q of the RGBA16F radiance plus the R11G11B10F halves' half steps; measured: the worst 0.95 of
 //       it), (b) at the lit points the lamp's closed form at the texel's own point, I mu atten(d) rho Dd(L, N), their
 //       mean within q (measured -0.04 %, 0.59 q);
-//   (2) THE SHADOW FOLLOWS THE MOVED MOVER: the mover stepped 1.0 m along +z inside the lamp's range (its LampShadow
-//       region stales the direct of the cards in the lamp's sphere; a mover changes no voxel, so no bounce change lists
-//       the floor), at rest every sampled point within one code of a whole re-solve (the GI torn down and built again)
-//       plus one step of the radiance store (RGBA16F since 10-2d) - RED where the LampShadow region does not reach the cards.
+//   (2) THE SHADOW AND THE BOUNCE FOLLOW THE MOVED MOVER: the mover stepped 1.0 m along +z inside the lamp's range (its
+//       LampShadow region stales the direct of the cards in the lamp's sphere; a mover IS GI geometry (stage 8A - the old
+//       law "a mover changes no voxel" was the defect: its bounce and its occlusion were missing from the store), so the
+//       next frame's region rebuild re-voxelises its old and new boxes in every cascade and the store's change relights
+//       the floor through the GPU's accumulation), at rest every sampled point within one code of a whole re-solve (the GI
+//       torn down and built again, the mover in the store at its pose) plus one step of the radiance store (RGBA16F since
+//       10-2d) - RED where the LampShadow region does not reach the cards, or the store keeps the mover where it was.
 // (An EDIT inside a lamp's range stales the same sphere; a still caster's move also moves the store, whose change
 // relights the floor through the GPU's accumulation, so no arm here can tell the two apart.)
 //   (3) AN AREA LIGHT'S FORM FACTOR ON A CARD (a second fixture, below): the card's direct within the stored values'

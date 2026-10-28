@@ -805,18 +805,13 @@ public:
         /// `movableItems`/`movableLights` are the engine's own records (the
         /// document's resolution reaches it through Scene::setNodeMovable).
         /// `mobilityMisses` counts objects that started moving DURING PLAY with
-        /// nothing predicting they would — each keeps its old bounce light as a
-        /// ghost until play stops, and each is worth marking Movable by hand;
-        /// `lastMobilityMiss` names the last one. `mobilityRebuilds` counts GI
-        /// rebuilds a mobility CHANGE caused: it is 0 in every scene today,
-        /// because the renderer only records mobility so far (lane R1) and
-        /// recording costs nothing — lane R2, which spends it on render
-        /// channels, is where a flip can become a rebuild.
+        /// nothing predicting they would — each is worth marking Movable by
+        /// hand; `lastMobilityMiss` names the last one. (No flip costs a GI
+        /// rebuild: a mover is GI geometry, PHOTON-7 stage 8A.)
         int     movableItems = 0;
         int     movableLights = 0;
         quint64 mobilityMisses = 0;
         QString lastMobilityMiss;
-        quint64 mobilityRebuilds = 0;
         /// PHOTON (SPECS/PHOTON_SPEC.md P0) — the live cascade chain, innermost
         /// first, empty in the single-volume arm. Per cascade: the half-extent
         /// and resolution it was built at, the metres per voxel that resolves

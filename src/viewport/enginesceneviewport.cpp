@@ -3036,7 +3036,6 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         const jahshaka::engine::MobilityStatus m = view()->scene()->published().mobility;   // the snapshot (U3 F5)
         out.movableItems     = int(m.movableItems);
         out.movableLights    = int(m.movableLights);
-        out.mobilityRebuilds = quint64(m.mobilityRebuilds);
     }
     if (mMirror) {
         out.mobilityMisses   = mMirror->mobilityMissCount();

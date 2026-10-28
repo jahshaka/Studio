@@ -1023,7 +1023,7 @@ int main()
             enginetest::setNodePosition(scene, promoted, Vec3(2.0f, 0.5f, 2.0f));
             render(e, 16);
             arm0 = scene->published().gi.rebuilds;
-            scene->setNodeMovable(promoted, true, MobilityChange::Authoring);
+            scene->setNodeMovable(promoted, true);
             measure("an authoring flip", arm0, 16, total, worst);
 
             // ---- (h) a DELETE of LIT geometry -------------------------------
@@ -1195,8 +1195,20 @@ int main()
                 const Quat q{ 0.0f, std::sin(r), 0.0f, std::cos(r) };
                 scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
             };
+            const GiStatus g0 = scene->published().gi;
             for (int f = 0; f < 60; ++f) { yaw(float(f)); render(e, 1); }
             Image motion; CHECK(view->readPixels(motion), "the last motion frame reads back");
+            {
+                // (printed: each cascade's rebuilds over the motion - whole, and by region (stage 8A))
+                const GiStatus g1 = scene->published().gi;
+                std::printf("   [%s] over the 60 motion frames:", pose.name);
+                for (size_t k = 0; k < g1.cascades.size() && k < g0.cascades.size(); ++k)
+                    std::printf("  c%zu rebuilds +%llu (region +%llu, owed %u/%u, active %u)", k,
+                                g1.cascades[k].rebuilds - g0.cascades[k].rebuilds,
+                                g1.cascades[k].regionRebuilds - g0.cascades[k].regionRebuilds, g1.cascades[k].regionOwed,
+                                g1.cascades[k].marchOwed, g1.cascades[k].feedbackActive);
+                std::printf("\n");
+            }
             // ...the SAME POSE at rest, after everything has caught up...
             render(e, 120);
             Image rest; CHECK(view->readPixels(rest), "the rest frame reads back");
@@ -1252,12 +1264,13 @@ int main()
         enginetest::setNodePosition(scene, fnode, Vec3(0.0f, 0.5f, 1.0f));
         render(e, 24);
         const GiStatus pre = scene->published().gi;
-        // A material edit: the cascades that hold its wearer owe a rebuild in place (PHOTON-7 stage 3: the wearer's box).
-        fp.albedo = Colour(0.9f, 0.2f, 0.2f);
-        CHECK(scene->setPbrMaterial(fmat, fp), "the material edit is accepted");
+        // A WHOLE REBUILD of cascade 0 at its placement (the measuring door gi.rebuildCascade: a change with no box - a
+        // boxed edit, the material edit this case used to drive, is a REGION rebuild since PHOTON-7 stage 8A and never
+        // reaches the whole rebuild's post-build fault), its ONE attempt under the fault.
         e->setArm("gi.cascadeFaultPost", 0.0);
-        scene->refreshGlobalIllumination();
-        render(e, 2);
+        e->setArm("gi.rebuildCascade", 0.0);
+        render(e, 1);
+        e->setArm("gi.rebuildCascade", -1.0);
         const GiStatus bad = scene->published().gi;
         std::printf("   post-build fault: c0 rebuilds %llu -> %llu, pending %d, vctBound %d\n",
                     pre.cascades[0].rebuilds, bad.cascades[0].rebuilds, bad.cascades[0].pending,
@@ -1493,6 +1506,14 @@ int main()
             CHECK(atRest == 0ull, "and when they stop, the chain re-voxelises nothing");
             const unsigned long long restsAfter = scene->published().gi.feedbackRests;
             const bool owedAfter = scene->published().gi.feedbackOwed;
+            {
+                const GiStatus ga = scene->published().gi;
+                std::printf("   after the rest, per cascade:");
+                for (size_t k = 0; k < ga.cascades.size(); ++k)
+                    std::printf("  c%zu active %u owed %d region %u/%u", k, ga.cascades[k].feedbackActive,
+                                int(ga.cascades[k].feedbackOwed), ga.cascades[k].regionOwed, ga.cascades[k].marchOwed);
+                std::printf("  chainOwed %d\n", int(ga.chainOwed));
+            }
             std::printf("   the feedback's rests: %llu before the movement, %llu at the stop, %llu after the rest (owed "
                         "%d)\n", restsBefore, restsAtStop, restsAfter, int(owedAfter));
             CHECK(restsAfter > restsAtStop && !owedAfter,

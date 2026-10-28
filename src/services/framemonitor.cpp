@@ -833,8 +833,7 @@ void FrameMonitor::Bundle::writeSnapshot(const EngineSnapshot &s, const QString 
         { "mobility", QJsonObject{
             { "movableItems", double(s.mobility.movableItems) },
             { "movableLights", double(s.mobility.movableLights) },
-            { "movableNodes", double(s.mobility.movableNodes) },
-            { "mobilityRebuilds", double(s.mobility.mobilityRebuilds) } } },
+            { "movableNodes", double(s.mobility.movableNodes) } } },
         { "render", QJsonObject{
             { "metricsRecording", s.render.metricsRecording },
             { "fps", s.render.fps },
