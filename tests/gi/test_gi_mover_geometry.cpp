@@ -22,7 +22,11 @@
 //       bus where it stopped) AND read darker than the same floor with no bus by more than four codes on average (the
 //       bus occludes their sky share - the law A1 makes true: RED ON THE BASE, a mover was in no store). PRINTED: the
 //       region rebuilds' price while it drives - each cascade's vct.regionN GPU ms per m^3 of the cells re-voxelised.
-// Counted in frames; each row under 45 s.
+//   `lamp` (gi.mover_lamp_step): A LAMP STEPPING WHILE A MOVER MOVES EVERY FRAME IN ITS CASCADES lands within the relight's
+//       own law (every cascade its range meets completes the round within 2 x lightWorkFrames + 1 frames): the region
+//       rebuild's injection carries the owed relight slab (the one-writer latch). RED before: the relights skipped every
+//       cascade the mover's region injected, for as long as it moved.
+// Counted in frames; each row under the engine fixture's 10 s.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -323,6 +327,76 @@ int main(int argc, char **argv)
                                 "court's by more than four codes");
         }
         scene->removeNode(bus);
+        GiParams off;
+        off.mode = GiMode::Off;
+        scene->setGlobalIllumination(off);
+        run(2);
+    }
+
+    if (arm.empty() || arm == "lamp") {
+        // A LAMP STEPPING WHILE A MOVER MOVES EVERY FRAME IN ITS CASCADES (the one-writer latch: a cascade takes one
+        // injection a frame, so the region rebuild's injection carries the lamp's owed relight slab - else the relight,
+        // which skips a cascade injected this frame, would wait for as long as the mover moved). THE LAW, the relight's
+        // own (GiQualityFacts::lightWorkFrames): an owed cascade's floor alone pays its whole owed volume in 2 x
+        // lightWorkFrames frames, so every cascade the lamp's range meets completes the step's relight round within that,
+        // plus the frame the step is owed in (the list's Lamp region is owed after the frame's region service).
+        std::printf("\n== lamp: a lamp stepping while a mover moves ==\n");
+        CHECK(scene->setGlobalIllumination(chainGi()), "the court is up");
+        e->waitForAsyncShaders();
+        const NodeId lamp = scene->createNode();
+        LightDesc ld;
+        ld.type = LightType::Point;
+        ld.colour = Colour(1.0f, 0.9f, 0.8f);
+        ld.intensity = 4.0f;
+        ld.range = 6.0f;
+        scene->setNodeTransform(lamp, Vec3(0.0f, 2.0f, -3.0f), Quat(), Vec3(1, 1, 1));
+        scene->setLight(lamp, ld);
+        Vec3 at(-1.0f, 0.5f, -3.0f);
+        const NodeId mover = addBox(scene, at, Vec3(0.6f, 1.0f, 0.6f), Colour(0.8f, 0.8f, 0.8f), true);
+        CHECK(lamp != 0 && mover != 0 && settle(1200) >= 0, "the lamp and the mover (still) come to rest");
+        int f = 0;
+        const auto step = [&]() {   // the mover sways 0.6 m along x, a frame at a time, every frame
+            at.x = -1.0f + 0.6f * std::sin(0.2f * float(++f));
+            scene->setNodeTransform(mover, at, Quat(), Vec3(0.6f, 1.0f, 0.6f));
+            run(1);
+        };
+        for (int k = 0; k < 8; ++k) step();   // (moving)
+        const GiStatus g0 = scene->published().gi;
+        const unsigned law = 2u * giQualityFacts(GiQuality::High, GiViewProfile::Desktop).lightWorkFrames + 1u;
+        ld.intensity = 8.0f;
+        scene->setLight(lamp, ld);
+        // the cascades the lamp's range meets: each must complete a relight round
+        std::vector<int> doneAt(g0.cascades.size(), -1);
+        std::vector<bool> meets(g0.cascades.size(), false);
+        for (size_t k = 0; k < g0.cascades.size(); ++k) {
+            const GiStatus::CascadeStatus &cs = g0.cascades[k];
+            bool in = true;
+            const float lp[3] = { 0.0f, 2.0f, -3.0f };
+            const float cc[3] = { cs.centre.x, cs.centre.y, cs.centre.z };
+            for (int ax = 0; ax < 3; ++ax) in = in && std::fabs(lp[ax] - cc[ax]) < cs.halfSize + ld.range;
+            meets[k] = in;
+        }
+        unsigned long long movesDuring = 0ull;
+        for (unsigned q = 1; q <= law + 8u; ++q) {
+            step();
+            const GiStatus g = scene->published().gi;
+            for (size_t k = 0; k < g.cascades.size() && k < doneAt.size(); ++k) {
+                if (doneAt[k] < 0 && g.cascades[k].relightRounds > g0.cascades[k].relightRounds) doneAt[k] = int(q);
+                if (q == law) movesDuring += g.cascades[k].moverRegionRebuilds - g0.cascades[k].moverRegionRebuilds;
+            }
+        }
+        bool all = true;
+        std::printf("   the relight's law: %u frames; the mover's region rebuilds meanwhile %llu;", law, movesDuring);
+        for (size_t k = 0; k < doneAt.size(); ++k) {
+            std::printf("  c%zu %s %d", k, meets[k] ? "round in" : "(out of range)", doneAt[k]);
+            if (meets[k]) all = all && doneAt[k] >= 1 && unsigned(doneAt[k]) <= law;
+        }
+        std::printf("\n");
+        CHECK(movesDuring > 0ull, "the mover moved by region every frame of it");
+        CHECK(all, "A LAMP'S STEP LANDS WHILE A MOVER MOVES: every cascade its range meets completes the relight round "
+                   "within its law's frames");
+        scene->removeNode(mover);
+        scene->removeNode(lamp);
         GiParams off;
         off.mode = GiMode::Off;
         scene->setGlobalIllumination(off);

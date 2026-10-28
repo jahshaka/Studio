@@ -62,6 +62,7 @@ gate.reach_cache 3.47  solo, CPU only, cold cache (URGENT #57, the builder's hal
 gi.card_sun_lift 1.92  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A finding 3, 2026-10-23: one engine fixture, a convex carded cap, 49 frames)
 gi.cascades_asan 33.4  solo, photon-7 stage 10 2026-10-25 (case 12: three poses + the fresh-build oracle, +850 frames)
 gi.directional_seam 7.11  solo, the card lock held, :71, warm (PHOTON-7 stage 1's read F2, 2026-10-23; the High chain, the reader parity harness's axis read, a roofed strip)
+gi.mover_lamp_step 3.76  solo, the card lock held, :83, warm (PHOTON-7 8A A1 fix, 2026-10-28: a lamp stepping while a mover moves every frame - every cascade its range meets completes the relight round within 2 x lightWorkFrames + 1; red before the fix: none in 45 frames)
 gi.mover_bus_sky 2.57  solo, the card lock held, :83, warm (PHOTON-7 8A A1, 2026-10-28: a bus driving 3 m 10 m away - cascade 1's floor beside it against a fresh build and the empty court, the light read alone; split from the geometry law for the fixture's 10 s)
 gi.shell_ends 2.75  solo, the card lock held, :71, warm (PHOTON-7 stage 1's read F1, 2026-10-23: the four desktop tiers' chains, every cascade's shell list)
 gi.mover_bus_geometry 7.56  solo, the card lock held, :83, warm (PHOTON-7 8A A1, 2026-10-28: a bus driving 3 m 10 m away - every cascade's geometry against a fresh build, bit for bit; the region's price printed)
