@@ -404,3 +404,12 @@ add_test(NAME source.shell_boundaries
 jah_ship_row(source.shell_boundaries)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.shell_boundaries PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.shell_boundaries)
+
+# source.half_store_rounded (REDS-1 item 5): an rgba16f image store TRUNCATES on NVIDIA 595.x (measured: gi.card_truth's
+# stored texels all in (-1.25, 0] half-float steps), so every half-float store rounds first - jahRoundHalf
+# (jah_half_round.glsl / the piece JahHalfRound). Every imageStore into an rgba16f / rg16f / r16f image of the ray jobs,
+# and the Photon light store's and the relight's run-time-format stores, carry it; its negative control first.
+add_test(NAME source.half_store_rounded
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/half_store_rounded.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.half_store_rounded PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.half_store_rounded)
