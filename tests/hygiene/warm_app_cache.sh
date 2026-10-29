@@ -185,11 +185,13 @@ out=$(JAH_GONE_X=1 JAHSHAKA_SHADER_CACHE_DIR=/x __GL_SHADER_DISK_CACHE=0 DISPLAY
     no "cold-on run: '$out' rc $rc ran: $(cat "$T/cold-ran" 2>&1)"
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "...and the next call reads cold-on warm" || no "cold-on after: '$out' rc $rc"
-touch -d '2001-01-02' "$T/fake-app"
+touch -d '2001-01-02' "$T/fake-app" "$T/coldfx"
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
-[ $rc = 3 ] && echo "$out" | grep -q 'a listed exe, the app or the staged media rebuilt since' &&
-    ok "the app relinked (its size or time moved - what a row's own seed stamp keys on): cold-on cold again, exit 3" ||
-    no "a rebuilt app: '$out' rc $rc"
+[ $rc = 0 ] && [ "$out" = "warm at $key" ] &&
+    ok "the app and a cold row's exe relinked (no shader moved): cold-on stays warm (URGENT #125: a relink is not a shader change)" ||
+    no "a relinked app: '$out' rc $rc"
+k2=$("$W" "$BUILD" --key); rc=$?
+[ $rc = 0 ] && [ "$k2" = "$key" ] && ok "--key prints the tree's shader key alone ($k2), exit 0" || no "--key: '$k2' rc $rc"
 printf 'y.cold\t%s\t\t%s\n' "$T/cwd" "$T/coldfx" >> "$CR"
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'the cold rows changed since' && ok "a row newly registered COLD: cold-on cold again, exit 3" ||

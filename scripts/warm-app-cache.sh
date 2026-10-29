@@ -34,6 +34,8 @@
 #                    Xvfb (60-99, 1920x1080x24, killed by its recorded pid); prints each boot's wall and the cache's size;
 #                    exits 0 when every boot passed (a failed boot's log kept under <tests-dir>/.evidence by fresh_home).
 #   --check          the answer alone, never a boot: exit 0 warm, 3 cold.
+#   --key            THE TREE's SHADER KEY alone (below), printed, exit 0 - its one definition, read by a row that keeps
+#                    a cache of its own (shader.async_after_open.seed's stamp, URGENT #125), never a second formula.
 #   --tests-dir <d>  the shared cache's directory (default <build>/tests) - the guard row's own scratch.
 #   --app <exe>      the app the boot runs (default <build>/bin/Jahshaka) - the guard row's fake, which compiles nothing.
 #   --cold-rows <f>  the cold rows' list cold-on runs (default <build>/tests/test-cold-rows.txt) - the guard
@@ -88,8 +90,8 @@
 #   time from the COLD registrations with each row's test tier, tests/CMakeLists.txt _jah_cold_row) once, UNCAPPED (the
 #   call's end, never the 60-s cap), the driver's cache ON, all at once under one hold (tests/support/warm_cold_rows.sh).
 #   Stamp <tests>/.cold-rows.driver-key: this key, the list's digest (a newly COLD row reads cold) and the BUILT digest -
-#   the size and time of every listed exe, the app and every staged media file: what a row's own cache stamp may key on
-#   beyond this key (the seed's tree key is the app binary's size and time, all of bin/media and the fork). A row on the
+#   the size and time of every staged media file: what a row's own cache stamp keys on beyond this key (the seed's stamp
+#   is this key, all of bin/media by content and the fork's BUILT_FROM; never a binary's bytes - URGENT #125). A row on the
 #   shared cache needs none of it - measured, with an EMPTY driver cache rtreflect.sphere_glint built all 13 ray
 #   pipelines through the shared VkPipelineCache in 1.04 s. A fixture that states its own cache while registered warm is
 #   refused at its start (enginetesthelpers.h), so this list cannot miss one of those.
@@ -113,10 +115,11 @@
 # content beyond the born World compiles on every run (the residue named, HARNESS-1). ONE answer for the boots named: "warm at <key>" when every one is, else "cold at <key>:
 # <each cold boot's why>" (exit 3 under --check; else their boots, in order).
 set -u
-BUILD=""; CHECK=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=570; COLDROWS=""
+BUILD=""; CHECK=0; KEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=570; COLDROWS=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
+        --key) KEYONLY=1; shift ;;
         --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; shift 2 ;;
         --app) APP="${2:?--app needs an executable}"; shift 2 ;;
         --lab) LAB="${2:?--lab needs an executable}"; shift 2 ;;
@@ -168,6 +171,7 @@ key_inputs() {
 }
 INPUTS=$(key_inputs) || exit 2
 KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
+[ "$KEYONLY" = 1 ] && { echo "$KEY"; exit 0; }
 layer_keys() {   # the shared cache's per-layer keys (its manifest's last column), sorted, one line
     [ -f "$1/cache-manifest.txt" ] && awk '$1 == "file" { print $NF }' "$1/cache-manifest.txt" | LC_ALL=C sort -u | tr '\n' ' '
 }
@@ -190,9 +194,9 @@ ENG_DSTAMP="$TESTS/.shadercache-engine.driver-key"
 APPX="${APP:-$BUILD/bin/Jahshaka}"; LABX="${LAB:-$BUILD/bin/jahlab}"
 COLDROWS="${COLDROWS:-$BUILD/tests/test-cold-rows.txt}"; COLD_DSTAMP="$TESTS/.cold-rows.driver-key"
 cold_digest() { echo "rows $( [ -f "$COLDROWS" ] && sha256sum < "$COLDROWS" | cut -c1-16 || echo none)"; }
-built_digest() {   # the size and time of every listed exe, the app and every staged media file (no content read: 4 ms)
-    { cut -f4 "$COLDROWS" 2>/dev/null; echo "$APPX"; } | LC_ALL=C sort -u | while IFS= read -r x; do
-        [ -n "$x" ] && stat -c '%s %Y %n' "$x" 2>/dev/null; done
+built_digest() {   # every staged media file's size and time (no content read: 4 ms) - what a cold row's own cache may key
+    # on beyond the key (the seed's stamp hashes all of bin/media). NOT an exe's or the app's bytes: a relink changes no
+    # shader (URGENT #125: keyed on the app's size and time, the seed and this boot re-ran ~160 s at every commit)
     find "$BUILD/bin/media" -type f -printf '%s %T@ %p\n' 2>/dev/null | LC_ALL=C sort
 }
 built_key() { echo "built $(built_digest | sha256sum | cut -c1-16)"; }
@@ -201,7 +205,7 @@ coldrows_why() {   # the cold rows: empty when their commands ran at this key, f
     if [ ! -f "$COLD_DSTAMP" ]; then echo "no driver-cache run recorded"
     elif [ "$(sed -n 1p "$COLD_DSTAMP")" != "$KEY" ]; then echo "the key moved (stored at $(sed -n 1p "$COLD_DSTAMP"))"
     elif [ "$(sed -n 2p "$COLD_DSTAMP")" != "$(cold_digest)" ]; then echo "the cold rows changed since ($(basename "$COLDROWS"))"
-    elif [ "$(sed -n 3p "$COLD_DSTAMP")" != "$(built_key)" ]; then echo "a listed exe, the app or the staged media rebuilt since"
+    elif [ "$(sed -n 3p "$COLD_DSTAMP")" != "$(built_key)" ]; then echo "the staged media rebuilt since"
     fi
 }
 exe_id() {   # <exe>: the name the driver keys its per-exe cache on - its file name (measured below)

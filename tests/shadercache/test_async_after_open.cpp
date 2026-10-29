@@ -10,13 +10,19 @@
 // permutations, which no startup set holds — never the startup build behind the splash (53-58 s
 // of the old 87-s cold launch, Debug, a loaded box; spikes/testing-speed-b3/profile.txt). So the
 // cold home is seeded with THE STARTUP SEED: the shader cache a launch that only boots and quits
-// leaves (`e2e-async-after-open-seed/`, kept beside the row's home), STAMPED WITH THE TREE'S KEY (urgent #38; a stamp
-// in the manner of scripts/lab/warm.sh's, with its own key - warm.sh's hashes the jahlab binary and reads the fork's
-// HEAD): the app binary (its size and modification time: a relink - an engine or app
-// change - moves them), the sha256 of its staged media and the Ogre install's BUILT_FROM (the fork commit). A seed
-// whose stamp is not this tree's is STALE: the seed row re-seeds it, and the row - which never compiles the startup
-// set inside its own run - refuses it, naming the seed row (a stale seed cost the row 50 s against its 28 s: the
-// cold launch built the startup set itself).
+// leaves (`e2e-async-after-open-seed/`, kept beside the row's home), STAMPED WITH THE TREE'S KEY (urgent #38): WHAT
+// THE SEED IS A FUNCTION OF, and nothing else (URGENT #125, HARNESS-4) - THE TREE's SHADER KEY (`scripts/warm-app-cache.sh
+// <build> --key`: its one definition - the engine's build id, the ray tier's SPIR-V, the fork commit, the staged Hlms
+// and Photon media, glslang, the build type, the GPU and its driver: what the engine's own cache layers key on), the
+// sha256 of EVERY staged media file (a texture's format can pick a permutation) and the Ogre install's BUILT_FROM.
+// NEVER the app binary's bytes: keyed on its size and time until #125, the seed went stale at every relink - every
+// commit of every lane - and the warm-up's cold-on boot re-made it (~160 s) though nothing it holds had moved. A
+// Studio-only change that adds a startup permutation (a preset or a template compiled into the app) leaves the seed
+// a few shaders short: the cold launch compiles them behind its splash (printed below as its startup compiles) - a
+// cost of seconds, never a wrong law; the app's own global pass re-runs over the seed at a new Studio commit by its key.
+// A seed whose stamp is not this tree's is STALE: the seed row re-seeds it, and the row - which never compiles the
+// startup set inside its own run - refuses it, naming the seed row (a stale seed cost the row 50 s against its 28 s:
+// the cold launch built the startup set itself).
 //
 // THE SEED IS ITS OWN ROW (TOOLING-7 stage 2; the trap file's "split into rows that run parts of the same law"):
 // `test_async_after_open --seed` is shader.async_after_open.seed, the FIXTURES_SETUP row that makes the seed when it is
@@ -51,7 +57,15 @@ QString treeKey()
 {
     QCryptographicHash h(QCryptographicHash::Sha256);
     const QFileInfo bin(QStringLiteral(JAHSHAKA_BINARY));
-    h.addData(QByteArray::number(bin.size()) + " " + QByteArray::number(bin.lastModified().toMSecsSinceEpoch()) + "\n");
+    // the tree's shader key, from its one definition (an empty answer - the script missing or the build unread - makes
+    // every seed stale: re-made, never trusted)
+    QProcess key;
+    key.start(QStringLiteral("bash"), {QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/scripts/warm-app-cache.sh"),
+                                       QFileInfo(bin.absolutePath()).absolutePath(), QStringLiteral("--key")});
+    const bool keyed = key.waitForFinished(60000) && key.exitStatus() == QProcess::NormalExit && key.exitCode() == 0;
+    const QByteArray shaderKey = keyed ? key.readAllStandardOutput().trimmed() : QByteArray();
+    if (shaderKey.isEmpty()) return QString();
+    h.addData("shader-key " + shaderKey + "\n");
     QStringList media;
     QDirIterator it(bin.absolutePath() + QStringLiteral("/media"), QDir::Files, QDirIterator::Subdirectories);
     while (it.hasNext()) media << it.next();
@@ -205,7 +219,7 @@ int main(int argc, char **argv)
 
     const QString stamp = QFileInfo(seed).absolutePath() + QStringLiteral("/tree-key.txt");
     const QString key = treeKey();
-    const bool seedFresh = QDir(seed).exists() && readStamp(stamp) == key;
+    const bool seedFresh = !key.isEmpty() && QDir(seed).exists() && readStamp(stamp) == key;
 
     // THE STARTUP SEED'S ROW (the header): made when missing or STALE (its stamp not this tree's key); a fresh seed is
     // the row's whole answer.
