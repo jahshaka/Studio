@@ -159,6 +159,55 @@ template <typename F> void matteGrid(F &&each)
             each(5, Vec3(a, y, kHalfZ), Vec3(0, 0, -1));
         }
 }
+/// THE VOXEL STORE's matte skin (bounce_series' read: cascade 0's covered inner-skin cells off the room's edges, the
+/// ROOM-FACING side), the mirror's face excluded: each cell's point on its face, its inward normal, its L
+struct Skin { std::vector<Vec3> p, n; std::vector<double> L; };
+Skin voxelSkin(Scene *s)
+{
+    Skin r;
+    GiVoxelVolume v;
+    if (!s->giVoxelLight(0, v) || !v.available || v.light.empty()) return r;
+    const float cell = v.cell[0];
+    for (int z = 0; z < v.depth; ++z)
+        for (int y = 0; y < v.height; ++y)
+            for (int x = 0; x < v.width; ++x) {
+                const float p[3] = { v.origin[0] + cell * (x + 0.5f), v.origin[1] + cell * (y + 0.5f),
+                                     v.origin[2] + cell * (z + 0.5f) };
+                const bool inGrown = std::fabs(p[0]) < kHalfX + cell && std::fabs(p[2]) < kHalfZ + cell &&
+                                     p[1] > -cell && p[1] < kHeight + cell;
+                const bool inShrunk = std::fabs(p[0]) < kHalfX - cell && std::fabs(p[2]) < kHalfZ - cell &&
+                                      p[1] > cell && p[1] < kHeight - cell;
+                if (!inGrown || inShrunk) continue;
+                int near = 0;
+                near += std::fabs(p[0]) > kHalfX - 1.0f ? 1 : 0;
+                near += std::fabs(p[2]) > kHalfZ - 1.0f ? 1 : 0;
+                near += (p[1] < 1.0f || p[1] > kHeight - 1.0f) ? 1 : 0;
+                if (near > 1) continue;
+                const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
+                const float c = v.light[i + 3];
+                if (!(c > 0.5f)) continue;
+                float in[3] = { 0.0f, 0.0f, 0.0f };
+                const float dx = kHalfX - std::fabs(p[0]), dz = kHalfZ - std::fabs(p[2]), dy0 = p[1], dy1 = kHeight - p[1];
+                const float dmin = std::min(std::min(std::fabs(dx), std::fabs(dz)), std::min(std::fabs(dy0), std::fabs(dy1)));
+                Vec3 on(p[0], p[1], p[2]);
+                if (dmin == std::fabs(dy0)) { in[1] = 1.0f; on.y = 0.0f; }
+                else if (dmin == std::fabs(dy1)) { in[1] = -1.0f; on.y = kHeight; }
+                else if (dmin == std::fabs(dx)) { in[0] = p[0] > 0.0f ? -1.0f : 1.0f; on.x = p[0] > 0.0f ? kHalfX : -kHalfX; }
+                else { in[2] = p[2] > 0.0f ? -1.0f : 1.0f; on.z = p[2] > 0.0f ? kHalfZ : -kHalfZ; }
+                if (in[2] > 0.5f) continue;   // the -z face: the mirror's
+                const float *side = v.light.data() + i;
+                if (v.normal.size() == v.light.size() && v.lightFront.size() == v.light.size() &&
+                    v.lightBack.size() == v.light.size() && v.normal[i + 3] > 0.5f) {
+                    const float n[3] = { 2.0f * v.normal[i] - 1.0f, 2.0f * v.normal[i + 1] - 1.0f,
+                                         2.0f * v.normal[i + 2] - 1.0f };
+                    side = (n[0] * in[0] + n[1] * in[1] + n[2] * in[2] >= 0.0f ? v.lightFront.data() : v.lightBack.data()) + i;
+                }
+                r.p.push_back(on);
+                r.n.push_back(Vec3(in[0], in[1], in[2]));
+                r.L.push_back(double(std::max(std::max(side[0], side[1]), side[2]) / c));
+            }
+    return r;
+}
 }   // namespace
 
 int main(int, char **)
@@ -216,7 +265,7 @@ int main(int, char **)
         size_t n = 0;
         matteGrid([&](int, const Vec3 &p, const Vec3 &nrm) {
             const double pp[3] = { p.x, p.y, p.z }, nn[3] = { nrm.x, nrm.y, nrm.z };
-            sum += black.matteAt(pp, nn, 256, g);
+            sum += black.matteAt(pp, nn, 64, g);   // (printed only: a coarse batch)
             ++n;
         });
         blackRatio = sum / double(n) / refMean[0];
@@ -242,6 +291,7 @@ int main(int, char **)
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     double mean[2] = { 0, 0 };
     bool ok[2] = { false, false };
+    Skin skin[2];
     for (int room = 0; room < 2; ++room) {
         View *in = e->createOffscreenView("mirror_in", 128, 128, Colour(0, 0, 0), OffscreenContract::StillPicture);
         Scene *s = e->createScene("mirror_closed_form");
@@ -305,6 +355,7 @@ int main(int, char **)
         size_t faces = 0;
         for (int k = 0; k < 6; ++k) faces += (k != kMirrorWall && seen[k]) ? 1u : 0u;
         mean[room] = n ? sum / double(n) : 0.0;
+        skin[room] = voxelSkin(s);
         ok[room] = rest >= 0 && faces == 5u;
         std::printf("   ENGINE %s: at rest after %d frames | %zu points on %zu matte faces, the mean %.5f (the reference "
                     "%.5f, %+.3f %%), the texels %.5f .. %.5f\n", m ? "MIRROR room" : "all-matte room", rest, n, faces,
@@ -322,7 +373,49 @@ int main(int, char **)
     std::printf("   THE RATIO: engine %.5f against the reference %.5f: %+.4f (%.2f q; a mirror black to its readers "
                 "%.5f; the reference's MC error %.2f q)\n", ratio, refRatio, ratio - refRatio,
                 std::fabs(ratio - refRatio) / (qRel * refRatio), blackRatio, refRatioErr / (qRel * refRatio));
-    CHECK(refRatioErr <= 0.25 * qRel * refRatio, "(0) the reference's Monte Carlo error under q / 4");
+    // (2) THE VOXEL STORE - its matte skin fed by the ray tier's SIDES' rays, a reader with no C2 of its own (the probe
+    // gathers are the same class). A side's ray reads THE CASCADES ALONE at its hit (rq_voxel_sides.comp: the cards are
+    // bound as stand-ins - a voxel that read a card closed a loop), so the skin is its own closed system: L = E + a_v G
+    // with a_v the voxel's own lobe, read from the all-matte room (a sealed uniform room holds E / (1 - a_v) exactly);
+    // the mirror room's skin against the path trace AT THE SKIN's OWN POINTS with that a_v. PRINTED, NOT ASSERTED (the
+    // lead's ruling owed): the fix reads +0.7 % (11 q) over it, (7) as built -5.7 %, before (7) -0.9 % - the voxel's
+    // re-emission is restored toward its viewer by the diffuse lobe's directional albedo, the reference's is Lambertian,
+    // and which of the two the 0.7 % is has not been measured.
+    double vox[2] = { 0, 0 }, voxRef = 0.0, voxErr = 0.0, aV = 0.0;
+    for (int room = 0; room < 2; ++room) {
+        for (const double L : skin[room].L) vox[room] += L;
+        vox[room] = skin[room].L.empty() ? 0.0 : vox[room] / double(skin[room].L.size());
+    }
+    if (vox[0] > double(kE) && !skin[1].p.empty()) {
+        aV = 1.0 - double(kE) / vox[0];
+        Ref rv = ref;
+        rv.aP = aV;
+        rv.mirror = true;
+        const int per = std::max(64, int(917504 / skin[1].p.size()));
+        double batch[4] = { 0, 0, 0, 0 };
+        for (int k = 0; k < 4; ++k) {
+            Rng g{ 0x5EED5EEDull * uint64_t(k + 7) };
+            double sum = 0.0;
+            for (size_t i = 0; i < skin[1].p.size(); ++i) {
+                const double pp[3] = { skin[1].p[i].x, skin[1].p[i].y, skin[1].p[i].z },
+                             nn[3] = { skin[1].n[i].x, skin[1].n[i].y, skin[1].n[i].z };
+                sum += rv.matteAt(pp, nn, per / 4, g);
+            }
+            batch[k] = sum / double(skin[1].p.size());
+        }
+        voxRef = 0.25 * (batch[0] + batch[1] + batch[2] + batch[3]);
+        double vv = 0.0;
+        for (const double b2 : batch) vv += (b2 - voxRef) * (b2 - voxRef);
+        voxErr = std::sqrt(vv / 3.0) / 2.0;
+    }
+    const double voxRatio = vox[0] > 0.0 ? vox[1] / vox[0] : 0.0, voxRefRatio = vox[0] > 0.0 ? voxRef / vox[0] : 0.0;
+    const double qV = quantumOf(voxRef) / std::max(voxRef, 1e-9) * voxRefRatio;
+    std::printf("   THE VOXEL STORE (the sides' rays): %zu / %zu skin cells, the voxel's lobe a_v %.5f (all-matte %.5f); the mirror room "
+                "%.5f against the path trace at its cells %.5f +- %.5f: the ratio %.5f against %.5f (%+.4f, %.2f q)\n",
+                skin[0].L.size(), skin[1].L.size(), aV, vox[0], vox[1], voxRef, voxErr, voxRatio, voxRefRatio,
+                voxRatio - voxRefRatio, qV > 0.0 ? std::fabs(voxRatio - voxRefRatio) / qV : 0.0);
+    CHECK(refRatioErr <= 0.25 * qRel * refRatio && voxErr / std::max(vox[0], 1e-9) <= 0.25 * qV,
+          "(0) the references' Monte Carlo error under q / 4");
     CHECK(ok[0] && ok[1] && std::fabs(ratio - refRatio) <= qRel * refRatio,
           "(1) A MIRROR WALL CONSERVES ENERGY IN THE STORE: the matte faces' mean, mirror room / all-matte room, within q "
           "of the path-traced reference's ratio");

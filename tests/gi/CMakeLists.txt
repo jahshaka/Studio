@@ -263,6 +263,8 @@ target_compile_definitions(test_gi_mirror_closed_form PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_mirror_closed_form PRIVATE JahshakaEngine)
+# (the reference path trace is the row's CPU half: optimised, so the row keeps its 10 s budget in a Debug tree)
+target_compile_options(test_gi_mirror_closed_form PRIVATE -O2)
 add_dependencies(test_gi_mirror_closed_form JahshakaEngineMedia)
 jah_gpu_row(gi.mirror_closed_form CLASS engine COMMAND test_gi_mirror_closed_form
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
