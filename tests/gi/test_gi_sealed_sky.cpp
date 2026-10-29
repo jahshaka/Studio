@@ -260,6 +260,31 @@ int main(int argc, char **argv)
             std::printf("   (3) cascade %d: %zu voxels inside the room, the brightest %.6f (%.4f %% of R)\n", c, vr.cells,
                         vr.peak, R > 0.0 ? 100.0 * vr.peak / R : -1.0);
             std::printf("       ARM: %zu cells over 0.000244; the brightest at %s (cell %.4f m)\n", vr.over, vr.where, 0.0);
+            if (c == 0) {   // MEASURING ARM: the escape shares of cascade 0's sides inside the room
+                GiVoxelSideShares sh;
+                GiVoxelVolume v0;
+                if (scene->giVoxelSideShares(sh) && sh.available && scene->giVoxelLight(0, v0) && v0.available &&
+                    sh.width == v0.width && sh.height == v0.height && sh.depth == v0.depth) {
+                    size_t written = 0, escaping = 0, inside = 0; unsigned maxShare = 0; char at[128] = "none";
+                    for (int z = 0; z < sh.depth; ++z) for (int y = 0; y < sh.height; ++y) for (int x = 0; x < sh.width; ++x) {
+                        const double cx = v0.origin[0] + (x + 0.5) * v0.cell[0], cy = v0.origin[1] + (y + 0.5) * v0.cell[1],
+                                     cz = v0.origin[2] + (z + 0.5) * v0.cell[2];
+                        if (!(std::fabs(cx) < 2.0 && std::fabs(cz) < 2.0 && cy > 0.0 && cy < 3.0)) continue;
+                        ++inside;
+                        const uint32_t w = sh.words[(size_t(z) * sh.height + y) * sh.width + x];
+                        if (!(w & (1u << 16))) continue;
+                        ++written;
+                        const unsigned f = w & 0xFFu, b = (w >> 8) & 0xFFu;
+                        if (f || b) {
+                            ++escaping;
+                            if (std::max(f, b) > maxShare) { maxShare = std::max(f, b); std::snprintf(at, sizeof(at), "(%.3f %.3f %.3f) front %u back %u two %u", cx, cy, cz, f, b, (w >> 17) & 1u); }
+                        }
+                    }
+                    std::printf("       ARM: escape shares inside the room: %zu cells, %zu written, %zu with rays escaping; the most %u/255 at %s\n",
+                                inside, written, escaping, maxShare, at);
+                } else
+                    std::printf("       ARM: escape shares unavailable (%d %d)\n", int(sh.available), sh.width);
+            }
             vOk = vOk && vr.ok && vr.cells > 0;
             vWorst = std::max(vWorst, vr.peak);
         }
