@@ -137,12 +137,15 @@ int main(int, char **)
         // read at the card's texel; and EVERY TEXEL of the +x wall's outer face (all of it lies outside the room); a
         // value is its brightest channel
         double sumIn = 0.0, lo = 1e30, hi = 0.0, worstOut = 0.0;
+        double armAlb = 0, armF0 = 0, armW = 0, armR = 0, armInd = 0, armFlat = 0, armRad = 0;
         size_t nIn = 0, nOut = 0, facesIn = 0;
         bool seen[6] = { false, false, false, false, false, false };
         const auto inner1 = [&](int k, const Vec3 &p, const Vec3 &n) {
             CardSample cs;
             if (!s->readCardAt(p, n, cs, walls[k].node) || !cs.ok || !cs.lit) return;
             const double L = std::max(std::max(double(cs.radiance[0]), double(cs.radiance[1])), double(cs.radiance[2]));
+            armAlb += double(cs.albedo[1]) * 3.14159265358979; armF0 += cs.specularF0[1]; armW += cs.specularWeight;
+            armR += double(cs.roughness); armInd += cs.indirect[1]; armFlat += cs.flat[1]; armRad += cs.radiance[1];   // MEASURING ARM (REDS-1)
             sumIn += L;
             lo = std::min(lo, L);
             hi = std::max(hi, L);
@@ -180,6 +183,8 @@ int main(int, char **)
                     "(%.2f q)\n", rays, rest, nIn, facesIn, meanIn, limit, 100.0 * (meanIn / limit - 1.0),
                     std::fabs(meanIn - limit) / quantumOf(limit), nIn ? lo : 0.0, hi, nOut, worstOut,
                     worstOut / quantumOf(kE));
+        if (nIn) std::printf("   ARM the inner points' card: albedo (x pi) %.6f, F0 %.6f, w %.6f, roughness (alpha) %.6f; radiance %.6f = indirect %.6f + flat %.6f + %.6f\n",
+                             armAlb / nIn, armF0 / nIn, armW / nIn, armR / nIn, armRad / nIn, armInd / nIn, armFlat / nIn, (armRad - armInd - armFlat) / nIn);
         inner = inner && read && rest >= 0 && facesIn == 6u && std::fabs(meanIn - limit) <= quantumOf(limit);
         outer = outer && read && rest >= 0 && nOut > 1000u && worstOut <= quantumOf(kE);
         e->setArm("cards.force", 0.0);
