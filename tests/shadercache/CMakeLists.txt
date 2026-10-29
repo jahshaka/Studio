@@ -61,7 +61,13 @@ target_compile_definitions(test_async_after_open PRIVATE
 # not this row's subject, and a fresh tree (every ship tree) paid it inside the row — 64 s solo, over the minute. The
 # seed row boots the SAME World Mode (the tier and features below) and quits, only when the seed is missing; the row
 # requires it (a fixture chain: FIXTURES_SETUP + FIXTURES_REQUIRED + DEPENDS, so `-R shader.async_after_open` runs both).
+# COLD (URGENT #122, HARNESS-4): the seed is a cache keyed on the shaders (its tree key) that only its own boot may make -
+# the row's law needs the open's tier change to compile, and the shared app cache holds tier low - so every shader
+# change made this row a 64-s boot at the 60-s cap (8B's check: 60.04 s, the row behind it NOT RUN). Declared COLD, the
+# warm-up's cold-on boot runs `--seed` once uncapped with this test tier (scripts/warm-app-cache.sh) and the row finds
+# the seed this tree's (0.03 s).
 jah_gpu_row(shader.async_after_open.seed SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+         COLD "the startup seed is a cache keyed on the shaders that only this row's own boot may make"
          COMMAND test_async_after_open --seed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.async_after_open.seed PROPERTIES TIMEOUT 60 LABELS "shadercache"   # 6 x its solo 28.2 s

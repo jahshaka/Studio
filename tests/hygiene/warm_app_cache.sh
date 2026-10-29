@@ -26,7 +26,7 @@ no() { echo "  FAIL: $1"; fail=1; }
 # the exes the -on stamps name (the driver's per-exe key is the exe's name): two fakes, the same in every call below
 printf '#!/bin/sh\nexit 0\n' > "$T/app"; printf '#!/bin/sh\nexit 0\n#lab\n' > "$T/lab"; chmod +x "$T/app" "$T/lab"
 cp "$T/app" "$T/app2"
-: > "$T/cold-none"   # no cold engine row: cold-on has nothing to warm (its own cases at the end)
+: > "$T/cold-none"   # no cold row: cold-on has nothing to warm (its own cases at the end)
 X=(--app "$T/app" --lab "$T/lab" --cold-rows "$T/cold-none")
 eid() { basename "$1"; }
 out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
@@ -171,26 +171,31 @@ exec 8>&-
 # shared-cache variable unset; stamped with the key and the list's digest. A FAKE cold row (it records where and how it
 # ran, then exits 3: a row's own red still stored its driver cache, printed, not judged)
 CR="$T/cold-rows"; mkdir -p "$T/cwd"
-printf '#!/bin/sh\necho "$PWD|$1|${JAHSHAKA_SHADER_CACHE_DIR:-unset}|${__GL_SHADER_DISK_CACHE:-on}" > "%s/cold-ran"\nexit 3\n' "$T" > "$T/coldfx"
+printf '#!/bin/sh\necho "$PWD|$1|${JAHSHAKA_SHADER_CACHE_DIR:-unset}|${__GL_SHADER_DISK_CACHE:-on}|${JAH_TIER_X:-none}|${JAH_GONE_X:-unset}" > "%s/cold-ran"\nexit 3\n' "$T" > "$T/coldfx"
 chmod +x "$T/coldfx"
-printf 'x.cold\t%s\t%s\targ1\n' "$T/cwd" "$T/coldfx" > "$CR"
+printf 'x.cold\t%s\tJAH_TIER_X=epic photon\x1f-JAH_GONE_X\t%s\targ1\n' "$T/cwd" "$T/coldfx" > "$CR"
 C=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$CR")
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
-[ $rc = 3 ] && echo "$out" | grep -q "the cold engine rows' exes' driver caches (cold-on): no driver-cache run recorded" &&
-    ok "a cold engine row listed, never run at the key: cold-on cold, exit 3" || no "cold-on unstamped: '$out' rc $rc"
-out=$(JAHSHAKA_SHADER_CACHE_DIR=/x __GL_SHADER_DISK_CACHE=0 DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
-[ $rc = 0 ] && echo "$out" | grep -q '^warm_cold_rows: x.cold: exit 3' && [ -e "$B/tests/.cold-engine-rows.driver-key" ] &&
-    [ "$(cat "$T/cold-ran" 2>/dev/null)" = "$T/cwd|arg1|unset|on" ] &&
-    ok "cold-on runs the row's exe once in its working directory with its args, the shared cache unset, the driver's cache on; its red printed, the stamp written" ||
+[ $rc = 3 ] && echo "$out" | grep -q "the cold rows' own caches (cold-on): no driver-cache run recorded" &&
+    ok "a cold row listed, never run at the key: cold-on cold, exit 3" || no "cold-on unstamped: '$out' rc $rc"
+out=$(JAH_GONE_X=1 JAHSHAKA_SHADER_CACHE_DIR=/x __GL_SHADER_DISK_CACHE=0 DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q '^warm_cold_rows: x.cold: exit 3' && [ -e "$B/tests/.cold-rows.driver-key" ] &&
+    [ "$(cat "$T/cold-ran" 2>/dev/null)" = "$T/cwd|arg1|unset|on|epic photon|unset" ] &&
+    ok "cold-on runs the row's command once in its working directory with its args and its test tier (set and unset), the shared cache unset, the driver's cache on; its red printed, the stamp written" ||
     no "cold-on run: '$out' rc $rc ran: $(cat "$T/cold-ran" 2>&1)"
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "...and the next call reads cold-on warm" || no "cold-on after: '$out' rc $rc"
-printf 'y.cold\t%s\t%s\n' "$T/cwd" "$T/coldfx" >> "$CR"
+touch -d '2001-01-02' "$T/fake-app"
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q 'a listed exe, the app or the staged media rebuilt since' &&
+    ok "the app relinked (its size or time moved - what a row's own seed stamp keys on): cold-on cold again, exit 3" ||
+    no "a rebuilt app: '$out' rc $rc"
+printf 'y.cold\t%s\t\t%s\n' "$T/cwd" "$T/coldfx" >> "$CR"
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'the cold rows changed since' && ok "a row newly registered COLD: cold-on cold again, exit 3" ||
     no "a new cold row: '$out' rc $rc"
 printf '#!/bin/sh\nsleep 30\n' > "$T/slowfx"; chmod +x "$T/slowfx"
-printf 'z.slow\t%s\t%s\n' "$T/cwd" "$T/slowfx" > "$T/slow-rows"
+printf 'z.slow\t%s\t\t%s\n' "$T/cwd" "$T/slowfx" > "$T/slow-rows"
 t0=$(date +%s)
 out=$(bash "$SRC/tests/support/warm_cold_rows.sh" "$T/slow-rows" $(( $(date +%s) + 1 )) "$T/slow-logs"); rc=$?
 [ $rc = 1 ] && echo "$out" | grep -q 'z.slow: exit 124, .* KILLED at the bound' && [ $(( $(date +%s) - t0 )) -lt 15 ] &&
