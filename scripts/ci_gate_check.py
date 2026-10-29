@@ -11,7 +11,8 @@ one — PASSED, and:
   * the whole range A..C does not reach the row (gate-scope's selection: the graph, the symbols, the rules);
   * it is not a measuring row (label `measure`: a measurement is never served).
 A row is SERVED-RED (URGENT #54: re-running a red at the same input is a quiet retry that could flip it green by chance)
-when its newest record is a red RESULT (FAIL, TIMEOUT, CRASH; NOTRUN and NOADMIT are not results) at THIS very tree (never
+when its newest record is a red RESULT (FAIL, TIMEOUT, CRASH; NOTRUN and NOADMIT are not results - but a NOTRUN BEHIND a
+row it needs, gate_runlog's `behind`, stands as a red while those rows stay red there: URGENT #123) at THIS very tree (never
 an ancestor's: the diff may have fixed it) with the build configuration, declaration and data hashes equal: it is in
 neither "served" nor "run" but in "red" ({row: {from, run, verdict, failLine, seconds}}), reported RED with its record;
 a deliberate re-run is spec.sh test's --rerun-red <row> --why <text>.
@@ -92,8 +93,8 @@ def records_by_tip(pins):
                 continue
             if gate_runlog.stale_build(t) or (pins[sha] and t.get("irisgl") != pins[sha]):
                 continue
-            if r.get("verdict") in ("NOTRUN", "NOADMIT", None):
-                continue
+            if r.get("verdict") in ("NOADMIT", None) or r.get("verdict") == "NOTRUN" and not r.get("behind"):
+                continue   # (a NOTRUN behind a red fixture is kept: URGENT #123, classify)
             out[sha].setdefault(r.get("suite"), []).append(r)
     for recs in out.values():
         for v in recs.values():
@@ -295,8 +296,31 @@ def red_stands(rec, fact, reach, cfg):
     return None
 
 
-def classify(rec, fact, row, reach, a_fork, tip_fork, cfg):
-    """("served", None) | ("red", None) | ("run", why) for the row's newest record `rec` at the tip."""
+def behind_stands(rec, fact, reach, cfg, at):
+    """Why the NOT-RUN-behind record `rec` does NOT stand (None when it does: SERVED-RED). URGENT #123: a row ctest did
+    not run because a row it needs went red (gate_runlog's `behind`) has no answer of its own, and running its call again
+    runs nothing while that row stays red - 8B's plan listed such a part seven times. So it stands as a red, NOT RUN behind
+    its fixture, while (a) it was recorded at THIS tree with the same configuration, declaration and data (a new tip
+    starts clean), and (b) every row it waited on is red at that same commit still (`at`: {row: [records]} there, the
+    newest last: a fixture re-run green frees it)."""
+    if not reach.same_tree(rec["tip"]["studio"]):
+        return "a not-run of an ancestor's tree"
+    why = red_stands(dict(rec, verdict="FAIL"), fact, reach, cfg)
+    if why:
+        return why
+    for f in rec.get("behind") or ():
+        fr = (at.get(f) or [None])[-1]
+        if not fr or fr.get("verdict") not in RED_RESULTS and not (fr.get("verdict") == "NOTRUN" and fr.get("behind")):
+            return f"the row it waited on, {f}, is no longer red at this tree"
+    return None
+
+
+def classify(rec, fact, row, reach, a_fork, tip_fork, cfg, at=None):
+    """("served", None) | ("red", None) | ("run", why) for the row's newest record `rec` at the tip (`at`: every row's
+    records at the commit `rec` is from - read for a NOT RUN behind its fixture)."""
+    if rec.get("verdict") == "NOTRUN" and rec.get("behind"):
+        why = behind_stands(rec, fact, reach, cfg, at or {})
+        return ("red", None) if why is None else ("run", f"NOT RUN behind {', '.join(rec['behind'])}; {why}")
     if rec.get("verdict") in RED_RESULTS:
         why = red_stands(rec, fact, reach, cfg)
         return ("red", None) if why is None else ("run", why if "ancestor" in why else
@@ -328,12 +352,14 @@ def serve(build, tip, rows):
             run[row] = "no record of it at the tip or an ancestor"
             continue
         rec = got[hit[0]][row][-1]
-        kind, why = classify(rec, facts.get(row), row, reach, hit[1], tip_fork, cfg)
+        kind, why = classify(rec, facts.get(row), row, reach, hit[1], tip_fork, cfg, got[hit[0]])
         if kind == "run":
             run[row] = f"{hit[0][:9]}: {why}"
         elif kind == "red":
             red[row] = {"from": hit[0], "run": rec.get("run"), "verdict": rec.get("verdict"),
                         "failLine": rec.get("failLine"), "seconds": rec.get("seconds")}
+            if rec.get("behind"):
+                red[row]["behind"] = rec["behind"]
         else:
             served[row] = {"from": hit[0], "run": rec.get("run"), "tier": rec.get("tier"), "seconds": rec.get("seconds")}
     return served, run, red
