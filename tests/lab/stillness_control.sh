@@ -39,7 +39,8 @@
 #       frame it restarts (its rest 0) has one at that frame or the one before - a VISIBLE relight read back (a card texel
 #       moved a code since its last report: cards_visible), a capture or a still trace (cards_captures, a cards.capture /
 #       cards.still row), a real change (a GI writer that is not the cards': a light's, the field's, the voxels'), or the
-#       teleport itself. A relight whose every texel stayed under a code (cards_subquantum) is NOT a cause: a reader that
+#       teleport itself (since PHOTON-7 stage 8B, B1: the gather's rest-0 frames after a write while its cells converge are
+#       that write's - a run of them shares its cause). A relight whose every texel stayed under a code (cards_subquantum) is NOT a cause: a reader that
 #       restarts on one is red - the count of such relight-frame restarts is printed for each reader.
 #   (5) THE SERIES STOPS (the lead's ruling (B) on the card-to-card rest): after the window's last VISIBLE relight
 #       reading, the relights end, and the window then holds at least 9 (one read-back due) + 16 (a reader's rest) frames
@@ -164,7 +165,15 @@ for label, key in (("the gather", "rest_frames"), ("the reflection", "refl_rest_
         check(False, "(4) %s rests in the window" % label)
         continue
     restarts = [i for i in range(start, len(rs)) if rs[i] == 0]
-    blind = [i for i in restarts if cause(i) is None]
+    # (THE GATHER's CONVERGENCE, PHOTON-7 stage 8B B1: its rest starts again only once its cells' history caught up with
+    # their samples - a run of rest-0 frames after a write is that write's; the run's frames share the cause of any of
+    # its frames, the reflection's rest has no such gate)
+    def cause_of(i):
+        j = i
+        if key == "rest_frames":
+            while j > start and rs[j - 1] == 0: j -= 1
+        return next((c for c in (cause(k) for k in range(j, i + 1)) if c), None)
+    blind = [i for i in restarts if cause_of(i) is None]
     on_relight = [i for i in blind if moved(rel, i) or moved(rel, i - 1)]
     print("  %s: %d restart frames after its first rest (%d), %d with no cause, %d of them on a relight frame%s" % (
         label, len(restarts), start, len(blind), len(on_relight), (" - frames %s" % blind[:12]) if blind else ""))
