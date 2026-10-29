@@ -52,8 +52,9 @@ if (st.gather && st.gather.running === true)
 // reflection's rest rule, stage 11's to bound). A window that never holds FAILS.
 // THE HOLD's DERIVED BOUND (PHOTON-7 stage 10-3, the lead's ruling; the door's one formula, stillnessDeriveLiveness -
 // lab.stillness_control's): where the stop's one rest decision falls in the window, (2) the view holds AFTER the
-// decision and its work's last GI row, (3) its first hold comes within holdBound = (N + due) + due + W + C + N + 1 frames of
-// the readers' first rest (C, since PHOTON-7 8B B1: the cells' measured convergence after the work, convergeFrames), and W,
+// decision and its work's last GI row, (3) its first hold comes within holdBound = (N + due) + due + W + C + N + H + 1 frames of
+// the readers' first rest (C, since PHOTON-7 8B B1: the cells' measured convergence after the work, convergeFrames; H, since
+// 8B B3: the longest card-refinement hand-over after the work, handoverFrames), and W,
 // the decision's work, keeps its pace (W <= workPace). The bound is derived from the
 // window's own counts; the window's length is only how long it is observed.
 // RED-CAPABLE (two arms, measured 2026-10-26, one run each): (a) EARLY - the readers' hold term OFF (the gather's

@@ -2457,6 +2457,7 @@ QVariantMap WorldApi::stillness(const QVariantMap &params)
                                     { QStringLiteral("decisionWorkEnd"), w.decisionWorkEnd },
                                     { QStringLiteral("holdBound"), w.holdBound },
                                     { QStringLiteral("convergeFrames"), w.convergeFrames },
+                                    { QStringLiteral("handoverFrames"), w.handoverFrames },
                                     { QStringLiteral("lastKeyConverge"), w.lastKeyConverge },
                                     { QStringLiteral("workPace"), w.workPace },
                                     { QStringLiteral("workPages"), w.workPages },

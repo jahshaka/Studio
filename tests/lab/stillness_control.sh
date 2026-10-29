@@ -117,7 +117,8 @@ if first_hold is not None:
               % (first_hold, t_dec, work_end))
         # (3) THE DERIVED BOUND IS THE DOOR's (jahshaka::engine::stillnessDeriveLiveness, ONE formula - the LAB STILLNESS
         # line's firstRest / decision / workEnd / holdBound / pace / pages; scripting.e2e.world_stillness reads the same):
-        # the first hold within (N + due) + due + W + N + 1 of the readers' first rest, W the decision's work at its pace
+        # the first hold within (N + due) + due + W + C + N + H + 1 of the readers' first rest, W the decision's work at its pace,
+        # C the re-rest's convergence (8B B1) and H the longest card-refinement hand-over after the work (8B B3), both measured
         import re as _re
         door = {}
         for line in open(os.path.join(wd, "control.log"), errors="replace"):
@@ -133,7 +134,7 @@ if first_hold is not None:
                   "(3) the door's frames are the record's (decision %d / %d, work end %d / %d, first rest %d / %d)"
                   % (int(door["decision"]), t_dec, int(door["workEnd"]), work_end, int(door["firstRest"]), first_rest))
             check(first_hold - first_rest <= int(door["holdBound"]), "(3) LIVENESS: the first hold %d frames after the "
-                  "first rest, within the door's derived bound (N + due) + due + W %d + N + 1 = %d"
+                  "first rest, within the door's derived bound (N + due) + due + W %d + C + N + H + 1 = %d"
                   % (first_hold - first_rest, W, int(door["holdBound"])))
             check(int(door["pace"]) >= 0 and W <= int(door["pace"]), "(3) W'S PACE: the decision's work (%d frames) within "
                   "ceil(%.1f pages / the tier's pages a frame) + due = %d" % (W, door["pages"], int(door["pace"])))
