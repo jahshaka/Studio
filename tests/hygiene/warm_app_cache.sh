@@ -192,8 +192,8 @@ out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc
 printf '#!/bin/sh\nsleep 30\n' > "$T/slowfx"; chmod +x "$T/slowfx"
 printf 'z.slow\t%s\t%s\n' "$T/cwd" "$T/slowfx" > "$T/slow-rows"
 t0=$(date +%s)
-out=$(bash "$SRC/tests/support/warm_cold_rows.sh" "$T/slow-rows" 1 "$T/slow-logs"); rc=$?
+out=$(bash "$SRC/tests/support/warm_cold_rows.sh" "$T/slow-rows" $(( $(date +%s) + 1 )) "$T/slow-logs"); rc=$?
 [ $rc = 1 ] && echo "$out" | grep -q 'z.slow: exit 124, .* KILLED at the bound' && [ $(( $(date +%s) - t0 )) -lt 15 ] &&
-    ok "an exe past the call's bound is killed and named - exit 1, no stamp from such a boot" || no "the bound: '$out' rc $rc"
+    ok "an exe past the call's end (its deadline) is killed and named - exit 1, no stamp from such a boot" || no "the bound: '$out' rc $rc"
 echo "tooling.warm_app_cache: $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail

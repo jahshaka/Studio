@@ -369,15 +369,17 @@ driver_boot() {
 # cold_boot <boots left>: the cold engine rows' exes, each once, uncapped, the driver's cache on, at once under one hold;
 # stamped with the key and the list's digest when none was killed at the bound
 cold_boot() {
-    local rest=$1 t0 rc wall log="$TESTS/warm-cold-rows.log" bound
+    local rest=$1 t0 rc wall log="$TESTS/warm-cold-rows.log" deadline
     room cold-on "$rest"
-    bound=$(( BUDGET - ($(date +%s) - T0) - WAIT - 15 )); [ "$bound" -ge 60 ] || bound=60
+    # THE EXES' BOUND IS THE CALL's END, read after the card's wait (the runner subtracts the clock): a wait shorter
+    # than its bound leaves the exes the rest
+    deadline=$(( T0 + BUDGET - 15 ))
     echo "warm-app-cache: booting $(what_of cold-on) (cold-on): $(grep -c . "$COLDROWS") exe(s) on $DISPLAY, each uncapped" \
-         "(bound ${bound} s; the card's wait at most ${WAIT} s)"
+         "(to the call's end, $(( deadline - $(date +%s) )) s from now less the card's wait, at most ${WAIT} s)"
     t0=$(date +%s)
     ( H="$TESTS/warm-cold-home"; rm -rf "$H"; mkdir -p "$H"
       HOME="$H" env -u __GL_SHADER_DISK_CACHE nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" \
-          --label "warm-app-cache (cold-on)" bash "$SRC/tests/support/warm_cold_rows.sh" "$COLDROWS" "$bound" \
+          --label "warm-app-cache (cold-on)" bash "$SRC/tests/support/warm_cold_rows.sh" "$COLDROWS" "$deadline" \
           "$TESTS/warm-cold-logs"; rc=$?; rm -rf "$H"; exit $rc ) > "$log" 2>&1
     rc=$?
     [ $rc = 75 ] && held "$log" cold-on "cold-on $rest"
