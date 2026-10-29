@@ -21,6 +21,12 @@
 // (bounce_series and card_closed_form are declared at 1 - 3.7 q: the lobe tables, the gather's deficit) cancel in it to
 // first order. q is the store's quantum at the mirror room's mean (one half-float step) as a fraction of it. The
 // reference's Monte Carlo error is printed, held under q / 4.
+// DECLARED (REDS-1, the lead's ruling): law (1) at 1.44 q - the ratio +0.0009 under the cards' RGBA16F Indirect/Flat
+// layers; under the old R11G11B10F layers it read 0.09-0.68 q, the 6-bit grid's rounding landing well (the two rooms'
+// values sit at different offsets on it): the cards' real bias in the mirror room, the matte walls reading the mirror's
+// light 0.09 % high, cause unmeasured (the continuation's read in the cards' gather, or the mirror card's diffuse half).
+// Law (2), the voxel skin's ratio, at 9-10 q (+0.0065): NOT the cross-cascade deficit (every hit read at c0: +0.0057),
+// which is real in the store's LEVEL (the all-matte room 1.5275 -> 1.5865 under that arm) and cancels in the ratio.
 // A fixture (the engine alone, one 128 x 128 offscreen view; 10 s budget). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
