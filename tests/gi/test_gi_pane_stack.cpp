@@ -155,6 +155,12 @@ int main(int argc, char **argv)
                 relights = g.cards.relights;
                 admitted = g.cards.admitted;
                 quiet = still ? quiet + 1 : 0;
+                if (f % 10 == 0)   // MEASURING ARM (8B, to be reverted)
+                    std::printf("   ARM f%d: gather restFrames %u held %d active %u reached %u held %u resumes %llu | cards relights %llu "
+                                "resident %u queue %u decisions %llu chainOwed %d\n", frames, g.gather.restFrames, int(g.gather.held),
+                                g.gather.cellsActive, g.gather.cellsReached, g.gather.cellsHeld, g.gather.resumes,
+                                (unsigned long long)g.cards.relights, g.cards.cardsResident, g.cards.queueLength,
+                                (unsigned long long)g.cards.restDecisions, int(g.chainOwed));
             }
             std::printf("   ARM atRest: quiet %d after %d frames\n", quiet, frames);
             return quiet >= 30;
