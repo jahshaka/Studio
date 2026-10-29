@@ -245,15 +245,6 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_fifo.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
     set_tests_properties(tooling.gpu_lock_fifo PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.gpu_lock_fifo)
-    # ARM (HARNESS-4, URGENT #123's proof; reverted by the next commit): a toy pair - a red FIXTURES_SETUP and the row that
-    # needs it - for one spec.sh call: the second is NOT RUN behind the first, recorded so and served-red after.
-    add_test(NAME tooling.arm123.fixture COMMAND sh -c "echo 'FAIL: the arm fixture is red by construction'; exit 1")
-    set_tests_properties(tooling.arm123.fixture PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling" FIXTURES_SETUP arm123)
-    jah_no_display(tooling.arm123.fixture)
-    add_test(NAME tooling.arm123.behind COMMAND sh -c "echo the arm row ran")
-    set_tests_properties(tooling.arm123.behind PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling" FIXTURES_REQUIRED arm123
-        DEPENDS tooling.arm123.fixture)
-    jah_no_display(tooling.arm123.behind)
     # tooling.law_records — A RECORD KEEPS ITS ROW's LAW NUMBERS (HARNESS-3 (b)): scripts/gate_runlog.py over a fake ctest
     # stream keeps every `LAW <name> <value> <unit> [<op> <bar>]` line (tests/support/lawline.h) in the row's record, a
     # green row's and a red row's, one past the 256-KB output cap too (law_records.py; a scratch HOME and run-log dir).
