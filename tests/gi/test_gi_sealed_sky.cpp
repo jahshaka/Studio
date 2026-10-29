@@ -265,13 +265,18 @@ int main(int argc, char **argv)
                 GiVoxelVolume v0;
                 if (scene->giVoxelSideShares(sh) && sh.available && scene->giVoxelLight(0, v0) && v0.available &&
                     sh.width == v0.width && sh.height == v0.height && sh.depth == v0.depth) {
-                    size_t written = 0, escaping = 0, inside = 0; unsigned maxShare = 0; char at[128] = "none";
+                    size_t written = 0, escaping = 0, inside = 0, roofN = 0, roofOcc = 0, escUnocc = 0; double roofShare = 0; unsigned maxShare = 0; char at[128] = "none";
                     for (int z = 0; z < sh.depth; ++z) for (int y = 0; y < sh.height; ++y) for (int x = 0; x < sh.width; ++x) {
                         const double cx = v0.origin[0] + (x + 0.5) * v0.cell[0], cy = v0.origin[1] + (y + 0.5) * v0.cell[1],
                                      cz = v0.origin[2] + (z + 0.5) * v0.cell[2];
+                        const uint32_t w = sh.words[(size_t(z) * sh.height + y) * sh.width + x];
+                        const size_t li = ((size_t(z) * v0.height + y) * v0.width + x) * 4u;
+                        if (std::fabs(cx) < 1.5 && std::fabs(cz) < 1.5 && cy - 0.5 * v0.cell[1] <= 3.4 && cy + 0.5 * v0.cell[1] > 3.4) {
+                            ++roofN; roofShare += (w & (1u << 16)) ? double(w & 0xFFu) : -1.0; roofOcc += v0.light[li + 3] > 0.0f ? 1 : 0;
+                        }
                         if (!(std::fabs(cx) < 2.0 && std::fabs(cz) < 2.0 && cy > 0.0 && cy < 3.0)) continue;
                         ++inside;
-                        const uint32_t w = sh.words[(size_t(z) * sh.height + y) * sh.width + x];
+                        if ((w & (1u << 16)) && (w & 0xFFFFu) && !(v0.light[li + 3] > 0.0f)) ++escUnocc;
                         if (!(w & (1u << 16))) continue;
                         ++written;
                         const unsigned f = w & 0xFFu, b = (w >> 8) & 0xFFu;
@@ -280,8 +285,8 @@ int main(int argc, char **argv)
                             if (std::max(f, b) > maxShare) { maxShare = std::max(f, b); std::snprintf(at, sizeof(at), "(%.3f %.3f %.3f) front %u back %u two %u", cx, cy, cz, f, b, (w >> 17) & 1u); }
                         }
                     }
-                    std::printf("       ARM: escape shares inside the room: %zu cells, %zu written, %zu with rays escaping; the most %u/255 at %s\n",
-                                inside, written, escaping, maxShare, at);
+                    std::printf("       ARM: escape shares inside the room: %zu cells, %zu written, %zu with rays escaping (%zu of them UNOCCUPIED in the light volume); the most %u/255 at %s; the roof top: %zu cells, %zu occupied, mean front share %.1f/255\n",
+                                inside, written, escaping, escUnocc, maxShare, at, roofN, roofOcc, roofN ? roofShare / roofN : 0.0);
                 } else
                     std::printf("       ARM: escape shares unavailable (%d %d)\n", int(sh.available), sh.width);
             }
