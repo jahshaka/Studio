@@ -57,6 +57,7 @@ starttime() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20; }   #
 ticket=""
 for f in "$q"/[0-9]*; do   # a reservation under this label: its place adopted (the re-call after an exit 75)
     case "$f" in *.tmp.*) continue ;; esac
+    [ -e "$f" ] || continue   # an empty queue leaves the glob unexpanded (the redirect's error precedes its 2>/dev/null)
     read -r p1 p2 p3 < "$f" 2>/dev/null || continue
     [ "$p1" = R ] && [ "${p2:-0}" -gt "$(date +%s)" ] && [ "$p3" = "$me" ] && { ticket=$f; break; }
 done
