@@ -18,6 +18,16 @@
 #   (2) THE SETTLE IS HALVED: the frames after the motion until the picture is within the bar of the final held one
 #       (worst <= 16 codes, no pixel off by 10 - gi.cascades' motion law) are at most HALF the same scene's with the fast
 #       update off (measured once with the arm gather.fastUpdateOff, committed and reverted: kOffSettle below).
+# A NAMED LIMIT (the lead's ruling, 2026-10-29): the moving ray's brick input is "changed AT ALL", so in a sealed room one
+# mover moves the bounce in almost every brick and nearly EVERY probe runs fast while anything moves (2115 of 2040 uniform
+# probes + twins with F > 1/2 during the slide) - physics (the light did change), but most of it under a display code, so
+# the whole picture takes the short history's noise for the motion. The law's own input would be the pixel's lag
+# N'.|dL| against oneCodeAt(L) (tests/support/displaycode.h); a brick word cannot carry it - measured, the arm
+# gather.fastThreshold (irisgl 9f890394 / 62fb3d3c, reverted), probes with F > 1/2 over six slides at N = 1/2/3/5/9:
+# the brick mask's RELATIVE word x the ray's light 1827/1901/1891/1925/1900; the feedback's ABSOLUTE word (state [4]/[7])
+# 2139/2138/2138/2139/2135 - a max over a brick's 512 voxels is not the hit's change. Lumen's own input (moved slot,
+# posed skin) alone: 187 fast and a 6-frame settle (not halved). The exact input is the HIT VOXEL's own absolute change
+# this frame (a per-voxel word): the spec's leftover.
 # usage: fast_update.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
