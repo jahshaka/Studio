@@ -82,6 +82,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -105,6 +106,7 @@ const double kADiffuse = kRho * enginetest::disneyDiffuseAlbedoHemi(1.0);   // a
 const int kCarryFadeFrames = 120;   // (7): a sustained change, the injected bricks carried in their frames
 const int kFadeFrames = 1200;   // (5): every inner-wall voxel under a step of the store a frame (printed)
 
+bool g_armButted = false;   // MEASURING ARM (REDS-1 1b, reverted after its one run)
 NodeId slab(Scene *s, const Vec3 &centre, const Vec3 &size, float emission)
 {
     PbrParams p;
@@ -218,12 +220,21 @@ int main(int argc, char **argv)
         sh[0] = sh[1] = sh[2] = S;   // a uniform environment of radiance S (Engine.h, setAmbientSh)
         s->setAmbientSh(sh);
         const float w = 2.0f * kHalfX + 2.0f * kThick, d = 2.0f * kHalfZ + 2.0f * kThick;
+        if (g_armButted) {   // MEASURING ARM (REDS-1 1b): the same room of BUTTED slabs - no two solids overlap
+            slab(s, Vec3(0.0f, -0.5f * kThick, 0.0f), Vec3(w, kThick, d), E);
+            slab(s, Vec3(0.0f, kHeight + 0.5f * kThick, 0.0f), Vec3(w, kThick, d), E);
+            slab(s, Vec3(-kHalfX - 0.5f * kThick, 0.5f * kHeight, 0.0f), Vec3(kThick, kHeight, 2.0f * kHalfZ), E);
+            slab(s, Vec3(kHalfX + 0.5f * kThick, 0.5f * kHeight, 0.0f), Vec3(kThick, kHeight, 2.0f * kHalfZ), E);
+            slab(s, Vec3(0.0f, 0.5f * kHeight, -kHalfZ - 0.5f * kThick), Vec3(w, kHeight, kThick), E);
+            slab(s, Vec3(0.0f, 0.5f * kHeight, kHalfZ + 0.5f * kThick), Vec3(w, kHeight, kThick), E);
+        } else {
         slab(s, Vec3(0.0f, -0.5f * kThick, 0.0f), Vec3(w, kThick, d), E);                      // the floor
         slab(s, Vec3(0.0f, kHeight + 0.5f * kThick, 0.0f), Vec3(w, kThick, d), E);             // the ceiling
         slab(s, Vec3(-kHalfX - 0.5f * kThick, 0.5f * kHeight, 0.0f), Vec3(kThick, kHeight + 2.0f * kThick, d), E);
         slab(s, Vec3(kHalfX + 0.5f * kThick, 0.5f * kHeight, 0.0f), Vec3(kThick, kHeight + 2.0f * kThick, d), E);
         slab(s, Vec3(0.0f, 0.5f * kHeight, -kHalfZ - 0.5f * kThick), Vec3(w, kHeight + 2.0f * kThick, kThick), E);
         slab(s, Vec3(0.0f, 0.5f * kHeight, kHalfZ + 0.5f * kThick), Vec3(w, kHeight + 2.0f * kThick, kThick), E);
+        }
         enginetest::testCameraLookAt(a.view, Vec3(0.0f, 2.0f, 0.0f), Vec3(0.0f, 2.0f, -3.0f));
         GiParams gi;
         gi.mode = GiMode::Vct;
@@ -339,6 +350,66 @@ int main(int argc, char **argv)
                   "(8) THE TLAS GATHER CONVERGES: the ray tier's feedback within a code of its 64-pass Jacobi");
             drop(m);
             e->setRayTracing(false);
+            continue;
+        }
+        if (std::getenv("JAH_REDS_ARM")) {   // MEASURING ARM (REDS-1 1b): where the dark inner-skin voxels are, overlapped and butted
+            for (int butted = 0; butted < 2; ++butted) {
+                g_armButted = butted == 1;
+                Arm m = arm(tiers[t], kE, 0.0f, false);
+                GiVoxelVolume v;
+                // classes on the x walls' and z walls' inner skin: [0] mid-face, [1] within 0.5 m of the floor or
+                // ceiling only, [2] within 0.5 m of a vertical corner only, [3] both; and the floor/ceiling's edge strip [4]
+                double sum[5] = {}, cnt[5] = {}, dark[5] = {};
+                int shown = 0;
+                if (m.scene && m.scene->giVoxelVolume(0, v) && v.available) {
+                    GiVoxelVolume vl;
+                    m.scene->giVoxelLight(0, vl);
+                    const float cell = v.cell[0];
+                    for (int z = 0; z < v.depth; ++z) for (int y = 0; y < v.height; ++y) for (int x = 0; x < v.width; ++x) {
+                        const float p[3] = { v.origin[0] + cell * (x + 0.5f), v.origin[1] + cell * (y + 0.5f), v.origin[2] + cell * (z + 0.5f) };
+                        const bool inGrown = std::fabs(p[0]) < kHalfX + cell && std::fabs(p[2]) < kHalfZ + cell && p[1] > -cell && p[1] < kHeight + cell;
+                        const bool inShrunk = std::fabs(p[0]) < kHalfX - cell && std::fabs(p[2]) < kHalfZ - cell && p[1] > cell && p[1] < kHeight - cell;
+                        if (!inGrown || inShrunk) continue;
+                        const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
+                        const float c = vl.light[i + 3];
+                        if (!(c > 0.5f)) continue;
+                        float in[3] = { 0, 0, 0 };
+                        const float dx = kHalfX - std::fabs(p[0]), dz = kHalfZ - std::fabs(p[2]), dy0 = p[1], dy1 = kHeight - p[1];
+                        const float dmin = std::min(std::min(std::fabs(dx), std::fabs(dz)), std::min(std::fabs(dy0), std::fabs(dy1)));
+                        bool wall = false;
+                        if (dmin == std::fabs(dy0)) in[1] = 1; else if (dmin == std::fabs(dy1)) in[1] = -1;
+                        else if (dmin == std::fabs(dx)) { in[0] = p[0] > 0 ? -1.f : 1.f; wall = true; } else { in[2] = p[2] > 0 ? -1.f : 1.f; wall = true; }
+                        const float nn[3] = { 2 * vl.normal[i] - 1, 2 * vl.normal[i + 1] - 1, 2 * vl.normal[i + 2] - 1 };
+                        const bool frontIn = nn[0] * in[0] + nn[1] * in[1] + nn[2] * in[2] >= 0;
+                        const float *sd = (vl.normal[i + 3] > 0.5f ? (frontIn ? vl.lightFront.data() : vl.lightBack.data()) : vl.light.data()) + i;
+                        const double L = std::max(std::max(sd[0], sd[1]), sd[2]) / c;
+                        int k;
+                        if (wall) {
+                            const bool nearH = p[1] < 0.5f || p[1] > kHeight - 0.5f;
+                            const bool nearV = (in[0] != 0 ? kHalfZ - std::fabs(p[2]) : kHalfX - std::fabs(p[0])) < 0.5f;
+                            k = nearH && nearV ? 3 : nearH ? 1 : nearV ? 2 : 0;
+                        } else {
+                            const bool nearE = std::min(kHalfX - std::fabs(p[0]), kHalfZ - std::fabs(p[2])) < 0.5f;
+                            if (!nearE) continue;
+                            k = 4;
+                        }
+                        sum[k] += L; cnt[k] += 1; dark[k] += L < 1.575 ? 1 : 0;
+                        if (L < 1.575 && shown < 24 && butted == 0 && k != 3) {
+                            ++shown;
+                            std::printf("     dark k%d p (%.3f %.3f %.3f) L %.4f n (%.2f %.2f %.2f) two %d c %.3f covP (%.2f %.2f %.2f) covN (%.2f %.2f %.2f) W %u\n",
+                                        k, p[0], p[1], p[2], L, nn[0], nn[1], nn[2], int(vl.normal[i + 3] > 0.5f), c,
+                                        v.coverageP[i], v.coverageP[i + 1], v.coverageP[i + 2], v.coverageN[i], v.coverageN[i + 1], v.coverageN[i + 2],
+                                        v.accumWeight.size() > i / 4 ? v.accumWeight[i / 4] : 0u);
+                        }
+                    }
+                }
+                const char *kn[5] = { "walls mid", "walls near floor/ceiling", "walls near a vertical corner", "walls near both", "floor/ceiling edge strip" };
+                std::printf("   ARM 1b %s (L main %.6f):\n", butted ? "BUTTED" : "OVERLAPPED", m.cascades.empty() ? -1.0 : m.cascades[0].mean);
+                for (int k = 0; k < 5; ++k)
+                    std::printf("     %-30s %6d voxels, mean L %.5f, %d under 1.575\n", kn[k], int(cnt[k]), cnt[k] > 0 ? sum[k] / cnt[k] : 0.0, int(dark[k]));
+                drop(m);
+            }
+            g_armButted = false;
             continue;
         }
         // THE SKY-LEAK ARM: the escape share, per cascade (the series half)
