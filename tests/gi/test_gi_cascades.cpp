@@ -1181,9 +1181,6 @@ int main()
         for (const Run &run : runs) {
         const Pose &pose = *run.pose;
         const int raysOn = run.raysOn;
-        // MEASURING ARM (8B B5, to be reverted): the rays-on run with NO gather history (gather.historyFrames 1: every
-        // pixel takes its frame's probes whole) - is the rays-on residue the gather's temporal hold at all?
-        e->setArm("gather.historyFrames", raysOn ? 1.0 : 0.0);
         if (raysOn != raysWere) {
             e->setRayTracing(raysOn != 0);
             render(e, 2);
