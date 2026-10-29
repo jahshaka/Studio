@@ -332,11 +332,6 @@ int main(int, char **)
                 run(12);
                 const GatherStatus &gs = s->published().gi.gather;
                 Band band[8];
-                double armS[8] = {}, armSref[8] = {}, armR[8] = {}, armRref[8] = {}, armLobe[8] = {}, armRefLobe[8] = {}, armOpen[8] = {};
-                unsigned armN[8] = {};
-                unsigned ulpHist[12] = {};
-                double armOwn[8] = {}, armOffMax[8] = {};
-                unsigned armOffN[8] = {};
                 unsigned hits = 0, wrong = 0, off = 0;
                 double worst = 0.0;
                 for (const GatherRay &r : gs.rays) {
@@ -357,50 +352,6 @@ int main(int, char **)
                     const double a = wallRadiance(P, V);
                     if (!(a > 1e-3)) continue;
                     const int b = std::min(7, int(std::hypot(P[1] - 2.0, P[2]) / 0.5));
-                    if (card) {   // MEASURING ARM (REDS-1 item 2, reverted after its one run): the stored texel and the read apart
-                        CardSample cs;
-                        if (s->readCardAt(Vec3(r.hitPos[0], r.hitPos[1], r.hitPos[2]), Vec3(1, 0, 0), cs, wall) && cs.ok) {
-                            const double T[3] = { cs.position[0], cs.position[1], cs.position[2] };
-                            double L[3] = { kLamp[0] - T[0], kLamp[1] - T[1], kLamp[2] - T[2] };
-                            const double dl = std::sqrt(dot3(L, L));
-                            norm3(L);
-                            const double mu = std::max(0.0, L[0]), E = kI * mu * lightFalloff(dl, kRange, kSrc);
-                            double Hn[3] = { L[0] + 1.0, L[1], L[2] };
-                            norm3(Hn);
-                            double Vt[3] = { O[0] - T[0], O[1] - T[1], O[2] - T[2] };
-                            norm3(Vt);
-                            double Hv[3] = { L[0] + Vt[0], L[1] + Vt[1], L[2] + Vt[2] };
-                            norm3(Hv);
-                            const double dN = disney(mu, 1.0, Hn[0], 1.0), dV = disney(mu, Vt[0], dot3(Vt, Hv), 1.0);
-                            const double storedDirect = double(cs.radiance[1]) - double(cs.indirect[1]) - double(cs.flat[1]);
-                            const double analyticN = E * kAlb * dN;
-                            // the lights' lobe at the hit, as the read takes it
-                            double Lh[3] = { kLamp[0] - r.hitPos[0], kLamp[1] - r.hitPos[1], kLamp[2] - r.hitPos[2] };
-                            const double dh = std::sqrt(dot3(Lh, Lh));
-                            norm3(Lh);
-                            double A = 0, B = 0;
-                            enginetest::ggxSpecularAlbedo(std::max(0.0, Lh[0]), 1.0, A, B, 96);
-                            const double lobe = kI * std::max(0.0, Lh[0]) * lightFalloff(dh, kRange, kSrc) * (gF0 * A + gW * B);
-                            const double cpuRead = storedDirect * dV / dN + double(cs.indirect[1]) + double(cs.flat[1]) + lobe;
-                            armS[b] += storedDirect; armSref[b] += analyticN; armR[b] += r.radiance[1]; armRref[b] += cpuRead;
-                            armLobe[b] += lobe; armRefLobe[b] += a; ++armN[b];
-                            {   // the reference at the ANSWERING texel's own point (V from the origin to it)
-                                double Vo[3] = { O[0] - T[0], O[1] - T[1], O[2] - T[2] };
-                                norm3(Vo);
-                                armOwn[b] += wallRadiance(T, Vo);
-                                const double off = std::hypot(cs.position[1] - P[1], cs.position[2] - P[2]);
-                                if (off > 1e-3) { ++armOffN[b]; armOffMax[b] = std::max(armOffMax[b], off); }
-                            }
-                            armOpen[b] += std::hypot(cs.position[1] - P[1], cs.position[2] - P[2]);
-                            {   // the stored radiance's error in units of the half float's step at the expected value
-                                const double want = analyticN + double(cs.indirect[1]) + double(cs.flat[1]);
-                                const double step = std::ldexp(1.0, int(std::floor(std::log2(want))) - 10);
-                                const double u = (double(cs.radiance[1]) - want) / step;
-                                const int k = std::max(0, std::min(11, int(std::floor((u + 1.5) / 0.25))));
-                                ++ulpHist[k];
-                            }
-                        }
-                    }
                     band[b].got += r.radiance[1];
                     band[b].ref += a;
                     ++band[b].n;
@@ -412,26 +363,6 @@ int main(int, char **)
                 std::printf("   (T1) %s: %u wall hits (%u answered by another source, %u not the patch's); the worst "
                             "single hit %.4f (V known to the patch's size)\n",
                             card ? "THE CARD'S ANSWER" : "THE CASCADES' ANSWER", hits, wrong, off, worst);
-                if (card)
-                    for (int b = 0; b < 8; ++b)
-                        if (armN[b])
-                            std::printf("        ARM band %d (%u): STORED direct vs the analytic at V = N %+.4f %%; the engine's READ vs "
-                                        "the CPU's restore of the same texel %+.4f %%; the CPU restore vs the reference %+.4f %%; the lobe's "
-                                        "share %.4f; |texel point - texel centre| %.2e m\n", b, armN[b],
-                                        100.0 * (armS[b] / armSref[b] - 1.0), 100.0 * (armR[b] / armRref[b] - 1.0),
-                                        100.0 * (armRref[b] / armRefLobe[b] - 1.0), armLobe[b] / armRref[b], armOpen[b] / armN[b]);
-                if (card)
-                    for (int b = 0; b < 8; ++b)
-                        if (armN[b])
-                            std::printf("        ARM band %d: the engine's answer vs the reference at the ANSWERING texel's point %+.4f %% (%.2f q); "
-                                        "%u of %u hits answered off the 1/64 m grid's texel (the farthest %.4f m)\n", b,
-                                        100.0 * (armR[b] / armOwn[b] - 1.0), std::fabs(armR[b] - armOwn[b]) / armN[b] / quantumOf(armOwn[b] / armN[b]),
-                                        armOffN[b], armN[b], armOffMax[b]);
-                if (card) {
-                    std::printf("        ARM the stored radiance - the expected, in half-float steps, bins of 0.25 from -1.5:");
-                    for (int k = 0; k < 12; ++k) std::printf(" [%+.2f]%u", -1.5 + 0.25 * k, ulpHist[k]);
-                    std::printf("\n");
-                }
                 bool within = wrong == 0u && hits >= 800u;
                 for (int b = 0; b < 8; ++b) {
                     if (!band[b].n) continue;
