@@ -5,9 +5,13 @@
 // proves the product-level contract, and it does it the only way that is worth
 // anything — by launching the REAL binary into a scratch HOME and reading what
 // `app.shaderCache()` says each time (the import.shutdown / open.responsive
-// pattern). TWO ROWS (TESTING-SPEED-B3; one row of five launches before):
+// pattern). THREE ROWS (TESTING-SPEED-B3 made two of one row of five launches; HARNESS-4 split the
+// first by proof, 2026-10-29: three launches priced 48.36 s, over a row's 45-s law, and 60.09 s
+// TIMEOUT on 8B's loaded check - each part keeps the laws of the launches it holds):
 //
-// shadercache.app — three launches:
+// shadercache.app.coldwarm — runs 1 and 2 in one process (run 2's laws read run 1's numbers);
+// shadercache.app.cleared (`--cleared`) — run 3 alone, on the home the coldwarm row leaves warm (a
+//                 fixture chain: it requires that row, and refuses a home with no cache to clear):
 //   run 1, cold : the cache reports itself enabled and located, the startup
 //                 gate builds shaders BEFORE the window (compiledThisRun > 0),
 //                 app.saveShaderCache() writes files, app.clearShaderCache()
@@ -122,6 +126,7 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     const bool churnRow = argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--churn");
+    const bool clearedRow = argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cleared");
 
     const QString home = QDir::current().absoluteFilePath(
         churnRow ? QStringLiteral("e2e-home-shadercache-churn") : QStringLiteral("e2e-home-shadercache"));
@@ -132,7 +137,8 @@ int main(int argc, char **argv)
     // and wants their sidecar directory, and an older AssetStore has none, so the app REFUSES the library (exit 4) and
     // run 1 never starts (main's build-linux, 2026-10-20, a home from an earlier schema; FORWARD-BUILDING: app data is
     // wiped at a format bump, and a row owns its own state).
-    QDir(home + "/.local/share/Jahshaka").removeRecursively();
+    // (shadercache.app.cleared keeps it: its subject is the warm cache the coldwarm row left)
+    if (!clearedRow) QDir(home + "/.local/share/Jahshaka").removeRecursively();
 
     const QString scripts = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
                             QStringLiteral("/tests/shadercache/scripts/");
@@ -242,7 +248,34 @@ int main(int argc, char **argv)
         return failures ? 1 : 0;
     }
 
-    // ---- run 1: cold ------------------------------------------------------
+    if (clearedRow) {
+        // ---- run 3: --clear-shader-cache (shadercache.app.cleared) ------------
+        // ITS START IS A WARM CACHE: the one run 2 of shadercache.app.coldwarm loaded and saved (the fixture chain).
+        // Without one the row would assert "cold again" on a home that was never warm - refused, not read.
+        const QString manifest = home + QStringLiteral("/.local/share/Jahshaka/shadercache/cache-manifest.txt");
+        if (!QFileInfo::exists(manifest)) {
+            std::printf("FAIL: no warm shader cache in %s - run shadercache.app.coldwarm first (the row's fixture chain "
+                        "does)\n", qPrintable(home));
+            return 1;
+        }
+        CHECK(true, "the home holds the warm cache shadercache.app.coldwarm left (its manifest)");
+        const QJsonObject cleared = runApp(home, scripts + "e2e_shader_cache_warm.js",
+                                           {QStringLiteral("--clear-shader-cache")}, &rc);
+        CHECK(rc == 0, "run 3 exited cleanly with --clear-shader-cache");
+        CHECK(cleared.value("compiledThisRun").toInt() > 0,
+              "--clear-shader-cache made the next launch cold again");
+        // NOT "loadedThisRun == 0": that counter also ticks for an IN-PROCESS
+        // microcode hit (two shaders generated from identical source — the SMAA
+        // materials do it three times every launch), so a genuinely cold run still
+        // reports a few. What a cold run cannot do is LOAD A LAYER.
+        CHECK(!cleared.value("microcodeLoaded").toBool() &&
+              !cleared.value("pipelineCacheLoaded").toBool(),
+              "--clear-shader-cache left no layer to load");
+        std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
+        return failures ? 1 : 0;
+    }
+
+    // ---- run 1: cold (shadercache.app.coldwarm) ----------------------------
     const QJsonObject cold = runApp(home, scripts + "e2e_shader_cache_cold.js", {}, &rc);
     CHECK(rc == 0, "run 1 exited cleanly");
     CHECK(cold.value("enabled").toBool(), "the cache is enabled by default");
@@ -324,20 +357,6 @@ int main(int argc, char **argv)
     std::printf("   run 2: compiled %d, loaded %d\n", warm.value("compiledThisRun").toInt(),
                 warm.value("loadedThisRun").toInt());
     CHECK(warm.value("compiledThisRun").toInt() == 0, "run 2 compiled NOTHING AT ALL");
-
-    // ---- run 3: --clear-shader-cache --------------------------------------
-    const QJsonObject cleared = runApp(home, scripts + "e2e_shader_cache_warm.js",
-                                       {QStringLiteral("--clear-shader-cache")}, &rc);
-    CHECK(rc == 0, "run 3 exited cleanly with --clear-shader-cache");
-    CHECK(cleared.value("compiledThisRun").toInt() > 0,
-          "--clear-shader-cache made the next launch cold again");
-    // NOT "loadedThisRun == 0": that counter also ticks for an IN-PROCESS
-    // microcode hit (two shaders generated from identical source — the SMAA
-    // materials do it three times every launch), so a genuinely cold run still
-    // reports a few. What a cold run cannot do is LOAD A LAYER.
-    CHECK(!cleared.value("microcodeLoaded").toBool() &&
-          !cleared.value("pipelineCacheLoaded").toBool(),
-          "--clear-shader-cache left no layer to load");
 
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
     return failures ? 1 : 0;

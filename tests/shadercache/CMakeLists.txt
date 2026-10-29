@@ -17,9 +17,14 @@
 # The application-level contract: the verbs, --clear-shader-cache, and the
 # owner's rule that the startup shader build happens behind the launch screen.
 # Spawns the REAL binary into a scratch HOME (the import.shutdown pattern) and reads
-# app.shaderCache() from its output. TWO ROWS (TESTING-SPEED-B3; one row of five launches before):
-#   shadercache.app        three launches — cold, warm (the steady state's compiled == 0 is its bar:
-#                          the first warm launch IS the steady state since WARMUPSET-2), cleared.
+# app.shaderCache() from its output. THREE ROWS (TESTING-SPEED-B3 made two of one row of five launches; HARNESS-4 split
+# the first BY PROOF, 2026-10-29: its three launches were priced 48.36 s, over a row's 45-s law, and timed out at
+# 60.09 s on 8B's loaded check):
+#   shadercache.app.coldwarm  two launches in one process — cold, then warm (the steady state's compiled == 0 is its
+#                          bar, the first warm launch IS the steady state since WARMUPSET-2; and its laws read the cold
+#                          run's numbers: a fraction of its compiles, the same fingerprint) - its home left WARM;
+#   shadercache.app.cleared   `--cleared`: one launch with --clear-shader-cache on that warm home (a fixture chain:
+#                          FIXTURES_REQUIRED + DEPENDS; it refuses a home with no cache) - cold again, no layer loaded.
 #   shadercache.app.churn (archived: archive/tests/shadercache)  `--churn`, stage-close, its own home: a seeding cold launch, then the save
 #                          under churn (the SMOKE-ENGINE-1 crash: the pass-cache delta < 8 across 300 sky
 #                          captures, the capacity >= 8192), unchanged.
@@ -35,10 +40,14 @@ target_link_libraries(test_shader_cache_app PRIVATE Qt6::Core)
 target_compile_definitions(test_shader_cache_app PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-jah_gpu_row(shadercache.app SHIP CLASS app TIER document   COMMAND test_shader_cache_app
+jah_gpu_row(shadercache.app.coldwarm SHIP CLASS app TIER document   COMMAND test_shader_cache_app
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-# budget 60 s: the measurement — three launches, 976 frames: 42.8-60.8 s loaded at the tip (cold 33-35, warm 4.6, cleared 19).
-set_tests_properties(shadercache.app PROPERTIES TIMEOUT 60 LABELS "shadercache")
+set_tests_properties(shadercache.app.coldwarm PROPERTIES TIMEOUT 60 LABELS "shadercache"
+    FIXTURES_SETUP shadercacheAppWarm)
+jah_gpu_row(shadercache.app.cleared SHIP CLASS app TIER document   COMMAND test_shader_cache_app --cleared
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.app.cleared PROPERTIES TIMEOUT 60 LABELS "shadercache"
+    FIXTURES_REQUIRED shadercacheAppWarm DEPENDS shadercache.app.coldwarm)
 
 # shader.async_after_open (ASYNC-SHADERS-1): after a project is open, a new material and a tier
 # change compile in the BACKGROUND — 0 UI-thread compiles, the placeholder in the presented
@@ -61,7 +70,13 @@ target_compile_definitions(test_async_after_open PRIVATE
 # not this row's subject, and a fresh tree (every ship tree) paid it inside the row — 64 s solo, over the minute. The
 # seed row boots the SAME World Mode (the tier and features below) and quits, only when the seed is missing; the row
 # requires it (a fixture chain: FIXTURES_SETUP + FIXTURES_REQUIRED + DEPENDS, so `-R shader.async_after_open` runs both).
+# COLD (URGENT #122, HARNESS-4): the seed is a cache keyed on the shaders (its tree key) that only its own boot may make -
+# the row's law needs the open's tier change to compile, and the shared app cache holds tier low - so every shader
+# change made this row a 64-s boot at the 60-s cap (8B's check: 60.04 s, the row behind it NOT RUN). Declared COLD, the
+# warm-up's cold-on boot runs `--seed` once uncapped with this test tier (scripts/warm-app-cache.sh) and the row finds
+# the seed this tree's (0.03 s).
 jah_gpu_row(shader.async_after_open.seed SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+         COLD "the startup seed is a cache keyed on the shaders that only this row's own boot may make"
          COMMAND test_async_after_open --seed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.async_after_open.seed PROPERTIES TIMEOUT 60 LABELS "shadercache"   # 6 x its solo 28.2 s
@@ -91,11 +106,14 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing. The two async rows
 # re-counted 2026-10-20 by the same meter at TOOLING-7's split (the seed's boot-and-quit 463, the cold + warm launches
-# 918 + 382).
+# 918 + 382). The shadercache.app split (HARNESS-4, 2026-10-29) counted by an LD_PRELOAD meter of
+# Ogre::Root::_fireFrameEnded() rewritten per frame (the apps _Exit): cold 581 + warm 562, cleared 581 (the 976 of the
+# whole row was a 2026-10-12 count of an older script set).
 foreach(_row_frames
         "shader.async_after_open=1300"
         "shader.async_after_open.seed=463"
-        "shadercache.app=976"
+        "shadercache.app.coldwarm=1143"
+        "shadercache.app.cleared=581"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)
