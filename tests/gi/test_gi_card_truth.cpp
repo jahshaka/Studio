@@ -335,6 +335,8 @@ int main(int, char **)
                 double armS[8] = {}, armSref[8] = {}, armR[8] = {}, armRref[8] = {}, armLobe[8] = {}, armRefLobe[8] = {}, armOpen[8] = {};
                 unsigned armN[8] = {};
                 unsigned ulpHist[12] = {};
+                double armOwn[8] = {}, armOffMax[8] = {};
+                unsigned armOffN[8] = {};
                 unsigned hits = 0, wrong = 0, off = 0;
                 double worst = 0.0;
                 for (const GatherRay &r : gs.rays) {
@@ -382,6 +384,13 @@ int main(int, char **)
                             const double cpuRead = storedDirect * dV / dN + double(cs.indirect[1]) + double(cs.flat[1]) + lobe;
                             armS[b] += storedDirect; armSref[b] += analyticN; armR[b] += r.radiance[1]; armRref[b] += cpuRead;
                             armLobe[b] += lobe; armRefLobe[b] += a; ++armN[b];
+                            {   // the reference at the ANSWERING texel's own point (V from the origin to it)
+                                double Vo[3] = { O[0] - T[0], O[1] - T[1], O[2] - T[2] };
+                                norm3(Vo);
+                                armOwn[b] += wallRadiance(T, Vo);
+                                const double off = std::hypot(cs.position[1] - P[1], cs.position[2] - P[2]);
+                                if (off > 1e-3) { ++armOffN[b]; armOffMax[b] = std::max(armOffMax[b], off); }
+                            }
                             armOpen[b] += std::hypot(cs.position[1] - P[1], cs.position[2] - P[2]);
                             {   // the stored radiance's error in units of the half float's step at the expected value
                                 const double want = analyticN + double(cs.indirect[1]) + double(cs.flat[1]);
@@ -411,6 +420,13 @@ int main(int, char **)
                                         "share %.4f; |texel point - texel centre| %.2e m\n", b, armN[b],
                                         100.0 * (armS[b] / armSref[b] - 1.0), 100.0 * (armR[b] / armRref[b] - 1.0),
                                         100.0 * (armRref[b] / armRefLobe[b] - 1.0), armLobe[b] / armRref[b], armOpen[b] / armN[b]);
+                if (card)
+                    for (int b = 0; b < 8; ++b)
+                        if (armN[b])
+                            std::printf("        ARM band %d: the engine's answer vs the reference at the ANSWERING texel's point %+.4f %% (%.2f q); "
+                                        "%u of %u hits answered off the 1/64 m grid's texel (the farthest %.4f m)\n", b,
+                                        100.0 * (armR[b] / armOwn[b] - 1.0), std::fabs(armR[b] - armOwn[b]) / armN[b] / quantumOf(armOwn[b] / armN[b]),
+                                        armOffN[b], armN[b], armOffMax[b]);
                 if (card) {
                     std::printf("        ARM the stored radiance - the expected, in half-float steps, bins of 0.25 from -1.5:");
                     for (int k = 0; k < 12; ++k) std::printf(" [%+.2f]%u", -1.5 + 0.25 * k, ulpHist[k]);
