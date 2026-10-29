@@ -379,7 +379,7 @@ int main(int argc, char **argv)
             continue;
         }
         if (std::getenv("JAH_REDS_ARM")) {   // MEASURING ARM (REDS-1 1b): where the dark inner-skin voxels are, overlapped and butted
-            for (int butted = 0; butted < 3; ++butted) {
+            for (int butted = 2; butted < 3; ++butted) {
                 g_armButted = butted == 1;
                 g_armShell = butted == 2;
                 Arm m = arm(tiers[t], kE, 0.0f, false);
@@ -435,6 +435,12 @@ int main(int argc, char **argv)
                 for (int k = 0; k < 5; ++k)
                     std::printf("     %-30s %6d voxels, mean L %.5f, %d under 1.575\n", kn[k], int(cnt[k]), cnt[k] > 0 ? sum[k] / cnt[k] : 0.0, int(dark[k]));
                 drop(m);
+            }
+            for (int shell = 0; shell < 2; ++shell) {   // the injection alone, slabs and shell
+                g_armShell = shell == 1;
+                Arm d = arm(tiers[t], kE, 0.0f, false, false);
+                std::printf("   ARM 1b %s, the bounces OFF: L %.6f\n", shell ? "ONE SHELL" : "OVERLAPPED", d.cascades.empty() ? -1.0 : d.cascades[0].mean);
+                drop(d);
             }
             g_armButted = false;
             g_armShell = false;
