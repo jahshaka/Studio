@@ -37,6 +37,26 @@
 // ITS VIEW IS AN UNDECLARED OFFSCREEN VIEW (no View::setOffscreenContract), whatever the rays: its chain never gathers
 // (ChainDesc::probeGather is a still picture's, PHOTON-7 7-5) and shades through the no-ray route's screen integrate
 // (7-6) - this suite measures the voxel chain, the field, the cones and the probes beneath it, never the gather.
+//
+// SIX ROWS, ONE PROOF EACH (HARNESS-2, 2026-10-29: the one row was priced 50.68 s, over the 45-s quiet law, and timed out at
+// 60 s twice under load). `test_gi_cascades_asan <part>` runs ONE part in its own process - every case keeps its frames and
+// its bars, and a part that needed the state an earlier case left STAGES it (named where it is staged):
+//   schedule      cases 0, 1, 2, 2b, 3, 5, 6, 8, 9, 10, 16a-16d - THE CAMERA'S SCHEDULE: where the chain stands and what a
+//                 camera move costs (the open, the table, rest, the sway band, the scroll, the teleport, empty space, the
+//                 validated tables, the monitor's rows, `items`, the near field, the lattice, the free pin). Counts and
+//                 placements, no picture.
+//   faults        cases 11, 13 - A FAILED REBUILD CHANGES NOTHING BUT THE CLOCK (a scroll's and a whole rebuild's throw:
+//                 not counted, the placement kept or owed, the chain bound, the retry within its count). The sanitizer's
+//                 own subject: the failure paths around a cascade's voxeliser.
+//   edits         cases 7 (edits), 14, 15, 15b - AN EDIT RE-VOXELISES EXACTLY THE CASCADES THAT HOLD IT, one a frame, never
+//                 the chain; the instance budget bounds what a rebuild voxelises; the dirty boxes merge by margin, and
+//                 the merged rebuilds' light rests at a fresh build's within two codes (case 15, the solver's bound).
+//   ambient       cases 4, 7 (specular) - THE CHAIN CARRIES THE AMBIENT AS ONE CASCADE DOES, diffuse and specular.
+//   mover         case 12, the three poses with the rays off - A2's LAW: a declared mover is lit at the pose it is in
+//                 (motion against rest), and at rest the picture is a fresh build's.
+//   mover_routes  case 12, the corner with the rays ON and a STILL turned by script - at rest each is a fresh build's
+//                 (asserted); the rays-on residue (the non-gathering route's screen integrate, PHOTON-7's leftover) and
+//                 the still's move quantum are printed.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -58,9 +78,21 @@ static int failures = 0;
 
 static const unsigned kSize = 128;
 
+/// Every frame the part renders, counted - printed at the end as the row's FRAMES (never estimated).
+static long long gFrames = 0;
+
 static void render(Engine *e, int frames = 1)
 {
     enginetest::frames(e, frames);
+    gFrames += frames;
+}
+
+/// enginetest::settleVoxelReadings with its frames counted (it renders up to its 64 on a reading that never lands).
+static int settleReadings(Engine *e, Scene *s)
+{
+    const int f = enginetest::settleVoxelReadings(e, s);
+    gFrames += f >= 0 ? f : 64;
+    return f;
 }
 
 static float lum(const Colour &c) { return 0.2126f * c.r + 0.7152f * c.g + 0.0722f * c.b; }
@@ -103,8 +135,19 @@ static GiParams cascadeGi()
     return gi;
 }
 
-int main()
+int main(int argc, char **argv)
 {
+    // THE PART (the header's six rows): exactly one, or the run is refused - the parts stage their own state, so two in
+    // one process would stage it twice.
+    const std::string part = argc == 2 ? argv[1] : "";
+    const bool doSchedule = part == "schedule", doFaults = part == "faults", doEdits = part == "edits",
+               doAmbient = part == "ambient", doMover = part == "mover", doMoverRoutes = part == "mover_routes";
+    if (!(doSchedule || doFaults || doEdits || doAmbient || doMover || doMoverRoutes)) {
+        std::printf("FAIL: usage: test_gi_cascades_asan schedule|faults|edits|ambient|mover|mover_routes (got '%s')\n",
+                    part.c_str());
+        return 2;
+    }
+    std::printf("== part: %s ==\n", part.c_str());
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-cascades-ogre.log");
     auto engine = Engine::create(cfg, err);
@@ -124,6 +167,59 @@ int main()
     const NodeId wall = enginetest::addTestCube(scene, Colour(0.9f, 0.05f, 0.05f), 0.0f, 0.9f);
     enginetest::setNodePosition(scene, wall, Vec3(0.0f, 3.0f, -6.0f));
     enginetest::setNodeScale(scene, wall, Vec3(12.0f, 6.0f, 0.2f));
+    GiStatus st;   // (the cases' running read of the chain)
+
+    // ---- A PART'S PRECONDITIONS, STAGED (HARNESS-2: each was the state an earlier case happened to leave) ----
+    // THE CHAIN PARKED AT THE SUITE'S HOME POSE: up at (0, 2, 6), nothing pending and nothing scrolling - the precondition
+    // of a case that counts rebuilds (an open's own N builds still in the queue would be counted as the case's). The
+    // frames are spent only until the queue is empty; 240 (case 16b's park bound) is the ceiling only a stuck queue reaches.
+    const auto chainOwes = [&]() {
+        for (const GiStatus::CascadeStatus &c : scene->published().gi.cascades)
+            if (c.pending || c.scrolling) return true;
+        return false;
+    };
+    const auto parkAtHome = [&](const char *why) {
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f)));
+        CHECK(scene->setGlobalIllumination(cascadeGi()), why);
+        render(e, 8);
+        int parked = 8;
+        for (; parked < 240 && chainOwes(); ++parked) render(e, 1);
+        std::printf("   (staged: the chain parked at the home pose in %d frames)\n", parked);
+        CHECK(!scene->published().gi.cascades.empty() && !chainOwes(),
+              "staged: the chain is up and its queue is empty before the case counts anything");
+    };
+    // THE SCENE CASE 7's EDITS LEAVE - A DIRECTIONAL LAMP (the suite's ONLY direct light; the ambient is the rest) and three
+    // cubes: the dragged one where its gesture ended, the painted one after its parameter edit and its two presets, the
+    // promoted mover. Case 7 never removes them, so cases 12, 13 and 15 were measured in this scene (case 12's turner is lit
+    // by this lamp and bounces it; case 15's lit voxels are its light). The parts that run them without case 7 build it
+    // here with case 7's own calls, in its order. A dependency made explicit, not a change of scene.
+    const auto stageEditedScene = [&]() {
+        const NodeId dragged = enginetest::addTestCube(scene, Colour(0.2f, 0.8f, 0.2f), 0.0f, 0.8f);
+        enginetest::setNodePosition(scene, dragged, Vec3(1.0f + 0.05f * 19.0f, 0.5f, 1.0f));
+        const NodeId lamp = enginetest::addDirectionalLight(scene, Vec3(0.2f, -1.0f, -0.4f), 2.0f);
+        LightDesc d;
+        d.type = LightType::Directional;
+        d.colour = Colour(1.0f, 0.4f, 0.2f);
+        d.intensity = 3.0f;
+        scene->setLight(lamp, d);
+        const MeshId m = scene->createMesh(enginetest::unitCubeMesh());
+        PbrParams pp; pp.albedo = Colour(0.1f, 0.1f, 0.9f); pp.roughness = 0.7f;
+        const MaterialId mat = scene->createPbrMaterial(pp);
+        const NodeId painted = scene->createNode();
+        scene->attachMesh(painted, m, mat);
+        enginetest::setNodePosition(scene, painted, Vec3(-1.5f, 0.5f, 1.0f));
+        pp.albedo = Colour(0.9f, 0.9f, 0.1f);
+        const bool edited = scene->setPbrMaterial(mat, pp) && scene->setShadingModel(mat, ShadingModel::Unlit) &&
+                            scene->setShadingModel(mat, ShadingModel::Lit);
+        const NodeId promoted = enginetest::addTestCube(scene, Colour(0.3f, 0.3f, 0.9f), 0.0f, 0.6f);
+        enginetest::setNodePosition(scene, promoted, Vec3(2.0f, 0.5f, 2.0f));
+        scene->setNodeMovable(promoted, true);
+        render(e, 2);
+        CHECK(dragged && lamp && painted && promoted && edited,
+              "staged: case 7's scene - the lamp, the dragged, painted and promoted cubes");
+    };
+
+    if (doSchedule) {   // (schedule: cases 0, 1, 2, 2b, 3)
     // =====================================================================
     // CASE 0 — THE OPEN: the chain is built WHERE THE CAMERA IS
     // =====================================================================
@@ -191,7 +287,7 @@ int main()
     std::printf("\n== case 1: the chain builds ==\n");
     CHECK(scene->setGlobalIllumination(cascadeGi()), "the cascade arm accepts");
     render(e, 4);
-    GiStatus st = scene->published().gi;
+    st = scene->published().gi;
     CHECK(st.vctBound, "the chain's head is bound to the shader");
     CHECK(st.cascades.size() >= 2, "more than one cascade exists");
     float prevCell = 0.0f, prevHalf = 0.0f;
@@ -344,7 +440,9 @@ int main()
     CHECK(prevTotal > before, "the walk re-voxelised something");
     CHECK(worstFrame <= 1, "NO FRAME EVER PAYS FOR TWO CASCADES (the one-per-frame budget)");
     CHECK(st.cascadeFullRebuilds == 0, "an ordinary walk never trips the teleport guard");
+    }   // (schedule: cases 0, 1, 2, 2b, 3)
 
+    if (doAmbient) {   // (ambient: case 4)
     // =====================================================================
     // CASE 4 — the ambient is in every cascade (upstream's 2,2,2 room)
     // =====================================================================
@@ -436,7 +534,17 @@ int main()
               "A PIXEL BEYOND CASCADE 0 READS THE CHAIN'S CONES WITH THE FIELD BOUND (within one code)");
         CHECK(fieldChain > 0.02f, "...and it is a lit picture, not a black one");
     }
+    }   // (ambient: case 4)
 
+    if (doSchedule) {   // (schedule: cases 5, 6)
+    // STAGED (HARNESS-2): the teleport was always measured from the chain case 4 left - the FIELD BOUND (ddgi on, budget 1)
+    // at (0, 2, 60) after its 8 frames - so its settle window shares the slot with the field's follow (the 2n + 2 bound).
+    {
+        view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 2.0f, 60.0f), Vec3(0.0f, 1.0f, 40.0f)));
+        GiParams chainF = cascadeGi(); chainF.ddgi = GiToggle::On; chainF.updateBudget = 1;
+        CHECK(scene->setGlobalIllumination(chainF), "staged: the chain with the field on, where case 4 left it");
+        render(e, 8);
+    }
     // =====================================================================
     // CASE 5 + 6 — the teleport: bounded, counted, and never black
     // =====================================================================
@@ -508,7 +616,9 @@ int main()
         CHECK(st.cascades.size() == 2 && st.cascades[0].rebuilds > 0,
               "and the cascades re-fill when the camera returns to the geometry");
     }
+    }   // (schedule: cases 5, 6)
 
+    if (doAmbient) {   // (ambient: case 7 (specular))
     // =====================================================================
     // CASE 7 — THE SPECULAR AMBIENT SURVIVES THE CHAIN (fork 8f09c0cd4 (was 0033))
     // =====================================================================
@@ -572,7 +682,9 @@ int main()
             render(e, 2);
         }
     }
+    }   // (ambient: case 7 (specular))
 
+    if (doSchedule) {   // (schedule: cases 8, 9, 10)
     // =====================================================================
     // CASE 8 — A PINNED TABLE THAT CANNOT BE HONOURED IS REFUSED WHOLE
     // =====================================================================
@@ -692,7 +804,7 @@ int main()
                                                          Vec3(0.0f, 1.0f, 6.0f)));
         CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up around the prop");
         render(e, 8);
-        CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
+        CHECK(settleReadings(e, scene) >= 0,   // the voxel read-back lands frames late
               "the voxel read-back landed: every cascade's reading is its newest gather's");
         st = scene->published().gi;
         const int near = st.cascades[0].items;
@@ -703,7 +815,7 @@ int main()
                                                              Vec3(x, 1.0f, 6.0f)));
             render(e, 1);
         }
-        CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
+        CHECK(settleReadings(e, scene) >= 0,   // the voxel read-back lands frames late
               "the voxel read-back landed: every cascade's reading is its newest gather's");
         st = scene->published().gi;
         const int far = st.cascades[0].items;
@@ -715,7 +827,10 @@ int main()
         scene->removeNode(prop);
         render(e, 4);
     }
+    }   // (schedule: cases 8, 9, 10)
 
+    if (doFaults) {   // (faults: case 11)
+    parkAtHome("staged: the chain is up for the failed scroll");
     // =====================================================================
     // CASE 11 — A REBUILD THAT THROWS CHANGES NOTHING BUT THE CLOCK
     // =====================================================================
@@ -780,7 +895,10 @@ int main()
               "...and the cascade is where the camera is");
         CHECK(st.cascades[0].pending == 0, "...and owes nothing once the cut's remainder has scrolled");
     }
+    }   // (faults: case 11)
 
+    if (doEdits) {   // (edits: case 7 (edits))
+    parkAtHome("staged: the chain is up, still, for the edits");
     // =====================================================================
     // CASE 7 — AN EDIT IS NOT A CHAIN REBUILD (PHOTON_SPEC G1)
     // =====================================================================
@@ -1107,7 +1225,10 @@ int main()
         CHECK(scene->setGlobalIllumination(down), "the edited chain comes down");
         render(e, 2);
     }
+    }   // (edits: case 7 (edits))
 
+    if (doMover || doMoverRoutes) {   // (mover / mover_routes: case 12)
+    stageEditedScene();
     // =====================================================================
     // CASE 12 — A STILL OBJECT THAT IS MOVING IS LIT AT THE POSE IT IS IN
     // =====================================================================
@@ -1149,8 +1270,12 @@ int main()
     // region's bounce restarted from its direct term and the feedback converged it a pass a frame (the error fell to 0
     // over 8-32 frames after the motion stopped). A2: the region's bricks take k passes IN THE FRAME they are rebuilt (k
     // from the region's largest albedo: PhotonComponent::regionBounce). The RAYS-ON numbers are PRINTED with the frames
-    // the picture takes to reach the bar and a code after the motion: the residue after A2 is the ray tier's temporal
-    // hold, stage 8B's by name.
+    // the picture takes to reach the bar and a code after the motion. WHICH ROUTE THEY MEASURE (PHOTON-7's leftover, 8B's
+    // B5, 2026-10-29 §3574): this view is a Live offscreen view that never gathers (probeGather false), so the rays-on
+    // residue is the NON-GATHERING ROUTE's - the screen integrate's (the irradiance field's temporal or its probe budget),
+    // unmeasured; the gather's history off reads the identical numbers. It is not the gather's temporal hold. Its numbers
+    // of record: 56/255, 500 px >= 10 on the base f9544f67f (the bar at 31 frames, a code at 37); 81/255, 341 px on 8B's
+    // tip (27 / 33). Its row (row mover_routes) asserts only the rest law on that route.
     std::printf("\n== case 12: a moving still object is lit at its own pose ==\n");
     {
         struct Pose { const char *name; Vec3 cam; int faces; };
@@ -1171,14 +1296,17 @@ int main()
         // The turner's footprint over the whole motion: a 2 m cube about the vertical, half-diagonal sqrt 2.
         const float reach = 1.41422f;
         // THE RUNS: the MOVER turning at the three poses with the rays off (A2's law, asserted); the corner with the rays on
-        // (printed: 8B's temporal residue, the frames to the bar and to a code); the corner with a STILL turned by script
+        // (printed: the non-gathering route's residue, the frames to the bar and to a code); the corner with a STILL turned by script
         // (printed: the document-to-engine mirror's move quantum - the walk marks a 1-degree-a-frame turn every second
         // frame, so the store holds the still up to a quantum behind: an editor-side agreement, not the renderer's law).
         struct Run { const Pose *pose; int raysOn; bool still; };
         const Run runs[5] = { { &poses[0], 0, false }, { &poses[1], 0, false }, { &poses[2], 0, false },
                               { &poses[0], 1, false }, { &poses[0], 0, true } };
         int raysWere = -1;
-        for (const Run &run : runs) {
+        for (int ri = 0; ri < 5; ++ri) {
+        // (the part: `mover` the three poses with the rays off - A2's law; `mover_routes` the rays-on corner and the still)
+        if (ri < 3 ? !doMover : !doMoverRoutes) continue;
+        const Run &run = runs[ri];
         const Pose &pose = *run.pose;
         const int raysOn = run.raysOn;
         if (raysOn != raysWere) {
@@ -1188,7 +1316,7 @@ int main()
         }
         std::printf("   -- %s, the rays %s --\n", run.still ? "a STILL turned by script (printed: the move quantum)"
                                                           : "a MOVER turning",
-                    raysOn ? "ON (printed: 8B's temporal residue)" : "OFF (A2's law)");
+                    raysOn ? "ON (printed: the non-gathering route's residue)" : "OFF (A2's law)");
         {
             view->setCamera(enginetest::testCameraDescLookAt(pose.cam, Vec3(0.0f, 1.0f, 0.0f)));
             const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
@@ -1301,7 +1429,7 @@ int main()
                     if (toBar < 0 && w <= 16 && o == 0u) toBar = int(q) + 1;
                     if (toCode < 0 && w <= 1) toCode = int(q) + 1;
                 }
-                std::printf("   [%s] RAYS ON (8B's, printed): motion vs rest %d/255, %u px >= 10; the bar reached %d frames "
+                std::printf("   [%s] RAYS ON (the non-gathering route, printed): motion vs rest %d/255, %u px >= 10; the bar reached %d frames "
                             "after the motion, a code %d frames after (-1: not within %zu)\n", pose.name, motionMax,
                             motionOver, toBar, toCode, after.size());
             }
@@ -1313,7 +1441,16 @@ int main()
         e->setRayTracing(true);
         render(e, 2);
     }
+    }   // (mover / mover_routes: case 12)
 
+    if (doFaults) {   // (faults: case 13)
+    // STAGED: case 13 ran after case 12 - the chain down, in case 7's scene.
+    {
+        GiParams down; down.mode = GiMode::Off;
+        CHECK(scene->setGlobalIllumination(down), "staged: the chain down before the post-build fault");
+        render(e, 2);
+        stageEditedScene();
+    }
     // =====================================================================
     // CASE 13 — A FAILURE AFTER THE BUILD
     // =====================================================================
@@ -1374,7 +1511,9 @@ int main()
         CHECK(scene->setGlobalIllumination(down), "the faulted chain comes down cleanly");
         render(e, 2);
     }
+    }   // (faults: case 13)
 
+    if (doEdits) {   // (edits: cases 14, 15, 15b)
     // =====================================================================
     // CASE 14 — THE PER-CASCADE INSTANCE BUDGET (PHOTON_SPEC §7 E2 (1))
     // =====================================================================
@@ -1426,7 +1565,7 @@ int main()
                   caps[ci] ? "the chain builds under an instance budget"
                            : "the chain builds with no budget (the shipped arm)");
             render(e, 6);
-            CHECK(enginetest::settleVoxelReadings(e, scene) >= 0,   // the voxel read-back lands frames late
+            CHECK(settleReadings(e, scene) >= 0,   // the voxel read-back lands frames late
                   "the voxel read-back landed: every cascade's reading is its newest gather's");
             const GiStatus st = scene->published().gi;
             if (st.cascades.empty()) { CHECK(false, "the chain is up at this cap"); continue; }
@@ -1740,7 +1879,9 @@ int main()
             render(e, 6);
         }
     }
+    }   // (edits: cases 14, 15, 15b)
 
+    if (doSchedule) {   // (schedule: cases 16a-16d)
     // =====================================================================
     // CASE 16 — THE NEAR-FIELD GUARANTEE (CASCADE-STEP-1)
     //
@@ -1898,7 +2039,9 @@ int main()
                   "...and the walk's worst offset is the lattice's supremum: (0.5 + h) of a step, the frame the test "
                   "costs and the scroll's chunk frames");
         }
-        CHECK(w1.cascadeFullRebuilds == 0, "a 10 m walk is not a teleport");
+        // THE WALK's OWN COUNT (HARNESS-2): the counter is the chain's lifetime total, and the park before the walk may be a
+        // relocation the guard rightly answers (in the schedule row it is 25 m, from case 10's end); the law is the walk's.
+        CHECK(w1.cascadeFullRebuilds == w0.cascadeFullRebuilds, "a 10 m walk is not a teleport (the walk adds no full rebuild)");
         }
     }
 
@@ -2007,6 +2150,7 @@ int main()
             CHECK(pinnedAtP, "...and every other cascade for the pin's camera");
         }
     }
+    }   // (schedule: cases 16a-16d)
 
     // The arm must come down cleanly — the chain's extra cascades are owned by
     // the scene and die with it (the teardown order the arm requires).
@@ -2015,6 +2159,7 @@ int main()
     render(e, 2);
     CHECK(scene->published().gi.cascades.empty(), "and leaves no cascades behind");
 
+    std::printf("\nframes rendered: %lld (part %s: the row's FRAMES)\n", gFrames, part.c_str());
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
                 failures == 1 ? "" : "s");
     return failures ? 1 : 0;

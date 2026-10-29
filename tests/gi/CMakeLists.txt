@@ -65,17 +65,41 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     add_dependencies(test_gi_cascades_asan JahshakaEngineMedia)
     target_compile_options(test_gi_cascades_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_gi_cascades_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(gi.cascades_asan SHIP CLASS engine COMMAND test_gi_cascades_asan
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    # LeakSanitizer off for the same reason test_engine_asan turns it off (the
-    # only leaks are inside libdbus via the Vulkan loader's device-select layer);
-    # use-after-free detection is the point and stays on.
-    # (TIMEOUT 60, the law's cap: every test under a minute - priced 33.4 s, 2816 frames under the sanitizer; PHOTON-7
-    # stage 10's case 12: three poses, each with a fresh build as its oracle, +850 frames)
-    set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 60 LABELS "engine"
-        RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
-        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
-    set_tests_properties(gi.cascades_asan PROPERTIES JAHSHAKA_TEST_FRAMES 2816)
+    # SIX ROWS, ONE PROOF EACH, ALL IN THE SHIP SET (HARNESS-2, 2026-10-29; the lead's ruling: a ship row split by proof keeps
+    # every law in the ship, the test_engine_asan.partN precedent). The one row gi.cascades_asan (deleted) ran all 23
+    # sub-cases in one process: 50.68 s, over the 45-s quiet law, and timed out at 60 s on two trees under load. Every case
+    # keeps its frames and its bars; a part stages the state an earlier case used to leave (test_gi_cascades.cpp's header).
+    # FRAMES: the part's own count (it prints "frames rendered"). Each row is the END-TO-END PROOF of one law of the chain:
+    #   .schedule      THE CAMERA'S SCHEDULE: an open builds once where the camera is, rest costs nothing, a sway inside the
+    #                  band costs nothing, a scroll pays at most one cascade a frame, a teleport is N counted rebuilds and
+    #                  never black, the near field holds over a walk, every centre sits on its quantum's lattice.
+    #   .faults        A FAILED REBUILD CHANGES NOTHING BUT THE CLOCK (cases 11, 13): the use-after-free class this binary
+    #                  exists for - the failure paths around a cascade's voxeliser.
+    #   .edits         AN EDIT RE-VOXELISES EXACTLY THE CASCADES THAT HOLD IT, one a frame, never the whole chain (case 7's
+    #                  edits, 14's budget, 15/15b's merged dirty boxes and their light resting at a fresh build's).
+    #   .ambient       THE CHAIN CARRIES THE AMBIENT AS ONE CASCADE DOES, the diffuse within a code and the specular (4, 7).
+    #   .mover         A2's LAW: a declared mover is lit at the pose it is in - motion against rest within 16 codes, no
+    #                  pixel off by 10, the rest a fresh build's within a code - at three poses of cascade 0, the rays off.
+    #   .mover_routes  AT REST A FRESH BUILD'S on the two other routes: the rays ON (this view never gathers - the
+    #                  non-gathering route's screen integrate; its motion residue printed, PHOTON-7's leftover) and a STILL
+    #                  turned by script (the mirror's move quantum printed).
+    foreach(_part schedule faults edits ambient mover mover_routes)
+        jah_gpu_row(gi.cascades_asan.${_part} SHIP CLASS engine COMMAND test_gi_cascades_asan ${_part}
+                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+        # LeakSanitizer off for the same reason test_engine_asan turns it off (the
+        # only leaks are inside libdbus via the Vulkan loader's device-select layer);
+        # use-after-free detection is the point and stays on.
+        # (TIMEOUT 60, the law's cap: every test under a minute; each part priced from its own solo run in gate-times.txt)
+        set_tests_properties(gi.cascades_asan.${_part} PROPERTIES TIMEOUT 60 LABELS "engine"
+            RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
+            ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    endforeach()
+    set_tests_properties(gi.cascades_asan.schedule PROPERTIES JAHSHAKA_TEST_FRAMES 1075)
+    set_tests_properties(gi.cascades_asan.faults PROPERTIES JAHSHAKA_TEST_FRAMES 90)
+    set_tests_properties(gi.cascades_asan.edits PROPERTIES JAHSHAKA_TEST_FRAMES 594)
+    set_tests_properties(gi.cascades_asan.ambient PROPERTIES JAHSHAKA_TEST_FRAMES 178)
+    set_tests_properties(gi.cascades_asan.mover PROPERTIES JAHSHAKA_TEST_FRAMES 1106)
+    set_tests_properties(gi.cascades_asan.mover_routes PROPERTIES JAHSHAKA_TEST_FRAMES 738)
 endif()
 
 # THE SANITISED TWIN, WITH THE RAYS ON (PHOTON_SPEC §7 R1). The tier is the
