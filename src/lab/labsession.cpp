@@ -1107,6 +1107,8 @@ bool Session::exec(const Command &c)
         ok = monitor(c);
     } else if (c.verb == "move") {
         ok = move(c);
+    } else if (c.verb == "slide") {
+        ok = slide(c);
     } else if (c.verb == "lights") {
         std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
             if (n->getSceneNodeType() == iris::SceneNodeType::Light) {
@@ -1628,6 +1630,31 @@ bool Session::move(const Command &c)
         mCamera.set(e0 + (eye - e0) * t, t0 + (target - t0) * t);
         frame();
     }
+    return true;
+}
+
+bool Session::slide(const Command &c)
+{
+    iris::SceneNodePtr found;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Mesh && n->getName().toStdString() == c.args[0])
+            found = n;
+        for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
+    };
+    walk(mDoc->getRootNode());
+    if (!found) { labFail("LAB REFUSED slide: no mesh named '%s'\n", c.args[0].c_str()); return false; }
+    iris::Vec3 d, unused;
+    if (!parsePose(c.args[1] + ",0,0,0", d, unused)) {
+        labFail("LAB REFUSED slide: '%s' is not dx,dy,dz\n", c.args[1].c_str());
+        return false;
+    }
+    const int n = std::atoi(c.args[2].c_str());
+    const iris::Vec3 p0 = found->getLocalPos();
+    for (int i = n > 0 ? 1 : 0; i <= n && !mQuit; ++i) {
+        found->setLocalPos(n > 0 ? p0 + d * (float(i) / float(n)) : p0 + d);
+        frame();
+    }
+    std::printf("LAB SLIDE %s by %s over %d frames\n", c.args[0].c_str(), c.args[1].c_str(), n);
     return true;
 }
 

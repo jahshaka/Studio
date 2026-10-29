@@ -129,7 +129,7 @@ gi.bounce_series.epic_lamp 5.27  solo, the card lock held, :71, warm (PHOTON-7 s
 gi.hit_list_demand 7.54  solo, the card lock held, :74, warm (PHOTON-2 stage 2's tail, 2026-10-22; jahlab on photon-room, 960x540, two sessions)
 gi.hold_after_stop 33.21  solo, the card lock held, :83, warm (PHOTON-2 round 2 L5-L8, 2026-10-22; jahlab on photon-room and photon-court, 960x540, five sessions; PHOTON-7 stage 5, 5-4: the field law bars)
 gi.rest_oracle_lamp 11.03  solo, the card lock held, :71, warm (PHOTON-7 8B B1: THE ORACLE - photon-room's lamp step, the held picture against a fresh rest; 902 frames)
-gi.rest_oracle_mover 15.24  solo, the card lock held, :71, warm (PHOTON-7 8B B1: THE ORACLE - photon-glass's mover played, its diffuse view against a fresh rest; 962 frames)
+gi.rest_oracle_mover 16.55  solo, the card lock held, :71, warm (PHOTON-7 8B B1: THE ORACLE - photon-glass's mover SLID 1.5 m over 60 frames (the lab verb slide; `play` moved nothing), its diffuse view against a fresh rest; 962 frames) - was: 15.24 with the mover never moving
 gi.light_is_world 31.52  solo, the card lock held, :68, warm (PHOTON-7 stage 1, 2026-10-23; jahlab on photon-shells and photon-roof, 960x540, two sessions)
 gi.one_writer 28.19  solo, the card lock held, :81, WARM (PHOTON-7 stage 11, 2026-10-27: the home virgin, the shader cache warm - the lead's ruling; was 46.36 quiet n=45, cold)
 gi.one_writer.fresh_home 0.00  ship 3a0422b4e (2026-10-13)

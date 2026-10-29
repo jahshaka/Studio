@@ -90,6 +90,7 @@ private:
     bool lamp(const Command &c);
     bool material(const Command &c);
     bool move(const Command &c);
+    bool slide(const Command &c);
     /// THE GPU MONITOR (PHOTON-7, the step before stage 10): N frames, one line each - every pass's and every GPU row's
     /// milliseconds from the engine's own frame monitor (its tee) - and a summary line.
     bool monitor(const Command &c);

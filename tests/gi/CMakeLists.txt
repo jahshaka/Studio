@@ -1227,7 +1227,8 @@ endif()
 # the cameras).
 
 # gi.rest_oracle_lamp / gi.rest_oracle_mover (PHOTON-7 stage 8B, B1's acceptance: THE ORACLE) - after a change at rest
-# (photon-room's lamp step; photon-glass's mover played 60 frames, its gather's own picture: the photon diffuse view)
+# (photon-room's lamp step; photon-glass's mover slid 1.5 m over 60 frames - `slide`: the environments carry no
+# animation, so `play` moved nothing - its gather's own picture: the photon diffuse view)
 # the held picture equals a fresh rest of the final scene (the rest restarted whole, held again) within one code, the
 # gather held whole at both shots. rest_oracle.sh says the law. 960x540; one jahlab session each: 902 and 962 frames.
 if(TARGET jahlab)

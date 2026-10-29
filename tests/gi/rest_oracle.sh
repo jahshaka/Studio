@@ -1,6 +1,6 @@
 #!/bin/bash
 # gi.rest_oracle_lamp / gi.rest_oracle_mover (PHOTON-7 stage 8B, B1's acceptance: THE ORACLE) - A HELD PICTURE IS THE
-# POSE's: after a change at rest (a lamp step; a mover's play) the gather's cells the change reached resume, the others
+# POSE's: after a change at rest (a lamp step; a mover slid 1.5 m over 60 frames) the gather's cells the change reached resume, the others
 # keep their rest - and once every cell holds again, the picture equals a FRESH REST of the final scene: the rest
 # restarted whole (the arm gather.restOff for one frame: every cell settles from K = 0) and held again, compared byte for
 # byte, within the store's quantum (one code). A resume that never happens (a cell held over an input it read) holds the
@@ -19,9 +19,7 @@ case "$WHICH" in
   lamp)  ENV=photon-room;  CHANGE='lamp lamp intensity 12' ;;
   mover) ENV=photon-glass; CHANGE='photon diffuse
 frames 300
-play on
-frames 60
-play off' ;;
+slide mover -1.5,0,0 60' ;;
   *) echo "FAIL: lamp|mover"; exit 1 ;;
 esac
 if [ "$WHICH" = lamp ]; then PRE='frames 300'; else PRE=''; fi

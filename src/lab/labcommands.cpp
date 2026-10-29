@@ -85,6 +85,10 @@ const std::vector<VerbDoc> &verbs()
         { "material", "material <object> colour r,g,b | material <object> roughness <v>", 3, 3,
           "a material edit (PHOTON-2 fix F5): the named object's PBR base colour (0..1 each) or roughness written in "
           "the document (the mirror pushes it on the next frame); no frame is drawn" },
+        { "slide", "slide <object> dx,dy,dz N", 3, 3,
+          "A MOVER's MOTION (PHOTON-7 stage 8B): the named object's position moved by dx,dy,dz metres over N frames in "
+          "the document (equal steps, one a frame, the last exactly at the end; N = 0 = one frame drawn at the end) - "
+          "the environments carry no animation, so `play` moves nothing in them" },
         { "pin", "pin <c|all> x,y,z [scroll] | pin off", 1, 3,
           "THE GI PLACEMENT PIN (PHOTON-7 stage 1; Scene::setGiPlacementPin, the measuring door): cascade c (or every "
           "cascade) placed for the camera position x,y,z, every other cascade pinned where it stands (its builtCam); "
@@ -233,6 +237,7 @@ bool parse(const std::string &lineIn, Command &out, std::string &error)
         if (out.verb == "settle" && !number(0, 1, true)) return false;
         if ((out.verb == "envcam" || out.verb == "measure") && !number(0, 0, false)) return false;
         if (out.verb == "move" && !number(1, 0, true)) return false;
+        if (out.verb == "slide" && !number(2, 0, true)) return false;
         if (out.verb == "stillness" && !number(1, 2, true)) return false;
         if (out.verb == "arm" && !number(1, -1e9, false)) return false;
         return true;
