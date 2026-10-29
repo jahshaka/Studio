@@ -213,7 +213,7 @@ int main(int argc, char **argv)
 
     // THE ROOM's voxels of one cascade: the occupied cells whose centre lies inside the room (x, z in [-2, 2], y in
     // [0, 3]); the brightest channel of each one's light (un-premultiplied); and the roof's top cells (the reference)
-    struct VoxRead { size_t cells = 0; double peak = 0.0; size_t roofCells = 0; double roofMean = 0.0; bool ok = false; char where[256] = {}; size_t over = 0; };
+    struct VoxRead { size_t cells = 0; double peak = 0.0; size_t roofCells = 0; double roofMean = 0.0; bool ok = false; };
     const auto readVoxels = [&](int c) {
         VoxRead r;
         GiVoxelVolume v;
@@ -231,14 +231,7 @@ int main(int argc, char **argv)
                     const double L = std::max(v.light[i], std::max(v.light[i + 1], v.light[i + 2])) / cOcc;
                     if (std::fabs(cx) < 2.0 && std::fabs(cz) < 2.0 && cy > 0.0 && cy < 3.0) {
                         ++r.cells;
-                        if (L > r.peak) {   // MEASURING ARM (REDS-1 item 3, reverted after its one run): the brightest cell's facts
-                            std::snprintf(r.where, sizeof(r.where), "(%.3f %.3f %.3f) c %.3f front %.6f back %.6f n (%.2f %.2f %.2f) two %d",
-                                          cx, cy, cz, cOcc, std::max(v.lightFront[i], std::max(v.lightFront[i + 1], v.lightFront[i + 2])) / cOcc,
-                                          std::max(v.lightBack[i], std::max(v.lightBack[i + 1], v.lightBack[i + 2])) / cOcc,
-                                          2 * v.normal[i] - 1, 2 * v.normal[i + 1] - 1, 2 * v.normal[i + 2] - 1, int(v.normal[i + 3] > 0.5f));
-                        }
                         r.peak = std::max(r.peak, L);
-                        if (L > 0.000244) ++r.over;
                     }
                     // the roof's top: the cell holding y = 3.4 over the roof's middle
                     if (std::fabs(cx) < 1.5 && std::fabs(cz) < 1.5 && cy - 0.5 * v.cell[1] <= 3.4 &&
@@ -259,37 +252,6 @@ int main(int argc, char **argv)
             const VoxRead vr = readVoxels(c);
             std::printf("   (3) cascade %d: %zu voxels inside the room, the brightest %.6f (%.4f %% of R)\n", c, vr.cells,
                         vr.peak, R > 0.0 ? 100.0 * vr.peak / R : -1.0);
-            std::printf("       ARM: %zu cells over 0.000244; the brightest at %s (cell %.4f m)\n", vr.over, vr.where, 0.0);
-            if (c == 0) {   // MEASURING ARM: the escape shares of cascade 0's sides inside the room
-                GiVoxelSideShares sh;
-                GiVoxelVolume v0;
-                if (scene->giVoxelSideShares(sh) && sh.available && scene->giVoxelLight(0, v0) && v0.available &&
-                    sh.width == v0.width && sh.height == v0.height && sh.depth == v0.depth) {
-                    size_t written = 0, escaping = 0, inside = 0, roofN = 0, roofOcc = 0, escUnocc = 0; double roofShare = 0; unsigned maxShare = 0; char at[128] = "none";
-                    for (int z = 0; z < sh.depth; ++z) for (int y = 0; y < sh.height; ++y) for (int x = 0; x < sh.width; ++x) {
-                        const double cx = v0.origin[0] + (x + 0.5) * v0.cell[0], cy = v0.origin[1] + (y + 0.5) * v0.cell[1],
-                                     cz = v0.origin[2] + (z + 0.5) * v0.cell[2];
-                        const uint32_t w = sh.words[(size_t(z) * sh.height + y) * sh.width + x];
-                        const size_t li = ((size_t(z) * v0.height + y) * v0.width + x) * 4u;
-                        if (std::fabs(cx) < 1.5 && std::fabs(cz) < 1.5 && cy - 0.5 * v0.cell[1] <= 3.4 && cy + 0.5 * v0.cell[1] > 3.4) {
-                            ++roofN; roofShare += (w & (1u << 16)) ? double(w & 0xFFu) : -1.0; roofOcc += v0.light[li + 3] > 0.0f ? 1 : 0;
-                        }
-                        if (!(std::fabs(cx) < 2.0 && std::fabs(cz) < 2.0 && cy > 0.0 && cy < 3.0)) continue;
-                        ++inside;
-                        if ((w & (1u << 16)) && (w & 0xFFFFu) && !(v0.light[li + 3] > 0.0f)) ++escUnocc;
-                        if (!(w & (1u << 16))) continue;
-                        ++written;
-                        const unsigned f = w & 0xFFu, b = (w >> 8) & 0xFFu;
-                        if (f || b) {
-                            ++escaping;
-                            if (std::max(f, b) > maxShare) { maxShare = std::max(f, b); std::snprintf(at, sizeof(at), "(%.3f %.3f %.3f) front %u back %u two %u", cx, cy, cz, f, b, (w >> 17) & 1u); }
-                        }
-                    }
-                    std::printf("       ARM: escape shares inside the room: %zu cells, %zu written, %zu with rays escaping (%zu of them UNOCCUPIED in the light volume); the most %u/255 at %s; the roof top: %zu cells, %zu occupied, mean front share %.1f/255\n",
-                                inside, written, escaping, escUnocc, maxShare, at, roofN, roofOcc, roofN ? roofShare / roofN : 0.0);
-                } else
-                    std::printf("       ARM: escape shares unavailable (%d %d)\n", int(sh.available), sh.width);
-            }
             vOk = vOk && vr.ok && vr.cells > 0;
             vWorst = std::max(vWorst, vr.peak);
         }
