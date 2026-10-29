@@ -33,8 +33,16 @@
 #   (d) walk vs teleport at EQUAL placements: glossy mean <= 0.5 codes and p99 <= 2 (the MIRROR's half is stage 5's,
 #       R2: printed, not judged);
 #   (e) the held small lamp step is rtreflect.lamp_step_held's (lamp_step_held.sh).
-#   (g) the rest's cost: no frame's trace above THE MAX OVER THE TILE FRAMES (one full k-4 frame over every batching
-#       texel), the compact path's tail included.
+#   (g) THE REST's COST (re-derived, HARNESS-3 (c)): a rest frame never outweighs a tile frame - read as THE TRACE's
+#       WORK through its GPU time, so judged where that time is the work's: in every 10-frame window of the compact
+#       path's tail (rise_law's windows) the MEDIAN trace ms <= the MEDIAN over the tile frames (each a full k-4 frame
+#       over every batching texel). Why a median: a frame's GPU time is its work over the throughput it had, and the
+#       throughput drops on the frames where another GI pass runs beside the trace (the cards' relight, the field's
+#       refinement) - an event of SOME frames, never the trace's own; a window's median holds while fewer than half its
+#       frames carry one, and the tiles' median is the typical full frame on the same footing. THE FRAGILE FORM IT
+#       REPLACED (one frame's GPU ms against the tiles' max) read red 4.63, red 4.85 and green 2.30 ms in three runs of
+#       one tree on 2026-10-29 (the trace's own median 0.49 -> 1.32 ms over the rest against the tiles' 3.31 - 4.05): the
+#       over-bar frames sat where another GI pass ran beside the trace. That max is still printed, never judged.
 #   (f) the held picture against a 4,096-sample reference is a MEASUREMENT (the arm reflect.restReference: 4,300
 #       frames, over a row's minute), never this row's: spikes/photon-2/round2/r1.
 # Every judgement is a FAIL line, never a traceback (a window that never holds included).
@@ -143,12 +151,25 @@ if rows:
     take = next((i for i, x in enumerate(rest) if 0 <= x[2] <= 16384), len(rest))
     tile, tail = rest[:take], rest[take:]
     if tile:
+        med = lambda xs: sorted(xs)[len(xs) // 2] if len(xs) % 2 else 0.5 * sum(sorted(xs)[len(xs) // 2 - 1:len(xs) // 2 + 1])
         peak = max(x[1] for x in tile)
+        tileMed = med([x[1] for x in tile])
         worst = max(tail, key=lambda x: x[1]) if tail else None
-        print("(g) the trace's GPU ms: the max over the %d tile frames %.3f; the compact path from rest frame %s, its max %s"
-              % (len(tile), peak, tail[0][0] if tail else "-", ("%.3f at rest frame %d" % (worst[1], worst[0])) if worst else "-"))
-        if worst and worst[1] > peak:
-            fails.append("(g) a tail frame's trace above the max over the tile frames: %.3f at rest frame %d > %.3f" % (worst[1], worst[0], peak))
+        print("(g) the trace's GPU ms: the tile frames (%d) median %.3f, max %.3f; the compact path from rest frame %s, its "
+              "single-frame max %s (the fragile form's reading, printed only)"
+              % (len(tile), tileMed, peak, tail[0][0] if tail else "-",
+                 ("%.3f at rest frame %d" % (worst[1], worst[0])) if worst else "-"))
+        wins = [(tail[a][0], tail[b - 1][0], med([x[1] for x in tail[a:b]])) for a, b in rise_law.windows(0, len(tail))]
+        print("(g) the compact path's 10-frame window medians (rest frames: ms): %s"
+              % (" ".join("%d-%d:%.3f" % w for w in wins) or "none"))
+        top = max(wins, key=lambda w: w[2]) if wins else None
+        print("LAW g.tile_median %.4f ms" % tileMed)
+        print("LAW g.tile_max %.4f ms" % peak)
+        if worst: print("LAW g.tail_single_frame_max %.4f ms" % worst[1])
+        if top: print("LAW g.tail_window_median_max %.4f ms <= %.4f" % (top[2], tileMed))
+        if top and top[2] > tileMed:
+            fails.append("(g) the compact path's window median above the tile frames' median: %.3f ms over rest frames "
+                         "%d-%d > %.3f" % (top[2], top[0], top[1], tileMed))
     else:
         fails.append("(g) no tile frame timed (the trace's GPU row)")
 m = re.search(r"path walk-vs-teleport \(at equal placements\) \| picture mean/p99/max codes, pixels >= 1: (.*?) \|", log)
