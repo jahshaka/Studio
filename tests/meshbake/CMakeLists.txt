@@ -133,7 +133,7 @@ set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home)
 file(MAKE_DIRECTORY ${_archive_home}/run)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(archive/archive_bakes_import.js.in ${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js @ONLY)
-jah_gpu_row(meshbake.archive_bakes SHIP CLASS app TIER low NEEDS NONE
+jah_gpu_row(meshbake.archive_bakes WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home" SHIP CLASS app TIER low NEEDS NONE
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/archive/archive_bakes.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js"

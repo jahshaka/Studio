@@ -94,7 +94,7 @@ set(_thr_home_wd ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-threading_texture_wait_wat
 
 jah_fresh_home_fixture(threading.freshhome.texture_wait_watchdog threading_home_texture_wait_watchdog "${_thr_home_wd}" WARM LABELS "threading")
 
-jah_gpu_row(threading.texture_wait_watchdog SHIP CLASS app TIER low NEEDS NONE
+jah_gpu_row(threading.texture_wait_watchdog WARM_HOME "${_thr_home_wd}" SHIP CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_BINARY_DIR}/texture_wait_watchdog.js
          WORKING_DIRECTORY ${_thr_home_wd}/run)
