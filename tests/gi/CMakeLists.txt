@@ -84,17 +84,28 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     #   .mover_routes  AT REST A FRESH BUILD'S on the two other routes: the rays ON (this view never gathers - the
     #                  non-gathering route's screen integrate; its motion residue printed, PHOTON-7's leftover) and a STILL
     #                  turned by script (the mirror's move quantum printed).
-    foreach(_part schedule faults edits ambient mover mover_routes)
-        jah_gpu_row(gi.cascades_asan.${_part} SHIP CLASS engine COMMAND test_gi_cascades_asan ${_part}
-                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        # LeakSanitizer off for the same reason test_engine_asan turns it off (the
-        # only leaks are inside libdbus via the Vulkan loader's device-select layer);
-        # use-after-free detection is the point and stays on.
-        # (TIMEOUT 60, the law's cap: every test under a minute; each part priced from its own solo run in gate-times.txt)
-        set_tests_properties(gi.cascades_asan.${_part} PROPERTIES TIMEOUT 60 LABELS "engine"
-            RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
-            ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
-    endforeach()
+    # (every row NAMED, never a loop variable: the selector resolves a set_tests_properties by the rows it names, and an
+    # unresolved name falls back to the whole directory - 94 gi rows for a one-row edit)
+    jah_gpu_row(gi.cascades_asan.schedule SHIP CLASS engine COMMAND test_gi_cascades_asan schedule
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.faults SHIP CLASS engine COMMAND test_gi_cascades_asan faults
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.edits SHIP CLASS engine COMMAND test_gi_cascades_asan edits
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.ambient SHIP CLASS engine COMMAND test_gi_cascades_asan ambient
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.mover SHIP CLASS engine COMMAND test_gi_cascades_asan mover
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.mover_routes SHIP CLASS engine COMMAND test_gi_cascades_asan mover_routes
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    # LeakSanitizer off for the same reason test_engine_asan turns it off (the
+    # only leaks are inside libdbus via the Vulkan loader's device-select layer);
+    # use-after-free detection is the point and stays on.
+    # (TIMEOUT 60, the law's cap: every test under a minute; each part priced from its own solo run in gate-times.txt)
+    set_tests_properties(gi.cascades_asan.schedule gi.cascades_asan.faults gi.cascades_asan.edits gi.cascades_asan.ambient
+                         gi.cascades_asan.mover gi.cascades_asan.mover_routes PROPERTIES TIMEOUT 60 LABELS "engine"
+        RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(gi.cascades_asan.schedule PROPERTIES JAHSHAKA_TEST_FRAMES 1075)
     set_tests_properties(gi.cascades_asan.faults PROPERTIES JAHSHAKA_TEST_FRAMES 90)
     set_tests_properties(gi.cascades_asan.edits PROPERTIES JAHSHAKA_TEST_FRAMES 594)
