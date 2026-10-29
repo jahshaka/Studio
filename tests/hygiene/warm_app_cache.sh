@@ -9,16 +9,25 @@ set -u
 SRC=${1:?source}; BUILD=${2:?build}
 W="$SRC/scripts/warm-app-cache.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
-mkdir -p "$T/.shadercache" "$T/.shadercache-engine"
-printf 'jahshaka-shader-cache 2\nshaders 2\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' > "$T/.shadercache/cache-manifest.txt"
-cp "$T/.shadercache/cache-manifest.txt" "$T/.shadercache-engine/cache-manifest.txt"
+CK="$SRC/tests/support/shadercache_check.py"
+# A TOY CACHE THAT IS ONE GENERATION (URGENT #117): its two files and a manifest naming them at their length and the
+# engine's hash - the warm reads a cache that fails its own manifest as cold
+# toy_cache <dir> <saved> <shaders>
+toy_cache() {
+    mkdir -p "$1"; printf '0123456789' > "$1/hlms.1.bin"; printf 'abcdefghijklmnopqrst' > "$1/pipeline.cache"
+    printf 'jahshaka-shader-cache 2\nsaved %s\nshaders %s\nfile hlms.1.bin 10 %s k1\nfile pipeline.cache 20 %s k2\n' "$2" "$3" \
+        "$(python3 -I "$CK" --hash "$1/hlms.1.bin")" "$(python3 -I "$CK" --hash "$1/pipeline.cache")" > "$1/cache-manifest.txt"
+}
+toy_cache "$T/.shadercache" 1 2
+toy_cache "$T/.shadercache-engine" 1 2
 fail=0
 ok() { echo "  ok: $1"; }
 no() { echo "  FAIL: $1"; fail=1; }
 # the exes the -on stamps name (the driver's per-exe key is the exe's name): two fakes, the same in every call below
 printf '#!/bin/sh\nexit 0\n' > "$T/app"; printf '#!/bin/sh\nexit 0\n#lab\n' > "$T/lab"; chmod +x "$T/app" "$T/lab"
 cp "$T/app" "$T/app2"
-X=(--app "$T/app" --lab "$T/lab")
+: > "$T/cold-none"   # no cold engine row: cold-on has nothing to warm (its own cases at the end)
+X=(--app "$T/app" --lab "$T/lab" --cold-rows "$T/cold-none")
 eid() { basename "$1"; }
 out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 key=$(echo "$out" | sed -n 's/^cold at \([0-9a-f]*\): .*/\1/p')
@@ -70,6 +79,21 @@ out=$("$W" "$BUILD" --tests-dir "$T" "${X[@]}" --only app-on); rc=$?
     ok "an -on boot asked for alone on a cold -off cache: refused, nothing booted, exit 3" || no "-on before -off: '$out' rc $rc"
 printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$T/.shadercache.warm-key"
 printf '%s\n%s\n' "$key" "$(eid "$T/app")" > "$T/.shadercache.driver-key"
+# A TORN SHARED CACHE (URGENT #117): every stamp at the key and the layer keys as recorded, but a file of other bytes
+# than its manifest's hash (the same length) - the engine boots cold on it, so the warm reads it cold
+cp "$T/.shadercache-engine/pipeline.cache" "$T/pipeline.good"
+printf 'ABCDEFGHIJKLMNOPQRST' > "$T/.shadercache-engine/pipeline.cache"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "the engine rows' cache (engine-off): the shared cache fails its own manifest (pipeline.cache: its hash" &&
+    ! echo "$out" | grep -q '(app-off)' &&
+    ok "a TORN shared cache (a file of other bytes, the stamps and keys as recorded): that boot cold, exit 3" ||
+    no "torn cache: '$out' rc $rc"
+mv "$T/pipeline.good" "$T/.shadercache-engine/pipeline.cache"
+rm "$T/.shadercache-engine/hlms.1.bin"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" --only engine-off); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "hlms.1.bin: named by the manifest, not there" && ok "...and one missing a file its manifest names: cold, exit 3" ||
+    no "missing file: '$out' rc $rc"
+toy_cache "$T/.shadercache-engine" 1 2
 sed -i 's/ k2$/ k3/' "$T/.shadercache/cache-manifest.txt"
 out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'replaced at another key' && ok "the shared cache replaced at another layer key: cold, exit 3" || no "replaced cache: '$out' rc $rc"
@@ -82,24 +106,24 @@ out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 # lock is declared held - and needs no display) grows the home's cache; fresh_home's own rules promote it or not.
 # A scratch build-shaped dir: fresh_home shares a cache only under a `tests` dir beside a CMakeCache.txt.
 B="$T/b"; mkdir -p "$B/tests/.shadercache" "$B/tests/.shadercache-engine"; touch "$B/CMakeCache.txt"
-manifest() { printf 'jahshaka-shader-cache 2\nsaved %s\nshaders %s\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' "$1" "$2"; }
-manifest 1 2 > "$B/tests/.shadercache/cache-manifest.txt"
-manifest 1 2 > "$B/tests/.shadercache-engine/cache-manifest.txt"
+toy_cache "$B/tests/.shadercache" 1 2
+toy_cache "$B/tests/.shadercache-engine" 1 2
 cat > "$T/fake-app" <<'APP'
 #!/bin/sh
 # the fake boot: the home's cache grows (a NEW manifest - its seeded one is a hard link of the shared one); with
 # FAKE_RACE set, another home's promotion lands first (the shared manifest rewritten at the same keys)
+# (the file lines kept as seeded: the linked files are the shared cache's, one generation)
 c="$HOME/.local/share/Jahshaka/shadercache"
-mkdir -p "$c"; rm -f "$c/cache-manifest.txt"
-printf 'jahshaka-shader-cache 2\nsaved 2\nshaders 3\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' > "$c/cache-manifest.txt"
+mkdir -p "$c"; files=$(grep '^file ' "$c/cache-manifest.txt"); rm -f "$c/cache-manifest.txt"
+printf 'jahshaka-shader-cache 2\nsaved 2\nshaders 3\n%s\n' "$files" > "$c/cache-manifest.txt"
 if [ -n "${FAKE_RACE:-}" ]; then
     rm -f "$FAKE_RACE/cache-manifest.txt"
-    printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' > "$FAKE_RACE/cache-manifest.txt"
+    printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\n%s\n' "$files" > "$FAKE_RACE/cache-manifest.txt"
 fi
 exit 0
 APP
 chmod +x "$T/fake-app"
-F=(--app "$T/fake-app" --lab "$T/fake-app")
+F=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/cold-none")
 out=$(FAKE_RACE="$B/tests/.shadercache" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q 'NOT promoted' && [ ! -e "$B/tests/.shadercache.warm-key" ] &&
     ok "a promotion fresh_home SKIPS (its rule 3, NOT replaced): the boot passed, NO stamp" || no "skipped promotion: '$out' rc $rc"
@@ -142,5 +166,34 @@ exec 8>&-
     [ ! -e "$B/tests/.shadercache.driver-key" ] && [ $s -lt 10 ] &&
     ok "the card held past the boot's wait (a tenth of a 10-s budget): exit 75 in $s s, nothing booted" ||
     no "the held card: '$out' rc $rc in $s s"
+# THE COLD ENGINE ROWS' EXES (cold-on, URGENT #119): a row declared COLD boots on no shared pipeline cache, so its exe's
+# own driver cache is all it has; cold-on runs each listed exe once, uncapped, in its row's working directory, the
+# shared-cache variable unset; stamped with the key and the list's digest. A FAKE cold row (it records where and how it
+# ran, then exits 3: a row's own red still stored its driver cache, printed, not judged)
+CR="$T/cold-rows"; mkdir -p "$T/cwd"
+printf '#!/bin/sh\necho "$PWD|$1|${JAHSHAKA_SHADER_CACHE_DIR:-unset}|${__GL_SHADER_DISK_CACHE:-on}" > "%s/cold-ran"\nexit 3\n' "$T" > "$T/coldfx"
+chmod +x "$T/coldfx"
+printf 'x.cold\t%s\t%s\targ1\n' "$T/cwd" "$T/coldfx" > "$CR"
+C=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$CR")
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "the cold engine rows' exes' driver caches (cold-on): no driver-cache run recorded" &&
+    ok "a cold engine row listed, never run at the key: cold-on cold, exit 3" || no "cold-on unstamped: '$out' rc $rc"
+out=$(JAHSHAKA_SHADER_CACHE_DIR=/x __GL_SHADER_DISK_CACHE=0 DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q '^warm_cold_rows: x.cold: exit 3' && [ -e "$B/tests/.cold-engine-rows.driver-key" ] &&
+    [ "$(cat "$T/cold-ran" 2>/dev/null)" = "$T/cwd|arg1|unset|on" ] &&
+    ok "cold-on runs the row's exe once in its working directory with its args, the shared cache unset, the driver's cache on; its red printed, the stamp written" ||
+    no "cold-on run: '$out' rc $rc ran: $(cat "$T/cold-ran" 2>&1)"
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "...and the next call reads cold-on warm" || no "cold-on after: '$out' rc $rc"
+printf 'y.cold\t%s\t%s\n' "$T/cwd" "$T/coldfx" >> "$CR"
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q 'the cold rows changed since' && ok "a row newly registered COLD: cold-on cold again, exit 3" ||
+    no "a new cold row: '$out' rc $rc"
+printf '#!/bin/sh\nsleep 30\n' > "$T/slowfx"; chmod +x "$T/slowfx"
+printf 'z.slow\t%s\t%s\n' "$T/cwd" "$T/slowfx" > "$T/slow-rows"
+t0=$(date +%s)
+out=$(bash "$SRC/tests/support/warm_cold_rows.sh" "$T/slow-rows" $(( $(date +%s) + 1 )) "$T/slow-logs"); rc=$?
+[ $rc = 1 ] && echo "$out" | grep -q 'z.slow: exit 124, .* KILLED at the bound' && [ $(( $(date +%s) - t0 )) -lt 15 ] &&
+    ok "an exe past the call's end (its deadline) is killed and named - exit 1, no stamp from such a boot" || no "the bound: '$out' rc $rc"
 echo "tooling.warm_app_cache: $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail

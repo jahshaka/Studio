@@ -609,17 +609,28 @@ def fresh_home_behaves(source):
         home = os.path.join(td, "x", "home-a")
         saved = [0]
 
-        def put(h, files, keep=()):
+        # THE TOY's FILES ARE ONE GENERATION, AS THE ENGINE's ARE (URGENT #117): each file's bytes are its name's (so a
+        # file kept from the shared cache has the bytes its manifest line says) and each manifest line carries the
+        # engine's hash of them (tests/support/shadercache_check.py) - fresh_home promotes only such a cache
+        ck_spec = importlib.util.spec_from_file_location(
+            "shadercache_check", os.path.join(os.path.abspath(source), "tests", "support", "shadercache_check.py"))
+        ck = importlib.util.module_from_spec(ck_spec)
+        ck_spec.loader.exec_module(ck)
+        body = lambda n: ((n + "\n") * (4096 // (len(n) + 1) + 1)).encode()[:4096]
+
+        def put(h, files, keep=(), torn=()):
             """A toy run's cache write: each (name, layer key) file by rename, then the manifest (the files `keep`
-            names - linked from the shared cache - listed beside them under their key) by rename."""
+            names - linked from the shared cache - listed beside them under their key) by rename. A name in `torn` is
+            listed with another file's hash (a cache that is not one generation)."""
             saved[0] += 1
             d = "%s/%s" % (h, cache)
             sh = ["mkdir -p %s" % d]
             for n, _k in files:
-                sh.append("mkdir -p $(dirname %s/%s) && head -c 4096 /dev/urandom > %s/%s.tmp && mv %s/%s.tmp %s/%s"
-                          % (d, n, d, n, d, n, d, n))
+                sh.append("mkdir -p $(dirname %s/%s) && yes %s | head -c 4096 > %s/%s.tmp && mv %s/%s.tmp %s/%s"
+                          % (d, n, n, d, n, d, n, d, n))
             lines = ["jahshaka-shader-cache 2", "saved %d" % saved[0]] + \
-                    ["file %s 4096 0 %s" % (n, k) for n, k in list(keep) + list(files)]
+                    ["file %s 4096 %s %s" % (n, ck.murmur_py(body(n + ".other" if n in torn else n)), k)
+                     for n, k in list(keep) + list(files)]
             sh.append("printf '%s\\n' > %s/m.tmp && mv %s/m.tmp %s/cache-manifest.txt" % ("\\n".join(lines), d, d, d))
             return " && ".join(sh)
         sc = lambda *names: all(os.path.isfile(os.path.join(td, ".shadercache", n)) for n in names)
@@ -680,6 +691,18 @@ def fresh_home_behaves(source):
         check(r1.returncode == 0 and r2.returncode == 0 and sc("a.bin", "s1.bin", "s2.bin"),
               "fresh_home: rule (2) - equal keys, the generation seeded: two homes in turn each REPLACE the shared cache, "
               "the second linked the first's variants (%d %d)" % (r1.returncode, r2.returncode))
+        # A TORN CACHE IS NEVER PROMOTED (URGENT #117): a green run whose cache fails its own manifest (a file of other
+        # bytes than its line's hash - the engine drops such a cache whole and boots cold) leaves the shared cache as it
+        # was and says so; the next home still links the last good generation
+        ht = os.path.join(td, "x", "home-torn")
+        rt = subprocess.run(["sh", fh, "--warm", ht, "--", "sh", "-c", put(ht, [("t.bin", "K1")], keep=[("a.bin", "K1"),
+                             ("s1.bin", "K1"), ("s2.bin", "K1")], torn=("t.bin",))], capture_output=True, text=True)
+        good = ck.check(os.path.join(td, ".shadercache"))
+        check(rt.returncode == 0 and not sc("t.bin") and sc("a.bin", "s1.bin", "s2.bin") and good[0] == 0
+              and "NOT promoted - it fails its own manifest (t.bin: its hash" in rt.stderr,
+              "fresh_home: a green run's TORN cache (a file of other bytes than its manifest's hash) is NOT promoted and "
+              "says so; the shared cache stays the last good generation (%d %s; shared: %s)"
+              % (rt.returncode, rt.stderr[-160:], good[1]))
         # --promote (HARNESS-1): a WARM fixture's consumer - its setup seeds the home; a green consumer's grown cache is
         # promoted THROUGH HARD LINKS and the home keeps it whole; a red one promotes nothing and leaves the home as it is
         hp = os.path.join(td, "x", "home-fx")

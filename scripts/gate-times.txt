@@ -53,8 +53,8 @@ engine.planar_asan 10.52  quiet n=39
 engine.lod_rule_parity 4.78  solo, the card lock held, :71 (ATOM-6 stage 2c, 2026-10-21: the exact rule's one arm + the empty top group)
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
-frame.streaming_picture 1.47  solo, its own cold compiles (no shader cache: the subject), the card lock held, :83 (BUGS-7 stage 2, 2026-10-20)
-frame.monitor_pop 2.46  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4: the save arm added, 2026-10-18)
+frame.streaming_picture 2.28  loaded, the card lock held, :77, registered COLD, its exe's driver cache warmed by cold-on (HARNESS-4 URGENT #119, 2026-10-29; was 1.47 solo :83, BUGS-7 stage 2, 2026-10-20: its own cold compiles, no shader cache: the subject)
+frame.monitor_pop 3.49  loaded, the card lock held, :77, registered COLD, its exe's driver cache warmed by cold-on (HARNESS-4 URGENT #119, 2026-10-29; was 2.46 solo :83, FRAME-MONITOR-DOOR-1 stage 4: the save arm added, 2026-10-18)
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 gate.selection 7.82  TOOLING-2 round 3 2026-10-19 (+ the require_tier / why_has cases; RE-PRICE IT SOLO at the sprint's gate): un-niced on the 20-core box at load ~4 (7.21 / 7.32; no solo window — other lanes live; the row holds no card), after the inventory copy by pickle and the scripts' modules read once (deepcopy + per-select reads were 3 s); its cases: + BULLET's lane, the CMake hunks, the lints, the patched Bullet source
@@ -327,8 +327,8 @@ source.panel_rows_guarded 0.00  ship 3a0422b4e (2026-10-13)
 source.photon_never_pinned 0.09  all n=2
 source.row_budget 0.20  ship 3a0422b4e (2026-10-13)
 source.timeout_cap 0.13  solo, :72 (URGENT #48, 2026-10-24: every registered row within the 60 s cap, the text too)
-tooling.warm_app_cache 6.60  loaded (38 % CPU-idle), CPU, ctest (HARNESS-1 / URGENT #106 + the rows' tiers, 2026-10-29: the four boots' answers, the stamp only on a promotion, the -on boot after its -off, the budget and the card's bounded wait (1 s), the tiers' digest - fake boots on a scratch tests dir)
-tooling.gpu_lock_fifo 7.29  loaded (93 % CPU-idle), CPU, ctest (URGENT #113, HARNESS-3, 2026-10-29: the card lock's ticket queue on a private lock - an empty queue silent, five waiters and a late short one in ticket order, a dead ticket skipped, --wait-max kept, a bounded waiter's place kept across its exit 75; sleeps, no GPU) - was 14.95, over a CPU row's 10 s (source.row_budget)
+tooling.warm_app_cache 6.48  loaded (the box at load ~14), CPU, ctest, solo (HARNESS-4 URGENT #117 + #119, 2026-10-29: + a torn shared cache and the cold-on boot - five cases; was 6.60) (HARNESS-1 / URGENT #106 + the rows' tiers, 2026-10-29: the four boots' answers, the stamp only on a promotion, the -on boot after its -off, the budget and the card's bounded wait (1 s), the tiers' digest - fake boots on a scratch tests dir)
+tooling.gpu_lock_fifo 7.48  loaded (62 % CPU-idle, load 13.8), CPU, ctest, solo (HARNESS-4, URGENT #118, 2026-10-29: re-taken solo; 7.29 at 44d7b31da, loaded 93 % CPU-idle - URGENT #113, HARNESS-3: the card lock's ticket queue on a private lock - an empty queue silent, five waiters and a late short one in ticket order, a dead ticket skipped, --wait-max kept, a bounded waiter's place kept across its exit 75; sleeps, no GPU) - was 14.95, over a CPU row's 10 s (source.row_budget)
 tooling.law_records 0.16  loaded (89 % CPU-idle), CPU, ctest (HARNESS-3 (b), 2026-10-29: scripts/gate_runlog.py over a fake ctest stream - every LAW line in the row's record, green and red, past the output cap; a fixture's `  FAIL (n)` line its fail line; no GPU)
 source.row_declares_needs 0.35  all n=2
 source.scene_no_friends 0.01  spec EU-2 stage 2 (2026-10-14)
@@ -337,7 +337,7 @@ source.graphics_queue_seams 0.05  spec ENGINE-UPGRADE-ASYNC-3 stage 1 (2026-10-1
 source.scene_no_photon_members 0.04  spec EU-2B stage 1 (2026-10-14)
 source.settings_keys 0.20  ship 3a0422b4e (2026-10-13)
 source.shell_boundaries 0.26  quiet n=58
-source.testing_rules 0.57  quiet n=56
+source.testing_rules 4.63  loaded (the box at load ~17), CPU, ctest (HARNESS-4, URGENT #117, 2026-10-29: + fresh_home never promotes a torn cache, the toy caches one generation; was 0.57 quiet n=56, a line older than the twelve concurrent homes)
 ssr.engine 5.82  quiet n=39
 ssr.engine_asan 19.66  quiet n=39
 test_engine 15.99  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
