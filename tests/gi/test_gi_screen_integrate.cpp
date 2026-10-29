@@ -217,6 +217,16 @@ int main()
                 run(1);
                 quiet = scene->published().gi.giAtRest ? quiet + 1 : 0;
             }
+            if (quiet < 30) {   // MEASURING ARM (REDS-1 item 4, reverted after its one run): what stays owed
+                const GiStatus g = scene->published().gi;
+                std::printf("   ARM not at rest: chainOwed %d feedbackOwed %d ifdWorking %d gather %d/%d;", int(g.chainOwed),
+                            int(g.feedbackOwed), int(g.ifdWorking), int(g.gather.running), int(g.gather.settled));
+                for (size_t c = 0; c < g.cascades.size(); ++c)
+                    std::printf(" c%zu active %u owed %d passes %llu stops %llu resumes %llu", c, g.cascades[c].feedbackActive,
+                                int(g.cascades[c].feedbackOwed), g.cascades[c].feedbackPasses, g.cascades[c].feedbackStops,
+                                g.cascades[c].feedbackResumes);
+                std::printf("\n");
+            }
             resetPhotonPassBindings();
             run(2);
             recs = photonPassBindings();
