@@ -14,7 +14,10 @@
 #   GI's own rest at the walk's start, so the live walk's work is the walk's - measured at frame 80 in both scenes
 #   (GiStatus::giAtRest, 20-frame steps) - plus the gather's hold (17): the court 120 (was 300); and a FROZEN walk needs
 #   the readers HELD at its start (the stillness door refuses it otherwise: a frozen unconverged history makes M1 measure
-#   the convergence) - the glass's reflection rests from ~frame 80 and holds K_max + 1 = 513 frames later: 600 (was 640).
+#   the convergence) - the glass: `rest 1200 held` (HARNESS-3 (f): the GI at rest AND every reader HELD, the door's freeze
+#   precondition, by the engine's own predicate; it was 600 frames, sized to the old K_max + 1 = 513 after the rest's
+#   ~frame 80 - K_max is deleted (no frame count holds a rest), and since 11-2 (8) the glass holds about 1,000 rest frames
+#   in: the 600 read "not converged at the walk's start").
 #   The glass's M1 runs beside its second frozen walk (a frozen session reads no clock), its L1 after it.
 # Each scene: a PRIME session (the walk's two poses, 3 frames each: every shader variant the walk draws compiled into the
 # row's warm cache), then three sessions of the same script - LIVE, FROZEN and FROZEN again.
@@ -46,28 +49,37 @@
 #          9.06 % (15); wall 8.4 / 10.2 / 13.1 (0 over), GPU busy 10.0 / 12.3 / 23.9 (1 over); the fly 8.3 / 9.3 / 9.3
 #          and 9.2 / 10.9 / 10.9 (0 over)
 # usage: walk.sh <jahlab> <work dir> --court   (gi.walk_court: the court's prime + live + frozen + frozen2, its M1, laws, clocks)
-#        walk.sh <jahlab> <work dir> --glass   (gi.walk_glass: the glass's prime + live + frozen + frozen2, its M1 and L1)
+#        walk.sh <jahlab> <work dir> --glass-live|--glass-frozen|--glass-frozen2   (gi.walk_glass.live / .frozen /
+#            .frozen2, SPLIT BY PROOF in HARNESS-3 (f) - a fixture chain on one work dir: .live the prime + the live walk
+#            (its clocks); .frozen the frozen walk + M1 (live against frozen); .frozen2 the second frozen walk + L1)
 #        walk.sh <jahlab> <work dir> --area    (gi.walk_area: photon-area's penumbra walk, M1 and the live residual printed)
 #        walk.sh <jahlab> <work dir> --bistro <model.fbx> <data root>   (gi.walk_bistro, the MEASURE row: its own
 #        data root - the bake and the shader cache of Bistro, never the fixtures' - and no class map: M1 'all' only)
 set -u
-LAB=${1:?jahlab}; WD=${2:?work dir}; MODE=${3:?--court|--glass|--area|--bistro}
+LAB=${1:?jahlab}; WD=${2:?work dir}; MODE=${3:?--court|--glass-live|--glass-frozen|--glass-frozen2|--area|--bistro}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
-rm -rf "$WD"; mkdir -p "$WD"
+case "$MODE" in --glass-frozen|--glass-frozen2) mkdir -p "$WD" ;;   # (the chain's later parts read the live part's dir)
+                *) rm -rf "$WD"; mkdir -p "$WD" ;; esac
 session() {   # name, the scene's source flags... (the script is $WD/<name>.lab)
     local name=$1; shift
     "$LAB" --headless --no-stdin --size 960x540 "$@" --script "$WD/$name.lab" > "$WD/$name.log" 2>&1
     rc=$?
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($name) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR|stillness:' "$WD/$name.log" | head -5; tail -3 "$WD/$name.log"; exit 1; }
-    grep -E '^LAB (FIRST FRAME|END|LOAD)' "$WD/$name.log" | cut -c1-160 | sed "s/^/  $name: /"
+    grep -E '^LAB (FIRST FRAME|END|LOAD|REST)' "$WD/$name.log" | cut -c1-160 | sed "s/^/  $name: /"
 }
-walk() {   # scene, source flags (one word), settle, start, target0, end, target1, frames, extra walk, trail, arms...
+walk() {   # scene, source flags (one word), settle (frames, or a lab line: `rest ...`), start, target0, end, target1, frames, extra walk, trail, arms...
     local scene=$1 src=$2 settle=$3 s=$4 t0=$5 e=$6 t1=$7 n=$8 extra=$9 trail=${10}
     shift 10
+    case "$settle" in *[!0-9]*) ;; *) settle="frames $settle" ;; esac
     if [ "$PRIME" = 1 ]; then
         printf 'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$s" "$t0" "$e" "$t1" > "$WD/$scene-prime.lab"
         session "$scene-prime" $src
+        # (the glass chain's parts boot on ONE cache's bytes - AB G10: a grown cache draws other variants; each part is
+        # its own row with its own home - so the live part keeps the primed cache for the frozen parts to restore)
+        if [ -n "${SNAP_SAVE:-}" ] && [ -d "${JAHSHAKA_SHADER_CACHE_DIR:-}" ]; then
+            rm -rf "$SNAP_SAVE"; cp -a "$JAHSHAKA_SHADER_CACHE_DIR" "$SNAP_SAVE"
+        fi
     fi
     for arm in "$@"; do
         local f=""; [ "${arm#frozen}" != "$arm" ] && f=" freeze"
@@ -79,7 +91,7 @@ walk() {   # scene, source flags (one word), settle, start, target0, end, target
         if [ -n "${SNAP:-}" ]; then rm -rf "$ROOT/shadercache"; cp -a "$SNAP" "$ROOT/shadercache"; fi
         # (the window after the stop: 8 frames - the stop frame's history count, the door's mask, comes back a few
         # frames late; M1 and the hitch law read the trail, the moving frames, only)
-        printf 'camera %s,%s\nframes %d\nstillness teleport:%s,%s/hold:1/walk:%s,%s:%d%s 8 trail=%d %s=%s-%s%s out=%s-%s\nstatus\nquit\n' \
+        printf 'camera %s,%s\n%s\nstillness teleport:%s,%s/hold:1/walk:%s,%s:%d%s 8 trail=%d %s=%s-%s%s out=%s-%s\nstatus\nquit\n' \
             "$s" "$t0" "$settle" "$s" "$t0" "$e" "$t1" "$n" "$extra" "$trail" "$dk" "$scene" "$arm" "$f" "$scene" "$arm" \
             > "$WD/$scene-$arm.lab"
         session "$scene-$arm" $src
@@ -167,7 +179,13 @@ if [ "$MODE" = "--area" ]; then
 fi
 SETTLE=160    # the court: its cards' last relight at frame 127 + the gather's 17-frame hold, rounded up (PHOTON-7 10-2: the
               # card-to-card re-listing's rounds at 4 cards a frame, the RGBA16F store's quantum - was the GI's rest at 80)
-GSETTLE=600   # the glass: its reflection HELD before a frozen walk (the door's precondition: rest from ~frame 80, + K_max + 1)
+# the glass: every reader HELD before a walk (the door's freeze precondition; the header says why). THE THREE ARMS START
+# ON ONE FRAME (L2: their first frames byte-equal): the predicate is read back with a lag, so a wait on it ends a frame
+# apart between sessions (measured: live 828, frozen 827 - 2,712 px apart). So the LIVE arm waits on it, `rest 1200
+# held`, then 4 frames more (the read-back's bound: ScreenProbeGather.h kReaderStaleFrames, the 3 frames in flight + the
+# cache's one frame late), and records n + 4; the frozen arms replay exactly that count - held there by construction.
+GSETTLE="rest 1200 held
+frames 4"
 if [ "$MODE" = "--court" ]; then
     walk court "--data-root $WD/data --env photon-court" $SETTLE 0,3,18 0,3,-6 0,3,3 0,3,-21 60 "" 60 live frozen frozen2
     # (the analysis is CPU work, after the court's last session: no live arm's clock beside it)
@@ -178,23 +196,47 @@ if [ "$MODE" = "--court" ]; then
     echo "gi.walk_court: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
     exit $fails
 fi
-if [ "$MODE" = "--glass" ]; then
-    walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 live
-    PRIME=0   # (primed above, with the live arm)
-    walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 frozen
-    # (the glass's M1 is CPU work: it runs beside the SECOND FROZEN walk, which reads no clock - never beside a live arm,
-    # whose wall and GPU clocks the hitch law reads; its L1 after it)
+glass_walk() {   # arm - the glass's walk (the rows run this script with sh: no arrays)
+    walk glass "--data-root $WD/data --env photon-glass" "$GSETTLE" -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 "$1"
+}
+restore_cache() {   # the frozen parts: the live part's primed cache bytes in this row's cache dir
+    [ -n "${JAHSHAKA_SHADER_CACHE_DIR:-}" ] || { echo "  (no JAHSHAKA_SHADER_CACHE_DIR: a hand run - the cache as found)"; return 0; }
+    [ -d "$WD/cache.snap" ] || { echo "FAIL: the live part's cache snapshot is missing ($WD/cache.snap)"; exit 1; }
+    rm -rf "$JAHSHAKA_SHADER_CACHE_DIR"; cp -a "$WD/cache.snap" "$JAHSHAKA_SHADER_CACHE_DIR"
+}
+if [ "$MODE" = "--glass-live" ]; then   # gi.walk_glass.live: the prime and the live walk (the hitch law's clocks, alone)
+    SNAP_SAVE="$WD/cache.snap" glass_walk live
+    n=$(sed -n 's/^LAB REST after \([0-9]*\) frames.*/\1/p' "$WD/glass-live.log" | head -1)
+    [ -n "$n" ] || { echo "FAIL: the live arm's rest count is missing"; exit 1; }
+    echo $((n + 4)) > "$WD/glass.settle"
+    echo "gi.walk_glass.live: the arms' settle $((n + 4)) frames (rest $n + 4)"
+    echo "gi.walk_glass.live: PASS"
+    exit 0
+fi
+if [ "$MODE" = "--glass-frozen" ]; then   # gi.walk_glass.frozen: the frozen walk, then M1 (live against frozen)
+    [ -f "$WD/data/stillness/glass-live.tsv" ] && [ -f "$WD/glass.settle" ] || { echo "FAIL: no live walk in $WD (gi.walk_glass.live writes it)"; exit 1; }
+    PRIME=0; GSETTLE=$(cat "$WD/glass.settle")
+    restore_cache
+    glass_walk frozen
     python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" glass glass-live glass-frozen \
-        --tsv "$WD/data/stillness/glass-live.tsv" --classes > "$WD/glass-m1.out" 2>&1 & gpid=$!
-    walk glass "--data-root $WD/data --env photon-glass" $GSETTLE -1.2,1.8,3.4 0,0.5,-3 1.2,1.8,1.0 0,0.5,-3 60 "" 60 frozen2
-    fails=0
-    wait $gpid || fails=1
+        --tsv "$WD/data/stillness/glass-live.tsv" --classes > "$WD/glass-m1.out" 2>&1
+    rc=$?
+    cat "$WD/glass-m1.out"
+    echo "gi.walk_glass.frozen: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
+    exit $rc
+fi
+if [ "$MODE" = "--glass-frozen2" ]; then   # gi.walk_glass.frozen2: the second frozen walk, then L1 (byte for byte)
+    [ -f "$WD/data/stillness/glass-frozen.tsv" ] || { echo "FAIL: no frozen walk in $WD (gi.walk_glass.frozen writes it)"; exit 1; }
+    PRIME=0; GSETTLE=$(cat "$WD/glass.settle")
+    restore_cache
+    glass_walk frozen2
     python3 -I "$HERE/walk_m1.py" "$WD/data/stillness" glass glass-live glass-frozen glass-frozen2 --l1-only \
-        > "$WD/glass-l1.out" 2>&1 || fails=1
-    cat "$WD/glass-l1.out" "$WD/glass-m1.out"
-    rm -rf "$WD/data/stillness/dump-"*
-    echo "gi.walk_glass: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
-    exit $fails
+        > "$WD/glass-l1.out" 2>&1
+    rc=$?
+    cat "$WD/glass-l1.out"
+    rm -rf "$WD/data/stillness/dump-"* "$WD/cache.snap"   # the three walks' dumps (~270 MB a walk) and the snapshot, once printed
+    echo "gi.walk_glass.frozen2: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
+    exit $rc
 fi
 echo "FAIL: walk.sh: unknown mode '$MODE' (--court, --glass, --area, --bistro)"
 exit 1

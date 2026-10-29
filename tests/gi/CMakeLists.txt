@@ -1215,19 +1215,38 @@ endif()
 # frozen per pixel: mean / p99 / share over one code) and the hitch law on the wall and the GPU clock PRINTED - the bars
 # are the later stages'; each asserts only its instrument's laws: frozen = frozen, the arms start equal, the classes
 # cover the counted pixels (walk.sh says the laws and the base). 960x540; four sessions each: the prime's 7 frames and
-# three walks of the hold + teleport + hold:1 + the 60-frame walk + the 8-frame window + 1 (LAB END: the court 231, the
-# glass 671). ALL THE CARD'S SLOTS (TOKENS 8): their GPU clocks are read alone.
+# three walks of the hold + teleport + hold:1 + the 60-frame walk + the 8-frame window + 1 (LAB END: the court 231; the
+# glass: its chain below). ALL THE CARD'S SLOTS (TOKENS 8): their GPU clocks are read alone.
 if(TARGET jahlab)
     jah_gpu_row(gi.walk_court CLASS engine TOKENS 8 SHIP FRAMES 700
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_court
                 --court
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_court PROPERTIES TIMEOUT 60 LABELS "engine")
-    jah_gpu_row(gi.walk_glass CLASS engine TOKENS 8 SHIP FRAMES 2020
+    # gi.walk_glass SPLIT BY PROOF (HARNESS-3 (f)): each walk now starts from `rest 1200 held` (every reader held - the
+    # glass holds ~1,000 rest frames in since 11-2 (8); it was 600 frames, the old K_max's), so the three walks no longer
+    # fit one row: a fixture chain on one work dir - .live (the prime + the live walk; its clocks alone) -> .frozen (the
+    # frozen walk + M1) -> .frozen2 (the second frozen walk + L1). Each SHIP, as the row was. Run one alone with
+    # `ctest -R gi.walk_glass.frozen2`. The parts boot on ONE cache's bytes (the live part's primed cache, restored) and
+    # start on ONE frame count (the live part's rest + 4, replayed) - L2 read 2,712 px without the first. Frames at
+    # photon-7 188268ffc: the rest 828, each walk 903 (the live part + the prime's 7) - the whole row was 2,020.
+    jah_gpu_row(gi.walk_glass.live CLASS engine TOKENS 8 SHIP FRAMES 910
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
-                --glass
+                --glass-live
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(gi.walk_glass PROPERTIES TIMEOUT 60 LABELS "engine")
+    set_tests_properties(gi.walk_glass.live PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_glass_live)
+    jah_gpu_row(gi.walk_glass.frozen CLASS engine TOKENS 8 SHIP FRAMES 903
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
+                --glass-frozen
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_glass.frozen PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_glass_frozen
+                         FIXTURES_REQUIRED gi_walk_glass_live DEPENDS gi.walk_glass.live)
+    jah_gpu_row(gi.walk_glass.frozen2 CLASS engine TOKENS 8 SHIP FRAMES 903
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
+                --glass-frozen2
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_glass.frozen2 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED "gi_walk_glass_live;gi_walk_glass_frozen" DEPENDS gi.walk_glass.frozen)
 endif()
 
 # gi.walk_rough.walk / .k14 / .k28 / .k59 (PHOTON-7 stage 7, 7-3; R12; SPLIT BY PROOF in HARNESS-3 (a): whole it ran 55.78

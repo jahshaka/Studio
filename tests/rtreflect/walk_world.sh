@@ -22,33 +22,57 @@
 # walks serve both measures. The unfrozen walk - the world's half - is gi.walk_glass's.) The spatial filter's GPU time over the
 # world-held walk printed. jahlab at Epic, 960x540; four sessions: a prime and the frozen and two world-held walks
 # (6 + 3 x 570 frames).
-# usage: walk_world.sh <jahlab> <work dir> <raysflat|both>
+# THE SETTLE (HARNESS-3 (f)): each walk starts from `rest 1200 held` - the GI at rest AND every reader HELD (the door's
+# freeze precondition), the engine's own predicate; it was 500 frames (the holds at S measured 357 rest frames in Rays with
+# the hits flattened, 248 in Both, under the old K_max): since 11-2 (8) the glass holds ~1,000 rest frames in and the 500
+# read "not converged at the walk's start". THE SPLIT BY PROOF where the three walks no longer fit one row: the optional
+# PART runs one walk on the arm's work dir - frozen (the prime first; FIXTURES_SETUP), worldA, then worldB with the
+# measures; no PART = the three in one row.
+# usage: walk_world.sh <jahlab> <work dir> <raysflat|both> [frozen|worldA|worldB]
 set -u
-LAB=${1:?jahlab}; WD=${2:?work dir}; ARM=${3:?arm}
+LAB=${1:?jahlab}; WD=${2:?work dir}; ARM=${3:?arm}; PART=${4:-all}
 case "$ARM" in raysflat) MODE=rays; ARMS='reflections rays\narm reflect.flatHits 1\n' ;;
                both) MODE=both; ARMS='reflections both\n' ;;
                *) echo "FAIL: the arm '$ARM' (raysflat|both)"; exit 1 ;; esac
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
-rm -rf "$WD"; mkdir -p "$WD"
+case "$PART" in all|frozen) rm -rf "$WD"; mkdir -p "$WD" ;; worldA|worldB) mkdir -p "$WD" ;;
+               *) echo "FAIL: the part '$PART' (frozen|worldA|worldB)"; exit 1 ;; esac
 SRC="--data-root $WD/data --env photon-glass"
 session() {   # name (the script is $WD/<name>.lab)
     "$LAB" --headless --no-stdin --size 960x540 $SRC --script "$WD/$1.lab" > "$WD/$1.log" 2>&1
     rc=$?
+    grep -E '^LAB REST' "$WD/$1.log" | sed "s/^/  $1: /"
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($1) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR|stillness:' "$WD/$1.log" | head -5; exit 1; }
 }
 S=-1.2,1.8,3.4; T=0,0.5,-3; E=1.2,1.8,1.0
 printf "$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
-session prime
-# (the settle: 500 frames - the holds at S measured 357 rest frames in Rays with the hits flattened, 248 in Both)
-for walk in frozen worldA worldB; do
+case "$PART" in all) WALKS="frozen worldA worldB" ;; *) WALKS=$PART ;; esac
+case "$PART" in all|frozen) session prime ;; esac
+# (the parts are rows with their own homes: they boot on ONE cache's bytes - AB G10, a grown cache draws other variants;
+# measured on gi.walk_glass's chain: 2,712 px apart at the hold without it, 0 with it - the frozen part keeps the primed
+# cache, the world parts restore it)
+if [ -n "${JAHSHAKA_SHADER_CACHE_DIR:-}" ]; then
+    case "$PART" in
+    frozen) rm -rf "$WD/cache.snap"; cp -a "$JAHSHAKA_SHADER_CACHE_DIR" "$WD/cache.snap" ;;
+    worldA|worldB) [ -d "$WD/cache.snap" ] || { echo "FAIL: the frozen part's cache snapshot is missing"; exit 1; }
+                   rm -rf "$JAHSHAKA_SHADER_CACHE_DIR"; cp -a "$WD/cache.snap" "$JAHSHAKA_SHADER_CACHE_DIR" ;;
+    esac
+fi
+# EACH ARM WALKS FROM ITS OWN HOLD (`rest 1200 held`): measured once with the world arms replaying the frozen walk's count
+# instead (rest + 4, as gi.walk_glass's chain does - its L2 needs byte-equal starts, these measures do not): the glossy
+# noise map read the same 1.16 % and the mirror's M1 went from p99 0.01 to 10.55 codes (18.5 % over one) - a world arm
+# frozen where its own readers had not chosen to stop. The holds differ by seed (seed 0 828, seed 7919 798 frames in Both).
+for walk in $WALKS; do
     f=" freeze=world"; [ $walk = frozen ] && f=" freeze"
     seed=0; [ $walk = worldB ] && seed=7919
-    printf "$ARMS"'arm reflect.seedOffset %d\ncamera %s,%s\nframes 500\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-%s%s out=glass-%s\nquit\n' \
+    printf "$ARMS"'arm reflect.seedOffset %d\ncamera %s,%s\nrest 1200 held\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-%s%s out=glass-%s\nquit\n' \
         "$seed" "$S" "$T" "$S" "$T" "$E" "$T" "$walk" "$f" "$walk" > "$WD/glass-$walk.lab"
     session glass-$walk
 done
 ROOT="$WD/data/stillness"
+case "$PART" in frozen|worldA) echo "rtreflect.walk_world ($ARM) $PART: PASS"; exit 0 ;; esac
+for w in frozen worldA; do [ -f "$ROOT/glass-$w.tsv" ] || { echo "FAIL: no $w walk in $WD (its part writes it)"; exit 1; }; done
 fails=0
 python3 -I "$HERE/../support/reflect_sources.py" tsv "$ROOT/glass-frozen.tsv" "$ROOT/glass-worldA.tsv" "$ROOT/glass-worldB.tsv" -- $MODE || fails=1
 python3 -I "$HERE/walk_noise.py" "$ROOT" glass-worldA glass-worldB glass-frozen > "$WD/measures.json" || { cat "$WD/measures.json"; fails=1; }
@@ -85,6 +109,6 @@ print('  the reflection\'s GPU passes over the world-held walk (mean ms): ' +
 sys.exit(1 if fails else 0)
 PY
 [ $? -eq 0 ] || fails=1
-rm -rf "$ROOT/dump-"*
+rm -rf "$ROOT/dump-"* "$WD/cache.snap"
 echo "rtreflect.walk_world ($ARM): $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
 exit $fails

@@ -13,27 +13,38 @@
 #       break the reflection's rest - to the hold: tests/support/rise_law.py, as rtreflect.still_after_stop's (a)).
 #       The step's own arrival (<= 16 frames) is rtreflect.history_detectors'.
 # Every judgement is a FAIL line, never a traceback (a window that never holds included).
-# usage: lamp_step_held.sh <jahlab> <work dir>
+# THE SIZING (HARNESS-3 (f)): the step's settle before the lamp is `rest 1200` (GiStatus::giAtRest, the engine's own
+# predicate: "a step applied AT REST"; it was 300 frames), and the door's window is 1,200 frames (it was 600: sized to the
+# old K_max 512 + the rest's start, and since 11-2 (8) the glass holds ~1,000 rest frames in - "eref held at frame 601 of
+# 600"). No frame count holds a rest (K_max deleted, the rest stops each texel by its own standard error), so the window is
+# the OBSERVATION SPAN the law asks the hold inside, sized under the row's 45-s law - never a physics bound.
+# SPLIT BY PROOF (the two 1,200-frame windows no longer fit one row): .ref (the reference session, FIXTURES_SETUP) then
+# .step (the step session and (e)'s judgement of both).
+# usage: lamp_step_held.sh <jahlab> <work dir> ref|step
 set -u
-LAB=${1:?jahlab}; WD=${2:?work dir}
+LAB=${1:?jahlab}; WD=${2:?work dir}; PART=${3:?ref or step}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
-rm -rf "$WD"; mkdir -p "$WD"
+case "$PART" in ref) rm -rf "$WD"; mkdir -p "$WD" ;; step) [ -f "$WD/data/stillness/eref.tsv" ] || {
+    echo "FAIL: no reference session in $WD (rtreflect.lamp_step_held.ref writes it)"; exit 1; } ;;
+    *) echo "FAIL: the part is ref or step, not '$PART'"; exit 2 ;; esac
 POSE=1.5,1.8,3.4,1.5,0.5,-3
-WIN=600
+WIN=1200
 # the step and its reference, each through the door at the stop's pose (a teleport to the pose it stands at: no move;
 # the reference's 20 frames give the gather the history the door's mask counts)
 # (the sources this row's bars are Both's: set, never assumed - the mode label below asserts what ran)
-printf 'reflections both\ncamera %s\nframes 300\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:1 %s out=estep\nshot e-step\nquit\n' \
+printf 'reflections both\ncamera %s\nrest 1200\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:1 %s out=estep\nshot e-step\nquit\n' \
     "$POSE" "$POSE" "$WIN" > "$WD/step.lab"
 printf 'reflections both\ncamera %s\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:20 %s out=eref\nshot e-ref\nquit\n' \
     "$POSE" "$POSE" "$WIN" > "$WD/ref.lab"
-for run in step ref; do
+for run in $PART; do
     "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env photon-glass --script "$WD/$run.lab" \
         > "$WD/$run.log" 2>&1
     rc=$?
+    grep -E '^LAB (REST|END)' "$WD/$run.log" | sed "s/^/  $run: /"
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($run) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$run.log" | head; tail -5 "$WD/$run.log"; exit 1; }
 done
 HERE=$(cd "$(dirname "$0")" && pwd)
+[ "$PART" = ref ] && { echo "rtreflect.lamp_step_held.ref: PASS (the reference session; .step judges it)"; exit 0; }
 python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/estep.tsv" "$WD/data/stillness/eref.tsv" -- both &&
 python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/step.log" "$WD/ref.log" -- e-=both || {
     echo "rtreflect.lamp_step_held: FAIL (the mode label)"; exit 1; }
