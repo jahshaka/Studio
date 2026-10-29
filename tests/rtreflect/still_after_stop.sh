@@ -5,7 +5,7 @@
 # THE MOTION, within its bound (the room's law, gi.hold_after_stop's, PHOTON-7 stage 5, 5-5: the demand's read-back
 # lags, so a card arrival and a field plane's refinement come after the stop; tests/support/owed_rows.py judges both
 # rows), so the reflection's law is judged on a still world - the stop, then the path's teleport back to the stop at EQUAL GI placements (the door's
-# placement pin). One 600-frame window (the rest re-founded, PHOTON-7 stage 6 commit 8: four rest rays a texel a frame,
+# placement pin). One 1,000-frame window (the rest re-founded, PHOTON-7 stage 6 commit 8: four rest rays a texel a frame,
 # no frame cap - PREFLIGHT_R section 3's estimate, (2N + the measured samples) / 4 + 8, about 100 frames).
 # THE LAW (physics: under still lights and geometry a reflection is a function of the world and the eye): once the eye
 # stops, each texel hands its moving history over to its own rest mean (eased out over 2N = 38 samples,
@@ -48,21 +48,40 @@
 # Every judgement is a FAIL line, never a traceback (a window that never holds included).
 # THE BASE (main 8423ec631, 2026-10-22, 1080p, spikes/photon-2/stage0): glossy mean 0.22 at frame 17 and 0.16 for ever
 # (69k pixels every frame); the mirror 1.24 codes every frame; never 0; walk vs teleport 130 codes on the glass.
-# usage: still_after_stop.sh <jahlab> <work dir>
+# SPLIT BY PROOF (PHOTON-7 8B B2, the lead's ruling): the hold now lands at 828 (the stop counts samples), so the
+# 1,000-frame walk window and the path's two windows no longer fit one row under the minute - `hold` runs the walk alone
+# and judges (a), (a2), (b'), (c), (g); `path` runs the walk and the teleport at equal placements and judges (d) alone,
+# AT AN EQUAL REST INDEX BEFORE THE HOLD (both windows 450 frames; the lead's ruling): the rest's samples are a function
+# of the sequence index (per-index determinism), so equal placements give equal pictures at equal frames, held or not -
+# (d) tests the rest estimate's path-independence, NOT a held picture: the hold is .hold's (b').
+# usage: still_after_stop.sh <jahlab> <work dir> hold|path
 set -u
-LAB=${1:?jahlab}; WD=${2:?work dir}
+LAB=${1:?jahlab}; WD=${2:?work dir}; PART=${3:?hold or path}
+case "$PART" in hold|path) ;; *) echo "FAIL: the part is hold or path, not '$PART'"; exit 2 ;; esac
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 rm -rf "$WD"; mkdir -p "$WD"
 POSE=1.5,1.8,3.4,1.5,0.5,-3
-WIN=600
+# THE WINDOW (PHOTON-7 8B B2's re-derivation): the observation span the law asks the hold inside - the glass holds at
+# 828 since the stop counts samples (kReflectStopSamples 300, the measured tail; it held at 534 when a texel could stop on
+# 32 samples of a heavy tail and keep a biased mean), plus the law's margin: 1,000.
+WIN=1000
 LAGK=17,24,32,48,64,96   # (a2)'s frames after the stop: from the rest's hand-over (2N / 4 frames) + its 16
 # (the sources this row's bars are Both's: set, never assumed - the mode label below asserts what ran)
+WINP=450
+if [ "$PART" = path ]; then
 cat > "$WD/run.lab" <<S
 reflections both
-stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WIN path trail=1 dump=still dumpwin=$LAGK,$WIN out=still
+stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WINP path trail=1 out=still
 quit
 S
+else
+cat > "$WD/run.lab" <<S
+reflections both
+stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WIN trail=1 dump=still dumpwin=$LAGK,$WIN out=still
+quit
+S
+fi
 for run in run; do
     "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env photon-glass --script "$WD/$run.lab" \
         > "$WD/$run.log" 2>&1
@@ -73,6 +92,25 @@ grep '^LAB STILLNESS' "$WD/run.log" | cut -c1-400
 HERE=$(cd "$(dirname "$0")" && pwd)
 python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/still.tsv" -- both || {
     echo "rtreflect.still_after_stop: FAIL (the mode label)"; exit 1; }
+if [ "$PART" = path ]; then
+python3 -I - "$WD" <<'PY'
+import os, re, sys
+log = open(os.path.join(sys.argv[1], "run.log")).read()
+fails = []
+m = re.search(r"path walk-vs-teleport \(at equal placements\) \| picture mean/p99/max codes, pixels >= 1: (.*?) \|", log)
+if not m:
+    fails.append("(d) the path line is missing")
+else:
+    cls = {k: (float(a), int(b)) for k, a, b in re.findall(r"(\w+)=([\d.]+)/(\d+)/\d+,\d+", m.group(1))}
+    print("(d) walk vs teleport at equal placements: glossy %s mirror %s" % (cls["glossy"], cls["mirror"]))
+    if cls["glossy"][0] > 0.5 or cls["glossy"][1] > 2: fails.append("(d) glossy mean <= 0.5 and p99 <= 2: %s" % (cls["glossy"],))
+    print("(d) the mirror's half is stage 5's (R2), not judged here: %s" % (cls["mirror"],))
+for f in fails: print("FAIL:", f)
+print("rtreflect.still_after_stop.path: %s" % ("FAIL" if fails else "PASS"))
+sys.exit(1 if fails else 0)
+PY
+exit $?
+fi
 LAGK=$LAGK python3 -I - "$WD" "$WIN" "$HERE/../support" <<'PY'
 import csv, math, os, re, sys
 wd, win = sys.argv[1], int(sys.argv[2])
@@ -141,9 +179,16 @@ if rows:
     # THE MAX OVER THE TILE FRAMES (k 4 over every batching texel, the hand-over included; frame 5 alone was a proxy
     # 2.5 % low: the residual's store begins at v = 2N, frames 14-15) - the compact path's tail included (its frames:
     # from the first whose read-back active count is within the list's 16,384).
+    # IN THE TRACE's SHARE OF THE FRAME's GPU TIME (PHOTON-7 8B B2, the lead's ruling on the measured clocks): the card's
+    # clocks are unlocked and fall to its idle state (345-420 MHz against 2,775, the driver's GPU-idle reason, nvidia-smi
+    # at 20 Hz beside .hold) on the light frames of a long rest tail - every pass of a frame stretches alike (the temporal
+    # pass 0.20 -> 0.37 ms on the same work), so the trace's absolute ms read the card's clock, not its cost; its share of
+    # the frame's GPU time is clock-free (the unlocked clocks the measurement's known limit: nobody locks clocks).
     def traceMs(r):
+        frame = float(r.get("frame_gpu_ms", "0") or 0)
         for tok in r.get("gpu_rows", "").split(","):
-            if tok.startswith("rq.reflect.trace:"): return float(tok.split(":")[1])
+            if tok.startswith("rq.reflect.trace:"):
+                return float(tok.split(":")[1]) / frame if frame > 0.0 else -1.0
         return -1.0
     rest = [(int(r["refl_rest_frames"]), traceMs(r), int(r["refl_rest_active"]) if r["refl_rest_active"] not in ("-", "") else -1)
             for r in rows[restStart:end] if r["refl_rest_frames"] not in ("-", "")]
@@ -155,31 +200,24 @@ if rows:
         peak = max(x[1] for x in tile)
         tileMed = med([x[1] for x in tile])
         worst = max(tail, key=lambda x: x[1]) if tail else None
-        print("(g) the trace's GPU ms: the tile frames (%d) median %.3f, max %.3f; the compact path from rest frame %s, its "
+        print("(g) the trace's share of the frame's GPU time: the tile frames (%d) median %.3f, max %.3f; the compact path from rest frame %s, its "
               "single-frame max %s (the fragile form's reading, printed only)"
               % (len(tile), tileMed, peak, tail[0][0] if tail else "-",
                  ("%.3f at rest frame %d" % (worst[1], worst[0])) if worst else "-"))
         wins = [(tail[a][0], tail[b - 1][0], med([x[1] for x in tail[a:b]])) for a, b in rise_law.windows(0, len(tail))]
-        print("(g) the compact path's 10-frame window medians (rest frames: ms): %s"
+        print("(g) the compact path's 10-frame window medians (rest frames: share): %s"
               % (" ".join("%d-%d:%.3f" % w for w in wins) or "none"))
         top = max(wins, key=lambda w: w[2]) if wins else None
-        print("LAW g.tile_median %.4f ms" % tileMed)
-        print("LAW g.tile_max %.4f ms" % peak)
-        if worst: print("LAW g.tail_single_frame_max %.4f ms" % worst[1])
-        if top: print("LAW g.tail_window_median_max %.4f ms <= %.4f" % (top[2], tileMed))
+        print("LAW g.tile_median %.4f (share)" % tileMed)
+        print("LAW g.tile_max %.4f (share)" % peak)
+        if worst: print("LAW g.tail_single_frame_max %.4f (share)" % worst[1])
+        if top: print("LAW g.tail_window_median_max %.4f (share) <= %.4f" % (top[2], tileMed))
         if top and top[2] > tileMed:
-            fails.append("(g) the compact path's window median above the tile frames' median: %.3f ms over rest frames "
+            fails.append("(g) the compact path's window median share above the tile frames' median: %.3f over rest frames "
                          "%d-%d > %.3f" % (top[2], top[0], top[1], tileMed))
     else:
         fails.append("(g) no tile frame timed (the trace's GPU row)")
-m = re.search(r"path walk-vs-teleport \(at equal placements\) \| picture mean/p99/max codes, pixels >= 1: (.*?) \|", log)
-if not m:
-    fails.append("(d) the path line is missing")
-else:
-    cls = {k: (float(a), int(b)) for k, a, b in re.findall(r"(\w+)=([\d.]+)/(\d+)/\d+,\d+", m.group(1))}
-    print("(d) walk vs teleport at equal placements: glossy %s mirror %s" % (cls["glossy"], cls["mirror"]))
-    if cls["glossy"][0] > 0.5 or cls["glossy"][1] > 2: fails.append("(d) glossy mean <= 0.5 and p99 <= 2: %s" % (cls["glossy"],))
-    print("(d) the mirror's half is stage 5's (R2), not judged here: %s" % (cls["mirror"],))
+# ((d), walk vs teleport, is the `path` part's)
 # (a2) THE LAG LAW AT A STOP (PHOTON-7 10-3 R12, the lead's ruling: the picture is the world's within its noise): the
 # eye still, the converged picture does not move (conv(k+1) - conv(k) = 0), so per glossy pixel at each listed frame k
 # after the hand-over |frame(k) - hold| <= 3 sqrt( SE^2 + 1 ) + 1 - SE the moving mean's standard error at the stop (the
@@ -214,7 +252,7 @@ except Exception as ex:
     fails.append("(a2) the lag law's dump: %s" % ex)
 print("(f) the held picture against the 4,096-sample reference: a measurement (the arm reflect.restReference), not this row")
 for f in fails: print("FAIL:", f)
-print("rtreflect.still_after_stop: %s" % ("FAIL" if fails else "PASS"))
+print("rtreflect.still_after_stop.hold: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)
 PY
 rc=$?

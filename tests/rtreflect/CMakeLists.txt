@@ -300,19 +300,26 @@ endif()
 # path's teleport at equal placements — (a) no rise to the hold (the rise law), (a2) the lag law at the stop (each frame
 # within its noise of the hold, R12), (b') the hold inside the window, 0 codes from it, no capped texel at it, (c) the mirror's estimator
 # fixed, (d) walk vs teleport on the glossy panes; (f), the 4,096-sample reference, is a measurement over a row's
-# minute (still_after_stop.sh says the law and the base). 960x540; one jahlab session: 231 frames to the stop, two
-# 600-frame windows and the path's bridge - 1,436 frames.
+# minute (still_after_stop.sh says the law and the base). 960x540; two rows since 8B B2 (below).
 # rtreflect.lamp_step_held (rev 6's (e), split out of the row above in round 4 so each runs its law under a minute) —
 # a small lamp step held at rest against a session converged at the new light, each through the door's 1,200-frame
 # window (HARNESS-3 (f); was 600 - the holds measured 522 / 622 at photon-7 188268ffc), each hold with no capped texel
 # (lamp_step_held.sh). 960x540; two jahlab sessions, two rows: the reference's 1,222 frames, the step's `rest 1200`
 # (234) + its door's 1,203 = 1,437.
 if(TARGET jahlab)
-    jah_gpu_row(rtreflect.still_after_stop CLASS engine FRAMES 1436
+    # rtreflect.still_after_stop SPLIT BY PROOF (PHOTON-7 8B B2: the hold at 828 since the stop counts samples - the
+    # walk's 1,000-frame window and the path's two windows no longer fit one row): .hold (the walk alone: (a), (a2),
+    # (b'), (c), (g); 231 + 1,000 + 1 frames) and .path ((d), the walk and the teleport at equal placements at an equal
+    # rest index before the hold - 450 frames each, per-index determinism; 231 + 2 x 450 + the bridge).
+    jah_gpu_row(rtreflect.still_after_stop.hold CLASS engine FRAMES 1232
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop
+                ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop_hold hold
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.still_after_stop PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_gpu_row(rtreflect.still_after_stop.path CLASS engine FRAMES 1136
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop_path path
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.still_after_stop.hold rtreflect.still_after_stop.path PROPERTIES TIMEOUT 60 LABELS "engine")
     # rtreflect.lamp_step_held SPLIT BY PROOF (HARNESS-3 (f): two 1,200-frame door windows - lamp_step_held.sh says the
     # sizing): .ref (the reference session) -> .step (the step session + (e)).
     jah_gpu_row(rtreflect.lamp_step_held.ref CLASS engine FRAMES 1222
