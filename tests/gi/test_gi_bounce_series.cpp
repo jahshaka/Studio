@@ -82,6 +82,7 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -105,10 +106,12 @@ const double kADiffuse = kRho * enginetest::disneyDiffuseAlbedoHemi(1.0);   // a
 const int kCarryFadeFrames = 120;   // (7): a sustained change, the injected bricks carried in their frames
 const int kFadeFrames = 1200;   // (5): every inner-wall voxel under a step of the store a frame (printed)
 
+bool g_armMetal = false;   // MEASURING ARM (REDS-1 item 1, reverted after its one run): a white rough metal room
 NodeId slab(Scene *s, const Vec3 &centre, const Vec3 &size, float emission)
 {
     PbrParams p;
     p.albedo = Colour(kRho, kRho, kRho);
+    if (g_armMetal) { p.albedo = Colour(1.0f, 1.0f, 1.0f); p.metalness = 1.0f; }
     p.roughness = 1.0f;
     p.emissive = Colour(emission, emission, emission);
     const NodeId n = s->createNode();
@@ -339,6 +342,42 @@ int main(int argc, char **argv)
                   "(8) THE TLAS GATHER CONVERGES: the ray tier's feedback within a code of its 64-pass Jacobi");
             drop(m);
             e->setRayTracing(false);
+            continue;
+        }
+        if (std::getenv("JAH_REDS_ARM")) {   // MEASURING ARM (REDS-1 item 1): the store's inputs and the metal's share
+            for (int metal = 0; metal < 2; ++metal) {
+                g_armMetal = metal == 1;
+                Arm m = arm(tiers[t], kE, 0.0f, false);
+                GiVoxelVolume v;
+                double sa = 0, sr = 0, sc = 0, amin = 9, amax = 0; size_t n = 0;
+                if (m.scene && m.scene->giVoxelVolume(0, v) && v.available) {
+                    const float cell = v.cell[0];
+                    for (int z = 0; z < v.depth; ++z) for (int y = 0; y < v.height; ++y) for (int x = 0; x < v.width; ++x) {
+                        const float p[3] = { v.origin[0] + cell * (x + 0.5f), v.origin[1] + cell * (y + 0.5f), v.origin[2] + cell * (z + 0.5f) };
+                        const bool inGrown = std::fabs(p[0]) < kHalfX + cell && std::fabs(p[2]) < kHalfZ + cell && p[1] > -cell && p[1] < kHeight + cell;
+                        const bool inShrunk = std::fabs(p[0]) < kHalfX - cell && std::fabs(p[2]) < kHalfZ - cell && p[1] > cell && p[1] < kHeight - cell;
+                        if (!inGrown || inShrunk) continue;
+                        int near = (std::fabs(p[0]) > kHalfX - 1.0f) + (std::fabs(p[2]) > kHalfZ - 1.0f) + (p[1] < 1.0f || p[1] > kHeight - 1.0f);
+                        if (near > 1) continue;
+                        const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
+                        if (!(v.albedo[i + 3] > 0.5f)) continue;
+                        const double a = std::max(std::max(v.albedo[i], v.albedo[i + 1]), v.albedo[i + 2]);
+                        sa += a; amin = std::min(amin, a); amax = std::max(amax, a);
+                        sr += v.emissive.size() > i + 3 ? v.emissive[i + 3] : -1.0; sc += v.albedo[i + 3]; ++n;
+                    }
+                }
+                const double L = m.cascades.empty() ? -1.0 : m.cascades[0].mean;
+                double A = 0, B = 0;
+                enginetest::ggxSpecularAlbedoHemi(1.0, A, B);
+                const double aStore = L > 0 ? 1.0 - kE / L : -1.0;
+                const double aMat = metal ? A + B : (n ? sa / n : 0) * enginetest::disneyDiffuseAlbedoHemi(1.0) + 0.04 * A + B;
+                std::printf("   ARM %s: %zu voxels, stored albedo mean %.6f [%.6f .. %.6f], roughness %.6f, c %.4f; L %.6f, "
+                            "the store's a' %.6f, the material's a' (stored albedo) %.6f, the ratio %.5f; integral a' %.6f\n",
+                            metal ? "WHITE METAL" : "DIELECTRIC", n, n ? sa / n : 0, amin, amax, n ? sr / n : 0, n ? sc / n : 0, L,
+                            aStore, aMat, aMat > 0 ? aStore / aMat : 0, metal ? A + B : kRho * enginetest::disneyDiffuseAlbedoHemi(1.0) + 0.04 * A + B);
+                drop(m);
+            }
+            g_armMetal = false;
             continue;
         }
         // THE SKY-LEAK ARM: the escape share, per cascade (the series half)
