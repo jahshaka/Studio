@@ -427,16 +427,18 @@ void Session::frame()
     fv.sky = true;
     fv.camera = mCamera.node();
     fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless || mReflectSources != ReflectSources::Both) {
+    if (mOpt.headless || mReflectSources != ReflectSources::Both || mHdrReadback) {
         // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
         // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays` /
         // `reflections screen` (the one estimator's sources narrowed to one).
         const bool headless = mOpt.headless;
         const ReflectSources sources = mReflectSources;
-        fv.finish = [headless, sources](FrameInputView &part, View *v) {
+        const bool hdr = mHdrReadback;
+        fv.finish = [headless, sources, hdr](FrameInputView &part, View *v) {
             PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             if (headless) fx.allowOffscreen = true;
             if (sources != ReflectSources::Both) fx.reflectSources = sources;
+            if (hdr) fx.hdrReadback = true;
             part.postFx = fx;
         };
     }
@@ -834,6 +836,72 @@ bool Session::exec(const Command &c)
             out << js << "\n";
             ok = bool(out);
             std::printf("LAB STATUS -> %s\n", qPrintable(path));
+        }
+    } else if (c.verb == "cardat") {
+        // THE CARD AT A WORLD POINT against the drawn pixel (labcommands.cpp's text)
+        float P[3] = { 0, 0, 0 }, N[3] = { 0, 0, 1 };
+        ok = std::sscanf(a0.c_str(), "%f,%f,%f", &P[0], &P[1], &P[2]) == 3 &&
+             std::sscanf(c.args[1].c_str(), "%f,%f,%f", &N[0], &N[1], &N[2]) == 3;
+        CardSample cs;
+        if (ok) ok = mScene->readCardAt(Vec3(P[0], P[1], P[2]), Vec3(N[0], N[1], N[2]), cs) && cs.ok;
+        if (!ok) labFail("LAB FAILED cardat: '%s %s' - no card answers that point and normal\n", a0.c_str(), c.args[1].c_str());
+        else {
+            if (!mHdrReadback) mHdrReadback = true;
+            renderFrames(2);
+            ImageF img;
+            const bool hdrOk = mView->readPixelsHdr(img);
+            // THE DIFFUSE LOBE'S DIRECTIONAL AND HEMISPHERICAL ALBEDO, the fork's closed form (JahDiffuseAlbedo_piece_all.any)
+            const auto da = [](double v, double r) {
+                v = std::clamp(v, 0.0, 1.0); r = std::clamp(r, 0.0, 1.0);
+                const double t = 1.0 - v, b = t * t * t * t * t, al = 1.5 * r - 1.0, rv = r * v, ef = 1.0 + (1.0 / 1.51 - 1.0) * r;
+                return ef * (1.0 + al / 21.0 + rv / 84.0 + b * (al + rv * 2.0 / 3.0 + al * al / 21.0 + al * rv / 42.0 + r * r * (11.0 - 9.0 * v * v) / 504.0));
+            };
+            const auto daHemi = [](double r) {
+                r = std::clamp(r, 0.0, 1.0);
+                const double al = 1.5 * r - 1.0, ef = 1.0 + (1.0 / 1.51 - 1.0) * r;
+                return ef * (1.0 + al * 2.0 / 21.0 + r / 63.0 + al * al / 441.0 + al * r / 3528.0 + r * r * 123.0 / 127008.0);
+            };
+            const auto dot = [](const double *u, const double *v) { return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]; };
+            const auto unit = [&](double *u) { const double l = std::sqrt(dot(u, u)); if (l > 0.0) for (int k = 0; k < 3; ++k) u[k] /= l; };
+            const iris::Vec3 ce = mCamera.position(), ct = mCamera.target();
+            const double T[3] = { cs.position[0], cs.position[1], cs.position[2] }, E[3] = { ce.x(), ce.y(), ce.z() },
+                         G[3] = { ct.x(), ct.y(), ct.z() };
+            double Nw[3] = { cs.worldNormal[0], cs.worldNormal[1], cs.worldNormal[2] }, V[3] = { E[0] - T[0], E[1] - T[1], E[2] - T[2] };
+            unit(Nw);
+            unit(V);
+            const double NdotV = std::max(0.0, dot(Nw, V));
+            const double r = std::sqrt(std::max(0.0, double(cs.roughness)));
+            const double envFactor = da(NdotV, r) / std::max(daHemi(r), 1e-4);
+            // the texel's point in the picture (the lab's camera: its vertical angle, the view's aspect)
+            double f[3] = { G[0] - E[0], G[1] - E[1], G[2] - E[2] };
+            unit(f);
+            double rt[3] = { -f[2], 0.0, f[0] };
+            unit(rt);
+            const double up[3] = { rt[1] * f[2] - rt[2] * f[1], rt[2] * f[0] - rt[0] * f[2], rt[0] * f[1] - rt[1] * f[0] };
+            const double dv[3] = { T[0] - E[0], T[1] - E[1], T[2] - E[2] };
+            const double xc = dot(dv, rt), yc = dot(dv, up), zc = dot(dv, f);
+            const double tanH = std::tan(0.5 * double(mCamera.node()->angle) * 3.14159265358979 / 180.0);
+            const double aspect = img.width && img.height ? double(img.width) / double(img.height) : 1.0;
+            const int px = int(std::floor((0.5 + 0.5 * xc / (zc * tanH * aspect)) * img.width));
+            const int py = int(std::floor((0.5 - 0.5 * yc / (zc * tanH)) * img.height));
+            double pix = -1.0, mean = 0.0;
+            int n = 0;
+            if (hdrOk && zc > 0.0 && px >= 1 && py >= 1 && px + 1 < int(img.width) && py + 1 < int(img.height)) {
+                const auto br = [&](int x, int y) { const auto p = img.at(unsigned(x), unsigned(y)); return std::max(p.r, std::max(p.g, p.b)); };
+                pix = br(px, py);
+                for (int y = -1; y <= 1; ++y) for (int x = -1; x <= 1; ++x) { mean += br(px + x, py + y); ++n; }
+                mean /= n;
+            }
+            const auto mx = [](const float *v) { return double(std::max(v[0], std::max(v[1], v[2]))); };
+            const double ind = mx(cs.indirect), rad = mx(cs.radiance), fl = mx(cs.flat);
+            std::printf("LAB CARDAT card %d texel (%u, %u) point (%.4f %.4f %.4f) n (%.3f %.3f %.3f) r %.3f | stored: radiance %.6f "
+                        "(V = N), indirect %.6f, flat %.6f, direct %.6f | toward the eye: N.V %.4f, the view term %.4f, the "
+                        "indirect half %.6f | the pixel (%d, %d): %.6f, 3x3 %.6f | the card's indirect toward the eye / the "
+                        "pixel %+.2f %% (3x3 %+.2f %%)\n", cs.card, cs.texelX, cs.texelY, T[0], T[1], T[2], Nw[0], Nw[1], Nw[2], r,
+                        rad, ind, fl, rad - ind - fl, NdotV, envFactor, ind * envFactor, px, py, pix, mean,
+                        pix > 0.0 ? 100.0 * (ind * envFactor / pix - 1.0) : 0.0, mean > 0.0 ? 100.0 * (ind * envFactor / mean - 1.0) : 0.0);
+            ok = hdrOk;
+            if (!hdrOk) labFail("LAB FAILED cardat: the view's float readback: %s\n", mEngine->lastError().c_str());
         }
     } else if (c.verb == "sideshares") {
         GiVoxelVolume vol;

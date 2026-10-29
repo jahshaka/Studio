@@ -39,6 +39,13 @@ const std::vector<VerbDoc> &verbs()
           "the surface cache's resident cards per object: its name, the cards resident and their faces (+x -x +y -y +z "
           "-z), the frame each face was last read (Scene::readCardRadiance; PHOTON-7 stage 5's residency by the "
           "readers' demand), appended to <file> (stdout without one)" },
+        { "cardat", "cardat x,y,z nx,ny,nz", 2, 2,
+          "THE CARD AT A WORLD POINT against the drawn pixel (REDS-1): Scene::readCardAt at the point and normal - the "
+          "texel's stored radiance (its direct at V = N, its indirect diffuse half, its flat), its point and roughness - "
+          "the INDIRECT half toward the camera (x DA(N.V, r) / DA_hemi(r), the card read's environment view term, the "
+          "lobe's closed form) and the HDR pixel the texel's point projects to (its own and its 3 x 3 mean; the view's "
+          "float readback is turned on and two frames drawn first). Run it in `photon diffuse` to hold the card's "
+          "indirect half against the drawn indirect diffuse" },
         { "sideshares", "sideshares file", 1, 1,
           "cascade 0's surface voxels as the ray tier's sides' gather last left them (PHOTON-7 11-2 (6), the openings' "
           "instrument): one line a written voxel - its cell, its world centre, its normal (two-sided: the front's), the "
