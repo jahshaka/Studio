@@ -885,15 +885,7 @@ int main(int argc, char **argv)
         size_t onlyI = 0, onlyO = 0, both = 0, overH = 0;
         double worstH = 0.0, readerMove[3] = { 0.0, 0.0, 0.0 };
         for (const auto &kv : inI)
-            if (kv.first != heldKey && !inO.count(kv.first)) {
-                ++onlyI;   // MEASURING ARM (8B B3's L1, to be reverted): which card, read when
-                std::printf("   ARM (8) only with it: node#%d card %u bucket %u size %u lastRead %llu lastRelit %llu | "
-                            "the held-in run read at %llu, %llu decisions; the held-out run at %llu, %llu decisions\n",
-                            kv.first.first, kv.first.second, kv.second->bucket, kv.second->size,
-                            (unsigned long long)kv.second->lastRead, (unsigned long long)kv.second->lastRelit,
-                            (unsigned long long)hin.frame, (unsigned long long)hin.decisions,
-                            (unsigned long long)hout.frame, (unsigned long long)hout.decisions);
-            }
+            if (kv.first != heldKey && !inO.count(kv.first)) ++onlyI;
         for (const auto &kv : inO)
             if (!inI.count(kv.first)) ++onlyO;
         for (const auto &kv : inO) {
