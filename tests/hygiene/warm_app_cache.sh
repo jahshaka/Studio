@@ -9,9 +9,17 @@ set -u
 SRC=${1:?source}; BUILD=${2:?build}
 W="$SRC/scripts/warm-app-cache.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
-mkdir -p "$T/.shadercache" "$T/.shadercache-engine"
-printf 'jahshaka-shader-cache 2\nshaders 2\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' > "$T/.shadercache/cache-manifest.txt"
-cp "$T/.shadercache/cache-manifest.txt" "$T/.shadercache-engine/cache-manifest.txt"
+CK="$SRC/tests/support/shadercache_check.py"
+# A TOY CACHE THAT IS ONE GENERATION (URGENT #117): its two files and a manifest naming them at their length and the
+# engine's hash - the warm reads a cache that fails its own manifest as cold
+# toy_cache <dir> <saved> <shaders>
+toy_cache() {
+    mkdir -p "$1"; printf '0123456789' > "$1/hlms.1.bin"; printf 'abcdefghijklmnopqrst' > "$1/pipeline.cache"
+    printf 'jahshaka-shader-cache 2\nsaved %s\nshaders %s\nfile hlms.1.bin 10 %s k1\nfile pipeline.cache 20 %s k2\n' "$2" "$3" \
+        "$(python3 -I "$CK" --hash "$1/hlms.1.bin")" "$(python3 -I "$CK" --hash "$1/pipeline.cache")" > "$1/cache-manifest.txt"
+}
+toy_cache "$T/.shadercache" 1 2
+toy_cache "$T/.shadercache-engine" 1 2
 fail=0
 ok() { echo "  ok: $1"; }
 no() { echo "  FAIL: $1"; fail=1; }
@@ -70,6 +78,21 @@ out=$("$W" "$BUILD" --tests-dir "$T" "${X[@]}" --only app-on); rc=$?
     ok "an -on boot asked for alone on a cold -off cache: refused, nothing booted, exit 3" || no "-on before -off: '$out' rc $rc"
 printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$T/.shadercache.warm-key"
 printf '%s\n%s\n' "$key" "$(eid "$T/app")" > "$T/.shadercache.driver-key"
+# A TORN SHARED CACHE (URGENT #117): every stamp at the key and the layer keys as recorded, but a file of other bytes
+# than its manifest's hash (the same length) - the engine boots cold on it, so the warm reads it cold
+cp "$T/.shadercache-engine/pipeline.cache" "$T/pipeline.good"
+printf 'ABCDEFGHIJKLMNOPQRST' > "$T/.shadercache-engine/pipeline.cache"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "the engine rows' cache (engine-off): the shared cache fails its own manifest (pipeline.cache: its hash" &&
+    ! echo "$out" | grep -q '(app-off)' &&
+    ok "a TORN shared cache (a file of other bytes, the stamps and keys as recorded): that boot cold, exit 3" ||
+    no "torn cache: '$out' rc $rc"
+mv "$T/pipeline.good" "$T/.shadercache-engine/pipeline.cache"
+rm "$T/.shadercache-engine/hlms.1.bin"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" --only engine-off); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "hlms.1.bin: named by the manifest, not there" && ok "...and one missing a file its manifest names: cold, exit 3" ||
+    no "missing file: '$out' rc $rc"
+toy_cache "$T/.shadercache-engine" 1 2
 sed -i 's/ k2$/ k3/' "$T/.shadercache/cache-manifest.txt"
 out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'replaced at another key' && ok "the shared cache replaced at another layer key: cold, exit 3" || no "replaced cache: '$out' rc $rc"
@@ -82,19 +105,19 @@ out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 # lock is declared held - and needs no display) grows the home's cache; fresh_home's own rules promote it or not.
 # A scratch build-shaped dir: fresh_home shares a cache only under a `tests` dir beside a CMakeCache.txt.
 B="$T/b"; mkdir -p "$B/tests/.shadercache" "$B/tests/.shadercache-engine"; touch "$B/CMakeCache.txt"
-manifest() { printf 'jahshaka-shader-cache 2\nsaved %s\nshaders %s\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' "$1" "$2"; }
-manifest 1 2 > "$B/tests/.shadercache/cache-manifest.txt"
-manifest 1 2 > "$B/tests/.shadercache-engine/cache-manifest.txt"
+toy_cache "$B/tests/.shadercache" 1 2
+toy_cache "$B/tests/.shadercache-engine" 1 2
 cat > "$T/fake-app" <<'APP'
 #!/bin/sh
 # the fake boot: the home's cache grows (a NEW manifest - its seeded one is a hard link of the shared one); with
 # FAKE_RACE set, another home's promotion lands first (the shared manifest rewritten at the same keys)
+# (the file lines kept as seeded: the linked files are the shared cache's, one generation)
 c="$HOME/.local/share/Jahshaka/shadercache"
-mkdir -p "$c"; rm -f "$c/cache-manifest.txt"
-printf 'jahshaka-shader-cache 2\nsaved 2\nshaders 3\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' > "$c/cache-manifest.txt"
+mkdir -p "$c"; files=$(grep '^file ' "$c/cache-manifest.txt"); rm -f "$c/cache-manifest.txt"
+printf 'jahshaka-shader-cache 2\nsaved 2\nshaders 3\n%s\n' "$files" > "$c/cache-manifest.txt"
 if [ -n "${FAKE_RACE:-}" ]; then
     rm -f "$FAKE_RACE/cache-manifest.txt"
-    printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\nfile hlms.1.bin 10 aa k1\nfile pipeline.cache 20 bb k2\n' > "$FAKE_RACE/cache-manifest.txt"
+    printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\n%s\n' "$files" > "$FAKE_RACE/cache-manifest.txt"
 fi
 exit 0
 APP

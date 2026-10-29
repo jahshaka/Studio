@@ -28,7 +28,9 @@
 #                   this run compiled); (3) equal keys and ANOTHER home promoted since the seed: SKIPPED and logged (its
 #                   variants stay; this home's new ones compile once on a later run - a cost, never a wrong cache).
 #                   SIZE DECIDES NOTHING (urgent #36: a replace-by-size kept a stale 70 MB union for a day - after a key
-#                   change no single fixture's fresh cache outgrew it, and every engine row compiled cold). A cold cache
+#                   change no single fixture's fresh cache outgrew it, and every engine row compiled cold). A cache that
+#                   fails its own manifest (a file missing, short, or of other bytes: the engine's load check) is NEVER
+#                   promoted, by any rule (URGENT #117: one torn shared cache booted eight rows cold in turn). A cold cache
 #                   costs ~4 s a boot and is its own measurement — a suite that asserts ON the cold cache (the VR
 #                   warm-up, the shadow cache probes) runs without --warm.
 #   --cache <key>   (with --warm) the tree's shared cache NAMED <key>: <build>/tests/.shadercache-<key>, its own lock —
@@ -88,6 +90,7 @@ case "$home" in
     *) echo "fresh_home.sh: refusing to wipe '$home' (not an absolute path 4+ deep)" >&2; exit 2 ;;
 esac
 start="$(/bin/pwd -P 2>/dev/null || echo /)"
+here="$(cd "$(dirname "$0")" && /bin/pwd -P)"   # this script's directory: shadercache_check.py beside it
 
 # THE TREE'S tests/ DIR: the nearest ancestor of <home> named `tests` whose parent is a configured build (CMakeCache.txt)
 # — the shared cache and the evidence live there; none (a home outside a build tree) = no sharing, no evidence move
@@ -123,9 +126,19 @@ keys_differ() {
 
 # THE PROMOTION (a GREEN run): the home's cache replaces the shared one by the three rules (the --warm help above; size
 # decides nothing). <how>: move (the home is wiped after) or link (--promote: the home keeps its cache, hard links)
+# ONLY A CACHE THAT IS ONE GENERATION (URGENT #117, HARNESS-4): the home's cache must pass the engine's own load check -
+# every file its manifest names there, at the manifest's length and hash (shadercache_check.py, the engine's
+# MurmurHash3 through its own library). The engine drops a cache that fails it WHOLE and boots cold, so a torn cache
+# promoted made every row seeded from it compile everything under the cap (BUGS-8's run: eight rtreflect rows timed out
+# in turn on one shared cache whose hlms.4.bin failed its manifest); it is never promoted, and says so.
 promote_cache() {
     how="$1"
     [ -n "$shared" ] && [ -f "$home/$cache_rel/cache-manifest.txt" ] || return 0
+    if ! torn=$(python3 -I "$here/shadercache_check.py" "$home/$cache_rel" 2>&1); then
+        echo "fresh_home.sh: this home's cache NOT promoted - it fails its own manifest ($torn); the engine would boot" \
+             "every row seeded from it cold (URGENT #117)" >&2
+        return 0
+    fi
     [ "$how" = link ] || rm -f "$home/$cache_rel/cache.lock"
     seed=$(cat "$home/.shadercache-seed" 2>/dev/null || echo none)
     # THE PROMOTION UNDER THE TREE'S CACHE LOCK, EXCLUSIVE (fix round item 7): no --warm links from a cache half
