@@ -84,7 +84,7 @@ static void shadowVaoArm(Engine *engine, Scene *s, int iteration) {
 }
 
 static bool runOnce(int iteration) {
-    const auto cfg = enginetest::testEngineConfig("test_engine_recreate-ogre.log");
+    const auto cfg = enginetest::testEngineConfig("test_engine_recreate-ogre.log", enginetest::EngineOverrides().realDestroy());
     std::string error;
     auto e = Engine::create(cfg, error);
     char msg[128];
