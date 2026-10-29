@@ -1106,7 +1106,7 @@ jah_data_pass("${CMAKE_CURRENT_SOURCE_DIR}")
 # from its own solo run).
 # THE SANITIZER ROWS ARE GUARDS, NOT MEASURES (URGENT #59, 2026-10-25): a sanitizer row (`*_asan`) is deterministic and
 # guards named behaviour under the sanitizer - in this list no master check ever reached one, and memory bugs (and the
-# laws only the twin carries: gi.cascades exists as gi.cascades_asan alone) surfaced only at the ship. They are reached
+# laws only the twin carries: gi.cascades exists as the gi.cascades_asan.* rows alone) surfaced only at the ship. They are reached
 # and served like any guard, in their own budget class (source.row_budget: a sanitizer row 60 s). The timing measures -
 # soaks, scale, determinism - stay here.
 set(JAH_MEASURE_ROWS
