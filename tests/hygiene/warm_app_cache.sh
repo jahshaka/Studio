@@ -27,7 +27,13 @@ key=$(echo "$out" | sed -n 's/^cold at \([0-9a-f]*\): .*/\1/p')
     ok "no stamp: cold at $key, every boot named, exit 3" || no "no stamp: '$out' rc $rc"
 [ "$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" | sed -n 's/^cold at \([0-9a-f]*\):.*/\1/p')" = "$key" ] &&
     ok "the key is the build's, the same twice" || no "the key moved between two reads"
+# the app-off stamp's third line: the digest of the rows' test tiers (<build>/tests/test-boot-sets.txt)
+SD="sets $( [ -f "$BUILD/tests/test-boot-sets.txt" ] && sha256sum < "$BUILD/tests/test-boot-sets.txt" | cut -c1-16 || echo none)"
 printf '%s\n%s\n' "$key" "k1 k2 " > "$T/.shadercache.warm-key"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" --only app-off); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "the rows' test tiers changed since" &&
+    ok "an app-off stamp without the rows' test tiers: cold, exit 3" || no "no sets line: '$out' rc $rc"
+printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$T/.shadercache.warm-key"
 out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" --only app-off); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "--only app-off answers for that boot alone: warm, exit 0" ||
     no "--only app-off: '$out' rc $rc"
@@ -62,7 +68,7 @@ printf '%s\n%s\n' "$key" "0123456789abcdef" > "$T/.shadercache.driver-key"
 out=$("$W" "$BUILD" --tests-dir "$T" "${X[@]}" --only app-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'call --only app-off first; nothing booted' &&
     ok "an -on boot asked for alone on a cold -off cache: refused, nothing booted, exit 3" || no "-on before -off: '$out' rc $rc"
-printf '%s\n%s\n' "$key" "k1 k2 " > "$T/.shadercache.warm-key"
+printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$T/.shadercache.warm-key"
 printf '%s\n%s\n' "$key" "$(eid "$T/app")" > "$T/.shadercache.driver-key"
 sed -i 's/ k2$/ k3/' "$T/.shadercache/cache-manifest.txt"
 out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
@@ -106,7 +112,8 @@ out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'no warm-up recorded' && ok "...so the next call reads cold and warms again" || no "after the skip: '$out' rc $rc"
 out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q "warm-app-cache: warm at $key" && [ -e "$B/tests/.shadercache.warm-key" ] &&
-    [ -e "$B/tests/.shadercache.driver-key" ] && grep -q 'shaders 3' "$B/tests/.shadercache/cache-manifest.txt" &&
+    [ -e "$B/tests/.shadercache.driver-key" ] && [ "$(sed -n 3p "$B/tests/.shadercache.warm-key")" = "$SD" ] &&
+    echo "$out" | grep -q "^warm_app_boot: test tier " && grep -q 'shaders 3' "$B/tests/.shadercache/cache-manifest.txt" &&
     ok "a promotion that lands (the shared cache replaced by the boot's grown one): stamped, then the -on boot" ||
     no "landed promotion: '$out' rc $rc"
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${F[@]}"); rc=$?

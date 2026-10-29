@@ -76,13 +76,20 @@
 #   app     <tests-dir>/.shadercache (the app rows', fresh_home --warm): `Jahshaka --engine-selftest` - the app's own
 #           startup warm-up gate (the born World's set: Epic, every feature) PLUS the self-test's six poses (the default
 #           scene, fixture B with the rays on and off, the motion pose, the mover) - a superset of the warm-up path, and
-#           the set of the row the cap broke first (app.engine_selftest_validation).
+#           the set of the row the cap broke first (app.engine_selftest_validation) - THEN, in the same home, one
+#           `--script tests/support/warm_tier.js` boot per test tier the rows declare (<build>/tests/test-boot-sets.txt,
+#           written at configure; tests/support/warm_app_boot.sh): a row's tier draws its own permutations of the born
+#           World (HARNESS-1, measured: log.engine at epic + photon built 3 pbs permutations and 256,658 bytes of
+#           pipelines on every run, and the 31 rows a WARM fixture seeds never promote). The stamp's third line is the
+#           sets file's digest: a new tier reads cold.
 #   engine  <tests-dir>/.shadercache-engine (the CLASS engine rows', fresh_home --warm --cache engine, tests/CMakeLists.txt
 #           jah_gpu_row): jahlab on photon-rough at Epic in Both, a few frames - the ray tier's every pipeline (the
 #           gather, the reflection and its compact pass, the resolve, the temporal, the filter) and the photon envs' Hlms
 #           set the lab rows share (--lab <exe>, default <build>/bin/jahlab).
-# A row booting a test tier with features off (JAHSHAKA_TEST_NEEDS) compiles its own variants once more; what it adds is
-# promoted by its own green run. ONE answer for the boots named: "warm at <key>" when every one is, else "cold at <key>:
+# What a row draws beyond its tier's born World (its own scene, a sample, an engine fixture's content) it compiles once
+# more: a row wrapped by fresh_home.sh --warm promotes it on its own green run (every engine row; GPU rows run one at a
+# time, so the generation is its seed's); a row seeded by a WARM fixture (fresh_home.sh --setup) never promotes - its
+# content beyond the born World compiles on every run (the residue named, HARNESS-1). ONE answer for the boots named: "warm at <key>" when every one is, else "cold at <key>:
 # <each cold boot's why>" (exit 3 under --check; else their boots, in order).
 set -u
 BUILD=""; CHECK=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=570
@@ -142,13 +149,17 @@ KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
 layer_keys() {   # the shared cache's per-layer keys (its manifest's last column), sorted, one line
     [ -f "$1/cache-manifest.txt" ] && awk '$1 == "file" { print $NF }' "$1/cache-manifest.txt" | LC_ALL=C sort -u | tr '\n' ' '
 }
-cold_why() {   # <shared> <stamp>: empty when warm at the key, else why not
+cold_why() {   # <shared> <stamp> [<sets digest>]: empty when warm at the key, else why not
     if [ ! -f "$2" ]; then echo "no warm-up recorded"
     elif [ "$(sed -n 1p "$2")" != "$KEY" ]; then echo "the key moved (warmed at $(sed -n 1p "$2"))"
     elif [ ! -f "$1/cache-manifest.txt" ]; then echo "the shared cache is gone"
     elif [ "$(sed -n 2p "$2")" != "$(layer_keys "$1")" ]; then echo "the shared cache was replaced at another key since"
+    elif [ $# -ge 3 ] && [ "$(sed -n 3p "$2")" != "$3" ]; then echo "the rows' test tiers changed since (test-boot-sets.txt)"
     fi
 }
+# THE ROWS' TEST TIERS (tests/CMakeLists.txt writes them at configure): the app-off boot boots each once after the self-test
+SETS="$BUILD/tests/test-boot-sets.txt"
+SETS_DIGEST="sets $( [ -f "$SETS" ] && sha256sum < "$SETS" | cut -c1-16 || echo none)"
 APP_SHARED="$TESTS/.shadercache"; APP_STAMP="$TESTS/.shadercache.warm-key"; APP_DSTAMP="$TESTS/.shadercache.driver-key"
 ENG_SHARED="$TESTS/.shadercache-engine"; ENG_STAMP="$TESTS/.shadercache-engine.warm-key"
 ENG_DSTAMP="$TESTS/.shadercache-engine.driver-key"
@@ -164,7 +175,7 @@ driver_why() {   # <stamp> <exe>: empty when this exe's driver cache was stored 
 }
 why_of() {   # <boot>: empty when warm
     case "$1" in
-        app-off) cold_why "$APP_SHARED" "$APP_STAMP" ;;
+        app-off) cold_why "$APP_SHARED" "$APP_STAMP" "$SETS_DIGEST" ;;
         app-on) driver_why "$APP_DSTAMP" "$APPX" ;;
         engine-off) cold_why "$ENG_SHARED" "$ENG_STAMP" ;;
         engine-on) driver_why "$ENG_DSTAMP" "$LABX" ;;
@@ -268,7 +279,8 @@ boot() {
     rc=$?
     [ $rc = 75 ] && held "$log" "$name" "$name $rest"
     wall=$(( $(date +%s) - t0 ))
-    grep -E 'fresh_home.sh|^gpu-lock: waited|^engine-selftest: .*-> (PASS|FAIL)|^LAB (END|FAILED)' "$log" | head -6
+    grep -E 'fresh_home.sh|^gpu-lock: waited|^engine-selftest: .*-> (PASS|FAIL)|^warm_app_boot: |^LAB (END|FAILED)' "$log" |
+        head -12
     RAN=1
     if [ $rc -ne 0 ]; then
         echo "warm-app-cache: the $name boot FAILED (exit $rc) after ${wall} s - its log $log; the cache is not warm"
@@ -285,7 +297,11 @@ boot() {
              "not stamped: the cache stays cold at $KEY and the next call warms again"
         return 0
     fi
-    printf '%s\n%s\n' "$KEY" "$(layer_keys "$shared")" > "$stamp"
+    if [ "$name" = app-off ]; then
+        printf '%s\n%s\n%s\n' "$KEY" "$(layer_keys "$shared")" "$SETS_DIGEST" > "$stamp"
+    else
+        printf '%s\n%s\n' "$KEY" "$(layer_keys "$shared")" > "$stamp"
+    fi
     echo "warm-app-cache: $(what_of "$name") warm at $KEY - the boot ${wall} s, $(du -sh "$shared" | cut -f1)" \
          "($(sed -n 's/^shaders //p' "$shared/cache-manifest.txt") shaders)"
     return 0
@@ -342,7 +358,7 @@ for b in $RUN; do
                 # them (tests/hygiene/shaders_spirv_valid.py); the dump is the boot's at this key, promoted or not
                 rm -rf "$DUMP"; mkdir -p "$DUMP"
                 boot app-off "$APP_SHARED" "$APP_STAMP" "$H" "$TESTS/warm-app-cache.log" "$left" \
-                    env "JAHSHAKA_HLMS_DEBUG_DIR=$DUMP/" "$APPX" --engine-selftest "$H/run/warm.png" || exit 1
+                    bash "$SRC/tests/support/warm_app_boot.sh" "$APPX" "$H/run/warm.png" "$SETS" "$DUMP" || exit 1
                 echo "$KEY" > "$DUMP/.key"
             else
                 driver_boot app-on "$APP_DSTAMP" "$APPX" "$H" "$TESTS/warm-app-cache-driver.log" "$left" \

@@ -316,6 +316,13 @@ function(_jah_test_boot_register _row _tier _why _window)
     endif()
     set_property(GLOBAL PROPERTY JAH_TEST_BOOT_${_row} "${_env}")
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_test_boot_apply [[${_row}]])")
+    # THE ROWS' BOOT SETS, for the warm-up (HARNESS-1): <tier>|<needs>, written at the end of this file to
+    # <build>/tests/test-boot-sets.txt; scripts/warm-app-cache.sh's app-off boot boots the app once at each
+    if(NOT _tier STREQUAL "document")
+        list(GET _env 1 _needs)
+        string(REPLACE "JAHSHAKA_TEST_NEEDS=set:" "" _needs "${_needs}")
+        set_property(GLOBAL APPEND PROPERTY JAH_TEST_BOOT_SETS "${_tier}|${_needs}")
+    endif()
 endfunction()
 function(_jah_test_boot_apply _row)
     get_property(_env GLOBAL PROPERTY JAH_TEST_BOOT_${_row})
@@ -1179,3 +1186,15 @@ function(jah_ship_closure_pass)
     endwhile()
 endfunction()
 jah_ship_closure_pass()
+
+# THE ROWS' BOOT SETS (HARNESS-1, 2026-10-29): every distinct test tier + needs an app or VR row boots, one a line
+# (<tier>|<needs>), read by scripts/warm-app-cache.sh: its app-off boot boots the app once at each after the self-test.
+# WHY: a row's tier compiles its own Hlms permutations of the born World (measured: log.engine at epic + photon built 3
+# pbs permutations - pbr_79, pbr_144 - and 256,658 bytes of pipelines the self-test's all-features World never draws),
+# and the 31 rows seeded by a WARM fixture (jah_fresh_home_fixture ... WARM, fresh_home.sh --setup) never promote what
+# they add, so each run rebuilt them. Written only when it changes (file(CONFIGURE)).
+get_property(_jah_sets GLOBAL PROPERTY JAH_TEST_BOOT_SETS)
+list(REMOVE_DUPLICATES _jah_sets)
+list(SORT _jah_sets)
+list(JOIN _jah_sets "\n" _jah_sets)
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test-boot-sets.txt" CONTENT "${_jah_sets}\n" @ONLY)
