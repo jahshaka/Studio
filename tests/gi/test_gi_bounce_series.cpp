@@ -350,6 +350,7 @@ int main(int argc, char **argv)
                 Arm m = arm(tiers[t], kE, 0.0f, false);
                 GiVoxelVolume v;
                 double sa = 0, sr = 0, sc = 0, amin = 9, amax = 0; size_t n = 0;
+                double bandSum[4][8] = {}, bandN[4][8] = {};
                 if (m.scene && m.scene->giVoxelVolume(0, v) && v.available) {
                     const float cell = v.cell[0];
                     for (int z = 0; z < v.depth; ++z) for (int y = 0; y < v.height; ++y) for (int x = 0; x < v.width; ++x) {
@@ -358,11 +359,30 @@ int main(int argc, char **argv)
                         const bool inShrunk = std::fabs(p[0]) < kHalfX - cell && std::fabs(p[2]) < kHalfZ - cell && p[1] > cell && p[1] < kHeight - cell;
                         if (!inGrown || inShrunk) continue;
                         int near = (std::fabs(p[0]) > kHalfX - 1.0f) + (std::fabs(p[2]) > kHalfZ - 1.0f) + (p[1] < 1.0f || p[1] > kHeight - 1.0f);
-                        if (near > 1) continue;
+                        if (near > 1 && !std::getenv("JAH_REDS_EDGES")) continue;
                         const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
                         if (!(v.albedo[i + 3] > 0.5f)) continue;
                         const double a = std::max(std::max(v.albedo[i], v.albedo[i + 1]), v.albedo[i + 2]);
                         sa += a; amin = std::min(amin, a); amax = std::max(amax, a);
+                        {   // the voxel's L (its room-facing side, as read()) by its distance from the face's nearest edge
+                            float in[3] = { 0, 0, 0 };
+                            const float dx = kHalfX - std::fabs(p[0]), dz = kHalfZ - std::fabs(p[2]), dy0 = p[1], dy1 = kHeight - p[1];
+                            const float dmin = std::min(std::min(std::fabs(dx), std::fabs(dz)), std::min(std::fabs(dy0), std::fabs(dy1)));
+                            int face = 0;
+                            if (dmin == std::fabs(dy0)) { in[1] = 1; face = 0; } else if (dmin == std::fabs(dy1)) { in[1] = -1; face = 1; }
+                            else if (dmin == std::fabs(dx)) { in[0] = p[0] > 0 ? -1.f : 1.f; face = 2; } else { in[2] = p[2] > 0 ? -1.f : 1.f; face = 3; }
+                            const float nn[3] = { 2 * v.normal[i] - 1, 2 * v.normal[i + 1] - 1, 2 * v.normal[i + 2] - 1 };
+                            const bool frontIn = nn[0] * in[0] + nn[1] * in[1] + nn[2] * in[2] >= 0;
+                            const float *sd = (v.normal[i + 3] > 0.5f ? (frontIn ? v.lightFront.data() : v.lightBack.data()) : v.light.data()) + i;
+                            const double Lv = std::max(std::max(sd[0], sd[1]), sd[2]) / std::max(v.light[i + 3], 1e-6f);
+                            // the distance to the nearest edge of the face it is on
+                            double de = 9;
+                            if (face < 2) de = std::min(kHalfX - std::fabs(p[0]), kHalfZ - std::fabs(p[2]));
+                            else if (face == 2) de = std::min(std::min(double(p[1]), double(kHeight - p[1])), double(kHalfZ - std::fabs(p[2])));
+                            else de = std::min(std::min(double(p[1]), double(kHeight - p[1])), double(kHalfX - std::fabs(p[0])));
+                            const int b = std::min(7, int(de / 0.5));
+                            bandSum[face][b] += Lv; bandN[face][b] += 1;
+                        }
                         sr += v.emissive.size() > i + 3 ? v.emissive[i + 3] : -1.0; sc += v.albedo[i + 3]; ++n;
                     }
                 }
@@ -375,6 +395,13 @@ int main(int argc, char **argv)
                             "the store's a' %.6f, the material's a' (stored albedo) %.6f, the ratio %.5f; integral a' %.6f\n",
                             metal ? "WHITE METAL" : "DIELECTRIC", n, n ? sa / n : 0, amin, amax, n ? sr / n : 0, n ? sc / n : 0, L,
                             aStore, aMat, aMat > 0 ? aStore / aMat : 0, metal ? A + B : kRho * enginetest::disneyDiffuseAlbedoHemi(1.0) + 0.04 * A + B);
+                const char *fn[4] = { "floor", "ceiling", "x walls", "z walls" };
+                for (int f = 0; f < 4; ++f) {
+                    std::printf("     %-8s L by edge distance (0.5 m bands):", fn[f]);
+                    for (int b = 0; b < 8; ++b)
+                        if (bandN[f][b] > 0) std::printf(" %.2f-%.2f m %.5f (%d)", 0.5 * b, 0.5 * b + 0.5, bandSum[f][b] / bandN[f][b], int(bandN[f][b]));
+                    std::printf("\n");
+                }
                 drop(m);
             }
             g_armMetal = false;
