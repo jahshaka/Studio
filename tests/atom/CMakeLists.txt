@@ -158,7 +158,7 @@ endif()
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_pt_header}")
 set(_pt_home ${CMAKE_CURRENT_BINARY_DIR}/pass-table-home)
 file(MAKE_DIRECTORY ${_pt_home}/run)
-jah_gpu_row(atom.pass_table SHIP CLASS app TIER document FRAMES 552
+jah_gpu_row(atom.pass_table WARM_HOME "${_pt_home}" SHIP CLASS app TIER document FRAMES 552
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/pass_table.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/scripts/atom_pass_table.js" "${_pt_table}"

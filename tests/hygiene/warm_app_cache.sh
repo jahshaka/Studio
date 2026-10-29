@@ -1,7 +1,8 @@
 #!/bin/bash
 # tooling.warm_app_cache (URGENT #52) - scripts/warm-app-cache.sh's NO-OP PATH: warm at its key it answers at once and
-# boots nothing; cold (no stamp, a moved key, a replaced cache) it says so - for BOTH its caches, the app rows' and the
-# engine rows' (PHOTON-7 11-2: an engine cache cold alone reads cold; its boot is the lab's). On a scratch tests dir (--tests-dir), never
+# boots nothing; cold (no stamp, a moved key, a replaced cache) it says so - for each of its FOUR boots, the app rows' and
+# the engine rows' caches with the driver's cache off and each exe's driver cache after it (PHOTON-7 11-2; the two-boot
+# law #100/#102b; one boot a call, the card's wait bounded per boot, #106). On a scratch tests dir (--tests-dir), never
 # the tree's shared cache; the boot itself is the script's own (not a test: once, uncapped, when the key moved).
 # usage: warm_app_cache.sh <source-dir> <build-dir>
 set -u
@@ -14,32 +15,69 @@ cp "$T/.shadercache/cache-manifest.txt" "$T/.shadercache-engine/cache-manifest.t
 fail=0
 ok() { echo "  ok: $1"; }
 no() { echo "  FAIL: $1"; fail=1; }
-out=$("$W" "$BUILD" --check --tests-dir "$T"); rc=$?
+# the exes the -on stamps name (the driver's per-exe key is the exe's name): two fakes, the same in every call below
+printf '#!/bin/sh\nexit 0\n' > "$T/app"; printf '#!/bin/sh\nexit 0\n#lab\n' > "$T/lab"; chmod +x "$T/app" "$T/lab"
+cp "$T/app" "$T/app2"
+X=(--app "$T/app" --lab "$T/lab")
+eid() { basename "$1"; }
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 key=$(echo "$out" | sed -n 's/^cold at \([0-9a-f]*\): .*/\1/p')
-[ $rc = 3 ] && [ -n "$key" ] && echo "$out" | grep -q 'no warm-up recorded' && ok "no stamp: cold at $key, exit 3 ($out)" || no "no stamp: '$out' rc $rc"
-[ "$("$W" "$BUILD" --check --tests-dir "$T" | sed -n 's/^cold at \([0-9a-f]*\):.*/\1/p')" = "$key" ] && ok "the key is the build's, the same twice" || no "the key moved between two reads"
+[ $rc = 3 ] && [ -n "$key" ] && echo "$out" | grep -q "the app rows' cache (app-off): no warm-up recorded" &&
+    echo "$out" | grep -q "the lab exe's driver cache (engine-on): no driver-cache boot recorded" &&
+    ok "no stamp: cold at $key, every boot named, exit 3" || no "no stamp: '$out' rc $rc"
+[ "$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" | sed -n 's/^cold at \([0-9a-f]*\):.*/\1/p')" = "$key" ] &&
+    ok "the key is the build's, the same twice" || no "the key moved between two reads"
+# the app-off stamp's third line: the digest of the rows' test tiers (<build>/tests/test-boot-sets.txt)
+SD="sets $( [ -f "$BUILD/tests/test-boot-sets.txt" ] && sha256sum < "$BUILD/tests/test-boot-sets.txt" | cut -c1-16 || echo none)"
 printf '%s\n%s\n' "$key" "k1 k2 " > "$T/.shadercache.warm-key"
-out=$("$W" "$BUILD" --check --tests-dir "$T"); rc=$?
-[ $rc = 3 ] && echo "$out" | grep -q "^cold at $key: the engine rows' cache: no warm-up recorded" &&
-    ok "the app cache warm, the engine rows' unstamped: cold, exit 3 ($out)" || no "engine unstamped: '$out' rc $rc"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" --only app-off); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "the rows' test tiers changed since" &&
+    ok "an app-off stamp without the rows' test tiers: cold, exit 3" || no "no sets line: '$out' rc $rc"
+printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$T/.shadercache.warm-key"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" --only app-off); rc=$?
+[ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "--only app-off answers for that boot alone: warm, exit 0" ||
+    no "--only app-off: '$out' rc $rc"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" --only app); rc=$?
+[ $rc = 3 ] && [ "$out" = "cold at $key: the app exe's driver cache (app-on): no driver-cache boot recorded" ] &&
+    ok "the app's -off boot warm, its -on boot unstamped: the pair reads cold, exit 3" || no "app-on unstamped: '$out' rc $rc"
+printf '%s\n%s\n' "$key" "$(eid "$T/app")" > "$T/.shadercache.driver-key"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
+[ $rc = 3 ] && [ "$out" = "cold at $key: the engine rows' cache (engine-off): no warm-up recorded; the lab exe's driver cache (engine-on): no driver-cache boot recorded" ] &&
+    ok "the app's two boots warm, the engine's unstamped: cold, exit 3" || no "engine unstamped: '$out' rc $rc"
 printf '%s\n%s\n' "$key" "k1 k2 " > "$T/.shadercache-engine.warm-key"
-out=$("$W" "$BUILD" --check --tests-dir "$T"); rc=$?
-[ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "both stamps at the key with their caches' layer keys: warm, exit 0" || no "warm stamp: '$out' rc $rc"
+printf '%s\n%s\n' "$key" "$(eid "$T/lab")" > "$T/.shadercache-engine.driver-key"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
+[ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "all four stamps at the key: warm, exit 0" || no "warm stamps: '$out' rc $rc"
 t0=$(date +%s%N)
-out=$("$W" "$BUILD" --tests-dir "$T"); rc=$?
+out=$("$W" "$BUILD" --tests-dir "$T" "${X[@]}"); rc=$?
 ms=$(( ($(date +%s%N) - t0) / 1000000 ))
 [ $rc = 0 ] && [ "$out" = "warm at $key" ] && [ $ms -lt 5000 ] && ok "THE NO-OP: warm at $key, exit 0, nothing booted, $ms ms" ||
     no "the no-op path: '$out' rc $rc in $ms ms"
+touch -d '2001-01-01' "$T/app"
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}" --only app); rc=$?
+[ $rc = 0 ] && ok "a relinked app exe of the same name: its driver cache still warm (the driver keys on the name), exit 0" ||
+    no "relinked exe: '$out' rc $rc"
+out=$("$W" "$BUILD" --check --tests-dir "$T" --app "$T/app2" --lab "$T/lab" --only app); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "(app-on): stored for another exe (app)" && ok "an exe of another name: its driver cache reads cold, exit 3" ||
+    no "another exe: '$out' rc $rc"
+printf '%s\n%s\n' "$key" "$(eid "$T/app")" > "$T/.shadercache.driver-key"
 printf '%s\n%s\n' "0123456789abcdef" "k1 k2 " > "$T/.shadercache.warm-key"
-out=$("$W" "$BUILD" --check --tests-dir "$T"); rc=$?
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'the key moved (warmed at 0123456789abcdef)' && ok "a stamp at another key: cold, exit 3" || no "moved key: '$out' rc $rc"
-printf '%s\n%s\n' "$key" "k1 k2 " > "$T/.shadercache.warm-key"
+printf '%s\n%s\n' "$key" "0123456789abcdef" > "$T/.shadercache.driver-key"
+out=$("$W" "$BUILD" --tests-dir "$T" "${X[@]}" --only app-on); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q 'call --only app-off first; nothing booted' &&
+    ok "an -on boot asked for alone on a cold -off cache: refused, nothing booted, exit 3" || no "-on before -off: '$out' rc $rc"
+printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$T/.shadercache.warm-key"
+printf '%s\n%s\n' "$key" "$(eid "$T/app")" > "$T/.shadercache.driver-key"
 sed -i 's/ k2$/ k3/' "$T/.shadercache/cache-manifest.txt"
-out=$("$W" "$BUILD" --check --tests-dir "$T"); rc=$?
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'replaced at another key' && ok "the shared cache replaced at another layer key: cold, exit 3" || no "replaced cache: '$out' rc $rc"
 rm -rf "$T/.shadercache"
-out=$("$W" "$BUILD" --check --tests-dir "$T"); rc=$?
+out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'the shared cache is gone' && ok "no shared cache: cold, exit 3" || no "gone cache: '$out' rc $rc"
+"$W" "$BUILD" --check --tests-dir "$T" --only app-of > /dev/null 2>&1; rc=$?
+[ $rc = 64 ] && ok "a bad --only value: exit 64" || no "a bad --only: rc $rc"
 # THE STAMP ONLY ON A PROMOTION (the lead's gap, #52): a FAKE app (--app; it compiles nothing, touches no card - the
 # lock is declared held - and needs no display) grows the home's cache; fresh_home's own rules promote it or not.
 # A scratch build-shaped dir: fresh_home shares a cache only under a `tests` dir beside a CMakeCache.txt.
@@ -61,18 +99,46 @@ fi
 exit 0
 APP
 chmod +x "$T/fake-app"
-out=$(FAKE_RACE="$B/tests/.shadercache" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" --app "$T/fake-app" --lab "$T/fake-app"); rc=$?
+F=(--app "$T/fake-app" --lab "$T/fake-app")
+out=$(FAKE_RACE="$B/tests/.shadercache" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q 'NOT promoted' && [ ! -e "$B/tests/.shadercache.warm-key" ] &&
     ok "a promotion fresh_home SKIPS (its rule 3, NOT replaced): the boot passed, NO stamp" || no "skipped promotion: '$out' rc $rc"
-[ -e "$B/tests/.shadercache-engine.warm-key" ] && grep -q 'shaders 3' "$B/tests/.shadercache-engine/cache-manifest.txt" &&
-    ok "...while the engine rows' cache, booted by the lab and promoted, is stamped" || no "the engine boot: '$out'"
-out=$("$W" "$BUILD" --check --tests-dir "$B/tests"); rc=$?
+[ ! -e "$B/tests/.shadercache.driver-key" ] && echo "$out" | grep -q 'app-on waits for the app rows. cache' &&
+    ok "...and the app's -on boot does not run on the unpromoted cache: not stamped" || no "app-on after a skip: '$out'"
+[ -e "$B/tests/.shadercache-engine.warm-key" ] && [ -e "$B/tests/.shadercache-engine.driver-key" ] &&
+    grep -q 'shaders 3' "$B/tests/.shadercache-engine/cache-manifest.txt" &&
+    ok "...while the engine rows' cache, booted by the lab and promoted, is stamped, and its -on boot after it" || no "the engine boots: '$out'"
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'no warm-up recorded' && ok "...so the next call reads cold and warms again" || no "after the skip: '$out' rc $rc"
-out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" --app "$T/fake-app" --lab "$T/fake-app"); rc=$?
+out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q "warm-app-cache: warm at $key" && [ -e "$B/tests/.shadercache.warm-key" ] &&
-    grep -q 'shaders 3' "$B/tests/.shadercache/cache-manifest.txt" &&
-    ok "a promotion that lands (the shared cache replaced by the boot's grown one): stamped" || no "landed promotion: '$out' rc $rc"
-out=$("$W" "$BUILD" --check --tests-dir "$B/tests"); rc=$?
+    [ -e "$B/tests/.shadercache.driver-key" ] && [ "$(sed -n 3p "$B/tests/.shadercache.warm-key")" = "$SD" ] &&
+    echo "$out" | grep -q "^warm_app_boot: test tier " && grep -q 'shaders 3' "$B/tests/.shadercache/cache-manifest.txt" &&
+    ok "a promotion that lands (the shared cache replaced by the boot's grown one): stamped, then the -on boot" ||
+    no "landed promotion: '$out' rc $rc"
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "...and the next call reads warm" || no "after the landing: '$out' rc $rc"
+awk '{ n[$1] = 1 } END { exit (n["app-off"] && n["app-on"] && n["engine-off"] && n["engine-on"]) ? 0 : 1 }' "$B/tests/.warm-walls" &&
+    ok "each boot's wall recorded (.warm-walls: the next call's estimate)" || no "the walls: $(cat "$B/tests/.warm-walls" 2>&1)"
+# THE BUDGET (#106): a boot that no longer fits the call's budget is not started - exit 75, the boots left named
+rm -f "$B/tests/.shadercache.warm-key" "$B/tests/.shadercache.driver-key"
+echo "app-on 1000" >> "$B/tests/.warm-walls"
+out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}" --only app --budget 100); rc=$?
+[ $rc = 75 ] && echo "$out" | grep -q 'the app-on boot (est. 1000 s) does not fit this call.s budget' &&
+    echo "$out" | grep -q 'call again: --only app-on$' && [ -e "$B/tests/.shadercache.warm-key" ] &&
+    [ ! -e "$B/tests/.shadercache.driver-key" ] &&
+    ok "the -off boot ran, the -on boot past the budget not started: exit 75, 'call again: --only app-on'" ||
+    no "the budget: '$out' rc $rc"
+# THE CARD's WAIT BOUNDED PER BOOT (#106): the card held past the boot's wait - exit 75, nothing ran
+# (this shell holds the lock on its own descriptor: no holder process outlives the row)
+exec 8>"$T/gpu.lock"; flock 8
+t0=$(date +%s)
+out=$(DISPLAY=:fake JAH_GPU_LOCK="$T/gpu.lock" "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}" --only app-on --budget 10); rc=$?
+s=$(( $(date +%s) - t0 ))
+exec 8>&-
+[ $rc = 75 ] && echo "$out" | grep -q 'the card stayed held 1 s' && echo "$out" | grep -q 'call again: --only app-on$' &&
+    [ ! -e "$B/tests/.shadercache.driver-key" ] && [ $s -lt 10 ] &&
+    ok "the card held past the boot's wait (a tenth of a 10-s budget): exit 75 in $s s, nothing booted" ||
+    no "the held card: '$out' rc $rc in $s s"
 echo "tooling.warm_app_cache: $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail

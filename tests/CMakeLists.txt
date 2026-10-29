@@ -316,6 +316,13 @@ function(_jah_test_boot_register _row _tier _why _window)
     endif()
     set_property(GLOBAL PROPERTY JAH_TEST_BOOT_${_row} "${_env}")
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_test_boot_apply [[${_row}]])")
+    # THE ROWS' BOOT SETS, for the warm-up (HARNESS-1): <tier>|<needs>, written at the end of this file to
+    # <build>/tests/test-boot-sets.txt; scripts/warm-app-cache.sh's app-off boot boots the app once at each
+    if(NOT _tier STREQUAL "document")
+        list(GET _env 1 _needs)
+        string(REPLACE "JAHSHAKA_TEST_NEEDS=set:" "" _needs "${_needs}")
+        set_property(GLOBAL APPEND PROPERTY JAH_TEST_BOOT_SETS "${_tier}|${_needs}")
+    endif()
 endfunction()
 function(_jah_test_boot_apply _row)
     get_property(_env GLOBAL PROPERTY JAH_TEST_BOOT_${_row})
@@ -403,10 +410,15 @@ endfunction()
 # variables ride the COMMAND, never ENVIRONMENT: a later set_tests_properties(… ENVIRONMENT …) replaces that property.
 # COLD "<why>" — a row whose SUBJECT is the cold compile (a count of compiles a warm cache would hide, the cache itself):
 # no wrapper, no cache, the reason stated where the row is.
+# WARM_HOME <home> — the row is a WARM fixture's consumer (jah_fresh_home_fixture(... <home> WARM)): it runs as
+# `${JAH_WARM_CONSUMER} <home> -- <exe> …`, and its green run promotes what it compiled (HARNESS-1; R14).
 function(jah_gpu_row _row)
-    cmake_parse_arguments(G "TEST_WINDOW;SHIP" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW;SHIP" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES;COLD;WARM_HOME" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
         message(FATAL_ERROR "jah_gpu_row(${_row}): CLASS and COMMAND are required")
+    endif()
+    if(G_WARM_HOME AND G_CLASS STREQUAL "engine")
+        message(FATAL_ERROR "jah_gpu_row(${_row}): WARM_HOME is a WARM fixture's consumer; an engine row promotes in-row")
     endif()
     if(DEFINED G_FRAMES AND NOT G_FRAMES MATCHES "^[0-9]+$")
         message(FATAL_ERROR "jah_gpu_row(${_row}): FRAMES '${G_FRAMES}' is not a whole number of frames")
@@ -447,6 +459,8 @@ function(jah_gpu_row _row)
         add_test(NAME ${_row} COMMAND sh "${JAH_FRESH_HOME}" --warm --cache engine "${_home}" --
                  env "JAHSHAKA_SHADER_CACHE_DIR=${_home}/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0
                  "${_exe}" ${G_COMMAND} ${_wd})
+    elseif(G_WARM_HOME)
+        add_test(NAME ${_row} COMMAND ${JAH_WARM_CONSUMER} "${G_WARM_HOME}" -- "${_exe}" ${G_COMMAND} ${_wd})
     else()
         add_test(NAME ${_row} COMMAND "${_exe}" ${G_COMMAND} ${_wd})
     endif()
@@ -471,7 +485,7 @@ endfunction()
 # is an argument of the wrapper now, and add_test resolves target names only in the command
 # position). A name outside JAH_GPU_EXCLUSIVE_SUITES is a configure error.
 function(jah_gpu_exclusive_test)
-    cmake_parse_arguments(G "TEST_WINDOW;SHIP" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY;COLD" "NEEDS;COMMAND;DATA" ${ARGN})
+    cmake_parse_arguments(G "TEST_WINDOW;SHIP" "NAME;CLASS;TIER;RUN_TIMEOUT;WORKING_DIRECTORY;NEEDS_WHY;COLD;WARM_HOME" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_NAME IN_LIST JAH_GPU_EXCLUSIVE_SUITES)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): not in JAH_GPU_EXCLUSIVE_SUITES "
                             "(tests/CMakeLists.txt) — the measuring list changes by a verdict only")
@@ -512,6 +526,8 @@ function(jah_gpu_exclusive_test)
         set(_home "${CMAKE_CURRENT_BINARY_DIR}/homes/${G_NAME}")
         set(_warm sh "${JAH_FRESH_HOME}" --warm --cache engine "${_home}" --
                   env "JAHSHAKA_SHADER_CACHE_DIR=${_home}/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0)
+    elseif(G_WARM_HOME)
+        set(_warm ${JAH_WARM_CONSUMER} "${G_WARM_HOME}" --)
     endif()
     add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" --run-timeout ${G_RUN_TIMEOUT}
              --label ${G_NAME}:${G_CLASS} ${_warm} "${_exe}" ${G_COMMAND} ${_wd})
@@ -588,6 +604,13 @@ set(JAH_COST_GI_CHAIN 90000)
 #   * `${JAH_FRESH_HOME} --warm <home> -- <command…>` as a row's COMMAND — a one-script
 #     row's default: the wipe happens inside the row (no extra ctest row), keeping the shader caches.
 set(JAH_FRESH_HOME "${CMAKE_SOURCE_DIR}/tests/support/fresh_home.sh")
+# A WARM FIXTURE's CONSUMER PROMOTES ON GREEN (HARNESS-1, 2026-10-29): the row a jah_fresh_home_fixture(... WARM) seeds
+# runs as `${JAH_WARM_CONSUMER} <the fixture's home> -- <command…>` (fresh_home.sh --promote: the home untouched, a green
+# run's grown cache promoted through hard links) - jah_gpu_row / jah_gpu_exclusive_test take it as WARM_HOME <home>, an
+# add_test site writes it before its command ($<TARGET_FILE:…>: a target name resolves only in the command position).
+# WHY: a --setup home has no exit to judge, so the 33 consumers never promoted and rebuilt their own content every run
+# (log.engine: 146,859 bytes of pipelines a run). source.testing_rules R14 holds every WARM fixture's consumers to it.
+set(JAH_WARM_CONSUMER sh "${JAH_FRESH_HOME}" --promote)
 function(jah_fresh_home_fixture row fixture home)
     cmake_parse_arguments(F "WARM" "" "ARGS;THEN;LABELS" ${ARGN})
     set(_flags)
@@ -1179,3 +1202,15 @@ function(jah_ship_closure_pass)
     endwhile()
 endfunction()
 jah_ship_closure_pass()
+
+# THE ROWS' BOOT SETS (HARNESS-1, 2026-10-29): every distinct test tier + needs an app or VR row boots, one a line
+# (<tier>|<needs>), read by scripts/warm-app-cache.sh: its app-off boot boots the app once at each after the self-test.
+# WHY: a row's tier compiles its own Hlms permutations of the born World (measured: log.engine at epic + photon built 3
+# pbs permutations - pbr_79, pbr_144 - and 256,658 bytes of pipelines the self-test's all-features World never draws),
+# and the 31 rows seeded by a WARM fixture (jah_fresh_home_fixture ... WARM, fresh_home.sh --setup) never promote what
+# they add, so each run rebuilt them. Written only when it changes (file(CONFIGURE)).
+get_property(_jah_sets GLOBAL PROPERTY JAH_TEST_BOOT_SETS)
+list(REMOVE_DUPLICATES _jah_sets)
+list(SORT _jah_sets)
+list(JOIN _jah_sets "\n" _jah_sets)
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test-boot-sets.txt" CONTENT "${_jah_sets}\n" @ONLY)

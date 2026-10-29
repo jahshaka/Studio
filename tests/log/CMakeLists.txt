@@ -35,7 +35,7 @@ file(MAKE_DIRECTORY ${_lg_home}/run)
 # TIER epic NEEDS photon (TEST-NEEDS-1, the lead's lifecycle rule): its claim is the engine's startup
 # path (the Ogre log listener, the device rows) — Photon on, as the product boots; TEST_WINDOW keeps
 # the 1280x720 window TEST-TIER-1 measured it at.
-jah_gpu_row(log.engine SHIP CLASS app TIER epic NEEDS photon TEST_WINDOW
+jah_gpu_row(log.engine WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/log-engine-home" SHIP CLASS app TIER epic NEEDS photon TEST_WINDOW
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/log_engine.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_CURRENT_SOURCE_DIR}/e2e_log_engine.js"

@@ -338,7 +338,7 @@ target_compile_definitions(test_space_docks PRIVATE
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 set(_space_docks_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space-docks)
 file(MAKE_DIRECTORY ${_space_docks_home}/run)
-jah_gpu_row(ui.space_docks SHIP CLASS app TIER low NEEDS NONE COMMAND test_space_docks
+jah_gpu_row(ui.space_docks WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-space-docks" SHIP CLASS app TIER low NEEDS NONE COMMAND test_space_docks
          WORKING_DIRECTORY ${_space_docks_home}/run)
 set_tests_properties(ui.space_docks PROPERTIES JAHSHAKA_TEST_FRAMES 631)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(ui.space_docks PROPERTIES

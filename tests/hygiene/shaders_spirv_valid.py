@@ -98,8 +98,9 @@ print("  ok   the negative control (the fault's pattern) is found invalid: %s" %
 
 # ---- THE DUMP, at the current key
 key = None
-r = subprocess.run(["bash", os.path.join(src, "scripts", "warm-app-cache.sh"), build, "--check"], capture_output=True,
-                   text=True)
+# the app-off boot's answer alone: the dump is that boot's (scripts/warm-app-cache.sh, the two-boot law)
+r = subprocess.run(["bash", os.path.join(src, "scripts", "warm-app-cache.sh"), build, "--check", "--only", "app-off"],
+                   capture_output=True, text=True)
 m = re.search(r"(?:warm|cold) at ([0-9a-f]{16})", r.stdout)
 key = m.group(1) if m else None
 if r.returncode != 0 or not key:
