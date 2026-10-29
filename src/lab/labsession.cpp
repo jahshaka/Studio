@@ -1124,6 +1124,46 @@ bool Session::exec(const Command &c)
         } else {
             labFail("LAB REFUSED pick: no arm reflect.pick\n");
         }
+    } else if (c.verb == "colourpick") {
+        const RayQueryStatus rq = mScene->published().rayQuery;
+        FILE *f = std::fopen(a0.c_str(), "w");
+        constexpr unsigned kSlots = 256u, kWords = 128u, kRec = 31u;
+        if (!f || rq.colourPick.size() < size_t(kSlots) * kWords || rq.colourPickFrames.size() < kSlots) {
+            ok = false;
+            labFail("LAB FAILED colourpick: %s\n", f ? "no ring published (the arm colour.pick off, or no ray tier)" : "cannot write the file");
+            if (f) std::fclose(f);
+        } else {
+            std::vector<unsigned> order;
+            for (unsigned i = 0; i < kSlots; ++i)
+                if (rq.colourPickFrames[i]) order.push_back(i);
+            std::sort(order.begin(), order.end(), [&](unsigned a, unsigned b) { return rq.colourPickFrames[a] < rq.colourPickFrames[b]; });
+            const auto fv = [&](size_t k) { float x; std::memcpy(&x, &rq.colourPick[k], 4); return x; };
+            std::fprintf(f, "# engine_frame k/n template fog blend depth WxH | lights.rgb (before the first Forward+ lamp) | "
+                            "lamp atten x4 | before lamp 1 .rgb | before env .rgb | envD.rgb | envS.rgb | before fog .rgb | out.rgb a | fogLit\n");
+            unsigned lines = 0;
+            for (unsigned i : order) {
+                const size_t base = size_t(i) * kWords;
+                const unsigned n = std::min(rq.colourPick[base], 4u);
+                if (n == 0u) std::fprintf(f, "%u 0/0\n", rq.colourPickFrames[i]);
+                for (unsigned k = 0; k < n; ++k) {
+                    const size_t o = base + 4u + size_t(k) * kRec;
+                    const uint32_t tag = rq.colourPick[o];
+                    std::fprintf(f, "%u %u/%u %s %u %u %.7f %ux%u |", rq.colourPickFrames[i], k + 1u, rq.colourPick[base],
+                                 (tag & 2u) ? "atom" : "pbs", (tag >> 2u) & 1u, (tag >> 3u) & 1u, fv(o + 1u),
+                                 rq.colourPick[o + 2u] & 0xFFFFu, rq.colourPick[o + 2u] >> 16u);
+                    std::fprintf(f, " %.6f %.6f %.6f | %.5f %.5f %.5f %.5f (%u lamps) | %.6f %.6f %.6f | %.6f %.6f %.6f |"
+                                    " %.6f %.6f %.6f | %.6f %.6f %.6f | %.6f %.6f %.6f | %.6f %.6f %.6f %.4f | %.5f\n",
+                                 fv(o + 3u), fv(o + 4u), fv(o + 5u), fv(o + 6u), fv(o + 7u), fv(o + 8u), fv(o + 9u),
+                                 (tag >> 8u) & 255u, fv(o + 10u), fv(o + 11u), fv(o + 12u), fv(o + 13u), fv(o + 14u),
+                                 fv(o + 15u), fv(o + 16u), fv(o + 17u), fv(o + 18u), fv(o + 19u), fv(o + 20u), fv(o + 21u),
+                                 fv(o + 22u), fv(o + 23u), fv(o + 24u), fv(o + 25u), fv(o + 26u), fv(o + 27u), fv(o + 28u),
+                                 fv(o + 30u));
+                    ++lines;
+                }
+            }
+            std::fclose(f);
+            std::printf("LAB COLOURPICK %zu frames, %u fragments -> %s\n", order.size(), lines, a0.c_str());
+        }
     } else if (c.verb == "histdump") {
         const RayQueryStatus rq = mScene->published().rayQuery;
         FILE *f = std::fopen(a0.c_str(), "w");
