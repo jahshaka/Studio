@@ -2,8 +2,10 @@
 """gate_runlog — THE RECORD OF WHAT RAN (DOCS/PROCESS.md; TESTING-SIMPLE). One record per row (and per pool arm) as the
 row ends, appended to <workspace>/testing/runs/<date>-<tier>-<tip9>.jsonl (JAH_RUN_LOG_DIR overrides): suite, arm,
 verdict, seconds, labels, the row's inputs (its declaration and data hashes), the tip (studio, irisgl, fork and the
-build's BUILT_FROM stamp), the build config, a red's first failing line and its output's path. A green record at an equal
-input at an ancestor serves the row (ci_gate_check.py serve). It decides nothing: a red is printed and recorded.
+build's BUILT_FROM stamp), the build config, a red's first failing line and its output's path, and THE ROW's LAW NUMBERS
+(`laws`, green or red: every `LAW <name> <value> <unit> [<op> <bar>]` line the row printed - tests/support/lawline.h - so a
+regression's range reads from the records by the number, not only by the first FAIL; HARNESS-3 (b)). A green record at an
+equal input at an ancestor serves the row (ci_gate_check.py serve). It decides nothing: a red is printed and recorded.
 
     scripts/gate_runlog.py run --tier spec|merge|ship --lane <name> [--build build-linux] -- ctest -j8 ...
     scripts/gate_runlog.py clocks          # the GPU's clock state now (exit 3 when it reads locked)
@@ -11,6 +13,7 @@ input at an ancestor serves the row (ci_gate_check.py serve). It decides nothing
 import argparse
 import datetime
 import json
+import math
 import os
 import re
 import shlex
@@ -18,7 +21,7 @@ import subprocess
 import sys
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
-SCHEMA = 3
+SCHEMA = 4                        # 4: `laws` (HARNESS-3 (b))
 TIERS = ("spec", "merge", "ship")
 MEASURING = {"measure"}          # the label of a row that measures: run at the sprint's ship only, never served
 
@@ -34,10 +37,14 @@ _VNOISE = re.compile(r"^(test \d+|UpdateCTestConfiguration .*|Constructing a lis
 # an arm that began and never ended is a CRASH
 _ARM = re.compile(r"^\s*ARM\s+(\S+)\s+(PASS|FAIL|CRASH|TIMEOUT|SKIP)\b(?:\s+(\d+(?:\.\d+)?)\s*(ms|s)?)?")
 _ARM_BEGIN = re.compile(r"^\s*ARM-BEGIN\s+(\S+)\s*$")
-# a red's first failing line: our `FAIL: <what>`, gtest's `[  FAILED  ]`, QTest's `FAIL!  :`, a script's assert
-_FAILLINE = re.compile(r"^\s*(?:\|\s*)*(FAIL(?:[:(!]).*|\[\s+FAILED\s+\].*)$")
+# a red's first failing line: our `FAIL: <what>`, a fixture's `  FAIL (3) <law>` (HARNESS-3 (b): the engine fixtures' check
+# lines were never matched - their reds recorded no fail line), gtest's `[  FAILED  ]`, QTest's `FAIL!  :`, a script's assert
+_FAILLINE = re.compile(r"^\s*(?:\|\s*)*(FAIL(?:[:(!]|\s+\S).*|\[\s+FAILED\s+\].*)$")
 _SCRIPTFAIL = re.compile(r"([^/\s]+\.js:\d+: Error: .*)$")
 OUTPUT_CAP = 262144
+# THE LAW LINE (tests/support/lawline.h): `LAW <name> <value> <unit> [<op> <bar>]` - collected past OUTPUT_CAP too
+_LAW = re.compile(r"^\s*LAW\s+([A-Za-z0-9_.:+\-]+)\s+(\S+)\s+(\S+)(?:\s+(<=|<|>=|>|==)\s+(\S+))?\s*$")
+_NONFINITE = ("nan", "inf", "infinity")
 
 
 def verdict_of(status):
@@ -60,6 +67,41 @@ def fail_line(text):
             if m:
                 script = m.group(1).strip()[:300]
     return script
+
+
+def _number(text):
+    """(value, ok): a finite float, or None for nan/inf (ok), or None for a malformed number (not ok)."""
+    try:
+        v = float(text)
+    except ValueError:
+        return None, False
+    return (v if math.isfinite(v) else None), True
+
+
+def laws_of(text):
+    """({name: {value, unit[, op, bar][, text]}}, [malformed LAW lines]) of a row's output. A non-finite value is kept as
+    its text (value null); a name printed twice keeps both (the second as <name>#2)."""
+    laws, bad = {}, []
+    for line in (text or "").splitlines():
+        if not line.lstrip().startswith("LAW"):
+            continue
+        m = _LAW.match(line)
+        v, ok = _number(m.group(2)) if m else (None, False)
+        b, bok = _number(m.group(5)) if m and m.group(4) else (None, True)
+        if not m or not ok or not bok:
+            if line.split()[0] == "LAW":
+                bad.append(line.strip()[:200])
+            continue
+        rec = {"value": v, "unit": m.group(3)}
+        if v is None:
+            rec["text"] = m.group(2)
+        if m.group(4):
+            rec["op"], rec["bar"] = m.group(4), b
+        key, n = m.group(1), 2
+        while key in laws:
+            key, n = f"{m.group(1)}#{n}", n + 1
+        laws[key] = rec
+    return laws, bad
 
 
 def arms_of(text):
@@ -201,7 +243,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
     vcmd = [cmd[0], "-V"] + [c for c in cmd[1:] if c != "--output-on-failure"]
     p = subprocess.Popen(vcmd, cwd=build, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                          errors="replace")
-    buf, size, pre, reds = {}, {}, {}, []
+    buf, size, pre, reds, lawbuf, late = {}, {}, {}, [], {}, {}
     for line in p.stdout:
         ln = line.rstrip("\n")
         m = _VLINE.match(ln)
@@ -216,9 +258,13 @@ def run_ctest(cmd, build, tier, lane, echo=True):
                 if st == "env" and txt.startswith(" "):
                     continue
                 pre[i] = False
+            if txt.lstrip().startswith("LAW"):
+                lawbuf.setdefault(i, []).append(txt)
             if size.get(i, 0) < OUTPUT_CAP:
                 buf.setdefault(i, []).append(txt)
                 size[i] = size.get(i, 0) + len(txt) + 1
+            elif i not in late and fail_line(txt):
+                late[i] = fail_line(txt)        # a red's first failing line printed past the cap (HARNESS-3 (b))
             continue
         if _VNOISE.match(ln) or _START.match(ln):
             continue
@@ -229,6 +275,8 @@ def run_ctest(cmd, build, tier, lane, echo=True):
             continue
         i, name, status, secs = m.group(1), m.group(2), m.group(3), float(m.group(4))
         text = "\n".join(buf.pop(i, []))
+        laws, badlaws = laws_of("\n".join(lawbuf.pop(i, [])))
+        late_fail = late.pop(i, None)
         pre.pop(i, None); size.pop(i, None)
         f = facts.get(name) or {}
         nulls = {}
@@ -244,9 +292,13 @@ def run_ctest(cmd, build, tier, lane, echo=True):
                 "ts": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "source": "run"}
         v = verdict_of(status)
         row = dict(base, arm=None, verdict=v, status=status.strip("* "), seconds=secs)
+        if laws:
+            row["laws"] = laws
+        if badlaws:
+            row["lawsMalformed"] = badlaws[:5]
         if v != "PASS":
             reds.append(name)
-            row["failLine"] = fail_line(text)
+            row["failLine"] = fail_line(text) or late_fail
             row["log"] = _row_output(build, run_id, name, text)
             if echo and text:
                 sys.stdout.write("\n".join(text.splitlines()[-40:]) + "\n"); sys.stdout.flush()

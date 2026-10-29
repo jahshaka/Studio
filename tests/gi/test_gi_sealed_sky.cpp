@@ -61,6 +61,7 @@
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lawline.h"
 
 #include <cstdint>
 #include <cstring>
@@ -80,6 +81,14 @@ int g_fail = 0;
 /// (the cards, the voxels, the field and the HDR picture are all RGBA16F): 2^(floor(log2 R) - 10). It replaced a picked
 /// 1 % of R.
 double quantumOf(double R) { return R > 0.0 ? std::ldexp(1.0, int(std::floor(std::log2(R))) - 10) : 0.0; }
+/// THE LAW LINES (HARNESS-3 (b); tests/support/lawline.h): every number a law below judges, in % of R against the bar
+/// (one store step, 100 quantumOf(R) / R), named <pass>.<law> - the pass set where its "==" header prints.
+std::string g_pass = "high";
+void law(const char *what, double v, double R)
+{
+    const std::string n = g_pass + "." + what;
+    enginetest::lawLine(n.c_str(), R > 0.0 ? 100.0 * v / R : -1.0, "%R", "<", R > 0.0 ? 100.0 * quantumOf(R) / R : 0.0);
+}
 void check(bool ok, const char *what)
 {
     std::printf("%s %s\n", ok ? "  ok  " : "  FAIL", what);
@@ -255,6 +264,7 @@ int main(int argc, char **argv)
             vOk = vOk && vr.ok && vr.cells > 0;
             vWorst = std::max(vWorst, vr.peak);
         }
+        law("voxels", vWorst, R);
         {
             // (the BURIED origins the caches skipped - jahRayOriginBuried: a lift crossing a front face, the origin inside
             // a solid - the voxel sides' and the cards' gather's, over the scene's life; PHOTON-7 stage 10-3)
@@ -308,6 +318,7 @@ int main(int argc, char **argv)
         std::printf("   (4) the field: bound %d, %u probes inside the room, the brightest texel %.6f (%.4f %% of R); "
                     "the control, %u probes in the open above, the brightest %.4f\n",
                     int(st.ifdBound), inside, fWorst, R > 0.0 ? 100.0 * fWorst / R : -1.0, above, fAbove);
+        law("field", fWorst, R);
         check(fok && above > 0u && fAbove > 0.5, "(4) the control: the field's probes in the open above the box hold the sky");
         check(fok && inside > 0u && R > 0.0 && fWorst < quantumOf(R),
               "(4) THE FIELD: no probe inside the sealed room holds one store step of the roof's");
@@ -391,6 +402,10 @@ int main(int argc, char **argv)
                     R > 0.0 ? 100.0 * p.spec[0] / R : -1.0, p.specPx[0], panels[1].name, p.spec[1],
                     R > 0.0 ? 100.0 * p.spec[1] / R : -1.0, p.specPx[1], p.border, R > 0.0 ? 100.0 * p.border / R : -1.0,
                     p.borderAt[0], p.borderAt[1]);
+        law("pixel_diffuse", p.diffuse, R);
+        law("pixel_spec0", p.spec[0], R);
+        law("pixel_spec1", p.spec[1], R);
+        law("pixel_border", p.border, R);
         check(p.ok && R > 0.0 && p.diffuse < quantumOf(R),
               "(7) THE PIXEL'S DIFFUSE: no matte pixel inside the sealed room reads one store step of the roof's");
         check(p.ok && R > 0.0 && p.specPx[0] > 100u && p.specPx[1] > 100u && p.spec[0] < quantumOf(R) && p.spec[1] < quantumOf(R),
@@ -418,6 +433,11 @@ int main(int argc, char **argv)
                     "(%.4f %% of R) at frame %d after the jump; the first frame %.4f %%, the brightest later %.4f %% (frame "
                     "%d), the last %.4f %%\n", tier, w.frames, w.worst, k * w.worst, w.worstFrame, k * w.first,
                     k * w.later, w.laterFrame, k * w.last);
+        {   // (the teleport's bar is <= one step)
+            const std::string n = g_pass + ".teleport";
+            enginetest::lawLine(n.c_str(), R > 0.0 ? 100.0 * w.worst / R : -1.0, "%R", "<=",
+                                R > 0.0 ? 100.0 * quantumOf(R) / R : 0.0);
+        }
         check(w.ok && w.frames > 0 && R > 0.0 && w.worst <= quantumOf(R),
               "(8) THE TELEPORT INTO THE BOX: no frame of the window until rest reads one store step of the roof's");
     };
@@ -438,6 +458,9 @@ int main(int argc, char **argv)
                     p.diffuse, R > 0.0 ? 100.0 * p.diffuse / R : -1.0, panels[0].name, p.spec[0],
                     R > 0.0 ? 100.0 * p.spec[0] / R : -1.0, panels[1].name, p.spec[1], R > 0.0 ? 100.0 * p.spec[1] / R : -1.0,
                     p.border, R > 0.0 ? 100.0 * p.border / R : -1.0);
+        law("cube_diffuse", p.diffuse, R);
+        law("cube_spec", std::max(p.spec[0], p.spec[1]), R);
+        law("cube_border", p.border, R);
         check(set && rest >= 0 && p.ok && R > 0.0 && p.diffuse < quantumOf(R),
               "(9) THE CAPTURED CUBE, THE DIFFUSE: no matte pixel inside the sealed room reads one store step of the roof's");
         check(set && rest >= 0 && p.ok && R > 0.0 && p.spec[0] < quantumOf(R) && p.spec[1] < quantumOf(R),
@@ -450,6 +473,7 @@ int main(int argc, char **argv)
     const char *tierName[2] = { "High", "Epic" };
     for (int t = 0; mode == "ray" && t < 2; ++t) {
         std::printf("== %s\n", tierName[t]);
+        g_pass = t ? "epic" : "high";
         GiParams gi;
         gi.mode = GiMode::Vct;
         gi.quality = tiers[t];
@@ -528,6 +552,7 @@ int main(int argc, char **argv)
         }
         std::printf("   (2) inside: at rest after %d frames, %u of 6 faces carded; the brightest point %.4f %% of R\n",
                     restIn, facesRead, R > 0.0 ? 100.0 * worst / R : -1.0);
+        law("cards", worst, R);
         check(restIn >= 0 && facesRead == 6u && R > 0.0 && worst < quantumOf(R),
               "(2) THE CARDS: no card point of the sealed room's faces reads one store step of the roof's");
         {
@@ -557,6 +582,7 @@ int main(int argc, char **argv)
     double Rnoray = 0.0;
     if (mode == "noray") {
         std::printf("== High, no rays (the field on)\n");
+        g_pass = "noray";
         scene->setRayTracing(RayTracingMode::Off);
         cardsOn = false;
         GiParams gi;
@@ -589,6 +615,7 @@ int main(int argc, char **argv)
     // where the camera stands, inside (the teleport is the shipped no-ray tier's, above; R is that tier's roof)
     if (mode == "noray") {
         std::printf("== High, no rays, the field off\n");
+        g_pass = "noray_fieldoff";
         GiParams gi;
         gi.mode = GiMode::Vct;
         gi.quality = GiQuality::High;
@@ -611,6 +638,7 @@ int main(int argc, char **argv)
             std::printf("   (5) the no-ray route inside (rays off, the field off, High): at rest after %d frames, the "
                         "picture's middle mean %.6f, peak %.6f (%.4f %% / %.4f %% of R %.4f)\n", rest, mean, peak,
                         R > 0.0 ? 100.0 * mean / R : -1.0, R > 0.0 ? 100.0 * peak / R : -1.0, R);
+            law("noray_route", peak, R);
             check(rest >= 0 && mean >= 0.0 && R > 0.5 * kAlbedo && peak < quantumOf(R),
                   "(5) THE NO-RAY ROUTE: no pixel of the picture inside the sealed room reads one store step of the roof's");
             pixelLaw(R, "no rays, the field off");
@@ -626,6 +654,7 @@ int main(int argc, char **argv)
         gi.bounces = true;
         gi.updateBudget = 0;
         check(scene->setGlobalIllumination(gi), "(9) the no-ray tier's GI rebuilds");
+        g_pass = "noray_shipped";
         e->waitForAsyncShaders();
         settle();
         {

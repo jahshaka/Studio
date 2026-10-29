@@ -35,6 +35,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/PhotonStatus.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lawline.h"
 
 #include <algorithm>
 #include <cmath>
@@ -243,7 +244,7 @@ int main()
                     s2[0] += p2.r; s2[1] += p2.g; s2[2] += p2.b;
                     ++n;
                 }
-            double worst = 0.0, eV = 0.0, eS = 0.0, eN = 0.0;
+            double worst = 0.0, eV = 0.0, eS = 0.0, eN = 0.0, physQ = 0.0;
             for (int c = 0; c < 3; ++c) {
                 sa[c] /= std::max(n, 1u);
                 sb[c] /= std::max(n, 1u);
@@ -254,6 +255,7 @@ int main()
                 const double q = quantumOf(sr[c]);
                 within = within && std::fabs(sb[c] - sr[c]) <= std::fabs(sa[c] - sr[c]) + q + std::fabs(s2[c] - sa[c]);
                 physical = physical && std::fabs(sb[c] - sr[c]) <= q;
+                physQ = std::max(physQ, q > 0.0 ? std::fabs(sb[c] - sr[c]) / q : -1.0);
                 worst = std::max(worst, std::fabs(sb[c] - sa[c]) / std::max(sa[c], 1e-6));
                 eV = std::max(eV, std::fabs(sa[c] - sr[c]) / std::max(sr[c], 1e-6));
                 eS = std::max(eS, std::fabs(sb[c] - sr[c]) / std::max(sr[c], 1e-6));
@@ -263,6 +265,14 @@ int main()
                         "%.4f %.4f %.4f (%.2f %%) - S vs V %.2f %%, V 1 mm %.3f %%\n", r.name, sr[0], sr[1], sr[2],
                         sa[0], sa[1], sa[2], 100.0 * eV, sb[0], sb[1], sb[2], 100.0 * eS, 100.0 * worst, 100.0 * eN);
             within = within && n > 0u;
+            {   // THE LAW LINES (HARNESS-3 (b); tests/support/lawline.h): (2')'s worst channel in q; the producer's and the
+                // route's distance from the reference, and the route's own 1 mm noise, in %
+                const std::string at = enginetest::lawName(std::string(arr.name) + "." + r.name);
+                enginetest::lawLine((at + ".screen_vs_ref").c_str(), physQ, "q", "<=", 1.0);
+                enginetest::lawLine((at + ".screen_vs_ref_pct").c_str(), 100.0 * eS, "%");
+                enginetest::lawLine((at + ".voxel_vs_ref_pct").c_str(), 100.0 * eV, "%");
+                enginetest::lawLine((at + ".voxel_1mm_pct").c_str(), 100.0 * eN, "%");
+            }
         }
         std::snprintf(msg, sizeof msg,
                       "[%s] (2) THE PRODUCER MOVED, THE PHYSICS DID NOT: every region's mean, per channel, no further from "
@@ -300,6 +310,9 @@ int main()
             std::snprintf(msg, sizeof msg,
                           "[%s] (3) OVER THE PICTURE: the producer no further from the reference than the voxel route, by "
                           "that route's own 1 mm noise (the mean and the pixels over 5 %%)", arr.name);
+            const std::string at = enginetest::lawName(arr.name);
+            enginetest::lawLine((at + ".picture_mean_pct").c_str(), 100.0 * sS.mean, "%", "<=", 100.0 * (sV.mean + s2.mean));
+            enginetest::lawLine((at + ".picture_over5").c_str(), sS.over5, "px", "<=", double(sV.over5 + s2.over5));
             CHECK(sS.n > 1000u && sS.mean <= sV.mean + s2.mean && sS.over5 <= sV.over5 + s2.over5, msg);
         }
         e->setArm("gi.screenIntegrateOff", 0.0);
