@@ -21,7 +21,10 @@
 # those, its first 16 hex digits.
 # WARM AT THE KEY = for an -off boot, its stamp (<shared>.warm-key, written after the boot was promoted) names this key
 # AND the shared cache's manifest still carries the layer keys it recorded then (a later promotion at the same key only
-# grows the union; one at another key replaced it); for an -on boot, its stamp (<shared>.driver-key) names this key and
+# grows the union; one at another key replaced it) AND the cache passes the engine's own load check - every file its
+# manifest names there at its length and hash (tests/support/shadercache_check.py; URGENT #117: a torn shared cache
+# read "warm" here by its keys while every engine row seeded from it booted cold, eight timed out in turn; the -off
+# boot on it boots cold and its promotion replaces it, fresh_home's rule 2); for an -on boot, its stamp (<shared>.driver-key) names this key and
 # the exe as it is now (the two-boot law, below).
 #
 #   (no flag)        warm: prints "warm at <key>", exits 0 at once. Cold: prints "cold at <key>: <why>", then runs the cold
@@ -154,6 +157,8 @@ cold_why() {   # <shared> <stamp> [<sets digest>]: empty when warm at the key, e
     elif [ "$(sed -n 1p "$2")" != "$KEY" ]; then echo "the key moved (warmed at $(sed -n 1p "$2"))"
     elif [ ! -f "$1/cache-manifest.txt" ]; then echo "the shared cache is gone"
     elif [ "$(sed -n 2p "$2")" != "$(layer_keys "$1")" ]; then echo "the shared cache was replaced at another key since"
+    elif ! torn=$(python3 -I "$SRC/tests/support/shadercache_check.py" "$1" 2>&1); then
+        echo "the shared cache fails its own manifest ($torn) - the engine would boot every row seeded from it cold"
     elif [ $# -ge 3 ] && [ "$(sed -n 3p "$2")" != "$3" ]; then echo "the rows' test tiers changed since (test-boot-sets.txt)"
     fi
 }

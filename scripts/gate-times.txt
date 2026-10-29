@@ -334,7 +334,7 @@ source.graphics_queue_seams 0.05  spec ENGINE-UPGRADE-ASYNC-3 stage 1 (2026-10-1
 source.scene_no_photon_members 0.04  spec EU-2B stage 1 (2026-10-14)
 source.settings_keys 0.20  ship 3a0422b4e (2026-10-13)
 source.shell_boundaries 0.26  quiet n=58
-source.testing_rules 0.57  quiet n=56
+source.testing_rules 4.63  loaded (the box at load ~17), CPU, ctest (HARNESS-4, URGENT #117, 2026-10-29: + fresh_home never promotes a torn cache, the toy caches one generation; was 0.57 quiet n=56, a line older than the twelve concurrent homes)
 ssr.engine 5.82  quiet n=39
 ssr.engine_asan 19.66  quiet n=39
 test_engine 15.99  median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
