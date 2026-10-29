@@ -30,7 +30,6 @@
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
-#include <map>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -161,31 +160,6 @@ int main(int argc, char **argv)
                     ? quiet + 1 : 0;
         if (quiet >= 12) { rest = f - quiet; break; }
     }
-    e->setArm("rayquery.skyRecReset", 1.0);   // MEASURING ARM (reverted): the rest's records alone
-    run(8);
-        {   // MEASURING ARM (11-2, reverted): the integrate's voxel-ray hits that answered light from INSIDE (std::fabs(r[0]) < 12.0f && std::fabs(r[2]) < 12.0f && r[1] > -0.01f && r[1] < 5.01f)
-            const RayQueryStatus &rq = s->published().rayQuery;
-            const size_t n = rq.sideRec.size() / 16u;
-            size_t in = 0, shown = 0, both = 0, minor = 0;
-            std::map<int, size_t> byCascade;
-            for (size_t i = 0; i < n; ++i) {
-                const float *r = &rq.sideRec[i * 16u];
-                if (!(std::fabs(r[0]) < 12.0f && std::fabs(r[2]) < 12.0f && r[1] > -0.01f && r[1] < 5.01f)) continue;
-                ++in;
-                ++byCascade[int(r[7])];
-                if (r[8] < -1.5f) ++both;
-                else if (int(r[8]) != int(r[9])) ++minor;
-                if (shown++ < 8)
-                    std::printf("   SIDEREC %s: P (%.3f %.3f %.3f) L %.6f d (%.3f %.3f %.3f) c%d | a %d na %d nv[a] %+.4f along %+.4f | "
-                                "iso %.5f back %.5f c%.0f px (%d, %d)\n", "hall at rest", r[0], r[1], r[2], r[3], r[4], r[5], r[6],
-                                int(r[7]), int(r[8]), int(r[9]), r[10], r[11], r[12], r[13], r[14], int(r[15]) % 4096,
-                                int(r[15]) / 4096);
-            }
-            std::printf("   SIDEREC %s: %llu records (%zu read), %zu inside; of them the both-orientation branch %zu, decided on a "
-                        "MINOR axis (a != na) %zu; by cascade:", "hall at rest", rq.sideRecords, n, in, both, minor);
-            for (const auto &kv : byCascade) std::printf(" c%d %zu", kv.first, kv.second);
-            std::printf("\n");
-        }
     std::printf("   %s: at rest after %d frames; the brightest pixel of any frame %.6f (%.3f codes of R) at frame %d, %u px "
                 "over one code; at rest %.6f (%.3f codes), %u px over\n", mode.c_str(), rest, worst, worst / bar,
                 worstFrame, worstOver, last, last / bar, lastOver);
