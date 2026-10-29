@@ -5,6 +5,10 @@
 # restarted whole (the arm gather.restOff for one frame: every cell settles from K = 0) and held again, compared byte for
 # byte, within the store's quantum (one code). A resume that never happens (a cell held over an input it read) holds the
 # old picture and fails here; so does a rest index that followed the path (a cell's rest mean is its pose's).
+# THE ROW's PROOF (its negative control, the arm gather.resumeOff - the cells' resume sees no input - committed, run once,
+# reverted): photon-room's lamp RED at 518,400 px up to 5 codes (irisgl 4ac69734, 2026-10-29); photon-glass's SLID mover
+# RED at 19,775 px over a code, up to 25 (irisgl 490e51e3, reverted 2026-10-29: the held picture kept the mover's old
+# pose). (The glass's first control, 287,868 px, ran while `play` moved nothing: the view switch's and the rest's.)
 # THE LAW, per scene:
 #   (1) the gather holds whole at both shots (the status's gather.restFrames past the settle: every cell held);
 #   (2) the two shots differ by at most one code on every pixel.
