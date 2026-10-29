@@ -197,6 +197,12 @@ bool runOnce(Engine *e, bool plates, Run &out, int &count)
         held = gs.restFrames > kRestFrames + 1u ? held + 1 : 0;
     }
     const GatherStatus &gs = scene->published().gi.gather;
+    // MEASURING ARM (8B, to be reverted): why the truth view does not hold
+    std::printf("   ARM %s: held %d framesRead %u restFrames %u settle %u irradiance %zu cells held %u active %u reached %u "
+                "ring %u resumes %llu running %d\n", name, held, out.framesRead, gs.restFrames, gs.settleFrames,
+                gs.irradiance.size(), gs.cellsHeld, gs.cellsActive, gs.cellsReached, gs.cellsRing, gs.resumes, int(gs.running));
+    for (const GatherRestRecord &r : gs.restLog)
+        std::printf("   ARM %s rec f %u K %u reached %u held %u active %u\n", name, r.frame, r.restK, r.reached, r.held, r.active);
     if (held >= 4 && gs.irradiance.size() == size_t(kW) * kH * 4u)
         for (int s = 0; s < 2; ++s) {
             for (unsigned y = 0; y < kH; ++y) {
