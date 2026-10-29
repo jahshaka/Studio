@@ -66,6 +66,7 @@
 #include <cstring>
 
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <cstdio>
 #include <functional>
@@ -401,6 +402,8 @@ int main(int argc, char **argv)
     // (8) THE TELEPORT WINDOW: the camera jumps inside, and every frame until the room is at rest is read
     struct Window { int frames = 0, worstFrame = -1, laterFrame = -1; double worst = 0.0, first = -1.0, later = 0.0, last = 0.0; bool ok = true; };
     const auto teleportIn = [&](Window &w) {
+        static int jumps = 0;
+        e->setArm("rayquery.skyRecReset", double(++jumps));   // MEASURING ARM (reverted): the window's records alone
         enginetest::testCameraLookAt(view, inPos, inAt);
         return settle([&](int f) {
             const PixRead p = readPicture();
@@ -414,6 +417,30 @@ int main(int argc, char **argv)
     };
     const auto teleportLaw = [&](const Window &w, double R, const char *tier) {
         const double k = R > 0.0 ? 100.0 / R : -1.0;
+        {   // MEASURING ARM (11-2, reverted): the integrate's voxel-ray hits that answered light from INSIDE (std::fabs(r[0]) < 2.0f && std::fabs(r[2]) < 2.0f && r[1] > -0.01f && r[1] < 3.01f)
+            const RayQueryStatus &rq = scene->published().rayQuery;
+            const size_t n = rq.sideRec.size() / 16u;
+            size_t in = 0, shown = 0, both = 0, minor = 0;
+            std::map<int, size_t> byCascade;
+            for (size_t i = 0; i < n; ++i) {
+                const float *r = &rq.sideRec[i * 16u];
+                if (!(std::fabs(r[0]) < 2.0f && std::fabs(r[2]) < 2.0f && r[1] > -0.01f && r[1] < 3.01f)) continue;
+                ++in;
+                ++byCascade[int(r[7])];
+                if (r[8] < -1.5f) ++both;
+                else if (int(r[8]) != int(r[9])) ++minor;
+                if (shown++ < 8)
+                    std::printf("   SIDEREC %s: P (%.3f %.3f %.3f) L %.6f d (%.3f %.3f %.3f) c%d | a %d na %d nv[a] %+.4f along %+.4f | "
+                                "iso %.5f back %.5f c%.0f px (%d, %d)\n", tier, r[0], r[1], r[2], r[3], r[4], r[5], r[6],
+                                int(r[7]), int(r[8]), int(r[9]), r[10], r[11], r[12], r[13], r[14], int(r[15]) % 4096,
+                                int(r[15]) / 4096);
+            }
+            std::printf("   SIDEREC %s: %llu records (%zu read), %zu inside; of them the both-orientation branch %zu, decided on a "
+                        "MINOR axis (a != na) %zu; by cascade:", tier, rq.sideRecords, n, in, both, minor);
+            for (const auto &kv : byCascade) std::printf(" c%d %zu", kv.first, kv.second);
+            std::printf("\n");
+        }
+
         std::printf("   (8) %s, the teleport into the box: %d frames read to rest, the picture's middle at its brightest %.6f "
                     "(%.4f %% of R) at frame %d after the jump; the first frame %.4f %%, the brightest later %.4f %% (frame "
                     "%d), the last %.4f %%\n", tier, w.frames, w.worst, k * w.worst, w.worstFrame, k * w.first,
