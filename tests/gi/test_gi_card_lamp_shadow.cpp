@@ -9,7 +9,7 @@
 // direct shape h / d^3 - the cosine over the square of the distance):
 //   (1) BOTH SHADOWS ARE ON THE CARD, AGAINST THE ANALYTIC UMBRA (R12; it was "under a quarter of the lit points'"):
 //       each point's DIRECT half (the radiance less its indirect and flat halves) - (a) at every umbra point 0 within
-//       the stores' steps (q of the RGBA16F radiance plus the R11G11B10F halves' half steps; measured: the worst 0.95 of
+//       the stores' steps (q of the RGBA16F radiance plus the RGBA16F halves' half steps since REDS-1; measured: the worst 0.95 of
 //       it), (b) at the lit points the lamp's closed form at the texel's own point, I mu atten(d) rho Dd(L, N), their
 //       mean within q (measured -0.04 %, 0.59 q);
 //   (2) THE SHADOW AND THE BOUNCE FOLLOW THE MOVED MOVER: the mover stepped 1.0 m along +z inside the lamp's range (its
@@ -235,9 +235,10 @@ int main(int argc, char **argv)
         // umbra exactly 0, lit the lamp's closed form at the texel's own point, I mu atten(d) rho Dd(L, N) (the card
         // holds the direct at V = N; the falloff the Karis window with the 0.1 m source clamp)
         const auto qOf = [](double R) { return R > 0.0 ? std::ldexp(1.0, int(std::floor(std::log2(R))) - 10) : 0.0; };
-        // the half step of the R11G11B10F layers (Indirect, Flat): a 6-bit mantissa in r and g, 5 in b
-        const auto halfR11 = [](double v, int c) {
-            return v > 0.0 ? std::ldexp(1.0, int(std::floor(std::log2(v))) - (c == 2 ? 6 : 7)) : 0.0;
+        // the half step of the Indirect and Flat layers - RGBA16F rounded to nearest since REDS-1 (they were R11G11B10F,
+        // a 6-bit mantissa): half a step of the half float's 10-bit mantissa
+        const auto halfLayer = [](double v) {
+            return v > 0.0 ? std::ldexp(1.0, int(std::floor(std::log2(v))) - 11) : 0.0;
         };
         const auto lampDirect = [&](const float P[3]) {
             const double lx = lampPos.x - P[0], ly = lampPos.y - P[1], lz = lampPos.z - P[2];
@@ -263,7 +264,7 @@ int main(int argc, char **argv)
                 bool over = false;
                 for (int c = 0; c < 3; ++c) {
                     const double direct = double(cs.radiance[c]) - cs.indirect[c] - cs.flat[c];
-                    const double bar = qOf(cs.radiance[c]) + halfR11(cs.indirect[c], c) + halfR11(cs.flat[c], c);
+                    const double bar = qOf(cs.radiance[c]) + halfLayer(cs.indirect[c]) + halfLayer(cs.flat[c]);
                     over = over || std::fabs(direct) > bar;
                     umbraWorst = std::max(umbraWorst, std::fabs(direct) / std::max(bar, 1e-12));
                 }
@@ -286,7 +287,7 @@ int main(int argc, char **argv)
                     std::fabs(litMeanGot - litMeanRef) / std::max(qOf(litMeanRef), 1e-12), 100.0 * litWorst);
         CHECK(rest0 >= 0 && umbraN > 40 && litN > 40, "the floor comes to rest carded and its points read");
         CHECK(umbraOver == 0u, "(1a) BOTH SHADOWS ARE ON THE CARD: every umbra point's direct half 0 within the stores' "
-                               "steps (q of the radiance, the R11G11B10F halves' half steps)");
+                               "steps (q of the radiance, the RGBA16F halves' half steps)");
         CHECK(litN > 40 && std::fabs(litMeanGot - litMeanRef) <= qOf(litMeanRef),
               "(1b) ...and the lit points' direct half the lamp's closed form: its mean within q of the analytic");
 
@@ -470,7 +471,7 @@ int main(int argc, char **argv)
         // D = intensity x pi (OgreScene's power scale), F = the rectangle's form factor at the texel, (1 / pi) x the
         // integral of cos x cos' / r^2 over the rectangle on a 200 x 100 midpoint grid, bounded over the texel the read
         // picked (its centre within half a texel of the point: F's least and largest on that square), the bar the three
-        // stored values' half steps (the radiance RGBA16F's, the indirect and flat terms' R11G11B10F 2^-7 on green).
+        // stored values' half steps (all three RGBA16F, rounded to nearest: 2^-11 of each, REDS-1).
         View *av = e->createOffscreenView("card_area", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
         Scene *as = e->createScene("card_area");
         if (!av || !as) { std::printf("FAIL: the area view/scene\n"); return 1; }
@@ -560,9 +561,8 @@ int main(int argc, char **argv)
                         fHi = std::max(fHi, f);
                     }
                 const double scale = kD * kIntensity * 3.14159265358979 * windowAt(px, pz);
-                // (the stored values' half steps: the radiance RGBA16F's 2^-11 since 10-2d, the indirect and flat terms'
-                // R11G11B10F 2^-7 on green)
-                const double tol = std::ldexp(double(cs.radiance[1]), -11) + std::ldexp(double(cs.indirect[1]) + cs.flat[1], -7);
+                // (the stored values' half steps: all three layers RGBA16F, rounded to nearest - 2^-11 of each, REDS-1)
+                const double tol = std::ldexp(double(cs.radiance[1]), -11) + std::ldexp(double(cs.indirect[1]) + cs.flat[1], -11);
                 const double past = std::max(0.0, std::max(scale * fLo - dk, dk - scale * fHi));
                 const double rel = std::fabs(dk / (scale * 0.5 * (fLo + fHi)) - 1.0);
                 aWorst = std::max(aWorst, past / std::max(tol, 1e-12));

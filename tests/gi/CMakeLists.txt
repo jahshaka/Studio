@@ -65,17 +65,53 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     add_dependencies(test_gi_cascades_asan JahshakaEngineMedia)
     target_compile_options(test_gi_cascades_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_gi_cascades_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(gi.cascades_asan SHIP CLASS engine COMMAND test_gi_cascades_asan
+    # SIX ROWS, ONE PROOF EACH, ALL IN THE SHIP SET (HARNESS-2, 2026-10-29; the lead's ruling: a ship row split by proof keeps
+    # every law in the ship, the test_engine_asan.partN precedent). The one row gi.cascades_asan (deleted) ran all 23
+    # sub-cases in one process: 50.68 s, over the 45-s quiet law, and timed out at 60 s on two trees under load. Every case
+    # keeps its frames and its bars; a part stages the state an earlier case used to leave (test_gi_cascades.cpp's header).
+    # FRAMES: the part's own count (it prints "frames rendered"). Each row is the END-TO-END PROOF of one law of the chain:
+    #   .schedule      THE CAMERA'S SCHEDULE: an open builds once where the camera is, rest costs nothing, a sway inside the
+    #                  band costs nothing, a scroll pays at most one cascade a frame, a teleport is N counted rebuilds and
+    #                  never black, the near field holds over a walk, every centre sits on its quantum's lattice.
+    #   .faults        A FAILED REBUILD CHANGES NOTHING BUT THE CLOCK (cases 11, 13): the use-after-free class this binary
+    #                  exists for - the failure paths around a cascade's voxeliser.
+    #   .edits         AN EDIT RE-VOXELISES EXACTLY THE CASCADES THAT HOLD IT, never the whole chain - a boxed edit as
+    #                  REGION rebuilds in every cascade its box reaches, in the frame (A1), one with no box one cascade a
+    #                  frame (case 7's edits, 14's budget, 15/15b's merged dirty boxes and their light resting at a fresh build's).
+    #   .ambient       THE CHAIN CARRIES THE AMBIENT AS ONE CASCADE DOES, diffuse and open-space specular, each within a code (4, 7).
+    #   .mover         A2's LAW: a declared mover is lit at the pose it is in - motion against rest within 16 codes, no
+    #                  pixel off by 10, the rest a fresh build's within a code - at three poses of cascade 0, the rays off.
+    #   .mover_routes  AT REST A FRESH BUILD'S on the two other routes: the rays ON (this view never gathers - the
+    #                  non-gathering route's screen integrate; its motion residue printed, PHOTON-7's leftover) and a STILL
+    #                  turned by script (the mirror's move quantum printed).
+    # (every row NAMED, never a loop variable: the selector resolves a set_tests_properties by the rows it names, and an
+    # unresolved name falls back to the whole directory - 94 gi rows for a one-row edit)
+    jah_gpu_row(gi.cascades_asan.schedule SHIP CLASS engine COMMAND test_gi_cascades_asan schedule
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.faults SHIP CLASS engine COMMAND test_gi_cascades_asan faults
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.edits SHIP CLASS engine COMMAND test_gi_cascades_asan edits
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.ambient SHIP CLASS engine COMMAND test_gi_cascades_asan ambient
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.mover SHIP CLASS engine COMMAND test_gi_cascades_asan mover
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    jah_gpu_row(gi.cascades_asan.mover_routes SHIP CLASS engine COMMAND test_gi_cascades_asan mover_routes
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # LeakSanitizer off for the same reason test_engine_asan turns it off (the
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
     # use-after-free detection is the point and stays on.
-    # (TIMEOUT 60, the law's cap: every test under a minute - priced 33.4 s, 2816 frames under the sanitizer; PHOTON-7
-    # stage 10's case 12: three poses, each with a fresh build as its oracle, +850 frames)
-    set_tests_properties(gi.cascades_asan PROPERTIES TIMEOUT 60 LABELS "engine"
+    # (TIMEOUT 60, the law's cap: every test under a minute; each part priced from its own solo run in gate-times.txt)
+    set_tests_properties(gi.cascades_asan.schedule gi.cascades_asan.faults gi.cascades_asan.edits gi.cascades_asan.ambient
+                         gi.cascades_asan.mover gi.cascades_asan.mover_routes PROPERTIES TIMEOUT 60 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
-    set_tests_properties(gi.cascades_asan PROPERTIES JAHSHAKA_TEST_FRAMES 2816)
+    set_tests_properties(gi.cascades_asan.schedule PROPERTIES JAHSHAKA_TEST_FRAMES 1075)
+    set_tests_properties(gi.cascades_asan.faults PROPERTIES JAHSHAKA_TEST_FRAMES 90)
+    set_tests_properties(gi.cascades_asan.edits PROPERTIES JAHSHAKA_TEST_FRAMES 594)
+    set_tests_properties(gi.cascades_asan.ambient PROPERTIES JAHSHAKA_TEST_FRAMES 178)
+    set_tests_properties(gi.cascades_asan.mover PROPERTIES JAHSHAKA_TEST_FRAMES 1106)
+    set_tests_properties(gi.cascades_asan.mover_routes PROPERTIES JAHSHAKA_TEST_FRAMES 738)
 endif()
 
 # THE SANITISED TWIN, WITH THE RAYS ON (PHOTON_SPEC §7 R1). The tier is the
@@ -249,6 +285,28 @@ jah_gpu_row(gi.card_closed_form CLASS engine COMMAND test_gi_card_closed_form
 set_tests_properties(gi.card_closed_form PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(gi.card_closed_form PROPERTIES JAHSHAKA_TEST_FRAMES 219)
+# gi.mirror_closed_form — A MIRROR WALL CONSERVES ENERGY IN THE STORE (PHOTON-7 11-2 (7)): card_closed_form's emitting
+# room twice, all matte and with one wall a near-mirror; the matte faces' mean ratio within q of a seeded path-traced
+# reference's (test_gi_mirror_closed_form.cpp states the law).
+add_executable(test_gi_mirror_closed_form test_gi_mirror_closed_form.cpp)
+set_target_properties(test_gi_mirror_closed_form PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_mirror_closed_form PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_mirror_closed_form PRIVATE JahshakaEngine)
+# (the reference path trace is the row's CPU half: optimised, so the row keeps its 10 s budget in a Debug tree)
+target_compile_options(test_gi_mirror_closed_form PRIVATE -O2)
+add_dependencies(test_gi_mirror_closed_form JahshakaEngineMedia)
+jah_gpu_row(gi.mirror_closed_form CLASS engine COMMAND test_gi_mirror_closed_form
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.mirror_closed_form PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
+set_tests_properties(gi.mirror_closed_form PROPERTIES JAHSHAKA_TEST_FRAMES 196)
 add_executable(test_sun_contact_acne test_sun_contact_acne.cpp)
 set_target_properties(test_sun_contact_acne PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1157,30 +1215,72 @@ endif()
 # frozen per pixel: mean / p99 / share over one code) and the hitch law on the wall and the GPU clock PRINTED - the bars
 # are the later stages'; each asserts only its instrument's laws: frozen = frozen, the arms start equal, the classes
 # cover the counted pixels (walk.sh says the laws and the base). 960x540; four sessions each: the prime's 7 frames and
-# three walks of the hold + teleport + hold:1 + the 60-frame walk + the 8-frame window + 1 (LAB END: the court 231, the
-# glass 671). ALL THE CARD'S SLOTS (TOKENS 8): their GPU clocks are read alone.
+# three walks of the hold + teleport + hold:1 + the 60-frame walk + the 8-frame window + 1 (LAB END: the court 231; the
+# glass: its chain below). ALL THE CARD'S SLOTS (TOKENS 8): their GPU clocks are read alone.
 if(TARGET jahlab)
     jah_gpu_row(gi.walk_court CLASS engine TOKENS 8 SHIP FRAMES 700
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_court
                 --court
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_court PROPERTIES TIMEOUT 60 LABELS "engine")
-    jah_gpu_row(gi.walk_glass CLASS engine TOKENS 8 SHIP FRAMES 2020
+    # gi.walk_glass SPLIT BY PROOF (HARNESS-3 (f)): each walk now starts from `rest 1200 held` (every reader held - the
+    # glass holds ~1,000 rest frames in since 11-2 (8); it was 600 frames, the old K_max's), so the three walks no longer
+    # fit one row: a fixture chain on one work dir - .live (the prime + the live walk; its clocks alone) -> .frozen (the
+    # frozen walk + M1) -> .frozen2 (the second frozen walk + L1). Each SHIP, as the row was. Run one alone with
+    # `ctest -R gi.walk_glass.frozen2`. The parts boot on ONE cache's bytes (the live part's primed cache, restored) and
+    # start on ONE frame count (the live part's rest + 4, replayed) - L2 read 2,712 px without the first. Frames at
+    # photon-7 188268ffc: the rest 828, each walk 903 (the live part + the prime's 7) - the whole row was 2,020.
+    jah_gpu_row(gi.walk_glass.live CLASS engine TOKENS 8 SHIP FRAMES 910
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
-                --glass
+                --glass-live
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(gi.walk_glass PROPERTIES TIMEOUT 60 LABELS "engine")
+    set_tests_properties(gi.walk_glass.live PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_glass_live)
+    jah_gpu_row(gi.walk_glass.frozen CLASS engine TOKENS 8 SHIP FRAMES 903
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
+                --glass-frozen
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_glass.frozen PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_glass_frozen
+                         FIXTURES_REQUIRED gi_walk_glass_live DEPENDS gi.walk_glass.live)
+    jah_gpu_row(gi.walk_glass.frozen2 CLASS engine TOKENS 8 SHIP FRAMES 903
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
+                --glass-frozen2
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_glass.frozen2 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED "gi_walk_glass_live;gi_walk_glass_frozen" DEPENDS gi.walk_glass.frozen)
 endif()
 
-# gi.walk_rough (PHOTON-7 stage 7, 7-3; R12) — THE ROUGH SPECULAR'S WALK LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS
-# MEMORY AND ITS NOISE: rough_lag.sh on photon-rough (its four rough metal strips, the lobe alone): at walk frames 14 /
-# 28 / 59 per rough pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1, breaking <= 1 % (the lag
-# law; N the gather's history count, SE_walk its raw lobe's sigma / sqrt N). 960x540; two sessions.
+# gi.walk_rough.walk / .k14 / .k28 / .k59 (PHOTON-7 stage 7, 7-3; R12; SPLIT BY PROOF in HARNESS-3 (a): whole it ran 55.78
+# / 57.69 s, over the 45-s quiet law) — THE ROUGH SPECULAR'S WALK LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS MEMORY AND
+# ITS NOISE: rough_lag.sh on photon-rough (its four rough metal strips, the lobe alone): at walk frame k per rough pixel
+# |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1, breaking <= 1 % (the lag law; N the gather's history
+# count, SE_walk its raw lobe's sigma / sqrt N) - ONE ROW PER k, each on the walk's dump (a fixture chain: .walk writes
+# it, FIXTURES_SETUP; run one k alone with `ctest -R gi.walk_rough.k14 -FS gi_walk_rough_dump`). CONVERGED is the lab's
+# `rest 600` (GiStatus::giAtRest; rough_lag.sh derives it - the picked 600 frames it replaced). Declared red: rough_lag.sh
+# says it. 960x540; one jahlab session a row; FRAMES as the rows ran them (the rests' measured counts).
 if(TARGET jahlab)
-    jah_gpu_row(gi.walk_rough CLASS engine TOKENS 8 FRAMES 4314
+    jah_gpu_row(gi.walk_rough.walk CLASS engine TOKENS 8 FRAMES 350
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+                walk
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(gi.walk_rough PROPERTIES TIMEOUT 60 LABELS "engine")
+    set_tests_properties(gi.walk_rough.walk PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_rough_dump)
+    jah_gpu_row(gi.walk_rough.k14 CLASS engine TOKENS 8 FRAMES 506
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+                14 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k14
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_rough.k14 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
+    jah_gpu_row(gi.walk_rough.k28 CLASS engine TOKENS 8 FRAMES 519
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+                28 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k28
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_rough.k28 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
+    jah_gpu_row(gi.walk_rough.k59 CLASS engine TOKENS 8 FRAMES 550
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+                59 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k59
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_rough.k59 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
 endif()
 
 # gi.walk_area (PHOTON-7 stage 7: the walk 7-A owed, at the stage's master check) — THE AREA LIGHT'S PENUMBRA WALK:

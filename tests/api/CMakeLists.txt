@@ -20,7 +20,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 jah_fresh_home_fixture(api.contract.fresh_home api_contract_home "${_home}" WARM LABELS "scripting")
 jah_ship_row(api.contract.fresh_home)   # a ship row's setup runs in the ship set too
 add_test(NAME api.contract
-         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/api_contract.sh"
+         COMMAND ${JAH_WARM_CONSUMER} "${_home}" -- bash "${CMAKE_CURRENT_SOURCE_DIR}/api_contract.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_SOURCE_DIR}/docs/SCRIPTING.md"
          WORKING_DIRECTORY ${_home}/run)

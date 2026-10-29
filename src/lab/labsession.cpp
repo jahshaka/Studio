@@ -68,8 +68,27 @@ constexpr unsigned kStatsWindowFrames = 240;
 /// settle: the cut's triangles unchanged over this many consecutive frames, nothing pending.
 constexpr int kSettleSteadyFrames = 8;
 constexpr int kSettleDefaultCap = 1200;
+/// rest: the cap without one (a refusal past it, never a longer wait).
+constexpr int kRestDefaultCap = 1200;
 
 const char *tierName(int t) { return tierNames()[size_t(std::max(0, std::min(3, t)))].c_str(); }
+
+// THE DIFFUSE LOBE'S DIRECTIONAL AND HEMISPHERICAL ALBEDO, the fork's closed form (JahDiffuseAlbedo_piece_all.any,
+// REDS-1): cardat's and hemi's view term
+double labDiffuseAlbedo(double v, double r)
+{
+    v = std::clamp(v, 0.0, 1.0);
+    r = std::clamp(r, 0.0, 1.0);
+    const double t = 1.0 - v, b = t * t * t * t * t, al = 1.5 * r - 1.0, rv = r * v, ef = 1.0 + (1.0 / 1.51 - 1.0) * r;
+    return ef * (1.0 + al / 21.0 + rv / 84.0 +
+                 b * (al + rv * 2.0 / 3.0 + al * al / 21.0 + al * rv / 42.0 + r * r * (11.0 - 9.0 * v * v) / 504.0));
+}
+double labDiffuseAlbedoHemi(double r)
+{
+    r = std::clamp(r, 0.0, 1.0);
+    const double al = 1.5 * r - 1.0, ef = 1.0 + (1.0 / 1.51 - 1.0) * r;
+    return ef * (1.0 + al * 2.0 / 21.0 + r / 63.0 + al * al / 441.0 + al * r / 3528.0 + r * r * 123.0 / 127008.0);
+}
 
 bool parsePose(const std::string &word, iris::Vec3 &eye, iris::Vec3 &target)
 {
@@ -175,6 +194,13 @@ bool Session::boot(std::string &error)
     std::string err;
     mEngine = Engine::create(cfg, err);
     if (!mEngine) { error = "engine: " + err; return false; }
+    // THE BOOT ARMS (--arm): before any view or scene, so every cache's first gather takes them
+    for (const auto &a : mOpt.bootArms) {
+        bool armOk = false;
+        mEngine->request([&](Engine &e) { armOk = e.setArm(a.first, a.second); });
+        if (!armOk) { error = "--arm " + a.first + ": no such arm, or the value out of its range"; return false; }
+        std::printf("LAB BOOT ARM %s = %g\n", a.first.c_str(), a.second);
+    }
     // THE ORDER (Engine.h:1971): a View before any Scene.
     if (mOpt.headless) {
         mView = mEngine->createOffscreenView("jahlab", mOpt.width, mOpt.height, Colour(0, 0, 0), OffscreenContract::StillPicture);
@@ -427,16 +453,18 @@ void Session::frame()
     fv.sky = true;
     fv.camera = mCamera.node();
     fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless || mReflectSources != ReflectSources::Both) {
+    if (mOpt.headless || mReflectSources != ReflectSources::Both || mHdrReadback) {
         // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
         // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays` /
         // `reflections screen` (the one estimator's sources narrowed to one).
         const bool headless = mOpt.headless;
         const ReflectSources sources = mReflectSources;
-        fv.finish = [headless, sources](FrameInputView &part, View *v) {
+        const bool hdr = mHdrReadback;
+        fv.finish = [headless, sources, hdr](FrameInputView &part, View *v) {
             PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             if (headless) fx.allowOffscreen = true;
             if (sources != ReflectSources::Both) fx.reflectSources = sources;
+            if (hdr) fx.hdrReadback = true;
             part.postFx = fx;
         };
     }
@@ -841,6 +869,30 @@ bool Session::exec(const Command &c)
                     msSinceStart() - t0, msSinceStart(), (unsigned long long)st.cutTriangles, st.pending,
                     int(mScene->published().gi.giAtRest));
         ok = steady >= kSettleSteadyFrames;
+    } else if (c.verb == "rest") {
+        // THE GI's REST (HARNESS-3 (a)): a converged picture is the one GiStatus::giAtRest says has stopped moving - the
+        // chain's owed work, the cards' rest decision, the gather's settled history (settleFramesOf) and its hold - never a
+        // frame count (gi.walk_rough's picked 600: the predicate held at 172-245 frames after a pose change). One frame at
+        // least, so a status published before a camera move never answers for the pose after it.
+        // `held` (HARNESS-3 (f)): and every reader HELD - the gather held and, where the reflection traces, the reflection
+        // held: what the stillness door's freeze requires (Stillness.cpp), since giAtRest's reflection term is its hand-over
+        const int cap = a0.empty() ? kRestDefaultCap : std::max(1, std::atoi(a0.c_str()));
+        const bool held = c.args.size() > 1 && c.args[1] == "held";
+        const double t0 = msSinceStart();
+        int n = 0;
+        bool rest = false;
+        while (n < cap && !mQuit && !rest) {
+            frame();
+            ++n;
+            const auto &pub = mScene->published();
+            rest = pub.gi.giAtRest &&
+                   (!held || (pub.gi.gather.running && pub.gi.gather.held && (!pub.rayQuery.reflect || pub.rayQuery.reflectHeld)));
+        }
+        if (rest)
+            std::printf("LAB REST after %d frames (%.0f ms)%s\n", n, msSinceStart() - t0, held ? ", every reader held" : "");
+        else
+            labFail("LAB REFUSED rest: the GI not at rest%s after %d frames (the cap)\n", held ? " and held" : "", n);
+        ok = rest;
     } else if (c.verb == "shot") {
         ok = shot(a0);
     } else if (c.verb == "status") {
@@ -853,6 +905,164 @@ bool Session::exec(const Command &c)
             out << js << "\n";
             ok = bool(out);
             std::printf("LAB STATUS -> %s\n", qPrintable(path));
+        }
+    } else if (c.verb == "cardat") {
+        // THE CARD AT A WORLD POINT against the drawn pixel (labcommands.cpp's text)
+        float P[3] = { 0, 0, 0 }, N[3] = { 0, 0, 1 };
+        ok = std::sscanf(a0.c_str(), "%f,%f,%f", &P[0], &P[1], &P[2]) == 3 &&
+             std::sscanf(c.args[1].c_str(), "%f,%f,%f", &N[0], &N[1], &N[2]) == 3;
+        CardSample cs;
+        if (ok) ok = mScene->readCardAt(Vec3(P[0], P[1], P[2]), Vec3(N[0], N[1], N[2]), cs) && cs.ok;
+        if (!ok) labFail("LAB FAILED cardat: '%s %s' - no card answers that point and normal\n", a0.c_str(), c.args[1].c_str());
+        else {
+            if (!mHdrReadback) mHdrReadback = true;
+            renderFrames(2);
+            ImageF img;
+            const bool hdrOk = mView->readPixelsHdr(img);
+            const auto da = labDiffuseAlbedo;
+            const auto daHemi = labDiffuseAlbedoHemi;
+            const auto dot = [](const double *u, const double *v) { return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]; };
+            const auto unit = [&](double *u) { const double l = std::sqrt(dot(u, u)); if (l > 0.0) for (int k = 0; k < 3; ++k) u[k] /= l; };
+            const iris::Vec3 ce = mCamera.position(), ct = mCamera.target();
+            const double T[3] = { cs.position[0], cs.position[1], cs.position[2] }, E[3] = { ce.x(), ce.y(), ce.z() },
+                         G[3] = { ct.x(), ct.y(), ct.z() };
+            double Nw[3] = { cs.worldNormal[0], cs.worldNormal[1], cs.worldNormal[2] }, V[3] = { E[0] - T[0], E[1] - T[1], E[2] - T[2] };
+            unit(Nw);
+            unit(V);
+            const double NdotV = std::max(0.0, dot(Nw, V));
+            const double r = std::sqrt(std::max(0.0, double(cs.roughness)));
+            const double envFactor = da(NdotV, r) / std::max(daHemi(r), 1e-4);
+            // the texel's point in the picture (the lab's camera: its vertical angle, the view's aspect)
+            double f[3] = { G[0] - E[0], G[1] - E[1], G[2] - E[2] };
+            unit(f);
+            double rt[3] = { -f[2], 0.0, f[0] };
+            unit(rt);
+            const double up[3] = { rt[1] * f[2] - rt[2] * f[1], rt[2] * f[0] - rt[0] * f[2], rt[0] * f[1] - rt[1] * f[0] };
+            const double dv[3] = { T[0] - E[0], T[1] - E[1], T[2] - E[2] };
+            const double xc = dot(dv, rt), yc = dot(dv, up), zc = dot(dv, f);
+            const double tanH = std::tan(0.5 * double(mCamera.node()->angle) * 3.14159265358979 / 180.0);
+            const double aspect = img.width && img.height ? double(img.width) / double(img.height) : 1.0;
+            const int px = int(std::floor((0.5 + 0.5 * xc / (zc * tanH * aspect)) * img.width));
+            const int py = int(std::floor((0.5 - 0.5 * yc / (zc * tanH)) * img.height));
+            double pix = -1.0, mean = 0.0;
+            int n = 0;
+            if (hdrOk && zc > 0.0 && px >= 1 && py >= 1 && px + 1 < int(img.width) && py + 1 < int(img.height)) {
+                const auto br = [&](int x, int y) { const auto p = img.at(unsigned(x), unsigned(y)); return std::max(p.r, std::max(p.g, p.b)); };
+                pix = br(px, py);
+                for (int y = -1; y <= 1; ++y) for (int x = -1; x <= 1; ++x) { mean += br(px + x, py + y); ++n; }
+                mean /= n;
+            }
+            const auto mx = [](const float *v) { return double(std::max(v[0], std::max(v[1], v[2]))); };
+            const double ind = mx(cs.indirect), rad = mx(cs.radiance), fl = mx(cs.flat);
+            std::printf("LAB CARDAT card %d texel (%u, %u) point (%.4f %.4f %.4f) n (%.3f %.3f %.3f) r %.3f | stored: radiance %.6f "
+                        "(V = N), indirect %.6f, flat %.6f, direct %.6f | toward the eye: N.V %.4f, the view term %.4f, the "
+                        "indirect half %.6f | the pixel (%d, %d): %.6f, 3x3 %.6f | the card's indirect toward the eye / the "
+                        "pixel %+.2f %% (3x3 %+.2f %%)\n", cs.card, cs.texelX, cs.texelY, T[0], T[1], T[2], Nw[0], Nw[1], Nw[2], r,
+                        rad, ind, fl, rad - ind - fl, NdotV, envFactor, ind * envFactor, px, py, pix, mean,
+                        pix > 0.0 ? 100.0 * (ind * envFactor / pix - 1.0) : 0.0, mean > 0.0 ? 100.0 * (ind * envFactor / mean - 1.0) : 0.0);
+            ok = hdrOk;
+            if (!hdrOk) labFail("LAB FAILED cardat: the view's float readback: %s\n", mEngine->lastError().c_str());
+        }
+    } else if (c.verb == "hemi") {
+        // THE IRRADIANCE AT A CARD TEXEL THREE WAYS (REDS-1's three-way; labcommands.cpp's text)
+        float P[3] = { 0, 0, 0 }, Nn[3] = { 0, 0, 1 };
+        ok = std::sscanf(a0.c_str(), "%f,%f,%f", &P[0], &P[1], &P[2]) == 3 &&
+             std::sscanf(c.args[1].c_str(), "%f,%f,%f", &Nn[0], &Nn[1], &Nn[2]) == 3;
+        const int m = std::max(4, std::min(256, std::atoi(c.args[2].c_str())));
+        CardSample cs;
+        if (ok) ok = mScene->readCardAt(Vec3(P[0], P[1], P[2]), Vec3(Nn[0], Nn[1], Nn[2]), cs) && cs.ok;
+        if (!ok) labFail("LAB FAILED hemi: no card answers '%s %s'\n", a0.c_str(), c.args[1].c_str());
+        else {
+            if (!mHdrReadback) mHdrReadback = true;
+            renderFrames(2);
+            const auto dot = [](const double *u, const double *v) { return u[0] * v[0] + u[1] * v[1] + u[2] * v[2]; };
+            const auto unit = [&](double *u) { const double l = std::sqrt(dot(u, u)); if (l > 0.0) for (int k = 0; k < 3; ++k) u[k] /= l; };
+            const double T[3] = { cs.position[0], cs.position[1], cs.position[2] };
+            double Nw[3] = { cs.worldNormal[0], cs.worldNormal[1], cs.worldNormal[2] };
+            unit(Nw);
+            const double r = std::sqrt(std::max(0.0, double(cs.roughness)));
+            const double alb = double(cs.albedo[1]) * 3.14159265358979;   // kD x pi: the albedo
+            // (a) THE CARD'S GATHER LAYER (its last TLAS gather's envColourD) and the check that the indirect half is it
+            const double gA = cs.gather[1];
+            const double gCheck = cs.indirect[1] / std::max(1e-12, alb * labDiffuseAlbedoHemi(r));
+            // (b) THE SCREEN PROBES' IRRADIANCE AT THE PIXEL: the diffuse view's pixel over albedo x DA(N.V, r)
+            ImageF img;
+            double gB = -1.0;
+            const iris::Vec3 ce = mCamera.position(), ct = mCamera.target();
+            const double E[3] = { ce.x(), ce.y(), ce.z() }, G[3] = { ct.x(), ct.y(), ct.z() };
+            if (mView->readPixelsHdr(img) && img.width > 2 && img.height > 2) {
+                double f[3] = { G[0] - E[0], G[1] - E[1], G[2] - E[2] };
+                unit(f);
+                double rt[3] = { -f[2], 0.0, f[0] };
+                unit(rt);
+                const double up[3] = { rt[1] * f[2] - rt[2] * f[1], rt[2] * f[0] - rt[0] * f[2], rt[0] * f[1] - rt[1] * f[0] };
+                const double dv[3] = { T[0] - E[0], T[1] - E[1], T[2] - E[2] };
+                const double zc = dot(dv, f), tanH = std::tan(0.5 * double(mCamera.node()->angle) * 3.14159265358979 / 180.0);
+                const double aspect = double(img.width) / double(img.height);
+                const int px = int(std::floor((0.5 + 0.5 * dot(dv, rt) / (zc * tanH * aspect)) * img.width));
+                const int py = int(std::floor((0.5 - 0.5 * dot(dv, up) / (zc * tanH)) * img.height));
+                double V[3] = { E[0] - T[0], E[1] - T[1], E[2] - T[2] };
+                unit(V);
+                if (zc > 0.0 && px >= 0 && py >= 0 && px < int(img.width) && py < int(img.height))
+                    gB = double(img.at(unsigned(px), unsigned(py)).g) /
+                         std::max(1e-12, alb * labDiffuseAlbedo(std::max(0.0, dot(Nw, V)), r));
+            }
+            // (c) THE BRUTE-FORCE HEMISPHERE AT THE TEXEL: m x m stratified cosine rays through the TLAS; a hit on the
+            // mirror floor (photon-contact's: y 0.02, roughness 0, metal 1, F0 0.9) continues once by reflection weighted
+            // by Schlick's F; a diffuse hit reads that surface's card toward the ray (readCardAt's stored radiance, at
+            // V = N: no view restore, stated); a miss, or a hit no card answers, is counted
+            double b0[3] = { 1, 0, 0 };
+            if (std::fabs(Nw[0]) > 0.9) { b0[0] = 0; b0[1] = 1; }
+            double tA[3] = { Nw[1] * b0[2] - Nw[2] * b0[1], Nw[2] * b0[0] - Nw[0] * b0[2], Nw[0] * b0[1] - Nw[1] * b0[0] };
+            unit(tA);
+            const double tB[3] = { Nw[1] * tA[2] - Nw[2] * tA[1], Nw[2] * tA[0] - Nw[0] * tA[2], Nw[0] * tA[1] - Nw[1] * tA[0] };
+            const auto trace = [&](const double *o, const double *dir, double &dist) {
+                std::vector<float> rays = { float(o[0]), float(o[1]), float(o[2]), 0.0f, float(dir[0]), float(dir[1]), float(dir[2]),
+                                            100.0f, 0.0f, 0.0f, 0.0f, 0.0f };
+                unsigned mask = 0xFFu;
+                std::memcpy(&rays[8], &mask, sizeof(float));   // the mask BIT-COPIED (ENGINE.md: a float(mask) traces nothing)
+                std::vector<float> hits;
+                dist = -1.0;
+                if (mScene->traceRays(rays, hits) && hits.size() >= 4) dist = hits[0];
+                return dist >= 0.0;
+            };
+            double sum = 0.0;
+            unsigned n = 0, misses = 0, noCard = 0, mirror = 0;
+            const double lift = 0.002;
+            const double O[3] = { T[0] + Nw[0] * lift, T[1] + Nw[1] * lift, T[2] + Nw[2] * lift };
+            for (int i = 0; i < m; ++i)
+                for (int j = 0; j < m; ++j) {
+                    const double u = (i + 0.5) / m, ph = 6.283185307179586 * (j + 0.5) / m, rr = std::sqrt(u), zz = std::sqrt(1.0 - u);
+                    double dir[3];
+                    for (int k = 0; k < 3; ++k) dir[k] = tA[k] * rr * std::cos(ph) + tB[k] * rr * std::sin(ph) + Nw[k] * zz;
+                    ++n;
+                    double dist;
+                    if (!trace(O, dir, dist)) { ++misses; continue; }
+                    double H[3] = { O[0] + dir[0] * dist, O[1] + dir[1] * dist, O[2] + dir[2] * dist };
+                    double w = 1.0;
+                    double d2[3] = { dir[0], dir[1], dir[2] };
+                    if (std::fabs(H[1] - 0.02) < 0.003 && dir[1] < 0.0) {   // the mirror floor: one reflection
+                        ++mirror;
+                        const double c = std::min(1.0, -dir[1]);
+                        w = 0.9 + 0.1 * std::pow(1.0 - c, 5.0);
+                        d2[1] = -d2[1];
+                        const double O2[3] = { H[0], H[1] + 0.001, H[2] };
+                        if (!trace(O2, d2, dist)) { ++misses; continue; }
+                        for (int k = 0; k < 3; ++k) H[k] = O2[k] + d2[k] * dist;
+                    }
+                    CardSample hs;
+                    if (!mScene->readCardAt(Vec3(float(H[0]), float(H[1]), float(H[2])), Vec3(float(-d2[0]), float(-d2[1]), float(-d2[2])), hs) || !hs.ok) {
+                        ++noCard;
+                        continue;
+                    }
+                    sum += w * double(hs.radiance[1]);
+                }
+            const double gC = n ? sum / double(n) : -1.0;
+            std::printf("LAB HEMI texel (%.4f %.4f %.4f) n (%.3f %.3f %.3f) r %.3f albedo %.4f | (a) the card's gather %.6f (its indirect "
+                        "half's own %.6f) | (b) the screen probes' irradiance %.6f | (c) the brute-force hemisphere %.6f (%u rays: %u on "
+                        "the mirror, %u misses, %u with no card) | a/c %+.2f %%, b/c %+.2f %%, a/b %+.2f %%\n",
+                        T[0], T[1], T[2], Nw[0], Nw[1], Nw[2], r, alb, gA, gCheck, gB, gC, n, mirror, misses, noCard,
+                        gC > 0 ? 100.0 * (gA / gC - 1.0) : 0.0, gC > 0 ? 100.0 * (gB / gC - 1.0) : 0.0, gB > 0 ? 100.0 * (gA / gB - 1.0) : 0.0);
         }
     } else if (c.verb == "sideshares") {
         GiVoxelVolume vol;
@@ -910,7 +1120,7 @@ bool Session::exec(const Command &c)
                         order.push_back(i);
                 std::sort(order.begin(), order.end(), [&](unsigned a, unsigned b) { return rq.reflectPickFrames[a] < rq.reflectPickFrames[b]; });
                 const auto fv = [&](unsigned i, unsigned k) { float x; std::memcpy(&x, &rq.reflectPick[i * 64u + k], 4); return x; };
-                std::fprintf(f, "# frame flags slot src hitT  L.xyz  traced.rgb  c2.rgb  nee.rgb  screen.r vouch gain delta.r  vNow restStop prim c2hit(slot t brdf.r portal.r hitLampSpec.r)"
+                std::fprintf(f, "# frame flags slot src hitT  L.xyz  traced.rgb  c2.rgb  nee.rgb  screen.r vouch gain delta.r  vNow restStop prim c2hit(slot t brdf.r portal.r hitLampSpec.r) mirror(slot part.r) cut.r"
                                 " | e share v stop flags LD answer.rgb m2 sample.rgb\n");
                 for (unsigned i : order) {
                     const uint32_t *w = &rq.reflectPick[i * 64u];
@@ -918,7 +1128,9 @@ bool Session::exec(const Command &c)
                                  rq.reflectPickFrames[i], w[1], w[2], w[3], fv(i, 4), fv(i, 5), fv(i, 6), fv(i, 7), fv(i, 8), fv(i, 9),
                                  fv(i, 10), fv(i, 11), fv(i, 12), fv(i, 13), fv(i, 14), fv(i, 15), fv(i, 16), fv(i, 17), fv(i, 18),
                                  fv(i, 19), fv(i, 20), w[21], w[22], w[23]);
-                    std::fprintf(f, " c2hit %d %.4f %.5f %.5f %.5f", w[24] == 0xFFFFFFFFu ? -1 : int(w[24]), fv(i, 25), fv(i, 26), fv(i, 27), fv(i, 28));
+                    std::fprintf(f, " c2hit %d %.4f %.5f %.5f %.5f mirror %d %.5f", w[24] == 0xFFFFFFFFu ? -1 : int(w[24]), fv(i, 25), fv(i, 26), fv(i, 27),
+                                 fv(i, 28), w[30] == 0xFFFFFFFFu ? -1 : int(w[30]), fv(i, 29));
+                    std::fprintf(f, " cut %.5f", fv(i, 31));
                     if (w[32])
                         std::fprintf(f, " %.6f %.6f %.0f %u %u %.5f  %.5f %.5f %.5f  %.6f  %.5f %.5f %.5f", fv(i, 33), fv(i, 34),
                                      fv(i, 35), w[36], w[37], fv(i, 38), fv(i, 39), fv(i, 40), fv(i, 41), fv(i, 42), fv(i, 43),

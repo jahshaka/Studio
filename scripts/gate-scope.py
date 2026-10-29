@@ -724,8 +724,13 @@ def bind_root(build):
 
 def _is_wipe(cmd):
     """A fixture setup's command is a home WIPE: tests/support/fresh_home.sh, tests/samples/freshhome.cmake, or an
-    `sh -c "rm -rf …"` (the three forms tests/CMakeLists.txt's fresh-home section names)."""
+    `sh -c "rm -rf …"` (the three forms tests/CMakeLists.txt's fresh-home section names). `fresh_home.sh --promote` is
+    NOT one: it wipes nothing and runs a WARM fixture's consumer, the row itself (HARNESS-1; scripting.e2e.material_share
+    is such a consumer and a run fixture's setup at once)."""
     cmd = list(cmd or [])
+    at = next((i for i, c in enumerate(cmd) if str(c).endswith("fresh_home.sh")), None)
+    if at is not None and "--promote" in cmd[at + 1:(cmd.index("--") if "--" in cmd[at:] else len(cmd))]:
+        return False
     if any(str(c).endswith(("fresh_home.sh", "freshhome.cmake")) for c in cmd):
         return True
     return len(cmd) > 2 and os.path.basename(str(cmd[0])) == "sh" and cmd[1] == "-c" and "rm -rf" in str(cmd[2])

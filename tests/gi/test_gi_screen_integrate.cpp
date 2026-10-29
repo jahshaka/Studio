@@ -16,25 +16,38 @@
 //   AXIS-ALIGNED (B2's own case): every diffuse cone of its surfaces is a 45-degree cone, a TIE of the march's stepping
 //     axis (jahVoxelAxis) - DECIDED (jahVoxelAxis's tolerance), so the two routes agree here too.
 //   TURNED 21 degrees about a generic axis: no surface on a voxel axis, no tie - the producer away from the seam.
-// THE BAR IS THE STORE'S QUANTUM q (the lead's ruling, R12): one half-float step at the reference's value.
+//   THE CLASS (REDS-1 (B), the lead's rule): a voxel-side rule that reads right on an axis-aligned box can read wrong on a
+//   turned one (a face covers one axis there, two or three here) - c15de7326's side rule did: axis-aligned 4.84 -> 5.20 %,
+//   TURNED 10.86 -> 18.85 %. EVERY voxel-side law runs on the TURNED arrangement, never on the axis-aligned one alone.
+// THE BARS: (2) the store's quantum q at the reference's value and the voxel route's own noise (the lead's ruling, R12);
+// (2') the reference's own error plus one display code (re-derived, REDS-1: below).
 // THE LAWS, per arrangement:
 //   (1) the door: the shipped route's opaque pass reads the producer's three products and no voxel volume, the voxel
 //       route's reads the cascades and not the producer;
 //   (2) THE PRODUCER MOVED, THE PHYSICS DID NOT: every region's mean (the floor, the wall, the boxes' fronts and their
 //       sides toward the middle), per channel, no further from the reference than the voxel route's, by q and that
 //       route's own 1 mm noise (measured: the two routes within 0.01-0.08 % of each other);
-//   (2') THE NO-RAY ROUTE'S DIFFUSE IS THE PHYSICS: every region within q of the reference - DECLARED RED (the lead's
-//       ruling, 2026-10-27), owned by 10-4's R7 (the one-cell rule), re-measured at its merge; what it leaves is the
-//       no-ray tier's measured limit. Measured (the worst channel): axis-aligned 1.3-6.7 % (the fronts ~4 % bright,
-//       the sides ~6 % dark); turned 2.0-51.4 % - the magenta side 0.116 against 0.219, darker than the GI-off
-//       picture (0.170), the blue side 20 %, the wall 8-10 %; over the whole picture 4.9 % mean (axis-aligned) and
-//       9.3 % (turned) from the reference;
+//   (2') THE NO-RAY ROUTE'S DIFFUSE IS THE PHYSICS: every region's mean, per channel, within THE REFERENCE'S OWN ERROR
+//       PLUS ONE DISPLAY CODE - the spec's ONE BAR (PHOTON-7 10-3, SPECS/PHOTON_7_SPEC.md :724), RE-DERIVED (REDS-1
+//       item 4; it was q, which no route could meet against this reference: the reference is itself an estimate, its
+//       second bounce the cards' fixed 128-ray set, -1.3 % from a brute-force hemisphere on gi.card_truth's patch).
+//       THE DERIVATION, every term measured here, per region and channel: |S - R| <= |R' - R| + |R512 - R| + code(R) -
+//       R' the reference again with the camera ONE MILLIMETRE ASIDE (its own noise, measured the way the voxel route's
+//       is), R512 the reference with the cards' gather at 512 rays (its quadrature: the 128-ray set's error is bounded by
+//       its distance to a set four times denser), code(R) the width of the display's 8-bit sRGB code at R (enginetest::
+//       oneCodeAt, gi.photon_window's own definition) - never a picked number. The bar and each term are printed.
+//       DECLARED RED on the no-ray tier's real defect (the lead's ruling, REDS-1): measured before the re-derivation
+//       (the worst channel) axis-aligned 1.3-6.7 % (the fronts ~4 % bright, the sides ~6 % dark), turned 2.0-51.4 % -
+//       the magenta side 0.116 against 0.219, DARKER THAN THE GI-OFF PICTURE (0.170): the route REMOVES light there;
+//       over the whole picture 4.9 % mean (axis-aligned) and 9.3 % (turned). Its fix is on the no-ray / Mac list;
 //   (3) OVER THE PICTURE: the producer's mean relative distance to the reference and its pixels over 5 % no more than
 //       the voxel route's, by that route's own 1 mm noise.
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/PhotonStatus.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/displaycode.h"
+#include "../support/lawline.h"
 
 #include <algorithm>
 #include <cmath>
@@ -136,7 +149,8 @@ int main()
         std::printf("\n-- %s --\n", arr.name);
         const Turn turn(arr.deg);
         const Vec3 eye = turn(Vec3(0.0f, 1.6f, 4.0f)), at = turn(Vec3(0.0f, 1.0f, -2.0f));
-        const auto build = [&](bool rays) {
+        const Vec3 step = turn(Vec3(0.001f, 0.0f, 0.0f));   // one millimetre aside (a turned step: the turn is about the origin)
+        const auto build = [&](bool rays, const Vec3 &aside) {
             Scene *scene = e->createScene(rays ? "screen_integrate_reference" : "screen_integrate");
             if (!scene) return scene;
             view->setScene(scene);
@@ -152,7 +166,8 @@ int main()
                 sh[0] = 0.25f; sh[1] = 0.3f; sh[2] = 0.4f;   // a dim blue sky
                 scene->setAmbientSh(sh);
             }
-            enginetest::testCameraLookAt(view, eye, at);
+            enginetest::testCameraLookAt(view, Vec3(eye.x + aside.x, eye.y + aside.y, eye.z + aside.z),
+                                         Vec3(at.x + aside.x, at.y + aside.y, at.z + aside.z));
             GiParams gi;
             gi.mode = GiMode::Vct;
             gi.quality = GiQuality::High;
@@ -164,28 +179,37 @@ int main()
         };
         // THE REFERENCE FIRST (its own scene): the ray tier, its screen gather's rest mean over 64 frames of its jittered
         // 64-ray probes (4096 rays a probe through the TLAS) and the cards' gather at 128 rays (gi.truthRays) - the
-        // hemisphere's high-ray limit, every hit's answer an exact estimator of its ray (gi.card_truth)
-        ImageF ref;
-        int restR = -1;
-        {
+        // hemisphere's high-ray limit, every hit's answer an exact estimator of its ray (gi.card_truth). THREE of them
+        // (law (2')'s bar, below): at 128 rays; again ONE MILLIMETRE ASIDE (its own noise, as the voxel route's is
+        // measured); and with the cards at 512 rays (its quadrature: the second bounce's fixed set, gi.card_truth's T2
+        // column - -1.3 % from the brute-force hemisphere at 128 rays on that row's patch, measured here on this one)
+        const auto reference = [&](double cardRays, const Vec3 &aside, ImageF &out) {
             e->setArm("gather.restFrames", 64.0);
-            e->setArm("gi.truthRays", 128.0);
-            Scene *rs = build(true);
-            if (!rs) { std::printf("FAIL: the reference's GI builds\n"); return 1; }
+            e->setArm("gi.truthRays", cardRays);
+            Scene *rs = build(true, aside);
+            if (!rs) return -2;
             run(10);
             int f = 0, quiet = 0;
             for (; f < 900 && quiet < 30; ++f) {
                 run(1);
                 quiet = rs->published().gi.giAtRest ? quiet + 1 : 0;
             }
-            restR = quiet >= 30 && view->readPixelsHdr(ref) ? f - quiet : -1;
+            const int rest = quiet >= 30 && view->readPixelsHdr(out) ? f - quiet : -1;
             e->setArm("gather.restFrames", 0.0);
             e->setArm("gi.truthRays", 0.0);
             view->setScene(nullptr);
             e->destroyScene(rs);
             run(2);
-        }
-        Scene *scene = build(false);
+            return rest;
+        };
+        ImageF ref, refAside, ref512;
+        const int restR = reference(128.0, Vec3(0.0f, 0.0f, 0.0f), ref);
+        const int restRA = reference(128.0, step, refAside);
+        const int restR5 = reference(512.0, Vec3(0.0f, 0.0f, 0.0f), ref512);
+        if (restR == -2 || restRA == -2 || restR5 == -2) { std::printf("FAIL: the reference's GI builds\n"); return 1; }
+        std::printf("   the references at rest after %d (128 rays), %d (1 mm aside), %d (512 rays) frames\n", restR, restRA,
+                    restR5);
+        Scene *scene = build(false, Vec3(0.0f, 0.0f, 0.0f));
         if (!scene) { std::printf("FAIL: the GI builds\n"); return 1; }
 
         const auto settled = [&](bool voxelRoute, ImageF &pic, std::vector<PhotonPassBindingRecord> &recs) {
@@ -206,9 +230,7 @@ int main()
         std::vector<PhotonPassBindingRecord> ra, rb, r2;
         const int restA = settled(true, a, ra);
         const int restB = settled(false, b, rb);
-        // THE CONE'S OWN NOISE: the voxel route again, the camera one millimetre aside (a turned step: the turn is
-        // about the origin)
-        const Vec3 step = turn(Vec3(0.001f, 0.0f, 0.0f));
+        // THE CONE'S OWN NOISE: the voxel route again, the camera one millimetre aside
         enginetest::testCameraLookAt(view, Vec3(eye.x + step.x, eye.y + step.y, eye.z + step.z),
                                      Vec3(at.x + step.x, at.y + step.y, at.z + step.z));
         const int restA2 = settled(true, a2, r2);
@@ -229,49 +251,74 @@ int main()
                   binds(rb, "jahConeHit") && !binds(rb, "vctProbes") && binds(ra, "vctProbes") &&
                   !binds(ra, "jahConeHit"),
               msg);
-        bool within = a.width == b.width && a.width > 0 && ref.width == a.width && restR >= 0, physical = within;
+        bool within = a.width == b.width && a.width > 0 && ref.width == a.width && restR >= 0, physical = within &&
+                      refAside.width == a.width && ref512.width == a.width && restRA >= 0 && restR5 >= 0;
         for (size_t ri = 0; ri < arr.nRegions; ++ri) {
             const Region &r = arr.regions[ri];
-            double sa[3] = { 0, 0, 0 }, sb[3] = { 0, 0, 0 }, sr[3] = { 0, 0, 0 }, s2[3] = { 0, 0, 0 };
+            double sa[3] = { 0, 0, 0 }, sb[3] = { 0, 0, 0 }, sr[3] = { 0, 0, 0 }, s2[3] = { 0, 0, 0 }, sn[3] = { 0, 0, 0 },
+                   s5[3] = { 0, 0, 0 };
             unsigned n = 0;
             for (unsigned y = r.y0; y < r.y1 && y < a.height; ++y)
                 for (unsigned x = r.x0; x < r.x1 && x < a.width; ++x) {
                     const auto pa = a.at(x, y), pb = b.at(x, y), pr = ref.at(x, y), p2 = a2.at(x, y);
+                    if (refAside.width == a.width && ref512.width == a.width) {
+                        const auto pn = refAside.at(x, y), p5 = ref512.at(x, y);
+                        sn[0] += pn.r; sn[1] += pn.g; sn[2] += pn.b;
+                        s5[0] += p5.r; s5[1] += p5.g; s5[2] += p5.b;
+                    }
                     sa[0] += pa.r; sa[1] += pa.g; sa[2] += pa.b;
                     sb[0] += pb.r; sb[1] += pb.g; sb[2] += pb.b;
                     sr[0] += pr.r; sr[1] += pr.g; sr[2] += pr.b;
                     s2[0] += p2.r; s2[1] += p2.g; s2[2] += p2.b;
                     ++n;
                 }
-            double worst = 0.0, eV = 0.0, eS = 0.0, eN = 0.0;
+            double worst = 0.0, eV = 0.0, eS = 0.0, eN = 0.0, barWorst = 0.0, overBar = 0.0;
             for (int c = 0; c < 3; ++c) {
                 sa[c] /= std::max(n, 1u);
                 sb[c] /= std::max(n, 1u);
                 sr[c] /= std::max(n, 1u);
                 s2[c] /= std::max(n, 1u);
+                sn[c] /= std::max(n, 1u);
+                s5[c] /= std::max(n, 1u);
                 // (2) the producer no further from the reference than the route it replaced, by q and that route's
                 // own 1 mm noise; (2') the route itself within q of the reference
                 const double q = quantumOf(sr[c]);
                 within = within && std::fabs(sb[c] - sr[c]) <= std::fabs(sa[c] - sr[c]) + q + std::fabs(s2[c] - sa[c]);
-                physical = physical && std::fabs(sb[c] - sr[c]) <= q;
+                // (2') THE ONE BAR (spec 10-3, :724): the reference's own error - its noise (1 mm aside) and its quadrature
+                // (the cards' second bounce, 512 rays against 128) - plus one display code at its level
+                const double bar = std::fabs(sn[c] - sr[c]) + std::fabs(s5[c] - sr[c]) + enginetest::oneCodeAt(sr[c]);
+                physical = physical && std::fabs(sb[c] - sr[c]) <= bar;
+                barWorst = std::max(barWorst, bar / std::max(sr[c], 1e-6));
+                overBar = std::max(overBar, std::fabs(sb[c] - sr[c]) / std::max(bar, 1e-9));
                 worst = std::max(worst, std::fabs(sb[c] - sa[c]) / std::max(sa[c], 1e-6));
                 eV = std::max(eV, std::fabs(sa[c] - sr[c]) / std::max(sr[c], 1e-6));
                 eS = std::max(eS, std::fabs(sb[c] - sr[c]) / std::max(sr[c], 1e-6));
                 eN = std::max(eN, std::fabs(s2[c] - sa[c]) / std::max(sa[c], 1e-6));
             }
             std::printf("   %-14s reference %.4f %.4f %.4f | voxel route %.4f %.4f %.4f (%+.2f %%) | screen integrate "
-                        "%.4f %.4f %.4f (%.2f %%) - S vs V %.2f %%, V 1 mm %.3f %%\n", r.name, sr[0], sr[1], sr[2],
-                        sa[0], sa[1], sa[2], 100.0 * eV, sb[0], sb[1], sb[2], 100.0 * eS, 100.0 * worst, 100.0 * eN);
+                        "%.4f %.4f %.4f (%.2f %%) - S vs V %.2f %%, V 1 mm %.3f %% | (2') the bar %.2f %% of R (the "
+                        "reference's 1 mm %.3f %%, its 512 rays %.3f %%, the code), S at %.2f x the bar\n", r.name, sr[0], sr[1],
+                        sr[2], sa[0], sa[1], sa[2], 100.0 * eV, sb[0], sb[1], sb[2], 100.0 * eS, 100.0 * worst, 100.0 * eN,
+                        100.0 * barWorst, 100.0 * std::fabs(sn[1] - sr[1]) / std::max(sr[1], 1e-6),
+                        100.0 * std::fabs(s5[1] - sr[1]) / std::max(sr[1], 1e-6), overBar);
             within = within && n > 0u;
+            {   // THE LAW LINES (HARNESS-3 (b); tests/support/lawline.h): (2')'s worst channel in q; the producer's and the
+                // route's distance from the reference, and the route's own 1 mm noise, in %
+                const std::string at = enginetest::lawName(std::string(arr.name) + "." + r.name);
+                enginetest::lawLine((at + ".screen_vs_ref").c_str(), overBar, "bar", "<=", 1.0);   // the ratio against (2')'s ONE BAR (REDS-1 item 4), not q
+                enginetest::lawLine((at + ".screen_vs_ref_pct").c_str(), 100.0 * eS, "%");
+                enginetest::lawLine((at + ".voxel_vs_ref_pct").c_str(), 100.0 * eV, "%");
+                enginetest::lawLine((at + ".voxel_1mm_pct").c_str(), 100.0 * eN, "%");
+            }
         }
         std::snprintf(msg, sizeof msg,
                       "[%s] (2) THE PRODUCER MOVED, THE PHYSICS DID NOT: every region's mean, per channel, no further from "
                       "the high-ray reference than the voxel route's, by q and that route's own 1 mm noise", arr.name);
         CHECK(within, msg);
-        // (DECLARED RED - the lead's ruling, 2026-10-27: owned by 10-4's R7 one-cell rule, re-measured at its merge)
+        // (DECLARED RED - the no-ray tier's defect, on the no-ray / Mac list: the header's (2'))
         std::snprintf(msg, sizeof msg,
-                      "[%s] (2') THE NO-RAY ROUTE'S DIFFUSE IS THE PHYSICS: every region's mean, per channel, within q of "
-                      "the high-ray reference", arr.name);
+                      "[%s] (2') THE NO-RAY ROUTE'S DIFFUSE IS THE PHYSICS: every region's mean, per channel, within the "
+                      "reference's own error (its 1 mm noise and its 512-ray quadrature) and one display code", arr.name);
         CHECK(physical, msg);
         {
             // over every lit pixel: the relative difference of the brightest channel
@@ -300,6 +347,9 @@ int main()
             std::snprintf(msg, sizeof msg,
                           "[%s] (3) OVER THE PICTURE: the producer no further from the reference than the voxel route, by "
                           "that route's own 1 mm noise (the mean and the pixels over 5 %%)", arr.name);
+            const std::string at = enginetest::lawName(arr.name);
+            enginetest::lawLine((at + ".picture_mean_pct").c_str(), 100.0 * sS.mean, "%", "<=", 100.0 * (sV.mean + s2.mean));
+            enginetest::lawLine((at + ".picture_over5").c_str(), sS.over5, "px", "<=", double(sV.over5 + s2.over5));
             CHECK(sS.n > 1000u && sS.mean <= sV.mean + s2.mean && sS.over5 <= sV.over5 + s2.over5, msg);
         }
         e->setArm("gi.screenIntegrateOff", 0.0);

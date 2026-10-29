@@ -64,6 +64,12 @@ tree and the build's registration, each with its name in the failure line:
      so with the test property JAHSHAKA_COLD_BY_SUBJECT TRUE (samples.cold_open, scripting.e2e.sky_swap_transient).
      What ctest cannot see is not read: a root a row's own script makes (material.live_roundtrip's stages) is the
      script's, warmed there.
+  R14 A WARM FIXTURE's CONSUMER PROMOTES ON GREEN (HARNESS-1, the lead's ruling 2026-10-29). Every row that
+     FIXTURES_REQUIRES a fixture whose setup is fresh_home.sh --setup --warm <home> (jah_fresh_home_fixture's WARM) runs
+     as fresh_home.sh --promote of THAT home (and the same --cache key; WARM_HOME on jah_gpu_row /
+     jah_gpu_exclusive_test, ${JAH_WARM_CONSUMER} before an add_test command). WHY: a --setup home has no exit to judge,
+     so the 33 such rows never promoted and rebuilt their own content on every run (log.engine: 146,859 bytes of
+     pipelines a run); its green run promotes it now, through hard links.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -302,7 +308,7 @@ def _fresh_home_wipes(cmd):
     out, args, i = [], cmd[at + 1:], 0
     while i < len(args) and args[i] != "--":
         a = args[i]
-        if a in ("--warm", "--keep-home", "--setup"):
+        if a in ("--warm", "--keep-home", "--setup", "--promote"):
             i += 1
         elif a in ("--cache", "--rm", "--mkdir"):
             i += 2
@@ -409,6 +415,56 @@ def r13_bad(tests):
     return bad
 
 
+def _fresh_home_args(cmd):
+    """fresh_home.sh's own arguments in a command (behind any launcher; up to `--`), or None without it."""
+    at = next((i for i, c in enumerate(cmd) if os.path.basename(c) == "fresh_home.sh"), None)
+    if at is None:
+        return None
+    args = cmd[at + 1:]
+    return args[:args.index("--")] if "--" in args else args
+
+
+def _home_and_key(args):
+    """(<home>, --cache key) of fresh_home.sh's arguments: the first positional, the key '' when none."""
+    key, i = "", 0
+    while i < len(args):
+        if args[i] == "--cache" and i + 1 < len(args):
+            key, i = args[i + 1], i + 2
+        elif args[i] in ("--rm", "--mkdir", "--reset"):
+            i += 2
+        elif args[i].startswith("--"):
+            i += 1
+        else:
+            return args[i], key
+    return None, key
+
+
+def r14_bad(tests):
+    """[`row (why)`] for every consumer of a WARM fixture (its setup: fresh_home.sh --setup --warm <home>) whose command is
+    not fresh_home.sh --promote of that home with the same --cache key. `tests`: ctest's json-v1 `tests` list."""
+    warm = {}
+    for t in tests:
+        a = _fresh_home_args(t.get("command") or [])
+        if a is not None and "--setup" in a and "--warm" in a:
+            for f in _list(_props(t).get("FIXTURES_SETUP")):
+                warm[f] = _home_and_key(a)
+    bad = []
+    for t in sorted(tests, key=lambda x: x["name"]):
+        for f in _list(_props(t).get("FIXTURES_REQUIRED")):
+            if f not in warm:
+                continue
+            home, key = warm[f]
+            a = _fresh_home_args(t.get("command") or [])
+            if a is None or "--promote" not in a:
+                bad.append("%s (WARM fixture %s: not wrapped in fresh_home.sh --promote)" % (t["name"], f))
+                continue
+            h, k = _home_and_key(a)
+            if h is None or os.path.realpath(h) != os.path.realpath(home) or k != key:
+                bad.append("%s (WARM fixture %s: promotes %s%s, the fixture seeds %s%s)"
+                           % (t["name"], f, h, " --cache " + k if k else "", home, " --cache " + key if key else ""))
+    return bad
+
+
 def the_rules_catch():
     """Each rule, fed one violation and its correction: a lint that cannot fail guards nothing."""
     print("the rules catch (synthetic inputs):")
@@ -512,6 +568,18 @@ def the_rules_catch():
           "R13 flags an app row booting its own data root cold (a bare root, an in-row or fixture wipe without --warm), "
           "never one warmed in-row or by its fixture (a relative root read from its WORKING_DIRECTORY), one cold by "
           "subject, a fixture, jahlab or a row on no root of its own (%s)" % r13)
+    r14 = r14_bad([C("w.setup", ["sh", fh, "--setup", "--warm", "/b/tests/x/w"], FIXTURES_SETUP=["wfx"]),
+                   C("c.setup", ["sh", fh, "--setup", "/b/tests/x/c"], FIXTURES_SETUP=["cfx"]),
+                   C("bare", [app, "--script", "x.js"], FIXTURES_REQUIRED=["wfx"]),
+                   C("other", ["sh", fh, "--promote", "/b/tests/x/o", "--", app], FIXTURES_REQUIRED=["wfx"]),
+                   C("keyed", ["sh", fh, "--promote", "--cache", "engine", "/b/tests/x/w", "--", app], FIXTURES_REQUIRED=["wfx"]),
+                   C("wrapped", ["sh", fh, "--promote", "/b/tests/x/w", "--", "bash", "/s/x.sh", app], FIXTURES_REQUIRED=["wfx"]),
+                   C("locked", ["/s/scripts/gpu-exclusive.sh", "--label", "l", "sh", fh, "--promote", "/b/tests/x/w/", "--", app],
+                     FIXTURES_REQUIRED=["wfx"]),
+                   C("coldfx", [app], FIXTURES_REQUIRED=["cfx"])])
+    check([b.split(" ")[0] for b in r14] == ["bare", "keyed", "other"],
+          "R14 flags a WARM fixture's consumer not wrapped in fresh_home.sh --promote, or promoting another home or another "
+          "--cache key; never a wrapped one (behind the lock too) or a consumer of a cold fixture (%s)" % r14)
     check(r6_bad([T("a"), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a"])]) == ["a.twin (DEPENDS a)"]
           and not r6_bad([T("a", FIXTURES_SETUP=["run_a"]), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a", "run_a"])])
           and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")]),
@@ -612,6 +680,23 @@ def fresh_home_behaves(source):
         check(r1.returncode == 0 and r2.returncode == 0 and sc("a.bin", "s1.bin", "s2.bin"),
               "fresh_home: rule (2) - equal keys, the generation seeded: two homes in turn each REPLACE the shared cache, "
               "the second linked the first's variants (%d %d)" % (r1.returncode, r2.returncode))
+        # --promote (HARNESS-1): a WARM fixture's consumer - its setup seeds the home; a green consumer's grown cache is
+        # promoted THROUGH HARD LINKS and the home keeps it whole; a red one promotes nothing and leaves the home as it is
+        hp = os.path.join(td, "x", "home-fx")
+        rs = subprocess.run(["sh", fh, "--setup", "--warm", hp], capture_output=True, text=True)
+        rp = subprocess.run(["sh", fh, "--promote", hp, "--", "sh", "-c", "test -f %s/%s/s2.bin && %s"
+                             % (hp, cache, put(hp, [("fx.bin", "K1")], keep=[("a.bin", "K1"), ("s1.bin", "K1"),
+                                                                            ("s2.bin", "K1")]))],
+                            capture_output=True, text=True)
+        kept = os.path.isfile(os.path.join(hp, cache, "fx.bin")) and os.path.isfile(os.path.join(hp, cache, "cache-manifest.txt"))
+        linked = sc("fx.bin") and os.stat(os.path.join(td, ".shadercache", "fx.bin")).st_nlink >= 2
+        rr = subprocess.run(["sh", fh, "--promote", hp, "--", "sh", "-c", "%s; exit 5" % put(hp, [("red.bin", "K1")],
+                             keep=[("fx.bin", "K1")])], capture_output=True, text=True)
+        check(rs.returncode == 0 and rp.returncode == 0 and kept and linked and rr.returncode == 5 and not sc("red.bin")
+              and os.path.isfile(os.path.join(hp, cache, "red.bin")),
+              "fresh_home: --promote - a WARM fixture's green consumer PROMOTES its grown cache through hard links and "
+              "its home keeps it whole; a red one keeps its exit code, promotes nothing, its home untouched (%d %d %d %s)"
+              % (rs.returncode, rp.returncode, rr.returncode, rp.stderr[-120:]))
         # RULE (1): the keys differ (an engine rebuild) - the home's cache holds only what it compiled (its stale layers
         # dropped) and is SMALLER than the stale union: replaced all the same, and the next home links it
         hc = os.path.join(td, "x", "home-key")
@@ -722,8 +807,10 @@ def main(source, build):
     if not hasattr(gs, "_is_wipe"):
         gs._is_wipe = lambda cmd: False                  # a base before F3: the checks below read red, not a crash
     check(gs._is_wipe(["sh", "/s/tests/support/fresh_home.sh", "--warm", "/h"]) and gs._is_wipe(["sh", "-c", "rm -rf /h"])
-          and not gs._is_wipe(["/b/bin/Jahshaka", "--script", "x.js"]),
-          "a fixture setup is a WIPE only when its command is fresh_home.sh / freshhome.cmake / sh -c rm -rf")
+          and not gs._is_wipe(["/b/bin/Jahshaka", "--script", "x.js"])
+          and not gs._is_wipe(["sh", "/s/tests/support/fresh_home.sh", "--promote", "/h", "--", "/b/bin/Jahshaka"]),
+          "a fixture setup is a WIPE only when its command is fresh_home.sh / freshhome.cmake / sh -c rm -rf - never "
+          "fresh_home.sh --promote (a WARM fixture's consumer: the row itself)")
     # the RUN fixtures (TEST-CUT-1: the threading parents this named were archived; the fixture chains of the cut —
     # a boot that hands its picture on, a stage that hands its library on — are the witnesses now)
     runfx = [n for n in ("samples.mirror_room_boots.boot1", "material.live_roundtrip.author") if n in inv]
@@ -758,6 +845,9 @@ def main(source, build):
     bad = r13_bad(tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     check(not bad, "R13 every app row with its own data root boots warm (fresh_home.sh --warm in the row or a WARM "
           "fixture of a home holding it) or states %s TRUE (%d cold: %s)" % (COLD_BY_SUBJECT, len(bad), bad[:16]))
+    bad = r14_bad(tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
+    check(not bad, "R14 every WARM fixture's consumer promotes on green (fresh_home.sh --promote of the fixture's home: "
+          "WARM_HOME) (%d not: %s)" % (len(bad), bad[:12]))
     inspect = []
     for root in ("src", os.path.join("irisgl", "mirror")):
         for dirpath, _dirs, names in os.walk(os.path.join(source, root)):

@@ -26,9 +26,14 @@
 //       both) - the Jacobi within ONE STORE STEP of it (2^(floor(log2 L) - 10)), the feedback within that and its stop
 //       law's code. The voxels are read on their ROOM-FACING side (the preflight's W3: a two-sided voxel's light is its
 //       two sides' mean, which averaged the void-lit outer face in - the old "escape": now c0 e = 0.000 exactly).
-//       DECLARED RED (2026-10-27): the store holds -0.60 % of the limit at High (a' 0.36781 against 0.37161) - the
-//       diffuse fit's own -0.5 % at r = 1 (jahDiffuseAlbedoHemi 0.7018 against the integral 0.7052) and a specular
-//       share of 0.0169 against the integral's 0.0190 (cause unmeasured: the lead's ruling owed);
+//       DECLARED RED at 1.4-2.3 q (REDS-1, the lead's ruling): the Jacobi -0.139 % (low), -0.053 % (medium, green),
+//       -0.086 % (high, epic); it was -0.60 % at High. REDS-1 fixed three causes: the diffuse lobe's fit to Ogre's DFG
+//       table (closed form now), the RGBA8 albedo volume (0.5 stored 0.498039; RGBA16_UNORM now) and the truncating
+//       half-float store (rounded now). Two remain, measured: HIDDEN FACES at the overlapped seams (buried pieces at L
+//       = E in the walls' edge strips, 2 % dark; a butted room is worse, its contact faces) and the voxel route's
+//       gather deficit WITHOUT hidden faces (one closed shell room: a' 0.369896 against 0.371728, -0.29 % of the
+//       limit) - both the voxel route's next spec. (The specular input is exact: a white rough metal room re-emits
+//       0.99812 of its own stored material, the dielectric 0.99815 - the old "-11 % specular" was a subtraction.)
 //   (2b) THE OPERATOR'S ARM AT THE SAME LIMIT (E 1, S = S*): with no escape the sky is never seen, so its store holds
 //       (2)'s limit whatever S is, within a step and the stop law's code;
 //   (2c) THE INJECTION ALONE (R12): the bounces off, the inner walls hold E within a store step (measured 1.000000);
@@ -79,6 +84,7 @@
 // offscreen view; rays, the gather, the field and the cards off). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lawline.h"
 
 #include <algorithm>
 #include <chrono>
@@ -101,7 +107,7 @@ const float kE = 1.0f;       // the walls' emission (radiance), the main and the
 const float kRho = 0.5f;     // their albedo
 const float kHalfX = 4.0f, kHalfZ = 4.0f, kHeight = 4.0f, kThick = 0.3f;
 
-const double kADiffuse = kRho * 0.701832;   // a' = rho x DA_hemi(1) (JahDiffuseAlbedo_piece_all.any)
+const double kADiffuse = kRho * enginetest::disneyDiffuseAlbedoHemi(1.0);   // a' = rho x DA_hemi(1), the lobe's integral
 const int kCarryFadeFrames = 120;   // (7): a sustained change, the injected bricks carried in their frames
 const int kFadeFrames = 1200;   // (5): every inner-wall voxel under a step of the store a frame (printed)
 
@@ -274,6 +280,10 @@ int main(int argc, char **argv)
     const bool doRays = part == "rays";
     for (int t = 0; t < 4; ++t) {
         if (argc > 1 && std::string(argv[1]) != names[t]) continue;
+        // THE LAW LINES (HARNESS-3 (b); tests/support/lawline.h): <tier>.<law>, the numbers each law below judges
+        const auto law = [&](const char *what, double v, const char *unit, const char *op = nullptr, double bar = 0.0) {
+            enginetest::lawLine((std::string(names[t]) + "." + what).c_str(), v, unit, op, bar);
+        };
         std::printf("\n== %s ==\n", names[t]);
         const auto tierT0 = std::chrono::steady_clock::now();
         const int tierF0 = frames;
@@ -306,6 +316,7 @@ int main(int argc, char **argv)
                   "(8) the sides' TLAS gather ran at the ray tier (its counts read back, no pass waited)");
             std::printf("   (8) cascades 0 and 1: %zu inner-wall voxels, %zu lit at all, the brightest %.6g (%.4f %% of the sky)\n",
                         inner, lit, peak01, 100.0 * peak01);
+            law("ray_inner_peak", 100.0 * peak01, "%sky", "<", 1.0);
             CHECK(inner > 0u && peak01 < 0.01,
                   "(8) AT THE RAY TIER no inner-wall voxel of cascades 0 and 1 reads 1 % of the sky (the voxel rays' e: "
                   "0.205 at High)");
@@ -335,6 +346,8 @@ int main(int argc, char **argv)
             std::printf("   (8) the ray tier's main arm at rest in %d frames: feedback %.5f, Jacobi-64 %.5f (the limit "
                         "E / (1 - a') %.5f: %+.2f %%); feedback vs Jacobi-64 worst %.3f codes, %zu over one\n",
                         m.restFrames, fb.mean, j64.mean, limit, 100.0 * (j64.mean / limit - 1.0), 100.0 * worst, over);
+            law("ray_feedback_vs_jacobi_worst", 100.0 * worst, "codes");
+            law("ray_feedback_vs_jacobi_over", double(over), "voxels", "==", 0.0);
             CHECK(m.restFrames >= 0 && same && over == 0u,
                   "(8) THE TLAS GATHER CONVERGES: the ray tier's feedback within a code of its 64-pass Jacobi");
             drop(m);
@@ -691,6 +704,8 @@ int main(int argc, char **argv)
                     j64.mean, 100.0 * (j64.mean / limit - 1.0), 100.0 * worst, over);
         std::printf("   the operator's arm (E 1, S* = E / (1 - a') = %.5f): the store %.5f (%+.2f %% of S*)\n", sStar, lOp,
                     100.0 * (lOp / sStar - 1.0));
+        law("feedback_vs_jacobi_worst", 100.0 * worst, "codes");
+        law("feedback_vs_jacobi_over", double(over), "voxels", "==", 0.0);
         CHECK(over == 0u, "(1) FEEDBACK = A 64-PASS JACOBI WITHIN ONE CODE at every inner-wall voxel");
         // THE PHYSICS' OWN LIMIT (R12): a sealed room escapes NOTHING, so the reference is e = 0 - L = E / (1 - a') - and
         // the bar the store's QUANTUM at it (one half-float step: 2^(floor(log2 L) - 10)) beside the Jacobi's 64-pass
@@ -708,6 +723,9 @@ int main(int argc, char **argv)
                     "Jacobi-64 %+.6f (%+.3f %%), the feedback %+.6f, the operator's arm %.5f; the store's own a' %.5f\n", aTrue,
                     kRho * enginetest::disneyDiffuseAlbedoHemi(1.0), 0.04 * sA + sB, limit0, q0, j64.mean - limit0,
                     100.0 * (j64.mean / limit0 - 1.0), fb.mean - limit0, lOp, j64.mean > 0.0 ? 1.0 - kE / j64.mean : -1.0);
+        law("jacobi_vs_limit", std::fabs(j64.mean - limit0) / q0, "q", "<=", 1.0);
+        law("feedback_vs_limit", std::fabs(fb.mean - limit0) / q0, "q", "<=", 1.0 + 0.01 * limit0 / q0);
+        law("operator_vs_limit", std::fabs(lOp - limit0) / q0, "q", "<=", 1.0 + 0.01 * limit0 / q0);
         CHECK(std::fabs(j64.mean - limit0) <= q0 && std::fabs(fb.mean - limit0) <= q0 + 0.01 * limit0,
               "(2) THE SERIES' LIMIT WITH NO ESCAPE: the Jacobi within one store step of E / (1 - a'), the feedback within "
               "that and its stop law's code");
@@ -721,12 +739,14 @@ int main(int argc, char **argv)
             const double qE = std::ldexp(1.0, int(std::floor(std::log2(double(kE)))) - 10);
             std::printf("   the injection alone (the bounces off): the store %.6f against E %.1f (%+.3f %%)\n", lD,
                         double(kE), 100.0 * (lD / kE - 1.0));
+            law("injection_vs_E", std::fabs(lD - kE) / qE, "q", "<=", 1.0);
             CHECK(lD >= 0.0 && std::fabs(lD - kE) <= qE,
                   "(2c) THE INJECTION: with the bounces off the inner walls hold E within a store step");
         }
         if (lampArm) {
             CHECK(lampOk && lampRest >= 0 && lampMovedOutside > 0u,
                   "(4) the resume arm: the lamp's light moves inner-wall voxels outside its range, and the feedback comes to rest");
+            law("resume_over", double(lampOver), "voxels", "==", 0.0);
             CHECK(lampOk && lampOver == 0u,
                   "(4) A STOPPED BRICK BESIDE A MOVING ONE RESTS WITHIN ONE CODE OF A 64-PASS JACOBI at every inner-wall voxel");
         }
@@ -735,6 +755,8 @@ int main(int argc, char **argv)
             std::printf("   (6) the fade is a SUSTAINED change: cascade 0's relight went round its owed box %d times in %d frames, the "
                         "longest wait %d frames (the floor's bound: 2 x lightWorkFrames + 2 = %d)\n", fadeRounds, kFadeFrames,
                         fadeRoundGap, fadeRoundBound);
+            law("fade_round_gap", fadeRoundGap, "frames", "<=", fadeRoundBound);
+            law("fade_over", double(fadeOver), "voxels", "==", 0.0);
             CHECK(fadeRoundGap >= 0 && fadeRoundGap <= fadeRoundBound,
                   "(6) A SUSTAINED CHANGE NEVER STARVES CASCADE 0: its relight rounds within the floor's bound");
             CHECK(fadeOk && travelInside * 1024.0 / kFadeFrames < 1.0 && travelBeyond * 1024.0 / kFadeFrames < 1.0 &&
@@ -744,6 +766,8 @@ int main(int argc, char **argv)
                   "(5) THE SLOW FADE ENDS WHERE THE STEP ENDS: beyond the range, the FADE arm within one code of a 64-pass Jacobi");
         }
         if (lampArm && doStep) {
+            law("step_over", double(stepOver), "voxels", "==", 0.0);
+            law("carry_over", double(carryOver), "voxels", "==", 0.0);
             CHECK(fadeOk && stepRest >= 0 && stepOver == 0u,
                   "(5) THE SLOW FADE ENDS WHERE THE STEP ENDS: beyond the range, the STEP arm within one code of a 64-pass Jacobi");
             CHECK(carryOk && carryRest >= 0 && carryMoved > 0u,

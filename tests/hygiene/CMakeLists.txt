@@ -245,6 +245,13 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_fifo.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
     set_tests_properties(tooling.gpu_lock_fifo PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.gpu_lock_fifo)
+    # tooling.law_records — A RECORD KEEPS ITS ROW's LAW NUMBERS (HARNESS-3 (b)): scripts/gate_runlog.py over a fake ctest
+    # stream keeps every `LAW <name> <value> <unit> [<op> <bar>]` line (tests/support/lawline.h) in the row's record, a
+    # green row's and a red row's, one past the 256-KB output cap too (law_records.py; a scratch HOME and run-log dir).
+    add_test(NAME tooling.law_records
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/law_records.py" "${CMAKE_SOURCE_DIR}/scripts/gate_runlog.py")
+    set_tests_properties(tooling.law_records PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.law_records)
     # source.no_renders_tracked — A RUN LEAVES NOTHING TRACKED (item 7): no render, home or Testing/ in git under
     # tests/ scripts/ testing/ but the fixture inputs.
     add_test(NAME source.no_renders_tracked
@@ -411,3 +418,12 @@ add_test(NAME source.shell_boundaries
 jah_ship_row(source.shell_boundaries)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.shell_boundaries PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.shell_boundaries)
+
+# source.half_store_rounded (REDS-1 item 5): an rgba16f image store TRUNCATES on NVIDIA 595.x (measured: gi.card_truth's
+# stored texels all in (-1.25, 0] half-float steps), so every half-float store rounds first - jahRoundHalf
+# (jah_half_round.glsl / the piece JahHalfRound). Every imageStore into an rgba16f / rg16f / r16f image of the ray jobs,
+# and the Photon light store's and the relight's run-time-format stores, carry it; its negative control first.
+add_test(NAME source.half_store_rounded
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/half_store_rounded.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.half_store_rounded PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.half_store_rounded)
