@@ -18,6 +18,12 @@
 #     REFLECT-MOVING-1.
 # MEASURED at the stage's tip: raysflat glossy noise 0.71 / 0.39 %, mirror 0.00 / 0.00 % (whole glossy M1 2.90 / 2.83 %);
 # both 0.92 / 0.98 %, 0.00 / 0.00 % (2.41 / 4.59 %).
+# DECLARED RED (the lead, 2026-10-29, HARNESS-3 (f)): rtreflect.walk_world_both's glossy noise map reads 1.16 % over a
+# code (p99 1.32; bar 1 %) at photon-7 188268ffc FROM A HELD START (`rest 1200 held`, each arm from its own hold: seed 0
+# 828, seed 7919 798 frames) - the Both estimator's noise at a held start, REFLECT-MOVING-1's half; the mirror 0.01. The
+# same 1.16 % on one cache's bytes and with the arms aligned to one count; the 0.92 / 0.98 above were read at an UNHELD
+# start (the old 500 frames) - the held start is the honest one. The bar stands. (Rays flat at the same tip: 0.84 %,
+# mirror 0.00 - green.)
 # (The split by arm, not by measure: the noise map needs the frozen walk the mirror's M1 reads, so each arm's three
 # walks serve both measures. The unfrozen walk - the world's half - is gi.walk_glass's.) The spatial filter's GPU time over the
 # world-held walk printed. jahlab at Epic, 960x540; four sessions: a prime and the frozen and two world-held walks
