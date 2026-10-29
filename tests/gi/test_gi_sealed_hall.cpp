@@ -160,45 +160,6 @@ int main(int argc, char **argv)
                     ? quiet + 1 : 0;
         if (quiet >= 12) { rest = f - quiet; break; }
     }
-    {   // MEASURING ARM (11-2, reverted): the rest's brightest pixel - where, and its value in the diffuse / reflections views
-        const auto peakAt = [&](unsigned &px, unsigned &py) {
-            ImageF pic;
-            double pk = -1.0;
-            if (view->readPixelsHdr(pic))
-                for (unsigned y = 0; y < pic.height; ++y)
-                    for (unsigned x = 0; x < pic.width; ++x) {
-                        const Colour c = pic.at(x, y);
-                        const double v = std::max(c.r, std::max(c.g, c.b));
-                        if (v > pk) { pk = v; px = x; py = y; }
-                    }
-            return pk;
-        };
-        const auto at = [&](unsigned x, unsigned y) {
-            ImageF pic;
-            if (!view->readPixelsHdr(pic)) return -1.0;
-            const Colour c = pic.at(x, y);
-            return double(std::max(c.r, std::max(c.g, c.b)));
-        };
-        unsigned px = 0, py = 0;
-        const double pk = peakAt(px, py);
-        std::printf("   ARM rest peak %.6f (%.3f codes) at (%u, %u); its 3x3:", pk, pk / bar, px, py);
-        for (int dy = -1; dy <= 1; ++dy)
-            for (int dx = -1; dx <= 1; ++dx)
-                std::printf(" %.3f", at(unsigned(int(px) + dx), unsigned(int(py) + dy)) / bar);
-        std::printf("\n");
-        const PhotonView vs[3] = { PhotonView::Diffuse, PhotonView::Reflections, PhotonView::ScreenProbes };
-        const char *vn[3] = { "diffuse", "reflections", "screenProbes" };
-        for (int k = 0; k < 3; ++k) {
-            s->setPhotonView(vs[k]);
-            run(4);
-            unsigned qx = 0, qy = 0;
-            const double q = peakAt(qx, qy);
-            std::printf("   ARM %s view: the pixel %.3f codes; this view's peak %.3f codes at (%u, %u)\n", vn[k], at(px, py) / bar,
-                        q / bar, qx, qy);
-        }
-        s->setPhotonView(PhotonView::Off);
-        run(4);
-    }
     std::printf("   %s: at rest after %d frames; the brightest pixel of any frame %.6f (%.3f codes of R) at frame %d, %u px "
                 "over one code; at rest %.6f (%.3f codes), %u px over\n", mode.c_str(), rest, worst, worst / bar,
                 worstFrame, worstOver, last, last / bar, lastOver);
