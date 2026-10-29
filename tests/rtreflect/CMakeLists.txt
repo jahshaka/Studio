@@ -235,18 +235,55 @@ set_tests_properties(rtreflect.odd_size PROPERTIES JAHSHAKA_TEST_FRAMES 91)
 # <= 1 % (whole glossy M1 printed as information: the noise plus the signal) (walk_world.sh, walk_noise.py). One arm a
 # row, its mode asserted: walk_world = Rays with the hits flattened, the reflection's own bar (stage 6's); walk_world_both
 # = Both on real hits, REFLECT-MOVING-1's Both half (the defect's slide and lag are owed before PHOTON-7's master check on
-# the merged tree). 960x540; four jahlab sessions each: 6 + 3 x 570 frames.
+# the merged tree). 960x540; four jahlab sessions each: the prime's 7 + three walks from `rest 1200 held` (HARNESS-3 (f);
+# was 500 frames): Rays flat 3 x 312 (rest 241) + 7; Both 3 x ~890 (rest 798-828) + 7 - each arm split by proof below.
 if(TARGET jahlab)
-    jah_gpu_row(rtreflect.walk_world CLASS engine TOKENS 8 FRAMES 1716
+    # rtreflect.walk_world SPLIT BY PROOF too (HARNESS-3 (f)): whole it ran 47.85 s, then 60.07 s (TIMEOUT) on a loaded box
+    # at photon-7 188268ffc - the same chain as the Both arm's below.
+    jah_gpu_row(rtreflect.walk_world.frozen CLASS engine TOKENS 8 FRAMES 319
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
-                raysflat
+                raysflat frozen
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.walk_world PROPERTIES TIMEOUT 60 LABELS "engine")
-    jah_gpu_row(rtreflect.walk_world_both CLASS engine TOKENS 8 FRAMES 1716
+    set_tests_properties(rtreflect.walk_world.frozen PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_walk_world_frozen)
+    jah_gpu_row(rtreflect.walk_world.worldA CLASS engine TOKENS 8 FRAMES 312
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
+                raysflat worldA
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.walk_world.worldA PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_walk_world_worldA
+                         FIXTURES_REQUIRED rtreflect_walk_world_frozen DEPENDS rtreflect.walk_world.frozen)
+    jah_gpu_row(rtreflect.walk_world.worldB CLASS engine TOKENS 8 FRAMES 312
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
+                raysflat worldB
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.walk_world.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED "rtreflect_walk_world_frozen;rtreflect_walk_world_worldA"
+                         DEPENDS rtreflect.walk_world.worldA)
+    # rtreflect.walk_world_both SPLIT BY PROOF (HARNESS-3 (f)): each walk from `rest 1200 held` (walk_world.sh says why) no
+    # longer fits three in a row - a fixture chain on one work dir: .frozen (the prime + the frozen walk) -> .worldA (seed 0)
+    # -> .worldB (seed 7919, then the noise map and the mirror's M1).
+    # (each part by name: a loop's variable sends the selector to the whole directory - HARNESS-2's rule)
+    jah_gpu_row(rtreflect.walk_world_both.frozen CLASS engine TOKENS 8 FRAMES 906
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both frozen
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.walk_world_both PROPERTIES TIMEOUT 60 LABELS "engine")
+    set_tests_properties(rtreflect.walk_world_both.frozen PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_walk_world_both_frozen)
+    jah_gpu_row(rtreflect.walk_world_both.worldA CLASS engine TOKENS 8 FRAMES 899
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both worldA
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.walk_world_both.worldA PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_walk_world_both_worldA
+                         FIXTURES_REQUIRED rtreflect_walk_world_both_frozen DEPENDS rtreflect.walk_world_both.frozen)
+    jah_gpu_row(rtreflect.walk_world_both.worldB CLASS engine TOKENS 8 FRAMES 869
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both worldB
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.walk_world_both.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED "rtreflect_walk_world_both_frozen;rtreflect_walk_world_both_worldA"
+                         DEPENDS rtreflect.walk_world_both.worldA)
     # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row) — THE MOVING REFLECTION LAGS ITS CONVERGED PICTURE BY
     # NO MORE THAN ITS MEMORY AND ITS NOISE: the glass walk in Rays with the hits flattened and the world held, per glossy
     # pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1 at walk frames 14 / 28 / 59, the breaking
@@ -266,20 +303,30 @@ endif()
 # minute (still_after_stop.sh says the law and the base). 960x540; one jahlab session: 231 frames to the stop, two
 # 600-frame windows and the path's bridge - 1,436 frames.
 # rtreflect.lamp_step_held (rev 6's (e), split out of the row above in round 4 so each runs its law under a minute) —
-# a small lamp step held at rest against a session converged at the new light, each through the door's 600-frame
-# window, each hold with no capped texel (lamp_step_held.sh). 960x540; two jahlab sessions: the step's 300 + its door's 602 (902), the reference's
-# 621 - 1,523 frames.
+# a small lamp step held at rest against a session converged at the new light, each through the door's 1,200-frame
+# window (HARNESS-3 (f); was 600 - the holds measured 522 / 622 at photon-7 188268ffc), each hold with no capped texel
+# (lamp_step_held.sh). 960x540; two jahlab sessions, two rows: the reference's 1,222 frames, the step's `rest 1200`
+# (234) + its door's 1,203 = 1,437.
 if(TARGET jahlab)
     jah_gpu_row(rtreflect.still_after_stop CLASS engine FRAMES 1436
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.still_after_stop PROPERTIES TIMEOUT 60 LABELS "engine")
-    jah_gpu_row(rtreflect.lamp_step_held CLASS engine FRAMES 1523
+    # rtreflect.lamp_step_held SPLIT BY PROOF (HARNESS-3 (f): two 1,200-frame door windows - lamp_step_held.sh says the
+    # sizing): .ref (the reference session) -> .step (the step session + (e)).
+    jah_gpu_row(rtreflect.lamp_step_held.ref CLASS engine FRAMES 1222
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lamp_step_held.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/lamp_step_held
+                ${CMAKE_CURRENT_BINARY_DIR}/work/lamp_step_held ref
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.lamp_step_held PROPERTIES TIMEOUT 60 LABELS "engine")
+    set_tests_properties(rtreflect.lamp_step_held.ref PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_lamp_step_held_ref)
+    jah_gpu_row(rtreflect.lamp_step_held.step CLASS engine FRAMES 1437
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lamp_step_held.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/lamp_step_held step
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.lamp_step_held.step PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED rtreflect_lamp_step_held_ref DEPENDS rtreflect.lamp_step_held.ref)
     # rtreflect.nee_firefly (PHOTON-7 stage 11, 11-1b) - THE REFLECTION FINDS ITS EMITTERS BY NEXT-EVENT ESTIMATION:
     # photon-firefly (one small bright emitter over a rough metal plate), Both, the arm reflect.nee on and off: (a) the
     # table's one emitter, NEE rays with it on and none off, the cone's hit rate printed; (b) at rest frame 300 NEE's

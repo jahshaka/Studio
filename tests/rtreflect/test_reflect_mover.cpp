@@ -1,5 +1,14 @@
 // A MOVING OBJECT'S REFLECTIONS CONVERGE AS A STILL ONE'S DO (REFLECT-MOVERS-1) —
-// `gi.reflect_mover` (archived: archive/tests/gi).
+// `gi.reflect_mover` (archived: archive/tests/gi, TEST-CUT-1). NOT REGISTERED - HARNESS-3 (e), 2026-10-29: no registered
+// row proves a mover's reflection against its settled picture (gi.soft_mover_ghost / gi.mover_bus_* judge the store's
+// mover geometry, rtreflect.hit_area_shadow a still mirror, rtreflect.history_detectors one slide's trail), but at
+// photon-7 1e1c4d97e this file is RED AT EVERY ARM it reached and OVER THE CAP whole (one run, the card lock, loaded:
+// TIMEOUT at 60.02 s inside arm 4 of 9; the archived price 34.39 s / 11,664 frames at 163d90223): moving vs settled
+// march glossy floor 34.98 codes (bar 2.8), march mirror floor 52.68 (2.8), glossy sphere 14.45 (3.0), rays glossy
+// floor 34.57 (8.0); grain 14.3x / 17.6x / 18.2x / 6.1x the still case's (bar 1.5-1.6); the still case itself 0.09-0.65
+// codes from the settled frame (the settled picture is the parked sphere's). A red is never registered: the row waits
+// for its cause (the movers' reflection under 8A's A1 - a mover answers from the store - against these pre-A1 bars) or
+// the lead's declaration, then registers split by proof (an arm a row, a posed arm with its rigid twin).
 //
 // THE OWNER'S FINDING: "heavy dithering in reflections, especially when moving
 // objects — if an animated sphere moving around has its reflection dither as it
@@ -120,7 +129,8 @@ static const float kSphereY = 0.9f;
 static const Vec3 kCamPos(0.0f, 2.2f, 5.5f);
 static const Vec3 kCamTarget(0.0f, 0.4f, -0.5f);
 
-static void render(Engine *e, int n) { enginetest::frames(e, n);}
+static int g_frames = 0;   // the row's FRAMES, counted (printed at the end)
+static void render(Engine *e, int n) { enginetest::frames(e, n); g_frames += n; }
 
 static MeshData sphereMesh(int rings = 32, int segments = 64)
 {
@@ -905,6 +915,6 @@ int main(int argc, char **argv)
                         hm / std::max(hs, 0.05f));
         ++armIdx;
     }
-    std::printf("%s\n", failures ? "FAILED" : "PASSED");
+    std::printf("frames %d\n%s\n", g_frames, failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }
