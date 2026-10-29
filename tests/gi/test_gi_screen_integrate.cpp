@@ -47,6 +47,7 @@
 #include "jahshaka/engine/PhotonStatus.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/displaycode.h"
+#include "../support/lawline.h"
 
 #include <algorithm>
 #include <cmath>
@@ -301,6 +302,14 @@ int main()
                         100.0 * barWorst, 100.0 * std::fabs(sn[1] - sr[1]) / std::max(sr[1], 1e-6),
                         100.0 * std::fabs(s5[1] - sr[1]) / std::max(sr[1], 1e-6), overBar);
             within = within && n > 0u;
+            {   // THE LAW LINES (HARNESS-3 (b); tests/support/lawline.h): (2')'s worst channel in q; the producer's and the
+                // route's distance from the reference, and the route's own 1 mm noise, in %
+                const std::string at = enginetest::lawName(std::string(arr.name) + "." + r.name);
+                enginetest::lawLine((at + ".screen_vs_ref").c_str(), overBar, "bar", "<=", 1.0);   // the ratio against (2')'s ONE BAR (REDS-1 item 4), not q
+                enginetest::lawLine((at + ".screen_vs_ref_pct").c_str(), 100.0 * eS, "%");
+                enginetest::lawLine((at + ".voxel_vs_ref_pct").c_str(), 100.0 * eV, "%");
+                enginetest::lawLine((at + ".voxel_1mm_pct").c_str(), 100.0 * eN, "%");
+            }
         }
         std::snprintf(msg, sizeof msg,
                       "[%s] (2) THE PRODUCER MOVED, THE PHYSICS DID NOT: every region's mean, per channel, no further from "
@@ -338,6 +347,9 @@ int main()
             std::snprintf(msg, sizeof msg,
                           "[%s] (3) OVER THE PICTURE: the producer no further from the reference than the voxel route, by "
                           "that route's own 1 mm noise (the mean and the pixels over 5 %%)", arr.name);
+            const std::string at = enginetest::lawName(arr.name);
+            enginetest::lawLine((at + ".picture_mean_pct").c_str(), 100.0 * sS.mean, "%", "<=", 100.0 * (sV.mean + s2.mean));
+            enginetest::lawLine((at + ".picture_over5").c_str(), sS.over5, "px", "<=", double(sV.over5 + s2.over5));
             CHECK(sS.n > 1000u && sS.mean <= sV.mean + s2.mean && sS.over5 <= sV.over5 + s2.over5, msg);
         }
         e->setArm("gi.screenIntegrateOff", 0.0);

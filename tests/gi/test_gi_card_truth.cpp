@@ -47,6 +47,7 @@
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/lightfalloff.h"
+#include "../support/lawline.h"
 
 #include <algorithm>
 #include <cmath>
@@ -373,6 +374,9 @@ int main(int, char **)
                                 0.5 * b, 0.5 * b + 0.5, band[b].n, got, ref, 100.0 * (got / ref - 1.0),
                                 std::fabs(got - ref) / q);
                     within = within && std::fabs(got - ref) <= q;
+                    // THE LAW LINE (HARNESS-3 (b); tests/support/lawline.h): the band's mean against the analytic, in q
+                    enginetest::lawLine((std::string(card ? "t1_card" : "t1_cascades") + ".band" + std::to_string(b)).c_str(),
+                                        std::fabs(got - ref) / q, "q", "<=", 1.0);
                 }
                 (card ? t1Card : t1Cascades) = within;
             }
@@ -386,6 +390,8 @@ int main(int, char **)
                         "%.6f (%.2f q); the brute-force hemisphere %.6f - the set's quadrature error %+.3f %%\n",
                         card ? "card-answered" : "cascade-answered", rays, rest, g, rays, same,
                         q > 0.0 ? std::fabs(g - same) / q : -1.0, truth, truth > 0.0 ? 100.0 * (same / truth - 1.0) : 0.0);
+            enginetest::lawLine((std::string(card ? "t2_card" : "t2_cascades") + ".rays" + std::to_string(rays)).c_str(),
+                                q > 0.0 ? std::fabs(g - same) / q : -1.0, "q", "<=", 1.0);
             bool &t2 = card ? t2Card : t2Cascades;
             t2 = t2 && ok && rest >= 0 && same > 0.0 && std::fabs(g - same) <= q;
         }

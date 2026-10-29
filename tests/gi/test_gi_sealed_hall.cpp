@@ -28,6 +28,7 @@
 // A fixture (the engine alone, one 192 x 192 offscreen view; 10 s budget). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
+#include "../support/lawline.h"
 
 #include <algorithm>
 #include <cmath>
@@ -164,7 +165,13 @@ int main(int argc, char **argv)
                 "over one code; at rest %.6f (%.3f codes), %u px over\n", mode.c_str(), rest, worst, worst / bar,
                 worstFrame, worstOver, last, last / bar, lastOver);
     CHECK(rest >= 0, "the hall comes to rest");
+    // THE LAW LINES (HARNESS-3 (b); tests/support/lawline.h): the numbers the laws below judge, in codes of R
+    enginetest::lawLine((mode + ".rest_frames").c_str(), rest, "frames");
+    enginetest::lawLine((mode + ".brightest_any_frame").c_str(), worst / bar, "codes");
     if (mode == "ray") {
+        enginetest::lawLine("ray.rest_brightest", last / bar, "codes", "<=", 1.0);
+        enginetest::lawLine("ray.rest_px_over", lastOver, "px");
+        enginetest::lawLine("ray.first_frame_brightest", first / bar, "codes", "<=", 1.0);
         CHECK(last <= bar, "(1) at rest no pixel inside the sealed hall reads one code of R");
         std::printf("   ray: the first frame after the GI switch, its brightest pixel %.6f (%.3f codes of R)\n", first,
                     first / bar);
@@ -178,6 +185,8 @@ int main(int argc, char **argv)
             if (a.vis[i] >= 255u) ++open;   // light 0's diffuse share
         }
         std::printf("   noray: the area light's visibility at rest - %u of %u pixels read unobstructed\n", open, read);
+        enginetest::lawLine("noray.rest_brightest", last / bar, "codes");
+        enginetest::lawLine("noray.area_unobstructed", open, "px", "==", 0.0);
         CHECK(read > 0u && open == 0u, "(1) no pixel inside the sealed hall reads the area light unobstructed");
     }
     if (mode == "noray") e->setArm("area.visReadback", 0.0);

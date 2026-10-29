@@ -68,6 +68,8 @@ constexpr unsigned kStatsWindowFrames = 240;
 /// settle: the cut's triangles unchanged over this many consecutive frames, nothing pending.
 constexpr int kSettleSteadyFrames = 8;
 constexpr int kSettleDefaultCap = 1200;
+/// rest: the cap without one (a refusal past it, never a longer wait).
+constexpr int kRestDefaultCap = 1200;
 
 const char *tierName(int t) { return tierNames()[size_t(std::max(0, std::min(3, t)))].c_str(); }
 
@@ -848,6 +850,30 @@ bool Session::exec(const Command &c)
                     msSinceStart() - t0, msSinceStart(), (unsigned long long)st.cutTriangles, st.pending,
                     int(mScene->published().gi.giAtRest));
         ok = steady >= kSettleSteadyFrames;
+    } else if (c.verb == "rest") {
+        // THE GI's REST (HARNESS-3 (a)): a converged picture is the one GiStatus::giAtRest says has stopped moving - the
+        // chain's owed work, the cards' rest decision, the gather's settled history (settleFramesOf) and its hold - never a
+        // frame count (gi.walk_rough's picked 600: the predicate held at 172-245 frames after a pose change). One frame at
+        // least, so a status published before a camera move never answers for the pose after it.
+        // `held` (HARNESS-3 (f)): and every reader HELD - the gather held and, where the reflection traces, the reflection
+        // held: what the stillness door's freeze requires (Stillness.cpp), since giAtRest's reflection term is its hand-over
+        const int cap = a0.empty() ? kRestDefaultCap : std::max(1, std::atoi(a0.c_str()));
+        const bool held = c.args.size() > 1 && c.args[1] == "held";
+        const double t0 = msSinceStart();
+        int n = 0;
+        bool rest = false;
+        while (n < cap && !mQuit && !rest) {
+            frame();
+            ++n;
+            const auto &pub = mScene->published();
+            rest = pub.gi.giAtRest &&
+                   (!held || (pub.gi.gather.running && pub.gi.gather.held && (!pub.rayQuery.reflect || pub.rayQuery.reflectHeld)));
+        }
+        if (rest)
+            std::printf("LAB REST after %d frames (%.0f ms)%s\n", n, msSinceStart() - t0, held ? ", every reader held" : "");
+        else
+            labFail("LAB REFUSED rest: the GI not at rest%s after %d frames (the cap)\n", held ? " and held" : "", n);
+        ok = rest;
     } else if (c.verb == "shot") {
         ok = shot(a0);
     } else if (c.verb == "status") {

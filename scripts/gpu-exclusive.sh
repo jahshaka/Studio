@@ -12,7 +12,7 @@
 # later holds taken ahead of it). Every waiter takes a TICKET first: a numbered file under <lock>.q/ (the number from
 # <lock>.q/counter, taken and the ticket written under that directory's own one-line flock) holding
 # "<pid> <its start time, /proc/<pid>/stat field 22> <label>" - THE PROTOCOL every holder of the card speaks (the lead's
-# util.CardLock too: a holder outside it is served first by the kernel's blocked-flock order); it waits (1 s polls)
+# util.CardLock too: a holder outside it is served first by the kernel's blocked-flock order); it waits (0.5 s polls)
 # until the lowest ticket whose pid is alive is its own, THEN tries the main flock (0.2 s polls, the queue re-read between
 # tries, within what is left of --wait-max), and removes its ticket once it holds the card (and on any exit: the trap). A ticket whose pid is dead is skipped and removed
 # by whoever sees it. The main flock stays the mutual exclusion; a holder that bypasses the queue (an older copy of this
@@ -57,7 +57,7 @@ starttime() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20; }   #
 ticket=""
 for f in "$q"/[0-9]*; do   # a reservation under this label: its place adopted (the re-call after an exit 75)
     case "$f" in *.tmp.*) continue ;; esac
-    [ -e "$f" ] || continue   # an empty queue leaves the glob unexpanded (the redirect's error precedes its 2>/dev/null)
+    [ -e "$f" ] || continue   # (an empty queue: the glob unmatched - its redirect would print before 2>/dev/null applies)
     read -r p1 p2 p3 < "$f" 2>/dev/null || continue
     [ "$p1" = R ] && [ "${p2:-0}" -gt "$(date +%s)" ] && [ "$p3" = "$me" ] && { ticket=$f; break; }
 done
@@ -96,12 +96,13 @@ t0=$(date +%s)
 waiting=""
 while :; do
     # THE HEAD TRIES THE CARD, NEVER BLOCKS IN THE KERNEL: a blocked flock is served in the kernel's order, so a re-call
-    # adopting an earlier ticket could not pass it - the head re-reads the queue between tries (0.2 s; the others 1 s)
+    # adopting an earlier ticket could not pass it - the head re-reads the queue between tries (0.2 s; the others 0.5 s: a
+    # new head notices within it, the card's idle at a hand-off)
     h=$(head_ticket)
     [ "$h" = "$ticket" ] && flock -n 9 && break
     [ -n "$waiting" ] || { echo "gpu-lock: waiting for the card (held by: $(holder))"; waiting=1; }
     [ -n "${wm:-}" ] && [ $(( $(date +%s) - t0 )) -ge "$wm" ] && stayed
-    if [ "$h" = "$ticket" ]; then sleep 0.2; else sleep 1; fi
+    if [ "$h" = "$ticket" ]; then sleep 0.2; else sleep 0.5; fi
 done
 rm -f "$ticket"
 [ -z "$waiting" ] || echo "gpu-lock: waited $(( $(date +%s) - t0 )) s"
