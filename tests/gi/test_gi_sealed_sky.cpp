@@ -52,12 +52,14 @@
 // RED ON THE BASE (the caches' cones: the card relight's sixteen-cone sky share and four-cone escape, the bounce's -
 // and the bounce's mean of a voxel's two sides, which let half of each sky-lit outer face light the inside).
 // THE BARS ARE PHYSICS (PHOTON-7 10-3 R12): every law above reads against q, one half-float step at R (0.000244 at the
-// measured R 0.4595; it was a picked 1 % of R). DECLARED RED, MEASURED 2026-10-27, one cause - THE COARSE TWO-SIDED
-// CELLS (10-3's item 5: a cell holding both faces of a wall, the sky-lit outer one averaged into the inner; on the
-// owner's review list, R13): the ray tier's (3) voxels c0 1.48 % of R and c1 0.60 %, (4) the field 0.081 % (its rays
-// read those cells), (8) the teleport's first frame after the jump 0.46 % (the old pose's coarse cells); the no-ray
-// tier's (3) c0 0.37 %, (7) / (9) the matte middle 0.10 % and (8) the same. Green against q: the cards (the brightest
-// 0.0006 % - their TLAS rays never miss inside), the ray tier's pixel ((7) 0.0008 %, (9)), (5) and the field-off picture.
+// measured R 0.4595; it was a picked 1 % of R). DECLARED RED (REDS-1, the lead's ruling, with today's numbers): the ray
+// tier's (3) voxels c0 1.487 % of R (1,755 of 10,728 inner cells over q, the brightest mid-wall on a one-sided inner
+// face) and c1 0.599 %, (4) the field 0.082 %, (8) the teleport High 2.07 % / Epic 1.72 % (0.46 % on photon-7's records
+// to 6ed217566, 2.13 % at 3efdc0c51: a regression in that range, named to its owner). THE CAUSE IS UNMEASURED: the
+// voxel sides' hit read at the footprint's level is NOT it (an arm at level 0: c0 0.88 %, c1 1.12 %, the field 0.071 %),
+// and NO occupied inner side's ray escapes (the escape shares: e = 0); the light enters the store through hit reads of
+// cells holding outside light - the candidate the fixture's BUTTED seams' contact faces, the hidden-face class. Green
+// against q: the cards (0.0000 %), the ray tier's pixel ((7), (9)), (5), the no-ray row and the field-off picture.
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"

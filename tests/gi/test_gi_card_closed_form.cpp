@@ -15,10 +15,9 @@
 //       built). The area's mean is the law, not each point: the cards' lobe is view-dependent (a hit reads the
 //       diffuse toward its viewer), so a point's incident light depends on the angles it sees the room at, while the
 //       room's energy balance holds the area's mean of the radiosity (the cards' stored value) to the closed form
-//       exactly. The points' range printed. DECLARED RED (2026-10-27, bounce_series (2)'s one cause - the engine's lobe
-//       tables: the diffuse fit's -0.5 % at r = 1 and the specular share, the owner's review list): measured -0.20 %
-//       (3.2 q) at 16 rays and -0.22 % (3.7 q) at 128 - the cards' a' 0.37038 against the integral's 0.37161 (the
-//       voxel store's 0.36781); the points 1.569 .. 1.601;
+//       exactly. The points' range printed. Measured (REDS-1): +0.021 % (0.35 q) at 16 rays, -0.016 % (0.26 q) at 128 -
+//       after the diffuse lobe's closed form (it was -0.20 % / -0.22 %: the fit to Ogre's DFG table) and the Indirect and
+//       Flat layers at RGBA16F (R11G11B10F's 6-bit grid read +0.08..0.10 % once the radiance store rounded);
 //   (2) FROM THE OTHER SIDE, NOTHING (L9): every texel of the +x wall's OUTER face (its cards held resident by
 //       cards.force: nothing inside the room reads its outside) within q of E - no light of the room through a wall.
 //       Measured: 196,608 texels, every one exactly E.
@@ -193,8 +192,6 @@ int main(int, char **)
         run(2);
     }
     e->setArm("gi.truthRays", 0.0);
-    // (DECLARED RED - the lead's ruling on bounce_series (2), 2026-10-27: one cause, the engine's lobe tables - its diffuse
-    // fit -0.5 % at r = 1 and its specular share - sub-visible, on the owner's review list)
     CHECK(inner, "(1) THE INNER FACES HOLD THE LIMIT: the area's mean within q of E / (1 - a'), at 16 and at 128 rays");
     CHECK(outer, "(2) FROM THE OTHER SIDE, NOTHING: every texel of the outer face within q of E (L9)");
     std::printf("\ngi.card_closed_form: %d frames, %d failure(s)\n", frames, failures);

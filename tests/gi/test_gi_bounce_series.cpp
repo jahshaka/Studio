@@ -26,9 +26,14 @@
 //       both) - the Jacobi within ONE STORE STEP of it (2^(floor(log2 L) - 10)), the feedback within that and its stop
 //       law's code. The voxels are read on their ROOM-FACING side (the preflight's W3: a two-sided voxel's light is its
 //       two sides' mean, which averaged the void-lit outer face in - the old "escape": now c0 e = 0.000 exactly).
-//       DECLARED RED (2026-10-27): the store holds -0.60 % of the limit at High (a' 0.36781 against 0.37161) - the
-//       diffuse fit's own -0.5 % at r = 1 (jahDiffuseAlbedoHemi 0.7018 against the integral 0.7052) and a specular
-//       share of 0.0169 against the integral's 0.0190 (cause unmeasured: the lead's ruling owed);
+//       DECLARED RED at 1.4-2.3 q (REDS-1, the lead's ruling): the Jacobi -0.139 % (low), -0.053 % (medium, green),
+//       -0.086 % (high, epic); it was -0.60 % at High. REDS-1 fixed three causes: the diffuse lobe's fit to Ogre's DFG
+//       table (closed form now), the RGBA8 albedo volume (0.5 stored 0.498039; RGBA16_UNORM now) and the truncating
+//       half-float store (rounded now). Two remain, measured: HIDDEN FACES at the overlapped seams (buried pieces at L
+//       = E in the walls' edge strips, 2 % dark; a butted room is worse, its contact faces) and the voxel route's
+//       gather deficit WITHOUT hidden faces (one closed shell room: a' 0.369896 against 0.371728, -0.29 % of the
+//       limit) - both the voxel route's next spec. (The specular input is exact: a white rough metal room re-emits
+//       0.99812 of its own stored material, the dielectric 0.99815 - the old "-11 % specular" was a subtraction.)
 //   (2b) THE OPERATOR'S ARM AT THE SAME LIMIT (E 1, S = S*): with no escape the sky is never seen, so its store holds
 //       (2)'s limit whatever S is, within a step and the stop law's code;
 //   (2c) THE INJECTION ALONE (R12): the bounces off, the inner walls hold E within a store step (measured 1.000000);

@@ -16,6 +16,13 @@
 //       and cascade 3's holds it (its 1.875 m cell shares the ground's faces: the coverage-weighted mean, in (0, E]);
 //   (2) THE MIRROR SHOWS IT: the far picture's brightest pixel equals the near arm's within one 8-bit code of it (the
 //       emitter's face is the same radiance at any distance, and its reflection that radiance times the metal's).
+//       DECLARED RED at 0.87 % (REDS-1, the lead's ruling): the near peak 18.1562 against the far 18.0000. Measured
+//       through the voxel door: every c1 cell of the near cube emits exactly E (emit factors 0.5 = f 1), and its
+//       single-face cells' fronts read E + rho G at 20.0000-20.0127; the cells whose canonical normal MIXES two faces
+//       read 20.15-20.32 (the -z/+x edge 20.1951 x F0 0.9 = the peak): their side's cosine hemisphere sends rays into the
+//       cube's OWN neighbouring cells - a convex solid lighting itself at coarse cells. The law (the voxel route's next
+//       spec): a mixed-normal cell's side gathers over the hemispheres of the faces it holds. (c15de7326's green, near
+//       17.9844, read a wrong side under the emission itself; the side rule now decides on a face that looks at the ray.)
 // RED before the deletion: the far arm's c2 and c3 stores 0, its picture's peak 0.43 against the near arm's 18.1.
 // NOT LAWS HERE, printed (the coarse cell's two findings, measured on this fixture: PHOTON-7 10-3 F2): the image's
 // CENTRE in the far arm reads 0 - the cube's +z and -z faces share one c2 cell, whose mixed plane is no front to the
