@@ -113,6 +113,29 @@ int main(int, char **)
             quiet = (!g.cascades.empty() && !g.chainOwed && !g.feedbackOwed && !g.ifdWorking) ? quiet + 1 : 0;
         }
         run(4);
+        if (k == 0) {   // MEASURING ARM (REDS-1 (b), reverted after its one run): the near cube's c1 cells through the voxel door
+            GiVoxelVolume v, l;
+            if (s->giVoxelVolume(1, v) && v.available && s->giVoxelLight(1, l) && l.available) {
+                const float cell = v.cell[0];
+                std::printf("   ARM c1 cell %.4f m; the cube x [-0.1, 0.1] y [0.9, 1.1] z [1.2, 1.4]\n", cell);
+                for (int z = 0; z < v.depth; ++z) for (int y = 0; y < v.height; ++y) for (int x = 0; x < v.width; ++x) {
+                    const float c0[3] = { v.origin[0] + cell * x, v.origin[1] + cell * y, v.origin[2] + cell * z };
+                    if (c0[0] + cell < -0.1f || c0[0] > 0.1f || c0[1] + cell < 0.9f || c0[1] > 1.1f || c0[2] + cell < 1.2f || c0[2] > 1.4f) continue;
+                    const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
+                    const float c = l.light[i + 3];
+                    if (!(c > 0.0f)) continue;
+                    std::printf("     cell [%.3f..%.3f, %.3f..%.3f, %.3f..%.3f] c %.3f covP (%.2f %.2f %.2f) covN (%.2f %.2f %.2f) n (%.2f %.2f %.2f) two %d "
+                                "emissive %.3f emitP (%.3f %.3f %.3f) emitN (%.3f %.3f %.3f) albedo %.3f | front %.4f back %.4f (un-premultiplied)\n",
+                                c0[0], c0[0] + cell, c0[1], c0[1] + cell, c0[2], c0[2] + cell, c,
+                                v.coverageP[i], v.coverageP[i + 1], v.coverageP[i + 2], v.coverageN[i], v.coverageN[i + 1], v.coverageN[i + 2],
+                                2 * l.normal[i] - 1, 2 * l.normal[i + 1] - 1, 2 * l.normal[i + 2] - 1, int(l.normal[i + 3] > 0.5f),
+                                v.emissive.size() > i ? v.emissive[i + 1] : -1.0f,
+                                v.emitP.size() > i ? v.emitP[i] : -1.0f, v.emitP.size() > i ? v.emitP[i + 1] : -1.0f, v.emitP.size() > i ? v.emitP[i + 2] : -1.0f,
+                                v.emitN.size() > i ? v.emitN[i] : -1.0f, v.emitN.size() > i ? v.emitN[i + 1] : -1.0f, v.emitN.size() > i ? v.emitN[i + 2] : -1.0f,
+                                v.albedo[i + 1], l.lightFront[i + 1] / c, l.lightBack[i + 1] / c);
+                }
+            }
+        }
         ImageF pic;
         double sum = 0.0, peak = 0.0, bright = 0.0;
         unsigned n = 0, over = 0;
