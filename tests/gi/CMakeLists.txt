@@ -249,6 +249,25 @@ jah_gpu_row(gi.card_closed_form CLASS engine COMMAND test_gi_card_closed_form
 set_tests_properties(gi.card_closed_form PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(gi.card_closed_form PROPERTIES JAHSHAKA_TEST_FRAMES 219)
+# gi.mirror_closed_form — A MIRROR WALL CONSERVES ENERGY IN THE STORE (PHOTON-7 11-2 (7)): card_closed_form's emitting
+# room twice, all matte and with one wall a near-mirror; the matte faces' mean ratio within q of a seeded path-traced
+# reference's (test_gi_mirror_closed_form.cpp states the law).
+add_executable(test_gi_mirror_closed_form test_gi_mirror_closed_form.cpp)
+set_target_properties(test_gi_mirror_closed_form PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_mirror_closed_form PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_mirror_closed_form PRIVATE JahshakaEngine)
+add_dependencies(test_gi_mirror_closed_form JahshakaEngineMedia)
+jah_gpu_row(gi.mirror_closed_form CLASS engine COMMAND test_gi_mirror_closed_form
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.mirror_closed_form PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 add_executable(test_sun_contact_acne test_sun_contact_acne.cpp)
 set_target_properties(test_sun_contact_acne PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
