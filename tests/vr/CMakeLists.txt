@@ -74,7 +74,7 @@ set(JAH_MONADO_MANIFEST "/usr/share/openxr/1/openxr_monado.json"
 # is a doff; ONE frame is a reprojection hiccup, and the hysteresis that tells
 # them apart is `vr.session` (archived: archive/tests/vr)'s case.
 set(_vr_mirror_home "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home")
-jah_gpu_row(vr.mirror_live SHIP CLASS vr TIER epic NEEDS photon
+jah_gpu_row(vr.mirror_live WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home" SHIP CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_mirror_live.js"
@@ -97,7 +97,7 @@ set_tests_properties(vr.mirror_live PROPERTIES
 # every gather ray a hit record (gather.decodeHits); the stereo list's first reading holds 0.5625 x W x H x 2 eyes, and
 # after its first growth it drops no record (e2e_vr_hit_list.js says the laws and the base).
 set(_vr_hit_home "${CMAKE_CURRENT_BINARY_DIR}/vr-hit-list-home")
-jah_gpu_row(vr.hit_list_stereo CLASS vr TIER epic NEEDS photon
+jah_gpu_row(vr.hit_list_stereo WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/vr-hit-list-home" CLASS vr TIER epic NEEDS photon
          COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
                  "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_hit_list.js"

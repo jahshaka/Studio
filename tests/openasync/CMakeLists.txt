@@ -48,7 +48,7 @@ file(MAKE_DIRECTORY ${_open_timing_home}/run)
 configure_file(e2e_open_frames.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_frames.js @ONLY)
 set(_frames_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-frames)
 file(MAKE_DIRECTORY ${_frames_home}/run)
-jah_gpu_row(open.frames SHIP CLASS app TIER epic NEEDS photon
+jah_gpu_row(open.frames WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-frames" SHIP CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_open_frames.js
          WORKING_DIRECTORY ${_frames_home}/run)
 # budget 40 s: the measurement (TESTING-SPEED-B3, the lead's verdict 2026-10-12): 539 frames, ~23-25 s with the WARM

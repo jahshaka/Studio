@@ -256,7 +256,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.clip_ref
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/clip_ref.sh
+         COMMAND ${JAH_WARM_CONSUMER} "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref" -- bash ${CMAKE_CURRENT_SOURCE_DIR}/clip_ref.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb
                  ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2_walk_anim.glb
@@ -278,7 +278,7 @@ set_tests_properties(scripting.e2e.clip_ref PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tex_ref)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.tex_ref
-         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tex_ref.sh
+         COMMAND ${JAH_WARM_CONSUMER} "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tex_ref" -- bash ${CMAKE_CURRENT_SOURCE_DIR}/tex_ref.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/implane_wide.png
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/implane_tall.png
@@ -298,7 +298,7 @@ set(_luHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-lamps_unshadowed)
 file(MAKE_DIRECTORY ${_luHome}/run)
 # (its home wiped and warmed before it boots: source.testing_rules R12 / R13)
 jah_fresh_home_fixture(scripting.e2e.lamps_unshadowed.fresh_home lamps_unshadowed_home "${_luHome}" WARM LABELS "scripting")
-jah_gpu_row(scripting.e2e.lamps_unshadowed CLASS app TIER low NEEDS NONE NEEDS_WHY "the issue reads the view's shadow maps, GI is the script's own switch"
+jah_gpu_row(scripting.e2e.lamps_unshadowed WARM_HOME "${_luHome}" CLASS app TIER low NEEDS NONE NEEDS_WHY "the issue reads the view's shadow maps, GI is the script's own switch"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_lamps_unshadowed.js
          WORKING_DIRECTORY ${_luHome}/run)
@@ -318,7 +318,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 set(JAH_TEST_BUNDLE ${_home}/perf/bundle)
 configure_file(scripts/e2e_perf_capture_frames.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js @ONLY)
-jah_gpu_row(scripting.e2e.perf_capture_frames SHIP CLASS app TIER low NEEDS NONE NEEDS_WHY "the capture window is counted in frames, giStatus is a recorded field (no GI claim)"
+jah_gpu_row(scripting.e2e.perf_capture_frames WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-perf_capture_frames" SHIP CLASS app TIER low NEEDS NONE NEEDS_WHY "the capture window is counted in frames, giStatus is a recorded field (no GI claim)"
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/perf_capture_frames.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js
@@ -439,7 +439,7 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_asset)
 jah_fresh_home_fixture(scripting.e2e.one_asset.fresh_home one_asset_home "${_home}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.one_asset
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js --headless
+         COMMAND ${JAH_WARM_CONSUMER} "${_home}" -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js --headless
          WORKING_DIRECTORY ${_home}/run)
 jah_ship_row(scripting.e2e.one_asset)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.one_asset PROPERTIES
@@ -458,7 +458,7 @@ configure_file(scripts/e2e_tray_panel.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tray_panel)
 jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" WARM LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.tray_panel SHIP CLASS app TIER low NEEDS NONE
+jah_gpu_row(scripting.e2e.tray_panel WARM_HOME "${_home}" SHIP CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
          WORKING_DIRECTORY ${_home}/run)
 # TESTING-CLEANUP-2B item 2: TIMEOUT 60 (URGENT #48: was 550) = 6 x the run log's quiet median 90.4 s (46 quiet PASS runs since 2026-10-01, worst 268.9 s);
@@ -482,7 +482,7 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
 # fork bump grew every PBS permutation (the glint's table).
 jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" WARM LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(gi.one_writer SHIP CLASS app TIER epic NEEDS photon
+jah_gpu_row(gi.one_writer WARM_HOME "${_home}" SHIP CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js
          WORKING_DIRECTORY ${_home}/run)
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
@@ -741,7 +741,7 @@ set(_msHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share)
 jah_fresh_home_fixture(scripting.e2e.material_share.fresh_home materialShareHome "${_msHome}" WARM ARGS --rm "${SHARE_PATH}" LABELS "scripting")
 file(MAKE_DIRECTORY ${_msHome}/run)
 add_test(NAME scripting.e2e.material_share
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js --headless
+         COMMAND ${JAH_WARM_CONSUMER} "${_msHome}" -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js --headless
          WORKING_DIRECTORY ${_msHome}/run)
 set_tests_properties(scripting.e2e.material_share PROPERTIES
     ENVIRONMENT "HOME=${_msHome};JAHSHAKA_DATA_ROOT=${_msHome}/.local/share/Jahshaka"
@@ -756,7 +756,7 @@ set(_msiHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share_import)
 jah_fresh_home_fixture(scripting.e2e.material_share_import.fresh_home materialShareImportHome "${_msiHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_msiHome}/run)
 add_test(NAME scripting.e2e.material_share_import
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
+         COMMAND ${JAH_WARM_CONSUMER} "${_msiHome}" -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
          WORKING_DIRECTORY ${_msiHome}/run)
 jah_ship_row(scripting.e2e.material_share_import)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.material_share_import PROPERTIES
@@ -782,7 +782,7 @@ set(_paHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_apply)
 jah_fresh_home_fixture(scripting.e2e.preset_apply.fresh_home presetApplyHome "${_paHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_paHome}/run)
 add_test(NAME scripting.e2e.preset_apply
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
+         COMMAND ${JAH_WARM_CONSUMER} "${_paHome}" -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
          WORKING_DIRECTORY ${_paHome}/run)
 jah_ship_row(scripting.e2e.preset_apply)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.preset_apply PROPERTIES
@@ -985,7 +985,7 @@ set_tests_properties(scripting.e2e.resize_rest.b scripting.e2e.resize_rest.c PRO
 set(_wsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_stillness)
 jah_fresh_home_fixture(scripting.e2e.world_stillness.fresh_home worldStillnessHome "${_wsHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_wsHome}/run)
-jah_gpu_row(scripting.e2e.world_stillness CLASS app TIER epic NEEDS photon FRAMES 276
+jah_gpu_row(scripting.e2e.world_stillness WARM_HOME "${_wsHome}" CLASS app TIER epic NEEDS photon FRAMES 276
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_stillness.js
     WORKING_DIRECTORY ${_wsHome}/run)
 set_tests_properties(scripting.e2e.world_stillness PROPERTIES
@@ -1000,7 +1000,7 @@ set_tests_properties(scripting.e2e.world_stillness PROPERTIES
 set(_ctsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-change_then_shot)
 jah_fresh_home_fixture(scripting.e2e.change_then_shot.fresh_home changeThenShotHome "${_ctsHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_ctsHome}/run)
-jah_gpu_row(scripting.e2e.change_then_shot CLASS app TIER epic NEEDS photon FRAMES 400
+jah_gpu_row(scripting.e2e.change_then_shot WARM_HOME "${_ctsHome}" CLASS app TIER epic NEEDS photon FRAMES 400
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js
     WORKING_DIRECTORY ${_ctsHome}/run)
 set_tests_properties(scripting.e2e.change_then_shot PROPERTIES
@@ -1016,7 +1016,7 @@ set_tests_properties(scripting.e2e.change_then_shot PROPERTIES
 set(_spcHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-second_project_capture)
 jah_fresh_home_fixture(scripting.e2e.second_project_capture.fresh_home secondProjectCaptureHome "${_spcHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_spcHome}/run)
-jah_gpu_row(scripting.e2e.second_project_capture CLASS app TIER epic NEEDS photon FRAMES 600
+jah_gpu_row(scripting.e2e.second_project_capture WARM_HOME "${_spcHome}" CLASS app TIER epic NEEDS photon FRAMES 600
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_second_project_capture.js
     WORKING_DIRECTORY ${_spcHome}/run)
 set_tests_properties(scripting.e2e.second_project_capture PROPERTIES
@@ -1031,7 +1031,7 @@ set_tests_properties(scripting.e2e.second_project_capture PROPERTIES
 set(_psHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-paused_shot)
 jah_fresh_home_fixture(scripting.e2e.paused_shot.fresh_home pausedShotHome "${_psHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_psHome}/run)
-jah_gpu_row(scripting.e2e.paused_shot CLASS app TIER epic NEEDS photon FRAMES 400
+jah_gpu_row(scripting.e2e.paused_shot WARM_HOME "${_psHome}" CLASS app TIER epic NEEDS photon FRAMES 400
     COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js
     WORKING_DIRECTORY ${_psHome}/run)
 set_tests_properties(scripting.e2e.paused_shot PROPERTIES
