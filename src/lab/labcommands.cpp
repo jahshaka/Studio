@@ -31,6 +31,10 @@ const std::vector<VerbDoc> &verbs()
         { "frames", "frames N", 1, 1, "render N frames (the engine's fixed 1/60 s grid; frames, never time)" },
         { "settle", "settle [maxFrames]", 0, 1,
           "render until the Atom status is steady: nothing pending and the cut's triangles unchanged over 8 frames (cap 1200)" },
+        { "rest", "rest [maxFrames]", 0, 1,
+          "render until THE GI IS AT REST (GiStatus::giAtRest - the engine's one settle predicate, the one --engine-selftest "
+          "waits on: the chain owes nothing, the cards' rest taken, the gather's history settled and held); at least one "
+          "frame; prints LAB REST after n frames; past the cap (default 1200) the run is REFUSED - a cap, never a wait" },
         { "shot", "shot [name]", 0, 1, "a PNG of the frame to <data-root>/shots/<name>.png (headless: readPixels; window: the frame capture)" },
         { "status", "status [file]", 0, 1,
           "the engine's AtomDrawStatus + RenderStats + the lab's state as ONE JSON line, appended to <file> (stdout without one)" },
@@ -231,6 +235,7 @@ bool parse(const std::string &lineIn, Command &out, std::string &error)
         };
         if (out.verb == "frames" && !number(0, 0, true)) return false;
         if (out.verb == "settle" && !number(0, 1, true)) return false;
+        if (out.verb == "rest" && !number(0, 1, true)) return false;
         if ((out.verb == "envcam" || out.verb == "measure") && !number(0, 0, false)) return false;
         if (out.verb == "move" && !number(1, 0, true)) return false;
         if (out.verb == "stillness" && !number(1, 2, true)) return false;

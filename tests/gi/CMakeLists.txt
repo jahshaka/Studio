@@ -1230,15 +1230,38 @@ if(TARGET jahlab)
     set_tests_properties(gi.walk_glass PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
-# gi.walk_rough (PHOTON-7 stage 7, 7-3; R12) — THE ROUGH SPECULAR'S WALK LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS
-# MEMORY AND ITS NOISE: rough_lag.sh on photon-rough (its four rough metal strips, the lobe alone): at walk frames 14 /
-# 28 / 59 per rough pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1, breaking <= 1 % (the lag
-# law; N the gather's history count, SE_walk its raw lobe's sigma / sqrt N). 960x540; two sessions.
+# gi.walk_rough.walk / .k14 / .k28 / .k59 (PHOTON-7 stage 7, 7-3; R12; SPLIT BY PROOF in HARNESS-3 (a): whole it ran 55.78
+# / 57.69 s, over the 45-s quiet law) — THE ROUGH SPECULAR'S WALK LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS MEMORY AND
+# ITS NOISE: rough_lag.sh on photon-rough (its four rough metal strips, the lobe alone): at walk frame k per rough pixel
+# |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1, breaking <= 1 % (the lag law; N the gather's history
+# count, SE_walk its raw lobe's sigma / sqrt N) - ONE ROW PER k, each on the walk's dump (a fixture chain: .walk writes
+# it, FIXTURES_SETUP; run one k alone with `ctest -R gi.walk_rough.k14 -FS gi_walk_rough_dump`). CONVERGED is the lab's
+# `rest 600` (GiStatus::giAtRest; rough_lag.sh derives it - the picked 600 frames it replaced). Declared red: rough_lag.sh
+# says it. 960x540; one jahlab session a row; FRAMES as the rows ran them (the rests' measured counts).
 if(TARGET jahlab)
-    jah_gpu_row(gi.walk_rough CLASS engine TOKENS 8 FRAMES 4314
+    jah_gpu_row(gi.walk_rough.walk CLASS engine TOKENS 8 FRAMES 350
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+                walk
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(gi.walk_rough PROPERTIES TIMEOUT 60 LABELS "engine")
+    set_tests_properties(gi.walk_rough.walk PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_rough_dump)
+    jah_gpu_row(gi.walk_rough.k14 CLASS engine TOKENS 8 FRAMES 506
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+                14 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k14
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_rough.k14 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
+    jah_gpu_row(gi.walk_rough.k28 CLASS engine TOKENS 8 FRAMES 519
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+                28 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k28
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_rough.k28 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
+    jah_gpu_row(gi.walk_rough.k59 CLASS engine TOKENS 8 FRAMES 550
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+                59 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k59
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.walk_rough.k59 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
 endif()
 
 # gi.walk_area (PHOTON-7 stage 7: the walk 7-A owed, at the stage's master check) — THE AREA LIGHT'S PENUMBRA WALK:
