@@ -159,7 +159,20 @@ inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides 
     if (o.mVr) cfg.vr.enabled = true;
     if (o.mLogSink) cfg.logSink = o.mLogSink;
     if (o.mHlmsMediaDir) cfg.hlmsMediaDir = *o.mHlmsMediaDir;
-    if (o.mShaderCacheDir) cfg.shaderCacheDir = *o.mShaderCacheDir;
+    if (o.mShaderCacheDir) {
+        // A FIXTURE THAT STATES ITS OWN CACHE IS A COLD ROW, AND ITS REGISTRATION SAYS SO (URGENT #119, HARNESS-4): it
+        // boots on no shared pipeline cache, so its exe's driver cache is the only warm thing it has - the warm-up's
+        // cold-on boot warms it for the rows registered COLD (tests/CMakeLists.txt _jah_cold_engine_row), and only those.
+        // Registered warm (the hook's variable set), it would go unwarmed: refused here, before any engine exists.
+        if (std::getenv("JAHSHAKA_SHADER_CACHE_DIR")) {
+            std::fprintf(stderr, "FAIL: this fixture states its own shader cache (shaderCacheDir / shaderCacheOff) but its row "
+                                 "boots on the shared one (JAHSHAKA_SHADER_CACHE_DIR is set): register it jah_gpu_row(... COLD "
+                                 "\"<why>\") so the warm-up warms its exe's driver cache (URGENT #119)\n");
+            std::fflush(stderr);
+            std::exit(1);
+        }
+        cfg.shaderCacheDir = *o.mShaderCacheDir;
+    }
     return cfg;
 }
 #endif

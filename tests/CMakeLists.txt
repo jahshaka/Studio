@@ -412,6 +412,28 @@ endfunction()
 # no wrapper, no cache, the reason stated where the row is.
 # WARM_HOME <home> — the row is a WARM fixture's consumer (jah_fresh_home_fixture(... <home> WARM)): it runs as
 # `${JAH_WARM_CONSUMER} <home> -- <exe> …`, and its green run promotes what it compiled (HARNESS-1; R14).
+# _jah_cold_engine_row(<row> <exe> <working dir or ""> [args...]) - A COLD ENGINE ROW's EXE, FOR THE WARM-UP (URGENT #119,
+# HARNESS-4): a CLASS engine row declared COLD boots on no shared engine cache, so every pipeline it creates - the ray
+# tier's included, ~2 min of NVIDIA's compiler for rq_reflect alone - is the driver's, served only from the driver's
+# disk cache, which the driver keys PER EXECUTABLE. After a shader change that cache is cold for this exe, and a row
+# killed at the 60-s cap stores nothing (frame.streaming_picture and frame.monitor_pop: 2 s of test, then ~4 min in
+# the teardown's wait on the ahead reflect build, killed - red at every run until someone ran the exe by hand). A row
+# on the shared cache needs none of this: measured, rtreflect.sphere_glint on an EMPTY driver cache built all 13 ray
+# pipelines through the shared VkPipelineCache in 1.04 s and passed in 1.34 s. So the warm-up's cold-on boot runs each
+# exe listed here once, uncapped, with the driver's cache on (scripts/warm-app-cache.sh). The list is
+# <build>/tests/test-cold-engine-rows.txt, one row a line: <row> TAB <working dir> TAB <exe> [TAB <arg>]... - written at
+# generate time from the registrations (never a hand list).
+function(_jah_cold_engine_row _row _exe _wd)
+    if(NOT _wd)
+        set(_wd "${CMAKE_CURRENT_BINARY_DIR}")
+    endif()
+    set(_line "${_row}\t${_wd}\t${_exe}")
+    foreach(_a IN LISTS ARGN)
+        string(APPEND _line "\t${_a}")
+    endforeach()
+    set_property(GLOBAL APPEND PROPERTY JAH_COLD_ENGINE_ROWS "${_line}")
+endfunction()
+
 function(jah_gpu_row _row)
     cmake_parse_arguments(G "TEST_WINDOW;SHIP" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES;COLD;WARM_HOME" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
@@ -463,6 +485,9 @@ function(jah_gpu_row _row)
         add_test(NAME ${_row} COMMAND ${JAH_WARM_CONSUMER} "${G_WARM_HOME}" -- "${_exe}" ${G_COMMAND} ${_wd})
     else()
         add_test(NAME ${_row} COMMAND "${_exe}" ${G_COMMAND} ${_wd})
+    endif()
+    if(G_CLASS STREQUAL "engine" AND G_COLD)
+        _jah_cold_engine_row(${_row} "${_exe}" "${G_WORKING_DIRECTORY}" ${G_COMMAND})
     endif()
     if(DEFINED G_FRAMES)
         set_property(TEST ${_row} PROPERTY JAHSHAKA_TEST_FRAMES ${G_FRAMES})
@@ -531,6 +556,9 @@ function(jah_gpu_exclusive_test)
     endif()
     add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" --run-timeout ${G_RUN_TIMEOUT}
              --label ${G_NAME}:${G_CLASS} ${_warm} "${_exe}" ${G_COMMAND} ${_wd})
+    if(G_CLASS STREQUAL "engine" AND G_COLD)
+        _jah_cold_engine_row(${G_NAME} "${_exe}" "${G_WORKING_DIRECTORY}" ${G_COMMAND})
+    endif()
     # (the lock's wait on top of the run's own bound, within the cap: under spec.sh / gpu-exclusive.sh the lock is held
     # and the wait is 0)
     math(EXPR _timeout "${G_RUN_TIMEOUT} + 30")
@@ -1214,3 +1242,9 @@ list(REMOVE_DUPLICATES _jah_sets)
 list(SORT _jah_sets)
 list(JOIN _jah_sets "\n" _jah_sets)
 file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test-boot-sets.txt" CONTENT "${_jah_sets}\n" @ONLY)
+# THE COLD ENGINE ROWS' EXES (URGENT #119; _jah_cold_engine_row above): the warm-up's cold-on boot runs each once,
+# uncapped, with the driver's cache on. Generated (the exes are generator expressions); written when it changes.
+get_property(_jah_cold GLOBAL PROPERTY JAH_COLD_ENGINE_ROWS)
+list(SORT _jah_cold)
+list(JOIN _jah_cold "\n" _jah_cold)
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test-cold-engine-rows.txt" CONTENT "${_jah_cold}\n")

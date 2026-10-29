@@ -26,7 +26,8 @@ no() { echo "  FAIL: $1"; fail=1; }
 # the exes the -on stamps name (the driver's per-exe key is the exe's name): two fakes, the same in every call below
 printf '#!/bin/sh\nexit 0\n' > "$T/app"; printf '#!/bin/sh\nexit 0\n#lab\n' > "$T/lab"; chmod +x "$T/app" "$T/lab"
 cp "$T/app" "$T/app2"
-X=(--app "$T/app" --lab "$T/lab")
+: > "$T/cold-none"   # no cold engine row: cold-on has nothing to warm (its own cases at the end)
+X=(--app "$T/app" --lab "$T/lab" --cold-rows "$T/cold-none")
 eid() { basename "$1"; }
 out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 key=$(echo "$out" | sed -n 's/^cold at \([0-9a-f]*\): .*/\1/p')
@@ -122,7 +123,7 @@ fi
 exit 0
 APP
 chmod +x "$T/fake-app"
-F=(--app "$T/fake-app" --lab "$T/fake-app")
+F=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/cold-none")
 out=$(FAKE_RACE="$B/tests/.shadercache" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q 'NOT promoted' && [ ! -e "$B/tests/.shadercache.warm-key" ] &&
     ok "a promotion fresh_home SKIPS (its rule 3, NOT replaced): the boot passed, NO stamp" || no "skipped promotion: '$out' rc $rc"
@@ -165,5 +166,34 @@ exec 8>&-
     [ ! -e "$B/tests/.shadercache.driver-key" ] && [ $s -lt 10 ] &&
     ok "the card held past the boot's wait (a tenth of a 10-s budget): exit 75 in $s s, nothing booted" ||
     no "the held card: '$out' rc $rc in $s s"
+# THE COLD ENGINE ROWS' EXES (cold-on, URGENT #119): a row declared COLD boots on no shared pipeline cache, so its exe's
+# own driver cache is all it has; cold-on runs each listed exe once, uncapped, in its row's working directory, the
+# shared-cache variable unset; stamped with the key and the list's digest. A FAKE cold row (it records where and how it
+# ran, then exits 3: a row's own red still stored its driver cache, printed, not judged)
+CR="$T/cold-rows"; mkdir -p "$T/cwd"
+printf '#!/bin/sh\necho "$PWD|$1|${JAHSHAKA_SHADER_CACHE_DIR:-unset}|${__GL_SHADER_DISK_CACHE:-on}" > "%s/cold-ran"\nexit 3\n' "$T" > "$T/coldfx"
+chmod +x "$T/coldfx"
+printf 'x.cold\t%s\t%s\targ1\n' "$T/cwd" "$T/coldfx" > "$CR"
+C=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$CR")
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "the cold engine rows' exes' driver caches (cold-on): no driver-cache run recorded" &&
+    ok "a cold engine row listed, never run at the key: cold-on cold, exit 3" || no "cold-on unstamped: '$out' rc $rc"
+out=$(JAHSHAKA_SHADER_CACHE_DIR=/x __GL_SHADER_DISK_CACHE=0 DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q '^warm_cold_rows: x.cold: exit 3' && [ -e "$B/tests/.cold-engine-rows.driver-key" ] &&
+    [ "$(cat "$T/cold-ran" 2>/dev/null)" = "$T/cwd|arg1|unset|on" ] &&
+    ok "cold-on runs the row's exe once in its working directory with its args, the shared cache unset, the driver's cache on; its red printed, the stamp written" ||
+    no "cold-on run: '$out' rc $rc ran: $(cat "$T/cold-ran" 2>&1)"
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "...and the next call reads cold-on warm" || no "cold-on after: '$out' rc $rc"
+printf 'y.cold\t%s\t%s\n' "$T/cwd" "$T/coldfx" >> "$CR"
+out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q 'the cold rows changed since' && ok "a row newly registered COLD: cold-on cold again, exit 3" ||
+    no "a new cold row: '$out' rc $rc"
+printf '#!/bin/sh\nsleep 30\n' > "$T/slowfx"; chmod +x "$T/slowfx"
+printf 'z.slow\t%s\t%s\n' "$T/cwd" "$T/slowfx" > "$T/slow-rows"
+t0=$(date +%s)
+out=$(bash "$SRC/tests/support/warm_cold_rows.sh" "$T/slow-rows" $(( $(date +%s) + 1 )) "$T/slow-logs"); rc=$?
+[ $rc = 1 ] && echo "$out" | grep -q 'z.slow: exit 124, .* KILLED at the bound' && [ $(( $(date +%s) - t0 )) -lt 15 ] &&
+    ok "an exe past the call's end (its deadline) is killed and named - exit 1, no stamp from such a boot" || no "the bound: '$out' rc $rc"
 echo "tooling.warm_app_cache: $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail
