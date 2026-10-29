@@ -10,6 +10,7 @@
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QProcess>
+#include <QFile>
 #include <QSettings>
 #include <cstdio>
 
@@ -91,22 +92,31 @@ int main(int argc, char **argv)
     // ---- A STUDIO-ONLY CHANGE (the merge read): Ogre's cache stays warm, but the
     // global pass's key — the Studio commit + the cache fingerprint — moved. The pass
     // must run over the warm cache, and nothing may compile live after it. Simulated
-    // by a stale key in the settings file, which is exactly what a new build reads.
+    // by a stale record, which is exactly what a new build reads. THE RECORD LIVES IN THE
+    // SHADER CACHE IT DESCRIBES (URGENT #104): shadercache/warm-pass.key, linked and promoted
+    // with the cache by fresh_home, never the settings file (which a fresh home wipes).
+    const QString record = home + "/.local/share/Jahshaka/shadercache/warm-pass.key";
+    const auto readRecord = [&]() {
+        QFile f(record);
+        return f.open(QIODevice::ReadOnly) ? QString::fromUtf8(f.readAll()).trimmed() : QString();
+    };
+    CHECK(!readRecord().isEmpty(), "the completed pass's record is in the shader cache (shadercache/warm-pass.key)");
     {
         QSettings ini(home + "/.local/share/Jahshaka/jahsettings.ini", QSettings::IniFormat);
-        ini.setValue(QStringLiteral("shader_warm_pass"), QStringLiteral("an-older-studio-build|0"));
-        ini.sync();
+        CHECK(!ini.contains(QStringLiteral("shader_warm_pass")), "...and never in the settings file");
+    }
+    {
+        QFile f(record);
+        CHECK(f.open(QIODevice::WriteOnly | QIODevice::Truncate) && f.write("an-older-studio-build|0\n") > 0,
+              "a stale record written");
     }
     const QJsonObject moved = runApp(home, script);
     assertRun("keymoved", moved);
     CHECK(gLastOutput.contains(QStringLiteral("the global pass's key moved")),
           "a moved key with a warm Ogre cache is SEEN");
     CHECK(gLastOutput.contains(passLine), "...and the global pass RUNS over the warm cache");
-    {
-        QSettings ini(home + "/.local/share/Jahshaka/jahsettings.ini", QSettings::IniFormat);
-        CHECK(ini.value(QStringLiteral("shader_warm_pass")).toString() != QStringLiteral("an-older-studio-build|0"),
-              "...and records the new key once it completed");
-    }
+    CHECK(!readRecord().isEmpty() && readRecord() != QStringLiteral("an-older-studio-build|0"),
+          "...and records the new key once it completed");
 
     std::printf("%s (%d failure(s))\n", failures ? "FAIL" : "PASS", failures);
     return failures ? 1 : 0;

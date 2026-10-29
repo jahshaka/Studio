@@ -65,6 +65,7 @@ For more information see the LICENSE file
 #include "ui/style/thememanager.h"
 #include "services/framepacing.h"
 #include "services/jahlog.h"
+#include "services/processexit.h"
 #include "services/testtier.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
 #include "services/sessionheader.h"
@@ -82,6 +83,10 @@ extern "C"
 
 int main(int argc, char *argv[])
 {
+    // THE EXIT-ONLY TEARDOWN's end (services/processexit.h): declared FIRST, so it is destroyed LAST — after the
+    // window (shutdown steps 5-8), the splash and the QApplication — and, when a call site below took the fast exit,
+    // it _Exits there with the run's own code instead of returning into exit()'s finalizers.
+    processexit::End processEnd;
     const CliOptions cli = CliOptions::parse(argc, argv);
     // --help / --version ANSWER AND EXIT HERE (lane HELP-FLAG-1): before the
     // refusals below, before QApplication, the data root, the settings file, the
@@ -511,12 +516,17 @@ int main(int argc, char *argv[])
     // then survives its own main window (the headless-zombie bug family).
     splash.finish(&window);
 
+    // THE EXIT-ONLY TEARDOWN, CALL SITE 1 OF 2: every CLI path's end (services/processexit.h) — the selftest, the
+    // API dump, a script, a script pool, an MCP session. Taken after the run returns and before `window` dies (the
+    // engine's last reference drops in its teardown, step 6).
+    const auto cliEnd = [](int rc) { return processexit::takeFastExit(rc); };
+
     // --engine-selftest releases the engine host itself, through the RAII guard
     // in selftestrunner.cpp, and writes its own close bracket here.
     if (!cli.selftestPng.isEmpty()) {
         const int rc = runEngineSelftest(window, app, cli.selftestPng);
         JahLog::stop(QStringLiteral("engine selftest, exit code %1").arg(rc));
-        return rc;
+        return cliEnd(rc);
     }
 
     // --dump-api-docs GOES THROUGH THE ORDERED EXIT (ledger 150, round 2). It
@@ -526,17 +536,17 @@ int main(int argc, char *argv[])
     // run in TextureCache::save. finalizeAppExit records step 4, stops the
     // watchdog and the monitor, releases the host and writes the close bracket.
     if (!cli.dumpDocsPath.isEmpty())
-        return finalizeAppExit(runDumpApiDocs(window, cli.dumpDocsPath));
+        return cliEnd(finalizeAppExit(runDumpApiDocs(window, cli.dumpDocsPath)));
 
     if (!cli.scriptPath.isEmpty())
-        return runScriptFile(window, app, cli.scriptPath, cli.headlessScript, cli.liveScript);
+        return cliEnd(runScriptFile(window, app, cli.scriptPath, cli.headlessScript, cli.liveScript));
 
     if (!cli.poolScripts.isEmpty())
-        return runScriptPool(window, app, cli.poolScripts, cli.poolName, cli.poolArms, cli.poolBaseline,
-                             cli.headlessScript, cli.liveScript);
+        return cliEnd(runScriptPool(window, app, cli.poolScripts, cli.poolName, cli.poolArms, cli.poolBaseline,
+                                    cli.headlessScript, cli.liveScript));
 
     if (cli.mcpServe)
-        return runMcpServe(window, app, cli.mcpPort, cli.headlessScript);
+        return cliEnd(runMcpServe(window, app, cli.mcpPort, cli.headlessScript));
 
     window.goToDesktop();   // splash.finish above hides the splash here
 
@@ -612,5 +622,8 @@ int main(int argc, char *argv[])
 		app.installEventFilter(new NativeToolTipFormatter(&app));
 
     const int rc = app.exec();
+    // THE EXIT-ONLY TEARDOWN, CALL SITE 2 OF 2: the editor's quit (services/processexit.h). Deleting this one line
+    // gives the editor the full destroy back (the driver's stored re-optimisation, URGENT #102's ABBA).
+    processexit::takeFastExit(rc);
     return finalizeAppExit(rc);
 }

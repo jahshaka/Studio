@@ -325,6 +325,7 @@ set(SRCS
     src/services/primitiveseed.cpp
     src/services/mainthreadheartbeat.cpp
     src/services/mainthreadwatchdog.cpp
+    src/services/processexit.cpp
     src/shell/shutdownorder.cpp
     src/shell/pagehost.cpp
     src/shell/actionhost.cpp
