@@ -217,16 +217,6 @@ int main()
                 run(1);
                 quiet = scene->published().gi.giAtRest ? quiet + 1 : 0;
             }
-            if (quiet < 30) {   // MEASURING ARM (REDS-1 item 4, reverted after its one run): what stays owed
-                const GiStatus g = scene->published().gi;
-                std::printf("   ARM not at rest: chainOwed %d feedbackOwed %d ifdWorking %d gather %d/%d;", int(g.chainOwed),
-                            int(g.feedbackOwed), int(g.ifdWorking), int(g.gather.running), int(g.gather.settled));
-                for (size_t c = 0; c < g.cascades.size(); ++c)
-                    std::printf(" c%zu active %u owed %d passes %llu stops %llu resumes %llu", c, g.cascades[c].feedbackActive,
-                                int(g.cascades[c].feedbackOwed), g.cascades[c].feedbackPasses, g.cascades[c].feedbackStops,
-                                g.cascades[c].feedbackResumes);
-                std::printf("\n");
-            }
             resetPhotonPassBindings();
             run(2);
             recs = photonPassBindings();
@@ -267,7 +257,7 @@ int main()
             for (unsigned y = r.y0; y < r.y1 && y < a.height; ++y)
                 for (unsigned x = r.x0; x < r.x1 && x < a.width; ++x) {
                     const auto pa = a.at(x, y), pb = b.at(x, y), pr = ref.at(x, y), p2 = a2.at(x, y);
-                    if (physical) {
+                    if (refAside.width == a.width && ref512.width == a.width) {
                         const auto pn = refAside.at(x, y), p5 = ref512.at(x, y);
                         sn[0] += pn.r; sn[1] += pn.g; sn[2] += pn.b;
                         s5[0] += p5.r; s5[1] += p5.g; s5[2] += p5.b;
