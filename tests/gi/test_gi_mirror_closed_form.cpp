@@ -9,9 +9,10 @@
 // THE REFERENCE, by a SEEDED PATH TRACE of the same box in this test (no sphere assumption - the lead's E / (1 - rho-bar)
 // is the integrating sphere's form, exact only for equal reflectances: in a cube with one f = 0.95 mirror and a = 0.5 the
 // matte walls hold 2.178 E, not 2.353 E), with the walls' BRDF as the engine holds them:
-//   * a MATTE wall sends E + a' G, G the cosine-weighted mean incoming radiance and a' = rho DA_hemi(1) + 0.04 A-bar(1) +
+//   * a MATTE wall STORES E + a' G, G the cosine-weighted mean incoming radiance and a' = rho DA_hemi(1) + 0.04 A-bar(1) +
 //     B-bar(1) - the material's whole lobe by direct integration, card_closed_form's a' (the dielectric's 4 % specular
-//     share included, re-emitted with the diffuse as the store re-emits it: its area mean is the radiosity's);
+//     share included) - and SENDS a ray arriving at cos mu E + ( rho DA( mu, 1 ) + 0.04 A-bar + B-bar ) G: the readers'
+//     view restore (jahHitBounceToward, jah_card_view.glsl), the diffuse lobe at its directional albedo;
 //   * the MIRROR sends E (its emission, Lambertian) plus R( mu ) times the radiance along its mirror direction,
 //     R( mu ) = F0 A( mu, 0 ) + B( mu, 0 ) - BRDF_Default's split DFG at the near-delta lobe by direct integration
 //     (enginetesthelpers.h ggxSpecularAlbedo, the alpha floor 1e-3), a function of the angle, never F0 alone.
@@ -71,7 +72,15 @@ struct Rng {
     double next() { s = s * 6364136223846793005ull + 1442695040888963407ull; return double(s >> 11) * (1.0 / 9007199254740992.0); }
 };
 struct Ref {
-    double aP;                 // the matte walls' a'
+    double aP;                 // the matte walls' a' (the hemispherical mean: what a texel / a voxel STORES)
+    double rhoDA[257];         // ...toward a viewer at cos mu: rho DA( mu, 1 ) (the diffuse lobe's directional albedo, the
+    double specBar = 0.0;      //    engine's view restore) + the specular share's integral 0.04 A-bar + B-bar
+    double toward(double mu) const
+    {
+        const double x = std::min(1.0, std::max(0.0, mu)) * 256.0;
+        const int i = std::min(255, int(x));
+        return rhoDA[i] + (rhoDA[i + 1] - rhoDA[i]) * (x - double(i)) + specBar;
+    }
     bool mirror;               // the -z wall a near-mirror
     std::vector<double> R;     // R( mu ) at 256 cosines (the mirror's split DFG)
     double reflect(double mu) const
@@ -125,7 +134,9 @@ struct Ref {
                 w *= reflect(mu);
                 for (int k = 0; k < 3; ++k) d[k] += 2.0 * mu * n[k];
             } else {
-                w *= aP;
+                // the hit's radiance TOWARD THIS RAY's viewer, as the engine's readers restore it (jahHitBounceToward,
+                // jah_card_view.glsl): the diffuse lobe at its directional albedo, the specular share as its integral
+                w *= toward(-(d[0] * n[0] + d[1] * n[1] + d[2] * n[2]));
                 cosineDir(n, g.next(), g.next(), d);
             }
         }
@@ -218,6 +229,8 @@ int main(int, char **)
     enginetest::ggxSpecularAlbedoHemi(1.0, A, B);
     Ref ref;
     ref.aP = double(kRho) * enginetest::disneyDiffuseAlbedoHemi(1.0) + 0.04 * A + B;
+    ref.specBar = 0.04 * A + B;
+    for (int i = 0; i <= 256; ++i) ref.rhoDA[i] = double(kRho) * enginetest::disneyDiffuseAlbedo(double(i) / 256.0, 1.0);
     ref.R.resize(256);
     double Rmean = 0.0;
     for (size_t i = 0; i < ref.R.size(); ++i) {
@@ -374,22 +387,24 @@ int main(int, char **)
                 "%.5f; the reference's MC error %.2f q)\n", ratio, refRatio, ratio - refRatio,
                 std::fabs(ratio - refRatio) / (qRel * refRatio), blackRatio, refRatioErr / (qRel * refRatio));
     // (2) THE VOXEL STORE - its matte skin fed by the ray tier's SIDES' rays, a reader with no C2 of its own (the probe
-    // gathers are the same class). A side's ray reads THE CASCADES ALONE at its hit (rq_voxel_sides.comp: the cards are
-    // bound as stand-ins - a voxel that read a card closed a loop), so the skin is its own closed system: L = E + a_v G
-    // with a_v the voxel's own lobe, read from the all-matte room (a sealed uniform room holds E / (1 - a_v) exactly);
-    // the mirror room's skin against the path trace AT THE SKIN's OWN POINTS with that a_v. PRINTED, NOT ASSERTED (the
-    // lead's ruling owed): the fix reads +0.7 % (11 q) over it, (7) as built -5.7 %, before (7) -0.9 % - the voxel's
-    // re-emission is restored toward its viewer by the diffuse lobe's directional albedo, the reference's is Lambertian,
-    // and which of the two the 0.7 % is has not been measured.
+    // gathers are the same class; (7) as built read -5.7 % here). A side's ray reads THE CASCADES ALONE at its hit
+    // (rq_voxel_sides.comp). THE RATIO, as (1): the skin's mean in the mirror room / in the all-matte room, against the
+    // path trace's ratio AT THE SKIN's OWN CELLS with the engine's BRDF (a', the cards' row's) - the store's own residue
+    // (its lobe a_v, read from the all-matte room and printed) cancels in it to first order. DECLARED, PRINTED (the
+    // lead's ruling, 2026-10-29): the voxel skin's ratio reads +0.60 % (9.8 q) over its reference with the directional
+    // re-emission (+0.36 %, 5.9 q, with a Lambertian one) - THE VOXEL ROUTE's CROSS-CASCADE RESIDUE, REDS-1's: cascade 0
+    // holds no cell within 1.5 m of the mirror, the excess grows with the mirror a face sees (floor / ceiling +0.60 %,
+    // the +-x walls +0.32 %, the +z wall facing it +0.90 %) - a mirror lengthens the paths, so a side's continued ray is
+    // answered by a coarser cascade whose deficit differs from c0's. (7) as built read -5.7 % here (a black mirror), the
+    // fix +0.6 %; REDS-1's c0-clamped arm measures the residue.
     double vox[2] = { 0, 0 }, voxRef = 0.0, voxErr = 0.0, aV = 0.0;
     for (int room = 0; room < 2; ++room) {
         for (const double L : skin[room].L) vox[room] += L;
         vox[room] = skin[room].L.empty() ? 0.0 : vox[room] / double(skin[room].L.size());
     }
     if (vox[0] > double(kE) && !skin[1].p.empty()) {
-        aV = 1.0 - double(kE) / vox[0];
-        Ref rv = ref;
-        rv.aP = aV;
+        aV = 1.0 - double(kE) / vox[0];   // (printed: the store's own lobe, its residue against the engine's BRDF)
+        Ref rv = ref;                     // THE ENGINE's BRDF (a', the cards' row's): the ratio cancels the store's residue
         rv.mirror = true;
         const int per = std::max(64, int(917504 / skin[1].p.size()));
         double batch[4] = { 0, 0, 0, 0 };
@@ -408,17 +423,18 @@ int main(int, char **)
         for (const double b2 : batch) vv += (b2 - voxRef) * (b2 - voxRef);
         voxErr = std::sqrt(vv / 3.0) / 2.0;
     }
-    const double voxRatio = vox[0] > 0.0 ? vox[1] / vox[0] : 0.0, voxRefRatio = vox[0] > 0.0 ? voxRef / vox[0] : 0.0;
+    const double voxRatio = vox[0] > 0.0 ? vox[1] / vox[0] : 0.0, voxRefRatio = voxRef * (1.0 - ref.aP) / double(kE);
     const double qV = quantumOf(voxRef) / std::max(voxRef, 1e-9) * voxRefRatio;
     std::printf("   THE VOXEL STORE (the sides' rays): %zu / %zu skin cells, the voxel's lobe a_v %.5f (all-matte %.5f); the mirror room "
                 "%.5f against the path trace at its cells %.5f +- %.5f: the ratio %.5f against %.5f (%+.4f, %.2f q)\n",
                 skin[0].L.size(), skin[1].L.size(), aV, vox[0], vox[1], voxRef, voxErr, voxRatio, voxRefRatio,
                 voxRatio - voxRefRatio, qV > 0.0 ? std::fabs(voxRatio - voxRefRatio) / qV : 0.0);
-    CHECK(refRatioErr <= 0.25 * qRel * refRatio && voxErr / std::max(vox[0], 1e-9) <= 0.25 * qV,
+    CHECK(refRatioErr <= 0.25 * qRel * refRatio && voxErr * (1.0 - ref.aP) / double(kE) <= 0.25 * qV,
           "(0) the references' Monte Carlo error under q / 4");
     CHECK(ok[0] && ok[1] && std::fabs(ratio - refRatio) <= qRel * refRatio,
           "(1) A MIRROR WALL CONSERVES ENERGY IN THE STORE: the matte faces' mean, mirror room / all-matte room, within q "
           "of the path-traced reference's ratio");
+    // (2) is PRINTED, DECLARED by the lead (2026-10-29): not asserted, not loosened - see its head above
     std::printf("\ngi.mirror_closed_form: %d frames, %d failure(s)\n", frames, failures);
     return failures ? 1 : 0;
 }
