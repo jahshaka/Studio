@@ -277,7 +277,7 @@ est_of() {
     local w
     w=$(awk -v b="$1" '$1 == b { w = $2 } END { print w }' "$WALLS" 2>/dev/null)
     [ -n "$w" ] && { echo "$w"; return; }
-    case "$1" in app-off) echo 400 ;; engine-off) echo 340 ;; app-on) echo 120 ;; engine-on) echo 60 ;; cold-on) echo 300 ;; esac
+    case "$1" in app-off) echo 400 ;; engine-off) echo 340 ;; app-on) echo 120 ;; engine-on) echo 60 ;; cold-on) echo 330 ;; esac   # cold-on: 306 s measured, three rows, loaded (#122)
 }
 note_wall() {
     { grep -v "^$1 " "$WALLS" 2>/dev/null; echo "$1 $2"; } > "$WALLS.tmp" && mv "$WALLS.tmp" "$WALLS"
@@ -383,8 +383,11 @@ cold_boot() {
     local rest=$1 t0 rc wall log="$TESTS/warm-cold-rows.log" deadline
     room cold-on "$rest"
     # THE EXES' BOUND IS THE CALL's END, read after the card's wait (the runner subtracts the clock): a wait shorter
-    # than its bound leaves the exes the rest
+    # than its bound leaves the exes the rest. And the card's wait leaves them at least their estimate: room() gives
+    # the wait the budget less the estimate, so the end's own 15-s margin comes off the wait too (#122's proof: the seed
+    # finished 1 s inside the bound after a 248-s wait, 306 s of run against a 300-s estimate)
     deadline=$(( T0 + BUDGET - 15 ))
+    WAIT=$(( WAIT - 15 )); [ "$WAIT" -ge 1 ] || WAIT=1
     echo "warm-app-cache: booting $(what_of cold-on) (cold-on): $(grep -c . "$COLDROWS") row(s) on $DISPLAY, each uncapped" \
          "(to the call's end, $(( deadline - $(date +%s) )) s from now less the card's wait, at most ${WAIT} s)"
     t0=$(date +%s)
