@@ -1,6 +1,7 @@
 #!/bin/bash
 # tooling.gpu_lock_fifo - THE CARD's LOCK IS FIRST COME, FIRST SERVED (URGENT #113, HARNESS-3): scripts/gpu-exclusive.sh on a
 # PRIVATE lock (JAH_GPU_LOCK in a scratch dir, a scratch HOME; no GPU: the commands are sleeps):
+#   (0) an empty queue prints nothing;
 #   (1) a holder, eight waiters arriving in order, a SHORT one arriving late: the grants in ticket order
 #       (flock alone has no order: the late short one could win the release);
 #   (2) a ticket whose pid is dead ahead of the queue is skipped and removed (a killed waiter blocks nobody);
@@ -19,6 +20,9 @@ unset JAH_GPU_LOCK_HELD
 fails=0
 want() { if [ "$1" = 1 ]; then echo "  ok   $2"; else echo "  FAIL $2"; fails=$((fails + 1)); fi; }
 log=$T/grants
+# (0) AN EMPTY QUEUE PRINTS NOTHING (8B's master check: an unmatched glob's redirect printed "No such file" once)
+"$LOCKSH" --label E true > "$T/E.out" 2>&1
+want "$([ ! -s "$T/E.out" ] && echo 1)" "(0) an empty queue: the lock prints nothing ($(head -c 120 "$T/E.out"))"
 # (1) THE ORDER: eight waiters (a release wakes every flock waiter at once and the first one SCHEDULED wins - with
 # eight the race shows), then the late short one
 "$LOCKSH" --label H sh -c "echo H >> '$log'; sleep 2" > "$T/H.out" 2>&1 &
