@@ -327,6 +327,8 @@ source.row_budget 0.20  ship 3a0422b4e (2026-10-13)
 source.timeout_cap 0.13  solo, :72 (URGENT #48, 2026-10-24: every registered row within the 60 s cap, the text too)
 tooling.warm_app_cache 6.48  loaded (the box at load ~14), CPU, ctest, solo (HARNESS-4 URGENT #117 + #119, 2026-10-29: + a torn shared cache and the cold-on boot - five cases; was 6.60) (HARNESS-1 / URGENT #106 + the rows' tiers, 2026-10-29: the four boots' answers, the stamp only on a promotion, the -on boot after its -off, the budget and the card's bounded wait (1 s), the tiers' digest - fake boots on a scratch tests dir)
 tooling.gpu_lock_fifo 7.48  loaded (62 % CPU-idle, load 13.8), CPU, ctest, solo (HARNESS-4, URGENT #118, 2026-10-29: re-taken solo; 7.29 at 44d7b31da, loaded 93 % CPU-idle - URGENT #113, HARNESS-3: the card lock's ticket queue on a private lock - an empty queue silent, five waiters and a late short one in ticket order, a dead ticket skipped, --wait-max kept, a bounded waiter's place kept across its exit 75; sleeps, no GPU) - was 14.95, over a CPU row's 10 s (source.row_budget)
+tooling.arm123.fixture 0.01  ARM (HARNESS-4 #123 proof, reverted next commit)
+tooling.arm123.behind 0.01  ARM (HARNESS-4 #123 proof, reverted next commit)
 tooling.law_records 0.16  loaded (89 % CPU-idle), CPU, ctest (HARNESS-3 (b), 2026-10-29: scripts/gate_runlog.py over a fake ctest stream - every LAW line in the row's record, green and red, past the output cap; a fixture's `  FAIL (n)` line its fail line; no GPU)
 source.row_declares_needs 0.35  all n=2
 source.scene_no_friends 0.01  spec EU-2 stage 2 (2026-10-14)
