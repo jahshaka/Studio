@@ -24,8 +24,8 @@
 # k 14 / 28 stay RED at 1.86 / 4.60 %. B4's VIRTUAL-POINT history was built and measured here and REVERTED (the lead's
 # ruling (b)): 3.51 / 3.99 / 0.11 bare, 3.55 / 3.53 / 0.23 with a same-plane tap, 3.16 / 3.05 / 0.24 with Lumen's 3 x 3
 # pick - k 14 doubled, because one mean distance across a lobe spanning a depth break (a near strip edge before the far
-# walls) names a point on neither. The filter keeps the lobes' mean distance layers (no reader); the leftover: the
-# distance's variance as a third moment and the two histories blended by the parallax error it predicts.
+# walls) names a point on neither. The distance layers are deleted with it (no reader); the leftover re-adds them with
+# the distance's variance as a third moment and blends the two histories by the parallax error it predicts.
 # 960x540; two jahlab sessions: the walk (600 + 60 and its door's frames) and the converged poses (6 x 600 + 3 x 14).
 # usage: rough_lag.sh <jahlab> <work dir>
 set -u
