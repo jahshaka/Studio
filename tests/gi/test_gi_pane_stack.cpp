@@ -156,7 +156,6 @@ int main(int argc, char **argv)
                 admitted = g.cards.admitted;
                 quiet = still ? quiet + 1 : 0;
             }
-            std::printf("   ARM atRest: quiet %d after %d frames\n", quiet, frames);
             return quiet >= 30;
         };
         // the direct half's mean over the floor's card texels under the stack (its middle 1.6 x 1.6 m)
@@ -172,20 +171,6 @@ int main(int argc, char **argv)
                     ++n;
                 }
             mean = n ? sum / double(n) : 0.0;
-            {   // MEASURING ARM (8B, to be reverted): the texels read and why not
-                size_t okN = 0, litN = 0, readN = 0;
-                for (int i = -4; i <= 4; ++i)
-                    for (int j = -4; j <= 4; ++j) {
-                        CardSample c;
-                        const bool r = scene->readCardAt(Vec3(0.2f * float(i), 0.0f, 0.2f * float(j)), Vec3(0, 1, 0), c);
-                        readN += r; okN += r && c.ok; litN += r && c.ok && c.lit;
-                    }
-                const GiStatus g = scene->published().gi;
-                std::printf("   ARM direct: read %zu ok %zu lit %zu | cards resident %u instances %u relights %llu admitted %llu queue %u decisions %llu\n",
-                            readN, okN, litN, g.cards.cardsResident, g.cards.instancesResident,
-                            (unsigned long long)g.cards.relights, (unsigned long long)g.cards.admitted, g.cards.queueLength,
-                            (unsigned long long)g.cards.restDecisions);
-            }
             return n > 40;
         };
         for (NodeId n : slabs) scene->setNodeVisible(n, false);
