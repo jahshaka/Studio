@@ -1226,6 +1226,23 @@ endif()
 # scripts/lab/warm.sh --tier epic at the walk's two poses on that data root (walk.sh says them; a stamp is keyed on the tier and
 # the cameras).
 
+# gi.rest_oracle_lamp / gi.rest_oracle_mover (PHOTON-7 stage 8B, B1's acceptance: THE ORACLE) - after a change at rest
+# (photon-room's lamp step; photon-glass's mover played 60 frames, its gather's own picture: the photon diffuse view)
+# the held picture equals a fresh rest of the final scene (the rest restarted whole, held again) within one code, the
+# gather held whole at both shots. rest_oracle.sh says the law. 960x540; one jahlab session each: 902 and 962 frames.
+if(TARGET jahlab)
+    jah_gpu_row(gi.rest_oracle_lamp CLASS engine FRAMES 902
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rest_oracle.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/rest_oracle_lamp lamp
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.rest_oracle_lamp PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_gpu_row(gi.rest_oracle_mover CLASS engine FRAMES 962
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rest_oracle.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/rest_oracle_mover mover
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.rest_oracle_mover PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
 # gi.hold_after_stop (PHOTON-2 stage 2 and its round, rev 8's H4 as rev 9 restated it) — THE GATHER SETTLES, THEN HOLDS:
 # jahlab's stillness door on photon-room (a walk inside one cell; a lamp step at rest: the field's change within 36
 # frames, falling over 10-frame windows, then the hold, no burst) and photon-court's 15 m crossing (the change falling
