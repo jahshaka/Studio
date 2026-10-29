@@ -583,6 +583,27 @@ set_tests_properties(gi.card_lamp_shadow gi.card_lamp_shadow_area PROPERTIES
 set_tests_properties(gi.card_lamp_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 283)
 set_tests_properties(gi.card_lamp_shadow_area PROPERTIES JAHSHAKA_TEST_FRAMES 893)
 
+# gi.area_follow (PHOTON-7 stage 8B, B2; a builder's row, archived at the merge) — THE AREA LIGHT'S VISIBILITY RESTS
+# PER TEXEL: a movable block slides under an area light; the far penumbra of a still plate keeps its rest bit for bit
+# through the move, the block's shadow follows it, the view holds again within n^2 + 8 frames
+# (test_gi_area_follow.cpp says the laws). A fixture.
+add_executable(test_gi_area_follow test_gi_area_follow.cpp)
+set_target_properties(test_gi_area_follow PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_area_follow PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_area_follow PRIVATE JahshakaEngine)
+add_dependencies(test_gi_area_follow JahshakaEngineMedia)
+jah_gpu_row(gi.area_follow CLASS engine COMMAND test_gi_area_follow
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.area_follow PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.area_follow PROPERTIES JAHSHAKA_TEST_FRAMES 420)
+
 # gi.soft_mover_ghost / gi.mover_bus_sky (PHOTON-7 stage 8A, A1; ONE_PICTURE B2) — A MOVER IS GI GEOMETRY, by region:
 # a door opened in play leaves no closed-door voxel or bounce (the store at rest is a fresh build's - geometry bit for
 # bit, light within a code), and a bus 10 m away occludes the floor's sky share (the store took it where it stopped,
