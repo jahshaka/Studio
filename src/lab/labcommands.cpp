@@ -62,6 +62,13 @@ const std::vector<VerbDoc> &verbs()
           "radiance, C2's traced lobe, the NEE part, the record and its flags) and the temporal pass's rest terms (the "
           "count v, the stop count, the standard error e against its share, the answer, the sample) - one line a frame "
           "to <file> (the arm reflect.pick)" },
+        { "colourpick", "colourpick file", 1, 1,
+          "THE COLOUR PICK's RING (BUGS-8, the arm colour.pick = 1 + x + 4096 y, set before the frames it reads - e.g. "
+          "before a `stillness`): every recorded frame of the last 256, by engine frame, and each fragment the colour "
+          "passes drew at the pixel - its template (pbs / atom), fog and blend, depth, target size, the pass-buffer lights' "
+          "sum (the colour before the first Forward+ lamp), each Forward+ lamp's attenuation after its shadow ray and the "
+          "colour before the second, the colour before the environment's BRDF with the diffuse and specular environment, "
+          "the output before the fog law and after it, its alpha and the fog's lit share - one line a fragment to <file>" },
         { "histdump", "histdump file", 1, 1,
           "the reflection's per-texel history count (the state's N / 8 + v, the arm reflect.historyReadback's copy; the "
           "trace's grid, the eyes side by side) as one header line (W H frame) and one row of counts a line to <file> - "
