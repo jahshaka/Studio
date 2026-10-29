@@ -31,7 +31,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstdlib>
 #include <cstdio>
 #include <string>
 
@@ -113,7 +112,7 @@ int main(int argc, char **argv)
         l.rectWidth = 4.0f;
         l.rectHeight = 4.0f;
         l.colour = Colour(1.0f, 1.0f, 1.0f);
-        l.intensity = std::getenv("JAH_ARM_NOLAMP") ? 0.0f : 20.0f;   // MEASURING ARM (reverted)
+        l.intensity = 20.0f;
         l.range = 40.0f;
         s->setNodeTransform(lamp, Vec3(0.0f, hy + t + 1.0f, -4.0f), Quat(), Vec3(1, 1, 1));
         s->setLight(lamp, l);
@@ -160,34 +159,6 @@ int main(int argc, char **argv)
         quiet = (!g.cascades.empty() && !g.chainOwed && !g.feedbackOwed && !g.ifdWorking && cardsStill && areaHeld)
                     ? quiet + 1 : 0;
         if (quiet >= 12) { rest = f - quiet; break; }
-    }
-    for (int c = 0; c < 4; ++c) {   // MEASURING ARM (11-2, reverted): the store's cells around the roof, by cell row
-        GiVoxelVolume v;
-        if (!s->giVoxelLight(c, v) || !v.available || v.lightFront.empty()) continue;
-        const float cell = v.cell[1];
-        for (int y = 0; y < v.height; ++y) {
-            const float y0 = v.origin[1] + cell * y, y1 = y0 + cell;
-            if (y1 < 4.5f || y0 > 5.9f) continue;
-            double nf = 0, front = 0, back = 0, ny = 0, cov = 0, maxBack = 0, maxFront = 0;
-            int twoSided = 0;
-            for (int z = 0; z < v.depth; ++z)
-                for (int x = 0; x < v.width; ++x) {
-                    const float px = v.origin[0] + v.cell[0] * (x + 0.5f), pz = v.origin[2] + v.cell[2] * (z + 0.5f);
-                    if (std::fabs(px) > 10.0f || std::fabs(pz) > 10.0f) continue;
-                    const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
-                    const float a = v.light[i + 3];
-                    if (!(a > 0.5f)) continue;
-                    const double F = std::max(std::max(v.lightFront[i], v.lightFront[i + 1]), v.lightFront[i + 2]) / a;
-                    const double Bk = std::max(std::max(v.lightBack[i], v.lightBack[i + 1]), v.lightBack[i + 2]) / a;
-                    nf += 1; front += F; back += Bk; cov += a; ny += 2.0 * v.normal[i + 1] - 1.0;
-                    maxBack = std::max(maxBack, Bk); maxFront = std::max(maxFront, F);
-                    twoSided += v.normal[i + 3] > 0.5f ? 1 : 0;
-                }
-            if (nf > 0)
-                std::printf("   STORE c%d cell %.3f m, row y %.3f .. %.3f: %.0f cells (two-sided %d), normal.y %+.3f, front %.5f "
-                            "(max %.5f) back %.5f (max %.5f) (codes of R: front %.2f back %.2f)\n", c, cell, y0, y1, nf, twoSided,
-                            ny / nf, front / nf, maxFront, back / nf, maxBack, front / nf / bar, back / nf / bar);
-        }
     }
     std::printf("   %s: at rest after %d frames; the brightest pixel of any frame %.6f (%.3f codes of R) at frame %d, %u px "
                 "over one code; at rest %.6f (%.3f codes), %u px over\n", mode.c_str(), rest, worst, worst / bar,
