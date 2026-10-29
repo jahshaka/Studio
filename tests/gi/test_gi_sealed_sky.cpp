@@ -213,7 +213,7 @@ int main(int argc, char **argv)
 
     // THE ROOM's voxels of one cascade: the occupied cells whose centre lies inside the room (x, z in [-2, 2], y in
     // [0, 3]); the brightest channel of each one's light (un-premultiplied); and the roof's top cells (the reference)
-    struct VoxRead { size_t cells = 0; double peak = 0.0; size_t roofCells = 0; double roofMean = 0.0; bool ok = false; };
+    struct VoxRead { size_t cells = 0; double peak = 0.0; size_t roofCells = 0; double roofMean = 0.0; bool ok = false; char where[256] = {}; size_t over = 0; };
     const auto readVoxels = [&](int c) {
         VoxRead r;
         GiVoxelVolume v;
@@ -231,7 +231,14 @@ int main(int argc, char **argv)
                     const double L = std::max(v.light[i], std::max(v.light[i + 1], v.light[i + 2])) / cOcc;
                     if (std::fabs(cx) < 2.0 && std::fabs(cz) < 2.0 && cy > 0.0 && cy < 3.0) {
                         ++r.cells;
+                        if (L > r.peak) {   // MEASURING ARM (REDS-1 item 3, reverted after its one run): the brightest cell's facts
+                            std::snprintf(r.where, sizeof(r.where), "(%.3f %.3f %.3f) c %.3f front %.6f back %.6f n (%.2f %.2f %.2f) two %d",
+                                          cx, cy, cz, cOcc, std::max(v.lightFront[i], std::max(v.lightFront[i + 1], v.lightFront[i + 2])) / cOcc,
+                                          std::max(v.lightBack[i], std::max(v.lightBack[i + 1], v.lightBack[i + 2])) / cOcc,
+                                          2 * v.normal[i] - 1, 2 * v.normal[i + 1] - 1, 2 * v.normal[i + 2] - 1, int(v.normal[i + 3] > 0.5f));
+                        }
                         r.peak = std::max(r.peak, L);
+                        if (L > 0.000244) ++r.over;
                     }
                     // the roof's top: the cell holding y = 3.4 over the roof's middle
                     if (std::fabs(cx) < 1.5 && std::fabs(cz) < 1.5 && cy - 0.5 * v.cell[1] <= 3.4 &&
@@ -252,6 +259,7 @@ int main(int argc, char **argv)
             const VoxRead vr = readVoxels(c);
             std::printf("   (3) cascade %d: %zu voxels inside the room, the brightest %.6f (%.4f %% of R)\n", c, vr.cells,
                         vr.peak, R > 0.0 ? 100.0 * vr.peak / R : -1.0);
+            std::printf("       ARM: %zu cells over 0.000244; the brightest at %s (cell %.4f m)\n", vr.over, vr.where, 0.0);
             vOk = vOk && vr.ok && vr.cells > 0;
             vWorst = std::max(vWorst, vr.peak);
         }
