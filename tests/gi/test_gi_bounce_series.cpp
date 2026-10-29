@@ -107,6 +107,7 @@ const int kCarryFadeFrames = 120;   // (7): a sustained change, the injected bri
 const int kFadeFrames = 1200;   // (5): every inner-wall voxel under a step of the store a frame (printed)
 
 bool g_armButted = false;   // MEASURING ARM (REDS-1 1b, reverted after its one run)
+bool g_armShell = false;
 NodeId slab(Scene *s, const Vec3 &centre, const Vec3 &size, float emission)
 {
     PbrParams p;
@@ -220,6 +221,31 @@ int main(int argc, char **argv)
         sh[0] = sh[1] = sh[2] = S;   // a uniform environment of radiance S (Engine.h, setAmbientSh)
         s->setAmbientSh(sh);
         const float w = 2.0f * kHalfX + 2.0f * kThick, d = 2.0f * kHalfZ + 2.0f * kThick;
+        if (g_armShell) {   // MEASURING ARM (REDS-1 1b): the room as ONE closed shell mesh - no hidden face anywhere
+            MeshData d;
+            const MeshData c = enginetest::unitCubeMesh();
+            const auto add = [&](float cx, float cy, float cz, float sx, float sy, float sz, bool inward) {
+                const unsigned b0 = unsigned(d.positions.size() / 3);
+                for (size_t k = 0; k + 2 < c.positions.size(); k += 3) {
+                    d.positions.insert(d.positions.end(), { cx + sx * c.positions[k], cy + sy * c.positions[k + 1], cz + sz * c.positions[k + 2] });
+                    const float sgn = inward ? -1.0f : 1.0f;
+                    d.normals.insert(d.normals.end(), { sgn * c.normals[k], sgn * c.normals[k + 1], sgn * c.normals[k + 2] });
+                }
+                for (size_t k = 0; k + 2 < c.indices.size(); k += 3) {
+                    if (inward) d.indices.insert(d.indices.end(), { b0 + c.indices[k], b0 + c.indices[k + 2], b0 + c.indices[k + 1] });
+                    else d.indices.insert(d.indices.end(), { b0 + c.indices[k], b0 + c.indices[k + 1], b0 + c.indices[k + 2] });
+                }
+            };
+            add(0.0f, 0.5f * kHeight, 0.0f, 2.0f * kHalfX + 2.0f * kThick, kHeight + 2.0f * kThick, 2.0f * kHalfZ + 2.0f * kThick, false);
+            add(0.0f, 0.5f * kHeight, 0.0f, 2.0f * kHalfX, kHeight, 2.0f * kHalfZ, true);
+            PbrParams pp;
+            pp.albedo = Colour(kRho, kRho, kRho);
+            pp.roughness = 1.0f;
+            pp.emissive = Colour(E, E, E);
+            const NodeId n = s->createNode();
+            s->attachMesh(n, s->createMesh(d), s->createPbrMaterial(pp));
+            enginetest::setNodePosition(s, n, Vec3(0.0f, 0.0f, 0.0f));
+        } else
         if (g_armButted) {   // MEASURING ARM (REDS-1 1b): the same room of BUTTED slabs - no two solids overlap
             slab(s, Vec3(0.0f, -0.5f * kThick, 0.0f), Vec3(w, kThick, d), E);
             slab(s, Vec3(0.0f, kHeight + 0.5f * kThick, 0.0f), Vec3(w, kThick, d), E);
@@ -353,8 +379,9 @@ int main(int argc, char **argv)
             continue;
         }
         if (std::getenv("JAH_REDS_ARM")) {   // MEASURING ARM (REDS-1 1b): where the dark inner-skin voxels are, overlapped and butted
-            for (int butted = 0; butted < 2; ++butted) {
+            for (int butted = 0; butted < 3; ++butted) {
                 g_armButted = butted == 1;
+                g_armShell = butted == 2;
                 Arm m = arm(tiers[t], kE, 0.0f, false);
                 GiVoxelVolume v;
                 // classes on the x walls' and z walls' inner skin: [0] mid-face, [1] within 0.5 m of the floor or
@@ -394,7 +421,7 @@ int main(int argc, char **argv)
                             k = 4;
                         }
                         sum[k] += L; cnt[k] += 1; dark[k] += L < 1.575 ? 1 : 0;
-                        if (L < 1.575 && shown < 24 && butted == 0 && k != 3) {
+                        if (L < 1.575 && shown < 8 && butted == 2) {
                             ++shown;
                             std::printf("     dark k%d p (%.3f %.3f %.3f) L %.4f n (%.2f %.2f %.2f) two %d c %.3f covP (%.2f %.2f %.2f) covN (%.2f %.2f %.2f) W %u\n",
                                         k, p[0], p[1], p[2], L, nn[0], nn[1], nn[2], int(vl.normal[i + 3] > 0.5f), c,
@@ -404,12 +431,13 @@ int main(int argc, char **argv)
                     }
                 }
                 const char *kn[5] = { "walls mid", "walls near floor/ceiling", "walls near a vertical corner", "walls near both", "floor/ceiling edge strip" };
-                std::printf("   ARM 1b %s (L main %.6f):\n", butted ? "BUTTED" : "OVERLAPPED", m.cascades.empty() ? -1.0 : m.cascades[0].mean);
+                std::printf("   ARM 1b %s (L main %.6f):\n", butted == 2 ? "ONE SHELL" : butted ? "BUTTED" : "OVERLAPPED", m.cascades.empty() ? -1.0 : m.cascades[0].mean);
                 for (int k = 0; k < 5; ++k)
                     std::printf("     %-30s %6d voxels, mean L %.5f, %d under 1.575\n", kn[k], int(cnt[k]), cnt[k] > 0 ? sum[k] / cnt[k] : 0.0, int(dark[k]));
                 drop(m);
             }
             g_armButted = false;
+            g_armShell = false;
             continue;
         }
         // THE SKY-LEAK ARM: the escape share, per cascade (the series half)
