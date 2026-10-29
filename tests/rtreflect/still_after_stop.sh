@@ -119,10 +119,10 @@ if rows:
     elif not still: fails.append("(b') the glass moved after the hold")
     end = hold if held else len(rows)
     glossy = [float(r["glossy_mean"]) for r in rows]
-    # FROM THE REST'S OWN START (its last, before the hold) + 16 frames - past its hand-over's transient (2N / 4 frames);
-    # here the rest begins on the stop's first frame, so frame 17
+    # FROM THE REST'S OWN SETTLE: 16 frames past the later of its last start and the last change of its inputs (a visible
+    # card relight, a close handed at rest - rise_law.settle_start, PHOTON-7 8B B2's re-derivation)
     restStart = max([i for i in range(1, end) if int(rows[i]["refl_rest_frames"]) <= 1] or [1])
-    start = restStart + 16
+    start = rise_law.settle_start(rows, end)
     spans = rise_law.windows(start, end)
     win10 = [sum(glossy[a:b]) / (b - a) for a, b in spans]
     print("(a) glossy mean change, 10-frame windows from %d to the hold: %s" % (start, " ".join("%.4f" % w for w in win10)))
