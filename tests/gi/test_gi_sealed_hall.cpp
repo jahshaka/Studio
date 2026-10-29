@@ -31,6 +31,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <cstdlib>
 #include <cstdio>
 #include <string>
 
@@ -112,7 +113,7 @@ int main(int argc, char **argv)
         l.rectWidth = 4.0f;
         l.rectHeight = 4.0f;
         l.colour = Colour(1.0f, 1.0f, 1.0f);
-        l.intensity = 20.0f;
+        l.intensity = std::getenv("JAH_ARM_NOLAMP") ? 0.0f : 20.0f;   // MEASURING ARM (reverted)
         l.range = 40.0f;
         s->setNodeTransform(lamp, Vec3(0.0f, hy + t + 1.0f, -4.0f), Quat(), Vec3(1, 1, 1));
         s->setLight(lamp, l);
