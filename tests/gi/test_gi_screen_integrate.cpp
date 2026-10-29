@@ -16,6 +16,9 @@
 //   AXIS-ALIGNED (B2's own case): every diffuse cone of its surfaces is a 45-degree cone, a TIE of the march's stepping
 //     axis (jahVoxelAxis) - DECIDED (jahVoxelAxis's tolerance), so the two routes agree here too.
 //   TURNED 21 degrees about a generic axis: no surface on a voxel axis, no tie - the producer away from the seam.
+//   THE CLASS (REDS-1 (B), the lead's rule): a voxel-side rule that reads right on an axis-aligned box can read wrong on a
+//   turned one (a face covers one axis there, two or three here) - c15de7326's side rule did: axis-aligned 4.84 -> 5.20 %,
+//   TURNED 10.86 -> 18.85 %. EVERY voxel-side law runs on the TURNED arrangement, never on the axis-aligned one alone.
 // THE BARS: (2) the store's quantum q at the reference's value and the voxel route's own noise (the lead's ruling, R12);
 // (2') the reference's own error plus one display code (re-derived, REDS-1: below).
 // THE LAWS, per arrangement:
