@@ -91,6 +91,15 @@ def converge_after(w, f):
         now, before = int(w[i]["rest_frames"] or 0), int(w[i - 1]["rest_frames"] or 0)
         if now >= 1 and (before == 0 or now < before): return fr - f - 1
     return 0
+def handover_after(w, f, h):
+    # B3 (PHOTON-7 stage 8B): THE HAND-OVER's frames - a refinement on a held cell re-rests it in the background and then
+    # walks its picture to the new rest at a code a frame, M = ceil(delta / one code) frames (the engine's handover_m,
+    # the longest begun on a frame); the rest's completion includes the walk, so a hold lands M frames later
+    m = 0
+    for r in w:
+        fr = int(r["frame"])
+        if fr > f and (h is None or fr <= h): m = max(m, int(r.get("handover_m") or 0))
+    return m
 def window(name, part="walk"):
     return [r for r in csv.DictReader(open(os.path.join(wd, "data", "stillness", name + ".tsv")), delimiter="\t") if r["window"] == part]
 rows_of = owed_rows.rows_of
@@ -141,10 +150,11 @@ h = held_from(w)
 over = [(int(r["frame"]), int(r["plaster_max"])) for r in w[1:] if int(r["plaster_max"]) > 1]
 owed, stray, last = owed_rows.judge(w)   # tests/support/owed_rows.py: the law, one implementation for both rows
 C = converge_after(w, last)
-print("room sub-cell: post-stop rows owed by the motion %s; stray %s; held from frame %s (the last owed row %d + C %d + 17 = %d); plaster frames over a code: %s"
-      % (owed or "none", stray or "none", h, last, C, last + C + 17, over[:6]))
+M = handover_after(w, last, h)
+print("room sub-cell: post-stop rows owed by the motion %s; stray %s; held from frame %s (the last owed row %d + C %d + 17 + the hand-over M %d = %d); plaster frames over a code: %s"
+      % (owed or "none", stray or "none", h, last, C, M, last + C + 17 + M, over[:6]))
 if stray: fails.append("(1) room sub-cell: every post-stop GI row owed by the motion within its bound: %s" % stray[:4])
-if h is None or h > last + C + 17: fails.append("(2) room sub-cell: the gather held by the last owed row + C + 17: %s > %d" % (h, last + C + 17))
+if h is None or h > last + C + 17 + M: fails.append("(2) room sub-cell: the gather held by the last owed row + C + 17 + M: %s > %d" % (h, last + C + 17 + M))
 if over: fails.append("room sub-cell: the plaster <= 1 code a frame from frame 1: %s" % over[:6])
 # ROOM, the lamp step (f)
 w = window("room-lamp")
@@ -197,7 +207,8 @@ hr = held_from(w, "refl_held")
 print("court crossing: the gather held from %s, the reflection from %s, the view from %s" % (hg, hr, h))
 if hg is None: fails.append("(c) court: the gather never held")
 Cw = converge_after(w, lastw)
-if hg is not None and hg > lastw + Cw + 17: fails.append("(c) court: the gather's hold <= the last frame it waited on + C + 17: %d > %d" % (hg, lastw + Cw + 17))
+Mw = handover_after(w, lastw, hg)
+if hg is not None and hg > lastw + Cw + 17 + Mw: fails.append("(c) court: the gather's hold <= the last frame it waited on + C + 17 + M: %d > %d (M %d)" % (hg, lastw + Cw + 17 + Mw, Mw))
 if hg is not None and hg <= lastw: fails.append("(c) court: the gather's hold after the last frame it waited on: %d <= %d" % (hg, lastw))
 if h is not None and ((hg is not None and h < hg) or (hr is not None and h < hr)):
     fails.append("(c) court: THE VIEW HOLDS WHEN EVERY READER HOLDS: the view's hold %d before a reader's (the gather %s, "
