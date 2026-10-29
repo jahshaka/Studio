@@ -12,6 +12,11 @@
 #     a field row is the REFINEMENT
 #     of a plane the window entered before the stop (no window move after it), within the restart's depth + the
 #     marks' lag (GiStatus::ifdRestartDepth + ifdMarkLag) - every post-stop row printed with its cause and its stamp,
+#     KNOWN RED (PHOTON-7 8B, 2026-10-29; the bug lane's on photon-7, its owner named at 8B's hand-off): "the plaster
+#     <= 1 code a frame" fails on ONE PIXEL of the image's last row, (873, 539), a one-frame 6-code dip (59 -> 53 -> 59) at
+#     frames carrying visible card_to_card relights (58-60 after the stop; the same class exposed by timing at 14/19 and
+#     24/28 on 8B's earlier tips) - measured NOT the gather (its diffuse, rough specular and sky visibility steady there),
+#     NOT the reflection (its view steady), NOT the area visibility's rest; the pass is the instrument's to name.
 #     any other cause or a row past its bound RED; (2) the gather held <= the last such row + C + 17 (C since PHOTON-7
 #     stage 8B, B1: the cells' measured convergence after it - converge_after); the plaster's
 #     per-frame change <= 1 code from frame 1;
