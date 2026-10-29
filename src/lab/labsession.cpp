@@ -773,8 +773,6 @@ bool Session::exec(const Command &c)
     } else if (c.verb == "play") {
         if (!onOff(a0, mPlaying, v)) { ok = false; labFail("LAB REFUSED play '%s'\n", a0.c_str()); }
         else {
-            mPlaying = v;
-            mDoc->setPlaying(v);
             // what plays: the nodes carrying an animation, and how many of them a property track (position, rotation,
             // scale: the document's own) moves - a skeletal clip is the engine's (the mirror pushes the clock)
             int animated = 0, tracks = 0, clips = 0;
@@ -790,8 +788,19 @@ bool Session::exec(const Command &c)
                 for (int i = 0; i < n->childCount(); ++i) walk(n->childAt(i));
             };
             walk(mDoc->getRootNode().data());
-            std::printf("LAB PLAY %s: %d nodes carry an animation (%d with a property track), %d clips in all\n",
-                        v ? "on" : "off", animated, tracks, clips);
+            // A VERB THAT MOVES NOTHING FAILS (URGENT #110: gi.rest_oracle_mover passed for a day on `play on` in an
+            // environment with no animation - "0 nodes" printed, nothing moved): a row that wants an object to move
+            // uses `slide`, and nothing here is a silent no-op
+            if (animated == 0 && clips == 0) {
+                ok = false;
+                labFail("LAB REFUSED play %s: nothing in the scene carries an animation (0 nodes, 0 clips) - it would move "
+                        "nothing (slide <object> dx,dy,dz N moves an object)\n", a0.c_str());
+            } else {
+                mPlaying = v;
+                mDoc->setPlaying(v);
+                std::printf("LAB PLAY %s: %d nodes carry an animation (%d with a property track), %d clips in all\n",
+                            v ? "on" : "off", animated, tracks, clips);
+            }
         }
     } else if (c.verb == "overlay") {
         if (!onOff(a0, mOverlay, v)) { ok = false; labFail("LAB REFUSED overlay '%s'\n", a0.c_str()); }

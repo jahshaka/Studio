@@ -20,7 +20,8 @@ const std::vector<VerbDoc> &verbs()
         { "overlay", "overlay on|off|toggle", 1, 1, "the F3 rows: triangles, occluded, frame ms, tier, view, camera (View::setOverlay)" },
         { "play", "play on|off|toggle", 1, 1,
           "the document's animation clock (Scene::setPlaying; each frame Scene::advance one 1/60 s step): the scene's "
-          "animated nodes play - Bistro's, under the stillness door (PHOTON-2 round 2, G6)" },
+          "animated nodes play - Bistro's, under the stillness door (PHOTON-2 round 2, G6); REFUSED where nothing carries "
+          "an animation (it would move nothing: `slide` moves an object)" },
         { "reflections", "reflections both|rays|screen", 1, 1,
           "the view's reflection sources (PostFxDesc::reflectSources): both = the one estimator (the screen trace first, "
           "the rays for the rest), rays = the rays alone, screen = the screen alone (its misses no sample) - the agreement "
