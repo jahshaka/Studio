@@ -53,8 +53,8 @@ engine.planar_asan 10.52  quiet n=39
 engine.lod_rule_parity 4.78  solo, the card lock held, :71 (ATOM-6 stage 2c, 2026-10-21: the exact rule's one arm + the empty top group)
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
-frame.streaming_picture 1.47  solo, its own cold compiles (no shader cache: the subject), the card lock held, :83 (BUGS-7 stage 2, 2026-10-20)
-frame.monitor_pop 2.46  solo, the card lock held, :83 (FRAME-MONITOR-DOOR-1 stage 4: the save arm added, 2026-10-18)
+frame.streaming_picture 2.28  loaded, the card lock held, :77, registered COLD, its exe's driver cache warmed by cold-on (HARNESS-4 URGENT #119, 2026-10-29; was 1.47 solo :83, BUGS-7 stage 2, 2026-10-20: its own cold compiles, no shader cache: the subject)
+frame.monitor_pop 3.49  loaded, the card lock held, :77, registered COLD, its exe's driver cache warmed by cold-on (HARNESS-4 URGENT #119, 2026-10-29; was 2.46 solo :83, FRAME-MONITOR-DOOR-1 stage 4: the save arm added, 2026-10-18)
 frame.interpolation 0.70  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.record_determinism 1.54  solo, warm, the card lock held (ENGINE-UPGRADE-U3 stage 1, 2026-10-15)
 gate.selection 7.82  TOOLING-2 round 3 2026-10-19 (+ the require_tier / why_has cases; RE-PRICE IT SOLO at the sprint's gate): un-niced on the 20-core box at load ~4 (7.21 / 7.32; no solo window — other lanes live; the row holds no card), after the inventory copy by pickle and the scripts' modules read once (deepcopy + per-select reads were 3 s); its cases: + BULLET's lane, the CMake hunks, the lints, the patched Bullet source
