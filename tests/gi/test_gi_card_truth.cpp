@@ -296,10 +296,10 @@ int main(int, char **)
                 // bounce alone
                 CardSample pc;
                 const bool okPatch = s->readCardAt(Vec3(3.2f, 2.0f, 0.0f), Vec3(-1, 0, 0), pc, patch) && pc.ok;
-                // (the Indirect layer is R11G11B10F: its green a 6-bit mantissa, so the bounce-lit texel's radiance - the
-                // fresh indirect, RGBA16F - and its cached half agree to that layer's step)
+                // (the Indirect layer is RGBA16F like the radiance since REDS-1, both rounded to nearest: the bounce-lit
+                // texel's radiance and its cached half agree to one half-float step)
                 const double qInd = pc.indirect[1] > 0.0f
-                                        ? std::ldexp(1.0, int(std::floor(std::log2(double(pc.indirect[1])))) - 6) : 0.0;
+                                        ? std::ldexp(1.0, int(std::floor(std::log2(double(pc.indirect[1])))) - 10) : 0.0;
                 bool ok = rest >= 0 && okPatch && std::fabs(pc.radiance[1] - pc.indirect[1]) <= qInd;
                 std::printf("   %s: at rest after %d frames; the patch's centre texel: radiance %.6f, its indirect "
                             "alone %.6f\n", card ? "THE CARDED WALL" : "THE UNCARDED WALL", rest,

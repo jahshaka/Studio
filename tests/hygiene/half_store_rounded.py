@@ -68,7 +68,7 @@ HLMS_STORES = {
     'media/Photon/Voxel/AnisotropicMipVctStep1_piece_cs.any':
         ('AnisotropicMipVctStep1_cs', {'outLightHigherMip0', 'outLightHigherMip1', 'outLightHigherMip2'}),
     'media/Hlms/Jahshaka/JahCardLight_cs.glsl':
-        ('JahCardLight_cs', {'cardRadiance', 'cardGather'}),
+        ('JahCardLight_cs', {'cardRadiance', 'cardGather', 'cardIndirect', 'cardFlat'}),
 }
 MACRO_FLOAT = re.compile(r'#define\s+(jahStoreLight|jahStoreDirect)\(\s*x\s*\)\s*(.*)')
 
