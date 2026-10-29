@@ -118,6 +118,7 @@ int main(int argc, char **argv)
         else if (a == "--data-root") { const char *v = next(); if (!v) return usage("--data-root needs a directory"); opt.dataRoot = QDir(QString::fromLocal8Bit(v)).absolutePath(); }
         else if (a == "--script") { const char *v = next(); if (!v) return usage("--script needs a file"); opt.script = QString::fromLocal8Bit(v); }
         else if (a == "--tier") { const char *v = next(); if (!v) return usage("--tier needs low|medium|high|epic"); opt.tier = QString::fromLocal8Bit(v); }
+        else if (a == "--arm") { const char *v = next(); const char *eq = v ? std::strchr(v, '=') : nullptr; if (!eq) return usage("--arm needs <name>=<value>"); opt.bootArms.emplace_back(std::string(v, size_t(eq - v)), std::strtod(eq + 1, nullptr)); }
         else if (a == "--camera") { const char *v = next(); if (!v || !sixFloats(v, opt.camPos, opt.camTarget)) return usage("--camera x,y,z,tx,ty,tz"); opt.hasCamera = true; }
         else if (a == "--size") {
             const char *v = next();

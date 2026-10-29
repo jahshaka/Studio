@@ -1621,7 +1621,7 @@ static int hitresMain(Engine *e)
         w.face = true;
         for (int k = 0; k < 3; ++k) {
             w.v[k] = t.radiance[k];
-            const int bits = st.radianceFormat == "R11G11B10F" ? (k == 2 ? 5 : 6) : 10;
+            const int bits = 10;   // the radiance layer is RGBA16F (10-2d; its R11G11B10F arm deleted, REDS-1)
             w.q[k] = t.radiance[k] > 0.0f ? 0.5 * std::ldexp(1.0, std::ilogb(double(t.radiance[k])) - bits)
                                           : 0.0;
             plateau = std::max(plateau, w.v[k]);

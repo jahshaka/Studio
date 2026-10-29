@@ -374,6 +374,7 @@ atom2.level_table_is_a_cut 1.98  solo, the card lock held (ATOM-2 stage 5, 2026-
 open.streams_to_the_end 20.62  solo, the card lock held (OPEN-PATH-1 stage 1, 2026-10-21; the lead's promotion at the merge)
 gi.light_order 5.65  solo, the card lock held, :71, warm (PHOTON-7 stage 2, 2026-10-23: the read's F3 - twenty lamps of one key in two creation orders; F4 - 132 lamps over the slots)
 source.shaders_spirv_valid 3.56  no card, by ctest (URGENT #89, PHOTON-7 10-4 2026-10-27: the app warm-up dump of 200 Hlms shaders through glslang + spirv-val, 8 threads; its negative control; red on the fault 4b0b97a1^ - 5 of 200)
+source.half_store_rounded 0.05  no card, by ctest (REDS-1 item 5, 2026-10-29: every half-float store rounds first - jahRoundHalf; its negative control)
 gi.pane_stack 7.20  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F4 2026-10-28: the ray tier - a Forward+ lamp through twelve glass slabs against the hole, the GI on: the reading rays' overflow counted; 19 frames)
 gi.pane_stack_cards 3.29  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F3 2026-10-28: the cards' direct half through twelve slabs and through one pane at 0.3, the cards at rest; 197 frames)
 rtreflect.pane_record 4.44  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F6 2026-10-28: a mirror's far block - a record - with and without a glass slab, the block shown and hidden; 121 frames at 256x144)

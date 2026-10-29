@@ -39,6 +39,19 @@ const std::vector<VerbDoc> &verbs()
           "the surface cache's resident cards per object: its name, the cards resident and their faces (+x -x +y -y +z "
           "-z), the frame each face was last read (Scene::readCardRadiance; PHOTON-7 stage 5's residency by the "
           "readers' demand), appended to <file> (stdout without one)" },
+        { "hemi", "hemi x,y,z nx,ny,nz N", 3, 3,
+          "THE IRRADIANCE AT A CARD TEXEL THREE WAYS at one frame (REDS-1): (a) the card's Gather layer (its TLAS gather's "
+          "envColourD), (b) the screen probes' irradiance at the pixel the texel projects to (the HDR pixel over albedo x "
+          "DA(N.V, r): run it in `photon diffuse`), (c) a brute-force hemisphere of N x N stratified cosine rays through the "
+          "TLAS from the texel, a hit on photon-contact's mirror floor continued once by reflection, a diffuse hit read from "
+          "its card (stored radiance, no view restore)" },
+        { "cardat", "cardat x,y,z nx,ny,nz", 2, 2,
+          "THE CARD AT A WORLD POINT against the drawn pixel (REDS-1): Scene::readCardAt at the point and normal - the "
+          "texel's stored radiance (its direct at V = N, its indirect diffuse half, its flat), its point and roughness - "
+          "the INDIRECT half toward the camera (x DA(N.V, r) / DA_hemi(r), the card read's environment view term, the "
+          "lobe's closed form) and the HDR pixel the texel's point projects to (its own and its 3 x 3 mean; the view's "
+          "float readback is turned on and two frames drawn first). Run it in `photon diffuse` to hold the card's "
+          "indirect half against the drawn indirect diffuse" },
         { "sideshares", "sideshares file", 1, 1,
           "cascade 0's surface voxels as the ray tier's sides' gather last left them (PHOTON-7 11-2 (6), the openings' "
           "instrument): one line a written voxel - its cell, its world centre, its normal (two-sided: the front's), the "
@@ -260,6 +273,7 @@ std::string helpText()
          "  --footprint N       the occlusion test's footprint (texels) the expectations assume (default 2: this base)\n"
          "  --bake-only         bake the file into the data root (or find its bake) and exit: CPU only, no engine\n"
          "                      (a run on a model whose bake is not cached refuses, exit 5: never a bake under the card)\n"
+         "  --arm <name>=<value>  an engine arm set before any scene is made (repeatable): a cache's first gather takes it\n"
          "  --camera x,y,z,tx,ty,tz   the camera at the start\n"
          "  --tier low|medium|high|epic   the World Mode at the start (default epic, a new scene's)\n"
          "  --size WxH          the window / offscreen size (default 1920x1080)\n"

@@ -22,19 +22,21 @@
 //        (the ray's origin on the patch's plane at the hit's distance, the circle's point nearest the patch's centre);
 //        in 0.5 m bands of the distance from the lamp's foot (N.V 0.99 down to 0.62), each band's mean against the
 //        mean of L(P -> V) within q of it. (a) THE CASCADES' ANSWER (a scene of its own, the wall uncarded: the hit's
-//        own direct, jahHitDirect) - measured -0.03 % in every band (0.0-0.5 q). (b) THE CARD'S ANSWER, against L at
-//        the TEXEL's centre (the read is texel-exact: 1/64 m texels on this face) - DECLARED RED (the lead's ruling,
-//        2026-10-27): -0.06 to -0.18 % in the bands (1-2 q; 0.4 of an 8-bit code) inside the card read path - its
-//        texels hold the analytic within q (-0.03 %), the 8-bit normal layer and its stored tilt measured out; on the
-//        owner's review list, its next step the card lights' lamp terms against jahHitDirect's. RED before R12's
-//        format fix: +0.6 % in every band - the albedo layer stored kD = albedo / pi in a byte (0.6 read +0.61 %, a
-//        0.03 albedo -18 %).
+//        own direct, jahHitDirect) - measured +0.002..+0.034 % (at most 0.51 q). (b) THE CARD'S ANSWER, against L at
+//        the TEXEL's centre (the read is texel-exact: 1/64 m texels on this face) - measured -0.009..+0.031 % (at most
+//        0.58 q; REDS-1). Its -0.06..-0.18 % before had two causes, neither the lamp term: the rgba16f store
+//        TRUNCATES on NVIDIA 595.x (every stored texel half a step low; jahRoundHalf now), and the hit readback held
+//        the hit's position in half precision, so 3-14 hits a band named the wrong texel (now floats). RED before R12's
+//        format fix: +0.6 % in every band - the albedo layer stored kD = albedo / pi in a byte.
 //   (T2) WHAT THE PATCH'S CARD GATHERS (the Gather layer at its centre texel: the mean of its N fixed cosine rays,
 //        jah_ray_set.glsl's Vogel set in jahConeBasisWorld - the cards' indirect gather through the TLAS) against the
 //        SAME N directions traced on the CPU through the fixture's analytic boxes with L(P -> V) at each hit: within q,
 //        at the tier's 16 rays and at the truth door's 128 (gi.truthRays, set before its scene is built: a cache at
-//        rest re-gathers nothing). (a) the cascades answering (the uncarded wall) - measured 0.13 q and 0.29 q; (b) the
-//        wall's card answering - DECLARED RED with (T1b), its one cause: 0.72 q at 16 rays, 1.18 q at 128. The
+//        rest re-gathers nothing). (a) the cascades answering (the uncarded wall) - DECLARED RED at 1.13 q (16 rays;
+//        0.29 q at 128; the lead's ruling, REDS-1): a store-answered hit adds the voxel's bounce part DERIVED as total -
+//        direct, two half floats of nearly equal size, which carries half a step of the total (+0.05 % here, against a
+//        physical 0.004 %; measured: the bounce part off reads 0.13 q) - the voxel route's residues block, its fix
+//        costed for the next spec; (b) the wall's card answering - 0.28 q at 16 rays, 0.18 q at 128 (REDS-1). The
 //        patch's cards held resident (cards.force: nothing else reads them - the door now offers its node whatever its
 //        demand). PRINTED beside it: the same quantity by a BRUTE-FORCE HEMISPHERE (512 x 512 stratified cosine
 //        directions on the CPU), the fixed set's own quadrature error - +9.0 % at 16 rays, -1.3 % at 128 here (the
@@ -296,10 +298,10 @@ int main(int, char **)
                 // bounce alone
                 CardSample pc;
                 const bool okPatch = s->readCardAt(Vec3(3.2f, 2.0f, 0.0f), Vec3(-1, 0, 0), pc, patch) && pc.ok;
-                // (the Indirect layer is R11G11B10F: its green a 6-bit mantissa, so the bounce-lit texel's radiance - the
-                // fresh indirect, RGBA16F - and its cached half agree to that layer's step)
+                // (the Indirect layer is RGBA16F like the radiance since REDS-1, both rounded to nearest: the bounce-lit
+                // texel's radiance and its cached half agree to one half-float step)
                 const double qInd = pc.indirect[1] > 0.0f
-                                        ? std::ldexp(1.0, int(std::floor(std::log2(double(pc.indirect[1])))) - 6) : 0.0;
+                                        ? std::ldexp(1.0, int(std::floor(std::log2(double(pc.indirect[1])))) - 10) : 0.0;
                 bool ok = rest >= 0 && okPatch && std::fabs(pc.radiance[1] - pc.indirect[1]) <= qInd;
                 std::printf("   %s: at rest after %d frames; the patch's centre texel: radiance %.6f, its indirect "
                             "alone %.6f\n", card ? "THE CARDED WALL" : "THE UNCARDED WALL", rest,
@@ -402,12 +404,11 @@ int main(int, char **)
                    "bounce alone");
     CHECK(t1Cascades, "(T1a) the cascades' answer at a lamp-lit wall: every band's mean within q of the analytic direct "
                       "toward V");
-    // (DECLARED RED - the lead's ruling, 2026-10-27: 1-3 q low in the card read path, the owner's review list)
     CHECK(t1Card, "(T1b) the card's answer at a lamp-lit wall: every band's mean within q of the analytic direct toward V "
                   "at its texel's centre");
+    // (DECLARED RED at 1.13 q - REDS-1, the lead's ruling: the store's derived bounce part, the header's (T2a))
     CHECK(t2Cascades, "(T2a) the patch's card gathers what its rays see, the cascades answering: within q of the same rays "
                       "traced through the analytic fixture, at 16 and 128 rays");
-    // (DECLARED RED with (T1b), its one cause: the card read's 1-3 q)
     CHECK(t2Card, "(T2b) ...the wall's card answering: within q of the same rays, at 16 and 128 rays");
     std::printf("\ngi.card_truth: %d frames, %d failure(s)\n", frames, failures);
     return failures ? 1 : 0;

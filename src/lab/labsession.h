@@ -22,6 +22,8 @@
 #include <deque>
 #include <memory>
 #include <string>
+#include <utility>
+#include <vector>
 
 class SceneMirror;
 namespace jahshaka { namespace engine { class Engine; class Scene; class View; } }
@@ -51,6 +53,9 @@ struct Options
     bool hasCamera = false;
     iris::Vec3 camPos, camTarget;
     QString tier = QStringLiteral("epic");
+    /// --arm <name>=<value>: engine arms set right after the engine is made, before any scene (REDS-1: a cache's FIRST
+    /// gather takes them - a truth door set after the load re-gathers nothing)
+    std::vector<std::pair<std::string, double>> bootArms;
     unsigned width = 1920, height = 1080;
 };
 
@@ -126,6 +131,7 @@ private:
     /// `reflections both|rays|screen`: the view's reflection SOURCES (PostFxDesc::reflectSources - the one estimator, the
     /// rays alone, the screen alone): the agreement row's door (Both vs Rays).
     jahshaka::engine::ReflectSources mReflectSources = jahshaka::engine::ReflectSources::Both;
+    bool mHdrReadback = false;   ///< `cardat` turned the view's float readback on (PostFxDesc::hdrReadback)
     bool mQuit = false;
     int mExit = 0;
     unsigned long long mFrames = 0;
