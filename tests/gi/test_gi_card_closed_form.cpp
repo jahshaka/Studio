@@ -27,7 +27,6 @@
 
 #include <algorithm>
 #include <cmath>
-#include <cstring>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -180,35 +179,6 @@ int main(int, char **)
                     "(%.2f q)\n", rays, rest, nIn, facesIn, meanIn, limit, 100.0 * (meanIn / limit - 1.0),
                     std::fabs(meanIn - limit) / quantumOf(limit), nIn ? lo : 0.0, hi, nOut, worstOut,
                     worstOut / quantumOf(kE));
-        {   // MEASURING ARM (REDS-1 follow-up, reverted after its one run): the lab's hemi (c) on this room - the floor's centre
-            // texel, 64 x 64 stratified cosine rays through Scene::traceRays, each hit's card read toward the ray (its stored
-            // radiance); the inner faces all hold ~E / (1 - a'), so the mean is that if the instrument is right
-            CardSample c0;
-            if (s->readCardAt(Vec3(0.0f, 0.0f, 0.0f), Vec3(0, 1, 0), c0) && c0.ok) {
-                const double T[3] = { c0.position[0], c0.position[1] + 0.002, c0.position[2] };
-                double sum = 0.0; unsigned n = 0, miss = 0, noCard = 0;
-                const int m = 64;
-                for (int i = 0; i < m; ++i)
-                    for (int j = 0; j < m; ++j) {
-                        const double u = (i + 0.5) / m, ph = 6.283185307179586 * (j + 0.5) / m, rr = std::sqrt(u);
-                        const double d[3] = { rr * std::cos(ph), std::sqrt(1.0 - u), rr * std::sin(ph) };
-                        std::vector<float> rays = { float(T[0]), float(T[1]), float(T[2]), 0.0f, float(d[0]), float(d[1]), float(d[2]),
-                                                    100.0f, 0.0f, 0.0f, 0.0f, 0.0f };
-                        unsigned mask = 0xFFu;
-                        std::memcpy(&rays[8], &mask, sizeof(float));
-                        std::vector<float> hits;
-                        ++n;
-                        if (!s->traceRays(rays, hits) || hits.size() < 4 || hits[0] < 0.0f) { ++miss; continue; }
-                        const Vec3 H(float(T[0] + d[0] * hits[0]), float(T[1] + d[1] * hits[0]), float(T[2] + d[2] * hits[0]));
-                        CardSample h;
-                        if (!s->readCardAt(H, Vec3(float(-d[0]), float(-d[1]), float(-d[2])), h) || !h.ok) { ++noCard; continue; }
-                        sum += double(h.radiance[1]);
-                    }
-                std::printf("   ARM hemi on the sealed room: the floor centre's card gather %.6f, the CPU hemisphere %.6f (%u rays, %u misses, "
-                            "%u no card) against the inner faces' %.5f: hemi / limit %+.2f %%, gather / limit %+.2f %%\n", double(c0.gather[1]),
-                            n ? sum / n : -1.0, n, miss, noCard, limit, n ? 100.0 * (sum / n / limit - 1.0) : 0.0, 100.0 * (c0.gather[1] / limit - 1.0));
-            }
-        }
         inner = inner && read && rest >= 0 && facesIn == 6u && std::fabs(meanIn - limit) <= quantumOf(limit);
         outer = outer && read && rest >= 0 && nOut > 1000u && worstOut <= quantumOf(kE);
         e->setArm("cards.force", 0.0);
