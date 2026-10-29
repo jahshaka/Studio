@@ -453,18 +453,19 @@ void Session::frame()
     fv.sky = true;
     fv.camera = mCamera.node();
     fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless || mReflectSources != ReflectSources::Both || mHdrReadback) {
+    if (mOpt.headless || mReflectSources != ReflectSources::Both || mHdrReadback || mReflectOff) {
         // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
         // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays` /
         // `reflections screen` (the one estimator's sources narrowed to one).
         const bool headless = mOpt.headless;
         const ReflectSources sources = mReflectSources;
-        const bool hdr = mHdrReadback;
-        fv.finish = [headless, sources, hdr](FrameInputView &part, View *v) {
+        const bool hdr = mHdrReadback, reflectOff = mReflectOff;
+        fv.finish = [headless, sources, hdr, reflectOff](FrameInputView &part, View *v) {
             PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             if (headless) fx.allowOffscreen = true;
             if (sources != ReflectSources::Both) fx.reflectSources = sources;
             if (hdr) fx.hdrReadback = true;
+            if (reflectOff) fx.ssr = 0;
             part.postFx = fx;
         };
     }
@@ -800,13 +801,15 @@ bool Session::exec(const Command &c)
     } else if (c.verb == "reflections") {
         // THE REFLECTION'S SOURCES (the agreement row's door): both = the one estimator, rays = the rays alone (the
         // screen sources leave the chain: a graph rebuild, the histories restart), screen = the screen alone
-        if (a0 == "both" || a0 == "rays" || a0 == "screen") {
-            mReflectSources = a0 == "both" ? ReflectSources::Both : a0 == "rays" ? ReflectSources::Rays
-                                                                                : ReflectSources::Screen;
+        if (a0 == "both" || a0 == "rays" || a0 == "screen" || a0 == "off") {
+            mReflectOff = a0 == "off";
+            if (!mReflectOff)
+                mReflectSources = a0 == "both" ? ReflectSources::Both : a0 == "rays" ? ReflectSources::Rays
+                                                                                    : ReflectSources::Screen;
             std::printf("LAB REFLECTIONS %s\n", a0.c_str());
         } else {
             ok = false;
-            labFail("LAB REFUSED reflections '%s' (both|rays|screen)\n", a0.c_str());
+            labFail("LAB REFUSED reflections '%s' (both|rays|screen|off)\n", a0.c_str());
         }
     } else if (c.verb == "play") {
         if (!onOff(a0, mPlaying, v)) { ok = false; labFail("LAB REFUSED play '%s'\n", a0.c_str()); }

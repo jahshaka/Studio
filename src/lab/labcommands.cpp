@@ -22,10 +22,11 @@ const std::vector<VerbDoc> &verbs()
           "the document's animation clock (Scene::setPlaying; each frame Scene::advance one 1/60 s step): the scene's "
           "animated nodes play - Bistro's, under the stillness door (PHOTON-2 round 2, G6); REFUSED where nothing carries "
           "an animation (it would move nothing: `slide` moves an object)" },
-        { "reflections", "reflections both|rays|screen", 1, 1,
+        { "reflections", "reflections both|rays|screen|off", 1, 1,
           "the view's reflection sources (PostFxDesc::reflectSources): both = the one estimator (the screen trace first, "
           "the rays for the rest), rays = the rays alone, screen = the screen alone (its misses no sample) - the agreement "
-          "row's door (Both vs Rays); a graph rebuild, the histories restart" },
+          "row's door (Both vs Rays); off = no reflection at all (PostFxDesc::ssr 0 - the chain without its prepass: an "
+          "A/B's arm, PHOTON-7 8B's pop); a graph rebuild, the histories restart" },
         { "photon", "photon off|voxels|probes|cards|screenProbes|diffuse|reflections|hits|gatherHits", 1, 1,
           "the scene's Photon view (Scene::setPhotonView): 'reflections' shows the specular environment term alone - "
           "rtreflect.contact's crease arm reads the reflection there, free of the receiver's own diffuse" },

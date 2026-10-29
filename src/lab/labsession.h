@@ -132,6 +132,7 @@ private:
     /// `reflections both|rays|screen`: the view's reflection SOURCES (PostFxDesc::reflectSources - the one estimator, the
     /// rays alone, the screen alone): the agreement row's door (Both vs Rays).
     jahshaka::engine::ReflectSources mReflectSources = jahshaka::engine::ReflectSources::Both;
+    bool mReflectOff = false;   ///< `reflections off`: PostFxDesc::ssr 0 (an A/B's arm)
     bool mHdrReadback = false;   ///< `cardat` turned the view's float readback on (PostFxDesc::hdrReadback)
     bool mQuit = false;
     int mExit = 0;
