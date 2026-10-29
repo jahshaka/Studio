@@ -88,9 +88,9 @@ for (var w = 0; w < 2; ++w) {
                " frames within ceil(" + win.workPages.toFixed(1) + " pages / the tier's pages a frame) + due = " + win.workPace);
     }
     assert(win.gatherHoldFrame > win.lastGiRowFrame && win.gatherHoldFrame > win.lastHoldKeyFrame &&
-           win.gatherHoldFrame <= lastWrite + win.lastKeyConverge + win.settleFrames + 1,
+           win.gatherHoldFrame <= lastWrite + win.lastKeyConverge + win.settleFrames + win.handoverFrames + 1,
            win.name + ": the gather's hold is the settle after the last write (" + win.gatherHoldFrame + ", last hold key " +
-           win.lastHoldKeyFrame + ", last row " + win.lastGiRowFrame + ", C " + win.lastKeyConverge + ", settle " + win.settleFrames + ")");
+           win.lastHoldKeyFrame + ", last row " + win.lastGiRowFrame + ", C " + win.lastKeyConverge + ", settle " + win.settleFrames + ", H " + win.handoverFrames + ")");
 }
 assert(typeof r.tsv === "string" && r.tsv.length > 0, "the TSV path: " + r.tsv);
 assert(r.path.directEqual.length >= 1, "the path check read the cascades: " + JSON.stringify(r.path));
