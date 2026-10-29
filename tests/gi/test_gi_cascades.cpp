@@ -666,18 +666,24 @@ int main(int argc, char **argv)
             // THE ASSERTION IS ON THE SMOOTHEST PLATE, and the rest of the sweep
             // is printed as evidence rather than pinned: a wide cone from a
             // plate lying on a ground plane is LEGITIMATELY occluded (half of
-            // it points into the floor), so at roughness 0.55 the term is a few
-            // thousandths either way and a ratio over it is noise. At 0.15 the
-            // reflection is of open space, the ambient is the whole reading,
-            // and the defect was unmistakable: 1.00 / 0.56 / 0.00 before the
-            // amendment to fork 8f09c0cd4 (was 0033), 1.00 / 0.85 / 0.85 after. The
-            // residual 0.85 is the same march-distance restart the diffuse half
-            // leaves at 0.51 (the patch header; OGRE_UPSTREAM_ISSUES).
+            // it points into the floor). At 0.15 the reflection is of open
+            // space and the ambient is the whole reading: 1.00 / 0.56 / 0.00
+            // before the amendment to fork 8f09c0cd4 (was 0033).
+            // THE LAW, RE-DERIVED (HARNESS-2, 2026-10-29, the lead's ruling; was "l2, l4 > 0.70 x l1", a bar picked under
+            // the old picture's 0.85 residue): case 4's - in open space the chain's cones over its stores are ONE
+            // volume's quadrature, each march handed to the next cascade, so a chain of 2 or 4 reads the plate as one
+            // cascade does, within the pictures' quantum: one code (block means of 8-bit pixels). Compared in exact
+            // units of 1e-4 code (a law in codes never compares float luma against a literal). Measured at the
+            // re-derivation: 0.1059 / 0.1059 / 0.1059 (1.00x, 1.00x).
+            // THE WIDER CONES (printed): four cascades read 0.96 / 0.90 / 0.81x of one at roughness 0.35 / 0.55 / 0.75
+            // (0.0535 against 0.0431 at 0.75: 2.6 codes) - the specular continuation's deficit at c3, the voxel route's
+            // cross-cascade residue (PHOTON_7_SPEC.md's declared block, REDS-1's), not this row's law.
             if (r == 0) {
+                const auto codes4 = [](float v) { return std::llround(double(v) * 255.0 * 1e4); };
                 CHECK(l1 > 0.02f, "a chain of ONE lights the plate through the ambient (reference)");
-                CHECK(l2 > 0.70f * l1,
-                      "TWO cascades keep the ambient in the reflection (it was lost after ONE hop)");
-                CHECK(l4 > 0.70f * l1, "...and FOUR still do (it was black)");
+                CHECK(std::llabs(codes4(l2) - codes4(l1)) <= 10000,
+                      "TWO cascades read the open-space reflection as ONE does, within a code (it was lost after ONE hop)");
+                CHECK(std::llabs(codes4(l4) - codes4(l1)) <= 10000, "...and FOUR do too, within a code (it was black)");
             }
             scene->removeNode(plate);
             render(e, 2);
