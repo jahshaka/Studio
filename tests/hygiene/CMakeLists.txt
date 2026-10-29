@@ -238,6 +238,13 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/warm_app_cache.sh" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(tooling.warm_app_cache PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.warm_app_cache)
+    # tooling.gpu_lock_fifo — THE CARD's LOCK IS FIRST COME, FIRST SERVED (URGENT #113): scripts/gpu-exclusive.sh's ticket
+    # queue on a private lock (sleeps, no GPU): the grants in ticket order, a dead ticket skipped, --wait-max's bound kept,
+    # a bounded waiter's place kept across its exit 75 for its re-call (gpu_lock_fifo.sh).
+    add_test(NAME tooling.gpu_lock_fifo
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_fifo.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
+    set_tests_properties(tooling.gpu_lock_fifo PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.gpu_lock_fifo)
     # source.no_renders_tracked — A RUN LEAVES NOTHING TRACKED (item 7): no render, home or Testing/ in git under
     # tests/ scripts/ testing/ but the fixture inputs.
     add_test(NAME source.no_renders_tracked
