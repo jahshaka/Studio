@@ -101,7 +101,7 @@ const float kE = 1.0f;       // the walls' emission (radiance), the main and the
 const float kRho = 0.5f;     // their albedo
 const float kHalfX = 4.0f, kHalfZ = 4.0f, kHeight = 4.0f, kThick = 0.3f;
 
-const double kADiffuse = kRho * 0.701832;   // a' = rho x DA_hemi(1) (JahDiffuseAlbedo_piece_all.any)
+const double kADiffuse = kRho * enginetest::disneyDiffuseAlbedoHemi(1.0);   // a' = rho x DA_hemi(1), the lobe's integral
 const int kCarryFadeFrames = 120;   // (7): a sustained change, the injected bricks carried in their frames
 const int kFadeFrames = 1200;   // (5): every inner-wall voxel under a step of the store a frame (printed)
 
