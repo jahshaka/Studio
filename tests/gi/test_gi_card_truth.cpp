@@ -334,6 +334,7 @@ int main(int, char **)
                 Band band[8];
                 double armS[8] = {}, armSref[8] = {}, armR[8] = {}, armRref[8] = {}, armLobe[8] = {}, armRefLobe[8] = {}, armOpen[8] = {};
                 unsigned armN[8] = {};
+                unsigned ulpHist[12] = {};
                 unsigned hits = 0, wrong = 0, off = 0;
                 double worst = 0.0;
                 for (const GatherRay &r : gs.rays) {
@@ -382,6 +383,13 @@ int main(int, char **)
                             armS[b] += storedDirect; armSref[b] += analyticN; armR[b] += r.radiance[1]; armRref[b] += cpuRead;
                             armLobe[b] += lobe; armRefLobe[b] += a; ++armN[b];
                             armOpen[b] += std::hypot(cs.position[1] - P[1], cs.position[2] - P[2]);
+                            {   // the stored radiance's error in units of the half float's step at the expected value
+                                const double want = analyticN + double(cs.indirect[1]) + double(cs.flat[1]);
+                                const double step = std::ldexp(1.0, int(std::floor(std::log2(want))) - 10);
+                                const double u = (double(cs.radiance[1]) - want) / step;
+                                const int k = std::max(0, std::min(11, int(std::floor((u + 1.5) / 0.25))));
+                                ++ulpHist[k];
+                            }
                         }
                     }
                     band[b].got += r.radiance[1];
@@ -403,6 +411,11 @@ int main(int, char **)
                                         "share %.4f; |texel point - texel centre| %.2e m\n", b, armN[b],
                                         100.0 * (armS[b] / armSref[b] - 1.0), 100.0 * (armR[b] / armRref[b] - 1.0),
                                         100.0 * (armRref[b] / armRefLobe[b] - 1.0), armLobe[b] / armRref[b], armOpen[b] / armN[b]);
+                if (card) {
+                    std::printf("        ARM the stored radiance - the expected, in half-float steps, bins of 0.25 from -1.5:");
+                    for (int k = 0; k < 12; ++k) std::printf(" [%+.2f]%u", -1.5 + 0.25 * k, ulpHist[k]);
+                    std::printf("\n");
+                }
                 bool within = wrong == 0u && hits >= 800u;
                 for (int b = 0; b < 8; ++b) {
                     if (!band[b].n) continue;
