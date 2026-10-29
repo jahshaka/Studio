@@ -433,7 +433,8 @@ int main(int argc, char **argv)
                                 r[2], r[3], r[4], r[5], r[6], r[7], r[8]);
             }
             std::printf("   SKYREC %s, the teleport window: the cards' gather's C2 sky answers %llu (recorded from %zu to %zu), of "
-                        "them starting INSIDE the room %zu\n", tier, rq.skyRecords - skyAt, from, n, inner);
+                        "them starting INSIDE the room %zu (counted on the GPU: %llu inside of %llu)\n", tier, rq.skyAll, from, n, inner,
+                        rq.skyRecords, rq.skyAll);
         }
         std::printf("   (8) %s, the teleport into the box: %d frames read to rest, the picture's middle at its brightest %.6f "
                     "(%.4f %% of R) at frame %d after the jump; the first frame %.4f %%, the brightest later %.4f %% (frame "
