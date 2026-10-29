@@ -48,8 +48,9 @@
 //   faults        cases 11, 13 - A FAILED REBUILD CHANGES NOTHING BUT THE CLOCK (a scroll's and a whole rebuild's throw:
 //                 not counted, the placement kept or owed, the chain bound, the retry within its count). The sanitizer's
 //                 own subject: the failure paths around a cascade's voxeliser.
-//   edits         cases 7 (edits), 14, 15, 15b - AN EDIT RE-VOXELISES EXACTLY THE CASCADES THAT HOLD IT, one a frame, never
-//                 the chain; the instance budget bounds what a rebuild voxelises; the dirty boxes merge by margin, and
+//   edits         cases 7 (edits), 14, 15, 15b - AN EDIT RE-VOXELISES EXACTLY THE CASCADES THAT HOLD IT, never the chain:
+//                 a boxed edit as REGION rebuilds of every cascade its box reaches in the frame (A1), an edit with no
+//                 box one cascade a frame; the instance budget bounds what a rebuild voxelises; the dirty boxes merge by margin, and
 //                 the merged rebuilds' light rests at a fresh build's within two codes (case 15, the solver's bound).
 //   ambient       cases 4, 7 (specular) - THE CHAIN CARRIES THE AMBIENT AS ONE CASCADE DOES, diffuse and specular.
 //   mover         case 12, the three poses with the rays off - A2's LAW: a declared mover is lit at the pose it is in
@@ -915,8 +916,17 @@ int main(int argc, char **argv)
     // What is asserted, for every kind of edit, is the same three things:
     //   * ZERO whole-chain builds — `GiStatus::rebuilds` (bumped by every
     //     `rebuildVct`) does not move;
-    //   * never more than ONE cascade re-voxelised in any single frame;
+    //   * in any single frame, only the cascades the edit's BOX reaches re-voxelise, and every one of those
+    //     rebuilds is a REGION rebuild - or, for an edit with no box (a datablock destroyed or swapped, a spawn),
+    //     never more than ONE cascade in a frame;
     //   * and no cascade is left owing a rebuild once the queue has drained.
+    // THE BOXED EDITS' LAW, RE-DERIVED (HARNESS-2, 2026-10-29, the lead's ruling): A1 (PHOTON_7_SPEC.md:858-859)
+    // DELETED the whole-cascade rebuild on a dirty box - a boxed edit is a REGION rebuild of its old and new boxes, "in
+    // EVERY cascade it reaches within the same frame". So "never two cascades in one frame" was the deleted path's
+    // budget, not the engine's law; the law is: per frame, the cascades rebuilt are a SUBSET of those whose box meets
+    // the edit's (old and new) box; every rebuild is a region rebuild (regionRebuilds moves with rebuilds); a single
+    // edit costs exactly the cascades that hold it. The one row hid this: case 7 inherited case 11's camera 28.75 m
+    // out, where the edits sat in cascade 3 alone; it now runs where its text always said, at the home pose.
     //
     // The camera stands still throughout, so every rebuild counted here was
     // paid for by the EDIT and by nothing else.
@@ -945,22 +955,56 @@ int main(int argc, char **argv)
             for (const auto &c : scene->published().gi.cascades) n += c.pending ? 1 : 0;
             return n;
         };
+        const auto perCascadeRebuilds = [&]() {
+            std::vector<unsigned long long> v;
+            for (const auto &c : scene->published().gi.cascades) v.push_back(c.rebuilds);
+            return v;
+        };
+        const auto regionRebuildsTotal = [&]() {
+            unsigned long long t = 0;
+            for (const auto &c : scene->published().gi.cascades) t += c.regionRebuilds;
+            return t;
+        };
+        // THE CASCADES AN EDIT's BOX REACHES: those whose box meets the world box [lo, hi] (case 7c's test, any axis).
+        const auto holdingMask = [&](const Vec3 &lo, const Vec3 &hi) {
+            std::vector<char> m;
+            for (const GiStatus::CascadeStatus &cs : scene->published().gi.cascades) {
+                const float c[3] = { cs.centre.x, cs.centre.y, cs.centre.z };
+                const float l[3] = { lo.x, lo.y, lo.z }, h[3] = { hi.x, hi.y, hi.z };
+                bool meets = true;
+                for (int a = 0; a < 3; ++a) meets = meets && h[a] >= c[a] - cs.halfSize && l[a] <= c[a] + cs.halfSize;
+                m.push_back(meets ? 1 : 0);
+            }
+            return m;
+        };
+        const auto countOf = [](const std::vector<char> &m) {
+            unsigned long long n = 0;
+            for (char b : m) n += b ? 1u : 0u;
+            return n;
+        };
         // Runs `frames` frames one at a time after an edit and reports the worst
         // single-frame cascade-rebuild count and the total. `arm0` is the
         // whole-chain build count sampled BEFORE the edit — and it has to be,
         // because `refreshGlobalIllumination()` is synchronous: on the base
         // engine the chain build lands inside that call, not inside the frames
         // that follow it.
+        // `box` (a boxed edit): the cascades its box reaches - judged by the region law above; none: one a frame.
         const auto measure = [&](const char *what, unsigned long long arm0, int frames,
-                                 unsigned long long &outTotal, int &outWorst) {
+                                 unsigned long long &outTotal, int &outWorst, const std::vector<char> *box = nullptr) {
             unsigned long long prev = chainRebuilds();
-            const unsigned long long first = prev;
+            const unsigned long long first = prev, region0 = regionRebuildsTotal();
+            std::vector<unsigned long long> prevEach = perCascadeRebuilds();
             int worst = 0;
+            bool outside = false;
             for (int i = 0; i < frames; ++i) {
                 render(e, 1);
                 const unsigned long long now = chainRebuilds();
                 worst = std::max(worst, int(now - prev));
                 prev = now;
+                const std::vector<unsigned long long> each = perCascadeRebuilds();
+                for (size_t k = 0; box && k < each.size() && k < prevEach.size() && k < box->size(); ++k)
+                    if (each[k] != prevEach[k] && !(*box)[k]) outside = true;
+                prevEach = each;
             }
             outTotal = prev - first;
             outWorst = worst;
@@ -971,8 +1015,18 @@ int main(int argc, char **argv)
             char msg[256];
             std::snprintf(msg, sizeof(msg), "%s: ZERO whole-chain builds", what);
             CHECK(arm1 == arm0, msg);
-            std::snprintf(msg, sizeof(msg), "%s: never two cascades in one frame", what);
-            CHECK(worst <= 1, msg);
+            if (box) {
+                const unsigned long long holding = countOf(*box), region = regionRebuildsTotal() - region0;
+                std::printf("   %-22s the box reaches %llu of %zu cascades; region rebuilds %llu of %llu\n", what, holding,
+                            box->size(), region, outTotal);
+                std::snprintf(msg, sizeof(msg), "%s: each frame re-voxelises only cascades its box reaches (A1)", what);
+                CHECK(!outside && (unsigned long long)worst <= holding, msg);
+                std::snprintf(msg, sizeof(msg), "%s: every rebuild a REGION rebuild, never a whole cascade (A1)", what);
+                CHECK(region == outTotal, msg);
+            } else {
+                std::snprintf(msg, sizeof(msg), "%s: never two cascades in one frame (an edit with no box)", what);
+                CHECK(worst <= 1, msg);
+            }
             std::snprintf(msg, sizeof(msg), "%s: the queue drained", what);
             CHECK(pendingCount() == 0, msg);
         };
@@ -982,16 +1036,21 @@ int main(int argc, char **argv)
         // A STILL OBJECT THAT IS MOVING IS RE-VOXELISED WHILE IT MOVES (smoke
         // rig 2026-09-15, ledger 320): leaving it until the settle is what left
         // a dragged cube lit against a voxel copy of itself at its old pose, so
-        // the drag costs AT MOST ONE cascade per frame — the same budget a
-        // camera scroll lives inside — and the release costs the cascades that
-        // can SEE the box, never the chain.
+        // the drag re-voxelises, every frame it moves, the REGIONS of the cascades
+        // its old and new boxes reach (A1; was "at most one cascade per frame",
+        // the deleted whole-rebuild path's budget) - and the release costs the
+        // cascades that can SEE the box, never the chain.
         const NodeId dragged = enginetest::addTestCube(scene, Colour(0.2f, 0.8f, 0.2f), 0.0f, 0.8f);
         enginetest::setNodePosition(scene, dragged, Vec3(1.0f, 0.5f, 1.0f));
         render(e, 8);                                    // the spawn's own work drains
         {
             const unsigned long long arm0 = scene->published().gi.rebuilds;
             unsigned long long prev = chainRebuilds();
-            const unsigned long long dragFirst = prev;
+            const unsigned long long dragFirst = prev, dragRegion0 = regionRebuildsTotal();
+            // the gesture's box: the unit cube from x = 1.0 to 1.95 (old and new boxes, every frame inside it)
+            const std::vector<char> dragBox = holdingMask(Vec3(0.5f, 0.0f, 0.5f), Vec3(2.45f, 1.0f, 1.5f));
+            std::vector<unsigned long long> prevEach = perCascadeRebuilds();
+            bool outside = false;
             int worstDrag = 0;
             for (int i = 0; i < 20; ++i) {               // the gesture: no settle asked for
                 enginetest::setNodePosition(scene, dragged,
@@ -1000,14 +1059,23 @@ int main(int argc, char **argv)
                 const unsigned long long now = chainRebuilds();
                 worstDrag = std::max(worstDrag, int(now - prev));
                 prev = now;
+                const std::vector<unsigned long long> each = perCascadeRebuilds();
+                for (size_t k = 0; k < each.size() && k < prevEach.size() && k < dragBox.size(); ++k)
+                    if (each[k] != prevEach[k] && !dragBox[k]) outside = true;
+                prevEach = each;
             }
+            const unsigned long long dragRegion = regionRebuildsTotal() - dragRegion0;
+            std::printf("   the drag's box reaches %llu of %zu cascades; region rebuilds %llu of %llu\n", countOf(dragBox),
+                        dragBox.size(), dragRegion, prev - dragFirst);
             std::printf("   the drag itself: chain builds %llu -> %llu, cascade rebuilds %llu, "
                         "worst frame %d\n",
                         arm0, scene->published().gi.rebuilds, prev - dragFirst, worstDrag);
             CHECK(scene->published().gi.rebuilds == arm0,
                   "a drag in flight costs ZERO whole-chain builds");
-            CHECK(worstDrag <= 1,
-                  "...and never more than one cascade in a frame");
+            CHECK(!outside && (unsigned long long)worstDrag <= countOf(dragBox),
+                  "...and each frame re-voxelises only the cascades its box reaches (A1)");
+            CHECK(dragRegion == prev - dragFirst,
+                  "...every one a REGION rebuild, never a whole cascade (A1)");
             CHECK(prev - dragFirst >= 1,
                   "...but the moving object IS re-voxelised while it moves, not left stale");
         }
@@ -1082,12 +1150,14 @@ int main(int argc, char **argv)
                 for (int a = 0; a < 3; ++a) meets = meets && std::fabs(p[a] - c[a]) <= cs.halfSize + 0.5f;
                 holding += meets ? 1u : 0u;
             }
+            const std::vector<char> paintedBox = holdingMask(Vec3(paintedAt.x - 0.5f, paintedAt.y - 0.5f, paintedAt.z - 0.5f),
+                                                             Vec3(paintedAt.x + 0.5f, paintedAt.y + 0.5f, paintedAt.z + 0.5f));
             CHECK(scene->setPbrMaterial(mat, pp), "a material parameter is edited");
             scene->refreshGlobalIllumination();
-            measure("a material edit", armMat, 16, total, worst);
+            measure("a material edit", armMat, 16, total, worst, &paintedBox);
             std::printf("   the cascades holding the painted cube: %llu of %zu\n", holding, nCascades);
             CHECK(holding >= 1u && total == holding,
-                  "...and EXACTLY THE CASCADES THAT HOLD THE WEARER got fresh voxels - one cascade per frame");
+                  "...and EXACTLY THE CASCADES THAT HOLD THE WEARER got fresh voxels");
             render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             CHECK(scene->published().gi.vctBound,
                   "...with the chain still bound after every voxeliser was replaced");
@@ -1127,8 +1197,10 @@ int main(int argc, char **argv)
             // ---- (f) a HIDE ------------------------------------------------
             render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             arm0 = scene->published().gi.rebuilds;
+            const std::vector<char> spawnedBox = holdingMask(Vec3(-0.5f, 0.0f, 1.5f), Vec3(0.5f, 1.0f, 2.5f));
             scene->setNodeVisible(spawned, false);
-            measure("a hide", arm0, 16, total, worst);
+            measure("a hide", arm0, 16, total, worst, &spawnedBox);
+            CHECK(total == countOf(spawnedBox), "...and a hide costs exactly the cascades that hold it");
             scene->setNodeVisible(spawned, true);
             render(e, 16);
 
@@ -1148,7 +1220,8 @@ int main(int argc, char **argv)
             render(e, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
             arm0 = scene->published().gi.rebuilds;
             scene->removeNode(spawned);
-            measure("a delete", arm0, 16, total, worst);
+            measure("a delete", arm0, 16, total, worst, &spawnedBox);
+            CHECK(total == countOf(spawnedBox), "...and a delete costs exactly the cascades that hold it");
             CHECK(total >= 1, "...and the cascades that held it DID re-voxelise");
 
             // ---- (h2) a DELETE 40 m AWAY: the outer cascade only -------------

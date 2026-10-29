@@ -75,8 +75,9 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     #                  never black, the near field holds over a walk, every centre sits on its quantum's lattice.
     #   .faults        A FAILED REBUILD CHANGES NOTHING BUT THE CLOCK (cases 11, 13): the use-after-free class this binary
     #                  exists for - the failure paths around a cascade's voxeliser.
-    #   .edits         AN EDIT RE-VOXELISES EXACTLY THE CASCADES THAT HOLD IT, one a frame, never the whole chain (case 7's
-    #                  edits, 14's budget, 15/15b's merged dirty boxes and their light resting at a fresh build's).
+    #   .edits         AN EDIT RE-VOXELISES EXACTLY THE CASCADES THAT HOLD IT, never the whole chain - a boxed edit as
+    #                  REGION rebuilds in every cascade its box reaches, in the frame (A1), one with no box one cascade a
+    #                  frame (case 7's edits, 14's budget, 15/15b's merged dirty boxes and their light resting at a fresh build's).
     #   .ambient       THE CHAIN CARRIES THE AMBIENT AS ONE CASCADE DOES, the diffuse within a code and the specular (4, 7).
     #   .mover         A2's LAW: a declared mover is lit at the pose it is in - motion against rest within 16 codes, no
     #                  pixel off by 10, the rest a fresh build's within a code - at three poses of cascade 0, the rays off.
