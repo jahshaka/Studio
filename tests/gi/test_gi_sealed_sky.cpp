@@ -400,7 +400,11 @@ int main(int argc, char **argv)
     };
     // (8) THE TELEPORT WINDOW: the camera jumps inside, and every frame until the room is at rest is read
     struct Window { int frames = 0, worstFrame = -1, laterFrame = -1; double worst = 0.0, first = -1.0, later = 0.0, last = 0.0; bool ok = true; };
+    unsigned long long skyAt = 0;   // MEASURING ARM (reverted): the cards' gather's C2 sky records at the jump
     const auto teleportIn = [&](Window &w) {
+        static int jumps = 0;
+        e->setArm("rayquery.skyRecReset", double(++jumps));   // (the records emptied at the jump: latched next frame)
+        skyAt = 0;
         enginetest::testCameraLookAt(view, inPos, inAt);
         return settle([&](int f) {
             const PixRead p = readPicture();
@@ -414,6 +418,23 @@ int main(int argc, char **argv)
     };
     const auto teleportLaw = [&](const Window &w, double R, const char *tier) {
         const double k = R > 0.0 ? 100.0 / R : -1.0;
+        {   // MEASURING ARM (reverted): the window's C2 sky answers in the cards' gather, by the secondary's start: INNER
+            // (inside the room's interior box, |x|, |z| <= 2.01, -0.01 <= y <= 3.01, its normal into the room) or not
+            const RayQueryStatus &rq = scene->published().rayQuery;
+            const size_t n = rq.skyRec.size() / 9u;
+            size_t inner = 0, shown = 0, from = 0;
+            for (size_t i = from; i < n; ++i) {
+                const float *r = &rq.skyRec[i * 9u];
+                const bool in = std::fabs(r[0]) <= 2.01f && std::fabs(r[2]) <= 2.01f && r[1] >= -0.01f && r[1] <= 3.01f;
+                if (!in) continue;
+                ++inner;
+                if (shown++ < 6)
+                    std::printf("   SKYREC %s inner: P (%.4f %.4f %.4f) N (%.3f %.3f %.3f) L (%.3f %.3f %.3f)\n", tier, r[0], r[1],
+                                r[2], r[3], r[4], r[5], r[6], r[7], r[8]);
+            }
+            std::printf("   SKYREC %s, the teleport window: the cards' gather's C2 sky answers %llu (recorded from %zu to %zu), of "
+                        "them starting INSIDE the room %zu\n", tier, rq.skyRecords - skyAt, from, n, inner);
+        }
         std::printf("   (8) %s, the teleport into the box: %d frames read to rest, the picture's middle at its brightest %.6f "
                     "(%.4f %% of R) at frame %d after the jump; the first frame %.4f %%, the brightest later %.4f %% (frame "
                     "%d), the last %.4f %%\n", tier, w.frames, w.worst, k * w.worst, w.worstFrame, k * w.first,
