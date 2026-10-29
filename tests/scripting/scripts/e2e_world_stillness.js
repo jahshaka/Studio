@@ -45,13 +45,16 @@ if (st.gather && st.gather.running === true)
 // write, the ones that file no GI row included (a ray-level refit, a shadow scan, a light write) - or owe work, and
 // HOLDS the settle after the last such frame (the door's lastHoldKeyFrame): at most that frame (the stop, frame 0, when
 // none came after it) + the settle N + 1, and never before it nor before the last GI row - its OWN hold
-// (gatherHoldFrame). THE VIEW HOLDS WHEN EVERY READER HOLDS (PHOTON-7 stage 10, the contract): its hold (holdFrame) is
+// (gatherHoldFrame: since PHOTON-7 stage 8B (B1) the start of the gather's LAST hold run - it rests per cell, and an input
+// reaching a cell after a hold ends that hold; the hold that counts lasts to the window's end; the hold key, an input
+// that reached a cell). THE VIEW HOLDS WHEN EVERY READER HOLDS (PHOTON-7 stage 10, the contract): its hold (holdFrame) is
 // at or after the gather's and, where the reflection traces, the reflection's own (reflHoldFrame; its length is the
 // reflection's rest rule, stage 11's to bound). A window that never holds FAILS.
 // THE HOLD's DERIVED BOUND (PHOTON-7 stage 10-3, the lead's ruling; the door's one formula, stillnessDeriveLiveness -
 // lab.stillness_control's): where the stop's one rest decision falls in the window, (2) the view holds AFTER the
-// decision and its work's last GI row, (3) its first hold comes within holdBound = (N + due) + due + W + N + 1 frames of
-// the readers' first rest, and W, the decision's work, keeps its pace (W <= workPace). The bound is derived from the
+// decision and its work's last GI row, (3) its first hold comes within holdBound = (N + due) + due + W + C + N + 1 frames of
+// the readers' first rest (C, since PHOTON-7 8B B1: the cells' measured convergence after the work, convergeFrames), and W,
+// the decision's work, keeps its pace (W <= workPace). The bound is derived from the
 // window's own counts; the window's length is only how long it is observed.
 // RED-CAPABLE (two arms, measured 2026-10-26, one run each): (a) EARLY - the readers' hold term OFF (the gather's
 // in.holdOwed false): the gather held at frame 76 of the walk window, before the decision's work and its last write
@@ -84,9 +87,9 @@ for (var w = 0; w < 2; ++w) {
                " frames within ceil(" + win.workPages.toFixed(1) + " pages / the tier's pages a frame) + due = " + win.workPace);
     }
     assert(win.gatherHoldFrame > win.lastGiRowFrame && win.gatherHoldFrame > win.lastHoldKeyFrame &&
-           win.gatherHoldFrame <= lastWrite + win.settleFrames + 1,
+           win.gatherHoldFrame <= lastWrite + win.lastKeyConverge + win.settleFrames + 1,
            win.name + ": the gather's hold is the settle after the last write (" + win.gatherHoldFrame + ", last hold key " +
-           win.lastHoldKeyFrame + ", last row " + win.lastGiRowFrame + ", settle " + win.settleFrames + ")");
+           win.lastHoldKeyFrame + ", last row " + win.lastGiRowFrame + ", C " + win.lastKeyConverge + ", settle " + win.settleFrames + ")");
 }
 assert(typeof r.tsv === "string" && r.tsv.length > 0, "the TSV path: " + r.tsv);
 assert(r.path.directEqual.length >= 1, "the path check read the cascades: " + JSON.stringify(r.path));

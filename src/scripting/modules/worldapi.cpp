@@ -2456,6 +2456,8 @@ QVariantMap WorldApi::stillness(const QVariantMap &params)
                                     { QStringLiteral("decisionFrame"), w.decisionFrame },
                                     { QStringLiteral("decisionWorkEnd"), w.decisionWorkEnd },
                                     { QStringLiteral("holdBound"), w.holdBound },
+                                    { QStringLiteral("convergeFrames"), w.convergeFrames },
+                                    { QStringLiteral("lastKeyConverge"), w.lastKeyConverge },
                                     { QStringLiteral("workPace"), w.workPace },
                                     { QStringLiteral("workPages"), w.workPages },
                                     // the gather's settle N (PHOTON-2 K6: the hold's bar is the last write + N + 1)

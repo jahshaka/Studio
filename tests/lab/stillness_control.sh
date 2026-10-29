@@ -22,6 +22,8 @@
 #           16 + 9 (the readers' DEMAND SPAN L = N + the due: each reader's rest indices [1, L], PHOTON-7 stage 10's
 #           per-reader snapshot) + 9 (the read-back's due after it: the period 4 + the ring 3 + 1 + 1)
 #         + W (the decision's own work: its captures and card-to-card rounds, from the decision to its last GI row)
+#         + C (since PHOTON-7 stage 8B, B1: the frames the gather's cells take after that work to CONVERGE - their
+#           history caught up with their samples, measured by the door: the LAB STILLNESS line's converge=)
 #         + 16 (the re-rest after that work) + 1 (the hold's own frame)
 #       of the readers' FIRST REST frame; a view that never holds is red - and W'S PACE LAW (the lead's correction: W is
 #       the cache's measured work, so its own bound is derived from the same session's counts):
