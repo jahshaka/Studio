@@ -1995,7 +1995,7 @@ bool Session::regions(const Command &c)
     if (!c.args.empty() && !boxes) { labFail("LAB REFUSED regions: '%s' (boxes)\n", c.args[0].c_str()); return false; }
     GiChangedRegions r;
     if (!mScene->giChangedRegions(r)) { labFail("LAB REGIONS FAILED: no list has closed (no frame drew the scene)\n"); return false; }
-    static const char *const kKinds[kGiRegionKindCount] = { "?", "Slab", "Card", "Edit", "Mover", "MoverShadow", "LampShadow", "Lamp" };
+    static const char *const kKinds[kGiRegionKindCount] = { "?", "Slab", "Card", "Edit", "Mover", "MoverShadow", "LampShadow", "Lamp", "CardScene" };
     unsigned per[kGiRegionKindCount] = {};
     for (const GiChangedRegion &g : r.regions)
         if (unsigned(g.kind) < kGiRegionKindCount) ++per[unsigned(g.kind)];

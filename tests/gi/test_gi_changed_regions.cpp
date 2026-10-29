@@ -65,6 +65,7 @@ static const char *kindName(GiRegionKind k)
     case GiRegionKind::MoverShadow: return "MoverShadow";
     case GiRegionKind::LampShadow: return "LampShadow";
     case GiRegionKind::Lamp: return "Lamp";
+    case GiRegionKind::CardScene: return "CardScene";
     }
     return "?";
 }
@@ -318,9 +319,11 @@ int main()
         const Box want = join(sphere(from, lampDesc.range), sphere(lampPos, lampDesc.range));
         // (the cards' own answer to the light write - today every resident card relit, the radiance signature C4 that
         // stage 5 deletes - is the Card producer's, listed beside it)
-        const unsigned others = unsigned(r.regions.size()) - countKind(r, GiRegionKind::Lamp) - countKind(r, GiRegionKind::Card);
-        std::printf("   Lamp %u, Card %u (the cache's relights), other %u\n", countKind(r, GiRegionKind::Lamp),
-                    countKind(r, GiRegionKind::Card), others);
+        // (since 8B (A) a relight the lamp's write caused lists as CardScene, a later round as Card: both the cache's)
+        const unsigned others = unsigned(r.regions.size()) - countKind(r, GiRegionKind::Lamp) - countKind(r, GiRegionKind::Card) -
+                                countKind(r, GiRegionKind::CardScene);
+        std::printf("   Lamp %u, Card %u, CardScene %u (the cache's relights), other %u\n", countKind(r, GiRegionKind::Lamp),
+                    countKind(r, GiRegionKind::Card), countKind(r, GiRegionKind::CardScene), others);
         CHECK(countKind(r, GiRegionKind::Lamp) == 1u && l && same(*l, want) && others == 0u && !r.overflow && !r.restart,
               "A LAMP STEP LISTS EXACTLY ITS OLD SPHERE JOINED WITH ITS NEW (one Lamp region; no other producer but the cards')");
         CHECK(l && l->cascadeMask != 0u, "...and names the cascades it reaches");
@@ -378,7 +381,8 @@ int main()
         const GiChangedRegions r2 = regions();
         dump(r2, "the intensity step's frame");
         const GiChangedRegion *l2 = firstKind(r2, GiRegionKind::Lamp);
-        const unsigned others2 = unsigned(r2.regions.size()) - countKind(r2, GiRegionKind::Lamp) - countKind(r2, GiRegionKind::Card);
+        const unsigned others2 = unsigned(r2.regions.size()) - countKind(r2, GiRegionKind::Lamp) - countKind(r2, GiRegionKind::Card) -
+                                 countKind(r2, GiRegionKind::CardScene);
         CHECK(countKind(r2, GiRegionKind::Lamp) == 1u && l2 && same(*l2, sphere(lampPos, lampDesc.range)) && others2 == 0u &&
                   !r2.overflow,
               "an intensity step lists exactly its one sphere");
