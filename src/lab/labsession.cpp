@@ -1118,7 +1118,8 @@ bool Session::exec(const Command &c)
                 for (unsigned i = 0; i < 64u; ++i) newest = std::max(newest, rq.reflectPickFrames[i]);
                 std::vector<unsigned> order;
                 for (unsigned i = 0; i < 64u; ++i)
-                    if ((rq.reflectPick[i * 64u] || rq.reflectPick[i * 64u + 32u]) &&
+                    if ((rq.reflectPick[i * 64u] || rq.reflectPick[i * 64u + 32u] || rq.reflectPick[i * 64u + 48u] ||
+                         rq.reflectPick[i * 64u + 49u] || rq.reflectPick[i * 64u + 53u]) &&   // (MEASURING ARM, 8B B2 (A))
                         rq.reflectPickFrames[i] + uint32_t(n + 4) > newest)
                         order.push_back(i);
                 std::sort(order.begin(), order.end(), [&](unsigned a, unsigned b) { return rq.reflectPickFrames[a] < rq.reflectPickFrames[b]; });
@@ -1134,6 +1135,9 @@ bool Session::exec(const Command &c)
                     std::fprintf(f, " c2hit %d %.4f %.5f %.5f %.5f mirror %d %.5f", w[24] == 0xFFFFFFFFu ? -1 : int(w[24]), fv(i, 25), fv(i, 26), fv(i, 27),
                                  fv(i, 28), w[30] == 0xFFFFFFFFu ? -1 : int(w[30]), fv(i, 29));
                     std::fprintf(f, " cut %.5f", fv(i, 31));
+                    // (MEASURING ARM, 8B B2 (A)): the refinement's counts and the picked texel's word
+                    std::fprintf(f, " | refining %u handover %u begun %u realEnds %u walks %u word %08x heldR %.5f M %u |", w[48], w[49],
+                                 w[50], w[51], w[52], w[53], fv(i, 54), w[55]);
                     if (w[32])
                         std::fprintf(f, " %.6f %.6f %.0f %u %u %.5f  %.5f %.5f %.5f  %.6f  %.5f %.5f %.5f", fv(i, 33), fv(i, 34),
                                      fv(i, 35), w[36], w[37], fv(i, 38), fv(i, 39), fv(i, 40), fv(i, 41), fv(i, 42), fv(i, 43),
