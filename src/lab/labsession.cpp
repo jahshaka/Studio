@@ -612,7 +612,17 @@ std::string Session::statusJson()
       << ",\"historyBytes\":" << gi.gather.historyBytes << ",\"restFrames\":" << gi.gather.restFrames
       // ...and its twins against their cap (PHOTON-7 stage 10: the cap is an L7 count; a real scene's demand reads it)
       << ",\"adaptive\":" << gi.gather.adaptive << ",\"adaptiveCap\":" << gi.gather.adaptiveCap
-      << ",\"adaptiveRequested\":" << gi.gather.adaptiveRequested << "}";
+      << ",\"adaptiveRequested\":" << gi.gather.adaptiveRequested;
+    {
+        // ...and THE FAST UPDATE's instrument (PHOTON-7 stage 8B, B5): the most probes of the retained frames' records (the
+        // last 32 retired) with a moving ray, and with their own amount past one half
+        unsigned moving = 0u, fast = 0u;
+        for (const jahshaka::engine::GatherRestRecord &r : gi.gather.restLog) {
+            moving = std::max(moving, r.movingProbes);
+            fast = std::max(fast, r.fastProbes);
+        }
+        o << ",\"movingProbesPeak\":" << moving << ",\"fastProbesPeak\":" << fast << "}";
+    }
     o << ",\"cards\":{\"captures\":" << gi.cards.captures << ",\"capturesLastFrame\":" << gi.cards.capturesLastFrame
       << ",\"queue\":" << gi.cards.queueLength << ",\"relights\":" << gi.cards.relights << ",\"indirectRelights\":"
       << gi.cards.indirectRelights << ",\"invalidRadiance\":" << gi.cards.invalidRadiance << ",\"invalidIndirect\":"

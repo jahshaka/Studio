@@ -1244,6 +1244,18 @@ if(TARGET jahlab)
     set_tests_properties(gi.rest_oracle_mover PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
+# gi.fast_update (PHOTON-7 stage 8B, B5's acceptance: LUMEN's FAST UPDATE) - photon-glass's mover slid 1.5 m in 60
+# frames in the gather's own picture (480x270): the probes the motion's hits reach counted (moving rays; their own F past
+# one half), and the settle to the bar after the motion at most HALF the fast update's off (8 frames, measured once with
+# the arm). fast_update.sh says the law and derives our N' from Lumen's. One jahlab session: 720 frames.
+if(TARGET jahlab)
+    jah_gpu_row(gi.fast_update CLASS engine FRAMES 720
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/fast_update.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/fast_update
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.fast_update PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
 # gi.hold_after_stop (PHOTON-2 stage 2 and its round, rev 8's H4 as rev 9 restated it) — THE GATHER SETTLES, THEN HOLDS:
 # jahlab's stillness door on photon-room (a walk inside one cell; a lamp step at rest: the field's change within 36
 # frames, falling over 10-frame windows, then the hold, no burst) and photon-court's 15 m crossing (the change falling
