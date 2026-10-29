@@ -34,9 +34,11 @@
 #                    Xvfb (60-99, 1920x1080x24, killed by its recorded pid); prints each boot's wall and the cache's size;
 #                    exits 0 when every boot passed (a failed boot's log kept under <tests-dir>/.evidence by fresh_home).
 #   --check          the answer alone, never a boot: exit 0 warm, 3 cold.
+#   --key            THE TREE's SHADER KEY alone (below), printed, exit 0 - its one definition, read by a row that keeps
+#                    a cache of its own (shader.async_after_open.seed's stamp, URGENT #125), never a second formula.
 #   --tests-dir <d>  the shared cache's directory (default <build>/tests) - the guard row's own scratch.
 #   --app <exe>      the app the boot runs (default <build>/bin/Jahshaka) - the guard row's fake, which compiles nothing.
-#   --cold-rows <f>  the cold engine rows' list cold-on runs (default <build>/tests/test-cold-engine-rows.txt) - the guard
+#   --cold-rows <f>  the cold rows' list cold-on runs (default <build>/tests/test-cold-rows.txt) - the guard
 #                    row's fake.
 #   --only <boots>   THE BOOTS THIS CALL MAY RUN, one or a comma list (URGENT #103 + #106): app-off, app-on, engine-off,
 #                    engine-on, cold-on; `app` = app-off,app-on and `engine` = engine-off,engine-on (the pairs, for a hand
@@ -77,18 +79,22 @@
 #                THE RESIDUE: every other exe (each test fixture) keeps a cold driver cache after a shader change and
 #                pays that compile ONCE on its first run - stored during the run, never awaited at its exit
 #                (tests/support/enginetesthelpers.h).
-# THE COLD ENGINE ROWS' EXES (cold-on; URGENT #119, HARNESS-4): a CLASS engine row declared COLD (its fixture states its
-#   own cache: frame.streaming_picture's shaderCacheOff, frame.monitor_pop's own dir) boots on NO shared pipeline cache,
-#   so every pipeline it creates is the NVIDIA driver's, from that exe's own driver cache alone (keyed per executable).
-#   After a shader change it compiles them cold - rq_reflect's ahead build 117-121 s in nvvm (BUGS-8's gdb: the teardown
-#   joins it), the 60-s cap kills the row, nothing is stored, and the row is red at every run. The cold-on boot runs every
-#   exe of <build>/tests/test-cold-engine-rows.txt (written at generate time from the COLD registrations,
-#   tests/CMakeLists.txt _jah_cold_engine_row) once, UNCAPPED (the call's budget, never the 60-s cap), the driver's cache
-#   ON, all at once under one hold (tests/support/warm_cold_rows.sh). Stamp <tests>/.cold-engine-rows.driver-key: this
-#   key and the list's digest (a newly COLD row reads cold). A row on the shared cache needs none of it - measured, with
-#   an EMPTY driver cache rtreflect.sphere_glint built all 13 ray pipelines through the shared VkPipelineCache in 1.04 s.
-#   A fixture that states its own cache while registered warm is refused at its start (enginetesthelpers.h), so this
-#   list cannot miss one.
+# THE COLD ROWS (cold-on; URGENT #119 + #122, HARNESS-4): a row declared COLD makes its own cache, so no boot above
+#   reaches it. An ENGINE row so declared (its fixture states its own cache: frame.streaming_picture's shaderCacheOff,
+#   frame.monitor_pop's own dir) boots on NO shared pipeline cache, so every pipeline it creates is the NVIDIA driver's,
+#   from that exe's own driver cache alone (keyed per executable): after a shader change rq_reflect's ahead build took
+#   117-121 s in nvvm (BUGS-8's gdb: the teardown joins it), the 60-s cap killed the row, nothing was stored, red at
+#   every run. An APP row so declared keeps a cache keyed on the shaders (shader.async_after_open.seed: its startup
+#   seed, a 64-s boot of the epic World Mode whenever its stamp is stale, timed out at 60.04 s on 8B's check, the row
+#   behind it NOT RUN). The cold-on boot runs every command of <build>/tests/test-cold-rows.txt (written at generate
+#   time from the COLD registrations with each row's test tier, tests/CMakeLists.txt _jah_cold_row) once, UNCAPPED (the
+#   call's end, never the 60-s cap), the driver's cache ON, all at once under one hold (tests/support/warm_cold_rows.sh).
+#   Stamp <tests>/.cold-rows.driver-key: this key, the list's digest (a newly COLD row reads cold) and the BUILT digest -
+#   the size and time of every staged media file: what a row's own cache stamp keys on beyond this key (the seed's stamp
+#   is this key, all of bin/media by content and the fork's BUILT_FROM; never a binary's bytes - URGENT #125). A row on the
+#   shared cache needs none of it - measured, with an EMPTY driver cache rtreflect.sphere_glint built all 13 ray
+#   pipelines through the shared VkPipelineCache in 1.04 s. A fixture that states its own cache while registered warm is
+#   refused at its start (enginetesthelpers.h), so this list cannot miss one of those.
 # THE CACHES:
 #   app     <tests-dir>/.shadercache (the app rows', fresh_home --warm): `Jahshaka --engine-selftest` - the app's own
 #           startup warm-up gate (the born World's set: Epic, every feature) PLUS the self-test's six poses (the default
@@ -109,10 +115,11 @@
 # content beyond the born World compiles on every run (the residue named, HARNESS-1). ONE answer for the boots named: "warm at <key>" when every one is, else "cold at <key>:
 # <each cold boot's why>" (exit 3 under --check; else their boots, in order).
 set -u
-BUILD=""; CHECK=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=570; COLDROWS=""
+BUILD=""; CHECK=0; KEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=570; COLDROWS=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
+        --key) KEYONLY=1; shift ;;
         --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; shift 2 ;;
         --app) APP="${2:?--app needs an executable}"; shift 2 ;;
         --lab) LAB="${2:?--lab needs an executable}"; shift 2 ;;
@@ -164,6 +171,7 @@ key_inputs() {
 }
 INPUTS=$(key_inputs) || exit 2
 KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
+[ "$KEYONLY" = 1 ] && { echo "$KEY"; exit 0; }
 layer_keys() {   # the shared cache's per-layer keys (its manifest's last column), sorted, one line
     [ -f "$1/cache-manifest.txt" ] && awk '$1 == "file" { print $NF }' "$1/cache-manifest.txt" | LC_ALL=C sort -u | tr '\n' ' '
 }
@@ -184,13 +192,20 @@ APP_SHARED="$TESTS/.shadercache"; APP_STAMP="$TESTS/.shadercache.warm-key"; APP_
 ENG_SHARED="$TESTS/.shadercache-engine"; ENG_STAMP="$TESTS/.shadercache-engine.warm-key"
 ENG_DSTAMP="$TESTS/.shadercache-engine.driver-key"
 APPX="${APP:-$BUILD/bin/Jahshaka}"; LABX="${LAB:-$BUILD/bin/jahlab}"
-COLDROWS="${COLDROWS:-$BUILD/tests/test-cold-engine-rows.txt}"; COLD_DSTAMP="$TESTS/.cold-engine-rows.driver-key"
+COLDROWS="${COLDROWS:-$BUILD/tests/test-cold-rows.txt}"; COLD_DSTAMP="$TESTS/.cold-rows.driver-key"
 cold_digest() { echo "rows $( [ -f "$COLDROWS" ] && sha256sum < "$COLDROWS" | cut -c1-16 || echo none)"; }
-coldrows_why() {   # the cold engine rows' exes: empty when their driver caches were stored at the key for this list
+built_digest() {   # every staged media file's size and time (no content read: 4 ms) - what a cold row's own cache may key
+    # on beyond the key (the seed's stamp hashes all of bin/media). NOT an exe's or the app's bytes: a relink changes no
+    # shader (URGENT #125: keyed on the app's size and time, the seed and this boot re-ran ~160 s at every commit)
+    find "$BUILD/bin/media" -type f -printf '%s %T@ %p\n' 2>/dev/null | LC_ALL=C sort
+}
+built_key() { echo "built $(built_digest | sha256sum | cut -c1-16)"; }
+coldrows_why() {   # the cold rows: empty when their commands ran at this key, for this list, on this build
     if [ ! -s "$COLDROWS" ] || [ -z "$(tr -d '[:space:]' < "$COLDROWS")" ]; then return 0; fi   # no cold row: nothing to warm
     if [ ! -f "$COLD_DSTAMP" ]; then echo "no driver-cache run recorded"
     elif [ "$(sed -n 1p "$COLD_DSTAMP")" != "$KEY" ]; then echo "the key moved (stored at $(sed -n 1p "$COLD_DSTAMP"))"
     elif [ "$(sed -n 2p "$COLD_DSTAMP")" != "$(cold_digest)" ]; then echo "the cold rows changed since ($(basename "$COLDROWS"))"
+    elif [ "$(sed -n 3p "$COLD_DSTAMP")" != "$(built_key)" ]; then echo "the staged media rebuilt since"
     fi
 }
 exe_id() {   # <exe>: the name the driver keys its per-exe cache on - its file name (measured below)
@@ -215,7 +230,7 @@ what_of() {
     case "$1" in
         app-off) echo "the app rows' cache" ;; app-on) echo "the app exe's driver cache" ;;
         engine-off) echo "the engine rows' cache" ;; engine-on) echo "the lab exe's driver cache" ;;
-        cold-on) echo "the cold engine rows' exes' driver caches" ;;
+        cold-on) echo "the cold rows' own caches" ;;
     esac
 }
 RUN=""; why=""
@@ -266,7 +281,7 @@ est_of() {
     local w
     w=$(awk -v b="$1" '$1 == b { w = $2 } END { print w }' "$WALLS" 2>/dev/null)
     [ -n "$w" ] && { echo "$w"; return; }
-    case "$1" in app-off) echo 400 ;; engine-off) echo 340 ;; app-on) echo 120 ;; engine-on) echo 60 ;; cold-on) echo 300 ;; esac
+    case "$1" in app-off) echo 400 ;; engine-off) echo 340 ;; app-on) echo 120 ;; engine-on) echo 60 ;; cold-on) echo 330 ;; esac   # cold-on: 306 s measured, three rows, loaded (#122)
 }
 note_wall() {
     { grep -v "^$1 " "$WALLS" 2>/dev/null; echo "$1 $2"; } > "$WALLS.tmp" && mv "$WALLS.tmp" "$WALLS"
@@ -366,15 +381,18 @@ driver_boot() {
          "$(( (${b1:-0} - ${b0:-0}) / 1048576 )) MB grown"
     return 0
 }
-# cold_boot <boots left>: the cold engine rows' exes, each once, uncapped, the driver's cache on, at once under one hold;
-# stamped with the key and the list's digest when none was killed at the bound
+# cold_boot <boots left>: the cold rows' commands, each once, uncapped, the driver's cache on, at once under one hold;
+# stamped with the key, the list's digest and the built digest when none was killed at the bound
 cold_boot() {
     local rest=$1 t0 rc wall log="$TESTS/warm-cold-rows.log" deadline
     room cold-on "$rest"
     # THE EXES' BOUND IS THE CALL's END, read after the card's wait (the runner subtracts the clock): a wait shorter
-    # than its bound leaves the exes the rest
+    # than its bound leaves the exes the rest. And the card's wait leaves them at least their estimate: room() gives
+    # the wait the budget less the estimate, so the end's own 15-s margin comes off the wait too (#122's proof: the seed
+    # finished 1 s inside the bound after a 248-s wait, 306 s of run against a 300-s estimate)
     deadline=$(( T0 + BUDGET - 15 ))
-    echo "warm-app-cache: booting $(what_of cold-on) (cold-on): $(grep -c . "$COLDROWS") exe(s) on $DISPLAY, each uncapped" \
+    WAIT=$(( WAIT - 15 )); [ "$WAIT" -ge 1 ] || WAIT=1
+    echo "warm-app-cache: booting $(what_of cold-on) (cold-on): $(grep -c . "$COLDROWS") row(s) on $DISPLAY, each uncapped" \
          "(to the call's end, $(( deadline - $(date +%s) )) s from now less the card's wait, at most ${WAIT} s)"
     t0=$(date +%s)
     ( H="$TESTS/warm-cold-home"; rm -rf "$H"; mkdir -p "$H"
@@ -391,7 +409,7 @@ cold_boot() {
         return 1
     fi
     note_wall cold-on "$(( wall - $(sed -n 's/^gpu-lock: waited \([0-9]*\) s$/\1/p' "$log" | head -1 | grep . || echo 0) ))"
-    printf '%s\n%s\n' "$KEY" "$(cold_digest)" > "$COLD_DSTAMP"
+    printf '%s\n%s\n%s\n' "$KEY" "$(cold_digest)" "$(built_key)" > "$COLD_DSTAMP"
     echo "warm-app-cache: $(what_of cold-on) stored at $KEY - the boot ${wall} s"
     return 0
 }

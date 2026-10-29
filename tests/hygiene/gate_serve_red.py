@@ -3,7 +3,8 @@
 (classify / red_stands) on synthetic records. Re-running a red at the same input is a quiet retry that could flip it green
 by chance, so a red RESULT (FAIL, TIMEOUT, CRASH) recorded at THIS tree with the same build configuration, declaration and
 data is served-red (reported with its record, neither served nor run); a red of an ANCESTOR's tree runs (the diff may have
-fixed it); a PASS serves as before; NOTRUN / NOADMIT are not results. No build, no git, no display.
+fixed it); a PASS serves as before; NOTRUN / NOADMIT are not results - except a NOTRUN BEHIND a row it needs (URGENT #123):
+served-red while that row is red at the same commit, run once it is not or at a new tree. No build, no git, no display.
 usage: gate_serve_red.py <source dir>"""
 import os
 import sys
@@ -56,5 +57,19 @@ want("a PASS at an ancestor the range does not reach serves as before", C(rec("P
 want("a PASS at an ancestor the range reaches runs", C(rec("PASS"), Reach(False, reaches={"gi.row"})), "run", "reaches")
 for v in ("NOTRUN", "NOADMIT"):
     want("a %s is not a result: never served-red (it runs)" % v, C(rec(v), Reach(True)), "run")
+# NOT RUN BEHIND ITS FIXTURE (URGENT #123): a row ctest did not run because a row it needs is red stands as a red while
+# that row is red at the same commit - its part is never listed to run for nothing - and runs once that row is not
+behind = dict(rec("NOTRUN"), behind=["gi.fixture"], failLine="NOT RUN behind gi.fixture")
+B = lambda r, reach, at: cgc.classify(r, FACT, "gi.row", reach, "fk", "fk", CFG, at)
+want("NOT RUN behind a fixture red at this tree: SERVED-RED", B(behind, Reach(True), {"gi.fixture": [rec("FAIL")]}), "red")
+want("NOT RUN behind a fixture that TIMED OUT at this tree: SERVED-RED", B(behind, Reach(True),
+     {"gi.fixture": [rec("TIMEOUT")]}), "red")
+want("NOT RUN behind a fixture re-run GREEN at this tree since: runs", B(behind, Reach(True),
+     {"gi.fixture": [rec("FAIL"), rec("PASS")]}), "run", "no longer red")
+want("NOT RUN behind a fixture with no record at this tree: runs", B(behind, Reach(True), {}), "run", "no longer red")
+want("NOT RUN behind, recorded at an ANCESTOR's tree: runs (a new tip starts clean)", B(behind, Reach(False),
+     {"gi.fixture": [rec("FAIL")]}), "run", "ancestor")
+want("NOT RUN behind, its declaration changed: runs", B(dict(behind, declaration={"hash": "d2"}), Reach(True),
+     {"gi.fixture": [rec("FAIL")]}), "run", "declaration")
 print("gate.serve_red:", "FAIL (%d)" % len(fails) if fails else "PASS")
 sys.exit(1 if fails else 0)

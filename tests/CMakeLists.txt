@@ -412,26 +412,42 @@ endfunction()
 # no wrapper, no cache, the reason stated where the row is.
 # WARM_HOME <home> — the row is a WARM fixture's consumer (jah_fresh_home_fixture(... <home> WARM)): it runs as
 # `${JAH_WARM_CONSUMER} <home> -- <exe> …`, and its green run promotes what it compiled (HARNESS-1; R14).
-# _jah_cold_engine_row(<row> <exe> <working dir or ""> [args...]) - A COLD ENGINE ROW's EXE, FOR THE WARM-UP (URGENT #119,
-# HARNESS-4): a CLASS engine row declared COLD boots on no shared engine cache, so every pipeline it creates - the ray
-# tier's included, ~2 min of NVIDIA's compiler for rq_reflect alone - is the driver's, served only from the driver's
-# disk cache, which the driver keys PER EXECUTABLE. After a shader change that cache is cold for this exe, and a row
-# killed at the 60-s cap stores nothing (frame.streaming_picture and frame.monitor_pop: 2 s of test, then ~4 min in
-# the teardown's wait on the ahead reflect build, killed - red at every run until someone ran the exe by hand). A row
-# on the shared cache needs none of this: measured, rtreflect.sphere_glint on an EMPTY driver cache built all 13 ray
-# pipelines through the shared VkPipelineCache in 1.04 s and passed in 1.34 s. So the warm-up's cold-on boot runs each
-# exe listed here once, uncapped, with the driver's cache on (scripts/warm-app-cache.sh). The list is
-# <build>/tests/test-cold-engine-rows.txt, one row a line: <row> TAB <working dir> TAB <exe> [TAB <arg>]... - written at
-# generate time from the registrations (never a hand list).
-function(_jah_cold_engine_row _row _exe _wd)
+# _jah_cold_row(<row> <exe> <working dir or ""> [args...]) - A COLD ROW's COMMAND, FOR THE WARM-UP (URGENT #119 + #122,
+# HARNESS-4). A row declared COLD makes its own cache, so nothing the warm-up warms reaches it:
+#   - a CLASS engine row boots on no shared engine cache, so every pipeline it creates - the ray tier's included, ~2 min
+#     of NVIDIA's compiler for rq_reflect alone - is the driver's, served only from the driver's disk cache, keyed PER
+#     EXECUTABLE (#119: frame.streaming_picture and frame.monitor_pop, 2 s of test then ~4 min in the teardown's wait on
+#     the ahead reflect build, killed at the cap and red at every run). A row on the shared cache needs none of this:
+#     measured, rtreflect.sphere_glint on an EMPTY driver cache built all 13 ray pipelines through the shared
+#     VkPipelineCache in 1.04 s and passed in 1.34 s;
+#   - a CLASS app row keeps a cache of its own keyed on the shaders (#122: shader.async_after_open.seed's startup seed,
+#     stamped with its tree key - a boot of the epic World Mode that compiles the whole startup set, 64 s cold, and the
+#     seed MUST be its own boot's: the row's law is that the open's tier change to low compiles in the background, and
+#     the shared app cache holds tier low).
+# The warm-up's cold-on boot runs each command listed here once, UNCAPPED, the driver's cache on, with the row's test
+# tier (scripts/warm-app-cache.sh): the seed row makes its seed there and finds it fresh in the run (0.03 s). The list
+# is <build>/tests/test-cold-rows.txt, one row a line: <row> TAB <working dir> TAB <env: VAR=value, or -VAR to unset,
+# joined by the unit separator 0x1F> TAB <exe> [TAB <arg>]... - written at generate time from the registrations (never a hand list).
+function(_jah_cold_row _row _exe _wd)
     if(NOT _wd)
         set(_wd "${CMAKE_CURRENT_BINARY_DIR}")
     endif()
-    set(_line "${_row}\t${_wd}\t${_exe}")
+    string(ASCII 31 _us)
+    get_property(_boot GLOBAL PROPERTY JAH_TEST_BOOT_${_row})   # the row's test tier (_jah_test_boot_register), if any
+    set(_env "")
+    foreach(_e IN LISTS _boot)
+        string(REGEX REPLACE "^([A-Za-z_0-9]+)=unset:.*$" "-\\1" _e "${_e}")   # unset -> -VAR
+        string(REGEX REPLACE "^([A-Za-z_0-9]+)=set:" "\\1=" _e "${_e}")
+        if(_env)
+            string(APPEND _env "${_us}")
+        endif()
+        string(APPEND _env "${_e}")
+    endforeach()
+    set(_line "${_row}\t${_wd}\t${_env}\t${_exe}")
     foreach(_a IN LISTS ARGN)
         string(APPEND _line "\t${_a}")
     endforeach()
-    set_property(GLOBAL APPEND PROPERTY JAH_COLD_ENGINE_ROWS "${_line}")
+    set_property(GLOBAL APPEND PROPERTY JAH_COLD_ROWS "${_line}")
 endfunction()
 
 function(jah_gpu_row _row)
@@ -470,8 +486,8 @@ function(jah_gpu_row _row)
     if(G_WORKING_DIRECTORY)
         set(_wd WORKING_DIRECTORY "${G_WORKING_DIRECTORY}")
     endif()
-    if(DEFINED G_COLD AND NOT G_CLASS STREQUAL "engine")
-        message(FATAL_ERROR "jah_gpu_row(${_row}): COLD declares an ENGINE row cold; a ${G_CLASS} row's home is its own")
+    if(DEFINED G_COLD AND NOT G_CLASS MATCHES "^(engine|app)$")
+        message(FATAL_ERROR "jah_gpu_row(${_row}): COLD declares an engine row cold, or an app row that keeps its own cache")
     endif()
     if("COLD" IN_LIST ARGN AND NOT G_COLD)
         message(FATAL_ERROR "jah_gpu_row(${_row}): COLD needs its reason (COLD \"<why the row must compile cold>\")")
@@ -486,9 +502,6 @@ function(jah_gpu_row _row)
     else()
         add_test(NAME ${_row} COMMAND "${_exe}" ${G_COMMAND} ${_wd})
     endif()
-    if(G_CLASS STREQUAL "engine" AND G_COLD)
-        _jah_cold_engine_row(${_row} "${_exe}" "${G_WORKING_DIRECTORY}" ${G_COMMAND})
-    endif()
     if(DEFINED G_FRAMES)
         set_property(TEST ${_row} PROPERTY JAHSHAKA_TEST_FRAMES ${G_FRAMES})
     endif()
@@ -496,6 +509,9 @@ function(jah_gpu_row _row)
     _jah_vram_register(${_row} ${G_CLASS} ${_k})
     if(_declared)
         _jah_test_boot_register(${_row} "${G_TIER}" "${G_NEEDS_WHY}" "${G_TEST_WINDOW}" ${G_NEEDS})
+    endif()
+    if(G_COLD)   # after the test tier is registered: the cold list carries it
+        _jah_cold_row(${_row} "${_exe}" "${G_WORKING_DIRECTORY}" ${G_COMMAND})
     endif()
     if(G_SHIP)
         jah_ship_row(${_row})
@@ -541,8 +557,8 @@ function(jah_gpu_exclusive_test)
     # it at once); ctest's TIMEOUT is the backstop: the budget + 30 s (timeout(1)'s kill grace).
     # A CLASS engine measure boots warm like every engine row (jah_gpu_row's CLASS engine paragraph; COLD "<why>" opts out)
     set(_warm)
-    if(DEFINED G_COLD AND NOT G_CLASS STREQUAL "engine")
-        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): COLD declares an ENGINE row cold")
+    if(DEFINED G_COLD AND NOT G_CLASS MATCHES "^(engine|app)$")
+        message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): COLD declares an engine row cold, or an app row that keeps its own cache")
     endif()
     if("COLD" IN_LIST ARGN AND NOT G_COLD)
         message(FATAL_ERROR "jah_gpu_exclusive_test(${G_NAME}): COLD needs its reason (COLD \"<why the row must compile cold>\")")
@@ -556,9 +572,6 @@ function(jah_gpu_exclusive_test)
     endif()
     add_test(NAME ${G_NAME} COMMAND "${JAH_GPU_EXCLUSIVE}" --run-timeout ${G_RUN_TIMEOUT}
              --label ${G_NAME}:${G_CLASS} ${_warm} "${_exe}" ${G_COMMAND} ${_wd})
-    if(G_CLASS STREQUAL "engine" AND G_COLD)
-        _jah_cold_engine_row(${G_NAME} "${_exe}" "${G_WORKING_DIRECTORY}" ${G_COMMAND})
-    endif()
     # (the lock's wait on top of the run's own bound, within the cap: under spec.sh / gpu-exclusive.sh the lock is held
     # and the wait is 0)
     math(EXPR _timeout "${G_RUN_TIMEOUT} + 30")
@@ -571,6 +584,9 @@ function(jah_gpu_exclusive_test)
     _jah_vram_register(${G_NAME} ${G_CLASS} all)
     if(_declared)
         _jah_test_boot_register(${G_NAME} "${G_TIER}" "${G_NEEDS_WHY}" "${G_TEST_WINDOW}" ${G_NEEDS})
+    endif()
+    if(G_COLD)   # after the test tier is registered: the cold list carries it
+        _jah_cold_row(${G_NAME} "${_exe}" "${G_WORKING_DIRECTORY}" ${G_COMMAND})
     endif()
     cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_measure_label [[${G_NAME}]])")
     if(G_SHIP)
@@ -1242,9 +1258,9 @@ list(REMOVE_DUPLICATES _jah_sets)
 list(SORT _jah_sets)
 list(JOIN _jah_sets "\n" _jah_sets)
 file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test-boot-sets.txt" CONTENT "${_jah_sets}\n" @ONLY)
-# THE COLD ENGINE ROWS' EXES (URGENT #119; _jah_cold_engine_row above): the warm-up's cold-on boot runs each once,
+# THE COLD ROWS' COMMANDS (URGENT #119 + #122; _jah_cold_row above): the warm-up's cold-on boot runs each once,
 # uncapped, with the driver's cache on. Generated (the exes are generator expressions); written when it changes.
-get_property(_jah_cold GLOBAL PROPERTY JAH_COLD_ENGINE_ROWS)
+get_property(_jah_cold GLOBAL PROPERTY JAH_COLD_ROWS)
 list(SORT _jah_cold)
 list(JOIN _jah_cold "\n" _jah_cold)
-file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test-cold-engine-rows.txt" CONTENT "${_jah_cold}\n")
+file(GENERATE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/test-cold-rows.txt" CONTENT "${_jah_cold}\n")

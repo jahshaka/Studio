@@ -4,7 +4,9 @@ ctest's verbose stream (no GPU, no build, a scratch HOME and run-log dir) record
 [<op> <bar>]` line a row printed (tests/support/lawline.h) in the row's record as `laws` - a green row's and a red row's,
 one printed past the output cap (256 KB) too; a non-finite value keeps its text; a malformed line is named in
 `lawsMalformed`, never a law; a row with no LAW line has no `laws` field; a red's fail line is kept past the cap, and an
-engine fixture's `  FAIL (n) <law>` line is one (it never was).
+engine fixture's `  FAIL (n) <law>` line is one (it never was). AND A ROW CTEST DID NOT RUN BEHIND A RED ROW IT NEEDS
+(`Failed test dependencies: <row>` then `***Not Run`) is recorded NOTRUN with `behind`, its status "behind <row>" and its
+fail line "NOT RUN behind <row>" (URGENT #123); one Not Run for another reason carries no `behind`.
 usage: law_records.py <the tree's scripts/gate_runlog.py> (named on the command line: the selector reaches the row from it)"""
 import glob
 import json
@@ -32,7 +34,10 @@ with tempfile.TemporaryDirectory(prefix="law-records-") as tmp:
                 "3: no law here\n3/4 Test #3: fake.plain .......................   Passed    0.10 sec\n"
                 "test 4\n    Start 4: fake.fixture\n4: Test command: /bin/false\n4: Test timeout computed to be: 60\n"
                 "4:   ok   (1) the control\n4: LAW high.voxels 1.48 %R < 0.0531\n4:   FAIL (3) THE VOXELS: no voxel reads a step\n"
-                "4: FAIL (1 failures, 445 frames)\n4/4 Test #4: fake.fixture .....................***Failed    3.00 sec\n")
+                "4: FAIL (1 failures, 445 frames)\n4/4 Test #4: fake.fixture .....................***Failed    3.00 sec\n"
+                "    Start 5: fake.behind\nFailed test dependencies: fake.fixture\n"
+                "5/6 Test #5: fake.behind ......................***Not Run   0.00 sec\n"
+                "    Start 6: fake.disabled\n6/6 Test #6: fake.disabled ....................***Not Run (Disabled)   0.00 sec\n")
     fake = os.path.join(tmp, "fake-ctest")
     with open(fake, "w") as f:
         f.write("#!/bin/sh\ncat '%s'\nexit 8\n" % stream)
@@ -48,11 +53,12 @@ with tempfile.TemporaryDirectory(prefix="law-records-") as tmp:
             recs[r["suite"]] = r
     g, r, n = recs.get("fake.green", {}), recs.get("fake.red", {}), recs.get("fake.plain", {})
     x = recs.get("fake.fixture", {})
+    b, d = recs.get("fake.behind", {}), recs.get("fake.disabled", {})
     def want(cond, what):
         print("  %s %s" % ("ok  " if cond else "FAIL", what))
         if not cond:
             fails.append(what)
-    want(len(recs) == 4, "four records written (%d; the run's rc %d)" % (len(recs), p.returncode))
+    want(len(recs) == 6, "six records written (%d; the run's rc %d)" % (len(recs), p.returncode))
     want(g.get("verdict") == "PASS" and g.get("laws", {}).get("k14.breaking") ==
          {"value": 1.86, "unit": "%", "op": "<=", "bar": 1.0}, "a green row keeps its law: value, unit, op and bar")
     want(g.get("laws", {}).get("sky.teleport") == {"value": None, "unit": "%R", "text": "nan"},
@@ -66,5 +72,10 @@ with tempfile.TemporaryDirectory(prefix="law-records-") as tmp:
          x.get("laws", {}).get("high.voxels", {}).get("bar") == 0.0531,
          "an engine fixture's red: its first '  FAIL (n) <law>' line is the fail line, its law kept")
     want(n.get("verdict") == "PASS" and "laws" not in n and "lawsMalformed" not in n, "a row with no LAW line has no field")
+    want(b.get("verdict") == "NOTRUN" and b.get("behind") == ["fake.fixture"] and b.get("status") == "behind fake.fixture"
+         and b.get("failLine") == "NOT RUN behind fake.fixture",
+         "a row not run behind its red fixture: NOTRUN, behind [fake.fixture], status 'behind fake.fixture' (#123) (%s)"
+         % {k: b.get(k) for k in ("verdict", "behind", "status", "failLine")})
+    want(d.get("verdict") == "NOTRUN" and "behind" not in d, "a row not run for another reason (disabled) carries no behind")
 print("tooling.law_records: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)

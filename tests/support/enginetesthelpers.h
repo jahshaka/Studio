@@ -162,7 +162,7 @@ inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides 
     if (o.mShaderCacheDir) {
         // A FIXTURE THAT STATES ITS OWN CACHE IS A COLD ROW, AND ITS REGISTRATION SAYS SO (URGENT #119, HARNESS-4): it
         // boots on no shared pipeline cache, so its exe's driver cache is the only warm thing it has - the warm-up's
-        // cold-on boot warms it for the rows registered COLD (tests/CMakeLists.txt _jah_cold_engine_row), and only those.
+        // cold-on boot warms it for the rows registered COLD (tests/CMakeLists.txt _jah_cold_row), and only those.
         // Registered warm (the hook's variable set), it would go unwarmed: refused here, before any engine exists.
         if (std::getenv("JAHSHAKA_SHADER_CACHE_DIR")) {
             std::fprintf(stderr, "FAIL: this fixture states its own shader cache (shaderCacheDir / shaderCacheOff) but its row "

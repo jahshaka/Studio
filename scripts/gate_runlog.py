@@ -28,6 +28,9 @@ MEASURING = {"measure"}          # the label of a row that measures: run at the 
 _START = re.compile(r"^\s*Start\s+\d+:\s+(\S+)\s*$")
 _RESULT = re.compile(r"^\s*\d+/\d+\s+Test\s+#(\d+):\s+(\S+)\s+\.*\s*(.*?)\s+([\d.]+)\s+sec\s*$")
 _VLINE = re.compile(r"^(\d+): ?(.*)$")
+# ctest's line before a row it does not run because a row it needs went red (a FIXTURES_SETUP or a DEPENDS parent):
+# `Failed test dependencies: <row> [<row>...]` - unprefixed, right before that row's `***Not Run` result (URGENT #123)
+_DEPS = re.compile(r"^Failed test dependencies:\s*(.*?)\s*$")
 _PREAMBLE = re.compile(r"^(Test command: |Working Directory: |Environment variables: ?$|Environment variable "
                        r"modifications: ?$|Test timeout computed to be: )")
 _VNOISE = re.compile(r"^(test \d+|UpdateCTestConfiguration .*|Constructing a list of tests|Done constructing a list "
@@ -244,8 +247,12 @@ def run_ctest(cmd, build, tier, lane, echo=True):
     p = subprocess.Popen(vcmd, cwd=build, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                          errors="replace")
     buf, size, pre, reds, lawbuf, late = {}, {}, {}, [], {}, {}
+    deps = None   # the last `Failed test dependencies:` names, for the next result line
     for line in p.stdout:
         ln = line.rstrip("\n")
+        md = _DEPS.match(ln)
+        if md:
+            deps = md.group(1).split()
         m = _VLINE.match(ln)
         if m:
             i, txt = m.group(1), m.group(2)
@@ -274,6 +281,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
         if not m:
             continue
         i, name, status, secs = m.group(1), m.group(2), m.group(3), float(m.group(4))
+        behind, deps = deps, None
         text = "\n".join(buf.pop(i, []))
         laws, badlaws = laws_of("\n".join(lawbuf.pop(i, [])))
         late_fail = late.pop(i, None)
@@ -292,13 +300,20 @@ def run_ctest(cmd, build, tier, lane, echo=True):
                 "ts": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "source": "run"}
         v = verdict_of(status)
         row = dict(base, arm=None, verdict=v, status=status.strip("* "), seconds=secs)
+        # NOT RUN BEHIND ITS FIXTURE (URGENT #123): a row ctest did not run because a row it needs is red is RECORDED so,
+        # the rows it waited on named - ci_gate_check.py serve reads it served-red while they stay red at this tree, so a
+        # plan never lists it to run again for nothing (8B's master check re-ran its part seven times: ~25 min of card)
+        if v == "NOTRUN" and behind:
+            row["behind"] = behind
+            row["status"] = "behind " + ", ".join(behind)
         if laws:
             row["laws"] = laws
         if badlaws:
             row["lawsMalformed"] = badlaws[:5]
         if v != "PASS":
             reds.append(name)
-            row["failLine"] = fail_line(text) or late_fail
+            row["failLine"] = (("NOT RUN behind " + ", ".join(row["behind"])) if row.get("behind")
+                               else fail_line(text) or late_fail)
             row["log"] = _row_output(build, run_id, name, text)
             if echo and text:
                 sys.stdout.write("\n".join(text.splitlines()[-40:]) + "\n"); sys.stdout.flush()

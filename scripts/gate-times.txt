@@ -293,7 +293,8 @@ services.memory 0.10  ship 3a0422b4e (2026-10-13)
 settings.store 0.56  quiet n=12
 shader.async_after_open 28.57  solo 2026-10-20 (TOOLING-7: the seed split out; 64.06 s solo before on the same fresh tree, the seed made inside the row)
 shader.async_after_open.seed 28.22  solo 2026-10-20 (TOOLING-7: the seed-MAKING run, a fresh tree; a tree that has its seed answers in ~0 s)
-shadercache.app 48.36  the card lock held, :74, by ctest, load ~4.9, THE FIRST RUN AFTER THE NVIDIA CACHE WAS CLEARED AND ITS CAP RAISED (URGENT #91, PHOTON-7 10-4 2026-10-27 20:20; it had been full since 10-20: every new SPIR-V compiled cold) - was: 51.38 median of 2, loaded box, 2026-10-12; re-price solo at the close (TESTING-SPEED-B3)
+shadercache.app.coldwarm 32.08  quiet (93 % CPU-idle before, 99 after; load 4.0), solo, the card lock held, :77 (HARNESS-4, 2026-10-29: shadercache.app split by proof - runs 1 and 2, cold 22.4 s + warm 9.7 s; the whole row was 48.36, over the 45-s law, and timed out at 60.09 on 8B's check)
+shadercache.app.cleared 20.82  quiet, solo, the card lock held, :77 (HARNESS-4, 2026-10-29: shadercache.app split by proof - run 3, --clear-shader-cache on the warm home shadercache.app.coldwarm leaves)
 shadergraph.emitter_parity 3.14  quiet n=47
 shadow.cutout_caster 25.68  solo, the card lock held, :72, warm (2026-10-27: the run root's shader cache from the tree's shared app cache - cold it compiled 303 shaders, 42.9 s, and timed out at 60 s)
 shadow.pane_lamp 2.10  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F2/F8/F12 2026-10-28: a point lamp and a spot, the hole, a glass and an opaque pane, the alpha drag through four alphas, Blend/Glass/Refractive at alpha 1 on the stock caster, Additive at 0.5; 89 frames)
@@ -389,7 +390,7 @@ atom2.cards_merge_within_budget 0.45  solo, the card lock held (ATOM-2 the stage
 atom2.level_table_is_a_cut 1.98  solo, the card lock held (ATOM-2 stage 5, 2026-10-22)
 open.streams_to_the_end 20.62  solo, the card lock held (OPEN-PATH-1 stage 1, 2026-10-21; the lead's promotion at the merge)
 gi.light_order 5.65  solo, the card lock held, :71, warm (PHOTON-7 stage 2, 2026-10-23: the read's F3 - twenty lamps of one key in two creation orders; F4 - 132 lamps over the slots)
-source.shaders_spirv_valid 3.56  no card, by ctest (URGENT #89, PHOTON-7 10-4 2026-10-27: the app warm-up dump of 200 Hlms shaders through glslang + spirv-val, 8 threads; its negative control; red on the fault 4b0b97a1^ - 5 of 200)
+source.shaders_spirv_valid 5.13  loaded (79 % CPU-idle, load 6.4), no card, solo, ctest (HARNESS-4 2026-10-29: re-priced - it ran 5.7 s on the master check against 3.56; the dump at this tree 228 files) - was 3.56 (URGENT #89, PHOTON-7 10-4 2026-10-27: the app warm-up dump of 200 Hlms shaders through glslang + spirv-val, 8 threads; its negative control; red on the fault 4b0b97a1^ - 5 of 200)
 source.half_store_rounded 0.05  no card, by ctest (REDS-1 item 5, 2026-10-29: every half-float store rounds first - jahRoundHalf; its negative control)
 gi.pane_stack 7.20  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F4 2026-10-28: the ray tier - a Forward+ lamp through twelve glass slabs against the hole, the GI on: the reading rays' overflow counted; 19 frames)
 gi.pane_stack_cards 3.29  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F3 2026-10-28: the cards' direct half through twelve slabs and through one pane at 0.3, the cards at rest; 197 frames)
