@@ -400,7 +400,9 @@ int main(int argc, char **argv)
     };
     // (8) THE TELEPORT WINDOW: the camera jumps inside, and every frame until the room is at rest is read
     struct Window { int frames = 0, worstFrame = -1, laterFrame = -1; double worst = 0.0, first = -1.0, later = 0.0, last = 0.0; bool ok = true; };
+    unsigned long long skyAt[5] = { 0, 0, 0, 0, 0 };   // MEASURING ARM (reverted): the sky counters at the jump
     const auto teleportIn = [&](Window &w) {
+        for (int i = 0; i < 5; ++i) skyAt[i] = scene->published().rayQuery.skyCount[i];
         enginetest::testCameraLookAt(view, inPos, inAt);
         return settle([&](int f) {
             const PixRead p = readPicture();
@@ -414,6 +416,13 @@ int main(int argc, char **argv)
     };
     const auto teleportLaw = [&](const Window &w, double R, const char *tier) {
         const double k = R > 0.0 ? 100.0 / R : -1.0;
+        {   // MEASURING ARM (reverted): the window's sky answers (the counters read a few frames late)
+            unsigned long long d[5];
+            for (int i = 0; i < 5; ++i) d[i] = scene->published().rayQuery.skyCount[i] - skyAt[i];
+            std::printf("   SKYCOUNT %s, the teleport window: C2's secondary rays %llu, answered as the sky %llu, of them a "
+                        "ray past the world's exit would have hit %llu | the probes' sky answers %llu, of them past-the-exit "
+                        "hits %llu\n", tier, d[2], d[0], d[1], d[3], d[4]);
+        }
         std::printf("   (8) %s, the teleport into the box: %d frames read to rest, the picture's middle at its brightest %.6f "
                     "(%.4f %% of R) at frame %d after the jump; the first frame %.4f %%, the brightest later %.4f %% (frame "
                     "%d), the last %.4f %%\n", tier, w.frames, w.worst, k * w.worst, w.worstFrame, k * w.first,
