@@ -19,6 +19,7 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 
 #include <cmath>
+#include <cstdlib>   // MEASURING ARM (DETERMINISM-1, to be reverted)
 
 namespace lab {
 namespace envs {
@@ -29,16 +30,18 @@ void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr
 {
     using V = iris::Vec3;
     const float t = 0.3f, h = 4.0f, top = 8.0f;
+    // MEASURING ARM (DETERMINISM-1, to be reverted): JAH_DIAG_NO_COPLANAR sinks every contact 1 mm (no coplanar faces)
+    const float e = std::getenv("JAH_DIAG_NO_COPLANAR") ? 0.001f : 0.0f;
     fixedBox(b, unit, "floor", V(-h - t, -t, -h - t), V(h + t, 0, h + t), matte);
     fixedBox(b, unit, "ceiling", V(-h - t, top, -h - t), V(h + t, top + t, h + t), matte);
-    fixedBox(b, unit, "wall-x0", V(-h - t, 0, -h), V(-h, top, h), matte);
-    fixedBox(b, unit, "wall-x1", V(h, 0, -h), V(h + t, top, h), matte);
-    fixedBox(b, unit, "wall-z0", V(-h, 0, -h - t), V(h, top, -h), matte);
+    fixedBox(b, unit, "wall-x0", V(-h - t, -e, -h), V(-h, top + e, h), matte);
+    fixedBox(b, unit, "wall-x1", V(h, -e, -h), V(h + t, top + e, h), matte);
+    fixedBox(b, unit, "wall-z0", V(-h, -e, -h - t), V(h, top + e, -h), matte);
     // the +Z wall around its 1 x 1 m opening (x in [-0.5, 0.5], y in [3.5, 4.5])
-    fixedBox(b, unit, "wall-z1-left", V(-h, 0, h), V(-0.5f, top, h + t), matte);
-    fixedBox(b, unit, "wall-z1-right", V(0.5f, 0, h), V(h, top, h + t), matte);
-    fixedBox(b, unit, "wall-z1-below", V(-0.5f, 0, h), V(0.5f, 3.5f, h + t), matte);
-    fixedBox(b, unit, "wall-z1-above", V(-0.5f, 4.5f, h), V(0.5f, top, h + t), matte);
+    fixedBox(b, unit, "wall-z1-left", V(-h, -e, h), V(-0.5f, top + e, h + t), matte);
+    fixedBox(b, unit, "wall-z1-right", V(0.5f, -e, h), V(h, top + e, h + t), matte);
+    fixedBox(b, unit, "wall-z1-below", V(-0.5f, -e, h), V(0.5f, 3.5f, h + t), matte);
+    fixedBox(b, unit, "wall-z1-above", V(-0.5f, 4.5f, h), V(0.5f, top + e, h + t), matte);
     if (!withLamp) return;
     auto lamp = iris::LightNode::create();
     lamp->setLightType(iris::LightType::Point);
@@ -88,14 +91,15 @@ Built buildGlass(unsigned seed, bool bake)
     const auto matte = b.material(kRho, kRho, kRho, 1.0f);
     roomShell(b, unit, matte);
     using V = iris::Vec3;
-    fixedBox(b, unit, "pane-r0.1", V(-3.6f, 0, -3.6f), V(-0.2f, 0.02f, 1.0f), b.material(0.9f, 0.9f, 0.9f, 0.1f, 1.0f));
-    fixedBox(b, unit, "pane-r0.3", V(0.2f, 0, -3.6f), V(3.6f, 0.02f, 1.0f), b.material(0.9f, 0.9f, 0.9f, 0.3f, 1.0f));
+    const float e = std::getenv("JAH_DIAG_NO_COPLANAR") ? 0.001f : 0.0f;   // MEASURING ARM (DETERMINISM-1, to be reverted)
+    fixedBox(b, unit, "pane-r0.1", V(-3.6f, -e, -3.6f), V(-0.2f, 0.02f, 1.0f), b.material(0.9f, 0.9f, 0.9f, 0.1f, 1.0f));
+    fixedBox(b, unit, "pane-r0.3", V(0.2f, -e, -3.6f), V(3.6f, 0.02f, 1.0f), b.material(0.9f, 0.9f, 0.9f, 0.3f, 1.0f));
     const float xs[4] = { -2.6f, -1.3f, 1.3f, 2.6f };
     for (int i = 0; i < 4; ++i)
-        fixedBox(b, unit, QStringLiteral("pillar-%1").arg(i), V(xs[i] - 0.15f, 0.02f, -2.75f),
+        fixedBox(b, unit, QStringLiteral("pillar-%1").arg(i), V(xs[i] - 0.15f, 0.02f - e, -2.75f),
                  V(xs[i] + 0.15f, 2.6f, -2.45f), matte);
-    fixedBox(b, unit, "mirror", V(-0.8f, 0.4f, -4.0f), V(0.8f, 2.4f, -3.97f), b.material(0.95f, 0.95f, 0.95f, 0.0f, 1.0f));
-    const int mover = fixedBox(b, unit, "mover", V(2.7f, 0.02f, -0.6f), V(3.3f, 0.62f, 0.0f),
+    fixedBox(b, unit, "mirror", V(-0.8f, 0.4f, -4.0f - e), V(0.8f, 2.4f, -3.97f), b.material(0.95f, 0.95f, 0.95f, 0.0f, 1.0f));
+    const int mover = fixedBox(b, unit, "mover", V(2.7f, 0.02f - e, -0.6f), V(3.3f, 0.62f, 0.0f),
                                b.material(0.8f, 0.3f, 0.2f, 0.5f));
     b.setMovable(mover);
     return b.finish();
