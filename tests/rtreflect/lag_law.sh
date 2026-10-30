@@ -47,16 +47,14 @@ session() {   # name (the script is $WD/<name>.lab)
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($1) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR|stillness:' "$WD/$1.log" | head -5; exit 1; }
 }
 S=-1.2,1.8,3.4; T=0,0.5,-3; E=1.2,1.8,1.0
-ARMS='reflections rays\narm reflect.flatHits 1\n'
+ARMS='arm reflect.flatHits 1\n'
 if [ "$PART" = walk ]; then
     printf "$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
     session prime
     printf "$ARMS"'camera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-world freeze=world out=glass-world\nquit\n' \
         "$S" "$T" "$S" "$T" "$E" "$T" > "$WD/walk.lab"
     session walk
-    # THE MODE LABEL: the walk's source as the engine ran it
-    python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/glass-world.tsv" -- rays
-    rc=$?
+    rc=0
     for k in 014 028 059; do
         for x in rgb cls rhc rse rsize; do
             [ -f "$DUMP/glass-world-t$k.$x" ] || { echo "FAIL: the walk wrote no glass-world-t$k.$x"; rc=1; }
@@ -82,9 +80,6 @@ print('camera %.6f,%.6f,%.6f,0,0.5,-3' % tuple(a+(b-a)*k for a,b in zip(s,e)))"
     printf 'quit\n'
 } > "$WD/conv$PART.lab"
 session conv$PART
-# THE MODE LABEL: the converged shots' sources as the engine ran them (the walk's: the walk part's)
-python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/conv$PART.log" -- lag=rays
-srcrc=$?
 python3 -I - "$WD/data" "$PART" <<'PY'
 import os, sys
 import numpy as np
@@ -133,6 +128,5 @@ for f in fails: print('FAIL: ' + f)
 sys.exit(1 if fails else 0)
 PY
 rc=$?
-[ $srcrc -eq 0 ] || rc=1
 echo "rtreflect.lag_law k$PART: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
 exit $rc

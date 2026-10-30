@@ -433,7 +433,6 @@ rtreflect.lag_law.k14 15.56  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at 
 rtreflect.lag_law.k28 15.38  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T050507-e4427ba87, 1-min load 3.5; V2 plan 0.2)
 rtreflect.lag_law.k59 15.68  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T050507-e4427ba87, 1-min load 1.2; V2 plan 0.2)
 rtreflect.lag_law.clean 0.01  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T050507-e4427ba87, 1-min load 3.5; V2 plan 0.2)
-rtreflect.mirror_blend 5.49  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T050637-e4427ba87, 1-min load 1.9; V2 plan 0.2)
 bake.locked_positions_kept 0.54  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044505-e4427ba87, 1-min load 1.8; V2 plan 0.2)
 bake.cut_curve 0.04  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044506-e4427ba87, 1-min load 1.8; V2 plan 0.2)
 atom2.ladder_never_forced 1.27  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044506-e4427ba87, 1-min load 1.8; V2 plan 0.2)

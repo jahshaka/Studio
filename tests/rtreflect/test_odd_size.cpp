@@ -87,7 +87,6 @@ int main()
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 1;                                       // High: half-resolution rays
-    fx.reflectSources = ReflectSources::Rays;
     view->setPostFx(fx);
     // looking down the floor toward the wall, its reflection under the floor's horizon and to the frame's right edge
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 6.0f), Vec3(0.0f, 0.4f, -4.0f));

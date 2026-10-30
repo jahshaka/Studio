@@ -130,7 +130,6 @@ int main()
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;
-    fx.reflectSources = ReflectSources::Rays;
     view->setPostFx(fx);
 
     // THE REFLECTION: the camera at the origin facing the mirror.
