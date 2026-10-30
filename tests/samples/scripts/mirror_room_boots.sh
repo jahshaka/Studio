@@ -37,8 +37,6 @@ fi
 sha=$(sha256sum "$shot" | cut -c1-16)
 echo "boot $K: $sha"
 grep -E '^mirror_room_boot: the shot settled' "$WORK/boot-$K.log" | head -1
-# MEASURING ARM (DETERMINISM-1 stage 0): the boot's own logs kept beside the shot, the work dir kept after a green boot 2
-for f in $(find "$home" -name '*.log'); do cp "$f" "$WORK/boot-$K.$(basename "$f")"; done
 rm -rf "$home"
 [ "$K" = 1 ] && exit 0
 first=$(sha256sum "$WORK/shot-1.png" | cut -c1-16)
@@ -46,3 +44,4 @@ if [ "$sha" != "$first" ]; then
     echo "FAIL: 2 boots gave 2 different pictures: boot 1 $first, boot 2 $sha (kept: $WORK)"; exit 1
 fi
 echo "ok: 2 boots, one picture ($sha)"
+rm -rf "$WORK"
