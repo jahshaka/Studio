@@ -1105,7 +1105,9 @@ bool Session::exec(const Command &c)
             renderFrames(n + 4);   // (+ the ring's frames in flight: the last n slots have landed)
             const RayQueryStatus rq = mScene->published().rayQuery;
             mEngine->request([&](Engine &e) { e.setArm("reflect.pick", 0.0); });
-            FILE *f = std::fopen(c.args[3].c_str(), "w");
+            QString pickPath = QString::fromStdString(c.args[3]);   // (relative: the data root's, as every verb's file)
+            if (QFileInfo(pickPath).isRelative()) pickPath = QDir(mOpt.dataRoot).filePath(pickPath);
+            FILE *f = std::fopen(pickPath.toStdString().c_str(), "w");
             if (!f || rq.reflectPick.size() < 64u * 64u || rq.reflectPickFrames.size() < 64u) {
                 ok = false;
                 labFail("LAB FAILED pick: %s\n", f ? "no ring published (no ray tier's reflection?)" : "cannot write the file");
@@ -1668,8 +1670,11 @@ bool Session::monitor(const Command &c)
         labFail("LAB REFUSED monitor: '%s' is not x,y,z,tx,ty,tz\n", c.args[2].c_str());
         return false;
     }
-    std::FILE *out = std::fopen(c.args[1].c_str(), "w");
-    if (!out) { labFail("LAB FAILED monitor: cannot write %s\n", c.args[1].c_str()); return false; }
+    // (a relative file is the data root's, as every other verb's that writes one - it used to land in the cwd)
+    QString path = QString::fromStdString(c.args[1]);
+    if (QFileInfo(path).isRelative()) path = QDir(mOpt.dataRoot).filePath(path);
+    std::FILE *out = std::fopen(path.toStdString().c_str(), "w");
+    if (!out) { labFail("LAB FAILED monitor: cannot write %s\n", qPrintable(path)); return false; }
     const unsigned tee = mEngine->openMonitorTee();
     if (!tee) { std::fclose(out); labFail("LAB FAILED monitor: the engine opened no monitor tee\n"); return false; }
     const bool ours = mEngine->published().monitor.level == MonitorLevel::Off;
@@ -1875,7 +1880,7 @@ bool Session::monitor(const Command &c)
     line("frame:overlap", overlapAll);
     for (const auto &kv : per) line(kv.first, kv.second);
     std::fclose(out);
-    std::printf("LAB MONITOR %d of %d frames (tail %d) -> %s\n", index, int(measured.size()), tail, c.args[1].c_str());
+    std::printf("LAB MONITOR %d of %d frames (tail %d) -> %s\n", index, int(measured.size()), tail, qPrintable(path));
     std::fflush(stdout);
     if (index != int(measured.size())) {
         labFail("LAB FAILED monitor: %d of the %d frames' records came back within %d tail frames\n", index,
