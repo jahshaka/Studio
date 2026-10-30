@@ -1397,6 +1397,8 @@ bool Session::exec(const Command &c)
         ok = pin(c);
     } else if (c.verb == "voxels") {
         ok = voxels(c);
+    } else if (c.verb == "census") {
+        ok = census(c);
     } else if (c.verb == "regions") {
         ok = regions(c);
     } else if (c.verb == "help") {
@@ -2007,6 +2009,195 @@ bool Session::regions(const Command &c)
                         unsigned(g.kind) < kGiRegionKindCount ? kKinds[unsigned(g.kind)] : "?", double(g.lo.x), double(g.lo.y),
                         double(g.lo.z), double(g.hi.x), double(g.hi.y), double(g.hi.z), g.cascadeMask);
     return true;
+}
+
+// ---- MEASURING ARM (BISTRO-REST-1 stage 0; reverted after its one run) ------------------------------------------------
+namespace {
+struct CensusSnap {
+    int frame = 0;
+    std::vector<std::vector<float>> half;   // per cascade: halfLight as stored (6 W wide)
+    std::vector<int> w, h, d;
+    std::vector<jahshaka::engine::Vec3> origin;
+    std::vector<float> cell;
+};
+unsigned long long censusHash(const std::vector<float> &v)
+{
+    unsigned long long hsh = 1469598103934665603ull;
+    const unsigned char *b = reinterpret_cast<const unsigned char *>(v.data());
+    for (size_t i = 0; i < v.size() * sizeof(float); ++i) { hsh ^= b[i]; hsh *= 1099511628211ull; }
+    return hsh;
+}
+// one fp16 step at v (the store's quantum): 2^(e - 10), the subnormal step below 2^-14
+double censusStep(double v)
+{
+    v = std::fabs(v);
+    if (v < 6.103515625e-05) return 5.9604644775390625e-08;
+    int e = 0;
+    std::frexp(v, &e);   // v = m 2^e, m in [0.5, 1)
+    return std::ldexp(1.0, e - 1 - 10);
+}
+}
+
+bool Session::census(const Command &c)
+{
+    using namespace jahshaka::engine;
+    const int n = std::max(3, std::atoi(c.args[0].c_str()));
+    QString base = QString::fromStdString(c.args[1]);
+    if (QFileInfo(base).isRelative()) base = QDir(mOpt.dataRoot).filePath(base);
+    std::ofstream tsv((base + ".tsv").toStdString());
+    std::ofstream bricks((base + ".bricks.txt").toStdString());
+    std::ofstream store((base + ".store.txt").toStdString());
+    const GiStatus g0 = mScene->published().gi;
+    const size_t nc = g0.cascades.size();
+    tsv << "f\tengineFrame\tatRest\tifdWorking\tdMarksMoves\tdMarksRegion\tdMarkAlls\tdRestarts\towedRestarts\tdSideDisp"
+           "\tdRouteChanges\tdSideWaits\tgatherMoving\tgatherFast\tgatherRestFrames\treflHeld\treflRestFrames\treflRestBound"
+           "\tdCardRelights\tregions\tregSlab\tregCard\tregEdit\tregMover\tregMoverSh\tregLampSh\tregLamp\tregCardScene"
+           "\toverflow\tfbRests";
+    for (size_t i = 0; i < nc; ++i)
+        for (const char *k : { "active", "owed", "dStops", "dResumes", "dRan", "dCarried", "dCounted", "dLitBand", "dMarched",
+                               "dRegion", "dMoverRegion", "dRelightVox", "regionOwed", "marchOwed", "fbActiveRead",
+                               "maskBounce", "maskDirect", "maskBounceMax" })
+            tsv << "\tc" << i << "_" << k;
+    tsv << "\n";
+    GiStatus prev = g0;
+    std::vector<int> snapAt = { 0, 1, 2, n / 2, n - 1 };
+    std::vector<CensusSnap> snaps;
+    const auto snapshot = [&](int f) {
+        CensusSnap s;
+        s.frame = f;
+        for (size_t i = 0; i < nc; ++i) {
+            GiVoxelVolume v;
+            const bool ok = mScene->giVoxelLight(int(i), v) && v.available;
+            s.half.push_back(ok ? v.halfLight : std::vector<float>());
+            s.w.push_back(v.width); s.h.push_back(v.height); s.d.push_back(v.depth);
+            s.origin.push_back(Vec3{ v.origin[0], v.origin[1], v.origin[2] });
+            s.cell.push_back(v.cell[0]);
+            store << "SNAP f " << f << " c " << i << " ok " << ok << " res " << v.width << "x" << v.height << "x" << v.depth
+                  << " origin " << v.origin[0] << "," << v.origin[1] << "," << v.origin[2] << " cell " << v.cell[0]
+                  << " hash " << std::hex << censusHash(s.half.back()) << std::dec << "\n";
+        }
+        snaps.push_back(std::move(s));
+    };
+    const auto diff = [&](const CensusSnap &a, const CensusSnap &b) {
+        for (size_t i = 0; i < nc; ++i) {
+            const std::vector<float> &x = a.half[i], &y = b.half[i];
+            if (x.empty() || x.size() != y.size()) { store << "DIFF f" << a.frame << "-f" << b.frame << " c " << i << " n/a\n"; continue; }
+            const int W = a.w[i], H = a.h[i];
+            long long texels = 0, kDiff = 0;
+            long long hist[6] = { 0, 0, 0, 0, 0, 0 };   // steps 1, 2, 3-4, 5-16, 17-256, >256
+            double maxRel = 0.0, maxSteps = 0.0, sumSigned = 0.0;
+            std::map<long long, long long> perBrick;
+            const size_t texCount = x.size() / 4u;
+            for (size_t t = 0; t < texCount; ++t) {
+                bool any = false;
+                double worst = 0.0;
+                for (int ch = 0; ch < 3; ++ch) {
+                    const double p = x[t * 4 + ch], q = y[t * 4 + ch];
+                    if (p == q) continue;
+                    any = true;
+                    const double st = std::fabs(q - p) / censusStep(std::max(std::fabs(p), std::fabs(q)));
+                    worst = std::max(worst, st);
+                    maxRel = std::max(maxRel, std::fabs(q - p) / std::max(std::max(std::fabs(p), std::fabs(q)), 1e-30));
+                    sumSigned += q - p;
+                }
+                if (x[t * 4 + 3] != y[t * 4 + 3]) ++kDiff;
+                if (!any) continue;
+                ++texels;
+                maxSteps = std::max(maxSteps, worst);
+                hist[worst <= 1.0 ? 0 : worst <= 2.0 ? 1 : worst <= 4.0 ? 2 : worst <= 16.0 ? 3 : worst <= 256.0 ? 4 : 5]++;
+                const long long xx = (long long)(t % (size_t(6) * W)) % W, yy = (long long)((t / (size_t(6) * W)) % H),
+                                zz = (long long)(t / (size_t(6) * W * H));
+                const int bx = int(W + 7) / 8, by = int(H + 7) / 8;
+                ++perBrick[(zz / 8) * bx * by + (yy / 8) * bx + xx / 8];
+            }
+            store << "DIFF f" << a.frame << "-f" << b.frame << " c " << i << " texels " << texels << " of " << texCount
+                  << " kDiff " << kDiff << " maxSteps " << maxSteps << " maxRel " << maxRel << " sumSigned " << sumSigned
+                  << " hist(1,2,3-4,5-16,17-256,>256) " << hist[0] << "," << hist[1] << "," << hist[2] << "," << hist[3] << ","
+                  << hist[4] << "," << hist[5] << " bricks " << perBrick.size() << "\n";
+            store << "DIFFBRICKS f" << a.frame << "-f" << b.frame << " c " << i << " origin " << a.origin[i].x << ","
+                  << a.origin[i].y << "," << a.origin[i].z << " brickM " << 8.0f * a.cell[i] << " dims " << (W + 7) / 8 << ":";
+            for (const auto &kv : perBrick) store << " " << kv.first << ":" << kv.second;
+            store << "\n";
+        }
+        store.flush();
+    };
+    for (int f = 0; f < n && !mQuit; ++f) {
+        frame();
+        const GiStatus &g = mScene->published().gi;
+        const RayQueryStatus &rq = mScene->published().rayQuery;
+        GiChangedRegions r;
+        const bool hasR = mScene->giChangedRegions(r);
+        unsigned per[kGiRegionKindCount] = {};
+        if (hasR)
+            for (const GiChangedRegion &gr : r.regions)
+                if (unsigned(gr.kind) < kGiRegionKindCount) ++per[unsigned(gr.kind)];
+        unsigned moving = 0u, fast = 0u;
+        if (!g.gather.restLog.empty()) { moving = g.gather.restLog.back().movingProbes; fast = g.gather.restLog.back().fastProbes; }
+        tsv << f << "\t" << mEngine->published().frame << "\t" << g.giAtRest << "\t" << g.ifdWorking << "\t"
+            << g.ifdMarkedByMoves - prev.ifdMarkedByMoves << "\t" << g.ifdMarkedByRegion - prev.ifdMarkedByRegion << "\t"
+            << g.ifdMarkAlls - prev.ifdMarkAlls << "\t" << g.ifdRestarts - prev.ifdRestarts << "\t" << g.ifdOwedRestarts << "\t"
+            << g.voxelSides.dispatches - prev.voxelSides.dispatches << "\t"
+            << g.voxelSides.routeChanges - prev.voxelSides.routeChanges << "\t" << g.voxelSides.waits - prev.voxelSides.waits
+            << "\t" << moving << "\t" << fast << "\t" << g.gather.restFrames << "\t" << rq.reflectHeld << "\t"
+            << rq.reflectRestFrames << "\t" << rq.reflectRestBound << "\t" << g.cards.relights - prev.cards.relights << "\t"
+            << (hasR ? r.regions.size() : 0u);
+        for (unsigned k = 1; k < kGiRegionKindCount; ++k) tsv << "\t" << per[k];
+        tsv << "\t" << (hasR ? r.overflow : 0u) << "\t" << g.feedbackRests;
+        bricks << "FRAME " << f << "\n";
+        if (hasR)
+            for (const GiChangedRegion &gr : r.regions)
+                bricks << "REGION " << unsigned(gr.kind) << " " << gr.lo.x << "," << gr.lo.y << "," << gr.lo.z << " "
+                       << gr.hi.x << "," << gr.hi.y << "," << gr.hi.z << " mask " << gr.cascadeMask << "\n";
+        for (size_t i = 0; i < nc && i < g.cascades.size() && i < prev.cascades.size(); ++i) {
+            const GiStatus::CascadeStatus &cs = g.cascades[i], &ps = prev.cascades[i];
+            GiFeedbackBricks fb;
+            unsigned actRead = 0u;
+            if (mScene->giFeedbackBricks(int(i), fb) && fb.available) {
+                bricks << "FB c " << i << " dims " << fb.dims[0] << "x" << fb.dims[1] << "x" << fb.dims[2] << " active:";
+                for (size_t b = 0; b < fb.flags.size(); ++b)
+                    if (fb.flags[b] & 1u) {
+                        ++actRead;
+                        bricks << " " << b << ":" << ((fb.flags[b] >> 1) & 255u) << ":" << fb.r[b] << ":" << fb.lastMove[b];
+                    }
+                bricks << "\n";
+            }
+            GiBrickMask m;
+            unsigned mb = 0u, md = 0u;
+            float mbMax = 0.0f;
+            if (mScene->takeGiBrickMask(int(i), m) && m.available) {
+                bricks << "MASK c " << i << " readings " << m.readings << " origin " << m.origin.x << "," << m.origin.y << ","
+                       << m.origin.z << " brickM " << m.brickMetres << " dims " << m.dims[0] << " changed:";
+                for (size_t b = 0; b < m.bounce.size(); ++b) {
+                    const float bo = m.bounce[b], di = b < m.direct.size() ? m.direct[b] : 0.0f;
+                    if (bo >= 1.0f) ++mb;
+                    if (di >= 1.0f) ++md;
+                    mbMax = std::max(mbMax, bo);
+                    if (bo > 0.0f || di > 0.0f) bricks << " " << b << ":" << bo << ":" << di;
+                }
+                bricks << "\n";
+            }
+            tsv << "\t" << cs.feedbackActive << "\t" << cs.feedbackOwed << "\t" << cs.feedbackStops - ps.feedbackStops << "\t"
+                << cs.feedbackResumes - ps.feedbackResumes << "\t" << cs.feedbackBricksRan - ps.feedbackBricksRan << "\t"
+                << cs.feedbackCarried - ps.feedbackCarried << "\t" << cs.commitCounted - ps.commitCounted << "\t"
+                << cs.commitLitBand - ps.commitLitBand << "\t" << cs.deltaMarched - ps.deltaMarched << "\t"
+                << cs.regionRebuilds - ps.regionRebuilds << "\t" << cs.moverRegionRebuilds - ps.moverRegionRebuilds << "\t"
+                << cs.relightVoxels - ps.relightVoxels << "\t" << cs.regionOwed << "\t" << cs.marchOwed << "\t" << actRead
+                << "\t" << mb << "\t" << md << "\t" << mbMax;
+        }
+        tsv << "\n";
+        tsv.flush();
+        bricks.flush();
+        prev = g;
+        if (std::find(snapAt.begin(), snapAt.end(), f) != snapAt.end()) {
+            snapshot(f);
+            const size_t k = snaps.size();
+            if (k >= 2) diff(snaps[k - 2], snaps[k - 1]);
+            if (k >= 3) diff(snaps[k - 3], snaps[k - 1]);
+            if (k >= 4) diff(snaps[0], snaps[k - 1]);
+        }
+    }
+    std::printf("LAB CENSUS %d frames -> %s.{tsv,bricks.txt,store.txt}\n", n, qPrintable(base));
+    return bool(tsv) && bool(store);
 }
 
 bool Session::voxels(const Command &c)
