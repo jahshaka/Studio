@@ -326,6 +326,18 @@ int main(int argc, char **argv)
           "the progress counter has a denominator on the second launch");
     CHECK(warm.value("fingerprint").toString() == cold.value("fingerprint").toString(),
           "the fingerprint is stable between launches");
+    // THE LOG NAMES THE KEYS A RUN READ AT (URGENT #126, HARNESS-4): one line per boot, the directory and this build's
+    // three layer keys (a measurement's log says which shaders it measured); between two launches of one build no layer
+    // is dropped on its key. The line is printed here so the row's own output carries it.
+    {
+        QString keyLine;
+        for (const QString &line : gLastOutput.split('\n'))
+            if (line.contains(QStringLiteral("this build's layer keys pipeline="))) keyLine = line.trimmed();
+        if (!keyLine.isEmpty()) std::printf("info: %s\n", keyLine.toUtf8().constData());
+        CHECK(!keyLine.isEmpty(), "run 2 logs the cache directory and this build's three layer keys");
+        CHECK(!gLastOutput.contains(QStringLiteral("its layer's key changed")),
+              "run 2 drops no layer on its key (one build, two launches)");
+    }
     // THE MACHINERY IS GONE, AND THE LAUNCH SAYS SO BY SAYING NOTHING
     // (WARMUPSET-2). A warm launch used to replay a recorded permutation set
     // here and log SEVEN "Can't find HLMS datablock material" lines while
