@@ -60,7 +60,6 @@ static void rayTier(Scene *s, View *view)
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;
-    fx.reflectSources = ReflectSources::Rays;
     view->setPostFx(fx);
 }
 

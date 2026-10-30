@@ -597,19 +597,15 @@ QVector<VerbInfo> WorldApi::verbs() const
           "with no argument it reads. One undo step. There is still no World panel row: the choice was "
           "made on the pictures and the default is the answer for everybody.",
           Needs::Document },
-        { "reflections", "world.reflections({mode?: \"both\"|\"rays\"|\"screen\", resolution?: \"auto\"|\"full\"|\"half\"}) -> {mode, resolution, traced}",
-          "WHERE THE RAY TIER'S REFLECTION COMES FROM, AND AT WHAT RESOLUTION, saved with the scene "
-          "(REFLECT-MODE-1, PHOTON-7 stage 6). `mode`: \"both\" (the default) is the ONE ESTIMATOR - the "
-          "screen trace answers each reflected ray it can vouch for from the last frame's picture and a "
-          "ray answers the rest, blended across the screen's fade so no seam shows; \"rays\" traces every "
-          "ray; \"screen\" answers from the screen alone, a miss is no sample (biased by construction: the "
-          "agreement measurement's arm). On a machine without rays \"both\" and \"screen\" are the screen "
-          "march and \"rays\" is none; a VR view runs \"rays\" whatever it says (the screen sources are "
-          "not per eye). `resolution`: \"auto\" (the default) is the tier's - High one ray per 2x2 "
-          "pixels, Epic every pixel - \"full\" and \"half\" pin it. `traced` says whether the open scene "
+        { "reflections", "world.reflections({resolution?: \"auto\"|\"full\"|\"half\"}) -> {resolution, traced}",
+          "THE RAY TIER'S REFLECTION RESOLUTION, saved with the scene (REFLECT-MODE-1). The reflection has no "
+          "mode (PHOTON-7-9A): where the scene traces rays it is the RAYS alone, on the desktop and in VR alike; "
+          "where it does not (Low, Medium, a machine or a project without rays) it is the screen-space march "
+          "(world.postFx's ssr row). `resolution`: \"auto\" (the default) is the tier's - High one ray per "
+          "2x2 pixels, Epic every pixel - \"full\" and \"half\" pin it. `traced` says whether the open scene "
           "traces its reflections here at all (Photon on, a ray tier, rays on the machine): where it does "
-          "not, both settings are kept and nothing reads them. Names are trimmed and case-insensitive; "
-          "an unknown key or name is refused. Called with no argument it reads. One undo step.",
+          "not, the setting is kept and nothing reads it. Names are trimmed and case-insensitive; an unknown "
+          "key or name is refused. Called with no argument it reads. One undo step.",
           Needs::Document },
         { "vr", "world.vr({flySpeed?, fly?, turn?, snapTurnDegrees?, smoothTurnDegreesPerSecond?, dominant?, hands?}) -> object",
           "THE PROJECT'S VR SETTINGS — how a wearer MOVES in this world, saved with the scene "
@@ -3354,42 +3350,41 @@ QString WorldApi::ssrMarch(const QString &rule)
 }
 
 // ---------------------------------------------------------------------------
-// THE RAY TIER'S REFLECTION SOURCES AND RESOLUTION (REFLECT-MODE-1) - shaped like world.ssrMarch: names in, the resolved
-// names out, nothing guessed, one undo step; a per-project dial with no tier column (the World panel's rows beside
-// Screen-Space Reflections, worldmodes).
-static const char *const kReflectionSourceNames[] = { "both", "rays", "screen" };
+// THE RAY TIER'S REFLECTION RESOLUTION (REFLECT-MODE-1) - shaped like world.ssrMarch: a name in, the resolved name out,
+// nothing guessed, one undo step; a per-project dial with no tier column (the World panel's row beside Screen-Space
+// Reflections, worldmodes). The reflection has no mode (PHOTON-7-9A): the rays where the scene traces them, the march
+// where it does not.
 static const char *const kReflectionResolutionNames[] = { "auto", "full", "half" };
 
 QVariantMap WorldApi::reflections(const QVariantMap &params)
 {
     auto scene = sceneOrFail(QStringLiteral("world.reflections"));
     if (!scene) return QVariantMap();
-    static const QStringList known = { QStringLiteral("mode"), QStringLiteral("resolution") };
+    static const QStringList known = { QStringLiteral("resolution") };
     const QString refusal = refuseUnknownKeys(QStringLiteral("world.reflections"), params, known);
     if (!refusal.isEmpty()) { fail(refusal); return QVariantMap(); }
-    const auto pick = [&](const QString &key, const char *const *names, int &out) {
-        if (!params.contains(key)) return true;
-        const QString want = params.value(key).toString().trimmed();
+    int resolution = qBound(0, scene->reflectionResolution, 2);
+    if (params.contains(QStringLiteral("resolution"))) {
+        const QString want = params.value(QStringLiteral("resolution")).toString().trimmed();
+        int found = -1;
         for (int i = 0; i < 3; ++i)
-            if (want.compare(QLatin1String(names[i]), Qt::CaseInsensitive) == 0) { out = i; return true; }
-        fail(QStringLiteral("world.reflections: '%1' is not a %2 (expected \"%3\", \"%4\" or \"%5\")")
-                 .arg(params.value(key).toString(), key, QLatin1String(names[0]), QLatin1String(names[1]),
-                      QLatin1String(names[2])));
-        return false;
-    };
-    int mode = qBound(0, scene->reflectionSources, 2), resolution = qBound(0, scene->reflectionResolution, 2);
-    if (!pick(QStringLiteral("mode"), kReflectionSourceNames, mode) ||
-        !pick(QStringLiteral("resolution"), kReflectionResolutionNames, resolution))
-        return QVariantMap();
+            if (want.compare(QLatin1String(kReflectionResolutionNames[i]), Qt::CaseInsensitive) == 0) found = i;
+        if (found < 0) {
+            fail(QStringLiteral("world.reflections: '%1' is not a resolution (expected \"%2\", \"%3\" or \"%4\")")
+                     .arg(params.value(QStringLiteral("resolution")).toString(),
+                          QLatin1String(kReflectionResolutionNames[0]), QLatin1String(kReflectionResolutionNames[1]),
+                          QLatin1String(kReflectionResolutionNames[2])));
+            return QVariantMap();
+        }
+        resolution = found;
+    }
     if (!params.isEmpty()) {
-        WorldEdit edit(scene, { QStringLiteral("reflectionSources"), QStringLiteral("reflectionResolution") });
-        sceneprops::set(scene, QStringLiteral("reflectionSources"), mode);
+        WorldEdit edit(scene, { QStringLiteral("reflectionResolution") });
         sceneprops::set(scene, QStringLiteral("reflectionResolution"), resolution);
         edit.commit(host.services ? host.services->undo : nullptr, QStringLiteral("Reflections"));
     }
     const bool rays = host.isEngineReady() && host.viewport && host.viewport->sceneTracesRays();
     return QVariantMap{
-        { QStringLiteral("mode"), QString::fromLatin1(kReflectionSourceNames[qBound(0, scene->reflectionSources, 2)]) },
         { QStringLiteral("resolution"),
           QString::fromLatin1(kReflectionResolutionNames[qBound(0, scene->reflectionResolution, 2)]) },
         { QStringLiteral("traced"), rays && scene->ssrMode > 0 },

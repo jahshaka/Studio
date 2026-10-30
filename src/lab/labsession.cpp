@@ -453,17 +453,14 @@ void Session::frame()
     fv.sky = true;
     fv.camera = mCamera.node();
     fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless || mReflectSources != ReflectSources::Both || mHdrReadback || mReflectOff) {
+    if (mOpt.headless || mHdrReadback || mReflectOff) {
         // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
-        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays` /
-        // `reflections screen` (the one estimator's sources narrowed to one).
+        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections off`.
         const bool headless = mOpt.headless;
-        const ReflectSources sources = mReflectSources;
         const bool hdr = mHdrReadback, reflectOff = mReflectOff;
-        fv.finish = [headless, sources, hdr, reflectOff](FrameInputView &part, View *v) {
+        fv.finish = [headless, hdr, reflectOff](FrameInputView &part, View *v) {
             PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             if (headless) fx.allowOffscreen = true;
-            if (sources != ReflectSources::Both) fx.reflectSources = sources;
             if (hdr) fx.hdrReadback = true;
             if (reflectOff) fx.ssr = 0;
             part.postFx = fx;
@@ -570,10 +567,8 @@ bool Session::shot(const std::string &nameIn)
         labFail("LAB SHOT FAILED %s: cannot write\n", qPrintable(path));
         return false;
     }
-    // (THE MODE LABEL: the sources the reflection traced this picture with - what it ran, read from the engine)
-    const int sources = mScene->published().rayQuery.reflectSources;
-    std::printf("LAB SHOT %s %ux%u colours %zu frame %llu sources %s%s\n", qPrintable(path), img.width, img.height,
-                colours.size(), mFrames, sources < 0 ? "-" : reflectSourcesName(ReflectSources(sources)),
+    std::printf("LAB SHOT %s %ux%u colours %zu frame %llu%s\n", qPrintable(path), img.width, img.height,
+                colours.size(), mFrames,
                 extra ? (" (+" + std::to_string(extra) + " frames for the capture)").c_str() : "");
     std::fflush(stdout);
     return true;
@@ -732,7 +727,7 @@ std::string Session::statusJson()
         // THE REFLECTION'S REST AND ITS NEE (PHOTON-7 stage 11): the rest as the last view drew it, the emitter table and
         // the cone's hit rate (RayQueryStatus)
         const RayQueryStatus &rq = mScene->published().rayQuery;
-        o << ",\"reflect\":{\"sources\":" << rq.reflectSources << ",\"restFrames\":" << rq.reflectRestFrames
+        o << ",\"reflect\":{\"restFrames\":" << rq.reflectRestFrames
           << ",\"held\":" << (rq.reflectHeld ? "true" : "false") << ",\"restActive\":" << rq.reflectRestActive
           << ",\"restCapped\":" << rq.reflectRestCapped << ",\"emitters\":" << rq.reflectEmitters << ",\"portals\":" << rq.reflectPortals
           << ",\"emittersOver\":" << rq.reflectEmittersOver << ",\"neeRays\":" << rq.reflectNeeRays
@@ -799,17 +794,13 @@ bool Session::exec(const Command &c)
         if (!onOff(a0, mDraw, v)) { ok = false; labFail("LAB REFUSED draw '%s'\n", a0.c_str()); }
         else { mDraw = v; mScene->setAtomDrawEnabled(v); }
     } else if (c.verb == "reflections") {
-        // THE REFLECTION'S SOURCES (the agreement row's door): both = the one estimator, rays = the rays alone (the
-        // screen sources leave the chain: a graph rebuild, the histories restart), screen = the screen alone
-        if (a0 == "both" || a0 == "rays" || a0 == "screen" || a0 == "off") {
+        // THE REFLECTION ON OR OFF (an A/B's arm): the reflection has no mode (PHOTON-7-9A)
+        if (a0 == "on" || a0 == "off") {
             mReflectOff = a0 == "off";
-            if (!mReflectOff)
-                mReflectSources = a0 == "both" ? ReflectSources::Both : a0 == "rays" ? ReflectSources::Rays
-                                                                                    : ReflectSources::Screen;
             std::printf("LAB REFLECTIONS %s\n", a0.c_str());
         } else {
             ok = false;
-            labFail("LAB REFUSED reflections '%s' (both|rays|screen|off)\n", a0.c_str());
+            labFail("LAB REFUSED reflections '%s' (on|off)\n", a0.c_str());
         }
     } else if (c.verb == "play") {
         if (!onOff(a0, mPlaying, v)) { ok = false; labFail("LAB REFUSED play '%s'\n", a0.c_str()); }

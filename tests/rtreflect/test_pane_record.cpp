@@ -104,7 +104,6 @@ int main()
     fx.allowOffscreen = true;
     fx.hdrReadback = true;
     fx.ssr = 2;
-    fx.reflectSources = ReflectSources::Rays;
     view->setPostFx(fx);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -3.0f));
 

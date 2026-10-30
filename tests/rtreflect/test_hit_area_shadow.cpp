@@ -116,7 +116,6 @@ int main()
         PostFxDesc fx;
         fx.allowOffscreen = true;
         fx.ssr = 2;
-        fx.reflectSources = ReflectSources::Rays;
         fx.hdrReadback = true;
         v->setPostFx(fx);
     }

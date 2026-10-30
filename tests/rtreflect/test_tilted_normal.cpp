@@ -112,7 +112,6 @@ int main()
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;
-    fx.reflectSources = ReflectSources::Rays;
     view->setPostFx(fx);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 3.464f), Vec3(0.0f, 0.0f, 0.0f));   // 30 degrees down
     double excess[2] = {};

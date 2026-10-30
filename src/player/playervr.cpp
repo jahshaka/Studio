@@ -79,7 +79,7 @@ bool PlayerVr::begin(Scene *scene, View *mirrorView, const iris::CameraNodePtr &
     // the one-session OVERRIDE (`VrConfig::ssr`, -1 = follow the project), for
     // a caller that asks for a measurement arm. In the headset the row buys
     // RAY-TRACED reflections rather than the screen-space march, which a stereo
-    // target cannot carry — see PostFxDesc::reflectSources.
+    // target cannot carry — see PostFxDesc::ssr.
     if (options.contains(QStringLiteral("reflections")))
         cfg.ssr = qBound(0, options.value(QStringLiteral("reflections")).toInt(), 2);
 

@@ -115,8 +115,6 @@ static float meanDiff(const Image &a, const Image &b, unsigned y0, unsigned y1)
     return n ? float(sum / double(n)) : 1e9f;
 }
 
-/// The sources this row measures (its bars are Both's).
-static constexpr ReflectSources kSources = ReflectSources::Both;
 /// (a)'s law: the reflection arrives within this many frames of its source (the restated law, PHOTON-7 stage 5).
 /// (a)'s BAR, DERIVED (R12; it was 16 frames, picked as "the deleted warm-up's 2 x 8"): the moving history blends its
 /// input in at no less than 1 / MaxFrames a frame (rq_reflect_temporal.comp: N = min( N_hist c + 1, MaxFrames ), the blend
@@ -138,21 +136,17 @@ static void rayTier(Scene *s, View *view)
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;
-    fx.reflectSources = kSources;   // THE MODE THIS ROW INTENDS (the mode label: never assumed - asserted below)
     fx.hdrReadback = true;
     view->setPostFx(fx);
 }
 
-/// THE MODE LABEL (PHOTON-7 stage 6): the sources the reflection RAN with, read from the engine and printed - this
-/// row's bars are Both's (the screen source while moving is what the slide judges: Rays with the hits flattened
-/// measured 0.506 where Both measured 1.366, so a number without its mode is no number).
-static void checkSources(Scene *s, const char *part)
+/// THE REFLECTION TRACED (the ray tier's own reading): the row's numbers are the rays' - the reflection has no mode since
+/// PHOTON-7-9A (the Both estimator, which this row measured before, is deleted).
+static void checkTraced(Scene *s, const char *part)
 {
-    const int ran = s->published().rayQuery.reflectSources;
-    std::printf("-- %s: the reflection traced with the sources '%s'\n", part,
-                ran < 0 ? "none" : reflectSourcesName(ReflectSources(ran)));
-    CHECK_MSG(ran == int(kSources), "%s: the reflection ran '%s', the row intends '%s'", part,
-              ran < 0 ? "none" : reflectSourcesName(ReflectSources(ran)), reflectSourcesName(kSources));
+    const bool traced = s->published().rayQuery.reflect;
+    std::printf("-- %s: the reflection traced: %s\n", part, traced ? "yes" : "no");
+    CHECK_MSG(traced, "%s: the reflection traced no rays", part);
 }
 
 /// The frames from the step until a trace holds 95 % of its settled change (and stays: one noisy
@@ -241,7 +235,7 @@ static LampStepArrivals lampStep(Engine *e, View *view)
     firstFrames(source, sBefore, sAfter);
     std::printf("\n   95 %% of the change held after: the source %d frames, the reflection %d frames (lag %d)\n",
                 out.source, out.reflection, out.reflection - out.source);
-    checkSources(s, "(a)");
+    checkTraced(s, "(a)");
     e->destroyScene(s);
     return out;
 }
@@ -302,7 +296,7 @@ static float slideTrail(Engine *e, View *view, float &stillOut)
     }
     std::printf("-- (b) slide 0.25 m/frame x 24: floor moving-vs-settled %.3f codes, worst 16-column band %.3f "
                 "(still control %.3f)\n", err, worstBand, stillOut);
-    checkSources(s, "(b)");
+    checkTraced(s, "(b)");
     e->destroyScene(s);
     return err;
 }
