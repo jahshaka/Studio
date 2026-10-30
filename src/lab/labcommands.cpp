@@ -94,7 +94,7 @@ const std::vector<VerbDoc> &verbs()
         { "monitor", "monitor <frames> <file> [x,y,z,tx,ty,tz]", 2, 3,
           "THE GPU MONITOR: render N frames on the fixed 1/60 s grid (still, or walking from the current pose to the one "
           "given, linearly, the last frame at it) with the engine's frame monitor on; each frame appends ONE line to "
-          "<file> - its index, the engine frame, the frame's GPU span, idle and busy, the TOP-LEVEL passes' and rows' sums "
+          "<file> (relative: the data root's) - its index, the engine frame, the frame's GPU span, idle and busy, the TOP-LEVEL passes' and rows' sums "
           "and the unnamed gaps, their OVERLAP over the busy span (time two top-level rows count twice: a row whose "
           "begin timestamp opened while earlier work still ran - a barrier's wait), then every compositor pass "
           "(pass:<node>/<pass>, nested: inside another) and every GPU row (row:<name> - injection, cards, gather, "
