@@ -34,8 +34,12 @@
 //       face - D's cells along it are planar (the plane test) and its end's cell holds faces on two axes (occupancy); a
 //       ray through the doorway beside it is printed (over-occluding is allowed, leaking is not);
 //   (4) THE ORIGIN PLANE - a ray 10 degrees off P's top, started one cascade-0 cell above it with its origin plane,
-//       ESCAPES (P's own coarse cells are the hemisphere's boundary), and the same ray with no origin plane HITS in
-//       P's own cell (so it is the plane that lets it through, not an empty cell).
+//       ESCAPES (P's own coarse cells are the hemisphere's boundary), and so does the same ray with NO origin plane - a
+//       face looking away from a ray is never met (VOXEL-R13 stage 3 (A'): the ray is above P's top and travels up; P's
+//       top looks up, its underside lies behind the ray: no face of P can be met) - while the same start aimed 10
+//       degrees DOWN, no origin plane, HITS in P's own cells (the face looking at it, ahead of it: the positive control).
+//       (Re-derived from the physics, the lead's ruling: the old control asserted that the occupancy rule stopped the
+//       upward ray in P's coarse cell - a stop no surface makes.)
 // Every answer is also asserted equal between the two halves (the reader's parity). The aperture-0 cone march's
 // escape for the same rays is PRINTED beside each (today's ray: the leak this row was red on).
 #include "jahshaka/engine/Engine.h"
@@ -176,6 +180,7 @@ int main()
     const double el = 10.0 * M_PI / 180.0;
     rays.push_back({ { 0.0, -9.8 + c0cell, pz }, { 0.0, std::sin(el), std::cos(el) }, { 0.0, 1.0, 0.0 } });
     rays.push_back({ { 0.0, -9.8 + c0cell, pz }, { 0.0, std::sin(el), std::cos(el) }, { 0.0, 0.0, 0.0 } });
+    rays.push_back({ { 0.0, -9.8 + c0cell, pz }, { 0.0, -std::sin(el), std::cos(el) }, { 0.0, 0.0, 0.0 } });   // (down)
     // (5) the door's edge: aimed at D's face 2 cm inside its end from 0.6 m, from the wall's side (+z travel) and the
     // doorway's (-z), at a height off every cell plane
     const double kDoorAim = 0.6, yD = 1.537;
@@ -318,14 +323,18 @@ int main()
               "(2) THE EDGE CELL: a ray through the wall-ceiling edge cell HITS there");
     }
     {
-        const VoxelReaderAnswer &a = co[kSweep + 1], &b = co[kSweep + 2];
+        const VoxelReaderAnswer &a = co[kSweep + 1], &b = co[kSweep + 2], &dn = co[kSweep + 3];
         std::printf("   (4) off the plate's top at 10 degrees: with the origin plane %s at t %.2f m (cascade %.0f, %.0f "
                     "cells; the last shell %.2f m); without it %s at t %.3f m (cascade %.0f)\n",
                     exitName(a.march[3]), double(a.escape[0]) * size0, double(a.escape[1]), double(a.escape[2]),
                     double(cL.guaranteedRadius), exitName(b.march[3]), double(b.escape[0]) * size0, double(b.escape[1]));
         check(a.march[3] == 2.0f, "(4) THE ORIGIN PLANE: a grazing ray off the plate ESCAPES (its own cells are no occluder)");
-        check(b.march[3] == 1.0f && double(b.escape[0]) * size0 < cell,
-              "(4) ...and with no origin plane it HITS in the plate's own cell (the plane is what lets it through)");
+        std::printf("   (4) the same start aimed 10 degrees DOWN, no origin plane: %s at t %.3f m (cascade %.0f)\n",
+                    exitName(dn.march[3]), double(dn.escape[0]) * size0, double(dn.escape[1]));
+        check(b.march[3] == 2.0f,
+              "(4) ...and with no origin plane it ESCAPES too: a face looking away from a ray is never met (A')");
+        check(dn.march[3] == 1.0f && double(dn.escape[0]) * size0 < cell,
+              "(4) THE POSITIVE CONTROL: the same start aimed down at the plate HITS in the plate's own cells");
     }
     {
         bool doorHits = true;

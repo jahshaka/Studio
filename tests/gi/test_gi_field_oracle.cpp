@@ -268,19 +268,24 @@ int main(int argc, char **argv)
                 const std::vector<float> *pairs[2][2] = { { &vs.halfLight, &vo.halfLight }, { &vs.light, &vo.light } };
                 const char *names[2] = { "halves", "cell" };
                 for (int k = 0; k < 2; ++k) {
-                    double worst = 0.0;
-                    size_t over = 0;
+                    double worst = 0.0, at[2] = { 0.0, 0.0 };
+                    size_t over = 0, worstI = 0;
                     const std::vector<float> &a = *pairs[k][0], &b = *pairs[k][1];
                     for (size_t i = 0; i + 3 < b.size(); i += 4)
                         for (int ch = 0; ch < 3; ++ch) {
                             const double code = 0.01 * std::max(std::fabs(double(b[i + ch])), double(kGiBrickFloor));
                             const double d = std::fabs(double(a[i + ch]) - double(b[i + ch])) / code;
-                            worst = std::max(worst, d);
+                            if (d > worst) { worst = d; worstI = i / 4; at[0] = a[i + ch]; at[1] = b[i + ch]; }
                             over += d > 1.0 ? 1u : 0u;
                         }
                     overAll += over;
-                    std::printf("   (7) cascade %d (%dx%dx%d) %-6s: the step against the oracle worst %.3f codes, %zu channels "
-                                "over a code\n", c, vo.width, vo.height, vo.depth, names[k], worst, over);
+                    // (where: a half texel's cell and half - the six halves side by side along x, W texels each)
+                    const size_t W = size_t(vo.width), H = size_t(vo.height);
+                    const size_t rowW = k == 0 ? 6u * W : W, xi = worstI % rowW, yi = (worstI / rowW) % H, zi = worstI / (rowW * H);
+                    std::printf("   (7) cascade %d (%dx%dx%d) %-6s: the step against the oracle worst %.3f codes (cell %zu %zu %zu%s%zu, "
+                                "%.6g against %.6g), %zu channels over a code\n", c, vo.width, vo.height, vo.depth, names[k],
+                                worst, k == 0 ? xi % W : xi, yi, zi, k == 0 ? " block " : " ", k == 0 ? xi / W : 0u, at[0],
+                                at[1], over);
                 }
             }
             CHECK(whole && overAll == 0u,
