@@ -21,6 +21,7 @@ Env photonFirefly();
 Env photonGlint();
 Env photonArea();
 Env photonContact();
+Env photonSeam();
 
 const std::vector<Env> &catalogue()
 {
@@ -28,7 +29,7 @@ const std::vector<Env> &catalogue()
                                         atomSmall(),  atomFlat(),   photonRoom(), photonCourt(),
                                         photonGlass(), photonRamp(), photonShells(), photonRoof(), photonRough(),
                                         photonFirefly(), photonGlint(),
-                                        photonArea(), photonContact() };
+                                        photonArea(), photonContact(), photonSeam() };
     return c;
 }
 
