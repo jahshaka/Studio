@@ -26,6 +26,7 @@ add_executable(jahlab
     envs/photon_rough.cpp
     envs/photon_area.cpp
     envs/photon_court.cpp
+    envs/photon_seam.cpp
     envs/photon_shells.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(jahlab PROPERTIES
