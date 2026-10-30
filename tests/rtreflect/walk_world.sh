@@ -1,6 +1,6 @@
 #!/bin/bash
-# rtreflect.walk_world / rtreflect.walk_world_both (PHOTON-7 stage 6 commit 7; the lead's rulings: the walk bar has two
-# owners, two labelled arms after REFLECT-MOVING-1, the measures of round 5, ledger §2849) — THE REFLECTION'S WALKING
+# rtreflect.walk_world / rtreflect.walk_world_rays (PHOTON-7 stage 6 commit 7; the lead's rulings: the walk bar has two
+# arms, the measures of round 5, ledger §2849; PHOTON-7-9A: the Both arm rewritten as Rays on real hits) — THE REFLECTION'S WALKING
 # BARS: gi.walk_glass's walk (photon-glass, -1.2,1.8,3.4 -> 1.2,1.8,1.0 looking at 0,0.5,-3, 60 frames from a converged
 # hold) with THE WORLD HELD - the arm gi.freeze = 2 from the walk's first frame (the stillness door's freeze=world): no
 # GI cache works and the gather keeps its histories, so no hit radiance can change, while the reflections run live -
@@ -10,36 +10,31 @@
 #     view-dependent change: it rewards lag and counts a correct update as flicker (the lag is rtreflect.lag_law's).
 #   THE MIRROR: whole M1, p99 <= 2 codes and share over one code <= 1 % (its estimator is the centre ray: no noise of
 #     its own, every change a defect).
-# ONE ARM A ROW, its mode set and read back from the door (the mode label), its owner named:
-#   raysflat (rtreflect.walk_world): RAYS WITH THE HITS FLATTENED (reflect.flatHits) - the reflection's own bar, the
-#     estimator and its denoiser alone, the hit caches out. OWNER: PHOTON-7 stage 6.
-#   both (rtreflect.walk_world_both): BOTH ON REAL HITS - REFLECT-MOVING-1's Both half (the screen source while moving,
-#     the hit caches; its slide and its lag are owed before PHOTON-7's master check on the merged tree). OWNER:
-#     REFLECT-MOVING-1.
-# MEASURED at the stage's tip: raysflat glossy noise 0.71 / 0.39 %, mirror 0.00 / 0.00 % (whole glossy M1 2.90 / 2.83 %);
-# both 0.92 / 0.98 %, 0.00 / 0.00 % (2.41 / 4.59 %).
-# DECLARED RED (the lead, 2026-10-29, HARNESS-3 (f)): rtreflect.walk_world_both's glossy noise map reads 1.16 % over a
-# code (p99 1.32; bar 1 %) at photon-7 188268ffc FROM A HELD START (`rest 1200 held`, each arm from its own hold: seed 0
-# 828, seed 7919 798 frames) - the Both estimator's noise at a held start, REFLECT-MOVING-1's half; the mirror 0.01. The
-# same 1.16 % on one cache's bytes and with the arms aligned to one count; the 0.92 / 0.98 above were read at an UNHELD
-# start (the old 500 frames) - the held start is the honest one. The bar stands. (Rays flat at the same tip: 0.84 %,
-# mirror 0.00 - green.)
+# ONE ARM A ROW (the reflection has no mode since PHOTON-7-9A: both arms are the rays):
+#   raysflat (rtreflect.walk_world): THE HITS FLATTENED (reflect.flatHits) - the reflection's own bar, the estimator and
+#     its denoiser alone, the hit caches out. OWNER: PHOTON-7 stage 6.
+#   rays (rtreflect.walk_world_rays): REAL HITS - the product's own reflection walking: the lobe's samples read the
+#     cards, the voxels and the decode at their hits, so the noise map holds the hit radiance's spread over the lobe
+#     too. (It was the BOTH arm, REFLECT-MOVING-1's, until PHOTON-7-9A deleted Both - its declared red, 1.16 % from a
+#     held start at photon-7 188268ffc, was the Both estimator's and closed with it.)
+# MEASURED at stage 6's tip: raysflat glossy noise 0.71 / 0.39 %, mirror 0.00 / 0.00 % (whole glossy M1 2.90 / 2.83 %);
+# from a held start at photon-7 188268ffc 0.84 %, mirror 0.00.
 # (The split by arm, not by measure: the noise map needs the frozen walk the mirror's M1 reads, so each arm's three
 # walks serve both measures. The unfrozen walk - the world's half - is gi.walk_glass's.) The spatial filter's GPU time over the
 # world-held walk printed. jahlab at Epic, 960x540; four sessions: a prime and the frozen and two world-held walks
 # (6 + 3 x 570 frames).
 # THE SETTLE (HARNESS-3 (f)): each walk starts from `rest 1200 held` - the GI at rest AND every reader HELD (the door's
-# freeze precondition), the engine's own predicate; it was 500 frames (the holds at S measured 357 rest frames in Rays with
-# the hits flattened, 248 in Both, under the old K_max): since 11-2 (8) the glass holds ~1,000 rest frames in and the 500
+# freeze precondition), the engine's own predicate; it was 500 frames (the holds at S measured 357 rest frames with
+# the hits flattened under the old K_max): since 11-2 (8) the glass holds ~1,000 rest frames in and the 500
 # read "not converged at the walk's start". THE SPLIT BY PROOF where the three walks no longer fit one row: the optional
 # PART runs one walk on the arm's work dir - frozen (the prime first; FIXTURES_SETUP), worldA, then worldB with the
 # measures; no PART = the three in one row.
-# usage: walk_world.sh <jahlab> <work dir> <raysflat|both> [frozen|worldA|worldB]
+# usage: walk_world.sh <jahlab> <work dir> <raysflat|rays> [frozen|worldA|worldB]
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}; ARM=${3:?arm}; PART=${4:-all}
-case "$ARM" in raysflat) MODE=rays; ARMS='reflections rays\narm reflect.flatHits 1\n' ;;
-               both) MODE=both; ARMS='reflections both\n' ;;
-               *) echo "FAIL: the arm '$ARM' (raysflat|both)"; exit 1 ;; esac
+case "$ARM" in raysflat) ARMS='arm reflect.flatHits 1\n' ;;
+               rays) ARMS='' ;;
+               *) echo "FAIL: the arm '$ARM' (raysflat|rays)"; exit 1 ;; esac
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
 case "$PART" in all|frozen) rm -rf "$WD"; mkdir -p "$WD" ;; worldA|worldB) mkdir -p "$WD" ;;
@@ -68,7 +63,7 @@ fi
 # EACH ARM WALKS FROM ITS OWN HOLD (`rest 1200 held`): measured once with the world arms replaying the frozen walk's count
 # instead (rest + 4, as gi.walk_glass's chain does - its L2 needs byte-equal starts, these measures do not): the glossy
 # noise map read the same 1.16 % and the mirror's M1 went from p99 0.01 to 10.55 codes (18.5 % over one) - a world arm
-# frozen where its own readers had not chosen to stop. The holds differ by seed (seed 0 828, seed 7919 798 frames in Both).
+# frozen where its own readers had not chosen to stop. The holds differ by seed (in Both, deleted: seed 0 828, seed 7919 798 frames).
 for walk in $WALKS; do
     f=" freeze=world"; [ $walk = frozen ] && f=" freeze"
     seed=0; [ $walk = worldB ] && seed=7919
@@ -80,13 +75,12 @@ ROOT="$WD/data/stillness"
 case "$PART" in frozen|worldA) echo "rtreflect.walk_world ($ARM) $PART: PASS"; exit 0 ;; esac
 for w in frozen worldA; do [ -f "$ROOT/glass-$w.tsv" ] || { echo "FAIL: no $w walk in $WD (its part writes it)"; exit 1; }; done
 fails=0
-python3 -I "$HERE/../support/reflect_sources.py" tsv "$ROOT/glass-frozen.tsv" "$ROOT/glass-worldA.tsv" "$ROOT/glass-worldB.tsv" -- $MODE || fails=1
 python3 -I "$HERE/walk_noise.py" "$ROOT" glass-worldA glass-worldB glass-frozen > "$WD/measures.json" || { cat "$WD/measures.json"; fails=1; }
 python3 -I - "$ROOT" "$WD/measures.json" "$ARM" <<'PY'
 import csv, json, os, sys
 root, path, arm = sys.argv[1:4]
-label = {'raysflat': "THE REFLECTION'S OWN BAR (Rays, the hits flattened; stage 6's)",
-         'both': "REFLECT-MOVING-1's BOTH HALF (Both, real hits)"}[arm]
+label = {'raysflat': "THE REFLECTION'S OWN BAR (the hits flattened; stage 6's)",
+         'rays': "THE PRODUCT'S WALKING REFLECTION (real hits; PHOTON-7-9A)"}[arm]
 fails = 0
 try:
     m = json.load(open(path))

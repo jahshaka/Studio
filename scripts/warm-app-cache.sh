@@ -106,7 +106,7 @@
 #           pipelines on every run, and the 31 rows a WARM fixture seeds never promote). The stamp's third line is the
 #           sets file's digest: a new tier reads cold.
 #   engine  <tests-dir>/.shadercache-engine (the CLASS engine rows', fresh_home --warm --cache engine, tests/CMakeLists.txt
-#           jah_gpu_row): jahlab on photon-rough at Epic in Both, a few frames - the ray tier's every pipeline (the
+#           jah_gpu_row): jahlab on photon-rough at Epic, a few frames - the ray tier's every pipeline (the
 #           gather, the reflection and its compact pass, the resolve, the temporal, the filter) and the photon envs' Hlms
 #           set the lab rows share (--lab <exe>, default <build>/bin/jahlab).
 # What a row draws beyond its tier's born World (its own scene, a sample, an engine fixture's content) it compiles once
@@ -445,7 +445,7 @@ for b in $RUN; do
         engine-off|engine-on)
             [ -x "$LABX" ] || { echo "warm-app-cache: no lab at $LABX" >&2; exit 2; }
             H="$TESTS/warm-engine-cache-home"; FH_ARGS="--warm --cache engine"; EXE="$LABX"
-            printf 'reflections both\nframes 4\nquit\n' > "$LABSCRIPT"
+            printf 'frames 4\nquit\n' > "$LABSCRIPT"
             LABCMD=(env "JAHSHAKA_SHADER_CACHE_DIR=$H/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0
                     "$LABX" --headless --no-stdin --size 960x540 --data-root "$H/run/lab" --env photon-rough --tier epic
                     --script "$LABSCRIPT")

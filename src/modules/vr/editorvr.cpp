@@ -139,7 +139,7 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
     //
     // WHAT THE HEADSET DOES WITH IT is not the desktop's screen trace
     // (impossible in a stereo target) but the RAYS, per eye — see
-    // PostFxDesc::reflectSources. `vr.begin({reflections:n})` OVERRIDES the row
+    // PostFxDesc::ssr. `vr.begin({reflections:n})` OVERRIDES the row
     // for one session (VrConfig::ssr, -1 = follow the project); it is
     // deliberately not a persisted setting.
     if (options.contains(QStringLiteral("reflections")))

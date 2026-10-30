@@ -67,17 +67,14 @@ POSE=1.5,1.8,3.4,1.5,0.5,-3
 # 32 samples of a heavy tail and keep a biased mean), plus the law's margin: 1,000.
 WIN=1000
 LAGK=17,24,32,48,64,96   # (a2)'s frames after the stop: from the rest's hand-over (2N / 4 frames) + its 16
-# (the sources this row's bars are Both's: set, never assumed - the mode label below asserts what ran)
 WINP=450
 if [ "$PART" = path ]; then
 cat > "$WD/run.lab" <<S
-reflections both
 stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WINP path trail=1 out=still
 quit
 S
 else
 cat > "$WD/run.lab" <<S
-reflections both
 stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WIN trail=1 dump=still dumpwin=$LAGK,$WIN out=still
 quit
 S
@@ -90,8 +87,6 @@ for run in run; do
 done
 grep '^LAB STILLNESS' "$WD/run.log" | cut -c1-400
 HERE=$(cd "$(dirname "$0")" && pwd)
-python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/still.tsv" -- both || {
-    echo "rtreflect.still_after_stop: FAIL (the mode label)"; exit 1; }
 if [ "$PART" = path ]; then
 python3 -I - "$WD" <<'PY'
 import os, re, sys

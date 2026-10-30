@@ -150,9 +150,7 @@ QVector<sceneprops::Field> buildFields()
     // THE SCREEN-SPACE MARCH'S PHASE RULE (SSR-RINGS-1), 0..2.
     add("ssrMarch", [](const ScenePtr &s) { return QVariant(s->ssrMarch); },
         [](const ScenePtr &s, const QVariant &v) { s->ssrMarch = qBound(0, v.toInt(), 2); });
-    // THE RAY TIER'S REFLECTION SOURCES AND RESOLUTION (REFLECT-MODE-1), 0..2 each.
-    add("reflectionSources", [](const ScenePtr &s) { return QVariant(s->reflectionSources); },
-        [](const ScenePtr &s, const QVariant &v) { s->reflectionSources = qBound(0, v.toInt(), 2); });
+    // THE RAY TIER'S REFLECTION RESOLUTION (REFLECT-MODE-1), 0..2.
     add("reflectionResolution", [](const ScenePtr &s) { return QVariant(s->reflectionResolution); },
         [](const ScenePtr &s, const QVariant &v) { s->reflectionResolution = qBound(0, v.toInt(), 2); });
     // setWorldGravity, never the raw field: it drives the Bullet world too.

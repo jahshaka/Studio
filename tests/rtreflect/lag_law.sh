@@ -27,7 +27,7 @@ session() {   # name (the script is $WD/<name>.lab)
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($1) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR|stillness:' "$WD/$1.log" | head -5; exit 1; }
 }
 S=-1.2,1.8,3.4; T=0,0.5,-3; E=1.2,1.8,1.0
-ARMS='reflections rays\narm reflect.flatHits 1\n'
+ARMS='arm reflect.flatHits 1\n'
 printf "$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
 session prime
 printf "$ARMS"'camera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-world freeze=world out=glass-world\nquit\n' \
@@ -44,10 +44,6 @@ print('camera %.6f,%.6f,%.6f,0,0.5,-3' % tuple(a+(b-a)*k for a,b in zip(s,e)))"
     printf 'quit\n'
 } > "$WD/conv.lab"
 session conv
-# THE MODE LABEL: the walk's and the converged shots' sources as the engine ran them
-python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/glass-world.tsv" -- rays &&
-python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/conv.log" -- lag=rays
-srcrc=$?
 python3 -I - "$WD/data" <<'PY'
 import os, sys
 import numpy as np
@@ -97,6 +93,5 @@ sys.exit(1 if fails else 0)
 PY
 rc=$?
 rm -rf "$WD/data/stillness/dump-"*
-[ $srcrc -eq 0 ] || rc=1
 echo "rtreflect.lag_law: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
 exit $rc

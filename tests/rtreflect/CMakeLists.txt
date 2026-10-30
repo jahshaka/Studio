@@ -228,18 +228,18 @@ set_tests_properties(rtreflect.odd_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(rtreflect.odd_size PROPERTIES JAHSHAKA_TEST_FRAMES 91)
 
-# rtreflect.walk_world / rtreflect.walk_world_both (PHOTON-7 stage 6 commit 7; the lead's rulings: two labelled arms after
-# REFLECT-MOVING-1, round 5's measures) — THE REFLECTION'S WALKING BARS: gi.walk_glass's walk with THE WORLD HELD
-# (gi.freeze = 2: no cache work, the gather held, the reflections live), seeds 0 and 7919, against the frozen walk -
-# GLOSSY by the NOISE MAP (rA - rB) / sqrt 2 and THE MIRROR by whole M1, each p99 <= 2 codes and share over one code
-# <= 1 % (whole glossy M1 printed as information: the noise plus the signal) (walk_world.sh, walk_noise.py). One arm a
-# row, its mode asserted: walk_world = Rays with the hits flattened, the reflection's own bar (stage 6's); walk_world_both
-# = Both on real hits, REFLECT-MOVING-1's Both half (the defect's slide and lag are owed before PHOTON-7's master check on
-# the merged tree). 960x540; four jahlab sessions each: the prime's 7 + three walks from `rest 1200 held` (HARNESS-3 (f);
-# was 500 frames): Rays flat 3 x 312 (rest 241) + 7; Both 3 x ~890 (rest 798-828) + 7 - each arm split by proof below.
+# rtreflect.walk_world / rtreflect.walk_world_rays (PHOTON-7 stage 6 commit 7; the lead's rulings: two arms after
+# REFLECT-MOVING-1, round 5's measures; PHOTON-7-9A: the Both arm rewritten as the rays on real hits) — THE REFLECTION'S
+# WALKING BARS: gi.walk_glass's walk with THE WORLD HELD (gi.freeze = 2: no cache work, the gather held, the reflections
+# live), seeds 0 and 7919, against the frozen walk - GLOSSY by the NOISE MAP (rA - rB) / sqrt 2 and THE MIRROR by whole
+# M1, each p99 <= 2 codes and share over one code <= 1 % (whole glossy M1 printed as information: the noise plus the
+# signal) (walk_world.sh, walk_noise.py). One arm a row: walk_world = the hits flattened, the reflection's own bar (stage
+# 6's); walk_world_rays = real hits, the product's walking reflection (no other walking row reads its hits: walk_world
+# flattens them, gi.walk_glass is the unfrozen world). 960x540; four jahlab sessions each: the prime's 7 + three walks
+# from `rest 1200 held` (HARNESS-3 (f); was 500 frames): flat 3 x 312 (rest 241) + 7 - each arm split by proof below.
 if(TARGET jahlab)
     # rtreflect.walk_world SPLIT BY PROOF too (HARNESS-3 (f)): whole it ran 47.85 s, then 60.07 s (TIMEOUT) on a loaded box
-    # at photon-7 188268ffc - the same chain as the Both arm's below.
+    # at photon-7 188268ffc - the same chain as the real-hit arm's below.
     jah_gpu_row(rtreflect.walk_world.frozen CLASS engine TOKENS 8 FRAMES 319
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
                 raysflat frozen
@@ -260,30 +260,30 @@ if(TARGET jahlab)
     set_tests_properties(rtreflect.walk_world.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED "rtreflect_walk_world_frozen;rtreflect_walk_world_worldA"
                          DEPENDS rtreflect.walk_world.worldA)
-    # rtreflect.walk_world_both SPLIT BY PROOF (HARNESS-3 (f)): each walk from `rest 1200 held` (walk_world.sh says why) no
+    # rtreflect.walk_world_rays SPLIT BY PROOF (HARNESS-3 (f)): each walk from `rest 1200 held` (walk_world.sh says why) no
     # longer fits three in a row - a fixture chain on one work dir: .frozen (the prime + the frozen walk) -> .worldA (seed 0)
     # -> .worldB (seed 7919, then the noise map and the mirror's M1).
     # (each part by name: a loop's variable sends the selector to the whole directory - HARNESS-2's rule)
-    jah_gpu_row(rtreflect.walk_world_both.frozen CLASS engine TOKENS 8 FRAMES 906
+    jah_gpu_row(rtreflect.walk_world_rays.frozen CLASS engine TOKENS 8 FRAMES 906
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both frozen
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_rays rays frozen
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.walk_world_both.frozen PROPERTIES TIMEOUT 60 LABELS "engine"
-                         FIXTURES_SETUP rtreflect_walk_world_both_frozen)
-    jah_gpu_row(rtreflect.walk_world_both.worldA CLASS engine TOKENS 8 FRAMES 899
+    set_tests_properties(rtreflect.walk_world_rays.frozen PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_walk_world_rays_frozen)
+    jah_gpu_row(rtreflect.walk_world_rays.worldA CLASS engine TOKENS 8 FRAMES 899
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both worldA
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_rays rays worldA
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.walk_world_both.worldA PROPERTIES TIMEOUT 60 LABELS "engine"
-                         FIXTURES_SETUP rtreflect_walk_world_both_worldA
-                         FIXTURES_REQUIRED rtreflect_walk_world_both_frozen DEPENDS rtreflect.walk_world_both.frozen)
-    jah_gpu_row(rtreflect.walk_world_both.worldB CLASS engine TOKENS 8 FRAMES 869
+    set_tests_properties(rtreflect.walk_world_rays.worldA PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_walk_world_rays_worldA
+                         FIXTURES_REQUIRED rtreflect_walk_world_rays_frozen DEPENDS rtreflect.walk_world_rays.frozen)
+    jah_gpu_row(rtreflect.walk_world_rays.worldB CLASS engine TOKENS 8 FRAMES 869
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both worldB
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_rays rays worldB
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.walk_world_both.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
-                         FIXTURES_REQUIRED "rtreflect_walk_world_both_frozen;rtreflect_walk_world_both_worldA"
-                         DEPENDS rtreflect.walk_world_both.worldA)
+    set_tests_properties(rtreflect.walk_world_rays.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED "rtreflect_walk_world_rays_frozen;rtreflect_walk_world_rays_worldA"
+                         DEPENDS rtreflect.walk_world_rays.worldA)
     # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row) — THE MOVING REFLECTION LAGS ITS CONVERGED PICTURE BY
     # NO MORE THAN ITS MEMORY AND ITS NOISE: the glass walk in Rays with the hits flattened and the world held, per glossy
     # pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1 at walk frames 14 / 28 / 59, the breaking
@@ -346,25 +346,15 @@ if(TARGET jahlab)
     set_tests_properties(rtreflect.nee_firefly PROPERTIES TIMEOUT 60 LABELS "engine")
     # rtreflect.contact (PHOTON-7 stage 6, AB E15 / ONE_PICTURE C3; READ_A findings 1-2) - THE CONTACT MEETS ITS
     # REFLECTION AND NO RAY HITS ITS OWN SURFACE: the post foot's reflection starts at the contact line and its top edge
-    # lies where the mirror puts it (Rays: the lifted mirror; Both: the interval to the plain one), within 1 px, from
+    # lies where the mirror puts it (the lifted mirror), within 1 px, from
     # 2.4 m and 1 m on photon-ramp; on photon-contact's CHAINED, CORRUGATED floor (parts of Atom's cut lie below level 0)
     # and the FLAT level-0 mirror beside it the seam, no dark pixel where the floors reflect the panel, no dark line
     # along a crease; at EACH distance rays.originCut 0 green on both level-0 floors (the float-only control) and
-    # rays.originPoint 0 red on the chained floor at 2.4 m (contact.sh). 1920x1080; two jahlab sessions, eleven
-    # shots of 50 frames - 550 frames.
-    jah_gpu_row(rtreflect.contact CLASS engine FRAMES 550
+    # rays.originPoint 0 red on the chained floor at 2.4 m (contact.sh). 1920x1080; two jahlab sessions, nine
+    # shots of 50 frames - 450 frames.
+    jah_gpu_row(rtreflect.contact CLASS engine FRAMES 450
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/contact.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/contact
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.contact PROPERTIES TIMEOUT 60 LABELS "engine")
-    # rtreflect.mirror_blend (PHOTON-7 stage 6, READ_B F2) - THE MIRROR TAKES THE COIN'S EXPECTATION: on photon-glass's
-    # mirror, seen from 3 m up at three poses of a slow pan (where the camera-reversal fade crosses one half inside it),
-    # the screen's share of the Both picture (Both - Rays) never steps from nothing to the whole screen-ray difference
-    # between neighbouring pixels away from the ray picture's edges; the base's fixed coin did, along a seam
-    # (mirror_blend.sh). 960x540; one jahlab session, 108 frames.
-    jah_gpu_row(rtreflect.mirror_blend CLASS engine FRAMES 108
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/mirror_blend.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/mirror_blend
-        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.mirror_blend PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()

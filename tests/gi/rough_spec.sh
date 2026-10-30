@@ -70,7 +70,6 @@ quit
 EOF
     cat > "$WD/ref.lab" <<EOF
 row reflectionRoughnessCutoff 100
-reflections rays
 arm reflect.restReference 1
 camera $P
 frames 4300

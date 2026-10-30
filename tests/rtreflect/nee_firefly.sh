@@ -1,7 +1,7 @@
 #!/bin/bash
 # rtreflect.nee_firefly (PHOTON-7 stage 11, 11-1b) — THE REFLECTION FINDS ITS EMITTERS BY NEXT-EVENT ESTIMATION.
 # jahlab on photon-firefly (photon-room's shell and lamp, a rough metal plate at perceptual 0.30 under one small bright
-# emitter - a 0.3 m cube of radiance 30, 1.2 m up), in Both, at the env's stop; two sessions through the stillness door,
+# emitter - a 0.3 m cube of radiance 30, 1.2 m up), in the rays (Both before PHOTON-7-9A), at the env's stop; two sessions through the stillness door,
 # the arm reflect.nee 1 (shipped: each VNDF draw paired with ONE ray in the emitter's bounding-sphere cone, the balance
 # heuristic) and 0 (the BRDF-only estimator, the NEGATIVE CONTROL). THE LAWS:
 #   (a) THE TABLE AND THE RAYS: one emitter; NEE rays traced with it on, none with it off (the counter's negative
@@ -24,16 +24,13 @@ POSE=0,1.6,2.4,0,0,-0.5
 WIN=520
 for run in on off; do
     v=1; [ "$run" = off ] && v=0
-    printf 'reflections both\narm reflect.nee %s\ncamera %s\nframes 230\nstillness teleport:%s/hold:1 %s out=nee-%s\nstatus\nquit\n' \
+    printf 'arm reflect.nee %s\ncamera %s\nframes 230\nstillness teleport:%s/hold:1 %s out=nee-%s\nstatus\nquit\n' \
         "$v" "$POSE" "$POSE" "$WIN" "$run" > "$WD/$run.lab"
     "$LAB" --headless --no-stdin --size 480x270 --data-root "$WD/data" --env photon-firefly --script "$WD/$run.lab" \
         > "$WD/$run.log" 2>&1
     rc=$?
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($run) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$run.log" | head; tail -5 "$WD/$run.log"; exit 1; }
 done
-HERE=$(cd "$(dirname "$0")" && pwd)
-python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/nee-on.tsv" "$WD/data/stillness/nee-off.tsv" -- both || {
-    echo "rtreflect.nee_firefly: FAIL (the mode label)"; exit 1; }
 python3 -I - "$WD" <<'PY'
 import csv, json, re, sys
 wd = sys.argv[1]

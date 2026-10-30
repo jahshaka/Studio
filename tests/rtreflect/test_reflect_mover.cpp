@@ -25,8 +25,8 @@
 // one scene, the materials and the march swapped between them: a glossy floor and
 // a mirror floor under a matte sphere (the REFLECTED footprint: the sphere's
 // mirror image through the floor plane, minus the sphere), and a glossy sphere
-// (its own disk) — with the screen-space march on (the desktop default) and with
-// the rays alone (a headset's chain never marches).
+// (its own disk) — by the rays alone (PHOTON-7-9A deleted the march's arms with the
+// Both estimator: a ray chain reflects by its rays on the desktop and in a headset alike).
 //
 // THE NUMBERS, frames-counted: at four checkpoints of a 240-frame run the MOVING
 // frame is read, the sphere is held at that pose for kSettleFrames and the
@@ -346,7 +346,6 @@ struct Arm {
     float floorMetal, floorRough;
     float sphereMetal, sphereRough;
     Region region;
-    bool march;          // the screen-space march on (the desktop default) or rays alone (VR's shape)
     /// THE BARS (0 = printed, not gated): the moving-vs-settled error in codes, and
     /// the high-frequency part of it against the still case's.
     float settledBar, hfRatioBar;
@@ -648,38 +647,23 @@ int main(int argc, char **argv)
     }
 
     const Arm arms[] = {
-        // THE MARCH OWNS A FLOOR'S REFLECTION OF AN ON-SCREEN OBJECT (desktop): its
-        // colour is the PREVIOUS frame's, reprojected through the camera only
-        // (JahSsrResolve_ps.glsl: "what still lags by a frame is a moving OBJECT's
-        // own motion") — not this lane's text, so printed as a target.
-        { "march: glossy floor 0.2, the sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
-          true, 2.8f, 0.0f },
-        { "march: mirror floor 0.05, the sphere's reflection", 1.0f, 0.05f, 0.0f, 0.8f, Region::Reflected,
-          true, 2.8f, 0.0f },
-        // THE RAY TIER'S OWN: a glossy mover's reflection of the world (the owner's
-        // dither: 5.94 codes and 2.2x the still grain before), and a floor's
-        // reflection of a mover where only the rays answer (a headset; 22.8 codes of
-        // trail before) — and a mirror, which has no history to get wrong.
-        { "glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere, true, 3.0f,
-          1.6f },
+        // THE RAY TIER's (the reflection has no mode since PHOTON-7-9A: a ray chain reflects by its rays alone - the
+        // march's arms, the old desktop default, are deleted with Both): a glossy mover's reflection of the world (the
+        // owner's dither: 5.94 codes and 2.2x the still grain before), and a floor's reflection of a mover (22.8 codes
+        // of trail before) - and a mirror, which has no history to get wrong.
         { "rays: glossy floor 0.2, the sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
-          false, 8.0f, 1.5f, false, 1.5f, 6.75f },
+          8.0f, 1.5f, false, 1.5f, 6.75f },
         { "rays: mirror floor 0.05, the sphere's reflection", 1.0f, 0.05f, 0.0f, 0.8f, Region::Reflected,
-          false, 0.0f, 1.5f },
-        { "rays: glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere, false,
+          0.0f, 1.5f },
+        { "rays: glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere,
           3.0f, 1.6f },
         // REFLECT-MOVERS-2: a SKINNED mover's reflection — the node still, the pose
         // carrying it (a character's limbs). Measured first, gated after.
         { "rays: glossy floor 0.2, a SKINNED sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
-          false, 8.0f, 1.5f, true, 1.5f, 7.38f },
-        // REFLECT-EDGE-2 (SKINNED-VELOCITY-1): the march's reflection of a POSED mover
-        // and a posed glossy mover's OWN reflection under the march, each against its
-        // rigid twin (arms 0 and 2) — the pixels the id pass does not draw now carry
-        // the pose's motion (rq_motion_skin.comp, and the trace's own identification).
-        { "march: glossy floor 0.2, a SKINNED sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
-          true, 2.8f, 0.0f, true, 0.0f, 0.0f, 1.5f, 0 },
-        { "march: a SKINNED glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere,
-          true, 3.0f, 1.6f, true, 0.0f, 0.0f, 1.5f, 2 },
+          8.0f, 1.5f, true, 1.5f, 7.38f },
+        // ...and a posed glossy mover's OWN reflection against its rigid twin (arm 2).
+        { "rays: a SKINNED glossy sphere 0.25, its own reflection", 0.0f, 0.9f, 1.0f, 0.25f, Region::Sphere,
+          3.0f, 1.6f, true, 0.0f, 0.0f, 1.5f, 2 },
     };
     // THE THREE GLOSSY-SPHERE ARMS' CONVERGENCE ENVELOPE, per checkpoint (never an
     // average across them), and the whole run at 3.0: a moving reflector's mean is an
@@ -705,11 +689,7 @@ int main(int argc, char **argv)
             if (arm.skinned) poseSkinned(at);
             else enginetest::setNodePosition(s, sphere, at);
         };
-        {
-            PostFxDesc afx = fx;
-            if (!arm.march) afx.reflectSources = ReflectSources::Rays;
-            view->setPostFx(afx);
-        }
+        view->setPostFx(fx);
         place(pathAt(0));
         render(e, kWarmFrames);
 
@@ -790,7 +770,7 @@ int main(int argc, char **argv)
                 // non-reflection terms (the mirror arm, which keeps no history,
                 // reads 0-1.1 there). Before the mover age counted PARKED movers the
                 // ghost drained at the mean's 1/32 and still showed after 60 frames.
-                if (!arm.march && !ghost.empty())
+                if (!ghost.empty())
                     // (a MIRROR keeps no history: its frame-1 error is already the floor's
                     // own, so only "no longer falling" applies to it)
                     CHECK_MSG((arm.floorRough < 0.1f || g[1] < 0.15f * g[0]) && g[1] - g[3] < 0.8f,
