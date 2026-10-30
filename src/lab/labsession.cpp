@@ -2233,8 +2233,14 @@ bool Session::voxels(const Command &c)
                     st.directDigest.c_str(), st.storeDigest.c_str(), waited);
         return true;
     }
+    // ONE ARRAY, ONE DOOR: `direct` and `light` read their own volume (Scene::giVoxelDirect / giVoxelLight) - the whole
+    // door decodes some twenty-five volumes, about two seconds a dump in Debug since VOXEL-R13 (gi.light_is_world's 23
+    // dumps had grown its wall to the 60-s cap, BISTRO-REST-1)
     GiVoxelVolume v;
-    if (!mScene->giVoxelVolume(int(ci), v) || !v.available) {
+    const bool got = kind == "direct" ? mScene->giVoxelDirect(int(ci), v)
+                   : kind == "light"  ? mScene->giVoxelLight(int(ci), v)
+                                      : mScene->giVoxelVolume(int(ci), v);
+    if (!got || !v.available) {
         labFail("LAB VOXELS FAILED: no volume for cascade %ld\n", ci);
         return false;
     }
