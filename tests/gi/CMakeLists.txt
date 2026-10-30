@@ -974,8 +974,10 @@ target_compile_definitions(test_gi_sealed_sky PRIVATE
 target_link_libraries(test_gi_sealed_sky PRIVATE JahshakaEngine)
 add_dependencies(test_gi_sealed_sky JahshakaEngineMedia)
 # ONE ROW A TIER (10-3, the lead's ruling: each within the fixture's 10 s with margin): gi.sealed_sky the ray tier
-# (High and Epic), gi.sealed_sky_noray the no-ray tier as it ships (the field on) and with the field off.
-foreach(_row ray noray)
+# (High and Epic), gi.sealed_sky_noray the no-ray tier as it ships (the field on) and with the field off;
+# gi.sealed_sky_shift (VOXEL-R13 stage 1, the lead's ruling (3)) the ray tier at High with the box moved so cascade 2's
+# cells hold whole slabs - the halves' law (3) where c2 cells hold an inner and an outer face.
+foreach(_row ray noray shift)
     if(_row STREQUAL "ray")
         set(_name gi.sealed_sky)
     else()
