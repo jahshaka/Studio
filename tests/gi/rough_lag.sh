@@ -20,6 +20,12 @@
 # inside 3 SE + 1): the excess exists only under MOTION - the lobe rides the diffuse's SURFACE reprojection, and a
 # view-dependent lobe reprojected along the surface lags past what its window implies (the reflection takes a
 # virtual-point history for the same reason).
+# 8B (2026-10-29; measured with the whole row before HARNESS-3's split, the same law): B5's fast update takes k 59 to 0.27 % (the walk's scroll changes bricks; the history shortens there);
+# k 14 / 28 stay RED at 1.86 / 4.60 %. B4's VIRTUAL-POINT history was built and measured here and REVERTED (the lead's
+# ruling (b)): 3.51 / 3.99 / 0.11 bare, 3.55 / 3.53 / 0.23 with a same-plane tap, 3.16 / 3.05 / 0.24 with Lumen's 3 x 3
+# pick - k 14 doubled, because one mean distance across a lobe spanning a depth break (a near strip edge before the far
+# walls) names a point on neither. The distance layers are deleted with it (no reader); the leftover re-adds them with
+# the distance's variance as a third moment and blends the two histories by the parallax error it predicts.
 # CONVERGED (HARNESS-3 (a), RE-DERIVED; it was a picked 600 frames): a converged picture is the one the engine's own settle
 # predicate says has stopped moving - GiStatus::giAtRest, the one --engine-selftest waits on: the chain owes nothing, the
 # cards' rest decision is taken, and the gather's history is settled (an EMA at h = 10 takes ceil(ln(1/D) / ln(1 - 1/h))

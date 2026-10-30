@@ -143,14 +143,19 @@ int main(int argc, char **argv)
         gi.bounces = false;   // the direct half alone: what the lamp's traced visibility gates
         gi.updateBudget = 0;
         if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
-        // the cards at rest: built, no relight or admission moving, the queue empty, for 30 frames
+        // the cards at rest: THE ENGINE's PREDICATE (giAtRest: the readers held AND the cards' one rest decision taken -
+        // never a frame count; PHOTON-7 stage 8B), and built, no relight or admission moving, the queue empty, for 30
+        // frames. (Under the per-cell rest the decision waits for the LAST cell's rest - ~100 frames later here than a
+        // view-wide rest's, 292 frames against 195 - a named cost; the window's drain before it evicts the floor's 13
+        // cards no reader stamps, and the decision re-admits them from its face marks: a read before the decision read
+        // them absent.)
         const auto atRest = [&]() {
             unsigned long long relights = ~0ull, admitted = ~0ull;
             int quiet = 0;
             for (int f = 0; f < 600 && quiet < 30; ++f) {
                 run(1);
                 const GiStatus g = scene->published().gi;
-                const bool still = !g.chainOwed && g.cards.built && g.cards.relights == relights &&
+                const bool still = g.giAtRest && !g.chainOwed && g.cards.built && g.cards.relights == relights &&
                                    g.cards.admitted == admitted && g.cards.queueLength == 0u;
                 relights = g.cards.relights;
                 admitted = g.cards.admitted;

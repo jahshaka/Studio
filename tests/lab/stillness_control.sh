@@ -16,10 +16,14 @@
 #   (2) THE HOLD WAITS FOR THE DECISION (R3's ruling: the readers' hold waits on the rest decision's work): the stop's one
 #       rest decision is taken, and no held frame comes before the decision's last GI row;
 #   (3) LIVENESS, the bound R3's design writes (since PHOTON-7 stage 10-3 computed ONCE, in the door -
+#       counted since PHOTON-7 stage 8B (B1) from THE REST THE DECISION READ: the later of the readers' rests that ran
+#       unbroken to the decision - the gather rests per cell and restarts on every input reaching a cell -
 #       jahshaka::engine::stillnessDeriveLiveness - and read here from the LAB STILLNESS line): the first hold comes within
 #           16 + 9 (the readers' DEMAND SPAN L = N + the due: each reader's rest indices [1, L], PHOTON-7 stage 10's
 #           per-reader snapshot) + 9 (the read-back's due after it: the period 4 + the ring 3 + 1 + 1)
 #         + W (the decision's own work: its captures and card-to-card rounds, from the decision to its last GI row)
+#         + C (since PHOTON-7 stage 8B, B1: the frames the gather's cells take after that work to CONVERGE - their
+#           history caught up with their samples, measured by the door: the LAB STILLNESS line's converge=)
 #         + 16 (the re-rest after that work) + 1 (the hold's own frame)
 #       of the readers' FIRST REST frame; a view that never holds is red - and W'S PACE LAW (the lead's correction: W is
 #       the cache's measured work, so its own bound is derived from the same session's counts):
@@ -35,7 +39,8 @@
 #       frame it restarts (its rest 0) has one at that frame or the one before - a VISIBLE relight read back (a card texel
 #       moved a code since its last report: cards_visible), a capture or a still trace (cards_captures, a cards.capture /
 #       cards.still row), a real change (a GI writer that is not the cards': a light's, the field's, the voxels'), or the
-#       teleport itself. A relight whose every texel stayed under a code (cards_subquantum) is NOT a cause: a reader that
+#       teleport itself (since PHOTON-7 stage 8B, B1: the gather's rest-0 frames after a write while its cells converge are
+#       that write's - a run of them shares its cause). A relight whose every texel stayed under a code (cards_subquantum) is NOT a cause: a reader that
 #       restarts on one is red - the count of such relight-frame restarts is printed for each reader.
 #   (5) THE SERIES STOPS (the lead's ruling (B) on the card-to-card rest): after the window's last VISIBLE relight
 #       reading, the relights end, and the window then holds at least 9 (one read-back due) + 16 (a reader's rest) frames
@@ -78,6 +83,21 @@ dec = [int(r.get("cards_decisions") or 0) for r in ctl]
 first_hold = next((i for i, h in enumerate(held) if h), None)
 first_rest = next((i for i, n in enumerate(rest) if n >= 1), None)
 t_dec = next((i for i in range(1, len(dec)) if dec[i] > dec[i - 1]), None)
+# THE REST THE DECISION READ (PHOTON-7 stage 8B, B1; the door's stillnessDeriveLiveness): the gather rests per cell and
+# restarts on every input that reaches a cell, and the decision waits for every reader's demand - so the liveness bound
+# counts from the later of the readers' (the gather's rest_frames, the reflection's refl_rest_frames) rests that ran
+# unbroken to the decision, each one's last start before it (the decision's own frame may restart both)
+if t_dec is not None and first_rest is not None:
+    refl = [int(r.get("refl_rest_frames") or 0) for r in ctl]
+    start = first_rest
+    for series in (rest, refl):
+        for i in range(t_dec - 1, 0, -1):
+            if series[i] >= 1 and (series[i - 1] == 0 or series[i] < series[i - 1]):
+                start = max(start, i)
+                break
+            if series[i] == 0:
+                break
+    first_rest = start
 last_gi = max((i for i, g in enumerate(gi) if g), default=None)
 print("frames from the teleport: the readers' first rest %s, the decision %s, its last GI row %s, the FIRST HOLD %s"
       % (first_rest, t_dec, last_gi, first_hold))
@@ -97,7 +117,8 @@ if first_hold is not None:
               % (first_hold, t_dec, work_end))
         # (3) THE DERIVED BOUND IS THE DOOR's (jahshaka::engine::stillnessDeriveLiveness, ONE formula - the LAB STILLNESS
         # line's firstRest / decision / workEnd / holdBound / pace / pages; scripting.e2e.world_stillness reads the same):
-        # the first hold within (N + due) + due + W + N + 1 of the readers' first rest, W the decision's work at its pace
+        # the first hold within (N + due) + due + W + C + N + H + 1 of the readers' first rest, W the decision's work at its pace,
+        # C the re-rest's convergence (8B B1) and H the longest card-refinement hand-over after the work (8B B3), both measured
         import re as _re
         door = {}
         for line in open(os.path.join(wd, "control.log"), errors="replace"):
@@ -113,7 +134,7 @@ if first_hold is not None:
                   "(3) the door's frames are the record's (decision %d / %d, work end %d / %d, first rest %d / %d)"
                   % (int(door["decision"]), t_dec, int(door["workEnd"]), work_end, int(door["firstRest"]), first_rest))
             check(first_hold - first_rest <= int(door["holdBound"]), "(3) LIVENESS: the first hold %d frames after the "
-                  "first rest, within the door's derived bound (N + due) + due + W %d + N + 1 = %d"
+                  "first rest, within the door's derived bound (N + due) + due + W %d + C + N + H + 1 = %d"
                   % (first_hold - first_rest, W, int(door["holdBound"])))
             check(int(door["pace"]) >= 0 and W <= int(door["pace"]), "(3) W'S PACE: the decision's work (%d frames) within "
                   "ceil(%.1f pages / the tier's pages a frame) + due = %d" % (W, door["pages"], int(door["pace"])))
@@ -145,7 +166,15 @@ for label, key in (("the gather", "rest_frames"), ("the reflection", "refl_rest_
         check(False, "(4) %s rests in the window" % label)
         continue
     restarts = [i for i in range(start, len(rs)) if rs[i] == 0]
-    blind = [i for i in restarts if cause(i) is None]
+    # (THE GATHER's CONVERGENCE, PHOTON-7 stage 8B B1: its rest starts again only once its cells' history caught up with
+    # their samples - a run of rest-0 frames after a write is that write's; the run's frames share the cause of any of
+    # its frames, the reflection's rest has no such gate)
+    def cause_of(i):
+        j = i
+        if key == "rest_frames":
+            while j > start and rs[j - 1] == 0: j -= 1
+        return next((c for c in (cause(k) for k in range(j, i + 1)) if c), None)
+    blind = [i for i in restarts if cause_of(i) is None]
     on_relight = [i for i in blind if moved(rel, i) or moved(rel, i - 1)]
     print("  %s: %d restart frames after its first rest (%d), %d with no cause, %d of them on a relight frame%s" % (
         label, len(restarts), start, len(blind), len(on_relight), (" - frames %s" % blind[:12]) if blind else ""))

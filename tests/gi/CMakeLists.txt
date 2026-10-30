@@ -583,6 +583,27 @@ set_tests_properties(gi.card_lamp_shadow gi.card_lamp_shadow_area PROPERTIES
 set_tests_properties(gi.card_lamp_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 283)
 set_tests_properties(gi.card_lamp_shadow_area PROPERTIES JAHSHAKA_TEST_FRAMES 893)
 
+# gi.area_follow (PHOTON-7 stage 8B, B2; a builder's row, archived at the merge) — THE AREA LIGHT'S VISIBILITY RESTS
+# PER TEXEL: a movable block slides under an area light; the far penumbra of a still plate keeps its rest bit for bit
+# through the move, the block's shadow follows it, the view holds again within n^2 + 8 frames
+# (test_gi_area_follow.cpp says the laws). A fixture.
+add_executable(test_gi_area_follow test_gi_area_follow.cpp)
+set_target_properties(test_gi_area_follow PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_area_follow PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_area_follow PRIVATE JahshakaEngine)
+add_dependencies(test_gi_area_follow JahshakaEngineMedia)
+jah_gpu_row(gi.area_follow CLASS engine COMMAND test_gi_area_follow
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.area_follow PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+set_tests_properties(gi.area_follow PROPERTIES JAHSHAKA_TEST_FRAMES 420)
+
 # gi.soft_mover_ghost / gi.mover_bus_sky (PHOTON-7 stage 8A, A1; ONE_PICTURE B2) — A MOVER IS GI GEOMETRY, by region:
 # a door opened in play leaves no closed-door voxel or bounce (the store at rest is a fresh build's - geometry bit for
 # bit, light within a code), and a bus 10 m away occludes the floor's sky share (the store took it where it stopped,
@@ -1331,6 +1352,36 @@ endif()
 # check: walk.sh <jahlab> <work dir> --bistro <BistroExterior.fbx> <data root> under scripts/gpu-exclusive.sh, after
 # scripts/lab/warm.sh --tier epic at the walk's two poses on that data root (walk.sh says them; a stamp is keyed on the tier and
 # the cameras).
+
+# gi.rest_oracle_lamp / gi.rest_oracle_mover (PHOTON-7 stage 8B, B1's acceptance: THE ORACLE) - after a change at rest
+# (photon-room's lamp step; photon-glass's mover slid 1.5 m over 60 frames - `slide`: the environments carry no
+# animation, so `play` moved nothing - its gather's own picture: the photon diffuse view)
+# the held picture equals a fresh rest of the final scene (the rest restarted whole, held again) within one code, the
+# gather held whole at both shots. rest_oracle.sh says the law. 960x540; one jahlab session each: 902 and 962 frames.
+if(TARGET jahlab)
+    jah_gpu_row(gi.rest_oracle_lamp CLASS engine FRAMES 902
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rest_oracle.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/rest_oracle_lamp lamp
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.rest_oracle_lamp PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_gpu_row(gi.rest_oracle_mover CLASS engine FRAMES 962
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rest_oracle.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/rest_oracle_mover mover
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.rest_oracle_mover PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
+
+# gi.fast_update (PHOTON-7 stage 8B, B5's acceptance: LUMEN's FAST UPDATE) - photon-glass's mover slid 1.5 m in 60
+# frames in the gather's own picture (480x270): the probes the motion's hits reach counted (moving rays; their own F past
+# one half), and the settle to the bar after the motion at most HALF the fast update's off (8 frames, measured once with
+# the arm). fast_update.sh says the law and derives our N' from Lumen's. One jahlab session: 720 frames.
+if(TARGET jahlab)
+    jah_gpu_row(gi.fast_update CLASS engine FRAMES 720
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/fast_update.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/fast_update
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.fast_update PROPERTIES TIMEOUT 60 LABELS "engine")
+endif()
 
 # gi.hold_after_stop (PHOTON-2 stage 2 and its round, rev 8's H4 as rev 9 restated it) — THE GATHER SETTLES, THEN HOLDS:
 # jahlab's stillness door on photon-room (a walk inside one cell; a lamp step at rest: the field's change within 36

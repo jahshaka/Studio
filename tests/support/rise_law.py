@@ -93,6 +93,23 @@ def judge(m, start, end, quantum=0.0):
     return spans, means, sigma, rises
 
 
+def settle_start(rows, end):
+    """WHERE A RESTING READER'S OWN SETTLE BEGINS in a stillness door's rows (PHOTON-7 8B, B2's re-derivation, the lead's
+    ruling): 16 frames past the LATER of the rest's last start (refl_rest_frames back to <= 1) and the last frame that
+    changed the reflection's INPUTS - a visible card relight (cards_visible rising) or a close the trace was handed at rest
+    (refl_rest_movers rising: a listed region or a live brick mask). The old start, the rest's alone, stood on the premise
+    that the GI's relights break the reflection's rest; under B2 they break it per texel, the rest begins while the cards
+    still relight, and the readers' code-a-frame follow of that estimate is not the rest's settle (measured: eref's glossy
+    0.13-0.37 codes a frame while cards_visible climbed 79 -> 124, rounds 13 -> 17, its decay after 159)."""
+    def col(i, k):
+        v = rows[i].get(k, "")
+        return int(v) if v not in ("", "-") else 0
+    rest = max([i for i in range(1, end) if col(i, "refl_rest_frames") <= 1] or [1])
+    inputs = max([i for i in range(2, end) if col(i, "cards_visible") > col(i - 1, "cards_visible") or
+                  col(i, "refl_rest_movers") > col(i - 1, "refl_rest_movers")] or [1])
+    return max(rest, inputs) + 16
+
+
 def _decay(n, rng, c=0.004):
     """A decaying change whose noise is the count's (sigma = c sqrt(level): the glass's measured c 0.003-0.005)."""
     out = []

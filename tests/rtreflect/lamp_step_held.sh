@@ -80,13 +80,13 @@ for name in ("estep", "eref"):
     if h >= len(r): fails.append("(e) the %s session never held before its shot" % name)
     elif capped != 0: fails.append("(e) the %s session's hold has %d capped texels (must be 0)" % (name, capped))
     end = h if h < len(r) else len(r)
-    # THE REST'S OWN SETTLE: from its last start + 16 frames (the GI relights after the lamp's change first - its rows
-    # break the reflection's rest, and its own settle is not the rest's) to the hold
-    restStart = max([i for i in range(1, end) if int(r[i]["refl_rest_frames"]) <= 1] or [1])
-    if end > restStart + 26:
+    # THE REST'S OWN SETTLE: 16 frames past the later of its last start and the last change of its inputs (a visible
+    # card relight, a close handed at rest - rise_law.settle_start, PHOTON-7 8B B2's re-derivation) to the hold
+    start = rise_law.settle_start(r, end)
+    if end > start + 10:
         g = [float(x["glossy_mean"]) for x in r]
-        _, _, sigma, rising = rise_law.judge(g, restStart + 16, end, max(1e-4, 1.0 / max(1, int(r[1]["glossy_px"]))))
-        print("(e) the %s session's settle: the rise law's noise %.5f, rises %d" % (name, sigma, len(rising)))
+        _, _, sigma, rising = rise_law.judge(g, start, end, max(1e-4, 1.0 / max(1, int(r[1]["glossy_px"]))))
+        print("(e) the %s session's settle from frame %d: the rise law's noise %.5f, rises %d" % (name, start, sigma, len(rising)))
         if rising: fails.append("(e) the %s session rises before its hold: %s" % (name, " ".join("%s:%d:%.4f->%.4f(%.4f)" % x for x in rising[:6])))
 try:
     from PIL import Image

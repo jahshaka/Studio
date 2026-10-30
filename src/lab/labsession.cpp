@@ -453,18 +453,19 @@ void Session::frame()
     fv.sky = true;
     fv.camera = mCamera.node();
     fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless || mReflectSources != ReflectSources::Both || mHdrReadback) {
+    if (mOpt.headless || mReflectSources != ReflectSources::Both || mHdrReadback || mReflectOff) {
         // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
         // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays` /
         // `reflections screen` (the one estimator's sources narrowed to one).
         const bool headless = mOpt.headless;
         const ReflectSources sources = mReflectSources;
-        const bool hdr = mHdrReadback;
-        fv.finish = [headless, sources, hdr](FrameInputView &part, View *v) {
+        const bool hdr = mHdrReadback, reflectOff = mReflectOff;
+        fv.finish = [headless, sources, hdr, reflectOff](FrameInputView &part, View *v) {
             PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             if (headless) fx.allowOffscreen = true;
             if (sources != ReflectSources::Both) fx.reflectSources = sources;
             if (hdr) fx.hdrReadback = true;
+            if (reflectOff) fx.ssr = 0;
             part.postFx = fx;
         };
     }
@@ -640,7 +641,17 @@ std::string Session::statusJson()
       << ",\"historyBytes\":" << gi.gather.historyBytes << ",\"restFrames\":" << gi.gather.restFrames
       // ...and its twins against their cap (PHOTON-7 stage 10: the cap is an L7 count; a real scene's demand reads it)
       << ",\"adaptive\":" << gi.gather.adaptive << ",\"adaptiveCap\":" << gi.gather.adaptiveCap
-      << ",\"adaptiveRequested\":" << gi.gather.adaptiveRequested << "}";
+      << ",\"adaptiveRequested\":" << gi.gather.adaptiveRequested;
+    {
+        // ...and THE FAST UPDATE's instrument (PHOTON-7 stage 8B, B5): the most probes of the retained frames' records (the
+        // last 32 retired) with a moving ray, and with their own amount past one half
+        unsigned moving = 0u, fast = 0u;
+        for (const jahshaka::engine::GatherRestRecord &r : gi.gather.restLog) {
+            moving = std::max(moving, r.movingProbes);
+            fast = std::max(fast, r.fastProbes);
+        }
+        o << ",\"movingProbesPeak\":" << moving << ",\"fastProbesPeak\":" << fast << "}";
+    }
     o << ",\"cards\":{\"captures\":" << gi.cards.captures << ",\"capturesLastFrame\":" << gi.cards.capturesLastFrame
       << ",\"queue\":" << gi.cards.queueLength << ",\"relights\":" << gi.cards.relights << ",\"indirectRelights\":"
       << gi.cards.indirectRelights << ",\"invalidRadiance\":" << gi.cards.invalidRadiance << ",\"invalidIndirect\":"
@@ -790,19 +801,19 @@ bool Session::exec(const Command &c)
     } else if (c.verb == "reflections") {
         // THE REFLECTION'S SOURCES (the agreement row's door): both = the one estimator, rays = the rays alone (the
         // screen sources leave the chain: a graph rebuild, the histories restart), screen = the screen alone
-        if (a0 == "both" || a0 == "rays" || a0 == "screen") {
-            mReflectSources = a0 == "both" ? ReflectSources::Both : a0 == "rays" ? ReflectSources::Rays
-                                                                                : ReflectSources::Screen;
+        if (a0 == "both" || a0 == "rays" || a0 == "screen" || a0 == "off") {
+            mReflectOff = a0 == "off";
+            if (!mReflectOff)
+                mReflectSources = a0 == "both" ? ReflectSources::Both : a0 == "rays" ? ReflectSources::Rays
+                                                                                    : ReflectSources::Screen;
             std::printf("LAB REFLECTIONS %s\n", a0.c_str());
         } else {
             ok = false;
-            labFail("LAB REFUSED reflections '%s' (both|rays|screen)\n", a0.c_str());
+            labFail("LAB REFUSED reflections '%s' (both|rays|screen|off)\n", a0.c_str());
         }
     } else if (c.verb == "play") {
         if (!onOff(a0, mPlaying, v)) { ok = false; labFail("LAB REFUSED play '%s'\n", a0.c_str()); }
         else {
-            mPlaying = v;
-            mDoc->setPlaying(v);
             // what plays: the nodes carrying an animation, and how many of them a property track (position, rotation,
             // scale: the document's own) moves - a skeletal clip is the engine's (the mirror pushes the clock)
             int animated = 0, tracks = 0, clips = 0;
@@ -818,8 +829,19 @@ bool Session::exec(const Command &c)
                 for (int i = 0; i < n->childCount(); ++i) walk(n->childAt(i));
             };
             walk(mDoc->getRootNode().data());
-            std::printf("LAB PLAY %s: %d nodes carry an animation (%d with a property track), %d clips in all\n",
-                        v ? "on" : "off", animated, tracks, clips);
+            // A VERB THAT MOVES NOTHING FAILS (URGENT #110: gi.rest_oracle_mover passed for a day on `play on` in an
+            // environment with no animation - "0 nodes" printed, nothing moved): a row that wants an object to move
+            // uses `slide`, and nothing here is a silent no-op
+            if (animated == 0 && clips == 0) {
+                ok = false;
+                labFail("LAB REFUSED play %s: nothing in the scene carries an animation (0 nodes, 0 clips) - it would move "
+                        "nothing (slide <object> dx,dy,dz N moves an object)\n", a0.c_str());
+            } else {
+                mPlaying = v;
+                mDoc->setPlaying(v);
+                std::printf("LAB PLAY %s: %d nodes carry an animation (%d with a property track), %d clips in all\n",
+                            v ? "on" : "off", animated, tracks, clips);
+            }
         }
     } else if (c.verb == "overlay") {
         if (!onOff(a0, mOverlay, v)) { ok = false; labFail("LAB REFUSED overlay '%s'\n", a0.c_str()); }
@@ -1357,6 +1379,8 @@ bool Session::exec(const Command &c)
         ok = monitor(c);
     } else if (c.verb == "move") {
         ok = move(c);
+    } else if (c.verb == "slide") {
+        ok = slide(c);
     } else if (c.verb == "lights") {
         std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
             if (n->getSceneNodeType() == iris::SceneNodeType::Light) {
@@ -1881,6 +1905,31 @@ bool Session::move(const Command &c)
     return true;
 }
 
+bool Session::slide(const Command &c)
+{
+    iris::SceneNodePtr found;
+    std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+        if (!found && n->getSceneNodeType() == iris::SceneNodeType::Mesh && n->getName().toStdString() == c.args[0])
+            found = n;
+        for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
+    };
+    walk(mDoc->getRootNode());
+    if (!found) { labFail("LAB REFUSED slide: no mesh named '%s'\n", c.args[0].c_str()); return false; }
+    iris::Vec3 d, unused;
+    if (!parsePose(c.args[1] + ",0,0,0", d, unused)) {
+        labFail("LAB REFUSED slide: '%s' is not dx,dy,dz\n", c.args[1].c_str());
+        return false;
+    }
+    const int n = std::atoi(c.args[2].c_str());
+    const iris::Vec3 p0 = found->getLocalPos();
+    for (int i = n > 0 ? 1 : 0; i <= n && !mQuit; ++i) {
+        found->setLocalPos(n > 0 ? p0 + d * (float(i) / float(n)) : p0 + d);
+        frame();
+    }
+    std::printf("LAB SLIDE %s by %s over %d frames\n", c.args[0].c_str(), c.args[1].c_str(), n);
+    return true;
+}
+
 // ---- THE GI DOORS (PHOTON-7 stage 1): the placement pin, one cascade's voxels by world cell ----------------------------
 
 bool Session::pin(const Command &c)
@@ -1944,7 +1993,7 @@ bool Session::regions(const Command &c)
     if (!c.args.empty() && !boxes) { labFail("LAB REFUSED regions: '%s' (boxes)\n", c.args[0].c_str()); return false; }
     GiChangedRegions r;
     if (!mScene->giChangedRegions(r)) { labFail("LAB REGIONS FAILED: no list has closed (no frame drew the scene)\n"); return false; }
-    static const char *const kKinds[kGiRegionKindCount] = { "?", "Slab", "Card", "Edit", "Mover", "MoverShadow", "LampShadow", "Lamp" };
+    static const char *const kKinds[kGiRegionKindCount] = { "?", "Slab", "Card", "Edit", "Mover", "MoverShadow", "LampShadow", "Lamp", "CardScene" };
     unsigned per[kGiRegionKindCount] = {};
     for (const GiChangedRegion &g : r.regions)
         if (unsigned(g.kind) < kGiRegionKindCount) ++per[unsigned(g.kind)];
