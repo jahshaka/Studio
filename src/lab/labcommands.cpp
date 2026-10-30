@@ -129,6 +129,10 @@ const std::vector<VerbDoc> &verbs()
           "line (cascade, kind, res, origin, cell, lo = the first voxel's WORLD cell index, dims) then "
           "dims[0] x dims[1] x dims[2] RGBA float32, x fastest - over the voxels whose centre lies in the world box "
           "(default the whole volume); a placement-free comparison joins two such files on the world cell" },
+        { "census", "census N file", 2, 2,
+          "MEASURING ARM (BISTRO-REST-1 stage 0, reverted after its run): N frames, each followed by one TSV line of the GI "
+          "readers' rest state (per-frame deltas), the changed-region list, every cascade's brick mask and feedback bricks; "
+          "the store (every cascade's half light) snapshotted at frames 0, 1, 2, N/2, N-1 and diffed; files <file>.*" },
         { "regions", "regions [boxes]", 0, 1,
           "THE CHANGED-REGION LIST (PHOTON-7 stage 3; Scene::giChangedRegions) as the last frame closed it: its frame, "
           "its regions per kind (Slab, Card, Edit, Mover, MoverShadow, LampShadow, Lamp), its overflow bits (1 the sun, 2 "
