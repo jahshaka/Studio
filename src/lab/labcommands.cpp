@@ -60,8 +60,8 @@ const std::vector<VerbDoc> &verbs()
           "indirect half against the drawn indirect diffuse" },
         { "sideshares", "sideshares file", 1, 1,
           "cascade 0's surface voxels as the ray tier's sides' gather last left them (PHOTON-7 11-2 (6), the openings' "
-          "instrument): one line a written voxel - its cell, its world centre, its normal (two-sided: the front's), the "
-          "front and back escape shares (Scene::giVoxelSideShares) - to <file>" },
+          "instrument): one line a written voxel - its cell, its world centre, the largest half's escape share and the "
+          "halves' coverage-weighted mean (Scene::giVoxelSideShares) - to <file>" },
         { "pick", "pick x y frames file", 4, 4,
           "THE PICK (PHOTON-7 11-2, the reds' instrument): the reflection's trace texel holding full-resolution pixel (x, y) "
           "kept over `frames` frames (at most 60) - each frame's sample (its direction, hit distance and slot, the traced "
@@ -116,7 +116,7 @@ const std::vector<VerbDoc> &verbs()
           "cascade) placed for the camera position x,y,z, every other cascade pinned where it stands (its builtCam); "
           "then a forced WHOLE rebuild of each pinned cascade at its pin (the arm gi.rebuildCascade, one frame each) - "
           "`scroll` leaves the re-placement to the scroll path instead (the pinned-scroll arm); `off` releases the pin" },
-        { "voxels", "voxels <c> <direct|light|back|albedo|covp|covn|posp|posn|stats> [file] [x0,y0,z0,x1,y1,z1]", 2, 4,
+        { "voxels", "voxels <c> <direct|light|albedo|covp|covn|posp|posn|stats> [file] [x0,y0,z0,x1,y1,z1]", 2, 4,
           "ONE CASCADE'S VOXELS (PHOTON-7 stage 1; Scene::giVoxelVolume / giVoxelStats), read once the chain owes no "
           "voxel work (GiStatus::chainOwed; frames rendered while it does, cap 600): `stats` prints the cascade's "
           "GiVoxelStats; any other kind writes that level-0 array BY WORLD CELL to <data-root>/<file> - one JSON header "

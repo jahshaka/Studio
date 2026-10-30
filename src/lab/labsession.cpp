@@ -1053,7 +1053,7 @@ bool Session::exec(const Command &c)
         if (!ok) {
             labFail("LAB FAILED sideshares: no cascade-0 volume or shares (or their grids differ)\n");
         } else if (FILE *f = std::fopen(a0.c_str(), "w")) {
-            std::fprintf(f, "# x y z  cx cy cz  nx ny nz  front back twoSided  (cell %.4f %.4f %.4f)\n", vol.cell[0],
+            std::fprintf(f, "# x y z  cx cy cz  most mean  (cell %.4f %.4f %.4f)\n", vol.cell[0],
                          vol.cell[1], vol.cell[2]);
             unsigned n = 0u;
             for (int z = 0; z < vol.depth; ++z)
@@ -1062,12 +1062,10 @@ bool Session::exec(const Command &c)
                         const size_t i = (size_t(z) * vol.height + y) * vol.width + x;
                         const uint32_t w = sh.words[i];
                         if (!(w & (1u << 16u))) continue;
-                        const float *nr = &vol.normal[i * 4u];
-                        std::fprintf(f, "%d %d %d %.3f %.3f %.3f %.3f %.3f %.3f %.3f %.3f %d\n", x, y, z,
+                        std::fprintf(f, "%d %d %d %.3f %.3f %.3f %.3f %.3f\n", x, y, z,
                                      vol.origin[0] + (x + 0.5f) * vol.cell[0], vol.origin[1] + (y + 0.5f) * vol.cell[1],
-                                     vol.origin[2] + (z + 0.5f) * vol.cell[2], nr[0] * 2.0f - 1.0f, nr[1] * 2.0f - 1.0f,
-                                     nr[2] * 2.0f - 1.0f, float(w & 255u) / 255.0f, float((w >> 8u) & 255u) / 255.0f,
-                                     int((w >> 17u) & 1u));
+                                     vol.origin[2] + (z + 0.5f) * vol.cell[2], float(w & 255u) / 255.0f,
+                                     float((w >> 8u) & 255u) / 255.0f);
                         ++n;
                     }
             std::fclose(f);
@@ -1995,11 +1993,11 @@ bool Session::voxels(const Command &c)
         labFail("LAB VOXELS FAILED: no volume for cascade %ld\n", ci);
         return false;
     }
-    const std::vector<float> *arr = kind == "direct" ? &v.direct : kind == "light" ? &v.light : kind == "back" ? &v.lightBack
+    const std::vector<float> *arr = kind == "direct" ? &v.direct : kind == "light" ? &v.light
                                   : kind == "albedo" ? &v.albedo : kind == "covp" ? &v.coverageP : kind == "covn" ? &v.coverageN
                                   : kind == "posp" ? &v.positionP : kind == "posn" ? &v.positionN : nullptr;
     if (!arr) {
-        labFail("LAB REFUSED voxels: '%s' (direct|light|back|albedo|covp|covn|posp|posn|stats)\n", kind.c_str());
+        labFail("LAB REFUSED voxels: '%s' (direct|light|albedo|covp|covn|posp|posn|stats)\n", kind.c_str());
         return false;
     }
     const int res[3] = { v.width, v.height, v.depth };

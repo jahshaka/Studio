@@ -37,7 +37,7 @@
 //       frames after the change, before the late reader's first read-back: 106 of the 106 lost); the reflection never
 //       reads here, so a least clock would never close it (the rule: each reader from its own first stamp).
 //   (7) THE STORE AT REST HOLDS (PHOTON-7 stage 10; the lead's ruling on the TLAS route's orbit): in every run, at B's
-//       rest, one more frame - every cascade's two sides read before and after it, each changed channel's move in STORE
+//       rest, one more frame - every cascade's six halves (VOXEL-R13) read before and after it, each changed channel's move in STORE
 //       STEPS at its own magnitude (the half's 2^-10 of the value, 2^-24 under its smallest normal) against its brick's
 //       ROUNDING BOUND 0.5 / (1 - r) steps (r the brick's word 2: the measured contraction, the operator's bound before
 //       one): round-to-nearest cannot bring a contraction closer than that to its fixed point, and the scheduler takes a
@@ -369,8 +369,8 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         for (const auto &cs : gb.cascades) out.builtAtB.push_back(cs.builtCam);
     }
     {
-        // (7) THE STORE AT REST HOLDS: one frame more, every cascade's two sides before and after it against the bricks'
-        // rounding bounds (the header)
+        // (7) THE STORE AT REST HOLDS: one frame more, every cascade's six halves (VOXEL-R13's half store) before and after
+        // it against the bricks' rounding bounds (the header)
         const int cascades = int(scene->published().gi.cascades.size());
         std::vector<GiVoxelVolume> v0(size_t(std::max(cascades, 0)));
         std::vector<GiFeedbackBricks> st(v0.size());
@@ -388,9 +388,9 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
                 inside = inside && q[k] >= 0 && q[k] < n;
             }
             const size_t i = inside ? (size_t(q[2]) * size_t(z.height) + size_t(q[1])) * size_t(z.width) + size_t(q[0]) : 0;
-            if (inside && z.lightFront.size() >= 4 * i + 3) {
+            if (inside && z.light.size() >= 4 * i + 3) {
                 out.edgeOk = true;
-                for (int k = 0; k < 3; ++k) out.edge[k] = z.lightFront[4 * i + size_t(k)];
+                for (int k = 0; k < 3; ++k) out.edge[k] = z.light[4 * i + size_t(k)];
             }
         }
         run(1);
@@ -402,58 +402,53 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
             const GiVoxelVolume &a = v0[size_t(c)];
             const GiFeedbackBricks &f = st[size_t(c)];
             if (!scene->giVoxelLight(c, v1) || !a.available || !v1.available || !f.available) continue;
-            bool any = false;
-            for (const std::vector<float> GiVoxelVolume::*side : { &GiVoxelVolume::lightFront, &GiVoxelVolume::lightBack })
-                any = any || (a.*side) != (v1.*side);
-            if (!any) continue;
+            if (a.halfLight.empty() || a.halfLight == v1.halfLight) continue;
             // (the voxels' OPERATOR BOUND - what a voxel re-emits of what it gathers: its albedo times its opacity, the
             // bounce's own factor - read for the moved cascades alone)
-            const bool haveAlbedo = scene->giVoxelVolume(c, full) && full.albedo.size() == a.lightFront.size();
+            const bool haveAlbedo = scene->giVoxelVolume(c, full) && full.albedo.size() == a.light.size();
             const size_t W = size_t(a.width), H = size_t(a.height);
             std::vector<char> hit(f.r.size(), 0);
-            for (const std::vector<float> GiVoxelVolume::*side : { &GiVoxelVolume::lightFront, &GiVoxelVolume::lightBack }) {
-                const std::vector<float> &x = a.*side, &y = v1.*side;
-                if (x.size() != y.size()) continue;
-                for (size_t i = 0; i + 3 < x.size(); i += 4) {
-                    const size_t q = i / 4, bx = (q % W) / 8u, by = ((q / W) % H) / 8u, bz = q / (W * H) / 8u;
-                    const size_t b = bx + f.dims[0] * (by + size_t(f.dims[1]) * bz);
-                    if (b >= f.r.size()) continue;
-                    const double op = haveAlbedo ? std::min(0.999, double(std::max({ full.albedo[i], full.albedo[i + 1],
-                                                                                     full.albedo[i + 2] })) *
-                                                                       double(full.albedo[i + 3]))
-                                                 : 0.999;
-                    const bool isMeasured = (f.flags[b] & 2048u) != 0u;
-                    const double rr = isMeasured ? std::min(std::min(std::max(double(f.r[b]), 0.0), 0.999), op) : op;
-                    const double bound = 0.5 / (1.0 - rr);
-                    for (int ch = 0; ch < 3; ++ch) {
-                        const double d = std::fabs(double(y[i + ch]) - double(x[i + ch]));
-                        if (!(d > 0.0)) continue;
-                        const double m = std::max({ std::fabs(double(x[i + ch])), std::fabs(double(y[i + ch])), 6.1035156e-5 });
-                        const double steps = d / std::ldexp(1.0, int(std::floor(std::log2(m))) - 10);
-                        ++moved;
-                        measured += isMeasured ? 1u : 0u;
-                        mostSteps = std::max(mostSteps, steps);
-                        const bool isOver = steps > std::max(1.0, bound) + 1e-9;
-                        over += isOver ? 1u : 0u;
-                        if (isOver && over <= 6u) {
-                            const size_t qx = q % W, qy = (q / W) % H, qz = q / (W * H);
-                            std::printf("     (7) over at test frame %d (parity %d): cascade %d %s cell %zu %zu %zu (%.2f %.2f %.2f) "
-                                        "channel %d: %.6g -> %.6g (%.0f steps, bound %.2f; albedo x opacity %.3f; normal %.2f %.2f "
-                                        "%.2f)\n", frames, frames & 1, c,
-                                        side == &GiVoxelVolume::lightFront ? "front" : "back", qx, qy, qz,
-                                        a.origin[0] + (qx + 0.5f) * a.cell[0], a.origin[1] + (qy + 0.5f) * a.cell[1],
-                                        a.origin[2] + (qz + 0.5f) * a.cell[2], ch, x[i + ch], y[i + ch], steps, bound, op,
-                                        a.normal.size() > i + 2 ? a.normal[i] : -1.f, a.normal.size() > i + 2 ? a.normal[i + 1] : -1.f,
-                                        a.normal.size() > i + 2 ? a.normal[i + 2] : -1.f);
-                        }
-                        if (steps / bound > worst) {
-                            worst = steps / bound;
-                            worstAmp = steps;
-                            worstBound = bound;
-                            worstR = isMeasured ? double(f.r[b]) : -1.0;
-                        }
-                        if (!hit[b]) { hit[b] = 1; ++bricksMoved; }
+            const std::vector<float> &x = a.halfLight, &y = v1.halfLight;
+            if (x.size() != y.size()) continue;
+            static const char *const kHalfName[6] = { "-x", "+x", "-y", "+y", "-z", "+z" };
+            for (size_t t = 0; t + 3 < x.size(); t += 4) {
+                // the texel's cell and half: a row's six blocks of W texels (block 2a the -a half, 2a + 1 the +a half)
+                const size_t tx = t / 4, blk = (tx / W) % 6u, q = (tx / (6u * W)) * W + tx % W, i = q * 4u;
+                const size_t bx = (q % W) / 8u, by = ((q / W) % H) / 8u, bz = q / (W * H) / 8u;
+                const size_t b = bx + f.dims[0] * (by + size_t(f.dims[1]) * bz);
+                if (b >= f.r.size()) continue;
+                const double op = haveAlbedo ? std::min(0.999, double(std::max({ full.albedo[i], full.albedo[i + 1],
+                                                                                 full.albedo[i + 2] })) *
+                                                                   double(full.albedo[i + 3]))
+                                             : 0.999;
+                const bool isMeasured = (f.flags[b] & 2048u) != 0u;
+                const double rr = isMeasured ? std::min(std::min(std::max(double(f.r[b]), 0.0), 0.999), op) : op;
+                const double bound = 0.5 / (1.0 - rr);
+                for (int ch = 0; ch < 3; ++ch) {
+                    const double d = std::fabs(double(y[t + ch]) - double(x[t + ch]));
+                    if (!(d > 0.0)) continue;
+                    const double m = std::max({ std::fabs(double(x[t + ch])), std::fabs(double(y[t + ch])), 6.1035156e-5 });
+                    const double steps = d / std::ldexp(1.0, int(std::floor(std::log2(m))) - 10);
+                    ++moved;
+                    measured += isMeasured ? 1u : 0u;
+                    mostSteps = std::max(mostSteps, steps);
+                    const bool isOver = steps > std::max(1.0, bound) + 1e-9;
+                    over += isOver ? 1u : 0u;
+                    if (isOver && over <= 6u) {
+                        const size_t qx = q % W, qy = (q / W) % H, qz = q / (W * H);
+                        std::printf("     (7) over at test frame %d (parity %d): cascade %d half %s cell %zu %zu %zu (%.2f %.2f "
+                                    "%.2f) channel %d: %.6g -> %.6g (%.0f steps, bound %.2f; albedo x opacity %.3f)\n", frames,
+                                    frames & 1, c, kHalfName[blk], qx, qy, qz, a.origin[0] + (qx + 0.5f) * a.cell[0],
+                                    a.origin[1] + (qy + 0.5f) * a.cell[1], a.origin[2] + (qz + 0.5f) * a.cell[2], ch,
+                                    x[t + ch], y[t + ch], steps, bound, op);
                     }
+                    if (steps / bound > worst) {
+                        worst = steps / bound;
+                        worstAmp = steps;
+                        worstBound = bound;
+                        worstR = isMeasured ? double(f.r[b]) : -1.0;
+                    }
+                    if (!hit[b]) { hit[b] = 1; ++bricksMoved; }
                 }
             }
         }
@@ -469,18 +464,20 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
                 }
                 const GiVoxelVolume &a0 = v0[0];
                 int shownS = 0;
-                for (size_t i = 0; i + 3 < a0.lightFront.size() && shownS < 4; i += 4)
+                for (size_t i = 0; i + 3 < a0.halfLight.size() && shownS < 4; i += 4)
                     for (int ch = 0; ch < 3 && shownS < 4; ++ch) {
                         bool varies = false;
                         for (int k = 1; k < 4; ++k)
-                            varies = varies || ser[size_t(k)].lightFront[i + ch] != ser[0].lightFront[i + ch];
+                            varies = varies || (ser[size_t(k)].halfLight.size() > i + ch &&
+                                                ser[size_t(k)].halfLight[i + ch] != ser[0].halfLight[i + ch]);
                         if (!varies) continue;
-                        const size_t W0 = size_t(a0.width), H0 = size_t(a0.height), q = i / 4;
-                        std::printf("     (7) series c0 cell %zu %zu %zu ch %d:", q % W0, (q / W0) % H0, q / (W0 * H0), ch);
+                        const size_t W0 = size_t(a0.width), H0 = size_t(a0.height), tx = i / 4;
+                        const size_t q = (tx / (6u * W0)) * W0 + tx % W0;
+                        std::printf("     (7) series c0 cell %zu %zu %zu half %zu ch %d:", q % W0, (q / W0) % H0,
+                                    q / (W0 * H0), (tx / W0) % 6u, ch);
                         for (int k = 0; k < 4; ++k)
-                            std::printf(" [frame %d p%d] %.4g / back %.4g", fr[size_t(k)], fr[size_t(k)] & 1,
-                                        ser[size_t(k)].lightFront[i + ch],
-                                        ser[size_t(k)].lightBack.size() > i + ch ? ser[size_t(k)].lightBack[i + ch] : -1.f);
+                            std::printf(" [frame %d p%d] %.4g", fr[size_t(k)], fr[size_t(k)] & 1,
+                                        ser[size_t(k)].halfLight[i + ch]);
                         std::printf("\n");
                         ++shownS;
                     }
@@ -492,14 +489,13 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
                 if (!scene->giVoxelVolume(c, f1)) continue;
                 run(1);
                 if (!scene->giVoxelVolume(c, f2)) continue;
-                size_t dDirect = 0, dTotal = 0, dDirectBack = 0;
-                for (size_t i = 0; i < f1.direct.size() && i < f2.direct.size(); ++i) dDirect += f1.direct[i] != f2.direct[i];
-                for (size_t i = 0; i < f1.directBack.size() && i < f2.directBack.size(); ++i)
-                    dDirectBack += f1.directBack[i] != f2.directBack[i];
-                for (size_t i = 0; i < f1.lightFront.size() && i < f2.lightFront.size(); ++i)
-                    dTotal += f1.lightFront[i] != f2.lightFront[i];
-                std::printf("     (7) cascade %d over the next frame: %zu front channels moved, its direct %zu, its direct back "
-                            "%zu\n", c, dTotal, dDirect, dDirectBack);
+                size_t dDirect = 0, dTotal = 0;
+                for (size_t i = 0; i < f1.halfDirect.size() && i < f2.halfDirect.size(); ++i)
+                    dDirect += f1.halfDirect[i] != f2.halfDirect[i];
+                for (size_t i = 0; i < f1.halfLight.size() && i < f2.halfLight.size(); ++i)
+                    dTotal += f1.halfLight[i] != f2.halfLight[i];
+                std::printf("     (7) cascade %d over the next frame: %zu half-store channels moved, its direct %zu\n", c,
+                            dTotal, dDirect);
             }
         }
         gOrbitMoved += moved;
@@ -602,9 +598,9 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
                 inside = inside && q[k] >= 0 && q[k] < n;
             }
             const size_t i = inside ? (size_t(q[2]) * size_t(z.height) + size_t(q[1])) * size_t(z.width) + size_t(q[0]) : 0;
-            if (inside && z.lightFront.size() >= 4 * i + 3) {
+            if (inside && z.light.size() >= 4 * i + 3) {
                 out.edgeRefOk = true;
-                for (int k = 0; k < 3; ++k) out.edgeRef[k] = z.lightFront[4 * i + size_t(k)];
+                for (int k = 0; k < 3; ++k) out.edgeRef[k] = z.light[4 * i + size_t(k)];
             }
         }
         e->setArm("gi.bounceJacobi", 0.0);

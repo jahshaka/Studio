@@ -52,7 +52,8 @@
 // (0.09375, 0.3125, 0.375) m - so cascade 2's 0.469 m cells hold the -x wall, the roof and the +z wall whole and the cells
 // at their edges hold an inner and an outer face - the ray tier at High: (1)'s roof, the room at rest inside, (3), and
 // cascade 2 asserted to hold such MIXED cells.
-// THE TIERS, ONE ROW EACH (argv[1]): gi.sealed_sky the ray tier at High and at Epic (laws 1-4, 6-8); gi.sealed_sky_noray
+// THE TIERS, ONE ROW EACH (argv[1]): gi.sealed_sky the ray tier at High ("ray"), gi.sealed_sky_epic at Epic ("epic", with
+// (9)) (laws 1-4, 6-8; VOXEL-R13 stage 2 split them, each within the fixture's 10 s); gi.sealed_sky_noray
 // the NO-RAY tier as it ships (rays off, the field on, no
 // cards: laws 1's roof, 3, 4, 7, 8); and the no-ray route with the field off ((5) with 7, rebuilt inside: the screen
 // integrate's cones answer every pixel).
@@ -130,8 +131,8 @@ int main(int argc, char **argv)
     // tier at High and Epic (gi.sealed_sky), "noray" the no-ray tier as it ships and with the field off
     // (gi.sealed_sky_noray)
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray" && mode != "noray" && mode != "shift") {
-        std::printf("FAIL: the mode is ray, noray or shift, not '%s'\n", mode.c_str());
+    if (mode != "ray" && mode != "epic" && mode != "noray" && mode != "shift") {
+        std::printf("FAIL: the mode is ray, epic, noray or shift, not '%s'\n", mode.c_str());
         return 2;
     }
     if (mode == "shift") g_off = Vec3(0.09375f, 0.3125f, 0.375f);
@@ -240,7 +241,8 @@ int main(int argc, char **argv)
     };
 
     // THE ROOM's voxels of one cascade: the occupied cells whose centre lies inside the room (x, z in [-2, 2], y in
-    // [0, 3]); the brightest channel of each one's light (un-premultiplied); and the roof's top cells (the reference)
+    // [0, 3]); the brightest channel of each one's light (un-premultiplied); and the roof's top cells' +y halves (the
+    // reference, VOXEL-R13's half store)
     struct VoxRead { size_t cells = 0; double peak = 0.0; size_t roofCells = 0; double roofMean = 0.0; bool ok = false; };
     const auto readVoxels = [&](int c) {
         VoxRead r;
@@ -263,9 +265,13 @@ int main(int argc, char **argv)
                     }
                     // the roof's top: the cell holding y = 3.4 over the roof's middle
                     if (std::fabs(cx) < 1.5 && std::fabs(cz) < 1.5 && cy - 0.5 * v.cell[1] <= 3.4 &&
-                        cy + 0.5 * v.cell[1] > 3.4) {
-                        ++r.roofCells;
-                        roofSum += std::max(v.lightFront[i], std::max(v.lightFront[i + 1], v.lightFront[i + 2])) / cOcc;
+                        cy + 0.5 * v.cell[1] > 3.4 && v.halfLight.size() == 6u * v.light.size()) {
+                        // the +y half (block 3): the roof's top faces
+                        const float *t = &v.halfLight[(((size_t(z) * v.height + y) * 6u + 3u) * v.width + x) * 4u];
+                        if (t[3] > 0.0f) {
+                            ++r.roofCells;
+                            roofSum += std::max(t[0], std::max(t[1], t[2])) / t[3];
+                        }
                     }
                 }
         r.roofMean = r.roofCells ? roofSum / double(r.roofCells) : 0.0;
@@ -303,7 +309,10 @@ int main(int argc, char **argv)
     const auto readHalves = [&](int c) {
         HalfRead r;
         GiVoxelVolume v;
-        if (!scene->giVoxelHalves(c, v) || !v.available) return r;
+        // (the room and its walls, roof and floor with a coarse cell's margin: only those cells are decoded)
+        const float lo[3] = { g_off.x - 4.4f, g_off.y - 2.4f, g_off.z - 4.4f };
+        const float hi[3] = { g_off.x + 4.4f, g_off.y + 5.4f, g_off.z + 4.4f };
+        if (!scene->giVoxelHalves(c, v, lo, hi) || !v.available) return r;
         r.ok = true;
         const int W = v.width;
         double roofSum = 0.0;
@@ -316,9 +325,10 @@ int main(int argc, char **argv)
                         const int a = q % 3, h = q / 3;
                         const float o = (h == 0 ? v.coverageP : v.coverageN)[i + size_t(a)];
                         if (!(o > 0.0f)) continue;
-                        const int hx = h == 0 ? W + x : x;
-                        const size_t hi = ((size_t(z) * v.height + y) * size_t(2 * W) + size_t(hx)) * 4u;
-                        const float k = v.halfLight[a][hi + 3];
+                        // (the half store: the six halves side by side along x, axis a's -a half then its +a half)
+                        const int hx = (2 * a + (h == 0 ? 1 : 0)) * W + x;
+                        const size_t hi = ((size_t(z) * v.height + y) * size_t(6 * W) + size_t(hx)) * 4u;
+                        const float k = v.halfLight[hi + 3];
                         if (!(k > 0.0f)) continue;
                         // the half's faces' point in the cell's own [0, 1]^3 (jah_voxel_halves.glsl's jahHalfFacePoint)
                         double p[3] = { 0.5, 0.5, 0.5 };
@@ -331,7 +341,7 @@ int main(int argc, char **argv)
                         for (int k3 = 0; k3 < 3; ++k3) w[k3] = v.origin[k3] + (cellIdx[k3] + p[k3]) * v.cell[k3];
                         double s[3] = { w[0], w[1], w[2] };
                         s[a] += (h == 0 ? 1.0 : -1.0) * 0.01;
-                        const double L = std::max(v.halfLight[a][hi], std::max(v.halfLight[a][hi + 1], v.halfLight[a][hi + 2])) / k;
+                        const double L = std::max(v.halfLight[hi], std::max(v.halfLight[hi + 1], v.halfLight[hi + 2])) / k;
                         if (inRoomAir(s[0], s[1], s[2])) {
                             inner = true;
                             ++r.halves;
@@ -602,7 +612,9 @@ int main(int argc, char **argv)
 
     const GiQuality tiers[2] = { GiQuality::High, GiQuality::Epic };
     const char *tierName[2] = { "High", "Epic" };
-    for (int t = 0; (mode == "ray" && t < 2) || (mode == "shift" && t < 1); ++t) {
+    // (VOXEL-R13 stage 2: the ray tier's two tiers are two rows - "ray" High, "epic" Epic with the captured cube - each
+    // within the fixture's 10 s: the halves' law reads four cascades a tier)
+    for (int t = mode == "epic" ? 1 : 0; ((mode == "ray" || mode == "shift") && t < 1) || (mode == "epic" && t < 2); ++t) {
         std::printf("== %s\n", tierName[t]);
         g_pass = t ? "epic" : "high";
         GiParams gi;

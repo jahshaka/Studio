@@ -177,13 +177,15 @@ template <typename F> void matteGrid(F &&each)
         }
 }
 /// THE VOXEL STORE's matte skin (bounce_series' read: cascade 0's covered inner-skin cells off the room's edges, the
-/// ROOM-FACING side), the mirror's face excluded: each cell's point on its face, its inward normal, its L
+/// ROOM-FACING HALF, VOXEL-R13's half store), the mirror's face excluded: each cell's point on its face, its inward
+/// normal, its L
 struct Skin { std::vector<Vec3> p, n; std::vector<double> L; };
 Skin voxelSkin(Scene *s)
 {
     Skin r;
     GiVoxelVolume v;
-    if (!s->giVoxelLight(0, v) || !v.available || v.light.empty()) return r;
+    const float lo[3] = { -kHalfX - 0.5f, -0.5f, -kHalfZ - 0.5f }, hi[3] = { kHalfX + 0.5f, kHeight + 0.5f, kHalfZ + 0.5f };
+    if (!s->giVoxelHalves(0, v, lo, hi) || !v.available || v.halfLight.empty()) return r;
     const float cell = v.cell[0];
     for (int z = 0; z < v.depth; ++z)
         for (int y = 0; y < v.height; ++y)
@@ -200,9 +202,6 @@ Skin voxelSkin(Scene *s)
                 near += std::fabs(p[2]) > kHalfZ - 1.0f ? 1 : 0;
                 near += (p[1] < 1.0f || p[1] > kHeight - 1.0f) ? 1 : 0;
                 if (near > 1) continue;
-                const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
-                const float c = v.light[i + 3];
-                if (!(c > 0.5f)) continue;
                 float in[3] = { 0.0f, 0.0f, 0.0f };
                 const float dx = kHalfX - std::fabs(p[0]), dz = kHalfZ - std::fabs(p[2]), dy0 = p[1], dy1 = kHeight - p[1];
                 const float dmin = std::min(std::min(std::fabs(dx), std::fabs(dz)), std::min(std::fabs(dy0), std::fabs(dy1)));
@@ -212,13 +211,12 @@ Skin voxelSkin(Scene *s)
                 else if (dmin == std::fabs(dx)) { in[0] = p[0] > 0.0f ? -1.0f : 1.0f; on.x = p[0] > 0.0f ? kHalfX : -kHalfX; }
                 else { in[2] = p[2] > 0.0f ? -1.0f : 1.0f; on.z = p[2] > 0.0f ? kHalfZ : -kHalfZ; }
                 if (in[2] > 0.5f) continue;   // the -z face: the mirror's
-                const float *side = v.light.data() + i;
-                if (v.normal.size() == v.light.size() && v.lightFront.size() == v.light.size() &&
-                    v.lightBack.size() == v.light.size() && v.normal[i + 3] > 0.5f) {
-                    const float n[3] = { 2.0f * v.normal[i] - 1.0f, 2.0f * v.normal[i + 1] - 1.0f,
-                                         2.0f * v.normal[i + 2] - 1.0f };
-                    side = (n[0] * in[0] + n[1] * in[1] + n[2] * in[2] >= 0.0f ? v.lightFront.data() : v.lightBack.data()) + i;
-                }
+                // the half whose faces look into the room: axis a's +a half (block 2a + 1) where the inward normal is +a
+                const int a = std::fabs(in[0]) > 0.5f ? 0 : std::fabs(in[1]) > 0.5f ? 1 : 2;
+                const size_t b = size_t(2 * a + (in[a] > 0.0f ? 1 : 0));
+                const float *side = &v.halfLight[(((size_t(z) * v.height + y) * 6u + b) * v.width + x) * 4u];
+                const float c = side[3];
+                if (!(c > 0.5f)) continue;
                 r.p.push_back(on);
                 r.n.push_back(Vec3(in[0], in[1], in[2]));
                 r.L.push_back(double(std::max(std::max(side[0], side[1]), side[2]) / c));

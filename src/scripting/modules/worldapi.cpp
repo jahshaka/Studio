@@ -471,8 +471,8 @@ QVector<VerbInfo> WorldApi::verbs() const
           "'frame' is which gather frame it is of (a still view's rest repeats one). A TOOL's reading (the reconstruction's "
           "arms engine.arm('gather.jitter') and engine.arm('gather.filterOff') measured on a scene), never a document's.",
           Needs::Document },
-        { "giVoxelRead", "world.giVoxelRead({cascade, points: [{x, y, z}, ...]}) -> {available, cascade, cell, origin, points: [{index, light, radiance, back, albedo, normal, coverageP, coverageN}]}",
-          "ONE CASCADE'S STORE AT WORLD POINTS — the voxel texel each point falls in, as it is STORED (before any read's kernel). A TEST AND TOOL verb: the renderer flushes and downloads the cascade's level-0 volumes whole (like world.giVoxelStats). Per point: 'index' [i, j, k] (null outside the cascade), 'light' the total light texel [r, g, b, a] as stored (premultiplied by the voxel's opacity a), 'radiance' the surface radiance it stands for (rgb / a), 'back' the same for the voxel's back side, 'albedo' [r, g, b, opacity], 'normal' the voxeliser's normal [x, y, z biased 0.5 + 0.5 n, 1 = two-sided], 'coverageP' / 'coverageN' the per-axis coverage of the faces looking +a / -a. 'cell' and 'origin' are the cascade's lattice in metres.",
+        { "giVoxelRead", "world.giVoxelRead({cascade, points: [{x, y, z}, ...]}) -> {available, cascade, cell, origin, points: [{index, light, radiance, halves, albedo, coverageP, coverageN}]}",
+          "ONE CASCADE'S STORE AT WORLD POINTS — the voxel texel each point falls in, as it is STORED (before any read's kernel). A TEST AND TOOL verb: the renderer flushes and downloads the cascade's level-0 volumes whole (like world.giVoxelStats). Per point: 'index' [i, j, k] (null outside the cascade), 'light' the cell's light [r, g, b, a] (premultiplied: rgb / a the coverage-weighted mean radiance of its six halves, a the largest half's coverage), 'radiance' the radiance it stands for (rgb / a), 'halves' the cell's six HALF LIGHTS as stored - the store the readers read - [r, g, b, k] premultiplied by the half's coverage k, in the order -x, +x, -y, +y, -z, +z, 'albedo' [r, g, b, opacity], 'coverageP' / 'coverageN' the per-axis coverage of the faces looking +a / -a. 'cell' and 'origin' are the cascade's lattice in metres.",
           Needs::Document },
         { "photon", "world.photon({enabled, tier}) -> {enabled, tier, custom, deviations, technique, quality, ddgi, bounces, row, updateBudget}",
           "PHOTON — realtime global illumination, as one switch and one quality dial. This is the surface the World panel shows and the shortest way to say what a scene should look like; world.gi is the same model with every individual knob exposed, and world.settings()/world.override are the same model again as registry rows. "
@@ -2630,12 +2630,19 @@ QVariantMap WorldApi::giVoxelRead(const QVariantMap &params)
             const double c = a[i * 4 + 3];
             return QVariant(QVariantList{ a[i * 4] / c, a[i * 4 + 1] / c, a[i * 4 + 2] / c });
         };
+        // the cell's six HALVES as stored (VOXEL-R13: the half store, the cell's box alone), -x, +x, -y, +y, -z, +z
+        QVariantList halves;
+        {
+            jahshaka::engine::GiVoxelVolume hv;
+            const float at[3] = { float(w[0]), float(w[1]), float(w[2]) };
+            if (es->giVoxelHalves(cascade, hv, at, at) && hv.available && hv.halfLight.size() == 24u)
+                for (size_t b = 0; b < 6u; ++b) halves.push_back(texel(hv.halfLight, b));
+        }
         out.push_back(QVariantMap{ { QStringLiteral("index"), QVariantList{ ix[0], ix[1], ix[2] } },
                                    { QStringLiteral("light"), texel(vol.light, i) },
                                    { QStringLiteral("radiance"), rad(vol.light) },
-                                   { QStringLiteral("back"), rad(vol.lightBack) },
+                                   { QStringLiteral("halves"), halves },
                                    { QStringLiteral("albedo"), texel(vol.albedo, i) },
-                                   { QStringLiteral("normal"), texel(vol.normal, i) },
                                    { QStringLiteral("coverageP"), texel(vol.coverageP, i) },
                                    { QStringLiteral("coverageN"), texel(vol.coverageN, i) } });
     }

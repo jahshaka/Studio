@@ -24,8 +24,8 @@
 //      until a WHOLE rebuild has made it one box's again. F2. ...and when that rebuild fails twice the store is
 //      cleared and the cascade stands down.
 //   G. WHAT IS LIT AT A COMMIT: the light was shifted with the store, so the direct term is re-injected AS A DELTA and
-//      the sky and the bounces re-solved over the slab and its bounce reach only. A KEPT VOXEL WHOSE DIRECT (both sides)
-//      DID NOT CHANGE KEEPS EVERY BIT of its total and back outside that region; THE WORK LAW - the voxels the commit
+//      the sky and the bounces re-solved over the slab and its bounce reach only. A KEPT VOXEL WHOSE DIRECT (every half)
+//      DID NOT CHANGE KEEPS EVERY BIT of its six halves outside that region; THE WORK LAW - the voxels the commit
 //      lit, counted by the door (CascadeStatus::commitLit*), are exactly the slab's lit voxels plus the changed direct
 //      set the store shows; and WALK = TELEPORT on the direct: the scrolled cascade's direct term is a whole build's,
 //      bit for bit. (A placement pin holds cascade 1, so the step scrolls cascade 0 alone.)
@@ -96,7 +96,11 @@ static bool sameStore(const GiVoxelVolume &a, const GiVoxelVolume &b, const char
             return false;
         }
     struct Arr { const char *name; const std::vector<float> *x, *y; };
-    const Arr arrs[] = { { "albedo", &a.albedo, &b.albedo }, { "normal", &a.normal, &b.normal },
+    const Arr arrs[] = { { "albedo", &a.albedo, &b.albedo },
+                         { "halfSideX", &a.halfSide[0], &b.halfSide[0] }, { "halfSideY", &a.halfSide[1], &b.halfSide[1] },
+                         { "halfSideZ", &a.halfSide[2], &b.halfSide[2] }, { "halfNormalX", &a.halfNormal[0], &b.halfNormal[0] },
+                         { "halfNormalY", &a.halfNormal[1], &b.halfNormal[1] },
+                         { "halfNormalZ", &a.halfNormal[2], &b.halfNormal[2] },
                          { "coverageP", &a.coverageP, &b.coverageP }, { "coverageN", &a.coverageN, &b.coverageN },
                          { "positionP", &a.positionP, &b.positionP }, { "positionN", &a.positionN, &b.positionN },
                          { "emissive", &a.emissive, &b.emissive },
@@ -654,6 +658,15 @@ int main()
         run(4);   // the commit's count lands (read back a few frames late)
         const GiStatus post = scene->published().gi;
         const int res = after.width;
+        // cell ia's six halves in `x` equal to the bit cell ib's in `y` (the half store: a row's six blocks of res texels)
+        const auto sameHalves = [&](const std::vector<float> &x, size_t ia, const std::vector<float> &y, size_t ib) {
+            for (size_t blk = 0; blk < 6u; ++blk) {
+                const size_t ta = (((ia / size_t(res)) * 6u + blk) * size_t(res) + ia % size_t(res)) * 4u;
+                const size_t tb = (((ib / size_t(res)) * 6u + blk) * size_t(res) + ib % size_t(res)) * 4u;
+                if (std::memcmp(&x[ta], &y[tb], 16) != 0) return false;
+            }
+            return true;
+        };
         const int sx = int(std::lround((after.origin[0] - before.origin[0]) / after.cell[0]));
         const int sy = int(std::lround((after.origin[1] - before.origin[1]) / after.cell[1]));
         const int sz = int(std::lround((after.origin[2] - before.origin[2]) / after.cell[2]));
@@ -670,9 +683,7 @@ int main()
                     const int ox = x + sx, oy = y + sy, oz = z + sz;
                     if (!(ox >= 0 && ox < res && oy >= 0 && oy < res && oz >= 0 && oz < res)) { activeBrick[brickOf(x, y, z)] = 1; continue; }
                     const size_t ib = (size_t(oz) * res + oy) * res + ox;
-                    if (std::memcmp(&after.direct[ia * 4], &before.direct[ib * 4], 16) != 0 ||
-                        std::memcmp(&after.directBack[ia * 4], &before.directBack[ib * 4], 16) != 0)
-                        activeBrick[brickOf(x, y, z)] = 1;
+                    if (!sameHalves(after.halfDirect, ia, before.halfDirect, ib)) activeBrick[brickOf(x, y, z)] = 1;
                 }
         size_t activeBricks = 0;
         for (char a : activeBrick) activeBricks += a ? 1u : 0u;
@@ -686,16 +697,14 @@ int main()
                     const bool inOld = ox >= 0 && ox < res && oy >= 0 && oy < res && oz >= 0 && oz < res;
                     if (!inOld) {   // the slab
                         bool lit = false;
-                        for (int k = 0; k < 4; ++k)
-                            lit = lit || after.direct[ia * 4 + k] != 0.0f || after.directBack[ia * 4 + k] != 0.0f;
+                        for (int k = 0; k < 4; ++k) lit = lit || after.direct[ia * 4 + k] != 0.0f;
                         slabLit += lit ? 1u : 0u;
                         continue;
                     }
                     ++kept;
                     const size_t ib = (size_t(oz) * res + oy) * res + ox;
-                    // the direct terms of BOTH sides (a delta replaces each in its own total)
-                    const bool sameDirect = std::memcmp(&after.direct[ia * 4], &before.direct[ib * 4], 16) == 0 &&
-                                            std::memcmp(&after.directBack[ia * 4], &before.directBack[ib * 4], 16) == 0;
+                    // the direct terms of EVERY HALF (VOXEL-R13: a delta replaces each in its own half)
+                    const bool sameDirect = sameHalves(after.halfDirect, ia, before.halfDirect, ib);
                     if (!sameDirect) {
                         ++bandAll;
                         bandXLo = std::min(bandXLo, x);
@@ -705,9 +714,7 @@ int main()
                     ++unchangedKept;
                     if (activeBrick[brickOf(x, y, z)]) continue;   // a brick the feedback ran: re-solved by design
                     ++unchangedOutside;
-                    if (std::memcmp(&after.light[ia * 4], &before.light[ib * 4], 16) != 0 ||
-                        std::memcmp(&after.lightBack[ia * 4], &before.lightBack[ib * 4], 16) != 0)
-                        ++violations;
+                    if (!sameHalves(after.halfLight, ia, before.halfLight, ib)) ++violations;
                 }
         const unsigned long long litSlab = post.cascades[0].commitLitSlab - pre.cascades[0].commitLitSlab;
         const unsigned long long litBand = post.cascades[0].commitLitBand - pre.cascades[0].commitLitBand;
@@ -723,7 +730,7 @@ int main()
             outerScrolled = outerScrolled || post.cascades[k].scrolls != pre.cascades[k].scrolls;
         }
         std::printf("\n");
-        std::printf("   kept %zu voxels: %zu with both sides' direct unchanged (%zu outside the activated bricks: %zu "
+        std::printf("   kept %zu voxels: %zu with every half's direct unchanged (%zu outside the activated bricks: %zu "
                     "changed their total or back), %zu with a changed one (the band, x [%d, %d))\n", kept, unchangedKept,
                     unchangedOutside, violations, bandAll, bandXLo, bandXHi);
         std::printf("   THE WORK: lit %llu in the slab (the store's own: %zu lit slab voxels) + %llu outside it (the store's "
@@ -734,7 +741,7 @@ int main()
                     marched, counted);
         CHECK(post.cascades[0].scrolls == pre.cascades[0].scrolls + 1u && sx != 0, "the step committed as a scroll");
         CHECK(unchangedOutside > 0 && violations == 0,
-              "A VOXEL WHOSE DIRECT DID NOT CHANGE KEEPS EVERY BIT of its total and back (outside the bricks the commit "
+              "A VOXEL WHOSE DIRECT DID NOT CHANGE KEEPS EVERY BIT of its six halves (outside the bricks the commit "
               "activated: the feedback ran nowhere else)");
         CHECK(!outerScrolled, "only cascade 0 scrolled (its counts are its own commit's)");
         CHECK(counted == 1u && litBand == bandAll && litSlab == slabLit,
@@ -748,11 +755,11 @@ int main()
         GiVoxelVolume built;
         CHECK(scene->giVoxelVolume(0, built), "the whole build's store reads back");
         size_t directDiff = 0;
-        for (size_t i = 0; i < built.direct.size() && i < after.direct.size(); ++i)
-            directDiff += std::memcmp(&built.direct[i], &after.direct[i], 4) != 0 ? 1u : 0u;
-        std::printf("   the direct after the walk against a whole build at its placement: %zu of %zu floats differ\n",
-                    directDiff, built.direct.size());
-        CHECK(built.direct.size() == after.direct.size() && directDiff == 0,
+        for (size_t i = 0; i < built.halfDirect.size() && i < after.halfDirect.size(); ++i)
+            directDiff += std::memcmp(&built.halfDirect[i], &after.halfDirect[i], 4) != 0 ? 1u : 0u;
+        std::printf("   the halves' direct after the walk against a whole build at its placement: %zu of %zu floats differ\n",
+                    directDiff, built.halfDirect.size());
+        CHECK(built.halfDirect.size() == after.halfDirect.size() && !built.halfDirect.empty() && directDiff == 0,
               "WALK = TELEPORT ON THE DIRECT: the scrolled cascade's direct term is the whole build's, bit for bit");
     }
 
@@ -845,13 +852,13 @@ int main()
         for (int k = 0; k < 2; ++k) CHECK(scene->giVoxelVolume(k, whole[k]), "I: the whole build's store reads back");
         size_t diff[2] = { 0, 0 };
         for (int k = 0; k < 2; ++k)
-            for (size_t i = 0; i < whole[k].direct.size() && i < walked[k].direct.size(); ++i)
-                diff[k] += std::memcmp(&whole[k].direct[i], &walked[k].direct[i], 4) != 0 ? 1u : 0u;
+            for (size_t i = 0; i < whole[k].halfDirect.size() && i < walked[k].halfDirect.size(); ++i)
+                diff[k] += std::memcmp(&whole[k].halfDirect[i], &walked[k].halfDirect[i], 4) != 0 ? 1u : 0u;
         std::printf("   the direct against a whole build at the same placements: cascade 0 %zu of %zu floats differ, cascade 1 "
-                    "%zu of %zu\n", diff[0], whole[0].direct.size(), diff[1], whole[1].direct.size());
-        CHECK(whole[0].direct.size() == walked[0].direct.size() && diff[0] == 0,
+                    "%zu of %zu\n", diff[0], whole[0].halfDirect.size(), diff[1], whole[1].halfDirect.size());
+        CHECK(whole[0].halfDirect.size() == walked[0].halfDirect.size() && !whole[0].halfDirect.empty() && diff[0] == 0,
               "I: ONCE STILL, CASCADE 0'S DIRECT IS THE WHOLE BUILD'S, bit for bit (the outer commit's re-march reached it)");
-        CHECK(whole[1].direct.size() == walked[1].direct.size() && diff[1] == 0,
+        CHECK(whole[1].halfDirect.size() == walked[1].halfDirect.size() && !whole[1].halfDirect.empty() && diff[1] == 0,
               "I: ...AND THE OUTERMOST'S OWN, bit for bit (its commit's region: the faces swept against the light, the slabs)");
         scene->removeNode(wall);
         scene->removeNode(sunNode);
