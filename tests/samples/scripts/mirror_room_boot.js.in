@@ -22,5 +22,9 @@ var sky = world.clouds().live || {};
 console.log("mirror_room_boot: the sky's deferred reads: SH " + sky.skyShDeferredReads + ", cloud clear " +
             sky.cloudClearDeferredReads + "; scroll captures " + sky.scrollCaptures + ", change captures " +
             sky.changeCaptures);
+// MEASURING ARM (DETERMINISM-1 stage 0): the compile mode's premise - captureDeferredDraws 0, nothing in the background
+var as = app.asyncShaders();
+console.log("DIAG APPASYNC captureDeferredDraws " + as.captureDeferredDraws + " placeholderDraws " + as.placeholderDraws +
+            " pendingSkips " + as.pendingSkips + " compiledInBackground " + as.compiledInBackground);
 if (s.atRest !== true) throw new Error("the shot settled to its cap, not to rest (" + s.settleFrames + " frames)");
 "ok";
