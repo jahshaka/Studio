@@ -995,8 +995,12 @@ target_compile_definitions(test_gi_sealed_sky PRIVATE
 target_link_libraries(test_gi_sealed_sky PRIVATE JahshakaEngine)
 add_dependencies(test_gi_sealed_sky JahshakaEngineMedia)
 # ONE ROW A TIER (10-3, the lead's ruling: each within the fixture's 10 s with margin): gi.sealed_sky the ray tier
-# (High and Epic), gi.sealed_sky_noray the no-ray tier as it ships (the field on) and with the field off.
-foreach(_row ray noray)
+# (High and Epic), gi.sealed_sky_noray the no-ray tier as it ships (the field on) and with the field off;
+# gi.sealed_sky_shift (VOXEL-R13 stage 1, the lead's ruling (3)) the ray tier at High with the box moved so cascade 2's
+# cells hold whole slabs - the halves' law (3) where c2 cells hold an inner and an outer face. VOXEL-R13 stage 2: the ray
+# tier SPLIT by tier (gi.sealed_sky High, gi.sealed_sky_epic Epic with the captured cube) - each within the fixture's
+# 10 s (the halves' law reads every cascade).
+foreach(_row ray epic noray shift)
     if(_row STREQUAL "ray")
         set(_name gi.sealed_sky)
     else()
@@ -1007,8 +1011,10 @@ foreach(_row ray noray)
     set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                          TIMEOUT 60 LABELS "engine")
 endforeach()
-set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 409)
-set_tests_properties(gi.sealed_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 335)
+set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 160)
+set_tests_properties(gi.sealed_sky_epic PROPERTIES JAHSHAKA_TEST_FRAMES 218)
+set_tests_properties(gi.sealed_sky_shift PROPERTIES JAHSHAKA_TEST_FRAMES 151)
+set_tests_properties(gi.sealed_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 337)
 
 # gi.glass_pass (PHOTON-7 10-4, R6; L9) — A PANE IS SHADED BY THE LIGHT THAT REACHES IT, NEVER BY THE SURFACE BEHIND IT: a
 # pane before a lamp-lit niche in a black world, its four blending modes against the hole (test_gi_glass_pass.cpp says the

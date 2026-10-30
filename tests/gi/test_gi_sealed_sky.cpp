@@ -15,10 +15,13 @@
 //       stands on) read over a quarter of R;
 //   (2) THE CARDS - the card the readers hit at every point of an 8 x 8 grid on each of the room's six faces (0.15 m in
 //       from its edges: Scene::readCardAt, the hit's own pick) reads under one store step of R (q: the half float's step at R, R12);
-//   (3) THE VOXELS - every occupied voxel of cascades 0 and 1 whose centre lies inside the room (its inner faces' cells:
-//       the walls are two or more of those cells thick) reads under q. (The coarser cascades' voxels hold both
-//       faces of a wall in one cell, their sides by orientation, not by inside and outside - the outermost's mix the
-//       sky-lit roof with the ceiling: 10-1's evidence, spikes/photon-7/stage10/10-1.)
+//   (3) THE HALVES (VOXEL-R13 stage 1; the ray tier) - the store keeps six half lights a cell, each lit and gathered from
+//       its own faces (Scene::giVoxelHalves): every half of EVERY cascade whose faces' point, stepped 1 cm along the half's
+//       direction, lies in the room's air reads under q - on their own lines the -x / -z walls' top edges and the +x / +z
+//       walls' bottom edges (stage 0's mechanism A: the two-side store's sign fold pooled the sky-lit roof with the inner
+//       wall exactly there, c3's inner halves 72-96 % of R; spikes/voxel-r13/stage0), the rest on one. R is cascade 0's
+//       +y halves on the roof's top. At the no-ray tier (until VOXEL-R13 stage 3) THE VOXELS of cascades 0 and 1 inside
+//       the room, their two sides' mean, under q.
 //   (4) THE FIELD - the field on (every shipped tier runs it): every probe whose lattice point lies inside the room
 //       holds no texel of q (its irradiance over pi, the store's units). RED before 10-1's probe rays: the
 //       aperture-0 march's escape let the sky through the walls (10-0's P3).
@@ -45,7 +48,12 @@
 //       cascade is built around a new pose a sealed room's nearby rays read the sky): the camera jumps from the settled
 //       pose above the box to the one inside, and EVERY frame of the window until the room is at rest is read - the
 //       picture's middle (the matte and the panels alike), its brightest pixel at most q in every frame.
-// THE TIERS, ONE ROW EACH (argv[1]): gi.sealed_sky the ray tier at High and at Epic (laws 1-4, 6-8); gi.sealed_sky_noray
+// THE PLACEMENT ARM (argv[1] "shift", gi.sealed_sky_shift; VOXEL-R13 stage 1, the lead's ruling (3)): the box moved by
+// (0.09375, 0.3125, 0.375) m - so cascade 2's 0.469 m cells hold the -x wall, the roof and the +z wall whole and the cells
+// at their edges hold an inner and an outer face - the ray tier at High: (1)'s roof, the room at rest inside, (3), and
+// cascade 2 asserted to hold such MIXED cells.
+// THE TIERS, ONE ROW EACH (argv[1]): gi.sealed_sky the ray tier at High ("ray"), gi.sealed_sky_epic at Epic ("epic", with
+// (9)) (laws 1-4, 6-8; VOXEL-R13 stage 2 split them, each within the fixture's 10 s); gi.sealed_sky_noray
 // the NO-RAY tier as it ships (rays off, the field on, no
 // cards: laws 1's roof, 3, 4, 7, 8); and the no-ray route with the field off ((5) with 7, rebuilt inside: the screen
 // integrate's cones answer every pixel).
@@ -86,6 +94,12 @@ double quantumOf(double R) { return R > 0.0 ? std::ldexp(1.0, int(std::floor(std
 /// THE LAW LINES (HARNESS-3 (b); tests/support/lawline.h): every number a law below judges, in % of R against the bar
 /// (one store step, 100 quantumOf(R) / R), named <pass>.<law> - the pass set where its "==" header prints.
 std::string g_pass = "high";
+/// THE PLACEMENT ARM (VOXEL-R13 stage 1, the lead's ruling (3)): gi.sealed_sky_shift builds the box moved by this offset,
+/// chosen so that cascade 2's 0.469 m cells HOLD a whole 0.4 m slab - the -x wall (x 0.09375), the roof (y 0.3125) and the
+/// +z wall (z 0.375) each inside one c2 cell (a slab avoids every cell plane only where the plane falls within 0.069 m of
+/// its outer face: a uniform half-cell offset splits all three again) - so the c2 cells at their edges hold an inner and
+/// an outer face. Zero for every other row.
+Vec3 g_off(0.0f, 0.0f, 0.0f);
 void law(const char *what, double v, double R)
 {
     const std::string n = g_pass + "." + what;
@@ -105,7 +119,7 @@ NodeId box(Scene *s, const Vec3 &at, const Vec3 &size, const PbrParams &p)
     const MaterialId mat = s->createPbrMaterial(p);
     if (!node || !mesh || !mat || !s->attachMesh(node, mesh, mat)) return 0;
     enginetest::poseRegistry()[s][node] = enginetest::NodePose{};
-    enginetest::setNodePosition(s, node, at);
+    enginetest::setNodePosition(s, node, Vec3(at.x + g_off.x, at.y + g_off.y, at.z + g_off.z));
     enginetest::setNodeScale(s, node, size);
     return node;
 }
@@ -117,7 +131,11 @@ int main(int argc, char **argv)
     // tier at High and Epic (gi.sealed_sky), "noray" the no-ray tier as it ships and with the field off
     // (gi.sealed_sky_noray)
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray" && mode != "noray") { std::printf("FAIL: the mode is ray or noray, not '%s'\n", mode.c_str()); return 2; }
+    if (mode != "ray" && mode != "epic" && mode != "noray" && mode != "shift") {
+        std::printf("FAIL: the mode is ray, epic, noray or shift, not '%s'\n", mode.c_str());
+        return 2;
+    }
+    if (mode == "shift") g_off = Vec3(0.09375f, 0.3125f, 0.375f);
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-sealed-sky-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -223,7 +241,8 @@ int main(int argc, char **argv)
     };
 
     // THE ROOM's voxels of one cascade: the occupied cells whose centre lies inside the room (x, z in [-2, 2], y in
-    // [0, 3]); the brightest channel of each one's light (un-premultiplied); and the roof's top cells (the reference)
+    // [0, 3]); the brightest channel of each one's light (un-premultiplied); and the roof's top cells' +y halves (the
+    // reference, VOXEL-R13's half store)
     struct VoxRead { size_t cells = 0; double peak = 0.0; size_t roofCells = 0; double roofMean = 0.0; bool ok = false; };
     const auto readVoxels = [&](int c) {
         VoxRead r;
@@ -246,15 +265,135 @@ int main(int argc, char **argv)
                     }
                     // the roof's top: the cell holding y = 3.4 over the roof's middle
                     if (std::fabs(cx) < 1.5 && std::fabs(cz) < 1.5 && cy - 0.5 * v.cell[1] <= 3.4 &&
-                        cy + 0.5 * v.cell[1] > 3.4) {
-                        ++r.roofCells;
-                        roofSum += std::max(v.lightFront[i], std::max(v.lightFront[i + 1], v.lightFront[i + 2])) / cOcc;
+                        cy + 0.5 * v.cell[1] > 3.4 && v.halfLight.size() == 6u * v.light.size()) {
+                        // the +y half (block 3): the roof's top faces
+                        const float *t = &v.halfLight[(((size_t(z) * v.height + y) * 6u + 3u) * v.width + x) * 4u];
+                        if (t[3] > 0.0f) {
+                            ++r.roofCells;
+                            roofSum += std::max(t[0], std::max(t[1], t[2])) / t[3];
+                        }
                     }
                 }
         r.roofMean = r.roofCells ? roofSum / double(r.roofCells) : 0.0;
         return r;
     };
 
+    // (3) AT THE RAY TIER: THE HALVES FACING INTO THE ROOM, EVERY CASCADE (VOXEL-R13 stage 1). The store keeps six half
+    // lights a cell, each from its own faces (Scene::giVoxelHalves); a half FACES INTO THE ROOM where its faces' point -
+    // along its axis their surface position, across it their centroid - stepped 1 cm along the half's direction lies in
+    // the room's air. Every such half of every cascade reads under q, split by where it lies: the -x and -z walls' top
+    // edges and the +x and +z walls' bottom edges (stage 0's mechanism A - the sign fold mis-pooled exactly those, c3's
+    // inner halves 72-96 % of R) on their own lines, the rest on one. And THE ROOF's TOP, the reference R: cascade 0's
+    // +y halves on the roof's top over its middle. And the MIXED cells: a cell holding a half that faces into the room
+    // and another that faces the open air (the corner class; the placement arm asserts cascade 2 holds some).
+    struct HalfRead {
+        bool ok = false;
+        size_t halves = 0, mixed = 0, roof = 0;
+        double peak = 0.0, roofMean = 0.0;
+        double line[5] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+        size_t lineN[5] = { 0, 0, 0, 0, 0 };
+    };
+    static const char *const kLineName[5] = { "-x_top", "-z_top", "+x_bottom", "+z_bottom", "other" };
+    const auto inRoomAir = [&](double x, double y, double z) {
+        x -= g_off.x; y -= g_off.y; z -= g_off.z;
+        if (!(std::fabs(x) < 2.0 && std::fabs(z) < 2.0 && y > 0.0 && y < 3.0)) return false;
+        // (the two metal panels on the back wall are solids inside the room)
+        if (z > -1.99 && z < -1.95 && y > 0.6 && y < 1.8 && ((x > -1.05 && x < -0.05) || (x > 0.05 && x < 1.05))) return false;
+        return true;
+    };
+    const auto inOpenAir = [&](double x, double y, double z) {
+        x -= g_off.x; y -= g_off.y; z -= g_off.z;
+        const bool hull = std::fabs(x) < 2.4 && std::fabs(z) < 2.4 && y > -0.4 && y < 3.4;
+        return !hull && y > -0.4;
+    };
+    const auto readHalves = [&](int c) {
+        HalfRead r;
+        GiVoxelVolume v;
+        // (the room and its walls, roof and floor with a coarse cell's margin: only those cells are decoded)
+        const float lo[3] = { g_off.x - 4.4f, g_off.y - 2.4f, g_off.z - 4.4f };
+        const float hi[3] = { g_off.x + 4.4f, g_off.y + 5.4f, g_off.z + 4.4f };
+        if (!scene->giVoxelHalves(c, v, lo, hi) || !v.available) return r;
+        r.ok = true;
+        const int W = v.width;
+        double roofSum = 0.0;
+        for (int z = 0; z < v.depth; ++z)
+            for (int y = 0; y < v.height; ++y)
+                for (int x = 0; x < W; ++x) {
+                    const size_t i = ((size_t(z) * v.height + y) * W + x) * 4u;
+                    bool inner = false, outer = false;
+                    for (int q = 0; q < 6; ++q) {
+                        const int a = q % 3, h = q / 3;
+                        const float o = (h == 0 ? v.coverageP : v.coverageN)[i + size_t(a)];
+                        if (!(o > 0.0f)) continue;
+                        // (the half store: the six halves side by side along x, axis a's -a half then its +a half)
+                        const int hx = (2 * a + (h == 0 ? 1 : 0)) * W + x;
+                        const size_t hi = ((size_t(z) * v.height + y) * size_t(6 * W) + size_t(hx)) * 4u;
+                        const float k = v.halfLight[hi + 3];
+                        if (!(k > 0.0f)) continue;
+                        // the half's faces' point in the cell's own [0, 1]^3 (jah_voxel_halves.glsl's jahHalfFacePoint)
+                        double p[3] = { 0.5, 0.5, 0.5 };
+                        p[a] = std::min(1.0, std::max(0.0, double((h == 0 ? v.positionP : v.positionN)[i + size_t(a)]) / o));
+                        const int b0 = a == 0 ? 1 : 0, b1 = a == 2 ? 1 : 2;
+                        p[b0] = v.halfSide[a][i + size_t(h == 0 ? 0 : 2)];
+                        p[b1] = v.halfSide[a][i + size_t(h == 0 ? 1 : 3)];
+                        double w[3];
+                        const int cellIdx[3] = { x, y, z };
+                        for (int k3 = 0; k3 < 3; ++k3) w[k3] = v.origin[k3] + (cellIdx[k3] + p[k3]) * v.cell[k3];
+                        double s[3] = { w[0], w[1], w[2] };
+                        s[a] += (h == 0 ? 1.0 : -1.0) * 0.01;
+                        const double L = std::max(v.halfLight[hi], std::max(v.halfLight[hi + 1], v.halfLight[hi + 2])) / k;
+                        if (inRoomAir(s[0], s[1], s[2])) {
+                            inner = true;
+                            ++r.halves;
+                            r.peak = std::max(r.peak, L);
+                            const double lx = w[0] - g_off.x, ly = w[1] - g_off.y, lz = w[2] - g_off.z;
+                            const int line = (lx < -1.5 && ly > 1.5) ? 0 : (lz < -1.5 && ly > 1.5) ? 1
+                                           : (lx > 1.5 && ly < 1.5) ? 2 : (lz > 1.5 && ly < 1.5) ? 3 : 4;
+                            r.line[line] = std::max(r.line[line], L);
+                            ++r.lineN[line];
+                        } else if (inOpenAir(s[0], s[1], s[2])) {
+                            outer = true;
+                            // the roof's top over its middle: cascade 0's +y halves there (the reference)
+                            const double lx = w[0] - g_off.x, ly = w[1] - g_off.y, lz = w[2] - g_off.z;
+                            if (q == 1 && std::fabs(lx) < 1.5 && std::fabs(lz) < 1.5 && std::fabs(ly - 3.4) < 0.5 * v.cell[1]) {
+                                ++r.roof;
+                                roofSum += L;
+                            }
+                        }
+                    }
+                    if (inner && outer) ++r.mixed;
+                }
+        r.roofMean = r.roof ? roofSum / double(r.roof) : 0.0;
+        return r;
+    };
+    const auto halvesLaw = [&](double R) {
+        double worst = 0.0;
+        bool ok = true;
+        double lines[5] = { 0.0, 0.0, 0.0, 0.0, 0.0 };
+        for (int c = 0; c < 4; ++c) {
+            const HalfRead hr = readHalves(c);
+            std::printf("   (3) cascade %d: %zu halves facing into the room, the brightest %.6f (%.4f %% of R); by edge:", c,
+                        hr.halves, hr.peak, R > 0.0 ? 100.0 * hr.peak / R : -1.0);
+            for (int l = 0; l < 5; ++l)
+                std::printf(" %s %.4f %% (%zu)", kLineName[l], R > 0.0 ? 100.0 * hr.line[l] / R : -1.0, hr.lineN[l]);
+            std::printf("; %zu mixed cells\n", hr.mixed);
+            ok = ok && hr.ok && hr.halves > 0;
+            worst = std::max(worst, hr.peak);
+            for (int l = 0; l < 5; ++l) lines[l] = std::max(lines[l], hr.line[l]);
+            if (mode == "shift" && c == 2)
+                check(hr.ok && hr.mixed > 0, "(3) the placement arm: cascade 2 holds cells with a half facing into the room "
+                                             "and another facing the open air");
+        }
+        for (int l = 0; l < 5; ++l) law((std::string("halves_") + kLineName[l]).c_str(), lines[l], R);
+        law("halves", worst, R);
+        {
+            const GiStatus g = scene->published().gi;
+            std::printf("   (3) the buried origins skipped: %llu voxel halves, %llu card texels\n", g.voxelSides.buried,
+                        g.cards.gather.buried);
+        }
+        check(ok && R > 0.0 && worst < quantumOf(R),
+              "(3) THE HALVES: no half facing into the sealed room, in any cascade, reads one store step of the roof's");
+    };
     // (3) THE VOXELS of cascades 0 and 1 inside the room, against R (every tier the room is read at)
     const auto voxelLaw = [&](double R) {
         double vWorst = 0.0;
@@ -328,7 +467,7 @@ int main(int argc, char **argv)
 
     // THE INSIDE CAMERA and where a world point lands in its picture (testCameraDescLookAt's basis, 45 degrees vertical,
     // the view's square aspect; top-left origin)
-    const Vec3 inPos(0.0f, 1.5f, 1.4f), inAt(0.0f, 1.0f, -2.0f);
+    const Vec3 inPos(0.0f + g_off.x, 1.5f + g_off.y, 1.4f + g_off.z), inAt(0.0f + g_off.x, 1.0f + g_off.y, -2.0f + g_off.z);
     const auto toPixel = [&](const Vec3 &w, unsigned W, unsigned H, double &px, double &py) {
         double f[3] = { inAt.x - inPos.x, inAt.y - inPos.y, inAt.z - inPos.z };
         const double fl = std::sqrt(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
@@ -473,7 +612,9 @@ int main(int argc, char **argv)
 
     const GiQuality tiers[2] = { GiQuality::High, GiQuality::Epic };
     const char *tierName[2] = { "High", "Epic" };
-    for (int t = 0; mode == "ray" && t < 2; ++t) {
+    // (VOXEL-R13 stage 2: the ray tier's two tiers are two rows - "ray" High, "epic" Epic with the captured cube - each
+    // within the fixture's 10 s: the halves' law reads four cascades a tier)
+    for (int t = mode == "epic" ? 1 : 0; ((mode == "ray" || mode == "shift") && t < 1) || (mode == "epic" && t < 2); ++t) {
         std::printf("== %s\n", tierName[t]);
         g_pass = t ? "epic" : "high";
         GiParams gi;
@@ -488,13 +629,13 @@ int main(int argc, char **argv)
         // (1) the control: above the box, the ground's rays read its outer walls
         enginetest::testCameraLookAt(view, Vec3(6.0f, 7.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f));
         const int restOut = settle();
-        const VoxRead out0 = readVoxels(0);
+        const HalfRead out0 = readHalves(0);
         const double R = out0.roofMean;
         const Read outer = readFace(wxp, 0u);
         const Read outerZ = readFace(wzp, 4u);
-        std::printf("   (1) above: at rest after %d frames; the roof's top voxels (%zu) read %.4f - the sky's irradiance "
+        std::printf("   (1) above: at rest after %d frames; the roof's top halves (%zu) read %.4f - the sky's irradiance "
                     "times the albedo over pi is %.2f; the outer +x wall's cards %u (%zu texels) mean %.4f, the +z's %u "
-                    "mean %.4f\n", restOut, out0.roofCells, R, double(kAlbedo), outer.cards, outer.texels, outer.mean,
+                    "mean %.4f\n", restOut, out0.roof, R, double(kAlbedo), outer.cards, outer.texels, outer.mean,
                     outerZ.cards, outerZ.mean);
         const double outerMean = std::max(outer.mean, outerZ.mean);
         // (6)'s control: the outer +x wall's cards' sky rays, an 8 x 8 grid on its outer face (x = 2.4)
@@ -514,6 +655,14 @@ int main(int argc, char **argv)
         // inside: its gather reads (and so keeps resident) the room's faces - the jump there is (8)'s teleport
         Window win;
         const int restIn = teleportIn(win);
+        if (mode == "shift") {
+            // THE PLACEMENT ARM: the room at rest inside, its halves (3) - the law holds where cascade 2's cells hold a
+            // whole slab (the other laws are the ray row's, at the fixture's own placement)
+            std::printf("   inside: at rest after %d frames\n", restIn);
+            check(restIn >= 0, "the shifted room comes to rest");
+            halvesLaw(R);
+            continue;
+        }
         // THE ROOM'S VISIBLE FACES, sampled where a reader can hit them: an 8 x 8 grid on each inner face, 0.15 m in from
         // its edges (a card also captures the parts of a face a neighbouring box covers - the floor under the walls -
         // whose texels gather from inside a solid and no ray can read: they are not the room's)
@@ -573,7 +722,7 @@ int main(int argc, char **argv)
             check(innerPoints > 0u && innerCounted == innerPoints && innerEscaped == 0u,
                   "(6) THE e = 0 COUNTER: no ray of a carded point inside the sealed room escapes");
         }
-        voxelLaw(R);
+        halvesLaw(R);
         fieldLaw(R);
         pixelLaw(R, tierName[t]);
         teleportLaw(win, R, tierName[t]);

@@ -23,9 +23,10 @@
 //       face) - RED ON THE BASE: the aperture-0 march takes a wall crossed at a grazing angle by the lateral crossing
 //       rate (0.087 a plane at 85 degrees) over the one or two planes a 1 m wall gives it, and passes the rest;
 //   (2) THE EDGE CELL - a ray from outside B at normal incidence through its wall-ceiling edge cell HITS there;
-//   (3) THE SIDE - every sweep hit reads the side of W's voxel the ray is on (its entry point against the voxel's faces
-//       along the canonical normal: the lit face; the store's own value, un-premultiplied), and the other side - W's
-//       unlit face, whose rays leave W and must never read its lit side through it - holds under 1 % of it;
+//   (3) THE SIDE - every sweep hit reads the HALF of W's voxel whose face the ray meets (VOXEL-R13: of the axes the
+//       cell holds faces looking at the ray on, the plane reached first from its entry - the lit face; the store's own
+//       value, un-premultiplied), and the half behind it - W's unlit face, whose rays leave W and must never read its lit
+//       side through it - holds under 1 % of it;
 //   (5) THE DOOR'S EDGE (the lead's ruling on the plane test: a planar cell of the finest cascade takes a ray only where
 //       the ray crosses its stored plane) - D, a 0.1 m wall in CASCADE 0 (1.5 m before the camera), ENDING MID-CELL (0.3
 //       of a cascade-0 cell into its last cell along z, a door's edge): rays aimed at its face 2 cm inside the end, 0-80
@@ -33,8 +34,12 @@
 //       face - D's cells along it are planar (the plane test) and its end's cell holds faces on two axes (occupancy); a
 //       ray through the doorway beside it is printed (over-occluding is allowed, leaking is not);
 //   (4) THE ORIGIN PLANE - a ray 10 degrees off P's top, started one cascade-0 cell above it with its origin plane,
-//       ESCAPES (P's own coarse cells are the hemisphere's boundary), and the same ray with no origin plane HITS in
-//       P's own cell (so it is the plane that lets it through, not an empty cell).
+//       ESCAPES (P's own coarse cells are the hemisphere's boundary), and so does the same ray with NO origin plane - a
+//       face looking away from a ray is never met (VOXEL-R13 stage 3 (A'): the ray is above P's top and travels up; P's
+//       top looks up, its underside lies behind the ray: no face of P can be met) - while the same start aimed 10
+//       degrees DOWN, no origin plane, HITS in P's own cells (the face looking at it, ahead of it: the positive control).
+//       (Re-derived from the physics, the lead's ruling: the old control asserted that the occupancy rule stopped the
+//       upward ray in P's coarse cell - a stop no surface makes.)
 // Every answer is also asserted equal between the two halves (the reader's parity). The aperture-0 cone march's
 // escape for the same rays is PRINTED beside each (today's ray: the leak this row was red on).
 #include "jahshaka/engine/Engine.h"
@@ -175,6 +180,7 @@ int main()
     const double el = 10.0 * M_PI / 180.0;
     rays.push_back({ { 0.0, -9.8 + c0cell, pz }, { 0.0, std::sin(el), std::cos(el) }, { 0.0, 1.0, 0.0 } });
     rays.push_back({ { 0.0, -9.8 + c0cell, pz }, { 0.0, std::sin(el), std::cos(el) }, { 0.0, 0.0, 0.0 } });
+    rays.push_back({ { 0.0, -9.8 + c0cell, pz }, { 0.0, -std::sin(el), std::cos(el) }, { 0.0, 0.0, 0.0 } });   // (down)
     // (5) the door's edge: aimed at D's face 2 cm inside its end from 0.6 m, from the wall's side (+z travel) and the
     // doorway's (-z), at a height off every cell plane
     const double kDoorAim = 0.6, yD = 1.537;
@@ -239,42 +245,60 @@ int main()
         }
         const double tFace = kAim;
         // the hit cell (its entry nudged along the ray)
-        const size_t vi = idx(cellOf(r.start[0] + (tHit + 1e-3) * r.dir[0], 0), wy,
-                              cellOf(r.start[2] + (tHit + 1e-3) * r.dir[2], 2)) * 4u;
-        const double nx = v.normal[vi] * 2.0 - 1.0, ny = v.normal[vi + 1] * 2.0 - 1.0, nz = v.normal[vi + 2] * 2.0 - 1.0;
-        // the side the ray's entry point lies on, along the canonical normal's dominant axis (jah_voxel_ray.glsl): the
-        // voxel's faces' coverage-weighted plane on that axis
-        double along = -(nx * r.dir[0] + ny * r.dir[1] + nz * r.dir[2]);
-        {
-            const double an[3] = { std::fabs(nx), std::fabs(ny), std::fabs(nz) };
-            const int na = an[0] >= an[1] ? (an[0] >= an[2] ? 0 : 2) : (an[1] >= an[2] ? 1 : 2);
-            const double oP = v.coverageP[vi + na], oN = v.coverageN[vi + na];
-            if (oP + oN > 0.0) {
-                const double pP = oP > 0.0 ? std::min(std::max(v.positionP[vi + na] / oP, 0.0), 1.0) : 0.0;
-                const double pN = oN > 0.0 ? std::min(std::max(v.positionN[vi + na] / oN, 0.0), 1.0) : 0.0;
-                const int ci = na == 0 ? cellOf(r.start[0] + (tHit + 1e-3) * r.dir[0], 0) : na == 1 ? wy
-                                       : cellOf(r.start[2] + (tHit + 1e-3) * r.dir[2], 2);
-                const double m = v.origin[na] + (ci + (oP * pP + oN * pN) / (oP + oN)) * cell;
-                const double e = r.start[na] + tHit * r.dir[na];
-                const double sd = (e - m) * ((na == 0 ? nx : na == 1 ? ny : nz) >= 0.0 ? 1.0 : -1.0);
-                if (sd != 0.0) along = sd;
-            }
+        const int hc[3] = { cellOf(r.start[0] + (tHit + 1e-3) * r.dir[0], 0), wy,
+                            cellOf(r.start[2] + (tHit + 1e-3) * r.dir[2], 2) };
+        const size_t vi = idx(hc[0], hc[1], hc[2]) * 4u;
+        // THE MET FACE (jah_voxel_ray.glsl jahVoxelRayHitSide, VOXEL-R13): of the axes the cell holds faces looking AT the
+        // ray on (the N half for a ray travelling +k, the P half for -k), the plane the ray reaches first from its entry;
+        // the hit reads that face's HALF (un-premultiplied), and the half behind it on the same axis is the other side
+        const auto halfAt = [&](int k, bool nHalf) {   // the half store's texel: axis k's -k half at block 2k, +k at 2k + 1
+            return &v.halfLight[(((size_t(hc[2]) * v.height + hc[1]) * 6u + size_t(2 * k + (nHalf ? 0 : 1))) * v.width +
+                                 hc[0]) * 4u];
+        };
+        double tMeet = 1e30;
+        int kMeet = -1;
+        for (int k = 0; k < 3; ++k) {
+            const double oP = v.coverageP[vi + k], oN = v.coverageN[vi + k];
+            if (!((r.dir[k] > 1e-6 && oN > 0.0) || (r.dir[k] < -1e-6 && oP > 0.0))) continue;
+            const double pP = oP > 0.0 ? std::min(std::max(v.positionP[vi + k] / oP, 0.0), 1.0) : 0.0;
+            const double pN = oN > 0.0 ? std::min(std::max(v.positionN[vi + k] / oN, 0.0), 1.0) : 0.0;
+            const double m = v.origin[k] + (hc[k] + (oP * pP + oN * pN) / (oP + oN)) * cell;
+            const double tk = (m - (r.start[k] + tHit * r.dir[k])) / r.dir[k];
+            if (tk >= 0.0 && tk < tMeet) { tMeet = tk; kMeet = k; }
         }
-        const float *front = &v.lightFront[vi], *back = &v.lightBack[vi];
-        const float *facing = along < 0.0 ? back : front, *other = along < 0.0 ? front : back;
-        const double w = front[3];
-        double rel = 0.0, oth = 0.0, lum = 0.0;
+        double want[3] = { 0.0, 0.0, 0.0 }, oth = 0.0, w = 0.0;
+        if (kMeet >= 0) {
+            const float *facing = halfAt(kMeet, r.dir[kMeet] > 0.0), *other = halfAt(kMeet, !(r.dir[kMeet] > 0.0));
+            w = facing[3];
+            for (int c = 0; c < 3; ++c) {
+                want[c] = w > 0.0 ? facing[c] / w : 0.0;
+                oth = std::max(oth, other[3] > 0.0f ? double(other[c] / other[3]) : 0.0);
+            }
+        } else {   // no face met ahead of the entry: the halves facing the ray, weighted by what it sees of each
+            double wSum = 0.0;
+            for (int k = 0; k < 3; ++k) {
+                if (r.dir[k] == 0.0) continue;
+                const bool nHalf = r.dir[k] > 0.0;
+                const double wk = (nHalf ? v.coverageN[vi + k] : v.coverageP[vi + k]) * std::fabs(r.dir[k]);
+                if (!(wk > 0.0)) continue;
+                const float *t = halfAt(k, nHalf);
+                for (int c = 0; c < 3; ++c) want[c] += t[3] > 0.0f ? wk * t[c] / t[3] : 0.0;
+                wSum += wk;
+            }
+            for (int c = 0; c < 3; ++c) want[c] = wSum > 0.0 ? want[c] / wSum : 0.0;
+            w = wSum;
+        }
+        double rel = 0.0, lum = 0.0;
         for (int c = 0; c < 3; ++c) {
-            const double want = w > 0.0 ? facing[c] / w : 0.0;
-            rel = std::max(rel, std::fabs(double(a.march[c]) - want) / std::max(want, 1e-6));
-            lum = std::max(lum, want);
-            oth = std::max(oth, w > 0.0 ? other[c] / w : 0.0);
+            rel = std::max(rel, std::fabs(double(a.march[c]) - want[c]) / std::max(want[c], 1e-6));
+            lum = std::max(lum, want[c]);
         }
         const double escMarch = 1.0 - std::min(1.0, double(mco[i].escape[0]) / 0.95);
         std::printf("   (1) %2d deg: %-9s cascade %.0f, t %.3f m (W's cells at %.3f, face at %.3f), %.0f cells; reads %.5f "
-                    "(the facing side %.5f, the other %.5f, rel %.1e) | the cone march at tan 0 escapes %.3f\n",
+                    "(the met face's half %.5f, the half behind it %.5f, rel %.1e; met axis %d) | the cone march at tan 0 "
+                    "escapes %.3f\n",
                     int(i) * 5, exitName(a.march[3]), double(a.escape[1]), tHit, tCol, tFace, double(a.escape[2]),
-                    double(a.march[1]), lum, oth, rel, escMarch);
+                    double(a.march[1]), lum, oth, rel, kMeet, escMarch);
         sweepHits = sweepHits && a.march[3] == 1.0f && int(a.escape[1]) == int(n - 1);
         sweepWhere = sweepWhere && tHit >= tCol - 1e-3 && tHit <= tFace + 1e-3;
         sideOk = sideOk && w > 0.0 && rel < 1e-4;
@@ -283,8 +307,8 @@ int main()
     }
     check(sweepHits, "(1) THE SWEEP: every ray 0-85 degrees off the wall's normal HITS, in the outer cascade");
     check(sweepWhere, "(1) ...inside the wall's cells (never before its cell-rounded box, never past the face)");
-    check(sideOk, "(3) THE SIDE: every hit reads the side of the wall's voxel facing the ray, the store's own value");
-    check(sideReal, "(3) ...and the other side holds under 1 % of it (the side is a real choice)");
+    check(sideOk, "(3) THE SIDE: every hit reads the half of the wall's voxel whose face the ray meets, the store's own value");
+    check(sideReal, "(3) ...and the half behind it holds under 1 % of it (the half is a real choice)");
     {
         const VoxelReaderAnswer &a = co[kSweep];
         const double tHit = double(a.escape[0]) * size0;
@@ -299,14 +323,18 @@ int main()
               "(2) THE EDGE CELL: a ray through the wall-ceiling edge cell HITS there");
     }
     {
-        const VoxelReaderAnswer &a = co[kSweep + 1], &b = co[kSweep + 2];
+        const VoxelReaderAnswer &a = co[kSweep + 1], &b = co[kSweep + 2], &dn = co[kSweep + 3];
         std::printf("   (4) off the plate's top at 10 degrees: with the origin plane %s at t %.2f m (cascade %.0f, %.0f "
                     "cells; the last shell %.2f m); without it %s at t %.3f m (cascade %.0f)\n",
                     exitName(a.march[3]), double(a.escape[0]) * size0, double(a.escape[1]), double(a.escape[2]),
                     double(cL.guaranteedRadius), exitName(b.march[3]), double(b.escape[0]) * size0, double(b.escape[1]));
         check(a.march[3] == 2.0f, "(4) THE ORIGIN PLANE: a grazing ray off the plate ESCAPES (its own cells are no occluder)");
-        check(b.march[3] == 1.0f && double(b.escape[0]) * size0 < cell,
-              "(4) ...and with no origin plane it HITS in the plate's own cell (the plane is what lets it through)");
+        std::printf("   (4) the same start aimed 10 degrees DOWN, no origin plane: %s at t %.3f m (cascade %.0f)\n",
+                    exitName(dn.march[3]), double(dn.escape[0]) * size0, double(dn.escape[1]));
+        check(b.march[3] == 2.0f,
+              "(4) ...and with no origin plane it ESCAPES too: a face looking away from a ray is never met (A')");
+        check(dn.march[3] == 1.0f && double(dn.escape[0]) * size0 < cell,
+              "(4) THE POSITIVE CONTROL: the same start aimed down at the plate HITS in the plate's own cells");
     }
     {
         bool doorHits = true;

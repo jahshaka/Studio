@@ -131,13 +131,13 @@ struct Reading {
     std::vector<float> L;   // the selected voxels' surface radiance (the brightest channel), in selection order
 };
 
-/// A cascade's inner-wall voxels: covered (c > 0.5), centred within one of its cells inside a face of the room, a metre
-/// from its edges; L = the store's total / its coverage (the total is premultiplied by c).
+/// A cascade's inner-wall voxels: centred within one of its cells inside a face of the room, a metre from its edges, their
+/// ROOM-FACING HALF covered (k > 0.5); L = that half's light / its coverage (the half store is premultiplied by k).
 Reading read(Scene *s, int cascade = 0)
 {
     Reading r;
     GiVoxelVolume v;
-    if (!s->giVoxelLight(cascade, v) || !v.available || v.light.empty()) return r;
+    if (!s->giVoxelLight(cascade, v) || !v.available || v.halfLight.empty()) return r;
     const float cell = v.cell[0];
     for (int z = 0; z < v.depth; ++z)
         for (int y = 0; y < v.height; ++y)
@@ -156,13 +156,9 @@ Reading read(Scene *s, int cascade = 0)
                 near += std::fabs(p[2]) > kHalfZ - 1.0f ? 1 : 0;
                 near += (p[1] < 1.0f || p[1] > kHeight - 1.0f) ? 1 : 0;
                 if (near > 1) continue;
-                const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
-                const float c = v.light[i + 3];
-                if (!(c > 0.5f)) continue;
-                // THE ROOM-FACING SIDE (PHOTON-7 10-3 R12, the preflight's W3): a two-sided voxel's `light` is the MEAN
-                // of its two sides, so a wall cell read whole averaged the outer face (lit by the void) into the inner
-                // one - the "escape" the old law measured. The side whose face looks INTO the room is read: the store's
-                // front where the voxeliser's canonical normal points inward, its back where it points out.
+                // THE ROOM-FACING HALF (PHOTON-7 10-3 R12, the preflight's W3; VOXEL-R13's half store): a wall cell read
+                // whole would average the outer face (lit by the void) into the inner one - the "escape" the old law
+                // measured. The half whose faces look INTO the room is read: on the face's axis, the half looking inward.
                 float in[3] = { 0.0f, 0.0f, 0.0f };   // the inward normal of the face the cell lies on
                 const float dx = kHalfX - std::fabs(p[0]), dz = kHalfZ - std::fabs(p[2]), dy0 = p[1],
                             dy1 = kHeight - p[1];
@@ -171,14 +167,12 @@ Reading read(Scene *s, int cascade = 0)
                 else if (dmin == std::fabs(dy1)) in[1] = -1.0f;
                 else if (dmin == std::fabs(dx)) in[0] = p[0] > 0.0f ? -1.0f : 1.0f;
                 else in[2] = p[2] > 0.0f ? -1.0f : 1.0f;
-                const float *side = v.light.data() + i;
-                if (v.normal.size() == v.light.size() && v.lightFront.size() == v.light.size() &&
-                    v.lightBack.size() == v.light.size() && v.normal[i + 3] > 0.5f) {
-                    const float n[3] = { 2.0f * v.normal[i] - 1.0f, 2.0f * v.normal[i + 1] - 1.0f,
-                                         2.0f * v.normal[i + 2] - 1.0f };
-                    const bool frontIn = n[0] * in[0] + n[1] * in[1] + n[2] * in[2] >= 0.0f;
-                    side = (frontIn ? v.lightFront.data() : v.lightBack.data()) + i;
-                }
+                // (the half store: axis a's -a half at block 2a, its +a half at 2a + 1)
+                const int a = std::fabs(in[0]) > 0.5f ? 0 : std::fabs(in[1]) > 0.5f ? 1 : 2;
+                const size_t b = size_t(2 * a + (in[a] > 0.0f ? 1 : 0));
+                const float *side = &v.halfLight[(((size_t(z) * v.height + y) * 6u + b) * v.width + x) * 4u];
+                const float c = side[3];
+                if (!(c > 0.5f)) continue;
                 const float L = std::max(std::max(side[0], side[1]), side[2]) / c;
                 r.L.push_back(L);
                 r.mean += L;

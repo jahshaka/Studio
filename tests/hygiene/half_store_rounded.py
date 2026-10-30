@@ -60,9 +60,9 @@ def check_ray_job(path, text):
 # (2) the Hlms compute media: file -> the images it stores into whose bound format is half float
 HLMS_STORES = {
     'media/Photon/Voxel/LightInjection_piece_cs.any':
-        ('LightInjection_cs', {'lightVoxel', 'directVoxel', 'backVoxel', 'directBackVoxel', 'dirOut0', 'dirOut1', 'dirOut2'}),
+        ('LightInjection_cs', {'halfStore', 'halfStoreDirect', 'dirOut0', 'dirOut1', 'dirOut2'}),
     'media/Photon/Voxel/LightVctBounceInject_piece_cs.any':
-        ('LightVctBounceInject_cs', {'lightVoxel', 'backScratch'}),
+        ('LightVctBounceInject_cs', {'lightVoxel'}),
     'media/Photon/Voxel/AnisotropicMipVctStep0_piece_cs.any':
         ('AnisotropicMipVctStep0_cs', {'outLightHigherMip0', 'outLightHigherMip1', 'outLightHigherMip2'}),
     'media/Photon/Voxel/AnisotropicMipVctStep1_piece_cs.any':
