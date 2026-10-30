@@ -66,7 +66,6 @@
 #include "../support/lawline.h"
 
 #include <cstdint>
-#include <cstdlib>
 #include <cstring>
 
 #include <algorithm>
@@ -575,37 +574,6 @@ int main(int argc, char **argv)
                   "(6) THE e = 0 COUNTER: no ray of a carded point inside the sealed room escapes");
         }
         voxelLaw(R);
-        // MEASURING ARM (VOXEL-R13 stage 0, to be reverted): every occupied cell of every cascade near the box, as stored
-        if (t == 0 && std::getenv("JAH_R13_DUMP")) {
-            for (int c = 0; c < 4; ++c) {
-                GiVoxelVolume v;
-                if (!scene->giVoxelVolume(c, v) || !v.available) { std::printf("R13DUMP cascade %d unavailable\n", c); continue; }
-                const std::string fn = std::string(std::getenv("JAH_R13_DUMP")) + "/c" + std::to_string(c) + ".txt";
-                FILE *fp = std::fopen(fn.c_str(), "w");
-                if (!fp) continue;
-                std::fprintf(fp, "# c %d res %d %d %d origin %.9g %.9g %.9g cell %.9g %.9g %.9g R %.9g\n", c, v.width, v.height,
-                             v.depth, v.origin[0], v.origin[1], v.origin[2], v.cell[0], v.cell[1], v.cell[2], R);
-                size_t n = 0;
-                for (int z = 0; z < v.depth; ++z)
-                    for (int y = 0; y < v.height; ++y)
-                        for (int x = 0; x < v.width; ++x) {
-                            const size_t i = ((size_t(z) * v.height + y) * v.width + x) * 4u;
-                            if (!(v.albedo[i + 3] > 0.0f)) continue;
-                            const double cx = v.origin[0] + (x + 0.5) * v.cell[0], cy = v.origin[1] + (y + 0.5) * v.cell[1],
-                                         cz = v.origin[2] + (z + 0.5) * v.cell[2];
-                            if (std::fabs(cx) > 3.2 || std::fabs(cz) > 3.2 || cy < -1.4 || cy > 4.6) continue;
-                            std::fprintf(fp, "%d %d %d", x, y, z);
-                            const std::vector<float> *arr[9] = { &v.coverageP, &v.coverageN, &v.positionP, &v.positionN,
-                                                                 &v.normal, &v.lightFront, &v.lightBack, &v.albedo, &v.direct };
-                            for (const std::vector<float> *a : arr)
-                                for (int k = 0; k < 4; ++k) std::fprintf(fp, " %.9g", a->size() > i + 3 ? (*a)[i + k] : -1.0f);
-                            std::fprintf(fp, "\n");
-                            ++n;
-                        }
-                std::fclose(fp);
-                std::printf("R13DUMP cascade %d: %zu cells -> %s\n", c, n, fn.c_str());
-            }
-        }
         fieldLaw(R);
         pixelLaw(R, tierName[t]);
         teleportLaw(win, R, tierName[t]);
