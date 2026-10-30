@@ -1112,13 +1112,14 @@ bool Session::exec(const Command &c)
                         order.push_back(i);
                 std::sort(order.begin(), order.end(), [&](unsigned a, unsigned b) { return rq.reflectPickFrames[a] < rq.reflectPickFrames[b]; });
                 const auto fv = [&](unsigned i, unsigned k) { float x; std::memcpy(&x, &rq.reflectPick[i * 64u + k], 4); return x; };
-                std::fprintf(f, "# frame flags slot src hitT  L.xyz  traced.rgb  c2.rgb  nee.rgb  screen.r vouch gain delta.r  vNow restStop prim c2hit(slot t brdf.r portal.r hitLampSpec.r) mirror(slot part.r) cut.r"
+                std::fprintf(f, "# frame flags slot src hitT  L.xyz  traced.rgb  c2.rgb  nee.rgb  gain delta.r  vNow restStop prim c2hit(slot t brdf.r portal.r hitLampSpec.r) mirror(slot part.r) cut.r"
                                 " | e share v stop flags LD answer.rgb m2 sample.rgb\n");
                 for (unsigned i : order) {
                     const uint32_t *w = &rq.reflectPick[i * 64u];
-                    std::fprintf(f, "%u %u %u %u %.4f  %.4f %.4f %.4f  %.5f %.5f %.5f  %.5f %.5f %.5f  %.5f %.5f %.5f  %.5f %.3f %.3f %.5f  %u %u %u |",
+                    // (words 17-18, the screen trace's radiance and vouch, retired with it: PHOTON-7-9A)
+                    std::fprintf(f, "%u %u %u %u %.4f  %.4f %.4f %.4f  %.5f %.5f %.5f  %.5f %.5f %.5f  %.5f %.5f %.5f  %.3f %.5f  %u %u %u |",
                                  rq.reflectPickFrames[i], w[1], w[2], w[3], fv(i, 4), fv(i, 5), fv(i, 6), fv(i, 7), fv(i, 8), fv(i, 9),
-                                 fv(i, 10), fv(i, 11), fv(i, 12), fv(i, 13), fv(i, 14), fv(i, 15), fv(i, 16), fv(i, 17), fv(i, 18),
+                                 fv(i, 10), fv(i, 11), fv(i, 12), fv(i, 13), fv(i, 14), fv(i, 15), fv(i, 16),
                                  fv(i, 19), fv(i, 20), w[21], w[22], w[23]);
                     std::fprintf(f, " c2hit %d %.4f %.5f %.5f %.5f mirror %d %.5f", w[24] == 0xFFFFFFFFu ? -1 : int(w[24]), fv(i, 25), fv(i, 26), fv(i, 27),
                                  fv(i, 28), w[30] == 0xFFFFFFFFu ? -1 : int(w[30]), fv(i, 29));

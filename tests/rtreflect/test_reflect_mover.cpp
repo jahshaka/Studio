@@ -398,15 +398,15 @@ static int costMain(Engine *e)
     enginetest::testCameraLookAt(view, kCamPos, kCamTarget);
     // THE LANE'S GPU TIME, by its own timestamps: the reflection's pair spans the
     // trace (the mover branches), the hit decode and the filter (the restart
-    // band); the march's object-motion job has a pair of its own. Every branch is
-    // behind the one arm ("reflect.motion", latched per frame), so ONE process
-    // holds both arms (trap 12), alternating 30-frame blocks; each block's first
-    // 10 frames are skipped (the timestamps come back a few frames late). The
-    // withheld arm runs no motion job: its share is zero, not its last reading.
+    // band). Every branch is behind the one arm ("reflect.motion", latched per
+    // frame), so ONE process holds both arms (trap 12), alternating 30-frame
+    // blocks; each block's first 10 frames are skipped (the timestamps come back
+    // a few frames late). (The march's object-motion job is deleted with the
+    // screen sources of a ray chain, PHOTON-7-9A.)
     enginetest::GpuTimingWindow gpuTiming(e);   // the rows below are the monitor's (lane TEST-1)
     int frame = 0;
-    double on = 0.0, off = 0.0, onMotion = 0.0;
-    int nOn = 0, nOff = 0, nMotion = 0;
+    double on = 0.0, off = 0.0;
+    int nOn = 0, nOff = 0;
     const auto step = [&](int n, bool motion, bool measure) {
         for (int i = 0; i < n; ++i) {
             enginetest::setNodePosition(s, sphere, pathAt(++frame));
@@ -416,7 +416,6 @@ static int costMain(Engine *e)
             if (st.reflectMs <= 0.0f) continue;
             if (motion) {
                 on += st.reflectMs; ++nOn;
-                if (st.reflectMotionMs > 0.0f) { onMotion += st.reflectMotionMs; ++nMotion; }
             } else {
                 off += st.reflectMs; ++nOff;
             }
@@ -430,11 +429,10 @@ static int costMain(Engine *e)
         step(30, false, true);
     }
     e->setArm("reflect.motion", 1.0);
-    const double a = nOn ? on / nOn : -1.0, b = nOff ? off / nOff : -1.0,
-                 m = nMotion ? onMotion / nMotion : 0.0;
+    const double a = nOn ? on / nOn : -1.0, b = nOff ? off / nOff : -1.0;
     std::printf("target: 1920x1080, a moving glossy sphere over a glossy floor: the reflection %.4f ms on / "
-                "%.4f ms off, the motion job %.4f ms; cost %+.4f ms (bar 0.1) [%d / %d frames]\n",
-                a, b, m, a + m - b, nOn, nOff);
+                "%.4f ms off; cost %+.4f ms (bar 0.1) [%d / %d frames]\n",
+                a, b, a - b, nOn, nOff);
     return 0;
 }
 
@@ -491,7 +489,7 @@ static int costPosedMain(Engine *e)
     enginetest::testCameraLookAt(view, kCamPos, kCamTarget);
     enginetest::GpuTimingWindow gpuTiming(e);   // the rows below are the monitor's (lane TEST-1)
     int frame = 0;
-    double onR = 0.0, offR = 0.0, onM = 0.0, offM = 0.0;
+    double onR = 0.0, offR = 0.0;
     int nOn = 0, nOff = 0;
     const auto step = [&](int n, bool posed, bool measure) {
         for (int i = 0; i < n; ++i) {
@@ -506,9 +504,8 @@ static int costPosedMain(Engine *e)
             if (!measure || i < 10) continue;
             const RayQueryStatus st = s->published().rayQuery;
             if (st.reflectMs <= 0.0f) continue;
-            const double m = st.reflectMotionMs > 0.0f ? st.reflectMotionMs : 0.0;
-            if (posed) { onR += st.reflectMs; onM += m; ++nOn; }
-            else { offR += st.reflectMs; offM += m; ++nOff; }
+            if (posed) { onR += st.reflectMs; ++nOn; }
+            else { offR += st.reflectMs; ++nOff; }
         }
     };
     step(120, true, false);
@@ -520,10 +517,9 @@ static int costPosedMain(Engine *e)
     }
     e->setArm("reflect.posed", 1.0);
     const double a = nOn ? onR / nOn : -1.0, b = nOff ? offR / nOff : -1.0;
-    const double am = nOn ? onM / nOn : -1.0, bm = nOff ? offM / nOff : -1.0;
     std::printf("target: 1920x1080, 30 posed glossy spheres over a glossy floor: the reflection %.4f ms on / %.4f ms "
-                "off, the motion jobs %.4f / %.4f ms; the posed identification costs %+.4f ms [%d / %d frames]\n",
-                a, b, am, bm, (a + am) - (b + bm), nOn, nOff);
+                "off; the posed identification costs %+.4f ms [%d / %d frames]\n",
+                a, b, a - b, nOn, nOff);
     // THE BAR (POSED-COST-1, lane ATOM-ENGINE-1): the posed identification at 1080p within
     // 2 % of the desktop target's frame (60 fps: 16.7 ms -> 0.33 ms), measured under
     // scripts/gpu-exclusive.sh with the clocks locked. Measured 2026-10-02 at 2100 MHz:
@@ -531,7 +527,7 @@ static int costPosedMain(Engine *e)
     // per-pixel pass. A per-ITEM pass (the posed items' screen rectangles) would need
     // posed bounds the GPU scene does not keep (its box is Ogre's Item AABB: the mesh's,
     // which a pose does not move).
-    const double posed = (a + am) - (b + bm);
+    const double posed = a - b;
     const bool within = nOn > 0 && nOff > 0 && posed <= 0.33;
     std::printf("%s: the posed identification %+.4f ms at 1920x1080 (bar 0.33 ms: 2%% of a 60 fps frame)\n",
                 within ? "ok" : "FAIL", posed);
