@@ -1109,8 +1109,9 @@ def main(source, build):
         pend16 = routes_pending(open(rp, errors="replace").read())
         new, stale, malformed = r16_bad(tests, r16_declares(r16_fixture_sources(source)), pend16)
         check(not new and not stale and not malformed,
-              "R16 every gi.* / rtreflect.* engine row declares its route in its fixture or the ratchet (%d listed; NEW "
-              "without: %s; stale - drop them: %s; malformed: %s)" % (len(pend16), new[:8], stale[:8], malformed[:8]))
+              "R16 every gi.* / rtreflect.* engine row declares its route in its fixture or the ratchet (%d listed; %d NEW "
+              "without: %s; %d stale - drop them: %s; %d malformed: %s)" % (len(pend16), len(new), new[:24], len(stale),
+                                                                           stale[:24], len(malformed), malformed[:24]))
         mb, base16 = _base_pending(source, "routes_pending.txt")
         grown = [] if base16 is None else sorted(set(pend16) - set(x.split()[0] for x in base16))
         check(not grown, "R16 the ratchet never loosens: routes_pending.txt lists no name its copy at the merge-base with "
