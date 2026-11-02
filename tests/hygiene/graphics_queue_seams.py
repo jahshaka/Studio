@@ -9,8 +9,9 @@ submission tag), and `mGraphicsQueue.` is named only by the lines that MUST be g
 graphics_queue_allow.txt (the file, the line's code, how many times):
   * the OpenXR binding (the queue family and index the session hands the runtime) and the eye
     hand-over into the swapchain (refused inside a bracket by _jahRequireGraphics);
-  * the ray tier's three blocking one-shot submits (readTlasBlocking, traceBlocking,
-    cardPickBlocking): their own command pools on the graphics family and their vkQueueSubmit.
+  * the ray tier's four blocking one-shot submits (readTlasBlocking, traceBlocking,
+    cardPickBlocking, and the laws' test-only harness lawBlocking - gi.share_law, gi.card_law: BISTRO-REST-1): their own
+    command pools on the graphics family and their vkQueueSubmit.
   * the GPU checkpoints' dump after a device loss (OgreGpuCheckpoints.cpp, PHOTON-7 stage 5): it reads EVERY
     queue's last marks, the graphics queue named as one of them - a read of the queue's handle, never a recording.
 A code line (comments excluded) under irisgl/engine/src matching `mGraphicsQueue\\.` that the list
