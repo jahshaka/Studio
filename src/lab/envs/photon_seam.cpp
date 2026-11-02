@@ -10,7 +10,8 @@
 //   B, across the lane: walls x [-19.7, -13.3], z [-4.7, 3.7] to 19.6 m, a flat roof with a parapet to 20.35 (across y 20);
 //   C, behind both, taller: x [-29.7, -21.0], z [2.0, 16.0] to 24.3 m - past c1's -X face and c2's top face (22.5);
 //   D, on the camera's other side: x [-6.0, 2.0], z [8.0, 16.0] to 19.2 m.
-// Every surface matte, albedo 0.6 (the facades) or 0.5 (the ground); the environments' sun (labscene.cpp
+// The facades matte, albedo 0.6, the ground 0.5; A's roof ZINC (metal, roughness 0.35), B's parapet cap POLISHED metal
+// (0.08), two-sided CUT-OUT sheets (a curtain before C's east wall, ivy on A's west wall) - Bistro's kinds there; the environments' sun (labscene.cpp
 // addSkyAndLights: pitch 40 degrees, the light toward -Z). Faces kept off the cells' planes where cheap (not a law here).
 // THE EXPECTATION: a still camera in a still scene comes to rest - the voxel store's content steady frame to frame (a
 // hash), the feedback at rest, every reader held (gi.still_rest_epic). Nothing in it moves.
@@ -31,6 +32,12 @@ Built buildSeam(unsigned seed, bool bake)
     const iris::MeshPtr unit = unitBox(b);
     const auto facade = b.material(kFacade, kFacade, kFacade, 1.0f);
     const auto ground = b.material(kGround, kGround, kGround, 1.0f);
+    // THE TWO KINDS BISTRO HOLDS AT ITS TOGGLING VOXELS and the first form lacked (the census's --list-box, stage 0): METAL
+    // (the zinc roof, a polished metal parapet cap) and TWO-SIDED CUT-OUTS (curtains, masked glass, ivy) - each at its
+    // own place, so a census names which one moves
+    const auto zinc = b.material(0.62f, 0.62f, 0.64f, 0.35f, 1.0f);
+    const auto polished = b.material(0.9f, 0.9f, 0.9f, 0.08f, 1.0f);
+    const auto curtain = b.cutout(0.7f, 0.65f, 0.55f, 0.9f, 8);
     using V = iris::Vec3;
     fixedBox(b, unit, "ground", V(-60.3f, -0.3f, -40.3f), V(40.3f, 0.02f, 50.3f), ground);
     // A: the seam block, its gable and chimney
@@ -47,7 +54,8 @@ Built buildSeam(unsigned seed, bool bake)
             const V centre(-16.5f - sx * run * 0.5f, 17.6f + rise * 0.5f, 10.5f);
             g.orientedBox(centre, u, v, w, V(len * 0.5f + 0.15f, 0.125f, 4.4f));
         }
-        b.instance(b.mesh(g), QStringLiteral("a-roof"), QStringLiteral("subject"), V(0, 0, 0), 0.0f, V(1, 1, 1), facade,
+        // (Bistro's roof at this spot is METAL - building_03's Grain_Metal, metallic 1 through its map: a zinc roof)
+        b.instance(b.mesh(g), QStringLiteral("a-roof"), QStringLiteral("subject"), V(0, 0, 0), 0.0f, V(1, 1, 1), zinc,
                    true, false);
     }
     fixedBox(b, unit, "a-chimney", V(-15.2f, 17.0f, 10.0f), V(-14.6f, 22.1f, 10.6f), facade);
@@ -57,6 +65,20 @@ Built buildSeam(unsigned seed, bool bake)
     fixedBox(b, unit, "b-parapet-e", V(-13.6f, 19.6f, -4.7f), V(-13.3f, 20.35f, 3.7f), facade);
     fixedBox(b, unit, "b-parapet-n", V(-19.4f, 19.6f, -4.7f), V(-13.6f, 20.35f, -4.4f), facade);
     fixedBox(b, unit, "b-parapet-s", V(-19.4f, 19.6f, 3.4f), V(-13.6f, 20.35f, 3.7f), facade);
+    // B's parapet cap: polished metal across y 20
+    fixedBox(b, unit, "b-cap", V(-19.75f, 20.35f, -4.75f), V(-13.25f, 20.43f, 3.75f), polished);
+    // the cut-outs: a two-sided curtain sheet in front of C's east wall (x -20.9) from 15.6 to 21.9 m, and an ivy sheet on
+    // A's west wall (x -19.8) from 14.1 to 19.9 m
+    {
+        Arrays c;
+        c.quad(V(-20.9f, 15.6f, 3.0f), V(-20.9f, 15.6f, 15.0f), V(-20.9f, 21.9f, 15.0f), V(-20.9f, 21.9f, 3.0f), V(1, 0, 0));
+        b.instance(b.mesh(c), QStringLiteral("c-curtain"), QStringLiteral("subject"), V(0, 0, 0), 0.0f, V(1, 1, 1), curtain,
+                   true, true);
+        Arrays v;
+        v.quad(V(-19.8f, 14.1f, 14.6f), V(-19.8f, 14.1f, 6.4f), V(-19.8f, 19.9f, 6.4f), V(-19.8f, 19.9f, 14.6f), V(-1, 0, 0));
+        b.instance(b.mesh(v), QStringLiteral("a-ivy"), QStringLiteral("subject"), V(0, 0, 0), 0.0f, V(1, 1, 1), curtain,
+                   true, true);
+    }
     // C: taller, behind, across c1's -X face and c2's top
     fixedBox(b, unit, "c-tower", V(-29.7f, 0.02f, 2.0f), V(-21.0f, 24.3f, 16.0f), facade);
     // D: the camera's other side

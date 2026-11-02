@@ -129,6 +129,9 @@ const std::vector<VerbDoc> &verbs()
           "line (cascade, kind, res, origin, cell, lo = the first voxel's WORLD cell index, dims) then "
           "dims[0] x dims[1] x dims[2] RGBA float32, x fastest - over the voxels whose centre lies in the world box "
           "(default the whole volume); a placement-free comparison joins two such files on the world cell" },
+        { "texels", "texels N file c x0,y0,z0,x1,y1,z1", 4, 4,
+          "MEASURING ARM (BISTRO-REST-1 stage 0): N frames, each followed by cascade c's half store over the box's cells; "
+          "every half texel whose light changed, with its value per frame" },
         { "census", "census N file", 2, 2,
           "MEASURING ARM (BISTRO-REST-1 stage 0, reverted after its run): N frames, each followed by one TSV line of the GI "
           "readers' rest state (per-frame deltas), the changed-region list, every cascade's brick mask and feedback bricks; "

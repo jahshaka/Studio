@@ -1401,6 +1401,8 @@ bool Session::exec(const Command &c)
         ok = voxels(c);
     } else if (c.verb == "census") {
         ok = census(c);
+    } else if (c.verb == "texels") {
+        ok = texels(c);
     } else if (c.verb == "regions") {
         ok = regions(c);
     } else if (c.verb == "help") {
@@ -2203,6 +2205,58 @@ bool Session::census(const Command &c)
     }
     std::printf("LAB CENSUS %d frames -> %s.{tsv,bricks.txt,store.txt}\n", n, qPrintable(base));
     return bool(tsv) && bool(store);
+}
+
+// MEASURING ARM (BISTRO-REST-1 stage 0): `texels N file c x0,y0,z0,x1,y1,z1` - N frames, each followed by cascade c's half
+// store (light and direct, the halves' coverage) over the cells the world box reaches; then every half texel whose light
+// changed in those frames, with its value per frame (rgb, the coverage k), its direct and its world cell
+bool Session::texels(const Command &c)
+{
+    using namespace jahshaka::engine;
+    const int n = std::max(2, std::atoi(c.args[0].c_str()));
+    QString path = QString::fromStdString(c.args[1]);
+    if (QFileInfo(path).isRelative()) path = QDir(mOpt.dataRoot).filePath(path);
+    const int ci = std::atoi(c.args[2].c_str());
+    float lo[3], hi[3];
+    {
+        const QStringList w = QString::fromStdString(c.args[3]).split(',');
+        for (int a = 0; a < 3; ++a) { lo[a] = w.value(a).toFloat(); hi[a] = w.value(a + 3).toFloat(); }
+    }
+    std::vector<std::vector<float>> seq;
+    GiVoxelVolume v;
+    for (int f = 0; f < n && !mQuit; ++f) {
+        frame();
+        if (!mScene->giVoxelHalves(ci, v, lo, hi) || !v.available) { labFail("LAB TEXELS FAILED: no halves\n"); return false; }
+        seq.push_back(v.halfLight);
+    }
+    std::ofstream out(path.toStdString());
+    out.precision(9);
+    const int W = v.width, H = v.height;
+    out << "# cascade " << ci << " box cells " << v.width << "x" << v.height << "x" << v.depth << " origin " << v.origin[0] << ","
+        << v.origin[1] << "," << v.origin[2] << " cell " << v.cell[0] << " frames " << n << "\n";
+    long long changed = 0;
+    const size_t tex = seq[0].size() / 4u;
+    for (size_t t = 0; t < tex; ++t) {
+        bool moved = false;
+        for (int f = 1; f < n && !moved; ++f)
+            for (int ch = 0; ch < 4; ++ch) moved = moved || seq[size_t(f)][t * 4 + ch] != seq[0][t * 4 + ch];
+        if (!moved) continue;
+        ++changed;
+        const int x6 = int(t % (size_t(6) * W)), y = int((t / (size_t(6) * W)) % H), z = int(t / (size_t(6) * W * H));
+        const int half = x6 / W, x = x6 % W;   // (half b: axis b/2, sign: even = -a, odd = +a)
+        out << "T cell " << x << "," << y << "," << z << " world " << v.origin[0] + (x + 0.5f) * v.cell[0] << ","
+            << v.origin[1] + (y + 0.5f) * v.cell[1] << "," << v.origin[2] + (z + 0.5f) * v.cell[2] << " half " << half
+            << " direct " << (t * 4 + 3 < v.halfDirect.size() ? v.halfDirect[t * 4] : -1.0f) << ","
+            << (t * 4 + 3 < v.halfDirect.size() ? v.halfDirect[t * 4 + 1] : -1.0f) << ","
+            << (t * 4 + 3 < v.halfDirect.size() ? v.halfDirect[t * 4 + 2] : -1.0f) << " seq";
+        for (int f = 0; f < n; ++f)
+            out << " " << seq[size_t(f)][t * 4] << "/" << seq[size_t(f)][t * 4 + 1] << "/" << seq[size_t(f)][t * 4 + 2] << "/"
+                << seq[size_t(f)][t * 4 + 3];
+        out << "\n";
+    }
+    std::printf("LAB TEXELS cascade %d: %lld half texels of %zu changed over %d frames -> %s\n", ci, changed, tex, n,
+                qPrintable(path));
+    return bool(out);
 }
 
 bool Session::voxels(const Command &c)

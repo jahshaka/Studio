@@ -104,6 +104,7 @@ private:
     bool pin(const Command &c);
     bool voxels(const Command &c);
     bool census(const Command &c);   // MEASURING ARM (BISTRO-REST-1 stage 0)
+    bool texels(const Command &c);   // MEASURING ARM (BISTRO-REST-1 stage 0)
     /// THE CHANGED-REGION LIST (PHOTON-7 stage 3): the last frame's, printed.
     bool regions(const Command &c);
     void nameEngineNodes();
