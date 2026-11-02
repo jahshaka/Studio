@@ -23,6 +23,12 @@
 # agent's turn between the 75 and its re-call) under the caller's label, and the next call with the SAME label adopts it -
 # its place ahead of every later arrival, not a new number. A reservation never idles the card: the queue passes over it
 # while its caller is away, and removes it once expired.
+# AN UNTICKETED HOLDER IS NAMED (URGENT #141, 2026-11-02: the Unreal session's holds ran the MAIN clone's older copy of this
+# script, which takes no ticket, and so jumped every ticketed waiter - a te139 wait ran out at 600 s behind them). A holder
+# that took its ticket writes its holder line ending in ` ticketed` (util.CardLock likewise); a waiter that finds a LIVE
+# holder whose line lacks it prints ONE loud line naming it - "gpu-lock: AN UNTICKETED HOLDER: pid <pid> <label> - an old
+# gpu-exclusive.sh copy or a bare flock ..." - and appends the same line, stamped, to <lock>.log (the lead's to read).
+# It never kills, never waits less: the flock stays the mutual exclusion.
 # The kernel's GPU faults while the command ran are printed after it (scripts/kernel_xid.py): an Xid is never
 # environmental. The desktop route by default: JAHSHAKA_VR=0 unless the caller set JAHSHAKA_VR (`--vr` runs set it).
 export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
@@ -86,6 +92,18 @@ head_ticket() {   # the lowest ticket whose pid is alive; the dead ones ahead of
     done
 }
 holder() { cat "$lock.holder" 2>/dev/null || echo '?'; }
+named=""
+unticketed() {   # a live holder whose line lacks the ticketed mark: named once per holder pid, here and in <lock>.log
+    local line hp
+    line=$(cat "$lock.holder" 2>/dev/null) || return 0
+    case "$line" in *" ticketed") return 0 ;; pid\ *) ;; *) return 0 ;; esac
+    hp=$(printf '%s' "$line" | cut -d' ' -f2)
+    [ -n "$hp" ] && [ "$hp" != "$named" ] && kill -0 "$hp" 2>/dev/null || return 0
+    named=$hp
+    local msg="gpu-lock: AN UNTICKETED HOLDER: ${line% since *} - an old gpu-exclusive.sh copy or a bare flock: it took the card without a ticket, ahead of every ticketed waiter (URGENT #141); its owner runs the tree's scripts/gpu-exclusive.sh"
+    echo "$msg"
+    echo "$(date '+%F %T') waiter '$me' (pid $$): $msg" >> "$lock.log" 2>/dev/null || true
+}
 stayed() {   # the place kept for the re-call (the header): the ticket rewritten as a reservation, the trap's removal off
     trap - EXIT
     echo "R $(( $(date +%s) + ${JAH_GPU_RESERVE_S:-120} )) $me" > "$ticket.tmp.$$" && mv -f "$ticket.tmp.$$" "$ticket"
@@ -101,12 +119,13 @@ while :; do
     h=$(head_ticket)
     [ "$h" = "$ticket" ] && flock -n 9 && break
     [ -n "$waiting" ] || { echo "gpu-lock: waiting for the card (held by: $(holder))"; waiting=1; }
+    [ "$h" = "$ticket" ] && unticketed   # (the head alone: it is the one the flock refused)
     [ -n "${wm:-}" ] && [ $(( $(date +%s) - t0 )) -ge "$wm" ] && stayed
     if [ "$h" = "$ticket" ]; then sleep 0.2; else sleep 0.5; fi
 done
 rm -f "$ticket"
 [ -z "$waiting" ] || echo "gpu-lock: waited $(( $(date +%s) - t0 )) s"
-echo "pid $$ ${label:-$1} since $(date '+%F %T')" > "$lock.holder"
+echo "pid $$ ${label:-$1} since $(date '+%F %T') ticketed" > "$lock.holder"   # (#141: the mark a waiter reads)
 start=$(date +%s)
 JAH_GPU_LOCK_HELD=1 "${bound[@]}" "$@"
 rc=$?

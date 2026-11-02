@@ -77,5 +77,20 @@ want "$([ "$rc1" -eq 75 ] && [ "$order2" = "C N " ] && echo 1)" \
 "$LOCKSH" true > /dev/null 2>&1
 left=$(ls "$T/lock.q" | grep -c '^[0-9]' || true)
 want "$([ "$left" -eq 0 ] && echo 1)" "(4) no ticket left behind ($left)"
+# (6) AN UNTICKETED HOLDER IS NAMED (URGENT #141): an old copy's hold - a bare flock and a holder line with no ticketed
+# mark - makes the waiter print ONE loud line naming it and log it to <lock>.log; a ticketed holder is never named
+( exec 9>>"$T/lock"; flock 9; echo "pid $BASHPID ue-old-copy since now" > "$T/lock.holder"; sleep 2 ) &
+sleep 0.4
+"$LOCKSH" --label W true > "$T/W.out" 2>&1
+wait
+n=$(grep -c 'AN UNTICKETED HOLDER: pid [0-9]* ue-old-copy - an old gpu-exclusive.sh copy' "$T/W.out")
+want "$([ "$n" = 1 ] && grep -q "waiter 'W'.*AN UNTICKETED HOLDER: pid [0-9]* ue-old-copy" "$T/lock.log" && echo 1)" \
+     "(6) an unticketed holder (an old copy's bare flock) named ONCE by the waiting head and in <lock>.log ($n)"
+"$LOCKSH" --label H6 sleep 1.5 > /dev/null 2>&1 &
+sleep 0.4
+"$LOCKSH" --label W2 true > "$T/W2.out" 2>&1
+wait
+want "$(grep -q 'held by: pid [0-9]* H6 since .* ticketed' "$T/W2.out" && ! grep -q 'UNTICKETED' "$T/W2.out" && echo 1)" \
+     "(6) a ticketed holder (this script) is never named: its holder line carries the mark"
 echo "tooling.gpu_lock_fifo: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
 exit $(( fails > 0 ))
