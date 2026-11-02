@@ -72,6 +72,12 @@ tree and the build's registration, each with its name in the failure line:
      jah_gpu_exclusive_test, ${JAH_WARM_CONSUMER} before an add_test command). WHY: a --setup home has no exit to judge,
      so the 33 such rows never promoted and rebuilt their own content on every run (log.engine: 146,859 bytes of
      pipelines a run); its green run promotes it now, through hard links.
+  R15 THE SHIPPED SEED IS OFF IN THE HARNESS (URGENT #143, 2026-11-02). Every GPU row that boots the app's EngineHost
+     (JAH_CLASS app, selftest, vr) carries a JAHSHAKA_SHADER_SEED entry in its ENVIRONMENT or ENVIRONMENT_MODIFICATION -
+     `set:none` from the registration (tests/cmake/vram_rows.cmake), or the row's own (a seed row's `unset:`, printed) -
+     and scripts/warm-app-cache.sh exports JAHSHAKA_SHADER_SEED=none. WHY: a tree's bin/shadercache-seed (the ship tree
+     after its seed step) is served to every data root without a microcode layer, so every cold test home booted on the
+     seed's SPIR-V, never the build's own compile; only shadercache.app opted out.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -443,6 +449,27 @@ def _home_and_key(args):
     return None, key
 
 
+SEED_CLASSES = ("app", "selftest", "vr")
+
+
+def r15_bad(tests):
+    """(bad, own): `bad` = every GPU row booting the app's EngineHost (JAH_CLASS app / selftest / vr) with no
+    JAHSHAKA_SHADER_SEED entry in its ENVIRONMENT or ENVIRONMENT_MODIFICATION (the tree's shipped seed served to its cold
+    home); `own` = `row (entry)` for each that states one other than none (a seed row). `tests`: ctest's json-v1 list."""
+    bad, own = [], []
+    for t in sorted(tests, key=lambda x: x["name"]):
+        p = _props(t)
+        if p.get("JAH_CLASS") not in SEED_CLASSES:
+            continue
+        seeds = [e for e in _list(p.get("ENVIRONMENT")) + _list(p.get("ENVIRONMENT_MODIFICATION"))
+                 if e.startswith("JAHSHAKA_SHADER_SEED=")]
+        if not seeds:
+            bad.append(t["name"])
+        elif seeds[-1] not in ("JAHSHAKA_SHADER_SEED=set:none", "JAHSHAKA_SHADER_SEED=none"):
+            own.append("%s (%s)" % (t["name"], seeds[-1]))
+    return bad, own
+
+
 def r14_bad(tests):
     """[`row (why)`] for every consumer of a WARM fixture (its setup: fresh_home.sh --setup --warm <home>) whose command is
     not fresh_home.sh --promote of that home with the same --cache key. `tests`: ctest's json-v1 `tests` list."""
@@ -584,6 +611,16 @@ def the_rules_catch():
     check([b.split(" ")[0] for b in r14] == ["bare", "keyed", "other"],
           "R14 flags a WARM fixture's consumer not wrapped in fresh_home.sh --promote, or promoting another home or another "
           "--cache key; never a wrapped one (behind the lock too) or a consumer of a cold fixture (%s)" % r14)
+    seed = "JAHSHAKA_SHADER_SEED=set:none"
+    r15, own15 = r15_bad([T("bare", JAH_CLASS="app", ENVIRONMENT_MODIFICATION=["JAHSHAKA_TEST_TIER=set:low"]),
+                          T("off", JAH_CLASS="app", ENVIRONMENT_MODIFICATION=["JAHSHAKA_TEST_TIER=set:low", seed]),
+                          T("st", JAH_CLASS="selftest"), T("vr", JAH_CLASS="vr", ENVIRONMENT=["JAHSHAKA_SHADER_SEED=none"]),
+                          T("seeded", JAH_CLASS="app", ENVIRONMENT_MODIFICATION=["JAHSHAKA_SHADER_SEED=unset:"]),
+                          T("eng", JAH_CLASS="engine"), T("cpu")])
+    check(r15 == ["bare", "st"] and own15 == ["seeded (JAHSHAKA_SHADER_SEED=unset:)"],
+          "R15 flags an app / selftest row booting with the shipped seed (no JAHSHAKA_SHADER_SEED entry), never one at none "
+          "(ENVIRONMENT or _MODIFICATION), an engine or CPU row; a row stating its own (a seed row's unset:) is printed "
+          "(%s %s)" % (r15, own15))
     check(r6_bad([T("a"), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a"])]) == ["a.twin (DEPENDS a)"]
           and not r6_bad([T("a", FIXTURES_SETUP=["run_a"]), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a", "run_a"])])
           and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")])
@@ -940,6 +977,11 @@ def main(source, build):
     bad = r14_bad(tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     check(not bad, "R14 every WARM fixture's consumer promotes on green (fresh_home.sh --promote of the fixture's home: "
           "WARM_HOME) (%d not: %s)" % (len(bad), bad[:12]))
+    bad, own = r15_bad(tests) if rc == 0 else (["ctest --show-only failed (%d)" % rc], [])
+    wsh = open(os.path.join(source, "scripts", "warm-app-cache.sh"), errors="replace").read()
+    check(not bad and "\nexport JAHSHAKA_SHADER_SEED=none\n" in wsh,
+          "R15 every app / selftest / vr GPU row boots with the shipped seed off (JAHSHAKA_SHADER_SEED=set:none, or its own: "
+          "%s) and the warm-up's boots too (%d on the seed: %s)" % (own[:6] or "none", len(bad), bad[:12]))
     inspect = []
     for root in ("src", os.path.join("irisgl", "mirror")):
         for dirpath, _dirs, names in os.walk(os.path.join(source, root)):

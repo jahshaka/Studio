@@ -151,6 +151,9 @@ HERE=$(cd "$(dirname "$0")" && pwd)
 SRC=$(cd "$HERE/.." && pwd)
 # THE WARM-UP's OWN BOOTS run on the caches they are warming: fresh_home.sh --warm's stamp check (URGENT #140) is not theirs
 export JAH_WARM_CHECK=0
+# THE SHIPPED SEED OFF (URGENT #143): the warm-up compiles the build's own pipelines into the shared caches every row links,
+# never serves a tree's bin/shadercache-seed - the rows boot with JAHSHAKA_SHADER_SEED=none (tests/cmake/vram_rows.cmake)
+export JAHSHAKA_SHADER_SEED=none
 TESTS=${TESTS:-$BUILD/tests}
 mkdir -p "$TESTS"
 

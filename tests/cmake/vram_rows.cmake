@@ -16,9 +16,33 @@ endmacro()
 function(_jah_vram_register _row _class _k)
     set_property(GLOBAL APPEND PROPERTY JAH_GPU_ROWS "${_row}|${_class}|${_k}")
     set_property(TEST ${_row} PROPERTY JAH_CLASS ${_class})
+    if(NOT _class STREQUAL "engine")   # the shipped seed off (URGENT #143, below): an engine binary reads no seed
+        cmake_language(EVAL CODE "cmake_language(DEFER CALL _jah_seed_off_apply [[${_row}]])")
+    endif()
     set(_n ${_k})
     if(_k STREQUAL "all" OR _n GREATER JAH_CARD_SLOTS)
         set(_n ${JAH_CARD_SLOTS})
     endif()
     set_property(TEST ${_row} PROPERTY RESOURCE_GROUPS "vram:${_n}")
+endfunction()
+
+# THE SHIPPED SEED IS OFF IN THE HARNESS (URGENT #143, 2026-11-02). A tree's <bin>/shadercache-seed (the ship tree after its
+# seed step; COLD-BOOT-1's make-seed.sh) is served by EngineHost to EVERY data root without a microcode layer at the build's
+# key: every cold test home would boot on the seed's SPIR-V and never run the build's own compile (only shadercache.app
+# opted out, in its C++). So every GPU row that boots the app's EngineHost (class app, selftest, vr) carries
+# JAHSHAKA_SHADER_SEED=set:none, appended at the end of its directory (after the site's own set_tests_properties, which
+# would replace a list set now) UNLESS THE ROW STATES ITS OWN: a JAHSHAKA_SHADER_SEED entry in its ENVIRONMENT or
+# ENVIRONMENT_MODIFICATION. A seed row opts back in with one line,
+#     set_tests_properties(<row> PROPERTIES ENVIRONMENT_MODIFICATION "JAHSHAKA_SHADER_SEED=unset:")
+# (the build's own seed resolves beside the binary). The warm-up's boots export the same none (scripts/warm-app-cache.sh);
+# source.testing_rules R15 reads the registered set.
+function(_jah_seed_off_apply _row)
+    get_property(_env TEST ${_row} PROPERTY ENVIRONMENT)
+    get_property(_mod TEST ${_row} PROPERTY ENVIRONMENT_MODIFICATION)
+    foreach(_e IN LISTS _env _mod)
+        if(_e MATCHES "^JAHSHAKA_SHADER_SEED=")
+            return()
+        endif()
+    endforeach()
+    set_property(TEST ${_row} APPEND PROPERTY ENVIRONMENT_MODIFICATION "JAHSHAKA_SHADER_SEED=set:none")
 endfunction()
