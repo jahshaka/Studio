@@ -9,8 +9,8 @@
 //   (a) THE RADIANCE MOVED: a lamp's intensity stepped. The surface and what it reflects
 //       are the same, so no reprojection test fires; the old radiance drained out of a still
 //       surface's mean over the floor's ~94 frames at the base.
-//   (b) THE EYE MOVED: a sideways slide moves a reflection across its surface: the trail
-//       held under a code (0.842 measured at the base with PAN-SMEAR-1's drop).
+//   (b) THE EYE MOVED: a sideways slide moves a reflection across its surface: the moving picture lags its converged
+//       (held) one by no more than the LAG LAW allows per pixel (slideLaw, PHOTON-7-9A stage 2).
 //
 // FIXTURES (High, rays on, 384 x 216):
 //   (a) a glossy metal floor (perceptual roughness 0.2 - above the mirror ramp, where the
@@ -240,9 +240,34 @@ static LampStepArrivals lampStep(Engine *e, View *view)
     return out;
 }
 
-/// (b) THE SLIDE: the moving floor against the settled floor, 8-bit codes.
-static float slideTrail(Engine *e, View *view, float &stillOut)
+/// (b) THE SLIDE - THE LAG LAW (PHOTON-7-9A stage 2, the lead's ruling; the picked "within 1 code of the settled" mean
+/// deleted). The moving history (rq_reflect_temporal.comp) is an exponential mean of blend 1/N, N <= M = kReflectWindow:
+/// with the converged picture C moving by Delta a frame along a constant-velocity slide its bias is the mean age (M - 1)
+/// times Delta (the clamp only pulls toward this frame's box: it never adds lag), its noise the moving SE (n_eff 2M - 1).
+/// PER FLOOR PIXEL: |moving - settled| <= (M - 1) Delta + 3 sqrt( SE_walk^2 + SE_settled^2 ) + 1, the breaking share
+/// <= 1 %. SE_walk is the temporal pass's own (the arm reflect.historyReadback: display codes a trace texel, as its last
+/// moving frame left it); SE_settled = 1 (the reference is HELD: the stop's guarantee, every displayed SE under one code);
+/// the +1 two 8-bit roundings (the grade's dither is per pixel and deterministic). Delta over a BASELINE of n frames,
+/// Delta-hat = |S_24 - S_{24-n}| / n between two HELD pictures - THE LINEARITY RELIED ON: the slide is constant-velocity
+/// (0.25 m a frame), and the converged reflection moves with it at a rate constant over the baseline (a feature's edge
+/// crossing a pixel inside it reads as its mean rate over n). NAMED OVERSTATEMENT: the two holds' own errors (<= 1 code
+/// each) enter Delta-hat as 2/n codes, the bound as (M - 1) 2 / n = 2.2 codes at n = 10.
+struct SlideLaw { float meanErr = 0.0f, breakShare = 1.0f, still = 0.0f; int held24 = -1, heldBase = -1; int pixels = 0; };
+static constexpr int kSlideFrames = 24;
+static constexpr int kSlideBaseline = 10;
+static constexpr int kHoldCap = 3000;
+/// Frames until the reflection holds (RayQueryStatus::reflectHeld, the engine's own predicate), -1 inside kHoldCap none.
+static int untilHeld(Engine *e, Scene *s)
 {
+    for (int f = 1; f <= kHoldCap; ++f) {
+        enginetest::frames(e, 1);
+        if (s->published().rayQuery.reflectHeld) return f;
+    }
+    return -1;
+}
+static SlideLaw slideLaw(Engine *e, View *view)
+{
+    SlideLaw out;
     Scene *s = e->createScene("slide");
     view->setScene(s);
     s->setAmbient(Colour(0.45f, 0.55f, 0.70f), Colour(0.30f, 0.30f, 0.32f));
@@ -264,41 +289,65 @@ static float slideTrail(Engine *e, View *view, float &stillOut)
     }
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
     rayTier(s, view);
+    e->setArm("reflect.historyReadback", 1.0);
     auto pose = [&](int frame) {
         const float x = -0.25f * float(frame);
         enginetest::testCameraLookAt(view, Vec3(x, 5.0f, 14.0f), Vec3(x, 1.0f, 0.0f));
     };
-    // THE CONTROL: a still camera's two read-backs (the mean's own restlessness).
+    // THE CONTROL (printed): a still camera's two read-backs (the mean's own restlessness).
     pose(0);
     enginetest::frames(e, 84);
     Image a, b;
     view->readPixels(a);
     enginetest::frames(e, 45);
     view->readPixels(b);
-    stillOut = meanDiff(a, b, kHeight / 3u, kHeight);
-    for (int i = 1; i <= 24; ++i) { pose(i); enginetest::frames(e, 1); }
-    Image moving, settled;
+    out.still = meanDiff(a, b, kHeight / 3u, kHeight);
+    for (int i = 1; i <= kSlideFrames; ++i) { pose(i); enginetest::frames(e, 1); }
+    Image moving, held24, heldBase;
     view->readPixels(moving);
-    enginetest::frames(e, 45);
-    view->readPixels(settled);
-    const float err = meanDiff(moving, settled, kHeight / 3u, kHeight);
-    // THE WORST 16-COLUMN BAND of the floor: a trail sits beside each pillar's reflection, and the
-    // floor's mean dilutes it over the floor between them.
-    float worstBand = 0.0f;
-    for (unsigned x0 = 0; x0 + 16u <= kWidth; x0 += 16u) {
-        double sum = 0.0; size_t n = 0;
-        for (unsigned y = kHeight / 3u; y < kHeight; ++y)
-            for (unsigned x = x0; x < x0 + 16u; ++x) {
-                const size_t i = (size_t(y) * kWidth + x) * 4u;
-                for (int c = 0; c < 3; ++c) { sum += std::fabs(double(moving.rgba[i + c]) - double(settled.rgba[i + c])); ++n; }
-            }
-        worstBand = std::max(worstBand, float(sum / double(n)));
-    }
-    std::printf("-- (b) slide 0.25 m/frame x 24: floor moving-vs-settled %.3f codes, worst 16-column band %.3f "
-                "(still control %.3f)\n", err, worstBand, stillOut);
     checkTraced(s, "(b)");
+    // THE MOVING SE as the last moving frame left it (the copy lands a few frames late; it is not re-written at rest)
+    enginetest::frames(e, 8);
+    const RayQueryStatus rq = s->published().rayQuery;
+    const std::vector<float> se = rq.reflectHistorySe;
+    const unsigned sw = rq.reflectHistoryW, sh = rq.reflectHistoryH;
+    out.held24 = untilHeld(e, s);
+    view->readPixels(held24);
+    pose(kSlideFrames - kSlideBaseline);
+    out.heldBase = untilHeld(e, s);
+    view->readPixels(heldBase);
+    e->setArm("reflect.historyReadback", 0.0);
+    const float M = float(kReflectWindow);
+    double sum = 0.0;
+    int broken = 0, n = 0;
+    for (unsigned y = kHeight / 3u; y < kHeight; ++y)
+        for (unsigned x = 0; x < kWidth; ++x) {
+            const size_t i = (size_t(y) * kWidth + x) * 4u;
+            float err = 0.0f, delta = 0.0f;
+            for (int c = 0; c < 3; ++c) {
+                err = std::max(err, std::fabs(float(moving.rgba[i + c]) - float(held24.rgba[i + c])));
+                delta = std::max(delta, std::fabs(float(held24.rgba[i + c]) - float(heldBase.rgba[i + c])) / float(kSlideBaseline));
+            }
+            float seWalk = 0.0f;
+            if (sw && sh && se.size() == size_t(sw) * sh) {
+                const float v = se[size_t(y * sh / kHeight) * sw + size_t(x * sw / kWidth)];
+                seWalk = std::isfinite(v) && v > 0.0f ? v : 0.0f;
+            }
+            const float bound = (M - 1.0f) * delta + 3.0f * std::sqrt(seWalk * seWalk + 1.0f) + 1.0f;
+            sum += err;
+            ++n;
+            if (err > bound) ++broken;
+        }
+    out.pixels = n;
+    out.meanErr = n ? float(sum / n) : 0.0f;
+    out.breakShare = n ? float(broken) / float(n) : 1.0f;
+    std::printf("-- (b) slide 0.25 m/frame x %d: the lag law per floor pixel |moving - held| <= (M - 1) Delta + 3 sqrt(SE_walk^2 "
+                "+ 1) + 1 (M %.0f, Delta over %d frames): breaking %.3f %% of %d px (bar 1 %%); floor mean |moving - held| "
+                "%.3f codes (printed; the old 1-code bar deleted); the holds after %d / %d frames; SE grid %ux%u; still "
+                "control %.3f\n", kSlideFrames, M, kSlideBaseline, 100.0 * out.breakShare, n, out.meanErr, out.held24,
+                out.heldBase, sw, sh, out.still);
     e->destroyScene(s);
-    return err;
+    return out;
 }
 
 int main()
@@ -327,13 +376,12 @@ int main()
               "(a) A LAMP STEP reaches the still glossy floor's reflection within %d frames of its source (lag %d: "
               "the source %d, the reflection %d)", kArrivalLagFrames, a.reflection - a.source, a.source, a.reflection);
 
-    float still = 0.0f;
-    const float trail = slideTrail(e, view, still);
-    // A GUARD (PAN-SMEAR-1's law, held): measured 0.842 at the base with the parallax drop, 0.367
-    // with the clamp (PHOTON-2 1b; the hit history through the virtual point chosen by its clamp
-    // error, Lumen's rule — PHOTON-5's "every pixel" fetch, measured 1.571, had no such choice).
-    CHECK_MSG(trail <= 1.0f, "(b) A SLIDE leaves no trail: the moving floor within 1 code of the settled (%.3f; "
-              "0.842 at the base)", trail);
+    const SlideLaw law = slideLaw(e, view);
+    CHECK_MSG(law.held24 > 0 && law.heldBase > 0, "(b) the slide's references HOLD (the engine's own predicate) inside "
+              "%d frames (pose 24 after %d, pose %d after %d)", kHoldCap, law.held24, kSlideFrames - kSlideBaseline,
+              law.heldBase);
+    CHECK_MSG(law.breakShare <= 0.01f, "(b) A SLIDE LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS MEMORY AND ITS NOISE "
+              "(the lag law): %.3f %% of the floor's pixels break it (bar 1 %%)", 100.0 * law.breakShare);
 
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;

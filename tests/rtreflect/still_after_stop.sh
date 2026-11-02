@@ -30,7 +30,12 @@
 #       hold NO CAPPED TEXEL (the door's refl_rest_capped 0: every texel stopped by its own standard error within its
 #       share of the one-code display budget, sqrt( n_eff ) codes at its pixel - so the displayed SE is under one code
 #       where the neighbours' n_eff match, the stop's own guarantee; a capped one stopped at its count's ceiling);
-#   (c) before the hold the mirror's per-frame mean change <= 1 code with the mover parked (its fixed estimator);
+#   (c) THE MIRROR CONVERGES (PHOTON-7-9A stage 2, the lead's ruling C2; the old "<= 1 code mean change" bar, a picked
+#       number, deleted): the mirror is a fixed estimator (the centre ray, M = 1) - at rest it takes its mean from its
+#       first rest sample and folds k a frame, so a frame's change of a texel's mean has variance sigma^2 k / (v_{t-1} v_t)
+#       (jah_reflect_rest.glsl): its mean change falls as 1/v from the stop and never rises - judged by THE RISE LAW on the
+#       mirror pixels' series, as (a) on the glossy (tests/support/rise_law.py), from the rest's own settle to the hold;
+#       the held end state is the stop's own guarantee (every displayed SE under one code).
 #   (d) walk vs teleport at EQUAL placements: glossy mean <= 0.5 codes and p99 <= 2 (the MIRROR's half is stage 5's,
 #       R2: printed, not judged);
 #   (e) the held small lamp step is rtreflect.lamp_step_held's (lamp_step_held.sh).
@@ -171,9 +176,13 @@ if rows:
     if rising: print("(a) the GI rows at the rises' frames (+-10): %s" % (sorted(set(sum([giAt(max(0, r.frame - 10), r.frame + 11) for r in rising], []))) or "none"))
     active = {i: rows[i]["refl_rest_active"] for i in (80, 300, 600) if i < len(rows)}
     print("(b') the rest's active texels at frames 80 / 300 / 600: %s" % " / ".join(str(active.get(i, "-")) for i in (80, 300, 600)))
-    mirror = max(float(r["mirror_mean"]) for r in rows[1:max(hold, 2)])
-    print("(c) the mirror's mean change before the hold: max %.3f" % mirror)
-    if mirror > 1.0: fails.append("(c) the mirror's mean change before the hold <= 1 code: %.3f" % mirror)
+    mirror = [float(r["mirror_mean"]) for r in rows]
+    mwin = [sum(mirror[a:b]) / (b - a) for a, b in spans]
+    print("(c) mirror mean change, 10-frame windows from %d to the hold: %s" % (start, " ".join("%.4f" % w for w in mwin)))
+    _, _, msigma, mrising = rise_law.judge(mirror, start, end, max(1e-4, 1.0 / max(1, int(rows[1]["mirror_px"]))))
+    print("(c) the mirror's rise-law noise %.5f; rises %d (the first frame's change %.3f, printed)" % (msigma, len(mrising), mirror[1] if len(mirror) > 1 else -1))
+    if mrising: fails.append("(c) the mirror converges with no rise to the hold (the rise law): rises %s"
+                             % " ".join("%s:%d:%.4f->%.4f(%.4f)" % r for r in mrising[:10]))
     # (g) THE REST'S COST (the lead's bar, PHOTON-7 stage 6): no rest frame's trace costs more than one full TILE frame -
     # THE MAX OVER THE TILE FRAMES (k 4 over every batching texel, the hand-over included; frame 5 alone was a proxy
     # 2.5 % low: the residual's store begins at v = 2N, frames 14-15) - the compact path's tail included (its frames:
