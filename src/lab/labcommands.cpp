@@ -23,8 +23,8 @@ const std::vector<VerbDoc> &verbs()
           "animated nodes play - Bistro's, under the stillness door (PHOTON-2 round 2, G6); REFUSED where nothing carries "
           "an animation (it would move nothing: `slide` moves an object)" },
         { "reflections", "reflections on|off", 1, 1,
-          "the view's reflection: on = the world's (the rays where the scene traces them, the march where it does not - "
-          "the reflection has no mode, PHOTON-7-9A); off = no reflection at all (PostFxDesc::ssr 0 - the chain without its "
+          "the view's reflection: on = the world's (the hybrid where the scene traces rays - the screen first, then the "
+          "rays; the march where it does not - the reflection has no mode, PHOTON-7-9A); off = no reflection at all (PostFxDesc::ssr 0 - the chain without its "
           "prepass: an A/B's arm, PHOTON-7 8B's pop); a graph rebuild, the histories restart" },
         { "photon", "photon off|voxels|probes|cards|screenProbes|diffuse|reflections|hits|gatherHits", 1, 1,
           "the scene's Photon view (Scene::setPhotonView): 'reflections' shows the specular environment term alone - "

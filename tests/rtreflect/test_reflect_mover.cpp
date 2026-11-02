@@ -25,8 +25,8 @@
 // one scene, the materials and the march swapped between them: a glossy floor and
 // a mirror floor under a matte sphere (the REFLECTED footprint: the sphere's
 // mirror image through the floor plane, minus the sphere), and a glossy sphere
-// (its own disk) — by the rays alone (PHOTON-7-9A deleted the march's arms with the
-// Both estimator: a ray chain reflects by its rays on the desktop and in a headset alike).
+// (its own disk) — by the ray chain's one shape (PHOTON-7-9A: the hybrid, screen first then
+// rays; its Both-vs-Rays arm pairs went with the mode).
 //
 // THE NUMBERS, frames-counted: at four checkpoints of a 240-frame run the MOVING
 // frame is read, the sphere is held at that pose for kSettleFrames and the
@@ -647,8 +647,8 @@ int main(int argc, char **argv)
     }
 
     const Arm arms[] = {
-        // THE RAY TIER's (the reflection has no mode since PHOTON-7-9A: a ray chain reflects by its rays alone - the
-        // march's arms, the old desktop default, are deleted with Both): a glossy mover's reflection of the world (the
+        // THE RAY TIER's (the reflection has no mode since PHOTON-7-9A: the hybrid on the desktop - the old "march"
+        // arms were that same shape and are folded into these): a glossy mover's reflection of the world (the
         // owner's dither: 5.94 codes and 2.2x the still grain before), and a floor's reflection of a mover (22.8 codes
         // of trail before) - and a mirror, which has no history to get wrong.
         { "rays: glossy floor 0.2, the sphere's reflection", 1.0f, 0.2f, 0.0f, 0.8f, Region::Reflected,
