@@ -181,7 +181,7 @@ lab.camera_cut 4.55  spec.sh test photon-2 --subsystem lab, the card lock held, 
 lab.boots_and_shoots 2.68  solo, the card lock held, :73, warm (LAB-1 stage 1, 2026-10-22; 11.38 s on the run that warmed the shared cache)
 lab.dolly_matches_probe 1.99  solo, the card lock held, :73 (LAB-1 stage 3, 2026-10-22; the lab run itself, dolly.sh + the box set at two stops)
 lab.envs_build 6.83  solo, CPU (PHOTON-7 stage 6, READ_A finding 2, 2026-10-23: the eleven checks in parallel; photon-contact's corrugated chained floor the slowest, its bake 3.3 s)
-lab.monitor 2.25  solo, the card lock held, :72 (PHOTON-7 jahlab monitor, 2026-10-25: photon-area at 960x540, the boot 30 frames and a lamp step 30, 127 frames)
+lab.monitor 5.13  the master's own record, spec tier, :60, the card lock held (testing/runs 20261102T062332-2187edd42, photon-7 2187edd42; URGENT #148, 2026-11-02: re-priced from its record - 2.25 at 2026-10-25 was ~8 ms a frame; photon-area's Epic frame now spans 16-18 ms of GPU (the monitor's own span), so 127 frames are ~2.2 s of GPU alone, plus a 1.1-s first frame and the warm wrap; the script direct in the row's environment read 4.82 s, loaded 7.4)
 lab.no_self_drain 2.96  solo, the card lock held, :72 (PHOTON-7 walk hitch, 2026-10-25: photon-glass at 960x540, boot 40 + a walk 80 under monitor; the fork's queue counters)
 lab.commit_reach 2.56  solo, the card lock held, :72 (PHOTON-7 walk hitch 2, 2026-10-25: photon-court at 960x540, a -z walk of 150 under monitor, each commit's slab and computed cells)
 gi.inject_fold 0.02  solo, CPU only (PHOTON-7 walk hitch 2, 2026-10-25: the injection boxes' fold, pure geometry)

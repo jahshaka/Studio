@@ -19,7 +19,14 @@
 #       BUBBLE (self: - bubble:; urgent #64: a submission inside it is no longer an exemption - the bubble is the fork's
 #       own timestamp pair at each flush, the flushed buffer's last BOTTOM_OF_PIPE to the next one's first TOP_OF_PIPE,
 #       never a CPU-side estimate; a row whose bubble could not be measured, bubblelost:, is red) - a dispatch through
-#       the Photon door directly inside gi.step files its own row (photonDispatch);
+#       the Photon door directly inside gi.step files its own row (photonDispatch). (4) JUDGES THE FRAMES THAT CREATE NO
+#       PIPELINE (the record's own `compiles` 0; URGENT #148, 2026-11-02): a frame that builds pipelines in the frame
+#       carries the driver's first-use work in our command stream, between two rows' timestamps where no engine marker
+#       can stand - MEASURED, one hold, two fresh processes on photon-7 2187edd42's jahlab: a cold engine cache (compiles
+#       42 / 13 / 1 on boot frames 1-3) read 0.115 / 0.102 / 0.060 ms unnamed at the warm run's own boundaries
+#       (gi.step|rq.skin, gi.step|gi.late), the warm cache (compiles 0) 0.033 / 0.043 / 0.022 there; every frame with
+#       compiles 0 alike in both (<= 0.048). The frames it skips are printed with their compiles and gaps, and a part
+#       with no frame to judge is red;
 #   (4b) THE BUBBLE's SANITY: a row with no submission inside carries a bubble of EXACTLY 0, and so do a row's own
 #       stretches with none (bubblenosub: is the breach - a credit the queue's own counters never saw);
 #   (5) NO OVERRUN: no row's children sum past it beyond the timestamps' rounding (1e-3 ms; overrun:) - an overlap or a
@@ -50,6 +57,7 @@ for part, n in (('boot', 30), ('step', 30)):
     if len(F) != n or not head or not S: fails.append('(1) %s: %d frame lines of %d, summary %s' % (part, len(F), n, bool(head)))
     if head and 'records without GPU time 0' not in head[0]: fails.append('(1) %s: a record without GPU time' % part)
     worst = 0.0
+    judged, skipped = 0, []
     for l in F:
         kv = dict(re.findall(r'(\w+) (-?[\d.]+(?:e-?\d+)?|nan)', l.split('|')[0]))
         span, idle, busy, passes, rows, rbubble, unattr = (float(kv[k]) for k in (
@@ -67,7 +75,13 @@ for part, n in (('boot', 30), ('step', 30)):
         for name, ms in tok.items():
             names[name] = max(names.get(name, 0.0), float(ms))
         where = re.search(r' gap (-?[\d.]+) (\S+) \|', l)
-        if unattr > 0.1: fails.append('(4) %s frame %s: %.4f ms of gaps no row names (the widest %s ms between %s)' % (
+        compiles = int(kv.get('compiles', 0))
+        if compiles > 0:   # (4) on a frame that creates no pipeline (the header: the driver's first-use work)
+            skipped.append('%s (compiles %d, unnamed %.4f ms)' % (kv.get('F', '?'), compiles, unattr))
+            tok = {k: v for k, v in tok.items() if not k.startswith(('self:row:', 'self:nested-row:'))}
+        else:
+            judged += 1
+        if unattr > 0.1 and compiles == 0: fails.append('(4) %s frame %s: %.4f ms of gaps no row names (the widest %s ms between %s)' % (
             part, kv.get('F', '?'), unattr, where.group(1) if where else '?', where.group(2) if where else '?'))
         for name, ms in tok.items():
             if not name.startswith(('self:row:', 'self:nested-row:')):
@@ -96,6 +110,8 @@ for part, n in (('boot', 30), ('step', 30)):
         worst_self = max([float(v) for k, v in tok.items() if k.startswith(('self:row:', 'self:nested-row:'))] + [0.0])
         names['__worst_self_' + part] = max(names.get('__worst_self_' + part, 0.0), worst_self)
         names['__worst_unattr_' + part] = max(names.get('__worst_unattr_' + part, 0.0), unattr)
+    print('%s: (4) judged on %d frames that create no pipeline; skipped %s' % (part, judged, skipped or 'none'))
+    if judged == 0: fails.append('(4) %s: no frame creates no pipeline - the engine cache was cold, nothing to judge' % part)
     print('%s: the frame adds up - the worst |work + idle - span| %.4f ms; the worst unnamed gap %.4f ms, '
           'the worst row own time left to no child %.4f ms (%.4f ms less its measured bubble)' % (
               part, worst, names.get('__worst_unattr_' + part, 0.0), names.get('__worst_self_' + part, 0.0),
