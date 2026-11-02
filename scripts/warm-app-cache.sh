@@ -47,7 +47,8 @@
 #                    382 s + 332 s with the driver cache off (#103), and `--only app` (both of the app's boots) ran 9 m 37 s,
 #                    226 s of it the card's wait, 25 s short of the harness's 10-minute call (#106). With --check it answers
 #                    for the named boots alone.
-#   --budget <s>     the call's whole bound (default 570: the harness's 600-s foreground call less 30 s). THE CARD's WAIT IS
+#   --budget <s>     the call's whole bound (default 1170: a 1200-s call window less 30 s — RUN IT IN THE BACKGROUND; the card is
+#                    shared and one hold runs up to 10 min, so a boot's wait must cover a full hold, URGENT #130). THE CARD's WAIT IS
 #                    NEVER INSIDE A BOOT's BUDGET: each boot takes the lock for itself (scripts/gpu-exclusive.sh) and waits at
 #                    most the budget left less the boot's own estimate (its last measured wall, <tests-dir>/.warm-walls; the
 #                    first warm of a tree the cold walls measured below), never under a tenth of the budget (at most 60 s)
@@ -115,7 +116,7 @@
 # content beyond the born World compiles on every run (the residue named, HARNESS-1). ONE answer for the boots named: "warm at <key>" when every one is, else "cold at <key>:
 # <each cold boot's why>" (exit 3 under --check; else their boots, in order).
 set -u
-BUILD=""; CHECK=0; KEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=570; COLDROWS=""
+BUILD=""; CHECK=0; KEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=1170; COLDROWS=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
@@ -287,7 +288,7 @@ note_wall() {
     { grep -v "^$1 " "$WALLS" 2>/dev/null; echo "$1 $2"; } > "$WALLS.tmp" && mv "$WALLS.tmp" "$WALLS"
 }
 T0=$(date +%s); RAN=0; WAIT=0
-FLOOR=$(( BUDGET / 10 )); [ "$FLOOR" -le 60 ] || FLOOR=60   # the first boot's least wait: 57 s of the default 570
+FLOOR=$(( BUDGET / 10 )); [ "$FLOOR" -le 60 ] || FLOOR=60   # the first boot's least wait: 60 s (the default budget 1170 leaves a boot ~830 s of wait, #130)
 # room <boot> <boots left>: the card's wait this boot may take (WAIT), or exit 75 when the boot no longer fits the call
 room() {
     local est left
