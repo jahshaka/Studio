@@ -672,10 +672,18 @@ set_tests_properties(gi.share_law PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscr
 #   (iii) A REST IS A REST - for 2 x lightWorkFrames + 2 frames nothing owed, no brick resumed or passed, the half store the
 #         same word for word (Scene::giHalfStoreWords). Every row; green everywhere.
 #   THE PICTURE after the lamp's step up, judged by tests/support/rise_law.py (gi.hold_after_stop (f)'s law) in the wrapper
-#         feedback_lamp.sh: .lamp.up at 64 x 64 (photon-7 bursts three times there, this lane's tip none: a guard, green);
-#         .room at gi.hold_after_stop's 960 x 540 with the cards - DECLARED RED to PROBE-GATHER-REST-1: the screen-probe
-#         gather's picture bursts after a lamp step while the store is monotone and resting (the field dispatching
-#         nothing); photon-7's own (the same 4-frame cadence and signature on both trees).
+#         feedback_lamp.sh, on the real gather (StillPicture): .lamp.up at 64 x 64 and .room at gi.hold_after_stop's
+#         960 x 540 with the cards - green (guards).
+#   .room_geom: the room part in photon-room's shell (gi.hold_after_stop (f)'s reproduction, BISTRO-REST-1): 8 m tall, its
+#         ceiling in cascade 1 alone at Epic; the picture's rise law after the lamp step. DECLARED RED to FEEDBACK-ORDER-1
+#         (the lead, 2026-11-02): the brick scheduler - an outer cascade budget-starved and passed in cursor order
+#         (cascade 1 at 113 bricks a frame over ~3000 active: a sweep of ~28 frames) delivers its input to cascade 0 in
+#         waves, and the picture bursts as each lands; photon-7's own (red there too, (ii') with it), shown here because
+#         the level-0 hit read reads the ceiling's own cascade-1 half (B's footprint read hid it). gi.hold_after_stop (f)
+#         is the same red on photon-room. The set-aside first fix and its numbers: spikes/feedback-order-1/.
+#   ROUTES: the picture parts (.lamp.*, .room, .room_geom) StillPicture - the screen-probe gather; the store parts (.up,
+#         .down, .scroll, the pair) `store` - route-independent: store laws only; the view exists to tick the frame. GI live
+#         at the shipped default updateBudget 1 everywhere.
 #   .scroll: gi.scroll_slab G's two-cascade chain at High, a pinned cascade-0 scroll bringing an emissive panel in - it comes
 #         to rest and (iii) holds after it.
 add_executable(test_gi_feedback_closed_box test_gi_feedback_closed_box.cpp)
@@ -690,11 +698,11 @@ target_compile_definitions(test_gi_feedback_closed_box PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_feedback_closed_box PRIVATE JahshakaEngine)
 add_dependencies(test_gi_feedback_closed_box JahshakaEngineMedia)
-jah_gpu_row(gi.feedback_closed_box.up CLASS engine FRAMES 267 COMMAND test_gi_feedback_closed_box box.up
+jah_gpu_row(gi.feedback_closed_box.up CLASS engine FRAMES 269 COMMAND test_gi_feedback_closed_box box.up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 jah_gpu_row(gi.feedback_closed_box.down CLASS engine FRAMES 301 COMMAND test_gi_feedback_closed_box box.down
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-jah_gpu_row(gi.feedback_facing_pair.up CLASS engine FRAMES 330 COMMAND test_gi_feedback_closed_box pair.up
+jah_gpu_row(gi.feedback_facing_pair.up CLASS engine FRAMES 313 COMMAND test_gi_feedback_closed_box pair.up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 jah_gpu_row(gi.feedback_facing_pair.down CLASS engine FRAMES 388 COMMAND test_gi_feedback_closed_box pair.down
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -706,13 +714,18 @@ jah_gpu_row(gi.feedback_closed_box.lamp.up CLASS engine FRAMES 210
          COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/feedback_lamp.sh $<TARGET_FILE:test_gi_feedback_closed_box>
                  ${CMAKE_CURRENT_BINARY_DIR}/work/feedback_lamp.up lamp.up
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-jah_gpu_row(gi.feedback_closed_box.room CLASS engine FRAMES 210
+jah_gpu_row(gi.feedback_closed_box.room CLASS engine FRAMES 170
          COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/feedback_lamp.sh $<TARGET_FILE:test_gi_feedback_closed_box>
                  ${CMAKE_CURRENT_BINARY_DIR}/work/feedback_room room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.feedback_closed_box.room_geom CLASS engine FRAMES 148
+         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/feedback_lamp.sh $<TARGET_FILE:test_gi_feedback_closed_box>
+                 ${CMAKE_CURRENT_BINARY_DIR}/work/feedback_room_geom room geom
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.feedback_closed_box.up gi.feedback_closed_box.down gi.feedback_facing_pair.up
                      gi.feedback_facing_pair.down gi.feedback_closed_box.lamp.up gi.feedback_closed_box.lamp.down
-                     gi.feedback_closed_box.room gi.feedback_closed_box.scroll
+                     gi.feedback_closed_box.room gi.feedback_closed_box.room_geom
+                     gi.feedback_closed_box.scroll
                      PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
 # gi.card_law (BISTRO-REST-1) - A CARD TEXEL NEVER SENDS NEGATIVE LIGHT, AND ITS MOVE RULE READS EVERY VALID REFERENCE AS
@@ -1398,6 +1411,10 @@ endif()
 # write + 17, the field's last write <= 40 frames, a follow frame's extra GPU <= 3 ms and its entering planes' fill
 # frames stepping no more pixels than the same crossing with them inline - J1's fade) and THE FOLIAGE CLASS (K5).
 # hold_after_stop.sh says the law and the base.
+# (f) DECLARED RED to FEEDBACK-ORDER-1 (BISTRO-REST-1, the lead's ruling 2026-11-02): photon-room's ceiling lies in
+# cascade 1 alone, whose input reaches cascade 0 in its scheduler's sweeps (the cursor-ordered passes of a budget-starved
+# outer cascade) - reproduced as gi.feedback_closed_box.room_geom, red on photon-7 and on this lane's tip by the same
+# wave; green on B (4a31da26f) only because its footprint hit read hid it.
 # 960x540; five jahlab sessions: 393, 424, 483, 483 and 483 frames.
 if(TARGET jahlab)
     jah_gpu_row(gi.hold_after_stop CLASS engine FRAMES 2266

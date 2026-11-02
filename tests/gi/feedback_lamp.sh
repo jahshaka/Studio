@@ -2,11 +2,11 @@
 # gi.feedback_closed_box.lamp.up's and .room's wrapper (BISTRO-REST-1): the fixture's laws, then THE PICTURE's per-frame change after the
 # interior lamp step judged by the one rise law (tests/support/rise_law.py - gi.hold_after_stop (f)'s), the quantum one
 # pixel-code over the picture's channels averaged (64 x 64 x 3; the room part 960 x 540 x 3).
-# usage: feedback_lamp.sh <test_gi_feedback_closed_box> <work dir> [part: lamp.up (default) | room]
+# usage: feedback_lamp.sh <test_gi_feedback_closed_box> <work dir> [part: lamp.up (default) | room] [the room's ingredients]
 set -u
-BIN=${1:?the fixture}; WD=${2:?work dir}; PART=${3:-lamp.up}
+BIN=${1:?the fixture}; WD=${2:?work dir}; PART=${3:-lamp.up}; ING=${4:-}
 rm -rf "$WD"; mkdir -p "$WD"
-"$BIN" "$PART" "$WD"
+"$BIN" "$PART" "$WD" $ING
 rc=$?
 HERE=$(cd "$(dirname "$0")" && pwd)
 PX=$([ "$PART" = room ] && echo $((960 * 540 * 3)) || echo $((64 * 64 * 3)))

@@ -30,29 +30,35 @@
 // from its rest at 12, back to 8; the field on, a
 // 1-m window in the +z wall to a sky of 0.5, the picture 64 x 64 - a guard: photon-7 bursts three times, this lane's tip
 // none) and room (the lamp's up step with the cards on and the picture at gi.hold_after_stop's 960 x 540 - (f)'s ingredient:
-// the gather's probe grid at the picture's real size; `nocards` as a third argument takes the cards off).
+// the gather's probe grid at the picture's real size; `geom` as a third argument puts it in photon-room's shell).
 // THE LAWS, on the surface voxels (the box's: a cell inside a face, a metre from its edges, its room-facing half covered;
 // the spheres': a cell within a cell of the sphere, its half facing along the radius covered; L = that half's light over
 // its coverage):
-//   (i)  THE FIXED POINT IS THE CLOSED FORM (box, pair): at the feedback's rest every voxel within ONE CODE plus ONE STORE
+//   (i)  THE FIXED POINT IS THE CLOSED FORM (box.up, pair.up, at the rest after the step: the form is linear in E, so at
+//        2E it is twice the one below): at the feedback's rest every voxel within ONE CODE plus ONE STORE
 //        STEP of the closed form - the engine's own bounds: a brick stops once the tail of its series is under a code
 //        (PhotonBrickFeedback_cs.glsl), and the half-float store rounds to nearest (a step 2^(floor(log2 L) - 10)).
 //        Printed beside it, THE DEFICIT SPLIT: a 64-pass Jacobi of the same state (the door gi.bounceJacobi - no stop law,
 //        but WITH the write hold: "feedback = Jacobi" means the feedback equals the HELD Jacobi) - the Jacobi against the
 //        closed form is what the gather reads off it, the feedback against the Jacobi is where the iteration stops.
-//        DECLARED RED to GATHER-TRUTH-1 (the lead, 2026-11-02): box -1.451 %, pair inner +0.785 %, outer +8.266 % on this
-//        lane's tip (photon-7: -18.68 / +0.49 / +6.59 %); the closed form above is LAMBERTIAN while HlmsPbs's diffuse is
+//        DECLARED RED to GATHER-TRUTH-1 (the lead, 2026-11-02): at 2E box -1.492 % (the Jacobi -1.428 %, worst 6.21 codes),
+//        pair inner +0.747 %, outer +8.451 % (worst 9.35) on this lane's tip (at E photon-7: -18.68 / +0.49 / +6.59 %); the
+//        closed form above is LAMBERTIAN while HlmsPbs's diffuse is
 //        Disney and the hit read sends the bounce by DA(N.V) / DA_hemi - the expectation to be re-derived from the lobe
 //        reference (GATHER-TRUTH-1 S0). Never loosened here.
 //   (ii') MONOTONE TO THE NEW FIXED POINT (box, pair, lamp; up and down), per voxel: after a step UP of the sources the old
 //        fixed point is a SUB-solution, x_old = A x_old + b_old <= A x_old + b_new, and for a positive A every update in
 //        ANY order - Jacobi, Gauss-Seidel, the feedback's asynchronous slices - keeps x non-decreasing and <= x* (by
 //        induction): no voxel moves down and none passes its new fixed point (the value it rests at). A step DOWN mirrors
-//        it (the old fixed point a SUPER-solution). The one allowance is the store's rounding: ONE STORE STEP (the write
-//        hold's quantum). A scheduler's pause cannot break it; an orbit, an overshoot or a read of a stale or mixed state
-//        can. The box's and the pair's steps are MATERIAL SWAPS (setNodeMaterial: the emission doubled, then halved
-//        back) - DECLARED RED to MATERIAL-SWAP-1 (photon-7's own: box up 17,608 moves against the step / 99,734 past,
-//        this tip 1,338 / 14,695); the lamp's are relights.
+//        it (the old fixed point a SUPER-solution). The one allowance is THE WRITE HOLD: a half's write is skipped within
+//        max( 1, 0.5 / (1 - r) ) store steps of what it stores (capped at 0.8 of a code), r <= the scene's largest lobe
+//        a', so the store follows its iterate only to within hold = max( 1, 0.5 / (1 - a') ) steps - 1.445 at the box's
+//        a' 0.654 (derived at monotoneLaw). A scheduler's pause cannot break it; an orbit, an overshoot or a read of a
+//        stale or mixed state can. The box's and the pair's steps are MATERIAL SWAPS (setNodeMaterial: the emission doubled, then halved
+//        back) - DECLARED RED to MATERIAL-SWAP-1 (its acceptance, this tip at the derived hold: box up 1,281 against the
+//        step / 15,651 past, box down 125 / 0, pair up 1,472 / 6,914; photon-7's own and worse there at one step's
+//        allowance: box up 17,608 / 99,734, down 3,844, pair up 1,393 / 3,223, down 17); pair.down and the lamp's relights
+//        green.
 //   (iii) A REST IS A REST (every part): from the first frame the chain and the feedback owe nothing (GiStatus::chainOwed /
 //        feedbackOwed false), for 2 x lightWorkFrames + 2 frames nothing is owed, the half store does not change by a
 //        bit (Scene::giHalfStoreWords: its words as stored, compared word for word) and no brick resumes or passes - the window is the floor share's bound on how late an owed brick is
@@ -60,12 +66,12 @@
 //        a slab's rounding and the round's own frame the +2), so a write still owed when the rest was read lands in it.
 //   THE PICTURE (lamp.up, room): its per-frame mean change after the lamp's step up goes to <work>/lamp_picture.txt for the
 //        row's wrapper to judge by tests/support/rise_law.py (gi.hold_after_stop (f)'s law), with a PIC line a frame (the
-//        field's dispatch, its owed restarts, the store's active bricks: what wrote that frame). The room's DECLARED RED
-//        to PROBE-GATHER-REST-1: the screen-probe gather's picture bursts after a lamp step while the store is monotone
-//        and resting (the field dispatching nothing, the store's active bricks falling) - photon-7's own (six rises
-//        there, eight on this lane's tip, the same 4-frame cadence).
-// A fixture: one offscreen view (the cards off but in the room part; the field off but in the lamp and room parts; the
-// gather on at every ray chain; the rays on).
+//        store's own sum of |delta| over the strip's voxels, the field's restarts that frame, its dispatch and owed
+//        restarts, the store's active bricks: what wrote that frame).
+// A fixture: one offscreen view - StillPicture in the picture parts (the editor's own picture: the screen-probe gather
+// runs), Live in the store parts (route `store`: route-independent, store laws only; the view exists to tick the frame) -
+// GI live at the shipped default updateBudget 1 (the GI state), the rays on; the cards off but in the room part, the
+// field off but in the lamp and room parts.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/lawline.h"
@@ -216,10 +222,12 @@ Reading read(Scene *s, bool spheres, bool strip = false)
                               : std::fabs(in[1]) >= std::fabs(in[2])                                       ? 1 : 2;
                 const size_t b = size_t(2 * a + (in[a] > 0.0f ? 1 : 0));
                 const float *side = &v.halfLight[(((size_t(z) * v.height + y) * 6u + b) * v.width + x) * 4u];
-                if (!(side[3] > 0.5f)) continue;
-                const float L = std::max(std::max(side[0], side[1]), side[2]) / side[3];
+                // (an uncovered half keeps its slot, NaN: the strip's voxel set is the geometry's alone, so a law over
+                // the frames counts every voxel whole - a coverage change never restarts a history)
+                const float L = side[3] > 0.5f ? std::max(std::max(side[0], side[1]), side[2]) / side[3] : NAN;
                 r.L.push_back(L);
                 r.surface.push_back(surf);
+                if (!(side[3] > 0.5f)) continue;
                 r.mean[surf] += L;
                 ++r.count[surf];
             }
@@ -249,7 +257,20 @@ int main(int argc, char **argv)
     // (the room part: hold_after_stop's 960 x 540 picture - the gather's probes are the picture's, so its size is an
     // ingredient; the others a 64 x 64 view)
     const bool room = scene == "room";
-    View *view = e->createOffscreenView("feedback", room ? 960 : 64, room ? 540 : 64, Colour(0, 0, 0), OffscreenContract::Live);
+    // THE ROOM's SHELL (the lead's ruling 2026-11-02: gi.hold_after_stop (f) reproduced in our own rows, its ingredients
+    // added one at a time - photon-room's shell red alone, its ceiling at 7 m inside cascade 0 green; its camera and the
+    // lab's sun and sky no further cause): the third argument `geom` - an 8 m cube room, 0.3 m walls, the 1 x 1 m opening
+    // at 3.5-4.5 m, every surface matte rho 0.5, no emission; the lamp 6 m up, range 20 (src/lab/envs/photon_room.cpp)
+    const std::string ingredients = room && argc > 3 ? "," + std::string(argv[3]) + "," : std::string();
+    const auto has = [&](const char *k) { return ingredients.find("," + std::string(k) + ",") != std::string::npos; };
+    // THE ROUTE. The picture parts (lamp, room): the view declares StillPicture - the editor's own picture - so at this
+    // ray chain it runs the screen-probe GATHER (OgreView.cpp: an offscreen view gathers only under StillPicture; a
+    // Live one takes the no-ray route's screen integrate, which NO-RAY-CUT-1 deletes - PROBE-GATHER-REST-1's audit).
+    // The store parts (box, pair, scroll): route `store` - route-independent: store laws only; the view exists to
+    // tick the frame (Live: both diffuse routes only READ the store, and the field and the cards are off there).
+    const bool picturePart = scene == "lamp" || room;
+    View *view = e->createOffscreenView("feedback", room ? 960 : 64, room ? 540 : 64, Colour(0, 0, 0),
+                                        picturePart ? OffscreenContract::StillPicture : OffscreenContract::Live);
     Scene *s = e->createScene("feedback");
     if (!view || !s) { std::printf("FAIL: the view and the scene\n"); return 1; }
     view->setScene(s);
@@ -273,6 +294,29 @@ int main(int argc, char **argv)
         std::printf("   the pair: a1 %.5f, a2 %.5f, F21 %.5f; L1 = %.6f, L2 = %.6f; the Jacobi's eigenvalues %+.4f, %+.4f\n",
                     a1, a2, F21, target[0], target[1], 0.5 * (tr + disc), 0.5 * (tr - disc));
         enginetest::testCameraLookAt(view, Vec3(kSphereCentre.x, kSphereCentre.y, kSphereCentre.z + 2.0f), kSphereCentre);
+    } else if (has("geom")) {
+        // photon-room's shell (src/lab/envs/photon_room.cpp roomShell), matte rho 0.5 at roughness 1
+        const MaterialId m = material(s, 0.5f, 0.0f);
+        const auto box = [&](const Vec3 &lo, const Vec3 &hi) {
+            const NodeId n = s->createNode();
+            s->attachMesh(n, s->createMesh(enginetest::unitCubeMesh()), m);
+            enginetest::setNodePosition(s, n, Vec3(0.5f * (lo.x + hi.x), 0.5f * (lo.y + hi.y), 0.5f * (lo.z + hi.z)));
+            enginetest::setNodeScale(s, n, Vec3(hi.x - lo.x, hi.y - lo.y, hi.z - lo.z));
+        };
+        const float t = 0.3f, h = 4.0f, top = 8.0f;
+        box(Vec3(-h - t, -t, -h - t), Vec3(h + t, 0, h + t));
+        box(Vec3(-h - t, top, -h - t), Vec3(h + t, top + t, h + t));
+        box(Vec3(-h - t, 0, -h), Vec3(-h, top, h));
+        box(Vec3(h, 0, -h), Vec3(h + t, top, h));
+        box(Vec3(-h, 0, -h - t), Vec3(h, top, -h));
+        box(Vec3(-h, 0, h), Vec3(-0.5f, top, h + t));
+        box(Vec3(0.5f, 0, h), Vec3(h, top, h + t));
+        box(Vec3(-0.5f, 0, h), Vec3(0.5f, 3.5f, h + t));
+        box(Vec3(-0.5f, 4.5f, h), Vec3(0.5f, top, h + t));
+        float sky[27] = {};
+        sky[0] = sky[1] = sky[2] = 0.5f;
+        s->setAmbientSh(sky);
+        enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 0.0f), Vec3(0.0f, 2.0f, -3.0f));
     } else {
         const float w = 2.0f * kHalfX + 2.0f * kThick, d = 2.0f * kHalfZ + 2.0f * kThick;
         emitters.push_back(slab(s, Vec3(0.0f, -0.5f * kThick, 0.0f), Vec3(w, kThick, d), kE));
@@ -328,11 +372,13 @@ int main(int argc, char **argv)
         gi.cascadeSet[1] = GiParams::GiCascadeDesc{ 20.0f, 64, 0.0f };
     }
     gi.ddgi = (scene == "lamp" || room) ? GiToggle::On : GiToggle::Off;
-    // (the room part: the cards on - photon-room's pipeline; the gather is on at every ray chain; a third argument
-    // `nocards` takes them off - the ingredient's own arm)
-    gi.cards = room && !(argc > 3 && std::string(argv[3]) == "nocards");
+    // (the room part: the cards on - photon-room's pipeline; the gather is on at every ray chain)
+    gi.cards = room;
     gi.bounces = true;
-    gi.updateBudget = 0;
+    // (THE GI STATE: live, the shipped default updateBudget 1 - a row measures what the user runs; no law here needs GI
+    // paused. Paused, the field's owed restarts converge inline and its dispatch counter reads 0 whatever happened, so the
+    // picture would be measured on a path no user runs. A material swap arms no Settle either way: setNodeMaterial's
+    // invalidation is its path - OgreScene::setNodeMaterial -> PhotonComponent::invalidateGiCaches.)
     if (!s->setGlobalIllumination(gi)) { std::printf("FAIL: the GI\n"); return 1; }
     e->waitForAsyncShaders();
     const unsigned lwf = giQualityFacts(gi.quality).lightWorkFrames;
@@ -386,14 +432,32 @@ int main(int argc, char **argv)
         CHECK(moved == 0 && res1 == res0 && pas1 == pas0 && owedFrames == 0, m);
     };
     // (ii') frame by frame from a step to the next rest, PER VOXEL: after a step UP no voxel moves down and none passes
-    // its new fixed point (the value it rests at); after a step DOWN the mirror - each within one store step (the write
-    // hold's quantum). `dir` +1 up, -1 down, 0 no monotone law (the scroll: light enters and leaves). The lamp's up step
-    // also writes the picture's per-frame change for the wrapper's rise law.
+    // its new fixed point (the value it rests at); after a step DOWN the mirror - each within the write hold (above).
+    // `dir` +1 up, -1 down, 0 no monotone law (the scroll: light enters and leaves). The lamp's up step also writes the
+    // picture's per-frame change for the wrapper's rise law. Every strip voxel is counted whole (an uncovered half keeps
+    // its slot); the history restarts only when the strip's voxel set changes - a cascade's placement, the scroll part's.
+    // THE ALLOWANCE IS THE WRITE HOLD (LightVctBounceInject_piece_cs.any (a)): a half's write is skipped while its target
+    // lies within max( 1, min( 0.5 / (1 - r), 0.8 code / step ) ) store steps of what it stores, r its brick's contraction -
+    // at most the operator's bound, the scene's largest lobe a' (the brick's prior and every measured ratio are under it).
+    // So the store follows its iterate only to within that hold: a held half released by a later write meets it from up to
+    // a hold away, and a resting half sits up to a hold off its fixed point - the law allows hold = max( 1, 0.5 / (1 - a') )
+    // steps (the code cap only lowers it): 1.445 at a' 0.654 (the box, the lamp rooms), 1.726 at the pair's outer 0.710.
+    const double aMax = spheres ? std::max(a1, a2) : (has("geom") ? lobe(0.5) : a1);
+    const double hold = std::max(1.0, 0.5 / (1.0 - aMax));
     const auto monotoneLaw = [&](const char *what, int dir, bool picture) {
         std::vector<std::vector<float>> hist;
         std::vector<double> pic;
         Image last;
         if (picture) enginetest::readLinear(view, last);
+        unsigned long long restarts0 = s->published().gi.ifdRestarts;
+        std::vector<unsigned long long> ran0;   // (per cascade: the feedback's bricks run, cumulative)
+        for (const auto &c : s->published().gi.cascades) ran0.push_back(c.feedbackBricksRan);
+        if (picture)
+            for (size_t c = 0; c < s->published().gi.cascades.size(); ++c) {
+                const auto &cs = s->published().gi.cascades[c];
+                std::printf("   PIC cascade %zu: half-size %.2f m, cell %.4f m, centre (%.2f, %.2f, %.2f)\n", c, double(cs.halfSize),
+                            double(cs.cell), double(cs.centre.x), double(cs.centre.y), double(cs.centre.z));
+            }
         hist.push_back(read(s, spheres, true).L);
         int quiet = 0, k = 0;
         bool rested = false;
@@ -402,6 +466,10 @@ int main(int argc, char **argv)
             const Reading cur = read(s, spheres, true);
             if (!cur.ok || cur.L.size() != hist.back().size()) { hist.clear(); hist.push_back(cur.L); continue; }
             const bool same = std::memcmp(cur.L.data(), hist.back().data(), cur.L.size() * sizeof(float)) == 0;
+            double storeDelta = 0.0;   // (the store's own change that frame: the strip voxels' sum of |delta|)
+            for (size_t i = 0; i < cur.L.size(); ++i)
+                if (std::isfinite(cur.L[i]) && std::isfinite(hist.back()[i]))
+                    storeDelta += std::fabs(double(cur.L[i]) - double(hist.back()[i]));
             hist.push_back(cur.L);
             if (picture) {
                 Image img;
@@ -411,12 +479,24 @@ int main(int argc, char **argv)
                         for (int c = 0; c < 3; ++c) m += std::abs(int(img.rgba[i + c]) - int(last.rgba[i + c]));
                     pic.push_back(m / double(img.rgba.size() / 4 * 3));
                     last = img;
-                    // (what wrote that frame: the field's integration, its owed restarts, the store's active bricks)
+                    // (what wrote that frame: the store's own change over the strip's voxels, the field's restarts
+                    // that frame, its dispatch and owed restarts, the store's active bricks)
                     const GiStatus g = s->published().gi;
                     unsigned active = 0;
                     for (const auto &c : g.cascades) active += c.feedbackActive;
-                    std::printf("   PIC frame %d change %.4f field dispatched %u owed restarts %u working %d; store active bricks %u\n",
-                                k + 1, pic.back(), g.ifdDispatchedLastFrame, g.ifdOwedRestarts, g.ifdWorking ? 1 : 0, active);
+                    const unsigned long long restarts = g.ifdRestarts - restarts0;
+                    restarts0 = g.ifdRestarts;
+                    std::string perCascade;   // (each cascade's active bricks and the bricks its feedback ran that frame)
+                    for (size_t c = 0; c < g.cascades.size(); ++c) {
+                        const unsigned long long was = c < ran0.size() ? ran0[c] : 0ull;
+                        perCascade += " c" + std::to_string(c) + " a" + std::to_string(g.cascades[c].feedbackActive) + " ran" +
+                                      std::to_string(g.cascades[c].feedbackBricksRan - was);
+                        if (c < ran0.size()) ran0[c] = g.cascades[c].feedbackBricksRan;
+                    }
+                    std::printf("   PIC frame %d change %.4f store sum|d| %.6f over %zu voxels; field restarts %llu dispatched %u "
+                                "owed restarts %u working %d; store active bricks %u;%s\n", k + 1, pic.back(), storeDelta,
+                                cur.L.size(), restarts, g.ifdDispatchedLastFrame, g.ifdOwedRestarts, g.ifdWorking ? 1 : 0,
+                                active, perCascade.c_str());
                 }
             }
             quiet = owes() ? 0 : quiet + 1;
@@ -434,15 +514,17 @@ int main(int argc, char **argv)
             for (size_t t = 1; t < hist.size(); ++t)
                 for (size_t i = 0; i < fin.size(); ++i) {
                     const double now = hist[t][i], was = hist[t - 1][i];
+                    if (!std::isfinite(now) || !std::isfinite(was) || !std::isfinite(fin[i])) continue;   // (uncovered)
                     const double st = storeStep(std::max(std::fabs(now), std::fabs(was)));
                     const double moved = dir * (now - was);   // > 0: with the step
-                    if (moved < -st) { ++against; worstAgainst = std::max(worstAgainst, -moved / st); }
+                    if (moved < -hold * st) { ++against; worstAgainst = std::max(worstAgainst, -moved / st); }
                     const double beyond = dir * (now - double(fin[i]));
                     const double sf = storeStep(std::fabs(double(fin[i])));
-                    if (beyond > sf) { ++past; worstPast = std::max(worstPast, beyond / sf); }
+                    if (beyond > hold * sf) { ++past; worstPast = std::max(worstPast, beyond / sf); }
                 }
-            std::printf("   (ii') %s: voxel moves AGAINST the step past a store step: %zu (the worst %.2f steps); values PAST the "
-                        "new fixed point past a step: %zu (the worst %.2f steps)\n", what, against, worstAgainst, past, worstPast);
+            std::printf("   (ii') %s: voxel moves AGAINST the step past the write hold (%.3f steps): %zu (the worst %.2f steps); "
+                        "values PAST the new fixed point past it: %zu (the worst %.2f steps)\n", what, hold, against, worstAgainst,
+                        past, worstPast);
             enginetest::lawLine((part + "_against").c_str(), double(against), "moves", "==", 0.0);
             enginetest::lawLine((part + "_past").c_str(), double(past), "values", "==", 0.0);
             std::snprintf(m, sizeof m, "(ii') %s: MONOTONE TO THE NEW FIXED POINT - no voxel against the step, none past it", what);
@@ -469,6 +551,7 @@ int main(int argc, char **argv)
         double fbMean[2] = { 0, 0 }, jMean[2] = { 0, 0 };
         size_t n[2] = { 0, 0 };
         for (size_t i = 0; i < fb.L.size(); ++i) {
+            if (!std::isfinite(fb.L[i])) continue;   // (an uncovered half's slot)
             const int k = fb.surface[i];
             const double T = scale * target[k];
             const double off = std::fabs(double(fb.L[i]) - T);
@@ -508,22 +591,22 @@ int main(int argc, char **argv)
         ld.type = LightType::Point;
         ld.colour = Colour(1.0f, 1.0f, 1.0f);
         ld.intensity = 8.0f;
-        ld.range = 12.0f;
-        s->setNodeTransform(lamp, Vec3(0.0f, 2.0f, 0.0f), Quat(), Vec3(1, 1, 1));
+        ld.range = has("geom") ? 20.0f : 12.0f;
+        s->setNodeTransform(lamp, Vec3(0.0f, has("geom") ? 6.0f : 2.0f, 0.0f), Quat(), Vec3(1, 1, 1));
         s->setLight(lamp, ld);
     }
     restLaw(lit ? "the lamp at rest (the first rest)" : "the first rest", 900);
     if (scene == "box" || scene == "pair") {
         // the steps: the emission doubled (UP); for the DOWN row, doubled to its rest and then halved back
-        if (step == "up") {
-            const Reading r = read(s, spheres);
-            if (!r.ok) { std::printf("FAIL: the surfaces read back\n"); return 1; }
-            fixedPointLaw(r, 1.0);
-        }
+        // (the UP row: the step from the first rest - a verified one - and (i) at the rest after it: the closed form is
+        // linear in the emission, so at 2E it is 2 L*; the 64-pass Jacobi door last, no law after it)
         for (NodeId n : emitters) s->setNodeMaterial(n, material(s, kRho, 2.0f * kE));
         if (step == "up") {
             monotoneLaw("the emission doubled (up)", +1, false);
             restLaw("after the step up", 900);
+            const Reading r = read(s, spheres);
+            if (!r.ok) { std::printf("FAIL: the surfaces read back\n"); return 1; }
+            fixedPointLaw(r, 2.0);
         } else {
             restLaw("the emission doubled, at its rest", 900);
             for (NodeId n : emitters) s->setNodeMaterial(n, material(s, kRho, kE));
@@ -556,7 +639,8 @@ int main(int argc, char **argv)
         s->setLight(lamp, ld);
         if (step != "down") {
             monotoneLaw("the lamp stepped 8 -> 12 (up)", +1, true);
-            restLaw("after the lamp step up", 900);
+            // (the rest after the step: the lamp rows' law - the room's own law is the picture, its rest held there)
+            if (!room) restLaw("after the lamp step up", 900);
         } else {
             restLaw("the lamp at 12, at its rest", 900);
             ld.intensity = 8.0f;
