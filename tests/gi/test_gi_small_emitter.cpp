@@ -8,22 +8,17 @@
 // (roughness 0.05: the K = 1 mirror ray) facing +z, the camera 0.6 m in front of it looking straight in, and a 0.20 m
 // cube emitting E = 20 behind the camera on the mirror's axis - two arms: NEAR, 1.2 m from the mirror (the mirror ray
 // reads it in c1, whose 0.156 m cells are finer than the cube), and FAR, 3.0 m from it (read in c2, 0.469 m cells).
-// The no-ray tier as it ships (High, the field on: at roughness 0.05 the rays take the whole lobe). Rest is counted in
-// frames.
+// High, the field on, the RAYS OFF (law (1) reads the store, which the rays do not write; the fixture's rays-off is
+// the cleanup spec's to turn on). Rest is counted in frames.
 // THE LAWS (the far arm):
 //   (1) THE STORE HOLDS THE EMITTER AT EVERY CASCADE, BY ITS COVERAGE: cascades 0-2's emissive volumes peak at E within
 //       the half-float store's step (2^-10 of E) and the merge's (2^-18) - no other face shares the cube's cells there -
 //       and cascade 3's holds it (its 1.875 m cell shares the ground's faces: the coverage-weighted mean, in (0, E]);
-//   (2) THE MIRROR SHOWS IT: the far picture's brightest pixel equals the near arm's within one 8-bit code of it (the
-//       emitter's face is the same radiance at any distance, and its reflection that radiance times the metal's).
-//       DECLARED RED at 0.87 % (REDS-1, the lead's ruling): the near peak 18.1562 against the far 18.0000. Measured
-//       through the voxel door: every c1 cell of the near cube emits exactly E (emit factors 0.5 = f 1), and its
-//       single-face cells' fronts read E + rho G at 20.0000-20.0127; the cells whose canonical normal MIXES two faces
-//       read 20.15-20.32 (the -z/+x edge 20.1951 x F0 0.9 = the peak): their side's cosine hemisphere sends rays into the
-//       cube's OWN neighbouring cells - a convex solid lighting itself at coarse cells. The law (the voxel route's next
-//       spec): a mixed-normal cell's side gathers over the hemispheres of the faces it holds. (c15de7326's green, near
-//       17.9844, read a wrong side under the emission itself; the side rule now decides on a face that looks at the ray.)
-// RED before the deletion: the far arm's c2 and c3 stores 0, its picture's peak 0.43 against the near arm's 18.1.
+//   (THE MIRROR'S LAW (2) - the far picture's peak against the near arm's within one code, read through the no-ray route's
+//   cone reflection, the fixture's rays off - and its declared red, 0.87 % (REDS-1: the near arm's mixed-normal cells
+//   lighting the cube itself at coarse cells), ARCHIVED by NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces; its law at the
+//   ray tier is the traced reflection's. The two arms' pictures stay printed.)
+// RED before the deletion: the far arm's c2 and c3 stores 0.
 // NOT LAWS HERE, printed (the coarse cell's two findings, measured on this fixture: PHOTON-7 10-3 F2): the image's
 // CENTRE in the far arm reads 0 - the cube's +z and -z faces share one c2 cell, whose mixed plane is no front to the
 // ray, which escapes; and the image's FLUX - a hit reads a cell's un-premultiplied radiance over the whole cell, so a
@@ -161,12 +156,9 @@ int main(int, char **)
         run(2);
     }
     {
-        char msg[200];
-        std::printf("   (not laws: F2) the image's centre far %.4f / near %.4f; its flux far / near %.3f (exact 0.25)\n",
-                    centre[1], centre[0], flux[0] > 0.0 ? flux[1] / flux[0] : -1.0);
-        std::snprintf(msg, sizeof(msg), "(2) the mirror shows the emitter far as near: the far picture's peak %.4f against "
-                                        "the near's %.4f within one code of it", peaks[1], peaks[0]);
-        CHECK(peaks[0] > 0.0 && std::fabs(peaks[1] - peaks[0]) <= peaks[0] / 255.0, msg);
+        std::printf("   (not laws: F2) the image's centre far %.4f / near %.4f; its flux far / near %.3f (exact 0.25); the "
+                    "peaks far %.4f / near %.4f\n", centre[1], centre[0], flux[0] > 0.0 ? flux[1] / flux[0] : -1.0,
+                    peaks[1], peaks[0]);
     }
     std::printf("\ngi.small_emitter: %d frames, %d failure(s)\n", frames, failures);
     return failures ? 1 : 0;

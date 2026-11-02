@@ -7,9 +7,10 @@
 // THE FIXTURE: a floor, two walls, a refractive pane (the refractives pass: its fragments have no screen product
 // and keep the world caches, the door's positive control) and a BLENDED pane at alpha 1 (7-5: the blended queues' own
 // pass on a gathering chain), a lamp and a sun, one offscreen view with the chain. Every
-// tier (Low, Medium, High, Epic: the GiQuality + the World Mode's SSR row; every Auto toggle the tier's) on THREE
-// chains: a RAY chain (the rays on, a still picture: the view gathers like a window), a NO-RAY chain (the scene's rays
-// Off) and a LIVE offscreen chain (the rays on, the Live contract: a live preview takes no gather).
+// tier (Low, Medium, High, Epic: the GiQuality + the World Mode's SSR row; every Auto toggle the tier's) on TWO
+// chains: a RAY chain (the rays on, a still picture: the view gathers like a window) and a LIVE offscreen chain (the rays
+// on, the Live contract: a live preview takes no gather - the screen integrate's products). (The NO-RAY chain's arm, the
+// scene's rays Off, and its pane in (5) archived by NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces.)
 // THE LAWS, per arm:
 //   (1) the door saw the opaque pass ("Jahshaka opaque") in the frames read (never vacuous);
 //   (2) L4: every record of the opaque passes ("Jahshaka opaque", "Jahshaka atom decode", both hosts) lists ONLY the
@@ -20,10 +21,10 @@
 //       pass reads (it lists one) - a blended fragment has no screen product (7-5 on a gathering chain; 7-6 on every
 //       chain: a chain that does not gather has the screen integrate's products, so it is a screen-GI chain too).
 // Every record of every arm is printed. Red on the base (the opaque passes bind the 40 voxel volumes and the field's
-// two textures at Epic); the ray arms went green at 7-5, the no-ray and live arms at 7-6.
+// two textures at Epic); the ray arms went green at 7-5, the live arms at 7-6.
 // AND ONCE, AT HIGH (7-5):
 //   (5) THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN: the blended pane's pixels (alpha 1: its own shading alone, the
-//       picture behind it weighed by zero) on the ray chain against the no-ray chain and the live ray chain - on every
+//       picture behind it weighed by zero) on the ray chain against the live ray chain - on every
 //       one its own pass after the opaque one (7-6; before it the two drew it inside the opaque pass with the
 //       prepass's properties withdrawn) - each at the GI's rest: the same function of the same world caches, lights and shadow maps, stored once into the
 //       RGBA16F target, so within ONE fp16 ulp of the larger value per channel (a gathering chain used to light it with
@@ -118,12 +119,10 @@ int main()
     const Tier tiers[] = { { "Low", GiQuality::Low, 0 }, { "Medium", GiQuality::Medium, 0 },
                            { "High", GiQuality::High, 1 }, { "Epic", GiQuality::Epic, 2 } };
     const std::vector<std::string> &allowed = photonScreenProducts();
-    struct Chain { const char *name; bool rays; OffscreenContract contract; };
-    const Chain chains[] = { { "ray", true, OffscreenContract::StillPicture },
-                             { "no-ray", false, OffscreenContract::StillPicture },
-                             { "live", true, OffscreenContract::Live } };
+    struct Chain { const char *name; OffscreenContract contract; };
+    const Chain chains[] = { { "ray", OffscreenContract::StillPicture }, { "live", OffscreenContract::Live } };
+    scene->setRayTracing(RayTracingMode::On);
     for (const Chain &ch : chains) {
-        scene->setRayTracing(ch.rays ? RayTracingMode::On : RayTracingMode::Off);
         view->setOffscreenContract(ch.contract);   // (the setter's own use: one view switching purpose)
         for (const Tier &t : tiers) {
             PostFxDesc fx;
@@ -244,42 +243,34 @@ int main()
                 }
             return true;
         };
-        std::vector<float> rayPane, livePane, liveRayPane;
-        int restRay = -1, restLive = -1, restLiveRay = -1;
+        std::vector<float> rayPane, liveRayPane;
+        int restRay = -1, restLiveRay = -1;
         const bool okRay = settledPane(OffscreenContract::StillPicture, rayPane, restRay);
         const GatherStatus gRay = scene->published().gi.gather;
         const bool okLiveRay = settledPane(OffscreenContract::Live, liveRayPane, restLiveRay);   // the live ray chain
-        scene->setRayTracing(RayTracingMode::Off);   // the no-ray chain: the same still picture, no rays
-        const bool okLive = settledPane(OffscreenContract::StillPicture, livePane, restLive);
-        const GatherStatus gLive = scene->published().gi.gather;
         // ONE fp16 ulp of the larger value: 2^(floor(log2 v) - 10) for a normal half
         const auto ulpOf = [](double v) {
             v = std::max(std::fabs(v), 6.103515625e-05);
             return std::ldexp(1.0, int(std::floor(std::log2(v))) - 10);
         };
-        double worstUlps = 0.0, meanRay = 0.0, meanLive = 0.0, meanLiveRay = 0.0;
+        double worstUlps = 0.0, meanRay = 0.0, meanLiveRay = 0.0;
         size_t past = 0;
-        const size_t n = std::min(std::min(rayPane.size(), livePane.size()), liveRayPane.size());
+        const size_t n = std::min(rayPane.size(), liveRayPane.size());
         for (size_t i = 0; i < n; ++i) {
-            const double a = rayPane[i];
-            for (const double b : { double(livePane[i]), double(liveRayPane[i]) }) {
-                const double ulps = std::fabs(a - b) / ulpOf(std::max(a, b));
-                worstUlps = std::max(worstUlps, ulps);
-                if (ulps > 1.0) ++past;
-            }
+            const double a = rayPane[i], b = liveRayPane[i];
+            const double ulps = std::fabs(a - b) / ulpOf(std::max(a, b));
+            worstUlps = std::max(worstUlps, ulps);
+            if (ulps > 1.0) ++past;
             meanRay += a;
-            meanLive += livePane[i];
-            meanLiveRay += liveRayPane[i];
+            meanLiveRay += b;
         }
-        if (n) { meanRay /= double(n); meanLive /= double(n); meanLiveRay /= double(n); }
+        if (n) { meanRay /= double(n); meanLiveRay /= double(n); }
         std::printf("\n   (5) the blended pane (alpha 1), %zu channel samples: the ray chain (gather %s, at rest after %d "
-                    "frames) mean %.5f, the live ray chain (at rest after %d) mean %.5f, the no-ray chain (gather %s, at "
-                    "rest after %d) mean %.5f; worst %.2f fp16 ulps, %zu past one\n",
-                    n, gRay.on ? "on" : "OFF", restRay, meanRay, restLiveRay, meanLiveRay, gLive.on ? "on" : "off",
-                    restLive, meanLive, worstUlps, past);
-        CHECK(okRay && okLive && okLiveRay && gRay.on && n >= 3u * 40u && meanRay > 0.0 && past == 0u,
+                    "frames) mean %.5f, the live ray chain (at rest after %d) mean %.5f; worst %.2f fp16 ulps, %zu past one\n",
+                    n, gRay.on ? "on" : "OFF", restRay, meanRay, restLiveRay, meanLiveRay, worstUlps, past);
+        CHECK(okRay && okLiveRay && gRay.on && n >= 3u * 40u && meanRay > 0.0 && past == 0u,
               "(5) THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN: the blended pane on the gathering chain within one fp16 "
-              "ulp of the live ray chain's and the no-ray chain's");
+              "ulp of the live ray chain's");
     }
     std::printf("\ngi.opaque_bindings: %d frames, %d failure(s)\n", frames, failures);
     return failures ? 1 : 0;

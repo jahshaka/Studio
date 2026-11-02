@@ -374,23 +374,6 @@ set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 # pixel half of the program is the looks.engine suite; these are all document
 # verbs -> --headless.
 
-# HARDWARE RAY TRACING IS A PROJECT ROW (owner, 2026-09-15; ledger §425):
-# world.rayTracing("off"|"auto"|"on"), saved with the scene, one undo step per
-# gesture, a loud refusal for anything else — and the SCENE ISSUE that is the
-# whole difference between "on" and "auto" (on and auto render the identical
-# picture; on TELLS YOU when the machine has no ray hardware).
-#
-# THE SAME SCRIPT TWICE, which is the only way to prove both answers on one GPU:
-# `ray_row` as this machine is, and `ray_row_norays` under the --no-ray-query
-# latch (JAHSHAKA_NO_RAY_QUERY=1), which builds the Vulkan device with none of
-# the ray extensions asked for. The script branches on
-# world.giStatus().rayQuery.available and asserts the matching half, so on a Mac
-# (no ray queries at all) both entries take the no-rays branch and both still
-# mean something. NOT --headless and NOT in jah_no_display: the issue half asks
-# the DEVICE a question, and there is no device without a display.
-set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-ray_row_norays)
-file(MAKE_DIRECTORY ${_home}/run)
-
 # DISPLAY-FREE, ENFORCED (SPECS/SCENEGRAPH_SPEC.md §3b). Every `--headless`
 # script run boots the NULL render system now: no display connection, no driver,
 # no window. These entries are therefore run with DISPLAY and WAYLAND_DISPLAY

@@ -1,11 +1,12 @@
-// gi.sealed_hall / gi.sealed_hall_noray (PHOTON-7 stage 10-3, R3; L9 is physics: a sky read with no visibility is light
+// gi.sealed_hall (PHOTON-7 stage 10-3, R3; L9 is physics: a sky read with no visibility is light
 // through a wall, and a light with no visibility gives nothing) - A SEALED HALL WIDER THAN THE FIELD'S WINDOW IS DARK
 // INSIDE. A closed hall (24 x 5 x 24 m inside, 0.4 m slabs, albedo 0.6, pillars and blocks for the screen's
 // silhouettes) under a uniform white sky of radiance 1, with an area light (4 x 4 m, intensity 20) over its roof shining
 // down on it; the camera inside, looking down the hall's length (its far wall 22 m off: past c0's 10 m box, the
 // irradiance field's window). Nothing inside emits and nothing outside can reach in: the exact answer is 0 at every
 // pixel. THE BAR: one 8-bit code of R (R = the albedo x the sky, what the roof's sky-lit top reads), the readback's
-// quantum on that scale. THE TIERS, ONE ROW EACH (argv[1]):
+// quantum on that scale. THE RAY TIER (argv[1] "ray"; the no-ray tier's row gi.sealed_hall_noray archived by NO-RAY-CUT-1,
+// 2026-10-30: the minimum GPU traces):
 //   "ray"   (gi.sealed_hall), the ray tier at High: (1) AT REST no pixel reads one code of R. RED before: the gather's
 //           integrate fell back, for a pixel no probe answered, to the field's cage plus the ENVIRONMENT's diffuse x
 //           (1 - confidence) - past the field's window the sky's irradiance, unoccluded (rq_probe_integrate.comp):
@@ -16,15 +17,9 @@
 //           the ray tier opened inside the frame, after the views had synced, so the first frame drew the ray chain
 //           with no listener - no gather, no area visibility: the area light lit the inside through the roof, 1.74
 //           over 25,484 px (OgreEngine::ensureRayTier now opens it before the views sync).
-//   "noray" (gi.sealed_hall_noray), the no-ray tier at High: (1) NO PIXEL INSIDE READS THE AREA LIGHT UNOBSTRUCTED
-//           (its visibility product's diffuse share at 255) at rest. RED before: a pixel no stratum was seen for (U = 0)
-//           read "unshadowed", and the light's LTC lit the inside through the roof - 1,038 pixels at 203 codes of R; a
-//           light with no visibility gives nothing now (jah_area_vis_law.glsl's resolve), and before the chain exists
-//           a stratum is no sample (JahScreenAreaVis_cs.glsl - this fixture's chain is built before its first frame).
 // PRINTED, NOT LAWS (measured, the residues' owners named): the ray tier's FIRST FRAME (the area light drawn before its
 // first visibility product: 1.74 over 25,484 px - the lead's ruling owed) and its first ~50 frames (the gather's hits
-// on the voxel chain before the cards are resident, 17 codes decaying: the coarse cell, 10-4's R7); the no-ray tier at
-// rest (the sky 2.1 codes, the area light 15 codes through the roof's coarse cells: the same, 10-4's R7).
+// on the voxel chain before the cards are resident, 17 codes decaying: the coarse cell, 10-4's R7).
 // A fixture (the engine alone, one 192 x 192 offscreen view; 10 s budget). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -65,12 +60,12 @@ void box(Scene *s, const Vec3 &at, const Vec3 &size)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray" && mode != "noray") { std::printf("FAIL: the mode is ray or noray, not '%s'\n", mode.c_str()); return 2; }
+    if (mode != "ray") { std::printf("FAIL: the mode is ray, not '%s'\n", mode.c_str()); return 2; }
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-sealed-hall-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->setRayTracing(mode == "ray");
+    e->setRayTracing(true);
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
@@ -85,7 +80,6 @@ int main(int argc, char **argv)
         fx.hdrReadback = true;
         view->setPostFx(fx);
     }
-    if (mode == "noray") s->setRayTracing(RayTracingMode::Off);
     float sh[27] = { 0 };
     sh[0] = sh[1] = sh[2] = 1.0f;   // a uniform white sky of radiance 1
     s->setAmbientSh(sh);
@@ -127,7 +121,6 @@ int main(int argc, char **argv)
     gi.bounces = true;
     gi.updateBudget = 0;
     if (!s->setGlobalIllumination(gi)) { std::printf("FAIL: GI\n"); return 1; }
-    if (mode == "noray") e->setArm("area.visReadback", 1.0);
     const double R = double(kAlbedo), bar = R / 255.0;
     // EVERY FRAME from the build to rest (shader compiles included: a frame drawn while a permutation builds is a frame
     // the user sees): the picture's brightest pixel and the count over the bar
@@ -156,8 +149,7 @@ int main(int argc, char **argv)
         const bool cardsStill = g.cards.relights == relights && g.cards.admitted == admitted && g.cards.queueLength == 0u;
         relights = g.cards.relights;
         admitted = g.cards.admitted;
-        const bool areaHeld = mode == "ray" || s->published().areaVis.held;
-        quiet = (!g.cascades.empty() && !g.chainOwed && !g.feedbackOwed && !g.ifdWorking && cardsStill && areaHeld)
+        quiet = (!g.cascades.empty() && !g.chainOwed && !g.feedbackOwed && !g.ifdWorking && cardsStill)
                     ? quiet + 1 : 0;
         if (quiet >= 12) { rest = f - quiet; break; }
     }
@@ -168,28 +160,14 @@ int main(int argc, char **argv)
     // THE LAW LINES (HARNESS-3 (b); tests/support/lawline.h): the numbers the laws below judge, in codes of R
     enginetest::lawLine((mode + ".rest_frames").c_str(), rest, "frames");
     enginetest::lawLine((mode + ".brightest_any_frame").c_str(), worst / bar, "codes");
-    if (mode == "ray") {
-        enginetest::lawLine("ray.rest_brightest", last / bar, "codes", "<=", 1.0);
-        enginetest::lawLine("ray.rest_px_over", lastOver, "px");
-        enginetest::lawLine("ray.first_frame_brightest", first / bar, "codes", "<=", 1.0);
-        CHECK(last <= bar, "(1) at rest no pixel inside the sealed hall reads one code of R");
-        std::printf("   ray: the first frame after the GI switch, its brightest pixel %.6f (%.3f codes of R)\n", first,
-                    first / bar);
-        CHECK(first >= 0.0 && first <= bar, "(2) the first frame after the GI switch draws with its producers: no pixel "
-                                            "lit through the roof by the area light");
-    } else {
-        const AreaVisStatus a = s->published().areaVis;
-        unsigned open = 0, read = 0;
-        for (size_t i = 0; i + 7 < a.vis.size(); i += 8u) {
-            ++read;
-            if (a.vis[i] >= 255u) ++open;   // light 0's diffuse share
-        }
-        std::printf("   noray: the area light's visibility at rest - %u of %u pixels read unobstructed\n", open, read);
-        enginetest::lawLine("noray.rest_brightest", last / bar, "codes");
-        enginetest::lawLine("noray.area_unobstructed", open, "px", "==", 0.0);
-        CHECK(read > 0u && open == 0u, "(1) no pixel inside the sealed hall reads the area light unobstructed");
-    }
-    if (mode == "noray") e->setArm("area.visReadback", 0.0);
+    enginetest::lawLine("ray.rest_brightest", last / bar, "codes", "<=", 1.0);
+    enginetest::lawLine("ray.rest_px_over", lastOver, "px");
+    enginetest::lawLine("ray.first_frame_brightest", first / bar, "codes", "<=", 1.0);
+    CHECK(last <= bar, "(1) at rest no pixel inside the sealed hall reads one code of R");
+    std::printf("   ray: the first frame after the GI switch, its brightest pixel %.6f (%.3f codes of R)\n", first,
+                first / bar);
+    CHECK(first >= 0.0 && first <= bar, "(2) the first frame after the GI switch draws with its producers: no pixel "
+                                        "lit through the roof by the area light");
     GiParams off;
     off.mode = GiMode::Off;
     s->setGlobalIllumination(off);

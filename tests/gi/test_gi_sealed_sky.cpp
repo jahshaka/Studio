@@ -20,8 +20,7 @@
 //       direction, lies in the room's air reads under q - on their own lines the -x / -z walls' top edges and the +x / +z
 //       walls' bottom edges (stage 0's mechanism A: the two-side store's sign fold pooled the sky-lit roof with the inner
 //       wall exactly there, c3's inner halves 72-96 % of R; spikes/voxel-r13/stage0), the rest on one. R is cascade 0's
-//       +y halves on the roof's top. At the no-ray tier (until VOXEL-R13 stage 3) THE VOXELS of cascades 0 and 1 inside
-//       the room, their two sides' mean, under q.
+//       +y halves on the roof's top.
 //   (4) THE FIELD - the field on (every shipped tier runs it): every probe whose lattice point lies inside the room
 //       holds no texel of q (its irradiance over pi, the store's units). RED before 10-1's probe rays: the
 //       aperture-0 march's escape let the sky through the walls (10-0's P3).
@@ -30,10 +29,6 @@
 //       read it; the card answering every point of (2)'s grid traced EXACTLY 0 rays to the sky at its last gather
 //       (CardSample::gatherSky, the per-card counter: inside a watertight room no ray misses); the control: the outer
 //       +x wall's cards (seen in (1)) send rays to the sky.
-//   (5) THE NO-RAY ROUTE'S PICTURE (High, the rays off and the field off: the screen integrate answers every pixel) -
-//       the middle of the picture inside the room, its brightest pixel under q. RED before the pixel's diffuse
-//       became the caches' ray integral (the refresh's paths 4 and 7): the four cones' escape read 31.5 % of R. (The
-//       specular cone's share - paths 6 and 9, 10-3's - is inside the number: 0.3 % here.)
 //   (7) THE PIXEL, DIFFUSE AND SPECULAR (PHOTON-7 stage 10-3, item 1; at every tier the room is read at): the composed HDR
 //       picture inside the room at rest - its DIFFUSE the matte middle (the two panels' pixels left out), its SPECULAR the
 //       two METAL panels on the back wall (metalness 1: every pixel of theirs is the specular term), a smooth one
@@ -42,8 +37,7 @@
 //   (9) THE CAPTURED CUBE (PHOTON-7 stage 10-3, the lead's condition: the sky cube at a narrow lobe measured, never
 //       assumed): the same sky as a CUBEMAP of radiance 1 (the engine captures it: the environment cube the pixel's
 //       specular reads - jahGlobalEnvVisibility gates it - and the SH beside it), the camera inside at rest: (7)'s three
-//       reads again, each under q (R the roof's, the same sky's radiance). Last in each row (the ray tier at Epic;
-//       the no-ray tier as it ships, rebuilt).
+//       reads again, each under q (R the roof's, the same sky's radiance). Last in the Epic row.
 //   (8) THE TELEPORT INTO THE BOX (stage 10's (1), 2026-10-26: a ray no cascade holds reads OUTSIDE = the sky, so before a
 //       cascade is built around a new pose a sealed room's nearby rays read the sky): the camera jumps from the settled
 //       pose above the box to the one inside, and EVERY frame of the window until the room is at rest is read - the
@@ -53,10 +47,9 @@
 // at their edges hold an inner and an outer face - the ray tier at High: (1)'s roof, the room at rest inside, (3), and
 // cascade 2 asserted to hold such MIXED cells.
 // THE TIERS, ONE ROW EACH (argv[1]): gi.sealed_sky the ray tier at High ("ray"), gi.sealed_sky_epic at Epic ("epic", with
-// (9)) (laws 1-4, 6-8; VOXEL-R13 stage 2 split them, each within the fixture's 10 s); gi.sealed_sky_noray
-// the NO-RAY tier as it ships (rays off, the field on, no
-// cards: laws 1's roof, 3, 4, 7, 8); and the no-ray route with the field off ((5) with 7, rebuilt inside: the screen
-// integrate's cones answer every pixel).
+// (9)) (laws 1-4, 6-8; VOXEL-R13 stage 2 split them, each within the fixture's 10 s). (The no-ray tier's row
+// gi.sealed_sky_noray - its laws 1's roof, 3's voxels, 4, 7, 8, (5) the field-off picture and (9) - archived by
+// NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces.)
 // RED ON THE BASE (the caches' cones: the card relight's sixteen-cone sky share and four-cone escape, the bounce's -
 // and the bounce's mean of a voxel's two sides, which let half of each sky-lit outer face light the inside).
 // THE BARS ARE PHYSICS (PHOTON-7 10-3 R12): every law above reads against q, one half-float step at R (0.000244 at the
@@ -67,7 +60,7 @@
 // voxel sides' hit read at the footprint's level is NOT it (an arm at level 0: c0 0.88 %, c1 1.12 %, the field 0.071 %),
 // and NO occupied inner side's ray escapes (the escape shares: e = 0); the light enters the store through hit reads of
 // cells holding outside light - the candidate the fixture's BUTTED seams' contact faces, the hidden-face class. Green
-// against q: the cards (0.0000 %), the ray tier's pixel ((7), (9)), (5), the no-ray row and the field-off picture.
+// against q: the cards (0.0000 %), the ray tier's pixel ((7), (9)).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -128,11 +121,10 @@ NodeId box(Scene *s, const Vec3 &at, const Vec3 &size, const PbrParams &p)
 int main(int argc, char **argv)
 {
     // ONE ROW A TIER (PHOTON-7 stage 10-3, the lead's ruling: each within the fixture's 10 s with margin): "ray" the ray
-    // tier at High and Epic (gi.sealed_sky), "noray" the no-ray tier as it ships and with the field off
-    // (gi.sealed_sky_noray)
+    // tier at High (gi.sealed_sky), "epic" at Epic (gi.sealed_sky_epic), "shift" the placement arm (gi.sealed_sky_shift)
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray" && mode != "epic" && mode != "noray" && mode != "shift") {
-        std::printf("FAIL: the mode is ray, epic, noray or shift, not '%s'\n", mode.c_str());
+    if (mode != "ray" && mode != "epic" && mode != "shift") {
+        std::printf("FAIL: the mode is ray, epic or shift, not '%s'\n", mode.c_str());
         return 2;
     }
     if (mode == "shift") g_off = Vec3(0.09375f, 0.3125f, 0.375f);
@@ -189,7 +181,6 @@ int main(int argc, char **argv)
     // THE REST (gi.card_oracle's, its window cut to the law's): the chain owes nothing, and the cache admitted, captured
     // and relit nothing, for 30 frames in a row - past the readers' window (S = 10) and the demand read-back's worst
     // landing (period + lag + 1 = 9: tests/support/owed_rows.py), so the resident set the reads ask for has arrived
-    bool cardsOn = true;   // the rays off (5): no cards, the chain and the field alone
     const auto settle = [&](const std::function<void(int)> &each = {}) {
         unsigned long long relights = ~0ull, admitted = ~0ull;
         int quiet = 0, f = 0;
@@ -197,7 +188,7 @@ int main(int argc, char **argv)
             run(1);
             if (each) each(f);
             const GiStatus g = scene->published().gi;
-            const bool cardsStill = !cardsOn || (g.cards.built && g.cards.relights == relights &&
+            const bool cardsStill = (g.cards.built && g.cards.relights == relights &&
                                                  g.cards.admitted == admitted && g.cards.queueLength == 0u);
             const bool still = !g.chainOwed && !g.feedbackOwed && cardsStill && !g.ifdWorking;
             relights = g.cards.relights;
@@ -393,28 +384,6 @@ int main(int argc, char **argv)
         }
         check(ok && R > 0.0 && worst < quantumOf(R),
               "(3) THE HALVES: no half facing into the sealed room, in any cascade, reads one store step of the roof's");
-    };
-    // (3) THE VOXELS of cascades 0 and 1 inside the room, against R (every tier the room is read at)
-    const auto voxelLaw = [&](double R) {
-        double vWorst = 0.0;
-        bool vOk = true;
-        for (int c = 0; c < 2; ++c) {
-            const VoxRead vr = readVoxels(c);
-            std::printf("   (3) cascade %d: %zu voxels inside the room, the brightest %.6f (%.4f %% of R)\n", c, vr.cells,
-                        vr.peak, R > 0.0 ? 100.0 * vr.peak / R : -1.0);
-            vOk = vOk && vr.ok && vr.cells > 0;
-            vWorst = std::max(vWorst, vr.peak);
-        }
-        law("voxels", vWorst, R);
-        {
-            // (the BURIED origins the caches skipped - jahRayOriginBuried: a lift crossing a front face, the origin inside
-            // a solid - the voxel sides' and the cards' gather's, over the scene's life; PHOTON-7 stage 10-3)
-            const GiStatus g = scene->published().gi;
-            std::printf("   (3) the buried origins skipped: %llu voxel sides, %llu card texels\n", g.voxelSides.buried,
-                        g.cards.gather.buried);
-        }
-        check(vOk && R > 0.0 && vWorst < quantumOf(R),
-              "(3) THE VOXELS: no voxel of cascades 0 and 1 inside the sealed room reads one store step of the roof's");
     };
     // (4) THE FIELD's probes inside the room (gi.field_oracle's slot rule: the window's slot to its lattice point)
     const auto fieldLaw = [&](double R) {
@@ -727,90 +696,6 @@ int main(int argc, char **argv)
         pixelLaw(R, tierName[t]);
         teleportLaw(win, R, tierName[t]);
         if (t == 1) cubeLaw(R, "Epic");
-    }
-    // THE NO-RAY TIER AS IT SHIPS (rays off, the field on, no cards): the roof's control, then inside - the voxels, the
-    // field, the pixel and the teleport window
-    double Rnoray = 0.0;
-    if (mode == "noray") {
-        std::printf("== High, no rays (the field on)\n");
-        g_pass = "noray";
-        scene->setRayTracing(RayTracingMode::Off);
-        cardsOn = false;
-        GiParams gi;
-        gi.mode = GiMode::Vct;
-        gi.quality = GiQuality::High;
-        gi.ddgi = GiToggle::On;
-        gi.cards = true;
-        gi.bounces = true;
-        gi.updateBudget = 0;
-        check(scene->setGlobalIllumination(gi), "the no-ray tier's GI builds");
-        e->waitForAsyncShaders();
-        enginetest::testCameraLookAt(view, Vec3(6.0f, 7.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f));
-        const int restOut = settle();
-        const VoxRead out0 = readVoxels(0);
-        const double R = out0.roofMean;
-        Rnoray = R;
-        std::printf("   (1) above: at rest after %d frames; the roof's top voxels (%zu) read %.4f\n", restOut, out0.roofCells, R);
-        check(restOut >= 0 && out0.ok && R > 0.5 * kAlbedo,
-              "(1) THE CONTROL at the no-ray tier: the roof's voxels read over half the albedo times the sky");
-        Window win;
-        const int restIn = teleportIn(win);
-        std::printf("   inside: at rest after %d frames\n", restIn);
-        check(restIn >= 0, "the no-ray tier's room comes to rest");
-        voxelLaw(R);
-        fieldLaw(R);
-        pixelLaw(R, "no rays");
-        teleportLaw(win, R, "no rays");
-    }
-    // (5) printed: the no-ray route (rays off, the field off), High, the picture's middle inside against R - rebuilt
-    // where the camera stands, inside (the teleport is the shipped no-ray tier's, above; R is that tier's roof)
-    if (mode == "noray") {
-        std::printf("== High, no rays, the field off\n");
-        g_pass = "noray_fieldoff";
-        GiParams gi;
-        gi.mode = GiMode::Vct;
-        gi.quality = GiQuality::High;
-        gi.ddgi = GiToggle::Off;
-        gi.cards = true;
-        gi.bounces = true;
-        gi.updateBudget = 0;
-        check(scene->setGlobalIllumination(gi), "(5) the no-ray route's GI builds");
-        {
-            e->waitForAsyncShaders();
-            const double R = Rnoray;
-            const int rest = settle();
-            double mean = -1.0;
-            middle(mean);
-            ImageF pic;
-            double peak = 0.0;
-            if (view->readPixelsHdr(pic))
-                for (unsigned y = pic.height / 4u; y < pic.height * 3u / 4u; ++y)
-                    for (unsigned x = pic.width / 4u; x < pic.width * 3u / 4u; ++x) peak = std::max(peak, double(pic.at(x, y).g));
-            std::printf("   (5) the no-ray route inside (rays off, the field off, High): at rest after %d frames, the "
-                        "picture's middle mean %.6f, peak %.6f (%.4f %% / %.4f %% of R %.4f)\n", rest, mean, peak,
-                        R > 0.0 ? 100.0 * mean / R : -1.0, R > 0.0 ? 100.0 * peak / R : -1.0, R);
-            law("noray_route", peak, R);
-            check(rest >= 0 && mean >= 0.0 && R > 0.5 * kAlbedo && peak < quantumOf(R),
-                  "(5) THE NO-RAY ROUTE: no pixel of the picture inside the sealed room reads one store step of the roof's");
-            pixelLaw(R, "no rays, the field off");
-        }
-    }
-    if (mode == "noray") {
-        // (9) at the no-ray tier as it ships: the field back on, then the captured cube
-        GiParams gi;
-        gi.mode = GiMode::Vct;
-        gi.quality = GiQuality::High;
-        gi.ddgi = GiToggle::On;
-        gi.cards = true;
-        gi.bounces = true;
-        gi.updateBudget = 0;
-        check(scene->setGlobalIllumination(gi), "(9) the no-ray tier's GI rebuilds");
-        g_pass = "noray_shipped";
-        e->waitForAsyncShaders();
-        settle();
-        {
-            cubeLaw(Rnoray, "no rays");
-        }
     }
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
     return g_fail ? 1 : 0;

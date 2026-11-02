@@ -11,17 +11,12 @@
 // leaves the wall, travels backwards past the camera, hits the cube and is
 // shaded from the Photon voxels, so the wall goes red. RED IS THE MEASUREMENT.
 //
-// Both arms run on this machine: `JAHSHAKA_NO_RAY_QUERY=1` is the fallback
-// picture (the SSR march alone, i.e. the picture a GPU without ray queries
-// draws), and the suite asserts it is the one WITHOUT the reflection. A machine
-// with no ray queries at all skips cleanly rather than failing — the tier is a
-// capability of the machine, not a promise of the document.
+// (The fallback arm under `JAHSHAKA_NO_RAY_QUERY=1` - the picture a GPU without ray queries draws - archived by
+// NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces. A machine with no ray queries skips cleanly.)
 //
-//   1. THE OFF ARM SEES NOTHING. With rays off the wall carries no more red
-//      than a wall with no reflection at all. This is both the control and the
-//      fallback contract.
+//   1. (THE OFF ARM - the fallback contract under the latch - archived with it.)
 //   2. THE ON ARM SEES THE CUBE. With rays on the wall carries red, clearly
-//      above the no-ray control. The cube is CARDED (PHOTON-CARDS-2), so the
+//      above the control (the wall with no SSR chain). The cube is CARDED (PHOTON-CARDS-2), so the
 //      hit reads the cube's own surface-cache card — its lit radiance at the
 //      card's texel, not a voxel's coverage-divided average — and the
 //      radiometric statement of that read lives in the F1-HITRES row
@@ -225,8 +220,7 @@ int main(int argc, char **argv)
                   : wantHitres ? "test-rt-reflect-hitres-ogre.log"
                   : wantLamp ? (wantLampTarget ? "test-rt-reflect-lamp-clip-ogre.log"
                                              : "test-rt-reflect-lamp-ogre.log")
-                  : getenv("JAHSHAKA_NO_RAY_QUERY") ? "test-rt-reflect-norays-ogre.log"
-                                                    : "test-rt-reflect-ogre.log");
+                  : "test-rt-reflect-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
@@ -247,14 +241,8 @@ int main(int argc, char **argv)
     // THE DEVICE ONLY EXISTS ONCE A VIEW DOES (the startup-order law). A machine
     // without ray queries skips: the fallback picture is a supported picture and
     // this suite is about the tier, not about it.
-    // THE SWITCH TAKES THE DEVICE WITH IT (R1): `JAHSHAKA_NO_RAY_QUERY=1` makes
-    // `vkCreateDevice` never hear of ray tracing, so `rayQueryAvailable()` is
-    // false in the fallback arm BY DESIGN — that is what makes it a real
-    // fallback and not a flag. So "no rays" is only a SKIP when the run wanted
-    // them and the machine could not give them.
-    const bool raysWanted = !getenv("JAHSHAKA_NO_RAY_QUERY");
     const bool haveRays = e->rayQueryAvailable() && e->rayTracing();
-    if (raysWanted && !haveRays) {
+    if (!haveRays) {
         std::printf("ok: this build/machine has no ray queries (available=%d wanted=%d) — "
                     "gi.rt_reflect is about the tier and skips cleanly\n",
                     int(e->rayQueryAvailable()), int(e->rayTracing()));
@@ -355,22 +343,12 @@ int main(int argc, char **argv)
     RayQueryStatus rq;
     {
         enginetest::GpuTimingWindow gpuTiming(e);   // rq.reflectMs is the monitor's row
-        red = measure(e, view, raysWanted ? "SSR + rays" : "SSR alone (fallback)", 24, &img);
+        red = measure(e, view, "SSR + rays", 24, &img);
         rq = s->published().rayQuery;
     }
     std::printf("    rayQuery: available=%d enabled=%d reflect=%d rays=%d ms=%.3f instances=%d\n",
                 int(rq.available), int(rq.enabled), int(rq.reflect), rq.reflectRays, rq.reflectMs,
                 rq.instances);
-
-    if (!raysWanted) {
-        CHECK(!rq.enabled, "the no-rays switch really is off");
-        CHECK_MSG(red < redPlain + 0.02f,
-                  "THE FALLBACK: the screen-space march alone shows nothing behind the camera "
-                  "(%.4f vs the control's %.4f)",
-                  red, redPlain);
-        std::printf("%s\n", failures ? "FAILED" : "PASSED");
-        return failures ? 1 : 0;
-    }
 
     CHECK(rq.reflect, "the tier reports that this scene's views are tracing reflections");
     // (TRACED FRAMES, not this frame's rays: a still mirror's texels take their centre ray whole, stop after eight frames

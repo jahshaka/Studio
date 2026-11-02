@@ -8,7 +8,8 @@
 // Refractive: the refraction times 1 - alpha, Refractions_piece_ps.any), so the transmittance is T = 0.9 and every quantity
 // inside the room is linear in what enters through the opening.
 //
-// THE LAW, per reader, per arm, at each tier (argv[1]: "ray" the ray tier at High, "noray" the no-ray tier as it ships):
+// THE LAW, per reader, per arm, at the ray tier (argv[1] "ray", High; the no-ray tier's rows gi.photon_window_noray and
+// gi.photon_window_sky_noray archived by NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces):
 // (argv[2]: "sky" the sky alone - the transmission of the sky's light into the room, R7's; "sun" the sky and the sun -
 // the sun patch too, the shadow maps' and the traced sun's, R8's)
 // the arm's reading equals T times the hole's, |G - T H| <= 2 SE + one code, where SE is the standard error of the mean of
@@ -94,8 +95,7 @@ using enginetest::oneCodeAt;
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray" && mode != "noray") { std::printf("FAIL: the mode is ray or noray, not '%s'\n", mode.c_str()); return 2; }
-    const bool rays = mode == "ray";
+    if (mode != "ray") { std::printf("FAIL: the mode is ray, not '%s'\n", mode.c_str()); return 2; }
     // THE LIGHT (argv[2]): "sky" the sky alone (the transmission of the sky's light, every cache's, R7), "sun" the sky
     // and the sun (the sun patch too: the shadow maps and the traced sun, R8)
     const std::string light = argc > 2 ? argv[2] : "sun";
@@ -124,7 +124,6 @@ int main(int argc, char **argv)
         fx.refractions = true;   // the Refractive arm draws in its own pass, as the material defines it
         v->setPostFx(fx);
     }
-    if (!rays) scene->setRayTracing(RayTracingMode::Off);
     PbrParams matte;
     matte.albedo = Colour(0.6f, 0.6f, 0.6f);
     matte.roughness = 0.9f;
@@ -136,9 +135,8 @@ int main(int argc, char **argv)
     box(scene, Vec3(0.0f, 1.5f, -2.2f), Vec3(4.8f, 3.0f, 0.4f), wall);
     box(scene, Vec3(0.0f, 1.5f, 2.2f), Vec3(4.8f, 3.0f, 0.4f), wall);
     box(scene, Vec3(0.0f, -0.6f, 0.0f), Vec3(20.0f, 0.4f, 20.0f), wall);
-    // the roof (y 3.0 .. 3.4) around the 2 x 2 m opening at x [-0.6, 1.4], z [-1.4, 0.6] (2 m: the no-ray tier's coarse
-    // cells - 0.31 m where its rays meet the roof - hold the opening's rim with the roof, and a 1 m opening is mostly
-    // rim there: both arms' rays stop at it, the hole's own estimate far from the exact answer)
+    // the roof (y 3.0 .. 3.4) around the 2 x 2 m opening at x [-0.6, 1.4], z [-1.4, 0.6] (2 m: sized when the no-ray
+    // tier's coarse cells - 0.31 m where its rays met the roof - held a 1 m opening's rim with the roof)
     const float ox0 = -0.6f, ox1 = 1.4f, oz0 = -1.4f, oz1 = 0.6f;
     slab(scene, -2.4f, 3.0f, -2.4f, ox0, 3.4f, 2.4f, wall);
     slab(scene, ox1, 3.0f, -2.4f, 2.4f, 3.4f, 2.4f, wall);
@@ -192,8 +190,8 @@ int main(int argc, char **argv)
         for (; f < 1200 && quiet < 30; ++f) {
             run(1);
             const GiStatus g = scene->published().gi;
-            const bool cardsStill = !rays || (g.cards.built && g.cards.relights == relights &&
-                                              g.cards.admitted == admitted && g.cards.queueLength == 0u);
+            const bool cardsStill = g.cards.built && g.cards.relights == relights &&
+                                    g.cards.admitted == admitted && g.cards.queueLength == 0u;
             const bool still = !g.chainOwed && !g.feedbackOwed && cardsStill && !g.ifdWorking;
             relights = g.cards.relights;
             admitted = g.cards.admitted;
@@ -303,10 +301,8 @@ int main(int argc, char **argv)
         readPixels(viewA, atA, beside, r[PixBeside]);
         readPixels(viewB, mirrorAt, mirror, r[PixMirror]);
         sunTermPatch = -1.0;
-        if (rays) {
-            readCards(patch, r[CardPatch], &sunTermPatch);
-            readCards(beside, r[CardBeside], nullptr);
-        }
+        readCards(patch, r[CardPatch], &sunTermPatch);
+        readCards(beside, r[CardBeside], nullptr);
         readVoxels(r[VoxPatch], r[VoxRoom]);
         readField(r[Field]);
         return r;
@@ -325,7 +321,7 @@ int main(int argc, char **argv)
     const std::vector<Reading> hole = readArm(holeSun);
     std::printf("   the hole: at rest after %d frames; the cards' sun term at the patch %.4f\n", restHole, holeSun);
     for (int k = 0; k < NumReaders; ++k)
-        if ((rays || (k != CardPatch && k != CardBeside)) && (sun || (k != PixPatch && k != CardPatch && k != VoxPatch)))
+        if (sun || (k != PixPatch && k != CardPatch && k != VoxPatch))
             std::printf("     %-40s %zu samples, mean %.6f\n", names[k], hole[k].v.size(), mean(hole[k].v));
     check(restHole >= 0, "the hole arm comes to rest");
     if (sun)
@@ -350,7 +346,6 @@ int main(int argc, char **argv)
                     "%.4f)\n", a.name, alpha, T, rest, sunTerm, holeSun);
         check(rest >= 0, "the arm comes to rest");
         for (int k = 0; k < NumReaders; ++k) {
-            if (!rays && (k == CardPatch || k == CardBeside)) continue;
             if (!sun && (k == PixPatch || k == CardPatch || k == VoxPatch)) continue;   // no sun patch under the sky alone
             const Reading &h = hole[k], &r = g[k];
             const size_t n = std::min(h.v.size(), r.v.size());
@@ -366,15 +361,6 @@ int main(int argc, char **argv)
                         code > 0.0 ? (G - T * H) / code : 0.0, code > 0.0 ? bar / code : 0.0, 2.0 * se);
             char what[256];
             std::snprintf(what, sizeof(what), "%s: %s passes T = %.2f of the hole's", a.name, names[k], T);
-            // THE NO-RAY TIER's ROOM (PHOTON-7 10-4, the lead's ruling 2026-10-27): its rays meet the roof in 0.31 m cells
-            // that hold the opening's rim with the roof, so the HOLE arm is not the exact answer there (2.9x darker than
-            // the ray tier's, its rim read from inside as the roof's sky-lit top) and the pane, which turns those cells'
-            // reads to their inside, sits 1.2-1.8 codes under T x it: the no-ray tier's cell size, not transmission - on
-            // the owner's review list, printed. The mirror's rays cross the pane's own cells: a law at every tier.
-            if (!rays && (k == PixBeside || k == VoxRoom || k == Field)) {
-                std::printf("     (printed, the no-ray room: not a law here - the hole's own coarse rim, the review list)\n");
-                continue;
-            }
             check(ok, what);
         }
     }

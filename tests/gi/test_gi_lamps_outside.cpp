@@ -12,9 +12,8 @@
 //
 // THE MIRROR PILLAR (R9 (2)): a metal pillar inside, its reflection the inside walls - ray hits, decoded with the WORLD
 // lamp list, each lamp traced from the hit (the hit's Forward+ cell deleted): the pillar's pixels are in the law below.
-// THE NO-RAY ARM (argv[1] "noray", R9 at the no-ray tier): no TLAS, the voxel chain bound (the GI at High, its direct
-// half alone) - each Forward+ lamp seen through the chain's own shadow march (jah_inject_visibility.glsl, the voxels' own
-// lamp law), the same law (0) / (1) below.
+// (The no-ray arm, gi.lamps_outside_noray - each Forward+ lamp through the voxel chain's shadow march - archived by
+// NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces.)
 // THE LAW (argv[1]: "ray" the ray tier at High), from the HDR readback (linear radiance), the inside view at rest:
 //   (0) THE CONTROL - the box's +z wall hidden (an opening), the same lamps light the floor and the back wall inside:
 //       the brightest channel's mean over the picture's middle half is R, over a code;
@@ -63,12 +62,11 @@ double oneCodeAt(double L)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray" && mode != "cards" && mode != "noray") {
-        std::printf("FAIL: the mode is ray, cards or noray, not '%s'\n", mode.c_str());
+    if (mode != "ray" && mode != "cards") {
+        std::printf("FAIL: the mode is ray or cards, not '%s'\n", mode.c_str());
         return 2;
     }
     const bool cardsMode = mode == "cards";
-    const bool noRay = mode == "noray";
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-lamps-outside-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -83,7 +81,6 @@ int main(int argc, char **argv)
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
     view->setShadows(true);
-    if (noRay) scene->setRayTracing(RayTracingMode::Off);   // the no-ray tier as it ships
     {
         PostFxDesc fx;
         fx.allowOffscreen = true;
@@ -95,16 +92,8 @@ int main(int argc, char **argv)
     matte.albedo = Colour(0.6f, 0.6f, 0.6f);
     matte.roughness = 0.9f;
     const MaterialId floorMat = scene->createPbrMaterial(matte);
-    // THE NO-RAY ARM'S SHELL REFLECTS NOTHING OUTSIDE: the no-ray GI's own diffuse and specular let the shell's lit OUTER
-    // faces through into the sealed box (measured with the lamps' voxel term forced to 0, so none of it is theirs: mean
-    // 0.00083 / peak 0.0037 with the walls grey, mean 0.00038 / peak 0.0066 on the mirror pillar with them black and the
-    // floor's edges outside - a GI leak, on the review list, not this law's subject). So in this arm the walls and the
-    // roof are black and the grey floor lies wholly inside them (the walls down to its underside): nothing outside
-    // reflects, and the inside reads the lamps' own visibility - the floor what a leaking lamp would light.
-    PbrParams black = matte;
-    black.albedo = Colour(0.0f, 0.0f, 0.0f);
-    const MaterialId wall = noRay ? scene->createPbrMaterial(black) : floorMat;
-    const float floorW = noRay ? 4.0f : 4.8f, wallH = noRay ? 3.8f : 3.0f, wallY = noRay ? 1.3f : 1.5f;
+    const MaterialId wall = floorMat;
+    const float floorW = 4.8f, wallH = 3.0f, wallY = 1.5f;
     // the box: inside x, z in [-2, 2], y in [0, 3]; 0.4 m walls
     box(scene, Vec3(0.0f, -0.2f, 0.0f), Vec3(floorW, 0.4f, floorW), floorMat);           // floor
     box(scene, Vec3(0.0f, 3.2f, 0.0f), Vec3(4.8f, 0.4f, 4.8f), wall);                   // roof
@@ -120,12 +109,6 @@ int main(int argc, char **argv)
         mirror.albedo = Colour(0.95f, 0.95f, 0.95f);
         mirror.metalness = 1.0f;
         mirror.roughness = 0.05f;
-        // (the no-ray arm has no hits to decode, and its mirror's reflection is the no-ray specular's: with the lamps'
-        // voxel term forced to 0 it read a constant 0.0066 there inside the black shell - not this law's subject, on the
-        // review list beside the GI's leak above - so its pillar is matte, a surface a leaking lamp would light)
-        if (noRay) {
-            mirror = matte;
-        }
         if (!box(scene, Vec3(0.0f, 1.0f, -0.6f), Vec3(0.5f, 2.0f, 0.5f), scene->createPbrMaterial(mirror))) {
             std::printf("FAIL: the pillar\n");
             return 1;
@@ -188,27 +171,6 @@ int main(int argc, char **argv)
         return p;
     };
     const auto settle = [&]() { e->waitForAsyncShaders(); run(8); };
-    // THE NO-RAY ARM: the voxel chain bound (the GI on, its direct half alone: no bounce, no field, no cards), no TLAS -
-    // each Forward+ lamp seen through the chain's own shadow march (PhotonVct_piece_ps.any's jahLampVoxelView); the
-    // chain at rest (voxelised, its light injected) before every reading
-    const auto chainAtRest = [&]() {
-        int quiet = 0, f = 0;
-        for (; f < 600 && quiet < 30; ++f) {
-            run(1);
-            const GiStatus g = scene->published().gi;
-            quiet = g.chainOwed || g.feedbackOwed ? 0 : quiet + 1;
-        }
-        return quiet >= 30;
-    };
-    if (noRay) {
-        GiParams gi;
-        gi.mode = GiMode::Vct;
-        gi.quality = GiQuality::High;
-        gi.ddgi = GiToggle::Off;
-        gi.cards = false;
-        gi.bounces = false;
-        if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
-    }
 
     if (cardsMode) {
         GiParams gi;
@@ -260,13 +222,10 @@ int main(int argc, char **argv)
     // (0) THE CONTROL: the +z wall hidden
     scene->setNodeVisible(front, false);
     settle();
-    const bool restOpen = !noRay || chainAtRest();
     const Pic open = read();
     scene->setNodeVisible(front, true);
     settle();
-    const bool restSealed = !noRay || chainAtRest();
     const Pic sealed = read();
-    check(restOpen && restSealed, "the voxel chain at rest before each reading");
     const double code = oneCodeAt(open.mean);
     const ShadowStatus st = e->published().shadow;
     std::printf("== %s: %zu focused maps; the opening: mean %.6f (peak %.6f); sealed: mean %.6f, peak %.6f at pixel (%u, "

@@ -497,7 +497,6 @@
    "old": "\tconst ivec2 full = ivec2( p.resolution.xy );\n",
    "new": "\tconst ivec2 full = ivec2( p.resolution.yx );\n",
    "must": [
-    "gi.screen_integrate",
     "gi.card_lamp_shadow_area",
     "gi.opaque_bindings"
    ],
@@ -509,7 +508,6 @@
    "old": "\tjahAreaVisTrace( ivec2( gl_GlobalInvocationID.xy ) );\n",
    "new": "\tjahAreaVisTrace( ivec2( gl_GlobalInvocationID.yx ) );\n",
    "must": [
-    "gi.screen_integrate",
     "gi.card_lamp_shadow_area",
     "gi.opaque_bindings"
    ],
@@ -521,7 +519,6 @@
    "old": "\tconst float vctRoughOcclusion = 1.0f - jahConeTexel.w;\n",
    "new": "\tconst float vctRoughOcclusion = 0.999f - jahConeTexel.w;\n",
    "must": [
-    "gi.screen_integrate",
     "gi.card_lamp_shadow_area",
     "gi.opaque_bindings"
    ],
@@ -533,7 +530,6 @@
    "old": "\t\tconst int jahAreaLight = min( i, 3 );\n",
    "new": "\t\tconst int jahAreaLight = min( i, 2 );\n",
    "must": [
-    "gi.screen_integrate",
     "gi.card_lamp_shadow_area",
     "gi.opaque_bindings"
    ],

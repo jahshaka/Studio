@@ -19,14 +19,13 @@
 //   "sealed" - the sun and a Sky Light (s < 1), the roof closed, the GI on at the ray tier (the gather measures the sky
 //     share: jahSkyVis): every pixel reads 0 within one code at the fog's own open level (no light of either reaches
 //     the medium inside). RED without the measured sky visibility (V_sky 1: the sky's share glowed, mean 0.306).
-//   "sealed_noray" - the same at the no-ray tier: the screen integrate's diffuse rays measure the sky share.
+//   (The no-ray tier's "sealed_noray", gi.fog_sealed_noray, archived by NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces.)
 //   "far" (the one read's F9) - A SEALED HALL PAST THE SHADOW DISTANCE: a closed hall 200 x 100 m inside and 910 m long
 //     (10 m walls, black), the eye inside at its mid-height looking down its length, the sun alone (s = 1), the fog thin
 //     (0.0015 exp2 a metre), GI off at the ray tier; the picture's middle eighth sees the far end 900 m off, so most of
 //     its eye rays lie past the PSSM's 500 m. Every pixel reads 0 within one code at the fog's own open level over 900 m.
 //     RED ON THE BASE: the march read the sun as open past its last split (the hall's far fog glowed, its whole share
-//     past 500 m). (The no-ray tier's march past the split is the voxel chain's, which ends far inside 500 m: there the
-//     sun past the chain is open - the chain's named limit, no row.)
+//     past 500 m).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -68,12 +67,11 @@ double oneCodeAt(double L)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "shaft";
-    if (mode != "shaft" && mode != "sealed" && mode != "sealed_noray" && mode != "far") {
-        std::printf("FAIL: the mode is shaft, sealed, sealed_noray or far, not '%s'\n", mode.c_str());
+    if (mode != "shaft" && mode != "sealed" && mode != "far") {
+        std::printf("FAIL: the mode is shaft, sealed or far, not '%s'\n", mode.c_str());
         return 2;
     }
-    const bool noRay = mode == "sealed_noray";
-    const bool sealedMode = mode == "sealed" || noRay;
+    const bool sealedMode = mode == "sealed";
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-fog-inscatter-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -87,7 +85,6 @@ int main(int argc, char **argv)
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
     view->setShadows(true);
-    if (noRay) scene->setRayTracing(RayTracingMode::Off);   // the no-ray tier as it ships: its integrate measures the sky
     {
         PostFxDesc fx;
         fx.allowOffscreen = true;

@@ -11,21 +11,21 @@
 //       (OgreMaterials.cpp renderQueueFor), so on a screen-GI chain they drew in the opaque pass, whose pass properties hand
 //       every fragment the screen products at its pixel (JahProbeGather_piece_ps.any: the gathered diffuse and the rough
 //       specular) - the products of the OPAQUE surface behind the pane. Measured on the base: Additive +86.6 codes (ray) /
-//       +106.3 (no rays) over the hole's pass, Modulate +210.7 / +266.4.
+//       +106.3 (no rays, the archived tier) over the hole's pass, Modulate +210.7 / +266.4.
 //   (b) Blend and Glass WROTE DEPTH (Ogre's Fade/Transparent keep the macroblock's depth write), and the Atom stock depth
 //       pass (a depth-only pass, OgreChain.cpp) put the pane's depth in the scene's: every screen product behind the pane
 //       took it for the surface, and the wall seen through it lost its whole indirect light - measured on the base, the
 //       wall through an alpha-0 pane read 0.758 against the hole's 1.237: its direct light alone, on both tiers.
 //
-// THE LAW, per tier (argv[1]: "ray" the ray tier at High, "noray" the no-ray tier as it ships), from the HDR readback (the
+// THE LAW, at the ray tier (argv[1] "ray", High; the no-ray tier's row gi.glass_pass_noray archived by NO-RAY-CUT-1,
+// 2026-10-30: the minimum GPU traces), from the HDR readback (the
 // linear scene radiance, before any grade), over the pane's pixels (its projected rectangle, 3 px in): (0) the hole (the pane
 // hidden) is the reference H; then for each mode the pane's MEAN equals the mode's pass of the hole's mean - Glass and Blend
 // (alpha 0.5) 0.5 mean(H), Additive (alpha 0.5) mean(H), Modulate 0 - within ONE CODE (1/255 of mean(H), the readback's
 // quantum at the picture's level; the hole's mean has no noise of its own at rest: its two reads one frame apart are
 // printed). Each pixel's excess over its bound is printed beside it: what is left there is the caches' pane (R7: the
 // caches still hold a pane as an opaque matte wall, so the niche's escaping light comes back from it - held under the bar
-// by the pane's distance and albedo; measured at 2.5 m / 0.3: under a code in the mean, a few codes at a pixel of the no-ray
-// tier's per-pixel rays).
+// by the pane's distance and albedo; measured at 2.5 m / 0.3: under a code in the mean).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -61,7 +61,7 @@ NodeId box(Scene *s, const Vec3 &at, const Vec3 &size, MaterialId mat)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "ray";
-    if (mode != "ray" && mode != "noray") { std::printf("FAIL: the mode is ray or noray, not '%s'\n", mode.c_str()); return 2; }
+    if (mode != "ray") { std::printf("FAIL: the mode is ray, not '%s'\n", mode.c_str()); return 2; }
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-glass-pass-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -81,7 +81,6 @@ int main(int argc, char **argv)
         fx.hdrReadback = true;
         view->setPostFx(fx);
     }
-    if (mode == "noray") scene->setRayTracing(RayTracingMode::Off);
     PbrParams matte;
     matte.albedo = Colour(0.6f, 0.6f, 0.6f);
     matte.roughness = 0.9f;
@@ -126,14 +125,13 @@ int main(int argc, char **argv)
     e->waitForAsyncShaders();
 
     // THE REST (gi.sealed_sky's): the chain owes nothing, the cache relit nothing, for 30 frames in a row
-    const bool cardsOn = mode == "ray";
     const auto settle = [&]() {
         unsigned long long relights = ~0ull, admitted = ~0ull;
         int quiet = 0, f = 0;
         for (; f < 900 && quiet < 30; ++f) {
             run(1);
             const GiStatus g = scene->published().gi;
-            const bool cardsStill = !cardsOn || (g.cards.built && g.cards.relights == relights &&
+            const bool cardsStill = (g.cards.built && g.cards.relights == relights &&
                                                  g.cards.admitted == admitted && g.cards.queueLength == 0u);
             const bool still = !g.chainOwed && !g.feedbackOwed && cardsStill && !g.ifdWorking;
             relights = g.cards.relights;

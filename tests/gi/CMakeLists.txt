@@ -572,7 +572,8 @@ target_compile_definitions(test_gi_card_lamp_shadow PRIVATE
 target_link_libraries(test_gi_card_lamp_shadow PRIVATE JahshakaEngine)
 add_dependencies(test_gi_card_lamp_shadow JahshakaEngineMedia)
 # (TWO ROWS, PHOTON-7 stage 7: whole past a fixture's 10 s budget - each part its own fixture: the lamp's two shadows
-# (1), (2); `_area` the area light's form factor, penumbra and pixel arms (3)-(8), and the no-ray route's (9), (10);
+# (1), (2); `_area` the area light's form factor, penumbra and pixel arms (3)-(8) (the no-ray route's (9), (10) archived
+# by NO-RAY-CUT-1, 2026-10-30);
 # every bar unchanged.)
 jah_gpu_row(gi.card_lamp_shadow CLASS engine COMMAND test_gi_card_lamp_shadow lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -676,9 +677,10 @@ set_tests_properties(gi.relight_credit PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
 
 # gi.opaque_bindings (PHOTON-7 stage 7, 7-1) — THE OPAQUE PASSES READ ONLY SCREEN-SPACE GI (L4): the door
 # (PhotonStatus.h photonPassBindings) lists every Photon texture each named colour pass binds; at every tier on a ray
-# chain, a no-ray chain and a live offscreen chain the opaque passes list only the five screen products, and the refractives pass (the
+# chain and a live offscreen chain (the no-ray chain's arm archived by NO-RAY-CUT-1, 2026-10-30) the opaque passes list
+# only the five screen products, and the refractives pass (the
 # control) a world cache (test_gi_opaque_bindings.cpp says the laws). Red on the base; the ray arms green at 7-5, the
-# no-ray and live arms at 7-6. A fixture.
+# live arms at 7-6. A fixture.
 add_executable(test_gi_opaque_bindings test_gi_opaque_bindings.cpp)
 set_target_properties(test_gi_opaque_bindings PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -694,26 +696,6 @@ add_dependencies(test_gi_opaque_bindings JahshakaEngineMedia)
 jah_gpu_row(gi.opaque_bindings CLASS engine FRAMES 745 COMMAND test_gi_opaque_bindings
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.opaque_bindings PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
-
-# gi.screen_integrate (PHOTON-7 stage 7, 7-6; R12) — THE NO-RAY ROUTE'S PRODUCER MOVED, THE PHYSICS DID NOT: the screen
-# integrate's picture and the voxel route the pixel ran before 7-6 (the door gi.screenIntegrateOff), both against a
-# high-ray TLAS reference of the same arrangement at the ray tier, in one process at the GI's rest, High
-# (test_gi_screen_integrate.cpp says the laws and the no-ray route's declared distance). A fixture.
-add_executable(test_gi_screen_integrate test_gi_screen_integrate.cpp)
-set_target_properties(test_gi_screen_integrate PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_screen_integrate PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_screen_integrate PRIVATE JahshakaEngine)
-add_dependencies(test_gi_screen_integrate JahshakaEngineMedia)
-jah_gpu_row(gi.screen_integrate CLASS engine FRAMES 637 COMMAND test_gi_screen_integrate
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.screen_integrate PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
 # gi.screen_bind (PHOTON-7 stage 7, the lead's two risk fixes) — THE NO-RAY SCREEN PASSES' SHARED JOBS BIND NOTHING
 # STALE (the door gi.screenBindMissing: a pass without its inputs writes nothing, every slot its own stand-in; three
@@ -734,44 +716,6 @@ add_dependencies(test_gi_screen_bind JahshakaEngineMedia)
 jah_gpu_row(gi.screen_bind CLASS engine FRAMES 600 COMMAND test_gi_screen_bind
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.screen_bind PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
-
-# gi.area_contact (PHOTON-7 stage 7's read, F6; L9) — THE NO-RAY AREA VISIBILITY'S MARCH STARTS A CELL ALONG THE NORMAL:
-# an area light behind a wall leaves the whole floor in front of it in shadow, the band along the wall's foot too
-# (test_gi_area_contact.cpp says the law). A fixture.
-add_executable(test_gi_area_contact test_gi_area_contact.cpp)
-set_target_properties(test_gi_area_contact PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_area_contact PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_area_contact PRIVATE JahshakaEngine)
-add_dependencies(test_gi_area_contact JahshakaEngineMedia)
-jah_gpu_row(gi.area_contact CLASS engine FRAMES 300 COMMAND test_gi_area_contact
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.area_contact PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
-
-# gi.rough_lobe_room (PHOTON-7 stage 7's read, F4; L9) — THE NO-RAY PRODUCER AND ITS PIXEL DECIDE THE ROUGH LOBE FROM
-# ONE ROUGHNESS, THE FOOTPRINT'S (the widened alpha of a normal-mapped surface): a closed room's normal-mapped floor
-# stays dark to a sky ten times brighter (test_gi_rough_lobe_room.cpp says the law). A fixture.
-add_executable(test_gi_rough_lobe_room test_gi_rough_lobe_room.cpp)
-set_target_properties(test_gi_rough_lobe_room PROPERTIES
-    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_compile_definitions(test_gi_rough_lobe_room PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_gi_rough_lobe_room PRIVATE JahshakaEngine)
-add_dependencies(test_gi_rough_lobe_room JahshakaEngineMedia)
-jah_gpu_row(gi.rough_lobe_room CLASS engine FRAMES 400 COMMAND test_gi_rough_lobe_room
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.rough_lobe_room PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
 # gi.emitter_energy (PHOTON-7 stage 10-3, R2; energy is conserved) - AN EMITTER OVER THE OLD MERGE CAP KEEPS ITS LIGHT:
 # bounce_series' sealed room with every slab emitting E = 100 and 1000 (High); the emissive stores hold E and the
@@ -794,9 +738,9 @@ jah_gpu_row(gi.emitter_energy CLASS engine FRAMES 110 COMMAND test_gi_emitter_en
 set_tests_properties(gi.emitter_energy PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
 # gi.small_emitter (PHOTON-7 stage 10-3; L9 is physics) - A SMALL OBJECT IS GEOMETRY AT EVERY CASCADE: a 0.20 m emitter
-# 3 m from a mirror is in cascades 2 and 3 (their stores hold it by its coverage) and the mirror shows it as at 1.2 m
-# (test_gi_small_emitter.cpp says the laws). RED before: the sub-voxel cull (rule 2) left it out of c2 and c3, and every
-# ray past 1.9 m passed through it. A fixture.
+# 3 m from a mirror is in cascades 2 and 3 (their stores hold it by its coverage; the mirror's law, read through the
+# no-ray route, archived by NO-RAY-CUT-1, 2026-10-30) (test_gi_small_emitter.cpp says the law). RED before: the sub-voxel
+# cull (rule 2) left it out of c2 and c3. A fixture.
 add_executable(test_gi_small_emitter test_gi_small_emitter.cpp)
 set_target_properties(test_gi_small_emitter PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -814,7 +758,7 @@ jah_gpu_row(gi.small_emitter CLASS engine FRAMES 400 COMMAND test_gi_small_emitt
 set_tests_properties(gi.small_emitter PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
 # gi.bounce_series.<tier> (PHOTON-7 stage 4; SPECS/PHOTON_7_SPEC.md stage 4) — THE BOUNCES CONVERGE BY FEEDBACK TO THE
-# SERIES' LIMIT, read in the voxel store, ONE ROW A TIER (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive
+# SERIES' LIMIT, read in the voxel store, at High and Epic (a fixture's 10 s budget): a sealed 8 x 4 x 8 m room of emissive
 # walls at albedo 0.5 - the feedback at its rest within one code of a 64-pass Jacobi over cascade 0 (the measuring door
 # gi.bounceJacobi), both within 3 % of
 # E / (1 - a'(1 - e)) with e the room's escape MEASURED by its sky-leak arm, and the operator's own arm (the sky held at
@@ -835,12 +779,9 @@ add_dependencies(test_gi_bounce_series JahshakaEngineMedia)
 # (the sky-leak, main and operator arms and the resume arm: laws (1)-(4)); `_fade` (the main room and the resume arm's
 # state rebuilt, then (5)'s FADE arm and (6), which rides on the fade); `_lamp` (the same state, then (5)'s STEP arm and
 # (7), the carried route from the step's end); every bar unchanged.)
-foreach(_tier low medium)
-    jah_gpu_row(gi.bounce_series.${_tier} CLASS engine COMMAND test_gi_bounce_series ${_tier}
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(gi.bounce_series.${_tier} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                         TIMEOUT 60 LABELS "engine")
-endforeach()
+# (gi.bounce_series.low / .medium - the Low and Medium tiers' series with the rays OFF, the cone side-gather - archived by
+# NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces. High and Epic's series, _fade and _lamp parts also run the rays off
+# (test_gi_bounce_series.cpp's engine switch) and close with the cleanup spec; their _rays parts are the TLAS route.)
 foreach(_tier high epic)
     jah_gpu_row(gi.bounce_series.${_tier} CLASS engine COMMAND test_gi_bounce_series ${_tier} series
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -855,8 +796,6 @@ foreach(_tier high epic)
                          gi.bounce_series.${_tier}_rays PROPERTIES
                          ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 endforeach()
-set_tests_properties(gi.bounce_series.low PROPERTIES JAHSHAKA_TEST_FRAMES 208)
-set_tests_properties(gi.bounce_series.medium PROPERTIES JAHSHAKA_TEST_FRAMES 200)
 foreach(_tier high epic)
     set_tests_properties(gi.bounce_series.${_tier} PROPERTIES JAHSHAKA_TEST_FRAMES 302)
     set_tests_properties(gi.bounce_series.${_tier}_fade PROPERTIES JAHSHAKA_TEST_FRAMES 1530)
@@ -933,11 +872,11 @@ set_tests_properties(gi.voxel_ray_wall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.voxel_ray_wall PROPERTIES JAHSHAKA_TEST_FRAMES 93)
 
-# gi.sealed_hall / gi.sealed_hall_noray (PHOTON-7 stage 10-3, R3; L9: a sky read with no visibility is light through a
+# gi.sealed_hall (PHOTON-7 stage 10-3, R3; L9: a sky read with no visibility is light through a
 # wall) - A SEALED HALL WIDER THAN THE FIELD'S WINDOW IS DARK INSIDE in every frame from the GI's build to rest, an area
 # light over its roof and the sky outside (test_gi_sealed_hall.cpp says the laws). RED before: the ray tier's integrate
-# fell back to the environment's diffuse past the field's window; the no-ray tier's first frames took the environment
-# and an unshadowed area light. One row a tier. A fixture.
+# fell back to the environment's diffuse past the field's window. The ray tier (its no-ray row archived by NO-RAY-CUT-1,
+# 2026-10-30). A fixture.
 add_executable(test_gi_sealed_hall test_gi_sealed_hall.cpp)
 set_target_properties(test_gi_sealed_hall PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -953,9 +892,6 @@ add_dependencies(test_gi_sealed_hall JahshakaEngineMedia)
 jah_gpu_row(gi.sealed_hall CLASS engine FRAMES 430 COMMAND test_gi_sealed_hall ray
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.sealed_hall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
-jah_gpu_row(gi.sealed_hall_noray CLASS engine FRAMES 430 COMMAND test_gi_sealed_hall noray
-            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.sealed_hall_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
 # gi.long_hall (PHOTON-7 stage 10-3, R4; L9: "ran out of distance" is not a miss) - A SEALED HALL LONGER THAN THE
 # CASCADES' REACH IS DARK IN ITS SURFACE CACHE: no inner-face card texel holds one code of the roof's (the cards' rays
@@ -980,7 +916,7 @@ set_tests_properties(gi.long_hall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscr
 # gi.sealed_sky (PHOTON-7 stage 10; L9) — THE SKY CANNOT LIGHT A SEALED ROOM, on every store that carries it: a closed box
 # under a uniform sky at High and Epic, its control the roof (test_gi_sealed_sky.cpp says the laws; red on the base: the
 # card relight's sixteen-cone sky share passed the walls, 10-0's P1). A fixture. 10-3 item 1: the pixel's diffuse and
-# specular (two metal panels), the no-ray tier as it ships, the teleport into the box (every frame of the window read) -
+# specular (two metal panels), the teleport into the box (every frame of the window read) -
 # RED where a path still leaks (10-3 item 2's table).
 add_executable(test_gi_sealed_sky test_gi_sealed_sky.cpp)
 set_target_properties(test_gi_sealed_sky PROPERTIES
@@ -995,12 +931,12 @@ target_compile_definitions(test_gi_sealed_sky PRIVATE
 target_link_libraries(test_gi_sealed_sky PRIVATE JahshakaEngine)
 add_dependencies(test_gi_sealed_sky JahshakaEngineMedia)
 # ONE ROW A TIER (10-3, the lead's ruling: each within the fixture's 10 s with margin): gi.sealed_sky the ray tier
-# (High and Epic), gi.sealed_sky_noray the no-ray tier as it ships (the field on) and with the field off;
+# (High and Epic; the no-ray tier's gi.sealed_sky_noray archived by NO-RAY-CUT-1, 2026-10-30);
 # gi.sealed_sky_shift (VOXEL-R13 stage 1, the lead's ruling (3)) the ray tier at High with the box moved so cascade 2's
 # cells hold whole slabs - the halves' law (3) where c2 cells hold an inner and an outer face. VOXEL-R13 stage 2: the ray
 # tier SPLIT by tier (gi.sealed_sky High, gi.sealed_sky_epic Epic with the captured cube) - each within the fixture's
 # 10 s (the halves' law reads every cascade).
-foreach(_row ray epic noray shift)
+foreach(_row ray epic shift)
     if(_row STREQUAL "ray")
         set(_name gi.sealed_sky)
     else()
@@ -1014,12 +950,11 @@ endforeach()
 set_tests_properties(gi.sealed_sky PROPERTIES JAHSHAKA_TEST_FRAMES 160)
 set_tests_properties(gi.sealed_sky_epic PROPERTIES JAHSHAKA_TEST_FRAMES 218)
 set_tests_properties(gi.sealed_sky_shift PROPERTIES JAHSHAKA_TEST_FRAMES 151)
-set_tests_properties(gi.sealed_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 337)
 
 # gi.glass_pass (PHOTON-7 10-4, R6; L9) — A PANE IS SHADED BY THE LIGHT THAT REACHES IT, NEVER BY THE SURFACE BEHIND IT: a
 # pane before a lamp-lit niche in a black world, its four blending modes against the hole (test_gi_glass_pass.cpp says the
 # laws; red on the base: Glass, Additive and Modulate drew in the opaque pass and read the screen products of the wall
-# behind them). A fixture, one row a tier.
+# behind them). A fixture, the ray tier (its no-ray row archived by NO-RAY-CUT-1, 2026-10-30).
 add_executable(test_gi_glass_pass test_gi_glass_pass.cpp)
 set_target_properties(test_gi_glass_pass PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1032,19 +967,11 @@ target_compile_definitions(test_gi_glass_pass PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_glass_pass PRIVATE JahshakaEngine)
 add_dependencies(test_gi_glass_pass JahshakaEngineMedia)
-foreach(_row ray noray)
-    if(_row STREQUAL "ray")
-        set(_name gi.glass_pass)
-    else()
-        set(_name gi.glass_pass_${_row})
-    endif()
-    jah_gpu_row(${_name} CLASS engine COMMAND test_gi_glass_pass ${_row}
-             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                         TIMEOUT 60 LABELS "engine")
-endforeach()
+jah_gpu_row(gi.glass_pass CLASS engine COMMAND test_gi_glass_pass ray
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.glass_pass PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.glass_pass PROPERTIES JAHSHAKA_TEST_FRAMES 328)
-set_tests_properties(gi.glass_pass_noray PROPERTIES JAHSHAKA_TEST_FRAMES 201)
 
 # gi.glass_escape (PHOTON-7 10-4, the R4 carry, design (D); L9) — A BLENDED PANE'S REFLECTION OF WHAT LIES BEYOND THE VOXEL
 # CHAIN IS WHAT IS THERE: a metal mirror pane in a black world turned onto an emissive wall 120 m out (past the outermost
@@ -1079,7 +1006,7 @@ set_tests_properties(gi.glass_escape_weight PROPERTIES ENVIRONMENT "QT_QPA_PLATF
 # through the opening; every reader (the sun patch, the room's diffuse and the mirror's specular in the pixel, the cards, the
 # voxels, the field) = (1 - alpha) x the hole's within the paired readings' 2 SE + a code (test_gi_photon_window.cpp says the
 # laws; red on the base on every traced path: the caches, the shadow maps and the traced sun hold the pane opaque). A
-# fixture, one row a tier.
+# fixture, the ray tier.
 add_executable(test_gi_photon_window test_gi_photon_window.cpp)
 set_target_properties(test_gi_photon_window PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1092,27 +1019,20 @@ target_compile_definitions(test_gi_photon_window PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_photon_window PRIVATE JahshakaEngine)
 add_dependencies(test_gi_photon_window JahshakaEngineMedia)
-# One row a tier and a light: gi.photon_window(_noray) the sky and the sun (R8's sun patch), gi.photon_window_sky(_noray)
-# the sky alone (R7's transmission of the sky's light).
+# One row a light: gi.photon_window the sky and the sun (R8's sun patch), gi.photon_window_sky the sky alone (R7's
+# transmission of the sky's light); the ray tier (the no-ray rows archived by NO-RAY-CUT-1, 2026-10-30).
 foreach(_light sun sky)
-    foreach(_row ray noray)
-        set(_name gi.photon_window)
-        if(_light STREQUAL "sky")
-            string(APPEND _name "_sky")
-        endif()
-        if(_row STREQUAL "noray")
-            string(APPEND _name "_noray")
-        endif()
-        jah_gpu_row(${_name} CLASS engine COMMAND test_gi_photon_window ${_row} ${_light}
-                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                             TIMEOUT 60 LABELS "engine")
-    endforeach()
+    set(_name gi.photon_window)
+    if(_light STREQUAL "sky")
+        string(APPEND _name "_sky")
+    endif()
+    jah_gpu_row(${_name} CLASS engine COMMAND test_gi_photon_window ray ${_light}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                         TIMEOUT 60 LABELS "engine")
 endforeach()
 set_tests_properties(gi.photon_window PROPERTIES JAHSHAKA_TEST_FRAMES 368)
-set_tests_properties(gi.photon_window_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)
 set_tests_properties(gi.photon_window_sky PROPERTIES JAHSHAKA_TEST_FRAMES 329)
-set_tests_properties(gi.photon_window_sky_noray PROPERTIES JAHSHAKA_TEST_FRAMES 199)
 
 # gi.pane_stack (PHOTON-7 10-4 fix round, the one read's F4; L9) — A RAY THROUGH MORE PANES THAN A LIST HOLDS IS NEVER
 # BLOCKED BY THEIR COUNT: twelve glass slabs over a floor, a Forward+ lamp above them - the floor reads T^12 of the hole
@@ -1143,7 +1063,7 @@ set_tests_properties(gi.pane_stack_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 # gi.lamps_outside (PHOTON-7 10-4, R9; L9) — SEVENTEEN LAMPS OUTSIDE A SEALED BOX LIGHT NOTHING INSIDE IT: a closed box in a
 # black world, seventeen casting point lamps around it, the shadow-map budget at 2 (fifteen Forward+ lamps); through an
 # opening they light the inside (the control), sealed every pixel inside reads 0 within a code (test_gi_lamps_outside.cpp
-# says the laws; red on the base: a Forward+ lamp had no visibility). A fixture, one row a tier.
+# says the laws; red on the base: a Forward+ lamp had no visibility). A fixture, the ray tier and its cards arm.
 add_executable(test_gi_lamps_outside test_gi_lamps_outside.cpp)
 set_target_properties(test_gi_lamps_outside PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -1166,16 +1086,10 @@ jah_gpu_row(gi.lamps_outside_cards CLASS engine COMMAND test_gi_lamps_outside ca
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.lamps_outside_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 120)
-# ...and its NO-RAY arm (R9 at the no-ray tier): no TLAS, the voxel chain bound - each Forward+ lamp seen through the
-# chain's own shadow march (jah_inject_visibility.glsl), the same two laws
-jah_gpu_row(gi.lamps_outside_noray CLASS engine COMMAND test_gi_lamps_outside noray
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.lamps_outside_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 77)
 
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
-# a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark at both tiers, its control
+# a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark at the ray tier, its control
 # (the sky alone through the opening) lit (test_gi_fog_inscatter.cpp says the laws; red on the base: the fog scattered its
 # colour with no visibility). A fixture, one row a law.
 add_executable(test_gi_fog_inscatter test_gi_fog_inscatter.cpp)
@@ -1198,10 +1112,6 @@ jah_gpu_row(gi.fog_sealed CLASS engine COMMAND test_gi_fog_inscatter sealed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.fog_sealed PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 118)
-jah_gpu_row(gi.fog_sealed_noray CLASS engine COMMAND test_gi_fog_inscatter sealed_noray
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.fog_sealed_noray PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 113)
 # ...and THE SEALED HALL PAST THE SHADOW DISTANCE (the one read's F9): its far fog is dark - the march past its last split
 # takes the sun's TLAS ray (red on the base: the sun read open past 500 m)
 jah_gpu_row(gi.fog_far_hall CLASS engine COMMAND test_gi_fog_inscatter far

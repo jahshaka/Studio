@@ -1,5 +1,5 @@
 #pragma once
-// ONE CODE AT A LEVEL (gi.photon_window, PHOTON-7 10-4; shared since REDS-1 by gi.screen_integrate): the display's 8-bit
+// ONE CODE AT A LEVEL (gi.photon_window, PHOTON-7 10-4; shared since REDS-1): the display's 8-bit
 // sRGB step at linear radiance L - the WIDTH of the code L falls in (the encode's own quantum there; never the distance
 // to the next code's edge, which shrinks to 0 just below it) - what a user can see change at that level, derived from
 // the encoding, never picked.

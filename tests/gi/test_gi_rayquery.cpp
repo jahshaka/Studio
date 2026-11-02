@@ -11,11 +11,10 @@
 //
 // What each case proves, and why it is the case that matters:
 //
-//   1. THE TIER COMES UP, AND THE PICTURE DOES NOT MOVE. Enabling ray queries
-//      changes the Vulkan device (instance 1.2, three feature bits, two buffer
-//      usage bits on every device-local pool). The proof that it is inert is
-//      that the scene renders the same pixels with the tier holding structures
-//      as with it switched off. A byte-identical picture, not a tolerance.
+//   1. THE TIER COMES UP: a structure over exactly the world's two items. (Its
+//      picture against the tier switched off, and case 6 - the no-rays switch -
+//      archived by NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces, and the Off
+//      mode goes with the cleanup.)
 //
 //   2. A RAY ANSWERS THE ANALYTIC DISTANCE. The honest proof that a ray tier
 //      works is a ray whose hit can be compared with arithmetic: a known point,
@@ -33,11 +32,6 @@
 //      the shadow caster walk does. If it rebuilt every frame it would be a
 //      permanent tax on a 60 Hz editor that nothing is yet consuming.
 //
-//   5. THE NO-RAYS SWITCH IS A REAL SWITCH. Off, the structures go and the
-//      status reads available true / enabled false — this machine rendering the
-//      picture a machine WITHOUT ray-tracing hardware renders. That is what
-//      lets every later ray-consuming suite assert both pictures on one GPU
-//      instead of assuming the fallback.
 //
 //   6. A MOVER MOVES ITS HIT. The point of a per-frame structure: move the box,
 //      and the same ray reports the new distance.
@@ -155,27 +149,13 @@ static MeshData gridMesh(unsigned n)
     return d;
 }
 
-static bool imagesEqual(const Image &a, const Image &b)
-{
-    if (a.width != b.width || a.height != b.height) return false;
-    for (unsigned y = 0; y < a.height; ++y)
-        for (unsigned x = 0; x < a.width; ++x) {
-            const Colour &p = a.at(x, y), &q = b.at(x, y);
-            if (p.r != q.r || p.g != q.g || p.b != q.b) return false;
-        }
-    return true;
-}
-
 
 int main(int argc, char **argv)
 {
     std::string err;
-    // A LOG PER RUN. Three ctest entries share this binary and this working
-    // directory (rays on, rays off, and the sanitised twin); one log name would
-    // have them clobbering each other's evidence whenever two run at once.
-    const auto cfg = enginetest::testEngineConfig(getenv("JAHSHAKA_NO_RAY_QUERY")
-                      ? "test-gi-rayquery-" JAH_RQ_LOG_TAG "-norays-ogre.log"
-                      : "test-gi-rayquery-" JAH_RQ_LOG_TAG "-ogre.log");
+    // A LOG PER BINARY (JAH_RQ_LOG_TAG: the sanitised twin's own name). (The no-rays run under JAHSHAKA_NO_RAY_QUERY -
+    // the device built without ray queries - archived by NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces.)
+    const auto cfg = enginetest::testEngineConfig("test-gi-rayquery-" JAH_RQ_LOG_TAG "-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
@@ -217,48 +197,6 @@ int main(int argc, char **argv)
     view->setCamera(enginetest::testCameraDescLookAt(Vec3(5.0f, 3.0f, 6.0f), Vec3(0.0f, 1.0f, 0.0f)));
     render(e, 6);
 
-    // =====================================================================
-    // THE NO-RAYS RUN (JAHSHAKA_NO_RAY_QUERY=1, which is what --no-ray-query
-    // sets). This is the whole point of the switch: this GPU renders the
-    // picture a machine WITHOUT ray-tracing hardware renders, so the fallback
-    // every later ray-consuming suite depends on is PROVED on every push
-    // instead of assumed.
-    //
-    // It is a DIFFERENT contract from the traced one, not a subset, so it gets
-    // its own assertions and stops here — the cases below would otherwise
-    // switch the tier back on at runtime and test nothing the traced run does
-    // not already cover.
-    //
-    // With the switch set the patch does not even ask the driver for the
-    // extensions, so `available` is false too: the process is on exactly the
-    // device it would have had before the ray tier existed.
-    // =====================================================================
-    if (!e->rayTracing()) {
-        std::printf("\n== the no-rays run (JAHSHAKA_NO_RAY_QUERY) ==\n");
-        const RayQueryStatus st = scene->published().rayQuery;
-        CHECK(!st.available, "the DEVICE was built without ray queries — the switch reaches it");
-        CHECK(!st.enabled, "...and the tier is off");
-        CHECK(st.blasCount == 0 && st.instances == 0 && st.triangles == 0,
-              "no acceleration structure exists at all");
-        CHECK(st.blasBytes == 0 && st.tlasBytes == 0, "...and it costs no memory");
-        CHECK(st.tlasBuilds == 0 && st.tlasRefits == 0 && st.blasBuilds == 0,
-              "...and no frame ever built one");
-        std::vector<float> rays, hits;
-        pushRay(rays, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
-        CHECK(!scene->traceRays(rays, hits),
-              "a trace REFUSES rather than answering wrongly");
-        CHECK(hits.empty(), "...leaving no answers behind");
-        CHECK(!e->rayQueryAvailable(), "the engine agrees the device has none");
-        // AND THE SCENE STILL RENDERS. The fallback is the same picture with
-        // one term computed differently — never a degraded or missing one.
-        Image img;
-        CHECK(view->readPixels(img) && img.width == kSize && img.height == kSize,
-              "and the scene renders exactly as it always did");
-        std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "PASSED", failures,
-                    failures == 1 ? "" : "s");
-        return failures ? 1 : 0;
-    }
-
     if (!e->rayQueryAvailable()) {
         // NOT A FAILURE. macOS, a pre-RTX GPU and a software rasteriser without
         // the extension are all supported platforms; the fallback picture is
@@ -285,18 +223,6 @@ int main(int argc, char **argv)
         CHECK(st.triangles > 0 && st.blasBytes > 0, "it holds real geometry and real memory");
         CHECK(st.tlasBuilds >= 1, "a top-level structure was built");
 
-        // THE PICTURE. Byte-identical with the tier holding structures and with
-        // it switched off — the tier touches no pixel, which is what makes
-        // enabling the Vulkan device features safe.
-        Image withRays, withoutRays;
-        view->readPixels(withRays);
-        e->setRayTracing(false);
-        render(e, 3);
-        view->readPixels(withoutRays);
-        CHECK(imagesEqual(withRays, withoutRays),
-              "THE PICTURE IS BYTE-IDENTICAL with the tier on and off");
-        e->setRayTracing(true);
-        render(e, 3);
     }
 
     // =====================================================================
@@ -424,36 +350,6 @@ int main(int argc, char **argv)
               "...without rebuilding a bottom-level one (geometry did not change, only its place)");
         enginetest::setNodePosition(scene, box, Vec3(0.0f, 1.0f, 0.0f));
         render(e, 3);
-    }
-
-    // =====================================================================
-    // CASE 6 — the no-rays switch
-    // =====================================================================
-    std::printf("\n== case 6: the no-rays switch ==\n");
-    {
-        e->setRayTracing(false);
-        render(e, 4);
-        const RayQueryStatus off = scene->published().rayQuery;
-        CHECK(off.available, "the DEVICE still advertises ray queries — that cannot be switched");
-        CHECK(!off.enabled, "...but the tier is off");
-        CHECK(off.instances == 0 && off.blasCount == 0,
-              "every structure is gone — this is the picture a machine without rays renders");
-        std::vector<float> rays, hits;
-        pushRay(rays, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
-        CHECK(!scene->traceRays(rays, hits), "and a trace REFUSES rather than answering wrongly");
-        CHECK(hits.empty(), "...leaving no answers behind");
-        CHECK(!e->rayTracing(), "the engine reports the switch as off");
-
-        e->setRayTracing(true);
-        render(e, 5);
-        const RayQueryStatus on = scene->published().rayQuery;
-        CHECK(on.enabled && on.instances == 2,
-              "switching it back on rebuilds the structure from scratch");
-        std::vector<float> r2, h2;
-        pushRay(r2, Vec3(10.0f, 1.0f, 0.0f), Vec3(-1.0f, 0.0f, 0.0f), 0.001f, 100.0f);
-        CHECK(scene->traceRays(r2, h2) && h2.size() == 4u && hitAt(h2, 0).hit &&
-                  std::fabs(hitAt(h2, 0).distance - 9.0f) < 0.001f,
-              "...and the same ray gives the same 9 m it gave before it was switched off");
     }
 
     // =====================================================================
