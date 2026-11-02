@@ -87,9 +87,9 @@ int main()
         for (size_t j = 0; j < texels.size(); ++j) {
             const GiLawAnswer &a = as[j];
             if (a.a[0] < 0.0f) { ++negative; if (a.a[0] < least) { least = a.a[0]; atLeast = j; } }
-            // (the bound: half a step of F's own rounding - its denormals' whole 2^-24 step, the store truncating there)
-            const double bound = a.b[2] < 6.1035156e-5f ? -1.0 : -0.5;
-            if (a.a[1] < bound) { ++residualOut; if (a.a[1] < worstResidual) { worstResidual = a.a[1]; atResidual = j; } }
+            // (the residual in units of F's own rounding, per channel - half a step, its denormals' whole 2^-24 step where
+            // the store truncates: rq_card_law.comp)
+            if (a.a[1] < -1.0f) { ++residualOut; if (a.a[1] < worstResidual) { worstResidual = a.a[1]; atResidual = j; } }
             if (a.a[2] != 0.0f) { if (!rereports) atRe = j; ++rereports; }
             if (a.a[3] != 0.0f) { if (!receiverRereports) atRecv = j; ++receiverRereports; }
         }
@@ -102,7 +102,7 @@ int main()
         };
         const bool okI = negative == 0 && residualOut == 0;
         std::printf("%s (i) %zu texels: %zu read negative (the least %.4g: %s); %zu cut residuals past the flat term's one "
-                    "rounding (the worst %.2f steps: %s) - bars 0 / 0\n", okI ? "ok:" : "FAIL:", texels.size(), negative,
+                    "rounding (the worst %.2f of it: %s) - bars 0 / 0\n", okI ? "ok:" : "FAIL:", texels.size(), negative,
                     least, negative ? describe(atLeast).c_str() : "-", residualOut, worstResidual,
                     residualOut ? describe(atResidual).c_str() : "-");
         const bool okIII = rereports == 0 && receiverRereports == 0;
