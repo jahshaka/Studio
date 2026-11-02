@@ -287,12 +287,33 @@ if(TARGET jahlab)
     # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row) — THE MOVING REFLECTION LAGS ITS CONVERGED PICTURE BY
     # NO MORE THAN ITS MEMORY AND ITS NOISE: the glass walk in Rays with the hits flattened and the world held, per glossy
     # pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1 at walk frames 14 / 28 / 59, the breaking
-    # share <= 1 % (lag_law.sh; SE_walk through the door: the arm reflect.historyReadback's moving SE). 960x540; three
-    # jahlab sessions: 6 + 709 + 4,240 frames.
-    jah_gpu_row(rtreflect.lag_law CLASS engine TOKENS 8 FRAMES 4955
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law
+    # share <= 1 % (lag_law.sh; SE_walk through the door: the arm reflect.historyReadback's moving SE). 960x540.
+    # SPLIT BY PROOF (URGENT #131, 2026-11-02: one row of 4,955 frames, 28.31 s solo, ran 56.27 s and timed out at 60.06 s
+    # under two builds' load - #96's class, a row at the cap with no margin): ONE ROW PER WALK FRAME's LAW, a fixture
+    # chain on one work dir - .walk (the prime + the world-held walk: its mode label and its dumps at k = 14 / 28 / 59
+    # kept, the shader cache snapshotted; 715 frames) -> .k14 -> .k28 -> .k59 (each: the world settled and held, its two
+    # converged poses on the walk's cache bytes, the law at its k; 1,840 frames; .k59 removes the snapshot).
+    # (each part by name: a loop's variable sends the selector to the whole directory - HARNESS-2's rule)
+    jah_gpu_row(rtreflect.lag_law.walk CLASS engine TOKENS 8 FRAMES 715
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law walk
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.lag_law PROPERTIES TIMEOUT 60 LABELS "engine")
+    set_tests_properties(rtreflect.lag_law.walk PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_lag_law_walk)
+    jah_gpu_row(rtreflect.lag_law.k14 CLASS engine TOKENS 8 FRAMES 1840
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law 14
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.lag_law.k14 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED rtreflect_lag_law_walk DEPENDS rtreflect.lag_law.walk)
+    jah_gpu_row(rtreflect.lag_law.k28 CLASS engine TOKENS 8 FRAMES 1840
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law 28
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.lag_law.k28 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED rtreflect_lag_law_walk DEPENDS rtreflect.lag_law.k14)
+    jah_gpu_row(rtreflect.lag_law.k59 CLASS engine TOKENS 8 FRAMES 1840
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law 59
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.lag_law.k59 PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED rtreflect_lag_law_walk DEPENDS rtreflect.lag_law.k28)
 endif()
 
 # rtreflect.still_after_stop (PHOTON-2 stage 1, its fix round and round 2's R1, rev 6's bars; split in round 4) — THE

@@ -12,14 +12,27 @@
 # <= 1 % of the glossy pixels at each k (at 3 sigma an honest estimate breaks ~0.3 % by chance).
 # THE BASE (irisgl c98e7718, the moving history's raw second moment: SE_walk read 0): 4.16 / 4.82 / 3.37 % breaking;
 # with the variance kept centred (05f61e46): 0.05 / 0.13 / 0.16 %.
-# 960x540; three jahlab sessions: a prime (6 frames), the walk (640 + its door's 69) and the converged poses
-# (640 + 6 x 600) - 4,955 frames.
-# usage: lag_law.sh <jahlab> <work dir>
+# 960x540. SPLIT BY PROOF (URGENT #131, 2026-11-02: the one row of 4,955 frames priced 28.31 s solo ran 56.27 s and timed
+# out at 60.06 s under two builds' load - a row at the cap with no margin, #96's class): ONE ROW PER WALK FRAME's LAW, a
+# fixture chain on one work dir -
+#   walk (rtreflect.lag_law.walk, FIXTURES_SETUP): the prime (6 frames) and the world-held walk (640 + its door's 69) -
+#     715 frames; its proof: the walk's mode label (the door ran Rays) and the three frames' dumps; it keeps the dumps of
+#     k = 14 / 28 / 59 only and SNAPSHOTS the shader cache, so every converged part boots on the bytes the converged
+#     session booted on in the one row (a grown cache draws other variants: walk_world.sh's measure, 2,712 px at a hold);
+#   14 | 28 | 59 (rtreflect.lag_law.k14 / .k28 / .k59): the world settled at the start pose and held (640 frames, the
+#     arm gi.freeze 2), the two converged poses k and k + 1 (2 x 600) - 1,840 frames - and the law at its k; each part
+#     removes its frame's dumps, the last (59) the snapshot. The law, its bar and its door are the one row's, unchanged.
+# usage: lag_law.sh <jahlab> <work dir> <walk|14|28|59>
 set -u
-LAB=${1:?jahlab}; WD=${2:?work dir}
+LAB=${1:?jahlab}; WD=${2:?work dir}; PART=${3:?part (walk|14|28|59)}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
-rm -rf "$WD"; mkdir -p "$WD"
+DUMP=$WD/data/stillness/dump-glass-world
+case "$PART" in
+    walk) rm -rf "$WD"; mkdir -p "$WD" ;;
+    14|28|59) [ -f "$DUMP/glass-world-t0$PART.rgb" ] || { echo "FAIL: no walk frame $PART in $WD (rtreflect.lag_law.walk writes it)"; exit 1; } ;;
+    *) echo "FAIL: the part '$PART' (walk|14|28|59)"; exit 1 ;;
+esac
 SRC="--data-root $WD/data --env photon-glass"
 session() {   # name (the script is $WD/<name>.lab)
     "$LAB" --headless --no-stdin --size 960x540 $SRC --script "$WD/$1.lab" > "$WD/$1.log" 2>&1
@@ -28,27 +41,44 @@ session() {   # name (the script is $WD/<name>.lab)
 }
 S=-1.2,1.8,3.4; T=0,0.5,-3; E=1.2,1.8,1.0
 ARMS='reflections rays\narm reflect.flatHits 1\n'
-printf "$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
-session prime
-printf "$ARMS"'camera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-world freeze=world out=glass-world\nquit\n' \
-    "$S" "$T" "$S" "$T" "$E" "$T" > "$WD/walk.lab"
-session walk
+if [ "$PART" = walk ]; then
+    printf "$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
+    session prime
+    printf "$ARMS"'camera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-world freeze=world out=glass-world\nquit\n' \
+        "$S" "$T" "$S" "$T" "$E" "$T" > "$WD/walk.lab"
+    session walk
+    # THE MODE LABEL: the walk's source as the engine ran it
+    python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/glass-world.tsv" -- rays
+    rc=$?
+    for k in 014 028 059; do
+        for x in rgb cls rhc rse rsize; do
+            [ -f "$DUMP/glass-world-t$k.$x" ] || { echo "FAIL: the walk wrote no glass-world-t$k.$x"; rc=1; }
+        done
+    done
+    for f in "$DUMP"/*; do case "$f" in *-t014.*|*-t028.*|*-t059.*) ;; *) rm -f "$f" ;; esac; done
+    if [ -n "${JAHSHAKA_SHADER_CACHE_DIR:-}" ]; then rm -rf "$WD/cache.snap"; cp -a "$JAHSHAKA_SHADER_CACHE_DIR" "$WD/cache.snap"; fi
+    echo "rtreflect.lag_law walk: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
+    exit $rc
+fi
+if [ -n "${JAHSHAKA_SHADER_CACHE_DIR:-}" ]; then
+    [ -d "$WD/cache.snap" ] || { echo "FAIL: the walk part's cache snapshot is missing"; exit 1; }
+    rm -rf "$JAHSHAKA_SHADER_CACHE_DIR"; cp -a "$WD/cache.snap" "$JAHSHAKA_SHADER_CACHE_DIR"
+fi
 {
     printf "$ARMS"'camera %s,%s\nframes 640\narm gi.freeze 2\n' "$S" "$T"
-    for k in 14 15 28 29 59 60; do
+    for k in $PART $((PART + 1)); do
         python3 -I -c "
 s=(-1.2,1.8,3.4); e=(1.2,1.8,1.0); k=$k/60.0
 print('camera %.6f,%.6f,%.6f,0,0.5,-3' % tuple(a+(b-a)*k for a,b in zip(s,e)))"
         printf 'frames 600\nshot lag%d\n' "$k"
     done
     printf 'quit\n'
-} > "$WD/conv.lab"
-session conv
-# THE MODE LABEL: the walk's and the converged shots' sources as the engine ran them
-python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/glass-world.tsv" -- rays &&
-python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/conv.log" -- lag=rays
+} > "$WD/conv$PART.lab"
+session conv$PART
+# THE MODE LABEL: the converged shots' sources as the engine ran them (the walk's: the walk part's)
+python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/conv$PART.log" -- lag=rays
 srcrc=$?
-python3 -I - "$WD/data" <<'PY'
+python3 -I - "$WD/data" "$PART" <<'PY'
 import os, sys
 import numpy as np
 from PIL import Image
@@ -61,7 +91,7 @@ def dil(m, k):
         for dx in range(-k, k + 1):
             o |= np.roll(np.roll(m, dy, 0), dx, 1)
     return o
-for k in (14, 28, 59):
+for k in (int(sys.argv[2]),):
     base = os.path.join(root, 'stillness', 'dump-glass-world', 'glass-world-t%03d' % k)
     need = [base + x for x in ('.rgb', '.cls', '.rhc', '.rse', '.rsize')] + \
            [os.path.join(root, 'shots', 'lag%d.png' % j) for j in (k, k + 1)]
@@ -96,7 +126,8 @@ for f in fails: print('FAIL: ' + f)
 sys.exit(1 if fails else 0)
 PY
 rc=$?
-rm -rf "$WD/data/stillness/dump-"*
+rm -f "$DUMP/glass-world-t0$PART."*
+[ "$PART" = 59 ] && rm -rf "$DUMP" "$WD/cache.snap"
 [ $srcrc -eq 0 ] || rc=1
-echo "rtreflect.lag_law: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
+echo "rtreflect.lag_law k$PART: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
 exit $rc
