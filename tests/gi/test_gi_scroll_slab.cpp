@@ -55,6 +55,7 @@
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
+#include <map>
 #include <cmath>
 #include <cstdio>
 #include <cstring>
@@ -308,8 +309,8 @@ int main()
             std::printf("   D: %s: level 0's half store moved in %zu of %zu floats, the largest %.2f half-float steps; feedback active %u, "
                         "resumes %llu, owed %d\n", what, n, A.size(), worst, c0.feedbackActive,
                         (unsigned long long)c0.feedbackResumes, c0.feedbackOwed ? 1 : 0);
-            // ...and the ACTIVE bricks' own state (the door): their measured contraction r and last move (codes), and that
-            // move over the store's smallest relative step (2^-11 of a value = 0.0488 codes) - a flip's would-move at a
+            // ...and the ACTIVE bricks' own state (the door): their measured contraction r and last move (RELATIVE, |d| / m -
+            // jahBrickChange), and that move over the store's smallest relative step (2^-11) - a flip's would-move at a
             // touching receiver (the resume's bound weighs a touching brick 1) in that receiver's steps
             GiFeedbackBricks fb;
             if (scene->giFeedbackBricks(0, fb) && fb.available) {
@@ -322,9 +323,9 @@ int main()
                     if (fb.r[b] > 0.9f) ++rHigh;
                     moveMax = std::max(moveMax, fb.lastMove[b]);
                 }
-                std::printf("   D: %s: the door's active bricks %zu (r > 0.9: %zu, r max %.4f), their largest last move %.4f "
-                            "codes = %.2f of a receiver's smallest step\n", what, act, rHigh, double(rMax),
-                            double(moveMax), double(moveMax) / 0.048828125);
+                std::printf("   D: %s: the door's active bricks %zu (r > 0.9: %zu, r max %.4f), their largest last move %.5f "
+                            "relative = %.2f codes = %.2f of a receiver's smallest store step\n", what, act, rHigh,
+                            double(rMax), double(moveMax), 100.0 * double(moveMax), double(moveMax) / 0.00048828125);
             }
         };
         {
@@ -335,16 +336,63 @@ int main()
             CHECK(scene->giVoxelVolume(0, regen), "the regenerated store reads back");
             moved(v, regen, "the door's frame");
             {
-                // (then four frames WITHOUT the door: a write that landed once after the rest, or one that keeps moving)
+                // (then twelve frames WITHOUT the door: a write that landed once after the rest, or one that keeps moving -
+                // and every float that moved, its values frame by frame: back and forth (a 2-cycle) or one way (progress))
                 GiVoxelVolume prev = regen;
-                for (int f = 2; f <= 5; ++f) {
+                std::map<size_t, std::vector<std::pair<int, float>>> flips;
+                for (size_t i = 0; i < v.halfLight.size() && i < regen.halfLight.size(); ++i)
+                    if (std::memcmp(&v.halfLight[i], &regen.halfLight[i], sizeof(float)) != 0)
+                        flips[i] = { { 0, v.halfLight[i] }, { 1, regen.halfLight[i] } };
+                for (int f = 2; f <= 13; ++f) {
                     run(1);
                     GiVoxelVolume cur;
                     if (!scene->giVoxelLight(0, cur)) break;   // (the light alone: one volume)
                     char what[64];
                     std::snprintf(what, sizeof what, "frame %d after the rest, no door", f);
                     moved(prev, cur, what);
+                    for (size_t i = 0; i < prev.halfLight.size() && i < cur.halfLight.size(); ++i)
+                        if (std::memcmp(&prev.halfLight[i], &cur.halfLight[i], sizeof(float)) != 0) {
+                            auto &q = flips[i];
+                            if (q.empty()) q.push_back({ f - 1, prev.halfLight[i] });
+                            q.push_back({ f, cur.halfLight[i] });
+                        }
                     prev = cur;
+                }
+                size_t shown = 0, backForth = 0, oneWay = 0;
+                for (const auto &kv : flips) {
+                    int ups = 0, downs = 0;
+                    for (size_t k = 1; k < kv.second.size(); ++k)
+                        (kv.second[k].second > kv.second[k - 1].second ? ups : downs) += 1;
+                    (ups && downs ? backForth : oneWay) += 1;
+                    if (shown++ < 12) {
+                        std::string line;
+                        for (const auto &fv : kv.second) {
+                            char b[48];
+                            std::snprintf(b, sizeof b, " f%d:%.7g", fv.first, double(fv.second));
+                            line += b;
+                        }
+                        std::printf("   D: float %zu (cell %zu, rgba %zu):%s\n", kv.first, kv.first / 4u, kv.first % 4u,
+                                    line.c_str());
+                    }
+                }
+                std::printf("   D: %zu floats moved over frames 1-13: %zu back and forth, %zu one way\n", flips.size(),
+                            backForth, oneWay);
+                // THE STALL READING (the lead's): for the bricks at r > 0.9, the geometric tail's remaining distance
+                // move x r / (1 - r), in codes (the move relative: x 100)
+                GiFeedbackBricks fb;
+                if (scene->giFeedbackBricks(0, fb) && fb.available) {
+                    size_t n9 = 0, over = 0;
+                    double worst = 0.0;
+                    for (size_t b = 0; b < fb.flags.size(); ++b) {
+                        const double r = fb.r[b];
+                        if (!(r > 0.9) || !(fb.lastMove[b] > 0.f)) continue;
+                        ++n9;
+                        const double tail = 100.0 * double(fb.lastMove[b]) * r / (1.0 - r);
+                        worst = std::max(worst, tail);
+                        if (tail > 1.0) ++over;
+                    }
+                    std::printf("   D: the bricks at r > 0.9 with a last move: %zu; their tail move x r / (1 - r) the largest "
+                                "%.2f codes, %zu over one code\n", n9, worst, over);
                 }
             }
             size_t lightDiff = 0;
