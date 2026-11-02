@@ -18,7 +18,10 @@ fails = list(rise_law.selfcheck())
 m = [float(x) for x in open(sys.argv[2]).read().split()]
 # from the step's own arrival (the series' peak) to its end: the change non-increasing
 peak = max(range(len(m)), key=lambda i: m[i]) if m else 0
-spans, means, sigma, rises = rise_law.judge(m, peak + 1, len(m), 1.0 / int(sys.argv[3]))
+spans, means, sigma, rises, dips = rise_law.judge(m, peak + 1, len(m), 1.0 / int(sys.argv[3]))
+# (a one-frame dip is printed, never a failure - rise_law.judge's contract, URGENT #138)
+if dips: print("   (ii) a one-frame DIP after the lamp step (the change fell and came back; not a rise): %s"
+               % " ".join("frame %d %.1f sigma" % d for d in dips))
 print("   (ii) the picture after the lamp step: %d frames, the peak at %d, the rise law's noise %.5f, rises %d %s"
       % (len(m), peak, sigma, len(rises), rises[:4]))
 if rises: fails.append("(ii) the picture's change non-increasing after the lamp step (the rise law): %s" % rises[:4])
