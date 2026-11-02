@@ -10,7 +10,8 @@
 #       0.01 % of the pixels more than a code apart; each session's hold inside its window with NO CAPPED TEXEL (the
 #       door's refl_rest_capped 0: every live texel's displayed standard error under a code) and 0 codes after it, and
 #       NO RISE over the rest's own settle (16 frames past the rest's last start - the GI relights first, and its rows
-#       break the reflection's rest - to the hold: tests/support/rise_law.py, as rtreflect.still_after_stop's (a)).
+#       break the reflection's rest - to the hold: tests/support/rise_law.py, as rtreflect.still_after_stop's (a); each
+#       frame also against the frame before, phase-free, URGENT #138).
 #       The step's own arrival (<= 16 frames) is rtreflect.history_detectors'.
 # Every judgement is a FAIL line, never a traceback (a window that never holds included).
 # THE SIZING (HARNESS-3 (f)): the step's settle before the lamp is `rest 1200` (GiStatus::giAtRest, the engine's own
@@ -85,7 +86,8 @@ for name in ("estep", "eref"):
     start = rise_law.settle_start(r, end)
     if end > start + 10:
         g = [float(x["glossy_mean"]) for x in r]
-        _, _, sigma, rising = rise_law.judge(g, start, end, max(1e-4, 1.0 / max(1, int(r[1]["glossy_px"]))))
+        _, _, sigma, rising, dips = rise_law.judge(g, start, end, max(1e-4, 1.0 / max(1, int(r[1]["glossy_px"]))))
+        if dips: print("%s: a one-frame DIP (the change fell and came back; not a rise - a skipped or partial update? the lead's leftover, URGENT #138): %s" % ("(e) the %s session" % name, " ".join("frame %d %.1f sigma" % d for d in dips)))
         print("(e) the %s session's settle from frame %d: the rise law's noise %.5f, rises %d" % (name, start, sigma, len(rising)))
         if rising: fails.append("(e) the %s session rises before its hold: %s" % (name, " ".join("%s:%d:%.4f->%.4f(%.4f)" % x for x in rising[:6])))
 try:

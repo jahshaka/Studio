@@ -27,7 +27,8 @@
 #     10-frame windows to the hold -
 #     THE RISE LAW, tests/support/rise_law.py (PHOTON-7 stage 0's read R2: one robust noise figure for the whole
 #     series, never a window's own, and every window judged against it, its mean and each of its frames - a burst of
-#     any length is a rise; the tolerance THIS row's own, rule R3; J5's 0.01 is the court's (a) only), then the hold,
+#     any length is a rise - and each frame against the frame before, phase-free, a one-frame dip printed and judged past
+#     (URGENT #138); the tolerance THIS row's own, rule R3; J5's 0.01 is the court's (a) only), then the hold,
 #     and 0 codes after it;
 #   COURT, the 15 m crossing (cascade commits inside the walk), after the stop: (a) the per-frame change
 #     non-increasing over 10-frame windows until the hold (0.01-code tolerance, J5); (b) 0 codes after the hold - no
@@ -164,9 +165,10 @@ lR, lW, lG, lbound, llast, lshort, lspend = field_law(w)
 h = held_from(w)
 after = [int(r["frame"]) for r in w if h is not None and int(r["frame"]) > h and int(r["all_max"]) > 0]
 # (the record prints a mean to 4 decimals: the quantum is the larger of that and one pixel-code over the pixels)
-spans, lwins, lsigma, lrises = rise_law.judge([float(r["all_mean"]) for r in w], 1, h if h is not None else len(w),
-                                              max(1e-4, 1.0 / max(1, int(w[1]["all_px"]))))
-print("room lamp step: the field's change on frames %s, done %d frames after the step; THE LAW: the store at rest from frame %s, %s integrations owed then at a grant of %s, so the last write <= %s - the field's last write %d; frames spending under the grant while restarts were owed: %s; 10-frame windows (sqrt of the mean change; its noise %.5f) %s; held from %s; frames changing after the hold: %d"
+spans, lwins, lsigma, lrises, ldips = rise_law.judge([float(r["all_mean"]) for r in w], 1, h if h is not None else len(w),
+                                                     max(1e-4, 1.0 / max(1, int(w[1]["all_px"]))))
+if ldips: print("%s: a one-frame DIP (the change fell and came back; not a rise - a skipped or partial update? the lead's leftover, URGENT #138): %s" % ("(f) room lamp step", " ".join("frame %d %.1f sigma" % d for d in ldips)))
+print("room lamp step: the field's change on frames %s, done %d frames after the step; THE LAW: the store at rest from frame %s, %s integrations owed then at a grant of %s, so the last write <= %s - the field's last write %d; frames spending under the grant while restarts were owed: %s; 10-frame windows (sqrt of the mean change; its noise %.5f, the second differences') %s; held from %s; frames changing after the hold: %d"
       % ("%d-%d" % (min(conv), max(conv)) if conv else "none", done, lR, lW, lG, lbound, llast, lshort[:6] or "none", lsigma,
          " ".join("%.4f" % x for x in lwins), h, len(after)))
 print("room lamp step: the grant spent per frame (frame:spent/grant): %s" % lspend)

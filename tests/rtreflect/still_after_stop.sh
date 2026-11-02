@@ -15,7 +15,8 @@
 #       the stop's first frame, so frame 17) to the hold, the
 #       glossy per-frame mean change decays and never rises - THE RISE LAW, tests/support/rise_law.py (photon-7 stage
 #       0's read R2: one robust noise figure for the whole series, every window judged against it, its mean and each of
-#       its frames - a burst of any length is a rise). (Its "<= 0.05 codes from frame 17" is DELETED, the lead's ruling:
+#       its frames - a burst of any length is a rise - and each frame against the frame before, phase-free, a one-frame
+#       dip printed and judged past: URGENT #138). (Its "<= 0.05 codes from frame 17" is DELETED, the lead's ruling:
 #       a moving estimate holds <= 12 samples, so the rest's refinement must move the mean by up to its SE, ~sigma /
 #       sqrt 12 - no honest estimator reaches 0.05 at frame 17; it read 0.30 on the base.)
 #   (a2) THE LAG LAW AT A STOP (PHOTON-7 10-3 R12, the lead's ruling: the rise law says the change shrinks, this one
@@ -165,8 +166,9 @@ if rows:
     win10 = [sum(glossy[a:b]) / (b - a) for a, b in spans]
     print("(a) glossy mean change, 10-frame windows from %d to the hold: %s" % (start, " ".join("%.4f" % w for w in win10)))
     # (the record prints a mean to 4 decimals: the quantum is the larger of that and one pixel-code over the pixels)
-    _, _, sigma, rising = rise_law.judge(glossy, start, end, max(1e-4, 1.0 / max(1, int(rows[1]["glossy_px"]))))
-    print("(a) the rise law's noise (sqrt of the mean change, the tail's successive differences): %.5f; rises %d" % (sigma, len(rising)))
+    _, _, sigma, rising, dips = rise_law.judge(glossy, start, end, max(1e-4, 1.0 / max(1, int(rows[1]["glossy_px"]))))
+    print("(a) the rise law's noise (sqrt of the mean change, the live frames' second differences): %.5f; rises %d" % (sigma, len(rising)))
+    if dips: print("%s: a one-frame DIP (the change fell and came back; not a rise - a skipped or partial update? the lead's leftover, URGENT #138): %s" % ("(a)", " ".join("frame %d %.1f sigma" % d for d in dips)))
     if rising: fails.append("(a) no rise to the hold (the rise law): rises (kind, frame, from, to, bound) %s"
                             % " ".join("%s:%d:%.4f->%.4f(%.4f)" % r for r in rising[:10]))
     if rising: print("(a) the GI rows at the rises' frames (+-10): %s" % (sorted(set(sum([giAt(max(0, r[1] - 10), r[1] + 11) for r in rising], []))) or "none"))
