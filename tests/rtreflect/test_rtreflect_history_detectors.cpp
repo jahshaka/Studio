@@ -146,7 +146,7 @@ static void checkTraced(Scene *s, const char *part)
 {
     const bool traced = s->published().rayQuery.reflect;
     std::printf("-- %s: the reflection traced: %s\n", part, traced ? "yes" : "no");
-    CHECK_MSG(traced, "%s: the reflection traced no rays", part);
+    CHECK_MSG(traced, "%s: the reflection traced rays", part);
 }
 
 /// The frames from the step until a trace holds 95 % of its settled change (and stays: one noisy
