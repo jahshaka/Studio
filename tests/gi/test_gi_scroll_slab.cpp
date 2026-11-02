@@ -287,8 +287,15 @@ int main()
         // THE FEEDBACK AT REST FIRST (PHOTON-7 stage 4): its passes move level 0 and regenerate the levels over the bricks
         // they ran, so the comparison is made where nothing moves - every level must still be a whole regeneration of
         // level 0 (a kept interior holding a displaced texel is never a brick the feedback runs, so it still shows).
-        for (int f = 0; f < 600 && scene->published().gi.cascades[0].feedbackOwed; ++f) run(1);
-        CHECK(!scene->published().gi.cascades[0].feedbackOwed, "D: cascade 0's feedback comes to rest after the commit");
+        // THE CHAIN AT REST, never cascade 0 alone (BISTRO-REST-1): the outer cascade feeds the inner one past its reach
+        // (cascade 0's rays read cascade 1 where they leave it), so cascade 0's feedback at rest while cascade 1 still
+        // iterates is not "nothing moves" - cascade 1's moves resume cascade 0's bricks and write its level 0 a step at a
+        // time from below (measured: 14 floats, +1 step each, over 12 frames, the chain owing all along). The engine's own
+        // rest predicate (GiStatus::chainOwed: every cascade's feedback) is the premise.
+        for (int f = 0; f < 600 && scene->published().gi.chainOwed; ++f) run(1);
+        CHECK(!scene->published().gi.chainOwed, "D: the chain comes to rest after the commit (every cascade's feedback)");
+        std::printf("   D: at the chain's rest: the chain owed %d, its light sources owed %d\n",
+                    scene->published().gi.chainOwed ? 1 : 0, scene->published().gi.lightSourcesOwed ? 1 : 0);
         GiVoxelVolume v;
         CHECK(scene->giVoxelVolume(0, v), "D: the store at rest reads back");
         // THE INSTRUMENT (BISTRO-REST-1): what a frame moved in level 0 - the moved floats, the largest move in half-float
@@ -306,9 +313,11 @@ int main()
                 worst = std::max(worst, std::fabs(double(B[i]) - double(A[i])) / step);
             }
             const auto &c0 = scene->published().gi.cascades[0];
+            const GiStatus &gs = scene->published().gi;
             std::printf("   D: %s: level 0's half store moved in %zu of %zu floats, the largest %.2f half-float steps; feedback active %u, "
-                        "resumes %llu, owed %d\n", what, n, A.size(), worst, c0.feedbackActive,
-                        (unsigned long long)c0.feedbackResumes, c0.feedbackOwed ? 1 : 0);
+                        "resumes %llu, owed %d; the chain owed %d, its light sources owed %d\n", what, n, A.size(), worst,
+                        c0.feedbackActive, (unsigned long long)c0.feedbackResumes, c0.feedbackOwed ? 1 : 0, gs.chainOwed ? 1 : 0,
+                        gs.lightSourcesOwed ? 1 : 0);
             // ...and the ACTIVE bricks' own state (the door): their measured contraction r and last move (RELATIVE, |d| / m -
             // jahBrickChange), and that move over the store's smallest relative step (2^-11) - a flip's would-move at a
             // touching receiver (the resume's bound weighs a touching brick 1) in that receiver's steps
