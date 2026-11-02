@@ -245,6 +245,14 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_fifo.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
     set_tests_properties(tooling.gpu_lock_fifo PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.gpu_lock_fifo)
+    # tooling.gpu_lock_sweep — THE HOLD's PROCESSES DIE WITH THE HOLD (URGENT #144): scripts/gpu-exclusive.sh on a private lock
+    # (sleeps, no GPU): a hold's escaped (setsid) child sits in the hold's own scope and is swept - at the command's exit, at its
+    # --run-timeout, KILLED past the grace when it ignores TERM, by the mark with no user manager, under a holder's nested call -
+    # and is gone before the next waiter's grant; the arguments arrive verbatim; a clean hold silent, the scope under 0.2 s.
+    add_test(NAME tooling.gpu_lock_sweep
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_sweep.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
+    set_tests_properties(tooling.gpu_lock_sweep PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.gpu_lock_sweep)
     # tooling.law_records — A RECORD KEEPS ITS ROW's LAW NUMBERS (HARNESS-3 (b)): scripts/gate_runlog.py over a fake ctest
     # stream keeps every `LAW <name> <value> <unit> [<op> <bar>]` line (tests/support/lawline.h) in the row's record, a
     # green row's and a red row's, one past the 256-KB output cap too (law_records.py; a scratch HOME and run-log dir).

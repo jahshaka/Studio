@@ -36,8 +36,8 @@ wait
 order=$(tr '\n' ' ' < "$log")
 echo "   the grants: $order"
 want "$([ "$order" = "H W1 W2 W3 W4 W5 L " ] && echo 1)" "(1) the grants in ticket order: a holder, five waiters, a late short one last"
-want "$(grep -q 'gpu-lock: waiting for the card (held by: pid [0-9]* H since' "$T/W1.out" && grep -q '^gpu-lock: waited [0-9]* s$' "$T/W1.out" && echo 1)" \
-     "(1) a waiter's two lines unchanged: 'waiting for the card (held by: …)' and 'waited N s'"
+want "$(grep -q 'gpu-lock: waiting for the card (held by: pid [0-9]* H since' "$T/W1.out" && grep -qE '^gpu-lock: waited [0-9]+(\.[0-9])? s$' "$T/W1.out" && echo 1)" \
+     "(1) a waiter's two lines unchanged: 'waiting for the card (held by: …)' and 'waited N.N s' (tenths, #95)"
 # (2) A DEAD TICKET AHEAD
 dead=$(sh -c 'echo $$')
 mkdir -p "$T/lock.q"
