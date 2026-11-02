@@ -28,6 +28,7 @@ add_executable(jahlab
     envs/photon_court.cpp
     envs/photon_seam.cpp
     envs/photon_shells.cpp
+    envs/photon_sweep.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
 set_target_properties(jahlab PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
