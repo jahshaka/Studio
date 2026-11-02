@@ -46,6 +46,7 @@ if(JAH_CCACHE_PROGRAM AND NOT JAH_NO_CCACHE)
 endif()
 
 project(Jahshaka)
+include(cmake/OneSpelling.cmake)   # a configured tree is never re-configured under a second spelling (URGENT #129)
 
 set(APP_OUTPUT_NAME "Jahshaka")
 
