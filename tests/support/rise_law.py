@@ -47,9 +47,14 @@ SELF CHECK (`selfcheck`, run by every row before it judges): the read's syntheti
 5-frame bursts of 0.2, 1 and 5 codes inside it - are each a rise, and the same decay with no burst is none; and the MEASURED
 cases (#138): the lamp step's hand-over series is a step rise at frame 158 from EVERY settle start's phase, and the room lamp's
 dip is a dip, not a rise.
+THE RESULT IS NAMED (URGENT #149, 2026-11-02): judge returns a Judgement (spans, means, sigma, rises, dips), a rise is a
+Rise (kind, frame, level, value, bound), a dip a Dip (frame, depth) - frozen dataclasses, read by NAME and never unpacked
+(they are not tuples: an unpacking caller fails at once). #138 added `dips` to a five-tuple and one caller written beside it
+still unpacked four (gi.feedback_closed_box's picture rows died in the judge); a field added here now breaks nobody.
 """
 import math
 import random
+from dataclasses import dataclass
 
 K = 5.0
 WINDOW = 10
@@ -87,12 +92,49 @@ def stabilised(m, quantum):
     return v, math.sqrt(level + quantum) - math.sqrt(level)
 
 
+@dataclass(frozen=True)
+class Rise:
+    """A rise: `kind` 'mean', 'burst' or 'step'; `frame` the window's start (mean) or the frame; `level` the level it rose
+    from, `value` the level it reached, `bound` the bound it passed - all in the judged (stabilised) space."""
+    kind: str
+    frame: int
+    level: float
+    value: float
+    bound: float
+
+    def text(self):
+        return "%s:%d:%.4f->%.4f(%.4f)" % (self.kind, self.frame, self.level, self.value, self.bound)
+
+    __repr__ = text
+
+
+@dataclass(frozen=True)
+class Dip:
+    """A one-frame dip the step test judged past: `frame`, its `depth` in sigma (printed by the rows, never a failure)."""
+    frame: int
+    depth: float
+
+    def text(self):
+        return "frame %d %.1f sigma" % (self.frame, self.depth)
+
+    __repr__ = text
+
+
+@dataclass(frozen=True)
+class Judgement:
+    """judge's result, read by name: `spans` the windows [a, b), `means` each window's mean, `sigma` the noise figure,
+    `rises` [Rise], `dips` [Dip] - all in the judged (stabilised) space."""
+    spans: list
+    means: list
+    sigma: float
+    rises: list
+    dips: list
+
+
 def judge(m, start, end, quantum=0.0):
     """m: the per-frame series (indexed by frame), a mean change in codes; `quantum` the smallest step one frame's
     value can take (the larger of one pixel-code over the pixels averaged and the record's print precision). Judged on
-    the stabilised series (stabilised). Returns (spans, means, sigma, rises, dips) in that space: rises are
-    (kind, window start or the frame, from, to, bound) - kind 'mean', 'burst' or 'step'; dips (frame, depth in sigma) - the
-    one-frame dips the step test judged past (printed by the rows, never a failure)."""
+    the stabilised series (stabilised). Returns a Judgement (read its fields by name: spans, means, sigma, rises, dips)."""
     raw = [max(x, 0.0) for x in m[:end]]
     m, qfloor = stabilised(m[:end], quantum)
     spans = windows(start, end)
@@ -105,21 +147,21 @@ def judge(m, start, end, quantum=0.0):
         nj = b - a
         bound = K * sigma * math.sqrt(1.0 / ni + 1.0 / nj)
         if means[i + 1] - means[i] > bound:
-            rises.append(("mean", a, means[i], means[i + 1], bound))
+            rises.append(Rise("mean", a, means[i], means[i + 1], bound))
         fbound = K * sigma * math.sqrt(1.0 + 1.0 / ni)
         for f in range(a, b):
             if m[f] - means[i] > fbound:
-                rises.append(("burst", f, means[i], m[f], fbound))
+                rises.append(Rise("burst", f, means[i], m[f], fbound))
     # (step) against the level reached: the frame before, or the level before a one-frame dip (URGENT #138)
     dips, sbound = [], K * sigma * math.sqrt(2.0)
     for f in range(spans[1][0] if len(spans) > 1 else end, end):
         if m[f] - m[f - 1] <= sbound:
             continue
         if f - 2 >= start and m[f - 1] < m[f - 2] - sbound and abs(m[f] - m[f - 2]) <= sbound:
-            dips.append((f - 1, (m[f - 2] - m[f - 1]) / sigma))
+            dips.append(Dip(f - 1, (m[f - 2] - m[f - 1]) / sigma))
         else:
-            rises.append(("step", f, m[f - 1], m[f], sbound))
-    return spans, means, sigma, rises, dips
+            rises.append(Rise("step", f, m[f - 1], m[f], sbound))
+    return Judgement(spans=spans, means=means, sigma=sigma, rises=rises, dips=dips)
 
 
 def settle_start(rows, end):
@@ -154,8 +196,9 @@ def selfcheck():
     rng = random.Random(20261023)
     base = _decay(60, rng)
     for end in (60, 52, 51):   # (52 and 51: a hold one or two frames into a window - merged, R3; a trend-only decay)
-        if judge(base, 1, end)[3]:
-            fails.append("rise_law: a flat (decaying) tail with no burst is a rise (hold %d): %s" % (end, judge(base, 1, end)[3][:2]))
+        flat = judge(base, 1, end).rises
+        if flat:
+            fails.append("rise_law: a flat (decaying) tail with no burst is a rise (hold %d): %s" % (end, flat[:2]))
     if windows(1, 52)[-1] != (41, 52):
         fails.append("rise_law: a final window under %d frames is merged into the one before: %s" % (MIN_WINDOW, windows(1, 52)))
     for height in (0.2, 1.0, 5.0):
@@ -164,7 +207,7 @@ def selfcheck():
                 m = list(base)
                 for f in range(at, at + length):
                     m[f] += height
-                if not judge(m, 1, 60)[3]:
+                if not judge(m, 1, 60).rises:
                     fails.append("rise_law: a %d-frame burst of %.1f codes at frame %d is not a rise" % (length, height, at))
     return fails + measured_cases()
 
@@ -198,13 +241,13 @@ def measured_cases():
     start, nothing else a rise; the room lamp's frame 15 a dip and no rise."""
     fails = []
     for start in range(87, 97):
-        r = judge(HANDOVER, start, 199, 1e-4)[3]
-        if [(k, f) for k, f, *_ in r] != [("step", 158)]:
+        r = judge(HANDOVER, start, 199, 1e-4).rises
+        if [(x.kind, x.frame) for x in r] != [("step", 158)]:
             fails.append("rise_law: the lamp step's hand-over (frame 158) from settle start %d: %s (must be one step rise at 158)"
-                         % (start, [(k, f) for k, f, *_ in r][:4]))
-    _, _, _, r, d = judge(ROOM_LAMP, 1, 75, max(1e-4, 1.0 / 518400))
-    if r or [f for f, _ in d] != [15]:
-        fails.append("rise_law: the room lamp's frame 15 is a dip, not a rise: rises %s, dips %s" % (r[:3], d))
+                         % (start, [(x.kind, x.frame) for x in r][:4]))
+    j = judge(ROOM_LAMP, 1, 75, max(1e-4, 1.0 / 518400))
+    if j.rises or [d.frame for d in j.dips] != [15]:
+        fails.append("rise_law: the room lamp's frame 15 is a dip, not a rise: rises %s, dips %s" % (j.rises[:3], j.dips))
     return fails
 
 
@@ -213,11 +256,11 @@ def _monte_carlo(series=60000, frames=60):
     pairs = mean_hits = burst_hits = step_hits = any_hits = 0
     for _ in range(series):
         m = [(4.0 + rng.gauss(0.0, 0.1)) ** 2 for _ in range(frames)]   # constant noise in the stabilised space
-        spans, means, sigma, rises, _ = judge(m, 0, frames)
-        pairs += len(spans) - 1
+        j = judge(m, 0, frames)
+        pairs += len(j.spans) - 1
         kinds = {}
-        for r in rises:
-            kinds.setdefault(r[1] if r[0] == "mean" else (r[1] // WINDOW) * WINDOW, set()).add(r[0])
+        for r in j.rises:
+            kinds.setdefault(r.frame if r.kind == "mean" else (r.frame // WINDOW) * WINDOW, set()).add(r.kind)
         for k in kinds.values():
             mean_hits += "mean" in k
             burst_hits += "burst" in k

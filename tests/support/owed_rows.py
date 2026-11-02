@@ -38,7 +38,18 @@ arrives after the stop, and admitting it is right; a plane the window entered be
   any other row after the stop, or a row past its bound, is STRAY.
 `w` is a stillness window's rows (jahlab's stillness door TSV, csv.DictReader): row 0 is the first still frame, the stop
 (the cache's frame of the walk's last move is its cards_frame - 1), and is not judged - its rows are the last move's.
+THE RESULT IS NAMED (URGENT #149): judge returns an OwedJudgement (owed, stray, last), read by name, never unpacked.
 """
+from dataclasses import dataclass
+
+
+@dataclass(frozen=True)
+class OwedJudgement:
+    """judge's result: `owed` the post-stop GI rows owed by the motion and `stray` the others, each (frame, its cause and
+    stamp); `last` the last owed frame (0 with none)."""
+    owed: list
+    stray: list
+    last: int
 
 
 def window_open(r, S):
@@ -62,8 +73,8 @@ def rows_of(r):
 
 
 def judge(w):
-    """(owed, stray, last): the post-stop GI rows owed by the motion and the stray ones, each (frame, its cause and
-    stamp), and the last owed frame (0 with none)."""
+    """An OwedJudgement (read by name: owed, stray, last): the post-stop GI rows owed by the motion and the stray ones,
+    each (frame, its cause and stamp), and the last owed frame (0 with none)."""
     stop = int(w[0]["cards_frame"]) - 1
     # THE READ-BACK'S WORST LANDING: a period, the lag AND ONE FRAME - the read is ISSUED when the cache plans the frame
     # (SurfaceCache::issueDemandRead, before the frame's readers run), so a stamp written on an issue frame is read by the
@@ -159,4 +170,4 @@ def judge(w):
         if other:
             stray.append((f, "no motion's cause: %s" % other))
     last = max([f for f, _ in owed] or [0])
-    return owed, stray, last
+    return OwedJudgement(owed=owed, stray=stray, last=last)

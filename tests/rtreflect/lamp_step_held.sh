@@ -86,10 +86,11 @@ for name in ("estep", "eref"):
     start = rise_law.settle_start(r, end)
     if end > start + 10:
         g = [float(x["glossy_mean"]) for x in r]
-        _, _, sigma, rising, dips = rise_law.judge(g, start, end, max(1e-4, 1.0 / max(1, int(r[1]["glossy_px"]))))
-        if dips: print("%s: a one-frame DIP (the change fell and came back; not a rise - a skipped or partial update? the lead's leftover, URGENT #138): %s" % ("(e) the %s session" % name, " ".join("frame %d %.1f sigma" % d for d in dips)))
+        j = rise_law.judge(g, start, end, max(1e-4, 1.0 / max(1, int(r[1]["glossy_px"]))))   # (by name: URGENT #149)
+        sigma, rising, dips = j.sigma, j.rises, j.dips
+        if dips: print("%s: a one-frame DIP (the change fell and came back; not a rise - a skipped or partial update? the lead's leftover, URGENT #138): %s" % ("(e) the %s session" % name, " ".join(d.text() for d in dips)))
         print("(e) the %s session's settle from frame %d: the rise law's noise %.5f, rises %d" % (name, start, sigma, len(rising)))
-        if rising: fails.append("(e) the %s session rises before its hold: %s" % (name, " ".join("%s:%d:%.4f->%.4f(%.4f)" % x for x in rising[:6])))
+        if rising: fails.append("(e) the %s session rises before its hold: %s" % (name, " ".join(x.text() for x in rising[:6])))
 try:
     from PIL import Image
 except ImportError:

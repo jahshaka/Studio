@@ -161,7 +161,8 @@ if part == "room":   # gi.hold_after_stop (URGENT #147: the room's two sessions)
     w = window("room-sub")
     h = held_from(w)
     over = [(int(r["frame"]), int(r["plaster_max"])) for r in w[1:] if int(r["plaster_max"]) > 1]
-    owed, stray, last = owed_rows.judge(w)   # tests/support/owed_rows.py: the law, one implementation for both rows
+    oj = owed_rows.judge(w)   # tests/support/owed_rows.py: the law, one implementation for both rows (read by name)
+    owed, stray, last = oj.owed, oj.stray, oj.last
     C = converge_after(w, last)
     M = handover_after(w, last, h)
     print("room sub-cell: post-stop rows owed by the motion %s; stray %s; held from frame %s (the last owed row %d + C %d + 17 + the hand-over M %d = %d); plaster frames over a code: %s"
@@ -177,9 +178,10 @@ if part == "room":   # gi.hold_after_stop (URGENT #147: the room's two sessions)
     h = held_from(w)
     after = [int(r["frame"]) for r in w if h is not None and int(r["frame"]) > h and int(r["all_max"]) > 0]
     # (the record prints a mean to 4 decimals: the quantum is the larger of that and one pixel-code over the pixels)
-    spans, lwins, lsigma, lrises, ldips = rise_law.judge([float(r["all_mean"]) for r in w], 1, h if h is not None else len(w),
-                                                         max(1e-4, 1.0 / max(1, int(w[1]["all_px"]))))
-    if ldips: print("%s: a one-frame DIP (the change fell and came back; not a rise - a skipped or partial update? the lead's leftover, URGENT #138): %s" % ("(f) room lamp step", " ".join("frame %d %.1f sigma" % d for d in ldips)))
+    lj = rise_law.judge([float(r["all_mean"]) for r in w], 1, h if h is not None else len(w),
+                        max(1e-4, 1.0 / max(1, int(w[1]["all_px"]))))   # (a Judgement, read by name: URGENT #149)
+    lwins, lsigma, lrises, ldips = lj.means, lj.sigma, lj.rises, lj.dips
+    if ldips: print("%s: a one-frame DIP (the change fell and came back; not a rise - a skipped or partial update? the lead's leftover, URGENT #138): %s" % ("(f) room lamp step", " ".join(d.text() for d in ldips)))
     print("room lamp step: the field's change on frames %s, done %d frames after the step; THE LAW: the store at rest from frame %s, %s integrations owed then at a grant of %s, so the last write <= %s - the field's last write %d; frames spending under the grant while restarts were owed: %s; 10-frame windows (sqrt of the mean change; its noise %.5f, the second differences') %s; held from %s; frames changing after the hold: %d"
           % ("%d-%d" % (min(conv), max(conv)) if conv else "none", done, lR, lW, lG, lbound, llast, lshort[:6] or "none", lsigma,
              " ".join("%.4f" % x for x in lwins), h, len(after)))
@@ -188,7 +190,7 @@ if part == "room":   # gi.hold_after_stop (URGENT #147: the room's two sessions)
     elif lbound is None or llast > lbound: fails.append("(f) room lamp step: the field's last write within the law: %d > %s" % (llast, lbound))
     if lshort: fails.append("(f) room lamp step: every frame while restarts are owed spends its grant: %s" % lshort[:6])
     if lrises: fails.append("(f) room lamp step: the change non-increasing to the hold (the rise law): rises (kind, frame, from, to, bound) %s"
-                            % [(k, f, round(a, 4), round(b, 4), round(c, 4)) for k, f, a, b, c in lrises[:8]])
+                            % " ".join(r.text() for r in lrises[:8]))
     if h is None: fails.append("(f) room lamp step: the picture never held")
     elif after: fails.append("(f) room lamp step: no change after the hold: %d frames from %d" % (len(after), after[0]))
 if part == "court":   # gi.hold_after_stop.court (URGENT #147: the crossing's three sessions)

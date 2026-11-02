@@ -136,7 +136,8 @@ if rows is None or len(rows) != win + 1:
     fails.append("the walk window's %d frames: %s" % (win + 1, "no TSV" if rows is None else len(rows)))
     rows = None
 if rows:
-    owed, stray, lastOwed = owed_rows.judge(rows)
+    oj = owed_rows.judge(rows)   # (an OwedJudgement, read by name: URGENT #149)
+    owed, stray = oj.owed, oj.stray
     print("the post-stop GI rows owed by the motion: %s; stray: %s" % (owed or "none", stray or "none"))
     if stray: fails.append("every post-stop GI row owed by the motion within its bound (the room's law): %s" % stray[:4])
     giAt = lambda a, b: [(int(r["frame"]), r["gi_rows"]) for r in rows[a:b] if r["gi_rows"] != "-"]
@@ -166,12 +167,13 @@ if rows:
     win10 = [sum(glossy[a:b]) / (b - a) for a, b in spans]
     print("(a) glossy mean change, 10-frame windows from %d to the hold: %s" % (start, " ".join("%.4f" % w for w in win10)))
     # (the record prints a mean to 4 decimals: the quantum is the larger of that and one pixel-code over the pixels)
-    _, _, sigma, rising, dips = rise_law.judge(glossy, start, end, max(1e-4, 1.0 / max(1, int(rows[1]["glossy_px"]))))
+    j = rise_law.judge(glossy, start, end, max(1e-4, 1.0 / max(1, int(rows[1]["glossy_px"]))))   # (by name: URGENT #149)
+    sigma, rising, dips = j.sigma, j.rises, j.dips
     print("(a) the rise law's noise (sqrt of the mean change, the live frames' second differences): %.5f; rises %d" % (sigma, len(rising)))
-    if dips: print("%s: a one-frame DIP (the change fell and came back; not a rise - a skipped or partial update? the lead's leftover, URGENT #138): %s" % ("(a)", " ".join("frame %d %.1f sigma" % d for d in dips)))
+    if dips: print("%s: a one-frame DIP (the change fell and came back; not a rise - a skipped or partial update? the lead's leftover, URGENT #138): %s" % ("(a)", " ".join(d.text() for d in dips)))
     if rising: fails.append("(a) no rise to the hold (the rise law): rises (kind, frame, from, to, bound) %s"
-                            % " ".join("%s:%d:%.4f->%.4f(%.4f)" % r for r in rising[:10]))
-    if rising: print("(a) the GI rows at the rises' frames (+-10): %s" % (sorted(set(sum([giAt(max(0, r[1] - 10), r[1] + 11) for r in rising], []))) or "none"))
+                            % " ".join(r.text() for r in rising[:10]))
+    if rising: print("(a) the GI rows at the rises' frames (+-10): %s" % (sorted(set(sum([giAt(max(0, r.frame - 10), r.frame + 11) for r in rising], []))) or "none"))
     active = {i: rows[i]["refl_rest_active"] for i in (80, 300, 600) if i < len(rows)}
     print("(b') the rest's active texels at frames 80 / 300 / 600: %s" % " / ".join(str(active.get(i, "-")) for i in (80, 300, 600)))
     mirror = max(float(r["mirror_mean"]) for r in rows[1:max(hold, 2)])
