@@ -2342,6 +2342,50 @@ int Session::run(const Options &opt)
                     "%.0f ms | maps %d resolved, %d missing | %s\n", qPrintable(QFileInfo(mOpt.file).fileName()),
                     !m ? qPrintable(r.error) : r.baked ? "BAKED" : r.parsed ? "BAKE HIT, PARSED (the sidecar)" : "CACHE HIT", r.meshes, grouped(r.triangles).c_str(),
                     r.lights, r.parseMs, r.bakeMs, r.readMs, r.texturesResolved, r.texturesMissing, qPrintable(r.bakePath));
+        if (m && !mOpt.listBox.isEmpty()) {
+            // MEASURING ARM (BISTRO-REST-1 stage 0): the mesh nodes whose WORLD box meets the given box, with their materials
+            const QStringList w = mOpt.listBox.split(',');
+            float lo[3], hi[3];
+            for (int a = 0; a < 3; ++a) { lo[a] = w.value(a).toFloat(); hi[a] = w.value(a + 3).toFloat(); }
+            std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
+                if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
+                    auto mn = qSharedPointerCast<iris::MeshNode>(n);
+                    const iris::MeshPtr mesh = mn ? mn->getMesh() : iris::MeshPtr();
+                    if (mesh) {
+                        const iris::AABB bb = mesh->getAABB();
+                        const iris::Mat4 g = n->getGlobalTransform();
+                        float wl[3] = { 1e30f, 1e30f, 1e30f }, wh[3] = { -1e30f, -1e30f, -1e30f };
+                        for (int k = 0; k < 8; ++k) {
+                            const iris::Vec3 c((k & 1) ? bb.getMax().x() : bb.getMin().x(), (k & 2) ? bb.getMax().y() : bb.getMin().y(),
+                                               (k & 4) ? bb.getMax().z() : bb.getMin().z());
+                            const iris::Vec3 p = g.map(c);
+                            const float q[3] = { p.x(), p.y(), p.z() };
+                            for (int a = 0; a < 3; ++a) { wl[a] = std::min(wl[a], q[a]); wh[a] = std::max(wh[a], q[a]); }
+                        }
+                        bool meets = true;
+                        for (int a = 0; a < 3; ++a) meets = meets && wh[a] >= lo[a] && wl[a] <= hi[a];
+                        if (meets) {
+                            auto mat = qSharedPointerCast<iris::PbrMaterial>(mn->getMaterial());
+                            std::printf("LAB BOX %s | world %.2f,%.2f,%.2f .. %.2f,%.2f,%.2f | cull %d",
+                                        qPrintable(n->getName()), wl[0], wl[1], wl[2], wh[0], wh[1], wh[2],
+                                        int(mn->getFaceCullingMode()));
+                            if (mat) {
+                                std::printf(" | mat %s alphaMode %d alpha %.2f cutoff %.2f base %s x%.2f metal %.2f rough %.2f emis %s x%.2f maps",
+                                            qPrintable(mat->name), mat->alphaMode, mat->alpha, mat->alphaCutoff,
+                                            qPrintable(mat->baseColor.name()), mat->baseColorFactor, mat->metallicFactor,
+                                            mat->roughnessFactor, qPrintable(mat->emissiveColor.name()), mat->emissiveIntensity);
+                                for (auto it = mat->textures.cbegin(); it != mat->textures.cend(); ++it)
+                                    std::printf(" %s=%s", qPrintable(it.key()),
+                                                it.value() ? qPrintable(QFileInfo(it.value()->getSource()).fileName()) : "-");
+                            }
+                            std::printf("\n");
+                        }
+                    }
+                }
+                for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
+            };
+            walk(m);
+        }
         return m ? 0 : 4;
     }
     // A RUN ON A MODEL NEVER BAKES UNDER THE CARD (the urgent list's #30, PHOTON-7 stage 5: two Bistro runs spent 37-46 s

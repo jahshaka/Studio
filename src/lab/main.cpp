@@ -110,6 +110,7 @@ int main(int argc, char **argv)
         else if (a == "--headless") opt.headless = true;
         else if (a == "--no-stdin") opt.readStdin = false;
         else if (a == "--bake-only") opt.bakeOnly = true;
+        else if (a == "--list-box") { const char *v = next(); if (!v) return usage("--list-box needs x0,y0,z0,x1,y1,z1"); opt.listBox = QString::fromLocal8Bit(v); }
         else if (a == "--env") { const char *v = next(); if (!v) return usage("--env needs a name (--env-list)"); opt.env = QString::fromLocal8Bit(v); }
         else if (a == "--seed") { const char *v = next(); char *end = nullptr; if (!v) return usage("--seed needs a number"); opt.seed = unsigned(std::strtoul(v, &end, 10)); if (!end || *end) return usage("--seed needs a number"); }
         else if (a == "--env-list") envListWanted = true;

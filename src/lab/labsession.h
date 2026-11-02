@@ -49,6 +49,7 @@ struct Options
     QString binDir;            ///< the binary's directory (media, app/content)
     bool headless = false;     ///< an OFFSCREEN Vulkan view, no window (never EngineConfig::headless; DISPLAY still needed)
     bool readStdin = true;
+    QString listBox;           ///< MEASURING ARM (BISTRO-REST-1 stage 0): with --bake-only, list the mesh nodes whose world box meets x0,y0,z0,x1,y1,z1
     bool bakeOnly = false;     ///< bake (or verify the cached bake of) the file and exit: CPU only, no engine, no GPU
     bool hasCamera = false;
     iris::Vec3 camPos, camTarget;
