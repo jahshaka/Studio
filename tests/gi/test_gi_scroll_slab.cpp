@@ -308,6 +308,24 @@ int main()
             std::printf("   D: %s: level 0's half store moved in %zu of %zu floats, the largest %.2f half-float steps; feedback active %u, "
                         "resumes %llu, owed %d\n", what, n, A.size(), worst, c0.feedbackActive,
                         (unsigned long long)c0.feedbackResumes, c0.feedbackOwed ? 1 : 0);
+            // ...and the ACTIVE bricks' own state (the door): their measured contraction r and last move (codes), and that
+            // move over the store's smallest relative step (2^-11 of a value = 0.0488 codes) - a flip's would-move at a
+            // touching receiver (the resume's bound weighs a touching brick 1) in that receiver's steps
+            GiFeedbackBricks fb;
+            if (scene->giFeedbackBricks(0, fb) && fb.available) {
+                size_t act = 0, rHigh = 0;
+                float rMax = 0.f, moveMax = 0.f;
+                for (size_t b = 0; b < fb.flags.size(); ++b) {
+                    if (!(fb.flags[b] & 1u)) continue;
+                    ++act;
+                    rMax = std::max(rMax, fb.r[b]);
+                    if (fb.r[b] > 0.9f) ++rHigh;
+                    moveMax = std::max(moveMax, fb.lastMove[b]);
+                }
+                std::printf("   D: %s: the door's active bricks %zu (r > 0.9: %zu, r max %.4f), their largest last move %.4f "
+                            "codes = %.2f of a receiver's smallest step\n", what, act, rHigh, double(rMax),
+                            double(moveMax), double(moveMax) / 0.048828125);
+            }
         };
         {
             GiVoxelVolume regen;
