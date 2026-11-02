@@ -657,6 +657,64 @@ jah_gpu_row(gi.share_law CLASS engine FRAMES 2 COMMAND test_gi_share_law
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.share_law PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
+# gi.feedback_closed_box.* and gi.feedback_facing_pair.* (BISTRO-REST-1, the owner's order 2026-11-02: "create a real test
+# and test it with that first") - PHOTON'S FEEDBACK AGAINST CLOSED FORMS AT THE RAY TIER, the voxel store read directly;
+# test_gi_feedback_closed_box.cpp derives each law. One step a row (the fixture's 10 s budget). Fixtures.
+#   (i)   THE FIXED POINT IS THE CLOSED FORM - the sealed box's L* = E / (1 - a') (exact in a sealed room of one material),
+#         the concentric pair's L1 / L2 (F21 = (r1 / r2)^2), within a code and a store step; the deficit split by a 64-pass
+#         (held) Jacobi printed beside it. Rows .up of the box and the pair. DECLARED RED to GATHER-TRUTH-1: the closed form
+#         is Lambertian, HlmsPbs's diffuse Disney - the expectation to be re-derived from the lobe reference
+#         (GATHER-TRUTH-1 S0); never loosened here.
+#   (ii') MONOTONE TO THE NEW FIXED POINT, per voxel - after a step up the old fixed point is a sub-solution of a positive
+#         operator, so every update in any order keeps each voxel non-decreasing and at most its new fixed point (a step
+#         down the mirror), within one store step. The box's and the pair's steps are material swaps (setNodeMaterial):
+#         DECLARED RED to MATERIAL-SWAP-1 (photon-7's own, worse there). The lamp's are relights: green (a guard).
+#   (iii) A REST IS A REST - for 2 x lightWorkFrames + 2 frames nothing owed, no brick resumed or passed, the half store the
+#         same word for word (Scene::giHalfStoreWords). Every row; green everywhere.
+#   THE PICTURE after the lamp's step up, judged by tests/support/rise_law.py (gi.hold_after_stop (f)'s law) in the wrapper
+#         feedback_lamp.sh: .lamp.up at 64 x 64 (photon-7 bursts three times there, this lane's tip none: a guard, green);
+#         .room at gi.hold_after_stop's 960 x 540 with the cards - DECLARED RED to PROBE-GATHER-REST-1: the screen-probe
+#         gather's picture bursts after a lamp step while the store is monotone and resting (the field dispatching
+#         nothing); photon-7's own (the same 4-frame cadence and signature on both trees).
+#   .scroll: gi.scroll_slab G's two-cascade chain at High, a pinned cascade-0 scroll bringing an emissive panel in - it comes
+#         to rest and (iii) holds after it.
+add_executable(test_gi_feedback_closed_box test_gi_feedback_closed_box.cpp)
+set_target_properties(test_gi_feedback_closed_box PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_feedback_closed_box PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_feedback_closed_box PRIVATE JahshakaEngine)
+add_dependencies(test_gi_feedback_closed_box JahshakaEngineMedia)
+jah_gpu_row(gi.feedback_closed_box.up CLASS engine FRAMES 267 COMMAND test_gi_feedback_closed_box box.up
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.feedback_closed_box.down CLASS engine FRAMES 301 COMMAND test_gi_feedback_closed_box box.down
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.feedback_facing_pair.up CLASS engine FRAMES 330 COMMAND test_gi_feedback_closed_box pair.up
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.feedback_facing_pair.down CLASS engine FRAMES 388 COMMAND test_gi_feedback_closed_box pair.down
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.feedback_closed_box.lamp.down CLASS engine FRAMES 313 COMMAND test_gi_feedback_closed_box lamp.down
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.feedback_closed_box.scroll CLASS engine FRAMES 204 COMMAND test_gi_feedback_closed_box scroll
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.feedback_closed_box.lamp.up CLASS engine FRAMES 210
+         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/feedback_lamp.sh $<TARGET_FILE:test_gi_feedback_closed_box>
+                 ${CMAKE_CURRENT_BINARY_DIR}/work/feedback_lamp.up lamp.up
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(gi.feedback_closed_box.room CLASS engine FRAMES 210
+         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/feedback_lamp.sh $<TARGET_FILE:test_gi_feedback_closed_box>
+                 ${CMAKE_CURRENT_BINARY_DIR}/work/feedback_room room
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.feedback_closed_box.up gi.feedback_closed_box.down gi.feedback_facing_pair.up
+                     gi.feedback_facing_pair.down gi.feedback_closed_box.lamp.up gi.feedback_closed_box.lamp.down
+                     gi.feedback_closed_box.room gi.feedback_closed_box.scroll
+                     PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.card_law (BISTRO-REST-1) - A CARD TEXEL NEVER SENDS NEGATIVE LIGHT, AND ITS MOVE RULE READS EVERY VALID REFERENCE AS
 # ONE: the shipped stored terms, read and move (jah_card_view.glsl, through Engine::giLaw's test-only job) - the read never
 # negative, the cut's residual within F's one rounding, no 3e38 from a finite reference, an unchanged re-march silent
