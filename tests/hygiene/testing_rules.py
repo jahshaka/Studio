@@ -315,20 +315,42 @@ ROOT_VARS = ("JAHSHAKA_DATA_ROOT", "HOME")
 KEEPS_HOME = "JAHSHAKA_TEST_KEEPS_HOME"
 
 
+FRESH_HOME = os.path.join(os.path.dirname(os.path.abspath(__file__)), os.pardir, "support", "fresh_home.sh")
+_FH_FLAGS = None
+
+
+def fresh_home_flags(text=None):
+    """{flag: words it takes, itself included} - READ FROM tests/support/fresh_home.sh's own option loop (the arms of
+    its `case "$1" in`: `--x) ...; shift N`), never a copy of it here (URGENT #149: --seed came in with #139 and this
+    parser, not knowing it took a word, read `--seed` as the <home> - R12 red on the row #139 had just wiped right)."""
+    global _FH_FLAGS
+    if text is None and _FH_FLAGS is not None:
+        return _FH_FLAGS
+    src = text if text is not None else open(FRESH_HOME).read()
+    loop = re.search(r'while \[ \$# -gt 0 \]; do\s*case "\$1" in(.*?)\n\s*esac\s*\n\s*done', src, re.S)
+    out = {}
+    for m in re.finditer(r'^\s*(--[a-z][a-z-]*)\)(.*?)(?=^\s*--[a-z-]*\)|^\s*\*\)|\Z)', loop.group(1) if loop else "",
+                         re.S | re.M):
+        n = re.search(r'\bshift(?:[ \t]+(\d+))?', m.group(2))
+        out[m.group(1)] = int(n.group(1)) if n and n.group(1) else 1
+    if text is None:
+        _FH_FLAGS = out
+    return out
+
+
 def _fresh_home_wipes(cmd):
     """The paths a fresh_home.sh command wipes (its <home> and every --reset dir), or None when the command does not run
     fresh_home.sh. The script may sit behind a launcher (scripts/gpu-exclusive.sh, `sh`): its own arguments start after
-    it and end at `--`."""
+    it and end at `--`. Its flags and the words each takes are the script's own (fresh_home_flags)."""
     at = next((i for i, c in enumerate(cmd) if os.path.basename(c) == "fresh_home.sh"), None)
     if at is None:
         return None
+    flags = fresh_home_flags()
     out, args, i = [], cmd[at + 1:], 0
     while i < len(args) and args[i] != "--":
         a = args[i]
-        if a in ("--warm", "--keep-home", "--setup", "--promote"):
-            i += 1
-        elif a in ("--cache", "--rm", "--mkdir"):
-            i += 2
+        if a in flags and a != "--reset":
+            i += flags[a]
         elif a == "--reset":
             if i + 1 < len(args):
                 out.append(args[i + 1])
@@ -642,13 +664,26 @@ def the_rules_catch():
                    C("other", ["/b/bin/Jahshaka"], ENVIRONMENT=["HOME=/b/tests/x/g"], FIXTURES_REQUIRED=["fx"]),
                    C("kept", ["/b/bin/Jahshaka"], ENVIRONMENT=env, JAHSHAKA_TEST_KEEPS_HOME="the warm second launch"),
                    C("outside", ["/b/bin/Jahshaka"], ENVIRONMENT=["HOME=/tmp/x/y/z"]),
-                   C("wrongroot", ["sh", fh, "--warm", "/b/tests/x/other", "--", "/b/bin/Jahshaka"], ENVIRONMENT=env[:1])],
+                   C("wrongroot", ["sh", fh, "--warm", "/b/tests/x/other", "--", "/b/bin/Jahshaka"], ENVIRONMENT=env[:1]),
+                   C("s.setup", ["sh", fh, "--setup", "--seed", "/b/tests/x/seed/shadercache", "/b/tests/x/s"],
+                     FIXTURES_SETUP=["sfx"]),
+                   C("seeded", ["/b/bin/Jahshaka"], ENVIRONMENT=["HOME=/b/tests/x/s"], FIXTURES_REQUIRED=["sfx"])],
                   "/b")
     check(r12 == ["bare (HOME=tests/x/h)", "bare (JAHSHAKA_DATA_ROOT=tests/x/h/.local/share/Jahshaka)",
                   "other (HOME=tests/x/g)", "wrongroot (HOME=tests/x/h)"],
           "R12 flags a row whose scratch root under the build dir has no wipe (none, a fixture wiping another root, an "
           "in-row wipe of another home), never one wiped in-row, by its fixture (home or --reset), kept with a reason, "
-          "or outside the build dir (%s)" % r12)
+          "or outside the build dir, nor one wiped by a fixture whose flag takes a word (--seed <dir>) (%s)" % r12)
+    # the parser's flags are fresh_home.sh's own (URGENT #149): every arm of the script's option loop with the words it
+    # shifts, a new arm read without a line here, and a flag's word never taken for the <home>
+    fl = fresh_home_flags()
+    syn = fresh_home_flags('while [ $# -gt 0 ]; do\n    case "$1" in\n        --a) a=1; shift ;;\n        --bb) b="$2"; '
+                           'shift 2\n                 case "$b" in x) exit 2 ;; esac ;;\n        --c) c="$c\n$2"; shift 2 ;;\n'
+                           '        --)  exit 2 ;;\n        *)   break ;;\n    esac\ndone\n')
+    check(fl.get("--warm") == 1 and fl.get("--setup") == 1 and fl.get("--reset") == 2 and fl.get("--seed") == 2
+          and fl.get("--cache") == 2 and "--" not in fl and syn == {"--a": 1, "--bb": 2, "--c": 2},
+          "fresh_home's flags are READ from tests/support/fresh_home.sh's option loop (each arm and the words it shifts; a "
+          "new arm known with no line here), never a copy (%s; a synthetic loop: %s)" % (sorted(fl.items()), syn))
     app = "/b/bin/Jahshaka"
     r13 = r13_bad([C("cold", [app, "--data-root", "/b/tests/x/d"]),
                    C("coldenv", ["bash", "/s/x.sh", app], ENVIRONMENT=["HOME=/b/tests/x/h"]),
