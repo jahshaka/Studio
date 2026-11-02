@@ -1,22 +1,23 @@
 // gi.share_law (BISTRO-REST-1, the lead's ruling (B)) - THE HIT READ's BOUNCE SHARE IS LINEAR IN THE STORE IT READS.
-// A ray's hit read hands back the store's bounce part, rad x share, share = ( T - D ) / T of the half it read
-// (rayquery/include/jah_rq_hit.glsl jahVoxelShareFootprint). The shipped share was weighed by a precision TRUST that read
+// A ray's hit read hands back the store's bounce part (rayquery/include/jah_rq_hit.glsl jahVoxelRadiance's
+// jahVoxelBounceOut): since BISTRO-REST-1's fix, the read of the total less the SAME read of the direct chain. The shipped share was weighed by a precision TRUST that read
 // T itself (clamp( 2 - 100 q / T ), q the store's quantum): over the dim range (premultiplied T about 6e-6 .. 1.2e-5) its
 // slope amplified the answer up to 3-4x, and on Bistro Exterior at Epic two halves of one coarse cell that read each other
 // through millimetre geometry orbited at period 2 for good (spikes/bistro-rest-1: 3.4e-6 <-> 5.4e-5, the answer 21x apart)
 // - the feedback never rested, nor any reader after it.
-// THIS ROW RUNS THE SHIPPED FUNCTION (Engine::giShareLaw: rq_share_law.comp includes the one jah_rq_hit.glsl, over a
-// fixture store of one pick) and holds:
+// THIS ROW RUNS THE SHIPPED READ (Engine::giShareLaw: rq_share_law.comp includes the one jah_rq_hit.glsl and calls
+// jahVoxelRadiance over a uniform fixture store - the half store, the chains, the coverages) and holds:
 //   (i)  THE SHARE IS CONTINUOUS AND MONOTONE in T, over 1e-7 .. 1e-2 sampled every 2^(1/256) (finer than a binade by
 //        256): no step between neighbours past 0.01, never falling as T rises (D = 0 and D = T / 2);
-//   (ii) THE READ IS LINEAR: its relative slope T d(answer) / dT is 1 within 1e-3 over the whole range (the read's
-//        radiance rad = T / k, D a fixed share of T - the answer then scales with T exactly), so a loop through it has the
-//        operator's gain, never more;
+//   (ii) THE READ IS LINEAR: the bounce part's relative slope T d(bounce) / dT is 1 within 1e-3 over the whole range (D
+//        a fixed share of T - the bounce then scales with T exactly), at the footprint lod 0 and 2, so a loop through it
+//        has the operator's gain, never more;
 //   (iii) TWO HALVES OF ONE CELL reading each other (returning fraction F, albedo rho, source S, coverage k), under the
 //        Jacobi door from out of phase: NO PERIOD-2 (the last two pairs equal, not alternating) and the fixed point
 //        D / ( 1 - rho F ) - here S / ( 1 - rho F ) - within one half-float step, for fixed points swept across the dim
 //        range (1e-7 .. 1e-3) at rho F = 0.19 (Bistro's: 0.6 x 5/16), 0.30 and 0.48.
-// On the base shader (the trust) this row is RED: (ii) on the ramp and (iii) where the fixed point sits on it.
+// On the base shader (the trust, its share at the pick texel) this row was RED, run once (BISTRO-REST-1): (i) a 0.0108
+// step at T 5.98e-6, (ii) the slope off by 562, (iii) 2 period-2 orbits and 138 fixed points dark by up to 86.6 steps.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
@@ -50,10 +51,13 @@ int main()
     std::vector<GiShareQuestion> qs;
     std::vector<float> Ts;
     for (double lt = std::log2(1e-7); lt <= std::log2(1e-2); lt += 1.0 / 256.0) Ts.push_back(float(std::exp2(lt)));
-    for (int d = 0; d < 2; ++d)
+    // four sweeps: D = 0 and D = T/2, each at the footprint lod 0 (the half store's level-0 plane) and lod 2 (the
+    // directional chains)
+    const float lods[2] = { 0.0f, 2.0f };
+    for (int sw = 0; sw < 4; ++sw)
         for (float T : Ts) {
             GiShareQuestion q;
-            q.q[0] = T; q.q[1] = d ? 0.5f * T : 0.0f; q.q[2] = k;
+            q.q[0] = T; q.q[1] = (sw & 1) ? 0.5f * T : 0.0f; q.q[2] = k; q.q[3] = lods[sw >> 1];
             q.mode = 0u;
             qs.push_back(q);
         }
@@ -78,10 +82,11 @@ int main()
     }
     int fails = 0;
     // (i) continuous and monotone; (ii) linear
-    for (int d = 0; d < 2; ++d) {
+    for (int sw = 0; sw < 4; ++sw) {
+        const int d = sw & 1;
         double worstStep = 0.0, worstFall = 0.0, worstSlope = 0.0;
         float atStep = 0.f, atFall = 0.f, atSlope = 0.f;
-        const size_t base = size_t(d) * Ts.size();
+        const size_t base = size_t(sw) * Ts.size();
         for (size_t j = 1; j < Ts.size(); ++j) {
             const GiShareAnswer &a0 = as[base + j - 1], &a1 = as[base + j];
             const double step = std::fabs(double(a1.a[0]) - a0.a[0]);
@@ -95,11 +100,11 @@ int main()
         }
         const bool okI = worstStep <= 0.01 && worstFall <= 1e-6;
         const bool okII = worstSlope <= 1e-3;
-        std::printf("%s (i)  D = %s: the share's largest step between neighbours %.6f (at T %.3g), its largest fall %.3g "
-                    "(at T %.3g) - bars 0.01 / 0\n", okI ? "ok:" : "FAIL:", d ? "T/2" : "0", worstStep, atStep, worstFall,
-                    atFall);
-        std::printf("%s (ii) D = %s: the read's relative slope T d(answer)/dT off 1 by at most %.6f (at T %.3g) - bar 1e-3\n",
-                    okII ? "ok:" : "FAIL:", d ? "T/2" : "0", worstSlope, atSlope);
+        std::printf("%s (i)  D = %s, lod %.0f: the share's largest step between neighbours %.6f (at T %.3g), its largest "
+                    "fall %.3g (at T %.3g) - bars 0.01 / 0\n", okI ? "ok:" : "FAIL:", d ? "T/2" : "0", lods[sw >> 1],
+                    worstStep, atStep, worstFall, atFall);
+        std::printf("%s (ii) D = %s, lod %.0f: the bounce part's relative slope T d(bounce)/dT off 1 by at most %.6f (at T "
+                    "%.3g) - bar 1e-3\n", okII ? "ok:" : "FAIL:", d ? "T/2" : "0", lods[sw >> 1], worstSlope, atSlope);
         fails += !okI + !okII;
     }
     // (iii) no period-2, the closed form
@@ -108,7 +113,7 @@ int main()
         double worstOff = 0.0;
         const Loop *worst = nullptr;
         for (size_t j = 0; j < loops.size(); ++j) {
-            const GiShareAnswer &a = as[2 * Ts.size() + j];
+            const GiShareAnswer &a = as[4 * Ts.size() + j];
             const Loop &L = loops[j];
             const float x0 = a.a[2], x1 = a.a[3], y0 = a.b[2], y1 = a.b[3];
             const float step = halfStep(L.star);
