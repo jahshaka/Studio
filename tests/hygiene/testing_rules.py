@@ -18,7 +18,9 @@ tree and the build's registration, each with its name in the failure line:
      change to what it tests: its script calls an API module that has an api file, or its directory is named by an
      AREA_RULE. A lint or script row must run a file of the tree or sit in a directory a rule names.
   R6 A ROW THAT READS ANOTHER ROW'S RUN REQUIRES IT: a row that DEPENDS on another registered row also
-     FIXTURES_REQUIRES a fixture that row SETS UP, so `-R <row>` runs the parent first in the same home.
+     FIXTURES_REQUIRES a fixture that row SETS UP, so `-R <row>` runs the parent first in the same home. A fixture's
+     CLEANUP row is not a reader: ctest lists every row that sets up or requires the fixture it cleans as its DEPENDS (its
+     own ordering, after them all) - those are never flagged (URGENT #133, rtreflect.lag_law.clean).
   R7 A GPU ROW STATES THE FRAMES IT RENDERS: every row on the card's slots (JAH_CLASS) carries JAHSHAKA_TEST_FRAMES
      (read from the property); the rows without it are listed in tests/hygiene/frames_pending.txt — a row without
      FRAMES the list does not name is RED, and a listed row that states FRAMES (or is gone) is RED until the list drops
@@ -203,8 +205,10 @@ def r6_bad(tests):
     props = {t["name"]: {p["name"]: p["value"] for p in t.get("properties", [])} for t in tests}
     bad = []
     for n, P in sorted(props.items()):
-        req = set(_list(P.get("FIXTURES_REQUIRED")))
+        req, cleans = set(_list(P.get("FIXTURES_REQUIRED"))), set(_list(P.get("FIXTURES_CLEANUP")))
         for d in _list(P.get("DEPENDS")):
+            if d in props and cleans & (set(_list(props[d].get("FIXTURES_SETUP"))) | set(_list(props[d].get("FIXTURES_REQUIRED")))):
+                continue   # ctest's own order for a cleanup row: after every row of the fixture it cleans
             if d in props and not (set(_list(props[d].get("FIXTURES_SETUP"))) & req):
                 bad.append("%s (DEPENDS %s)" % (n, d))
     return bad
@@ -582,8 +586,13 @@ def the_rules_catch():
           "--cache key; never a wrapped one (behind the lock too) or a consumer of a cold fixture (%s)" % r14)
     check(r6_bad([T("a"), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a"])]) == ["a.twin (DEPENDS a)"]
           and not r6_bad([T("a", FIXTURES_SETUP=["run_a"]), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a", "run_a"])])
-          and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")]),
-          "R6 flags a row that DEPENDS on a run it does not require (a fixture the run sets up clears it)")
+          and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")])
+          and not r6_bad([T("w", FIXTURES_SETUP=["fx"]), T("k", DEPENDS=["w"], FIXTURES_REQUIRED=["fx"]),
+                          T("c", DEPENDS=["k", "w"], FIXTURES_CLEANUP=["fx"])])
+          and r6_bad([T("w", FIXTURES_SETUP=["fx"]), T("o"), T("c", DEPENDS=["o", "w"], FIXTURES_CLEANUP=["fx"])])
+          == ["c (DEPENDS o)"],
+          "R6 flags a row that DEPENDS on a run it does not require (a fixture the run sets up clears it); a fixture's "
+          "CLEANUP row is never flagged for the rows of the fixture it cleans (ctest's own order, #133), only for another")
 
 
 def fresh_home_behaves(source):

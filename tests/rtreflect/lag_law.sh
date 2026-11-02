@@ -21,17 +21,24 @@
 #     session booted on in the one row (a grown cache draws other variants: walk_world.sh's measure, 2,712 px at a hold);
 #   14 | 28 | 59 (rtreflect.lag_law.k14 / .k28 / .k59): the world settled at the start pose and held (640 frames, the
 #     arm gi.freeze 2), the two converged poses k and k + 1 (2 x 600) - 1,840 frames - and the law at its k; each part
-#     removes its frame's dumps, the last (59) the snapshot. The law, its bar and its door are the one row's, unchanged.
-# usage: lag_law.sh <jahlab> <work dir> <walk|14|28|59>
+#     reads the walk's files and removes none, so the three run in any order (URGENT #133);
+#   clean (rtreflect.lag_law.clean, FIXTURES_CLEANUP; no card, no jahlab: `-`): the dumps and the snapshot removed,
+#     after every part that ran. The law, its bar and its door are the one row's, unchanged.
+# usage: lag_law.sh <jahlab> <work dir> <walk|14|28|59|clean>
 set -u
-LAB=${1:?jahlab}; WD=${2:?work dir}; PART=${3:?part (walk|14|28|59)}
+LAB=${1:?jahlab}; WD=${2:?work dir}; PART=${3:?part (walk|14|28|59|clean)}
+DUMP=$WD/data/stillness/dump-glass-world
+if [ "$PART" = clean ]; then
+    rm -rf "$DUMP" "$WD/cache.snap"
+    echo "rtreflect.lag_law clean: the walk's dumps and its cache snapshot removed - PASS"
+    exit 0
+fi
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 HERE=$(cd "$(dirname "$0")" && pwd)
-DUMP=$WD/data/stillness/dump-glass-world
 case "$PART" in
     walk) rm -rf "$WD"; mkdir -p "$WD" ;;
     14|28|59) [ -f "$DUMP/glass-world-t0$PART.rgb" ] || { echo "FAIL: no walk frame $PART in $WD (rtreflect.lag_law.walk writes it)"; exit 1; } ;;
-    *) echo "FAIL: the part '$PART' (walk|14|28|59)"; exit 1 ;;
+    *) echo "FAIL: the part '$PART' (walk|14|28|59|clean)"; exit 1 ;;
 esac
 SRC="--data-root $WD/data --env photon-glass"
 session() {   # name (the script is $WD/<name>.lab)
@@ -126,8 +133,6 @@ for f in fails: print('FAIL: ' + f)
 sys.exit(1 if fails else 0)
 PY
 rc=$?
-rm -f "$DUMP/glass-world-t0$PART."*
-[ "$PART" = 59 ] && rm -rf "$DUMP" "$WD/cache.snap"
 [ $srcrc -eq 0 ] || rc=1
 echo "rtreflect.lag_law k$PART: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
 exit $rc
