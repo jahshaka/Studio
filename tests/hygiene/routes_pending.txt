@@ -53,6 +53,7 @@ gi.glass_pass                            gather reflection field store paused  #
 gi.hit_list_demand                       gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.hit_specular_mobility                 gather reflection store  # tests/gi/test_gi_hit_specular_mobility.cpp: Live 0 / StillPicture 2 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
 gi.hold_after_stop                       gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
+gi.hold_after_stop.court                 gather  # gi.hold_after_stop's court sessions, split out by URGENT #147 (the same lab view: StillPicture, GI on, at its budget)
 gi.lamps_outside                         gather reflection store paused  # tests/gi/test_gi_lamps_outside.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 1, ssr 1
 gi.lamps_outside_cards                   gather reflection store paused  # tests/gi/test_gi_lamps_outside.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 1, ssr 1
 gi.leak_room                             integrate store ; gather reflection store paused (leak_cards)  # tests/gi/test_gi_leak_room.cpp: Live 'leak' (post chain, no ssr) at budget 1; StillPicture 'leak_cards' rays on, ssr 1, budget 0

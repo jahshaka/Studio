@@ -253,6 +253,14 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_sweep.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
     set_tests_properties(tooling.gpu_lock_sweep PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.gpu_lock_sweep)
+    # tooling.row_env — A ROW RUN BY HAND CARRIES ITS REGISTRATION (URGENT #147): scripts/row-env.sh on a toy ctest build -
+    # the row printed as registered, --run applying its ENVIRONMENT and ENVIRONMENT_MODIFICATION in its directory,
+    # --scratch writing nothing under the build (a warm fresh_home row's shared cache copied), fixtures and a GPU row
+    # without a DISPLAY refused, a GPU row under the lock (row_env.sh; CPU, a private lock file).
+    add_test(NAME tooling.row_env
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/row_env.sh" "${CMAKE_SOURCE_DIR}/scripts/row-env.sh")
+    set_tests_properties(tooling.row_env PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.row_env)
     # tooling.law_records — A RECORD KEEPS ITS ROW's LAW NUMBERS (HARNESS-3 (b)): scripts/gate_runlog.py over a fake ctest
     # stream keeps every `LAW <name> <value> <unit> [<op> <bar>]` line (tests/support/lawline.h) in the row's record, a
     # green row's and a red row's, one past the 256-KB output cap too (law_records.py; a scratch HOME and run-log dir).

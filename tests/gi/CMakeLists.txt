@@ -1415,13 +1415,22 @@ endif()
 # cascade 1 alone, whose input reaches cascade 0 in its scheduler's sweeps (the cursor-ordered passes of a budget-starved
 # outer cascade) - reproduced as gi.feedback_closed_box.room_geom, red on photon-7 and on this lane's tip by the same
 # wave; green on B (4a31da26f) only because its footprint hit read hid it.
-# 960x540; five jahlab sessions: 393, 424, 483, 483 and 483 frames.
+# 960x540; TWO ROWS BY SCENE (URGENT #147, 2026-11-02: the five sessions in one row were 38-40 s quiet and timed out at
+# 60.06 s in a master under the shared box's load, the frame lines identical - split by proof, nothing cut):
+#   gi.hold_after_stop        - photon-room: the sub-cell walk (1), (2), the plaster; the lamp step's (f); 393 + 424 frames.
+#   gi.hold_after_stop.court  - photon-court: the crossing (a), (b), (c), (g), (d) and the foliage class (K5, L8): the
+#                               crossing, its gather.classOff twin and its gi.fieldEnterInline twin; 3 x 483 frames.
 if(TARGET jahlab)
-    jah_gpu_row(gi.hold_after_stop CLASS engine FRAMES 2266
+    jah_gpu_row(gi.hold_after_stop CLASS engine FRAMES 817
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/hold_after_stop.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/hold_after_stop
+                ${CMAKE_CURRENT_BINARY_DIR}/work/hold_after_stop room
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.hold_after_stop PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_gpu_row(gi.hold_after_stop.court CLASS engine FRAMES 1449
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/hold_after_stop.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/hold_after_stop_court court
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(gi.hold_after_stop.court PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
 
 # gi.inject_fold (PHOTON-7's walk hitch, 2) — THE INJECTION's BOXES FOLD PAIR BY PAIR, NEVER INTO THEIR UNION: a two-axis
