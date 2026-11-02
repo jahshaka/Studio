@@ -18,9 +18,14 @@ until a green row replaced it - while scripts/warm-app-cache.sh, which read only
 warm. So the harness asks the engine's own question: fresh_home.sh never promotes a home whose cache fails it, and
 warm-app-cache.sh reads a shared cache that fails it as cold (its -off boot then replaces it).
 
-THE HASH IS THE ENGINE's: Ogre::MurmurHash3_x64_128 out of the tree's libOgreNextMain.so (the build's CMakeCache.txt
-OGRE_NEXT_OgreNextMain_LIB, found by walking up from the directory; or JAH_OGRE_MAIN_LIB) through ctypes - 34 ms for a
-9 MB pipeline cache. Without it (a toy tree) the same function in Python (~10 MB/s; --selftest holds the two equal).
+THE HASH IS THE ENGINE's: Ogre::MurmurHash3_x64_128 out of the tree's libOgreNextMain.so through ctypes - 34 ms for a
+9 MB pipeline cache - found as a configured build names it: JAH_OGRE_MAIN_LIB, else the OGRE_NEXT_OgreNextMain_LIB line of
+the first CMakeCache.txt above the directory that carries one, else THIS SCRIPT's OWN TREE's (its build-linux/CMakeCache.txt,
+then its irisgl/thirdparty/ogre-next-install - the library build-ogre.sh installs). Without any (a source tree never built)
+the same function in Python (~12 MB/s; --selftest holds the two equal) - NEVER SILENTLY (URGENT #132, 2026-11-02: a
+hand-priced row whose home sat under a scratch build with an empty CMakeCache.txt hashed the 429 MB engine cache in
+Python at every green run's promotion check, 34 s a row, and three of four parts read 44-49 s for 13-17 s of work):
+the fallback prints ONE line on stderr naming the bytes, their cost and every place read.
 """
 import ctypes
 import os
@@ -81,33 +86,66 @@ def murmur_py(data, seed=SEED):
     return "%016x%016x" % (h1, h2)
 
 
-def _find_lib(start):
+TREE = os.path.dirname(os.path.dirname(os.path.dirname(os.path.abspath(__file__))))   # tests/support -> this script's tree
+WHY = [""]   # why the last engine_hash() found no library (the fallback's line names it)
+
+
+def _cmake_lib(cc):
+    """The OGRE_NEXT_OgreNextMain_LIB a CMakeCache.txt names, or None."""
+    try:
+        with open(cc, errors="replace") as f:
+            for line in f:
+                if line.startswith("OGRE_NEXT_OgreNextMain_LIB:"):
+                    return line.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return None
+
+
+def find_lib(start):
+    """(the engine library's path, where it was named) or (None, every place read and why it gave none)."""
     lib = os.environ.get("JAH_OGRE_MAIN_LIB")
     if lib:
-        return lib
+        return (lib, "JAH_OGRE_MAIN_LIB") if os.path.isfile(lib) else (None, "JAH_OGRE_MAIN_LIB=%s is not a file" % lib)
+    read = []
     d = os.path.abspath(start)
     while True:
         cc = os.path.join(d, "CMakeCache.txt")
         if os.path.isfile(cc):
-            with open(cc, errors="replace") as f:
-                for line in f:
-                    if line.startswith("OGRE_NEXT_OgreNextMain_LIB:"):
-                        return line.split("=", 1)[1].strip()
+            v = _cmake_lib(cc)
+            if v and os.path.isfile(v):
+                return v, cc
+            read.append("%s: %s" % (cc, "names %s, not a file" % v if v else "no OGRE_NEXT_OgreNextMain_LIB line"))
         up = os.path.dirname(d)
         if up == d:
-            return None
+            break
         d = up
+    if not read:
+        read.append("no CMakeCache.txt above %s" % os.path.abspath(start))
+    cc = os.path.join(TREE, "build-linux", "CMakeCache.txt")
+    v = _cmake_lib(cc)
+    if v and os.path.isfile(v):
+        return v, "%s (this script's tree)" % cc
+    read.append("%s: %s" % (cc, "names %s, not a file" % v if v else
+                            "no OGRE_NEXT_OgreNextMain_LIB line" if os.path.isfile(cc) else "not there"))
+    inst = os.path.join(TREE, "irisgl", "thirdparty", "ogre-next-install", "lib", "libOgreNextMain.so")
+    if os.path.isfile(inst):
+        return inst, "%s (this script's tree)" % inst
+    read.append("%s: not there" % inst)
+    return None, "JAH_OGRE_MAIN_LIB unset; " + "; ".join(read)
 
 
 def engine_hash(start):
-    """The engine's hex128 through its own Ogre library, or None when that library is not found."""
-    lib = _find_lib(start)
-    if not lib or not os.path.isfile(lib):
+    """The engine's hex128 through its own Ogre library, or None when that library is not found (WHY[0] says why)."""
+    lib, how = find_lib(start)
+    if not lib:
+        WHY[0] = how
         return None
     try:
         so = ctypes.CDLL(lib)
         fn = getattr(so, "_ZN4Ogre19MurmurHash3_x64_128EPKvijPv")
-    except (OSError, AttributeError):
+    except (OSError, AttributeError) as e:
+        WHY[0] = "%s (named by %s) does not load the engine's hash: %s" % (lib, how, e)
         return None
     fn.restype = None
     fn.argtypes = [ctypes.c_char_p, ctypes.c_int, ctypes.c_uint32, ctypes.c_void_p]
@@ -117,6 +155,14 @@ def engine_hash(start):
         fn(data, len(data), SEED, out)
         return "%016x%016x" % (out[0], out[1])
     return h
+
+
+def fallback(nbytes):
+    """The pure-Python hash, said aloud (URGENT #132): ONE line on stderr - the bytes, their cost, why no library."""
+    mb = nbytes / 1e6
+    print("shadercache_check: THE ENGINE's LIBRARY NOT FOUND - hashing %.1f MB in Python (~12 MB/s: ~%.0f s): %s"
+          % (mb, mb / 12.0, WHY[0]), file=sys.stderr)
+    return murmur_py
 
 
 def check(d):
@@ -134,7 +180,7 @@ def check(d):
             if len(p) < 5 or not p[2].isdigit():
                 return 2, "a malformed manifest line: %r" % line
             files.append((p[1], int(p[2]), p[3]))
-    h = engine_hash(d) or murmur_py
+    h = engine_hash(d) or fallback(sum(size for _, size, _ in files))
     for name, size, want in files:
         try:
             with open(os.path.join(d, name), "rb") as f:
@@ -153,12 +199,12 @@ def main(argv):
     if len(argv) == 3 and argv[1] == "--hash":
         with open(argv[2], "rb") as f:
             data = f.read()
-        print((engine_hash(os.path.dirname(os.path.abspath(argv[2]))) or murmur_py)(data))
+        print((engine_hash(os.path.dirname(os.path.abspath(argv[2]))) or fallback(len(data)))(data))
         return 0
     if len(argv) == 2 and argv[1] == "--selftest":
         h = engine_hash(os.getcwd())
         if h is None:
-            print("shadercache_check: the engine's library not found (JAH_OGRE_MAIN_LIB / a CMakeCache.txt above the cwd)")
+            print("shadercache_check: the engine's library not found: %s" % WHY[0])
             return 3
         bad = [n for n in (0, 1, 7, 8, 9, 15, 16, 17, 31, 4096, 100003)
                if h(bytes((i * 131 + n) & 255 for i in range(n))) != murmur_py(bytes((i * 131 + n) & 255 for i in range(n)))]

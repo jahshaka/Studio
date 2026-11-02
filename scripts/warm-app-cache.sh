@@ -181,7 +181,7 @@ cold_why() {   # <shared> <stamp> [<sets digest>]: empty when warm at the key, e
     elif [ "$(sed -n 1p "$2")" != "$KEY" ]; then echo "the key moved (warmed at $(sed -n 1p "$2"))"
     elif [ ! -f "$1/cache-manifest.txt" ]; then echo "the shared cache is gone"
     elif [ "$(sed -n 2p "$2")" != "$(layer_keys "$1")" ]; then echo "the shared cache was replaced at another key since"
-    elif ! torn=$(python3 -I "$SRC/tests/support/shadercache_check.py" "$1" 2>&1); then
+    elif ! torn=$(python3 -I "$SRC/tests/support/shadercache_check.py" "$1"); then   # its stderr (#132's fallback line) passes
         echo "the shared cache fails its own manifest ($torn) - the engine would boot every row seeded from it cold"
     elif [ $# -ge 3 ] && [ "$(sed -n 3p "$2")" != "$3" ]; then echo "the rows' test tiers changed since (test-boot-sets.txt)"
     fi

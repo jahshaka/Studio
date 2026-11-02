@@ -134,7 +134,8 @@ keys_differ() {
 promote_cache() {
     how="$1"
     [ -n "$shared" ] && [ -f "$home/$cache_rel/cache-manifest.txt" ] || return 0
-    if ! torn=$(python3 -I "$here/shadercache_check.py" "$home/$cache_rel" 2>&1); then
+    # (its stdout is the verdict; its stderr - the pure-Python fallback's one line, URGENT #132 - reaches the row's output)
+    if ! torn=$(python3 -I "$here/shadercache_check.py" "$home/$cache_rel"); then
         echo "fresh_home.sh: this home's cache NOT promoted - it fails its own manifest ($torn); the engine would boot" \
              "every row seeded from it cold (URGENT #117)" >&2
         return 0

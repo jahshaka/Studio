@@ -703,6 +703,24 @@ def fresh_home_behaves(source):
               "fresh_home: a green run's TORN cache (a file of other bytes than its manifest's hash) is NOT promoted and "
               "says so; the shared cache stays the last good generation (%d %s; shared: %s)"
               % (rt.returncode, rt.stderr[-160:], good[1]))
+        # THE PURE-PYTHON HASH IS NEVER SILENT (URGENT #132): with no engine library to load (JAH_OGRE_MAIN_LIB names none)
+        # a green run's promotion check says so in ONE line on the row's output - the bytes, their cost, the cause - and
+        # still judges the cache; and a home under a build whose CMakeCache.txt names no library (this toy's, a scratch's)
+        # finds THIS TREE's library the way its configured build names it (when the tree is built)
+        hn = os.path.join(td, "x", "home-nolib")
+        rn = subprocess.run(["sh", fh, "--warm", hn, "--", "sh", "-c", put(hn, [("n.bin", "K1")], keep=[("a.bin", "K1"),
+                             ("s1.bin", "K1"), ("s2.bin", "K1")])], capture_output=True, text=True,
+                            env=dict(os.environ, JAH_OGRE_MAIN_LIB=os.path.join(t, "no-such-lib.so")))
+        said = [l for l in rn.stderr.splitlines() if "THE ENGINE's LIBRARY NOT FOUND" in l]
+        check(rn.returncode == 0 and len(said) == 1 and "MB in Python (~12 MB/s" in said[0]
+              and ("JAH_OGRE_MAIN_LIB=%s is not a file" % os.path.join(t, "no-such-lib.so")) in said[0] and sc("n.bin"),
+              "shadercache_check: no engine library -> the pure-Python hash said in ONE line on the row's output (the bytes, "
+              "the cost, the cause), the cache still judged and promoted (%d %s)" % (rn.returncode, rn.stderr[-200:]))
+        lib, how = ck.find_lib(os.path.join(td, ".shadercache"))
+        built = ck._cmake_lib(os.path.join(ck.TREE, "build-linux", "CMakeCache.txt"))
+        check(not built or (lib == built and "this script's tree" in how and "CMakeCache.txt" in how),
+              "shadercache_check: under a CMakeCache.txt that names no library, the tree's own build-linux/CMakeCache.txt "
+              "names it (%s via %s)" % (lib, how))
         # --promote (HARNESS-1): a WARM fixture's consumer - its setup seeds the home; a green consumer's grown cache is
         # promoted THROUGH HARD LINKS and the home keeps it whole; a red one promotes nothing and leaves the home as it is
         hp = os.path.join(td, "x", "home-fx")
