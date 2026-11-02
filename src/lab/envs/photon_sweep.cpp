@@ -48,6 +48,30 @@ Built buildSweep(unsigned seed, bool bake)
                      V(x + 0.5f * w, 20.53f, z0 + 1.0f), mat);
         }
     }
+    // THE PAIR BY NUMBERS (gi.sidePick's read on Bistro, stage 0): cascade 3's orbiting voxel (28, 37, 36) READ ITSELF - its
+    // +Y half (k 0.33) cast its rays into the BACK of a one-sided sheet 6 mm above it (an answer of 0), and its few front
+    // hits 4-10 mm away were answered by its own coarse cell's other half, whose premultiplied T stood at 3.4e-6 / 5.4e-5
+    // in the two states (trust 0 / 1, share 0.048 / 1, the answer 1.8e-4 / 3.8e-3); its +Z half the mirror image. So: a
+    // PLATE with a ONE-SIDED SHEET a few millimetres above it (facing up: seen from the plate, a back face), the plate's
+    // lit edge a few millimetres past the sheet's, inside cascade 3's cells at that height (y 24.375 .. 26.25, 14 m over
+    // the eye: cascade 3 answers there) - one stack a cell along x, the gap 3 .. 20 mm and the plate's width 0.3 .. 1.7 m
+    // swept, so a cell's halves land on every coverage and every dimness.
+    {
+        const auto plateMat = b.material(0.62f, 0.62f, 0.64f, 0.35f, 1.0f);   // Bistro's zinc there
+        static const float kGap[5] = { 0.003f, 0.005f, 0.008f, 0.012f, 0.020f };
+        for (int i = 0; i < 24; ++i) {
+            const float cx = -45.0f + 1.875f * float(i) + 0.9375f;   // the c3 cell's centre along x
+            const float w = 0.3f + 1.4f * float(i % 8) / 7.0f, gap = kGap[i % 5];
+            const float y0 = 25.05f;
+            fixedBox(b, unit, QStringLiteral("stack%1-plate").arg(i), V(cx - 0.5f * w, y0 - 0.02f, 7.75f),
+                     V(cx + 0.5f * w, y0, 9.15f), plateMat);
+            Arrays sh;   // the one-sided sheet over it, facing +Y, 30 mm short of the plate's +Z edge (its lit sill)
+            sh.quad(V(cx - 0.5f * w - 0.05f, y0 + gap, 9.12f), V(cx + 0.5f * w + 0.05f, y0 + gap, 9.12f),
+                    V(cx + 0.5f * w + 0.05f, y0 + gap, 7.70f), V(cx - 0.5f * w - 0.05f, y0 + gap, 7.70f), V(0, 1, 0));
+            b.instance(b.mesh(sh), QStringLiteral("stack%1-sheet").arg(i), QStringLiteral("subject"), V(0, 0, 0), 0.0f,
+                       V(1, 1, 1), plateMat, true, false);
+        }
+    }
     return b.finish();
 }
 
