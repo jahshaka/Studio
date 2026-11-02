@@ -657,6 +657,26 @@ jah_gpu_row(gi.share_law CLASS engine FRAMES 2 COMMAND test_gi_share_law
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.share_law PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
+# gi.card_law (BISTRO-REST-1) - A CARD TEXEL NEVER SENDS NEGATIVE LIGHT, AND ITS MOVE RULE READS EVERY VALID REFERENCE AS
+# ONE: the shipped stored terms, read and move (jah_card_view.glsl, through Engine::giLaw's test-only job) - the read never
+# negative, the cut's residual within F's one rounding, no 3e38 from a finite reference, an unchanged re-march silent
+# (test_gi_card_law.cpp says the laws). An engine fixture: one dispatch.
+add_executable(test_gi_card_law test_gi_card_law.cpp)
+set_target_properties(test_gi_card_law PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_card_law PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_card_law PRIVATE JahshakaEngine)
+add_dependencies(test_gi_card_law JahshakaEngineMedia)
+jah_gpu_row(gi.card_law CLASS engine FRAMES 2 COMMAND test_gi_card_law
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_law PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+
 # gi.leak_room (restored for PHOTON-7 stage 5, 5-3; held at 163d90223 in archive/tests/gi) — THE LEAK THROUGH A WALL,
 # the field's and THE CARDS': a sealed room with a lamp inside and a red one outside, the red that reaches the inside
 # is the leak (test_gi_leak_room.cpp says the laws). A fixture.

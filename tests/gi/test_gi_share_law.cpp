@@ -5,7 +5,7 @@
 // slope amplified the answer up to 3-4x, and on Bistro Exterior at Epic two halves of one coarse cell that read each other
 // through millimetre geometry orbited at period 2 for good (spikes/bistro-rest-1: 3.4e-6 <-> 5.4e-5, the answer 21x apart)
 // - the feedback never rested, nor any reader after it.
-// THIS ROW RUNS THE SHIPPED READ (Engine::giShareLaw: rq_share_law.comp includes the one jah_rq_hit.glsl and calls
+// THIS ROW RUNS THE SHIPPED READ (Engine::giLaw(GiLaw::Share): rq_share_law.comp includes the one jah_rq_hit.glsl and calls
 // jahVoxelRadiance over a uniform fixture store - the half store, the chains, the coverages) and holds:
 //   (i)  THE SHARE IS CONTINUOUS AND MONOTONE in T, over 1e-7 .. 1e-2 sampled every 2^(1/256) (finer than a binade by
 //        256): no step between neighbours past 0.01, never falling as T rises (D = 0 and D = T / 2);
@@ -48,7 +48,7 @@ int main()
 
     // ---- (i) and (ii): THE SWEEP ------------------------------------------------------------------------------------
     const float k = 0.33f;
-    std::vector<GiShareQuestion> qs;
+    std::vector<GiLawQuestion> qs;
     std::vector<float> Ts;
     for (double lt = std::log2(1e-7); lt <= std::log2(1e-2); lt += 1.0 / 256.0) Ts.push_back(float(std::exp2(lt)));
     // four sweeps: D = 0 and D = T/2, each at the footprint lod 0 (the half store's level-0 plane) and lod 2 (the
@@ -56,9 +56,9 @@ int main()
     const float lods[2] = { 0.0f, 2.0f };
     for (int sw = 0; sw < 4; ++sw)
         for (float T : Ts) {
-            GiShareQuestion q;
+            GiLawQuestion q;
             q.q[0] = T; q.q[1] = (sw & 1) ? 0.5f * T : 0.0f; q.q[2] = k; q.q[3] = lods[sw >> 1];
-            q.mode = 0u;
+            q.u[0] = 0u;
             qs.push_back(q);
         }
     // ---- (iii): THE LOOP ---------------------------------------------------------------------------------------------
@@ -69,15 +69,15 @@ int main()
         for (double lx = std::log2(1e-7); lx <= std::log2(1e-3); lx += 0.125) {
             const float star = float(std::exp2(lx)), S = star * (1.0f - p[0] * p[1]);
             loops.push_back({ S, p[1], p[0], star });
-            GiShareQuestion q;
+            GiLawQuestion q;
             q.q[0] = S; q.q[1] = p[1]; q.q[2] = p[0]; q.q[3] = k;
-            q.mode = 1u;
-            q.iterations = 600u;
+            q.u[0] = 1u;
+            q.u[1] = 600u;
             qs.push_back(q);
         }
-    std::vector<GiShareAnswer> as;
-    if (!e->giShareLaw(qs, as) || as.size() != qs.size()) {
-        std::printf("FAIL: giShareLaw: %s\n", e->takeLastError().c_str());
+    std::vector<GiLawAnswer> as;
+    if (!e->giLaw(GiLaw::Share, qs, as) || as.size() != qs.size()) {
+        std::printf("FAIL: giLaw(Share): %s\n", e->takeLastError().c_str());
         return 1;
     }
     int fails = 0;
@@ -88,7 +88,7 @@ int main()
         float atStep = 0.f, atFall = 0.f, atSlope = 0.f;
         const size_t base = size_t(sw) * Ts.size();
         for (size_t j = 1; j < Ts.size(); ++j) {
-            const GiShareAnswer &a0 = as[base + j - 1], &a1 = as[base + j];
+            const GiLawAnswer &a0 = as[base + j - 1], &a1 = as[base + j];
             const double step = std::fabs(double(a1.a[0]) - a0.a[0]);
             if (step > worstStep) { worstStep = step; atStep = Ts[j]; }
             const double fall = double(a0.a[0]) - a1.a[0];
@@ -113,7 +113,7 @@ int main()
         double worstOff = 0.0;
         const Loop *worst = nullptr;
         for (size_t j = 0; j < loops.size(); ++j) {
-            const GiShareAnswer &a = as[4 * Ts.size() + j];
+            const GiLawAnswer &a = as[4 * Ts.size() + j];
             const Loop &L = loops[j];
             const float x0 = a.a[2], x1 = a.a[3], y0 = a.b[2], y1 = a.b[3];
             const float step = halfStep(L.star);
