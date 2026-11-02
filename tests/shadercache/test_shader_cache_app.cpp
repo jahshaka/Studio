@@ -5,13 +5,20 @@
 // proves the product-level contract, and it does it the only way that is worth
 // anything — by launching the REAL binary into a scratch HOME and reading what
 // `app.shaderCache()` says each time (the import.shutdown / open.responsive
-// pattern). THREE ROWS (TESTING-SPEED-B3 made two of one row of five launches; HARNESS-4 split the
+// pattern). ONE ROW A LAUNCH (TESTING-SPEED-B3 made two of one row of five launches; HARNESS-4 split the
 // first by proof, 2026-10-29: three launches priced 48.36 s, over a row's 45-s law, and 60.09 s
-// TIMEOUT on 8B's loaded check - each part keeps the laws of the launches it holds):
+// TIMEOUT on 8B's loaded check; URGENT #136 split runs 1 and 2, 2026-11-02: shadercache.app.coldwarm,
+// 32.08 s quiet, timed out at 60.02 s and 60.11 s on two loaded master checks - each part keeps the laws
+// of the launch it holds), a fixture chain on one home:
 //
-// shadercache.app.coldwarm — runs 1 and 2 in one process (run 2's laws read run 1's numbers);
-// shadercache.app.cleared (`--cleared`) — run 3 alone, on the home the coldwarm row leaves warm (a
-//                 fixture chain: it requires that row, and refuses a home with no cache to clear):
+// shadercache.app.cold (`--cold`) — run 1 on a wiped data root; it keeps the numbers run 2's laws read
+//                 (its app.shaderCache() object, cold-run.json in the home) - FIXTURES_SETUP;
+// shadercache.app.warm (`--warm`) — run 2 alone on the home run 1 left (it refuses a home with no cache
+//                 or no cold-run.json): its laws read run 1's numbers from that file - FIXTURES_SETUP for
+// shadercache.app.cleared (`--cleared`) — run 3 alone, on the home run 2 left warm (it refuses a home
+//                 with no cache to clear);
+// shadercache.app.clean (`--clean`, no launch) — the FIXTURES_CLEANUP: the home removed after every
+//                 part that ran (ctest's order, URGENT #133):
 //   run 1, cold : the cache reports itself enabled and located, the startup
 //                 gate builds shaders BEFORE the window (compiledThisRun > 0),
 //                 app.saveShaderCache() writes files, app.clearShaderCache()
@@ -48,6 +55,7 @@
 #include <QCoreApplication>
 #include <QDir>
 #include <QElapsedTimer>
+#include <QFile>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -120,16 +128,32 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     return last;
 }
 
+int warmLaws(const QString &home, const QString &scripts, const QJsonObject &cold);
+
 }  // namespace
 
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     const bool churnRow = argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--churn");
-    const bool clearedRow = argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cleared");
+    const QString mode = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();
+    const bool clearedRow = mode == QStringLiteral("--cleared");
+    const bool coldRow = mode == QStringLiteral("--cold"), warmRow = mode == QStringLiteral("--warm");
+    if (!churnRow && !clearedRow && !coldRow && !warmRow && mode != QStringLiteral("--clean")) {
+        std::printf("usage: test_shader_cache_app --cold | --warm | --cleared | --clean | --churn (one row a launch, "
+                    "URGENT #136)\n");
+        return 64;
+    }
 
     const QString home = QDir::current().absoluteFilePath(
         churnRow ? QStringLiteral("e2e-home-shadercache-churn") : QStringLiteral("e2e-home-shadercache"));
+    if (mode == QStringLiteral("--clean")) {
+        // THE FIXTURE's CLEANUP (shadercache.app.clean): the home the cold, warm and cleared rows shared, removed after every
+        // part that ran - no launch, no card
+        const bool gone = QDir(home).removeRecursively();
+        std::printf("%s: the home %s removed\nRESULT: %s\n", gone ? "ok" : "FAIL", qPrintable(home), gone ? "PASS" : "FAIL");
+        return gone ? 0 : 1;
+    }
     QDir().mkpath(home + "/run");
     QDir().mkpath(home + "/cache");
     // A fresh start every time the suite runs, or "cold" would be a lie — THE WHOLE DATA ROOT, not the shader cache
@@ -137,8 +161,11 @@ int main(int argc, char **argv)
     // and wants their sidecar directory, and an older AssetStore has none, so the app REFUSES the library (exit 4) and
     // run 1 never starts (main's build-linux, 2026-10-20, a home from an earlier schema; FORWARD-BUILDING: app data is
     // wiped at a format bump, and a row owns its own state).
-    // (shadercache.app.cleared keeps it: its subject is the warm cache the coldwarm row left)
-    if (!clearedRow) QDir(home + "/.local/share/Jahshaka").removeRecursively();
+    // (shadercache.app.warm and .cleared keep it: their subject is the cache the row before left)
+    if (churnRow || coldRow) {
+        QDir(home + "/.local/share/Jahshaka").removeRecursively();
+        QFile::remove(home + "/cold-run.json");
+    }
 
     const QString scripts = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
                             QStringLiteral("/tests/shadercache/scripts/");
@@ -250,15 +277,15 @@ int main(int argc, char **argv)
 
     if (clearedRow) {
         // ---- run 3: --clear-shader-cache (shadercache.app.cleared) ------------
-        // ITS START IS A WARM CACHE: the one run 2 of shadercache.app.coldwarm loaded and saved (the fixture chain).
+        // ITS START IS A WARM CACHE: the one run 2 (shadercache.app.warm) loaded and saved (the fixture chain).
         // Without one the row would assert "cold again" on a home that was never warm - refused, not read.
         const QString manifest = home + QStringLiteral("/.local/share/Jahshaka/shadercache/cache-manifest.txt");
         if (!QFileInfo::exists(manifest)) {
-            std::printf("FAIL: no warm shader cache in %s - run shadercache.app.coldwarm first (the row's fixture chain "
+            std::printf("FAIL: no warm shader cache in %s - run shadercache.app.warm first (the row's fixture chain "
                         "does)\n", qPrintable(home));
             return 1;
         }
-        CHECK(true, "the home holds the warm cache shadercache.app.coldwarm left (its manifest)");
+        CHECK(true, "the home holds the warm cache shadercache.app.warm left (its manifest)");
         const QJsonObject cleared = runApp(home, scripts + "e2e_shader_cache_warm.js",
                                            {QStringLiteral("--clear-shader-cache")}, &rc);
         CHECK(rc == 0, "run 3 exited cleanly with --clear-shader-cache");
@@ -275,7 +302,24 @@ int main(int argc, char **argv)
         return failures ? 1 : 0;
     }
 
-    // ---- run 1: cold (shadercache.app.coldwarm) ----------------------------
+    const QString coldFile = home + QStringLiteral("/cold-run.json");
+    if (warmRow) {
+        // ---- run 2: warm (shadercache.app.warm) -----------------------------
+        // ITS START IS THE HOME RUN 1 LEFT (the fixture chain): its cache, and run 1's numbers its laws read. Without them the
+        // row would call a launch warm that nothing seeded - refused, not read.
+        QFile f(coldFile);
+        const QString manifest = home + QStringLiteral("/.local/share/Jahshaka/shadercache/cache-manifest.txt");
+        if (!QFileInfo::exists(manifest) || !f.open(QIODevice::ReadOnly)) {
+            std::printf("FAIL: no cold run in %s (its cache or cold-run.json) - run shadercache.app.cold first (the row's "
+                        "fixture chain does)\n", qPrintable(home));
+            return 1;
+        }
+        const QJsonObject cold = QJsonDocument::fromJson(f.readAll()).object();
+        CHECK(cold.value("compiledThisRun").toInt() > 0, "the home holds run 1's cache and its numbers (cold-run.json)");
+        return warmLaws(home, scripts, cold);
+    }
+
+    // ---- run 1: cold (shadercache.app.cold) -------------------------------
     const QJsonObject cold = runApp(home, scripts + "e2e_shader_cache_cold.js", {}, &rc);
     CHECK(rc == 0, "run 1 exited cleanly");
     CHECK(cold.value("enabled").toBool(), "the cache is enabled by default");
@@ -304,7 +348,23 @@ int main(int argc, char **argv)
     // is back, and 2 would mean something else survived that should not have.
     CHECK(cold.value("afterClearFiles").toInt() == 1,
           "app.clearShaderCache() removed every cache file and kept only the writer lock");
+    // THE NUMBERS RUN 2's LAWS READ, KEPT FOR ITS ROW (shadercache.app.warm): this run's app.shaderCache() object
+    {
+        QFile f(coldFile);
+        const bool kept = f.open(QIODevice::WriteOnly | QIODevice::Truncate)
+                          && f.write(QJsonDocument(cold).toJson(QJsonDocument::Compact)) > 0;
+        CHECK(kept, "run 1's numbers kept for run 2's row (cold-run.json)");
+    }
+    std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
+    return failures ? 1 : 0;
+}
 
+namespace {
+
+/// Run 2 (shadercache.app.warm): a warm launch on the home run 1 left, its laws against run 1's numbers `cold`.
+int warmLaws(const QString &home, const QString &scripts, const QJsonObject &cold)
+{
+    int rc = -1;
     // ---- run 2: warm ------------------------------------------------------
     // Run 1 cleared its own cache at the end, then quit — and the clean-quit
     // save wrote it back from the session's memory. So run 2 is a genuine warm
@@ -373,3 +433,5 @@ int main(int argc, char **argv)
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
     return failures ? 1 : 0;
 }
+
+}  // namespace

@@ -17,14 +17,21 @@
 # The application-level contract: the verbs, --clear-shader-cache, and the
 # owner's rule that the startup shader build happens behind the launch screen.
 # Spawns the REAL binary into a scratch HOME (the import.shutdown pattern) and reads
-# app.shaderCache() from its output. THREE ROWS (TESTING-SPEED-B3 made two of one row of five launches; HARNESS-4 split
-# the first BY PROOF, 2026-10-29: its three launches were priced 48.36 s, over a row's 45-s law, and timed out at
-# 60.09 s on 8B's loaded check):
-#   shadercache.app.coldwarm  two launches in one process — cold, then warm (the steady state's compiled == 0 is its
-#                          bar, the first warm launch IS the steady state since WARMUPSET-2; and its laws read the cold
-#                          run's numbers: a fraction of its compiles, the same fingerprint) - its home left WARM;
-#   shadercache.app.cleared   `--cleared`: one launch with --clear-shader-cache on that warm home (a fixture chain:
-#                          FIXTURES_REQUIRED + DEPENDS; it refuses a home with no cache) - cold again, no layer loaded.
+# app.shaderCache() from its output. ONE ROW A LAUNCH (TESTING-SPEED-B3 made two of one row of five launches; HARNESS-4 split
+# the first BY PROOF, 2026-10-29: three launches priced 48.36 s, over a row's 45-s law, timed out at 60.09 s on 8B's loaded
+# check; URGENT #136, 2026-11-02: its cold + warm row, 32.08 s quiet, timed out at 60.11 s (10-30) and 60.02 s (11-02) on
+# loaded master checks - a row at the cap with no margin, #96's class), a fixture chain on one home:
+#   shadercache.app.cold      `--cold`: run 1 on a wiped data root (enabled, located, the startup build before the window,
+#                          save writes files, clear keeps only the lock); its numbers kept for run 2 (cold-run.json) -
+#                          FIXTURES_SETUP shadercacheAppCold;
+#   shadercache.app.warm      `--warm`: run 2 on that home (the steady state's compiled == 0 is its bar, the first warm
+#                          launch IS the steady state since WARMUPSET-2; its laws read run 1's numbers: a fraction of its
+#                          compiles, the same fingerprint; it refuses a home with no cold run) - its home left WARM,
+#                          FIXTURES_SETUP shadercacheAppWarm;
+#   shadercache.app.cleared   `--cleared`: one launch with --clear-shader-cache on that warm home (it refuses a home with no
+#                          cache) - cold again, no layer loaded;
+#   shadercache.app.clean     `--clean`: the FIXTURES_CLEANUP of both fixtures, the home removed after every part that ran
+#                          (no launch, no card; URGENT #133's rule: no DEPENDS chain).
 #   shadercache.app.churn (archived: archive/tests/shadercache)  `--churn`, stage-close, its own home: a seeding cold launch, then the save
 #                          under churn (the SMOKE-ENGINE-1 crash: the pass-cache delta < 8 across 300 sky
 #                          captures, the capacity >= 8192), unchanged.
@@ -40,14 +47,23 @@ target_link_libraries(test_shader_cache_app PRIVATE Qt6::Core)
 target_compile_definitions(test_shader_cache_app PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-jah_gpu_row(shadercache.app.coldwarm SHIP CLASS app TIER document   COMMAND test_shader_cache_app
+jah_gpu_row(shadercache.app.cold SHIP CLASS app TIER document   COMMAND test_shader_cache_app --cold
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(shadercache.app.coldwarm PROPERTIES TIMEOUT 60 LABELS "shadercache"
-    FIXTURES_SETUP shadercacheAppWarm)
+set_tests_properties(shadercache.app.cold PROPERTIES TIMEOUT 60 LABELS "shadercache"
+    FIXTURES_SETUP shadercacheAppCold)
+jah_gpu_row(shadercache.app.warm SHIP CLASS app TIER document   COMMAND test_shader_cache_app --warm
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.app.warm PROPERTIES TIMEOUT 60 LABELS "shadercache"
+    FIXTURES_REQUIRED shadercacheAppCold FIXTURES_SETUP shadercacheAppWarm)
 jah_gpu_row(shadercache.app.cleared SHIP CLASS app TIER document   COMMAND test_shader_cache_app --cleared
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app.cleared PROPERTIES TIMEOUT 60 LABELS "shadercache"
-    FIXTURES_REQUIRED shadercacheAppWarm DEPENDS shadercache.app.coldwarm)
+    FIXTURES_REQUIRED "shadercacheAppCold;shadercacheAppWarm")
+add_test(NAME shadercache.app.clean COMMAND test_shader_cache_app --clean WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.app.clean PROPERTIES TIMEOUT 60 LABELS "shadercache"
+    FIXTURES_CLEANUP "shadercacheAppCold;shadercacheAppWarm")
+jah_no_display(shadercache.app.clean)
+jah_ship_row(shadercache.app.clean)   # THE SHIP SET (TEST-CUT-1): the cleanup of two ship rows' fixtures
 
 # shader.async_after_open (ASYNC-SHADERS-1): after a project is open, a new material and a tier
 # change compile in the BACKGROUND — 0 UI-thread compiles, the placeholder in the presented
@@ -108,11 +124,12 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/warmup_pass")
 # re-counted 2026-10-20 by the same meter at TOOLING-7's split (the seed's boot-and-quit 463, the cold + warm launches
 # 918 + 382). The shadercache.app split (HARNESS-4, 2026-10-29) counted by an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded() rewritten per frame (the apps _Exit): cold 581 + warm 562, cleared 581 (the 976 of the
-# whole row was a 2026-10-12 count of an older script set).
+# whole row was a 2026-10-12 count of an older script set); cold 581 and warm 562 are their own rows since URGENT #136.
 foreach(_row_frames
         "shader.async_after_open=1300"
         "shader.async_after_open.seed=463"
-        "shadercache.app.coldwarm=1143"
+        "shadercache.app.cold=581"
+        "shadercache.app.warm=562"
         "shadercache.app.cleared=581"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
