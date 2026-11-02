@@ -290,12 +290,45 @@ int main()
         CHECK(!scene->published().gi.cascades[0].feedbackOwed, "D: cascade 0's feedback comes to rest after the commit");
         GiVoxelVolume v;
         CHECK(scene->giVoxelVolume(0, v), "D: the store at rest reads back");
+        // THE INSTRUMENT (BISTRO-REST-1): what a frame moved in level 0 - the moved floats, the largest move in half-float
+        // steps of the value it left, and cascade 0's feedback that frame (active bricks, resumes, owed)
+        const auto moved = [&](const GiVoxelVolume &a, const GiVoxelVolume &b, const char *what) {
+            size_t n = 0;
+            double worst = 0.0;
+            // (the half store as stored: what the feedback writes)
+            const std::vector<float> &A = a.halfLight, &B = b.halfLight;
+            for (size_t i = 0; i < A.size() && i < B.size(); ++i) {
+                if (std::memcmp(&A[i], &B[i], sizeof(float)) == 0) continue;
+                ++n;
+                const double x = std::fabs(double(A[i])), step = x < 6.1035156e-5 ? 5.9604645e-8
+                                                                          : std::ldexp(1.0, int(std::floor(std::log2(x))) - 10);
+                worst = std::max(worst, std::fabs(double(B[i]) - double(A[i])) / step);
+            }
+            const auto &c0 = scene->published().gi.cascades[0];
+            std::printf("   D: %s: level 0's half store moved in %zu of %zu floats, the largest %.2f half-float steps; feedback active %u, "
+                        "resumes %llu, owed %d\n", what, n, A.size(), worst, c0.feedbackActive,
+                        (unsigned long long)c0.feedbackResumes, c0.feedbackOwed ? 1 : 0);
+        };
         {
             GiVoxelVolume regen;
             e->setArm("gi.regenerateDirectional", 0.0);
             run(1);
             e->setArm("gi.regenerateDirectional", -1.0);
             CHECK(scene->giVoxelVolume(0, regen), "the regenerated store reads back");
+            moved(v, regen, "the door's frame");
+            {
+                // (then four frames WITHOUT the door: a write that landed once after the rest, or one that keeps moving)
+                GiVoxelVolume prev = regen;
+                for (int f = 2; f <= 5; ++f) {
+                    run(1);
+                    GiVoxelVolume cur;
+                    if (!scene->giVoxelLight(0, cur)) break;   // (the light alone: one volume)
+                    char what[64];
+                    std::snprintf(what, sizeof what, "frame %d after the rest, no door", f);
+                    moved(prev, cur, what);
+                    prev = cur;
+                }
+            }
             size_t lightDiff = 0;
             for (size_t i = 0; i < v.light.size() && i < regen.light.size(); ++i)
                 lightDiff += std::memcmp(&v.light[i], &regen.light[i], sizeof(float)) != 0 ? 1u : 0u;
