@@ -122,13 +122,14 @@ const std::vector<VerbDoc> &verbs()
           "cascade) placed for the camera position x,y,z, every other cascade pinned where it stands (its builtCam); "
           "then a forced WHOLE rebuild of each pinned cascade at its pin (the arm gi.rebuildCascade, one frame each) - "
           "`scroll` leaves the re-placement to the scroll path instead (the pinned-scroll arm); `off` releases the pin" },
-        { "voxels", "voxels <c> <direct|light|albedo|covp|covn|posp|posn|stats> [file] [x0,y0,z0,x1,y1,z1]", 2, 4,
+        { "voxels", "voxels <c> <direct|light|albedo|covp|covn|posp|posn|halves|stats> [file] [x0,y0,z0,x1,y1,z1]", 2, 4,
           "ONE CASCADE'S VOXELS (PHOTON-7 stage 1; Scene::giVoxelVolume / giVoxelStats), read once the chain owes no "
           "voxel work (GiStatus::chainOwed; frames rendered while it does, cap 600): `stats` prints the cascade's "
           "GiVoxelStats; any other kind writes that level-0 array BY WORLD CELL to <data-root>/<file> - one JSON header "
           "line (cascade, kind, res, origin, cell, lo = the first voxel's WORLD cell index, dims) then "
           "dims[0] x dims[1] x dims[2] RGBA float32, x fastest - over the voxels whose centre lies in the world box "
-          "(default the whole volume); a placement-free comparison joins two such files on the world cell" },
+          "(default the whole volume); a placement-free comparison joins two such files on the world cell; `halves` (file and "
+          "box required) writes per cell its six half lights then their direct terms (Scene::giVoxelHalves, VOXEL-R13)" },
         { "regions", "regions [boxes]", 0, 1,
           "THE CHANGED-REGION LIST (PHOTON-7 stage 3; Scene::giChangedRegions) as the last frame closed it: its frame, "
           "its regions per kind (Slab, Card, Edit, Mover, MoverShadow, LampShadow, Lamp), its overflow bits (1 the sun, 2 "

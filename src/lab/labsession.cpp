@@ -2031,6 +2031,48 @@ bool Session::voxels(const Command &c)
         if (quiet < 2) frame();
     }
     if (quiet < 2) { labFail("LAB VOXELS FAILED: the chain still owed voxel work after %d frames\n", waited); return false; }
+    if (kind == "halves") {
+        // THE HALF STORE BY WORLD CELL (BISTRO-REST-1): the six half lights (radiance x k, k) and their direct terms of the
+        // cells the box reaches (Scene::giVoxelHalves' compact volume) - one JSON header line, then per cell (x fastest)
+        // its six halves' light then their direct terms, RGBA float32 each (half q: axis q % 3, h q / 3 - 0 the +a half)
+        if (c.args.size() < 4) { labFail("LAB REFUSED voxels: halves needs a file and a box\n"); return false; }
+        std::vector<float> b;
+        std::string cur;
+        for (char ch : c.args[3] + ",") {
+            if (ch == ',') { if (!cur.empty()) b.push_back(float(std::strtod(cur.c_str(), nullptr))); cur.clear(); }
+            else cur += ch;
+        }
+        if (b.size() != 6) { labFail("LAB REFUSED voxels: '%s' is not x0,y0,z0,x1,y1,z1\n", c.args[3].c_str()); return false; }
+        const float lo[3] = { b[0], b[1], b[2] }, hi[3] = { b[3], b[4], b[5] };
+        GiVoxelVolume hv;
+        if (!mScene->giVoxelHalves(int(ci), hv, lo, hi) || !hv.available) {
+            labFail("LAB VOXELS FAILED: no halves for cascade %ld\n", ci);
+            return false;
+        }
+        QString path = QString::fromStdString(c.args[2]);
+        if (QFileInfo(path).isRelative()) path = QDir(mOpt.dataRoot).filePath(path);
+        std::ofstream out(path.toStdString(), std::ios::binary);
+        out << "{\"cascade\":" << ci << ",\"kind\":\"halves\",\"origin\":[" << hv.origin[0] << "," << hv.origin[1] << ","
+            << hv.origin[2] << "],\"cell\":" << hv.cell[0] << ",\"dims\":[" << hv.width << "," << hv.height << "," << hv.depth
+            << "]}\n";
+        const size_t W = size_t(hv.width), H = size_t(hv.height), D = size_t(hv.depth);
+        for (size_t z = 0; z < D; ++z)
+            for (size_t y = 0; y < H; ++y)
+                for (size_t x = 0; x < W; ++x)
+                    for (int part = 0; part < 2; ++part) {
+                        const std::vector<float> &src = part == 0 ? hv.halfLight : hv.halfDirect;
+                        for (size_t q = 0; q < 6u; ++q) {
+                            // (the compact volume's x: block q of width W, the half's texel at q W + x - jah_voxel_halves)
+                            const size_t blk = (q / 3u) == 0u ? 2u * (q % 3u) + 1u : 2u * (q % 3u);
+                            const size_t t = ((z * H + y) * (6u * W) + blk * W + x) * 4u;
+                            const float zero[4] = { 0.f, 0.f, 0.f, 0.f };
+                            out.write(reinterpret_cast<const char *>(t + 3u < src.size() ? &src[t] : zero), 4 * sizeof(float));
+                        }
+                    }
+        std::printf("LAB VOXELS cascade %ld halves origin %.4f,%.4f,%.4f cell %.6f dims %dx%dx%d -> %s\n", ci, hv.origin[0],
+                    hv.origin[1], hv.origin[2], hv.cell[0], hv.width, hv.height, hv.depth, qPrintable(path));
+        return bool(out);
+    }
     if (kind == "stats") {
         const GiVoxelStats st = mScene->giVoxelStats(int(ci));
         if (!st.available) { labFail("LAB VOXELS FAILED: no stats for cascade %ld\n", ci); return false; }
