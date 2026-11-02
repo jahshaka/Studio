@@ -629,8 +629,7 @@ std::string Session::statusJson()
       << ",\"gpuCountLagFrames\":" << rs.gpuCountLagFrames << "}";
     // ...and the field's state (PHOTON-7 stage 5, 5-4: the marks, the restarts and refinements owed, the follows) and
     // the surface cache's counters - an agent's per-frame `status file` reads them
-    o << ",\"gi\":{\"atRest\":" << (gi.giAtRest ? "true" : "false") << ",\"chainOwed\":" << (gi.chainOwed ? "true" : "false")
-      << ",\"lightSourcesOwed\":" << (gi.lightSourcesOwed ? "true" : "false") << ",\"ifdOwedRestarts\":" << gi.ifdOwedRestarts
+    o << ",\"gi\":{\"atRest\":" << (gi.giAtRest ? "true" : "false") << ",\"ifdOwedRestarts\":" << gi.ifdOwedRestarts
       << ",\"ifdOwedRefines\":" << gi.ifdOwedRefines << ",\"ifdWorking\":" << (gi.ifdWorking ? "true" : "false")
       << ",\"ifdMarkedByMoves\":" << gi.ifdMarkedByMoves << ",\"ifdMarkedByRegion\":" << gi.ifdMarkedByRegion
       << ",\"ifdMarkAlls\":" << gi.ifdMarkAlls << ",\"ifdRestarts\":" << gi.ifdRestarts

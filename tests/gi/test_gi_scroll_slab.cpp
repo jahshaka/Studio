@@ -294,8 +294,7 @@ int main()
         // rest predicate (GiStatus::chainOwed: every cascade's feedback) is the premise.
         for (int f = 0; f < 600 && scene->published().gi.chainOwed; ++f) run(1);
         CHECK(!scene->published().gi.chainOwed, "D: the chain comes to rest after the commit (every cascade's feedback)");
-        std::printf("   D: at the chain's rest: the chain owed %d, its light sources owed %d\n",
-                    scene->published().gi.chainOwed ? 1 : 0, scene->published().gi.lightSourcesOwed ? 1 : 0);
+        std::printf("   D: at the chain's rest: the chain owed %d\n", scene->published().gi.chainOwed ? 1 : 0);
         GiVoxelVolume v;
         CHECK(scene->giVoxelVolume(0, v), "D: the store at rest reads back");
         // THE INSTRUMENT (BISTRO-REST-1): what a frame moved in level 0 - the moved floats, the largest move in half-float
@@ -315,9 +314,8 @@ int main()
             const auto &c0 = scene->published().gi.cascades[0];
             const GiStatus &gs = scene->published().gi;
             std::printf("   D: %s: level 0's half store moved in %zu of %zu floats, the largest %.2f half-float steps; feedback active %u, "
-                        "resumes %llu, owed %d; the chain owed %d, its light sources owed %d\n", what, n, A.size(), worst,
-                        c0.feedbackActive, (unsigned long long)c0.feedbackResumes, c0.feedbackOwed ? 1 : 0, gs.chainOwed ? 1 : 0,
-                        gs.lightSourcesOwed ? 1 : 0);
+                        "resumes %llu, owed %d; the chain owed %d\n", what, n, A.size(), worst, c0.feedbackActive,
+                        (unsigned long long)c0.feedbackResumes, c0.feedbackOwed ? 1 : 0, gs.chainOwed ? 1 : 0);
             // ...and the ACTIVE bricks' own state (the door): their measured contraction r and last move (RELATIVE, |d| / m -
             // jahBrickChange), and that move over the store's smallest relative step (2^-11) - a flip's would-move at a
             // touching receiver (the resume's bound weighs a touching brick 1) in that receiver's steps
