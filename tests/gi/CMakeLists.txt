@@ -681,9 +681,10 @@ set_tests_properties(gi.share_law PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscr
 #         waves, and the picture bursts as each lands; photon-7's own (red there too, (ii') with it), shown here because
 #         the level-0 hit read reads the ceiling's own cascade-1 half (B's footprint read hid it). gi.hold_after_stop (f)
 #         is the same red on photon-room. The set-aside first fix and its numbers: spikes/feedback-order-1/.
-#   ROUTES: the picture parts (.lamp.*, .room, .room_geom) StillPicture - the screen-probe gather; the store parts (.up,
-#         .down, .scroll, the pair) `store` - route-independent: store laws only; the view exists to tick the frame. GI live
-#         at the shipped default updateBudget 1 everywhere.
+#   ROUTES (declared in the fixture, asserted on the first frame - URGENT #146): the picture parts (.lamp.*, .room,
+#         .room_geom) StillPicture - the screen-probe gather, the store, the field (and .room's the cards); the store parts
+#         (.up, .down, .scroll, the pair) Live - the SCREEN INTEGRATE and the store (store laws only; the view exists to
+#         tick the frame; ROUTE-ROWS-1 re-points them). GI live at the shipped default updateBudget 1 everywhere.
 #   .scroll: gi.scroll_slab G's two-cascade chain at High, a pinned cascade-0 scroll bringing an emissive panel in - it comes
 #         to rest and (iii) holds after it.
 add_executable(test_gi_feedback_closed_box test_gi_feedback_closed_box.cpp)
