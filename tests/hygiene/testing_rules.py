@@ -605,6 +605,7 @@ def fresh_home_behaves(source):
     cache as the engine does - each file and the manifest by RENAME (a linked file is never written through)."""
     import shutil
     import tempfile
+    import time
     fh = os.path.join(os.path.abspath(source), "tests", "support", "fresh_home.sh")
     # the cases run on the wipe's default: a caller's JAH_KEEP_HOME (a diagnosis run) never reaches them
     os.environ.pop("JAH_KEEP_HOME", None)
@@ -747,6 +748,30 @@ def fresh_home_behaves(source):
               "fresh_home --seed: the startup seed linked into the wiped home, a green run's grown cache NEVER promoted (the "
               "shared cache as it was), a missing seed refused (exit 1) (%d %d %s %s)" % (rs.returncode, rm.returncode,
                                                                                     rs.stderr[-120:], rm.stderr[-120:]))
+        # A COLD SHARED CACHE IS REFUSED IN A SECOND (URGENT #140): a toy build the key reads (an engine build id, the staged
+        # media), the app stamps naming another key - a --warm home exits 1 at once naming the boot, never runs the command;
+        # with JAH_WARM_CHECK=0 (the warm-up's own boots) it runs
+        wb = os.path.join(t, "wk", "build"); wt = os.path.join(wb, "tests")
+        for d in ("engine/generated", "bin/media/Hlms", "bin/media/Photon", "tests/x"):
+            os.makedirs(os.path.join(wb, d), exist_ok=True)
+        open(os.path.join(wb, "CMakeCache.txt"), "w").write("CMAKE_BUILD_TYPE:STRING=Debug\n")
+        open(os.path.join(wb, "engine/generated/jahshaka_engine_build_id.h"), "w").write("#define ID 1\n")
+        for d in ("Hlms", "Photon"):
+            open(os.path.join(wb, "bin/media", d, "a.txt"), "w").write(d)
+        for st in (".shadercache.warm-key", ".shadercache.driver-key"):
+            open(os.path.join(wt, st), "w").write("0000000000000000\n")
+        wh, ran = os.path.join(wt, "x", "home-cold"), os.path.join(t, "wk", "ran")
+        env = {k: v for k, v in os.environ.items() if k != "JAH_WARM_CHECK"}
+        t0 = time.monotonic()
+        rw = subprocess.run(["sh", fh, "--warm", wh, "--", "sh", "-c", "touch " + ran], capture_output=True, text=True, env=env)
+        cold_s = time.monotonic() - t0
+        rw0 = subprocess.run(["sh", fh, "--warm", wh, "--", "sh", "-c", "touch " + ran], capture_output=True, text=True,
+                             env=dict(env, JAH_WARM_CHECK="0"))
+        check(rw.returncode == 1 and "this build's app-off is not warmed (warmed at 0000000000000000" in rw.stderr
+              and "spec.sh test" in rw.stderr and cold_s < 5.0 and rw0.returncode == 0 and os.path.exists(ran),
+              "fresh_home --warm: a cold shared cache (the warm-up's stamp at another key) REFUSED in %.1f s naming the boot "
+              "and the fix, the command never run; JAH_WARM_CHECK=0 (the warm-up's boots) runs it (%d %d %s)"
+              % (cold_s, rw.returncode, rw0.returncode, rw.stderr[-160:]))
         # --promote (HARNESS-1): a WARM fixture's consumer - its setup seeds the home; a green consumer's grown cache is
         # promoted THROUGH HARD LINKS and the home keeps it whole; a red one promotes nothing and leaves the home as it is
         hp = os.path.join(td, "x", "home-fx")

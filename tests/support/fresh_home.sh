@@ -56,6 +56,16 @@
 #                   missing or fails its own manifest (exit 1). Not --warm: the home never takes the shared app cache and
 #                   never promotes, so what a run compiles beyond the startup set (scripting.e2e.sky_swap_transient's arms:
 #                   the subject) compiles cold every run.
+#   (--warm, THE WARM-UP's STAMP CHECKED FIRST, URGENT #140, 2026-11-02: a GPU row run by hand with ctest on a build no warm-up
+#                   warmed compiled its pipelines under its cap and TIMED OUT at 60 s saying nothing - the Bistro builder lost
+#                   ~10 min to ten such, a 1-s fixture among them. Before it links, a --warm home reads the stamp
+#                   scripts/warm-app-cache.sh writes for its cache - app-off's <tests>/.shadercache.warm-key and app-on's
+#                   .shadercache.driver-key for the app cache, engine-off's .shadercache-engine.warm-key (and engine-on's
+#                   driver-key when the command runs jahlab) for --cache engine - against this build's key (`warm-app-cache.sh
+#                   <build> --key`, ~0.15 s; the same key spec.sh's warm-up reads), and REFUSES (exit 1, in a second) a cold one:
+#                   "this build's <boot> is not warmed ... run spec.sh test (it warms first) or warm-app-cache.sh --only <boot>".
+#                   spec.sh test, merge and sprint.sh ship warm first, so their rows pass it; the warm-up's own boots set
+#                   JAH_WARM_CHECK=0; a build whose key cannot be read (a toy) is not checked.)
 #   --reset <dir>   also removed and recreated (a suite's export target beside its home).
 #   --rm <file>     also removed.
 #   --mkdir <dir>   also created.
@@ -222,6 +232,28 @@ if [ "$promote" = 1 ]; then
     set -e
     [ "$rc" = 0 ] && promote_cache link
     exit "$rc"
+fi
+# THE WARM-UP's STAMP (URGENT #140, the header): a cold shared cache refused in a second, never a row timed out at its cap
+warm_refuse() {   # <boot> <why>
+    echo "fresh_home.sh: this build's $1 is not warmed ($2) - a row on it compiles its pipelines under its 60-s cap and times" \
+         "out: run \`spec.sh test <spec>\` (it warms first) or \`scripts/warm-app-cache.sh $(dirname "$tests_dir") --only $1\`" \
+         "(URGENT #140)" >&2
+    exit 1
+}
+if [ "$warm" = 1 ] && [ -n "$tests_dir" ] && [ "${JAH_WARM_CHECK:-1}" != 0 ] && { [ -z "$key" ] || [ "$key" = engine ]; }; then
+    wsh="$(cd "$here/../.." && /bin/pwd -P)/scripts/warm-app-cache.sh"
+    if [ -f "$wsh" ] && cur=$(bash "$wsh" "$(dirname "$tests_dir")" --key 2>/dev/null) && [ -n "$cur" ]; then
+        if [ -z "$key" ]; then offs=".shadercache.warm-key:app-off .shadercache.driver-key:app-on"
+        else offs=".shadercache-engine.warm-key:engine-off"
+             case " $* " in *"/jahlab "*) offs="$offs .shadercache-engine.driver-key:engine-on" ;; esac
+        fi
+        for o in $offs; do
+            st="$tests_dir/${o%%:*}"; boot="${o##*:}"
+            if [ ! -f "$st" ]; then warm_refuse "$boot" "no warm-up recorded"
+            elif [ "$(sed -n 1p "$st")" != "$cur" ]; then warm_refuse "$boot" "warmed at $(sed -n 1p "$st"), this build's key $cur"
+            fi
+        done
+    fi
 fi
 if [ "$warm" = 1 ] && [ -d "$home" ]; then
     keepd="$(mktemp -d "$(dirname "$home")/.fresh-home-keep.XXXXXX")"   # same filesystem: a rename

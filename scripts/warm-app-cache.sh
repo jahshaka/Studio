@@ -149,6 +149,8 @@ USAGE="usage: warm-app-cache.sh <build-dir> [--check] [--only <boot>[,<boot>...]
 BUILD=$(cd "$BUILD" && pwd)
 HERE=$(cd "$(dirname "$0")" && pwd)
 SRC=$(cd "$HERE/.." && pwd)
+# THE WARM-UP's OWN BOOTS run on the caches they are warming: fresh_home.sh --warm's stamp check (URGENT #140) is not theirs
+export JAH_WARM_CHECK=0
 TESTS=${TESTS:-$BUILD/tests}
 mkdir -p "$TESTS"
 
