@@ -71,5 +71,33 @@ want("NOT RUN behind, recorded at an ANCESTOR's tree: runs (a new tip starts cle
      {"gi.fixture": [rec("FAIL")]}), "run", "ancestor")
 want("NOT RUN behind, its declaration changed: runs", B(dict(behind, declaration={"hash": "d2"}), Reach(True),
      {"gi.fixture": [rec("FAIL")]}), "run", "declaration")
+# A PATH THE ROW REMOVES OR MAKES IS NEVER ITS DATA (URGENT #137b): the fixture row `fresh_home.sh --setup --rm <build>/x/out.jbundle
+# <home>` - its consumers write out.jbundle - keeps ONE data hash whatever that file holds (it was hashed as the row's data, so the
+# row was never served and `spec.sh test --all` stopped NO PROGRESS); a real data argument still moves the hash
+import tempfile  # noqa: E402
+import gate_graph as gg  # noqa: E402
+t = tempfile.mkdtemp(prefix="serve-red-data-")
+root, build = os.path.join(t, "src"), os.path.join(t, "src", "build-linux")
+os.makedirs(os.path.join(build, "x")); os.makedirs(os.path.join(root, "tests", "x"))
+out, data = os.path.join(build, "x", "out.jbundle"), os.path.join(root, "tests", "x", "case.js")
+open(data, "w").write("one")
+roots = {"root": root, "build": build, "cur_root": root, "cur_build": build}
+row = {"name": "x.fresh_home", "properties": [],
+       "command": ["/bin/sh", os.path.join(root, "tests", "support", "fresh_home.sh"), "--setup", "--rm", out, data,
+                   os.path.join(build, "x", "home")]}
+hashes = []
+for content in (None, "first export", "second export"):
+    if content is not None:
+        open(out, "w").write(content)
+    d = gg.data_set(row, roots, {})
+    hashes.append((d["hash"], sorted(d["files"])))
+if not (len({h for h, _ in hashes}) == 1 and all(not any("out.jbundle" in f for f in fs) for _, fs in hashes)
+        and any("case.js" in f for f in hashes[0][1])):
+    fails.append("a path after --rm is hashed as the row's data: %s" % hashes)
+else:
+    print("ok: a path the row removes (--rm) is never its data: one hash whatever the file holds; its real data argument kept")
+open(data, "w").write("two")
+if gg.data_set(row, roots, {})["hash"] == hashes[0][0]:
+    fails.append("a real data argument's change does not move the row's data hash")
 print("gate.serve_red:", "FAIL (%d)" % len(fails) if fails else "PASS")
 sys.exit(1 if fails else 0)

@@ -822,6 +822,11 @@ DATA_SETS = {                                  # a named set -> the source-tree 
 # the harness (scripts/gpu-exclusive.sh, tests/support/fresh_home.sh, run_pool.py …) — it never makes
 # a row's data known; the row's set is its real data arguments, its walked directories and its declared families only.
 HARNESS_DIRS = ("scripts/", "tests/support/")
+# A PATH THE ROW REMOVES OR MAKES IS ITS OUTPUT, NEVER ITS DATA (URGENT #137b, 2026-11-02): the value after the harness's
+# `--rm` / `--reset` / `--mkdir` (tests/support/fresh_home.sh) names what the row wipes or creates - scripting.e2e.material_share
+# .fresh_home's `--rm <build>/tests/scripting/material_share.jbundle`, a file its consumers write, hashed as its data: every
+# run rewrote the hash, the row was never served, and `spec.sh test --all` stopped NO PROGRESS planning it again.
+OUTPUT_FLAGS = ("--rm", "--reset", "--mkdir")
 DATA_PRUNE = {".git", "__pycache__", ".cache", "build", "build-linux", "node_modules"}
 DATA_WALK_MAX = 20000                          # files one walked directory may hold before it is UNKNOWN (said, never cut)
 
@@ -914,7 +919,11 @@ def data_set(test, roots, _memo=None, hashed=True):
             dirs.append(rel_tree)
         else:
             problems.append(f"{rel_tree} is absent")
-    for a in test.get("command") or []:
+    cmd = test.get("command") or []
+    outputs = {cmd[i + 1] for i in range(len(cmd) - 1) if cmd[i] in OUTPUT_FLAGS}
+    for a in cmd:
+        if a in outputs:
+            continue                         # a path the row removes or makes: its output, never data (#137b)
         for part in [a] + ([a.split("=", 1)[1]] if a.startswith("-") and "=" in a else []):
             if not part.startswith("/"):
                 continue
