@@ -201,13 +201,23 @@ built_digest() {   # every staged media file's size and time (no content read: 4
     find "$BUILD/bin/media" -type f -printf '%s %T@ %p\n' 2>/dev/null | LC_ALL=C sort
 }
 built_key() { echo "built $(built_digest | sha256sum | cut -c1-16)"; }
-coldrows_why() {   # the cold rows: empty when their commands ran at this key, for this list, on this build
-    if [ ! -s "$COLDROWS" ] || [ -z "$(tr -d '[:space:]' < "$COLDROWS")" ]; then return 0; fi   # no cold row: nothing to warm
+coldrows_stamp_why() {   # the cold rows' stamp alone: empty when their commands ran at this key, for this list, on this build
     if [ ! -f "$COLD_DSTAMP" ]; then echo "no driver-cache run recorded"
     elif [ "$(sed -n 1p "$COLD_DSTAMP")" != "$KEY" ]; then echo "the key moved (stored at $(sed -n 1p "$COLD_DSTAMP"))"
     elif [ "$(sed -n 2p "$COLD_DSTAMP")" != "$(cold_digest)" ]; then echo "the cold rows changed since ($(basename "$COLDROWS"))"
     elif [ "$(sed -n 3p "$COLD_DSTAMP")" != "$(built_key)" ]; then echo "the staged media rebuilt since"
     fi
+}
+stale_seeds() {   # the seed rows whose own freshness check says stale (URGENT #139: a seed keys on the Studio build too)
+    bash "$SRC/tests/support/warm_cold_rows.sh" --stale-seeds "$COLDROWS" | tr '\n' ' ' | sed 's/ $//'
+}
+coldrows_why() {   # the cold rows: empty when their commands ran at this key, for this list, on this build, and every startup
+    # seed among them is fresh (#139: one re-seed per Studio commit, here - uncapped - never inside a capped row)
+    if [ ! -s "$COLDROWS" ] || [ -z "$(tr -d '[:space:]' < "$COLDROWS")" ]; then return 0; fi   # no cold row: nothing to warm
+    local w; w=$(coldrows_stamp_why)
+    if [ -n "$w" ]; then echo "$w"; return 0; fi
+    local s; s=$(stale_seeds)
+    [ -z "$s" ] || echo "a startup seed is stale (a new Studio build): $s"
 }
 exe_id() {   # <exe>: the name the driver keys its per-exe cache on - its file name (measured below)
     basename "$1"
@@ -396,8 +406,11 @@ cold_boot() {
     echo "warm-app-cache: booting $(what_of cold-on) (cold-on): $(grep -c . "$COLDROWS") row(s) on $DISPLAY, each uncapped" \
          "(to the call's end, $(( deadline - $(date +%s) )) s from now less the card's wait, at most ${WAIT} s)"
     t0=$(date +%s)
+    # THE STAMP HELD AND ONLY SEEDS STALE (#139): those seed rows alone run (the others' caches are this key's already)
+    local only=""; [ -z "$(coldrows_stamp_why)" ] && only=$(stale_seeds)
+    [ -n "$only" ] && echo "warm-app-cache: cold-on runs the stale startup seed(s) alone: $only"
     ( H="$TESTS/warm-cold-home"; rm -rf "$H"; mkdir -p "$H"
-      HOME="$H" env -u __GL_SHADER_DISK_CACHE nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" \
+      HOME="$H" JAH_COLD_ONLY="$only" env -u __GL_SHADER_DISK_CACHE nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" \
           --label "warm-app-cache (cold-on)" bash "$SRC/tests/support/warm_cold_rows.sh" "$COLDROWS" "$deadline" \
           "$TESTS/warm-cold-logs"; rc=$?; rm -rf "$H"; exit $rc ) > "$log" 2>&1
     rc=$?

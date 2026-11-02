@@ -34,12 +34,22 @@
 //
 // Engine UP (the assertion is a picture). Fresh home: the run starts from an
 // empty data root, so nothing a previous run cached (a shader, a probe face)
-// stands between the change and its first frame.
+// stands between the change and its first frame - SEEDED WITH THE STARTUP SET
+// ONLY (URGENT #139: the boot-and-quit seed, so the boot does not recompile the
+// 307 startup shaders no assertion reads). The changes' OWN shaders still compile
+// at the change, and that is asserted below: clouds_on and the chain's switch each
+// compile at least one shader (app.shaderCache().compiledThisRun), so a startup
+// set that grew to hold them turns this row red instead of passing on a warm path.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
     console.log("ok: " + msg);
 }
+
+// THE STARTUP SEED IS THIS TIER's AND THIS BUILD's (URGENT #139): the boot compiled nothing - so it skipped the global pass
+var bootCompiled = app.shaderCache().compiledThisRun;
+assert(bootCompiled === 0, "the boot compiled 0 shaders on this tier's startup seed (" + bootCompiled + "; more = a seed " +
+       "of another tier or build: the boot pays the global pass, the row's price no longer holds)");
 
 var guid = project.create("Sky swap transient " + Date.now());
 assert(guid.length > 10, "project.create -> " + guid);
@@ -94,6 +104,9 @@ function arm(label, change) {
     return worst(before, f1);
 }
 var failures = [];
+// THE ARMS COMPILE COLD (URGENT #139): compiledThisRun around each stretch, printed; the two that must compile asserted
+function compiled() { return app.shaderCache().compiledThisRun; }
+var cold = { start: compiled() };
 
 var moved = arm("haze", function () { world.sky("realistic", { sunHaze: 1.0 }); });
 assert(moved >= 3, "the haze change moved the picture (" + moved + ")");
@@ -110,7 +123,9 @@ assert(moved >= 3, "gradient -> realistic moved the picture (" + moved + ")");
 // speed 0: no scroll, so the only capture is the change's own. A layer that
 // failed to draw would pass the frame-0 check by measuring nothing: it must move
 // the picture.
+cold.beforeClouds = compiled();
 moved = arm("clouds_on", function () { world.clouds({ enabled: true, coverage: 0.7, speed: 0 }); });
+cold.clouds = compiled() - cold.beforeClouds;
 assert(moved >= 3, "the cloud layer going on moved the picture (" + moved + ")");
 moved = arm("clouds_off", function () { world.clouds({ enabled: false }); });
 assert(moved >= 3, "the cloud layer going off moved the picture (" + moved + ")");
@@ -159,9 +174,11 @@ function armCam(label, change) {
 // Here the chain's own readers (the bounce injection's escape) carried the
 // uncaptured cube into the frames after it — 111/28/118 on the ground at base.
 world.clouds({ enabled: false });
+cold.beforeChain = compiled();
 world.gi({ mode: "vct", ddgi: false });
 world.sky("realistic", { sunHaze: 40.0 });
 moved = armCam("repro_haze", function () { world.sky("realistic", { sunHaze: 1.0 }); });
+cold.chain = compiled() - cold.beforeChain;
 assert(moved >= 3, "the repro's haze change moved the picture (" + moved + ")");
 // ...and the SHIPPED configuration: the chain and the irradiance field on.
 world.gi({ mode: "vct", ddgi: true });
@@ -197,4 +214,12 @@ assert(worst(dragA, dragB) >= 3, "the drag's two skies differ (" + worst(dragA, 
 assert(Math.min(dA, dB) <= 2, "a drag frame draws ONE whole set: f0 is the first sky's picture (" + dA +
        ") or the second's (" + dB + "), within 2/255");
 assert(failures.length === 0, "no change flashes its first frame (failed: " + failures.join(", ") + ")");
+cold.end = compiled();
+console.log("SKYSWAP compiles: the boot " + bootCompiled + "; the setup " + (cold.start - bootCompiled) + "; the IBL arms before clouds " +
+            (cold.beforeClouds - cold.start) + "; clouds_on " + cold.clouds + "; the chain's switch and its repro arm " +
+            cold.chain + "; the whole script " + (cold.end - cold.start));
+assert(cold.clouds > 0, "the cloud layer's change compiled its own shaders at the change (" + cold.clouds +
+       "): the startup seed does not hold them, the cold change is still the subject");
+assert(cold.chain > 0, "the Photon chain's switch compiled its own shaders at the change (" + cold.chain +
+       "): the startup seed does not hold them, the cold change is still the subject");
 console.log("sky_swap_transient: PASS");

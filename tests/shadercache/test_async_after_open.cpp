@@ -20,6 +20,16 @@
 // Studio-only change that adds a startup permutation (a preset or a template compiled into the app) leaves the seed
 // a few shaders short: the cold launch compiles them behind its splash (printed below as its startup compiles) - a
 // cost of seconds, never a wrong law; the app's own global pass re-runs over the seed at a new Studio commit by its key.
+// THE GLOBAL PASS's COMMIT AND THE TEST TIER ARE IN THE KEY NOW (URGENT #139, the lead's ruling (A'), 2026-11-02): the app
+// re-runs its startup global pass whenever its key - GIT_COMMIT_HASH (<build>/generated/jah_provenance.h, the value
+// compiled into the app) and the cache fingerprint - is not the seed's warm-pass.key, OR the startup compiled anything
+// (shaderbuildgate.cpp); over a seed one Studio commit old that pass re-rendered the template worlds for 37 s in Debug
+// (scripting.e2e.sky_swap_transient: 141 + 137 frames, 34.3 + 2.6 s, compiling 18). So the seed is re-made once per Studio
+// commit - by the warm-up's cold-on boot, which runs a seed row whenever its own `--seed-check` says stale, uncapped,
+// never inside a capped row - and its stamp names the test tier it was booted at (JAHSHAKA_TEST_TIER / _NEEDS: a seed
+// is the startup set OF ONE TIER - another tier's boot compiles its own permutations and the pass runs again).
+// ONE SEED PER TIER, THIS CODE: `--seed-dir <name>` names the seed's directory beside the working directory (default
+// e2e-async-after-open-seed: this row's); scripting.e2e.sky_swap_transient.seed is the second instance, at that row's tier.
 // A seed whose stamp is not this tree's is STALE: the seed row re-seeds it, and the row - which never compiles the
 // startup set inside its own run - refuses it, naming the seed row (a stale seed cost the row 50 s against its 28 s:
 // the cold launch built the startup set itself).
@@ -78,6 +88,13 @@ QString treeKey()
     }
     QFile built(QStringLiteral(JAHSHAKA_OGRE_INSTALL) + QStringLiteral("/BUILT_FROM"));
     if (built.open(QIODevice::ReadOnly)) h.addData(built.readAll());
+    // THE GLOBAL PASS's COMMIT (URGENT #139): the GIT_COMMIT_HASH compiled into the app - its pass key's Studio half
+    QFile prov(QFileInfo(bin.absolutePath()).absolutePath() + QStringLiteral("/generated/jah_provenance.h"));
+    if (!prov.open(QIODevice::ReadOnly)) return QString();   // unread: every seed stale, never trusted
+    for (const QByteArray &line : prov.readAll().split('\n'))
+        if (line.startsWith("#define GIT_COMMIT_HASH ")) h.addData("pass-commit " + line.mid(24).trimmed() + "\n");
+    // ...AND THE TEST TIER the seed boots at (a seed is one tier's startup set)
+    h.addData("tier " + qgetenv("JAHSHAKA_TEST_TIER") + "|" + qgetenv("JAHSHAKA_TEST_NEEDS") + "\n");
     return QString::fromLatin1(h.result().toHex());
 }
 QString readStamp(const QString &path)
@@ -215,12 +232,23 @@ int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
     const QString home = QDir::current().absoluteFilePath(QStringLiteral("e2e-home-async-after-open"));
-    const QString seed = QDir::current().absoluteFilePath(QStringLiteral("e2e-async-after-open-seed/shadercache"));
+    // ONE SEED PER TIER (URGENT #139): --seed-dir <name>, the seed's directory beside the working directory
+    const int sd = app.arguments().indexOf(QStringLiteral("--seed-dir"));
+    const QString seedName = sd > 0 && sd + 1 < app.arguments().size() ? app.arguments().at(sd + 1)
+                                                                       : QStringLiteral("e2e-async-after-open-seed");
+    const QString seed = QDir::current().absoluteFilePath(seedName + QStringLiteral("/shadercache"));
 
     const QString stamp = QFileInfo(seed).absolutePath() + QStringLiteral("/tree-key.txt");
     const QString key = treeKey();
     const bool seedFresh = !key.isEmpty() && QDir(seed).exists() && readStamp(stamp) == key;
 
+    // THE FRESHNESS CHECK (URGENT #139; the warm-up's cold-on reads it): exit 0 the seed is this tree's, 3 it is stale or
+    // missing - nothing booted
+    if (app.arguments().contains(QStringLiteral("--seed-check"))) {
+        std::printf("the startup seed %s: %s\n", qPrintable(seedName), seedFresh ? "fresh (its stamp the tree's key)"
+                    : QDir(seed).exists() ? "STALE (its stamp is not the tree's key)" : "missing");
+        return seedFresh ? 0 : 3;
+    }
     // THE STARTUP SEED'S ROW (the header): made when missing or STALE (its stamp not this tree's key); a fresh seed is
     // the row's whole answer.
     if (app.arguments().contains(QStringLiteral("--seed"))) {
@@ -231,7 +259,7 @@ int main(int argc, char **argv)
         if (QDir(seed).exists())
             std::printf("    the startup seed is STALE (its stamp is not this tree's key): re-seeding\n");
         QDir(QFileInfo(seed).absolutePath()).removeRecursively();
-        const QString seedHome = QDir::current().absoluteFilePath(QStringLiteral("e2e-async-after-open-seeding"));
+        const QString seedHome = QDir::current().absoluteFilePath(seedName + QStringLiteral("-seeding"));
         bool seeded = seedLaunch(seedHome) &&
                       QDir().mkpath(QFileInfo(seed).absolutePath()) &&
                       QDir().rename(seedHome + "/.local/share/Jahshaka/shadercache", seed);

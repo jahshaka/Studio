@@ -181,10 +181,25 @@ file(MAKE_DIRECTORY ${_pumpdefer_home}/run)
 # haze change equals the one settled a frame later (no part of the change lands
 # behind it: the sun's tint once did, PHOTON-7 stage 7). Engine UP (a picture);
 # the home is WIPED first, so no cached shader or face stands between a change
-# and its first frame. Priced 37.6 s (scripts/gate-times.txt), under an app row's 60 s;
-# the cold path is the subject — the boot lane lowers it.
+# and its first frame. THE STARTUP SET IS SEEDED, THE ARMS COMPILE COLD (URGENT #139, the lead's ruling (A), 2026-11-02:
+# the row ran 51.9 s and timed out at 60.6-60.7 s - 33.7 s of it the cold boot, 27.3 s the startup shader build's 307
+# compiles, which no assertion reads): the wiped home is seeded with THIS TIER's STARTUP SEED (a boot-and-quit cache,
+# test_async_after_open.cpp's seed code - the second instance, at this row's TIER/NEEDS - keyed on the tree's shader key,
+# the Studio build the app's global pass keys on, and the tier; tests/support/fresh_home.sh --seed: linked, never
+# promoted), so the boot compiles 0 and SKIPS the global pass (the lead's ruling (A'): one seed boot a Studio commit, in
+# the warm-up's cold-on - never inside this row), while every change's own shaders still compile at the change - the
+# subject - and the script ASSERTS it all: 0 startup compiles, clouds_on and the chain's switch > 0 (a startup set that
+# grew to hold them reds the row, never a silent pass).
+jah_gpu_row(scripting.e2e.sky_swap_transient.seed SHIP CLASS app TIER epic NEEDS photon
+         COLD "this tier's startup seed is a cache keyed on the shaders and the Studio build that only its own boot may make"
+         COMMAND $<TARGET_FILE:test_async_after_open> --seed --seed-dir e2e-sky-swap-transient-seed
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(scripting.e2e.sky_swap_transient.seed PROPERTIES TIMEOUT 60 LABELS "scripting"
+    FIXTURES_SETUP skySwapTransientSeed)
 set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
-jah_fresh_home_fixture(scripting.e2e.sky_swap_transient.fresh_home skySwapTransientFreshHome "${_sstHome}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.sky_swap_transient.fresh_home skySwapTransientFreshHome "${_sstHome}"
+    ARGS --seed ${CMAKE_CURRENT_BINARY_DIR}/e2e-sky-swap-transient-seed/shadercache LABELS "scripting")
+set_tests_properties(scripting.e2e.sky_swap_transient.fresh_home PROPERTIES FIXTURES_REQUIRED skySwapTransientSeed)
 jah_gpu_row(scripting.e2e.sky_swap_transient SHIP CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
@@ -196,7 +211,7 @@ set_tests_properties(scripting.e2e.sky_swap_transient PROPERTIES
     ENVIRONMENT "HOME=${_sstHome};JAHSHAKA_DATA_ROOT=${_sstHome}/.local/share/Jahshaka;__GL_SHADER_DISK_CACHE_PATH=$ENV{HOME}/.cache/nvidia"
     FIXTURES_REQUIRED skySwapTransientFreshHome
     LABELS "scripting" TIMEOUT 60
-    # the cold path is the subject (above): source.testing_rules R13 lets this root boot cold
+    # the cold change is the subject (above): its root boots on the startup seed, never the shared warm cache - source.testing_rules R13
     JAHSHAKA_COLD_BY_SUBJECT TRUE)
 
 # phase 2: full surface (assets/materials/graph/world). The script needs real
@@ -908,7 +923,13 @@ if(TEST scripting.e2e.preset_apply)
     set_property(TEST scripting.e2e.preset_apply PROPERTY JAHSHAKA_TEST_FRAMES 1)
 endif()
 if(TEST scripting.e2e.sky_swap_transient)
-    set_property(TEST scripting.e2e.sky_swap_transient PROPERTY JAHSHAKA_TEST_FRAMES 1083)
+    # (URGENT #139: 1083 less the startup build's 531 the seeded boot skips - the GI warm-up's 243, the Basic template's 151,
+    # the World template's 137, each logged by its boot; the arms' frames unchanged. Derived from those log lines, not metered)
+    set_property(TEST scripting.e2e.sky_swap_transient PROPERTY JAHSHAKA_TEST_FRAMES 552)
+endif()
+if(TEST scripting.e2e.sky_swap_transient.seed)
+    # (URGENT #139: the boot-and-quit's startup build at this tier from an empty home - 243 + 151 + 137 frames, logged)
+    set_property(TEST scripting.e2e.sky_swap_transient.seed PROPERTY JAHSHAKA_TEST_FRAMES 531)
 endif()
 if(TEST scripting.e2e.tex_ref)
     set_property(TEST scripting.e2e.tex_ref PROPERTY JAHSHAKA_TEST_FRAMES 3)

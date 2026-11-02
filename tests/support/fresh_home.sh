@@ -49,6 +49,13 @@
 #                   pbs permutations, 146,859 bytes of pipelines a run). A red run promotes nothing and leaves the home
 #                   as it is. The rows take it through WARM_HOME (tests/CMakeLists.txt); source.testing_rules R14 holds
 #                   every WARM fixture's consumer to it.
+#   --seed <dir>    THE HOME SEEDED WITH A STARTUP SEED, NEVER PROMOTED (URGENT #139, 2026-11-02): after the wipe, <dir> - a
+#                   shader cache a boot-and-quit launch left (shader.async_after_open.seed's, keyed on the tree's shader key,
+#                   made by its COLD seed row and the warm-up's cold-on boot) - is LINKED into the home's cache by --warm's
+#                   own link pass (the cache writes by rename: a link is never written through); refused when <dir> is
+#                   missing or fails its own manifest (exit 1). Not --warm: the home never takes the shared app cache and
+#                   never promotes, so what a run compiles beyond the startup set (scripting.e2e.sky_swap_transient's arms:
+#                   the subject) compiles cold every run.
 #   --reset <dir>   also removed and recreated (a suite's export target beside its home).
 #   --rm <file>     also removed.
 #   --mkdir <dir>   also created.
@@ -61,7 +68,7 @@
 #                   name>/, replacing that home's previous evidence (one red kept per row). Without a command it is a
 #                   fixture row (a FIXTURES_SETUP home is wiped at its next setup).
 set -eu
-warm=0; keep=0; setup=0; key=""; promote=0
+warm=0; keep=0; setup=0; key=""; promote=0; seed=""
 resets=""; rms=""; mkdirs=""
 while [ $# -gt 0 ]; do
     case "$1" in
@@ -71,6 +78,7 @@ while [ $# -gt 0 ]; do
                  case "$key" in ""|*[!a-z0-9_]*) echo "fresh_home.sh: --cache needs a key of [a-z0-9_]" >&2; exit 2 ;; esac ;;
         --setup) setup=1; shift ;;
         --promote) promote=1; shift ;;
+        --seed)  seed="${2:?--seed needs a cache directory}"; shift 2 ;;
         --reset) resets="$resets
 $2"; shift 2 ;;
         --rm)    rms="$rms
@@ -236,6 +244,23 @@ else
     rm -rf "$home"
 fi
 mkdir -p "$home/run"
+# THE LINK PASS: every file of a cache directory but its writer lock, hard-linked (else copied) into the home's cache
+link_cache() {
+    ( cd "$1" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
+        mkdir -p "$home/$cache_rel/$(dirname "$f")"
+        ln "$1/$f" "$home/$cache_rel/$f" 2>/dev/null || cp -p "$1/$f" "$home/$cache_rel/$f" 2>/dev/null || true
+    done
+}
+if [ -n "$seed" ]; then
+    [ "$warm" = 0 ] && [ "$promote" = 0 ] || { echo "fresh_home.sh: --seed is never --warm or --promote (a seeded home never promotes)" >&2; exit 2; }
+    [ -d "$seed" ] || { echo "fresh_home.sh: the startup seed $seed is missing - its seed row makes it (the fixture chain)" >&2; exit 1; }
+    if ! torn=$(python3 -I "$here/shadercache_check.py" "$seed"); then
+        echo "fresh_home.sh: the startup seed $seed fails its own manifest ($torn) - refused" >&2; exit 1
+    fi
+    mkdir -p "$home/$cache_rel"
+    link_cache "$seed"
+    echo "fresh_home.sh: the home seeded with the startup seed $seed ($(find "$seed" -type f | wc -l) files; never promoted)"
+fi
 if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
     # THE SHARED CACHE, LINKED (never the writer's lock: a linked lock would be one flock for every home)
     mkdir -p "$home/$cache_rel"
@@ -246,10 +271,7 @@ if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
         flock -s -w 60 9 || exit 0
         [ -d "$shared" ] || exit 0
         generation "$shared" > "$home/.shadercache-seed"   # the generation linked (the promotion's rule 2)
-        ( cd "$shared" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
-            mkdir -p "$home/$cache_rel/$(dirname "$f")"
-            ln "$shared/$f" "$home/$cache_rel/$f" 2>/dev/null || cp -p "$shared/$f" "$home/$cache_rel/$f" 2>/dev/null || true
-        done
+        link_cache "$shared"
         exit 0
     ) 9>"$shared.lock" || true
 fi

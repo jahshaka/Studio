@@ -730,6 +730,23 @@ def fresh_home_behaves(source):
         check(not built or (lib == built and "this script's tree" in how and "CMakeCache.txt" in how),
               "shadercache_check: under a CMakeCache.txt that names no library, the tree's own build-linux/CMakeCache.txt "
               "names it (%s via %s)" % (lib, how))
+        # --seed (URGENT #139): a home seeded with a STARTUP SEED (a boot-and-quit cache) - its files linked in after the wipe,
+        # NEVER promoted (a green run's grown cache leaves the shared one as it was); a missing seed refused (exit 1)
+        sd_home = os.path.join(t, "seedmaker")
+        subprocess.run(["sh", "-c", put(sd_home, [("seed.bin", "K1")])], capture_output=True)
+        seed_dir = os.path.join(sd_home, cache)
+        hs = os.path.join(td, "x", "home-seeded")
+        before = sorted(os.listdir(os.path.join(td, ".shadercache")))
+        rs = subprocess.run(["sh", fh, "--seed", seed_dir, hs, "--", "sh", "-c", "test -f %s/%s/seed.bin && %s"
+                             % (hs, cache, put(hs, [("grown.bin", "K1")], keep=[("seed.bin", "K1")]))],
+                            capture_output=True, text=True)
+        rm = subprocess.run(["sh", fh, "--setup", "--seed", os.path.join(t, "no-such-seed"), hs], capture_output=True, text=True)
+        check(rs.returncode == 0 and "seeded with the startup seed" in rs.stdout and not sc("grown.bin") and not sc("seed.bin")
+              and sorted(os.listdir(os.path.join(td, ".shadercache"))) == before
+              and rm.returncode == 1 and "the startup seed" in rm.stderr and "is missing" in rm.stderr,
+              "fresh_home --seed: the startup seed linked into the wiped home, a green run's grown cache NEVER promoted (the "
+              "shared cache as it was), a missing seed refused (exit 1) (%d %d %s %s)" % (rs.returncode, rm.returncode,
+                                                                                    rs.stderr[-120:], rm.stderr[-120:]))
         # --promote (HARNESS-1): a WARM fixture's consumer - its setup seeds the home; a green consumer's grown cache is
         # promoted THROUGH HARD LINKS and the home keeps it whole; a red one promotes nothing and leaves the home as it is
         hp = os.path.join(td, "x", "home-fx")
