@@ -103,6 +103,8 @@ gi.card_residency_pinned 8.23  solo, the card lock held, :72, warm (PHOTON-7 sta
 gi.card_residency_crowded 4.92  solo, the card lock held, :72, warm (PHOTON-7 stage 10, 2026-10-26, re-priced as gi.card_residency: the crowded room to B - (4); 399 frames; before: 5.33 at 566)
 gi.card_residency_late 7.41  solo, the card lock held, :72, warm (PHOTON-7 stage 10, 2026-10-26, re-priced: the teleport and the late reader at B - (5); 669 frames, the decision a due later; before: 7.28 at 643)
 gi.card_residency_held 9.64  solo, the card lock held, :72, warm (PHOTON-7 stage 10, 2026-10-26, re-priced: the band card held in and out at B, the no-pop transitions ending once at rest and owed nothing - (8), declared red for stage 8; 943 frames, the decision a due later; before: 9.54 at 937)
+gi.card_law 1.02  solo, the card lock held, :77, warm, nice 10, a home under the built tree (BISTRO-REST-1, 2026-11-02: one dispatch - 274,432 texels and 4,624 references through jah_card_view.glsl; 2 frames)
+gi.share_law 0.87  solo, the card lock held, :77, warm, nice 10, a home under the built tree (BISTRO-REST-1, 2026-11-02: one dispatch - the share sweep and 321 two-half loops through jah_rq_hit.glsl; 2 frames)
 gi.card_contact_lift 3.41  solo, the card lock held, :72 (PHOTON-7 10-3 R10, 2026-10-27)
 gi.card_lamp_shadow 6.56  solo, the card lock held, :72 (PHOTON-7 10-3 R12, 2026-10-27: (1) re-pointed at the analytic umbra - the card's direct half 0 in the umbra, the lamp's closed form lit; 283 frames)
 gi.card_lamp_shadow_area 7.74  solo, the card lock held, :72 (PHOTON-7 10-3 R12, 2026-10-27: (6)/(9) re-pointed at the analytic umbra - the read-back visibility 0 / 1 to the store's half step; 893 frames)
