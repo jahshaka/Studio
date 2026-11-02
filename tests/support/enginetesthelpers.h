@@ -177,10 +177,108 @@ inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides 
 }
 #endif
 
+/// THE ROW DECLARES THE ROUTE IT MEASURES (URGENT #146, 2026-11-02). BISTRO-REST-1's rows gi.feedback_closed_box.room /
+/// .lamp.* were written, run, cross-run and reasoned about as "the screen-probe gather", but their view was
+/// OffscreenContract::Live: an offscreen view gathers only under StillPicture (OgreView.cpp, chainDesc: d.probeGather /
+/// d.screenIntegrate), so they measured the no-ray route's SCREEN INTEGRATE. They also ran with GI PAUSED
+/// (GiParams::updateBudget = 0), under which the field's dispatch counter reads 0 by construction. The row's output
+/// never said either. So a fixture that measures GI or a reflection DECLARES what its measured view runs:
+///     enginetest::declareRoutes(view, scene, enginetest::Routes().gather().field().store());
+/// right after it creates the view. The FIRST frame rendered through enginetest::frames() after it asserts the
+/// declaration against the frame's own record: the view's chain as built (inspect::ViewEcho::routes(): the gather, the
+/// screen integrate, the ray reflection - each must match EXACTLY, a route the view runs and the row did not declare
+/// is a mismatch too) and the pause (inspect::SceneEcho::giUpdateBudget() == 0 must equal paused()): a mismatch FAILS
+/// AT ONCE (exit 1), before any law, naming the declared and the actual routes. The scene's products (GiStatus: the
+/// field ifdBound, the cards' atlas built, the store's cascades) are built by the frames themselves, so each one
+/// declared must be live by the kRouteProductFrames-th frame after the declaration, else the same failure; the match
+/// prints one ROUTES line (with the frame its products were live on), so the row's output says what it measured.
+/// requireRoutes() is the check now, all of it at once (a view that already rendered). source.testing_rules R16 holds
+/// every gi.* / rtreflect.* engine row to it.
+struct Routes {
+    bool g = false, i = false, r = false;   ///< the view's chain: the gather, the screen integrate, the ray reflection
+    bool f = false, c = false, s = false;   ///< the scene's products: the irradiance field, the cards, the voxel store
+    bool p = false;                         ///< GI paused (GiParams::updateBudget 0: the field and the probes frozen)
+    Routes &gather()     { g = true; return *this; }
+    Routes &integrate()  { i = true; return *this; }   ///< the no-ray route's screen integrate (NO-RAY-CUT-1 removes it)
+    Routes &reflection() { r = true; return *this; }
+    Routes &field()      { f = true; return *this; }
+    Routes &cards()      { c = true; return *this; }
+    Routes &store()      { s = true; return *this; }
+    Routes &paused()     { p = true; return *this; }
+};
+inline std::string routesText(const Routes &r)
+{
+    std::string t;
+    const auto add = [&t](bool on, const char *w) { if (on) { if (!t.empty()) t += ' '; t += w; } };
+    add(r.g, "gather"); add(r.i, "integrate"); add(r.r, "reflection");
+    add(r.f, "field"); add(r.c, "cards"); add(r.s, "store"); add(r.p, "paused");
+    return t.empty() ? std::string("none") : t;
+}
+/// What the view and its scene ran on the last rendered frame (the door: EngineInspect.h, URGENT #146).
+inline Routes actualRoutes(View *v, Scene *s)
+{
+    Routes a;
+    if (const inspect::ViewEcho *ve = inspect::view(v)) {
+        const inspect::ViewRoutes vr = ve->routes();
+        a.g = vr.probeGather; a.i = vr.screenIntegrate; a.r = vr.rayReflect;
+    }
+    const GiStatus gs = s->published().gi;
+    a.f = gs.ifdBound;
+    a.c = gs.cards.built;
+    a.s = !gs.cascades.empty();
+    if (const inspect::SceneEcho *se = inspect::scene(s)) a.p = se->giUpdateBudget() == 0;
+    return a;
+}
+/// The frames a declared product (field, cards, store) has to come live in after its declaration. A bound on a
+/// startup, not a law: the store's first voxelisation and the field's first pass land in the first frames, read back
+/// at the renderer's lag (4 on this stack); a fixture whose product starts later declares it there (requireRoutes).
+constexpr int kRouteProductFrames = 16;
+/// `frame` > 0: the declaration's frame count (the frames() hook); a product not live yet waits (returns false)
+/// until kRouteProductFrames. 0: everything now.
+inline bool requireRoutes(View *v, Scene *s, const Routes &declared, const char *what = "the measured view", int frame = 0)
+{
+    const Routes a = actualRoutes(v, s);
+    const bool chainOk = a.g == declared.g && a.i == declared.i && a.r == declared.r && a.p == declared.p;
+    const bool productsOk = (!declared.f || a.f) && (!declared.c || a.c) && (!declared.s || a.s);
+    if (chainOk && !productsOk && frame > 0 && frame < kRouteProductFrames) return false;
+    const bool ok = chainOk && productsOk;
+    std::fprintf(stdout, "ROUTES %s: declared {%s}, the frame ran {%s}%s - %s\n", what, routesText(declared).c_str(),
+                 routesText(a).c_str(), frame > 0 ? (" (frame " + std::to_string(frame) + " after the declaration)").c_str() : "",
+                 ok ? "ok" : "MISMATCH");
+    std::fflush(stdout);
+    if (ok) return true;
+    std::fprintf(stderr, "FAIL: %s measures {%s} but the frame's own record says {%s} (the view's chain: gather/"
+                         "integrate/reflection exact; the scene's field/cards/store live if declared; paused = "
+                         "updateBudget 0) - fix the fixture's premise or its declaration before any law (URGENT #146)\n",
+                 what, routesText(declared).c_str(), routesText(a).c_str());
+    std::fflush(nullptr);
+    std::_Exit(1);
+    return false;
+}
+namespace framesdetail {
+struct DeclaredRoutes { View *v; Scene *s; Routes r; std::string what; int frames; };
+inline std::vector<DeclaredRoutes> &declaredRoutes() { static std::vector<DeclaredRoutes> d; return d; }
+inline void checkDeclaredRoutes()
+{
+    auto &d = declaredRoutes();
+    for (size_t k = 0; k < d.size();) {
+        auto &x = d[k];
+        if (requireRoutes(x.v, x.s, x.r, x.what.c_str(), ++x.frames)) d.erase(d.begin() + long(k));
+        else ++k;
+    }
+}
+}  // namespace framesdetail
+/// The declaration, asserted on the first frame enginetest::frames() renders after it (the view must outlive it).
+inline void declareRoutes(View *v, Scene *s, const Routes &declared, const char *what = "the measured view")
+{
+    framesdetail::declaredRoutes().push_back({v, s, declared, what, 0});
+}
+
 /// THE TEST DOOR'S ONE FRAME VERB (ENGINE-UPGRADE-U3 stage 2b): every engine suite steps the engine through here —
 /// `frames(e, n)` renders n frames, `frames(e, 1, rec)` hands the record over first. `e` is whatever the suite holds
 /// (an Engine *, a unique_ptr, an Engine &): a template, so no call site edits its receiver. Its body is today's bytes
 /// (submit if given, then renderOneFrame n times); stage 4 swaps it ONCE for the lockstep wait on the render thread.
+/// After each frame, a route declaration made since the last one is asserted (declareRoutes, above: URGENT #146).
 namespace framesdetail {
 template <class E, class = void> struct RendersByDot : std::false_type {};
 template <class E>
@@ -191,10 +289,10 @@ template <class E> void frames(E &&e, int n, const FrameInput *rec = nullptr)
 {
     if constexpr (framesdetail::RendersByDot<std::remove_reference_t<E>>::value) {
         if (rec) e.submitFrame(*rec);
-        for (int i = 0; i < n; ++i) e.renderOneFrame();
+        for (int i = 0; i < n; ++i) { e.renderOneFrame(); framesdetail::checkDeclaredRoutes(); }
     } else {
         if (rec) e->submitFrame(*rec);
-        for (int i = 0; i < n; ++i) e->renderOneFrame();
+        for (int i = 0; i < n; ++i) { e->renderOneFrame(); framesdetail::checkDeclaredRoutes(); }
     }
 }
 /// The same with the record by reference — a suite's temporary record (`frames(e, 1, FrameInput::delta(0.0f))`).

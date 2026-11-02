@@ -78,6 +78,13 @@ tree and the build's registration, each with its name in the failure line:
      and scripts/warm-app-cache.sh exports JAHSHAKA_SHADER_SEED=none. WHY: a tree's bin/shadercache-seed (the ship tree
      after its seed step) is served to every data root without a microcode layer, so every cold test home booted on the
      seed's SPIR-V, never the build's own compile; only shadercache.app opted out.
+  R16 A GI OR REFLECTION ROW DECLARES THE ROUTE IT MEASURES (URGENT #146, 2026-11-02). Every gi.* / rtreflect.* engine row
+     (JAH_CLASS engine: it renders) has a fixture that declares its measured view's route - enginetest::declareRoutes /
+     requireRoutes (tests/support/enginetesthelpers.h: asserted on the first frame against the frame's own record, the
+     view's chain and the pause) - or is listed in tests/hygiene/routes_pending.txt with its derived declaration (a
+     ratchet: never a name its copy at the merge-base with main lacks; a listed row that declares now, or is gone, is
+     stale). WHY: BISTRO-REST-1's gi.feedback_closed_box rows measured the SCREEN INTEGRATE of a Live offscreen view as
+     "the gather", with GI paused, and their output never said it.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -247,12 +254,12 @@ def r7_grown(pending, base_pending):
     return [] if base_pending is None else sorted(set(pending) - set(base_pending))
 
 
-def _base_pending(source):
-    """frames_pending.txt at `git merge-base HEAD ogre` (main; None when there is no merge-base or no copy)."""
+def _base_pending(source, name="frames_pending.txt"):
+    """tests/hygiene/<name> at `git merge-base HEAD ogre` (main; None when there is no merge-base or no copy)."""
     mb = subprocess.run(["git", "merge-base", "HEAD", "ogre"], cwd=source, capture_output=True, text=True).stdout.strip()
     if not mb:
         return None, None
-    p = subprocess.run(["git", "show", f"{mb}:tests/hygiene/frames_pending.txt"], cwd=source, capture_output=True,
+    p = subprocess.run(["git", "show", f"{mb}:tests/hygiene/{name}"], cwd=source, capture_output=True,
                        text=True)
     if p.returncode != 0:
         return mb, None
@@ -470,6 +477,68 @@ def r15_bad(tests):
     return bad, own
 
 
+ROUTES_PENDING = os.path.join("tests", "hygiene", "routes_pending.txt")
+ROUTE_WORDS = {"gather", "integrate", "reflection", "field", "cards", "store", "paused", "none"}
+_ROUTES_CALL = re.compile(r"\b(declareRoutes|requireRoutes)\s*\(")
+
+
+def routes_pending(text):
+    """{row: [its views' declarations, each a set of route words]} of routes_pending.txt's text (`;` between views, a
+    view's trailing `(name)` dropped, `#` to the end of a line a comment)."""
+    out = {}
+    for line in text.splitlines():
+        line = line.split("#", 1)[0].strip()
+        if not line:
+            continue
+        name, _, rest = line.partition(" ")
+        out[name] = [set(re.sub(r"\([^)]*\)", " ", v).split()) for v in rest.split(";")]
+    return out
+
+
+def r16_fixture_sources(source):
+    """{executable: [its C++ sources]} of every add_executable (and jahshaka_rt_reflect_test) under tests/."""
+    out = {}
+    for root, _dirs, names in os.walk(os.path.join(source, "tests")):
+        if "CMakeLists.txt" not in names:
+            continue
+        txt = open(os.path.join(root, "CMakeLists.txt"), errors="replace").read()
+        for m in re.finditer(r"add_executable\(\s*(\S+)\s+([^)]*)\)", txt):
+            out[m.group(1)] = [os.path.join(root, w) for w in m.group(2).split() if w.endswith((".cpp", ".cc", ".cxx"))]
+        for m in re.finditer(r"jahshaka_rt_reflect_test\(\s*(\S+)\s*\)", txt):
+            out[m.group(1)] = [os.path.join(root, "test_rt_reflect.cpp")]
+    return out
+
+
+def r16_declares(sources):
+    """declares(test) -> True when the row's fixture calls declareRoutes / requireRoutes outside a comment or string;
+    False for a jahlab row (the lab has no declaration yet) or a fixture that does not."""
+    memo = {}
+
+    def declares(t):
+        words = [os.path.basename(str(w)) for w in t.get("command") or []]
+        exe = next((w for w in words if w in sources), None)
+        if exe is None:
+            return False
+        if exe not in memo:
+            memo[exe] = any(_ROUTES_CALL.search(_r10_blank(open(f, errors="replace").read()))
+                            for f in sources[exe] if os.path.isfile(f))
+        return memo[exe]
+    return declares
+
+
+def r16_bad(tests, declares, pending):
+    """(new, stale, malformed): `new` = gi.* / rtreflect.* engine rows whose fixture declares no route and that
+    routes_pending.txt does not list; `stale` = listed rows that declare now or are not registered; `malformed` = listed
+    rows with a word outside ROUTE_WORDS or a view naming neither gather, integrate nor none."""
+    rows = {t["name"]: t for t in tests if t["name"].startswith(("gi.", "rtreflect.")) and _props(t).get("JAH_CLASS") == "engine"}
+    undeclared = {n for n, t in rows.items() if not declares(t)}
+    new = sorted(undeclared - set(pending))
+    stale = sorted(n for n in pending if n not in undeclared)
+    malformed = sorted(n for n, views in pending.items()
+                       if any(not v or v - ROUTE_WORDS or not v & {"gather", "integrate", "none"} for v in views))
+    return new, stale, malformed
+
+
 def r14_bad(tests):
     """[`row (why)`] for every consumer of a WARM fixture (its setup: fresh_home.sh --setup --warm <home>) whose command is
     not fresh_home.sh --promote of that home with the same --cache key. `tests`: ctest's json-v1 `tests` list."""
@@ -621,6 +690,22 @@ def the_rules_catch():
           "R15 flags an app / selftest row booting with the shipped seed (no JAHSHAKA_SHADER_SEED entry), never one at none "
           "(ENVIRONMENT or _MODIFICATION), an engine or CPU row; a row stating its own (a seed row's unset:) is printed "
           "(%s %s)" % (r15, own15))
+    E = lambda name, exe: dict(T(name, JAH_CLASS="engine"), command=["sh", "/s/tests/support/fresh_home.sh", "--", "/b/" + exe])
+    rows16 = [E("gi.decl", "test_decl"), E("gi.bare", "test_bare"), E("gi.listed", "test_bare"), E("rtreflect.lab", "jahlab"),
+              E("gi.done", "test_decl"), T("gi.cpu"), E("other.x", "test_bare")]
+    dec16 = lambda t: os.path.basename(t["command"][-1]) == "test_decl"
+    p16 = routes_pending("gi.listed integrate store paused  # a Live view\nrtreflect.lab gather reflection\n"
+                         "gi.done gather store\ngi.gone integrate\ngi.bad gather ; sideways (v2)\n")
+    new16, stale16, bad16 = r16_bad(rows16, dec16, p16)
+    check(new16 == ["gi.bare"] and stale16 == ["gi.bad", "gi.done", "gi.gone"] and bad16 == ["gi.bad"]
+          and p16["gi.listed"] == [{"integrate", "store", "paused"}] and len(p16["gi.bad"]) == 2,
+          "R16 flags a GI / reflection engine row whose fixture declares no route and that the ratchet does not list; a "
+          "listed row that declares now or is gone is stale; a declaration of a word outside the routes, or a view naming "
+          "no gather / integrate / none, is malformed; a CPU row and another subject are never read (%s %s %s)"
+          % (new16, stale16, bad16))
+    blank = _r10_blank('// enginetest::declareRoutes(v, s, r)\nconst char *x = "requireRoutes(";\n')
+    check(not _ROUTES_CALL.search(blank) and _ROUTES_CALL.search(_r10_blank("enginetest::declareRoutes (v, s, r);")),
+          "R16 reads a fixture's declaration in its code, never in a comment or a string")
     check(r6_bad([T("a"), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a"])]) == ["a.twin (DEPENDS a)"]
           and not r6_bad([T("a", FIXTURES_SETUP=["run_a"]), T("a.twin", DEPENDS=["a"], FIXTURES_REQUIRED=["home_a", "run_a"])])
           and not r6_bad([T("w", FIXTURES_SETUP="home"), T("r", DEPENDS=["w"], FIXTURES_REQUIRED="home")])
@@ -982,6 +1067,20 @@ def main(source, build):
     check(not bad and "\nexport JAHSHAKA_SHADER_SEED=none\n" in wsh,
           "R15 every app / selftest / vr GPU row boots with the shipped seed off (JAHSHAKA_SHADER_SEED=set:none, or its own: "
           "%s) and the warm-up's boots too (%d on the seed: %s)" % (own[:6] or "none", len(bad), bad[:12]))
+    rp = os.path.join(source, ROUTES_PENDING)
+    if not os.path.isfile(rp):
+        check(False, "R16 %s exists (the routes ratchet)" % ROUTES_PENDING)
+    elif rc == 0:
+        pend16 = routes_pending(open(rp, errors="replace").read())
+        new, stale, malformed = r16_bad(tests, r16_declares(r16_fixture_sources(source)), pend16)
+        check(not new and not stale and not malformed,
+              "R16 every gi.* / rtreflect.* engine row declares its route in its fixture or the ratchet (%d listed; NEW "
+              "without: %s; stale - drop them: %s; malformed: %s)" % (len(pend16), new[:8], stale[:8], malformed[:8]))
+        mb, base16 = _base_pending(source, "routes_pending.txt")
+        grown = [] if base16 is None else sorted(set(pend16) - set(x.split()[0] for x in base16))
+        check(not grown, "R16 the ratchet never loosens: routes_pending.txt lists no name its copy at the merge-base with "
+              "main (%s) does not (%s)" % ((mb or "none")[:9] if base16 is not None else "no copy there: the lane that "
+                                            "writes it", grown[:8]))
     inspect = []
     for root in ("src", os.path.join("irisgl", "mirror")):
         for dirpath, _dirs, names in os.walk(os.path.join(source, root)):
