@@ -10,7 +10,7 @@
 //   (i)  THE SHARE IS CONTINUOUS AND MONOTONE in T, over 1e-7 .. 1e-2 sampled every 2^(1/256) (finer than a binade by
 //        256): no step between neighbours past 0.01, never falling as T rises (D = 0 and D = T / 2);
 //   (ii) THE READ IS LINEAR: the bounce part's relative slope T d(bounce) / dT is 1 within 1e-3 over the whole range (D
-//        a fixed share of T - the bounce then scales with T exactly), at the footprint lod 0 and 2, so a loop through it
+//        a fixed share of T - the bounce then scales with T exactly), at the hit's level-0 half, so a loop through it
 //        has the operator's gain, never more;
 //   (iii) TWO HALVES OF ONE CELL reading each other (returning fraction F, albedo rho, source S, coverage k), under the
 //        Jacobi door from out of phase: NO PERIOD-2 (the last two pairs equal, not alternating) and the fixed point
@@ -51,13 +51,13 @@ int main()
     std::vector<GiLawQuestion> qs;
     std::vector<float> Ts;
     for (double lt = std::log2(1e-7); lt <= std::log2(1e-2); lt += 1.0 / 256.0) Ts.push_back(float(std::exp2(lt)));
-    // four sweeps: D = 0 and D = T/2, each at the footprint lod 0 (the half store's level-0 plane) and lod 2 (the
-    // directional chains)
-    const float lods[2] = { 0.0f, 2.0f };
-    for (int sw = 0; sw < 4; ++sw)
+    // two sweeps: D = 0 and D = T/2, at the hit's level-0 half (the only level a hit reads since BISTRO-REST-1's
+    // sealed-room fix)
+    constexpr int kSweeps = 2;
+    for (int sw = 0; sw < kSweeps; ++sw)
         for (float T : Ts) {
             GiLawQuestion q;
-            q.q[0] = T; q.q[1] = (sw & 1) ? 0.5f * T : 0.0f; q.q[2] = k; q.q[3] = lods[sw >> 1];
+            q.q[0] = T; q.q[1] = (sw & 1) ? 0.5f * T : 0.0f; q.q[2] = k;
             q.u[0] = 0u;
             qs.push_back(q);
         }
@@ -82,7 +82,7 @@ int main()
     }
     int fails = 0;
     // (i) continuous and monotone; (ii) linear
-    for (int sw = 0; sw < 4; ++sw) {
+    for (int sw = 0; sw < kSweeps; ++sw) {
         const int d = sw & 1;
         double worstStep = 0.0, worstFall = 0.0, worstSlope = 0.0;
         float atStep = 0.f, atFall = 0.f, atSlope = 0.f;
@@ -100,11 +100,11 @@ int main()
         }
         const bool okI = worstStep <= 0.01 && worstFall <= 1e-6;
         const bool okII = worstSlope <= 1e-3;
-        std::printf("%s (i)  D = %s, lod %.0f: the share's largest step between neighbours %.6f (at T %.3g), its largest "
-                    "fall %.3g (at T %.3g) - bars 0.01 / 0\n", okI ? "ok:" : "FAIL:", d ? "T/2" : "0", lods[sw >> 1],
+        std::printf("%s (i)  D = %s: the share's largest step between neighbours %.6f (at T %.3g), its largest "
+                    "fall %.3g (at T %.3g) - bars 0.01 / 0\n", okI ? "ok:" : "FAIL:", d ? "T/2" : "0",
                     worstStep, atStep, worstFall, atFall);
-        std::printf("%s (ii) D = %s, lod %.0f: the bounce part's relative slope T d(bounce)/dT off 1 by at most %.6f (at T "
-                    "%.3g) - bar 1e-3\n", okII ? "ok:" : "FAIL:", d ? "T/2" : "0", lods[sw >> 1], worstSlope, atSlope);
+        std::printf("%s (ii) D = %s: the bounce part's relative slope T d(bounce)/dT off 1 by at most %.6f (at T "
+                    "%.3g) - bar 1e-3\n", okII ? "ok:" : "FAIL:", d ? "T/2" : "0", worstSlope, atSlope);
         fails += !okI + !okII;
     }
     // (iii) no period-2, the closed form
@@ -113,7 +113,7 @@ int main()
         double worstOff = 0.0;
         const Loop *worst = nullptr;
         for (size_t j = 0; j < loops.size(); ++j) {
-            const GiLawAnswer &a = as[4 * Ts.size() + j];
+            const GiLawAnswer &a = as[kSweeps * Ts.size() + j];
             const Loop &L = loops[j];
             const float x0 = a.a[2], x1 = a.a[3], y0 = a.b[2], y1 = a.b[3];
             const float step = halfStep(L.star);
