@@ -11,11 +11,17 @@
 //   C, behind both, taller: x [-29.7, -21.0], z [2.0, 16.0] to 24.3 m - past c1's -X face and c2's top face (22.5);
 //   D, on the camera's other side: x [-6.0, 2.0], z [8.0, 16.0] to 19.2 m.
 // The facades matte, albedo 0.6, the ground 0.5; A's roof ZINC (metal, roughness 0.35), B's parapet cap POLISHED metal
-// (0.08), two-sided CUT-OUT sheets (a curtain before C's east wall, ivy on A's west wall) - Bistro's kinds there; the environments' sun (labscene.cpp
+// (0.08), two-sided CUT-OUT sheets (a curtain before C's east wall, ivy on A's west wall) - Bistro's kinds there; a
+// point LAMP in the lane at 17 m (range 6 m: the lamp step's subject); the environments' sun (labscene.cpp
 // addSkyAndLights: pitch 40 degrees, the light toward -Z). Faces kept off the cells' planes where cheap (not a law here).
 // THE EXPECTATION: a still camera in a still scene comes to rest - the voxel store's content steady frame to frame (a
 // hash), the feedback at rest, every reader held (gi.still_rest_epic). Nothing in it moves.
 #include "envbuild.h"
+
+#include "irisgl/document/scenegraph/cameralens.h"
+#include "irisgl/document/scenegraph/lightnode.h"
+#include "irisgl/document/scenegraph/scene.h"
+#include "irisgl/document/scenegraph/scenenode.h"
 
 #include <cmath>
 
@@ -83,6 +89,15 @@ Built buildSeam(unsigned seed, bool bake)
     fixedBox(b, unit, "c-tower", V(-29.7f, 0.02f, 2.0f), V(-21.0f, 24.3f, 16.0f), facade);
     // D: the camera's other side
     fixedBox(b, unit, "d-block", V(-6.0f, 0.02f, 8.0f), V(2.0f, 19.2f, 16.0f), facade);
+    // THE LAMP (a lamp step's subject, the lamp_step pattern): a point lamp of the default intensity, range 6 m, in the
+    // lane between A and B at 17 m - its range reaches the gable, the parapet and the seam
+    auto lamp = iris::LightNode::create();
+    lamp->setLightType(iris::LightType::Point);
+    lamp->setName(QStringLiteral("lamp"));
+    b.built().doc->getRootNode()->addChild(lamp);
+    lamp->setLocalPos(V(-16.5f, 17.0f, 5.0f));
+    lamp->setPropertyValue(QStringLiteral("intensity"), iris::lens::kDefaultLampIntensity);
+    lamp->setPropertyValue(QStringLiteral("distance"), 6.0f);
     return b.finish();
 }
 
