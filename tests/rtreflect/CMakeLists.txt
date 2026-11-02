@@ -230,13 +230,13 @@ set_tests_properties(rtreflect.odd_size PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(rtreflect.odd_size PROPERTIES JAHSHAKA_TEST_FRAMES 91)
 
-# rtreflect.walk_world / rtreflect.walk_world_rays (PHOTON-7 stage 6 commit 7; the lead's rulings: two arms after
-# REFLECT-MOVING-1, round 5's measures; PHOTON-7-9A: the Both arm rewritten as the rays on real hits) — THE REFLECTION'S
+# rtreflect.walk_world / rtreflect.walk_world_hybrid (PHOTON-7 stage 6 commit 7; the lead's rulings: two arms after
+# REFLECT-MOVING-1, round 5's measures; PHOTON-7-9A: the hybrid - screen first, then rays - is the one shape) — THE REFLECTION'S
 # WALKING BARS: gi.walk_glass's walk with THE WORLD HELD (gi.freeze = 2: no cache work, the gather held, the reflections
 # live), seeds 0 and 7919, against the frozen walk - GLOSSY by the NOISE MAP (rA - rB) / sqrt 2 and THE MIRROR by whole
 # M1, each p99 <= 2 codes and share over one code <= 1 % (whole glossy M1 printed as information: the noise plus the
 # signal) (walk_world.sh, walk_noise.py). One arm a row: walk_world = the hits flattened, the reflection's own bar (stage
-# 6's); walk_world_rays = real hits, the product's walking reflection (no other walking row reads its hits: walk_world
+# 6's); walk_world_hybrid = the hybrid on real hits, the product's walking reflection (no other walking row reads its hits: walk_world
 # flattens them, gi.walk_glass is the unfrozen world). 960x540; four jahlab sessions each: the prime's 7 + three walks
 # from `rest 1200 held` (HARNESS-3 (f); was 500 frames): flat 3 x 312 (rest 241) + 7 - each arm split by proof below.
 if(TARGET jahlab)
@@ -262,30 +262,30 @@ if(TARGET jahlab)
     set_tests_properties(rtreflect.walk_world.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED "rtreflect_walk_world_frozen;rtreflect_walk_world_worldA"
                          DEPENDS rtreflect.walk_world.worldA)
-    # rtreflect.walk_world_rays SPLIT BY PROOF (HARNESS-3 (f)): each walk from `rest 1200 held` (walk_world.sh says why) no
+    # rtreflect.walk_world_hybrid SPLIT BY PROOF (HARNESS-3 (f)): each walk from `rest 1200 held` (walk_world.sh says why) no
     # longer fits three in a row - a fixture chain on one work dir: .frozen (the prime + the frozen walk) -> .worldA (seed 0)
     # -> .worldB (seed 7919, then the noise map and the mirror's M1).
     # (each part by name: a loop's variable sends the selector to the whole directory - HARNESS-2's rule)
-    jah_gpu_row(rtreflect.walk_world_rays.frozen CLASS engine TOKENS 8 FRAMES 906
+    jah_gpu_row(rtreflect.walk_world_hybrid.frozen CLASS engine TOKENS 8 FRAMES 906
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_rays rays frozen
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_hybrid hybrid frozen
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.walk_world_rays.frozen PROPERTIES TIMEOUT 60 LABELS "engine"
-                         FIXTURES_SETUP rtreflect_walk_world_rays_frozen)
-    jah_gpu_row(rtreflect.walk_world_rays.worldA CLASS engine TOKENS 8 FRAMES 899
+    set_tests_properties(rtreflect.walk_world_hybrid.frozen PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_walk_world_hybrid_frozen)
+    jah_gpu_row(rtreflect.walk_world_hybrid.worldA CLASS engine TOKENS 8 FRAMES 899
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_rays rays worldA
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_hybrid hybrid worldA
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.walk_world_rays.worldA PROPERTIES TIMEOUT 60 LABELS "engine"
-                         FIXTURES_SETUP rtreflect_walk_world_rays_worldA
-                         FIXTURES_REQUIRED rtreflect_walk_world_rays_frozen DEPENDS rtreflect.walk_world_rays.frozen)
-    jah_gpu_row(rtreflect.walk_world_rays.worldB CLASS engine TOKENS 8 FRAMES 869
+    set_tests_properties(rtreflect.walk_world_hybrid.worldA PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_SETUP rtreflect_walk_world_hybrid_worldA
+                         FIXTURES_REQUIRED rtreflect_walk_world_hybrid_frozen DEPENDS rtreflect.walk_world_hybrid.frozen)
+    jah_gpu_row(rtreflect.walk_world_hybrid.worldB CLASS engine TOKENS 8 FRAMES 869
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
-                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_rays rays worldB
+                ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_hybrid hybrid worldB
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    set_tests_properties(rtreflect.walk_world_rays.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
-                         FIXTURES_REQUIRED "rtreflect_walk_world_rays_frozen;rtreflect_walk_world_rays_worldA"
-                         DEPENDS rtreflect.walk_world_rays.worldA)
+    set_tests_properties(rtreflect.walk_world_hybrid.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
+                         FIXTURES_REQUIRED "rtreflect_walk_world_hybrid_frozen;rtreflect_walk_world_hybrid_worldA"
+                         DEPENDS rtreflect.walk_world_hybrid.worldA)
     # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row) — THE MOVING REFLECTION LAGS ITS CONVERGED PICTURE BY
     # NO MORE THAN ITS MEMORY AND ITS NOISE: the glass walk in Rays with the hits flattened and the world held, per glossy
     # pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1 at walk frames 14 / 28 / 59, the breaking

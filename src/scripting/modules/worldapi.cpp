@@ -599,7 +599,9 @@ QVector<VerbInfo> WorldApi::verbs() const
           Needs::Document },
         { "reflections", "world.reflections({resolution?: \"auto\"|\"full\"|\"half\"}) -> {resolution, traced}",
           "THE RAY TIER'S REFLECTION RESOLUTION, saved with the scene (REFLECT-MODE-1). The reflection has no "
-          "mode (PHOTON-7-9A): where the scene traces rays it is the RAYS alone, on the desktop and in VR alike; "
+          "mode (PHOTON-7-9A): where the scene traces rays it is THE HYBRID - each reflected ray answered by the "
+          "screen first (the last frame's picture, where it can vouch for the hit) and by a traced ray for the rest; "
+          "a VR view's rays answer alone (the screen sources are not per eye); "
           "where it does not (Low, Medium, a machine or a project without rays) it is the screen-space march "
           "(world.postFx's ssr row). `resolution`: \"auto\" (the default) is the tier's - High one ray per "
           "2x2 pixels, Epic every pixel - \"full\" and \"half\" pin it. `traced` says whether the open scene "
@@ -3352,8 +3354,8 @@ QString WorldApi::ssrMarch(const QString &rule)
 // ---------------------------------------------------------------------------
 // THE RAY TIER'S REFLECTION RESOLUTION (REFLECT-MODE-1) - shaped like world.ssrMarch: a name in, the resolved name out,
 // nothing guessed, one undo step; a per-project dial with no tier column (the World panel's row beside Screen-Space
-// Reflections, worldmodes). The reflection has no mode (PHOTON-7-9A): the rays where the scene traces them, the march
-// where it does not.
+// Reflections, worldmodes). The reflection has no mode (PHOTON-7-9A): the hybrid (screen first, then rays) where the
+// scene traces rays, the march where it does not.
 static const char *const kReflectionResolutionNames[] = { "auto", "full", "half" };
 
 QVariantMap WorldApi::reflections(const QVariantMap &params)
