@@ -45,6 +45,15 @@
 # No user manager (no systemd-run or no bus socket): the hold is marked instead, JAH_GPU_HOLD=<unit> in the command's
 # environment, and the sweep finds its processes by that mark in /proc/<pid>/environ (a process that clears its
 # environment escapes it - the scope does not have that hole).
+# THE HOLD LOG (TEST-STREAMLINE-1 1d, 2026-11-03: the test audit could not count card hours by holder - only anomalies were
+# logged): every hold of the card appends to <lock>.holds, one line when the card is TAKEN and one when it is RELEASED,
+# paired by the ticket (a SIGKILLed holder leaves its HOLD line alone - a kill cannot write its end; the reader closes it at
+# the next line of that pid, or reads it open):
+#   HOLD <ticket> <pid> <start, ISO seconds> <the wait, s> <label>
+#   DONE <ticket> <pid> <end, ISO seconds> <rc> <held, s>
+# tab-separated, each line one write (O_APPEND: whole lines from concurrent holders). A nested call (a holder's own row)
+# and an exit 75 (never held) write none. The lead's util.CardLock writes the same lines (its rc "-": it does not run the
+# command). JAH_GPU_HOLD_LOG names another file (the suites' private one).
 # The kernel's GPU faults while the command ran are printed after it (scripts/kernel_xid.py): an Xid is never
 # environmental. The desktop route by default: JAHSHAKA_VR=0 unless the caller set JAHSHAKA_VR (`--vr` runs set it).
 export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
@@ -198,10 +207,14 @@ while :; do
     if [ "$h" = "$ticket" ]; then sleep 0.2; else sleep 0.5; fi
 done
 rm -f "$ticket"
-[ -z "$waiting" ] || echo "gpu-lock: waited $(awk -v a="$t0f" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}') s"   # tenths (#95)
+waited=$(awk -v a="$t0f" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}')
+[ -z "$waiting" ] || echo "gpu-lock: waited $waited s"   # tenths (#95)
 echo "pid $$ ${label:-$1} since $(date '+%F %T') ticketed" > "$lock.holder"   # (#141: the mark a waiter reads)
 start=$(date +%s)
+holds="${JAH_GPU_HOLD_LOG:-$lock.holds}"; tno=$(basename "$ticket")
+printf 'HOLD\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$(date -d "@$start" '+%FT%T%z')" "$waited" "$me" >> "$holds" 2> /dev/null || true
 hold_run "jahgpu-$(basename "$ticket")-$$" "${bound[@]}" "$@"   # (#144: the hold's cgroup, swept before the release)
 rc=$?
+printf 'DONE\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$(date '+%FT%T%z')" "$rc" "$(( $(date +%s) - start ))" >> "$holds" 2> /dev/null || true
 python3 "$here/kernel_xid.py" since "$start" 2>&1 | sed 's/^/gpu-lock: /'
 exit $rc

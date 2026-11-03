@@ -279,6 +279,13 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_sweep.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
     set_tests_properties(tooling.gpu_lock_sweep PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.gpu_lock_sweep)
+    # tooling.gpu_lock_holds — EVERY HOLD OF THE CARD IS COUNTED ONCE (TEST-STREAMLINE-1 1d): scripts/gpu-exclusive.sh's hold
+    # log (<lock>.holds: a HOLD line at the take, a DONE line at the release, by ticket) on a private lock - two in turn,
+    # a nested call and an exit 75 writing none, a SIGKILLed holder's HOLD alone, ten at once (gpu_lock_holds.sh).
+    add_test(NAME tooling.gpu_lock_holds
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_holds.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
+    set_tests_properties(tooling.gpu_lock_holds PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.gpu_lock_holds)
     # tooling.row_env — A ROW RUN BY HAND CARRIES ITS REGISTRATION (URGENT #147): scripts/row-env.sh on a toy ctest build -
     # the row printed as registered, --run applying its ENVIRONMENT and ENVIRONMENT_MODIFICATION in its directory,
     # --scratch writing nothing under the build (a warm fresh_home row's shared cache copied), fixtures and a GPU row
