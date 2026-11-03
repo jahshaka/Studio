@@ -292,6 +292,13 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_holds.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
     set_tests_properties(tooling.gpu_lock_holds PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.gpu_lock_holds)
+    # tooling.gpu_lock_mark — A ctest UNDER THE CARD's LOCK MARKS ITS TREE (TEST-STREAMLINE-1 block D's collision): scripts/
+    # gpu-exclusive.sh writes <gitdir>/jah-check.pid around a ctest whose test dir is in a git tree, keeps an outer live mark,
+    # takes a stale one, marks nothing for another command, leaves none at an exit 75 (gpu_lock_mark.sh; a toy tree, a fake ctest).
+    add_test(NAME tooling.gpu_lock_mark
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_mark.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
+    set_tests_properties(tooling.gpu_lock_mark PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.gpu_lock_mark)
     # tooling.evidence_cap — THE EVIDENCE IS WHAT EXPLAINS A RED, AND IT IS CAPPED (TEST-STREAMLINE-1 1f): fresh_home.sh's red
     # home without its shader cache (unless the cache is the row's subject), gate_runlog.py's cap on tests/.evidence (an older
     # home's cache shed, output/ to its newest 40 runs and each row's newest red log) - on a toy build dir (evidence_cap.py).

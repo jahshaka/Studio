@@ -71,6 +71,31 @@ done
 bound=(); [ -n "$rt" ] && bound=(timeout -k 10 "$rt")
 [ "${JAH_GPU_LOCK_HELD:-}" = 1 ] && [ -n "${JAH_GPU_HOLD:-}" ] && exec "${bound[@]}" "$@"   # inside a hold: its sweep is ours
 lock="${JAH_GPU_LOCK:-/tmp/jah-gpu.lock}"
+# THE TREE's CHECK MARK (URGENT #153's mark, TEST-STREAMLINE-1 block D's collision 2026-11-03): a hand `gpu-exclusive.sh ...
+# ctest --test-dir <build>` set none, so a builder found its tree free and relinked bin/Jahshaka 4 min into a 6-min re-price -
+# every row after it ran a dirty build, the call void. When the command is a ctest (the first word named ctest, after any
+# nice/env/timeout/VAR= words) whose test dir (--test-dir, else the cwd) is inside a git tree, this script writes that tree's
+# <gitdir>/jah-check.pid ("<pid> <time>", spec.py CheckMark's format: the pre-commit hook and the builders read it) from
+# before its wait to its exit, and removes it then - only its own: a mark a live pid already holds (an outer check) is kept.
+mark=""
+mark_take() {
+    local a d="" seen="" g
+    for a in "$@"; do
+        if [ -z "$seen" ]; then [ "$(basename -- "$a")" = ctest ] && seen=1; continue; fi
+        case "$d" in next) d=$a; continue ;; esac
+        case "$a" in --test-dir) d=next ;; --test-dir=*) d=${a#--test-dir=} ;; esac
+    done
+    [ -n "$seen" ] || return 0
+    [ -n "$d" ] && [ "$d" != next ] || d=$PWD
+    g=$(git -C "$d" rev-parse --absolute-git-dir 2> /dev/null) || return 0
+    if read -r p _ < "$g/jah-check.pid" 2> /dev/null && [ -n "$p" ] && kill -0 "$p" 2> /dev/null; then return 0; fi
+    echo "$$ $(date '+%FT%T%z')" > "$g/jah-check.pid" && mark="$g/jah-check.pid"
+}
+mark_release() {
+    [ -n "$mark" ] || return 0
+    read -r p _ < "$mark" 2> /dev/null && [ "$p" = "$$" ] && rm -f "$mark"
+    mark=""
+}
 # THE HOLD's CGROUP (URGENT #144, the header): hold_run <unit> <command...> - the command in its scope (or marked), its rc
 # kept, every process it left swept before it returns
 hold_run() {
@@ -158,7 +183,8 @@ fi
 echo "$$ $(starttime $$) $me" > "$ticket.tmp.$$" && mv -f "$ticket.tmp.$$" "$ticket"
 flock -u 8
 exec 8>&-
-trap 'rm -f "$ticket"' EXIT   # (no TERM/INT trap: bash would defer it past a blocking flock; a killed waiter's ticket is a dead pid's)
+mark_take "$@"
+trap 'rm -f "$ticket"; mark_release' EXIT   # (no TERM/INT trap: bash would defer it past a blocking flock; a killed waiter's ticket is a dead pid's)
 alive() {   # a ticket's pid and start time: the same live process (a recycled pid is another start time: dead)
     [ -n "$1" ] && [ -n "$2" ] && [ "$(starttime "$1")" = "$2" ]
 }
@@ -189,6 +215,7 @@ unticketed() {   # a live holder whose line lacks the ticketed mark: named once 
 }
 stayed() {   # the place kept for the re-call (the header): the ticket rewritten as a reservation, the trap's removal off
     trap - EXIT
+    mark_release
     echo "R $(( $(date +%s) + ${JAH_GPU_RESERVE_S:-120} )) $me" > "$ticket.tmp.$$" && mv -f "$ticket.tmp.$$" "$ticket"
     echo "gpu-lock: the card stayed held ${wm} s (by: $(holder)) - nothing ran (the place kept ${JAH_GPU_RESERVE_S:-120} s for a re-call labelled '$me')"
     exit 75
@@ -215,6 +242,7 @@ holds="${JAH_GPU_HOLD_LOG:-$lock.holds}"; tno=$(basename "$ticket")
 printf 'HOLD\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$(date -d "@$start" '+%FT%T%z')" "$waited" "$me" >> "$holds" 2> /dev/null || true
 hold_run "jahgpu-$(basename "$ticket")-$$" "${bound[@]}" "$@"   # (#144: the hold's cgroup, swept before the release)
 rc=$?
+mark_release
 printf 'DONE\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$(date '+%FT%T%z')" "$rc" "$(( $(date +%s) - start ))" >> "$holds" 2> /dev/null || true
 python3 "$here/kernel_xid.py" since "$start" 2>&1 | sed 's/^/gpu-lock: /'
 exit $rc

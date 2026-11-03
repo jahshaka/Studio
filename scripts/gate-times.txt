@@ -456,3 +456,4 @@ gi.fog_far_hall 2.56  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round
 pool.host_low 6.49  solo, the card lock held, :77, WARM, ctest -j1, CPU idle ~90 %, THE HEADLESS HOST's ONE PROCESS (TEST-STREAMLINE-1 block B2, 2026-11-03: scripting.e2e.lamps_unshadowed 11.73 + sockets.e2e 10.06 s as app rows; the clean-state law held forward and reversed)
 pool.host_low::lamps_unshadowed 0.41  the arm's ARM line in pool.host_low's solo run (block B2, 2026-11-03)
 pool.host_low::sockets 0.90  the arm's ARM line in pool.host_low's solo run (block B2, 2026-11-03)
+tooling.gpu_lock_mark 1.97  CPU, ctest, solo, nice 10, no GPU (TEST-STREAMLINE-1 block D, 2026-11-03: a ctest under the card's lock marks its tree - a toy git tree and a fake ctest on a private lock; the build of the tree just before, CPU loaded)
