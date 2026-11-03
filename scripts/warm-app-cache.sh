@@ -202,13 +202,20 @@ ENG_SHARED="$TESTS/.shadercache-engine"; ENG_STAMP="$TESTS/.shadercache-engine.w
 ENG_DSTAMP="$TESTS/.shadercache-engine.driver-key"
 APPX="${APP:-$BUILD/bin/Jahshaka}"; LABX="${LAB:-$BUILD/bin/jahlab}"
 COLDROWS="${COLDROWS:-$BUILD/tests/test-cold-rows.txt}"; COLD_SDIR="$TESTS/.cold-rows"
-built_digest() {   # every staged media file's size and time (no content read: 4 ms) - what a cold row's own cache may key
-    # on beyond the key (the seed's stamp hashes all of bin/media). NOT an exe's or the app's bytes: a relink changes no
-    # shader (URGENT #125: keyed on the app's size and time, the seed and this boot re-ran ~160 s at every commit)
-    find "$BUILD/bin/media" -type f -printf '%s %T@ %p\n' 2>/dev/null | LC_ALL=C sort
+built_digest() {   # [<build>]: every staged media file's CONTENT, by its path under bin/media - what a cold row's own cache may
+    # key on beyond the key (the seed's stamp hashes all of bin/media by content). NOT an exe's or the app's bytes: a relink
+    # changes no shader (URGENT #125: keyed on the app's size and time, the seed and this boot re-ran ~160 s at every commit).
+    # NOT the files' times or the tree's path (CODING_RULES §6, #154's rule: two trees at one key read 6 of 6 cold stamps
+    # apart - a fresh tree's media staged at another time read "rebuilt since"): ~4 MB, ~30 ms
+    ( cd "${1:-$BUILD}/bin/media" 2>/dev/null && find . -type f -print0 | LC_ALL=C sort -z | xargs -0 -r sha256sum )
 }
-built_key() { echo "built $(built_digest | sha256sum | cut -c1-16)"; }
-row_digest() { echo "row $(printf '%s' "$1" | sha256sum | cut -c1-16)"; }   # <the row's line>: its command, its tier, its dir
+built_key() { echo "built $(built_digest "${1:-}" | sha256sum | cut -c1-16)"; }   # [<build>]
+row_digest() {   # <the row's line> [<build> <src>]: its command, its tier, its dir - the tree's own paths written <build> and
+    # <src> first (CODING_RULES §6: the line carries the tree's spelling, test-cold-rows.txt; a tree path in a stamp made
+    # every other tree's stamp read "its registration changed")
+    local l=${1//"${2:-$BUILD}"/<build>}; l=${l//"${3:-$SRC}"/<src>}
+    echo "row $(printf '%s' "$l" | sha256sum | cut -c1-16)"
+}
 row_stamp_why() {   # <row> <line>: empty when this row's prime ran at this key, for this command, on this build
     local st="$COLD_SDIR/$1.driver-key"
     if [ ! -f "$st" ]; then echo "no prime recorded"

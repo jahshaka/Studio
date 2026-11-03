@@ -263,5 +263,33 @@ rm -f "$CS/y.cold.driver-key"; out2=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$B
 l1=$(echo "$out1" | sed -n "s/^warm-app-cache: this call's logs: //p"); l2=$(echo "$out2" | sed -n "s/^warm-app-cache: this call's logs: //p")
 [ -n "$l1" ] && [ -n "$l2" ] && [ "$l1" != "$l2" ] && [ -f "$l1/cold-on/y.cold.log" ] && [ -f "$l2/cold-on/y.cold.log" ] && [ -f "$l1/cold-on.log" ] &&
     ok "two calls leave two sets of logs (each call's directory, its rows' logs in it)" || no "two calls' logs: [$l1] [$l2]"
+# A COLD STAMP CARRIES NO TREE PATH (CODING_RULES §6; TEST-STREAMLINE-1, measured before the fix: ship-cut-2 and photon-2 at
+# one key held 6 of 6 cold stamps apart in lines 2 and 3): two toy trees at two paths, the same content, each primes the same
+# cold row (its line spelled with its own tree) - their stamps are EQUAL; a media file's TIME moved reads warm, its CONTENT
+# moved reads "the staged media rebuilt since"
+toy_tree() {   # <dir>: a toy build the key reads, a cold row under it
+    local b="$1/build"
+    mkdir -p "$b/engine/generated" "$b/bin/media/Hlms" "$b/bin/media/Photon" "$b/bin/media/x" "$b/tests/row" "$b/tests/.shadercache"
+    cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$b/engine/generated/"
+    printf 'CMAKE_BUILD_TYPE:STRING=Debug\n' > "$b/CMakeCache.txt"
+    printf 'h' > "$b/bin/media/Hlms/a.any"; printf 'p' > "$b/bin/media/Photon/b.any"; printf 'x' > "$b/bin/media/x/c.png"
+    printf '#!/bin/sh\nexit 0\n' > "$b/tests/row/fx"; chmod +x "$b/tests/row/fx"
+    printf 'p.cold\t%s\t-JAH_X\tenv\t__GL_SHADER_DISK_CACHE_PATH=%s\t%s\t--in\t%s\n' "$b/tests/row" "$b/tests/row/dc" "$b/tests/row/fx" \
+        "$b/tests/row/in.js" > "$b/tests/rows.txt"
+}
+toy_tree "$T/tA"; toy_tree "$T/tB"; touch -d '2001-01-01' "$T/tB/build/bin/media/x/c.png"
+for t in tA tB; do
+    DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$T/$t/build" --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/$t/build/tests/rows.txt" \
+        --only cold-on > "$T/$t.out" 2>&1
+done
+sa=$(sed -n 2,3p "$T/tA/build/tests/.cold-rows/p.cold.driver-key" 2>/dev/null); sb=$(sed -n 2,3p "$T/tB/build/tests/.cold-rows/p.cold.driver-key" 2>/dev/null)
+[ -n "$sa" ] && [ "$sa" = "$sb" ] && ok "two trees at two paths, one content: their cold stamps equal (the row's line with <build>, the media by content, a file's time apart)" ||
+    no "path-free stamps: [$sa] vs [$sb] ($(tail -3 "$T/tA.out"))"
+out=$("$W" "$T/tB/build" --check --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/tB/build/tests/rows.txt" --only cold-on); rc=$?
+[ $rc = 0 ] && ok "...and a staged file touched (its time alone): cold-on warm" || no "a touched media file: '$out' rc $rc"
+printf 'y' > "$T/tB/build/bin/media/x/c.png"
+out=$("$W" "$T/tB/build" --check --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/tB/build/tests/rows.txt" --only cold-on); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q 'p.cold (the staged media rebuilt since)' && ok "...a staged file's content moved: cold-on cold, the row named" ||
+    no "a media content change: '$out' rc $rc"
 echo "tooling.warm_app_cache: $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail
