@@ -1414,9 +1414,22 @@ def _files_naming_grep(root, identifiers, roots, exclude):
 _CMD = re.compile(r"([A-Za-z_][A-Za-z0-9_]*)\s*\(")
 
 
+_CMAKE_PARSED = {}
+
+
 def cmake_commands(text):
     """Parse a CMake file into commands: (name, first_line, last_line, args_text, function_scope).
-    Comments stripped; parentheses balanced; `function`/`macro` bodies carry the function name."""
+    Comments stripped; parentheses balanced; `function`/`macro` bodies carry the function name.
+    MEMOIZED BY THE TEXT (TEST-STREAMLINE-1: the selector re-parsed the same build files 2,206 times for one range whose diff
+    added a CMake function - 47 s of a 60-s reach; gate.reach_cache timed out): a pure function of the text, each caller
+    given its own list of the immutable tuples."""
+    got = _CMAKE_PARSED.get(text)
+    if got is None:
+        got = _CMAKE_PARSED[text] = tuple(_cmake_commands(text))
+    return list(got)
+
+
+def _cmake_commands(text):
     lines = text.split("\n")
     clean = []
     for l in lines:

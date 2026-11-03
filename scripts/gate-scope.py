@@ -2916,7 +2916,14 @@ class Selection:
         return []
 
     def deferring_functions(self, helper):
-        """The functions whose bodies run `DEFER CALL <helper>` (in any build file of the tree)."""
+        """The functions whose bodies run `DEFER CALL <helper>` (in any build file of the tree). Memoized per helper (the
+        tree's build files are read once per selection: TEST-STREAMLINE-1, 5,438 calls of one range)."""
+        memo = self.__dict__.setdefault("_deferring_memo", {})
+        if helper not in memo:
+            memo[helper] = self._deferring_functions(helper)
+        return set(memo[helper])
+
+    def _deferring_functions(self, helper):
         self.cmake_calls(helper)            # fills _cmake_texts
         out = set()
         for t in self._cmake_texts:
@@ -2927,7 +2934,14 @@ class Selection:
         return out
 
     def cmake_calls(self, fn):
-        """The first arguments of every call of a CMake helper across the tree's build files."""
+        """The first arguments of every call of a CMake helper across the tree's build files. Memoized per helper (the
+        texts are read once per selection; 10,876 calls of one range scanned them all each time: TEST-STREAMLINE-1)."""
+        memo = self.__dict__.setdefault("_cmake_calls_memo", {})
+        if fn not in memo:
+            memo[fn] = self._cmake_calls(fn)
+        return list(memo[fn])
+
+    def _cmake_calls(self, fn):
         if not hasattr(self, "_cmake_texts"):
             self._cmake_texts = []
             for top in ("CMakeLists.txt", "cmake", "tests", "irisgl/CMakeLists.txt", "irisgl/cmake",
