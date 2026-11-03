@@ -55,7 +55,7 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
              open red until it is green and measured, the timing-law, cold and measure rows, the 10-s rows, the rows over
              their budget alone - keeps the whole card, 8 x W slots, alone (<out>/alone-rows.txt, each with its reason).
 
-usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] [--prices <file>]
+usage: width_pair.py <build> --display :NN [--plan] [--rejudge <out-dir>] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] [--prices <file>]
        [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600] [--budget-scale 1] [--open-reds <spec>]
        [--tree <dir>]
   --open-reds  the spec whose THE OPEN REDS table names the declared reds (default <workspace>/SPECS/PHOTON_7_SPEC.md;
@@ -64,6 +64,8 @@ usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <
   --budget-scale  every class budget x this factor, in (0, 1] (the toys' seconds-long rows); above 1 refused (it loosens a
                law), anything but 1 refused on the card (the lock the tree's gpu-exclusive.sh)
   --plan    the rows, the exclusions with their reasons, the parts and the estimated card time - nothing run, no lock.
+  --rejudge <out-dir>  THE PER-ROW WIDTH (block C's ruling) from that run's runs.jsonl: adopted-rows.txt and alone-rows.txt
+            rewritten there (a row adopts width 2 only on every width-2 run's verdict, budget, x1.5 and VRAM bars); no card.
   exit      0 a width adopted (the line `ADOPT WIDTH <w>`); 1 width 1 unstable or faulting alone (an OOM / Xid line),
             the run incomplete or VOID; 2 refused (usage, a bad
             display, no rows); 75 the card stayed held (a hold's wait ran out: call again).
@@ -94,7 +96,10 @@ VRAM_HEADROOM = 0.90       # width W's VRAM peak under 90 % of the card's memory
 SAMPLE_MS = 250
 # A ROW WITH A TIMING LAW the labels cannot see: gi.walk_court's hitch law reads the frame's wall (the spec's stage 4: "only
 # the 7 GPU measure rows and gi.walk_court carry timing laws").
-TIMING_LAW_ROWS = {"gi.walk_court"}
+# lab.monitor (block C, 2026-11-03, the lead's ruling): its law (4) attributes the frame's GPU time to named rows and cannot
+# tell a foreign context's time slices from a gap - it read FAIL ALONE on the card (width 1's second run, the desktop's
+# browser holding 3.8 GB of the card) and at widths 2 and 3; a timing-law row, `measure` since
+TIMING_LAW_ROWS = {"gi.walk_court", "lab.monitor"}
 OOM = re.compile(r"OUT_OF_DEVICE_MEMORY|OUT_OF_HOST_MEMORY|out of (device|video) memory", re.I)
 XID = re.compile(r"\bXid\b")
 RESULT = re.compile(r"^\s*\d+/\d+ Test\s+#\d+: (\S+) \.*\s*(.*?)\s+([\d.]+) sec\s*$")
@@ -576,6 +581,79 @@ def judge(recs, price, row_cap, budget=None, inflate=INFLATE, gain=GAIN, headroo
     return adopt, lines, uncovered
 
 
+def per_row(recs, budget, w=2, row_cap=ROW_CAP_S, inflate=INFLATE, headroom=VRAM_HEADROOM):
+    """THE PER-ROW WIDTH (block C's ruling, the lead, 2026-11-03): ({row: its width-w walls} adopted, {row: why alone}) from the
+    SAME records. A row adopts width `w` only when width 1 agrees with itself on it (one verdict, its FAIL lines equal, every
+    width-1 wall under its class budget) and in EVERY width-w run: its verdict and FAIL lines equal width 1's, its wall under
+    its class budget, under `row_cap`, and at most `inflate` x its width-1 median (or within INFLATE_FLOOR_S of it), and that
+    run's VRAM peak read and under `headroom` of the card's total, with no out-of-memory or Xid line. Every other row keeps
+    the card alone, its reason named. A row is judged only on runs that asked for it."""
+    seen = {}
+    for r in recs:
+        for n, (v, s) in r["rows"].items():
+            seen.setdefault(n, {}).setdefault(r["width"], []).append((v, s, r))
+    adopted, alone = {}, {}
+    for n in sorted(seen):
+        b = budget.get(n)
+        one = seen[n].get(1, [])
+        if not one:
+            alone[n] = "no width-1 run"
+            continue
+        base = {v for v, _, _ in one}
+        if len(base) != 1:
+            alone[n] = "width 1 disagrees with itself: " + " / ".join(v[:80] for v, _, _ in one)
+            continue
+        w1max = max(s for _, s, _ in one)
+        if b is not None and w1max > b:
+            alone[n] = f"over its class budget alone ({w1max:.2f} s, the budget {b:g} s)"
+            continue
+        runs = seen[n].get(w, [])
+        if not runs:
+            alone[n] = f"no width-{w} run"
+            continue
+        w1 = _median([s for _, s, _ in one])
+        why = None
+        for v, s, r in runs:
+            total, peak = r.get("vram_total_mb"), r.get("vram_peak_mb")
+            if v not in base:
+                why = f"its verdict at width {w} {v[:80]} against width 1's {next(iter(base))[:80]}"
+            elif b is not None and s > b:
+                why = f"{s:.2f} s at width {w}, past its class budget {b:g} s"
+            elif s > row_cap:
+                why = f"{s:.2f} s at width {w}, past {row_cap:.0f} s"
+            elif s > inflate * w1 and s - w1 > INFLATE_FLOOR_S:
+                why = f"{s:.2f} s at width {w}, x{s / w1:.2f} its width-1 wall {w1:.2f} s (the bar x{inflate:g})"
+            elif total is None or peak is None:
+                why = f"its width-{w} run {r['tag']}'s VRAM unread"
+            elif peak >= headroom * total:
+                why = f"its width-{w} run {r['tag']}'s VRAM peak {peak:.0f} MB, past {100 * headroom:.0f} % of {total:.0f} MB"
+            elif r["oom"] or r["xid"]:
+                why = f"its width-{w} run {r['tag']} printed an out-of-memory / Xid line"
+            if why:
+                break
+        if why:
+            alone[n] = why
+        else:
+            adopted[n] = [s for _, s, _ in runs]
+    return adopted, alone
+
+
+def write_per_row(recs, budget, excl, out, w=2):
+    """Writes <out>/adopted-rows.txt (one row a line) and <out>/alone-rows.txt (row TAB its reason) from per_row; the rows
+    the run left out (excl) are alone with their reasons. Returns (adopted, alone)."""
+    asked = {n for r in recs for n in r["asked"]}            # the GPU rows (a card-free fixture setup ctest added is no width's)
+    adopted, alone = per_row([dict(r, rows={n: x for n, x in r["rows"].items() if n in asked}) for r in recs], budget, w)
+    for why, ns in (excl or {}).items():   # a row the run's own selection now leaves out never adopts (its reason wins)
+        for n in ns:
+            adopted.pop(n, None)
+            alone[n] = why
+    open(os.path.join(out, "adopted-rows.txt"), "w").write("".join(f"{n}\n" for n in sorted(adopted)))
+    open(os.path.join(out, "alone-rows.txt"), "w").write("".join(f"{n}\t{alone[n]}\n" for n in sorted(alone)))
+    print(f"width_pair: PER ROW at width {w}: {len(adopted)} row(s) adopt it ({out}/adopted-rows.txt), {len(alone)} keep the "
+          f"card alone ({out}/alone-rows.txt, each with its reason)")
+    return adopted, alone
+
+
 def summary(recs, price, out):
     """The per-width table: wall, VRAM peak, the rows' inflation against their price toward the cap."""
     rows = ["width\truns\twall_s(each)\tvram_peak_mb\tvram_first_mb\tworst_row\tworst_s\tworst_price_s\tmedian_ratio"]
@@ -626,6 +704,7 @@ def main(argv):
         die(f"--budget-scale {bscale:g} on the card (the lock {lock[0]}): the class budget is the law there, the scale is 1")
     reds_file = opt(args, "--open-reds")
     tree = opt(args, "--tree")
+    rejudge = opt(args, "--rejudge")
     if len(args) != 1 or args[0].startswith("-"):
         die("usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] "
             "[--prices <file>] [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600] [--budget-scale 1] "
@@ -675,6 +754,12 @@ def main(argv):
         die("no row to run (no GPU row with no timing law priced under 10 s)")
     if plan:
         return 0
+    if rejudge:   # THE PER-ROW WIDTH FROM A RUN's RECORDS (block C's ruling): no card, no lock, no mark - the files rewritten
+        recs = [json.loads(ln) for ln in open(os.path.join(rejudge, "runs.jsonl")) if ln.strip()]
+        if any(not r["held"] for r in recs) or 1 not in {r["width"] for r in recs}:
+            die(f"--rejudge {rejudge}: a run incomplete or no width-1 run - nothing judged", 1)
+        write_per_row(recs, budget, excl, rejudge, 2)
+        return 0
     if not display or not re.fullmatch(r":(6[0-9]|[7-9][0-9])", display):
         die(f"--display {display!r}: a rig display in :60-:99 (CODING_RULES §7; never :0, never unset)")
     tree = tree or tree_of(build)
@@ -720,8 +805,10 @@ def measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, 
     adopt, lines, uncovered = judge(recs, price, row_cap, budget)
     for ln in lines:
         print("  " + ln)
+    if 2 in {r["width"] for r in recs} and not any(not r["held"] for r in recs):
+        write_per_row(recs, budget, excl, out, 2)   # THE PER-ROW WIDTH (block C's ruling): its own files, every row's reason
     if adopt is None:
-        print(f"width_pair: NO WIDTH ADOPTED - width 1 unstable or a run incomplete (evidence {out})")
+        print(f"width_pair: NO WIDTH ADOPTED for the whole set - width 1 unstable or a run incomplete (evidence {out})")
         return 1
     # WHAT THE WIDTH COVERS (the final CPU audit's finding 3): ONLY the rows it measured - the rows every run judged, less the
     # rows over their budget alone. Every other GPU row (a declared open red until it is green and measured, a timing-law,

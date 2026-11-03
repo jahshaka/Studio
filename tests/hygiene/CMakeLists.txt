@@ -327,8 +327,9 @@ if(Python3_Interpreter_FOUND)
     # Testing/Temporary is removed under it, another check's live mark refusing the run; gain - a width not 15 % faster than the next narrower one, a VRAM peak past
     # 90 % of memory.total and an unread memory.total, each refusing it; budget (the final CPU audit's finding 1) - a row already
     # past its class budget ALONE named at width 1 and left out of the judgement (never charged to the width), --plan naming
-    # the rows priced over their budget / 1.5.
-    foreach(_wp plan judge refuse bars gain reds log budget)
+    # the rows priced over their budget / 1.5; perrow (block C's ruling) - the per-row width from a run's records: a row adopts
+    # width 2 only on its own bars in every width-2 run, the run's VRAM under 90 %, each other row alone with its reason.
+    foreach(_wp plan judge refuse bars gain reds log budget perrow)
         add_test(NAME tooling.width_pair.${_wp}
                  COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/width_pair_test.py" "${CMAKE_SOURCE_DIR}"
                          "${CMAKE_CURRENT_BINARY_DIR}/width-pair-${_wp}" ${_wp})

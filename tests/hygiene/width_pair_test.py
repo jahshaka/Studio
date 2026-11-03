@@ -394,8 +394,48 @@ elif PART == "budget":
           "NO WIDTH ADOPTED", ""), f"oom1: an OOM line alone at width 1 adopts no width (rc {rc}) "
           f"{[x for x in out.splitlines() if 'WIDTH' in x][:3]}")
 
+elif PART == "perrow":
+    # THE PER-ROW WIDTH (block C's ruling, 2026-11-03: no width for the whole set - 7 rows past a bar, lab.monitor unstable
+    # alone): each row adopts width 2 only on its OWN bars in every width-2 run, the run's VRAM under 90 %; the rest alone,
+    # each with its reason. Synthetic records through write_per_row (RED AT THE BASE: the base has no per-row judgement).
+    import importlib.util
+    spm = importlib.util.spec_from_file_location("width_pair_under_test", WP)
+    wp = importlib.util.module_from_spec(spm)
+    spm.loader.exec_module(wp)
+
+    def rec(w, k, rows, peak=5000.0, total=16000.0, oom=(), xid=()):
+        return {"tag": f"w{w}-p{k}", "width": w, "part": k, "held": True, "rows": rows, "asked": sorted(rows),
+                "vram_peak_mb": peak, "vram_total_mb": total, "oom": list(oom), "xid": list(xid)}
+    P = "PASS"
+    w1a = {"ok": (P, 2.0), "slow": (P, 2.0), "budget": (P, 8.0), "red": ("FAIL[FAIL: (1) a law]", 3.0), "flip": (P, 2.0),
+           "alone_over": (P, 12.0), "unstable": (P, 2.0), "vram": (P, 2.0), "excluded": (P, 2.0)}
+    w1b = dict(w1a, unstable=("FAIL[FAIL: (4) a gap]", 2.1))
+    w2 = {"ok": (P, 2.9), "slow": (P, 3.4), "budget": (P, 10.4), "red": ("FAIL[FAIL: (1) a law]", 3.1),
+          "flip": ("FAIL[FAIL: a neighbour]", 2.0), "alone_over": (P, 13.0), "unstable": (P, 2.0), "excluded": (P, 2.0)}
+    recs = [rec(1, 1, w1a), rec(2, 1, w2), rec(2, 2, {"vram": (P, 2.0)}, peak=14500.0), rec(2, 1, dict(w2, slow=(P, 2.2))),
+            rec(1, 1, w1b)]
+    budget = {n: 10.0 for n in w1a}
+    out = os.path.join(T, "pr"); os.makedirs(out)
+    try:
+        ad, al = wp.write_per_row(recs, budget, {"a timing law": ["excluded"]}, out, 2)
+        got = open(os.path.join(out, "adopted-rows.txt")).read().split()
+        why = dict(ln.split("\t", 1) for ln in open(os.path.join(out, "alone-rows.txt")).read().splitlines())
+    except AttributeError as e:
+        got, why = None, {}
+        check(False, f"perrow: the tool has no per-row judgement ({e})")
+    if got is not None:
+        check(got == ["ok", "red"], f"perrow: the rows that held every bar in every width-2 run adopt it - a green row and a "
+              f"red row on equal FAIL lines: {got}")
+        check("x1.70" in why.get("slow", ""), f"perrow: a row past x1.5 in ONE of two width-2 runs keeps the card: {why.get('slow')}")
+        check("past its class budget" in why.get("budget", ""), f"perrow: a row past its class budget at width 2: {why.get('budget')}")
+        check("its verdict at width 2" in why.get("flip", ""), f"perrow: a verdict that changes at width 2: {why.get('flip')}")
+        check("over its class budget alone" in why.get("alone_over", ""), f"perrow: a row over budget alone: {why.get('alone_over')}")
+        check("disagrees with itself" in why.get("unstable", ""), f"perrow: width 1 disagreeing with itself: {why.get('unstable')}")
+        check("VRAM peak 14500" in why.get("vram", ""), f"perrow: a width-2 run past 90 % of the card: {why.get('vram')}")
+        check(why.get("excluded") == "a timing law", f"perrow: a row the selection leaves out never adopts: {why.get('excluded')}")
+
 else:
-    check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain|reds|log|budget)")
+    check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain|reds|log|budget|perrow)")
 shutil.rmtree(T, ignore_errors=True)
 print("width_pair_test: " + ("PASSED" if not fails else f"FAILED ({len(fails)})"))
 sys.exit(1 if fails else 0)
