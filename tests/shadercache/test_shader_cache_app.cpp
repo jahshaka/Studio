@@ -88,8 +88,23 @@ QJsonObject markerObject(const QString &out, const QString &marker)
     return last;
 }
 
+/// THE PART's MARKERS (ORPHAN-REDS-1 item 6, 2026-11-03): `part-<mode>.started` at a part's start, `.green` at its green
+/// end - a part the cap KILLED leaves `.started` alone, and the cleanup keeps that home's logs (see --clean).
+QString gPartMarker;
+int finish(int rc)
+{
+    if (rc == 0 && !gPartMarker.isEmpty()) {
+        QFile g(gPartMarker + QStringLiteral(".green"));
+        if (g.open(QIODevice::WriteOnly | QIODevice::Truncate)) g.write("green\n");
+    }
+    return rc;
+}
+
 /// Runs the app with `--script`, returns the app.shaderCache() object the
-/// script printed.
+/// script printed. THE APP's LINES ARE FORWARDED AS THEY ARRIVE (ORPHAN-REDS-1 item 6): each line on this row's own
+/// stdout (line-buffered, prefixed "    | "), so a launch the 60-s cap kills leaves every number it measured in the
+/// row's log - the cold run's 60-s TIMEOUTs on two master checks recorded an EMPTY output (this launcher printed only
+/// after the app exited, into a fully buffered pipe).
 QJsonObject runApp(const QString &home, const QString &script, const QStringList &extraArgs,
                    int *exitCodeOut)
 {
@@ -113,22 +128,35 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     launch.start();
     app.start(QStringLiteral(JAHSHAKA_BINARY), QStringList() << extraArgs << "--script" << script);
     if (!app.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); ++failures; return {}; }
+    QByteArray all;
+    const auto forward = [&all, &app](bool rest) {
+        while (app.canReadLine() || (rest && app.bytesAvailable() > 0)) {
+            const QByteArray line = app.canReadLine() ? app.readLine() : app.readAll();
+            all += line;
+            if (line.contains("Freetype returned null")) continue;   // (the overlay font's 160 lines of noise)
+            std::printf("    | %s%s", line.constData(), line.endsWith('\n') ? "" : "\n");
+        }
+    };
+    bool exited = false;
     // THE HANG GUARD, never a budget: inside a row the 60-s cap ends a launch long before it; it bounds only the uncapped
-    // runs - the warm-up's cold-on prime of the rows' own driver cache (ORPHAN-REDS-1 item 4), where a cold driver
-    // compiles the ray pipelines for 4-6 minutes (measured 2026-11-03: a 240-s guard killed the prime at 241 s, the cache
-    // left partial)
-    if (!app.waitForFinished(900000)) {
+    // runs - the warm-up's cold-on prime of the rows' own driver cache (item 4), where a cold driver compiles the ray
+    // pipelines for 4-6 minutes (measured 2026-11-03: a 240-s guard killed the prime at 241 s, the cache left partial)
+    while (launch.elapsed() < 900000) {
+        exited = app.waitForFinished(100) || app.state() == QProcess::NotRunning;   // (false once already finished)
+        forward(exited);
+        if (exited) break;
+    }
+    if (!exited) {
         std::printf("FAIL: app did not exit\n"); ++failures; app.kill(); app.waitForFinished(5000);
         return {};
     }
+    forward(true);
     if (exitCodeOut) *exitCodeOut = app.exitCode();
     std::printf("   launch %s: %.1f s\n", qPrintable(QFileInfo(script).fileName()), launch.elapsed() / 1000.0);
-    const QString out = QString::fromUtf8(app.readAll());
+    const QString out = QString::fromUtf8(all);
     gLastOutput = out;
     const QJsonObject last = markerObject(out, QStringLiteral("SHADERCACHE "));
-    if (last.isEmpty()) {
-        std::printf("---- app output ----\n%s\n--------------------\n", qPrintable(out));
-    }
+    if (last.isEmpty()) std::printf("   (no SHADERCACHE line in the app's output: it is forwarded above)\n");
     return last;
 }
 
@@ -139,6 +167,7 @@ int warmLaws(const QString &home, const QString &scripts, const QJsonObject &col
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    std::setvbuf(stdout, nullptr, _IOLBF, 0);   // every line reaches the row's log as it is printed (item 6)
     const bool churnRow = argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--churn");
     const QString mode = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();
     const bool clearedRow = mode == QStringLiteral("--cleared");
@@ -153,7 +182,23 @@ int main(int argc, char **argv)
         churnRow ? QStringLiteral("e2e-home-shadercache-churn") : QStringLiteral("e2e-home-shadercache"));
     if (mode == QStringLiteral("--clean")) {
         // THE FIXTURE's CLEANUP (shadercache.app.clean): the home the cold, warm and cleared rows shared, removed after every
-        // part that ran - no launch, no card
+        // part that ran - no launch, no card. A PART THAT DID NOT END GREEN (red, or killed at the cap: its `.started`
+        // without its `.green`) KEEPS ITS EVIDENCE (ORPHAN-REDS-1 item 6, fresh_home.sh's rule): the home's app logs and
+        // run 1's numbers are copied to <build>/tests/.evidence/e2e-home-shadercache/ (replacing the previous red's) first.
+        QStringList red;
+        for (const QString &st : QDir(home).entryList({ QStringLiteral("part-*.started") }, QDir::Files))
+            if (!QFileInfo::exists(home + "/" + st.chopped(8) + ".green")) red << st.chopped(8).mid(5);
+        if (!red.isEmpty()) {
+            const QString ev = QDir(home).absoluteFilePath(QStringLiteral("../../.evidence/e2e-home-shadercache"));
+            QDir(ev).removeRecursively();
+            QDir().mkpath(ev + "/logs");
+            int kept = 0;
+            for (const QFileInfo &f : QDir(home + "/run/logs").entryInfoList(QDir::Files))
+                kept += QFile::copy(f.absoluteFilePath(), ev + "/logs/" + f.fileName()) ? 1 : 0;
+            QFile::copy(home + "/cold-run.json", ev + "/cold-run.json");
+            std::printf("ok: the part(s) that did not end green (%s): %d app log(s) kept in %s\n",
+                        qPrintable(red.join(", ")), kept, qPrintable(QDir::cleanPath(ev)));
+        }
         const bool gone = QDir(home).removeRecursively();
         std::printf("%s: the home %s removed\nRESULT: %s\n", gone ? "ok" : "FAIL", qPrintable(home), gone ? "PASS" : "FAIL");
         return gone ? 0 : 1;
@@ -171,6 +216,10 @@ int main(int argc, char **argv)
         QFile::remove(home + "/cold-run.json");
     }
 
+    // THE PART's START (item 6): its `.green` gone, its `.started` written - a kill at the cap leaves exactly this
+    gPartMarker = home + "/part-" + mode.mid(2);
+    QFile::remove(gPartMarker + QStringLiteral(".green"));
+    { QFile st(gPartMarker + QStringLiteral(".started")); if (st.open(QIODevice::WriteOnly | QIODevice::Truncate)) st.write("started\n"); }
     const QString scripts = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
                             QStringLiteral("/tests/shadercache/scripts/");
     int rc = -1;
@@ -276,7 +325,7 @@ int main(int argc, char **argv)
         CHECK(!gLastOutput.contains(QStringLiteral("save already in progress")),
               "no re-entrant save was attempted");
         std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
-        return failures ? 1 : 0;
+        return finish(failures ? 1 : 0);
     }
 
     if (clearedRow) {
@@ -303,7 +352,7 @@ int main(int argc, char **argv)
               !cleared.value("pipelineCacheLoaded").toBool(),
               "--clear-shader-cache left no layer to load");
         std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
-        return failures ? 1 : 0;
+        return finish(failures ? 1 : 0);
     }
 
     const QString coldFile = home + QStringLiteral("/cold-run.json");
@@ -360,7 +409,7 @@ int main(int argc, char **argv)
         CHECK(kept, "run 1's numbers kept for run 2's row (cold-run.json)");
     }
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
-    return failures ? 1 : 0;
+    return finish(failures ? 1 : 0);
 }
 
 namespace {
@@ -435,7 +484,7 @@ int warmLaws(const QString &home, const QString &scripts, const QJsonObject &col
     CHECK(warm.value("compiledThisRun").toInt() == 0, "run 2 compiled NOTHING AT ALL");
 
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
-    return failures ? 1 : 0;
+    return finish(failures ? 1 : 0);
 }
 
 }  // namespace
