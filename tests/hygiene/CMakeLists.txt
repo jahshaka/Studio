@@ -185,7 +185,9 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/shaders_spirv_valid.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" "${JAH_GLSLANG_VALIDATOR}")
     jah_ship_row(source.shaders_spirv_valid)   # THE SHIP SET (the lead, 2026-10-27: its dump is the ship's warm-up's)
-    set_tests_properties(source.shaders_spirv_valid PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    # JAH_BOOTS app-off: the dump is that boot's product, so `spec.sh test` warms it before this row (a classless row asks no
+    # boot: in a fresh tree a tooling diff's call ran it before any warm-up and it went red, SHIP-CUT-2 2026-11-03)
+    set_tests_properties(source.shaders_spirv_valid PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling" JAH_BOOTS app-off)
     jah_no_display(source.shaders_spirv_valid)
     # gate.serve_red (URGENT #54) — A RED AT THE SAME INPUT IS SERVED-RED, NEVER RE-RUN: ci_gate_check.py serve's
     # decision on synthetic records (a red result at this tree with equal configuration / declaration / data hashes is
