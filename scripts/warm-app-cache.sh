@@ -89,10 +89,13 @@
 #   seed, a 64-s boot of the epic World Mode whenever its stamp is stale, timed out at 60.04 s on 8B's check, the row
 #   behind it NOT RUN). The cold-on boot runs every command of <build>/tests/test-cold-rows.txt (written at generate
 #   time from the COLD registrations with each row's test tier, tests/CMakeLists.txt _jah_cold_row) once, UNCAPPED (the
-#   call's end, never the 60-s cap), the driver's cache ON, all at once under one hold (tests/support/warm_cold_rows.sh).
-#   Stamp <tests>/.cold-rows.driver-key: this key, the list's digest (a newly COLD row reads cold) and the BUILT digest -
-#   the size and time of every staged media file: what a row's own cache stamp keys on beyond this key (the seed's stamp
-#   is this key, all of bin/media by content and the fork's BUILT_FROM; never a binary's bytes - URGENT #125). A row on the
+#   call's end, never the 60-s cap), the driver's cache ON, ONE ROW AT A TIME, EACH ITS OWN HOLD (tests/support/
+#   warm_cold_rows.sh; SHIP-CUT-2 0b, URGENT #155: run all at once, a prime died out of GPU memory and was stamped).
+#   A STAMP PER ROW, written only for a run the runner judged PRIMED (it reached its own end; a seed fresh after it):
+#   <tests>/.cold-rows/<row>.driver-key - this key, the row's line digest (its command: a new or changed COLD row reads
+#   cold) and the BUILT digest, the size and time of every staged media file: what a row's own cache stamp keys on beyond
+#   this key (the seed's stamp is this key, all of bin/media by content and the fork's BUILT_FROM; never a binary's bytes -
+#   URGENT #125). Only the rows not primed at the key run; the prime's cost is printed per row. A row on the
 #   shared cache needs none of it - measured, with an EMPTY driver cache rtreflect.sphere_glint built all 13 ray
 #   pipelines through the shared VkPipelineCache in 1.04 s. A fixture that states its own cache while registered warm is
 #   refused at its start (enginetesthelpers.h), so this list cannot miss one of those.
@@ -198,31 +201,42 @@ APP_SHARED="$TESTS/.shadercache"; APP_STAMP="$TESTS/.shadercache.warm-key"; APP_
 ENG_SHARED="$TESTS/.shadercache-engine"; ENG_STAMP="$TESTS/.shadercache-engine.warm-key"
 ENG_DSTAMP="$TESTS/.shadercache-engine.driver-key"
 APPX="${APP:-$BUILD/bin/Jahshaka}"; LABX="${LAB:-$BUILD/bin/jahlab}"
-COLDROWS="${COLDROWS:-$BUILD/tests/test-cold-rows.txt}"; COLD_DSTAMP="$TESTS/.cold-rows.driver-key"
-cold_digest() { echo "rows $( [ -f "$COLDROWS" ] && sha256sum < "$COLDROWS" | cut -c1-16 || echo none)"; }
+COLDROWS="${COLDROWS:-$BUILD/tests/test-cold-rows.txt}"; COLD_SDIR="$TESTS/.cold-rows"
 built_digest() {   # every staged media file's size and time (no content read: 4 ms) - what a cold row's own cache may key
     # on beyond the key (the seed's stamp hashes all of bin/media). NOT an exe's or the app's bytes: a relink changes no
     # shader (URGENT #125: keyed on the app's size and time, the seed and this boot re-ran ~160 s at every commit)
     find "$BUILD/bin/media" -type f -printf '%s %T@ %p\n' 2>/dev/null | LC_ALL=C sort
 }
 built_key() { echo "built $(built_digest | sha256sum | cut -c1-16)"; }
-coldrows_stamp_why() {   # the cold rows' stamp alone: empty when their commands ran at this key, for this list, on this build
-    if [ ! -f "$COLD_DSTAMP" ]; then echo "no driver-cache run recorded"
-    elif [ "$(sed -n 1p "$COLD_DSTAMP")" != "$KEY" ]; then echo "the key moved (stored at $(sed -n 1p "$COLD_DSTAMP"))"
-    elif [ "$(sed -n 2p "$COLD_DSTAMP")" != "$(cold_digest)" ]; then echo "the cold rows changed since ($(basename "$COLDROWS"))"
-    elif [ "$(sed -n 3p "$COLD_DSTAMP")" != "$(built_key)" ]; then echo "the staged media rebuilt since"
+row_digest() { echo "row $(printf '%s' "$1" | sha256sum | cut -c1-16)"; }   # <the row's line>: its command, its tier, its dir
+row_stamp_why() {   # <row> <line>: empty when this row's prime ran at this key, for this command, on this build
+    local st="$COLD_SDIR/$1.driver-key"
+    if [ ! -f "$st" ]; then echo "no prime recorded"
+    elif [ "$(sed -n 1p "$st")" != "$KEY" ]; then echo "the key moved (primed at $(sed -n 1p "$st"))"
+    elif [ "$(sed -n 2p "$st")" != "$(row_digest "$2")" ]; then echo "its registration changed"
+    elif [ "$(sed -n 3p "$st")" != "$BUILT_KEY" ]; then echo "the staged media rebuilt since"
     fi
 }
 stale_seeds() {   # the seed rows whose own freshness check says stale (URGENT #139: a seed keys on the Studio build too)
     bash "$SRC/tests/support/warm_cold_rows.sh" --stale-seeds "$COLDROWS" | tr '\n' ' ' | sed 's/ $//'
 }
-coldrows_why() {   # the cold rows: empty when their commands ran at this key, for this list, on this build, and every startup
-    # seed among them is fresh (#139: one re-seed per Studio commit, here - uncapped - never inside a capped row)
-    if [ ! -s "$COLDROWS" ] || [ -z "$(tr -d '[:space:]' < "$COLDROWS")" ]; then return 0; fi   # no cold row: nothing to warm
-    local w; w=$(coldrows_stamp_why)
-    if [ -n "$w" ]; then echo "$w"; return 0; fi
-    local s; s=$(stale_seeds)
-    [ -z "$s" ] || echo "a startup seed is stale (a new Studio build): $s"
+coldrows_left() {   # "<row> TAB <why>" for every cold row to prime: its stamp not this key's, or a startup seed stale (#139: one
+    # re-seed per Studio commit, by the warm-up - uncapped - never inside a capped row: SHIP-CUT-2 0d)
+    [ -s "$COLDROWS" ] || return 0
+    BUILT_KEY=${BUILT_KEY:-$(built_key)}
+    local line row w s
+    s=" $(stale_seeds) "
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        row=${line%%$'\t'*}; w=$(row_stamp_why "$row" "$line")
+        [ -z "$w" ] && case "$s" in *" $row "*) w="its startup seed is stale (a new Studio build)" ;; esac
+        [ -z "$w" ] || printf '%s\t%s\n' "$row" "$w"
+    done < "$COLDROWS"
+}
+coldrows_why() {   # the cold rows: empty when every one is primed at this key and every startup seed among them is fresh
+    local l; l=$(coldrows_left)
+    [ -n "$l" ] || return 0
+    echo "$(printf '%s\n' "$l" | grep -c .) of $(grep -c . "$COLDROWS") to prime: $(printf '%s\n' "$l" | sed 's/\t/ (/; s/$/)/' | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
 }
 exe_id() {   # <exe>: the name the driver keys its per-exe cache on - its file name (measured below)
     basename "$1"
@@ -274,6 +288,15 @@ for b in $RUN; do
 done
 
 # ---- THE BOOTS (once each, uncapped: not a test) -------------------------------------------------------------------
+# THIS CALL's LOGS, ITS OWN DIRECTORY (SHIP-CUT-2 0c): every boot's log and each cold row's went to one fixed path under
+# <tests>, overwritten by the next call - ORPHAN-REDS-1's cold-on per-row logs, the only record of why a prime failed, were
+# gone by the time anyone read them. Now <tests>/warm-logs/<time>-<pid>-<boots>/ (JAH_WARM_LOG_DIR names another), the
+# newest 40 calls kept; the call prints the directory first.
+WLOGS="$TESTS/warm-logs"
+LOGS="${JAH_WARM_LOG_DIR:-$WLOGS/$(date +%Y%m%dT%H%M%S)-$$-$(echo "$RUN" | tr ' ' '+')}"
+mkdir -p "$LOGS"
+ls -1dt "$WLOGS"/*/ 2>/dev/null | tail -n +41 | xargs -r rm -rf
+echo "warm-app-cache: this call's logs: $LOGS"
 XPID=""
 cleanup() { [ -n "$XPID" ] && kill "$XPID" 2>/dev/null; }
 trap cleanup EXIT
@@ -298,6 +321,9 @@ est_of() {
     w=$(awk -v b="$1" '$1 == b { w = $2 } END { print w }' "$WALLS" 2>/dev/null)
     [ -n "$w" ] && { echo "$w"; return; }
     case "$1" in app-off) echo 400 ;; engine-off) echo 340 ;; app-on) echo 120 ;; engine-on) echo 60 ;; cold-on) echo 330 ;; esac   # cold-on: 306 s measured, three rows, loaded (#122)
+}
+waited_of() {   # <log>: the card's wait in whole seconds (the lock prints tenths since #95: "waited 12.3 s"), 0 when none
+    local w; w=$(sed -n 's/^gpu-lock: waited \([0-9]*\)\(\.[0-9]*\)\{0,1\} s$/\1/p' "$1" | head -1); echo "${w:-0}"
 }
 note_wall() {
     { grep -v "^$1 " "$WALLS" 2>/dev/null; echo "$1 $2"; } > "$WALLS.tmp" && mv "$WALLS.tmp" "$WALLS"
@@ -348,7 +374,7 @@ boot() {
         echo "warm-app-cache: the $name boot FAILED (exit $rc) after ${wall} s - its log $log; the cache is not warm"
         return 1
     fi
-    note_wall "$name" "$(( wall - $(sed -n 's/^gpu-lock: waited \([0-9]*\) s$/\1/p' "$log" | head -1 | grep . || echo 0) ))"
+    note_wall "$name" "$(( wall - $(waited_of "$log") ))"
     if [ ! -f "$shared/cache-manifest.txt" ]; then
         echo "warm-app-cache: the $name boot passed but no shared cache was promoted ($shared) - not warm"
         return 1
@@ -391,45 +417,59 @@ driver_boot() {
         echo "warm-app-cache: the $name boot FAILED (exit $rc) after ${wall} s - its log $log"
         return 1
     fi
-    note_wall "$name" "$(( wall - $(sed -n 's/^gpu-lock: waited \([0-9]*\) s$/\1/p' "$log" | head -1 | grep . || echo 0) ))"
+    note_wall "$name" "$(( wall - $(waited_of "$log") ))"
     printf '%s\n%s\n' "$KEY" "$(exe_id "$exe")" > "$dstamp"
     echo "warm-app-cache: $(what_of "$name") stored at $KEY - the boot ${wall} s, the driver cache" \
          "$(( (${b1:-0} - ${b0:-0}) / 1048576 )) MB grown"
     return 0
 }
-# cold_boot <boots left>: the cold rows' commands, each once, uncapped, the driver's cache on, at once under one hold;
-# stamped with the key, the list's digest and the built digest when none was killed at the bound
+# cold_boot <boots left>: the cold rows not primed at the key, each once, uncapped, the driver's cache on, ONE AT A TIME,
+# each its own hold (warm_cold_rows.sh); each row the runner judged PRIMED gets its stamp, the rest are named
 cold_boot() {
-    local rest=$1 t0 rc wall log="$TESTS/warm-cold-rows.log" deadline
+    local rest=$1 t0 rc wall log="$LOGS/cold-on.log" deadline todo names line row n
+    BUILT_KEY=$(built_key)
+    todo=$(coldrows_left); names=$(printf '%s\n' "$todo" | cut -f1 | tr '\n' ' ' | sed 's/ *$//')
     room cold-on "$rest"
-    # THE EXES' BOUND IS THE CALL's END, read after the card's wait (the runner subtracts the clock): a wait shorter
-    # than its bound leaves the exes the rest. And the card's wait leaves them at least their estimate: room() gives
-    # the wait the budget less the estimate, so the end's own 15-s margin comes off the wait too (#122's proof: the seed
-    # finished 1 s inside the bound after a 248-s wait, 306 s of run against a 300-s estimate)
+    # THE EXES' BOUND IS THE CALL's END, read after each row's card wait (the runner subtracts the clock); the end's own
+    # 15-s margin comes off the first wait too (#122's proof: the seed finished 1 s inside the bound after a 248-s wait)
     deadline=$(( T0 + BUDGET - 15 ))
     WAIT=$(( WAIT - 15 )); [ "$WAIT" -ge 1 ] || WAIT=1
-    echo "warm-app-cache: booting $(what_of cold-on) (cold-on): $(grep -c . "$COLDROWS") row(s) on $DISPLAY, each uncapped" \
-         "(to the call's end, $(( deadline - $(date +%s) )) s from now less the card's wait, at most ${WAIT} s)"
+    echo "warm-app-cache: booting $(what_of cold-on) (cold-on): $(printf '%s\n' "$todo" | grep -c .) of $(grep -c . "$COLDROWS")" \
+         "row(s) on $DISPLAY, one at a time, each its own hold, uncapped (to the call's end, $(( deadline - $(date +%s) )) s from" \
+         "now; each row's card wait at most ${WAIT} s): $names"
     t0=$(date +%s)
-    # THE STAMP HELD AND ONLY SEEDS STALE (#139): those seed rows alone run (the others' caches are this key's already)
-    local only=""; [ -z "$(coldrows_stamp_why)" ] && only=$(stale_seeds)
-    [ -n "$only" ] && echo "warm-app-cache: cold-on runs the stale startup seed(s) alone: $only"
     ( H="$TESTS/warm-cold-home"; rm -rf "$H"; mkdir -p "$H"
-      HOME="$H" JAH_COLD_ONLY="$only" env -u __GL_SHADER_DISK_CACHE nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" \
-          --label "warm-app-cache (cold-on)" bash "$SRC/tests/support/warm_cold_rows.sh" "$COLDROWS" "$deadline" \
-          "$TESTS/warm-cold-logs"; rc=$?; rm -rf "$H"; exit $rc ) > "$log" 2>&1
+      HOME="$H" JAH_COLD_ONLY="$names" JAH_COLD_WAIT="$WAIT" env -u __GL_SHADER_DISK_CACHE nice -n 10 \
+          bash "$SRC/tests/support/warm_cold_rows.sh" "$COLDROWS" "$deadline" "$LOGS/cold-on"; rc=$?; rm -rf "$H"; exit $rc ) > "$log" 2>&1
     rc=$?
-    [ $rc = 75 ] && held "$log" cold-on "cold-on $rest"
     wall=$(( $(date +%s) - t0 ))
-    grep -E '^gpu-lock: waited|^warm_cold_rows: ' "$log" | head -40
+    grep -E '^warm_cold_rows: ' "$log" | grep -v ': skipped (primed' | head -40
     RAN=1
-    if [ $rc -ne 0 ]; then
-        echo "warm-app-cache: the cold-on boot FAILED (exit $rc) after ${wall} s - its log $log (each exe's in $TESTS/warm-cold-logs)"
+    mkdir -p "$COLD_SDIR"; n=0
+    while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        row=${line%%$'\t'*}
+        if grep -qF "warm_cold_rows: $row: PRIMED" "$log"; then
+            printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
+        fi
+    done < "$COLDROWS"
+    note_wall cold-on "$(grep -oE 'PRIMED - its run [0-9]+ s' "$log" | awk '{ s += $(NF - 1) } END { print s + 0 }')"
+    if [ $rc = 1 ]; then
+        echo "warm-app-cache: the cold-on boot FAILED after ${wall} s - A PRIME CRASHED, NOT STAMPED: $(grep -E '^warm_cold_rows: .*: NOT PRIMED - (its run CRASHED|the seed is not fresh)' "$log" |
+             sed -E 's/^warm_cold_rows: ([^:]*): NOT PRIMED - (its run CRASHED|the seed is not fresh after its run) \(([^)]*)\).*/\1 (\2: \3)/' | tr '\n' ';' | sed 's/;$//; s/;/; /g')" \
+             "- ${n} other row(s) primed and stamped; each row's log in $LOGS/cold-on"
         return 1
     fi
-    note_wall cold-on "$(( wall - $(sed -n 's/^gpu-lock: waited \([0-9]*\) s$/\1/p' "$log" | head -1 | grep . || echo 0) ))"
-    printf '%s\n%s\n%s\n' "$KEY" "$(cold_digest)" "$(built_key)" > "$COLD_DSTAMP"
-    echo "warm-app-cache: $(what_of cold-on) stored at $KEY - the boot ${wall} s"
+    if [ $rc = 75 ]; then
+        echo "warm-app-cache: the cold-on boot primed ${n} row(s) in ${wall} s; the rest wait (the card stayed held past a row's" \
+             "wait, or the call's end came) - call again: --only $(echo "cold-on $rest" | tr -s ' ' ',' | sed 's/,$//')"
+        exit 75
+    fi
+    if [ $rc -ne 0 ]; then
+        echo "warm-app-cache: the cold-on boot FAILED (exit $rc) after ${wall} s - its log $log"
+        return 1
+    fi
+    echo "warm-app-cache: $(what_of cold-on) primed at $KEY - ${n} row(s), the boot ${wall} s"
     return 0
 }
 DUMP="$TESTS/.hlms-dump"
@@ -454,11 +494,11 @@ for b in $RUN; do
                 # <tests>/.hlms-dump and stamped with this key after a passed boot - source.shaders_spirv_valid validates
                 # them (tests/hygiene/shaders_spirv_valid.py); the dump is the boot's at this key, promoted or not
                 rm -rf "$DUMP"; mkdir -p "$DUMP"
-                boot app-off "$APP_SHARED" "$APP_STAMP" "$H" "$TESTS/warm-app-cache.log" "$left" \
+                boot app-off "$APP_SHARED" "$APP_STAMP" "$H" "$LOGS/app-off.log" "$left" \
                     bash "$SRC/tests/support/warm_app_boot.sh" "$APPX" "$H/run/warm.png" "$SETS" "$DUMP" || exit 1
                 echo "$KEY" > "$DUMP/.key"
             else
-                driver_boot app-on "$APP_DSTAMP" "$APPX" "$H" "$TESTS/warm-app-cache-driver.log" "$left" \
+                driver_boot app-on "$APP_DSTAMP" "$APPX" "$H" "$LOGS/app-on.log" "$left" \
                     "$APPX" --engine-selftest "$H/run/warm.png" || exit 1
             fi ;;
         engine-off|engine-on)
@@ -469,9 +509,9 @@ for b in $RUN; do
                     "$LABX" --headless --no-stdin --size 960x540 --data-root "$H/run/lab" --env photon-rough --tier epic
                     --script "$LABSCRIPT")
             if [ "$b" = engine-off ]; then
-                boot engine-off "$ENG_SHARED" "$ENG_STAMP" "$H" "$TESTS/warm-engine-cache.log" "$left" "${LABCMD[@]}" || exit 1
+                boot engine-off "$ENG_SHARED" "$ENG_STAMP" "$H" "$LOGS/engine-off.log" "$left" "${LABCMD[@]}" || exit 1
             else
-                driver_boot engine-on "$ENG_DSTAMP" "$LABX" "$H" "$TESTS/warm-engine-cache-driver.log" "$left" \
+                driver_boot engine-on "$ENG_DSTAMP" "$LABX" "$H" "$LOGS/engine-on.log" "$left" \
                     "${LABCMD[@]}" || exit 1
             fi ;;
         cold-on)
