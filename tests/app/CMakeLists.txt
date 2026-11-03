@@ -261,8 +261,9 @@ add_executable(test_render_route test_render_route.cpp
     ${CMAKE_SOURCE_DIR}/src/bridge/renderroute.cpp
     ${CMAKE_SOURCE_DIR}/src/app/cli/clioptions.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/engineviewwidget.cpp
-    ${CMAKE_SOURCE_DIR}/src/viewport/engineviewwidget.h)
-set_target_properties(test_render_route PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    ${CMAKE_SOURCE_DIR}/src/viewport/engineviewwidget.h
+    ${CMAKE_SOURCE_DIR}/app/platform.qrc)   # (the host's screen, red (a))
+set_target_properties(test_render_route PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC ON CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_include_directories(test_render_route PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src

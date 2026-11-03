@@ -16,6 +16,11 @@
 // never degrades silently - every refusal is one named line.
 #include <QApplication>
 #include <QByteArray>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <cstring>
 #include <QWidget>
 #include <cstdio>
 #include <memory>
@@ -99,6 +104,38 @@ int main(int argc, char **argv)
               "--render-offscreen with no script, pool or MCP run is refused");
         check(!parse({ "--dump-api-docs", "x.md", "--headless", "--render-offscreen" }).errors.isEmpty(),
               "--render-offscreen with --dump-api-docs is refused (the dump stays NULL, proven)");
+    }
+
+    // 3b. THE HOST's SCREEN IS THE RIG's (TEST-STREAMLINE-1 red (a)): the policy hands the offscreen platform a file
+    // naming ONE screen equal to the rig's xcb screen (1920x1080, DPR 1, logical DPI 96 - measured on the rig's Xvfb -,
+    // no frame margins), only for the host; the document-only run keeps the plain platform. Before QApplication, as main.
+    {
+        QString err;
+        qunsetenv("QT_QPA_PLATFORM");
+        const bool applied = parse({ "--script", "x.js", "--headless", "--render-offscreen" }).applyPlatformPolicy(err);
+        const QByteArray plat = qgetenv("QT_QPA_PLATFORM");
+        const QByteArray prefix = "offscreen:configfile=";
+        check(applied && err.isEmpty() && plat.startsWith(prefix), "the host names a screen file to the offscreen platform");
+        const QString path = QString::fromLocal8Bit(plat.mid(int(std::strlen(prefix.constData()))));
+        check(!path.isEmpty() && !path.contains(QLatin1Char(':')),
+              "...a real path with no ':' (the plugin splits its arguments on ':', so a resource path cannot pass)");
+        QFile f(path);
+        const bool opened = f.open(QIODevice::ReadOnly);
+        const QJsonObject o = QJsonDocument::fromJson(opened ? f.readAll() : QByteArray()).object();
+        f.close();
+        const QJsonArray screens = o.value(QStringLiteral("screens")).toArray();
+        const QJsonObject s = screens.isEmpty() ? QJsonObject() : screens.first().toObject();
+        check(opened && screens.size() == 1 && s.value(QStringLiteral("width")).toInt() == 1920 &&
+                  s.value(QStringLiteral("height")).toInt() == 1080 && s.value(QStringLiteral("dpr")).toDouble() == 1.0 &&
+                  s.value(QStringLiteral("logicalDpi")).toDouble() == 96.0 &&
+                  o.value(QStringLiteral("windowFrameMargins")).toBool(true) == false,
+              "...naming ONE screen equal to the rig's: 1920x1080, DPR 1, logical DPI 96, no frame margins");
+        CliOptions::releasePlatformFiles();
+        check(!QFile::exists(path), "...and released once the app has read it");
+        qunsetenv("QT_QPA_PLATFORM");
+        const bool docApplied = parse({ "--script", "x.js", "--headless" }).applyPlatformPolicy(err);
+        check(docApplied && qgetenv("QT_QPA_PLATFORM") == "offscreen", "the document-only run keeps the plain offscreen platform");
+        qunsetenv("QT_QPA_PLATFORM");
     }
 
     // 4. THE DECLARED OFFSCREEN VIEW ON A NULL ENGINE

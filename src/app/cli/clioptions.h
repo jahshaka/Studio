@@ -171,9 +171,14 @@ struct CliOptions
     static QString usageText();
 
     /// Chooses the QPA platform BEFORE QApplication exists: offscreen for
-    /// headless runs, else xcb (the engine has no Wayland backend) unless the
-    /// user chose a platform themselves.
-    void applyPlatformPolicy() const;
+    /// headless runs - the headless HOST's with the rig's screen (a file the
+    /// plugin reads) - else xcb (the engine has no Wayland backend) unless the
+    /// user chose a platform themselves. False (with `error`) when the host's
+    /// screen file could not be written: the host never degrades silently.
+    bool applyPlatformPolicy(QString &error) const;
+    /// Deletes the files the policy wrote for the platform plugin, once
+    /// QApplication has read them (main, right after its construction).
+    static void releasePlatformFiles();
 };
 
 #endif // CLIOPTIONS_H

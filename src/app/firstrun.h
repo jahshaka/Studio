@@ -67,7 +67,7 @@ inline bool isDrivenSession(const CliOptions &cli)
     if (!cli.dumpDocsPath.isEmpty())          return true;
     if (cli.mcpServe)                         return true;
     if (!cli.selftestPng.isEmpty())           return true;
-    if (qgetenv("QT_QPA_PLATFORM") == "offscreen") return true;
+    if (qgetenv("QT_QPA_PLATFORM").split(':').value(0) == "offscreen") return true;   // (the host names its screen after a ':')
     return false;
 }
 

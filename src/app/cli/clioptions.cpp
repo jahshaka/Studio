@@ -12,6 +12,9 @@ For more information see the LICENSE file
 #include "app/cli/clioptions.h"
 
 #include <QByteArray>
+#include <QCoreApplication>
+#include <QDir>
+#include <QFile>
 #include <QtGlobal>
 
 #include <cstring>
@@ -226,10 +229,37 @@ CliOptions::VrChoice CliOptions::resolveVr(bool cliVr, bool cliNoVr, const QByte
     return { true, false, startInVr, QStringLiteral("setting") };
 }
 
-void CliOptions::applyPlatformPolicy() const
+// THE HOST's SCREEN FILE (red (a)): written by applyPlatformPolicy, read by the offscreen plugin while QApplication is
+// constructed, deleted by releasePlatformFiles right after.
+static QString sHostScreenFile;
+
+bool CliOptions::applyPlatformPolicy(QString &error) const
 {
     if ((headlessScript && (isScriptRun() || mcpPort > 0)) || !dumpDocsPath.isEmpty())
         qputenv("QT_QPA_PLATFORM", "offscreen");
+    // THE HEADLESS HOST's SCREEN IS THE RIG's (TEST-STREAMLINE-1 red (a)). A fresh window is sized from its screen
+    // (MainWindow::fitToScreen: the .ui's 1612x1530 clamped to the available geometry), and the offscreen platform's own
+    // screen is 800x800: the host's window came out 1265x800 (its layout's minimum) and its editor view 733x291 where an
+    // app row's is 1612x1080 and 924x565, so three rows' laws read another picture there. The host (--render-offscreen
+    // only - the NULL runs draw nothing) gets ONE screen equal to the rig's: 1920x1080, DPR 1, no window-frame margins (an
+    // X window with no manager has none) and the logical DPI the xcb app reads on the rig's Xvfb (96, measured; the fonts
+    // size the docks) - app/platform/host-screen.json. The plugin splits its arguments on ':', so the file is a real one:
+    // the resource copied to a per-process temp file, deleted once QApplication has read it (releasePlatformFiles).
+    if (renderOffscreen && headlessScript) {
+        QFile res(QStringLiteral(":/platform/host-screen.json"));
+        const QString path = QDir(QDir::tempPath())
+                                 .filePath(QStringLiteral("jahshaka-host-screen-%1.json").arg(QCoreApplication::applicationPid()));
+        QFile out(path);
+        if (!res.open(QIODevice::ReadOnly) || !out.open(QIODevice::WriteOnly | QIODevice::Truncate) ||
+            out.write(res.readAll()) <= 0) {
+            error = QStringLiteral("--render-offscreen: the host's screen description could not be written to %1 (%2)")
+                        .arg(path, out.errorString());
+            return false;
+        }
+        out.close();
+        sHostScreenFile = path;
+        qputenv("QT_QPA_PLATFORM", QByteArray("offscreen:configfile=") + path.toLocal8Bit());
+    }
 
 #ifdef Q_OS_LINUX
     // The engine (Ogre-Next) has no Wayland backend: xcb, always — unless the
@@ -239,4 +269,11 @@ void CliOptions::applyPlatformPolicy() const
     if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM"))
         qputenv("QT_QPA_PLATFORM", "xcb");
 #endif
+    return true;
+}
+
+void CliOptions::releasePlatformFiles()
+{
+    if (!sHostScreenFile.isEmpty()) QFile::remove(sHostScreenFile);
+    sHostScreenFile.clear();
 }

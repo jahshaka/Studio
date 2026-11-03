@@ -1004,6 +1004,7 @@ set (QRCS
     ${CMAKE_SOURCE_DIR}/app/icons.qrc
     ${CMAKE_SOURCE_DIR}/app/images.qrc
     ${CMAKE_SOURCE_DIR}/app/models.qrc
+    ${CMAKE_SOURCE_DIR}/app/platform.qrc
     ${CMAKE_SOURCE_DIR}/app/themes.qrc
     ${JAH_NOTICES_QRC}
     ${CMAKE_SOURCE_DIR}/src/export/viewer/viewer.qrc

@@ -178,7 +178,13 @@ int main(int argc, char *argv[])
             }
         }
     }
-    cli.applyPlatformPolicy();
+    {
+        QString platformError;
+        if (!cli.applyPlatformPolicy(platformError)) {
+            std::fprintf(stderr, "Jahshaka: %s\n", qPrintable(platformError));
+            return 2;
+        }
+    }
     if (!cli.dumpDocsPath.isEmpty() && qgetenv("QT_QPA_PLATFORM") != "offscreen") {   // the dump's first proof (above)
         std::fprintf(stderr, "Jahshaka: --dump-api-docs must boot the offscreen platform (the NULL render system), not "
                              "'%s' - refused before any boot\n", qgetenv("QT_QPA_PLATFORM").constData());
@@ -221,6 +227,7 @@ int main(int argc, char *argv[])
     QApplication::setAttribute(Qt::AA_DontCreateNativeWidgetSiblings);
     QApplication::setDesktopSettingsAware(false);
     QApplication app(argc, argv);
+    CliOptions::releasePlatformFiles();   // (the host's screen file: the platform plugin has read it)
     // THE ONE CORE BUDGET (THREADING-1): this thread becomes the game thread (Bullet's index 0, its foreground share
     // fixed for the run) and Qt's global pool is capped at the background tier — before any scene or QtConcurrent job.
     processbudget::apply();
