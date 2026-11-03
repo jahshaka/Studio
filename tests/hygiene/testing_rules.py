@@ -604,11 +604,35 @@ LONG = "long"
 SANITIZER_ENV = ("ASAN_OPTIONS=", "LSAN_OPTIONS=", "UBSAN_OPTIONS=", "TSAN_OPTIONS=")
 
 
-def r17_bad(tests):
+def target_sources(build):
+    """{target: {source file}} from the build's compile_commands.json (an object's output path names its target's
+    CMakeFiles/<target>.dir), or None when the build exports none."""
+    try:
+        cc = json.load(open(os.path.join(build, "compile_commands.json")))
+    except (OSError, ValueError):
+        return None
+    out = {}
+    for e in cc:
+        m = re.search(r"CMakeFiles/([^/\s]+)\.dir/", e.get("output") or e.get("command") or "")
+        if m:
+            out.setdefault(m.group(1), set()).add(os.path.normpath(os.path.join(e.get("directory", ""), e["file"])))
+    return out
+
+
+def _binary_of(row, cmd):
+    """The executable a row runs: the last argument that is a path to a file named like a target (no `=`, not the row's
+    own home, which fresh_home.sh names after the row)."""
+    c = [a for a in cmd if "=" not in a and "/" in a and os.path.basename(a) != row and not a.endswith((".sh", ".py"))]
+    return os.path.basename(c[-1]) if c else None
+
+
+def r17_bad(tests, sources=None):
     """R17 (TEST-STREAMLINE-1 5b): [`row (why)`] for every row labelled `long` (FAST drops it; the feature end, when reached,
     and LONG run it) that is not the sanitizer TWIN of a guard every pass runs - its name <plain>_asan; <plain> registered and
     neither `long` nor `measure`; the same argv but the binary's `_asan`; the same environment but the sanitizer's options;
-    the same frames. Then the twin's laws are the plain row's and a pass that skips it loses no law."""
+    the same frames; and (item 5, the 4-5 audit's residue) its binary BUILT FROM THE SAME SOURCES as the plain row's
+    (`sources`: target_sources of the build - a twin target that compiles another file set carries other laws). Then the
+    twin's laws are the plain row's and a pass that skips it loses no law."""
     by = {t["name"]: t for t in tests}
     bad = []
     for t in sorted(tests, key=lambda x: x["name"]):
@@ -636,6 +660,14 @@ def r17_bad(tests):
             bad.append("%s (another environment than %s's, the sanitizer's options apart)" % (n, plain["name"]))
         if P.get(FRAMES_PROPERTY) != Q.get(FRAMES_PROPERTY):
             bad.append("%s (other frames than %s's)" % (n, plain["name"]))
+        if sources is not None:
+            tb, pb = _binary_of(n, t.get("command") or []), _binary_of(plain["name"], plain.get("command") or [])
+            ts, ps = sources.get(tb or ""), sources.get(pb or "")
+            if not ts or not ps:
+                bad.append("%s (its binary's sources unread: %s / %s not in compile_commands.json)" % (n, tb, pb))
+            elif ts != ps:
+                bad.append("%s (%s is built from other sources than %s: %s)" % (
+                    n, tb, pb, sorted(os.path.basename(f) for f in ts ^ ps)[:4]))
     return bad
 
 
@@ -794,6 +826,16 @@ def the_rules_catch():
                    A("q.e", "test_q", ["engine", "measure"]), A("q.e_asan", "test_q_asan", ["engine", "long"]),
                    A("o.e_asan", "test_o_asan", ["engine", "long"]), A("p.plain", "test_p", ["engine", "long"]),
                    A("k.e", "test_k", ["engine"]), A("k.e_asan", "test_k_asan", ["engine"])])
+    src = {"test_l": {"/s/l.cpp"}, "test_l_asan": {"/s/l.cpp"}, "test_k": {"/s/k.cpp"}, "test_k_asan": {"/s/k.cpp"}}
+    same = r17_bad([A("l.e", "test_l", ["engine"]), A("l.e_asan", "test_l_asan", ["engine", "long"], [asan])], src)
+    other = r17_bad([A("l.e", "test_l", ["engine"]), A("l.e_asan", "test_l_asan", ["engine", "long"], [asan])],
+                    dict(src, test_l_asan={"/s/l.cpp", "/s/extra_law.cpp"}))
+    unread = r17_bad([A("l.e", "test_l", ["engine"]), A("l.e_asan", "test_l_asan", ["engine", "long"], [asan])],
+                     {"test_l": {"/s/l.cpp"}})
+    check(not same and len(other) == 1 and "built from other sources" in other[0] and "extra_law.cpp" in other[0]
+          and len(unread) == 1 and "sources unread" in unread[0],
+          "R17 flags a twin whose _asan binary compiles other sources than its plain row's binary, or whose sources are "
+          "unread, never the same file set (%s %s)" % (other, unread))
     check([b.split(" ")[0] for b in r17] == ["a.e_asan", "f.e_asan", "m.e_asan", "o.e_asan", "p.plain", "q.e_asan"],
           "R17 flags a `long` row that is not a sanitizer twin of an every-pass guard (no _asan name, no plain twin, the twin "
           "itself measure, another argv, environment or frames), never the exact twin or an unlabelled one (%s)" % r17)
@@ -1174,10 +1216,12 @@ def main(source, build):
     check(not bad and "\nexport JAHSHAKA_SHADER_SEED=none\n" in wsh,
           "R15 every app / selftest / vr GPU row boots with the shipped seed off (JAHSHAKA_SHADER_SEED=set:none, or its own: "
           "%s) and the warm-up's boots too (%d on the seed: %s)" % (own[:6] or "none", len(bad), bad[:12]))
-    bad = r17_bad(tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
+    srcs = target_sources(build)
+    bad = (r17_bad(tests, srcs) if srcs is not None else ["compile_commands.json unread (R17 reads the twins' sources)"]) \
+        if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     longs = sorted(t["name"] for t in tests if LONG in _list(_props(t).get("LABELS"))) if rc == 0 else []
     check(not bad, "R17 every `long` row (out of FAST) is the sanitizer twin of a guard every pass runs - one argv, "
-          "one environment, one frame count (%d long: %s; %d not: %s)" % (len(longs), longs, len(bad), bad[:12]))
+          "one environment, one frame count, one source set (%d long: %s; %d not: %s)" % (len(longs), longs, len(bad), bad[:12]))
     rp = os.path.join(source, ROUTES_PENDING)
     if not os.path.isfile(rp):
         check(False, "R16 %s exists (the routes ratchet)" % ROUTES_PENDING)
