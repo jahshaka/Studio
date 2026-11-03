@@ -18,7 +18,7 @@
 # read after ITS card wait - never the 60-s cap).
 # EACH ROW JUDGED (one line each, the stamp's to write - scripts/warm-app-cache.sh): "PRIMED" when its run reached its own
 # end - exit 0, or a red of its own law (its cache stored all the same, the red printed); a SEED row (`--seed`) only when
-# its own `--seed-check` then says fresh. "NOT PRIMED" otherwise: killed at the call's end, a signal, or the engine's own
+# its own `--seed-check` then says fresh (the run carries JAH_COLD_PRIME=1: a seed row seeds only here, SHIP-CUT-2 0d). "NOT PRIMED" otherwise: killed at the call's end, a signal, or the engine's own
 # crash or device-loss line in its log (`Jahshaka crashed`, VK_ERROR_OUT_OF_DEVICE_MEMORY, VK_ERROR_DEVICE_LOST).
 # EXIT: 0 every row run PRIMED; 1 a prime CRASHED (a defect: the row's own, never environmental); 75 the card stayed held
 # past a row's wait or the call's end came - the rows left are named and the next call primes them.
@@ -78,7 +78,7 @@ while IFS= read -r -u 3 line; do
     done
     w=$(( left - ${JAH_COLD_MIN_LEFT:-30} )); [ "$w" -ge 1 ] || w=1; [ "$w" -le "$WAITMAX" ] || w=$WAITMAX
     log="$LOGS/$row.log"; t0=$(date +%s)
-    ( cd "$wd" && exec env "${unsets[@]}" "${sets[@]}" "$LOCK" --wait-max "$w" --label "warm-app-cache (cold-on: $row)" \
+    ( cd "$wd" && exec env "${unsets[@]}" "${sets[@]}" JAH_COLD_PRIME=1 "$LOCK" --wait-max "$w" --label "warm-app-cache (cold-on: $row)" \
           bash -c 'b=$(( $1 - $(date +%s) )); [ "$b" -ge 1 ] || b=1; shift; exec timeout --kill-after=10 "$b" "$@"' \
           cold-bound "$DEADLINE" "${cmd[@]}" ) < /dev/null > "$log" 2>&1
     rc=$?

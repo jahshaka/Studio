@@ -30,7 +30,8 @@
 // is the startup set OF ONE TIER - another tier's boot compiles its own permutations and the pass runs again).
 // ONE SEED PER TIER, THIS CODE: `--seed-dir <name>` names the seed's directory beside the working directory (default
 // e2e-async-after-open-seed: this row's); scripting.e2e.sky_swap_transient.seed is the second instance, at that row's tier.
-// A seed whose stamp is not this tree's is STALE: the seed row re-seeds it, and the row - which never compiles the
+// A seed whose stamp is not this tree's is STALE: the warm-up's cold-on re-seeds it (JAH_COLD_PRIME=1; met stale in a capped
+// run, the seed row fails at once naming the warm-up - SHIP-CUT-2 0d), and the row - which never compiles the
 // startup set inside its own run - refuses it, naming the seed row (a stale seed cost the row 50 s against its 28 s:
 // the cold launch built the startup set itself).
 //
@@ -255,6 +256,18 @@ int main(int argc, char **argv)
         if (seedFresh) {
             std::printf("    the startup seed is this tree's (its stamp the tree's key): nothing to do\nPASS\n");
             return 0;
+        }
+        // A STALE SEED IS RE-MADE BY THE WARM-UP, NEVER MET BY THE ROW (SHIP-CUT-2 0d): the boot is 22-64 s, so inside a
+        // capped run it was a silent 60.11-s TIMEOUT (ORPHAN-REDS-1's final --all at cc814e299). The warm-up's cold-on
+        // (tests/support/warm_cold_rows.sh) runs this command with JAH_COLD_PRIME=1 and seeds uncapped; anywhere else a
+        // missing or stale seed fails in a fraction of a second, naming the warm-up (#140's rule for an unwarmed row).
+        if (qgetenv("JAH_COLD_PRIME") != "1") {
+            std::printf("FAIL: the startup seed %s is %s - the warm-up makes it before this row "
+                        "(scripts/warm-app-cache.sh <build> --only cold-on; spec.sh test asks it), never this capped run. "
+                        "Its key moved since the warm-up: a CMake re-run (GIT_COMMIT_HASH is configure-time), a media "
+                        "rebuild or a new fork stamp in the tree while its rows ran\n",
+                        qPrintable(seedName), QDir(seed).exists() ? "STALE (its stamp is not the tree's key)" : "missing");
+            return 1;
         }
         if (QDir(seed).exists())
             std::printf("    the startup seed is STALE (its stamp is not this tree's key): re-seeding\n");

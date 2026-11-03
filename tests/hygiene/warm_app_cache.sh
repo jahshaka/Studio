@@ -219,7 +219,9 @@ out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${
 sed -i '/^o\.cold/d' "$CR"
 # A STALE STARTUP SEED IS RE-MADE BY THE WARM-UP (SHIP-CUT-2 0d): a seed row primed at the key whose own --seed-check says stale
 # (a new Studio build) runs again; it is PRIMED only when its --seed-check says fresh after the run
-printf '#!/bin/sh\ncase "$1" in --seed-check) [ -f fresh ] && exit 0; exit 3 ;; --seed) [ -n "$SEED_FAILS" ] || touch fresh; echo PASS; exit 0 ;; esac\nexit 64\n' > "$T/seedfx"
+# (the fake seeds only under the warm-up's JAH_COLD_PRIME=1, as the real seed row does since SHIP-CUT-2 0d: every PRIMED below is
+# the runner passing it; a stale seed met outside the warm-up fails at once)
+printf '#!/bin/sh\ncase "$1" in --seed-check) [ -f fresh ] && exit 0; exit 3 ;; --seed) [ -f fresh ] && exit 0; [ "$JAH_COLD_PRIME" = 1 ] || { echo "FAIL: stale, the warm-up makes it"; exit 1; }; [ -n "$SEED_FAILS" ] || touch fresh; echo PASS; exit 0 ;; esac\nexit 64\n' > "$T/seedfx"
 chmod +x "$T/seedfx"; mkdir -p "$T/s"
 printf 's.seed\t%s\t\t%s\t--seed\n' "$T/s" "$T/seedfx" >> "$CR"
 out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 SEED_FAILS=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
@@ -236,6 +238,10 @@ out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc
 out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 0 ] && [ -f "$T/s/fresh" ] && echo "$out" | grep -q 'warm_cold_rows: s.seed: PRIMED' && ! echo "$out" | grep -q 'warm_cold_rows: [xyz].cold: PRIMED' &&
     ok "...and the warm-up re-makes it before any row (the other rows not run again)" || no "the stale seed re-made: '$out' rc $rc"
+rm -f "$T/s/fresh"; out=$(cd "$T/s" && "$T/seedfx" --seed); rc=$?
+[ $rc = 1 ] && [ ! -f "$T/s/fresh" ] && ok "a stale seed met OUTSIDE the warm-up (no JAH_COLD_PRIME) fails at once, nothing seeded (the row never re-seeds under its cap)" ||
+    no "the seed outside the warm-up: '$out' rc $rc"
+DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on > /dev/null 2>&1
 # EACH ROW ITS OWN HOLD: the card held past a row's wait - that row NOT RUN, exit 75, nothing stamped, the next call primes it
 rm -f "$CS/z.cold.driver-key"
 exec 8>"$T/gpu.lock"; flock 8
