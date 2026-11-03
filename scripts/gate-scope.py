@@ -244,6 +244,8 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: ["gi", "atom", "engine"] for f in ("gpuSlotChangedLane", "gpuSlotChangedOwed", "measure", "fileSlotFields",
                                              "fileColumn")},
     "query": ["engine", "picking"],
+    # THE ONE ASYNC-SHADER RULE (ORPHAN-REDS-1): the delta commit's shader (gi) and the ray tier's pipeline builds (gi, rtreflect)
+    "compilesInBackground": ["shadercache", "threading", "gi", "rtreflect"],
 }
 OGRE_VIEW_FUNCTIONS = {
     **{f: _CORE for f in ("OgreView", "~OgreView", "setScene", "detachScene", "attachWorkspace", "detachWorkspace",
