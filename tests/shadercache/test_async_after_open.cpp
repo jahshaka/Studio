@@ -42,7 +42,7 @@
 // launches only: the startup build is not its subject.
 #include <QCoreApplication>
 #include "app/startuppasskey.h"   // the pass key's one definition (src/app)
-#include "jah_startup_pass_id.h"     // JAH_STARTUP_PASS_CODE_ID (cmake/StartupPassId.cmake)
+#include "jah_startup_pass_id.h"     // JAH_STARTUP_PASS_CODE_ID (cmake/startup_pass_id.py)
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
@@ -239,9 +239,8 @@ bool copyTree(const QString &from, const QString &to)
 
 /// THE KEYS' OWN CASES (CPU, no card, no app: shadercache.startup_pass_key) - the pass key's and the seed key's terms are
 /// WHAT DECIDES THE PASS's BYTES (TEST-STREAMLINE-1 point 3): the media by content, never a path or a time; the key moves
-/// with the pass's code id, the media and the fingerprint, and holds a Studio commit apart; the id's generator (cmake/
-/// StartupPassId.cmake) moves with a listed source and the engine's full build id, never an unlisted one; and the build's
-/// list holds the pass's own sources.
+/// with the pass's code id, the media and the fingerprint, and holds a Studio commit apart; the build's list names the pass
+/// (its completeness against the compiler's deps: source.startup_pass_closure); a re-seed starts on the stale seed's layers.
 int keySelfTest()
 {
     int failures = 0;
@@ -275,37 +274,12 @@ int keySelfTest()
               k != startuppass::passKey(QStringLiteral("P"), db + QStringLiteral("0"), QStringLiteral("F")) &&
               k != startuppass::passKey(QStringLiteral("P"), da, QStringLiteral("G")),
           "the pass key moves with its code id, its media and the cache fingerprint, and with nothing else (no commit term)");
-    // THE GENERATOR on toy inputs: a listed file, an unlisted one, the engine's id header
-    put(t + QStringLiteral("/g/listed.cpp"), "a"); put(t + QStringLiteral("/g/unlisted.cpp"), "u");
-    put(t + QStringLiteral("/g/id.h"), "#define JAHSHAKA_ENGINE_BUILD_ID \"e1\"\n");
-    auto gen = [&]() {
-        QProcess p;
-        p.start(QStringLiteral(JAH_CMAKE_COMMAND), {QStringLiteral("-DJAH_PASS_FILES=") + t + QStringLiteral("/g/listed.cpp"),
-                                                   QStringLiteral("-DJAH_ENGINE_ID_HEADER=") + t + QStringLiteral("/g/id.h"),
-                                                   QStringLiteral("-DJAH_PASS_OUT=") + t + QStringLiteral("/g/out.h"),
-                                                   QStringLiteral("-P"), QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
-                                                       QStringLiteral("/cmake/StartupPassId.cmake")});
-        p.waitForFinished(30000);
-        return readStamp(t + QStringLiteral("/g/out.h"));
-    };
-    const QString g0 = gen();
-    put(t + QStringLiteral("/g/unlisted.cpp"), "u2");
-    const QString g1 = gen();
-    put(t + QStringLiteral("/g/listed.cpp"), "a2");
-    const QString g2 = gen();
-    put(t + QStringLiteral("/g/id.h"), "#define JAHSHAKA_ENGINE_BUILD_ID \"e2\"\n");
-    const QString g3 = gen();
-    CHECK(g0.contains(QStringLiteral("JAH_STARTUP_PASS_CODE_ID")) && g1 == g0 && g2 != g1 && g3 != g2,
-          "the pass's code id: an unlisted Studio file moved - the same id; a listed source moved - another; the engine's "
-          "full build id moved - another");
-    // THE BUILD's LIST (configure-time, <build>/startup-pass-files.txt): the pass's own source and what it draws from
+    // THE BUILD's LIST (cmake/startup_pass_id.py writes it at build time; source.startup_pass_closure holds it to the
+    // compiler's own deps - completeness is that row's): it exists and names the pass's own source
     QFile list(QFileInfo(QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).absolutePath()).absolutePath() +
                QStringLiteral("/startup-pass-files.txt"));
     const QString names = list.open(QIODevice::ReadOnly) ? QString::fromUtf8(list.readAll()) : QString();
-    CHECK(names.contains(QStringLiteral("src/app/shaderbuildgate.cpp\n")) &&
-              names.contains(QStringLiteral("irisgl/document/scenegraph/worldmodes.cpp\n")) &&
-              names.contains(QStringLiteral("src/services/scenetemplatebuilder.cpp\n")),
-          "the build's pass list holds shaderbuildgate.cpp, the World Modes and the template builder it includes");
+    CHECK(names.contains(QStringLiteral("src/app/shaderbuildgate.cpp\n")), "the build's pass list names shaderbuildgate.cpp");
     std::printf("    the pass list: %d files\n", int(names.count(QLatin1Char('\n'))));
     // A RE-SEED STARTS ON THE STALE SEED's LAYERS (the lead's condition): a stale seed (its stamp another key) holding a
     // layer file; `--seed` under the warm-up's JAH_COLD_PRIME with a toy app that records whether its home's cache held that

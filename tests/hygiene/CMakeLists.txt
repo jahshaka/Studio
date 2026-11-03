@@ -169,6 +169,12 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/shader_cache_key.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.shader_cache_key PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.shader_cache_key)
+    # source.startup_pass_closure — TEST-STREAMLINE-1 (the stage-1 audit's finding 5): the startup pass's key hashes its whole
+    # dependency closure - every file the compiler reads for shaderbuildgate.cpp, their sources, the named extras.
+    add_test(NAME source.startup_pass_closure
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/startup_pass_closure.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.startup_pass_closure PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.startup_pass_closure)
     # source.code_rows — TEST-STREAMLINE-1 1b: the `code` label (tests/CMakeLists.txt jah_code_label_pass, derived) is exactly
     # the rows that take no card - `spec.sh test --code` runs them with no lock and no warm-up (code_rows.py says the rule).
     add_test(NAME source.code_rows

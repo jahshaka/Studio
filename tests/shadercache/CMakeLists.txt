@@ -98,7 +98,6 @@ set_target_properties(test_async_after_open PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(test_async_after_open PRIVATE Qt6::Core Qt6::Gui)
 target_compile_definitions(test_async_after_open PRIVATE
-    JAH_CMAKE_COMMAND="${CMAKE_COMMAND}"
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
     JAHSHAKA_OGRE_INSTALL="${OGRE_NEXT_PREFIX}")

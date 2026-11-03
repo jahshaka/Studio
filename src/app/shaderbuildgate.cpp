@@ -4,7 +4,7 @@
 #include "app/versionsplashscreen.h"
 #include "bridge/enginehost.h"
 #include "data/settingsmanager.h"
-#include "jah_startup_pass_id.h"   // JAH_STARTUP_PASS_CODE_ID (cmake/StartupPassId.cmake)
+#include "jah_startup_pass_id.h"   // JAH_STARTUP_PASS_CODE_ID (cmake/startup_pass_id.py)
 #include "app/startuppasskey.h"
 #include <QCoreApplication>
 #include "services/defaultfloormaterial.h"
