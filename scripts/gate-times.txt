@@ -203,7 +203,7 @@ materials.bundle 0.00  ship 3a0422b4e (2026-10-13)
 math.parity 20.37  quiet n=23
 mcp.e2e 28.30  ship 3a0422b4e (2026-10-13)
 mcp.e2e.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
-meshbake.archive_bakes 41.00  ship 3a0422b4e (2026-10-13)
+meshbake.archive_bakes 34.53  solo, the card lock held, :71 (ORPHAN-REDS-1, 2026-11-03: three launches, each from 'Pipeline cache saved' to its process exit inside one second; it FAILED at 55.48 s on its 20-s teardown watchdog since 10-29, the ray tier's close joining builds no view used) - was 41.00 (ship 3a0422b4e, 2026-10-13)
 meshbake.archive_bakes.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 mirror.document_to_engine 9.72  quiet n=43
 open.frames 38.81  quiet n=41
