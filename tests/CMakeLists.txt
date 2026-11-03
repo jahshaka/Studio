@@ -673,6 +673,16 @@ function(jah_fresh_home_fixture row fixture home)
     if(F_LABELS)
         set_tests_properties(${row} PROPERTIES LABELS "${F_LABELS}")
     endif()
+    # A WARM fixture SEEDS FROM A WARM-UP's PRODUCT (the shared cache): it names the boots (JAH_BOOTS, the warm-up's own
+    # property), so neither it nor any row requiring it is a `code` row (TEST-STREAMLINE-1 1b: a NULL headless row on a WARM
+    # fixture redded at an unwarmed tree's --code call - its fixture is cold now)
+    if(F_WARM)
+        if(F_ARGS MATCHES "--cache;engine")
+            set_property(TEST ${row} PROPERTY JAH_BOOTS "engine-off;engine-on")
+        else()
+            set_property(TEST ${row} PROPERTY JAH_BOOTS "app-off;app-on")
+        endif()
+    endif()
 endfunction()
 
 # jah_timing_script(<in.js> <out.js>) — THE MILLISECOND BARS OF AN E2E SCRIPT, ARMED (lane
@@ -1254,7 +1264,7 @@ jah_ship_closure_pass()
 # whose fixture a non-code row requires: `ctest -L code` would run it unlocked), and requires no setup that is not code
 # (ctest pulls a required setup in outside -L: a GPU setup would run unlocked), to a fixed point. Never a hand label: a row
 # is a code test by what it takes, so a new CPU row is one at once. source.code_rows (tests/hygiene) holds the label to
-# this rule on the listing and prints the count; the count at TEST-STREAMLINE-1: 92 (source.code_rows itself the 92nd).
+# this rule on the listing and prints the count; the count at TEST-STREAMLINE-1: 90.
 function(jah_code_label_pass)
     get_property(_all GLOBAL PROPERTY JAH_SHIP_ALL)   # (every row with its directory: _jah_ship_collect above)
     set(_code "")
@@ -1263,8 +1273,9 @@ function(jah_code_label_pass)
         get_property(_rg TEST ${_t} DIRECTORY "${_d}" PROPERTY RESOURCE_GROUPS)
         get_property(_cl TEST ${_t} DIRECTORY "${_d}" PROPERTY JAH_CLASS)
         get_property(_bt TEST ${_t} DIRECTORY "${_d}" PROPERTY JAH_BOOTS)
+        get_property(_lk TEST ${_t} DIRECTORY "${_d}" PROPERTY JAH_CARD_LOCK)   # a CPU row a policy holds to the lock
         get_property(_l TEST ${_t} DIRECTORY "${_d}" PROPERTY LABELS)
-        if(NOT _rg AND NOT _cl AND NOT _bt AND NOT "measure" IN_LIST _l)
+        if(NOT _rg AND NOT _cl AND NOT _bt AND NOT _lk AND NOT "measure" IN_LIST _l)
             list(APPEND _code ${_t})
         endif()
     endforeach()

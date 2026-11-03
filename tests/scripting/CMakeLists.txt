@@ -271,7 +271,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.clip_ref
-         COMMAND ${JAH_WARM_CONSUMER} "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref" -- bash ${CMAKE_CURRENT_SOURCE_DIR}/clip_ref.sh
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/clip_ref.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb
                  ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2_walk_anim.glb
@@ -280,6 +280,7 @@ add_test(NAME scripting.e2e.clip_ref
          WORKING_DIRECTORY ${_home}/run)
 jah_ship_row(scripting.e2e.clip_ref)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.clip_ref PROPERTIES
+    JAHSHAKA_HEADLESS TRUE   # clip_ref.sh runs the app --headless only: the NULL render system (testing_rules R13)
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 60)   # two processes: 98 s measured on a cold shader cache, 8 s warm
@@ -293,7 +294,7 @@ set_tests_properties(scripting.e2e.clip_ref PROPERTIES
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tex_ref)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.tex_ref
-         COMMAND ${JAH_WARM_CONSUMER} "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tex_ref" -- bash ${CMAKE_CURRENT_SOURCE_DIR}/tex_ref.sh
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/tex_ref.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/implane_wide.png
                  ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/implane_tall.png
@@ -302,6 +303,7 @@ add_test(NAME scripting.e2e.tex_ref
          WORKING_DIRECTORY ${_home}/run)
 jah_ship_row(scripting.e2e.tex_ref)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.tex_ref PROPERTIES
+    JAHSHAKA_HEADLESS TRUE   # tex_ref.sh runs the app --headless only: the NULL render system (testing_rules R13)
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 60)   # three processes, like clip_ref's two (98 s cold, 8 s warm)
@@ -434,10 +436,10 @@ configure_file(scripts/e2e_one_asset.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_a
 # "one animation row"), and a home that persists across gates accumulates a
 # second copy of everything.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_asset)
-jah_fresh_home_fixture(scripting.e2e.one_asset.fresh_home one_asset_home "${_home}" WARM LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.one_asset.fresh_home one_asset_home "${_home}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
 file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.one_asset
-         COMMAND ${JAH_WARM_CONSUMER} "${_home}" -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js --headless
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js --headless
          WORKING_DIRECTORY ${_home}/run)
 jah_ship_row(scripting.e2e.one_asset)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.one_asset PROPERTIES
@@ -621,7 +623,7 @@ file(MAKE_DIRECTORY ${_cbud_home}/run)
 # command; every one of the script's three processes is --headless, the flag forwarded to each) — so
 # a change to the copy, the floor or the paste selects this row (read 8 F1).
 add_test(NAME scripting.e2e.clipboard_budget
-         COMMAND sh "${JAH_FRESH_HOME}" --warm "${_cbud_home}" --
+         COMMAND sh "${JAH_FRESH_HOME}" "${_cbud_home}" --   # (no --warm: --headless is the NULL render system, no shader cache)
                  bash ${CMAKE_CURRENT_SOURCE_DIR}/clipboard_budget.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --headless
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard_budget.js
          WORKING_DIRECTORY ${_cbud_home}/run)
@@ -736,10 +738,10 @@ file(MAKE_DIRECTORY ${_mbHome}/run)
 set(SHARE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_share.jbundle)
 configure_file(scripts/e2e_material_share.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js @ONLY)
 set(_msHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share)
-jah_fresh_home_fixture(scripting.e2e.material_share.fresh_home materialShareHome "${_msHome}" WARM ARGS --rm "${SHARE_PATH}" LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.material_share.fresh_home materialShareHome "${_msHome}" ARGS --rm "${SHARE_PATH}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
 file(MAKE_DIRECTORY ${_msHome}/run)
 add_test(NAME scripting.e2e.material_share
-         COMMAND ${JAH_WARM_CONSUMER} "${_msHome}" -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js --headless
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js --headless
          WORKING_DIRECTORY ${_msHome}/run)
 set_tests_properties(scripting.e2e.material_share PROPERTIES
     ENVIRONMENT "HOME=${_msHome};JAHSHAKA_DATA_ROOT=${_msHome}/.local/share/Jahshaka"
@@ -751,10 +753,10 @@ set_tests_properties(scripting.e2e.material_share PROPERTIES
 configure_file(scripts/e2e_material_share_import.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js @ONLY)
 set(_msiHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share_import)
-jah_fresh_home_fixture(scripting.e2e.material_share_import.fresh_home materialShareImportHome "${_msiHome}" WARM LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.material_share_import.fresh_home materialShareImportHome "${_msiHome}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
 file(MAKE_DIRECTORY ${_msiHome}/run)
 add_test(NAME scripting.e2e.material_share_import
-         COMMAND ${JAH_WARM_CONSUMER} "${_msiHome}" -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
          WORKING_DIRECTORY ${_msiHome}/run)
 jah_ship_row(scripting.e2e.material_share_import)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.material_share_import PROPERTIES
@@ -777,10 +779,10 @@ file(MAKE_DIRECTORY ${_mbiHome}/run)
 # Document verbs only -> --headless. A FRESH HOME, because the load-bearing
 # first assertion is that NOTHING is seeded until a preset is used.
 set(_paHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preset_apply)
-jah_fresh_home_fixture(scripting.e2e.preset_apply.fresh_home presetApplyHome "${_paHome}" WARM LABELS "scripting")
+jah_fresh_home_fixture(scripting.e2e.preset_apply.fresh_home presetApplyHome "${_paHome}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
 file(MAKE_DIRECTORY ${_paHome}/run)
 add_test(NAME scripting.e2e.preset_apply
-         COMMAND ${JAH_WARM_CONSUMER} "${_paHome}" -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
          WORKING_DIRECTORY ${_paHome}/run)
 jah_ship_row(scripting.e2e.preset_apply)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.preset_apply PROPERTIES
@@ -870,11 +872,11 @@ jah_add_pool(editor TIER low NEEDS NONE NEEDS_WHY "editor verbs and their screen
 jah_ship_row(pool.editor)   # THE SHIP SET (TEST-CUT-1)
 
 if(TEST scripting.e2e.clip_ref)
-    jah_fresh_home_fixture(scripting.e2e.clip_ref.fresh_home scriptingE2eClipRefFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref" WARM LABELS "scripting")
+    jah_fresh_home_fixture(scripting.e2e.clip_ref.fresh_home scriptingE2eClipRefFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
     set_property(TEST scripting.e2e.clip_ref APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eClipRefFreshHome)
 endif()
 if(TEST scripting.e2e.tex_ref)
-    jah_fresh_home_fixture(scripting.e2e.tex_ref.fresh_home scriptingE2eTexRefFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tex_ref" WARM LABELS "scripting")
+    jah_fresh_home_fixture(scripting.e2e.tex_ref.fresh_home scriptingE2eTexRefFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tex_ref" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
     set_property(TEST scripting.e2e.tex_ref APPEND PROPERTY FIXTURES_REQUIRED scriptingE2eTexRefFreshHome)
 endif()
 if(TEST scripting.e2e.perf_capture_frames)

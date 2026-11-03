@@ -17,10 +17,10 @@ file(MAKE_DIRECTORY ${_home}/run)
 # left by an older build carries an older schema — the app's reset keeps the storages, wants their sidecar directory, an
 # older AssetStore has none, and the library is REFUSED (exit 4): "--dump-api-docs exited 4" on main's build-linux, green
 # in a fresh ship tree. A row owns its own state (the same fault as shadercache.app, 67cefee33).
-jah_fresh_home_fixture(api.contract.fresh_home api_contract_home "${_home}" WARM LABELS "scripting")
+jah_fresh_home_fixture(api.contract.fresh_home api_contract_home "${_home}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
 jah_ship_row(api.contract.fresh_home)   # a ship row's setup runs in the ship set too
 add_test(NAME api.contract
-         COMMAND ${JAH_WARM_CONSUMER} "${_home}" -- bash "${CMAKE_CURRENT_SOURCE_DIR}/api_contract.sh"
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/api_contract.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                  "${CMAKE_SOURCE_DIR}/docs/SCRIPTING.md"
          WORKING_DIRECTORY ${_home}/run)
@@ -29,7 +29,9 @@ set_tests_properties(api.contract PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED api_contract_home
     TIMEOUT 60
-    LABELS "scripting")
+    LABELS "scripting"
+    JAHSHAKA_HEADLESS TRUE     # its script runs --dump-api-docs: the NULL render system (testing_rules R13)
+    JAH_CARD_LOCK "the dump refuses to run without the card's lock (main.cpp, JAH_GPU_LOCK_HELD; CLAUDE.md: regen-api-docs.sh runs under it)")
 # `--dump-api-docs` boots the NULL render system (SPECS/SCENEGRAPH_SPEC.md §3b):
 # generating the docs needs the registry and a document, never a pixel. Run with
 # DISPLAY stripped so that stays true.

@@ -4,8 +4,9 @@
 `spec.sh test <spec> --code` runs the rows labelled `code` that a stage's diff reaches, ctest -j12, with NO card lock and NO
 warm-up. So a `code` row must take no card, and nothing ctest pulls in beside it may either. tests/CMakeLists.txt
 (jah_code_label_pass) derives the label; this row holds the listing to the same rule, both ways:
-  - a `code` row has no card slots (RESOURCE_GROUPS), no JAH_CLASS, no `measure` label, no JAH_BOOTS (a warm-up's product:
-    source.shaders_spirv_valid reads the app-off boot's dump - it runs with the six at a stage's end);
+  - a `code` row has no card slots (RESOURCE_GROUPS), no JAH_CLASS, no `measure` label, no JAH_BOOTS and no fresh_home.sh
+    --warm/--promote/--seed in its command and no JAH_CARD_LOCK (a policy that holds it to the lock) (a warm-up's product: source.shaders_spirv_valid reads the app-off boot's dump, a
+    WARM home the shared cache - a stage's --code call never warms);
   - every setup its FIXTURES_REQUIRED names is `code` (ctest runs a required setup outside -L: a GPU setup would run
     unlocked), and it is no setup or cleanup of a fixture a non-code row requires (a GPU row's fixture half);
   - and every row that meets those is labelled (a CPU row is a code test at once - none left out).
@@ -32,8 +33,12 @@ def _list(v):
 def judge(tests):
     """(labelled, wrongly labelled [(row, why)], left out [row]) of a json-v1 `tests` list."""
     P = {t["name"]: {x["name"]: x["value"] for x in t.get("properties", [])} for t in tests}
+    C = {t["name"]: [str(c) for c in (t.get("command") or [])] for t in tests}
+    warm = {n for n, c in C.items() if any(x.endswith("fresh_home.sh") for x in c)
+            and any(x in ("--warm", "--promote", "--seed") for x in c)}
     takes = {n for n, p in P.items()
-             if p.get("RESOURCE_GROUPS") or p.get("JAH_CLASS") or "measure" in _list(p.get("LABELS")) or p.get("JAH_BOOTS")}
+             if p.get("RESOURCE_GROUPS") or p.get("JAH_CLASS") or "measure" in _list(p.get("LABELS")) or p.get("JAH_BOOTS")
+             or p.get("JAH_CARD_LOCK") or n in warm}
     code = set(P) - takes
     setups, users = {}, {}
     for n, p in P.items():
@@ -58,7 +63,9 @@ def judge(tests):
         p = P[n]
         why = ("card slots" if p.get("RESOURCE_GROUPS") else "a JAH_CLASS" if p.get("JAH_CLASS") else
                "a measure row" if "measure" in _list(p.get("LABELS")) else "a warm-up's product (JAH_BOOTS)"
-               if p.get("JAH_BOOTS") else "a card row's fixture half, or it requires a setup that takes the card")
+               if p.get("JAH_BOOTS") else "held to the card's lock (JAH_CARD_LOCK)" if p.get("JAH_CARD_LOCK")
+               else "a warm-up's product (fresh_home.sh --warm/--promote/--seed)" if n in warm
+               else "a card row's fixture half, or it requires a setup that takes the card")
         wrong.append((n, why))
     return labelled, wrong, sorted(code - labelled)
 
@@ -75,10 +82,12 @@ def main(source, build):
              T("g.row", JAH_CLASS="engine", FIXTURES_REQUIRED=["fxg"]), T("c.half", LABELS=["code"], FIXTURES_SETUP=["fxg"]),
              T("g.setup", JAH_CLASS="app", FIXTURES_SETUP=["fxs"]), T("c.pulls", LABELS=["code"], FIXTURES_REQUIRED=["fxs"]),
              T("c.setup_ok", LABELS=["code"], FIXTURES_SETUP=["fxc"]), T("c.user_ok", LABELS=["code"], FIXTURES_REQUIRED=["fxc"]),
-             T("c.left_out", LABELS=["hygiene"])]
+             T("c.left_out", LABELS=["hygiene"]),
+             dict(T("c.warm", LABELS=["code"]), command=["sh", "/s/tests/support/fresh_home.sh", "--warm", "/b/h", "--", "x"]),
+             T("c.lock", LABELS=["code"], JAH_CARD_LOCK="a policy")]
     _, wrong, left = judge(synth)
-    check(sorted(n for n, _ in wrong) == ["c.boots", "c.class", "c.half", "c.measure", "c.pulls", "c.slots"] and left == ["c.left_out"],
-          "card slots, a class, a measure row, a warm-up product, a GPU row's fixture half and a row pulling a GPU setup are "
+    check(sorted(n for n, _ in wrong) == ["c.boots", "c.class", "c.half", "c.lock", "c.measure", "c.pulls", "c.slots", "c.warm"] and left == ["c.left_out"],
+          "card slots, a class, a measure row, a warm-up product (named, or a fresh_home --warm command), a lock policy, a GPU row's fixture half and a row pulling a GPU setup are "
           "refused the label; a CPU setup of a CPU row keeps it; an unlabelled CPU row is named (%s / %s)" % (wrong, left))
     sys.path.insert(0, os.path.join(source, "scripts"))
     import gate_graph            # a listing from a copy of the CTestTestfile tree (never truncates a running gate's log)

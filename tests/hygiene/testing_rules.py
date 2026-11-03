@@ -65,7 +65,9 @@ tree and the build's registration, each with its name in the failure line:
      in one day found twenty-four app rows at or past the 60 s cap that way. A row whose SUBJECT is the cold path says
      so with the test property JAHSHAKA_COLD_BY_SUBJECT TRUE (samples.cold_open.import / .open, scripting.e2e.sky_swap_transient).
      What ctest cannot see is not read: a root a row's own script makes (material.live_roundtrip's stages) is the
-     script's, warmed there.
+     script's, warmed there. A HEADLESS app row (`--headless` / `--dump-api-docs` on its command, or the test property
+     JAHSHAKA_HEADLESS TRUE where its script runs the app) boots the NULL render system: no shader cache - it is exempt
+     (TEST-STREAMLINE-1 1b: its WARM fixture was a warm-up dependency for nothing).
   R14 A WARM FIXTURE's CONSUMER PROMOTES ON GREEN (HARNESS-1, the lead's ruling 2026-10-29). Every row that
      FIXTURES_REQUIRES a fixture whose setup is fresh_home.sh --setup --warm <home> (jah_fresh_home_fixture's WARM) runs
      as fresh_home.sh --promote of THAT home (and the same --cache key; WARM_HOME on jah_gpu_row /
@@ -432,6 +434,11 @@ def r13_bad(tests):
         P = _props(t)
         if not _app_boot(cmd) or str(P.get(COLD_BY_SUBJECT, "")).strip().upper() in ("TRUE", "ON", "1", "YES"):
             continue
+        # A HEADLESS APP ROW (TEST-STREAMLINE-1 1b): `--headless` / `--dump-api-docs` is the NULL render system - no shader
+        # cache, nothing to boot warm; visible on its command, or stated JAHSHAKA_HEADLESS TRUE where a script runs the app
+        if any(c in ("--headless", "--dump-api-docs") for c in cmd) or \
+                str(P.get("JAHSHAKA_HEADLESS", "")).strip().upper() in ("TRUE", "ON", "1", "YES"):
+            continue
         wd = P.get("WORKING_DIRECTORY") or "/"
         roots = []
         for e in _list(P.get("ENVIRONMENT")):
@@ -697,12 +704,15 @@ def the_rules_catch():
                    C("subject", [app, "--data-root", "/b/tests/x/s"], JAHSHAKA_COLD_BY_SUBJECT="TRUE"),
                    C("fixture", ["/b/tests/gi/test_x"], ENVIRONMENT=["HOME=/b/tests/x/z"]),
                    C("lab", ["/b/bin/jahlab", "--data-root", "/b/tests/x/l"]),
-                   C("shared", [app, "--script", "x.js"])])
+                   C("shared", [app, "--script", "x.js"]),
+                   C("headless", [app, "--headless", "--data-root", "/b/tests/x/hl"]),
+                   C("headless_script", ["bash", "/s/x.sh", app], ENVIRONMENT=["HOME=/b/tests/x/hs"], JAHSHAKA_HEADLESS="TRUE")])
     check(r13 == ["cold (--data-root=/b/tests/x/d)", "coldenv (HOME=/b/tests/x/h)",
                   "fixturedcold (JAHSHAKA_DATA_ROOT=/b/tests/x/c)", "inrowcold (--data-root=/b/tests/x/h/d)"],
           "R13 flags an app row booting its own data root cold (a bare root, an in-row or fixture wipe without --warm), "
           "never one warmed in-row or by its fixture (a relative root read from its WORKING_DIRECTORY), one cold by "
-          "subject, a fixture, jahlab or a row on no root of its own (%s)" % r13)
+          "subject, a fixture, jahlab, a row on no root of its own or a HEADLESS app row (the NULL render system: --headless on "
+          "its command, or JAHSHAKA_HEADLESS TRUE) (%s)" % r13)
     r14 = r14_bad([C("w.setup", ["sh", fh, "--setup", "--warm", "/b/tests/x/w"], FIXTURES_SETUP=["wfx"]),
                    C("c.setup", ["sh", fh, "--setup", "/b/tests/x/c"], FIXTURES_SETUP=["cfx"]),
                    C("bare", [app, "--script", "x.js"], FIXTURES_REQUIRED=["wfx"]),
