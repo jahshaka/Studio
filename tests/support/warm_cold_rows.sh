@@ -68,7 +68,7 @@ while IFS= read -r -u 3 line; do
     fi
     if [ "$again" = 1 ]; then echo "warm_cold_rows: $row: NOT RUN - left for the next call"; continue; fi
     left=$(( DEADLINE - $(date +%s) ))
-    if [ "$left" -lt "${JAH_COLD_MIN_LEFT:-30}" ]; then   # (the knob: tooling.warm_app_cache's toy bound, seconds)
+    if [ "$left" -lt "${JAH_COLD_MIN_LEFT:-30}" ]; then   # (the knob: tooling.warm_cold_rows and warm_cold_calls toy bounds, seconds)
         echo "warm_cold_rows: $row: NOT RUN - the call's end (${left} s left): the next call primes it"; again=1; continue
     fi
     unsets=(-u JAHSHAKA_SHADER_CACHE_DIR -u __GL_SHADER_DISK_CACHE); sets=()   # env takes its -u options BEFORE any VAR=value

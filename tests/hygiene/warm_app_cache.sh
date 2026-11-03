@@ -4,9 +4,16 @@
 # the engine rows' caches with the driver's cache off and each exe's driver cache after it (PHOTON-7 11-2; the two-boot
 # law #100/#102b; one boot a call, the card's wait bounded per boot, #106). On a scratch tests dir (--tests-dir), never
 # the tree's shared cache; the boot itself is the script's own (not a test: once, uncapped, when the key moved).
-# usage: warm_app_cache.sh <source-dir> <build-dir>
+# FOUR ROWS, ONE SCRIPT (TEST-STREAMLINE-1: the whole ran 35.8 s quiet at 8a8503057 against a CPU row's 10-s budget and a
+# 6.48-s price line - split by proof): <part> = boots (tooling.warm_app_cache: the four boots' answers, the stamps, the
+# fake boots, the budget and the bounded wait), cold (tooling.warm_cold_rows: the cold-on runner's rows - one at a time, the
+# crashed prime, the seeds), coldcall (tooling.warm_cold_calls: a call's own bounds - the held card, the deadline, the logs)
+# or keys (tooling.warm_key: the key's terms, the top-up, the path-free stamps); none = all four, a hand run.
+# usage: warm_app_cache.sh <source-dir> <build-dir> [boots|cold|coldcall|keys]
 set -u
-SRC=${1:?source}; BUILD=${2:?build}
+SRC=${1:?source}; BUILD=${2:?build}; PART=${3:-all}
+case "$PART" in all|boots|cold|coldcall|keys) ;; *) echo "warm_app_cache.sh: <part> is boots, cold, coldcall or keys, not $PART" >&2; exit 64 ;; esac
+want() { [ "$PART" = all ] || [ "$PART" = "$1" ]; }
 W="$SRC/scripts/warm-app-cache.sh"
 T=$(mktemp -d); trap 'rm -rf "$T"' EXIT
 CK="$SRC/tests/support/shadercache_check.py"
@@ -32,6 +39,39 @@ cp "$T/app" "$T/app2"
 : > "$T/cold-none"   # no cold row: cold-on has nothing to warm (its own cases at the end)
 X=(--app "$T/app" --lab "$T/lab" --cold-rows "$T/cold-none")
 eid() { basename "$1"; }
+key=$("$W" "$BUILD" --key)   # the build's key (each part reads it; the boots part proves --check names it)
+# THE STAMP ONLY ON A PROMOTION (the lead's gap, #52): a FAKE app (--app; it compiles nothing, touches no card - the
+# lock is declared held - and needs no display) grows the home's cache; fresh_home's own rules promote it or not.
+# A scratch build-shaped dir: fresh_home shares a cache only under a `tests` dir beside a CMakeCache.txt.
+B="$T/b"; mkdir -p "$B/tests/.shadercache" "$B/tests/.shadercache-engine"; touch "$B/CMakeCache.txt"
+toy_cache "$B/tests/.shadercache" 1 2
+toy_cache "$B/tests/.shadercache-engine" 1 2
+cat > "$T/fake-app" <<'APP'
+#!/bin/sh
+# the fake boot: the home's cache grows (a NEW manifest - its seeded one is a hard link of the shared one); with
+# FAKE_RACE set, another home's promotion lands first (the shared manifest rewritten at the same keys)
+# (the file lines kept as seeded: the linked files are the shared cache's, one generation)
+c="$HOME/.local/share/Jahshaka/shadercache"
+mkdir -p "$c"; files=$(grep '^file ' "$c/cache-manifest.txt"); rm -f "$c/cache-manifest.txt"
+printf 'jahshaka-shader-cache 2\nsaved 2\nshaders 3\n%s\n' "$files" > "$c/cache-manifest.txt"
+if [ -n "${FAKE_RACE:-}" ]; then
+    rm -f "$FAKE_RACE/cache-manifest.txt"
+    printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\n%s\n' "$files" > "$FAKE_RACE/cache-manifest.txt"
+fi
+exit 0
+APP
+chmod +x "$T/fake-app"
+F=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/cold-none")
+# THE COLD ROWS' FAKES (the cold and coldcall parts): a fake that records how it ran and exits with its own red, and a
+# fake that records its start and end (0.3 s apart: the one-at-a-time law reads their order, not their length)
+CR="$T/cold-rows"; mkdir -p "$T/cwd"; CS="$B/tests/.cold-rows"
+printf '#!/bin/sh\necho "$PWD|$1|${JAHSHAKA_SHADER_CACHE_DIR:-unset}|${__GL_SHADER_DISK_CACHE:-on}|${JAH_TIER_X:-none}|${JAH_GONE_X:-unset}" > "%s/cold-ran"\necho "FAIL: its own law"\nexit 3\n' "$T" > "$T/coldfx"
+chmod +x "$T/coldfx"
+printf 'x.cold\t%s\tJAH_TIER_X=epic photon\x1f-JAH_GONE_X\t%s\targ1\n' "$T/cwd" "$T/coldfx" > "$CR"
+C=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$CR")
+printf '#!/bin/sh\necho "start $(basename "$PWD") $(date +%%s%%N)" >> "%s/order"; sleep 0.3; echo "end $(basename "$PWD") $(date +%%s%%N)" >> "%s/order"\nexit 0\n' "$T" "$T" > "$T/seqfx"
+chmod +x "$T/seqfx"; mkdir -p "$T/y" "$T/z"
+if want boots; then
 out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 key=$(echo "$out" | sed -n 's/^cold at \([0-9a-f]*\): .*/\1/p')
 [ $rc = 3 ] && [ -n "$key" ] && echo "$out" | grep -q "the app rows' cache (app-off): no warm-up recorded" &&
@@ -105,28 +145,6 @@ out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'the shared cache is gone' && ok "no shared cache: cold, exit 3" || no "gone cache: '$out' rc $rc"
 "$W" "$BUILD" --check --tests-dir "$T" --only app-of > /dev/null 2>&1; rc=$?
 [ $rc = 64 ] && ok "a bad --only value: exit 64" || no "a bad --only: rc $rc"
-# THE STAMP ONLY ON A PROMOTION (the lead's gap, #52): a FAKE app (--app; it compiles nothing, touches no card - the
-# lock is declared held - and needs no display) grows the home's cache; fresh_home's own rules promote it or not.
-# A scratch build-shaped dir: fresh_home shares a cache only under a `tests` dir beside a CMakeCache.txt.
-B="$T/b"; mkdir -p "$B/tests/.shadercache" "$B/tests/.shadercache-engine"; touch "$B/CMakeCache.txt"
-toy_cache "$B/tests/.shadercache" 1 2
-toy_cache "$B/tests/.shadercache-engine" 1 2
-cat > "$T/fake-app" <<'APP'
-#!/bin/sh
-# the fake boot: the home's cache grows (a NEW manifest - its seeded one is a hard link of the shared one); with
-# FAKE_RACE set, another home's promotion lands first (the shared manifest rewritten at the same keys)
-# (the file lines kept as seeded: the linked files are the shared cache's, one generation)
-c="$HOME/.local/share/Jahshaka/shadercache"
-mkdir -p "$c"; files=$(grep '^file ' "$c/cache-manifest.txt"); rm -f "$c/cache-manifest.txt"
-printf 'jahshaka-shader-cache 2\nsaved 2\nshaders 3\n%s\n' "$files" > "$c/cache-manifest.txt"
-if [ -n "${FAKE_RACE:-}" ]; then
-    rm -f "$FAKE_RACE/cache-manifest.txt"
-    printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\n%s\n' "$files" > "$FAKE_RACE/cache-manifest.txt"
-fi
-exit 0
-APP
-chmod +x "$T/fake-app"
-F=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/cold-none")
 out=$(FAKE_RACE="$B/tests/.shadercache" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q 'NOT promoted' && [ ! -e "$B/tests/.shadercache.warm-key" ] &&
     ok "a promotion fresh_home SKIPS (its rule 3, NOT replaced): the boot passed, NO stamp" || no "skipped promotion: '$out' rc $rc"
@@ -169,16 +187,13 @@ exec 8>&-
     [ ! -e "$B/tests/.shadercache.driver-key" ] && [ $s -lt 10 ] &&
     ok "the card held past the boot's wait (a tenth of a 10-s budget): exit 75 in $s s, nothing booted" ||
     no "the held card: '$out' rc $rc in $s s"
+fi
+if want cold; then
 # THE COLD ROWS (cold-on, URGENT #119; SHIP-CUT-2 0b): a row declared COLD makes its own cache, so cold-on runs each listed
 # command once, uncapped, in its row's working directory, the shared-cache variable unset, ONE ROW AT A TIME, EACH ITS OWN HOLD
 # (the lock declared held here: nested, at once), and stamps EACH ROW it judged PRIMED (.cold-rows/<row>.driver-key: the key, the
 # row's line, the built digest). A FAKE cold row records where and how it ran, then exits 3: a row's own red, its run at its end
 # - PRIMED, the red printed.
-CR="$T/cold-rows"; mkdir -p "$T/cwd"; CS="$B/tests/.cold-rows"
-printf '#!/bin/sh\necho "$PWD|$1|${JAHSHAKA_SHADER_CACHE_DIR:-unset}|${__GL_SHADER_DISK_CACHE:-on}|${JAH_TIER_X:-none}|${JAH_GONE_X:-unset}" > "%s/cold-ran"\necho "FAIL: its own law"\nexit 3\n' "$T" > "$T/coldfx"
-chmod +x "$T/coldfx"
-printf 'x.cold\t%s\tJAH_TIER_X=epic photon\x1f-JAH_GONE_X\t%s\targ1\n' "$T/cwd" "$T/coldfx" > "$CR"
-C=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$CR")
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q "the cold rows' own caches (cold-on): 1 of 1 to prime: x.cold (no prime recorded)" &&
     ok "a cold row listed, never primed at the key: cold-on cold, the row named, exit 3" || no "cold-on unstamped: '$out' rc $rc"
@@ -199,8 +214,7 @@ k2=$("$W" "$BUILD" --key); rc=$?
 [ $rc = 0 ] && [ "$k2" = "$key" ] && ok "--key prints the tree's shader key alone ($k2), exit 0" || no "--key: '$k2' rc $rc"
 # ONE AT A TIME, ONLY WHAT IS NOT PRIMED: two more rows (each records its start and end) - the primed x.cold is not run again,
 # y and z run one after the other, never together
-printf '#!/bin/sh\necho "start $(basename "$PWD") $(date +%%s%%N)" >> "%s/order"; sleep 1; echo "end $(basename "$PWD") $(date +%%s%%N)" >> "%s/order"\nexit 0\n' "$T" "$T" > "$T/seqfx"
-chmod +x "$T/seqfx"; mkdir -p "$T/y" "$T/z"; rm -f "$T/cold-ran"
+rm -f "$T/cold-ran"
 printf 'y.cold\t%s\t\t%s\nz.cold\t%s\t\t%s\n' "$T/y" "$T/seqfx" "$T/z" "$T/seqfx" >> "$CR"
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q '2 of 3 to prime: y.cold (no prime recorded); z.cold (no prime recorded)' &&
@@ -244,11 +258,15 @@ out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${
 rm -f "$T/s/fresh"; out=$(cd "$T/s" && "$T/seedfx" --seed); rc=$?
 [ $rc = 1 ] && [ ! -f "$T/s/fresh" ] && ok "a stale seed met OUTSIDE the warm-up (no JAH_COLD_PRIME) fails at once, nothing seeded (the row never re-seeds under its cap)" ||
     no "the seed outside the warm-up: '$out' rc $rc"
+fi
+if want coldcall; then
+# THE CALL's OWN CASES (tooling.warm_cold_calls) start from every listed cold row primed - alone, its three rows listed first
+[ "$PART" = coldcall ] && printf 'y.cold\t%s\t\t%s\nz.cold\t%s\t\t%s\n' "$T/y" "$T/seqfx" "$T/z" "$T/seqfx" >> "$CR"
 DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on > /dev/null 2>&1
 # EACH ROW ITS OWN HOLD: the card held past a row's wait - that row NOT RUN, exit 75, nothing stamped, the next call primes it
 rm -f "$CS/z.cold.driver-key"
 exec 8>"$T/gpu.lock"; flock 8
-out=$(env -u JAH_GPU_LOCK_HELD JAH_COLD_MIN_LEFT=5 DISPLAY=:fake JAH_GPU_LOCK="$T/gpu.lock" "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on --budget 40); rc=$?
+out=$(env -u JAH_GPU_LOCK_HELD JAH_COLD_MIN_LEFT=5 DISPLAY=:fake JAH_GPU_LOCK="$T/gpu.lock" "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on --budget 22); rc=$?   # (the least budget whose row still starts: its card wait ~2 s, the law the same)
 exec 8>&-
 [ $rc = 75 ] && echo "$out" | grep -q '^warm_cold_rows: z.cold: NOT RUN - the card stayed held' && [ ! -e "$CS/z.cold.driver-key" ] &&
     echo "$out" | grep -q 'call again: --only cold-on$' &&
@@ -261,11 +279,13 @@ out=$(JAH_GPU_LOCK_HELD=1 JAH_COLD_MIN_LEFT=0 bash "$SRC/tests/support/warm_cold
 [ $rc = 75 ] && echo "$out" | grep -q 'z.slow: NOT PRIMED - killed at the call.s end' && [ $(( $(date +%s) - t0 )) -lt 15 ] &&
     ok "an exe past the call's end (its deadline) is killed and named - NOT PRIMED, exit 75" || no "the bound: '$out' rc $rc"
 # EACH CALL's LOGS KEPT (SHIP-CUT-2 0c): two calls that boot leave two log directories, each with its rows' logs
-rm -f "$CS/y.cold.driver-key"; out1=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on)
-rm -f "$CS/y.cold.driver-key"; out2=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on)
+rm -f "$CS/x.cold.driver-key"; out1=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on)
+rm -f "$CS/x.cold.driver-key"; out2=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on)
 l1=$(echo "$out1" | sed -n "s/^warm-app-cache: this call's logs: //p"); l2=$(echo "$out2" | sed -n "s/^warm-app-cache: this call's logs: //p")
-[ -n "$l1" ] && [ -n "$l2" ] && [ "$l1" != "$l2" ] && [ -f "$l1/cold-on/y.cold.log" ] && [ -f "$l2/cold-on/y.cold.log" ] && [ -f "$l1/cold-on.log" ] &&
+[ -n "$l1" ] && [ -n "$l2" ] && [ "$l1" != "$l2" ] && [ -f "$l1/cold-on/x.cold.log" ] && [ -f "$l2/cold-on/x.cold.log" ] && [ -f "$l1/cold-on.log" ] &&
     ok "two calls leave two sets of logs (each call's directory, its rows' logs in it)" || no "two calls' logs: [$l1] [$l2]"
+fi
+if want keys; then
 # A COLD STAMP CARRIES NO TREE PATH (CODING_RULES §6; TEST-STREAMLINE-1, measured before the fix: ship-cut-2 and photon-2 at
 # one key held 6 of 6 cold stamps apart in lines 2 and 3): two toy trees at two paths, the same content, each primes the same
 # cold row (its line spelled with its own tree) - their stamps are EQUAL; a media file's TIME moved reads warm, its CONTENT
@@ -335,5 +355,6 @@ o=$("$W" "$KB" --check "${KX[@]}"); r=$?
 grep -v SHADER_CACHE_CODE_ID "$T/id.bak" > "$KB/engine/generated/jahshaka_engine_build_id.h"
 "$W" "$KB" --key > /dev/null 2>&1; r=$?
 [ $r = 2 ] && ok "a build id header without the code id (an unbuilt or older tree): no key, exit 2 - never a key without the cache's code" || no "no code id: rc $r"
-echo "tooling.warm_app_cache: $([ $fail = 0 ] && echo PASS || echo FAIL)"
+fi
+echo "tooling.warm_app_cache ($PART): $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail

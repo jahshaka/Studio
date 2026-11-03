@@ -242,13 +242,21 @@ if(Python3_Interpreter_FOUND)
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.timeout_cap PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.timeout_cap)
-    # tooling.warm_app_cache — scripts/warm-app-cache.sh's NO-OP PATH (URGENT #52): warm at the build's key it answers
-    # at once and boots nothing; no stamp, a moved key, a replaced or missing cache read cold (warm_app_cache.sh; a
-    # scratch tests dir, never the tree's shared cache).
-    add_test(NAME tooling.warm_app_cache
-             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/warm_app_cache.sh" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
-    set_tests_properties(tooling.warm_app_cache PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
-    jah_no_display(tooling.warm_app_cache)
+    # tooling.warm_app_cache / warm_cold_rows / warm_cold_calls / warm_key — scripts/warm-app-cache.sh on a scratch tests
+    # dir and toy trees, never the tree's shared cache (warm_app_cache.sh <part>; ONE SCRIPT, FOUR ROWS split by proof,
+    # TEST-STREAMLINE-1: the whole ran 35.8 s quiet against a CPU row's 10 s): boots - warm at the build's key it answers at
+    # once and boots nothing, no stamp / a moved key / a replaced or missing cache read cold, the fake boots, the budget and
+    # the bounded wait (URGENT #52, #106); cold - the cold-on runner's rows (#119, #155, the seeds); coldcall - a call's own
+    # bounds (the held card, the deadline, the logs); keys - the key's terms, the top-up, #126's nonce, the path-free stamps.
+    foreach(_wp IN ITEMS "warm_app_cache:boots" "warm_cold_rows:cold" "warm_cold_calls:coldcall" "warm_key:keys")
+        string(REPLACE ":" ";" _wp "${_wp}")
+        list(GET _wp 0 _wrow)
+        list(GET _wp 1 _wpart)
+        add_test(NAME tooling.${_wrow}
+                 COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/warm_app_cache.sh" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" ${_wpart})
+        set_tests_properties(tooling.${_wrow} PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+        jah_no_display(tooling.${_wrow})
+    endforeach()
     # tooling.gpu_lock_fifo — THE CARD's LOCK IS FIRST COME, FIRST SERVED (URGENT #113): scripts/gpu-exclusive.sh's ticket
     # queue on a private lock (sleeps, no GPU): the grants in ticket order, a dead ticket skipped, --wait-max's bound kept,
     # a bounded waiter's place kept across its exit 75 for its re-call (gpu_lock_fifo.sh).
