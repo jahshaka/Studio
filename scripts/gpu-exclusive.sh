@@ -88,12 +88,12 @@ mark_take() {
     [ -n "$seen" ] || return 0
     [ -n "$d" ] && [ "$d" != next ] || d=$PWD
     g=$(git -C "$d" rev-parse --absolute-git-dir 2> /dev/null) || return 0
-    if read -r p _ < "$g/jah-check.pid" 2> /dev/null && [ -n "$p" ] && kill -0 "$p" 2> /dev/null; then return 0; fi
+    if { read -r p _ < "$g/jah-check.pid"; } 2> /dev/null && [ -n "$p" ] && kill -0 "$p" 2> /dev/null; then return 0; fi
     echo "$$ $(date '+%FT%T%z')" > "$g/jah-check.pid" && mark="$g/jah-check.pid"
 }
 mark_release() {
     [ -n "$mark" ] || return 0
-    read -r p _ < "$mark" 2> /dev/null && [ "$p" = "$$" ] && rm -f "$mark"
+    { read -r p _ < "$mark"; } 2> /dev/null && [ "$p" = "$$" ] && rm -f "$mark"
     mark=""
 }
 # THE HOLD's CGROUP (URGENT #144, the header): hold_run <unit> <command...> - the command in its scope (or marked), its rc
