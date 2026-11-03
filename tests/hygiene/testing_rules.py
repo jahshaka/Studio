@@ -87,6 +87,10 @@ tree and the build's registration, each with its name in the failure line:
      ratchet: never a name its copy at the merge-base with main lacks; a listed row that declares now, or is gone, is
      stale). WHY: BISTRO-REST-1's gi.feedback_closed_box rows measured the SCREEN INTEGRATE of a Live offscreen view as
      "the gather", with GI paused, and their output never said it.
+  R17 A LONG-ONLY ROW LOSES NO LAW (TEST-STREAMLINE-1 5b, 2026-11-03). A row labelled `long` (the LONG pass alone: the
+     selector, gate-scope.py NEVER_SELECTED, and FAST skip it) is the `_asan` twin of a registered guard every pass runs,
+     with the same argv but the binary's `_asan`, the same environment but the sanitizer's options and the same frames -
+     one source's laws, so a spec's call and FAST run them once (the plain twin) and LONG adds the sanitizer.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -596,6 +600,45 @@ def r14_bad(tests):
     return bad
 
 
+LONG = "long"
+SANITIZER_ENV = ("ASAN_OPTIONS=", "LSAN_OPTIONS=", "UBSAN_OPTIONS=", "TSAN_OPTIONS=")
+
+
+def r17_bad(tests):
+    """R17 (TEST-STREAMLINE-1 5b): [`row (why)`] for every row labelled `long` (the LONG pass alone: the selector and FAST
+    skip it) that is not the sanitizer TWIN of a guard every pass runs - its name <plain>_asan; <plain> registered and
+    neither `long` nor `measure`; the same argv but the binary's `_asan`; the same environment but the sanitizer's options;
+    the same frames. Then the twin's laws are the plain row's and a pass that skips it loses no law."""
+    by = {t["name"]: t for t in tests}
+    bad = []
+    for t in sorted(tests, key=lambda x: x["name"]):
+        P = _props(t)
+        if LONG not in _list(P.get("LABELS")):
+            continue
+        n = t["name"]
+        if not n.endswith("_asan"):
+            bad.append("%s (not a sanitizer twin: no _asan name)" % n)
+            continue
+        plain = by.get(n[:-len("_asan")])
+        if plain is None:
+            bad.append("%s (its plain twin %s is not registered)" % (n, n[:-len("_asan")]))
+            continue
+        Q = _props(plain)
+        if {LONG, MEASURE} & set(_list(Q.get("LABELS"))):
+            bad.append("%s (its plain twin %s does not run in every pass)" % (n, plain["name"]))
+            continue
+        # its own home is named by the row (homes/<row>: fresh_home.sh's per-row cache), its binary <exe>_asan
+        strip = lambda a: (lambda a: a[:-len("_asan")] if a.endswith("_asan") else a)(a.replace(n, plain["name"]))
+        if [strip(a) for a in t.get("command") or []] != list(plain.get("command") or []):
+            bad.append("%s (another argv than %s's)" % (n, plain["name"]))
+        env = lambda X: sorted(e for e in _list(X.get("ENVIRONMENT")) if not e.startswith(SANITIZER_ENV))
+        if env(P) != env(Q):
+            bad.append("%s (another environment than %s's, the sanitizer's options apart)" % (n, plain["name"]))
+        if P.get(FRAMES_PROPERTY) != Q.get(FRAMES_PROPERTY):
+            bad.append("%s (other frames than %s's)" % (n, plain["name"]))
+    return bad
+
+
 def the_rules_catch():
     """Each rule, fed one violation and its correction: a lint that cannot fail guards nothing."""
     print("the rules catch (synthetic inputs):")
@@ -740,6 +783,20 @@ def the_rules_catch():
           "R15 flags an app / selftest row booting with the shipped seed (no JAHSHAKA_SHADER_SEED entry), never one at none "
           "(ENVIRONMENT or _MODIFICATION), an engine or CPU row; a row stating its own (a seed row's unset:) is printed "
           "(%s %s)" % (r15, own15))
+    A = lambda name, exe, labels, env=(), frames="81": dict(T(name, LABELS=labels, ENVIRONMENT=list(env),
+                                                            JAHSHAKA_TEST_FRAMES=frames),
+                                                       command=["sh", "fresh_home.sh", "/b/homes/" + name, "--", "/b/" + exe])
+    asan = "ASAN_OPTIONS=detect_leaks=0"
+    r17 = r17_bad([A("l.e", "test_l", ["engine"]), A("l.e_asan", "test_l_asan", ["engine", "long"], [asan]),
+                   A("m.e", "test_m", ["engine"]), A("m.e_asan", "test_m_asan", ["engine", "long"], [asan, "X=1"]),
+                   A("f.e", "test_f", ["engine"]), A("f.e_asan", "test_f_asan", ["engine", "long"], [asan], frames="9"),
+                   A("a.e", "test_a", ["engine"]), A("a.e_asan", "test_a_asan --part 1", ["engine", "long"]),
+                   A("q.e", "test_q", ["engine", "measure"]), A("q.e_asan", "test_q_asan", ["engine", "long"]),
+                   A("o.e_asan", "test_o_asan", ["engine", "long"]), A("p.plain", "test_p", ["engine", "long"]),
+                   A("k.e", "test_k", ["engine"]), A("k.e_asan", "test_k_asan", ["engine"])])
+    check([b.split(" ")[0] for b in r17] == ["a.e_asan", "f.e_asan", "m.e_asan", "o.e_asan", "p.plain", "q.e_asan"],
+          "R17 flags a `long` row that is not a sanitizer twin of an every-pass guard (no _asan name, no plain twin, the twin "
+          "itself measure, another argv, environment or frames), never the exact twin or an unlabelled one (%s)" % r17)
     E = lambda name, exe: dict(T(name, JAH_CLASS="engine"), command=["sh", "/s/tests/support/fresh_home.sh", "--", "/b/" + exe])
     rows16 = [E("gi.decl", "test_decl"), E("gi.bare", "test_bare"), E("gi.listed", "test_bare"), E("rtreflect.lab", "jahlab"),
               E("gi.done", "test_decl"), T("gi.cpu"), E("other.x", "test_bare")]
@@ -1117,6 +1174,10 @@ def main(source, build):
     check(not bad and "\nexport JAHSHAKA_SHADER_SEED=none\n" in wsh,
           "R15 every app / selftest / vr GPU row boots with the shipped seed off (JAHSHAKA_SHADER_SEED=set:none, or its own: "
           "%s) and the warm-up's boots too (%d on the seed: %s)" % (own[:6] or "none", len(bad), bad[:12]))
+    bad = r17_bad(tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
+    longs = sorted(t["name"] for t in tests if LONG in _list(_props(t).get("LABELS"))) if rc == 0 else []
+    check(not bad, "R17 every `long` row (the LONG pass alone) is the sanitizer twin of a guard every pass runs - one argv, "
+          "one environment, one frame count (%d long: %s; %d not: %s)" % (len(longs), longs, len(bad), bad[:12]))
     rp = os.path.join(source, ROUTES_PENDING)
     if not os.path.isfile(rp):
         check(False, "R16 %s exists (the routes ratchet)" % ROUTES_PENDING)

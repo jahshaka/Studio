@@ -586,8 +586,11 @@ TOOLING_PATHS = re.compile(r"^(scripts/|testing/|tests/hygiene/|tests/support/|"
                            r"tests/CMakeLists\.txt$|tests/cmake/|\.claude/)")
 TOOLING_LABELS = {"hygiene", "tooling"}
 # A ROW THAT MEASURES (label `measure`: a timing, soak, churn or scale row) is never selected: it runs at the sprint's
-# ship only (DOCS/PROCESS.md, Testing).
-NEVER_SELECTED = {"measure"}
+# ship only (DOCS/PROCESS.md, Testing). A ROW OF THE LONG PASS ONLY (label `long`, TEST-STREAMLINE-1 5b: a sanitizer twin
+# whose laws are its plain twin's - one source, one argv, one environment but the sanitizer's options; source.testing_rules
+# R17 holds the pairing) is never selected either: the plain twin runs in every spec's call and FAST, the twin in LONG, so
+# no law runs twice in one pass.
+NEVER_SELECTED = {"measure", "long"}
 
 
 def sh(cmd, cwd=None):

@@ -311,6 +311,16 @@ def speed_cases(source, build):
         S = sel([path])
         for r in rows:
             check(r in inv0 and r in S.selected and not S.fallback, "11. %s selects %s" % (path, r))
+    # 27. A LONG-ONLY TWIN IS NEVER SELECTED (TEST-STREAMLINE-1 5b): a change to the twins' one source reaches the plain row,
+    # never its `long` sanitizer twin (the LONG pass runs it) - the reach's rows, the twin among its never_selected
+    for src_, plain_ in (("tests/ssr/test_ssr.cpp", "ssr.engine"), ("tests/looks/test_looks.cpp", "looks.engine"),
+                         ("tests/distortion/test_distortion.cpp", "distortion.engine")):
+        R = gs.reach([src_], None, build)
+        twin_ = plain_ + "_asan"
+        check(twin_ in inv0 and "long" in inv0[twin_]["labels"] and plain_ in R["rows"] and twin_ not in R["rows"]
+              and twin_ in R["never_selected"],
+              "27. %s reaches %s and never its long twin %s (rows %d; never selected %s)"
+              % (src_, plain_, twin_, len(R["rows"]), R["never_selected"][:4]))
     # 24. a fallback is its directory's subsystem, never the tier
     S = sel(["tests/gi/tsa_new_dir/input.bin"])
     gi_rows = [n for n, t in inv0.items() if t["dir"] == "gi"]
