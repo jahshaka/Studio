@@ -123,6 +123,6 @@ rtreflect.tilted_normal                  integrate reflection store  # tests/rtr
 rtreflect.walk_world.frozen              gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 rtreflect.walk_world.worldA              gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 rtreflect.walk_world.worldB              gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.walk_world_both.frozen         gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.walk_world_both.worldA         gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.walk_world_both.worldB         gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
+rtreflect.walk_world_hybrid.frozen         gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
+rtreflect.walk_world_hybrid.worldA         gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
+rtreflect.walk_world_hybrid.worldB         gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget

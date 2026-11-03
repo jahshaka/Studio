@@ -252,7 +252,8 @@ pool.editor::tier 0.92  quiet n=44
 pool.editor::undo_macro 1.63  quiet n=45
 preview.lifecycle 1.86  quiet n=45
 rigperf.smoke 1.47  quiet n=49
-rtreflect.contact 18.42  solo, the card lock held, :83 (PHOTON-7 stage 6, READ_A 1-2, 2026-10-23: two jahlab sessions at 1920x1080, photon-ramp Rays/Both and photon-contact's corrugated chained floor, its crease and the negative control, nine shots of 50 frames)
+rtreflect.contact 29.43  solo, the card lock held, :74, warm, by ctest (PHOTON-7-9A stage 0, 2026-11-03, Studio 40c9853ed: the hybrid - the ramp's two shots and the chained floor's seven, 9 shots x 50 = 450 frames; two jahlab sessions at 1920x1080)
+rtreflect.mirror_blend 5.02  solo, the card lock held, :74, warm, by ctest (PHOTON-7-9A stage 0, 2026-11-03: RESTORED on the hybrid - photon-glass's mirror on a slow pan, 960x540, one jahlab session, a 60-frame prime and three poses of 4 x 8 frames: R under reflect.screenOff, again for the control, and B; 156 frames)
 rtreflect.lamp_step_held.ref 32.43  loaded (70-90 % CPU-idle, three lanes on the card), the card lock held, :77, warm (HARNESS-3 (f), 2026-10-29, at photon-7 188268ffc: rtreflect.lamp_step_held split by proof - the reference session, its 1,200-frame window (held at 622); 1,222 frames)
 rtreflect.lamp_step_held.step 37.10  loaded (70-90 % CPU-idle, three lanes on the card), the card lock held, :77, warm (HARNESS-3 (f), 2026-10-29, at photon-7 188268ffc: rtreflect.lamp_step_held split by proof - `rest 1200` (234) + the step + its 1,200-frame window (held at 522) + (e); 1,437 frames)
 rtreflect.still_after_stop.hold 39.85  solo, the card lock held, :71, warm, load 5.2 (PHOTON-7 8B B2, 2026-10-29: split by proof from rtreflect.still_after_stop - the walk alone, its 1,000-frame window (the hold at 828 since the stop counts samples): (a), (a2), (b'), (c), (g); 1,232 frames - NEAR THE 45-s EDGE)
