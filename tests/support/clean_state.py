@@ -22,7 +22,8 @@ every order, exit 0 ("HOLDS"). --expect violated inverts the exit (the law fed a
 state must be caught) - never for NOT RUN.
 
 Usage: clean_state.py --app <Jahshaka> --driver <run_pool.py> --pool <name> [--baseline <js>] [--expect holds|violated]
-                      [--headless] --arm <name> <script> <budget-s> [--arm ...] [-- <app args>]
+                      [--headless] [--warm <fresh_home.sh>] --arm <name> <script> <budget-s> [--arm ...] [-- <app args>]
+--warm: each order's home seeded WARM (fresh_home.sh --setup --warm; cwd under <build>/tests) - a card pool's orders.
 cwd: a scratch directory of the row's (each order's home is made under it).
 """
 import os
@@ -34,14 +35,14 @@ import sys
 
 def parse(argv):
     o = {"app": None, "driver": None, "pool": None, "baseline": None, "expect": "holds", "headless": False,
-         "arms": [], "extra": []}
+         "warm": None, "arms": [], "extra": []}
     i = 0
     while i < len(argv):
         a = argv[i]
         if a == "--":
             o["extra"] = argv[i + 1:]
             break
-        if a in ("--app", "--driver", "--pool", "--baseline", "--expect"):
+        if a in ("--app", "--driver", "--pool", "--baseline", "--expect", "--warm"):
             o[a[2:]] = argv[i + 1]; i += 2
         elif a == "--headless":
             o["headless"] = True; i += 1
@@ -81,6 +82,11 @@ def run_order(o, label, arms, top):
     home = os.path.join(top, re.sub(r"[^a-z0-9_]", "_", label))
     shutil.rmtree(home, ignore_errors=True)
     os.makedirs(os.path.join(home, "run"))
+    if o["warm"]:
+        # A CARD POOL's ORDER BOOTS WARM (TEST-STREAMLINE-1 block B): each order's fresh home is seeded as a WARM fixture's
+        # (fresh_home.sh --setup --warm: the tree's shared cache linked in, the seed template) before the driver runs, so an
+        # order never compiles cold under its arms' budgets; NULL-headless rows need none (no shader cache)
+        subprocess.run(["sh", o["warm"], "--setup", "--warm", home], check=True)
     env = dict(os.environ)
     env.update({"HOME": home, "JAHSHAKA_DATA_ROOT": os.path.join(home, ".local", "share", "Jahshaka"),
                 "JAH_POOL_ARMS": "", "JAH_KEEP_HOME": "1"})
