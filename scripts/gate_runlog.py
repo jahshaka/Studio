@@ -230,7 +230,34 @@ EVIDENCE_RUNS = 40          # THE EVIDENCE CAP (TEST-STREAMLINE-1 1f): the newes
 EVIDENCE_CACHE_REL = os.path.join(".local", "share", "Jahshaka", "shadercache")
 
 
-def prune_evidence(build, keep_runs=EVIDENCE_RUNS):
+def evidence_keep_homes(tests):
+    """THE HOMES WHOSE CACHE IS THEIR ROW's SUBJECT, from the REGISTRATION (the stage-1 audit's finding 10: a marker the homes
+    written before the rule lack): every row whose ENVIRONMENT carries JAH_EVIDENCE_CACHE=keep (tests/CMakeLists.txt sets it on
+    the shadercache-labelled and COLD rows) - the basenames of its HOME, its JAHSHAKA_DATA_ROOT's home (the dir above
+    .local/share/...) and its command's fresh_home.sh <home>. `tests`: ctest's json-v1 list."""
+    keep = set()
+    for t in tests or []:
+        props = {p["name"]: p["value"] for p in t.get("properties", [])}
+        env = props.get("ENVIRONMENT") or []
+        env = [env] if isinstance(env, str) else env
+        if "JAH_EVIDENCE_CACHE=keep" not in env:
+            continue
+        for e in env:
+            k, _, v = e.partition("=")
+            if k == "HOME" and v:
+                keep.add(os.path.basename(v.rstrip("/")))
+            elif k == "JAHSHAKA_DATA_ROOT" and ".local" in v:
+                keep.add(os.path.basename(v.split("/.local")[0].rstrip("/")))
+        cmd = [str(c) for c in t.get("command") or []]
+        at = next((i for i, c in enumerate(cmd) if c.endswith("fresh_home.sh")), None)
+        if at is not None:
+            pos = [c for c in cmd[at + 1:cmd.index("--") if "--" in cmd else len(cmd)] if not c.startswith("-")]
+            if pos:
+                keep.add(os.path.basename(pos[-1].rstrip("/")))
+    return keep
+
+
+def prune_evidence(build, keep_runs=EVIDENCE_RUNS, keep_homes=None):
     """THE EVIDENCE CAP, at the start of every call that writes evidence (TEST-STREAMLINE-1 1f; photon-2's tests/.evidence held
     21 GB): (1) every red home there sheds its shader cache (its manifest kept as shadercache-manifest.txt) unless it is marked
     .evidence-keeps-cache (a row whose subject is the cache: fresh_home.sh's JAH_EVIDENCE_CACHE=keep) - the home's own logs and
@@ -241,20 +268,28 @@ def prune_evidence(build, keep_runs=EVIDENCE_RUNS):
     ev = os.path.join(build, "tests", ".evidence")
     if not os.path.isdir(ev):
         return 0, 0, 0
-    def size(p):
+    def size(p):   # the bytes a removal FREES: a file's only when this is its last link (the stage-1 audit's finding 11)
         n = 0
         for dp, _, fs in os.walk(p):
             for f in fs:
                 try:
-                    n += os.lstat(os.path.join(dp, f)).st_size
+                    st = os.lstat(os.path.join(dp, f))
+                    n += st.st_size if st.st_nlink == 1 else 0
                 except OSError:
                     pass
         return n
+    if keep_homes is None:      # the registration's (evidence_keep_homes); an unreadable build keeps by the marker alone
+        try:
+            import gate_graph
+            keep_homes = evidence_keep_homes(json.loads(gate_graph.ctest_inventory(build)[0] or "{}").get("tests", []))
+        except Exception:
+            keep_homes = set()
     shed = freed = gone = 0
     for name in sorted(os.listdir(ev)):
         home = os.path.join(ev, name)
         cache = os.path.join(home, EVIDENCE_CACHE_REL)
-        if name == "output" or not os.path.isdir(cache) or os.path.exists(os.path.join(home, ".evidence-keeps-cache")):
+        if name == "output" or not os.path.isdir(cache) or name in keep_homes \
+                or os.path.exists(os.path.join(home, ".evidence-keeps-cache")):
             continue
         man = os.path.join(cache, "cache-manifest.txt")
         if os.path.isfile(man):
@@ -274,7 +309,7 @@ def prune_evidence(build, keep_runs=EVIDENCE_RUNS):
             for f in os.listdir(d):
                 if newest.get(f) != r:
                     p = os.path.join(d, f)
-                    freed += size(p) if os.path.isdir(p) else os.lstat(p).st_size
+                    freed += size(p) if os.path.isdir(p) else (os.lstat(p).st_size if os.lstat(p).st_nlink == 1 else 0)
                     shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else os.remove(p)
             if not os.listdir(d):
                 os.rmdir(d)

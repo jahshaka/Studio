@@ -70,7 +70,20 @@ with tempfile.TemporaryDirectory() as t:
     for i, r in enumerate(runs):
         put(os.path.join(out, r, "row.common.log"), "red %d" % i)
     put(os.path.join(out, runs[0], "row.once.log"), "the only red of row.once")    # its newest red log: in the oldest run
-    shed, gone, freed = gate_runlog.prune_evidence(b, keep_runs=40)
+    # (10) KEEP BY THE REGISTRATION (the stage-1 audit's finding 10): a home of a row registered JAH_EVIDENCE_CACHE=keep keeps its
+    # cache though it carries no marker (written before the rule) - red on the base: the marker was the only keep
+    subj = os.path.join(ev, "home-subject-old")
+    put(os.path.join(subj, CACHE, "pipeline.cache"), "s" * 512)
+    tests = [{"name": "shadercache.x", "command": ["sh", FH, "--warm", os.path.join(b, "tests", "x", "home-subject-old"), "--", "x"],
+              "properties": [{"name": "ENVIRONMENT", "value": ["JAHSHAKA_VR=0", "JAH_EVIDENCE_CACHE=keep"]}]},
+             {"name": "gi.y", "command": ["sh", FH, os.path.join(b, "tests", "x", "home-old"), "--", "y"],
+              "properties": [{"name": "ENVIRONMENT", "value": ["HOME=/b/tests/x/home-old"]}]}]
+    keep = gate_runlog.evidence_keep_homes(tests)
+    law(keep == {"home-subject-old"}, "(5) the registration names the homes whose cache is the subject (%s)" % sorted(keep))
+    os.link(os.path.join(old, CACHE, "pipeline.cache"), os.path.join(t, "a-second-link"))   # a byte shared: not freed
+    shed, gone, freed = gate_runlog.prune_evidence(b, keep_runs=40, keep_homes=keep)
+    law(os.path.isfile(os.path.join(subj, CACHE, "pipeline.cache")), "(5) ...and the cap keeps that home's cache, no marker needed")
+    law(freed < 4096, "(6) 'freed' counts only the last links: the old home's 4,096-byte file is linked elsewhere - not freed (%d)" % freed)
     law(not os.path.exists(os.path.join(old, CACHE)) and open(os.path.join(old, "shadercache-manifest.txt")).read() == "m-old"
         and os.path.isfile(os.path.join(old, "run", "app.log")) and os.path.isfile(os.path.join(e2, CACHE, "pipeline.cache")),
         "(3) the cap sheds an older unmarked red home's cache (manifest and log kept) and keeps the marked one's (shed %d)" % shed)
@@ -79,7 +92,7 @@ with tempfile.TemporaryDirectory() as t:
         and gone == 4,
         "(4) output: the newest 40 runs kept; an older run keeps only a row's newest red log (row.once); 4 emptied runs "
         "removed (%d runs left, %d removed)" % (len(left), gone))
-    again = gate_runlog.prune_evidence(b, keep_runs=40)
+    again = gate_runlog.prune_evidence(b, keep_runs=40, keep_homes=keep)
     law(again[0] == 0 and again[1] == 0, "...and a second call removes nothing more (%s)" % (again,))
 print("tooling.evidence_cap: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)
