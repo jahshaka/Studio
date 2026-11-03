@@ -306,6 +306,18 @@ elif PART == "log":
     ln = [x for x in out.splitlines() if x.startswith("  left out, a declared open red")]
     check(rc == 0 and len(ln) == 1 and "toy.declared (:9)" in ln[0] and "toy.a" not in ln[0]
           and "4 rows with no timing law" in out, f"declared: the open red left out with its line, toy.a kept (rc {rc}) {ln}")
+    # 16b. WHAT AN ADOPTED WIDTH COVERS (the final CPU audit's finding 3): only the rows it measured - the declared red keeps the
+    #      whole card, alone (alone-rows.txt with its reason), never the width (the base wrote no list: a width applied to every row)
+    rc, out, labels, recs = run(bd, "--display", ":71", "--order", "1,2")
+    od = os.path.join(T, "declared-out")
+    cov = open(os.path.join(od, "adopted-rows.txt")).read().split() if os.path.exists(os.path.join(od, "adopted-rows.txt")) else None
+    alone = dict(ln.split("\t", 1) for ln in open(os.path.join(od, "alone-rows.txt")).read().splitlines()) \
+        if os.path.exists(os.path.join(od, "alone-rows.txt")) else {}
+    check(rc == 0 and "ADOPT WIDTH 2" in out and cov == ["toy.a", "toy.b", "toy.c", "toy.d"]
+          and alone.get("toy.declared") == "a declared open red" and alone.get("toy.cold") == "cold"
+          and "keep the whole card, 8 x W slots, alone" in out,
+          f"declared: width 2 covers only the rows it measured, the declared red stays alone with its reason (rc {rc}) "
+          f"covered {cov}, alone {sorted(alone)}")
     rc, out, labels, recs = run(bd, "--plan", "--open-reds", os.path.join(T, "no-such-spec.md"))
     check(rc == 2 and "unreadable" in out, f"declared: an unreadable open-reds spec refused (rc {rc}), not read as empty")
 
@@ -343,6 +355,11 @@ elif PART == "budget":
     check(rc == 0 and "ADOPT WIDTH 2" in out and "REFUSED" not in out and len(o1) == 1 and "toy.over ran 1.2" in o1[0]
           and "past its 1 s" in o1[0], f"over: the row past its budget alone named at width 1, not charged to width 2, ADOPT "
           f"WIDTH 2 (rc {rc}) {[x for x in out.splitlines() if 'REFUSED' in x or 'ADOPT' in x or 'OVER ITS' in x]}")
+    od = os.path.join(T, "over-out")
+    cov = open(os.path.join(od, "adopted-rows.txt")).read().split() if os.path.exists(os.path.join(od, "adopted-rows.txt")) else []
+    alone = open(os.path.join(od, "alone-rows.txt")).read() if os.path.exists(os.path.join(od, "alone-rows.txt")) else ""
+    check("toy.a" in cov and "toy.over" not in cov and "toy.over\tover its class budget at width 1" in alone,
+          f"over: the adopted width does not cover the row over its budget alone (covered {cov})")
 
 else:
     check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain|reds|log|budget)")

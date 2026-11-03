@@ -451,7 +451,8 @@ def total_wall(rs):
 
 
 def judge(recs, price, row_cap, budget=None, inflate=INFLATE, gain=GAIN, headroom=VRAM_HEADROOM):
-    """(the adopted width or None, [lines]) - THE RULE of the docstring, every reason printed. `budget`: {row: class budget s}."""
+    """(the adopted width or None, [lines], {row: why no width covers it}) - THE RULE of the docstring, every reason printed.
+    `budget`: {row: class budget s}."""
     budget = budget or {}
     lines, by_w = [], {}
     for r in recs:
@@ -467,7 +468,7 @@ def judge(recs, price, row_cap, budget=None, inflate=INFLATE, gain=GAIN, headroo
         lines.append(f"INCOMPLETE {r['tag']}: " + ("the card stayed held (exit 75)" if not r["held"] else
                      "no verdict for " + ", ".join(n for n in r["asked"] if n not in r["rows"])))
     if 1 not in by_w:
-        return None, lines + ["NO WIDTH 1 RUN: nothing to compare against"]
+        return None, lines + ["NO WIDTH 1 RUN: nothing to compare against"], {}
     unstable = sorted(n for n, w in seen.items() if len({v for v, _ in w.get(1, [])}) > 1)
     for n in unstable:
         lines.append(f"WIDTH 1 DISAGREES WITH ITSELF: {n} " + " / ".join(v for v, _ in seen[n][1]))
@@ -539,9 +540,10 @@ def judge(recs, price, row_cap, budget=None, inflate=INFLATE, gain=GAIN, headroo
             adopt = w
         else:
             break
+    uncovered = {n: f"over its class budget at width 1 ({over1[n]:.2f} s alone)" for n in over1}
     if unstable or any(r in missing for r in by_w[1]):
-        return None, lines
-    return adopt, lines
+        return None, lines, uncovered
+    return adopt, lines, uncovered
 
 
 def summary(recs, price, out):
@@ -643,10 +645,10 @@ def main(argv):
     if not tree:
         die(f"{build}: no CMAKE_HOME_DIRECTORY in its CMakeCache.txt - name the tree (--tree): the run holds its check mark")
     with CheckMark(tree):
-        return measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, row_cap)
+        return measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, row_cap, excl)
 
 
-def measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, row_cap):
+def measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, row_cap, excl):
     """The holds, the summary and THE RULE (main's, under the tree's check mark)."""
     out = os.path.abspath(out or os.path.join(build, "tests", ".width-pair", time.strftime("%Y%m%d-%H%M%S")))
     os.makedirs(out, exist_ok=True)
@@ -663,12 +665,28 @@ def measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, 
                 return 75
     for ln in summary(recs, price, out):
         print(ln)
-    adopt, lines = judge(recs, price, row_cap, budget)
+    adopt, lines, uncovered = judge(recs, price, row_cap, budget)
     for ln in lines:
         print("  " + ln)
     if adopt is None:
         print(f"width_pair: NO WIDTH ADOPTED - width 1 unstable or a run incomplete (evidence {out})")
         return 1
+    # WHAT THE WIDTH COVERS (the final CPU audit's finding 3): ONLY the rows it measured - the rows every run judged, less the
+    # rows over their budget alone. Every other GPU row (a declared open red until it is green and measured, a timing-law,
+    # cold or measure row, a row priced 10 s or more, unpriced, or needing an excluded row's fixture) keeps the WHOLE card
+    # (8 x W slots: alone) - its VRAM and its neighbours were never measured. The registration commit reads these two files.
+    judged = set.intersection(*[set(r["rows"]) for r in recs]) if recs else set()
+    asked = {n for r in recs for n in r["asked"]}         # the GPU rows (a card-free fixture setup ctest added is no width's)
+    covered = sorted(n for n in judged & asked if n not in uncovered)
+    alone = dict(uncovered)
+    for why, ns in excl.items():
+        for n in ns:
+            alone.setdefault(n, why)
+    open(os.path.join(out, "adopted-rows.txt"), "w").write("".join(f"{n}\n" for n in covered))
+    open(os.path.join(out, "alone-rows.txt"), "w").write("".join(f"{n}\t{alone[n]}\n" for n in sorted(alone)))
+    print(f"width_pair: width {adopt} covers the {len(covered)} rows it measured ({out}/adopted-rows.txt) and no other: "
+          f"{len(alone)} GPU rows keep the whole card, 8 x W slots, alone ({out}/alone-rows.txt - the declared open reds until "
+          f"green and measured, the timing-law, cold and measure rows, the rows over their budget alone, the 10-s rows)")
     print(f"width_pair: ADOPT WIDTH {adopt} (the widest with width 1's verdicts in every run, no out-of-memory, every row under "
           f"its class budget, x{INFLATE:g} its width-1 wall and {row_cap:.0f} s, {100 * GAIN:.0f} % of wall gained per width, "
           f"the VRAM peak under {100 * VRAM_HEADROOM:.0f} %; evidence {out})")
