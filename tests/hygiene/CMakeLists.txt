@@ -286,6 +286,13 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_holds.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
     set_tests_properties(tooling.gpu_lock_holds PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.gpu_lock_holds)
+    # tooling.evidence_cap — THE EVIDENCE IS WHAT EXPLAINS A RED, AND IT IS CAPPED (TEST-STREAMLINE-1 1f): fresh_home.sh's red
+    # home without its shader cache (unless the cache is the row's subject), gate_runlog.py's cap on tests/.evidence (an older
+    # home's cache shed, output/ to its newest 40 runs and each row's newest red log) - on a toy build dir (evidence_cap.py).
+    add_test(NAME tooling.evidence_cap
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/evidence_cap.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(tooling.evidence_cap PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.evidence_cap)
     # tooling.row_env — A ROW RUN BY HAND CARRIES ITS REGISTRATION (URGENT #147): scripts/row-env.sh on a toy ctest build -
     # the row printed as registered, --run applying its ENVIRONMENT and ENVIRONMENT_MODIFICATION in its directory,
     # --scratch writing nothing under the build (a warm fresh_home row's shared cache copied), fixtures and a GPU row

@@ -221,6 +221,62 @@ def append_records(records, tier, tip):
     return path
 
 
+EVIDENCE_RUNS = 40          # THE EVIDENCE CAP (TEST-STREAMLINE-1 1f): the newest output/<run>/ dirs kept
+EVIDENCE_CACHE_REL = os.path.join(".local", "share", "Jahshaka", "shadercache")
+
+
+def prune_evidence(build, keep_runs=EVIDENCE_RUNS):
+    """THE EVIDENCE CAP, at the start of every call that writes evidence (TEST-STREAMLINE-1 1f; photon-2's tests/.evidence held
+    21 GB): (1) every red home there sheds its shader cache (its manifest kept as shadercache-manifest.txt) unless it is marked
+    .evidence-keeps-cache (a row whose subject is the cache: fresh_home.sh's JAH_EVIDENCE_CACHE=keep) - the home's own logs and
+    pictures stay, one home per row (fresh_home replaces it); (2) output/<run>/ keeps the newest `keep_runs` runs, and in an
+    older run the file of a row whose NEWEST red log it is (never the last word on a still-red row). Returns (homes shed, runs
+    removed, bytes freed)."""
+    import shutil
+    ev = os.path.join(build, "tests", ".evidence")
+    if not os.path.isdir(ev):
+        return 0, 0, 0
+    def size(p):
+        n = 0
+        for dp, _, fs in os.walk(p):
+            for f in fs:
+                try:
+                    n += os.lstat(os.path.join(dp, f)).st_size
+                except OSError:
+                    pass
+        return n
+    shed = freed = gone = 0
+    for name in sorted(os.listdir(ev)):
+        home = os.path.join(ev, name)
+        cache = os.path.join(home, EVIDENCE_CACHE_REL)
+        if name == "output" or not os.path.isdir(cache) or os.path.exists(os.path.join(home, ".evidence-keeps-cache")):
+            continue
+        man = os.path.join(cache, "cache-manifest.txt")
+        if os.path.isfile(man):
+            shutil.copyfile(man, os.path.join(home, "shadercache-manifest.txt"))
+        freed += size(cache)
+        shutil.rmtree(cache, ignore_errors=True)
+        shed += 1
+    out = os.path.join(ev, "output")
+    if os.path.isdir(out):
+        runs = sorted((r for r in os.listdir(out) if os.path.isdir(os.path.join(out, r))), reverse=True)   # <time>-<sha>: newest first
+        newest = {}
+        for r in runs:
+            for f in os.listdir(os.path.join(out, r)):
+                newest.setdefault(f, r)
+        for r in runs[keep_runs:]:
+            d = os.path.join(out, r)
+            for f in os.listdir(d):
+                if newest.get(f) != r:
+                    p = os.path.join(d, f)
+                    freed += size(p) if os.path.isdir(p) else os.lstat(p).st_size
+                    shutil.rmtree(p, ignore_errors=True) if os.path.isdir(p) else os.remove(p)
+            if not os.listdir(d):
+                os.rmdir(d)
+                gone += 1
+    return shed, gone, freed
+
+
 def _row_output(build, run_id, row, text):
     """<build>/tests/.evidence/output/<run>/<row>.log holding a red row's output; its path, or None."""
     try:
@@ -238,6 +294,13 @@ def run_ctest(cmd, build, tier, lane, echo=True):
     """Run one ctest command (argv) verbose in `build`; append every row's records as it ends; return (rc, reds)."""
     if tier not in TIERS:
         raise ValueError(f"gate_runlog: tier '{tier}' is not one of {', '.join(TIERS)}")
+    try:   # the evidence cap (prune_evidence), before this call writes any
+        shed, gone, freed = prune_evidence(build)
+        if shed or gone:
+            print(f"gate_runlog: the evidence cap - {shed} red home(s) shed their shader cache, {gone} old output run(s) "
+                  f"removed, {freed / 1048576:.0f} MB freed", flush=True)
+    except OSError as e:
+        print(f"gate_runlog: the evidence cap failed ({e}) - nothing removed", flush=True)
     shas = tree_shas(_git(["rev-parse", "--show-toplevel"], build) or ROOT)
     shas["built"] = built_from(build)
     facts, config, config_why = row_facts(build)

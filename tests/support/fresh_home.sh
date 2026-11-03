@@ -209,6 +209,18 @@ else
     mkdir -p "$tests_dir/.evidence"
     rm -rf "$ev"
     mv "$home" "$ev" 2>/dev/null || rm -rf "$home"
+    # ...WITHOUT ITS SHADER CACHE (TEST-STREAMLINE-1 1f: photon-2's .evidence held 21 GB over 90 homes, rtreflect.contact's
+    # 461 of 461 MB its cache - bytes that explain no red; its manifest kept: the layer keys it held), unless the row's
+    # subject IS the cache (JAH_EVIDENCE_CACHE=keep: the shadercache rows and the COLD rows, tests/CMakeLists.txt) - marked
+    # so gate_runlog.py's evidence cap keeps it too
+    if [ -d "$ev" ]; then
+        if [ "${JAH_EVIDENCE_CACHE:-}" = keep ]; then
+            : > "$ev/.evidence-keeps-cache"
+        elif [ -d "$ev/$cache_rel" ]; then
+            [ -f "$ev/$cache_rel/cache-manifest.txt" ] && cp "$ev/$cache_rel/cache-manifest.txt" "$ev/shadercache-manifest.txt"
+            rm -rf "$ev/$cache_rel"
+        fi
+    fi
 fi
 # A ROW'S WORKING DIRECTORY SURVIVES THE WIPE (round 5): a pool's ctest WORKING_DIRECTORY is <home>/run (and a row may
 # start inside its home): only a configure creates them, so a wipe that took them made the row's NEXT run "Not Run:

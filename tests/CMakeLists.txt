@@ -48,6 +48,30 @@ if(CMAKE_VERSION VERSION_LESS 3.28)
 endif()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL _jah_vr_off_walk "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# A RED HOME KEEPS ITS SHADER CACHE ONLY WHERE THE CACHE IS THE SUBJECT (TEST-STREAMLINE-1 1f; tests/support/fresh_home.sh's
+# red path, scripts/gate_runlog.py prune_evidence): JAH_EVIDENCE_CACHE=keep for the rows labelled `shadercache` and the rows
+# registered COLD; every other red home sheds its cache (its manifest kept). The same deferred walk as the VR one.
+function(_jah_evidence_cache_walk dir)
+    get_property(_cold GLOBAL PROPERTY JAH_COLD_ROWS)
+    set(_cold_names "")
+    foreach(_l IN LISTS _cold)
+        string(REGEX REPLACE "\t.*$" "" _n "${_l}")
+        list(APPEND _cold_names "${_n}")
+    endforeach()
+    get_property(_tests DIRECTORY "${dir}" PROPERTY TESTS)
+    foreach(_t IN LISTS _tests)
+        get_property(_lab TEST "${_t}" DIRECTORY "${dir}" PROPERTY LABELS)
+        if("shadercache" IN_LIST _lab OR _t IN_LIST _cold_names)
+            set_property(TEST "${_t}" DIRECTORY "${dir}" APPEND PROPERTY ENVIRONMENT "JAH_EVIDENCE_CACHE=keep")
+        endif()
+    endforeach()
+    get_property(_subs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    foreach(_s IN LISTS _subs)
+        _jah_evidence_cache_walk("${_s}")
+    endforeach()
+endfunction()
+cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL _jah_evidence_cache_walk "${CMAKE_CURRENT_SOURCE_DIR}")
+
 # THE ASan ENGINE SUITES' OPTIONS, in one place (PHOTON_SPEC §7 R1).
 #
 # `protect_shadow_gap=0` is LOAD-BEARING and was MEASURED, not guessed. With the
