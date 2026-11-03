@@ -179,10 +179,12 @@ if rows:
     mirror = [float(r["mirror_mean"]) for r in rows]
     mwin = [sum(mirror[a:b]) / (b - a) for a, b in spans]
     print("(c) mirror mean change, 10-frame windows from %d to the hold: %s" % (start, " ".join("%.4f" % w for w in mwin)))
-    _, _, msigma, mrising = rise_law.judge(mirror, start, end, max(1e-4, 1.0 / max(1, int(rows[1]["mirror_px"]))))
+    mj = rise_law.judge(mirror, start, end, max(1e-4, 1.0 / max(1, int(rows[1]["mirror_px"]))))   # (by name: URGENT #149)
+    msigma, mrising, mdips = mj.sigma, mj.rises, mj.dips
     print("(c) the mirror's rise-law noise %.5f; rises %d (the first frame's change %.3f, printed)" % (msigma, len(mrising), mirror[1] if len(mirror) > 1 else -1))
-    if mrising: fails.append("(c) the mirror converges with no rise to the hold (the rise law): rises %s"
-                             % " ".join("%s:%d:%.4f->%.4f(%.4f)" % r for r in mrising[:10]))
+    if mdips: print("(c): a one-frame DIP (the change fell and came back; not a rise - the lead's leftover, URGENT #138): %s" % " ".join(d.text() for d in mdips))
+    if mrising: fails.append("(c) the mirror converges with no rise to the hold (the rise law): rises (kind, frame, from, to, bound) %s"
+                             % " ".join(r.text() for r in mrising[:10]))
     # (g) THE REST'S COST (the lead's bar, PHOTON-7 stage 6): no rest frame's trace costs more than one full TILE frame -
     # THE MAX OVER THE TILE FRAMES (k 4 over every batching texel, the hand-over included; frame 5 alone was a proxy
     # 2.5 % low: the residual's store begins at v = 2N, frames 14-15) - the compact path's tail included (its frames:
