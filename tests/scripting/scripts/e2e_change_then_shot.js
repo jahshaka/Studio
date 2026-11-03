@@ -6,6 +6,11 @@
 // and never again. Its clock froze, the window never closed, the rest decision never came, the cards owed their hold and
 // giAtRest stayed false: the shot ran to its 2,002-frame cap. The window now closes in the cache's frames as well (its
 // stamps have all landed by the read-back's period and lag past first + S).
+// ITS SCENE, EXPLICIT (TEST-STREAMLINE-1 3a, the lead's ruling): the boot's own default world - SceneTemplate::Basic,
+// what the scripted boot's newScene() makes (MainWindow::enterEditorOnNewScene) - made HERE by the verb, so the row reads
+// the same scene in any order of a pool and never depends on being first. The law below is unchanged.
+var g = project.create(project.nextFreeName("change-then-shot"), { template: "basic" });
+if (!g || g.length < 10) throw new Error("project.create refused");
 editor.setCamera({ position: { x: 5, y: 5, z: 14 }, lookAt: { x: -2, y: 0.5, z: -3 } });
 editor.frame(240);
 var i = 0;

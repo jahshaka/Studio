@@ -41,12 +41,12 @@ endif()
 
 # pool.host_low — THE HEADLESS HOST, ONE PROCESS FOR TWO LOW / NO-NEEDS VERB ROWS (TEST-STREAMLINE-1 3a item 3): the arms
 # are scripting.e2e.lamps_unshadowed's and sockets.e2e's scripts, unchanged, on `--headless --render-offscreen`.
-# lamps_unshadowed is FIRST: its law reads THE BOOT's default scene (no project.create of its own - the clean-state law's
-# reversed order cannot move it); sockets creates its own project. Registered HERE, not in tests/scripting: the sockets
+# Each arm makes its own scene (lamps_unshadowed the boot's default Basic world through project.create - the lead's
+# ruling: no arm depends on being first), so any order runs the same scenes. Registered HERE, not in tests/scripting: the sockets
 # script is configured by this directory, which configures after it. OFF until block B (JAH_HOST_POOLS); the arms'
 # seconds are ESTIMATES (each row's solo price less its ~5.6-s boot) until block B measures them in the pool.
 if("host_low" IN_LIST JAH_HOST_POOLS)
-    jah_pool_arm(host_low lamps_unshadowed ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_lamps_unshadowed.js 8 FIRST)
+    jah_pool_arm(host_low lamps_unshadowed ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_lamps_unshadowed.js 8)
     jah_pool_arm(host_low sockets ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js 19)
     jah_add_pool(host_low TIER low NEEDS NONE NEEDS_WHY "the lamp issue reads the view's shadow maps, GI is the script's own switch; socket verbs, camera.screenshot returns a shot (no picture claim)"
                  APP_ARGS ${JAH_HOST_ARGS} LABELS "scripting")

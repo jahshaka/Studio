@@ -9,6 +9,11 @@
 function assert(c, m) { if (!c) throw new Error("assert failed: " + m); console.log("ok: " + m); }
 function J(v) { return JSON.stringify(v); }
 
+// ITS SCENE, EXPLICIT (TEST-STREAMLINE-1 3a, the lead's ruling): the boot's own default world - SceneTemplate::Basic,
+// what the scripted boot's newScene() makes (MainWindow::enterEditorOnNewScene) - made HERE by the verb, so the row reads
+// the same scene in any order of a pool and never depends on being first. The law below is unchanged.
+var g = project.create(project.nextFreeName("lamps-unshadowed"), { template: "basic" });
+assert(g && g.length > 10, "project.create (the default Basic world)");
 world.rayTracing("off");
 world.gi({ mode: "off" });
 world.shadows({ mapBudget: 2 });
