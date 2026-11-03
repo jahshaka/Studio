@@ -45,7 +45,6 @@ set_tests_properties(lab.script_stops PROPERTIES TIMEOUT 60 LABELS "lab")
 # the same triangle count, scene hash and bake hash (the bake pool's threaded output), the next seed another hash. CPU.
 add_test(NAME lab.envs_build COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/envs_build.sh $<TARGET_FILE:jahlab>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-jah_ship_row(lab.envs_build)   # THE SHIP SET (TEST-CUT-1): promoted at the LAB-1 merge
 set_tests_properties(lab.envs_build PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(lab.envs_build)
 
@@ -56,7 +55,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 # lab.dolly_matches_probe (stage 3) — scripts/lab/dolly.sh on the kit-bashed box set at two stops: the dolly's table
 # equals the engine's AtomDrawStatus at each stop (cut triangles, clusters, occluded objects) and the cut probe's drawn
 # triangles equal that cut, +- 0. On the rig's display; the dolly takes the card's lock (re-entrant under a holder).
-jah_gpu_row(lab.dolly_matches_probe SHIP CLASS engine FRAMES 30
+jah_gpu_row(lab.dolly_matches_probe CLASS engine FRAMES 30
     COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/dolly_matches_probe.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/dolly_matches_probe
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

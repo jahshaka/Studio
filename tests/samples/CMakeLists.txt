@@ -129,7 +129,7 @@ jah_no_display(samples.cold_open.clean)
 # script's 120); the one-launch row's 706 was the startup gate's 523, the open's and the script's 120 among them)
 set_property(TEST samples.cold_open.import PROPERTY JAHSHAKA_TEST_FRAMES 584)
 set_property(TEST samples.cold_open.open PROPERTY JAHSHAKA_TEST_FRAMES 155)
-jah_ship_row(samples.cleanstart.Matcaps samples.cleanstart.Mirror_Room samples.cleanstart.Particles samples.cleanstart.Physics samples.cleanstart.Showroom samples.cleanstart.Showroom_2 samples.cleanstart.Skeletal_Animation samples.cleanstart.Tornado samples.cleanstart.World_Background)   # THE SHIP SET (TEST-CUT-1)
+jah_ship_row(samples.cleanstart.Tornado)   # THE SHIP SET (TEST-CUT-1)
 
 # THE MULTI-ARCHIVE SESSION (code review of the cleanup, 2026-09-10): seven
 # archives imported into ONE home and opened back to back in ONE process — the
@@ -151,13 +151,13 @@ file(MAKE_DIRECTORY ${_shome}/run)
 # THE SHADER CACHE WARM (PHOTON-7 stage 11, the lead's ruling): the data root stays virgin (settings, library, store) and
 # the boots take the tree's shared shader cache (fresh_home.sh --warm) - the cache is not this law's; a compile-timed
 # picture is COLD-BOOT-2's class, with its own cold row (mirror_room_boots.sh's header says why). 30.9 s / 26.0 s warm.
-jah_gpu_row(samples.mirror_room_boots.boot1 SHIP CLASS app TIER document
+jah_gpu_row(samples.mirror_room_boots.boot1 CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 1
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(samples.mirror_room_boots.boot1 PROPERTIES LABELS "scripting" TIMEOUT 60
     FIXTURES_SETUP samples_mirror_room_boot1)
-jah_gpu_row(samples.mirror_room_boots.boot2 SHIP CLASS app TIER document
+jah_gpu_row(samples.mirror_room_boots.boot2 CLASS app TIER document
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boots.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/mirror_room_boot.js.in ${CMAKE_CURRENT_BINARY_DIR}/mirror-room-boots 2
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

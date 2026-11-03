@@ -35,7 +35,7 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     target_include_directories(test_window_render_thread PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
     target_link_libraries(test_window_render_thread PRIVATE JahshakaEngine Qt6::Widgets X11)
     add_dependencies(test_window_render_thread JahshakaEngineMedia)
-    jah_gpu_row(view.window_on_render_thread SHIP CLASS engine FRAMES 120 COMMAND test_window_render_thread
+    jah_gpu_row(view.window_on_render_thread CLASS engine FRAMES 120 COMMAND test_window_render_thread
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(view.window_on_render_thread PROPERTIES
         ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb;VK_INSTANCE_LAYERS=VK_LAYER_KHRONOS_validation"

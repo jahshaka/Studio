@@ -58,7 +58,6 @@ target_link_libraries(test_import_async PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
 add_test(NAME import.async COMMAND test_import_async
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-jah_ship_row(import.async)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(import.async PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "importer")
 

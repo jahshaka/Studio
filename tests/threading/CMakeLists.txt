@@ -25,7 +25,7 @@ target_compile_definitions(test_staging_race PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_staging_race PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(test_staging_race JahshakaEngineMedia)
-jah_gpu_row(threading.staging_race SHIP CLASS engine COMMAND test_staging_race
+jah_gpu_row(threading.staging_race CLASS engine COMMAND test_staging_race
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(threading.staging_race PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "threading")

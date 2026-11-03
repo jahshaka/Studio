@@ -18,7 +18,6 @@ file(MAKE_DIRECTORY ${_home}/run)
 # older AssetStore has none, and the library is REFUSED (exit 4): "--dump-api-docs exited 4" on main's build-linux, green
 # in a fresh ship tree. A row owns its own state (the same fault as shadercache.app, 67cefee33).
 jah_fresh_home_fixture(api.contract.fresh_home api_contract_home "${_home}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
-jah_ship_row(api.contract.fresh_home)   # a ship row's setup runs in the ship set too
 add_test(NAME api.contract
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/api_contract.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"

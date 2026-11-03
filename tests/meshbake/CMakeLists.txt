@@ -111,9 +111,8 @@ foreach(_part standin dragon throws)
         TIMEOUT ${_bake_timeout_${_part}} LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
     jah_no_display(bake.determinism.${_part})
 endforeach()
-jah_ship_row(bake.determinism.standin bake.determinism.dragon bake.determinism.throws)   # THE SHIP SET (TEST-CUT-1)
 
-# bake.dag_reaches_root (ATOM-6 stage 2c; SHIP — the bake's end-to-end row for the cluster DAG; rewritten for ATOM-2's
+# bake.dag_reaches_root (ATOM-6 stage 2c; the bake's end-to-end row for the cluster DAG, (the ship set left at draft B, TEST-STREAMLINE-1 4a: LONG only); rewritten for ATOM-2's
 # builder, the law kept): a card soup (2,000 quads in a 2 m sphere) and a kit-bash (200 closed 12-triangle boxes) bake
 # to DAGs that END — the top cut draws nothing over a non-empty root, the stored errors monotone, no group terminal,
 # the builder under its depth cap. A CPU row: FRAMES 0.
@@ -122,7 +121,6 @@ add_test(NAME bake.dag_reaches_root COMMAND $<TARGET_FILE:test_mesh_bake> --dag-
 set_tests_properties(bake.dag_reaches_root PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.dag_reaches_root)
-jah_ship_row(bake.dag_reaches_root)   # THE SHIP SET: the DAG build's end-to-end row (ATOM-6)
 
 # meshbake.archive_bakes.import / .rebuild / .missing (FORWARD-ONLY-1 item 1): an ARCHIVE IMPORT bakes every model it
 # brings (archives carry no bakes), so a fresh library that imports the shipped samples opens them from bakes with ZERO
@@ -194,7 +192,7 @@ endif()
 # the one empty frame a headless engine walks.
 # (meshbake.archive_bakes.*: NULL headless since TEST-STREAMLINE-1 3a item 6 - no card, no frames to count)
 
-# bake.locked_positions_kept (ATOM-7 stage 2; SHIP; rewritten for ATOM-2's builder, the law kept): A LOCKED POSITION
+# bake.locked_positions_kept (ATOM-7 stage 2; (the ship set left at draft B, TEST-STREAMLINE-1 4a: LONG only); rewritten for ATOM-2's builder, the law kept): A LOCKED POSITION
 # SURVIVES. The card soup, the kit-bash and a rough faceted sheet (96 x 96 cells with UV charts: long group borders,
 # sliver fans) bake with no group's output losing a position its level locked — recomputed from the DAG itself (a
 # group's external positions: its members' edges twinned by a pool cluster outside it).
@@ -203,7 +201,6 @@ add_test(NAME bake.locked_positions_kept COMMAND $<TARGET_FILE:test_mesh_bake> -
 set_tests_properties(bake.locked_positions_kept PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.locked_positions_kept)
-jah_ship_row(bake.locked_positions_kept)   # THE SHIP SET: the border-crack law's end-to-end row (ATOM-7; the lead's promotion at the merge)
 
 # bake.cut_curve (ATOM-UPGRADE stage 0; the builder's row): THE CUT CURVE IS MONOTONE AND ENDS EMPTY. The kit-bashed box
 # set (30 overlapping boxes, 360 triangles, hard UV seams) bakes to a DAG whose cut — the runtime's rule over the stored
@@ -211,23 +208,21 @@ jah_ship_row(bake.locked_positions_kept)   # THE SHIP SET: the border-crack law'
 # draws nothing (the empty top: stage 5's law). Red at the base. A CPU row: FRAMES 0.
 add_test(NAME bake.cut_curve COMMAND $<TARGET_FILE:test_mesh_bake> --cut-curve-law
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-jah_ship_row(bake.cut_curve)   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
 set_tests_properties(bake.cut_curve PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.cut_curve)
 
 # THE ATOM-2 ROWS (ATOM-2 part A; the builder's rows, each a `--atom2 <row>` verb, CPU only: FRAMES 0). The five below
-# are THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge as the DAG builder's end-to-end laws. The fixtures: the
+# were promoted at the ATOM-2 merge as the DAG builder's end-to-end laws (the ship set left at draft B, TEST-STREAMLINE-1 4a: LONG only). The fixtures: the
 # Bistro-units kit-bashed box set, a 10 m curved shell with a 4 x 3 atlas, the card soup, the kit-bash, the rough sheet
 # and a 100-triangle ring (tests/meshbake/atom2_rows.h says what each row asserts). The builder's other three rows
-# (atom2.adjacency_by_position, atom2.borders_move, atom2.locked_positions_kept — the last one the SHIP row
+# (atom2.adjacency_by_position, atom2.borders_move, atom2.locked_positions_kept — the last one
 # bake.locked_positions_kept's law over the same fixtures) were archived at the merge: archive/tests/ATOM-2/.
-set(_atom2_ship_rows ladder_never_forced ends_empty one_step_drift_bound cards_merge_within_budget level_table_is_a_cut)
-foreach(_row IN LISTS _atom2_ship_rows)
+set(_atom2_rows ladder_never_forced ends_empty one_step_drift_bound cards_merge_within_budget level_table_is_a_cut)
+foreach(_row IN LISTS _atom2_rows)
     add_test(NAME atom2.${_row} COMMAND $<TARGET_FILE:test_mesh_bake> --atom2 ${_row}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom2.${_row} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
     jah_no_display(atom2.${_row})
-    jah_ship_row(atom2.${_row})   # THE SHIP SET (TEST-CUT-1): promoted at the ATOM-2 merge
 endforeach()

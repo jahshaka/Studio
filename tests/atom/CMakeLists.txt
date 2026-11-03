@@ -94,7 +94,7 @@ if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
         add_dependencies(test_atom_component_asan JahshakaEngineMedia)
         target_compile_options(test_atom_component_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
         target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
-        jah_gpu_row(atom.component_asan SHIP CLASS engine COMMAND test_atom_component_asan
+        jah_gpu_row(atom.component_asan CLASS engine COMMAND test_atom_component_asan
                  WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
         set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 60 LABELS "engine"
             ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
@@ -180,7 +180,7 @@ set_source_files_properties(test_atom_hidden_cut.cpp PROPERTIES COMPILE_DEFINITI
 # (98,318 of 182,807 triangles at High, 924 x 565) is drawn for objects with no visible pixel.
 add_executable(test_atom_hidden_cut test_atom_hidden_cut.cpp)
 jah_atom_engine_target(test_atom_hidden_cut)
-jah_gpu_row(atom.hidden_cut SHIP CLASS engine FRAMES 33 COMMAND test_atom_hidden_cut
+jah_gpu_row(atom.hidden_cut CLASS engine FRAMES 33 COMMAND test_atom_hidden_cut
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.hidden_cut PROPERTIES TIMEOUT 60 LABELS "engine")
 
@@ -195,7 +195,7 @@ set_tests_properties(atom.hidden_cut PROPERTIES TIMEOUT 60 LABELS "engine")
 add_executable(test_atom_cluster_occlusion test_atom_cluster_occlusion.cpp)
 set_source_files_properties(test_atom_cluster_occlusion.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
 jah_atom_engine_target(test_atom_cluster_occlusion)
-jah_gpu_row(atom.cluster_occlusion SHIP CLASS engine FRAMES 145 COMMAND test_atom_cluster_occlusion
+jah_gpu_row(atom.cluster_occlusion CLASS engine FRAMES 145 COMMAND test_atom_cluster_occlusion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_occlusion PROPERTIES TIMEOUT 60 LABELS "engine")
 

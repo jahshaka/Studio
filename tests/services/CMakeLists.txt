@@ -55,7 +55,6 @@ target_link_libraries(test_memory_ownership PRIVATE IrisGL Qt6::Gui)
 jah_document_graph(test_memory_ownership)
 add_test(NAME services.memory COMMAND test_memory_ownership
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-jah_ship_row(services.memory)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(services.memory PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "services")
 jah_no_display(services.memory)

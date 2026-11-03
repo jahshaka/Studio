@@ -69,7 +69,7 @@ target_compile_definitions(test_engine_recreate PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_recreate PRIVATE JahshakaEngine)
 add_dependencies(test_engine_recreate JahshakaEngineMedia)
-jah_gpu_row(test_engine_recreate SHIP CLASS engine COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(test_engine_recreate CLASS engine COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # meshbake.shadow_vao_alias (archived: archive/tests/meshbake) — THE SHADOW-VAO LIST OF A LOD CHAIN (ATOM P1's AT-A11;
 # PHOTON-SCENE-SWITCH-1), as its own ctest name so gate-scope can select it: a
 # 6-level mesh must hold one SHRUNK shadow VAO per level over one vertex buffer
@@ -91,7 +91,7 @@ target_compile_definitions(test_decals PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_decals PRIVATE JahshakaEngine)
 add_dependencies(test_decals JahshakaEngineMedia)
-jah_gpu_row(decals.engine SHIP CLASS engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+jah_gpu_row(decals.engine CLASS engine COMMAND test_decals WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(decals.engine PROPERTIES TIMEOUT 60 LABELS "engine")
 
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/frame_input_settle")
@@ -112,7 +112,7 @@ target_compile_definitions(test_engine_record_determinism PRIVATE
 target_link_libraries(test_engine_record_determinism PRIVATE JahshakaEngine)
 add_dependencies(test_engine_record_determinism JahshakaEngineMedia)
 # Two engines in sequence (one per child process: Root is a singleton), never at once: the engine class's slots cover it.
-jah_gpu_row(frame.record_determinism SHIP CLASS engine FRAMES 128 COMMAND test_engine_record_determinism
+jah_gpu_row(frame.record_determinism CLASS engine FRAMES 128 COMMAND test_engine_record_determinism
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/record_determinism")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/record_determinism")
 set_tests_properties(frame.record_determinism PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -129,7 +129,7 @@ target_compile_definitions(test_engine_message_order PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_message_order PRIVATE JahshakaEngine)
 add_dependencies(test_engine_message_order JahshakaEngineMedia)
-jah_gpu_row(engine.message_order SHIP CLASS engine FRAMES 7 COMMAND test_engine_message_order
+jah_gpu_row(engine.message_order CLASS engine FRAMES 7 COMMAND test_engine_message_order
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.message_order PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_tsan_render(frame.record_determinism engine.message_order)   # the render thread's TSan arm (U3 decision 47)
@@ -147,7 +147,7 @@ target_compile_definitions(test_engine_interpolation PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_interpolation PRIVATE JahshakaEngine)
 add_dependencies(test_engine_interpolation JahshakaEngineMedia)
-jah_gpu_row(frame.interpolation SHIP CLASS engine FRAMES 20 COMMAND test_engine_interpolation
+jah_gpu_row(frame.interpolation CLASS engine FRAMES 20 COMMAND test_engine_interpolation
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.interpolation PROPERTIES TIMEOUT 60 LABELS "engine")
 
@@ -163,7 +163,7 @@ target_compile_definitions(test_engine_drag_latency PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_drag_latency PRIVATE JahshakaEngine)
 add_dependencies(test_engine_drag_latency JahshakaEngineMedia)
-jah_gpu_row(frame.drag_latency SHIP CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
+jah_gpu_row(frame.drag_latency CLASS engine FRAMES 400 COMMAND test_engine_drag_latency
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.drag_latency PROPERTIES TIMEOUT 60 LABELS "engine")
 # frame.streaming_picture — A FRAME WITH A HOLE IS PRESENTED, NEVER A HELD PLATE (BUGS-7 stage 2): a WINDOW view on the
@@ -182,7 +182,7 @@ target_compile_definitions(test_engine_streaming_picture PRIVATE
 target_include_directories(test_engine_streaming_picture PRIVATE ${X11_INCLUDE_DIR})
 target_link_libraries(test_engine_streaming_picture PRIVATE JahshakaEngine ${X11_LIBRARIES})
 add_dependencies(test_engine_streaming_picture JahshakaEngineMedia)
-jah_gpu_row(frame.streaming_picture SHIP CLASS engine FRAMES 60
+jah_gpu_row(frame.streaming_picture CLASS engine FRAMES 60
          COLD "the hole IS a cold compile: the unlit cube's permutation must be building while frames are presented (the fixture's shaderCacheOff)"
          COMMAND test_engine_streaming_picture
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -200,7 +200,7 @@ target_compile_definitions(test_engine_error_door PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_error_door PRIVATE JahshakaEngine)
 add_dependencies(test_engine_error_door JahshakaEngineMedia)
-jah_gpu_row(engine.error_door SHIP CLASS engine FRAMES 620 COMMAND test_engine_error_door
+jah_gpu_row(engine.error_door CLASS engine FRAMES 620 COMMAND test_engine_error_door
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.error_door PROPERTIES TIMEOUT 60 LABELS "engine")
 # frame.monitor_pop — THE MONITOR'S RECORDS ARE POPPED, NEVER REQUESTED (FRAME-MONITOR-DOOR-1): the hand-back door as an
@@ -219,7 +219,7 @@ target_compile_definitions(test_engine_monitor_pop PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_monitor_pop PRIVATE JahshakaEngine)
 add_dependencies(test_engine_monitor_pop JahshakaEngineMedia)
-jah_gpu_row(frame.monitor_pop SHIP CLASS engine FRAMES 280
+jah_gpu_row(frame.monitor_pop CLASS engine FRAMES 280
          COLD "the save arm needs shaders this session compiled: its own cache dir, wiped every run (a warm cache saves nothing)"
          COMMAND test_engine_monitor_pop
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -261,7 +261,7 @@ add_dependencies(test_engine_gpu_walk_parity JahshakaEngineMedia)
 # the compose inside the compare's task and the serial arm (gpuscene.serialCompose), ABBA. Also a clang TSan row.
 # RAY-FEED-OBSERVER-1: the ray tier live on the view, the ray feed's traced set folded into the digest (a re-level, an
 # alpha slot, a rigged slot and a mesh swap in the scene); its lane halves owe the ordered body for <= 10 % of the movers.
-jah_gpu_row(engine.gpuscene_identity SHIP CLASS engine COMMAND test_engine_gpu_walk_parity --compose-identity
+jah_gpu_row(engine.gpuscene_identity CLASS engine COMMAND test_engine_gpu_walk_parity --compose-identity
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.gpuscene_identity PROPERTIES TIMEOUT 60 LABELS "engine"
     JAHSHAKA_TEST_FRAMES 18)   # 1 + 6 warm + 10 + 1

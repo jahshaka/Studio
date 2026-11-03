@@ -110,13 +110,13 @@ target_compile_definitions(test_async_after_open PRIVATE
 # change made this row a 64-s boot at the 60-s cap (8B's check: 60.04 s, the row behind it NOT RUN). Declared COLD, the
 # warm-up's cold-on boot runs `--seed` once uncapped with this test tier (scripts/warm-app-cache.sh) and the row finds
 # the seed this tree's (0.03 s).
-jah_gpu_row(shader.async_after_open.seed SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+jah_gpu_row(shader.async_after_open.seed CLASS app TIER epic NEEDS photon bloom ssao smaa planar
          COLD "the startup seed is a cache keyed on the shaders that only this row's own boot may make"
          COMMAND test_async_after_open --seed
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.async_after_open.seed PROPERTIES TIMEOUT 60 LABELS "shadercache"   # 6 x its solo 28.2 s
     FIXTURES_SETUP asyncAfterOpenSeed)
-jah_gpu_row(shader.async_after_open SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_after_open
+jah_gpu_row(shader.async_after_open CLASS app TIER epic NEEDS photon bloom ssao smaa planar COMMAND test_async_after_open
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 60 LABELS "shadercache"
     FIXTURES_REQUIRED asyncAfterOpenSeed DEPENDS shader.async_after_open.seed)

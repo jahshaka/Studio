@@ -52,7 +52,7 @@ jah_ship_row(scripting.live)   # THE SHIP SET (TEST-CUT-1)
 # calls; what the editor reads per frame is the published snapshot, what it set it keeps). A count, in frames.
 set(_hsgHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-host_sync_getters)
 file(MAKE_DIRECTORY ${_hsgHome}/run)
-jah_gpu_row(host.sync_getters SHIP CLASS app TIER low NEEDS NONE FRAMES 630
+jah_gpu_row(host.sync_getters CLASS app TIER low NEEDS NONE FRAMES 630
          NEEDS_WHY "a count of the host's synchronous engine entries, the capture inside the window is a subject, its picture no claim"
          COMMAND ${JAH_FRESH_HOME} --warm ${_hsgHome} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
@@ -77,7 +77,7 @@ jah_tsan_blocked(host.sync_getters )   # TSAN-GCC15-THREAD-REGISTRY under GCC an
 # drawn by the next frame the render thread began (none merged into the next tick's), zero synchronous engine reads.
 set(_edlHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_drag_latency)
 file(MAKE_DIRECTORY ${_edlHome}/run)
-jah_gpu_row(editor.drag_latency SHIP CLASS app TIER low NEEDS NONE FRAMES 260
+jah_gpu_row(editor.drag_latency CLASS app TIER low NEEDS NONE FRAMES 260
          COMMAND ${JAH_FRESH_HOME} --warm ${_edlHome} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/editor_drag_latency.js --script-live
@@ -113,7 +113,7 @@ jah_pool_arm(editor fragments ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_fragments.
 # Measured once each (2026-10-20, solo, the card lock held): author 39.3 s / 1,135 frames, import 21.2 s / 1,084,
 # restore 12.5 s / 92. TIMEOUT max(6 x the solo run, the 120 s floor), rounded up.
 foreach(_row author import restore)
-    jah_gpu_row(material.live_roundtrip.${_row} SHIP CLASS app TIER epic NEEDS photon
+    jah_gpu_row(material.live_roundtrip.${_row} CLASS app TIER epic NEEDS photon
              COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      ${CMAKE_CURRENT_SOURCE_DIR}/scripts/material_live_roundtrip.js.in
                      ${CMAKE_CURRENT_SOURCE_DIR}/fixtures/cutout_checker.png
@@ -136,7 +136,7 @@ set(_ect_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-editor_controls-timing)
 file(MAKE_DIRECTORY ${_ect_home}/run)
 jah_timing_script(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_editor_controls.js
                   ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js)
-jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing SHIP CLASS app TIER document   RUN_TIMEOUT 60
+jah_gpu_exclusive_test(NAME scripting.e2e.editor_controls.timing CLASS app TIER document   RUN_TIMEOUT 60
     COMMAND sh "${JAH_FRESH_HOME}" --warm "${_ect_home}" --
             $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_editor_controls.timing.js
     WORKING_DIRECTORY ${_ect_home}/run)
@@ -190,7 +190,7 @@ file(MAKE_DIRECTORY ${_pumpdefer_home}/run)
 # the warm-up's cold-on - never inside this row), while every change's own shaders still compile at the change - the
 # subject - and the script ASSERTS it all: 0 startup compiles, clouds_on and the chain's switch > 0 (a startup set that
 # grew to hold them reds the row, never a silent pass).
-jah_gpu_row(scripting.e2e.sky_swap_transient.seed SHIP CLASS app TIER epic NEEDS photon
+jah_gpu_row(scripting.e2e.sky_swap_transient.seed CLASS app TIER epic NEEDS photon
          COLD "this tier's startup seed is a cache keyed on the shaders and the Studio build that only its own boot may make"
          COMMAND $<TARGET_FILE:test_async_after_open> --seed --seed-dir e2e-sky-swap-transient-seed
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
@@ -200,7 +200,7 @@ set(_sstHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-sky_swap_transient)
 jah_fresh_home_fixture(scripting.e2e.sky_swap_transient.fresh_home skySwapTransientFreshHome "${_sstHome}"
     ARGS --seed ${CMAKE_CURRENT_BINARY_DIR}/e2e-sky-swap-transient-seed/shadercache LABELS "scripting")
 set_tests_properties(scripting.e2e.sky_swap_transient.fresh_home PROPERTIES FIXTURES_REQUIRED skySwapTransientSeed)
-jah_gpu_row(scripting.e2e.sky_swap_transient SHIP CLASS app TIER epic NEEDS photon
+jah_gpu_row(scripting.e2e.sky_swap_transient CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sky_swap_transient.js
          WORKING_DIRECTORY ${_sstHome}/run)
@@ -278,7 +278,6 @@ add_test(NAME scripting.e2e.clip_ref
                  ${CMAKE_SOURCE_DIR}/tests/skeletal/fixtures/mixamo_tpose.fbx
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clip_ref.js
          WORKING_DIRECTORY ${_home}/run)
-jah_ship_row(scripting.e2e.clip_ref)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.clip_ref PROPERTIES
     JAHSHAKA_HEADLESS TRUE   # clip_ref.sh runs the app --headless only: the NULL render system (testing_rules R13)
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -301,7 +300,6 @@ add_test(NAME scripting.e2e.tex_ref
                  ${CMAKE_SOURCE_DIR}/tests/importer/fixtures/textured_pbr_quad.glb
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_tex_ref.js
          WORKING_DIRECTORY ${_home}/run)
-jah_ship_row(scripting.e2e.tex_ref)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.tex_ref PROPERTIES
     JAHSHAKA_HEADLESS TRUE   # tex_ref.sh runs the app --headless only: the NULL render system (testing_rules R13)
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
@@ -339,7 +337,7 @@ file(MAKE_DIRECTORY ${_home}/run)
 set(JAH_TEST_BUNDLE ${_home}/perf/bundle)
 configure_file(scripts/e2e_perf_capture_frames.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js @ONLY)
-jah_gpu_row(scripting.e2e.perf_capture_frames WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-perf_capture_frames" SHIP CLASS app TIER low NEEDS NONE NEEDS_WHY "the capture window is counted in frames, giStatus is a recorded field (no GI claim)"
+jah_gpu_row(scripting.e2e.perf_capture_frames WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-perf_capture_frames" CLASS app TIER low NEEDS NONE NEEDS_WHY "the capture window is counted in frames, giStatus is a recorded field (no GI claim)"
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/perf_capture_frames.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                  ${CMAKE_CURRENT_BINARY_DIR}/e2e_perf_capture_frames.js
@@ -445,7 +443,6 @@ file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME scripting.e2e.one_asset
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_one_asset.js --headless
          WORKING_DIRECTORY ${_home}/run)
-jah_ship_row(scripting.e2e.one_asset)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.one_asset PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
     FIXTURES_REQUIRED one_asset_home
@@ -462,7 +459,7 @@ configure_file(scripts/e2e_tray_panel.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-tray_panel)
 jah_fresh_home_fixture(scripting.e2e.tray_panel.fresh_home tray_panel_home "${_home}" WARM LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.tray_panel WARM_HOME "${_home}" SHIP CLASS app TIER low NEEDS NONE
+jah_gpu_row(scripting.e2e.tray_panel WARM_HOME "${_home}" CLASS app TIER low NEEDS NONE
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_tray_panel.js
          WORKING_DIRECTORY ${_home}/run)
 # TESTING-CLEANUP-2B item 2: TIMEOUT 60 (URGENT #48: was 550) = 6 x the run log's quiet median 90.4 s (46 quiet PASS runs since 2026-10-01, worst 268.9 s);
@@ -487,7 +484,7 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
 jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" WARM LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
 jah_host_args(gi.one_writer _host)   # (the headless host's command once block B switches it on: TEST-STREAMLINE-1 3a)
-jah_gpu_row(gi.one_writer WARM_HOME "${_home}" SHIP CLASS app TIER epic NEEDS photon
+jah_gpu_row(gi.one_writer WARM_HOME "${_home}" CLASS app TIER epic NEEDS photon
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js ${_host}
          WORKING_DIRECTORY ${_home}/run)
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
@@ -632,7 +629,6 @@ add_test(NAME scripting.e2e.clipboard_budget
                  bash ${CMAKE_CURRENT_SOURCE_DIR}/clipboard_budget.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --headless
                  ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_clipboard_budget.js
          WORKING_DIRECTORY ${_cbud_home}/run)
-jah_ship_row(scripting.e2e.clipboard_budget)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.clipboard_budget PROPERTIES
     ENVIRONMENT "HOME=${_cbud_home}"
     LABELS "scripting"
@@ -685,7 +681,7 @@ configure_file(scripts/e2e_player_bounce.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js @ONLY)
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-player_bounce)
 file(MAKE_DIRECTORY ${_home}/run)
-jah_gpu_row(scripting.e2e.player_bounce SHIP CLASS app TIER epic NEEDS photon
+jah_gpu_row(scripting.e2e.player_bounce CLASS app TIER epic NEEDS photon
          COMMAND ${JAH_FRESH_HOME} --warm ${_home} --
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_player_bounce.js
          WORKING_DIRECTORY ${_home}/run)
@@ -768,7 +764,6 @@ file(MAKE_DIRECTORY ${_msiHome}/run)
 add_test(NAME scripting.e2e.material_share_import
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share_import.js --headless
          WORKING_DIRECTORY ${_msiHome}/run)
-jah_ship_row(scripting.e2e.material_share_import)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.material_share_import PROPERTIES
     ENVIRONMENT "HOME=${_msiHome};JAHSHAKA_DATA_ROOT=${_msiHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED "materialShareImportHome;materialShareFile"
@@ -794,7 +789,6 @@ file(MAKE_DIRECTORY ${_paHome}/run)
 add_test(NAME scripting.e2e.preset_apply
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_preset_apply.js --headless
          WORKING_DIRECTORY ${_paHome}/run)
-jah_ship_row(scripting.e2e.preset_apply)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(scripting.e2e.preset_apply PROPERTIES
     ENVIRONMENT "HOME=${_paHome};JAHSHAKA_DATA_ROOT=${_paHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED presetApplyHome
@@ -879,7 +873,6 @@ configure_file(scripts/e2e_material_drop.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_m
 jah_pool_arm(editor material_drop ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_drop.js 12)
 
 jah_add_pool(editor TIER low NEEDS NONE NEEDS_WHY "editor verbs and their screenshots at Low with Photon off, as TEST-TIER-1 measured them (no GI claim)" TEST_WINDOW LABELS scripting)
-jah_ship_row(pool.editor)   # THE SHIP SET (TEST-CUT-1)
 
 if(TEST scripting.e2e.clip_ref)
     jah_fresh_home_fixture(scripting.e2e.clip_ref.fresh_home scriptingE2eClipRefFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-clip_ref" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)

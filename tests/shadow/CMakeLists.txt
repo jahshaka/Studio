@@ -49,7 +49,7 @@ set_tests_properties(shadow.cutout_caster PROPERTIES LABELS "engine" TIMEOUT 60)
 set(_soak_timeout_primitives 60)
 set(_soak_timeout_tornado 60)
 foreach(_part primitives tornado)
-    jah_gpu_row(gpu.cutout_soak.${_part} SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+    jah_gpu_row(gpu.cutout_soak.${_part} CLASS app TIER epic NEEDS photon bloom ssao smaa planar
              COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.sh
                      $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
                      ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gpu_cutout_soak.js.in

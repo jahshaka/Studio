@@ -137,4 +137,3 @@ jah_gpu_row(open.streams_to_the_end CLASS app TIER low NEEDS NONE TEST_WINDOW FR
 set_tests_properties(open.streams_to_the_end PROPERTIES
     ENVIRONMENT "HOME=${_streams_home};JAHSHAKA_DATA_ROOT=${_streams_home}/.local/share/Jahshaka"
     TIMEOUT 60 LABELS "openasync")
-jah_ship_row(open.streams_to_the_end)   # THE SHIP SET: the open path's end-to-end row (OPEN-PATH-1; the lead's promotion at the merge)

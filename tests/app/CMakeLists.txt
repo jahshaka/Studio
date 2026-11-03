@@ -98,7 +98,7 @@ file(MAKE_DIRECTORY ${_sq_home}/run)
 # row's own declaration is its heaviest boot (the tokens it must hold).
 set(_tnb_home ${CMAKE_CURRENT_BINARY_DIR}/test-needs-boot-home)
 file(MAKE_DIRECTORY ${_tnb_home}/run)
-jah_gpu_row(app.test_needs_boot SHIP CLASS app TIER epic NEEDS photon bloom
+jah_gpu_row(app.test_needs_boot CLASS app TIER epic NEEDS photon bloom
          COMMAND sh ${JAH_FRESH_HOME} --warm ${_tnb_home} --
                  bash "${CMAKE_CURRENT_SOURCE_DIR}/test_needs_boot.sh"
                  "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"

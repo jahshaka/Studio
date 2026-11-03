@@ -97,7 +97,7 @@ target_compile_definitions(bench_rigperf PRIVATE
 target_link_libraries(bench_rigperf PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(bench_rigperf JahshakaEngineMedia)
 
-jah_gpu_row(rigperf.smoke SHIP CLASS engine COMMAND bench_rigperf --smoke
+jah_gpu_row(rigperf.smoke CLASS engine COMMAND bench_rigperf --smoke
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/rigsmoke")
 set_tests_properties(rigperf.smoke PROPERTIES

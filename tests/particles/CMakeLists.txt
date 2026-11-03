@@ -37,7 +37,7 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_particles_pfx2_asan PRIVATE -fsanitize=address)
     target_link_libraries(test_particles_pfx2_asan PRIVATE JahshakaEngineAsan Qt6::Gui)
     add_dependencies(test_particles_pfx2_asan JahshakaEngineMedia)
-    jah_gpu_row(engine.particles_pfx2_asan SHIP CLASS engine COMMAND test_particles_pfx2_asan
+    jah_gpu_row(engine.particles_pfx2_asan CLASS engine COMMAND test_particles_pfx2_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.particles_pfx2_asan PROPERTIES JAHSHAKA_TEST_FRAMES 1062)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
     # Leak detection off for the same reason the engine suite turns it off: the

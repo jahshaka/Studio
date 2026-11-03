@@ -37,7 +37,6 @@ target_link_libraries(test_photon_tiers PRIVATE IrisGL Qt6::Gui)
 jah_document_graph(test_photon_tiers)
 add_test(NAME photon.tiers COMMAND test_photon_tiers
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-jah_ship_row(photon.tiers)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(photon.tiers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
     LABELS "document" TIMEOUT 60)
 set_tests_properties(photon.tiers PROPERTIES JAHSHAKA_TEST_FRAMES 0)
@@ -65,8 +64,8 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     add_dependencies(test_gi_cascades_asan JahshakaEngineMedia)
     target_compile_options(test_gi_cascades_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_gi_cascades_asan PRIVATE -fsanitize=address)
-    # SIX ROWS, ONE PROOF EACH, ALL IN THE SHIP SET (HARNESS-2, 2026-10-29; the lead's ruling: a ship row split by proof keeps
-    # every law in the ship, the test_engine_asan.partN precedent). The one row gi.cascades_asan (deleted) ran all 23
+    # SIX ROWS, ONE PROOF EACH (HARNESS-2, 2026-10-29; split by proof, the test_engine_asan.partN precedent; out of the ship
+    # set since draft B, TEST-STREAMLINE-1 4a: the sanitizers' ship rows are test_engine_asan's two halves). The one row gi.cascades_asan (deleted) ran all 23
     # sub-cases in one process: 50.68 s, over the 45-s quiet law, and timed out at 60 s on two trees under load. Every case
     # keeps its frames and its bars; a part stages the state an earlier case used to leave (test_gi_cascades.cpp's header).
     # FRAMES: the part's own count (it prints "frames rendered"). Each row is the END-TO-END PROOF of one law of the chain:
@@ -86,17 +85,17 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     #                  turned by script (the mirror's move quantum printed).
     # (every row NAMED, never a loop variable: the selector resolves a set_tests_properties by the rows it names, and an
     # unresolved name falls back to the whole directory - 94 gi rows for a one-row edit)
-    jah_gpu_row(gi.cascades_asan.schedule SHIP CLASS engine COMMAND test_gi_cascades_asan schedule
+    jah_gpu_row(gi.cascades_asan.schedule CLASS engine COMMAND test_gi_cascades_asan schedule
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    jah_gpu_row(gi.cascades_asan.faults SHIP CLASS engine COMMAND test_gi_cascades_asan faults
+    jah_gpu_row(gi.cascades_asan.faults CLASS engine COMMAND test_gi_cascades_asan faults
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    jah_gpu_row(gi.cascades_asan.edits SHIP CLASS engine COMMAND test_gi_cascades_asan edits
+    jah_gpu_row(gi.cascades_asan.edits CLASS engine COMMAND test_gi_cascades_asan edits
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    jah_gpu_row(gi.cascades_asan.ambient SHIP CLASS engine COMMAND test_gi_cascades_asan ambient
+    jah_gpu_row(gi.cascades_asan.ambient CLASS engine COMMAND test_gi_cascades_asan ambient
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    jah_gpu_row(gi.cascades_asan.mover SHIP CLASS engine COMMAND test_gi_cascades_asan mover
+    jah_gpu_row(gi.cascades_asan.mover CLASS engine COMMAND test_gi_cascades_asan mover
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    jah_gpu_row(gi.cascades_asan.mover_routes SHIP CLASS engine COMMAND test_gi_cascades_asan mover_routes
+    jah_gpu_row(gi.cascades_asan.mover_routes CLASS engine COMMAND test_gi_cascades_asan mover_routes
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # LeakSanitizer off for the same reason test_engine_asan turns it off (the
     # only leaks are inside libdbus via the Vulkan loader's device-select layer);
@@ -136,7 +135,7 @@ if(JAHSHAKA_ASAN)
     add_dependencies(test_gi_rayquery_asan JahshakaEngineMedia)
     target_compile_options(test_gi_rayquery_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_gi_rayquery_asan PRIVATE -fsanitize=address)
-    jah_gpu_row(gi.rayquery_asan SHIP CLASS engine COMMAND test_gi_rayquery_asan
+    jah_gpu_row(gi.rayquery_asan CLASS engine COMMAND test_gi_rayquery_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rayquery_asan PROPERTIES TIMEOUT 60 LABELS "engine"
         RESOURCE_LOCK gi_chain COST ${JAH_COST_GI_CHAIN}
@@ -166,7 +165,7 @@ target_compile_definitions(test_cloud_2d PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_cloud_2d PRIVATE IrisGL JahshakaEngine Qt6::Gui)
 add_dependencies(test_cloud_2d JahshakaEngineMedia)
-jah_gpu_row(cloud_2d.energy SHIP CLASS engine COMMAND test_cloud_2d energy
+jah_gpu_row(cloud_2d.energy CLASS engine COMMAND test_cloud_2d energy
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(cloud_2d.energy PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
@@ -344,7 +343,6 @@ jah_gpu_row(gi.probe_court CLASS engine COMMAND test_gi_probe_court
 set_tests_properties(gi.probe_court PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.probe_court PROPERTIES JAHSHAKA_TEST_FRAMES 30)
-jah_ship_row(gi.probe_court)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
 # gi.directional_seam (PHOTON-7 stage 1, AB A11; stage 1's read F2) — THE PACKED HALVES OF A DIRECTIONAL VOLUME DO NOT
 # BLEED INTO EACH OTHER, AT ANY LEVEL: the hit read at either x face of every cascade, the first half's +x face at levels
@@ -1275,22 +1273,22 @@ if(TARGET jahlab)
     # gi.walk_glass SPLIT BY PROOF (HARNESS-3 (f)): each walk now starts from `rest 1200 held` (every reader held - the
     # glass holds ~1,000 rest frames in since 11-2 (8); it was 600 frames, the old K_max's), so the three walks no longer
     # fit one row: a fixture chain on one work dir - .live (the prime + the live walk; its clocks alone) -> .frozen (the
-    # frozen walk + M1) -> .frozen2 (the second frozen walk + L1). Each SHIP, as the row was. Run one alone with
+    # frozen walk + M1) -> .frozen2 (the second frozen walk + L1). Not SHIP (draft B keeps gi.walk_court as gi's row). Run one alone with
     # `ctest -R gi.walk_glass.frozen2`. The parts boot on ONE cache's bytes (the live part's primed cache, restored) and
     # start on ONE frame count (the live part's rest + 4, replayed) - L2 read 2,712 px without the first. Frames at
     # photon-7 188268ffc: the rest 828, each walk 903 (the live part + the prime's 7) - the whole row was 2,020.
-    jah_gpu_row(gi.walk_glass.live CLASS engine TOKENS 8 SHIP FRAMES 910
+    jah_gpu_row(gi.walk_glass.live CLASS engine TOKENS 8 FRAMES 910
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
                 --glass-live
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_glass.live PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_glass_live)
-    jah_gpu_row(gi.walk_glass.frozen CLASS engine TOKENS 8 SHIP FRAMES 903
+    jah_gpu_row(gi.walk_glass.frozen CLASS engine TOKENS 8 FRAMES 903
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
                 --glass-frozen
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_glass.frozen PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_glass_frozen
                          FIXTURES_REQUIRED gi_walk_glass_live DEPENDS gi.walk_glass.live)
-    jah_gpu_row(gi.walk_glass.frozen2 CLASS engine TOKENS 8 SHIP FRAMES 903
+    jah_gpu_row(gi.walk_glass.frozen2 CLASS engine TOKENS 8 FRAMES 903
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
                 --glass-frozen2
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

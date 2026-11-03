@@ -50,7 +50,6 @@ if(JAHSHAKA_ASAN)
     target_link_libraries(test_skeleton_share_asan PRIVATE JahshakaEngineAsan)
     add_test(NAME skeletal.share_asan COMMAND test_skeleton_share_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    jah_ship_row(skeletal.share_asan)   # THE SHIP SET (TEST-CUT-1)
     # LeakSanitizer off for the same reason tests/engine gives: the only leaks
     # are Ogre's own, and this suite is here for use-after-free, not for leaks.
     # An ASAN twin runs at the stage close (TESTING-SPEED-B4): skeletal.share (archived: archive/tests/skeletal) is the merge row.

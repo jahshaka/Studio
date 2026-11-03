@@ -68,7 +68,7 @@ add_dependencies(test_physics_step_cost JahshakaEngineMedia)
 # budget's foreground share starves Bullet. The step and the sync are printed apart (PHYSICS_MANY_MOVERS).
 # A GUARD, not a measure: the bar is a whole 60 Hz frame against ~5 ms, a margin no parallel row on the card's lock
 # closes — so it runs at every merge it is reached by, not only at the ship.
-jah_gpu_row(physics.many_movers SHIP CLASS engine COMMAND test_physics_step_cost --bodies 1000
+jah_gpu_row(physics.many_movers CLASS engine COMMAND test_physics_step_cost --bodies 1000
          --frames 120 --warmup 20 --threads budget --mirror --mt-only --bar 16.7
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(physics.many_movers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document"
