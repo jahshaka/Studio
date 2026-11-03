@@ -177,8 +177,8 @@ void EditorPage::build(const Deps &deps)
         auto *photonGroup = new QActionGroup(photonMenu);
         photonGroup->setExclusive(true);
         const QStringList photonLabels = { tr("Off"), tr("Voxels"), tr("Probes"), tr("Cards"),
-                                           tr("Screen Probes"), tr("Diffuse GI Only"),
-                                           tr("Reflections Only"), tr("Ray Hits"), tr("Gather Hits") };
+                                           tr("Screen Probes"), tr("Diffuse GI Only (Opaque Surfaces)"),
+                                           tr("Reflections Only (Opaque Surfaces)"), tr("Ray Hits"), tr("Gather Hits") };
         static_assert(jahshaka::engine::kPhotonViewCount == 9, "one label per PhotonView, in its order");
         for (int mode = 0; mode < photonLabels.size(); ++mode) {
             QAction *action = photonMenu->addAction(photonLabels[mode]);

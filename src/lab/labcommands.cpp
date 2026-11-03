@@ -27,8 +27,10 @@ const std::vector<VerbDoc> &verbs()
           "rays; the march where it does not - the reflection has no mode, PHOTON-7-9A); off = no reflection at all (PostFxDesc::ssr 0 - the chain without its "
           "prepass: an A/B's arm, PHOTON-7 8B's pop); a graph rebuild, the histories restart" },
         { "photon", "photon off|voxels|probes|cards|screenProbes|diffuse|reflections|hits|gatherHits", 1, 1,
-          "the scene's Photon view (Scene::setPhotonView): 'reflections' shows the specular environment term alone - "
-          "rtreflect.contact's crease arm reads the reflection there, free of the receiver's own diffuse" },
+          "the scene's Photon view (Scene::setPhotonView): 'reflections' shows THE OPAQUE SURFACES' specular environment "
+          "term alone ('diffuse' their indirect diffuse; glass and blended surfaces are not in either; the picture under "
+          "it keeps the scene's light, which the reflection's screen trace reads) - rtreflect.contact's crease arm reads "
+          "the reflection there, free of the receiver's own diffuse" },
         { "frames", "frames N", 1, 1, "render N frames (the engine's fixed 1/60 s grid; frames, never time)" },
         { "settle", "settle [maxFrames]", 0, 1,
           "render until the Atom status is steady: nothing pending and the cut's triangles unchanged over 8 frames (cap 1200)" },
