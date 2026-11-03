@@ -200,6 +200,11 @@ bool seedLaunch(const QString &seedHome, const QString &carry)
     // engine-only edit or a Studio change to the pass every layer still loads and only the NEW permutations compile; a
     // layer whose key moved (a fork bump, a template edit) the engine drops by itself and builds cold - never a wrong entry.
     // It wiped the seed and booted on an empty cache: every re-seed was the cold startup set (~280-291 s, #125).
+    // THE UNION THIS LEAVES IS WITHIN THE ROW's LAW (the stage-1 audit's finding 6, read against the header): the subject is
+    // "the OPEN's background compile - the new material's and the tier's permutations, which no startup set holds"; a seed
+    // carrying an earlier startup set's extras holds only boot-and-quit permutations (no seed ever opened a project), so it
+    // can never hold the open's - and "a seed a few shaders short ... a cost of seconds, never a wrong law" says the law
+    // does not need the set EXACT. The warm carry stays; the stale layers' extras never reach the subject.
     if (!carry.isEmpty() && QDir(carry).exists() &&
         !copyTree(carry, seedHome + QStringLiteral("/.local/share/Jahshaka/shadercache")))
         return false;
