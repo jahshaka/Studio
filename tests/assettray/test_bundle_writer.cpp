@@ -35,7 +35,9 @@ For more information see the LICENSE file
 
 #include <QCoreApplication>
 #include <QDir>
+#include <QDateTime>
 #include <QFile>
+#include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QTemporaryDir>
@@ -44,6 +46,8 @@ For more information see the LICENSE file
 #include <cstdio>
 #include <cstring>
 #include <limits>
+#include <map>
+#include <memory>
 
 #ifdef Q_OS_LINUX
 #include <sys/inotify.h>
@@ -53,6 +57,7 @@ For more information see the LICENSE file
 #include "io/clipboardformat.h"
 #include "export/exportmanifest.h"
 #include "io/ziphelper.h"
+#include "zip.h"
 #include "services/bundlewriter.h"
 
 static int failures = 0;
@@ -68,9 +73,10 @@ QStringList writeObjects(const QString &dir, int count, int size)
     for (int i = 0; i < count; ++i) {
         QByteArray bytes(size, '\0');
         quint32 x = 2463534242u + quint32(i) * 7919u;
+        char *out = bytes.data();           // one detach: QByteArray::operator[] checks it per byte (Debug)
         for (int b = 0; b < size; ++b) {    // xorshift: incompressible, reproducible
             x ^= x << 13; x ^= x >> 17; x ^= x << 5;
-            bytes[b] = char(x & 0xff);
+            out[b] = char(x & 0xff);
         }
         const QString path = QDir(dir).filePath(QStringLiteral("obj%1.png").arg(i));
         QFile f(path);
@@ -110,11 +116,22 @@ assetshare::BundleStage stagePack(const QStringList &paths)
     return stage;
 }
 
+// An archive is EXTRACTED ONCE and its entries read from that copy (TEST-STREAMLINE-1 5c: the suite extracted a ~70 MB
+// archive once per entry it read - five whole inflates). Keyed by the archive's path and its size and mtime, so an
+// archive written again is extracted again; what each check reads is the same bytes.
 QByteArray entryBytes(const QString &zip, const QString &entry)
 {
-    QTemporaryDir out;
-    if (!ZipHelper::extract(zip, out.path())) return QByteArray();
-    QFile f(QDir(out.path()).filePath(entry));
+    static std::map<QString, std::unique_ptr<QTemporaryDir>> extracted;
+    const QFileInfo info(zip);
+    const QString key = zip + QLatin1Char('|') + QString::number(info.size()) + QLatin1Char('|')
+                        + QString::number(info.lastModified().toMSecsSinceEpoch());
+    auto it = extracted.find(key);
+    if (it == extracted.end()) {
+        auto out = std::make_unique<QTemporaryDir>();
+        if (!out->isValid() || !ZipHelper::extract(zip, out->path())) return QByteArray();
+        it = extracted.emplace(key, std::move(out)).first;
+    }
+    QFile f(QDir(it->second->path()).filePath(entry));
     return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
 }
 
@@ -269,10 +286,9 @@ int main(int argc, char **argv)
         // its header says.
         QTemporaryDir forged;
         {
-            QTemporaryDir peek;
-            ZipHelper::extract(workerPath, peek.path());
-            QFile::copy(QDir(peek.path()).filePath(QStringLiteral("payload.json")),
-                        QDir(forged.path()).filePath(QStringLiteral("payload.json")));
+            // the worker's payload, from its one extraction (entryBytes)
+            QFile out(QDir(forged.path()).filePath(QStringLiteral("payload.json")));
+            if (out.open(QIODevice::WriteOnly)) out.write(entryBytes(workerPath, QStringLiteral("payload.json")));
         }
         exportformat::ExportManifest lie;
         lie.version = 2;
@@ -289,7 +305,19 @@ int main(int argc, char **argv)
         lie.assets.append(one);
         lie.write(QDir(forged.path()).filePath(QStringLiteral("jah.manifest.json")));
         const QString forgedPath = QDir(work.path()).filePath(QStringLiteral("forged.jbundle"));
-        CHECK(ZipHelper::zipDirectory(forged.path(), forgedPath), "a forged share file is built");
+        // built STORED (level 0, TEST-STREAMLINE-1 5c: deflating the ~70 MB payload a third time cost ~2.2 s): the bound
+        // is the entries' uncompressed bytes against the manifest, whatever the container's compression
+        bool built = false;
+        if (struct zip_t *z = zip_open(forgedPath.toStdString().c_str(), 0, 'w')) {
+            built = true;
+            for (const char *name : { "jah.manifest.json", "payload.json" }) {
+                const QString src = QDir(forged.path()).filePath(QString::fromLatin1(name));
+                built = built && zip_entry_open(z, name) == 0 && zip_entry_fwrite(z, src.toStdString().c_str()) == 0
+                        && zip_entry_close(z) == 0;
+            }
+            zip_close(z);
+        }
+        CHECK(built, "a forged share file is built");
         const assetshare::UnpackedBundle refused = assetshare::unpackBundle(forgedPath);
         std::printf("info: the forged file: %s\n", qPrintable(refused.error));
         CHECK(!refused.error.isEmpty() && refused.envelope.items.isEmpty()
