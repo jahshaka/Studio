@@ -230,59 +230,12 @@ endfunction()
 # on this box, where a display is always reachable and the claim would otherwise
 # be untested. Apply it to every document/headless suite; never to a suite that
 # renders (they need a display, honestly and permanently).
-# THE TIMEOUT POLICY (TEST_GATE_AUDIT.md §3, applied across tests/ 2026-09-09).
-#
-# Every row's TIMEOUT is 6x its measured seconds with a floor, and nothing else.
-# THE STATISTIC (lead decision, TESTING-CLEANUP-2B fix round, 2026-10-10): "measured" is the run log's QUIET MEDIAN
-# (PASS runs with no sibling ctest), and the TIMEOUT is never below the QUIET WORST measured UNDER THE SLOT (runs since
-# 2026-10-09 18:00 — one gate at a time, the honest regime): max(6 x quiet median, slot-era worst), rounded up to 10 s.
-# Never a contended worst (before the slot a "worst" was another lane's load), never the median alone.
-# THE SAMPLE (lead, TESTING-CLEANUP-2B fix round after read 4): the median is over the run log's SLOT-ERA quiet PASS runs
-# (the archive, testing/runs — a lane's own re-measure is a set of records IN it, never a replacement for it), and only
-# runs taken the way the GATE runs the row: a row the gate runs COLD (a fresh rc tree's home: open.responsive,
-# open.responsive.timing (archived: archive/tests/open) — their homes keep the shader cache, so only a tree's first run is cold) is measured on its
-# cold runs; warm repeats in one home are not its sample. Each TIMEOUT comment names the sample: n, the median, the
-# slot-era worst, cold/warm, the date, and what was on the box.
-# It used to be whatever number felt safe when the row was written: 25 suites
-# sat between 38x and 173x of their measured time and a hundred more above that,
-# with 600 s and 900 s ceilings on suites that take one second. That is not
-# safety, it is a hang costing ten minutes of a gate the owner wants to finish
-# in ten.
-#
-# THE FLOOR IS 120 s, NOT THE AUDIT'S 60. Contention on this box is measured in
-# multiples, not percentages: samples.cleanstart.Matcaps runs 18.7 s solo and
-# 36.5 s at -j2, CLAUDE.md's gate facts record threading.newproject_stall (archived: archive/tests/threading) at
-# 1.8x headroom under four live Vulkan lanes, and most of these rows are three
-# to seven seconds of which four are an engine boot. A 60 s floor on a five
-# second boot-bound suite is twelve-fold headroom that one bad afternoon eats;
-# 120 keeps the whole point of the change (a hang costs two minutes instead of
-# ten) with margin nobody has to argue about.
-#
-# The CONTENTION CLASS — CLAUDE.md's solo-retry list — gets 300 s instead:
-# open.responsive, archive.responsive (archived: archive/tests/archive), app.engine_selftest_validation,
-# threading.{newproject_stall,mode,mode_serial}, scripting.e2e.{player_verbs,
-# space_switch,sun_light}, gi.budget (archived: archive/tests/gi), app.watchdog_stall (archived: archive/tests/app), claude.chat,
-# ui.media_lazy (archived: archive/tests/ui), shadergraph.bake_output (archived: archive/tests/shadergraph) and the perf.* suites.
-#
-# DOCUMENTED EXCEPTIONS, each with its reason at its own registration:
-# cameras.e2e (900, it times out under GI-rebuild contention starving the
-# mode-2 compile pool) and app.input_keys (archived: archive/tests/app) (600, one long chain of synthesised
-# keys with fixed sleeps between them).
-#
-# A new row takes 6x its own measured seconds, or the floor, whichever is more.
-#
-# RE-APPLIED 2026-09-27 (lane D6B-GATE-SHAPE; audit §9 H2): 171 registrations had drifted
-# back above it — 900 s on 3-23 s suites, 600 s on sixteen gi suites, 300 s on ~100 engine
-# rows whose policy value is the floor. Each was set to 6x the larger of the audit's gate
-# (2026-09-26) and D6B's before-run (-j4 beside two other lanes' gates), rounded up to a
-# minute, floor 120; none was widened. The contention class and the documented exceptions
-# kept their values. (A row in a RESOURCE_LOCK family does not start its clock until its
-# lock is free, so a family chain costs no row its budget.)
-# ROWS THAT SET NO TIMEOUT (46 of them: the sub-second document suites, the
-# wipe fixtures) get ctest's DEFAULT, which every documented gate command sets
-# to `--timeout 120` (docs/TESTING_GATE.md) — never ctest's own 1500 s. The
-# contention class is per row (engine_selftest_validation 180, ui.media_lazy (archived: archive/tests/ui)
-# 120, shadergraph.bake_output (archived: archive/tests/shadergraph) 120, claude.chat the default), not a flat 300.
+
+# THE TIMEOUT (TEST-STREAMLINE-1 5d; the old 6x-with-a-120-s-floor policy, its contention class and its exceptions -
+# cameras.e2e, scripting.e2e.space_switch / .sun_light and others no longer registered - deleted): EVERY ROW IS CAPPED AT
+# 60 s (CLAUDE.md Testing, the owner's law of 2026-10-20; DOCS/CODING_RULES.md §5): a TIMEOUT of at most 60 on every row and
+# no run bound past it (source.timeout_cap), a price of at most 60 s (source.testing_rules R8). A row that needs more is
+# rebuilt to the frames its law needs or split by proof, never given a longer TIMEOUT.
 
 # WHITE-BOX IMPORTER SUITES. assimp is IrisGL's PRIVATE dependency (ENGINEERING
 # DEBT L4, 2026-09-10): nothing that links libIrisGL sees its headers or its

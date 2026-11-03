@@ -113,8 +113,10 @@ the fork commit, so the first launch after a pin bump rebuilds it once (slower, 
 cmake -S . -B build-linux -G Ninja \
       -DCMAKE_BUILD_TYPE=RelWithDebInfo \
       -DCMAKE_POLICY_VERSION_MINIMUM=3.5
-cmake --build build-linux -j$(nproc)
+nice -n 19 ionice -c 3 cmake --build build-linux -j12
 ```
+(`-j12` alone on the box; beside another build the width your brief gives — `DOCS/CODING_RULES.md` §4: ~12 compile jobs
+across all of them, two Debug builds at -j12 once filled the box's memory.)
 
 This builds IrisGL, the engine layer, and the app in one go. (For development builds use
 `-DCMAKE_BUILD_TYPE=Debug -DDISABLE_BREAKPAD=ON` — breakpad swallows crash backtraces.)
@@ -131,11 +133,11 @@ before assimp is added to the build — you will see lines like
 
 on the first configure and `vendor patch already applied: …` on every one after. Nothing to
 run by hand; the assimp submodule simply ends up in the applied-not-committed state, exactly
-— `git status` showing eight modified files under `irisgl/thirdparty/assimp` is the CORRECT
+— `git status` showing nine modified files under `irisgl/thirdparty/assimp` is the CORRECT
 state of a configured tree, not dirt to clean (`git -C irisgl/thirdparty/assimp checkout -- .`
 + a reconfigure puts it straight back).
-ONE patch stack is left: `irisgl/thirdparty/assimp-patches/` (applied by our own configure,
-because assimp is compiled by our build). Ogre-Next has none — since 2026-09-22 its submodule
+TWO patch stacks are left: `irisgl/thirdparty/assimp-patches/` and `irisgl/thirdparty/bullet-patches/` (applied by our
+own configure, because assimp and Bullet are compiled by our build; Bullet's applied files show the same way). Ogre-Next has none — since 2026-09-22 its submodule
 is our FORK, `github.com/jahshaka/ogre-next` branch `jahshaka`, and `build-ogre.sh` only checks
 that the checkout is a descendant of the tag `jahshaka-stack-v1` before it builds
 (`irisgl/docs/OGRE_BUILD.md`). The applier is chosen per tree: a git

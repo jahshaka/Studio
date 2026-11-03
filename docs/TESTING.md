@@ -19,11 +19,11 @@ DISPLAY=:NN ctest -R '^pool\.gi_verbs$' --output-on-failure
 JAH_POOL_ARMS=gi_verbs.gi_status DISPLAY=:NN ctest -R '^pool\.gi_verbs$' --output-on-failure
 ```
 
-A row is a seconds-long GUARD of a named behaviour under its budget (a fixture or a CPU row 10 s, an app row 60 s;
-`source.row_budget` holds every row at its price in `scripts/gate-times.txt`), or it is labelled `measure` (a timing,
-soak, churn or scale row, or a guard over its budget — `JAH_MEASURE_ROWS` in `tests/CMakeLists.txt`) and runs only at
-the sprint's ship, alone on the card. A guard is never deleted for its price: a pool over 60 s is split by its arms, a
-row over its budget is rewritten to it or becomes a measure.
+THE RULES a row obeys — its budget, the 60-s cap, one row per proof, `measure` rows in the LONG pass only, the stage's
+code tests and the card once per feature — are `DOCS/CODING_RULES.md` §5-§7 in the lead repo, and nowhere else (this page
+does not restate them). A stage's gate is `spec.sh test <spec> --code` (the `code`-labelled rows that take no card, no
+lock, no warm-up); the card rows run once at the feature's end. A row over its budget is rebuilt to the fewest frames its
+law needs or split by proof; a guard is never labelled `measure` for its price.
 
 ## 2. How a test is shaped
 
@@ -157,19 +157,19 @@ the gate on a Vulkan row registered any other way, naming its CMakeLists line.
 - **Your own X display**, `Xvfb :NN -screen 0 1920x1080x24` (NN in 60-99, `/tmp/.X<NN>-lock`
   absent first), and an explicit `DISPLAY=:NN` on every ctest or app line. Never `:0` — that
   is the person at the desk. 1920x1080 exactly: framing-dependent pixel suites move with the
-  window's aspect. Start it as `Xvfb :NN … & echo $! > <your tree>/xvfb.pid`, stop exactly
-  that pid — never by name or number.
+  window's aspect. Start it, then record the REAL Xvfb pid (`pgrep -x Xvfb -g $!` — under the agents' shell `$!` is the
+  wrapper's) in a gitignored `*.pid` in your tree, and stop exactly that pid — never by name or number.
 - **`--data-root <dir>` / `JAHSHAKA_DATA_ROOT`** moves the settings file, the library, the
   asset store and the shader cache together. Every suite sets its own; set it for any app you
   start by hand, or you write the build tree's shared `jahsettings.ini`.
 - **The card's lock.** `scripts/gpu-exclusive.sh <command>` runs a command holding the ONE lock on the GPU (a flock;
   the verbs hold it around their ctest runs, a measuring row registered with `jah_gpu_exclusive_test()` takes it
-  itself, an app or measurement you run by hand wraps itself in it). Inside one ctest, every GPU row takes its
-  class's slots of the card (8: a fixture 1, an app row 2, a measuring row all 8), so `ctest -j8` keeps each class
-  to its width.
-- **Priority.** Builds run under `nice -n 19 ionice -c 3`; ctest and hand-started app instances
-  under `nice -n 19` ONLY (IONICE-1: the root disk's mq-deadline ages an idle-class read 10 s, and
-  a 0.1 s script under `ionice -c 3` took 60 s). A person's live app always wins the CPU.
+  itself, an app or measurement you run by hand wraps itself in it). Inside one ctest EVERY GPU row takes all 8 of the
+  card's slots (`tests/support/test_boot.cmake`, URGENT #44: a neighbour inflated a row's wall to its cap), so GPU rows
+  run one at a time; `scripts/width_pair.py` is the paired run that decides a wider width.
+- **Priority.** Builds run under `nice -n 19 ionice -c 3`; ctest, hand-started app instances and measurements under
+  `nice -n 10`, no ionice (URGENT #84: a capped row at a build's nice 19 lost the CPU race; IONICE-1: an idle-class read
+  ages 10 s). A person's live app always wins the CPU.
 
 ## 5. Reading a red
 
@@ -194,7 +194,7 @@ The engine has no wall clock: it steps a fixed 1/60 s per frame. A test waits fo
 stepping frames (`editor.frame(n)`) and reading until the value stops moving — never by
 sleeping a number of milliseconds and hoping. A test that measures time warms up first (the
 first seconds of a process are the shader-compile storm), runs under the GPU lock, and its
-millisecond bars are `measure` rows (the sprint's ship); the guards assert counts. The `<ms>` on an ARM line is
+millisecond bars are `measure` rows (the LONG pass only, `sprint.sh ship <tip> --long`); the guards assert counts. The `<ms>` on an ARM line is
 a report for the scheduler, never an assertion.
 
 ## 7. What your change reaches, and why
