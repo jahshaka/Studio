@@ -87,10 +87,10 @@ tree and the build's registration, each with its name in the failure line:
      ratchet: never a name its copy at the merge-base with main lacks; a listed row that declares now, or is gone, is
      stale). WHY: BISTRO-REST-1's gi.feedback_closed_box rows measured the SCREEN INTEGRATE of a Live offscreen view as
      "the gather", with GI paused, and their output never said it.
-  R17 A LONG-ONLY ROW LOSES NO LAW (TEST-STREAMLINE-1 5b, 2026-11-03). A row labelled `long` (the LONG pass alone: the
-     selector, gate-scope.py NEVER_SELECTED, and FAST skip it) is the `_asan` twin of a registered guard every pass runs,
+  R17 A ROW OUT OF FAST LOSES NO LAW THERE (TEST-STREAMLINE-1 5b, 2026-11-03). A row labelled `long` (FAST drops it; a
+     feature's end runs it when its diff reaches it, and LONG) is the `_asan` twin of a registered guard every pass runs,
      with the same argv but the binary's `_asan`, the same environment but the sanitizer's options and the same frames -
-     one source's laws, so a spec's call and FAST run them once (the plain twin) and LONG adds the sanitizer.
+     one source's laws, so FAST runs them once (the plain twin) and the reached feature end and LONG add the sanitizer.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -605,8 +605,8 @@ SANITIZER_ENV = ("ASAN_OPTIONS=", "LSAN_OPTIONS=", "UBSAN_OPTIONS=", "TSAN_OPTIO
 
 
 def r17_bad(tests):
-    """R17 (TEST-STREAMLINE-1 5b): [`row (why)`] for every row labelled `long` (the LONG pass alone: the selector and FAST
-    skip it) that is not the sanitizer TWIN of a guard every pass runs - its name <plain>_asan; <plain> registered and
+    """R17 (TEST-STREAMLINE-1 5b): [`row (why)`] for every row labelled `long` (FAST drops it; the feature end, when reached,
+    and LONG run it) that is not the sanitizer TWIN of a guard every pass runs - its name <plain>_asan; <plain> registered and
     neither `long` nor `measure`; the same argv but the binary's `_asan`; the same environment but the sanitizer's options;
     the same frames. Then the twin's laws are the plain row's and a pass that skips it loses no law."""
     by = {t["name"]: t for t in tests}
@@ -1176,7 +1176,7 @@ def main(source, build):
           "%s) and the warm-up's boots too (%d on the seed: %s)" % (own[:6] or "none", len(bad), bad[:12]))
     bad = r17_bad(tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     longs = sorted(t["name"] for t in tests if LONG in _list(_props(t).get("LABELS"))) if rc == 0 else []
-    check(not bad, "R17 every `long` row (the LONG pass alone) is the sanitizer twin of a guard every pass runs - one argv, "
+    check(not bad, "R17 every `long` row (out of FAST) is the sanitizer twin of a guard every pass runs - one argv, "
           "one environment, one frame count (%d long: %s; %d not: %s)" % (len(longs), longs, len(bad), bad[:12]))
     rp = os.path.join(source, ROUTES_PENDING)
     if not os.path.isfile(rp):

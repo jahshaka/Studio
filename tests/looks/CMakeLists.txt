@@ -45,9 +45,9 @@ if(JAHSHAKA_ASAN)
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    # LONG ONLY (TEST-STREAMLINE-1 5b, the lead's ruling on the twins): this twin's laws are looks.engine's - one source (test_looks.cpp),
-    # one argv, one environment but the sanitizer's options (source.testing_rules R17) - so it runs in the LONG pass alone
-    # (label `long`: the selector and FAST skip it, as they skip `measure`) and looks.engine runs in every call; no law twice in a pass.
+    # NOT IN FAST (TEST-STREAMLINE-1 5b, the lead's ruling on the twins): this twin's laws are looks.engine's - one source (test_looks.cpp),
+    # one argv, one environment but the sanitizer's options (source.testing_rules R17). Label `long`: FAST drops it (the engine
+    # library's two asan halves guard memory there); a feature's end runs it whenever its diff reaches it, and LONG runs it.
     set_tests_properties(looks.engine_asan PROPERTIES TIMEOUT 60 LABELS "engine;long"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(looks.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 81)

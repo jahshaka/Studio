@@ -42,9 +42,9 @@ if(JAHSHAKA_ASAN)
     set_tests_properties(distortion.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 110)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
     # Same reason as tests/engine and tests/ssr: the only leaks LSan finds are
     # libdbus-1 allocations reached from the Vulkan loader's device-select layer.
-    # LONG ONLY (TEST-STREAMLINE-1 5b, the lead's ruling on the twins): this twin's laws are distortion.engine's - one source (test_distortion.cpp),
-    # one argv, one environment but the sanitizer's options (source.testing_rules R17) - so it runs in the LONG pass alone
-    # (label `long`: the selector and FAST skip it, as they skip `measure`) and distortion.engine runs in every call; no law twice in a pass.
+    # NOT IN FAST (TEST-STREAMLINE-1 5b, the lead's ruling on the twins): this twin's laws are distortion.engine's - one source (test_distortion.cpp),
+    # one argv, one environment but the sanitizer's options (source.testing_rules R17). Label `long`: FAST drops it (the engine
+    # library's two asan halves guard memory there); a feature's end runs it whenever its diff reaches it, and LONG runs it.
     set_tests_properties(distortion.engine_asan PROPERTIES TIMEOUT 60 LABELS "engine;long"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
 endif()

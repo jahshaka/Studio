@@ -53,9 +53,9 @@ if(JAHSHAKA_ASAN)
     # Same reason as tests/engine: the only leaks LSan finds here are libdbus-1
     # allocations reached from the Vulkan loader's Mesa device-select layer.
     # ...and the same ruling for the sanitised twin (see ssr.engine above).
-    # LONG ONLY (TEST-STREAMLINE-1 5b, the lead's ruling on the twins): this twin's laws are ssr.engine's - one source (test_ssr.cpp),
-    # one argv, one environment but the sanitizer's options (source.testing_rules R17) - so it runs in the LONG pass alone
-    # (label `long`: the selector and FAST skip it, as they skip `measure`) and ssr.engine runs in every call; no law twice in a pass.
+    # NOT IN FAST (TEST-STREAMLINE-1 5b, the lead's ruling on the twins): this twin's laws are ssr.engine's - one source (test_ssr.cpp),
+    # one argv, one environment but the sanitizer's options (source.testing_rules R17). Label `long`: FAST drops it (the engine
+    # library's two asan halves guard memory there); a feature's end runs it whenever its diff reaches it, and LONG runs it.
     set_tests_properties(ssr.engine_asan PROPERTIES TIMEOUT 60 LABELS "engine;long"
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS};JAHSHAKA_NO_RAY_QUERY=1")
     set_tests_properties(ssr.engine_asan PROPERTIES JAHSHAKA_TEST_FRAMES 676)
