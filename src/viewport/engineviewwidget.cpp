@@ -33,6 +33,15 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
     mViewName = name;
     mBackground = background;
     mCreateError.clear();
+    // OFFSCREEN BY DECLARATION (setOffscreen): no native attempt at all - the View is offscreen from its first frame,
+    // with the contract it was declared with.
+    if (mDeclaredOffscreen) {
+        mView = engine->createOffscreenView(name.toStdString(), static_cast<unsigned>(width()),
+                                            static_cast<unsigned>(height()), background, mDeclaredContract);
+        if (!mView) mCreateError = QString::fromStdString(engine->lastError());
+        else mView->setEnabled(isVisible());
+        return mView != nullptr;
+    }
     bool handleIsNative = true;
 #ifdef Q_OS_MACOS
     // winId() is only an NSView* under the cocoa plugin. The offscreen/minimal
@@ -78,6 +87,29 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
         mView->setEnabled(isVisible());
     }
     return mView != nullptr;
+}
+
+bool EngineViewWidget::setOffscreen(jahshaka::engine::OffscreenContract contract)
+{
+    if (mView) return false;
+    mDeclaredOffscreen = true;
+    mDeclaredContract = contract;
+    // No native window is ever asked for: nothing presents here (and an offscreen QPA platform hands out synthetic
+    // window ids only). Cleared before the widget is first shown, so no native window was made for it.
+    setAttribute(Qt::WA_NativeWindow, false);
+#ifdef Q_OS_LINUX
+    setAttribute(Qt::WA_PaintOnScreen, false);
+#endif
+    return true;
+}
+
+QString EngineViewWidget::viewRefusal(const jahshaka::engine::Engine *engine)
+{
+    if (!engine) return QStringLiteral("no engine: no View can exist");
+    if (engine->isHeadless())
+        return QStringLiteral("the NULL render system holds no View of any kind (EngineConfig::headless: createView "
+                              "and createOffscreenView refuse) - this process renders nothing");
+    return QString();
 }
 
 void EngineViewWidget::destroyView()

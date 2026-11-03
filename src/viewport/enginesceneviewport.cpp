@@ -4946,6 +4946,22 @@ IEditorViewport *createEngineSceneViewport(const std::shared_ptr<Engine> &engine
     return new EngineSceneViewport(engine, driver, parent);
 }
 
+// THE HEADLESS HOST's VIEWPORT (TEST-STREAMLINE-1 stage 3a): THIS class over an offscreen View by declaration - never a
+// second implementation of the editor's engine work. THE CONTRACT is StillPicture, the one the presented editor view
+// takes: an on-screen view "always gathers where its scene does" (Engine.h View::setOffscreenContract), and of the two
+// offscreen contracts only StillPicture gathers (OgreView.cpp's contractAllows) - the same contract showEvent gives
+// the native path's fallback below, for the same reason (it drives the scene's GI; its pictures are the screenshot
+// verbs', taken at rest).
+IEditorViewport *createOffscreenEditorViewport(const std::shared_ptr<Engine> &engine,
+                                               EngineRenderDriver *driver, QWidget *parent, QString &error)
+{
+    error = EngineViewWidget::viewRefusal(engine.get());
+    if (!error.isEmpty()) return nullptr;
+    auto *viewport = new EngineSceneViewport(engine, driver, parent);
+    viewport->setOffscreen(jahshaka::engine::OffscreenContract::StillPicture);
+    return viewport;
+}
+
 void EngineSceneViewport::setServices(StudioServices *services)
 {
     // The gizmos raise undo pushes / refreshes through the aggregate; the

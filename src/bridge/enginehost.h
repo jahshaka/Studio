@@ -12,6 +12,7 @@
 #include <memory>
 #include <QString>
 #include "jahshaka/engine/Engine.h"
+#include "bridge/renderroute.h"
 
 class EngineRenderDriver;
 
@@ -67,6 +68,11 @@ public:
     bool isRunning() const { return static_cast<bool>(mEngine); }
 
     std::shared_ptr<jahshaka::engine::Engine> engine() const { return mEngine; }
+    /// The route start() booted (bridge/renderroute.h): Null, VulkanOffscreen (the headless host) or VulkanWindowed;
+    /// Refused before a successful start.
+    RenderRoute renderRoute() const { return mRoute; }
+    /// Why the last start() failed (its `error`), empty after a success or before any start.
+    QString startError() const { return mStartError; }
     EngineRenderDriver *driver() const { return mDriver; }
 
     /// Stops the loop and drops the host's reference. Viewports that still hold
@@ -82,6 +88,9 @@ private:
 
     std::shared_ptr<jahshaka::engine::Engine> mEngine;
     EngineRenderDriver *mDriver = nullptr;
+    RenderRoute mRoute = RenderRoute::Refused;
+    QString mStartError;
+    bool startEngine(QString &error);   // start()'s body: the route decided, the engine created
     class QTimer *mCacheWatchdog = nullptr;
     unsigned mShadersSeen = 0;    ///< compiled+cached at the last watchdog tick
     unsigned mShadersSaved = 0;   ///< the value at the last successful save
@@ -96,6 +105,12 @@ private:
 /// without touching the document.
 void setCliNoRayQuery(bool on);
 bool cliNoRayQuery();
+
+/// THE --render-offscreen LATCH (TEST-STREAMLINE-1 stage 3a, the scriptable headless host). main() sets it from the
+/// command line before any engine exists; EngineHost::start hands it to the one render-route decision
+/// (bridge/renderroute.h): with the offscreen platform it boots Vulkan with no window instead of NULL.
+void setCliRenderOffscreen(bool on);
+bool cliRenderOffscreen();
 
 /// THE VR LAUNCH LATCH (SPECS/VR_SPEC.md §4.1, lane VR-START-1). main() sets it
 /// once, before any engine exists, from CliOptions::resolveVr and the two VR
@@ -119,6 +134,13 @@ class IEditorViewport;
 class QWidget;
 IEditorViewport *createEngineSceneViewport(const std::shared_ptr<jahshaka::engine::Engine> &engine,
                                            EngineRenderDriver *driver, QWidget *parent);
+
+/// Factory for THE HEADLESS HOST's editor viewport (TEST-STREAMLINE-1 stage 3a; defined beside the one above): the
+/// SAME editor viewport over an OFFSCREEN View by declaration (EngineViewWidget::setOffscreen) — every verb's code path
+/// the editor's own, no second implementation. Refuses (null, `error` one line) where no View can exist: a NULL
+/// render system's engine (the caller keeps the document-only viewport).
+IEditorViewport *createOffscreenEditorViewport(const std::shared_ptr<jahshaka::engine::Engine> &engine,
+                                               EngineRenderDriver *driver, QWidget *parent, QString &error);
 
 /// Factory for the engine-backed player view (defined in
 /// src/player/engineplayerview.cpp).

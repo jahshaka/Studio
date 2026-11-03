@@ -33,6 +33,14 @@ struct CliOptions
     /// written against. Exists for demos and for the suite that proves the
     /// live half does what it claims.
     bool liveScript = false;
+    /// --render-offscreen (with --headless and a script, pool or MCP run): THE SCRIPTABLE HEADLESS HOST
+    /// (TEST-STREAMLINE-1 stage 3a). Still the offscreen platform — no window, no UI — but the engine boots Vulkan,
+    /// not NULL, and the editor viewport renders into an offscreen View by declaration (bridge/renderroute.h), so a
+    /// run's verbs take the editor's own code path with no widget on screen. It needs an X display (DISPLAY): Ogre's
+    /// Vulkan render system connects to it at plugin load. Without it --headless stays the NULL, document-only run.
+    bool renderOffscreen = false;
+    /// The run is the document-only one: --headless without --render-offscreen (the NULL render system).
+    bool documentOnly() const { return headlessScript && !renderOffscreen; }
     /// --scripts <dir-or-list> [--pool <name>] [--arms <a,b>]: THE POOL RUNNER
     /// (lane SUITE-POOL-1; jahshaka/docs/TESTING.md). Runs several scripts —
     /// the ARMS of one test pool — in ONE process, so a family of suites pays

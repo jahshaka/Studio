@@ -92,6 +92,8 @@ QString CliOptions::usageText()
         "  --arms <a,b>                run only these arms (with --scripts)\n"
         "  --pool-baseline <file.js>   the pool's baseline script (with --scripts)\n"
         "  --headless                  a script/MCP run with no window (offscreen)\n"
+        "  --render-offscreen          with --headless: render on Vulkan offscreen views, no window\n"
+        "                              (the scriptable headless host; needs DISPLAY)\n"
         "  --script-live               keep rendering between a script's verbs\n"
         "  --dump-api-docs <file.md>   write the generated scripting reference and exit (the NULL render\n"
         "                              system, proven: no GPU; scripts/regen-api-docs.sh is the one way)\n"
@@ -139,6 +141,7 @@ CliOptions CliOptions::parse(int argc, char *argv[])
             else needsValue(argv[i]); }
         else if (qstrcmp(argv[i], "--headless") == 0) o.headlessScript = true;
         else if (qstrcmp(argv[i], "--script-live") == 0) o.liveScript = true;
+        else if (qstrcmp(argv[i], "--render-offscreen") == 0) o.renderOffscreen = true;
         else if (qstrcmp(argv[i], "--dump-api-docs") == 0) {
             if (hasNext) o.dumpDocsPath = QString::fromLocal8Bit(argv[++i]); else needsValue(argv[i]); }
         // 0 is EPHEMERAL, not "off" — see CliOptions::mcpServe. A bare
@@ -203,6 +206,11 @@ CliOptions CliOptions::parse(int argc, char *argv[])
     if ((!o.poolName.isEmpty() || !o.poolArms.isEmpty() || !o.poolBaseline.isEmpty()) &&
         o.poolScripts.isEmpty())
         o.errors << QStringLiteral("--pool/--arms/--pool-baseline: need --scripts <dir-or-list>");
+    // THE HEADLESS HOST IS A HEADLESS RUN THAT RENDERS: without --headless and a script, pool or MCP run there is no
+    // offscreen platform for it to render in, and the API dump stays the NULL render system, proven (its first proof).
+    if (o.renderOffscreen && (!o.headlessScript || !(o.isScriptRun() || o.mcpServe) || !o.dumpDocsPath.isEmpty()))
+        o.errors << QStringLiteral("--render-offscreen: needs --headless and a --script, --scripts or --mcp-port run "
+                                   "(never --dump-api-docs)");
     if (o.vr && o.noVr)
         o.errors << QStringLiteral("--vr and --no-vr: pass one or the other, not both");
     return o;

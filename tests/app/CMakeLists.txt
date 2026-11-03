@@ -169,6 +169,46 @@ set_tests_properties(pool.runner PROPERTIES
     LABELS "pool;scripting;tooling" TIMEOUT 60)
 jah_no_display(pool.runner)
 
+# app.render_route — THE ONE RENDER-SYSTEM DECISION AND THE HEADLESS HOST's VIEW, on the CPU (TEST-STREAMLINE-1 3a, the
+# reader's P4 + P5; test_render_route.cpp says the laws): the route table and its once-per-process latch, the
+# --render-offscreen CLI, and EngineViewWidget's declared offscreen View on a NULL engine (no native attempt, the
+# NULL refusal in one line). The NULL render system and the offscreen platform: no display, no card.
+find_package(Qt6 REQUIRED COMPONENTS Widgets)
+add_executable(test_render_route test_render_route.cpp
+    ${CMAKE_SOURCE_DIR}/src/bridge/renderroute.cpp
+    ${CMAKE_SOURCE_DIR}/src/app/cli/clioptions.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/engineviewwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/engineviewwidget.h)
+set_target_properties(test_render_route PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_render_route PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_render_route PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_render_route PRIVATE JahshakaEngine Qt6::Widgets)
+add_dependencies(test_render_route JahshakaEngineMedia)
+add_test(NAME app.render_route COMMAND ${CMAKE_BINARY_DIR}/bin/test_render_route
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(app.render_route PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "scripting")
+jah_no_display(app.render_route)
+
+# app.render_offscreen_host — THE HEADLESS HOST's DOOR THROUGH THE REAL APP, on the CPU (TEST-STREAMLINE-1 3a;
+# render_offscreen_host.sh says the three laws): the NULL route's DEVICE row, --render-offscreen refused with DISPLAY
+# unset (exit 3, one line, no document-only run in its place), and without --headless (a CLI error). DISPLAY unset,
+# no card; the host booting Vulkan offscreen is card block B's.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/render-offscreen-host-home)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME app.render_offscreen_host
+         COMMAND sh ${JAH_FRESH_HOME} ${_home} --
+                 sh ${CMAKE_CURRENT_SOURCE_DIR}/render_offscreen_host.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${_home}
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(app.render_offscreen_host PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    JAHSHAKA_HEADLESS TRUE   # every boot is --headless (the third refuses before any boot): no shader cache (testing_rules R13)
+    LABELS "scripting" TIMEOUT 60)
+jah_no_display(app.render_offscreen_host)
+
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its

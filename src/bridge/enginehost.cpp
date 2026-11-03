@@ -1,4 +1,5 @@
 #include "bridge/enginehost.h"
+#include "bridge/renderroute.h"
 
 #include "services/apppaths.h"
 
@@ -24,10 +25,13 @@
 
 namespace {
 bool gCliNoRayQuery = false;
+bool gCliRenderOffscreen = false;
 VrLaunch gVrLaunch;
 }
 void setCliNoRayQuery(bool on) { gCliNoRayQuery = on; }
 bool cliNoRayQuery() { return gCliNoRayQuery; }
+void setCliRenderOffscreen(bool on) { gCliRenderOffscreen = on; }
+bool cliRenderOffscreen() { return gCliRenderOffscreen; }
 void setVrLaunch(const VrLaunch &launch) { gVrLaunch = launch; }
 const VrLaunch &vrLaunch() { return gVrLaunch; }
 
@@ -293,6 +297,13 @@ bool EngineHost::clearShaderCacheOnDisk()
 bool EngineHost::start(QString &error)
 {
     if (mEngine) return true;
+    const bool ok = startEngine(error);
+    if (!ok) mStartError = error;
+    return ok;
+}
+
+bool EngineHost::startEngine(QString &error)
+{
 
     EngineConfig cfg = resolveConfig();
     // THE HEADLESS DECISION, made once and platform-independently
@@ -309,9 +320,19 @@ bool EngineHost::start(QString &error)
     // only place that choice is made, and it can never be revised later in the
     // run. A windowed session is Vulkan from boot to exit, exactly as it was
     // before the swap; an offscreen session is NULL from boot to exit and can
-    // hold no View at all.
-    const bool offscreen = QGuiApplication::platformName() == QLatin1String("offscreen");
-    cfg.headless = offscreen;
+    // hold no View at all...
+    //
+    // ...UNLESS IT IS THE SCRIPTABLE HEADLESS HOST (TEST-STREAMLINE-1 stage 3a): offscreen AND `--render-offscreen` —
+    // no window, no UI, the engine on Vulkan and the editor viewport over an offscreen View by declaration. The
+    // decision is ONE pure function (bridge/renderroute.h, its table a code test) behind the process's latch: a second
+    // call is refused, whatever it asks.
+    const RenderRouteChoice route = processRenderRoute().decide(
+        { QGuiApplication::platformName(), cliRenderOffscreen(), !qEnvironmentVariableIsEmpty("DISPLAY") });
+    if (route.route == RenderRoute::Refused) {
+        error = route.why;
+        return false;
+    }
+    cfg.headless = route.route == RenderRoute::Null;
     // THE APP'S CALLS ARE RECORDS (ENGINE-UPGRADE-U3 stage 4a, decision 39): every View setter, engine verb and scene
     // command this process makes reaches the engine as a field of the record or a message of its stream.
     cfg.hostRecords = true;
@@ -321,7 +342,7 @@ bool EngineHost::start(QString &error)
 #ifdef Q_OS_MACOS
     // The MoltenVK ICD probe is pointless without Vulkan — and a headless run
     // must not depend on a driver being installed at all.
-    if (!offscreen) ensureVulkanIcdEnvironment();
+    if (route.route != RenderRoute::Null) ensureVulkanIcdEnvironment();
 #endif
 #ifdef Q_OS_LINUX
     // Ogre has no Wayland backend: its Vulkan path uses VK_KHR_xcb_surface and needs a
@@ -346,6 +367,9 @@ bool EngineHost::start(QString &error)
         // and — unlike the v1 interim, which booted Vulkan surfaceless and
         // therefore still needed a REACHABLE display for Ogre's XCB support
         // object — no display at all. These runs work with DISPLAY unset.
+        // THE HEADLESS HOST (RenderRoute::VulkanOffscreen) is that v1 shape again, by request: no X connection of
+        // Qt's and no window of ours (display 0: its View is offscreen by declaration), but Ogre's XCB support
+        // object connects to $DISPLAY by itself at plugin load - which is why the route refuses an unset DISPLAY.
         cfg.display = 0;
     } else {
         error = QStringLiteral("The engine requires the xcb platform (running on '%1'). "
@@ -366,6 +390,7 @@ bool EngineHost::start(QString &error)
         return false;
     }
     mEngine = std::move(engine);
+    mRoute = route.route;
     mDriver = new EngineRenderDriver(mEngine.get());
 
     // (The transform-write counter is no longer handed over: the renderer learns what moved from each frame's
@@ -399,6 +424,7 @@ bool EngineHost::start(QString &error)
         rows << qMakePair(QStringLiteral("headless"),
                           cfg.headless ? QStringLiteral("true (NULL render system)")
                                        : QStringLiteral("false"));
+        rows << qMakePair(QStringLiteral("render route"), QString::fromLatin1(renderRouteName(mRoute)));
         JahLog::writeHeaderBlock(QStringLiteral("=== DEVICE ==="), rows);
         // Qt Multimedia's hardware backend, named from this adapter before anything media-related
         // is constructed (services/mediahardware.h: the unnamed check cost 731 ms).

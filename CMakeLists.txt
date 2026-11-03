@@ -251,6 +251,7 @@ set(SRCS
     src/viewport/gizmooverlay.cpp
     src/viewport/enginerenderdriver.cpp
     src/bridge/enginehost.cpp
+    src/bridge/renderroute.cpp
     src/scripting/apimodule.cpp
     src/scripting/apiregistry.cpp
     src/scripting/scriptworker.cpp

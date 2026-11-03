@@ -43,6 +43,19 @@ public:
     /// view ignores it.
     void setFallbackContract(jahshaka::engine::OffscreenContract c) { mFallbackContract = c; }
 
+    /// OFFSCREEN BY DECLARATION (TEST-STREAMLINE-1 stage 3a, the scriptable headless host): this widget's View is an
+    /// offscreen one from the start, declaring `contract` — createView() makes NO native attempt (the widget never
+    /// asks for a native window: WA_NativeWindow and WA_PaintOnScreen are cleared) and goes straight to
+    /// Engine::createOffscreenView. Not the fallback above, which stays the on-screen path's answer to a FAILED
+    /// native view. Call before createView(); false once a View exists (a contract is a creation parameter).
+    bool setOffscreen(jahshaka::engine::OffscreenContract contract);
+    bool offscreenByDeclaration() const { return mDeclaredOffscreen; }
+
+    /// WHY NO VIEW OF ANY KIND CAN EXIST ON `engine`, one line — empty when one can. The NULL render system's engine
+    /// holds none (Types.h EngineConfig::headless: createView and createOffscreenView both refuse). What the headless
+    /// host's factory (createOffscreenEditorViewport) refuses with before building a viewport.
+    static QString viewRefusal(const jahshaka::engine::Engine *engine);
+
     jahshaka::engine::View *view() const { return mView; }
 
     /// Empty unless the ON-SCREEN view could not be created and this widget fell
@@ -131,6 +144,8 @@ private:
     jahshaka::engine::Colour                mBackground{0.10f, 0.11f, 0.14f};
     QString                                 mCreateError;
     jahshaka::engine::OffscreenContract     mFallbackContract = jahshaka::engine::OffscreenContract::Live;
+    bool                                    mDeclaredOffscreen = false;
+    jahshaka::engine::OffscreenContract     mDeclaredContract = jahshaka::engine::OffscreenContract::StillPicture;
     /// VIEW-REBUILD-1's two counters — see nativeHides()/rectChanges().
     qulonglong                              mNativeHides = 0;
     qulonglong                              mRectChanges = 0;

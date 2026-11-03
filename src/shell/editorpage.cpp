@@ -426,7 +426,16 @@ void EditorPage::build(const Deps &deps)
         // editor would have fallen back to the document-only viewport on a
         // machine whose on-screen Metal/Vulkan viewport works
         // (SPECS/MACOS_VIEWPORT_SPEC.md).
-        if (host.start(error) && !host.engine()->isHeadless()) {
+        // THE HEADLESS HOST (TEST-STREAMLINE-1 stage 3a, RenderRoute::VulkanOffscreen): the same editor viewport over
+        // an offscreen View by declaration - no window, no native attempt, every verb the editor's own code path. Its
+        // factory refuses where no View can exist (one named line below; the document-only stand-in serves).
+        if (host.start(error) && host.renderRoute() == RenderRoute::VulkanOffscreen) {
+            sceneView = createOffscreenEditorViewport(host.engine(), host.driver(), viewPort, error);
+            if (sceneView) {
+                if (deps.engineStarted) deps.engineStarted(host.engine());
+                host.driver()->start();
+            }
+        } else if (host.isRunning() && !host.engine()->isHeadless()) {
             sceneView = createEngineSceneViewport(host.engine(), host.driver(), viewPort);
             // The window watches the Engine (step 6 of the shutdown order checks
             // it died with the viewports) and paces the loop — PANEL-AWARE PACING
@@ -435,10 +444,10 @@ void EditorPage::build(const Deps &deps)
             // mode, fed before the driver starts.
             if (deps.engineStarted) deps.engineStarted(host.engine());
             host.driver()->start();
-        } else if (!error.isEmpty()) {
+        }
+        if (!sceneView && !error.isEmpty())
             qCritical("Engine unavailable (%s): using the headless document-only viewport.",
                       qPrintable(error));
-        }
     }
     if (!sceneView) sceneView = new HeadlessEditorViewport(viewPort);
     sceneView->asWidget()->setParent(viewPort);

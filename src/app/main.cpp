@@ -283,6 +283,8 @@ int main(int argc, char *argv[])
     // which is the user's and which a test run must not rewrite (the engine
     // carries the config to the device itself).
     if (cli.noRayQuery) setCliNoRayQuery(true);
+    // THE HEADLESS HOST's LATCH (TEST-STREAMLINE-1 stage 3a), like the ray latch: the one render-route decision reads it.
+    if (cli.renderOffscreen) setCliRenderOffscreen(true);
     // THE VR LAUNCH LATCH (SPECS/VR_SPEC.md §4.1, VR-START-1), before any engine
     // exists, like the ray latch above. THE ONE PRECEDENCE: --vr / --no-vr, then
     // JAHSHAKA_VR=1 / 0 (the runners' form — every non-VR test launcher sets 0),
@@ -521,6 +523,17 @@ int main(int argc, char *argv[])
     // engine's last reference drops in its teardown, step 6).
     const auto cliEnd = [](int rc) { return processexit::takeFastExit(rc); };
 
+    // THE HEADLESS HOST NEVER DEGRADES SILENTLY (TEST-STREAMLINE-1 stage 3a): a run that asked for --render-offscreen
+    // and did not get the Vulkan offscreen route (DISPLAY unset, the engine refused) ends here, with the reason, before
+    // any script runs - never a document-only run in its place, whose render verbs would fail somewhere else.
+    if (cli.renderOffscreen && EngineHost::instance().renderRoute() != RenderRoute::VulkanOffscreen) {
+        std::fprintf(stderr, "Jahshaka: --render-offscreen: the headless host did not start (%s)\n",
+                     qPrintable(EngineHost::instance().startError().isEmpty()
+                                    ? QStringLiteral("the editor page booted no offscreen viewport")
+                                    : EngineHost::instance().startError()));
+        return cliEnd(finalizeAppExit(3));
+    }
+
     // --engine-selftest releases the engine host itself, through the RAII guard
     // in selftestrunner.cpp, and writes its own close bracket here.
     if (!cli.selftestPng.isEmpty()) {
@@ -539,14 +552,16 @@ int main(int argc, char *argv[])
         return cliEnd(finalizeAppExit(runDumpApiDocs(window, cli.dumpDocsPath)));
 
     if (!cli.scriptPath.isEmpty())
-        return cliEnd(runScriptFile(window, app, cli.scriptPath, cli.headlessScript, cli.liveScript));
+        return cliEnd(runScriptFile(window, app, cli.scriptPath, cli.documentOnly(), cli.liveScript));
 
+    // (the runners' `headless` is the DOCUMENT-ONLY run: the headless host renders, so it boots the editor page as a
+    // windowed run does - on the offscreen platform, its viewport offscreen by declaration)
     if (!cli.poolScripts.isEmpty())
         return cliEnd(runScriptPool(window, app, cli.poolScripts, cli.poolName, cli.poolArms, cli.poolBaseline,
-                                    cli.headlessScript, cli.liveScript));
+                                    cli.documentOnly(), cli.liveScript));
 
     if (cli.mcpServe)
-        return cliEnd(runMcpServe(window, app, cli.mcpPort, cli.headlessScript));
+        return cliEnd(runMcpServe(window, app, cli.mcpPort, cli.documentOnly()));
 
     window.goToDesktop();   // splash.finish above hides the splash here
 
