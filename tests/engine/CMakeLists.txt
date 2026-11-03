@@ -69,7 +69,10 @@ target_compile_definitions(test_engine_recreate PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_recreate PRIVATE JahshakaEngine)
 add_dependencies(test_engine_recreate JahshakaEngineMedia)
-jah_gpu_row(test_engine_recreate CLASS engine COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+# THE ENGINE's ROW IN FAST (the lead, TEST-STREAMLINE-1 4a): test_engine is `measure` by its price (15.99 s over the
+# fixture's 10 s, JAH_MEASURE_ROWS), so FAST would carry no engine row; this one runs the engine's whole lifecycle end to end -
+# create -> render -> destroy, three times in one process (the startup order and the teardown that mirrors it) - at 4.18 s.
+jah_gpu_row(test_engine_recreate SHIP CLASS engine COMMAND test_engine_recreate WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 # meshbake.shadow_vao_alias (archived: archive/tests/meshbake) — THE SHADOW-VAO LIST OF A LOD CHAIN (ATOM P1's AT-A11;
 # PHOTON-SCENE-SWITCH-1), as its own ctest name so gate-scope can select it: a
 # 6-level mesh must hold one SHRUNK shadow VAO per level over one vertex buffer
