@@ -10,10 +10,11 @@
 #   rebuild  run 2 on run 1's root: the bakes deleted, the open rebuilds them from the sources, no parse;
 #   missing  run 3 on run 2's root: the bakes and the sources deleted, the model MISSING with a scene issue, no parse.
 #
-# usage: archive_bakes.sh <jahshaka-binary> <import.js> <open.js> import|rebuild|missing
-# cwd is the scratch run dir; JAHSHAKA_DATA_ROOT is the scratch data root (wiped by `import` only).
+# usage: archive_bakes.sh <jahshaka-binary> <import.js> <open.js> import|rebuild|missing [<app arg>...]
+# cwd is the scratch run dir; JAHSHAKA_DATA_ROOT is the scratch data root (wiped by `import` only). The trailing app
+# arguments ride every launch (the rows pass `--headless`: the NULL render system, TEST-STREAMLINE-1 3a item 6).
 set -u
-BIN="$1"; IMPORT_JS="$2"; OPEN_JS="$3"; PART="${4:?the part: import, rebuild or missing}"
+BIN="$1"; IMPORT_JS="$2"; OPEN_JS="$3"; PART="${4:?the part: import, rebuild or missing}"; shift 4
 ROOT="${JAHSHAKA_DATA_ROOT:?the row sets JAHSHAKA_DATA_ROOT}"
 case "$PART" in
     import)  rm -rf "$ROOT"; mkdir -p "$ROOT" ;;
@@ -28,7 +29,7 @@ esac
 if [ "$PART" = import ]; then
 # Run 1: import the shipped samples into the fresh root; every model baked, the
 # open reads bakes only, and the log carries no "parsing the source" line.
-"$BIN" --data-root "$ROOT" --script "$IMPORT_JS" > run1.log 2>&1
+"$BIN" "$@" --data-root "$ROOT" --script "$IMPORT_JS" > run1.log 2>&1
 rc=$?
 if [ "$rc" -ne 0 ]; then echo "archive_bakes: run 1 exited $rc"; tail -40 run1.log; exit 1; fi
 grep -E "^(ok|FAIL)" run1.log
@@ -50,7 +51,7 @@ find "$ROOT" -path '*objects*' -name '*.jmb' -delete
 printf 'var REBUILT = true;\n' > run2.js; cat "$OPEN_JS" >> run2.js
 # The library's background sweep is switched OFF here, so it is the OPEN that
 # must rebuild (the sweep is the same rebuild at the lowest priority).
-JAHSHAKA_BAKE_SWEEP=0 "$BIN" --data-root "$ROOT" --script "$PWD/run2.js" > run2.log 2>&1
+JAHSHAKA_BAKE_SWEEP=0 "$BIN" "$@" --data-root "$ROOT" --script "$PWD/run2.js" > run2.log 2>&1
 rc=$?
 grep -E "^(ok|FAIL)" run2.log
 if [ "$rc" -ne 0 ]; then echo "archive_bakes: run 2 exited $rc"; tail -40 run2.log; exit 1; fi
@@ -64,7 +65,7 @@ fi
 # RUN 3 — THE SOURCES GO TOO: nothing to rebuild from, so the model is MISSING
 # with a scene issue naming it, and still nothing is parsed.
 find "$ROOT" -path '*objects*' \( -name '*.jmb' -o -name '*.obj' -o -name '*.dae' -o -name '*.fbx' -o -name '*.glb' -o -name '*.gltf' \) -delete
-"$BIN" --data-root "$ROOT" --script "$OPEN_JS" > run3.log 2>&1
+"$BIN" "$@" --data-root "$ROOT" --script "$OPEN_JS" > run3.log 2>&1
 rc=$?
 grep -E "^(ok|FAIL)" run3.log
 if [ "$rc" -ne 0 ]; then echo "archive_bakes: run 3 exited $rc"; tail -40 run3.log; exit 1; fi

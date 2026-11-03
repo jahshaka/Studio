@@ -130,23 +130,29 @@ jah_ship_row(bake.dag_reaches_root)   # THE SHIP SET: the DAG build's end-to-end
 # its models MISSING and a `model.missing` scene issue — never a parse (archive/archive_bakes.sh). SPLIT BY PROOF, ONE
 # ROW A LAUNCH (ORPHAN-REDS-1, 2026-11-03, URGENT #136's form): the three launches in one row were 34.53 s solo, 65.6 s at
 # the shared box's x1.9 - a fixture chain on one data root now, each part its launch's laws: .import (run 1, FIXTURES_SETUP
-# meshbakeArchiveImported) -> .rebuild (run 2, meshbakeArchiveRebuilt) -> .missing (run 3). Each is the WARM fixture's
-# consumer (its green run promotes, R14); the home is wiped at the fixture's next setup.
+# meshbakeArchiveImported) -> .rebuild (run 2, meshbakeArchiveRebuilt) -> .missing (run 3). The home is wiped at the
+# fixture's next setup.
+# CODE ROWS ON THE NULL RENDER SYSTEM (TEST-STREAMLINE-1 3a item 6): every verb the three launches drive is a document verb
+# (project.importArchive, assets.bakeAll, project.open/close/list, app.openStats, editor.checkScene - docs/SCRIPTING.md's
+# needs column) and the bake is CPU work, so each launch is `--headless` (visible on the command: archive_bakes.sh hands
+# its trailing arguments to every launch): no display, no card, no shader cache (measured by hand on NULL, DISPLAY unset,
+# 2026-11-03: 6.19 / 5.35 / 3.38 s, every law green; on the card they were 18.75 / 7.39 / 5.52). Still SHIP rows.
 set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home)
 file(MAKE_DIRECTORY ${_archive_home}/run)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 configure_file(archive/archive_bakes_import.js.in ${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js @ONLY)
 foreach(_part import rebuild missing)
-    jah_gpu_row(meshbake.archive_bakes.${_part} WARM_HOME "${_archive_home}" SHIP CLASS app TIER low NEEDS NONE
+    add_test(NAME meshbake.archive_bakes.${_part}
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/archive/archive_bakes.sh"
                      "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
                      "${CMAKE_CURRENT_BINARY_DIR}/archive_bakes_import.js"
-                     "${CMAKE_CURRENT_SOURCE_DIR}/archive/archive_bakes_open.js" ${_part}
+                     "${CMAKE_CURRENT_SOURCE_DIR}/archive/archive_bakes_open.js" ${_part} --headless
              WORKING_DIRECTORY ${_archive_home}/run)
-    # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
+    jah_ship_row(meshbake.archive_bakes.${_part})   # THE SHIP SET (as it was: jah_gpu_row ... SHIP)
     set_tests_properties(meshbake.archive_bakes.${_part} PROPERTIES
         ENVIRONMENT "HOME=${_archive_home};JAHSHAKA_DATA_ROOT=${_archive_home}/data"
         TIMEOUT 60 LABELS "meshbake")
+    jah_no_display(meshbake.archive_bakes.${_part})
 endforeach()
 set_tests_properties(meshbake.archive_bakes.import PROPERTIES FIXTURES_SETUP meshbakeArchiveImported)
 set_tests_properties(meshbake.archive_bakes.rebuild PROPERTIES FIXTURES_REQUIRED meshbakeArchiveImported
@@ -169,9 +175,10 @@ file(MAKE_DIRECTORY ${_shipped_home}/run)
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its
 # SECOND run in the same tree (an rc tree's solo retries, build-linux, a stage close) — and every
 # such home grew without bound (ui.column_law (archived: archive/tests/ui)'s held 66 'ColumnLaw' projects). Each row below
-# creates projects; its home is wiped at the start of every run (WARM: the shader caches stay).
+# creates projects; its home is wiped at the start of every run (no WARM: the archive chain is the NULL render system's,
+# which keeps no shader cache - TEST-STREAMLINE-1 3a item 6).
 if(TEST meshbake.archive_bakes.import)
-    jah_fresh_home_fixture(meshbake.archive_bakes.fresh_home meshbakeArchiveBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home" WARM LABELS meshbake)
+    jah_fresh_home_fixture(meshbake.archive_bakes.fresh_home meshbakeArchiveBakesFreshHome "${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home" LABELS meshbake)
     foreach(_part import rebuild missing)
         set_property(TEST meshbake.archive_bakes.${_part} APPEND PROPERTY FIXTURES_REQUIRED meshbakeArchiveBakesFreshHome)
     endforeach()
@@ -182,11 +189,7 @@ endif()
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
 # method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
 # the one empty frame a headless engine walks.
-if(TEST meshbake.archive_bakes.import)   # (ORPHAN-REDS-1's split: one launch each, counted per process by an Ogre::Root::_fireFrameEnded meter, 2026-11-03; the whole was 551 on 10-12)
-    set_property(TEST meshbake.archive_bakes.import PROPERTY JAHSHAKA_TEST_FRAMES 605)
-    set_property(TEST meshbake.archive_bakes.rebuild PROPERTY JAHSHAKA_TEST_FRAMES 46)
-    set_property(TEST meshbake.archive_bakes.missing PROPERTY JAHSHAKA_TEST_FRAMES 45)
-endif()
+# (meshbake.archive_bakes.*: NULL headless since TEST-STREAMLINE-1 3a item 6 - no card, no frames to count)
 
 # bake.locked_positions_kept (ATOM-7 stage 2; SHIP; rewritten for ATOM-2's builder, the law kept): A LOCKED POSITION
 # SURVIVES. The card soup, the kit-bash and a rough faceted sheet (96 x 96 cells with UV charts: long group borders,

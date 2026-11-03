@@ -204,10 +204,10 @@ materials.bundle 0.00  ship 3a0422b4e (2026-10-13)
 math.parity 20.37  quiet n=23
 mcp.e2e 28.30  ship 3a0422b4e (2026-10-13)
 mcp.e2e.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
-meshbake.archive_bakes.import 18.75  solo, the card lock held, :71 (ORPHAN-REDS-1 item 3, 2026-11-03: run 1 of the split by proof - the samples imported and baked, 605 frames; the three-launch row was 34.53 s solo, 65.6 s at x1.9, and failed at 55.48 s on its teardown watchdog since 10-29)
-meshbake.archive_bakes.rebuild 7.39  solo, the card lock held, :71 (ORPHAN-REDS-1 item 3: run 2 - the bakes deleted, the open rebuilds them; 46 frames)
-meshbake.archive_bakes.missing 5.52  solo, the card lock held, :71 (ORPHAN-REDS-1 item 3: run 3 - the sources deleted too, the model missing with its scene issue; 45 frames)
-meshbake.archive_bakes.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
+meshbake.archive_bakes.import 6.26  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 3a item 6, 2026-11-03: the NULL render system - every verb a document verb; was 18.75 on the card, the card lock held, :71, ORPHAN-REDS-1)
+meshbake.archive_bakes.rebuild 5.52  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 3a item 6: run 2 on NULL - the bakes deleted, the open rebuilds them; was 7.39 on the card)
+meshbake.archive_bakes.missing 3.67  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 3a item 6: run 3 on NULL - the sources deleted too, the model missing with its scene issue; was 5.52 on the card)
+meshbake.archive_bakes.fresh_home 0.01  solo, CPU (TEST-STREAMLINE-1 3a item 6: no longer WARM - the NULL chain keeps no shader cache)
 mirror.document_to_engine 9.72  quiet n=43
 open.frames 38.81  quiet n=41
 open.frames.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
