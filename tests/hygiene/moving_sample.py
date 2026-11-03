@@ -9,7 +9,10 @@ view ever traced and made a moving picture a function of what the process drew b
   M2 each known moving site reads the helper: the reflection's pp.knobs[2], the gather's rp.seq[0] and pp.knobs6[2], the
      area visibility's pp.strata[1];
   M3 the helper restarts on a scene id or a size change and on nothing else (its one `if`), with a unique scene id
-     (OgreScene::historyId from reserveNodeId).
+     (OgreScene::historyId from reserveNodeId);
+  M4 A STORED VIEW COMPARES THE SCENE's ID, NEVER ITS ADDRESS (the 3c audit): no per-view `<view>.scene != scene` in the
+     reflection's or the gather's sources - a view outlives the scenes it drew and a freed address comes back - and the
+     gather's history reset goes through detail::rebindScene.
 Fed a violation first. The rule's behaviour is engine.moving_sample (a pure-function unit test); the picture's is card
 block B (the selftest's two shapes print the same mover hash).
 
@@ -54,6 +57,12 @@ def laws(files):
     hid = "const NodeId mHistoryId = reserveNodeId();" in files.get("EnginePrivate.h", "")
     out.append((bool(rule) and ifs == 1 and hid, "M3 the helper restarts on a scene id or a size change only (its one if: %d), "
                 "the scene id unique (reserveNodeId)" % ifs))
+    addr = sorted("%s: %s" % (f, m.group(0)) for f in ("OgreRayQuery.cpp", "OgreScreenProbeGather.cpp")
+                  for m in re.finditer(r"\b(?:rv|sv|av|hv|ev|v|o|kv\.second)\.scene\s*!=\s*(?:in\.)?scene\b",
+                                       code_only(files.get(f, ""))))
+    reset = "if (detail::rebindScene(v.sceneId, in.scene->historyId())) v.age = 0u;" in files.get("OgreScreenProbeGather.cpp", "")
+    out.append((not addr and reset, "M4 a stored view compares the scene's history id, never its address (address compares: %s; "
+                "the gather's reset through rebindScene: %s)" % (addr, reset)))
     return out
 
 
@@ -65,7 +74,8 @@ def main(src):
             files[n] = open(os.path.join(d, n), errors="replace").read()
     muts = [("M1", "OgreAreaVis.cpp", "st.moving.index(st.frame, sceneId, w, h)", "(st.frame & 0xFFFFu)"),
             ("M2", "OgreRayQuery.cpp", "rv.moving.index(rv.frame,", "rv.moving_index(rv.frame,"),
-            ("M3", "MovingSample.h", " || width != mW || height != mH", "")]
+            ("M3", "MovingSample.h", " || width != mW || height != mH", ""),
+            ("M4", "OgreRayQuery.cpp", "if (rv.sceneId != scene->historyId()) continue;", "if (rv.scene != scene) continue;")]
     for law, f, a, b in muts:
         m = dict(files)
         m[f] = m.get(f, "").replace(a, b, 1)

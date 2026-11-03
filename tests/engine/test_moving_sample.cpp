@@ -7,6 +7,7 @@
 #include "MovingSample.h"
 
 using jahshaka::engine::detail::MovingSequence;
+using jahshaka::engine::detail::rebindScene;
 static int gFail = 0;
 static void check(bool ok, const char *what) { std::printf("%s: %s\n", ok ? "ok" : "FAIL", what); if (!ok) ++gFail; }
 
@@ -40,6 +41,18 @@ int main()
     check(w.index(5u + 65536u, A, 8, 8) == 0 && w.index(5u + 65537u, A, 8, 8) == 1, "the index is 16 bits (wraps at 65536)");
     MovingSequence z;
     check(z.index(0, 0, 8, 8) == 0 && z.index(9, 0, 8, 8) == 9, "no scene (id 0) is a scene like any other: its frames count");
+    // 7. THE ONE SCENE IDENTITY a stored view compares (rebindScene; the 3c audit): a view's stored scene is its history
+    //    id, never its address - a NEW scene allocated where the last one was freed (the same address, another id) is a
+    //    rebind, and the view's histories start empty (the gather's age reset); the same scene again is none
+    {
+        unsigned long long stored = 0ull;
+        const void *freed = &stored;   // (the address both scenes "had": an address never enters the rule)
+        (void)freed;
+        check(rebindScene(stored, 41ull) && stored == 41ull, "a view's first scene is a bind (its histories start empty)");
+        check(!rebindScene(stored, 41ull), "the same scene again (its id) is no rebind: the histories carry on");
+        check(rebindScene(stored, 42ull) && stored == 42ull,
+              "a NEW scene at the FREED address (same address, a new history id) is a rebind: the history resets");
+    }
     std::printf("engine.moving_sample: %s\n", gFail ? "FAILED" : "all ok");
     return gFail ? 1 : 0;
 }
