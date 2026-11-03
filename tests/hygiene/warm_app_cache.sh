@@ -219,14 +219,22 @@ out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD"
 # the card 2 s, the toy boot takes ~0 s - the line prints the boot's own wall and the wait beside it (red before: "the boot 3 s")
 B4="$T/b4"; mkdir -p "$B4/tests"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2
 printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$B4/tests/.shadercache.warm-key"; echo 0000000000000000 > "$B4/tests/.shadercache.engine-id"
-( flock 7; sleep 2 ) 7>"$T/gpu4.lock" & hp=$!; sleep 0.3
+# (RED ONCE UNDER -j4, 2026-11-03, two races: (1) the walls were whole seconds and the wait floored - "own = wall - wait"
+# read 2 s for a 0.4-s boot when the 2.1 s spanned three second boundaries, and the bar "boot < 2 s" judged the toy boot's
+# own speed (five fake processes, ~0.2 s idle, slower in a batch); both are tenths now and the bar is the law itself, load-
+# free: the printed boot is UNDER the printed wait (~1.9 s; the sum - no subtraction - is over it whatever the load);
+# (2) "sleep 0.3" assumed the holder had the lock by then - a loaded box can start the call first (wait 0): the call now
+# starts only once the holder has written its mark under the lock, at most 5 s)
+rm -f "$T/held4"
+( flock 7; : > "$T/held4"; sleep 2 ) 7>"$T/gpu4.lock" & hp=$!
+for _ in $(seq 50); do [ -e "$T/held4" ] && break; sleep 0.1; done
 out=$(env -u JAH_GPU_LOCK_HELD DISPLAY=:fake JAH_GPU_LOCK="$T/gpu4.lock" "$W" "$BUILD" --tests-dir "$B4/tests" "${F[@]}" --only app-off --budget 300); rc=$?
 wait $hp
 ln=$(echo "$out" | grep "warm at $key - the boot")
-bw=$(echo "$ln" | sed -n "s/.*the boot \([0-9]*\) s (the card's wait \([0-9]*\) s).*/\1 \2/p")
-[ $rc = 0 ] && [ -n "$bw" ] && [ "${bw#* }" -ge 1 ] && [ "${bw% *}" -lt 2 ] &&
-    ok "the boot's printed wall is its own, the card's wait beside it (boot ${bw% *} s, wait ${bw#* } s)" ||
-    no "the boot's wall: rc $rc '$ln'"
+bw=$(echo "$ln" | sed -n "s/.*the boot \([0-9]*\)\.\([0-9]\) s (the card's wait \([0-9]*\)\.\([0-9]\) s).*/\1\2 \3\4/p")
+[ $rc = 0 ] && [ -e "$T/held4" ] && [ -n "$bw" ] && [ "${bw#* }" -ge 10 ] && [ "$(( 10#${bw% *} ))" -lt "$(( 10#${bw#* } ))" ] &&
+    ok "the boot's printed wall is its own, the card's wait beside it, in tenths (boot ${bw% *}/10 s, wait ${bw#* }/10 s)" ||
+    no "the boot's wall: rc $rc '$ln' (the holder's mark: $([ -e "$T/held4" ] && echo set || echo NOT set))"
 # A COVERAGE BUILD's BOOT WRITES ITS PROFILE UNDER coverage/boots/<boot> (the 2a audit's finding 1; red before: nothing set it)
 B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n' > "$B3/CMakeCache.txt"; toy_cache "$B3/tests/.shadercache" 1 2
 printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/covapp"; chmod +x "$T/covapp"

@@ -460,9 +460,19 @@ est_of() {
     [ -n "$w" ] && { echo "$w"; return; }
     case "$1" in app-off) echo 400 ;; engine-off) echo 340 ;; app-on) echo 120 ;; engine-on) echo 60 ;; cold-on) echo 330 ;; esac   # cold-on: 306 s measured, three rows, loaded (#122)
 }
-waited_of() {   # <log>: the card's wait in whole seconds (the lock prints tenths since #95: "waited 12.3 s"), 0 when none
-    local w; w=$(sed -n 's/^gpu-lock: waited \([0-9]*\)\(\.[0-9]*\)\{0,1\} s$/\1/p' "$1" | head -1); echo "${w:-0}"
+# A BOOT's OWN WALL IN TENTHS (tooling.warm_app_cache's red under -j4, 2026-11-03): the wall was whole seconds of `date +%s`
+# and the wait the lock's tenths FLOORED, so "own = wall - wait" carried up to ~2 s of quantisation - a 1.7-s wait and a
+# 0.4-s boot read "the boot 2 s" when the 2.1 s spanned three second boundaries, "1 s" when it spanned two (the toy's bar is
+# boot < 2 s: red by the clock's phase, more often under load). Both now in tenths: the wall from date +%s%N, the wait as
+# printed (#95: "waited 12.3 s").
+waited_of() {   # <log>: the card's wait in TENTHS of a second, 0 when none
+    local w; w=$(sed -n 's/^gpu-lock: waited \([0-9]*\)\.\{0,1\}\([0-9]\{0,1\}\)[0-9]* s$/\1 \2/p' "$1" | head -1)
+    [ -n "$w" ] || { echo 0; return; }
+    echo $(( ${w% *} * 10 + ${w#* }0 / 10 ))
 }
+now_ns() { date +%s%N; }
+tenths_since() { echo $(( ($(now_ns) - $1) / 100000000 )); }   # <t0 in ns>
+fmt_tenths() { echo "$(( $1 / 10 )).$(( $1 % 10 ))"; }
 note_wall() {
     { grep -v "^$1 " "$WALLS" 2>/dev/null; echo "$1 $2"; } > "$WALLS.tmp" && mv "$WALLS.tmp" "$WALLS"
 }
@@ -496,7 +506,7 @@ boot() {
     echo "warm-app-cache: booting $(what_of "$name") ($name): $(basename "$EXE") on $DISPLAY (home $home;" \
          "the card's wait at most ${WAIT} s)"
     local t0 rc wall skipped waited
-    t0=$(date +%s)
+    t0=$(now_ns)
     # THE DRIVER's CACHE OFF for this boot (URGENT #100): every pipeline is compiled into the engine's VkPipelineCache,
     # which every exe loads - a driver-cache hit would leave it out of it
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
@@ -504,16 +514,16 @@ boot() {
           --label "warm-app-cache ($name)" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
     rc=$?
     [ $rc = 75 ] && held "$log" "$name" "$name $rest"
-    wall=$(( $(date +%s) - t0 ))
+    wall=$(tenths_since "$t0")
     grep -E 'fresh_home.sh|^gpu-lock: waited|^engine-selftest: .*-> (PASS|FAIL)|^warm_app_boot: |^LAB (END|FAILED)' "$log" |
         head -12
     RAN=1
     if [ $rc -ne 0 ]; then
-        echo "warm-app-cache: the $name boot FAILED (exit $rc) after ${wall} s - its log $log; the cache is not warm"
+        echo "warm-app-cache: the $name boot FAILED (exit $rc) after $(fmt_tenths "$wall") s - its log $log; the cache is not warm"
         return 1
     fi
-    waited=$(waited_of "$log"); wall=$(( wall - waited ))   # THE BOOT's OWN WALL: the card's wait is not the boot's (block A)
-    note_wall "$name" "$wall"
+    waited=$(waited_of "$log"); wall=$(( wall - waited )); [ "$wall" -ge 0 ] || wall=0   # THE BOOT's OWN WALL (block A), tenths
+    note_wall "$name" "$(( (wall + 5) / 10 ))"; waited=$(fmt_tenths "$waited"); wall=$(fmt_tenths "$wall")
     if [ ! -f "$shared/cache-manifest.txt" ]; then
         echo "warm-app-cache: the $name boot passed but no shared cache was promoted ($shared) - not warm"
         return 1
@@ -543,22 +553,22 @@ driver_boot() {
     local t0 rc wall b0 b1 dpath waited
     dpath="${__GL_SHADER_DISK_CACHE_PATH:-/home/jahshaka/.cache/nvidia}"
     b0=$(du -sb "$dpath" 2>/dev/null | cut -f1)
-    t0=$(date +%s)
+    t0=$(now_ns)
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
           env -u __GL_SHADER_DISK_CACHE nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" \
           --label "warm-app-cache ($name)" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
     rc=$?
     [ $rc = 75 ] && held "$log" "$name" "$name $rest"
-    wall=$(( $(date +%s) - t0 ))
+    wall=$(tenths_since "$t0")
     b1=$(du -sb "$dpath" 2>/dev/null | cut -f1)
     grep -E '^gpu-lock: waited' "$log" | head -1
     RAN=1
     if [ $rc -ne 0 ]; then
-        echo "warm-app-cache: the $name boot FAILED (exit $rc) after ${wall} s - its log $log"
+        echo "warm-app-cache: the $name boot FAILED (exit $rc) after $(fmt_tenths "$wall") s - its log $log"
         return 1
     fi
-    waited=$(waited_of "$log"); wall=$(( wall - waited ))   # THE BOOT's OWN WALL: the card's wait is not the boot's (block A)
-    note_wall "$name" "$wall"
+    waited=$(waited_of "$log"); wall=$(( wall - waited )); [ "$wall" -ge 0 ] || wall=0   # THE BOOT's OWN WALL (block A), tenths
+    note_wall "$name" "$(( (wall + 5) / 10 ))"; waited=$(fmt_tenths "$waited"); wall=$(fmt_tenths "$wall")
     printf '%s\n%s\n' "$KEY" "$(exe_id "$exe")" > "$dstamp"
     echo "warm-app-cache: $(what_of "$name") stored at $KEY - the boot ${wall} s (the card's wait ${waited} s), the driver cache" \
          "$(( (${b1:-0} - ${b0:-0}) / 1048576 )) MB grown"
