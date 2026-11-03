@@ -160,6 +160,15 @@ if(NOT Python3_Interpreter_FOUND)
         "python3 and reconfigure.")
 endif()
 if(Python3_Interpreter_FOUND)
+    # source.shader_cache_key — TEST-STREAMLINE-1 1a: the hlms layer keys on the shader cache's own code
+    # (JAHSHAKA_SHADER_CACHE_CODE_SOURCES), not every engine source, because engine C++ reaches a cached Hlms source only
+    # through property and piece values (the entry's key). A NEW engine file that builds shader source text (a piece, a
+    # program from a C++ string, the disk cache's calls) reds until it joins that list or the low-level allow-list. See
+    # the script's header; its negative control runs first.
+    add_test(NAME source.shader_cache_key
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/shader_cache_key.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.shader_cache_key PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.shader_cache_key)
     add_test(NAME source.gate_scope_rules
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_scope_rules.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")

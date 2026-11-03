@@ -20,6 +20,9 @@ toy_cache() {
 }
 toy_cache "$T/.shadercache" 1 2
 toy_cache "$T/.shadercache-engine" 1 2
+# THE TOP-UP's STAMP (TEST-STREAMLINE-1 1a (c)): the full engine build id an -off boot last ran at
+EID=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$BUILD/engine/generated/jahshaka_engine_build_id.h")
+echo "$EID" > "$T/.shadercache.engine-id"; echo "$EID" > "$T/.shadercache-engine.engine-id"
 fail=0
 ok() { echo "  ok: $1"; }
 no() { echo "  FAIL: $1"; fail=1; }
@@ -291,5 +294,46 @@ printf 'y' > "$T/tB/build/bin/media/x/c.png"
 out=$("$W" "$T/tB/build" --check --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/tB/build/tests/rows.txt" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'p.cold (the staged media rebuilt since)' && ok "...a staged file's content moved: cold-on cold, the row named" ||
     no "a media content change: '$out' rc $rc"
+# THE NARROWED KEY AND THE TOP-UP (TEST-STREAMLINE-1 1a; #126's nonce case on the narrowed key, CPU half): on a toy tree
+# warmed by hand at its key - ONLY the engine's full build id moved: the key holds, the two -off boots read a TOP-UP, the -on
+# boots and the cold rows warm; a byte of the staged Hlms media, a ray-tier SPIR-V header or the shader cache's code id moved:
+# the KEY moves, every boot cold (the shader that changed is the one that runs - the card half is block A)
+toy_tree "$T/tK"; KB="$T/tK/build"; KT="$KB/tests"; mkdir -p "$KB/engine/generated/rayquery"; printf 'spv1' > "$KB/engine/generated/rayquery/rq_x_spv.h"
+kk=$("$W" "$KB" --key); kid=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$KB/engine/generated/jahshaka_engine_build_id.h")
+KX=(--app "$T/app" --lab "$T/lab" --cold-rows "$KB/tests/rows.txt" --tests-dir "$KT")
+toy_cache "$KT/.shadercache" 1 2; toy_cache "$KT/.shadercache-engine" 1 2
+printf '%s\n%s\n%s\n' "$kk" "k1 k2 " "sets none" > "$KT/.shadercache.warm-key"; printf '%s\n%s\n' "$kk" "k1 k2 " > "$KT/.shadercache-engine.warm-key"
+printf '%s\n%s\n' "$kk" app > "$KT/.shadercache.driver-key"; printf '%s\n%s\n' "$kk" lab > "$KT/.shadercache-engine.driver-key"
+echo "$kid" > "$KT/.shadercache.engine-id"; echo "$kid" > "$KT/.shadercache-engine.engine-id"
+DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$KB" "${KX[@]}" --only cold-on > /dev/null 2>&1
+out=$("$W" "$KB" --check "${KX[@]}"); rc=$?
+[ $rc = 0 ] && [ "$out" = "warm at $kk" ] && ok "the narrowed key's toy tree warm at $kk (every boot)" || no "the toy tree warm: '$out' rc $rc"
+sed -i 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\)/#define JAHSHAKA_ENGINE_BUILD_ID "f\1/' "$KB/engine/generated/jahshaka_engine_build_id.h"
+out=$("$W" "$KB" --check "${KX[@]}"); rc=$?
+[ $rc = 3 ] && [ "$("$W" "$KB" --key)" = "$kk" ] &&
+    echo "$out" | grep -q "the app rows' cache (app-off): the engine's code moved since .*a TOP-UP" &&
+    echo "$out" | grep -q "the engine rows' cache (engine-off): the engine's code moved since .*a TOP-UP" &&
+    ! echo "$out" | grep -qE '\((app-on|engine-on|cold-on)\)' &&
+    ok "an engine edit alone (the full build id): the KEY holds, the two -off boots a TOP-UP, the -on boots and the cold rows warm" ||
+    no "the engine edit alone: '$out' rc $rc"
+out=$("$W" "$KB" --check "${KX[@]}" --only app-on); rc=$?
+[ $rc = 0 ] && ok "...and an -on boot is not held behind its -off boot's top-up" || no "app-on behind a top-up: '$out' rc $rc"
+nonce() {   # <what> <file> <bytes>: the key moves, every boot cold
+    cp "$2" "$T/nonce.bak"; printf '%s' "$3" >> "$2"
+    local o r; o=$("$W" "$KB" --check "${KX[@]}"); r=$?
+    [ $r = 3 ] && [ "$("$W" "$KB" --key)" != "$kk" ] && echo "$o" | grep -q '(app-on): the key moved' &&
+        echo "$o" | grep -q '(cold-on): 1 of 1 to prime: p.cold (the key moved' &&
+        ok "a NONCE in $1: the key moves, every boot cold" || no "the nonce in $1: '$o' rc $r"
+    cp "$T/nonce.bak" "$2"
+}
+nonce "the staged Hlms media" "$KB/bin/media/Hlms/a.any" "// nonce"
+nonce "a ray-tier SPIR-V header" "$KB/engine/generated/rayquery/rq_x_spv.h" "1"
+cp "$KB/engine/generated/jahshaka_engine_build_id.h" "$T/id.bak"
+sed -i 's/^#define JAHSHAKA_SHADER_CACHE_CODE_ID "\([0-9a-f]\)/#define JAHSHAKA_SHADER_CACHE_CODE_ID "e\1/' "$KB/engine/generated/jahshaka_engine_build_id.h"
+o=$("$W" "$KB" --check "${KX[@]}"); r=$?
+[ $r = 3 ] && [ "$("$W" "$KB" --key)" != "$kk" ] && ok "the shader cache's own code moved (JAHSHAKA_SHADER_CACHE_CODE_ID): the key moves" || no "the code id: '$o' rc $r"
+grep -v SHADER_CACHE_CODE_ID "$T/id.bak" > "$KB/engine/generated/jahshaka_engine_build_id.h"
+"$W" "$KB" --key > /dev/null 2>&1; r=$?
+[ $r = 2 ] && ok "a build id header without the code id (an unbuilt or older tree): no key, exit 2 - never a key without the cache's code" || no "no code id: rc $r"
 echo "tooling.warm_app_cache: $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail

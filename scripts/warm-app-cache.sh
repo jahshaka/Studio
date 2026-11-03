@@ -11,14 +11,21 @@
 # This is not a test: it boots the app ONCE, UNCAPPED, when the key moved, and leaves the shared cache warm for the rows.
 #
 # THE KEY: what the engine's shader-cache layer keys are made of (irisgl/engine/src/OgreShaderCache.cpp configure() and
-# load()), read from the build without booting - the engine build id (<build>/engine/generated/
-# jahshaka_engine_build_id.h: the engine's own sources, kCacheFormat among them), THE RAY TIER's BUILT-IN SPIR-V
+# load()), read from the build without booting - the shader cache's CODE id (<build>/engine/generated/
+# jahshaka_engine_build_id.h's JAHSHAKA_SHADER_CACHE_CODE_ID: the container's own source, kCacheFormat in it; NOT every
+# engine source since TEST-STREAMLINE-1 1a: an Hlms entry is keyed by its merged properties + pieces after every C++ hook,
+# so an engine edit adds entries, never makes one wrong - irisgl/cmake/EngineBuildId.cmake), THE RAY TIER's BUILT-IN SPIR-V
 # (<build>/engine/generated/rayquery/*_spv.h: compiled into the engine, not media, and outside the build id - an
 # rq_reflect edit left both caches "warm" while every boot paid ~30 s building the reflection's two pipelines cold, and
 # a row at the cap timed out and promoted nothing: gi.rough_reference 60 s, 2026-10-28), the fork commit the engine was compiled
 # against (compile_commands.json's JAHSHAKA_OGRE_FORK_COMMIT), the staged Hlms and Photon media (<build>/bin/media, the
 # directories the engine hashes), glslang's build_info.h, the build type, and the GPU (name and driver). sha256 of
 # those, its first 16 hex digits.
+# THE TOP-UP (TEST-STREAMLINE-1 1a (c)): the engine's FULL build id (JAHSHAKA_ENGINE_BUILD_ID) is not in the key but is
+# read: an engine edit that sets a NEW property makes permutations the warm cache lacks, which the first rows would compile
+# under their cap. So an -off boot warm at the key whose <shared>.engine-id names another full id runs once more as a
+# TOP-UP - a warm boot on valid caches (every layer served, only the new permutations compile); its -on boot and the cold
+# rows are NOT re-run (their stamps hold the key).
 # WARM AT THE KEY = for an -off boot, its stamp (<shared>.warm-key, written after the boot was promoted) names this key
 # AND the shared cache's manifest still carries the layer keys it recorded then (a later promotion at the same key only
 # grows the union; one at another key replaced it) AND the cache passes the engine's own load check - every file its
@@ -162,9 +169,11 @@ mkdir -p "$TESTS"
 
 # ---- THE KEY ------------------------------------------------------------------------------------------------------
 key_inputs() {
-    local id="$BUILD/engine/generated/jahshaka_engine_build_id.h"
+    local id="$BUILD/engine/generated/jahshaka_engine_build_id.h" code
     [ -f "$id" ] || { echo "warm-app-cache: no engine build id at $id (build the tree first)" >&2; return 1; }
-    echo "build-id $(sha256sum < "$id" | cut -c1-64)"
+    code=$(sed -n 's/^#define JAHSHAKA_SHADER_CACHE_CODE_ID "\([0-9a-f]*\)"$/\1/p' "$id")
+    [ -n "$code" ] || { echo "warm-app-cache: no JAHSHAKA_SHADER_CACHE_CODE_ID in $id (build the tree first)" >&2; return 1; }
+    echo "cache-code $code"
     echo "rq-spirv $(cd "$BUILD/engine/generated" 2>/dev/null && find rayquery -name '*_spv.h' -print0 2>/dev/null | LC_ALL=C sort -z | xargs -0 -r sha256sum | sha256sum | cut -c1-64)"
     echo "fork $(grep -o -m1 'JAHSHAKA_OGRE_FORK_COMMIT=[^ ]*' "$BUILD/compile_commands.json" 2>/dev/null | grep -oE '[0-9a-f]{40}' | head -1)"
     local d
@@ -181,6 +190,8 @@ key_inputs() {
 INPUTS=$(key_inputs) || exit 2
 KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
 [ "$KEYONLY" = 1 ] && { echo "$KEY"; exit 0; }
+# the engine's FULL build id, its first 16 hex digits: the top-up's signal (the header)
+ENGINE_ID=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$BUILD/engine/generated/jahshaka_engine_build_id.h")
 layer_keys() {   # the shared cache's per-layer keys (its manifest's last column), sorted, one line
     [ -f "$1/cache-manifest.txt" ] && awk '$1 == "file" { print $NF }' "$1/cache-manifest.txt" | LC_ALL=C sort -u | tr '\n' ' '
 }
@@ -192,6 +203,9 @@ cold_why() {   # <shared> <stamp> [<sets digest>]: empty when warm at the key, e
     elif ! torn=$(python3 -I "$SRC/tests/support/shadercache_check.py" "$1"); then   # its stderr (#132's fallback line) passes
         echo "the shared cache fails its own manifest ($torn) - the engine would boot every row seeded from it cold"
     elif [ $# -ge 3 ] && [ "$(sed -n 3p "$2")" != "$3" ]; then echo "the rows' test tiers changed since (test-boot-sets.txt)"
+    elif [ "${TOPUP_CHECK:-1}" = 1 ] && [ "$(cat "$1.engine-id" 2>/dev/null)" != "$ENGINE_ID" ]; then
+        echo "the engine's code moved since ($(cat "$1.engine-id" 2>/dev/null || echo none) -> $ENGINE_ID; the key holds: a TOP-UP," \
+             "a warm boot that adds the new permutations)"
     fi
 }
 # THE ROWS' TEST TIERS (tests/CMakeLists.txt writes them at configure): the app-off boot boots each once after the self-test
@@ -287,7 +301,7 @@ echo "cold at $KEY: $why"
 # AN -on BOOT RUNS ON ITS -off BOOT's CACHE: asked for alone while that cache is cold, nothing boots
 for b in $RUN; do
     case "$b" in *-on) off="${b%-on}-off"
-        if [ -n "$(why_of "$off")" ] && ! case " $RUN " in *" $off "*) true ;; *) false ;; esac; then
+        if [ -n "$(TOPUP_CHECK=0 why_of "$off")" ] && ! case " $RUN " in *" $off "*) true ;; *) false ;; esac; then
             echo "warm-app-cache: $b boots on $(what_of "$off"), cold - call --only $off first; nothing booted"
             exit 3
         fi ;;
@@ -397,6 +411,7 @@ boot() {
     else
         printf '%s\n%s\n' "$KEY" "$(layer_keys "$shared")" > "$stamp"
     fi
+    echo "$ENGINE_ID" > "$shared.engine-id"   # the top-up's stamp (the header)
     echo "warm-app-cache: $(what_of "$name") warm at $KEY - the boot ${wall} s, $(du -sh "$shared" | cut -f1)" \
          "($(sed -n 's/^shaders //p' "$shared/cache-manifest.txt") shaders)"
     return 0
@@ -486,7 +501,7 @@ for b in $RUN; do
     left=${left#"$b"}; left=${left# }
     # an -on boot after its -off boot in this call: only on the cache that boot promoted
     case "$b" in *-on) off="${b%-on}-off"
-        if [ -n "$(why_of "$off")" ]; then
+        if [ -n "$(TOPUP_CHECK=0 why_of "$off")" ]; then
             echo "warm-app-cache: $b waits for $(what_of "$off") (not promoted by this call's $off boot) - the next call warms both"
             continue
         fi ;;
