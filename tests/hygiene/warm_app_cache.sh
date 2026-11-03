@@ -188,6 +188,18 @@ exec 8>&-
     [ ! -e "$B/tests/.shadercache.driver-key" ] && [ $s -lt 10 ] &&
     ok "the card held past the boot's wait (a tenth of a 10-s budget): exit 75 in $s s, nothing booted" ||
     no "the held card: '$out' rc $rc in $s s"
+# A TOP-UP REPLACES THE UNION (the stage-1 audit's finding 4): an app-off boot whose ONLY why is the engine's moved code boots
+# its home without the shared hlms layer (fresh_home.sh --drop-hlms), so the promoted cache holds only what the boot used -
+# the shared hlms.1.bin of an earlier engine is gone after it (red before: the union kept it). A boot cold for another reason
+# keeps the layer.
+B2="$T/b2"; mkdir -p "$B2/tests"; touch "$B2/CMakeCache.txt"; toy_cache "$B2/tests/.shadercache" 1 2
+printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$B2/tests/.shadercache.warm-key"; echo 0000000000000000 > "$B2/tests/.shadercache.engine-id"
+out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B2/tests" "${F[@]}" --only app-off); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q 'a TOP-UP' && echo "$out" | grep -q -- '--drop-hlms: the home.s hlms layer left out' &&
+    ! grep -q '^file hlms\.' "$B2/tests/.shadercache/cache-manifest.txt" && grep -q '^file pipeline.cache' "$B2/tests/.shadercache/cache-manifest.txt" &&
+    [ "$(cat "$B2/tests/.shadercache.engine-id")" = "$EID" ] &&
+    ok "a TOP-UP boot (the engine's code moved alone) boots without the hlms layer and REPLACES the union: the old hlms entries gone, the pipelines kept" ||
+    no "the top-up's union: rc $rc $(echo "$out" | tail -3) / $(tr '\n' ';' < "$B2/tests/.shadercache/cache-manifest.txt")"
 fi
 if want cold; then
 # THE COLD ROWS (cold-on, URGENT #119; SHIP-CUT-2 0b): a row declared COLD makes its own cache, so cold-on runs each listed

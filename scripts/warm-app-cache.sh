@@ -588,6 +588,12 @@ cold_boot() {
     echo "warm-app-cache: $(what_of cold-on) primed at $KEY - ${n} row(s), the boot ${wall} s"
     return 0
 }
+# A TOP-UP REPLACES THE UNION (the stage-1 audit's finding 4, the lead's ruling): an -off boot that runs ONLY because the
+# engine's code moved boots without the shared hlms layer (fresh_home.sh --drop-hlms: the microcode and pipelines warm), so
+# its promotion replaces the union with what this engine uses - the dead permutations of earlier engine versions never pile up
+topup_args() {   # <boot>: " --drop-hlms" when its only why is the top-up
+    case "$(why_of "$1")" in *"a TOP-UP"*) [ -z "$(TOPUP_CHECK=0 why_of "$1")" ] && echo " --drop-hlms" ;; esac
+}
 DUMP="$TESTS/.hlms-dump"
 LABSCRIPT="$TESTS/warm-engine-cache.lab"
 left="$RUN"
@@ -603,7 +609,7 @@ for b in $RUN; do
     case "$b" in
         app-off|app-on)
             [ -x "$APPX" ] || { echo "warm-app-cache: no app at $APPX" >&2; exit 2; }
-            H="$TESTS/warm-app-cache-home"; FH_ARGS="--warm"; EXE="$APPX"
+            H="$TESTS/warm-app-cache-home"; FH_ARGS="--warm$(topup_args app-off)"; EXE="$APPX"
             if [ "$b" = app-off ]; then
                 # THE PERMUTATIONS THE BOOT GENERATES, DUMPED (URGENT #89): every Hlms vertex and pixel shader of the
                 # warm-up and the self-test's poses, written by the engine (JAHSHAKA_HLMS_DEBUG_DIR, OgreEngine.cpp) into
@@ -619,7 +625,7 @@ for b in $RUN; do
             fi ;;
         engine-off|engine-on)
             [ -x "$LABX" ] || { echo "warm-app-cache: no lab at $LABX" >&2; exit 2; }
-            H="$TESTS/warm-engine-cache-home"; FH_ARGS="--warm --cache engine"; EXE="$LABX"
+            H="$TESTS/warm-engine-cache-home"; FH_ARGS="--warm --cache engine$(topup_args engine-off)"; EXE="$LABX"
             printf 'reflections both\nframes 4\nquit\n' > "$LABSCRIPT"
             LABCMD=(env "JAHSHAKA_SHADER_CACHE_DIR=$H/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0
                     "$LABX" --headless --no-stdin --size 960x540 --data-root "$H/run/lab" --env photon-rough --tier epic

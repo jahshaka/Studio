@@ -4,7 +4,7 @@
 # implementation of the wipe: it replaced 27 hand-copied `sh -c "rm -rf …"` fixtures and tests/samples/freshhome.cmake,
 # and it is every pool's and one-script row's default.
 #
-#   fresh_home.sh [--warm [--cache <key>]] [--keep-home] [--reset <dir>]... [--rm <file>]... [--mkdir <dir>]... <home>
+#   fresh_home.sh [--warm [--cache <key>] [--drop-hlms]] [--keep-home] [--reset <dir>]... [--rm <file>]... [--mkdir <dir>]... <home>
 #                 [-- <command> [args...]]
 #   fresh_home.sh --promote [--cache <key>] <home> -- <command> [args...]
 #
@@ -78,11 +78,12 @@
 #                   name>/, replacing that home's previous evidence (one red kept per row). Without a command it is a
 #                   fixture row (a FIXTURES_SETUP home is wiped at its next setup).
 set -eu
-warm=0; keep=0; setup=0; key=""; promote=0; seed=""
+warm=0; keep=0; setup=0; key=""; promote=0; seed=""; drop_hlms=0
 resets=""; rms=""; mkdirs=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --warm)  warm=1; shift ;;
+        --drop-hlms) drop_hlms=1; shift ;;
         --keep-home) keep=1; shift ;;
         --cache) key="${2:-}"; shift 2
                  case "$key" in ""|*[!a-z0-9_]*) echo "fresh_home.sh: --cache needs a key of [a-z0-9_]" >&2; exit 2 ;; esac ;;
@@ -318,6 +319,17 @@ if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
         link_cache "$shared"
         exit 0
     ) 9>"$shared.lock" || true
+    # --drop-hlms (with --warm; the warm-up's TOP-UP, TEST-STREAMLINE-1 audit finding 4): the seeded home WITHOUT the hlms
+    # layer - its files unlinked and their manifest lines dropped (a new manifest file: the linked one is never written) -
+    # so the boot regenerates exactly the permutations it uses from the templates (cheap: the microcode and the pipelines
+    # stay warm, keyed on content) and its promotion REPLACES the shared union: the dead permutations of earlier engine
+    # versions go, the old key's reset at a warm boot's cost. A manifest naming a missing file would wipe the whole cache.
+    if [ "$drop_hlms" = 1 ] && [ -f "$home/$cache_rel/cache-manifest.txt" ]; then
+        rm -f "$home/$cache_rel"/hlms.*.bin
+        grep -v '^file hlms\.' "$home/$cache_rel/cache-manifest.txt" > "$home/$cache_rel/cache-manifest.txt.new"
+        mv -f "$home/$cache_rel/cache-manifest.txt.new" "$home/$cache_rel/cache-manifest.txt"
+        echo "fresh_home.sh: --drop-hlms: the home's hlms layer left out (the boot regenerates what it uses)"
+    fi
 fi
 
 old_ifs="$IFS"; IFS='
