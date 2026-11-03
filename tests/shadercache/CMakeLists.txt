@@ -88,11 +88,17 @@ jah_ship_row(shadercache.app.clean)   # THE SHIP SET (TEST-CUT-1): the cleanup o
 # 33.1 s (load 6) / 34.8-36 s (load 10) at the tip (75 s quiet before). KEPT IN THE MERGE TIER over the 30 s rule (the
 # lead, 2026-10-12): the background-compile guard is reached only when the shader service changes, and it is guarded
 # nowhere else in the merge tier.
-add_executable(test_async_after_open test_async_after_open.cpp)
+# THE SEED's KEY IS THE PASS KEY's TERMS (TEST-STREAMLINE-1 point 3): the app's src/app/startuppasskey.cpp compiled in (one
+# definition of the media digest and the key) and the build's JAH_STARTUP_PASS_CODE_ID header
+add_executable(test_async_after_open test_async_after_open.cpp ${CMAKE_SOURCE_DIR}/src/app/startuppasskey.cpp)
+target_include_directories(test_async_after_open PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_dependencies(test_async_after_open JahStartupPassId)
+set_source_files_properties(test_async_after_open.cpp PROPERTIES OBJECT_DEPENDS "${JAH_STARTUP_PASS_HEADER}")
 set_target_properties(test_async_after_open PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_link_libraries(test_async_after_open PRIVATE Qt6::Core Qt6::Gui)
 target_compile_definitions(test_async_after_open PRIVATE
+    JAH_CMAKE_COMMAND="${CMAKE_COMMAND}"
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
     JAHSHAKA_OGRE_INSTALL="${OGRE_NEXT_PREFIX}")
@@ -115,6 +121,14 @@ jah_gpu_row(shader.async_after_open SHIP CLASS app TIER epic NEEDS photon bloom 
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 60 LABELS "shadercache"
     FIXTURES_REQUIRED asyncAfterOpenSeed DEPENDS shader.async_after_open.seed)
+
+# shadercache.startup_pass_key (TEST-STREAMLINE-1 point 3, CPU: no card, no app) - the startup pass's key and the seeds'
+# tree key are WHAT DECIDES THE PASS's BYTES, never the Studio commit: the media digest by content (no path, no time), the
+# key's three terms and nothing else, the code id's generator (a listed source and the engine's full id move it, an
+# unlisted file does not), the build's list (test_async_after_open.cpp keySelfTest).
+add_test(NAME shadercache.startup_pass_key COMMAND test_async_after_open --key-self-test)
+set_tests_properties(shadercache.startup_pass_key PROPERTIES TIMEOUT 60 LABELS "shadercache")
+jah_no_display(shadercache.startup_pass_key)
 
 # shader.async_soak (archived: archive/tests/shader) (ASYNC-SHADERS-1): 50 applies while flying, a blocking render meeting a pending
 # permutation, a scene switch mid-compile and a quit with compiles pending — validation layer on.

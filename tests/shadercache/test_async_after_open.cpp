@@ -41,6 +41,8 @@
 // build inside itself, 64 s solo on a fresh tree, 2026-10-20, over the minute). The row the law is about runs the two
 // launches only: the startup build is not its subject.
 #include <QCoreApplication>
+#include "app/startuppasskey.h"   // the pass key's one definition (src/app)
+#include "jah_startup_pass_id.h"     // JAH_STARTUP_PASS_CODE_ID (cmake/StartupPassId.cmake)
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
@@ -50,6 +52,7 @@
 #include <QCryptographicHash>
 #include <QDateTime>
 #include <QDirIterator>
+#include <QElapsedTimer>
 #include <QProcess>
 #include <algorithm>
 #include <cstdio>
@@ -77,23 +80,16 @@ QString treeKey()
     const QByteArray shaderKey = keyed ? key.readAllStandardOutput().trimmed() : QByteArray();
     if (shaderKey.isEmpty()) return QString();
     h.addData("shader-key " + shaderKey + "\n");
-    QStringList media;
-    QDirIterator it(bin.absolutePath() + QStringLiteral("/media"), QDir::Files, QDirIterator::Subdirectories);
-    while (it.hasNext()) media << it.next();
-    std::sort(media.begin(), media.end());
-    for (const QString &f : media) {
-        QFile file(f);
-        if (!file.open(QIODevice::ReadOnly)) continue;
-        h.addData(f.toUtf8());
-        h.addData(QCryptographicHash::hash(file.readAll(), QCryptographicHash::Sha256));
-    }
+    // THE STAGED MEDIA BY CONTENT under its media-relative path - the pass key's own term (startuppass::mediaDigest; it
+    // hashed each file's ABSOLUTE path here, so no tree's seed could serve another, #154)
+    h.addData("media " + startuppass::mediaDigest(bin.absolutePath() + QStringLiteral("/media")).toLatin1() + "\n");
     QFile built(QStringLiteral(JAHSHAKA_OGRE_INSTALL) + QStringLiteral("/BUILT_FROM"));
     if (built.open(QIODevice::ReadOnly)) h.addData(built.readAll());
-    // THE GLOBAL PASS's COMMIT (URGENT #139): the GIT_COMMIT_HASH compiled into the app - its pass key's Studio half
-    QFile prov(QFileInfo(bin.absolutePath()).absolutePath() + QStringLiteral("/generated/jah_provenance.h"));
-    if (!prov.open(QIODevice::ReadOnly)) return QString();   // unread: every seed stale, never trusted
-    for (const QByteArray &line : prov.readAll().split('\n'))
-        if (line.startsWith("#define GIT_COMMIT_HASH ")) h.addData("pass-commit " + line.mid(24).trimmed() + "\n");
+    // THE GLOBAL PASS's CODE (URGENT #139; TEST-STREAMLINE-1 point 3): the app's pass re-runs over a seed whose recorded
+    // key is not its own, so the seed is stale exactly when that key's Studio half moves - JAH_STARTUP_PASS_CODE_ID (the
+    // pass's own sources and the engine's full build id), built with this exe from the same generated header. It was the
+    // Studio COMMIT: every commit re-made both seeds in the warm-up's cold-on (~280-291 s each, #125)
+    h.addData(QByteArray("pass-code ") + JAH_STARTUP_PASS_CODE_ID + "\n");
     // ...AND THE TEST TIER the seed boots at (a seed is one tier's startup set)
     h.addData("tier " + qgetenv("JAHSHAKA_TEST_TIER") + "|" + qgetenv("JAHSHAKA_TEST_NEEDS") + "\n");
     return QString::fromLatin1(h.result().toHex());
@@ -229,9 +225,92 @@ bool copyTree(const QString &from, const QString &to)
     return true;
 }
 
+/// THE KEYS' OWN CASES (CPU, no card, no app: shadercache.startup_pass_key) - the pass key's and the seed key's terms are
+/// WHAT DECIDES THE PASS's BYTES (TEST-STREAMLINE-1 point 3): the media by content, never a path or a time; the key moves
+/// with the pass's code id, the media and the fingerprint, and holds a Studio commit apart; the id's generator (cmake/
+/// StartupPassId.cmake) moves with a listed source and the engine's full build id, never an unlisted one; and the build's
+/// list holds the pass's own sources.
+int keySelfTest()
+{
+    int failures = 0;
+    const QString t = QDir::temp().absoluteFilePath(QStringLiteral("startup-pass-key-%1").arg(QCoreApplication::applicationPid()));
+    QDir(t).removeRecursively();
+    auto put = [](const QString &path, const QByteArray &bytes) {
+        QDir().mkpath(QFileInfo(path).absolutePath());
+        QFile f(path);
+        return f.open(QIODevice::WriteOnly | QIODevice::Truncate) && f.write(bytes) == bytes.size();
+    };
+    for (const QString &tree : {QStringLiteral("/a/media"), QStringLiteral("/some/other/b/media")}) {
+        put(t + tree + QStringLiteral("/Hlms/x.any"), "hlms");
+        put(t + tree + QStringLiteral("/2.0/y.material"), "material");
+    }
+    const QString da = startuppass::mediaDigest(t + QStringLiteral("/a/media"));
+    const QString db = startuppass::mediaDigest(t + QStringLiteral("/some/other/b/media"));
+    CHECK(da.size() == 64 && da == db, "the media digest: two trees at two paths, one content - one digest (no path)");
+    {
+        QFile f(t + QStringLiteral("/some/other/b/media/2.0/y.material"));
+        f.open(QIODevice::ReadWrite);
+        f.setFileTime(QDateTime::fromSecsSinceEpoch(978307200), QFileDevice::FileModificationTime);
+    }
+    CHECK(startuppass::mediaDigest(t + QStringLiteral("/some/other/b/media")) == da, "...a file's time moved: the same digest");
+    put(t + QStringLiteral("/some/other/b/media/2.0/y.material"), "materiaL");
+    CHECK(startuppass::mediaDigest(t + QStringLiteral("/some/other/b/media")) != da, "...a file's content moved: another digest");
+    put(t + QStringLiteral("/a/media/2.0/z.compositor"), "c");
+    CHECK(startuppass::mediaDigest(t + QStringLiteral("/a/media")) != da, "...a file added: another digest");
+    CHECK(startuppass::mediaDigest(t + QStringLiteral("/none")) == QStringLiteral("none"), "...no media dir: 'none'");
+    const QString k = startuppass::passKey(QStringLiteral("P"), da, QStringLiteral("F"));
+    CHECK(k == startuppass::passKey(QStringLiteral("P"), db, QStringLiteral("F")) &&
+              k != startuppass::passKey(QStringLiteral("Q"), da, QStringLiteral("F")) &&
+              k != startuppass::passKey(QStringLiteral("P"), db + QStringLiteral("0"), QStringLiteral("F")) &&
+              k != startuppass::passKey(QStringLiteral("P"), da, QStringLiteral("G")),
+          "the pass key moves with its code id, its media and the cache fingerprint, and with nothing else (no commit term)");
+    // THE GENERATOR on toy inputs: a listed file, an unlisted one, the engine's id header
+    put(t + QStringLiteral("/g/listed.cpp"), "a"); put(t + QStringLiteral("/g/unlisted.cpp"), "u");
+    put(t + QStringLiteral("/g/id.h"), "#define JAHSHAKA_ENGINE_BUILD_ID \"e1\"\n");
+    auto gen = [&]() {
+        QProcess p;
+        p.start(QStringLiteral(JAH_CMAKE_COMMAND), {QStringLiteral("-DJAH_PASS_FILES=") + t + QStringLiteral("/g/listed.cpp"),
+                                                   QStringLiteral("-DJAH_ENGINE_ID_HEADER=") + t + QStringLiteral("/g/id.h"),
+                                                   QStringLiteral("-DJAH_PASS_OUT=") + t + QStringLiteral("/g/out.h"),
+                                                   QStringLiteral("-P"), QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
+                                                       QStringLiteral("/cmake/StartupPassId.cmake")});
+        p.waitForFinished(30000);
+        return readStamp(t + QStringLiteral("/g/out.h"));
+    };
+    const QString g0 = gen();
+    put(t + QStringLiteral("/g/unlisted.cpp"), "u2");
+    const QString g1 = gen();
+    put(t + QStringLiteral("/g/listed.cpp"), "a2");
+    const QString g2 = gen();
+    put(t + QStringLiteral("/g/id.h"), "#define JAHSHAKA_ENGINE_BUILD_ID \"e2\"\n");
+    const QString g3 = gen();
+    CHECK(g0.contains(QStringLiteral("JAH_STARTUP_PASS_CODE_ID")) && g1 == g0 && g2 != g1 && g3 != g2,
+          "the pass's code id: an unlisted Studio file moved - the same id; a listed source moved - another; the engine's "
+          "full build id moved - another");
+    // THE BUILD's LIST (configure-time, <build>/startup-pass-files.txt): the pass's own source and what it draws from
+    QFile list(QFileInfo(QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).absolutePath()).absolutePath() +
+               QStringLiteral("/startup-pass-files.txt"));
+    const QString names = list.open(QIODevice::ReadOnly) ? QString::fromUtf8(list.readAll()) : QString();
+    CHECK(names.contains(QStringLiteral("src/app/shaderbuildgate.cpp\n")) &&
+              names.contains(QStringLiteral("irisgl/document/scenegraph/worldmodes.cpp\n")) &&
+              names.contains(QStringLiteral("src/services/scenetemplatebuilder.cpp\n")),
+          "the build's pass list holds shaderbuildgate.cpp, the World Modes and the template builder it includes");
+    std::printf("    the pass list: %d files\n", int(names.count(QLatin1Char('\n'))));
+    {   // THE LAUNCH's PRICE of the media term (the app hashes its staged media at every launch's gate): measured, printed
+        QElapsedTimer m; m.start();
+        const QString d = startuppass::mediaDigest(QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).absolutePath() + QStringLiteral("/media"));
+        std::printf("    the build's staged media digest %s in %lld ms (the app pays it once a launch)\n", qPrintable(d.left(16)),
+                    static_cast<long long>(m.elapsed()));
+    }
+    QDir(t).removeRecursively();
+    std::printf("%s\n", failures ? "FAIL" : "PASS");
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
+    if (app.arguments().contains(QStringLiteral("--key-self-test"))) return keySelfTest();
     const QString home = QDir::current().absoluteFilePath(QStringLiteral("e2e-home-async-after-open"));
     // ONE SEED PER TIER (URGENT #139): --seed-dir <name>, the seed's directory beside the working directory
     const int sd = app.arguments().indexOf(QStringLiteral("--seed-dir"));

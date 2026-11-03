@@ -4,7 +4,9 @@
 #include "app/versionsplashscreen.h"
 #include "bridge/enginehost.h"
 #include "data/settingsmanager.h"
-#include "jah_provenance.h"   // GIT_COMMIT_HASH
+#include "jah_startup_pass_id.h"   // JAH_STARTUP_PASS_CODE_ID (cmake/StartupPassId.cmake)
+#include "app/startuppasskey.h"
+#include <QCoreApplication>
 #include "services/defaultfloormaterial.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
 #include "services/testtier.h"
@@ -27,6 +29,7 @@
 #include "viewport/recordingview.h"
 
 #include <functional>
+#include <future>
 #include <optional>
 
 #include <QApplication>
@@ -400,6 +403,10 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
 {
     auto engine = EngineHost::instance().engine();
     if (!engine) return 0;   // headless: no engine, no shaders, no wait
+    // THE STAGED MEDIA's DIGEST, a term of the global pass's key (below), read OFF the UI thread (~4 MB, 17 ms measured in
+    // Debug: shadercache.startup_pass_key prints it) while the warm-up's frames run; joined where the key is formed
+    std::future<QString> mediaDigest = std::async(std::launch::async, startuppass::mediaDigest,
+                                                  QCoreApplication::applicationDirPath() + QStringLiteral("/media"));
 
     unsigned compiled = 0, cached = 0, expected = 0;
     engine->shaderBuildProgress(compiled, cached, expected);
@@ -633,18 +640,24 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     QElapsedTimer giTimer; giTimer.start();
     engine->shaderBuildProgress(compiled, cached, expected);
     // THE GLOBAL PASS RUNS WHEN ITS KEY MOVED, not only when Ogre's cache was cold
-    // (the merge read): the cache key never names the Studio build, so a Studio-only
+    // (the merge read): the cache key never names the Studio code, so a Studio-only
     // change to a preset, a template or a helper shader left Ogre's cache warm and the
     // pass skipped — and the change compiled LIVE. The key of the last COMPLETED pass is
-    // the Studio commit plus the cache fingerprint; a cold cache runs it as well.
+    // WHAT DECIDES ITS BYTES (TEST-STREAMLINE-1 point 3; it named the Studio COMMIT, so every
+    // commit re-ran it): this pass's own sources and the engine's full build id
+    // (JAH_STARTUP_PASS_CODE_ID), the staged media by content and the cache fingerprint
+    // (app/startuppasskey.h, the one definition the test seeds read too); a cold cache runs it as well.
     std::string fingerprint;
     engine->request([&](jahshaka::engine::Engine &e) { fingerprint = e.shaderCacheStats().fingerprint; });   // a REQUEST (U3 stage 3)
-    const QString passKey = QStringLiteral(GIT_COMMIT_HASH) + QLatin1Char('|') + QString::fromStdString(fingerprint);
+    const QString passKey = startuppass::passKey(
+        QStringLiteral(JAH_STARTUP_PASS_CODE_ID),
+        mediaDigest.get(),
+        QString::fromStdString(fingerprint));
     const bool keyMoved = readWarmPassRecord() != passKey;   // the record in the cache it describes (URGENT #104)
     const bool runPass = compiled > 0 || keyMoved;
     if (keyMoved && compiled == 0)
-        qInfo("startup shader build: the global pass's key moved (a new Studio build) — running it "
-              "over a warm cache");
+        qInfo("startup shader build: the global pass's key moved (what it compiles changed: its code, "
+              "the engine, the media or the cache) — running it over a warm cache");
     unsigned lastCompiled = compiled;
     int quiet = 0;
     // ...AND UNTIL THE LIGHTING ARM IS BOUND (TEST-TIER-1): the Atom-off frames below draw the

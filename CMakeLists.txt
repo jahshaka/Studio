@@ -1044,6 +1044,48 @@ endif()
 # include directory is added before the first subdirectory (JAH_GENERATED_DIR).
 configure_file(${CMAKE_SOURCE_DIR}/cmake/jah_provenance.h.in ${JAH_GENERATED_DIR}/jah_provenance.h @ONLY)
 
+# THE GLOBAL STARTUP PASS's CODE ID (TEST-STREAMLINE-1 point 3; cmake/StartupPassId.cmake says why): the pass's key names what
+# decides its bytes, not the Studio commit. The list: shaderbuildgate.cpp and the src/ and irisgl/ sources (.h and .cpp) of
+# every header it includes, read here from its #include lines - shaderbuildgate.cpp is a configure dependency, so a new
+# include joins the list at once. The id also folds the engine's FULL build id (read by the generator from the engine's
+# generated header at build time). JAH_STARTUP_PASS_FILES is printed by tooling.startup_pass_key.
+set(_pass_src "${CMAKE_SOURCE_DIR}/src/app/shaderbuildgate.cpp")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_pass_src}")
+file(STRINGS "${_pass_src}" _pass_incs REGEX "^#include \"[^\"]+\"")
+set(JAH_STARTUP_PASS_FILES "${_pass_src}")
+foreach(_l IN LISTS _pass_incs)
+    string(REGEX REPLACE "^#include \"([^\"]+)\".*$" "\\1" _h "${_l}")
+    string(REGEX REPLACE "\\.h$" "" _b "${_h}")
+    foreach(_root "${CMAKE_SOURCE_DIR}/src" "${CMAKE_SOURCE_DIR}")
+        foreach(_e .h .cpp)
+            if(EXISTS "${_root}/${_b}${_e}" AND NOT IS_DIRECTORY "${_root}/${_b}${_e}")
+                list(APPEND JAH_STARTUP_PASS_FILES "${_root}/${_b}${_e}")
+            endif()
+        endforeach()
+    endforeach()
+endforeach()
+list(REMOVE_DUPLICATES JAH_STARTUP_PASS_FILES)
+if(NOT JAHSHAKA_ENGINE_BUILD_ID_DIR)
+    message(FATAL_ERROR "the startup pass id needs the engine's generated build id (JAHSHAKA_ENGINE_BUILD_ID_DIR)")
+endif()
+set(JAH_STARTUP_PASS_HEADER "${JAH_GENERATED_DIR}/jah_startup_pass_id.h")
+string(REPLACE ";" "|" _pass_arg "${JAH_STARTUP_PASS_FILES}")
+add_custom_command(
+    OUTPUT "${JAH_STARTUP_PASS_HEADER}"
+    COMMAND ${CMAKE_COMMAND} "-DJAH_PASS_FILES=${_pass_arg}"
+            "-DJAH_ENGINE_ID_HEADER=${JAHSHAKA_ENGINE_BUILD_ID_DIR}/jahshaka_engine_build_id.h"
+            "-DJAH_PASS_OUT=${JAH_STARTUP_PASS_HEADER}" -P "${CMAKE_SOURCE_DIR}/cmake/StartupPassId.cmake"
+    DEPENDS ${JAH_STARTUP_PASS_FILES} "${JAHSHAKA_ENGINE_BUILD_ID_DIR}/jahshaka_engine_build_id.h"
+            "${CMAKE_SOURCE_DIR}/cmake/StartupPassId.cmake"
+    COMMENT "Hashing the startup shader pass's sources for its key"
+    VERBATIM)
+add_custom_target(JahStartupPassId DEPENDS "${JAH_STARTUP_PASS_HEADER}")
+file(WRITE "${CMAKE_BINARY_DIR}/startup-pass-files.txt" "")
+foreach(_f IN LISTS JAH_STARTUP_PASS_FILES)
+    file(RELATIVE_PATH _r "${CMAKE_SOURCE_DIR}" "${_f}")
+    file(APPEND "${CMAKE_BINARY_DIR}/startup-pass-files.txt" "${_r}\n")
+endforeach()
+
 # (OGRE_PATCH_STACK — the 88 patch FILENAMES a capture bundle used to list — is
 # DELETED with the patch stack itself, 2026-09-22: the engine source is our fork
 # now, so OGRE_PIN_HASH above IS the whole provenance. A bundle that names the
@@ -1093,7 +1135,10 @@ add_executable(${CMAKE_PROJECT_NAME} MACOSX_BUNDLE src/app/main.cpp ${SRCS} ${HE
     src/app/cli/scriptrunner.h
     src/app/cli/selftestrunner.h
     src/app/versionsplashscreen.h src/app/versionsplashscreen.cpp
-    src/app/shaderbuildgate.h src/app/shaderbuildgate.cpp)
+    src/app/shaderbuildgate.h src/app/shaderbuildgate.cpp
+    src/app/startuppasskey.h src/app/startuppasskey.cpp)
+add_dependencies(${CMAKE_PROJECT_NAME} JahStartupPassId)
+set_source_files_properties(src/app/shaderbuildgate.cpp PROPERTIES OBJECT_DEPENDS "${JAH_STARTUP_PASS_HEADER}")
 
 set_target_properties(${PROJECT_NAME} PROPERTIES OUTPUT_NAME ${APP_OUTPUT_NAME})
 
