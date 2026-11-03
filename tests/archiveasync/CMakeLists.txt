@@ -1,4 +1,4 @@
-# archive.responsive (archived: archive/tests/archive) — the threaded project archive (STABILITY_PROGRAM_SPEC
+# archive.responsive.roundtrip / .lifecycle (+ their .timing twins) — the threaded project archive (STABILITY_PROGRAM_SPEC
 # Lane 4), measured the way open.responsive measures an open: spawn the REAL
 # binary, drive it over MCP, and read the main-thread heartbeat's worst gap
 # while an export and an import are in flight. Also asserts the two things the
@@ -25,36 +25,62 @@ target_compile_definitions(test_archive_responsive PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
 
-# KEPT (the lead, TESTING-SPEED-B2 fix round 2026-10-12): the merge tier's ONE guard of src/services/projectarchiver.cpp
-# (the threaded export/import, the cancel, the quit mid-export) — its .timing twin runs at the stage close only.
-# budget 70 s (the ROWS table; solo median 68.4 s on 2026-10-12: scripts/gate-times.txt).
-set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive)
-file(MAKE_DIRECTORY ${_archive_home}/run)
-# archive.responsive.timing — THE UI-GAP BUDGETS, stage-close (lane D6B-GATE-SHAPE; audit §5,
-# FIX-TIME): the same binary with JAHSHAKA_TIMING_BARS=1, on a quiet box, under the
-# GPU-timing lock; the push row above asserts everything else and prints the gaps.
-set(_archive_timing_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing)
-file(MAKE_DIRECTORY ${_archive_timing_home}/run)
-jah_gpu_exclusive_test(NAME archive.responsive.timing WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing" SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 60 COMMAND test_archive_responsive
-         WORKING_DIRECTORY ${_archive_timing_home}/run)
-set_tests_properties(archive.responsive.timing PROPERTIES
-    ENVIRONMENT "HOME=${_archive_timing_home};JAHSHAKA_DATA_ROOT=${_archive_timing_home}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
-    LABELS "archive;measure")
+# THE ROWS - SPLIT BY PROOF (TEST-STREAMLINE-1 item 4, the lead's ruling 2026-11-03): the whole binary ran 67-74 s
+# (archive.responsive 67.61-74.28 s, archived 10-20; archive.responsive.timing 67.0-68.5 s on four ship runs 10-20..10-22
+# against a stale 49.60-s line), past the 60-s cap. `--part roundtrip` (the threaded import, the threaded and synchronous
+# exports, what the archive ships, the round trip, a clean quit) and `--part lifecycle` (the share file off the UI thread,
+# the cancel that leaves no orphan, the quit with an archive in flight) - every check kept, each part its own app on its own
+# home, wiped before it by its WARM fresh-home fixture (the empty library the bake-row checks need).
+#   archive.responsive.<part>         UNARMED (no JAHSHAKA_TIMING_BARS): every count, the round trip, the manifest, the
+#                                     cancel, the quit - the gaps PRINTED against their budgets (timingbars.h); archiveasync's
+#                                     FAST row (SHIP), a normal card row.
+#   archive.responsive.timing.<part>  the same part with the UI-gap budgets ARMED (and the 600-entry big pack), on the quiet box
+#                                     under the GPU-timing lock: `measure`, LONG only.
+# archive.responsive.part_usage — the binary REFUSES a run that names no part (a CPU row: it prints the usage line and
+# exits before it spawns anything; no display, no card), so a registration that loses its --part never runs the app.
+add_test(NAME archive.responsive.part_usage COMMAND test_archive_responsive --part none)
+set_tests_properties(archive.responsive.part_usage PROPERTIES TIMEOUT 60 LABELS "archive"
+    PASS_REGULAR_EXPRESSION "FAIL: usage: test_archive_responsive --part roundtrip\\|lifecycle \\(got 'none'\\)")
+jah_no_display(archive.responsive.part_usage)
+foreach(_part roundtrip lifecycle)
+    set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-${_part})
+    file(MAKE_DIRECTORY ${_home}/run)
+    jah_gpu_row(archive.responsive.${_part} WARM_HOME "${_home}" SHIP CLASS app TIER epic NEEDS photon bloom ssao smaa planar
+                COMMAND test_archive_responsive --part ${_part} WORKING_DIRECTORY ${_home}/run)
+    set_tests_properties(archive.responsive.${_part} PROPERTIES
+        ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+        TIMEOUT 60 LABELS "archive")
+    jah_fresh_home_fixture(archive.responsive.${_part}.fresh_home archiveResponsive_${_part}_FreshHome "${_home}" WARM
+                           LABELS "archive")
+    set_property(TEST archive.responsive.${_part} APPEND PROPERTY FIXTURES_REQUIRED archiveResponsive_${_part}_FreshHome)
+
+    set(_thome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing-${_part})
+    file(MAKE_DIRECTORY ${_thome}/run)
+    jah_gpu_exclusive_test(NAME archive.responsive.timing.${_part} WARM_HOME "${_thome}" SHIP CLASS app TIER epic
+        NEEDS photon bloom ssao smaa planar RUN_TIMEOUT 60 COMMAND test_archive_responsive --part ${_part}
+        WORKING_DIRECTORY ${_thome}/run)
+    set_tests_properties(archive.responsive.timing.${_part} PROPERTIES
+        ENVIRONMENT "HOME=${_thome};JAHSHAKA_DATA_ROOT=${_thome}/.local/share/Jahshaka;JAHSHAKA_TIMING_BARS=1"
+        LABELS "archive;measure")
+    jah_fresh_home_fixture(archive.responsive.timing.${_part}.fresh_home archiveResponsiveTiming_${_part}_FreshHome
+                           "${_thome}" WARM LABELS "archive")
+    set_property(TEST archive.responsive.timing.${_part} APPEND PROPERTY FIXTURES_REQUIRED
+                 archiveResponsiveTiming_${_part}_FreshHome)
+endforeach()
 
 # The race lane (scripts/sanitize.sh tsan): the threaded export/import runner
 # plus its cancel path. Same wall-clock caveat as open.responsive.
 # TSan, run 2026-10-11 (RUNNER-A7A): red — TSAN-BOOT-TOO-SLOW (testing/defects.json, recheck 2026-11-15)
-jah_tsan_blocked( archive.responsive.timing)   # spawns the app: see jah_tsan_blocked
-
-if(TEST archive.responsive.timing)
-    jah_fresh_home_fixture(archive.responsive.timing.fresh_home archiveResponsiveTimingFreshHome "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-archive-timing" WARM LABELS "archive")
-    set_property(TEST archive.responsive.timing APPEND PROPERTY FIXTURES_REQUIRED archiveResponsiveTimingFreshHome)
-endif()
+jah_tsan_blocked(archive.responsive.roundtrip archive.responsive.lifecycle
+                 archive.responsive.timing.roundtrip archive.responsive.timing.lifecycle)   # spawn the app: see jah_tsan_blocked
 
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
 # method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. 0 = the row renders none.
-if(TEST archive.responsive.timing)
-    set_property(TEST archive.responsive.timing PROPERTY JAHSHAKA_TEST_FRAMES 1099)
-endif()
+# PROVISIONAL, BLOCK D (TEST-STREAMLINE-1 item 4): each part states its WHOLE binary's measured count (archive.responsive
+# 1129, archive.responsive.timing 1099, 2026-10-12) until block D counts the parts.
+foreach(_part roundtrip lifecycle)
+    set_property(TEST archive.responsive.${_part} PROPERTY JAHSHAKA_TEST_FRAMES 1129)
+    set_property(TEST archive.responsive.timing.${_part} PROPERTY JAHSHAKA_TEST_FRAMES 1099)
+endforeach()

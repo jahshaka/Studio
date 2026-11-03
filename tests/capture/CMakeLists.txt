@@ -20,11 +20,24 @@ foreach(_arm first_recording)
         LABELS "scripting;capture;measure")
 endforeach()
 jah_ship_row(capture.first_recording.timing)   # THE SHIP SET (TEST-CUT-1)
+# capture.first_recording — THE SAME SCRIPT UNARMED (TEST-STREAMLINE-1 item 4, the lead's ruling on the 4-5 audit's Q1: the
+# capture subsystem had no FAST row - its one row is `measure`, LONG only): every count asserted (the first recording starts,
+# no shader compiled or loaded by it, its frames recorded), the two millisecond bars PRINTED (the script's timingBar: no
+# JAH_TIMING_BARS in the plain script), a normal card row on its own wiped home (warm caches); capture's FAST row (SHIP).
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/capture-home-first_recording)
+jah_gpu_row(capture.first_recording SHIP CLASS app TIER document FRAMES 552
+    COMMAND sh "${JAH_FRESH_HOME}" --warm "${_home}" --
+            $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/capture_first_recording.js
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(capture.first_recording PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    TIMEOUT 60 LABELS "scripting;capture")
 
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
-# method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
+# method: spikes/testing-speed-b2/frames_pass1.tsv); capture.first_recording states the timing twin's 552 (the same script:
+# the bars change no frame; PROVISIONAL, block D counts it). A pool's is the sum over its arms. A headless row renders
 # the one empty frame a headless engine walks.
 if(TEST capture.first_recording.timing)
     set_property(TEST capture.first_recording.timing PROPERTY JAHSHAKA_TEST_FRAMES 552)

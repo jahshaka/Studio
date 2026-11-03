@@ -271,7 +271,8 @@ target_link_libraries(jah_testmesh PUBLIC IrisGL Qt6::Core)
 set(JAH_GPU_EXCLUSIVE "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
 set(JAH_GPU_EXCLUSIVE_SUITES
     # (TEST-CUT-1: the list is the ship set's measuring rows; the rest were archived with their rows)
-    archive.responsive.timing
+    archive.responsive.timing.roundtrip
+    archive.responsive.timing.lifecycle
     scripting.e2e.editor_controls.timing
     # TESTING-CLEANUP-2 P10f: the recorder's millisecond bars (the count and the bar in one row since the pool went).
     capture.first_recording.timing
@@ -1234,7 +1235,8 @@ jah_data_pass("${CMAKE_CURRENT_SOURCE_DIR}")
 # and served like any guard, in their own budget class (source.row_budget: a sanitizer row 60 s). The timing measures -
 # soaks, scale, determinism - stay here.
 set(JAH_MEASURE_ROWS
-    archive.responsive.timing.fresh_home
+    archive.responsive.timing.roundtrip.fresh_home
+    archive.responsive.timing.lifecycle.fresh_home
     gpu.cutout_soak.primitives
     gpu.cutout_soak.tornado
     test_engine

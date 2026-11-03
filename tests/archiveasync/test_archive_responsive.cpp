@@ -51,6 +51,7 @@
 #include "io/ziphelper.h"
 
 static int failures = 0;
+static QString gPart;   // --part roundtrip | lifecycle (main)
 using namespace mcpharness;
 
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
@@ -306,34 +307,27 @@ static RunStats runArchive(McpClient &mcp, const QString &startScript, const cha
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-
-    // HERMETIC BY CONSTRUCTION. This suite's HOME lives in the build tree and
-    // SURVIVES between runs, and a warm library quietly weakens what the run
-    // can prove: a mesh bake is content-addressed, so a second run's import
-    // finds the bake object already in the store and records no bake row
-    // against the new project's asset rows at all — the "no bake travels"
-    // assertion below would then pass on an empty set and prove nothing
-    // (measured: bake:2 from a cold library, bake:0 from a warm one). Start
-    // every run from an empty library. Guarded on the directory NAME so this
-    // can never point at a real user's home.
+    // THE PART (TEST-STREAMLINE-1 item 4): `--part roundtrip | lifecycle`, one ctest row each (tests/archiveasync/CMakeLists.txt)
     {
-        const QString home = qEnvironmentVariable("HOME");
-        if (QFileInfo(home).fileName() == QLatin1String("e2e-home-archive"))
-            QDir(QDir(home).filePath(QStringLiteral(".local/share/Jahshaka"))).removeRecursively();
-        else
-            std::printf("info: HOME is not the suite's scratch home (%s) — not resetting\n",
-                        home.toUtf8().constData());
+        const QStringList a = app.arguments();
+        const int at = a.indexOf(QStringLiteral("--part"));
+        gPart = at >= 0 && at + 1 < a.size() ? a.at(at + 1) : QString();
+        if (gPart != QLatin1String("roundtrip") && gPart != QLatin1String("lifecycle")) {
+            std::printf("FAIL: usage: test_archive_responsive --part roundtrip|lifecycle (got '%s')\n",
+                        gPart.toUtf8().constData());
+            return 2;
+        }
+        std::printf("info: the part: %s\n", gPart.toUtf8().constData());
     }
 
-    // SEEDED AFTER THE WIPE, and the order is load-bearing (hygiene lane,
-    // 2026-09-09). The seed used to land in `<binary dir>/jahsettings.ini`,
-    // which is OUTSIDE this scratch home, so it survived the reset above by
-    // accident. It lands inside the data root now — which is the point, that
-    // is what stops this suite writing the developer's shared settings file —
-    // and the reset above would therefore delete it, leaving the app to meet
-    // the modal donate dialog at quit and hang until the exit budget ran out.
-    // (Measured: "process terminated within the exit budget with an archive in
-    // flight" failed for exactly this reason and nothing else.)
+    // HERMETIC BY CONSTRUCTION: a warm library quietly weakens what the run can prove (a mesh bake is content-addressed,
+    // so a second run's import finds the bake already in the store and records no bake row - "no bake travels" would pass
+    // on an empty set; measured: bake:2 from a cold library, bake:0 from a warm one). Every row of this binary starts from
+    // an empty library: its home is wiped before it by its WARM fresh-home fixture (jah_fresh_home_fixture, the shader
+    // caches kept) - the binary's own wipe of a home NAMED e2e-home-archive is deleted (TEST-STREAMLINE-1 item 4: no row
+    // runs in that home any more).
+    // The settings are seeded INSIDE the data root (never the developer's shared settings file), after that wipe: an
+    // unseeded home meets the modal donate dialog at quit and hangs until the exit budget runs out.
     seedSettings(QStringLiteral(JAHSHAKA_BINARY));
 
     // THE FIXTURE IS World Background (2026-09-07): it has to be a world with
@@ -397,301 +391,314 @@ int main(int argc, char **argv)
     std::printf("info: (the numbers above are the ENGINE's boot compile storm, not the "
                 "archiver's — see the comment at this call)\n");
 
-    // ---- 1. the THREADED import, with the UI thread under measurement -----
-    const RunStats imported =
-        runArchive(mcp, QStringLiteral("project.importArchiveAsync('%1')").arg(sample), "import");
-    CHECK(imported.started, "project.importArchiveAsync accepted");
-    CHECK(imported.done, "the threaded import completed");
-    CHECK(imported.polls >= 2, "the app answered requests WHILE the import was in flight");
-    // OR the operation finished inside one probe interval and could not be
-    // asked for a tick. That is a live case since the warm-up above: an import
-    // that used to run 2.6-4.5 s (with the UI thread compiling shaders beside
-    // it) now runs 420-470 ms against a 250 ms probe, so one tick is a normal
-    // reading and zero is possible. The GAP still covers it either way —
-    // maxGapMs is max(worst gap, time since the last tick or the start).
-    CHECK(imported.ticks > 0 || imported.elapsedMs < kHeartbeatMs,
-          "the UI thread kept ticking during the import (or the import finished "
-          "inside the first heartbeat interval)");
-    // The control is measured HERE, right after the import and before anything
-    // else touches the app: same app, same box, same second, the UI thread
-    // doing the same kind of work with nothing in flight (see kControlFactor).
-    CHECK(imported.maxGap > 0.0, "the heartbeat probe measured the import");
-    TIMING_CHECK(withinControlBudget(mcp, imported.maxGap, "import", imported.logMark),
-                 "no UI-thread gap beyond the budget during the threaded import");
+    // ---- THE TWO PARTS (TEST-STREAMLINE-1 item 4: the whole row ran 67-74 s, past the 60-s cap; SPLIT BY PROOF, every
+    // check kept): `--part roundtrip` - the threaded import, the threaded and synchronous exports, what the archive ships,
+    // the round trip, then a clean quit; `--part lifecycle` - the share file off the UI thread, the cancel that leaves no
+    // orphan, the quit with an archive in flight. Each part boots its own app on its own home and pays its own warm-up.
+    if (gPart == QLatin1String("roundtrip")) {
+        // ---- 1. the THREADED import, with the UI thread under measurement -----
+        const RunStats imported =
+            runArchive(mcp, QStringLiteral("project.importArchiveAsync('%1')").arg(sample), "import");
+        CHECK(imported.started, "project.importArchiveAsync accepted");
+        CHECK(imported.done, "the threaded import completed");
+        CHECK(imported.polls >= 2, "the app answered requests WHILE the import was in flight");
+        // OR the operation finished inside one probe interval and could not be
+        // asked for a tick. That is a live case since the warm-up above: an import
+        // that used to run 2.6-4.5 s (with the UI thread compiling shaders beside
+        // it) now runs 420-470 ms against a 250 ms probe, so one tick is a normal
+        // reading and zero is possible. The GAP still covers it either way —
+        // maxGapMs is max(worst gap, time since the last tick or the start).
+        CHECK(imported.ticks > 0 || imported.elapsedMs < kHeartbeatMs,
+              "the UI thread kept ticking during the import (or the import finished "
+              "inside the first heartbeat interval)");
+        // The control is measured HERE, right after the import and before anything
+        // else touches the app: same app, same box, same second, the UI thread
+        // doing the same kind of work with nothing in flight (see kControlFactor).
+        CHECK(imported.maxGap > 0.0, "the heartbeat probe measured the import");
+        TIMING_CHECK(withinControlBudget(mcp, imported.maxGap, "import", imported.logMark),
+                     "no UI-thread gap beyond the budget during the threaded import");
 
-    const QJsonObject importResult = mcp.runScript(QStringLiteral("project.archiveResult()"))
-                                         .value("result").toObject();
-    std::printf("info: import result: %s\n",
-                QJsonDocument(importResult).toJson(QJsonDocument::Compact).constData());
-    const QString guid = importResult.value("guid").toString();
-    CHECK(importResult.value("ok").toBool() && guid.length() > 10,
-          "the import produced a project");
-    const int importedAssets = importResult.value("assets").toInt();
-    CHECK(importedAssets > 0, "the import ingested assets");
-    if (guid.isEmpty()) { jahshaka.kill(); jahshaka.waitForFinished(5000); return 1; }
+        const QJsonObject importResult = mcp.runScript(QStringLiteral("project.archiveResult()"))
+                                             .value("result").toObject();
+        std::printf("info: import result: %s\n",
+                    QJsonDocument(importResult).toJson(QJsonDocument::Compact).constData());
+        const QString guid = importResult.value("guid").toString();
+        CHECK(importResult.value("ok").toBool() && guid.length() > 10,
+              "the import produced a project");
+        const int importedAssets = importResult.value("assets").toInt();
+        CHECK(importedAssets > 0, "the import ingested assets");
+        if (guid.isEmpty()) { jahshaka.kill(); jahshaka.waitForFinished(5000); return 1; }
 
-    // ---- 2. the THREADED export of that same world ------------------------
-    CHECK(mcp.runScript(QStringLiteral("project.open('%1')").arg(guid)).value("ok").toBool(),
-          "the imported world opens");
-    const int nodes = mcp.runScript(QStringLiteral("scene.nodes().length"))
-                          .value("result").toInt();
-    CHECK(nodes > 1, "the imported world really loaded");
+        // ---- 2. the THREADED export of that same world ------------------------
+        CHECK(mcp.runScript(QStringLiteral("project.open('%1')").arg(guid)).value("ok").toBool(),
+              "the imported world opens");
+        const int nodes = mcp.runScript(QStringLiteral("scene.nodes().length"))
+                              .value("result").toInt();
+        CHECK(nodes > 1, "the imported world really loaded");
 
-    // Make sure the world HAS mesh bakes before it is archived — otherwise the
-    // "no bakes travel" assertion below would pass on an empty set and prove
-    // nothing. Opening bakes lazily already; this is the belt.
-    mcp.runScript(QStringLiteral("assets.bakeAll({dryRun: false})"));
-    const QString storeRoot =
-        mcp.runScript(QStringLiteral("assets.storeRoot()")).value("result").toString();
-    int bakesOnDisk = 0;
-    if (!storeRoot.isEmpty()) {
-        QDirIterator it(storeRoot, QStringList() << QStringLiteral("*.jmb"), QDir::Files,
-                        QDirIterator::Subdirectories);
-        while (it.hasNext()) { it.next(); ++bakesOnDisk; }
-    }
-    std::printf("info: %d mesh bake(s) in the store at %s\n", bakesOnDisk,
-                storeRoot.toUtf8().constData());
-    CHECK(bakesOnDisk > 0, "the world has mesh bakes on disk before the export");
-
-    const RunStats exported =
-        runArchive(mcp, QStringLiteral("project.exportArchiveAsync('%1')").arg(outZip), "export");
-    CHECK(exported.started, "project.exportArchiveAsync accepted");
-    CHECK(exported.done, "the threaded export completed");
-    CHECK(exported.polls >= 2, "the app answered requests WHILE the export was in flight");
-    CHECK(exported.ticks > 0 || exported.elapsedMs < kHeartbeatMs,
-          "the UI thread kept ticking during the export (or the export finished "
-          "inside the first heartbeat interval)");
-    CHECK(exported.maxGap > 0.0, "the heartbeat probe measured the export");
-    TIMING_CHECK(withinControlBudget(mcp, exported.maxGap, "export", exported.logMark),
-                 "no UI-thread gap beyond the budget during the threaded export");
-
-    const QJsonObject exportResult = mcp.runScript(QStringLiteral("project.archiveResult()"))
-                                         .value("result").toObject();
-    std::printf("info: export result: %s\n",
-                QJsonDocument(exportResult).toJson(QJsonDocument::Compact).constData());
-    CHECK(exportResult.value("ok").toBool(), "the export reported success");
-    CHECK(QFileInfo::exists(outZip) && QFileInfo(outZip).size() > 1024,
-          "the archive was written and is not empty");
-
-    // ---- 2a. the SYNCHRONOUS verb keeps the UI thread alive too ------------
-    // (STUDIO-D1 item 4) project.exportArchive answers in the same call, but its
-    // file half (the copies, the catalog file, the zip) runs on a pool thread
-    // while the UI thread pumps: the heartbeat TICKS inside the one request.
-    // A count, not a millisecond bar: before the lane it ticked 0 times.
-    {
-        const QString syncZip = QDir(QFileInfo(outZip).absolutePath()).filePath(
-            QStringLiteral("sync-export.zip"));
-        QFile::remove(syncZip);
-        mcp.runScript(QStringLiteral("app.heartbeat(0)"));
-        mcp.runScript(QStringLiteral("app.heartbeat(50)"));
-        QElapsedTimer syncClock;
-        syncClock.start();
-        const QJsonObject sync = mcp.runScript(
-            QStringLiteral("JSON.stringify(project.exportArchive('%1'))").arg(syncZip));
-        const qint64 syncMs = syncClock.elapsed();
-        const QJsonObject hb = QJsonDocument::fromJson(
-            mcp.runScript(QStringLiteral("JSON.stringify(app.heartbeatStats())"))
-                .value("result").toString().toUtf8()).object();
-        mcp.runScript(QStringLiteral("app.heartbeat(0)"));
-        std::printf("info: [sync export] %lld ms, heartbeat %s\n", static_cast<long long>(syncMs),
-                    QJsonDocument(hb).toJson(QJsonDocument::Compact).constData());
-        CHECK(sync.value("ok").toBool() && QFileInfo::exists(syncZip),
-              "project.exportArchive (synchronous) wrote its archive");
-        CHECK(hb.value("ticks").toInt() > 0,
-              "...and the UI thread kept ticking inside the verb (its file half is the worker's)");
-        QFile::remove(syncZip);
-    }
-
-    // ---- 2b. WHAT the archive ships (PUBLISH_AUDIT #2) --------------------
-    // The mesh bake is derived data keyed on the BUILD that produced it: the
-    // importing installation rejects a foreign bake as stale on sight and the
-    // .jaf ingest cannot preserve the role anyway. The raw exporter has always
-    // filtered role 'bake'; the project archiver silently did not, so every
-    // generation of every bake travelled as dead megabytes. Read the manifest
-    // the archiver actually wrote and hold that line.
-    {
-        QTemporaryDir peek;
-        CHECK(peek.isValid(), "temp dir to read the archive manifest");
-        QString zipError;
-        CHECK(ZipHelper::extract(outZip, peek.path(), &zipError),
-              "the exported archive extracts");
-        QFile manifestFile(QDir(peek.path()).filePath(exportformat::manifestFileName()));
-        CHECK(manifestFile.open(QIODevice::ReadOnly), "the archive carries a manifest.json");
-        const QJsonObject manifest =
-            QJsonDocument::fromJson(manifestFile.readAll()).object();
-        const QJsonArray manifestAssets = manifest.value("assets").toArray();
-        CHECK(!manifestAssets.isEmpty(), "the manifest lists assets");
-        int bakeEntries = 0, jmbEntries = 0, sourceEntries = 0;
-        for (const auto &av : manifestAssets) {
-            for (const auto &fv : av.toObject().value("files").toArray()) {
-                const QJsonObject f = fv.toObject();
-                const QString role = f.value("role").toString();
-                if (role == QLatin1String("bake")) ++bakeEntries;
-                else if (role == QLatin1String("source")) ++sourceEntries;
-                if (f.value("name").toString().endsWith(QLatin1String(".jmb"))) ++jmbEntries;
-            }
+        // Make sure the world HAS mesh bakes before it is archived — otherwise the
+        // "no bakes travel" assertion below would pass on an empty set and prove
+        // nothing. Opening bakes lazily already; this is the belt.
+        mcp.runScript(QStringLiteral("assets.bakeAll({dryRun: false})"));
+        const QString storeRoot =
+            mcp.runScript(QStringLiteral("assets.storeRoot()")).value("result").toString();
+        int bakesOnDisk = 0;
+        if (!storeRoot.isEmpty()) {
+            QDirIterator it(storeRoot, QStringList() << QStringLiteral("*.jmb"), QDir::Files,
+                            QDirIterator::Subdirectories);
+            while (it.hasNext()) { it.next(); ++bakesOnDisk; }
         }
-        std::printf("info: manifest files — source:%d bake:%d .jmb:%d\n",
-                    sourceEntries, bakeEntries, jmbEntries);
-        CHECK(sourceEntries > 0, "the manifest still ships the real sources");
-        CHECK(bakeEntries == 0, "no role:'bake' entry travels in the archive");
-        CHECK(jmbEntries == 0, "no .jmb bake file travels in the archive");
-    }
+        std::printf("info: %d mesh bake(s) in the store at %s\n", bakesOnDisk,
+                    storeRoot.toUtf8().constData());
+        CHECK(bakesOnDisk > 0, "the world has mesh bakes on disk before the export");
 
-    // ---- 3. CORRECTNESS: the synchronous verb and the threaded one agree ---
-    // Re-importing what the threaded export wrote must produce the same world.
-    // This is the half that is not allowed to move while the threading does.
-    mcp.runScript(QStringLiteral("project.close()"));
-    const QJsonObject roundTrip = mcp.runScript(
-        QStringLiteral("project.importArchive('%1')").arg(outZip));
-    std::printf("info: round-trip import: %s\n",
-                QJsonDocument(roundTrip).toJson(QJsonDocument::Compact).constData());
-    CHECK(roundTrip.value("ok").toBool(), "the exported archive imports back (synchronous verb)");
-    const QJsonObject rt = roundTrip.value("result").toObject();
-    CHECK(rt.value("assets").toInt() == importedAssets,
-          "the round trip carries the same asset count");
-    const QString rtGuid = rt.value("guid").toString();
-    CHECK(mcp.runScript(QStringLiteral("project.open('%1')").arg(rtGuid)).value("ok").toBool(),
-          "the round-tripped world opens");
-    CHECK(mcp.runScript(QStringLiteral("scene.nodes().length")).value("result").toInt() == nodes,
-          "the round-tripped world has the same node count");
+        const RunStats exported =
+            runArchive(mcp, QStringLiteral("project.exportArchiveAsync('%1')").arg(outZip), "export");
+        CHECK(exported.started, "project.exportArchiveAsync accepted");
+        CHECK(exported.done, "the threaded export completed");
+        CHECK(exported.polls >= 2, "the app answered requests WHILE the export was in flight");
+        CHECK(exported.ticks > 0 || exported.elapsedMs < kHeartbeatMs,
+              "the UI thread kept ticking during the export (or the export finished "
+              "inside the first heartbeat interval)");
+        CHECK(exported.maxGap > 0.0, "the heartbeat probe measured the export");
+        TIMING_CHECK(withinControlBudget(mcp, exported.maxGap, "export", exported.logMark),
+                     "no UI-thread gap beyond the budget during the threaded export");
 
-    // ---- 3b. THE SHARE FILE IS WRITTEN OFF THE UI THREAD (EXPORT-THREAD-1) ----
-    // assets.exportBundle of a 200-entry pack: the catalog is read on the UI
-    // thread, the bytes / payload / zip are a worker's, and the verb waits with
-    // the event loop turning. PUSH asserts COUNTS — the write ran on a worker,
-    // the render loop ticked and drew during it; the stage-close row asserts the
-    // LAW: the export adds at most ONE FRAME's budget (16.7 ms at 60 fps) to the
-    // UI thread. THE VERB MEASURES THE ONE THING IT OWNS (MAIN-REDS-1 stage 5):
-    // `worstUiStepMs`, the longest stretch its own work held the UI thread
-    // between two event-loop turns, and the loop's `ticks` / `framesRendered`
-    // over its span (frames, the driver's count). The old reading — the worst
-    // heartbeat gap over the export minus the worst gap of a 2 s control window
-    // of MCP-driven frames, two maxima of two different stretches of wall clock,
-    // each a Debug frame plus a round trip — measured the frames, not the export.
-    {
-        const double kFrameBudgetMs = 1000.0 / 60.0;
-        const int kPackEntries = 200;
-        // THE BIG PACK (MAIN-REDS-1's fix round): 400 more TINY pictures (8x8: the catalog's cost is per row, not
-        // per byte) make a 600-entry pack, exported in the stage-close row only — the catalog half's set reads are
-        // chunked by their measured cost, so its longest stretch must not grow with the set.
-        const int kBigExtra = jahtest::timingBarsArmed() ? 400 : 0;
-        QTemporaryDir pics;
-        CHECK(pics.isValid(), "a directory for the pack's pictures");
-        QStringList files;
-        for (int i = 0; i < kPackEntries + kBigExtra; ++i) {
-            // 256x256 of per-picture noise: every file different, ~190 KB of PNG
-            // each (~38 MB of owed bytes), so the write is many frames long.
-            const int side = i < kPackEntries ? 256 : 8;
-            QImage img(side, side, QImage::Format_RGB32);
-            quint32 x = 2463534242u + quint32(i) * 7919u;
-            for (int y = 0; y < img.height(); ++y) {
-                QRgb *row = reinterpret_cast<QRgb *>(img.scanLine(y));
-                for (int c = 0; c < img.width(); ++c) {
-                    x ^= x << 13; x ^= x >> 17; x ^= x << 5;
-                    row[c] = qRgb(x & 0xff, (x >> 8) & 0xff, (x >> 16) & 0xff);
+        const QJsonObject exportResult = mcp.runScript(QStringLiteral("project.archiveResult()"))
+                                             .value("result").toObject();
+        std::printf("info: export result: %s\n",
+                    QJsonDocument(exportResult).toJson(QJsonDocument::Compact).constData());
+        CHECK(exportResult.value("ok").toBool(), "the export reported success");
+        CHECK(QFileInfo::exists(outZip) && QFileInfo(outZip).size() > 1024,
+              "the archive was written and is not empty");
+
+        // ---- 2a. the SYNCHRONOUS verb keeps the UI thread alive too ------------
+        // (STUDIO-D1 item 4) project.exportArchive answers in the same call, but its
+        // file half (the copies, the catalog file, the zip) runs on a pool thread
+        // while the UI thread pumps: the heartbeat TICKS inside the one request.
+        // A count, not a millisecond bar: before the lane it ticked 0 times.
+        {
+            const QString syncZip = QDir(QFileInfo(outZip).absolutePath()).filePath(
+                QStringLiteral("sync-export.zip"));
+            QFile::remove(syncZip);
+            mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+            mcp.runScript(QStringLiteral("app.heartbeat(50)"));
+            QElapsedTimer syncClock;
+            syncClock.start();
+            const QJsonObject sync = mcp.runScript(
+                QStringLiteral("JSON.stringify(project.exportArchive('%1'))").arg(syncZip));
+            const qint64 syncMs = syncClock.elapsed();
+            const QJsonObject hb = QJsonDocument::fromJson(
+                mcp.runScript(QStringLiteral("JSON.stringify(app.heartbeatStats())"))
+                    .value("result").toString().toUtf8()).object();
+            mcp.runScript(QStringLiteral("app.heartbeat(0)"));
+            std::printf("info: [sync export] %lld ms, heartbeat %s\n", static_cast<long long>(syncMs),
+                        QJsonDocument(hb).toJson(QJsonDocument::Compact).constData());
+            CHECK(sync.value("ok").toBool() && QFileInfo::exists(syncZip),
+                  "project.exportArchive (synchronous) wrote its archive");
+            CHECK(hb.value("ticks").toInt() > 0,
+                  "...and the UI thread kept ticking inside the verb (its file half is the worker's)");
+            QFile::remove(syncZip);
+        }
+
+        // ---- 2b. WHAT the archive ships (PUBLISH_AUDIT #2) --------------------
+        // The mesh bake is derived data keyed on the BUILD that produced it: the
+        // importing installation rejects a foreign bake as stale on sight and the
+        // .jaf ingest cannot preserve the role anyway. The raw exporter has always
+        // filtered role 'bake'; the project archiver silently did not, so every
+        // generation of every bake travelled as dead megabytes. Read the manifest
+        // the archiver actually wrote and hold that line.
+        {
+            QTemporaryDir peek;
+            CHECK(peek.isValid(), "temp dir to read the archive manifest");
+            QString zipError;
+            CHECK(ZipHelper::extract(outZip, peek.path(), &zipError),
+                  "the exported archive extracts");
+            QFile manifestFile(QDir(peek.path()).filePath(exportformat::manifestFileName()));
+            CHECK(manifestFile.open(QIODevice::ReadOnly), "the archive carries a manifest.json");
+            const QJsonObject manifest =
+                QJsonDocument::fromJson(manifestFile.readAll()).object();
+            const QJsonArray manifestAssets = manifest.value("assets").toArray();
+            CHECK(!manifestAssets.isEmpty(), "the manifest lists assets");
+            int bakeEntries = 0, jmbEntries = 0, sourceEntries = 0;
+            for (const auto &av : manifestAssets) {
+                for (const auto &fv : av.toObject().value("files").toArray()) {
+                    const QJsonObject f = fv.toObject();
+                    const QString role = f.value("role").toString();
+                    if (role == QLatin1String("bake")) ++bakeEntries;
+                    else if (role == QLatin1String("source")) ++sourceEntries;
+                    if (f.value("name").toString().endsWith(QLatin1String(".jmb"))) ++jmbEntries;
                 }
             }
-            const QString f = QDir(pics.path()).filePath(QStringLiteral("pack%1.png").arg(i));
-            img.save(f);
-            files << f;
+            std::printf("info: manifest files — source:%d bake:%d .jmb:%d\n",
+                        sourceEntries, bakeEntries, jmbEntries);
+            CHECK(sourceEntries > 0, "the manifest still ships the real sources");
+            CHECK(bakeEntries == 0, "no role:'bake' entry travels in the archive");
+            CHECK(jmbEntries == 0, "no .jmb bake file travels in the archive");
         }
-        QStringList guids;
-        for (int start = 0; start < files.size(); start += 25) {
-            QStringList batch;
-            for (int i = start; i < qMin(int(files.size()), start + 25); ++i)
-                batch << QStringLiteral("'%1'").arg(files.at(i));
-            const QJsonArray landed = QJsonDocument::fromJson(
-                mcp.runScript(QStringLiteral(
-                    "JSON.stringify([%1].map(function(f){return assets.importFile(f)}))")
-                                  .arg(batch.join(',')))
-                    .value("result").toString().toUtf8()).array();
-            for (const auto &g : landed) guids << QStringLiteral("'%1'").arg(g.toString());
-        }
-        std::printf("info: [pack] %lld pictures imported for the packs\n",
-                    static_cast<long long>(guids.size()));
-        CHECK(guids.size() == kPackEntries + kBigExtra, "the pictures are library textures");
 
-        // ONE EXPORT, ITS LAWS: the file, the worker, the render loop drawing every tick, and (stage-close) the
-        // export's longest own UI-thread block under one frame's budget.
-        const auto exportPack = [&](const QStringList &entries, const char *label) {
-            const QString packPath = QDir::current().filePath(QStringLiteral("pack-%1.jbundle").arg(entries.size()));
-            QFile::remove(packPath);
-            const QJsonObject written = QJsonDocument::fromJson(
-                mcp.runScript(QStringLiteral("JSON.stringify(assets.exportBundle([%1], '%2'))")
-                                  .arg(entries.join(','), packPath))
-                    .value("result").toString().toUtf8()).object();
-            const double worstStep = written.value("worstUiStepMs").toDouble(-1.0);
-            const qlonglong ticks = qlonglong(written.value("ticks").toDouble());
-            const qlonglong drawn = qlonglong(written.value("framesRendered").toDouble());
-            std::printf("info: [%s] exportBundle of %d entries: %lld bytes, worker=%d | the export's worst UI step "
-                        "%.2f ms (bar %.1f) | render loop over its span: %lld ticks, %lld frames drawn\n", label,
-                        written.value("assets").toInt(),
-                        static_cast<long long>(written.value("bytes").toDouble()),
-                        int(written.value("worker").toBool()), worstStep, kFrameBudgetMs, ticks, drawn);
-            CHECK(written.value("path").toString() == packPath && QFileInfo(packPath).size() > 1024 * 1024,
-                  "assets.exportBundle wrote the pack (its 200 large pictures: over a megabyte)");
-            CHECK(written.value("kind").toString() == QLatin1String("pack")
-                      && written.value("assets").toInt() >= entries.size(),
-                  "...as a pack carrying every entry");
-            CHECK(written.value("worker").toBool(), "...and the write ran on a worker, not the UI thread");
-            CHECK(ticks > 0 && drawn >= ticks - 1,
-                  "the render loop kept drawing while the pack was written (every tick of the span drew, but the one "
-                  "in flight at its end)");
-            TIMING_CHECK(worstStep >= 0.0 && worstStep <= kFrameBudgetMs,
-                         "the export adds at most one frame's budget to the UI thread: its longest own block is under "
-                         "16.7 ms");
-            QFile::remove(packPath);
-        };
-        exportPack(guids.mid(0, kPackEntries), "pack");
-        if (kBigExtra) exportPack(guids, "big pack");
+        // ---- 3. CORRECTNESS: the synchronous verb and the threaded one agree ---
+        // Re-importing what the threaded export wrote must produce the same world.
+        // This is the half that is not allowed to move while the threading does.
+        mcp.runScript(QStringLiteral("project.close()"));
+        const QJsonObject roundTrip = mcp.runScript(
+            QStringLiteral("project.importArchive('%1')").arg(outZip));
+        std::printf("info: round-trip import: %s\n",
+                    QJsonDocument(roundTrip).toJson(QJsonDocument::Compact).constData());
+        CHECK(roundTrip.value("ok").toBool(), "the exported archive imports back (synchronous verb)");
+        const QJsonObject rt = roundTrip.value("result").toObject();
+        CHECK(rt.value("assets").toInt() == importedAssets,
+              "the round trip carries the same asset count");
+        const QString rtGuid = rt.value("guid").toString();
+        CHECK(mcp.runScript(QStringLiteral("project.open('%1')").arg(rtGuid)).value("ok").toBool(),
+              "the round-tripped world opens");
+        CHECK(mcp.runScript(QStringLiteral("scene.nodes().length")).value("result").toInt() == nodes,
+              "the round-tripped world has the same node count");
+
     }
 
-    // ---- 4. CANCEL leaves no orphan ---------------------------------------
-    mcp.runScript(QStringLiteral("project.close()"));
-    const int projectsBefore =
-        mcp.runScript(QStringLiteral("project.list().length")).value("result").toInt();
-    CHECK(mcp.runScript(QStringLiteral("project.importArchiveAsync('%1')").arg(sample))
-              .value("ok").toBool(), "a third import started, to be cancelled");
-    const bool cancelAccepted =
-        mcp.runScript(QStringLiteral("project.cancelArchive()")).value("result").toBool();
-    std::printf("info: cancel accepted: %d\n", int(cancelAccepted));
-    QElapsedTimer cancelTimer;
-    cancelTimer.start();
-    bool idle = false;
-    while (cancelTimer.elapsed() < kOpBudgetMs) {
-        if (mcp.runScript(QStringLiteral("project.archiveState()")).value("result").toString()
-            == QLatin1String("idle")) { idle = true; break; }
-        QThread::msleep(50);
-    }
-    CHECK(idle, "the cancelled import stopped");
-    const int projectsAfter =
-        mcp.runScript(QStringLiteral("project.list().length")).value("result").toInt();
-    std::printf("info: projects %d -> %d after the cancelled import\n",
-                projectsBefore, projectsAfter);
-    // Either the cancel landed before the catalog phase (no row was ever made)
-    // or it landed inside it and the archiver deleted the row it had started.
-    // Both are "zero orphans"; a THIRD project is not.
-    if (cancelAccepted)
-        CHECK(projectsAfter == projectsBefore, "a cancelled import leaves no orphan project");
-    else
-        std::printf("info: the import finished before the cancel could be delivered\n");
+    if (gPart == QLatin1String("lifecycle")) {
+        // ---- 3b. THE SHARE FILE IS WRITTEN OFF THE UI THREAD (EXPORT-THREAD-1) ----
+        // assets.exportBundle of a 200-entry pack: the catalog is read on the UI
+        // thread, the bytes / payload / zip are a worker's, and the verb waits with
+        // the event loop turning. PUSH asserts COUNTS — the write ran on a worker,
+        // the render loop ticked and drew during it; the stage-close row asserts the
+        // LAW: the export adds at most ONE FRAME's budget (16.7 ms at 60 fps) to the
+        // UI thread. THE VERB MEASURES THE ONE THING IT OWNS (MAIN-REDS-1 stage 5):
+        // `worstUiStepMs`, the longest stretch its own work held the UI thread
+        // between two event-loop turns, and the loop's `ticks` / `framesRendered`
+        // over its span (frames, the driver's count). The old reading — the worst
+        // heartbeat gap over the export minus the worst gap of a 2 s control window
+        // of MCP-driven frames, two maxima of two different stretches of wall clock,
+        // each a Debug frame plus a round trip — measured the frames, not the export.
+        {
+            const double kFrameBudgetMs = 1000.0 / 60.0;
+            const int kPackEntries = 200;
+            // THE BIG PACK (MAIN-REDS-1's fix round): 400 more TINY pictures (8x8: the catalog's cost is per row, not
+            // per byte) make a 600-entry pack, exported in the stage-close row only — the catalog half's set reads are
+            // chunked by their measured cost, so its longest stretch must not grow with the set.
+            const int kBigExtra = jahtest::timingBarsArmed() ? 400 : 0;
+            QTemporaryDir pics;
+            CHECK(pics.isValid(), "a directory for the pack's pictures");
+            QStringList files;
+            for (int i = 0; i < kPackEntries + kBigExtra; ++i) {
+                // 256x256 of per-picture noise: every file different, ~190 KB of PNG
+                // each (~38 MB of owed bytes), so the write is many frames long.
+                const int side = i < kPackEntries ? 256 : 8;
+                QImage img(side, side, QImage::Format_RGB32);
+                quint32 x = 2463534242u + quint32(i) * 7919u;
+                for (int y = 0; y < img.height(); ++y) {
+                    QRgb *row = reinterpret_cast<QRgb *>(img.scanLine(y));
+                    for (int c = 0; c < img.width(); ++c) {
+                        x ^= x << 13; x ^= x >> 17; x ^= x << 5;
+                        row[c] = qRgb(x & 0xff, (x >> 8) & 0xff, (x >> 16) & 0xff);
+                    }
+                }
+                const QString f = QDir(pics.path()).filePath(QStringLiteral("pack%1.png").arg(i));
+                img.save(f);
+                files << f;
+            }
+            QStringList guids;
+            for (int start = 0; start < files.size(); start += 25) {
+                QStringList batch;
+                for (int i = start; i < qMin(int(files.size()), start + 25); ++i)
+                    batch << QStringLiteral("'%1'").arg(files.at(i));
+                const QJsonArray landed = QJsonDocument::fromJson(
+                    mcp.runScript(QStringLiteral(
+                        "JSON.stringify([%1].map(function(f){return assets.importFile(f)}))")
+                                      .arg(batch.join(',')))
+                        .value("result").toString().toUtf8()).array();
+                for (const auto &g : landed) guids << QStringLiteral("'%1'").arg(g.toString());
+            }
+            std::printf("info: [pack] %lld pictures imported for the packs\n",
+                        static_cast<long long>(guids.size()));
+            CHECK(guids.size() == kPackEntries + kBigExtra, "the pictures are library textures");
 
-    // ---- 5. quitting with an archive IN FLIGHT ----------------------------
-    // shutdownArchives() is step 2 of the shutdown order; this is the
-    // import.shutdown zombie applied to the archiver.
-    CHECK(mcp.runScript(QStringLiteral("project.importArchiveAsync('%1')").arg(sample))
-              .value("ok").toBool(), "a fourth import started, to be quit through");
-    // No project is open at this point (the cancel case closed it), which used
-    // to mean a modal "Unsaved Changes" box at quit — the close-path zombie
-    // this lane fixed in MainWindow::closeEvent. Quitting from here is
-    // therefore part of the assertion, not an accident.
+            // ONE EXPORT, ITS LAWS: the file, the worker, the render loop drawing every tick, and (stage-close) the
+            // export's longest own UI-thread block under one frame's budget.
+            const auto exportPack = [&](const QStringList &entries, const char *label) {
+                const QString packPath = QDir::current().filePath(QStringLiteral("pack-%1.jbundle").arg(entries.size()));
+                QFile::remove(packPath);
+                const QJsonObject written = QJsonDocument::fromJson(
+                    mcp.runScript(QStringLiteral("JSON.stringify(assets.exportBundle([%1], '%2'))")
+                                      .arg(entries.join(','), packPath))
+                        .value("result").toString().toUtf8()).object();
+                const double worstStep = written.value("worstUiStepMs").toDouble(-1.0);
+                const qlonglong ticks = qlonglong(written.value("ticks").toDouble());
+                const qlonglong drawn = qlonglong(written.value("framesRendered").toDouble());
+                std::printf("info: [%s] exportBundle of %d entries: %lld bytes, worker=%d | the export's worst UI step "
+                            "%.2f ms (bar %.1f) | render loop over its span: %lld ticks, %lld frames drawn\n", label,
+                            written.value("assets").toInt(),
+                            static_cast<long long>(written.value("bytes").toDouble()),
+                            int(written.value("worker").toBool()), worstStep, kFrameBudgetMs, ticks, drawn);
+                CHECK(written.value("path").toString() == packPath && QFileInfo(packPath).size() > 1024 * 1024,
+                      "assets.exportBundle wrote the pack (its 200 large pictures: over a megabyte)");
+                CHECK(written.value("kind").toString() == QLatin1String("pack")
+                          && written.value("assets").toInt() >= entries.size(),
+                      "...as a pack carrying every entry");
+                CHECK(written.value("worker").toBool(), "...and the write ran on a worker, not the UI thread");
+                CHECK(ticks > 0 && drawn >= ticks - 1,
+                      "the render loop kept drawing while the pack was written (every tick of the span drew, but the one "
+                      "in flight at its end)");
+                TIMING_CHECK(worstStep >= 0.0 && worstStep <= kFrameBudgetMs,
+                             "the export adds at most one frame's budget to the UI thread: its longest own block is under "
+                             "16.7 ms");
+                QFile::remove(packPath);
+            };
+            exportPack(guids.mid(0, kPackEntries), "pack");
+            if (kBigExtra) exportPack(guids, "big pack");
+        }
+
+        // ---- 4. CANCEL leaves no orphan ---------------------------------------
+        mcp.runScript(QStringLiteral("project.close()"));
+        const int projectsBefore =
+            mcp.runScript(QStringLiteral("project.list().length")).value("result").toInt();
+        CHECK(mcp.runScript(QStringLiteral("project.importArchiveAsync('%1')").arg(sample))
+                  .value("ok").toBool(), "a third import started, to be cancelled");
+        const bool cancelAccepted =
+            mcp.runScript(QStringLiteral("project.cancelArchive()")).value("result").toBool();
+        std::printf("info: cancel accepted: %d\n", int(cancelAccepted));
+        QElapsedTimer cancelTimer;
+        cancelTimer.start();
+        bool idle = false;
+        while (cancelTimer.elapsed() < kOpBudgetMs) {
+            if (mcp.runScript(QStringLiteral("project.archiveState()")).value("result").toString()
+                == QLatin1String("idle")) { idle = true; break; }
+            QThread::msleep(50);
+        }
+        CHECK(idle, "the cancelled import stopped");
+        const int projectsAfter =
+            mcp.runScript(QStringLiteral("project.list().length")).value("result").toInt();
+        std::printf("info: projects %d -> %d after the cancelled import\n",
+                    projectsBefore, projectsAfter);
+        // Either the cancel landed before the catalog phase (no row was ever made)
+        // or it landed inside it and the archiver deleted the row it had started.
+        // Both are "zero orphans"; a THIRD project is not.
+        if (cancelAccepted)
+            CHECK(projectsAfter == projectsBefore, "a cancelled import leaves no orphan project");
+        else
+            std::printf("info: the import finished before the cancel could be delivered\n");
+
+        // ---- 5. quitting with an archive IN FLIGHT ----------------------------
+        // shutdownArchives() is step 2 of the shutdown order; this is the
+        // import.shutdown zombie applied to the archiver.
+        CHECK(mcp.runScript(QStringLiteral("project.importArchiveAsync('%1')").arg(sample))
+                  .value("ok").toBool(), "a fourth import started, to be quit through");
+        // No project is open at this point (the cancel case closed it), which used
+        // to mean a modal "Unsaved Changes" box at quit — the close-path zombie
+        // this lane fixed in MainWindow::closeEvent. Quitting from here is
+        // therefore part of the assertion, not an accident.
+    } else {
+        // the roundtrip part ends with a clean quit - nothing in flight; the in-flight quit is the lifecycle part's
+        mcp.runScript(QStringLiteral("project.close()"));
+    }
     mcp.quit();
     QElapsedTimer exitTimer;
     exitTimer.start();
     const bool exited = jahshaka.waitForFinished(kExitBudgetMs);
     std::printf("info: exit after %lld ms\n", static_cast<long long>(exitTimer.elapsed()));
-    CHECK(exited, "process terminated within the exit budget with an archive in flight");
+    CHECK(exited, gPart == QLatin1String("lifecycle") ? "process terminated within the exit budget with an archive in flight"
+                                                       : "process terminated within the exit budget (the clean quit)");
     if (!exited) { jahshaka.kill(); jahshaka.waitForFinished(5000); }
     else {
         const bool clean = jahshaka.exitStatus() == QProcess::NormalExit && jahshaka.exitCode() == 0;
