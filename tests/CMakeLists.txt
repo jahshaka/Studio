@@ -1288,7 +1288,6 @@ set(JAH_MEASURE_ROWS
     bundle.writer
     gpu.cutout_soak.primitives
     gpu.cutout_soak.tornado
-    math.parity
     test_engine
 )
 set_property(GLOBAL PROPERTY JAH_MEASURE_SEEN "")

@@ -53,53 +53,67 @@ static bool bitEq(float a, float b)
     return std::memcmp(&a, &b, sizeof(float)) == 0;
 }
 
+// THE CHECKS' NAMES ARE COMPOSED ONLY FOR A FAILURE (TEST-STREAMLINE-1 5c: the row ran 19.3 s solo against a CPU row's
+// 10 s, its 26.8 M checks each building one to three std::string temporaries for a name no passing check prints; every
+// comparison, its count and its failure line are unchanged).
+static void report(const char *what, float q, float i)
+{
+    if (failures < 40)
+        std::printf("FAIL %-42s qt=%.9g (%08x) iris=%.9g (%08x)\n", what, q,
+                    *(unsigned *)&q, i, *(unsigned *)&i);
+    ++failures;
+}
+
 static void chk(const char *what, float q, float i)
 {
     ++checks;
+    if (!bitEq(q, i)) report(what, q, i);
+}
+
+// `what` + `sub` (".x", "(r,c)") - joined only when the check fails
+static void chkSub(const char *what, const char *sub, float q, float i)
+{
+    ++checks;
     if (!bitEq(q, i)) {
-        if (failures < 40)
-            std::printf("FAIL %-42s qt=%.9g (%08x) iris=%.9g (%08x)\n", what, q,
-                        *(unsigned *)&q, i, *(unsigned *)&i);
-        ++failures;
+        char name[256];
+        std::snprintf(name, sizeof(name), "%s%s", what, sub);
+        report(name, q, i);
     }
 }
 
 static void chk3(const char *what, QVector3D q, iris::Vec3 i)
 {
-    std::string s(what);
-    chk((s + ".x").c_str(), q.x(), i.x());
-    chk((s + ".y").c_str(), q.y(), i.y());
-    chk((s + ".z").c_str(), q.z(), i.z());
+    chkSub(what, ".x", q.x(), i.x());
+    chkSub(what, ".y", q.y(), i.y());
+    chkSub(what, ".z", q.z(), i.z());
 }
 static void chk4(const char *what, QVector4D q, iris::Vec4 i)
 {
-    std::string s(what);
-    chk((s + ".x").c_str(), q.x(), i.x());
-    chk((s + ".y").c_str(), q.y(), i.y());
-    chk((s + ".z").c_str(), q.z(), i.z());
-    chk((s + ".w").c_str(), q.w(), i.w());
+    chkSub(what, ".x", q.x(), i.x());
+    chkSub(what, ".y", q.y(), i.y());
+    chkSub(what, ".z", q.z(), i.z());
+    chkSub(what, ".w", q.w(), i.w());
 }
 static void chkq(const char *what, QQuaternion q, iris::Quat i)
 {
-    std::string s(what);
-    chk((s + ".s").c_str(), q.scalar(), i.scalar());
-    chk((s + ".x").c_str(), q.x(), i.x());
-    chk((s + ".y").c_str(), q.y(), i.y());
-    chk((s + ".z").c_str(), q.z(), i.z());
+    chkSub(what, ".s", q.scalar(), i.scalar());
+    chkSub(what, ".x", q.x(), i.x());
+    chkSub(what, ".y", q.y(), i.y());
+    chkSub(what, ".z", q.z(), i.z());
 }
+static const char *const kCell[4][4] = {{"(0,0)", "(0,1)", "(0,2)", "(0,3)"}, {"(1,0)", "(1,1)", "(1,2)", "(1,3)"},
+                                        {"(2,0)", "(2,1)", "(2,2)", "(2,3)"}, {"(3,0)", "(3,1)", "(3,2)", "(3,3)"}};
 static void chkm(const char *what, const QMatrix4x4 &q, const iris::Mat4 &i)
 {
-    std::string s(what);
     for (int r = 0; r < 4; ++r)
         for (int c = 0; c < 4; ++c)
-            chk((s + "(" + char('0' + r) + "," + char('0' + c) + ")").c_str(), q(r, c), i(r, c));
+            chkSub(what, kCell[r][c], q(r, c), i(r, c));
 }
 static void chkm3(const char *what, const QMatrix3x3 &q, const iris::Mat3 &i)
 {
-    std::string s(what);
     for (int r = 0; r < 3; ++r)
         for (int c = 0; c < 3; ++c)
-            chk((s + "(" + char('0' + r) + "," + char('0' + c) + ")").c_str(), q(r, c), i(r, c));
+            chkSub(what, kCell[r][c], q(r, c), i(r, c));
 }
 
 int main()

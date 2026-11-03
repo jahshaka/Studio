@@ -203,7 +203,7 @@ material.live_roundtrip.import 17.11  solo, the card lock held, :72, warm (2026-
 material.live_roundtrip.restore 13.12  solo, the card lock held, :72, warm (2026-10-27: the shared app cache seeded)
 materialpreview.engine 2.55  quiet n=46
 materials.bundle 0.00  ship 3a0422b4e (2026-10-13)
-math.parity 20.37  quiet n=23
+math.parity 1.24  quiet (100 % CPU-idle), CPU, ctest, solo, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: the check names composed only for a failure - the same 26,830,103 checks; was 20.37 quiet n=23, labelled measure by its price)
 mcp.e2e 28.30  ship 3a0422b4e (2026-10-13)
 mcp.e2e.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 meshbake.archive_bakes.import 6.26  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 3a item 6, 2026-11-03: the NULL render system - every verb a document verb; was 18.75 on the card, the card lock held, :71, ORPHAN-REDS-1)
