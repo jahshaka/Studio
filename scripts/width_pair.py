@@ -28,7 +28,9 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
              price and the 60-s cap.
   THE TREE   the run holds the tree's check mark (URGENT #153: jah-check.pid in the tree's git dir, the mark spec.sh test
              and the pre-commit hook read) for its whole length - no other check runs and no commit lands in the tree
-             while it measures; a live mark of another check REFUSES the run (exit 2) before any hold.
+             while it measures; a live mark of another check REFUSES the run (exit 2) before any hold. The build's
+             .ninja_log is stamped at the start and read before every hold and after the last: a build during the run
+             VOIDS it (exit 1, named; spec.py's #153b rule - the mark cannot stop a `cmake --build`).
   THE RULE   (the spec's stage 4; the bars the lead ruled on the 4-5 audit, 2026-11-03) ADOPT THE WIDEST WIDTH whose every run
              gives every row the OUTCOME width 1 gave it (a green row PASS; a red row its verdict AND its FAIL lines, equal
              line for line - a law red at width 1 that turns into a device loss at width 3 is still FAIL, and is refused), with no out-of-device-memory line, and where every run of width W
@@ -52,7 +54,7 @@ usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <
   --tree       the tree whose check mark the run holds (default the build's CMAKE_HOME_DIRECTORY)
   --budget-scale  every class budget x this factor (the toys' seconds-long rows; never below 1 on the card)
   --plan    the rows, the exclusions with their reasons, the parts and the estimated card time - nothing run, no lock.
-  exit      0 a width adopted (the line `ADOPT WIDTH <w>`); 1 width 1 unstable or the run incomplete; 2 refused (usage, a bad
+  exit      0 a width adopted (the line `ADOPT WIDTH <w>`); 1 width 1 unstable, the run incomplete or VOID; 2 refused (usage, a bad
             display, no rows); 75 the card stayed held (a hold's wait ran out: call again).
 The evidence: <out>/runs.jsonl (one line per run), <out>/<run>/ctest.out + ctest.log, <out>/summary.tsv.
 """
@@ -450,6 +452,16 @@ def total_wall(rs):
     return sum(r["ctest_wall_s"] for r in rs) * parts / len(rs)
 
 
+def ninja_stamp(build):
+    """(size, mtime_ns) of the build's .ninja_log, or None - it moves when and only when ninja runs a step (spec.py
+    _ninja_stamp, URGENT #153b)."""
+    try:
+        st = os.stat(os.path.join(build, ".ninja_log"))
+        return (st.st_size, st.st_mtime_ns)
+    except OSError:
+        return None
+
+
 def judge(recs, price, row_cap, budget=None, inflate=INFLATE, gain=GAIN, headroom=VRAM_HEADROOM):
     """(the adopted width or None, [lines], {row: why no width covers it}) - THE RULE of the docstring, every reason printed.
     `budget`: {row: class budget s}."""
@@ -656,13 +668,29 @@ def measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, 
     print(f"width_pair: the card's memory.total {total_mb if total_mb is not None else 'UNREAD'} MB (the headroom bar "
           f"{100 * VRAM_HEADROOM:.0f} %)", flush=True)
     recs = []
+    built0 = ninja_stamp(build)
+
+    def rebuilt(where):
+        """THE BUILD GUARD (the final CPU audit's finding 4; spec.py's #153b rule): the check mark stops a commit and a second
+        check, never a `cmake --build`; a build mid-run would judge width 1 and width 3 on different binaries."""
+        if ninja_stamp(build) == built0:
+            return False
+        print(f"width_pair: VOID {where}: the tree's build ran during the width run ({build}/.ninja_log moved) - the widths "
+              f"would be judged on different binaries; the records so far are kept, nothing is judged; never build a tree "
+              f"while its check runs (exit 1)", flush=True)
+        return True
+
     for w in order:
         for k, p in enumerate(ps, 1):
+            if rebuilt(f"before width {w} part {k}"):
+                return 1
             r = run_one(build, out, w, k, p, lock, display, wait_max, smi, total_mb)
             recs.append(r)
             if not r["held"]:
                 print("width_pair: the card stayed held - stopped; the records so far are kept, call again (exit 75)")
                 return 75
+    if rebuilt("after the last hold"):
+        return 1
     for ln in summary(recs, price, out):
         print(ln)
     adopt, lines, uncovered = judge(recs, price, row_cap, budget)

@@ -54,6 +54,7 @@ case "$1" in
   conflict) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 1 ] && { echo "a neighbour on the card"; exit 1; }; sleep 0.05; i=$((i+1)); done ;;
   oom) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
   over) s=0; [ "$(n)" -gt 1 ] && s=1; sleep 1.2; [ "$(n)" -gt 1 ] && s=1; [ $s = 1 ] && sleep 0.1; exit 0 ;;
+  build) echo "1 2 3 toy.o 0" >> "$NINJALOG"; sleep 0.2 ;;
   slow) sleep 0.15; [ "$(n)" -gt 1 ] && sleep 1.0; exit 0 ;;
   flaky) c="$VRAMDIR/../flaky.count"; k=$(cat "$c" 2>/dev/null || echo 0); echo $((k+1)) > "$c"; [ "$k" = 2 ] && exit 1; sleep 0.1 ;;
 esac
@@ -127,7 +128,7 @@ def run(b, *args, env=None):
     log = os.path.join(T, "lock.log")
     if os.path.exists(log):
         os.remove(log)
-    e = dict(os.environ, VRAMDIR=VR, LOCKLOG=log, MARKFILE=MARK,
+    e = dict(os.environ, VRAMDIR=VR, LOCKLOG=log, MARKFILE=MARK, NINJALOG=os.path.join(b, ".ninja_log"),
              CLOBBER=os.path.join(b, "Testing", "Temporary"), **(env or {}))
     out = os.path.join(T, os.path.basename(b) + "-out")
     shutil.rmtree(out, ignore_errors=True)
@@ -329,6 +330,13 @@ elif PART == "log":
           and all(r.get("log", "").endswith("ctest.log") and os.path.exists(r["log"]) for r in recs),
           f"clobber: the OOM line read from the run's own ctest.log, width 3 refused, ADOPT WIDTH 2 (rc {rc}) "
           f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
+
+    # 17b. A BUILD DURING THE RUN (the final CPU audit's finding 4): a row "builds" the toy tree (appends to its .ninja_log) in
+    #      the width-1 hold - the run is VOID before the width-2 hold, exit 1, nothing judged (the base ran on and adopted)
+    bb = toy("rebuilt", [("toy.build", "build", "")])
+    rc, out, labels, recs = run(bb, "--display", ":71", "--order", "1,2")
+    check(rc == 1 and labels == ["width-w1-p1"] and "VOID before width 2 part 1" in out and ".ninja_log moved" in out
+          and "ADOPT" not in out, f"rebuilt: a build mid-run voids it before the next hold, exit 1 (rc {rc}, holds {labels})")
 
     # 18. ANOTHER CHECK's LIVE MARK in the tree refuses the run before any hold (this test's own pid: alive)
     with open(MARK, "w") as fh:
