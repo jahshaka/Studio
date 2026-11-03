@@ -278,6 +278,13 @@ def tooling_cases(gs, graph, build, inv0):
           "a shared-harness path alone (tests/support/fresh_home.sh): ONE row per class it reaches (%s), the tools' rows "
           "and the smoke row beside them, nothing else (%d other)" % (", ".join("%s %s" % kv for kv in sorted(picks.items())),
                                                                     len(set(rest) - set(picks.values()))))
+    # A LAW HELPER IS NOT PLUMBING (the stage-1 audit's finding 3; RED before it: rise_law.py collapsed to three picks): it
+    # reaches every row that imports it - the wrappers that run it - never one row per class
+    SL = sel(["tests/support/rise_law.py"])
+    law = {"gi.hold_after_stop", "gi.feedback_closed_box.up", "rtreflect.lamp_step_held.step", "rtreflect.still_after_stop.hold"}
+    check(law <= set(SL.selected) and not getattr(SL, "harness_picks", None),
+          "a LAW helper alone (tests/support/rise_law.py): every row whose wrapper imports it (%s), no one-per-class collapse "
+          "(missing %s)" % (len(set(SL.selected) - tools), sorted(law - set(SL.selected))))
     S2 = sel(["tests/support/fresh_home.sh", "tests/gi/test_gi_rayquery.cpp"])
     check("gi.rayquery_asan" in S2.selected and set(getattr(S2, "harness_picks", {}).values()) <= set(S2.selected),
           "...with a row's OWN file beside it: that row selected as before (gi.rayquery_asan), the classes' picks too")

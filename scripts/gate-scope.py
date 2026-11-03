@@ -1356,6 +1356,46 @@ class Selection:
         notes.append("NO RULE and no rule for any parent directory → nothing more (never the whole tier)")
         self.fallback.append(f"{tag}: {why} → NOTHING (no rule owns it or any parent directory)")
 
+    def law_helper(self, p):
+        """A LAW HELPER (LAW_HELPER; the stage-1 audit's finding 3): the rows that run it, AND every file of tests/ that IMPORTS
+        it - its module name in the file's text (a wrapper's `python3 .../rise_law.py`, an `import owed_rows`, a C++ test that
+        names it) - each reached as if it had changed itself (its own rule: a wrapper its rows, a test source its target's).
+        A helper nobody imports: today's walk (its directory)."""
+        name = os.path.basename(p)
+        mod = re.sub(r"\.(py|sh|js)$", "", name)
+        why = f"{p}: a law helper - its importers' rows"
+        hit = self.argv_rows(p, why)
+        importers = []
+        for dp, _, fs in os.walk(os.path.join(ROOT, "tests")):
+            for f in fs:
+                if not f.endswith((".py", ".sh", ".js", ".js.in", ".cpp", ".h", ".txt")) or f == name:
+                    continue
+                full = os.path.join(dp, f)
+                try:
+                    text = open(full, errors="replace").read()
+                except OSError:
+                    continue
+                if re.search(r"\b" + re.escape(mod) + r"\b", text):
+                    importers.append(os.path.relpath(full, ROOT))
+        importers = [x for x in sorted(importers) if not x.startswith("tests/support/") or LAW_HELPER.match(x)]
+        before = set(self.selected)
+        seen = self.__dict__.setdefault("_law_seen", set())
+        seen.add(p)
+        for x in importers:
+            if x.endswith("CMakeLists.txt"):
+                continue            # a registration that names it is its rows' (their commands run it: argv_rows above)
+            if LAW_HELPER.match(x):
+                if x not in seen and not SHARED_HARNESS.match(x):
+                    self.law_helper(x)          # a helper that imports this one: its importers too
+                continue
+            self.path(x, 1, via=f"imports {name}")
+        if not importers and not hit:
+            self.path(p)
+            return
+        self.rationale.append((p, f"A LAW HELPER (TEST-STREAMLINE-1): {len(hit)} row(s) run it, {len(importers)} file(s) import "
+                                  f"it ({', '.join(importers[:6])}{' ...' if len(importers) > 6 else ''}) - "
+                                  f"{len(set(self.selected) - before) + len(hit)} row(s)"))
+
     def argv_rows(self, p, why):
         """Rows whose command line or script IS this file (a wrapper, a lint, a configured .js)."""
         ap = os.path.normpath(os.path.join(ROOT, p))
@@ -3124,6 +3164,8 @@ def select(paths, rng, build, graph=None, inv=None, quiet_graph=False):
             own_rows, own_tier = set(S.selected), len(S.full_tier)
         if S.tooling_only and TOOLING_OWN.match(p):
             S.tooling_path(p)
+        elif LAW_HELPER.match(p) and not SHARED_HARNESS.match(p):
+            S.law_helper(p)
         else:
             S.path(p)
     if shared:
@@ -3145,7 +3187,14 @@ def select(paths, rng, build, graph=None, inv=None, quiet_graph=False):
 # harness: a COMPILED helper (tests/support/*.h, *.cpp) - its hunk reaches its includers by the graph and its identifiers,
 # precisely (gate.selection's U1-A); and a WHOLE TIER a harness path sets (a compile option in tests/CMakeLists.txt changes
 # every test binary: the FAST pass, never one row per class - its TOOLING-3 cases).
-SHARED_HARNESS = re.compile(r"^(tests/support/(?!.*\.(h|hpp|cpp|cc|inl)$)|tests/cmake/|tests/CMakeLists\.txt$|scripts/)")
+# THE PLUMBING, BY NAME (the stage-1 audit's finding 3, the lead's ruling: only the runners, the home, the warm-up and the
+# CMake helpers collapse; a LAW helper - rise_law.py, owed_rows.py, reflect_sources.py, any module a row's law imports -
+# reaches every row that imports it, by import: LAW_HELPER_IMPORTERS below)
+SHARED_HARNESS = re.compile(r"^(tests/support/(fresh_home\.sh|run_pool\.py|samepath\.sh|test_boot\.cmake|warm_app_boot\.sh|"
+                            r"warm_cold_rows\.sh|warm_tier\.js|shadercache_check\.py)$|tests/cmake/|tests/CMakeLists\.txt$|"
+                            r"scripts/(gpu-exclusive\.sh|warm-app-cache\.sh|gate_runlog\.py|kernel_xid\.py|row-env\.sh)$)")
+# A LAW HELPER: a non-compiled file of tests/support/ outside the plumbing (its rows are its importers')
+LAW_HELPER = re.compile(r"^tests/support/[^/]+\.(py|sh|js)$")
 # THE CLASSES (the harness paths a row runs through; read from its registration): the pick is per class
 HARNESS_CLASSES = ("app", "selftest", "vr", "engine", "jahlab", "cold", "seed", "pool", "cpu")
 
