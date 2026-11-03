@@ -415,14 +415,18 @@ def main(source, build):
             # them without a link: gate.serve_red, URGENT #54, left the bar one short) - counted from the record's own
             # number of them (`gates`; a case without it counts none)
             gates = [n for n in inv0 if n.startswith("gate.") and not (inv0[n]["labels"] & gs.NEVER_SELECTED)]
+            # ...and the tooling.* rows likewise (a tooling path's rule; TEST-STREAMLINE-1: five new ones left the bar one
+            # short) - counted from the case's `tooling` (a case without it counts none)
+            tools = [n for n in inv0 if n.startswith("tooling.") and not (inv0[n]["labels"] & gs.NEVER_SELECTED)]
             bar = at["rows"] + (len(linking) - at["linking"]) + (len(lints) - at["lints"]) + \
-                (len(gates) - at.get("gates", len(gates)))
+                (len(gates) - at.get("gates", len(gates))) + (len(tools) - at.get("tooling", len(tools)))
             check(bool(lib) and bool(linking), "%s: the graph names the executables that link %s (%d) and their rows (%d)"
                   % (c["lane"], dm["links"], len(lib), len(linking)))
             check(not whole and len(gating) <= bar,
-                  "%s: stays at <= %d rows, the bar derived (recorded %d at %d linking rows + %d lints + %d gate rows; now %d"
-                  " + %d + %d) (%s)" % (c["lane"], bar, at["rows"], at["linking"], at["lints"], at.get("gates", len(gates)),
-                                        len(linking), len(lints), len(gates), "TIER" if whole else len(gating)))
+                  "%s: stays at <= %d rows, the bar derived (recorded %d at %d linking rows + %d lints + %d gate rows + %d tooling "
+                  "rows; now %d + %d + %d + %d) (%s)" % (c["lane"], bar, at["rows"], at["linking"], at["lints"],
+                                                       at.get("gates", len(gates)), at.get("tooling", len(tools)), len(linking),
+                                                       len(lints), len(gates), len(tools), "TIER" if whole else len(gating)))
             # THE EDGE ITSELF (a selector that drops it selects FEWER rows, and a bar alone passes that): every compiled
             # row on it is selected — the app rows ride the physics TUs' area rule by their modules, not the graph
             miss = [n for n in linking if classified[n]["kind"] != "app" and n not in sel]
