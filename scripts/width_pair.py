@@ -10,7 +10,10 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
              not one of TIMING_LAW_ROWS, not a DECLARED OPEN RED (a row in the first column of THE OPEN REDS table of
              SPECS/PHOTON_7_SPEC.md, --open-reds: the table spec.sh land reads, by the same rule; a red at width 1 judged
              against itself proves nothing about a width) - and priced under 10 s in scripts/gate-times.txt (the small rows;
-             an unpriced row is left out, named). The fixture setups ctest adds are run with them and judged with them.
+             an unpriced row is left out, named), and whose FIXTURE CLOSURE holds no excluded row (ctest adds a required
+             fixture's setup and cleanup to the run: a row needing the cold setup would bring it into the hold). The fixture
+             setups ctest adds are run with them and judged with them; --plan names the rows priced over their class
+             budget / 1.5 (the budget binds before the x1.5 bar).
   THE ARMS   the SAME rows, the same tree and build, at width 1, 2 and 3 - width W = `ctest -j W` with a resource spec of
              W x 8 slots (`--resource-spec-file`, the build's own spec untouched), so W GPU rows hold the card at once -
              in a PALINDROME order (default 1,2,3,2,1, the lead's ruling for block C: widths 1 and 2 each twice, symmetric in time,
@@ -45,8 +48,12 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
              more risk for nothing); and whose VRAM PEAK, sampled only while the hold runs, stays under VRAM_HEADROOM (90 %)
              of the card's memory.total (nvidia-smi; a peak or a total unread refuses the width - an unmeasured headroom is
              no headroom). A width is never adopted over a refused narrower one. Width 1 itself must agree with itself (its
-             two runs) - a row whose verdict differs between them is a finding before any width is adopted (exit 1).
-             Timing-law and cold rows stay alone whatever is adopted.
+             two runs) - a row whose verdict differs between them, or an out-of-memory / Xid line with one row on the card,
+             is a finding before any width is adopted (exit 1). A row past its class budget in a width-1 run is a stale
+             price or a budget red: named, left out of every width's judgement, never charged to the width.
+  COVERED    an adopted width covers ONLY the rows it measured (<out>/adopted-rows.txt); every other GPU row - a declared
+             open red until it is green and measured, the timing-law, cold and measure rows, the 10-s rows, the rows over
+             their budget alone - keeps the whole card, 8 x W slots, alone (<out>/alone-rows.txt, each with its reason).
 
 usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] [--prices <file>]
        [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600] [--budget-scale 1] [--open-reds <spec>]
