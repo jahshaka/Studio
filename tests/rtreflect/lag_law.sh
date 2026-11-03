@@ -1,8 +1,11 @@
 #!/bin/bash
 # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row; the lead's law and its noise term) — THE MOVING
 # REFLECTION LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS MEMORY AND ITS OWN NOISE: gi.walk_glass's walk (photon-glass,
-# -1.2,1.8,3.4 -> 1.2,1.8,1.0 looking at 0,0.5,-3, 60 frames from a converged hold) in RAYS with the hits flattened (the
-# arm reflect.flatHits: the reflection's own estimator, the hit caches out) and the world held; at walk frames k = 14,
+# -1.2,1.8,3.4 -> 1.2,1.8,1.0 looking at 0,0.5,-3, 60 frames from a converged hold) with the hits flattened (the arm
+# reflect.flatHits: the reflection's own RAY estimator and denoiser, the caches out - under the arm the screen gives no
+# answer, its read of the previous picture being a cache: PHOTON-7-9A, the lead's ruling (A) - which is the STEREO
+# chain's route; the desktop hybrid's lag is rtreflect.history_detectors', its motion rtreflect.walk_world_hybrid's) and
+# the world held; at walk frames k = 14,
 # 28 and 59, per glossy pixel
 #     |walk(k) - conv(k)| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1
 # conv(k) the picture converged at the walk's pose k (the world held), N the texel's moving count (the door's .rhc),
@@ -16,7 +19,7 @@
 # out at 60.06 s under two builds' load - a row at the cap with no margin, #96's class): ONE ROW PER WALK FRAME's LAW, a
 # fixture chain on one work dir -
 #   walk (rtreflect.lag_law.walk, FIXTURES_SETUP): the prime (6 frames) and the world-held walk (640 + its door's 69) -
-#     715 frames; its proof: the walk's mode label (the door ran Rays) and the three frames' dumps; it keeps the dumps of
+#     715 frames; its proof: the three frames' dumps; it keeps the dumps of
 #     k = 14 / 28 / 59 only and SNAPSHOTS the shader cache, so every converged part boots on the bytes the converged
 #     session booted on in the one row (a grown cache draws other variants: walk_world.sh's measure, 2,712 px at a hold);
 #   14 | 28 | 59 (rtreflect.lag_law.k14 / .k28 / .k59): the world settled at the start pose and held (640 frames, the

@@ -11,8 +11,11 @@
 #   THE MIRROR: whole M1, p99 <= 2 codes and share over one code <= 1 % (its estimator is the centre ray: no noise of
 #     its own, every change a defect).
 # ONE ARM A ROW (the reflection has no mode since PHOTON-7-9A: both arms run the hybrid, the one shape):
-#   raysflat (rtreflect.walk_world): THE RAYS' HITS FLATTENED (reflect.flatHits) - the reflection's own bar, the estimator and
-#     its denoiser alone, the hit caches out. OWNER: PHOTON-7 stage 6.
+#   raysflat (rtreflect.walk_world): THE RAYS' HITS FLATTENED (reflect.flatHits) - the reflection's own bar, the RAY estimator
+#     and its denoiser alone, the caches out: under the arm the screen gives no answer too (its read of the previous
+#     picture is a cache - PHOTON-7-9A, the lead's ruling (A)), so this arm measures the STEREO chain's route (no screen
+#     sources in stereo). The desktop hybrid's motion is the hybrid arm's below; its lag is rtreflect.history_detectors'.
+#     OWNER: PHOTON-7 stage 6.
 #   hybrid (rtreflect.walk_world_hybrid): THE PRODUCT'S OWN REFLECTION WALKING on REAL HITS - the screen first (the
 #     previous picture where it vouches), the rays for the rest (the cards, the voxels and the decode at their hits).
 #     (PHOTON-7-9A: the rays alone read 2.49 % here - the lobe's own variance - and never rested after the walk; the
