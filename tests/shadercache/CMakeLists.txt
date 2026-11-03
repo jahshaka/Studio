@@ -47,15 +47,29 @@ target_link_libraries(test_shader_cache_app PRIVATE Qt6::Core)
 target_compile_definitions(test_shader_cache_app PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>")
-jah_gpu_row(shadercache.app.cold SHIP CLASS app TIER document   COMMAND test_shader_cache_app --cold
+# THE DRIVER's CACHE IS THE ROWS' OWN (ORPHAN-REDS-1 item 4, 2026-11-03; URGENT #152's class): run 1 boots a wiped data
+# root (no VkPipelineCache) and run 3 clears it, so their ray pipelines come from the NVIDIA driver's per-executable disk
+# cache alone - and the shared one (~/.cache/nvidia, every tree's and every concurrent row's "Jahshaka", the path the
+# card's lock exports over the launcher's own XDG_CACHE_HOME) loses them (#152): .cold TIMED OUT at 60.01 s on the
+# master checks at a9e64793c and 3f88e1e75 and ran 24.98 s solo with them warm (its startup gate 18.25 s). The three
+# launches name <build>/tests/shadercache/app-driver-cache, written by these rows only, one at a time (the fixture
+# chain); .cold is registered COLD, so the warm-up's cold-on boot runs it once a key, uncapped, and primes it. The
+# variable rides the COMMAND (the cold-on runner reads no ENVIRONMENT property). The subject stays the APP's cache.
+set(_scdriver ${CMAKE_CURRENT_BINARY_DIR}/app-driver-cache)
+file(MAKE_DIRECTORY ${_scdriver})
+jah_gpu_row(shadercache.app.cold SHIP CLASS app TIER document
+         COLD "run 1 boots a wiped data root (the subject) - its driver cache is the rows' own, primed here"
+         COMMAND env __GL_SHADER_DISK_CACHE_PATH=${_scdriver} $<TARGET_FILE:test_shader_cache_app> --cold
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app.cold PROPERTIES TIMEOUT 60 LABELS "shadercache"
     FIXTURES_SETUP shadercacheAppCold)
-jah_gpu_row(shadercache.app.warm SHIP CLASS app TIER document   COMMAND test_shader_cache_app --warm
+jah_gpu_row(shadercache.app.warm SHIP CLASS app TIER document
+         COMMAND env __GL_SHADER_DISK_CACHE_PATH=${_scdriver} $<TARGET_FILE:test_shader_cache_app> --warm
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app.warm PROPERTIES TIMEOUT 60 LABELS "shadercache"
     FIXTURES_REQUIRED shadercacheAppCold FIXTURES_SETUP shadercacheAppWarm)
-jah_gpu_row(shadercache.app.cleared SHIP CLASS app TIER document   COMMAND test_shader_cache_app --cleared
+jah_gpu_row(shadercache.app.cleared SHIP CLASS app TIER document
+         COMMAND env __GL_SHADER_DISK_CACHE_PATH=${_scdriver} $<TARGET_FILE:test_shader_cache_app> --cleared
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.app.cleared PROPERTIES TIMEOUT 60 LABELS "shadercache"
     FIXTURES_REQUIRED "shadercacheAppCold;shadercacheAppWarm")

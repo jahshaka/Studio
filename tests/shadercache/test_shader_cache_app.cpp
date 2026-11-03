@@ -113,7 +113,11 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     launch.start();
     app.start(QStringLiteral(JAHSHAKA_BINARY), QStringList() << extraArgs << "--script" << script);
     if (!app.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); ++failures; return {}; }
-    if (!app.waitForFinished(240000)) {
+    // THE HANG GUARD, never a budget: inside a row the 60-s cap ends a launch long before it; it bounds only the uncapped
+    // runs - the warm-up's cold-on prime of the rows' own driver cache (ORPHAN-REDS-1 item 4), where a cold driver
+    // compiles the ray pipelines for 4-6 minutes (measured 2026-11-03: a 240-s guard killed the prime at 241 s, the cache
+    // left partial)
+    if (!app.waitForFinished(900000)) {
         std::printf("FAIL: app did not exit\n"); ++failures; app.kill(); app.waitForFinished(5000);
         return {};
     }
