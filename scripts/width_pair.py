@@ -7,8 +7,10 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
 
   THE ROWS   every GPU row (a RESOURCE_GROUPS vram claim) with NO TIMING LAW: not `measure`, not COLD (test-cold-rows.txt or
              JAHSHAKA_COLD_BY_SUBJECT: its subject is the cold compile), no armed millisecond bar (JAHSHAKA_TIMING_BARS=1),
-             not one of TIMING_LAW_ROWS - and priced under 10 s in scripts/gate-times.txt (the small rows; an unpriced row
-             is left out, named). The fixture setups ctest adds are run with them and judged with them.
+             not one of TIMING_LAW_ROWS, not a DECLARED OPEN RED (a row in the first column of THE OPEN REDS table of
+             SPECS/PHOTON_7_SPEC.md, --open-reds: the table spec.sh land reads, by the same rule; a red at width 1 judged
+             against itself proves nothing about a width) - and priced under 10 s in scripts/gate-times.txt (the small rows;
+             an unpriced row is left out, named). The fixture setups ctest adds are run with them and judged with them.
   THE ARMS   the SAME rows, the same tree and build, at width 1, 2 and 3 - width W = `ctest -j W` with a resource spec of
              W x 8 slots (`--resource-spec-file`, the build's own spec untouched), so W GPU rows hold the card at once -
              in a PALINDROME order (default 1,2,3,2,1, the lead's ruling for block C: widths 1 and 2 each twice, symmetric in time,
@@ -20,10 +22,16 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
   RECORDED   per run: the wall (the lock's wait included) and ctest's own "Total Test time" (the wall gain's), each row's
              verdict and its wall (ctest's own), the VRAM peak (nvidia-smi sampled every SAMPLE_MS, the card's used MB, counted
              only once the hold's command started; its first reading, before the rows start, beside it) and the card's
-             memory.total, the out-of-memory lines
-             and Xid lines of the run's log; per row: its wall against its price and the 60-s cap.
+             memory.total, the out-of-memory lines of the run's OWN log (`ctest -V --output-log <run>/ctest.log`: every
+             row's output - never the build's shared Testing/Temporary/LastTest.log, which any other ctest in the build
+             truncates) and the Xid lines the lock prints; per row: its verdict, its FAIL lines and its wall against its
+             price and the 60-s cap.
+  THE TREE   the run holds the tree's check mark (URGENT #153: jah-check.pid in the tree's git dir, the mark spec.sh test
+             and the pre-commit hook read) for its whole length - no other check runs and no commit lands in the tree
+             while it measures; a live mark of another check REFUSES the run (exit 2) before any hold.
   THE RULE   (the spec's stage 4; the bars the lead ruled on the 4-5 audit, 2026-11-03) ADOPT THE WIDEST WIDTH whose every run
-             gives every row the verdict width 1 gave it, with no out-of-device-memory line, and where every run of width W
+             gives every row the OUTCOME width 1 gave it (a green row PASS; a red row its verdict AND its FAIL lines, equal
+             line for line - a law red at width 1 that turns into a device loss at width 3 is still FAIL, and is refused), with no out-of-device-memory line, and where every run of width W
              keeps EVERY ROW under its class budget (tests/hygiene/row_budget.py budget_of, the one definition: an engine
              fixture or a CPU row 10 s), under INFLATE x its width-1 wall (1.5: #44's fault was a row inflating toward its
              cap, and a width that inflates every row by one factor breaks the class budgets while every verdict holds; an
@@ -37,12 +45,16 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
              Timing-law and cold rows stay alone whatever is adopted.
 
 usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] [--prices <file>]
-       [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600] [--budget-scale 1]
+       [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600] [--budget-scale 1] [--open-reds <spec>]
+       [--tree <dir>]
+  --open-reds  the spec whose THE OPEN REDS table names the declared reds (default <workspace>/SPECS/PHOTON_7_SPEC.md;
+               unreadable = refused, exit 2: an unread list is not an empty one)
+  --tree       the tree whose check mark the run holds (default the build's CMAKE_HOME_DIRECTORY)
   --budget-scale  every class budget x this factor (the toys' seconds-long rows; never below 1 on the card)
   --plan    the rows, the exclusions with their reasons, the parts and the estimated card time - nothing run, no lock.
   exit      0 a width adopted (the line `ADOPT WIDTH <w>`); 1 width 1 unstable or the run incomplete; 2 refused (usage, a bad
             display, no rows); 75 the card stayed held (a hold's wait ran out: call again).
-The evidence: <out>/runs.jsonl (one line per run), <out>/<run>/ctest.out + LastTest.log, <out>/summary.tsv.
+The evidence: <out>/runs.jsonl (one line per run), <out>/<run>/ctest.out + ctest.log, <out>/summary.tsv.
 """
 import json
 import os
@@ -165,9 +177,76 @@ def vram_total(exe):
         return None
 
 
-def select(rows, price, cold):
-    """(the rows, {reason: [rows]}) - THE ROWS of the docstring, each exclusion with its reason."""
-    sel, out = [], {}
+def open_reds(path):
+    """{row: its line} of THE OPEN REDS table of `path` (lib/land.py declared_rows' rule: the table under the LAST heading
+    starting "## THE OPEN REDS", a row by its EXACT name in the first column), or None when the file is unreadable."""
+    try:
+        lines = open(path, errors="replace").read().splitlines()
+    except OSError:
+        return None
+    starts = [i for i, ln in enumerate(lines) if ln.startswith("## THE OPEN REDS")]
+    table = {}
+    if starts:
+        i = starts[-1] + 1
+        while i < len(lines) and not lines[i].startswith("|"):
+            i += 1
+        for j in range(i, len(lines)):
+            if not lines[j].startswith("|"):
+                break
+            cell = lines[j].strip("|").split("|")[0].strip()
+            if cell and cell != "row" and not set(cell) <= set("-: "):
+                table.setdefault(cell, j + 1)
+    return table
+
+
+def tree_of(build):
+    """The build's source tree (CMakeCache.txt CMAKE_HOME_DIRECTORY), or None."""
+    try:
+        for ln in open(os.path.join(build, "CMakeCache.txt"), errors="replace"):
+            if ln.startswith("CMAKE_HOME_DIRECTORY:"):
+                return ln.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return None
+
+
+class CheckMark:
+    """URGENT #153's mark (scripts/lead/lib/spec.py CheckMark: `<pid> <time>` in jah-check.pid of the tree's git dir), held
+    for the run: spec.sh test refuses a second check beside it and the pre-commit hook refuses a commit. A live mark of
+    another process refuses this run (SystemExit 2)."""
+
+    def __init__(self, tree):
+        p = subprocess.run(["git", "-C", tree, "rev-parse", "--absolute-git-dir"], capture_output=True, text=True)
+        if p.returncode != 0 or not p.stdout.strip():
+            die(f"--tree {tree}: not a git tree (the run holds its check mark, URGENT #153)")
+        self.path = os.path.join(p.stdout.strip(), "jah-check.pid")
+
+    def __enter__(self):
+        try:
+            words = open(self.path).read().split()
+            other = int(words[0])
+            os.kill(other, 0)
+            if other != os.getpid():
+                die(f"REFUSED: another check is running in this tree (pid {other}, since "
+                    f"{words[1] if len(words) > 1 else '?'}; its mark {self.path}) - the width run measures alone in its tree")
+        except (OSError, ValueError, IndexError):
+            pass
+        with open(self.path, "w") as f:
+            f.write(f"{os.getpid()} {time.strftime('%Y-%m-%dT%H:%M:%S')}\n")
+        return self
+
+    def __exit__(self, *exc):
+        try:
+            if open(self.path).read().split()[0] == str(os.getpid()):
+                os.remove(self.path)
+        except (OSError, IndexError):
+            pass
+        return False
+
+
+def select(rows, price, cold, declared=None):
+    """(the rows, {reason: [rows]}) - THE ROWS of the docstring, each exclusion with its reason. `declared`: {row: line}."""
+    sel, out, declared = [], {}, declared or {}
     for n, p in rows:
         if not p.get("RESOURCE_GROUPS"):
             continue                                    # takes no card: not a width question
@@ -177,6 +256,7 @@ def select(rows, price, cold):
                "cold" if n in cold or p.get("JAHSHAKA_COLD_BY_SUBJECT") else
                "timing bars armed" if "JAHSHAKA_TIMING_BARS=1" in env else
                "a timing law" if n in TIMING_LAW_ROWS else
+               "a declared open red" if n in declared else
                "unpriced" if n not in price else
                f"priced {SMALL_S:.0f} s or more" if price[n] >= SMALL_S else None)
         if why:
@@ -237,16 +317,44 @@ class VramSampler:
                 self.proc.kill()
 
 
+RESULT_ID = re.compile(r"^\s*\d+/\d+ Test\s+#(\d+): (\S+) ")
+VLINE = re.compile(r"^(\d+): ?(.*)$")
+PREAMBLE = re.compile(r"^(Test command: |Working Directory: |Environment variables: ?$|Environment variable "
+                      r"modifications: ?$|Test timeout computed to be: |  ?\S+=)")
+
+
+def fail_lines(text):
+    """A red row's FAIL lines in order (scripts/gate_runlog.py's pattern: our `FAIL: <what>`, a fixture's `  FAIL (3)
+    <law>`, gtest's `[  FAILED  ]`, QTest's `FAIL!  :`), else its first script error line; [] when it printed none."""
+    sys.path.insert(0, HERE)
+    import gate_runlog  # noqa: E402
+    got = [m.group(1).strip()[:300] for m in map(gate_runlog._FAILLINE.match, (text or "").splitlines()) if m]
+    if not got:
+        one = gate_runlog.fail_line(text)
+        got = [one] if one else []
+    return got
+
+
 def verdicts(text):
-    """{row: (verdict, wall s)} from ctest's own result lines."""
-    out = {}
+    """{row: (outcome, wall s)} from ctest's own result lines; the outcome of a green row is "PASS", of a red one its
+    verdict and its FAIL lines (`FAIL[<line> | <line>]`) - read from the run's -V log, every row's output by its test id."""
+    out, body = {}, {}
     for ln in text.splitlines():
+        m = VLINE.match(ln)
+        if m:
+            body.setdefault(m.group(1), []).append(m.group(2))
+            continue
         m = RESULT.match(ln)
         if not m:
             continue
         s = m.group(2)
         v = ("PASS" if s.startswith("Passed") else "TIMEOUT" if "Timeout" in s else "NOTRUN" if "Not Run" in s else
              "SKIP" if "Skipped" in s else "FAIL" if "Failed" in s or "Exception" in s or "SEGFAULT" in s else "OTHER:" + s)
+        if v != "PASS":
+            mi = RESULT_ID.match(ln)
+            txt = "\n".join(x for x in body.get(mi.group(1) if mi else "", []) if not PREAMBLE.match(x))
+            fl = fail_lines(txt)
+            v = f"{v}[{' | '.join(fl)}]" if fl else v
         out[m.group(1)] = (v, float(m.group(3)))
     return out
 
@@ -267,7 +375,7 @@ def run_one(build, out, w, k, part, lock, display, wait_max, smi, total_mb=None)
     held = os.path.join(d, "held")
     # the hold's command marks its start (the VRAM sampler counts from there), then IS the ctest
     cmd = lock + ["--wait-max", str(wait_max), "--label", f"width-w{w}-p{k}", "sh", "-c", ': > "$0"; exec "$@"', held,
-                  "nice", "-n", "10", "ctest",
+                  "nice", "-n", "10", "ctest", "-V", "--output-log", os.path.join(d, "ctest.log"),
                   "--test-dir", build, "-j", str(w), "--resource-spec-file", spec, "--tests-from-file", lst]
     env = dict(os.environ, DISPLAY=display)
     print(f"width_pair: width {w} part {k}: {len(part)} rows - {' '.join(shlex.quote(c) for c in cmd)}", flush=True)
@@ -277,17 +385,16 @@ def run_one(build, out, w, k, part, lock, display, wait_max, smi, total_mb=None)
     wall = time.monotonic() - t0
     text = p.stdout + p.stderr
     open(os.path.join(d, "ctest.out"), "w").write(text)
-    log = ""
-    lt = os.path.join(build, "Testing", "Temporary", "LastTest.log")
-    if p.returncode != 75 and os.path.exists(lt):
-        log = open(lt, errors="replace").read()
-        open(os.path.join(d, "LastTest.log"), "w").write(log)
-    v = verdicts(text)
+    # THE RUN's OWN LOG (ctest --output-log, -V: every row's output) - never the build's shared LastTest.log
+    lp = os.path.join(d, "ctest.log")
+    log = open(lp, errors="replace").read() if os.path.exists(lp) else ""
+    v = verdicts(log or text)
     tt = TOTAL_TIME.search(text)
     rec = {"tag": tag, "width": w, "part": k, "rc": p.returncode, "held": p.returncode != 75, "wall_s": round(wall, 2),
            "ctest_wall_s": float(tt.group(1)) if tt else None,
            "vram_idle_mb": vs.first, "vram_peak_mb": vs.peak, "vram_samples": vs.n, "vram_total_mb": total_mb,
-           "oom": sorted({ln.strip()[:200] for ln in (text + log).splitlines() if OOM.search(ln)})[:20],
+           "log": lp if log else None,
+           "oom": sorted({ln.strip()[:200] for ln in (log or text).splitlines() if OOM.search(ln)})[:20],
            "xid": sorted({ln.strip()[:200] for ln in text.splitlines() if XID.search(ln)})[:20],
            "rows": {n: list(x) for n, x in v.items()}, "asked": part}
     with open(os.path.join(out, "runs.jsonl"), "a") as fh:
@@ -435,23 +542,37 @@ def main(argv):
     smi = opt(args, "--nvidia-smi", "nvidia-smi")
     wait_max = int(opt(args, "--wait-max", "600"))
     bscale = float(opt(args, "--budget-scale", "1"))
+    reds_file = opt(args, "--open-reds")
+    tree = opt(args, "--tree")
     if len(args) != 1 or args[0].startswith("-"):
         die("usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] "
-            "[--prices <file>] [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600] [--budget-scale 1]")
+            "[--prices <file>] [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600] [--budget-scale 1] "
+            "[--open-reds <spec>] [--tree <dir>]")
     build = os.path.abspath(args[0])
     if 1 not in order or any(w < 1 for w in order):
         die(f"--order {order}: the widths are >= 1 and width 1 is in it (the base every width is judged against)")
     price = prices(pfile)
     if not price:
         die(f"no prices read from {pfile} (scripts/gate-times.txt: a row's price is what makes it small)")
+    if not reds_file:
+        sys.path.insert(0, HERE)
+        import gate_runlog  # noqa: E402
+        reds_file = os.path.join(gate_runlog.workspace_root(), "SPECS", "PHOTON_7_SPEC.md")
+    declared = open_reds(reds_file)
+    if declared is None:
+        die(f"--open-reds {reds_file}: unreadable - the declared open reds leave the set, and an unread list is not an empty one")
     inv = inventory(build)
-    sel, excl = select(inv, price, cold_rows(build))
+    sel, excl = select(inv, price, cold_rows(build), declared)
     ps = parts(sel, price, part_cap) if sel else []
     est = sum(sum(price[n] for n in p) * RATIO / w for w in order for p in ps)
     print(f"width_pair: {len(sel)} rows with no timing law priced under {SMALL_S:.0f} s ({sum(price[n] for n in sel):.0f} s "
           f"serial), {len(ps)} part(s) under {part_cap:.0f} s each at width 1; order {','.join(map(str, order))}; "
           f"{len(ps) * len(order)} holds, ~{est / 60:.0f} min of card estimated (the width-W run at 1/W of width 1's)")
     for why, ns in sorted(excl.items()):
+        if why == "a declared open red":   # always by name, each with its table line: a red leaves a set only with its reason
+            print(f"  left out, {why} (THE OPEN REDS of {reds_file}; a red at width 1 judged against itself proves nothing): "
+                  f"{len(ns)}: " + " ".join(f"{n} (:{declared[n]})" for n in sorted(ns)))
+            continue
         print(f"  left out, {why}: {len(ns)}" + (": " + " ".join(sorted(ns)) if len(ns) <= 12 else ""))
     for k, p in enumerate(ps, 1):
         print(f"  part {k}: {len(p)} rows ~{sum(price[n] for n in p) * RATIO:.0f} s at width 1")
@@ -465,6 +586,15 @@ def main(argv):
         return 0
     if not display or not re.fullmatch(r":(6[0-9]|[7-9][0-9])", display):
         die(f"--display {display!r}: a rig display in :60-:99 (CODING_RULES §7; never :0, never unset)")
+    tree = tree or tree_of(build)
+    if not tree:
+        die(f"{build}: no CMAKE_HOME_DIRECTORY in its CMakeCache.txt - name the tree (--tree): the run holds its check mark")
+    with CheckMark(tree):
+        return measure(build, out, order, ps, sel, inv, price, bscale, smi, lock, display, wait_max, row_cap)
+
+
+def measure(build, out, order, ps, sel, inv, price, bscale, smi, lock, display, wait_max, row_cap):
+    """The holds, the summary and THE RULE (main's, under the tree's check mark)."""
     out = os.path.abspath(out or os.path.join(build, "tests", ".width-pair", time.strftime("%Y%m%d-%H%M%S")))
     os.makedirs(out, exist_ok=True)
     budget = class_budgets([(n, p) for n, p in inv if n in set(sel)], bscale)

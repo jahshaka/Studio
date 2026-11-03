@@ -3,7 +3,7 @@
 ctest tree whose rows are shell sleeps claiming the card's 8 slots, a fake card lock (records each hold's label, runs the
 command) and a fake nvidia-smi (the used MB = a base + 1000 per toy row running). No GPU, no display, no lock.
 
-usage: width_pair_test.py <source root> <scratch base> plan|judge|refuse|bars|gain|reds   (rows split by proof, each under the CPU row's 10 s)
+usage: width_pair_test.py <source root> <scratch base> plan|judge|refuse|bars|gain|reds|log   (rows split by proof, each under the CPU row's 10 s)
 Proves: the row set (a GPU row, priced under 10 s, no measure / cold / armed timing bars / named timing law; an unpriced or a
 10-s row left out, each with its reason; a CPU row not asked); a width W run is `ctest -j W` with W x 8 slots (the toy rows
 overlap W at once: the fake card's peak); the palindrome order and one hold per (width, part) with its label; the parts under the
@@ -12,7 +12,9 @@ only beside a neighbour -> that width refused by name; an out-of-memory line -> 
 width 1 disagreeing with itself -> no width (exit 1); the card held -> exit 75 with the records kept; a bad display refused;
 THE BARS (the lead's rulings on the 4-5 audit): a row past x1.5 its width-1 wall, or past its class budget, refuses the width;
 a width whose total wall is not 15 % under the next narrower width's is refused; a VRAM peak past 90 % of memory.total, or an
-unread total, refuses the width."""
+unread total, refuses the width; a red row agrees only on equal FAIL lines; the declared open reds (the toy spec's THE OPEN REDS
+table, its live table only) leave the set by name, an unreadable spec refused; the OOM line read from the run's own ctest.log
+when the build's Testing/Temporary is removed under it; the tree's check mark held for the run and a live foreign mark refusing."""
 import json
 import os
 import shutil
@@ -42,6 +44,11 @@ n() { ls "$VRAMDIR" | wc -l; }
 case "$1" in
   plain) sleep 0.2 ;;
   inflate) i=0; s=0; while [ $i -lt 8 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; [ $s = 1 ] && sleep 0.6; exit 0 ;;
+  redline) i=0; s=0; while [ $i -lt 6 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done
+           [ $s = 1 ] && echo "FAIL: vkQueueSubmit: VK_ERROR_DEVICE_LOST" || echo "FAIL: (1) 1.44 q over the 1-q bar"; exit 1 ;;
+  samered) echo "FAIL: (1) 1.44 q over the 1-q bar"; sleep 0.2; exit 1 ;;
+  mark) read p _ < "$MARKFILE" && kill -0 "$p" && exit 0; echo "FAIL: no live check mark at $MARKFILE"; exit 1 ;;
+  oomclobber) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; rm -rf "$CLOBBER"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
   tiny) s=0; [ "$(n)" -gt 1 ] && s=1; sleep 0.02; [ "$(n)" -gt 1 ] && s=1; [ $s = 1 ] && sleep 0.05; exit 0 ;;
   near) i=0; s=0; while [ $i -lt 16 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; [ $s = 1 ] && sleep 0.3; exit 0 ;;
   conflict) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 1 ] && { echo "a neighbour on the card"; exit 1; }; sleep 0.05; i=$((i+1)); done ;;
@@ -72,6 +79,14 @@ def write(path, text, mode=0o755):
 
 
 write(os.path.join(T, "row.sh"), ROW)
+TREE = os.path.join(T, "tree")                    # the toy tree whose check mark a run holds (URGENT #153)
+subprocess.run(["git", "init", "-q", TREE], check=True)
+MARK = os.path.join(TREE, ".git", "jah-check.pid")
+REDS = os.path.join(T, "reds.md")                 # the toy spec's THE OPEN REDS table
+with open(REDS, "w") as fh:
+    fh.write("## Stage 1\n| row | x |\n|---|---|\n| toy.a | a stage table only names it |\n\n"
+             "## THE OPEN REDS — the live list\n| row | cause | fixer | before |\n|---|---|---|---|\n"
+             "| toy.declared | (1) 1.44 q | ITS-SPEC S0 | S1 |\n")
 write(os.path.join(T, "lock.sh"), LOCK)
 write(os.path.join(T, "smi.sh"), SMI)
 
@@ -110,12 +125,14 @@ def run(b, *args, env=None):
     log = os.path.join(T, "lock.log")
     if os.path.exists(log):
         os.remove(log)
-    e = dict(os.environ, VRAMDIR=VR, LOCKLOG=log, **(env or {}))
+    e = dict(os.environ, VRAMDIR=VR, LOCKLOG=log, MARKFILE=MARK,
+             CLOBBER=os.path.join(b, "Testing", "Temporary"), **(env or {}))
     out = os.path.join(T, os.path.basename(b) + "-out")
     shutil.rmtree(out, ignore_errors=True)
     p = subprocess.run([sys.executable, "-I", WP, b, "--prices", os.path.join(b, "gate-times.txt"),
                         "--lock", os.path.join(T, "lock.sh"), "--nvidia-smi", os.path.join(T, "smi.sh"), "--out", out,
-                        *args], env=e, capture_output=True, text=True)
+                        "--tree", TREE, *([] if "--open-reds" in args else ["--open-reds", REDS]), *args], env=e,
+                       capture_output=True, text=True)
     labels = open(log).read().split() if os.path.exists(log) else []
     recs = [json.loads(ln) for ln in open(os.path.join(out, "runs.jsonl"))] if os.path.exists(
         os.path.join(out, "runs.jsonl")) else []
@@ -244,8 +261,57 @@ elif PART == "reds":
           f"conflict: width 2 refused by the row that fails beside a neighbour, ADOPT WIDTH 1 (rc {rc}) "
           f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
 
+    # 14. A RED AGREES ONLY ON ITS FAIL LINES: red at width 1 on its law, red at width 2 on a device loss - width 2 refused
+    #     with both lines (the base judged FAIL = FAIL and adopted width 2)
+    br = toy("redline", [("toy.redline", "redline", "")])
+    rc, out, labels, recs = run(br, "--display", ":71", "--order", "1,2")
+    ref = [ln for ln in out.splitlines() if "REFUSED" in ln]
+    check(rc == 0 and "ADOPT WIDTH 1" in out and len(ref) == 1
+          and "toy.redline FAIL[FAIL: (1) 1.44 q over the 1-q bar] at width 1, FAIL[FAIL: vkQueueSubmit: VK_ERROR_DEVICE_LOST] "
+              "at width 2"
+          in ref[0], f"redline: a red whose FAIL line changes beside a neighbour refuses width 2 (rc {rc}) {ref}")
+
+    # 15. ... AND THE SAME FAIL LINES AGREE: red at both widths on one law line -> width 2 adopted; the run held the tree's
+    #     check mark (a row reads it live) and removed it after
+    bs = toy("samered", [("toy.samered", "samered", ""), ("toy.mark", "mark", "")])
+    rc, out, labels, recs = run(bs, "--display", ":71", "--order", "1,2")
+    check(rc == 0 and "ADOPT WIDTH 2" in out and "REFUSED" not in out,
+          f"samered: a red with equal FAIL lines at both widths agrees, ADOPT WIDTH 2 (rc {rc}) "
+          f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
+    check(all(r["rows"].get("toy.mark", [None])[0] == "PASS" for r in recs) and not os.path.exists(MARK),
+          f"samered: every run held the tree's check mark (toy.mark read it live: "
+          f"{[r['rows'].get('toy.mark', [None])[0] for r in recs]}), removed after")
+
+elif PART == "log":
+    # 16. THE DECLARED OPEN REDS LEAVE THE SET, each named with its table line - only the live table's rows (a stage table
+    #     naming toy.a declares nothing)
+    bd = toy("declared", [("toy.declared", "plain", "")])
+    rc, out, labels, recs = run(bd, "--plan")
+    ln = [x for x in out.splitlines() if x.startswith("  left out, a declared open red")]
+    check(rc == 0 and len(ln) == 1 and "toy.declared (:9)" in ln[0] and "toy.a" not in ln[0]
+          and "4 rows with no timing law" in out, f"declared: the open red left out with its line, toy.a kept (rc {rc}) {ln}")
+    rc, out, labels, recs = run(bd, "--plan", "--open-reds", os.path.join(T, "no-such-spec.md"))
+    check(rc == 2 and "unreadable" in out, f"declared: an unreadable open-reds spec refused (rc {rc}), not read as empty")
+
+    # 17. THE RUN's OWN LOG: the out-of-memory line is read from <run>/ctest.log even when another ctest in the build
+    #     removes Testing/Temporary under the run (the base read the shared LastTest.log, lost it and adopted width 3)
+    bc = toy("clobber", [("toy.oomclobber", "oomclobber", "")])
+    rc, out, labels, recs = run(bc, "--display", ":71", "--order", "1,2,3")
+    check(rc == 0 and "ADOPT WIDTH 2" in out and "WIDTH 3 REFUSED:" in out and "out-of-memory" in out
+          and all(r.get("log", "").endswith("ctest.log") and os.path.exists(r["log"]) for r in recs),
+          f"clobber: the OOM line read from the run's own ctest.log, width 3 refused, ADOPT WIDTH 2 (rc {rc}) "
+          f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
+
+    # 18. ANOTHER CHECK's LIVE MARK in the tree refuses the run before any hold (this test's own pid: alive)
+    with open(MARK, "w") as fh:
+        fh.write(f"{os.getpid()} 2026-11-03T00:00:00\n")
+    rc, out, labels, recs = run(b1, "--display", ":71", "--order", "1,2")
+    check(rc == 2 and "another check is running in this tree" in out and not labels and not recs,
+          f"mark: a live mark of another check refuses the run, no hold (rc {rc})")
+    os.remove(MARK)
+
 else:
-    check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain|reds)")
+    check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain|reds|log)")
 shutil.rmtree(T, ignore_errors=True)
 print("width_pair_test: " + ("PASSED" if not fails else f"FAILED ({len(fails)})"))
 sys.exit(1 if fails else 0)
