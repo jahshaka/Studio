@@ -350,10 +350,10 @@ if [ -n "$INHERIT" ]; then
     fi
     [ -f "$TESTS/.warm-walls" ] || { [ -f "$PT/.warm-walls" ] && cp "$PT/.warm-walls" "$TESTS/.warm-walls"; }
     # the seeded library template (TEST-STREAMLINE-1 3a item 5), COPIED - a home writes its library in place - when the
-    # parent's is at this tree's bake key (its own, not the warm key: tests/support/seed_home.sh)
+    # parent's is at this tree's seed key (its own, not the warm key: tests/support/seed_home.sh)
     bk=$(sh "$SRC/tests/support/seed_home.sh" key "$TESTS")
-    if [ -n "$bk" ] && [ "$(head -1 "$PT/.seedhome/bake-key" 2>/dev/null)" = "$bk" ] \
-           && [ "$(head -1 "$TESTS/.seedhome/bake-key" 2>/dev/null)" != "$bk" ]; then
+    if [ -n "$bk" ] && [ "$(head -1 "$PT/.seedhome/seed-key" 2>/dev/null)" = "$bk" ] \
+           && [ "$(head -1 "$TESTS/.seedhome/seed-key" 2>/dev/null)" != "$bk" ]; then
         take "$PT/.seedhome" "$TESTS/.seedhome" copy && got="$got .seedhome"
     fi
     # THE COLD ROWS: each row the parent primed at this key, for the same registration (paths aside) and the same staged
@@ -395,10 +395,10 @@ if [ -n "$INHERIT" ]; then
     exit 0
 fi
 # THE SEEDED LIBRARY TEMPLATE (TEST-STREAMLINE-1 3a item 5; tests/support/seed_home.sh): the 17 shipped meshes' library,
-# made ONCE per bake key by one NULL headless boot (no card, ~3 s) when the template is missing or at another key, so every
+# made ONCE per seed key (seed_home.sh key: the bake producer, the assimp pin, the 17 sources...) by one NULL headless boot (no card, ~3 s) when the template is missing or at another key, so every
 # --warm home is COPIED a seeded library and its boot seeds nothing (0.93 s a boot). With the app boots asked for, never
-# under --check; a tests dir with no bake key (a toy's, the guard rows') makes none and says nothing.
-if [ "$CHECK" = 0 ] && [ -f "$TESTS/bake-key.txt" ] && case " $SEL " in *" app-off "*) true ;; *) false ;; esac; then
+# under --check; a tests dir with no seed key inputs (a toy's, the guard rows') makes none and says nothing.
+if [ "$CHECK" = 0 ] && [ -f "$TESTS/seed-key-inputs.txt" ] && case " $SEL " in *" app-off "*) true ;; *) false ;; esac; then
     sh "$SRC/tests/support/seed_home.sh" make "$APPX" "$TESTS" || true
 fi
 RUN=""; why=""

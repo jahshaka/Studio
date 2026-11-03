@@ -927,15 +927,42 @@ function(jah_add_pool pool)
     endif()
 endfunction()
 
-# THE BAKE KEY, FOR THE HARNESS (TEST-STREAMLINE-1 3a item 5): irisgl's JAHSHAKA_MESH_BAKE_PRODUCER_ID (kFormatVersion's file
-# and every bake-producing source by content - DOCS/traps/ENGINE.md "THE BAKE KEY") in <build>/tests/bake-key.txt: the
-# seeded library template's key (tests/support/seed_home.sh: the warm-up makes the 17 shipped meshes' library once per key,
-# fresh_home.sh --warm copies it into each home). Written only when it changes (file(CONFIGURE)).
+# THE SEED TEMPLATE's KEY INPUTS (TEST-STREAMLINE-1 3a item 5 + its audit F4): EVERYTHING that decides what a seeded
+# library holds, listed in <build>/tests/seed-key-inputs.txt for tests/support/seed_home.sh, which hashes the files' CONTENT
+# when it is asked (so an edit moves the key at once, no re-configure needed for a file's bytes):
+#   producer  irisgl's JAHSHAKA_MESH_BAKE_PRODUCER_ID - the bake producer: kFormatVersion's file and every bake-producing
+#             source by content (DOCS/traps/ENGINE.md "THE BAKE KEY");
+#   git       the assimp pin (its submodule's HEAD) - the importer the seed's parse runs;
+#   file      the 17 shipped source meshes (read from the seed table src/data/primitives.h, ":/x" shipping as "app/x"),
+#             the seed table itself, the seed and import code, the library DB's schema, and the assimp patch stack.
+# The LIST is configure-time (primitives.h is a configure dependency, so a new seed row re-lists); the bytes are live.
 get_property(_jah_bake_key GLOBAL PROPERTY JAH_MESH_BAKE_PRODUCER_ID)
 if(NOT _jah_bake_key)
     message(FATAL_ERROR "tests: irisgl published no JAH_MESH_BAKE_PRODUCER_ID (irisgl/CMakeLists.txt) - the seed template needs it")
 endif()
-file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bake-key.txt" CONTENT "${_jah_bake_key}\n" @ONLY)
+file(READ "${CMAKE_SOURCE_DIR}/src/data/primitives.h" _jah_prims)
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/src/data/primitives.h")
+string(REGEX MATCHALL "\"(:/|app/)[^\"]+\\.(obj|fbx|glb|gltf|dae)\"" _jah_meshes "${_jah_prims}")
+set(_jah_seed_inputs "root ${CMAKE_SOURCE_DIR}\nproducer ${_jah_bake_key}\ngit irisgl/thirdparty/assimp\n")
+set(_jah_seed_n 0)
+foreach(_m IN LISTS _jah_meshes)
+    string(REPLACE "\"" "" _m "${_m}")
+    string(REGEX REPLACE "^:/" "app/" _m "${_m}")
+    if(NOT EXISTS "${CMAKE_SOURCE_DIR}/${_m}")
+        message(FATAL_ERROR "tests: the seed table names ${_m}, which is not in the source tree")
+    endif()
+    string(APPEND _jah_seed_inputs "file ${_m}\n")
+    math(EXPR _jah_seed_n "${_jah_seed_n} + 1")
+endforeach()
+file(GLOB _jah_assimp_patches RELATIVE "${CMAKE_SOURCE_DIR}" "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/assimp-patches/*.patch")
+list(SORT _jah_assimp_patches)
+foreach(_f src/data/primitives.h src/services/primitiveseed.cpp src/services/primitiveassets.cpp src/services/primitiveassets.h
+           src/services/import/assetimportservice.cpp src/data/database/casschema.h src/data/database/database.cpp
+           src/services/librarygeneration.cpp src/services/librarygeneration.h ${_jah_assimp_patches})
+    string(APPEND _jah_seed_inputs "file ${_f}\n")
+endforeach()
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/seed-key-inputs.txt" CONTENT "${_jah_seed_inputs}" @ONLY)
+file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/bake-key.txt")   # (its single-input predecessor, deleted)
 
 # THE HEADLESS HOST's SWITCH (TEST-STREAMLINE-1 stage 3a item 3; the lead's ruling: REPLACE NOTHING until card block B
 # proves it). The scriptable headless host (`--headless --render-offscreen`: the offscreen platform, the engine on Vulkan,

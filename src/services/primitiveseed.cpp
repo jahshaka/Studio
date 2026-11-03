@@ -106,6 +106,32 @@ QString shippedFile(const primitives::Def &def, QTemporaryDir &holder, QString *
     return QString();
 }
 
+/// THE SHIPPED BYTES THEMSELVES (TEST-STREAMLINE-1 3a audit F4): the resource when this binary has it, else the same file
+/// beside the binary (shippedFile's two routes, one rule). Empty with `errorOut` set when neither is there.
+QByteArray shippedBytes(const primitives::Def &def, QString *errorOut)
+{
+    const QString seed = QString::fromLatin1(def.mesh);
+    const QString onDisk = IrisUtils::getAbsoluteAssetPath(
+        seed.startsWith(QLatin1Char(':')) ? QStringLiteral("app") + seed.mid(1) : seed);
+    const QString path = seed.startsWith(QLatin1Char(':')) && QFileInfo::exists(seed) ? seed : onDisk;
+    QFile f(path);
+    if (!f.open(QIODevice::ReadOnly)) {
+        if (errorOut) *errorOut = QStringLiteral("the shipped file '%1' cannot be read").arg(path);
+        return QByteArray();
+    }
+    return f.readAll();
+}
+
+/// Do the stored source's bytes equal the shipped ones? (A content-addressed store names an object by its bytes, but a
+/// library copied from a template - or made by an older build - may hold the PREVIOUS shipped mesh under the same guid.)
+bool storedIsShipped(const primitives::Def &def, const QString &storedPath)
+{
+    QFile stored(storedPath);
+    if (!stored.open(QIODevice::ReadOnly)) return false;
+    const QByteArray shipped = shippedBytes(def, nullptr);
+    return !shipped.isEmpty() && stored.size() == shipped.size() && stored.readAll() == shipped;
+}
+
 /// The row exists and its source bytes are in the store: the path to them.
 QString storedSource(QSqlDatabase conn, const QString &root, Database *db, const QString &guid)
 {
@@ -155,7 +181,16 @@ Plan planSeed(const primitives::Def &def, Database *db)
     // (kFormatVersion, the BAKE KEY) leaves the row and its source in place with
     // a bake this build cannot read, and the seed is the one place that knows
     // how to rebuild it without waiting for a sweep.
-    const QString have = storedSource(conn, root, db, plan.guid);
+    QString have = storedSource(conn, root, db, plan.guid);
+    // A SEEDED ROW HOLDS THE SHIPPED BYTES, OR IT IS RE-SEEDED (TEST-STREAMLINE-1 3a audit F4): a row whose stored source
+    // is not the mesh this build ships (a library from a template, or one an older build seeded, after a shipped mesh
+    // changed) would draw the OLD mesh with a bake that reads fresh against its own old source - so it is dropped below
+    // like a row with no bytes, and imported again from the shipped file. Said once, by name.
+    if (!have.isEmpty() && !storedIsShipped(def, have)) {
+        irisLog(QStringLiteral("seed: '%1' holds a stored source that is not the shipped mesh - re-seeded")
+                    .arg(QString::fromLatin1(def.name)));
+        have.clear();
+    }
     if (!have.isEmpty()) {
         plan.seeded = true;
         if (!MeshBakeStore::isFresh(conn, root, have, plan.guid)) {
