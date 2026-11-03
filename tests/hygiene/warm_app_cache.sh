@@ -200,6 +200,16 @@ out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B2/tests" "$
     [ "$(cat "$B2/tests/.shadercache.engine-id")" = "$EID" ] &&
     ok "a TOP-UP boot (the engine's code moved alone) boots without the hlms layer and REPLACES the union: the old hlms entries gone, the pipelines kept" ||
     no "the top-up's union: rc $rc $(echo "$out" | tail -3) / $(tr '\n' ';' < "$B2/tests/.shadercache/cache-manifest.txt")"
+# A COVERAGE BUILD's BOOT WRITES ITS PROFILE UNDER coverage/boots/<boot> (the 2a audit's finding 1; red before: nothing set it)
+B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n' > "$B3/CMakeCache.txt"; toy_cache "$B3/tests/.shadercache" 1 2
+printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/covapp"; chmod +x "$T/covapp"
+mkdir -p "$B3/engine/generated" "$B3/bin/media"; cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B3/engine/generated/"
+cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B3/bin/media/" 2>/dev/null
+DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
+printf '%s\n%s\n%s\n' "$("$W" "$B3" --key)" "k1 k2 " "sets none" > "$B3/tests/.shadercache.warm-key"; echo "$EID" > "$B3/tests/.shadercache.engine-id"
+DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
+[ "$(cat "$T/b3.prefix" 2>/dev/null)" = "$B3/coverage/boots/app-on" ] && [ -d "$B3/coverage/boots/app-on" ] &&
+    ok "a JAH_COVERAGE build's boot writes its profile under coverage/boots/<boot>" || no "the boot's GCOV_PREFIX: '$(cat "$T/b3.prefix" 2>/dev/null)'"
 fi
 if want cold; then
 # THE COLD ROWS (cold-on, URGENT #119; SHIP-CUT-2 0b): a row declared COLD makes its own cache, so cold-on runs each listed

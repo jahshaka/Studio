@@ -487,7 +487,7 @@ boot() {
     # which every exe loads - a driver-cache hit would leave it out of it
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
           __GL_SHADER_DISK_CACHE=0 nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" \
-          --label "warm-app-cache ($name)" sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
+          --label "warm-app-cache ($name)" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
     rc=$?
     [ $rc = 75 ] && held "$log" "$name" "$name $rest"
     wall=$(( $(date +%s) - t0 ))
@@ -531,7 +531,7 @@ driver_boot() {
     t0=$(date +%s)
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
           env -u __GL_SHADER_DISK_CACHE nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" \
-          --label "warm-app-cache ($name)" sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
+          --label "warm-app-cache ($name)" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
     rc=$?
     [ $rc = 75 ] && held "$log" "$name" "$name $rest"
     wall=$(( $(date +%s) - t0 ))
@@ -564,7 +564,7 @@ cold_boot() {
          "now; each row's card wait at most ${WAIT} s): $names"
     t0=$(date +%s)
     ( H="$TESTS/warm-cold-home"; rm -rf "$H"; mkdir -p "$H"
-      HOME="$H" JAH_COLD_ONLY="$names" JAH_COLD_WAIT="$WAIT" env -u __GL_SHADER_DISK_CACHE nice -n 10 \
+      HOME="$H" JAH_COLD_ONLY="$names" JAH_COLD_WAIT="$WAIT" env -u __GL_SHADER_DISK_CACHE $(cov_env cold-on) nice -n 10 \
           bash "$SRC/tests/support/warm_cold_rows.sh" "$COLDROWS" "$deadline" "$LOGS/cold-on"; rc=$?; rm -rf "$H"; exit $rc ) > "$log" 2>&1
     rc=$?
     wall=$(( $(date +%s) - t0 ))
@@ -602,6 +602,14 @@ cold_boot() {
 # its promotion replaces the union with what this engine uses - the dead permutations of earlier engine versions never pile up
 topup_args() {   # <boot>: " --drop-hlms" when its only why is the top-up
     case "$(why_of "$1")" in *"a TOP-UP"*) [ -z "$(TOPUP_CHECK=0 why_of "$1")" ] && echo " --drop-hlms" ;; esac
+}
+# THE WARM-UP's BOOTS WRITE THEIR COVERAGE (TEST-STREAMLINE-1 stage 2, the 2a audit's finding 1, the lead's ruling): in a
+# JAH_COVERAGE build each boot's counters go under <build>/coverage/boots/<boot> (scripts/coverage_map.py reads them as the
+# producers of the cached artefacts its class's rows load); in every other build nothing
+COVERAGE=$(sed -n 's/^JAH_COVERAGE:BOOL=//p' "$BUILD/CMakeCache.txt" 2>/dev/null)
+cov_env() {   # <boot>: the GCOV_PREFIX assignments for env, or nothing
+    case "$COVERAGE" in ON|on|1|TRUE|true) mkdir -p "$BUILD/coverage/boots/$1"
+        echo "GCOV_PREFIX=$BUILD/coverage/boots/$1 GCOV_PREFIX_STRIP=0" ;; esac
 }
 DUMP="$TESTS/.hlms-dump"
 LABSCRIPT="$TESTS/warm-engine-cache.lab"
