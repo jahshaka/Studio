@@ -4420,7 +4420,9 @@ void EngineSceneViewport::presentCovered(int frames)
 {
     // Nothing to present into: an offscreen fallback view owns no pixels of
     // this widget, and no view at all owns nothing.
-    if (!view() || view()->isOffscreen() || !mEngine) return;
+    // (View::presentsAsWindow: the headless host's stand-in draws the covered frames its window would - the same
+    // frames, so the same histories; TEST-STREAMLINE-1 3a item 2b)
+    if (!view() || !view()->presentsAsWindow() || !mEngine) return;
     // ...NOR WHILE THE VR SESSION PAINTS THE HEADSET'S EYE ON IT (U3 stage 2 read F2: the snapshot's fact, never the
     // enable): the desktop shows the eye, not this widget's picture.
     if (sessionPaintsThisView()) return;
@@ -4514,7 +4516,7 @@ void EngineSceneViewport::presentBackground()
     // See the declaration for why this is explicit. Everything below is a
     // reason there is nothing to do, in the order it is cheapest to find out.
     if (!mActive || !mEngine) return;
-    if (!view() || view()->isOffscreen()) return;
+    if (!view() || !view()->presentsAsWindow()) return;   // (a presented stand-in is the window's route)
     if (sessionPaintsThisView()) return;   // the desktop shows the headset's eye (U3 read F2)
     if (mEngineScene) return;              // a world is bound: ordinary frames own the picture
     if (!isVisible()) return;              // no pixels of ours on screen to replace
@@ -4653,7 +4655,7 @@ void EngineSceneViewport::beginSceneLoad(const QString &title)
 jahshaka::engine::FramePace EngineSceneViewport::driverFramePace() const
 {
     using jahshaka::engine::FramePace;
-    if (!mEngine || !view() || view()->isOffscreen()) return FramePace::Complete;
+    if (!mEngine || !view() || !view()->presentsAsWindow()) return FramePace::Complete;   // (a stand-in paces as its window)
     // While the world is still arriving it is `Scene::setLoading` that holds
     // the arm back, not this — see the note on that verb: a load draws frames
     // from half a dozen places and a per-frame flag cannot cover them all.
@@ -4947,18 +4949,19 @@ IEditorViewport *createEngineSceneViewport(const std::shared_ptr<Engine> &engine
 }
 
 // THE HEADLESS HOST's VIEWPORT (TEST-STREAMLINE-1 stage 3a): THIS class over an offscreen View by declaration - never a
-// second implementation of the editor's engine work. THE CONTRACT is StillPicture, the one the presented editor view
-// takes: an on-screen view "always gathers where its scene does" (Engine.h View::setOffscreenContract), and of the two
-// offscreen contracts only StillPicture gathers (OgreView.cpp's contractAllows) - the same contract showEvent gives
-// the native path's fallback below, for the same reason (it drives the scene's GI; its pictures are the screenshot
-// verbs', taken at rest).
+// second implementation of the editor's engine work. THE CONTRACT is PresentedStandIn (item 2b, Types.h): the view
+// STANDS IN FOR the presented editor view - every engine branch that tells a presented view from an offscreen picture
+// reads View::presentsAsWindow and takes the window's route (the post chain, the overlay, the PiP, the LOD band, the
+// photon view's present, the GI driver's on-screen pass, the reflection's fold, the frame monitor's on-screen frame,
+// the mirror's sample count) - and it gathers as a window does (OgreView.cpp's contractAllows: it presents). A test on
+// the host guards the picture a user sees; only the target is a texture.
 IEditorViewport *createOffscreenEditorViewport(const std::shared_ptr<Engine> &engine,
                                                EngineRenderDriver *driver, QWidget *parent, QString &error)
 {
     error = EngineViewWidget::viewRefusal(engine.get());
     if (!error.isEmpty()) return nullptr;
     auto *viewport = new EngineSceneViewport(engine, driver, parent);
-    viewport->setOffscreen(jahshaka::engine::OffscreenContract::StillPicture);
+    viewport->setOffscreen(jahshaka::engine::OffscreenContract::PresentedStandIn);
     return viewport;
 }
 

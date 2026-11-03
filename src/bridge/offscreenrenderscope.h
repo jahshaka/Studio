@@ -55,7 +55,8 @@ public:
         const bool eyeOnDesktop =
             mEngine->published().vr.mirrorShowing == jahshaka::engine::VrDesktopPicture::Eye;
         for (jahshaka::engine::View *v : views) {
-            if (!v || v->isOffscreen() || !v->pushedEnabled()) continue;
+            // (a presented stand-in - the headless host's editor view - is suspended as the window it stands in for)
+            if (!v || !v->presentsAsWindow() || !v->pushedEnabled()) continue;
             if (eyeOnDesktop && v == mEngine->vrMirrorView()) continue;
             v->setEnabled(false);
             mSuspended.push_back(v);

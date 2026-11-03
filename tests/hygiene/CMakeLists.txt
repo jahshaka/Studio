@@ -446,6 +446,15 @@ jah_ship_row(source.graphics_queue_seams)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.graphics_queue_seams PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.graphics_queue_seams)
 
+# source.presented_predicate — ONE PREDICATE OF "PRESENTED" (TEST-STREAMLINE-1 3a item 2b): the headless host's editor
+# view (OffscreenContract::PresentedStandIn) takes the window's route at every presented-vs-offscreen branch -
+# View::presentsAsWindow read at each named site, no isOffscreen() left in the engine but the target's fact, the
+# identity born once, only the host's factory declaring it. See the script; the picture proof is card block B (B1).
+add_test(NAME source.presented_predicate
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/presented_predicate.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.presented_predicate PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.presented_predicate)
+
 # source.scene_no_photon_members — ENGINE-UPGRADE-2B stage 1: Photon's state lives in
 # PhotonComponent, not OgreScene — none of the COMMITTED NAMED LIST (photon_members.txt) is an
 # OgreScene member, every one is a PhotonComponent member. See the script.
