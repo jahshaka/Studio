@@ -217,6 +217,7 @@ physics.many_movers 1.58  solo, the card lock held, :76, box 95 % CPU-idle (THRE
 picking.fov_cap 1.54  quiet n=44
 pieces.mirror 1.83  quiet n=46
 player.editor_parity 6.10  ship 3a0422b4e (2026-10-13)
+pool.runner 27.10  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 3a item 1, 2026-11-03: revived as a code row - the NULL headless app's five arms, three times, + the stand-in app's crash/hang/baseline/tier/Xid cases; 27.69 by hand)
 pool.editor 29.02  quiet n=46
 pool.editor::add_primitive 0.55  quiet n=46
 pool.editor::build_scene 1.67  quiet n=46

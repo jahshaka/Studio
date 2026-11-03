@@ -146,14 +146,28 @@ if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     find_program(JAH_XVFB Xvfb)
 endif()
 
-# pool.runner (archived: archive/tests/pool) — THE POOL RUNNER'S OWN TEST (tests/support/test_run_pool.py; the runner is
+# pool.runner — THE POOL RUNNER'S OWN TEST (tests/support/test_run_pool.py; the runner is
 # src/app/cli/scriptrunner.cpp, so the row lives with the app's): the real app,
 # headless, over five fixture arms (a fresh realm and a closed project between arms, a thrown
 # assertion and a numeric completion value as FAIL, the pool going on, JAH_POOL_ARMS's subset
 # and its unknown-arm FAIL), and the driver against a stand-in app for what the real one cannot
 # be asked to do (a SIGSEGV mid-arm, a hang past the budget, a lost baseline — one arm each).
+# REVIVED AS A `code` ROW (TEST-STREAMLINE-1 3a item 1): stage 3 groups rows on run_pool.py, so its own suite runs on
+# every stage again. The real-app half is the NULL headless app (no display, no card: jah_no_display; no warm cache -
+# the NULL render system compiles nothing), the stand-in half pure CPU. A fresh home every run (fresh_home.sh, no --warm).
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/pool-home-runner)
 file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME pool.runner
+         COMMAND sh ${JAH_FRESH_HOME} ${_home} --
+                 ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/support/test_run_pool.py
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${JAH_RUN_POOL}
+                 ${CMAKE_CURRENT_SOURCE_DIR}/pool_selftest
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(pool.runner PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    JAHSHAKA_HEADLESS TRUE   # every app process it starts is --headless: the NULL render system (testing_rules R13)
+    LABELS "pool;scripting;tooling" TIMEOUT 60)
+jah_no_display(pool.runner)
 
 # THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B2; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, MEASURED — every engine frame (Engine::renderOneFrame) of every process the row starts,
