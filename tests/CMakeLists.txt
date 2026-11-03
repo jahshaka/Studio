@@ -934,15 +934,17 @@ file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/bake-key.txt")   # (its single-input pr
 #   JAH_HOST_POOLS  pools of host rows, ONE process for their arms (jah_add_pool APP_ARGS ${JAH_HOST_ARGS}); a pool ON
 #                   registers in place of its arms' single rows (JAH_HOST_POOL_<pool>, jah_host_pooled). B2 (the clean-state
 #                   law, tests/support/clean_state.py --warm, forward and reversed: each arm first once = alone):
-#                   host_low HOLDS (pool 6.49 s against its two rows' 21.79 s). host_epic is NOT ON: VIOLATED - paused_shot's
-#                   play time after editor.frame(37) is not a function of the frames (t 0.350 after change_then_shot, 0.367
-#                   first, 1.100 in the app row) and its stopped shot settles 126 / 199 / 71 frames; the row's own law (the
-#                   shot during play = the stopped shot at the same t) held in every run.
+#                   host_low HOLDS (pool 6.49 s against its two rows' 21.79 s). host_epic VIOLATED at block B (paused_shot's
+#                   play time after editor.frame(37) was the wall's - t 0.350 / 0.367 / 1.100 by order and form) until red (b)
+#                   (ba38b6234: a lockstep frame is one grid step); RE-RUN 2026-11-04 (TE7, card/te7/b2-host_epic.out, warm,
+#                   :74): HOLDS forward and reversed - paused_shot t 0.6166666746139526 (37/60), at rest in 261 / stopped in
+#                   80 frames, 0 px over a code; change_then_shot at rest in 63 frames - identical lines in both orders;
+#                   arms 1.98 / 1.95 s and 3.02 / 2.97 s. ON since.
 # The shell-wrapped rows (atom.pass_table, shadow.cutout_caster, scripting.e2e.perf_capture_frames, log.engine,
 # material.live_roundtrip.*) stay as they are.
 set(JAH_HOST_ROWS gi.one_writer perf.offscreen_isolation scene.reopen_fidelity.high_sky scene.reopen_fidelity.scaled
     hdr.bloom_showroom scene.reopen_fidelity scripting.e2e.world_stillness)
-set(JAH_HOST_POOLS host_low)
+set(JAH_HOST_POOLS host_low host_epic)
 set(JAH_HOST_ARGS --headless --render-offscreen)
 set(JAH_HOST_POOL_host_epic scripting.e2e.change_then_shot scripting.e2e.paused_shot)
 set(JAH_HOST_POOL_host_low scripting.e2e.lamps_unshadowed sockets.e2e)

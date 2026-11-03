@@ -310,12 +310,8 @@ scripting.e2e.resize_rest.a 17.79  the card lock held, :72, warm (2026-10-27: th
 scripting.e2e.resize_rest.b 17.79  the card lock held, :72, warm (2026-10-27: the shader cache from the tree's shared app cache - cold, ~300 shaders a boot sat at the 60 s cap)
 scripting.e2e.resize_rest.c 23.19  the card lock held, :72, warm (2026-10-27: the shader cache from the tree's shared app cache - cold, ~300 shaders a boot sat at the 60 s cap)
 scripting.e2e.world_stillness.fresh_home 0.01  solo (PHOTON-2 stage 0, 2026-10-22)
-scripting.e2e.change_then_shot 15.50  the card lock held, :72, warm (2026-10-27: the shader cache from the tree's shared app cache - cold, ~300 shaders a boot sat at the 60 s cap)
-scripting.e2e.change_then_shot.fresh_home 0.01  solo (PHOTON-7 stage 10-3, 2026-10-26)
 scripting.e2e.second_project_capture 16.88  the card lock held, :72, warm (2026-10-27: the shader cache from the tree's shared app cache - cold, ~300 shaders a boot sat at the 60 s cap)
 scripting.e2e.second_project_capture.fresh_home 0.02  solo (PHOTON-7 stage 10-3 R0, 2026-10-26)
-scripting.e2e.paused_shot 16.74  the card lock held, :72, warm (2026-10-27: the shader cache from the tree's shared app cache - cold, ~300 shaders a boot sat at the 60 s cap)
-scripting.e2e.paused_shot.fresh_home 0.01  solo (PHOTON-7 stage 10-3, 2026-10-26)
 scripting.live 10.56  quiet n=49
 services.core 0.00  ship 3a0422b4e (2026-10-13)
 services.memory 0.10  ship 3a0422b4e (2026-10-13)
@@ -458,4 +454,7 @@ gi.fog_far_hall 2.56  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round
 pool.host_low 6.49  solo, the card lock held, :77, WARM, ctest -j1, CPU idle ~90 %, THE HEADLESS HOST's ONE PROCESS (TEST-STREAMLINE-1 block B2, 2026-11-03: scripting.e2e.lamps_unshadowed 11.73 + sockets.e2e 10.06 s as app rows; the clean-state law held forward and reversed)
 pool.host_low::lamps_unshadowed 0.41  the arm's ARM line in pool.host_low's solo run (block B2, 2026-11-03)
 pool.host_low::sockets 0.90  the arm's ARM line in pool.host_low's solo run (block B2, 2026-11-03)
+pool.host_epic 11.40  solo, the card lock held, :74, WARM, ctest -j1, THE HEADLESS HOST's ONE PROCESS (TEST-STREAMLINE-1 TE7, 2026-11-04, card/te7/b2-switch-proof.out: scripting.e2e.change_then_shot 15.50 + scripting.e2e.paused_shot 16.74 s as app rows; the clean-state law HOLDS forward and reversed since red (b), card/te7/b2-host_epic.out); the first run after the configure's relink of bin/Jahshaka
+pool.host_epic::change_then_shot 2.07  the arm's ARM line in pool.host_epic's solo run (TE7, 2026-11-04; 1.98 / 1.95 s in the clean-state orders)
+pool.host_epic::paused_shot 3.07  the arm's ARM line in pool.host_epic's solo run (TE7, 2026-11-04; 3.02 / 2.97 s in the clean-state orders)
 tooling.gpu_lock_mark 1.97  CPU, ctest, solo, nice 10, no GPU (TEST-STREAMLINE-1 block D, 2026-11-03: a ctest under the card's lock marks its tree - a toy git tree and a fake ctest on a private lock; the build of the tree just before, CPU loaded)

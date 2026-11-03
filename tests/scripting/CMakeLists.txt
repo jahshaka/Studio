@@ -1058,11 +1058,12 @@ endif()
 # pool.host_epic — THE HEADLESS HOST, ONE PROCESS FOR TWO EPIC+PHOTON SHOT ROWS (TEST-STREAMLINE-1 3a item 3): the
 # arms are scripting.e2e.change_then_shot's and .paused_shot's scripts, unchanged, on `--headless --render-offscreen`.
 # Each arm makes its own scene (change_then_shot the boot's default Basic world through project.create - the lead's
-# ruling: no arm depends on being first), so any order runs the same scenes. OFF until block B (JAH_HOST_POOLS); the
-# arms' seconds are ESTIMATES (each row's solo price less its ~5.6-s boot) until block B measures them in the pool.
+# ruling: no arm depends on being first), so any order runs the same scenes. ON since TE7 (2026-11-04, JAH_HOST_POOLS:
+# its clean-state law HOLDS once red (b) made a lockstep frame one grid step); the arms' seconds are their measured ARM
+# walls rounded up (1.98 / 1.95 and 3.02 / 2.97 s, forward / reversed: card/te7/b2-host_epic.out) - were 10 / 12 estimates.
 if("host_epic" IN_LIST JAH_HOST_POOLS)
-    jah_pool_arm(host_epic change_then_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js 10)
-    jah_pool_arm(host_epic paused_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js 12)
+    jah_pool_arm(host_epic change_then_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js 2)
+    jah_pool_arm(host_epic paused_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js 4)
     jah_add_pool(host_epic TIER epic NEEDS photon APP_ARGS ${JAH_HOST_ARGS} LABELS "scripting")
     set_property(TEST pool.host_epic PROPERTY JAHSHAKA_TEST_FRAMES 800)   # the two rows' measured 400 + 400
 endif()
