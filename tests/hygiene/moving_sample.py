@@ -5,7 +5,11 @@ A stochastic producer's MOVING sample index is a view's frames since its scene's
 (irisgl/engine/src/MovingSample.h, detail::MovingSequence) - never the raw per-view counter, which counted every frame the
 view ever traced and made a moving picture a function of what the process drew before (the self-test's mover:
 2d88c4ee after the fixture half alone, 122cb3a8 after the default poses). The law on the source:
-  M1 no raw `<counter>.frame & 0xFFFF` sample index is left in the engine's sources (comments aside);
+  M1 NO RAW FRAME-COUNT SEED is left anywhere in the engine's sources - every subdirectory of irisgl/engine/src (photon/,
+     rayquery/, atom/, ...), comments aside - in any form (the 3c audit: the glass escape's `frameNow() & 0xFFFF` hid from
+     a pattern that knew only `.frame`, in a file list that did not walk): the process frame (frameNow()), a view's or a
+     state's `.frame`, a member counter (mFrame..., m...Frame...) or a bare `frame`, masked to 16 bits (`& 0xFFFF`) or
+     wrapped (`% 65536`, `% 0x10000`), or written straight into a float parameter (`float(frameNow())`, `float(x.frame)`);
   M2 each known moving site reads the helper: the reflection's pp.knobs[2], the gather's rp.seq[0] and pp.knobs6[2], the
      area visibility's pp.strata[1], the glass escape's pp.knobs3[0] (its moving draws; at rest its rest sequence);
   M3 the helper restarts on a scene id or a size change and on nothing else (its one `if`), with a unique scene id
@@ -46,13 +50,14 @@ SITES = [
     ("OgreRayQuery.cpp", "pp.knobs3[0] = float(restFrames > 0u ? kGlassRestSequence + std::min(restFrames - 1u, (1u << 20) - 1u)",
      "the glass escape's REST area draws (the rest sequence, keyed on the view's rest frame K)"),
 ]
-RAW = re.compile(r"\b\w+\.frame\s*&\s*0x[fF]{4}u?\b")
+FRAME = r"(?:frameNow\(\)|\b\w+\.frame\b|\bm[A-Z]\w*Frame\w*\b|\bmFrame\w*\b|\bframe\b)"
+RAW = re.compile(FRAME + r"\s*(?:&\s*0x[fF]{4}u?\b|%\s*(?:65536|0x10000)u?\b)|\bfloat\(\s*(?:frameNow\(\)|\w+\.frame)\s*\)")
 
 
 def laws(files):
     out = []
     raw = sorted("%s: %s" % (f, m.group(0)) for f, t in files.items() for m in RAW.finditer(code_only(t)))
-    out.append((not raw, "M1 no raw `.frame & 0xFFFF` moving index left in the engine (%s)" % raw))
+    out.append((not raw, "M1 no raw frame-count seed left in the engine, any subdirectory, any form (%s)" % raw))
     for f, text, what in SITES:
         out.append((text in files.get(f, ""), "M2 %s reads the helper (%s)" % (what, f)))
     h = code_only(files.get("MovingSample.h", ""))
@@ -73,9 +78,21 @@ def laws(files):
 def main(src):
     d = os.path.join(src, "irisgl", "engine", "src")
     files = {}
-    for n in os.listdir(d):
-        if n.endswith((".cpp", ".h")):
-            files[n] = open(os.path.join(d, n), errors="replace").read()
+    for root, _, names in os.walk(d):           # EVERY subdirectory (the 3c audit: photon/, rayquery/, atom/, ...)
+        for n in names:
+            if n.endswith((".cpp", ".h")):
+                p = os.path.join(root, n)
+                files[os.path.relpath(p, d)] = open(p, errors="replace").read()
+    subdirs = sorted({f.split("/")[0] for f in files if "/" in f})
+    check(len(subdirs) >= 2, "the walk reaches the engine's subdirectories (%s)" % subdirs)
+    # M1 FED ONCE PER FORM, each in a SUBDIRECTORY's file (the walk's own proof): appended code, never a comment
+    sub = next(f for f in sorted(files) if f.startswith("photon/") and f.endswith(".cpp"))
+    for form in ("x = frameNow() & 0xFFFFu;", "x = st.frame & 0xFFFF;", "x = mFrameCounter & 0xFFFFu;",
+                 "x = mCardFrame % 65536u;", "x = frame % 0x10000u;", "p.k = float(frameNow());", "p.k = float(hv.frame);"):
+        m = dict(files)
+        m[sub] = m[sub] + "\nvoid jahMutation() { " + form + " }\n"
+        red = [w for ok, w in laws(m) if not ok and w.startswith("M1")]
+        check(bool(red), "M1 is fed the form `%s` in %s and reds" % (form, sub))
     muts = [("M1", "OgreAreaVis.cpp", "st.moving.index(st.frame, sceneId, w, h)", "(st.frame & 0xFFFFu)"),
             ("M2", "OgreRayQuery.cpp", "rv.moving.index(rv.frame,", "rv.moving_index(rv.frame,"),
             ("M3", "MovingSample.h", " || width != mW || height != mH", ""),
