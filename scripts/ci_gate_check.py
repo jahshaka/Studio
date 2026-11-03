@@ -31,6 +31,7 @@ import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
 sys.path.insert(0, HERE)
+import gate_graph  # noqa: E402
 import gate_runlog  # noqa: E402
 
 CANDIDATES_MAX = 40          # the newest ancestors holding records that one serving reads (a selection each)
@@ -250,8 +251,7 @@ def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
         # a lint reads the whole tree, so only a record of THIS tree answers it (2026-10-14: seven unpriced rows passed R2 by a
         # served record of an older tree); at the same tree it is the same answer (URGENT FIX LIST #20)
         return "a lint reads the whole tree: served only by a record of this very tree"
-    rc = (rec.get("config") or {}).get("hash")
-    if not rc or not cfg or rc != cfg.get("hash"):
+    if not gate_graph.config_equal(rec.get("config"), cfg):
         return "its build configuration differs (or is unknown): %s vs this build's %s" % (
             (rec.get("config") or {}).get("build_type"), (cfg or {}).get("build_type"))
     d = rec.get("declaration")
@@ -284,8 +284,7 @@ def red_stands(rec, fact, reach, cfg):
         return "the row is not in the build's ctest inventory"
     if not reach.same_tree(rec["tip"]["studio"]):
         return "a red of an ancestor's tree (the diff may have fixed it)"
-    rc = (rec.get("config") or {}).get("hash")
-    if not rc or not cfg or rc != cfg.get("hash"):
+    if not gate_graph.config_equal(rec.get("config"), cfg):
         return "its build configuration differs (or is unknown)"
     d = rec.get("declaration")
     d = d.get("hash") if isinstance(d, dict) else None
@@ -336,6 +335,8 @@ def serve(build, tip, rows):
     build = gs.resolve_build(build)
     reach = Reach(gs, build, tip)
     facts, cfg, _ = gate_runlog.row_facts(build)
+    if cfg:   # the flags half, read once: config_equal proves a record's flags from its own hash (URGENT #154)
+        cfg = dict(cfg, keys=gate_graph.config_keys(build))
     cands = candidates(gs.ROOT, tip)
     got = records_by_tip({c: ig for c, ig, _ in cands})
     tip_fork = next((fk for c, _, fk in cands if c == tip), None) or \

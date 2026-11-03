@@ -763,6 +763,15 @@ def strip_roots(value, roots):
     return value
 
 
+def _strip_root_bytes(data, roots):
+    """A CONFIGURED COPY's bytes with the tree's and the build's paths as `<root>` / `<build>` (URGENT #154): configure_file
+    writes the tree's absolute spelling into a row's script (cleanstart_<sample>.js: `var ZIP = "<tree>/scenes/…"`), so its
+    raw hash - the row's data hash - differed in every tree and a lane's record never served its parent's tree."""
+    for p, tok in _prefixes(roots):
+        data = re.sub(re.escape(p.encode()) + rb"(?=/|$|[\s\"';:,=])", tok.encode(), data)
+    return data
+
+
 def _sha256(data):
     import hashlib
     return hashlib.sha256(data).hexdigest()
@@ -951,7 +960,8 @@ def data_set(test, roots, _memo=None, hashed=True):
                     dirs.append(rel[len("<root>/"):])
                 continue
             if path not in memo:
-                memo[path] = None if _is_elf(path) else _sha256(open(path, "rb").read())
+                memo[path] = None if _is_elf(path) else _sha256(
+                    _strip_root_bytes(open(path, "rb").read(), roots) if tok == "<build>" else open(path, "rb").read())
             if memo[path] is not None:
                 files[rel] = memo[path]
                 sources[rel] = "argument"
@@ -1014,9 +1024,7 @@ def build_config(build, cache=None):
     c = _cache_entries(build) if cache is None else cache
     if not c:
         return None, f"no CMakeCache.txt in {build}"
-    keys = {k: v for k, (t, v) in c.items() if k in _CONFIG_KEYS or k.endswith("_FLAGS_" + (c.get("CMAKE_BUILD_TYPE") or ("", ""))[1].upper())}
-    opts = {k: v for k, (t, v) in c.items()
-            if (t == "UNINITIALIZED" or re.match(r"^(JAH|ENABLE|DISABLE|WITH|USE)_", k)) and k not in keys}
+    keys, opts = _config_parts(c)
     cfg = {"build_type": (c.get("CMAKE_BUILD_TYPE") or ("", ""))[1] or None,
            "generator": (c.get("CMAKE_GENERATOR") or ("", ""))[1] or None,
            "compiler": (c.get("CMAKE_CXX_COMPILER") or ("", ""))[1] or None,
@@ -1025,6 +1033,45 @@ def build_config(build, cache=None):
     cfg["options"] = opts
     cfg["hash"] = _sha256(_canon_json(full).encode())
     return cfg, None
+
+
+def _config_parts(c):
+    """(the flags and switches CMake builds with, the options) of a CMakeCache's entries - build_config's two halves."""
+    keys = {k: v for k, (t, v) in c.items() if k in _CONFIG_KEYS or k.endswith("_FLAGS_" + (c.get("CMAKE_BUILD_TYPE") or ("", ""))[1].upper())}
+    opts = {k: v for k, (t, v) in c.items()
+            if (t == "UNINITIALIZED" or re.match(r"^(JAH|ENABLE|DISABLE|WITH|USE)_", k)) and k not in keys}
+    return keys, opts
+
+
+def config_keys(build):
+    """The flags half of <build>'s configuration (never recorded: config_equal reads it to check a record's hash), or None."""
+    c = _cache_entries(build)
+    return _config_parts(c)[0] if c else None
+
+
+def _switches(opts):
+    """The options that CONFIGURE a build: every option but a LOCATION (a value that is an absolute path - a tool, a data set,
+    the tree's own spelling). URGENT #154: #129's guard put JAH_CONFIGURED_SOURCE_DIR (the tree's path) into every build's
+    options, so a record served no tree but its own - a landing at the very tip a lane had proved re-planned 329 rows."""
+    return {k: v for k, v in (opts or {}).items() if not str(v).startswith("/")}
+
+
+def config_equal(rec_cfg, cfg):
+    """Is a record's build configuration this build's? `cfg`: build_config's, with `keys` (config_keys) beside it. Equal
+    hashes are equal; otherwise THE FLAGS are proved equal from the record's own hash (its hash over this build's flags and
+    the record's stored options must reproduce it) and THE SWITCHES compared (_switches: a tree's paths are not its
+    configuration). A record without a hash or its options is unknown - never equal."""
+    rh = (rec_cfg or {}).get("hash")
+    if not rh or not cfg or not cfg.get("hash"):
+        return False
+    if rh == cfg["hash"]:
+        return True
+    ro = (rec_cfg or {}).get("options")
+    if not isinstance(ro, dict) or cfg.get("keys") is None:
+        return False
+    if _sha256(_canon_json({"keys": cfg["keys"], "options": ro}).encode()) != rh:
+        return False                                   # the flags differ
+    return _switches(ro) == _switches(cfg.get("options"))
 
 
 def row_facts(build, hashed=True):

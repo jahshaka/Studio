@@ -99,5 +99,51 @@ else:
 open(data, "w").write("two")
 if gg.data_set(row, roots, {})["hash"] == hashes[0][0]:
     fails.append("a real data argument's change does not move the row's data hash")
+# A RECORD SERVES ANOTHER TREE AT EQUAL INPUT (URGENT #154): #129's guard put the tree's own path into every build's options
+# (JAH_CONFIGURED_SOURCE_DIR) and configure_file writes it into a row's script, so a lane's records served no tree but its own -
+# a landing at the very tip the lane had proved planned 329 rows. Two toy trees, one commit: the configuration and the data equal.
+import shutil  # noqa: E402
+for tree in ("lane", "parent"):
+    r_, b_ = os.path.join(t, tree), os.path.join(t, tree, "build-linux")
+    os.makedirs(os.path.join(b_, "tests", "s")); os.makedirs(os.path.join(r_, "scenes"))
+    open(os.path.join(r_, "scenes", "S.zip"), "w").write("the sample")
+    open(os.path.join(b_, "tests", "s", "row.js"), "w").write('var ZIP = "%s/scenes/S.zip";\nvar OUT = "%s/out";\n' % (r_, b_))
+    open(os.path.join(b_, "CMakeCache.txt"), "w").write(
+        "CMAKE_HOME_DIRECTORY:INTERNAL=%s\nCMAKE_CACHEFILE_DIR:INTERNAL=%s\nCMAKE_BUILD_TYPE:STRING=Debug\n"
+        "CMAKE_CXX_FLAGS:STRING=-pipe\nDISABLE_BREAKPAD:UNINITIALIZED=ON\nJAH_CONFIGURED_SOURCE_DIR:INTERNAL=%s\n"
+        "JAH_XVFB:FILEPATH=/usr/bin/Xvfb\n%s" % (r_, b_, r_, "JAH_LAB_OLD_MODEL:FILEPATH=/data/old.fbx\n" if tree == "parent" else ""))
+lane, parent = os.path.join(t, "lane", "build-linux"), os.path.join(t, "parent", "build-linux")
+cl, cp = gg.build_config(lane)[0], dict(gg.build_config(parent)[0], keys=gg.config_keys(parent))
+recd = {"hash": cl["hash"], "options": cl["options"]}
+cases = [("a lane's record, its tree's path the only difference (and a stale location in the parent's cache): EQUAL", recd, cp, True),
+         ("the same record without its options: unknown, never equal", {"hash": cl["hash"]}, cp, False)]
+base_cache = open(os.path.join(lane, "CMakeCache.txt")).read()
+
+
+def variant(line, name):
+    """The lane's record had its cache carried `line` (the last entry of a name wins)."""
+    open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache + line + "\n")
+    v = gg.build_config(lane)[0]
+    cases.append((name, {"hash": v["hash"], "options": v["options"]}, cp, False))
+
+
+variant("DISABLE_BREAKPAD:UNINITIALIZED=OFF", "a switch differs (DISABLE_BREAKPAD OFF; the flags equal): NOT equal")
+variant("CMAKE_CXX_FLAGS:STRING=-O2", "the flags differ (CMAKE_CXX_FLAGS -O2): NOT equal")
+for name, rc_, cfg_, want_ in cases:
+    got_ = gg.config_equal(rc_, cfg_)
+    print(("ok   " if got_ == want_ else "FAIL ") + "config_equal: " + name)
+    if got_ != want_:
+        fails.append("config_equal: " + name)
+rowj = lambda tree: {"name": "s.row", "properties": [{"name": "JAH_DATA", "value": "samples/S"}],  # noqa: E731
+                     "command": ["/bin/sh", os.path.join(t, tree, "build-linux", "tests", "s", "row.js")]}
+dh = [gg.data_set(rowj(tr), gg.build_roots(os.path.join(t, tr, "build-linux")), {})["hash"] for tr in ("lane", "parent")]
+if not dh[0] or dh[0] != dh[1]:
+    fails.append("a configured copy holding its tree's path hashes apart in two trees: %s" % dh)
+else:
+    print("ok   a configured copy that names its tree's path hashes EQUAL in two trees (the paths stripped)")
+open(os.path.join(t, "parent", "build-linux", "tests", "s", "row.js"), "a").write("var MORE = 1;\n")
+if gg.data_set(rowj("parent"), gg.build_roots(parent), {})["hash"] == dh[0]:
+    fails.append("a configured copy's real change does not move the data hash")
+shutil.rmtree(t, ignore_errors=True)
 print("gate.serve_red:", "FAIL (%d)" % len(fails) if fails else "PASS")
 sys.exit(1 if fails else 0)
