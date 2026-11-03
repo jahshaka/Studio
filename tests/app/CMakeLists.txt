@@ -63,6 +63,27 @@ foreach(_half default fixture)
         TIMEOUT 60 LABELS "app")  # the 60 s cap (URGENT #48); the short run (PHOTON-7 stage 10: the fixed frames a quarter)
 endforeach()
 
+# app.engine_selftest_shapes.{alone,after_default} — FIXTURE B IS A FUNCTION OF ITS OWN SCENE (URGENT #157; the law and
+# its cause: engine_selftest_shapes.sh). .alone runs the fixture half alone and keeps its B1 / B2 / mover pictures (the
+# setup); .after_default runs the full six-pose shape and its three must be BYTE-EQUAL to them: whatever the default half
+# leaves behind (an engine member past detachScene, a cache, the window's layout - the carrier #157 measured: the editor
+# view 748 wide after pose 2's resizes, 733 alone) reds the pair. Both without the validation layer (the same
+# configuration on both sides), both on the short run, each its own wiped home with the shader cache warm. Not SHIP: a
+# feature's end when its diff reaches it, and the LONG pass.
+set(_shapes_home ${CMAKE_CURRENT_BINARY_DIR}/selftest-shapes-home)
+foreach(_arm alone after_default)
+    jah_gpu_row(app.engine_selftest_shapes.${_arm} CLASS selftest
+             COMMAND sh ${JAH_FRESH_HOME} --warm ${_shapes_home}-${_arm} --
+                     bash "${CMAKE_CURRENT_SOURCE_DIR}/engine_selftest_shapes.sh"
+                     "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_CURRENT_BINARY_DIR}" ${_arm}
+             WORKING_DIRECTORY "$<TARGET_FILE_DIR:${CMAKE_PROJECT_NAME}>")
+    set_tests_properties(app.engine_selftest_shapes.${_arm} PROPERTIES
+        ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}QT_QPA_PLATFORM=xcb;HOME=${_shapes_home}-${_arm};JAHSHAKA_DATA_ROOT=${_shapes_home}-${_arm}/.local/share/Jahshaka;JAHSHAKA_SELFTEST_SHORT=1"
+        TIMEOUT 60 LABELS "app")
+endforeach()
+set_tests_properties(app.engine_selftest_shapes.alone PROPERTIES FIXTURES_SETUP selftest_shapes)
+set_tests_properties(app.engine_selftest_shapes.after_default PROPERTIES FIXTURES_REQUIRED selftest_shapes)
+
 # app.startup_quiet (archived: archive/tests/app) — the boot log stays clean (STABILITY_PROGRAM_SPEC lanes
 # 6a/6b/6c). Three noise sources were fixed together and all three are only
 # observable in a REAL boot, so this is the one suite that reads the boot log:
@@ -272,6 +293,14 @@ if(TEST app.engine_selftest_validation.default)
 endif()
 if(TEST app.engine_selftest_validation.fixture)
     set_property(TEST app.engine_selftest_validation.fixture PROPERTY JAHSHAKA_TEST_FRAMES 1297)
+endif()
+# (URGENT #157, 2026-11-03: the Ogre frame count at each arm's last traced frame, the short run, by hand on the card -
+# spikes/test-streamline-1/157/run/guard-green; the boot's frames included)
+if(TEST app.engine_selftest_shapes.alone)
+    set_property(TEST app.engine_selftest_shapes.alone PROPERTY JAHSHAKA_TEST_FRAMES 1136)
+endif()
+if(TEST app.engine_selftest_shapes.after_default)
+    set_property(TEST app.engine_selftest_shapes.after_default PROPERTY JAHSHAKA_TEST_FRAMES 1522)
 endif()
 if(TEST app.test_needs_boot)
     set_property(TEST app.test_needs_boot PROPERTY JAHSHAKA_TEST_FRAMES 710)

@@ -353,3 +353,13 @@ target_include_directories(test_moving_sample PRIVATE ${CMAKE_SOURCE_DIR}/irisgl
 add_test(NAME engine.moving_sample COMMAND test_moving_sample)
 set_tests_properties(engine.moving_sample PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.moving_sample)
+
+# engine.hit_list_law — THE REFLECTION REST's RECORD ALLOWANCE as a pure function (URGENT #157; test_hit_list_law.cpp says
+# the law): a function of the view's target (its hit list's creation capacity) and the rest's batching count, never of
+# how large the list once grew; a list smaller than its creation size caps it. The header only: a CPU code row.
+add_executable(test_hit_list_law test_hit_list_law.cpp)
+set_target_properties(test_hit_list_law PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_hit_list_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.hit_list_law COMMAND test_hit_list_law)
+set_tests_properties(engine.hit_list_law PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.hit_list_law)

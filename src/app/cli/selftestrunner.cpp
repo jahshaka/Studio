@@ -236,9 +236,12 @@ editor.frame(300);
 /// Part two: the rays come off and the picture settles again. A separate
 /// evaluation because the screenshot between them is the RUNNER's.
 /// THE MOVER (TESTING-CLEANUP-2 H5): after B2, the rays back on and settled, then a glossy
-/// sphere moved 0.1 m a frame for 30 frames on the fixed clock; the runner shoots mid-move. The sphere is DECLARED
-/// Movable (ENGINE-UPGRADE-1 U0 3c): a mover by declaration — the engine no longer guesses a drag from motion, and a
-/// script moving an undeclared still object is an edit each frame.
+/// sphere moved 0.1 m a frame for 30 frames on the fixed clock. The moving paths (the march's object motion, the
+/// trace's mover branches, a history reprojected by velocity) run in the EDITOR view's 30 frames, which nothing hashes;
+/// the hashed shot is the scene AT REST after that motion (the picture service settles a gathering scene to rest:
+/// EngineSceneViewport::takeScreenshot, its settle printed as "pose mover shot settled N frames"). The sphere is
+/// DECLARED Movable (ENGINE-UPGRADE-1 U0 3c): a mover by declaration — the engine no longer guesses a drag from motion,
+/// and a script moving an undeclared still object is an edit each frame.
 const char *const kFixtureMoverScript = R"JS(
 if (world.rayTracing("auto") !== "auto") throw new Error("world.rayTracing(auto) refused");
 editor.frame(120);
@@ -643,14 +646,34 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         // test, and what they leave behind is a 131-pixel-tall view. Fixture B is
         // about SCREEN-SPACE reflections and a ray prepass that rides them, so it
         // gets a window of a stated size, and the size is part of the fence.
+        // ...AND THE VIEW'S SIZE IS STATED, NOT LEFT TO THE LAYOUT'S HISTORY (URGENT #157). The window's size does not
+        // fix the editor view's: the main window's layout keeps a regrown central width after a squeeze, so at
+        // 1280x800 the view was 733x291 in a fresh window and 748x291 after pose 2's 700x520. The editor view's frames
+        // are this scene's path - its traces stamp the cards' rest demand, so the resident set the mover's rest reads
+        // is decided at the view's size - and the mover's hash differed by that size alone (122cb3a8 / 2d88c4ee;
+        // measured: the window resizes with no frames drawn reproduced the six-pose run's whole residency sequence and
+        // its hash). So the viewport widget is pinned at 748x291 (the six-pose record's own geometry) for the fixture,
+        // and a view that does not render at it fails the run.
         window.resize(1280, 800);
+        QWidget *fixtureView = window.viewport()->asWidget();
+        const QSize kFixtureViewSize(748, 291);
+        struct UnpinView {
+            QWidget *w = nullptr;
+            ~UnpinView() { if (w) { w->setMinimumSize(0, 0); w->setMaximumSize(QWIDGETSIZE_MAX, QWIDGETSIZE_MAX); } }
+        } unpinView{ fixtureView };
+        if (fixtureView) fixtureView->setFixedSize(kFixtureViewSize);
         for (int frame = 0; frame < 12; ++frame) {
             app.processEvents();
             window.viewport()->renderFrames(1, 1.0f / 60.0f);
         }
-        std::fprintf(stderr, "engine-selftest: fixture B renders at %dx%d (window 1280x800)\n",
+        std::fprintf(stderr, "engine-selftest: fixture B renders at %dx%d (window 1280x800, the view pinned at %dx%d)\n",
                      window.viewport()->renderTargetSize().width(),
-                     window.viewport()->renderTargetSize().height());
+                     window.viewport()->renderTargetSize().height(), kFixtureViewSize.width(), kFixtureViewSize.height());
+        if (window.viewport()->renderTargetSize() != kFixtureViewSize) {
+            std::fprintf(stderr, "engine-selftest: fixture B's view is not at its stated %dx%d - its hashes would be "
+                                 "another size's picture\n", kFixtureViewSize.width(), kFixtureViewSize.height());
+            return 1;
+        }
 
         // The arm's row, set before the fixture's 300 settling frames so B1/B2 are
         // taken after the same frame count as the shipped pair.
@@ -662,6 +685,12 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                                       : "world.sunContact({ enabled: true });\neditor.frame(300);");
         if (!runFixtureStep(fixtureB.constData(), "build + settle")) return 1;
         app.processEvents();
+        if (window.viewport()->renderTargetSize() != kFixtureViewSize) {   // (the project's panels opened around it)
+            std::fprintf(stderr, "engine-selftest: fixture B's view left its stated %dx%d (%dx%d) after the build\n",
+                         kFixtureViewSize.width(), kFixtureViewSize.height(),
+                         window.viewport()->renderTargetSize().width(), window.viewport()->renderTargetSize().height());
+            return 1;
+        }
 
         // THE GRADE IS PART OF THE FENCE, and this is the one thing about fixture B
         // that had to be discovered rather than designed.
@@ -721,7 +750,9 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         // B1/B2 are a still fixture: the moving-object paths (the march's object motion, the trace's
         // mover branches, the velocity a history reprojects by) never run in either. Rays back on and
         // settled on the fixed clock, then a glossy sphere crosses the floor 0.1 m per frame for 30
-        // frames and the VIEWPORT-grade shot is taken mid-move, no settle.
+        // editor frames (the moving paths run there), and the VIEWPORT-grade shot is the scene AT REST
+        // after the motion: the picture service settles a gathering scene (EngineSceneViewport::
+        // takeScreenshot), and the settle is reported and must end at rest, as B1's and B2's.
         QByteArray fixtureMover(kFixtureMoverScript);
         if (shortRun) fixtureMover.replace("editor.frame(120);", "editor.frame(30);");
         if (!runFixtureStep(fixtureMover.constData(), "mover")) return 1;
@@ -734,6 +765,7 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
                          qPrintable(moverPng));
             return 1;
         }
+        if (!reportShotSettle(window, "pose mover")) return 1;
         const QString hashMover = fileSha256(moverPng);
         std::fprintf(stderr, "engine-selftest: pose mover sha256 %s (%s)\n",
                      qPrintable(hashMover), qPrintable(moverPng));

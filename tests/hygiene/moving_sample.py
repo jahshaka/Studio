@@ -3,8 +3,9 @@
 
 A stochastic producer's MOVING sample index is a view's frames since its scene's bind or its size change
 (irisgl/engine/src/MovingSample.h, detail::MovingSequence) - never the raw per-view counter, which counted every frame the
-view ever traced and made a moving picture a function of what the process drew before (the self-test's mover:
-2d88c4ee after the fixture half alone, 122cb3a8 after the default poses). The law on the source:
+view ever traced and made a moving picture a function of what the process drew before. (URGENT #157 suspected it for the
+self-test's two mover hashes; measured, their carrier was fixture B's editor view SIZE - selftestrunner.cpp pins it - and
+this rule stands on its own law.) The law on the source:
   M1 NO RAW FRAME-COUNT SEED is left anywhere in the engine's sources - every subdirectory of irisgl/engine/src (photon/,
      rayquery/, atom/, ...), comments aside - in any form (the 3c audit: the glass escape's `frameNow() & 0xFFFF` hid from
      a pattern that knew only `.frame`, in a file list that did not walk): the process frame (frameNow()), a view's or a
@@ -17,8 +18,8 @@ view ever traced and made a moving picture a function of what the process drew b
   M4 A STORED VIEW COMPARES THE SCENE's ID, NEVER ITS ADDRESS (the 3c audit): no per-view `<view>.scene != scene` in the
      reflection's or the gather's sources - a view outlives the scenes it drew and a freed address comes back - and the
      gather's history reset goes through detail::rebindScene.
-Fed a violation first. The rule's behaviour is engine.moving_sample (a pure-function unit test); the picture's is card
-block B (the selftest's two shapes print the same mover hash).
+Fed a violation first. The rule's behaviour is engine.moving_sample (a pure-function unit test); "a second scene renders
+as if it were opened first" is app.engine_selftest_shapes (the fixture half's bytes alone and after the default half).
 
 Run: moving_sample.py <source-dir>
 """
