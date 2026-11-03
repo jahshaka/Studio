@@ -3,7 +3,7 @@
 ctest tree whose rows are shell sleeps claiming the card's 8 slots, a fake card lock (records each hold's label, runs the
 command) and a fake nvidia-smi (the used MB = a base + 1000 per toy row running). No GPU, no display, no lock.
 
-usage: width_pair_test.py <source root> <scratch base> plan|judge|refuse|bars|gain|reds|log   (rows split by proof, each under the CPU row's 10 s)
+usage: width_pair_test.py <source root> <scratch base> plan|judge|refuse|bars|gain|reds|log|budget   (rows split by proof, each under the CPU row's 10 s)
 Proves: the row set (a GPU row, priced under 10 s, no measure / cold / armed timing bars / named timing law; an unpriced or a
 10-s row left out, each with its reason; a CPU row not asked); a width W run is `ctest -j W` with W x 8 slots (the toy rows
 overlap W at once: the fake card's peak); the palindrome order and one hold per (width, part) with its label; the parts under the
@@ -53,6 +53,7 @@ case "$1" in
   near) i=0; s=0; while [ $i -lt 16 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; [ $s = 1 ] && sleep 0.3; exit 0 ;;
   conflict) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 1 ] && { echo "a neighbour on the card"; exit 1; }; sleep 0.05; i=$((i+1)); done ;;
   oom) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
+  over) s=0; [ "$(n)" -gt 1 ] && s=1; sleep 1.2; [ "$(n)" -gt 1 ] && s=1; [ $s = 1 ] && sleep 0.1; exit 0 ;;
   slow) sleep 0.15; [ "$(n)" -gt 1 ] && sleep 1.0; exit 0 ;;
   flaky) c="$VRAMDIR/../flaky.count"; k=$(cat "$c" 2>/dev/null || echo 0); echo $((k+1)) > "$c"; [ "$k" = 2 ] && exit 1; sleep 0.1 ;;
 esac
@@ -310,8 +311,26 @@ elif PART == "log":
           f"mark: a live mark of another check refuses the run, no hold (rc {rc})")
     os.remove(MARK)
 
+elif PART == "budget":
+    # 19. A ROW ALREADY PAST ITS CLASS BUDGET AT WIDTH 1 (the final CPU audit's finding 1; x0.1 for the toys: 1 s): toy.over runs
+    #     1.2 s alone, 1.3 s beside a neighbour (x1.08: no inflation) - a stale price or a budget red, named at width 1 and left
+    #     out of the judgement, so width 2 is judged on the other rows and adopted (the base judged the budget at width 2+ only
+    #     and refused width 2 with the wrong cause: "past its class budget 1 s at width 2")
+    bo = toy("over", [("toy.over", "over", "")])
+    with open(os.path.join(bo, "gate-times.txt"), "a") as fh:
+        fh.write("toy.over 0.8  toy (over 1 s / 1.5)\n")
+    rc, out, labels, recs = run(bo, "--plan", "--budget-scale", "0.1")
+    ln = [x for x in out.splitlines() if "priced over their class budget / 1.5" in x]
+    check(rc == 0 and len(ln) == 1 and "toy.over 0.80/1" in ln[0] and "toy.a" not in ln[0],
+          f"over --plan: the row priced over its budget / 1.5 named (the budget binds first), the 0.3-s rows not (rc {rc}) {ln}")
+    rc, out, labels, recs = run(bo, "--display", ":71", "--order", "1,2", "--budget-scale", "0.1")
+    o1 = [x for x in out.splitlines() if "OVER ITS CLASS BUDGET AT WIDTH 1" in x]
+    check(rc == 0 and "ADOPT WIDTH 2" in out and "REFUSED" not in out and len(o1) == 1 and "toy.over ran 1.2" in o1[0]
+          and "past its 1 s" in o1[0], f"over: the row past its budget alone named at width 1, not charged to width 2, ADOPT "
+          f"WIDTH 2 (rc {rc}) {[x for x in out.splitlines() if 'REFUSED' in x or 'ADOPT' in x or 'OVER ITS' in x]}")
+
 else:
-    check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain|reds|log)")
+    check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain|reds|log|budget)")
 shutil.rmtree(T, ignore_errors=True)
 print("width_pair_test: " + ("PASSED" if not fails else f"FAILED ({len(fails)})"))
 sys.exit(1 if fails else 0)

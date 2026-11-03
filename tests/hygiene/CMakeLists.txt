@@ -306,9 +306,9 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/debug_hot_loops.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.debug_hot_loops PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.debug_hot_loops)
-    # tooling.width_pair.plan / .judge / .refuse / .bars / .gain / .reds / .log — THE PAIRED WIDTH RUN's TOOL (TEST-STREAMLINE-1 4b; the run itself is card
+    # tooling.width_pair.plan / .judge / .refuse / .bars / .gain / .reds / .log / .budget — THE PAIRED WIDTH RUN's TOOL (TEST-STREAMLINE-1 4b; the run itself is card
     # block C): scripts/width_pair.py on toys - a hand-written ctest tree of shell rows claiming the card's 8 slots, a fake
-    # lock, a fake nvidia-smi (width_pair_test.py; no card, no display, no lock). ONE SCRIPT, SEVEN ROWS split by proof under the
+    # lock, a fake nvidia-smi (width_pair_test.py; no card, no display, no lock). ONE SCRIPT, EIGHT ROWS split by proof under the
     # CPU row's 10 s: plan - the row set and every exclusion's reason, the parts, the display refused, the card held (exit 75);
     # judge - the palindrome order's holds (1,2,3,2,1), W rows at once at width W (the fake card's peak), the fixture setup judged, a clean set adopts the
     # widest; refuse - an out-of-memory line, a row past the row cap, width 1 disagreeing with itself (no width, exit 1);
@@ -318,8 +318,10 @@ if(Python3_Interpreter_FOUND)
     # agreeing, the tree's check mark held for the run (URGENT #153); log - the declared open reds left out by name (THE OPEN
     # REDS table), an unreadable list refused, the OOM line read from the run's own ctest.log when the build's
     # Testing/Temporary is removed under it, another check's live mark refusing the run; gain - a width not 15 % faster than the next narrower one, a VRAM peak past
-    # 90 % of memory.total and an unread memory.total, each refusing it.
-    foreach(_wp plan judge refuse bars gain reds log)
+    # 90 % of memory.total and an unread memory.total, each refusing it; budget (the final CPU audit's finding 1) - a row already
+    # past its class budget ALONE named at width 1 and left out of the judgement (never charged to the width), --plan naming
+    # the rows priced over their budget / 1.5.
+    foreach(_wp plan judge refuse bars gain reds log budget)
         add_test(NAME tooling.width_pair.${_wp}
                  COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/width_pair_test.py" "${CMAKE_SOURCE_DIR}"
                          "${CMAKE_CURRENT_BINARY_DIR}/width-pair-${_wp}" ${_wp})

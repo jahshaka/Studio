@@ -440,12 +440,25 @@ def judge(recs, price, row_cap, budget=None, inflate=INFLATE, gain=GAIN, headroo
     unstable = sorted(n for n, w in seen.items() if len({v for v, _ in w.get(1, [])}) > 1)
     for n in unstable:
         lines.append(f"WIDTH 1 DISAGREES WITH ITSELF: {n} " + " / ".join(v for v, _ in seen[n][1]))
+    # THE CLASS BUDGET AT WIDTH 1 (the final CPU audit's finding 1): a row past its class budget ALONE is a stale price or a
+    # budget red (card block D's), never the width's fault - judged at width 2 only, it refused every wider width with a wrong
+    # cause. It is named here and left out of every width's judgement, and no adopted width covers it.
+    over1 = {}
+    for n in sorted(seen):
+        b, w1walls = budget.get(n), [s for _, s in seen[n].get(1, [])]
+        if b is not None and w1walls and max(w1walls) > b:
+            over1[n] = max(w1walls)
+            lines.append(f"OVER ITS CLASS BUDGET AT WIDTH 1: {n} ran {over1[n]:.2f} s alone, past its {b:g} s (priced "
+                         f"{price.get(n, 0):.2f} s) - a stale price or a budget red, reported and left out of every width's "
+                         f"judgement (no width covers it)")
     ok_w = [1]
     for i, w in enumerate(widths):
         if w == 1:
             continue
         why = []
         for n in sorted(seen):
+            if n in over1:
+                continue
             base = {v for v, _ in seen[n].get(1, [])}
             got = [v for v, _ in seen[n].get(w, [])]
             if got and (len(base) != 1 or any(v not in base for v in got)):
@@ -576,6 +589,11 @@ def main(argv):
         print(f"  left out, {why}: {len(ns)}" + (": " + " ".join(sorted(ns)) if len(ns) <= 12 else ""))
     for k, p in enumerate(ps, 1):
         print(f"  part {k}: {len(p)} rows ~{sum(price[n] for n in p) * RATIO:.0f} s at width 1")
+    budget = class_budgets([(n, p) for n, p in inv if n in set(sel)], bscale)
+    tight = sorted(n for n in sel if price[n] > budget[n] / INFLATE)
+    if tight:   # for these the class budget, not the x1.5 bar, binds at a wider width (the final CPU audit's finding 1)
+        print(f"  priced over their class budget / {INFLATE:g} (the budget binds before the x{INFLATE:g} bar at width 2+): "
+              f"{len(tight)}: " + " ".join(f"{n} {price[n]:.2f}/{budget[n]:g}" for n in tight))
     cls = sorted({p.get("JAH_CLASS", "?") for n, p in inv if n in set(sel)})
     boots = [b for c, bs in (("engine", ("engine-off", "engine-on")), ("app", ("app-off", "app-on"))) if c in cls for b in bs]
     print(f"  the classes {', '.join(cls)}: THE WARM-UP FIRST, one call each (GATE_AND_RIG 'the warm-up before an app row'): "
@@ -590,14 +608,13 @@ def main(argv):
     if not tree:
         die(f"{build}: no CMAKE_HOME_DIRECTORY in its CMakeCache.txt - name the tree (--tree): the run holds its check mark")
     with CheckMark(tree):
-        return measure(build, out, order, ps, sel, inv, price, bscale, smi, lock, display, wait_max, row_cap)
+        return measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, row_cap)
 
 
-def measure(build, out, order, ps, sel, inv, price, bscale, smi, lock, display, wait_max, row_cap):
+def measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, row_cap):
     """The holds, the summary and THE RULE (main's, under the tree's check mark)."""
     out = os.path.abspath(out or os.path.join(build, "tests", ".width-pair", time.strftime("%Y%m%d-%H%M%S")))
     os.makedirs(out, exist_ok=True)
-    budget = class_budgets([(n, p) for n, p in inv if n in set(sel)], bscale)
     total_mb = vram_total(smi)
     print(f"width_pair: the card's memory.total {total_mb if total_mb is not None else 'UNREAD'} MB (the headroom bar "
           f"{100 * VRAM_HEADROOM:.0f} %)", flush=True)
