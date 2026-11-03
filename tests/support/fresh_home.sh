@@ -332,6 +332,13 @@ if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
     fi
 fi
 
+# THE SEEDED LIBRARY (TEST-STREAMLINE-1 3a item 5; seed_home.sh): an app home (--warm, the app cache) gets the 17 shipped
+# meshes' library COPIED from the warm-up's template when the template is at the build's bake key - its boot then seeds
+# nothing; otherwise nothing is copied and the boot seeds as it always did
+if [ "$warm" = 1 ] && [ -z "$key" ] && [ -n "$tests_dir" ] && [ "$promote" = 0 ]; then
+    sh "$here/seed_home.sh" copy "$tests_dir" "$home/.local/share/Jahshaka" || true
+fi
+
 old_ifs="$IFS"; IFS='
 '
 for d in $resets; do [ -n "$d" ] && rm -rf "$d" && mkdir -p "$d"; done

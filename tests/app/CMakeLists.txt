@@ -204,6 +204,22 @@ foreach(_row pool.clean_state.law pool.clean_state.docs)
     jah_no_display(${_row})
 endforeach()
 
+# app.seed_home_template — THE 17 SHIPPED MESHES SEEDED ONCE PER BAKE KEY (TEST-STREAMLINE-1 3a item 5; the reader's P6;
+# seed_home_template.sh says the four laws): the warm-up's template made by one NULL headless boot and made once per key,
+# fresh_home.sh --warm copying it (the boot then seeds nothing, the store the template's objects by content hash), the
+# control home seeding, and a moved bake key never served (the home seeds; the next make re-makes). No display, no card.
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/seed-home-template)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME app.seed_home_template
+         COMMAND sh ${JAH_FRESH_HOME} ${_home} --
+                 sh ${CMAKE_CURRENT_SOURCE_DIR}/seed_home_template.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 ${CMAKE_SOURCE_DIR} ${CMAKE_BINARY_DIR}/tests ${_home}/run/toy
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(app.seed_home_template PROPERTIES
+    JAHSHAKA_HEADLESS TRUE   # every boot is --headless: the NULL render system (testing_rules R13)
+    LABELS "scripting;tooling" TIMEOUT 60)
+jah_no_display(app.seed_home_template)
+
 # app.render_route — THE ONE RENDER-SYSTEM DECISION AND THE HEADLESS HOST's VIEW, on the CPU (TEST-STREAMLINE-1 3a, the
 # reader's P4 + P5; test_render_route.cpp says the laws): the route table and its once-per-process latch, the
 # --render-offscreen CLI, and EngineViewWidget's declared offscreen View on a NULL engine (no native attempt, the

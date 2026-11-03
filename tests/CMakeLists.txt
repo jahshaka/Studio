@@ -927,6 +927,16 @@ function(jah_add_pool pool)
     endif()
 endfunction()
 
+# THE BAKE KEY, FOR THE HARNESS (TEST-STREAMLINE-1 3a item 5): irisgl's JAHSHAKA_MESH_BAKE_PRODUCER_ID (kFormatVersion's file
+# and every bake-producing source by content - DOCS/traps/ENGINE.md "THE BAKE KEY") in <build>/tests/bake-key.txt: the
+# seeded library template's key (tests/support/seed_home.sh: the warm-up makes the 17 shipped meshes' library once per key,
+# fresh_home.sh --warm copies it into each home). Written only when it changes (file(CONFIGURE)).
+get_property(_jah_bake_key GLOBAL PROPERTY JAH_MESH_BAKE_PRODUCER_ID)
+if(NOT _jah_bake_key)
+    message(FATAL_ERROR "tests: irisgl published no JAH_MESH_BAKE_PRODUCER_ID (irisgl/CMakeLists.txt) - the seed template needs it")
+endif()
+file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/bake-key.txt" CONTENT "${_jah_bake_key}\n" @ONLY)
+
 # THE HEADLESS HOST's SWITCH (TEST-STREAMLINE-1 stage 3a item 3; the lead's ruling: REPLACE NOTHING until card block B
 # proves it). The scriptable headless host (`--headless --render-offscreen`: the offscreen platform, the engine on Vulkan,
 # the editor viewport a presented stand-in - src/bridge/renderroute.h) runs a verbs-only app row with no window and no
