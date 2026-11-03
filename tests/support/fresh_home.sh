@@ -110,6 +110,7 @@ case "$home" in
 esac
 start="$(/bin/pwd -P 2>/dev/null || echo /)"
 here="$(cd "$(dirname "$0")" && /bin/pwd -P)"   # this script's directory: shadercache_check.py beside it
+. "$here/owner_home_guard.sh"                     # jah_owner_root_refused: never the owner's own data root
 
 # THE TREE'S tests/ DIR: the nearest ancestor of <home> named `tests` whose parent is a configured build (CMakeCache.txt)
 # — the shared cache and the evidence live there; none (a home outside a build tree) = no sharing, no evidence move
@@ -239,6 +240,7 @@ if [ "$promote" = 1 ]; then
         { echo "fresh_home.sh: --promote takes only --cache, <home> and -- <command>" >&2; exit 2; }
     [ "${1:-}" = "--" ] && [ $# -ge 2 ] || { echo "fresh_home.sh: --promote needs -- <command>" >&2; exit 2; }
     shift
+    jah_owner_root_refused "$@" && exit 2
     set +e
     "$@"
     rc=$?
@@ -350,6 +352,7 @@ IFS="$old_ifs"
 [ "$1" = "--" ] || { echo "fresh_home.sh: expected -- before the command, got '$1'" >&2; exit 2; }
 shift
 [ $# -gt 0 ] || { echo "fresh_home.sh: -- with no command" >&2; exit 2; }
+jah_owner_root_refused "$@" && exit 2       # never the owner's own data root (owner_home_guard.sh)
 mkdir -p "$start" 2>/dev/null || true
 cd "$start"
 # A FIXTURE'S SETUP (--setup, jah_fresh_home_fixture's row; round 14 addendum 2): the wipe BEFORE, then its THEN, then

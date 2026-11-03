@@ -11,6 +11,8 @@
 set -u
 APP=${1:?app}; PNG=${2:?png}; SETS=${3:?sets file}; DUMP=${4:?dump dir}
 HERE=$(cd "$(dirname "$0")" && pwd)
+. "$HERE/owner_home_guard.sh"
+jah_owner_root_refused "$APP" && exit 2     # every process below boots the app on this environment's data root
 JAHSHAKA_HLMS_DEBUG_DIR="$DUMP/" "$APP" --engine-selftest "$PNG" || exit $?
 [ -f "$SETS" ] || { echo "warm_app_boot: no test-boot sets ($SETS) - the self-test alone"; exit 0; }
 n=0

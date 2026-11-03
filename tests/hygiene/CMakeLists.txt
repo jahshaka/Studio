@@ -328,6 +328,13 @@ if(Python3_Interpreter_FOUND)
         set_tests_properties(tooling.width_pair.${_wp} PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
         jah_no_display(tooling.width_pair.${_wp})
     endforeach()
+    # tooling.owner_home_guard — A TEST NEVER BOOTS THE APP ON THE LOGIN USER's OWN DATA ROOT (TEST-STREAMLINE-1 block A: a hand
+    # fresh_home.sh call with no HOME rewrote the owner's shader cache): fresh_home.sh's two command paths and warm_app_boot.sh
+    # refuse it, exit 2 (tests/support/owner_home_guard.sh); a fake app, nothing written outside the row's scratch.
+    add_test(NAME tooling.owner_home_guard
+             COMMAND sh "${CMAKE_CURRENT_SOURCE_DIR}/owner_home_guard_toy.sh" "${CMAKE_SOURCE_DIR}" "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(tooling.owner_home_guard PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.owner_home_guard)
     # tooling.coverage_map — THE PER-ROW MAP IS EACH ROW's OWN, AND A PROCESS ENDING IN _Exit STILL WRITES IT (TEST-STREAMLINE-1
     # stage 2): a toy library and two toy rows built --coverage with the tree's cmake/coverage/gcov_exit_wrap.c, each its own
     # GCOV_PREFIX, read by scripts/coverage_map.py (coverage_map_toy.py; no card).
