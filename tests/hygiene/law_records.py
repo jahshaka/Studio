@@ -6,7 +6,9 @@ one printed past the output cap (256 KB) too; a non-finite value keeps its text;
 `lawsMalformed`, never a law; a row with no LAW line has no `laws` field; a red's fail line is kept past the cap, and an
 engine fixture's `  FAIL (n) <law>` line is one (it never was). AND A ROW CTEST DID NOT RUN BEHIND A RED ROW IT NEEDS
 (`Failed test dependencies: <row>` then `***Not Run`) is recorded NOTRUN with `behind`, its status "behind <row>" and its
-fail line "NOT RUN behind <row>" (URGENT #123); one Not Run for another reason carries no `behind`.
+fail line "NOT RUN behind <row>" (URGENT #123); one Not Run for another reason carries no `behind`. A POOL's ARM LINES
+(`ARM <pool>.<arm> <verdict> <ms>`) are each an arm record, one printed past the cap too, and an arm's echoed output
+(`<pool>.<arm>| ...`, tests/support/run_pool.py) is never one (TE7).
 usage: law_records.py <the tree's scripts/gate_runlog.py> (named on the command line: the selector reaches the row from it)"""
 import glob
 import json
@@ -37,7 +39,12 @@ with tempfile.TemporaryDirectory(prefix="law-records-") as tmp:
                 "4: FAIL (1 failures, 445 frames)\n4/4 Test #4: fake.fixture .....................***Failed    3.00 sec\n"
                 "    Start 5: fake.behind\nFailed test dependencies: fake.fixture\n"
                 "5/6 Test #5: fake.behind ......................***Not Run   0.00 sec\n"
-                "    Start 6: fake.disabled\n6/6 Test #6: fake.disabled ....................***Not Run (Disabled)   0.00 sec\n")
+                "    Start 6: fake.disabled\n6/7 Test #6: fake.disabled ....................***Not Run (Disabled)   0.00 sec\n"
+                "test 7\n    Start 7: fake.pool\n7: Test command: /bin/true\n7: Test timeout computed to be: 60\n"
+                "7: ARM-BEGIN fake.early\n7: fake.early| the arm measured 17 px\n7: ARM fake.early PASS 250\n"
+                + filler.replace("2: ", "7: ") +
+                "7: ARM-BEGIN fake.late\n7: fake.late| ARM fake.late PASS 9\n7: ARM fake.late PASS 1500\n"
+                "7/7 Test #7: fake.pool ........................   Passed    4.00 sec\n")
     fake = os.path.join(tmp, "fake-ctest")
     with open(fake, "w") as f:
         f.write("#!/bin/sh\ncat '%s'\nexit 8\n" % stream)
@@ -46,11 +53,14 @@ with tempfile.TemporaryDirectory(prefix="law-records-") as tmp:
     env = dict(os.environ, HOME=tmp, JAH_RUN_LOG_DIR=runs)
     p = subprocess.run([sys.executable, runlog, "run", "--tier", "spec",
                         "--lane", "tooling", "--build", tmp, "--", fake], cwd=tmp, env=env, capture_output=True, text=True)
-    recs = {}
+    recs, arms = {}, []
     for fn in glob.glob(os.path.join(runs, "*.jsonl")):
         for line in open(fn):
             r = json.loads(line)
-            recs[r["suite"]] = r
+            if r.get("arm") and r.get("arm") != "None":
+                arms.append(r)
+            else:
+                recs[r["suite"]] = r
     g, r, n = recs.get("fake.green", {}), recs.get("fake.red", {}), recs.get("fake.plain", {})
     x = recs.get("fake.fixture", {})
     b, d = recs.get("fake.behind", {}), recs.get("fake.disabled", {})
@@ -58,7 +68,11 @@ with tempfile.TemporaryDirectory(prefix="law-records-") as tmp:
         print("  %s %s" % ("ok  " if cond else "FAIL", what))
         if not cond:
             fails.append(what)
-    want(len(recs) == 6, "six records written (%d; the run's rc %d)" % (len(recs), p.returncode))
+    want(len(recs) == 7, "seven row records written (%d; the run's rc %d)" % (len(recs), p.returncode))
+    got = sorted((a.get("arm"), a.get("verdict"), a.get("seconds")) for a in arms)
+    want(got == [("fake.early", "PASS", 0.25), ("fake.late", "PASS", 1.5)],
+         "a pool's arm records: one per arm, an ARM line printed past the 256-KB cap kept, an arm's echoed "
+         "'<pool>.<arm>| ARM ...' line never a second record (TE7) (%s)" % got)
     want(g.get("verdict") == "PASS" and g.get("laws", {}).get("k14.breaking") ==
          {"value": 1.86, "unit": "%", "op": "<=", "bar": 1.0}, "a green row keeps its law: value, unit, op and bar")
     want(g.get("laws", {}).get("sky.teleport") == {"value": None, "unit": "%R", "text": "nan"},

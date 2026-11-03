@@ -102,10 +102,12 @@ def run_order(o, label, arms, top):
     r = subprocess.run(cmd, cwd=os.path.join(home, "run"), env=env, stdout=subprocess.PIPE, stderr=subprocess.STDOUT,
                        text=True, errors="replace")
     verdicts, lines, cur = {}, {}, None
-    # THE ONE CHANNEL: the driver's `ARM <pool>.<arm> <verdict> <ms>` line; an arm's own output is echoed `| ...`
-    # (JAH_KEEP_HOME=1: a green arm's too) between its ARM-BEGIN and its ARM line
+    # THE ONE CHANNEL: the driver's `ARM <pool>.<arm> <verdict> <ms>` line; every arm's own output is echoed
+    # `<pool>.<arm>| ...` (run_pool.py, TE7) between its ARM-BEGIN and its ARM line
+    echo = re.compile(r"^%s\.\S+\| " % re.escape(o["pool"]))
     for raw in r.stdout.splitlines():
-        line = raw[2:] if raw.startswith("| ") else raw
+        e = echo.match(raw)
+        line = raw[e.end():] if e else raw
         m = re.match(r"ARM-BEGIN %s\.(\S+)" % re.escape(o["pool"]), line)
         if m:
             cur = m.group(1); lines.setdefault(cur, []); continue

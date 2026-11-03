@@ -213,11 +213,12 @@ def main():
     budget = {n: b for n, _, b in opt["list"]}
     verdicts = {}   # arm -> (verdict, ms, reason)
 
-    # THE OUTPUT IS TRIAGE, NOT A LOG: the app's own lines go to one file per process
-    # (pool-logs/, in the row's working directory, which fresh_home wipes every run) and reach
-    # ctest's output only for an arm that did NOT pass (or a process that never began one). A
-    # pool's whole output is megabytes, and ctest truncates what it keeps of a passing row —
-    # the run log's `ARM` lines were cut away with it (measured: 21 of 29 doc arms recorded).
+    # EVERY ARM's OUTPUT REACHES THE ROW's LOG (TE7, 2026-11-04, the lead: a pool's arm numbers must be readable after
+    # the run - pool.editor's physics arm's `hung y` / `faller y` lines were in pool-logs/ only, which fresh_home wipes at
+    # the next run): at its verdict each arm's lines are echoed, every line prefixed `<pool>.<arm>| `, a passing arm's
+    # too. The prefix keeps an echoed `ARM` / `LAW` line from reading as the driver's own (the run log matches them at
+    # the line's start), and the run log keeps every `ARM` line past its 256-KB output cap (scripts/gate_runlog.py) -
+    # the cap that once cut 21 of 29 doc arms' records. The whole stream still goes to pool-logs/ per process.
     os.makedirs("pool-logs", exist_ok=True)
     pending = {}    # arm -> its buffered lines
     boot = []       # lines of the current process before its first arm
@@ -235,11 +236,9 @@ def main():
             return
         verdicts[arm] = (verdict, ms, why)
         lines = pending.pop(arm, [])
-        # JAH_KEEP_HOME=1 (TOOLING-6 item 3, a diagnosis run; fresh_home.sh keeps the green home): a PASSING arm's output
-        # is printed too, so a green arm's numbers are read from the row's own run, never a second run by hand
-        if (verdict != "PASS" or os.environ.get("JAH_KEEP_HOME") == "1") and lines:
+        if lines:
             say("---- %s.%s: its output (%d line(s)) ----" % (pool, arm, len(lines)))
-            for l in lines: say("| " + l)
+            for l in lines: say("%s.%s| %s" % (pool, arm, l))
         say("ARM %s.%s %s %d%s" % (pool, arm, verdict, ms, (" " + why) if why else ""))
 
     def flush(pid, since, begins):

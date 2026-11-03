@@ -71,8 +71,13 @@ check("RESTART" not in out, "one process ran all five arms")
 log = app_log()
 check(log.count("pool-baseline-ran") == 5,
       "the pool's BASELINE script ran after every arm, the red ones too (%d of 5)" % log.count("pool-baseline-ran"))
-check("the expected failure" in out and "ok: arm a created" not in out,
-      "a red arm's own output reaches the row's output; a green arm's stays in pool-logs/")
+# EVERY ARM's OUTPUT REACHES THE ROW's OUTPUT (TE7): the red arm c's and the green arm a's, each line under its
+# `<pool>.<arm>| ` prefix and never bare (the prefix is what keeps an echoed ARM / LAW line from reading as the driver's)
+olines = out.splitlines()
+check(any(l.startswith("selftest.c| ") and "the expected failure" in l for l in olines)
+      and any(l.startswith("selftest.a| ") and "ok: arm a created" in l for l in olines)
+      and not any(l.startswith("ok: arm a created") for l in olines),
+      "every arm's own output reaches the row's output under its '<pool>.<arm>| ' prefix: red arm c's and green arm a's")
 check(not verdicts.twice, "every arm's verdict is ONE `ARM` line (twice: %s)" % verdicts.twice)
 
 rc, out = run(base + arms, {"JAH_POOL_ARMS": "other.x,selftest.b,selftest.nope"})
@@ -262,7 +267,8 @@ rc3, out3 = run([sys.executable, driver, "--pool", "nojournal", "--app", okapp, 
                 {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": os.path.join(vdir, "missing")})
 check(rc3 == 0 and "FINDING: the kernel journal is unreadable" in out3 and "ARM nojournal.a PASS" in out3,
       "an unreadable kernel journal is a printed FINDING, not a red of the pool (devprocess.kernel_journal owns it)")
-# JAH_KEEP_HOME=1 (TOOLING-6 item 3, a diagnosis run): a PASSING arm's own output reaches the row's output too
+# EVERY ARM's OUTPUT REACHES THE ROW's OUTPUT (TE7): a PASSING arm's lines too, each prefixed `<pool>.<arm>| ` - so an
+# echoed ARM line never reads as the driver's - with or without JAH_KEEP_HOME (once the only way to see a green arm's)
 with open(okapp, "w") as f:
     f.write("#!/usr/bin/env python3\nimport sys\na = sys.argv; p = a[a.index('--pool') + 1]\n"
             "print('ARM-BEGIN %s.a' % p, flush=True)\nprint('the arm measured 17 px', flush=True)\n"
@@ -270,9 +276,11 @@ with open(okapp, "w") as f:
 kargs = [sys.executable, driver, "--pool", "keep", "--app", okapp, "--arm", "a", "x.js", "30"]
 rc5, out5 = run(kargs, {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": empty_journal.name})
 rc6, out6 = run(kargs, {"JAH_POOL_ARMS": "", "JAH_KERNEL_JOURNAL": empty_journal.name, "JAH_KEEP_HOME": "1"})
-check(rc5 == 0 and rc6 == 0 and "the arm measured 17 px" not in out5 and "| the arm measured 17 px" in out6
-      and "ARM keep.a PASS" in out6,
-      "JAH_KEEP_HOME=1 prints a PASSING arm's output (without it a green arm's output stays in pool-logs/)")
+import re as _re
+check(rc5 == 0 and rc6 == 0 and "keep.a| the arm measured 17 px" in out5 and "keep.a| the arm measured 17 px" in out6
+      and "keep.a| ARM keep.a PASS 1" in out5 and len(_re.findall(r"(?m)^ARM keep\.a PASS", out5)) == 1,
+      "a PASSING arm's output reaches the row's output, each line prefixed 'keep.a| ' (JAH_KEEP_HOME or not); the "
+      "app's own ARM line echoed under the prefix, the driver's ARM line once at a line's start")
 shutil.rmtree(vdir, ignore_errors=True)
 os.unlink(empty_journal.name)
 

@@ -363,7 +363,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
     vcmd = [cmd[0], "-V"] + [c for c in cmd[1:] if c != "--output-on-failure"]
     p = subprocess.Popen(vcmd, cwd=build, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                          errors="replace")
-    buf, size, pre, reds, lawbuf, late = {}, {}, {}, [], {}, {}
+    buf, size, pre, reds, lawbuf, late, armbuf = {}, {}, {}, [], {}, {}, {}
     deps = None   # the last `Failed test dependencies:` names, for the next result line
     for line in p.stdout:
         ln = line.rstrip("\n")
@@ -384,6 +384,8 @@ def run_ctest(cmd, build, tier, lane, echo=True):
                 pre[i] = False
             if txt.lstrip().startswith("LAW"):
                 lawbuf.setdefault(i, []).append(txt)
+            if _ARM.match(txt) or _ARM_BEGIN.match(txt):   # a pool's arm lines, past the cap too (TE7: run_pool echoes
+                armbuf.setdefault(i, []).append(txt)        # every arm's output, so a pool's output passes 256 KB)
             if size.get(i, 0) < OUTPUT_CAP:
                 buf.setdefault(i, []).append(txt)
                 size[i] = size.get(i, 0) + len(txt) + 1
@@ -401,6 +403,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
         behind, deps = deps, None
         text = "\n".join(buf.pop(i, []))
         laws, badlaws = laws_of("\n".join(lawbuf.pop(i, [])))
+        armtext = "\n".join(armbuf.pop(i, []))
         late_fail = late.pop(i, None)
         pre.pop(i, None); size.pop(i, None)
         f = facts.get(name) or {}
@@ -434,7 +437,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
             row["log"] = _row_output(build, run_id, name, text)
             if echo and text:
                 sys.stdout.write("\n".join(text.splitlines()[-40:]) + "\n"); sys.stdout.flush()
-        recs = [row] + [dict(base, arm=a, verdict=av, status=av, seconds=s) for a, av, s in arms_of(text)]
+        recs = [row] + [dict(base, arm=a, verdict=av, status=av, seconds=s) for a, av, s in arms_of(armtext)]
         append_records(recs, tier, shas["studio"])
     return p.wait(), reds
 
