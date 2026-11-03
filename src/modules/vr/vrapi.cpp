@@ -236,7 +236,7 @@ View *desktopViewOf(Engine *e, View *eyes)
     std::vector<View *> views;
     e->listViews(views);
     for (View *v : views)
-        if (v && !v->isOffscreen() && v->scene() == eyes->scene()) return v;
+        if (v && v->presentsAsWindow() && v->scene() == eyes->scene()) return v;   // (a presented stand-in is one)
     return nullptr;
 }
 

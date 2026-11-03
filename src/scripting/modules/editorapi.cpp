@@ -2945,6 +2945,8 @@ QVariantMap EditorApi::viewportState()
     // says "in pixels" and the no-viewport branch says 0 — agree with them.
     out.insert("width", qMax(0, target.width()));
     out.insert("height", qMax(0, target.height()));
+    // (the TARGET's fact - a texture, not a window - as the verb's doc says; the ROUTE is `state`, which reads
+    // View::presentsAsWindow: no law reads this field as the route, source.presented_predicate's Studio list)
     out.insert("offscreen", host.viewport->isOffscreen());
     // THE FLY'S STATE (ledger §356). A key stuck in the held set moves nothing
     // and logs nothing — Left and Right in it together cancel — so "the arrows

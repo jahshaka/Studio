@@ -189,7 +189,7 @@ bool EditorVrPreview::begin(const std::shared_ptr<Engine> &engine, IEditorViewpo
         std::vector<View *> views;
         engine->listViews(views);
         for (View *v : views)
-            if (v && !v->isOffscreen() && v->scene() == scene) {
+            if (v && v->presentsAsWindow() && v->scene() == scene) {   // (the desktop's view: a presented stand-in is one)
                 engine->setVrMirrorView(v);
                 mMirrorView = v;
                 break;

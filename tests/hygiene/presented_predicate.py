@@ -56,7 +56,21 @@ SITES = [
     ("src/viewport/enginesceneviewport.cpp", "if (!view() || !view()->presentsAsWindow()) return;", "the editor's background frame"),
     ("src/viewport/enginesceneviewport.cpp", "if (!mEngine || !view() || !view()->presentsAsWindow()) return FramePace::Complete;",
      "the editor's frame pace"),
+    ("src/viewport/enginesceneviewport.cpp", 'if (!view() || !view()->presentsAsWindow()) return QStringLiteral("offscreen");',
+     "the editor's presentation state (editor.viewportState().state: the route a row gates on)"),
+    ("src/modules/vr/vrapi.cpp", "if (v && v->presentsAsWindow() && v->scene() == eyes->scene()) return v;",
+     "VR's desktop-view lookup"),
+    ("src/modules/vr/editorvr.cpp", "if (v && v->presentsAsWindow() && v->scene() == scene) {", "the VR mirror's desktop view"),
 ]
+# STUDIO's isOffscreen() READS THAT ARE THE TARGET's FACT, NEVER THE ROUTE (the 3a audit's finding 1): each named with why;
+# any other isOffscreen() call in src/ is a route read that must be presentsAsWindow()
+STUDIO_TARGET_FACTS = {
+    "src/viewport/engineviewwidget.cpp": "the widget's own mechanics: Qt's updates muted only over a window it presents into, "
+                                         "a WinIdChange rebuild only for a native-window view",
+    "src/viewport/enginesceneviewport.h": "IEditorViewport::isOffscreen() - the target (a texture), the verb's `offscreen` field",
+    "src/scripting/modules/editorapi.cpp": "editor.viewportState().offscreen - the target's fact as its doc says; no law reads it",
+    "src/app/cli/selftestrunner.cpp": "the selftest's own check that its on-screen window backend took (a target fact)",
+}
 TARGET_FACT = {"irisgl/engine/src/OgreVideoReadback.cpp"}   # isOffscreen() as the TARGET's fact (window vs texture)
 
 
@@ -102,6 +116,10 @@ def laws(files):
                   and re.search(r"\bisOffscreen\(\)", code_only(t)))
     out.append((not left, "P3 no isOffscreen() call left in the engine's sources but the target's fact %s (left: %s)"
                 % (sorted(TARGET_FACT), left)))
+    sleft = sorted(f for f, t in files.items() if f.startswith("src/") and f not in STUDIO_TARGET_FACTS
+                   and re.search(r"\bisOffscreen\(\)", re.sub(r"bool isOffscreen\(\) const", "", code_only(t))))
+    out.append((not sleft, "P3 no isOffscreen() route read left in Studio's sources but the named target facts %s (left: %s)"
+                % (sorted(STUDIO_TARGET_FACTS), sleft)))
     decl = sorted(f for f, t in files.items() if f.startswith("src/") and "OffscreenContract::PresentedStandIn" in code_only(t)
                   .replace('""', ""))
     fac = files.get("src/viewport/enginesceneviewport.cpp", "")
@@ -133,6 +151,8 @@ def main(root):
         ("P3", "irisgl/engine/src/OgreView.cpp", "return presentsAsWindow() || mPip.allowOffscreen;",
          "return !isOffscreen() || mPip.allowOffscreen;"),
         ("P4", "src/viewport/recordingview.cpp", "OffscreenContract::StillPicture", "OffscreenContract::PresentedStandIn"),
+        ("P3", "src/modules/vr/vrapi.cpp", "v->presentsAsWindow() && v->scene() == eyes->scene()",
+         "!v->isOffscreen() && v->scene() == eyes->scene()"),
     ]
     for law, f, a, b in muts:
         m = dict(files)

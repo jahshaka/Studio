@@ -4022,7 +4022,10 @@ QString EngineSceneViewport::presentationState() const
 {
     // No render target of our own, or one that never reaches the widget: the
     // cover has no business here and the honest answer is "offscreen".
-    if (!view() || view()->isOffscreen()) return QStringLiteral("offscreen");
+    // A PRESENTED STAND-IN (the headless host's view, View::presentsAsWindow; TEST-STREAMLINE-1 3a audit F1) is the
+    // window's ROUTE: it reports the window's states, so a row that gates on "offscreen" (perf.offscreen_isolation)
+    // runs its law on the host instead of skipping it.
+    if (!view() || !view()->presentsAsWindow()) return QStringLiteral("offscreen");
     if (!mScene) return QStringLiteral("noscene");
     return presentsSinceBind() >= kPresentsBeforeReveal
                ? QStringLiteral("presenting")
