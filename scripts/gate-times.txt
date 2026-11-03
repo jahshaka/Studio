@@ -323,6 +323,7 @@ source.atom_no_registries 0.01  spec EU-2 stage 3 (2026-10-14)
 source.bake_key_guard 0.04  quiet n=57
 source.no_engine_transform_reads 0.04  solo (ENGINE-UPGRADE-U2 stage 1, 2026-10-14)
 source.shader_cache_key 0.27  quiet (99 % CPU-idle), CPU, ctest, solo (TEST-STREAMLINE-1 1a, 2026-11-03: the hlms layer keyed on the cache's own code - no engine file builds shader source text outside the cache-code list and the low-level allow-list; its negative control first)
+source.code_rows 0.10  loaded (90 % CPU-idle), CPU, ctest, solo (TEST-STREAMLINE-1 1b, 2026-11-03: the derived `code` label is exactly the rows that take no card - no slots, no class, no measure, no warm-up product, no GPU fixture half, no GPU setup pulled in; 92 rows; its synthetic violations first; 0.05 s on a second run)
 source.db_pointers_initialised 0.00  ship 3a0422b4e (2026-10-13)
 source.fork_stamp 0.10  ship 3a0422b4e (2026-10-13)
 source.gate_scope_rules 6.20  solo, rewritten to its budget (TESTING-SIMPLE, 2026-10-13)

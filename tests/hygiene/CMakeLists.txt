@@ -169,6 +169,12 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/shader_cache_key.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.shader_cache_key PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.shader_cache_key)
+    # source.code_rows — TEST-STREAMLINE-1 1b: the `code` label (tests/CMakeLists.txt jah_code_label_pass, derived) is exactly
+    # the rows that take no card - `spec.sh test --code` runs them with no lock and no warm-up (code_rows.py says the rule).
+    add_test(NAME source.code_rows
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/code_rows.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.code_rows PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(source.code_rows)
     add_test(NAME source.gate_scope_rules
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/gate_scope_rules.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")

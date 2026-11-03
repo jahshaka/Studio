@@ -1247,6 +1247,81 @@ function(jah_ship_closure_pass)
 endfunction()
 jah_ship_closure_pass()
 
+# THE CODE TESTS (TEST-STREAMLINE-1 1b; CODING_RULES §5 "the stage loop"): the label `code` DERIVED here for every row a stage's
+# gate (`spec.sh test <spec> --code`: ctest -j12, no card lock, no warm-up) may run - a row that takes NO card: no card
+# slots (RESOURCE_GROUPS), no JAH_CLASS, not `measure`, no warm-up product (JAH_BOOTS: source.shaders_spirv_valid reads the
+# app-off boot's dump - it runs with the six at a stage's end) - and is no fixture half of a card row (a setup or cleanup
+# whose fixture a non-code row requires: `ctest -L code` would run it unlocked), and requires no setup that is not code
+# (ctest pulls a required setup in outside -L: a GPU setup would run unlocked), to a fixed point. Never a hand label: a row
+# is a code test by what it takes, so a new CPU row is one at once. source.code_rows (tests/hygiene) holds the label to
+# this rule on the listing and prints the count; the count at TEST-STREAMLINE-1: 92 (source.code_rows itself the 92nd).
+function(jah_code_label_pass)
+    get_property(_all GLOBAL PROPERTY JAH_SHIP_ALL)   # (every row with its directory: _jah_ship_collect above)
+    set(_code "")
+    foreach(_t IN LISTS _all)
+        get_property(_d GLOBAL PROPERTY JAH_SHIP_DIR_${_t})
+        get_property(_rg TEST ${_t} DIRECTORY "${_d}" PROPERTY RESOURCE_GROUPS)
+        get_property(_cl TEST ${_t} DIRECTORY "${_d}" PROPERTY JAH_CLASS)
+        get_property(_bt TEST ${_t} DIRECTORY "${_d}" PROPERTY JAH_BOOTS)
+        get_property(_l TEST ${_t} DIRECTORY "${_d}" PROPERTY LABELS)
+        if(NOT _rg AND NOT _cl AND NOT _bt AND NOT "measure" IN_LIST _l)
+            list(APPEND _code ${_t})
+        endif()
+    endforeach()
+    set(_moved TRUE)
+    while(_moved)
+        set(_moved FALSE)
+        set(_setups "")    # "<fixture>=<setup or cleanup row>"
+        set(_users "")     # "<fixture>=<row that requires it>"
+        foreach(_t IN LISTS _all)
+            get_property(_d GLOBAL PROPERTY JAH_SHIP_DIR_${_t})
+            get_property(_fs TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_SETUP)
+            get_property(_fc TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_CLEANUP)
+            get_property(_fr TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_REQUIRED)
+            foreach(_f IN LISTS _fs _fc)
+                list(APPEND _setups "${_f}=${_t}")
+            endforeach()
+            foreach(_f IN LISTS _fr)
+                list(APPEND _users "${_f}=${_t}")
+            endforeach()
+        endforeach()
+        foreach(_t IN LISTS _code)
+            get_property(_d GLOBAL PROPERTY JAH_SHIP_DIR_${_t})
+            get_property(_fs TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_SETUP)
+            get_property(_fc TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_CLEANUP)
+            get_property(_fr TEST ${_t} DIRECTORY "${_d}" PROPERTY FIXTURES_REQUIRED)
+            set(_out FALSE)
+            foreach(_pair IN LISTS _users)       # a setup/cleanup of a fixture a non-code row requires
+                string(REPLACE "=" ";" _p "${_pair}")
+                list(GET _p 0 _f)
+                list(GET _p 1 _r)
+                if((_f IN_LIST _fs OR _f IN_LIST _fc) AND NOT _r IN_LIST _code)
+                    set(_out TRUE)
+                endif()
+            endforeach()
+            foreach(_pair IN LISTS _setups)      # requires a setup that is not code
+                string(REPLACE "=" ";" _p "${_pair}")
+                list(GET _p 0 _f)
+                list(GET _p 1 _r)
+                if(_f IN_LIST _fr AND NOT _r IN_LIST _code)
+                    set(_out TRUE)
+                endif()
+            endforeach()
+            if(_out)
+                list(REMOVE_ITEM _code ${_t})
+                set(_moved TRUE)
+            endif()
+        endforeach()
+    endwhile()
+    foreach(_t IN LISTS _code)
+        get_property(_d GLOBAL PROPERTY JAH_SHIP_DIR_${_t})
+        set_property(TEST ${_t} DIRECTORY "${_d}" APPEND PROPERTY LABELS code)
+    endforeach()
+    list(LENGTH _code _n)
+    message(STATUS "THE CODE TESTS: ${_n} rows labelled `code` (TEST-STREAMLINE-1 1b)")
+endfunction()
+jah_code_label_pass()
+
 # THE ROWS' BOOT SETS (HARNESS-1, 2026-10-29): every distinct test tier + needs an app or VR row boots, one a line
 # (<tier>|<needs>), read by scripts/warm-app-cache.sh: its app-off boot boots the app once at each after the self-test.
 # WHY: a row's tier compiles its own Hlms permutations of the born World (measured: log.engine at epic + photon built 3
