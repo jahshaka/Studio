@@ -7,7 +7,7 @@ view ever traced and made a moving picture a function of what the process drew b
 2d88c4ee after the fixture half alone, 122cb3a8 after the default poses). The law on the source:
   M1 no raw `<counter>.frame & 0xFFFF` sample index is left in the engine's sources (comments aside);
   M2 each known moving site reads the helper: the reflection's pp.knobs[2], the gather's rp.seq[0] and pp.knobs6[2], the
-     area visibility's pp.strata[1];
+     area visibility's pp.strata[1], the glass escape's pp.knobs3[0] (its moving draws; at rest its rest sequence);
   M3 the helper restarts on a scene id or a size change and on nothing else (its one `if`), with a unique scene id
      (OgreScene::historyId from reserveNodeId);
   M4 A STORED VIEW COMPARES THE SCENE's ID, NEVER ITS ADDRESS (the 3c audit): no per-view `<view>.scene != scene` in the
@@ -41,6 +41,10 @@ SITES = [
     ("OgreScreenProbeGather.cpp", "rp.seq[0] = float(v.moving.index(v.frame,", "the gather's moving sample"),
     ("OgreScreenProbeGather.cpp", "pp.knobs6[2] = float(v.moving.index(v.frame,", "the gather's history rounding"),
     ("OgreAreaVis.cpp", "st.moving.index(st.frame, sceneId, w, h)", "the area visibility's moving stratum"),
+    ("OgreRayQuery.cpp", ": ev.moving.index(ev.frame, scene->historyId(), ev.width, ev.height));",
+     "the glass escape's moving area draws (the 3c audit: it sampled by the process frame count)"),
+    ("OgreRayQuery.cpp", "pp.knobs3[0] = float(restFrames > 0u ? kGlassRestSequence + std::min(restFrames - 1u, (1u << 20) - 1u)",
+     "the glass escape's REST area draws (the rest sequence, keyed on the view's rest frame K)"),
 ]
 RAW = re.compile(r"\b\w+\.frame\s*&\s*0x[fF]{4}u?\b")
 
