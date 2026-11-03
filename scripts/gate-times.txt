@@ -29,11 +29,11 @@ atom.pass_table.fresh_home 0.03  solo (BUGS-1 item 1, 2026-10-19)
 engine.moving_sample 0.01  solo, CPU, ctest, no display, nice 10 (TEST-STREAMLINE-1 3c, 2026-11-03: the moving sample index's one rule as a pure function - a bind and a size change restart it, a cut and a held frame keep it)
 audio.peaks 0.80  ship 3a0422b4e (2026-10-13)
 avatar.responsive 31.65  solo, :72, WARM (URGENT #48 follow-up 85c6b09ee: fresh_home --warm, its own data-root wipe deleted; 2026-10-24). Cold it was 48.07 (quiet n=41) and over 60 s on the photon-7r merge's tree
-bake.determinism.standin 11.72  solo, the card lock held (ATOM-2 stage 2, 2026-10-22)
-bake.determinism.dragon 12.02  solo, the card lock held (ATOM-2 stage 2, 2026-10-22)
+bake.determinism.standin 8.34  quiet (99 % CPU-idle), CPU, ctest, solo, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: re-priced solo, the code unchanged - 1 thread 5.26 s + 20 threads 1.48 / 1.48 s; was 11.72 under the card lock 2026-10-22, labelled measure by its price)
+bake.determinism.dragon 7.54  quiet (99 % CPU-idle), CPU, ctest, solo, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: re-priced solo, the code unchanged; was 12.02 under the card lock 2026-10-22, labelled measure by its price)
 bake.determinism.throws 25.49  solo, the card lock held (ATOM-2 the stage-2 read, 2026-10-22)
 bake.dag_reaches_root 0.24  solo, the card lock held (ATOM-2 stage 2, 2026-10-22)
-bundle.writer 21.13  quiet n=24
+bundle.writer 7.32  quiet (99 % CPU-idle), CPU, ctest, solo, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: the zip library at -O2 in Debug (irisgl adb230a9), each archive extracted once, the forged file stored, one detach in the generator; every law and the 200 x 256 KiB fixture kept; was 21.13 quiet n=24, labelled measure by its price)
 cameras.exposure 4.31  quiet n=47
 capture.first_recording.timing 14.90  ship 3a0422b4e (2026-10-13)
 chain.hzb 1.73  quiet n=43
@@ -362,6 +362,7 @@ tooling.coverage_map 0.30  quiet (97 % CPU-idle), CPU, ctest, solo (TEST-STREAML
 tooling.width_pair.plan 0.23  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 4b, 2026-11-03: scripts/width_pair.py on toys - the row set and every exclusion with its reason, the parts under the cap, a bad display refused, the card held exit 75)
 tooling.width_pair.judge 4.76  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 4b, 2026-11-03: scripts/width_pair.py on toys - the 1,2,3,2,1 holds, W toy rows at once at width W read on a fake nvidia-smi, the fixture setup judged, the widest width adopted, a row red beside a neighbour refusing its width)
 tooling.width_pair.refuse 5.56  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 4b, 2026-11-03: scripts/width_pair.py on toys - an out-of-memory line, a row past the row cap and width 1 disagreeing with itself each refusing)
+source.debug_hot_loops 0.05  quiet (99 % CPU-idle), CPU, ctest, solo, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: compile_commands.json read: zip, meshoptimizer and Bullet's four targets at -O2 in Debug)
 tooling.gpu_lock_sweep 4.99  loaded (load 3.7-9.5, the Unreal session on CPUs 0-9), CPU, the suite run directly (bash, not ctest), pinned to CPUs 10-19, nice 10 (URGENT #144, 2026-11-02, on photon-7 2187edd42 + the post-Bistro chain: a hold's escaped child swept at its exit, at its bound, KILLED past a 1-s grace, by the mark, under a nested call - gone before the next grant; sleeps, no GPU)
 tooling.row_env 0.61  loaded (load 11.0), CPU, the suite run directly (bash, not ctest), CPUs 10-19, nice 10 (URGENT #147, 2026-11-02: scripts/row-env.sh on a toy ctest build)
 tooling.law_records 0.16  loaded (89 % CPU-idle), CPU, ctest (HARNESS-3 (b), 2026-10-29: scripts/gate_runlog.py over a fake ctest stream - every LAW line in the row's record, green and red, past the output cap; a fixture's `  FAIL (n)` line its fail line; no GPU)

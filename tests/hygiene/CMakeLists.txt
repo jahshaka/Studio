@@ -299,6 +299,13 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/evidence_cap.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(tooling.evidence_cap PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.evidence_cap)
+    # source.debug_hot_loops — THE VENDORED HOT LOOPS ARE OPTIMISED IN DEBUG (TEST-STREAMLINE-1 5c): every compile command
+    # of zip's, meshoptimizer's and Bullet's four targets' sources carries -O2 in a Debug build (compile_commands.json;
+    # debug_hot_loops.py, fed its violations first), so the rule in irisgl/CMakeLists.txt cannot silently drop.
+    add_test(NAME source.debug_hot_loops
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/debug_hot_loops.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.debug_hot_loops PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.debug_hot_loops)
     # tooling.width_pair.plan / .judge / .refuse — THE PAIRED WIDTH RUN's TOOL (TEST-STREAMLINE-1 4b; the run itself is card
     # block C): scripts/width_pair.py on toys - a hand-written ctest tree of shell rows claiming the card's 8 slots, a fake
     # lock, a fake nvidia-smi (width_pair_test.py; no card, no display, no lock). ONE SCRIPT, THREE ROWS split by proof under the
