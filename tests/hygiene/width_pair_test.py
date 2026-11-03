@@ -92,7 +92,7 @@ write(os.path.join(T, "lock.sh"), LOCK)
 write(os.path.join(T, "smi.sh"), SMI)
 
 
-def toy(name, extra, plain=4):
+def toy(name, extra, plain=4, more=()):
     """A toy build: its CTestTestfile.cmake, its prices, its cold-rows file. `extra` = [(row, mode, props)]; `plain` plain
     rows toy.a, toy.b, ... (0.2 s each)."""
     b = os.path.join(T, name)
@@ -107,6 +107,7 @@ def toy(name, extra, plain=4):
         lines.append(f'add_test({n} "{T}/row.sh" "{mode}")')
         lines.append(f'set_tests_properties({n} PROPERTIES RESOURCE_GROUPS "vram:8" {props})')
     lines.append("set_tests_properties(toy.a PROPERTIES FIXTURES_REQUIRED toyHome)")
+    lines += list(more)
     for n, _, props in extra:
         if "COST" not in props:
             lines.append(f"set_tests_properties({n} PROPERTIES COST 100)")
@@ -155,6 +156,20 @@ if PART == "plan":
     rc, out, labels, recs = run(b1, "--plan", "--part-cap-s", "0.7")
     check(rc == 0 and "3 part(s)" in out and "part 3: 2 rows" in out,
           f"--plan --part-cap-s 0.7: the 6 rows (0.33 s each at width 1) packed into 3 parts under the cap")
+
+    # 1b. THE FIXTURE CLOSURE (the final CPU audit's finding 2): a row whose required fixture's setup is excluded (cold) is left
+    #     out with it, and so is a row two fixtures away (its setup needs the cold one); a row needing a setup that takes no
+    #     card (toy.a: toy.home) stays. The base selected all three: ctest would have run the cold setup in their hold.
+    bx = toy("closure", [("toy.coldsetup", "plain", "JAHSHAKA_COLD_BY_SUBJECT TRUE FIXTURES_SETUP coldFix"),
+                         ("toy.needscold", "plain", "FIXTURES_REQUIRED coldFix"),
+                         ("toy.mid", "plain", "FIXTURES_SETUP nnFix FIXTURES_REQUIRED coldFix"),
+                         ("toy.needsneeds", "plain", "FIXTURES_REQUIRED nnFix")])
+    rc, out, labels, recs = run(bx, "--plan")
+    ln = [x for x in out.splitlines() if x.startswith("  left out, its fixtures need an excluded row")]
+    check(rc == 0 and "4 rows with no timing law" in out and len(ln) == 1 and ": 3: " in ln[0]
+          and "toy.needscold (needs toy.coldsetup: cold)" in ln[0] and "toy.needsneeds (needs toy.coldsetup: cold)" in ln[0]
+          and "toy.mid (needs toy.coldsetup: cold)" in ln[0] and "toy.a" not in ln[0],
+          f"closure --plan: the rows whose fixtures need the cold setup left out by name, toy.a kept (rc {rc}) {ln}")
 
     # 2. A BAD DISPLAY IS REFUSED before any hold
     for d in (None, ":0", ":12"):

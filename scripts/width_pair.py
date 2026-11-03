@@ -244,9 +244,25 @@ class CheckMark:
         return False
 
 
+def _names(v):
+    return [v] if isinstance(v, str) else list(v or [])
+
+
+NEEDS_EXCLUDED = "its fixtures need an excluded row"
+
+
 def select(rows, price, cold, declared=None):
-    """(the rows, {reason: [rows]}) - THE ROWS of the docstring, each exclusion with its reason. `declared`: {row: line}."""
+    """(the rows, {reason: [rows]}, {row: [(the excluded row its fixtures need, its reason)]}) - THE ROWS of the docstring,
+    each exclusion with its reason. `declared`: {row: line}. A row whose FIXTURE CLOSURE (the setup and cleanup rows of every
+    fixture it requires, theirs in turn - what ctest adds to its run) holds an excluded row is left out too (the final CPU
+    audit's finding 2: shadercache.app.warm brought shadercache.app.cold, the cold compile, into every hold of its part)."""
     sel, out, declared = [], {}, declared or {}
+    why_of, props = {}, dict(rows)
+    of_fixture = {}
+    for n, p in rows:
+        for key in ("FIXTURES_SETUP", "FIXTURES_CLEANUP"):
+            for f in _names(p.get(key)):
+                of_fixture.setdefault(f, []).append(n)
     for n, p in rows:
         if not p.get("RESOURCE_GROUPS"):
             continue                                    # takes no card: not a width question
@@ -261,9 +277,24 @@ def select(rows, price, cold, declared=None):
                f"priced {SMALL_S:.0f} s or more" if price[n] >= SMALL_S else None)
         if why:
             out.setdefault(why, []).append(n)
+            why_of[n] = why
         else:
             sel.append(n)
-    return sorted(sel), out
+    needs = {}
+    for n in sel:
+        seen, todo = set(), list(_names(props[n].get("FIXTURES_REQUIRED")))
+        while todo:
+            f = todo.pop()
+            if f in seen:
+                continue
+            seen.add(f)
+            for m in of_fixture.get(f, []):
+                if m != n and m in why_of:
+                    needs.setdefault(n, []).append((m, why_of[m]))
+                todo += _names(props[m].get("FIXTURES_REQUIRED"))
+    for n in needs:
+        out.setdefault(NEEDS_EXCLUDED, []).append(n)
+    return sorted(m for m in sel if m not in needs), out, {n: sorted(set(v)) for n, v in needs.items()}
 
 
 def parts(sel, price, cap):
@@ -575,7 +606,7 @@ def main(argv):
     if declared is None:
         die(f"--open-reds {reds_file}: unreadable - the declared open reds leave the set, and an unread list is not an empty one")
     inv = inventory(build)
-    sel, excl = select(inv, price, cold_rows(build), declared)
+    sel, excl, needs = select(inv, price, cold_rows(build), declared)
     ps = parts(sel, price, part_cap) if sel else []
     est = sum(sum(price[n] for n in p) * RATIO / w for w in order for p in ps)
     print(f"width_pair: {len(sel)} rows with no timing law priced under {SMALL_S:.0f} s ({sum(price[n] for n in sel):.0f} s "
@@ -585,6 +616,10 @@ def main(argv):
         if why == "a declared open red":   # always by name, each with its table line: a red leaves a set only with its reason
             print(f"  left out, {why} (THE OPEN REDS of {reds_file}; a red at width 1 judged against itself proves nothing): "
                   f"{len(ns)}: " + " ".join(f"{n} (:{declared[n]})" for n in sorted(ns)))
+            continue
+        if why == NEEDS_EXCLUDED:          # always by name, each with the excluded row ctest would add to its hold
+            print(f"  left out, {why} (ctest adds a required fixture's setup and cleanup to the run): {len(ns)}: " +
+                  " ".join(f"{n} (needs " + ", ".join(f"{m}: {r}" for m, r in needs[n]) + ")" for n in sorted(ns)))
             continue
         print(f"  left out, {why}: {len(ns)}" + (": " + " ".join(sorted(ns)) if len(ns) <= 12 else ""))
     for k, p in enumerate(ps, 1):
