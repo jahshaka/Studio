@@ -4,6 +4,11 @@
 # EVERY GPU row takes all 8 slots, so GPU rows run one at a time (urgent #44: a row's 60 s is its own cost, never its
 # neighbours'); a row that boots no Vulkan takes none and overlaps them.
 set(JAH_CARD_SLOTS 8)
+# ...EXCEPT THE ROWS MEASURED TO SHARE IT (TEST-STREAMLINE-1 block C, the lead's per-row ruling, 2026-11-03): the rows of
+# tests/support/card-width-2-rows.txt take HALF the slots, so two of them hold the card at once (block C: width 2's total
+# 419 s against width 1's 825 s on its 141 rows); every other GPU row keeps all eight and runs alone.
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../support/card-width-2-rows.txt" JAH_CARD_WIDTH2_ROWS REGEX "^[^#]")
+set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/../support/card-width-2-rows.txt")
 
 # The build's ctest resource spec: one `vram` resource with the card's slots (ctest reads CTEST_RESOURCE_SPEC_FILE).
 macro(jah_vram_resource_spec)
@@ -22,6 +27,9 @@ function(_jah_vram_register _row _class _k)
     set(_n ${_k})
     if(_k STREQUAL "all" OR _n GREATER JAH_CARD_SLOTS)
         set(_n ${JAH_CARD_SLOTS})
+    endif()
+    if(_n EQUAL JAH_CARD_SLOTS AND _row IN_LIST JAH_CARD_WIDTH2_ROWS)
+        math(EXPR _n "${JAH_CARD_SLOTS} / 2")
     endif()
     set_property(TEST ${_row} PROPERTY RESOURCE_GROUPS "vram:${_n}")
 endfunction()
