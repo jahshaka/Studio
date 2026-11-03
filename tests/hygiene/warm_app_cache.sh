@@ -323,6 +323,11 @@ sa=$(sed -n 2,3p "$T/tA/build/tests/.cold-rows/p.cold.driver-key" 2>/dev/null); 
     no "path-free stamps: [$sa] vs [$sb] ($(tail -3 "$T/tA.out"))"
 out=$("$W" "$T/tB/build" --check --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/tB/build/tests/rows.txt" --only cold-on); rc=$?
 [ $rc = 0 ] && ok "...and a staged file touched (its time alone): cold-on warm" || no "a touched media file: '$out' rc $rc"
+# THE OTHER SPELLING (the stage-1 audit's finding 11): the same tree called through a symlink (~/Developer -> /mnt/work/Developer
+# on this box) reads its stamps warm - its lines' spelling stripped whichever way it was called (red on the base: stale)
+ln -s "$T/tB" "$T/tB-link"
+out=$("$W" "$T/tB-link/build" --check --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/tB/build/tests/rows.txt" --only cold-on); rc=$?
+[ $rc = 0 ] && ok "...and called through another spelling of its path (a symlink): cold-on still warm" || no "another spelling: '$out' rc $rc"
 printf 'y' > "$T/tB/build/bin/media/x/c.png"
 out=$("$W" "$T/tB/build" --check --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/tB/build/tests/rows.txt" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'p.cold (the staged media rebuilt since)' && ok "...a staged file's content moved: cold-on cold, the row named" ||

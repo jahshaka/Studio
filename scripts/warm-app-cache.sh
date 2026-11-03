@@ -238,7 +238,16 @@ built_key() { echo "built $(built_digest "${1:-}" | sha256sum | cut -c1-16)"; } 
 row_digest() {   # <the row's line> [<build> <src>]: its command, its tier, its dir - the tree's own paths written <build> and
     # <src> first (CODING_RULES §6: the line carries the tree's spelling, test-cold-rows.txt; a tree path in a stamp made
     # every other tree's stamp read "its registration changed")
-    local l=${1//"${2:-$BUILD}"/<build>}; l=${l//"${3:-$SRC}"/<src>}
+    # EVERY SPELLING of the tree (the stage-1 audit's finding 11: ~/Developer is a symlink to /mnt/work/Developer - a call made
+    # through the other spelling than the configure's left the lines unstripped and every stamp stale): the logical and the
+    # physical path of each, and the spellings its CMakeCache records (CMAKE_CACHEFILE_DIR / CMAKE_HOME_DIRECTORY)
+    local b=${2:-$BUILD} s=${3:-$SRC} l=$1 x
+    for x in "$b" "$(cd "$b" 2>/dev/null && pwd -P)" "$(sed -n 's/^CMAKE_CACHEFILE_DIR:INTERNAL=//p' "$b/CMakeCache.txt" 2>/dev/null)"; do
+        [ -n "$x" ] && l=${l//"$x"/<build>}
+    done
+    for x in "$s" "$(cd "$s" 2>/dev/null && pwd -P)" "$(sed -n 's/^CMAKE_HOME_DIRECTORY:INTERNAL=//p' "$b/CMakeCache.txt" 2>/dev/null)"; do
+        [ -n "$x" ] && l=${l//"$x"/<src>}
+    done
     echo "row $(printf '%s' "$l" | sha256sum | cut -c1-16)"
 }
 row_stamp_why() {   # <row> <line>: empty when this row's prime ran at this key, for this command, on this build
