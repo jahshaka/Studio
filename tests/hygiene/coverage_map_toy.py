@@ -59,24 +59,49 @@ with tempfile.TemporaryDirectory() as t:
          sh("g++", "--coverage", "main.o", "liblib.a", "wrap.o", "-Wl,--wrap=_Exit", "-o", "row", "-pthread")]
     law(all(x.returncode == 0 for x in r), "the toy builds with the tree's wrapper (%s)" % [x.stderr[-200:] for x in r if x.returncode])
 
-    def run(exe, row, *args):
-        env = dict(os.environ, GCOV_PREFIX=os.path.join(b, "coverage", "rows", row), GCOV_PREFIX_STRIP="0")
+    def run(exe, row, *args, kind="rows"):
+        env = dict(os.environ, GCOV_PREFIX=os.path.join(b, "coverage", kind, row), GCOV_PREFIX_STRIP="0")
         os.makedirs(env["GCOV_PREFIX"], exist_ok=True)
         return subprocess.run([os.path.join(b, exe)] + list(args), cwd=b, env=env).returncode
-    rc = [run("nowrap", "row.nowrap"), run("row", "row.A"), run("row", "row.B", "B")]
-    law(rc == [0, 0, 0], "three toy rows ran green (%s)" % rc)
+    rc = [run("nowrap", "row.nowrap"), run("row", "row.A"), run("row", "row.B", "B"), run("row", "row.F"), run("row", "row.C"),
+          run("row", "row.S"), run("row", "app-off", kind="boots")]
+    law(rc == [0] * 7, "seven toy runs (five rows, a setup, a boot) ran (%s)" % rc)
+    # row.C's profile torn (a gcov error); the pass's records (row.F FAILED); row.B requires row.S's fixture
+    for dp, _, fs in os.walk(os.path.join(b, "coverage", "rows", "row.C")):
+        for f in fs:
+            if f.endswith(".gcda"):
+                open(os.path.join(dp, f), "wb").write(b"torn")
+    recs = os.path.join(t, "pass.jsonl")
+    with open(recs, "w") as fh:
+        for r, v in (("row.nowrap", "PASS"), ("row.A", "PASS"), ("row.B", "PASS"), ("row.F", "FAIL"), ("row.C", "PASS"), ("row.S", "PASS")):
+            fh.write(json.dumps({"suite": r, "verdict": v, "ts": "2026-11-03T00:00:00+01:00"}) + "\n")
+    inv = os.path.join(t, "inv.json")
+    json.dump({"tests": [{"name": "row.S", "properties": [{"name": "FIXTURES_SETUP", "value": ["fx"]}]},
+                         {"name": "row.B", "properties": [{"name": "FIXTURES_REQUIRED", "value": ["fx"]}]}]}, open(inv, "w"))
     m = os.path.join(t, "map.json")
-    p = subprocess.run([sys.executable, "-I", CM, "collect", b, m, "--tip", "toy"], capture_output=True, text=True)
+    p = subprocess.run([sys.executable, "-I", CM, "collect", b, m, "--tip", "toy", "--records", recs, "--inventory", inv],
+                       capture_output=True, text=True)
     doc = json.load(open(m)) if p.returncode == 0 and os.path.isfile(m) else {}
     rows = doc.get("rows", {})
     law("row.nowrap" in doc.get("no_profile", []) and "row.nowrap" not in rows,
         "(1) a row ending in _Exit WITHOUT the wrap leaves no profile - named under no_profile (%s)" % doc.get("no_profile"))
     a = {tuple(x) for x in rows.get("row.A", [])}
     bb = {tuple(x) for x in rows.get("row.B", [])}
-    law(a == {("src/lib.cpp", "work"), ("src/lib.cpp", "spin")} and bb == {("src/lib.cpp", "other")},
-        "(2) each row's map holds the functions it ran and only those - A %s, B %s" % (sorted(a), sorted(bb)))
+    law(a == {("src/lib.cpp", "work"), ("src/lib.cpp", "spin")} and bb == {("src/lib.cpp", "other"), ("src/lib.cpp", "work"), ("src/lib.cpp", "spin")},
+        "(2) each row's map holds the functions it ran - A %s - and a row its required setup's too - B %s (other + row.S's)"
+        % (sorted(a), sorted(bb)))
+    np_ = set(doc.get("no_profile", []))
+    law({"row.F", "row.C"} <= np_ and "row.F" not in rows and "row.C" not in rows,
+        "(5) a FAILED row (its pass record) and a row whose .gcda gcov cannot read are no_profile, never 'ran nothing' (%s)"
+        % {k: doc.get("why", {}).get(k) for k in ("row.F", "row.C")})
+    law({tuple(x) for x in doc.get("boots", {}).get("app-off", [])} == {("src/lib.cpp", "work"), ("src/lib.cpp", "spin")},
+        "(6) a warm-up boot's profile (coverage/boots/<boot>) collected as its boots entry, by the real collector")
     law(json.dumps(doc).find(t) < 0, "(3) the map names no tree path (files under the source root)")
     q = subprocess.run([sys.executable, "-I", CM, "rows", m, "src/lib.cpp", "other"], capture_output=True, text=True)
     law(q.stdout.split() == ["row.B"], "(4) `rows <map> src/lib.cpp other` answers row.B alone (%s)" % q.stdout.split())
+    nr = subprocess.run([sys.executable, "-I", CM, "collect", b, m], capture_output=True, text=True)
+    law(nr.returncode == 64, "(7) collect without the pass's records is refused (only PASS rows are mapped)")
+    subprocess.run([sys.executable, "-I", CM, "reset", b], capture_output=True)
+    law(not os.path.exists(os.path.join(b, "coverage", "rows")), "(8) reset empties the prefixes before a pass (gcov merges)")
 print("tooling.coverage_map: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)
