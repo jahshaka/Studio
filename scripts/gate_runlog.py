@@ -50,6 +50,11 @@ _LAW = re.compile(r"^\s*LAW\s+([A-Za-z0-9_.:+\-]+)\s+(\S+)\s+(\S+)(?:\s+(<=|<|>=
 _NONFINITE = ("nan", "inf", "infinity")
 
 
+# THE VERDICTS A RECORD WRITES that are not green - the one list (verdict_of below writes all but NOADMIT, the admission
+# door's; the lead's spec.sh --reds reads it: the stage-1 audit's finding 7)
+RED_VERDICTS = ("FAIL", "TIMEOUT", "CRASH", "NOTRUN", "NOADMIT")
+
+
 def verdict_of(status):
     s = status.lower()
     if "passed" in s: return "PASS"

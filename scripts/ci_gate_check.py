@@ -275,15 +275,21 @@ RED_RESULTS = ("FAIL", "TIMEOUT", "CRASH")
 
 def red_stands(rec, fact, reach, cfg):
     """Why the red record `rec` does NOT stand at this tip (None when it does: SERVED-RED). URGENT #54: re-running a red at
-    the same input is a quiet retry that could flip it green by chance, so a red recorded at THIS tree (never an ancestor's:
-    the diff may have fixed it), with the same build configuration, declaration and data, is reported with its record and
+    the same input is a quiet retry that could flip it green by chance, so a red recorded at THIS tree - or at an ancestor
+    whose diff since does not reach the row (TEST-STREAMLINE-1) - with the same build configuration, declaration and data, is
+    reported with its record and
     not run again (a deliberate re-run is spec.sh test's --rerun-red <row> --why <text>)."""
     if rec.get("verdict") not in RED_RESULTS:
         return f"its verdict {rec.get('verdict')} is not a red result"
     if fact is None:
         return "the row is not in the build's ctest inventory"
     if not reach.same_tree(rec["tip"]["studio"]):
-        return "a red of an ancestor's tree (the diff may have fixed it)"
+        # AN ANCESTOR's RED STANDS WHERE THE DIFF SINCE DOES NOT REACH THE ROW (TEST-STREAMLINE-1, the stage-1 audit's finding 2;
+        # the lead's ruling: a red at an UNCHANGED input is served red - re-running it is a retry for green, CODING_RULES §1).
+        # It ran again at every later tip before ("the diff may have fixed it") - a comment-only commit re-ran lab.monitor
+        r = reach.of(rec["tip"]["studio"])
+        if r is None or rec.get("suite") in r:
+            return f"a red of an ancestor's tree, and {rec['tip']['studio'][:9]}..{reach.tip[:9]} reaches it (the fix may be in it)"
     if not gate_graph.config_equal(rec.get("config"), cfg):
         return "its build configuration differs (or is unknown)"
     d = rec.get("declaration")

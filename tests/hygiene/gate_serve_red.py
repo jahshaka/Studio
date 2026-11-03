@@ -27,7 +27,7 @@ class Reach:
 
 
 def rec(verdict, cfg="cfg", decl="d", data="h"):
-    return {"verdict": verdict, "failLine": "FAIL: the law", "tip": {"studio": "a" * 40}, "config": {"hash": cfg},
+    return {"suite": "gi.row", "verdict": verdict, "failLine": "FAIL: the law", "tip": {"studio": "a" * 40}, "config": {"hash": cfg},
             "declaration": {"hash": decl}, "data_hash": data, "run": "run-1", "seconds": 3.0, "tier": "lane"}
 
 
@@ -46,7 +46,12 @@ def want(name, got, kind, why_has=None):
 C = lambda r, reach, fact=FACT, cfg=CFG: cgc.classify(r, fact, "gi.row", reach, "fk", "fk", cfg)
 for v in ("FAIL", "TIMEOUT", "CRASH"):
     want("a %s at THIS tree, the same configuration, declaration and data: SERVED-RED" % v, C(rec(v), Reach(True)), "red")
-want("a FAIL at an ANCESTOR's tree runs (the diff may have fixed it)", C(rec("FAIL"), Reach(False)), "run", "ancestor")
+# AN ANCESTOR's RED (TEST-STREAMLINE-1, the stage-1 audit's finding 2): it runs only where the diff since REACHES the row - the
+# fix may be in it; where it does not, the input is unchanged and the red is SERVED-RED (RED ON BASE: it always ran)
+want("a FAIL at an ANCESTOR's tree whose diff since reaches the row runs (the fix may be in it)",
+     C(rec("FAIL"), Reach(False, reaches={"gi.row"})), "run", "reaches it")
+want("a FAIL at an ANCESTOR's tree whose diff since does NOT reach the row: SERVED-RED (an unchanged input)",
+     C(rec("FAIL"), Reach(False)), "red")
 want("a FAIL at this tree, its build configuration changed: runs", C(rec("FAIL", cfg="other"), Reach(True)), "run",
      "configuration")
 want("a FAIL at this tree, its declaration changed: runs", C(rec("FAIL", decl="d2"), Reach(True)), "run", "declaration")
