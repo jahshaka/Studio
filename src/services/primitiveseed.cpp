@@ -124,6 +124,9 @@ QByteArray shippedBytes(const primitives::Def &def, QString *errorOut)
 
 /// Do the stored source's bytes equal the shipped ones? (A content-addressed store names an object by its bytes, but a
 /// library copied from a template - or made by an older build - may hold the PREVIOUS shipped mesh under the same guid.)
+/// ITS COST, said beside the seed (the 3c audit): every boot reads and compares all 17 shipped sources against their
+/// stored copies - 2.7 MB of meshes (app/content/primitives 2.0 MB, the controllers 0.7 MB), a size check first and a
+/// byte compare only on equal sizes; no hash, no copy.
 bool storedIsShipped(const primitives::Def &def, const QString &storedPath)
 {
     QFile stored(storedPath);
