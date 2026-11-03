@@ -1,0 +1,5 @@
+1 TEST-STREAMLINE-1
+# THE TREE'S SCRIPTS VERSION, read by the lead's tools (scripts/lead/lib/spec.py TREE_TOOLS_VERSION; TEST-STREAMLINE-1 3a
+# audit F6): the first field is an integer the tools require at least - a tree whose scripts/ predates the tools' serving
+# rules (ci_gate_check.py's RED_VERDICTS and red_stands' ancestor rule, gate_runlog.py, gate-scope.py's coverage reach)
+# is REFUSED by name, never served wrong. Bump it with a scripts/ change the lead's tools come to depend on.
