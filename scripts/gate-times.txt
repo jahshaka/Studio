@@ -203,7 +203,9 @@ materials.bundle 0.00  ship 3a0422b4e (2026-10-13)
 math.parity 20.37  quiet n=23
 mcp.e2e 28.30  ship 3a0422b4e (2026-10-13)
 mcp.e2e.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
-meshbake.archive_bakes 34.53  solo, the card lock held, :71 (ORPHAN-REDS-1, 2026-11-03: three launches, each from 'Pipeline cache saved' to its process exit inside one second; it FAILED at 55.48 s on its 20-s teardown watchdog since 10-29, the ray tier's close joining builds no view used) - was 41.00 (ship 3a0422b4e, 2026-10-13)
+meshbake.archive_bakes.import 18.75  solo, the card lock held, :71 (ORPHAN-REDS-1 item 3, 2026-11-03: run 1 of the split by proof - the samples imported and baked, 605 frames; the three-launch row was 34.53 s solo, 65.6 s at x1.9, and failed at 55.48 s on its teardown watchdog since 10-29)
+meshbake.archive_bakes.rebuild 7.39  solo, the card lock held, :71 (ORPHAN-REDS-1 item 3: run 2 - the bakes deleted, the open rebuilds them; 46 frames)
+meshbake.archive_bakes.missing 5.52  solo, the card lock held, :71 (ORPHAN-REDS-1 item 3: run 3 - the sources deleted too, the model missing with its scene issue; 45 frames)
 meshbake.archive_bakes.fresh_home 0.00  ship 3a0422b4e (2026-10-13)
 mirror.document_to_engine 9.72  quiet n=43
 open.frames 38.81  quiet n=41
