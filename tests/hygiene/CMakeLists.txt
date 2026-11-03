@@ -299,6 +299,20 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/evidence_cap.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(tooling.evidence_cap PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.evidence_cap)
+    # tooling.width_pair.plan / .judge / .refuse — THE PAIRED WIDTH RUN's TOOL (TEST-STREAMLINE-1 4b; the run itself is card
+    # block C): scripts/width_pair.py on toys - a hand-written ctest tree of shell rows claiming the card's 8 slots, a fake
+    # lock, a fake nvidia-smi (width_pair_test.py; no card, no display, no lock). ONE SCRIPT, THREE ROWS split by proof under the
+    # CPU row's 10 s: plan - the row set and every exclusion's reason, the parts, the display refused, the card held (exit 75);
+    # judge - the ABBA holds, W rows at once at width W (the fake card's peak), the fixture setup judged, a clean set adopts the
+    # widest, a row red beside a neighbour refuses its width; refuse - an out-of-memory line, a row past the row cap, width 1
+    # disagreeing with itself (no width, exit 1).
+    foreach(_wp plan judge refuse)
+        add_test(NAME tooling.width_pair.${_wp}
+                 COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/width_pair_test.py" "${CMAKE_SOURCE_DIR}"
+                         "${CMAKE_CURRENT_BINARY_DIR}/width-pair-${_wp}" ${_wp})
+        set_tests_properties(tooling.width_pair.${_wp} PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+        jah_no_display(tooling.width_pair.${_wp})
+    endforeach()
     # tooling.coverage_map — THE PER-ROW MAP IS EACH ROW's OWN, AND A PROCESS ENDING IN _Exit STILL WRITES IT (TEST-STREAMLINE-1
     # stage 2): a toy library and two toy rows built --coverage with the tree's cmake/coverage/gcov_exit_wrap.c, each its own
     # GCOV_PREFIX, read by scripts/coverage_map.py (coverage_map_toy.py; no card).
