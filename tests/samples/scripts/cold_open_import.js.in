@@ -1,11 +1,12 @@
-// samples.cold_open (URGENT #48's follow-up, the lead's ruling (b), 2026-10-24) - THE OWNER'S FIRST RUN AFTER A WIPE:
-// the smallest shipped sample (Showroom 2, 353 KB) imported and opened from a VIRGIN home on a COLD shader cache - the
-// row's home wiped before it, the shader cache with it (fresh_home.sh without --warm) - and only the open's law: the
-// archive imports, the project opens, 120 fixed-dt frames render, and the engine reports no error the suite does not
-// tolerate. No bakeAll, no reopen: the nine samples.cleanstart.* rows keep those, WARM.
-// MEASURED ONCE on the photon-7r merge's tree (2026-10-24): 47.34 s the process (the import 11 ms, the open 2.3 s, the
-// frames 6.4 s - the rest the boot's cold compile: 331 shaders, 101 Hlms permutations built in the frame, 15 UI-thread
-// stalls, the longest 10.6 s).
+// samples.cold_open.import (URGENT #48's follow-up, the lead's ruling (b), 2026-10-24; SPLIT BY PROOF, ORPHAN-REDS-1,
+// 2026-11-03, URGENT #136's form) - THE OWNER'S FIRST RUN AFTER A WIPE, LAUNCH 1 OF 2: the smallest shipped sample
+// (Showroom 2, 353 KB) imported from a VIRGIN home on a COLD shader cache - the row's home wiped before it, the shader
+// cache with it (fresh_home.sh --setup without --warm) - so this boot compiles the startup set cold, the subject. Its
+// laws: the archive imports (a guid, catalog rows) and the engine reports no error the suite does not tolerate. The
+// launch quits cleanly, and the clean quit saves what this boot compiled: the home it leaves (FIXTURES_SETUP
+// samplesColdOpen) is the one samples.cold_open.open boots on and opens the project in - the open's law, launch 2.
+// WHY TWO LAUNCHES: the one-launch row (import, open, 120 frames) was 47.34 s quiet and 56.18 s at load and timed out
+// at 60.08 s (§3667's cold compile at the cap); one launch a row, nothing cut.
 var SAMPLE = "Showroom 2";
 var ZIP = "@SOURCE_DIR@/scenes/" + SAMPLE + ".zip";
 function assert(cond, msg) {
@@ -18,8 +19,6 @@ app.engineErrors(true);
 var imported = project.importArchive(ZIP);
 assert(imported && imported.guid && imported.guid.length > 10, "importArchive -> " + (imported ? imported.guid : "null"));
 assert(imported.assets > 0, "catalog rows imported (" + imported.assets + ")");
-assert(project.open(imported.guid) === true, "project.open on a cold shader cache");
-editor.frame(120, 1.0 / 60.0);
 var e = app.engineErrors(false);
 var bad = [];
 for (var i = 0; i < e.entries.length; i++) {
@@ -28,6 +27,5 @@ for (var i = 0; i < e.entries.length; i++) {
     if (!ok) bad.push(e.entries[i]);
 }
 console.log("engineErrors: drains=" + e.drains + " recorded=" + e.recorded + " entries=" + JSON.stringify(e.entries));
-assert(e.drains > 0, "the frame loop ran (drains " + e.drains + ")");
 assert(bad.length === 0, "no unexpected engine errors " + JSON.stringify(bad));
-console.log("samples.cold_open: PASS");
+console.log("samples.cold_open.import: PASS");

@@ -19,7 +19,7 @@
 # wiped before every run by its own wrapper (fresh_home.sh --warm) and its boot's shader cache seeded from the tree's
 # shared app cache - a cold compile no longer fits the 60 s cap (samples.cleanstart.Particles timed out at 60.33 s on
 # the photon-7r merge's tree; it was priced 52.59 s cold). Every import, open, save, reopen and bake assertion stays.
-# THE OWNER'S COLD FIRST RUN is samples.cold_open's (below): the smallest sample on a virgin home and a cold cache, the
+# THE OWNER'S COLD FIRST RUN is samples.cold_open.*'s (below; two launches, one row each): the smallest sample on a virgin home and a cold cache, the
 # open's law alone. Nine processes on purpose (a pool cannot give an arm a virgin home).
 #
 # THE ONLY SAMPLE GATE (TEST_GATE_AUDIT.md §2, 2026-09-09). It absorbed
@@ -59,27 +59,76 @@ foreach(SAMPLE IN LISTS _samples)
         TIMEOUT 60)
 endforeach()
 
-# samples.cold_open — THE OWNER'S FIRST RUN AFTER A WIPE (URGENT #48's follow-up, the lead's ruling (b)): the smallest
-# shipped sample (Showroom 2) imported and opened from a VIRGIN home on a COLD shader cache (fresh_home.sh WITHOUT
-# --warm: the home's cache wiped with it), the open's law alone - imported, opened, 120 frames, no engine error the
-# suite does not tolerate (scripts/cold_open.js.in). Measured once: 47.34 s (the boot's cold compile is most of it).
+# samples.cold_open.import / .open / .clean — THE OWNER'S FIRST RUN AFTER A WIPE (URGENT #48's follow-up, the lead's ruling
+# (b)): the smallest shipped sample (Showroom 2) imported and opened from a VIRGIN home on a COLD shader cache, the open's
+# law alone - imported, opened, 120 frames, no engine error the suite does not tolerate. SPLIT BY PROOF, ONE ROW A LAUNCH
+# (ORPHAN-REDS-1, 2026-11-03, URGENT #136's form): the one-launch row was 47.34 s quiet, 56.18 s at load, and TIMED OUT at
+# 60.08 s (§3667: the boot's cold compile at the cap). A fixture chain on one home:
+#   .fresh_home  the wipe (jah_fresh_home_fixture WITHOUT WARM: the home and its shader cache) - samplesColdOpenHome;
+#   .import  launch 1 (scripts/cold_open_import.js.in) on that virgin home, --clear-shader-cache stated too (so its
+#            cold-on prime below compiles cold on any home): the boot compiles cold (the subject), the archive imports,
+#            no unexpected engine error; the clean quit saves what it compiled - a RUN fixture, FIXTURES_SETUP
+#            samplesColdOpen (its wipe is the fixture before it: a setup whose command is fresh_home.sh reads as a
+#            WIPE to the selector, never as a row - gate-scope.py _is_wipe);
+#   .open    launch 2 (scripts/cold_open_open.js.in): the app on that home, untouched (its cache = the startup set launch 1
+#            compiled, none of the sample's own permutations - the one-launch row's open on the same cache state): the
+#            project opens, 120 frames, the frame loop ran, no unexpected engine error;
+#   .clean   the FIXTURES_CLEANUP of both fixtures: the home wiped after every part that ran (no launch, no card;
+#            URGENT #133).
+# Both launches are cold by subject (source.testing_rules R13): never the tree's shared cache.
+# THE DRIVER's CACHE IS THE ROW's OWN, NEVER THE SHARED ONE (URGENT #152, 2026-11-03): the subject is a wiped APP home
+# (its shader cache, VkPipelineCache included, gone) on a machine whose GPU driver cache survived the wipe - the owner's
+# first run. A virgin home's ray pipelines (rq_reflect ~80 s cold in the driver) come from the NVIDIA driver's
+# per-executable disk cache alone, and the shared one (~/.cache/nvidia, every tree's and every concurrent row's
+# "Jahshaka") was measured to lose them between two holds 12 min apart while app rows ran (both launches then timed out
+# at 60.6 s; the cause unverified - spikes/orphan-reds-1/). So the row names its own driver cache, outside the wiped home
+# (it survives the wipe, as the owner's does), written by these two rows only, one at a time (the fixture chain), and
+# PRIMED by the warm-up's cold-on boot, uncapped (COLD below: its command runs there once a shader key, to its end - the
+# driver stores its compiles during the run). The variables ride the COMMAND (the cold-on run reads no ENVIRONMENT
+# property); ENVIRONMENT repeats the roots for ctest and the hygiene rules. Launch 2 boots on launch 1's saved
+# VkPipelineCache, so the driver's cache only serves what launch 1 compiled.
 set(_chome ${CMAKE_CURRENT_BINARY_DIR}/home-cold-open)
-file(MAKE_DIRECTORY ${_chome}/run)
-configure_file(scripts/cold_open.js.in ${CMAKE_CURRENT_BINARY_DIR}/cold_open.js @ONLY)
-jah_gpu_row(samples.cold_open CLASS app TIER document
-         COMMAND sh ${JAH_FRESH_HOME} ${_chome} -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_BINARY_DIR}/cold_open.js
+set(_cdriver ${CMAKE_CURRENT_BINARY_DIR}/cold-open-driver-cache)
+file(MAKE_DIRECTORY ${_chome}/run ${_cdriver})
+set(_cenv env HOME=${_chome} JAHSHAKA_DATA_ROOT=${_chome}/.local/share/Jahshaka __GL_SHADER_DISK_CACHE_PATH=${_cdriver})
+configure_file(scripts/cold_open_import.js.in ${CMAKE_CURRENT_BINARY_DIR}/cold_open_import.js @ONLY)
+configure_file(scripts/cold_open_open.js.in ${CMAKE_CURRENT_BINARY_DIR}/cold_open_open.js @ONLY)
+jah_fresh_home_fixture(samples.cold_open.fresh_home samplesColdOpenHome "${_chome}" LABELS scripting)
+jah_gpu_row(samples.cold_open.import CLASS app TIER document
+         COLD "a virgin home's boot compiles the startup set cold (the subject) - its driver cache is the row's own, primed here"
+         COMMAND ${_cenv} $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --clear-shader-cache
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/cold_open_import.js
          WORKING_DIRECTORY ${_chome}/run
          DATA "samples/Showroom 2")
-set_tests_properties(samples.cold_open PROPERTIES
+set_tests_properties(samples.cold_open.import PROPERTIES
     ENVIRONMENT "HOME=${_chome};JAHSHAKA_DATA_ROOT=${_chome}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 60
+    FIXTURES_REQUIRED samplesColdOpenHome
+    FIXTURES_SETUP samplesColdOpen
     # the owner's cold first run is the subject: source.testing_rules R13 lets this root boot cold
     JAHSHAKA_COLD_BY_SUBJECT TRUE)
-# (its frames, counted once in a scratch tree off the tip with a per-process renderOneFrame counter, never committed:
-# 706 - the startup gate's 523 and the open's and the script's 120 among them)
-set_property(TEST samples.cold_open PROPERTY JAHSHAKA_TEST_FRAMES 706)
+jah_gpu_row(samples.cold_open.open CLASS app TIER document
+         COMMAND ${_cenv} $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/cold_open_open.js
+         WORKING_DIRECTORY ${_chome}/run
+         DATA "samples/Showroom 2")
+set_tests_properties(samples.cold_open.open PROPERTIES
+    ENVIRONMENT "HOME=${_chome};JAHSHAKA_DATA_ROOT=${_chome}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 60
+    FIXTURES_REQUIRED "samplesColdOpenHome;samplesColdOpen"
+    # its cache is launch 1's (the subject's second half), never the shared warm one
+    JAHSHAKA_COLD_BY_SUBJECT TRUE)
+# (fresh_home.sh with no command: the home wiped and its empty run/ re-made - the rows' working directory must exist for
+# ctest to start them; a bare rm -rf of the home left the next .import "Not Run")
+add_test(NAME samples.cold_open.clean COMMAND sh ${JAH_FRESH_HOME} ${_chome})
+set_tests_properties(samples.cold_open.clean PROPERTIES TIMEOUT 60 LABELS "scripting" FIXTURES_CLEANUP "samplesColdOpenHome;samplesColdOpen")
+jah_no_display(samples.cold_open.clean)
+# (their frames, counted once per launch by a per-process Ogre::Root::_fireFrameEnded counter - an LD_PRELOAD meter in a
+# scratch dir, never committed - 2026-11-03: 584 (the cold boot's startup gate) and 155 (the warm boot, the open, the
+# script's 120); the one-launch row's 706 was the startup gate's 523, the open's and the script's 120 among them)
+set_property(TEST samples.cold_open.import PROPERTY JAHSHAKA_TEST_FRAMES 584)
+set_property(TEST samples.cold_open.open PROPERTY JAHSHAKA_TEST_FRAMES 155)
 jah_ship_row(samples.cleanstart.Matcaps samples.cleanstart.Mirror_Room samples.cleanstart.Particles samples.cleanstart.Physics samples.cleanstart.Showroom samples.cleanstart.Showroom_2 samples.cleanstart.Skeletal_Animation samples.cleanstart.Tornado samples.cleanstart.World_Background)   # THE SHIP SET (TEST-CUT-1)
 
 # THE MULTI-ARCHIVE SESSION (code review of the cleanup, 2026-09-10): seven

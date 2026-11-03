@@ -244,7 +244,10 @@ samples.cleanstart.Showroom_2 41.44  quiet n=48
 samples.cleanstart.Skeletal_Animation 45.50  quiet n=44
 samples.cleanstart.Tornado 46.08  quiet n=18
 samples.cleanstart.World_Background 55.08  quiet n=46
-samples.cold_open 56.18  the card lock held, :74, by ctest, load ~4.9, THE FIRST RUN AFTER THE NVIDIA CACHE WAS CLEARED AND ITS CAP RAISED (URGENT #91, PHOTON-7 10-4 2026-10-27 20:20; it had been full since 10-20: every new SPIR-V compiled cold) - was: 47.34 solo, the card lock held, :72, COLD (URGENT #48 follow-up, the lead's ruling (b), 2026-10-24: Showroom 2 from a virgin home on a cold shader cache - 331 shaders, 15 UI-thread stalls, the longest 10.6 s)
+samples.cold_open.import 29.10  solo, the card lock held, :71, its own driver cache primed by the cold-on runner (ORPHAN-REDS-1 item 2, 2026-11-03: launch 1 of the split by proof - a virgin home, the startup set compiled cold, 584 frames; 22.36 s in an earlier solo run on the shared driver cache; the one-launch samples.cold_open was 47.34 quiet / 56.18 loaded and TIMED OUT at 60.08 s)
+samples.cold_open.open 21.25  solo, the card lock held, :71 (ORPHAN-REDS-1 item 2, 2026-11-03: launch 2 - on launch 1's home and cache, the open and its 120 frames, 155 frames)
+samples.cold_open.clean 0.02  CPU, no card, measured (ORPHAN-REDS-1 item 2: the FIXTURES_CLEANUP of samplesColdOpenHome and samplesColdOpen - fresh_home.sh wipes the home, re-makes its run/)
+samples.cold_open.fresh_home 0.02  CPU, no card (ORPHAN-REDS-1 item 2: the wipe, jah_fresh_home_fixture without WARM)
 samples.mirror_room_boots.boot1 30.85  solo, the card lock held, :81, WARM (PHOTON-7 stage 11, 2026-10-27: the data root virgin, the shader cache warm - the lead's ruling; was 31.75 cold, 2026-10-20)
 samples.mirror_room_boots.boot2 26.02  solo, the card lock held, :81, WARM (PHOTON-7 stage 11, 2026-10-27: the data root virgin, the shader cache warm; was 32.06 cold, 2026-10-20)
 scale.cpu_walks 34.63  solo, the card lock held, :72, load 4.3 (PHOTON-7 10-3, 2026-10-27, the lead's re-price: the measured quiet run after the six walk fixes and the churn fix - the 10k world's remainders on the perf-audit list; before: 15.07 quiet n=46)

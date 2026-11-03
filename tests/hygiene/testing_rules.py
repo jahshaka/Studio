@@ -63,7 +63,7 @@ tree and the build's registration, each with its name in the failure line:
      FIXTURES_REQUIRES a fixture whose setup is fresh_home.sh --warm of one (jah_fresh_home_fixture's WARM). WHY: a
      root of its own is a virgin shader cache - ~300 shaders, 30-50 s of every boot, never healed - and four sweeps
      in one day found twenty-four app rows at or past the 60 s cap that way. A row whose SUBJECT is the cold path says
-     so with the test property JAHSHAKA_COLD_BY_SUBJECT TRUE (samples.cold_open, scripting.e2e.sky_swap_transient).
+     so with the test property JAHSHAKA_COLD_BY_SUBJECT TRUE (samples.cold_open.import / .open, scripting.e2e.sky_swap_transient).
      What ctest cannot see is not read: a root a row's own script makes (material.live_roundtrip's stages) is the
      script's, warmed there.
   R14 A WARM FIXTURE's CONSUMER PROMOTES ON GREEN (HARNESS-1, the lead's ruling 2026-10-29). Every row that

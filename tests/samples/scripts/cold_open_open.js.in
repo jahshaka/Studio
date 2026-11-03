@@ -1,0 +1,31 @@
+// samples.cold_open.open (SPLIT BY PROOF, ORPHAN-REDS-1, 2026-11-03, URGENT #136's form) - THE OWNER'S FIRST RUN AFTER A
+// WIPE, LAUNCH 2 OF 2: on the home samples.cold_open.import left (FIXTURES_REQUIRED samplesColdOpen; never wiped here),
+// the project that launch imported is opened and 120 fixed-dt frames render, and the engine reports no error the suite
+// does not tolerate - the open's law, unchanged. ITS CACHE IS LAUNCH 1's: the startup set that boot compiled cold and
+// saved at its clean quit (the set the one-launch row held in memory at its open), and nothing of the sample's own
+// permutations, which this open compiles - the one-launch row's open, on the same cache state. Never the tree's shared
+// cache (the row's subject is the cold path: JAHSHAKA_COLD_BY_SUBJECT).
+var SAMPLE = "Showroom 2";
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: [" + SAMPLE + "] " + msg);
+    console.log("ok: [" + SAMPLE + "] " + msg);
+}
+var TOLERATED = ["setClipStates: the node has no clips"];
+// THE FIXTURE's HOME: exactly the one project launch 1 imported (a virgin home and one import; a home that holds
+// another is not that home - refused, not read)
+var projects = project.list({});
+assert(projects.length === 1, "the home holds the one project samples.cold_open.import made (" + JSON.stringify(projects) + ")");
+app.engineErrors(true);
+assert(project.open(projects[0].guid) === true, "project.open on the cold cache launch 1 left");
+editor.frame(120, 1.0 / 60.0);
+var e = app.engineErrors(false);
+var bad = [];
+for (var i = 0; i < e.entries.length; i++) {
+    var ok = false;
+    for (var t = 0; t < TOLERATED.length; t++) if (e.entries[i].message.indexOf(TOLERATED[t]) >= 0) ok = true;
+    if (!ok) bad.push(e.entries[i]);
+}
+console.log("engineErrors: drains=" + e.drains + " recorded=" + e.recorded + " entries=" + JSON.stringify(e.entries));
+assert(e.drains > 0, "the frame loop ran (drains " + e.drains + ")");
+assert(bad.length === 0, "no unexpected engine errors " + JSON.stringify(bad));
+console.log("samples.cold_open.open: PASS");
