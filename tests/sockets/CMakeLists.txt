@@ -43,11 +43,11 @@ endif()
 # are scripting.e2e.lamps_unshadowed's and sockets.e2e's scripts, unchanged, on `--headless --render-offscreen`.
 # Each arm makes its own scene (lamps_unshadowed the boot's default Basic world through project.create - the lead's
 # ruling: no arm depends on being first), so any order runs the same scenes. Registered HERE, not in tests/scripting: the sockets
-# script is configured by this directory, which configures after it. OFF until block B (JAH_HOST_POOLS); the arms'
-# seconds are ESTIMATES (each row's solo price less its ~5.6-s boot) until block B measures them in the pool.
+# script is configured by this directory, which configures after it. ON since block B (JAH_HOST_POOLS: B2's clean-state law
+# held in both orders); the arms' seconds are block B's MEASURED arm walls in the pool (0.41 and 0.90 s, rounded up).
 if("host_low" IN_LIST JAH_HOST_POOLS)
-    jah_pool_arm(host_low lamps_unshadowed ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_lamps_unshadowed.js 8)
-    jah_pool_arm(host_low sockets ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js 19)
+    jah_pool_arm(host_low lamps_unshadowed ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_lamps_unshadowed.js 1)
+    jah_pool_arm(host_low sockets ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js 1)
     jah_add_pool(host_low TIER low NEEDS NONE NEEDS_WHY "the lamp issue reads the view's shadow maps, GI is the script's own switch; socket verbs, camera.screenshot returns a shot (no picture claim)"
                  APP_ARGS ${JAH_HOST_ARGS} LABELS "scripting")
     set_property(TEST pool.host_low PROPERTY JAHSHAKA_TEST_FRAMES 529)   # the two rows' measured 20 + 509

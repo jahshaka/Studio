@@ -918,21 +918,27 @@ endforeach()
 file(CONFIGURE OUTPUT "${CMAKE_CURRENT_BINARY_DIR}/seed-key-inputs.txt" CONTENT "${_jah_seed_inputs}" @ONLY)
 file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/bake-key.txt")   # (its single-input predecessor, deleted)
 
-# THE HEADLESS HOST's SWITCH (TEST-STREAMLINE-1 stage 3a item 3; the lead's ruling: REPLACE NOTHING until card block B
-# proves it). The scriptable headless host (`--headless --render-offscreen`: the offscreen platform, the engine on Vulkan,
-# the editor viewport a presented stand-in - src/bridge/renderroute.h) runs a verbs-only app row with no window and no
-# UI. Its rows are PREPARED here and switched on by ONE commit after block B (B1: each host row's verdict and law lines
-# equal its app row's; B2: the pools in two orders and alone):
-#   JAH_HOST_ROWS   rows whose app command takes JAH_HOST_ARGS (each registration asks jah_host_args) - the single
-#                   --script rows of the audit's groupable list: gi.one_writer, scripting.e2e.world_stillness,
-#                   perf.offscreen_isolation, hdr.bloom_showroom, scene.reopen_fidelity / .high_sky / .scaled.
+# THE HEADLESS HOST's SWITCH (TEST-STREAMLINE-1 stage 3a item 3; ON where card block B proved it, 2026-11-03). The scriptable
+# headless host (`--headless --render-offscreen`: the offscreen platform, the engine on Vulkan, the editor viewport a presented
+# stand-in - src/bridge/renderroute.h) runs a verbs-only app row with no window and no UI.
+#   JAH_HOST_ROWS   rows whose app command takes JAH_HOST_ARGS (each registration asks jah_host_args). B1 (spikes/test-streamline-1/
+#                   card/B1-compare.txt): each row run as an app row and as a host row, solo, warm - the SAME verdict and the
+#                   same ok:/FAIL:/LAW lines to the character for these four; their walls 28.71 -> 13.44, 4.99 -> 3.90, 19.31 ->
+#                   8.37, 7.60 -> 5.88 s. NOT ON (B1 differs, the host's picture is not the app's): hdr.bloom_showroom (no-band
+#                   worst 0 vs 1 code), scene.reopen_fidelity (the ground 26,27,29 vs 26,26,29), scripting.e2e.world_stillness
+#                   (the teleport window 522,060 vs 213,303 px) - the host's offscreen platform presents another window size
+#                   than the rig's 1920x1080 xcb screen (INFERRED from the pixel counts; a host fix, then B1 again).
 #   JAH_HOST_POOLS  pools of host rows, ONE process for their arms (jah_add_pool APP_ARGS ${JAH_HOST_ARGS}); a pool ON
-#                   registers in place of its arms' single rows (JAH_HOST_POOL_<pool>, jah_host_pooled):
-#                   host_epic (tests/scripting) and host_low (tests/sockets). Under the 60-s cap only these two fit.
-# EMPTY until block B: every row registered as it is proven. The shell-wrapped rows (atom.pass_table,
-# shadow.cutout_caster, scripting.e2e.perf_capture_frames, log.engine, material.live_roundtrip.*) stay as they are.
-set(JAH_HOST_ROWS "")
-set(JAH_HOST_POOLS "")
+#                   registers in place of its arms' single rows (JAH_HOST_POOL_<pool>, jah_host_pooled). B2 (the clean-state
+#                   law, tests/support/clean_state.py --warm, forward and reversed: each arm first once = alone):
+#                   host_low HOLDS (pool 6.49 s against its two rows' 21.79 s). host_epic is NOT ON: VIOLATED - paused_shot's
+#                   play time after editor.frame(37) is not a function of the frames (t 0.350 after change_then_shot, 0.367
+#                   first, 1.100 in the app row) and its stopped shot settles 126 / 199 / 71 frames; the row's own law (the
+#                   shot during play = the stopped shot at the same t) held in every run.
+# The shell-wrapped rows (atom.pass_table, shadow.cutout_caster, scripting.e2e.perf_capture_frames, log.engine,
+# material.live_roundtrip.*) stay as they are.
+set(JAH_HOST_ROWS gi.one_writer perf.offscreen_isolation scene.reopen_fidelity.high_sky scene.reopen_fidelity.scaled)
+set(JAH_HOST_POOLS host_low)
 set(JAH_HOST_ARGS --headless --render-offscreen)
 set(JAH_HOST_POOL_host_epic scripting.e2e.change_then_shot scripting.e2e.paused_shot)
 set(JAH_HOST_POOL_host_low scripting.e2e.lamps_unshadowed sockets.e2e)
