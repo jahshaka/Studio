@@ -146,6 +146,7 @@ def reach_key(build, a, tip):
             h.update(f"{f}:{st.st_mtime_ns}:{st.st_size}\n".encode())
         except OSError:
             h.update(b"-")
+    h.update(f"coverage-map {gate_runlog.coverage_map_digest()}\n".encode())   # (the 2a audit's finding 6: a new map re-reaches)
     return h.hexdigest()[:20]
 
 

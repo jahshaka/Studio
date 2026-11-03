@@ -226,6 +226,20 @@ def append_records(records, tier, tip):
     return path
 
 
+def coverage_map_path():
+    """THE COVERAGE MAP's FILE (TEST-STREAMLINE-1 stage 2), one definition: JAH_COVERAGE_MAP, else <the records' dir>/../coverage/map.json."""
+    return os.environ.get("JAH_COVERAGE_MAP") or os.path.join(os.path.dirname(log_dir()), "coverage", "map.json")
+
+
+def coverage_map_digest():
+    """The map's content digest (or 'none'): a term of every reach cache key - a new map re-reaches (the 2a audit's finding 6)."""
+    import hashlib
+    try:
+        return hashlib.sha256(open(coverage_map_path(), "rb").read()).hexdigest()[:16]
+    except OSError:
+        return "none"
+
+
 EVIDENCE_RUNS = 40          # THE EVIDENCE CAP (TEST-STREAMLINE-1 1f): the newest output/<run>/ dirs kept
 EVIDENCE_CACHE_REL = os.path.join(".local", "share", "Jahshaka", "shadercache")
 

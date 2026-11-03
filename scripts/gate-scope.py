@@ -3268,13 +3268,11 @@ def coverage_map_doc():
     """THE COVERAGE MAP (TEST-STREAMLINE-1 stage 2; scripts/coverage_map.py collect writes it): JAH_COVERAGE_MAP names the
     file, else <the records' directory>/../coverage/map.json (the lead repo's testing/coverage/); None when there is none or
     it cannot be read - every engine path then takes the table, as before."""
-    path = os.environ.get("JAH_COVERAGE_MAP")
-    if not path:
-        try:
-            import gate_runlog
-            path = os.path.join(os.path.dirname(gate_runlog.log_dir()), "coverage", "map.json")
-        except Exception:
-            return None
+    try:
+        import gate_runlog
+        path = gate_runlog.coverage_map_path()
+    except Exception:
+        return None
     if path not in _COVERAGE_DOC:
         try:
             doc = json.load(open(path))
