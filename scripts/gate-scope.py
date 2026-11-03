@@ -735,6 +735,13 @@ def _is_wipe(cmd):
     at = next((i for i, c in enumerate(cmd) if str(c).endswith("fresh_home.sh")), None)
     if at is not None and "--promote" in cmd[at + 1:(cmd.index("--") if "--" in cmd[at:] else len(cmd))]:
         return False
+    # A ROW's OWN RUN IN A FRESH HOME IS NOT A WIPE (TEST-STREAMLINE-1, 2026-11-03): `fresh_home.sh [--warm …] <home> -- <cmd>`
+    # without --setup runs the row's command in its home (wiped around it) - a fixture setup of that form is a RUN fixture
+    # (app.engine_selftest_shapes.alone, the gi/rtreflect walk chains' first parts), never a home wipe. --setup [-- THEN] is.
+    if at is not None and "--" in cmd[at + 1:]:
+        opts = cmd[at + 1:at + 1 + cmd[at + 1:].index("--")]
+        if "--setup" not in opts and len(cmd) > at + 1 + len(opts) + 1:
+            return False
     if any(str(c).endswith(("fresh_home.sh", "freshhome.cmake")) for c in cmd):
         return True
     return len(cmd) > 2 and os.path.basename(str(cmd[0])) == "sh" and cmd[1] == "-c" and "rm -rf" in str(cmd[2])
