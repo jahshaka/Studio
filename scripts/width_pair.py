@@ -11,8 +11,9 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
              is left out, named). The fixture setups ctest adds are run with them and judged with them.
   THE ARMS   the SAME rows, the same tree and build, at width 1, 2 and 3 - width W = `ctest -j W` with a resource spec of
              W x 8 slots (`--resource-spec-file`, the build's own spec untouched), so W GPU rows hold the card at once -
-             in ABBA order (default 1,2,3,3,2,1: each width twice, symmetric in time, so a drift of the box over the run
-             cancels in each width's pair).
+             in a PALINDROME order (default 1,2,3,2,1, the lead's ruling for block C: widths 1 and 2 each twice, symmetric in time,
+             so a drift of the box over the run cancels in their pairs; width 3's one run is judged on verdicts, out-of-memory
+             and the 45-s bar, which need no pair; `--order 1,2,3,3,2,1` pairs every width).
   THE HOLDS  each (part, width) run is ONE hold of the card (`gpu-exclusive.sh --wait-max --label width-w<W>-p<k>`): the rows
              are packed into parts whose width-1 estimate (the price x RATIO) stays under PART_CAP_S, so no hold passes ~8
              min (CODING_RULES §7); the Unreal session's tickets fit between two holds.
@@ -24,7 +25,7 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
              must agree with itself (its two runs) - a row whose verdict differs between them is a finding before any width is
              adopted (exit 1). Timing-law and cold rows stay alone whatever is adopted.
 
-usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,3,2,1] [--out <dir>] [--lock <cmd>] [--prices <file>]
+usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] [--prices <file>]
        [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600]
   --plan    the rows, the exclusions with their reasons, the parts and the estimated card time - nothing run, no lock.
   exit      0 a width adopted (the line `ADOPT WIDTH <w>`); 1 width 1 unstable or the run incomplete; 2 refused (usage, a bad
@@ -333,7 +334,7 @@ def main(argv):
     if plan:
         args.remove("--plan")
     display = opt(args, "--display")
-    order = [int(x) for x in opt(args, "--order", "1,2,3,3,2,1").split(",")]
+    order = [int(x) for x in opt(args, "--order", "1,2,3,2,1").split(",")]
     out = opt(args, "--out")
     lock = shlex.split(opt(args, "--lock", os.path.join(HERE, "gpu-exclusive.sh")))
     pfile = opt(args, "--prices", os.path.join(HERE, "gate-times.txt"))
@@ -342,7 +343,7 @@ def main(argv):
     smi = opt(args, "--nvidia-smi", "nvidia-smi")
     wait_max = int(opt(args, "--wait-max", "600"))
     if len(args) != 1 or args[0].startswith("-"):
-        die("usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,3,2,1] [--out <dir>] [--lock <cmd>] "
+        die("usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] "
             "[--prices <file>] [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600]")
     build = os.path.abspath(args[0])
     if 1 not in order or any(w < 1 for w in order):

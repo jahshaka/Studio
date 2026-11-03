@@ -303,7 +303,7 @@ if(Python3_Interpreter_FOUND)
     # block C): scripts/width_pair.py on toys - a hand-written ctest tree of shell rows claiming the card's 8 slots, a fake
     # lock, a fake nvidia-smi (width_pair_test.py; no card, no display, no lock). ONE SCRIPT, THREE ROWS split by proof under the
     # CPU row's 10 s: plan - the row set and every exclusion's reason, the parts, the display refused, the card held (exit 75);
-    # judge - the ABBA holds, W rows at once at width W (the fake card's peak), the fixture setup judged, a clean set adopts the
+    # judge - the palindrome order's holds (1,2,3,2,1), W rows at once at width W (the fake card's peak), the fixture setup judged, a clean set adopts the
     # widest, a row red beside a neighbour refuses its width; refuse - an out-of-memory line, a row past the row cap, width 1
     # disagreeing with itself (no width, exit 1).
     foreach(_wp plan judge refuse)

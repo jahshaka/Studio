@@ -6,7 +6,7 @@ command) and a fake nvidia-smi (the used MB = a base + 1000 per toy row running)
 usage: width_pair_test.py <source root> <scratch base> plan|judge|refuse   (three rows split by proof, each under the CPU row's 10 s)
 Proves: the row set (a GPU row, priced under 10 s, no measure / cold / armed timing bars / named timing law; an unpriced or a
 10-s row left out, each with its reason; a CPU row not asked); a width W run is `ctest -j W` with W x 8 slots (the toy rows
-overlap W at once: the fake card's peak); the ABBA order and one hold per (width, part) with its label; the parts under the
+overlap W at once: the fake card's peak); the palindrome order and one hold per (width, part) with its label; the parts under the
 cap; the verdicts per row incl. the fixture setup ctest adds; THE RULE: identical verdicts -> the widest width; a row red
 only beside a neighbour -> that width refused by name; an out-of-memory line -> refused; a row past the row cap -> refused;
 width 1 disagreeing with itself -> no width (exit 1); the card held -> exit 75 with the records kept; a bad display refused."""
@@ -141,11 +141,11 @@ if PART == "plan":
 
 
 elif PART == "judge":
-    # 3. A CLEAN SET: the ABBA order, one hold per run, W rows at once at width W, every verdict equal -> the widest width
+    # 3. A CLEAN SET: the default order 1,2,3,2,1, one hold per run, W rows at once at width W, every verdict equal -> the widest width
     rc, out, labels, recs = run(b1, "--display", ":71")
     check(rc == 0 and "ADOPT WIDTH 3" in out, f"clean: ADOPT WIDTH 3 (rc {rc}) {out.splitlines()[-1:]}")
-    check(labels == ["width-w1-p1", "width-w2-p1", "width-w3-p1", "width-w3-p1", "width-w2-p1", "width-w1-p1"],
-          f"clean: six holds in ABBA order 1,2,3,3,2,1, each labelled ({labels})")
+    check(labels == ["width-w1-p1", "width-w2-p1", "width-w3-p1", "width-w2-p1", "width-w1-p1"],
+          f"clean: five holds in the default order 1,2,3,2,1, each labelled ({labels})")
     peaks = {r["width"]: r["vram_peak_mb"] for r in recs}
     check(peaks.get(1) == 1500 and peaks.get(3, 0) >= 3500 and peaks.get(2, 0) >= 2500,
           f"clean: the VRAM peak read per width - 1 row at once at width 1, 3 at width 3 ({peaks})")
