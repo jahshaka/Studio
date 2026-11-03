@@ -48,7 +48,7 @@
 #                    (the files are never written in place: a promotion renames a new directory over the old), with its
 #                    stamps and its top-up stamp; the -off boot's dump at the key; each cold row the parent primed at the key
 #                    for the same registration (paths aside) and the same media by content, with its private driver cache
-#                    (a *CACHE*PATH* value under the parent's build) and its startup seed (a directory beside its working dir
+#                    (a *CACHE*PATH* value under the parent's build: COPIED - the driver writes it in place) and its startup seed (a directory beside its working dir
 #                    holding tree-key.txt - its own freshness check still judges it). Prints what it took and what is still
 #                    to warm here; boots nothing, takes no card. Exit 0 (something or nothing taken), 3 (keys differ).
 #   --key            THE TREE's SHADER KEY alone (below), printed, exit 0 - its one definition, read by a row that keeps
@@ -307,12 +307,17 @@ if [ -n "$INHERIT" ]; then
         exit 3
     fi
     got=""
-    # take <src> <dst>: a cache directory by hard links (its files are never written in place: a promotion renames a new
-    # directory over it, fresh_home.sh), else copied; into a sibling first, then renamed over ours under OUR lock
+    # take <src> <dst> [copy]: a cache directory into a sibling first, then renamed over ours under OUR lock - BY HARD LINKS
+    # only where every writer of its files REPLACES them by rename (the engine's caches: cachefile::writeAtomic; a promotion
+    # renames a new directory over the old, fresh_home.sh), else COPIED (`copy`): the NVIDIA driver writes its cache files
+    # IN PLACE (it grows a GLCache .bin mid-run), so a linked driver cache would let a child write its parent's file (the
+    # stage-1 audit's finding 1); the cold rows' seeds likewise (their stamps are written by a test, not by rename)
     take() {
         local nxt="$2.inherit.$$"
         mkdir -p "$(dirname "$2")"; rm -rf "$nxt"
-        cp -al "$1" "$nxt" 2>/dev/null || { rm -rf "$nxt"; cp -a "$1" "$nxt"; } || { rm -rf "$nxt"; return 1; }
+        if [ "${3:-}" = copy ]; then cp -a "$1" "$nxt" || { rm -rf "$nxt"; return 1; }
+        else cp -al "$1" "$nxt" 2>/dev/null || { rm -rf "$nxt"; cp -a "$1" "$nxt"; } || { rm -rf "$nxt"; return 1; }
+        fi
         ( flock -w 60 9 || exit 1; rm -rf "$2.old.$$"; [ -e "$2" ] && mv "$2" "$2.old.$$"; mv "$nxt" "$2"; rm -rf "$2.old.$$" ) \
             9>"$2.lock"
     }
@@ -356,12 +361,12 @@ if [ -n "$INHERIT" ]; then
             wd=${f[1]}
             for a in "${f[@]:2}"; do
                 for v in $(printf '%s' "$a" | tr '\037' '\n'); do
-                    case "$v" in *CACHE*PATH*=*) d=${v#*=}; case "$d" in "$PB"/*) [ -d "$d" ] && take "$d" "$BUILD/${d#"$PB"/}" ;; esac ;; esac
+                    case "$v" in *CACHE*PATH*=*) d=${v#*=}; case "$d" in "$PB"/*) [ -d "$d" ] && take "$d" "$BUILD/${d#"$PB"/}" copy ;; esac ;; esac
                 done
             done
             for sd in "$wd"/*/; do
                 rel=${sd%/}; rel=${rel#"$PB"/}
-                [ -f "$sd/tree-key.txt" ] && case "$sd" in "$PB"/*) take "${sd%/}" "$BUILD/$rel" ;; esac
+                [ -f "$sd/tree-key.txt" ] && case "$sd" in "$PB"/*) take "${sd%/}" "$BUILD/$rel" copy ;; esac
             done
             printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
         done < "$COLDROWS"

@@ -410,6 +410,12 @@ mkdir -p "$CT/.shadercache.next"; printf 'NEW' > "$CT/.shadercache.next/hlms.1.b
 rm -rf "$CT/.shadercache"; mv "$CT/.shadercache.next" "$CT/.shadercache"
 [ "$(cat "$PT/.shadercache/hlms.1.bin")" = 0123456789 ] && python3 -I "$CK" "$PT/.shadercache" > /dev/null &&
     ok "I2: a child promotion (a rename over its cache) leaves the parent's cache whole" || no "I2: the parent's cache changed"
+# I2b (the stage-1 audit's finding 1): the DRIVER writes its cache file in place - a child's driver appending to the taken
+# cache must leave the parent's bytes as they were (red when the inheritance hard-linked it)
+printf 'grown by the child' >> "$CT/row/dc/GLCache.bin"; printf 'x' >> "$CT/row/seed-x/tree-key.txt"
+[ "$(cat "$PT/row/dc/GLCache.bin")" = drv ] && [ "$(cat "$PT/row/seed-x/tree-key.txt")" = k ] &&
+    ok "I2b: a child's driver writing its taken driver cache in place (and its seed's stamp) leaves the parent's files as they were" ||
+    no "I2b: the parent's driver cache or seed was written through the child ($(cat "$PT/row/dc/GLCache.bin"))"
 # I3: a child whose key differs (a staged Hlms byte) takes nothing and stays cold
 toy_tree "$T/iD"; DB="$T/iD/build"; printf 'H' > "$DB/bin/media/Hlms/a.any"
 out=$(IX "$DB" --inherit "$PB"); rc=$?
