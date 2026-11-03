@@ -28,6 +28,8 @@ file(MAKE_DIRECTORY ${_sockets_home}/run)
 set(JAHSHAKA_SOCKETS_RIG "${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb")
 configure_file(${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_sockets.js.in
                ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js @ONLY)
+jah_host_pooled(sockets.e2e _pooled)   # (a single row until pool.host_low is ON, below: TEST-STREAMLINE-1 3a item 3)
+if(NOT _pooled)
 jah_gpu_row(sockets.e2e WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/sockets-home" SHIP CLASS app TIER low NEEDS NONE NEEDS_WHY "socket verbs, camera.screenshot returns a shot (no picture claim)"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js
          WORKING_DIRECTORY ${_sockets_home}/run)
@@ -35,6 +37,21 @@ set_tests_properties(sockets.e2e PROPERTIES
     ENVIRONMENT "HOME=${_sockets_home};JAHSHAKA_DATA_ROOT=${_sockets_home}/.local/share/Jahshaka"
     LABELS "scripting"
     TIMEOUT 60)
+endif()
+
+# pool.host_low — THE HEADLESS HOST, ONE PROCESS FOR TWO LOW / NO-NEEDS VERB ROWS (TEST-STREAMLINE-1 3a item 3): the arms
+# are scripting.e2e.lamps_unshadowed's and sockets.e2e's scripts, unchanged, on `--headless --render-offscreen`.
+# lamps_unshadowed is FIRST: its law reads THE BOOT's default scene (no project.create of its own - the clean-state law's
+# reversed order cannot move it); sockets creates its own project. Registered HERE, not in tests/scripting: the sockets
+# script is configured by this directory, which configures after it. OFF until block B (JAH_HOST_POOLS); the arms'
+# seconds are ESTIMATES (each row's solo price less its ~5.6-s boot) until block B measures them in the pool.
+if("host_low" IN_LIST JAH_HOST_POOLS)
+    jah_pool_arm(host_low lamps_unshadowed ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_lamps_unshadowed.js 8 FIRST)
+    jah_pool_arm(host_low sockets ${CMAKE_CURRENT_BINARY_DIR}/e2e_sockets.js 19)
+    jah_add_pool(host_low TIER low NEEDS NONE NEEDS_WHY "the lamp issue reads the view's shadow maps, GI is the script's own switch; socket verbs, camera.screenshot returns a shot (no picture claim)"
+                 APP_ARGS ${JAH_HOST_ARGS} LABELS "scripting")
+    set_property(TEST pool.host_low PROPERTY JAHSHAKA_TEST_FRAMES 529)   # the two rows' measured 20 + 509
+endif()
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create
 # refuses a taken one), so a row that creates a project in a home nothing wipes went red on its

@@ -18,9 +18,10 @@ find_package(Qt6 REQUIRED COMPONENTS Core)
 # it asserts on.
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-offscreen_isolation)
 file(MAKE_DIRECTORY ${_home}/run)
+jah_host_args(perf.offscreen_isolation _host)   # (the headless host's command once block B switches it on: TEST-STREAMLINE-1 3a)
 jah_gpu_row(perf.offscreen_isolation WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/e2e-home-offscreen_isolation" SHIP CLASS app TIER low NEEDS NONE NEEDS_WHY "a readback must not redraw the editor view: a counter around a screenshot (no picture claim)"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
-                 --script ${CMAKE_CURRENT_SOURCE_DIR}/offscreen_isolation.js
+                 --script ${CMAKE_CURRENT_SOURCE_DIR}/offscreen_isolation.js ${_host}
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(perf.offscreen_isolation PROPERTIES
     ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"

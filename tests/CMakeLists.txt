@@ -927,6 +927,44 @@ function(jah_add_pool pool)
     endif()
 endfunction()
 
+# THE HEADLESS HOST's SWITCH (TEST-STREAMLINE-1 stage 3a item 3; the lead's ruling: REPLACE NOTHING until card block B
+# proves it). The scriptable headless host (`--headless --render-offscreen`: the offscreen platform, the engine on Vulkan,
+# the editor viewport a presented stand-in - src/bridge/renderroute.h) runs a verbs-only app row with no window and no
+# UI. Its rows are PREPARED here and switched on by ONE commit after block B (B1: each host row's verdict and law lines
+# equal its app row's; B2: the pools in two orders and alone):
+#   JAH_HOST_ROWS   rows whose app command takes JAH_HOST_ARGS (each registration asks jah_host_args) - the single
+#                   --script rows of the audit's groupable list: gi.one_writer, scripting.e2e.world_stillness,
+#                   perf.offscreen_isolation, hdr.bloom_showroom, scene.reopen_fidelity / .high_sky / .scaled.
+#   JAH_HOST_POOLS  pools of host rows, ONE process for their arms (jah_add_pool APP_ARGS ${JAH_HOST_ARGS}); a pool ON
+#                   registers in place of its arms' single rows (JAH_HOST_POOL_<pool>, jah_host_pooled):
+#                   host_epic (tests/scripting) and host_low (tests/sockets). Under the 60-s cap only these two fit.
+# EMPTY until block B: every row registered as it is proven. The shell-wrapped rows (atom.pass_table,
+# shadow.cutout_caster, scripting.e2e.perf_capture_frames, log.engine, material.live_roundtrip.*) stay as they are.
+set(JAH_HOST_ROWS "")
+set(JAH_HOST_POOLS "")
+set(JAH_HOST_ARGS --headless --render-offscreen)
+set(JAH_HOST_POOL_host_epic scripting.e2e.change_then_shot scripting.e2e.paused_shot)
+set(JAH_HOST_POOL_host_low scripting.e2e.lamps_unshadowed sockets.e2e)
+# jah_host_args(<row> <var>): <var> = JAH_HOST_ARGS when <row> runs on the host, else empty (its command unchanged).
+function(jah_host_args row var)
+    if(row IN_LIST JAH_HOST_ROWS)
+        set(${var} ${JAH_HOST_ARGS} PARENT_SCOPE)
+    else()
+        set(${var} "" PARENT_SCOPE)
+    endif()
+endfunction()
+# jah_host_pooled(<row> <var>): <var> TRUE when <row> is an arm of a host pool that is ON (its single row is not
+# registered: the pool runs it), else FALSE.
+function(jah_host_pooled row var)
+    set(_in FALSE)
+    foreach(_p IN LISTS JAH_HOST_POOLS)
+        if(row IN_LIST JAH_HOST_POOL_${_p})
+            set(_in TRUE)
+        endif()
+    endforeach()
+    set(${var} ${_in} PARENT_SCOPE)
+endfunction()
+
 add_subdirectory(engine)
 add_subdirectory(document)
 add_subdirectory(math)

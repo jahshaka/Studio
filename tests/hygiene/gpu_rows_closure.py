@@ -208,7 +208,9 @@ def classify(test, app, harnesses):
     nodisplay = any(re.match(r"^DISPLAY=unset:", e) for e in envmod)
     if nodisplay:
         return False, registered, "jah_no_display"
-    if "--headless" in words and (app in words):
+    # (`--headless --render-offscreen` is THE HEADLESS HOST, TEST-STREAMLINE-1 3a: the offscreen platform on VULKAN - a
+    # card row, never the NULL render system)
+    if "--headless" in words and "--render-offscreen" not in words and (app in words):
         return False, registered, "the app --headless"
     if any(re.match(r"^VK_(ICD_FILENAMES|DRIVER_FILES)=.*lvp_icd", str(e)) for e in env):
         return False, registered, "lavapipe (CPU Vulkan: host memory, no VRAM)"

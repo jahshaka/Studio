@@ -313,6 +313,9 @@ set_tests_properties(scripting.e2e.tex_ref PROPERTIES
 # (e2e_lamps_unshadowed.js says the law).
 set(_luHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-lamps_unshadowed)
 file(MAKE_DIRECTORY ${_luHome}/run)
+# (a single row until its host pool is ON: pool.host_low, tests/sockets - TEST-STREAMLINE-1 3a item 3)
+jah_host_pooled(scripting.e2e.lamps_unshadowed _pooled)
+if(NOT _pooled)
 # (its home wiped and warmed before it boots: source.testing_rules R12 / R13)
 jah_fresh_home_fixture(scripting.e2e.lamps_unshadowed.fresh_home lamps_unshadowed_home "${_luHome}" WARM LABELS "scripting")
 jah_gpu_row(scripting.e2e.lamps_unshadowed WARM_HOME "${_luHome}" CLASS app TIER low NEEDS NONE NEEDS_WHY "the issue reads the view's shadow maps, GI is the script's own switch"
@@ -323,6 +326,7 @@ set_tests_properties(scripting.e2e.lamps_unshadowed PROPERTIES
     ENVIRONMENT "HOME=${_luHome};JAHSHAKA_DATA_ROOT=${_luHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED lamps_unshadowed_home
     LABELS "scripting" TIMEOUT 60 JAHSHAKA_TEST_FRAMES 20)
+endif()
 
 # scripting.e2e.perf_capture_frames — THE CAPTURE WINDOW IS COUNTED IN FRAMES
 # (PERF-CAPTURE-SCRIPT-1, lane FENCE-1). Two halves like perf.capture_bundle (archived: archive/tests/perf):
@@ -482,8 +486,9 @@ set(_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-one_writer)
 # fork bump grew every PBS permutation (the glint's table).
 jah_fresh_home_fixture(gi.one_writer.fresh_home one_writer_home "${_home}" WARM LABELS scripting)
 file(MAKE_DIRECTORY ${_home}/run)
+jah_host_args(gi.one_writer _host)   # (the headless host's command once block B switches it on: TEST-STREAMLINE-1 3a)
 jah_gpu_row(gi.one_writer WARM_HOME "${_home}" SHIP CLASS app TIER epic NEEDS photon
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/gi_one_writer.js ${_host}
          WORKING_DIRECTORY ${_home}/run)
 # STAGE-CLOSE (TESTING-SPEED-B2; SPECS/TESTING_SPEED_ROWS.md MOVE): the ship and the stage close only.
 set_tests_properties(gi.one_writer PROPERTIES
@@ -991,8 +996,9 @@ set_tests_properties(scripting.e2e.resize_rest.b scripting.e2e.resize_rest.c PRO
 set(_wsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-world_stillness)
 jah_fresh_home_fixture(scripting.e2e.world_stillness.fresh_home worldStillnessHome "${_wsHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_wsHome}/run)
+jah_host_args(scripting.e2e.world_stillness _host)   # (the headless host's command once block B switches it on)
 jah_gpu_row(scripting.e2e.world_stillness WARM_HOME "${_wsHome}" CLASS app TIER epic NEEDS photon FRAMES 276
-    COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_stillness.js
+    COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_world_stillness.js ${_host}
     WORKING_DIRECTORY ${_wsHome}/run)
 set_tests_properties(scripting.e2e.world_stillness PROPERTIES
     ENVIRONMENT "HOME=${_wsHome};JAHSHAKA_DATA_ROOT=${_wsHome}/.local/share/Jahshaka"
@@ -1004,6 +1010,8 @@ set_tests_properties(scripting.e2e.world_stillness PROPERTIES
 # the shot at once (its own view the cards' only reader). RED before the fix: the cards' demand window held open by a
 # reader whose clock froze after one graze, the shot at its 2,002-frame cap. 240 frames, the rest, the shot's settle.
 set(_ctsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-change_then_shot)
+jah_host_pooled(scripting.e2e.change_then_shot _pooled)   # (a single row until pool.host_epic is ON, below)
+if(NOT _pooled)
 jah_fresh_home_fixture(scripting.e2e.change_then_shot.fresh_home changeThenShotHome "${_ctsHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_ctsHome}/run)
 jah_gpu_row(scripting.e2e.change_then_shot WARM_HOME "${_ctsHome}" CLASS app TIER epic NEEDS photon FRAMES 400
@@ -1013,6 +1021,7 @@ set_tests_properties(scripting.e2e.change_then_shot PROPERTIES
     ENVIRONMENT "HOME=${_ctsHome};JAHSHAKA_DATA_ROOT=${_ctsHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED changeThenShotHome
     LABELS "scripting" TIMEOUT 60)
+endif()
 
 # scripting.e2e.second_project_capture (PHOTON-7 stage 10-3, R0) - A SECOND PROJECT IN ONE SESSION, SHOT AT ONCE, NEVER
 # LOSES THE DEVICE: fixture B built in a new project and shot, then again in a second new project and shot (the shot's
@@ -1035,6 +1044,8 @@ set_tests_properties(scripting.e2e.second_project_capture PROPERTIES
 # and equals, to the code, a shot of the scene stopped and posed at the same document time. 60 + 37 + 10 frames and the
 # two shots' settles.
 set(_psHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-paused_shot)
+jah_host_pooled(scripting.e2e.paused_shot _pooled)   # (a single row until pool.host_epic is ON, below)
+if(NOT _pooled)
 jah_fresh_home_fixture(scripting.e2e.paused_shot.fresh_home pausedShotHome "${_psHome}" WARM LABELS "scripting")
 file(MAKE_DIRECTORY ${_psHome}/run)
 jah_gpu_row(scripting.e2e.paused_shot WARM_HOME "${_psHome}" CLASS app TIER epic NEEDS photon FRAMES 400
@@ -1044,3 +1055,16 @@ set_tests_properties(scripting.e2e.paused_shot PROPERTIES
     ENVIRONMENT "HOME=${_psHome};JAHSHAKA_DATA_ROOT=${_psHome}/.local/share/Jahshaka"
     FIXTURES_REQUIRED pausedShotHome
     LABELS "scripting" TIMEOUT 60)
+endif()
+
+# pool.host_epic — THE HEADLESS HOST, ONE PROCESS FOR TWO EPIC+PHOTON SHOT ROWS (TEST-STREAMLINE-1 3a item 3): the
+# arms are scripting.e2e.change_then_shot's and .paused_shot's scripts, unchanged, on `--headless --render-offscreen`.
+# change_then_shot is FIRST: its law reads THE BOOT's default scene (no project.create of its own - the clean-state
+# law's reversed order cannot move it); paused_shot creates its own project. OFF until block B (JAH_HOST_POOLS); the
+# arms' seconds are ESTIMATES (each row's solo price less its ~5.6-s boot) until block B measures them in the pool.
+if("host_epic" IN_LIST JAH_HOST_POOLS)
+    jah_pool_arm(host_epic change_then_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js 10 FIRST)
+    jah_pool_arm(host_epic paused_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js 12)
+    jah_add_pool(host_epic TIER epic NEEDS photon APP_ARGS ${JAH_HOST_ARGS} LABELS "scripting")
+    set_property(TEST pool.host_epic PROPERTY JAHSHAKA_TEST_FRAMES 800)   # the two rows' measured 400 + 400
+endif()

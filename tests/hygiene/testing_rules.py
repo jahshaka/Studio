@@ -436,7 +436,9 @@ def r13_bad(tests):
             continue
         # A HEADLESS APP ROW (TEST-STREAMLINE-1 1b): `--headless` / `--dump-api-docs` is the NULL render system - no shader
         # cache, nothing to boot warm; visible on its command, or stated JAHSHAKA_HEADLESS TRUE where a script runs the app
-        if any(c in ("--headless", "--dump-api-docs") for c in cmd) or \
+        # (THE HEADLESS HOST, TEST-STREAMLINE-1 3a: `--headless --render-offscreen` boots VULKAN - a shader cache, warm or
+        # cold - so it is no headless row here)
+        if (any(c in ("--headless", "--dump-api-docs") for c in cmd) and "--render-offscreen" not in cmd) or \
                 str(P.get("JAHSHAKA_HEADLESS", "")).strip().upper() in ("TRUE", "ON", "1", "YES"):
             continue
         wd = P.get("WORKING_DIRECTORY") or "/"
@@ -706,13 +708,16 @@ def the_rules_catch():
                    C("lab", ["/b/bin/jahlab", "--data-root", "/b/tests/x/l"]),
                    C("shared", [app, "--script", "x.js"]),
                    C("headless", [app, "--headless", "--data-root", "/b/tests/x/hl"]),
+                   C("hostcold", [app, "--headless", "--render-offscreen", "--data-root", "/b/tests/x/hc"]),
                    C("headless_script", ["bash", "/s/x.sh", app], ENVIRONMENT=["HOME=/b/tests/x/hs"], JAHSHAKA_HEADLESS="TRUE")])
     check(r13 == ["cold (--data-root=/b/tests/x/d)", "coldenv (HOME=/b/tests/x/h)",
-                  "fixturedcold (JAHSHAKA_DATA_ROOT=/b/tests/x/c)", "inrowcold (--data-root=/b/tests/x/h/d)"],
+                  "fixturedcold (JAHSHAKA_DATA_ROOT=/b/tests/x/c)", "hostcold (--data-root=/b/tests/x/hc)",
+                  "inrowcold (--data-root=/b/tests/x/h/d)"],
           "R13 flags an app row booting its own data root cold (a bare root, an in-row or fixture wipe without --warm), "
           "never one warmed in-row or by its fixture (a relative root read from its WORKING_DIRECTORY), one cold by "
           "subject, a fixture, jahlab, a row on no root of its own or a HEADLESS app row (the NULL render system: --headless on "
-          "its command, or JAHSHAKA_HEADLESS TRUE) (%s)" % r13)
+          "its command, or JAHSHAKA_HEADLESS TRUE) - the headless HOST (--headless --render-offscreen: Vulkan) is flagged "
+          "cold like any app row (%s)" % r13)
     r14 = r14_bad([C("w.setup", ["sh", fh, "--setup", "--warm", "/b/tests/x/w"], FIXTURES_SETUP=["wfx"]),
                    C("c.setup", ["sh", fh, "--setup", "/b/tests/x/c"], FIXTURES_SETUP=["cfx"]),
                    C("bare", [app, "--script", "x.js"], FIXTURES_REQUIRED=["wfx"]),

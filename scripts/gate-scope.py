@@ -838,7 +838,8 @@ def load_inventory(build):
             "reldir": d,
             "cmd": [os.path.normpath(c) if os.path.isabs(c) else c for c in cmd],
             "app": any(c.endswith("bin/Jahshaka") for c in cmd),
-            "headless": "--headless" in cmd,
+            # (`--headless --render-offscreen` is THE HEADLESS HOST, TEST-STREAMLINE-1 3a: Vulkan, a vulkan script's row)
+            "headless": "--headless" in cmd and "--render-offscreen" not in cmd,
             "script": script,
             "argv_files": set(files_in_argv),
             "via": via,
