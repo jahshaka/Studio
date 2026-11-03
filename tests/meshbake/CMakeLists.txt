@@ -137,6 +137,9 @@ jah_ship_row(bake.dag_reaches_root)   # THE SHIP SET: the DAG build's end-to-end
 # needs column) and the bake is CPU work, so each launch is `--headless` (visible on the command: archive_bakes.sh hands
 # its trailing arguments to every launch): no display, no card, no shader cache (measured by hand on NULL, DISPLAY unset,
 # 2026-11-03: 6.19 / 5.35 / 3.38 s, every law green; on the card they were 18.75 / 7.39 / 5.52). Still SHIP rows.
+# WHAT THE NULL ROUTE NO LONGER RUNS, and was never these rows' law (the 3a audit): the ENGINE's consumption of a rebuilt
+# bake (its GPU upload) and the old three-launch row's engine teardown. Every law kept is document-side and cannot pass
+# vacuously on NULL (bakeHits > 0, bakeBuilds > 0, missing.length > 0).
 set(_archive_home ${CMAKE_CURRENT_BINARY_DIR}/archive-bakes-home)
 file(MAKE_DIRECTORY ${_archive_home}/run)
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
