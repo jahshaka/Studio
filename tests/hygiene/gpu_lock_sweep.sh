@@ -20,6 +20,11 @@ cleanup() { for f in "$T"/*.pid; do [ -f "$f" ] && kill -9 "$(cat "$f")" 2> /dev
 trap cleanup EXIT
 export HOME="$T" JAH_GPU_LOCK="$T/lock"
 unset JAH_GPU_LOCK_HELD JAH_GPU_HOLD JAH_GPU_NO_SCOPE
+# THE ROW's OWN CGROUP (ORPHAN-REDS-1, 2026-11-03): the row may itself run inside a hold's scope - spec.sh / sprint.sh hold
+# the card around their ctest through this script, so the row's process tree sits in a jahgpu-* scope of THAT hold (the
+# master checks' red at a9e64793c: case (4)'s child, never moved, read as "in a jahgpu- scope"). A case's scope is judged
+# against this one: a hold's scope is a jahgpu-* cgroup OTHER than the row's own; the mark leaves the child in the row's own.
+OWN_CG=$(cat /proc/self/cgroup)
 fails=0
 want() { if [ "$1" = 1 ]; then echo "  ok   $2"; else echo "  FAIL $2"; fails=$((fails + 1)); fi; }
 gone() { [ -s "$1" ] && ! kill -0 "$(cat "$1")" 2> /dev/null; }
@@ -40,7 +45,7 @@ hold_case() {   # <case> <the hold's extra args...> -- <the hold's tail>: the ho
 }
 # (1) a hold that exits with its escaped child alive
 hold_case 1 sh -c "$(esc 1) sleep 0.3"
-want "$(grep -q 'jahgpu-' "$T/1.cg" && echo 1)" "(1) the escaped child sat in the hold's own scope ($(sed 's|.*/||' "$T/1.cg"))"
+want "$(grep -q 'jahgpu-' "$T/1.cg" && [ "$(cat "$T/1.cg")" != "$OWN_CG" ] && echo 1)" "(1) the escaped child sat in the hold's own scope ($(sed 's|.*/||' "$T/1.cg"); the row's own: ${OWN_CG##*/})"
 want "$(gone "$T/1.pid" && [ "$(cat "$T/1.at_grant")" = GONE ] && [ "$(cat "$T/1.rc")" = 0 ] \
         && grep -q "gpu-lock: swept the hold's leftover process(es): .* (TERM) - the card released after them" "$T/H1.out" && echo 1)" \
      "(1) a hold that exits: its escaped child swept (TERM) and gone before the waiter's grant, rc 0 kept ($(cat "$T/1.at_grant") $(cat "$T/1.rc"); $(tail -1 "$T/H1.out"))"
@@ -54,11 +59,11 @@ want "$(gone "$T/3.pid" && [ "$(cat "$T/3.at_grant")" = GONE ] && grep -q "(TERM
      "(3) a TERM-proof child KILLED after the grace, gone before the waiter's grant ($(cat "$T/3.at_grant"); $(tail -1 "$T/H3.out"))"
 # (4) no user manager: the mark
 JAH_GPU_NO_SCOPE=1 hold_case 4 sh -c "$(esc 4) sleep 0.3"
-want "$(gone "$T/4.pid" && [ "$(cat "$T/4.at_grant")" = GONE ] && ! grep -q 'jahgpu-' "$T/4.cg" && grep -q "swept" "$T/H4.out" && echo 1)" \
-     "(4) no scope (JAH_GPU_NO_SCOPE): the hold's mark found its escaped child, swept before the waiter's grant ($(cat "$T/4.at_grant"))"
+want "$(gone "$T/4.pid" && [ "$(cat "$T/4.at_grant")" = GONE ] && [ "$(cat "$T/4.cg")" = "$OWN_CG" ] && grep -q "swept" "$T/H4.out" && echo 1)" \
+     "(4) no scope (JAH_GPU_NO_SCOPE): the child stayed in the row's own cgroup, the hold's mark found it, swept before the waiter's grant ($(cat "$T/4.at_grant"); ${OWN_CG##*/})"
 # (5) nested: under a holder (no lock taken) the call sweeps its own; inside a hold it leaves it to the hold
 JAH_GPU_LOCK_HELD=1 "$LOCKSH" sh -c "$(esc 5) sleep 0.2" > "$T/H5.out" 2>&1
-want "$(gone "$T/5.pid" && grep -q 'jahgpu-n' "$T/5.cg" && grep -q swept "$T/H5.out" && echo 1)" \
+want "$(gone "$T/5.pid" && grep -q 'jahgpu-n' "$T/5.cg" && [ "$(cat "$T/5.cg")" != "$OWN_CG" ] && grep -q swept "$T/H5.out" && echo 1)" \
      "(5) a nested call under a holder (util.CardLock) swept its own scope before it returned"
 JAH_GPU_LOCK_HELD=1 JAH_GPU_HOLD=outer "$LOCKSH" sh -c "$(esc 6) sleep 0.2" > "$T/H6.out" 2>&1
 for _ in $(seq 20); do [ -s "$T/6.pid" ] && break; sleep 0.1; done
