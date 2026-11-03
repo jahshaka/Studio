@@ -2539,8 +2539,57 @@ static int bakeBlobTool(const QString &path, int threads, const QString &outPath
 /// the multi-mesh model there (only once its three blobs agree), beside the sha256 of the model it baked, and
 /// "throws:early" (units 1, 3, 40) / "throws:late" (units 400, 2000) READ it as their reference - the same comparison,
 /// against the same one-thread bytes, refused when the model they wrote is not the one the reference baked.
-static void bakeDeterminism(const QString &part = QString(), const QString &refDir = QString())
+/// THE REFERENCE IS THE RUN's (TEST-STREAMLINE-1 item 5, the 4-5 audit's residue): the one-thread reference lives under
+/// `<root>/run-<ctest pid>-<its start time>` - the ctest process that runs the setup and its readers (the first `ctest`
+/// among this process's ancestors, /proc) - never one fixed directory of the build, so two ctest calls in one build never
+/// read or remove each other's reference. Outside ctest: `run-pid-<own pid>` (a lone run shares nothing).
+static QString procStat(qint64 pid, int field)
 {
+    QFile f(QStringLiteral("/proc/%1/stat").arg(pid));
+    if (!f.open(QIODevice::ReadOnly)) return QString();
+    const QByteArray st = f.readAll();
+    const int close = st.lastIndexOf(')');            // the comm field may hold spaces: fields count after its ')'
+    const QList<QByteArray> rest = st.mid(close + 2).split(' ');
+    return field - 3 < rest.size() && field >= 3 ? QString::fromLatin1(rest.at(field - 3)) : QString();
+}
+static QString procComm(qint64 pid)
+{
+    QFile f(QStringLiteral("/proc/%1/comm").arg(pid));
+    return f.open(QIODevice::ReadOnly) ? QString::fromLatin1(f.readAll().trimmed()) : QString();
+}
+static QString runTag(qint64 from)
+{
+    for (qint64 pid = from, hops = 0; pid > 1 && hops < 64; pid = procStat(pid, 4).toLongLong(), ++hops)
+        if (procComm(pid) == QLatin1String("ctest")) return QStringLiteral("run-%1-%2").arg(pid).arg(procStat(pid, 22));
+    return QStringLiteral("run-pid-%1").arg(from);
+}
+static QString runRefDir(const QString &root)
+{
+    return root.isEmpty() ? QString() : root + QLatin1Char('/') + runTag(QCoreApplication::applicationPid());
+}
+/// bake.determinism.reference.clean: this run's reference removed, and every run's whose ctest is gone (a killed call's).
+static int cleanReferences(const QString &root)
+{
+    const QString mine = runTag(QCoreApplication::applicationPid());
+    int removed = 0;
+    for (const QString &d : QDir(root).entryList({QStringLiteral("run-*")}, QDir::Dirs | QDir::NoDotAndDotDot)) {
+        const QStringList w = d.split(QLatin1Char('-'));   // run-<pid>-<start> | run-pid-<pid>
+        const bool live = w.size() == 3 && w.at(1) != QLatin1String("pid") && procComm(w.at(1).toLongLong()) == QLatin1String("ctest")
+                          && procStat(w.at(1).toLongLong(), 22) == w.at(2);
+        if (d == mine || !live) {
+            QDir(root + QLatin1Char('/') + d).removeRecursively();
+            ++removed;
+        }
+    }
+    std::printf("the serial references: %d run director%s removed under %s (this run's: %s)\n", removed,
+                removed == 1 ? "y" : "ies", qUtf8Printable(root), qUtf8Printable(mine));
+    return 0;
+}
+
+static void bakeDeterminism(const QString &part = QString(), const QString &refRoot = QString())
+{
+    const QString refDir = runRefDir(refRoot);
+    if (!refDir.isEmpty()) std::printf("the serial reference of this run: %s\n", qUtf8Printable(refDir));
     QTemporaryDir tmp;
     const QString standinPath = tmp.path() + QStringLiteral("/standin.obj");
     CHECK_LOUD(standin::write(standinPath), "the scan stand-in is written");
@@ -3212,6 +3261,12 @@ int main(int argc, char **argv)
     if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--bake-blob"))
         return bakeBlobTool(QString::fromLocal8Bit(argv[2]), argc > 3 ? QString::fromLocal8Bit(argv[3]).toInt() : 0,
                             argc > 4 ? QString::fromLocal8Bit(argv[4]) : QString());
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--determinism-clean"))
+        return cleanReferences(QString::fromLocal8Bit(argv[2]));
+    if (argc > 2 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--determinism-run-dir")) {
+        std::printf("RUN-DIR %s\n", qUtf8Printable(runRefDir(QString::fromLocal8Bit(argv[2]))));   // tooling.bake_reference_run
+        return 0;
+    }
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--determinism")) {
         std::printf("== 15. the bake does not depend on its threads ==\n");
         bakeDeterminism(argc > 2 ? QString::fromLocal8Bit(argv[2]) : QString(),

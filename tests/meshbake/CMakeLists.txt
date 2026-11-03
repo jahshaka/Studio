@@ -100,7 +100,7 @@ file(MAKE_DIRECTORY ${_quit_home}/run)
 # three blobs agree) to ${_bake_ref} (FIXTURES_SETUP bakeSerialReference) and the throws run as two rows that READ it
 # (FIXTURES_REQUIRED): .early (units 1, 3, 40) and .late (units 400, 2000), every throw and every whole bake after it
 # compared with the same one-thread bytes, refused when the model is not the one the reference baked. The reference is
-# removed by bake.determinism.reference.clean (FIXTURES_CLEANUP). Run one alone: ctest -R bake.determinism.throws.late.
+# removed by bake.determinism.reference.clean (FIXTURES_CLEANUP); it is the CALL's (below). Run one alone: ctest -R bake.determinism.throws.late.
 set(_bake_ref ${_bake_home}/serial-reference)
 foreach(_part standin dragon throws.early throws.late)
     string(REPLACE "throws." "throws:" _arg ${_part})
@@ -119,10 +119,18 @@ foreach(_part standin dragon throws.early throws.late)
 endforeach()
 set_tests_properties(bake.determinism.standin PROPERTIES FIXTURES_SETUP bakeSerialReference)
 set_tests_properties(bake.determinism.throws.early bake.determinism.throws.late PROPERTIES FIXTURES_REQUIRED bakeSerialReference)
-add_test(NAME bake.determinism.reference.clean COMMAND ${CMAKE_COMMAND} -E rm -rf "${_bake_ref}")
+add_test(NAME bake.determinism.reference.clean COMMAND $<TARGET_FILE:test_mesh_bake> --determinism-clean "${_bake_ref}")
 set_tests_properties(bake.determinism.reference.clean PROPERTIES TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0
                      FIXTURES_CLEANUP bakeSerialReference)
 jah_no_display(bake.determinism.reference.clean)
+# THE REFERENCE IS ONE CTEST CALL's (TEST-STREAMLINE-1 item 5): ${_bake_ref} is a ROOT - each call's reference lives in
+# run-<its ctest pid>-<start time> under it (test_mesh_bake runRefDir), so two calls in one build never share or remove each
+# other's; the cleanup removes its own call's and a dead call's. bake.determinism.reference_run proves it on a toy ctest tree.
+add_test(NAME bake.determinism.reference_run
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/bake_reference_run_test.py" $<TARGET_FILE:test_mesh_bake>
+                 "${CMAKE_CURRENT_BINARY_DIR}/bake-reference-run")
+set_tests_properties(bake.determinism.reference_run PROPERTIES TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(bake.determinism.reference_run)
 
 # bake.dag_reaches_root (ATOM-6 stage 2c; the bake's end-to-end row for the cluster DAG, (the ship set left at draft B, TEST-STREAMLINE-1 4a: LONG only); rewritten for ATOM-2's
 # builder, the law kept): a card soup (2,000 quads in a 2 m sphere) and a kit-bash (200 closed 12-triangle boxes) bake
