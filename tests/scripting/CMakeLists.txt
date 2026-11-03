@@ -740,10 +740,15 @@ file(MAKE_DIRECTORY ${_mbHome}/run)
 # material as a self-contained share file. Two processes for the same reason
 # the bundle pair needs two: "a library that has never seen it" is not
 # something a verb can fake.
-set(SHARE_PATH ${CMAKE_CURRENT_BINARY_DIR}/material_share.jbundle)
-configure_file(scripts/e2e_material_share.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js @ONLY)
+# THE SHARE FILE IS THE WRITER's, IN THE WRITER's HOME (TEST-STREAMLINE-1 3a, the lead's ruling): written under
+# e2e-home-material_share/share by scripting.e2e.material_share (FIXTURES_SETUP materialShareFile) and read by
+# scripting.e2e.material_share_import (FIXTURES_REQUIRED materialShareFile) - never a fixed file beside the homes. The
+# writer's own home fixture wipes it at every run's start, so the reader can read only THIS run's file: absent, it fails
+# by name (no stale bundle from an earlier run, nothing another row writes).
 set(_msHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_share)
-jah_fresh_home_fixture(scripting.e2e.material_share.fresh_home materialShareHome "${_msHome}" ARGS --rm "${SHARE_PATH}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
+set(SHARE_PATH ${_msHome}/share/material_share.jbundle)
+configure_file(scripts/e2e_material_share.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js @ONLY)
+jah_fresh_home_fixture(scripting.e2e.material_share.fresh_home materialShareHome "${_msHome}" ARGS --mkdir "${_msHome}/share" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
 file(MAKE_DIRECTORY ${_msHome}/run)
 add_test(NAME scripting.e2e.material_share
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_share.js --headless
