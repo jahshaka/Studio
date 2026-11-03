@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QVariantMap>
 
 #include "irisgl/irisglfwd.h"
+#include "irisgl/document/scenegraph/simulationclock.h"
 
 #include "scripting/apimodule.h"
 
@@ -106,7 +107,7 @@ public:
     Q_INVOKABLE bool playEject(const QVariant &on = QVariant());
     Q_INVOKABLE QString playInputOwner();
     Q_INVOKABLE bool simulate(bool enabled = true);
-    Q_INVOKABLE bool frame(int n = 1, double dt = -1.0);
+    Q_INVOKABLE bool frame(int n = 1, double dt = iris::SimulationClock::kStepSeconds);   // a frame is one grid step
     /// A KEY ON THE EDITOR VIEWPORT, as delivered (PLAY-FLY-1): the
     /// ShortcutOverride, then KeyPress and/or KeyRelease, sent to the viewport
     /// widget. `action` is 'press', 'release' or 'tap'. An unclaimed key that is an

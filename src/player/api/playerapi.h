@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include <QVariantMap>
 
 #include "scripting/apimodule.h"
+#include "irisgl/document/scenegraph/simulationclock.h"
 
 class PlayerApi : public ApiModule
 {
@@ -52,7 +53,7 @@ public:
     Q_INVOKABLE bool playing();
     Q_INVOKABLE bool restart();
     Q_INVOKABLE QVariantMap state();
-    Q_INVOKABLE bool frame(int count = 1, double dt = -1.0);
+    Q_INVOKABLE bool frame(int count = 1, double dt = iris::SimulationClock::kStepSeconds);   // a frame is one grid step
     Q_INVOKABLE QVariantMap screenshot(const QString &path, const QVariantMap &options = QVariantMap());
 
 private:

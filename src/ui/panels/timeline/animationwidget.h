@@ -19,6 +19,7 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 #include "irisgl/core/properties/property.h"
 #include <QElapsedTimer>
+#include "irisgl/document/scenegraph/simulationclock.h"
 
 class QWidget;
 class QElapsedTimer;
@@ -50,6 +51,9 @@ class AnimationWidget : public QWidget
     QTimer* timer;
     //http://stackoverflow.com/questions/17571717/accessing-the-elapsed-seconds-of-a-qtimer
     QElapsedTimer elapsedTimer;
+    /// THE PREVIEW's GRID (TEST-STREAMLINE-1 red (b)): the wall time the timer measured, turned into whole 1/60 s steps
+    /// by the document's own clock rule - the cursor moves by those, never by a fractional wall dt.
+    iris::SimulationClock previewClock;
 
     QIcon playIcon;
     QIcon pauseIcon;

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "player/api/playerapi.h"
+#include "viewport/framestep.h"
 
 #include <QColor>
 #include <QDir>
@@ -101,11 +102,11 @@ QVector<VerbInfo> PlayerApi::verbs() const
           "into the rig so they do not move), `worldScale` and `flySpeed` (the EFFECTIVE metres "
           "per second: the project's `world.vr().flySpeed` times editor.cameraSpeed()'s factor).",
           Needs::Document },
-        { "frame", "player.frame(count = 1, dt = -1) -> bool",
+        { "frame", "player.frame(count = 1, dt = 1/60) -> bool",
           "Steps and renders exactly `count` PLAYER frames synchronously — editor.frame for the "
-          "other space, on the SAME document simulation clock: with `dt` >= 0 each frame hands "
-          "the clock exactly that many seconds instead of the wall time since the previous "
-          "step, the clock turns them into whole 1/60 s grid steps for physics, avatars and "
+          "other space, on the SAME document simulation clock: each frame hands the clock exactly "
+          "`dt` seconds (ONE grid step by default; a negative dt is REFUSED - a scripted frame never "
+          "takes the wall clock's time), the clock turns them into whole 1/60 s grid steps for physics, avatars and "
           "animation, and the engine's particles are told to advance by the same amount. "
           "REFUSES a dt above scene.clock().maxAdvance (step more frames instead) and "
           "REFUSES when the Player page has never been shown — the "
@@ -223,7 +224,11 @@ bool PlayerApi::frame(int count, double dt)
     auto *service = serviceOrFail("player.frame");
     if (!service) return false;
     if (!requireEngine()) return false;
-    if (dt > iris::SimulationClock::kMaxAdvanceSeconds + 1e-9)
+    if (dt < 0.0)
+        return fail(QStringLiteral("player.frame: dt %1 s is negative - a scripted frame is a fixed step (the default "
+                                   "1/%2 s, or a stated dt >= 0), never the wall clock's").arg(dt)
+                        .arg(iris::SimulationClock::kStepHz));
+    if (!framestep::scriptedDtValid(dt))
         return fail(QStringLiteral("player.frame: dt %1 s is above the clock's per-frame bound of "
                                    "%2 s (%3 steps of 1/%4); step more frames instead")
                         .arg(dt).arg(iris::SimulationClock::kMaxAdvanceSeconds)

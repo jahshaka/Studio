@@ -3,6 +3,7 @@
 #include "bridge/stableoffscreenrender.h"
 #include "bridge/sceneworkerthreads.h"
 #include "player/engineplayerscene.h"
+#include "viewport/framestep.h"
 
 #include "viewport/freecamerapolicy.h"
 #include "viewport/ieditorviewport.h"
@@ -345,6 +346,9 @@ void EnginePlayerScene::stepFrames(int n, float dt, int width, int height)
 {
     auto engine = mEngine.lock();
     if (!engine || !mView || !mScene) return;
+    // A SCRIPTED PLAYER FRAME IS ONE GRID STEP (red (b)): never step()'s wall-clock branch, which is the free-running
+    // tick's (the owner's real-time session).
+    dt = float(framestep::lockstepSeconds(dt));
     for (int i = 0; i < n; ++i) {
         step(dt, width, height);
         // Scripted player stepping: tag the cause per iteration (the engine

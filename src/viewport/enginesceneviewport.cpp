@@ -7,6 +7,7 @@
 #include "services/defaultfloormaterial.h"
 #include "services/scenestats.h"
 #include "viewport/enginesceneviewport.h"
+#include "viewport/framestep.h"
 #include "jahshaka/engine/Stillness.h"
 
 #include <QShowEvent>
@@ -3253,7 +3254,10 @@ void EngineSceneViewport::stepFrames(int n, float dt)
 
 void EngineSceneViewport::renderFrames(int n)
 {
-    renderFrames(n, -1.0f);
+    // A HOST's LOCKSTEP FRAME IS ONE GRID STEP (TEST-STREAMLINE-1 red (b)): the MCP's frames, the planar answer's, an
+    // open's boundary frame - never the wall time the frame took (only the driver's free-running tick takes the wall:
+    // the owner's real-time session, syncFrame(-1)).
+    renderFrames(n, float(framestep::lockstepSeconds(-1.0)));
 }
 
 void EngineSceneViewport::renderBoundaryFrame()
@@ -3283,6 +3287,8 @@ void EngineSceneViewport::renderFrames(int n, float dt)
     // gate, now that clip evaluation is the engine's and everything else in the
     // chain is driven by absolute time.
     if (!mEngine) return;
+    // A NEGATIVE dt IS NO WALL CLOCK HERE (red (b), framestep.h): the verbs refuse one; a caller's slip steps one grid step.
+    dt = float(framestep::lockstepSeconds(dt));
     for (int i = 0; i < n; ++i) {
         // AN OFFLINE RECORDING RECORDS ONLY TIMELINE FRAMES (VIDEO-REC-2): a
         // script's editor.frame (stepFrames) is one; a panel's refresh or a

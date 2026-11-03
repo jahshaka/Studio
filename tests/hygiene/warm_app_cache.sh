@@ -59,6 +59,12 @@ if [ -n "${FAKE_RACE:-}" ]; then
     rm -f "$FAKE_RACE/cache-manifest.txt"
     printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\n%s\n' "$files" > "$FAKE_RACE/cache-manifest.txt"
 fi
+# with FAKE_PASS_LOG set, the startup gate's global pass as the app decides it: a record in the cache = skipped; none = the
+# pass runs and writes its record (a new file - the seeded one is a hard link of the shared one)
+if [ -n "${FAKE_PASS_LOG:-}" ]; then
+    if [ -f "$c/warm-pass.key" ]; then echo skipped >> "$FAKE_PASS_LOG"
+    else echo ran >> "$FAKE_PASS_LOG"; printf 'pass=this-boot\n' > "$c/warm-pass.key"; fi
+fi
 exit 0
 APP
 chmod +x "$T/fake-app"
@@ -192,14 +198,23 @@ exec 8>&-
 # its home without the shared hlms layer (fresh_home.sh --drop-hlms), so the promoted cache holds only what the boot used -
 # the shared hlms.1.bin of an earlier engine is gone after it (red before: the union kept it). A boot cold for another reason
 # keeps the layer.
+# THE PASS's RECORD GOES WITH THE LAYER (capture.first_recording's red at ae6713d20): the shared cache holds the startup
+# pass's record (warm-pass.key); the top-up's boot must find none and run the pass, and the promoted cache carries the record
+# that boot wrote (red before: the record survived the drop, the fake skipped the pass - the real app's union lost the NV12
+# job and every permutation only the pass draws). A boot cold for another reason keeps the layer.
 B2="$T/b2"; mkdir -p "$B2/tests"; touch "$B2/CMakeCache.txt"; toy_cache "$B2/tests/.shadercache" 1 2
+printf 'pass=an-earlier-boot\n' > "$B2/tests/.shadercache/warm-pass.key"
 printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$B2/tests/.shadercache.warm-key"; echo 0000000000000000 > "$B2/tests/.shadercache.engine-id"
-out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B2/tests" "${F[@]}" --only app-off); rc=$?
-[ $rc = 0 ] && echo "$out" | grep -q 'a TOP-UP' && echo "$out" | grep -q -- '--drop-hlms: the home.s hlms layer left out' &&
+: > "$T/b2.pass"
+out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B2/tests" "${F[@]}" --only app-off); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q 'a TOP-UP' && echo "$out" | grep -q -- '--drop-hlms: the home.s hlms layer and its startup-pass record left out' &&
     ! grep -q '^file hlms\.' "$B2/tests/.shadercache/cache-manifest.txt" && grep -q '^file pipeline.cache' "$B2/tests/.shadercache/cache-manifest.txt" &&
     [ "$(cat "$B2/tests/.shadercache.engine-id")" = "$EID" ] &&
     ok "a TOP-UP boot (the engine's code moved alone) boots without the hlms layer and REPLACES the union: the old hlms entries gone, the pipelines kept" ||
     no "the top-up's union: rc $rc $(echo "$out" | tail -3) / $(tr '\n' ';' < "$B2/tests/.shadercache/cache-manifest.txt")"
+[ "$(head -1 "$T/b2.pass")" = ran ] && [ "$(cat "$B2/tests/.shadercache/warm-pass.key" 2>/dev/null)" = pass=this-boot ] &&
+    ok "the top-up's boot found no startup-pass record and ran the pass; the promoted cache holds the record it wrote" ||
+    no "the top-up's pass: the boots '$(tr '\n' ' ' < "$T/b2.pass")', the shared record '$(cat "$B2/tests/.shadercache/warm-pass.key" 2>/dev/null)'"
 # THE BOOT's OWN WALL (block A, 2026-11-03: "the boot 75 s" was 27.5 s of the card's wait + 47.5 s of boot): another holder keeps
 # the card 2 s, the toy boot takes ~0 s - the line prints the boot's own wall and the wait beside it (red before: "the boot 3 s")
 B4="$T/b4"; mkdir -p "$B4/tests"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2

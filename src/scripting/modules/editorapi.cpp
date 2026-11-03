@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "scripting/modules/editorapi.h"
+#include "viewport/framestep.h"
 #include "services/import/importbatchrunner.h"
 
 #include <QKeySequence>
@@ -675,8 +676,8 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "simulate", "editor.simulate(enabled=true) -> bool",
           "Starts/stops the in-place physics simulation without entering play mode.",
           Needs::Document },
-        { "frame", "editor.frame(n=1, dt=-1) -> bool",
-          "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. With `dt` >= 0 each frame hands the document's ONE simulation clock exactly that many seconds instead of the wall time the frame took; the clock turns it into whole 1/60 s grid steps (a carried remainder, never a partial step), physics, avatars and animation take those steps, and the engine's particle simulation is told to advance by the same amount. The same seconds always produce the same steps, so frame(120, 1/60), frame(60, 1/30) and frame(240, 1/120) leave the document bit-identical (scripting.e2e.fixed_clock). REFUSES a dt above scene.clock().maxAdvance (7 steps = 0.1167 s, one under the clock's 8-step catch-up bound so a carried fraction can never be dropped): a script wanting more simulated time steps more frames.",
+        { "frame", "editor.frame(n=1, dt=1/60) -> bool",
+          "Renders exactly n frames synchronously (document->engine sync + renderOneFrame) — the deterministic stepping the test suites use. A frame is ONE GRID STEP by default (dt = 1/60 s, iris::SimulationClock::kStepSeconds): the engine has no wall clock, so a scripted frame never hands the document the wall time it took (a Debug frame bought 0-2 steps by the box's pace: a played animation read t 0.350 or 1.100 after the same 37 frames - TEST-STREAMLINE-1 red (b)). Each frame hands the document's ONE simulation clock exactly `dt` seconds; the clock turns it into whole 1/60 s grid steps (a carried remainder, never a partial step), physics, avatars and animation take those steps, and the engine's particle simulation is told to advance by the same amount. The same seconds always produce the same steps, so frame(120, 1/60), frame(60, 1/30) and frame(240, 1/120) leave the document bit-identical (scripting.e2e.fixed_clock). REFUSES a dt above scene.clock().maxAdvance (7 steps = 0.1167 s, one under the clock's 8-step catch-up bound so a carried fraction can never be dropped): a script wanting more simulated time steps more frames. REFUSES a negative dt (the old \"use the wall clock\" value: deleted).",
           Needs::Engine },
         { "warmUpShaders", "editor.warmUpShaders() -> {built, compiledThisRun, loadedThisRun, ms}",
           "Compiles every shader the OPEN world needs, now, instead of on the first frames the user "
@@ -2570,7 +2571,11 @@ bool EditorApi::playerHasTheScreen() const
 bool EditorApi::frame(int n, double dt)
 {
     if (!requireEngine()) return false;
-    if (dt > iris::SimulationClock::kMaxAdvanceSeconds + 1e-9)
+    if (dt < 0.0)
+        return fail(QStringLiteral("editor.frame: dt %1 s is negative - a scripted frame is a fixed step (the default "
+                                   "1/%2 s, or a stated dt >= 0), never the wall clock's").arg(dt)
+                        .arg(iris::SimulationClock::kStepHz));
+    if (!framestep::scriptedDtValid(dt))
         return fail(QStringLiteral("editor.frame: dt %1 s is above the clock's per-frame bound of "
                                    "%2 s (%3 steps of 1/%4); step more frames instead")
                         .arg(dt).arg(iris::SimulationClock::kMaxAdvanceSeconds)

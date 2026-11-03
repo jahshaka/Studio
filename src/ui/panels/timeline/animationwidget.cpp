@@ -255,8 +255,12 @@ void AnimationWidget::clearPropertiesMenu()
 
 void AnimationWidget::updateAnim()
 {
-    animWidgetData->cursorPosInSeconds += elapsedTimer.nsecsElapsed()/(1000.0f*1000.0f*1000.0f);
+    // The wall time since the last tick, in WHOLE grid steps (previewClock carries the remainder; a stall past the
+    // clock's catch-up bound drops the rest, as play does) - a tick that bought none moves nothing.
+    const int steps = previewClock.advance(double(elapsedTimer.nsecsElapsed()) * 1e-9);
     elapsedTimer.restart();
+    if (steps == 0) return;
+    animWidgetData->cursorPosInSeconds += float(double(steps) * iris::SimulationClock::kStepSeconds);
     animWidgetData->refreshWidgets();
 
     onObjectAnimationTimeChanged(animWidgetData->cursorPosInSeconds);
@@ -270,6 +274,7 @@ void AnimationWidget::startTimer()
 
         timer->start(timerSpeed);
         elapsedTimer.start();
+        previewClock.reset();
         ui->playBtn->setIcon(pauseIcon);
     } else
     {

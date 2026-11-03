@@ -1332,8 +1332,8 @@ public:
     virtual void renderFrames(int n) { Q_UNUSED(n); }
     /// Steps `n` frames handing the document's simulation clock exactly `dt`
     /// seconds each, instead of however long the wall clock says (the clock
-    /// turns either into whole grid steps — iris::SimulationClock). A negative
-    /// `dt` means "use the wall clock" and is identical to renderFrames(n).
+    /// turns them into whole grid steps — iris::SimulationClock). renderFrames(n) steps ONE grid step a frame; a
+    /// lockstep frame never takes the wall clock's time (a negative `dt` steps one grid step: the verbs refuse it).
     virtual void renderFrames(int n, float dt) { Q_UNUSED(n); Q_UNUSED(dt); }
     /// editor.frame's frames (VIDEO-REC-2): exactly renderFrames, except that
     /// they are TIMELINE frames — what a script steps the world by. During an
