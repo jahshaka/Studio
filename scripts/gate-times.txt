@@ -42,7 +42,7 @@ bake.determinism.throws.early 7.70  quiet (100 % CPU-idle), CPU, ctest, solo, ni
 bake.determinism.throws.late 5.14  quiet (100 % CPU-idle), CPU, ctest, solo, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: the throws split by proof on bake.determinism.standin's one-thread blob (FIXTURES_SETUP bakeSerialReference); units 400, 2000)
 bake.determinism.reference.clean 0.01  quiet (100 % CPU-idle), CPU, ctest, solo, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: the throws split by proof on bake.determinism.standin's one-thread blob (FIXTURES_SETUP bakeSerialReference); the reference removed, FIXTURES_CLEANUP)
 bake.dag_reaches_root 0.24  solo, the card lock held (ATOM-2 stage 2, 2026-10-22)
-bundle.writer 7.32  quiet (99 % CPU-idle), CPU, ctest, solo, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: the zip library at -O2 in Debug (irisgl adb230a9), each archive extracted once, the forged file stored, one detach in the generator; every law and the 200 x 256 KiB fixture kept; was 21.13 quiet n=24, labelled measure by its price)
+bundle.writer 8.66  solo, CPU, ctest, no display, nice 10, a LOADED box (CPU idle 65 %; 8.38 s in the run before; 7.32 s quiet before this change) (TEST-STREAMLINE-1 item 5, 2026-11-03: the extract cache keyed on the archive's BLAKE2b-256 - 65 ms a 70-MB hash, one per entry read - and check 0, an archive rewritten in place)
 cameras.exposure 4.31  quiet n=47
 capture.first_recording 14.90  PROVISIONAL, block D's solo run prices it (TEST-STREAMLINE-1 item 4, 2026-11-03): the timing twin's line (the same script, its bars printed instead of asserted; its newest four ship records 11.22-13.12 s, 10-20..10-22)
 capture.first_recording.timing 14.90  ship 3a0422b4e (2026-10-13)

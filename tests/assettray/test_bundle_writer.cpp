@@ -34,6 +34,7 @@ For more information see the LICENSE file
 //      reason before the payload is read.
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QDir>
 #include <QDateTime>
 #include <QFile>
@@ -117,14 +118,17 @@ assetshare::BundleStage stagePack(const QStringList &paths)
 }
 
 // An archive is EXTRACTED ONCE and its entries read from that copy (TEST-STREAMLINE-1 5c: the suite extracted a ~70 MB
-// archive once per entry it read - five whole inflates). Keyed by the archive's path and its size and mtime, so an
-// archive written again is extracted again; what each check reads is the same bytes.
+// archive once per entry it read - five whole inflates). KEYED ON THE ARCHIVE's CONTENT (a BLAKE2b-256 of its bytes: 65 ms for
+// 70 MB), never its path, size or mtime: an archive rewritten in place at the same size within one mtime tick was served the
+// OLD extraction (the 4-5 audit's residue; check 0 below); what each check reads is the bytes the file holds now.
 QByteArray entryBytes(const QString &zip, const QString &entry)
 {
-    static std::map<QString, std::unique_ptr<QTemporaryDir>> extracted;
-    const QFileInfo info(zip);
-    const QString key = zip + QLatin1Char('|') + QString::number(info.size()) + QLatin1Char('|')
-                        + QString::number(info.lastModified().toMSecsSinceEpoch());
+    static std::map<QByteArray, std::unique_ptr<QTemporaryDir>> extracted;
+    QFile in(zip);
+    if (!in.open(QIODevice::ReadOnly)) return QByteArray();
+    QCryptographicHash h(QCryptographicHash::Blake2b_256);
+    if (!h.addData(&in)) return QByteArray();
+    const QByteArray key = h.result();
     auto it = extracted.find(key);
     if (it == extracted.end()) {
         auto out = std::make_unique<QTemporaryDir>();
@@ -135,6 +139,18 @@ QByteArray entryBytes(const QString &zip, const QString &entry)
     return f.open(QIODevice::ReadOnly) ? f.readAll() : QByteArray();
 }
 
+/// A one-entry archive `name` = `text`, STORED, at `path` (check 0).
+bool tinyZip(const QString &path, const char *name, const QByteArray &text)
+{
+    QFile::remove(path);
+    struct zip_t *z = zip_open(path.toStdString().c_str(), 0, 'w');
+    if (!z) return false;
+    const bool ok = zip_entry_open(z, name) == 0 && zip_entry_write(z, text.constData(), size_t(text.size())) == 0
+                    && zip_entry_close(z) == 0;
+    zip_close(z);
+    return ok;
+}
+
 }   // namespace
 
 int main(int argc, char **argv)
@@ -142,6 +158,23 @@ int main(int argc, char **argv)
     QCoreApplication app(argc, argv);
     QTemporaryDir work;
     CHECK(work.isValid(), "a scratch directory");
+    // 0. THE EXTRACT CACHE READS THE FILE's BYTES: an archive rewritten at one path, at the same size, its mtime put back,
+    //    is read again (a path / size / mtime key served the first extraction)
+    {
+        const QString z = QDir(work.path()).filePath(QStringLiteral("rewritten.zip"));
+        const bool a = tinyZip(z, "x.txt", QByteArrayLiteral("aaaa"));
+        const QDateTime t = QFileInfo(z).lastModified();
+        const QByteArray first = entryBytes(z, QStringLiteral("x.txt"));
+        const qint64 size = QFileInfo(z).size();
+        const bool b = tinyZip(z, "x.txt", QByteArrayLiteral("bbbb"));
+        QFile f(z);
+        const bool kept = f.open(QIODevice::ReadWrite) && f.setFileTime(t, QFileDevice::FileModificationTime);
+        f.close();
+        CHECK(a && b && kept && QFileInfo(z).size() == size && QFileInfo(z).lastModified() == t,
+              "0: an archive rewritten in place at the same size, its mtime put back");
+        CHECK(first == "aaaa" && entryBytes(z, QStringLiteral("x.txt")) == "bbbb",
+              "0: the extract cache reads the rewritten archive's bytes, not the first extraction");
+    }
     const QString objects = QDir(work.path()).filePath(QStringLiteral("store"));
     QDir().mkpath(objects);
     // 200 entries (the pack the brief names) of 256 KiB: ~50 MiB of owed bytes, enough
