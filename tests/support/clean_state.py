@@ -4,15 +4,22 @@ gives the same verdict and the same numbers whichever order its group runs in, a
 of the arm alone - nothing an earlier arm did may reach it - so a pool's one process is a saving, never a second test.
 
 The check: the group's arms run through the pool driver (tests/support/run_pool.py) in ONE process per order - forward,
-reversed, and alone for every arm that is first in neither order (an arm run first starts on the boot's state: that IS
-its alone run) - each order in a fresh home. Per arm, every run must give:
+reversed, and alone for every arm that is first in neither order - each order in a fresh home. "ALONE" IS FIRST IN THE
+POOL PROCESS: the arm runs right after the pool's boot (and before any other arm), which is the boot's state - not a
+solo row of its own (the 3a audit's note). Per arm, every run must give:
   * the same VERDICT (PASS/FAIL/CRASH/TIMEOUT), and
-  * the same LAW LINES - the arm's own `ok: ` / `FAIL: ` assertion lines, in order, to the character, after the one
-    normalisation a run cannot avoid: the run's home path, a guid, a 13-digit Date.now() stamp and a `<n> ms` wall are
-    the run's, never the law's (each replaced by a token).
+  * the same LAW LINES, in order, to the character: the arm's own `ok: ` / `FAIL: ` assertion lines AND its `LAW <name>
+    <value>` lines (tests/support/lawline.h's channel) - after the one normalisation a run cannot avoid: the run's home
+    path, a guid, a 13-digit Date.now() stamp, and a NAMED wall-clock field, `wall <n> ms` (the form an arm prints a
+    timing in that its law does not judge). Every other number - a frame count, an engine-time "250 ms", any LAW value - is
+    the law's and is compared exactly (the 3a audit's finding 3: a blanket `<n> ms` rewrite erased law values).
+  * AND IT MUST HAVE RUN (the 3a audit's finding 2): every declared arm needs its own verdict in every order - PASS with
+    at least one law line, or FAIL (a failed assertion is a run) - an arm with none (the app did not boot, the driver died
+    or killed it: NONE / CRASH / TIMEOUT, or a PASS that asserted nothing) is NOT RUN, and the check FAILS (exit 1)
+    whatever --expect says: a law that holds over nothing is no law.
 A difference is printed with the two orders and the first differing line, and the check exits 1 ("VIOLATED"); equal in
 every order, exit 0 ("HOLDS"). --expect violated inverts the exit (the law fed a violation: a pair of arms that shares
-state must be caught).
+state must be caught) - never for NOT RUN.
 
 Usage: clean_state.py --app <Jahshaka> --driver <run_pool.py> --pool <name> [--baseline <js>] [--expect holds|violated]
                       [--headless] --arm <name> <script> <budget-s> [--arm ...] [-- <app args>]
@@ -59,14 +66,14 @@ def orders(arms):
 
 GUID = re.compile(r"\{?[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\}?")
 STAMP = re.compile(r"\b1[0-9]{12}\b")
-WALL = re.compile(r"\b[0-9]+(\.[0-9]+)? ?ms\b")
+WALL = re.compile(r"\bwall [0-9]+(\.[0-9]+)? ?ms\b")   # ONLY the named wall-clock field (never a bare "<n> ms")
 
 
 def normalise(line, home):
     line = line.replace(home, "<HOME>")
     line = GUID.sub("<GUID>", line)
     line = STAMP.sub("<STAMP>", line)
-    return WALL.sub("<MS>", line)
+    return WALL.sub("wall <MS>", line)
 
 
 def run_order(o, label, arms, top):
@@ -101,6 +108,8 @@ def run_order(o, label, arms, top):
             verdicts[m.group(1)] = m.group(2); cur = None; continue
         if cur is not None and re.match(r"(ok|FAIL): ", line):
             lines[cur].append(normalise(line, home))
+        elif cur is not None and re.match(r"LAW \S+ ", line):
+            lines[cur].append(line)          # THE LAW CHANNEL: compared exactly, never normalised
     return {n: (verdicts.get(n, "NONE"), lines.get(n, [])) for n, _, _ in arms}, r.stdout
 
 
@@ -110,10 +119,13 @@ def self_test():
     got = [(l, [x[0] for x in arms]) for l, arms in orders([a, b, c])]
     assert got == [("forward", ["a", "b", "c"]), ("reversed", ["c", "b", "a"]), ("alone:b", ["b"])], got
     assert [l for l, _ in orders([a, b])] == ["forward", "reversed"]   # each arm first once: its alone run
-    n = normalise("ok: /h/x made 2fd4e1c6-7a2d-4b1e-9c3f-0a1b2c3d4e5f at 1762190000123 in 12 ms (3 rows)", "/h/x")
-    assert n == "ok: <HOME> made <GUID> at <STAMP> in <MS> (3 rows)", n
+    n = normalise("ok: /h/x made 2fd4e1c6-7a2d-4b1e-9c3f-0a1b2c3d4e5f at 1762190000123, wall 12 ms (3 rows)", "/h/x")
+    assert n == "ok: <HOME> made <GUID> at <STAMP>, wall <MS> (3 rows)", n
+    # a bare "<n> ms" is a LAW value (an engine-time millisecond on the fixed 1/60-s clock): kept, so 250 vs 283 differ
+    assert normalise("ok: settled in 250 ms", "/h") == "ok: settled in 250 ms"
+    assert normalise("ok: settled in 250 ms", "/h") != normalise("ok: settled in 283 ms", "/h")
     print("clean_state.py --self-test: ok (the orders: forward, reversed, alone for an arm first in neither; the "
-          "normalisation keeps every number but a home, a guid, a stamp and a wall)")
+          "normalisation keeps every number but a home, a guid, a stamp and a NAMED wall - a bare '<n> ms' is the law's)")
     return 0
 
 
@@ -128,6 +140,22 @@ def main(argv):
         print("order %-12s %s" % (label, "  ".join("%s=%s(%d lines)" % (n, v, len(l)) for n, (v, l) in res.items())))
         for n, v in res.items():
             results.setdefault(n, []).append((label, v))
+    # IT MUST HAVE RUN (the 3a audit's finding 2): every declared arm, every order, a verdict and at least one law line
+    # (an arm RAN when its script ran to a verdict of its own: PASS with at least one law line, or FAIL - an assertion
+    # that failed is a run, its reason on the ARM line; NONE, CRASH and TIMEOUT are a process that did not run it)
+    def why_not(v, lines):
+        if v not in ("PASS", "FAIL"):
+            return "no verdict" if v == "NONE" else v
+        return "PASS with no law line" if v == "PASS" and not lines else ""
+    notrun = sorted("%s in %s (%s)" % (n, label, why_not(v, lines))
+                    for n, runs in results.items() for label, (v, lines) in runs if why_not(v, lines))
+    missing = sorted(n for n, _, _ in o["arms"] if n not in results)
+    if notrun or missing or not results:
+        for x in notrun:
+            print("NOT RUN " + x)
+        print("THE CLEAN-STATE LAW CANNOT BE JUDGED for pool %s: %d arm-run(s) did not run%s - a law over nothing is a FAIL"
+              % (o["pool"], len(notrun), (", arms with no run at all: %s" % missing) if missing else ""))
+        return 1
     violated = []
     for n, runs in results.items():
         (l0, (v0, lines0)) = runs[0]
