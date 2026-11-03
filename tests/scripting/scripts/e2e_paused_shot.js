@@ -48,4 +48,7 @@ var c = app.compareImages("paused_shot_playing.png", "paused_shot_stopped.png", 
 console.log("paused_shot: the two shots: " + c.over + " pixels over one code of " + (c.width * c.height) + ", max " +
             c.maxDelta);
 if (c.over !== 0) throw new Error("a shot during play differs from the stopped shot at the same time: " + c.over + " px");
+// THE LAW's NUMBERS ON THE ok: CHANNEL (TEST-STREAMLINE-1 block B; the clean-state law compares an arm's ok:/FAIL:/LAW lines)
+console.log("ok: paused_shot: at t " + t + " the shot during play at rest in " + playing.settleFrames + " frames, the stopped one in " +
+            stopped.settleFrames + "; " + c.over + " px over one code of " + (c.width * c.height) + " (max " + c.maxDelta + ")");
 "ok";

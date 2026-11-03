@@ -27,4 +27,8 @@ console.log("change_then_shot: the shot settled " + s.settleFrames + " frames, a
             (s.atRestReason ? " (" + s.atRestReason + ")" : "") + "; " + c2.restDecisions + " rest decision(s)");
 if (s.atRest !== true)
     throw new Error("THE SHOT RAN TO ITS CAP (" + s.settleFrames + " frames, " + s.atRestReason + "): the demand never closed");
+// THE LAW's NUMBERS ON THE ok: CHANNEL (TEST-STREAMLINE-1 block B): the clean-state law (tests/support/clean_state.py) compares an
+// arm's ok:/FAIL:/LAW lines across a pool's orders - the frames and the rest decisions are the fixed clock's, equal in any order
+console.log("ok: change_then_shot: at rest after " + i + " frames (" + c.cards + " cards, " + c.restDecisions +
+            " rest decision(s)); the shot at rest in " + s.settleFrames + " frames (" + c2.restDecisions + " rest decision(s))");
 "ok";
