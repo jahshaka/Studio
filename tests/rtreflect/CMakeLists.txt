@@ -235,8 +235,8 @@ set_tests_properties(rtreflect.odd_size PROPERTIES JAHSHAKA_TEST_FRAMES 91)
 # WALKING BARS: gi.walk_glass's walk with THE WORLD HELD (gi.freeze = 2: no cache work, the gather held, the reflections
 # live), seeds 0 and 7919, against the frozen walk - GLOSSY by the NOISE MAP (rA - rB) / sqrt 2 and THE MIRROR by whole
 # M1, each p99 <= 2 codes and share over one code <= 1 % (whole glossy M1 printed as information: the noise plus the
-# signal) (walk_world.sh, walk_noise.py). One arm a row: walk_world = the hits flattened, the reflection's own bar (stage
-# 6's); walk_world_hybrid = the hybrid on real hits, the product's walking reflection (no other walking row reads its hits: walk_world
+# signal) (walk_world.sh, walk_noise.py). One arm a row: walk_world = the hits flattened and the screen silent (reflect.flatHits, PHOTON-7-9A ruling (A)): the ray
+# estimator and denoiser alone, the caches out - the stereo chain's route (stage 6's own bar); walk_world_hybrid = the hybrid on real hits, the product's walking reflection (no other walking row reads its hits: walk_world
 # flattens them, gi.walk_glass is the unfrozen world). 960x540; four jahlab sessions each: the prime's 7 + three walks
 # from `rest 1200 held` (HARNESS-3 (f); was 500 frames): flat 3 x 312 (rest 241) + 7 - each arm split by proof below.
 if(TARGET jahlab)
@@ -287,7 +287,8 @@ if(TARGET jahlab)
                          FIXTURES_REQUIRED "rtreflect_walk_world_hybrid_frozen;rtreflect_walk_world_hybrid_worldA"
                          DEPENDS rtreflect.walk_world_hybrid.worldA)
     # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row) — THE MOVING REFLECTION LAGS ITS CONVERGED PICTURE BY
-    # NO MORE THAN ITS MEMORY AND ITS NOISE: the glass walk in Rays with the hits flattened and the world held, per glossy
+    # NO MORE THAN ITS MEMORY AND ITS NOISE: the glass walk with the hits flattened and the screen silent (the ray estimator
+    # and denoiser alone, the caches out: the stereo route - PHOTON-7-9A ruling (A)) and the world held, per glossy
     # pixel |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1 at walk frames 14 / 28 / 59, the breaking
     # share <= 1 % (lag_law.sh; SE_walk through the door: the arm reflect.historyReadback's moving SE). 960x540.
     # SPLIT BY PROOF (URGENT #131, 2026-11-02: one row of 4,955 frames, 28.31 s solo, ran 56.27 s and timed out at 60.06 s
