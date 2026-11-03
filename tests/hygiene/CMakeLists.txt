@@ -243,12 +243,13 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(source.timeout_cap PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.timeout_cap)
     # tooling.warm_app_cache / warm_cold_rows / warm_cold_calls / warm_key — scripts/warm-app-cache.sh on a scratch tests
-    # dir and toy trees, never the tree's shared cache (warm_app_cache.sh <part>; ONE SCRIPT, FOUR ROWS split by proof,
+    # dir and toy trees, never the tree's shared cache (warm_app_cache.sh <part>; ONE SCRIPT, FIVE ROWS split by proof,
     # TEST-STREAMLINE-1: the whole ran 35.8 s quiet against a CPU row's 10 s): boots - warm at the build's key it answers at
     # once and boots nothing, no stamp / a moved key / a replaced or missing cache read cold, the fake boots, the budget and
     # the bounded wait (URGENT #52, #106); cold - the cold-on runner's rows (#119, #155, the seeds); coldcall - a call's own
-    # bounds (the held card, the deadline, the logs); keys - the key's terms, the top-up, #126's nonce, the path-free stamps.
-    foreach(_wp IN ITEMS "warm_app_cache:boots" "warm_cold_rows:cold" "warm_cold_calls:coldcall" "warm_key:keys")
+    # bounds (the held card, the deadline, the logs); keys - the key's terms, the top-up, #126's nonce, the path-free stamps;
+    # inherit - a fresh tree takes its parent's warm caches at an equal key (TEST-STREAMLINE-1 1a).
+    foreach(_wp IN ITEMS "warm_app_cache:boots" "warm_cold_rows:cold" "warm_cold_calls:coldcall" "warm_key:keys" "warm_inherit:inherit")
         string(REPLACE ":" ";" _wp "${_wp}")
         list(GET _wp 0 _wrow)
         list(GET _wp 1 _wpart)

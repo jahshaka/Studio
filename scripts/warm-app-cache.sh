@@ -41,6 +41,16 @@
 #                    Xvfb (60-99, 1920x1080x24, killed by its recorded pid); prints each boot's wall and the cache's size;
 #                    exits 0 when every boot passed (a failed boot's log kept under <tests-dir>/.evidence by fresh_home).
 #   --check          the answer alone, never a boot: exit 0 warm, 3 cold.
+#   --inherit <b>    A FRESH TREE TAKES ITS PARENT's WARM CACHES AT AN EQUAL KEY (TEST-STREAMLINE-1 1a; `spec.sh new` calls it
+#                    after the build): <b> is the parent tree's build dir. Its key, computed by THIS script, must equal this
+#                    tree's (else exit 3, nothing taken); then each shared cache the parent holds stamped at the key, passing
+#                    its own manifest (#117) and not warm here already, is taken under the parent's shared lock - by hard links
+#                    (the files are never written in place: a promotion renames a new directory over the old), with its
+#                    stamps and its top-up stamp; the -off boot's dump at the key; each cold row the parent primed at the key
+#                    for the same registration (paths aside) and the same media by content, with its private driver cache
+#                    (a *CACHE*PATH* value under the parent's build) and its startup seed (a directory beside its working dir
+#                    holding tree-key.txt - its own freshness check still judges it). Prints what it took and what is still
+#                    to warm here; boots nothing, takes no card. Exit 0 (something or nothing taken), 3 (keys differ).
 #   --key            THE TREE's SHADER KEY alone (below), printed, exit 0 - its one definition, read by a row that keeps
 #                    a cache of its own (shader.async_after_open.seed's stamp, URGENT #125), never a second formula.
 #   --tests-dir <d>  the shared cache's directory (default <build>/tests) - the guard row's own scratch.
@@ -126,7 +136,7 @@
 # content beyond the born World compiles on every run (the residue named, HARNESS-1). ONE answer for the boots named: "warm at <key>" when every one is, else "cold at <key>:
 # <each cold boot's why>" (exit 3 under --check; else their boots, in order).
 set -u
-BUILD=""; CHECK=0; KEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=1170; COLDROWS=""
+BUILD=""; INHERIT=""; CHECK=0; KEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=1170; COLDROWS=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
@@ -136,6 +146,7 @@ while [ $# -gt 0 ]; do
         --lab) LAB="${2:?--lab needs an executable}"; shift 2 ;;
         --cold-rows) COLDROWS="${2:?--cold-rows needs a file}"; shift 2 ;;
         --only) ONLY="${2:?--only needs a boot}"; shift 2 ;;
+        --inherit) INHERIT="${2:?--inherit needs the parent build dir}"; shift 2 ;;
         --budget) BUDGET="${2:?--budget needs seconds}"; shift 2
                   case "$BUDGET" in ""|*[!0-9]*) echo "warm-app-cache: --budget <seconds>, not $BUDGET" >&2; exit 64 ;; esac ;;
         -*) echo "warm-app-cache: unknown flag $1" >&2; exit 64 ;;
@@ -284,6 +295,84 @@ what_of() {
         cold-on) echo "the cold rows' own caches" ;;
     esac
 }
+# ---- THE INHERITANCE (TEST-STREAMLINE-1 1a): a fresh tree takes its PARENT's warm caches at an EQUAL key ----------------
+if [ -n "$INHERIT" ]; then
+    PB=$(cd "$INHERIT" 2>/dev/null && pwd) || { echo "warm-app-cache: --inherit: no build dir $INHERIT" >&2; exit 64; }
+    [ "$PB" != "$BUILD" ] || { echo "warm-app-cache: --inherit: the parent is this build" >&2; exit 64; }
+    PSRC=$(cd "$PB/.." && pwd); PT="$PB/tests"
+    # THE PARENT's KEY BY THIS SCRIPT's FORMULA (a stamp is comparable only at one formula): equal, or nothing moves
+    PKEY=$(bash "$0" "$PB" --key 2>/dev/null)
+    if [ -z "$PKEY" ] || [ "$PKEY" != "$KEY" ]; then
+        echo "warm-app-cache: inherited nothing - the parent's key ${PKEY:-unreadable} is not this tree's $KEY ($PB)"
+        exit 3
+    fi
+    got=""
+    # take <src> <dst>: a cache directory by hard links (its files are never written in place: a promotion renames a new
+    # directory over it, fresh_home.sh), else copied; into a sibling first, then renamed over ours under OUR lock
+    take() {
+        local nxt="$2.inherit.$$"
+        mkdir -p "$(dirname "$2")"; rm -rf "$nxt"
+        cp -al "$1" "$nxt" 2>/dev/null || { rm -rf "$nxt"; cp -a "$1" "$nxt"; } || { rm -rf "$nxt"; return 1; }
+        ( flock -w 60 9 || exit 1; rm -rf "$2.old.$$"; [ -e "$2" ] && mv "$2" "$2.old.$$"; mv "$nxt" "$2"; rm -rf "$2.old.$$" ) \
+            9>"$2.lock"
+    }
+    # the two shared caches: the parent's stamped at this key and passing its own manifest, ours not warm at it
+    for c in app engine; do
+        if [ $c = app ]; then sh_=.shadercache; st=.warm-key; dk=.driver-key; else sh_=.shadercache-engine; st=.warm-key; dk=.driver-key; fi
+        P="$PT/$sh_"; M="$TESTS/$sh_"
+        [ -f "$P$st" ] && [ "$(sed -n 1p "$P$st")" = "$KEY" ] && [ "$(sed -n 2p "$P$st")" = "$(layer_keys "$P")" ] || continue
+        if [ -f "$M$st" ] && [ -z "$(TOPUP_CHECK=0 cold_why "$M" "$M$st")" ]; then continue; fi
+        ( flock -s -w "${JAH_INHERIT_LOCK_WAIT:-60}" 9 || exit 1   # (the knob: tooling.warm_inherit's held lock, seconds)
+          python3 -I "$SRC/tests/support/shadercache_check.py" "$P" > /dev/null || exit 1
+          take "$P" "$M" ) 9>"$P.lock" || { echo "warm-app-cache: the parent's $sh_ not taken (its lock, or its manifest)"; continue; }
+        cp "$P$st" "$M$st"
+        [ -f "$P$dk" ] && [ "$(sed -n 1p "$P$dk")" = "$KEY" ] && cp "$P$dk" "$M$dk"
+        [ -f "$P.engine-id" ] && cp "$P.engine-id" "$M.engine-id"
+        got="$got $sh_ ($(du -sh "$M" | cut -f1))"
+    done
+    # the -off boot's permutation dump (source.shaders_spirv_valid), stamped with the key
+    if [ "$(cat "$PT/.hlms-dump/.key" 2>/dev/null)" = "$KEY" ] && [ "$(cat "$TESTS/.hlms-dump/.key" 2>/dev/null)" != "$KEY" ]; then
+        rm -rf "$TESTS/.hlms-dump"; cp -a "$PT/.hlms-dump" "$TESTS/.hlms-dump" && got="$got .hlms-dump"
+    fi
+    [ -f "$TESTS/.warm-walls" ] || { [ -f "$PT/.warm-walls" ] && cp "$PT/.warm-walls" "$TESTS/.warm-walls"; }
+    # THE COLD ROWS: each row the parent primed at this key, for the same registration (paths aside) and the same staged
+    # media by content, takes the parent's stamp and the row's own state - its private driver cache (a *CACHE*PATH* value
+    # under the parent's build) and its startup seed (a directory beside its working dir holding tree-key.txt: the seed's own
+    # freshness check still judges it, #139)
+    case "$COLDROWS" in "$BUILD"/*) PROWS="$PB/${COLDROWS#"$BUILD"/}" ;; *) PROWS="$PB/tests/test-cold-rows.txt" ;; esac; n=0   # (the parent's own)
+    if [ -s "$COLDROWS" ] && [ -s "$PROWS" ]; then
+        BUILT_KEY=$(built_key); PBUILT=$(built_key "$PB")
+        mkdir -p "$COLD_SDIR"
+        while IFS= read -r line; do
+            [ -n "$line" ] || continue
+            row=${line%%$'\t'*}
+            [ -z "$(row_stamp_why "$row" "$line")" ] && continue   # ours primed already
+            pline=$(awk -F'\t' -v r="$row" '$1 == r' "$PROWS" | head -1); pst="$PT/.cold-rows/$row.driver-key"
+            [ -n "$pline" ] && [ -f "$pst" ] || continue
+            [ "$(sed -n 1p "$pst")" = "$KEY" ] && [ "$(sed -n 2p "$pst")" = "$(row_digest "$pline" "$PB" "$PSRC")" ] &&
+                [ "$(sed -n 3p "$pst")" = "$PBUILT" ] && [ "$PBUILT" = "$BUILT_KEY" ] &&
+                [ "$(row_digest "$pline" "$PB" "$PSRC")" = "$(row_digest "$line")" ] || continue
+            readarray -t -d $'\t' f < <(printf '%s' "$pline")
+            wd=${f[1]}
+            for a in "${f[@]:2}"; do
+                for v in $(printf '%s' "$a" | tr '\037' '\n'); do
+                    case "$v" in *CACHE*PATH*=*) d=${v#*=}; case "$d" in "$PB"/*) [ -d "$d" ] && take "$d" "$BUILD/${d#"$PB"/}" ;; esac ;; esac
+                done
+            done
+            for sd in "$wd"/*/; do
+                rel=${sd%/}; rel=${rel#"$PB"/}
+                [ -f "$sd/tree-key.txt" ] && case "$sd" in "$PB"/*) take "${sd%/}" "$BUILD/$rel" ;; esac
+            done
+            printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
+        done < "$COLDROWS"
+    fi
+    [ "$n" -gt 0 ] && got="$got $n cold row(s)"
+    echo "warm-app-cache: inherited at $KEY from $PB:${got:- nothing (the parent holds none at this key, or this tree is warm)}"
+    TOPUP_CHECK=1
+    left=""; for b in $ALL; do [ -n "$(why_of "$b")" ] && left="$left $b"; done
+    echo "warm-app-cache: still to warm here:${left:- nothing}"
+    exit 0
+fi
 RUN=""; why=""
 for b in $SEL; do
     w=$(why_of "$b")
