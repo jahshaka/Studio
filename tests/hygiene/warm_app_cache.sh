@@ -200,6 +200,18 @@ out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B2/tests" "$
     [ "$(cat "$B2/tests/.shadercache.engine-id")" = "$EID" ] &&
     ok "a TOP-UP boot (the engine's code moved alone) boots without the hlms layer and REPLACES the union: the old hlms entries gone, the pipelines kept" ||
     no "the top-up's union: rc $rc $(echo "$out" | tail -3) / $(tr '\n' ';' < "$B2/tests/.shadercache/cache-manifest.txt")"
+# THE BOOT's OWN WALL (block A, 2026-11-03: "the boot 75 s" was 27.5 s of the card's wait + 47.5 s of boot): another holder keeps
+# the card 2 s, the toy boot takes ~0 s - the line prints the boot's own wall and the wait beside it (red before: "the boot 3 s")
+B4="$T/b4"; mkdir -p "$B4/tests"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2
+printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$B4/tests/.shadercache.warm-key"; echo 0000000000000000 > "$B4/tests/.shadercache.engine-id"
+( flock 7; sleep 2 ) 7>"$T/gpu4.lock" & hp=$!; sleep 0.3
+out=$(env -u JAH_GPU_LOCK_HELD DISPLAY=:fake JAH_GPU_LOCK="$T/gpu4.lock" "$W" "$BUILD" --tests-dir "$B4/tests" "${F[@]}" --only app-off --budget 300); rc=$?
+wait $hp
+ln=$(echo "$out" | grep "warm at $key - the boot")
+bw=$(echo "$ln" | sed -n "s/.*the boot \([0-9]*\) s (the card's wait \([0-9]*\) s).*/\1 \2/p")
+[ $rc = 0 ] && [ -n "$bw" ] && [ "${bw#* }" -ge 1 ] && [ "${bw% *}" -lt 2 ] &&
+    ok "the boot's printed wall is its own, the card's wait beside it (boot ${bw% *} s, wait ${bw#* } s)" ||
+    no "the boot's wall: rc $rc '$ln'"
 # A COVERAGE BUILD's BOOT WRITES ITS PROFILE UNDER coverage/boots/<boot> (the 2a audit's finding 1; red before: nothing set it)
 B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n' > "$B3/CMakeCache.txt"; toy_cache "$B3/tests/.shadercache" 1 2
 printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/covapp"; chmod +x "$T/covapp"
