@@ -924,10 +924,13 @@ file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/bake-key.txt")   # (its single-input pr
 #   JAH_HOST_ROWS   rows whose app command takes JAH_HOST_ARGS (each registration asks jah_host_args). B1 (spikes/test-streamline-1/
 #                   card/B1-compare.txt): each row run as an app row and as a host row, solo, warm - the SAME verdict and the
 #                   same ok:/FAIL:/LAW lines to the character for these four; their walls 28.71 -> 13.44, 4.99 -> 3.90, 19.31 ->
-#                   8.37, 7.60 -> 5.88 s. NOT ON (B1 differs, the host's picture is not the app's): hdr.bloom_showroom (no-band
-#                   worst 0 vs 1 code), scene.reopen_fidelity (the ground 26,27,29 vs 26,26,29), scripting.e2e.world_stillness
-#                   (the teleport window 522,060 vs 213,303 px) - the host's offscreen platform presents another window size
-#                   than the rig's 1920x1080 xcb screen (INFERRED from the pixel counts; a host fix, then B1 again).
+#                   8.37, 7.60 -> 5.88 s. ON SINCE RED (a) (the host's screen is the rig's: clioptions.cpp,
+#                   app/platform/host-screen.json): hdr.bloom_showroom, scene.reopen_fidelity, scripting.e2e.world_stillness -
+#                   off before it (the host's 800x800 offscreen screen gave a 1265x800 window and a 733x291 view: no-band worst
+#                   0 vs 1, the ground 26,27,29 vs 26,26,29, the teleport window 522,060 vs 213,303 px); re-run both ways
+#                   2026-11-03 (spikes/test-streamline-1/157/hostrows/), warm, solo: the same verdicts and ok:/LAW lines,
+#                   per-run data apart (a guid, a capture's timestamped path, the GPU-ms cost line); walls 12.84 -> 9.13,
+#                   22.06 -> 9.86, 23.84 -> 13.35 s.
 #   JAH_HOST_POOLS  pools of host rows, ONE process for their arms (jah_add_pool APP_ARGS ${JAH_HOST_ARGS}); a pool ON
 #                   registers in place of its arms' single rows (JAH_HOST_POOL_<pool>, jah_host_pooled). B2 (the clean-state
 #                   law, tests/support/clean_state.py --warm, forward and reversed: each arm first once = alone):
@@ -937,7 +940,8 @@ file(REMOVE "${CMAKE_CURRENT_BINARY_DIR}/bake-key.txt")   # (its single-input pr
 #                   shot during play = the stopped shot at the same t) held in every run.
 # The shell-wrapped rows (atom.pass_table, shadow.cutout_caster, scripting.e2e.perf_capture_frames, log.engine,
 # material.live_roundtrip.*) stay as they are.
-set(JAH_HOST_ROWS gi.one_writer perf.offscreen_isolation scene.reopen_fidelity.high_sky scene.reopen_fidelity.scaled)
+set(JAH_HOST_ROWS gi.one_writer perf.offscreen_isolation scene.reopen_fidelity.high_sky scene.reopen_fidelity.scaled
+    hdr.bloom_showroom scene.reopen_fidelity scripting.e2e.world_stillness)
 set(JAH_HOST_POOLS host_low)
 set(JAH_HOST_ARGS --headless --render-offscreen)
 set(JAH_HOST_POOL_host_epic scripting.e2e.change_then_shot scripting.e2e.paused_shot)
