@@ -306,14 +306,16 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/debug_hot_loops.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.debug_hot_loops PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.debug_hot_loops)
-    # tooling.width_pair.plan / .judge / .refuse — THE PAIRED WIDTH RUN's TOOL (TEST-STREAMLINE-1 4b; the run itself is card
+    # tooling.width_pair.plan / .judge / .refuse / .bars / .gain — THE PAIRED WIDTH RUN's TOOL (TEST-STREAMLINE-1 4b; the run itself is card
     # block C): scripts/width_pair.py on toys - a hand-written ctest tree of shell rows claiming the card's 8 slots, a fake
-    # lock, a fake nvidia-smi (width_pair_test.py; no card, no display, no lock). ONE SCRIPT, THREE ROWS split by proof under the
+    # lock, a fake nvidia-smi (width_pair_test.py; no card, no display, no lock). ONE SCRIPT, FIVE ROWS split by proof under the
     # CPU row's 10 s: plan - the row set and every exclusion's reason, the parts, the display refused, the card held (exit 75);
     # judge - the palindrome order's holds (1,2,3,2,1), W rows at once at width W (the fake card's peak), the fixture setup judged, a clean set adopts the
-    # widest, a row red beside a neighbour refuses its width; refuse - an out-of-memory line, a row past the row cap, width 1
-    # disagreeing with itself (no width, exit 1).
-    foreach(_wp plan judge refuse)
+    # widest; refuse - an out-of-memory line, a row past the row cap, width 1 disagreeing with itself (no width, exit 1);
+    # bars (the lead's rulings on the 4-5 audit) - a row past x1.5 its width-1 wall, a row past its class budget, a row red
+    # beside a neighbour, each refusing its width; gain - a width not 15 % faster than the next narrower one, a VRAM peak past
+    # 90 % of memory.total and an unread memory.total, each refusing it.
+    foreach(_wp plan judge refuse bars gain)
         add_test(NAME tooling.width_pair.${_wp}
                  COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/width_pair_test.py" "${CMAKE_SOURCE_DIR}"
                          "${CMAKE_CURRENT_BINARY_DIR}/width-pair-${_wp}" ${_wp})
