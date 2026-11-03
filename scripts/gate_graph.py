@@ -1035,11 +1035,18 @@ def build_config(build, cache=None):
     return cfg, None
 
 
+# AN OPTION WHOSE OFF IS THE DEFAULT BUILD, BYTE FOR BYTE (TEST-STREAMLINE-1 stage 2): at OFF it is not a configuration -
+# left out, so adding it changed no record's hash (every tree's records would have stopped serving once) - and at ON it is
+# (the coverage build's records never serve the Debug tree's, nor its into them)
+_OFF_IS_THE_DEFAULT = {"JAH_COVERAGE"}
+
+
 def _config_parts(c):
     """(the flags and switches CMake builds with, the options) of a CMakeCache's entries - build_config's two halves."""
     keys = {k: v for k, (t, v) in c.items() if k in _CONFIG_KEYS or k.endswith("_FLAGS_" + (c.get("CMAKE_BUILD_TYPE") or ("", ""))[1].upper())}
     opts = {k: v for k, (t, v) in c.items()
-            if (t == "UNINITIALIZED" or re.match(r"^(JAH|ENABLE|DISABLE|WITH|USE)_", k)) and k not in keys}
+            if (t == "UNINITIALIZED" or re.match(r"^(JAH|ENABLE|DISABLE|WITH|USE)_", k)) and k not in keys
+            and not (k in _OFF_IS_THE_DEFAULT and str(v).upper() in ("OFF", "0", "FALSE", "NO", ""))}
     return keys, opts
 
 

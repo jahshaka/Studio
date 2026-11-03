@@ -134,6 +134,11 @@ def variant(line, name):
 
 variant("DISABLE_BREAKPAD:UNINITIALIZED=OFF", "a switch differs (DISABLE_BREAKPAD OFF; the flags equal): NOT equal")
 variant("CMAKE_CXX_FLAGS:STRING=-O2", "the flags differ (CMAKE_CXX_FLAGS -O2): NOT equal")
+variant("JAH_COVERAGE:BOOL=ON", "THE COVERAGE BUILD (JAH_COVERAGE ON; TEST-STREAMLINE-1 stage 2): NOT equal - it never serves the Debug tree")
+open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache + "JAH_COVERAGE:BOOL=OFF\n")
+v_ = gg.build_config(lane)[0]
+cases.append(("the option at OFF (the default build, byte for byte): EQUAL - its arrival re-keys no record", {"hash": v_["hash"], "options": v_["options"]}, cp, True))
+open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache)
 for name, rc_, cfg_, want_ in cases:
     got_ = gg.config_equal(rc_, cfg_)
     print(("ok   " if got_ == want_ else "FAIL ") + "config_equal: " + name)
