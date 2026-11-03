@@ -220,6 +220,8 @@ picking.fov_cap 1.54  quiet n=44
 pieces.mirror 1.83  quiet n=46
 player.editor_parity 6.10  ship 3a0422b4e (2026-10-13)
 pool.runner 27.10  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 3a item 1, 2026-11-03: revived as a code row - the NULL headless app's five arms, three times, + the stand-in app's crash/hang/baseline/tier/Xid cases; 27.69 by hand)
+pool.clean_state.docs 31.23  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 3a item 4, 2026-11-03: THE CLEAN-STATE LAW's permanent row, CPU half - scripting.e2e.one_asset + .preset_apply in both orders, the library reset between arms; two NULL headless processes)
+pool.clean_state.law 32.30  solo, CPU, ctest, no display, no card, nice 10 (TEST-STREAMLINE-1 3a item 4, 2026-11-03: the clean-state law's own test - the orders' self-test, two violations caught (a verdict, a number), the reset holding it; six NULL headless processes)
 pool.editor 29.02  quiet n=46
 pool.editor::add_primitive 0.55  quiet n=46
 pool.editor::build_scene 1.67  quiet n=46

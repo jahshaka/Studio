@@ -169,6 +169,41 @@ set_tests_properties(pool.runner PROPERTIES
     LABELS "pool;scripting;tooling" TIMEOUT 60)
 jah_no_display(pool.runner)
 
+# THE CLEAN-STATE LAW (TEST-STREAMLINE-1 3a item 4; tests/support/clean_state.py says it): every grouped row gives the
+# same verdict and the same numbers - its `ok:`/`FAIL:` lines to the character, bar a home path, a guid, a Date.now()
+# stamp and a wall - whichever order its group runs in, and alone. One process per order, a fresh home each; the reset
+# between arms is the pool's BASELINE script clean_state/clean_library_baseline.js - the existing verb app.resetLibrary
+# (both storages cleared: in a driven session it re-seeds the primitives and seeds no presets - a fresh home's boot).
+#   pool.clean_state.law   the law's own test: toy arms on the NULL headless app - a library row left behind caught by
+#                          the next arm's verdict, a moved number caught with equal verdicts, the reset making it hold.
+#   pool.clean_state.docs  THE PERMANENT ROW, its CPU half: scripting.e2e.one_asset + .preset_apply (NULL headless, one
+#                          home) in both orders - each first once, which is its alone run. RED before (2026-11-03, by
+#                          hand): preset_apply FAILED after one_asset (its library's material rows), and three printed
+#                          numbers moved with the order (a list's order, two process-wide counters' absolutes) - each
+#                          script now prints its law's own number. The card groups' half is block B (B2).
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/clean-state-home)
+file(MAKE_DIRECTORY ${_home}/law/run ${_home}/docs/run)   # (each order's home is made under the row's run dir, wiped with it)
+add_test(NAME pool.clean_state.law
+         COMMAND sh ${JAH_FRESH_HOME} ${_home}/law --
+                 sh ${CMAKE_CURRENT_SOURCE_DIR}/clean_state/clean_state_law.sh ${Python3_EXECUTABLE}
+                 ${CMAKE_SOURCE_DIR}/tests/support/clean_state.py ${JAH_RUN_POOL}
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}/clean_state
+         WORKING_DIRECTORY ${_home}/law/run)
+add_test(NAME pool.clean_state.docs
+         COMMAND sh ${JAH_FRESH_HOME} ${_home}/docs --
+                 ${Python3_EXECUTABLE} ${CMAKE_SOURCE_DIR}/tests/support/clean_state.py
+                 --app $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --driver ${JAH_RUN_POOL} --pool docs --headless
+                 --baseline ${CMAKE_CURRENT_SOURCE_DIR}/clean_state/clean_library_baseline.js
+                 --arm one_asset ${CMAKE_BINARY_DIR}/tests/scripting/e2e_one_asset.js 60
+                 --arm preset_apply ${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_preset_apply.js 60
+         WORKING_DIRECTORY ${_home}/docs/run)
+foreach(_row pool.clean_state.law pool.clean_state.docs)
+    set_tests_properties(${_row} PROPERTIES
+        JAHSHAKA_HEADLESS TRUE   # every app process is --headless: the NULL render system (testing_rules R13)
+        LABELS "pool;scripting;tooling" TIMEOUT 60)
+    jah_no_display(${_row})
+endforeach()
+
 # app.render_route — THE ONE RENDER-SYSTEM DECISION AND THE HEADLESS HOST's VIEW, on the CPU (TEST-STREAMLINE-1 3a, the
 # reader's P4 + P5; test_render_route.cpp says the laws): the route table and its once-per-process latch, the
 # --render-offscreen CLI, and EngineViewWidget's declared offscreen View on a NULL engine (no native attempt, the

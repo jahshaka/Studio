@@ -290,6 +290,9 @@ var quadMembers = assets.list({ scope: "project", type: "texture" }).filter(func
     return assets.dependencies(quad).indexOf(r.guid) >= 0;
 });
 assert(quadMembers.length > 0, "the GLB brought " + quadMembers.length + " member texture row(s)");
+// (in NAME order: the list's own order is not a law, and a line's order must not depend on what ran before - the
+// clean-state law, TEST-STREAMLINE-1 3a)
+quadMembers.sort(function (a, b) { return a.name < b.name ? -1 : a.name > b.name ? 1 : 0; });
 quadMembers.forEach(function (m) {
     assert(currentTray().indexOf(m.guid) < 0, "import member '" + m.name + "' is not a tile");
 });

@@ -113,9 +113,10 @@ assert(assets.list({ scope: "store", type: "texture" }).length === texturesAtRes
        "…no texture row either");
 assert(assets.list({ scope: "project" }).length === pinsAtRest,
        "…nothing pinned into the open project");
+// (the counter is process-wide and monotonic - only its DIFFERENCE is this law's number, so the line prints the
+// difference: an earlier arm of a pool moves the absolute, never the law - the clean-state law, TEST-STREAMLINE-1 3a)
 assert(assets.storeStatus().deviceWaits === waitsAtRest,
-       "…AND NOT ONE WAIT FOR THE DEVICE (" + waitsAtRest + " -> "
-       + assets.storeStatus().deviceWaits + ")");
+       "…AND NOT ONE WAIT FOR THE DEVICE (+" + (assets.storeStatus().deviceWaits - waitsAtRest) + ")");
 
 // The same for a preset with no maps at all, which is where this started.
 var gold = materials.loadGraph("Gold PBR");
@@ -574,7 +575,7 @@ assert(material.apply(cube3, "Silver PBR") === true, "apply a preset the project
 var afterNew = editor.undoState().pushes;
 assert(afterNew === pushesBefore + 3,
        "an apply of a NEW bundle records THREE commands in its one macro — the pin, the "
-       + "material and the use edge (" + pushesBefore + " -> " + afterNew + ")");
+       + "material and the use edge (+" + (afterNew - pushesBefore) + ")");   // (`pushes` is process-wide: its difference is the law's number)
 
 var cube4 = scene.addPrimitive("Cube");
 var pushesHeld = editor.undoState().pushes;
