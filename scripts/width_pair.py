@@ -14,8 +14,10 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
   THE ARMS   the SAME rows, the same tree and build, at width 1, 2 and 3 - width W = `ctest -j W` with a resource spec of
              W x 8 slots (`--resource-spec-file`, the build's own spec untouched), so W GPU rows hold the card at once -
              in a PALINDROME order (default 1,2,3,2,1, the lead's ruling for block C: widths 1 and 2 each twice, symmetric in time,
-             so a drift of the box over the run cancels in their pairs; width 3's one run is judged on verdicts, out-of-memory
-             and the 45-s bar, which need no pair; `--order 1,2,3,3,2,1` pairs every width).
+             so a drift of the box over the run cancels in their pairs; width 3's one run is judged on every bar below - its
+             verdicts, OOM / Xid lines and walls against width 1's pair (the budgets, the 45-s cap, x1.5 width 1's median),
+             its total wall against width 2's mean, its VRAM peak - one run against the paired widths under it;
+             `--order 1,2,3,3,2,1` pairs every width).
   THE HOLDS  each (part, width) run is ONE hold of the card (`gpu-exclusive.sh --wait-max --label width-w<W>-p<k>`): the rows
              are packed into parts whose width-1 estimate (the price x RATIO) stays under PART_CAP_S, so no hold passes ~8
              min (CODING_RULES §7); the Unreal session's tickets fit between two holds.

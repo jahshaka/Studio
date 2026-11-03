@@ -43,7 +43,7 @@ f="$VRAMDIR/$(basename "$0").$$"; : > "$f"; trap 'rm -f "$f"' EXIT
 n() { ls "$VRAMDIR" | wc -l; }
 case "$1" in
   plain) sleep 0.2 ;;
-  inflate) i=0; s=0; while [ $i -lt 8 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; [ $s = 1 ] && sleep 0.6; exit 0 ;;
+  inflate) i=0; s=0; while [ $i -lt 8 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; [ $s = 1 ] && sleep 1.2; exit 0 ;;
   redline) i=0; s=0; while [ $i -lt 6 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done
            [ $s = 1 ] && echo "FAIL: vkQueueSubmit: VK_ERROR_DEVICE_LOST" || echo "FAIL: (1) 1.44 q over the 1-q bar"; exit 1 ;;
   samered) echo "FAIL: (1) 1.44 q over the 1-q bar"; sleep 0.2; exit 1 ;;
@@ -62,9 +62,11 @@ esac
 exit 0
 """
 LOCK = """#!/bin/sh
-# the fake card lock: gpu-exclusive.sh's argument shape; records the label; LOCK75=1 = the card stayed held
+# the fake card lock: gpu-exclusive.sh's argument shape; records the label; LOCK75=1 = the card stayed held; LOCKWAIT=1 = the
+# card is held by ANOTHER holder for 0.4 s first (3 rows' 'VRAM' in use while this call waits for the lock)
 while [ $# -gt 0 ]; do case "$1" in --wait-max|--run-timeout) shift 2 ;; --label) echo "$2" >> "$LOCKLOG"; shift 2 ;; *) break ;; esac; done
 [ "$LOCK75" = 1 ] && { echo "gpu-lock: the card stayed held"; exit 75; }
+[ "$LOCKWAIT" = 1 ] && { for i in 1 2 3; do : > "$VRAMDIR/other.$i"; done; sleep 0.4; rm -f "$VRAMDIR"/other.*; }
 exec "$@"
 """
 SMI = """#!/bin/sh
@@ -224,8 +226,9 @@ elif PART == "refuse":
           f"flaky: a row whose width-1 runs differ - no width adopted, exit 1 (rc {rc})")
 
 elif PART == "bars":
-    # 9. THE INFLATION BAR: a row at x2.5 its width-1 wall beside a neighbour (0.4 -> 1.0 s), under its class budget and the row cap
-    #    (10 s) - width 2 refused by name -> width 1 (the base adopted width 2)
+    # 9. THE INFLATION BAR: a row at x4 its width-1 wall beside a neighbour (0.4 -> 1.6 s: 1.2 s over it, 0.7 s clear of the 0.5-s
+    #    floor - a width-1 run slowed by the toy's own spawns under --code -j12 stays inflated), under its class budget and the
+    #    row cap (10 s) - width 2 refused by name -> width 1 (the base adopted width 2)
     bi = toy("inflate", [("toy.inflate", "inflate", "")])
     rc, out, labels, recs = run(bi, "--display", ":71", "--order", "1,2")
     ref = [ln for ln in out.splitlines() if "REFUSED" in ln]
@@ -264,6 +267,13 @@ elif PART == "gain":
     check(rc == 0 and "ADOPT WIDTH 2" in out and "WIDTH 3 REFUSED: VRAM peak 3500 MB, past 90 % of the card's 3500 MB" in out,
           f"vram: width 3's peak past 90 % of memory.total refuses it, ADOPT WIDTH 2 (rc {rc}) "
           f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
+
+    # 12b. THE SAMPLER COUNTS FROM THE HOLD's START (the final CPU audit's LOW: the gate had no toy): another holder keeps 3 rows'
+    #      'VRAM' while the call waits for the lock - width 1's peak is its own one row (1500 MB), never the other holder's 3500
+    rc, out, labels, recs = run(bg, "--display", ":71", "--order", "1", env={"LOCKWAIT": "1"})
+    check(rc == 0 and len(recs) == 1 and recs[0]["vram_peak_mb"] == 1500,
+          f"held: the VRAM read while the lock is waited for is not this run's - width 1's peak "
+          f"{recs[0]['vram_peak_mb'] if recs else None} MB (1500 = one toy row; 3500 = the other holder's) (rc {rc})")
 
     # 13. AN UNREAD TOTAL: nvidia-smi gives no memory.total - no headroom measured, width 2 refused -> width 1
     rc, out, labels, recs = run(bg, "--display", ":71", "--order", "1,2", env={"SMITOTAL": "none"})
