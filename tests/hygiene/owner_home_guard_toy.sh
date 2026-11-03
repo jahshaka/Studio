@@ -24,6 +24,9 @@ case_ ran "fresh_home: HOME the test home" env HOME="$T/h5" sh "$FH" "$T/h5" -- 
 case_ ran "fresh_home: --data-root a test home beats the owner's HOME" env HOME="$O" sh "$FH" "$T/h6" -- "$T/bin/Jahshaka" --data-root "$T/h6/run"
 case_ ran "fresh_home: an env word moves the root off the owner's HOME" env HOME="$O" sh "$FH" "$T/h7" -- env JAHSHAKA_DATA_ROOT="$T/h7/d" "$T/bin/Jahshaka"
 case_ ran "fresh_home: a relative JAHSHAKA_DATA_ROOT (beside the app)" env HOME="$O" JAHSHAKA_DATA_ROOT=data sh "$FH" "$T/h8" -- "$T/bin/Jahshaka"
+printf '#!/bin/sh\nexec "$@" --data-root "%s/h10/run"\n' "$T" > "$T/wrap.sh"
+case_ ran "fresh_home: a wrapper script given the app (it sets the root itself) is not judged" env HOME="$O" sh "$FH" "$T/h10" -- sh "$T/wrap.sh" "$T/bin/Jahshaka"
+case_ refused "fresh_home: nice -n 10 env HOME=<owner's> <app>" env HOME="$T/h11" sh "$FH" "$T/h11" -- nice -n 10 env HOME="$O" "$T/bin/Jahshaka"
 rm -f "$T/ran"; env HOME="$O" sh "$FH" "$T/h9" -- /bin/true; rc=$?
 [ $rc = 0 ] && echo "ok:   fresh_home: a command that is not the app (an engine fixture's) is never judged (rc $rc)" || { echo "FAIL: a non-app command refused (rc $rc)"; fails=$((fails + 1)); }
 rm -rf "$T"
