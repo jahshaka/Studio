@@ -658,6 +658,48 @@
     "rtreflect.emitters",
     "shadow.pane_lamp"
    ]
+  },
+  {
+   "case": "COVERAGE-V4d a NEW function (a new file-local function) is the table's: the map has no answer for it (the 2a audit's finding 2; red on 3e0b4df37: the map's empty answer)",
+   "file": "irisgl/engine/src/OgreRayQuery.cpp",
+   "old": "constexpr unsigned kCompactRing = 64u;\n",
+   "new": "constexpr unsigned kCompactRing = 64u;\nstatic int brandNewHelper(int x) {\n    return x + 1;\n}\n",
+   "coverage_map": {
+    "rows": {
+     "gi.area_follow": [
+      [
+       "irisgl/engine/src/OgreRayQuery.cpp",
+       "measure"
+      ]
+     ]
+    }
+   },
+   "must": [
+    "gi.bounce_series.epic",
+    "rtreflect.emitters",
+    "shadow.pane_lamp"
+   ]
+  },
+  {
+   "case": "COVERAGE-V4e a hunk inside a file-local STRUCT body (a GPU buffer layout) is the table's (the 2a audit's finding 3)",
+   "file": "irisgl/engine/src/OgreRayQuery.cpp",
+   "old": "struct PortalScanIn {\n    std::vector<uint32_t> words;\n",
+   "new": "struct PortalScanIn {\n    std::vector<uint32_t> words;\n    unsigned extraField;\n",
+   "coverage_map": {
+    "rows": {
+     "gi.area_follow": [
+      [
+       "irisgl/engine/src/OgreRayQuery.cpp",
+       "measure"
+      ]
+     ]
+    }
+   },
+   "must": [
+    "gi.bounce_series.epic",
+    "rtreflect.emitters",
+    "shadow.pane_lamp"
+   ]
   }
  ]
 }

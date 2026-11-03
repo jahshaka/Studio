@@ -1351,9 +1351,15 @@ class Selection:
         known = {fn for row in list(doc.get("rows", {}).values()) + list(doc.get("boots", {}).values()) for f, fn in row if f == p}
         if not known:
             return False                         # the map holds nothing of this file: the table
-        for fn in fns:
-            if fn not in known and re.search(r"\b" + re.escape(fn) + r"\s*\(", a or ""):
-                return False                     # an old function the map never saw run: the map is older than its caller
+        if not set(fns) <= known:
+            # THE MAP ANSWERS ONLY WHAT IT HOLDS (the 2a audit's findings 2 + 3, the lead's ruling): a NEW function (an override
+            # Ogre calls unchanged has no caller in the diff), a CLASS or STRUCT body (enclosing_functions names the class - a
+            # POD layout has no executed function of its name), a function the map never saw run - the table, never its empty
+            # answer
+            return False
+        tip = str(doc.get("tip") or "")
+        if re.fullmatch(r"[0-9a-f]{7,40}", tip) and not (self.revs.base and _git_ok_scope(["merge-base", "--is-ancestor", tip, self.revs.base])):
+            return False                         # a map not on the range's history (the 2a audit's finding 8): the table
         want = {(p, fn) for fn in fns}
         rows = {r for r, held in doc.get("rows", {}).items() if r in self.inv and want & {tuple(x) for x in held}}
         boots = [bt for bt, held in doc.get("boots", {}).items() if want & {tuple(x) for x in held}]
@@ -3249,6 +3255,10 @@ SHARED_HARNESS = re.compile(r"^(tests/support/(fresh_home\.sh|run_pool\.py|samep
 LAW_HELPER = re.compile(r"^tests/support/[^/]+\.(py|sh|js)$")
 # THE CLASSES (the harness paths a row runs through; read from its registration): the pick is per class
 HARNESS_CLASSES = ("app", "selftest", "vr", "engine", "jahlab", "cold", "seed", "pool", "cpu")
+
+
+def _git_ok_scope(args):
+    return subprocess.run(["git"] + args, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
 
 
 _COVERAGE_DOC = {}
