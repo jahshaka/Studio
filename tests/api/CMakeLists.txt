@@ -30,8 +30,7 @@ set_tests_properties(api.contract PROPERTIES
     FIXTURES_REQUIRED api_contract_home
     TIMEOUT 60
     LABELS "scripting"
-    JAHSHAKA_HEADLESS TRUE     # its script runs --dump-api-docs: the NULL render system (testing_rules R13)
-    JAH_CARD_LOCK "the dump refuses to run without the card's lock (main.cpp, JAH_GPU_LOCK_HELD; CLAUDE.md: regen-api-docs.sh runs under it)")
+    JAHSHAKA_HEADLESS TRUE)    # its script runs --dump-api-docs: the NULL render system, proven (testing_rules R13)
 # `--dump-api-docs` boots the NULL render system (SPECS/SCENEGRAPH_SPEC.md §3b):
 # generating the docs needs the registry and a document, never a pixel. Run with
 # DISPLAY stripped so that stays true.

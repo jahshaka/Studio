@@ -11,7 +11,7 @@
 # spec whose ADDED row is (exit 2) and archives the added rows it did not mark SHIP. Since the cut every registered row
 # is THE SHIP SET's (205 rows; the rest are in the lead repo's archive/tests/<prefix>/ with their last prices).
 api.contract.fresh_home 0.01  main cd0587fdc (2026-10-20)
-api.contract 3.40  ship 3a0422b4e (2026-10-13)
+api.contract 5.88  quiet (99 % CPU-idle), CPU, ctest, solo (TEST-STREAMLINE-1, 2026-11-03: + the dump's no-GPU proof's negative control, a second dump boot; no lock, no display) - was 3.40 ship 3a0422b4e (2026-10-13)
 app.engine_selftest_validation.default 31.51  solo, the card lock held, :72, warm, nice 10 (PHOTON-7 11-2, 2026-10-28: the combined row split, one row per proof - the default scene's pose 1, pose 2, motion under the layer, and the broken-ground arm)
 app.engine_selftest_validation.fixture 33.50  solo, the card lock held, :72, warm, nice 10 (PHOTON-7 11-2, 2026-10-28: the combined row split, one row per proof - pose pair B and the mover under the layer)
 app.test_needs_boot 33.40  ship 3a0422b4e (2026-10-13)

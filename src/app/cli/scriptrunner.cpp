@@ -508,8 +508,56 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
     return finalizeAppExit(rc);
 }
 
+namespace {
+/// THE VULKAN DRIVERS THIS PROCESS HAS MAPPED (the dump's after-boot proof): every ICD library the loader's manifests name
+/// (/usr/share/vulkan/icd.d, /etc/vulkan/icd.d, $VK_DRIVER_FILES / $VK_ICD_FILENAMES) found in /proc/self/maps. The loader
+/// opens an ICD only to enumerate or create an instance, so a mapped driver is a Vulkan instance's evidence; the loader
+/// library alone (linked, never called) is not.
+QStringList mappedVulkanDrivers()
+{
+    QStringList manifests;
+    for (const char *var : {"VK_DRIVER_FILES", "VK_ICD_FILENAMES"})
+        for (const QString &f : qEnvironmentVariable(var).split(QLatin1Char(':'), Qt::SkipEmptyParts)) manifests << f;
+    for (const QString &dir : {QStringLiteral("/usr/share/vulkan/icd.d"), QStringLiteral("/etc/vulkan/icd.d"),
+                               QStringLiteral("/usr/local/share/vulkan/icd.d")})
+        for (const QFileInfo &fi : QDir(dir).entryInfoList({QStringLiteral("*.json")}, QDir::Files)) manifests << fi.filePath();
+    QStringList libs;
+    for (const QString &m : manifests) {
+        QFile f(m);
+        if (!f.open(QIODevice::ReadOnly)) continue;
+        const QByteArray j = f.readAll();
+        const int k = j.indexOf("\"library_path\"");
+        if (k < 0) continue;
+        const int a = j.indexOf('"', j.indexOf(':', k) + 1), b = a < 0 ? -1 : j.indexOf('"', a + 1);
+        if (a < 0 || b < 0) continue;
+        const QString lib = QFileInfo(QString::fromUtf8(j.mid(a + 1, b - a - 1))).fileName();
+        if (!lib.isEmpty()) libs << lib;
+    }
+    QFile maps(QStringLiteral("/proc/self/maps"));
+    if (!maps.open(QIODevice::ReadOnly)) return {QStringLiteral("(/proc/self/maps unreadable: no proof)")};
+    const QString text = QString::fromUtf8(maps.readAll());
+    QStringList hit;
+    for (const QString &lib : libs)
+        if (text.contains(QLatin1Char('/') + lib) && !hit.contains(lib)) hit << lib;
+    return hit;
+}
+}   // namespace
+
 int runDumpApiDocs(MainWindow &window, const QString &outPath)
 {
+    // THE DUMP TOUCHED NO GPU (main.cpp says why, TEST-STREAMLINE-1): the engine this process booted is the NULL render
+    // system's, and no Vulkan driver is mapped - else no docs, exit 3
+    const auto engine = EngineHost::instance().engine();
+    if (engine && !engine->isHeadless()) {
+        std::fprintf(stderr, "dump-api-docs: the engine booted a GPU render system, not NULL - no docs written\n");
+        return 3;
+    }
+    const QStringList drivers = mappedVulkanDrivers();
+    if (!drivers.isEmpty()) {
+        std::fprintf(stderr, "dump-api-docs: a Vulkan driver is mapped into this process (%s) - an instance was made; "
+                             "no docs written\n", qPrintable(drivers.join(QStringLiteral(", "))));
+        return 3;
+    }
     QFile docs(outPath);
     if (!docs.open(QIODevice::WriteOnly | QIODevice::Truncate | QIODevice::Text)) {
         std::fprintf(stderr, "dump-api-docs: cannot write %s\n", qPrintable(outPath));

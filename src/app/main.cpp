@@ -116,16 +116,11 @@ int main(int argc, char *argv[])
             std::fprintf(stderr, "Jahshaka: %s\n", qPrintable(e));
         return 2;
     }
-    // THE DOCS DUMP RUNS UNDER THE CARD'S LOCK OR NOT AT ALL (urgent #42; a rule broken twice becomes a refusal):
-    // `--dump-api-docs` boots the whole app and engine (the verbs register at the MainWindow's module boot), so it is
-    // an app instance on the card. scripts/gpu-exclusive.sh sets JAH_GPU_LOCK_HELD=1 for what it runs (the ctest rows
-    // under spec.sh's lock inherit it); a bare run is refused here, before QApplication, naming the one way.
-    if (!cli.dumpDocsPath.isEmpty() && qgetenv("JAH_GPU_LOCK_HELD") != "1") {
-        std::fprintf(stderr, "Jahshaka: --dump-api-docs runs only under the card's lock (JAH_GPU_LOCK_HELD=1, set by "
-                             "scripts/gpu-exclusive.sh); regenerate docs/SCRIPTING.md with "
-                             "scripts/regen-api-docs.sh <build dir>\n");
-        return 2;
-    }
+    // THE DOCS DUMP TOUCHES NO GPU, AND PROVES IT (TEST-STREAMLINE-1, the lead's ruling 2026-11-03; it ran only under the
+    // card's lock, urgent #42, though it boots the NULL render system): the platform policy below puts it on the offscreen
+    // QPA, which EngineHost maps to the NULL render system (src/bridge/enginehost.cpp); the dump checks that it did -
+    // before it boots (here, after the policy) and after it booted (runDumpApiDocs: a headless engine, and no Vulkan
+    // driver mapped into this process) - and exits non-zero otherwise. So no lock: it is a CPU run (api.contract a code row).
     // ONE THREAD AND THE OWNER'S MODE DO NOT GO TOGETHER (ENGINE-UPGRADE-U3 worth-a-look 5): JAH_ENGINE_ONE_THREAD=1 is
     // a measurement's A arm for LOCKSTEP runs; a free-running run (interactive, or JAH_FREE_RUNNING=1) on one thread has
     // no render loop to draw its frames and would show nothing — refused here, like any other unhonourable request.
@@ -184,6 +179,11 @@ int main(int argc, char *argv[])
         }
     }
     cli.applyPlatformPolicy();
+    if (!cli.dumpDocsPath.isEmpty() && qgetenv("QT_QPA_PLATFORM") != "offscreen") {   // the dump's first proof (above)
+        std::fprintf(stderr, "Jahshaka: --dump-api-docs must boot the offscreen platform (the NULL render system), not "
+                             "'%s' - refused before any boot\n", qgetenv("QT_QPA_PLATFORM").constData());
+        return 3;
+    }
     // WHETHER A PERSON IS LOOKING AT THIS PROCESS, recorded once for everything
     // that has no CliOptions to ask with (app/firstrun.h): an error box raised
     // deep in a page is unanswerable in a driven run and spends the run's whole
