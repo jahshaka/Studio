@@ -33,9 +33,10 @@ if not shutil.which("g++") or not (shutil.which("gcov-15") or shutil.which("gcov
     print("tooling.coverage_map: FAIL - no g++ / gcov on this box")
     sys.exit(1)
 with tempfile.TemporaryDirectory() as t:
-    s, b = os.path.join(t, "src"), os.path.join(t, "build")
+    s, b = os.path.join(t, "src"), os.path.join(t, ".hidden", "build")   # (a hidden dir on the path, as every worktree's .claude/)
     os.makedirs(s)
     os.makedirs(b)
+    s = os.path.join(t, ".hidden", "src"); os.makedirs(s)   # the source root is the build's parent (coverage_map's rule)
     open(os.path.join(s, "lib.cpp"), "w").write(
         "#include <thread>\n"
         "int work(int n) { int k = 0; for (int i = 0; i < n; ++i) k += i; return k; }\n"

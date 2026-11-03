@@ -148,9 +148,17 @@ if(JAH_COVERAGE)
     if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
         message(FATAL_ERROR "JAH_COVERAGE needs GCC (gcov)")
     endif()
-    add_library(jah_gcov_exit STATIC "${CMAKE_SOURCE_DIR}/cmake/coverage/gcov_exit_wrap.c")
-    add_link_options(--coverage "LINKER:--wrap=_Exit")
-    link_libraries(jah_gcov_exit)
+    # the wrapper compiled HERE, at configure, into one object on every link line (a target linked through link_libraries
+    # would enter the vendored libraries' install(EXPORT) sets, which CMake refuses: assimp, zip)
+    set(_jah_gcov_wrap "${CMAKE_BINARY_DIR}/coverage/gcov_exit_wrap.o")
+    file(MAKE_DIRECTORY "${CMAKE_BINARY_DIR}/coverage")
+    execute_process(COMMAND "${CMAKE_C_COMPILER}" -O2 -c "${CMAKE_SOURCE_DIR}/cmake/coverage/gcov_exit_wrap.c" -o "${_jah_gcov_wrap}"
+                    RESULT_VARIABLE _jah_gcov_rc)
+    if(NOT _jah_gcov_rc EQUAL 0)
+        message(FATAL_ERROR "JAH_COVERAGE: the _Exit wrapper does not compile (${_jah_gcov_rc})")
+    endif()
+    set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_SOURCE_DIR}/cmake/coverage/gcov_exit_wrap.c")
+    add_link_options(--coverage "LINKER:--wrap=_Exit" "${_jah_gcov_wrap}")
     message(STATUS "THE COVERAGE BUILD: JahshakaEngine instrumented, _Exit wrapped (TEST-STREAMLINE-1 stage 2)")
 endif()
 
@@ -159,9 +167,6 @@ find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimed
 
 include(UseModernCpp)
 include(AddExternalSubdirectories)
-if(JAH_COVERAGE)   # (THE COVERAGE BUILD above: the engine's own sources alone carry the counters)
-    target_compile_options(JahshakaEngine PRIVATE --coverage -fprofile-update=atomic)
-endif()
 include(BuildType)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS TRUE)
@@ -931,6 +936,9 @@ set(WIDGETS
 # the document never links it — and keeps build-linux/engine as its binary dir
 # so test and tooling paths are unchanged.
 add_subdirectory(${CMAKE_CURRENT_SOURCE_DIR}/irisgl/engine ${CMAKE_CURRENT_BINARY_DIR}/engine)
+if(JAH_COVERAGE)   # (THE COVERAGE BUILD, the option's block above: the engine's own sources alone carry the counters)
+    target_compile_options(JahshakaEngine PRIVATE --coverage -fprofile-update=atomic)
+endif()
 # The HOST's compile-time defaults for the engine's plugin and media directories
 # (EngineHost::resolveConfig tries <exe dir>/media and the env overrides first) —
 # on the ONE TU that reads them, never on the engine's interface (SPEED-CPU B2:

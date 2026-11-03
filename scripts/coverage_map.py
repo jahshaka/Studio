@@ -61,7 +61,9 @@ def unqualified(demangled):
 def read_prefix(prefix, root, build):
     """{(file, fn)} executed in one row's prefix: every .gcda under it, its .gcno found at the build path the prefix mirrors."""
     got = set()
-    gcdas = glob.glob(os.path.join(prefix, "**", "*.gcda"), recursive=True)
+    # os.walk, never glob's **: it skips hidden directories, and every worktree's objects sit under .claude/ (the real
+    # build's first collect read 66 .gcda files as none)
+    gcdas = [os.path.join(dp, f) for dp, _, fs in os.walk(prefix) for f in fs if f.endswith(".gcda")]
     if not gcdas:
         return None
     with tempfile.TemporaryDirectory() as t:
@@ -83,7 +85,7 @@ def read_prefix(prefix, root, build):
                     continue
                 cwd = doc.get("current_working_directory") or build
                 for f in doc.get("files", []):
-                    path = os.path.normpath(os.path.join(cwd, f["file"]))
+                    path = os.path.realpath(os.path.join(cwd, f["file"]))
                     if not path.startswith(root + os.sep):
                         continue
                     rel = os.path.relpath(path, root)
@@ -95,7 +97,16 @@ def read_prefix(prefix, root, build):
 
 def collect(build, out, tip=None):
     build = os.path.abspath(build)
+    # THE SOURCE ROOT the build was configured from (its CMakeCache's CMAKE_HOME_DIRECTORY; a coverage build lives beside
+    # the tree, never inside it), else the build's parent
     root = os.path.realpath(os.path.join(build, ".."))
+    try:
+        for line in open(os.path.join(build, "CMakeCache.txt"), errors="replace"):
+            if line.startswith("CMAKE_HOME_DIRECTORY:INTERNAL="):
+                root = os.path.realpath(line.split("=", 1)[1].strip())
+                break
+    except OSError:
+        pass
     cfg = ""
     try:
         cfg = hashlib.sha256(open(os.path.join(build, "CMakeCache.txt"), "rb").read()).hexdigest()[:16]
