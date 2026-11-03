@@ -238,3 +238,11 @@ foreach(_row IN LISTS _atom2_rows)
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
     jah_no_display(atom2.${_row})
 endforeach()
+# atom2.lost_external_at_its_position (TEST-STREAMLINE-1 5c's red: meshbake.archive_bakes.rebuild SIGSEGV in measureStep):
+# rule 4 charges a lost external position its own distance to the output, read at a LOCAL vertex holding its weld id
+# (never pos[3 * weldId]). measureStep driven directly, a closed form; red at the base. A CPU code row: FRAMES 0.
+add_test(NAME atom2.lost_external_at_its_position COMMAND $<TARGET_FILE:test_mesh_bake> --atom2 lost_external_at_its_position
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom2.lost_external_at_its_position PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(atom2.lost_external_at_its_position)

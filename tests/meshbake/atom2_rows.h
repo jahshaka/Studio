@@ -15,8 +15,12 @@
 //                                within the budget and stored; the quads conserve the cards' area within 10 % (D9)
 //   atom2.level_table_is_a_cut   the whole-mesh level table: <= 8 uniform-depth cuts of the DAG, each bound the
 //                                largest stored error at its depth, non-decreasing (D10)
+//   atom2.lost_external_at_its_position  (TEST-STREAMLINE-1 5c's red) measureStep's rule 4 charges an external
+//                                position the output lost ITS OWN distance to the output: the weld id is the MESH's,
+//                                never an index into the group's local positions
 
 #include "import/atomdag/adjacency.h"
+#include "import/atomdag/measure.h"
 #include "jahshaka/engine/Types.h"   // kLevelDriftOverBound: the drift law the ray origin spends
 
 namespace atom2
@@ -642,6 +646,42 @@ inline int levelTableIsACut()
     return finish();
 }
 
+/// atom2.lost_external_at_its_position (TEST-STREAMLINE-1 5c: meshbake.archive_bakes.rebuild SIGSEGV in measureStep,
+/// measure.cpp rule 4). A group's LocalSpace holds GLOBAL weld ids (adjacency.h: LocalSpace::weld) beside its LOCAL
+/// positions; rule 4 read the lost external position at `pos[3 * weldId]` - a local array indexed by a mesh-wide id: a
+/// wrong vertex while the id is under the local count, a read past the array (the crash, under load's heap layout) past
+/// it. THE LAW, a closed form: a quad (0,0,0) (1,0,0) (0,1,0) (1,1,1) whose output keeps only the first triangle loses
+/// the external position (1,1,1); its distance to that triangle is to (0.5,0.5,0), sqrt(1.5). Two id layouts: the lost
+/// position's weld id 2 (under the local count of 4: the base read local vertex 2, ON the output, 0 - red), and 1 << 26
+/// (the crash's shape: the base read ~800 MB past the array). Both measurement modes (the ladder's decision, the kept
+/// result's exact walk) charge the same term.
+inline int lostExternalAtItsPosition()
+{
+    const float want = std::sqrt(1.5f);
+    const std::vector<unsigned> layouts[2] = { { 7u, 8u, 9u, 2u }, { 70000u, 70001u, 70002u, 1u << 26 } };
+    const char *names[2] = { "weld id under the local count", "weld id past the local count" };
+    for (int l = 0; l < 2; ++l)
+        for (const bool exact : { false, true }) {
+            iris::atomdag::LocalSpace space;
+            space.pos = { 0, 0, 0, 1, 0, 0, 0, 1, 0, 1, 1, 1 };
+            space.weld = layouts[l];
+            space.comp = { 0u, 0u, 0u, 0u };
+            space.cap = { 10.0f, 10.0f, 10.0f, 10.0f };
+            space.islandCount = 1;
+            const std::vector<unsigned> in = { 0, 1, 2, 1, 3, 2 }, out = { 0, 1, 2 };
+            const std::vector<unsigned> external = { layouts[l][3] };
+            const iris::atomdag::StepMeasure m = iris::atomdag::measureStep(space, in, out, external, 0.01f, 1e-6f, exact);
+            const bool fanned = std::find(m.fanWelds.begin(), m.fanWelds.end(), layouts[l][3]) != m.fanWelds.end();
+            char msg[240];
+            std::snprintf(msg, sizeof(msg), "%s, %s: the lost external position charged %.6f = sqrt(1.5) %.6f, "
+                          "counted %d (1), its weld an offender (%d)", names[l], exact ? "exact" : "decision",
+                          double(m.lostLocked), double(want), m.lockedLost, int(fanned));
+            CHECK_LOUD(std::fabs(m.lostLocked - want) <= 1e-5f && m.lockedLost == 1 && fanned, msg);
+            std::fflush(stdout);   // the base's second layout reads past the array: the first's verdict stays printed
+        }
+    return finish();
+}
+
 inline int run(const QString &row)
 {
     if (row == QStringLiteral("ladder_never_forced")) return ladderNeverForced();
@@ -649,6 +689,7 @@ inline int run(const QString &row)
     if (row == QStringLiteral("one_step_drift_bound")) return oneStepDriftBound();
     if (row == QStringLiteral("cards_merge_within_budget")) return cardsMergeWithinBudget();
     if (row == QStringLiteral("level_table_is_a_cut")) return levelTableIsACut();
+    if (row == QStringLiteral("lost_external_at_its_position")) return lostExternalAtItsPosition();
     std::printf("FAIL: --atom2 %s: no such row\n", qUtf8Printable(row));
     return 1;
 }

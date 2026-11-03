@@ -428,6 +428,7 @@ atom2.ends_empty 2.26  solo, the card lock held (ATOM-2 the stage-3 read, 2026-1
 atom2.one_step_drift_bound 3.05  solo, the card lock held (ATOM-2 stage 2, 2026-10-22)
 atom2.cards_merge_within_budget 0.45  solo, the card lock held (ATOM-2 the stage-4 read, 2026-10-22)
 atom2.level_table_is_a_cut 1.98  solo, the card lock held (ATOM-2 stage 5, 2026-10-22)
+atom2.lost_external_at_its_position 0.02  solo, CPU, ctest, no display, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: measureStep rule 4 driven directly - the lost external position charged its own distance, sqrt(1.5), with its weld id under and past the local count, both modes; red at the base: 0 and SIGSEGV)
 open.streams_to_the_end 20.62  solo, the card lock held (OPEN-PATH-1 stage 1, 2026-10-21; the lead's promotion at the merge)
 gi.light_order 5.65  solo, the card lock held, :71, warm (PHOTON-7 stage 2, 2026-10-23: the read's F3 - twenty lamps of one key in two creation orders; F4 - 132 lamps over the slots)
 source.shaders_spirv_valid 5.13  loaded (79 % CPU-idle, load 6.4), no card, solo, ctest (HARNESS-4 2026-10-29: re-priced - it ran 5.7 s on the master check against 3.56; the dump at this tree 228 files) - was 3.56 (URGENT #89, PHOTON-7 10-4 2026-10-27: the app warm-up dump of 200 Hlms shaders through glslang + spirv-val, 8 threads; its negative control; red on the fault 4b0b97a1^ - 5 of 200)
