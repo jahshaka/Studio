@@ -4,7 +4,8 @@
 # frames a shot (the mirror is the lobe's centre ray: exact on its first frame; 50 clears the young view's warm-up and
 # the GI's first frames). Two sessions:
 #   photon-ramp: the 0.00 strip's post on its 10 cm matte black FOOT (0.02-0.12 m), an emitter above it, from 2.4 m
-#     (envcam 2) and 1 m (envcam 3) - the rays (the reflection has no mode since PHOTON-7-9A; its BOTH arms are deleted).
+#     (envcam 2) and 1 m (envcam 3) - THE HYBRID, the one shape (PHOTON-7-9A, the owner's ruling: the screen trace first
+#     where the previous picture vouches for the hit, the ray from the lifted origin elsewhere; no mode).
 #   photon-contact: the same mark on a CHAINED, CORRUGATED mirror floor (a welded grid each of whose vertices sits 0.2 mm
 #     above or below the plane by a hashed sign: Atom's cut draws coarse clusters, parts of which lie BELOW level 0,
 #     while every ray traces level 0) beside a FLAT LEVEL-0 mirror (x < -2.2: a box), from 2.4 m and 1 m (envcams 1,
@@ -17,8 +18,12 @@
 #   (b) the foot's reflected top edge (the half-level crossing from the dark foot to the post's bright reflection)
 #       within 1 px of where the mirror puts it FROM THE LIFTED ORIGIN - the origin law's own, bounded offset: the ray
 #       starts the drawn surface's bound (Epic's 1 px footprint x the drift ratio 2 at the floor point's Euclidean
-#       distance) above the floor, so it meets the foot that much higher (~2 px) - on the flat strip's arms; the
-#       corrugated floor's (its zigzag is a fifth of a pixel) is printed.
+#       distance) above the floor, so it meets the foot that much higher (~2 px) - where the RAY answers; where the
+#       SCREEN answers (it marches from the drawn surface itself, which needs no lift) the plain mirror's edge. The
+#       hybrid answers the mirror's centre ray from the screen where it vouches and from the ray elsewhere, so on the flat
+#       strip the edge lies within 1 px of the INTERVAL between the two mirrors (measured as Both at photon-7 8a8503057:
+#       +1.4 / +0.9 px from the lifted one, 0.0 from the interval); the corrugated floor's (its zigzag is a fifth of a
+#       pixel) is printed.
 #   (c) NO RAY HITS ITS OWN FLOOR (READ_A finding 2; READ_B F4, the lead's round-7 ruling): inside the band where each
 #       mirror floor reflects the emitter panel over the far wall (y 0.8-7.9; a 0.15 m margin, 5 cm either side of the
 #       floors' seam, the post, the foot, the block and the walls kept out) the picture is the mirror image of one
@@ -62,10 +67,10 @@ rm -rf "$WD"; mkdir -p "$WD"
 cat > "$WD/ramp.lab" <<S
 envcam 2
 frames 50
-shot rays-2p4
+shot hybrid-2p4
 envcam 3
 frames 50
-shot rays-1m
+shot hybrid-1m
 quit
 S
 cat > "$WD/chained.lab" <<S
@@ -158,16 +163,18 @@ def seam(name, eye, gateEdge):
         if col[k] < thr <= col[k + 1]:
             seen = k + (thr - col[k]) / max(col[k + 1] - col[k], 1e-9); break
     edge = seen - liftedTop[1]
-    # (the ray leaves the lifted origin: its distance is to the lifted mirror)
-    off = edge
+    # THE HYBRID: the screen answers from the DRAWN SURFACE itself (it marches the depth the view drew - no level to
+    # clear) and the ray from the lifted origin, so the edge lies between the two mirrors: its distance is to that interval
+    lo, hi = min(liftedTop[1], mirTop[1]), max(liftedTop[1], mirTop[1])
+    off = seen - hi if seen > hi else (seen - lo if seen < lo else 0.0)
     print('%-12s contact line row %.1f, first dark row %s -> SEAM %.1f px; top edge seen %.1f, the mirror %.1f, from the'
           ' lifted origin (%.2f mm) %.1f -> %+.1f px%s (dark %.1f bright %.1f)' %
           (name, foot[1], first, gap, seen, mirTop[1], 1000.0 * h, liftedTop[1], edge,
-           '' if gateEdge == 'rays' else ' [printed]',
+           (' [to the two mirrors %+.1f]' % off) if gateEdge else ' [printed]',
            dark, bright))
     if not (gap <= 1.0): fails.append('%s: the seam at the contact %.1f px > 1' % (name, gap))
     if gateEdge and not (abs(off) <= 1.0):
-        fails.append('%s: the reflected top edge %+.1f px from the lifted mirror (> 1)' % (name, off))
+        fails.append('%s: the reflected top edge %+.1f px from the two mirrors (> 1)' % (name, off))
 # THE BOXES a reflected ray or a view ray must keep clear of (lo, hi), inflated by the margin
 BOXES = [((-1.93, 0.02, -3.15), (-1.83, 0.62, -3.0)),        # the foot and the post
          ((1.0, 0.02, -2.57), (2.8, 0.8, -2.17))]            # the crease block
@@ -242,7 +249,7 @@ def crease(name):
           (name, cols, lineCols, (' ' + str(worst)) if worst else ''))
     if cols < 200: fails.append('%s: the crease spans %d columns (< 200): the fixture moved' % (name, cols))
     if lineCols: fails.append('%s: %d columns of the crease hit their own floor (a line along it)' % (name, lineCols))
-for name, eye, gate in (('rays-2p4', (-1.88, 1.02, -0.8), 'rays'), ('rays-1m', (-1.88, 0.62, -2.2), 'rays'),
+for name, eye, gate in (('hybrid-2p4', (-1.88, 1.02, -0.8), 'hybrid'), ('hybrid-1m', (-1.88, 0.62, -2.2), 'hybrid'),
                         ('chained-2p4', (-1.88, 1.02, -0.8), ''), ('chained-1m', (-1.88, 0.62, -2.2), '')):
     seam(name, eye, gate)
 # (c) EVERY ARM AT EVERY DISTANCE, each gated on its own (the lead's round-7 ruling - no one-of-two acceptance):
