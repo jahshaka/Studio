@@ -268,6 +268,22 @@ def tooling_cases(gs, graph, build, inv0):
     S = sel(["tests/support/fresh_home.sh"])
     check("api.contract" in S.selected,
           "a change to the test harness (tests/support/) selects the smoke row (%s)" % sorted(S.selected)[:4])
+    # A HARNESS-ONLY DIFF: ONE ROW PER CLASS THROUGH ITS SHARED HARNESS (TEST-STREAMLINE-1 1c; gate-scope.py SHARED_HARNESS).
+    # RED ON BASE (8a8503057): fresh_home.sh alone reached 226 rows beyond the tools' own and the lints
+    tools = {n for n, t in inv0.items() if t["labels"] & {"hygiene", "tooling"} or n.startswith("source.")}
+    picks = getattr(S, "harness_picks", {})
+    rest = sorted(set(S.selected) - tools - set(gs.ALWAYS_ON_CODE))
+    check(S.tooling_only and picks and sorted(rest) == sorted(picks.values()) and len(picks) <= len(gs.HARNESS_CLASSES)
+          and all(gs.harness_class(r, inv0[r], set()) == c or c in ("cold", "seed") for c, r in picks.items()),
+          "a shared-harness path alone (tests/support/fresh_home.sh): ONE row per class it reaches (%s), the tools' rows "
+          "and the smoke row beside them, nothing else (%d other)" % (", ".join("%s %s" % kv for kv in sorted(picks.items())),
+                                                                    len(set(rest) - set(picks.values()))))
+    S2 = sel(["tests/support/fresh_home.sh", "tests/gi/test_gi_rayquery.cpp"])
+    check("gi.rayquery_asan" in S2.selected and set(getattr(S2, "harness_picks", {}).values()) <= set(S2.selected),
+          "...with a row's OWN file beside it: that row selected as before (gi.rayquery_asan), the classes' picks too")
+    S3 = sel(["tests/support/fresh_home.sh", "src/services/vrworld.cpp"])
+    check(not S3.tooling_only and not getattr(S3, "harness_picks", None) and len(S3.selected) > len(S.selected) + 50,
+          "...with ONE product path: today's reach, no collapse (%d rows)" % len(S3.selected))
     check(gs.product_paths(["irisgl/docs/OGRE_BUILD.md", "docs/TESTING.md", "scripts/x.py", "tests/hygiene/y.py",
                             "irisgl/README.md"]) == []
           and len(gs.product_paths(["irisgl/engine/src/OgreGi.cpp", "app/content/x.obj", "CMakeLists.txt",

@@ -852,8 +852,10 @@ def load_inventory(build):
             # its relaunch) is `run_fixture` and stays a gating row (R1, the estimate, max_rows)
             "fixture_setup": bool(props.get("FIXTURES_SETUP")) and _is_wipe(cmd),
             "run_fixture": bool(props.get("FIXTURES_SETUP")) and not _is_wipe(cmd),
+            "fixture_cleanup": bool(props.get("FIXTURES_CLEANUP")),   # a fixture's cleanup (ctest runs it after its users)
             "labels": set(props.get("LABELS", []) or []),
             "frame_count": props.get("JAHSHAKA_TEST_FRAMES"),     # FRAMES <n>: the frames the row renders (item 7)
+            "jah_class": props.get("JAH_CLASS"),                 # the row's card class (tests/CMakeLists.txt), if any
             "kind": "other", "exes": set(),
         }
     picture_set(inv)
@@ -3112,16 +3114,101 @@ def select(paths, rng, build, graph=None, inv=None, quiet_graph=False):
     S = Selection(inv, graph, app_exe, Revs(rng))
     S.tooling_only = bool(paths) and not product_paths(paths)
     S._paths = set(paths)
-    for p in paths:
+    # A HARNESS-ONLY DIFF REACHES ONE ROW PER CLASS THROUGH ITS SHARED HARNESS (TEST-STREAMLINE-1 1c; harness_collapse below):
+    # the paths every row runs through are read LAST, so a row a row's own file reaches is never one they collapse
+    shared = [p for p in paths if S.tooling_only and SHARED_HARNESS.match(p)]
+    own = [p for p in paths if p not in shared]
+    own_rows, own_tier = set(), 0
+    for p in own + shared:
+        if p == (shared or [None])[0]:
+            own_rows, own_tier = set(S.selected), len(S.full_tier)
         if S.tooling_only and TOOLING_OWN.match(p):
             S.tooling_path(p)
         else:
             S.path(p)
+    if shared:
+        harness_collapse(S, shared, own_rows, own_tier, build)
     S.data_edges(paths, data_facts(build))
     tooling_paths(S, paths)
     lint_rows(S, paths)
     if graph is not None: graph.save_syms()
     return S
+
+
+# THE SHARED HARNESS (TEST-STREAMLINE-1 1c, the spec's evidence: this window's two harness-only reds both fell inside the class
+# the change touched): the paths EVERY ROW of a class runs through - the rows' support (fresh_home.sh, the warm-up, the pool
+# runner, the fixtures' helpers), the tests' CMake helpers, the tools under scripts/. In a TOOLING-ONLY diff (no product
+# path) the rows such a path reaches - and no other path of the diff - collapse to ONE ROW PER CLASS: the class's cheapest
+# priced row (scripts/gate-times.txt; an unpriced one last), not `measure`, ties by name. A row's OWN files (its test
+# source, its script, its registration lines) are not shared harness: it is selected as before. A product path anywhere in
+# the diff: today's reach, unchanged. The lints and the tools' rows ride as before (lint_rows, tooling_paths). NOT shared
+# harness: a COMPILED helper (tests/support/*.h, *.cpp) - its hunk reaches its includers by the graph and its identifiers,
+# precisely (gate.selection's U1-A); and a WHOLE TIER a harness path sets (a compile option in tests/CMakeLists.txt changes
+# every test binary: the FAST pass, never one row per class - its TOOLING-3 cases).
+SHARED_HARNESS = re.compile(r"^(tests/support/(?!.*\.(h|hpp|cpp|cc|inl)$)|tests/cmake/|tests/CMakeLists\.txt$|scripts/)")
+# THE CLASSES (the harness paths a row runs through; read from its registration): the pick is per class
+HARNESS_CLASSES = ("app", "selftest", "vr", "engine", "jahlab", "cold", "seed", "pool", "cpu")
+
+
+def harness_class(name, t, cold):
+    """A row's harness class: `seed` (a COLD row that makes a startup seed: its stamp keys on the Studio build, #139), `cold`
+    (a COLD row: its own cache, the warm-up's cold-on), `pool` (one process, many arms: run_pool.py), `jahlab` (a lab
+    session), else its card class (`app` / `selftest` / `vr` / `engine`), else `cpu`."""
+    cmd = " ".join(t.get("cmd") or [])
+    if name in cold:
+        return "seed" if re.search(r"(^|\s)--seed(\s|$)", cmd) else "cold"
+    if t.get("pool"):
+        return "pool"
+    if re.search(r"(^|/)jahlab(\s|$)", cmd):
+        return "jahlab"
+    return t.get("jah_class") if t.get("jah_class") in ("app", "selftest", "vr", "engine") else "cpu"
+
+
+def harness_collapse(S, shared, own_rows, own_tier, build):
+    """The shared harness's reach, ONE ROW PER CLASS (SHARED_HARNESS says the rule): the rows only the shared paths added are
+    kept one per class; the others leave the selection, said in the rationale. A whole tier they set is left the tier."""
+    inv = S.inv
+    if len(S.full_tier) > own_tier:
+        return                                   # a whole tier the harness set stays the tier (the header says why)
+    reached = set(S.selected) - own_rows
+    keep_always = {n for n in reached if inv[n]["labels"] & TOOLING_LABELS or n.startswith("source.")}   # the tools' own
+    pool = sorted(n for n in reached - keep_always if not (inv[n]["labels"] & NEVER_SELECTED)
+                  and not inv[n].get("fixture_setup") and not inv[n].get("fixture_cleanup"))
+    if not pool:
+        return
+    try:
+        prices = {}
+        for line in open(os.path.join(ROOT, "scripts", "gate-times.txt"), errors="replace"):
+            f = line.split()
+            if len(f) >= 2 and not line.startswith("#"):
+                try:
+                    prices[f[0]] = float(f[1])
+                except ValueError:
+                    pass
+    except OSError:
+        prices = {}
+    try:
+        cold = {l.split("\t", 1)[0] for l in open(os.path.join(build or "", "tests", "test-cold-rows.txt"),
+                                                  errors="replace") if l.strip()}
+    except (OSError, TypeError):
+        cold = set()
+    by = collections.defaultdict(list)
+    for n in pool:
+        by[harness_class(n, inv[n], cold)].append(n)
+    picks = {c: min(rows, key=lambda r: (r not in prices, prices.get(r, 0.0), r)) for c, rows in by.items()}
+    keep = set(picks.values()) | keep_always
+    for n in sorted(set(S.selected) - own_rows - keep):
+        S.selected.pop(n, None)
+        S.whole.discard(n)
+        S.arms.pop(n, None)
+    for c in HARNESS_CLASSES:
+        if c in picks and picks[c] not in S.selected:
+            S.selected[picks[c]] = f"the shared harness ({shared[0]}): the {c} class's one row"
+    S.harness_picks = picks
+    S.rationale.append((", ".join(shared[:3]) + (" ..." if len(shared) > 3 else ""),
+                        f"HARNESS-ONLY (TEST-STREAMLINE-1 1c): the shared harness reached {len(pool)} row(s)"
+                        + " - ONE PER CLASS: "
+                        + ", ".join(f"{c} {picks[c]}" for c in HARNESS_CLASSES if c in picks)))
 
 
 def lint_rows(S, paths):
