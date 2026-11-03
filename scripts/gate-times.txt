@@ -369,6 +369,7 @@ source.graphics_queue_seams 0.05  spec ENGINE-UPGRADE-ASYNC-3 stage 1 (2026-10-1
 source.presented_predicate 2.09  solo, CPU, ctest, no display, nice 10 (TEST-STREAMLINE-1 3a item 2b, 2026-11-03: one predicate of presented - every presented-vs-offscreen branch reads View::presentsAsWindow, the stand-in born once, only the host's factory declaring it; four mutations fed first)
 source.scene_no_photon_members 0.04  spec EU-2B stage 1 (2026-10-14)
 source.moving_sample 3.47  solo, CPU, ctest, no display, nice 10 (TEST-STREAMLINE-1 3c + its audit, 2026-11-03: every frame-count seed form in every engine subdirectory, the five moving sites, the helper's rule, the stored views' scene id; seven forms + four mutations fed first)
+source.scene_maps 0.10  solo, CPU, ctest, no display, nice 10 (TEST-STREAMLINE-1 3c audit, 2026-11-03: every scene-pointer-keyed map erased by forgetScene before its first return, each helper erasing its maps; three mutations fed first)
 source.selftest_shapes 0.02  solo, CPU, ctest, no display, nice 10 (TEST-STREAMLINE-1 3c, 2026-11-03: the self-test's two shapes run the same fixture half - no shape flag in it, its substitutions the run's flags, its scripts the file's constants)
 source.settings_keys 0.20  ship 3a0422b4e (2026-10-13)
 source.shell_boundaries 0.26  quiet n=58

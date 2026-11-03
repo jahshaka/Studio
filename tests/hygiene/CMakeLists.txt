@@ -454,6 +454,15 @@ add_test(NAME source.moving_sample
 set_tests_properties(source.moving_sample PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.moving_sample)
 
+# source.scene_maps — A MAP KEYED BY A SCENE's ADDRESS DIES WITH THE SCENE (TEST-STREAMLINE-1 3c audit): every
+# scene-pointer-keyed map in the engine is known with its erase, RayQueryTier::forgetScene reaches each before its first
+# return, each forget helper erases its maps - so a new scene at a freed address never inherits another's cards or voxel
+# sides. See the script.
+add_test(NAME source.scene_maps
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/scene_maps.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.scene_maps PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.scene_maps)
+
 # source.selftest_shapes — THE SELF-TEST's TWO SHAPES RUN THE SAME FIXTURE (TEST-STREAMLINE-1 3c): the fixture half reads
 # neither shape flag, its substitutions are the run's flags', its scripts the file's constants. See the script.
 add_test(NAME source.selftest_shapes
