@@ -26,7 +26,8 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
              gives every row the verdict width 1 gave it, with no out-of-device-memory line, and where every run of width W
              keeps EVERY ROW under its class budget (tests/hygiene/row_budget.py budget_of, the one definition: an engine
              fixture or a CPU row 10 s), under INFLATE x its width-1 wall (1.5: #44's fault was a row inflating toward its
-             cap, and a width that inflates every row by one factor breaks the class budgets while every verdict holds) and
+             cap, and a width that inflates every row by one factor breaks the class budgets while every verdict holds; an
+             excess under INFLATE_FLOOR_S, 0.5 s, is the walls' resolution, never an inflation) and
              under ROW_CAP_S (45 s: the quiet-box law under the 60-s cap); whose TOTAL WALL (ctest's own "Total Test time",
              never the lock's wait) is at least GAIN (15 %) under the next narrower width's (a wider width with no gain is
              more risk for nothing); and whose VRAM PEAK, sampled only while the hold runs, stays under VRAM_HEADROOM (90 %)
@@ -60,6 +61,9 @@ CAP_S = 60.0               # every row's cap (CLAUDE.md Testing)
 PART_CAP_S = 480.0         # one hold's estimated wall at width 1 (the 8-min call estimate; a hold under ~10 min)
 RATIO = 1.1                # price -> wall before a run measured one (lib/sprint.py SHIP_RATIO_DEFAULT)
 INFLATE = 1.5              # a row's wall at width W over INFLATE x its width-1 wall refuses W (the lead's ruling, 2026-11-03)
+INFLATE_FLOOR_S = 0.5      # ... when it is ALSO this much over it: the walls' resolution (ctest prints 0.01 s; a process start's
+                           # jitter is tens of ms), so a fixture setup at 0.01 s read 0.02 s is not a x2 inflation - the set's
+                           # setups (fresh_home 0.00-0.02 s) would refuse every width on noise; a row over 1 s is judged at x1.5
 GAIN = 0.15                # width W's total wall at least 15 % under the next narrower width's, or W is refused (the same)
 VRAM_HEADROOM = 0.90       # width W's VRAM peak under 90 % of the card's memory.total, or W is refused (the same)
 SAMPLE_MS = 250
@@ -347,7 +351,7 @@ def judge(recs, price, row_cap, budget=None, inflate=INFLATE, gain=GAIN, headroo
             if b is not None and walls and max(walls) > b:
                 why.append(f"{n} ran {max(walls):.2f} s at width {w}, past its class budget {b:g} s")
             w1 = _median([s for _, s in seen[n].get(1, [])])
-            if w1 and walls and max(walls) > inflate * w1:
+            if w1 is not None and walls and max(walls) > inflate * w1 and max(walls) - w1 > INFLATE_FLOOR_S:
                 why.append(f"{n} ran {max(walls):.2f} s at width {w}, x{max(walls) / w1:.2f} its width-1 wall {w1:.2f} s "
                            f"(the bar x{inflate:g})")
         oom = [ln for r in by_w[w] for ln in r["oom"]]

@@ -3,7 +3,7 @@
 ctest tree whose rows are shell sleeps claiming the card's 8 slots, a fake card lock (records each hold's label, runs the
 command) and a fake nvidia-smi (the used MB = a base + 1000 per toy row running). No GPU, no display, no lock.
 
-usage: width_pair_test.py <source root> <scratch base> plan|judge|refuse|bars|gain   (rows split by proof, each under the CPU row's 10 s)
+usage: width_pair_test.py <source root> <scratch base> plan|judge|refuse|bars|gain|reds   (rows split by proof, each under the CPU row's 10 s)
 Proves: the row set (a GPU row, priced under 10 s, no measure / cold / armed timing bars / named timing law; an unpriced or a
 10-s row left out, each with its reason; a CPU row not asked); a width W run is `ctest -j W` with W x 8 slots (the toy rows
 overlap W at once: the fake card's peak); the palindrome order and one hold per (width, part) with its label; the parts under the
@@ -41,7 +41,8 @@ f="$VRAMDIR/$(basename "$0").$$"; : > "$f"; trap 'rm -f "$f"' EXIT
 n() { ls "$VRAMDIR" | wc -l; }
 case "$1" in
   plain) sleep 0.2 ;;
-  inflate) i=0; s=0; while [ $i -lt 4 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; [ $s = 1 ] && sleep 0.3; exit 0 ;;
+  inflate) i=0; s=0; while [ $i -lt 8 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; [ $s = 1 ] && sleep 0.6; exit 0 ;;
+  tiny) s=0; [ "$(n)" -gt 1 ] && s=1; sleep 0.02; [ "$(n)" -gt 1 ] && s=1; [ $s = 1 ] && sleep 0.05; exit 0 ;;
   near) i=0; s=0; while [ $i -lt 16 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; [ $s = 1 ] && sleep 0.3; exit 0 ;;
   conflict) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 1 ] && { echo "a neighbour on the card"; exit 1; }; sleep 0.05; i=$((i+1)); done ;;
   oom) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
@@ -188,13 +189,21 @@ elif PART == "refuse":
           f"flaky: a row whose width-1 runs differ - no width adopted, exit 1 (rc {rc})")
 
 elif PART == "bars":
-    # 9. THE INFLATION BAR: a row at x2.5 its width-1 wall beside a neighbour, still under its class budget and the row cap
+    # 9. THE INFLATION BAR: a row at x2.5 its width-1 wall beside a neighbour (0.4 -> 1.0 s), under its class budget and the row cap
     #    (10 s) - width 2 refused by name -> width 1 (the base adopted width 2)
     bi = toy("inflate", [("toy.inflate", "inflate", "")])
     rc, out, labels, recs = run(bi, "--display", ":71", "--order", "1,2")
     ref = [ln for ln in out.splitlines() if "REFUSED" in ln]
     check(rc == 0 and "ADOPT WIDTH 1" in out and len(ref) == 1 and "toy.inflate ran" in ref[0] and "its width-1 wall" in ref[0]
           and "class budget" not in ref[0], f"inflate: a row inflated past x1.5 its width-1 wall refuses width 2 (rc {rc}) "
+          f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
+
+    # 9b. THE WALLS' RESOLUTION: a 0.02-s row read at x3 beside a neighbour (0.07 s) is under the 0.5-s floor - not an
+    #     inflation (the set's fixture setups run 0.00-0.02 s): width 2 adopted
+    bt = toy("tiny", [("toy.tiny", "tiny", "")])
+    rc, out, labels, recs = run(bt, "--display", ":71", "--order", "1,2")
+    check(rc == 0 and "ADOPT WIDTH 2" in out and "REFUSED" not in out,
+          f"tiny: a 0.02-s row's x3 under the 0.5-s floor refuses nothing, ADOPT WIDTH 2 (rc {rc}) "
           f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
 
     # 10. THE CLASS BUDGET (x0.1 for the toys: 1 s): a row 0.8 s alone, 1.1 s beside a neighbour (x1.4: under the inflation bar) past its 1-s budget
@@ -204,13 +213,6 @@ elif PART == "bars":
     check(rc == 0 and "ADOPT WIDTH 1" in out and len(ref) == 1 and "toy.near ran" in ref[0]
           and "past its class budget 1 s" in ref[0] and "its width-1 wall" not in ref[0],
           f"near: a row past its class budget at width 2 (under x1.5) refuses width 2 (rc {rc}) "
-          f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
-
-    # 4. A ROW RED ONLY BESIDE A NEIGHBOUR: width 2 refused by name -> width 1
-    b2 = toy("conflict", [("toy.conflict", "conflict", "")])
-    rc, out, labels, recs = run(b2, "--display", ":71", "--order", "1,2")
-    check(rc == 0 and "ADOPT WIDTH 1" in out and "WIDTH 2 REFUSED: toy.conflict PASS at width 1, FAIL at width 2" in out,
-          f"conflict: width 2 refused by the row that fails beside a neighbour, ADOPT WIDTH 1 (rc {rc}) "
           f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
 
 elif PART == "gain":
@@ -234,8 +236,16 @@ elif PART == "gain":
           f"vram unread: no memory.total refuses width 2 (rc {rc}) "
           f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
 
+elif PART == "reds":
+    # 4. A ROW RED ONLY BESIDE A NEIGHBOUR: width 2 refused by name -> width 1
+    b2 = toy("conflict", [("toy.conflict", "conflict", "")])
+    rc, out, labels, recs = run(b2, "--display", ":71", "--order", "1,2")
+    check(rc == 0 and "ADOPT WIDTH 1" in out and "WIDTH 2 REFUSED: toy.conflict PASS at width 1, FAIL at width 2" in out,
+          f"conflict: width 2 refused by the row that fails beside a neighbour, ADOPT WIDTH 1 (rc {rc}) "
+          f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
+
 else:
-    check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain)")
+    check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain|reds)")
 shutil.rmtree(T, ignore_errors=True)
 print("width_pair_test: " + ("PASSED" if not fails else f"FAILED ({len(fails)})"))
 sys.exit(1 if fails else 0)
