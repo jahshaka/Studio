@@ -446,6 +446,21 @@ jah_ship_row(source.graphics_queue_seams)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.graphics_queue_seams PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.graphics_queue_seams)
 
+# source.moving_sample — EVERY MOVING SAMPLE SITE READS THE ONE RULE (TEST-STREAMLINE-1 3c, URGENT #157): no raw
+# `.frame & 0xFFFF` index left in the engine, the reflection's / gather's / area visibility's sites through
+# detail::MovingSequence, the helper restarting on a scene bind or a size change only. See the script.
+add_test(NAME source.moving_sample
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/moving_sample.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.moving_sample PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.moving_sample)
+
+# source.selftest_shapes — THE SELF-TEST's TWO SHAPES RUN THE SAME FIXTURE (TEST-STREAMLINE-1 3c): the fixture half reads
+# neither shape flag, its substitutions are the run's flags', its scripts the file's constants. See the script.
+add_test(NAME source.selftest_shapes
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/selftest_shapes.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.selftest_shapes PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.selftest_shapes)
+
 # source.presented_predicate — ONE PREDICATE OF "PRESENTED" (TEST-STREAMLINE-1 3a item 2b): the headless host's editor
 # view (OffscreenContract::PresentedStandIn) takes the window's route at every presented-vs-offscreen branch -
 # View::presentsAsWindow read at each named site, no isOffscreen() left in the engine but the target's fact, the

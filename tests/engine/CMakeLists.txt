@@ -339,3 +339,14 @@ foreach(_row_frames
         set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
     endif()
 endforeach()
+
+# engine.moving_sample — THE MOVING SAMPLE INDEX's ONE RULE as a pure function (TEST-STREAMLINE-1 3c, URGENT #157;
+# test_moving_sample.cpp says the law): a scene bind and a size change restart a view's moving index, a camera cut and a
+# held frame keep it, N frames on scene A then a bind to B index exactly as a fresh view on B. The header only: no device,
+# no Ogre - a CPU code row.
+add_executable(test_moving_sample test_moving_sample.cpp)
+set_target_properties(test_moving_sample PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_moving_sample PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.moving_sample COMMAND test_moving_sample)
+set_tests_properties(engine.moving_sample PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.moving_sample)
