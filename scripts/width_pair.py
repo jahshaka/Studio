@@ -52,9 +52,11 @@ usage: width_pair.py <build> --display :NN [--plan] [--order 1,2,3,2,1] [--out <
   --open-reds  the spec whose THE OPEN REDS table names the declared reds (default <workspace>/SPECS/PHOTON_7_SPEC.md;
                unreadable = refused, exit 2: an unread list is not an empty one)
   --tree       the tree whose check mark the run holds (default the build's CMAKE_HOME_DIRECTORY)
-  --budget-scale  every class budget x this factor (the toys' seconds-long rows; never below 1 on the card)
+  --budget-scale  every class budget x this factor, in (0, 1] (the toys' seconds-long rows); above 1 refused (it loosens a
+               law), anything but 1 refused on the card (the lock the tree's gpu-exclusive.sh)
   --plan    the rows, the exclusions with their reasons, the parts and the estimated card time - nothing run, no lock.
-  exit      0 a width adopted (the line `ADOPT WIDTH <w>`); 1 width 1 unstable, the run incomplete or VOID; 2 refused (usage, a bad
+  exit      0 a width adopted (the line `ADOPT WIDTH <w>`); 1 width 1 unstable or faulting alone (an OOM / Xid line),
+            the run incomplete or VOID; 2 refused (usage, a bad
             display, no rows); 75 the card stayed held (a hold's wait ran out: call again).
 The evidence: <out>/runs.jsonl (one line per run), <out>/<run>/ctest.out + ctest.log, <out>/summary.tsv.
 """
@@ -484,6 +486,13 @@ def judge(recs, price, row_cap, budget=None, inflate=INFLATE, gain=GAIN, headroo
     unstable = sorted(n for n, w in seen.items() if len({v for v, _ in w.get(1, [])}) > 1)
     for n in unstable:
         lines.append(f"WIDTH 1 DISAGREES WITH ITSELF: {n} " + " / ".join(v for v, _ in seen[n][1]))
+    # A ROW's OWN FAULT ALONE (the final CPU audit's LOW): an out-of-memory or Xid line in a WIDTH-1 run is a row alone on the
+    # card - a budget finding or a device fault (GATE_AND_RIG: never environmental), no width question; judged at width 2+
+    # only, it refused every wider width and adopted width 1 with the fault unnamed.
+    w1fault = [ln for r in by_w[1] for ln in r["oom"] + r["xid"]]
+    if w1fault:
+        lines.append(f"WIDTH 1 HAS {len(w1fault)} OUT-OF-MEMORY / Xid LINE(S) WITH ONE ROW ON THE CARD: {w1fault[0]} - a row's "
+                     f"own fault (a budget finding or a device fault, never environmental), fixed before any width is judged")
     # THE CLASS BUDGET AT WIDTH 1 (the final CPU audit's finding 1): a row past its class budget ALONE is a stale price or a
     # budget red (card block D's), never the width's fault - judged at width 2 only, it refused every wider width with a wrong
     # cause. It is named here and left out of every width's judgement, and no adopted width covers it.
@@ -553,7 +562,7 @@ def judge(recs, price, row_cap, budget=None, inflate=INFLATE, gain=GAIN, headroo
         else:
             break
     uncovered = {n: f"over its class budget at width 1 ({over1[n]:.2f} s alone)" for n in over1}
-    if unstable or any(r in missing for r in by_w[1]):
+    if unstable or w1fault or any(r in missing for r in by_w[1]):
         return None, lines, uncovered
     return adopt, lines, uncovered
 
@@ -600,6 +609,12 @@ def main(argv):
     smi = opt(args, "--nvidia-smi", "nvidia-smi")
     wait_max = int(opt(args, "--wait-max", "600"))
     bscale = float(opt(args, "--budget-scale", "1"))
+    # THE CLASS BUDGET IS THE LAW (the final CPU audit's LOW): a scale above 1 loosens it - refused everywhere; on the card (the
+    # tree's own gpu-exclusive.sh as the lock) the budget is exactly budget_of's - the scale is the toys' knob only
+    if not 0 < bscale <= 1:
+        die(f"--budget-scale {bscale:g}: above 1 (or not positive) loosens every class budget - a toy's knob, in (0, 1]")
+    if bscale != 1 and os.path.realpath(lock[0]) == os.path.realpath(os.path.join(HERE, "gpu-exclusive.sh")):
+        die(f"--budget-scale {bscale:g} on the card (the lock {lock[0]}): the class budget is the law there, the scale is 1")
     reds_file = opt(args, "--open-reds")
     tree = opt(args, "--tree")
     if len(args) != 1 or args[0].startswith("-"):

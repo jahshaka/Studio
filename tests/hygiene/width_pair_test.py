@@ -55,6 +55,7 @@ case "$1" in
   oom) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
   over) s=0; [ "$(n)" -gt 1 ] && s=1; sleep 1.2; [ "$(n)" -gt 1 ] && s=1; [ $s = 1 ] && sleep 0.1; exit 0 ;;
   build) echo "1 2 3 toy.o 0" >> "$NINJALOG"; sleep 0.2 ;;
+  oom1) echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; sleep 0.2 ;;
   slow) sleep 0.15; [ "$(n)" -gt 1 ] && sleep 1.0; exit 0 ;;
   flaky) c="$VRAMDIR/../flaky.count"; k=$(cat "$c" 2>/dev/null || echo 0); echo $((k+1)) > "$c"; [ "$k" = 2 ] && exit 1; sleep 0.1 ;;
 esac
@@ -133,7 +134,7 @@ def run(b, *args, env=None):
     out = os.path.join(T, os.path.basename(b) + "-out")
     shutil.rmtree(out, ignore_errors=True)
     p = subprocess.run([sys.executable, "-I", WP, b, "--prices", os.path.join(b, "gate-times.txt"),
-                        "--lock", os.path.join(T, "lock.sh"), "--nvidia-smi", os.path.join(T, "smi.sh"), "--out", out,
+                        *([] if "--lock" in args else ["--lock", os.path.join(T, "lock.sh")]), "--nvidia-smi", os.path.join(T, "smi.sh"), "--out", out,
                         "--tree", TREE, *([] if "--open-reds" in args else ["--open-reds", REDS]), *args], env=e,
                        capture_output=True, text=True)
     labels = open(log).read().split() if os.path.exists(log) else []
@@ -368,6 +369,20 @@ elif PART == "budget":
     alone = open(os.path.join(od, "alone-rows.txt")).read() if os.path.exists(os.path.join(od, "alone-rows.txt")) else ""
     check("toy.a" in cov and "toy.over" not in cov and "toy.over\tover its class budget at width 1" in alone,
           f"over: the adopted width does not cover the row over its budget alone (covered {cov})")
+
+    # 20. THE SCALE IS A TOY's KNOB: above 1 (it loosens every budget) refused; anything but 1 with the card's own lock refused
+    for sc, extra, what in (("2", [], "loosens every class budget"),
+                            ("0.5", ["--lock", os.path.join(SRC, "scripts", "gpu-exclusive.sh")], "on the card")):
+        rc, out, labels, recs = run(bo, "--plan", "--budget-scale", sc, *extra)
+        check(rc == 2 and what in out and not labels, f"scale {sc}{' on the card' if extra else ''}: refused (rc {rc})")
+
+    # 21. A ROW's OWN OUT-OF-MEMORY LINE ALONE AT WIDTH 1: no width adopted, exit 1, the fault named (the base judged OOM at
+    #     width 2+ only: width 2 refused and width 1 adopted with the fault unnamed)
+    bm = toy("oom1", [("toy.oom1", "oom1", "")])
+    rc, out, labels, recs = run(bm, "--display", ":71", "--order", "1,2")
+    check(rc == 1 and "WIDTH 1 HAS 1 OUT-OF-MEMORY / Xid LINE(S) WITH ONE ROW ON THE CARD" in out and "ADOPT" not in out.replace(
+          "NO WIDTH ADOPTED", ""), f"oom1: an OOM line alone at width 1 adopts no width (rc {rc}) "
+          f"{[x for x in out.splitlines() if 'WIDTH' in x][:3]}")
 
 else:
     check(False, f"unknown part {PART!r} (plan|judge|refuse|bars|gain|reds|log|budget)")
