@@ -47,6 +47,10 @@ endif()
 
 project(Jahshaka)
 include(cmake/OneSpelling.cmake)   # a configured tree is never re-configured under a second spelling (URGENT #129)
+# EVERY CONFIGURE EXPORTS compile_commands.json (TEST-STREAMLINE-1, the final CPU audit's finding 5): source.testing_rules R17,
+# source.debug_hot_loops and source.gpu_rows_closure read it, and a tree configured as docs/BUILDING_LINUX.md or
+# DOCS/MACOS_BUILD.md says (no -DCMAKE_EXPORT_COMPILE_COMMANDS=ON) would red them all. source.testing_rules checks this line.
+set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 set(APP_OUTPUT_NAME "Jahshaka")
 

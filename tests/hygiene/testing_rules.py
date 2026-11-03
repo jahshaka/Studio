@@ -1216,6 +1216,10 @@ def main(source, build):
     check(not bad and "\nexport JAHSHAKA_SHADER_SEED=none\n" in wsh,
           "R15 every app / selftest / vr GPU row boots with the shipped seed off (JAHSHAKA_SHADER_SEED=set:none, or its own: "
           "%s) and the warm-up's boots too (%d on the seed: %s)" % (own[:6] or "none", len(bad), bad[:12]))
+    top = open(os.path.join(source, "CMakeLists.txt"), errors="replace").read()
+    check(re.search(r"^set\(CMAKE_EXPORT_COMPILE_COMMANDS ON\)", top, re.M) is not None,
+          "R17 its input: the top CMakeLists.txt sets CMAKE_EXPORT_COMPILE_COMMANDS ON, so every configure exports "
+          "compile_commands.json (a tree configured as docs/BUILDING_LINUX.md says reds R17 otherwise)")
     srcs = target_sources(build)
     bad = (r17_bad(tests, srcs) if srcs is not None else ["compile_commands.json unread (R17 reads the twins' sources)"]) \
         if rc == 0 else ["ctest --show-only failed (%d)" % rc]
