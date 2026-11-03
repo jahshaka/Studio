@@ -2534,7 +2534,12 @@ static int bakeBlobTool(const QString &path, int threads, const QString &outPath
 /// asked again.
 /// `part` (TEST-CUT-1: three rows, each at most 60 s): "standin" (the multi-mesh model), "dragon" (the Stanford
 /// dragon), "throws" (the throw-in-every-unit cases on the multi-mesh model); empty runs all three.
-static void bakeDeterminism(const QString &part = QString())
+/// THE THROWS SPLIT BY PROOF (TEST-STREAMLINE-1 5c: "throws" ran 17.92 s solo against a CPU row's 10 s, 5.26 s of it the
+/// one-thread reference bake the "standin" part already makes): with `refDir`, "standin" WRITES its one-thread blob of
+/// the multi-mesh model there (only once its three blobs agree), beside the sha256 of the model it baked, and
+/// "throws:early" (units 1, 3, 40) / "throws:late" (units 400, 2000) READ it as their reference - the same comparison,
+/// against the same one-thread bytes, refused when the model they wrote is not the one the reference baked.
+static void bakeDeterminism(const QString &part = QString(), const QString &refDir = QString())
 {
     QTemporaryDir tmp;
     const QString standinPath = tmp.path() + QStringLiteral("/standin.obj");
@@ -2569,8 +2574,18 @@ static void bakeDeterminism(const QString &part = QString())
     QStringList subjects;
     if (part.isEmpty() || part == QStringLiteral("standin")) subjects << twoPath;
     if (part.isEmpty() || part == QStringLiteral("dragon")) subjects << QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj");
-    const bool throws = part.isEmpty() || part == QStringLiteral("throws");
-    CHECK_LOUD(!subjects.isEmpty() || throws, qUtf8Printable(QStringLiteral("the part '%1' is one of standin, dragon, throws").arg(part)));
+    const bool throws = part.isEmpty() || part == QStringLiteral("throws") || part.startsWith(QStringLiteral("throws:"));
+    const QString throwSet = part.startsWith(QStringLiteral("throws:")) ? part.mid(7) : QString();
+    CHECK_LOUD((!subjects.isEmpty() || throws) && (throwSet.isEmpty() || throwSet == QStringLiteral("early")
+                                                    || throwSet == QStringLiteral("late")),
+               qUtf8Printable(QStringLiteral("the part '%1' is one of standin, dragon, throws, throws:early, throws:late")
+                              .arg(part)));
+    CHECK_LOUD(throwSet.isEmpty() || !refDir.isEmpty(), "a throws:<set> part reads the serial reference: its directory given");
+    const auto modelSha = [&twoPath]() {
+        QFile f(twoPath);
+        return f.open(QIODevice::ReadOnly) ? QCryptographicHash::hash(f.readAll(), QCryptographicHash::Sha256).toHex()
+                                           : QByteArray();
+    };
     for (const QString &path : subjects) {
         const QString name = QFileInfo(path).fileName();
         QByteArray blob[3];
@@ -2600,6 +2615,13 @@ static void bakeDeterminism(const QString &part = QString())
         CHECK_LOUD(blob[1] == blob[0] && blob[2] == blob[0],
                    qUtf8Printable(name + QStringLiteral(": 1 thread and %1 threads (twice) bake byte-identical blobs")
                                              .arg(hardware)));
+        if (path == twoPath && !refDir.isEmpty() && !blob[0].isEmpty() && blob[1] == blob[0] && blob[2] == blob[0]) {
+            QDir().mkpath(refDir);
+            QFile b(refDir + QStringLiteral("/two_standins.serial.blob")), h(refDir + QStringLiteral("/two_standins.obj.sha256"));
+            CHECK_LOUD(b.open(QIODevice::WriteOnly) && b.write(blob[0]) == blob[0].size()
+                           && h.open(QIODevice::WriteOnly) && h.write(modelSha()) == 64,
+                       "the one-thread blob is written as the throw rows' serial reference");
+        }
     }
     CHECK_LOUD(subjects.size() == (part.isEmpty() ? 2 : (throws ? 0 : 1)), "the part's subjects ran");
     if (!throws)
@@ -2617,10 +2639,22 @@ static void bakeDeterminism(const QString &part = QString())
     // byte-identical to the reference.
     {
         QTemporaryDir scratch;
-        iris::MeshBake::setBakeThreads(1);
-        const QByteArray reference = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
+        QByteArray reference;
+        if (throwSet.isEmpty()) {
+            iris::MeshBake::setBakeThreads(1);
+            reference = iris::MeshBake::serialize(iris::MeshBake::buildFromFile(twoPath, fp, scratch.path()));
+        } else {
+            QFile b(refDir + QStringLiteral("/two_standins.serial.blob")), h(refDir + QStringLiteral("/two_standins.obj.sha256"));
+            const QByteArray sha = h.open(QIODevice::ReadOnly) ? h.readAll() : QByteArray();
+            reference = b.open(QIODevice::ReadOnly) ? b.readAll() : QByteArray();
+            CHECK_LOUD(!reference.isEmpty() && sha == modelSha(),
+                       "the serial reference (bake.determinism.standin's one-thread blob) is there, of this very model");
+        }
         iris::MeshBake::setBakeThreads(hardware);
-        for (const int n : { 1, 3, 40, 400, 2000 }) {
+        const std::vector<int> units = throwSet == QStringLiteral("early") ? std::vector<int>{ 1, 3, 40 }
+                                       : throwSet == QStringLiteral("late") ? std::vector<int>{ 400, 2000 }
+                                                                            : std::vector<int>{ 1, 3, 40, 400, 2000 };
+        for (const int n : units) {
             iris::MeshBake::failBakeAfterChunksForTest(n);
             const iris::MeshBake::Model failed = iris::MeshBake::buildFromFile(twoPath, fp, scratch.path());
             iris::MeshBake::failBakeAfterChunksForTest(0);
@@ -3180,7 +3214,8 @@ int main(int argc, char **argv)
                             argc > 4 ? QString::fromLocal8Bit(argv[4]) : QString());
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--determinism")) {
         std::printf("== 15. the bake does not depend on its threads ==\n");
-        bakeDeterminism(argc > 2 ? QString::fromLocal8Bit(argv[2]) : QString());
+        bakeDeterminism(argc > 2 ? QString::fromLocal8Bit(argv[2]) : QString(),
+                        argc > 3 ? QString::fromLocal8Bit(argv[3]) : QString());
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;

@@ -94,23 +94,35 @@ file(MAKE_DIRECTORY ${_quit_home}/run)
 # REBUILT TO ITS LAW (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s): every bake of the law kept — each subject
 # once serial and twice on every thread, the ten throw cases (two widths x five units) each followed by a whole bake —
 # as THREE rows of the same binary (`--determinism standin|dragon|throws`), each its own process and home; one row was
-# 65 s; the parts' solo runs 8.3 / 15.8 / 42.5 s (2026-10-20). A CPU row renders nothing (FRAMES 0); over the 10 s CPU
-# budget, so `measure` (tests/CMakeLists.txt). TIMEOUT: the 60 s law (below).
-# ATOM-2 stage 2 (the stage-1 read's finding 4): every part under the 60 s law — the throws part rebuilt to three whole
-# bakes (the reference, one after each width's five throws); its TIMEOUT is the law itself.
-set(_bake_timeout_standin 60)
-set(_bake_timeout_dragon 60)
-set(_bake_timeout_throws 60)
-foreach(_part standin dragon throws)
+# 65 s. A CPU row renders nothing (FRAMES 0); each under the CPU row's 10 s since TEST-STREAMLINE-1 5c (no `measure`).
+# THE THROWS SPLIT BY PROOF (TEST-STREAMLINE-1 5c): the throws part ran 17.92 s solo against a CPU row's 10 s, 5.26 s of it
+# the one-thread reference bake the standin part already makes - so the standin part WRITES its one-thread blob (once its
+# three blobs agree) to ${_bake_ref} (FIXTURES_SETUP bakeSerialReference) and the throws run as two rows that READ it
+# (FIXTURES_REQUIRED): .early (units 1, 3, 40) and .late (units 400, 2000), every throw and every whole bake after it
+# compared with the same one-thread bytes, refused when the model is not the one the reference baked. The reference is
+# removed by bake.determinism.reference.clean (FIXTURES_CLEANUP). Run one alone: ctest -R bake.determinism.throws.late.
+set(_bake_ref ${_bake_home}/serial-reference)
+foreach(_part standin dragon throws.early throws.late)
+    string(REPLACE "throws." "throws:" _arg ${_part})
+    set(_ref_arg "")
+    if(NOT _part STREQUAL "dragon")
+        set(_ref_arg "${_bake_ref}")
+    endif()
     add_test(NAME bake.determinism.${_part}
              COMMAND sh "${JAH_FRESH_HOME}" "${_bake_home}/bake.determinism.${_part}" -- $<TARGET_FILE:test_mesh_bake>
-                     --determinism ${_part}
+                     --determinism ${_arg} ${_ref_arg}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(bake.determinism.${_part} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen;HOME=${_bake_home}/bake.determinism.${_part};JAHSHAKA_DATA_ROOT=${_bake_home}/bake.determinism.${_part}/.local/share/Jahshaka"
-        TIMEOUT ${_bake_timeout_${_part}} LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+        TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
     jah_no_display(bake.determinism.${_part})
 endforeach()
+set_tests_properties(bake.determinism.standin PROPERTIES FIXTURES_SETUP bakeSerialReference)
+set_tests_properties(bake.determinism.throws.early bake.determinism.throws.late PROPERTIES FIXTURES_REQUIRED bakeSerialReference)
+add_test(NAME bake.determinism.reference.clean COMMAND ${CMAKE_COMMAND} -E rm -rf "${_bake_ref}")
+set_tests_properties(bake.determinism.reference.clean PROPERTIES TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0
+                     FIXTURES_CLEANUP bakeSerialReference)
+jah_no_display(bake.determinism.reference.clean)
 
 # bake.dag_reaches_root (ATOM-6 stage 2c; the bake's end-to-end row for the cluster DAG, (the ship set left at draft B, TEST-STREAMLINE-1 4a: LONG only); rewritten for ATOM-2's
 # builder, the law kept): a card soup (2,000 quads in a 2 m sphere) and a kit-bash (200 closed 12-triangle boxes) bake

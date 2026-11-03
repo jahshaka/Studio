@@ -1282,7 +1282,6 @@ jah_data_pass("${CMAKE_CURRENT_SOURCE_DIR}")
 # soaks, scale, determinism - stay here.
 set(JAH_MEASURE_ROWS
     archive.responsive.timing.fresh_home
-    bake.determinism.throws
     gpu.cutout_soak.primitives
     gpu.cutout_soak.tornado
     test_engine
