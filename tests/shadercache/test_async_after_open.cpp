@@ -187,11 +187,22 @@ void report(const char *run, const QJsonObject &r)
 
 /// Launches the app with a script that only quits: the startup shader set is built behind the
 /// splash and saved at the clean quit — THE STARTUP SEED's source.
-bool seedLaunch(const QString &seedHome)
+bool copyTree(const QString &from, const QString &to);
+
+/// One boot-and-quit launch into a fresh `seedHome`; `carry` (a stale seed, may be empty) is its starting shader cache.
+bool seedLaunch(const QString &seedHome, const QString &carry)
 {
     QDir(seedHome).removeRecursively();
     QDir().mkpath(seedHome + "/run");
     QDir().mkpath(seedHome + "/cache");
+    // A RE-SEED STARTS ON THE STALE SEED's LAYERS (TEST-STREAMLINE-1 point 3, the lead's condition): its layers are keyed by
+    // the engine on what makes their bytes (the hlms layer on the cache's own code since irisgl 94c04515), so after an
+    // engine-only edit or a Studio change to the pass every layer still loads and only the NEW permutations compile; a
+    // layer whose key moved (a fork bump, a template edit) the engine drops by itself and builds cold - never a wrong entry.
+    // It wiped the seed and booted on an empty cache: every re-seed was the cold startup set (~280-291 s, #125).
+    if (!carry.isEmpty() && QDir(carry).exists() &&
+        !copyTree(carry, seedHome + QStringLiteral("/.local/share/Jahshaka/shadercache")))
+        return false;
     const QString script = seedHome + "/run/seed.js";
     {
         QFile f(script);
@@ -206,7 +217,8 @@ bool seedLaunch(const QString &seedHome)
     app.setProcessEnvironment(env);
     app.setWorkingDirectory(seedHome + "/run");
     app.setProcessChannelMode(QProcess::MergedChannels);
-    app.start(QStringLiteral(JAHSHAKA_BINARY), QStringList() << "--script" << script);
+    // (JAH_SEED_FAKE_APP: the key self-test's toy app, which compiles nothing and touches no card)
+    app.start(qEnvironmentVariable("JAH_SEED_FAKE_APP", QStringLiteral(JAHSHAKA_BINARY)), QStringList() << "--script" << script);
     if (!app.waitForStarted(20000) || !app.waitForFinished(500000)) { app.kill(); app.waitForFinished(5000); return false; }
     return app.exitCode() == 0;
 }
@@ -249,8 +261,7 @@ int keySelfTest()
     CHECK(da.size() == 64 && da == db, "the media digest: two trees at two paths, one content - one digest (no path)");
     {
         QFile f(t + QStringLiteral("/some/other/b/media/2.0/y.material"));
-        f.open(QIODevice::ReadWrite);
-        f.setFileTime(QDateTime::fromSecsSinceEpoch(978307200), QFileDevice::FileModificationTime);
+        if (f.open(QIODevice::ReadWrite)) f.setFileTime(QDateTime::fromSecsSinceEpoch(978307200), QFileDevice::FileModificationTime);
     }
     CHECK(startuppass::mediaDigest(t + QStringLiteral("/some/other/b/media")) == da, "...a file's time moved: the same digest");
     put(t + QStringLiteral("/some/other/b/media/2.0/y.material"), "materiaL");
@@ -296,6 +307,34 @@ int keySelfTest()
               names.contains(QStringLiteral("src/services/scenetemplatebuilder.cpp\n")),
           "the build's pass list holds shaderbuildgate.cpp, the World Modes and the template builder it includes");
     std::printf("    the pass list: %d files\n", int(names.count(QLatin1Char('\n'))));
+    // A RE-SEED STARTS ON THE STALE SEED's LAYERS (the lead's condition): a stale seed (its stamp another key) holding a
+    // layer file; `--seed` under the warm-up's JAH_COLD_PRIME with a toy app that records whether its home's cache held that
+    // file at launch and adds one of its own - the new seed carries both, its stamp this tree's key
+    {
+        const QString w = t + QStringLiteral("/reseed");
+        put(w + QStringLiteral("/e2e-async-after-open-seed/shadercache/hlms.1.bin"), "warm layer");
+        put(w + QStringLiteral("/e2e-async-after-open-seed/tree-key.txt"), "another key");
+        put(w + QStringLiteral("/fake-app"), "#!/bin/sh\nc=\"$HOME/.local/share/Jahshaka/shadercache\"\n"
+                                             "[ -f \"$c/hlms.1.bin\" ] && echo carried > \"$c/at-launch\" || echo empty > \"$c/at-launch\"\n"
+                                             "mkdir -p \"$c\" && echo new > \"$c/hlms.2.bin\"\nexit 0\n");
+        QFile::setPermissions(w + QStringLiteral("/fake-app"), QFileDevice::ReadOwner | QFileDevice::WriteOwner | QFileDevice::ExeOwner);
+        QProcess re;
+        QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+        env.insert(QStringLiteral("JAH_COLD_PRIME"), QStringLiteral("1"));
+        env.insert(QStringLiteral("JAH_SEED_FAKE_APP"), w + QStringLiteral("/fake-app"));
+        re.setProcessEnvironment(env);
+        re.setWorkingDirectory(w);
+        re.start(QCoreApplication::applicationFilePath(), {QStringLiteral("--seed")});
+        re.waitForFinished(60000);
+        const QString sd = w + QStringLiteral("/e2e-async-after-open-seed");
+        CHECK(re.exitCode() == 0 && readStamp(sd + QStringLiteral("/shadercache/at-launch")) == QStringLiteral("carried") &&
+                  QFile::exists(sd + QStringLiteral("/shadercache/hlms.1.bin")) &&
+                  QFile::exists(sd + QStringLiteral("/shadercache/hlms.2.bin")) &&
+                  readStamp(sd + QStringLiteral("/tree-key.txt")) == treeKey() && !QDir(sd + QStringLiteral("-seeding")).exists(),
+              "a re-seed boots ON the stale seed's layers (the warm layer carried into the launch, the new entries added, the "
+              "stamp this tree's key) - never on an empty cache");
+        if (re.exitCode() != 0) std::printf("    the re-seed: %s\n", re.readAll().constData());
+    }
     {   // THE LAUNCH's PRICE of the media term (the app hashes its staged media at every launch's gate): measured, printed
         QElapsedTimer m; m.start();
         const QString d = startuppass::mediaDigest(QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).absolutePath() + QStringLiteral("/media"));
@@ -350,17 +389,17 @@ int main(int argc, char **argv)
         }
         if (QDir(seed).exists())
             std::printf("    the startup seed is STALE (its stamp is not this tree's key): re-seeding\n");
-        QDir(QFileInfo(seed).absolutePath()).removeRecursively();
         const QString seedHome = QDir::current().absoluteFilePath(seedName + QStringLiteral("-seeding"));
-        bool seeded = seedLaunch(seedHome) &&
-                      QDir().mkpath(QFileInfo(seed).absolutePath()) &&
+        const bool launched = seedLaunch(seedHome, seed);   // on the stale seed's layers (seedLaunch says why)
+        QDir(QFileInfo(seed).absolutePath()).removeRecursively();   // the stale seed and its stamp, once the new one exists
+        bool seeded = launched && QDir().mkpath(QFileInfo(seed).absolutePath()) &&
                       QDir().rename(seedHome + "/.local/share/Jahshaka/shadercache", seed);
         if (seeded) {
             QFile f(stamp);
             seeded = f.open(QIODevice::WriteOnly | QIODevice::Truncate) && f.write(key.toLatin1()) > 0;
         }
         QDir(seedHome).removeRecursively();
-        std::printf("    the startup seed: %s\n%s\n", seeded ? "made by a boot-and-quit launch" : "COULD NOT be made",
+        std::printf("    the startup seed: %s\n%s\n", seeded ? "made by a boot-and-quit launch (on the stale seed's layers when one was there)" : "COULD NOT be made",
                     seeded ? "PASS" : "FAIL");
         return seeded ? 0 : 1;
     }
