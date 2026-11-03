@@ -137,11 +137,31 @@ if(JAHSHAKA_TSAN)
     message(STATUS "ThreadSanitizer: ON (whole tree; Ogre/Qt remain uninstrumented)")
 endif()
 
+# THE COVERAGE BUILD (TEST-STREAMLINE-1 stage 2, the coverage map): JahshakaEngine alone instrumented (gcov, its counters
+# updated atomically - the engine is threaded), every target linked with libgcov and with _Exit WRAPPED so a process that
+# ends in _Exit - every one we own - still writes its profile (cmake/coverage/gcov_exit_wrap.c says why, with the toy that
+# proved it). Its own build directory: another configuration (its records never serve the Debug tree's, gate_graph's
+# config hash), the default build's bytes untouched (OFF). Each row writes under <build>/coverage/rows/<row>
+# (GCOV_PREFIX, tests/CMakeLists.txt); scripts/coverage_map.py reads them into the map.
+option(JAH_COVERAGE "Instrument JahshakaEngine for the per-row coverage map (a separate build dir)" OFF)
+if(JAH_COVERAGE)
+    if(NOT CMAKE_CXX_COMPILER_ID STREQUAL "GNU")
+        message(FATAL_ERROR "JAH_COVERAGE needs GCC (gcov)")
+    endif()
+    add_library(jah_gcov_exit STATIC "${CMAKE_SOURCE_DIR}/cmake/coverage/gcov_exit_wrap.c")
+    add_link_options(--coverage "LINKER:--wrap=_Exit")
+    link_libraries(jah_gcov_exit)
+    message(STATUS "THE COVERAGE BUILD: JahshakaEngine instrumented, _Exit wrapped (TEST-STREAMLINE-1 stage 2)")
+endif()
+
 find_package(OpenGL REQUIRED) # is this needed?
 find_package(Qt6 REQUIRED COMPONENTS Concurrent Network Widgets Sql Svg Multimedia Qml HttpServer)
 
 include(UseModernCpp)
 include(AddExternalSubdirectories)
+if(JAH_COVERAGE)   # (THE COVERAGE BUILD above: the engine's own sources alone carry the counters)
+    target_compile_options(JahshakaEngine PRIVATE --coverage -fprofile-update=atomic)
+endif()
 include(BuildType)
 
 set_property(GLOBAL PROPERTY USE_FOLDERS TRUE)

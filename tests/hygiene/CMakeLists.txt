@@ -299,6 +299,13 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/evidence_cap.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(tooling.evidence_cap PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.evidence_cap)
+    # tooling.coverage_map — THE PER-ROW MAP IS EACH ROW's OWN, AND A PROCESS ENDING IN _Exit STILL WRITES IT (TEST-STREAMLINE-1
+    # stage 2): a toy library and two toy rows built --coverage with the tree's cmake/coverage/gcov_exit_wrap.c, each its own
+    # GCOV_PREFIX, read by scripts/coverage_map.py (coverage_map_toy.py; no card).
+    add_test(NAME tooling.coverage_map
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/coverage_map_toy.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(tooling.coverage_map PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.coverage_map)
     # tooling.row_env — A ROW RUN BY HAND CARRIES ITS REGISTRATION (URGENT #147): scripts/row-env.sh on a toy ctest build -
     # the row printed as registered, --run applying its ENVIRONMENT and ENVIRONMENT_MODIFICATION in its directory,
     # --scratch writing nothing under the build (a warm fresh_home row's shared cache copied), fixtures and a GPU row

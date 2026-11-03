@@ -72,6 +72,24 @@ function(_jah_evidence_cache_walk dir)
 endfunction()
 cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL _jah_evidence_cache_walk "${CMAKE_CURRENT_SOURCE_DIR}")
 
+# THE COVERAGE BUILD's ROWS EACH WRITE THEIR OWN PROFILE (TEST-STREAMLINE-1 stage 2; JAH_COVERAGE, the root CMakeLists.txt):
+# GCOV_PREFIX=<build>/coverage/rows/<row> (GCOV_PREFIX_STRIP=0: the build's absolute object paths under it), so one row's
+# counters never merge into another's; scripts/coverage_map.py collect reads them into the map. Off in every other build.
+if(JAH_COVERAGE)
+    function(_jah_coverage_walk dir)
+        get_property(_tests DIRECTORY "${dir}" PROPERTY TESTS)
+        foreach(_t IN LISTS _tests)
+            set_property(TEST "${_t}" DIRECTORY "${dir}" APPEND PROPERTY ENVIRONMENT
+                         "GCOV_PREFIX=${CMAKE_BINARY_DIR}/coverage/rows/${_t}" "GCOV_PREFIX_STRIP=0")
+        endforeach()
+        get_property(_subs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+        foreach(_s IN LISTS _subs)
+            _jah_coverage_walk("${_s}")
+        endforeach()
+    endfunction()
+    cmake_language(DEFER DIRECTORY "${CMAKE_SOURCE_DIR}" CALL _jah_coverage_walk "${CMAKE_CURRENT_SOURCE_DIR}")
+endif()
+
 # THE ASan ENGINE SUITES' OPTIONS, in one place (PHOTON_SPEC §7 R1).
 #
 # `protect_shadow_gap=0` is LOAD-BEARING and was MEASURED, not guessed. With the
