@@ -81,5 +81,21 @@ else
 var shapeRefusals = world.giStatus().rayQuery.reflectShapeRefusals;
 console.log("the reflection's shape refusals over the session: " + shapeRefusals);
 assert(shapeRefusals === 0, "no reflection recording met a chain at another stereo shape: " + shapeRefusals);
+// ...AND THE COUNTER COUNTS (its NEGATIVE CONTROL, the lead's ruling; DOCS/traps/ENGINE.md: a counter's row reads it
+// non-zero once): the arm reflect.shapeMismatch (a test arm, latched at the next frame's top) makes the stereo view's
+// recording read the other shape for exactly ONE eye frame - the count reads exactly 1 after it, and exactly 1 at the
+// session's end (the frames between add none: the arm is off before and after)
+assert(engine.arm("reflect.shapeMismatch", 1) === 1, "the arm reflect.shapeMismatch is registered");
+var rArm = vr.state().rendered, armPumps = 0;
+while (vr.state().rendered === rArm && armPumps < 50) { editor.frame(1); ++armPumps; }
+engine.arm("reflect.shapeMismatch", 0);
+var armEyeFrames = vr.state().rendered - rArm;
+var refusedOnce = world.giStatus().rayQuery.reflectShapeRefusals;
+console.log("the negative control: " + armEyeFrames + " eye frame(s) under the arm (" + armPumps + " pumped); the count " + refusedOnce);
+assert(armEyeFrames === 1, "the arm covered exactly one eye frame: " + armEyeFrames);
+assert(refusedOnce === 1, "the counter counts: one forced eye frame reads exactly 1 refusal: " + refusedOnce);
+for (var k = 0; k < 10; ++k) editor.frame(1);
+var refusedEnd = world.giStatus().rayQuery.reflectShapeRefusals;
+assert(refusedEnd === 1, "the session adds none after the arm: exactly 1 at its end: " + refusedEnd);
 assert(vr.end() === true, "the session ended");
 engine.arm("gather.decodeHits", 0);
