@@ -111,6 +111,12 @@ const std::vector<VerbDoc> &verbs()
         { "lamp", "lamp <name> intensity <v> | lamp <name> position x,y,z", 3, 3,
           "a lamp step: the named light's intensity or position written in the document (the mirror pushes it on the "
           "next frame); no frame is drawn" },
+        { "sky", "sky brightness <v> | sky rayleigh <v>", 2, 2,
+          "THE SKY's DIALS (PHOTON-7-9A, the sky-invariance row's levers): the realistic sky's skyBrightness (Unreal's "
+          "sky luminance factor: the sky's pixels, the Sky Light, reflections, the aerial in-scatter - never the sun) or "
+          "its rayleighScale (the molecular density: the sky's COLOUR, and the sun's through the air) written in the "
+          "document, a number in 0..10 (the document's own range; outside it is REFUSED, never clamped); refused on a "
+          "scene whose sky is not the realistic one; the mirror pushes it on the next frame" },
         { "material", "material <object> colour r,g,b | material <object> roughness <v>", 3, 3,
           "a material edit (PHOTON-2 fix F5): the named object's PBR base colour (0..1 each) or roughness written in "
           "the document (the mirror pushes it on the next frame); no frame is drawn" },
@@ -313,6 +319,23 @@ std::string helpText()
     o << "\na --script line the lab refuses STOPS the script there (exit 1, LAB SCRIPT STOPPED naming the line and its "
          "reason);\n  try <line>\n      opts that one line out: its refusal is said (LAB TRY) and the script goes on\n";
     return o.str();
+}
+
+bool parseSkyDial(const std::string &word, float &out, std::string &error)
+{
+    // a plain decimal: strtod's whole word, finite by its BITS' meaning (no "nan", "inf", hex floats), in the document's
+    // range [0, 10] (Scene::clampSkyRealistic) - refused outside it, never clamped (the row must set what it says)
+    char *end = nullptr;
+    const double v = word.empty() ? 0.0 : std::strtod(word.c_str(), &end);
+    bool plain = !word.empty();
+    for (char ch : word)
+        plain = plain && (std::isdigit(static_cast<unsigned char>(ch)) || ch == '.' || ch == '-' || ch == '+');
+    if (!plain || !end || *end || !(v >= 0.0 && v <= 10.0)) {
+        error = "'" + word + "' is not a sky dial's value (a number in 0..10)";
+        return false;
+    }
+    out = float(v);
+    return true;
 }
 
 }   // namespace lab

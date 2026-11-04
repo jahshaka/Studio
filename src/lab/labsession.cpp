@@ -1326,6 +1326,8 @@ bool Session::exec(const Command &c)
         ok = stillness(c);
     } else if (c.verb == "lamp") {
         ok = lamp(c);
+    } else if (c.verb == "sky") {
+        ok = sky(c);
     } else if (c.verb == "material") {
         ok = material(c);
     } else if (c.verb == "photon") {
@@ -1588,6 +1590,26 @@ bool Session::lamp(const Command &c)
     }
     labFail("LAB REFUSED lamp: '%s' (intensity | position)\n", c.args[1].c_str());
     return false;
+}
+
+bool Session::sky(const Command &c)
+{
+    const bool brightness = c.args[0] == "brightness", rayleigh = c.args[0] == "rayleigh";
+    if (!brightness && !rayleigh) {
+        labFail("LAB REFUSED sky: '%s' (brightness | rayleigh)\n", c.args[0].c_str());
+        return false;
+    }
+    float v = 1.0f;
+    std::string why;
+    if (!parseSkyDial(c.args[1], v, why)) { labFail("LAB REFUSED sky: %s\n", why.c_str()); return false; }
+    if (mDoc->skyType != iris::SkyType::REALISTIC) {
+        labFail("LAB REFUSED sky: this scene's sky is not the realistic one (its brightness dial moves nothing)\n");
+        return false;
+    }
+    iris::SkyRealistic r = mDoc->skyRealistic;
+    (brightness ? r.skyBrightness : r.rayleighScale) = v;
+    mDoc->setSkyRealistic(r);
+    return true;
 }
 
 bool Session::material(const Command &c)

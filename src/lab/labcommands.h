@@ -39,6 +39,11 @@ const std::vector<std::pair<std::string, std::string>> &keyTable();
 /// or a wrong argument count answers false with the reason.
 bool parse(const std::string &line, Command &out, std::string &error);
 
+/// THE SKY VERB's VALUE (`sky brightness|rayleigh <v>`): a plain decimal in the document's range 0..10 (both dials',
+/// Scene::clampSkyRealistic), refused outside it (never clamped) - the one rule the session applies, held by lab.sky_verb
+/// (tests/lab/test_lab_sky_verb.cpp).
+bool parseSkyDial(const std::string &word, float &out, std::string &error);
+
 /// The whole help text: the keys, the verbs and the flags.
 std::string helpText();
 
