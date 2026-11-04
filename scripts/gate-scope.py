@@ -1331,11 +1331,7 @@ class Selection:
                 r = self.engine_table(p, tag)
                 notes.append(r or "no includer, no table line → nothing reached")
             return
-        if depth == 0 and self.coverage_reach(p, tag, notes):
-            # THE MAP ANSWERS ONLY A PATH THE DIFF CHANGED (TE8, 2026-11-04): an engine source reached at depth 1 - an includer
-            # of a changed header, a file naming its changed symbol (header_symbols) - has no diff of its own, so the map read
-            # it as "a comment or whitespace change - no row" and dropped every row its table reaches (gate_selection
-            # COVERAGE-V4f: 28 rows lost on a toy map); such a path takes the table, as before the map
+        if self.coverage_reach(p, tag, notes, depth):
             return
         r = self.engine_table(p, tag)
         if r:
@@ -1343,7 +1339,7 @@ class Selection:
         else:
             self._fallback(p, tag, notes)
 
-    def coverage_reach(self, p, tag, notes):
+    def coverage_reach(self, p, tag, notes, depth=0):
         """THE COVERAGE MAP's REACH (TEST-STREAMLINE-1 stage 2; coverage_map_doc): an engine SOURCE's hunks reach the rows whose
         recorded run EXECUTED a function a hunk sits in (gate_graph.enclosing_functions; by its unqualified name: an overload
         unions, an over-reach) - and, per row, today's table wherever the map cannot answer: a row with no map (registered
@@ -1355,11 +1351,34 @@ class Selection:
         doc = coverage_map_doc()
         if not doc or not p.endswith(CXX_EXT) or p.endswith(HEADER_EXT) or not self.revs.base:
             return False
-        a, b = self.revs.texts(p)
-        fns = gate_graph.enclosing_functions(a, b, gate_graph.hunks_of(self.revs.diff_u0(p)))
-        if not fns:
-            notes.append("the coverage map: a comment or whitespace change - no row")
-            return True
+        if depth > 0:
+            # A SOURCE REACHED AT DEPTH 1 HAS NO DIFF OF ITS OWN (TE8, 2026-11-04; gate_selection COVERAGE-V4f / V4g): read as one,
+            # its empty diff was "a comment or whitespace change - no row", and every row its table reaches was dropped (28 on a
+            # toy map). Reached through a header's SYMBOL (header_symbols: it names a changed identifier), the map answers for
+            # the functions whose lines name that symbol, the source as it is now - the walk the core TUs' hand maps made, for
+            # every engine source; reached with no symbol (an includer of the header), it has no lines to read: the table
+            ids = self._symbol_ids.get(p)
+            if not ids:
+                return False
+            try:
+                text = open(os.path.join(ROOT, p), errors="replace").read()
+            except OSError:
+                return False
+            lines = gate_graph.strip_cxx(text)
+            outer = gate_graph._outer_scopes(lines)
+            rx = re.compile(r"\b(" + "|".join(re.escape(t) for t in sorted(ids)) + r")\b")
+            fns = {}
+            for k, ln in enumerate(lines):
+                if rx.search(ln):
+                    fns[outer[k]] = fns.get(outer[k], 0) + 1
+            if not fns:
+                return False
+        else:
+            a, b = self.revs.texts(p)
+            fns = gate_graph.enclosing_functions(a, b, gate_graph.hunks_of(self.revs.diff_u0(p)))
+            if not fns:
+                notes.append("the coverage map: a comment or whitespace change - no row")
+                return True
         if None in fns:
             return False
         known = {fn for row in list(doc.get("rows", {}).values()) + list(doc.get("boots", {}).values()) for f, fn in row if f == p}

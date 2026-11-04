@@ -323,6 +323,41 @@ def speed_cases(source, build):
               and "ship" not in inv0[twin_]["labels"],
               "27. %s reaches %s AND its long twin %s at the feature end; FAST holds %s alone (rows %d; never selected %s)"
               % (src_, plain_, twin_, plain_, len(R["rows"]), R["never_selected"][:4]))
+    # 28. THE MAP ANSWERS A SOURCE REACHED THROUGH A HEADER's SYMBOL BY THE FUNCTIONS THAT NAME IT (TEST-STREAMLINE-1 stage 2,
+    # TE8 2026-11-04): header_symbols reaches OgreSky.cpp at depth 1 for a changed `skyReadDue`; on a toy map whose one sky
+    # row ran the functions naming it, the reach is that row - not the sky table's every row; with no symbol (an includer) the
+    # table. RED ON 76aa5ad47 (the map asked at depth 0 only: the whole sky table, both arms)
+    sp = "irisgl/engine/src/OgreSky.cpp"
+    lines_ = gs.gate_graph.strip_cxx(open(os.path.join(source, sp), errors="replace").read())
+    outer_ = gs.gate_graph._outer_scopes(lines_)
+    naming_ = sorted({outer_[k] for k, ln in enumerate(lines_) if re.search(r"\bskyReadDue\b", ln)} - {None})
+    sky_ = sorted(n for n in inv0 if n.startswith("sky."))
+    toy_ = {n: [["irisgl/engine/src/unrelated.cpp", "unrelated"]] for n in inv0}
+    toy_[sky_[0]] = [[sp, f] for f in naming_]
+    for n in sky_[1:]:
+        toy_[n] = [[sp, "tsaSomethingElse"]] + [[sp, f] for f in naming_ if False]
+    fd_, tmp_ = tempfile.mkstemp(suffix=".json")
+    with os.fdopen(fd_, "w") as fh_:
+        json.dump({"schema": 1, "tip": "TOYMAP", "rows": toy_, "boots": {}}, fh_)
+    old_map_ = os.environ.get("JAH_COVERAGE_MAP")
+    os.environ["JAH_COVERAGE_MAP"] = tmp_
+    gs._COVERAGE_DOC.clear()
+    try:
+        got_ = {}
+        for arm_, ids_ in (("symbol", {"skyReadDue"}), ("includer", None)):
+            S = sel([], revs=fake({}))
+            if ids_:
+                S._symbol_ids[sp] = set(ids_)
+            S.path(sp, 1, via="tsa")
+            got_[arm_] = sorted(n for n in S.selected if n.startswith("sky."))
+    finally:
+        os.remove(tmp_)
+        if old_map_ is None: os.environ.pop("JAH_COVERAGE_MAP", None)
+        else: os.environ["JAH_COVERAGE_MAP"] = old_map_
+        gs._COVERAGE_DOC.clear()
+    check(len(sky_) >= 2 and naming_ and got_["symbol"] == [sky_[0]] and set(sky_) <= set(got_["includer"]),
+          "28. OgreSky.cpp reached through skyReadDue (named in %s) -> the map's row %s alone (%s); reached as an includer "
+          "-> the sky table (%s)" % (naming_, sky_[:1], got_["symbol"], got_["includer"]))
     # 24. a fallback is its directory's subsystem, never the tier
     S = sel(["tests/gi/tsa_new_dir/input.bin"])
     gi_rows = [n for n, t in inv0.items() if t["dir"] == "gi"]
