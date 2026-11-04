@@ -12,6 +12,16 @@ JAH_COVERAGE build (CMakeLists.txt: JahshakaEngine instrumented, _Exit wrapped) 
   coverage_map.py rows <map.json> <file> <function>...      the rows whose map holds (file, function) - a function by its
                                                             UNQUALIFIED name (gate_graph.enclosing_functions' form), so an
                                                             overload or a same-named static unions: an over-reach, never a miss
+  coverage_map.py audit <map.json> <base>..<tip> [--build <dir>]
+                                                            THE UNDER-REACH AUDIT (stage 2's ruling, option 2): the rows whose
+                                                            map RAN a function the range's engine sources changed and that the
+                                                            selector (gate-scope.py: the table + the hand maps) does NOT reach,
+                                                            each with the (file, function) that names it; a report, exit 0
+
+THE MAP IS NEVER A SELECTOR (the landing audit's F3, 2026-11-04): gate-scope.py reads no map, whatever file exists where; the
+map is read only here, by the path the caller names (no default path, no environment variable). It cannot narrow a renderer's
+reach (DOCS/traps/GATE_AND_RIG.md "CODE COVERAGE CANNOT NARROW THE ENGINE's REACH"): what it can show is where the table
+UNDER-reaches - an audit the lead runs on demand, whose findings become table lines.
 
 THE MAP HOLDS ONLY WHOLE RUNS (the 2a audit's findings 4, 5, 7): a row is mapped only when the coverage pass's newest record
 of it is PASS (any other verdict - a run that stopped early or lost a process's dump - is no_profile: the table for it), and only
@@ -218,6 +228,95 @@ def rows_of(doc, file, functions):
     return sorted(r for r, fns in doc.get("rows", {}).items() if want & {tuple(x) for x in fns})
 
 
+APP_BOOT_CLASSES = ("app", "selftest", "vr")    # an app warm-up boot's consumers (an engine boot's: "engine")
+
+
+def under_reach(doc, changed, selected, classes):
+    """THE UNDER-REACH AUDIT's judgement (pure; `audit` feeds it). `changed`: {file: {function, or None for a namespace-
+    scope line}} - the functions each changed engine SOURCE's hunks sit in (gate_graph.enclosing_functions); `selected`: the
+    rows the selector reached (None: every row - nothing can be missed); `classes`: {row: its card class} for the rows the
+    audit judges (the inventory less the never-selected `measure` rows). Returns {missed: {row: [(file, fn), ...]},
+    unanswered: [(file, why)], unmapped: [rows the map holds no profile of]}:
+      - a row MISSED: its map holds a changed (file, function), or a warm-up boot that ran one is its class's producer (an
+        app boot reaches app / selftest / vr rows, an engine boot the engine rows), and the selection lacks it;
+      - UNANSWERED: a namespace-scope line (no function to look up), a file the map holds nothing of, a function no row or
+        boot of the map ran (new, a class body, or the map older than its caller) - the table's answer is the only one;
+      - UNMAPPED: the judged rows the map has no profile of - the map cannot speak for them either way."""
+    rows = {r: {tuple(x) for x in held} for r, held in (doc.get("rows") or {}).items()}
+    boots = {b: {tuple(x) for x in held} for b, held in (doc.get("boots") or {}).items()}
+    missed, unanswered = {}, []
+    for f in sorted(changed):
+        fns = changed[f]
+        known = {fn for held in list(rows.values()) + list(boots.values()) for g, fn in held if g == f}
+        if None in fns:
+            unanswered.append((f, "a namespace-scope line"))
+        if not known:
+            unanswered.append((f, "the map holds nothing of this file"))
+            continue
+        for fn in sorted(x for x in fns if x is not None):
+            if fn not in known:
+                unanswered.append((f, f"{fn}(): no row or boot of the map ran it"))
+                continue
+            want = (f, fn)
+            hit = {r for r, held in rows.items() if want in held}
+            for b, held in boots.items():
+                if want in held:
+                    cls = APP_BOOT_CLASSES if b.startswith("app") else ("engine",)
+                    hit |= {r for r, c in classes.items() if c in cls}
+            for r in hit:
+                if r in classes and (selected is not None and r not in selected):
+                    missed.setdefault(r, []).append(want)
+    unmapped = sorted(r for r in classes if r not in rows)
+    return {"missed": {r: sorted(v) for r, v in sorted(missed.items())}, "unanswered": unanswered, "unmapped": unmapped}
+
+
+def audit(map_path, rng, build_arg):
+    """`audit`: the selector's reach of the range (gate-scope.py reach, the map never read) against the map's (under_reach)."""
+    import importlib.util
+    here = os.path.dirname(os.path.abspath(__file__))
+    spec = importlib.util.spec_from_file_location("gate_scope_audit", os.path.join(here, "gate-scope.py"))
+    gs = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(gs)
+    doc = json.load(open(map_path))
+    build = gs.resolve_build(build_arg)
+    paths = gs.touched_paths(rng)
+    R = gs.reach(paths, rng, build)
+    inv = R["_S"].inv
+    selected = None if R["full_tier"] else set(R["rows"])
+    classes = {n: t.get("jah_class") or "cpu" for n, t in inv.items() if not (t["labels"] & gs.NEVER_SELECTED)}
+    revs = gs.Revs(rng)
+    changed, headers = {}, []
+    for p in paths:
+        if not p.startswith("irisgl/engine/") or not p.endswith(gs.gate_graph.CXX_EXT):
+            continue
+        if p.endswith(gs.gate_graph.HEADER_EXT):
+            headers.append(p)
+            continue
+        a, b = revs.texts(p)
+        if a is None or b is None:
+            changed[p] = {None}               # an added or deleted source: no function of the base to look up
+            continue
+        changed[p] = set(gs.gate_graph.enclosing_functions(a, b, gs.gate_graph.hunks_of(revs.diff_u0(p))))
+    res = under_reach(doc, changed, selected, classes)
+    tip = str(doc.get("tip") or "?")
+    on = subprocess.run(["git", "-C", gs.ROOT, "merge-base", "--is-ancestor", tip, revs.base or "HEAD"],
+                        capture_output=True).returncode == 0 if re.fullmatch(r"[0-9a-f]{7,40}", tip) else False
+    print(f"coverage_map audit: {rng} - the map {map_path} (tip {tip[:9]}"
+          f"{'' if on else ', NOT an ancestor of the range base: a function may have moved since'}); "
+          f"{len(paths)} path(s), {len(changed)} engine source(s) read, the selector reached "
+          f"{'EVERY row (the whole tier: nothing to miss)' if selected is None else f'{len(selected)} row(s)'}")
+    for h in headers:
+        print(f"  not the map's: {h} (a header - the map answers a source's functions; its symbols are the table's)")
+    for f, why in res["unanswered"]:
+        print(f"  unanswered: {f}: {why}")
+    print(f"  the map cannot speak for {len(res['unmapped'])} judged row(s) (no profile; the measure rows are never judged)")
+    print(f"THE UNDER-REACH: {len(res['missed'])} row(s) ran a changed function and the table + the hand maps miss them"
+          + (":" if res["missed"] else ""))
+    for r, why in res["missed"].items():
+        print(f"  {r} ({classes.get(r)}): ran " + ", ".join(f"{os.path.basename(f)} {fn}()" for f, fn in why))
+    return 0
+
+
 def main(argv):
     if len(argv) == 2 and argv[0] == "reset":
         return reset(argv[1])
@@ -237,6 +336,8 @@ def main(argv):
                   file=sys.stderr)
             return 64
         return collect(argv[1], argv[2], opts.get("--tip"), recs, opts.get("--inventory"))
+    if len(argv) in (3, 5) and argv[0] == "audit" and (len(argv) == 3 or argv[3] == "--build"):
+        return audit(argv[1], argv[2], argv[4] if len(argv) == 5 else "build-linux")
     if len(argv) >= 4 and argv[0] == "rows":
         print("\n".join(rows_of(json.load(open(argv[1])), argv[2], argv[3:])))
         return 0

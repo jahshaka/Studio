@@ -203,9 +203,9 @@ def hunk_cases(gs, graph, build, inv0, cases):
                 # the tree's build files with the context's other file as the case holds it (on both sides)
                 return [(f, other.get(f, t)) for f, t in _real(self_)]
             gs.Selection.tree_cmake_files = tree_files
-        # A TOY COVERAGE MAP (TEST-STREAMLINE-1 stage 2, the reader's V4-V6; no card): every row of the build mapped to an
+        # A TOY COVERAGE MAP AT THE OLD SELECTOR's SWITCH (JAH_COVERAGE_MAP; no card): every row of the build mapped to an
         # unrelated function unless the case names it - `coverage_map`: {rows: {row: [[file, fn]] | "none"}, boots: {...}};
-        # a row named "none" has NO map (registered after it, or no profile)
+        # since the landing audit's F3 the selector reads no map, so a case with one proves the selection is the table's
         cm, cm_path = c.get("coverage_map"), None
         if cm is not None:
             rows_ = {r: [["irisgl/engine/src/unrelated.cpp", "unrelated"]] for r in inv0}
@@ -217,14 +217,12 @@ def hunk_cases(gs, graph, build, inv0, cases):
                 json.dump({"schema": 1, "tip": "TOYMAP", "rows": rows_, "boots": cm.get("boots") or {}}, fh)
         old_env = os.environ.get("JAH_COVERAGE_MAP")
         os.environ["JAH_COVERAGE_MAP"] = cm_path or os.path.join(tempfile.gettempdir(), "no-such-coverage-map.json")
-        gs._COVERAGE_DOC.clear()
         try:
             S = gs.select([path], "BASE..TIP", build, graph=graph, inv=fresh_inv(inv0), quiet_graph=True)
         finally:
             gs.Revs, gs.Selection.tree_cmake_files = real, real_files
             if old_env is None: os.environ.pop("JAH_COVERAGE_MAP", None)
             else: os.environ["JAH_COVERAGE_MAP"] = old_env
-            gs._COVERAGE_DOC.clear()
             if cm_path: os.remove(cm_path)
         check(not S.fallback, "%s: no fallback (%s)" % (c["case"][:60], S.fallback[:1]))
         # a hunk is read by what it names: never the whole inventory unless the case says so (TOOLING-2: a `must` list

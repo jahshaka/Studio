@@ -57,16 +57,15 @@ third = cgc.Reach(gs, build, tip)
 got = third.of(ancestors[0])
 law(third.hits == 0 and third.computed == 1 and got == fresh.of(ancestors[0]),
     "(3) a corrupt cache file is recomputed (and rewritten), never read")
-# (4) THE COVERAGE MAP IS A TERM OF THE KEY (TEST-STREAMLINE-1, the 2a audit's finding 6): a new map re-reaches (red on the base)
+# (4) THE COVERAGE MAP IS NO TERM OF THE KEY (the landing audit's F3, 2026-11-04: the selector never reads a map, so a map
+#     at JAH_COVERAGE_MAP - the old selector's switch - moves no key; red on b5ef0dffb, where it was a term)
 import tempfile  # noqa: E402
 fd, mp = tempfile.mkstemp(suffix=".json"); os.write(fd, b'{"rows": {"x": []}}'); os.close(fd)
 prev = os.environ.get("JAH_COVERAGE_MAP"); os.environ["JAH_COVERAGE_MAP"] = mp
 k1 = cgc.reach_key(build, ancestors[0], tip)
-open(mp, "w").write('{"rows": {"y": []}}')
-k2 = cgc.reach_key(build, ancestors[0], tip)
 os.remove(mp)
 if prev is None: os.environ.pop("JAH_COVERAGE_MAP", None)
 else: os.environ["JAH_COVERAGE_MAP"] = prev
-law(k1 != k2 and k1 != k0, "(4) the coverage map's content is a term of the key: a new map, a new key")
+law(k1 == k0, "(4) a coverage map is no term of the key: the selector never reads one (the map is the audit's)")
 print("gate.reach_cache: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)

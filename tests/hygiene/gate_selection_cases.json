@@ -536,7 +536,7 @@
    "must_not": []
   },
   {
-   "case": "COVERAGE-V4a a hunk inside OgreRayQuery.cpp's measure() reaches EXACTLY the rows whose map ran measure() (TEST-STREAMLINE-1 stage 2, a toy map; RED ON BASE: the table's 172 rows)",
+   "case": "COVERAGE-NOT-A-SELECTOR a map present at JAH_COVERAGE_MAP changes NO selection (the landing audit's F3, 2026-11-04: the map is the on-demand under-reach audit's, coverage_map.py audit, never the selector's): a hunk inside OgreRayQuery.cpp's measure() on a toy map whose only rows to run it are gi.area_follow and rtreflect.contact still reaches the table's rows (RED ON b5ef0dffb: the map's two rows, the table's 172 dropped)",
    "file": "irisgl/engine/src/OgreRayQuery.cpp",
    "old": "    const float bound = (b && !b->empty()) ? b->back() : 0.0f;\n",
    "new": "    const float bound = (b && !b->empty()) ? b->back() * 1.0f : 0.0f;\n",
@@ -552,178 +552,16 @@
       [
        "irisgl/engine/src/OgreRayQuery.cpp",
        "measure"
-      ],
-      [
-       "irisgl/engine/src/OgreRayQuery.cpp",
-       "other"
       ]
      ]
     }
    },
    "must": [
     "gi.area_follow",
-    "rtreflect.contact"
-   ],
-   "must_not": [
+    "rtreflect.contact",
     "gi.bounce_series.epic",
     "rtreflect.emitters",
     "shadow.pane_lamp"
-   ],
-   "max_selected": 60
-  },
-  {
-   "case": "COVERAGE-V4b a hunk at NAMESPACE SCOPE (enclosing_functions -> None) is the table's, the map notwithstanding",
-   "file": "irisgl/engine/src/OgreRayQuery.cpp",
-   "old": "constexpr unsigned kCompactRing = 64u;",
-   "new": "constexpr unsigned kCompactRing = 65u;",
-   "coverage_map": {
-    "rows": {
-     "gi.area_follow": [
-      [
-       "irisgl/engine/src/OgreRayQuery.cpp",
-       "measure"
-      ]
-     ]
-    }
-   },
-   "must": [
-    "gi.bounce_series.epic",
-    "rtreflect.emitters",
-    "shadow.pane_lamp"
-   ]
-  },
-  {
-   "case": "COVERAGE-V5 a row with NO map (registered after it, or killed at its cap) is reached by the table: never dropped",
-   "file": "irisgl/engine/src/OgreRayQuery.cpp",
-   "old": "    const float bound = (b && !b->empty()) ? b->back() : 0.0f;\n",
-   "new": "    const float bound = (b && !b->empty()) ? b->back() * 1.0f : 0.0f;\n",
-   "coverage_map": {
-    "rows": {
-     "gi.area_follow": [
-      [
-       "irisgl/engine/src/OgreRayQuery.cpp",
-       "measure"
-      ]
-     ],
-     "gi.bounce_series.epic": "none"
-    }
-   },
-   "must": [
-    "gi.area_follow",
-    "gi.bounce_series.epic"
-   ],
-   "must_not": [
-    "rtreflect.emitters",
-    "shadow.pane_lamp"
-   ]
-  },
-  {
-   "case": "COVERAGE-V6 a function only a warm-up boot ran (the producer of a cached artefact) reaches every row of its boot's class",
-   "file": "irisgl/engine/src/OgreRayQuery.cpp",
-   "old": "    const float bound = (b && !b->empty()) ? b->back() : 0.0f;\n",
-   "new": "    const float bound = (b && !b->empty()) ? b->back() * 1.0f : 0.0f;\n",
-   "coverage_map": {
-    "rows": {},
-    "boots": {
-     "engine-off": [
-      [
-       "irisgl/engine/src/OgreRayQuery.cpp",
-       "measure"
-      ]
-     ]
-    }
-   },
-   "must": [
-    "gi.bounce_series.epic",
-    "shadow.pane_lamp"
-   ]
-  },
-  {
-   "case": "COVERAGE-V4c a function the map never saw run that the base already held: the map is older than its caller - the table",
-   "file": "irisgl/engine/src/OgreRayQuery.cpp",
-   "old": "    const float bound = (b && !b->empty()) ? b->back() : 0.0f;\n",
-   "new": "    const float bound = (b && !b->empty()) ? b->back() * 1.0f : 0.0f;\n",
-   "coverage_map": {
-    "rows": {
-     "gi.area_follow": [
-      [
-       "irisgl/engine/src/OgreRayQuery.cpp",
-       "something_else"
-      ]
-     ]
-    }
-   },
-   "must": [
-    "gi.bounce_series.epic",
-    "rtreflect.emitters",
-    "shadow.pane_lamp"
-   ]
-  },
-  {
-   "case": "COVERAGE-V4d a NEW function (a new file-local function) is the table's: the map has no answer for it (the 2a audit's finding 2; red on 3e0b4df37: the map's empty answer)",
-   "file": "irisgl/engine/src/OgreRayQuery.cpp",
-   "old": "constexpr unsigned kCompactRing = 64u;\n",
-   "new": "constexpr unsigned kCompactRing = 64u;\nstatic int brandNewHelper(int x) {\n    return x + 1;\n}\n",
-   "coverage_map": {
-    "rows": {
-     "gi.area_follow": [
-      [
-       "irisgl/engine/src/OgreRayQuery.cpp",
-       "measure"
-      ]
-     ]
-    }
-   },
-   "must": [
-    "gi.bounce_series.epic",
-    "rtreflect.emitters",
-    "shadow.pane_lamp"
-   ]
-  },
-  {
-   "case": "COVERAGE-V4e a hunk inside a file-local STRUCT body (a GPU buffer layout) is the table's (the 2a audit's finding 3)",
-   "file": "irisgl/engine/src/OgreRayQuery.cpp",
-   "old": "struct PortalScanIn {\n    std::vector<uint32_t> words;\n",
-   "new": "struct PortalScanIn {\n    std::vector<uint32_t> words;\n    unsigned extraField;\n",
-   "coverage_map": {
-    "rows": {
-     "gi.area_follow": [
-      [
-       "irisgl/engine/src/OgreRayQuery.cpp",
-       "measure"
-      ]
-     ]
-    }
-   },
-   "must": [
-    "gi.bounce_series.epic",
-    "rtreflect.emitters",
-    "shadow.pane_lamp"
-   ]
-  },
-  {
-   "case": "COVERAGE-V4f a HEADER hunk's reach through an INCLUDER is the includer's table, the map notwithstanding (TE8, 2026-11-04): header_symbols reaches the engine sources that name the changed symbol at depth 1, whose OWN diff is empty - the map read 'a comment or whitespace change - no row' and dropped every row the includer's table reaches (RED ON 4236623b9: 28 rows lost on a toy map)",
-   "file": "irisgl/engine/src/EnginePrivate.h",
-   "old": "struct AreaVisParams {\n    float camPos[4] = {};\n",
-   "new": "struct AreaVisParams {\n    double camPos[4] = {};\n",
-   "coverage_map": {
-    "rows": {
-     "gi.area_follow": [
-      [
-       "irisgl/engine/src/OgreAreaVis.cpp",
-       "x"
-      ],
-      [
-       "irisgl/engine/src/OgreRayQuery.cpp",
-       "measure"
-      ]
-     ]
-    }
-   },
-   "must": [
-    "gi.inject_fold",
-    "engine.moving_sample",
-    "engine.hit_list_law"
    ],
    "must_not": []
   }

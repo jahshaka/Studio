@@ -8,7 +8,8 @@ links; two toy "rows" end as the engine fixtures do (on_exit -> std::_Exit), eac
   (2) with it, row A's map holds exactly the functions A ran (work, and spin for its lambda), row B's exactly B's (other) - a
       row's map is its own;
   (3) the map's files are paths under the source root (src/lib.cpp), never the tree's absolute spelling (CODING_RULES §6);
-  (4) `rows <map> src/lib.cpp other` answers B alone.
+  (4) `rows <map> src/lib.cpp other` answers B alone;
+  (10) the under-reach audit's judgement (coverage_map.under_reach, pure: the map is the audit's, never the selector's).
 usage: coverage_map_toy.py <source dir>"""
 import json
 import os
@@ -116,5 +117,27 @@ with tempfile.TemporaryDirectory() as t:
     law(nr.returncode == 64, "(7) collect without the pass's records is refused (only PASS rows are mapped)")
     subprocess.run([sys.executable, "-I", CM, "reset", b], capture_output=True)
     law(not os.path.exists(os.path.join(b, "coverage", "rows")), "(8) reset empties the prefixes before a pass (gcov merges)")
+# (10) THE UNDER-REACH AUDIT's JUDGEMENT (the landing audit's F3: the map is the audit's, never the selector's) - pure, on a
+#      toy map: a row that ran a changed function and the selection lacks is MISSED (with the function); a selected one is
+#      not; a warm-up boot that ran it names its class's rows; a namespace-scope line, a file the map never saw and a
+#      function no row ran are UNANSWERED (the table's alone); a row with no profile is UNMAPPED; the whole tier misses nothing
+import importlib.util  # noqa: E402
+_sp = importlib.util.spec_from_file_location("coverage_map_under_test", CM)
+_cm = importlib.util.module_from_spec(_sp)
+_sp.loader.exec_module(_cm)
+toy = {"rows": {"e.ran": [["e/A.cpp", "f"]], "e.sel": [["e/A.cpp", "f"]], "e.other": [["e/A.cpp", "g"]], "a.app": []},
+       "boots": {"app-off": [["e/A.cpp", "h"]]}}
+cls = {"e.ran": "engine", "e.sel": "engine", "e.other": "engine", "a.app": "app", "a.noprof": "app"}
+ur = getattr(_cm, "under_reach", None)
+got = ur(toy, {"e/A.cpp": {"f", "h", "nobody", None}, "e/B.cpp": {"k"}}, {"e.sel"}, cls) if ur else {}
+law(ur is not None and got["missed"] == {"e.ran": [("e/A.cpp", "f")], "a.app": [("e/A.cpp", "h")],
+                                         "a.noprof": [("e/A.cpp", "h")]}
+    and ("e/A.cpp", "a namespace-scope line") in got["unanswered"]
+    and ("e/A.cpp", "nobody(): no row or boot of the map ran it") in got["unanswered"]
+    and ("e/B.cpp", "the map holds nothing of this file") in got["unanswered"] and got["unmapped"] == ["a.noprof"]
+    and not ur(toy, {"e/A.cpp": {"f"}}, None, cls)["missed"],
+    "(10) the under-reach audit: e.ran missed through f(), e.sel selected, the app boot's h() names the app rows, the "
+    "namespace line / unseen file / unrun function unanswered, a.noprof unmapped, the whole tier misses nothing (%s)"
+    % ({k: got.get(k) for k in ("missed", "unmapped")} if got else "no under_reach"))
 print("tooling.coverage_map: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)

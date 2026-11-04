@@ -1331,92 +1331,14 @@ class Selection:
                 r = self.engine_table(p, tag)
                 notes.append(r or "no includer, no table line → nothing reached")
             return
-        if self.coverage_reach(p, tag, notes, depth):
-            return
+        # THE COVERAGE MAP IS NEVER A SELECTOR (stage 2's ruling, option 2; the landing audit's F3, 2026-11-04): an engine
+        # source takes the table here, whatever map exists - the map is read only by the on-demand under-reach audit,
+        # `scripts/coverage_map.py audit <map.json> <range>`, which prints the rows the table and the hand maps miss
         r = self.engine_table(p, tag)
         if r:
             notes.append(r)
         else:
             self._fallback(p, tag, notes)
-
-    def coverage_reach(self, p, tag, notes, depth=0):
-        """THE COVERAGE MAP's REACH (TEST-STREAMLINE-1 stage 2; coverage_map_doc): an engine SOURCE's hunks reach the rows whose
-        recorded run EXECUTED a function a hunk sits in (gate_graph.enclosing_functions; by its unqualified name: an overload
-        unions, an over-reach) - and, per row, today's table wherever the map cannot answer: a row with no map (registered
-        after it, or killed at its cap: no profile) is reached by the table as before; a warm-up boot that executed the function
-        (the producer of a cached artefact) reaches every row of its boot's class. The map does NOT answer - today's table, the
-        whole path - for a header (its symbols' rule), a medium (gcov sees no shader), a hunk at namespace scope, a function
-        the map has never seen that the base already held (the map is older than its caller), or no map at all. True when it
-        answered."""
-        doc = coverage_map_doc()
-        if not doc or not p.endswith(CXX_EXT) or p.endswith(HEADER_EXT) or not self.revs.base:
-            return False
-        if depth > 0:
-            # A SOURCE REACHED AT DEPTH 1 HAS NO DIFF OF ITS OWN (TE8, 2026-11-04; gate_selection COVERAGE-V4f / V4g): read as one,
-            # its empty diff was "a comment or whitespace change - no row", and every row its table reaches was dropped (28 on a
-            # toy map). Reached through a header's SYMBOL (header_symbols: it names a changed identifier), the map answers for
-            # the functions whose lines name that symbol, the source as it is now - the walk the core TUs' hand maps made, for
-            # every engine source; reached with no symbol (an includer of the header), it has no lines to read: the table
-            ids = self._symbol_ids.get(p)
-            if not ids:
-                return False
-            try:
-                text = open(os.path.join(ROOT, p), errors="replace").read()
-            except OSError:
-                return False
-            lines = gate_graph.strip_cxx(text)
-            outer = gate_graph._outer_scopes(lines)
-            rx = re.compile(r"\b(" + "|".join(re.escape(t) for t in sorted(ids)) + r")\b")
-            fns = {}
-            for k, ln in enumerate(lines):
-                if rx.search(ln):
-                    fns[outer[k]] = fns.get(outer[k], 0) + 1
-            if not fns:
-                return False
-        else:
-            a, b = self.revs.texts(p)
-            fns = gate_graph.enclosing_functions(a, b, gate_graph.hunks_of(self.revs.diff_u0(p)))
-            if not fns:
-                notes.append("the coverage map: a comment or whitespace change - no row")
-                return True
-        if None in fns:
-            return False
-        known = {fn for row in list(doc.get("rows", {}).values()) + list(doc.get("boots", {}).values()) for f, fn in row if f == p}
-        if not known:
-            return False                         # the map holds nothing of this file: the table
-        if not set(fns) <= known:
-            # THE MAP ANSWERS ONLY WHAT IT HOLDS (the 2a audit's findings 2 + 3, the lead's ruling): a NEW function (an override
-            # Ogre calls unchanged has no caller in the diff), a CLASS or STRUCT body (enclosing_functions names the class - a
-            # POD layout has no executed function of its name), a function the map never saw run - the table, never its empty
-            # answer
-            return False
-        tip = str(doc.get("tip") or "")
-        if re.fullmatch(r"[0-9a-f]{7,40}", tip) and not (self.revs.base and _git_ok_scope(["merge-base", "--is-ancestor", tip, self.revs.base])):
-            return False                         # a map not on the range's history (the 2a audit's finding 8): the table
-        want = {(p, fn) for fn in fns}
-        rows = {r for r, held in doc.get("rows", {}).items() if r in self.inv and want & {tuple(x) for x in held}}
-        boots = [bt for bt, held in doc.get("boots", {}).items() if want & {tuple(x) for x in held}]
-        for bt in boots:                         # the producer's consumers: every row of its boot's class
-            classes = ("app", "selftest", "vr") if bt.startswith("app") else ("engine",)
-            rows |= {r for r, t in self.inv.items() if t.get("jah_class") in classes}
-        # THE PER-ROW FALLBACK: what the table reaches among the rows the map has no profile of
-        keep = dict(self.selected)
-        tok = self._reach_begin()
-        try:
-            self.engine_table(p, f"{tag} (the table, for the rows with no map)")
-        finally:
-            cap, _ = self._reach_end(tok)
-        table_new = {r for r in cap if r not in keep}
-        for r in table_new - rows:
-            if r in doc.get("rows", {}):         # mapped: the map's answer stands - the table's add undone
-                self.selected.pop(r, None); self.whole.discard(r); self.arms.pop(r, None)
-        unmapped = sorted(r for r in table_new if r not in doc.get("rows", {}))
-        self.add(sorted(rows), f"{tag}: the coverage map (map {str(doc.get('tip'))[:9]}): a row that ran "
-                               + ", ".join(sorted(fns)))
-        notes.append(f"the coverage map: {len(rows)} row(s) ran {', '.join(sorted(fns))}"
-                     + (f" (+{len(boots)} warm-up boot(s): their class)" if boots else "")
-                     + (f"; the table for {len(unmapped)} row(s) with no map" if unmapped else ""))
-        return True
 
     def _fallback(self, p, tag, notes, why="no rule, no symbol, no graph owner"):
         """A PATH NOBODY OWNS (TESTING-SPEED-A item 1): recorded as a fallback (printed, and gate.selection refuses a lane
@@ -3288,31 +3210,6 @@ SHARED_HARNESS = re.compile(r"^(tests/support/(fresh_home\.sh|run_pool\.py|samep
 LAW_HELPER = re.compile(r"^tests/support/[^/]+\.(py|sh|js)$")
 # THE CLASSES (the harness paths a row runs through; read from its registration): the pick is per class
 HARNESS_CLASSES = ("app", "selftest", "vr", "engine", "jahlab", "cold", "seed", "pool", "cpu")
-
-
-def _git_ok_scope(args):
-    return subprocess.run(["git"] + args, cwd=ROOT, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode == 0
-
-
-_COVERAGE_DOC = {}
-
-
-def coverage_map_doc():
-    """THE COVERAGE MAP (TEST-STREAMLINE-1 stage 2; scripts/coverage_map.py collect writes it): JAH_COVERAGE_MAP names the
-    file, else <the records' directory>/../coverage/map.json (the lead repo's testing/coverage/); None when there is none or
-    it cannot be read - every engine path then takes the table, as before."""
-    try:
-        import gate_runlog
-        path = gate_runlog.coverage_map_path()
-    except Exception:
-        return None
-    if path not in _COVERAGE_DOC:
-        try:
-            doc = json.load(open(path))
-            _COVERAGE_DOC[path] = doc if isinstance(doc, dict) and doc.get("rows") else None
-        except (OSError, ValueError):
-            _COVERAGE_DOC[path] = None
-    return _COVERAGE_DOC[path]
 
 
 def harness_class(name, t, cold):
