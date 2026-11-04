@@ -6,8 +6,26 @@
 # rest re-founded, PHOTON-7 stage 6 commit 8: four rest rays a texel a frame, no frame cap - a view holds when every texel
 # has stopped by its standard error, about 100 frames on the glass):
 #   (e) a lamp step SMALLER than the one-ray sigma (8 -> 8.16) applied at rest, HELD (the door says it held before its
-#       shot), equals a session converged at the new light (held likewise): mean |change| <= 0.05 codes and at most
-#       0.01 % of the pixels more than a code apart; each session's hold inside its window with NO CAPPED TEXEL (the
+#       shot), equals a session converged at the new light (held likewise), BY TWO DERIVED LAWS (PHOTON-7-9A stage 0, the
+#       lead's ruling; the old "mean <= 0.05 codes, <= 0.01 % over a code" were picked rev-6 numbers, deleted - the
+#       mean is PRINTED with no bar: the GI's rest zone below is shared by every pixel that reads one cell, so the
+#       pixels' differences are correlated, not independent, and no bound on their mean follows):
+#       THE TERMS. (i) the GI: both holds draw their rest samples index for index (a texel's k-th rest sample is a
+#       function of its seed pixel and k; the step's GI change at the hits restarts the rest, rise_law.settle_start), so
+#       they differ by what the hits read - the GI's held state, path-dependent inside its RELATIVE rest zone z =
+#       2^-10 / (1 - lambda) = 0.98 % at lambda = 0.9 (DOCS/traps/ENGINE.md "AN fp16 CONTRACTION ORBITS"); a reflection
+#       F L moves by F dL <= z (F L), at most z max g = 0.0098 x 58.6 = 0.57 codes for every F and L (g(u) = u c'(u), the
+#       film-and-sRGB curve's log slope, its maximum at code 176: spikes/photon-7-9a/r5/slope.cpp, slope.txt - the plain
+#       "F c'(F L) <= c'(L)" FAILS in the shoulder, ratio 11.05). (ii) the stop: the sessions' counts may differ where
+#       their hits differ, and two means of one sequence at counts v1 < v2 differ with SD <= SE sqrt(1 - v1 / v2) <= the
+#       stop's SE, under one display code at the strictest reader: s = 1 code, a STANDARD ERROR - a statistical term,
+#       never a hard bound. (iii) one 8-bit rounding: + 1.
+#       LAW 1 (every pixel, family-wise over the row's N judged pixels): |step - ref| <= floor(0.57 + sqrt(2 ln N) s) + 1
+#       - the expected maximum of N Gaussian deviations of SD s is under s sqrt(2 ln N); N computed and printed.
+#       LAW 2 (the tail): the share of pixels over floor(0.57 + 3 s) + 1 = 4 codes is <= 0.27 %, the two-sided 3-sigma
+#       tail. WITHDRAWN: the earlier "every pixel <= 3 codes" (it treated the SE as a bound). Measured at irisgl a18a3c5f's
+#       build: mean 0.016, 20 px over 1 code, max 3 - green under both (a fact, not the bar's reason);
+#       each session's hold inside its window with NO CAPPED TEXEL (the
 #       door's refl_rest_capped 0: every live texel's displayed standard error under a code) and 0 codes after it, and
 #       NO RISE over the rest's own settle (16 frames past the rest's last start - the GI relights first, and its rows
 #       break the reflection's rest - to the hold: tests/support/rise_law.py, as rtreflect.still_after_stop's (a); each
@@ -97,9 +115,21 @@ elif all(os.path.exists(os.path.join(wd, "data", "shots", n + ".png")) for n in 
     a = Image.open(os.path.join(wd, "data", "shots", "e-step.png")).convert("RGB").tobytes()
     b = Image.open(os.path.join(wd, "data", "shots", "e-ref.png")).convert("RGB").tobytes()
     d = [max(abs(a[i] - b[i]), abs(a[i + 1] - b[i + 1]), abs(a[i + 2] - b[i + 2])) for i in range(0, len(a), 3)]
-    mean, over = sum(d) / len(d), sum(1 for v in d if v > 1)
-    print("(e) the held small lamp step vs the converged new light: mean %.4f, %d px > 1 code, max %d" % (mean, over, max(d)))
-    if mean > 0.05 or over > len(d) * 1e-4: fails.append("(e) mean <= 0.05 and <= 0.01 %% over a code: %.4f, %d px" % (mean, over))
+    import math
+    n = len(d)
+    zg, s = 2.0 ** -10 / (1.0 - 0.9) * 58.6, 1.0   # the GI zone's display term (0.57) and the stop's SD bound (1 code)
+    maxBound = int(math.floor(zg + math.sqrt(2.0 * math.log(n)) * s)) + 1   # LAW 1, family-wise over n pixels
+    tailCode = int(math.floor(zg + 3.0 * s)) + 1                            # LAW 2's threshold: 4 codes
+    tail = sum(1 for v in d if v > tailCode)
+    mean, over = sum(d) / n, sum(1 for v in d if v > 1)
+    print("(e) the held small lamp step vs the converged new light: mean %.4f (printed, no bar), %d px > 1 code, max %d"
+          % (mean, over, max(d)))
+    print("(e) LAW 1: N = %d judged pixels, the max <= floor(%.2f + sqrt(2 ln N) %.2f x s %.0f) + 1 = %d; LAW 2: %d px "
+          "(%.4f %%) over %d codes, bar 0.27 %%" % (n, zg, math.sqrt(2.0 * math.log(n)), s, maxBound, tail,
+                                                    100.0 * tail / n, tailCode))
+    if max(d) > maxBound: fails.append("(e) LAW 1, every pixel within %d codes (N = %d): max %d" % (maxBound, n, max(d)))
+    if tail > 0.0027 * n: fails.append("(e) LAW 2, <= 0.27 %% of the pixels over %d codes: %d (%.4f %%)"
+                                       % (tailCode, tail, 100.0 * tail / n))
 else:
     fails.append("(e) the step's or the reference's shot is missing")
 for f in fails: print("FAIL:", f)
