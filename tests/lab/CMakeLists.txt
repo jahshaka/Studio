@@ -53,6 +53,16 @@ add_test(NAME lab.envs_build COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/envs_build.s
 set_tests_properties(lab.envs_build PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(lab.envs_build)
 
+# lab.sky_verb (PHOTON-7-9A) — THE SKY VERB's grammar and value rule (test_lab_sky_verb.cpp says the law): `sky
+# brightness|rayleigh <v>` parses, its value a plain decimal in the document's 0..10, refused outside it, never clamped.
+# The parser compiles alone (src/lab/labcommands.cpp): a CPU code row.
+add_executable(test_lab_sky_verb test_lab_sky_verb.cpp ${CMAKE_SOURCE_DIR}/src/lab/labcommands.cpp)
+set_target_properties(test_lab_sky_verb PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_lab_sky_verb PRIVATE ${CMAKE_SOURCE_DIR}/src/lab)
+add_test(NAME lab.sky_verb COMMAND test_lab_sky_verb)
+set_tests_properties(lab.sky_verb PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(lab.sky_verb)
+
 # lab.env_expectation_printed (stage 2) — `jahlab --env-list` prints every environment's law and its closed-form
 # expectation at each dolly stop (22 / 88 / 177 / 354 m), every value a finite number. CPU only.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)

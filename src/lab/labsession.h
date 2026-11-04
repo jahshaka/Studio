@@ -93,6 +93,8 @@ private:
     /// THE STILLNESS DOOR's lab verb (PHOTON-2 stage 0; irisgl Stillness.h), the lamp step and the scripted move.
     bool stillness(const Command &c);
     bool lamp(const Command &c);
+    /// `sky brightness|rayleigh <v>` (PHOTON-7-9A): the realistic sky's dial in the document (parseSkyDial's rule).
+    bool sky(const Command &c);
     bool material(const Command &c);
     bool move(const Command &c);
     bool slide(const Command &c);
