@@ -109,8 +109,10 @@ set_tests_properties(vr.hit_list_stereo PROPERTIES
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_hit_home};JAHSHAKA_DATA_ROOT=${_vr_hit_home}/.local/share/Jahshaka")
 # THE FRAMES (R7): the script's pump, counted by it - 73 editor frames (10 + 63 pumps for 60 eye frames, read from the
-# first; PHOTON-7 stage 0's read R4, 2026-10-23, one run, :71)
-set_tests_properties(vr.hit_list_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 73)
+# first; PHOTON-7 stage 0's read R4, 2026-10-23, one run, :71) + PHOTON-7-9A's shape control: the pumps to one eye frame
+# under the arm reflect.shapeMismatch (1 when the runtime draws each pump, as the 63-for-60 read says) + 10 = 84 (estimated;
+# re-counted from its first run at the feature end)
+set_tests_properties(vr.hit_list_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 84)
 
 # vr.start_broken (archived: archive/tests/vr) (VR-START-1 case d): the active manifest's runtime library cannot be
 # loaded. The runner still owns a private runtime (unused); the manifest is ours.
