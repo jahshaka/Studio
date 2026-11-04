@@ -399,4 +399,19 @@ if(TARGET jahlab)
                 ${CMAKE_CURRENT_BINARY_DIR}/work/mirror_blend
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.mirror_blend PROPERTIES TIMEOUT 60 LABELS "engine")
+    # rtreflect.sky_invariant (PHOTON-7-9A, the lead's ruling R6) - A SEALED ROOM IS THE SAME UNDER ANY SKY: photon-sealed
+    # (photon-glass's fixture in the closed shell) under two skies (`sky brightness 4` + `sky rayleigh 3`) gives EXACT equal
+    # codes (sky_invariant.sh says the physics). ONE ROW PER PROOF: .first = a new scene's frames k1..k8 (+ the control:
+    # photon-glass, whose 1 m opening lets the sky in, must differ at k8; four sessions, 8 frames each), .hold = the hold
+    # (`rest 1200 held`, two sessions). Each session declares its route through the lab's `routes` verb. 960x540. FRAMES
+    # estimated (32; 2 x the hold ~500), re-counted from the first run at the feature end.
+    jah_gpu_row(rtreflect.sky_invariant.first CLASS engine FRAMES 32
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/sky_invariant.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/sky_invariant_first first
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    jah_gpu_row(rtreflect.sky_invariant.hold CLASS engine FRAMES 1004
+        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/sky_invariant.sh $<TARGET_FILE:jahlab>
+                ${CMAKE_CURRENT_BINARY_DIR}/work/sky_invariant_hold hold
+        WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+    set_tests_properties(rtreflect.sky_invariant.first rtreflect.sky_invariant.hold PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
