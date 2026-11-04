@@ -238,6 +238,20 @@ constexpr int kRouteProductFrames = 16;
 inline bool requireRoutes(View *v, Scene *s, const Routes &declared, const char *what = "the measured view", int frame = 0)
 {
     const Routes a = actualRoutes(v, s);
+    // THE TWO DOORS AGREE (PHOTON-7-9A, the lead's ruling: the chain's routes are PUBLISHED for a host - the lab's
+    // `routes` verb reads PublishedEngineFrame::ViewFrames' routeGather / routeIntegrate / routeReflect - and the
+    // fixtures' door above answers them): on the frame judged, the view's published row says what inspect says, or
+    // FAIL by name - every declaring fixture is this law's code test, so the two doors cannot drift.
+    {
+        const PublishedEngineFrame::ViewFrames row = v->published();
+        if (row.id != 0 && (row.routeGather != a.g || row.routeIntegrate != a.i || row.routeReflect != a.r)) {
+            std::fprintf(stderr, "FAIL: %s's PUBLISHED routes {gather %d integrate %d reflection %d} differ from the inspect "
+                                 "door's {%d %d %d} on the same frame (PHOTON-7-9A: the two doors must agree)\n", what,
+                         int(row.routeGather), int(row.routeIntegrate), int(row.routeReflect), int(a.g), int(a.i), int(a.r));
+            std::fflush(nullptr);
+            std::_Exit(1);
+        }
+    }
     const bool chainOk = a.g == declared.g && a.i == declared.i && a.r == declared.r && a.p == declared.p;
     const bool productsOk = (!declared.f || a.f) && (!declared.c || a.c) && (!declared.s || a.s);
     if (chainOk && !productsOk && frame > 0 && frame < kRouteProductFrames) return false;
