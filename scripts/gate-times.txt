@@ -63,12 +63,14 @@ distortion.engine_asan 9.51  quiet n=44
 document.characterisation 0.08  quiet n=47
 drawers.db 0.00  ship 3a0422b4e (2026-10-13)
 editor.drag_latency 15.71  decision 65's three shapes, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
+engine.chain_reflect_sources 0.01  solo, CPU (PHOTON-7-9A, 2026-11-04)
 engine.error_door 3.22  stage 5's fix round, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.gpuscene_identity 2.16  quiet n=3 (ENGINE-UPGRADE-U4 master check, 2026-10-18, load 2.4-3.4)
 engine.message_order 0.84  the fix round's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 engine.particles_pfx2_asan 11.59  quiet n=41
 engine.planar_asan 10.52  quiet n=39
 engine.lod_rule_parity 4.78  solo, the card lock held, :71 (ATOM-6 stage 2c, 2026-10-21: the exact rule's one arm + the empty top group)
+engine.reflect_chain_shape 0.01  solo, CPU (PHOTON-7-9A, 2026-11-04)
 export.web 0.08  quiet n=45
 frame.drag_latency 1.20  stage 5's rows, the card lock held (ENGINE-UPGRADE-U3, 2026-10-16)
 frame.streaming_picture 1.67  solo, the card lock held, :71, registered COLD, on a per-exe driver cache this tree never warmed (ORPHAN-REDS-1 item 1, 2026-11-03: no ray pipeline built - the tier's open starts none, no view of the row needs one; it TIMED OUT at 60 s since 10-29 in the teardown's join of three unneeded cold builds) - was 2.28 loaded (HARNESS-4 #119)
