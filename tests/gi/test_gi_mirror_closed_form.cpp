@@ -310,7 +310,7 @@ int main(int, char **)
     bool ok[2] = { false, false };
     Skin skin[2];
     for (int room = 0; room < 2; ++room) {
-        View *in = e->createOffscreenView("mirror_in", 128, 128, Colour(0, 0, 0), OffscreenContract::StillPicture);
+        View *in = e->createOffscreenView("mirror_in", 128, 128, Colour(0, 0, 0));
         Scene *s = e->createScene("mirror_closed_form");
         if (!in || !s) { std::printf("FAIL: view/scene\n"); return 1; }
         in->setScene(s);

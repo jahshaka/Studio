@@ -91,7 +91,7 @@ int main(int argc, char **argv) {
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->submitFrame(FrameInput::delta(1.0f / 60.0f));
     ++frames;
-    View *view = engine->createOffscreenView("sky_emits", kSize, kSize, Colour(0, 0, 0), OffscreenContract::StillPicture);
+    View *view = engine->createOffscreenView("sky_emits", kSize, kSize, Colour(0, 0, 0));
     Scene *escene = engine->createScene("sky_emits");
     if (!view || !escene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(escene);

@@ -1008,10 +1008,6 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
     EngineViewWidget::showEvent(e);
     // The native window exists now: bind a View to it, then the engine scene.
     if (!view() && mEngine) {
-        // THE EDITOR'S PICTURE: an offscreen fallback of the viewport still
-        // gathers (it drives the scene's GI, and its pictures are the
-        // screenshot verbs', taken at rest).
-        setFallbackContract(jahshaka::engine::OffscreenContract::StillPicture);
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f));
     }
@@ -3565,9 +3561,9 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     if (!mEngine || !mEngineScene || width <= 0 || height <= 0) return QImage();
     View *shot = mEngine->createOffscreenView("screenshot-" + std::to_string(++mViewSerial),
                                              unsigned(width), unsigned(height),
-                                             Colour(0.10f, 0.11f, 0.14f), jahshaka::engine::OffscreenContract::StillPicture);
+                                             Colour(0.10f, 0.11f, 0.14f));
     if (!shot) return QImage();
-    // A STILL PICTURE (View::setOffscreenContract): it gathers, and the settle
+    // A STILL PICTURE: it gathers like every view of its scene, and the settle
     // below waits for giAtRest before the readback.
     // THE USER'S PICTURE OPENS NEITHER HELPER CHANNEL (VR-4-FIX finding 2).
     //
@@ -3751,7 +3747,7 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     // texture animation stay at the instant the script asked for; the document's
     // clock is not stepped at all) and handed back before the shot's own frames.
     // ...AND A GATHERING SCENE SETTLES WHOEVER ASKED (the fix round): the
-    // shot view is a StillPicture, so a shot the script did not ask to settle
+    // shot view is a still picture, so a shot the script did not ask to settle
     // (the Screenshot button, a preview tile) still waits for its own history
     // — at the verb's cap — rather than photographing the raw estimate.
     {
@@ -3843,9 +3839,8 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
 // measurement so the file does not open on a fade — and nothing is ever settled
 // per frame: a settle renders frames of this scene outside the driver's tick and
 // would step every temporal history the viewport shares with it (CLOSE-SHOT-2's
-// app.capture_steps lesson). It is a StillPicture view: it gathers where the
-// scene gathers, exactly like the photo, rather than taking the Live contract's
-// field-only answer — the recording is the picture the photo would be.
+// app.capture_steps lesson). It gathers where the scene gathers, exactly like the
+// photo — the recording is the picture the photo would be.
 jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, unsigned height,
                                                                bool helpers, RecordingHooks hooks,
                                                                QString *why)
@@ -4958,11 +4953,11 @@ IEditorViewport *createEngineSceneViewport(const std::shared_ptr<Engine> &engine
 }
 
 // THE HEADLESS HOST's VIEWPORT (TEST-STREAMLINE-1 stage 3a): THIS class over an offscreen View by declaration - never a
-// second implementation of the editor's engine work. THE CONTRACT is PresentedStandIn (item 2b, Types.h): the view
-// STANDS IN FOR the presented editor view - every engine branch that tells a presented view from an offscreen picture
+// second implementation of the editor's engine work. ITS ROLE is the PRESENTED STAND-IN (item 2b,
+// Engine::createPresentedStandInView, born one): the view STANDS IN FOR the presented editor view - every engine branch that tells a presented view from an offscreen picture
 // reads View::presentsAsWindow and takes the window's route (the post chain, the overlay, the PiP, the LOD band, the
 // photon view's present, the GI driver's on-screen pass, the reflection's fold, the frame monitor's on-screen frame,
-// the mirror's sample count) - and it gathers as a window does (OgreView.cpp's contractAllows: it presents). A test on
+// the mirror's sample count) - and it gathers as every view of a ray scene does (detail::chainGiRoutes). A test on
 // the host guards the picture a user sees; only the target is a texture.
 IEditorViewport *createOffscreenEditorViewport(const std::shared_ptr<Engine> &engine,
                                                EngineRenderDriver *driver, QWidget *parent, QString &error)
@@ -4970,7 +4965,7 @@ IEditorViewport *createOffscreenEditorViewport(const std::shared_ptr<Engine> &en
     error = EngineViewWidget::viewRefusal(engine.get());
     if (!error.isEmpty()) return nullptr;
     auto *viewport = new EngineSceneViewport(engine, driver, parent);
-    viewport->setOffscreen(jahshaka::engine::OffscreenContract::PresentedStandIn);
+    viewport->setPresentedStandIn();
     return viewport;
 }
 

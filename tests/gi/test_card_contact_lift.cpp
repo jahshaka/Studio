@@ -57,7 +57,7 @@ int main(int, char **) {
     e->setRayTracing(true);
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
-    View *view = e->createOffscreenView("contact_lift", 128, 128, Colour(0, 0, 0), OffscreenContract::StillPicture);
+    View *view = e->createOffscreenView("contact_lift", 128, 128, Colour(0, 0, 0));
     Scene *s = e->createScene("contact_lift");
     if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(s);

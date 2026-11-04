@@ -64,7 +64,7 @@ int main()
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
 
-    View *v = e->createOffscreenView("area_follow", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
+    View *v = e->createOffscreenView("area_follow", 256, 256, Colour(0, 0, 0));
     Scene *s = e->createScene("area_follow");
     if (!v || !s) { std::printf("FAIL: the view/scene\n"); return 1; }
     v->setScene(s);

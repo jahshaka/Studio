@@ -490,9 +490,11 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // and is no worse off than the old code.
     const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
-                                                 Colour(0.0f, 0.0f, 0.0f, 1.0f), OffscreenContract::Live);
-    // LIVE (View::setOffscreenContract): its frames are never read as a picture
-    // (its scene's GI below is there to compile the compute set, not to be seen).
+                                                 Colour(0.0f, 0.0f, 0.0f, 1.0f));
+    // Its frames are never read as a picture (its scene's GI below is there to
+    // compile the set, not to be seen). On a ray machine it GATHERS, as every view
+    // of a ray scene does (one producer, ROUTE-ROWS-1): its frames build the
+    // gather's engine-wide pipelines and its PBS permutations, not the integrate's.
     // PRIMARY, NOT UTILITY, AND THIS IS THE WHOLE OF PHASE P4(a)
     // (SPECS/THREADING_ADOPTION_SPEC.md §3.4a, interaction I-2).
     //

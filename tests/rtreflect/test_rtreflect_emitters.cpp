@@ -74,8 +74,7 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
-    View *view = e->createOffscreenView("emitters", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f),
-                                        jahshaka::engine::OffscreenContract::Live);
+    View *view = e->createOffscreenView("emitters", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f));
     if (!(e->rayQueryAvailable() && e->rayTracing())) {
         std::printf("ok: no ray queries on this machine - the row is about the ray tier\n");
         return 0;

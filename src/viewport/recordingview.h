@@ -4,7 +4,7 @@
 // THE RECORDER'S VIEW, MADE IN ONE PLACE (VIDEO-REC-1's view; VIDEO-REC-2 shares it).
 //
 // The video recorder draws a SEPARATE offscreen view of the editor's scene
-// (VIDEO_CAPTURE_SPEC §10.2): a StillPicture view with its own full chain, the
+// (VIDEO_CAPTURE_SPEC §10.2): an offscreen view with its own full chain, the
 // helper channel per the switch, and the NV12 readback on. Two callers build it
 // and they must build the SAME view:
 //
@@ -33,7 +33,7 @@ namespace recordingview {
 constexpr unsigned kWidth = 1920, kHeight = 1080;
 
 /// Creates the recording view of `scene`: `width` x `height` offscreen,
-/// StillPicture, the editor's helpers drawn only when `helpers`, the NV12
+/// gathering as its scene does, the editor's helpers drawn only when `helpers`, the NV12
 /// readback on. Null with `why` set when the engine refuses any step (the view
 /// is then destroyed again).
 jahshaka::engine::View *create(jahshaka::engine::Engine &engine, jahshaka::engine::Scene *scene,

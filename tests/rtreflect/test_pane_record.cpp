@@ -66,8 +66,7 @@ int main()
     Engine *e = engine.get();
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     int frames = 1;
-    View *view = e->createOffscreenView("panerecord", kWidth, kHeight, Colour(0.30f, 0.40f, 0.55f),
-                                        OffscreenContract::Live);
+    View *view = e->createOffscreenView("panerecord", kWidth, kHeight, Colour(0.30f, 0.40f, 0.55f));
     Scene *s = e->createScene("panerecord");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
     view->setScene(s);

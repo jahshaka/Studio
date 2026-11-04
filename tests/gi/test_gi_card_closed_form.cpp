@@ -83,7 +83,7 @@ int main(int, char **)
     bool inner = true, outer = true;
     for (const int rays : { 16, 128 }) {
         e->setArm("gi.truthRays", rays == 16 ? 0.0 : double(rays));
-        View *in = e->createOffscreenView("closed_in", 128, 128, Colour(0, 0, 0), OffscreenContract::StillPicture);
+        View *in = e->createOffscreenView("closed_in", 128, 128, Colour(0, 0, 0));
         Scene *s = e->createScene("closed_form");
         if (!in || !s) { std::printf("FAIL: view/scene\n"); return 1; }
         in->setScene(s);

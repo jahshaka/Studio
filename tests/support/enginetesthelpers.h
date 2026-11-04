@@ -178,9 +178,9 @@ inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides 
 #endif
 
 /// THE ROW DECLARES THE ROUTE IT MEASURES (URGENT #146, 2026-11-02). BISTRO-REST-1's rows gi.feedback_closed_box.room /
-/// .lamp.* were written, run, cross-run and reasoned about as "the screen-probe gather", but their view was
-/// OffscreenContract::Live: an offscreen view gathers only under StillPicture (OgreView.cpp, chainDesc: d.probeGather /
-/// d.screenIntegrate), so they measured the no-ray route's SCREEN INTEGRATE. They also ran with GI PAUSED
+/// .lamp.* were written, run, cross-run and reasoned about as "the screen-probe gather", but their view was a Live
+/// offscreen view (a contract ROUTE-ROWS-1 deleted: every view of a ray scene gathers since, detail::chainGiRoutes), so
+/// they measured the no-ray route's SCREEN INTEGRATE. They also ran with GI PAUSED
 /// (GiParams::updateBudget = 0), under which the field's dispatch counter reads 0 by construction. The row's output
 /// never said either. So a fixture that measures GI or a reflection DECLARES what its measured view runs:
 ///     enginetest::declareRoutes(view, scene, enginetest::Routes().gather().field().store());

@@ -36,6 +36,7 @@ atom.hidden_cut 2.82  solo, the card lock held, :71 (re-registered by ATOM-8 sta
 atom.pass_table 42.85  solo, the card lock held, :77, cold shader cache after the fork pin bump (BUGS-1 item 1, 2026-10-19)
 atom.pass_table.fresh_home 0.03  solo (BUGS-1 item 1, 2026-10-19)
 engine.hit_list_law 0.01  solo, CPU, ctest, no display, nice 10 (URGENT #157, 2026-11-03: the reflection rest's record allowance as a pure function - the target's creation capacity, never the grown list's; a smaller list caps it; the base's rule fed as a negative control)
+engine.chain_gi_routes 0.01  solo, CPU, ctest, no display, nice 10 (ROUTE-ROWS-1 stage 0, 2026-11-04: the chain's diffuse-GI route as a pure function over its 40-combination truth table - one producer per view, the view's kind no input; the deleted Live contract's rule fed as a negative control)
 engine.moving_sample 0.01  solo, CPU, ctest, no display, nice 10 (TEST-STREAMLINE-1 3c, 2026-11-03: the moving sample index's one rule as a pure function - a bind and a size change restart it, a cut and a held frame keep it)
 audio.peaks 0.80  ship 3a0422b4e (2026-10-13)
 avatar.responsive 31.65  solo, :72, WARM (URGENT #48 follow-up 85c6b09ee: fresh_home --warm, its own data-root wipe deleted; 2026-10-24). Cold it was 48.07 (quiet n=41) and over 60 s on the photon-7r merge's tree

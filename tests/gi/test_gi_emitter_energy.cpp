@@ -97,7 +97,7 @@ int main(int, char **)
     double ratio[2] = { -1.0, -1.0 };
     for (int k = 0; k < 2; ++k) {
         const float E = arms[k];
-        View *view = e->createOffscreenView("emitter_energy", 64, 64, Colour(0, 0, 0), OffscreenContract::Live);
+        View *view = e->createOffscreenView("emitter_energy", 64, 64, Colour(0, 0, 0));
         Scene *s = e->createScene("emitter_energy");
         if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
         view->setScene(s);

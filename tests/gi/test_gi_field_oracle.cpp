@@ -176,7 +176,7 @@ int main(int argc, char **argv)
     GiParams off;
     off.mode = GiMode::Off;
     if (doStep) {
-        View *view = e->createOffscreenView("field_oracle", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
+        View *view = e->createOffscreenView("field_oracle", 128, 128, Colour(0, 0, 0));
         Scene *scene = e->createScene("field_oracle");
         if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
         view->setScene(scene);
@@ -306,7 +306,7 @@ int main(int argc, char **argv)
 
     if (doMarks) {
         // (3) TWO SEALED ROOMS 2 m APART INSIDE THE FIELD, the first's lamp stepped
-        View *v2 = e->createOffscreenView("field_oracle_rooms", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
+        View *v2 = e->createOffscreenView("field_oracle_rooms", 128, 128, Colour(0, 0, 0));
         Scene *s2 = e->createScene("field_oracle_rooms");
         if (!v2 || !s2) { std::printf("FAIL: the rooms' view/scene\n"); return 1; }
         v2->setScene(s2);
@@ -475,7 +475,7 @@ int main(int argc, char **argv)
         run(1);
 
         // (4) THE OPEN KEEP
-        View *v3 = e->createOffscreenView("field_oracle_open", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
+        View *v3 = e->createOffscreenView("field_oracle_open", 128, 128, Colour(0, 0, 0));
         Scene *s3 = e->createScene("field_oracle_open");
         if (!v3 || !s3) { std::printf("FAIL: the open view/scene\n"); return 1; }
         v3->setScene(s3);
@@ -577,7 +577,7 @@ int main(int argc, char **argv)
     if (doShells) {
         // (5) THE PROBES OUTSIDE CASCADE 0
         {
-            View *v5 = e->createOffscreenView("field_oracle_c1", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
+            View *v5 = e->createOffscreenView("field_oracle_c1", 128, 128, Colour(0, 0, 0));
             Scene *s5 = e->createScene("field_oracle_c1");
             if (!v5 || !s5) { std::printf("FAIL: the c1 view/scene\n"); return 1; }
             v5->setScene(s5);
@@ -666,7 +666,7 @@ int main(int argc, char **argv)
 
         // (6) THE CONE SHELLS: one probe set, two placements of cascade 0
         {
-            View *v6 = e->createOffscreenView("field_oracle_shells", 128, 128, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
+            View *v6 = e->createOffscreenView("field_oracle_shells", 128, 128, Colour(0, 0, 0));
             Scene *s6 = e->createScene("field_oracle_shells");
             if (!v6 || !s6) { std::printf("FAIL: the shells view/scene\n"); return 1; }
             v6->setScene(s6);
@@ -769,7 +769,7 @@ int main(int argc, char **argv)
     }
     if (doPicture) {
         // (6c) THE PICTURE AT CASCADE 0's TWO REACHABLE PLACEMENTS, THE CAMERA STILL
-        View *v7 = e->createOffscreenView("cache_level_picture", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
+        View *v7 = e->createOffscreenView("cache_level_picture", 256, 256, Colour(0, 0, 0));
         Scene *s7 = e->createScene("cache_level_picture");
         if (!v7 || !s7) { std::printf("FAIL: the picture's view/scene\n"); return 1; }
         v7->setScene(s7);

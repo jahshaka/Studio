@@ -271,8 +271,7 @@ int main(int argc, char **argv)
     // is Live, so it runs the SCREEN INTEGRATE (the field and the cards are off there) - declared as such below, the
     // truth today; re-pointing them to the gather is ROUTE-ROWS-1's (they join its 42 integrate rows).
     const bool picturePart = scene == "lamp" || room;
-    View *view = e->createOffscreenView("feedback", room ? 960 : 64, room ? 540 : 64, Colour(0, 0, 0),
-                                        picturePart ? OffscreenContract::StillPicture : OffscreenContract::Live);
+    View *view = e->createOffscreenView("feedback", room ? 960 : 64, room ? 540 : 64, Colour(0, 0, 0));
     Scene *s = e->createScene("feedback");
     if (!view || !s) { std::printf("FAIL: the view and the scene\n"); return 1; }
     view->setScene(s);

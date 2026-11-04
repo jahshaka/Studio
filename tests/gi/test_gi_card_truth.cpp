@@ -235,8 +235,7 @@ int main(int, char **)
         const bool card = (arm & 1) == 0;
         const int rays = arm < 2 ? 16 : 128;
         e->setArm("gi.truthRays", rays == 16 ? 0.0 : double(rays));
-        View *view = e->createOffscreenView(card ? "card_truth_card" : "card_truth_cascades", 192, 192, Colour(0, 0, 0),
-                                            OffscreenContract::StillPicture);
+        View *view = e->createOffscreenView(card ? "card_truth_card" : "card_truth_cascades", 192, 192, Colour(0, 0, 0));
         Scene *s = e->createScene(card ? "card_truth_card" : "card_truth_cascades");
         if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
         view->setScene(s);

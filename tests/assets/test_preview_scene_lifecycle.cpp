@@ -94,7 +94,7 @@ public:
     {
         auto e = engine();
         if (!e) return false;
-        View *own = e->createOffscreenView("probe-own", unsigned(w), unsigned(h), Colour(0, 0, 0, 1), jahshaka::engine::OffscreenContract::Live);
+        View *own = e->createOffscreenView("probe-own", unsigned(w), unsigned(h), Colour(0, 0, 0, 1));
         if (!own) return false;
         own->setEnabled(false);
         adoptView(own);
@@ -167,12 +167,12 @@ int main(int argc, char **argv)
 
     // The editor's viewport exists first in the app: a preview is never the
     // engine's first render target.
-    View *primary = engine->createOffscreenView("primary", 64, 64, Colour(0, 0, 0, 1), jahshaka::engine::OffscreenContract::Live);
+    View *primary = engine->createOffscreenView("primary", 64, 64, Colour(0, 0, 0, 1));
     Scene *primaryScene = engine->createScene("primary");
     primary->setScene(primaryScene);
 
-    View *viewA = engine->createOffscreenView("probe-a", 96, 96, Colour(0, 0, 0.5f, 1), jahshaka::engine::OffscreenContract::Live);
-    View *viewB = engine->createOffscreenView("probe-b", 96, 96, Colour(0, 0.5f, 0, 1), jahshaka::engine::OffscreenContract::Live);
+    View *viewA = engine->createOffscreenView("probe-a", 96, 96, Colour(0, 0, 0.5f, 1));
+    View *viewB = engine->createOffscreenView("probe-b", 96, 96, Colour(0, 0.5f, 0, 1));
     CHECK(viewA && viewB, "two offscreen views for the probe");
     if (!viewA || !viewB) return 1;
 
@@ -253,7 +253,7 @@ int main(int argc, char **argv)
     // crash. Under ASan it is a use-after-free as well.
     {
         ProbeScene probe(engine);
-        View *torn = engine->createOffscreenView("probe-torn", 96, 96, Colour(0, 0, 0.5f, 1), jahshaka::engine::OffscreenContract::Live);
+        View *torn = engine->createOffscreenView("probe-torn", 96, 96, Colour(0, 0, 0.5f, 1));
         CHECK(torn != nullptr, "a View to tear away");
         CHECK(probe.attach(torn), "the preview attaches to its widget's View");
         Scene *const kept = probe.engineScene();
@@ -264,7 +264,7 @@ int main(int argc, char **argv)
         CHECK(probe.engineScene() == kept, "...and keeps the Scene and its mirror");
         engine->destroyView(torn);
 
-        View *rebuilt = engine->createOffscreenView("probe-rebuilt", 96, 96, Colour(0, 0.5f, 0, 1), jahshaka::engine::OffscreenContract::Live);
+        View *rebuilt = engine->createOffscreenView("probe-rebuilt", 96, 96, Colour(0, 0.5f, 0, 1));
         CHECK(rebuilt != nullptr, "the widget's new View exists");
         CHECK(probe.attach(rebuilt), "the preview re-attaches to the new View");
         CHECK(probe.engineScene() == kept, "...the same Scene, never rebuilt");

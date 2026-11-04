@@ -1,6 +1,5 @@
 // gi.screen_bind (PHOTON-7 stage 7, the lead's two risk fixes) - THE NO-RAY SCREEN PASSES' SHARED JOBS BIND NOTHING
-// STALE, A SCREENSHOT LEAVES THE LIVE VIEW'S AREA HISTORY ALONE, A VIEW HAS ONE AREA PRODUCER, AND A DECLINED FRAME
-// DRAWS NO SKY THROUGH WALLS.
+// STALE, A SCREENSHOT LEAVES THE LIVE VIEW'S AREA HISTORY ALONE, AND A DECLINED FRAME DRAWS NO SKY THROUGH WALLS.
 //
 // The no-ray route's three compute passes (Jahshaka/ScreenIntegrate, ScreenAreaVis, ScreenAreaVisResolve) run SHARED
 // jobs (CompositorPassCompute finds them by name, uncloned): every view's ScreenGiListener sets their bindings in front
@@ -26,9 +25,8 @@
 //   (3) THE SCREENSHOT AT ANOTHER SIZE (EngineSceneViewport::takeScreenshot's route: a still picture of S1 of its own,
 //       192 x 128, the live view's camera): while it renders and after it is destroyed, the live view's frames are
 //       bit-identical to its twin's.
-//   (4) ONE AREA PRODUCER A VIEW: a Live view of a scene that traces rays (its chain does not gather: the no-ray
-//       route) - the scene's area visibility is the no-ray producer's alone, its residency the producer's own (before
-//       the fix the ray tier traced and registered its own visibility for the same view, both paid every frame).
+//   (4) DELETED (ROUTE-ROWS-1 stage 0): its subject, a Live offscreen view of a ray scene on the no-ray route, left with
+//       the Live contract - every view of a ray scene gathers (one producer).
 //   (5) A DISPATCH THAT NEVER RAN (the door gi.screenShaderCold: the three jobs' permutations built in the background,
 //       the views compiling in the background), mid-rest: a deferred trace neither ages nor flips the area history -
 //       the first frame that traces again is one rest frame past the last that did; a new view whose integrate still builds reads its targets as the
@@ -101,7 +99,7 @@ Scene *buildScene(Engine *e, const char *name) {
     return s->setGlobalIllumination(gi) ? s : nullptr;
 }
 View *stillView(Engine *e, const char *name, unsigned w, unsigned h, Scene *s) {
-    View *v = e->createOffscreenView(name, w, h, Colour(0, 0, 0), OffscreenContract::StillPicture);
+    View *v = e->createOffscreenView(name, w, h, Colour(0, 0, 0));
     if (!v) return nullptr;
     PostFxDesc fx;
     fx.allowOffscreen = true;
@@ -394,41 +392,6 @@ int main()
         CHECK(deferred >= 1u && after >= 1u, "(5) premise: the door's permutation built in the background (frames deferred)");
         CHECK(aged == 0u, "(5) a deferred trace neither ages nor flips the area history (the frame given back)");
         CHECK(finite, "(5) a new view whose integrate is still building reads its seeded (zero) targets: every pixel finite");
-    }
-
-    // ---- (4) ONE AREA PRODUCER A VIEW (the stage 7 read's F1) ----
-    {
-        e->setRayTracing(true);
-        Scene *s3 = buildScene(e, "screen_bind_rays");
-        if (!s3) { std::printf("FAIL: the ray scene\n"); return 1; }
-        s3->setRayTracing(RayTracingMode::On);
-        View *lv = e->createOffscreenView("screen_bind_live_rays", 256, 256, Colour(0, 0, 0), OffscreenContract::Live);
-        if (!lv) { std::printf("FAIL: the live view\n"); return 1; }
-        PostFxDesc fx;
-        fx.allowOffscreen = true;
-        fx.ssr = 1;
-        lv->setPostFx(fx);
-        lv->setScene(s3);
-        enginetest::testCameraLookAt(lv, eye, at);
-        e->waitForAsyncShaders();
-        run(40);
-        const AreaVisStatus st = s3->published().areaVis;
-        // the no-ray producer's own residency (OgreAreaVis.cpp: the sums' pairs, the surface words' pair and the rest
-        // means at the trace's size, the product at the target's) - the ray tier's images on top of it were a second
-        // producer's
-        const unsigned long long own = (unsigned long long)st.traceW * st.traceH * (6u * 16u + 2u * 16u) +
-                                       (unsigned long long)st.targetW * st.targetH * 8u;
-        std::printf("   (4) a Live view of a ray scene: running %d, trace %ux%u of %ux%u, %llu B resident (the no-ray "
-                    "producer's own %llu B)%s%s\n", int(st.running), st.traceW, st.traceH, st.targetW, st.targetH,
-                    st.vramBytes, own, st.reason.empty() ? "" : " - ", st.reason.c_str());
-        CHECK(st.running && st.targetW == 256u && st.vramBytes == own,
-              "(4) a Live view of a ray scene (a chain that does not gather: the no-ray route) runs ONE area producer, "
-              "the no-ray route's - the ray tier's trace yields");
-        lv->setScene(nullptr);
-        e->destroyView(lv);
-        e->destroyScene(s3);
-        e->setRayTracing(false);
-        run(2);
     }
 
     // ---- (6) A FRAME THE GATHER DECLINES DRAWS NO SKY THROUGH THE WALLS (the stage 7 read's F3) ----

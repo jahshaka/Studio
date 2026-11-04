@@ -41,7 +41,7 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    View *view = e->createOffscreenView("share", 64, 64, Colour(0, 0, 0), OffscreenContract::Live);
+    View *view = e->createOffscreenView("share", 64, 64, Colour(0, 0, 0));
     Scene *scene = e->createScene("share");
     view->setScene(scene);
     enginetest::frames(e, 2);   // (the ray tier opens in a frame)

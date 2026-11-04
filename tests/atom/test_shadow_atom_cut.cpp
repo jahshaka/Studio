@@ -228,7 +228,7 @@ static void buildWorld(World &w, bool dense, const float *gap = nullptr)
 
 static bool makeWorld(World &w, const char *name, bool dense, const float *gap = nullptr)
 {
-    w.view = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
+    w.view = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
     w.scene = gE->createScene(name);
     if (!w.view || !w.scene) return false;
     buildWorld(w, dense, gap);
@@ -238,7 +238,6 @@ static bool makeWorld(World &w, const char *name, bool dense, const float *gap =
         w.scene->setAtomDrawEnabled(false);
         w.scene->setLodBias(0.0f);
     }
-    w.view->setOffscreenContract(OffscreenContract::StillPicture);
     w.view->setScene(w.scene);
     w.view->setShadows(true);
     PostFxDesc fx;
@@ -721,7 +720,7 @@ static int firstFrameMain()
     std::vector<View *> more;
     for (int i = 1; i < 8; ++i) {
         const std::string name = "uses-" + std::to_string(i);
-        View *v = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0), OffscreenContract::StillPicture);
+        View *v = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
         if (!v) { std::printf("FAIL: view %d\n", i); return 1; }
         v->setScene(w.scene);
         v->setShadows(true);
@@ -1392,7 +1391,7 @@ enum class RouteExtra { None, Lamps, Mirror };
 
 bool makeRouteWorld(RouteWorld &w, const char *name, bool split, RouteExtra extra = RouteExtra::None)
 {
-    w.view = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
+    w.view = gE->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
     w.scene = gE->createScene(name);
     if (!w.view || !w.scene) return false;
     Scene *s = w.scene;
@@ -1486,7 +1485,6 @@ bool makeRouteWorld(RouteWorld &w, const char *name, bool split, RouteExtra extr
         if (!s->setPlanarReflections(pr) || !s->setNodePlanarReflector(mirror, true)) return false;
     }
     if (!split) s->setAtomDrawEnabled(false);
-    w.view->setOffscreenContract(OffscreenContract::StillPicture);
     w.view->setScene(s);
     w.view->setShadows(true);
     PostFxDesc fx;

@@ -138,7 +138,8 @@ OGRE_ENGINE_FUNCTIONS = {
     **{f: _ALL for f in ("init", "renderOneFrame", "runFrame", "fillPublished", "drainFrameInput", "submitFrame",
                          "applySceneStream", "syncHostViews", "noteDevice", "deviceRayQuery", "appliedFrameDelta",
                          "pendingGiConfiguration", "closeRenderFrame", "frameCloseStep", "createView",
-                         "createOffscreenView", "createOffscreen", "createStereoPairView", "destroyView", "createScene",
+                         "createOffscreenView", "createPresentedStandInView", "createOffscreenTarget", "createOffscreen",
+                         "createStereoPairView", "destroyView", "createScene",
                          "destroyScene", "drainPendingSceneDestroys", "scenesFeedingEnabledViews", "updateScene",
                          "advanceResources", "hasEnabledViews", "listViews", "setVsync", "ensureHlms",
                          "registerCommonMaterials", "tellEveryHlms", "create", "OgreEngine", "~OgreEngine",
@@ -252,7 +253,7 @@ OGRE_VIEW_FUNCTIONS = {
                           "rebuildWorkspaceDef", "rebuildDetachedWorkspaceDef", "destroy", "createRtt", "passPreExecute",
                           "workspacePreUpdate", "workspacePosUpdate", "syncGlobalsListener", "applyPendingResize",
                           "applyPendingResizeImpl", "resize", "rebuildRtt", "stallDevice", "setEnabled", "applyEnabled", "applyWorkspacesEnabled", "setSessionCovers", "setCamera",
-                          "setCameraNode", "sanitizeSamples", "setSampleCount", "setOffscreenContract", "setBackground", "applyBackground",
+                          "setCameraNode", "sanitizeSamples", "setSampleCount", "setBackground", "applyBackground",
                           "readPixels", "readPixelsHdr",
                           # U3 stage 4a: the host's setters as record fields, the readbacks as requests, the create's halves
                           "postRecord", "hostPosts", "callIsTheHosts", "requestOnEngine", "adoptTarget",

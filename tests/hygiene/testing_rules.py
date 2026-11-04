@@ -87,6 +87,13 @@ tree and the build's registration, each with its name in the failure line:
      ratchet: never a name its copy at the merge-base with main lacks; a listed row that declares now, or is gone, is
      stale). WHY: BISTRO-REST-1's gi.feedback_closed_box rows measured the SCREEN INTEGRATE of a Live offscreen view as
      "the gather", with GI paused, and their output never said it.
+  R16b AN `integrate` DECLARATION NAMES A SCENE THAT DOES NOT TRACE (ROUTE-ROWS-1 stage 0, 2026-11-04). The screen
+     integrate is the diffuse only where a scene does not trace (detail::chainGiRoutes, irisgl/engine/src/GiChainRules.h:
+     one producer, every view of a ray scene gathers), so a row that declares `integrate` - in its fixture's code
+     (Routes().integrate()) or in routes_pending.txt - has a binary that turns the rays off in code (setRayTracing with
+     any argument but a literal `true` or RayTracingMode::On / Auto - false, or an arm's variable - or
+     RayTracingMode::Off). WHY: the Live offscreen contract was deleted; an `integrate` row on a ray scene would
+     measure a route no view runs (red at frame 1, or a false listed declaration).
   R17 A ROW OUT OF FAST LOSES NO LAW THERE (TEST-STREAMLINE-1 5b, 2026-11-03). A row labelled `long` (FAST drops it; a
      feature's end runs it when its diff reaches it, and LONG) is the `_asan` twin of a registered guard every pass runs,
      with the same argv but the binary's `_asan`, the same environment but the sanitizer's options and the same frames -
@@ -621,6 +628,37 @@ def r16_bad(tests, declares, pending):
     return new, stale, malformed
 
 
+_INTEGRATE_CALL = re.compile(r"\.integrate\s*\(\s*\)")
+# a rays-off switch: setRayTracing with any argument but a literal `true` or RayTracingMode::On / Auto (false, or a
+# variable an arm sets - the cascades' rays loop, setRayTracing(raysOn != 0)), or the scene's RayTracingMode::Off
+_RAYS_OFF = re.compile(r"\bsetRayTracing\s*\(\s*(?!true\s*\)|RayTracingMode::(?:On|Auto)\b)[^)\s]|\bRayTracingMode::Off\b")
+
+
+def r16b_texts(sources):
+    """{executable: its C++ sources' code, comments and strings blanked} for R16b (r16_fixture_sources' map)."""
+    return {exe: "\n".join(_r10_blank(open(f, errors="replace").read()) for f in files if os.path.isfile(f))
+            for exe, files in sources.items()}
+
+
+def r16b_bad(tests, texts, pending):
+    """[`row (where)`] of every gi.* / rtreflect.* engine row that declares `integrate` - in its binary's code
+    (Routes().integrate()) or in routes_pending.txt - while that binary never turns the rays off (setRayTracing(false) /
+    RayTracingMode::Off in its code): the integrate runs only where a scene does not trace. `texts`: r16b_texts."""
+    bad = []
+    for t in sorted(tests, key=lambda x: x["name"]):
+        n = t["name"]
+        if not n.startswith(("gi.", "rtreflect.")) or _props(t).get("JAH_CLASS") != "engine":
+            continue
+        exe = next((w for w in (os.path.basename(str(x)) for x in t.get("command") or []) if w in texts), None)
+        if exe is None or _RAYS_OFF.search(texts[exe]):
+            continue
+        if _INTEGRATE_CALL.search(texts[exe]):
+            bad.append("%s (%s declares integrate in code)" % (n, exe))
+        elif any("integrate" in v for v in pending.get(n, [])):
+            bad.append("%s (listed integrate)" % n)
+    return bad
+
+
 def r14_bad(tests):
     """[`row (why)`] for every consumer of a WARM fixture (its setup: fresh_home.sh --setup --warm <home>) whose command is
     not fresh_home.sh --promote of that home with the same --cache key. `tests`: ctest's json-v1 `tests` list."""
@@ -913,6 +951,24 @@ def the_rules_catch():
           "listed row that declares now or is gone is stale; a declaration of a word outside the routes, or a view naming "
           "no gather / integrate / none, is malformed; a CPU row and another subject are never read (%s %s %s)"
           % (new16, stale16, bad16))
+    tx16b = {"test_rays_on": _r10_blank("declareRoutes(v, s, Routes().integrate().store());\n"
+                                        "// e->setRayTracing(false);\nconst char *x = \"RayTracingMode::Off\";\n"),
+             "test_rays_off": _r10_blank("e->setRayTracing(false);\ndeclareRoutes(v, s, Routes().integrate());\n"),
+             "test_scene_off": _r10_blank("s->setRayTracing(RayTracingMode::Off);\n"),
+             "test_gathers": _r10_blank("declareRoutes(v, s, Routes().gather().store());\n"),
+             "test_arm_off": _r10_blank("e->setRayTracing(raysOn != 0);\ndeclareRoutes(v, s, Routes().integrate());\n"),
+             "test_only_on": _r10_blank("e->setRayTracing(true);\ns->setRayTracing(RayTracingMode::On);\n"
+                                        "declareRoutes(v, s, Routes().integrate());\n")}
+    rows16b = [E("gi.code_on", "test_rays_on"), E("gi.code_off", "test_rays_off"), E("gi.listed_on", "test_gathers"),
+               E("gi.listed_off", "test_scene_off"), E("gi.gathers", "test_gathers"), T("gi.cpu"),
+               E("other.y", "test_rays_on"), E("gi.arm_off", "test_arm_off"), E("gi.only_on", "test_only_on")]
+    p16b = routes_pending("gi.listed_on integrate store\ngi.listed_off integrate store paused\ngi.gathers gather\n")
+    bad16b = r16b_bad(rows16b, tx16b, p16b)
+    check([b.split(" ")[0] for b in bad16b] == ["gi.code_on", "gi.listed_on", "gi.only_on"],
+          "R16b flags a row declaring integrate (in code or listed) on a binary that never turns the rays off - a rays-off "
+          "switch in a comment or a string is none, setRayTracing(true) and RayTracingMode::On are none - never a rays-off "
+          "binary's integrate (a literal false or an arm's variable), a gather row, a CPU row or another subject (%s)"
+          % bad16b)
     blank = _r10_blank('// enginetest::declareRoutes(v, s, r)\nconst char *x = "requireRoutes(";\n')
     check(not _ROUTES_CALL.search(blank) and _ROUTES_CALL.search(_r10_blank("enginetest::declareRoutes (v, s, r);")),
           "R16 reads a fixture's declaration in its code, never in a comment or a string")
@@ -1302,6 +1358,9 @@ def main(source, build):
               "R16 every gi.* / rtreflect.* engine row declares its route in its fixture or the ratchet (%d listed; %d NEW "
               "without: %s; %d stale - drop them: %s; %d malformed: %s)" % (len(pend16), len(new), new[:24], len(stale),
                                                                            stale[:24], len(malformed), malformed[:24]))
+        bad16b = r16b_bad(tests, r16b_texts(r16_fixture_sources(source)), pend16)
+        check(not bad16b, "R16b every `integrate` declaration (code or listed) names a binary that turns the rays off - "
+              "the integrate runs only where a scene does not trace (%d not: %s)" % (len(bad16b), bad16b[:24]))
         mb, base16 = _base_pending(source, "routes_pending.txt")
         grown = [] if base16 is None else sorted(set(pend16) - set(x.split()[0] for x in base16))
         check(not grown, "R16 the ratchet never loosens: routes_pending.txt lists no name its copy at the merge-base with "

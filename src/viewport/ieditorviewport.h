@@ -1516,7 +1516,7 @@ public:
     /// the photo tool's route made persistent. The view is the editor's own
     /// picture: its own full chain with its own adaptive exposure, seeded from
     /// the on-screen view's measured one so a recording does not open on a
-    /// fade; StillPicture (it gathers like a screenshot does); the editor's
+    /// fade; it gathers like a screenshot does; the editor's
     /// furniture (grid, gizmo, outline, wires, icons) drawn only when
     /// `helpers` (§10.5, the switch; the helper channel of the view's passes).
     /// Its NV12 readback is on. Null with `why` set when there is no engine,

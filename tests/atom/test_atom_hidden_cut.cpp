@@ -401,14 +401,13 @@ int main()
     shut.name = "shut";
     // THE VIEWS FIRST (Ogre's startup order: a render target before any scene manager).
     for (World *w : { &on, &ref, &shut })
-        w->view = gE->createOffscreenView(std::string("hidden-cut-") + w->name, kW, kH, Colour(0.2f, 0.3f, 0.5f), jahshaka::engine::OffscreenContract::Live);
+        w->view = gE->createOffscreenView(std::string("hidden-cut-") + w->name, kW, kH, Colour(0.2f, 0.3f, 0.5f));
     for (World *w : { &on, &ref, &shut }) {
         w->scene = gE->createScene(std::string("hidden-cut-") + w->name);
         buildWorld(*w);
     }
     shut.scene->setAtomOcclusionEnabled(false);
     for (World *w : { &on, &ref, &shut }) {
-        w->view->setOffscreenContract(OffscreenContract::StillPicture);
         w->view->setScene(w->scene);
         w->view->setCamera(enginetest::testCameraDescLookAt(Vec3(0.0f, 1.5f, 6.0f), Vec3(0.0f, 1.5f, -20.0f)));
         w->ov = static_cast<OgreView *>(w->view);

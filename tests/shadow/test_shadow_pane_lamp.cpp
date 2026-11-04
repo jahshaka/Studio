@@ -89,7 +89,7 @@ int main()
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
-    View *view = e->createOffscreenView("pane_lamp", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
+    View *view = e->createOffscreenView("pane_lamp", 256, 256, Colour(0, 0, 0));
     Scene *scene = e->createScene("pane_lamp");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);

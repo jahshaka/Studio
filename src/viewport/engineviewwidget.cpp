@@ -33,11 +33,12 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
     mViewName = name;
     mBackground = background;
     mCreateError.clear();
-    // OFFSCREEN BY DECLARATION (setOffscreen): no native attempt at all - the View is offscreen from its first frame,
-    // with the contract it was declared with.
+    // OFFSCREEN BY DECLARATION (setOffscreen / setPresentedStandIn): no native attempt at all - the View is offscreen
+    // from its first frame, in the role it was declared with.
     if (mDeclaredOffscreen) {
-        mView = engine->createOffscreenView(name.toStdString(), static_cast<unsigned>(width()),
-                                            static_cast<unsigned>(height()), background, mDeclaredContract);
+        const unsigned w = static_cast<unsigned>(width()), h = static_cast<unsigned>(height());
+        mView = mDeclaredStandIn ? engine->createPresentedStandInView(name.toStdString(), w, h, background)
+                                 : engine->createOffscreenView(name.toStdString(), w, h, background);
         if (!mView) mCreateError = QString::fromStdString(engine->lastError());
         else mView->setEnabled(isVisible());
         return mView != nullptr;
@@ -72,7 +73,7 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
     if (!mView)
         mView = engine->createOffscreenView(name.toStdString(),
                                             static_cast<unsigned>(width()),
-                                            static_cast<unsigned>(height()), background, mFallbackContract);
+                                            static_cast<unsigned>(height()), background);
     if (mView) {
 #ifdef Q_OS_LINUX
         // From here the engine owns this region entirely; Qt updates would fight it.
@@ -89,11 +90,11 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
     return mView != nullptr;
 }
 
-bool EngineViewWidget::setOffscreen(jahshaka::engine::OffscreenContract contract)
+bool EngineViewWidget::declareOffscreen(bool presentedStandIn)
 {
     if (mView) return false;
     mDeclaredOffscreen = true;
-    mDeclaredContract = contract;
+    mDeclaredStandIn = presentedStandIn;
     // No native window is ever asked for: nothing presents here (and an offscreen QPA platform hands out synthetic
     // window ids only). Cleared before the widget is first shown, so no native window was made for it.
     setAttribute(Qt::WA_NativeWindow, false);

@@ -7,10 +7,11 @@
 // THE FIXTURE: a floor, two walls, a refractive pane (the refractives pass: its fragments have no screen product
 // and keep the world caches, the door's positive control) and a BLENDED pane at alpha 1 (7-5: the blended queues' own
 // pass on a gathering chain), a lamp and a sun, one offscreen view with the chain. Every
-// tier (Low, Medium, High, Epic: the GiQuality + the World Mode's SSR row; every Auto toggle the tier's) on TWO
-// chains: a RAY chain (the rays on, a still picture: the view gathers like a window) and a LIVE offscreen chain (the rays
-// on, the Live contract: a live preview takes no gather - the screen integrate's products). (The NO-RAY chain's arm, the
-// scene's rays Off, and its pane in (5) archived by NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces.)
+// tier (Low, Medium, High, Epic: the GiQuality + the World Mode's SSR row; every Auto toggle the tier's) on the RAY
+// chain (the rays on: the view gathers, as every view of a ray scene does). (The NO-RAY chain's arm, the scene's rays
+// Off, archived by NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces. The LIVE offscreen chain's arm and (5), which held
+// its blended pane to the ray chain's, deleted by ROUTE-ROWS-1 stage 0 with the Live contract: one producer, no second
+// chain of a ray scene to compare.)
 // THE LAWS, per arm:
 //   (1) the door saw the opaque pass ("Jahshaka opaque") in the frames read (never vacuous);
 //   (2) L4: every record of the opaque passes ("Jahshaka opaque", "Jahshaka atom decode", both hosts) lists ONLY the
@@ -21,22 +22,13 @@
 //       pass reads (it lists one) - a blended fragment has no screen product (7-5 on a gathering chain; 7-6 on every
 //       chain: a chain that does not gather has the screen integrate's products, so it is a screen-GI chain too).
 // Every record of every arm is printed. Red on the base (the opaque passes bind the 40 voxel volumes and the field's
-// two textures at Epic); the ray arms went green at 7-5, the live arms at 7-6.
-// AND ONCE, AT HIGH (7-5):
-//   (5) THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN: the blended pane's pixels (alpha 1: its own shading alone, the
-//       picture behind it weighed by zero) on the ray chain against the live ray chain - on every
-//       one its own pass after the opaque one (7-6; before it the two drew it inside the opaque pass with the
-//       prepass's properties withdrawn) - each at the GI's rest: the same function of the same world caches, lights and shadow maps, stored once into the
-//       RGBA16F target, so within ONE fp16 ulp of the larger value per channel (a gathering chain used to light it with
-//       the environment alone: PHOTON-GATHER-1d's withdrawal). The live arm read +29 % until the gather was recorded
-//       only for a view whose chain gathers (7-5: a live view's opaque pass bound the gather beside the world caches).
+// two textures at Epic); the ray arms went green at 7-5.
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/PhotonStatus.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>
-#include <cmath>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -78,8 +70,7 @@ int main()
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
-    View *view = e->createOffscreenView("opaque_bindings", 256, 256, Colour(0, 0, 0),
-                                        OffscreenContract::StillPicture);   // (each chain below sets its own)
+    View *view = e->createOffscreenView("opaque_bindings", 256, 256, Colour(0, 0, 0));
     Scene *scene = e->createScene("opaque_bindings");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
@@ -119,11 +110,9 @@ int main()
     const Tier tiers[] = { { "Low", GiQuality::Low, 0 }, { "Medium", GiQuality::Medium, 0 },
                            { "High", GiQuality::High, 1 }, { "Epic", GiQuality::Epic, 2 } };
     const std::vector<std::string> &allowed = photonScreenProducts();
-    struct Chain { const char *name; OffscreenContract contract; };
-    const Chain chains[] = { { "ray", OffscreenContract::StillPicture }, { "live", OffscreenContract::Live } };
+    const char *const chain = "ray";   // the one chain of a ray scene (the arms' printed name)
     scene->setRayTracing(RayTracingMode::On);
-    for (const Chain &ch : chains) {
-        view->setOffscreenContract(ch.contract);   // (the setter's own use: one view switching purpose)
+    {
         for (const Tier &t : tiers) {
             PostFxDesc fx;
             fx.allowOffscreen = true;
@@ -141,7 +130,7 @@ int main()
             resetPhotonPassBindings();
             run(2);
             const std::vector<PhotonPassBindingRecord> recs = photonPassBindings();
-            std::printf("\n  [%s, %s chain] rays resolved %d, %zu pass records:\n", t.name, ch.name,
+            std::printf("\n  [%s, %s chain] rays resolved %d, %zu pass records:\n", t.name, chain,
                         int(scene->rayTracingResolved()), recs.size());
             bool sawOpaque = false, opaqueScreenOnly = true, refractivesWorld = false, sawBlended = false,
                  blendedWorld = false;
@@ -166,112 +155,21 @@ int main()
                 }
             }
             char msg[512];
-            std::snprintf(msg, sizeof msg, "[%s, %s] (1) the door saw the opaque pass", t.name, ch.name);
+            std::snprintf(msg, sizeof msg, "[%s, %s] (1) the door saw the opaque pass", t.name, chain);
             CHECK(sawOpaque, msg);
             std::snprintf(msg, sizeof msg, "[%s, %s] (2) L4: the opaque passes bind only screen products (offenders: %s)",
-                          t.name, ch.name, offenders.empty() ? "none" : offenders.c_str());
+                          t.name, chain, offenders.empty() ? "none" : offenders.c_str());
             CHECK(opaqueScreenOnly, msg);
             std::snprintf(msg, sizeof msg, "[%s, %s] (3) the control: the refractives pass lists a world cache",
-                          t.name, ch.name);
+                          t.name, chain);
             CHECK(refractivesWorld, msg);
             std::snprintf(msg, sizeof msg,
                           "[%s, %s] (4) the blended surfaces draw in their own pass, which lists a world cache", t.name,
-                          ch.name);
+                          chain);
             CHECK(sawBlended && blendedWorld, msg);
         }
     }
 
-    // ---- (5) THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN (7-5), at High ----
-    {
-        PostFxDesc fx;
-        fx.allowOffscreen = true;
-        fx.ssr = 1;
-        fx.refractions = true;
-        fx.hdrReadback = true;
-        view->setPostFx(fx);
-        scene->setRayTracing(RayTracingMode::On);
-        GiParams gi;
-        gi.mode = GiMode::Vct;
-        gi.quality = GiQuality::High;
-        gi.ddgi = GiToggle::Auto;
-        gi.bounces = true;
-        if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
-        const Vec3 eye(1.5f, 2.2f, 5.0f), at(-0.5f, 1.0f, -1.5f);
-        // the pane's front face, its left 70 % x its middle 70 % (the refractive pane covers the rest from this eye)
-        const auto paneFace = [&](int i, int k) {
-            return Vec3(paneAt.x - 0.35f * paneSize.x + 0.35f * paneSize.x * (float(i) / 6.0f),
-                        paneAt.y - 0.35f * paneSize.y + 0.70f * paneSize.y * (float(k) / 6.0f),
-                        paneAt.z + 0.5f * paneSize.z + 1e-3f);
-        };
-        const auto projectTo = [&](const Vec3 &pt, unsigned w, unsigned h, int &ix, int &iy) {
-            double f[3] = { at.x - eye.x, at.y - eye.y, at.z - eye.z };
-            const double fl = std::sqrt(f[0] * f[0] + f[1] * f[1] + f[2] * f[2]);
-            for (double &c : f) c /= fl;
-            double r[3] = { -f[2], 0.0, f[0] };   // f x (0, 1, 0)
-            const double rl = std::sqrt(r[0] * r[0] + r[2] * r[2]);
-            r[0] /= rl; r[2] /= rl;
-            const double u[3] = { r[1] * f[2] - r[2] * f[1], r[2] * f[0] - r[0] * f[2], r[0] * f[1] - r[1] * f[0] };
-            const double d[3] = { pt.x - eye.x, pt.y - eye.y, pt.z - eye.z };
-            const double zf = d[0] * f[0] + d[1] * f[1] + d[2] * f[2];
-            const double tanY = std::tan(22.5 * 3.14159265358979 / 180.0), tanX = tanY * double(w) / double(h);
-            const double xn = (d[0] * r[0] + d[1] * r[1] + d[2] * r[2]) / (zf * tanX);
-            const double yn = (d[0] * u[0] + d[1] * u[1] + d[2] * u[2]) / (zf * tanY);
-            ix = int(std::floor((xn + 1.0) * 0.5 * double(w)));
-            iy = int(std::floor((1.0 - yn) * 0.5 * double(h)));
-            return zf > 0.0 && ix >= 0 && iy >= 0 && ix < int(w) && iy < int(h);
-        };
-        const auto settledPane = [&](OffscreenContract contract, std::vector<float> &out, int &restAt) {
-            view->setOffscreenContract(contract);
-            e->waitForAsyncShaders();
-            int f = 0, quiet = 0;
-            for (; f < 900 && quiet < 30; ++f) {
-                run(1);
-                quiet = scene->published().gi.giAtRest ? quiet + 1 : 0;
-            }
-            restAt = quiet >= 30 ? f - quiet : -1;
-            ImageF pic;
-            out.clear();
-            if (!view->readPixelsHdr(pic)) return false;
-            for (int i = 0; i <= 6; ++i)
-                for (int k = 0; k <= 6; ++k) {
-                    int ix, iy;
-                    if (!projectTo(paneFace(i, k), pic.width, pic.height, ix, iy)) return false;
-                    const auto px = pic.at(unsigned(ix), unsigned(iy));
-                    out.push_back(px.r);
-                    out.push_back(px.g);
-                    out.push_back(px.b);
-                }
-            return true;
-        };
-        std::vector<float> rayPane, liveRayPane;
-        int restRay = -1, restLiveRay = -1;
-        const bool okRay = settledPane(OffscreenContract::StillPicture, rayPane, restRay);
-        const GatherStatus gRay = scene->published().gi.gather;
-        const bool okLiveRay = settledPane(OffscreenContract::Live, liveRayPane, restLiveRay);   // the live ray chain
-        // ONE fp16 ulp of the larger value: 2^(floor(log2 v) - 10) for a normal half
-        const auto ulpOf = [](double v) {
-            v = std::max(std::fabs(v), 6.103515625e-05);
-            return std::ldexp(1.0, int(std::floor(std::log2(v))) - 10);
-        };
-        double worstUlps = 0.0, meanRay = 0.0, meanLiveRay = 0.0;
-        size_t past = 0;
-        const size_t n = std::min(rayPane.size(), liveRayPane.size());
-        for (size_t i = 0; i < n; ++i) {
-            const double a = rayPane[i], b = liveRayPane[i];
-            const double ulps = std::fabs(a - b) / ulpOf(std::max(a, b));
-            worstUlps = std::max(worstUlps, ulps);
-            if (ulps > 1.0) ++past;
-            meanRay += a;
-            meanLiveRay += b;
-        }
-        if (n) { meanRay /= double(n); meanLiveRay /= double(n); }
-        std::printf("\n   (5) the blended pane (alpha 1), %zu channel samples: the ray chain (gather %s, at rest after %d "
-                    "frames) mean %.5f, the live ray chain (at rest after %d) mean %.5f; worst %.2f fp16 ulps, %zu past one\n",
-                    n, gRay.on ? "on" : "OFF", restRay, meanRay, restLiveRay, meanLiveRay, worstUlps, past);
-        CHECK(okRay && okLiveRay && gRay.on && n >= 3u * 40u && meanRay > 0.0 && past == 0u,
-              "(5) THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN: the blended pane on the gathering chain within one fp16 "
-              "ulp of the live ray chain's");
-    }
     std::printf("\ngi.opaque_bindings: %d frames, %d failure(s)\n", frames, failures);
     return failures ? 1 : 0;
 }

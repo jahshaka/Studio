@@ -208,7 +208,7 @@ int main()
     ref.name = "ref";
     shut.name = "shut";
     for (World *w : { &on, &ref, &shut })
-        w->view = gE->createOffscreenView(std::string("cluster-occl-") + w->name, kW, kH, Colour(0.2f, 0.3f, 0.5f), jahshaka::engine::OffscreenContract::Live);
+        w->view = gE->createOffscreenView(std::string("cluster-occl-") + w->name, kW, kH, Colour(0.2f, 0.3f, 0.5f));
     for (World *w : { &on, &ref, &shut }) {
         w->scene = gE->createScene(std::string("cluster-occl-") + w->name);
         buildWorld(*w);
@@ -222,7 +222,6 @@ int main()
         PostFxDesc fx;
         fx.allowOffscreen = true;
         w->view->setPostFx(fx);
-        w->view->setOffscreenContract(OffscreenContract::StillPicture);
         w->view->setScene(w->scene);
         w->view->setCamera(hidden);
         w->ov = static_cast<OgreView *>(w->view);

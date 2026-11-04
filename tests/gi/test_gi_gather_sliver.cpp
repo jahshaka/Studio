@@ -99,7 +99,7 @@ void frames(Engine *e, int n, int &count) { enginetest::frames(e, n); count += n
 bool runOnce(Engine *e, bool plates, Run &out, int &count)
 {
     const char *name = plates ? "sliver" : "sliver_truth";
-    View *view = e->createOffscreenView(name, kW, kH, Colour(0, 0, 0), OffscreenContract::StillPicture);
+    View *view = e->createOffscreenView(name, kW, kH, Colour(0, 0, 0));
     Scene *scene = e->createScene(name);
     if (!view || !scene) return false;
     view->setScene(scene);
@@ -217,7 +217,7 @@ bool runOnce(Engine *e, bool plates, Run &out, int &count)
 /// THE PRICE: the placement's two passes (the monitor's gather.place) on a 1920 x 1080 view of the plated scene
 float placeMs(Engine *e, GiQuality q, int &count, unsigned &requested, unsigned &cap, float &filterMs, float &integrateMs)
 {
-    View *view = e->createOffscreenView("sliver_price", 1920u, 1080u, Colour(0, 0, 0), OffscreenContract::StillPicture);
+    View *view = e->createOffscreenView("sliver_price", 1920u, 1080u, Colour(0, 0, 0));
     Scene *scene = e->createScene("sliver_price");
     if (!view || !scene) return -1.0f;
     view->setScene(scene);

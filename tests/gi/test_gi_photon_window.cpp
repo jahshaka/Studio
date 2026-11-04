@@ -110,8 +110,8 @@ int main(int argc, char **argv)
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     // TWO VIEWS from one eye inside the room: A at the sun patch and the floor beside it, B at the mirror
-    View *viewA = e->createOffscreenView("photon_window_a", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
-    View *viewB = e->createOffscreenView("photon_window_b", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
+    View *viewA = e->createOffscreenView("photon_window_a", 256, 256, Colour(0, 0, 0));
+    View *viewB = e->createOffscreenView("photon_window_b", 256, 256, Colour(0, 0, 0));
     Scene *scene = e->createScene("photon_window");
     if (!viewA || !viewB || !scene) { std::printf("FAIL: views/scene\n"); return 1; }
     for (View *v : { viewA, viewB }) {

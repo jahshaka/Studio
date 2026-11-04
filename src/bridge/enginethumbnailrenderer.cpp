@@ -260,14 +260,14 @@ bool EngineThumbnailRenderer::ensureResources(QSize size)
         // this DID fail — a second instance — it failed silently, which is the
         // defect THUMBS-1 fixed; it now says what the engine said.
         View *own = engine->createOffscreenView("thumbs", unsigned(size.width()), unsigned(size.height()),
-                                                backgroundColour(), OffscreenContract::StillPicture);
+                                                backgroundColour());
         if (!own) {
             failed(QStringLiteral("the offscreen view could not be created: %1")
                        .arg(QString::fromStdString(engine->lastError())));
             return false;
         }
         own->setEnabled(false);
-        // A THUMBNAIL IS A STILL PICTURE (View::setOffscreenContract): it
+        // A THUMBNAIL IS A STILL PICTURE: it
         // gathers where its studio scene does and the render settles on
         // giAtRest (bridge/stableoffscreenrender.h), so a stored tile is never
         // the gather's raw first frames.

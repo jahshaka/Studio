@@ -136,9 +136,9 @@ QImage EnginePreviewScene::renderOffscreen(const char *tag, int width, int heigh
     auto engine = mEngine.lock();
     if (!engine || width <= 0 || height <= 0) return QImage();
     View *shot = engine->createOffscreenView(uniqueName(tag, this) + "-" + std::to_string(++mShotSerial),
-                                             unsigned(width), unsigned(height), background, OffscreenContract::StillPicture);
+                                             unsigned(width), unsigned(height), background);
     if (!shot) return QImage();
-    // A STORED SNAPSHOT: a still picture (View::setOffscreenContract) — it
+    // A STORED SNAPSHOT: a still picture — it
     // gathers where the preview's scene does and settles below.
     // Nothing attached yet (the widget was never shown): the shot View is the
     // FIRST View, which is what lets the Scene be created (ORDER MATTERS).

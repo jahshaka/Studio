@@ -117,7 +117,7 @@ struct PictureRequest {
     bool     untilRest = false;
     float    restoreDelta = -1.0f;
     bool     hdr = false;                       ///< the linear radiance too (View::readPixelsHdr)
-    /// THE STILL PICTURE'S POLICY (View::setOffscreenContract StillPicture): a scene that gathers draws the first frame
+    /// THE STILL PICTURE'S POLICY (a screenshot's, a thumbnail's): a scene that gathers draws the first frame
     /// and waits for rest; a scene that does not takes the path it always took (no settle frames).
     static PictureRequest stillPicture(jahshaka::engine::Scene *scene, jahshaka::engine::View *view,
                                        unsigned cap = 2000u)

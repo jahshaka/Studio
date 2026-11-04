@@ -71,7 +71,7 @@ struct Reading {
 Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, bool mover, float mirrorRough = 0.0f) {
     Reading r;
     Scene *s = e->createScene(name);
-    View *v = e->createOffscreenView(name, kWidth, kHeight, Colour(0, 0, 0), OffscreenContract::StillPicture);
+    View *v = e->createOffscreenView(name, kWidth, kHeight, Colour(0, 0, 0));
     if (!s || !v) return r;
     v->setScene(s);
     PostFxDesc fx;
@@ -170,7 +170,7 @@ int main()
     {
         // (the device's ray query is known once a view exists)
         Scene *ps = e->createScene("spec_probe");
-        View *pv = e->createOffscreenView("spec_probe", 16, 16, Colour(0, 0, 0), OffscreenContract::StillPicture);
+        View *pv = e->createOffscreenView("spec_probe", 16, 16, Colour(0, 0, 0));
         if (ps && pv) pv->setScene(ps);
         const bool rq = e->rayQueryAvailable() && e->rayTracing();
         if (pv) { pv->setScene(nullptr); e->destroyView(pv); }

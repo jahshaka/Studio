@@ -35,20 +35,14 @@ public:
     /// Releases the View now (idempotent). The destructor does this too.
     void destroyView();
 
-    /// THE CONTRACT THE OFFSCREEN FALLBACK DECLARES (View::setOffscreenContract,
-    /// PHOTON-GATHER-1d fix round). A widget's view is drawn every frame for a
-    /// person, so the fallback is LIVE by default (the gather pinned off); the
-    /// editor viewport, whose pictures are taken at rest and which drives the
-    /// scene's GI, declares StillPicture. Call before createView(); an on-screen
-    /// view ignores it.
-    void setFallbackContract(jahshaka::engine::OffscreenContract c) { mFallbackContract = c; }
-
     /// OFFSCREEN BY DECLARATION (TEST-STREAMLINE-1 stage 3a, the scriptable headless host): this widget's View is an
-    /// offscreen one from the start, declaring `contract` — createView() makes NO native attempt (the widget never
-    /// asks for a native window: WA_NativeWindow and WA_PaintOnScreen are cleared) and goes straight to
-    /// Engine::createOffscreenView. Not the fallback above, which stays the on-screen path's answer to a FAILED
-    /// native view. Call before createView(); false once a View exists (a contract is a creation parameter).
-    bool setOffscreen(jahshaka::engine::OffscreenContract contract);
+    /// offscreen one from the start — createView() makes NO native attempt (the widget never asks for a native window:
+    /// WA_NativeWindow and WA_PaintOnScreen are cleared). setOffscreen(): an offscreen PICTURE
+    /// (Engine::createOffscreenView); setPresentedStandIn(): THE PRESENTED STAND-IN (Engine::createPresentedStandInView
+    /// - the headless host's editor view, its one caller). Not the offscreen fallback of a FAILED native view (a
+    /// picture, createView's own answer). Call before createView(); false once a View exists (a role is a creation fact).
+    bool setOffscreen() { return declareOffscreen(false); }
+    bool setPresentedStandIn() { return declareOffscreen(true); }
     bool offscreenByDeclaration() const { return mDeclaredOffscreen; }
 
     /// WHY NO VIEW OF ANY KIND CAN EXIST ON `engine`, one line — empty when one can. The NULL render system's engine
@@ -137,15 +131,16 @@ protected:
     void recreateViewForNewWindow();
 
 private:
+    bool declareOffscreen(bool presentedStandIn);
+
     std::weak_ptr<jahshaka::engine::Engine> mEngine;
     jahshaka::engine::View                 *mView = nullptr;
     /// What createView() was called with, so a WinIdChange can repeat it.
     QString                                 mViewName;
     jahshaka::engine::Colour                mBackground{0.10f, 0.11f, 0.14f};
     QString                                 mCreateError;
-    jahshaka::engine::OffscreenContract     mFallbackContract = jahshaka::engine::OffscreenContract::Live;
     bool                                    mDeclaredOffscreen = false;
-    jahshaka::engine::OffscreenContract     mDeclaredContract = jahshaka::engine::OffscreenContract::StillPicture;
+    bool                                    mDeclaredStandIn = false;
     /// VIEW-REBUILD-1's two counters — see nativeHides()/rectChanges().
     qulonglong                              mNativeHides = 0;
     qulonglong                              mRectChanges = 0;

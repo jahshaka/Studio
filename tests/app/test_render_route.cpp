@@ -157,9 +157,7 @@ int main(int argc, char **argv)
         declared->resize(320, 240);
         check(!declared->offscreenByDeclaration(), "a widget is not offscreen until it is declared");
         check(declared->testAttribute(Qt::WA_NativeWindow), "...and asks for a native window until then");
-        check(declared->setOffscreen(jahshaka::engine::OffscreenContract::StillPicture) &&
-                  declared->offscreenByDeclaration(),
-              "setOffscreen(StillPicture): the flag reads back");
+        check(declared->setOffscreen() && declared->offscreenByDeclaration(), "setOffscreen(): the flag reads back");
         check(!declared->testAttribute(Qt::WA_NativeWindow), "...and the widget asks for NO native window");
         window.show();
         app.processEvents();

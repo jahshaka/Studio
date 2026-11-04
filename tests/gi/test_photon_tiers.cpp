@@ -319,9 +319,9 @@ static void testProbeBudget()
           "Epic's budget holds the measured 32-probe Showroom grid");
 }
 
-static void testOffscreenContract()
+static void testOffscreenPictures()
 {
-    std::printf("\n-- 8. the offscreen picture contract --\n");
+    std::printf("\n-- 8. the offscreen pictures --\n");
     const QVector<worldmodes::OffscreenPicture> &kinds = worldmodes::offscreenPictures();
     QStringList names;
     for (const worldmodes::OffscreenPicture &k : kinds) {
@@ -332,7 +332,7 @@ static void testOffscreenContract()
               qPrintable(QStringLiteral("%1: a lower picture says what it renders").arg(k.kind)));
     }
     for (const char *want : { "viewport", "screenshot.scene", "screenshot.viewport", "screenshot.plain",
-                              "screenshot.tonemap", "projectTile", "liveOffscreen", "probeCapture", "cardCapture" })
+                              "screenshot.tonemap", "projectTile", "probeCapture", "cardCapture" })
         CHECK(names.contains(QLatin1String(want)),
               qPrintable(QStringLiteral("the table declares %1").arg(QLatin1String(want))));
     for (const worldmodes::OffscreenPicture &k : kinds)
@@ -353,7 +353,7 @@ int main(int argc, char **argv)
     testTriState();
     testEpic();
     testProbeBudget();
-    testOffscreenContract();
+    testOffscreenPictures();
     std::printf("\n%s (%d failure%s)\n", failures ? "FAILED" : "all ok", failures, failures == 1 ? "" : "s");
     return failures ? 1 : 0;
 }

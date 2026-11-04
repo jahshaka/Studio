@@ -136,7 +136,7 @@ int main(int argc, char **argv)
     GiParams off;
     off.mode = GiMode::Off;
     if (doLamp) {
-        View *view = e->createOffscreenView("card_lamp_shadow", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
+        View *view = e->createOffscreenView("card_lamp_shadow", 256, 256, Colour(0, 0, 0));
         Scene *scene = e->createScene("card_lamp_shadow");
         if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
         view->setScene(scene);
@@ -146,8 +146,7 @@ int main(int argc, char **argv)
             fx.ssr = 1;
             view->setPostFx(fx);
         }
-        // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
-        // chain gathers, and a Live view takes the field's answer)
+        // IT GATHERS (every view of a ray scene does: one producer, ROUTE-ROWS-1)
         const NodeId floorNode =
             cube(scene, Vec3(0.0f, -0.05f, 0.0f), Vec3(8.0f, 0.1f, 8.0f), Colour(0.6f, 0.6f, 0.6f), false);   // the floor
         const NodeId wallNode =
@@ -466,7 +465,7 @@ int main(int argc, char **argv)
         // integral of cos x cos' / r^2 over the rectangle on a 200 x 100 midpoint grid, bounded over the texel the read
         // picked (its centre within half a texel of the point: F's least and largest on that square), the bar the three
         // stored values' half steps (all three RGBA16F, rounded to nearest: 2^-11 of each, REDS-1).
-        View *av = e->createOffscreenView("card_area", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
+        View *av = e->createOffscreenView("card_area", 256, 256, Colour(0, 0, 0));
         Scene *as = e->createScene("card_area");
         if (!av || !as) { std::printf("FAIL: the area view/scene\n"); return 1; }
         av->setScene(as);
@@ -476,8 +475,7 @@ int main(int argc, char **argv)
             fx.ssr = 1;
             av->setPostFx(fx);
         }
-        // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
-        // chain gathers, and a Live view takes the field's answer)
+        // IT GATHERS (every view of a ray scene does: one producer, ROUTE-ROWS-1)
         const float kAlbedo = 0.6f;
         MaterialId floorMat = 0;
         cube(as, Vec3(0.0f, -0.05f, 0.0f), Vec3(2.0f, 0.1f, 2.0f), Colour(kAlbedo, kAlbedo, kAlbedo), false, &floorMat);
@@ -797,7 +795,7 @@ int main(int argc, char **argv)
         // THE VISIBILITY'S GPU TIME AT 1080p (printed): a 1920 x 1080 view of the same scene and camera, the monitor's rows "area.vis" and "area.resolve"
         // over its first frames (each frame's, a few frames late)
         const auto time1080 = [&](const char *label) {
-            View *hd = e->createOffscreenView("card_area_1080", 1920, 1080, Colour(0, 0, 0), OffscreenContract::StillPicture);
+            View *hd = e->createOffscreenView("card_area_1080", 1920, 1080, Colour(0, 0, 0));
             double traceMost = -1.0, resolveMost = -1.0;
             std::vector<double> traceAll, resolveAll;
             if (hd) {

@@ -71,7 +71,7 @@ int main(int, char **)
     const float arms[2] = { 1.2f, 3.0f };   // the emitter's face distance from the mirror: near (c1), far (c2)
     double centre[2] = { -1.0, -1.0 }, peaks[2] = { -1.0, -1.0 }, flux[2] = { 0.0, 0.0 };
     for (int k = 0; k < 2; ++k) {
-        View *view = e->createOffscreenView("small_emitter", 128, 128, Colour(0, 0, 0), OffscreenContract::StillPicture);
+        View *view = e->createOffscreenView("small_emitter", 128, 128, Colour(0, 0, 0));
         Scene *s = e->createScene("small_emitter");
         if (!view || !s) { std::printf("FAIL: view/scene\n"); return 1; }
         view->setScene(s);

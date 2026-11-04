@@ -515,9 +515,10 @@ set_tests_properties(source.selftest_shapes PROPERTIES TIMEOUT 60 LABELS "hygien
 jah_no_display(source.selftest_shapes)
 
 # source.presented_predicate — ONE PREDICATE OF "PRESENTED" (TEST-STREAMLINE-1 3a item 2b): the headless host's editor
-# view (OffscreenContract::PresentedStandIn) takes the window's route at every presented-vs-offscreen branch -
+# view (born by Engine::createPresentedStandInView) takes the window's route at every presented-vs-offscreen branch -
 # View::presentsAsWindow read at each named site, no isOffscreen() left in the engine but the target's fact, the
-# identity born once, only the host's factory declaring it. See the script; the picture proof is card block B (B1).
+# identity born once by its one factory, only the host's factory making one; and no offscreen contract left anywhere
+# (ROUTE-ROWS-1: one producer). See the script; the picture proof is card block B (B1).
 add_test(NAME source.presented_predicate
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/presented_predicate.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.presented_predicate PROPERTIES TIMEOUT 60 LABELS "hygiene")

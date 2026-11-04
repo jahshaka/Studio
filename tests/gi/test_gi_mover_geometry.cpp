@@ -103,7 +103,7 @@ int main(int argc, char **argv)
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     int frames = 1;
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
-    View *view = e->createOffscreenView("movers", 64, 64, Colour(0, 0, 0), OffscreenContract::Live);
+    View *view = e->createOffscreenView("movers", 64, 64, Colour(0, 0, 0));
     Scene *scene = e->createScene("movers");
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
     view->setScene(scene);
