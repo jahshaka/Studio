@@ -1071,6 +1071,12 @@ if("host_epic" IN_LIST JAH_HOST_POOLS)
     jah_pool_arm(host_epic change_then_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js 2)
     jah_pool_arm(host_epic paused_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js 4)
     jah_pool_arm(host_epic frame_step ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_frame_step.js 1)
+    # THE hit_list_rebind ARM (the landing audit's F7, 2026-11-04): a view RE-ATTACHED to a scene builds its hit list at
+    # its creation size, as a fresh view does (irisgl 4576b132's detachScene reset, which no row reached): scene A grows
+    # the editor view's list under gather.decodeHits, a project switch re-binds the same view to B, and B's first reading
+    # is exactly the creation size (e2e_hit_list_rebind.js). Epic, rays: this pool. Its 3 s and its frames PROVISIONAL
+    # (at most 10 + 60 + 10 + 60 frames), unmeasured until its first card run.
+    jah_pool_arm(host_epic hit_list_rebind ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_hit_list_rebind.js 3)
     jah_add_pool(host_epic TIER epic NEEDS photon APP_ARGS ${JAH_HOST_ARGS} LABELS "scripting")
-    set_property(TEST pool.host_epic PROPERTY JAHSHAKA_TEST_FRAMES 847)   # the two rows' measured 400 + 400, + frame_step's 47 (37 + 10, provisional)
+    set_property(TEST pool.host_epic PROPERTY JAHSHAKA_TEST_FRAMES 987)   # the two rows' measured 400 + 400, + frame_step's 47 (37 + 10) + hit_list_rebind's at most 140 (both provisional)
 endif()
