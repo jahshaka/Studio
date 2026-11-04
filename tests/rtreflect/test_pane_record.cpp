@@ -105,6 +105,11 @@ int main()
     fx.hdrReadback = true;
     fx.ssr = 2;
     view->setPostFx(fx);
+    // THE ROUTE AND THE RAY'S OWN ANSWER (PHOTON-7-9A, the lead's ruling R7): the reflection is the hybrid, and this row's
+    // law is the RAY's (a crossed pane's light in the ray's record), so the screen half answers no texel (enginetest::rayReflectionOnly: the test arm
+    // reflect.screenOff); the view's route declared and asserted on its first frame (URGENT #146)
+    CHECK(enginetest::rayReflectionOnly(e), "the arm reflect.screenOff (the ray's own answer: this row's law is the ray's)");
+    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(), "rtreflect.pane_record's view");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -3.0f));
 
     // THE FOUR ARMS: [slab][block]

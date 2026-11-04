@@ -79,6 +79,11 @@ Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, 
     fx.ssr = 2;
     fx.hdrReadback = true;
     v->setPostFx(fx);
+    // THE ROUTE AND THE RAY'S OWN ANSWER (PHOTON-7-9A, the lead's ruling R7): the reflection is the hybrid, and this row's
+    // law is the RAY's (the hit's specular by its mobility), so the screen half answers no texel (enginetest::rayReflectionOnly: the test arm
+    // reflect.screenOff); the view's route declared and asserted on its first frame (URGENT #146)
+    CHECK(enginetest::rayReflectionOnly(e), "the arm reflect.screenOff (the ray's own answer: this row's law is the ray's)");
+    enginetest::declareRoutes(v, s, enginetest::Routes().gather().reflection().store(), "gi.hit_specular_mobility's view");
     PbrParams matte;
     matte.albedo = Colour(0.5f, 0.5f, 0.5f);
     matte.roughness = 0.9f;

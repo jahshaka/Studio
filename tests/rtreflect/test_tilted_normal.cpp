@@ -113,6 +113,11 @@ int main()
     fx.allowOffscreen = true;
     fx.ssr = 2;
     view->setPostFx(fx);
+    // THE ROUTE AND THE RAY'S OWN ANSWER (PHOTON-7-9A, the lead's ruling R7): the reflection is the hybrid, and this row's
+    // law is the RAY's (the ray's origin on a tilted normal), so the screen half answers no texel (enginetest::rayReflectionOnly: the test arm
+    // reflect.screenOff); the view's route declared and asserted on its first frame (URGENT #146)
+    CHECK(enginetest::rayReflectionOnly(e), "the arm reflect.screenOff (the ray's own answer: this row's law is the ray's)");
+    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(), "rtreflect.tilted_normal's view");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 2.0f, 3.464f), Vec3(0.0f, 0.0f, 0.0f));   // 30 degrees down
     double excess[2] = {};
     for (int arm = 0; arm < 2; ++arm) {
