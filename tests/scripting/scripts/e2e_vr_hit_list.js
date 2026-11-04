@@ -75,5 +75,11 @@ if (grownReadings > 0)
     assert(droppedGrown === 0, "after its first growth the stereo list drops no record: " + droppedGrown);
 else
     assert(dropped === 0, "a list that never grew dropped no record: " + dropped);
+// THE STEREO SHAPE (PHOTON-7-9A, the lead's ruling (A) on cube site (6b)): View::setStereo rebuilds the chain at the
+// view's shape inside the call, so no recording of the session's frames met a chain at another shape - the tier's defect
+// counter reads 0 (each refusal would also be its frame's error, naming the view)
+var shapeRefusals = world.giStatus().rayQuery.reflectShapeRefusals;
+console.log("the reflection's shape refusals over the session: " + shapeRefusals);
+assert(shapeRefusals === 0, "no reflection recording met a chain at another stereo shape: " + shapeRefusals);
 assert(vr.end() === true, "the session ended");
 engine.arm("gather.decodeHits", 0);
