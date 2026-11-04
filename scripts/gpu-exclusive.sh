@@ -77,7 +77,21 @@ lock="${JAH_GPU_LOCK:-/tmp/jah-gpu.lock}"
 # nice/env/timeout/VAR= words) whose test dir (--test-dir, else the cwd) is inside a git tree, this script writes that tree's
 # <gitdir>/jah-check.pid ("<pid> <time>", spec.py CheckMark's format: the pre-commit hook and the builders read it) from
 # before its wait to its exit, and removes it then - only its own: a mark a live pid already holds (an outer check) is kept.
+# ONE CHECK A TREE, TAKEN ATOMICALLY (the landing audit's LOW, 2026-11-04: check-then-write let two marked ctests starting
+# together both write it, and the first one's release removed it under the second): the take runs under a flock of
+# <gitdir>/jah-check.lock and writes the mark by rename (a reader never sees it half-written); a live mark of an ANCESTOR
+# (spec.sh test's, width_pair's: the check this call runs inside) is kept and the call runs; a live mark of any OTHER process
+# is a second check in the tree - REFUSED, exit 2, before any wait, the mark untouched.
 mark=""
+is_ancestor() {   # <pid>: is it this script or one of its parents (/proc/<p>/status PPid, no fork)
+    local p=$$ k v
+    while [ -n "$p" ] && [ "$p" -gt 1 ]; do
+        [ "$p" = "$1" ] && return 0
+        v=""; while read -r k v _; do [ "$k" = PPid: ] && break; v=""; done < "/proc/$p/status" 2> /dev/null
+        p=$v
+    done
+    return 1
+}
 mark_take() {
     local a d="" seen="" g
     for a in "$@"; do
@@ -88,8 +102,18 @@ mark_take() {
     [ -n "$seen" ] || return 0
     [ -n "$d" ] && [ "$d" != next ] || d=$PWD
     g=$(git -C "$d" rev-parse --absolute-git-dir 2> /dev/null) || return 0
-    if { read -r p _ < "$g/jah-check.pid"; } 2> /dev/null && [ -n "$p" ] && kill -0 "$p" 2> /dev/null; then return 0; fi
-    echo "$$ $(date '+%FT%T%z')" > "$g/jah-check.pid" && mark="$g/jah-check.pid"
+    local f="$g/jah-check.pid" r
+    r=$(exec 7> "$g/jah-check.lock" && flock -x 7 || exit 0
+        if { read -r p _ < "$f"; } 2> /dev/null && [ -n "$p" ] && kill -0 "$p" 2> /dev/null; then
+            is_ancestor "$p" && echo outer || echo "other $(cat "$f" 2> /dev/null)"; exit 0
+        fi
+        echo "$$ $(date '+%FT%T%z')" > "$f.$$" && mv -f "$f.$$" "$f" && echo taken)
+    case "$r" in
+        taken) mark=$f ;;
+        other*) echo "gpu-lock: REFUSED (exit 2): another check is running in this tree - $f holds '${r#other }' (one check" \
+                     "a tree, URGENT #153; wait for it or run in another tree)" >&2
+                rm -f "$ticket"; exit 2 ;;
+    esac
 }
 mark_release() {
     [ -n "$mark" ] || return 0
