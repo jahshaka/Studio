@@ -111,6 +111,13 @@ const std::vector<VerbDoc> &verbs()
         { "lamp", "lamp <name> intensity <v> | lamp <name> position x,y,z", 3, 3,
           "a lamp step: the named light's intensity or position written in the document (the mirror pushes it on the "
           "next frame); no frame is drawn" },
+        { "routes", "routes <gather|integrate|reflection|field|cards|store|paused ...> | routes none", 1, 7,
+          "THE ROW DECLARES THE ROUTE IT MEASURES (URGENT #146 for the lab; PHOTON-7-9A): the lab view's chain (the "
+          "gather, the screen integrate, the ray reflection - EXACT, a route it runs and the line did not name is a "
+          "mismatch too), the GI pause (exact) and the scene's products (field, cards, store: live by the 16th frame) "
+          "judged after the NEXT frame drawn against that frame's own record (the inspect door and the published "
+          "GiStatus - enginetest::requireRoutes' doors); prints LAB ROUTES ... ok, or LAB FAILED routes and the run "
+          "ends with exit 1" },
         { "sky", "sky brightness <v> | sky rayleigh <v>", 2, 2,
           "THE SKY's DIALS (PHOTON-7-9A, the sky-invariance row's levers): the realistic sky's skyBrightness (Unreal's "
           "sky luminance factor: the sky's pixels, the Sky Light, reflections, the aerial in-scatter - never the sun) or "
@@ -336,6 +343,42 @@ bool parseSkyDial(const std::string &word, float &out, std::string &error)
     }
     out = float(v);
     return true;
+}
+
+bool parseRoutes(const std::vector<std::string> &words, RouteSet &out, std::string &error)
+{
+    out = RouteSet();
+    if (words.size() == 1 && words[0] == "none") return true;
+    for (const std::string &w : words) {
+        bool *slot = w == "gather" ? &out.gather : w == "integrate" ? &out.integrate : w == "reflection" ? &out.reflection
+                   : w == "field" ? &out.field : w == "cards" ? &out.cards : w == "store" ? &out.store
+                   : w == "paused" ? &out.paused : nullptr;
+        if (!slot) { error = "'" + w + "' is not a route (gather integrate reflection field cards store paused, or none)"; return false; }
+        if (*slot) { error = "'" + w + "' named twice"; return false; }
+        *slot = true;
+    }
+    if (words.empty()) { error = "no route named (none for none)"; return false; }
+    return true;
+}
+
+std::string routesText(const RouteSet &r)
+{
+    std::string t;
+    const auto add = [&t](bool on, const char *w) { if (on) { if (!t.empty()) t += ' '; t += w; } };
+    add(r.gather, "gather"); add(r.integrate, "integrate"); add(r.reflection, "reflection");
+    add(r.field, "field"); add(r.cards, "cards"); add(r.store, "store"); add(r.paused, "paused");
+    return t.empty() ? std::string("none") : t;
+}
+
+RouteVerdict judgeRoutes(const RouteSet &declared, const RouteSet &actual, int frame)
+{
+    const bool chainOk = declared.gather == actual.gather && declared.integrate == actual.integrate &&
+                         declared.reflection == actual.reflection && declared.paused == actual.paused;
+    const bool productsOk = (!declared.field || actual.field) && (!declared.cards || actual.cards) &&
+                            (!declared.store || actual.store);
+    if (chainOk && productsOk) return RouteVerdict::Match;
+    if (chainOk && frame < kRouteProductFrames) return RouteVerdict::Wait;   // a product still coming live
+    return RouteVerdict::Mismatch;
 }
 
 }   // namespace lab
