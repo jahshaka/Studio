@@ -19,15 +19,15 @@ set_tests_properties(lab.boots_and_shoots PROPERTIES TIMEOUT 60 LABELS "lab")
 # lab.monitor (PHOTON-7, the step before stage 10) — `jahlab monitor`: the engine's own frame monitor per frame from the
 # lab on photon-area (Epic, rays on): every GI phase named with a positive time, and every frame's top-level passes and
 # rows adding up to its busy GPU span (monitor.sh). The boot's 30 frames, a 60-frame settle, a lamp step's 30.
-# A TIMING-LAW ROW, `measure` (LONG, alone; TEST-STREAMLINE-1 block C, the lead's ruling, 2026-11-03): law (4) attributes the
-# frame's GPU time to named rows and cannot tell another context's time slices on the card from a gap - it read FAIL ALONE
-# on the card ("ms of gaps no row names", "a nested row leaves ms to no child"; width 1's second run, the desktop's browser
-# holding 3.8 GB of the card) and beside any neighbour; it runs where the card is ours alone (scripts/width_pair.py
-# TIMING_LAW_ROWS).
+# LAW (4) IS JUDGED ON THIS PROCESS's OWN TIMESTAMP SPANS - A FOREIGN CONTEXT's SLICE IS NOT A GAP (the landing audit's
+# F6, 2026-11-04; the derivation in monitor.sh): a slice of another context is one contiguous interval, so it lands in ONE of
+# our spans - (4a) the frame's unnamed time less its widest gap, per frame; (4b) the widest gap and each enclosing row's own
+# time by their median over the judged frames. It replaces block C's relabel to `measure` (the row read FAIL alone on a card
+# a desktop browser shared: an excluded row, CODING_RULES §1); a guard again, run where its diff reaches it.
 jah_gpu_row(lab.monitor CLASS engine FRAMES 127
     COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/monitor.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/monitor
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-set_tests_properties(lab.monitor PROPERTIES TIMEOUT 60 LABELS "lab;measure")
+set_tests_properties(lab.monitor PROPERTIES TIMEOUT 60 LABELS "lab")
 
 # lab.card_set_binds (PHOTON-7 stage 10-3, F3 and its fit) - THE REST SET IS THE POSE's AT ONE FRUSTUM, BY TWO PATHS, WHERE
 # THE ATLAS BINDS: atom-street at 1920 x 1080 (its demand fills the 256 pages), at rest at the street's pose, then a far

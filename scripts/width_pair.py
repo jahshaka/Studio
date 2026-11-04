@@ -100,10 +100,9 @@ VRAM_HEADROOM = 0.90       # width W's VRAM peak under 90 % of the card's memory
 SAMPLE_MS = 250
 # A ROW WITH A TIMING LAW the labels cannot see: gi.walk_court's hitch law reads the frame's wall (the spec's stage 4: "only
 # the 7 GPU measure rows and gi.walk_court carry timing laws").
-# lab.monitor (block C, 2026-11-03, the lead's ruling): its law (4) attributes the frame's GPU time to named rows and cannot
-# tell a foreign context's time slices from a gap - it read FAIL ALONE on the card (width 1's second run, the desktop's
-# browser holding 3.8 GB of the card) and at widths 2 and 3; a timing-law row, `measure` since
-TIMING_LAW_ROWS = {"gi.walk_court", "lab.monitor"}
+# (lab.monitor left it, the landing audit's F6: its law (4) is judged on its own process's spans - a foreign context's slice
+# is not a gap, tests/lab/monitor.sh - so a neighbour's slices cannot red it; block C's relabel to `measure` is reverted)
+TIMING_LAW_ROWS = {"gi.walk_court"}
 OOM = re.compile(r"OUT_OF_DEVICE_MEMORY|OUT_OF_HOST_MEMORY|out of (device|video) memory", re.I)
 XID = re.compile(r"\bXid\b")
 RESULT = re.compile(r"^\s*\d+/\d+ Test\s+#\d+: (\S+) \.*\s*(.*?)\s+([\d.]+) sec\s*$")
