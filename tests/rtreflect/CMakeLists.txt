@@ -340,9 +340,9 @@ endif()
 if(TARGET jahlab)
     # rtreflect.still_after_stop SPLIT BY PROOF (PHOTON-7 8B B2: the hold at 828 since the stop counts samples - the
     # walk's 1,000-frame window and the path's two windows no longer fit one row): .hold (the walk alone: (a), (a2),
-    # (b'), (c), (g); 231 + 1,000 + 1 frames) and .path ((d), the walk and the teleport at equal placements at an equal
+    # (b'), (c), (g); 231 + 500 + 1 frames - the 500-frame span PHOTON-7-9A's (b') law needs) and .path ((d), the walk and the teleport at equal placements at an equal
     # rest index before the hold - 450 frames each, per-index determinism; 231 + 2 x 450 + the bridge).
-    jah_gpu_row(rtreflect.still_after_stop.hold CLASS engine FRAMES 1232
+    jah_gpu_row(rtreflect.still_after_stop.hold CLASS engine FRAMES 732
         COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop_hold hold
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
