@@ -50,7 +50,7 @@ case "$1" in
   mark) read p _ < "$MARKFILE" && kill -0 "$p" && exit 0; echo "FAIL: no live check mark at $MARKFILE"; exit 1 ;;
   oomclobber) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; rm -rf "$CLOBBER"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
   tiny) s=0; [ "$(n)" -gt 1 ] && s=1; sleep 0.02; [ "$(n)" -gt 1 ] && s=1; [ $s = 1 ] && sleep 0.05; exit 0 ;;
-  near) i=0; s=0; while [ $i -lt 4 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; sleep 0.5; [ $s = 1 ] && sleep 0.4; exit 0 ;;
+  near) i=0; s=0; while [ $i -lt 4 ]; do set -- "$VRAMDIR"/*; [ $# -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; sleep 0.5; [ $s = 1 ] && sleep 0.4; exit 0 ;;
   conflict) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 1 ] && { echo "a neighbour on the card"; exit 1; }; sleep 0.05; i=$((i+1)); done ;;
   oom) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
   over) s=0; [ "$(n)" -gt 1 ] && s=1; sleep 1.2; [ "$(n)" -gt 1 ] && s=1; [ $s = 1 ] && sleep 0.1; exit 0 ;;
@@ -261,7 +261,9 @@ elif PART == "bars":
     #     inflation bar, max(x1.5, +0.5 s) = ~1.26 s) past its 1-s budget. THE ALONE WALL IS A SLEEP, NOT POLLS (TE8, 2026-11-04):
     #     it was 16 forking polls, 0.86 s solo, 0.14 s under the budget, and the code gate's -j12 load stretched the forks past
     #     it - read "over its class budget alone", left out, width 2 adopted: a false red. Now 4 polls (the neighbour's 0.2 s),
-    #     then a sleep load cannot stretch: ~0.24 s under the budget alone, ~0.16 s over it at width 2, ~0.1 s under the bar
+    #     then a sleep load cannot stretch: ~0.24 s under the budget alone, ~0.16 s over it at width 2, ~0.1 s under the bar.
+    #     THE POLLS FORK NOTHING (the landing audit's LOW, 2026-11-04; CODING_RULES §6): a poll counts the fake card's files
+    #     with the shell's own glob (`set -- "$VRAMDIR"/*`), never `ls | wc` in a command substitution - its margin is sleeps alone
     bn = toy("near", [("toy.near", "near", "")])
     rc, out, labels, recs = run(bn, "--display", ":71", "--order", "1,2", "--budget-scale", "0.1")
     ref = [ln for ln in out.splitlines() if "REFUSED" in ln]
