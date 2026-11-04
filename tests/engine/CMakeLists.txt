@@ -357,6 +357,17 @@ jah_no_display(engine.moving_sample)
 # engine.hit_list_law — THE REFLECTION REST's RECORD ALLOWANCE as a pure function (URGENT #157; test_hit_list_law.cpp says
 # the law): a function of the view's target (its hit list's creation capacity) and the rest's batching count, never of
 # how large the list once grew; a list smaller than its creation size caps it. The header only: a CPU code row.
+# IT IS ALSO THE ROW OF irisgl 4576b132's detachScene RESET (mHitListRows = 0), and no row of its own exists, for a stated
+# reason (the landing audit's F7, the lead's ruling (a), 2026-11-04; card/te9: the host arm hit_list_rebind could not grow
+# the list - a 924 x 565 view's demand ~652k records under 825,344 - and was deleted):
+# - a SAME-SHAPE re-attach keeps the old workspace definition's rows: OgreView::setScene rebuilds the definition only on
+#   sceneShapeMoved() (OgreView.cpp:1027), and hitListRows is not shape (OgreChain.cpp:695; the list's rows,
+#   OgreChain.cpp:2177);
+# - the allowance reads min(the list as built, the creation capacity) (HitListLaw.h, this row), so the PICTURE never
+#   depends on the rows;
+# - the reset shows only at the next definition rebuild after a shape change in the new scene.
+# The history-dependent list SIZE (memory, not picture) is the lead's declared item; its fixer is a builder (the list
+# re-made at max(0, create) on a re-attach).
 add_executable(test_hit_list_law test_hit_list_law.cpp)
 set_target_properties(test_hit_list_law PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
 target_include_directories(test_hit_list_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
