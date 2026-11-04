@@ -8,7 +8,7 @@
 // 1.100 after the same 37 frames), so a scripted picture was a function of the box's pace. Only the render driver's
 // free-running tick takes the wall (the owner's real-time session, EngineSceneViewport::syncFrame(-1)), and the
 // timeline panel's preview play turns its wall time into whole steps through a SimulationClock of its own.
-// Header-only, no Qt: unit-tested (tests/app test_frame_step.cpp).
+// Header-only, no Qt. Its law at the door: pool.host_epic::frame_step (tests/scripting/scripts/e2e_frame_step.js).
 
 #include "irisgl/document/scenegraph/simulationclock.h"
 

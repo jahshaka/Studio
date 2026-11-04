@@ -63,17 +63,6 @@ foreach(_half default fixture)
         TIMEOUT 60 LABELS "app")  # the 60 s cap (URGENT #48); the short run (PHOTON-7 stage 10: the fixed frames a quarter)
 endforeach()
 
-# app.frame_step — A LOCKSTEP FRAME IS ONE GRID STEP (TEST-STREAMLINE-1 red (b); src/viewport/framestep.h, its law in
-# test_frame_step.cpp): n scripted frames advance the document clock by exactly n steps at any wall pace (the wall rule fed
-# as the negative control), a scripted dt is >= 0 and within the bound, the timeline preview moves by whole steps. A CPU
-# code row: the header and the document's clock only.
-add_executable(test_frame_step test_frame_step.cpp)
-set_target_properties(test_frame_step PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
-target_include_directories(test_frame_step PRIVATE ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR})
-add_test(NAME app.frame_step COMMAND test_frame_step)
-set_tests_properties(app.frame_step PROPERTIES TIMEOUT 60 LABELS "app")
-jah_no_display(app.frame_step)
-
 # app.engine_selftest_shapes.{alone,after_default} — FIXTURE B IS A FUNCTION OF ITS OWN SCENE (URGENT #157; the law and
 # its cause: engine_selftest_shapes.sh). .alone runs the fixture half alone and keeps its B1 / B2 / mover pictures (the
 # setup); .after_default runs the full six-pose shape and its three must be BYTE-EQUAL to them: whatever the default half

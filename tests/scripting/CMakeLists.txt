@@ -1061,9 +1061,16 @@ endif()
 # ruling: no arm depends on being first), so any order runs the same scenes. ON since TE7 (2026-11-04, JAH_HOST_POOLS:
 # its clean-state law HOLDS once red (b) made a lockstep frame one grid step); the arms' seconds are their measured ARM
 # walls rounded up (1.98 / 1.95 and 3.02 / 2.97 s, forward / reversed: card/te7/b2-host_epic.out) - were 10 / 12 estimates.
+# THE frame_step ARM (the landing audit's F5, 2026-11-04): A SCRIPTED FRAME IS ONE GRID STEP AT THE DOOR - play, then
+# editor.frame(37) moves the clock exactly 37 steps and a played lamp 37/60 s, editor.frame(10, 1/30) exactly 20, a negative
+# or past-the-bound dt refused with the clock unmoved (e2e_frame_step.js). It needs an engine (editor.frame refuses on the
+# NULL headless route: requireEngine), so it is a host arm; this pool already plays and steps (paused_shot), and the arm
+# makes its own project, so no order changes it. Replaces app.frame_step (a CPU loop that never reached a door). Its 1 s
+# and its frames are PROVISIONAL - an estimate from paused_shot's 37 + 10 frames, unmeasured until its first card run.
 if("host_epic" IN_LIST JAH_HOST_POOLS)
     jah_pool_arm(host_epic change_then_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js 2)
     jah_pool_arm(host_epic paused_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js 4)
+    jah_pool_arm(host_epic frame_step ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_frame_step.js 1)
     jah_add_pool(host_epic TIER epic NEEDS photon APP_ARGS ${JAH_HOST_ARGS} LABELS "scripting")
-    set_property(TEST pool.host_epic PROPERTY JAHSHAKA_TEST_FRAMES 800)   # the two rows' measured 400 + 400
+    set_property(TEST pool.host_epic PROPERTY JAHSHAKA_TEST_FRAMES 847)   # the two rows' measured 400 + 400, + frame_step's 47 (37 + 10, provisional)
 endif()
