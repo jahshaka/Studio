@@ -199,6 +199,23 @@ def speed_cases(source, build):
                                             "bool X::init(int a) {\n  auto f = [&]() {\n    a += 2;\n  };\n}\n",
                                             [(3, 1, 3, 1)]) == {"init": 2},
           "18. the walk steps OUT of a lambda to its member function, and `init` stays `init` (no generic-word filter)")
+    # 18b. THE INVENTORY READS WHAT CTEST READS (ROUTE-ROWS-1, 2026-11-04: source.timeout_cap died copying a scratch
+    # CTestTestfile a sibling row - tooling.width_pair - had made and deleted under the build while it walked): the top
+    # CTestTestfile and its subdirs() chain only - a scratch build under the tree is never read, and a named subdir that
+    # vanished is skipped, never a crash. FED THE VIOLATION: the old os.walk lists the scratch file.
+    tdir = tempfile.mkdtemp(prefix="gsr-ctestfiles-")
+    try:
+        for rel, body in ((".", 'subdirs("a")\nsubdirs("gone")\n'), ("a", 'subdirs("b")\n'), ("a/b", ""),
+                          ("a/scratch-x/clean", 'subdirs("y")\n')):
+            os.makedirs(os.path.join(tdir, rel), exist_ok=True)
+            open(os.path.join(tdir, rel, "CTestTestfile.cmake"), "w").write(body)
+        got = [r for r, _, _ in gs.gate_graph.ctest_testfiles(tdir)]
+        walked = sorted(os.path.relpath(dp, tdir) for dp, _, fs in os.walk(tdir) if "CTestTestfile.cmake" in fs)
+        check(got == [".", "a", "a/b"] and "a/scratch-x/clean" in walked,
+              "18b. the inventory's files are ctest's chain (%s), never a scratch build under the tree (the walk "
+              "would read %s), and a vanished subdir is skipped" % (got, walked))
+    finally:
+        shutil.rmtree(tdir, ignore_errors=True)
     # 19. a comment-only edit selects nothing
     ca = open(os.path.join(source, "irisgl/engine/src/OgreChain.cpp"), errors="replace").read()
     S = sel(["irisgl/engine/src/OgreChain.cpp"], revs=fake({"irisgl/engine/src/OgreChain.cpp": (ca, ca + "\n// tsa\n")}))

@@ -638,6 +638,30 @@ class NinjaGraph:
         return s
 
 
+def ctest_testfiles(build):
+    """[(dir relative to `build`, mtime_ns, size)] of EXACTLY the CTestTestfile.cmake files ctest reads: the build's top
+    one and every `subdirs("...")` it names, recursively - never an os.walk of the tree (2026-11-04, ROUTE-ROWS-1: a
+    row's own scratch build under the tree - tooling.width_pair's width-pair-budget-*/clean - was created and deleted
+    while a sibling row walked, and source.timeout_cap died copying a CTestTestfile that had vanished; ctest never reads
+    such a file, so it is neither the inventory's key nor its copy)."""
+    out, seen, stack = [], set(), ["."]
+    while stack:
+        rel = os.path.normpath(stack.pop())
+        if rel in seen or rel == ".." or rel.startswith(".." + os.sep) or os.path.isabs(rel):
+            continue
+        seen.add(rel)
+        f = os.path.join(build, rel, "CTestTestfile.cmake")
+        try:
+            st = os.stat(f)
+            with open(f, errors="replace") as fh:
+                text = fh.read()
+        except OSError:
+            continue
+        out.append((rel, st.st_mtime_ns, st.st_size))
+        stack.extend(os.path.join(rel, m.group(1)) for m in re.finditer(r'^\s*subdirs\("([^"]+)"\)', text, re.M))
+    return sorted(out)
+
+
 def ctest_inventory(build):
     """`ctest --show-only=json-v1` for a build dir, run in a COPY of its CTestTestfile.cmake tree (a listing in the
     build dir itself truncates a running ctest's LastTest.log), cached per build state in .gate-scope-inventory.json
@@ -646,16 +670,7 @@ def ctest_inventory(build):
     import json as _json
     import shutil
     import tempfile
-    files = []
-    for dp, _, fs in os.walk(build):
-        if "CTestTestfile.cmake" in fs:
-            f = os.path.join(dp, "CTestTestfile.cmake")
-            try:
-                st = os.stat(f)
-            except OSError:
-                continue
-            files.append((os.path.relpath(dp, build), st.st_mtime_ns, st.st_size))
-    files.sort()
+    files = ctest_testfiles(build)
     try:
         nl = os.stat(os.path.join(build, ".ninja_log")).st_mtime_ns
     except OSError:
