@@ -562,6 +562,16 @@ def r18_bad(listed, tests):
 ROUTES_PENDING = os.path.join("tests", "hygiene", "routes_pending.txt")
 ROUTE_WORDS = {"gather", "integrate", "reflection", "field", "cards", "store", "paused", "none"}
 _ROUTES_CALL = re.compile(r"\b(declareRoutes|requireRoutes)\s*\(")
+# THE LAB's DECLARATION (PHOTON-7-9A): a jahlab row's script writes a lab `routes <words>` line (the lab judges it against
+# the frame's published record, src/lab/labsession.cpp judgeDeclaredRoutes) - at a line's start, after a quote or a
+# whitespace, or after a written `\n` (a printf's line); its words from the routes' set
+_ROUTE_ALT = "|".join(sorted(ROUTE_WORDS))
+_LAB_ROUTES = re.compile(r"(?:^|[\s'\"]|\\n)routes\s+(?:%s)(?:[ \t]+(?:%s))*" % ((_ROUTE_ALT,) * 2), re.MULTILINE)
+
+
+def _sh_blank(text):
+    """A shell script's text with its comment lines (first non-blank character `#`) blanked."""
+    return "\n".join("" if line.lstrip().startswith("#") else line for line in text.splitlines())
 
 
 def routes_pending(text):
@@ -592,12 +602,17 @@ def r16_fixture_sources(source):
 
 
 def r16_declares(sources):
-    """declares(test) -> True when the row's fixture calls declareRoutes / requireRoutes outside a comment or string;
-    False for a jahlab row (the lab has no declaration yet) or a fixture that does not."""
+    """declares(test) -> True when the row's fixture calls declareRoutes / requireRoutes outside a comment or string, or -
+    a jahlab row - when a shell script its command names holds a lab `routes <words>` line outside a comment (the lab's
+    declaration, PHOTON-7-9A); False otherwise."""
     memo = {}
 
     def declares(t):
-        words = [os.path.basename(str(w)) for w in t.get("command") or []]
+        cmd = [str(w) for w in t.get("command") or []]
+        if any(os.path.basename(w) == "jahlab" for w in cmd):
+            return any(_LAB_ROUTES.search(_sh_blank(open(w, errors="replace").read()))
+                       for w in cmd if w.endswith(".sh") and os.path.isfile(w))
+        words = [os.path.basename(w) for w in cmd]
         exe = next((w for w in words if w in sources), None)
         if exe is None:
             return False
@@ -913,6 +928,17 @@ def the_rules_catch():
           "listed row that declares now or is gone is stale; a declaration of a word outside the routes, or a view naming "
           "no gather / integrate / none, is malformed; a CPU row and another subject are never read (%s %s %s)"
           % (new16, stale16, bad16))
+    # THE LAB's DECLARATION (PHOTON-7-9A): a jahlab row whose script writes a `routes` line declares; a commented one does
+    # not (the old rule answered False for every jahlab row: RED there)
+    import tempfile
+    with tempfile.TemporaryDirectory() as td16:
+        decl, cmt = os.path.join(td16, "decl.sh"), os.path.join(td16, "cmt.sh")
+        open(decl, "w").write("#!/bin/bash\nprintf 'routes gather reflection store\\ncamera 0,1,2,0,0,0\\nquit\\n' > x.lab\n")
+        open(cmt, "w").write("#!/bin/bash\n# routes gather reflection\nprintf 'camera 0,1,2,0,0,0\\nquit\\n' > x.lab\n")
+        lab16 = lambda name, sh: dict(T(name, JAH_CLASS="engine"), command=["sh", sh, "/b/bin/jahlab", "/b/w"])
+        d16 = r16_declares({})
+        check(d16(lab16("rtreflect.lab_decl", decl)) and not d16(lab16("rtreflect.lab_cmt", cmt)),
+              "R16 reads a jahlab row's declaration from its script's `routes` line, never from a shell comment")
     blank = _r10_blank('// enginetest::declareRoutes(v, s, r)\nconst char *x = "requireRoutes(";\n')
     check(not _ROUTES_CALL.search(blank) and _ROUTES_CALL.search(_r10_blank("enginetest::declareRoutes (v, s, r);")),
           "R16 reads a fixture's declaration in its code, never in a comment or a string")
