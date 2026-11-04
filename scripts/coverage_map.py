@@ -188,9 +188,16 @@ def collect(build, out, tip=None, records=(), inventory=None):
                     doc["why"][name] = why
                 continue
             (own if kind == "rows" else boots)[name] = got
+    # A SETUP THAT PASSED AND WROTE NO PROFILE IS WHOLE AND EMPTY (TE8, 2026-11-04): a home wipe (a fresh_home setup) or a seed
+    # its own stamp served runs no instrumented code, so it leaves no .gcda - it reads as a setup with no whole profile, and
+    # block E's first map lost 35 rows to their fresh_home setups. Its consumer's map is its own; a setup that did not PASS
+    # still leaves it no_profile. The setup itself stays unmapped (the table).
+    empty_ok = {x for x, v in verdicts.items() if v == "PASS" and x not in own
+                and doc["why"].get(x, "no .gcda") == "no .gcda"}
     for name, got in own.items():
         need = setups.get(name, [])
-        if any(x not in own for x in need if x in verdicts or os.path.isdir(os.path.join(build, "coverage", "rows", x))):
+        if any(x not in own and x not in empty_ok for x in need
+               if x in verdicts or os.path.isdir(os.path.join(build, "coverage", "rows", x))):
             doc["no_profile"].append(name)
             doc["why"][name] = "a fixture setup it requires has no whole profile"
             continue

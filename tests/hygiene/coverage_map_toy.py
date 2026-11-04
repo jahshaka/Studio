@@ -64,8 +64,8 @@ with tempfile.TemporaryDirectory() as t:
         os.makedirs(env["GCOV_PREFIX"], exist_ok=True)
         return subprocess.run([os.path.join(b, exe)] + list(args), cwd=b, env=env).returncode
     rc = [run("nowrap", "row.nowrap"), run("row", "row.A"), run("row", "row.B", "B"), run("row", "row.F"), run("row", "row.C"),
-          run("row", "row.S"), run("row", "app-off", kind="boots")]
-    law(rc == [0] * 7, "seven toy runs (five rows, a setup, a boot) ran (%s)" % rc)
+          run("row", "row.S"), run("row", "app-off", kind="boots"), run("row", "row.D"), run("row", "row.E")]
+    law(rc == [0] * 9, "nine toy runs (seven rows, a setup, a boot) ran (%s)" % rc)
     # row.C's profile torn (a gcov error); the pass's records (row.F FAILED); row.B requires row.S's fixture
     for dp, _, fs in os.walk(os.path.join(b, "coverage", "rows", "row.C")):
         for f in fs:
@@ -73,11 +73,18 @@ with tempfile.TemporaryDirectory() as t:
                 open(os.path.join(dp, f), "wb").write(b"torn")
     recs = os.path.join(t, "pass.jsonl")
     with open(recs, "w") as fh:
-        for r, v in (("row.nowrap", "PASS"), ("row.A", "PASS"), ("row.B", "PASS"), ("row.F", "FAIL"), ("row.C", "PASS"), ("row.S", "PASS")):
+        for r, v in (("row.nowrap", "PASS"), ("row.A", "PASS"), ("row.B", "PASS"), ("row.F", "FAIL"), ("row.C", "PASS"), ("row.S", "PASS"),
+                     ("row.D", "PASS"), ("row.E", "PASS"), ("row.W", "PASS"), ("row.Wf", "FAIL")):
             fh.write(json.dumps({"suite": r, "verdict": v, "ts": "2026-11-03T00:00:00+01:00"}) + "\n")
     inv = os.path.join(t, "inv.json")
     json.dump({"tests": [{"name": "row.S", "properties": [{"name": "FIXTURES_SETUP", "value": ["fx"]}]},
-                         {"name": "row.B", "properties": [{"name": "FIXTURES_REQUIRED", "value": ["fx"]}]}]}, open(inv, "w"))
+                         {"name": "row.B", "properties": [{"name": "FIXTURES_REQUIRED", "value": ["fx"]}]},
+                         # row.W: a home WIPE (a fresh_home setup: runs no instrumented code, writes no .gcda) that PASSED;
+                         # row.Wf: one that FAILED - each the setup of a row that ran the engine
+                         {"name": "row.W", "properties": [{"name": "FIXTURES_SETUP", "value": ["fxw"]}]},
+                         {"name": "row.D", "properties": [{"name": "FIXTURES_REQUIRED", "value": ["fxw"]}]},
+                         {"name": "row.Wf", "properties": [{"name": "FIXTURES_SETUP", "value": ["fxf"]}]},
+                         {"name": "row.E", "properties": [{"name": "FIXTURES_REQUIRED", "value": ["fxf"]}]}]}, open(inv, "w"))
     m = os.path.join(t, "map.json")
     p = subprocess.run([sys.executable, "-I", CM, "collect", b, m, "--tip", "toy", "--records", recs, "--inventory", inv],
                        capture_output=True, text=True)
@@ -94,6 +101,12 @@ with tempfile.TemporaryDirectory() as t:
     law({"row.F", "row.C"} <= np_ and "row.F" not in rows and "row.C" not in rows,
         "(5) a FAILED row (its pass record) and a row whose .gcda gcov cannot read are no_profile, never 'ran nothing' (%s)"
         % {k: doc.get("why", {}).get(k) for k in ("row.F", "row.C")})
+    law({tuple(x) for x in rows.get("row.D", [])} == {("src/lib.cpp", "work"), ("src/lib.cpp", "spin")} and "row.E" in np_
+        and "row.W" not in rows,
+        "(9) a setup that PASSED and wrote no profile (a home wipe: it ran no instrumented code) is whole and EMPTY - its "
+        "consumer row.D mapped %s; a FAILED one leaves its consumer row.E no_profile (%s); the wipe itself is not mapped "
+        "(TE8, 2026-11-04: 35 rows of block E's map lost to their fresh_home setups)"
+        % (sorted({tuple(x) for x in rows.get("row.D", [])}), doc.get("why", {}).get("row.E")))
     law({tuple(x) for x in doc.get("boots", {}).get("app-off", [])} == {("src/lib.cpp", "work"), ("src/lib.cpp", "spin")},
         "(6) a warm-up boot's profile (coverage/boots/<boot>) collected as its boots entry, by the real collector")
     law(json.dumps(doc).find(t) < 0, "(3) the map names no tree path (files under the source root)")
