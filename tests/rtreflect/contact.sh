@@ -1,8 +1,8 @@
 #!/bin/bash
 # rtreflect.contact (PHOTON-7 stage 6, AB E15 / ONE_PICTURE C3; READ_A findings 1 and 2) — THE CONTACT MEETS ITS
 # REFLECTION, AND NO RAY HITS ITS OWN SURFACE. jahlab, 1920x1080 (the 45-degree view the projection below assumes), 50
-# frames a shot (the mirror is the lobe's centre ray: exact on its first frame; 50 clears the young view's warm-up and
-# the GI's first frames). Two sessions:
+# frames a shot (the mirror is the lobe's centre ray: exact on its first frame; 50 clears the reflection's first
+# samples and the GI's first frames). Two sessions:
 #   photon-ramp: the 0.00 strip's post on its 10 cm matte black FOOT (0.02-0.12 m), an emitter above it, from 2.4 m
 #     (envcam 2) and 1 m (envcam 3) - THE HYBRID, the one shape (PHOTON-7-9A, the owner's ruling: the screen trace first
 #     where the previous picture vouches for the hit, the ray from the lifted origin elsewhere; no mode).

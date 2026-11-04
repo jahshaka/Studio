@@ -4939,8 +4939,9 @@ void vr_view_policy_keeps_the_project_and_drops_what_has_no_per_eye_form() {
     // ...and a description that asks for nothing is untouched but for the one
     // field whose DEFAULT is not what a stereo view may have: the offscreen
     // opt-in (no VR view ever renders a passthrough shape). (The reflection has
-    // no mode to drop since PHOTON-7-9A: a ray chain's reflection is its rays,
-    // on the desktop and in the headset alike.)
+    // no mode to drop since PHOTON-7-9A: one hybrid shape, screen first then
+    // rays - the headset's one difference, no screen sources, is the chain's
+    // rule, not a policy edit of this description.)
     PostFxDesc plain;
     PostFxDesc plainEye = plain;
     applyVrViewPolicy(plainEye);
