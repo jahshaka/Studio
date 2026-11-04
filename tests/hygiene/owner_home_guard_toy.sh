@@ -27,6 +27,16 @@ case_ ran "fresh_home: a relative JAHSHAKA_DATA_ROOT (beside the app)" env HOME=
 printf '#!/bin/sh\nexec "$@" --data-root "%s/h10/run"\n' "$T" > "$T/wrap.sh"
 case_ ran "fresh_home: a wrapper script given the app (it sets the root itself) is not judged" env HOME="$O" sh "$FH" "$T/h10" -- sh "$T/wrap.sh" "$T/bin/Jahshaka"
 case_ refused "fresh_home: nice -n 10 env HOME=<owner's> <app>" env HOME="$T/h11" sh "$FH" "$T/h11" -- nice -n 10 env HOME="$O" "$T/bin/Jahshaka"
+# THE LAUNCH WRAPPERS (the landing audit's LOW, 2026-11-04: `timeout 60 <app>` was not judged - its DURATION read as the
+# program): timeout, taskset, ionice, setsid, stdbuf, nice and env, with their options and positional words, any nesting
+case_ refused "fresh_home: timeout 60 <app>, HOME the owner's" env HOME="$O" sh "$FH" "$T/h12" -- timeout 60 "$T/bin/Jahshaka"
+case_ refused "fresh_home: taskset -c 10-19 nice -n 10 ionice -c 3 setsid timeout -k 5 60 stdbuf -oL env HOME=<owner's> <app>" \
+    env HOME="$T/h13" sh "$FH" "$T/h13" -- taskset -c 10-19 nice -n 10 ionice -c 3 setsid timeout -k 5 60 stdbuf -oL \
+    env HOME="$O" "$T/bin/Jahshaka"
+case_ ran "fresh_home: timeout --signal KILL 60 taskset 0x400 <app> on a test home" env HOME="$T/h14" sh "$FH" "$T/h14" -- \
+    timeout --signal KILL 60 taskset 0x400 "$T/bin/Jahshaka"
+case_ ran "fresh_home: timeout 60 <app> --data-root <a test home> beats the owner's HOME" env HOME="$O" sh "$FH" "$T/h15" -- \
+    timeout 60 "$T/bin/Jahshaka" --data-root "$T/h15/run"
 rm -f "$T/ran"; env HOME="$O" sh "$FH" "$T/h9" -- /bin/true; rc=$?
 [ $rc = 0 ] && echo "ok:   fresh_home: a command that is not the app (an engine fixture's) is never judged (rc $rc)" || { echo "FAIL: a non-app command refused (rc $rc)"; fails=$((fails + 1)); }
 rm -rf "$T"
