@@ -95,6 +95,9 @@ private:
     bool lamp(const Command &c);
     /// `sky brightness|rayleigh <v>` (PHOTON-7-9A): the realistic sky's dial in the document (parseSkyDial's rule).
     bool sky(const Command &c);
+    /// `routes <words>` (PHOTON-7-9A): the lab's route declaration, judged after each frame drawn (judgeDeclaredRoutes)
+    bool routes(const Command &c);
+    void judgeDeclaredRoutes();
     bool material(const Command &c);
     bool move(const Command &c);
     bool slide(const Command &c);
@@ -135,6 +138,9 @@ private:
     bool mHdrReadback = false;   ///< `cardat` turned the view's float readback on (PostFxDesc::hdrReadback)
     bool mQuit = false;
     int mExit = 0;
+    RouteSet mRoutesDeclared;     ///< the `routes` verb's declaration (judged after each frame while pending)
+    bool mRoutesPending = false;
+    int mRoutesFrames = 0;
     unsigned long long mFrames = 0;
     unsigned long long mSceneTriangles = 0;
     int mShotSerial = 0;

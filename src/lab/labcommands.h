@@ -44,6 +44,19 @@ bool parse(const std::string &line, Command &out, std::string &error);
 /// (tests/lab/test_lab_sky_verb.cpp).
 bool parseSkyDial(const std::string &word, float &out, std::string &error);
 
+/// THE ROUTES VERB (`routes <words>`, the lab's route declaration - URGENT #146's for jahlab rows; PHOTON-7-9A): the
+/// declared set, its text and its judgement against a frame's own record - the same law as enginetest::requireRoutes
+/// (tests/support/enginetesthelpers.h): the chain's three routes and the pause EXACT, a declared product (field, cards,
+/// store) live by the kRouteProductFrames-th frame after the declaration (a product still coming answers Wait). Held by
+/// lab.routes_verb (tests/lab/test_lab_routes_verb.cpp).
+struct RouteSet { bool gather = false, integrate = false, reflection = false, field = false, cards = false, store = false,
+                  paused = false; };
+enum class RouteVerdict { Match, Wait, Mismatch };
+constexpr int kRouteProductFrames = 16;   ///< enginetest::kRouteProductFrames' (the store's first voxelisation, the field's pass)
+bool parseRoutes(const std::vector<std::string> &words, RouteSet &out, std::string &error);
+std::string routesText(const RouteSet &r);
+RouteVerdict judgeRoutes(const RouteSet &declared, const RouteSet &actual, int frame);
+
 /// The whole help text: the keys, the verbs and the flags.
 std::string helpText();
 

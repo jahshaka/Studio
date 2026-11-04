@@ -63,6 +63,16 @@ add_test(NAME lab.sky_verb COMMAND test_lab_sky_verb)
 set_tests_properties(lab.sky_verb PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(lab.sky_verb)
 
+# lab.routes_verb (PHOTON-7-9A) — THE LAB's ROUTE DECLARATION (test_lab_routes_verb.cpp says the law: enginetest::
+# requireRoutes' own - the chain and the pause exact, a declared product live by the 16th frame). The parser and the judge
+# compile alone (src/lab/labcommands.cpp): a CPU code row.
+add_executable(test_lab_routes_verb test_lab_routes_verb.cpp ${CMAKE_SOURCE_DIR}/src/lab/labcommands.cpp)
+set_target_properties(test_lab_routes_verb PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_lab_routes_verb PRIVATE ${CMAKE_SOURCE_DIR}/src/lab)
+add_test(NAME lab.routes_verb COMMAND test_lab_routes_verb)
+set_tests_properties(lab.routes_verb PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(lab.routes_verb)
+
 # lab.env_expectation_printed (stage 2) — `jahlab --env-list` prints every environment's law and its closed-form
 # expectation at each dolly stop (22 / 88 / 177 / 354 m), every value a finite number. CPU only.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)

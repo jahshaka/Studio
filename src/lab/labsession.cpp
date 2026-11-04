@@ -469,6 +469,7 @@ void Session::frame()
     mMirror->sync(SceneMirror::FrameViews{ { fv } });
     mEngine->renderOneFrame();
     ++mFrames;
+    if (mRoutesPending) judgeDeclaredRoutes();
     if (mFrames % (kStatsWindowFrames / 2) == 0) mEngine->publishRenderStats(kStatsWindowFrames);
     if (mOverlay && mFrames % kOverlayEveryFrames == 0) pushOverlay();
 }
@@ -1328,6 +1329,8 @@ bool Session::exec(const Command &c)
         ok = lamp(c);
     } else if (c.verb == "sky") {
         ok = sky(c);
+    } else if (c.verb == "routes") {
+        ok = routes(c);
     } else if (c.verb == "material") {
         ok = material(c);
     } else if (c.verb == "photon") {
@@ -1590,6 +1593,47 @@ bool Session::lamp(const Command &c)
     }
     labFail("LAB REFUSED lamp: '%s' (intensity | position)\n", c.args[1].c_str());
     return false;
+}
+
+// THE ROUTES VERB (URGENT #146 for the lab; PHOTON-7-9A): the declaration, then judged after each frame drawn until it
+// matches, against that frame's own PUBLISHED record (a host's door, never the fixtures': R11): the view's chain as built
+// (PublishedEngineFrame::ViewFrames' routes - engine.published_routes holds them equal to the inspect door's), the scene's
+// products (GiStatus) and the pause as this host set it (the document's GI update budget, what the mirror pushes).
+bool Session::routes(const Command &c)
+{
+    RouteSet r;
+    std::string why;
+    if (!parseRoutes(c.args, r, why)) { labFail("LAB REFUSED routes: %s\n", why.c_str()); return false; }
+    mRoutesDeclared = r;
+    mRoutesPending = true;
+    mRoutesFrames = 0;
+    return true;
+}
+
+void Session::judgeDeclaredRoutes()
+{
+    RouteSet a;
+    const PublishedEngineFrame::ViewFrames row = mView->published();
+    a.gather = row.routeGather; a.integrate = row.routeIntegrate; a.reflection = row.routeReflect;
+    const GiStatus gs = mScene->published().gi;
+    a.field = gs.ifdBound;
+    a.cards = gs.cards.built;
+    a.store = !gs.cascades.empty();
+    a.paused = mDoc->giUpdateBudget == 0;   // (the host's own: SceneMirror pushes GiParams::updateBudget from it)
+    const RouteVerdict v = judgeRoutes(mRoutesDeclared, a, ++mRoutesFrames);
+    if (v == RouteVerdict::Wait) return;
+    mRoutesPending = false;
+    if (v == RouteVerdict::Match) {
+        std::printf("LAB ROUTES declared {%s}, the frame ran {%s} (frame %d after the declaration) - ok\n",
+                    routesText(mRoutesDeclared).c_str(), routesText(a).c_str(), mRoutesFrames);
+        return;
+    }
+    labFail("LAB FAILED routes: declared {%s} but the frame's own record says {%s} (frame %d after the declaration; "
+            "the chain exact, the products live by frame %d) - fix the row's premise or its declaration before any law\n",
+            routesText(mRoutesDeclared).c_str(), routesText(a).c_str(), mRoutesFrames, kRouteProductFrames);
+    std::fflush(stdout);
+    mExit = 1;
+    mQuit = true;
 }
 
 bool Session::sky(const Command &c)
@@ -2283,6 +2327,11 @@ int Session::run(const Options &opt)
                         "window's close or `quit`\n", mOpt.readStdin ? ", stdin is closed" : "");
             std::fflush(stdout);
         }
+    }
+    if (mRoutesPending) {   // a declaration no frame judged: the row measured nothing it said (the helper's exit law)
+        labFail("LAB FAILED routes: declared {%s} and no frame judged it before the run ended\n",
+                routesText(mRoutesDeclared).c_str());
+        mExit = 1;
     }
     std::printf("LAB END frames %llu, %.0f ms, exit %d\n", mFrames, msSinceStart(), mExit);
     std::fflush(stdout);
