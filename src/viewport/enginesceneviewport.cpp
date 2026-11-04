@@ -3172,6 +3172,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.reflectRestBound = rq.reflectRestBound;
         out.rayQuery.reflectRestBoundOwed = rq.reflectRestBoundOwed;
         out.rayQuery.reflectRestNeedMax = rq.reflectRestNeedMax;
+        out.rayQuery.reflectShapeRefusals = rq.reflectShapeRefusals;
         out.rayQuery.reflectEmitters = rq.reflectEmitters;
         out.rayQuery.reflectNeeRays = rq.reflectNeeRays;
         out.rayQuery.reflectNeeHits = rq.reflectNeeHits;

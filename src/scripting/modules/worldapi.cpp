@@ -1358,6 +1358,9 @@ static QVariantMap rayQueryToJs(const IEditorViewport::GiStatusInfo::RayQueryInf
                         { QStringLiteral("reflectRestBound"), rq.reflectRestBound },
                         { QStringLiteral("reflectRestBoundOwed"), double(rq.reflectRestBoundOwed) },
                         { QStringLiteral("reflectRestNeedMax"), double(rq.reflectRestNeedMax) },
+                        // ...AND ITS SHAPE REFUSALS (PHOTON-7-9A: a recording on a chain not at its view's stereo shape -
+                        // a defect counter, the tier's; 0 is the law)
+                        { QStringLiteral("reflectShapeRefusals"), double(rq.reflectShapeRefusals) },
                         { QStringLiteral("reflectEmitters"), rq.reflectEmitters },
                         { QStringLiteral("reflectNeeRays"), double(rq.reflectNeeRays) },
                         { QStringLiteral("reflectNeeHits"), double(rq.reflectNeeHits) },

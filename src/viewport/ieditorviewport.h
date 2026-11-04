@@ -981,6 +981,7 @@ public:
             /// (PHOTON-7 stage 11; RayQueryStatus's).
             int reflectRestActive = -1, reflectRestCapped = -1, reflectRestBound = -1;
             unsigned reflectRestBoundOwed = 0, reflectRestNeedMax = 0;
+            unsigned long long reflectShapeRefusals = 0;   ///< (PHOTON-7-9A) recordings refused for a chain not at its view's stereo shape: 0 is the law
             int reflectEmitters = -1;
             unsigned long long reflectNeeRays = 0, reflectNeeHits = 0;
             /// THE HIT DECODE's list (PLANAR-RECORDS-1): records appended in the
