@@ -486,3 +486,5 @@ rtreflect.walk_world_hybrid.frozen 13.47  loaded (70-90 % CPU-idle, three lanes 
 rtreflect.walk_world_hybrid.worldA 12.30  loaded (70-90 % CPU-idle, three lanes on the card), the card lock held, :77, warm (HARNESS-3 (f), 2026-10-29, as rtreflect.walk_world_both)
 rtreflect.walk_world_hybrid.worldB 21.81  loaded (70-90 % CPU-idle, three lanes on the card), the card lock held, :77, warm (HARNESS-3 (f), 2026-10-29, as rtreflect.walk_world_both)
 rtreflect.mirror_blend 5.02  solo, the card lock held, :74, warm, by ctest (PHOTON-7-9A stage 0, 2026-11-03: RESTORED on the hybrid - photon-glass's mirror on a slow pan, 960x540, one jahlab session, a 60-frame prime and three poses of 4 x 8 frames: R under reflect.screenOff, again for the control, and B; 156 frames)
+engine.chain_reflect_sources 0.01  solo, CPU (PHOTON-7-9A, 2026-11-04)
+engine.reflect_chain_shape 0.01  solo, CPU (PHOTON-7-9A, 2026-11-04)
