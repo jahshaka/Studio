@@ -95,10 +95,12 @@ iris::MeshPtr unitBox(Builder &b);
 /// an instance of `unit` filling the world box [mn, mx], role "subject", recorded as a Fixed 12-triangle feature
 int fixedBox(Builder &b, const iris::MeshPtr &unit, const QString &name, const iris::Vec3 &mn, const iris::Vec3 &mx,
              const iris::PbrMaterialPtr &mat);
-/// THE PHOTON ROOMS' SHELL (photon_room.cpp): photon-room's sealed 8 m cube - its walls 0.3 m thick (inside x, z in
-/// [-4, 4], y in [0, 8]), the 1 x 1 m opening in its +Z wall, the lamp 6 m up (unless `lamp` is false: photon-area's
-/// light is its area light alone) - every wall `matte`
-void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr &matte, bool lamp = true);
+/// THE PHOTON ROOMS' SHELL (photon_room.cpp): photon-room's 8 m cube - its walls 0.3 m thick (inside x, z in [-4, 4],
+/// y in [0, 8]), the 1 x 1 m opening in its +Z wall (NOT SEALED: the sky reaches inside through it - PHOTON-7-9A; unless
+/// `opening` is false: photon-sealed's closed shell), the lamp 6 m up (unless `lamp` is false: photon-area's light is
+/// its area light alone) - every wall `matte`
+void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr &matte, bool lamp = true,
+               bool opening = true);
 /// world-space bounds of an axis-aligned box after yaw + scale + translation
 void boxBounds(const iris::Vec3 &centre, const iris::Vec3 &half, const iris::Vec3 &pos, float yawDegrees,
                const iris::Vec3 &scale, iris::Vec3 &mn, iris::Vec3 &mx);

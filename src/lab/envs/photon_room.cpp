@@ -25,7 +25,7 @@ namespace envs {
 
 // THE ROOM'S SHELL (photon-room's, and photon-glass's, photon-ramp's and photon-rough's around their fixtures): the
 // eight walls, the opening, the lamp - envbuild.h declares it (photon_rough.cpp shares it).
-void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr &matte, bool withLamp)
+void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr &matte, bool withLamp, bool opening)
 {
     using V = iris::Vec3;
     const float t = 0.3f, h = 4.0f, top = 8.0f;
@@ -34,11 +34,16 @@ void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr
     fixedBox(b, unit, "wall-x0", V(-h - t, 0, -h), V(-h, top, h), matte);
     fixedBox(b, unit, "wall-x1", V(h, 0, -h), V(h + t, top, h), matte);
     fixedBox(b, unit, "wall-z0", V(-h, 0, -h - t), V(h, top, -h), matte);
-    // the +Z wall around its 1 x 1 m opening (x in [-0.5, 0.5], y in [3.5, 4.5])
-    fixedBox(b, unit, "wall-z1-left", V(-h, 0, h), V(-0.5f, top, h + t), matte);
-    fixedBox(b, unit, "wall-z1-right", V(0.5f, 0, h), V(h, top, h + t), matte);
-    fixedBox(b, unit, "wall-z1-below", V(-0.5f, 0, h), V(0.5f, 3.5f, h + t), matte);
-    fixedBox(b, unit, "wall-z1-above", V(-0.5f, 4.5f, h), V(0.5f, top, h + t), matte);
+    if (opening) {
+        // the +Z wall around its 1 x 1 m opening (x in [-0.5, 0.5], y in [3.5, 4.5])
+        fixedBox(b, unit, "wall-z1-left", V(-h, 0, h), V(-0.5f, top, h + t), matte);
+        fixedBox(b, unit, "wall-z1-right", V(0.5f, 0, h), V(h, top, h + t), matte);
+        fixedBox(b, unit, "wall-z1-below", V(-0.5f, 0, h), V(0.5f, 3.5f, h + t), matte);
+        fixedBox(b, unit, "wall-z1-above", V(-0.5f, 4.5f, h), V(0.5f, top, h + t), matte);
+    } else {
+        // the +Z wall whole (photon-sealed: no path from the sky to the inside but through 0.3 m of matte wall)
+        fixedBox(b, unit, "wall-z1", V(-h, 0, h), V(h, top, h + t), matte);
+    }
     if (!withLamp) return;
     auto lamp = iris::LightNode::create();
     lamp->setLightType(iris::LightType::Point);
@@ -81,12 +86,9 @@ Built buildRoom(unsigned seed, bool bake)
 //     mover hit gate is deleted) and the cards trace it in their movers term; a still mover keeps every cache's rest (a
 //     moving one would re-trace the cards' movers term and re-voxelise its region every frame).
 // THE EXPECTATION: the keep rule only — every probe of the sealed shell sees geometry in >= 2 faces.
-Built buildGlass(unsigned seed, bool bake)
+/// photon-glass's fixture (the panes, the pillars, the mirror, the mover) - photon-glass's and photon-sealed's
+void glassFixture(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr &matte)
 {
-    Builder b("photon-glass", seed, bake);
-    const iris::MeshPtr unit = unitBox(b);
-    const auto matte = b.material(kRho, kRho, kRho, 1.0f);
-    roomShell(b, unit, matte);
     using V = iris::Vec3;
     fixedBox(b, unit, "pane-r0.1", V(-3.6f, 0, -3.6f), V(-0.2f, 0.02f, 1.0f), b.material(0.9f, 0.9f, 0.9f, 0.1f, 1.0f));
     fixedBox(b, unit, "pane-r0.3", V(0.2f, 0, -3.6f), V(3.6f, 0.02f, 1.0f), b.material(0.9f, 0.9f, 0.9f, 0.3f, 1.0f));
@@ -98,6 +100,31 @@ Built buildGlass(unsigned seed, bool bake)
     const int mover = fixedBox(b, unit, "mover", V(2.7f, 0.02f, -0.6f), V(3.3f, 0.62f, 0.0f),
                                b.material(0.8f, 0.3f, 0.2f, 0.5f));
     b.setMovable(mover);
+}
+
+Built buildGlass(unsigned seed, bool bake)
+{
+    Builder b("photon-glass", seed, bake);
+    const iris::MeshPtr unit = unitBox(b);
+    const auto matte = b.material(kRho, kRho, kRho, 1.0f);
+    roomShell(b, unit, matte);
+    glassFixture(b, unit, matte);
+    return b.finish();
+}
+
+// ---- photon-sealed (PHOTON-7-9A: the sky-invariance row's scene) -----------------------------------------------------
+//
+// photon-glass's fixture in a CLOSED shell - roomShell without its opening, the lamp inside: no path from the sky (nor the
+// sun) to any inside surface but through 0.3 m of matte wall, so THE PHYSICS SAYS every inside pixel is the same under any
+// sky (rtreflect.sky_invariant: two skies, exact codes). photon-glass itself is NOT sealed (its 1 x 1 m opening lets the
+// sky in), which is why this is a sibling.
+Built buildSealed(unsigned seed, bool bake)
+{
+    Builder b("photon-sealed", seed, bake);
+    const iris::MeshPtr unit = unitBox(b);
+    const auto matte = b.material(kRho, kRho, kRho, 1.0f);
+    roomShell(b, unit, matte, true, false);
+    glassFixture(b, unit, matte);
     return b.finish();
 }
 
@@ -316,6 +343,14 @@ std::vector<Prediction> expectGlass(const Built &, const Optics &)
     return { { "probesKeptShare", 1.0, "every probe of the sealed shell sees >= 2 faces of geometry: all kept" } };
 }
 
+std::string describeSealed()
+{
+    return "photon-sealed: photon-glass's fixture (two metal floor panes, four pillars, a mirror, a still mover) in a CLOSED "
+           "shell - photon-room's without its opening, the lamp inside: no light path from the sky or the sun to the "
+           "inside (PHOTON-7-9A's sky-invariance scene: two skies give the same inside picture). Predicts THE KEEP RULE "
+           "only: every probe sees >= 2 faces, all kept.";
+}
+
 std::string describeGlass()
 {
     return "photon-glass: photon-room's sealed shell with two metal floor panes (roughness 0.1 and 0.3), four matte "
@@ -352,6 +387,7 @@ std::string describeRoom()
 
 Env photonRoom() { return Env{ "photon-room", describeRoom, buildRoom, stopRoom, expectRoom, 500.0f, false }; }
 Env photonGlass() { return Env{ "photon-glass", describeGlass, buildGlass, stopGlass, expectGlass, 500.0f, false }; }
+Env photonSealed() { return Env{ "photon-sealed", describeSealed, buildSealed, stopGlass, expectGlass, 500.0f, false }; }
 Env photonRamp() { return Env{ "photon-ramp", describeRamp, buildRamp, stopRamp, expectRamp, 500.0f, false }; }
 Env photonContact()
 {
