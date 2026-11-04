@@ -339,6 +339,19 @@ set_tests_properties(engine.chain_reflect_sources engine.reflect_chain_shape PRO
 jah_no_display(engine.chain_reflect_sources)
 jah_no_display(engine.reflect_chain_shape)
 
+# engine.route_declarations.forget / .exit — THE ROUTE DECLARATIONS' LIFETIME (PHOTON-7-9A, the reader's audit of R7;
+# test_route_declarations.cpp says the laws): a destroyed view's pending declarations are dropped (no read after free),
+# each a FAIL by name; one still pending at the process's end exits 1 by name. The helper header only, no engine created:
+# CPU code rows, one per law.
+add_executable(test_route_declarations test_route_declarations.cpp)
+set_target_properties(test_route_declarations PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_route_declarations PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+add_test(NAME engine.route_declarations.forget COMMAND test_route_declarations forget)
+add_test(NAME engine.route_declarations.exit COMMAND test_route_declarations exit)
+set_tests_properties(engine.route_declarations.forget engine.route_declarations.exit PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.route_declarations.forget)
+jah_no_display(engine.route_declarations.exit)
+
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.

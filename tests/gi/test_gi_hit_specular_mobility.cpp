@@ -103,7 +103,7 @@ Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, 
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    if (!s->setGlobalIllumination(gi)) { e->destroyView(v); e->destroyScene(s); return r; }
+    if (!s->setGlobalIllumination(gi)) { failures += enginetest::destroyView(e, v); e->destroyScene(s); return r; }
     enginetest::testCameraLookAt(v, kEye, kAt);
     e->waitForAsyncShaders();
     for (int f = 0, quiet = 0; f < 400; ++f) {
@@ -153,7 +153,7 @@ Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, 
         r.ok = r.n > 500u;
     }
     v->setScene(nullptr);
-    e->destroyView(v);
+    failures += enginetest::destroyView(e, v);   // (0: its route asserted on the first frame)
     e->destroyScene(s);
     enginetest::frames(e, 2);
     frames += 2;
