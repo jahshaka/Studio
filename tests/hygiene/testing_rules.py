@@ -91,6 +91,11 @@ tree and the build's registration, each with its name in the failure line:
      feature's end runs it when its diff reaches it, and LONG) is the `_asan` twin of a registered guard every pass runs,
      with the same argv but the binary's `_asan`, the same environment but the sanitizer's options and the same frames -
      one source's laws, so FAST runs them once (the plain twin) and the reached feature end and LONG add the sanitizer.
+  R18 THE CARD-WIDTH-2 LIST NAMES REAL ROWS AT HALF THE CARD (the landing audit's F2, 2026-11-04). Every name in
+     tests/support/card-width-2-rows.txt - read by the list's ONE parse rule (width2_rows: a line stripped of its whitespace
+     is a row unless empty or starting with '#'; tests/cmake/vram_rows.cmake and the lead's lib/sprint.py width2 read it so)
+     - is a row name, listed once, a registered row, not `measure`, and registered at HALF the card's slots (vram:4: the
+     registration read it); and every row at half the card is in the list (nothing else halves).
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -512,6 +517,48 @@ def r15_bad(tests):
     return bad, own
 
 
+WIDTH2_LIST = os.path.join("tests", "support", "card-width-2-rows.txt")
+HALF_CARD = 4                          # tests/cmake/vram_rows.cmake: JAH_CARD_SLOTS 8 / 2
+_ROW_NAME = re.compile(r"[A-Za-z0-9_.\-]+")
+
+
+def width2_rows(text):
+    """THE LIST's ONE PARSE RULE (tests/cmake/vram_rows.cmake's file(STRINGS) + TRANSFORM STRIP + FILTER, the lead's
+    lib/sprint.py width2): a line stripped of its surrounding whitespace is a row unless it is empty or starts with '#'
+    (CMake's file(STRINGS) drops the CR of a CRLF line; so does this)."""
+    return [l.strip() for l in text.replace("\r", "").split("\n") if l.strip() and not l.strip().startswith("#")]
+
+
+def _vram_slots(p):
+    for g in p.get("RESOURCE_GROUPS") or []:
+        for r in g.get("requirements", []) if isinstance(g, dict) else []:
+            if r.get(".type") == "vram":
+                return r.get("slots")
+    return None
+
+
+def r18_bad(listed, tests):
+    """R18: [`row (why)`] - a listed name that is no row name, listed twice, unregistered, a `measure` row or not at
+    HALF_CARD slots; and a registered row at HALF_CARD slots the list does not name. `tests`: ctest's json-v1 list."""
+    by = {t["name"]: _props(t) for t in tests}
+    bad, seen = [], set()
+    for n in listed:
+        if not _ROW_NAME.fullmatch(n):
+            bad.append("%r (not a row name)" % n)
+        elif n in seen:
+            bad.append("%s (listed twice)" % n)
+        elif n not in by:
+            bad.append("%s (no such row registered)" % n)
+        elif MEASURE in _list(by[n].get("LABELS")):
+            bad.append("%s (a measure row: it holds the whole card)" % n)
+        elif _vram_slots(by[n]) != HALF_CARD:
+            bad.append("%s (vram:%s, not half the card: the registration did not read it)" % (n, _vram_slots(by[n])))
+        seen.add(n)
+    bad += ["%s (vram:%d, not in the list)" % (n, HALF_CARD) for n, p in sorted(by.items())
+            if _vram_slots(p) == HALF_CARD and n not in seen]
+    return bad
+
+
 ROUTES_PENDING = os.path.join("tests", "hygiene", "routes_pending.txt")
 ROUTE_WORDS = {"gather", "integrate", "reflection", "field", "cards", "store", "paused", "none"}
 _ROUTES_CALL = re.compile(r"\b(declareRoutes|requireRoutes)\s*\(")
@@ -690,6 +737,20 @@ def the_rules_catch():
     check(r9_bad({"s": row([], labels={"ship"}), "g": row([])}, set()) == ["s"]
           and not r9_bad({"s": row([], labels={"ship", "measure"})}, {"s"}),
           "R9 flags an unpriced ship row (a measure row of the set too), never an unpriced row outside the set")
+    t18 = lambda n, slots, labels=(): {"name": n, "properties": [
+        {"name": "LABELS", "value": list(labels)},
+        {"name": "RESOURCE_GROUPS", "value": [{"requirements": [{".type": "vram", "slots": slots}]}]}]}
+    ok18 = [t18("g.half", 4), t18("g.whole", 8)]
+    check(width2_rows("# c\n\n g.half \r\n  # an indented comment\n") == ["g.half"]
+          and not r18_bad(["g.half"], ok18)
+          and r18_bad(["g.half", "g.gone"], ok18) == ["g.gone (no such row registered)"]
+          and r18_bad(["g.half", "g.whole"], ok18) == ["g.whole (vram:8, not half the card: the registration did not read it)"]
+          and r18_bad([], ok18) == ["g.half (vram:4, not in the list)"]
+          and r18_bad(["g.half", "g.half"], ok18) == ["g.half (listed twice)"]
+          and r18_bad(["g.half", "a b"], ok18) == ["'a b' (not a row name)"]
+          and r18_bad(["g.m"], [t18("g.m", 4, ["measure"])]) == ["g.m (a measure row: it holds the whole card)"],
+          "R18 reads the width-2 list by its one rule (an indented comment no row, an indented name a row) and flags a "
+          "name that is no row, twice, unregistered, measure or not at half the card, and a half-card row not listed")
     bare = 'add_test(NAME a.b COMMAND x)\nset_tests_properties(a.b PROPERTIES\n    RUN_SERIAL TRUE)'
     other = '# RUN_SERIAL: x.y compiles shaders\nadd_test(NAME x.y COMMAND x)\n' + bare
     check(r4_bad("t", bare, set()) == ["t:3 (a.b)"] and not r4_bad("t", "# RUN_SERIAL: it compiles shaders\n" + bare, set())
@@ -1226,6 +1287,11 @@ def main(source, build):
     longs = sorted(t["name"] for t in tests if LONG in _list(_props(t).get("LABELS"))) if rc == 0 else []
     check(not bad, "R17 every `long` row (out of FAST) is the sanitizer twin of a guard every pass runs - one argv, "
           "one environment, one frame count, one source set (%d long: %s; %d not: %s)" % (len(longs), longs, len(bad), bad[:12]))
+    wl = os.path.join(source, WIDTH2_LIST)
+    listed = width2_rows(open(wl, errors="replace").read()) if os.path.isfile(wl) else []
+    bad = r18_bad(listed, tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
+    check(not bad, "R18 every row of %s is a registered, non-measure GPU row at half the card, and every half-card row "
+          "is listed (%d listed; %d not: %s)" % (WIDTH2_LIST, len(listed), len(bad), bad[:12]))
     rp = os.path.join(source, ROUTES_PENDING)
     if not os.path.isfile(rp):
         check(False, "R16 %s exists (the routes ratchet)" % ROUTES_PENDING)

@@ -7,7 +7,14 @@ set(JAH_CARD_SLOTS 8)
 # ...EXCEPT THE ROWS MEASURED TO SHARE IT (TEST-STREAMLINE-1 block C, the lead's per-row ruling, 2026-11-03): the rows of
 # tests/support/card-width-2-rows.txt take HALF the slots, so two of them hold the card at once (block C: width 2's total
 # 419 s against width 1's 825 s on its 141 rows); every other GPU row keeps all eight and runs alone.
-file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../support/card-width-2-rows.txt" JAH_CARD_WIDTH2_ROWS REGEX "^[^#]")
+# THE LIST's ONE PARSE RULE (the landing audit's F2; lib/sprint.py width2 in the lead's tools reads it the same way): a line
+# stripped of its surrounding whitespace is a row unless it is empty or starts with `#` - so an indented comment is a
+# comment and an indented name a row, in both readers (the old REGEX "^[^#]" kept an indented comment as a row named
+# "  # ..." and an indented name with its spaces, which no test matched). source.testing_rules R18 reads the list by the
+# same rule and holds every row in it to a registered GPU row at half the slots.
+file(STRINGS "${CMAKE_CURRENT_LIST_DIR}/../support/card-width-2-rows.txt" JAH_CARD_WIDTH2_ROWS)
+list(TRANSFORM JAH_CARD_WIDTH2_ROWS STRIP)
+list(FILTER JAH_CARD_WIDTH2_ROWS EXCLUDE REGEX "^(#.*)?$")
 set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${CMAKE_CURRENT_LIST_DIR}/../support/card-width-2-rows.txt")
 
 # The build's ctest resource spec: one `vram` resource with the card's slots (ctest reads CTEST_RESOURCE_SPEC_FILE).

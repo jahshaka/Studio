@@ -51,9 +51,13 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
              two runs) - a row whose verdict differs between them, or an out-of-memory / Xid line with one row on the card,
              is a finding before any width is adopted (exit 1). A row past its class budget in a width-1 run is a stale
              price or a budget red: named, left out of every width's judgement, never charged to the width.
-  COVERED    an adopted width covers ONLY the rows it measured (<out>/adopted-rows.txt); every other GPU row - a declared
+  COVERED    an adopted width covers ONLY the rows it measured (<out>/whole-set-rows.txt); every other GPU row - a declared
              open red until it is green and measured, the timing-law, cold and measure rows, the 10-s rows, the rows over
-             their budget alone - keeps the whole card, 8 x W slots, alone (<out>/alone-rows.txt, each with its reason).
+             their budget alone - keeps the whole card, 8 x W slots, alone (<out>/whole-set-alone.txt, each with its reason).
+  PER ROW    (block C's ruling) each row adopts width 2 on its OWN bars in every width-2 run: <out>/width2-rows.txt and
+             <out>/width2-alone.txt (each with its reason) - THE ONLY LIST tests/support/card-width-2-rows.txt is written
+             from. The two judgements never share a file name (the landing audit's F2: the whole set's width-1 cover once
+             overwrote the per-row list, so a row that refused width 2 read as adopting it).
 
 usage: width_pair.py <build> --display :NN [--plan] [--rejudge <out-dir>] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] [--prices <file>]
        [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600] [--budget-scale 1] [--open-reds <spec>]
@@ -64,7 +68,7 @@ usage: width_pair.py <build> --display :NN [--plan] [--rejudge <out-dir>] [--ord
   --budget-scale  every class budget x this factor, in (0, 1] (the toys' seconds-long rows); above 1 refused (it loosens a
                law), anything but 1 refused on the card (the lock the tree's gpu-exclusive.sh)
   --plan    the rows, the exclusions with their reasons, the parts and the estimated card time - nothing run, no lock.
-  --rejudge <out-dir>  THE PER-ROW WIDTH (block C's ruling) from that run's runs.jsonl: adopted-rows.txt and alone-rows.txt
+  --rejudge <out-dir>  THE PER-ROW WIDTH (block C's ruling) from that run's runs.jsonl: width2-rows.txt and width2-alone.txt
             rewritten there (a row adopts width 2 only on every width-2 run's verdict, budget, x1.5 and VRAM bars); no card.
   exit      0 a width adopted (the line `ADOPT WIDTH <w>`); 1 width 1 unstable or faulting alone (an OOM / Xid line),
             the run incomplete or VOID; 2 refused (usage, a bad
@@ -638,19 +642,30 @@ def per_row(recs, budget, w=2, row_cap=ROW_CAP_S, inflate=INFLATE, headroom=VRAM
     return adopted, alone
 
 
+def per_row_files(out, w=2):
+    """THE PER-ROW LIST's two files (<out>/width<w>-rows.txt, <out>/width<w>-alone.txt): never the whole set's names
+    (WHOLE_SET_FILES) - measure() writes both judgements into one directory (the landing audit's F2)."""
+    return os.path.join(out, f"width{w}-rows.txt"), os.path.join(out, f"width{w}-alone.txt")
+
+
+WHOLE_SET_FILES = ("whole-set-rows.txt", "whole-set-alone.txt")
+
+
 def write_per_row(recs, budget, excl, out, w=2):
-    """Writes <out>/adopted-rows.txt (one row a line) and <out>/alone-rows.txt (row TAB its reason) from per_row; the rows
-    the run left out (excl) are alone with their reasons. Returns (adopted, alone)."""
+    """Writes per_row_files(out, w): the rows that adopt width w (one a line) and the rows alone (row TAB its reason) from
+    per_row; the rows the run left out (excl) are alone with their reasons. Returns (adopted, alone)."""
     asked = {n for r in recs for n in r["asked"]}            # the GPU rows (a card-free fixture setup ctest added is no width's)
     adopted, alone = per_row([dict(r, rows={n: x for n, x in r["rows"].items() if n in asked}) for r in recs], budget, w)
     for why, ns in (excl or {}).items():   # a row the run's own selection now leaves out never adopts (its reason wins)
         for n in ns:
             adopted.pop(n, None)
             alone[n] = why
-    open(os.path.join(out, "adopted-rows.txt"), "w").write("".join(f"{n}\n" for n in sorted(adopted)))
-    open(os.path.join(out, "alone-rows.txt"), "w").write("".join(f"{n}\t{alone[n]}\n" for n in sorted(alone)))
-    print(f"width_pair: PER ROW at width {w}: {len(adopted)} row(s) adopt it ({out}/adopted-rows.txt), {len(alone)} keep the "
-          f"card alone ({out}/alone-rows.txt, each with its reason)")
+    rows_f, alone_f = per_row_files(out, w)
+    open(rows_f, "w").write("".join(f"{n}\n" for n in sorted(adopted)))
+    open(alone_f, "w").write("".join(f"{n}\t{alone[n]}\n" for n in sorted(alone)))
+    print(f"width_pair: PER ROW at width {w}: {len(adopted)} row(s) adopt it ({rows_f} - the list "
+          f"tests/support/card-width-2-rows.txt is written from), {len(alone)} keep the card alone ({alone_f}, each with its "
+          f"reason)")
     return adopted, alone
 
 
@@ -813,7 +828,8 @@ def measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, 
     # WHAT THE WIDTH COVERS (the final CPU audit's finding 3): ONLY the rows it measured - the rows every run judged, less the
     # rows over their budget alone. Every other GPU row (a declared open red until it is green and measured, a timing-law,
     # cold or measure row, a row priced 10 s or more, unpriced, or needing an excluded row's fixture) keeps the WHOLE card
-    # (8 x W slots: alone) - its VRAM and its neighbours were never measured. The registration commit reads these two files.
+    # (8 x W slots: alone) - its VRAM and its neighbours were never measured. These are the WHOLE SET's files, never the
+    # per-row list's (per_row_files, written above): the registration reads width2-rows.txt only (the landing audit's F2).
     judged = set.intersection(*[set(r["rows"]) for r in recs]) if recs else set()
     asked = {n for r in recs for n in r["asked"]}         # the GPU rows (a card-free fixture setup ctest added is no width's)
     covered = sorted(n for n in judged & asked if n not in uncovered)
@@ -821,10 +837,11 @@ def measure(build, out, order, ps, budget, price, smi, lock, display, wait_max, 
     for why, ns in excl.items():
         for n in ns:
             alone.setdefault(n, why)
-    open(os.path.join(out, "adopted-rows.txt"), "w").write("".join(f"{n}\n" for n in covered))
-    open(os.path.join(out, "alone-rows.txt"), "w").write("".join(f"{n}\t{alone[n]}\n" for n in sorted(alone)))
-    print(f"width_pair: width {adopt} covers the {len(covered)} rows it measured ({out}/adopted-rows.txt) and no other: "
-          f"{len(alone)} GPU rows keep the whole card, 8 x W slots, alone ({out}/alone-rows.txt - the declared open reds until "
+    set_rows, set_alone = (os.path.join(out, f) for f in WHOLE_SET_FILES)
+    open(set_rows, "w").write("".join(f"{n}\n" for n in covered))
+    open(set_alone, "w").write("".join(f"{n}\t{alone[n]}\n" for n in sorted(alone)))
+    print(f"width_pair: width {adopt} covers the {len(covered)} rows it measured ({set_rows}) and no other: "
+          f"{len(alone)} GPU rows keep the whole card, 8 x W slots, alone ({set_alone} - the declared open reds until "
           f"green and measured, the timing-law, cold and measure rows, the rows over their budget alone, the 10-s rows)")
     print(f"width_pair: ADOPT WIDTH {adopt} (the widest with width 1's verdicts in every run, no out-of-memory, every row under "
           f"its class budget, x{INFLATE:g} its width-1 wall and {row_cap:.0f} s, {100 * GAIN:.0f} % of wall gained per width, "

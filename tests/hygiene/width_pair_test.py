@@ -235,6 +235,19 @@ elif PART == "bars":
     check(rc == 0 and "ADOPT WIDTH 1" in out and len(ref) == 1 and "toy.inflate ran" in ref[0] and "its width-1 wall" in ref[0]
           and "class budget" not in ref[0], f"inflate: a row inflated past x1.5 its width-1 wall refuses width 2 (rc {rc}) "
           f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
+    # 9a. THROUGH measure() THE WHOLE SET's COVER NEVER OVERWRITES THE PER-ROW LIST (the landing audit's F2): width 1 stable,
+    #     toy.inflate refusing width 2, so the SET adopts width 1 - its cover (whole-set-rows.txt) lists every measured row,
+    #     toy.inflate included (at width 1, correctly), and the PER-ROW list (width2-rows.txt, the one card-width-2-rows.txt is
+    #     written from) keeps it OUT, alone with its reason. RED AT THE BASE: both judgements wrote adopted-rows.txt, the
+    #     set's last, so the per-row list read toy.inflate as adopting width 2.
+    od = os.path.join(T, "inflate-out")
+    rd = lambda f: open(os.path.join(od, f)).read() if os.path.exists(os.path.join(od, f)) else None
+    w2, w2a, ws = rd("width2-rows.txt"), rd("width2-alone.txt"), rd("whole-set-rows.txt")
+    check(w2 is not None and w2.split() == ["toy.a", "toy.b", "toy.c", "toy.d"] and w2a is not None
+          and "toy.inflate\t" in w2a and "its width-1 wall" in w2a and ws is not None and "toy.inflate" in ws.split()
+          and not os.path.exists(os.path.join(od, "adopted-rows.txt")),
+          f"inflate: the set adopts width 1 and the per-row list keeps the refusing row out (width2-rows.txt {w2!r}; "
+          f"width2-alone.txt {w2a!r}; whole-set-rows.txt {ws!r})")
 
     # 9b. THE WALLS' RESOLUTION: a 0.02-s row read at x3 beside a neighbour (0.07 s) is under the 0.5-s floor - not an
     #     inflation (the set's fixture setups run 0.00-0.02 s): width 2 adopted
@@ -323,12 +336,12 @@ elif PART == "log":
     check(rc == 0 and len(ln) == 1 and "toy.declared (:9)" in ln[0] and "toy.a" not in ln[0]
           and "4 rows with no timing law" in out, f"declared: the open red left out with its line, toy.a kept (rc {rc}) {ln}")
     # 16b. WHAT AN ADOPTED WIDTH COVERS (the final CPU audit's finding 3): only the rows it measured - the declared red keeps the
-    #      whole card, alone (alone-rows.txt with its reason), never the width (the base wrote no list: a width applied to every row)
+    #      whole card, alone (whole-set-alone.txt with its reason), never the width (the base wrote no list: a width applied to every row)
     rc, out, labels, recs = run(bd, "--display", ":71", "--order", "1,2")
     od = os.path.join(T, "declared-out")
-    cov = open(os.path.join(od, "adopted-rows.txt")).read().split() if os.path.exists(os.path.join(od, "adopted-rows.txt")) else None
-    alone = dict(ln.split("\t", 1) for ln in open(os.path.join(od, "alone-rows.txt")).read().splitlines()) \
-        if os.path.exists(os.path.join(od, "alone-rows.txt")) else {}
+    cov = open(os.path.join(od, "whole-set-rows.txt")).read().split() if os.path.exists(os.path.join(od, "whole-set-rows.txt")) else None
+    alone = dict(ln.split("\t", 1) for ln in open(os.path.join(od, "whole-set-alone.txt")).read().splitlines()) \
+        if os.path.exists(os.path.join(od, "whole-set-alone.txt")) else {}
     check(rc == 0 and "ADOPT WIDTH 2" in out and cov == ["toy.a", "toy.b", "toy.c", "toy.d"]
           and alone.get("toy.declared") == "a declared open red" and alone.get("toy.cold") == "cold"
           and "keep the whole card, 8 x W slots, alone" in out,
@@ -379,8 +392,8 @@ elif PART == "budget":
           and "past its 1 s" in o1[0], f"over: the row past its budget alone named at width 1, not charged to width 2, ADOPT "
           f"WIDTH 2 (rc {rc}) {[x for x in out.splitlines() if 'REFUSED' in x or 'ADOPT' in x or 'OVER ITS' in x]}")
     od = os.path.join(T, "over-out")
-    cov = open(os.path.join(od, "adopted-rows.txt")).read().split() if os.path.exists(os.path.join(od, "adopted-rows.txt")) else []
-    alone = open(os.path.join(od, "alone-rows.txt")).read() if os.path.exists(os.path.join(od, "alone-rows.txt")) else ""
+    cov = open(os.path.join(od, "whole-set-rows.txt")).read().split() if os.path.exists(os.path.join(od, "whole-set-rows.txt")) else []
+    alone = open(os.path.join(od, "whole-set-alone.txt")).read() if os.path.exists(os.path.join(od, "whole-set-alone.txt")) else ""
     check("toy.a" in cov and "toy.over" not in cov and "toy.over\tover its class budget at width 1" in alone,
           f"over: the adopted width does not cover the row over its budget alone (covered {cov})")
 
@@ -422,8 +435,8 @@ elif PART == "perrow":
     out = os.path.join(T, "pr"); os.makedirs(out)
     try:
         ad, al = wp.write_per_row(recs, budget, {"a timing law": ["excluded"]}, out, 2)
-        got = open(os.path.join(out, "adopted-rows.txt")).read().split()
-        why = dict(ln.split("\t", 1) for ln in open(os.path.join(out, "alone-rows.txt")).read().splitlines())
+        got = open(os.path.join(out, "width2-rows.txt")).read().split()
+        why = dict(ln.split("\t", 1) for ln in open(os.path.join(out, "width2-alone.txt")).read().splitlines())
     except AttributeError as e:
         got, why = None, {}
         check(False, f"perrow: the tool has no per-row judgement ({e})")

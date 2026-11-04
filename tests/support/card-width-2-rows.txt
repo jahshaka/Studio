@@ -2,8 +2,10 @@
 # held, in BOTH width-2 runs of spikes/test-streamline-1/card/C-width (Studio 78e1ca6f0's binary, :86), width 1's verdict
 # and FAIL lines, a wall <= x1.5 its width-1 median and under its class budget, the run's VRAM under 90 % of the card
 # (scripts/width_pair.py --rejudge: per_row). Each takes HALF the card's slots (tests/cmake/vram_rows.cmake); every other
-# GPU row keeps all of them (alone-rows.txt beside the run, each with its reason). A row leaves this list when its law,
-# frames or neighbours change - re-judged by the next width run, never by hand.
+# GPU row keeps all of them. THIS LIST IS WRITTEN FROM THE RUN's PER-ROW FILE ONLY, width2-rows.txt (its rows alone in
+# width2-alone.txt, each with its reason) - never from whole-set-rows.txt, the whole set's cover at the width it adopted.
+# A row leaves this list when its law, frames or neighbours change - re-judged by the next width run, never by hand.
+# The format (one rule, both readers): a line stripped of its whitespace is a row unless empty or starting with '#'.
 assets.engine
 atom.cluster_occlusion
 atom.component_asan
