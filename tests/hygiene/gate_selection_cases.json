@@ -700,6 +700,32 @@
     "rtreflect.emitters",
     "shadow.pane_lamp"
    ]
+  },
+  {
+   "case": "COVERAGE-V4f a HEADER hunk's reach through an INCLUDER is the includer's table, the map notwithstanding (TE8, 2026-11-04): header_symbols reaches the engine sources that name the changed symbol at depth 1, whose OWN diff is empty - the map read 'a comment or whitespace change - no row' and dropped every row the includer's table reaches (RED ON 4236623b9: 28 rows lost on a toy map)",
+   "file": "irisgl/engine/src/EnginePrivate.h",
+   "old": "struct AreaVisParams {\n    float camPos[4] = {};\n",
+   "new": "struct AreaVisParams {\n    double camPos[4] = {};\n",
+   "coverage_map": {
+    "rows": {
+     "gi.area_follow": [
+      [
+       "irisgl/engine/src/OgreAreaVis.cpp",
+       "x"
+      ],
+      [
+       "irisgl/engine/src/OgreRayQuery.cpp",
+       "measure"
+      ]
+     ]
+    }
+   },
+   "must": [
+    "gi.inject_fold",
+    "engine.moving_sample",
+    "engine.hit_list_law"
+   ],
+   "must_not": []
   }
  ]
 }

@@ -1331,7 +1331,11 @@ class Selection:
                 r = self.engine_table(p, tag)
                 notes.append(r or "no includer, no table line → nothing reached")
             return
-        if self.coverage_reach(p, tag, notes):
+        if depth == 0 and self.coverage_reach(p, tag, notes):
+            # THE MAP ANSWERS ONLY A PATH THE DIFF CHANGED (TE8, 2026-11-04): an engine source reached at depth 1 - an includer
+            # of a changed header, a file naming its changed symbol (header_symbols) - has no diff of its own, so the map read
+            # it as "a comment or whitespace change - no row" and dropped every row its table reaches (gate_selection
+            # COVERAGE-V4f: 28 rows lost on a toy map); such a path takes the table, as before the map
             return
         r = self.engine_table(p, tag)
         if r:
