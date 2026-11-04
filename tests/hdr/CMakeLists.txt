@@ -101,19 +101,38 @@ endif()
 # at half its peak across and down agree within 10 %, and the hot spot's row
 # carries no excess at the frame's edges (the old fixed 256x256 ladder blurred 65
 # taps across and 11 down: a full-width band). See the file header.
+# REGISTERED AGAIN (ROUTE-ROWS-1, the lead's ruling 2026-11-04): TEST-CUT-1 stage 4 cut the row and its sweep 3 left the
+# source unbuilt; its isotropy law (B) is held by no other row. Frames: 12, the archived count (163d90223), re-counted
+# with its price from its own solo run at the feature end.
+jahshaka_hdr_test(test_hdr_bloom_isotropic test_hdr_bloom_isotropic.cpp)
+target_link_libraries(test_hdr_bloom_isotropic PRIVATE JahshakaEngine)
+jah_gpu_row(hdr.bloom_isotropic CLASS engine COMMAND test_hdr_bloom_isotropic
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(hdr.bloom_isotropic PROPERTIES TIMEOUT 60 LABELS "engine")
+set_tests_properties(hdr.bloom_isotropic PROPERTIES JAHSHAKA_TEST_FRAMES 12)
 
 # EXACTLY ONE sRGB ENCODE ON EVERY DISPLAY PATH (SRGB-ENCODE-1). A flat emissive
 # plane at a ramp of known radiances, read back four ways in ONE process: the
 # Plain instrument (linear, unchanged), the ungraded display picture in the
 # passthrough and the post shape (the exact sRGB OETF), and the graded picture
 # (the OETF of the film curve; the grey card at 118). See the file header.
+# REGISTERED AGAIN (ROUTE-ROWS-1, the lead's ruling 2026-11-04): the one row that holds the shader's film curve and its
+# encode to the paper curve (iris::lens::filmRGB's transcription) - every picture row's codes depend on it; TEST-CUT-1
+# stage 4 cut it and its sweep 3 left the source unbuilt. Frames: 336, the archived count (163d90223), re-counted with
+# its price from its own solo run at the feature end.
+jahshaka_hdr_test(test_hdr_display_encode test_hdr_display_encode.cpp)
+target_link_libraries(test_hdr_display_encode PRIVATE JahshakaEngine)
+jah_gpu_row(hdr.display_encode CLASS engine COMMAND test_hdr_display_encode
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(hdr.display_encode PROPERTIES TIMEOUT 60 LABELS "engine")
+set_tests_properties(hdr.display_encode PROPERTIES JAHSHAKA_TEST_FRAMES 336)
 
 # hdr.bloom_showroom — NO FULL-WIDTH BAND IN THE PRODUCT (BLOOM-1, the app half of
-# hdr.bloom_isotropic (archived: archive/tests/hdr)): Showroom 2 from its own camera, the editor's "scene" shot with
+# hdr.bloom_isotropic): Showroom 2 from its own camera, the editor's "scene" shot with
 # bloom and at bloomAmount 0; every row's two end pixels agree within 2 codes unless a
 # pixel bright enough to bloom lies within a halo's reach of them. An app run on the
 # rig's display; a FRESH home per run (the sample is imported). A whole-scene proof: a
-# stage-close row (hdr.bloom_isotropic (archived: archive/tests/hdr) is the seconds-long merge guard of the same claim).
+# stage-close row (hdr.bloom_isotropic is the seconds-long merge guard of the same claim).
 # TIER document: the sample opens at its own saved World (the product's picture,
 # which a test tier would rewrite before the shot).
 set(JAH_BLOOM_SHOWROOM "${CMAKE_SOURCE_DIR}/scenes/Showroom 2.zip")

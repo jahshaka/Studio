@@ -191,9 +191,9 @@
   },
   {
    "case": "TOOLING-2 THE LINTS RIDE EVERY DIFF: a one-line test change selects its row AND source.testing_rules / source.row_budget (PHOTON-1's unpriced row passed a merge gate that ran no source.* row, §2573)",
-   "file": "tests/gi/test_gi_cliff.cpp",
-   "old": "static const float kGroundSpan = 200.0f;\n",
-   "new": "static const float kGroundSpan = 201.0f;\n",
+   "file": "tests/gi/test_inject_fold.cpp",
+   "old": "    const int res = 128;\n",
+   "new": "    const int res = 129;\n",
    "must": [
     "source.testing_rules",
     "source.row_budget"

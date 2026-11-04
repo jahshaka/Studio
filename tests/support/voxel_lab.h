@@ -1,8 +1,7 @@
 // THE VOXEL LAB (PHOTON-VOXEL-4): the plane march of jah_voxel_march.glsl / jah_voxel_sample.glsl
 // on the CPU, over a store read back from the GPU (giVoxelVolume) or voxelised analytically
 // from boxes (SYNTH), against THE CONE-TRACE REFERENCE of the true geometry. Header-only, no
-// engine dependency: the gate lab's instrument and the suites' harness (test_gi_voxel_lab.cpp,
-// test_gi_ddgi_ambient.cpp).
+// engine dependency: the gate lab's instrument and the suite's harness (test_gi_voxel_lab.cpp).
 #pragma once
 #include <algorithm>
 #include <array>
