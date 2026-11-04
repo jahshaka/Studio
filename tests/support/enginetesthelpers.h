@@ -274,6 +274,17 @@ inline void declareRoutes(View *v, Scene *s, const Routes &declared, const char 
     framesdetail::declaredRoutes().push_back({v, s, declared, what, 0});
 }
 
+/// THE RAY'S OWN ANSWER (PHOTON-7-9A, the lead's ruling R7): the reflection is the hybrid - the screen first, then the rays
+/// (ChainDesc::screenSources) - so a row whose law is the reflection RAY's (a hit's record, a far copy, a pane's light, a
+/// dispatch's shape, the hit's specular) sets the test arm reflect.screenOff: the screen half answers no texel, the hits
+/// as shipped (the arm is never a product frame's). Through a request (the render thread's door). True when the arm took.
+inline bool rayReflectionOnly(Engine *e)
+{
+    bool ok = false;
+    e->request([&](Engine &x) { ok = x.setArm("reflect.screenOff", 1.0); });
+    return ok;
+}
+
 /// THE TEST DOOR'S ONE FRAME VERB (ENGINE-UPGRADE-U3 stage 2b): every engine suite steps the engine through here —
 /// `frames(e, n)` renders n frames, `frames(e, 1, rec)` hands the record over first. `e` is whatever the suite holds
 /// (an Engine *, a unique_ptr, an Engine &): a template, so no call site edits its receiver. Its body is today's bytes

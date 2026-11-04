@@ -119,6 +119,11 @@ int main()
         fx.hdrReadback = true;
         v->setPostFx(fx);
     }
+    // THE ROUTE AND THE RAY'S OWN ANSWER (PHOTON-7-9A, the lead's ruling R7): the reflection is the hybrid, and this row's
+    // law is the RAY's (an area light's visibility at the ray's hit), so the screen half answers no texel (enginetest::rayReflectionOnly: the test arm
+    // reflect.screenOff); the view's route declared and asserted on its first frame (URGENT #146)
+    CHECK(enginetest::rayReflectionOnly(e), "the arm reflect.screenOff (the ray's own answer: this row's law is the ray's)");
+    enginetest::declareRoutes(v, s, enginetest::Routes().gather().reflection().store(), "rtreflect.hit_area_shadow's view");
     PbrParams matte;
     matte.albedo = Colour(0.8f, 0.8f, 0.8f);
     matte.roughness = 0.9f;

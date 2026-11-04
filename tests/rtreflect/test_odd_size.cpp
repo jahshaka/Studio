@@ -88,6 +88,11 @@ int main()
     fx.allowOffscreen = true;
     fx.ssr = 1;                                       // High: half-resolution rays
     view->setPostFx(fx);
+    // THE ROUTE AND THE RAY'S OWN ANSWER (PHOTON-7-9A, the lead's ruling R7): the reflection is the hybrid, and this row's
+    // law is the RAY's (the half-resolution trace's dispatch at an odd size), so the screen half answers no texel (enginetest::rayReflectionOnly: the test arm
+    // reflect.screenOff); the view's route declared and asserted on its first frame (URGENT #146)
+    CHECK(enginetest::rayReflectionOnly(e), "the arm reflect.screenOff (the ray's own answer: this row's law is the ray's)");
+    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(), "rtreflect.odd_size's view");
     // looking down the floor toward the wall, its reflection under the floor's horizon and to the frame's right edge
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 6.0f), Vec3(0.0f, 0.4f, -4.0f));
     enginetest::frames(e, 90);
