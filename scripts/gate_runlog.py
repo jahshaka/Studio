@@ -205,6 +205,43 @@ def gpu_clocks():
         return {"state": "unknown"}
 
 
+CODE_LABEL = "code"              # the derived label of a row that takes no card (tests/CMakeLists.txt jah_code_label_pass)
+_NVRM = re.compile(r"\bKernel Module\b.*?\s(\d+\.\d+(?:\.\d+)?)\s")
+_DRIVER = []
+
+
+def card_driver():
+    """THE CARD's DRIVER (URGENT #167): the NVIDIA driver version a card row's verdict was taken on - a part of its record's
+    key (ci_gate_check.py serve: a card row is served, green or red, only at an EQUAL known driver; 16:51's crash, the driver
+    595.91.07 -> 595.99.02, and PHOTON-7-9A's call 13 was served from the faulted run's records). Read once a process:
+    JAH_GPU_DRIVER (the suites' override - a suite never reads the real card), else /proc/driver/nvidia/version (the
+    loaded kernel module: no card call), else nvidia-smi; None unknown (never equal)."""
+    if _DRIVER:
+        return _DRIVER[0]
+    v = os.environ.get("JAH_GPU_DRIVER") or None
+    if v is None:
+        try:
+            m = _NVRM.search(open("/proc/driver/nvidia/version").read())
+            v = m.group(1) if m else None
+        except OSError:
+            v = None
+    if v is None:
+        try:
+            r = subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"], capture_output=True,
+                               text=True, timeout=10)
+            v = (r.stdout.strip().splitlines() or [None])[0] if r.returncode == 0 else None
+        except (OSError, subprocess.TimeoutExpired):
+            v = None
+    _DRIVER.append(v)
+    return v
+
+
+def takes_card(labels):
+    """A row takes the card unless it carries the derived label `code` (a tree before it: every row does)."""
+    labels = [labels] if isinstance(labels, str) else (labels or ())
+    return CODE_LABEL not in labels
+
+
 def row_facts(build):
     """({row: {labels, declaration, data_hash, data_why}}, config, config_why) of a build dir."""
     try:
@@ -403,6 +440,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
         base = {"schema": SCHEMA, "run": run_id, "tier": tier, "lanes": [lane], "tip": shas, "suite": name,
                 "labels": sorted(f.get("labels") or []), "declaration": f.get("declaration"),
                 "data_hash": f.get("data_hash"), "config": config, "display": display, "nulls": nulls,
+                "driver": card_driver(),
                 "ts": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "source": "run"}
         v = verdict_of(status)
         row = dict(base, arm=None, verdict=v, status=status.strip("* "), seconds=secs)

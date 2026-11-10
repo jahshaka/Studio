@@ -9,11 +9,12 @@ one — PASSED, and:
   * its DECLARATION and DATA hashes equal the build's at C (a hash unknown on either side is never equal);
   * the fork pin at A equals C's, or the row does not reach the fork (the build graph);
   * the whole range A..C does not reach the row (gate-scope's selection: the graph, the symbols, the rules);
-  * it is not a measuring row (label `measure`: a measurement is never served).
+  * it is not a measuring row (label `measure`: a measurement is never served);
+  * a CARD row (every row without the derived label `code`) was recorded on the driver of now (URGENT #167, card_driver).
 A row is SERVED-RED (URGENT #54: re-running a red at the same input is a quiet retry that could flip it green by chance)
 when its newest record is a red RESULT (FAIL, TIMEOUT, CRASH; NOTRUN and NOADMIT are not results - but a NOTRUN BEHIND a
 row it needs, gate_runlog's `behind`, stands as a red while those rows stay red there: URGENT #123) at THIS very tree (never
-an ancestor's: the diff may have fixed it) with the build configuration, declaration and data hashes equal: it is in
+an ancestor's: the diff may have fixed it) with the build configuration, declaration and data hashes equal (a card row: its driver too, #167): it is in
 neither "served" nor "run" but in "red" ({row: {from, run, verdict, failLine, seconds}}), reported RED with its record;
 a deliberate re-run is spec.sh test's --rerun-red <row> --why <text>.
 Every other row RUNS, with the reason. The serving decides nothing else: a red is the run's, read by the lead.
@@ -240,6 +241,18 @@ class Reach:
         return reach
 
 
+def driver_differs(rec, fact):
+    """Why a CARD row's record was taken on another driver (None when equal, or a CPU row). URGENT #167: the card's verdict is
+    the driver's too - a driver update (595.91.07 -> 595.99.02 after 16:51's crash) is a new input of every card row; a CPU
+    row (the derived label `code`) keeps serving. An unknown driver on either side is never equal."""
+    if not gate_runlog.takes_card((fact or {}).get("labels")):
+        return None
+    have, now = rec.get("driver"), gate_runlog.card_driver()
+    if not have or not now or have != now:
+        return f"a card row, its record taken on the driver {have or 'unknown'} (now {now or 'unknown'})"
+    return None
+
+
 def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
     """Why record `rec` at A cannot stand for the row at C (None when it can); `cfg`: the build's configuration."""
     if rec.get("verdict") != "PASS":
@@ -254,6 +267,9 @@ def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
     if not gate_graph.config_equal(rec.get("config"), cfg):
         return "its build configuration differs (or is unknown): %s vs this build's %s" % (
             (rec.get("config") or {}).get("build_type"), (cfg or {}).get("build_type"))
+    why = driver_differs(rec, fact)
+    if why:
+        return why
     d = rec.get("declaration")
     d = d.get("hash") if isinstance(d, dict) else None
     if not d or d != (fact.get("declaration") or {}).get("hash"):
@@ -292,6 +308,9 @@ def red_stands(rec, fact, reach, cfg):
             return f"a red of an ancestor's tree, and {rec['tip']['studio'][:9]}..{reach.tip[:9]} reaches it (the fix may be in it)"
     if not gate_graph.config_equal(rec.get("config"), cfg):
         return "its build configuration differs (or is unknown)"
+    why = driver_differs(rec, fact)
+    if why:
+        return why
     d = rec.get("declaration")
     d = d.get("hash") if isinstance(d, dict) else None
     if not d or d != (fact.get("declaration") or {}).get("hash"):
