@@ -20,7 +20,7 @@
 set -u
 HERE=$(cd "$(dirname "$0")" && pwd)
 [ "$#" -ge 2 ] || { echo "usage: row-env.sh <build> <row> [--run [--scratch <dir>]]" >&2; exit 64; }
-BUILD=$(cd "$1" && /bin/pwd -P) || exit 64; ROW=$2; shift 2
+BUILD=$(cd "$1" && /bin/pwd -P) || exit 64; GIVEN=$(cd "$1" && pwd); ROW=$2; shift 2
 run=0 scratch=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -32,7 +32,7 @@ done
 [ -z "$scratch" ] || [ "$run" = 1 ] || { echo "row-env.sh: --scratch goes with --run" >&2; exit 64; }
 js=$(ctest --test-dir "$BUILD" --show-only=json-v1 -R "^$(printf '%s' "$ROW" | sed 's/[][\.*^$+?(){}|]/\\&/g')\$" 2>/dev/null) \
     || { echo "row-env.sh: ctest --show-only failed in $BUILD" >&2; exit 2; }
-exec python3 -I - "$BUILD" "$ROW" "$run" "$scratch" "$HERE" "$js" <<'PY'
+ROW_ENV_GIVEN=$GIVEN exec python3 -I - "$BUILD" "$ROW" "$run" "$scratch" "$HERE" "$js" <<'PY'
 import json, os, shutil, subprocess, sys
 build, row, run, scratch, here, js = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4], sys.argv[5], sys.argv[6]
 tests = [t for t in json.loads(js or "{}").get("tests", []) if t["name"] == row]
@@ -56,9 +56,24 @@ if not run:
 if fixtures:
     print("row-env.sh: REFUSED - %s requires the fixtures %s, whose setups only ctest runs: `ctest --test-dir %s -R '^%s$'`"
           % (row, " ".join(fixtures), build, row), file=sys.stderr); sys.exit(2)
-tdir = os.path.join(build, "tests") + os.sep
+# EVERY SPELLING OF THE BUILD (2026-11-20: a --scratch run in a tree configured under ~/Developer wrote into the tree's build -
+# <build> here is its REAL path (/mnt/work/...), the registration's paths carry the configured ~/Developer one, and nothing
+# matched): the real path, the path given and the spelling the build was configured under (CMakeCache's CMAKE_CACHEFILE_DIR)
+def _cache_dir(b):
+    try:
+        for l in open(os.path.join(b, "CMakeCache.txt"), errors="replace"):
+            if l.startswith("CMAKE_CACHEFILE_DIR:INTERNAL="):
+                return l.split("=", 1)[1].strip()
+    except OSError:
+        pass
+    return None
+spellings = {build, os.path.realpath(build), os.environ.get("ROW_ENV_GIVEN") or build, _cache_dir(build) or build}
+tdirs = sorted({os.path.join(b.rstrip(os.sep), "tests") + os.sep for b in spellings}, key=len, reverse=True)
 def mapped(s):
-    return s.replace(tdir, os.path.join(scratch, "tests") + os.sep) if scratch else s
+    if scratch:
+        for d in tdirs:
+            s = s.replace(d, os.path.join(scratch, "tests") + os.sep)
+    return s
 if scratch:
     scratch = os.path.abspath(scratch)
     st = os.path.join(scratch, "tests")
@@ -85,7 +100,7 @@ if scratch:
                 shutil.copy2(os.path.join(build, "tests", f), os.path.join(st, f))
     import re
     for w in words + [wd] + env_set + env_mod:   # every path under <build>/tests a word names, inside a shell string too
-        for piece in re.findall(re.escape(tdir) + r"""[^\s"'()`;|&<>:=$]*""", w):
+        for piece in re.findall("(?:" + "|".join(re.escape(d) for d in tdirs) + r""")[^\s"'()`;|&<>:=$]*""", w):
             dst = mapped(piece)
             if os.path.isfile(piece) and not os.path.exists(dst):
                 os.makedirs(os.path.dirname(dst), exist_ok=True); shutil.copy2(piece, dst)

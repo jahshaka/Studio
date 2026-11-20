@@ -67,5 +67,17 @@ env -u DISPLAY bash "$RE" "$B" toy.gpu --run > "$T/g0.out" 2>&1; rc=$?
 want "$([ $rc = 2 ] && grep -q 'explicit DISPLAY' "$T/g0.out" && echo 1)" "(4) a GPU row without an explicit DISPLAY is refused (exit $rc)"
 DISPLAY=:99 bash "$RE" "$B" toy.gpu --run > "$T/g.out" 2>&1
 want "$(grep -qx 'held=1' "$B/tests/w/gpu.txt" 2>/dev/null && echo 1)" "(4) a GPU row runs under the tree's gpu-exclusive.sh ($(cat "$B/tests/w/gpu.txt" 2>/dev/null))"
+# (5) --scratch IN A BUILD CONFIGURED UNDER A LINK's SPELLING (the ~/Developer -> /mnt/work/Developer case, 2026-11-20: a --scratch
+#     run wrote into the tree's build - the script resolved <build> to its real path while the registration names the configured
+#     one): nothing under the build written, whichever spelling the caller gives (red on the base: out.txt in the real build)
+ln -s "$T" "$T/link"
+cmake -S "$T/src" -B "$T/link/b2" > "$T/cmake2.out" 2>&1 || { echo "FAIL: the linked toy build: $(tail -3 "$T/cmake2.out")"; exit 1; }
+for given in "$T/link/b2" "$T/b2"; do
+    rm -rf "$T/s5"; touch "$T/mark5"; sleep 0.01
+    bash "$RE" "$given" toy.env --run --scratch "$T/s5" > "$T/l5.out" 2>&1
+    newer=$(find "$T/b2" -newer "$T/mark5" -not -type d | grep -v 'Testing/Temporary' | head -3)
+    want "$([ -z "$newer" ] && [ ! -e "$T/b2/tests/w/out.txt" ] && [ -s "$T/s5/tests/w/out.txt" ] && echo 1)" \
+         "(5) --scratch in a build configured under a link's spelling, called as $given: nothing under the build written, the output in the scratch ($newer; $(cat "$T/s5/tests/w/out.txt" 2>/dev/null))"
+done
 [ "$fails" = 0 ] && { echo "tooling.row_env: PASS"; exit 0; }
 echo "tooling.row_env: FAILED ($fails)"; exit 1
