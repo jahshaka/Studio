@@ -35,9 +35,9 @@ int main()
     int onTime = 0, late = 0, measured = 0;
     for (int k = 0; k < 120; ++k) {
         FrameInput in;
-        in.stepSerial = (unsigned long long)(k + 2);
         FrameInputScene part;
         part.scene = scene;
+        part.stepSerial = (unsigned long long)(k + 2);   // the scene's clock (ONE-FRAME-1: per scene)
         NodeRecord r;
         r.id = node;
         r.fields = NodeRecord::Trs;

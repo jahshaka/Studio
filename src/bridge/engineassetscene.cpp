@@ -408,11 +408,9 @@ void EngineAssetScene::step(float dt, int width, int height)
     mOrbit.advance();
     mOrbit.apply(mCamera);
 
+    // THE PREVIEW's TIME IS ITS DOCUMENT's (ONE-FRAME-1): the clock's steps reach the engine through this preview's
+    // own mirror (its scene's serial), so its particles and meter run whatever the editor's page is doing.
     mDocument->advance(dt);
-    // A preview is a host of the engine's ONE frame delta too (A4.2): the
-    // editor stops pushing when its page is hidden (a paused play leaves 0 in
-    // force), so a preview re-arms the grid step or its particles stay frozen.
-    if (auto e = engine()) e->submitFrame(jahshaka::engine::FrameInput::delta(jahshaka::engine::Engine::kDefaultFrameDelta));
     pushFrame(mCamera, width, height);
 }
 

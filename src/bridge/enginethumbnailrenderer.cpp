@@ -430,10 +430,8 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     mLastFailure.clear();
 
     document->refresh();
-    // Reproducible warm-up: the engine-side simulation (particles, shader
-    // time) steps on the default grid for a thumbnail regardless of what the
-    // last host left in force (A4.2 review S3).
-    engine->submitFrame(jahshaka::engine::FrameInput::delta(jahshaka::engine::Engine::kDefaultFrameDelta));
+    // A THUMBNAIL ADVANCES NOTHING (ONE-FRAME-1): its document is never stepped, so its scene's time stands still
+    // through every warm-up and settle frame — reproducible whatever the last host did (no delta to re-arm).
     // BOUND ONCE (PREVIEWENV-2 item a): the studio document is the same
     // document every time, and `setSource` is a full teardown-and-rebind even
     // when the answer is the same — the whole cost this lane is about.

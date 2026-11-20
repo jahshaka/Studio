@@ -108,14 +108,14 @@ inline unsigned renderStableFrames(jahshaka::engine::Engine *engine,
 struct PictureRequest {
     jahshaka::engine::Scene *scene = nullptr;   ///< whose GI the settle waits on (giAtRest, the one predicate)
     jahshaka::engine::View  *view = nullptr;    ///< what is read back (null = settle only)
-    /// THE SETTLE (PHOTON-GATHER-1d): with the engine's clock frozen (a photograph does not advance the world), draw
-    /// the shot's first frame unconditionally where its own history starts young (`firstFrame`: a gathering scene, a
-    /// GI configuration the shot's record changes), then frames until the scene is at rest (`untilRest`), at most
-    /// `settleCap`; the clock handed back after (`restoreDelta` < 0: the delta the engine had).
+    /// THE SETTLE (PHOTON-GATHER-1d): a photograph does not advance the world — and needs no freeze to say so
+    /// (ONE-FRAME-1): a scene's time is the steps its document's serial moved, and nothing here steps a document, so
+    /// every settle and stable frame advances 0. Draw the shot's first frame unconditionally where its own history
+    /// starts young (`firstFrame`: a gathering scene, a GI configuration the shot's record changes), then frames until
+    /// the scene is at rest (`untilRest`), at most `settleCap`.
     unsigned settleCap = 2000u;
     bool     firstFrame = false;
     bool     untilRest = false;
-    float    restoreDelta = -1.0f;
     bool     hdr = false;                       ///< the linear radiance too (View::readPixelsHdr)
     /// THE STILL PICTURE'S POLICY (View::setOffscreenContract StillPicture): a scene that gathers draws the first frame
     /// and waits for rest; a scene that does not takes the path it always took (no settle frames).
@@ -141,8 +141,6 @@ inline void takePicture(jahshaka::engine::Engine *engine, const PictureRequest &
 {
     Picture pic;
     if (engine && (req.firstFrame || req.untilRest)) {
-        const float delta = req.restoreDelta >= 0.0f ? req.restoreDelta : engine->fixedFrameDelta();
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
         // FRAMES NOBODY SAW: the settle renders outside the driver's tick, and the monitor must not read them as driven.
         const auto frame = [&] {
             if (framemonitor::active())
@@ -154,7 +152,6 @@ inline void takePicture(jahshaka::engine::Engine *engine, const PictureRequest &
         if (req.firstFrame) { frame(); ++i; }
         if (req.untilRest)
             for (; i < req.settleCap && !(req.scene && req.scene->published().gi.giAtRest); ++i) frame();
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(delta));
     }
     // Plus whatever the texture load-request counter still owes (THREADING_ADOPTION_SPEC.md P2 item 4).
     pic.frames += renderStableFrames(engine);

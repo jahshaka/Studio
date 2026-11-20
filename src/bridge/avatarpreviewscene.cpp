@@ -221,7 +221,9 @@ void AvatarPreviewScene::step(float dt, int width, int height)
 
     // ORDER (§0.5.1): pose -> mirror (refreshes global transforms) -> overlay.
     mModel->advance(dt);
-    if (auto e = engine()) e->submitFrame(jahshaka::engine::FrameInput::delta(jahshaka::engine::Engine::kDefaultFrameDelta));   // A4.2 S3
+    // THE PREVIEW's WORLD TIME (ONE-FRAME-1): its document's clock, stamped by this preview's mirror — the clip's own
+    // time (above) is the model's; the scene's particles and meter step with the document.
+    if (mModel->document()) mModel->document()->advance(dt);
     applyGrid();     // cheap (two floats); tracks load/clear without a signal
     pushFrame(mModel->camera(), width, height);
     if (mOverlay) {

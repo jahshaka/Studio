@@ -82,10 +82,10 @@ static int freeRunningArm()
     const auto status = [&]() { GpuSubstrateStatus st; e->request([&](Engine &) { st = gpuSubstrateStatus(*scene); }); return st; };
     const auto record = [&](unsigned long long step) {
         FrameInput in;
-        in.stepSerial = step;
-        in.stepPeriod = 1.0f / 60.0f;
         FrameInputScene part;
         part.scene = scene;
+        part.stepSerial = step;   // the scene's clock (ONE-FRAME-1: per scene)
+        part.stepPeriod = 1.0f / 60.0f;
         for (size_t i = 0; i < movers.size(); ++i) {
             NodeRecord r;
             r.id = movers[i];
@@ -226,10 +226,10 @@ static int composeIdentityArm()
     unsigned long long step = 0;
     const auto record = [&](int pose, bool send = true) {
         FrameInput in;
-        in.stepSerial = send ? ++step : step;   // a frame that sends nothing is no new step (it would interpolate)
-        in.stepPeriod = 1.0f / 60.0f;
         FrameInputScene part;
         part.scene = scene;
+        part.stepSerial = send ? ++step : step;   // a frame that sends nothing is no new step (it would interpolate)
+        part.stepPeriod = 1.0f / 60.0f;
         part.gi = gi;
         for (int i = 0; send && i < kCubes; ++i) {
             NodeRecord r;

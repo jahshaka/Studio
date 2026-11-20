@@ -18,6 +18,11 @@
 //  4. A NEW SOURCE: the cursor re-primes on the incoming document's clock (its past steps are not the mirror's) and
 //     the shader clock restarts at 0 ("went live" is per source, the lead's ruling): the same document opened twice
 //     reads the same shader seconds after the same steps. RED on the base: the clock carried the session's history.
+//  5. THE SCENE's SERIAL CROSSES A PLAY EDGE RISING (ONE-FRAME-1 stage 1): the mirror stamps its scene's part with the
+//     document clock's LIFETIME serial, so after a play edge (SimulationClock::reset, what Play / Stop / Simulate do)
+//     the engine's newest grid state for the scene is larger than before and the scene's time advances by the edge's
+//     steps. RED on the base 273b8e638: the viewport stamped clock.steps(), which reads 1 after the edge against 600
+//     before (printed below from the same clock: what the base's stamp was), and the engine held 600 as its newest.
 // NULL render system, offscreen platform: no display, no card.
 #include <QGuiApplication>
 #include <cmath>
@@ -32,6 +37,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/EngineInspect.h"
 #include "../support/documentgraph.h"
 #include "../support/testmesh.h"
 
@@ -194,6 +200,32 @@ int main(int argc, char **argv)
         std::printf("      the same document opened twice, 12 steps each: %.6f / %.6f s\n", t[0], t[1]);
         check(t[0] == t[1] && std::fabs(t[0] - 12.0 * kStep) < 1e-9,
               "the same document opened twice reads equal shader seconds after equal steps");
+    }
+
+    // ---- 5. THE PLAY EDGE ----
+    {
+        SceneMirror mirror(target);
+        auto edgeDoc = scrollingDoc("edge");
+        mirror.setSource(edgeDoc);
+        mirror.sync();
+        enginetest::frozenFrames(graph.engine(), 1);
+        for (int i = 0; i < 600; ++i) edgeDoc->advance(float(kStep));
+        mirror.sync();
+        enginetest::frozenFrames(graph.engine(), 1);
+        const jahshaka::engine::inspect::SceneEcho *echo = jahshaka::engine::inspect::scene(target);
+        const unsigned long long before = echo->newestStep();
+        const double timeBefore = echo->sceneSeconds();
+        edgeDoc->simulationClock().reset();   // Play (EngineSceneViewport's play edge)
+        edgeDoc->advance(float(kStep));
+        mirror.sync();
+        enginetest::frozenFrames(graph.engine(), 1);
+        const unsigned long long after = echo->newestStep();
+        const double advanced = (echo->sceneSeconds() - timeBefore) / double(1.0f / 60.0f);
+        std::printf("      600 steps, Play, 1 step: the scene's serial %llu -> %llu (the base's stamp, steps(): %llu); "
+                    "the scene advanced %.6f steps\n", before, after,
+                    (unsigned long long)edgeDoc->simulationClock().steps(), advanced);
+        check(after > before, "the scene's serial after a play edge is larger than before (a lifetime serial)");
+        check(std::fabs(advanced - 1.0) < 1e-9, "the step after the edge advances the scene's time one step");
     }
 
     std::printf("%s\n", gFailures == 0 ? "mirror.shader_clock_steps: all checks passed" : "mirror.shader_clock_steps: FAILURES");

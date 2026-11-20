@@ -150,7 +150,7 @@ target_compile_definitions(test_engine_interpolation PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_interpolation PRIVATE JahshakaEngine)
 add_dependencies(test_engine_interpolation JahshakaEngineMedia)
-jah_gpu_row(frame.interpolation CLASS engine FRAMES 20 COMMAND test_engine_interpolation
+jah_gpu_row(frame.interpolation CLASS engine FRAMES 34 COMMAND test_engine_interpolation   # +14 the rewound-serial case (ONE-FRAME-1: 2 lockstep + 12 free, counted by reading)
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.interpolation PROPERTIES TIMEOUT 60 LABELS "engine")
 
@@ -450,3 +450,44 @@ target_include_directories(test_region_grid_law PRIVATE ${CMAKE_SOURCE_DIR}/iris
 add_test(NAME engine.region_grid_law COMMAND test_region_grid_law)
 set_tests_properties(engine.region_grid_law PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.region_grid_law)
+# THE SCENE'S CLOCK (ONE-FRAME-1 stage 1; test_frame_clock.cpp says each law): one binary, one row per proof, on the
+# NULL render system (no display, no card).
+#   frame.clock_once      a serial's steps apply once; an empty hand-over advances 0 (red on the base: +0.016667 s);
+#                         reassert re-primes; the harness steps only the scenes no host ever stamped.
+#   frame.two_scenes      two scenes in one hand-over each advance by their own serial (red on any single cursor); a
+#                         join's drain counts, the next frame consumes, once.
+#   frame.particle_scale  the particles' time = steps x period x particleTimeScale (0.25, 4), the scene's unscaled.
+add_executable(test_frame_clock test_frame_clock.cpp)
+set_target_properties(test_frame_clock PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_frame_clock PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_frame_clock PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_frame_clock PRIVATE JahshakaEngine)
+add_dependencies(test_frame_clock JahshakaEngineMedia)
+foreach(_mode clock_once two_scenes particle_scale)
+    string(REPLACE "_" "-" _flag "${_mode}")
+    add_test(NAME frame.${_mode} COMMAND test_frame_clock --${_flag} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(frame.${_mode} PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_no_display(frame.${_mode})
+endforeach()
+# frame.meter_time — THE HDR METER ADAPTS IN ITS SCENE's TIME (ONE-FRAME-1 stage 1; test_frame_meter.cpp says the law):
+# the view's meter takes steps x period at particle time scales 0.25 and 4, and 0 on a frame nobody stepped the scene.
+# A card row (the meter runs on a view).
+add_executable(test_frame_meter test_frame_meter.cpp)
+set_target_properties(test_frame_meter PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_frame_meter PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_frame_meter PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_frame_meter PRIVATE JahshakaEngine)
+add_dependencies(test_frame_meter JahshakaEngineMedia)
+jah_gpu_row(frame.meter_time CLASS engine FRAMES 6 COMMAND test_frame_meter
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.meter_time PROPERTIES TIMEOUT 60 LABELS "engine")

@@ -751,9 +751,6 @@ private:
     bool mShotRadianceWanted = false;
     QVector<float> mShotRadiance;
     int mShotRadianceW = 0, mShotRadianceH = 0;
-    /// The frame delta syncFrame last pushed (the settle freezes the engine's
-    /// clock for its frames and hands this back).
-    float mLastFrameDelta = 1.0f / 60.0f;
     /// A world is on its way but nothing of it has presented yet. Set by
     /// beginSceneLoad and cleared when the view starts presenting: the state
     /// machine alone cannot tell "no world open" from "a world is loading",

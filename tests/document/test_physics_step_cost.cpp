@@ -328,7 +328,6 @@ int main(int argc, char **argv)
         cfg.renderThread = overlap;
         rig.engine = je::Engine::create(cfg, err);
         if (!rig.engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-        rig.engine->submitFrame(je::FrameInput::delta(kDt));
         rig.view = rig.engine->createOffscreenView("physics", 256, 256, je::Colour(0, 0, 0, 1), jahshaka::engine::OffscreenContract::Live);
         if (!rig.view) { std::printf("FAIL: view\n"); return 1; }
         if (mirror) gCube = testmesh::load(":assets/models/cube.obj");
@@ -353,11 +352,10 @@ int main(int argc, char **argv)
         unsigned long long step = 0;
         const auto submit = [&]() {
             je::FrameInput in;
-            in.frameDelta = kDt;
-            in.stepSerial = ++step;
-            in.stepPeriod = kDt;
             je::FrameInputScene part;
             part.scene = scene;
+            part.stepSerial = ++step;   // the scene's clock (ONE-FRAME-1: per scene, one grid step a submit)
+            part.stepPeriod = kDt;
             for (int i = 0; i < 10000; ++i) {
                 je::NodeRecord r;
                 r.id = cubes[size_t(i)];

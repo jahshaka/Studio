@@ -257,10 +257,9 @@ void EnginePlayerScene::step(float dt, int width, int height)
     vp.width = width;
     vp.height = height;
     vp.pixelRatioScale = 1.0f;
-    // THE ONE CLOCK (ENGINEERING_DEBT_SPEC A4.2), the player half: the seconds
-    // the document's SimulationClock turned into grid steps this frame are
-    // what the engine is told to simulate below.
-    const float simulated = mPlayback->update(vp, dt >= 0.0f ? dt : wall);
+    // THE ONE CLOCK (ENGINEERING_DEBT_SPEC A4.2), the player half: the grid steps the document's SimulationClock buys
+    // this frame reach the engine through the mirror's stamp of its serial (ONE-FRAME-1; no delta pushed).
+    mPlayback->update(vp, dt >= 0.0f ? dt : wall);
     // The spring-arm follow camera, same call the editor viewport makes and for
     // the same reason: the document computes the arm, the HOST knows which
     // camera it renders (AVATAR_LOCOMOTION_SPEC §8.5).
@@ -316,8 +315,6 @@ void EnginePlayerScene::step(float dt, int width, int height)
             }
         mMirror->sync(views);
     }
-    if (auto engine = mEngine.lock())
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(simulated * mDocument->particleTimeScale));
 }
 
 PlayerVr *EnginePlayerScene::vr()

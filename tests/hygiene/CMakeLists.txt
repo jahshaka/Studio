@@ -674,3 +674,11 @@ add_test(NAME source.brick_list_bounded
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/brick_list_bounded.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.brick_list_bounded PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.brick_list_bounded)
+# source.scene_time_one_meaning — A SCENE's TIME HAS ONE MEANING AND ONE SOURCE (ONE-FRAME-1 stage 1): no reader of Ogre's
+# process-wide frame clock in our C++ (its one writer OgreEngine.cpp), no media on Ogre's time auto-params (the meter's
+# and the OldMovie look's time are set per view from the view's scene), the meter's time its scene's frame time, no
+# host-written delta left anywhere, the harness's clock door no src/ caller. Fed a violation first. See the script.
+add_test(NAME source.scene_time_one_meaning
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/scene_time_one_meaning.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.scene_time_one_meaning PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.scene_time_one_meaning)

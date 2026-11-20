@@ -94,9 +94,12 @@ static void writePpm(const Image &img, const char *path)
     std::printf("    wrote %s\n", path);
 }
 
+/// THE SUITE's GRID STEPS PER FRAME (ONE-FRAME-1: a scene's time is its steps; this engine-only scene's are the
+/// harness's): 1 by default, 2 for a 1/30 s step, 0 to freeze the particles for an A/B.
+static unsigned gSteps = 1u;
 static void render(Engine *e, int frames = 3)
 {
-    enginetest::frames(e, frames);
+    for (int i = 0; i < frames; ++i) enginetest::steppedFrame(e, gSteps);
 }
 
 static unsigned pixelDiff(const Image &a, const Image &b)
@@ -415,10 +418,10 @@ int main()
     // the scene clock for every A/B, so two frames compare the same quads.
     {
         s->setNodeVisible(emitter, false);          // the quad is section 1-6's
-        // A 1/30 step spawns a cloud in 30 frames; the freeze below is a frame
-        // delta of 0 (the engine has no wall clock — Engine.h "Simulation
-        // clock"), and the step is re-armed after it.
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 30.0f));
+        // A 1/30 step (two grid steps a frame) spawns a cloud in 30 frames; the
+        // freeze below is frames of no step (the engine has no wall clock —
+        // Engine.h "Simulation clock"), and the step is re-armed after it.
+        gSteps = 2u;
 
         ParticleSystemDesc pd;
         pd.quota = 512;
@@ -446,7 +449,7 @@ int main()
         // Fill the box (30 frames at 400/s = a few hundred quads), then freeze.
         view->setPostFx(base);
         render(engine.get(), 30);
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
+        gSteps = 0u;
         render(engine.get(), 2);
         Image offBurst;
         REQUIRE(view->readPixels(offBurst));
@@ -489,9 +492,9 @@ int main()
         pd.additive = false;
         pd.alphaHash = false;
         REQUIRE(s->setParticleSystem(burst, pd));
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 30.0f));
+        gSteps = 2u;
         render(engine.get(), 30);
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
+        gSteps = 0u;
         render(engine.get(), 2);
         Image ordinaryOn;
         REQUIRE(view->readPixels(ordinaryOn));
@@ -512,7 +515,7 @@ int main()
                       "...and is NOT in the field: byte-identical with and without the pass "
                       "(%u px differ)", pixelDiff(ordinaryOn, ordinaryOff));
         }
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(Engine::kDefaultFrameDelta));   // back to the grid default
+        gSteps = 1u;   // back to the grid default
         CHECK(s->removeParticleSystem(burst), "the burst is removed");
         s->removeNode(burst);
         s->setNodeVisible(emitter, true);

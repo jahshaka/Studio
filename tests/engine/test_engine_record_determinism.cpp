@@ -47,9 +47,9 @@ bool noSubmit(int f) { return f % 11 == 5; }
 FrameInput nodeRecord(Scene *scene, NodeId node, int f, int half)
 {
     FrameInput in;
-    in.stepSerial = (unsigned long long)(f);
     FrameInputScene part;
     part.scene = scene;
+    part.stepSerial = (unsigned long long)(f);   // the scene's clock (ONE-FRAME-1: per scene)
     NodeRecord r;
     r.id = node;
     r.fields = NodeRecord::Trs;

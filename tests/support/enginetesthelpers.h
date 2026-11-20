@@ -342,27 +342,51 @@ inline bool rayReflectionOnly(Engine *e)
 
 /// THE TEST DOOR'S ONE FRAME VERB (ENGINE-UPGRADE-U3 stage 2b): every engine suite steps the engine through here —
 /// `frames(e, n)` renders n frames, `frames(e, 1, rec)` hands the record over first. `e` is whatever the suite holds
-/// (an Engine *, a unique_ptr, an Engine &): a template, so no call site edits its receiver. Its body is today's bytes
-/// (submit if given, then renderOneFrame n times); stage 4 swaps it ONCE for the lockstep wait on the render thread.
+/// (an Engine *, a unique_ptr, an Engine &): a template, so no call site edits its receiver.
+/// THE HARNESS's LAW: A FRAME IS ONE GRID STEP (ONE-FRAME-1 stage 1). A scene's time is its document's steps (its
+/// part's serial, stamped by its mirror); an engine-only fixture's scenes have no document, so before each frame the
+/// harness advances every scene no host ever stamped by one step (inspect::EngineEcho::harnessStep). A mirror fixture's
+/// time is its document's, as in the app: it advances its document. `frozenFrames(e, n)` renders n frames that step
+/// nothing (a still world: a frame nobody stepped advances 0); `steppedFrame(e, k)` one frame of k steps.
 /// After each frame, a route declaration made since the last one is asserted (declareRoutes, above: URGENT #146).
 namespace framesdetail {
 template <class E, class = void> struct RendersByDot : std::false_type {};
 template <class E>
 struct RendersByDot<E, std::void_t<decltype(std::declval<E &>().renderOneFrame())>> : std::true_type {};
+template <class E> Engine *frameEngine(E &e)
+{
+    if constexpr (RendersByDot<std::remove_reference_t<E>>::value) return &e;
+    else return &*e;
+}
+inline void renderSteps(Engine *e, int n, unsigned steps, const FrameInput *rec)
+{
+    if (!e) return;
+    if (rec) e->submitFrame(*rec);
+    const inspect::EngineEcho *echo = inspect::engine(e);
+    for (int i = 0; i < n; ++i) {
+        if (steps && echo) const_cast<inspect::EngineEcho *>(echo)->harnessStep(steps);
+        e->renderOneFrame();
+        checkDeclaredRoutes();
+    }
+}
 }  // namespace framesdetail
 
 template <class E> void frames(E &&e, int n, const FrameInput *rec = nullptr)
 {
-    if constexpr (framesdetail::RendersByDot<std::remove_reference_t<E>>::value) {
-        if (rec) e.submitFrame(*rec);
-        for (int i = 0; i < n; ++i) { e.renderOneFrame(); framesdetail::checkDeclaredRoutes(); }
-    } else {
-        if (rec) e->submitFrame(*rec);
-        for (int i = 0; i < n; ++i) { e->renderOneFrame(); framesdetail::checkDeclaredRoutes(); }
-    }
+    framesdetail::renderSteps(framesdetail::frameEngine(e), n, 1u, rec);
 }
-/// The same with the record by reference — a suite's temporary record (`frames(e, 1, FrameInput::delta(0.0f))`).
+/// The same with the record by reference — a suite's temporary record.
 template <class E> void frames(E &&e, int n, const FrameInput &rec) { frames(std::forward<E>(e), n, &rec); }
+/// n frames that step no scene (the harness's still world).
+template <class E> void frozenFrames(E &&e, int n, const FrameInput *rec = nullptr)
+{
+    framesdetail::renderSteps(framesdetail::frameEngine(e), n, 0u, rec);
+}
+/// One frame of `steps` grid steps (a hitch: a host frame that bought several).
+template <class E> void steppedFrame(E &&e, unsigned steps)
+{
+    framesdetail::renderSteps(framesdetail::frameEngine(e), 1, steps, nullptr);
+}
 
 /// THE SUBSCRIBED STATUSES, READ THE WAY A HOST READS THEM (ENGINE-UPGRADE-U3 stage 3, decision 17): each call
 /// renews the counters' subscription for the window after it and answers the last frame's snapshot — counters
