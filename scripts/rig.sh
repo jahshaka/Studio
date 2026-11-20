@@ -16,9 +16,15 @@
 #                            DISPLAY=:NN, HOME=<data root>/home, JAHSHAKA_VR=0 (VR runs go through tests/vr/run_vr_app.sh),
 #                            JAH_CPUS and JAH_RIG_DATA; a Jahshaka or jahlab binary given no --data-root gets
 #                            `--data-root <data root>`. Refused (2) with no live rig of the tree - :0 is never used.
-#   rig.sh down              kills EXACTLY the recorded pid, once /proc/<pid>/comm is Xvfb and its start time is the
-#                            recorded one (a reused number or pid is another process: never killed), then removes the pid
-#                            file. A stale pid file (the process gone - a reboot - or no longer ours) is removed and said.
+#   rig.sh down              THE STARTER's end: kills EXACTLY the recorded pid, once /proc/<pid>/comm is Xvfb and its start time
+#                            is the recorded one (a reused number or pid is another process: never killed), then removes the pid
+#                            file - ONLY WHEN NO OTHER LIVE USER is recorded; else it is KEPT ("down requested") and the last
+#                            user's release takes it down. A stale pid file (the process gone - a reboot - or no longer ours) is
+#                            removed and said.
+#   rig.sh release           A REUSER's end (it got RIG_STARTED=0): unrecords its caller; the last user of a rig whose starter
+#                            asked it down takes it down. THE USERS (the branch audit's W1): `up` records its caller - JAH_RIG_USER,
+#                            else its parent pid - with its start time in <pid file>.users; a user whose pid is gone or whose
+#                            start time differs is pruned; `run` is a user for its own run.
 #   rig.sh status            the rig, the data root, our CPUs, the card's holder and queue.
 #   rig.sh display           the live rig's DISPLAY (:NN), exit 1 if none - for scripts.
 #   rig.sh tree              the tree's ONE spelling (~/Developer/..., CODING_RULES §4) - what a script cds into before it
@@ -41,10 +47,11 @@ canon() {   # the ~/Developer spelling of a path under the link's real target (s
 }
 tree=$(canon "$(cd "$here/.." && pwd)")
 pidf="$tree/rig-xvfb.pid"
+users="$pidf.users"   # "<pid> <start time>" a line: the rig's live users (W1)
 data="$tree.data"
 xdir=${JAH_RIG_XDIR:-/tmp}   # where X servers keep their lock files and sockets (a suite's fake server: its own)
 die() { echo "rig.sh: $*" >&2; exit 2; }
-usage() { sed -n '4,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 64; }
+usage() { sed -n '4,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 64; }
 
 cpus() {
     local c=${JAH_CPUS:-} f="${JAH_LEAD_ROOT:-$uhome/Developer}/testing/CPUS"
@@ -59,6 +66,17 @@ comm() { cat "/proc/$1/comm" 2> /dev/null; }
 rpid="" rdisp="" rstart=""
 [ -f "$pidf" ] && read -r rpid rdisp rstart _ < "$pidf" 2> /dev/null
 live() { [ -n "$rpid" ] && [ "$(comm "$rpid")" = Xvfb ] && [ -n "$rstart" ] && [ "$(starttime "$rpid")" = "$rstart" ]; }
+me() { local p=${JAH_RIG_USER:-$PPID}; echo "$p $(starttime "$p")"; }
+others() {   # the live users other than the caller ($1: its line), pruning the dead from the file
+    local p s keep=""
+    [ -f "$users" ] || return 0
+    while read -r p s; do
+        [ -n "$p" ] && [ -n "$s" ] && [ "$(starttime "$p")" = "$s" ] && [ "$p $s" != "$1" ] && keep="$keep$p $s"$'\n'
+    done < "$users"
+    printf '%s' "$keep" > "$users.tmp.$$" && mv -f "$users.tmp.$$" "$users"
+    printf '%s' "$keep"
+}
+enroll() { local m; m=$(me); others "$m" > /dev/null; echo "$m" >> "$users"; rm -f "$pidf.down"; }
 stale_note() {   # a pid file that names no live rig of ours: removed, said
     local why="the process is gone"
     [ -d "/proc/$rpid" ] && why="pid $rpid is now '$(comm "$rpid")' started at another time - not ours"
@@ -92,7 +110,7 @@ cmd_up() {
     if [ -f "$pidf" ] && live; then
         [ -z "$want" ] || [ "$rdisp" = ":$want" ] || die "this tree's rig is up at $rdisp (pid $rpid) - not :$want; rig.sh down first"
         [ -z "$env" ] || echo "rig.sh: this tree's rig is already up at $rdisp (pid $rpid) - reused" >&2
-        say_rig 0 $env; return 0
+        enroll; say_rig 0 $env; return 0
     fi
     [ -f "$pidf" ] && stale_note >&2
     for n in ${want:-$(seq 60 99)}; do
@@ -118,7 +136,7 @@ cmd_up() {
         done
         if [ -n "$p" ]; then
             rpid=$p rdisp=":$n" rstart=$(starttime "$p")
-            echo "$rpid $rdisp $rstart $tree" > "$pidf.tmp.$$" && mv -f "$pidf.tmp.$$" "$pidf"
+            echo "$rpid $rdisp $rstart $tree" > "$pidf.tmp.$$" && mv -f "$pidf.tmp.$$" "$pidf"; rm -f "$users" "$pidf.down"; enroll
             [ -z "$env" ] || echo "rig.sh: Xvfb up at $rdisp (pid $rpid, $pidf)" >&2
             say_rig 1 $env; return 0
         fi
@@ -128,14 +146,24 @@ cmd_up() {
     die "no free display in 60-99"
 }
 
-cmd_down() {
+cmd_down() {   # <down|release>
+    local o
     if [ ! -f "$pidf" ]; then echo "rig.sh: no rig up in $tree (no $pidf)"; return 0; fi
-    live || { stale_note; return 0; }
+    mkdir -p "$data" && exec 7> "$data/.rig.lock" && flock -x 7   # (the users file: one writer at a time)
+    live || { stale_note; rm -f "$users" "$pidf.down"; return 0; }
+    o=$(others "$(me)")
+    if [ -n "$o" ]; then
+        [ "$1" = down ] && : > "$pidf.down"
+        echo "rig $1: $rdisp kept: in use by $(printf '%s' "$o" | grep -c .) other user(s) (pid $(printf '%s' "$o" | cut -d' ' -f1 | tr '\n' ' ')) -" \
+             "$([ -f "$pidf.down" ] && echo "down requested: the last user's release takes it down" || echo "its starter takes it down")"
+        return 0
+    fi
+    if [ "$1" = release ] && [ ! -f "$pidf.down" ]; then echo "rig release: $rdisp left up (its starter takes it down)"; return 0; fi
     kill "$rpid" 2> /dev/null
     local i; for i in $(seq 50); do [ "$(starttime "$rpid")" = "$rstart" ] || break; sleep 0.1; done
     if [ "$(starttime "$rpid")" = "$rstart" ]; then kill -KILL "$rpid" 2> /dev/null; sleep 0.2; fi
-    rm -f "$pidf"
-    echo "rig down: Xvfb pid $rpid ($rdisp) killed, $pidf removed (the data root $data stays)"
+    rm -f "$pidf" "$users" "$pidf.down"
+    echo "rig $1: Xvfb pid $rpid ($rdisp) killed, $pidf removed (the data root $data stays)"
 }
 
 cmd_run() {
@@ -160,9 +188,14 @@ cmd_run() {
                          [ -n "$dr" ] || cmd+=(--data-root "$data") ;;
     esac
     mkdir -p "$data/home"
-    exec "$here/gpu-exclusive.sh" "${lockopts[@]}" --label "$label" \
+    # THE RUN IS A USER of the rig for its own life (W1): a starter's down meanwhile keeps the rig; its end releases it
+    local rc; ( exec 7> "$data/.rig.lock"; flock -x 7; JAH_RIG_USER=$$ enroll )
+    "$here/gpu-exclusive.sh" "${lockopts[@]}" --label "$label" \
         env DISPLAY="$rdisp" HOME="$data/home" JAHSHAKA_VR=0 JAH_CPUS="$c" JAH_RIG_DATA="$data" \
         taskset -c "$c" nice -n 10 "${cmd[@]}"
+    rc=$?
+    JAH_RIG_USER=$$ cmd_down release > /dev/null
+    return $rc
 }
 
 cmd_status() {
@@ -179,7 +212,8 @@ cmd_status() {
 
 case "${1:-}" in
     up) shift; cmd_up "$@" ;;
-    down) cmd_down ;;
+    down) cmd_down down ;;
+    release) cmd_down release ;;
     run) shift; cmd_run "$@" ;;
     status) cmd_status ;;
     display) live && echo "$rdisp" ;;
