@@ -52,7 +52,10 @@
 #
 set -uo pipefail
 
-REPO_ROOT="$(cd "$(dirname "$0")/.." && pwd)"
+# THE TREE's ONE SPELLING (CODING_RULES §4; WORKFLOW-STREAMLINE-1 6.5): the race lane CONFIGURES a build dir, and a first
+# configure under /mnt/work/... (the ~/Developer link's target) compiles uncached and spells every command another way -
+# so the lane always runs from the ~/Developer spelling, whichever spelling it was called by (scripts/rig.sh tree)
+REPO_ROOT="$(bash "$(dirname "$0")/rig.sh" tree)" || { echo "sanitize: no tree (scripts/rig.sh tree)" >&2; exit 2; }
 cd "$REPO_ROOT"
 
 usage() {

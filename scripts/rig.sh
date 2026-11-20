@@ -21,6 +21,8 @@
 #                            file. A stale pid file (the process gone - a reboot - or no longer ours) is removed and said.
 #   rig.sh status            the rig, the data root, our CPUs, the card's holder and queue.
 #   rig.sh display           the live rig's DISPLAY (:NN), exit 1 if none - for scripts.
+#   rig.sh tree              the tree's ONE spelling (~/Developer/..., CODING_RULES §4) - what a script cds into before it
+#                            configures (a first configure under /mnt/work/... compiles uncached and re-spells every command).
 #   rig.sh cpus              OUR CPU SET, the one setting: $JAH_CPUS, else the first line of <lead repo>/testing/CPUS
 #                            (JAH_LEAD_ROOT, else ~/Developer), else 10-19 (the box split with the Unreal session, CLAUDE.md
 #                            "The box and the card"). `nproc` honours the affinity, so a build run under
@@ -42,7 +44,7 @@ pidf="$tree/rig-xvfb.pid"
 data="$tree.data"
 xdir=${JAH_RIG_XDIR:-/tmp}   # where X servers keep their lock files and sockets (a suite's fake server: its own)
 die() { echo "rig.sh: $*" >&2; exit 2; }
-usage() { sed -n '4,30p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 64; }
+usage() { sed -n '4,32p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 64; }
 
 cpus() {
     local c=${JAH_CPUS:-} f="${JAH_LEAD_ROOT:-$uhome/Developer}/testing/CPUS"
@@ -181,6 +183,7 @@ case "${1:-}" in
     run) shift; cmd_run "$@" ;;
     status) cmd_status ;;
     display) live && echo "$rdisp" ;;
+    tree) printf '%s\n' "$tree" ;;
     cpus) cpus ;;
     *) usage ;;
 esac
