@@ -41,6 +41,14 @@ function remove() {
     var del = rows.filter(function (p) { return p.name === "Doors Delete"; });
     var keep = rows.filter(function (p) { return p.name === "Doors Keep"; });
     assert(del.length === 1 && keep.length === 1, "both projects are listed");
+    // A PROJECT WHOSE OPEN IS IN FLIGHT IS NOT DELETED UNDER IT (the audit's W3: the door read sceneOpen only,
+    // so the open installed a world for a deleted row).
+    assert(project.openAsync(del[0].guid) === true, "the project to delete starts opening (threaded)");
+    var opening = refusal(function () { project.remove(del[0].guid); });
+    console.log("opening: " + opening);
+    assert(opening !== null && opening.indexOf("is opening") >= 0, "removing a project while it opens is REFUSED");
+    var turns = 0;
+    while (project.openState() === "opening" && turns < 100000) ++turns;   // each call turns the loop
     assert(project.open(keep[0].guid) === true, "the project to keep is opened");
     var why = refusal(function () { project.remove(keep[0].guid); });
     console.log("open: " + why);

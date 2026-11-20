@@ -727,6 +727,14 @@ bool ProjectApi::remove(const QString &guid)
 {
     if (!host.db || !host.services || !host.services->project)
         return fail("project: not available in this session");
+    // A PROJECT WHOSE OPEN IS IN FLIGHT is not deleted under it (the audit's W3):
+    // the door reads sceneOpen, which a threaded open sets only at its bind — the
+    // install would then build a world for a row that is gone. (Whether the
+    // Desktop's Delete can be clicked while an open runs is unverified: the
+    // open's progress dialog is up — a leftover line for the door itself.)
+    if (openInFlight() && host.project->getProjectGuid() == guid)
+        return fail(QStringLiteral("project.remove: '%1' is opening — wait until project.openState() reads "
+                                   "'idle'").arg(guid));
     // THE ONE DELETE (STUDIO-HYGIENE-1): the Desktop tile's Delete calls the
     // same function, and it owns every refusal (an unknown guid, the open
     // project, a location that is not there) — host.project is NOT mutated
