@@ -236,6 +236,55 @@ def card_driver():
     return v
 
 
+# A TIMEOUT THAT MEASURED THE ENVIRONMENT IS NO VERDICT (WORKFLOW-STREAMLINE-1 5.2, the owner 2026-11-20; 144 TIMEOUTs since 10-13
+# were 2.5 h of card with no answer, each served red at its tree until a `--rerun-red --why`). A TIMEOUT record carries
+# `no_verdict` (its reason) when
+#   (a) COLD: its row booted on a cold cache - the caller (spec.sh's gate) checks the warm-up's STAMP for the boots the row's class
+#       needs (scripts/warm-app-cache.sh --check: the key the stamp names against the build's key now) before the row's batch
+#       and hands the answer over as JAH_ROW_COLD ({row: why} for the batch's cold rows); or
+#   (b) AT THE CAP EDGE: its price (scripts/gate-times.txt) is at least CAP_EDGE of its cap (the TIMEOUT's own wall: ctest killed it
+#       there). CAP_EDGE = 1/1.3: a sibling's full-width build raised every 60-s row's wall ~30 % (URGENT #121, measured
+#       2026-10-29), so a row priced over cap/1.3 can cross its cap by load alone - its TIMEOUT measured the load, not the row.
+# A no-verdict record is never served red (ci_gate_check.py); the caller runs the row once more, warm (JAH_ROW_RETRY=1: that run's
+# TIMEOUT is a verdict unless it is cold again - the cap edge is judged once).
+CAP_EDGE = 1 / 1.3
+_PRICES = []
+
+
+def prices():
+    """{row: seconds} of the tree's scripts/gate-times.txt (read once a process; a malformed line skipped)."""
+    if not _PRICES:
+        out = {}
+        try:
+            for l in open(os.path.join(ROOT, "scripts", "gate-times.txt"), errors="replace"):
+                w = l.split()
+                if len(w) >= 2 and not w[0].startswith("#"):
+                    try:
+                        out[w[0]] = float(w[1])
+                    except ValueError:
+                        pass
+        except OSError:
+            pass
+        _PRICES.append(out)
+    return _PRICES[0]
+
+
+def no_verdict(row, secs):
+    """Why a TIMEOUT of `row` after `secs` s is no verdict, or None (it is a red)."""
+    try:
+        cold = json.loads(os.environ.get("JAH_ROW_COLD") or "{}").get(row)
+    except (ValueError, AttributeError):
+        cold = None
+    if cold:
+        return "cold: " + str(cold)[:200]
+    if os.environ.get("JAH_ROW_RETRY") == "1":
+        return None
+    p = prices().get(row)
+    if p and secs and p >= CAP_EDGE * secs:
+        return f"cap edge: priced {p:g} s, its cap {secs:.1f} s (a 30 % load inflation, #121, crosses it)"
+    return None
+
+
 def takes_card(labels):
     """A row takes the card unless it carries the derived label `code` (a tree before it: every row does)."""
     labels = [labels] if isinstance(labels, str) else (labels or ())
@@ -447,6 +496,8 @@ def run_ctest(cmd, build, tier, lane, echo=True):
         # NOT RUN BEHIND ITS FIXTURE (URGENT #123): a row ctest did not run because a row it needs is red is RECORDED so,
         # the rows it waited on named - ci_gate_check.py serve reads it served-red while they stay red at this tree, so a
         # plan never lists it to run again for nothing (8B's master check re-ran its part seven times: ~25 min of card)
+        if v == "TIMEOUT" and no_verdict(name, secs):   # 5.2: it measured the cache or the load, not the row
+            row["no_verdict"] = no_verdict(name, secs)
         if v == "NOTRUN" and behind:
             row["behind"] = behind
             row["status"] = "behind " + ", ".join(behind)

@@ -11,6 +11,8 @@ one — PASSED, and:
   * the whole range A..C does not reach the row (gate-scope's selection: the graph, the symbols, the rules);
   * it is not a measuring row (label `measure`: a measurement is never served);
   * a CARD row (every row without the derived label `code`) was recorded on the driver of now (URGENT #167, card_driver).
+A TIMEOUT marked `no_verdict` (cold, or at its cap edge: gate_runlog.no_verdict, WORKFLOW-STREAMLINE-1 5.2) is never served
+red: it runs.
 A row is SERVED-RED (URGENT #54: re-running a red at the same input is a quiet retry that could flip it green by chance)
 when its newest record is a red RESULT (FAIL, TIMEOUT, CRASH; NOTRUN and NOADMIT are not results - but a NOTRUN BEHIND a
 row it needs, gate_runlog's `behind`, stands as a red while those rows stay red there: URGENT #123) at THIS very tree (never
@@ -297,6 +299,8 @@ def red_stands(rec, fact, reach, cfg):
     not run again (a deliberate re-run is spec.sh test's --rerun-red <row> --why <text>)."""
     if rec.get("verdict") not in RED_RESULTS:
         return f"its verdict {rec.get('verdict')} is not a red result"
+    if rec.get("no_verdict"):   # WORKFLOW-STREAMLINE-1 5.2 (gate_runlog.no_verdict): a TIMEOUT cold or at its cap edge answers nothing
+        return f"NO VERDICT ({rec['no_verdict']}): it runs again, warm"
     if fact is None:
         return "the row is not in the build's ctest inventory"
     if not reach.same_tree(rec["tip"]["studio"]):
@@ -347,7 +351,7 @@ def classify(rec, fact, row, reach, a_fork, tip_fork, cfg, at=None):
         return ("red", None) if why is None else ("run", f"NOT RUN behind {', '.join(rec['behind'])}; {why}")
     if rec.get("verdict") in RED_RESULTS:
         why = red_stands(rec, fact, reach, cfg)
-        return ("red", None) if why is None else ("run", why if "ancestor" in why else
+        return ("red", None) if why is None else ("run", why if "ancestor" in why or why.startswith("NO VERDICT") else
                                                   f"its newest record is {rec.get('verdict')} ({(rec.get('failLine') or '')[:120]}); {why}")
     why = why_not(rec, fact, row, reach, a_fork, tip_fork, cfg)
     return ("run", why) if why else ("served", None)
