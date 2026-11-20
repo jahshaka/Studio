@@ -21,7 +21,11 @@ case "$HOME" in
     */projectdoors-home-refuse) ;;
     *) echo "FAIL: refusing to run outside the row's scratch HOME ($HOME)"; exit 1 ;;
 esac
-find "$PWD" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null
+# THE WIPE IS GUARDED BY ITS OWN DIRECTORY, not by HOME: a hand run from anywhere else empties nothing.
+case "$PWD" in
+    */projectdoors-home-refuse/run) find "$PWD" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null ;;
+    *) echo "FAIL: refusing to wipe $PWD (the row runs in */projectdoors-home-refuse/run)"; exit 1 ;;
+esac
 mkdir -p fixtures
 
 { cat "$JS"; echo "make(\"$PWD/fixtures\");"; } > make.run.js
