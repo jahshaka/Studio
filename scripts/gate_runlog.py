@@ -169,14 +169,16 @@ def tree_shas(root=None):
 
 
 def built_from(build):
-    """{studio, irisgl, dirty, fork_dirty} from <build>/BUILT_FROM (cmake/BuiltFrom.cmake writes it as every build's last
-    step)."""
+    """{studio, irisgl, dirty, fork_dirty, content, stale} from <build>/BUILT_FROM (cmake/BuiltFrom.cmake writes it as every
+    build's last step). `stale` (URGENT #187, cmake/built_from.py): this pass's binaries miss a source ninja could not see (an old
+    mtime) - "?" (the map unread) is stale too; a stamp written before the field carries none (False)."""
     try:
         kv = dict(l.split("=", 1) for l in open(os.path.join(build, "BUILT_FROM")).read().splitlines() if "=" in l)
     except OSError:
         return None
     return {"studio": kv.get("studio", ""), "irisgl": kv.get("irisgl", ""), "dirty": kv.get("dirty") == "1",
-            "fork_dirty": kv.get("fork_dirty") != "0"}
+            "fork_dirty": kv.get("fork_dirty") != "0", "content": kv.get("content"),
+            "stale": kv.get("stale") not in (None, "0")}
 
 
 def stale_build(shas):
@@ -186,6 +188,8 @@ def stale_build(shas):
         return "built from an UNKNOWN commit (no BUILT_FROM stamp)"
     if b.get("dirty"):
         return "built from a DIRTY tree"
+    if b.get("stale"):
+        return "built while a source ninja could not see (an old mtime) was older than its objects: STALE (build again)"
     if b.get("studio") != shas.get("studio") or b.get("irisgl") != shas.get("irisgl"):
         return "built from studio %s / irisgl %s, not the tip" % ((b.get("studio") or "?")[:9], (b.get("irisgl") or "?")[:9])
     return None

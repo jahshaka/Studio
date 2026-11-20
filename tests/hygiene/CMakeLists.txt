@@ -373,6 +373,14 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/law_records.py" "${CMAKE_SOURCE_DIR}/scripts/gate_runlog.py")
     set_tests_properties(tooling.law_records PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.law_records)
+    # tooling.built_from_heals (URGENT #187) — A SOURCE NINJA COULD NOT SEE IS HEALED, NEVER STAMPED AS BUILT: a toy CMake +
+    # ninja project with the tree's cmake/BuiltFrom.cmake + cmake/built_from.py - a cp -p restore (an old mtime) prints the
+    # loud line, is touched, stamps stale=1, and the next pass rebuilds it (stale=0); a fork file names build-ogre.sh and stays
+    # stale until the install's stamp is newer; a clean pass and an ordinary edit stamp stale=0. No GPU, no display.
+    add_test(NAME tooling.built_from_heals
+             COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/built_from_heals.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(tooling.built_from_heals PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.built_from_heals)
     # source.no_renders_tracked — A RUN LEAVES NOTHING TRACKED (item 7): no render, home or Testing/ in git under
     # tests/ scripts/ testing/ but the fixture inputs.
     add_test(NAME source.no_renders_tracked

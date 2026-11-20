@@ -12,6 +12,13 @@
 # stamp at all — as studio_dirty (never the tip's run). Every gate first runs a no-op `cmake --build`
 # (gate_runlog.prebuild): a stale binary or a `--target` build's leftovers are rebuilt and the stamp is fresh.
 #
+# THE CONTENT (URGENT #187): ninja rebuilds by mtime, so a source restored with an OLD mtime (tar xf, cp -p) rebuilt nothing
+# and this always-run step stamped the tree as it is now - a stamp naming content the binary was never built from.
+# cmake/built_from.py keeps the tree's per-file content map beside the stamp; a file whose content moved while its mtime did
+# not pass the last stamp is touched, ONE loud line says "this pass is STALE - build again", and the stamp carries
+# stale=<n> for this pass (content=, stale_fork=, stale_files= too); the next pass rebuilds it. util.build passes again on
+# that line; a FORK file in it needs build-ogre.sh first (spec.sh test refuses, exit 2, with the command).
+#
 # Two modes: included from the top CMakeLists (defines the target), and run as a script (-P) by the target.
 if(CMAKE_SCRIPT_MODE_FILE)
     # _jah_head(<dir> <out sha> <out dirty>)
@@ -45,7 +52,18 @@ if(CMAKE_SCRIPT_MODE_FILE)
     else()
         set(dirty 0)
     endif()
-    set(text "studio=${studio}\nirisgl=${irisgl}\ndirty=${dirty}\nfork_dirty=${fdirty}\n")
+    # THE CONTENT AND WHAT NINJA COULD NOT SEE (URGENT #187; cmake/built_from.py says how): content=, stale=, stale_fork=,
+    # stale_files= - a source restored with an old mtime is touched here and this pass is stamped STALE (build again)
+    get_filename_component(_build "${OUT}" DIRECTORY)
+    set(extra "content=?\nstale=?\nstale_fork=0\nstale_files=\n")
+    if(PY)
+        execute_process(COMMAND "${PY}" -I "${CMAKE_CURRENT_LIST_DIR}/built_from.py" "${SRC}" "${_build}" "${OGRE_PREFIX}"
+                        OUTPUT_VARIABLE extra RESULT_VARIABLE prc)
+        if(NOT prc EQUAL 0)
+            set(extra "content=?\nstale=?\nstale_fork=0\nstale_files=\n")
+        endif()
+    endif()
+    set(text "studio=${studio}\nirisgl=${irisgl}\ndirty=${dirty}\nfork_dirty=${fdirty}\n${extra}")
     set(old "")
     if(EXISTS "${OUT}")
         file(READ "${OUT}" old)
@@ -76,6 +94,7 @@ endfunction()
 
 add_custom_target(jah_built_from ALL
     COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DOUT=${CMAKE_BINARY_DIR}/BUILT_FROM
+            -DPY=${Python3_EXECUTABLE} -DOGRE_PREFIX=${OGRE_NEXT_PREFIX}
             -P ${CMAKE_CURRENT_LIST_DIR}/BuiltFrom.cmake
     COMMENT "BUILT_FROM: the studio and irisgl commits this build was made from"
     VERBATIM)
