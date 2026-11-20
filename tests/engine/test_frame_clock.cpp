@@ -9,8 +9,9 @@
 // not draw it hands it 0 and leaves its steps.
 //
 //   --clock-once        frame.clock_once: a serial's steps apply once (an equal serial again 0; a merged hand-over's
-//                       newest serial carries both ticks), an empty frame 0, a reassert re-primes, a lower serial
-//                       re-primes (never a wrap), the harness steps only a never-stamped scene, for good.
+//                       newest serial carries both ticks), an empty frame 0, a reassert KEEPS the steps (bug 2) while a
+//                       new document's epoch re-primes, a lower serial re-primes (never a wrap), the harness steps only a
+//                       never-stamped scene, for good.
 //                       RED ON THE BASE 273b8e638 / irisgl 4576b132: the engine's clock was one persisting frame delay;
 //                       an empty hand-over advanced it again by the last delta (+0.016667 s, measured at this row's first
 //                       form through Ogre's ControllerManager elapsed time).
@@ -72,12 +73,21 @@ static void clockOnce()
     c.take(part(15));   // two host ticks merged into one hand-over: the newest serial (15 over 14) is the one taken
     c.beginFrame(true);
     check(c.dt == 2.0 * kPeriod, "a merged hand-over's newest serial carries both ticks' steps");
-    c.take(part(5, 1.0f, true));
+    // A REASSERT IS NO NEW CLOCK (the stage-1 audit's bug 2): a page switch, a re-take, a Player shot re-apply every
+    // field (FrameInputScene::reassert) and keep the scene's steps. RED on irisgl 8060febd: it re-primed (0 steps).
+    c.take(part(17, 1.0f, true));
     c.beginFrame(true);
-    check(c.dt == 0.0, "a reassert re-primes on the incoming serial: 0, never a jump");
+    std::printf("      a reassert with the serial 15 -> 17: %.6f steps\n", steps(c));
+    check(c.dt == 2.0 * kPeriod, "a reassert without a document change advances its steps normally");
+    // ONLY A NEW DOCUMENT RE-PRIMES: its mirror's setSource moves the clock's epoch
+    FrameInputScene fresh = part(5);
+    fresh.clockEpoch = 2;
+    c.take(fresh);
+    c.beginFrame(true);
+    check(c.dt == 0.0, "a new document (the epoch moved) re-primes on its serial: 0, never a jump");
     c.take(part(6));
     c.beginFrame(true);
-    check(c.dt == kPeriod, "...and the next step advances one step");
+    check(c.dt == kPeriod, "...and its next step advances one step");
     c.take(part(3));
     c.beginFrame(true);
     check(c.dt == 0.0 && c.newest == 3, "a lower serial without a reassert re-primes too (0 steps, never a wrap)");

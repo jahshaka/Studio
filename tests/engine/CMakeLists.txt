@@ -459,7 +459,8 @@ jah_no_display(engine.region_grid_law)
 #   frame.particle_scale  the particles' time = steps x period x particleTimeScale (0.25, 4), the scene's unscaled.
 # THE SCENE'S CLOCK (ONE-FRAME-1 stage 1; test_frame_clock.cpp says each law): the pure value type every engine scene
 # keeps (irisgl/engine/src/SceneClock.h), driven directly — one binary, one row per proof, CPU only (no engine, no card).
-#   frame.clock_once         a serial's steps apply once; an empty frame 0 (red on the base: +0.016667 s); re-primes;
+#   frame.clock_once         a serial's steps apply once; an empty frame 0 (red on the base: +0.016667 s); a reassert
+#                            keeps the steps, a new document's epoch re-primes (bug 2: red on 8060febd, 0 steps);
 #                            the harness steps only never-stamped scenes.
 #   frame.two_scenes         two scenes' clocks are independent; a join's count is consumed by the next frame, once.
 #   frame.particle_scale     the particles' time = steps x period x particleTimeScale (0.25, 4), the scene's unscaled.
