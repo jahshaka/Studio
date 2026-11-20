@@ -8,9 +8,12 @@
 set(_home ${CMAKE_CURRENT_BINARY_DIR}/projectdoors-home-refuse)
 jah_fresh_home_fixture(project.refuses_unreadable.fresh_home projectDoorsRefuseHome "${_home}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
 file(MAKE_DIRECTORY ${_home}/run)
+# The JS half and `--headless` stand VISIBLY on the command line: gate-scope reads the row's verbs from its .js
+# argument and its kind (a headless script) from the flag, which the wrapper forwards to both processes.
 add_test(NAME project.refuses_unreadable
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/project_doors.sh
-                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}/project_doors.js
+                 ${CMAKE_CURRENT_SOURCE_DIR}/rewrite_archive.py --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(project.refuses_unreadable PROPERTIES
     JAHSHAKA_HEADLESS TRUE   # project_doors.sh runs the app --headless only: the NULL render system (testing_rules R13)

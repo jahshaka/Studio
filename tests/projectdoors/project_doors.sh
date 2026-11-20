@@ -9,9 +9,10 @@
 #      over the row); and an archive whose scene does not parse imported -> refused (it imported EMPTY).
 # Plus the control: the v2 source opens with its nodes. Two --headless processes and one python step.
 #
-# $1 = the Jahshaka binary, $2 = this directory (the JS half and the fixture maker)
+# $1 = the Jahshaka binary, $2 = the JS half (project_doors.js), $3 = the fixture maker (rewrite_archive.py),
+# $4 = --headless (forwarded to both processes; it is on the row's command line for gate-scope to read)
 set -u
-BIN="$1"; HERE="$2"
+BIN="$1"; JS="$2"; PY="$3"; MODE="${4:?the run mode (--headless)}"
 fail=0
 check() { if [ "$1" = "0" ]; then echo "ok:   $2"; else echo "FAIL: $2"; fail=1; fi }
 
@@ -23,8 +24,8 @@ esac
 find "$PWD" -mindepth 1 -maxdepth 1 -exec rm -rf {} + 2>/dev/null
 mkdir -p fixtures
 
-{ cat "$HERE/project_doors.js"; echo "make(\"$PWD/fixtures\");"; } > make.run.js
-"$BIN" --headless --script "$PWD/make.run.js" > make.log 2>&1
+{ cat "$JS"; echo "make(\"$PWD/fixtures\");"; } > make.run.js
+"$BIN" "$MODE" --script "$PWD/make.run.js" > make.log 2>&1
 rc=$?
 grep -E "^ok:|assert failed|Error" make.log
 check $rc "process 1 (make the source project and its archive) passes (exit $rc)"
@@ -32,13 +33,13 @@ grep -q "make: ALL OK" make.log
 check $? "process 1 reached its end"
 [ $fail = 0 ] || exit 1
 
-python3 -I "$HERE/rewrite_archive.py" "$PWD/fixtures/source.zip" "$PWD/fixtures" \
+python3 -I "$PY" "$PWD/fixtures/source.zip" "$PWD/fixtures" \
         "$JAHSHAKA_DATA_ROOT/JahLibrary.db" "Doors Corrupt Row"
 check $? "the three archives are made from the export, and one library row is corrupted"
 [ $fail = 0 ] || exit 1
 
-{ cat "$HERE/project_doors.js"; echo "refuse(\"$PWD/fixtures\");"; } > refuse.run.js
-"$BIN" --headless --script "$PWD/refuse.run.js" > refuse.log 2>&1
+{ cat "$JS"; echo "refuse(\"$PWD/fixtures\");"; } > refuse.run.js
+"$BIN" "$MODE" --script "$PWD/refuse.run.js" > refuse.log 2>&1
 rc=$?
 grep -E "^ok:|assert failed|manifest v3:|scene v3:|scene garbage:" refuse.log
 check $rc "process 2 (the three refusals and the control) passes (exit $rc)"

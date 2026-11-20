@@ -3887,10 +3887,11 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
     // AN ARCHIVE SCENE THAT IS NOT A JSON OBJECT IS REFUSED (STUDIO-HYGIENE-1). The guid remap below
     // round-trips the blob through QJsonDocument, and a blob that does not parse came out of it EMPTY:
-    // the archive imported as an empty world under the archive's name, the user told nothing.
+    // the archive imported as an empty world under the archive's name, the user told nothing. An EMPTY
+    // blob (a row never saved) is no scene, as the open reads it (openreads::readPlan), and imports so.
     QJsonParseError sceneParse;
     const QJsonDocument parsedScene = QJsonDocument::fromJson(sceneBlob, &sceneParse);
-    if (!parsedScene.isObject()) {
+    if (!sceneBlob.isEmpty() && !parsedScene.isObject()) {
         if (whyOut)
             *whyOut = sceneParse.error != QJsonParseError::NoError
                           ? QStringLiteral("the archive's scene does not parse (%1 at byte %2)")
