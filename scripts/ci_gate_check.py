@@ -252,6 +252,13 @@ def env_differs(rec, fact, now):
     card = gate_runlog.takes_card((fact or {}).get("labels"))
     key = "card" if card else "cpu"
     have = rec.get("env") or {}
+    # AN UNREADABLE FIELD IS NEVER EQUAL (#167's law; the branch audit's B7): "?" on either side - "?" against "?" too - says
+    # nothing about the two environments being one
+    ks = gate_runlog.ENV_FIELDS if card else gate_runlog.CPU_FIELDS
+    blind = [k for k in ks for side in ((have.get("fields") or {}), (now.get("fields") or {})) if side.get(k, "?") == "?"]
+    if have and blind:
+        return (f"a {'card' if card else 'CPU'} row: its environment's {', '.join(sorted(set(blind)))} unreadable (on the record's side "
+                "or now) - an unknown field is never equal")
     if have.get(key) and have.get(key) == now.get(key):
         return None
     hf, nf = have.get("fields") or {}, now.get("fields") or {}

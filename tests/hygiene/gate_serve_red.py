@@ -88,6 +88,19 @@ want("a PASS of a CPU row taken under another compiler runs, the compiler named"
      Reach(True), fact=CPU), "run", "the compiler GNU 14 -> GNU 15")
 want("a record with no fingerprint (written before it) never serves", C(dict(rec("PASS"), env=None), Reach(True)), "run",
      "no environment fingerprint")
+# AN UNREADABLE FIELD IS NEVER EQUAL (#167's law; the branch audit's B7): a field read as "?" on either side - even "?" against
+# "?" - answers nothing: a card row with any such field runs, a CPU row with its compiler or Qt such runs (its kernel not read)
+U = fp(driver="?")
+want("a PASS of a card row whose driver was unreadable, now unreadable too: runs (unknown is never equal)",
+     C(rec("PASS", env=U), Reach(True), env=U), "run", "unreadable")
+want("a FAIL of a card row whose driver was unreadable, now too: not served red, it runs",
+     C(rec("FAIL", env=U), Reach(True), env=U), "run", "unreadable")
+U = fp(compiler="?")
+want("a PASS of a CPU row whose compiler was unreadable, now too: runs", C(rec("PASS", env=U), Reach(True), fact=CPU, env=U), "run",
+     "unreadable")
+U = fp(kernel="?")
+want("a PASS of a CPU row whose KERNEL was unreadable (not a CPU field): still serves", C(rec("PASS", env=U), Reach(True), fact=CPU,
+     env=U), "served")
 ENV = fp()
 # NO VERDICT (5.2): a TIMEOUT marked no_verdict (cold, or at its cap edge: gate_runlog.no_verdict) is never served red: it runs
 want("a TIMEOUT at THIS tree marked NO VERDICT (cold): it runs, never SERVED-RED",

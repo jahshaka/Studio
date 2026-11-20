@@ -216,7 +216,7 @@ _NVRM = re.compile(r"\bKernel Module\b.*?\s(\d+\.\d+(?:\.\d+)?)\s")
 # CMakeCXXCompiler.cmake (its PATH, /usr/bin/c++, names no version: a GCC update kept every key), Qt from the cache's Qt6_DIR
 # (Qt6ConfigVersionImpl.cmake's PACKAGE_VERSION), the loader from libvulkan.so.1's real name, each layer manifest's name,
 # implementation and API versions (VVL 1.4.341's false VUID moved a validation row's verdict: GATE_AND_RIG), the kernel's
-# release. A field that cannot be read is "?" (equal only to "?": the same unreadable box). JAH_ENV_FINGERPRINT (the suites'
+# release. A field that cannot be read is "?" - NEVER equal, on either side (ci_gate_check.env_differs, #167's law). JAH_ENV_FINGERPRINT (the suites'
 # one override, "driver=toy-A,kernel=k1"): the fields named, every other "-" - a suite never reads the real box.
 ENV_FIELDS = ("driver", "compiler", "qt", "vulkan", "layers", "kernel")
 CPU_FIELDS = ("compiler", "qt")
