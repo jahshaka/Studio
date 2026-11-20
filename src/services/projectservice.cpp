@@ -413,16 +413,7 @@ bool ProjectService::saveProjectBlob()
         ok = db->updateProject(blob, thumb, guid);
         projectManager->updateTile(guid, thumb);
     } else {
-        // STAGE-0 ARM (STUDIO-HYGIENE-1): the script's gesture batch committed
-        // first (outside the clock), then the UPDATE + its own commit timed —
-        // what an autocommit Ctrl+S pays. Reverted after one run.
-        { DbTransaction flush(db->getDb()); flush.commit(); }
-        QElapsedTimer armWrite; armWrite.start();
-        DbTransaction tx(db->getDb());
         ok = db->updateProjectBlob(blob, guid);
-        const bool committed = tx.commit();
-        qInfo("SAVE-ARM write_ms=%.3f ok=%d committed=%d", armWrite.nsecsElapsed() / 1e6,
-              int(ok), int(committed));
     }
     projectManager->touchTile(guid);
 
