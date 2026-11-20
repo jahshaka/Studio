@@ -93,13 +93,10 @@ void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
                                 : QStringLiteral("its scene is not a JSON object");
             return;
         }
-        // ...AND SO IS A NEWER BUILD'S SCENE: read as this build's format, what that build added would be
-        // dropped and the next save would write the scene back without it.
-        const int version = sceneformat::versionOf(doc.object());
-        if (version > sceneformat::kVersion) {
-            reads.refusal = QStringLiteral("its scene is format version %1, made by a newer Jahshaka; this "
-                                           "build reads version %2")
-                                .arg(version).arg(sceneformat::kVersion);
+        // ...AND SO IS ANOTHER BUILD'S SCENE, newer or older (sceneformat::versionRefusal says why each
+        // would be lost).
+        if (const QString other = sceneformat::versionRefusal(doc.object()); !other.isEmpty()) {
+            reads.refusal = QStringLiteral("its scene is %1").arg(other);
             return;
         }
         reads.projectObj = doc.object();

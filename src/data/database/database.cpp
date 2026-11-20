@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <atomic>
 #include "data/database/casschema.h"
 #include "data/constants.h"
+#include "io/sceneformat.h"   // the scene version gate the import shares with the open
 #include "irisgl/irisglfwd.h"
 #include "irisgl/core/logger.h"
 #include "data/guidmanager.h"
@@ -3887,6 +3888,14 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
                                 .arg(sceneParse.errorString()).arg(sceneParse.offset)
                           : QStringLiteral("the archive's scene is not a JSON object");
         return false;
+    }
+    // ...AND ONE ANOTHER BUILD WROTE (the audit): imported, it would be a tile that can never open here —
+    // the open refuses the same version by the same rule (sceneformat::versionRefusal).
+    if (!sceneBlob.isEmpty()) {
+        if (const QString other = sceneformat::versionRefusal(parsedScene.object()); !other.isEmpty()) {
+            if (whyOut) *whyOut = QStringLiteral("the archive's scene is %1").arg(other);
+            return false;
+        }
     }
 
     QVector<AssetRecord> assetList;

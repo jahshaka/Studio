@@ -53,7 +53,7 @@ struct Reads
     QJsonObject projectObj;
     bool found = false;
     /// WHY THIS SCENE IS NOT OPENED, "" when it opens (STUDIO-HYGIENE-1): a blob that does not parse, or
-    /// one a NEWER build wrote (formatVersion past sceneformat::kVersion). Forward-only: such a scene is
+    /// one another build wrote (sceneformat::versionRefusal: newer, older or unversioned). Forward-only: such a scene is
     /// never opened empty or half-read — the next save would write that over the row. The open refuses
     /// before it tears anything down (ProjectRunner::refuseOpen); the plan stops here (no sources).
     QString refusal;
