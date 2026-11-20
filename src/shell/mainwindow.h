@@ -366,9 +366,6 @@ public slots:
     /// sample browser's open (project.openSample). Borrowed, never null in a
     /// windowed session, and owned by this window.
     ProjectManager *projectPage() const { return pmContainer; }
-    /// The close a user asked for (the runner drains an open in flight first).
-    void closeProject();
-
     /// Takes the editor's panels down for a page that is not the editor.
     void hideEditorPanels();
 
@@ -433,7 +430,10 @@ private:
     void buildPanels(bool fresh) override;
     bool revealWorld(bool playMode) override;
     void prepareClose() override;
-    void closeWorld(bool reopenInPlace) override;
+    bool closeWorld(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut) override;
+    /// The close's first step: unsaved changes saved (auto-save), asked about, refused or
+    /// dropped by `unsaved` (services/closeunsaved.h). False = the close does not happen.
+    bool settleUnsaved(CloseUnsaved unsaved, QString *whyOut);
     void showOpenProgress(int percent, const QString &text) override;
     void showOpenCompileProgress(unsigned compiled) override;
     void hideOpenProgress() override;

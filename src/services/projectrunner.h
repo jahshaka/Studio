@@ -51,6 +51,7 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/import/meshprewarm.h"
+#include "services/closeunsaved.h"
 #include "services/openreads.h"
 #include "services/projectassets.h"
 #include "services/scenetemplate.h"
@@ -95,8 +96,11 @@ public:
         /// (the hover preview's borrowed material goes back first).
         virtual void prepareClose() = 0;
         /// The close's whole teardown, the open's drain already done.
-        /// `reopenInPlace` = the first half of an open: the page stays.
-        virtual void closeWorld(bool reopenInPlace) = 0;
+        /// `reopenInPlace` = the first half of an open: the page stays. Unsaved
+        /// changes are settled FIRST, by `unsaved` (services/closeunsaved.h): false
+        /// = the close was refused (or cancelled) and the world is untouched,
+        /// `whyOut` saying why.
+        virtual bool closeWorld(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut) = 0;
         virtual void showOpenProgress(int percent, const QString &text) = 0;
         /// THE OPEN'S COMPILE LINE (SHADER-WARM-2): "Compiling shaders — n",
         /// called from INSIDE the warm-up frame after each shader it compiles on
@@ -174,7 +178,7 @@ public:
     /// stays.
     ///
     /// An open in flight is drained first, then the host's teardown runs.
-    void close(bool reopenInPlace);
+    bool close(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut = nullptr);
 
     // ---- the export ----------------------------------------------------------
     /// THE ONE EXPORT OF A PROJECT BY GUID (threaded, the window's archiver):

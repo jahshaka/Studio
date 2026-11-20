@@ -210,7 +210,8 @@ public:
     enum class SaveReason {
         Editor,   ///< Ctrl+S, the toolbar, the close's and the switch's auto-save, an export's pre-save:
                   ///< the tile is the next presented frame (asked for, encoded on a worker). With no
-                  ///< view yet (the scene was never opened in edit mode) there is nothing to save: true.
+                  ///< world open: nothing to save, true. With no view (headless): the blob alone, when
+                  ///< the scene is dirty (a clean one: true, nothing written).
         Create,   ///< a new project's first save: the tile asked for when a view exists.
         Script    ///< project.save: the row AND its tile written when it returns (one frame read now).
     };

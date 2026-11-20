@@ -196,8 +196,12 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
     // If we're opening a new scene, close the old one first — and the page the
     // user is on stays, because this close is the first half of an open
     // (MainWindow::CloseIntent, VIEW-REBUILD-1).
-    if (shell->services()->project->isSceneOpen())
-        shell->closeProject(true);   // the first half of an open: the page stays
+    // A person's route: unsaved changes are asked about, and a Cancel (or an
+    // auto-save that failed, said by the save door) stops the open here, before
+    // the project is re-pointed (STUDIO-HYGIENE-1 audit).
+    if (shell->services()->project->isSceneOpen()
+        && !shell->closeProject(true, CloseUnsaved::Ask))   // the first half of an open: the page stays
+        return;
 
 	// WHERE THIS PROJECT ACTUALLY IS (SMALL-UI-A fix round F1). This rebuilt
 	// the path from the DEFAULT projects root, so a project created at a chosen
@@ -396,8 +400,13 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
         // one was simply dropped: no autosave under `auto_save`, no undo-stack
         // reset, the user's unsaved edits gone. It has to happen BEFORE the
         // re-point, because closeProject saves the project the pointer names.
-        if (shell->services()->project->isSceneOpen())
-            shell->closeProject(true);   // the first half of an open: the page stays
+        // ...asking about unsaved changes, as a tile does: a Cancel (or a failed
+        // auto-save) keeps the open world and leaves the import a tile.
+        if (shell->services()->project->isSceneOpen()
+            && !shell->closeProject(true, CloseUnsaved::Ask)) {   // the first half of an open: the page stays
+            hideOpenProgress();
+            return;
+        }
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
         LoadTimeline::begin(QStringLiteral("open(import) %1").arg(result.worldName));
@@ -464,8 +473,8 @@ void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
 void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 {
     Q_UNUSED(widget);
-    emit closeProject();
-    project->setProjectGuid(QString());
+    // A person's route: unsaved changes asked about; a Cancel keeps the world (and its pointer).
+    if (shell->closeProject(false, CloseUnsaved::Ask)) project->setProjectGuid(QString());
 }
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
@@ -962,6 +971,11 @@ void ProjectManager::newProject()
 
 	const ProjectInfo info = dialog.getProjectInfo();
 	if (!projectService) return;   // headless/stub host: nothing to create with
+	if (info.projectName.trimmed().isEmpty()) return;   // a cancelled dialog
+	// THE OPEN WORLD CLOSES FIRST, asking about unsaved changes, BEFORE a row is
+	// minted: a Cancel (or a failed auto-save) creates nothing (STUDIO-HYGIENE-1).
+	if (shell->services()->project->isSceneOpen() && !shell->closeProject(false, CloseUnsaved::Ask))
+		return;
 
 	QString why, folder;
 	const QString projectGuid =

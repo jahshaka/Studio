@@ -55,5 +55,47 @@ function save() {
     assert(why !== null && why.indexOf("the scene could not be saved") >= 0,
            "a save that wrote no row FAILS, with the sentence (it reported success)");
     assert(dirty() === true, "...and the scene is STILL dirty (markSaved ran on the failure)");
+
+    // NO CLOSE DROPS THE EDITS IT COULD NOT SAVE (the audit's B1): auto-save is on, it fails, the close is
+    // REFUSED and the world stays — project.open, project.close and project.create alike.
+    var trap = byName("Doors Save Trap");
+    var other = byName("Doors Save Other");
+    var count = project.list().length;
+    why = refusal(function () { project.open(other); });
+    console.log("open over a failed auto-save: " + why);
+    assert(why !== null && why.indexOf("could not be saved, so it stays open") >= 0,
+           "an open over a world whose auto-save fails is REFUSED (it closed the world and dropped the edits)");
+    assert(project.current() && project.current().guid === trap && dirty() === true, "...the world stays, still dirty");
+    assert(refusal(function () { project.close(); }) !== null, "...a close is refused the same way");
+    assert(refusal(function () { project.create("Doors Never Made", { template: "empty" }); }) !== null,
+           "...and a create");
+    assert(project.list().length === count, "...which made no project");
+    assert(project.open(other, { discard: true }) === true, "{discard: true} drops them and opens");
     console.log("save: ALL OK");
+}
+
+// Process 3, auto-save OFF (the python step seeds the setting): a dirty world is never closed silently.
+function autosaveOff() {
+    assert(project.open(byName("Doors Round Trip")) === true, "the round-trip project opens");
+    var before = meshes();
+    scene.addPrimitive("cube");
+    assert(dirty() === true, "an edit makes it dirty");
+    var other = byName("Doors Save Other");
+    var why = refusal(function () { project.open(other); });
+    console.log("open with auto-save off: " + why);
+    assert(why !== null && why.indexOf("unsaved changes and auto-save is off") >= 0 && why.indexOf("discard") >= 0,
+           "an open over a dirty world with auto-save off is REFUSED, naming {discard: true} (it dropped the edits)");
+    assert(refusal(function () { project.close(); }) !== null, "...a close too");
+    var count = project.list().length;
+    assert(refusal(function () { project.create("Doors Never Made", { template: "empty" }); }) !== null, "...a create too");
+    assert(project.list().length === count, "...which made no project");
+    assert(project.save() === true && dirty() === false, "saved, it is clean");
+    assert(project.close() === true, "...and a clean world closes");
+    assert(project.open(byName("Doors Round Trip")) === true, "reopened");
+    assert(meshes() === before + 1, "...with the saved edit (" + meshes() + ")");
+    scene.addPrimitive("sphere");
+    assert(project.close({ discard: true }) === true, "{discard: true} closes a dirty world");
+    assert(project.open(byName("Doors Round Trip")) === true && meshes() === before + 1,
+           "...and the discarded edit is gone, the saved one kept (" + meshes() + ")");
+    console.log("autosave off: ALL OK");
 }

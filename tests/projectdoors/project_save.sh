@@ -5,7 +5,9 @@
 # dirty, save clean, push after a save dirty, an opened scene clean). Between the processes, python gives one
 # project's row a SQLite trigger that drops every UPDATE of it (RAISE(IGNORE): the statement succeeds and
 # writes NO row - the shape of a row that is gone). Process 2: a save of that project is refused with the
-# sentence, the scene still dirty, and the row's bytes unchanged. Two --headless processes, no clock.
+# sentence, the scene still dirty, and the row's bytes unchanged; and the close it then reaches is REFUSED (the
+# world stays) unless {discard: true}. Process 3, auto-save off in the settings: a dirty world refuses an open, a
+# close and a create; a saved one closes; {discard: true} drops the edits. Three --headless processes, no clock.
 #
 # $1 = the Jahshaka binary, $2 = the JS half (project_save.js), $3 = --headless (forwarded to both)
 set -u
@@ -55,5 +57,26 @@ blob = conn.execute("SELECT scene FROM projects WHERE name = 'Doors Save Trap'")
 sys.exit(0 if hashlib.sha256(bytes(blob)).hexdigest() == sys.argv[2] else 1)
 PY
 check $? "the trap project's row is the bytes it was (nothing was written, and nothing claimed it was)"
+
+# Process 3: auto-save OFF, seeded in the row's own settings (the Preferences checkbox's key).
+python3 -I - "$JAHSHAKA_DATA_ROOT/jahsettings.ini" <<'PY'
+import configparser, sys
+ini = configparser.ConfigParser(interpolation=None)
+ini.optionxform = str
+ini.read(sys.argv[1])
+if not ini.has_section("General"):
+    ini.add_section("General")
+ini.set("General", "auto_save", "false")
+with open(sys.argv[1], "w") as f:
+    ini.write(f, space_around_delimiters=False)
+PY
+check $? "auto-save is switched off in the row's settings"
+{ cat "$JS"; echo "autosaveOff();"; } > off.run.js
+"$BIN" "$MODE" --script "$PWD/off.run.js" > off.log 2>&1
+rc=$?
+grep -E "^ok:|assert failed|^open with" off.log
+check $rc "process 3 (auto-save off: refused, saved, discarded) passes (exit $rc)"
+grep -q "autosave off: ALL OK" off.log
+check $? "process 3 reached its end"
 [ $fail = 0 ] && echo "project.save_door: PASS" || echo "project.save_door: FAIL"
 exit $fail

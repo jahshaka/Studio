@@ -1345,7 +1345,7 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     ProjectService *projects = host.services ? host.services->project : nullptr;
     if (projects && projects->isSceneOpen() && host.shell) {
         host.endRunUndoMacro();
-        host.shell->closeProject();
+        host.shell->closeProject(false, CloseUnsaved::Discard);   // the reset drops it, by its contract
         host.beginRunUndoMacro();
     }
 

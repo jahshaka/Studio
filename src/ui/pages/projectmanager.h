@@ -234,7 +234,6 @@ signals:
     void importProject();
     /// A tile's Export: the project `guid` (the current project is untouched).
     void exportProject(const QString &guid, const QString &name);
-    void closeProject();
 
 private:
     /// Hands the pointed-at project to the shell's threaded open, in the space

@@ -68,9 +68,9 @@ void ShellView::newProjectAsync(const QString &guid, const QString &name, const 
     mWindow->projectRunner()->createAsync(guid, name, folder, kind);
 }
 
-void ShellView::closeProject(bool reopenInPlace)
+bool ShellView::closeProject(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut)
 {
-    mWindow->projectRunner()->close(reopenInPlace);
+    return mWindow->projectRunner()->close(reopenInPlace, unsaved, whyOut);
 }
 
 bool ShellView::waitForOpen()

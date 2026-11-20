@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include <QVariantList>
 #include <QVariantMap>
 
+#include "services/closeunsaved.h"
 #include "services/scenetemplate.h"
 
 #include "irisgl/irisglfwd.h"
@@ -85,8 +86,11 @@ public:
     virtual void newProjectAsync(const QString &guid, const QString &name, const QString &folder,
                                  SceneTemplate kind) = 0;
     /// `reopenInPlace` = the first half of an open: the teardown without
-    /// leaving the page the open will reveal into.
-    virtual void closeProject(bool reopenInPlace = false) = 0;
+    /// leaving the page the open will reveal into. `unsaved` says what the close
+    /// does with unsaved changes (services/closeunsaved.h) — every caller names
+    /// one, so no route discards edits silently. False = refused or cancelled:
+    /// the world is untouched and `whyOut` says why.
+    virtual bool closeProject(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut = nullptr) = 0;
     /// Drains an open in flight; true when nothing is (or is still) in flight.
     virtual bool waitForOpen() = 0;
     virtual bool isOpeningProject() const = 0;

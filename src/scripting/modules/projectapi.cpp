@@ -50,7 +50,11 @@ ProjectManager *desktopPage(const ScriptHost &host)
 QVector<VerbInfo> ProjectApi::verbs() const
 {
     return {
-        { "create", "project.create(name, {template, location}) -> guid",
+        { "create", "project.create(name, {template, location, discard}) -> guid",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and "
           "opens it in the editor. The scene is in the row when this returns; the row's THUMBNAIL is encoded "
           "on a worker and lands ~100 ms later (the same holds for the world a create closes; project.save "
@@ -87,7 +91,11 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "the meshes the mirror still owes — so a world whose inputs land later is lit on the frames "
           "after this returns: `world.giStatus().vctBound` says which.",
           Needs::Document },
-        { "createAsync", "project.createAsync(name, {template, location}) -> guid",
+        { "createAsync", "project.createAsync(name, {template, location, discard}) -> guid",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "THE CREATE, WITHOUT THE WAIT (SPECS/OPEN_COVER_SPEC.md §2 C/§4). Exactly what "
           "project.create does — the same folder, the same DB row, the same default world, the "
           "same slices in the same order — except that it returns as soon as the create is "
@@ -105,7 +113,11 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "what they mean on project.create, and an open or create already in flight is REFUSED "
           "by name rather than queued.",
           Needs::Window },
-        { "open", "project.open(guidOrName) -> bool",
+        { "open", "project.open(guidOrName, {discard}) -> bool",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, "
           "switches to the editor. INSIDE A SCRIPT this ends the run's undo entry first (see project.create): "
           "the closed project's undo history goes with it, and the rest of the run records into a fresh entry."
@@ -124,7 +136,11 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "or an archive import shows. The world that was open is already closed by then (the close is the "
           "open's first half).",
           Needs::Document },
-        { "openAsync", "project.openAsync(guidOrName, {play}) -> bool",
+        { "openAsync", "project.openAsync(guidOrName, {play, discard}) -> bool",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the "
           "install runs one slice per event-loop turn (services/sceneopenrunner.h), which is what the desktop "
           "tile and the archive-import open now do. Returns as soon as the open is under way — poll "
@@ -173,7 +189,11 @@ QVector<VerbInfo> ProjectApi::verbs() const
         { "save", "project.save() -> bool",
           "Saves the open scene into the project's DB blob. Works headless (blob-only; the thumbnail refreshes only when a viewport can render one).",
           Needs::Document },
-        { "close", "project.close() -> bool",
+        { "close", "project.close({discard}) -> bool",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "Closes the open project — INCLUDING one that is still opening: a threaded open in flight is "
           "drained first (its install finishes, then the world closes), so a close can never leave install "
           "slices queued against a project that is gone. "
@@ -310,6 +330,16 @@ QString ProjectApi::resolveGuid(const QString &guidOrName, QString *nameOut)
 // thing that differs: whether the shell drains the runner before returning.
 // `verb` is what a refusal calls itself, so the message names the verb the
 // caller actually used.
+namespace {
+/// WHAT A SCRIPT'S CLOSE DOES WITH UNSAVED CHANGES (services/closeunsaved.h): refused with a sentence,
+/// unless the caller said {discard: true} — no verb drops edits silently.
+CloseUnsaved scriptCloseUnsaved(const QVariantMap &options)
+{
+    return options.value(QStringLiteral("discard"), false).toBool() ? CloseUnsaved::Discard
+                                                                     : CloseUnsaved::Refuse;
+}
+}   // namespace
+
 QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
                                bool async, const QString &verb)
 {
@@ -319,7 +349,8 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     // UNKNOWN KEYS ARE REFUSED, not ignored (the house rule): `{tempalte: "empty"}`
     // silently making the template is exactly the class of bug the option maps
     // exist to prevent.
-    static const QStringList known = { QStringLiteral("template"), QStringLiteral("location") };
+    static const QStringList known = { QStringLiteral("template"), QStringLiteral("location"),
+                                       QStringLiteral("discard") };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
         if (known.contains(it.key())) continue;
         fail(QStringLiteral("%1: unknown option '%2' (known: %3)")
@@ -336,6 +367,20 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
         }
     }
     const QString location = options.value(QStringLiteral("location")).toString();
+
+    // THE OPEN WORLD CLOSES FIRST, BEFORE A ROW IS MINTED (STUDIO-HYGIENE-1 audit):
+    // unsaved changes refuse the create unless {discard: true}, and a failed
+    // auto-save refuses it whatever — nothing is created then.
+    if (host.services->project->isSceneOpen()) {
+        host.endRunUndoMacro();
+        QString closeWhy;
+        const bool closed = host.shell->closeProject(false, scriptCloseUnsaved(options), &closeWhy);
+        host.beginRunUndoMacro();
+        if (!closed) {
+            fail(QStringLiteral("%1: %2").arg(verb, closeWhy));
+            return QString();
+        }
+    }
 
     // The data half (guid, current project, folder, DB row, desktop) is
     // ProjectService's; MainWindow::newProject then builds the default scene
@@ -385,7 +430,7 @@ QString ProjectApi::createAsync(const QString &name, const QVariantMap &options)
     return createInto(name, options, true, QStringLiteral("project.createAsync"));
 }
 
-bool ProjectApi::open(const QString &guidOrName)
+bool ProjectApi::open(const QString &guidOrName, const QVariantMap &options)
 {
     if (!host.shell || !host.services || !host.services->project)
         return fail("project: not available in this session");
@@ -433,9 +478,15 @@ bool ProjectApi::open(const QString &guidOrName)
     // and open a fresh one for what the script does in the new project.
     host.endRunUndoMacro();
     // The close is the first half of this open: the page the user is on stays
-    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
-    if (host.services->project->isSceneOpen())
-        host.shell->closeProject(true);
+    // (MainWindow::CloseIntent, VIEW-REBUILD-1). Unsaved changes refuse it unless
+    // {discard: true}; a failed auto-save refuses it whatever (STUDIO-HYGIENE-1).
+    if (host.services->project->isSceneOpen()) {
+        QString closeWhy;
+        if (!host.shell->closeProject(true, scriptCloseUnsaved(options), &closeWhy)) {
+            host.beginRunUndoMacro();
+            return fail(QStringLiteral("project.open: %1").arg(closeWhy));
+        }
+    }
 
     // The ledger starts HERE, not in MainWindow::openProject: the session
     // registrations are part of what an open costs and they happen inside it.
@@ -499,9 +550,14 @@ bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options
     }
     host.endRunUndoMacro();   // CLOSE-2 item 2, as project.open
     // The close is the first half of this open: the page the user is on stays
-    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
-    if (host.services->project->isSceneOpen())
-        host.shell->closeProject(true);
+    // (MainWindow::CloseIntent, VIEW-REBUILD-1) — refused as project.open's is.
+    if (host.services->project->isSceneOpen()) {
+        QString closeWhy;
+        if (!host.shell->closeProject(true, scriptCloseUnsaved(options), &closeWhy)) {
+            host.beginRunUndoMacro();
+            return fail(QStringLiteral("project.openAsync: %1").arg(closeWhy));
+        }
+    }
 
     LoadTimeline::begin(QStringLiteral("open(script-async) %1").arg(name.isEmpty() ? guid : name));
     // The open's first slices do the session registrations themselves, with
@@ -607,7 +663,7 @@ bool ProjectApi::save()
     return true;
 }
 
-bool ProjectApi::close()
+bool ProjectApi::close(const QVariantMap &options)
 {
     // AN OPEN IN FLIGHT IS SOMETHING TO CLOSE (lane OPEN-FRAMES-1). Until this
     // lane, "is a project open?" meant "has a scene finished being installed?",
@@ -622,9 +678,10 @@ bool ProjectApi::close()
     // in-flight project's history dies with it.
     if (openInFlight()) {
         host.endRunUndoMacro();
-        host.shell->closeProject();
+        QString closeWhy;
+        const bool closed = host.shell->closeProject(false, scriptCloseUnsaved(options), &closeWhy);
         host.beginRunUndoMacro();
-        return true;
+        return closed ? true : fail(QStringLiteral("project.close: %1").arg(closeWhy));
     }
     if (!requireProject()) return false;
     // The run's edits so far become ONE undo step of the project being closed,
@@ -632,9 +689,12 @@ bool ProjectApi::close()
     // (CLOSE-2 item 2). Without this the whole stack survived the close,
     // holding commands that name a document that no longer exists.
     host.endRunUndoMacro();
-    host.shell->closeProject();
+    QString closeWhy;
+    const bool closed = host.shell->closeProject(false, scriptCloseUnsaved(options), &closeWhy);
     host.beginRunUndoMacro();
-    return true;
+    // REFUSED, NOT DISCARDED (STUDIO-HYGIENE-1 audit): unsaved changes with
+    // auto-save off, or an auto-save that failed — the world stays open.
+    return closed ? true : fail(QStringLiteral("project.close: %1").arg(closeWhy));
 }
 
 QString ProjectApi::nextFreeName(const QString &name)

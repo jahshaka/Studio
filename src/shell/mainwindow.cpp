@@ -1110,12 +1110,6 @@ iris::ScenePtr MainWindow::openWorld() const
     return scene;
 }
 
-// The close a user asked for: the world goes and the window lands on the
-// Desktop (VIEW-REBUILD-1 gave the other half of this function a name).
-void MainWindow::closeProject()
-{
-    projects->close(false);
-}
 
 void MainWindow::openProjectAsync(bool playMode)
 {
@@ -1187,30 +1181,60 @@ void MainWindow::prepareClose()
 }
 
 // THE CLOSE'S TEARDOWN (the runner has already drained an open in flight).
-void MainWindow::closeWorld(bool reopenInPlace)
+bool MainWindow::settleUnsaved(CloseUnsaved unsaved, QString *whyOut)
+{
+    // NO CLOSE DISCARDS EDITS SILENTLY (STUDIO-HYGIENE-1 audit; services/closeunsaved.h). Settled BEFORE the
+    // close touches anything, so a refusal leaves the world exactly as it was (still playing, if it was).
+    if (whyOut) whyOut->clear();
+    if (!projectService->isSceneOpen() || unsaved == CloseUnsaved::Discard) return true;
+    const QString name = project->getProjectName();
+    const QString guid = project->getProjectGuid();
+    if (settings->get(settingkeys::autoSave)) {
+        // closePrevious:save — a create's ledger shows its close (CREATE-GAP-1); a no-op outside a run.
+        LoadTimeline::Accumulate row(QStringLiteral("closePrevious:save"));
+        QString why;
+        if (projectService->save(guid, ProjectService::SaveReason::Editor, &why)) return true;
+        // A FAILED AUTO-SAVE REFUSES THE CLOSE: the world stays, and the save door has said why (once).
+        if (whyOut) *whyOut = tr("'%1' could not be saved, so it stays open: %2").arg(name, why);
+        return false;
+    }
+    if (!undoService->isDirty()) return true;
+    if (unsaved == CloseUnsaved::Ask && !FirstRun::isDrivenSession()) {
+        const auto reply = QMessageBox::question(this, tr("Unsaved Changes"),
+                                                 tr("'%1' has unsaved changes. Save before closing?").arg(name),
+                                                 QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
+        if (reply == QMessageBox::No) return true;
+        // A "Yes" whose save failed is a Cancel: the save door has said why.
+        if (reply == QMessageBox::Yes && projectService->save(guid, ProjectService::SaveReason::Editor))
+            return true;
+        if (whyOut) *whyOut = tr("the close of '%1' was cancelled").arg(name);
+        return false;
+    }
+    if (whyOut)
+        *whyOut = tr("'%1' has unsaved changes and auto-save is off — save it first (project.save), or pass "
+                     "{discard: true} to drop them").arg(name);
+    return false;
+}
+
+bool MainWindow::closeWorld(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut)
 {
     // A tile's close control can fire with no scene open (double-fired close,
     // or closing while an open never completed): every line below dereferences
     // `scene`, so the first one crashed on null (crash-1788555267.log,
     // the first line at offset 0x320 of a null Scene). Nothing open means
     // nothing to close.
-    if (!scene) return;
+    if (!scene) return true;
+    if (!settleUnsaved(unsaved, whyOut)) return false;
     {
         scene->getPhysicsEnvironment()->stopPhysics();
         scene->getPhysicsEnvironment()->stopSimulation();
 
-        // Put every body and avatar back where Play found it before the
-        // autosave below — the Environment's own restore (recursive, exact),
+        // Put every body and avatar back where Play found it — the
+        // Environment's own restore (recursive, exact),
         // not the top-level-only matrix copy this used to be.
         if (!scene->getPhysicsEnvironment()->nodeTransforms.isEmpty())
             scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
-
-        if (projectService->isSceneOpen()) {
-            // closePrevious:save — a create's ledger shows its close now
-            // (CREATE-GAP-1); a no-op outside a LoadTimeline run.
-            LoadTimeline::Accumulate row(QStringLiteral("closePrevious:save"));
-            if (settings->get(settingkeys::autoSave)) saveScene();
-        }
+        // (The auto-save is settleUnsaved's, above: it runs BEFORE the teardown, and its failure refuses the close.)
 
         scene->getPhysicsEnvironment()->destroyPhysicsWorld();
 
@@ -1283,7 +1307,7 @@ void MainWindow::closeWorld(bool reopenInPlace)
 		// white and enabled with no scene open (owner, 2026-09-05). Re-style
 		// explicitly: the scene-open flag just went false.
 		updateTopMenuStates(WindowSpaces::DESKTOP);
-		return;
+		return true;
 	}
 
 	// A CLOSE THAT IS THE FIRST HALF OF AN OPEN STAYS ON THE PAGE IT IS ON
@@ -1315,13 +1339,14 @@ void MainWindow::closeWorld(bool reopenInPlace)
 	playerView->end();
 
 	// The reveal calls enterEditorSpace() itself when the page never left.
-	if (reopenInPlace) return;
+	if (reopenInPlace) return true;
 
     LoadTimeline::Accumulate toDesktop(QStringLiteral("closePrevious:switch"));
     switchSpace(WindowSpaces::DESKTOP);
 
 	if (sceneView->isInitialized())
 		sceneView->end();
+	return true;
 }
 
 // THE PANELS' CALLS INTO THE WINDOW, answered by the editor's docks: the
@@ -1698,7 +1723,6 @@ void MainWindow::setupDesktop()
 	moduleHub->initialize(context);
 	moduleHub->contribute(pageHost, actionHost);
 
-	connect(pmContainer, SIGNAL(closeProject()), SLOT(closeProject()));
 	connect(pmContainer, &ProjectManager::fileToCreate,
 	        this, [this](const QString &guid, const QString &name, const QString &path,
 	                     SceneTemplate kind) {

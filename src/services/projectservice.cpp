@@ -466,10 +466,15 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
         if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
     }
     const bool hasView = viewport && viewport->isInitialized();
-    // An editor save before the scene was ever opened in edit mode: no renderer
-    // was initialized and there is nothing to save (nick) — a success, as it
-    // always was, and nothing is written.
-    if (reason == SaveReason::Editor && !hasView) return true;
+    // AN EDITOR SAVE WITH NO WORLD OPEN (Ctrl+S on the Desktop, after a close or
+    // a refused open: file.save works in any space) has nothing to save — a
+    // success, silent, nothing written (the audit's W1: it popped a failure box).
+    if (reason == SaveReason::Editor && !sceneOpen) return true;
+    // ...and one with no view (a headless run: the NULL render system never
+    // initializes one) writes the blob when there is something to write — the
+    // close's auto-save rides this door, and a no-op here dropped a headless
+    // run's edits at its close without a word. Clean: nothing to write.
+    if (reason == SaveReason::Editor && !hasView && !(undo && undo->isDirty())) return true;
 
     if (!db) return fail(QStringLiteral("there is no library in this session"));
     if (guid.isEmpty() || !project || project->getProjectGuid() != guid)

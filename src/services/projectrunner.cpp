@@ -651,9 +651,19 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
     // the save's own saveOpen:*) say where it went.
     if (!LoadTimeline::isRunning())
         LoadTimeline::begin(QStringLiteral("create %1").arg(filename));
+    // EVERY CREATE ROUTE CLOSES THE OPEN WORLD ITSELF, FIRST, by its own policy (the
+    // New Scene dialog asks, project.create refuses unless told to discard) —
+    // before a row is minted. This is the backstop: a world still open here is
+    // closed only if nothing would be lost, and a refusal stops the create.
     if (mProjectService->isSceneOpen()) {
         LoadTimeline::mark(QStringLiteral("closePrevious"));
-        close(false);
+        QString why;
+        if (!close(false, CloseUnsaved::Refuse, &why)) {
+            qWarning("project create: the open world could not be closed, so nothing was created: %s",
+                     qUtf8Printable(why));
+            LoadTimeline::end();
+            return;
+        }
     }
     // ...AND ONLY NOW IS THE CURRENT PROJECT THE NEW ONE: the close above
     // autosaved the old world into the old project's own row (createProject-
@@ -759,7 +769,7 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
 
 // ---- the close ---------------------------------------------------------------
 
-void ProjectRunner::close(bool reopenInPlace)
+bool ProjectRunner::close(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut)
 {
     mHost->prepareClose();
     // AN OPEN IN FLIGHT IS DRAINED FIRST (lane OPEN-FRAMES-1, item 3), the way
@@ -785,7 +795,7 @@ void ProjectRunner::close(bool reopenInPlace)
     // a queued metacall — not user input, so ExcludeUserInputEvents lets it in)
     // must RETURN, not fall through to the teardown under the outer drain
     // (the second read of OPEN-FRAMES-1): the outer close finishes the job.
-    if (sDrainingOpen) return;
+    if (sDrainingOpen) return true;   // the outer close finishes the job
     if (isOpening()) {
         sDrainingOpen = true;
         mRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
@@ -797,7 +807,7 @@ void ProjectRunner::close(bool reopenInPlace)
         }
         sDrainingOpen = false;
     }
-    mHost->closeWorld(reopenInPlace);
+    return mHost->closeWorld(reopenInPlace, unsaved, whyOut);
 }
 
 // ---- the export --------------------------------------------------------------
