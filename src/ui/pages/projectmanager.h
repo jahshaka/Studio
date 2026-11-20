@@ -153,6 +153,11 @@ public slots:
     void switchDesktop(int desktop);
 
 public:
+    /// An import or open problem, told to whoever is actually there: a box for
+    /// a person, a log line for a DRIVEN run (see the definition). Public for
+    /// the window's refused open (MainWindow::showOpenRefusal).
+    void reportImportProblem(const QString &title, const QString &text);
+
     /// THE SAMPLE BROWSER'S OPEN, AS A VERB (API-first, SCRIPTING_SPEC §2.3 —
     /// `project.openSample(name)`). `name` is the sample's base name, which is
     /// also its archive's file name, in either shipped set: the Jahshaka
@@ -236,9 +241,6 @@ private:
     /// the ROUTE asked for. `mode` is an argument and never a member: see
     /// ProjectOpenMode above.
     void loadProjectAssets(ProjectOpenMode mode);
-    /// An import problem, told to whoever is actually there: a box for a person,
-    /// a log line for a DRIVEN run (see the definition).
-    void reportImportProblem(const QString &title, const QString &text);
 
     // desktops (DESKTOPS_SPEC.md + DESKTOP_SLIDER_SPEC.md)
     void setupDesktopControls();

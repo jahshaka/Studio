@@ -191,9 +191,11 @@ iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped(openreads::Reads &reads)
 	runPumped([&reads, &stale, project = mProject]() {
 		openreads::ReadConnection conn(reads.dbPath);
 		openreads::readPlan(conn.db(), project, reads);
+		if (!reads.refusal.isEmpty()) return;   // refused: the caller says so, nothing more is read
 		openreads::readSession(conn.db(), reads);
 		stale = MeshBakeStore::staleJobsFor(conn.db(), reads.root, reads.modelPaths + reads.clipPaths);
 	});
+	if (!reads.refusal.isEmpty()) return prewarm;
 	if (reads.modelPaths.isEmpty() && reads.clipPaths.isEmpty()) return prewarm;
 
 	// STALE BAKES ARE REBUILT FROM THEIR OWN SOURCES FIRST (FORWARD-ONLY-1
@@ -274,9 +276,11 @@ void ProjectRunner::open(bool playMode)
 	}
 
 	// The reads and the bakes, on a worker while this thread pumps (above).
+	mOpenRefusal.clear();
 	LoadTimeline::mark(QStringLiteral("plan"));
 	openreads::Reads reads = openreads::prepare(mProject);
 	const iris::MeshPrewarmPtr prewarm = prewarmModelsPumped(reads);
+	if (refuseOpen(reads)) return;   // BEFORE stageBegin: nothing is torn down
 
 	stageBegin();
 	// The session registrations, in the threaded open's order, from the rows
@@ -308,6 +312,25 @@ void ProjectRunner::open(bool playMode)
 	// boundary frame behind it. (The first lighting arm no longer waits for
 	// this: releaseLightingArm above, BUGS-6 stage 1.)
 	mViewport->endSceneLoad();
+}
+
+// A SCENE THE OPEN MUST NOT READ (STUDIO-HYGIENE-1): one that does not parse, or
+// one a newer build wrote (openreads::readPlan says which). Refused before
+// stageBegin on both routes, so the open itself tears nothing down: the blocking
+// open returns here, the threaded one abandons its run (the runner's next turn
+// sees the abort and finishes — its finished() takes the cover and the dialog
+// down). The sentence is made HERE ONLY, so the verb, the tile and the import
+// all carry the same words.
+bool ProjectRunner::refuseOpen(const openreads::Reads &reads)
+{
+	if (reads.refusal.isEmpty()) return false;
+	mOpenRefusal = tr("'%1' could not be opened: %2")
+	                   .arg(mProject ? mProject->getProjectName() : QString(), reads.refusal);
+	qWarning("project open: %s", qUtf8Printable(mOpenRefusal));
+	if (mRunner && mRunner->isRunning()) mRunner->requestAbort();
+	LoadTimeline::end();
+	mHost->showOpenRefusal(mOpenRefusal);
+	return true;
 }
 
 bool ProjectRunner::isOpening() const
@@ -435,6 +458,7 @@ void ProjectRunner::startOpenRun(bool playMode)
 	// must not leave the previous one on screen while it does. stageBegin
 	// raises it again (idempotent — it only rebases the present counter, and
 	// nothing has presented in between).
+	mOpenRefusal.clear();
 	mViewport->beginSceneLoad(mProject ? mProject->getProjectName() : QString());
 
 	// ---- the reads: the runner's workers, connections of their own ---------
@@ -465,6 +489,7 @@ void ProjectRunner::startOpenRun(bool playMode)
 	// assets on Bistro Exterior: 68 slices, 2.4 s with their frames).
 	QVector<SceneOpenRunner::Slice> slices;
 	slices.append({ QStringLiteral("Preparing assets…"), 45, [this, reads]() {
+		if (refuseOpen(*reads)) return;   // BEFORE stageBegin: nothing is torn down
 		stageBegin();
 		stageRegistrationsBegin(*reads);
 	} });

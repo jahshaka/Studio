@@ -15,7 +15,8 @@ For more information see the LICENSE file
 // Export manifest v2 (ASSET_PIPELINE_SPEC §3.3, phase-5 front half).
 //
 // One manifest format for every unified export (raw file exports, share
-// files, project archives). It is JSON, version 2 (anything else is refused):
+// files, project archives). It is JSON, version kManifestVersion = 2; fromBytes
+// refuses every other version, older and newer, naming both:
 //
 //   {
 //     "format": "jah-export-manifest",
@@ -40,9 +41,6 @@ For more information see the LICENSE file
 // error); the resolver-backed content source fills it from the `files` table
 // and the values are identical to hashes computed here, so manifests are
 // stable across the front-half → final-half swap.
-//
-// Readers keep accepting v1: fromBytes() maps a single-word manifest to
-// {version: 1, kind: <word>, assets: []}.
 
 #include <QJsonObject>
 #include <QString>
@@ -50,6 +48,11 @@ For more information see the LICENSE file
 #include <QVector>
 
 namespace exportformat {
+
+/// THE ONE VERSION this build writes and reads. Anything else is refused by
+/// fromBytes (forward-only: an older manifest is never migrated, a newer one is
+/// never half-read as this one).
+constexpr int kManifestVersion = 2;
 
 struct ManifestFile
 {
@@ -116,7 +119,7 @@ struct ManifestScene
 
 struct ExportManifest
 {
-    int version = 2;
+    int version = kManifestVersion;
     QString kind;            // payload type
     QString generator;       // informational
     QString created;         // ISO 8601 UTC, informational
@@ -127,8 +130,9 @@ struct ExportManifest
     QByteArray toBytes() const;                 // pretty JSON, trailing newline
     bool write(const QString &path, QString *error = nullptr) const;
 
-    /// Accepts v2 JSON and v1 single-word manifests. On failure returns a
-    /// manifest with version 0 and sets *error.
+    /// Reads a kManifestVersion JSON manifest; anything else (not JSON, not
+    /// this format, any other version) returns a manifest with version 0 and
+    /// sets *error.
     static ExportManifest fromBytes(const QByteArray &bytes, QString *error = nullptr);
     static ExportManifest fromFile(const QString &path, QString *error = nullptr);
 

@@ -76,6 +76,10 @@ public:
     virtual void openProject(bool playMode) = 0;
     /// The threaded open; poll isOpeningProject().
     virtual void openProjectAsync(bool playMode) = 0;
+    /// Why the last open (either route) did not happen, in the user's words
+    /// ("" unless the most recent open was refused: a scene that does not
+    /// parse, or one a newer build wrote).
+    virtual QString openRefusal() const = 0;
     virtual void newProject(const QString &guid, const QString &name, const QString &folder,
                             SceneTemplate kind) = 0;
     virtual void newProjectAsync(const QString &guid, const QString &name, const QString &folder,

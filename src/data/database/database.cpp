@@ -3844,8 +3844,9 @@ bool Database::hasDependencies(const QString &guid)
 }
 
 // The PROJECT archive half of .jaf — replaced by the envelope format in lane JAF-READER-1.
-bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids, QSet<QString> *knownGuids)
+bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids, QSet<QString> *knownGuids, QString *whyOut)
 {
+    if (whyOut) whyOut->clear();
     // ScopedConnection: the connection name was already unique per call (a
     // fresh guid), which meant every project import leaked a DISTINCT
     // registration for the process's life — the connection list grew without
@@ -3883,6 +3884,20 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     auto sceneThumb = query.value(2).toByteArray();
     auto sceneVersion = query.value(3).toString();
     auto oldSceneGuid = query.value(4).toString();
+
+    // AN ARCHIVE SCENE THAT IS NOT A JSON OBJECT IS REFUSED (STUDIO-HYGIENE-1). The guid remap below
+    // round-trips the blob through QJsonDocument, and a blob that does not parse came out of it EMPTY:
+    // the archive imported as an empty world under the archive's name, the user told nothing.
+    QJsonParseError sceneParse;
+    const QJsonDocument parsedScene = QJsonDocument::fromJson(sceneBlob, &sceneParse);
+    if (!parsedScene.isObject()) {
+        if (whyOut)
+            *whyOut = sceneParse.error != QJsonParseError::NoError
+                          ? QStringLiteral("the archive's scene does not parse (%1 at byte %2)")
+                                .arg(sceneParse.errorString()).arg(sceneParse.offset)
+                          : QStringLiteral("the archive's scene is not a JSON object");
+        return false;
+    }
 
     QVector<AssetRecord> assetList;
 
@@ -3994,8 +4009,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         "VALUES (:name, :scene, :thumbnail, :version, datetime(), datetime(), :guid)"
     );
 
-    auto doc = QJsonDocument::fromJson(sceneBlob);
-    QString docToString = doc.toJson(QJsonDocument::Compact);
+    QString docToString = parsedScene.toJson(QJsonDocument::Compact);
 
     QMapIterator<QString, QString> i(assetGuids);
     while (i.hasNext()) {

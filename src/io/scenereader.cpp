@@ -109,9 +109,10 @@ iris::ScenePtr SceneReader::readScene(const QString &projectPath, QJsonObject pr
 	useAlternativeLocation = false;
 
     // FORMAT VERSION (src/io/sceneformat.h). v2 is what this build writes and
-    // reads; no conversion from any other exists (FORWARD-ONLY-1). A blob of
-    // another version is said so in the log — a key this build does not know is
-    // ignored and the next save writes v2.
+    // reads; no conversion from any other exists (FORWARD-ONLY-1). A NEWER blob
+    // never reaches here: the open's reads refuse it (openreads::readPlan,
+    // STUDIO-HYGIENE-1). An older one is said so in the log — a key this build
+    // does not know is ignored and the next save writes v2.
     const int version = sceneformat::versionOf(projectObj);
     if (version != sceneformat::kVersion)
         qWarning("SceneReader: this scene is format v%d, this build reads v%d — nothing is "

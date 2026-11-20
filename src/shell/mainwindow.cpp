@@ -1097,6 +1097,20 @@ void MainWindow::hideOpenProgress()
     if (pmContainer) pmContainer->hideOpenProgress();
 }
 
+void MainWindow::showOpenRefusal(const QString &text)
+{
+    // A REFUSED OPEN LANDS ON THE DESKTOP AND SAYS WHY (STUDIO-HYGIENE-1). The
+    // open refused before its teardown; a close that was the first half of it
+    // (a load in place) has already taken the old world, so the page that
+    // stayed has nothing under it.
+    hideOpenProgress();
+    if (currentSpace != WindowSpaces::DESKTOP) {
+        switchSpace(WindowSpaces::DESKTOP);
+        if (sceneView->isInitialized()) sceneView->end();
+    }
+    if (pmContainer) pmContainer->reportImportProblem(tr("Open Scene"), text);
+}
+
 void MainWindow::saveOpenWorld()
 {
     saveScene();

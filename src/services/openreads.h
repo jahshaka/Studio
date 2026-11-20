@@ -52,6 +52,11 @@ struct Reads
     /// The scene blob, parsed (`found` false = no project row or an empty blob).
     QJsonObject projectObj;
     bool found = false;
+    /// WHY THIS SCENE IS NOT OPENED, "" when it opens (STUDIO-HYGIENE-1): a blob that does not parse, or
+    /// one a NEWER build wrote (formatVersion past sceneformat::kVersion). Forward-only: such a scene is
+    /// never opened empty or half-read — the next save would write that over the row. The open refuses
+    /// before it tears anything down (ProjectRunner::refuseOpen); the plan stops here (no sources).
+    QString refusal;
     QStringList modelPaths;   ///< the pinned models + the blob's mesh sources: the bake read's plan
     QStringList clipPaths;    ///< the blob's clip files: their stale clip bakes are rebuilt first
 

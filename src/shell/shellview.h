@@ -32,6 +32,7 @@ public:
     QString spaceRefusal() const override;
     void openProject(bool playMode) override;
     void openProjectAsync(bool playMode) override;
+    QString openRefusal() const override;
     void newProject(const QString &guid, const QString &name, const QString &folder, SceneTemplate kind) override;
     void newProjectAsync(const QString &guid, const QString &name, const QString &folder, SceneTemplate kind) override;
     void closeProject(bool reopenInPlace = false) override;

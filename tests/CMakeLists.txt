@@ -1030,6 +1030,8 @@ add_subdirectory(meshbake)
 add_subdirectory(importasync)
 add_subdirectory(openasync)
 add_subdirectory(archiveasync)
+# The project's doors (STUDIO-HYGIENE-1): what the open, the import and the save accept and refuse.
+add_subdirectory(projectdoors)
 add_subdirectory(avatar)        # the avatar FIXTURES only (beta_mannequin.dae: avatar.responsive, scripting.e2e.one_asset read it)
 add_subdirectory(avatarasync)
 add_subdirectory(ui)

@@ -443,6 +443,7 @@ private:
     void showOpenProgress(int percent, const QString &text) override;
     void showOpenCompileProgress(unsigned compiled) override;
     void hideOpenProgress() override;
+    void showOpenRefusal(const QString &text) override;
     void saveOpenWorld() override;
     iris::ScenePtr openWorld() const override;
     ProjectRunner *projects = nullptr;

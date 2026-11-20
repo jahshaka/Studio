@@ -104,6 +104,9 @@ public:
         /// events (a frame inside a frame).
         virtual void showOpenCompileProgress(unsigned compiled) = 0;
         virtual void hideOpenProgress() = 0;
+        /// A REFUSED OPEN (STUDIO-HYGIENE-1): the window lands on the Desktop and
+        /// says `text` (a box for a person, a log line for a driven run).
+        virtual void showOpenRefusal(const QString &text) = 0;
         /// The open world's force save (autosave), for an export of it.
         virtual void saveOpenWorld() = 0;
         /// The world that is bound to the window, or null.
@@ -125,6 +128,10 @@ public:
     void openAsync(bool playMode);
     /// True while an asynchronous open (or create) is in flight.
     bool isOpening() const;
+    /// WHY THE LAST OPEN WAS REFUSED, in the user's words — "" unless the most
+    /// recent open (either route) was refused. THE ONE SENTENCE: the verb's
+    /// error, the tile's and the import's box all carry it (refuseOpen).
+    QString openRefusal() const { return mOpenRefusal; }
     /// Runs an in-flight threaded open TO COMPLETION before the caller does
     /// anything else, with the event loop pumped (user input excluded). A
     /// caller about to close the project and point it at another world MUST
@@ -207,6 +214,10 @@ private:
     bool stageRegistrationsStep(qint64 budgetMs);
     /// The blocking open's reads and bake reads, on workers while this thread pumps.
     iris::MeshPrewarmPtr prewarmModelsPumped(openreads::Reads &reads);
+    /// THE REFUSAL, BEFORE stageBegin on both routes (so nothing the open owns is
+    /// torn down): true when `reads` refuse the scene — the run abandoned, its
+    /// ledger ended, openRefusal() set and the host told.
+    bool refuseOpen(const openreads::Reads &reads);
     void runPumped(const std::function<void()> &work);
 
     Database *mDb = nullptr;
@@ -219,6 +230,7 @@ private:
     /// Counted here rather than in the runner because only the shell's
     /// viewport knows whether it drew.
     unsigned mSliceBoundaryFrames = 0;
+    QString mOpenRefusal;
     iris::ScenePtr mPendingScene;
     /// The session rows being registered and the next one (stageRegistrationsStep).
     QVector<ProjectAssets::SessionRow> mSessionRows;

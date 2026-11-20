@@ -743,7 +743,9 @@ public:
     /// row keeps its guid otherwise; `value(guid, guid)` reads identity), and
     /// `knownGuids` the archive guids this library already held at the same
     /// type — the same asset, whose row the import left alone.
-    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids, QSet<QString> *knownGuids = nullptr);
+    /// `whyOut`, when the import is refused for a reason the user can act on (an archive scene that is
+    /// not a JSON object, STUDIO-HYGIENE-1), says so; it stays empty for a database failure.
+    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids, QSet<QString> *knownGuids = nullptr, QString *whyOut = nullptr);
 
     // EXPORT ===============================================================================
     /// THE PROJECT ARCHIVE'S CATALOG SNAPSHOT, in two halves (STUDIO-D1 item 4): the READ

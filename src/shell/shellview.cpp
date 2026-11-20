@@ -53,6 +53,11 @@ void ShellView::openProjectAsync(bool playMode)
     mWindow->projectRunner()->openAsync(playMode);
 }
 
+QString ShellView::openRefusal() const
+{
+    return mWindow->projectRunner()->openRefusal();
+}
+
 void ShellView::newProject(const QString &guid, const QString &name, const QString &folder, SceneTemplate kind)
 {
     mWindow->projectRunner()->create(guid, name, folder, kind);

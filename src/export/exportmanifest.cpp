@@ -27,7 +27,7 @@ QJsonObject ExportManifest::toJson() const
 {
     QJsonObject root;
     root["format"] = kFormatTag;
-    root["version"] = 2;
+    root["version"] = kManifestVersion;
     root["kind"] = kind;
     if (!generator.isEmpty()) root["generator"] = generator;
     if (!created.isEmpty()) root["created"] = created;
@@ -127,9 +127,16 @@ ExportManifest ExportManifest::fromBytes(const QByteArray &bytes, QString *error
         if (error) *error = QStringLiteral("not a %1 document").arg(kFormatTag);
         return m;
     }
+    // ITS OWN VERSION ONLY (STUDIO-HYGIENE-1): an older manifest is not
+    // migrated and a NEWER one is not read as this one — a newer build's
+    // archive half-read here would drop what it added without a word.
     const int version = root["version"].toInt();
-    if (version < 2) {
-        if (error) *error = QStringLiteral("bad manifest version: %1").arg(version);
+    if (version != kManifestVersion) {
+        if (error)
+            *error = QStringLiteral("the manifest is version %1, made by %2 Jahshaka; this build reads version %3")
+                         .arg(version)
+                         .arg(version > kManifestVersion ? QStringLiteral("a newer") : QStringLiteral("an older"))
+                         .arg(kManifestVersion);
         return m;
     }
 

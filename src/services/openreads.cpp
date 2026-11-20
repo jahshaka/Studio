@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QUuid>
 
 #include "data/project.h"
+#include "io/sceneformat.h"
 #include "io/scenereader.h"
 #include "services/assetstorepaths.h"
 #include "services/loadtimeline.h"
@@ -93,10 +94,24 @@ void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
         LoadTimeline::Accumulate json(QStringLiteral("worker:sceneJson"));
         QJsonParseError error;
         const QJsonDocument doc = QJsonDocument::fromJson(blob, &error);
-        // A blob that does not parse opens as an empty world, as the reader always did — said once, by name.
-        if (error.error != QJsonParseError::NoError || !doc.isObject())
-            qWarning("open: the scene blob of project %s does not parse (%s at %d) — it opens empty",
-                     qUtf8Printable(reads.projectGuid), qUtf8Printable(error.errorString()), error.offset);
+        // A BLOB THAT DOES NOT PARSE IS REFUSED (STUDIO-HYGIENE-1). It used to open as an EMPTY world with
+        // a log line, and the next save wrote that empty world over the row: the scene lost, silently.
+        if (error.error != QJsonParseError::NoError || !doc.isObject()) {
+            reads.refusal = error.error != QJsonParseError::NoError
+                                ? QStringLiteral("its scene does not parse (%1 at byte %2)")
+                                      .arg(error.errorString()).arg(error.offset)
+                                : QStringLiteral("its scene is not a JSON object");
+            return;
+        }
+        // ...AND SO IS A NEWER BUILD'S SCENE: read as this build's format, what that build added would be
+        // dropped and the next save would write the scene back without it.
+        const int version = sceneformat::versionOf(doc.object());
+        if (version > sceneformat::kVersion) {
+            reads.refusal = QStringLiteral("its scene is format version %1, made by a newer Jahshaka; this "
+                                           "build reads version %2")
+                                .arg(version).arg(sceneformat::kVersion);
+            return;
+        }
         reads.projectObj = doc.object();
         reads.found = true;
     }

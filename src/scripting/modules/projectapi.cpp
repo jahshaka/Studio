@@ -117,7 +117,12 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "it landed on the first frame the user sees (298 ms on the default world). It still waits for "
           "what it reads — a camera a drawing view has tracked, the voxel inputs' textures, the sky, "
           "the meshes the mirror still owes — so a world whose inputs land later is lit on the frames "
-          "after this returns: `world.giStatus().vctBound` says which.",
+          "after this returns: `world.giStatus().vctBound` says which.\n\n"
+          "A SCENE THIS BUILD MUST NOT READ IS REFUSED, nothing opened, before anything of the open is torn "
+          "down: a scene blob that does not parse, or one a NEWER build wrote (its formatVersion past this "
+          "build's) — the error is \"'<name>' could not be opened: <why>\", the same sentence a desktop tile "
+          "or an archive import shows. The world that was open is already closed by then (the close is the "
+          "open's first half).",
           Needs::Document },
         { "openAsync", "project.openAsync(guidOrName, {play}) -> bool",
           "Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the "
@@ -431,6 +436,10 @@ bool ProjectApi::open(const QString &guidOrName)
     host.services->project->pointAtProject(guid, name);
     host.shell->openProject(false);
     host.beginRunUndoMacro();
+    // A REFUSED SCENE (STUDIO-HYGIENE-1): one that does not parse, or one a
+    // newer build wrote — the runner's one sentence, nothing opened.
+    if (const QString refusal = host.shell->openRefusal(); !refusal.isEmpty())
+        return fail(QStringLiteral("project.open: %1").arg(refusal));
     return true;
 }
 
