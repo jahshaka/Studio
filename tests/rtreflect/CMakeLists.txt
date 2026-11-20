@@ -404,12 +404,12 @@ if(TARGET jahlab)
     # codes (sky_invariant.sh says the physics). ONE ROW PER PROOF: .first = a new scene's frames k1..k8 (+ the control:
     # photon-glass, whose 1 m opening lets the sky in, must differ at k8; four sessions, 8 frames each), .hold = the hold
     # (`rest 1200 held`, two sessions). Each session declares its route through the lab's `routes` verb. 960x540. FRAMES
-    # estimated (32; 2 x the hold ~500), re-counted from the first run at the feature end.
-    jah_gpu_row(rtreflect.sky_invariant.first CLASS engine FRAMES 32
+    # counted from the first runs (2026-11-20, LAB END): .first 4 sessions x 9 = 36; .hold 341 + 356 = 697 (each rest + 3).
+    jah_gpu_row(rtreflect.sky_invariant.first CLASS engine FRAMES 36
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/sky_invariant.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/sky_invariant_first first
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
-    jah_gpu_row(rtreflect.sky_invariant.hold CLASS engine FRAMES 1004
+    jah_gpu_row(rtreflect.sky_invariant.hold CLASS engine FRAMES 697
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/sky_invariant.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/sky_invariant_hold hold
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
