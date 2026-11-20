@@ -1,0 +1,39 @@
+// assets.one_name_door — AN ASSET'S NAME HAS ONE DOOR, AND THE AVATAR SAVE GOES THROUGH IT (STUDIO-HYGIENE-1
+// stage 3). The avatar save syncs its asset row's name to the definition's; that sync wrote the row past the
+// name law (a bare updateAssetMetadata), so an avatar could end up NAMED LIKE A SHIPPED PRESET — an asset
+// nothing can find by its name (the name finds the preset). Now the save refuses such a name BEFORE it stores
+// a byte: the avatar keeps its name, the caller is told why, and the definition and its row never disagree
+// in a way the user did not see. One --headless process.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function rowName(guid) {
+    var rows = avatar.library({ scope: "all" }).filter(function (a) { return a.guid === guid; });
+    return rows.length === 1 ? rows[0].name : null;
+}
+
+project.create("Doors Names", { template: "empty" });
+var model = assets.importFile("@RIG@");
+assert(model && model.length > 0, "the rigged model imports");
+// A definition named like a shipped preset (the create takes the name it is given) whose ROW the user then
+// renamed — the row and the definition differ, and the next save syncs the row to the definition.
+var av = avatar.createAsset(model, { name: "Gold PBR", scope: "library" });
+assert(av && av.length > 0, "an avatar is made from it");
+assert(assets.rename(av, "Hero") === true, "its row is renamed to Hero");
+assert(rowName(av) === "Hero", "...and reads Hero");
+
+var opened = avatar.open(av);
+assert(opened.name === "Gold PBR", "the open definition still carries the preset's name");
+var version = opened.version;
+var why = null, saved = null;
+try { saved = avatar.save(); } catch (e) { why = String(e && e.message ? e.message : e); }
+console.log("save: " + (why !== null ? why : JSON.stringify(saved)));
+assert(why !== null && why.indexOf("keeps its name 'Hero'") >= 0 && why.indexOf("'Gold PBR'") >= 0
+       && why.indexOf("material the app ships") >= 0,
+       "the save is REFUSED by a sentence naming the kept name and why");
+assert(rowName(av) === "Hero",
+       "...the asset row keeps its name (it was renamed to 'Gold PBR' past the name law) - " + rowName(av));
+assert(avatar.asset().version === version, "...and no new version of the definition was stored");
+console.log("one name door: ALL OK");

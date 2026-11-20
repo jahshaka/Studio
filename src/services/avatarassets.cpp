@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "data/guidmanager.h"
 #include "data/project.h"
 #include "services/assethome.h"
+#include "services/assettags.h"
 #include "services/assetcas.h"
 #include "services/assetmetadata.h"
 #include "services/assetstorepaths.h"
@@ -309,6 +310,16 @@ QString AvatarAssets::save(const QString &guid, Scope scope,
     if (record.guid.isEmpty()) return refuse(QStringLiteral("no asset with guid '%1'").arg(guid));
     if (record.type != static_cast<int>(ModelTypes::Avatar))
         return refuse(QStringLiteral("'%1' is not an avatar asset").arg(record.name));
+    // THE ROW'S NAME FOLLOWS THE DEFINITION'S (below), through the ONE name
+    // door (assettags::write) — so a name that door refuses (a shipped preset's:
+    // nothing could find an asset by it) is refused HERE, before a byte is
+    // stored. The definition and its asset never carry two names; the avatar
+    // keeps the name it had, and the caller is told why (STUDIO-HYGIENE-1).
+    const bool renames = !definition.name.isEmpty() && definition.name != record.name;
+    if (renames) {
+        if (const QString why = assettags::nameRefusal(guid, definition.name); !why.isEmpty())
+            return refuse(QStringLiteral("the avatar keeps its name '%1': %2").arg(record.name, why));
+    }
 
     QString name;
     AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid, &name);
@@ -345,9 +356,13 @@ QString AvatarAssets::save(const QString &guid, Scope scope,
 
     reconcileDependencies(guid, definition, db, project);
     // The row's name follows the definition's: the module renames an avatar by
-    // renaming the thing, not by a second gesture on the tile.
-    if (!definition.name.isEmpty() && definition.name != record.name)
-        db->updateAssetMetadata(guid, definition.name, record.tags);
+    // renaming the thing, not by a second gesture on the tile. Its law was
+    // checked before the store (above); a write that still fails is the
+    // database's, and said.
+    if (renames && !assettags::rename(db, guid, definition.name))
+        qWarning("avatar save: the definition of '%s' is stored, but its asset row could not be "
+                 "renamed to '%s' (the database refused the write)",
+                 qUtf8Printable(record.name), qUtf8Printable(definition.name));
     // The metadata block describes the DEFINITION, so it is stale the moment
     // one is saved; drop it and let the lazy backfill recompute on demand.
     {

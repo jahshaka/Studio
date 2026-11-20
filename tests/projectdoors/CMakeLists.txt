@@ -40,3 +40,21 @@ set_tests_properties(project.remove_folder PROPERTIES
     LABELS "scripting"
     TIMEOUT 60)
 jah_no_display(project.remove_folder)
+
+# assets.one_name_door — an asset's name has one door (stage 3): the avatar save's name sync goes through
+# assettags, so a definition named like a shipped preset is refused before a byte is stored and the row keeps
+# its name. One --headless process; the rig fixture from tests/avatar.
+set(RIG "${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb")
+configure_file(asset_name_door.js.in ${CMAKE_CURRENT_BINARY_DIR}/asset_name_door.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/projectdoors-home-names)
+jah_fresh_home_fixture(assets.one_name_door.fresh_home projectDoorsNamesHome "${_home}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME assets.one_name_door
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/asset_name_door.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(assets.one_name_door PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED projectDoorsNamesHome
+    LABELS "scripting"
+    TIMEOUT 60)
+jah_no_display(assets.one_name_door)

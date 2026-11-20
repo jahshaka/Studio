@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "ui/panels/assetwidget.h"
 #include "scripting/modules/assetsapi.h"
 #include "services/assetshare.h"
+#include "services/assettags.h"
 #include "ui/dialogs/bundleexportdialog.h"
 
 #include "ui/dialogs/importsettingsdialog.h"
@@ -1058,11 +1059,6 @@ void AssetWidget::sceneViewCustomContextMenu(const QPoint& pos)
 			connect(action, SIGNAL(triggered()), this, SLOT(exportMaterial()));
 			menu.addAction(action);
 
-            if (QGuiApplication::queryKeyboardModifiers() == Qt::ShiftModifier) {
-                action = new QAction(QIcon(), "Save Material Preview", this);
-                connect(action, SIGNAL(triggered()), this, SLOT(exportMaterialPreview()));
-                menu.addAction(action);
-            }
 		}
 
         if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::File))
@@ -1360,40 +1356,6 @@ void AssetWidget::exportMaterial()
                    tr("Export Material"));
 }
 
-void AssetWidget::exportMaterialPreview()
-{
-    auto assetGuid = assetItem.wItem->data(MODEL_GUID_ROLE).toString();
-    auto materialDef = QJsonDocument::fromJson(db->fetchAssetData(assetGuid)).object();
-
-    QString jsonMaterialString = QJsonDocument(materialDef).toJson();
-
-    for (const auto &value : materialDef) {
-        if (value.isString() &&
-            !db->fetchAsset(value.toString()).name.isEmpty() &&
-            value.toString() != materialDef["guid"].toString())
-        {
-            jsonMaterialString.replace(value.toString(), QString(db->fetchAsset(value.toString()).name));
-        }
-    }
-
-    QJsonDocument saveDoc = QJsonDocument::fromJson(jsonMaterialString.toUtf8());
-
-    QString fileName = IrisUtils::join(
-        project->getProjectFolder(),
-        IrisUtils::buildFileName(db->fetchAsset(assetGuid).name, "material")
-    );
-
-    QFile file(fileName);
-    file.open(QFile::WriteOnly);
-    file.write(saveDoc.toJson());
-    file.close();
-
-    ThumbnailGenerator::getSingleton()->requestThumbnail(
-        ThumbnailRequestType::Material, fileName, assetGuid, true
-    );
-
-}
-
 void AssetWidget::exportAssetPack()
 {
     QStringList assetGuids;
@@ -1442,33 +1404,19 @@ void AssetWidget::OnLstItemsCommitData(QWidget *listItem)
 
     if (!newName.isEmpty()) {
         if (assetItem.wItem->data(MODEL_ITEM_TYPE) == MODEL_ASSET) {
-			QString newFileName = IrisUtils::buildFileName(newName, QFileInfo(oldName).suffix());
-            db->renameAsset(guid, newFileName);
-			QFile assetToRename(QDir(project->getProjectFolder()).filePath(oldName));
-			if (!assetToRename.rename(QDir(project->getProjectFolder()).filePath(newFileName))) {
-				if (rename(
-					QDir(project->getProjectFolder()).filePath(oldName).toStdString().c_str(),
-					QDir(project->getProjectFolder()).filePath(newFileName).toStdString().c_str()
-				)) {
-					for (auto &asset : AssetManager::getAssets()) {
-                        if (asset->assetGuid == guid) {
-                            asset->fileName = newFileName;
-                            if (!asset->path.isEmpty()) {
-                                asset->path = QDir(project->getProjectFolder()).filePath(newFileName);
-                            }
-                        }
-					}
-				}
-            }
-            else {
-                for (auto &asset : AssetManager::getAssets()) {
-                    if (asset->assetGuid == guid) {
-                        asset->fileName = newFileName;
-                        if (!asset->path.isEmpty()) {
-                            asset->path = QDir(project->getProjectFolder()).filePath(newFileName);
-                        }
-                    }
-                }
+            // THE ONE NAME DOOR (STUDIO-HYGIENE-1): assets.rename's. This wrote
+            // the row past the name law (Database::renameAsset, now deleted) — a
+            // shipped preset renamed from here, the old extension appended to
+            // the name typed — and then renamed a FILE in the project folder, a
+            // layout that no longer exists (a project holds no asset files),
+            // through a fallback whose `if (rename(...))` ran on FAILURE.
+            const QString wanted = newName.trimmed();
+            QString why = assettags::nameRefusal(guid, wanted);
+            if (why.isEmpty() && !assettags::rename(db, guid, wanted))
+                why = tr("the database refused the rename");
+            if (!why.isEmpty()) {
+                toast()->showToast(tr("Rename"), tr("'%1' keeps its name: %2").arg(oldName, why), 3000);
+                refresh();   // the tile is showing the name the user typed
             }
         }
         else {

@@ -40,6 +40,14 @@ add_test(NAME source.no_ui_folder_delete
 set_tests_properties(source.no_ui_folder_delete PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_ui_folder_delete)
 
+# source.one_asset_name_write — STUDIO-HYGIENE-1 stage 3: an asset's name is written only by assettags::write
+# (no renameAsset call; updateAssetMetadata called only there). See the script's header.
+add_test(NAME source.one_asset_name_write
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_asset_name_write.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.one_asset_name_write PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.one_asset_name_write)
+
 # source.db_pointers_initialised — DBPTR-1: a declared `Database *` is an
 # initialised one, and the two handles that are filled by a setter after
 # construction stay wired to their caller. See the script's header for the

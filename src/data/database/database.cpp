@@ -2094,17 +2094,6 @@ bool Database::renameCollection(const int &collectionId, const QString &newName)
     return executeAndCheckQuery(query, "RenameCollection");
 }
 
-bool Database::renameAsset(const QString &guid, const QString &newName)
-{
-    QSqlQuery query;
-    query.prepare("UPDATE assets SET name = ? WHERE guid = ?");
-    query.addBindValue(newName);
-    query.addBindValue(guid);
-    const bool ok = executeAndCheckQuery(query, "RenameAsset");
-    if (ok) refreshSidecar(guid);   // name is a sidecar field (I2)
-    return ok;
-}
-
 bool Database::setAssetParent(const QString &guid, const QString &parent)
 {
     if (guid.isEmpty()) return false;

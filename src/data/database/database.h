@@ -487,7 +487,6 @@ public:
     /// Reparents a drawer (parent -1 = top level). Refuses ids <= 0, unknown
     /// drawers/parents, and cycles (a drawer cannot move under its own subtree).
     bool setCollectionParent(const int collectionId, const int parent);
-    bool renameAsset(const QString &guid, const QString &newName);
     /// WHERE A ROW IS FILED (DRAWERS-1). `assets.parent` carries both kinds of
     /// parent — a FOLDER guid for a filed row, the owning ASSET's guid for an
     /// import member — so this is only ever called on a row the project owns,

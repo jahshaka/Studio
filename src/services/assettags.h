@@ -85,8 +85,30 @@ inline QStringList tagsOf(Database *db, const QString &guid)
     return parse(db->fetchAsset(guid).tags);
 }
 
+/// THE NAME LAW, AS A SENTENCE (STUDIO-HYGIENE-1): "" when `name` may be
+/// written to `guid`'s row, else why not — the one wording assets.rename, the
+/// Assets panel's rename and the avatar save all show. `write` below refuses
+/// exactly when this is not empty (its comments say why each rule exists). An
+/// empty `name` keeps the stored one and is never refused here.
+inline QString nameRefusal(const QString &guid, const QString &name)
+{
+    if (name.isEmpty()) return QString();
+    const QString shipped = MaterialBundle::shippedPresetName(guid);
+    if (!shipped.isEmpty() && name != shipped)
+        return QStringLiteral("'%1' is a material the app ships and is read-only - materials.edit "
+                              "gives you this project's own copy of it, and that one renames")
+            .arg(shipped);
+    if (shipped.isEmpty() && !MaterialBundle::shippedPresetGuidForName(name).isEmpty())
+        return QStringLiteral("'%1' is the name of a material the app ships - an asset by that name "
+                              "could never be found by it (the name finds the preset)")
+            .arg(name);
+    return QString();
+}
+
 /// Writes name + tags together — the ONE path, used by assets.rename,
-/// assets.setTags and the Assets page's Update button. `name` empty keeps the
+/// assets.setTags, the Assets page's Update button, the Assets panel's rename
+/// and the avatar save; the only caller of Database::updateAssetMetadata
+/// (source.one_asset_name_write). `name` empty keeps the
 /// stored name; `tags` null (a default-constructed optional-ish empty
 /// QByteArray from `serialize`) is handled by the two wrappers below, which
 /// read the row first so nothing is lost.
@@ -105,8 +127,7 @@ inline bool write(Database *db, const QString &guid, const QString &name,
     // theirs to find), which is why this refuses a NAME CHANGE and not the
     // write: `setTags` passes the stored name through, and the seeder's own
     // repair passes the shipped one.
-    const QString shipped = MaterialBundle::shippedPresetName(guid);
-    if (!shipped.isEmpty() && !name.isEmpty() && name != shipped) return false;
+    //
     // AND NOTHING ELSE MAY TAKE A SHIPPED PRESET'S NAME (PRESET-UNIFY-1 fix
     // round). A preset is found BY NAME — `material.apply(n, "Gold PBR")`,
     // `materials.loadGraph("Gold PBR")`, the drag payload, every script — so
@@ -117,9 +138,9 @@ inline bool write(Database *db, const QString &guid, const QString &name,
     // only to materials, and deliberately: the drag payload and the tray
     // resolve a reserved preset name whatever the row behind it is, so a
     // MODEL called "Gold PBR" is just as unreachable as a material would be.
-    if (shipped.isEmpty() && !name.isEmpty()
-        && !MaterialBundle::shippedPresetGuidForName(name).isEmpty())
-        return false;
+    //
+    // Both rules are nameRefusal's (one sentence for every door that says why).
+    if (!nameRefusal(guid, name).isEmpty()) return false;
     return db->updateAssetMetadata(guid, name, serialize(tags));
 }
 
