@@ -154,6 +154,15 @@ keys_differ() {
 promote_cache() {
     how="$1"
     [ -n "$shared" ] && [ -f "$home/$cache_rel/cache-manifest.txt" ] || return 0
+    # A RUN WITH VULKAN LAYERS OR GPU CHECKPOINTS ON NEVER PROMOTES (2026-11-20: a debug-layer run's cache was promoted as the
+    # tree's): a layer (the validation's GPU-assisted mode instruments every shader) or the checkpoint marks build that run's
+    # pipelines under conditions no row runs in - its cache is the run's own, never the shared one every row boots on
+    if [ -n "${VK_INSTANCE_LAYERS:-}" ] || [ -n "${VK_LOADER_LAYERS_ENABLE:-}" ] || [ "${JAHSHAKA_GPU_CHECKPOINTS:-0}" = 1 ]; then
+        echo "fresh_home.sh: this home's cache NOT promoted - the run had Vulkan layers or GPU checkpoints on" \
+             "(VK_INSTANCE_LAYERS='${VK_INSTANCE_LAYERS:-}' VK_LOADER_LAYERS_ENABLE='${VK_LOADER_LAYERS_ENABLE:-}'" \
+             "JAHSHAKA_GPU_CHECKPOINTS='${JAHSHAKA_GPU_CHECKPOINTS:-}'): its pipelines are that run's, never the rows'" >&2
+        return 0
+    fi
     # (its stdout is the verdict; its stderr - the pure-Python fallback's one line, URGENT #132 - reaches the row's output)
     if ! torn=$(python3 -I "$here/shadercache_check.py" "$home/$cache_rel"); then
         echo "fresh_home.sh: this home's cache NOT promoted - it fails its own manifest ($torn); the engine would boot" \

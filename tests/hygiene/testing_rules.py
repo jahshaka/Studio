@@ -1165,6 +1165,24 @@ def fresh_home_behaves(source):
               "fresh_home: --promote - a WARM fixture's green consumer PROMOTES its grown cache through hard links and "
               "its home keeps it whole; a red one keeps its exit code, promotes nothing, its home untouched (%d %d %d %s)"
               % (rs.returncode, rp.returncode, rr.returncode, rp.stderr[-120:]))
+        # A RUN WITH VULKAN LAYERS OR GPU CHECKPOINTS ON NEVER PROMOTES (2026-11-20: a debug-layer run's cache was promoted):
+        # a green --warm run under VK_INSTANCE_LAYERS, VK_LOADER_LAYERS_ENABLE or JAHSHAKA_GPU_CHECKPOINTS=1 adds its file and
+        # exits 0 - the shared cache is NOT replaced, said; the same run without them promotes (RED ON BASE b40910344: promoted)
+        lay = []
+        for k, (var, val) in enumerate((("VK_INSTANCE_LAYERS", "VK_LAYER_KHRONOS_validation"),
+                                        ("VK_LOADER_LAYERS_ENABLE", "*validation"), ("JAHSHAKA_GPU_CHECKPOINTS", "1"))):
+            hl = os.path.join(td, "x", "home-layer%d" % k)
+            rl = subprocess.run(["sh", fh, "--warm", hl, "--", "sh", "-c",
+                                 put(hl, [("layer%d.bin" % k, "K1")], keep=[("a.bin", "K1")])],
+                                capture_output=True, text=True, env=dict(os.environ, **{var: val}))
+            lay.append((rl.returncode, sc("layer%d.bin" % k), "NOT promoted - the run had Vulkan layers or GPU checkpoints on" in rl.stderr))
+        env0 = {k: v for k, v in os.environ.items() if k not in ("VK_INSTANCE_LAYERS", "VK_LOADER_LAYERS_ENABLE", "JAHSHAKA_GPU_CHECKPOINTS")}
+        hl = os.path.join(td, "x", "home-layer-off")
+        rl = subprocess.run(["sh", fh, "--warm", hl, "--", "sh", "-c", put(hl, [("nolayer.bin", "K1")], keep=[("a.bin", "K1")])],
+                            capture_output=True, text=True, env=env0)
+        check(lay == [(0, False, True)] * 3 and rl.returncode == 0 and sc("nolayer.bin"),
+              "fresh_home: a green run with Vulkan layers or GPU checkpoints on (VK_INSTANCE_LAYERS, VK_LOADER_LAYERS_ENABLE, "
+              "JAHSHAKA_GPU_CHECKPOINTS=1) NEVER promotes its cache (said); the same run without them does (%s %d)" % (lay, rl.returncode))
         # RULE (1): the keys differ (an engine rebuild) - the home's cache holds only what it compiled (its stale layers
         # dropped) and is SMALLER than the stale union: replaced all the same, and the next home links it
         hc = os.path.join(td, "x", "home-key")
