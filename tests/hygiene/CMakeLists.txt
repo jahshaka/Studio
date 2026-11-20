@@ -208,15 +208,16 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/shader_cache_key.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.shader_cache_key PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.shader_cache_key)
-    # source.bake_key_untouched — ATOM-HOUSE-1 (SPECS/V2_CROSS_REFERENCE.md section 2): a branch cut from photon-7 edits
-    # no file of the bake key's CONTENT hash (irisgl/CMakeLists.txt's _mesh_bake_hashed_sources, read there, never
-    # copied): a comment there re-bakes every library, and V2 edits them only in its one bake stage. The base is the
-    # merge-base with photon-7; uncommitted edits count. source.bake_key_guard keeps the watched files' other half.
-    add_test(NAME source.bake_key_untouched
-             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/bake_key_untouched.py" "${CMAKE_SOURCE_DIR}"
-                     photon-7)
-    set_tests_properties(source.bake_key_untouched PROPERTIES TIMEOUT 60 LABELS "hygiene")
-    jah_no_display(source.bake_key_untouched)
+    # source.bake_key_versioned — ATOM-HOUSE-1 (SPECS/V2_CROSS_REFERENCE.md section 2, the audit's findings 2 and d): the
+    # files of the bake key's CONTENT hash (irisgl/CMakeLists.txt's _mesh_bake_hashed_sources, read there and cross-checked
+    # against CMake's own id) change only together with kFormatVersion - a state law against the record
+    # irisgl/import/meshbake.key, no branch and no base, so it holds in any clone and on the bake stage's own branch.
+    # source.bake_key_guard keeps the other half (the watched files' acknowledgement line).
+    add_test(NAME source.bake_key_versioned
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/bake_key_versioned.py" "${CMAKE_SOURCE_DIR}"
+                     "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.bake_key_versioned PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.bake_key_versioned)
     # source.gpu_table_strides — ATOM-HOUSE-1 (the audit's finding 1): GpuScene::kLevelsPerMesh and kSubmeshesPerMesh reach
     # the Hlms media only as properties (GpuScene::setTableStrideProperties, HlmsAtom); no hand `* 8u` copy of either in
     # irisgl/engine/media. The script names its exact patterns and its residual; its negative control runs first.
