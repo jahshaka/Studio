@@ -225,29 +225,12 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
         return QString();
     };
 
-    if (name.trimmed().isEmpty())
-        return fail(QStringLiteral("a non-empty name is required"));
-    // ONE NAME, ONE PROJECT (PROJECT-NAMES-1): a taken name is refused with
-    // the free one named, before anything is minted.
-    if (const QString refusal = nameRefusal(name); !refusal.isEmpty()) return fail(refusal);
+    if (const QString refusal = createRefusal(name, location); !refusal.isEmpty()) return fail(refusal);
 
     // WHERE IT LANDS. The user's projects root unless the dialog's Browse (or
-    // the verb's `location`) named somewhere else. Checked before a guid is
-    // minted or a pointer moves: a create that fails half way through leaves
-    // `project` pointing at a folder that does not exist.
+    // the verb's `location`) named somewhere else (createRefusal judged it).
     QString root = location.trimmed();
-    if (root.isEmpty()) {
-        root = projectsRoot();
-    } else {
-        const QFileInfo info(root);
-        if (!info.exists())
-            return fail(QStringLiteral("the location '%1' does not exist").arg(root));
-        if (!info.isDir())
-            return fail(QStringLiteral("the location '%1' is not a folder").arg(root));
-        if (!info.isWritable())
-            return fail(QStringLiteral("the location '%1' is not writable").arg(root));
-        root = QDir(root).absolutePath();
-    }
+    root = root.isEmpty() ? projectsRoot() : QDir(root).absolutePath();
 
     const QString guid = GUIDManager::generateGUID();
     const QString fullProjectPath = folderUnder(root, guid);
@@ -282,6 +265,25 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
     projectManager->addTile(guid);
     if (folderOut) *folderOut = fullProjectPath;
     return guid;
+}
+
+QString ProjectService::createRefusal(const QString &name, const QString &location) const
+{
+    if (name.trimmed().isEmpty()) return QStringLiteral("a non-empty name is required");
+    // ONE NAME, ONE PROJECT (PROJECT-NAMES-1): a taken name is refused with
+    // the free one named, before anything is minted.
+    if (const QString refusal = nameRefusal(name); !refusal.isEmpty()) return refusal;
+    // WHERE IT LANDS: checked before a guid is minted or a pointer moves — a
+    // create that fails half way through leaves `project` pointing at a folder
+    // that does not exist.
+    const QString root = location.trimmed();
+    if (!root.isEmpty()) {
+        const QFileInfo info(root);
+        if (!info.exists()) return QStringLiteral("the location '%1' does not exist").arg(root);
+        if (!info.isDir()) return QStringLiteral("the location '%1' is not a folder").arg(root);
+        if (!info.isWritable()) return QStringLiteral("the location '%1' is not writable").arg(root);
+    }
+    return QString();
 }
 
 QString ProjectService::nextFreeName(const QString &name, const QString &exceptGuid) const

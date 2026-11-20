@@ -972,6 +972,11 @@ void ProjectManager::newProject()
 	const ProjectInfo info = dialog.getProjectInfo();
 	if (!projectService) return;   // headless/stub host: nothing to create with
 	if (info.projectName.trimmed().isEmpty()) return;   // a cancelled dialog
+	// The create's own refusals first (a name, a location): a refused create closes nothing.
+	if (const QString refusal = projectService->createRefusal(info.projectName, info.projectPath); !refusal.isEmpty()) {
+		reportImportProblem(tr("Create Scene"), tr("The scene could not be created: %1").arg(refusal));
+		return;
+	}
 	// THE OPEN WORLD CLOSES FIRST, asking about unsaved changes, BEFORE a row is
 	// minted: a Cancel (or a failed auto-save) creates nothing (STUDIO-HYGIENE-1).
 	if (shell->services()->project->isSceneOpen() && !shell->closeProject(false, CloseUnsaved::Ask))

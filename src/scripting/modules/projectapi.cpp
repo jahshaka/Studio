@@ -371,6 +371,11 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     // THE OPEN WORLD CLOSES FIRST, BEFORE A ROW IS MINTED (STUDIO-HYGIENE-1 audit):
     // unsaved changes refuse the create unless {discard: true}, and a failed
     // auto-save refuses it whatever — nothing is created then.
+    // ...after the create's OWN refusals (a name, a location): a refused create leaves the open world open.
+    if (const QString refusal = host.services->project->createRefusal(name, location); !refusal.isEmpty()) {
+        fail(QStringLiteral("%1: %2").arg(verb, refusal));
+        return QString();
+    }
     if (host.services->project->isSceneOpen()) {
         host.endRunUndoMacro();
         QString closeWhy;

@@ -132,6 +132,12 @@ public:
     /// open is closed — and autosaved into its OWN row — by the caller, which
     /// then points at the new guid (`pointAtProject`). `folderOut` receives the
     /// new project's folder. The desktop gets the new project's tile here.
+    /// WHY A CREATE WOULD BE REFUSED for its own arguments ("" = it would not): an empty name, a taken
+    /// one, a location that is missing, not a folder or not writable. The ONE judgement createProjectShell
+    /// makes — and every create route asks it FIRST, before it closes the world that is open, so a create
+    /// refused for its arguments leaves that world exactly where it was (STUDIO-HYGIENE-1).
+    QString createRefusal(const QString &name, const QString &location = QString()) const;
+
     QString createProjectShell(const QString &name, const QString &location = QString(),
                                QString *whyOut = nullptr, QString *folderOut = nullptr);
 

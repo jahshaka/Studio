@@ -35,6 +35,13 @@ function make() {
     assert(project.open(g) === true, "reopened");
     assert(meshes() === 4, "the round trip keeps every node (4 meshes: " + meshes() + ")");
     assert(dirty() === false, "an opened scene is clean");
+    // A CREATE REFUSED FOR ITS OWN ARGUMENTS leaves the open world open: it is judged BEFORE the close (the
+    // feature-end card's editor.new_scene caught a create that closed the world, then refused its location).
+    assert(refusal(function () { project.create("Nowhere", { location: "/definitely/not/here" }); }) !== null,
+           "a create at a location that does not exist is refused");
+    assert(project.current() && project.current().guid === g, "...and the open project is still open");
+    assert(refusal(function () { project.create("Doors Round Trip"); }) !== null, "a create with a taken name is refused");
+    assert(project.current() && project.current().guid === g, "...and the open project is still open");
 
     project.create("Doors Save Trap", { template: "empty" });
     scene.addPrimitive("cube");
