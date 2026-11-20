@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 #include "services/materialmembers.h"
 #include "services/memberstamp.h"
+#include "services/undoservice.h"
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/animationfile.h"
@@ -1421,11 +1422,13 @@ QString AssetsApi::createFolder(const QString &name, const QVariantMap &options)
         return QString();
     }
 
-    if (host.undoStack) {
+    if (host.services && host.services->undo) {
         // The outcome is read out of a box the CALLER owns: a command that
-        // turns out to be a no-op deletes itself inside push().
+        // turns out to be a no-op deletes itself inside push(). Through the
+        // service, as the panel's own create (the edit gate, the run's macro,
+        // the push count "unsaved" reads — source.one_undo_push).
         auto outcome = std::make_shared<FolderCommandOutcome>();
-        host.undoStack->push(new CreateProjectFolderCommand(host.db, projectGuid, name,
+        host.services->undo->push(new CreateProjectFolderCommand(host.db, projectGuid, name,
                                                             parent, outcome));
         if (!outcome->error.isEmpty()) {        // lost a race with another writer
             fail(QStringLiteral("assets.createFolder: %1").arg(outcome->error));
@@ -1503,9 +1506,9 @@ int AssetsApi::moveToFolder(const QVariant &guidOrGuids, const QVariant &folderG
     }
     if (judged.moved == 0) return 0;            // nothing to do, and nothing to undo
 
-    if (host.undoStack) {
+    if (host.services && host.services->undo) {
         auto outcome = std::make_shared<FolderCommandOutcome>();
-        host.undoStack->push(new MoveToProjectFolderCommand(host.db, projectGuid, guids,
+        host.services->undo->push(new MoveToProjectFolderCommand(host.db, projectGuid, guids,
                                                             target, outcome));
         if (!outcome->error.isEmpty())          // lost a race with another writer
             fail(QStringLiteral("assets.moveToFolder: %1").arg(outcome->error));

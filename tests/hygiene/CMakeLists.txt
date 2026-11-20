@@ -56,6 +56,14 @@ add_test(NAME source.one_save_door
 set_tests_properties(source.one_save_door PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_save_door)
 
+# source.one_undo_push — STUDIO-HYGIENE-1 audit: every scene command is pushed through UndoService (the edit gate,
+# the run's macro, the push count "unsaved" reads). See the script's header.
+add_test(NAME source.one_undo_push
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_undo_push.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.one_undo_push PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.one_undo_push)
+
 # source.db_pointers_initialised — DBPTR-1: a declared `Database *` is an
 # initialised one, and the two handles that are filled by a setter after
 # construction stay wired to their caller. See the script's header for the

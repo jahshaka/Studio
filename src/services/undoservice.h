@@ -133,7 +133,9 @@ public:
     // a run that records anything is still exactly one entry.
     //
     // This is the right place for it because EVERY undo command in the app is
-    // pushed through this service — nothing else calls QUndoStack::push.
+    // pushed through this service — nothing else calls the scene stack's
+    // QUndoStack::push (source.one_undo_push; the material graph's own stack is
+    // its document's, not the scene's).
 
     /// Arms the run's macro. Nothing reaches the stack until the first push.
     void beginScriptMacro(const QString &text);
