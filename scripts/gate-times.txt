@@ -380,6 +380,7 @@ tooling.owner_home_guard 0.25  solo, CPU, ctest, no display, no card, nice 10 (T
 source.debug_hot_loops 0.05  quiet (99 % CPU-idle), CPU, ctest, solo, nice 10 (TEST-STREAMLINE-1 5c, 2026-11-03: compile_commands.json read: zip, meshoptimizer and Bullet's four targets at -O2 in Debug)
 tooling.gpu_lock_sweep 4.99  loaded (load 3.7-9.5, the Unreal session on CPUs 0-9), CPU, the suite run directly (bash, not ctest), pinned to CPUs 10-19, nice 10 (URGENT #144, 2026-11-02, on photon-7 2187edd42 + the post-Bistro chain: a hold's escaped child swept at its exit, at its bound, KILLED past a 1-s grace, by the mark, under a nested call - gone before the next grant; sleeps, no GPU)
 tooling.row_env 0.61  loaded (load 11.0), CPU, the suite run directly (bash, not ctest), CPUs 10-19, nice 10 (URGENT #147, 2026-11-02: scripts/row-env.sh on a toy ctest build)
+tooling.one_spelling 0.47  loaded (load 42.0, the Unreal half busy), CPU, the suite run directly (bash, not ctest), CPUs 10-19, nice 10, median of 3 (0.42-0.68) (WORKFLOW-STREAMLINE-1 6.5, 2026-11-20: cmake/OneSpelling.cmake in a toy NONE project, six cmake -S configures)
 tooling.law_records 0.16  loaded (89 % CPU-idle), CPU, ctest (HARNESS-3 (b), 2026-10-29: scripts/gate_runlog.py over a fake ctest stream - every LAW line in the row's record, green and red, past the output cap; a fixture's `  FAIL (n)` line its fail line; no GPU)
 source.row_declares_needs 0.35  all n=2
 source.scene_no_friends 0.01  spec EU-2 stage 2 (2026-10-14)

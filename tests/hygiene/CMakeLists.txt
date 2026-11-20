@@ -358,6 +358,14 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/row_env.sh" "${CMAKE_SOURCE_DIR}/scripts/row-env.sh")
     set_tests_properties(tooling.row_env PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.row_env)
+    # tooling.one_spelling — A TREE IS CONFIGURED UNDER ITS ONE SPELLING (CODING_RULES §4, URGENT #129, WORKFLOW-STREAMLINE-1
+    # 6.5): cmake/OneSpelling.cmake in a toy NONE project under a scratch HOME whose Developer is a symlink - a FIRST configure
+    # whose source or build dir is spelled through the link's target refused, the link's spelling configuring, the
+    # JAH_ONE_SPELLING_LINK=none override, no trigger without a symlink, the re-configure guard kept (one_spelling.sh; CPU).
+    add_test(NAME tooling.one_spelling
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_spelling.sh" "${CMAKE_SOURCE_DIR}/cmake/OneSpelling.cmake")
+    set_tests_properties(tooling.one_spelling PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.one_spelling)
     # tooling.law_records — A RECORD KEEPS ITS ROW's LAW NUMBERS (HARNESS-3 (b)): scripts/gate_runlog.py over a fake ctest
     # stream keeps every `LAW <name> <value> <unit> [<op> <bar>]` line (tests/support/lawline.h) in the row's record, a
     # green row's and a red row's, one past the 256-KB output cap too (law_records.py; a scratch HOME and run-log dir).
