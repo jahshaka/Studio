@@ -96,6 +96,11 @@ tree and the build's registration, each with its name in the failure line:
      is a row unless empty or starting with '#'; tests/cmake/vram_rows.cmake and the lead's lib/sprint.py width2 read it so)
      - is a row name, listed once, a registered row, not `measure`, and registered at HALF the card's slots (vram:4: the
      registration read it); and every row at half the card is in the list (nothing else halves).
+  R19 A BASH SCRIPT RUNS UNDER BASH (URGENT #183, 2026-11-20). A row whose command hands a script to `sh` (or `dash`) - at any
+     place in its argv: fresh_home.sh's `--` hands one on too - where that script's first line is a bash shebang, is RED: on
+     Ubuntu `sh` is dash, and a bash-only construct ($'...', [[ ]], arrays, pipefail) in it fails or does something else
+     there. Such a row is registered `COMMAND bash <script>`. WHY: rtreflect.sky_invariant.first/.hold never ran (dash broke
+     its $'...', e806ae21a on photon-7-9a), and 47 rows ran a bash script under dash, each one bash-only line from a red.
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -559,6 +564,36 @@ def r18_bad(listed, tests):
     return bad
 
 
+SHELLS_POSIX = ("sh", "dash")
+_BASH_SHEBANG = re.compile(r"^#!\s*(?:\S*/)?(?:env\s+)?bash\b")
+
+
+def _bash_script(path, first_line=None):
+    """Is `path` a script whose shebang is bash? (`first_line`: the suites' synthetic input.)"""
+    if first_line is None:
+        try:
+            with open(path, errors="replace") as f:
+                first_line = f.readline()
+        except OSError:
+            return False
+    return bool(_BASH_SHEBANG.match(first_line))
+
+
+def r19_bad(tests, first_line=None):
+    """R19: [`row (script)`] - a row whose argv hands a bash-shebang script to sh / dash, anywhere in it (a `-c` string is
+    no script). `first_line` (the suites'): {path: its first line} instead of the files."""
+    bad = []
+    for t in tests:
+        cmd = [str(c) for c in t.get("command") or []]
+        for i, c in enumerate(cmd[:-1]):
+            if os.path.basename(c) in SHELLS_POSIX and not cmd[i + 1].startswith("-"):
+                nxt = cmd[i + 1]
+                if _bash_script(nxt, None if first_line is None else first_line.get(nxt, "")):
+                    bad.append("%s (%s)" % (t["name"], nxt))
+                    break
+    return sorted(bad)
+
+
 ROUTES_PENDING = os.path.join("tests", "hygiene", "routes_pending.txt")
 ROUTE_WORDS = {"gather", "integrate", "reflection", "field", "cards", "store", "paused", "none"}
 _ROUTES_CALL = re.compile(r"\b(declareRoutes|requireRoutes)\s*\(")
@@ -751,6 +786,15 @@ def the_rules_catch():
           and r18_bad(["g.m"], [t18("g.m", 4, ["measure"])]) == ["g.m (a measure row: it holds the whole card)"],
           "R18 reads the width-2 list by its one rule (an indented comment no row, an indented name a row) and flags a "
           "name that is no row, twice, unregistered, measure or not at half the card, and a half-card row not listed")
+    fl = {"/s/b.sh": "#!/bin/bash\n", "/s/e.sh": "#!/usr/bin/env bash\n", "/s/p.sh": "#!/bin/sh\n", "/s/n.sh": ""}
+    t19 = lambda n, *cmd: {"name": n, "command": list(cmd)}
+    check(r19_bad([t19("a", "/usr/bin/sh", "/s/b.sh", "x"), t19("e", "sh", "/s/e.sh"),
+                   t19("w", "sh", "/s/support/fresh_home.sh", "/h", "--", "dash", "/s/b.sh")], fl)
+          == ["a (/s/b.sh)", "e (/s/e.sh)", "w (/s/b.sh)"]
+          and not r19_bad([t19("ok", "bash", "/s/b.sh"), t19("p", "sh", "/s/p.sh"), t19("c", "sh", "-c", "/s/b.sh"),
+                           t19("n", "sh", "/s/n.sh"), t19("x", "/s/b.sh")], fl),
+          "R19 flags a bash-shebang script handed to sh or dash (at any place in the argv), never one under bash, a POSIX "
+          "script under sh, a -c string or a script run by its own shebang")
     bare = 'add_test(NAME a.b COMMAND x)\nset_tests_properties(a.b PROPERTIES\n    RUN_SERIAL TRUE)'
     other = '# RUN_SERIAL: x.y compiles shaders\nadd_test(NAME x.y COMMAND x)\n' + bare
     check(r4_bad("t", bare, set()) == ["t:3 (a.b)"] and not r4_bad("t", "# RUN_SERIAL: it compiles shaders\n" + bare, set())
@@ -1292,6 +1336,9 @@ def main(source, build):
     bad = r18_bad(listed, tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
     check(not bad, "R18 every row of %s is a registered, non-measure GPU row at half the card, and every half-card row "
           "is listed (%d listed; %d not: %s)" % (WIDTH2_LIST, len(listed), len(bad), bad[:12]))
+    bad = r19_bad(tests) if rc == 0 else ["ctest --show-only failed (%d)" % rc]
+    check(not bad, "R19 a bash script runs under bash: no row hands a bash-shebang script to sh / dash (registered COMMAND "
+          "bash) (%d under sh: %s)" % (len(bad), bad[:12]))
     rp = os.path.join(source, ROUTES_PENDING)
     if not os.path.isfile(rp):
         check(False, "R16 %s exists (the routes ratchet)" % ROUTES_PENDING)

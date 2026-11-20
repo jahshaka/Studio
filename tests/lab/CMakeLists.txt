@@ -11,7 +11,7 @@ endif()
 # drew, its pixels are on screen); a second run of the same script hits the bake cache (no parse, no bake) and cuts the
 # same. Two runs of 41 frames.
 jah_gpu_row(lab.boots_and_shoots SHIP CLASS engine FRAMES 82
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/boots_and_shoots.sh $<TARGET_FILE:jahlab>
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/boots_and_shoots.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/boots_and_shoots
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.boots_and_shoots PROPERTIES TIMEOUT 60 LABELS "lab")
@@ -25,7 +25,7 @@ set_tests_properties(lab.boots_and_shoots PROPERTIES TIMEOUT 60 LABELS "lab")
 # time by their median over the judged frames. It replaces block C's relabel to `measure` (the row read FAIL alone on a card
 # a desktop browser shared: an excluded row, CODING_RULES §1); a guard again, run where its diff reaches it.
 jah_gpu_row(lab.monitor CLASS engine FRAMES 127
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/monitor.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/monitor
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/monitor.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/monitor
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.monitor PROPERTIES TIMEOUT 60 LABELS "lab")
 
@@ -40,7 +40,7 @@ set_tests_properties(lab.card_set_binds PROPERTIES TIMEOUT 60 LABELS "lab")
 # lab.script_stops (URGENT #50) — A REFUSED SCRIPT LINE STOPS THE SCRIPT, nonzero, naming the line and its reason; a
 # `try` line opts out (script_stops.sh). Three sessions of a frame on photon-contact at 320x180.
 jah_gpu_row(lab.script_stops CLASS engine FRAMES 3
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/script_stops.sh $<TARGET_FILE:jahlab>
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/script_stops.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/script_stops
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.script_stops PROPERTIES TIMEOUT 60 LABELS "lab")
@@ -48,7 +48,7 @@ set_tests_properties(lab.script_stops PROPERTIES TIMEOUT 60 LABELS "lab")
 # lab.envs_build (stage 2) — `jahlab --env-check` per environment, the eight in parallel (envs_build.sh): each builds
 # (its meshes through the bake's stages) under 5 s, and rebuilds AND re-bakes deterministically: the same seed gives
 # the same triangle count, scene hash and bake hash (the bake pool's threaded output), the next seed another hash. CPU.
-add_test(NAME lab.envs_build COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/envs_build.sh $<TARGET_FILE:jahlab>
+add_test(NAME lab.envs_build COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/envs_build.sh $<TARGET_FILE:jahlab>
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.envs_build PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(lab.envs_build)
@@ -61,7 +61,7 @@ find_package(Python3 REQUIRED COMPONENTS Interpreter)
 # equals the engine's AtomDrawStatus at each stop (cut triangles, clusters, occluded objects) and the cut probe's drawn
 # triangles equal that cut, +- 0. On the rig's display; the dolly takes the card's lock (re-entrant under a holder).
 jah_gpu_row(lab.dolly_matches_probe CLASS engine FRAMES 30
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/dolly_matches_probe.sh $<TARGET_FILE:jahlab>
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/dolly_matches_probe.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/dolly_matches_probe
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.dolly_matches_probe PROPERTIES TIMEOUT 60 LABELS "lab")
@@ -70,7 +70,7 @@ set_tests_properties(lab.dolly_matches_probe PROPERTIES TIMEOUT 60 LABELS "lab")
 # path check, then the `move` and `lamp` verbs (stillness_runs.sh says what it asserts: the door's shape, never a bar).
 # 960x540; 51 frames of move (the stop its last), 2 x 20 window frames, the 5-frame bridge, 7 frames of the verbs after.
 jah_gpu_row(lab.stillness_runs CLASS engine FRAMES 104
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/stillness_runs.sh $<TARGET_FILE:jahlab>
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/stillness_runs.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/stillness_runs
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.stillness_runs PROPERTIES TIMEOUT 60 LABELS "lab")
@@ -80,7 +80,7 @@ set_tests_properties(lab.stillness_runs PROPERTIES TIMEOUT 60 LABELS "lab")
 # the held frame's own history count), the hold waits for the stop's one rest decision, and it comes within R3's own
 # bound (stillness_control.sh says the laws). 960x540; a 300-frame window from the teleport.
 jah_gpu_row(lab.stillness_control CLASS engine FRAMES 315
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/stillness_control.sh $<TARGET_FILE:jahlab>
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/stillness_control.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/stillness_control
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.stillness_control PROPERTIES TIMEOUT 60 LABELS "lab")
@@ -89,7 +89,7 @@ set_tests_properties(lab.stillness_control PROPERTIES TIMEOUT 60 LABELS "lab")
 # degrees or the eye moving > 100 m in a frame): on photon-glass a 150 m teleport and a 90 degree snap step the gather's
 # and the reflection's cut counters by one, a 50 m teleport by none (camera_cut.sh). Three door runs of 26 frames.
 jah_gpu_row(lab.camera_cut CLASS engine FRAMES 78
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/camera_cut.sh $<TARGET_FILE:jahlab>
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/camera_cut.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/camera_cut
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.camera_cut PROPERTIES TIMEOUT 60 LABELS "lab")
@@ -98,7 +98,7 @@ set_tests_properties(lab.camera_cut PROPERTIES TIMEOUT 60 LABELS "lab")
 # under `monitor`) the walk crosses a field follow and a card capture, and the graphics queue counts no self-drain on any
 # frame (the fork's JahQueueCounters); the submissions inside gi.plan / cards.tables(.pass) are printed (no_self_drain.sh).
 jah_gpu_row(lab.no_self_drain CLASS engine FRAMES 120
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/no_self_drain.sh $<TARGET_FILE:jahlab>
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/no_self_drain.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/no_self_drain
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.no_self_drain PROPERTIES TIMEOUT 60 LABELS "lab")
@@ -107,7 +107,7 @@ set_tests_properties(lab.no_self_drain PROPERTIES TIMEOUT 60 LABELS "lab")
 # MEETS A MOVED FACE: on photon-court (its sun, no lamp) a straight -z walk under `monitor`; every inner commit computes at
 # most one face's band past its slab, where the light-blind rule computed two (commit_reach.sh).
 jah_gpu_row(lab.commit_reach CLASS engine FRAMES 180
-    COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/commit_reach.sh $<TARGET_FILE:jahlab>
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/commit_reach.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/commit_reach
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.commit_reach PROPERTIES TIMEOUT 60 LABELS "lab")

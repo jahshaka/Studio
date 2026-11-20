@@ -1235,7 +1235,7 @@ set_tests_properties(gi.fog_far_hall PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=off
 # quantum) of the undropped session (hit_list_demand.sh says the law and the base). 960x540; two sessions of 151 frames.
 if(TARGET jahlab)
     jah_gpu_row(gi.hit_list_demand CLASS engine FRAMES 302
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/hit_list_demand.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/hit_list_demand.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/hit_list_demand
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.hit_list_demand PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -1249,7 +1249,7 @@ endif()
 # 125 + 67 frames (LAB END, 2026-10-23).
 if(TARGET jahlab)
     jah_gpu_row(gi.light_is_world CLASS engine FRAMES 192
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/light_is_world.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/light_is_world.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/light_is_world
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.light_is_world PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -1266,7 +1266,7 @@ endif()
 # glass: its chain below). ALL THE CARD'S SLOTS (TOKENS 8): their GPU clocks are read alone.
 if(TARGET jahlab)
     jah_gpu_row(gi.walk_court CLASS engine TOKENS 8 SHIP FRAMES 700
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_court
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_court
                 --court
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_court PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -1278,18 +1278,18 @@ if(TARGET jahlab)
     # start on ONE frame count (the live part's rest + 4, replayed) - L2 read 2,712 px without the first. Frames at
     # photon-7 188268ffc: the rest 828, each walk 903 (the live part + the prime's 7) - the whole row was 2,020.
     jah_gpu_row(gi.walk_glass.live CLASS engine TOKENS 8 FRAMES 910
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
                 --glass-live
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_glass.live PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_glass_live)
     jah_gpu_row(gi.walk_glass.frozen CLASS engine TOKENS 8 FRAMES 903
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
                 --glass-frozen
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_glass.frozen PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_glass_frozen
                          FIXTURES_REQUIRED gi_walk_glass_live DEPENDS gi.walk_glass.live)
     jah_gpu_row(gi.walk_glass.frozen2 CLASS engine TOKENS 8 FRAMES 903
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_glass
                 --glass-frozen2
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_glass.frozen2 PROPERTIES TIMEOUT 60 LABELS "engine"
@@ -1306,24 +1306,24 @@ endif()
 # says it. 960x540; one jahlab session a row; FRAMES as the rows ran them (the rests' measured counts).
 if(TARGET jahlab)
     jah_gpu_row(gi.walk_rough.walk CLASS engine TOKENS 8 FRAMES 350
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
                 walk
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_rough.walk PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_rough_dump)
     jah_gpu_row(gi.walk_rough.k14 CLASS engine TOKENS 8 FRAMES 506
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
                 14 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k14
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_rough.k14 PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
     jah_gpu_row(gi.walk_rough.k28 CLASS engine TOKENS 8 FRAMES 519
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
                 28 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k28
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_rough.k28 PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
     jah_gpu_row(gi.walk_rough.k59 CLASS engine TOKENS 8 FRAMES 550
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
                 59 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k59
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_rough.k59 PROPERTIES TIMEOUT 60 LABELS "engine"
@@ -1336,7 +1336,7 @@ endif()
 # asserted. 960x540; three sessions.
 if(TARGET jahlab)
     jah_gpu_row(gi.walk_area CLASS engine TOKENS 8 FRAMES 1342
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_area --area
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_area --area
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_area PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
@@ -1347,11 +1347,11 @@ endif()
 # code (R12; declared red - rough_spec.sh says why).
 if(TARGET jahlab)
     jah_gpu_row(gi.rough_lobe_quadrature CLASS engine TOKENS 8 FRAMES 270
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_spec.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/rough_quad --quadrature
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_spec.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/rough_quad --quadrature
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.rough_lobe_quadrature PROPERTIES TIMEOUT 60 LABELS "engine")
     jah_gpu_row(gi.rough_reference CLASS engine TOKENS 8 FRAMES 4560
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rough_spec.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/rough_ref --reference
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_spec.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/rough_ref --reference
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.rough_reference PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
@@ -1361,7 +1361,7 @@ endif()
 # tier's gather shape asserted, the gather's GPU rows over a 30-frame walk and its VRAM printed. 960x540; two sessions.
 if(TARGET jahlab)
     jah_gpu_row(gi.low_gather CLASS engine TOKENS 8 FRAMES 1650
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/low_gather.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/low_gather
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/low_gather.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/low_gather
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.low_gather PROPERTIES TIMEOUT 60 LABELS "engine")
 endif()
@@ -1380,12 +1380,12 @@ endif()
 # gather held whole at both shots. rest_oracle.sh says the law. 960x540; one jahlab session each: 902 and 962 frames.
 if(TARGET jahlab)
     jah_gpu_row(gi.rest_oracle_lamp CLASS engine FRAMES 902
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rest_oracle.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rest_oracle.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/rest_oracle_lamp lamp
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.rest_oracle_lamp PROPERTIES TIMEOUT 60 LABELS "engine")
     jah_gpu_row(gi.rest_oracle_mover CLASS engine FRAMES 962
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/rest_oracle.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rest_oracle.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/rest_oracle_mover mover
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.rest_oracle_mover PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -1397,7 +1397,7 @@ endif()
 # the arm). fast_update.sh says the law and derives our N' from Lumen's. One jahlab session: 720 frames.
 if(TARGET jahlab)
     jah_gpu_row(gi.fast_update CLASS engine FRAMES 720
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/fast_update.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/fast_update.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/fast_update
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.fast_update PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -1421,12 +1421,12 @@ endif()
 #                               crossing, its gather.classOff twin and its gi.fieldEnterInline twin; 3 x 483 frames.
 if(TARGET jahlab)
     jah_gpu_row(gi.hold_after_stop CLASS engine FRAMES 817
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/hold_after_stop.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/hold_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/hold_after_stop room
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.hold_after_stop PROPERTIES TIMEOUT 60 LABELS "engine")
     jah_gpu_row(gi.hold_after_stop.court CLASS engine FRAMES 1449
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/hold_after_stop.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/hold_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/hold_after_stop_court court
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.hold_after_stop.court PROPERTIES TIMEOUT 60 LABELS "engine")

@@ -241,20 +241,20 @@ if(TARGET jahlab)
     # rtreflect.walk_world SPLIT BY PROOF too (HARNESS-3 (f)): whole it ran 47.85 s, then 60.07 s (TIMEOUT) on a loaded box
     # at photon-7 188268ffc - the same chain as the Both arm's below.
     jah_gpu_row(rtreflect.walk_world.frozen CLASS engine TOKENS 8 FRAMES 319
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
                 raysflat frozen
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.walk_world.frozen PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_SETUP rtreflect_walk_world_frozen)
     jah_gpu_row(rtreflect.walk_world.worldA CLASS engine TOKENS 8 FRAMES 312
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
                 raysflat worldA
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.walk_world.worldA PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_SETUP rtreflect_walk_world_worldA
                          FIXTURES_REQUIRED rtreflect_walk_world_frozen DEPENDS rtreflect.walk_world.frozen)
     jah_gpu_row(rtreflect.walk_world.worldB CLASS engine TOKENS 8 FRAMES 312
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world
                 raysflat worldB
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.walk_world.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
@@ -265,20 +265,20 @@ if(TARGET jahlab)
     # -> .worldB (seed 7919, then the noise map and the mirror's M1).
     # (each part by name: a loop's variable sends the selector to the whole directory - HARNESS-2's rule)
     jah_gpu_row(rtreflect.walk_world_both.frozen CLASS engine TOKENS 8 FRAMES 906
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both frozen
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.walk_world_both.frozen PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_SETUP rtreflect_walk_world_both_frozen)
     jah_gpu_row(rtreflect.walk_world_both.worldA CLASS engine TOKENS 8 FRAMES 899
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both worldA
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.walk_world_both.worldA PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_SETUP rtreflect_walk_world_both_worldA
                          FIXTURES_REQUIRED rtreflect_walk_world_both_frozen DEPENDS rtreflect.walk_world_both.frozen)
     jah_gpu_row(rtreflect.walk_world_both.worldB CLASS engine TOKENS 8 FRAMES 869
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/walk_world.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_world_both both worldB
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.walk_world_both.worldB PROPERTIES TIMEOUT 60 LABELS "engine"
@@ -297,27 +297,27 @@ if(TARGET jahlab)
     # runs .walk, .k28, .clean. (URGENT #133: no DEPENDS between the parts - source.testing_rules R6.)
     # (each part by name: a loop's variable sends the selector to the whole directory - HARNESS-2's rule)
     jah_gpu_row(rtreflect.lag_law.walk CLASS engine TOKENS 8 FRAMES 715
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law walk
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law walk
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.lag_law.walk PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_SETUP rtreflect_lag_law_walk)
     jah_gpu_row(rtreflect.lag_law.k14 CLASS engine TOKENS 8 FRAMES 1840
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law 14
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law 14
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.lag_law.k14 PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED rtreflect_lag_law_walk)
     jah_gpu_row(rtreflect.lag_law.k28 CLASS engine TOKENS 8 FRAMES 1840
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law 28
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law 28
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.lag_law.k28 PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED rtreflect_lag_law_walk)
     jah_gpu_row(rtreflect.lag_law.k59 CLASS engine TOKENS 8 FRAMES 1840
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law 59
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law 59
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.lag_law.k59 PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED rtreflect_lag_law_walk)
     add_test(NAME rtreflect.lag_law.clean
-             COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh - ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law clean)
+             COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/lag_law.sh - ${CMAKE_CURRENT_BINARY_DIR}/work/lag_law clean)
     set_tests_properties(rtreflect.lag_law.clean PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_CLEANUP rtreflect_lag_law_walk)
     jah_no_display(rtreflect.lag_law.clean)
@@ -340,24 +340,24 @@ if(TARGET jahlab)
     # (b'), (c), (g); 231 + 1,000 + 1 frames) and .path ((d), the walk and the teleport at equal placements at an equal
     # rest index before the hold - 450 frames each, per-index determinism; 231 + 2 x 450 + the bridge).
     jah_gpu_row(rtreflect.still_after_stop.hold CLASS engine FRAMES 1232
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop_hold hold
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     jah_gpu_row(rtreflect.still_after_stop.path CLASS engine FRAMES 1136
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/still_after_stop.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/still_after_stop_path path
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.still_after_stop.hold rtreflect.still_after_stop.path PROPERTIES TIMEOUT 60 LABELS "engine")
     # rtreflect.lamp_step_held SPLIT BY PROOF (HARNESS-3 (f): two 1,200-frame door windows - lamp_step_held.sh says the
     # sizing): .ref (the reference session) -> .step (the step session + (e)).
     jah_gpu_row(rtreflect.lamp_step_held.ref CLASS engine FRAMES 1222
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lamp_step_held.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/lamp_step_held.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/lamp_step_held ref
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.lamp_step_held.ref PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_SETUP rtreflect_lamp_step_held_ref)
     jah_gpu_row(rtreflect.lamp_step_held.step CLASS engine FRAMES 1437
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/lamp_step_held.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/lamp_step_held.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/lamp_step_held step
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.lamp_step_held.step PROPERTIES TIMEOUT 60 LABELS "engine"
@@ -368,7 +368,7 @@ if(TARGET jahlab)
     # still-converging texels at most a quarter of the BRDF-only's; (c) NEE's hold inside the window with no capped
     # texel, the control's none (nee_firefly.sh). 480x270; two jahlab sessions - about 1,500 frames.
     jah_gpu_row(rtreflect.nee_firefly CLASS engine FRAMES 1500
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/nee_firefly.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/nee_firefly.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/nee_firefly
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.nee_firefly PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -381,7 +381,7 @@ if(TARGET jahlab)
     # rays.originPoint 0 red on the chained floor at 2.4 m (contact.sh). 1920x1080; two jahlab sessions, eleven
     # shots of 50 frames - 550 frames.
     jah_gpu_row(rtreflect.contact CLASS engine FRAMES 550
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/contact.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/contact.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/contact
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.contact PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -391,7 +391,7 @@ if(TARGET jahlab)
     # between neighbouring pixels away from the ray picture's edges; the base's fixed coin did, along a seam
     # (mirror_blend.sh). 960x540; one jahlab session, 108 frames.
     jah_gpu_row(rtreflect.mirror_blend CLASS engine FRAMES 108
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/mirror_blend.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/mirror_blend.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/mirror_blend
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.mirror_blend PROPERTIES TIMEOUT 60 LABELS "engine")
