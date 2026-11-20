@@ -64,6 +64,7 @@ LAB=${1:?jahlab}; WD=${2:?work dir}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 rm -rf "$WD"; mkdir -p "$WD"
 cat > "$WD/ramp.lab" <<S
+routes gather reflection store
 envcam 2
 frames 50
 shot hybrid-2p4
@@ -73,6 +74,7 @@ shot hybrid-1m
 quit
 S
 cat > "$WD/chained.lab" <<S
+routes gather reflection store
 envcam 1
 frames 50
 shot chained-2p4

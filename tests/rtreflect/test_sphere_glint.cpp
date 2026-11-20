@@ -119,6 +119,9 @@ static Glint glintAt(Engine *e, View *view, float radius)
     fx.ssr = 0;
     fx.hdrReadback = true;
     view->setPostFx(fx);
+    // THE ROUTE (PHOTON-7-9A, URGENT #177): the glint is the forward lobe's alone - no GI, no SSR row: the chain runs no
+    // gather, no screen integrate and no ray reflection, and the scene builds no product. Asserted on the first frame.
+    enginetest::declareRoutes(view, s, enginetest::Routes(), "rtreflect.sphere_glint's view");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.0f, 2.0f), Vec3(0.0f, 0.0f, 2.0f / 3.0f));
     enginetest::frames(e, 12);
     ImageF img;

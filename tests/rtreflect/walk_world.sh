@@ -50,7 +50,9 @@ session() {   # name (the script is $WD/<name>.lab)
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($1) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR|stillness:' "$WD/$1.log" | head -5; exit 1; }
 }
 S=-1.2,1.8,3.4; T=0,0.5,-3; E=1.2,1.8,1.0
-printf "$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
+# THE ROUTE (URGENT #177): every session declares it, judged on its first frame; the 6-frame prime the chain only (a
+# declared product - the store - has until the 16th frame: a shorter session would end with it pending), the walks the store
+printf 'routes gather reflection\n'"$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
 case "$PART" in all) WALKS="frozen worldA worldB" ;; *) WALKS=$PART ;; esac
 case "$PART" in all|frozen) session prime ;; esac
 # (the parts are rows with their own homes: they boot on ONE cache's bytes - AB G10, a grown cache draws other variants;
@@ -70,7 +72,7 @@ fi
 for walk in $WALKS; do
     f=" freeze=world"; [ $walk = frozen ] && f=" freeze"
     seed=0; [ $walk = worldB ] && seed=7919
-    printf "$ARMS"'arm reflect.seedOffset %d\ncamera %s,%s\nrest 1200 held\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-%s%s out=glass-%s\nquit\n' \
+    printf 'routes gather reflection store\n'"$ARMS"'arm reflect.seedOffset %d\ncamera %s,%s\nrest 1200 held\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-%s%s out=glass-%s\nquit\n' \
         "$seed" "$S" "$T" "$S" "$T" "$E" "$T" "$walk" "$f" "$walk" > "$WD/glass-$walk.lab"
     session glass-$walk
 done

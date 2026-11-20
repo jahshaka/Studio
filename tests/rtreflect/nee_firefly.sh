@@ -24,7 +24,7 @@ POSE=0,1.6,2.4,0,0,-0.5
 WIN=520
 for run in on off; do
     v=1; [ "$run" = off ] && v=0
-    printf 'arm reflect.nee %s\ncamera %s\nframes 230\nstillness teleport:%s/hold:1 %s out=nee-%s\nstatus\nquit\n' \
+    printf 'routes gather reflection\narm reflect.nee %s\ncamera %s\nframes 230\nstillness teleport:%s/hold:1 %s out=nee-%s\nstatus\nquit\n' \
         "$v" "$POSE" "$POSE" "$WIN" "$run" > "$WD/$run.lab"
     "$LAB" --headless --no-stdin --size 480x270 --data-root "$WD/data" --env photon-firefly --script "$WD/$run.lab" \
         > "$WD/$run.log" 2>&1

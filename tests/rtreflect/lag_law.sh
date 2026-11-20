@@ -52,9 +52,10 @@ session() {   # name (the script is $WD/<name>.lab)
 S=-1.2,1.8,3.4; T=0,0.5,-3; E=1.2,1.8,1.0
 ARMS='arm reflect.flatHits 1\n'
 if [ "$PART" = walk ]; then
-    printf "$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
+    # THE ROUTE (URGENT #177): each session declares it; the 6-frame prime the chain only (the store has until frame 16)
+    printf 'routes gather reflection\n'"$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
     session prime
-    printf "$ARMS"'camera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-world freeze=world out=glass-world\nquit\n' \
+    printf 'routes gather reflection store\n'"$ARMS"'camera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-world freeze=world out=glass-world\nquit\n' \
         "$S" "$T" "$S" "$T" "$E" "$T" > "$WD/walk.lab"
     session walk
     rc=0
@@ -73,7 +74,7 @@ if [ -n "${JAHSHAKA_SHADER_CACHE_DIR:-}" ]; then
     rm -rf "$JAHSHAKA_SHADER_CACHE_DIR"; cp -a "$WD/cache.snap" "$JAHSHAKA_SHADER_CACHE_DIR"
 fi
 {
-    printf "$ARMS"'camera %s,%s\nframes 640\narm gi.freeze 2\n' "$S" "$T"
+    printf 'routes gather reflection store\n'"$ARMS"'camera %s,%s\nframes 640\narm gi.freeze 2\n' "$S" "$T"
     for k in $PART $((PART + 1)); do
         python3 -I -c "
 s=(-1.2,1.8,3.4); e=(1.2,1.8,1.0); k=$k/60.0

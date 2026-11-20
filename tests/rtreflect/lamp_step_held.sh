@@ -50,9 +50,9 @@ POSE=1.5,1.8,3.4,1.5,0.5,-3
 WIN=1200
 # the step and its reference, each through the door at the stop's pose (a teleport to the pose it stands at: no move;
 # the reference's 20 frames give the gather the history the door's mask counts)
-printf 'camera %s\nrest 1200\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:1 %s out=estep\nshot e-step\nquit\n' \
+printf 'routes gather reflection store\ncamera %s\nrest 1200\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:1 %s out=estep\nshot e-step\nquit\n' \
     "$POSE" "$POSE" "$WIN" > "$WD/step.lab"
-printf 'camera %s\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:20 %s out=eref\nshot e-ref\nquit\n' \
+printf 'routes gather reflection store\ncamera %s\nlamp lamp intensity 8.16\nstillness teleport:%s/hold:20 %s out=eref\nshot e-ref\nquit\n' \
     "$POSE" "$POSE" "$WIN" > "$WD/ref.lab"
 for run in $PART; do
     "$LAB" --headless --no-stdin --size 960x540 --data-root "$WD/data" --env photon-glass --script "$WD/$run.lab" \

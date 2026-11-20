@@ -90,11 +90,13 @@ LAGK=17,24,32,48,64,96   # (a2)'s frames after the stop: from the rest's hand-ov
 WINP=450
 if [ "$PART" = path ]; then
 cat > "$WD/run.lab" <<S
+routes gather reflection store
 stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WINP path trail=1 out=still
 quit
 S
 else
 cat > "$WD/run.lab" <<S
+routes gather reflection store
 stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WIN trail=1 dump=still dumpwin=$LAGK,$WIN out=still
 status
 quit

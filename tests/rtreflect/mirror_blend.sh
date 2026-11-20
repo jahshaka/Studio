@@ -35,6 +35,7 @@ LAB=${1:?jahlab}; WD=${2:?work dir}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 rm -rf "$WD"; mkdir -p "$WD"
 {
+    echo 'routes gather reflection store'   # THE ROUTE (URGENT #177): judged on the first frame, the store by the 16th
     echo 'camera 1.5,3.0,1.0,0,0.8,-4'
     echo 'frames 60'
     echo 'arm gi.freeze 2'

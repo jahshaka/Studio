@@ -37,7 +37,7 @@ if(JAHSHAKA_ASAN)
     jah_gpu_row(gi.rt_reflect_asan CLASS engine COMMAND test_rt_reflect_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(gi.rt_reflect_asan PROPERTIES
-                         TIMEOUT 60 LABELS "engine"
+                         TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77
                          ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(gi.rt_reflect_asan PROPERTIES JAHSHAKA_TEST_FRAMES 939)
 endif()
