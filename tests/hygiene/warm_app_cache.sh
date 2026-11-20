@@ -170,6 +170,19 @@ out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${
     no "landed promotion: '$out' rc $rc"
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $key" ] && ok "...and the next call reads warm" || no "after the landing: '$out' rc $rc"
+# THE DISPLAY IS THE TREE's RIG (WORKFLOW-STREAMLINE-1 5.8: one way to get a display): with no DISPLAY a boot runs on
+# `rig.sh up --env` and the rig it started comes down at the end. Hermetic: a tree of links to this one's scripts and tests (its
+# rig-xvfb.pid there, never in the real tree; no lane's live rig reused) and a FAKE X server (a script named Xvfb on PATH, its
+# files in a private X dir). (red on the old script: it started its own Xvfb, a real one, recorded by `$!` of its wrapper)
+mkdir -p "$T/rt/scripts" "$T/xr" "$T/xbin"; ln -s "$SRC"/scripts/* "$T/rt/scripts/"; ln -s "$SRC/tests" "$T/rt/tests"
+printf '%s\n' '#!/bin/bash' 'n=${1#:}; d=${JAH_RIG_XDIR:?}' 'printf "%10d\n" $$ > "$d/.X$n-lock"; mkdir -p "$d/.X11-unix"; : > "$d/.X11-unix/X$n"' \
+    'trap '"'"'rm -f "$d/.X$n-lock" "$d/.X11-unix/X$n"; exit 0'"'"' TERM' 'for i in $(seq 300); do sleep 0.2; done' > "$T/xbin/Xvfb"; chmod +x "$T/xbin/Xvfb"
+rm -f "$B/tests/.shadercache.driver-key"
+out=$(env -u DISPLAY PATH="$T/xbin:$PATH" JAH_RIG_XDIR="$T/xr" JAH_GPU_LOCK_HELD=1 "$T/rt/scripts/warm-app-cache.sh" "$BUILD" --tests-dir "$B/tests" "${F[@]}" --only app-on); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q 'booting the app exe.s driver cache (app-on): .* on :60 ' && [ -e "$B/tests/.shadercache.driver-key" ] \
+    && [ ! -e "$T/xr/.X60-lock" ] && [ ! -e "$T/rt/rig-xvfb.pid" ] \
+    && ok "no DISPLAY: the boot ran on the tree's rig (rig.sh up --env, :60), stamped, and the rig it started is down (no pid file, no server)" \
+    || no "the boot on the rig: rc $rc '$(echo "$out" | head -4)' pid file $(cat "$T/rt/rig-xvfb.pid" 2>&1)"
 awk '{ n[$1] = 1 } END { exit (n["app-off"] && n["app-on"] && n["engine-off"] && n["engine-on"]) ? 0 : 1 }' "$B/tests/.warm-walls" &&
     ok "each boot's wall recorded (.warm-walls: the next call's estimate)" || no "the walls: $(cat "$B/tests/.warm-walls" 2>&1)"
 # THE BUDGET (#106): a boot that no longer fits the call's budget is not started - exit 75, the boots left named

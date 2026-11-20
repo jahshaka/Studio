@@ -435,19 +435,15 @@ LOGS="${JAH_WARM_LOG_DIR:-$WLOGS/$(date +%Y%m%dT%H%M%S)-$$-$(echo "$RUN" | tr ' 
 mkdir -p "$LOGS"
 ls -1dt "$WLOGS"/*/ 2>/dev/null | tail -n +41 | xargs -r rm -rf
 echo "warm-app-cache: this call's logs: $LOGS"
-XPID=""
-cleanup() { [ -n "$XPID" ] && kill "$XPID" 2>/dev/null; }
+# THE DISPLAY IS THE TREE's RIG (WORKFLOW-STREAMLINE-1 5.8: one way to get a display): with no DISPLAY given, `rig.sh up --env`
+# (its Xvfb by its real pid, a rig already up in the tree reused) and `rig.sh down` at the exit only when this call started it
+# (the Xvfb this script once started itself was recorded as `$!` of its wrapper - the class GATE_AND_RIG names - and killed by it)
+RIG_STARTED=0
+cleanup() { [ "$RIG_STARTED" = 1 ] && bash "$SRC/scripts/rig.sh" down > /dev/null 2>&1; }
 trap cleanup EXIT
 if [ -z "${DISPLAY:-}" ]; then
-    for n in $(seq 60 99); do
-        [ -e "/tmp/.X$n-lock" ] || [ -e "/tmp/.X11-unix/X$n" ] && continue
-        Xvfb ":$n" -screen 0 1920x1080x24 -nolisten tcp > /dev/null 2>&1 &
-        XPID=$!
-        for _ in $(seq 50); do [ -e "/tmp/.X11-unix/X$n" ] && break; sleep 0.1; done
-        if [ -e "/tmp/.X11-unix/X$n" ] && kill -0 "$XPID" 2>/dev/null; then export DISPLAY=":$n"; break; fi
-        kill "$XPID" 2>/dev/null; XPID=""
-    done
-    [ -n "${DISPLAY:-}" ] || { echo "warm-app-cache: no free display in 60-99" >&2; exit 2; }
+    rigenv=$(bash "$SRC/scripts/rig.sh" up --env 2> /dev/null | grep '^DISPLAY=') || { echo "warm-app-cache: no display (scripts/rig.sh up failed)" >&2; exit 2; }
+    eval "$rigenv"; export DISPLAY
 fi
 # A BOOT's ESTIMATE: its last measured wall on this tree, the card's wait apart (<tests-dir>/.warm-walls), else a cold
 # tree's: the -off boots 382 s / 332 s (#103, the driver cache off); measured on HARNESS-1's fresh tree (2026-10-29, a
