@@ -66,10 +66,20 @@ For more information see the LICENSE file
 // exports go through src/export/. A dead unchecked truncate on a scene file is
 // a loaded gun; deleting beats fixing.
 
+namespace {
+/// The guids getSceneObject is leaving out (setOmittedNodes), for the walk's static writeSceneNode: set for the
+/// length of one getSceneObject on this thread only, null otherwise (a library blob or a fragment omits nothing).
+thread_local const QSet<QString> *tOmitted = nullptr;
+}   // namespace
+
 QByteArray SceneWriter::getSceneObject(QString projectPath,
                                        iris::ScenePtr scene,
                                        EditorData *editorData)
 {
+    struct OmitScope {
+        explicit OmitScope(const QSet<QString> *set) { tOmitted = (set && !set->isEmpty()) ? set : nullptr; }
+        ~OmitScope() { tOmitted = nullptr; }
+    } omitScope(&mOmitted);
     dir = projectPath;
     QJsonObject projectObj;
     projectObj["version"] = Constants::CONTENT_VERSION;
@@ -584,6 +594,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     for (int i = 0; i < kids; ++i) {
         iris::SceneNode *child = sceneNode->childAt(i);
         if (!child) continue;
+        if (tOmitted && tOmitted->contains(child->getGUID())) continue;   // spawned during Play (setOmittedNodes)
         QJsonObject childNodeObj;
         writeSceneNode(childNodeObj, child->sharedFromThis());
         childrenArray.append(childNodeObj);

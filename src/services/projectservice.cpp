@@ -31,6 +31,8 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "services/loadtimeline.h"
 #include "services/jahlog.h"
+#include "player/editpose.h"
+#include "player/playback.h"
 
 #include <QElapsedTimer>
 #include <QFutureWatcher>
@@ -485,6 +487,21 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
     {
         LoadTimeline::Accumulate row(QStringLiteral("save:serialize"));
         SceneWriter writer;
+        // A SAVE DURING PLAY WRITES THE EDITED SCENE (STUDIO-HYGIENE-1 audit, player/editpose.h): the
+        // play-start snapshot is swapped in for the walk and the play pose put back on EVERY exit of this
+        // block (the guard), with no frame between — the mirror reads only the dirty marks at its next sync
+        // and finds the play pose it had. A node Play spawned is left out. No command is pushed: the saved
+        // state (UndoService) is the edit pose this writes, which is what Play's stop restores.
+        QSet<QString> spawned;
+        QVector<editpose::Played<iris::SceneNodePtr, PlayBackNodeTransform>> played;
+        struct PutBack {
+            QVector<editpose::Played<iris::SceneNodePtr, PlayBackNodeTransform>> &played;
+            ~PutBack() { editpose::putBack(played); }
+        } putBack{ played };
+        if (const QMap<QString, PlayBackNodeTransform> *pose = viewport ? viewport->playStartPose() : nullptr) {
+            played = editpose::swapIn(scene->nodes.values(), *pose, &spawned);
+            writer.setOmittedNodes(spawned);
+        }
         blob = writer.getSceneObject(projectFolderFor(guid), scene,
                                      hasView ? viewport->getEditorData() : nullptr);
     }

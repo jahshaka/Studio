@@ -74,6 +74,9 @@ class PlayBack
 	QMap<QString, PlayBackNodeTransform> nodeTransforms;
 public:
 	bool isScenePlaying() { return _isPlaying; }
+	/// Every node's local transform when Play started, by guid (the edit pose a save during Play writes:
+	/// player/editpose.h). Empty when not playing.
+	const QMap<QString, PlayBackNodeTransform> &playStartPose() const { return nodeTransforms; }
 	bool isScenePaused() { return _isPaused; }
 
 	void setEditorViewport(IEditorViewport* viewport) { editorViewport = viewport; }

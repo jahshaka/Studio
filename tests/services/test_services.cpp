@@ -30,6 +30,12 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/uistep.h"
 #include "services/undoservice.h"
+#include "player/editpose.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
+
+#include <QMap>
+#include <memory>
 
 static int failures = 0;
 #define CHECK(cond, name) do { \
@@ -208,12 +214,62 @@ void testUiStep()
 
 } // namespace
 
+// THE EDIT POSE A SAVE DURING PLAY WRITES (player/editpose.h, STUDIO-HYGIENE-1 audit): the swap over the
+// play-start snapshot, on stand-in nodes — exact values in, exact values back.
+struct PoseNode
+{
+    QString guid;
+    iris::Vec3 pos, scale{ 1, 1, 1 };
+    iris::Quat rot;
+    int writes = 0;
+    iris::Vec3 getLocalPos() const { return pos; }
+    iris::Quat getLocalRot() const { return rot; }
+    iris::Vec3 getLocalScale() const { return scale; }
+    void setLocalPos(const iris::Vec3 &v) { pos = v; ++writes; }
+    void setLocalRot(const iris::Quat &q) { rot = q; ++writes; }
+    void setLocalScale(const iris::Vec3 &v) { scale = v; ++writes; }
+};
+struct PoseEntry { iris::Vec3 pos, scale; iris::Quat rot; };
+
+void testEditPose()
+{
+    auto moved = std::make_shared<PoseNode>(), still = std::make_shared<PoseNode>(),
+         spawned = std::make_shared<PoseNode>();
+    moved->guid = "moved"; still->guid = "still"; spawned->guid = "spawned";
+    moved->pos = iris::Vec3(1, 2, 3);
+    still->pos = iris::Vec3(7, 0, 0);
+    QMap<QString, PoseEntry> snapshot;   // what Play found
+    snapshot.insert("moved", { iris::Vec3(1, 2, 3), iris::Vec3(1, 1, 1), iris::Quat() });
+    snapshot.insert("still", { iris::Vec3(7, 0, 0), iris::Vec3(1, 1, 1), iris::Quat() });
+    // ...and what the simulation did: the body fell and turned.
+    moved->pos = iris::Vec3(1, -40.5f, 3);
+    moved->rot = iris::Quat(0.7071068f, 0.7071068f, 0, 0);
+    const iris::Vec3 playPos = moved->pos;
+    const iris::Quat playRot = moved->rot;
+
+    QSet<QString> spawnedGuids;
+    const auto played = editpose::swapIn(QList<std::shared_ptr<PoseNode>>{ moved, still, spawned }, snapshot,
+                                         &spawnedGuids);
+    CHECK(moved->pos == iris::Vec3(1, 2, 3) && moved->rot == iris::Quat(),
+          "editpose: a node Play moved carries its play-start pose for the walk");
+    CHECK(still->writes == 0, "editpose: a node Play never moved is not written (a static node stays static)");
+    CHECK(played.size() == 1, "editpose: only the moved node is recorded to put back");
+    CHECK(spawnedGuids == QSet<QString>{ "spawned" } && spawned->writes == 0,
+          "editpose: a node with no snapshot entry was spawned in Play - named, left untouched");
+    editpose::putBack(played);
+    CHECK(moved->pos == playPos && moved->rot == playRot && moved->scale == iris::Vec3(1, 1, 1),
+          "editpose: the play pose comes back exactly");
+    CHECK(editpose::swapIn(QList<std::shared_ptr<PoseNode>>{}, snapshot, nullptr).isEmpty(),
+          "editpose: no nodes, nothing swapped");
+}
+
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
     testUndoService();
     testSelectionService();
     testUiStep();
+    testEditPose();
     std::printf(failures ? "FAILURES: %d\n" : "ALL PASS\n", failures);
     return failures ? 1 : 0;
 }

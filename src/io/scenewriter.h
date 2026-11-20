@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSet>
 #include <QJsonDocument>
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/animation/keyframeanimation.h"
@@ -38,6 +39,9 @@ public:
     QByteArray getSceneObject(QString projectPath,
                               iris::ScenePtr scene,
                               EditorData *editorData);
+    /// Nodes (by guid) getSceneObject leaves out, with their subtrees: the nodes a Play spawned, during a save
+    /// made while playing (STUDIO-HYGIENE-1, player/editpose.h — the play-start set is the document).
+    void setOmittedNodes(QSet<QString> guids) { mOmitted = std::move(guids); }
 
 public:
     void writeScene(QJsonObject& projectObj, iris::ScenePtr scene);
@@ -75,6 +79,9 @@ public:
 	static QString getLightNodeTypeName(iris::LightType lightType);
 	static QString getKeyTangentTypeName(iris::TangentType tangentType);
 	static QString getKeyHandleModeName(iris::HandleMode handleMode);
+
+private:
+    QSet<QString> mOmitted;
 };
 
 #endif // SCENEWRITER_H

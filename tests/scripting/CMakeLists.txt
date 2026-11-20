@@ -226,6 +226,9 @@ set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 # physics stepper lives in the engine viewport's syncFrame and the headless
 # stand-in's startPhysicsSimulation is an empty override.
 jah_pool_arm(editor physics ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_physics.js 7)
+# scripting.e2e.save_during_play — a save during Play writes the EDITED scene (STUDIO-HYGIENE-1 audit): a body
+# stepped 60 frames, saved mid-fall, reopened at its pre-play pose exactly (e2e_save_during_play.js).
+jah_pool_arm(editor save_during_play ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_save_during_play.js 61)
 
 # Video assets (ASSET_MEDIA_SPEC §1): importFile(mp4) → Video row + frame-grab
 # thumbnail + probed metadata block. Qt Multimedia's ffmpeg backend decodes
