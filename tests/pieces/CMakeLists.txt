@@ -125,7 +125,7 @@ target_link_libraries(test_piece_mirror PRIVATE IrisGL JahshakaEngine Qt6::Gui Q
 add_dependencies(test_piece_mirror JahshakaEngineMedia)
 jah_gpu_row(pieces.mirror SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_piece_mirror
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
-set_tests_properties(pieces.mirror PROPERTIES JAHSHAKA_TEST_FRAMES 127)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
+set_tests_properties(pieces.mirror PROPERTIES JAHSHAKA_TEST_FRAMES 128)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4); +1 the bare-sync case (ONE-FRAME-1 stage 0)
 set_tests_properties(pieces.mirror PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "pieces")
 

@@ -15,6 +15,9 @@
 //     with one sync each, then bare syncs, advance exactly K/60 s; a frame of two steps synced twice advances 2/60 s.
 //  3. FOCUS SMOOTHING: a tracking camera with smoothFocus eases once per step-bearing sync; a bare sync leaves its
 //     focus distance where it was (the base eased it again).
+//  4. A NEW SOURCE: the cursor re-primes on the incoming document's clock (its past steps are not the mirror's) and
+//     the shader clock restarts at 0 ("went live" is per source, the lead's ruling): the same document opened twice
+//     reads the same shader seconds after the same steps. RED on the base: the clock carried the session's history.
 // NULL render system, offscreen platform: no display, no card.
 #include <QGuiApplication>
 #include <cmath>
@@ -137,6 +140,60 @@ int main(int argc, char **argv)
         mirror.sync();
         std::printf("      focus after two bare syncs: %.6f\n", double(camera->focusDistance));
         check(camera->focusDistance == eased, "a bare sync leaves the eased focus distance where it was");
+    }
+
+    // ---- 4. A NEW SOURCE: the cursor re-primes on ITS clock, and the shader clock restarts at 0 (per document) ----
+    auto scrollingDoc = [&](const char *name) {
+        auto d = iris::Scene::create();
+        auto n = iris::MeshNode::create();
+        n->setName(name);
+        n->setMesh(testmesh::load(":assets/models/cube.obj"));
+        auto m = iris::PbrMaterial::create();
+        m->textureVelocityU = 0.5f;
+        n->setMaterial(m);
+        d->getRootNode()->addChild(n);
+        return d;
+    };
+    {
+        SceneMirror mirror(target);
+        auto docA = scrollingDoc("a");
+        mirror.setSource(docA);
+        mirror.sync();
+        for (int i = 0; i < 40; ++i) docA->advance(float(kStep));
+        mirror.sync();
+        auto docB = scrollingDoc("b");
+        for (int i = 0; i < 5; ++i) docB->advance(float(kStep));   // B's past: 5 steps against A's 40
+        mirror.setSource(docB);
+        mirror.sync();
+        const double atBind = mirror.shaderSeconds();
+        std::printf("      after A's 40 steps, binding B (5 steps of its own): the shader clock reads %.6f steps\n", atBind / kStep);
+        check(atBind == 0.0, "a new source restarts the shader clock at 0, and B's past steps are not the mirror's");
+        docB->advance(float(kStep));
+        mirror.sync();
+        const double one = mirror.shaderSeconds() / kStep;
+        std::printf("      one step of B: %.6f steps\n", one);
+        check(std::fabs(one - 1.0) < 1e-9, "B's next step advances the shader clock 1/60 s");
+    }
+    {
+        // THE SAME DOCUMENT OPENED TWICE reads the same shader seconds after the same steps (no session history)
+        double t[2] = { 0.0, 0.0 };
+        auto doc2 = scrollingDoc("twice");
+        for (int run = 0; run < 2; ++run) {
+            SceneMirror mirror(target);
+            if (run == 1) {   // the second open follows unrelated history on the same mirror
+                auto other = scrollingDoc("other");
+                mirror.setSource(other);
+                mirror.sync();
+                for (int i = 0; i < 25; ++i) { other->advance(float(kStep)); mirror.sync(); }
+            }
+            mirror.setSource(doc2);
+            mirror.sync();
+            for (int i = 0; i < 12; ++i) { doc2->advance(float(kStep)); mirror.sync(); }
+            t[run] = mirror.shaderSeconds();
+        }
+        std::printf("      the same document opened twice, 12 steps each: %.6f / %.6f s\n", t[0], t[1]);
+        check(t[0] == t[1] && std::fabs(t[0] - 12.0 * kStep) < 1e-9,
+              "the same document opened twice reads equal shader seconds after equal steps");
     }
 
     std::printf("%s\n", gFailures == 0 ? "mirror.shader_clock_steps: all checks passed" : "mirror.shader_clock_steps: FAILURES");
