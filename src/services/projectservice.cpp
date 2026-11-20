@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "services/projectservice.h"
 
 #include <QBuffer>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
@@ -50,6 +51,7 @@ ProjectService::ProjectService(Database *db,
 
 ProjectService::~ProjectService()
 {
+    drainFolderDeletes();   // the --script exit never reaches the shutdown order's drain
     // The shell drains at shutdown (ShellLifecycle::stopBackgroundWork), while the
     // database is still open; anything still here is only waited for, never
     // written — the rows it would write may already be gone.
@@ -313,13 +315,46 @@ void ProjectService::pointAtProject(const QString &guid, const QString &name)
     project->setProjectGuid(guid);
 }
 
-bool ProjectService::removeProject(const QString &guid)
+namespace {
+/// The prefix of a project folder renamed aside for its removal, beside the
+/// guid folders of the same Projects directory (a dot: no project's guid).
+const QString kAsidePrefix = QStringLiteral(".removing-");
+}   // namespace
+
+bool ProjectService::removeProject(const QString &guid, QString *whyOut)
 {
-    // THE PROJECT'S OWN FOLDER, wherever it is (fix round F1): this rebuilt the
-    // path from the default root, so deleting a project created at a chosen
-    // location dropped its rows and left the real folder on disk forever.
-    QDir dirToRemove(projectFolderFor(guid));
-    if (dirToRemove.exists() && !dirToRemove.removeRecursively()) return false;
+    if (whyOut) whyOut->clear();
+    const auto fail = [whyOut](const QString &why) {
+        if (whyOut) *whyOut = why;
+        return false;
+    };
+    if (!db) return fail(QStringLiteral("no library in this session"));
+    ProjectTileData row;
+    if (guid.isEmpty() || !db->fetchProjectTile(guid, &row))
+        return fail(QStringLiteral("no project with guid '%1'").arg(guid));
+    if (sceneOpen && project && project->getProjectGuid() == guid)
+        return fail(QStringLiteral("this project is open — close it first"));
+    QString whyMissing;
+    if (projectLocationMissing(guid, &whyMissing)) return fail(whyMissing);
+
+    // THE FOLDER LEAVES AT ONCE, ITS BYTES ON A WORKER (STUDIO-HYGIENE-1). The
+    // project's OWN folder, wherever it is (fix round F1), renamed aside in its
+    // own directory: one rename(2), so the project is gone from disk the moment
+    // this returns and a failure (a busy or read-only folder) leaves folder and
+    // rows exactly as they were. The recursive delete — a web export is a
+    // viewer, a glb and its textures — ran HERE, on the UI thread, and kept
+    // going after a failure, leaving half a folder behind its kept rows.
+    const QString folder = projectFolderFor(guid);
+    const QFileInfo folderInfo(folder);
+    const QString projectsDir = folderInfo.absolutePath();
+    if (folderInfo.exists()) {
+        const QString aside = QDir(projectsDir).filePath(
+            kAsidePrefix + guid + QLatin1Char('-') + QString::number(QDateTime::currentMSecsSinceEpoch()));
+        if (!QDir().rename(folder, aside))
+            return fail(QStringLiteral("the project folder '%1' could not be moved aside for removal "
+                                       "(is it open in another program?)")
+                            .arg(folder));
+    }
 
     db->deleteProject(guid);
     db->deleteFolderAndDependencies(guid);
@@ -327,7 +362,42 @@ bool ProjectService::removeProject(const QString &guid)
 
     supersedeThumbnail(guid);
     if (projectManager) projectManager->removeTile(guid);
+
+    // Every folder aside in this directory that no worker owns yet: this one,
+    // and any a killed process left behind (one directory read, here).
+    QStringList owned;
+    {
+        QMutexLocker locked(mFoldersAsideLock.get());
+        for (const QFileInfo &entry : QDir(projectsDir).entryInfoList(
+                 { kAsidePrefix + QLatin1Char('*') }, QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot)) {
+            const QString path = entry.absoluteFilePath();
+            if (mFoldersAside->contains(path)) continue;
+            mFoldersAside->insert(path);
+            owned.append(path);
+        }
+    }
+    if (!owned.isEmpty()) {
+        mFolderDeletes.removeIf([](const QFuture<void> &f) { return f.isFinished(); });
+        mFolderDeletes.append(QtConcurrent::run(
+            [owned, aside = mFoldersAside, lock = mFoldersAsideLock]() {
+                for (const QString &path : owned) {
+                    if (!QDir(path).removeRecursively())
+                        qWarning("project delete: '%s' could not be removed in full; the next delete "
+                                 "in its directory tries again", qUtf8Printable(path));
+                    QMutexLocker locked(lock.get());
+                    aside->remove(path);
+                }
+            }));
+    }
     return true;
+}
+
+int ProjectService::drainFolderDeletes()
+{
+    const int pending = int(mFolderDeletes.size());
+    for (QFuture<void> &future : mFolderDeletes) future.waitForFinished();
+    mFolderDeletes.clear();
+    return pending;
 }
 
 iris::ScenePtr ProjectService::readProjectScene(const QJsonObject &projectObj,

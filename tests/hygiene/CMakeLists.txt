@@ -32,6 +32,14 @@ jah_ship_row(source.no_raw_transaction)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.no_raw_transaction PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_raw_transaction)
 
+# source.no_ui_folder_delete — STUDIO-HYGIENE-1 stage 2: no widget deletes a folder tree; the project
+# delete is ProjectService::removeProject's (renamed aside, removed on a worker). See the script's header.
+add_test(NAME source.no_ui_folder_delete
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_ui_folder_delete.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.no_ui_folder_delete PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.no_ui_folder_delete)
+
 # source.db_pointers_initialised — DBPTR-1: a declared `Database *` is an
 # initialised one, and the two handles that are filled by a setter after
 # construction stay wired to their caller. See the script's header for the

@@ -22,3 +22,21 @@ set_tests_properties(project.refuses_unreadable PROPERTIES
     LABELS "scripting"
     TIMEOUT 60)
 jah_no_display(project.refuses_unreadable)
+
+# project.remove_folder — the one delete (stage 2): a project with a web export removed through project.remove
+# (the tile's Delete is the same function) — the row gone, the open project and an unknown guid refused, and
+# after the process the folder gone with nothing left aside. Two --headless processes (project_remove.sh).
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/projectdoors-home-remove)
+jah_fresh_home_fixture(project.remove_folder.fresh_home projectDoorsRemoveHome "${_home}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME project.remove_folder
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/project_remove.sh
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}/project_remove.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(project.remove_folder PROPERTIES
+    JAHSHAKA_HEADLESS TRUE   # project_remove.sh runs the app --headless only: the NULL render system (testing_rules R13)
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED projectDoorsRemoveHome
+    LABELS "scripting"
+    TIMEOUT 60)
+jah_no_display(project.remove_folder)

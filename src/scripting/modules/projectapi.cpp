@@ -191,7 +191,12 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "dialogs put in their name box, and what an archive import (a sample reopen) names its project.",
           Needs::Document },
         { "remove", "project.remove(guid) -> bool",
-          "Deletes a project: its folder tree, its DB row and its asset/dependency rows. Refuses to delete the open project. NOT undoable.",
+          "Deletes a project: its folder tree, its DB row and its asset/dependency rows — THE ONE DELETE, the Desktop "
+          "tile's Delete calls the same function. Refused, by a sentence: an unknown guid, the OPEN project "
+          "(project.close() first), and a project whose recorded location is not there. The folder is renamed "
+          "aside at once (gone from its place when this returns; a folder that cannot be moved refuses with "
+          "the rows kept) and its bytes are removed on a worker, so a large export never freezes the window. "
+          "NOT undoable.",
           Needs::Document },
         { "list", "project.list({desktop}) -> [{guid, name, desktop, x, y}]",
           "Lists projects; desktop 1-4 filters, omit for all.",
@@ -646,26 +651,13 @@ bool ProjectApi::remove(const QString &guid)
 {
     if (!host.db || !host.services || !host.services->project)
         return fail("project: not available in this session");
-    if (host.services->project->isSceneOpen() && host.project->getProjectGuid() == guid)
-        return fail("project.remove: this project is open — project.close() first");
-
-    QString name;
-    if (resolveGuid(guid, &name) != guid)
-        return fail(QStringLiteral("project.remove: no project with guid '%1'").arg(guid));
-
-    // …and a delete cannot reach a folder on a drive that is not there: it must
-    // not quietly drop the catalog rows that name files it cannot remove
-    // (fix round F1).
-    {
-        QString whyMissing;
-        if (host.services->project->projectLocationMissing(guid, &whyMissing))
-            return fail(QStringLiteral("project.remove: %1").arg(whyMissing));
-    }
-
-    // Folder first (like the widget), then the DB rows — through the
-    // guid-parameterised service: host.project is NOT mutated (§1.6.1).
-    if (!host.services->project->removeProject(guid))
-        return fail("project.remove: could not remove the project folder");
+    // THE ONE DELETE (STUDIO-HYGIENE-1): the Desktop tile's Delete calls the
+    // same function, and it owns every refusal (an unknown guid, the open
+    // project, a location that is not there) — host.project is NOT mutated
+    // (SCRIPTING_SPEC §1.6.1).
+    QString why;
+    if (!host.services->project->removeProject(guid, &why))
+        return fail(QStringLiteral("project.remove: %1").arg(why));
     return true;
 }
 

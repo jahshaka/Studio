@@ -329,6 +329,8 @@ void ShellLifecycle::stopBackgroundWork()
     if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr) {
         const int drained = projectService->drainThumbnailEncodes();
         if (drained) qInfo("shutdown: wrote %d pending project thumbnail(s)", drained);
+        const int folders = projectService->drainFolderDeletes();
+        if (folders) qInfo("shutdown: finished %d project folder removal(s)", folders);
     }
 
     // Reap the remaining pool workers (metadata/peaks/bake futures) so
@@ -393,6 +395,7 @@ void ShellLifecycle::teardownWindow()
     if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr) {
         projectService->settleThumbnailCapture();
         projectService->drainThumbnailEncodes();
+        projectService->drainFolderDeletes();
     }
 
     // The modules. ONE TEARDOWN PATH: on the window-close path step 3 has

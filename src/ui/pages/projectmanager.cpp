@@ -468,55 +468,22 @@ void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 {
     if (!projectService) return;
-    // THE PROJECT'S OWN FOLDER, wherever it is (fix round F1). Built from the
-    // DEFAULT root, this deleted the rows of a located project and left its
-    // real folder on disk forever — the tile disappeared and the gigabytes
-    // stayed. A location that is not reachable refuses instead: a delete that
-    // cannot reach the files must not quietly drop the catalog rows that name
-    // them.
-    QString whyMissing;
-    if (projectService->projectLocationMissing(widget->tileData.guid, &whyMissing)) {
-        reportImportProblem(tr("Delete Scene"),
-                            tr("'%1' could not be deleted: %2")
-                                .arg(widget->tileData.name, whyMissing));
-        return;
-    }
-
     auto option = QMessageBox::question(this,
                                         "Deleting Project",
                                         "Are you sure you want to delete this project?",
                                         QMessageBox::Yes | QMessageBox::Cancel);
-
-    if (option == QMessageBox::Yes) {
-        QDir dirToRemove(projectService->projectFolderFor(widget->tileData.guid));
-        if (dirToRemove.removeRecursively()) {
-            // The catalog half, by the deleted project's OWN guid (read before
-            // the tile goes). This used to stamp that guid onto the LIVE
-            // Project — which then carried a deleted project's identity around
-            // the desktop — and unlink every row NAME the deletes returned
-            // from `project->getProjectFolder()`: the folder of whatever
-            // project was open last, or the working directory for the startup
-            // placeholder, never the one just removed (that is gone already,
-            // recursively, above). Those names were the flat per-project
-            // copies; the last of them (the default scene's Tile.png, the sky
-            // and material presets, the particle image) became pinned store
-            // objects with plan item 15c, so the loops could only ever delete
-            // the wrong project's files. ProjectService::removeProject (the
-            // verb's door) never had them.
-            const QString guid = widget->tileData.guid;
-            dynamicGrid->deleteTile(widget);
-            db->deleteProject(guid);
-            db->deleteFolderAndDependencies(guid);
-            db->deleteAssetAndDependencies(guid);
-
-            checkForEmptyState();
-        } else {
-            QMessageBox::warning(this,
-                                 "Delete Failed!",
-                                 "Failed to remove entire project folder, please try again!",
-                                 QMessageBox::Ok);
-        }
-    }
+    if (option != QMessageBox::Yes) return;
+    // THE ONE DELETE (STUDIO-HYGIENE-1): project.remove's door. This slot had a
+    // SECOND copy — a recursive folder delete on the UI thread (the window
+    // frozen through a web export's files, and HALF a folder left after a
+    // failure, rows kept), with no refusal of the open project and no stop of
+    // the tile's thumbnail encode. The service refuses by a sentence, renames
+    // the folder aside, drops the rows and the tile, and removes the bytes on a
+    // worker.
+    const QString name = widget->tileData.name;
+    QString why;
+    if (!projectService->removeProject(widget->tileData.guid, &why))
+        reportImportProblem(tr("Delete Scene"), tr("'%1' could not be deleted: %2").arg(name, why));
 }
 
 void ProjectManager::searchProjects()

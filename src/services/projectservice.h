@@ -27,8 +27,12 @@ For more information see the LICENSE file
 #include <functional>
 #include <memory>
 
+#include <QFuture>
 #include <QHash>
 #include <QJsonObject>
+#include <QList>
+#include <QMutex>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
@@ -154,10 +158,21 @@ public:
     /// sit beside this and parse on the calling thread is gone).
     void pointAtProject(const QString &guid, const QString &name);
 
-    /// Deletes a project: folder tree first (like the widget), then the DB
-    /// rows through the guid-parameterised deletes — the current project is
-    /// NOT mutated (SCRIPTING_SPEC §1.6.1). Removes the project's tile.
-    bool removeProject(const QString &guid);
+    /// THE ONE DELETE (STUDIO-HYGIENE-1 stage 2): what project.remove and the
+    /// Desktop tile's Delete both call. Refuses, by a sentence in `whyOut`, an
+    /// unknown guid, the OPEN project and a project whose recorded location is
+    /// not there (a delete that cannot reach the files must not drop the rows
+    /// that name them). Then the folder is RENAMED ASIDE (one rename(2) in its
+    /// own Projects directory: atomic, and a failure leaves everything as it
+    /// was), the rows go through the guid-parameterised deletes (the current
+    /// project is NOT mutated, SCRIPTING_SPEC §1.6.1), the tile and any
+    /// thumbnail encode in flight with them — and the BYTES are removed on a
+    /// worker, never on the calling thread. The worker also takes any folder a
+    /// killed process left aside in that directory.
+    bool removeProject(const QString &guid, QString *whyOut = nullptr);
+    /// Waits for every folder removal in flight (the shutdown paths and the
+    /// destructor). Returns how many it waited for.
+    int drainFolderDeletes();
 
     /// The model files the LAST readProjectScene found with no current bake
     /// (FORWARD-ONLY-1): missing from the open, never parsed. The shell raises
@@ -245,6 +260,11 @@ private:
     /// replaces what it would have written).
     void supersedeThumbnail(const QString &guid);
     QHash<QString, QFutureWatcher<QByteArray> *> mThumbEncodes;
+    /// The folder removals in flight (removeProject), and the aside paths they
+    /// own — a later delete never hands a second worker the same folder.
+    QList<QFuture<void>> mFolderDeletes;
+    std::shared_ptr<QSet<QString>> mFoldersAside = std::make_shared<QSet<QString>>();
+    std::shared_ptr<QMutex> mFoldersAsideLock = std::make_shared<QMutex>();
     /// What an asynchronous tile request holds instead of `this`: the viewport
     /// may answer after this service is gone.
     std::shared_ptr<char> mAlive = std::make_shared<char>(0);
