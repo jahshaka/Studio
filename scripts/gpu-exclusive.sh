@@ -53,11 +53,102 @@
 #   DONE <ticket> <pid> <end, ISO seconds> <rc> <held, s>
 # tab-separated, each line one write (O_APPEND: whole lines from concurrent holders). A nested call (a holder's own row)
 # and an exit 75 (never held) write none. The lead's util.CardLock writes the same lines (its rc "-": it does not run the
-# command). JAH_GPU_HOLD_LOG names another file (the suites' private one).
+# command). Two lines a hold, not one at the release: a killed holder's hold would otherwise leave no trace at all.
+# THE LOG IS ON DISK (WORKFLOW-STREAMLINE-1 2.5, 2026-11-20: it lived beside the lock in /tmp - RAM - and every hold of the
+# sprint before the 11-16 reboot was lost to the audit). WHERE (`gpu-exclusive.sh --holds-log` prints it): JAH_GPU_HOLD_LOG
+# when set; else, for THE CARD's lock (JAH_GPU_LOCK unset or /tmp/jah-gpu.lock), <the user's home>/Developer/testing/lock/
+# holds.log (the lead repo's testing/, gitignored; the passwd home, so a row's scratch HOME never moves it); else - a
+# private lock, a suite's - <lock>.holds beside it (a toy hold never enters the card's record). Its directory is made.
+# THE REPORT: `gpu-exclusive.sh --report [since]` (since: anything `date -d` reads - 2026-11-16, '7 days ago') - per side
+# (ours / the Unreal session's `ue-*` labels): holds, total held, share of all holds, share of the window (busy), the
+# holds over 600 s, waits; then every hold over 600 s listed, and every open hold (a HOLD with no DONE: a killed holder,
+# closed at the next hold's start - the flock makes that its latest possible end - or one running now). The ~10-min hold
+# is a TARGET (CLAUDE.md "The box and the card"): an overrun is REPORTED here, a running call is never cut.
 # The kernel's GPU faults while the command ran are printed after it (scripts/kernel_xid.py): an Xid is never
 # environmental. The desktop route by default: JAHSHAKA_VR=0 unless the caller set JAHSHAKA_VR (`--vr` runs set it).
 export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
 here="$(cd "$(dirname "$0")" && pwd)"
+card_lock=/tmp/jah-gpu.lock
+holds_log() {   # the hold log's path (the header's THE LOG IS ON DISK)
+    local h
+    if [ -n "${JAH_GPU_HOLD_LOG:-}" ]; then printf '%s\n' "$JAH_GPU_HOLD_LOG"
+    elif [ "${JAH_GPU_LOCK:-$card_lock}" = "$card_lock" ]; then
+        h=$(getent passwd "$(id -u)" | cut -d: -f6); printf '%s\n' "${h:-$HOME}/Developer/testing/lock/holds.log"
+    else printf '%s\n' "$JAH_GPU_LOCK.holds"; fi
+}
+if [ "${1:-}" = --holds-log ]; then holds_log; exit 0; fi
+if [ "${1:-}" = --report ]; then   # (the header's THE REPORT; reads the log, never takes the lock)
+    s0=0
+    if [ -n "${2:-}" ]; then
+        s0=$(date -d "$2" +%s 2> /dev/null) \
+            || { echo "gpu-exclusive.sh --report: '$2' is not a date (date -d reads it: 2026-11-16, '7 days ago')" >&2; exit 64; }
+    fi
+    exec python3 -I - "$(holds_log)" "$s0" <<'PY'
+import os, sys, time
+from datetime import datetime
+log, s0 = sys.argv[1], int(sys.argv[2])
+LONG = 600   # the ~10-min hold (CLAUDE.md "The box and the card"): a target, reported, never enforced
+now = time.time()
+try:
+    lines = open(log, errors="replace").read().splitlines()
+except OSError as e:
+    print(f"gpu-lock report: no hold log at {log} ({e.strerror})"); sys.exit(1)
+ts = lambda s: datetime.strptime(s, "%Y-%m-%dT%H:%M:%S%z").timestamp()
+day = lambda t: datetime.fromtimestamp(t).strftime("%F %T")
+holds, byk, skipped = [], {}, 0
+for ln in lines:
+    f = ln.split("\t")
+    try:
+        if len(f) == 6 and f[0] == "HOLD":
+            h = {"t": f[1], "pid": int(f[2]), "start": ts(f[3]), "wait": float(f[4]), "label": f[5], "end": None, "rc": "?", "how": ""}
+            holds.append(h); byk[(f[1], f[2])] = h
+        elif len(f) == 6 and f[0] == "DONE" and (f[1], f[2]) in byk:
+            h = byk[(f[1], f[2])]; h["end"], h["rc"] = h["start"] + int(f[5]), f[4]
+        else:
+            skipped += 1
+    except ValueError:
+        skipped += 1
+holds.sort(key=lambda h: h["start"])
+for i, h in enumerate(holds):   # an open hold: closed at the next hold's start (the flock: its latest end), or running
+    if h["end"] is not None:
+        continue
+    if i + 1 < len(holds):
+        h["end"], h["how"] = holds[i + 1]["start"], "killed (no DONE): closed at the next hold's start"
+    elif os.path.exists(f"/proc/{h['pid']}"):
+        h["end"], h["how"] = now, "RUNNING now"
+    else:
+        h["how"] = "open (no DONE, no later hold): its end unknown, not counted"
+sel = [h for h in holds if h["start"] >= s0]
+t0 = s0 if s0 else (sel[0]["start"] if sel else now)
+span = max(now - t0, 1.0)
+side = lambda h: "ue-*" if h["label"].startswith("ue-") else "ours"
+held = lambda h: (h["end"] - h["start"]) if h["end"] is not None else 0.0
+total = sum(held(h) for h in sel)
+print(f"gpu-lock report: {log}")
+frm = "(since)" if s0 else "(the log's first hold)"
+print(f"  {len(sel)} holds from {day(t0)} {frm} to {day(now)}: {span / 3600:.1f} h"
+      + (f"; {skipped} line(s) not read" if skipped else ""))
+print(f"  {'side':<5} {'holds':>6} {'held s':>9} {'held h':>7} {'share':>6} {'busy':>5} {'>600s':>6} {'max s':>6}"
+      f" {'waited':>7} {'wait s':>8} {'max wait':>9}")
+for name in ("ours", "ue-*", "all"):
+    g = [h for h in sel if name == "all" or side(h) == name]
+    hs = sum(held(h) for h in g)
+    w = [h["wait"] for h in g if h["wait"] >= 1.0]
+    print(f"  {name:<5} {len(g):>6} {hs:>9.0f} {hs / 3600:>7.2f} {(100 * hs / total if total else 0):>5.0f}% {100 * hs / span:>4.0f}%"
+          f" {sum(1 for h in g if held(h) > LONG):>6} {max([held(h) for h in g] or [0]):>6.0f}"
+          f" {len(w):>7} {sum(w):>8.0f} {max(w or [0]):>9.0f}")
+over = [h for h in sel if held(h) > LONG]
+print(f"HOLDS OVER {LONG} s - {len(over)} (the ~10-min hold is a target: reported, a running call is never cut):")
+for h in over:
+    print(f"  {day(h['start'])}  {side(h):<4} held {held(h):>5.0f} s  waited {h['wait']:>5.0f} s  rc {h['rc']:<2} pid {h['pid']:<8}"
+          f" {h['label']}" + (f"  [{h['how']}]" if h["how"] else ""))
+op = [h for h in sel if h["how"]]
+if op:
+    print(f"OPEN HOLDS (a HOLD line with no DONE) - {len(op)}:")
+    for h in op:
+        print(f"  {day(h['start'])}  {side(h):<4} pid {h['pid']:<8} {h['label']}  [{h['how']}]")
+PY
+fi
 rt="" label=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
@@ -70,7 +161,7 @@ done
 [ "$#" -gt 0 ] || { echo "usage: gpu-exclusive.sh [--run-timeout <s>] [--wait-max <s>] [--label <text>] <command> [args...]" >&2; exit 64; }
 bound=(); [ -n "$rt" ] && bound=(timeout -k 10 "$rt")
 [ "${JAH_GPU_LOCK_HELD:-}" = 1 ] && [ -n "${JAH_GPU_HOLD:-}" ] && exec "${bound[@]}" "$@"   # inside a hold: its sweep is ours
-lock="${JAH_GPU_LOCK:-/tmp/jah-gpu.lock}"
+lock="${JAH_GPU_LOCK:-$card_lock}"
 # THE TREE's CHECK MARK (URGENT #153's mark, TEST-STREAMLINE-1 block D's collision 2026-11-03): a hand `gpu-exclusive.sh ...
 # ctest --test-dir <build>` set none, so a builder found its tree free and relinked bin/Jahshaka 4 min into a 6-min re-price -
 # every row after it ran a dirty build, the call void. When the command is a ctest (the first word named ctest, after any
@@ -262,7 +353,7 @@ waited=$(awk -v a="$t0f" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}')
 [ -z "$waiting" ] || echo "gpu-lock: waited $waited s"   # tenths (#95)
 echo "pid $$ ${label:-$1} since $(date '+%F %T') ticketed" > "$lock.holder"   # (#141: the mark a waiter reads)
 start=$(date +%s)
-holds="${JAH_GPU_HOLD_LOG:-$lock.holds}"; tno=$(basename "$ticket")
+holds=$(holds_log); mkdir -p "$(dirname "$holds")" 2> /dev/null; tno=$(basename "$ticket")
 printf 'HOLD\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$(date -d "@$start" '+%FT%T%z')" "$waited" "$me" >> "$holds" 2> /dev/null || true
 hold_run "jahgpu-$(basename "$ticket")-$$" "${bound[@]}" "$@"   # (#144: the hold's cgroup, swept before the release)
 rc=$?
