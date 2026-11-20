@@ -152,6 +152,12 @@ int UndoService::count() const
     return mStack->count();
 }
 
+void UndoService::markUnsaved()
+{
+    mSavedPushCount = ~quint64(0);   // a push count never reaches it (isDirty)
+    mSavedInMacro = false;
+}
+
 void UndoService::markSaved()
 {
     mSavedPushCount = mPushCount;

@@ -149,6 +149,10 @@ void testUndoService()
     CHECK(undo.isDirty(), "dirty: a push after a save inside the run is dirty when the macro closes");
     undo.clear();
     CHECK(!undo.isDirty(), "dirty: clear (a close, an open) is clean");
+    undo.markUnsaved();
+    CHECK(undo.isDirty(), "dirty: a save that wrote no row leaves it dirty, though nothing moved");
+    undo.markSaved();
+    CHECK(!undo.isDirty(), "dirty: ...until a save that did");
     // NO UNDO LIMIT IS SET ANYWHERE (grep setUndoLimit: none); the push count never falls, so even a stack
     // that dropped its oldest command could not read clean after a push.
     CHECK(stack.undoLimit() == 0, "dirty: the stack has no undo limit (pushCount alone decides a push)");

@@ -150,6 +150,9 @@ public:
     /// it moves). Called ONLY by a save that wrote its row (ProjectService::save)
     /// and by an open, whose document IS the row.
     void markSaved();
+    /// The row does NOT hold the document (a save that wrote no row): dirty until the next markSaved, whatever
+    /// the stack does — no push or undo can land back on "saved" by coincidence.
+    void markUnsaved();
 
 private:
     QUndoStack *mStack = nullptr;

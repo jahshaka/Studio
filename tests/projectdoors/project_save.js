@@ -97,5 +97,12 @@ function autosaveOff() {
     assert(project.close({ discard: true }) === true, "{discard: true} closes a dirty world");
     assert(project.open(byName("Doors Round Trip")) === true && meshes() === before + 1,
            "...and the discarded edit is gone, the saved one kept (" + meshes() + ")");
+
+    // A CREATE WHOSE FIRST SAVE FAILS (the trigger drops that row's writes) is UNSAVED, not clean: the create
+    // cleared the stack, and the scene read clean though its row holds no scene - the close then dropped it.
+    project.create("Doors Create Fails", { template: "empty" });
+    assert(dirty() === true, "a created world whose first save failed is DIRTY (it read clean)");
+    assert(refusal(function () { project.close(); }) !== null, "...so its close is refused, not silent");
+    assert(project.close({ discard: true }) === true, "...and {discard: true} closes it");
     console.log("autosave off: ALL OK");
 }

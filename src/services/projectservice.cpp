@@ -534,6 +534,9 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
         if (ok && !tx.commit()) ok = false;
     }
     if (!ok) {
+        // THE ROW DOES NOT HOLD THE DOCUMENT, whatever the stack said: a create's world (its stack just
+        // cleared) whose first save failed read CLEAN, and its close dropped it without a word.
+        if (undo) undo->markUnsaved();
         ProjectTileData row;
         return fail(db->fetchProjectTile(guid, &row)
                         ? QStringLiteral("the library did not write its row (the log has the database's answer)")

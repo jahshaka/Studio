@@ -37,6 +37,10 @@ conn = sqlite3.connect(sys.argv[1])
 blob = conn.execute("SELECT scene FROM projects WHERE name = 'Doors Save Trap'").fetchone()[0]
 conn.execute("CREATE TRIGGER doors_save_trap BEFORE UPDATE ON projects WHEN OLD.name = 'Doors Save Trap' "
              "BEGIN SELECT RAISE(IGNORE); END")
+# ...and one for a project that does not exist yet: every UPDATE of a row named 'Doors Create Fails' is dropped,
+# so a create's FIRST save writes no row (process 3).
+conn.execute("CREATE TRIGGER doors_create_fails BEFORE UPDATE ON projects WHEN NEW.name = 'Doors Create Fails' "
+             "BEGIN SELECT RAISE(IGNORE); END")
 conn.commit()
 conn.close()
 print(hashlib.sha256(bytes(blob)).hexdigest())
