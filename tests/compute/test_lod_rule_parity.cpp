@@ -77,8 +77,12 @@ static int failures = 0;
 /// deliberately sits just under.
 static const std::vector<float> kBounds = { 0.0008f, 0.002f, 0.006f, 0.018f,
                                             0.05f,   0.14f,  0.4f };
+/// THE DECOY (ATOM-HOUSE-1, the audit's finding b): a second mesh with OTHER bounds and one
+/// level fewer, attached FIRST, so the chained mesh's entry in the GPU scene's tables is not 0
+/// and every `meshIndex * stride + level` the shaders compute is a real stride.
+static const std::vector<float> kDecoyBounds = { 0.001f, 0.004f, 0.011f, 0.03f, 0.09f, 0.25f };
 
-static MeshData chainedMesh()
+static MeshData chainedMesh(const std::vector<float> &bounds = kBounds)
 {
     const int N = 32;
     MeshData d;
@@ -105,9 +109,9 @@ static MeshData chainedMesh()
     // irrelevant here — only its BOUND and the fact that the level exists are —
     // so the coarsest few repeat the coarsest lattice the mesh can express.
     const int steps[7] = { 2, 4, 8, 16, 32, 32, 32 };
-    for (int i = 0; i < 7; ++i) d.lodIndices.push_back(build(steps[i]));
-    d.lodBounds = kBounds;
-    d.lodErrors = kBounds;
+    for (size_t i = 0; i < bounds.size() && i < 7u; ++i) d.lodIndices.push_back(build(steps[i]));
+    d.lodBounds = bounds;
+    d.lodErrors = bounds;
     return d;
 }
 
@@ -521,7 +525,7 @@ static void productCutParity(Engine *e, View *view)
 // allowed = allowedWorldError(tolerance, cell, scale), the scale the instance's longest
 // column. Until this arm nothing ran the gather's copy against the header.
 //
-// THIS ARM RUNS THE PRODUCT'S GATHER JOB ITSELF over the same 600 instances: the GPU
+// THIS ARM RUNS THE PRODUCT'S GATHER JOB ITSELF over the same 660 instances (two meshes): the GPU
 // scene's own mesh, level and partition tables; one octant over everything; one material
 // bucket; and the instance table read back with the two words the Photon store would
 // write — the GI-visible flag, and a material word whose slot half is the instance's own
@@ -530,7 +534,9 @@ static void productCutParity(Engine *e, View *view)
 // (its geometry row). For each instance the records must be EXACTLY the partitions of
 // the level `lodLevelForWorldError` picks, one per partition, over cells that walk the
 // whole chain at the product's tolerance (a 256th of a cell, OgreGi.cpp's
-// kCascadeLodCellFraction).
+// kCascadeLodCellFraction), and AT EVERY BOUND: a cell of exactly 256 x a bound affords a
+// scale-1 instance that bound itself, where the walk's STRICT `<` keeps the finer level
+// (a `<=` would red here and nowhere else).
 namespace voxelcase {
 struct Record {   // JahVoxelGather_cs.glsl's Record (PhotonVoxelizer::kInstanceRecordBytes)
     float worldRow[3][4];
@@ -551,7 +557,8 @@ Ogre::DescriptorSetUav::BufferSlot slotOf(Ogre::UavBufferPacked *b, Ogre::Resour
 }
 }   // namespace voxelcase
 
-static void voxelGatherParity(Scene *scene, unsigned slots)
+static void voxelGatherParity(Scene *scene, unsigned slots,
+                              const std::map<unsigned, const std::vector<float> *> &boundsOfMesh)
 {
     using namespace jahshaka::engine::detail;
     std::printf("\n== the voxel gather's walk (the one piece's second user) against Types.h ==\n");
@@ -580,32 +587,35 @@ static void voxelGatherParity(Scene *scene, unsigned slots)
         std::memcpy(inst.data(), t->map(), size_t(slots) * sizeof(GpuInstance));
         t->unmap();
     }
-    uint32_t meshIndex = 0xFFFFFFFFu, finestParts = 0;
-    bool oneMesh = true;
+    uint32_t finestParts = 0;
+    std::vector<uint32_t> meshOf(slots, 0xFFFFFFFFu);
+    bool known = true;
     for (unsigned s = 0; s < slots; ++s) {
-        uint32_t m, flags;
-        std::memcpy(&m, &inst[s].boundsMin[3], 4);
+        uint32_t flags;
+        std::memcpy(&meshOf[s], &inst[s].boundsMin[3], 4);
         std::memcpy(&flags, &inst[s].boundsMax[3], 4);
-        if (meshIndex == 0xFFFFFFFFu) meshIndex = m;
-        oneMesh = oneMesh && m == meshIndex;
+        known = known && boundsOfMesh.count(meshOf[s]);
         flags |= kGpuGiVisible;
         std::memcpy(&inst[s].boundsMax[3], &flags, 4);
         inst[s].ids[1] = s;   // pool 0 (the one bucket), slot = the instance's own slot
     }
-    CHECK(oneMesh && meshIndex != 0xFFFFFFFFu, "the voxel arm's instances all name the chained mesh's entry");
-    if (!oneMesh || meshIndex == 0xFFFFFFFFu) return;
-    std::map<uint32_t, unsigned> levelOfRow;   // geometry row -> level
-    std::vector<uint32_t> partsAt(GpuScene::kLevelsPerMesh, 0u);
-    for (uint32_t l = 0; l < GpuScene::kLevelsPerMesh; ++l) {
-        const GpuMeshLevel &lv = gs.levelAt(meshIndex, l);
-        partsAt[l] = lv.partCount;
-        if (lv.geomRow != GpuScene::kNoGeomRow) levelOfRow[lv.geomRow] = l;
-        finestParts = std::max(finestParts, lv.partCount);
+    CHECK(known && boundsOfMesh.size() == 2u, "the voxel arm's instances name the two meshes' entries");
+    if (!known) return;
+    // geometry row -> (mesh entry, level); every level of both meshes has its own row
+    std::map<uint32_t, std::pair<uint32_t, unsigned>> levelOfRow;
+    size_t levelsExpected = 0;
+    for (const auto &mb : boundsOfMesh) {
+        levelsExpected += mb.second->size() + 1u;
+        for (uint32_t l = 0; l < GpuScene::kLevelsPerMesh; ++l) {
+            const GpuMeshLevel &lv = gs.levelAt(mb.first, l);
+            if (lv.geomRow != GpuScene::kNoGeomRow) levelOfRow[lv.geomRow] = { mb.first, l };
+            finestParts = std::max(finestParts, lv.partCount);
+        }
     }
     char msg[260];
-    std::snprintf(msg, sizeof(msg), "the chained mesh's eight levels each have their own geometry row (%zu)",
-                  levelOfRow.size());
-    CHECK(levelOfRow.size() == kBounds.size() + 1u, msg);
+    std::snprintf(msg, sizeof(msg), "the two meshes' levels each have their own geometry row (%zu of %zu)",
+                  levelOfRow.size(), levelsExpected);
+    CHECK(levelOfRow.size() == levelsExpected, msg);
     const uint32_t capacity = std::max(finestParts * slots, 1u);
 
     Ogre::UavBufferPacked *bParams = vm->createUavBuffer(1u, sizeof(VoxelGatherParams), 0, nullptr, false);
@@ -620,8 +630,9 @@ static void voxelGatherParity(Scene *scene, unsigned slots)
     // The product's tolerance (OgreGi.cpp kCascadeLodCellFraction: a 256th of a cell) over cells that take the
     // chain from level 0 (the finest instance at 5 cm cells) to past its last bound (the coarsest at 1 km).
     const float tolerance = 1.0f / 256.0f;
-    const float cells[8] = { 0.05f, 0.25f, 1.0f, 4.0f, 16.0f, 64.0f, 256.0f, 1024.0f };
-    unsigned evaluated = 0, mismatched = 0, missing = 0, wrongCount = 0, mixed = 0, nearThreshold = 0;
+    std::vector<float> cells = { 0.05f, 0.25f, 1.0f, 4.0f, 16.0f, 64.0f, 256.0f, 1024.0f };
+    for (float b : kBounds) cells.push_back(b * 256.0f);   // exact: a power-of-two scale of the bound's float
+    unsigned evaluated = 0, mismatched = 0, missing = 0, wrongCount = 0, mixed = 0, nearThreshold = 0, atBound = 0;
     unsigned overflow = 0, histogram[8] = {};
     bool ran = true;
     for (float cell : cells) {
@@ -684,22 +695,25 @@ static void voxelGatherParity(Scene *scene, unsigned slots)
             uint32_t s;
             std::memcpy(&s, &r.aabb1[3], 4);
             const auto it = levelOfRow.find(r.meshData[0]);
-            if (s >= slots || it == levelOfRow.end()) { ++wrongCount; continue; }
-            if (level[s] != 0xFFFFFFFFu && level[s] != it->second) mixedAt[s] = 1u;
-            level[s] = it->second;
+            if (s >= slots || it == levelOfRow.end() || it->second.first != meshOf[s]) { ++wrongCount; continue; }
+            if (level[s] != 0xFFFFFFFFu && level[s] != it->second.second) mixedAt[s] = 1u;
+            level[s] = it->second.second;
             ++count[s];
         }
         for (unsigned s = 0; s < slots; ++s) {
             const float scale = worldMaxAxisScale(inst[s].world);
             const float allowed = allowedWorldError(tolerance, cell, scale);
-            const unsigned cpu = unsigned(lodLevelForWorldError(kBounds, allowed, kBounds.size() + 1u));
+            const std::vector<float> &bounds = *boundsOfMesh.at(meshOf[s]);
+            const unsigned cpu = unsigned(lodLevelForWorldError(bounds, allowed, bounds.size() + 1u));
             ++evaluated;
-            for (float b : kBounds)
+            for (float b : bounds) {
                 if (b > 0.0f && std::fabs(allowed - b) / b < 1.0e-4f) ++nearThreshold;
+                if (allowed == b) ++atBound;
+            }
             if (level[s] == 0xFFFFFFFFu) { ++missing; continue; }
             mixed += mixedAt[s];
             if (level[s] < 8u) ++histogram[level[s]];
-            if (count[s] != partsAt[level[s]]) ++wrongCount;
+            if (count[s] != gs.levelAt(meshOf[s], level[s]).partCount) ++wrongCount;
             if (level[s] != cpu) {
                 if (++mismatched <= 3u)
                     std::printf("   GATHER DISAGREES: slot %u (scale %.3f) at a %.2f m cell: device level %u, "
@@ -717,9 +731,9 @@ static void voxelGatherParity(Scene *scene, unsigned slots)
     if (!ran) return;
 
     std::printf("   %u evaluations (%u instances x %zu cells at a 1/256 cell tolerance)\n   levels taken: ", evaluated,
-                slots, sizeof(cells) / sizeof(cells[0]));
+                slots, cells.size());
     for (int i = 0; i < 8; ++i) std::printf("%u:%u ", i, histogram[i]);
-    std::printf("\n   %u evaluations within 1e-4 of a level boundary\n", nearThreshold);
+    std::printf("\n   %u evaluations within 1e-4 of a level boundary, %u EXACTLY at one\n", nearThreshold, atBound);
     std::snprintf(msg, sizeof(msg), "every instance wrote records at every cell (%u missing) and none overflowed (%u)",
                   missing, overflow);
     CHECK(missing == 0u && overflow == 0u, msg);
@@ -730,9 +744,12 @@ static void voxelGatherParity(Scene *scene, unsigned slots)
     for (int i = 0; i < 8; ++i) if (histogram[i]) ++distinct;
     std::snprintf(msg, sizeof(msg), "the gather's sweep reached %u distinct levels of the eight", distinct);
     CHECK(distinct >= 5u, msg);
-    std::snprintf(msg, sizeof(msg), "THE VOXEL GATHER'S WALK AGREES WITH THE C++ CURRENCY on all %u (%u disagree)",
+    std::snprintf(msg, sizeof(msg), "THE VOXEL GATHER'S WALK AGREES WITH THE C++ CURRENCY on all %u, two meshes (%u disagree)",
                   evaluated, mismatched);
-    CHECK(evaluated == slots * 8u && mismatched == 0u, msg);
+    CHECK(evaluated == slots * unsigned(cells.size()) && mismatched == 0u, msg);
+    std::snprintf(msg, sizeof(msg), "THE STRICT `<` IS REACHED: %u evaluations afforded exactly a bound (agreeing above)",
+                  atBound);
+    CHECK(atBound > 0u, msg);
 }
 
 int main(int argc, char **argv)
@@ -755,9 +772,22 @@ int main(int argc, char **argv)
     scene->setAtomDrawEnabled(false);
     scene->setAmbient(Colour(0.4f, 0.4f, 0.4f), Colour(0.2f, 0.2f, 0.2f));
 
-    const MeshId mesh = scene->createMesh(chainedMesh());
     PbrParams p; p.albedo = Colour(0.7f, 0.7f, 0.7f); p.roughness = 0.6f;
     const MaterialId mat = scene->createPbrMaterial(p);
+    // WHAT EACH SLOT HOLDS is read by its NODE, never by its slot's number (the decoys come first).
+    enum Kind { kStraight, kTurned, kDecoy };
+    std::unordered_map<unsigned long long, int> kindOf;
+    const MeshId decoy = scene->createMesh(chainedMesh(kDecoyBounds));
+    const int kDecoys = 60;
+    for (int i = 0; i < kDecoys; ++i) {
+        const NodeId n = scene->createNode();
+        if (!scene->attachMesh(n, decoy, mat)) { std::printf("FAIL: attach (decoy)\n"); return 1; }
+        const float s = 0.5f * std::pow(2.0f, float(i % 4));
+        enginetest::setNodePosition(scene, n, Vec3(2.0f, 0.0f, -(3.0f + 7.0f * float(i))));
+        enginetest::setNodeScale(scene, n, Vec3(s, s, s));
+        kindOf[(unsigned long long)n] = kDecoy;
+    }
+    const MeshId mesh = scene->createMesh(chainedMesh());
     const int kInstances = 500;
     // WHAT EACH NODE IS, so the DRAW PATH's answer can be checked against the
     // rule without going through the GPU table (the strategy arm below reads
@@ -774,6 +804,7 @@ int main(int argc, char **argv)
         enginetest::setNodePosition(scene, n, Vec3(0.0f, 0.0f, -dist));
         enginetest::setNodeScale(scene, n, Vec3(s, s, s));
         placed[(unsigned long long)n] = { dist, s };
+        kindOf[(unsigned long long)n] = kStraight;
     }
     const int kRotated = 100;
     const float c1 = std::cos(0.5f * 45.0f * 3.14159265f / 180.0f);
@@ -786,23 +817,49 @@ int main(int argc, char **argv)
         if (!scene->attachMesh(n, mesh, mat)) { std::printf("FAIL: attach\n"); return 1; }
         const float dist = 2.0f + 3.0f * float(i);
         scene->setNodeTransform(n, Vec3(0.0f, 0.0f, -dist), yawPitch, Vec3(1.0f, 4.0f, 1.0f));
+        kindOf[(unsigned long long)n] = kTurned;
     }
     enginetest::addDirectionalLight(scene, Vec3(-0.4f, -1.0f, -0.35f), 3.0f);
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.0f, 0.0f), Vec3(0.0f, 0.0f, -1.0f));
     enginetest::frames(e, 3);
 
     const unsigned slots = scene->published().gpuScene.slotCount;
-    CHECK(slots == unsigned(kInstances + kRotated), "every instance is in the table");
+    CHECK(slots == unsigned(kInstances + kRotated + kDecoys), "every instance is in the table");
     std::vector<GpuSceneEntry> table;
     for (unsigned i = 0; i < slots; ++i) {
         GpuSceneEntry en;
         if (scene->gpuSceneEntry(i, en)) table.push_back(en);
     }
     CHECK(table.size() == slots, "the table reads back");
+    // Per slot: its kind and its mesh's bounds; per mesh entry: its bounds (the voxel arm's).
+    std::vector<int> kindAt(slots, -1);
+    std::map<unsigned, const std::vector<float> *> boundsOfMesh;
+    unsigned chainedEntry = 0xFFFFFFFFu, decoyEntry = 0xFFFFFFFFu;
+    for (unsigned i = 0; i < slots && i < table.size(); ++i) {
+        const auto k = kindOf.find((unsigned long long)table[i].nodeId);
+        kindAt[i] = k == kindOf.end() ? -1 : k->second;
+        if (kindAt[i] == kDecoy) decoyEntry = table[i].meshIndex;
+        else if (kindAt[i] >= 0) chainedEntry = table[i].meshIndex;
+    }
+    const auto boundsAt = [&](unsigned slot) -> const std::vector<float> & {
+        return kindAt[slot] == kDecoy ? kDecoyBounds : kBounds;
+    };
+    boundsOfMesh[chainedEntry] = &kBounds;
+    boundsOfMesh[decoyEntry] = &kDecoyBounds;
+    {
+        bool one = true;
+        for (unsigned i = 0; i < slots && i < table.size(); ++i)
+            one = one && kindAt[i] >= 0 && table[i].meshIndex == (kindAt[i] == kDecoy ? decoyEntry : chainedEntry);
+        char m[200];
+        std::snprintf(m, sizeof(m), "THE STRIDE IS REAL: the chained mesh's entry is %u, the decoy's %u, every slot "
+                      "names its own", chainedEntry, decoyEntry);
+        CHECK(one && chainedEntry != decoyEntry && chainedEntry != 0u && chainedEntry != 0xFFFFFFFFu, m);
+    }
     {
         bool truth = table.size() == slots;
         float rowMax = 0.0f;
-        for (unsigned i = unsigned(kInstances); truth && i < slots; ++i) {
+        for (unsigned i = 0; truth && i < slots; ++i) {
+            if (kindAt[i] != kTurned) continue;
             truth = std::fabs(worldMaxAxisScale(table[i].world) - 4.0f) < 1.0e-4f;
             for (int row = 0; row < 3; ++row) {
                 const float *w = &table[i].world[row * 4];
@@ -872,16 +929,17 @@ int main(int argc, char **argv)
             const float dist = std::max(0.0f, std::sqrt(dx * dx + dy * dy + dz * dz) - radius);
             const float footprint = sampleFootprintPerspective(dist, ps.projScaleY, ps.height);
             const float allowed = allowedWorldError(ps.tol, footprint, scale);
+            const std::vector<float> &bounds = boundsAt(slot);
             const unsigned cpu =
-                unsigned(lodLevelForWorldError(kBounds, allowed, kBounds.size() + 1u));
+                unsigned(lodLevelForWorldError(bounds, allowed, bounds.size() + 1u));
             const unsigned gpu = res.levels[slot];
             ++evaluated;
             if (gpu < 8u) ++histogram[gpu];
-            for (float b : kBounds)
+            for (float b : bounds)
                 if (b > 0.0f && std::fabs(allowed - b) / b < 1.0e-4f) ++nearThreshold;
             if (gpu != cpu) {
                 ++mismatched;
-                if (slot >= unsigned(kInstances)) ++mismatchedRotated;
+                if (kindAt[slot] == kTurned) ++mismatchedRotated;
                 if (firstBadSlot == 0xFFFFFFFFu) {
                     firstBadSlot = slot;
                     firstBadGpu = gpu;
@@ -889,6 +947,47 @@ int main(int argc, char **argv)
                 }
             }
         }
+    }
+
+    // ---- MODE 2: THE DRAW COMMANDS (JahCullDraws_cs; ATOM-HOUSE-1, the audit's finding a) ----------
+    // The cull's job 3 runs only in mode 2, which no frame of the product's asks for but a measuring arm
+    // (shadow.casterPbsProbe): this request is the one place it is compiled and run. Each command must
+    // draw its slot's level exactly as the level table holds it - `levels[meshIndex * stride + level]`
+    // over two mesh entries, the decoy's first - one instance, its slot as firstInstance.
+    {
+        GpuCullRequest r;
+        if (!e->fillCullView(view, r)) { std::printf("FAIL: fillCullView (mode 2)\n"); return 1; }
+        for (int i = 0; i < 24; ++i) r.planes[i] = 0.0f;
+        for (int i = 0; i < 6; ++i) r.planes[i * 4 + 3] = 1.0e9f;
+        r.hzbLevels = 0u;
+        r.mode = 2u;
+        r.pixelTolerance = 1.0f;
+        r.projScaleY = 1.0f / std::tan(45.0f * 0.5f * 3.14159265f / 180.0f);
+        r.viewportHeight = 1080.0f;
+        GpuCullResult res;
+        unsigned commands = 0, wrong = 0;
+        std::set<unsigned> levelsDrawn, seen;
+        if (!e->gpuCull(scene, view, r, /*readBack=*/true, res)) {
+            std::printf("FAIL: gpuCull (mode 2): %s\n", e->takeLastError().c_str());
+            ++failures;
+        } else {
+            const auto &gs = static_cast<jahshaka::engine::detail::OgreScene *>(scene)->gpuScene();
+            for (size_t k = 0; k + 4 < res.drawCommands.size(); k += 5) {
+                const unsigned *c = &res.drawCommands[k];
+                const unsigned slot = c[4];
+                ++commands;
+                if (slot >= slots || slot >= res.levels.size() || !seen.insert(slot).second) { ++wrong; continue; }
+                const unsigned level = res.levels[slot];
+                const auto &L = gs.levelAt(table[slot].meshIndex, level);
+                levelsDrawn.insert(level);
+                if (c[0] != L.indexCount || c[1] != 1u || c[2] != L.firstIndex || c[3] != 0u) ++wrong;
+            }
+        }
+        char m[220];
+        std::snprintf(m, sizeof(m), "MODE 2: %u draw commands for %u slots (%u survivors), each drawing its slot's level "
+                      "as the level table holds it (%u wrong; %zu distinct levels)", commands, slots, res.survivors,
+                      wrong, levelsDrawn.size());
+        CHECK(commands == slots && res.survivors == slots && wrong == 0u && levelsDrawn.size() >= 3u, m);
     }
 
     // ---- THE THIRD COPY: THE DRAW PATH'S OWN STRATEGY -----------------------
@@ -924,7 +1023,7 @@ int main(int argc, char **argv)
         // The rotated group is attached and drawn too (A5b's fix round added it
         // after this block was written on another lane — the phase A merge
         // joined them): every instance of BOTH groups reports a level.
-        CHECK(drawn.size() == size_t(kInstances + kRotated), "every instance reports a drawn level");
+        CHECK(drawn.size() == size_t(kInstances + kRotated + kDecoys), "every instance reports a drawn level");
 
         unsigned sEvaluated = 0, sMismatched = 0, sHist[8] = {}, sNearThreshold = 0;
         // Per SCALE, because the defect this arm exists for is a scale defect:
@@ -1008,8 +1107,8 @@ int main(int argc, char **argv)
         // the GLSL copy divides by the instance's scale on the device.
     }
 
-    std::printf("\n== the parity ==\n   %u evaluations (%d instances x %zu parameter sets)\n",
-                evaluated, kInstances, sets.size());
+    std::printf("\n== the parity ==\n   %u evaluations (%u instances x %zu parameter sets)\n",
+                evaluated, slots, sets.size());
     std::printf("   levels taken: ");
     for (int i = 0; i < 8; ++i) std::printf("%u:%u ", i, histogram[i]);
     std::printf("\n   %u evaluations within 1e-4 of a level boundary\n", nearThreshold);
@@ -1030,7 +1129,7 @@ int main(int argc, char **argv)
     std::snprintf(msg, sizeof(msg), "the sweep reached %u distinct levels of the eight", distinct);
     CHECK(distinct >= 5u, msg);
 
-    voxelGatherParity(scene, slots);
+    voxelGatherParity(scene, slots, boundsOfMesh);
     clusterCutParity(e);
     productCutParity(e, view);
 
