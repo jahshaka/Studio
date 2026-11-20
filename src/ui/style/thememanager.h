@@ -68,6 +68,12 @@ public:
     // The blue accent variant of the same spec (primary actions: New Scene,
     // Add to Project, Update). Same geometry, primary color.
     static QString chromeAccentButtonSheet();
+    /// THE CLAUDE CHAT WINDOW'S SHEET (moved out of ui/windows/claudechatwindow.cpp,
+    /// STUDIO-HYGIENE-1): a self-contained dark palette, explicit on every widget, so
+    /// the popup reads identically under Qlementine dark and Classic — the one
+    /// theme-owned sheet that holds in BOTH themes (it is never empty). Keyed on the
+    /// window's object names (claudeChatRoot, claudeBubbleUser, …).
+    static QString claudeChatSheet();
 
     // Compact variant of the chrome spec for dense panel header rows (the
     // editor asset panel's Go Up / Display controls): same colors, rounded

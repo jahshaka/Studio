@@ -12,12 +12,19 @@ add_executable(test_claude_chat test_claude_chat.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/claude/claudechathost.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/windows/claudechatwindow.cpp
     ${CMAKE_SOURCE_DIR}/src/scripting/claude/claudeskills.qrc
-    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
+    # the window's sheet is the theme's (ThemeManager::claudeChatSheet, STUDIO-HYGIENE-1) - the theme's TU
+    # and what it reads (the classic sheets, the settings it persists the theme in)
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
 set_target_properties(test_claude_chat PROPERTIES AUTOMOC ON AUTORCC ON CXX_STANDARD 17)
 target_include_directories(test_claude_chat PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src)
-target_link_libraries(test_claude_chat PRIVATE Qt6::Widgets)
+target_link_libraries(test_claude_chat PRIVATE Qt6::Widgets qlementine)
 # OUT OF THE GPU-TIMING LOCK (lane D6B-GATE-SHAPE; audit §4 R4, FIX-LOCK): it measures no time
 # (its flake was a /proc read, not GPU time).
 add_test(NAME claude.chat COMMAND test_claude_chat

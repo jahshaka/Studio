@@ -13,8 +13,10 @@
 // editor with the tray on Assets and on Console and a selection in the
 // properties, Materials, Assets, Avatar, Player, Publish, and every dialog
 // app.dialogs() can open — and asserts that every non-empty sheet under
-// Qlementine is either the theme's own (ThemeManager hands it out and the walk
-// classifies it 'theme') or on the ALLOWLIST below, each entry with its reason.
+// Qlementine is the theme's own (ThemeManager hands it out and the walk
+// classifies it 'theme'). There is NO allowlist: the one window that had an entry,
+// the Claude chat popup, carries the theme's sheet now
+// (ThemeManager::claudeChatSheet, STUDIO-HYGIENE-1).
 //
 // Then it relaunches the app on the archived Classic theme and spot-checks
 // that Classic still carries its archive BIT-FOR-BIT: the root sheets the
@@ -38,25 +40,6 @@ static int failures = 0;
     else { std::printf("FAIL: %s\n", qUtf8Printable(QString(msg))); ++failures; } } while (0)
 
 namespace {
-
-// THE ALLOWLIST — raw (non-ThemeManager) sheets Qlementine may carry, and why.
-// Matched on the TOP-LEVEL window's objectName ("window" in the walk).
-struct Allowed { const char *window; const char *reason; };
-const Allowed kAllowlist[] = {
-    // The Claude chat popup is a self-contained designed surface — chat
-    // bubbles, a banner, an input well — explicitly identical under both
-    // themes and opted out of both cascades (ui/windows/claudechatwindow.h).
-    // Its sheet is the content's look, not a stock-widget skin.
-    { "claudeChatRoot", "Claude chat popup: self-contained bubble/banner design, same in both themes" },
-};
-
-const char *allowedReason(const QJsonObject &sheet)
-{
-    const QString window = sheet.value("window").toString();
-    for (const Allowed &a : kAllowlist)
-        if (window == QLatin1String(a.window)) return a.reason;
-    return nullptr;
-}
 
 QJsonObject readObject(McpClient &mcp, const QString &expression)
 {
@@ -93,7 +76,6 @@ int walkQlementine(McpClient &mcp, const QString &stop, int *themeOwned)
     for (const QJsonValue &v : walk.value("sheets").toArray()) {
         const QJsonObject sheet = v.toObject();
         if (sheet.value("owner").toString() == QLatin1String("theme")) continue;
-        if (allowedReason(sheet)) continue;
         ++unexplained;
         std::printf("  RAW %s [%s] window=%s: %s\n",
                     qUtf8Printable(sheet.value("path").toString()),
@@ -105,7 +87,7 @@ int walkQlementine(McpClient &mcp, const QString &stop, int *themeOwned)
                 walk.value("widgets").toInt(), walk.value("styled").toInt(),
                 walk.value("themeOwned").toInt(), walk.value("raw").toInt());
     if (themeOwned) *themeOwned += walk.value("themeOwned").toInt();
-    CHECK(unexplained == 0, stop + ": no raw stylesheet outside the allowlist (Qlementine)");
+    CHECK(unexplained == 0, stop + ": no raw stylesheet (Qlementine)");
     return unexplained;
 }
 
