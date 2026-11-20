@@ -170,7 +170,6 @@ int main()
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     {
         // (the device's ray query is known once a view exists)
         Scene *ps = e->createScene("spec_probe");

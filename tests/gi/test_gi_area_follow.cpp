@@ -61,7 +61,6 @@ int main()
     Engine *e = engine.get();
     e->setRayTracing(true);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
 
     View *v = e->createOffscreenView("area_follow", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);

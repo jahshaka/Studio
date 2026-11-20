@@ -141,7 +141,6 @@ int main()
     Engine *e = engine.get();
     e->setRayTracing(false);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
 
     Scene *s1 = buildScene(e, "screen_bind_live");

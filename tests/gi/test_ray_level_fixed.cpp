@@ -83,7 +83,6 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const Vec3 start(0.0f, 1.6f, 4.0f), end(0.0f, 1.6f, 0.0f), target(0.0f, 0.5f, -200.0f);
 
     // (a) THE WALK

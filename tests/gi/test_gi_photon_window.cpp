@@ -107,7 +107,6 @@ int main(int argc, char **argv)
     Engine *e = engine.get();
     e->setRayTracing(true);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     // TWO VIEWS from one eye inside the room: A at the sun patch and the floor beside it, B at the mirror
     View *viewA = e->createOffscreenView("photon_window_a", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);

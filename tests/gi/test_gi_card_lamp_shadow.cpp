@@ -120,7 +120,6 @@ int main(int argc, char **argv)
     Engine *e = engine.get();
     e->setRayTracing(true);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     // ONE PART A ROW (PHOTON-7 stage 7: whole, past the fixture's 10 s budget), named by the argument: `lamp` - the
     // lamp's two shadows on the card, (1) and (2); `area` - the area light's fixture, (3)-(8). None = both.

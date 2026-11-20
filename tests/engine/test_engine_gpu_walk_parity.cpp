@@ -61,7 +61,6 @@ static int freeRunningArm()
     Engine *e = engine.get();
     const inspect::EngineEcho *echo = inspect::engine(e);
     if (!echo) { std::printf("FAIL: the engine's probes\n"); return 1; }
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     View *view = e->createOffscreenView("parity-free", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("parity-free");
     if (!view || !scene) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
@@ -83,7 +82,6 @@ static int freeRunningArm()
     const auto status = [&]() { GpuSubstrateStatus st; e->request([&](Engine &) { st = gpuSubstrateStatus(*scene); }); return st; };
     const auto record = [&](unsigned long long step) {
         FrameInput in;
-        in.frameDelta = 1.0f / 60.0f;
         in.stepSerial = step;
         in.stepPeriod = 1.0f / 60.0f;
         FrameInputScene part;
@@ -165,7 +163,6 @@ static int composeIdentityArm()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     View *view = e->createOffscreenView("identity", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("identity", 8u);
     if (!view || !scene) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }
@@ -229,7 +226,6 @@ static int composeIdentityArm()
     unsigned long long step = 0;
     const auto record = [&](int pose, bool send = true) {
         FrameInput in;
-        in.frameDelta = 1.0f / 60.0f;
         in.stepSerial = send ? ++step : step;   // a frame that sends nothing is no new step (it would interpolate)
         in.stepPeriod = 1.0f / 60.0f;
         FrameInputScene part;
@@ -393,7 +389,6 @@ int main(int argc, char **argv)
     const auto cfg = enginetest::testEngineConfig("test-engine-gpu-walk-parity-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->submitFrame(FrameInput::delta(1.0f / 60.0f));
     Engine *e = engine.get();
     View *view = e->createOffscreenView("parity", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("parity");

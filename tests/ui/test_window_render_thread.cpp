@@ -117,7 +117,6 @@ int main(int argc, char **argv)
             enginetest::EngineOverrides().display(static_cast<NativeDisplayHandle>(reinterpret_cast<unsigned long long>(dpy))));
         engine = Engine::create(cfg, err);
         if (!engine) return;
-        engine->submitFrame(FrameInput::delta(1.0f / 60.0f));
         view = engine->createView("spike", static_cast<NativeWindowHandle>(winId), unsigned(surface->width()),
                                   unsigned(surface->height()), Colour(0.1f, 0.1f, 0.2f));
         scene = engine->createScene("spike");

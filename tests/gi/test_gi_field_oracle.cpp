@@ -157,7 +157,6 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     // ONE PART A ROW (PHOTON-7 stage 7: whole, past the fixture's 10 s budget), named by the argument: `step` - the leak
     // room's step against its oracle, laws (1), (2) and (7); `marks` - the two sealed rooms and the open step, (3) and (4);

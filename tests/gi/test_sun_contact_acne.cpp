@@ -102,7 +102,6 @@ int main()
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     View *view = e->createOffscreenView("sunacne", kW, kH, Colour(0.45f, 0.55f, 0.70f), jahshaka::engine::OffscreenContract::Live);
     Scene *s = e->createScene("sunacne");
     if (!view || !s) { std::printf("FAIL: view/scene: %s\n", e->lastError().c_str()); return 1; }

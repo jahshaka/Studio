@@ -304,7 +304,6 @@ int main(int, char **)
     Engine *e = engine.get();
     e->setRayTracing(true);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     double mean[2] = { 0, 0 };
     bool ok[2] = { false, false };

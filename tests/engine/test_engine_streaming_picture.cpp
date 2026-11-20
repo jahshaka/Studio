@@ -117,7 +117,6 @@ int main()
     CHECK(engine != nullptr, "engine created (%s)", err.c_str());
     if (!engine) return 1;
     Engine *e = engine.get();
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     View *view = e->createView("streaming", static_cast<NativeWindowHandle>(window), kW, kH, Colour(0.10f, 0.11f, 0.14f));
     if (!view) { std::printf("FAIL: createView: %s\n", e->lastError().c_str()); return 1; }
     view->setAsyncShaders(true);

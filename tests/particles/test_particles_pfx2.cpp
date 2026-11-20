@@ -144,7 +144,6 @@ int main(int argc, char **argv)
     CHECK(std::fabs(engine->fixedFrameDelta() - Engine::kDefaultFrameDelta) < 1e-6f &&
           std::fabs(Engine::kDefaultFrameDelta - 1.0f / 60.0f) < 1e-6f,
           "the engine boots on the 1/60 s grid step (no wall clock)");
-    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     CHECK(std::fabs(engine->fixedFrameDelta() - 1.0f / 60.0f) < 1e-6f,
           "a submitted frame delta is the one the engine runs on");
 
@@ -286,7 +285,6 @@ int main(int argc, char **argv)
         CHECK(countBright(frozenA) > 50, "the frozen plume is still on screen");
         CHECK(moved == 0, "a frame delta of 0 freezes the simulation exactly");
 
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));   // resumes on the grid step
         warm(engine.get(), 30);
         view->readPixels(img);
         int movedAgain = 0;

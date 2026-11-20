@@ -282,7 +282,6 @@ int main()
     Engine *e = engine.get();
     e->setRayTracing(true);
     int count = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
 
     Run sl, tr;
     const bool okS = runOnce(e, true, sl, count);

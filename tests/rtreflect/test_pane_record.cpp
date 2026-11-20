@@ -64,7 +64,6 @@ int main()
     auto engine = Engine::create(enginetest::testEngineConfig("test-pane-record-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     int frames = 1;
     View *view = e->createOffscreenView("panerecord", kWidth, kHeight, Colour(0.30f, 0.40f, 0.55f),
                                         OffscreenContract::Live);

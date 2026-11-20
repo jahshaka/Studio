@@ -134,7 +134,6 @@ int main(int argc, char **argv)
     Engine *e = engine.get();
     e->setRayTracing(true);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     View *view = e->createOffscreenView("sealed_sky", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
     Scene *scene = e->createScene("sealed_sky");

@@ -218,7 +218,6 @@ int main(int argc, char **argv)
         }
     }
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     const GiQuality tiers[4] = { GiQuality::Low, GiQuality::Medium, GiQuality::High, GiQuality::Epic };
     const char *names[4] = { "low", "medium", "high", "epic" };

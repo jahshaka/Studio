@@ -74,7 +74,6 @@ int main()
     Engine *e = engine.get();
     e->setRayTracing(true);   // the cards exist where the rays run
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     View *view = e->createOffscreenView("card_oracle", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
     Scene *scene = e->createScene("card_oracle");

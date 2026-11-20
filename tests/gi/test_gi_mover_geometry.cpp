@@ -103,7 +103,6 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->setRayTracing(false);   // the store's own rays carry the bounce: the store is what is read
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     int frames = 1;
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     View *view = e->createOffscreenView("movers", 64, 64, Colour(0, 0, 0), OffscreenContract::Live);

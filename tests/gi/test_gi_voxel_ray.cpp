@@ -79,7 +79,6 @@ int main()
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->setRayTracing(true);
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     View *view = e->createOffscreenView("voxel_ray", 256, 256, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("voxel_ray");
     view->setScene(scene);
