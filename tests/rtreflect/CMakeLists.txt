@@ -406,11 +406,11 @@ if(TARGET jahlab)
     # (`rest 1200 held`, two sessions). Each session declares its route through the lab's `routes` verb. 960x540. FRAMES
     # estimated (32; 2 x the hold ~500), re-counted from the first run at the feature end.
     jah_gpu_row(rtreflect.sky_invariant.first CLASS engine FRAMES 32
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/sky_invariant.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/sky_invariant.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/sky_invariant_first first
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     jah_gpu_row(rtreflect.sky_invariant.hold CLASS engine FRAMES 1004
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/sky_invariant.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/sky_invariant.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/sky_invariant_hold hold
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.sky_invariant.first rtreflect.sky_invariant.hold PROPERTIES TIMEOUT 60 LABELS "engine")
