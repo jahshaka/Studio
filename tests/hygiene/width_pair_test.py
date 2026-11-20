@@ -17,6 +17,7 @@ table, its live table only) leave the set by name, an unreadable spec refused; t
 when the build's Testing/Temporary is removed under it; the tree's check mark held for the run and a live foreign mark refusing."""
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -390,7 +391,12 @@ elif PART == "budget":
           f"over --plan: the row priced over its budget / 1.5 named (the budget binds first), the 0.3-s rows not (rc {rc}) {ln}")
     rc, out, labels, recs = run(bo, "--display", ":71", "--order", "1,2", "--budget-scale", "0.1")
     o1 = [x for x in out.splitlines() if "OVER ITS CLASS BUDGET AT WIDTH 1" in x]
-    check(rc == 0 and "ADOPT WIDTH 2" in out and "REFUSED" not in out and len(o1) == 1 and "toy.over ran 1.2" in o1[0]
+    # THE ALONE WALL IS READ AS A NUMBER >= the row's 1.2-s SLEEP (WS1-FIX2 item 8, 2026-11-20: red in PHOTON-7's first --code call
+    # at load ~40, "toy.over ran 1.32 s alone"): the old bar was the TEXT "ran 1.2", i.e. a wall in [1.2, 1.3) - a 0.1-s margin of
+    # forks (the row's two `n` polls, sh's start) that load stretches (CODING_RULES §6: a toy's margin to a bar is SLEEPS). The law
+    # is "past its 1-s budget alone": the 1.2-s sleep alone puts the wall there, and load only adds to it
+    w1 = re.search(r"toy\.over ran (\d+(?:\.\d+)?) s alone", o1[0]) if len(o1) == 1 else None
+    check(rc == 0 and "ADOPT WIDTH 2" in out and "REFUSED" not in out and w1 is not None and float(w1.group(1)) >= 1.2
           and "past its 1 s" in o1[0], f"over: the row past its budget alone named at width 1, not charged to width 2, ADOPT "
           f"WIDTH 2 (rc {rc}) {[x for x in out.splitlines() if 'REFUSED' in x or 'ADOPT' in x or 'OVER ITS' in x]}")
     od = os.path.join(T, "over-out")
