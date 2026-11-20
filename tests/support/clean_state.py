@@ -143,7 +143,13 @@ def main(argv):
     o = parse(argv)
     top = os.getcwd()
     results = {}
+    # WHAT RAN SURVIVES A KILL (WS1-FIX2 item 8, 2026-11-20: pool.clean_state.docs hit its 60-s TIMEOUT at load ~40 and its JUnit
+    # held NOTHING - every line was still in this process's stdout buffer; measured: ctest keeps what a killed row has written).
+    # Line-buffered whatever the interpreter's flags (-I ignores PYTHONUNBUFFERED), and each order announced before it runs, so a
+    # timeout names the order it stopped in and every finished order's line
+    sys.stdout.reconfigure(line_buffering=True)
     for label, arms in orders(o["arms"]):
+        print("order %-12s running: %s" % (label, " ".join(n for n, _, _ in arms)))
         res, out = run_order(o, label, arms, top)
         print("order %-12s %s" % (label, "  ".join("%s=%s(%d lines)" % (n, v, len(l)) for n, (v, l) in res.items())))
         for n, v in res.items():
