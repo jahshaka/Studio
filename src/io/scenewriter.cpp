@@ -25,6 +25,7 @@ For more information see the LICENSE file
 
 #include <QDir>
 #include <QFile>
+#include <QElapsedTimer>
 
 #include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/mesh.h"
@@ -71,6 +72,7 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
                                        EditorData *editorData)
 {
     dir = projectPath;
+    QElapsedTimer armWalk; armWalk.start();   // STAGE-0 ARM (STUDIO-HYGIENE-1): reverted after one run
     QJsonObject projectObj;
     projectObj["version"] = Constants::CONTENT_VERSION;
     // THE FORMAT HEADER (src/io/sceneformat.h). `version` above is the APP's
@@ -97,7 +99,12 @@ QByteArray SceneWriter::getSceneObject(QString projectPath,
         projectObj["editor"] = editorObj;
     }
 
-    return QJsonDocument(projectObj).toJson();
+    const double walkMs = armWalk.nsecsElapsed() / 1e6;
+    QElapsedTimer armEncode; armEncode.start();
+    QByteArray out = QJsonDocument(projectObj).toJson();
+    qInfo("SAVE-ARM walk_ms=%.3f encode_ms=%.3f bytes=%lld", walkMs,
+          armEncode.nsecsElapsed() / 1e6, qlonglong(out.size()));
+    return out;
 }
 
 void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
