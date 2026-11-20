@@ -193,27 +193,42 @@ public:
                                     std::unique_ptr<EditorData> *editorData,
                                     const iris::MeshPrewarmPtr &prewarm);
 
-    /// Blob-only save (SCRIPTING_SPEC §1.6.2): never silently no-ops; the
-    /// thumbnail refreshes only when a viewport can render one.
-    /// Run before every SCENE WRITE (all three saves below). The shell ends the
+    /// Run before every SCENE WRITE (save, below). The shell ends the
     /// live material hover preview here: the preview borrows a mesh's material
     /// slot without touching the document, and a save taken mid-hover would
     /// otherwise write the BORROWED material into the project — the one state
     /// the user never chose. A hook, like UndoService's, so this service stays
     /// free of the preview and headless hosts leave it unset.
     void setPreWriteHook(std::function<void()> hook) { mPreWrite = std::move(hook); }
+    /// WHO TELLS THE USER a save failed: "the scene could not be saved: <why>"
+    /// (a box for a person, a log line for a driven run — the shell's). A hook
+    /// for the reason the pre-write one is; headless hosts leave it unset and
+    /// read save()'s result.
+    void setSaveFailedHook(std::function<void(const QString &)> hook) { mSaveFailed = std::move(hook); }
 
-    bool saveProjectBlob();
+    /// Why a scene is written — the one thing the doors differ by.
+    enum class SaveReason {
+        Editor,   ///< Ctrl+S, the toolbar, the close's and the switch's auto-save, an export's pre-save:
+                  ///< the tile is the next presented frame (asked for, encoded on a worker). With no
+                  ///< view yet (the scene was never opened in edit mode) there is nothing to save: true.
+        Create,   ///< a new project's first save: the tile asked for when a view exists.
+        Script    ///< project.save: the row AND its tile written when it returns (one frame read now).
+    };
 
-    /// The regular editor save: scene blob (written before it returns) +
-    /// viewport thumbnail (encoded on a worker, written when it is done — see
-    /// storeThumbnailLater) + desktop tile. No-ops when the viewport never
-    /// initialized (nothing to save).
-    void saveOpenScene();
-
-    /// First save of a fresh project into projectPath (was
-    /// MainWindow::saveScene(filename, projectPath)).
-    void saveInitialScene(const QString &projectPath);
+    /// THE ONE SAVE DOOR (STUDIO-HYGIENE-1 stage 1): the open project's scene
+    /// into its row, for every reason above — what Ctrl+S, the close, the
+    /// switch, the export, the create and project.save all call. The hover
+    /// preview ends first (setPreWriteHook); the walk, the encode and the one
+    /// UPDATE run here, on the calling thread (stage 0 measured the walk at 65 %
+    /// of a 21 MB save, so it stays synchronous until the document keeps its
+    /// own snapshot — the portable project's spec). TRUE ONLY WHEN THE ROW WAS
+    /// WRITTEN (Database::wroteOneProjectRow: one row, by the guid), and only
+    /// then is the undo stack marked saved. A failure — no open scene, a guid
+    /// that is not the open project's, a row that is gone or refused the write
+    /// — returns false with `whyOut` set, tells the save-failed hook "the scene
+    /// could not be saved: <why>", and leaves the stack DIRTY, so the close
+    /// asks. Every door logs one SAVE line (SESSION_LOG_SPEC §5).
+    bool save(const QString &guid, SaveReason reason, QString *whyOut = nullptr);
 
     /// The presented frame -> scene thumbnail + desktop tile, synchronously
     /// read (one frame), the encode on a worker.
@@ -281,6 +296,7 @@ private:
     UndoService *undo;
     std::function<iris::ScenePtr()> sceneProvider;
     std::function<void()> mPreWrite;
+    std::function<void(const QString &)> mSaveFailed;
     QStringList mMissingModels;
     QVector<MissingClipRef> mMissingClips;
     int mCascadeRowsDropped = 0;

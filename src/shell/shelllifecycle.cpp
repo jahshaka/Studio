@@ -162,8 +162,10 @@ void ShellLifecycle::closeRequested(QCloseEvent *event)
 	const bool autoSave = mParts.settings->get(settingkeys::autoSave);
 	const bool sceneOpen = projectService && projectService->isSceneOpen();
 
-	if (autoSave && sceneOpen) {
-		if (mParts.saveScene) mParts.saveScene();
+	// AN AUTO-SAVE THAT FAILED FALLS THROUGH TO THE QUESTION (STUDIO-HYGIENE-1):
+	// the save door has said why, the stack is still dirty, and the user decides —
+	// a close used to accept here whatever the save did.
+	if (autoSave && sceneOpen && mParts.saveScene && mParts.saveScene()) {
 		event->accept();
 	}
 	else {
@@ -175,15 +177,16 @@ void ShellLifecycle::closeRequested(QCloseEvent *event)
 		// the process alive — the same zombie the in-flight-open settle at the
 		// top of this function was written for, in a second guise. Nothing to
 		// save means nothing to ask.
-		if (undoService && undoService->isDirty()
-		    && !undoService->savedCountMatchesCurrent() && sceneOpen) {
+		if (undoService && undoService->isDirty() && sceneOpen) {
 			QMessageBox::StandardButton reply;
 			reply = QMessageBox::question(mParts.window,
 				"Unsaved Changes",
 				"There are unsaved changes, save before closing?",
 				QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
 			if (reply == QMessageBox::Yes) {
-				if (mParts.saveScene) mParts.saveScene();
+				// A "Yes" whose save failed keeps the window: the door said why,
+				// and closing now would drop the very changes the user asked to keep.
+				if (mParts.saveScene && !mParts.saveScene()) { event->ignore(); return; }
 				event->accept();
 			}
 			else if (reply == QMessageBox::No) {

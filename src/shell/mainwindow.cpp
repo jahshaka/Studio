@@ -425,7 +425,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	parts.docks = docks;
 	parts.assistant = assistant;
 	parts.assetsPage = [this]() { return _assetView; };
-	parts.saveScene = [this]() { saveScene(); };
+	parts.saveScene = [this]() { return saveScene(); };
 	parts.deleteUi = [this]() {
 		// The plain services are gone (step 5): nothing reaches them after.
 		services = nullptr;
@@ -956,26 +956,15 @@ void MainWindow::updateTopMenuStates(WindowSpaces activeSpace)
 	header->updateStates(activeSpace, projectService->isSceneOpen());
 }
 
-void MainWindow::saveScene(const QString &filename, const QString &projectPath)
-{
-	Q_UNUSED(filename);
-	projectService->saveInitialScene(projectPath);
-}
-
 bool MainWindow::startInteractiveImport(const QStringList &files)
 {
     if (!docks->assetTray()) return false;
     return docks->assetTray()->importFiles(files);
 }
 
-bool MainWindow::saveProjectBlob()
+bool MainWindow::saveScene()
 {
-	return projectService->saveProjectBlob();
-}
-
-void MainWindow::saveScene()
-{
-	projectService->saveOpenScene();
+	return projectService->save(project->getProjectGuid(), ProjectService::SaveReason::Editor);
 }
 
 
@@ -1078,7 +1067,7 @@ void MainWindow::buildPanels(bool fresh)
         undoService->clear();
         updateWindowTitle();
     } else {
-        undoService->resetSavedCount();
+        undoService->markSaved();   // the opened world IS its row: nothing unsaved
     }
 }
 
@@ -1111,9 +1100,9 @@ void MainWindow::showOpenRefusal(const QString &text)
     if (pmContainer) pmContainer->reportImportProblem(tr("Open Scene"), text);
 }
 
-void MainWindow::saveOpenWorld()
+bool MainWindow::saveOpenWorld()
 {
-    saveScene();
+    return saveScene();
 }
 
 iris::ScenePtr MainWindow::openWorld() const
@@ -1286,8 +1275,6 @@ void MainWindow::closeWorld(bool reopenInPlace)
     // free themselves a few frames after this).
     if (auto eng = EngineHost::instance().engine())
         eng->request([](jahshaka::engine::Engine &e) { e.reclaimMemory(); });   // a REQUEST (U3 stage 4a)
-
-	undoService->resetSavedCount();
 
 	if (currentSpace == WindowSpaces::DESKTOP) {
 		header->disableSceneSpaces();
@@ -1640,6 +1627,11 @@ void MainWindow::setupDesktop()
 	pmContainer = new ProjectManager(db, project, this);
 	pmContainer->shell = shellView.get();
 	projectService->setProjectManager(pmContainer);
+	// A FAILED SAVE IS SAID (STUDIO-HYGIENE-1): "the scene could not be saved: <why>" —
+	// a box for a person, a log line for a driven run (the page's one reporter).
+	projectService->setSaveFailedHook([this](const QString &sentence) {
+		if (pmContainer) pmContainer->reportImportProblem(tr("Save Scene"), sentence);
+	});
 	// ...and the other half of that pairing: the desktop's New Scene button
 	// creates through the SERVICE, not through a second copy of it (R1).
 	pmContainer->setProjectService(projectService);

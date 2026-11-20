@@ -719,7 +719,7 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
     // the page, and the desktop re-reads the tile when it is next shown.
     //
     // ...AND THE TILE NEEDS A VIEW (fix round item 5). `ProjectService::
-    // saveInitialScene` takes a headless branch when `viewport->isInitialized()`
+    // save(Create)` takes a headless branch when `viewport->isInitialized()`
     // is false, writing the row with NO tile and no editor data — and a View is
     // born in `EngineSceneViewport::showEvent`, because it needs the widget's
     // MAPPED NATIVE WINDOW (the engine's own startup order: a render window
@@ -738,9 +738,9 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
     auto hadViewport = std::make_shared<bool>(true);
     slices.append({ QStringLiteral("Saving the scene…"), 97,
                     [this, projectPath, hadViewport]() {
-        LoadTimeline::mark(QStringLiteral("saveInitialScene"));
+        LoadTimeline::mark(QStringLiteral("save(create)"));
         *hadViewport = mViewport->isInitialized();
-        mProjectService->saveInitialScene(projectPath);
+        mProjectService->save(mProject->getProjectGuid(), ProjectService::SaveReason::Create);
     } });
     slices.append({ QStringLiteral("Opening…"), 100,
                     [this, projectPath, hadViewport]() {
@@ -748,7 +748,7 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
         if (!*hadViewport && mViewport->isInitialized()) {
             qInfo("scene create: the tile was taken after the reveal — the editor page "
                   "had never been shown, so the initial save had no viewport");
-            mProjectService->saveInitialScene(projectPath);
+            mProjectService->save(mProject->getProjectGuid(), ProjectService::SaveReason::Create);
         }
     } });
 
@@ -820,7 +820,11 @@ bool ProjectRunner::startExport(const QString &guid, const QString &zipPath, QSt
     // there, so every later autosave of the open world landed in that row too.
     const bool exportingOpenWorld = mHost->openWorld() && mProjectService->isSceneOpen()
                                     && guid == mProject->getProjectGuid();
-    if (exportingOpenWorld) mHost->saveOpenWorld();
+    // THE ARCHIVE CARRIES WHAT IS ON SCREEN, or nothing: a pre-save that failed
+    // (told to the user by the save door) refuses the export rather than archive
+    // the row's older scene under the open world's name (STUDIO-HYGIENE-1).
+    if (exportingOpenWorld && !mHost->saveOpenWorld())
+        return refuse(tr("The open world could not be saved first, so it was not exported."));
 
     if (!mArchiver) {
         // It exports `mExportTarget` — a Project naming the row — never the

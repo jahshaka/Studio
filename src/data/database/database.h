@@ -502,6 +502,8 @@ public:
                                const QString &folder);
     bool updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail, const QString &projectGuid);
     bool updateProjectBlob(const QByteArray &sceneBlob, const QString &projectGuid);
+    /// The two writers above succeed only when they wrote exactly ONE row.
+    static bool wroteOneProjectRow(const QSqlQuery &query, const QString &projectGuid);
     bool updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail);
     bool updateAssetAsset(const QString &guid, const QByteArray &asset);
     bool updateSceneThumbnail(const QString &guid, const QByteArray &asset);

@@ -104,19 +104,48 @@ void testUndoService()
     undo.clear();
     CHECK(stack.count() == 0, "undo: clear() clears once the macro closes");
 
-    // Saved-count bookkeeping, preserving the pre-extraction bool coercion:
-    // the recorded value is only ever 0 or 1.
-    CHECK(undo.savedCountMatchesCurrent(), "undo: fresh service matches empty stack");
+    // THE ONE DEFINITION OF "UNSAVED" (UndoService::isDirty, STUDIO-HYGIENE-1). It replaced a counter coerced
+    // to 0/1, under which "2 commands still reads as saved" - this suite asserted that quirk - so every edit
+    // after the first save read as saved and the close never asked about it.
+    CHECK(!undo.isDirty(), "dirty: a cleared stack is a fresh document - clean");
     undo.push(new CountingCommand(&redos, &undos));
-    CHECK(!undo.savedCountMatchesCurrent(), "undo: unsaved push is detected");
+    CHECK(undo.isDirty(), "dirty: a push makes it dirty");
     undo.markSaved();
-    CHECK(undo.savedCountMatchesCurrent(), "undo: markSaved matches");
+    CHECK(!undo.isDirty(), "dirty: a save makes it clean");
     undo.push(new CountingCommand(&redos, &undos));
-    // The quirk: 2 commands vs saved-at-1 both coerce to 1 — "matches".
-    CHECK(undo.savedCountMatchesCurrent(),
-          "undo: bool-coercion quirk preserved (2 commands still reads as saved)");
-    undo.resetSavedCount();
-    CHECK(!undo.savedCountMatchesCurrent(), "undo: resetSavedCount marks unsaved again");
+    CHECK(undo.isDirty(), "dirty: a push AFTER a save is dirty (the coerced counter read it as saved)");
+    undo.markSaved();
+    undo.undo();
+    CHECK(undo.isDirty(), "dirty: an undo after a save is dirty");
+    undo.redo();
+    CHECK(!undo.isDirty(), "dirty: the redo back to the saved state is clean");
+    undo.undo();
+    undo.push(new CountingCommand(&redos, &undos));
+    CHECK(undo.isDirty(),
+          "dirty: a push after an undo (the redo branch dropped) is dirty though the index is the saved one");
+    // A FAILED save never calls markSaved (ProjectService::save): the stack stays as dirty as it was.
+    CHECK(undo.isDirty(), "dirty: no markSaved, still dirty");
+    // INSIDE A SCRIPT RUN'S MACRO: QUndoStack cannot set clean mid-macro, this can - and a save made inside
+    // the run, with nothing pushed after it, is still the saved state once the macro closes over it.
+    undo.clear();
+    undo.beginScriptMacro("script: save inside");
+    undo.push(new CountingCommand(&redos, &undos));
+    CHECK(undo.isDirty(), "dirty: a push inside the run's macro is dirty");
+    undo.markSaved();
+    CHECK(!undo.isDirty(), "dirty: a save inside the run is clean");
+    undo.endScriptMacro();
+    CHECK(!undo.isDirty(), "dirty: ...and still clean when the macro closes over it");
+    undo.beginScriptMacro("script: push after the save");
+    undo.push(new CountingCommand(&redos, &undos));
+    undo.markSaved();
+    undo.push(new CountingCommand(&redos, &undos));
+    undo.endScriptMacro();
+    CHECK(undo.isDirty(), "dirty: a push after a save inside the run is dirty when the macro closes");
+    undo.clear();
+    CHECK(!undo.isDirty(), "dirty: clear (a close, an open) is clean");
+    // NO UNDO LIMIT IS SET ANYWHERE (grep setUndoLimit: none); the push count never falls, so even a stack
+    // that dropped its oldest command could not read clean after a push.
+    CHECK(stack.undoLimit() == 0, "dirty: the stack has no undo limit (pushCount alone decides a push)");
 }
 
 void testSelectionService()

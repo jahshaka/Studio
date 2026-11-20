@@ -599,8 +599,11 @@ QVariantMap ProjectApi::thumbnail(const QString &path, const QString &guid)
 bool ProjectApi::save()
 {
     if (!requireProject()) return false;
-    if (!host.services || !host.services->project || !host.services->project->saveProjectBlob())
-        return fail("project.save: the blob save failed");
+    if (!host.services || !host.services->project) return fail("project: not available in this session");
+    // THE ONE SAVE DOOR (STUDIO-HYGIENE-1): true only when the row was written.
+    QString why;
+    if (!host.services->project->save(host.project->getProjectGuid(), ProjectService::SaveReason::Script, &why))
+        return fail(QStringLiteral("project.save: the scene could not be saved: %1").arg(why));
     return true;
 }
 

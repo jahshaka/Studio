@@ -107,8 +107,9 @@ public:
         /// A REFUSED OPEN (STUDIO-HYGIENE-1): the window lands on the Desktop and
         /// says `text` (a box for a person, a log line for a driven run).
         virtual void showOpenRefusal(const QString &text) = 0;
-        /// The open world's force save (autosave), for an export of it.
-        virtual void saveOpenWorld() = 0;
+        /// The open world's force save (autosave), for an export of it. False when
+        /// the save failed (the save door has told the user).
+        virtual bool saveOpenWorld() = 0;
         /// The world that is bound to the window, or null.
         virtual iris::ScenePtr openWorld() const = 0;
     };

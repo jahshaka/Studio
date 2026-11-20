@@ -94,7 +94,7 @@ public:
         /// The Assets page, or null while it has never been built.
         std::function<AssetView *()> assetsPage;
         /// The force save (autosave / "save before closing?").
-        std::function<void()> saveScene;
+        std::function<bool()> saveScene;   ///< the editor's save; false = it failed (and said so)
         /// Step 5's last act: the window forgets the plain services and
         /// deletes its Ui:: struct.
         std::function<void()> deleteUi;

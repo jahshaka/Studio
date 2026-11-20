@@ -2136,7 +2136,7 @@ bool Database::updateProject(const QByteArray &sceneBlob, const QByteArray &thum
     query.addBindValue(sceneBlob);
     query.addBindValue(thumbnail);
     query.addBindValue(projectGuid);
-    return executeAndCheckQuery(query, "UpdateProject");
+    return executeAndCheckQuery(query, "UpdateProject") && wroteOneProjectRow(query, projectGuid);
 }
 
 // Blob-only update: keeps the existing thumbnail (headless saves have no
@@ -2147,7 +2147,21 @@ bool Database::updateProjectBlob(const QByteArray &sceneBlob, const QString &pro
     query.prepare("UPDATE projects SET scene = ?, last_written = datetime() WHERE guid = ?");
     query.addBindValue(sceneBlob);
     query.addBindValue(projectGuid);
-    return executeAndCheckQuery(query, "UpdateProjectBlob");
+    return executeAndCheckQuery(query, "UpdateProjectBlob") && wroteOneProjectRow(query, projectGuid);
+}
+
+// A SAVE THAT WROTE NO ROW IS A FAILED SAVE (STUDIO-HYGIENE-1). The two
+// project-row writers above returned the statement's success, and an UPDATE
+// whose WHERE matches nothing succeeds — so a save of a project whose row was
+// gone reported "saved", the undo stack was marked clean, and the close did not
+// ask. One row, by the guid, is the only success.
+bool Database::wroteOneProjectRow(const QSqlQuery &query, const QString &projectGuid)
+{
+    const int rows = query.numRowsAffected();
+    if (rows == 1) return true;
+    irisLog(QStringLiteral("the save of project %1 wrote %2 rows (one was expected)")
+                .arg(projectGuid).arg(rows));
+    return false;
 }
 
 bool Database::updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail)

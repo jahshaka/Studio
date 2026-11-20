@@ -67,7 +67,7 @@ ProjectService::~ProjectService()
 //
 // A save used to deflate its thumbnail PNG on the UI thread: ~100 ms of every
 // close, every Ctrl+S and every create (measured: the create's
-// `saveInitialScene` 131 ms, of which the screenshot 25-36 and the rest the
+// initial save 131 ms, of which the screenshot 25-36 and the rest the
 // encode). The picture is the presented frame read back (CLOSE-SHOT-2,
 // requestTile) and the QImage it hands back is ENCODED on a worker; the database write and the
 // tile follow on this thread when the worker is done (the DB is SQLite on the
@@ -420,11 +420,14 @@ iris::ScenePtr ProjectService::readProjectScene(const QJsonObject &projectObj,
 //
 // The blob does not go to a file; it goes to SQLite, as ONE statement —
 // Database::updateProject / updateProjectBlob are a single
-// `UPDATE projects SET scene=?, … WHERE guid=?` in autocommit, and there is no
-// `PRAGMA journal_mode` anywhere in the tree, so SQLite runs its default
-// rollback journal. A `kill -9` mid-UPDATE therefore leaves the PREVIOUS blob
-// intact by construction: there is no window in which the project row holds
-// half a scene.
+// `UPDATE projects SET scene=?, … WHERE guid=?` (in autocommit, or inside the
+// script run's gesture batch, which commits it whole). The library runs in WAL
+// mode with synchronous=NORMAL (Database::initializeDatabase,
+// applyDurabilityPragmas — FSYNC-2): a committed transaction is in the -wal file
+// and a recovery replays the -wal up to the last COMPLETE transaction, so a
+// `kill -9` mid-UPDATE leaves the PREVIOUS blob intact by construction: there is
+// no window in which the project row holds half a scene. (A power cut may lose
+// the last few seconds of commits; it cannot tear one.)
 //
 // This is worth writing down because the property is invisible, unguarded and
 // easy to destroy. Splitting the save into several statements (blob here,
@@ -441,133 +444,88 @@ iris::ScenePtr ProjectService::readProjectScene(const QJsonObject &projectObj,
 //
 // The write in the save/store path that could NOT tear is the CAS object copy;
 // that one is fixed at src/services/assetcas.cpp storeObject.
-bool ProjectService::saveProjectBlob()
+bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOut)
 {
-    // The SAVE BLOCK (SESSION_LOG_SPEC §5) is emitted from here, not from the
-    // verb: this is what project.save calls AND what the UI save path calls, so
-    // one record covers both.
-    if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
+    if (whyOut) whyOut->clear();
     QElapsedTimer clock;
     clock.start();
-    // The blob-only save (SCRIPTING_SPEC §1.6.2). Unlike saveOpenScene() this
-    // NEVER silently no-ops: the scene lives only in the DB projects table,
-    // and a scripted or headless save must actually write it. The thumbnail
-    // is refreshed only when a viewport can render one (and kept otherwise).
-    auto scene = sceneProvider ? sceneProvider() : iris::ScenePtr();
-    if (!scene || project->getProjectGuid().isEmpty()) return false;
-
-    SceneWriter writer;
-    auto blob = writer.getSceneObject(project->getProjectFolder(),
-                                      scene,
-                                      (viewport && viewport->isInitialized()) ? viewport->getEditorData() : nullptr);
-
-    bool ok;
-    // A null screenshot (engine scene mid-swap, or a readback failure) must
-    // never overwrite the stored tile with an empty PNG — fall back to the
-    // blob-only save.
-    // THE PRESENTED FRAME, READ NOW (CLOSE-SHOT-2): this verb's contract is a
-    // written row, so it takes the synchronous door — one frame and its fence,
-    // never a settle.
-    QImage img;
-    if (viewport && viewport->isInitialized())
-        img = tileFromFrame(viewport->capturePresentedFrame());
-    // THE VERB'S ENCODE STAYS SYNCHRONOUS (CREATE-GAP-1, stated): this is
-    // project.save — a script's call, never a person's key, whose contract is
-    // that the row (thumbnail included) is written when it returns. It
-    // supersedes an encode still in flight from an earlier save, which would
-    // otherwise land an OLDER picture over this one.
-    const QString guid = project->getProjectGuid();
-    supersedeThumbnail(guid);
-    if (!img.isNull()) {
-        const QByteArray thumb = encodeThumbnailPng(img);
-        ok = db->updateProject(blob, thumb, guid);
-        projectManager->updateTile(guid, thumb);
-    } else {
-        ok = db->updateProjectBlob(blob, guid);
-    }
-    projectManager->touchTile(guid);
-
-    undo->markSaved();
-    JahLog::write(JahLog::scene, ok ? JahLog::Level::Display : JahLog::Level::Error,
-            QStringLiteral("=== SCENE SAVE === '%1' (%2) %3 in %4 ms, blob %5 bytes")
-                .arg(project->getProjectName(), project->getProjectGuid(),
-                     ok ? QStringLiteral("ok") : QStringLiteral("FAILED"))
-                .arg(clock.elapsed()).arg(blob.size()));
-    return ok;
-}
-
-void ProjectService::saveOpenScene()
-{
-    if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
-    // if the viewport isnt initialized then the scene was never opened in
-    // edit mode. This also means no renderer was initialized. There's no
-    // need to save (nick)
-    if (!viewport->isInitialized()) return;
-
-    // The ledger's view of a save (CREATE-GAP-1): a create's closing save is
-    // inside the create's run now, and these say where its time goes. They
-    // are no-ops outside a run.
-    const QString guid = project->getProjectGuid();
     QByteArray blob;
-    {
-        LoadTimeline::Accumulate row(QStringLiteral("saveOpen:serialize"));
-        SceneWriter writer;
-        blob = writer.getSceneObject(project->getProjectFolder(),
-                                     sceneProvider(),
-                                     viewport->getEditorData());
-    }
-    {
-        // THE TILE IS THE NEXT PRESENTED FRAME (CLOSE-SHOT-2): asked for here,
-        // answered by the driver's next tick (or by the close's settle, before
-        // the world is torn down) — this row measures the ask, which is all the
-        // save pays.
-        LoadTimeline::Accumulate row(QStringLiteral("saveOpen:thumbnail"));
-        requestTile(guid);
-    }
-    {
-        // THE ESSENTIAL WRITE IS SYNCHRONOUS: the scene is in the row before
-        // this returns. Only the thumbnail's PNG encode leaves the thread.
-        LoadTimeline::Accumulate row(QStringLiteral("saveOpen:write"));
-        db->updateProjectBlob(blob, guid);
-    }
-    undo->markSaved();
-    projectManager->touchTile(guid);
-}
+    const auto fail = [&](const QString &why) {
+        if (whyOut) *whyOut = why;
+        const QString sentence = QStringLiteral("the scene could not be saved: %1").arg(why);
+        JahLog::write(JahLog::scene, JahLog::Level::Error,
+                      QStringLiteral("=== SCENE SAVE === '%1' (%2) FAILED in %3 ms: %4")
+                          .arg(project ? project->getProjectName() : QString(), guid)
+                          .arg(clock.elapsed()).arg(why));
+        if (mSaveFailed) mSaveFailed(sentence);
+        return false;
+    };
 
-void ProjectService::saveInitialScene(const QString &projectPath)
-{
     {
         LoadTimeline::Accumulate row(QStringLiteral("save:preWrite"));
-        if (mPreWrite) mPreWrite();  // a save writes the ORIGINAL material
+        if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
     }
-    SceneWriter writer;
-    QByteArray sceneObject;
+    const bool hasView = viewport && viewport->isInitialized();
+    // An editor save before the scene was ever opened in edit mode: no renderer
+    // was initialized and there is nothing to save (nick) — a success, as it
+    // always was, and nothing is written.
+    if (reason == SaveReason::Editor && !hasView) return true;
+
+    if (!db) return fail(QStringLiteral("there is no library in this session"));
+    if (guid.isEmpty() || !project || project->getProjectGuid() != guid)
+        return fail(QStringLiteral("'%1' is not the open project").arg(guid));
+    const iris::ScenePtr scene = sceneProvider ? sceneProvider() : iris::ScenePtr();
+    if (!scene) return fail(QStringLiteral("there is no open scene to save"));
+
     {
         LoadTimeline::Accumulate row(QStringLiteral("save:serialize"));
-        sceneObject = writer.getSceneObject(projectPath,
-                                            sceneProvider(),
-                                            viewport->isInitialized() ? viewport->getEditorData()
-                                                                      : nullptr);
+        SceneWriter writer;
+        blob = writer.getSceneObject(projectFolderFor(guid), scene,
+                                     hasView ? viewport->getEditorData() : nullptr);
     }
 
-    // Headless (scripted project.create): the viewport never initialized, so
-    // there is no picture and the row keeps its empty thumbnail. Otherwise the
-    // tile is the new world's first PRESENTED frame (CLOSE-SHOT-2), asked for
-    // below and stored when the reveal has drawn it — no second render, and so
-    // nothing here arms GI for a picture (the GI park this used to need is gone).
-    const bool wantTile = viewport->isInitialized();
-    const QString guid = project->getProjectGuid();
+    bool ok = false;
+    QByteArray thumb;
+    if (reason == SaveReason::Script && hasView) {
+        // THE VERB'S TILE IS WRITTEN WITH ITS ROW (CREATE-GAP-1, CLOSE-SHOT-2):
+        // project.save's contract is that the row, thumbnail included, is
+        // written when it returns — the presented frame read now (one frame and
+        // its fence, never a settle), encoded here. A null frame (a scene
+        // mid-swap, a failed readback) never overwrites the stored tile.
+        LoadTimeline::Accumulate row(QStringLiteral("save:thumbnail"));
+        const QImage img = tileFromFrame(viewport->capturePresentedFrame());
+        if (!img.isNull()) thumb = encodeThumbnailPng(img);
+    }
+    // ...and it supersedes an encode still in flight from an earlier save, which
+    // would otherwise land an OLDER picture over this one.
+    if (!thumb.isEmpty()) supersedeThumbnail(guid);
     {
-        LoadTimeline::Accumulate row(QStringLiteral("save:updateProject"));
-        db->updateProjectBlob(sceneObject, guid);
+        LoadTimeline::Accumulate row(QStringLiteral("save:write"));
+        ok = thumb.isEmpty() ? db->updateProjectBlob(blob, guid) : db->updateProject(blob, thumb, guid);
+    }
+    if (!ok) {
+        ProjectTileData row;
+        return fail(db->fetchProjectTile(guid, &row)
+                        ? QStringLiteral("the library did not write its row (the log has the database's answer)")
+                        : QStringLiteral("the project's row is no longer in the library"));
     }
 
-    undo->markSaved();
-    projectManager->touchTile(guid);
-    if (wantTile) {
-        LoadTimeline::Accumulate shot(QStringLiteral("save:thumbnail"));
-        requestTile(guid);
+    // ONLY A WRITTEN ROW IS A SAVED SCENE.
+    if (undo) undo->markSaved();
+    if (projectManager) {
+        if (!thumb.isEmpty()) projectManager->updateTile(guid, thumb);
+        projectManager->touchTile(guid);
     }
+    // THE TILE IS THE NEXT PRESENTED FRAME (CLOSE-SHOT-2) for the editor's and
+    // the create's saves: asked for here, answered by the driver's next tick (or
+    // by the close's settle) and encoded on a worker — the ask is all the save
+    // pays. A create with no view yet takes it after its reveal (ProjectRunner).
+    if (reason != SaveReason::Script && hasView) requestTile(guid);
+    JahLog::write(JahLog::scene, JahLog::Level::Display,
+                  QStringLiteral("=== SCENE SAVE === '%1' (%2) ok in %3 ms, blob %4 bytes")
+                      .arg(project->getProjectName(), guid)
+                      .arg(clock.elapsed()).arg(blob.size()));
+    return true;
 }
 
 void ProjectService::updateCurrentSceneThumbnail()

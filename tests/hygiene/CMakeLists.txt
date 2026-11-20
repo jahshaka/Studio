@@ -48,6 +48,14 @@ add_test(NAME source.one_asset_name_write
 set_tests_properties(source.one_asset_name_write PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.one_asset_name_write)
 
+# source.one_save_door — STUDIO-HYGIENE-1 stage 1: the scene has one save door (ProjectService::save); the three
+# old doors are gone and the scene row's writers are called only there. See the script's header.
+add_test(NAME source.one_save_door
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_save_door.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.one_save_door PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.one_save_door)
+
 # source.db_pointers_initialised — DBPTR-1: a declared `Database *` is an
 # initialised one, and the two handles that are filled by a setter after
 # construction stay wired to their caller. See the script's header for the

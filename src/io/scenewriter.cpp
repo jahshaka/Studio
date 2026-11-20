@@ -62,7 +62,7 @@ For more information see the LICENSE file
 // open, then wrote: destroy-then-write on the one copy of a world, with a
 // crash window in the middle and no error path at all. Scenes live in the
 // projects table (getSceneObject -> Database::updateProject, a single
-// crash-atomic UPDATE — see the note at ProjectService::saveProjectBlob), and
+// crash-atomic UPDATE — see the note at ProjectService::save), and
 // exports go through src/export/. A dead unchecked truncate on a scene file is
 // a loaded gun; deleting beats fixing.
 

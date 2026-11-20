@@ -59,3 +59,21 @@ set_tests_properties(assets.one_name_door PROPERTIES
     LABELS "scripting"
     TIMEOUT 60)
 jah_no_display(assets.one_name_door)
+
+# project.save_door — the one save door (stage 1): project.save round-trips, the dirty laws through the verbs,
+# and a save whose UPDATE writes no row (a trigger the python step installs) FAILS, the scene still dirty, the
+# row unchanged. Two --headless processes (project_save.sh).
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/projectdoors-home-save)
+jah_fresh_home_fixture(project.save_door.fresh_home projectDoorsSaveHome "${_home}" LABELS "scripting")   # NULL render system (--headless): no shader cache - no warm-up product (TEST-STREAMLINE-1 1b)
+file(MAKE_DIRECTORY ${_home}/run)
+add_test(NAME project.save_door
+         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/project_save.sh
+                 $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}/project_save.js --headless
+         WORKING_DIRECTORY ${_home}/run)
+set_tests_properties(project.save_door PROPERTIES
+    JAHSHAKA_HEADLESS TRUE   # project_save.sh runs the app --headless only: the NULL render system (testing_rules R13)
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED projectDoorsSaveHome
+    LABELS "scripting"
+    TIMEOUT 60)
+jah_no_display(project.save_door)

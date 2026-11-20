@@ -587,7 +587,7 @@ QVector<VerbInfo> EditorApi::verbs() const
         { "snapToFloor", "editor.snapToFloor() -> bool",
           "Drops the selection straight down onto the first scene surface below its bounds (the End key); y=0 plane when nothing is hit. Undoable.",
           Needs::Engine },
-        { "undoState", "editor.undoState() -> {count, index, canUndo, canRedo, macroOpen, pushes, pendingAssetDeletes, dbBatchDepth, dbCommits}",
+        { "undoState", "editor.undoState() -> {count, index, canUndo, canRedo, macroOpen, pushes, dirty, pendingAssetDeletes, dbBatchDepth, dbCommits}",
           "The undo stack, for scripts that need to assert that an action was RECORDED rather "
           "than merely performed. `count`/`index` are the stack's own; `macroOpen` is true inside "
           "a script run. Read `pushes` — the total number of commands ever pushed — to bracket an "
@@ -602,7 +602,10 @@ QVector<VerbInfo> EditorApi::verbs() const
           "database's gesture transaction: a script run opens one (so it reads 1 inside a run), and every "
           "library write the run makes rides it, which is why 300 scene.addPrimitive calls cost one commit "
           "instead of 300. `dbCommits` counts this process's durable write commits so far — read it before "
-          "and after an action and the difference is the number of disk syncs that action cost.",
+          "and after an action and the difference is the number of disk syncs that action cost. "
+          "`dirty` is THE answer to \"are there unsaved changes?\" — what the window close asks on: true once a "
+          "command is pushed or an undo/redo moves the stack after the last save (or open), false after a save "
+          "that wrote its row; a FAILED save leaves it true.",
           Needs::Document },
         { "editGate", "editor.editGate() -> {scriptRunning, refusals, notice}",
           "THE EDIT GATE — what a script run does to HAND editing (owner, 2026-09-15). While a "
@@ -2431,6 +2434,9 @@ QVariantMap EditorApi::undoState()
     // explains why editor.undo() cannot reach the run's own steps.
     out["macroOpen"] = host.services->undo->isScriptMacroOpen();
     out["pushes"]    = QVariant::fromValue(qulonglong(host.services->undo->pushCount()));
+    // THE ONE "UNSAVED CHANGES" (UndoService::isDirty, STUDIO-HYGIENE-1): what the
+    // window close asks on, and what a failed save leaves true.
+    out["dirty"]     = host.services->undo->isDirty();
     // The deferred library work the dying commands queued (CLOSE-1). Zero
     // after every clear; a database-less host reports zero too.
     out["pendingAssetDeletes"] = host.db ? host.db->pendingAssetDeleteCount() : 0;
