@@ -31,9 +31,11 @@ set_tests_properties(chain.hzb PROPERTIES TIMEOUT 60 LABELS "engine")
 
 # engine.lod_rule_parity — REVIVED BY ATOM-5 (archived at 163d90223), promoted into the ship set at its merge (out at draft B): the cut's
 # C++ twin and the device's rule are held equal here (a change to one side without the other reds it — the subsystem's guard);
-# the quality currency's C++ half against its GLSL half, and since ATOM-5 the cluster cut's DENSITY CAP (caps 1-4)
-# in the fourth copy (the GLSL piece over the shipped meshes' DAGs) and the fifth (the product's cut job), the cut
-# with the cap still ONE cut (no drawn cluster under another, every level-0 triangle covered once).
+# the quality currency's C++ half against its GLSL half - the ONE walk piece through both of its users, the cull's
+# job 1 (and its mode-2 draw writer) and the voxel gather's job, over two mesh entries (ATOM-HOUSE-1) - and the cluster
+# cut's exact rule in the fourth copy (the GLSL piece over the shipped meshes' DAGs) and the fifth (the product's cut
+# job), the cut ONE cut (no drawn cluster under another, every level-0 triangle covered once). ATOM-6 deleted the
+# density cap the earlier text named.
 add_executable(test_lod_rule_parity test_lod_rule_parity.cpp
     ${CMAKE_SOURCE_DIR}/tests/atom/cluster_draw.cpp
     ${CMAKE_SOURCE_DIR}/tests/atom/cluster_fixtures.cpp
