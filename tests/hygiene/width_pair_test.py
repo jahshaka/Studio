@@ -39,25 +39,30 @@ def check(cond, what):
 
 
 ROW = """#!/bin/sh
-# a toy GPU row: holds its 'VRAM' (a file) while it runs; $1 = its mode
-f="$VRAMDIR/$(basename "$0").$$"; : > "$f"; trap 'rm -f "$f"' EXIT
-n() { ls "$VRAMDIR" | wc -l; }
+# a toy GPU row: holds its 'VRAM' (a file) while it runs; $1 = its mode. THE WALLS ARE SLEEPS (URGENT #178; CODING_RULES §6): a
+# row's wall against a bar is held by its sleeps, never by forks a loaded box stretches - the neighbour count is the shell's own
+# glob (cnt: no fork, never `ls | wc` in a command substitution), the name is ${0##*/} (no basename), a poll is a few checks
+# around one sleep (2026-11-20, load 17 on 10 CPUs: the 8 forking polls put toy.inflate's width-1 wall at 2.24 s, not 0.43,
+# and its x4 signal read x1.58; toy.near's alone wall crossed its budget - both false verdicts)
+f="$VRAMDIR/${0##*/}.$$"; : > "$f"; trap 'rm -f "$f"' EXIT
+cnt() { set -- "$VRAMDIR"/*; c=$#; }
+nb() { cnt; [ "$c" -gt 1 ] && s=1; return 0; }
 case "$1" in
   plain) sleep 0.2 ;;
-  inflate) i=0; s=0; while [ $i -lt 8 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; [ $s = 1 ] && sleep 1.2; exit 0 ;;
-  redline) i=0; s=0; while [ $i -lt 6 ]; do [ "$(n)" -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done
+  inflate) s=0; nb; sleep 0.15; nb; sleep 0.15; nb; sleep 0.1; nb; [ $s = 1 ] && sleep 1.2; exit 0 ;;
+  redline) s=0; nb; sleep 0.15; nb; sleep 0.15; nb
            [ $s = 1 ] && echo "FAIL: vkQueueSubmit: VK_ERROR_DEVICE_LOST" || echo "FAIL: (1) 1.44 q over the 1-q bar"; exit 1 ;;
   samered) echo "FAIL: (1) 1.44 q over the 1-q bar"; sleep 0.2; exit 1 ;;
   mark) read p _ < "$MARKFILE" && kill -0 "$p" && exit 0; echo "FAIL: no live check mark at $MARKFILE"; exit 1 ;;
-  oomclobber) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; rm -rf "$CLOBBER"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
-  tiny) s=0; [ "$(n)" -gt 1 ] && s=1; sleep 0.02; [ "$(n)" -gt 1 ] && s=1; [ $s = 1 ] && sleep 0.05; exit 0 ;;
-  near) i=0; s=0; while [ $i -lt 4 ]; do set -- "$VRAMDIR"/*; [ $# -gt 1 ] && s=1; sleep 0.05; i=$((i+1)); done; sleep 0.5; [ $s = 1 ] && sleep 0.4; exit 0 ;;
-  conflict) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 1 ] && { echo "a neighbour on the card"; exit 1; }; sleep 0.05; i=$((i+1)); done ;;
-  oom) i=0; while [ $i -lt 12 ]; do [ "$(n)" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
-  over) s=0; [ "$(n)" -gt 1 ] && s=1; sleep 1.2; [ "$(n)" -gt 1 ] && s=1; [ $s = 1 ] && sleep 0.1; exit 0 ;;
+  oomclobber) i=0; while [ $i -lt 12 ]; do cnt; [ "$c" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; rm -rf "$CLOBBER"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
+  tiny) s=0; nb; sleep 0.02; nb; [ $s = 1 ] && sleep 0.05; exit 0 ;;
+  near) s=0; nb; sleep 0.1; nb; sleep 0.1; nb; sleep 1.3; [ $s = 1 ] && sleep 0.65; exit 0 ;;
+  conflict) i=0; while [ $i -lt 12 ]; do cnt; [ "$c" -gt 1 ] && { echo "a neighbour on the card"; exit 1; }; sleep 0.05; i=$((i+1)); done ;;
+  oom) i=0; while [ $i -lt 12 ]; do cnt; [ "$c" -gt 2 ] && { echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; exit 0; }; sleep 0.05; i=$((i+1)); done ;;
+  over) s=0; nb; sleep 1.2; nb; [ $s = 1 ] && sleep 0.1; exit 0 ;;
   build) echo "1 2 3 toy.o 0" >> "$NINJALOG"; sleep 0.2 ;;
   oom1) echo "vkAllocateMemory: VK_ERROR_OUT_OF_DEVICE_MEMORY"; sleep 0.2 ;;
-  slow) sleep 0.15; [ "$(n)" -gt 1 ] && sleep 1.0; exit 0 ;;
+  slow) s=0; nb; sleep 0.15; nb; [ $s = 1 ] && sleep 1.0; exit 0 ;;
   flaky) c="$VRAMDIR/../flaky.count"; k=$(cat "$c" 2>/dev/null || echo 0); echo $((k+1)) > "$c"; [ "$k" = 2 ] && exit 1; sleep 0.1 ;;
 esac
 exit 0
@@ -258,18 +263,21 @@ elif PART == "bars":
           f"tiny: a 0.02-s row's x3 under the 0.5-s floor refuses nothing, ADOPT WIDTH 2 (rc {rc}) "
           f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
 
-    # 10. THE CLASS BUDGET (x0.1 for the toys: 1 s): a row ~0.76 s alone, ~1.16 s beside a neighbour (+0.4 s: under the
-    #     inflation bar, max(x1.5, +0.5 s) = ~1.26 s) past its 1-s budget. THE ALONE WALL IS A SLEEP, NOT POLLS (TE8, 2026-11-04):
+    # 10. THE CLASS BUDGET (x0.2 for this toy: 2 s): a row ~1.55 s alone, ~2.2 s beside a neighbour (+0.65 s: under the
+    #     inflation bar, max(x1.5, +0.5 s) = ~2.33 s) past its 2-s budget. THE BUDGET IS ABSOLUTE, SO ITS MARGIN IS A SLEEP's
+    #     (URGENT #178, 2026-11-20, measured: at load 17 on 10 CPUs the alone wall of the 1-s toy read 1.03 s, 0.27 s over its
+    #     0.76 quiet - 0.24 s was its whole margin): ~0.45 s under the budget alone now, the width-2 window (2.0, 2.33) relative
+    #     (the x1.5 bar grows with a loaded width-1 wall). THE ALONE WALL IS A SLEEP, NOT POLLS (TE8, 2026-11-04):
     #     it was 16 forking polls, 0.86 s solo, 0.14 s under the budget, and the code gate's -j12 load stretched the forks past
     #     it - read "over its class budget alone", left out, width 2 adopted: a false red. Now 4 polls (the neighbour's 0.2 s),
     #     then a sleep load cannot stretch: ~0.24 s under the budget alone, ~0.16 s over it at width 2, ~0.1 s under the bar.
     #     THE POLLS FORK NOTHING (the landing audit's LOW, 2026-11-04; CODING_RULES §6): a poll counts the fake card's files
     #     with the shell's own glob (`set -- "$VRAMDIR"/*`), never `ls | wc` in a command substitution - its margin is sleeps alone
     bn = toy("near", [("toy.near", "near", "")])
-    rc, out, labels, recs = run(bn, "--display", ":71", "--order", "1,2", "--budget-scale", "0.1")
+    rc, out, labels, recs = run(bn, "--display", ":71", "--order", "1,2", "--budget-scale", "0.2")
     ref = [ln for ln in out.splitlines() if "REFUSED" in ln]
     check(rc == 0 and "ADOPT WIDTH 1" in out and len(ref) == 1 and "toy.near ran" in ref[0]
-          and "past its class budget 1 s" in ref[0] and "its width-1 wall" not in ref[0],
+          and "past its class budget 2 s" in ref[0] and "its width-1 wall" not in ref[0],
           f"near: a row past its class budget at width 2 (under x1.5) refuses width 2 (rc {rc}) "
           f"{[ln for ln in out.splitlines() if 'REFUSED' in ln or 'ADOPT' in ln]}")
 
