@@ -643,7 +643,7 @@ static void voxelGatherParity(Scene *scene, unsigned slots)
         std::vector<voxelcase::Record> rec;
         uint32_t readout[kReadWords] = {};
         try {
-            GpuScene::setLevelTableProperty(job);
+            GpuScene::setTableStrideProperties(job);
             job->_setUavBuffer(0u, voxelcase::slotOf(bParams, Ogre::ResourceAccess::Read));
             job->_setUavBuffer(1u, voxelcase::slotOf(bInst, Ogre::ResourceAccess::Read));
             job->_setUavBuffer(2u, voxelcase::slotOf(gs.meshBuffer(), Ogre::ResourceAccess::Read));

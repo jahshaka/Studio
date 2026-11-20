@@ -217,6 +217,13 @@ if(Python3_Interpreter_FOUND)
                      photon-7)
     set_tests_properties(source.bake_key_untouched PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.bake_key_untouched)
+    # source.gpu_table_strides — ATOM-HOUSE-1 (the audit's finding 1): GpuScene::kLevelsPerMesh and kSubmeshesPerMesh reach
+    # the Hlms media only as properties (GpuScene::setTableStrideProperties, HlmsAtom); no hand `* 8u` copy of either in
+    # irisgl/engine/media. The script names its exact patterns and its residual; its negative control runs first.
+    add_test(NAME source.gpu_table_strides
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/gpu_table_strides.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.gpu_table_strides PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.gpu_table_strides)
     # source.startup_pass_closure — TEST-STREAMLINE-1 (the stage-1 audit's finding 5): the startup pass's key hashes its whole
     # dependency closure - every file the compiler reads for shaderbuildgate.cpp, their sources, the named extras.
     add_test(NAME source.startup_pass_closure
