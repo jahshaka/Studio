@@ -36,6 +36,8 @@ __pycache__/
 
 # an agent's Xvfb pidfile lives in the worktree root (the rig law): never dirt, never committed
 *.pid
+# rig.sh keeps its users beside its pid file (rig-xvfb.pid.users): a rig that is up must never read as dirt (2026-11-20: spec.sh test --code refused a tree whose rig was up)
+*.pid.users
 # A SCREENSHOT AT THE TREE'S ROOT (PHOTON-7 stage 11, measured: an app run by hand from the root - its cwd - wrote
 # editor.screenshot's relative PNGs there, the build stamped DIRTY at its next BUILT_FROM, and every spec.sh record of the
 # next 2.5 h of card time was dropped as a dirty build's): never dirt, never committed. No tracked file is a root PNG.
