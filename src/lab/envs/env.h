@@ -16,15 +16,16 @@
 //
 // WHAT "e" IS — THE PHYSICS, and the one place the cut departs from it. Removing a separate shell moves the surface by
 // the shell's distance to what remains beside it, never more than the shell's own extent: e = min(its separation from
-// the surface it stands on — a protrusion's depth, a free bar's stand-off — , its bounding-box diagonal). That is the
-// whole-mesh LOD CHAIN's island-capped term (meshbake.cpp:2200-2209), and the expectations here ARE that physics (a
-// dropped door moves the surface 0.2 m). THE CLUSTER DAG THE CUT READS charges a WHOLLY DROPPED island its EXTENT,
-// never below it (meshbake.cpp:4900-4904, :5516-5520: the group's error is at least the removed island's extent;
-// the prune's price is the extent) — so wherever an expectation's e is a separation smaller than the island's extent,
+// the surface it stands on — a protrusion's depth, a free bar's stand-off — , its bounding-box diagonal). The
+// expectations here ARE that physics (a dropped door moves the surface 0.2 m); the whole-mesh LOD chain that charged
+// it was deleted with the chain itself (kFormatVersion 32). THE CLUSTER DAG THE CUT READS charges a WHOLLY DROPPED
+// island its EXTENT, never below it (irisgl/import/atomdag/measure.h, the measured step's term 3: the box diagonal of
+// the part the input held) — so wherever an expectation's e is a separation smaller than the island's extent,
 // the cut keeps the island LONGER than the physics needs. That charge is what the closed forms do NOT model, named
 // per environment; it is the first cause of a measured count above its prediction. A whole object (nothing remains
-// beside it: the DAG's empty top) is charged its LARGEST island's extent. Each generator writes its feature table
-// (Feature below) and the closed form is the sum over it; what else it does not model is said per environment.
+// beside it: the DAG's empty top) is charged its WHOLE level-0 box diagonal (atomdag/build.h, D8). Each generator
+// writes its feature table (Feature below) and the closed form is the sum over it; what else it does not model is
+// said per environment.
 
 #pragma once
 
