@@ -477,3 +477,6 @@ project.refuses_unreadable.fresh_home 0.02  by hand (spec.sh reprice, 2026-11-20
 project.remove_folder 5.60  by hand (spec.sh reprice, 2026-11-20): solo ctest runs 5.55 s and the -V run, box load ~3 (STUDIO-HYGIENE-1 stage 2)
 project.remove_folder.fresh_home 0.02  by hand (spec.sh reprice, 2026-11-20)
 source.no_ui_folder_delete 0.01  by hand (spec.sh reprice, 2026-11-20)
+assets.one_name_door 3.10  by hand (spec.sh reprice, 2026-11-20)
+assets.one_name_door.fresh_home 0.02  by hand (spec.sh reprice, 2026-11-20)
+source.one_asset_name_write 0.03  by hand (spec.sh reprice, 2026-11-20)
