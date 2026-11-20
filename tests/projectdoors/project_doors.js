@@ -1,5 +1,5 @@
-// project.refuses_unreadable's JS half (STUDIO-HYGIENE-1 stage 6). Each process runs this file plus ONE
-// call: make(dir) in the first, refuse(dir) in the second.
+// project.refuses_unreadable's JS half (STUDIO-HYGIENE-1 stage 6 and its audit). Each process runs this file
+// plus ONE call: make(dir, rig) in the first, refuse(dir) in the second.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -10,14 +10,30 @@ function refusal(fn) {
     try { fn(); } catch (e) { return String(e && e.message ? e.message : e); }
     return null;
 }
+function byName(name) {
+    var rows = project.list().filter(function (p) { return p.name === name; });
+    assert(rows.length === 1, "'" + name + "' is listed");
+    return rows[0].guid;
+}
+// A world with a ROTATED node (a v1 scene's euler rotation is not read: opened, it comes back unrotated).
+function rotatedWorld(name) {
+    project.create(name, { template: "empty" });
+    var id = scene.addPrimitive("cube");
+    node.transform(id, { rotation: { x: 0, y: 45, z: 0 } });
+    assert(project.save() === true, "'" + name + "' saves");
+}
 
-// Process 1: a real project (two nodes), saved and exported — the fixture's source; and a second
-// project whose library row the python step corrupts.
-function make(dir) {
-    project.create("Doors Corrupt Row", { template: "empty" });
-    scene.addPrimitive("cube");
-    assert(project.save() === true, "the project to corrupt saves");
-    var g = project.create("Doors Source", { template: "empty" });
+// Process 1: the four projects whose rows the python step rewrites (the corrupt one PINS a model, so a
+// refused threaded open that still planned it would read its bake), and the source project, exported.
+function make(dir, rig) {
+    rotatedWorld("Doors Corrupt Row");
+    var placed = assets.importAndPlace(rig, { position: { x: 0, y: 0, z: 0 } });
+    assert(placed.nodeId, "...and pins a model");
+    assert(project.save() === true, "...saved with it");
+    rotatedWorld("Doors Newer Row");
+    rotatedWorld("Doors Older Row");
+    rotatedWorld("Doors Unversioned Row");
+    project.create("Doors Source", { template: "empty" });
     scene.addPrimitive("cube");
     scene.addPrimitive("sphere");
     assert(project.save() === true, "the source project saves");
@@ -26,49 +42,70 @@ function make(dir) {
     console.log("make: ALL OK");
 }
 
-// Process 2: the three fixtures the python made from it.
+// One refused open, both routes' law: the sentence, nothing open, a save refused, and a second open refused
+// again (the row is never changed: checked by the python step after this process).
+function refusedOpen(name, words) {
+    var guid = byName(name);
+    var why = refusal(function () { project.open(guid); });
+    console.log(name + ": " + why);
+    assert(why !== null && why.indexOf("'" + name + "' could not be opened") >= 0, "opening '" + name + "' is REFUSED");
+    for (var i = 0; i < words.length; ++i)
+        assert(why.indexOf(words[i]) >= 0, "...the reason names '" + words[i] + "'");
+    assert(project.current() == null, "...no scene is open");   // undefined: no open project
+    assert(project.openRefusal() === why.replace(/^project\.open: /, ""), "...project.openRefusal() carries the same sentence");
+    var saved = refusal(function () { if (project.save() !== true) throw new Error("project.save returned false"); });
+    assert(saved !== null, "...a save then is refused (" + saved + ")");
+    assert(refusal(function () { project.open(guid); }) !== null, "...and a second open is refused again");
+}
+
+// Process 2.
 function refuse(dir) {
     var before = project.list().length;
 
-    // 1. A NEWER BUILD'S MANIFEST: refused by name, no project made.
+    // THE IMPORT REFUSES WHAT THE OPEN WOULD: a newer manifest, a newer scene, a scene that does not parse.
     var why = refusal(function () { project.importArchive(dir + "/manifest_v3.zip"); });
     console.log("manifest v3: " + why);
     assert(why !== null && why.indexOf("manifest is version 3") >= 0 && why.indexOf("newer") >= 0
-           && why.indexOf("reads version 2") >= 0,
-           "an archive whose manifest is version 3 is REFUSED, naming both versions");
-    assert(project.list().length === before, "...and no project is made");
-
-    // 2. A NEWER BUILD'S SCENE: the archive imports (its manifest is ours), the OPEN refuses it.
-    var v3 = project.importArchive(dir + "/scene_v3.zip");
-    assert(v3.guid && v3.guid.length > 0, "an archive with a v2 manifest and a v3 scene imports");
-    why = refusal(function () { project.open(v3.guid); });
-    console.log("scene v3: " + why);
-    assert(why !== null && why.indexOf("could not be opened") >= 0
-           && why.indexOf("format version 3") >= 0 && why.indexOf("newer") >= 0,
-           "opening a scene of format version 3 is REFUSED, naming both versions");
-    assert(project.current() == null, "...and no scene is open");   // undefined: no open project
-
-    // 3. A SCENE THAT DOES NOT PARSE: refused, never opened (or imported) EMPTY — a save would write the
-    // empty world over the row.
-    var count = project.list().length;
+           && why.indexOf("reads version 2") >= 0, "an archive whose manifest is version 3 is REFUSED, naming both versions");
+    why = refusal(function () { project.importArchive(dir + "/scene_v3.zip"); });
+    console.log("archive scene v3: " + why);
+    assert(why !== null && why.indexOf("cannot be read") >= 0 && why.indexOf("format version 3") >= 0
+           && why.indexOf("newer") >= 0, "an archive whose scene is format version 3 is REFUSED (a tile that could never open)");
     why = refusal(function () { project.importArchive(dir + "/scene_garbage.zip"); });
     console.log("archive scene garbage: " + why);
     assert(why !== null && why.indexOf("cannot be read") >= 0 && why.indexOf("does not parse") >= 0,
            "an archive whose scene does not parse is REFUSED with the parse error");
-    assert(project.list().length === count, "...and no project is made");
-    var corrupt = project.list().filter(function (p) { return p.name === "Doors Corrupt Row"; });
-    assert(corrupt.length === 1, "the corrupted project is listed");
-    why = refusal(function () { project.open(corrupt[0].guid); });
-    console.log("row scene garbage: " + why);
-    assert(why !== null && why.indexOf("could not be opened") >= 0 && why.indexOf("does not parse") >= 0,
-           "opening a project whose scene does not parse is REFUSED with the parse error");
-    assert(project.current() == null, "...and no scene is open");   // undefined: no open project
+    assert(project.list().length === before, "...and no project is made by any of the three");
 
-    // 4. THE DOOR STILL OPENS: the source itself (v2 everything) opens with its two nodes.
-    var src = project.list().filter(function (p) { return p.name === "Doors Source"; });
-    assert(src.length === 1, "the source project is listed");
-    assert(project.open(src[0].guid) === true, "a scene this build wrote opens");
+    // THE OPEN REFUSES ANY SCENE BUT ITS OWN FORMAT — newer, older, unversioned — and one that does not parse.
+    refusedOpen("Doors Newer Row", ["format version 3", "newer"]);
+    refusedOpen("Doors Older Row", ["format version 1", "older"]);
+    refusedOpen("Doors Unversioned Row", ["format version 1", "older"]);
+    refusedOpen("Doors Corrupt Row", ["does not parse"]);
+
+    // THE THREADED ROUTE (the tile's, the import-open's): the same refusal at its first slice, read by
+    // project.openRefusal — and NOTHING planned for it: the pinned model's bake is never read.
+    var corrupt = byName("Doors Corrupt Row");
+    app.openStats({ reset: true });
+    assert(project.openAsync(corrupt) === true, "the threaded open of the corrupt row starts");
+    var turns = 0;
+    while (project.openState() === "opening" && turns < 100000) ++turns;   // each call turns the loop
+    assert(project.openState() === "idle", "...and ends (" + turns + " polls)");
+    why = project.openRefusal();
+    console.log("threaded: " + why);
+    assert(why.indexOf("'Doors Corrupt Row' could not be opened") >= 0 && why.indexOf("does not parse") >= 0,
+           "...refused, project.openRefusal() carrying the sentence");
+    assert(project.current() == null, "...no scene is open");
+    var stats = app.openStats();
+    console.log("threaded open stats: " + JSON.stringify({ bakeHits: stats.bakeHits, bakeMisses: stats.bakeMisses,
+                                                            workerParses: stats.workerParses, bakeBuilds: stats.bakeBuilds }));
+    assert(stats.bakeHits === 0 && stats.bakeMisses === 0 && stats.workerParses === 0 && stats.bakeBuilds === 0,
+           "...and nothing was planned for it: no bake read, looked up or built");
+
+    // THE DOOR STILL OPENS: the source itself (v2 everything) opens with its two nodes, and clears the refusal.
+    assert(project.open(byName("Doors Source")) === true, "a scene this build wrote opens");
     var meshes = scene.nodes().filter(function (n) { return n.type === "mesh"; });
     assert(meshes.length === 2, "...with its two nodes (" + meshes.length + ")");
+    assert(project.openRefusal() === "", "...and project.openRefusal() reads empty again");
     console.log("refuse: ALL OK");
 }

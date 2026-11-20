@@ -44,6 +44,7 @@ public:
     Q_INVOKABLE bool openSample(const QString &name);
     Q_INVOKABLE QStringList samples();
     Q_INVOKABLE QString openState();
+    Q_INVOKABLE QString openRefusal();
     Q_INVOKABLE bool save();
     Q_INVOKABLE bool close();
     Q_INVOKABLE bool rename(const QString &guid, const QString &newName);

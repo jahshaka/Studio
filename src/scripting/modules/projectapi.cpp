@@ -119,8 +119,8 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "the meshes the mirror still owes — so a world whose inputs land later is lit on the frames "
           "after this returns: `world.giStatus().vctBound` says which.\n\n"
           "A SCENE THIS BUILD MUST NOT READ IS REFUSED, nothing opened, before anything of the open is torn "
-          "down: a scene blob that does not parse, or one a NEWER build wrote (its formatVersion past this "
-          "build's) — the error is \"'<name>' could not be opened: <why>\", the same sentence a desktop tile "
+          "down: a scene blob that does not parse, or one ANOTHER build wrote (a formatVersion that is not this "
+          "build's — newer, older, or none at all) — the error is \"'<name>' could not be opened: <why>\", the same sentence a desktop tile "
           "or an archive import shows. The world that was open is already closed by then (the close is the "
           "open's first half).",
           Needs::Document },
@@ -163,6 +163,13 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "bookkeeping at every slice boundary whether or not anything drew (app.renderStats() "
           ".resourceAdvances) — but a poll with no frame is slow and paints nothing.",
           Needs::Window },
+        { "openRefusal", "project.openRefusal() -> string",
+          "WHY THE LAST OPEN WAS REFUSED, in the user's words — \"\" unless the most recent open (either "
+          "route: project.open, project.openAsync, a desktop tile, an archive import's open) was refused "
+          "(STUDIO-HYGIENE-1). The sentence is the one project.open fails with and the tile's box shows: "
+          "\"'<name>' could not be opened: <why>\" — a scene blob that does not parse, or one another build "
+          "wrote. A threaded open refuses at its first slice, so poll project.openState() to 'idle' first.",
+          Needs::Document },
         { "save", "project.save() -> bool",
           "Saves the open scene into the project's DB blob. Works headless (blob-only; the thumbnail refreshes only when a viewport can render one).",
           Needs::Document },
@@ -547,6 +554,12 @@ QString ProjectApi::openState()
 {
     if (!host.shell) { fail("project: not available in this session"); return QStringLiteral("idle"); }
     return openInFlight() ? QStringLiteral("opening") : QStringLiteral("idle");
+}
+
+QString ProjectApi::openRefusal()
+{
+    if (!host.shell) { fail("project: not available in this session"); return QString(); }
+    return host.shell->openRefusal();
 }
 
 QVariantMap ProjectApi::thumbnail(const QString &path, const QString &guid)

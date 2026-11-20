@@ -13,7 +13,8 @@ file(MAKE_DIRECTORY ${_home}/run)
 add_test(NAME project.refuses_unreadable
          COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/project_doors.sh
                  $<TARGET_FILE:${CMAKE_PROJECT_NAME}> ${CMAKE_CURRENT_SOURCE_DIR}/project_doors.js
-                 ${CMAKE_CURRENT_SOURCE_DIR}/rewrite_archive.py --headless
+                 ${CMAKE_CURRENT_SOURCE_DIR}/rewrite_archive.py ${CMAKE_SOURCE_DIR}/tests/avatar/fixtures/rig2.glb
+                 --headless
          WORKING_DIRECTORY ${_home}/run)
 set_tests_properties(project.refuses_unreadable PROPERTIES
     JAHSHAKA_HEADLESS TRUE   # project_doors.sh runs the app --headless only: the NULL render system (testing_rules R13)
