@@ -1,6 +1,7 @@
 #include "viewport/engineviewwidget.h"
 #include <QEvent>
 #include <QGuiApplication>
+#include <QWindow>
 #include <QResizeEvent>
 
 EngineViewWidget::EngineViewWidget(QWidget *parent) : QWidget(parent)
@@ -39,7 +40,7 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
         mView = engine->createOffscreenView(name.toStdString(), static_cast<unsigned>(width()),
                                             static_cast<unsigned>(height()), background, mDeclaredContract);
         if (!mView) mCreateError = QString::fromStdString(engine->lastError());
-        else mView->setEnabled(isVisible());
+        else pushDrawing();
         return mView != nullptr;
     }
     bool handleIsNative = true;
@@ -84,7 +85,7 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
         // would only guarantee stale ones.
         if (!mView->isOffscreen()) setUpdatesEnabled(false);
 #endif
-        mView->setEnabled(isVisible());
+        pushDrawing();
     }
     return mView != nullptr;
 }
@@ -154,7 +155,7 @@ void EngineViewWidget::recreateViewForNewWindow()
     viewAboutToBeDestroyed();
     destroyView();
     createView(engine, name, background);
-    if (mView) mView->setEnabled(isVisible());
+    pushDrawing();
     viewRecreated();
 }
 
@@ -173,7 +174,9 @@ void EngineViewWidget::resizeEvent(QResizeEvent *event)
 void EngineViewWidget::showEvent(QShowEvent *event)
 {
     QWidget::showEvent(event);
-    if (mView) mView->setEnabled(true);
+    mShown = true;
+    watchTopLevel();   // the top-level's window exists once shown (and may be a new one after a reparent)
+    pushDrawing();
 }
 
 void EngineViewWidget::hideEvent(QHideEvent *event)
@@ -184,5 +187,45 @@ void EngineViewWidget::hideEvent(QHideEvent *event)
     // what a page switch does, and what made an in-place open show the app's
     // watermark for up to three seconds before VIEW-REBUILD-1.
     ++mNativeHides;
-    if (mView) mView->setEnabled(false);
+    mShown = false;
+    pushDrawing();
+}
+
+// THE ONE PREDICATE, PUSHED (ONE-FRAME-1 stage 3): the View is enabled exactly while somebody can see it. A disabled
+// View draws nothing; with none enabled the render driver draws nothing and slows its tick to the fallback interval,
+// while requests, pictures (their own offscreen views), the scripting service and a VR session keep running.
+void EngineViewWidget::pushDrawing()
+{
+    if (mView) mView->setEnabled(wantsToDraw());
+}
+
+void EngineViewWidget::noteTopExposed(bool exposed)
+{
+    mTopExposed = exposed;
+    pushDrawing();
+}
+
+// THE TOP-LEVEL's EXPOSE EVENTS (ruling R4): a window fully covered, or on another workspace, is not exposed — the
+// platform says so through QWindow::isExposed at the window's expose event, read here on the UI thread. Watched on
+// the TOP-LEVEL window, not this widget's own native child: a child of an unmapped or covered window is not told.
+void EngineViewWidget::watchTopLevel()
+{
+    QWindow *top = window() ? window()->windowHandle() : nullptr;
+    if (top == mWatchedWindow) return;
+    if (mWatchedWindow) mWatchedWindow->removeEventFilter(this);
+    mWatchedWindow = top;
+    // ASSUMED EXPOSED until an expose event says otherwise: a window just shown is mapped by the platform a moment
+    // later, and a lockstep run that renders right after show() (the self-test) must draw as it always did. Only the
+    // platform's own report turns it off.
+    mTopExposed = true;
+    if (top) top->installEventFilter(this);
+}
+
+bool EngineViewWidget::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == mWatchedWindow && event->type() == QEvent::Expose) {
+        ++mExposeEvents;
+        noteTopExposed(mWatchedWindow->isExposed());
+    }
+    return QWidget::eventFilter(watched, event);
 }

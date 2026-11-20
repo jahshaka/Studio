@@ -1418,6 +1418,12 @@ public:
     virtual bool nativeMapped() const { return false; }
     virtual qulonglong nativeHides() const { return 0; }
     virtual qulonglong rectChanges() const { return 0; }
+    /// NOTHING RENDERS WHEN NOBODY LOOKS (ONE-FRAME-1 stage 3; EngineViewWidget::wantsToDraw): is the viewport's
+    /// top-level window EXPOSED (QWindow::isExposed at its last expose event: not when fully covered or on another
+    /// workspace), and is the viewport DRAWING (shown — not minimised, not on a hidden page — and exposed: its View
+    /// enabled)?
+    virtual bool viewExposed() const { return false; }
+    virtual bool viewDrawing() const { return false; }
     /// THE FLY'S HELD-KEY SET, by name ("Left", "PageUp", "Shift" …), sorted
     /// (ledger §356). A key stuck in it is otherwise INVISIBLE: Left and Right
     /// held together cancel to no movement at all, which reads as "the arrows

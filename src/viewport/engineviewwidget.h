@@ -14,6 +14,7 @@
 // Engine went first, the View is already gone and nothing is touched. Owners
 // should still destroy their EngineViewWidgets BEFORE the Engine so teardown
 // is deterministic rather than merely safe.
+#include <QPointer>
 #include <QWidget>
 #include <memory>
 #include "jahshaka/engine/Engine.h"
@@ -90,6 +91,19 @@ public:
     /// Player, a create from the Desktop) moves both, by design.
     qulonglong nativeHides() const { return mNativeHides; }
     qulonglong rectChanges() const { return mRectChanges; }
+    /// NOTHING RENDERS WHEN NOBODY LOOKS (ONE-FRAME-1 stage 3): THE ONE PREDICATE that enables this widget's View —
+    /// SHOWN (Qt's show/hide events: a page switch hides it, and a minimise does too: QWidget hides the children of a
+    /// minimised window, spontaneously) AND its top-level window EXPOSED (QWindow::isExposed, read on the UI thread at
+    /// that window's expose events: a window fully covered or on another workspace is not; never a second X
+    /// connection). isVisible() is NOT it: a minimised window's widgets still answer true.
+    bool wantsToDraw() const { return mShown && mTopExposed; }
+    /// The top-level window's exposure as its last expose event left it (true until one says otherwise).
+    bool topExposed() const { return mTopExposed; }
+    /// The exposure's one input: the expose filter calls it with QWindow::isExposed(); a test drives it directly (a
+    /// window's exposure is the platform's, and no public API changes it).
+    void noteTopExposed(bool exposed);
+    /// The top-level's expose events this widget has seen, ever (a caller differences it).
+    qulonglong exposeEvents() const { return mExposeEvents; }
 
 protected:
     /// Deliberately empty. Together with WA_OpaquePaintEvent this stops Qt
@@ -102,6 +116,8 @@ protected:
     void hideEvent(QHideEvent *) override;
     /// QEvent::WinIdChange only — see recreateViewForNewWindow().
     bool event(QEvent *) override;
+    /// The top-level window's QEvent::Expose (wantsToDraw).
+    bool eventFilter(QObject *watched, QEvent *event) override;
 
     /// Called right BEFORE the current View is destroyed on the way to a new
     /// native window — i.e. while the pointer a subclass is holding is still
@@ -150,6 +166,13 @@ private:
     qulonglong                              mNativeHides = 0;
     qulonglong                              mRectChanges = 0;
     QSize                                   mLastRect;
+    /// wantsToDraw's two inputs, and the top-level window whose expose events are watched.
+    bool                                    mShown = false;
+    bool                                    mTopExposed = true;
+    qulonglong                              mExposeEvents = 0;
+    QPointer<QWindow>                       mWatchedWindow;
+    void watchTopLevel();
+    void pushDrawing();
 };
 
 #endif // ENGINEVIEWWIDGET_H

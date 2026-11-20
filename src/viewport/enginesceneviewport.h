@@ -322,6 +322,8 @@ public:
     /// where the events arrive (EngineViewWidget's show/hide/resize).
     bool nativeMapped() const override { return EngineViewWidget::nativeMapped(); }
     qulonglong nativeHides() const override { return EngineViewWidget::nativeHides(); }
+    bool viewExposed() const override { return EngineViewWidget::topExposed(); }
+    bool viewDrawing() const override { return EngineViewWidget::wantsToDraw(); }
     qulonglong rectChanges() const override { return EngineViewWidget::rectChanges(); }
     void beginSceneLoad(const QString &title = QString()) override;
     void endSceneLoad() override;
