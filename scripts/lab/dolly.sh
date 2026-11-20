@@ -12,8 +12,8 @@
 #   D                          an environment's dolly stop at D metres    -> measure D (settle + probe), shot, status
 # THE OUT DIR receives: dolly.lab (the script it ran), dolly.log (jahlab's output), stop<N>.png, status.jsonl (one
 # status per stop), measure.tsv (environments), table.tsv (the table) — and the table on stdout.
-# THE DISPLAY: $DISPLAY when it names a rig (never :0 — refused), else a private Xvfb on a free :60-:99 at 1920x1080x24,
-# its pid recorded in <out-dir>/xvfb.pid and killed at the end. THE LOCK: scripts/gpu-exclusive.sh (re-entrant under a
+# THE DISPLAY: $DISPLAY when it names a rig (60-99), else the tree's rig (scripts/rig.sh up: reused, or started and brought
+# down at the end); the run pinned to our CPUs (rig.sh cpus). THE LOCK: scripts/gpu-exclusive.sh (re-entrant under a
 # holder). THE BAKE: a model is baked first, OFF the card (jahlab --bake-only into the data root; a cached bake costs a
 # hash) - a run on a model never bakes under the lock (jahlab refuses a model whose bake is not cached, exit 5; the
 # urgent list's #30). The binary: $JAHLAB, else <this tree>/build-linux/bin/jahlab. Exit: jahlab's (0 = every stop
@@ -45,27 +45,18 @@ mkdir -p "$out" || exit 2
 out="$(cd "$out" && pwd)"
 rm -f "$out/status.jsonl" "$out/measure.tsv" "$out/table.tsv" "$out"/stop*.png
 
-# ---- the display ------------------------------------------------------------------------------------------------
-xpid=""
+# ---- the display: scripts/rig.sh (WORKFLOW-STREAMLINE-1 5.8) ------------------------------------------------------
+# $DISPLAY when it names a rig (60-99), else the tree's rig (`rig.sh up --env`: reused when up, else started - and then
+# brought down at the end, by its recorded pid); our CPUs from the one setting (rig.sh cpus)
+rig="$tree/scripts/rig.sh" rig_started="" display=""
 case "${DISPLAY:-}" in
-    "" | :0 | :0.* | *:0 | *:0.*) display=""; [ -n "${DISPLAY:-}" ] && echo "dolly: DISPLAY=$DISPLAY is the owner's display — a private Xvfb is used instead" ;;
-    *) display="$DISPLAY" ;;
+    :[6-9][0-9] | :[6-9][0-9].*) display="$DISPLAY" ;;
+    *) [ -n "${DISPLAY:-}" ] && echo "dolly: DISPLAY=$DISPLAY is not a rig (60-99) - the tree's rig is used instead"
+       e=$("$rig" up --env) || { echo "dolly.sh: no rig (scripts/rig.sh up failed)" >&2; exit 2; }
+       eval "$e"; display=$DISPLAY; [ "$RIG_STARTED" = 1 ] && rig_started=1 ;;
 esac
-if [ -n "$display" ]; then
-    :
-else
-    display=""
-    for n in $(seq 60 99); do
-        [ -e "/tmp/.X$n-lock" ] || [ -e "/tmp/.X11-unix/X$n" ] && continue
-        Xvfb ":$n" -screen 0 1920x1080x24 -nolisten tcp > "$out/xvfb.log" 2>&1 &
-        xpid=$!
-        sleep 1
-        if kill -0 "$xpid" 2>/dev/null && [ -e "/tmp/.X11-unix/X$n" ]; then display=":$n"; echo "$xpid" > "$out/xvfb.pid"; break; fi
-        xpid=""
-    done
-    [ -n "$display" ] || { echo "dolly.sh: no free display in :60-:99 (and \$DISPLAY names no rig)" >&2; exit 2; }
-fi
-cleanup() { [ -n "$xpid" ] && kill "$xpid" 2>/dev/null && rm -f "$out/xvfb.pid"; }
+cpus=$("$rig" cpus) || exit 2
+cleanup() { [ -z "$rig_started" ] || "$rig" down > /dev/null; }
 trap cleanup EXIT
 
 # ---- the script -------------------------------------------------------------------------------------------------
@@ -107,7 +98,7 @@ fi
 # ---- the run ----------------------------------------------------------------------------------------------------
 subject=()
 if [ -n "$env" ]; then subject=(--env "$env" --seed "$seed"); else subject=("$file"); fi
-"$tree/scripts/gpu-exclusive.sh" --label "dolly.sh" env DISPLAY="$display" nice -n 19 "$lab" --headless --no-stdin \
+"$tree/scripts/gpu-exclusive.sh" --label "dolly.sh" env DISPLAY="$display" taskset -c "$cpus" nice -n 19 "$lab" --headless --no-stdin \
     --size "$size" --tier "$tier" --data-root "$dataroot" --script "$out/dolly.lab" "${subject[@]}" > "$out/dolly.log" 2>&1
 rc=$?
 grep -E '^LAB (LOAD|ENV|FIRST|REFUSED|FAILED|END)|ENGINE ERROR' "$out/dolly.log" | cut -c1-220

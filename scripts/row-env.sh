@@ -6,7 +6,8 @@
 #   (no flag)        PRINTS the row as ctest registered it (ctest --show-only=json-v1): its command, its working directory,
 #                    ENVIRONMENT and ENVIRONMENT_MODIFICATION, TIMEOUT, class and the fixtures it requires.
 #   --run            RUNS it as ctest would: the registration's environment applied (ENVIRONMENT, then each
-#                    ENVIRONMENT_MODIFICATION op in order), in its working directory, at nice 10; a GPU row (JAH_CLASS)
+#                    ENVIRONMENT_MODIFICATION op in order), in its working directory, at nice 10 on our CPUs (scripts/rig.sh
+#                    cpus); a GPU row (JAH_CLASS)
 #                    under this tree's scripts/gpu-exclusive.sh (at once inside a holder) and on an explicit DISPLAY
 #                    (never :0). A row that requires fixtures is REFUSED (their setups are ctest's: run `ctest -R`).
 #   --scratch <dir>  ...and WRITES NOTHING UNDER <build>: every path under <build>/tests in the command, the working
@@ -113,11 +114,13 @@ for e in env_mod:
 if gpu:
     d = env.get("DISPLAY", "")
     if not d or d in (":0", ":0.0"):
-        print("row-env.sh: REFUSED - a GPU row runs on an explicit DISPLAY=:NN of your own Xvfb, never :0 (got '%s')" % d,
-              file=sys.stderr); sys.exit(2)
+        print("row-env.sh: REFUSED - a GPU row runs on an explicit DISPLAY=:NN of your own Xvfb, never :0 (got '%s'): "
+              "`scripts/rig.sh up`, then DISPLAY=$(scripts/rig.sh display)" % d, file=sys.stderr); sys.exit(2)
     if env.get("JAH_GPU_LOCK_HELD") != "1":
         cmd = [os.path.join(here, "gpu-exclusive.sh"), "--label", "row-env " + row] + cmd
-cmd = ["nice", "-n", "10"] + cmd
+# OUR CPUs (the box split with the Unreal session): the one setting, scripts/rig.sh cpus (WORKFLOW-STREAMLINE-1 5.8)
+cpus = subprocess.run([os.path.join(here, "rig.sh"), "cpus"], capture_output=True, text=True).stdout.strip() or "10-19"
+cmd = ["taskset", "-c", cpus, "nice", "-n", "10"] + cmd
 print("row-env.sh: running in %s%s" % (wd, " (scratch: nothing under %s written)" % build if scratch else ""))
 sys.stdout.flush()
 os.chdir(wd)

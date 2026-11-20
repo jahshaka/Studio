@@ -9,8 +9,9 @@ Before it, every measuring lane wrote its own rig: a capture driver, a parser, a
 "measuring door" in engine code (116 such scripts in 39 spike dirs; process-tooling.md A1). This is
 the one rig. In order, it:
 
-  1. takes its own memory scope (~/Developer/scripts/lead/scoped.sh 40G), its OWN Xvfb (a free display
-     in 60-99, 1920x1080x24, killed by the pid it recorded), a scratch HOME and --data-root, and the
+  1. takes its own memory scope (~/Developer/scripts/lead/scoped.sh 40G), the tree's rig (scripts/rig.sh: $DISPLAY
+     when it names a rig in 60-99, else the tree's Xvfb - reused, or started and brought down at the end by its
+     recorded pid), our CPUs (rig.sh cpus), a scratch HOME and --data-root, and the
      WHOLE CARD (scripts/gpu-exclusive.sh: every VRAM token, the run log's timing class);
   2. leaves the GPU clocks UNLOCKED (owner decision 2026-10-04: no clock locks; revisited later) —
      the method is the paired arms in one process, ABBA, with medians and a bootstrap CI, and the
@@ -224,26 +225,23 @@ def clock_state():
         return {"state": "unknown", "error": str(e)}
 
 
-def free_display():
-    for n in range(60, 100):
-        if not os.path.exists("/tmp/.X%d-lock" % n) and not os.path.exists("/tmp/.X11-unix/X%d" % n):
-            return n
-    raise SystemExit("perf-ab: no free X display in 60-99")
+RIG = os.path.join(ROOT, "scripts", "rig.sh")
 
 
-def start_xvfb():
-    """OUR OWN display, its pid recorded at spawn (never a wrapper's $!), the rig's one geometry."""
-    n = free_display()
-    p = subprocess.Popen(["Xvfb", ":%d" % n, "-screen", "0", "1920x1080x24", "-nolisten", "tcp"],
-                         stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-    for _ in range(100):
-        if os.path.exists("/tmp/.X11-unix/X%d" % n):
-            return n, p
-        if p.poll() is not None:
-            break
-        time.sleep(0.1)
-    p.kill()
-    raise SystemExit("perf-ab: Xvfb :%d did not come up" % n)
+def rig_display():
+    """(display, started): $DISPLAY when it names a rig (60-99), else the tree's rig - reused when up, else started by
+    scripts/rig.sh up (WORKFLOW-STREAMLINE-1 5.8: the one Xvfb starter, the real pid recorded), started=True then."""
+    m = re.match(r"^:(\d+)(?:\.\d+)?$", os.environ.get("DISPLAY", ""))
+    if m and 60 <= int(m.group(1)) <= 99:
+        return os.environ["DISPLAY"], False
+    d = subprocess.run([RIG, "display"], capture_output=True, text=True)
+    if d.returncode == 0 and d.stdout.strip():
+        return d.stdout.strip(), False
+    up = subprocess.run([RIG, "up"], capture_output=True, text=True)
+    d = subprocess.run([RIG, "display"], capture_output=True, text=True)
+    if up.returncode or d.returncode or not d.stdout.strip():
+        raise SystemExit("perf-ab: no rig (scripts/rig.sh up): " + (up.stderr or up.stdout).strip())
+    return d.stdout.strip(), True
 
 
 # ---------------------------------------------------------------------------------------------------
@@ -445,6 +443,8 @@ def main():
     cmd = []
     if os.access(SCOPED, os.X_OK):
         cmd += [SCOPED, "40G", "--"]
+    cpus = subprocess.run([RIG, "cpus"], capture_output=True, text=True).stdout.strip() or "10-19"
+    cmd += ["taskset", "-c", cpus]   # our CPUs (the box split; rig.sh cpus, the one setting)
     if not a.full_priority:
         # nice only, NO ionice (IONICE-1, 2026-10-09): the root disk's mq-deadline ages an idle-class
         # read 10 s, so an app under `ionice -c 3` starved a 0.1 s script to 60 s — builds keep -c 3
@@ -462,9 +462,9 @@ def main():
         return 0
 
     before = clock_state()
-    xn, xvfb = start_xvfb()
+    display, rig_started = rig_display()
     log = os.path.join(out, "app.log")
-    env = dict(os.environ, DISPLAY=":%d" % xn, HOME=home)
+    env = dict(os.environ, DISPLAY=display, HOME=home)
     budget = 600 + len(a.res) * (a.warm + len(order) * (a.settle + a.frames)) // 5
     t0 = time.time()
     rc = None
@@ -481,11 +481,8 @@ def main():
                     os.killpg(p.pid, signal.SIGKILL)
                 rc = "timeout"
     finally:
-        xvfb.terminate()
-        try:
-            xvfb.wait(timeout=10)
-        except subprocess.TimeoutExpired:
-            xvfb.kill()
+        if rig_started:
+            subprocess.run([RIG, "down"], capture_output=True)
     after = clock_state()
     text = open(log, errors="replace").read()
     events = [json.loads(m) for m in re.findall(r"^PERFAB (\{.*\})\s*$", text, re.M)]

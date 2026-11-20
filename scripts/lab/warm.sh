@@ -21,8 +21,8 @@
 # carries this tree's key and every camera asked for, else exit 3 naming the warm command - what a run that loads a
 # model does before it boots (walk.sh --bistro, by hand: gi.walk_bistro is archived). After a media edit, a C++ build
 # or a pin bump the cache is (partly) cold: the warm step is what is run, never a longer TIMEOUT.
-# THE DISPLAY: $DISPLAY when it names a rig (never :0 - refused), else a private Xvfb on a free :60-:99 at 1920x1080x24,
-# its pid recorded and killed at the end. The binary: $JAHLAB, else <this tree>/build-linux/bin/jahlab.
+# THE DISPLAY: $DISPLAY when it names a rig (60-99), else the tree's rig (scripts/rig.sh up: reused, or started and brought
+# down at the end); the run pinned to our CPUs (rig.sh cpus). The binary: $JAHLAB, else <this tree>/build-linux/bin/jahlab.
 set -u
 here="$(cd "$(dirname "$0")" && pwd)"
 tree="$(cd "$here/../.." && pwd)"
@@ -82,25 +82,19 @@ if [ "$check" = 1 ]; then
     exit 3
 fi
 
-# ---- the display ------------------------------------------------------------------------------------------------
-xpid="" display=""
+# ---- the display: scripts/rig.sh (WORKFLOW-STREAMLINE-1 5.8) ------------------------------------------------------
+# $DISPLAY when it names a rig (60-99), else the tree's rig (`rig.sh up --env`: reused when up, else started - and then
+# brought down at the end, by its recorded pid); our CPUs from the one setting (rig.sh cpus)
+rig="$tree/scripts/rig.sh" rig_started="" display=""
 case "${DISPLAY:-}" in
-    "" | :0 | :0.* | *:0 | *:0.*) [ -n "${DISPLAY:-}" ] && echo "warm: DISPLAY=$DISPLAY is the owner's display - a private Xvfb is used instead" ;;
-    *) display="$DISPLAY" ;;
+    :[6-9][0-9] | :[6-9][0-9].*) display="$DISPLAY" ;;
+    *) [ -n "${DISPLAY:-}" ] && echo "warm: DISPLAY=$DISPLAY is not a rig (60-99) - the tree's rig is used instead"
+       e=$("$rig" up --env) || { echo "warm.sh: no rig (scripts/rig.sh up failed)" >&2; exit 2; }
+       eval "$e"; display=$DISPLAY; [ "$RIG_STARTED" = 1 ] && rig_started=1 ;;
 esac
+cpus=$("$rig" cpus) || exit 2
 work="$(mktemp -d "${TMPDIR:-/tmp}/warm.XXXXXX")"
-if [ -z "$display" ]; then
-    for n in $(seq 60 99); do
-        [ -e "/tmp/.X$n-lock" ] || [ -e "/tmp/.X11-unix/X$n" ] && continue
-        Xvfb ":$n" -screen 0 1920x1080x24 -nolisten tcp > "$work/xvfb.log" 2>&1 &
-        xpid=$!
-        sleep 1
-        if kill -0 "$xpid" 2>/dev/null && [ -e "/tmp/.X11-unix/X$n" ]; then display=":$n"; echo "$xpid" > "$work/xvfb.pid"; break; fi
-        xpid=""
-    done
-    [ -n "$display" ] || { echo "warm.sh: no free display in :60-:99 (and \$DISPLAY names no rig)" >&2; rm -rf "$work"; exit 2; }
-fi
-cleanup() { [ -n "$xpid" ] && kill "$xpid" 2>/dev/null; rm -rf "$work"; }
+cleanup() { [ -z "$rig_started" ] || "$rig" down > /dev/null; rm -rf "$work"; }
 trap cleanup EXIT
 
 # ---- the bake (a model: off the card) ---------------------------------------------------------------------------
@@ -121,7 +115,7 @@ fi
 subject=("$file"); [ -n "$env" ] && subject=(--env "$env")
 mkdir -p "$dataroot"
 "$tree/scripts/gpu-exclusive.sh" --wait-max 600 --run-timeout "$timeout" --label "warm.sh" env DISPLAY="$display" \
-    nice -n 19 "$lab" --headless --no-stdin --size "$size" --data-root "$dataroot" "${subject[@]}" --script "$work/warm.lab" \
+    taskset -c "$cpus" nice -n 19 "$lab" --headless --no-stdin --size "$size" --data-root "$dataroot" "${subject[@]}" --script "$work/warm.lab" \
     > "$work/warm.log" 2>&1
 rc=$?
 grep -E '^LAB (LOAD|FIRST FRAME|END|REFUSED|FAILED)' "$work/warm.log" | cut -c1-200 | sed 's/^/  warm: /'
