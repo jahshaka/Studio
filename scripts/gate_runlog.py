@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """gate_runlog — THE RECORD OF WHAT RAN (DOCS/PROCESS.md; TESTING-SIMPLE). One record per row (and per pool arm) as the
-row ends, appended to <workspace>/testing/runs/<date>-<tier>-<tip9>.jsonl (JAH_RUN_LOG_DIR overrides): suite, arm,
+row ends, appended to <workspace>/local/runs/<date>-<tier>-<tip9>.jsonl (the box-local root, BOX-LOCAL-1: JAH_RUN_LOG_DIR,
+then JAH_LOCAL_ROOT override): suite, arm,
 verdict, seconds, labels, the row's inputs (its declaration and data hashes), the tip (studio, irisgl, fork and the
 build's BUILT_FROM stamp), the build config, a red's first failing line and its output's path, and THE ROW's LAW NUMBERS
 (`laws`, green or red: every `LAW <name> <value> <unit> [<op> <bar>]` line the row printed - tests/support/lawline.h - so a
@@ -143,7 +144,8 @@ def workspace_root():
 
 
 def log_dir():
-    return os.environ.get("JAH_RUN_LOG_DIR") or os.path.join(workspace_root(), "testing", "runs")
+    return (os.environ.get("JAH_RUN_LOG_DIR")
+            or os.path.join(os.environ.get("JAH_LOCAL_ROOT") or os.path.join(workspace_root(), "local"), "runs"))
 
 
 def _git(args, cwd=None):

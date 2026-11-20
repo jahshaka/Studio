@@ -134,7 +134,10 @@ if gpu:
     if env.get("JAH_GPU_LOCK_HELD") != "1":
         cmd = [os.path.join(here, "gpu-exclusive.sh"), "--label", "row-env " + row] + cmd
 # OUR CPUs (the box split with the Unreal session): the one setting, scripts/rig.sh cpus (WORKFLOW-STREAMLINE-1 5.8)
-cpus = subprocess.run([os.path.join(here, "rig.sh"), "cpus"], capture_output=True, text=True).stdout.strip() or "10-19"
+rc = subprocess.run([os.path.join(here, "rig.sh"), "cpus"], capture_output=True, text=True)
+cpus = rc.stdout.strip()
+if rc.returncode or not cpus:   # (no fallback CPU list: the box's own set, or the refusal rig.sh printed)
+    sys.exit(rc.stderr.strip() or "row-env.sh: rig.sh cpus printed no CPU set")
 cmd = ["taskset", "-c", cpus, "nice", "-n", "10"] + cmd
 print("row-env.sh: running in %s%s" % (wd, " (scratch: nothing under %s written)" % build if scratch else ""))
 sys.stdout.flush()

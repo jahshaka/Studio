@@ -29,9 +29,9 @@
 #   rig.sh display           the live rig's DISPLAY (:NN), exit 1 if none - for scripts.
 #   rig.sh tree              the tree's ONE spelling (~/Developer/..., CODING_RULES §4) - what a script cds into before it
 #                            configures (a first configure under /mnt/work/... compiles uncached and re-spells every command).
-#   rig.sh cpus              OUR CPU SET, the one setting: $JAH_CPUS, else the first line of <lead repo>/testing/CPUS
-#                            (JAH_LEAD_ROOT, else ~/Developer), else 10-19 (the box split with the Unreal session, CLAUDE.md
-#                            "The box and the card"). `nproc` honours the affinity, so a build run under
+#   rig.sh cpus              OUR CPU SET, the one setting: $JAH_CPUS, else the first line of <the box-local root>/CPUS
+#                            (JAH_LOCAL_ROOT, else <JAH_LEAD_ROOT, else ~/Developer>/local: BOX-LOCAL-1, box data); no set
+#                            is REFUSED (exit 2: the lead's box-check.sh writes it). `nproc` honours the affinity, so a build run under
 #                            `taskset -c $(rig.sh cpus)` also narrows build-ogre.sh's job count.
 # The tree is the one this script sits in; its spelling the canonical ~/Developer one (CODING_RULES §4).
 # exit: run passes its command's code (75: the card stayed held); 2 refused; 64 usage.
@@ -54,10 +54,10 @@ die() { echo "rig.sh: $*" >&2; exit 2; }
 usage() { sed -n '4,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 64; }
 
 cpus() {
-    local c=${JAH_CPUS:-} f="${JAH_LEAD_ROOT:-$uhome/Developer}/testing/CPUS"
+    local c=${JAH_CPUS:-} f="${JAH_LOCAL_ROOT:-${JAH_LEAD_ROOT:-$uhome/Developer}/local}/CPUS"
     [ -n "$c" ] || { [ -f "$f" ] && read -r c _ < "$f"; }
-    c=${c:-10-19}
-    [[ $c =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || die "our CPU set '$c' is not a CPU list (JAH_CPUS / testing/CPUS)"
+    [ -n "$c" ] || die "REFUSED: no CPU set - $f is missing (box data: ~/Developer/scripts/lead/box-check.sh writes it)"
+    [[ $c =~ ^[0-9]+(-[0-9]+)?(,[0-9]+(-[0-9]+)?)*$ ]] || die "our CPU set '$c' is not a CPU list (JAH_CPUS / $f)"
     printf '%s\n' "$c"
 }
 starttime() { sed 's/.*) //' "/proc/$1/stat" 2> /dev/null | cut -d' ' -f20; }   # /proc/<pid>/stat field 22
@@ -181,7 +181,7 @@ cmd_run() {
     [[ ${rdisp#:} =~ ^[0-9]+$ ]] && [ "${rdisp#:}" -ge 60 ] && [ "${rdisp#:}" -le 99 ] \
         || die "the recorded display '$rdisp' is not a rig in 60-99 - refused (never :0)"
     local c; c=$(cpus) || exit 2
-    taskset -c "$c" true 2> /dev/null || die "taskset -c $c fails on this box (JAH_CPUS / testing/CPUS)"
+    taskset -c "$c" true 2> /dev/null || die "taskset -c $c fails on this box (JAH_CPUS / the box-local CPUS)"
     local cmd=("$@") a dr=""
     case "$(basename -- "$1")" in
         Jahshaka|jahlab) for a in "$@"; do case "$a" in --data-root|--data-root=*) dr=1 ;; esac; done

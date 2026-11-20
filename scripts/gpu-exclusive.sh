@@ -59,8 +59,9 @@
 # command). Two lines a hold, not one at the release: a killed holder's hold would otherwise leave no trace at all.
 # THE LOG IS ON DISK (WORKFLOW-STREAMLINE-1 2.5, 2026-11-20: it lived beside the lock in /tmp - RAM - and every hold of the
 # sprint before the 11-16 reboot was lost to the audit). WHERE (`gpu-exclusive.sh --holds-log` prints it): JAH_GPU_HOLD_LOG
-# when set; else, for THE CARD's lock (JAH_GPU_LOCK unset or /tmp/jah-gpu.lock), <the user's home>/Developer/testing/lock/
-# holds.log (the lead repo's testing/, gitignored; the passwd home, so a row's scratch HOME never moves it); else - a
+# when set; else, for THE CARD's lock (JAH_GPU_LOCK unset or /tmp/jah-gpu.lock), <the box-local root>/lock/holds.log
+# (JAH_LOCAL_ROOT, else <the user's passwd home>/Developer/local - BOX-LOCAL-1: box data, never in a repo; the passwd home, so a
+# row's scratch HOME never moves it); else - a
 # private lock, a suite's - <lock>.holds beside it (a toy hold never enters the card's record). Its directory is made.
 # THE REPORT: `gpu-exclusive.sh --report [since]` (since: anything `date -d` reads - 2026-11-16, '7 days ago') - per side
 # (ours / the Unreal session's `ue-*` labels): holds, total held, share of all holds, share of the window (busy), the
@@ -76,7 +77,7 @@ holds_log() {   # the hold log's path (the header's THE LOG IS ON DISK)
     local h
     if [ -n "${JAH_GPU_HOLD_LOG:-}" ]; then printf '%s\n' "$JAH_GPU_HOLD_LOG"
     elif [ "${JAH_GPU_LOCK:-$card_lock}" = "$card_lock" ]; then
-        h=$(getent passwd "$(id -u)" | cut -d: -f6); printf '%s\n' "${h:-$HOME}/Developer/testing/lock/holds.log"
+        h=$(getent passwd "$(id -u)" | cut -d: -f6); printf '%s\n' "${JAH_LOCAL_ROOT:-${h:-$HOME}/Developer/local}/lock/holds.log"
     else printf '%s\n' "$JAH_GPU_LOCK.holds"; fi
 }
 if [ "${1:-}" = --holds-log ]; then holds_log; exit 0; fi

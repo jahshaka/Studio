@@ -443,7 +443,10 @@ def main():
     cmd = []
     if os.access(SCOPED, os.X_OK):
         cmd += [SCOPED, "40G", "--"]
-    cpus = subprocess.run([RIG, "cpus"], capture_output=True, text=True).stdout.strip() or "10-19"
+    rc = subprocess.run([RIG, "cpus"], capture_output=True, text=True)
+    cpus = rc.stdout.strip()
+    if rc.returncode or not cpus:   # (no fallback CPU list: the box's own set, or the refusal rig.sh printed)
+        sys.exit(rc.stderr.strip() or "perf-ab: rig.sh cpus printed no CPU set")
     cmd += ["taskset", "-c", cpus]   # our CPUs (the box split; rig.sh cpus, the one setting)
     if not a.full_priority:
         # nice only, NO ionice (IONICE-1, 2026-10-09): the root disk's mq-deadline ages an idle-class
