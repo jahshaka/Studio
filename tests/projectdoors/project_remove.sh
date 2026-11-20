@@ -4,7 +4,9 @@
 # stage 2). A project with a real exports/ folder (a web export) is removed through project.remove — the
 # Desktop tile's Delete calls the same ProjectService::removeProject: its row goes, the OPEN project and an
 # unknown guid are refused by a sentence, and after the process has ended (its shutdown joins the worker) the
-# folder is gone and nothing is left aside in its Projects directory. Two --headless processes.
+# folder is gone and nothing is left aside in its Projects directory; and with the Projects directory read-only
+# the delete is REFUSED with the row and every file kept (the base deleted the files and kept the rows).
+# Three --headless processes.
 #
 # $1 = the Jahshaka binary, $2 = the JS half (project_remove.js), $3 = --headless (forwarded to both)
 set -u
@@ -34,6 +36,19 @@ PROJECTS="$(dirname "$FOLDER")"
 n=$(find "$FOLDER/exports" -type f 2>/dev/null | wc -l)
 [ "$n" -ge 2 ]
 check $? "the folder holds an exports/ tree before the delete ($n files under $FOLDER/exports)"
+
+# Process 2a: the Projects directory READ-ONLY. The base deleted every file inside the folder, failed its rmdir
+# and kept the rows: a partial delete. The one door renames aside or refuses — nothing goes.
+before=$(find "$FOLDER" -type f | sort | md5sum)
+chmod 555 "$PROJECTS"
+{ cat "$JS"; echo "readOnly();"; } > ro.run.js
+"$BIN" "$MODE" --script "$PWD/ro.run.js" > ro.log 2>&1
+rc=$?
+chmod 755 "$PROJECTS"
+grep -E "^ok:|assert failed|^read-only:" ro.log
+check $rc "process 2a (a read-only Projects directory) passes (exit $rc)"
+[ "$(find "$FOLDER" -type f | sort | md5sum)" = "$before" ]
+check $? "...and every file of the folder is still there"
 
 { cat "$JS"; echo "remove();"; } > remove.run.js
 "$BIN" "$MODE" --script "$PWD/remove.run.js" > remove.log 2>&1

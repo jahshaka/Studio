@@ -4,8 +4,11 @@ stage 4 from archive/tests/theme, where TEST-CUT-1 had put it).
 
 The live walk (theme.sheets / app.styleSheets) only sees widgets that exist during its tour; this reads the
 SOURCE. Three rules, NO allowlist:
-  1. every `setStyleSheet(` call outside src/ui/style/ whose argument holds a non-empty string literal once each
-     getter call (StyleSheet::, ThemeManager::, ThemeRoles::) is stripped is a raw sheet;
+  1. every `setStyleSheet(` call outside src/ui/style/ passes ONLY GETTERS (StyleSheet::, ThemeManager::,
+     ThemeRoles::): its argument, comments and getter calls stripped, may hold nothing but a condition and the
+     `?` `:` choosing between two getters (`open ? StyleSheet::A() : StyleSheet::B()`). A literal, a named
+     constant, a cast or a concatenation is a raw sheet (the audit: a brace-less sheet in a constant, a sheet
+     built by `+`, a sheet read from a .qss file all passed the literal-only rule);
   2. no .ui form carries a `styleSheet` property;
   3. NEW: no CSS-SHAPED string literal (a selector, a brace, then a property: `QLabel { color: ... }`) in a
      .cpp/.h outside src/ui/style/ — the sheet passed as a NAMED CONSTANT, which rule 1 cannot see (the chat
@@ -27,6 +30,9 @@ any_literal = re.compile(r'R"([^(\s]*)\((.*?)\)\1"|"((?:[^"\\\n]|\\.)*)"', re.S)
 css = re.compile(r"[A-Za-z#*][\w#.:\-\s,>*]*\{\s*(?:[^{}]*;\s*)?-?(?:background|color|border|padding|margin|font|"
                  r"selection-background-color|outline|spacing|min-width|min-height)[\w-]*\s*:", re.S)
 bad = []
+# What a getters-only argument leaves once its getter calls are stripped (whitespace removed): nothing, or a
+# condition — an identifier, a member read or a no-argument call, optionally negated — then `?`, then `:`.
+GETTERS_ONLY = re.compile(r"(?:(?:!?[A-Za-z_]\w*(?:(?:\.|->)\w+)*(?:\(\))?)?\?)?:?")
 
 
 def strip_getters(arg):
@@ -94,7 +100,8 @@ for base, dirs, files in os.walk(os.path.join(root, "src")):
                 depth += {"(": 1, ")": -1}.get(text[i], 0)
                 i += 1
             arg = text[m.end():i - 1]
-            if any(lit.strip() for lit in literal.findall(strip_getters(arg))):
+            residue = "".join(strip_getters(arg).split())
+            if not GETTERS_ONLY.fullmatch(residue):
                 line = text.count("\n", 0, m.start()) + 1
                 bad.append(f"{rel}:{line}: raw sheet: setStyleSheet({' '.join(arg.split())[:80]})")
         for m in any_literal.finditer(text):                            # rule 3

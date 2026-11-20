@@ -22,6 +22,19 @@ function make() {
     console.log("make: ALL OK");
 }
 
+// Process 2a, the Projects directory made READ-ONLY by the shell: the folder cannot be moved aside, so the
+// delete is REFUSED by its sentence and nothing goes — the row stays (the shell checks every file stayed).
+function readOnly() {
+    var del = project.list().filter(function (p) { return p.name === "Doors Delete"; });
+    assert(del.length === 1, "the project to delete is listed");
+    var why = refusal(function () { if (project.remove(del[0].guid) !== true) throw new Error("returned false"); });
+    console.log("read-only: " + why);
+    assert(why !== null && why.indexOf("could not be moved aside") >= 0,
+           "a folder that cannot be moved aside REFUSES the delete, by its sentence");
+    assert(project.list().filter(function (p) { return p.guid === del[0].guid; }).length === 1, "...and the row stays");
+    console.log("read-only: ALL OK");
+}
+
 // Process 2: the open project is refused, the other removed through the one door.
 function remove() {
     var rows = project.list();

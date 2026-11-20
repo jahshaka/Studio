@@ -474,7 +474,7 @@ gi.scroll_slab.scroll 5.38  solo (one -j1 call, rig :64, 2026-11-21; V2 plan 0.2
 gi.scroll_slab.light 5.89  solo (one -j1 call, rig :64, 2026-11-21; V2 plan 0.2: split by proof)
 project.refuses_unreadable 5.90  by hand (spec.sh reprice, 2026-11-20): solo ctest runs 5.90 / 5.84 s after the audit rewrite, box load ~5 (STUDIO-HYGIENE-1)
 project.refuses_unreadable.fresh_home 0.02  by hand (spec.sh reprice, 2026-11-20)
-project.remove_folder 5.60  by hand (spec.sh reprice, 2026-11-20): solo ctest runs 5.55 s and the -V run, box load ~3 (STUDIO-HYGIENE-1 stage 2)
+project.remove_folder 8.20  by hand (spec.sh reprice, 2026-11-20)
 project.remove_folder.fresh_home 0.02  by hand (spec.sh reprice, 2026-11-20)
 source.no_ui_folder_delete 0.01  by hand (spec.sh reprice, 2026-11-20)
 assets.one_name_door 3.10  by hand (spec.sh reprice, 2026-11-20)
