@@ -336,7 +336,7 @@ QVector<VerbInfo> AppApi::verbs() const
           "true to clear the record after reading it.",
           Needs::Document },
         { "frameStats", "app.frameStats({reset}) -> {running, intervalMs, displayPeriodMs, ticks, rendered, drawing, fpsDrawn, "
-                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{checked, carried, uiOverruns, frameOverruns, carriedExcused, budgetCarried, submitted, handOvers, requests, presentAlpha, presentFree, messagesCarried, drainsCut}}",
+                        "slowFramesLastMinute, workMs, worstMs, slowFrames, enabledViews, submit:{checked, carried, uiOverruns, frameOverruns, carriedExcused, budgetCarried, submitted, handOvers, requests, presentAlpha, presentFree, messagesCarried, drainsCut, stepSerialDrawn, poseSerial, displayTimeNs}}",
           "What the ONE render loop (EngineRenderDriver) has been doing. `ticks` counts timer fires and "
           "`rendered` the ticks that actually called the engine, both cumulative; the ticks that had no "
           "enabled View to draw — sitting on a page with no viewport — are `ticks - rendered`, and the "
@@ -370,7 +370,10 @@ QVector<VerbInfo> AppApi::verbs() const
           "`presentAlpha` / "
           "`presentFree` — the last drawn frame's interpolation weight (1 = the newest grid state) and whether it was a "
           "free-running frame; `requests` — the engine requests the host made (each waits up to a frame in "
-          "free-running: none belongs on a per-tick path).",
+          "free-running: none belongs on a per-tick path); `stepSerialDrawn` / `poseSerial` / `displayTimeNs` — what the "
+          "last frame DREW (ONE-FRAME-1, the headset's door): the grid state (the step serial of the scene its first "
+          "presented view shows), the head pose (the VR session's serial of the pose that frame located, 0 = none) and "
+          "the display time it was located for (ns on the runtime's clock, 0 without a session).",
           Needs::Document },
         { "pacing", "app.pacing(mode?) -> {mode, modes, intervalMs, refreshHz, vsync, running}",
           "How fast the ONE render loop is allowed to tick, and whether the frame waits for the "
@@ -1659,6 +1662,11 @@ QVariantMap AppApi::frameStats(const QVariantMap &options)
         // THE DRAIN'S BUDGET (BUGS-7): what the last frame carried to the next, and the drains ever cut.
         submit.insert("messagesCarried", double(engine->published().input.messagesCarried));
         submit.insert("drainsCut", double(engine->published().input.drainsCut));
+        // WHAT THE LAST FRAME DREW (ONE-FRAME-1 stage 2; VR's door D4): the grid state (the presented scene's step
+        // serial), the head pose's serial (0: none located) and its predicted display time (ns; 0 without a session).
+        submit.insert("stepSerialDrawn", double(engine->published().stepSerialDrawn));
+        submit.insert("poseSerial", double(engine->published().poseSerial));
+        submit.insert("displayTimeNs", double(engine->published().displayTimeNs));
     }
     out.insert("submit", submit);
     if (reset && driver) driver->resetWorst();
