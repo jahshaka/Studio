@@ -69,19 +69,9 @@ ReadConnection::~ReadConnection()
 
 void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
 {
-    {
-        int queries = 0;
-        LoadTimeline::Accumulate rows(QStringLiteral("db:sessionRows"), 0);
-        reads.objectRows = ProjectAssets::readSessionRows(conn, reads.root, reads.projectGuid,
-                                                          static_cast<int>(ModelTypes::Object), &queries);
-        rows.stop();
-        LoadTimeline::add(QStringLiteral("db:sessionRows"), 0.0, queries);
-    }
-    // THE PINNED MODELS ARE THE OBJECT ROWS' PATHS (the plan the registration and the reader share).
-    for (const ProjectAssets::SessionRow &row : reads.objectRows)
-        if (!row.path.isEmpty() && !reads.modelPaths.contains(row.path)) reads.modelPaths.append(row.path);
-
-    // THE SCENE BLOB, READ ONCE AND PARSED ONCE (it was read three times and parsed three times).
+    // THE SCENE BLOB, READ ONCE AND PARSED ONCE (it was read three times and parsed three times) — and
+    // FIRST (STUDIO-HYGIENE-1): a scene the open refuses plans NOTHING, no session row and no model path, so
+    // the runner reads, rebuilds and writes no bake for a world it will not open.
     QByteArray blob;
     {
         LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
@@ -115,6 +105,18 @@ void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
         reads.projectObj = doc.object();
         reads.found = true;
     }
+
+    {
+        int queries = 0;
+        LoadTimeline::Accumulate rows(QStringLiteral("db:sessionRows"), 0);
+        reads.objectRows = ProjectAssets::readSessionRows(conn, reads.root, reads.projectGuid,
+                                                          static_cast<int>(ModelTypes::Object), &queries);
+        rows.stop();
+        LoadTimeline::add(QStringLiteral("db:sessionRows"), 0.0, queries);
+    }
+    // THE PINNED MODELS ARE THE OBJECT ROWS' PATHS (the plan the registration and the reader share).
+    for (const ProjectAssets::SessionRow &row : reads.objectRows)
+        if (!row.path.isEmpty() && !reads.modelPaths.contains(row.path)) reads.modelPaths.append(row.path);
 
     // ...and its sources, resolved on this connection exactly as the reader will resolve them.
     LoadTimeline::Accumulate plan(QStringLiteral("worker:plan"));
