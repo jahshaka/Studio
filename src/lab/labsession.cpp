@@ -1597,8 +1597,9 @@ bool Session::lamp(const Command &c)
 
 // THE ROUTES VERB (URGENT #146 for the lab; PHOTON-7-9A): the declaration, then judged after each frame drawn until it
 // matches, against that frame's own PUBLISHED record (a host's door, never the fixtures': R11): the view's chain as built
-// (PublishedEngineFrame::ViewFrames' routes - engine.published_routes holds them equal to the inspect door's), the scene's
-// products (GiStatus) and the pause as this host set it (the document's GI update budget, what the mirror pushes).
+// (PublishedEngineFrame::ViewFrames' routes - enginetest::requireRoutes holds them equal to the inspect door's on every
+// frame a declaring fixture judges), the scene's products (GiStatus) and the pause as this host set it (the document's GI
+// update budget, what the mirror pushes).
 bool Session::routes(const Command &c)
 {
     RouteSet r;
