@@ -327,6 +327,10 @@ bool ProjectRunner::refuseOpen(const openreads::Reads &reads)
 	mOpenRefusal = tr("'%1' could not be opened: %2")
 	                   .arg(mProject ? mProject->getProjectName() : QString(), reads.refusal);
 	qWarning("project open: %s", qUtf8Printable(mOpenRefusal));
+	// NO HALF-OPEN PROJECT (the audit): the pointer goes as the tile's own close
+	// takes it (ProjectManager::closeProjectFromWidget) — nothing keyed on the
+	// guid can mistake the refused project for the open one.
+	if (mProject) mProject->setProjectGuid(QString());
 	if (mRunner && mRunner->isRunning()) mRunner->requestAbort();
 	LoadTimeline::end();
 	mHost->showOpenRefusal(mOpenRefusal);

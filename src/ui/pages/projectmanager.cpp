@@ -184,9 +184,12 @@ ProjectManager::~ProjectManager()
 
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-	if (project->getProjectGuid() == widget->tileData.guid) {
-		    shell->setSpace(QStringLiteral("editor"));
-
+	// THE OPEN WORLD'S OWN TILE goes to the editor — the world must BE open, as
+	// both project verbs check: a guid left pointed with no scene (a close, a
+	// refused open) sent a second click into an EMPTY editor with no message
+	// (STUDIO-HYGIENE-1 audit).
+	if (project->getProjectGuid() == widget->tileData.guid && shell->services()->project->isSceneOpen()) {
+		shell->setSpace(QStringLiteral("editor"));
 		return;
 	}
 
