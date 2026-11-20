@@ -1,14 +1,16 @@
-// engine.lod_rule_parity (archived: archive/tests/engine) — ONE QUALITY CURRENCY, TWO IMPLEMENTATIONS, AND THE
+// engine.lod_rule_parity — ONE QUALITY CURRENCY, TWO IMPLEMENTATIONS, AND THE
 // PROOF THEY ARE THE SAME (SPECS/atom/A4_SUBSTRATE_CULL_DESIGN.md section 3).
 //
 // THE CURRENCY is `sampleFootprintPerspective` + `allowedWorldError` +
 // `lodLevelForWorldError` in jahshaka/engine/Types.h, and its GLSL twin is
 // `jahSampleFootprint` + `jahAllowedWorldError` + `jahLevelForAllowed` in
-// media/Hlms/Jahshaka/JahCullTest_cs.glsl. There are two copies because a
+// media/Hlms/Jahshaka/JahLevelRule_piece_cs.any (ONE definition each, inserted by
+// the cull's test job and the voxel gather). There are two halves because a
 // compute shader cannot include a C++ header. This suite is the reason that is
-// SAFE: it drives the REAL shader — the cull's own job 1, on the device, over the
-// real GPU scene table — and compares its answer against the header's over
-// 10,000 (bound, distance, tolerance, projection) combinations.
+// SAFE: it drives the REAL shaders — the cull's own job 1, on the device, over the
+// real GPU scene table, over 10,000 (bound, distance, tolerance, projection)
+// combinations, and the voxel gather's own job over the same table (its cascade
+// case, below) — and compares their answers against the header's.
 //
 // HOW THE 10,000 ARE MADE: 500 instances spread from 1 m to 500 m with varying
 // scales (so the distance term and the mesh-units term both move), evaluated
@@ -35,6 +37,18 @@
 #include "EnginePrivate.h"
 #include "cluster_draw.h"
 #include "cluster_fixtures.h"
+
+#include "photon/voxel/PhotonVoxelizer.h"
+
+#include <OgreHlmsCompute.h>
+#include <OgreHlmsComputeJob.h>
+#include <OgreHlmsManager.h>
+#include <OgreRenderSystem.h>
+#include <OgreResourceTransition.h>
+#include <OgreRoot.h>
+#include <Vao/OgreAsyncTicket.h>
+#include <Vao/OgreUavBufferPacked.h>
+#include <Vao/OgreVaoManager.h>
 
 #include <QCoreApplication>
 
@@ -498,6 +512,229 @@ static void productCutParity(Engine *e, View *view)
     CHECK(bad == 0u && nearBad == 0u, msg);
 }
 
+// ---- THE SIXTH COPY'S USER: THE VOXEL GATHER'S WALK (ATOM-HOUSE-1) ------------------
+//
+// The walk is ONE piece (`JahLevelRuleWalk`, media/Hlms/Jahshaka/JahLevelRule_piece_cs.any)
+// with two users on the device: the cull's test job, which the 10,000 evaluations above
+// drive, and the VOXEL GATHER (Jahshaka/VoxelGatherWrite, JahVoxelGather_cs.glsl), which
+// spends the currency's CASCADE case — one sample is a cell, no distance term:
+// allowed = allowedWorldError(tolerance, cell, scale), the scale the instance's longest
+// column. Until this arm nothing ran the gather's copy against the header.
+//
+// THIS ARM RUNS THE PRODUCT'S GATHER JOB ITSELF over the same 600 instances: the GPU
+// scene's own mesh, level and partition tables; one octant over everything; one material
+// bucket; and the instance table read back with the two words the Photon store would
+// write — the GI-visible flag, and a material word whose slot half is the instance's own
+// slot — so the job's predicates admit every instance, its walk alone picks the level,
+// and every record it writes names its instance (the record's slot lane) and its level
+// (its geometry row). For each instance the records must be EXACTLY the partitions of
+// the level `lodLevelForWorldError` picks, one per partition, over cells that walk the
+// whole chain at the product's tolerance (a 256th of a cell, OgreGi.cpp's
+// kCascadeLodCellFraction).
+namespace voxelcase {
+struct Record {   // JahVoxelGather_cs.glsl's Record (PhotonVoxelizer::kInstanceRecordBytes)
+    float worldRow[3][4];
+    float aabb0[4];
+    float aabb1[4];   // w = the material SLOT, bit-cast
+    uint32_t meshData[4];   // geometry row, first index, index count, flags
+};
+static_assert(sizeof(Record) == Ogre::PhotonVoxelizer::kInstanceRecordBytes, "the gather's record");
+
+Ogre::DescriptorSetUav::BufferSlot slotOf(Ogre::UavBufferPacked *b, Ogre::ResourceAccess::ResourceAccess a)
+{
+    Ogre::DescriptorSetUav::BufferSlot s = Ogre::DescriptorSetUav::BufferSlot::makeEmpty();
+    s.buffer = b;
+    s.offset = 0;
+    s.sizeBytes = 0;
+    s.access = a;
+    return s;
+}
+}   // namespace voxelcase
+
+static void voxelGatherParity(Scene *scene, unsigned slots)
+{
+    using namespace jahshaka::engine::detail;
+    std::printf("\n== the voxel gather's walk (the one piece's second user) against Types.h ==\n");
+    OgreScene *os = static_cast<OgreScene *>(scene);
+    GpuScene &gs = os->gpuScene();
+    Ogre::Root &root = Ogre::Root::getSingleton();
+    Ogre::RenderSystem *rs = root.getRenderSystem();
+    Ogre::HlmsCompute *hc = root.getHlmsManager()->getComputeHlms();
+    Ogre::VaoManager *vm = rs->getVaoManager();
+    Ogre::HlmsComputeJob *job = hc ? hc->findComputeJobNoThrow("Jahshaka/VoxelGatherWrite") : nullptr;
+    if (!job || !gs.live()) { std::printf("FAIL: no gather job or no GPU scene\n"); ++failures; return; }
+    // THE PRODUCT'S BRACKET: the partitions' AABB job is a Photon dispatch, made inside a Graphics GI region
+    // (PhotonComponent::prepareGiInputs); the gather's dispatches below sit in one too, as runVoxelGather's do.
+    PhotonComponent::GiRegion region(PhotonComponent::RegionKind::Graphics);
+    gs.ensurePartitions(root.getHlmsManager(), rs, Ogre::PhotonVoxelizer::kIndicesPerPartition);
+    if (!gs.partitionAabbBuffer() || !gs.partitionCount()) {
+        std::printf("FAIL: the GPU scene built no partitions\n");
+        ++failures;
+        return;
+    }
+
+    // THE INSTANCE TABLE, as the device holds it, with the Photon store's two words.
+    std::vector<GpuInstance> inst(slots);
+    {
+        Ogre::AsyncTicketPtr t = gs.instanceBuffer()->readRequest(0, slots);
+        std::memcpy(inst.data(), t->map(), size_t(slots) * sizeof(GpuInstance));
+        t->unmap();
+    }
+    uint32_t meshIndex = 0xFFFFFFFFu, finestParts = 0;
+    bool oneMesh = true;
+    for (unsigned s = 0; s < slots; ++s) {
+        uint32_t m, flags;
+        std::memcpy(&m, &inst[s].boundsMin[3], 4);
+        std::memcpy(&flags, &inst[s].boundsMax[3], 4);
+        if (meshIndex == 0xFFFFFFFFu) meshIndex = m;
+        oneMesh = oneMesh && m == meshIndex;
+        flags |= kGpuGiVisible;
+        std::memcpy(&inst[s].boundsMax[3], &flags, 4);
+        inst[s].ids[1] = s;   // pool 0 (the one bucket), slot = the instance's own slot
+    }
+    CHECK(oneMesh && meshIndex != 0xFFFFFFFFu, "the voxel arm's instances all name the chained mesh's entry");
+    if (!oneMesh || meshIndex == 0xFFFFFFFFu) return;
+    std::map<uint32_t, unsigned> levelOfRow;   // geometry row -> level
+    std::vector<uint32_t> partsAt(GpuScene::kLevelsPerMesh, 0u);
+    for (uint32_t l = 0; l < GpuScene::kLevelsPerMesh; ++l) {
+        const GpuMeshLevel &lv = gs.levelAt(meshIndex, l);
+        partsAt[l] = lv.partCount;
+        if (lv.geomRow != GpuScene::kNoGeomRow) levelOfRow[lv.geomRow] = l;
+        finestParts = std::max(finestParts, lv.partCount);
+    }
+    char msg[260];
+    std::snprintf(msg, sizeof(msg), "the chained mesh's eight levels each have their own geometry row (%zu)",
+                  levelOfRow.size());
+    CHECK(levelOfRow.size() == kBounds.size() + 1u, msg);
+    const uint32_t capacity = std::max(finestParts * slots, 1u);
+
+    Ogre::UavBufferPacked *bParams = vm->createUavBuffer(1u, sizeof(VoxelGatherParams), 0, nullptr, false);
+    Ogre::UavBufferPacked *bInst = vm->createUavBuffer(slots, sizeof(GpuInstance), 0, inst.data(), false);
+    Ogre::UavBufferPacked *bWork = vm->createUavBuffer(2u, sizeof(uint32_t), 0, nullptr, false);
+    const uint32_t range[2] = { 0u, capacity };   // the one (octant, bucket) range: all of the records
+    Ogre::UavBufferPacked *bRanges = vm->createUavBuffer(1u, sizeof(range), 0, const_cast<uint32_t *>(range), false);
+    Ogre::UavBufferPacked *bRecords = vm->createUavBuffer(capacity, sizeof(voxelcase::Record), 0, nullptr, false);
+    Ogre::UavBufferPacked *bReadout = vm->createUavBuffer(kReadWords, sizeof(uint32_t), 0, nullptr, false);
+    Ogre::UavBufferPacked *bMask = vm->createUavBuffer(1u, sizeof(uint32_t), 0, nullptr, false);
+
+    // The product's tolerance (OgreGi.cpp kCascadeLodCellFraction: a 256th of a cell) over cells that take the
+    // chain from level 0 (the finest instance at 5 cm cells) to past its last bound (the coarsest at 1 km).
+    const float tolerance = 1.0f / 256.0f;
+    const float cells[8] = { 0.05f, 0.25f, 1.0f, 4.0f, 16.0f, 64.0f, 256.0f, 1024.0f };
+    unsigned evaluated = 0, mismatched = 0, missing = 0, wrongCount = 0, mixed = 0, nearThreshold = 0;
+    unsigned overflow = 0, histogram[8] = {};
+    bool ran = true;
+    for (float cell : cells) {
+        VoxelGatherParams p;
+        p.counts[0] = slots;
+        p.counts[1] = 1u;   // one octant
+        p.counts[2] = 1u;   // one material bucket
+        p.counts[3] = kGatherLod;
+        p.caps[0] = capacity;
+        p.caps[1] = 1u;
+        p.caps[2] = Ogre::PhotonVoxelizer::kIndicesPerPartition;
+        p.lod[0] = cell;
+        p.lod[1] = tolerance;
+        for (int i = 0; i < 3; ++i) { p.octMin[0][i] = -1.0e9f; p.octMax[0][i] = 1.0e9f; }
+        bParams->upload(&p, 0, 1u);
+        const uint32_t zeros[kReadWords] = {};
+        bWork->upload(zeros, 0, 2u);
+        bReadout->upload(zeros, 0, kReadWords);
+        std::vector<voxelcase::Record> rec;
+        uint32_t readout[kReadWords] = {};
+        try {
+            GpuScene::setLevelTableProperty(job);
+            job->_setUavBuffer(0u, voxelcase::slotOf(bParams, Ogre::ResourceAccess::Read));
+            job->_setUavBuffer(1u, voxelcase::slotOf(bInst, Ogre::ResourceAccess::Read));
+            job->_setUavBuffer(2u, voxelcase::slotOf(gs.meshBuffer(), Ogre::ResourceAccess::Read));
+            job->_setUavBuffer(3u, voxelcase::slotOf(gs.levelBuffer(), Ogre::ResourceAccess::Read));
+            job->_setUavBuffer(4u, voxelcase::slotOf(gs.partitionAabbBuffer(), Ogre::ResourceAccess::Read));
+            job->_setUavBuffer(5u, voxelcase::slotOf(bWork, Ogre::ResourceAccess::ReadWrite));
+            job->_setUavBuffer(6u, voxelcase::slotOf(bRanges, Ogre::ResourceAccess::Read));
+            job->_setUavBuffer(7u, voxelcase::slotOf(bRecords, Ogre::ResourceAccess::Write));
+            job->_setUavBuffer(8u, voxelcase::slotOf(bReadout, Ogre::ResourceAccess::ReadWrite));
+            job->_setUavBuffer(9u, voxelcase::slotOf(bMask, Ogre::ResourceAccess::Read));
+            job->setNumThreadGroups((slots + kGatherThreadsPerGroup - 1u) / kGatherThreadsPerGroup, 1u, 1u);
+            Ogre::ResourceTransitionArray &rt = rs->getBarrierSolver().getNewResourceTransitionsArrayTmp();
+            job->analyzeBarriers(rt);
+            rs->executeResourceTransition(rt);
+            hc->dispatch(job, 0, 0);
+            Ogre::AsyncTicketPtr tr = bReadout->readRequest(0, kReadWords);
+            std::memcpy(readout, tr->map(), sizeof(readout));
+            tr->unmap();
+            const uint32_t written = std::min(readout[kReadRecords], capacity);
+            rec.resize(written);
+            if (written) {
+                Ogre::AsyncTicketPtr t = bRecords->readRequest(0, written);
+                std::memcpy(rec.data(), t->map(), size_t(written) * sizeof(voxelcase::Record));
+                t->unmap();
+            }
+        } catch (Ogre::Exception &ex) {
+            std::printf("FAIL: the gather job: %s\n", ex.getFullDescription().c_str());
+            ++failures;
+            ran = false;
+        }
+        job->clearUavBuffers();
+        if (!ran) break;
+        overflow += readout[kReadOverflow];
+        // Per instance: the levels its records name and how many there are.
+        std::vector<unsigned> count(slots, 0u), level(slots, 0xFFFFFFFFu);
+        std::vector<unsigned char> mixedAt(slots, 0u);
+        for (const voxelcase::Record &r : rec) {
+            uint32_t s;
+            std::memcpy(&s, &r.aabb1[3], 4);
+            const auto it = levelOfRow.find(r.meshData[0]);
+            if (s >= slots || it == levelOfRow.end()) { ++wrongCount; continue; }
+            if (level[s] != 0xFFFFFFFFu && level[s] != it->second) mixedAt[s] = 1u;
+            level[s] = it->second;
+            ++count[s];
+        }
+        for (unsigned s = 0; s < slots; ++s) {
+            const float scale = worldMaxAxisScale(inst[s].world);
+            const float allowed = allowedWorldError(tolerance, cell, scale);
+            const unsigned cpu = unsigned(lodLevelForWorldError(kBounds, allowed, kBounds.size() + 1u));
+            ++evaluated;
+            for (float b : kBounds)
+                if (b > 0.0f && std::fabs(allowed - b) / b < 1.0e-4f) ++nearThreshold;
+            if (level[s] == 0xFFFFFFFFu) { ++missing; continue; }
+            mixed += mixedAt[s];
+            if (level[s] < 8u) ++histogram[level[s]];
+            if (count[s] != partsAt[level[s]]) ++wrongCount;
+            if (level[s] != cpu) {
+                if (++mismatched <= 3u)
+                    std::printf("   GATHER DISAGREES: slot %u (scale %.3f) at a %.2f m cell: device level %u, "
+                                "Types.h %u (allowed %.6g)\n", s, double(scale), double(cell), level[s], cpu, allowed);
+            }
+        }
+    }
+    vm->destroyUavBuffer(bMask);
+    vm->destroyUavBuffer(bReadout);
+    vm->destroyUavBuffer(bRecords);
+    vm->destroyUavBuffer(bRanges);
+    vm->destroyUavBuffer(bWork);
+    vm->destroyUavBuffer(bInst);
+    vm->destroyUavBuffer(bParams);
+    if (!ran) return;
+
+    std::printf("   %u evaluations (%u instances x %zu cells at a 1/256 cell tolerance)\n   levels taken: ", evaluated,
+                slots, sizeof(cells) / sizeof(cells[0]));
+    for (int i = 0; i < 8; ++i) std::printf("%u:%u ", i, histogram[i]);
+    std::printf("\n   %u evaluations within 1e-4 of a level boundary\n", nearThreshold);
+    std::snprintf(msg, sizeof(msg), "every instance wrote records at every cell (%u missing) and none overflowed (%u)",
+                  missing, overflow);
+    CHECK(missing == 0u && overflow == 0u, msg);
+    std::snprintf(msg, sizeof(msg), "each instance's records are exactly its level's partitions, one level an instance "
+                  "(%u wrong, %u mixed)", wrongCount, mixed);
+    CHECK(wrongCount == 0u && mixed == 0u, msg);
+    unsigned distinct = 0;
+    for (int i = 0; i < 8; ++i) if (histogram[i]) ++distinct;
+    std::snprintf(msg, sizeof(msg), "the gather's sweep reached %u distinct levels of the eight", distinct);
+    CHECK(distinct >= 5u, msg);
+    std::snprintf(msg, sizeof(msg), "THE VOXEL GATHER'S WALK AGREES WITH THE C++ CURRENCY on all %u (%u disagree)",
+                  evaluated, mismatched);
+    CHECK(evaluated == slots * 8u && mismatched == 0u, msg);
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -793,6 +1030,7 @@ int main(int argc, char **argv)
     std::snprintf(msg, sizeof(msg), "the sweep reached %u distinct levels of the eight", distinct);
     CHECK(distinct >= 5u, msg);
 
+    voxelGatherParity(scene, slots);
     clusterCutParity(e);
     productCutParity(e, view);
 
