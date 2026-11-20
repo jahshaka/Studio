@@ -63,7 +63,7 @@ add_dependencies(test_rtreflect_history_detectors JahshakaEngineMedia)
 jah_gpu_row(rtreflect.history_detectors CLASS engine COMMAND test_rtreflect_history_detectors
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(rtreflect.history_detectors PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(rtreflect.history_detectors PROPERTIES JAHSHAKA_TEST_FRAMES 578)
 jah_ship_row(rtreflect.history_detectors)   # THE SHIP SET: PHOTON-5's end-to-end row (the lead's promotion at the merge)
 
@@ -86,7 +86,7 @@ add_dependencies(test_rtreflect_emitters JahshakaEngineMedia)
 jah_gpu_row(rtreflect.emitters CLASS engine COMMAND test_rtreflect_emitters
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(rtreflect.emitters PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine")
+                     TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(rtreflect.emitters PROPERTIES JAHSHAKA_TEST_FRAMES 57)
 
 # rtreflect.sphere_glint — A LAMP HAS A SIZE (PHOTON-7 stage 11, the sphere-light glint): a polished metal floor under one

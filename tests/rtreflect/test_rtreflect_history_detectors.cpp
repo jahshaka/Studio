@@ -198,6 +198,10 @@ static LampStepArrivals lampStep(Engine *e, View *view)
     const Vec3 eye(0.0f, 1.2f, 6.0f), target(0.0f, 0.2f, -2.0f);
     enginetest::testCameraLookAt(view, eye, target);
     rayTier(s, view);
+    // THE ROUTE (PHOTON-7-9A, URGENT #177): declared here, asserted on the first frame below - (a) reads the hybrid's
+    // reflection on the ray tier's integrate chain with the voxel store live.
+    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(),
+                              "rtreflect.history_detectors (a)'s view");
 
     // The box's front face centre (0, 1, -2.5) mirrored in the floor: where its reflection is;
     // and the face itself: the reflection's source.
@@ -289,6 +293,8 @@ static SlideLaw slideLaw(Engine *e, View *view)
     }
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
     rayTier(s, view);
+    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(),
+                              "rtreflect.history_detectors (b)'s view");
     e->setArm("reflect.historyReadback", 1.0);
     auto pose = [&](int frame) {
         const float x = -0.25f * float(frame);
@@ -361,8 +367,8 @@ int main()
     // THE DEVICE ONLY EXISTS ONCE A VIEW DOES (the startup-order law).
     View *view = e->createOffscreenView("historydetectors", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f), jahshaka::engine::OffscreenContract::Live);
     if (!(e->rayQueryAvailable() && e->rayTracing())) {
-        std::printf("ok: no ray queries on this machine - the row is about the ray tier\n");
-        return 0;
+        std::printf("SKIP: no ray-query device here - the row is about the ray tier\n");
+        return 77;   // ctest's SKIP_RETURN_CODE: never a green that measured nothing
     }
 
     const LampStepArrivals a = lampStep(e, view);

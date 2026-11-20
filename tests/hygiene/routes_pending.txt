@@ -94,7 +94,6 @@ gi.walk_rough.k28                        gather  # the lab's view: StillPicture 
 gi.walk_rough.k59                        gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.walk_rough.walk                       gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 rtreflect.contact                        gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.history_detectors              integrate reflection store  # tests/rtreflect/test_rtreflect_history_detectors.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
 rtreflect.lag_law.k14                    gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 rtreflect.lag_law.k28                    gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 rtreflect.lag_law.k59                    gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget

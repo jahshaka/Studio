@@ -76,8 +76,8 @@ int main()
     View *view = e->createOffscreenView("emitters", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f),
                                         jahshaka::engine::OffscreenContract::Live);
     if (!(e->rayQueryAvailable() && e->rayTracing())) {
-        std::printf("ok: no ray queries on this machine - the row is about the ray tier\n");
-        return 0;
+        std::printf("SKIP: no ray-query device here - the row is about the ray tier\n");
+        return 77;   // ctest's SKIP_RETURN_CODE: never a green that measured nothing (its declaration comes after)
     }
     Scene *s = e->createScene("emitters");
     view->setScene(s);
