@@ -341,8 +341,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "importAndPlace", "assets.importAndPlace(path, {position, drawer}) -> {assetGuid, projectGuid, nodeId, summary: {movable, static, meshes, animatedNodes, lights, cameras, lightUnits, cutouts, glass, contentScale, missingMaps, sun}}",
           "THE way to get a model file on disk into the open scene, in one call: it runs the one "
           "import pipeline (assets.importFile), pins the result into the open project "
-          "(assets.addToProject) and instantiates it (assets.addToScene) — the three-call flow "
-          "scene.addMesh used to short-circuit into a node that came back empty on the next open. "
+          "(assets.addToProject) and instantiates it (assets.addToScene) — the three-call flow, "
+          "so the node carries an asset guid and comes back on the next open. "
           "`drawer` files the library asset in a drawer (id from assets.drawers()); `position` "
           "places the node (without it, it spawns in front of the editor camera). "
           "PARTLY UNDOABLE, and the split matters: the import and the pin are PERMANENT (an undo "
@@ -1609,9 +1609,9 @@ QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
 
 // AI_SURFACE_PROGRAM_SPEC lane D #7 — the other half of the F1 story.
 //
-// scene.addMesh(diskPath) existed because it LOOKED like the obvious verb; it
-// wrote a disk path where the reader expects a guid and now refuses, naming
-// this verb. So this composes the three real calls and nothing more: no fourth
+// A verb that parsed a disk path straight into the scene wrote that path where
+// the reader expects a guid (the node came back empty; that verb is deleted,
+// STUDIO-HYGIENE-1). So this composes the three real calls and nothing more: no fourth
 // import route (ASSET_PIPELINE_SPEC: one pipeline), no new placement path.
 //
 // It is deliberately not "atomic". The import and the pin are permanent

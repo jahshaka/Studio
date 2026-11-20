@@ -1,7 +1,7 @@
 ---
 name: jahshaka-assets
 description: Import files into Jahshaka's asset store, browse the library visually, organize drawers, and bring assets into projects and scenes via the assets verbs. Use when the user asks to import models/images/audio/video, find or organize library assets, or place an asset in the scene.
-version: 4
+version: 5
 ---
 
 # Assets in Jahshaka
@@ -34,11 +34,6 @@ var nodeId = assets.addToScene(p, { position: {x:0, y:0, z:0} });  // 3. place i
 **Steps 1 and 2 are NOT undoable; only the placement is** — so an undo after
 `importAndPlace` removes the node and leaves the library asset. Say so if the
 user asks to "undo the import".
-
-**`scene.addMesh(path)` always FAILS.** It appears in older notes; it used to
-write the disk path where the scene reader expects an asset guid, so the object
-came back empty on the next open and never exported. Its error message names
-`assets.importAndPlace`.
 
 ## Importing
 
