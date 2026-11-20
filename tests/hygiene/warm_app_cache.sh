@@ -229,25 +229,44 @@ out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD"
     ok "the top-up's boot found no startup-pass record and ran the pass; the promoted cache holds the record it wrote" ||
     no "the top-up's pass: the boots '$(tr '\n' ' ' < "$T/b2.pass")', the shared record '$(cat "$B2/tests/.shadercache/warm-pass.key" 2>/dev/null)'"
 # THE BOOT's OWN WALL (block A, 2026-11-03: "the boot 75 s" was 27.5 s of the card's wait + 47.5 s of boot): another holder keeps
-# the card 2 s, the toy boot takes ~0 s - the line prints the boot's own wall and the wait beside it (red before: "the boot 3 s")
+# the card 2 s past the call's ticket, the toy boot takes ~0 s - the line prints the boot's own wall and the wait beside it (red
+# before: "the boot 3 s")
 B4="$T/b4"; mkdir -p "$B4/tests"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2
 printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$B4/tests/.shadercache.warm-key"; echo 0000000000000000 > "$B4/tests/.shadercache.engine-id"
 # (RED ONCE UNDER -j4, 2026-11-03, two races: (1) the walls were whole seconds and the wait floored - "own = wall - wait"
-# read 2 s for a 0.4-s boot when the 2.1 s spanned three second boundaries, and the bar "boot < 2 s" judged the toy boot's
-# own speed (five fake processes, ~0.2 s idle, slower in a batch); both are tenths now and the bar is the law itself, load-
-# free: the printed boot is UNDER the printed wait (~1.9 s; the sum - no subtraction - is over it whatever the load);
-# (2) "sleep 0.3" assumed the holder had the lock by then - a loaded box can start the call first (wait 0): the call now
-# starts only once the holder has written its mark under the lock, at most 5 s)
+# read 2 s for a 0.4-s boot when the 2.1 s spanned three second boundaries; both are tenths now; (2) "sleep 0.3" assumed the
+# holder had the lock by then - a loaded box can start the call first (wait 0): the call now starts only once the holder has
+# written its mark under the lock, at most 5 s)
+# THE LAW, RE-DERIVED (WS1-FIX2 item 9, 2026-11-20: red in PHOTON-7's first --code call at load ~40, "the boot 2.1 s (the card's
+# wait 1.2 s)"). The old bar "the printed boot is UNDER the printed wait" compared two FORK-BOUND quantities: the toy boot
+# (fresh_home + five fake processes: 0.3-0.6 s at load ~20, 2.1 s at ~40 under ctest -j12) against the holder's 2-s sleep MINUS
+# the script's own start-up to its lock request (0.3-0.6 s at ~20, ~0.8 s at ~40) - its margin was forks, which CODING_RULES §6
+# forbids (a toy holds its margin to a bar in SLEEPS). The rig is not in it: DISPLAY is given, so rig.sh is never called.
+# What the line must prove is that the printed boot is the boot's OWN wall, the wait apart: the two printed figures SPLIT the
+# call - boot + wait <= the call's own wall measured here (each printed figure is floored to tenths, so their sum never exceeds
+# the true wall). The old defect printed the boot WITH the wait in it: boot + wait = wall + wait, over the call's wall by the
+# whole wait. THE WAIT IS A SLEEP, never sleep-minus-start-up: the holder keeps the card until the call's TICKET is in the
+# queue (<lock>.q/<n>, written by gpu-exclusive.sh just before its wait clock starts; a glob poll, no fork), THEN sleeps 2 s - so
+# the printed wait is ~2 s however long the script takes to reach its lock request (a fixed 2-s or 3-s hold left 0 s of wait on
+# one CPU shared with three busy loops: the start-up outlasted it). So the bar's margin is the holder's sleep alone.
+# ITS DIRECTION: load only ADDS to the call's wall, never to the printed sum of a correct line, so load cannot make this bar a
+# false red (measured on one CPU shared with three busy loops: boot 8.4 + wait 1.5 <= wall 11.8). What load can do is hide the
+# defect: the defect overshoots by the wait (~2 s) and the call's own start-up and tail sit in its wall as slack - at a quiet
+# box the defect reads red (boot 2.4 + wait 2.2 > wall 2.8), at that 1/4-CPU squeeze its slack (1.8 s) passed it. A regression
+# is caught on any normal run; no load is a false red.
 rm -f "$T/held4"
-( flock 7; : > "$T/held4"; sleep 2 ) 7>"$T/gpu4.lock" & hp=$!
+( flock 7; : > "$T/held4"
+  for _ in $(seq 300); do set -- "$T/gpu4.lock.q"/[0-9]*; [ -e "$1" ] && break; sleep 0.05; done; sleep 2 ) 7>"$T/gpu4.lock" & hp=$!
 for _ in $(seq 50); do [ -e "$T/held4" ] && break; sleep 0.1; done
+tc0=$(date +%s%N)
 out=$(env -u JAH_GPU_LOCK_HELD DISPLAY=:fake JAH_GPU_LOCK="$T/gpu4.lock" "$W" "$BUILD" --tests-dir "$B4/tests" "${F[@]}" --only app-off --budget 300); rc=$?
+cw=$(( ($(date +%s%N) - tc0) / 100000000 ))   # the call's own wall, tenths (floored: the bar below is the stricter for it, +1)
 wait $hp
 ln=$(echo "$out" | grep "warm at $key - the boot")
 bw=$(echo "$ln" | sed -n "s/.*the boot \([0-9]*\)\.\([0-9]\) s (the card's wait \([0-9]*\)\.\([0-9]\) s).*/\1\2 \3\4/p")
-[ $rc = 0 ] && [ -e "$T/held4" ] && [ -n "$bw" ] && [ "${bw#* }" -ge 10 ] && [ "$(( 10#${bw% *} ))" -lt "$(( 10#${bw#* } ))" ] &&
-    ok "the boot's printed wall is its own, the card's wait beside it, in tenths (boot ${bw% *}/10 s, wait ${bw#* }/10 s)" ||
-    no "the boot's wall: rc $rc '$ln' (the holder's mark: $([ -e "$T/held4" ] && echo set || echo NOT set))"
+[ $rc = 0 ] && [ -e "$T/held4" ] && [ -n "$bw" ] && [ "${bw#* }" -ge 10 ] && [ "$(( 10#${bw% *} + 10#${bw#* } ))" -le "$(( cw + 1 ))" ] &&
+    ok "the boot's printed wall is its own, the card's wait beside it, in tenths: boot ${bw% *} + wait ${bw#* } <= the call's wall $cw (+1)" ||
+    no "the boot's wall: rc $rc '$ln', the call's wall $cw tenths (the holder's mark: $([ -e "$T/held4" ] && echo set || echo NOT set))"
 # A COVERAGE BUILD's BOOT WRITES ITS PROFILE UNDER coverage/boots/<boot> (the 2a audit's finding 1; red before: nothing set it)
 B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n' > "$B3/CMakeCache.txt"; toy_cache "$B3/tests/.shadercache" 1 2
 printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/covapp"; chmod +x "$T/covapp"
