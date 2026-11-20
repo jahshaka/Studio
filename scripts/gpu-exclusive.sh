@@ -42,6 +42,9 @@
 # hold. A nested call (JAH_GPU_LOCK_HELD=1: spec.sh's util.CardLock holds the card, its ctests and boots run through here)
 # takes its own scope and sweeps it the same way before it returns, so the call releases the card after them; a call
 # already inside a hold's scope (JAH_GPU_HOLD set: a row's own lock call inside ctest) runs as before - its hold sweeps it.
+# THE HOLD's MEMORY IS CAPPED (2026-11-20: one app under GPU-assisted validation grew to 26 GB of a 32-GB box and the kernel's global
+# OOM killer fired): the scope carries MemoryMax (JAH_GPU_MEM_MAX, default 16G; a normal app is ~3 GB) and MemorySwapMax, so a
+# runaway is killed ALONE, inside its own cgroup, rc 137, and the box and the other lanes keep their memory.
 # No user manager (no systemd-run or no bus socket): the hold is marked instead, JAH_GPU_HOLD=<unit> in the command's
 # environment, and the sweep finds its processes by that mark in /proc/<pid>/environ (a process that clears its
 # environment escapes it - the scope does not have that hole).
@@ -218,7 +221,7 @@ hold_run() {
     if [ -z "${JAH_GPU_NO_SCOPE:-}" ] && command -v systemd-run > /dev/null 2>&1 \
        && [ -S "${XDG_RUNTIME_DIR:-/run/user/$(id -u)}/bus" ]; then
         hold_how=scope
-        JAH_GPU_LOCK_HELD=1 JAH_GPU_HOLD=$unit systemd-run --user --scope --quiet --collect --expand-environment=no --unit="$unit" -- "$@"
+        JAH_GPU_LOCK_HELD=1 JAH_GPU_HOLD=$unit systemd-run --user --scope --quiet --collect --expand-environment=no --unit="$unit" -p MemoryMax="${JAH_GPU_MEM_MAX:-16G}" -p MemorySwapMax="${JAH_GPU_SWAP_MAX:-4G}" -- "$@"
     else
         hold_how=mark
         JAH_GPU_LOCK_HELD=1 JAH_GPU_HOLD=$unit "$@"
