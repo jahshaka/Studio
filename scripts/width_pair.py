@@ -7,8 +7,8 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
 
   THE ROWS   every GPU row (a RESOURCE_GROUPS vram claim) with NO TIMING LAW: not `measure`, not COLD (test-cold-rows.txt or
              JAHSHAKA_COLD_BY_SUBJECT: its subject is the cold compile), no armed millisecond bar (JAHSHAKA_TIMING_BARS=1),
-             not one of TIMING_LAW_ROWS, not a DECLARED OPEN RED (a row in the first column of THE OPEN REDS table of
-             SPECS/PHOTON_7_SPEC.md, --open-reds: the table spec.sh land reads, by the same rule; a red at width 1 judged
+             not one of TIMING_LAW_ROWS, not a DECLARED OPEN RED (a row in the first column of the one table of
+             SPECS/OPEN_REDS.md, --open-reds: the reds' one home spec.sh land reads, by the same rule; a red at width 1 judged
              against itself proves nothing about a width) - and priced under 10 s in scripts/gate-times.txt (the small rows;
              an unpriced row is left out, named), and whose FIXTURE CLOSURE holds no excluded row (ctest adds a required
              fixture's setup and cleanup to the run: a row needing the cold setup would bring it into the hold). The fixture
@@ -62,7 +62,7 @@ s beside 24 GPU rows). This run decides the width by ONE paired measurement:
 usage: width_pair.py <build> --display :NN [--plan] [--rejudge <out-dir>] [--order 1,2,3,2,1] [--out <dir>] [--lock <cmd>] [--prices <file>]
        [--row-cap-s 45] [--part-cap-s 480] [--nvidia-smi <exe>] [--wait-max 600] [--budget-scale 1] [--open-reds <spec>]
        [--tree <dir>]
-  --open-reds  the spec whose THE OPEN REDS table names the declared reds (default <workspace>/SPECS/PHOTON_7_SPEC.md;
+  --open-reds  the reds' one home whose first table names the declared reds (default <workspace>/SPECS/OPEN_REDS.md;
                unreadable = refused, exit 2: an unread list is not an empty one)
   --tree       the tree whose check mark the run holds (default the build's CMAKE_HOME_DIRECTORY)
   --budget-scale  every class budget x this factor, in (0, 1] (the toys' seconds-long rows); above 1 refused (it loosens a
@@ -199,25 +199,27 @@ def vram_total(exe):
 
 
 def open_reds(path):
-    """{row: its line} of THE OPEN REDS table of `path` (lib/land.py declared_rows' rule: the table under the LAST heading
-    starting "## THE OPEN REDS", a row by its EXACT name in the first column), or None when the file is unreadable."""
+    """{row: its line} of THE REDS' ONE HOME, SPECS/OPEN_REDS.md (V2 plan 0.7; the lead's lib/reds.py is its reader, by the same
+    rule): its FIRST table, whose header's first cell is `Red`, a row by its EXACT name in the first column; None when the file
+    is unreadable or holds no such table (an unread list is not an empty one)."""
     try:
         lines = open(path, errors="replace").read().splitlines()
     except OSError:
         return None
-    starts = [i for i, ln in enumerate(lines) if ln.startswith("## THE OPEN REDS")]
-    table = {}
-    if starts:
-        i = starts[-1] + 1
-        while i < len(lines) and not lines[i].startswith("|"):
-            i += 1
-        for j in range(i, len(lines)):
-            if not lines[j].startswith("|"):
+    table, head = {}, None
+    for j, ln in enumerate(lines, 1):
+        if not ln.startswith("|"):
+            if head is not None:
                 break
-            cell = lines[j].strip("|").split("|")[0].strip()
-            if cell and cell != "row" and not set(cell) <= set("-: "):
-                table.setdefault(cell, j + 1)
-    return table
+            continue
+        cell = ln.strip("|").split("|")[0].strip()
+        if set(cell) <= set("-: "):
+            continue
+        if head is None:
+            head = cell
+            continue
+        table.setdefault(cell, j)
+    return table if head == "Red" else None
 
 
 def tree_of(build):
@@ -732,10 +734,11 @@ def main(argv):
     if not reds_file:
         sys.path.insert(0, HERE)
         import gate_runlog  # noqa: E402
-        reds_file = os.path.join(gate_runlog.workspace_root(), "SPECS", "PHOTON_7_SPEC.md")
+        reds_file = os.path.join(gate_runlog.workspace_root(), "SPECS", "OPEN_REDS.md")
     declared = open_reds(reds_file)
     if declared is None:
-        die(f"--open-reds {reds_file}: unreadable - the declared open reds leave the set, and an unread list is not an empty one")
+        die(f"--open-reds {reds_file}: unreadable or no `Red` table - the declared open reds leave the set, and an unread list "
+            "is not an empty one")
     inv = inventory(build)
     sel, excl, needs = select(inv, price, cold_rows(build), declared)
     ps = parts(sel, price, part_cap) if sel else []
@@ -745,7 +748,7 @@ def main(argv):
           f"{len(ps) * len(order)} holds, ~{est / 60:.0f} min of card estimated (the width-W run at 1/W of width 1's)")
     for why, ns in sorted(excl.items()):
         if why == "a declared open red":   # always by name, each with its table line: a red leaves a set only with its reason
-            print(f"  left out, {why} (THE OPEN REDS of {reds_file}; a red at width 1 judged against itself proves nothing): "
+            print(f"  left out, {why} (the reds' one home {reds_file}; a red at width 1 judged against itself proves nothing): "
                   f"{len(ns)}: " + " ".join(f"{n} (:{declared[n]})" for n in sorted(ns)))
             continue
         if why == NEEDS_EXCLUDED:          # always by name, each with the excluded row ctest would add to its hold

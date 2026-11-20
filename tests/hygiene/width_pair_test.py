@@ -12,8 +12,8 @@ only beside a neighbour -> that width refused by name; an out-of-memory line -> 
 width 1 disagreeing with itself -> no width (exit 1); the card held -> exit 75 with the records kept; a bad display refused;
 THE BARS (the lead's rulings on the 4-5 audit): a row past x1.5 its width-1 wall, or past its class budget, refuses the width;
 a width whose total wall is not 15 % under the next narrower width's is refused; a VRAM peak past 90 % of memory.total, or an
-unread total, refuses the width; a red row agrees only on equal FAIL lines; the declared open reds (the toy spec's THE OPEN REDS
-table, its live table only) leave the set by name, an unreadable spec refused; the OOM line read from the run's own ctest.log
+unread total, refuses the width; a red row agrees only on equal FAIL lines; the declared open reds (the toy's SPECS/OPEN_REDS.md,
+its first table only) leave the set by name, an unreadable home or one with no `Red` table refused; the OOM line read from the run's own ctest.log
 when the build's Testing/Temporary is removed under it; the tree's check mark held for the run and a live foreign mark refusing."""
 import json
 import os
@@ -93,11 +93,11 @@ write(os.path.join(T, "row.sh"), ROW)
 TREE = os.path.join(T, "tree")                    # the toy tree whose check mark a run holds (URGENT #153)
 subprocess.run(["git", "init", "-q", TREE], check=True)
 MARK = os.path.join(TREE, ".git", "jah-check.pid")
-REDS = os.path.join(T, "reds.md")                 # the toy spec's THE OPEN REDS table
+REDS = os.path.join(T, "OPEN_REDS.md")            # the toy's reds' one home (V2 plan 0.7): its first table only
 with open(REDS, "w") as fh:
-    fh.write("## Stage 1\n| row | x |\n|---|---|\n| toy.a | a stage table only names it |\n\n"
-             "## THE OPEN REDS — the live list\n| row | cause | fixer | before |\n|---|---|---|---|\n"
-             "| toy.declared | (1) 1.44 q | ITS-SPEC S0 | S1 |\n")
+    fh.write("# the open reds\n\n| Red | Its law (one line) | Last measured (box, date) | Class | Closes at |\n"
+             "|---|---|---|---|---|\n| toy.declared | (1) within 1 q | toy 2026-11-20: 1.44 q | B | 1.6 |\n\n"
+             "## a later table\n| row | x |\n|---|---|\n| toy.a | a second table only names it |\n")
 write(os.path.join(T, "lock.sh"), LOCK)
 write(os.path.join(T, "smi.sh"), SMI)
 
@@ -344,7 +344,7 @@ elif PART == "log":
     bd = toy("declared", [("toy.declared", "plain", "")])
     rc, out, labels, recs = run(bd, "--plan")
     ln = [x for x in out.splitlines() if x.startswith("  left out, a declared open red")]
-    check(rc == 0 and len(ln) == 1 and "toy.declared (:9)" in ln[0] and "toy.a" not in ln[0]
+    check(rc == 0 and len(ln) == 1 and "toy.declared (:5)" in ln[0] and "toy.a" not in ln[0]
           and "4 rows with no timing law" in out, f"declared: the open red left out with its line, toy.a kept (rc {rc}) {ln}")
     # 16b. WHAT AN ADOPTED WIDTH COVERS (the final CPU audit's finding 3): only the rows it measured - the declared red keeps the
     #      whole card, alone (whole-set-alone.txt with its reason), never the width (the base wrote no list: a width applied to every row)
@@ -360,6 +360,11 @@ elif PART == "log":
           f"covered {cov}, alone {sorted(alone)}")
     rc, out, labels, recs = run(bd, "--plan", "--open-reds", os.path.join(T, "no-such-spec.md"))
     check(rc == 2 and "unreadable" in out, f"declared: an unreadable open-reds spec refused (rc {rc}), not read as empty")
+    old_spec = os.path.join(T, "OLD_SPEC.md")   # the retired home (a spec's `## THE OPEN REDS` table): no `Red` table - refused
+    with open(old_spec, "w") as fh:
+        fh.write("## THE OPEN REDS — the live list\n| row | cause |\n|---|---|\n| toy.declared | (1) 1.44 q |\n")
+    rc, out, labels, recs = run(bd, "--plan", "--open-reds", old_spec)
+    check(rc == 2 and "no `Red` table" in out, f"declared: a file with no `Red` table (the retired spec table) refused (rc {rc})")
 
     # 17. THE RUN's OWN LOG: the out-of-memory line is read from <run>/ctest.log even when another ctest in the build
     #     removes Testing/Temporary under the run (the base read the shared LastTest.log, lost it and adopted width 3)
