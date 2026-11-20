@@ -1,37 +1,37 @@
-// THE SCENE'S CLOCK (ONE-FRAME-1 stage 1, V2 plan 2.1): one binary, one row per proof, on the NULL render system (no
-// display, no card: Root::renderOneFrame walks a workspace-less render system, and the scenes' clocks still run).
+// THE SCENE'S CLOCK (ONE-FRAME-1 stage 1, V2 plan 2.1): the pure value type every engine scene keeps
+// (irisgl/engine/src/SceneClock.h), driven directly — one binary, one row per proof, CPU only (no engine, no display,
+// no card). The integration (the drain, the join, which scenes a frame draws, the particles, the meter) is the card
+// fixtures' (frame.clock_integration, frame.meter_time).
 //
-// THE LAW (Types.h FrameInputScene::stepSerial): a scene's time is its DOCUMENT's steps. Its part carries the document
-// clock's lifetime serial; a frame advances the scene by (serial - the last serial it saw) x stepPeriod — ONCE, and 0
-// on a frame nobody stepped it. Documents are plural, so the cursor lives WITH THE SCENE.
+// THE LAW (Types.h FrameInputScene::stepSerial): a scene's time is its DOCUMENT's steps. A part carries the document
+// clock's lifetime serial; the steps it moved since the last part are owed, ONCE; a frame that DRAWS the scene consumes
+// them, at most FrameInputScene::kMaxStepsPerFrame (the document's catch-up bound), dropping the rest; a frame that does
+// not draw it hands it 0 and leaves its steps.
 //
-//   --clock-once      frame.clock_once: a serial's steps apply once (a second sync of the same steps 0, two syncs of
-//                     one frame merged count both), an empty hand-over advances 0, `reassert` re-primes (a new document
-//                     on the scene: 0, never a jump), and the harness steps only the scenes no host ever stamped (a
-//                     scene a host stamps later leaves its set for good).
-//                     RED ON THE BASE 273b8e638 / irisgl 4576b132: the engine's clock was ONE persisting frame delay,
-//                     and an empty hand-over advanced it again by the last record's delta (+0.016667 s, measured by
-//                     this row's first form through Ogre's ControllerManager elapsed time).
-//   --two-scenes      frame.two_scenes: two scenes with different serials in ONE hand-over each advance by their own
-//                     steps (an editor at 36,000 and a preview at 50: neither reads the other's 35,950); steps a join's
-//                     drain counted (a request between frames) are consumed by the next frame, once.
-//                     RED on any single-cursor design (the base's one frame delay: both scenes advanced by the newest
-//                     record's delta).
-//   --particle-scale  frame.particle_scale: the time handed to a scene's particles (the fork's ParticleSystemManager2::
-//                     setTimeSinceLast) is its steps x period x particleTimeScale, at 0.25 and at 4, exact to float;
-//                     0 on an empty hand-over; and the scene's own time (what its meter, looks and clouds read) is
-//                     steps x period whatever the scale. RED ON THE BASE: the scale multiplied the ONE frame delay
-//                     that the meter read too (enginesceneviewport.cpp: simulated x particleTimeScale).
-#include <cmath>
+//   --clock-once        frame.clock_once: a serial's steps apply once (an equal serial again 0; a merged hand-over's
+//                       newest serial carries both ticks), an empty frame 0, a reassert re-primes, a lower serial
+//                       re-primes (never a wrap), the harness steps only a never-stamped scene, for good.
+//                       RED ON THE BASE 273b8e638 / irisgl 4576b132: the engine's clock was one persisting frame delay;
+//                       an empty hand-over advanced it again by the last delta (+0.016667 s, measured at this row's first
+//                       form through Ogre's ControllerManager elapsed time).
+//   --two-scenes        frame.two_scenes: two scenes' clocks are independent (an editor at serial 36,000 and a preview at
+//                       50 in one hand-over: 1 step and 2 steps); steps a join's drain counted are consumed by the next
+//                       drawn frame, once. RED on any single-cursor design (the base's one delay).
+//   --particle-scale    frame.particle_scale: the particles' time is the consumed steps x period x particleTimeScale (0.25
+//                       and 4, exact to float); the scene's own time is unscaled. RED ON THE BASE: the scale multiplied
+//                       the one delay the meter read too.
+//   --drawn-only        frame.clock_drawn_only (the stage-1 audit's bug 1): a frame that does not draw a scene keeps its
+//                       owed steps (a thumbnail's frame never eats the editor's) and hands it 0; 36,000 owed steps arrive
+//                       as 8 (the excess dropped and counted, never replayed). RED ON irisgl bba6409b, by its code:
+//                       beginFrameClock consumed every scene's owed steps every frame, drawn or not, unbounded (36,000
+//                       owed: a 600-s particle step on restore).
 #include <cstdio>
-#include <cstring>
 #include <string>
 
-#include "jahshaka/engine/Engine.h"
-#include "jahshaka/engine/EngineInspect.h"
-#include "enginetesthelpers.h"
+#include "SceneClock.h"
 
-using namespace jahshaka::engine;
+using jahshaka::engine::FrameInputScene;
+using jahshaka::engine::detail::SceneClock;
 
 static int gFailures = 0;
 static void check(bool ok, const char *what)
@@ -43,139 +43,136 @@ static void check(bool ok, const char *what)
 
 static const double kPeriod = double(1.0f / 60.0f);   // the period as it crosses the boundary (a float)
 
-/// One scene part stamped with its document's serial (what the mirror's emit writes).
-static FrameInput stamp(Scene *s, unsigned long long serial, float particleScale = 1.0f, bool reassert = false)
+static FrameInputScene part(unsigned long long serial, float particleScale = 1.0f, bool reassert = false)
 {
-    FrameInput in;
-    FrameInputScene part;
-    part.scene = s;
-    part.stepSerial = serial;
-    part.stepPeriod = 1.0f / 60.0f;
-    part.particleTimeScale = particleScale;
-    part.reassert = reassert;
-    in.scenes.push_back(std::move(part));
-    return in;
+    FrameInputScene p;
+    p.stepSerial = serial;
+    p.stepPeriod = 1.0f / 60.0f;
+    p.particleTimeScale = particleScale;
+    p.reassert = reassert;
+    return p;
 }
-static double dt(Scene *s) { return inspect::scene(s)->frameSceneSeconds(); }
-static double steps(Scene *s) { return dt(s) / kPeriod; }
+static double steps(const SceneClock &c) { return c.dt / c.period; }
 
-static int clockOnce(Engine &e)
+static void clockOnce()
 {
-    Scene *a = e.createScene("stamped");
-    Scene *b = e.createScene("harness");
-    check(a && b, "two headless scenes");
-    if (!a || !b) return 1;
+    SceneClock c;
+    c.take(part(10));
+    c.beginFrame(true);
+    check(c.dt == 0.0, "the first serial primes the cursor: 0 steps (the document's past is not the scene's)");
+    c.take(part(13));
+    c.beginFrame(true);
+    std::printf("      serial 10 -> 13: %.6f steps\n", steps(c));
+    check(c.dt == 3.0 * kPeriod, "a serial that moved 3 advances the scene 3 steps, exactly");
+    c.beginFrame(true);
+    check(c.dt == 0.0, "an EMPTY hand-over (a frame with no part) advances the scene 0");
+    c.take(part(13));
+    c.beginFrame(true);
+    check(c.dt == 0.0, "the same serial again (a second sync of the same steps) advances 0");
+    c.take(part(15));   // two host ticks merged into one hand-over: the newest serial (15 over 14) is the one taken
+    c.beginFrame(true);
+    check(c.dt == 2.0 * kPeriod, "a merged hand-over's newest serial carries both ticks' steps");
+    c.take(part(5, 1.0f, true));
+    c.beginFrame(true);
+    check(c.dt == 0.0, "a reassert re-primes on the incoming serial: 0, never a jump");
+    c.take(part(6));
+    c.beginFrame(true);
+    check(c.dt == kPeriod, "...and the next step advances one step");
+    c.take(part(3));
+    c.beginFrame(true);
+    check(c.dt == 0.0 && c.newest == 3, "a lower serial without a reassert re-primes too (0 steps, never a wrap)");
 
-    e.submitFrame(stamp(a, 10));
-    enginetest::frozenFrames(&e, 1);
-    check(dt(a) == 0.0, "the first serial primes the cursor: 0 steps (the document's past is not the scene's)");
-    e.submitFrame(stamp(a, 13));
-    enginetest::frozenFrames(&e, 1);
-    std::printf("      serial 10 -> 13: %.6f steps\n", steps(a));
-    check(dt(a) == 3.0 * kPeriod, "a serial that moved 3 advances the scene 3 steps, exactly");
-    enginetest::frozenFrames(&e, 1);
-    std::printf("      an empty hand-over: %.6f s\n", dt(a));
-    check(dt(a) == 0.0, "an EMPTY hand-over advances the scene 0");
-    e.submitFrame(stamp(a, 13));
-    enginetest::frozenFrames(&e, 1);
-    check(dt(a) == 0.0, "the same serial again (a second sync of the same steps) advances 0");
-    e.submitFrame(stamp(a, 14));
-    e.submitFrame(stamp(a, 15));   // two host ticks merged into one hand-over: the newest serial is the right one
-    enginetest::frozenFrames(&e, 1);
-    std::printf("      two syncs (14, 15) in one hand-over: %.6f steps\n", steps(a));
-    check(dt(a) == 2.0 * kPeriod, "two ticks merged into one hand-over carry both steps");
-    e.submitFrame(stamp(a, 5, 1.0f, true));   // a new document on the scene (the mirror's setSource)
-    enginetest::frozenFrames(&e, 1);
-    check(dt(a) == 0.0, "a reassert re-primes on the incoming document's serial: 0, never a jump");
-    e.submitFrame(stamp(a, 6));
-    enginetest::frozenFrames(&e, 1);
-    check(dt(a) == kPeriod, "...and its next step advances one step");
-    e.submitFrame(stamp(a, 3));   // a lower serial with no reassert: another clock stamped here (a host defect)
-    enginetest::frozenFrames(&e, 1);
-    check(dt(a) == 0.0, "a lower serial without a reassert re-primes too (0 steps, never a wrap)");
-
-    // THE HARNESS's GRID: only the scenes no host ever stamped
-    enginetest::frames(&e, 1);
-    std::printf("      one harness frame: stamped %.6f steps, harness %.6f steps\n", steps(a), steps(b));
-    // (b was never stamped, so its period is the grid's own 1/60 in double, not the float a part carries)
-    check(dt(a) == 0.0 && dt(b) == 1.0 / 60.0, "the harness steps only the scene no host ever stamped");
-    e.submitFrame(stamp(b, 100));   // a host stamps the harness's scene: it leaves the harness's set for good
-    enginetest::frames(&e, 1);
-    enginetest::frames(&e, 1);
-    check(dt(b) == 0.0, "a scene a host stamped later is never stepped by the harness again (one source)");
-    return 0;
+    SceneClock harness;
+    harness.harnessStep(1);
+    harness.beginFrame(true);
+    check(harness.dt == 1.0 / 60.0, "the harness steps a scene no host ever stamped");
+    harness.take(part(100));
+    harness.harnessStep(1);
+    harness.beginFrame(true);
+    check(harness.dt == 0.0 && harness.hostStamped, "a scene a host stamped is never stepped by the harness again");
 }
 
-static int twoScenes(Engine &e)
+static void twoScenes()
 {
-    Scene *editor = e.createScene("editor");
-    Scene *preview = e.createScene("preview");
-    check(editor && preview, "two headless scenes");
-    if (!editor || !preview) return 1;
-    e.submitFrame(stamp(editor, 36000));
-    e.submitFrame(stamp(preview, 50));
-    enginetest::frozenFrames(&e, 1);
-    // ONE hand-over, two scenes' parts
-    e.submitFrame(stamp(editor, 36001));
-    e.submitFrame(stamp(preview, 52));
-    enginetest::frozenFrames(&e, 1);
+    SceneClock editor, preview;
+    editor.take(part(36000));
+    preview.take(part(50));
+    editor.beginFrame(true);
+    preview.beginFrame(true);
+    editor.take(part(36001));
+    preview.take(part(52));
+    editor.beginFrame(true);
+    preview.beginFrame(true);
     std::printf("      one hand-over: editor %.6f steps, preview %.6f steps\n", steps(editor), steps(preview));
-    check(dt(editor) == kPeriod, "the editor (serial 36,000 -> 36,001) advances 1 step");
-    check(dt(preview) == 2.0 * kPeriod, "the preview (serial 50 -> 52) advances 2 steps, in the same hand-over");
-    // A JOIN's DRAIN between frames counts the steps; the next frame consumes them, once
-    e.submitFrame(stamp(preview, 53));
-    e.request([](Engine &) {});   // a join: the pending record's scene parts land now (applyPendingEngineMessages)
-    enginetest::frozenFrames(&e, 1);
-    std::printf("      a step counted by a join's drain: the next frame %.6f steps\n", steps(preview));
-    check(dt(preview) == kPeriod, "steps a join's drain counted are consumed by the next frame");
-    check(dt(editor) == 0.0, "...and the other scene, not stepped, advances 0");
-    enginetest::frozenFrames(&e, 1);
-    check(dt(preview) == 0.0, "...once: the frame after advances 0");
-    return 0;
+    check(editor.dt == kPeriod, "the editor (serial 36,000 -> 36,001) advances 1 step");
+    check(preview.dt == 2.0 * kPeriod, "the preview (serial 50 -> 52) advances 2 steps, in the same hand-over");
+    preview.take(part(53));   // a join's drain between frames counts it
+    preview.beginFrame(true);
+    check(preview.dt == kPeriod, "steps a join's drain counted are consumed by the next frame");
+    preview.beginFrame(true);
+    check(preview.dt == 0.0, "...once: the frame after advances 0");
 }
 
-static int particleScale(Engine &e)
+static void particleScale()
 {
-    Scene *s = e.createScene("particles");
-    check(s != nullptr, "a headless scene");
-    if (!s) return 1;
-    e.submitFrame(stamp(s, 0));
-    enginetest::frozenFrames(&e, 1);
+    SceneClock c;
+    c.take(part(0));
+    c.beginFrame(true);
+    unsigned long long serial = 0;
     for (float scale : { 0.25f, 4.0f }) {
-        const unsigned k = 3;
-        static unsigned long long serial = 0;
-        serial += k;
-        e.submitFrame(stamp(s, serial, scale));
-        enginetest::frozenFrames(&e, 1);
-        const double scene = inspect::scene(s)->frameSceneSeconds();
-        const double particles = inspect::scene(s)->particleSeconds();
-        const float want = float(double(k) * kPeriod * double(scale));
-        std::printf("      scale %.2f, %u steps: scene %.6f s, particles %.6f s (law %.6f)\n", double(scale), k, scene,
-                    particles, double(want));
-        check(float(particles) == want, "the particles advance steps x period x particleTimeScale, exact to float");
-        check(scene == double(k) * kPeriod, "the scene's own time (its meter, looks, clouds) is steps x period, unscaled");
-        enginetest::frozenFrames(&e, 1);
-        check(inspect::scene(s)->particleSeconds() == 0.0, "an empty hand-over hands the particles 0");
+        serial += 3;
+        c.take(part(serial, scale));
+        c.beginFrame(true);
+        const float want = float(3.0 * kPeriod * double(scale));
+        std::printf("      scale %.2f, 3 steps: scene %.6f s, particles %.6f s (law %.6f)\n", double(scale), c.dt,
+                    c.particleDt, double(want));
+        check(float(c.particleDt) == want, "the particles advance steps x period x particleTimeScale, exact to float");
+        check(c.dt == 3.0 * kPeriod, "the scene's own time is steps x period, unscaled");
+        c.beginFrame(true);
+        check(c.particleDt == 0.0, "an empty hand-over hands the particles 0");
     }
-    return 0;
+}
+
+static void drawnOnly()
+{
+    SceneClock editor;
+    editor.take(part(1000));
+    editor.beginFrame(true);
+    editor.take(part(1003));
+    editor.beginFrame(false);   // a thumbnail's / a preview's / a Player shot's frame: the editor is not drawn
+    std::printf("      an undrawn frame: dt %.6f, owed %llu\n", editor.dt, editor.owed);
+    check(editor.dt == 0.0 && editor.particleDt == 0.0, "a frame that does not draw the scene hands it 0");
+    check(editor.owed == 3, "...and leaves its 3 owed steps");
+    editor.beginFrame(true);
+    check(editor.dt == 3.0 * kPeriod, "the next frame that draws it consumes them");
+    // ten minutes minimised: the 100-ms ticks stepped the document 36,000 times
+    editor.take(part(1003 + 36000));
+    const double before = editor.sceneSeconds();
+    editor.beginFrame(true);
+    std::printf("      36,000 owed steps: the frame takes %.6f steps, %llu dropped\n", steps(editor), editor.dropped);
+    check(editor.dt == double(SceneClock::kMaxStepsPerFrame) * kPeriod,
+          "36,000 owed steps arrive as the bound's 8 (the document's own catch-up)");
+    check(editor.dropped == 36000 - SceneClock::kMaxStepsPerFrame, "...the excess dropped and counted, never replayed");
+    check(editor.sceneSeconds() - before == editor.dt, "...and the scene's time moves by what it showed");
+    editor.beginFrame(true);
+    check(editor.dt == 0.0, "the frame after: nothing owed");
 }
 
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "";
-    if (mode != "--clock-once" && mode != "--two-scenes" && mode != "--particle-scale") {
-        std::printf("usage: test_frame_clock --clock-once | --two-scenes | --particle-scale\n");
+    const char *row = mode == "--clock-once" ? "frame.clock_once"
+                    : mode == "--two-scenes" ? "frame.two_scenes"
+                    : mode == "--particle-scale" ? "frame.particle_scale"
+                    : mode == "--drawn-only" ? "frame.clock_drawn_only" : nullptr;
+    if (!row) {
+        std::printf("usage: test_frame_clock --clock-once | --two-scenes | --particle-scale | --drawn-only\n");
         return 2;
     }
-    std::string err;
-    auto engine = Engine::create(enginetest::testEngineConfig("test-frame-clock-ogre.log",
-                                                              enginetest::EngineOverrides().headless()), err);
-    check(engine != nullptr, "a headless engine");
-    if (!engine) { std::printf("    %s\n", err.c_str()); return 1; }
-    const int rc = mode == "--clock-once" ? clockOnce(*engine)
-                 : mode == "--two-scenes" ? twoScenes(*engine) : particleScale(*engine);
-    const char *row = mode == "--clock-once" ? "frame.clock_once"
-                    : mode == "--two-scenes" ? "frame.two_scenes" : "frame.particle_scale";
-    std::printf("%s: %s\n", row, (gFailures == 0 && rc == 0) ? "all checks passed" : "FAILURES");
-    return (gFailures == 0 && rc == 0) ? 0 : 1;
+    if (mode == "--clock-once") clockOnce();
+    else if (mode == "--two-scenes") twoScenes();
+    else if (mode == "--particle-scale") particleScale();
+    else drawnOnly();
+    std::printf("%s: %s\n", row, gFailures == 0 ? "all checks passed" : "FAILURES");
+    return gFailures == 0 ? 0 : 1;
 }

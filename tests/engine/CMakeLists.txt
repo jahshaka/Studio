@@ -457,22 +457,25 @@ jah_no_display(engine.region_grid_law)
 #   frame.two_scenes      two scenes in one hand-over each advance by their own serial (red on any single cursor); a
 #                         join's drain counts, the next frame consumes, once.
 #   frame.particle_scale  the particles' time = steps x period x particleTimeScale (0.25, 4), the scene's unscaled.
+# THE SCENE'S CLOCK (ONE-FRAME-1 stage 1; test_frame_clock.cpp says each law): the pure value type every engine scene
+# keeps (irisgl/engine/src/SceneClock.h), driven directly — one binary, one row per proof, CPU only (no engine, no card).
+#   frame.clock_once         a serial's steps apply once; an empty frame 0 (red on the base: +0.016667 s); re-primes;
+#                            the harness steps only never-stamped scenes.
+#   frame.two_scenes         two scenes' clocks are independent; a join's count is consumed by the next frame, once.
+#   frame.particle_scale     the particles' time = steps x period x particleTimeScale (0.25, 4), the scene's unscaled.
+#   frame.clock_drawn_only   an undrawn frame keeps the scene's steps and hands it 0; 36,000 owed arrive as 8 (bug 1).
 add_executable(test_frame_clock test_frame_clock.cpp)
 set_target_properties(test_frame_clock PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_include_directories(test_frame_clock PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
-target_compile_definitions(test_frame_clock PRIVATE
-    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_frame_clock PRIVATE JahshakaEngine)
-add_dependencies(test_frame_clock JahshakaEngineMedia)
-foreach(_mode clock_once two_scenes particle_scale)
-    string(REPLACE "_" "-" _flag "${_mode}")
-    add_test(NAME frame.${_mode} COMMAND test_frame_clock --${_flag} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(frame.${_mode} PROPERTIES TIMEOUT 60 LABELS "engine")
-    jah_no_display(frame.${_mode})
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_frame_clock PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+foreach(_pair "clock_once;clock-once" "two_scenes;two-scenes" "particle_scale;particle-scale" "clock_drawn_only;drawn-only")
+    list(GET _pair 0 _row)
+    list(GET _pair 1 _flag)
+    add_test(NAME frame.${_row} COMMAND test_frame_clock --${_flag} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(frame.${_row} PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_no_display(frame.${_row})
 endforeach()
 # frame.meter_time — THE HDR METER ADAPTS IN ITS SCENE's TIME (ONE-FRAME-1 stage 1; test_frame_meter.cpp says the law):
 # the view's meter takes steps x period at particle time scales 0.25 and 4, and 0 on a frame nobody stepped the scene.
@@ -491,3 +494,19 @@ add_dependencies(test_frame_meter JahshakaEngineMedia)
 jah_gpu_row(frame.meter_time CLASS engine FRAMES 6 COMMAND test_frame_meter
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.meter_time PROPERTIES TIMEOUT 60 LABELS "engine")
+# frame.clock_integration — A FRAME CONSUMES THE STEPS OF THE SCENES IT DRAWS, AND ONLY THEIRS (ONE-FRAME-1, the stage-1
+# audit's bug 1; test_frame_integration.cpp says the law): through the real drain and drawn set. A card row.
+add_executable(test_frame_integration test_frame_integration.cpp)
+set_target_properties(test_frame_integration PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_frame_integration PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_frame_integration PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_frame_integration PRIVATE JahshakaEngine)
+add_dependencies(test_frame_integration JahshakaEngineMedia)
+jah_gpu_row(frame.clock_integration CLASS engine FRAMES 5 COMMAND test_frame_integration
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.clock_integration PROPERTIES TIMEOUT 60 LABELS "engine")
