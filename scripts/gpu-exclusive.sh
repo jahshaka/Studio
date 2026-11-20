@@ -277,7 +277,9 @@ fi
 # shell, and a row's fresh HOME has no driver cache at all, so every run redid the driver's work. Every GPU run passes here.
 export __GL_SHADER_DISK_CACHE_SIZE="${__GL_SHADER_DISK_CACHE_SIZE:-8589934592}"
 # the driver appends GLCache/ itself: the path is the PARENT, so the rows share the box's own cache (#97's diagnosis)
-export __GL_SHADER_DISK_CACHE_PATH="${__GL_SHADER_DISK_CACHE_PATH:-/home/jahshaka/.cache/nvidia}"
+# - the login user's passwd home, never a spelled one (BOX-LOCAL-1: no box's path in a script)
+_ph=$(getent passwd "$(id -u)" | cut -d: -f6)
+export __GL_SHADER_DISK_CACHE_PATH="${__GL_SHADER_DISK_CACHE_PATH:-${_ph:-$HOME}/.cache/nvidia}"
 exec 9>>"$lock"
 # THE TICKET (URGENT #113): the number and the ticket file under the queue's own lock, so a lower ticket always exists
 # before a higher one is seen

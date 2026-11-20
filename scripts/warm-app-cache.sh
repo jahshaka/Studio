@@ -548,7 +548,7 @@ driver_boot() {
     room "$name" "$rest"
     echo "warm-app-cache: booting $(what_of "$name") ($name): $(basename "$EXE") on $DISPLAY (the card's wait at most ${WAIT} s)"
     local t0 rc wall b0 b1 dpath waited
-    dpath="${__GL_SHADER_DISK_CACHE_PATH:-/home/jahshaka/.cache/nvidia}"
+    dpath="${__GL_SHADER_DISK_CACHE_PATH:-$(getent passwd "$(id -u)" | cut -d: -f6)/.cache/nvidia}"   # (gpu-exclusive.sh's default)
     b0=$(du -sb "$dpath" 2>/dev/null | cut -f1)
     t0=$(now_ns)
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
