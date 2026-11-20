@@ -82,6 +82,57 @@ want("a PASS of a card row taken on another driver runs, the driver named", C(re
      "the driver d0 -> d1")
 want("a FAIL of a card row taken on another kernel is not served red: it runs", C(rec("FAIL", env=fp(kernel="k0")), Reach(True)),
      "run", "the kernel k0 -> k1")
+# THE CARD IS AN INPUT (URGENT #188, the doors-0 ground read: the two boxes' driver is equal and their kernels differ by a build, so
+# at equal kernels one card's records and six were served on another): two environments equal but for the device are NOT equal
+want("a PASS of a card row taken on another CARD (every other field equal) runs, the gpu named",
+     C(rec("PASS", env=fp(gpu="NVIDIA GeForce RTX 4080 SUPER [10de:2702]")), Reach(True),
+       env=fp(gpu="NVIDIA GeForce RTX 5060 Ti [10de:2d04]")), "run", "the gpu NVIDIA GeForce RTX 4080 SUPER [10de:2702] -> ")
+want("a FAIL of a card row taken on another CARD is not served red: it runs",
+     C(rec("FAIL", env=fp(gpu="g-4080")), Reach(True), env=fp(gpu="g-5060")), "run", "the gpu g-4080 -> g-5060")
+def toy_pci(devs):
+    """A sysfs and an NVIDIA proc tree of the test's making: {bus id: (class, vendor, device, subvendor, subdevice, model)}."""
+    import tempfile
+    t = tempfile.mkdtemp(prefix="serve-red-pci-")
+    for bus, (cls, *ids, model) in devs.items():
+        os.makedirs(os.path.join(t, "pci", bus))
+        for n, v in zip(("class", "vendor", "device", "subsystem_vendor", "subsystem_device"), (cls, *ids)):
+            open(os.path.join(t, "pci", bus, n), "w").write(v + "\n")
+        if model:
+            os.makedirs(os.path.join(t, "nv", bus))
+            open(os.path.join(t, "nv", bus, "information"), "w").write(f"Model: \t\t {model}\nIRQ:   \t\t 16\n")
+    try:
+        return grl._gpu(os.path.join(t, "pci"), os.path.join(t, "nv"))
+    finally:
+        import shutil
+        shutil.rmtree(t, ignore_errors=True)
+
+
+# THE CARD's READ (#188): files only - every display-class device in bus order, the model from the NVIDIA proc file, the ids alone
+# for another vendor's; a network card is no card; no display device is unreadable (None -> "?", never equal)
+got = toy_pci({"0000:01:00.0": ("0x030000", "0x10de", "0x2d04", "0x1043", "0x8a11", "NVIDIA GeForce RTX 5060 Ti"),
+               "0000:05:00.0": ("0x020000", "0x8086", "0x125c", "0x8086", "0x0000", None),
+               "0000:0b:00.0": ("0x038000", "0x1002", "0x13c0", "0x1002", "0x0123", None)})
+want("the card read from sysfs: the NVIDIA model + its ids; another vendor's display device by its ids; no network card",
+     ("ok" if got == "NVIDIA GeForce RTX 5060 Ti [10de:2d04 1043:8a11];[1002:13c0 1002:0123]" else "bad", got), "ok")
+got = toy_pci({"0000:01:00.0": ("0x030000", "0x10de", "0x2702", "0x10de", "0x18f1", "NVIDIA GeForce RTX 4080 SUPER")})
+want("another board's card reads another value (the 4080 SUPER)", ("ok" if "[10de:2702 10de:18f1]" in got else "bad", got), "ok")
+want("no display-class device: unreadable (None)", ("ok" if toy_pci({}) is None else "bad", None), "ok")
+
+
+def before_gpu(e):
+    """`e` as a record written before the gpu field carries it: its fields without it, its card hash over the six it had."""
+    import hashlib
+    f = {k: v for k, v in e["fields"].items() if k != "gpu"}
+    old = ("driver", "compiler", "qt", "vulkan", "layers", "kernel")
+    return dict(e, fields=f, card=hashlib.sha256("\n".join(f"{k}={f[k]}" for k in old).encode()).hexdigest()[:16])
+
+
+want("a PASS of a card row whose record predates the gpu field runs (another environment: a new box re-runs every card row once)",
+     C(rec("PASS", env=before_gpu(fp())), Reach(True)), "run", "the gpu not recorded -> ")
+want("a PASS of a CPU row whose record predates the gpu field still serves (its cpu hash is the compiler and Qt's)",
+     C(rec("PASS", env=before_gpu(fp())), Reach(True), fact=CPU), "served")
+want("a PASS of a CPU row taken on another card still serves (the card is not a CPU field)",
+     C(rec("PASS", env=fp(gpu="g-4080")), Reach(True), fact=CPU, env=fp(gpu="g-5060")), "served")
 want("a PASS of a CPU row taken under another kernel and driver still serves", C(rec("PASS", env=fp(kernel="k0", driver="d0")),
      Reach(True), fact=CPU), "served")
 want("a PASS of a CPU row taken under another compiler runs, the compiler named", C(rec("PASS", env=fp(compiler="GNU 14")),

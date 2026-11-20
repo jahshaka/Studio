@@ -210,15 +210,21 @@ _NVRM = re.compile(r"\bKernel Module\b.*?\s(\d+\.\d+(?:\.\d+)?)\s")
 # THE ENVIRONMENT FINGERPRINT (WORKFLOW-STREAMLINE-1 5.3; it generalises URGENT #167, where the driver 595.91.07 -> 595.99.02
 # after 16:51's crash let PHOTON-7-9A's call be served from the faulted run's records). A record's verdict is the environment's
 # too: every record carries `env` = {card, cpu, fields}; a CARD row (no `code` label) is served - green or red - only at an
-# equal `card` hash (the driver, the compiler VERSION, Qt, the Vulkan loader and its layers, the kernel), a CPU row at an equal
+# equal `card` hash (the driver, the compiler VERSION, Qt, the Vulkan loader and its layers, the kernel, the card), a CPU row at an equal
 # `cpu` hash (the compiler and Qt alone). Read once a process, from files (no card call): the driver from
 # /proc/driver/nvidia/version (else nvidia-smi), the compiler's id and version from the build's CMakeFiles/<v>/
 # CMakeCXXCompiler.cmake (its PATH, /usr/bin/c++, names no version: a GCC update kept every key), Qt from the cache's Qt6_DIR
 # (Qt6ConfigVersionImpl.cmake's PACKAGE_VERSION), the loader from libvulkan.so.1's real name, each layer manifest's name,
 # implementation and API versions (VVL 1.4.341's false VUID moved a validation row's verdict: GATE_AND_RIG), the kernel's
-# release. A field that cannot be read is "?" - NEVER equal, on either side (ci_gate_check.env_differs, #167's law). JAH_ENV_FINGERPRINT (the suites'
+# release, THE CARD (URGENT #188: the two boxes' driver is equal and their kernels differ by one build, so at equal kernels one
+# card's records and six would serve on another): every display-class PCI device (sysfs class 0x03xxxx, in bus order) as
+# "<model> [vendor:device subvendor:subdevice]" - the ids from /sys/bus/pci/devices/*/ (the subsystem ids name the board, its
+# memory size among them), the model from /proc/driver/nvidia/gpus/<bus id>/information (another vendor's: the ids alone);
+# files only, measured 0.3 ms, no nvidia-smi and no card call. A field that cannot be read is "?" - NEVER equal, on either
+# side (ci_gate_check.env_differs, #167's law); a record that predates a field is another environment (its card hash
+# differs: a new field re-runs every card row once, as a new box does). JAH_ENV_FINGERPRINT (the suites'
 # one override, "driver=toy-A,kernel=k1"): the fields named, every other "-" - a suite never reads the real box.
-ENV_FIELDS = ("driver", "compiler", "qt", "vulkan", "layers", "kernel")
+ENV_FIELDS = ("driver", "compiler", "qt", "vulkan", "layers", "kernel", "gpu")
 CPU_FIELDS = ("compiler", "qt")
 _ENV = {}
 
@@ -241,6 +247,22 @@ def _driver():
         except (OSError, subprocess.TimeoutExpired):
             v = None
     return v
+
+
+def _gpu(pci="/sys/bus/pci/devices", nv="/proc/driver/nvidia/gpus"):
+    """THE CARD as the fingerprint's `gpu` field (the header above), or None (no display-class device readable)."""
+    out = []
+    for d in sorted(os.listdir(pci)) if os.path.isdir(pci) else ():
+        try:
+            rd = lambda n: open(os.path.join(pci, d, n)).read().strip()   # noqa: E731
+            if not rd("class").startswith("0x03"):
+                continue
+            ids = "%s:%s %s:%s" % tuple(rd(n)[2:] for n in ("vendor", "device", "subsystem_vendor", "subsystem_device"))
+        except OSError:
+            continue
+        model = _first(os.path.join(nv, d, "information"), r"^Model:\s*(.*?)\s*$")
+        out.append(f"{model} [{ids}]" if model else f"[{ids}]")
+    return ";".join(out) or None
 
 
 def _layers():
@@ -282,7 +304,8 @@ def env_fields(build):
             if os.path.exists(lib):
                 lv = os.path.basename(os.path.realpath(lib)).replace("libvulkan.so.", "")
                 break
-        f = {"driver": _driver(), "compiler": comp, "qt": qt, "vulkan": lv, "layers": _layers(), "kernel": os.uname().release}
+        f = {"driver": _driver(), "compiler": comp, "qt": qt, "vulkan": lv, "layers": _layers(), "kernel": os.uname().release,
+             "gpu": _gpu()}
         f = {k: (v if v else "?") for k, v in f.items()}
     _ENV[build] = f
     return f

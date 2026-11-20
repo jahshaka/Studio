@@ -253,16 +253,17 @@ def env_differs(rec, fact, now):
     key = "card" if card else "cpu"
     have = rec.get("env") or {}
     # AN UNREADABLE FIELD IS NEVER EQUAL (#167's law; the branch audit's B7): "?" on either side - "?" against "?" too - says
-    # nothing about the two environments being one
+    # nothing about the two environments being one. A field the RECORD PREDATES (URGENT #188's `gpu`) is not unreadable: its
+    # card hash differs, so it is another environment, and the moved line below names it ("not recorded -> <now>")
     ks = gate_runlog.ENV_FIELDS if card else gate_runlog.CPU_FIELDS
-    blind = [k for k in ks for side in ((have.get("fields") or {}), (now.get("fields") or {})) if side.get(k, "?") == "?"]
+    hf, nf = have.get("fields") or {}, now.get("fields") or {}
+    blind = [k for k in ks if hf.get(k) == "?" or nf.get(k, "?") == "?"]
     if have and blind:
         return (f"a {'card' if card else 'CPU'} row: its environment's {', '.join(sorted(set(blind)))} unreadable (on the record's side "
                 "or now) - an unknown field is never equal")
     if have.get(key) and have.get(key) == now.get(key):
         return None
-    hf, nf = have.get("fields") or {}, now.get("fields") or {}
-    moved = [f"the {k} {hf.get(k, 'unknown')} -> {nf.get(k)}" for k in (gate_runlog.ENV_FIELDS if card else gate_runlog.CPU_FIELDS)
+    moved = [f"the {k} {hf.get(k, 'not recorded')} -> {nf.get(k)}" for k in (gate_runlog.ENV_FIELDS if card else gate_runlog.CPU_FIELDS)
              if hf.get(k) != nf.get(k)]
     return (f"a {'card' if card else 'CPU'} row, its record taken in another environment: "
             + ("; ".join(moved) if have else "the record has no environment fingerprint"))
