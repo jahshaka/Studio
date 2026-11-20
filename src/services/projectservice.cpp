@@ -49,6 +49,10 @@ ProjectService::ProjectService(Database *db,
     : db(db), project(project), projectManager(nullptr), settings(settings),
       viewport(viewport), undo(undo), sceneProvider(std::move(sceneProvider))
 {
+    // A FOLDER A KILLED DELETE LEFT ASIDE is swept at start-up, on a worker (the audit's W4): only a later
+    // delete in the same directory swept it before, so a root nobody deleted from again kept it for ever.
+    // (A project filed at a chosen location is swept by the next delete there.)
+    if (settings) removeAsideFoldersLater(QDir(projectsRoot()).filePath(QStringLiteral("Projects")));
 }
 
 ProjectService::~ProjectService()
@@ -349,8 +353,9 @@ bool ProjectService::removeProject(const QString &guid, QString *whyOut)
     const QString folder = projectFolderFor(guid);
     const QFileInfo folderInfo(folder);
     const QString projectsDir = folderInfo.absolutePath();
+    QString aside;
     if (folderInfo.exists()) {
-        const QString aside = QDir(projectsDir).filePath(
+        aside = QDir(projectsDir).filePath(
             kAsidePrefix + guid + QLatin1Char('-') + QString::number(QDateTime::currentMSecsSinceEpoch()));
         if (!QDir().rename(folder, aside))
             return fail(QStringLiteral("the project folder '%1' could not be moved aside for removal "
@@ -358,15 +363,35 @@ bool ProjectService::removeProject(const QString &guid, QString *whyOut)
                             .arg(folder));
     }
 
-    db->deleteProject(guid);
-    db->deleteFolderAndDependencies(guid);
-    db->deleteAssetAndDependencies(guid);
+    // THE ROWS GO TOGETHER OR NOT AT ALL (the audit's W4): one transaction over the three deletes (their own
+    // guards nest into it), and a failure puts the folder BACK where it was — a refused delete changes nothing.
+    // Their results were ignored: a row delete that failed still returned true with the folder aside.
+    bool rowsOk = false;
+    {
+        DbTransaction tx(db->getDb());
+        bool foldersOk = true, assetsOk = true;
+        const bool projectOk = db->deleteProject(guid);
+        db->deleteFolderAndDependencies(guid, &foldersOk);
+        db->deleteAssetAndDependencies(guid, &assetsOk);
+        rowsOk = projectOk && foldersOk && assetsOk && tx.commit();
+    }
+    if (!rowsOk) {
+        if (!aside.isEmpty() && !QDir().rename(aside, folder))
+            qWarning("project delete: the rows of %s were kept but its folder could not be put back from '%s'",
+                     qUtf8Printable(guid), qUtf8Printable(aside));
+        return fail(QStringLiteral("the library refused to delete the project's rows; nothing was deleted"));
+    }
 
     supersedeThumbnail(guid);
     if (projectManager) projectManager->removeTile(guid);
+    removeAsideFoldersLater(projectsDir);
+    return true;
+}
 
-    // Every folder aside in this directory that no worker owns yet: this one,
-    // and any a killed process left behind (one directory read, here).
+void ProjectService::removeAsideFoldersLater(const QString &projectsDir)
+{
+    // Every folder aside in this directory that no worker owns yet: a delete's
+    // own, and any a killed process left behind (one directory read, here).
     QStringList owned;
     {
         QMutexLocker locked(mFoldersAsideLock.get());
@@ -391,7 +416,6 @@ bool ProjectService::removeProject(const QString &guid, QString *whyOut)
                 }
             }));
     }
-    return true;
 }
 
 int ProjectService::drainFolderDeletes()

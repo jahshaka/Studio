@@ -18,6 +18,8 @@ function make() {
     var web = project.exportWeb();
     assert(web.indexHtml && web.indexHtml.indexOf(folder) === 0, "the web export lands in the project's folder: " + web.dir);
     console.log("REMOVE FOLDER=" + folder);
+    project.create("Doors Undeletable", { template: "empty" });
+    console.log("UNDELETABLE FOLDER=" + project.current().folder);
     project.create("Doors Keep", { template: "empty" });
     console.log("make: ALL OK");
 }
@@ -33,6 +35,12 @@ function readOnly() {
            "a folder that cannot be moved aside REFUSES the delete, by its sentence");
     assert(project.list().filter(function (p) { return p.guid === del[0].guid; }).length === 1, "...and the row stays");
     console.log("read-only: ALL OK");
+}
+
+// Process 2b: a boot that deletes nothing (the shell checks the start-up sweep took the stale folder).
+function boot() {
+    assert(project.list().length >= 2, "the library boots");
+    console.log("boot: ALL OK");
 }
 
 // Process 2: the open project is refused, the other removed through the one door.
@@ -55,6 +63,14 @@ function remove() {
     assert(why !== null && why.indexOf("is open") >= 0, "removing the OPEN project is REFUSED by a sentence");
     why = refusal(function () { project.remove("no-such-guid"); });
     assert(why !== null && why.indexOf("no project with guid") >= 0, "an unknown guid is REFUSED by a sentence");
+    // ROWS THE LIBRARY REFUSES TO DELETE (the shell's trigger aborts that row's DELETE): nothing is deleted —
+    // the rows stay and the folder is put back where it was (the shell checks).
+    var undeletable = project.list().filter(function (p) { return p.name === "Doors Undeletable"; });
+    var why = refusal(function () { project.remove(undeletable[0].guid); });
+    console.log("rows refused: " + why);
+    assert(why !== null && why.indexOf("nothing was deleted") >= 0, "a delete whose rows the library refuses is REFUSED");
+    assert(project.list().filter(function (p) { return p.guid === undeletable[0].guid; }).length === 1,
+           "...and its row stays");
     assert(project.remove(del[0].guid) === true, "the other project is removed");
     assert(project.list().filter(function (p) { return p.guid === del[0].guid; }).length === 0,
            "...its row is gone");

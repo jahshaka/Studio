@@ -275,6 +275,8 @@ private:
     /// Drops `guid`'s encode in flight (a synchronous write or a delete
     /// replaces what it would have written).
     void supersedeThumbnail(const QString &guid);
+    /// Hands every `.removing-*` folder of `projectsDir` no worker owns yet to a worker that removes it.
+    void removeAsideFoldersLater(const QString &projectsDir);
     QHash<QString, QFutureWatcher<QByteArray> *> mThumbEncodes;
     /// The folder removals in flight (removeProject), and the aside paths they
     /// own — a later delete never hands a second worker the same folder.

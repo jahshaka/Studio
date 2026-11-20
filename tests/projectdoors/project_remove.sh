@@ -50,6 +50,27 @@ check $rc "process 2a (a read-only Projects directory) passes (exit $rc)"
 [ "$(find "$FOLDER" -type f | sort | md5sum)" = "$before" ]
 check $? "...and every file of the folder is still there"
 
+# A row the library refuses to delete (process 2): a trigger aborts the DELETE of 'Doors Undeletable'.
+UNDEL="$(grep -o 'UNDELETABLE FOLDER=.*' make.log | cut -d= -f2-)"
+python3 -I - "$JAHSHAKA_DATA_ROOT/JahLibrary.db" <<'PY'
+import sqlite3, sys
+conn = sqlite3.connect(sys.argv[1])
+conn.execute("CREATE TRIGGER doors_undeletable BEFORE DELETE ON projects WHEN OLD.name = 'Doors Undeletable' "
+             "BEGIN SELECT RAISE(ABORT, 'this row refuses its delete'); END")
+conn.commit()
+PY
+check $? "the undeletable project's row is made to refuse its delete"
+
+# Process 2b: a folder a KILLED delete left aside is swept at START-UP (it was swept only by a later delete in
+# the same directory) — a boot that deletes nothing removes it.
+mkdir -p "$PROJECTS/.removing-stale-0/exports" && echo x > "$PROJECTS/.removing-stale-0/exports/left.txt"
+{ cat "$JS"; echo "boot();"; } > boot.run.js
+"$BIN" "$MODE" --script "$PWD/boot.run.js" > boot.log 2>&1
+rc=$?
+check $rc "process 2b (a boot) passes (exit $rc)"
+[ ! -e "$PROJECTS/.removing-stale-0" ]
+check $? "...and the folder a killed delete left aside is gone (swept at start-up)"
+
 { cat "$JS"; echo "remove();"; } > remove.run.js
 "$BIN" "$MODE" --script "$PWD/remove.run.js" > remove.log 2>&1
 rc=$?
@@ -57,6 +78,8 @@ grep -E "^ok:|assert failed|^open:" remove.log
 check $rc "process 2 (the refusals, the delete) passes (exit $rc)"
 [ ! -e "$FOLDER" ]
 check $? "the project's folder is gone"
+[ -n "$UNDEL" ] && [ -d "$UNDEL" ]
+check $? "the undeletable project's folder was put back where it was ($UNDEL)"
 left=$(find "$PROJECTS" -mindepth 1 -maxdepth 1 -name '.removing-*' | wc -l)
 [ "$left" = "0" ]
 check $? "nothing is left aside in $PROJECTS ($left)"
