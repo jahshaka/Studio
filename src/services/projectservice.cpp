@@ -500,8 +500,16 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
     // would otherwise land an OLDER picture over this one.
     if (!thumb.isEmpty()) supersedeThumbnail(guid);
     {
+        // "SAVED" MEANS COMMITTED (STUDIO-HYGIENE-1 audit). A script run holds the database's gesture batch for
+        // its whole length, and the UPDATE inside it was counted (one row) and reported saved while its COMMIT
+        // waited for the run's end: a kill or a failed batch commit later in the run left the row at the
+        // previous scene with the scene marked clean. A TOP-LEVEL guard stands the batch down — it commits what
+        // the batch holds and reopens at the next statement (DbTransaction, database.h) — and this guard's own
+        // commit is the save's truth. WAL + synchronous=NORMAL: a commit is a WAL append, no fsync.
         LoadTimeline::Accumulate row(QStringLiteral("save:write"));
+        DbTransaction tx(db->getDb());
         ok = thumb.isEmpty() ? db->updateProjectBlob(blob, guid) : db->updateProject(blob, thumb, guid);
+        if (ok && !tx.commit()) ok = false;
     }
     if (!ok) {
         ProjectTileData row;

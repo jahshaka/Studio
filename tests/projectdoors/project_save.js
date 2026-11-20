@@ -22,7 +22,11 @@ function make() {
     var g = project.create("Doors Round Trip", { template: "empty" });
     scene.addPrimitive("cube", { count: 3 });
     assert(dirty() === true, "a push makes the scene dirty");
+    var commits = editor.undoState().dbCommits;
     assert(project.save() === true, "the save writes the row");
+    assert(editor.undoState().dbCommits > commits,
+           "...COMMITTED before it said saved (dbCommits " + commits + " -> " + editor.undoState().dbCommits +
+           "): inside a script run's gesture batch the row was written but not committed");
     assert(dirty() === false, "...and the scene is clean");
     scene.addPrimitive("sphere");
     assert(dirty() === true, "a push AFTER a save is dirty (the coerced counter read it as saved: the close never asked)");
