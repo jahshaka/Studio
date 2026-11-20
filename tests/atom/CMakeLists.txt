@@ -28,11 +28,9 @@ endforeach()
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 
 # ---------------------------------------------------------------------------
-# ATOM stage 3 — THE PARITY GRID and THE NEGATIVE CONTROL (lane ATOM-S3-PARITY;
-# SPECS/atom/D1_HLMS_ATOM_AND_VISBUF_DESIGN.md §1). Both reach past the public
-# Engine API (EnginePrivate.h, HlmsAtom.h, AtomPass.h — as atom.cluster_crack (archived: archive/tests/atom)
-# does) and link Ogre: the grid builds its own workspaces on the scene's manager,
-# the control records raw Vulkan through the engine's pass provider.
+# THE ENGINE-REACHING TARGETS: a row that reaches past the public Engine API
+# (EnginePrivate.h, HlmsAtom.h, AtomPass.h) and links Ogre, building its own
+# workspaces on the scene's manager.
 function(jah_atom_engine_target _t)
     set_target_properties(${_t} PROPERTIES
         AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -49,98 +47,32 @@ function(jah_atom_engine_target _t)
     add_dependencies(${_t} JahshakaEngineMedia)
 endfunction()
 
-# engine.atom_parity (archived: archive/tests/engine) — the grid: materials x lights x Photon terms, stock HlmsPbs
-# against HlmsAtom's decode over a hand-made id buffer, per cell mean <= 1.0 code
-# and <= 0.5 % of interior pixels beyond 8 codes, a grazing cell included. It reads
-# until every arm is stable (frames, never time) and prints the whole grid.
-
-# engine.atom_negative_control — stage 0's P-B, permanent: our own compute + graphics
-# pipeline recorded into Ogre's frame from the engine's PASS_CUSTOM provider, and
-# Ogre's next pass byte-identical to the same pass without ours over 120 frames. Its
-# three shaders compile to SPIR-V at BUILD time (never committed bytes), and the
-# suite links the Vulkan render system to reach the device, like tests/vr's spike.
-find_package(Vulkan QUIET)
-find_program(JAH_ATOM_GLSLANG NAMES glslangValidator glslang)
-if(Vulkan_FOUND AND JAH_ATOM_GLSLANG AND OGRE_NEXT_VULKAN_RS_LIB)
-    set(_atom_neg_gen "${CMAKE_CURRENT_BINARY_DIR}/generated")
-    file(MAKE_DIRECTORY "${_atom_neg_gen}")
-    set(_atom_neg_headers)
-    foreach(_stage comp vert frag)
-        add_custom_command(
-            OUTPUT "${_atom_neg_gen}/atom_negative_${_stage}_spv.h"
-            COMMAND "${JAH_ATOM_GLSLANG}" -V -S ${_stage} --vn test_${_stage}
-                    -o "${_atom_neg_gen}/atom_negative_${_stage}_spv.h"
-                    "${CMAKE_CURRENT_SOURCE_DIR}/shaders/atom_negative.${_stage}"
-            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/shaders/atom_negative.${_stage}"
-            COMMENT "Compiling engine.atom_negative_control's ${_stage} shader"
-            VERBATIM)
-        list(APPEND _atom_neg_headers "${_atom_neg_gen}/atom_negative_${_stage}_spv.h")
-    endforeach()
-    # ...AND ITS SANITISED TWIN: the owners' retire windows (a destroyed view's stats ring and a
-    # destroyed scene's caster ring, reaped 8 frames later through the device's window) are raw
-    # Vulkan memory handed between owners — the use-after-free class a sanitizer is for.
-    if(JAHSHAKA_ASAN)
-        add_executable(test_atom_component_asan test_atom_component.cpp)
-        set_target_properties(test_atom_component_asan PROPERTIES
-            AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-            CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
-            RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
-            BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
-            INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-        target_compile_definitions(test_atom_component_asan PRIVATE
-            JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
-            JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-        target_link_libraries(test_atom_component_asan PRIVATE JahshakaEngineAsan)
-        add_dependencies(test_atom_component_asan JahshakaEngineMedia)
-        target_compile_options(test_atom_component_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
-        target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
-        jah_gpu_row(atom.component_asan CLASS engine COMMAND test_atom_component_asan
-                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 60 LABELS "engine"
-            ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
-        set_tests_properties(atom.component_asan PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # its plain twin's
-    endif()
-    # EnginePrivate.h names a local `slots`: Qt's keyword macro would eat it.
-    set_source_files_properties(test_shadow_atom_cut.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
-    # ONE ROW PER DEVICE (lane D6B-GATE-SHAPE; audit verdict MERGE): where the Khronos
-    # validation layer is installed, the `_validation` rows below ARE the suite — the same
-    # binary and the same assertions, plus the layer, FAIL_REGULAR_EXPRESSION on any report
-    # and the positive control that the layer is active (a strict superset, the
-    # app.engine_selftest precedent). The plain rows register only where the layer is
-    # missing, so a box without it still runs the byte-identity assertion.
-    # ...lavapipe is the second device of the spike's recipe (the software rasteriser
-    # exposes neither ray queries nor the RTX's timing, so it is the other half of
-    # "validation clean on both devices").
-    set(_lvp_icd "/usr/share/vulkan/icd.d/lvp_icd.json")
-    if(NOT EXISTS "/usr/share/vulkan/explicit_layer.d/VkLayer_khronos_validation.json")
-        add_test(NAME engine.atom_negative_control COMMAND test_atom_negative_control
-                 WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-        set_tests_properties(engine.atom_negative_control PROPERTIES TIMEOUT 60 LABELS "engine")
-        if(EXISTS "${_lvp_icd}")
-            add_test(NAME engine.atom_negative_control_lavapipe COMMAND test_atom_negative_control
-                     WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-            set_tests_properties(engine.atom_negative_control_lavapipe PROPERTIES
-                TIMEOUT 60 LABELS "engine" ENVIRONMENT "VK_ICD_FILENAMES=${_lvp_icd}")
-        endif()
-    endif()
-    # UNDER THE VALIDATION LAYER, failing on any report: our recorder's barriers and the
-    # provider's restoration are what the layer reads. Each asserts the layer is ACTIVE
-    # (JAH_EXPECT_VALIDATION: Engine::validation — vkCmdDraw must resolve into the layer's library), so a
-    # machine without the layer cannot read as green.
-else()
-    message(STATUS "Jahshaka: engine.atom_negative_control NOT built — vulkan=${Vulkan_FOUND} "
-                   "glslang='${JAH_ATOM_GLSLANG}' vulkanRs='${OGRE_NEXT_VULKAN_RS_LIB}'")
+# atom.component_asan — test_atom_component.cpp UNDER THE SANITIZER: the owners' retire windows (a
+# destroyed view's stats ring and a destroyed scene's caster ring, reaped 8 frames later through the
+# device's window) are raw Vulkan memory handed between owners — the use-after-free class a sanitizer is for.
+if(JAHSHAKA_ASAN)
+    add_executable(test_atom_component_asan test_atom_component.cpp)
+    set_target_properties(test_atom_component_asan PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+        CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+        BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+        INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+    target_compile_definitions(test_atom_component_asan PRIVATE
+        JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+        JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+    target_link_libraries(test_atom_component_asan PRIVATE JahshakaEngineAsan)
+    add_dependencies(test_atom_component_asan JahshakaEngineMedia)
+    target_compile_options(test_atom_component_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
+    jah_gpu_row(atom.component_asan CLASS engine COMMAND test_atom_component_asan
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 60 LABELS "engine"
+        ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
+    set_tests_properties(atom.component_asan PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # its plain twin's
 endif()
-
-# ---------------------------------------------------------------------------
-# atom.lod_switch (archived: archive/tests/atom) — THE LOD RULES IN THE VIEWPORT (ATOM-LOD-BOUND-1; ATOM-CLUSTER-CUT). A
-# scan stand-in (floor, columns, 600 debris islands; the generator atom.lod_bound_bar (archived: archive/tests/atom) bakes)
-# imported through the owner's route: the chain's per-object level (shadows, stock PBR)
-# steps down over 30-500 m, comes back to 0 and holds across a band edge; the Levels view
-# paints the CUT's depth, coarser further out; and a slow zoom shows no pop (no band). The fixture is WRITTEN by test_mesh_bake before the run (a setup test), so no
-# mesh is checked in. An app run on the rig's display, like atom.view.
-set(_lod_switch_home ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-atom_lod_switch)
-set(LOD_STANDIN ${_lod_switch_home}/lod_standin.obj)
+# EnginePrivate.h names a local `slots`: Qt's keyword macro would eat it.
+set_source_files_properties(test_shadow_atom_cut.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
 
 # atom.pass_table — THE FULLEST PASS FITS THE PASS-TEXTURE TABLE (BUGS-1 item 1; preflight-atom-3 §A): an Epic world on
 # the Basic template with sun contact, the 2D clouds and the World fog (+ one area light created and removed: the LTC
@@ -198,17 +130,3 @@ jah_atom_engine_target(test_atom_cluster_occlusion)
 jah_gpu_row(atom.cluster_occlusion CLASS engine FRAMES 145 COMMAND test_atom_cluster_occlusion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_occlusion PROPERTIES TIMEOUT 60 LABELS "engine")
-
-# FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
-# JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
-# Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
-foreach(_row_frames
-        )
-    string(REPLACE "=" ";" _rf "${_row_frames}")
-    list(GET _rf 0 _r)
-    list(GET _rf 1 _n)
-    if(TEST ${_r})
-        set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_n})
-    endif()
-endforeach()
-
