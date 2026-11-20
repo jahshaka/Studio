@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""theme.no_raw_sheets — NO RAW STYLESHEET OUTSIDE src/ui/style/ (CODING_RULES §2; restored by STUDIO-HYGIENE-1
+"""source.no_raw_sheets — NO RAW STYLESHEET OUTSIDE src/ui/style/ (CODING_RULES §2; restored by STUDIO-HYGIENE-1
 stage 4 from archive/tests/theme, where TEST-CUT-1 had put it).
 
 The live walk (theme.sheets / app.styleSheets) only sees widgets that exist during its tour; this reads the
@@ -104,9 +104,9 @@ for base, dirs, files in os.walk(os.path.join(root, "src")):
                 bad.append(f"{rel}:{line}: a stylesheet in a string literal: {' '.join(body.split())[:80]}")
 
 if bad:
-    print("theme.no_raw_sheets: FAIL — %d raw sheet(s) outside src/ui/style/:" % len(bad))
+    print("source.no_raw_sheets: FAIL — %d raw sheet(s) outside src/ui/style/:" % len(bad))
     for b in bad:
         print("    " + b)
     print("    Move the sheet into the theme (ThemeManager or StyleSheet, src/ui/style/) and call its getter.")
     sys.exit(1)
-print("theme.no_raw_sheets: ok — no raw stylesheet outside src/ui/style/")
+print("source.no_raw_sheets: ok — no raw stylesheet outside src/ui/style/")

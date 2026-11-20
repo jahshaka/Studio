@@ -47,7 +47,7 @@ For more information see the LICENSE file
 // popup reads identically under Qlementine dark and stays legible under
 // Classic — it deliberately opts out of both themes' cascades. The sheet is the
 // THEME's (ThemeManager::claudeChatSheet, src/ui/style/): no raw sheet lives
-// outside src/ui/style/ (theme.no_raw_sheets, no allowlist).
+// outside src/ui/style/ (source.no_raw_sheets, no allowlist).
 
 #include <QStringList>
 #include <QWidget>

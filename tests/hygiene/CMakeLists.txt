@@ -172,17 +172,17 @@ if(NOT Python3_Interpreter_FOUND)
         "tool's own guard), source.notices_coverage (every vendored component is "
         "acknowledged) and source.member_init (every member of ours carries a value) "
         "are NOT registered in this build, and neither is "
-        "document.reader_defaults in its own directory, or theme.no_raw_sheets. Install "
+        "document.reader_defaults in its own directory, or source.no_raw_sheets. Install "
         "python3 and reconfigure.")
 endif()
 if(Python3_Interpreter_FOUND)
-    # theme.no_raw_sheets — the static half of the no-raw-stylesheet law (CODING_RULES §2), restored by
+    # source.no_raw_sheets — the static half of the no-raw-stylesheet law (CODING_RULES §2), restored by
     # STUDIO-HYGIENE-1 stage 4 from archive/tests/theme with NO allowlist and a third rule: a CSS-shaped string
     # literal outside src/ui/style/ (a sheet passed as a named constant). See the script's header.
-    add_test(NAME theme.no_raw_sheets
+    add_test(NAME source.no_raw_sheets
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_raw_sheets.py" "${CMAKE_SOURCE_DIR}")
-    set_tests_properties(theme.no_raw_sheets PROPERTIES TIMEOUT 60 LABELS "hygiene")
-    jah_no_display(theme.no_raw_sheets)
+    set_tests_properties(source.no_raw_sheets PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.no_raw_sheets)
     # source.shader_cache_key — TEST-STREAMLINE-1 1a: the hlms layer keys on the shader cache's own code
     # (JAHSHAKA_SHADER_CACHE_CODE_SOURCES), not every engine source, because engine C++ reaches a cached Hlms source only
     # through property and piece values (the entry's key). A NEW engine file that builds shader source text (a piece, a
