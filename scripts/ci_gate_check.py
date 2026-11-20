@@ -10,13 +10,14 @@ one — PASSED, and:
   * the fork pin at A equals C's, or the row does not reach the fork (the build graph);
   * the whole range A..C does not reach the row (gate-scope's selection: the graph, the symbols, the rules);
   * it is not a measuring row (label `measure`: a measurement is never served);
-  * a CARD row (every row without the derived label `code`) was recorded on the driver of now (URGENT #167, card_driver).
+  * its record was taken in this ENVIRONMENT (WORKFLOW-STREAMLINE-1 5.3, gate_runlog.env_fingerprint; #167's driver one field):
+    a CARD row (every row without the derived label `code`) at an equal whole fingerprint, a CPU row at an equal compiler and Qt.
 A TIMEOUT marked `no_verdict` (cold, or at its cap edge: gate_runlog.no_verdict, WORKFLOW-STREAMLINE-1 5.2) is never served
 red: it runs.
 A row is SERVED-RED (URGENT #54: re-running a red at the same input is a quiet retry that could flip it green by chance)
 when its newest record is a red RESULT (FAIL, TIMEOUT, CRASH; NOTRUN and NOADMIT are not results - but a NOTRUN BEHIND a
 row it needs, gate_runlog's `behind`, stands as a red while those rows stay red there: URGENT #123) at THIS very tree (never
-an ancestor's: the diff may have fixed it) with the build configuration, declaration and data hashes equal (a card row: its driver too, #167): it is in
+an ancestor's: the diff may have fixed it) with the build configuration, declaration, data and environment equal: it is in
 neither "served" nor "run" but in "red" ({row: {from, run, verdict, failLine, seconds}}), reported RED with its record;
 a deliberate re-run is spec.sh test's --rerun-red <row> --why <text>.
 Every other row RUNS, with the reason. The serving decides nothing else: a red is the run's, read by the lead.
@@ -243,19 +244,24 @@ class Reach:
         return reach
 
 
-def driver_differs(rec, fact):
-    """Why a CARD row's record was taken on another driver (None when equal, or a CPU row). URGENT #167: the card's verdict is
-    the driver's too - a driver update (595.91.07 -> 595.99.02 after 16:51's crash) is a new input of every card row; a CPU
-    row (the derived label `code`) keeps serving. An unknown driver on either side is never equal."""
-    if not gate_runlog.takes_card((fact or {}).get("labels")):
+def env_differs(rec, fact, now):
+    """Why a record was taken in ANOTHER ENVIRONMENT (None when equal) - WORKFLOW-STREAMLINE-1 5.3 (gate_runlog's fingerprint; URGENT
+    #167's driver one field of it): a CARD row (every row without the derived label `code`) compares the whole fingerprint, a CPU
+    row the compiler and Qt alone; the fields that moved are named (the driver among them). A record with no fingerprint (one
+    written before it) is never equal."""
+    card = gate_runlog.takes_card((fact or {}).get("labels"))
+    key = "card" if card else "cpu"
+    have = rec.get("env") or {}
+    if have.get(key) and have.get(key) == now.get(key):
         return None
-    have, now = rec.get("driver"), gate_runlog.card_driver()
-    if not have or not now or have != now:
-        return f"a card row, its record taken on the driver {have or 'unknown'} (now {now or 'unknown'})"
-    return None
+    hf, nf = have.get("fields") or {}, now.get("fields") or {}
+    moved = [f"the {k} {hf.get(k, 'unknown')} -> {nf.get(k)}" for k in (gate_runlog.ENV_FIELDS if card else gate_runlog.CPU_FIELDS)
+             if hf.get(k) != nf.get(k)]
+    return (f"a {'card' if card else 'CPU'} row, its record taken in another environment: "
+            + ("; ".join(moved) if have else "the record has no environment fingerprint"))
 
 
-def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
+def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None, env=None):
     """Why record `rec` at A cannot stand for the row at C (None when it can); `cfg`: the build's configuration."""
     if rec.get("verdict") != "PASS":
         return f"its newest record is {rec.get('verdict')} ({(rec.get('failLine') or '')[:120]})"
@@ -269,7 +275,7 @@ def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
     if not gate_graph.config_equal(rec.get("config"), cfg):
         return "its build configuration differs (or is unknown): %s vs this build's %s" % (
             (rec.get("config") or {}).get("build_type"), (cfg or {}).get("build_type"))
-    why = driver_differs(rec, fact)
+    why = env_differs(rec, fact, env or {})
     if why:
         return why
     d = rec.get("declaration")
@@ -291,7 +297,7 @@ def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None):
 RED_RESULTS = ("FAIL", "TIMEOUT", "CRASH")
 
 
-def red_stands(rec, fact, reach, cfg):
+def red_stands(rec, fact, reach, cfg, env=None):
     """Why the red record `rec` does NOT stand at this tip (None when it does: SERVED-RED). URGENT #54: re-running a red at
     the same input is a quiet retry that could flip it green by chance, so a red recorded at THIS tree - or at an ancestor
     whose diff since does not reach the row (TEST-STREAMLINE-1) - with the same build configuration, declaration and data, is
@@ -312,7 +318,7 @@ def red_stands(rec, fact, reach, cfg):
             return f"a red of an ancestor's tree, and {rec['tip']['studio'][:9]}..{reach.tip[:9]} reaches it (the fix may be in it)"
     if not gate_graph.config_equal(rec.get("config"), cfg):
         return "its build configuration differs (or is unknown)"
-    why = driver_differs(rec, fact)
+    why = env_differs(rec, fact, env or {})
     if why:
         return why
     d = rec.get("declaration")
@@ -324,7 +330,7 @@ def red_stands(rec, fact, reach, cfg):
     return None
 
 
-def behind_stands(rec, fact, reach, cfg, at):
+def behind_stands(rec, fact, reach, cfg, at, env=None):
     """Why the NOT-RUN-behind record `rec` does NOT stand (None when it does: SERVED-RED). URGENT #123: a row ctest did
     not run because a row it needs went red (gate_runlog's `behind`) has no answer of its own, and running its call again
     runs nothing while that row stays red - 8B's plan listed such a part seven times. So it stands as a red, NOT RUN behind
@@ -333,7 +339,7 @@ def behind_stands(rec, fact, reach, cfg, at):
     newest last: a fixture re-run green frees it)."""
     if not reach.same_tree(rec["tip"]["studio"]):
         return "a not-run of an ancestor's tree"
-    why = red_stands(dict(rec, verdict="FAIL"), fact, reach, cfg)
+    why = red_stands(dict(rec, verdict="FAIL"), fact, reach, cfg, env)
     if why:
         return why
     for f in rec.get("behind") or ():
@@ -343,17 +349,17 @@ def behind_stands(rec, fact, reach, cfg, at):
     return None
 
 
-def classify(rec, fact, row, reach, a_fork, tip_fork, cfg, at=None):
+def classify(rec, fact, row, reach, a_fork, tip_fork, cfg, at=None, env=None):
     """("served", None) | ("red", None) | ("run", why) for the row's newest record `rec` at the tip (`at`: every row's
     records at the commit `rec` is from - read for a NOT RUN behind its fixture)."""
     if rec.get("verdict") == "NOTRUN" and rec.get("behind"):
-        why = behind_stands(rec, fact, reach, cfg, at or {})
+        why = behind_stands(rec, fact, reach, cfg, at or {}, env)
         return ("red", None) if why is None else ("run", f"NOT RUN behind {', '.join(rec['behind'])}; {why}")
     if rec.get("verdict") in RED_RESULTS:
-        why = red_stands(rec, fact, reach, cfg)
+        why = red_stands(rec, fact, reach, cfg, env)
         return ("red", None) if why is None else ("run", why if "ancestor" in why or why.startswith("NO VERDICT") else
                                                   f"its newest record is {rec.get('verdict')} ({(rec.get('failLine') or '')[:120]}); {why}")
-    why = why_not(rec, fact, row, reach, a_fork, tip_fork, cfg)
+    why = why_not(rec, fact, row, reach, a_fork, tip_fork, cfg, env)
     return ("run", why) if why else ("served", None)
 
 
@@ -371,6 +377,7 @@ def serve(build, tip, rows):
     tip_fork = next((fk for c, _, fk in cands if c == tip), None) or \
         _git(["rev-parse", f"{_git(['rev-parse', f'{tip}:irisgl'], gs.ROOT)}:thirdparty/ogre-next"],
              os.path.join(gs.ROOT, "irisgl"))
+    env = gate_runlog.env_fingerprint(build)   # 5.3: the environment of now, the build's compiler and Qt
     served, run, red = {}, {}, {}
     for row in rows:
         labels = set((reach.labels_inv().get(row) or {}).get("labels") or ())
@@ -382,7 +389,7 @@ def serve(build, tip, rows):
             run[row] = "no record of it at the tip or an ancestor"
             continue
         rec = got[hit[0]][row][-1]
-        kind, why = classify(rec, facts.get(row), row, reach, hit[1], tip_fork, cfg, got[hit[0]])
+        kind, why = classify(rec, facts.get(row), row, reach, hit[1], tip_fork, cfg, got[hit[0]], env)
         if kind == "run":
             run[row] = f"{hit[0][:9]}: {why}"
         elif kind == "red":

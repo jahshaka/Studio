@@ -26,9 +26,24 @@ class Reach:
         return self.reaches
 
 
-def rec(verdict, cfg="cfg", decl="d", data="h"):
+# THE ENVIRONMENT (WORKFLOW-STREAMLINE-1 5.3): the records' and now's fingerprint, made by the tree's own gate_runlog from faked
+# fields (JAH_ENV_FINGERPRINT: the box never read) - the card's hash (every field) and the CPU's (the compiler and Qt)
+import gate_runlog as grl  # noqa: E402
+
+
+def fp(**kw):
+    os.environ["JAH_ENV_FINGERPRINT"] = ",".join(f"{k}={v}" for k, v in dict({"driver": "d1", "compiler": "GNU 15", "qt": "6.10",
+                                                                               "kernel": "k1"}, **kw).items())
+    grl._ENV.clear()
+    return grl.env_fingerprint("/nonexistent")
+
+
+ENV = fp()
+
+
+def rec(verdict, cfg="cfg", decl="d", data="h", env=ENV):
     return {"suite": "gi.row", "verdict": verdict, "failLine": "FAIL: the law", "tip": {"studio": "a" * 40}, "config": {"hash": cfg},
-            "declaration": {"hash": decl}, "data_hash": data, "run": "run-1", "seconds": 3.0, "tier": "lane"}
+            "declaration": {"hash": decl}, "data_hash": data, "run": "run-1", "seconds": 3.0, "tier": "lane", "env": env}
 
 
 FACT = {"declaration": {"hash": "d"}, "data_hash": "h", "labels": ["gi"]}
@@ -43,7 +58,7 @@ def want(name, got, kind, why_has=None):
         fails.append(name)
 
 
-C = lambda r, reach, fact=FACT, cfg=CFG: cgc.classify(r, fact, "gi.row", reach, "fk", "fk", cfg)
+C = lambda r, reach, fact=FACT, cfg=CFG, env=ENV: cgc.classify(r, fact, "gi.row", reach, "fk", "fk", cfg, None, env)
 for v in ("FAIL", "TIMEOUT", "CRASH"):
     want("a %s at THIS tree, the same configuration, declaration and data: SERVED-RED" % v, C(rec(v), Reach(True)), "red")
 # AN ANCESTOR's RED (TEST-STREAMLINE-1, the stage-1 audit's finding 2): it runs only where the diff since REACHES the row - the
@@ -60,12 +75,29 @@ want("a FAIL at this tree of a row out of the inventory: runs", C(rec("FAIL"), R
 want("a PASS at this tree serves as before", C(rec("PASS"), Reach(True)), "served")
 want("a PASS at an ancestor the range does not reach serves as before", C(rec("PASS"), Reach(False)), "served")
 want("a PASS at an ancestor the range reaches runs", C(rec("PASS"), Reach(False, reaches={"gi.row"})), "run", "reaches")
+# THE ENVIRONMENT IS AN INPUT (5.3; #167's driver one field): a card row's record answers only at an equal whole fingerprint, the
+# field that moved named; a CPU row's (the label `code`) at an equal compiler and Qt (RED ON BASE: the kernel and the compiler unread)
+CPU = dict(FACT, labels=["code"])
+want("a PASS of a card row taken on another driver runs, the driver named", C(rec("PASS", env=fp(driver="d0")), Reach(True)), "run",
+     "the driver d0 -> d1")
+want("a FAIL of a card row taken on another kernel is not served red: it runs", C(rec("FAIL", env=fp(kernel="k0")), Reach(True)),
+     "run", "the kernel k0 -> k1")
+want("a PASS of a CPU row taken under another kernel and driver still serves", C(rec("PASS", env=fp(kernel="k0", driver="d0")),
+     Reach(True), fact=CPU), "served")
+want("a PASS of a CPU row taken under another compiler runs, the compiler named", C(rec("PASS", env=fp(compiler="GNU 14")),
+     Reach(True), fact=CPU), "run", "the compiler GNU 14 -> GNU 15")
+want("a record with no fingerprint (written before it) never serves", C(dict(rec("PASS"), env=None), Reach(True)), "run",
+     "no environment fingerprint")
+ENV = fp()
+# NO VERDICT (5.2): a TIMEOUT marked no_verdict (cold, or at its cap edge: gate_runlog.no_verdict) is never served red: it runs
+want("a TIMEOUT at THIS tree marked NO VERDICT (cold): it runs, never SERVED-RED",
+     C(dict(rec("TIMEOUT"), no_verdict="cold: cold at k: no warm-up recorded"), Reach(True)), "run", "NO VERDICT")
 for v in ("NOTRUN", "NOADMIT"):
     want("a %s is not a result: never served-red (it runs)" % v, C(rec(v), Reach(True)), "run")
 # NOT RUN BEHIND ITS FIXTURE (URGENT #123): a row ctest did not run because a row it needs is red stands as a red while
 # that row is red at the same commit - its part is never listed to run for nothing - and runs once that row is not
 behind = dict(rec("NOTRUN"), behind=["gi.fixture"], failLine="NOT RUN behind gi.fixture")
-B = lambda r, reach, at: cgc.classify(r, FACT, "gi.row", reach, "fk", "fk", CFG, at)
+B = lambda r, reach, at: cgc.classify(r, FACT, "gi.row", reach, "fk", "fk", CFG, at, ENV)
 want("NOT RUN behind a fixture red at this tree: SERVED-RED", B(behind, Reach(True), {"gi.fixture": [rec("FAIL")]}), "red")
 want("NOT RUN behind a fixture that TIMED OUT at this tree: SERVED-RED", B(behind, Reach(True),
      {"gi.fixture": [rec("TIMEOUT")]}), "red")

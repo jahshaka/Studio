@@ -207,24 +207,32 @@ def gpu_clocks():
 
 CODE_LABEL = "code"              # the derived label of a row that takes no card (tests/CMakeLists.txt jah_code_label_pass)
 _NVRM = re.compile(r"\bKernel Module\b.*?\s(\d+\.\d+(?:\.\d+)?)\s")
-_DRIVER = []
+# THE ENVIRONMENT FINGERPRINT (WORKFLOW-STREAMLINE-1 5.3; it generalises URGENT #167, where the driver 595.91.07 -> 595.99.02
+# after 16:51's crash let PHOTON-7-9A's call be served from the faulted run's records). A record's verdict is the environment's
+# too: every record carries `env` = {card, cpu, fields}; a CARD row (no `code` label) is served - green or red - only at an
+# equal `card` hash (the driver, the compiler VERSION, Qt, the Vulkan loader and its layers, the kernel), a CPU row at an equal
+# `cpu` hash (the compiler and Qt alone). Read once a process, from files (no card call): the driver from
+# /proc/driver/nvidia/version (else nvidia-smi), the compiler's id and version from the build's CMakeFiles/<v>/
+# CMakeCXXCompiler.cmake (its PATH, /usr/bin/c++, names no version: a GCC update kept every key), Qt from the cache's Qt6_DIR
+# (Qt6ConfigVersionImpl.cmake's PACKAGE_VERSION), the loader from libvulkan.so.1's real name, each layer manifest's name,
+# implementation and API versions (VVL 1.4.341's false VUID moved a validation row's verdict: GATE_AND_RIG), the kernel's
+# release. A field that cannot be read is "?" (equal only to "?": the same unreadable box). JAH_ENV_FINGERPRINT (the suites'
+# one override, "driver=toy-A,kernel=k1"): the fields named, every other "-" - a suite never reads the real box.
+ENV_FIELDS = ("driver", "compiler", "qt", "vulkan", "layers", "kernel")
+CPU_FIELDS = ("compiler", "qt")
+_ENV = {}
 
 
-def card_driver():
-    """THE CARD's DRIVER (URGENT #167): the NVIDIA driver version a card row's verdict was taken on - a part of its record's
-    key (ci_gate_check.py serve: a card row is served, green or red, only at an EQUAL known driver; 16:51's crash, the driver
-    595.91.07 -> 595.99.02, and PHOTON-7-9A's call 13 was served from the faulted run's records). Read once a process:
-    JAH_GPU_DRIVER (the suites' override - a suite never reads the real card), else /proc/driver/nvidia/version (the
-    loaded kernel module: no card call), else nvidia-smi; None unknown (never equal)."""
-    if _DRIVER:
-        return _DRIVER[0]
-    v = os.environ.get("JAH_GPU_DRIVER") or None
-    if v is None:
-        try:
-            m = _NVRM.search(open("/proc/driver/nvidia/version").read())
-            v = m.group(1) if m else None
-        except OSError:
-            v = None
+def _first(path, rx):
+    try:
+        m = re.search(rx, open(path, errors="replace").read(), re.M)
+        return m.group(1) if m else None
+    except OSError:
+        return None
+
+
+def _driver():
+    v = _first("/proc/driver/nvidia/version", _NVRM.pattern)
     if v is None:
         try:
             r = subprocess.run(["nvidia-smi", "--query-gpu=driver_version", "--format=csv,noheader"], capture_output=True,
@@ -232,8 +240,60 @@ def card_driver():
             v = (r.stdout.strip().splitlines() or [None])[0] if r.returncode == 0 else None
         except (OSError, subprocess.TimeoutExpired):
             v = None
-    _DRIVER.append(v)
     return v
+
+
+def _layers():
+    out = []
+    for d in ("/usr/share/vulkan/explicit_layer.d", "/usr/share/vulkan/implicit_layer.d", "/etc/vulkan/explicit_layer.d",
+              "/etc/vulkan/implicit_layer.d"):
+        for f in sorted(os.listdir(d)) if os.path.isdir(d) else ():
+            try:
+                doc = json.load(open(os.path.join(d, f)))
+            except (OSError, ValueError):
+                continue
+            for l in ([doc["layer"]] if "layer" in doc else doc.get("layers") or []):
+                out.append(f"{l.get('name')}:{l.get('implementation_version')}:{l.get('api_version')}")
+    return ";".join(sorted(out)) or None
+
+
+def env_fields(build):
+    """{field: value} of ENV_FIELDS for `build` (the header above); cached per build a process."""
+    if build in _ENV:
+        return _ENV[build]
+    ov = os.environ.get("JAH_ENV_FINGERPRINT")
+    if ov is not None:
+        got = dict(kv.split("=", 1) for kv in ov.split(",") if "=" in kv)
+        f = {k: got.get(k, "-") for k in ENV_FIELDS}
+    else:
+        cache = os.path.join(build or "", "CMakeCache.txt")
+        comp = None
+        for p in sorted(os.listdir(os.path.join(build, "CMakeFiles"))) if build and os.path.isdir(os.path.join(build, "CMakeFiles")) else ():
+            c = os.path.join(build, "CMakeFiles", p, "CMakeCXXCompiler.cmake")
+            i, v = _first(c, r'^set\(CMAKE_CXX_COMPILER_ID "([^"]*)"\)'), _first(c, r'^set\(CMAKE_CXX_COMPILER_VERSION "([^"]*)"\)')
+            if v:
+                comp = f"{i} {v}"
+        qd = _first(cache, r"^Qt6_DIR:PATH=(.*)$")
+        qt = None
+        for n in ("Qt6ConfigVersionImpl.cmake", "Qt6ConfigVersion.cmake"):
+            qt = qt or (_first(os.path.join(qd, n), r'^set\(PACKAGE_VERSION "([^"]*)"\)') if qd else None)
+        lv = None
+        for lib in ("/usr/lib/x86_64-linux-gnu/libvulkan.so.1", "/usr/lib64/libvulkan.so.1", "/usr/lib/libvulkan.so.1"):
+            if os.path.exists(lib):
+                lv = os.path.basename(os.path.realpath(lib)).replace("libvulkan.so.", "")
+                break
+        f = {"driver": _driver(), "compiler": comp, "qt": qt, "vulkan": lv, "layers": _layers(), "kernel": os.uname().release}
+        f = {k: (v if v else "?") for k, v in f.items()}
+    _ENV[build] = f
+    return f
+
+
+def env_fingerprint(build):
+    """{card, cpu, fields}: the hash of every field (a card row's key) and of CPU_FIELDS alone (a CPU row's)."""
+    import hashlib
+    f = env_fields(build)
+    h = lambda ks: hashlib.sha256("\n".join(f"{k}={f[k]}" for k in ks).encode()).hexdigest()[:16]   # noqa: E731
+    return {"card": h(ENV_FIELDS), "cpu": h(CPU_FIELDS), "fields": f}
 
 
 # A TIMEOUT THAT MEASURED THE ENVIRONMENT IS NO VERDICT (WORKFLOW-STREAMLINE-1 5.2, the owner 2026-11-20; 144 TIMEOUTs since 10-13
@@ -489,7 +549,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
         base = {"schema": SCHEMA, "run": run_id, "tier": tier, "lanes": [lane], "tip": shas, "suite": name,
                 "labels": sorted(f.get("labels") or []), "declaration": f.get("declaration"),
                 "data_hash": f.get("data_hash"), "config": config, "display": display, "nulls": nulls,
-                "driver": card_driver(),
+                "env": env_fingerprint(build),
                 "ts": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "source": "run"}
         v = verdict_of(status)
         row = dict(base, arm=None, verdict=v, status=status.strip("* "), seconds=secs)
