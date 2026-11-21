@@ -327,11 +327,42 @@ endif()
 
 # app.gate_settle — THE STARTUP GATE's SETTLE ON PUBLISHED STATE (COLD-BOOT-1 stage 4; test_gate_settle.cpp says the
 # laws): a frame is settled when the background compiler is idle and the frame deferred no dispatch, drew no placeholder
-# and skipped no draw - the ray builds too in a world phase; the hang guard counts the WALL with nothing moving, never
-# frames. A header-only pure function: CPU, no engine, no display.
+# and skipped no draw - the ray builds too in a world phase; the hang guard counts the WALL with nothing LANDING (a
+# deferral is no movement: the livelock's red), never frames, and the gate's ceiling ends every wait. A header-only pure
+# function: CPU, no engine, no display.
 add_executable(test_gate_settle test_gate_settle.cpp)
 set_target_properties(test_gate_settle PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
 target_include_directories(test_gate_settle PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_test(NAME app.gate_settle COMMAND test_gate_settle)
 set_tests_properties(app.gate_settle PROPERTIES TIMEOUT 60 LABELS "scripting")
 jah_no_display(app.gate_settle)
+
+# app.window_answers — THE WINDOW ANSWERS THROUGHOUT THE STARTUP GATE (COLD-BOOT-1 stage 4, the lead's acceptance (a);
+# window_answers.js says the law): a VIRGIN home's boot (the subject: the gate compiles the startup set cold,
+# --clear-shader-cache) and a script whose first act reads the UI thread's heartbeat - started by the watchdog before
+# the gate, never reset - whose worst gap must stay under two of its own 250-ms ticks. THE DRIVER's CACHE IS THE ROW's OWN
+# (samples.cold_open.import's reason, URGENT #152): outside the wiped home, primed by the warm-up's cold-on boot (COLD
+# below; that uncapped boot is the driver-cold gate, the 104-s freeze of spikes/cold-boot-1/S1b), so the row's own boot
+# is the driver-warm first launch after a wipe, inside the cap. RED on the gate that compiled in its frames (2,187 ms).
+set(_whome ${CMAKE_CURRENT_BINARY_DIR}/home-window-answers)
+set(_wdriver ${CMAKE_CURRENT_BINARY_DIR}/window-answers-driver-cache)
+file(MAKE_DIRECTORY ${_whome}/run ${_wdriver})
+set(_wenv env HOME=${_whome} JAHSHAKA_DATA_ROOT=${_whome}/.local/share/Jahshaka __GL_SHADER_DISK_CACHE_PATH=${_wdriver}
+          JAHSHAKA_SHADER_SEED=none)
+configure_file(window_answers.js ${CMAKE_CURRENT_BINARY_DIR}/window_answers.js COPYONLY)
+jah_fresh_home_fixture(app.window_answers.fresh_home appWindowAnswersHome "${_whome}" LABELS scripting)
+jah_gpu_row(app.window_answers CLASS app TIER document
+         COLD "a virgin home's gate compiles the startup set cold (the subject) - its driver cache is the row's own, primed here"
+         COMMAND ${_wenv} $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --clear-shader-cache
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/window_answers.js
+         WORKING_DIRECTORY ${_whome}/run)
+set_tests_properties(app.window_answers PROPERTIES
+    ENVIRONMENT "HOME=${_whome};JAHSHAKA_DATA_ROOT=${_whome}/.local/share/Jahshaka;JAHSHAKA_SHADER_SEED=none"
+    LABELS "scripting"
+    TIMEOUT 60
+    FIXTURES_REQUIRED appWindowAnswersHome
+    # the first launch after a wipe is the subject: source.testing_rules R13 lets this root boot cold
+    JAHSHAKA_COLD_BY_SUBJECT TRUE)
+add_test(NAME app.window_answers.clean COMMAND sh ${JAH_FRESH_HOME} ${_whome})
+set_tests_properties(app.window_answers.clean PROPERTIES TIMEOUT 60 LABELS "scripting" FIXTURES_CLEANUP appWindowAnswersHome)
+jah_no_display(app.window_answers.clean)
