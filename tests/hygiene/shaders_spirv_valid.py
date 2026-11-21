@@ -1,34 +1,40 @@
 #!/usr/bin/env python3
-# source.shaders_spirv_valid (URGENT #89, PHOTON-7 10-4) - EVERY GENERATED SHADER IS VALID SPIR-V, NOT ONLY WHAT THE
-# DRIVER ACCEPTS. An invalid module the NVIDIA driver swallows reaches a merge unseen: the fog march's compare tap
-# (irisgl d7582e77) gave the global shadow texture a depth image type that getShadow's parameter did not have, five of
-# the self-test's 100 pixel shaders passed a mismatched OpFunctionCall argument, and only the validation layer's row
-# (app.engine_selftest_validation, VUID-VkShaderModuleCreateInfo-pCode-08737) saw it, a day later.
+# source.shaders_spirv_valid (URGENT #89, PHOTON-7 10-4; REBUILT on the engine's own bytes, NONDET-1's F3, 2026-11-21) - EVERY
+# SHADER MODULE THE ENGINE RAN IS VALID SPIR-V, NOT ONLY WHAT THE DRIVER ACCEPTS. An invalid module the NVIDIA driver swallows
+# reaches a merge unseen: the fog march's compare tap (irisgl d7582e77) gave the global shadow texture a depth image type that
+# getShadow's parameter did not have, five of the self-test's 100 pixel shaders passed a mismatched OpFunctionCall argument,
+# and only the validation layer's row (app.engine_selftest_validation, VUID-VkShaderModuleCreateInfo-pCode-08737) saw it.
 #
-# WHAT IT READS: the HLMS PERMUTATIONS THE TREE'S APP WARM-UP GENERATED - scripts/warm-app-cache.sh boots
-# `Jahshaka --engine-selftest` (the app's startup warm-up gate, the born World's set at Epic, plus the self-test's six
-# poses) with JAHSHAKA_HLMS_DEBUG_DIR=<build>/tests/.hlms-dump/ and stamps the dump with the cache key it was made at.
-# The row refuses a dump that is not the current key's (a cold cache: run scripts/warm-app-cache.sh <build>; every
-# spec.sh call warms it first).
-# WHAT IT DOES: each dumped vertex and pixel shader through glslang (the build's) with Ogre's Vulkan preamble emulated
-# (OgreVulkanProgram.cpp getPreamble / addVertexSemanticsToPreamble; every root-layout slot macro given its own binding),
-# then spirv-val --relax-block-layout --target-env vulkan1.2 - the validation layer's own check - in parallel; any
-# compile failure or invalid module is red, named. FIRST, THE NEGATIVE CONTROL: the fault's own pattern, which must be
-# found invalid (a lint that cannot fail guards nothing).
-import concurrent.futures
-import glob
-import os
-import re
-import shutil
-import subprocess
-import sys
-import tempfile
+# WHAT IT READS - THE BYTES THE ENGINE CREATED ITS MODULES FROM, at the build's cache key:
+#   (1) every entry of the tree's two warm MICROCODE CACHES - <build>/tests/.shadercache/microcode.cache (the app's warm-up)
+#       and <build>/tests/.shadercache-engine/microcode.cache (the engine rows'): Ogre's file (uint32 count; per entry a
+#       16-byte hash, a uint32 length, the blob), each blob the fork's JRL0 frame (OgreVulkanProgram.cpp:317-430: the magic
+#       'JRL0', the per-binding-type array-range keys, the SPIR-V) - vertex, pixel AND COMPUTE (Hlms compute, Photon, the
+#       gather's Hlms side): the old row re-compiled the app warm-up's GLSL DUMP, which holds no compute module at all
+#       (JAHSHAKA_HLMS_DEBUG_DIR reaches the PBS and Atom Hlms only, OgreEngine.cpp:4296-4298; NONDET-1 F3);
+#   (2) THE RAY TIER's BUILT-IN SPIR-V, compiled into the engine at build time (<build>/engine/generated/rayquery/*_spv.h,
+#       glslangValidator --target-env spirv1.4): no disk cache holds it.
+# A cache whose warm stamp is not this build's key is REFUSED (run scripts/warm-app-cache.sh <build>; spec.sh warms first).
+# WHAT IT DOES: each module (deduplicated by its bytes) through spirv-val --relax-block-layout --target-env vulkan1.2 - the
+# validation layer's own check - in parallel over our CPUs; its stage read from its OpEntryPoint. Every invalid module is
+# RED, named (its source, its cache hash, its stage, spirv-val's line); a frame the parser cannot read is RED (a format the
+# row no longer understands validates nothing). FIRST, THE NEGATIVE CONTROLS: the fault's own pattern, compiled by the
+# build's glslang and wrapped in a synthetic JRL0 frame of a synthetic cache, must be found INVALID through the same path; a
+# truncated cache must be refused.
+# WHAT THE DELETED GLSL DUMP PROVED THAT THE BLOBS DO NOT: ONE thing - that each dumped vertex/pixel permutation COMPILES under
+# our emulated preamble (a permutation the engine failed to compile leaves no module in any cache; the engine counts its compile
+# failures itself: the self-test's line, quoted with the six). Nothing else: its coverage was a subset (the app warm-up's vertex
+# and pixel shaders only), and a module no warm-up and no row created is in neither the dump nor a cache.
+import concurrent.futures, glob, hashlib, os, re, shutil, struct, subprocess, sys, tempfile
 
 src, build = sys.argv[1], sys.argv[2]
 glslang = sys.argv[3] if len(sys.argv) > 3 else (shutil.which("glslangValidator") or "/usr/bin/glslangValidator")
 spirv_val = shutil.which("spirv-val")
 tests = os.path.join(build, "tests")
-dump = os.path.join(tests, ".hlms-dump")
+CACHES = (("app", os.path.join(tests, ".shadercache", "microcode.cache"), "app-off"),
+          ("engine", os.path.join(tests, ".shadercache-engine", "microcode.cache"), "engine-off"))
+JRL0 = 0x304C524A
+MODELS = {0: "vert", 1: "tesc", 2: "tese", 3: "geom", 4: "frag", 5: "comp", 5267: "task", 5268: "mesh"}
 
 
 def fail(msg):
@@ -37,49 +43,82 @@ def fail(msg):
 
 
 if not spirv_val or not os.path.isfile(glslang):
-    fail("needs glslangValidator (%s) and spirv-val (the Vulkan SDK's / spirv-tools)" % glslang)
-
-PRE = ["#extension GL_EXT_samplerless_texture_functions : require", "#define vulkan_layout layout",
-       "#define vulkan( x ) x", "#define vk_comma ,", "#define vkSampler1D sampler1D", "#define vkSampler2D sampler2D",
-       "#define vkSampler2DArray sampler2DArray", "#define vkSampler3D sampler3D", "#define vkSamplerCube samplerCube"]
-_k = 0
-for _x in "BRtsTuUPC":
-    for _i in range(64):
-        PRE.append("#define ogre_%s%d set = 0, binding = %d" % (_x, _i, _k))
-        _k += 1
-VS_PRE = ["#define OGRE_POSITION location = 0", "#define OGRE_BLENDWEIGHT location = 1",
-          "#define OGRE_BLENDINDICES location = 2", "#define OGRE_BLENDWEIGHT2 location = 3",
-          "#define OGRE_BLENDINDICES2 location = 4", "#define OGRE_NORMAL location = 5", "#define OGRE_DIFFUSE location = 6",
-          "#define OGRE_SPECULAR location = 7", "#define OGRE_BINORMAL location = 8", "#define OGRE_TANGENT location = 9",
-          "#define OGRE_DRAWID location = 15u"] + ["#define OGRE_TEXCOORD%d location = %d" % (j, 16 + j) for j in range(8)]
+    fail("needs glslangValidator (%s) and spirv-val (spirv-tools)" % glslang)
 
 
-def check(path, stage, text=None):
-    """(name, None) valid; (name, why) not."""
-    name = os.path.basename(path)
-    lines = (text if text is not None else open(path, errors="replace").read()).split("\n")
-    vi = [i for i, l in enumerate(lines) if l.strip().startswith("#version")]
-    if not vi:
-        return name, "no #version line"
-    vi = vi[0]
-    pre = PRE + (VS_PRE if stage == "vert" else [])
-    with tempfile.TemporaryDirectory(prefix="spv-") as d:
-        g, o = os.path.join(d, "s." + stage), os.path.join(d, "s.spv")
-        open(g, "w").write("\n".join(lines[vi:vi + 1] + pre + lines[vi + 1:]))
-        r = subprocess.run([glslang, "-V", "--target-env", "vulkan1.2", "-S", stage, "-o", o, g], capture_output=True,
+def read_cache(path):
+    """[(hash hex, spirv bytes)] of an Ogre microcode.cache of JRL0 frames; raises ValueError naming the first entry the
+    parser cannot read (a short file, a frame with no JRL0 magic, a SPIR-V size past its blob, trailing bytes)."""
+    data = open(path, "rb").read()
+    if len(data) < 4:
+        raise ValueError("%s: %d bytes, no entry count" % (path, len(data)))
+    n = struct.unpack_from("<I", data, 0)[0]
+    off, out = 4, []
+    for i in range(n):
+        if off + 20 > len(data):
+            raise ValueError("%s: entry %d of %d starts past the end (%d of %d bytes)" % (path, i, n, off, len(data)))
+        h = data[off:off + 16].hex()
+        ln = struct.unpack_from("<I", data, off + 16)[0]
+        off += 20
+        blob = data[off:off + ln]
+        if len(blob) != ln:
+            raise ValueError("%s: entry %d (%s) declares %d bytes, %d left" % (path, i, h[:16], ln, len(blob)))
+        off += ln
+        if len(blob) < 8 or struct.unpack_from("<I", blob, 0)[0] != JRL0:
+            raise ValueError("%s: entry %d (%s) is not a JRL0 frame" % (path, i, h[:16]))
+        o, nt = 8, struct.unpack_from("<I", blob, 4)[0]
+        for _ in range(nt):
+            c = struct.unpack_from("<I", blob, o)[0]
+            o += 4 + 4 * c
+        sz = struct.unpack_from("<I", blob, o)[0]
+        o += 4
+        if o + sz != len(blob):
+            raise ValueError("%s: entry %d (%s): its SPIR-V (%d bytes at %d) does not end its frame (%d)" % (
+                path, i, h[:16], sz, o, len(blob)))
+        out.append((h, blob[o:o + sz]))
+    if off != len(data):
+        raise ValueError("%s: %d trailing bytes after %d entries" % (path, len(data) - off, n))
+    return out
+
+
+def stage_of(spv):
+    """The first OpEntryPoint's execution model, else '?'."""
+    if len(spv) < 20 or struct.unpack_from("<I", spv, 0)[0] != 0x07230203:
+        return "?"
+    o = 20
+    while o + 4 <= len(spv):
+        w = struct.unpack_from("<I", spv, o)[0]
+        wc, op = w >> 16, w & 0xFFFF
+        if wc == 0:
+            return "?"
+        if op == 15:
+            return MODELS.get(struct.unpack_from("<I", spv, o + 4)[0], "?")
+        o += 4 * wc
+    return "?"
+
+
+def validate(spv):
+    """None valid; else spirv-val's first two lines."""
+    with tempfile.NamedTemporaryFile(suffix=".spv") as f:
+        f.write(spv)
+        f.flush()
+        v = subprocess.run([spirv_val, "--relax-block-layout", "--target-env", "vulkan1.2", f.name], capture_output=True,
                            text=True)
-        if r.returncode != 0:
-            errs = [l for l in r.stdout.split("\n") if "ERROR" in l][:2]
-            return name, "glslang: " + " | ".join(errs)
-        v = subprocess.run([spirv_val, "--relax-block-layout", "--target-env", "vulkan1.2", o], capture_output=True,
-                           text=True)
-        if v.returncode != 0:
-            return name, "spirv-val: " + " | ".join((v.stderr or v.stdout).strip().split("\n")[:2])
-    return name, None
+    return None if v.returncode == 0 else " | ".join((v.stderr or v.stdout).strip().split("\n")[:2])
 
 
-# ---- THE NEGATIVE CONTROL: the fault's own pattern (a global texture used directly in a comparison sampler's constructor
-# and passed to a function's texture2D parameter) must be found invalid
+def jrl0_cache(path, spvs):
+    """A synthetic microcode.cache of JRL0 frames (no binding-type ranges) - the negative controls' input."""
+    with open(path, "wb") as f:
+        f.write(struct.pack("<I", len(spvs)))
+        for i, spv in enumerate(spvs):
+            blob = struct.pack("<II", JRL0, 0) + struct.pack("<I", len(spv)) + spv
+            f.write(hashlib.md5(b"%d" % i).digest() + struct.pack("<I", len(blob)) + blob)
+
+
+# ---- THE NEGATIVE CONTROLS: the fault's own pattern (a global texture used directly in a comparison sampler's constructor
+# and passed to a function's texture2D parameter), compiled by the build's glslang, wrapped in a JRL0 frame, read back by
+# read_cache and found INVALID; and a truncated cache refused
 CONTROL = """#version 460 core
 layout( set = 0, binding = 0 ) uniform texture2D texShadowMap0;
 layout( set = 0, binding = 1 ) uniform samplerShadow shadowSampler;
@@ -91,37 +130,71 @@ void main()
     outColour = vec4( direct + tap( texShadowMap0, shadowSampler, vec2( 0.5 ), 0.5 ) );
 }
 """
-_, why = check("negative-control.frag", "frag", CONTROL)
-if why is None:
-    fail("the negative control (the fog march's fault pattern) was found VALID: the check cannot see the class it guards")
-print("  ok   the negative control (the fault's pattern) is found invalid: %s" % why[:160])
+with tempfile.TemporaryDirectory(prefix="spv-control-") as d:
+    g, o, c = os.path.join(d, "c.frag"), os.path.join(d, "c.spv"), os.path.join(d, "microcode.cache")
+    open(g, "w").write(CONTROL)
+    r = subprocess.run([glslang, "-V", "-S", "frag", "-o", o, g], capture_output=True, text=True)
+    if r.returncode != 0 or not os.path.isfile(o):
+        fail("the negative control does not compile with %s: %s" % (glslang, r.stdout.strip()[-200:]))
+    jrl0_cache(c, [open(o, "rb").read()])
+    mods = read_cache(c)
+    why = validate(mods[0][1]) if len(mods) == 1 else "read %d modules" % len(mods)
+    if why is None or stage_of(mods[0][1]) != "frag":
+        fail("the negative control (the fog march's fault pattern, in a JRL0 frame) was found VALID or not a pixel shader "
+             "(%s): the check cannot see the class it guards" % stage_of(mods[0][1]))
+    print("  ok   the negative control (the fault's pattern, framed as the engine frames it) is found invalid: %s" % why[:140])
+    data = open(c, "rb").read()
+    open(c, "wb").write(data[:len(data) - 7])
+    try:
+        read_cache(c)
+        fail("a truncated cache was READ: the parser would validate a part of a module and call it whole")
+    except ValueError as e:
+        print("  ok   a truncated cache is refused: %s" % str(e).split(": ", 1)[-1][:120])
 
-# ---- THE DUMP, at the current key
-key = None
-# the app-off boot's answer alone: the dump is that boot's (scripts/warm-app-cache.sh, the two-boot law)
-r = subprocess.run(["bash", os.path.join(src, "scripts", "warm-app-cache.sh"), build, "--check", "--only", "app-off"],
-                   capture_output=True, text=True)
-m = re.search(r"(?:warm|cold) at ([0-9a-f]{16})", r.stdout)
-key = m.group(1) if m else None
-if r.returncode != 0 or not key:
-    fail("the shared app cache is not warm at this build's key (%s): run scripts/warm-app-cache.sh %s - its boot dumps "
-         "the permutations this row validates" % ((r.stdout.strip() or r.stderr.strip())[:200], build))
-stamp = os.path.join(dump, ".key")
-if not os.path.isfile(stamp) or open(stamp).read().strip() != key:
-    fail("no permutation dump at the current key %s (%s): run scripts/warm-app-cache.sh %s after removing its stamp "
-         "%s/.shadercache.warm-key, or let the next spec.sh call warm" % (key, stamp, build, tests))
-files = [(f, "vert") for f in sorted(glob.glob(os.path.join(dump, "*VertexShader_vs.glsl")))] + \
-        [(f, "frag") for f in sorted(glob.glob(os.path.join(dump, "*PixelShader_ps.glsl")))]
-if len([f for f, s in files if s == "frag"]) < 10:
-    fail("the dump at %s holds %d pixel shaders - the warm-up's boot generates ~100" % (dump, len(files)))
+# ---- THE CACHES, each at the current key
+modules = {}   # spirv sha -> [stage, [(source, hash)], spv]
+for name, path, boot in CACHES:
+    r = subprocess.run(["bash", os.path.join(src, "scripts", "warm-app-cache.sh"), build, "--check", "--only", boot],
+                       capture_output=True, text=True)
+    if r.returncode != 0:
+        fail("the %s cache is not warm at this build's key (%s): run scripts/warm-app-cache.sh %s --only %s - its boot fills "
+             "the cache this row validates" % (name, (r.stdout.strip() or r.stderr.strip())[:200], build, boot))
+    if not os.path.isfile(path):
+        fail("no %s microcode cache at %s although its warm-up says warm" % (name, path))
+    try:
+        entries = read_cache(path)
+    except ValueError as e:
+        fail("the %s cache cannot be read: %s" % (name, e))
+    for h, spv in entries:
+        k = hashlib.sha256(spv).hexdigest()
+        modules.setdefault(k, [stage_of(spv), [], spv])[1].append((name, h[:16]))
+# ---- THE RAY TIER's BUILT-INS
+rq = sorted(glob.glob(os.path.join(build, "engine", "generated", "rayquery", "*_spv.h")))
+if not rq:
+    fail("no ray-tier SPIR-V under %s/engine/generated/rayquery (build the tree)" % build)
+for f in rq:
+    words = [int(w, 16) for w in re.findall(r"0x[0-9a-fA-F]{8}", open(f).read())]
+    spv = struct.pack("<%dI" % len(words), *words)
+    k = hashlib.sha256(spv).hexdigest()
+    modules.setdefault(k, [stage_of(spv), [], spv])[1].append(("rayquery", os.path.basename(f)[:-6]))
+counts = {}
+for st, srcs, _ in modules.values():
+    for s in {s for s, _ in srcs}:
+        counts.setdefault(s, {}).setdefault(st, 0)
+        counts[s][st] += 1
+if not counts.get("app", {}).get("frag") or not counts.get("engine", {}).get("comp"):
+    fail("the caches hold no app pixel shader or no engine compute module (%s): not a warm-up's cache" % counts)
+workers = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else (os.cpu_count() or 4)
 bad = []
-with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, os.cpu_count() or 4)) as ex:
-    for name, why in ex.map(lambda fs: check(*fs), files):
+with concurrent.futures.ThreadPoolExecutor(max_workers=workers) as ex:
+    for k, why in zip(list(modules), ex.map(lambda k: validate(modules[k][2]), list(modules))):
         if why:
-            bad.append((name, why))
-for name, why in bad:
-    print("  FAIL %s: %s" % (name, why[:300]))
-print("%s: %d shaders (%d vertex, %d pixel) of the warm-up's dump at key %s, %d invalid" %
-      ("FAIL" if bad else "PASS", len(files), len([1 for f, s in files if s == "vert"]),
-       len([1 for f, s in files if s == "frag"]), key, len(bad)))
+            bad.append((k, why))
+for k, why in bad:
+    st, srcs, _ = modules[k]
+    print("  FAIL %s module %s (%s): %s" % (st, k[:16], ", ".join("%s %s" % s for s in srcs[:3]), why[:300]))
+for s in sorted(counts):
+    print("  %-8s %s" % (s, ", ".join("%s %d" % (st, n) for st, n in sorted(counts[s].items()))))
+print("%s: %d distinct modules (the app and engine caches at their keys, the ray tier's %d built-ins), %d invalid" %
+      ("FAIL" if bad else "PASS", len(modules), len(rq), len(bad)))
 sys.exit(1 if bad else 0)

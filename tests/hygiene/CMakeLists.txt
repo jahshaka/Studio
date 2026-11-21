@@ -198,17 +198,19 @@ if(Python3_Interpreter_FOUND)
     jah_ship_row(gate.selection)   # THE SHIP SET (TEST-CUT-1)
     set_tests_properties(gate.selection PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(gate.selection)
-    # source.shaders_spirv_valid (URGENT #89, PHOTON-7 10-4) - EVERY GENERATED SHADER IS VALID SPIR-V, not only what the
-    # driver accepts: the app warm-up's dump of its Hlms permutations (scripts/warm-app-cache.sh, at the build's cache
-    # key) through glslang and spirv-val, its negative control the fault's own pattern (shaders_spirv_valid.py says why:
-    # the fog march's depth-image mismatch the NVIDIA driver swallowed and only the validation layer's row saw).
+    # source.shaders_spirv_valid (URGENT #89, PHOTON-7 10-4; rebuilt on the engine's own bytes, NONDET-1 F3, 2026-11-21) -
+    # EVERY MODULE THE ENGINE RAN IS VALID SPIR-V, not only what the driver accepts: every entry of the two warm microcode
+    # caches (the app's and the engine rows', at the build's key: vertex, pixel AND compute) and the ray tier's built-in
+    # SPIR-V through spirv-val, its negative controls the fault's own pattern in a JRL0 frame and a truncated cache
+    # (shaders_spirv_valid.py says why, and what the old GLSL re-compile proved that this does not).
     add_test(NAME source.shaders_spirv_valid
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/shaders_spirv_valid.py"
                      "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" "${JAH_GLSLANG_VALIDATOR}")
     jah_ship_row(source.shaders_spirv_valid)   # THE SHIP SET (the lead, 2026-10-27: its dump is the ship's warm-up's)
-    # JAH_BOOTS app-off: the dump is that boot's product, so `spec.sh test` warms it before this row (a classless row asks no
-    # boot: in a fresh tree a tooling diff's call ran it before any warm-up and it went red, SHIP-CUT-2 2026-11-03)
-    set_tests_properties(source.shaders_spirv_valid PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling" JAH_BOOTS app-off)
+    # JAH_BOOTS app-off + engine-off: the two caches are those boots' products, so `spec.sh test` warms them before this row
+    # (a classless row asks no boot: in a fresh tree a tooling diff's call ran it before any warm-up and it went red,
+    # SHIP-CUT-2 2026-11-03)
+    set_tests_properties(source.shaders_spirv_valid PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling" JAH_BOOTS "app-off;engine-off")
     jah_no_display(source.shaders_spirv_valid)
     # gate.serve_red (URGENT #54) — A RED AT THE SAME INPUT IS SERVED-RED, NEVER RE-RUN: ci_gate_check.py serve's
     # decision on synthetic records (a red result at this tree with equal configuration / declaration / data hashes is

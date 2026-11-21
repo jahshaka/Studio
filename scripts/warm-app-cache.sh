@@ -348,10 +348,6 @@ if [ -n "$INHERIT" ]; then
         [ -f "$P.engine-id" ] && cp "$P.engine-id" "$M.engine-id"
         got="$got $sh_ ($(du -sh "$M" | cut -f1))"
     done
-    # the -off boot's permutation dump (source.shaders_spirv_valid), stamped with the key
-    if [ "$(cat "$PT/.hlms-dump/.key" 2>/dev/null)" = "$KEY" ] && [ "$(cat "$TESTS/.hlms-dump/.key" 2>/dev/null)" != "$KEY" ]; then
-        rm -rf "$TESTS/.hlms-dump"; cp -a "$PT/.hlms-dump" "$TESTS/.hlms-dump" && got="$got .hlms-dump"
-    fi
     [ -f "$TESTS/.warm-walls" ] || { [ -f "$PT/.warm-walls" ] && cp "$PT/.warm-walls" "$TESTS/.warm-walls"; }
     # the seeded library template (TEST-STREAMLINE-1 3a item 5), COPIED - a home writes its library in place - when the
     # parent's is at this tree's seed key (its own, not the warm key: tests/support/seed_home.sh)
@@ -643,7 +639,6 @@ cov_env() {   # <boot>: the GCOV_PREFIX assignments for env, or nothing
     case "$COVERAGE" in ON|on|1|TRUE|true) mkdir -p "$BUILD/coverage/boots/$1"
         echo "GCOV_PREFIX=$BUILD/coverage/boots/$1 GCOV_PREFIX_STRIP=0" ;; esac
 }
-DUMP="$TESTS/.hlms-dump"
 LABSCRIPT="$TESTS/warm-engine-cache.lab"
 left="$RUN"
 for b in $RUN; do
@@ -660,14 +655,10 @@ for b in $RUN; do
             [ -x "$APPX" ] || { echo "warm-app-cache: no app at $APPX" >&2; exit 2; }
             H="$TESTS/warm-app-cache-home"; FH_ARGS="--warm$(topup_args app-off)"; EXE="$APPX"
             if [ "$b" = app-off ]; then
-                # THE PERMUTATIONS THE BOOT GENERATES, DUMPED (URGENT #89): every Hlms vertex and pixel shader of the
-                # warm-up and the self-test's poses, written by the engine (JAHSHAKA_HLMS_DEBUG_DIR, OgreEngine.cpp) into
-                # <tests>/.hlms-dump and stamped with this key after a passed boot - source.shaders_spirv_valid validates
-                # them (tests/hygiene/shaders_spirv_valid.py); the dump is the boot's at this key, promoted or not
-                rm -rf "$DUMP"; mkdir -p "$DUMP"
+                # (the GLSL dump this boot once wrote for source.shaders_spirv_valid is gone, 2026-11-21: the row reads the
+                # engine's own bytes in the microcode caches - NONDET-1 F3; its tier boots' logs go to this call's logs)
                 boot app-off "$APP_SHARED" "$APP_STAMP" "$H" "$LOGS/app-off.log" "$left" \
-                    bash "$SRC/tests/support/warm_app_boot.sh" "$APPX" "$H/run/warm.png" "$SETS" "$DUMP" || exit 1
-                echo "$KEY" > "$DUMP/.key"
+                    bash "$SRC/tests/support/warm_app_boot.sh" "$APPX" "$H/run/warm.png" "$SETS" "$LOGS" || exit 1
             else
                 driver_boot app-on "$APP_DSTAMP" "$APPX" "$H" "$LOGS/app-on.log" "$left" \
                     "$APPX" --engine-selftest "$H/run/warm.png" || exit 1
