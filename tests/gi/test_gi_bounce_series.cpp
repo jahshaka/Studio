@@ -587,7 +587,7 @@ int main(int argc, char **argv)
                 const int trials = std::max(1, envInt("JAH_TRIALS", 5));
                 const int fadeFrames = std::max(2, envInt("JAH_TRIAL_FRAMES", kFadeFrames));
                 const char *barEnv = std::getenv("JAH_FOREIGN_BAR");
-                const double bar = barEnv ? std::atof(barEnv) : 5.0;
+                const double bar = barEnv ? std::atof(barEnv) : 50.0;   // (READ-9's bound: a relight moves D by 50 codes at most)
                 GiParams gi;
                 gi.mode = GiMode::Vct;
                 gi.quality = tiers[t];
@@ -596,6 +596,7 @@ int main(int argc, char **argv)
                 gi.bounces = true;
                 gi.updateBudget = 0;
                 int fails = 0, detected = 0, both = 0;
+                bool signDumped = false;   // (one sign dump a process)
                 for (int k = 0; k < trials; ++k) {
                     GiParams off;
                     off.mode = GiMode::Off;
@@ -611,6 +612,33 @@ int main(int argc, char **argv)
                     for (int f = 1; f <= fadeFrames; ++f) {
                         setLamp(400.0f - 200.0f * float(f) / float(fadeFrames));
                         run(1);
+                        if (signDumped) continue;
+                        const GiStatus gs = m.scene->published().gi;
+                        for (size_t c = 0; c < gs.cascades.size() && !signDumped; ++c) {
+                            if (!gs.cascades[c].signFirstFrame) continue;
+                            signDumped = true;
+                            GiVoxelVolume v;
+                            if (!m.scene->giVoxelDirect(int(c), v) || v.halfDirect.empty()) {
+                                std::printf("     SIGN DUMP c%zu at fade frame %d: no readback\n", c, f);
+                                break;
+                            }
+                            // (the half direct store: ((z * height + y) * 6 + half) * width + x, four floats a texel)
+                            float lo = 0.0f;
+                            size_t at = 0, negatives = 0, texels = v.halfDirect.size() / 4u;
+                            for (size_t t = 0; t < texels; ++t)
+                                for (int ch = 0; ch < 3; ++ch) {
+                                    const float x = v.halfDirect[4u * t + size_t(ch)];
+                                    if (x < 0.0f) ++negatives;
+                                    if (x < lo) { lo = x; at = t; }
+                                }
+                            const size_t w = size_t(v.width), h = size_t(v.height);
+                            const size_t x = at % w, rest = at / w, half = rest % 6u, y = (rest / 6u) % h, z = rest / 6u / h;
+                            const size_t bw = (w + 7u) / 8u, bh = (h + 7u) / 8u;
+                            std::printf("     SIGN DUMP c%zu (first over 100 at fade frame %lld, brick %u): read back at fade frame %d - "
+                                        "%zu negative channels of %zu texels; the smallest %.6g at voxel (%zu,%zu,%zu) half %zu = brick %zu\n",
+                                        c, (long long)gs.cascades[c].signFirstFrame - (long long)fadeStart, gs.cascades[c].signFirstBrick,
+                                        f, negatives, texels, double(lo), x, y, z, half, x / 8u + bw * (y / 8u + bh * (z / 8u)));
+                        }
                     }
                     const unsigned long long fadeEnd = m.scene->published().frame;
                     const int rest = toRest(900);
@@ -628,7 +656,11 @@ int main(int argc, char **argv)
                     }
                     const bool fail = !same || rest < 0 || over != 0u;
                     bool hit = false;
-                    for (const GiStatus::CascadeStatus &c : g.cascades) hit = hit || c.foreignFirstFrame != 0u;
+                    unsigned signs = 0;
+                    for (const GiStatus::CascadeStatus &c : g.cascades) {
+                        hit = hit || c.foreignFirstFrame != 0u;
+                        signs += c.signReadings ? 1u : 0u;
+                    }
                     fails += fail ? 1 : 0;
                     detected += hit ? 1 : 0;
                     both += (fail && hit) ? 1 : 0;
@@ -636,8 +668,9 @@ int main(int argc, char **argv)
                     m.scene->requestGiVoxelDigests(dg);
                     for (int w = 0; w < 120 && !dg->ready; ++w) run(1);
                     std::printf("   TRIAL %d %s: built at rest in %d, the fade %d frames (engine frames %llu-%llu), rest %d after: beyond, "
-                                "worst %.3f codes, %zu over one | detector (bar %.1f codes) %s\n", k, fail ? "FAIL" : "pass", buildRest,
-                                fadeFrames, fadeStart, fadeEnd, rest, 100.0 * worst, over, bar, hit ? "FIRED" : "quiet");
+                                "worst %.3f codes, %zu over one | detector (bar %.1f codes) %s, SIGN in %u cascades\n", k, fail ? "FAIL" : "pass",
+                                buildRest, fadeFrames, fadeStart, fadeEnd, rest, 100.0 * worst, over, bar, hit ? "FIRED" : "quiet",
+                                signs);
                     {   // THE FEEDBACK'S WORK over the fade and its rest: bricks listed (each a bounce group when it runs)
                         unsigned long long ran = 0;
                         for (size_t c = 0; c < g.cascades.size() && c < g0.cascades.size(); ++c)
@@ -647,12 +680,17 @@ int main(int argc, char **argv)
                     }
                     for (size_t c = 0; c < g.cascades.size(); ++c) {
                         const GiStatus::CascadeStatus &cs = g.cascades[c];
-                        std::printf("     c%zu: readings %llu (skipped %llu), word0 max %.3f, word1 max %.3f codes; first over: frame %llu "
-                                    "(fade frame %lld) word %u brick %u %.3f codes (skipped by then %llu); digests direct %s light %s\n",
+                        std::printf("     c%zu: readings %llu (skipped %llu), word0 max %.3f (brick %u), word1 max %.3f (brick %u) codes; "
+                                    "first over %.0f: fade frame %lld word %u brick %u %.3f codes, %u bricks over (skipped by then "
+                                    "%llu); SIGN (word0 > 100): %llu readings, first at fade frame %lld brick %u %.3f codes, %u "
+                                    "bricks; digests direct %s light %s\n",
                                     c, cs.foreignReadings, cs.brickReadingsSkipped, double(cs.foreignDirectMax),
-                                    double(cs.foreignBounceMax), cs.foreignFirstFrame,
+                                    cs.foreignDirectMaxBrick, double(cs.foreignBounceMax), cs.foreignBounceMaxBrick, bar,
                                     cs.foreignFirstFrame ? (long long)cs.foreignFirstFrame - (long long)fadeStart : -1ll,
-                                    cs.foreignFirstWord, cs.foreignFirstBrick, double(cs.foreignFirstCodes), cs.foreignFirstSkipped,
+                                    cs.foreignFirstWord, cs.foreignFirstBrick, double(cs.foreignFirstCodes), cs.foreignFirstCount,
+                                    cs.foreignFirstSkipped, cs.signReadings,
+                                    cs.signFirstFrame ? (long long)cs.signFirstFrame - (long long)fadeStart : -1ll,
+                                    cs.signFirstBrick, double(cs.signFirstCodes), cs.signFirstCount,
                                     dg->ready && c < dg->direct.size() ? dg->direct[c].substr(0, 16).c_str() : "-",
                                     dg->ready && c < dg->light.size() ? dg->light[c].substr(0, 16).c_str() : "-");
                     }
