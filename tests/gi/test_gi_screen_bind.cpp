@@ -264,9 +264,12 @@ int main()
         const int restT = settle(400);
         // A FRAME IS DRAWN: every view presented it, and the engine wrote no error for it (a stale binding threw in
         // Ogre's barrier solver - the whole frame lost, every view's picture the one before)
+        // An error is told apart by the FRAME it was written in (FrameError::frame: every frame its own number) - never
+        // by FrameError::serial, the RECORD the frame applied: a fixture that submits no record runs every frame on
+        // serial 0, so a serial cannot tell a new error from none (ONE-FRAME-1: the harness submits no record).
         const auto errors = [&]() {
             const auto &fe = e->published().frameErrors;
-            return fe.empty() ? 0ull : fe.back().serial;
+            return fe.empty() ? 0ull : fe.back().frame;
         };
         struct Three { Pics p; ImageF t; unsigned long long shown[3] = {}; };
         const auto read3 = [&](View *t) {
@@ -330,7 +333,7 @@ int main()
         e->setArm("gi.screenZeroUnmarked", 1.0);
         run(1);
         const auto &fe = e->published().frameErrors;
-        const bool guarded = !fe.empty() && fe.back().serial != err2 &&
+        const bool guarded = !fe.empty() && fe.back().frame != err2 &&
                              fe.back().text.find("num_thread_groups not set") != std::string::npos;
         e->setArm("gi.screenZeroUnmarked", 0.0);
         run(1);
