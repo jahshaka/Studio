@@ -437,19 +437,20 @@ int main()
         gi.cards = true;
         gi.bounces = true;
         gi.updateBudget = 0;
+        // AT REST IS THE ENGINE's ONE SETTLE PREDICATE (GiStatus::giAtRest: no chain, feedback or field work owed and THE
+        // SURFACE CACHE OWES NOTHING - its rest decision taken, its captures, relights and rounds done; CODING_RULES §5: "at
+        // rest" is the engine's predicate, never a frame count), with the cards built, held kQuiet frames (card_residency's
+        // hold). It replaced this row's own count of 60 quiet frames of unchanged relights and admissions, twice a run (V2
+        // plan 0.2, the lead's ruling 2026-11-21: the row read 10.3 s against its 10-s budget); the law read at rest is unchanged.
         const auto settle = [&]() {
-            unsigned long long relights = ~0ull, admitted = ~0ull;
+            constexpr int kQuiet = 2;
             int quiet = 0, f = 0;
-            for (; f < 1500 && quiet < 60; ++f) {
+            for (; f < 1500 && quiet < kQuiet; ++f) {
                 render(e, 1);
                 const GiStatus g = s->published().gi;
-                const bool still = !g.chainOwed && !g.feedbackOwed && g.cards.built && g.cards.relights == relights &&
-                                   g.cards.admitted == admitted && g.cards.queueLength == 0u;
-                relights = g.cards.relights;
-                admitted = g.cards.admitted;
-                quiet = still ? quiet + 1 : 0;
+                quiet = g.giAtRest && g.cards.built ? quiet + 1 : 0;
             }
-            return quiet >= 60 ? f - quiet : -1;
+            return quiet >= kQuiet ? f - quiet : -1;
         };
         // a face's points (its inner plane z = face, facing `nz`), and their surface voxel in cascade 0
         struct Reading { double cardR = 0.0, cardG = 0.0, directR = 0.0, voxR = 0.0, voxG = 0.0; size_t cards = 0, voxels = 0;

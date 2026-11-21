@@ -762,7 +762,7 @@ target_compile_definitions(test_gi_leak_room PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_leak_room PRIVATE JahshakaEngine)
 add_dependencies(test_gi_leak_room JahshakaEngineMedia)
-jah_gpu_row(gi.leak_room CLASS engine FRAMES 384 COMMAND test_gi_leak_room
+jah_gpu_row(gi.leak_room CLASS engine FRAMES 425 COMMAND test_gi_leak_room
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.leak_room PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
