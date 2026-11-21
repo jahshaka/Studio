@@ -450,13 +450,7 @@ target_include_directories(test_region_grid_law PRIVATE ${CMAKE_SOURCE_DIR}/iris
 add_test(NAME engine.region_grid_law COMMAND test_region_grid_law)
 set_tests_properties(engine.region_grid_law PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.region_grid_law)
-# THE SCENE'S CLOCK (ONE-FRAME-1 stage 1; test_frame_clock.cpp says each law): one binary, one row per proof, on the
-# NULL render system (no display, no card).
-#   frame.clock_once      a serial's steps apply once; an empty hand-over advances 0 (red on the base: +0.016667 s);
-#                         reassert re-primes; the harness steps only the scenes no host ever stamped.
-#   frame.two_scenes      two scenes in one hand-over each advance by their own serial (red on any single cursor); a
-#                         join's drain counts, the next frame consumes, once.
-#   frame.particle_scale  the particles' time = steps x period x particleTimeScale (0.25, 4), the scene's unscaled.
+
 # THE SCENE'S CLOCK (ONE-FRAME-1 stage 1; test_frame_clock.cpp says each law): the pure value type every engine scene
 # keeps (irisgl/engine/src/SceneClock.h), driven directly — one binary, one row per proof, CPU only (no engine, no card).
 #   frame.clock_once         a serial's steps apply once; an empty frame 0 (red on the base: +0.016667 s); a reassert
