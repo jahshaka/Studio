@@ -472,3 +472,4 @@ gi.leak_room.seam 4.62  solo (one -j1 call, rig :64, 2026-11-21; V2 plan 0.2: sp
 gi.leak_room.cards 6.41  solo (one -j1 call, rig :64, 2026-11-21; V2 plan 0.2: split by proof)
 gi.scroll_slab.scroll 5.38  solo (one -j1 call, rig :64, 2026-11-21; V2 plan 0.2: split by proof)
 gi.scroll_slab.light 5.89  solo (one -j1 call, rig :64, 2026-11-21; V2 plan 0.2: split by proof)
+particles.ring_full_handles 0.01  solo 2026-11-21 at 61063f1db (spec.sh reprice, run 20261121T170254-61063f1db)
