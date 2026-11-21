@@ -70,6 +70,14 @@
 //       code of a 64-pass Jacobi of the end state; the arm can fail (the voxels beyond move over a code). RED with the
 //       carried section unread (High: 296 voxels over a code, the worst 2.25; the door's other half alone,
 //       the passed bricks' moves read, is green either way: under a 120-frame fade the bounces' moves alone resume them).
+//   (9) THE FADE NEVER FLIPS A DIRECT TERM'S SIGN (NONDET-1 stage 2; the part `fade`): a voxel's direct term is affine in the
+//       lamp with non-negative terms (its halves' cosine, visibility, albedo and the lamp's colour all >= 0, the emissive
+//       independent of the lamp), so a relight's relative change of it (the brick mask's word 0, jahBrickChange: |b - a| /
+//       max(|a|, |b|)) is at most 1 - 200/400 at the lamp's step and far less a fade frame; OVER 100 % (100 codes) it needs
+//       an old and a new term of OPPOSITE signs, which no input makes. Read over the fade and its rest by the detector
+//       gi.foreignDetect. RED on the injection's dynamically indexed local arrays on NVIDIA (12 of 14 first fades of a
+//       process; the fault is a process's FIRST fade only - a second fresh chain in the same process never showed it, so a
+//       run proves one first fade: the miss rate on a broken build is 2 in 14 a row, ~2 % for the two rows together).
 //   (8) AT THE RAY TIER (PHOTON-7 stage 10, 10-2b; the part `rays`, High and Epic): the voxel sides are gathered by TLAS
 //       rays (rq_voxel_sides.comp) - the sky-leak arm with the rays on: the sides' gather ran (its dispatches and sides
 //       read back, GiStatus::voxelSides), and the inner-wall voxels of cascades 0 and 1 read under 1 % of the sky (L9's
@@ -554,6 +562,9 @@ int main(int argc, char **argv)
         size_t carryOver = 0, carryMoved = 0;
         double carryWorst = 0.0;
         int carryRest = -1;
+        unsigned long long fadeSignReadings = 0;   // (9): the direct-term readings of the fade over the sign bar
+        unsigned fadeSignCascades = 0;
+        bool fadeSignRead = false;
         unsigned long long carryResumes = 0, carryCarried = 0;
         bool carryOk = false;
         int fadeRoundGap = -1, fadeRounds = 0, fadeRoundBound = 0;
@@ -774,6 +785,9 @@ int main(int argc, char **argv)
             unsigned long long rounds0 = m.scene->published().gi.cascades.empty()
                                              ? 0ull : m.scene->published().gi.cascades[0].relightRounds;
             int lastRound = 0, roundGap = 0, roundsDone = 0;
+            // (9)'s DETECTOR over the fade and its rest: every brick reading of the injection's relative change of the
+            // direct term (gi.foreignDetect, 50 codes; the sign bar at 100)
+            e->setArm("gi.foreignDetect", 50.0);
             for (int f = 1; f <= kFadeFrames; ++f) {
                 setLamp(400.0f - 200.0f * float(f) / float(kFadeFrames));
                 run(1);
@@ -793,6 +807,15 @@ int main(int argc, char **argv)
             fadeRoundBound = int(2u * lwf + 2u);
             fadeRest = toRest(900);
             fEnd = read(m.scene);
+            {
+                const GiStatus gs = m.scene->published().gi;
+                fadeSignReadings = 0;
+                for (const GiStatus::CascadeStatus &c : gs.cascades) fadeSignReadings += c.signReadings;
+                fadeSignCascades = 0;
+                for (const GiStatus::CascadeStatus &c : gs.cascades) fadeSignCascades += c.signReadings ? 1 : 0;
+                fadeSignRead = !gs.cascades.empty() && gs.cascades[0].foreignReadings > 0u;
+            }
+            e->setArm("gi.foreignDetect", 0.0);
             }
             // each arm against the end state's Jacobi (the resume arm's, the lamp at 200), beyond the range
             fadeOk = lj.voxels == outside.size() && (!doFade || (o400.ok && fEnd.ok && o400.voxels == lj.voxels &&
@@ -959,6 +982,11 @@ int main(int argc, char **argv)
                   "(5) the slow fade moves the voxels beyond the range over a code in all, every voxel under a step a frame");
             CHECK(fadeOk && fadeOver == 0u,
                   "(5) THE SLOW FADE ENDS WHERE THE STEP ENDS: beyond the range, the FADE arm within one code of a 64-pass Jacobi");
+            std::printf("   (9) the fade's direct-term readings over the sign bar (100 codes): %llu, in %u cascades\n",
+                        fadeSignReadings, fadeSignCascades);
+            law("fade_sign_readings", double(fadeSignReadings), "readings", "==", 0.0);
+            CHECK(fadeSignRead && fadeSignReadings == 0ull,
+                  "(9) A RELIGHT NEVER FLIPS A DIRECT TERM'S SIGN: no brick reading of the fade over 100 codes");
         }
         if (lampArm && doStep) {
             law("step_over", double(stepOver), "voxels", "==", 0.0);
