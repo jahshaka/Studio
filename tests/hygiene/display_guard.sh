@@ -10,7 +10,8 @@
 #       booted; with --rig the tree's rig is taken (a fake Xvfb) and the boot is handed THAT display, never :0;
 #   (4) gpu-exclusive.sh: a command under the lock sees DISPLAY=:0 UNSET (said on one line), a rig display kept;
 #   (5) fresh_home.sh under DISPLAY=:0: REFUSED, exit 2, its command never run; with no DISPLAY the command runs;
-#   (6) scripts/lab/smoke.sh (the owner's desktop smoke) opens a non-rig display ONLY with --desktop (the lead's ruling).
+#   (6) scripts/lab/smoke.sh (the owner's desktop smoke) opens a non-rig display ONLY with --desktop (the lead's ruling);
+#   (7) rig.sh run from a shell with DISPLAY=:0: its command and the lock both see the rig's display.
 # usage: display_guard.sh <source dir> <build dir>
 set -u
 SRC=${1:?source dir}; BUILD=${2:?build dir}
@@ -93,6 +94,14 @@ DISPLAY=:0 JAHLAB="$T/jl" bash "$SRC/scripts/lab/smoke.sh" --env atom-street > "
 DISPLAY=:0 JAHLAB="$T/jl" bash "$SRC/scripts/lab/smoke.sh" --desktop --env atom-street > "$T/s1.out" 2>&1; r1=$?
 want "$([ $r0 = 2 ] && grep -q 'smoke.sh --desktop --env atom-street' "$T/s0.out" && [ $r1 = 0 ] && [ "$(cat "$T/smoke" 2>/dev/null)" = "LAB --env atom-street" ] && echo 1)" \
      "(6) smoke.sh under DISPLAY=:0: refused without --desktop (exit $r0, the line with the flag printed), run with it (exit $r1)"
+# (7) rig.sh run from a shell that inherited DISPLAY=:0: the command runs on the rig's display and the lock sees the rig's
+# too - no "unset" line (red on 31a0f1a16's rig.sh: the lock said it on every run)
+JR=(env PATH="$T/bin:$PATH" JAH_RIG_XDIR="$T/x" JAH_CPUS=0 HOME="$T" JAH_GPU_LOCK="$T/lock7")
+"${JR[@]}" bash "$T/rt/scripts/rig.sh" up > "$T/r7up.out" 2>&1
+r7=$(DISPLAY=:0 "${JR[@]}" bash "$T/rt/scripts/rig.sh" run dg7 -- sh -c 'echo "ran on $DISPLAY"' 2>&1)
+"${JR[@]}" bash "$T/rt/scripts/rig.sh" down > /dev/null 2>&1
+want "$(grep -qE '^ran on :(6[0-9]|[7-9][0-9])$' <<< "$r7" && ! grep -q 'gpu-lock: DISPLAY=' <<< "$r7" && echo 1)" \
+     "(7) rig.sh run under DISPLAY=:0: the command on the rig's display, the lock silent ($(tr '\n' ' ' <<< "$r7" | cut -c1-120))"
 # (5) fresh_home.sh: a home four deep, no build above it (no shared cache)
 H="$T/h/o/m/e"; mkdir -p "$H"
 DISPLAY=:0 sh "$SRC/tests/support/fresh_home.sh" "$H" -- sh -c "touch '$T/ran0'" > "$T/f.out" 2>&1; rc=$?

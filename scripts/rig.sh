@@ -190,7 +190,9 @@ cmd_run() {
     mkdir -p "$data/home"
     # THE RUN IS A USER of the rig for its own life (W1): a starter's down meanwhile keeps the rig; its end releases it
     local rc; ( exec 7> "$data/.rig.lock"; flock -x 7; JAH_RIG_USER=$$ enroll )
-    "$here/gpu-exclusive.sh" "${lockopts[@]}" --label "$label" \
+    # (DISPLAY is the rig's for the LOCK too, URGENT #195's guard: with the caller's inherited :0 the lock said "unset" on
+    # every run - the command below always had the rig's)
+    DISPLAY="$rdisp" "$here/gpu-exclusive.sh" "${lockopts[@]}" --label "$label" \
         env DISPLAY="$rdisp" HOME="$data/home" JAHSHAKA_VR=0 JAH_CPUS="$c" JAH_RIG_DATA="$data" \
         taskset -c "$c" nice -n 10 "${cmd[@]}"
     rc=$?
