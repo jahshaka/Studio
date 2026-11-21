@@ -669,6 +669,16 @@ add_test(NAME source.rough_lobe_transport
 set_tests_properties(source.rough_lobe_transport PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.rough_lobe_transport)
 
+# source.compute_size_keys (COLD-BOOT-1 stage 2): NO COMPUTE PERMUTATION IS KEYED ON A SIZE NOBODY READS - every job of
+# irisgl's compute JSONs sets "inform_shader_of_texture_size" false unless its source or a piece reads a size property
+# (a per-run value in a key: one permutation per view size - the editor, the recorder, a PiP, a headset's eye). The files
+# are read where the engine reads them, the staged media. Its negative control first.
+add_test(NAME source.compute_size_keys
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/compute_size_keys.py" "${CMAKE_SOURCE_DIR}"
+                 "${JAHSHAKA_MEDIA_DIR}")
+set_tests_properties(source.compute_size_keys PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.compute_size_keys)
+
 # source.webgpu_census (DOORS-0 stage 0, V2 plan 0.5): WHAT WEBGPU REFUSES AND EVERY ONE-EYE-ONLY GATE ONLY FALLS - one
 # table (class, regex, path set, ceiling, the plan item that lowers it) over irisgl/engine, comments stripped: device
 # address, push constants, image atomics, read-write rg images, texel buffers, early fragment tests, binding arrays,
