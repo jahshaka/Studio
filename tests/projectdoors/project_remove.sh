@@ -6,7 +6,8 @@
 # unknown guid are refused by a sentence, and after the process has ended (its shutdown joins the worker) the
 # folder is gone and nothing is left aside in its Projects directory; and with the Projects directory read-only
 # the delete is REFUSED with the row and every file kept (the base deleted the files and kept the rows). A boot
-# sweeps a folder left aside only when no row claims it; a live project's is put back.
+# sweeps a folder left aside only when no row claims it; a live project's is put back. A delete whose rows the
+# library refuses keeps every file, its folder assets' store sidecars included.
 # Three --headless processes.
 #
 # $1 = the Jahshaka binary, $2 = the JS half (project_remove.js), $3 = --headless (forwarded to both)
@@ -85,6 +86,15 @@ check $? "...and the folder a killed delete left aside is gone (swept at start-u
 [ ! -e "$KEEP_ASIDE" ] && [ -d "$KEEP" ] && [ "$(find "$KEEP" -type f | sed "s|^$KEEP||" | sort | md5sum)" = "$keep_files" ]
 check $? "...and the LIVE project's folder is put back with every file (it was removed by the name pattern)"
 
+# THE REFUSED DELETE KEEPS ITS ASSETS' SIDECARS (the final read's B4): the undeletable project's folder asset gets
+# its store sidecar (the file the delete's scrub removes, Database::dropSidecar); its bytes must survive the
+# refused delete — the nested deletes dropped it before the outer transaction rolled the rows back.
+SKY="$(grep -o 'UNDELETABLE SKY=.*' make.log | cut -d= -f2-)"
+STORE="$(grep -o 'STORE ROOT=.*' make.log | cut -d= -f2-)"
+SIDECAR="$STORE/sidecar/$SKY.json"
+[ -n "$SKY" ] && [ -d "$STORE/sidecar" ] && printf '{"guid":"%s","planted":"project.remove_folder"}\n' "$SKY" > "$SIDECAR"
+check $? "the undeletable project's folder asset has a sidecar ($SIDECAR)"
+sidecar_sum=$(md5sum < "$SIDECAR")
 { cat "$JS"; echo "remove();"; } > remove.run.js
 "$BIN" "$MODE" --script "$PWD/remove.run.js" > remove.log 2>&1
 rc=$?
@@ -94,6 +104,8 @@ check $rc "process 2 (the refusals, the delete) passes (exit $rc)"
 check $? "the project's folder is gone"
 [ -n "$UNDEL" ] && [ -d "$UNDEL" ]
 check $? "the undeletable project's folder was put back where it was ($UNDEL)"
+[ -f "$SIDECAR" ] && [ "$(md5sum < "$SIDECAR")" = "$sidecar_sum" ]
+check $? "...and its folder asset's sidecar is the bytes it was (a refused delete deletes no file)"
 left=$(find "$PROJECTS" -mindepth 1 -maxdepth 1 -name '.removing-*' | wc -l)
 [ "$left" = "0" ]
 check $? "nothing is left aside in $PROJECTS ($left)"

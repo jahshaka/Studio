@@ -369,7 +369,10 @@ public:
     int createCollection(const QString &collectionName, const int parent = -1);
 
     // DELETE ===============================================================================
-    bool deleteProject(const QString &guid);
+    struct PendingAssetScrub;   // below, with applyAssetScrubs
+    /// `deferred`: nested in a caller's transaction, the reaped rows' sidecar and session scrubs are handed up
+    /// for the caller to apply after ITS commit (as deleteFolderAndDependencies).
+    bool deleteProject(const QString &guid, QVector<PendingAssetScrub> *deferred = nullptr);
 	bool destroyTable(const QString &table);
 	void wipeDatabase();
     /// LIBRARY DELETE KEEPS PROJECT PINS (owner, 2026-09-09).
@@ -471,13 +474,18 @@ public:
     /// The returned list is the on-disk files the caller should unlink. The
     /// optional `ok` reports whether every row actually went: a delete that
     /// could not run (closed connection, failed statement) must never look
-    /// like a successful one to the caller.
-    QStringList deleteFolderAndDependencies(const QString &guid, bool *ok = nullptr);
+    /// like a successful one to the caller. NESTED in a caller's transaction,
+    /// the rows are real only at the caller's commit: with `deferred` the
+    /// sidecar and session scrubs are handed up for the caller to apply after
+    /// it (applyAssetScrubs), never run here (the final read's B4).
+    QStringList deleteFolderAndDependencies(const QString &guid, bool *ok = nullptr,
+                                            QVector<PendingAssetScrub> *deferred = nullptr);
     /// `force` carries the hard delete through the whole closure (see
     /// deleteAsset): without it, any member a project still pins is unlisted
-    /// instead of removed.
+    /// instead of removed. `deferred`: as deleteFolderAndDependencies.
     QStringList deleteAssetAndDependencies(const QString &guid, bool *ok = nullptr,
-                                           bool force = false);
+                                           bool force = false,
+                                           QVector<PendingAssetScrub> *deferred = nullptr);
     bool deleteRecord(const QString &table, const QString &row, const QVariant &value);
 
     // UPDATE ===============================================================================

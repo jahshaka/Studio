@@ -1548,9 +1548,10 @@ QString Database::getAuthorName()
 
 // Guid-parameterised (SCRIPTING_SPEC §1.1/§1.6.1): callers no longer have to
 // MUTATE Globals::project to delete a project that is not the open one.
-bool Database::deleteProject(const QString &guid)
+bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *deferred)
 {
     DbTransaction tx(db);
+    const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
     QSqlQuery query;
     query.prepare("DELETE FROM projects WHERE guid = ?");
@@ -1644,7 +1645,8 @@ bool Database::deleteProject(const QString &guid)
     }
 
     if (!tx.commit()) return false;
-    applyAssetScrubs(scrubs);
+    if (!ownsTransaction && deferred) *deferred += scrubs;
+    else applyAssetScrubs(scrubs);
     return true;
 }
 
@@ -3670,7 +3672,8 @@ QVector<DependencyRecord> Database::fetchAssetDependencies(const AssetRecord &re
     return dependencies;
 }
 
-QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
+QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok,
+                                                  QVector<PendingAssetScrub> *deferred)
 {
 	QStringList files;
 	bool allOk = true;
@@ -3684,6 +3687,7 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 	// left some folders deleted, some assets deleted and the rest of the
 	// subtree pointing at parents that no longer exist.
 	DbTransaction tx(db);
+	const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
 	// Get all child folders
 	for (const auto &folder : fetchFolderAndChildFolders(guid)) {
@@ -3721,7 +3725,12 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 
 	const bool committed = tx.commit();
 	allOk = committed && allOk;
-	if (committed) applyAssetScrubs(scrubs);
+	// NESTED, "committed" is the degraded guard's true: the rows are real only at the caller's commit, so the
+	// scrubs go up to it (the final read's B4: a refused project delete had dropped its assets' sidecars).
+	if (committed) {
+		if (!ownsTransaction && deferred) *deferred += scrubs;
+		else applyAssetScrubs(scrubs);
+	}
 
 	if (!allOk)
 		iris::Logger::getSingleton()->warn(
@@ -3742,7 +3751,8 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 	return files;
 }
 
-QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok, bool force)
+QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok, bool force,
+                                                 QVector<PendingAssetScrub> *deferred)
 {
 	QStringList files;
 	bool allOk = true;
@@ -3751,6 +3761,7 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 	QVector<PendingAssetScrub> scrubs;
 
 	DbTransaction tx(db);
+	const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
 	// For every asset, find their dependencies
 	for (const auto &asset : fetchAssetGUIDAndDependencies(guid)) {
@@ -3776,7 +3787,12 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 
 	const bool committed = tx.commit();
 	allOk = committed && allOk;
-	if (committed) applyAssetScrubs(scrubs);
+	// NESTED, "committed" is the degraded guard's true: the rows are real only at the caller's commit, so the
+	// scrubs go up to it (the final read's B4: a refused project delete had dropped its assets' sidecars).
+	if (committed) {
+		if (!ownsTransaction && deferred) *deferred += scrubs;
+		else applyAssetScrubs(scrubs);
+	}
 
 	if (!allOk)
 		iris::Logger::getSingleton()->warn(

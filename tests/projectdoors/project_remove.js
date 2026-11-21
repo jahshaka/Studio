@@ -20,6 +20,14 @@ function make() {
     console.log("REMOVE FOLDER=" + folder);
     project.create("Doors Undeletable", { template: "empty" });
     console.log("UNDELETABLE FOLDER=" + project.current().folder);
+    // ...with one asset filed in a project folder (the rows deleteFolderAndDependencies deletes, nested in the
+    // project delete's transaction): the shell gives it a sidecar in the store, which a refused delete must keep.
+    var things = assets.createFolder("Things");
+    var sky = assets.createSky({ name: "Undeletable Sky", folder: things });
+    assert(sky && assets.folders().filter(function (f) { return f.guid === things && f.count === 1; }).length === 1,
+           "the undeletable project files one asset in a folder");
+    console.log("UNDELETABLE SKY=" + sky);
+    console.log("STORE ROOT=" + assets.storeRoot());
     project.create("Doors Keep", { template: "empty" });
     console.log("KEEP FOLDER=" + project.current().folder);
     console.log("make: ALL OK");

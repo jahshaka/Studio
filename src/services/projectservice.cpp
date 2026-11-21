@@ -369,13 +369,16 @@ bool ProjectService::removeProject(const QString &guid, QString *whyOut)
     // THE ROWS GO TOGETHER OR NOT AT ALL (the audit's W4): one transaction over the three deletes (their own
     // guards nest into it), and a failure puts the folder BACK where it was — a refused delete changes nothing.
     // Their results were ignored: a row delete that failed still returned true with the folder aside.
+    // THE SCRUBS WAIT FOR THAT COMMIT (the final read's B4): the nested deletes hand up their sidecar removals and
+    // session de-registrations, applied only once the rows are gone — a refused delete leaves every file.
     bool rowsOk = false;
+    QVector<Database::PendingAssetScrub> scrubs;
     {
         DbTransaction tx(db->getDb());
         bool foldersOk = true, assetsOk = true;
-        const bool projectOk = db->deleteProject(guid);
-        db->deleteFolderAndDependencies(guid, &foldersOk);
-        db->deleteAssetAndDependencies(guid, &assetsOk);
+        const bool projectOk = db->deleteProject(guid, &scrubs);
+        db->deleteFolderAndDependencies(guid, &foldersOk, &scrubs);
+        db->deleteAssetAndDependencies(guid, &assetsOk, /*force*/ false, &scrubs);
         rowsOk = projectOk && foldersOk && assetsOk && tx.commit();
     }
     if (!rowsOk) {
@@ -385,6 +388,7 @@ bool ProjectService::removeProject(const QString &guid, QString *whyOut)
                      qUtf8Printable(guid), qUtf8Printable(aside));
         return fail(QStringLiteral("the library refused to delete the project's rows; nothing was deleted"));
     }
+    db->applyAssetScrubs(scrubs);
 
     supersedeThumbnail(guid);
     if (projectManager) projectManager->removeTile(guid);
