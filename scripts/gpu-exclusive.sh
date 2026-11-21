@@ -371,7 +371,7 @@ if [ -z "$ticket" ]; then
     ticket="$q/$(printf '%012d' "$n")${short:+.s$short}"
 fi
 case "${ticket##*/}" in *.s[0-9]*) short=${ticket##*.s} ;; esac   # (an adopted short reservation keeps its declared time)
-echo "$$ $(starttime $$) $me" > "$ticket.tmp.$$" && mv -f "$ticket.tmp.$$" "$ticket"
+echo "$$ $(starttime $$) ${place:+$place }$me" > "$ticket.tmp.$$" && mv -f "$ticket.tmp.$$" "$ticket"   # (a call's hold: its place, M2)
 flock -u 8
 exec 8>&-
 mark_take "$@"
@@ -385,31 +385,35 @@ alive() {   # a ticket's pid and start time: the same live process (a recycled p
 }
 # THE FAIRNESS LAW (CODING_RULES § 7; util.py PASS_ALLOW_S / PASS_SHARE hold the same two numbers - lock_test holds them equal):
 # a long ticket is passed by shorts while passed + s <= 90 s + 15 % of its owner's own held seconds
+# THE CREDIT IS THE CALL's (CARD-QUEUE-1 M2, the second engineer's review: keyed by the ticket's process, each warm-up boot of a
+# feature end got a fresh 90 s and the call's end line read 0 - lock_test 14d): a hold that is part of a call writes its ticket
+# "<pid> <start> place:<pid>-<start> <label>", and its credit is the PLACE's <pid>-<start> - one credit for every hold of the call
+# (its boots here, its util.CardLock holds and yields); a hold with no place keys by its own <pid>-<start>
+key_of() { case "$3" in place:*-*) echo "${3#place:}" ;; *) echo "$1-$2" ;; esac; }   # <pid> <start> <the ticket's 3rd word>
 PASS_ALLOW_S=${JAH_GPU_PASS_ALLOW_S:-90} PASS_SHARE_PCT=15   # (JAH_GPU_PASS_ALLOW_S: the suites' toy allowance, never set by a tool)
 short_of() { case "${1##*/}" in *.s[0-9]*) echo "${1##*.s}" ;; esac; }   # a short ticket's declared seconds; empty: a long one
-credit_ok() {   # <pid> <start> <s>: may the owner of this long ticket be passed by <s> more seconds of shorts
+credit_ok() {   # <key> <s>: may the call (or the lone hold) of this long ticket be passed by <s> more seconds of shorts
     local held=0 passed=0
-    { read -r held passed _ < "$q/.credit/$1-$2"; } 2> /dev/null   # (braced: a missing file's error is the redirect's own, N)
-    [ $(( 100 * (${passed:-0} + $3) )) -le $(( 100 * PASS_ALLOW_S + PASS_SHARE_PCT * ${held:-0} )) ]
+    { read -r held passed _ < "$q/.credit/$1"; } 2> /dev/null   # (braced: a missing file's error is the redirect's own, N)
+    [ $(( 100 * (${passed:-0} + $2) )) -le $(( 100 * PASS_ALLOW_S + PASS_SHARE_PCT * ${held:-0} )) ]
 }
 head_ticket() {   # THE HEAD: the lowest ticket whose pid is alive - unless it is LONG and the first waiting SHORT ticket has credit
                   # on every long ticket below it (then that short); the dead ones removed; a reservation is passed over (an
                   # absent caller never idles the card) and kept until it expires. With no short ticket: the lowest live, as ever.
-    local f pid exp first="" longs=() s l ok
+    local f pid exp k first="" longs=() s l ok
     for f in "$q"/[0-9]*; do
         case "$f" in *.tmp.*) continue ;; esac
         [ -e "$f" ] || continue
-        read -r pid exp _ < "$f" 2>/dev/null || pid=""
+        { read -r pid exp k _ < "$f"; } 2>/dev/null || pid=""
         if [ "$pid" = R ]; then   # (passed over; removed once expired - a call's place at once when its caller died: ONE PLACE)
-            read -r _ _ k < "$f" 2> /dev/null
             case "$k" in place:*-*) k=${k#place:}; alive "${k%-*}" "${k##*-}" || exp=0 ;; esac
             [ "${exp:-0}" -gt "$(date +%s)" ] || rm -f "$f"; continue
         fi
         alive "$pid" "$exp" || { rm -f "$f"; continue; }
         s=$(short_of "$f")
-        if [ -z "$s" ]; then [ -n "$first" ] || first=$f; longs+=("$pid $exp"); continue; fi
+        if [ -z "$s" ]; then [ -n "$first" ] || first=$f; longs+=("$(key_of "$pid" "$exp" "$k")"); continue; fi
         [ -n "$first" ] || { echo "$f"; return; }                 # a short at the front: first come, first served
-        ok=1; for l in "${longs[@]}"; do credit_ok $l "$s" || { ok=""; break; }; done
+        ok=1; for l in "${longs[@]}"; do credit_ok "$l" "$s" || { ok=""; break; }; done
         [ -n "$ok" ] && { echo "$f"; return; }
         break                                                     # the FIRST waiting short only: shorts keep their order
     done
@@ -467,7 +471,7 @@ if [ -n "$short" ]; then   # A SHORT HOLD's GRANT: it passes every live long tic
     for f in "$q"/[0-9]*; do
         case "$f" in *.tmp.*) continue ;; esac
         [ -e "$f" ] && [[ ${f##*/} < ${ticket##*/} ]] && [ -z "$(short_of "$f")" ] || continue
-        read -r pid exp _ < "$f" 2> /dev/null; [ "$pid" != R ] && alive "$pid" "$exp" && charged+=("$pid-$exp")
+        { read -r pid exp k _ < "$f"; } 2> /dev/null; [ "$pid" != R ] && alive "$pid" "$exp" && charged+=("$(key_of "$pid" "$exp" "$k")")
     done
     charge "$short" 1
     for f in "$q/.credit"/* "$q/.lost"/*; do   # the credit and the lost mark of a process gone: removed by the card's holder
