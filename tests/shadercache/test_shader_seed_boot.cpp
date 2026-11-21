@@ -1,11 +1,17 @@
-// shadercache.seed_boot.twin / shadercache.seed_boot — THE SHIPPED MICROCODE SEED, at the app (COLD-BOOT-1 S1).
+// shadercache.seed_boot.twin / shadercache.seed_boot — THE SHIPPED MICROCODE SEED, at the app (COLD-BOOT-1).
 //
-// THE ACCEPTANCE: from a virgin data root and a virgin HOME (the NVIDIA driver's own cache lives in it, so it is cold
-// too), with the seed present, glslang compiles at most 5 % of the cold count; the startup gate's wall and its
-// longest stall are printed against an unseeded twin.
+// THE ACCEPTANCE: from a virgin data root and a virgin HOME, with the seed present, glslang compiles at most 5 % of the
+// unseeded count; the startup gate's wall and its longest stall are printed against an unseeded twin.
 //
-// TWO ROWS, ONE FIXTURE (the shader.async_after_open.seed pattern): a cold boot of the gate is ~29 s and a seeded one
-// ~23 s on this box, so one row holding both would sit at the 60-s cap.
+// THE DRIVER'S CACHE IS WARM AND SHARED, NEVER BUILT HERE (the lead's ruling P4, 2026-11-21; CODING_RULES 6: a cold state
+// is never built inside a row's cap). The seed's subject is glslang, not the driver: COLD-BOOT-1 stage 1's table
+// (spikes/cold-boot-1/S1b) - an all-cold gate is 154 s, 89 % of it the driver's pipeline compiles, the seed's share 4 %;
+// with the driver's cache warm the seed halves the gate (10.3 -> 4.7 s). So both launches boot on THE ONE WARM DRIVER
+// CACHE the warm-up prepares outside every cap: the card's lock (scripts/gpu-exclusive.sh) exports
+// __GL_SHADER_DISK_CACHE_PATH (the box's per-executable driver cache) and the warm-up's app-on boot fills it for this
+// binary. A launch with no such path would start the driver cold inside the cap: REFUSED (the row fails and says so).
+//
+// TWO ROWS, ONE FIXTURE (the shader.async_after_open.seed pattern):
 //   --twin   THE UNSEEDED TWIN: a virgin home, JAHSHAKA_SHADER_SEED unset — so the app resolves the BUILD's own seed
 //            directory (<exe dir>/shadercache-seed, asserted), which a lane's build does not carry (asserted "absent":
 //            a tree whose bin/ holds a seed cannot run an unseeded twin this way, and says so). Its numbers go to
@@ -55,9 +61,18 @@ Launch runApp(const QString &app, const QString &home, const QString *seedEnv)
     QDir().mkpath(home + "/cache");
     QProcess p;
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+    // THE WARM DRIVER CACHE (the header): the lock's, filled by the warm-up - never a cold one built inside the cap.
+    if (env.value(QStringLiteral("__GL_SHADER_DISK_CACHE_PATH")).isEmpty() ||
+        env.value(QStringLiteral("__GL_SHADER_DISK_CACHE")) == QLatin1String("0")) {
+        std::printf("FAIL: REFUSED - no warm driver cache: __GL_SHADER_DISK_CACHE_PATH is unset (or the cache is off); "
+                    "this row runs under the card's lock (gpu-exclusive.sh exports it) after the warm-up's app boots\n");
+        ++failures;
+        return l;
+    }
     env.insert("HOME", home);
     env.insert("JAHSHAKA_DATA_ROOT", home + "/.local/share/Jahshaka");
-    // The driver's own pipeline cache in the virgin home too: cold on both launches, so the difference is the seed's.
+    // The app's other caches in the virgin home; the DRIVER's is the lock's warm one (above), the same for both launches,
+    // so the difference is the seed's.
     env.insert("XDG_CACHE_HOME", home + "/cache");
     if (seedEnv) env.insert("JAHSHAKA_SHADER_SEED", *seedEnv);
     else         env.remove("JAHSHAKA_SHADER_SEED");
@@ -69,7 +84,7 @@ Launch runApp(const QString &app, const QString &home, const QString *seedEnv)
     t.start();
     p.start(app, { QStringLiteral("--script"), script });
     if (!p.waitForStarted(20000)) { std::printf("FAIL: %s did not start\n", qPrintable(app)); ++failures; return l; }
-    if (!p.waitForFinished(110000)) {
+    if (!p.waitForFinished(55000)) {   // under the row's 60-s cap
         std::printf("FAIL: the app did not exit\n"); ++failures; p.kill(); p.waitForFinished(5000);
     }
     l.wallS = t.elapsed() / 1000.0;
@@ -220,7 +235,7 @@ int main(int argc, char **argv)
     std::printf("   the seeded launch's own data root %s after its quit (it saves one only when something "
                 "compiled: %d)\n", ownLayer ? "holds a microcode layer" : "holds no microcode layer", seededCompiled);
 
-    std::printf("\n   THE STARTUP GATE, a virgin data root and HOME        unseeded twin     seeded\n");
+    std::printf("\n   THE STARTUP GATE, a virgin home, the warm driver     unseeded twin     seeded\n");
     std::printf("   the gate's wall (ms)                                 %8.0f   %8lld\n",
                 twin.value("gateMs").toDouble(), s.gateMs);
     std::printf("   its longest UI stall (ms, app.heartbeatStats)        %8.0f   %8.0f\n",

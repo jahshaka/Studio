@@ -150,9 +150,10 @@ jah_gpu_row(shadercache.seed CLASS engine FRAMES 18
          COMMAND test_shader_seed WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(shadercache.seed PROPERTIES TIMEOUT 60 LABELS "shadercache")
 # shadercache.seed_boot.twin + shadercache.seed_boot — THE ACCEPTANCE at the app (test_shader_seed_boot.cpp's header): a
-# virgin data root and HOME, the startup gate cold (the twin, whose saved cache make-seed.sh turns into the seed) and
-# seeded (glslang <= 5 % of the twin's count, the seed byte-identical after), the gate's wall and longest stall printed
-# side by side. A FIXTURE PAIR: a cold boot is ~29 s and a seeded one ~23 s, one row holding both would sit at the cap.
+# virgin data root and HOME on THE ONE WARM DRIVER CACHE the warm-up prepares (the lock's; never a cold one inside the cap:
+# the lead's ruling P4), the shader cache cold (the twin, whose saved cache make-seed.sh turns into the seed) and seeded
+# (glslang <= 5 % of the twin's count, the seed byte-identical after), the gate's wall and longest stall printed side by
+# side. A FIXTURE PAIR: each launch is its own proof (COLD-BOOT-1 stage 1: ~15 s unseeded, ~9 s seeded, the driver warm).
 # FRAMES: the B3 meter (spikes/testing-speed-b3/framecount) on the builder's first green run, 2026-10-25 — 446 / 445.
 add_executable(test_shader_seed_boot test_shader_seed_boot.cpp)
 set_target_properties(test_shader_seed_boot PROPERTIES CXX_STANDARD 17
