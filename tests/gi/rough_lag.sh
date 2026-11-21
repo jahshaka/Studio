@@ -48,12 +48,10 @@
 #   than the quantity it bounds: 3 of the old sd is 2.28 of the true one at the floor, which gaussian noise passes 2.2 % of
 #   the time, not the ~0.3 % the bar assumes (8x, before the +1 code). At a young count V(n) = 1/(n - 1/2) is wider than
 #   the old 1/n (a fast cut's rounding), and 1/R widens it more: at every count the term is wider than the old one.
-#   h IS READ, NEVER WRITTEN HERE: no status field carries the history's floor itself (GatherTuning::historyFrames is the
-#   A/B door, 0 = the shipped kHistoryFrames, OgreScreenProbeGather.cpp:360-366; the lab's status has no such field). The
-#   walk's OWN stillness record carries its settle (rough-walk.tsv settle_frames, GiStatus's settleFrames), which is
-#   settleFramesOf(h) = ceil(ln(1/D) / ln(1 - 1/max(h, 2))) at D = kGatherSettleCodes = 5 (OgreScreenProbeGather.cpp:372,
-#   Types.h) - this read depends on that constant: one-to-one on h = 3..15 (h 1 and 2 share the settle 3), so the row
-#   inverts it (16 -> 10) and refuses a settle that names no single h; R is that same settle (the rest mean's length).
+#   h IS READ, NEVER WRITTEN HERE: the walk's OWN stillness record carries the history's floor itself (rough-walk.tsv
+#   history_frames, GatherStatus::historyFrames: the shipped kHistoryFrames or the A/B door gather.historyFrames,
+#   OgreScreenProbeGather.cpp historyFramesOf) and the rest mean's length R beside it (settle_frames, settleFramesOf(h));
+#   the row refuses a walk whose record names no single h or no single settle.
 # THE SHARE ACROSS SESSIONS (measured, stage 2C): the walk and the converged pictures are byte-identical whatever the
 # session's frame index (a second session, every session 30 frames later: |walk - conv| mean and p99 equal to the digit);
 # only the twelve raw frames are other draws, so sigma is. This law's share moved 0.8338 -> 0.8345 % (k14) and 0.9336 ->
@@ -90,14 +88,6 @@ LAW_PY=$(cat <<'PY'
 import math
 import numpy as np
 KCOUNT_MAX = 15        # the packed count's four bits (jah_probe_history.glsl kHistoryCountMax)
-SETTLE_CODES = 5.0     # kGatherSettleCodes (Types.h): the step the settle waits out
-def settle_of(h):
-    """the engine's settleFramesOf(h) (OgreScreenProbeGather.cpp)"""
-    return int(math.ceil(math.log(1.0 / SETTLE_CODES) / math.log(1.0 - 1.0 / float(max(h, 2)))))
-def history_of_settle(settle):
-    """the floor h whose settle the record carries; None when no single h in 1..15 has it"""
-    hs = [h for h in range(1, KCOUNT_MAX + 1) if settle_of(h) == settle]
-    return hs[0] if len(hs) == 1 else None
 def lag_steps(n, h):
     """(1 - 1/n_eff) h, n_eff = min(n + 1/2, h): the lag's bound in frames of the slope at the stored count n (0: none)"""
     n = np.asarray(n, dtype=np.float64)
@@ -134,14 +124,6 @@ def check(ok, what):
     print(('ok   ' if ok else 'FAIL ') + what, flush=True)
     if not ok:
         fails.append(what)
-# 1. THE READ OF h: the settle the walk's record carries names one h (the engine's documented 16 at h = 10, Types.h)
-by = {}
-for h in range(3, KCOUNT_MAX + 1):
-    by.setdefault(settle_of(h), []).append(h)
-check(all(len(v) == 1 for v in by.values()) and all(history_of_settle(settle_of(h)) == h for h in range(3, KCOUNT_MAX + 1)),
-      'the settle names its floor one-to-one on h = 3..15: %s' % ' '.join('%d->%d' % (s, v[0]) for s, v in sorted(by.items())))
-check(settle_of(10) == 16 and history_of_settle(16) == 10, 'settle 16 <-> h 10 (Types.h: 16 at the shipped 10 frames)')
-check(history_of_settle(settle_of(1)) is None, 'a settle of %d (h 1 or 2) names no single h: refused' % settle_of(1))
 # THE SHADER's HISTORY, frame by frame (rq_probe_integrate.comp:1257-1290): count 0 takes the frame whole; the blend
 # max(1 / (count + 1), 1 / h); the fast update at amount F caps N' = min(1 / b - 1, (1 - F)(h - 1)), b = 1 / (1 + N'), and
 # stores round(N') + 1; the count saturates at 15. A REFUSAL (another surface's history) restarts it at count 1.
@@ -282,21 +264,23 @@ if [ "$PART" = walk ]; then
     exit 0
 fi
 K=$PART
-# THE FLOOR h, READ from the walk's own stillness record (its settle_frames: one value over the walk, inverted - the header)
+# THE FLOOR h AND THE REST's LENGTH R, READ from the walk's own stillness record (history_frames and settle_frames: one value
+# each over the walk - the header)
 TSV=$WALK/data/stillness/rough-walk.tsv
 HF=$(python3 -I -c "$LAW_PY
 $(cat <<'PY'
 import csv, sys
 try:
     rows = [r for r in csv.DictReader(open(sys.argv[1]), delimiter='\t') if r['window'] == 'walk-move']
-except (OSError, KeyError) as e:
+    hs = sorted({int(r['history_frames']) for r in rows})
+    settles = sorted({int(r['settle_frames']) for r in rows})
+except (OSError, KeyError, ValueError) as e:
     print('FAIL: the walk\'s record %s is unreadable (%s)' % (sys.argv[1], e)); sys.exit(1)
-settles = sorted({int(r['settle_frames']) for r in rows})
-h = history_of_settle(settles[0]) if len(settles) == 1 else None
-if h is None:
-    print('FAIL: the walk\'s record names no single history floor (settle_frames %s over %d walk frames)' % (settles, len(rows)))
+if len(hs) != 1 or hs[0] < 1 or len(settles) != 1 or settles[0] < 1:
+    print('FAIL: the walk\'s record names no single history floor and settle (history_frames %s, settle_frames %s over %d walk '
+          'frames)' % (hs, settles, len(rows)))
     sys.exit(1)
-print('%d %d' % (h, settles[0]))
+print('%d %d' % (hs[0], settles[0]))
 PY
 )" "$TSV")
 [ $? -eq 0 ] || { echo "$HF"; exit 1; }
