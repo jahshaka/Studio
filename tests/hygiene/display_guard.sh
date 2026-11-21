@@ -9,7 +9,8 @@
 #   (3) warm-app-cache.sh under DISPLAY=:0: REFUSED, exit 2, the safe line (env -u DISPLAY <abs path> ...) printed, nothing
 #       booted; with --rig the tree's rig is taken (a fake Xvfb) and the boot is handed THAT display, never :0;
 #   (4) gpu-exclusive.sh: a command under the lock sees DISPLAY=:0 UNSET (said on one line), a rig display kept;
-#   (5) fresh_home.sh under DISPLAY=:0: REFUSED, exit 2, its command never run; with no DISPLAY the command runs.
+#   (5) fresh_home.sh under DISPLAY=:0: REFUSED, exit 2, its command never run; with no DISPLAY the command runs;
+#   (6) scripts/lab/smoke.sh (the owner's desktop smoke) opens a non-rig display ONLY with --desktop (the lead's ruling).
 # usage: display_guard.sh <source dir> <build dir>
 set -u
 SRC=${1:?source dir}; BUILD=${2:?build dir}
@@ -22,7 +23,7 @@ got=""; for v in :60 :99 :99.0 :61.1 "" :0 :0.0 :1 :59 :100 localhost:10.0 :fake
 want "$([ "$got" = 000012222222 ] && echo 1)" "(1) check: :60 :99 :99.0 :61.1 a rig (0), empty 1, :0 :0.0 :1 :59 :100 localhost:10.0 :fake refused (2) - got $got"
 # (2) THE CENSUS (file: class). guard = sources/calls display-guard.sh; own = its own 60-99 test; unset = runs with -u DISPLAY;
 # maker = rig.sh (it MAKES the rig display); reads = records or prints it, boots nothing; desktop = the OWNER's smoke on his
-# own display by design (scripts/lab/smoke.sh, the lead's ruling pending, URGENT #195); note = a comment only
+# own display, ONLY with --desktop (scripts/lab/smoke.sh, the lead's ruling 2026-11-21); note = a comment only
 read -r -d '' TABLE <<'TAB'
 scripts/display-guard.sh def
 scripts/warm-app-cache.sh guard
@@ -55,6 +56,7 @@ while read -r f c; do
         guard) grep -q 'display-guard\.sh' "$p" || badc="$badc $f(no display-guard.sh)" ;;
         own) grep -qE '6\[0-9\]|\[6-9\]\[0-9\]|60 <= ' "$p" || badc="$badc $f(no 60-99 test)" ;;
         unset) grep -q -- '-u DISPLAY' "$p" || badc="$badc $f(no -u DISPLAY)" ;;
+        desktop) grep -q 'display-guard\.sh' "$p" && grep -q -- '--desktop' "$p" || badc="$badc $f(no --desktop gate)" ;;
     esac
 done <<< "$TABLE"
 want "$([ -z "$badc" ] && echo 1)" "(2) each class's check holds (guard: display-guard.sh named; own: a 60-99 test; unset: -u DISPLAY)${badc:+ - RED:$badc}"
@@ -85,6 +87,12 @@ want "$([ "$a" = none ] && [ "$b" = :61 ] && echo 1)" "(4) under the lock DISPLA
 DISPLAY=:0 HOME="$T" JAH_GPU_LOCK="$T/lock" pd > /dev/null
 want "$(grep -q 'gpu-lock: DISPLAY=:0 is not a rig display (60-99; :0 is the OWNER.s) - unset for this command' "$T/g.err" && echo 1)" \
      "(4) ...and the lock says so on one line"
+# (6) smoke.sh, the owner's desktop smoke: under DISPLAY=:0 refused without --desktop (its jahlab never run); with it, it runs
+printf '#!/bin/sh\necho "LAB $*" >> %s/smoke\nexit 0\n' "$T" > "$T/jl"; chmod +x "$T/jl"
+DISPLAY=:0 JAHLAB="$T/jl" bash "$SRC/scripts/lab/smoke.sh" --env atom-street > "$T/s0.out" 2>&1; r0=$?
+DISPLAY=:0 JAHLAB="$T/jl" bash "$SRC/scripts/lab/smoke.sh" --desktop --env atom-street > "$T/s1.out" 2>&1; r1=$?
+want "$([ $r0 = 2 ] && grep -q 'smoke.sh --desktop --env atom-street' "$T/s0.out" && [ $r1 = 0 ] && [ "$(cat "$T/smoke" 2>/dev/null)" = "LAB --env atom-street" ] && echo 1)" \
+     "(6) smoke.sh under DISPLAY=:0: refused without --desktop (exit $r0, the line with the flag printed), run with it (exit $r1)"
 # (5) fresh_home.sh: a home four deep, no build above it (no shared cache)
 H="$T/h/o/m/e"; mkdir -p "$H"
 DISPLAY=:0 sh "$SRC/tests/support/fresh_home.sh" "$H" -- sh -c "touch '$T/ran0'" > "$T/f.out" 2>&1; rc=$?
