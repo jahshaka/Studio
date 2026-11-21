@@ -54,12 +54,12 @@
 #   settleFramesOf(h) = ceil(ln(1/D) / ln(1 - 1/max(h, 2))) at D = kGatherSettleCodes = 5 (OgreScreenProbeGather.cpp:372,
 #   Types.h) - this read depends on that constant: one-to-one on h = 3..15 (h 1 and 2 share the settle 3), so the row
 #   inverts it (16 -> 10) and refuses a settle that names no single h; R is that same settle (the rest mean's length).
-# THE SHARE IS REPRODUCIBLE ONLY FOR A BYTE-IDENTICAL SESSION (measured, stage 2C): adding one pose to the reference
-# session moved the old law's k14 share 1.6484 -> 1.8066 % on an unchanged walk (|walk - conv| mean 1.2427 and p99 13
-# equal; sigma median 2.15 -> 2.11): the session's frame index moves, so its raw frames (and its rest means) are other
-# draws. The 12-sample sigma's own spread (chi-square, 11 dof, a pixel's sigma re-drawn) moves this law's k14 share by
-# 0.004 points (sd; spikes/rough-lobe-history-1/REFUTE-2C-noise-and-spread.txt) - 40x less than that move, whose cause is
-# not shown (the old form's step read 0 or 1 from conv(k + 1)'s draw, granting 0 or 14 codes, is the candidate).
+# THE SHARE ACROSS SESSIONS (measured, stage 2C): the walk and the converged pictures are byte-identical whatever the
+# session's frame index (a second session, every session 30 frames later: |walk - conv| mean and p99 equal to the digit);
+# only the twelve raw frames are other draws, so sigma is. This law's share moved 0.8338 -> 0.8345 % (k14) and 0.9336 ->
+# 0.9403 % (k28) (spikes/rough-lobe-history-1/SPREAD-2C.log), as a 12-sample sigma re-drawn predicts (chi-square, 11
+# dof: sd 0.004 points, REFUTE-2C-noise-and-spread.txt). The old law moved 1.6484 -> 1.8066 % at k14 on such a re-draw:
+# its allowance was the noise term alone on 89 % of its breakers.
 # THE TAIL UNDER MOTION, measured (2026-10-27): NOT a bias of the moving rule (the moving rule held at pose 59 -
 # gather.restOff - for 64 frames against the rest mean there: -0.015 codes, each strip within 0.3) and NOT the statistics
 # (at that fixed pose the moving error's p99 2.5 codes sits inside the noise term): the excess exists only under MOTION.
