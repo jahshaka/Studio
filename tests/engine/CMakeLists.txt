@@ -478,8 +478,9 @@ foreach(_pair "clock_once;clock-once" "two_scenes;two-scenes" "particle_scale;pa
     set_tests_properties(frame.${_row} PROPERTIES TIMEOUT 60 LABELS "engine")
     jah_no_display(frame.${_row})
 endforeach()
-# frame.meter_time — THE HDR METER ADAPTS IN ITS SCENE's TIME (ONE-FRAME-1 stage 1; test_frame_meter.cpp says the law):
-# the view's meter takes steps x period at particle time scales 0.25 and 4, and 0 on a frame nobody stepped the scene.
+# frame.meter_time — THE HDR METER ADAPTS IN ITS VIEWER's TIME (ONE-FRAME-1 stage 1; test_frame_meter.cpp says the law):
+# a live view adapts one presented step a frame (stepped or not, any particle scale); a picture has no history (equal
+# exposure after 2 and 200 frames).
 # A card row (the meter runs on a view).
 add_executable(test_frame_meter test_frame_meter.cpp)
 set_target_properties(test_frame_meter PROPERTIES
@@ -492,7 +493,7 @@ target_compile_definitions(test_frame_meter PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_frame_meter PRIVATE JahshakaEngine)
 add_dependencies(test_frame_meter JahshakaEngineMedia)
-jah_gpu_row(frame.meter_time CLASS engine FRAMES 6 COMMAND test_frame_meter
+jah_gpu_row(frame.meter_time CLASS engine FRAMES 206 COMMAND test_frame_meter
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.meter_time PROPERTIES TIMEOUT 60 LABELS "engine")
 # frame.clock_integration — A FRAME CONSUMES THE STEPS OF THE SCENES IT DRAWS, AND ONLY THEIRS (ONE-FRAME-1, the stage-1

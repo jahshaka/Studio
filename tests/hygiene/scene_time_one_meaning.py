@@ -15,8 +15,9 @@ the card's frame.meter_time):
      frame_time, time, time_0_x, time_0_1, time_0_2pi, costime*, sintime*, tantime*, fps. The converted sites: the HDR
      meter's timeSinceLast (JahshakaCompute.material.json) and the OldMovie look's lookTime (JahLooks.material), both set
      per view from the view's scene (OgreChain.cpp).
-  T3 THE METER's TIME IS ITS SCENE's: OgreChain.cpp sets the meter resolve's timeSinceLast from the view's scene's
-     frameSceneSeconds(), and the job declares it a manual float.
+  T3 THE METER's TIME IS ITS VIEWER's (the lead's ruling reversing R6): OgreChain.cpp hands the meter resolve's
+     timeSinceLast the view's OgreEngine::meterSecondsFor (a picture: no history; a live view: presented time), and
+     the job declares it a manual float.
   T4 NO HOST-WRITTEN DELTA (forward-only): FrameInput::delta / frameDelta / kDefaultFrameDelta / fixedFrameDelta appear
      nowhere in src/, irisgl/ (the vendored trees excepted) or tests/.
   T5 THE HARNESS DOOR IS THE TESTS' ALONE: harnessStep has no caller in src/ or irisgl/mirror (the engine defines it; the
@@ -90,8 +91,9 @@ def t2(media):
 
 
 def t3(chain, json):
-    set_ok = ('meterSeconds = float(scene ? scene->frameSceneSeconds() : 0.0);' in chain
-              and 'setMeterParam(kMeterResolveJob, "timeSinceLast", meterSeconds);' in chain)
+    set_ok = ('meterSeconds = meterTime;' in chain
+              and 'setMeterParam(kMeterResolveJob, "timeSinceLast", meterSeconds);' in chain
+              and chain.count('mView->mEngine->meterSecondsFor(*mView)') == 2)
     decl_ok = re.search(r'\[\s*"timeSinceLast"\s*,\s*\[\s*0\.0\s*\]\s*,\s*"float"\s*\]', json) is not None
     return set_ok and decl_ok
 
@@ -130,8 +132,8 @@ def main(root):
           "T2 flags a time auto-param in a material and in a compute job (mutants)")
     check(not t2({"m.material": "    // param_named_auto lookTime time_0_x 3600 (the old line)\n    param_named lookTime float 0\n"}),
           "T2 ignores a comment naming the old auto-param")
-    check(not t3(chain.replace("scene->frameSceneSeconds()", "scene->sceneSeconds()"), json),
-          "T3 flags a meter time that is not the scene's frame time (mutant)")
+    check(not t3(chain.replace("meterSeconds = meterTime;", "meterSeconds = float(scene->frameSceneSeconds());"), json),
+          "T3 flags a meter time that is not the viewer's (mutant)")
     check(bool(t4({"tests/x.cpp": "e->submitFrame(FrameInput::delta(1.0f / 60.0f));"})), "T4 flags a host delta (mutant)")
     check(bool(t5({"src/viewport/x.cpp": "echo->harnessStep(1);"})), "T5 flags a src/ caller of the harness door (mutant)")
 
@@ -143,7 +145,7 @@ def main(root):
           "T1 ...and OgreEngine.cpp does write it (the frame's delay is set)")
     bad = t2(media)
     check(not bad, f"T2 no media reads Ogre's time auto-params ({len(media)} files; {bad[:4]})")
-    check(t3(chain, json), "T3 the meter's timeSinceLast is set per view from its scene's frame time, a manual float")
+    check(t3(chain, json), "T3 the meter's timeSinceLast is its viewer's time (meterSecondsFor), a manual float")
     d = t4(everywhere)
     check(not d, f"T4 no host-written delta anywhere ({len(everywhere)} files; {d[:6]})")
     h = t5(everywhere)

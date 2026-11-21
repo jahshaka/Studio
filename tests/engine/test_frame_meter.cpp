@@ -1,15 +1,16 @@
-// frame.meter_time — THE HDR METER ADAPTS IN ITS SCENE's TIME (ONE-FRAME-1 stage 1, V2 plan 2.1; ruling R6: exposure is
-// a grid quantity).
+// frame.meter_time — THE HDR METER ADAPTS IN ITS VIEWER's TIME (ONE-FRAME-1 stage 1; the lead's ruling reversing R6).
 //
-// THE LAW: the time a view hands its meter (JahHdrMeterResolve_cs: mix(new, old, 0.25^dt)) is the steps ITS scene
-// advanced this frame x the period — never x particleTimeScale, never Ogre's process-wide frame clock — and 0 on a
-// frame nobody stepped the scene (a picture's settle, a free frame between grid steps).
-// THE DEFECT (ground read § 2.1 THE METER, [F]): the meter's timeSinceLast was the `frame_time` auto-param = Ogre's
-// frame delay = the host's frameDelta = simulated x particleTimeScale (enginesceneviewport.cpp:2724), so slow-motion
-// particles slowed the exposure with them. On the base 273b8e638 / irisgl 4576b132 this row reads 0.25 x 3/60 =
-// 0.0125 s at scale 0.25 and 0.2 s at scale 4 (DERIVED from the base's code: the probe is this stage's; the card was
-// closed while the stage was built — the feature-end pass is its first run).
-// A card row: the meter runs only on a view (the NULL render system holds none).
+// THE LAW (OgreEngine::meterSecondsFor):
+//  (a) A LIVE view adapts in PRESENTED time: a lockstep frame one grid step (1/60 s), whether or not its scene was stepped
+//      (a paused scene still adapts as the camera turns), at any particle time scale (0.25, 4) — never the particles'.
+//  (b) A PICTURE (an offscreen StillPicture view: a shot, a thumbnail, a preview tile) has NO HISTORY: its meter takes the
+//      frame's own key (an infinite step, 0.25^dt = 0), so its exposure is equal after 2 frames and after 200 — a still
+//      picture's brightness never depends on how many settle frames it took (the HISTORY-1 law).
+// RED ON THE BASE 273b8e638 / irisgl 4576b132 (derived from its code; this row's probe is the stage's): (a) the meter's
+// frame_time was simulated x particleTimeScale (0.0125 s at scale 0.25, 0.2 s at 4, 0 on a stepless frame); (b) a
+// picture's meter adapted 1/60 s a frame from its first frame's value, so its exposure moved with its settle's length.
+// RED ON irisgl 95a46e7e for both (its rule: the scene's stepped time, 0 for a still scene: a thumbnail kept its first
+// frame's brightness for ever). A card row: the meter runs on a view.
 #include <cmath>
 #include <cstdio>
 
@@ -58,22 +59,47 @@ int main()
     const inspect::ViewEcho *echo = inspect::view(view);
     check(echo != nullptr, "the view's probes");
     if (!echo) return 1;
-    const double period = double(1.0f / 60.0f);
+    const float period = float(double(1.0f / 60.0f));
 
+    // (a) A LIVE VIEW
     unsigned long long serial = 100;
     engine->submitFrame(stamp(scene, serial, 1.0f));
     enginetest::frozenFrames(engine, 2);
     for (float scale : { 0.25f, 4.0f }) {
-        const unsigned k = 3;
-        serial += k;
+        serial += 3;
         engine->submitFrame(stamp(scene, serial, scale));
         enginetest::frozenFrames(engine, 1);
-        const float meter = echo->meterSeconds();
-        std::printf("      particle time scale %.2f, %u steps: the meter took %.6f s (law %.6f)\n", double(scale), k,
-                    double(meter), double(k) * period);
-        check(meter == float(double(k) * period), "the meter's time is steps x period, whatever the particle scale");
+        std::printf("      live, particle time scale %.2f, 3 steps: the meter took %.6f s (law %.6f)\n", double(scale),
+                    double(echo->meterSeconds()), double(period));
+        check(echo->meterSeconds() == period, "a live lockstep frame adapts one presented grid step, whatever the scale");
         enginetest::frozenFrames(engine, 1);
-        check(echo->meterSeconds() == 0.0f, "a frame nobody stepped the scene hands the meter 0");
+        check(echo->meterSeconds() == period, "...and a frame nobody stepped the scene still adapts (presented time)");
+    }
+
+    // (b) A PICTURE: no history
+    View *pic = engine->createOffscreenView("meter-picture", 64, 64, Colour(0.2f, 0.2f, 0.2f), OffscreenContract::StillPicture);
+    check(pic != nullptr, "a still-picture view");
+    if (pic) {
+        pic->setScene(scene);
+        enginetest::testCameraLookAt(pic, Vec3(0, 1, 4), Vec3(0, 0, 0));
+        pic->setPostFx(fx);
+        view->setEnabled(false);
+        const auto exposure = [&] {
+            float m = 0.0f;
+            engine->request([&](Engine &) { m = pic->measuredExposureScale(); });
+            return m;
+        };
+        enginetest::frozenFrames(engine, 2);
+        const float after2 = exposure();
+        enginetest::frozenFrames(engine, 198);
+        const float after200 = exposure();
+        const float picMeter = inspect::view(pic)->meterSeconds();
+        std::printf("      picture: the meter took %.1f s a frame; exposure after 2 frames %.9g, after 200 %.9g\n",
+                    double(picMeter), double(after2), double(after200));
+        check(picMeter >= 1000.0f, "a picture's meter has no history (an infinite step)");
+        check(after2 > 0.0f && after2 == after200, "a picture's exposure is equal after 2 and after 200 frames");
+        pic->setScene(nullptr);
+        engine->destroyView(pic);
     }
     engine->destroyView(view);
     engine->destroyScene(scene);
