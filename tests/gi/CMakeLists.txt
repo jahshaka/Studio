@@ -511,24 +511,54 @@ target_compile_definitions(test_gi_card_residency PRIVATE
 target_link_libraries(test_gi_card_residency PRIVATE JahshakaEngine)
 add_dependencies(test_gi_card_residency JahshakaEngineMedia)
 # ONE ROW A LAW GROUP (PHOTON-7 stage 10, the lead's ruling: each within the fixture's 10 s, every run the fewest frames
-# its law needs): gi.card_residency the walk and the teleport ((1) (2) (3) (7)), _pinned the history part (6), _crowded
-# the compaction (4), _late the late first reader (5), _held the band card held in and out at B (8).
-foreach(_row walk pinned crowded late held)
-    if(_row STREQUAL "walk")
-        set(_name gi.card_residency)
-    else()
-        set(_name gi.card_residency_${_row})
-    endif()
-    jah_gpu_row(${_name} CLASS engine COMMAND test_gi_card_residency ${_row}
+# its law needs). SPLIT BY PROOF (V2 plan 0.2, the lead's rulings 2026-11-21: the rows ran 12.4-16.9 s, every run already its
+# law's fewest frames): each run to B's rest is its own row, and a row that COMPARES two runs REQUIRES the other's Run, written
+# by that row to work/card_residency/<run>.snapshot (saveRun / loadRun: the cards, the rates, the rooms, the placements, the
+# band face's hits; stamped with this build - a snapshot of another build is REFUSED, never compared):
+#   gi.card_residency.walk     the walk A -> B, (7)'s convex edge; writes walk.snapshot                 (FIXTURES_SETUP walk)
+#   gi.card_residency.teleport the teleport at B against the walk: (1) (2) (3); writes teleport.snapshot
+#                              REQUIRES walk.snapshot - wrong, walk = teleport would be judged against another walk
+#   gi.card_residency_pinned   the teleport pinned to the walk's placement: (6) - REQUIRES walk.snapshot (the placement and
+#                              the walk's resident set it is judged against)
+#   gi.card_residency_crowded  the compaction (4) - one run, nothing required
+#   gi.card_residency_late     the late first reader (5) - REQUIRES teleport.snapshot (the read set it must keep resident)
+#   gi.card_residency_held.in  the band card held resident at B; writes held_in.snapshot
+#   gi.card_residency_held.out the band card held absent at B: (8) L1 against held_in.snapshot, and THE NO POP (its own run)
+#                              - REQUIRES held_in.snapshot (the resident set and the band face's hits with the card in)
+# Every row boots on the shared warm engine cache (fresh_home.sh --warm); a writer's green run promotes what it compiled, so a
+# reader boots on it - as the reader's run once followed the writer's in one process. Each checks (7)'s store at rest over its
+# own run. Run one reader alone with `ctest -R <row>` (ctest runs its writer first).
+set(_snaps "${CMAKE_CURRENT_BINARY_DIR}/work/card_residency")
+file(MAKE_DIRECTORY "${_snaps}")
+foreach(_pair "gi.card_residency.walk|walk" "gi.card_residency.teleport|teleport" "gi.card_residency_pinned|pinned"
+              "gi.card_residency_crowded|crowded" "gi.card_residency_late|late" "gi.card_residency_held.in|held_in"
+              "gi.card_residency_held.out|held_out")
+    string(REPLACE "|" ";" _pr "${_pair}")
+    list(GET _pr 0 _name)
+    list(GET _pr 1 _row)
+    jah_gpu_row(${_name} CLASS engine COMMAND test_gi_card_residency ${_row} "${_snaps}"
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(${_name} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                          TIMEOUT 60 LABELS "engine")
 endforeach()
-set_tests_properties(gi.card_residency PROPERTIES JAHSHAKA_TEST_FRAMES 843)
-set_tests_properties(gi.card_residency_pinned PROPERTIES JAHSHAKA_TEST_FRAMES 772)
-set_tests_properties(gi.card_residency_crowded PROPERTIES JAHSHAKA_TEST_FRAMES 399)
-set_tests_properties(gi.card_residency_late PROPERTIES JAHSHAKA_TEST_FRAMES 669)
-set_tests_properties(gi.card_residency_held PROPERTIES JAHSHAKA_TEST_FRAMES 943)
+set_tests_properties(gi.card_residency.walk PROPERTIES FIXTURES_SETUP gi_card_residency_walk)
+set_tests_properties(gi.card_residency.teleport PROPERTIES FIXTURES_SETUP gi_card_residency_teleport
+                     FIXTURES_REQUIRED gi_card_residency_walk DEPENDS gi.card_residency.walk)
+set_tests_properties(gi.card_residency_pinned PROPERTIES FIXTURES_REQUIRED gi_card_residency_walk DEPENDS gi.card_residency.walk)
+set_tests_properties(gi.card_residency_late PROPERTIES FIXTURES_REQUIRED "gi_card_residency_walk;gi_card_residency_teleport"
+                     DEPENDS gi.card_residency.teleport)
+set_tests_properties(gi.card_residency_held.in PROPERTIES FIXTURES_SETUP gi_card_residency_held_in)
+set_tests_properties(gi.card_residency_held.out PROPERTIES FIXTURES_REQUIRED gi_card_residency_held_in
+                     DEPENDS gi.card_residency_held.in)
+# (FRAMES: each row's own count as its fixture prints it, measured 2026-11-21 at the split's first runs)
+foreach(_rf "gi.card_residency.walk|361" "gi.card_residency.teleport|197" "gi.card_residency_pinned|197"
+            "gi.card_residency_crowded|289" "gi.card_residency_late|216" "gi.card_residency_held.in|209"
+            "gi.card_residency_held.out|290")
+    string(REPLACE "|" ";" _p "${_rf}")
+    list(GET _p 0 _r)
+    list(GET _p 1 _f)
+    set_tests_properties(${_r} PROPERTIES JAHSHAKA_TEST_FRAMES ${_f})
+endforeach()
 
 # gi.gather_sliver (PHOTON-7 stage 10) — THE GRID ANSWERS EVERY PIXEL: a 1-px sliver of a wall seen past two black
 # plates (between them, and at the view's edge) is answered by a probe on every settling frame, its noise within the

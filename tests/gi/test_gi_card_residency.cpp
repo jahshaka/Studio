@@ -68,9 +68,14 @@
 // THE ROWS (PHOTON-7 stage 10, the lead's ruling: one binary, one row a law group, each within the fixture's 10 s, every
 // run the fewest frames its law needs - AT REST is the cache's one rest decision since the stop and the cache owing its
 // readers nothing, held kQuiet frames):
-// gi.card_residency (argv walk: the walk and the teleport - (1) (2) (3) (7)), gi.card_residency_pinned (the walk and the
-// pinned teleport - (6)), _crowded ((4)), _late (the teleport and the late reader - (5)), _held (the band card held in
-// and out, both runs AT B - (8)); every row checks (7)'s store at rest over its own runs.
+// THE ROWS (argv: <row> <the snapshots' directory>; tests/gi/CMakeLists.txt registers them and says what each REQUIRES):
+// walk - the walk A -> B, (7)'s convex edge, writes walk.snapshot; teleport - the teleport at B against the walk's snapshot,
+// (1) (2) (3), writes teleport.snapshot; pinned - the teleport pinned to the walk's placement, (6), against walk.snapshot;
+// crowded - (4); late - the late first reader, (5), against teleport.snapshot; held_in - the band card held resident at B,
+// writes held_in.snapshot; held_out - held absent, (8) L1 against held_in.snapshot and THE NO POP. Every row checks (7)'s store
+// at rest over its own run. THE SPLIT (V2 plan 0.2, 2026-11-21): each run to B's rest its own row (the rows ran 12.4-16.9 s);
+// a snapshot (saveRun / loadRun, below) is stamped with this build and REFUSED from another, never compared - a reader with a
+// wrong snapshot would judge its law against another engine's run.
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -79,6 +84,10 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <dlfcn.h>
+#include <fstream>
+#include <sstream>
+#include <sys/stat.h>
 #include <map>
 #include <memory>
 #include <string>
@@ -296,6 +305,11 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     };
     look(gStartAtB ? 12.0f : -12.0f);
     if (!scene->setGlobalIllumination(gi)) return false;
+    // THE DECLARED ROUTE (URGENT #146, source.testing_rules R16; the five rows left tests/hygiene/routes_pending.txt with the
+    // split, V2 plan 0.2): a StillPicture view with the post chain and ssr 1 GATHERS and runs the ray REFLECTION; the scene's
+    // CARDS and the voxel STORE live; updateBudget 0 = GI PAUSED - asserted on the first frame against the frame's own record
+    enginetest::declareRoutes(view, scene, enginetest::Routes().gather().reflection().cards().store().paused(),
+                              (std::string("gi.card_residency's ") + name + " view").c_str());
     // (6)'s ARM: cascades 1 and 2 pinned to the walk's final placement (built there, no scroll history), 0 and 3 free
     if (pinTo && pinTo->size() >= 4u) {
         GiPlacementPin pin;
@@ -617,16 +631,160 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
 }
 }   // namespace
 
+// THE WALK's SNAPSHOT (V2 plan 0.2, the lead's ruling 2026-11-21: the walk and the teleport in one process ran 16.9 s, over the
+// fixture's 10-s budget, every frame already its law's fewest - SPLIT BY PROOF): gi.card_residency.walk runs the walk and
+// writes its Run here; gi.card_residency.teleport and gi.card_residency_pinned read it (ctest's fixture chain: FIXTURES_SETUP
+// gi_card_residency_walk). Text, one record a line, every float at 9 significant digits and every double at 17 (exact round
+// trips). STAMPED with this exe's and the engine library's modification times: a snapshot of another build is REFUSED,
+// never compared (a stale walk would judge (1)-(3) and (6) against another engine's cards).
+static std::string buildStamp() {
+    struct stat a {}, b {};
+    Dl_info info {};
+    const bool lib = dladdr(reinterpret_cast<void *>(&giQualityFacts), &info) && info.dli_fname &&
+                     stat(info.dli_fname, &b) == 0;
+    if (stat("/proc/self/exe", &a) != 0) return "";
+    std::ostringstream o;
+    o << (long long)a.st_mtim.tv_sec << "." << a.st_mtim.tv_nsec << "/" << (lib ? (long long)b.st_mtim.tv_sec : -1LL) << "."
+      << (lib ? (long long)b.st_mtim.tv_nsec : 0L);
+    return o.str();
+}
+
+static bool saveRun(const Run &r, const std::string &path) {
+    std::ofstream f(path + ".tmp");
+    if (!f) return false;
+    f.precision(17);
+    const auto fl = [](float v) { char b[32]; std::snprintf(b, sizeof(b), "%.9g", double(v)); return std::string(b); };
+    f << "stamp " << buildStamp() << "\n";
+    f << "scalars " << r.restRateOk << " " << r.frame << " " << r.newest << " " << r.evicted << " " << r.admitted << " "
+      << r.compaction << " " << r.pagesUsed << " " << r.decisionUsed << " " << r.decisionFree << " " << r.decisions << " "
+      << r.decisionAdmitted << " " << r.decisionRefused << " " << r.restA << " " << r.restB << " " << r.edgeOk << " "
+      << r.edgeRefOk;
+    for (float v : r.edge) f << " " << fl(v);
+    for (float v : r.edgeRef) f << " " << fl(v);
+    f << "\n";
+    for (const Room *room : { &r.a, &r.b }) {
+        f << "room " << fl(room->centre.x) << " " << fl(room->centre.y) << " " << fl(room->centre.z) << " "
+          << room->pillars.size();
+        for (NodeId p : room->pillars) f << " " << p;
+        f << " " << room->walls.size();
+        for (const Room::Wall &w : room->walls) f << " " << w.node << " " << w.outer;
+        f << "\n";
+    }
+    f << "built " << r.builtAtB.size();
+    for (const Vec3 &v : r.builtAtB) f << " " << fl(v.x) << " " << fl(v.y) << " " << fl(v.z);
+    f << "\n";
+    for (const CardRadiance &c : r.cards) {
+        f << "card " << c.node << " " << c.card << " " << c.bucket << " " << c.size << " " << c.lastRelit << " "
+          << c.lastIndirect << " " << c.lastRead << " " << c.rgb.size();
+        for (float v : c.rgb) f << " " << fl(v);
+        f << "\n";
+    }
+    for (const auto &kv : r.rate) f << "rate " << kv.first.first << " " << kv.first.second << " " << kv.second << "\n";
+    for (const auto &kv : r.restRate) f << "restrate " << kv.first.first << " " << kv.first.second << " " << kv.second << "\n";
+    for (const CardCacheStatus::Refused &x : r.refusedCards)
+        f << "refused " << x.node << " " << x.index << " " << x.size << " " << x.mark << "\n";
+    f << "held " << r.hitsOk << " " << r.popIn << " " << r.popOut << " " << r.popInRest << " " << r.popOutRest << "\n";
+    for (const auto &kv : r.face)
+        f << "face " << kv.first << " " << unsigned(kv.second.src) << " " << fl(kv.second.rgb[0]) << " " << fl(kv.second.rgb[1])
+          << " " << fl(kv.second.rgb[2]) << "\n";
+    f << "end\n";
+    f.close();
+    return f && std::rename((path + ".tmp").c_str(), path.c_str()) == 0;
+}
+
+/// "" read whole; else why not (absent, another build's, torn)
+static std::string loadRun(Run &r, const std::string &path) {
+    std::ifstream f(path);
+    if (!f) return "no snapshot at " + path + " - the row that writes it runs first (ctest runs it: FIXTURES_REQUIRED)";
+    std::string line, tag;
+    bool ended = false;
+    int rooms = 0;
+    while (std::getline(f, line)) {
+        std::istringstream in(line);
+        in >> tag;
+        if (tag == "stamp") {
+            std::string st;
+            in >> st;
+            if (st != buildStamp()) return "the snapshot " + path + " is another build's (" + st + ", this build " + buildStamp() + ")";
+        } else if (tag == "scalars") {
+            in >> r.restRateOk >> r.frame >> r.newest >> r.evicted >> r.admitted >> r.compaction >> r.pagesUsed >>
+                r.decisionUsed >> r.decisionFree >> r.decisions >> r.decisionAdmitted >> r.decisionRefused >> r.restA >>
+                r.restB >> r.edgeOk >> r.edgeRefOk;
+            for (float &v : r.edge) in >> v;
+            for (float &v : r.edgeRef) in >> v;
+        } else if (tag == "room") {
+            Room &room = rooms++ == 0 ? r.a : r.b;
+            size_t n = 0;
+            in >> room.centre.x >> room.centre.y >> room.centre.z >> n;
+            room.pillars.resize(n);
+            for (NodeId &p : room.pillars) in >> p;
+            in >> n;
+            room.walls.resize(n);
+            for (Room::Wall &w : room.walls) in >> w.node >> w.outer;
+        } else if (tag == "built") {
+            size_t n = 0;
+            in >> n;
+            r.builtAtB.resize(n);
+            for (Vec3 &v : r.builtAtB) in >> v.x >> v.y >> v.z;
+        } else if (tag == "card") {
+            CardRadiance c;
+            size_t n = 0;
+            in >> c.node >> c.card >> c.bucket >> c.size >> c.lastRelit >> c.lastIndirect >> c.lastRead >> n;
+            c.rgb.resize(n);
+            for (float &v : c.rgb) in >> v;
+            r.cards.push_back(std::move(c));
+        } else if (tag == "rate" || tag == "restrate") {
+            NodeId node = 0;
+            unsigned b = 0;
+            double v = 0.0;
+            in >> node >> b >> v;
+            (tag == "rate" ? r.rate : r.restRate)[{ node, b }] = v;
+        } else if (tag == "refused") {
+            CardCacheStatus::Refused x;
+            in >> x.node >> x.index >> x.size >> x.mark;
+            r.refusedCards.push_back(x);
+        } else if (tag == "held") {
+            in >> r.hitsOk >> r.popIn >> r.popOut >> r.popInRest >> r.popOutRest;
+        } else if (tag == "face") {
+            unsigned idx = 0, src = 0;
+            Run::HitRay h;
+            in >> idx >> src >> h.rgb[0] >> h.rgb[1] >> h.rgb[2];
+            h.src = static_cast<unsigned char>(src);
+            r.face[idx] = h;
+        } else if (tag == "end") {
+            ended = true;
+        }
+        if (in.fail()) return "the snapshot " + path + " is torn at: " + line.substr(0, 80);
+    }
+    return ended && rooms == 2 ? "" : "the snapshot " + path + " is incomplete (no end line, or not two rooms)";
+}
+
 int main(int argc, char **argv)
 {
     // THE ROW (one binary, one row a law group - each within the fixture's budget: the lead's ruling): walk = the walk
     // and the teleport, (1) (2) (3) (7); pinned = the walk and the pinned teleport, (6); crowded = (4); late = the
     // teleport and the late reader, (5); held = the band card held in and out at B, (8)
+    // (V2 plan 0.2: walk = the walk alone, (7), and its snapshot written; teleport = the teleport against the walk's
+    // snapshot, (1) (2) (3); pinned reads the snapshot for the walk it once ran itself)
     const std::string mode = argc > 1 ? argv[1] : "walk";
-    if (mode != "walk" && mode != "pinned" && mode != "crowded" && mode != "late" && mode != "held") {
-        std::printf("FAIL: unknown row '%s' (walk | pinned | crowded | late | held)\n", mode.c_str());
+    if (mode != "walk" && mode != "teleport" && mode != "pinned" && mode != "crowded" && mode != "late" && mode != "held_in" &&
+        mode != "held_out") {
+        std::printf("FAIL: unknown row '%s' (walk | teleport | pinned | crowded | late | held_in | held_out)\n", mode.c_str());
         return 1;
     }
+    // THE SNAPSHOTS' DIRECTORY (argv[2]): walk.snapshot (the walk's Run: .teleport and _pinned read it), teleport.snapshot (the
+    // teleport's: _late reads it), held_in.snapshot (the held-in run's: _held.out reads it)
+    const std::string snapdir = argc > 2 ? argv[2] : "";
+    if (mode != "crowded" && snapdir.empty()) {
+        std::printf("FAIL: the %s row needs the snapshots' directory (argv[2])\n", mode.c_str());
+        return 1;
+    }
+    const auto need = [&](Run &r, const char *which) {
+        const std::string why = loadRun(r, snapdir + "/" + which + ".snapshot");
+        if (!why.empty()) { std::printf("FAIL: %s\n", why.c_str()); return false; }
+        std::printf("   %s: read from %s/%s.snapshot (this build's)\n", which, snapdir.c_str(), which);
+        return true;
+    };
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-card-residency-" + mode + "-ogre.log");
     auto engine = Engine::create(cfg, err);
@@ -644,21 +802,36 @@ int main(int argc, char **argv)
     bool okW = true, okT = true, okP = true, okC = true, okL = true, okHin = true, okHout = true;
     // (the teleports START AT B - the teleport with no past: walk = teleport is path independence, and no frame of room
     // A is the law's; the walk keeps A, whose cards its arrival at B must evict)
-    if (mode == "walk" || mode == "pinned") okW = runOnce(e, true, w, frames);
+    if (mode == "walk") okW = runOnce(e, true, w, frames);
+    if ((mode == "teleport" || mode == "pinned") && !need(w, "walk")) return 1;
+    if (mode == "late" && !need(t, "teleport")) return 1;
+    if (mode == "held_out" && !need(hin, "held_in")) return 1;
     gStartAtB = true;
-    if (mode == "walk" || mode == "late") okT = runOnce(e, false, t, frames);
+    if (mode == "teleport") okT = runOnce(e, false, t, frames);
     if (mode == "pinned") okP = runOnce(e, false, pnd, frames, false, 0, &w.builtAtB);
     if (mode == "late") okL = runOnce(e, false, l, frames, false, 8);
     gStartAtB = false;
     if (mode == "crowded") okC = runOnce(e, false, c, frames, true);
-    if (mode == "held") {
-        // (8) L1: the band face's card held resident in one run and absent in another (cards.force), both AT B
+    if (mode == "held_in" || mode == "held_out") {
+        // (8) L1: the band face's card held resident in one run (_held.in, its Run written) and absent in another (_held.out,
+        // judged against it), both AT B (cards.force)
         gStartAtB = true;
-        okHin = runOnce(e, false, hin, frames, false, 0, nullptr, +1);
-        okHout = runOnce(e, false, hout, frames, false, 0, nullptr, -1);
+        if (mode == "held_in") okHin = runOnce(e, false, hin, frames, false, 0, nullptr, +1);
+        else okHout = runOnce(e, false, hout, frames, false, 0, nullptr, -1);
         gStartAtB = false;
     }
+    if (mode == "held_in") {
+        CHECK(okHin && hin.restB >= 0 && hin.hitsOk, "the held-in run comes to rest at B and its band face's hits read back");
+        CHECK(saveRun(hin, snapdir + "/held_in.snapshot"), "the held-in run's snapshot written for _held.out");
+    }
     if (mode == "walk") {
+        std::printf("   WALK:     at rest in A %d frames, in B %d | %zu cards resident, %u pages | admitted %llu, evicted %llu, "
+                    "compaction moves %llu\n", w.restA, w.restB, w.cards.size(), w.pagesUsed, w.admitted, w.evicted,
+                    w.compaction);
+        CHECK(okW && w.restA >= 0 && w.restB >= 0, "the walk comes to rest in A and in B and its cards read back");
+        CHECK(saveRun(w, snapdir + "/walk.snapshot"), "the walk's snapshot written for the teleport and the pinned rows");
+    }
+    if (mode == "teleport") {
     std::printf("   WALK:     at rest in A %d frames, in B %d | %zu cards resident, %u pages | admitted %llu, evicted %llu, "
                 "compaction moves %llu\n", w.restA, w.restB, w.cards.size(), w.pagesUsed, w.admitted, w.evicted,
                 w.compaction);
@@ -667,6 +840,7 @@ int main(int argc, char **argv)
                 t.compaction);
     CHECK(okW && okT && w.restA >= 0 && w.restB >= 0 && t.restB >= 0,
           "both runs come to rest (the walk in A and in B, the teleport at B) and their cards read back");
+    CHECK(saveRun(t, snapdir + "/teleport.snapshot"), "the teleport's snapshot written for _late");
     }
 
     // the nodes are the scene's own: the two runs' scenes number them alike (the same build order) - matched by the
@@ -684,7 +858,7 @@ int main(int argc, char **argv)
     const auto readRecently = [](const Run &r, const CardRadiance &c) { return c.lastRead + kWindow >= r.newest; };
 
     // (1) the pillars of B carded, no outer face read
-    if (mode == "walk") {
+    if (mode == "teleport") {
     size_t pillarsW = 0, pillarsT = 0, outerRead = 0;
     for (const Run *r : { &w, &t }) {
         size_t &pillars = r == &w ? pillarsW : pillarsT;
@@ -745,7 +919,7 @@ int main(int argc, char **argv)
                             rt >= floor ? " - AT THE FLOOR OR MORE" : rt >= 0.5 * floor ? " (the band floor/2 .. floor)" : "");
         }
     };
-    if (mode == "walk") {
+    if (mode == "teleport") {
     side(fW, fT, "walk", "teleport", readW, missW, bandW);
     side(fT, fW, "teleport", "walk", readT, missT, bandT);
     std::printf("   the read set (faces read in the readers' rest-16 at B at least %.2f hits a frame, the settle law's floor): "
@@ -775,7 +949,7 @@ int main(int argc, char **argv)
     }
 
     // (3) the values
-    if (mode == "walk") {
+    if (mode == "teleport") {
     size_t common = 0, over = 0;
     double worst = 0.0;
     for (const auto &kv : inW) {
@@ -870,7 +1044,7 @@ int main(int argc, char **argv)
     //     with the voxel read along the RAY: 98 codes, the pillar's lit -z face read into its +x face; then 5.2 codes with
     //     the read along the hit's normal - against a code, the bar before it was derived. The cause, measured against the
     //     card estimator at 128 rays: both caches' fixed 16-ray quadrature, the voxel side's single surface point -13 %.)
-    if (mode == "held") {
+    if (mode == "held_out") {
         const std::map<NodeId, int> idI = key(hin), idO = key(hout);
         std::map<std::pair<int, unsigned>, const CardRadiance *> inI, inO;
         for (const CardRadiance &k : hin.cards) if (idI.count(k.node)) inI[{ idI.at(k.node), k.card }] = &k;
