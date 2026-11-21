@@ -446,6 +446,25 @@ add_test(NAME engine.compute_layer_prune COMMAND test_compute_layer_prune
 set_tests_properties(engine.compute_layer_prune PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.compute_layer_prune)
 
+# engine.compute_store_chain — THE COMPUTE LAYER END TO END ON THE CPU (SHADER-SYSTEM-1 stage 3F (c);
+# test_compute_store_chain.cpp says why): the engine's adapter between the fork's HlmsCompute records and a real
+# ShaderCache, three NULL launches in the engine's order - a built permutation's record is saved, the next launch loads it
+# (stale 0, rejected 0: the fork's keys are the ones irisgl re-derives) and dispatches with NO parse; an edited template
+# prunes it and parses (the negative control). No card, no display.
+add_executable(test_compute_store_chain test_compute_store_chain.cpp)
+set_target_properties(test_compute_store_chain PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+set_source_files_properties(test_compute_store_chain.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
+target_include_directories(test_compute_store_chain PRIVATE
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+target_compile_definitions(test_compute_store_chain PRIVATE JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}")
+target_link_libraries(test_compute_store_chain PRIVATE JahshakaEngine OgreNext)
+add_test(NAME engine.compute_store_chain COMMAND test_compute_store_chain
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.compute_store_chain PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.compute_store_chain)
+
 # engine.ray_builder_slots — THE RAY PIPELINE BUILDERS' SLOTS (COLD-BOOT-1 stage 4; RayBuilderSlots.h): the width bounds
 # the builders at once; the reflection pair's second builder is taken only if a slot is free NOW (a tier one wide builds
 # the pair serially - no width deadlocks); a width below one is one. CPU only: no card, no engine.

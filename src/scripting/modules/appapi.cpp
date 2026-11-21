@@ -285,7 +285,8 @@ QVector<VerbInfo> AppApi::verbs() const
           Needs::Engine },
         { "asyncShaders", "app.asyncShaders() -> {policy, active, running, threads, pending, completed, "
                           "failed, placeholderDraws, pendingSkips, captureDeferredDraws, compiledInBackground, "
-                          "paramsMisfits, compileErrors, computeParsedInFrame, computePsoInFrame, glslangCompiles, "
+                          "paramsMisfits, compileErrors, computeParsedInFrame, computePsoInFrame, computeDestroyWaits, "
+                          "computeDestroyWaitMs, glslangCompiles, "
                           "glslangMs, graphicsPsos, graphicsPsoMs, computePsos, computePsoMs, rayBuildsJoinedWaiting}",
           "THE BACKGROUND SHADER COMPILER (ASYNC-SHADERS-1). After a project is open the editor's "
           "view never waits for a shader: a permutation it has not built yet goes to the engine's "
@@ -309,7 +310,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "runs) - 0 on a sound build. WHAT A FRAME BUILT AND WHAT THE COMPILERS COST (COLD-BOOT-1), running totals "
           "for the process: computeParsedInFrame counts compute permutations whose template parse ran inside a frame "
           "(a warm launch's frames read 0: the compute layer's records serve them); computePsoInFrame compute "
-          "pipelines built inside a frame by any path; glslangCompiles / glslangMs the shaders glslang compiled and "
+          "pipelines built inside a frame by any path; computeDestroyWaits / computeDestroyWaitMs the compute jobs "
+          "destroyed while their permutation was compiling, which the frame waited for, and that wait's time; glslangCompiles / glslangMs the shaders glslang compiled and "
           "its time, every thread summed; graphicsPsos / graphicsPsoMs and computePsos / computePsoMs the driver's "
           "pipeline creations and their time, every thread summed. rayBuildsJoinedWaiting counts the times a frame or a "
           "wait blocked on a ray pipeline build that was not finished (COLD-BOOT-1 stage 4: the startup gate waits on "
@@ -1073,6 +1075,8 @@ QVariantMap AppApi::asyncShaders()
     m["compileErrors"]        = QVariant::fromValue(qulonglong(s.compileErrors));
     m["computeParsedInFrame"] = QVariant::fromValue(qulonglong(s.computeParsedInFrame));
     m["computePsoInFrame"]    = QVariant::fromValue(qulonglong(s.computePsoInFrame));
+    m["computeDestroyWaits"]  = QVariant::fromValue(qulonglong(s.computeDestroyWaits));
+    m["computeDestroyWaitMs"] = s.computeDestroyWaitMs;
     m["glslangCompiles"]      = QVariant::fromValue(qulonglong(s.glslangCompiles));
     m["glslangMs"]            = s.glslangMs;
     m["graphicsPsos"]         = QVariant::fromValue(qulonglong(s.graphicsPsos));

@@ -1,8 +1,9 @@
 // engine.compute_record (COLD-BOOT-1 stage 3; CPU, no card, no engine) - THE COMPUTE LAYER'S RECORD AND ITS TWO KEYS
 // (irisgl engine/src/ComputeRecord.h says why). The laws:
 //   (1) A RECORD SURVIVES THE LAYER: records -> compute.bin's bytes -> records, equal field for field, in order.
-//   (2) THE INPUT KEY IS THE CONTENT THE PARSE READS (the lead's ruling P3): a changed template, piece file, C++ piece or
-//       property moves the key of the job that reads it; a change to ANOTHER job's piece does not move this job's key;
+//   (2) THE INPUT KEY IS THE CONTENT THE PARSE READS (the lead's ruling P3): a changed template, piece file, C++ piece,
+//       property or root layout (SHADER-SYSTEM-1 F2a: a slot's type reaches no property) moves the key of the job that
+//       reads it; a change to ANOTHER job's piece does not move this job's key;
 //       the C++ pieces' container order is not an input. NEGATIVE CONTROL: two jobs differing ONLY in a C++ piece get two
 //       keys - the key HlmsCompute::permutationKey gave (source name + piece file names + properties, fork
 //       OgreHlmsCompute.cpp) folds no C++ piece and could not tell them apart; its fields are restated here as
@@ -55,8 +56,9 @@ ComputeKeyInputs jobInputs(const std::string &piece, const std::string &cppPiece
     in.templateText = "#version 450\n@insertpiece( Body )\n";
     in.pieceFiles = { { "CrossPlatformSettings_piece_all.glsl", "#define ogre_float float\n" },
                       { "Body_piece_cs.any", piece } };
-    in.cppPieces = { { "Header", "// header\n" }, { "Extra", cppPiece } };
+    in.cppPieces = { { 0x3333u, "// header\n" }, { 0x4444u, cppPiece } };
     in.properties = { { 0x1111u, 8 }, { 0x2222u, 1 } };
+    in.rootLayout = std::string(48, '\x05');
     return in;
 }
 
@@ -99,6 +101,9 @@ int main() {
     CHECK(computeRecordInputKey(c) != k0, "(2) a changed C++ PIECE moves the key");
     ComputeKeyInputs v = base; v.properties[0].second = 16;
     CHECK(computeRecordInputKey(v) != k0, "(2) a changed PROPERTY value moves the key");
+    ComputeKeyInputs l = base; l.rootLayout[7] = '\x06';
+    CHECK(computeRecordInputKey(l) != k0,
+          "(2) a changed ROOT LAYOUT moves the key (equal text, other slot types: SHADER-SYSTEM-1 F2a)");
     ComputeKeyInputs o = base; std::swap(o.cppPieces[0], o.cppPieces[1]);
     CHECK(computeRecordInputKey(o) == k0, "(2) the C++ pieces' container order is not an input");
     // Another job reads another piece: editing THAT piece moves the other job's key and leaves this one's.

@@ -20,8 +20,10 @@
 # CLAUSE (2), THE COMPUTE LAYER's RECORD KEY (COLD-BOOT-1 stage 3; the lead's condition 3 on P6: per VIEW, no per-run
 # value): the input key a record is found by (irisgl engine/src/ComputeRecord.h, ComputeKeyInputs and
 # computeRecordInputKey) reads EXACTLY what a template's parse reads - the template's bytes, the piece files, the C++
-# pieces, the properties - and nothing of a view: the struct holds exactly those four fields, and neither it nor the key
-# function names a view, a camera, an eye, a viewport or a size. A new field is red until the lead rules it in here.
+# pieces, the properties - plus the ROOT LAYOUT's bytes (ruled in by SHADER-SYSTEM-1's start preflight, F2a: a slot's type
+# reaches no property, and two jobs of equal text with other slot types need two programs) - and nothing of a view: the
+# struct holds exactly those five fields, and neither it nor the key function names a view, a camera, an eye, a viewport
+# or a size. A new field is red until the lead rules it in here.
 # Its negative control first: a synthetic struct with a view's width added is refused.
 import glob, json, os, re, sys, tempfile
 
@@ -70,7 +72,7 @@ def judge(jsons, idx):
     return bad
 
 
-KEY_FIELDS = ['templateText', 'pieceFiles', 'cppPieces', 'properties']
+KEY_FIELDS = ['templateText', 'pieceFiles', 'cppPieces', 'properties', 'rootLayout']
 VIEW_WORDS = re.compile(r'\b\w*(?:[Vv]iew|[Cc]amera|[Ee]ye|[Vv]iewport|[Ww]idth|[Hh]eight|[Rr]esolution|[Ss]ize)\w*\b')
 
 
@@ -117,7 +119,8 @@ def self_test():
             'flag_false': {'source': 'Plain_cs', 'inform_shader_of_texture_size': False},
             'missing': {'source': 'Nowhere_cs', 'inform_shader_of_texture_size': True}}}, open(j, 'w'))
         got = sorted(b[1] for b in judge([j], index_files([t])))
-    good_h = 'struct ComputeKeyInputs {\n std::string templateText;\n V pieceFiles;\n V cppPieces;\n P properties;\n};\n'
+    good_h = ('struct ComputeKeyInputs {\n std::string templateText;\n V pieceFiles;\n V cppPieces;\n P properties;\n'
+              ' std::string rootLayout;\n};\n')
     bad_h = good_h.replace(' P properties;', ' P properties;\n unsigned viewWidth;')
     good_c = 'ComputeKey128 computeRecordInputKey(const ComputeKeyInputs &in) {\n    k.u64(in.pieceFiles.size());\n}\n'
     bad_c = good_c.replace('k.u64(in.pieceFiles.size());', 'k.u64(in.pieceFiles.size()); k.u64(eyeIndex);')
@@ -134,7 +137,7 @@ def main():
     ok, got = self_test()
     print(('  ok   ' if ok else '  FAIL ') + 'the negative controls: a flagless job reading no size and a missing source are refused, '
           'a job reading num_thread_groups_x and a flag-false job are not; a record key with a view width or an eye is '
-          'refused, the four-field key is not (%s)' % (got,))
+          'refused, the five-field key is not (%s)' % (got,))
     fails += 0 if ok else 1
     jsons = sorted(glob.glob(os.path.join(root, 'irisgl', 'engine', 'media', '**', '*.material.json'), recursive=True))
     jobs = sum(len(json.load(open(f)).get('compute', {})) for f in jsons)
@@ -152,7 +155,7 @@ def main():
         rk = ['cannot read the record key: %s' % e]
     for f in rk:
         print('  FAIL (2) ' + f)
-    print(('  ok   ' if not rk else '  FAIL ') + '(2) the compute record key reads the parse\'s four inputs and nothing of a view')
+    print(('  ok   ' if not rk else '  FAIL ') + '(2) the compute record key reads the parse\'s inputs and the root layout, nothing of a view')
     fails += 1 if rk else 0
     print('source.compute_size_keys: ' + ('PASSED' if not fails else 'FAILED (%d)' % fails))
     sys.stdout.flush()
