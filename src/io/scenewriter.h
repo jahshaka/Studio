@@ -56,7 +56,10 @@ public:
     /// in a scene file).
     static SceneFragment captureFragment(const iris::SceneNodePtr &node);
 
-    static void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
+    /// `omitted`: the guids getSceneObject leaves out (setOmittedNodes), passed down the walk; a library blob or
+    /// a fragment omits nothing.
+    static void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node,
+                               const QSet<QString> *omitted = nullptr);
 	static void writeAnimationData(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
     static void writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr node);
 	static void writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node);
