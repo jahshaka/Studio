@@ -15,7 +15,9 @@
 #                 views), the lerp between levels 0.2 apart, and the clamp at the last level (0.7: the 0.75 strip). A
 #                 level weighting or a normalisation error shifts the mean - the law fails.
 #   --reference   gi.rough_reference - THE LOBE AGAINST THE TRUTH (re-pointed in 10-3, R12): the held picture against
-#                 the traced reflection's reference (cutoff 100, the rays alone, reflect.restReference: 4,096 raw GGX
+#                 the traced reflection's reference (cutoff 100, THE RAYS ALONE - the test arm reflect.screenOff: the
+#                 reflection has no mode since PHOTON-7-9A and a row that tests the ray sets the arm, the lead's ruling R7 -
+#                 reflect.restReference: 4,096 raw GGX
 #                 samples a texel at rest, composited unfiltered). THE LAW: the rough class's and every strip's mean SIGNED
 #                 error (the energy, the channels' mean) within the reference's SE of the mean + 1 code (the SE from the
 #                 reference's own pixel noise: a pixel against its four neighbours' mean); the per-pixel error printed
@@ -70,6 +72,7 @@ quit
 EOF
     cat > "$WD/ref.lab" <<EOF
 row reflectionRoughnessCutoff 100
+arm reflect.screenOff 1
 arm reflect.restReference 1
 camera $P
 frames 4300
