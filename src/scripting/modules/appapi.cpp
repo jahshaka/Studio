@@ -242,6 +242,7 @@ QVector<VerbInfo> AppApi::verbs() const
         { "shaderCache", "app.shaderCache() -> {enabled, dir, fingerprint, sizeBytes, files, "
                          "pipelineCacheLoaded, pipelineCacheReason, microcodeLoaded, "
                          "microcodeEntries, hlmsCachesLoaded, seedDir, seedState, seedEntries, "
+                         "computeRecordsLoaded, computeRecordsRejected, computeRecordsStale, "
                          "compiledThisRun, loadedThisRun, expectedShaders, lastSaved, "
                          "save:{copied, messages, worstMs, chunkWorstMs, chunkMaxEntries, chunkEntries, frames, frameOverruns, written}, "
                          "passCacheEntries, passCacheCapacity, renderableCacheEntries, "
@@ -261,7 +262,11 @@ QVector<VerbInfo> AppApi::verbs() const
           "key and never written; seedState says what this launch did with it — off / unused (the "
           "directory's own layer loaded) / absent / loaded (seedEntries entries; microcodeLoaded is then "
           "true) / stale (made by another fork, glslang, build type or render system: not read) / corrupt / "
-          "rejected. The counters work whether or not the cache "
+          "rejected. THE COMPUTE LAYER (COLD-BOOT-1, compute.bin): computeRecordsLoaded counts the compute-code "
+          "records this launch read and kept - their code is compiled off the frame once the background compiler "
+          "runs, so a warm launch's frames parse no compute template; computeRecordsRejected those whose stored "
+          "source does not hash to the program they name (another compiler's, or damaged); computeRecordsStale "
+          "those dropped because a file they read (the template, a piece) changed. The counters work whether or not the cache "
           "itself is enabled. liveCompiles counts the shaders compiled on the UI thread AFTER the "
           "startup splash outside a compile dialog (an open in flight, or the open's compile "
           "dialog) — each one froze the window for its compile and is a named defect "
@@ -276,7 +281,8 @@ QVector<VerbInfo> AppApi::verbs() const
           Needs::Engine },
         { "asyncShaders", "app.asyncShaders() -> {policy, active, running, threads, pending, completed, "
                           "failed, placeholderDraws, pendingSkips, captureDeferredDraws, compiledInBackground, "
-                          "paramsMisfits, compileErrors}",
+                          "paramsMisfits, compileErrors, computeParsedInFrame, computePsoInFrame, glslangCompiles, "
+                          "glslangMs, graphicsPsos, graphicsPsoMs, computePsos, computePsoMs}",
           "THE BACKGROUND SHADER COMPILER (ASYNC-SHADERS-1). After a project is open the editor's "
           "view never waits for a shader: a permutation it has not built yet goes to the engine's "
           "compile service (its own low-priority threads) and the object draws with a neutral grey "
@@ -296,7 +302,12 @@ QVector<VerbInfo> AppApi::verbs() const
           "dispatches the engine REFUSED because a pipeline's parameters did not fit its program - "
           "0 on a sound build. compileErrors counts program loads, of every shader of the process, that "
           "FAILED to compile (the engine logs and survives one: a compute job whose shader fails never "
-          "runs) - 0 on a sound build.",
+          "runs) - 0 on a sound build. WHAT A FRAME BUILT AND WHAT THE COMPILERS COST (COLD-BOOT-1), running totals "
+          "for the process: computeParsedInFrame counts compute permutations whose template parse ran inside a frame "
+          "(a warm launch's frames read 0: the compute layer's records serve them); computePsoInFrame compute "
+          "pipelines built inside a frame by any path; glslangCompiles / glslangMs the shaders glslang compiled and "
+          "its time, every thread summed; graphicsPsos / graphicsPsoMs and computePsos / computePsoMs the driver's "
+          "pipeline creations and their time, every thread summed.",
           Needs::Engine },
         { "setAsyncShaders", "app.setAsyncShaders(on) -> app.asyncShaders()",
           "Turns the background compile policy on or off for this session (see app.asyncShaders). A "
@@ -1011,6 +1022,9 @@ QVariantMap AppApi::shaderCache()
     m["seedDir"]             = QString::fromStdString(s.seedDir);
     m["seedState"]           = QString::fromStdString(s.seedState);
     m["seedEntries"]         = s.seedEntries;
+    m["computeRecordsLoaded"]   = s.computeRecordsLoaded;
+    m["computeRecordsRejected"] = s.computeRecordsRejected;
+    m["computeRecordsStale"]    = s.computeRecordsStale;
     m["hlmsCachesLoaded"]    = s.hlmsCachesLoaded;
     m["compiledThisRun"]     = s.compiledThisRun;
     m["loadedThisRun"]       = s.loadedThisRun;
@@ -1048,6 +1062,14 @@ QVariantMap AppApi::asyncShaders()
     m["compiledInBackground"] = s.compiledInBackground;
     m["paramsMisfits"]        = QVariant::fromValue(qulonglong(s.paramsMisfits));
     m["compileErrors"]        = QVariant::fromValue(qulonglong(s.compileErrors));
+    m["computeParsedInFrame"] = QVariant::fromValue(qulonglong(s.computeParsedInFrame));
+    m["computePsoInFrame"]    = QVariant::fromValue(qulonglong(s.computePsoInFrame));
+    m["glslangCompiles"]      = QVariant::fromValue(qulonglong(s.glslangCompiles));
+    m["glslangMs"]            = s.glslangMs;
+    m["graphicsPsos"]         = QVariant::fromValue(qulonglong(s.graphicsPsos));
+    m["graphicsPsoMs"]        = s.graphicsPsoMs;
+    m["computePsos"]          = QVariant::fromValue(qulonglong(s.computePsos));
+    m["computePsoMs"]         = s.computePsoMs;
     return m;
 }
 

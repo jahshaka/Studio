@@ -345,6 +345,8 @@ if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
     # so the boot regenerates exactly the permutations it uses from the templates (cheap: the microcode and the pipelines
     # stay warm, keyed on content) and its promotion REPLACES the shared union: the dead permutations of earlier engine
     # versions go, the old key's reset at a warm boot's cost. A manifest naming a missing file would wipe the whole cache.
+    # THE COMPUTE LAYER GOES WITH IT (COLD-BOOT-1 stage 3): compute.bin holds the compute permutations' code records, the
+    # same kind of union of earlier boots - left out the same way, so the promotion replaces it with what this boot built.
     # THE STARTUP PASS's RECORD GOES WITH THE LAYER IT DESCRIBES (TEST-STREAMLINE-1, capture.first_recording's red at
     # ae6713d20): warm-pass.key (src/app/shaderbuildgate.cpp) says "this cache holds what the global pass draws" - the
     # recording view's NV12 job, the template worlds, the GI compute set - and the app SKIPS the pass on it. Kept beside a
@@ -353,10 +355,10 @@ if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
     # (the linked file is the shared cache's: never written), the top-up's first app boot re-runs the pass over the warm
     # microcode and writes the record again.
     if [ "$drop_hlms" = 1 ] && [ -f "$home/$cache_rel/cache-manifest.txt" ]; then
-        rm -f "$home/$cache_rel"/hlms.*.bin "$home/$cache_rel/warm-pass.key"
-        grep -v '^file hlms\.' "$home/$cache_rel/cache-manifest.txt" > "$home/$cache_rel/cache-manifest.txt.new"
+        rm -f "$home/$cache_rel"/hlms.*.bin "$home/$cache_rel/compute.bin" "$home/$cache_rel/warm-pass.key"
+        grep -v '^file hlms\.\|^file compute\.bin ' "$home/$cache_rel/cache-manifest.txt" > "$home/$cache_rel/cache-manifest.txt.new"
         mv -f "$home/$cache_rel/cache-manifest.txt.new" "$home/$cache_rel/cache-manifest.txt"
-        echo "fresh_home.sh: --drop-hlms: the home's hlms layer and its startup-pass record left out (the boot re-runs the pass and regenerates what it uses)"
+        echo "fresh_home.sh: --drop-hlms: the home's hlms layer, its compute layer and its startup-pass record left out (the boot re-runs the pass and regenerates what it uses)"
     fi
 fi
 

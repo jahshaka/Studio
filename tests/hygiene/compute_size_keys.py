@@ -16,6 +16,13 @@
 # usage: compute_size_keys.py <source dir> <staged media dir>
 # A NEGATIVE CONTROL runs first: synthetic jobs - flagless and reading nothing (red), flagless and reading num_thread_groups_x
 # (green), flag false (green), a missing source (red).
+#
+# CLAUSE (2), THE COMPUTE LAYER's RECORD KEY (COLD-BOOT-1 stage 3; the lead's condition 3 on P6: per VIEW, no per-run
+# value): the input key a record is found by (irisgl engine/src/ComputeRecord.h, ComputeKeyInputs and
+# computeRecordInputKey) reads EXACTLY what a template's parse reads - the template's bytes, the piece files, the C++
+# pieces, the properties - and nothing of a view: the struct holds exactly those four fields, and neither it nor the key
+# function names a view, a camera, an eye, a viewport or a size. A new field is red until the lead rules it in here.
+# Its negative control first: a synthetic struct with a view's width added is refused.
 import glob, json, os, re, sys, tempfile
 
 SIZE_READ = re.compile(r'num_thread_groups_[xyz]|\b(?:texture|uav)\d+_(?:width|height|depth|mipmaps)\b|_(?:width|height|depth)_with_lod\b')
@@ -63,6 +70,42 @@ def judge(jsons, idx):
     return bad
 
 
+KEY_FIELDS = ['templateText', 'pieceFiles', 'cppPieces', 'properties']
+VIEW_WORDS = re.compile(r'\b\w*(?:[Vv]iew|[Cc]amera|[Ee]ye|[Vv]iewport|[Ww]idth|[Hh]eight|[Rr]esolution|[Ss]ize)\w*\b')
+
+
+def strip_comments(text):
+    text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
+    return re.sub(r'//[^\n]*', '', text)
+
+
+def record_key_faults(header_text, source_text):
+    """[why] - the record key's law broken (clause 2)"""
+    faults = []
+    h = strip_comments(header_text)
+    m = re.search(r'struct\s+ComputeKeyInputs\s*\{(.*?)\};', h, re.S)
+    if not m:
+        return ['ComputeKeyInputs not found']
+    body = m.group(1)
+    fields = re.findall(r'(\w+)\s*;', body)
+    if fields != KEY_FIELDS:
+        faults.append('ComputeKeyInputs holds %s, the law %s' % (fields, KEY_FIELDS))
+    words = sorted(set(VIEW_WORDS.findall(body)))
+    if words:
+        faults.append('ComputeKeyInputs names a view or a size: %s' % words)
+    src = strip_comments(source_text)
+    f = re.search(r'ComputeKey128\s+computeRecordInputKey\s*\([^)]*\)\s*\{(.*?)\n\}', src, re.S)
+    if not f:
+        faults.append('computeRecordInputKey not found')
+    else:
+        words = sorted(set(w for w in VIEW_WORDS.findall(f.group(1)) if w not in ('size',)))
+        # .size() of the key's own containers is a length prefix, not a view's size
+        words = [w for w in words if not re.search(r'\.' + re.escape(w) + r'\(\)', f.group(1))]
+        if words:
+            faults.append('computeRecordInputKey names a view or a size: %s' % words)
+    return faults
+
+
 def self_test():
     with tempfile.TemporaryDirectory() as t:
         open(os.path.join(t, 'Plain_cs.glsl'), 'w').write('void main() { uint x = 1u; }\n')
@@ -74,7 +117,12 @@ def self_test():
             'flag_false': {'source': 'Plain_cs', 'inform_shader_of_texture_size': False},
             'missing': {'source': 'Nowhere_cs', 'inform_shader_of_texture_size': True}}}, open(j, 'w'))
         got = sorted(b[1] for b in judge([j], index_files([t])))
-        return got == ['flagless_plain', 'missing'], got
+    good_h = 'struct ComputeKeyInputs {\n std::string templateText;\n V pieceFiles;\n V cppPieces;\n P properties;\n};\n'
+    bad_h = good_h.replace(' P properties;', ' P properties;\n unsigned viewWidth;')
+    good_c = 'ComputeKey128 computeRecordInputKey(const ComputeKeyInputs &in) {\n    k.u64(in.pieceFiles.size());\n}\n'
+    bad_c = good_c.replace('k.u64(in.pieceFiles.size());', 'k.u64(in.pieceFiles.size()); k.u64(eyeIndex);')
+    rk = (not record_key_faults(good_h, good_c)) and bool(record_key_faults(bad_h, good_c)) and bool(record_key_faults(good_h, bad_c))
+    return got == ['flagless_plain', 'missing'] and rk, (got, rk)
 
 
 def main():
@@ -84,8 +132,9 @@ def main():
     root, media = sys.argv[1], sys.argv[2]
     fails = 0
     ok, got = self_test()
-    print(('  ok   ' if ok else '  FAIL ') + 'the negative control: a flagless job reading no size and a missing source are refused, '
-          'a job reading num_thread_groups_x and a flag-false job are not (refused: %s)' % got)
+    print(('  ok   ' if ok else '  FAIL ') + 'the negative controls: a flagless job reading no size and a missing source are refused, '
+          'a job reading num_thread_groups_x and a flag-false job are not; a record key with a view width or an eye is '
+          'refused, the four-field key is not (%s)' % (got,))
     fails += 0 if ok else 1
     jsons = sorted(glob.glob(os.path.join(root, 'irisgl', 'engine', 'media', '**', '*.material.json'), recursive=True))
     jobs = sum(len(json.load(open(f)).get('compute', {})) for f in jsons)
@@ -95,6 +144,16 @@ def main():
     print(('  ok   ' if not bad else '  FAIL ') + 'every compute job of %d in %d files keys no size it does not read (%d break the law)'
           % (jobs, len(jsons), len(bad)))
     fails += 1 if bad or not jsons else 0
+    src = os.path.join(root, 'irisgl', 'engine', 'src')
+    try:
+        rk = record_key_faults(open(os.path.join(src, 'ComputeRecord.h')).read(),
+                               open(os.path.join(src, 'ComputeRecord.cpp')).read())
+    except OSError as e:
+        rk = ['cannot read the record key: %s' % e]
+    for f in rk:
+        print('  FAIL (2) ' + f)
+    print(('  ok   ' if not rk else '  FAIL ') + '(2) the compute record key reads the parse\'s four inputs and nothing of a view')
+    fails += 1 if rk else 0
     print('source.compute_size_keys: ' + ('PASSED' if not fails else 'FAILED (%d)' % fails))
     sys.stdout.flush()
     return 1 if fails else 0

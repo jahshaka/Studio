@@ -24,8 +24,10 @@ CK="$SRC/tests/support/shadercache_check.py"
 # toy_cache <dir> <saved> <shaders>
 toy_cache() {
     mkdir -p "$1"; printf '0123456789' > "$1/hlms.1.bin"; printf 'abcdefghijklmnopqrst' > "$1/pipeline.cache"
-    printf 'jahshaka-shader-cache 2\nsaved %s\nshaders %s\nfile hlms.1.bin 10 %s k1\nfile pipeline.cache 20 %s k2\n' "$2" "$3" \
-        "$(python3 -I "$CK" --hash "$1/hlms.1.bin")" "$(python3 -I "$CK" --hash "$1/pipeline.cache")" > "$1/cache-manifest.txt"
+    printf 'JAHCOMP1' > "$1/compute.bin"
+    printf 'jahshaka-shader-cache 2\nsaved %s\nshaders %s\nfile hlms.1.bin 10 %s k1\nfile pipeline.cache 20 %s k2\nfile compute.bin 8 %s k1\n' "$2" "$3" \
+        "$(python3 -I "$CK" --hash "$1/hlms.1.bin")" "$(python3 -I "$CK" --hash "$1/pipeline.cache")" \
+        "$(python3 -I "$CK" --hash "$1/compute.bin")" > "$1/cache-manifest.txt"
 }
 toy_cache "$T/.shadercache" 1 2
 toy_cache "$T/.shadercache-engine" 1 2
@@ -217,7 +219,8 @@ ls "$T/gpu.lock.q" 2> /dev/null | grep -qE '^[0-9]{12}\.s50$' && ok "a boot that
 # A TOP-UP REPLACES THE UNION (the stage-1 audit's finding 4): an app-off boot whose ONLY why is the engine's moved code boots
 # its home without the shared hlms layer (fresh_home.sh --drop-hlms), so the promoted cache holds only what the boot used -
 # the shared hlms.1.bin of an earlier engine is gone after it (red before: the union kept it). A boot cold for another reason
-# keeps the layer.
+# keeps the layer. THE COMPUTE LAYER GOES WITH IT (COLD-BOOT-1 stage 3): compute.bin is the compute permutations' records,
+# the same union of what earlier boots built - dropped by the top-up beside the hlms layer (red before: it was kept).
 # THE PASS's RECORD GOES WITH THE LAYER (capture.first_recording's red at ae6713d20): the shared cache holds the startup
 # pass's record (warm-pass.key); the top-up's boot must find none and run the pass, and the promoted cache carries the record
 # that boot wrote (red before: the record survived the drop, the fake skipped the pass - the real app's union lost the NV12
@@ -227,10 +230,11 @@ printf 'pass=an-earlier-boot\n' > "$B2/tests/.shadercache/warm-pass.key"
 printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$B2/tests/.shadercache.warm-key"; echo 0000000000000000 > "$B2/tests/.shadercache.engine-id"
 : > "$T/b2.pass"
 out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B2/tests" "${F[@]}" --only app-off); rc=$?
-[ $rc = 0 ] && echo "$out" | grep -q 'a TOP-UP' && echo "$out" | grep -q -- '--drop-hlms: the home.s hlms layer and its startup-pass record left out' &&
+[ $rc = 0 ] && echo "$out" | grep -q 'a TOP-UP' && echo "$out" | grep -q -- '--drop-hlms: the home.s hlms layer, its compute layer and its startup-pass record left out' &&
     ! grep -q '^file hlms\.' "$B2/tests/.shadercache/cache-manifest.txt" && grep -q '^file pipeline.cache' "$B2/tests/.shadercache/cache-manifest.txt" &&
+    ! grep -q '^file compute\.bin' "$B2/tests/.shadercache/cache-manifest.txt" &&
     [ "$(cat "$B2/tests/.shadercache.engine-id")" = "$EID" ] &&
-    ok "a TOP-UP boot (the engine's code moved alone) boots without the hlms layer and REPLACES the union: the old hlms entries gone, the pipelines kept" ||
+    ok "a TOP-UP boot (the engine's code moved alone) boots without the hlms and compute layers and REPLACES the union: the old hlms entries and compute records gone, the pipelines kept" ||
     no "the top-up's union: rc $rc $(echo "$out" | tail -3) / $(tr '\n' ';' < "$B2/tests/.shadercache/cache-manifest.txt")"
 [ "$(head -1 "$T/b2.pass")" = ran ] && [ "$(cat "$B2/tests/.shadercache/warm-pass.key" 2>/dev/null)" = pass=this-boot ] &&
     ok "the top-up's boot found no startup-pass record and ran the pass; the promoted cache holds the record it wrote" ||

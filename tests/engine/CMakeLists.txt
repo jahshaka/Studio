@@ -395,6 +395,18 @@ jah_no_display(engine.moving_sample)
 # - the reset shows only at the next definition rebuild after a shape change in the new scene.
 # The history-dependent list SIZE (memory, not picture) is the lead's declared item; its fixer is a builder (the list
 # re-made at max(0, create) on a re-attach).
+# engine.compute_record — THE COMPUTE LAYER's RECORD AND ITS TWO KEYS (COLD-BOOT-1 stage 3; test_compute_record.cpp says
+# why): the round trip through compute.bin's bytes, the input key moving with exactly the content a parse reads (its
+# negative control: the old permutation key's fields merge two jobs differing only in a C++ piece), the pairing law (a
+# record whose source does not hash to its program key is rejected), the program key. CPU only: no card, no engine.
+add_executable(test_compute_record test_compute_record.cpp)
+set_target_properties(test_compute_record PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_compute_record PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+target_link_libraries(test_compute_record PRIVATE JahshakaEngine)
+add_test(NAME engine.compute_record COMMAND test_compute_record)
+set_tests_properties(engine.compute_record PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.compute_record)
+
 add_executable(test_hit_list_law test_hit_list_law.cpp)
 set_target_properties(test_hit_list_law PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
 target_include_directories(test_hit_list_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
