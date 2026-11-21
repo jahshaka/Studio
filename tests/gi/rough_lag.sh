@@ -5,12 +5,14 @@
 # the probes' prefiltered lobe whole, riding the gather's history), Epic, 960x540; a 2 m walk along them (0,1.6,2.4 ->
 # 0,1.6,0.4 looking at 0,0,-3, 60 frames from a converged hold), and at walk frames k = 14, 28 and 59, per ROUGH pixel
 # (the class map's 2)
-#     |walk(k) - conv(k)| <= (1 - 1/n_eff) (|conv(k) - conv(k - h)| + 1) + 3 SE_walk + 1,   n_eff = min(n + 1/2, h)
+#     |walk(k) - conv(k)| <= (1 - 1/n_eff) (|conv(k) - conv(k - h)| + 1) + 3 sd + 1,   n_eff = min(n + 1/2, h),
+#     sd = sigma sqrt(V(n) + 1/R)
 # conv(j) the picture converged at the walk's pose j (the GI at rest there: CONVERGED, below), n the gather's history
-# count at the pixel (the dump's .ghc: the frames its mean holds, saturating at 15), h the history's floor in frames (READ
-# from the walk's record, below), SE_walk = sigma / sqrt(max(n, 1)), sigma the pixel's per-frame standard deviation of
-# the RAW lobe at pose k (gather.temporal 0: twelve frames' estimates alone, in the same session - the lead's option B: a
-# test's statistic, no engine channel), the +1 the two 8-bit pictures' rounding. THE BAR: the breaking share <= 1 % of
+# count at the pixel (the dump's .ghc: the frames its mean holds, saturating at 15), h the history's floor in frames and R
+# the reference's held frames (both READ from the walk's record, below), sd the spread of walk(k) - conv(k) (THE NOISE
+# TERM, below), sigma the pixel's per-frame standard deviation of the RAW lobe at pose k (gather.temporal 0: twelve
+# frames' estimates alone, in the same session - the lead's option B: a test's statistic, no engine channel), the +1 the
+# two 8-bit pictures' rounding. THE BAR: the breaking share <= 1 % of
 # the rough pixels at each k (at 3 sigma an honest estimate breaks ~0.3 % by chance). (It replaced the live residual
 # against "the cone's recorded 48.32 %", the producer the lobe replaced - a picked bar.)
 # THE LAG TERM, DERIVED (the arithmetic is LAW_PY below, self-checked by gi.walk_rough.law):
@@ -31,12 +33,33 @@
 #   offsets - granted 0 - and 1 at the rest - granted 14); on k14 it read 1.8066 % where this law reads 0.8915 %, the
 #   same pixels and noise (spikes/rough-lobe-history-1/REFUTE-2C.log). A pixel starved of samples (blend 0: the hit list
 #   full) keeps its mean and lags past the bound - the law shows it.
+# THE NOISE TERM, DERIVED (ROUGH-LOBE-HISTORY-1 stage 2C, the lead's ruling; LAW_PY's walk_var / noise_sd, self-checked):
+#   walk(k) = Sum_j w_j x_(k-j), the raw estimates x iid of spread sigma, so Var = sigma^2 Sum_j w_j^2 = sigma^2 V: V = 1/n
+#   for a history of n <= h frames (the true mean), then V = q/h + (alpha / (2 - alpha))(1 - q), q = (1 - alpha)^(2(n - h)),
+#   falling with age to the floor's alpha / (2 - alpha) (1/19 at h = 10). conv(k) is the HELD REST MEAN of R frames
+#   (restLengthOf = settleFramesOf(h) = the walk's settle_frames at the lab's default tuning: 16), Var = sigma^2 / R, its
+#   draws not the walk's. So sd(walk - conv) = sigma sqrt(V + 1/R). The count bounds V as it bounds the lag: a fast cut
+#   stores round(N') + 1, so b <= 1 / (n - 1/2), and V(n) is the fresh form at n - 1/2 (at least 1 frame); a saturated count
+#   (15) hides the age, and V only falls with age, so V(15) is the form at 14.5 - the youngest history that saturates.
+#   The term the row held before, sigma / sqrt(count), left out the reference's own noise (1/R) and took the count for the
+#   EMA's effective samples (2h - 1 = 19 at the floor): it was SHORT of the true spread. At count 15 the true spread is
+#   0.3393 sigma for an old history (the floor form, +31 % on the old 0.2582) and at most 0.3654 sigma (+42 %) at the
+#   youngest saturating one - the term this row takes. That is a CORRECTION, not a loosening: the old term was narrower
+#   than the quantity it bounds: 3 of the old sd is 2.28 of the true one at the floor, which gaussian noise passes 2.2 % of
+#   the time, not the ~0.3 % the bar assumes (8x, before the +1 code). At a young count V(n) = 1/(n - 1/2) is wider than
+#   the old 1/n (a fast cut's rounding), and 1/R widens it more: at every count the term is wider than the old one.
 #   h IS READ, NEVER WRITTEN HERE: no status field carries the history's floor itself (GatherTuning::historyFrames is the
 #   A/B door, 0 = the shipped kHistoryFrames, OgreScreenProbeGather.cpp:360-366; the lab's status has no such field). The
 #   walk's OWN stillness record carries its settle (rough-walk.tsv settle_frames, GiStatus's settleFrames), which is
 #   settleFramesOf(h) = ceil(ln(1/D) / ln(1 - 1/max(h, 2))) at D = kGatherSettleCodes = 5 (OgreScreenProbeGather.cpp:372,
 #   Types.h) - this read depends on that constant: one-to-one on h = 3..15 (h 1 and 2 share the settle 3), so the row
-#   inverts it (16 -> 10) and refuses a settle that names no single h.
+#   inverts it (16 -> 10) and refuses a settle that names no single h; R is that same settle (the rest mean's length).
+# THE SHARE IS REPRODUCIBLE ONLY FOR A BYTE-IDENTICAL SESSION (measured, stage 2C): adding one pose to the reference
+# session moved the old law's k14 share 1.6484 -> 1.8066 % on an unchanged walk (|walk - conv| mean 1.2427 and p99 13
+# equal; sigma median 2.15 -> 2.11): the session's frame index moves, so its raw frames (and its rest means) are other
+# draws. The 12-sample sigma's own spread (chi-square, 11 dof, a pixel's sigma re-drawn) moves this law's k14 share by
+# 0.004 points (sd; spikes/rough-lobe-history-1/REFUTE-2C-noise-and-spread.txt) - 40x less than that move, whose cause is
+# not shown (the old form's step read 0 or 1 from conv(k + 1)'s draw, granting 0 or 14 codes, is the candidate).
 # THE TAIL UNDER MOTION, measured (2026-10-27): NOT a bias of the moving rule (the moving rule held at pose 59 -
 # gather.restOff - for 64 frames against the rest mean there: -0.015 codes, each strip within 0.3) and NOT the statistics
 # (at that fixed pose the moving error's p99 2.5 codes sits inside the noise term): the excess exists only under MOTION.
@@ -79,6 +102,18 @@ def lag_steps(n, h):
     """(1 - 1/n_eff) h, n_eff = min(n + 1/2, h): the lag's bound in frames of the slope at the stored count n (0: none)"""
     n = np.asarray(n, dtype=np.float64)
     return np.where(n >= 1.0, h * (1.0 - 1.0 / np.minimum(n + 0.5, float(h))), 0.0)
+def weights_var(x, h):
+    """Sum_j w_j^2 of a history grown from one frame to x frames (x real, >= 1): 1/x to the floor h, then the EMA's"""
+    x = np.maximum(np.asarray(x, dtype=np.float64), 1.0)
+    a = 1.0 / h
+    q = (1.0 - a) ** (2.0 * np.maximum(x - h, 0.0))
+    return np.where(x <= h, 1.0 / x, q / h + a / (2.0 - a) * (1.0 - q))
+def walk_var(n, h):
+    """the bound on Sum_j w_j^2 at the stored count n (refusals and fast cuts included): the fresh form at n - 1/2"""
+    return weights_var(np.minimum(np.asarray(n, dtype=np.float64), float(KCOUNT_MAX)) - 0.5, h)
+def noise_sd(n, h, R):
+    """sd(walk - conv) / sigma: the walk's history beside the reference's held mean of R frames"""
+    return np.sqrt(walk_var(n, h) + 1.0 / R)
 def lag_allowance(conv, k, n, h):
     """the lag the law grants at walk frame k: conv maps a pose to its converged picture in codes (the larger channel's
     change where the picture has channels), n the history count, h the floor read from the walk's record"""
@@ -166,6 +201,50 @@ for h in (5, 10, 15):
         i = int(round(0.3 / 0.01))
         check(float(grant[i].min()) >= 2.7 - 1e-9, 'h 10, a ramp of 0.3 code a frame lags 2.70 codes: the law grants %.2f..%.2f'
               % (float(grant[i].min()), float(grant[i].max())))
+# 5. THE NOISE TERM: a simulated history of iid unit noise (the shader's rule) against a 16-frame held mean - the sample
+#    sd of the difference equals sqrt(V + 1/R) within its own error (1/sqrt(2M) relative), at the floor and at every
+#    young count; RED for the old 1/sqrt(count)
+M, R = 40000, 16
+tol = 4.0 / math.sqrt(2.0 * M)
+for h in (5, 10, 15):
+    x = rng.standard_normal((260, M))
+    m = x[0].copy(); cnt = 1
+    sds = {}
+    for j in range(1, 260):
+        b = max(1.0 / (cnt + 1), 1.0 / h)
+        m += b * (x[j] - m); cnt = min(cnt + 1, KCOUNT_MAX)
+        if j + 1 <= KCOUNT_MAX:
+            sds[j + 1] = m.copy()
+    conv = rng.standard_normal((R, M)).mean(axis=0)
+    floor = float(np.std(m - conv, ddof=1)); want = math.sqrt((1.0 / h) / (2.0 - 1.0 / h) + 1.0 / R)
+    old = 1.0 / math.sqrt(KCOUNT_MAX)
+    check(abs(floor / want - 1.0) < tol and float(noise_sd(KCOUNT_MAX, h, R)) >= want,
+          'h %d, an old history: sd(walk - conv) %.4f against the floor form %.4f (tolerance %.1f %%); the row takes %.4f '
+          '(the youngest saturating history); the old sigma/sqrt(count) %.4f is %.0f %% short'
+          % (h, floor, want, 100 * tol, float(noise_sd(KCOUNT_MAX, h, R)), old, 100 * (1 - old / floor)))
+    young = [(c, float(np.std(v - conv, ddof=1)), math.sqrt(float(weights_var(c, h)) + 1.0 / R)) for c, v in sds.items()]
+    bad = [(c, s, w) for c, s, w in young if abs(s / w - 1.0) > tol]
+    check(not bad, 'h %d, a history aged n = 2..15: sd(walk - conv) equals sqrt(V(n) + 1/R) at every n (the worst %.2f %%)%s'
+          % (h, 100 * max(abs(s / w - 1.0) for c, s, w in young), (': off at %s' % bad[:3]) if bad else ''))
+# 6. THE ROW's V BOUNDS EVERY HISTORY: Sum w^2 propagated exactly (V' = (1 - b)^2 V + b^2) under refusals and fast cuts
+worst = 0.0
+for trial in range(1500):
+    h = int(rng.integers(2, KCOUNT_MAX + 1)); V, cnt = None, 0
+    ev = {}
+    for j in rng.choice(np.arange(1, 160), size=int(rng.integers(0, 20)), replace=False):
+        ev[int(j)] = 'refuse' if rng.random() < 0.3 else float(rng.uniform(0.01, 0.9))
+    for j in range(160):
+        e = ev.get(j)
+        if V is None or e == 'refuse':
+            V, cnt = 1.0, 1
+        else:
+            b = max(1.0 / (cnt + 1), 1.0 / h); nxt = cnt + 1
+            if isinstance(e, float):
+                nf = min(1.0 / b - 1.0, (1.0 - e) * (h - 1.0)); b = 1.0 / (1.0 + nf); nxt = int(nf + 0.5) + 1
+            V = (1.0 - b) ** 2 * V + b * b; cnt = min(nxt, KCOUNT_MAX)
+        worst = max(worst, V / float(walk_var(cnt, h)))
+check(worst <= 1.0 + 1e-12, 'the row\'s V(n) bounds Sum w^2 of 1500 histories with refusals and fast cuts (the largest '
+      'ratio %.4f)' % worst)
 print('gi.walk_rough.law: %s' % ('FAIL (%d)' % len(fails) if fails else 'PASS'))
 sys.exit(1 if fails else 0)
 PY
@@ -267,8 +346,9 @@ hh, kb = int(sys.argv[5]), int(sys.argv[6])
 c0, ckb = png('conv%d' % k), png('conv%d' % kb)
 raw = np.stack([png('raw%d_%d' % (k, j)) for j in range(12)])
 sigma = raw.std(axis=0, ddof=1).max(axis=2)
+R = int(sys.argv[7])
 N = np.maximum(n, 1.0)
-se = sigma / np.sqrt(N)
+se = sigma * noise_sd(n, hh, R)
 lhs = np.abs(walk - c0).max(axis=2)
 rough = cls == 2
 if rough.sum() < 50000:
@@ -277,9 +357,9 @@ grant = lag_allowance({k: c0, kb: ckb}, k, n, hh)
 slope = np.abs(c0 - ckb).max(axis=2)
 breaks = rough & (lhs > grant + 3.0 * se + 1.0)
 share = breaks.sum() / rough.sum()
-print('walk frame %d: rough %d px, h %d (the slope from pose %d), n median %.0f, sigma median %.2f codes, SE_walk median %.2f '
+print('walk frame %d: rough %d px, h %d (the slope from pose %d), R %d, n median %.0f, sigma median %.2f codes, sd median %.2f '
       '(p90 %.2f); |walk - conv| mean %.2f p99 %.1f; the lag granted median %.2f (p90 %.2f) codes; breaking %.2f %% (bar 1 %%)'
-      % (k, rough.sum(), hh, kb, np.median(n[rough]), np.median(sigma[rough]), np.median(se[rough]),
+      % (k, rough.sum(), hh, kb, R, np.median(n[rough]), np.median(sigma[rough]), np.median(se[rough]),
          np.percentile(se[rough], 90), lhs[rough].mean(), np.percentile(lhs[rough], 99), np.median(grant[rough]),
          np.percentile(grant[rough], 90), 100 * share))
 print('LAW k%d.breaking %.4f %% <= 1' % (k, 100 * share))
@@ -361,7 +441,7 @@ if share > 0.01:
 for f in fails: print('FAIL: ' + f)
 sys.exit(1 if fails else 0)
 PY
-)" "$WD/data" "$DUMP" "$K" "$WD" "$HH" "$KB"
+)" "$WD/data" "$DUMP" "$K" "$WD" "$HH" "$KB" "$SETTLE"
 rc=$?
 rm -rf "$WD/data/shots"
 rm -f "$DUMP/rough-walk-t$(printf '%03d' "$K")."*   # (this k's frame read: the walk row writes it afresh)
