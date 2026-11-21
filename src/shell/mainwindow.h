@@ -200,13 +200,6 @@ public:
     /// The window as the ui/ and viewport/ layers see it (IShellView, 9bz).
     IShellView *view() const;
 
-    /// Blob-only save (SCRIPTING_SPEC §1.6.2): writes the scene into the
-    /// project row — with a viewport thumbnail when one is available — and
-    /// NEVER silently no-ops the way saveScene() does when the viewport is
-    /// uninitialized (headless scripts must be able to save). False when no
-    /// scene/project is open.
-    bool saveProjectBlob();
-
     /// editor.importAssets verb: starts the interactive THREADED import (the
     /// project panel's ImportBatchRunner + progress dialog) for the given
     /// files. Returns false when no import UI exists or a batch is running.
@@ -234,6 +227,9 @@ public:
     /// The Player page's widget, and the one live Project.
     PlayerWidget *playerPage() const { return playerView; }
     Project *currentProject() const { return project; }
+    /// app.quit's half (IShellView::settleForQuit): the open world settled now by `unsaved`
+    /// (settleUnsaved), and the window's next close armed with the same.
+    bool settleForQuit(CloseUnsaved unsaved, QString *whyOut);
 
     /// One toast, reused, for every transient viewport readout (snap size, fly
     /// speed) — and for a gesture the viewport has to REFUSE: a material or an
@@ -357,8 +353,10 @@ public slots:
     void assetItemSelected(QListWidgetItem *item);
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
-	void saveScene(const QString &filename, const QString &projectPath);
-    void saveScene();
+    /// THE EDITOR'S SAVE (Ctrl+S, the toolbar, the close's auto-save): the one
+    /// door, ProjectService::save(Editor). False when it failed (said to the user); a save that left out the
+    /// nodes a run added says so once in the viewport readout (the scene stays unsaved).
+    bool saveScene();
 
     void showPreferences();
     /// `kind` = the New Scene dialog's Template drop-down and
@@ -372,9 +370,6 @@ public slots:
     /// sample browser's open (project.openSample). Borrowed, never null in a
     /// windowed session, and owned by this window.
     ProjectManager *projectPage() const { return pmContainer; }
-    /// The close a user asked for (the runner drains an open in flight first).
-    void closeProject();
-
     /// Takes the editor's panels down for a page that is not the editor.
     void hideEditorPanels();
 
@@ -439,11 +434,15 @@ private:
     void buildPanels(bool fresh) override;
     bool revealWorld(bool playMode) override;
     void prepareClose() override;
-    void closeWorld(bool reopenInPlace) override;
+    bool closeWorld(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut) override;
+    /// The close's first step: unsaved changes saved (auto-save), asked about, refused or
+    /// dropped by `unsaved` (services/closeunsaved.h). False = the close does not happen.
+    bool settleUnsaved(CloseUnsaved unsaved, QString *whyOut);
     void showOpenProgress(int percent, const QString &text) override;
     void showOpenCompileProgress(unsigned compiled) override;
     void hideOpenProgress() override;
-    void saveOpenWorld() override;
+    void showOpenRefusal(const QString &text) override;
+    bool saveOpenWorld() override;
     iris::ScenePtr openWorld() const override;
     ProjectRunner *projects = nullptr;
 
@@ -510,6 +509,8 @@ private:
 	ActionHost *actionHost = nullptr;
 	ModuleHub *moduleHub = nullptr;
 	ShellLifecycle *lifecycle = nullptr;
+	/// settleUnsaved is deciding (its boxes are nested event loops): a second close is refused meanwhile.
+	bool settlingUnsaved = false;
 	/// The window as the layers below see it (ui/ishellview.h); owned here.
 	std::unique_ptr<ShellView> shellView;
 	ViewController *viewController = nullptr;

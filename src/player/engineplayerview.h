@@ -43,6 +43,7 @@ public:
 
     // ---- IPlayerHost (verb-coverage audit F1) ----------------------------
     bool isScenePlaying() override;
+    const PlayBack *playBack() const override;
     void playScene() override;
     void stopScene() override;
     bool isPlayerActive() const override { return mActive; }

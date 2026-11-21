@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-// services.core — unit contracts of the Phase-1 service layer
+// services.core — unit contracts of the Phase-1 service layer (and the folder removal's quit cap)
 // (APP_ARCHITECTURE_AUDIT §3.3):
 //
 //  UndoService: push/undo/redo guards, the script-macro clear guard (a script
@@ -30,6 +30,20 @@ For more information see the LICENSE file
 #include "services/selectionservice.h"
 #include "services/uistep.h"
 #include "services/undoservice.h"
+#include "player/editpose.h"
+#include "app/firstrun.h"
+#include "services/closeunsaved.h"
+#include "services/folderremoval.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/vec.h"
+
+#include <QHash>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
+#include <QTemporaryDir>
+#include <QMap>
+#include <memory>
 
 static int failures = 0;
 #define CHECK(cond, name) do { \
@@ -104,19 +118,52 @@ void testUndoService()
     undo.clear();
     CHECK(stack.count() == 0, "undo: clear() clears once the macro closes");
 
-    // Saved-count bookkeeping, preserving the pre-extraction bool coercion:
-    // the recorded value is only ever 0 or 1.
-    CHECK(undo.savedCountMatchesCurrent(), "undo: fresh service matches empty stack");
+    // THE ONE DEFINITION OF "UNSAVED" (UndoService::isDirty, STUDIO-HYGIENE-1). It replaced a counter coerced
+    // to 0/1, under which "2 commands still reads as saved" - this suite asserted that quirk - so every edit
+    // after the first save read as saved and the close never asked about it.
+    CHECK(!undo.isDirty(), "dirty: a cleared stack is a fresh document - clean");
     undo.push(new CountingCommand(&redos, &undos));
-    CHECK(!undo.savedCountMatchesCurrent(), "undo: unsaved push is detected");
+    CHECK(undo.isDirty(), "dirty: a push makes it dirty");
     undo.markSaved();
-    CHECK(undo.savedCountMatchesCurrent(), "undo: markSaved matches");
+    CHECK(!undo.isDirty(), "dirty: a save makes it clean");
     undo.push(new CountingCommand(&redos, &undos));
-    // The quirk: 2 commands vs saved-at-1 both coerce to 1 — "matches".
-    CHECK(undo.savedCountMatchesCurrent(),
-          "undo: bool-coercion quirk preserved (2 commands still reads as saved)");
-    undo.resetSavedCount();
-    CHECK(!undo.savedCountMatchesCurrent(), "undo: resetSavedCount marks unsaved again");
+    CHECK(undo.isDirty(), "dirty: a push AFTER a save is dirty (the coerced counter read it as saved)");
+    undo.markSaved();
+    undo.undo();
+    CHECK(undo.isDirty(), "dirty: an undo after a save is dirty");
+    undo.redo();
+    CHECK(!undo.isDirty(), "dirty: the redo back to the saved state is clean");
+    undo.undo();
+    undo.push(new CountingCommand(&redos, &undos));
+    CHECK(undo.isDirty(),
+          "dirty: a push after an undo (the redo branch dropped) is dirty though the index is the saved one");
+    // A FAILED save never calls markSaved (ProjectService::save): the stack stays as dirty as it was.
+    CHECK(undo.isDirty(), "dirty: no markSaved, still dirty");
+    // INSIDE A SCRIPT RUN'S MACRO: QUndoStack cannot set clean mid-macro, this can - and a save made inside
+    // the run, with nothing pushed after it, is still the saved state once the macro closes over it.
+    undo.clear();
+    undo.beginScriptMacro("script: save inside");
+    undo.push(new CountingCommand(&redos, &undos));
+    CHECK(undo.isDirty(), "dirty: a push inside the run's macro is dirty");
+    undo.markSaved();
+    CHECK(!undo.isDirty(), "dirty: a save inside the run is clean");
+    undo.endScriptMacro();
+    CHECK(!undo.isDirty(), "dirty: ...and still clean when the macro closes over it");
+    undo.beginScriptMacro("script: push after the save");
+    undo.push(new CountingCommand(&redos, &undos));
+    undo.markSaved();
+    undo.push(new CountingCommand(&redos, &undos));
+    undo.endScriptMacro();
+    CHECK(undo.isDirty(), "dirty: a push after a save inside the run is dirty when the macro closes");
+    undo.clear();
+    CHECK(!undo.isDirty(), "dirty: clear (a close, an open) is clean");
+    undo.markUnsaved();
+    CHECK(undo.isDirty(), "dirty: a save that wrote no row leaves it dirty, though nothing moved");
+    undo.markSaved();
+    CHECK(!undo.isDirty(), "dirty: ...until a save that did");
+    // NO UNDO LIMIT IS SET ANYWHERE (grep setUndoLimit: none); the push count never falls, so even a stack
+    // that dropped its oldest command could not read clean after a push.
+    CHECK(stack.undoLimit() == 0, "dirty: the stack has no undo limit (pushCount alone decides a push)");
 }
 
 void testSelectionService()
@@ -179,12 +226,196 @@ void testUiStep()
 
 } // namespace
 
+// THE EDIT POSE A SAVE DURING PLAY WRITES (player/editpose.h, STUDIO-HYGIENE-1 audit): the swap over the
+// play-start snapshot, on stand-in nodes — exact values in, exact values back.
+struct PoseNode
+{
+    QString guid;
+    iris::Vec3 pos, scale{ 1, 1, 1 };
+    iris::Quat rot;
+    int writes = 0;
+    iris::Vec3 getLocalPos() const { return pos; }
+    iris::Quat getLocalRot() const { return rot; }
+    iris::Vec3 getLocalScale() const { return scale; }
+    void setLocalPos(const iris::Vec3 &v) { pos = v; ++writes; }
+    void setLocalRot(const iris::Quat &q) { rot = q; ++writes; }
+    void setLocalScale(const iris::Vec3 &v) { scale = v; ++writes; }
+};
+struct PoseEntry { iris::Vec3 pos, scale; iris::Quat rot; };
+
+void testEditPose()
+{
+    auto moved = std::make_shared<PoseNode>(), still = std::make_shared<PoseNode>(),
+         spawned = std::make_shared<PoseNode>();
+    moved->guid = "moved"; still->guid = "still"; spawned->guid = "spawned";
+    moved->pos = iris::Vec3(1, 2, 3);
+    still->pos = iris::Vec3(7, 0, 0);
+    QMap<QString, PoseEntry> snapshot;   // what Play found
+    snapshot.insert("moved", { iris::Vec3(1, 2, 3), iris::Vec3(1, 1, 1), iris::Quat() });
+    snapshot.insert("still", { iris::Vec3(7, 0, 0), iris::Vec3(1, 1, 1), iris::Quat() });
+    // ...and what the simulation did: the body fell and turned.
+    moved->pos = iris::Vec3(1, -40.5f, 3);
+    moved->rot = iris::Quat(0.7071068f, 0.7071068f, 0, 0);
+    const iris::Vec3 playPos = moved->pos;
+    const iris::Quat playRot = moved->rot;
+
+    QSet<QString> spawnedGuids;
+    const auto played = editpose::swapIn(QList<std::shared_ptr<PoseNode>>{ moved, still, spawned }, snapshot,
+                                         &spawnedGuids);
+    CHECK(moved->pos == iris::Vec3(1, 2, 3) && moved->rot == iris::Quat(),
+          "editpose: a node Play moved carries its play-start pose for the walk");
+    CHECK(still->writes == 0, "editpose: a node Play never moved is not written (a static node stays static)");
+    CHECK(played.size() == 1, "editpose: only the moved node is recorded to put back");
+    CHECK(spawnedGuids == QSet<QString>{ "spawned" } && spawned->writes == 0,
+          "editpose: a node with no snapshot entry was spawned in Play - named, left untouched");
+    editpose::putBack(played);
+    CHECK(moved->pos == playPos && moved->rot == playRot && moved->scale == iris::Vec3(1, 1, 1),
+          "editpose: the play pose comes back exactly");
+    CHECK(editpose::swapIn(QList<std::shared_ptr<PoseNode>>{}, snapshot, nullptr).isEmpty(),
+          "editpose: no nodes, nothing swapped");
+}
+
+// THE DOCUMENT'S EDIT POSE (player/editpose.h documentEditPose, the final read's B1): three things move one document
+// — the editor's run, the Player's run, Simulate Physics. Stand-in runs: the answer is the EARLIEST-started run
+// playing on the document, else the simulation's held bodies; and a run that starts over a running simulation takes
+// the bodies' pre-simulate pose.
+struct RunStandIn
+{
+    bool playingNow = false;
+    quint64 serial = 0;
+    int doc = 0;
+    QMap<QString, PoseEntry> pose;
+    bool isScenePlaying() const { return playingNow; }
+    quint64 playSerial() const { return serial; }
+    int document() const { return doc; }
+    const QMap<QString, PoseEntry> &playStartPose() const { return pose; }
+};
+
+void testDocumentEditPose()
+{
+    const auto entry = [](float y) { return PoseEntry{ iris::Vec3(0, y, 0), iris::Vec3(1, 1, 1), iris::Quat() }; };
+    RunStandIn editor, player;
+    editor.playingNow = player.playingNow = true;
+    editor.doc = player.doc = 1;
+    editor.serial = 1;                      // the editor's run started first (editor.play, then the Player page)...
+    player.serial = 2;
+    editor.pose.insert("body", entry(5));   // ...so it holds the pose before any Play
+    player.pose.insert("body", entry(-3));  // ...and the Player's snapshot is the editor's PLAY pose
+    const QHash<QString, PoseEntry> none;
+
+    auto edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &player, &editor }, 1, &none);
+    CHECK(edit.wholeDocument && edit.pose.value("body").pos == iris::Vec3(0, 5, 0),
+          "editpose: two runs playing on one document - the EARLIEST-started one's snapshot is the edit pose");
+    editor.playingNow = false;
+    edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &editor, &player }, 1, &none);
+    CHECK(edit.wholeDocument && edit.pose.value("body").pos == iris::Vec3(0, -3, 0),
+          "editpose: the Player's run alone - its snapshot (the editor's run is stopped)");
+    player.doc = 2;
+    QHash<QString, PoseEntry> simulated;
+    simulated.insert("body", entry(9));
+    edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &editor, &player }, 1, &simulated);
+    CHECK(!edit.wholeDocument && edit.pose.size() == 1 && edit.pose.value("body").pos == iris::Vec3(0, 9, 0),
+          "editpose: no run on this document - Simulate's held bodies, and not a whole document (nothing is spawned)");
+    edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &editor, nullptr }, 1, &none);
+    CHECK(!edit.wholeDocument && edit.pose.isEmpty(), "editpose: nothing moves the document - no pose to swap");
+
+    auto body = std::make_shared<PoseNode>(), lamp = std::make_shared<PoseNode>();
+    body->guid = "body"; lamp->guid = "lamp";
+    body->pos = iris::Vec3(0, -20, 0);      // Simulate Physics dropped it before Play was pressed
+    lamp->pos = iris::Vec3(4, 4, 4);
+    const auto snap = editpose::playStartSnapshot<PoseEntry>(QList<std::shared_ptr<PoseNode>>{ body, lamp }, simulated);
+    CHECK(snap.value("body").pos == iris::Vec3(0, 9, 0) && snap.value("lamp").pos == iris::Vec3(4, 4, 4) &&
+              snap.size() == 2,
+          "editpose: a run started over a running simulation takes the body's PRE-SIMULATE pose, every other node's own");
+}
+
+// A QUIT NEVER WAITS FOR A PROJECT FOLDER'S BYTES WITHOUT A LIMIT (the final read 2's M1; services/folderremoval.h).
+// The shutdown waited for every removal in flight with no cap while the window was still on screen. Now a drain
+// waits at most its cap, STOPS the worker between two entries and joins it; the folder stays aside, and the next
+// start (a new owner: ProjectService's sweep) removes it. Red on the base: there the drain had no cap at all.
+void testFolderRemovalCap()
+{
+    QTemporaryDir root;
+    const auto makeTree = [&](const QString &name, int dirs, int filesPerDir) {
+        const QString top = root.filePath(name);
+        for (int d = 0; d < dirs; ++d) {
+            const QString dir = top + QStringLiteral("/exports/d%1").arg(d);
+            QDir().mkpath(dir);
+            for (int f = 0; f < filesPerDir; ++f) {
+                QFile file(dir + QStringLiteral("/f%1").arg(f));
+                if (file.open(QIODevice::WriteOnly)) file.write("x");
+            }
+        }
+        return top;
+    };
+    // A small folder inside the cap: removed whole, nothing stopped.
+    const QString small = makeTree(QStringLiteral(".removing-small-0"), 2, 3);
+    {
+        FolderRemoval removal;
+        CHECK(removal.start({ small }) == 1, "folders: a start takes the folder");
+        CHECK(removal.start({ small }) == 0, "folders: ...and a second start never hands a second worker the same one");
+        const FolderRemoval::Drained d = removal.drain(FolderRemoval::kQuitCapMs);
+        CHECK(d.waited == 1 && d.stopped == 0 && !QFileInfo::exists(small),
+              "folders: a removal that ends inside the cap is waited for and the folder is gone");
+    }
+    // A large folder drained at a cap of 0 (the quit's cap, reached): the drain STOPS the worker and returns; the
+    // folder stays aside. 20,000 files: a worker cannot unlink them between its start and the drain's next line.
+    const QString large = makeTree(QStringLiteral(".removing-large-0"), 40, 500);
+    {
+        FolderRemoval removal;
+        removal.start({ large });
+        const FolderRemoval::Drained d = removal.drain(0);
+        CHECK(d.waited == 1 && d.stopped == 1, "folders: a drain past its cap stops the removal (not waited out)");
+        CHECK(QFileInfo::exists(large) && !removal.owns(large),
+              "folders: ...the folder stays aside, and no worker holds it any more");
+    }
+    // The next start (a new owner) finishes it.
+    {
+        FolderRemoval removal;
+        removal.start({ large });
+        const FolderRemoval::Drained d = removal.drain(60000);
+        CHECK(d.stopped == 0 && !QFileInfo::exists(large), "folders: the next start removes the folder left aside");
+    }
+}
+
+// WHO ANSWERS AN UNSAVED WORLD (services/closeunsaved.h decideUnsaved, the lead's ruling 2026-11-21): the box is a
+// person's unless nobody is at the screen. A forced data root alone (an app launched with --data-root, no script,
+// no MCP client) is a person's session: it is driven, but not scripted, and its close over unsaved changes ASKS.
+// Run last: it forces this process's data root.
+void testUnsavedDecision()
+{
+    QTemporaryDir root;
+    AppPaths::initialize(root.path());   // what --data-root does; main()'s latch never ran: no script, no MCP
+    CHECK(FirstRun::isDrivenSession() && !FirstRun::isScriptedSession(),
+          "unsaved: a forced data root alone is driven, not scripted");
+    CHECK(decideUnsaved(CloseUnsaved::Ask, FirstRun::isScriptedSession(), false, true, false) == UnsavedVerdict::Ask,
+          "unsaved: a person's close in a --data-root session over unsaved changes, auto-save off - asked");
+    CHECK(decideUnsaved(CloseUnsaved::Ask, FirstRun::isScriptedSession(), true, true, false) == UnsavedVerdict::Ask,
+          "unsaved: a person's close in a --data-root session whose auto-save failed - asked");
+    FirstRun::rememberScripted(true);   // a --script / --headless run or an --mcp-port client
+    CHECK(decideUnsaved(CloseUnsaved::Ask, FirstRun::isScriptedSession(), false, true, false) == UnsavedVerdict::Refuse,
+          "unsaved: a scripted session's close over unsaved changes - refused, never a box nobody answers");
+    FirstRun::rememberScripted(false);
+    CHECK(decideUnsaved(CloseUnsaved::Refuse, false, false, true, false) == UnsavedVerdict::Refuse,
+          "unsaved: a script's route without {discard} - refused, even with a person at the screen");
+    CHECK(decideUnsaved(CloseUnsaved::Discard, true, false, true, false) == UnsavedVerdict::Close,
+          "unsaved: {discard: true} - closes");
+    CHECK(decideUnsaved(CloseUnsaved::Ask, false, true, true, true) == UnsavedVerdict::Close,
+          "unsaved: auto-save on and the save held the whole document - closes");
+    CHECK(decideUnsaved(CloseUnsaved::Ask, true, false, false, false) == UnsavedVerdict::Close,
+          "unsaved: auto-save off and nothing changed - closes");
+}
+
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
     testUndoService();
     testSelectionService();
     testUiStep();
+    testEditPose();
+    testDocumentEditPose();
+    testFolderRemovalCap();
+    testUnsavedDecision();
     std::printf(failures ? "FAILURES: %d\n" : "ALL PASS\n", failures);
     return failures ? 1 : 0;
 }

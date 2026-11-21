@@ -18,6 +18,7 @@ For more information see the LICENSE file
 #include <QUuid>
 
 #include "data/project.h"
+#include "io/sceneformat.h"
 #include "io/scenereader.h"
 #include "services/assetstorepaths.h"
 #include "services/loadtimeline.h"
@@ -68,19 +69,9 @@ ReadConnection::~ReadConnection()
 
 void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
 {
-    {
-        int queries = 0;
-        LoadTimeline::Accumulate rows(QStringLiteral("db:sessionRows"), 0);
-        reads.objectRows = ProjectAssets::readSessionRows(conn, reads.root, reads.projectGuid,
-                                                          static_cast<int>(ModelTypes::Object), &queries);
-        rows.stop();
-        LoadTimeline::add(QStringLiteral("db:sessionRows"), 0.0, queries);
-    }
-    // THE PINNED MODELS ARE THE OBJECT ROWS' PATHS (the plan the registration and the reader share).
-    for (const ProjectAssets::SessionRow &row : reads.objectRows)
-        if (!row.path.isEmpty() && !reads.modelPaths.contains(row.path)) reads.modelPaths.append(row.path);
-
-    // THE SCENE BLOB, READ ONCE AND PARSED ONCE (it was read three times and parsed three times).
+    // THE SCENE BLOB, READ ONCE AND PARSED ONCE (it was read three times and parsed three times) — and
+    // FIRST (STUDIO-HYGIENE-1): a scene the open refuses plans NOTHING, no session row and no model path, so
+    // the runner reads, rebuilds and writes no bake for a world it will not open.
     QByteArray blob;
     {
         LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
@@ -93,13 +84,36 @@ void readPlan(QSqlDatabase conn, Project *project, Reads &reads)
         LoadTimeline::Accumulate json(QStringLiteral("worker:sceneJson"));
         QJsonParseError error;
         const QJsonDocument doc = QJsonDocument::fromJson(blob, &error);
-        // A blob that does not parse opens as an empty world, as the reader always did — said once, by name.
-        if (error.error != QJsonParseError::NoError || !doc.isObject())
-            qWarning("open: the scene blob of project %s does not parse (%s at %d) — it opens empty",
-                     qUtf8Printable(reads.projectGuid), qUtf8Printable(error.errorString()), error.offset);
+        // A BLOB THAT DOES NOT PARSE IS REFUSED (STUDIO-HYGIENE-1). It used to open as an EMPTY world with
+        // a log line, and the next save wrote that empty world over the row: the scene lost, silently.
+        if (error.error != QJsonParseError::NoError || !doc.isObject()) {
+            reads.refusal = error.error != QJsonParseError::NoError
+                                ? QStringLiteral("its scene does not parse (%1 at byte %2)")
+                                      .arg(error.errorString()).arg(error.offset)
+                                : QStringLiteral("its scene is not a JSON object");
+            return;
+        }
+        // ...AND SO IS ANOTHER BUILD'S SCENE, newer or older (sceneformat::versionRefusal says why each
+        // would be lost).
+        if (const QString other = sceneformat::versionRefusal(doc.object()); !other.isEmpty()) {
+            reads.refusal = QStringLiteral("its scene is %1").arg(other);
+            return;
+        }
         reads.projectObj = doc.object();
         reads.found = true;
     }
+
+    {
+        int queries = 0;
+        LoadTimeline::Accumulate rows(QStringLiteral("db:sessionRows"), 0);
+        reads.objectRows = ProjectAssets::readSessionRows(conn, reads.root, reads.projectGuid,
+                                                          static_cast<int>(ModelTypes::Object), &queries);
+        rows.stop();
+        LoadTimeline::add(QStringLiteral("db:sessionRows"), 0.0, queries);
+    }
+    // THE PINNED MODELS ARE THE OBJECT ROWS' PATHS (the plan the registration and the reader share).
+    for (const ProjectAssets::SessionRow &row : reads.objectRows)
+        if (!row.path.isEmpty() && !reads.modelPaths.contains(row.path)) reads.modelPaths.append(row.path);
 
     // ...and its sources, resolved on this connection exactly as the reader will resolve them.
     LoadTimeline::Accumulate plan(QStringLiteral("worker:plan"));

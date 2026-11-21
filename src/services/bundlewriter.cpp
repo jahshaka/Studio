@@ -77,7 +77,7 @@ ExportResult writeBundle(BundleStage stage, const QString &destPath, const Write
     // envelope itself.
     const clipboardformat::Envelope &envelope = stage.envelope;
     exportformat::ExportManifest manifest;
-    manifest.version = 2;
+    manifest.version = exportformat::kManifestVersion;
     manifest.kind = stage.kind;
     manifest.generator = QStringLiteral("Jahshaka");
     manifest.created = envelope.created;

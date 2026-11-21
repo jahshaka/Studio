@@ -31,7 +31,7 @@ public:
 
     Q_INVOKABLE int desktop(int n = 0);
     Q_INVOKABLE bool space(const QString &name);
-    Q_INVOKABLE bool quit();
+    Q_INVOKABLE bool quit(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantList openTimings();
     Q_INVOKABLE QVariantMap openStats(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap queryLog(const QVariantMap &options = QVariantMap());

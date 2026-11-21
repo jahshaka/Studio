@@ -172,13 +172,14 @@ static void testLaunchConfig()
     // The assets skill teaches the ONE-CALL import (lane D #7). It taught
     // scene.addMesh as a shortcut once (audit F2), and that is what made the
     // F1 data loss reachable from the dock — so what it names here is a gate,
-    // not prose.
+    // not prose. The verb itself is DELETED (STUDIO-HYGIENE-1 stage 5): a
+    // skill that names it teaches a call the registry no longer has.
     const QString assetSkill = QString::fromUtf8(
         readFile(project + "/.claude/skills/jahshaka-assets/SKILL.md"));
     CHECK(assetSkill.contains("assets.importAndPlace"),
           "config: assets skill teaches assets.importAndPlace");
-    CHECK(assetSkill.contains("scene.addMesh") && assetSkill.contains("FAILS"),
-          "config: ...and still says scene.addMesh fails");
+    CHECK(!assetSkill.contains("scene.addMesh"),
+          "config: ...and names no scene.addMesh (the verb is deleted)");
     CHECK(assetSkill.contains("browse_assets"),
           "config: assets skill points at browse_assets for visual browsing");
 

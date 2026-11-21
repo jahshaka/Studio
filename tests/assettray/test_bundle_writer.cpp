@@ -32,6 +32,10 @@ For more information see the LICENSE file
 //   5. THE READER'S BOUND (unpackBundle): the legitimate 200-entry pack unpacks whole, and a
 //      file whose payload is larger than its own manifest accounts for is REFUSED with the
 //      reason before the payload is read.
+//   7. THE MANIFEST READS ITS OWN VERSION ONLY (STUDIO-HYGIENE-1 stage 6, forward-only): a
+//      manifest that says version 2 is read; 1 and 3 are REFUSED (version 0 back, an error
+//      that names the version it saw and the one this build reads) — a newer file is never
+//      half-read as ours, an older one never migrated.
 
 #include <QCoreApplication>
 #include <QCryptographicHash>
@@ -356,6 +360,34 @@ int main(int argc, char **argv)
         CHECK(!refused.error.isEmpty() && refused.envelope.items.isEmpty()
                   && refused.error.contains(QStringLiteral("more than its manifest accounts for")),
               "a payload larger than its manifest accounts for is REFUSED, with the reason");
+    }
+
+    // ---- 7. the manifest's version gate ------------------------------------------------
+    {
+        const auto manifestOf = [](int version) {
+            QJsonObject root;
+            root.insert(QStringLiteral("format"), QStringLiteral("jah-export-manifest"));
+            root.insert(QStringLiteral("version"), version);
+            root.insert(QStringLiteral("kind"), QStringLiteral("project"));
+            return QJsonDocument(root).toJson();
+        };
+        QString why2;
+        const exportformat::ExportManifest v2 = exportformat::ExportManifest::fromBytes(manifestOf(2), &why2);
+        CHECK(v2.isValid() && v2.version == exportformat::kManifestVersion && why2.isEmpty(),
+              "a version-2 manifest is read");
+        for (const int other : { 1, 3 }) {
+            QString why;
+            const exportformat::ExportManifest m = exportformat::ExportManifest::fromBytes(manifestOf(other), &why);
+            std::printf("info: version %d: %s\n", other, qPrintable(why));
+            const bool named = why.contains(QStringLiteral("version %1").arg(other))
+                               && why.contains(QStringLiteral("reads version 2"));
+            CHECK(!m.isValid() && m.version == 0 && named,
+                  other == 1 ? "a version-1 manifest is REFUSED, the error naming both versions"
+                             : "a version-3 manifest (a newer build's) is REFUSED, the error naming both versions");
+        }
+        CHECK(exportformat::ExportManifest().toJson().value(QStringLiteral("version")).toInt()
+                  == exportformat::kManifestVersion,
+              "the writer writes the version the reader reads");
     }
 
     std::printf("%s: %d failure(s)\n", failures ? "FAIL" : "PASS", failures);

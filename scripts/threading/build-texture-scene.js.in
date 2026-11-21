@@ -13,8 +13,7 @@
 // not straight off disk, deliberately: that is the path a user's project takes,
 // it is what the material serializer can round-trip through a save and a
 // reopen, and it means the measured open resolves guids exactly as a real one
-// does. `scene.addMesh`'s removal notice in docs/SCRIPTING.md is the same
-// lesson — a raw disk path in a material does not survive.
+// does: a raw disk path in a material does not survive a save and a reopen.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);

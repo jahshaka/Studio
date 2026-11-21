@@ -191,9 +191,11 @@ iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped(openreads::Reads &reads)
 	runPumped([&reads, &stale, project = mProject]() {
 		openreads::ReadConnection conn(reads.dbPath);
 		openreads::readPlan(conn.db(), project, reads);
+		if (!reads.refusal.isEmpty()) return;   // refused: the caller says so, nothing more is read
 		openreads::readSession(conn.db(), reads);
 		stale = MeshBakeStore::staleJobsFor(conn.db(), reads.root, reads.modelPaths + reads.clipPaths);
 	});
+	if (!reads.refusal.isEmpty()) return prewarm;
 	if (reads.modelPaths.isEmpty() && reads.clipPaths.isEmpty()) return prewarm;
 
 	// STALE BAKES ARE REBUILT FROM THEIR OWN SOURCES FIRST (FORWARD-ONLY-1
@@ -274,9 +276,11 @@ void ProjectRunner::open(bool playMode)
 	}
 
 	// The reads and the bakes, on a worker while this thread pumps (above).
+	mOpenRefusal.clear();
 	LoadTimeline::mark(QStringLiteral("plan"));
 	openreads::Reads reads = openreads::prepare(mProject);
 	const iris::MeshPrewarmPtr prewarm = prewarmModelsPumped(reads);
+	if (refuseOpen(reads)) return;   // BEFORE stageBegin: nothing is torn down
 
 	stageBegin();
 	// The session registrations, in the threaded open's order, from the rows
@@ -308,6 +312,29 @@ void ProjectRunner::open(bool playMode)
 	// boundary frame behind it. (The first lighting arm no longer waits for
 	// this: releaseLightingArm above, BUGS-6 stage 1.)
 	mViewport->endSceneLoad();
+}
+
+// A SCENE THE OPEN MUST NOT READ (STUDIO-HYGIENE-1): one that does not parse, or
+// one a newer build wrote (openreads::readPlan says which). Refused before
+// stageBegin on both routes, so the open itself tears nothing down: the blocking
+// open returns here, the threaded one abandons its run (the runner's next turn
+// sees the abort and finishes — its finished() takes the cover and the dialog
+// down). The sentence is made HERE ONLY, so the verb, the tile and the import
+// all carry the same words.
+bool ProjectRunner::refuseOpen(const openreads::Reads &reads)
+{
+	if (reads.refusal.isEmpty()) return false;
+	mOpenRefusal = tr("'%1' could not be opened: %2")
+	                   .arg(mProject ? mProject->getProjectName() : QString(), reads.refusal);
+	qWarning("project open: %s", qUtf8Printable(mOpenRefusal));
+	// NO HALF-OPEN PROJECT (the audit): the pointer goes as the tile's own close
+	// takes it (ProjectManager::closeProjectFromWidget) — nothing keyed on the
+	// guid can mistake the refused project for the open one.
+	if (mProject) mProject->setProjectGuid(QString());
+	if (mRunner && mRunner->isRunning()) mRunner->requestAbort();
+	LoadTimeline::end();
+	mHost->showOpenRefusal(mOpenRefusal);
+	return true;
 }
 
 bool ProjectRunner::isOpening() const
@@ -435,6 +462,7 @@ void ProjectRunner::startOpenRun(bool playMode)
 	// must not leave the previous one on screen while it does. stageBegin
 	// raises it again (idempotent — it only rebases the present counter, and
 	// nothing has presented in between).
+	mOpenRefusal.clear();
 	mViewport->beginSceneLoad(mProject ? mProject->getProjectName() : QString());
 
 	// ---- the reads: the runner's workers, connections of their own ---------
@@ -465,6 +493,7 @@ void ProjectRunner::startOpenRun(bool playMode)
 	// assets on Bistro Exterior: 68 slices, 2.4 s with their frames).
 	QVector<SceneOpenRunner::Slice> slices;
 	slices.append({ QStringLiteral("Preparing assets…"), 45, [this, reads]() {
+		if (refuseOpen(*reads)) return;   // BEFORE stageBegin: nothing is torn down
 		stageBegin();
 		stageRegistrationsBegin(*reads);
 	} });
@@ -606,27 +635,20 @@ void ProjectRunner::createAsync(const QString &guid, const QString &filename,
 void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
                                    const QString &projectPath, SceneTemplate kind)
 {
-    // AN OPEN IN FLIGHT FINISHES FIRST — before this create's ledger begins:
-    // its run is the one LoadTimeline holds until the open ends it, so a begin
-    // skipped because "a run is running" would leave the create's marks on no
-    // run at all once the drain's end() closed the open's (fix round).
-    if (isOpening()) {
-        qWarning("project create: an open was still in flight — draining it first");
-        mRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
-    }
-    // THE LEDGER COVERS THE CLOSE (CREATE-GAP-1). It began after it, so the
-    // create's own record was the smaller half of the verb: 800-1200 ms of a
-    // create over an open world — the autosave, the teardown, the page switch
-    // — sat in front of the run and in no stage. `closePrevious` is that
-    // span, and its counters (closePrevious:save / :teardown / :switch, and
-    // the save's own saveOpen:*) say where it went.
+    // THE CREATE'S LEDGER BEGINS HERE. Since every route closes the open world
+    // before the row is minted (STUDIO-HYGIENE-1), that close runs BEFORE this
+    // ledger and is not in it (CREATE-GAP-1 had put it in, as `closePrevious`;
+    // its counters closePrevious:save / :teardown / :switch now count only when
+    // a ledger already runs).
     if (!LoadTimeline::isRunning())
         LoadTimeline::begin(QStringLiteral("create %1").arg(filename));
-    if (mProjectService->isSceneOpen()) {
-        LoadTimeline::mark(QStringLiteral("closePrevious"));
-        close(false);
-    }
-    // ...AND ONLY NOW IS THE CURRENT PROJECT THE NEW ONE: the close above
+    // EVERY CREATE ROUTE CLOSES THE OPEN WORLD ITSELF, FIRST, by its own policy (the
+    // New Scene dialog asks, project.create refuses unless told to discard) —
+    // before a row is minted, an open in flight included (the routes drain it in
+    // their close: the final read's W5); ProjectService::createProjectShell refuses
+    // a world still open before it mints anything (the final read 2: the backstop
+    // that stood here refused AFTER the mint, and no route could reach it).
+    // ...AND ONLY NOW IS THE CURRENT PROJECT THE NEW ONE: the route's close
     // autosaved the old world into the old project's own row (createProject-
     // Shell used to re-point first, and the old project's edits went into the
     // new one's row — CREATE-GAP-1).
@@ -690,7 +712,7 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
     // the page, and the desktop re-reads the tile when it is next shown.
     //
     // ...AND THE TILE NEEDS A VIEW (fix round item 5). `ProjectService::
-    // saveInitialScene` takes a headless branch when `viewport->isInitialized()`
+    // save(Create)` takes a headless branch when `viewport->isInitialized()`
     // is false, writing the row with NO tile and no editor data — and a View is
     // born in `EngineSceneViewport::showEvent`, because it needs the widget's
     // MAPPED NATIVE WINDOW (the engine's own startup order: a render window
@@ -709,9 +731,9 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
     auto hadViewport = std::make_shared<bool>(true);
     slices.append({ QStringLiteral("Saving the scene…"), 97,
                     [this, projectPath, hadViewport]() {
-        LoadTimeline::mark(QStringLiteral("saveInitialScene"));
+        LoadTimeline::mark(QStringLiteral("save(create)"));
         *hadViewport = mViewport->isInitialized();
-        mProjectService->saveInitialScene(projectPath);
+        mProjectService->save(mProject->getProjectGuid(), ProjectService::SaveReason::Create);
     } });
     slices.append({ QStringLiteral("Opening…"), 100,
                     [this, projectPath, hadViewport]() {
@@ -719,7 +741,7 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
         if (!*hadViewport && mViewport->isInitialized()) {
             qInfo("scene create: the tile was taken after the reveal — the editor page "
                   "had never been shown, so the initial save had no viewport");
-            mProjectService->saveInitialScene(projectPath);
+            mProjectService->save(mProject->getProjectGuid(), ProjectService::SaveReason::Create);
         }
     } });
 
@@ -730,7 +752,7 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
 
 // ---- the close ---------------------------------------------------------------
 
-void ProjectRunner::close(bool reopenInPlace)
+bool ProjectRunner::close(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut)
 {
     mHost->prepareClose();
     // AN OPEN IN FLIGHT IS DRAINED FIRST (lane OPEN-FRAMES-1, item 3), the way
@@ -756,7 +778,7 @@ void ProjectRunner::close(bool reopenInPlace)
     // a queued metacall — not user input, so ExcludeUserInputEvents lets it in)
     // must RETURN, not fall through to the teardown under the outer drain
     // (the second read of OPEN-FRAMES-1): the outer close finishes the job.
-    if (sDrainingOpen) return;
+    if (sDrainingOpen) return true;   // the outer close finishes the job
     if (isOpening()) {
         sDrainingOpen = true;
         mRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
@@ -768,7 +790,7 @@ void ProjectRunner::close(bool reopenInPlace)
         }
         sDrainingOpen = false;
     }
-    mHost->closeWorld(reopenInPlace);
+    return mHost->closeWorld(reopenInPlace, unsaved, whyOut);
 }
 
 // ---- the export --------------------------------------------------------------
@@ -791,7 +813,11 @@ bool ProjectRunner::startExport(const QString &guid, const QString &zipPath, QSt
     // there, so every later autosave of the open world landed in that row too.
     const bool exportingOpenWorld = mHost->openWorld() && mProjectService->isSceneOpen()
                                     && guid == mProject->getProjectGuid();
-    if (exportingOpenWorld) mHost->saveOpenWorld();
+    // THE ARCHIVE CARRIES WHAT IS ON SCREEN, or nothing: a pre-save that failed
+    // (told to the user by the save door) refuses the export rather than archive
+    // the row's older scene under the open world's name (STUDIO-HYGIENE-1).
+    if (exportingOpenWorld && !mHost->saveOpenWorld())
+        return refuse(tr("The open world could not be saved first, so it was not exported."));
 
     if (!mArchiver) {
         // It exports `mExportTarget` — a Project naming the row — never the

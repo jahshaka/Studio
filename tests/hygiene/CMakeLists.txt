@@ -32,6 +32,38 @@ jah_ship_row(source.no_raw_transaction)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(source.no_raw_transaction PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_raw_transaction)
 
+# source.no_ui_folder_delete — STUDIO-HYGIENE-1 stage 2: no widget deletes a folder tree; the project
+# delete is ProjectService::removeProject's (renamed aside, removed on a worker). See the script's header.
+add_test(NAME source.no_ui_folder_delete
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_ui_folder_delete.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.no_ui_folder_delete PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.no_ui_folder_delete)
+
+# source.one_asset_name_write — STUDIO-HYGIENE-1 stage 3: an asset's name is written only by assettags::write
+# (no renameAsset call; updateAssetMetadata called only there). See the script's header.
+add_test(NAME source.one_asset_name_write
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_asset_name_write.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.one_asset_name_write PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.one_asset_name_write)
+
+# source.one_save_door — STUDIO-HYGIENE-1 stage 1: the scene has one save door (ProjectService::save); the three
+# old doors are gone and the scene row's writers are called only there. See the script's header.
+add_test(NAME source.one_save_door
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_save_door.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.one_save_door PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.one_save_door)
+
+# source.one_undo_push — STUDIO-HYGIENE-1 audit: every scene command is pushed through UndoService (the edit gate,
+# the run's macro, the push count "unsaved" reads). See the script's header.
+add_test(NAME source.one_undo_push
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_undo_push.sh"
+                 "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.one_undo_push PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.one_undo_push)
+
 # source.db_pointers_initialised — DBPTR-1: a declared `Database *` is an
 # initialised one, and the two handles that are filled by a setter after
 # construction stay wired to their caller. See the script's header for the
@@ -156,10 +188,17 @@ if(NOT Python3_Interpreter_FOUND)
         "tool's own guard), source.notices_coverage (every vendored component is "
         "acknowledged) and source.member_init (every member of ours carries a value) "
         "are NOT registered in this build, and neither is "
-        "document.reader_defaults or theme.no_raw_sheets in their own directories. Install "
+        "document.reader_defaults in its own directory, or source.no_raw_sheets. Install "
         "python3 and reconfigure.")
 endif()
 if(Python3_Interpreter_FOUND)
+    # source.no_raw_sheets — the static half of the no-raw-stylesheet law (CODING_RULES §2), restored by
+    # STUDIO-HYGIENE-1 stage 4 from archive/tests/theme with NO allowlist and a third rule: a CSS-shaped string
+    # literal outside src/ui/style/ (a sheet passed as a named constant). See the script's header.
+    add_test(NAME source.no_raw_sheets
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_raw_sheets.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.no_raw_sheets PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.no_raw_sheets)
     # source.shader_cache_key — TEST-STREAMLINE-1 1a: the hlms layer keys on the shader cache's own code
     # (JAHSHAKA_SHADER_CACHE_CODE_SOURCES), not every engine source, because engine C++ reaches a cached Hlms source only
     # through property and piece values (the entry's key). A NEW engine file that builds shader source text (a piece, a

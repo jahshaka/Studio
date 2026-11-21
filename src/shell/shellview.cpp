@@ -53,6 +53,11 @@ void ShellView::openProjectAsync(bool playMode)
     mWindow->projectRunner()->openAsync(playMode);
 }
 
+QString ShellView::openRefusal() const
+{
+    return mWindow->projectRunner()->openRefusal();
+}
+
 void ShellView::newProject(const QString &guid, const QString &name, const QString &folder, SceneTemplate kind)
 {
     mWindow->projectRunner()->create(guid, name, folder, kind);
@@ -63,9 +68,14 @@ void ShellView::newProjectAsync(const QString &guid, const QString &name, const 
     mWindow->projectRunner()->createAsync(guid, name, folder, kind);
 }
 
-void ShellView::closeProject(bool reopenInPlace)
+bool ShellView::closeProject(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut)
 {
-    mWindow->projectRunner()->close(reopenInPlace);
+    return mWindow->projectRunner()->close(reopenInPlace, unsaved, whyOut);
+}
+
+bool ShellView::settleForQuit(CloseUnsaved unsaved, QString *whyOut)
+{
+    return mWindow->settleForQuit(unsaved, whyOut);
 }
 
 bool ShellView::waitForOpen()

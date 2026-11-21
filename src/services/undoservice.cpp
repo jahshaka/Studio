@@ -80,6 +80,10 @@ bool UndoService::endScriptMacro()
     if (!mMacroOpen) return false;
     mMacroOpen = false;
     mStack->endMacro();
+    // A save inside the run, with nothing pushed after it, saved what the macro
+    // now closes over: the closing index is the saved one (isDirty).
+    if (mSavedInMacro && mPushCount == mSavedPushCount) mSavedIndex = mStack->index();
+    mSavedInMacro = false;
     return true;
 }
 
@@ -130,6 +134,7 @@ void UndoService::clear()
     // world. The run still ends up as one entry either way.
     if (mMacroOpen) return;
     mStack->clear();
+    markSaved();   // a cleared stack is a fresh document: nothing unsaved (isDirty)
     // Every command that just died appended its asset-row cleanup instead of
     // writing it (CLOSE-1). One transaction for the lot, here, where the
     // clear's cost is already being paid — and where a failure has somewhere
@@ -139,7 +144,7 @@ void UndoService::clear()
 
 bool UndoService::isDirty() const
 {
-    return !mStack->isClean();
+    return mPushCount != mSavedPushCount || mStack->index() != mSavedIndex;
 }
 
 int UndoService::count() const
@@ -147,12 +152,15 @@ int UndoService::count() const
     return mStack->count();
 }
 
-void UndoService::markSaved()
+void UndoService::markUnsaved()
 {
-    mSavedCount = mStack->count() != 0 ? 1 : 0;
+    mSavedPushCount = ~quint64(0);   // a push count never reaches it (isDirty)
+    mSavedInMacro = false;
 }
 
-bool UndoService::savedCountMatchesCurrent() const
+void UndoService::markSaved()
 {
-    return mSavedCount == (mStack->count() != 0 ? 1 : 0);
+    mSavedPushCount = mPushCount;
+    mSavedIndex = mStack->index();
+    mSavedInMacro = mMacroOpen;
 }

@@ -29,11 +29,14 @@ For more information see the LICENSE file
 
 #include <QHash>
 #include <QJsonObject>
+#include <QList>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
 
 #include "io/missingclipref.h"
+#include "services/folderremoval.h"
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/import/meshprewarm.h"
@@ -43,6 +46,7 @@ class Project;
 class ProjectManager;
 class SettingsManager;
 class IEditorViewport;
+class IPlayerHost;
 class UndoService;
 class EditorData;
 class QImage;
@@ -62,6 +66,9 @@ public:
     /// first so pages and modules can be constructed against them); wired as
     /// soon as the page exists.
     void setProjectManager(ProjectManager *pm) { projectManager = pm; }
+    /// The Player page's host (its run plays the same document as the editor's): a save asks both runs for the
+    /// document's edit pose (PlayBack::documentEditPose). Null in a session with no player backend.
+    void setPlayerHost(IPlayerHost *host) { mPlayerHost = host; }
 
     /// The user's projects root (default_directory setting or Documents). The
     /// DEFAULT — a project created through the New Scene dialog's Browse button
@@ -128,6 +135,12 @@ public:
     /// open is closed — and autosaved into its OWN row — by the caller, which
     /// then points at the new guid (`pointAtProject`). `folderOut` receives the
     /// new project's folder. The desktop gets the new project's tile here.
+    /// WHY A CREATE WOULD BE REFUSED for its own arguments ("" = it would not): an empty name, a taken
+    /// one, a location that is missing, not a folder or not writable. The ONE judgement createProjectShell
+    /// makes — and every create route asks it FIRST, before it closes the world that is open, so a create
+    /// refused for its arguments leaves that world exactly where it was (STUDIO-HYGIENE-1).
+    QString createRefusal(const QString &name, const QString &location = QString()) const;
+
     QString createProjectShell(const QString &name, const QString &location = QString(),
                                QString *whyOut = nullptr, QString *folderOut = nullptr);
 
@@ -154,10 +167,22 @@ public:
     /// sit beside this and parse on the calling thread is gone).
     void pointAtProject(const QString &guid, const QString &name);
 
-    /// Deletes a project: folder tree first (like the widget), then the DB
-    /// rows through the guid-parameterised deletes — the current project is
-    /// NOT mutated (SCRIPTING_SPEC §1.6.1). Removes the project's tile.
-    bool removeProject(const QString &guid);
+    /// THE ONE DELETE (STUDIO-HYGIENE-1 stage 2): what project.remove and the
+    /// Desktop tile's Delete both call. Refuses, by a sentence in `whyOut`, an
+    /// unknown guid, the OPEN project and a project whose recorded location is
+    /// not there (a delete that cannot reach the files must not drop the rows
+    /// that name them). Then the folder is RENAMED ASIDE (one rename(2) in its
+    /// own Projects directory: atomic, and a failure leaves everything as it
+    /// was), the rows go through the guid-parameterised deletes (the current
+    /// project is NOT mutated, SCRIPTING_SPEC §1.6.1), the tile and any
+    /// thumbnail encode in flight with them — and the BYTES are removed on a
+    /// worker, never on the calling thread. The worker also takes any folder a
+    /// killed process left aside in that directory.
+    bool removeProject(const QString &guid, QString *whyOut = nullptr);
+    /// Waits for the folder removals in flight at most `capMs`, then stops the rest
+    /// (their folders stay aside; the next start's sweep removes them): the shutdown
+    /// paths, at FolderRemoval::kQuitCapMs. The destructor drains at the same cap.
+    FolderRemoval::Drained drainFolderDeletes(int capMs);
 
     /// The model files the LAST readProjectScene found with no current bake
     /// (FORWARD-ONLY-1): missing from the open, never parsed. The shell raises
@@ -178,27 +203,48 @@ public:
                                     std::unique_ptr<EditorData> *editorData,
                                     const iris::MeshPrewarmPtr &prewarm);
 
-    /// Blob-only save (SCRIPTING_SPEC §1.6.2): never silently no-ops; the
-    /// thumbnail refreshes only when a viewport can render one.
-    /// Run before every SCENE WRITE (all three saves below). The shell ends the
+    /// Run before every SCENE WRITE (save, below). The shell ends the
     /// live material hover preview here: the preview borrows a mesh's material
     /// slot without touching the document, and a save taken mid-hover would
     /// otherwise write the BORROWED material into the project — the one state
     /// the user never chose. A hook, like UndoService's, so this service stays
     /// free of the preview and headless hosts leave it unset.
     void setPreWriteHook(std::function<void()> hook) { mPreWrite = std::move(hook); }
+    /// WHO TELLS THE USER a save failed: "the scene could not be saved: <why>"
+    /// (a box for a person, a log line for a driven run — the shell's). A hook
+    /// for the reason the pre-write one is; headless hosts leave it unset and
+    /// read save()'s result.
+    void setSaveFailedHook(std::function<void(const QString &)> hook) { mSaveFailed = std::move(hook); }
 
-    bool saveProjectBlob();
+    /// Why a scene is written — the one thing the doors differ by.
+    enum class SaveReason {
+        Editor,   ///< Ctrl+S, the toolbar, the close's and the switch's auto-save, an export's pre-save:
+                  ///< the tile is the next presented frame (asked for, encoded on a worker). With no
+                  ///< world open: nothing to save, true. With no view (headless): the blob alone, when
+                  ///< the scene is dirty (a clean one: true, nothing written).
+        Create,   ///< a new project's first save: the tile asked for when a view exists.
+        Script    ///< project.save: the row AND its tile written when it returns (one frame read now).
+    };
 
-    /// The regular editor save: scene blob (written before it returns) +
-    /// viewport thumbnail (encoded on a worker, written when it is done — see
-    /// storeThumbnailLater) + desktop tile. No-ops when the viewport never
-    /// initialized (nothing to save).
-    void saveOpenScene();
-
-    /// First save of a fresh project into projectPath (was
-    /// MainWindow::saveScene(filename, projectPath)).
-    void saveInitialScene(const QString &projectPath);
+    /// THE ONE SAVE DOOR (STUDIO-HYGIENE-1 stage 1): the open project's scene
+    /// into its row, for every reason above — what Ctrl+S, the close, the
+    /// switch, the export, the create and project.save all call. The hover
+    /// preview ends first (setPreWriteHook); the walk, the encode and the one
+    /// UPDATE run here, on the calling thread (stage 0 measured the walk at 65 %
+    /// of a 21 MB save, so it stays synchronous until the document keeps its
+    /// own snapshot — the portable project's spec). TRUE ONLY WHEN THE ROW WAS
+    /// WRITTEN (Database::wroteOneProjectRow: one row, by the guid), and only
+    /// then is the undo stack marked saved. A failure — no open scene, a guid
+    /// that is not the open project's, a row that is gone or refused the write
+    /// — returns false with `whyOut` set, tells the save-failed hook "the scene
+    /// could not be saved: <why>", and leaves the stack DIRTY, so the close
+    /// asks. Every door logs one SAVE line (SESSION_LOG_SPEC §5).
+    ///
+    /// DURING A RUN OR A SIMULATION it writes the document's EDIT pose (PlayBack::documentEditPose); a node a run
+    /// added is not part of it and is left out — and then the row does not hold the whole document: true (the row
+    /// was written), the scene stays UNSAVED, and `whyOut` carries the one sentence that says so ("saved the scene
+    /// as edited; N object(s) added during Play are saved when Play stops"), logged once.
+    bool save(const QString &guid, SaveReason reason, QString *whyOut = nullptr);
 
     /// The presented frame -> scene thumbnail + desktop tile, synchronously
     /// read (one frame), the encode on a worker.
@@ -244,7 +290,14 @@ private:
     /// Drops `guid`'s encode in flight (a synchronous write or a delete
     /// replaces what it would have written).
     void supersedeThumbnail(const QString &guid);
+    /// Hands every `.removing-<guid>-*` folder of `projectsDir` no worker owns yet and NO PROJECT ROW CLAIMS to a
+    /// worker that removes it; a claimed one (a live project's, left aside by a killed or refused delete) is
+    /// renamed back to `<guid>`; an unreadable library removes nothing.
+    void removeAsideFoldersLater(const QString &projectsDir);
     QHash<QString, QFutureWatcher<QByteArray> *> mThumbEncodes;
+    /// The folder removals in flight (removeProject), and the aside paths they
+    /// own — a later delete never hands a second worker the same folder.
+    FolderRemoval mFolderRemoval;
     /// What an asynchronous tile request holds instead of `this`: the viewport
     /// may answer after this service is gone.
     std::shared_ptr<char> mAlive = std::make_shared<char>(0);
@@ -258,9 +311,11 @@ private:
     ProjectManager *projectManager;
     SettingsManager *settings;
     IEditorViewport *viewport;
+    IPlayerHost *mPlayerHost = nullptr;
     UndoService *undo;
     std::function<iris::ScenePtr()> sceneProvider;
     std::function<void()> mPreWrite;
+    std::function<void(const QString &)> mSaveFailed;
     QStringList mMissingModels;
     QVector<MissingClipRef> mMissingClips;
     int mCascadeRowsDropped = 0;

@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <atomic>
 #include "data/database/casschema.h"
 #include "data/constants.h"
+#include "io/sceneformat.h"   // the scene version gate the import shares with the open
 #include "irisgl/irisglfwd.h"
 #include "irisgl/core/logger.h"
 #include "data/guidmanager.h"
@@ -1547,9 +1548,10 @@ QString Database::getAuthorName()
 
 // Guid-parameterised (SCRIPTING_SPEC §1.1/§1.6.1): callers no longer have to
 // MUTATE Globals::project to delete a project that is not the open one.
-bool Database::deleteProject(const QString &guid)
+bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *deferred)
 {
     DbTransaction tx(db);
+    const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
     QSqlQuery query;
     query.prepare("DELETE FROM projects WHERE guid = ?");
@@ -1643,7 +1645,8 @@ bool Database::deleteProject(const QString &guid)
     }
 
     if (!tx.commit()) return false;
-    applyAssetScrubs(scrubs);
+    if (!ownsTransaction && deferred) *deferred += scrubs;
+    else applyAssetScrubs(scrubs);
     return true;
 }
 
@@ -2094,17 +2097,6 @@ bool Database::renameCollection(const int &collectionId, const QString &newName)
     return executeAndCheckQuery(query, "RenameCollection");
 }
 
-bool Database::renameAsset(const QString &guid, const QString &newName)
-{
-    QSqlQuery query;
-    query.prepare("UPDATE assets SET name = ? WHERE guid = ?");
-    query.addBindValue(newName);
-    query.addBindValue(guid);
-    const bool ok = executeAndCheckQuery(query, "RenameAsset");
-    if (ok) refreshSidecar(guid);   // name is a sidecar field (I2)
-    return ok;
-}
-
 bool Database::setAssetParent(const QString &guid, const QString &parent)
 {
     if (guid.isEmpty()) return false;
@@ -2146,7 +2138,7 @@ bool Database::updateProject(const QByteArray &sceneBlob, const QByteArray &thum
     query.addBindValue(sceneBlob);
     query.addBindValue(thumbnail);
     query.addBindValue(projectGuid);
-    return executeAndCheckQuery(query, "UpdateProject");
+    return executeAndCheckQuery(query, "UpdateProject") && wroteOneProjectRow(query, projectGuid);
 }
 
 // Blob-only update: keeps the existing thumbnail (headless saves have no
@@ -2157,7 +2149,21 @@ bool Database::updateProjectBlob(const QByteArray &sceneBlob, const QString &pro
     query.prepare("UPDATE projects SET scene = ?, last_written = datetime() WHERE guid = ?");
     query.addBindValue(sceneBlob);
     query.addBindValue(projectGuid);
-    return executeAndCheckQuery(query, "UpdateProjectBlob");
+    return executeAndCheckQuery(query, "UpdateProjectBlob") && wroteOneProjectRow(query, projectGuid);
+}
+
+// A SAVE THAT WROTE NO ROW IS A FAILED SAVE (STUDIO-HYGIENE-1). The two
+// project-row writers above returned the statement's success, and an UPDATE
+// whose WHERE matches nothing succeeds — so a save of a project whose row was
+// gone reported "saved", the undo stack was marked clean, and the close did not
+// ask. One row, by the guid, is the only success.
+bool Database::wroteOneProjectRow(const QSqlQuery &query, const QString &projectGuid)
+{
+    const int rows = query.numRowsAffected();
+    if (rows == 1) return true;
+    irisLog(QStringLiteral("the save of project %1 wrote %2 rows (one was expected)")
+                .arg(projectGuid).arg(rows));
+    return false;
 }
 
 bool Database::updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail)
@@ -3033,6 +3039,16 @@ bool Database::fetchProjectTile(const QString &guid, ProjectTileData *out)
     return true;
 }
 
+bool Database::hasProjectRow(const QString &guid, bool *readOk)
+{
+    QSqlQuery query;
+    query.prepare("SELECT 1 FROM projects WHERE guid = ?");
+    query.addBindValue(guid);
+    const bool ok = executeAndCheckQuery(query, "hasProjectRow");
+    if (readOk) *readOk = ok;
+    return ok && query.next();
+}
+
 QStringList Database::fetchProjectGuids(int desktop)
 {
     QSqlQuery query;
@@ -3656,7 +3672,8 @@ QVector<DependencyRecord> Database::fetchAssetDependencies(const AssetRecord &re
     return dependencies;
 }
 
-QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
+QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok,
+                                                  QVector<PendingAssetScrub> *deferred)
 {
 	QStringList files;
 	bool allOk = true;
@@ -3670,6 +3687,7 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 	// left some folders deleted, some assets deleted and the rest of the
 	// subtree pointing at parents that no longer exist.
 	DbTransaction tx(db);
+	const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
 	// Get all child folders
 	for (const auto &folder : fetchFolderAndChildFolders(guid)) {
@@ -3707,7 +3725,12 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 
 	const bool committed = tx.commit();
 	allOk = committed && allOk;
-	if (committed) applyAssetScrubs(scrubs);
+	// NESTED, "committed" is the degraded guard's true: the rows are real only at the caller's commit, so the
+	// scrubs go up to it (the final read's B4: a refused project delete had dropped its assets' sidecars).
+	if (committed) {
+		if (!ownsTransaction && deferred) *deferred += scrubs;
+		else applyAssetScrubs(scrubs);
+	}
 
 	if (!allOk)
 		iris::Logger::getSingleton()->warn(
@@ -3728,7 +3751,8 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok)
 	return files;
 }
 
-QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok, bool force)
+QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok, bool force,
+                                                 QVector<PendingAssetScrub> *deferred)
 {
 	QStringList files;
 	bool allOk = true;
@@ -3737,6 +3761,7 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 	QVector<PendingAssetScrub> scrubs;
 
 	DbTransaction tx(db);
+	const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
 	// For every asset, find their dependencies
 	for (const auto &asset : fetchAssetGUIDAndDependencies(guid)) {
@@ -3762,7 +3787,12 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 
 	const bool committed = tx.commit();
 	allOk = committed && allOk;
-	if (committed) applyAssetScrubs(scrubs);
+	// NESTED, "committed" is the degraded guard's true: the rows are real only at the caller's commit, so the
+	// scrubs go up to it (the final read's B4: a refused project delete had dropped its assets' sidecars).
+	if (committed) {
+		if (!ownsTransaction && deferred) *deferred += scrubs;
+		else applyAssetScrubs(scrubs);
+	}
 
 	if (!allOk)
 		iris::Logger::getSingleton()->warn(
@@ -3844,8 +3874,9 @@ bool Database::hasDependencies(const QString &guid)
 }
 
 // The PROJECT archive half of .jaf — replaced by the envelope format in lane JAF-READER-1.
-bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids, QSet<QString> *knownGuids)
+bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids, QSet<QString> *knownGuids, QString *whyOut)
 {
+    if (whyOut) whyOut->clear();
     // ScopedConnection: the connection name was already unique per call (a
     // fresh guid), which meant every project import leaked a DISTINCT
     // registration for the process's life — the connection list grew without
@@ -3883,6 +3914,29 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     auto sceneThumb = query.value(2).toByteArray();
     auto sceneVersion = query.value(3).toString();
     auto oldSceneGuid = query.value(4).toString();
+
+    // AN ARCHIVE SCENE THAT IS NOT A JSON OBJECT IS REFUSED (STUDIO-HYGIENE-1). The guid remap below
+    // round-trips the blob through QJsonDocument, and a blob that does not parse came out of it EMPTY:
+    // the archive imported as an empty world under the archive's name, the user told nothing. An EMPTY
+    // blob (a row never saved) is no scene, as the open reads it (openreads::readPlan), and imports so.
+    QJsonParseError sceneParse;
+    const QJsonDocument parsedScene = QJsonDocument::fromJson(sceneBlob, &sceneParse);
+    if (!sceneBlob.isEmpty() && !parsedScene.isObject()) {
+        if (whyOut)
+            *whyOut = sceneParse.error != QJsonParseError::NoError
+                          ? QStringLiteral("the archive's scene does not parse (%1 at byte %2)")
+                                .arg(sceneParse.errorString()).arg(sceneParse.offset)
+                          : QStringLiteral("the archive's scene is not a JSON object");
+        return false;
+    }
+    // ...AND ONE ANOTHER BUILD WROTE (the audit): imported, it would be a tile that can never open here —
+    // the open refuses the same version by the same rule (sceneformat::versionRefusal).
+    if (!sceneBlob.isEmpty()) {
+        if (const QString other = sceneformat::versionRefusal(parsedScene.object()); !other.isEmpty()) {
+            if (whyOut) *whyOut = QStringLiteral("the archive's scene is %1").arg(other);
+            return false;
+        }
+    }
 
     QVector<AssetRecord> assetList;
 
@@ -3994,8 +4048,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         "VALUES (:name, :scene, :thumbnail, :version, datetime(), datetime(), :guid)"
     );
 
-    auto doc = QJsonDocument::fromJson(sceneBlob);
-    QString docToString = doc.toJson(QJsonDocument::Compact);
+    QString docToString = parsedScene.toJson(QJsonDocument::Compact);
 
     QMapIterator<QString, QString> i(assetGuids);
     while (i.hasNext()) {

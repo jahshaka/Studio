@@ -337,7 +337,6 @@ protected slots:
 	void saveAvatarToLibrary();
     void exportSky();
     void exportMaterial();
-	void exportMaterialPreview();
 	void exportAssetPack();
 
     void searchAssets(QString);

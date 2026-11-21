@@ -195,6 +195,7 @@ void EnginePlayerView::end()
 }
 
 bool EnginePlayerView::isScenePlaying() { return mScene->isPlaying(); }
+const PlayBack *EnginePlayerView::playBack() const { return mScene ? mScene->playback() : nullptr; }
 
 void EnginePlayerView::playScene()
 {

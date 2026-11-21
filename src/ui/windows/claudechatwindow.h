@@ -45,7 +45,9 @@ For more information see the LICENSE file
 //
 // Colors are a self-contained dark palette (explicit on every widget) so the
 // popup reads identically under Qlementine dark and stays legible under
-// Classic — it deliberately opts out of both themes' cascades.
+// Classic — it deliberately opts out of both themes' cascades. The sheet is the
+// THEME's (ThemeManager::claudeChatSheet, src/ui/style/): no raw sheet lives
+// outside src/ui/style/ (source.no_raw_sheets, no allowlist).
 
 #include <QStringList>
 #include <QWidget>

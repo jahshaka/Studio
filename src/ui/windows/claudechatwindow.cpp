@@ -38,6 +38,7 @@ For more information see the LICENSE file
 
 #include "scripting/claude/claudechathost.h"
 #include "scripting/claude/claudelaunchconfig.h"
+#include "ui/style/thememanager.h"
 
 namespace {
 
@@ -48,65 +49,6 @@ const char *kGeometryKey = "claude_chat/geometry";
 const int kInlineImageMaxWidth = 320;
 const int kInlineImageMaxHeight = 260;
 
-// Self-contained dark palette — identical under Qlementine dark and Classic.
-const char *kWindowStyle = R"(
-QWidget#claudeChatRoot {
-    background: #202124; border: 1px solid #3c3f44; border-radius: 6px;
-}
-QWidget#claudeChatHeader { background: #2a2c30; border-bottom: 1px solid #3c3f44; }
-QLabel { color: #e8e8ea; background: transparent; }
-QLabel#claudeTitle { font-weight: bold; color: #e8e8ea; }
-QLabel#claudeStatus { color: #9aa0a6; font-size: 11px; }
-QLabel#claudeCost { color: #7d8288; font-size: 11px; }
-QLabel#claudeInfoLine { color: #9aa0a6; font-size: 11px; font-style: italic; }
-QLabel#claudeImage { background: #26272b; border: 1px solid #3c3f44; border-radius: 6px; }
-QComboBox#claudeModel {
-    background: #35373c; color: #b8bcc2; border: 1px solid #4a4d52;
-    border-radius: 4px; padding: 1px 6px; font-size: 11px;
-}
-QComboBox#claudeModel QAbstractItemView {
-    background: #2a2c30; color: #e8e8ea; selection-background-color: #3d6db5;
-}
-QLabel#claudeBubbleUser {
-    background: #2f4f77; color: #eef2f8; border-radius: 8px; padding: 7px 10px;
-}
-QLabel#claudeBubbleAssistant {
-    background: #2e3035; color: #e8e8ea; border-radius: 8px; padding: 7px 10px;
-}
-QLabel#claudeBubbleError {
-    background: #4a2b2b; color: #ffb3ab; border-radius: 8px; padding: 7px 10px;
-}
-QLabel#claudeToolDetail {
-    background: #26272b; color: #b8bcc2; border-radius: 6px; padding: 6px;
-    font-family: monospace; font-size: 11px;
-}
-QToolButton#claudeToolLine {
-    color: #8ab4f8; background: transparent; border: none; font-size: 11px;
-    text-align: left; padding: 1px;
-}
-QScrollArea#claudeScroll, QWidget#claudeMessages { background: #202124; border: none; }
-QPlainTextEdit#claudeInput {
-    background: #2a2c30; color: #e8e8ea; border: 1px solid #3c3f44;
-    border-radius: 6px; padding: 4px; font-size: 13px;
-}
-QPushButton {
-    background: #35373c; color: #e8e8ea; border: 1px solid #4a4d52;
-    border-radius: 5px; padding: 5px 14px;
-}
-QPushButton:hover { background: #3f4247; }
-QPushButton:disabled { color: #6a6d72; background: #2c2e32; }
-QPushButton#claudeSend { background: #3d6db5; border-color: #3d6db5; }
-QPushButton#claudeSend:hover { background: #4a7bc4; }
-QPushButton#claudeSend:disabled { background: #2c3a4f; color: #7d8794; }
-QPushButton#claudeStop { background: #8a3d3d; border-color: #8a3d3d; }
-QToolButton#claudeHeaderBtn {
-    color: #b8bcc2; background: transparent; border: none;
-    font-size: 13px; padding: 3px;
-}
-QToolButton#claudeHeaderBtn:hover { color: #ffffff; background: #3c3f44; border-radius: 4px; }
-QWidget#claudeMcpBanner { background: #4a4023; border-bottom: 1px solid #5c5230; }
-QLabel#claudeMcpBannerText { color: #e8d9a0; font-size: 11px; }
-)";
 
 } // namespace
 
@@ -116,7 +58,7 @@ ClaudeChatWindow::ClaudeChatWindow(SettingsStore *settings, ClaudeChatHost *host
     setObjectName(QStringLiteral("claudeChatRoot"));
     setWindowTitle(tr("Claude"));
     setAttribute(Qt::WA_StyledBackground, true);
-    setStyleSheet(QString::fromLatin1(kWindowStyle));
+    setStyleSheet(ThemeManager::claudeChatSheet());   // the theme's (src/ui/style/), both themes
     setMinimumSize(300, 320);
     buildUi();
 

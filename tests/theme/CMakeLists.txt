@@ -40,8 +40,9 @@ set_tests_properties(theme.sheets PROPERTIES
 jah_tsan_blocked(theme.sheets)   # spawns the app
 jah_lsan_lane(theme.sheets)   # spawns the app: its harness reads the child's exit (quitAndReap) — green = the app leaked nothing
 
-# theme.no_raw_sheets (archived: archive/tests/theme) — the static half of the no-raw-stylesheet law (theme review SF-3):
-# the live walk cannot see menus and dialogs built on demand, so the source is linted too.
+# source.no_raw_sheets — the static half of the no-raw-stylesheet law (theme review SF-3): the live walk cannot see
+# menus and dialogs built on demand, so the source is linted too. It lives in tests/hygiene (restored there by
+# STUDIO-HYGIENE-1, no allowlist).
 find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # FRESH HOMES (PROJECT-NAMES-1). A project name is unique in a library now (project.create

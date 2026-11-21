@@ -446,33 +446,36 @@ bool ProjectArchiver::workImport()
     QString manifestError;
     const ExportManifest manifest = ExportManifest::fromFile(
         QDir(mStage->path()).filePath(exportformat::manifestFileName()), &manifestError);
+    // AN UNREADABLE MANIFEST IS AN ERROR (STUDIO-HYGIENE-1): it used to import
+    // the rows only, silently — every object of the archive dropped, and a
+    // newer build's archive half-read as this one. Refused, with the reason.
+    if (!manifest.isValid()) {
+        mResult.error = QStringLiteral("this project archive cannot be read: %1").arg(manifestError);
+        return false;
+    }
 
-    // Objects + asset_files + pins, from the manifest (v2 archives; a legacy
-    // archive without one imports rows only — its flat files are ignored,
-    // there is no flat-folder world to put them in).
-    if (manifest.isValid() && manifest.version >= 2) {
-        const QDir objectsDir(QDir(mStage->path()).filePath(QStringLiteral("objects")));
-        for (const ManifestAsset &asset : manifest.assets) {
-            IngestAsset plan;
-            plan.archiveGuid = asset.guid;
-            plan.folder = asset.folder;   // ARCHIVE-FOLDER-1; empty = the root
-            for (const ManifestFile &file : asset.files) {
-                // objects/<oid>.<ext> — find by oid prefix (ext recorded in name).
-                const auto candidates =
-                    objectsDir.entryInfoList({ file.oid + ".*", file.oid }, QDir::Files);
-                if (candidates.isEmpty()) continue;
-                AssetCas::Staged staged;
-                staged.srcPath = candidates.first().absoluteFilePath();
-                staged.role    = file.role;
-                staged.name    = file.name;
-                // The manifest's oid is NOT trusted as the content id: it names
-                // the file inside the archive and nothing more. stage() hashes
-                // the bytes it actually reads, which is what makes a hostile
-                // archive unable to put anything under a name it chose.
-                plan.files.append(staged);
-            }
-            mIngest.append(plan);
+    // Objects + asset_files + pins, from the manifest.
+    const QDir objectsDir(QDir(mStage->path()).filePath(QStringLiteral("objects")));
+    for (const ManifestAsset &asset : manifest.assets) {
+        IngestAsset plan;
+        plan.archiveGuid = asset.guid;
+        plan.folder = asset.folder;   // ARCHIVE-FOLDER-1; empty = the root
+        for (const ManifestFile &file : asset.files) {
+            // objects/<oid>.<ext> — find by oid prefix (ext recorded in name).
+            const auto candidates =
+                objectsDir.entryInfoList({ file.oid + ".*", file.oid }, QDir::Files);
+            if (candidates.isEmpty()) continue;
+            AssetCas::Staged staged;
+            staged.srcPath = candidates.first().absoluteFilePath();
+            staged.role    = file.role;
+            staged.name    = file.name;
+            // The manifest's oid is NOT trusted as the content id: it names
+            // the file inside the archive and nothing more. stage() hashes
+            // the bytes it actually reads, which is what makes a hostile
+            // archive unable to put anything under a name it chose.
+            plan.files.append(staged);
         }
+        mIngest.append(plan);
     }
     // THE CAS INGEST'S FILE HALF (FSYNC-1). Hashing and copying every object —
     // and the fsync that makes each one durable — used to happen inside the
@@ -533,9 +536,11 @@ void ProjectArchiver::beginInstallImport()
 
     // Catalog rows (fresh guids; scene blob remapped inside importProject).
     const QString newProjectGuid = GUIDManager::generateGUID();
+    QString importWhy;
     if (!db->importProject(QDir(mStage->path()).filePath(mBlobDbBase), newProjectGuid,
-                           mResult.worldName, mGuidMap, &mKnownGuids)) {
-        mResult.error = QStringLiteral("the archive's catalog could not be imported");
+                           mResult.worldName, mGuidMap, &mKnownGuids, &importWhy)) {
+        mResult.error = importWhy.isEmpty() ? QStringLiteral("the archive's catalog could not be imported")
+                                            : QStringLiteral("this project archive cannot be read: %1").arg(importWhy);
         return;
     }
     // A FREE NAME (PROJECT-NAMES-1): an import is always a NEW project, and a

@@ -80,6 +80,23 @@ public:
     /// window on the owner's session when a project was closed.
     void clear();
 
+    /// THE ONE DEFINITION OF "UNSAVED CHANGES" (STUDIO-HYGIENE-1): true when
+    /// the document has moved since the last markSaved() (or the last clear(),
+    /// which is a fresh document) — a command pushed, or the stack's index moved
+    /// by an undo or a redo. Read by every reader: the window close's question,
+    /// the open's and the close's bookkeeping, editor.undoState().dirty.
+    ///
+    /// The saved state is (pushCount, index). pushCount never falls, so no push
+    /// can ever land back on "clean" by coincidence (there is no undo limit to
+    /// drop commands, and if one is ever set a push still moves pushCount); an
+    /// undo after a save moves the index (dirty), a redo back restores it
+    /// (clean). It works INSIDE a script's macro, where QUndoStack's own clean
+    /// state cannot be set: a save made inside the run's open macro is carried
+    /// to the macro's closing index when the macro ends with nothing pushed since.
+    ///
+    /// It replaced a counter coerced to 0/1 ("the count at last save" was only
+    /// ever 0 or 1) under which every edit after the FIRST save read as saved,
+    /// so the close never asked about it, and a failed save was invisible.
     bool isDirty() const;
     int  count() const;
 
@@ -116,7 +133,9 @@ public:
     // a run that records anything is still exactly one entry.
     //
     // This is the right place for it because EVERY undo command in the app is
-    // pushed through this service — nothing else calls QUndoStack::push.
+    // pushed through this service — nothing else calls the scene stack's
+    // QUndoStack::push (source.one_undo_push; the material graph's own stack is
+    // its document's, not the scene's).
 
     /// Arms the run's macro. Nothing reaches the stack until the first push.
     void beginScriptMacro(const QString &text);
@@ -127,13 +146,13 @@ public:
     /// Closes the macro if it ever opened. True when the run left an entry.
     bool endScriptMacro();
 
-    /// Saved-state bookkeeping (was MainWindow::undoStackCount). Preserves a
-    /// pre-extraction quirk: the old code stored getUndoStackCount(), whose
-    /// return type was bool — the "count at last save" was only ever 0 or 1,
-    /// and the unsaved-changes prompt compared against the same coercion.
+    /// The document as it stands is the saved one (isDirty() reads false until
+    /// it moves). Called ONLY by a save that wrote its row (ProjectService::save)
+    /// and by an open, whose document IS the row.
     void markSaved();
-    void resetSavedCount() { mSavedCount = 0; }
-    bool savedCountMatchesCurrent() const;
+    /// The row does NOT hold the document (a save that wrote no row): dirty until the next markSaved, whatever
+    /// the stack does — no push or undo can land back on "saved" by coincidence.
+    void markUnsaved();
 
 private:
     QUndoStack *mStack = nullptr;
@@ -145,7 +164,12 @@ private:
     bool mMacroOpen = false;
     QString mMacroText;
     quint64 mPushCount = 0;
-    int  mSavedCount = 0;
+    /// The saved state (isDirty): the push count and the stack index at the last
+    /// markSaved / clear; `mSavedInMacro` = that save happened inside the run's
+    /// open macro (endScriptMacro carries it to the closing index).
+    quint64 mSavedPushCount = 0;
+    int mSavedIndex = 0;
+    bool mSavedInMacro = false;
     std::function<void()> mPrePush;
     std::function<void()> mStackMoved;
     std::function<void()> mDeferredFlush;

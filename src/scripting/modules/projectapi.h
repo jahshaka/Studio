@@ -38,14 +38,15 @@ public:
     /// The sliced create, WITHOUT the drain — see the verb's doc.
     Q_INVOKABLE QString createAsync(const QString &name,
                                     const QVariantMap &options = QVariantMap());
-    Q_INVOKABLE bool open(const QString &guidOrName);
+    Q_INVOKABLE bool open(const QString &guidOrName, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool openAsync(const QString &guidOrName,
                                const QVariantMap &options = QVariantMap());
-    Q_INVOKABLE bool openSample(const QString &name);
+    Q_INVOKABLE bool openSample(const QString &name, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QStringList samples();
     Q_INVOKABLE QString openState();
+    Q_INVOKABLE QString openRefusal();
     Q_INVOKABLE bool save();
-    Q_INVOKABLE bool close();
+    Q_INVOKABLE bool close(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool rename(const QString &guid, const QString &newName);
     Q_INVOKABLE QString nextFreeName(const QString &name);
     Q_INVOKABLE bool remove(const QString &guid);

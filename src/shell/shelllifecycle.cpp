@@ -14,7 +14,6 @@ For more information see the LICENSE file
 
 #include <QCloseEvent>
 #include <QMainWindow>
-#include <QMessageBox>
 #include <QPointer>
 #include <QThreadPool>
 #include <QUndoStack>
@@ -23,6 +22,7 @@ For more information see the LICENSE file
 #include <cstdio>
 #include <cstdlib>
 #include <thread>
+#include <utility>
 
 #include "bridge/enginehost.h"
 #include "data/constants.h"
@@ -157,47 +157,20 @@ void ShellLifecycle::closeRequested(QCloseEvent *event)
 		sSettlingOpen = false;
 	}
 
-	ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr;
-	UndoService *undoService = mParts.services ? mParts.services->undo() : nullptr;
-	const bool autoSave = mParts.settings->get(settingkeys::autoSave);
-	const bool sceneOpen = projectService && projectService->isSceneOpen();
-
-	if (autoSave && sceneOpen) {
-		if (mParts.saveScene) mParts.saveScene();
-		event->accept();
+	// THE ONE DECISION (STUDIO-HYGIENE-1, the final read's W1): MainWindow::settleUnsaved, the same every close of
+	// a world takes. Auto-save on: saved; a failed save, or one that left out what a run added, or unsaved changes
+	// with auto-save off ask a PERSON (Save again / Discard / Cancel, never trapped) and are REFUSED in a driven
+	// session, which nobody can answer a box in (app/firstrun.h; this close asked one, ungated); app.quit arms its
+	// own Refuse or Discard. With no project open there is nothing to decide (the editor's default scene's undo
+	// entries are not a document: app.watchdog_stall). A refusal keeps the window and the world exactly as they were.
+	const CloseUnsaved unsaved = std::exchange(mCloseUnsaved, CloseUnsaved::Ask);
+	QString why;
+	if (mParts.settleUnsaved && !mParts.settleUnsaved(unsaved, &why)) {
+		qWarning("window close refused: %s", qUtf8Printable(why));
+		event->ignore();
+		return;
 	}
-	else {
-		// `isSceneOpen()` is part of the CONDITION, not just the branch above
-		// it (2026-09-04, found by app.watchdog_stall): with no project open
-		// the undo stack is still dirty — the editor's default scene put
-		// entries there — so this asked the user to save a document that does
-		// not exist, with a modal QMessageBox that swallowed the quit and left
-		// the process alive — the same zombie the in-flight-open settle at the
-		// top of this function was written for, in a second guise. Nothing to
-		// save means nothing to ask.
-		if (undoService && undoService->isDirty()
-		    && !undoService->savedCountMatchesCurrent() && sceneOpen) {
-			QMessageBox::StandardButton reply;
-			reply = QMessageBox::question(mParts.window,
-				"Unsaved Changes",
-				"There are unsaved changes, save before closing?",
-				QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-			if (reply == QMessageBox::Yes) {
-				if (mParts.saveScene) mParts.saveScene();
-				event->accept();
-			}
-			else if (reply == QMessageBox::No) {
-				event->accept();
-			}
-			else {
-				event->ignore();
-				return;
-			}
-		}
-		else {
-			event->accept();
-		}
-	}
+	event->accept();
 
 	// (THE DONATE DIALOG USED TO RUN HERE, modally, as the last thing a user
 	// saw on the way out. It moved to FIRST LAUNCH — app/firstrun.h, called
@@ -329,6 +302,13 @@ void ShellLifecycle::stopBackgroundWork()
     if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr) {
         const int drained = projectService->drainThumbnailEncodes();
         if (drained) qInfo("shutdown: wrote %d pending project thumbnail(s)", drained);
+        // A PROJECT FOLDER'S BYTES are waited for at the same 3-s cap as every join here (the final read 2's
+        // M1: this wait had none, with the window still on screen); a removal past it stops between two
+        // files, its folder stays aside, and the next start's sweep removes it.
+        const FolderRemoval::Drained folders = projectService->drainFolderDeletes(FolderRemoval::kQuitCapMs);
+        if (folders.waited)
+            qInfo("shutdown: %d project folder removal(s), %d stopped at the cap (finished by the next start)",
+                  folders.waited, folders.stopped);
     }
 
     // Reap the remaining pool workers (metadata/peaks/bake futures) so
@@ -393,6 +373,7 @@ void ShellLifecycle::teardownWindow()
     if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr) {
         projectService->settleThumbnailCapture();
         projectService->drainThumbnailEncodes();
+        projectService->drainFolderDeletes(FolderRemoval::kQuitCapMs);
     }
 
     // The modules. ONE TEARDOWN PATH: on the window-close path step 3 has

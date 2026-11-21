@@ -50,7 +50,11 @@ ProjectManager *desktopPage(const ScriptHost &host)
 QVector<VerbInfo> ProjectApi::verbs() const
 {
     return {
-        { "create", "project.create(name, {template, location}) -> guid",
+        { "create", "project.create(name, {template, location, discard}) -> guid",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "Creates a project (folder, DB row, default scene saved into the blob) on the current desktop and "
           "opens it in the editor. The scene is in the row when this returns; the row's THUMBNAIL is encoded "
           "on a worker and lands ~100 ms later (the same holds for the world a create closes; project.save "
@@ -87,7 +91,11 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "the meshes the mirror still owes — so a world whose inputs land later is lit on the frames "
           "after this returns: `world.giStatus().vctBound` says which.",
           Needs::Document },
-        { "createAsync", "project.createAsync(name, {template, location}) -> guid",
+        { "createAsync", "project.createAsync(name, {template, location, discard}) -> guid",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "THE CREATE, WITHOUT THE WAIT (SPECS/OPEN_COVER_SPEC.md §2 C/§4). Exactly what "
           "project.create does — the same folder, the same DB row, the same default world, the "
           "same slices in the same order — except that it returns as soon as the create is "
@@ -105,7 +113,11 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "what they mean on project.create, and an open or create already in flight is REFUSED "
           "by name rather than queued.",
           Needs::Window },
-        { "open", "project.open(guidOrName) -> bool",
+        { "open", "project.open(guidOrName, {discard}) -> bool",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "Opens a project by guid or exact name: preloads its assets synchronously, reads the scene blob, "
           "switches to the editor. INSIDE A SCRIPT this ends the run's undo entry first (see project.create): "
           "the closed project's undo history goes with it, and the rest of the run records into a fresh entry."
@@ -117,9 +129,18 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "it landed on the first frame the user sees (298 ms on the default world). It still waits for "
           "what it reads — a camera a drawing view has tracked, the voxel inputs' textures, the sky, "
           "the meshes the mirror still owes — so a world whose inputs land later is lit on the frames "
-          "after this returns: `world.giStatus().vctBound` says which.",
+          "after this returns: `world.giStatus().vctBound` says which.\n\n"
+          "A SCENE THIS BUILD MUST NOT READ IS REFUSED, nothing opened, before anything of the open is torn "
+          "down: a scene blob that does not parse, or one ANOTHER build wrote (a formatVersion that is not this "
+          "build's — newer, older, or none at all) — the error is \"'<name>' could not be opened: <why>\", the same sentence a desktop tile "
+          "or an archive import shows. The world that was open is already closed by then (the close is the "
+          "open's first half).",
           Needs::Document },
-        { "openAsync", "project.openAsync(guidOrName, {play}) -> bool",
+        { "openAsync", "project.openAsync(guidOrName, {play, discard}) -> bool",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "Opens a project WITHOUT blocking the UI thread: the model files parse on a worker thread and the "
           "install runs one slice per event-loop turn (services/sceneopenrunner.h), which is what the desktop "
           "tile and the archive-import open now do. Returns as soon as the open is under way — poll "
@@ -130,17 +151,20 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "it by leaving a flag on the page for every other route to read. It is an argument here for the "
           "same reason.",
           Needs::Window },
-        { "openSample", "project.openSample(name) -> bool",
+        { "openSample", "project.openSample(name, {discard}) -> bool",
           "Opens one of the samples this tree ships, by base name (\"Matcaps\", \"Showroom 2\") or by an "
           "Ogre port's display title — THE SAMPLE BROWSER'S OWN ROUTE, which imports the archive and then "
-          "opens the imported world. The dialog's tiles call this, so a script and a double-click take the "
-          "same road. It lands in the EDITOR: a sample is something to look at and edit, and the Player is a "
+          "opens the imported world. The dialog's tiles take the same import (ProjectManager::openSampleArchive), "
+          "so a script and a double-click take the same road; a tile asks a person about unsaved changes. It lands in the EDITOR: a sample is something to look at and edit, and the Player is a "
           "separate statement (app.space('player')). BOTH HALVES ARE THREADED, like the browser's, and "
           "they run in that order: poll project.archiveState() until 'idle' (the import), then "
           "project.openState() until 'idle' (the open), with a frame in the loop. project.samples() "
           "lists the names. A REOPENED SAMPLE IS ALWAYS A FRESH COPY, UNIQUELY NAMED: the first open of "
           "Matcaps makes \"Matcaps\", the next \"Matcaps 2\", then \"Matcaps 3\" (project.nextFreeName's "
-          "rule; every archive import names its project the same way).",
+          "rule; every archive import names its project the same way). THE OPEN WORLD IS SETTLED FIRST, as "
+          "project.open settles it: an unknown name is refused with the world untouched; then unsaved changes "
+          "refuse the open with project.open's sentence unless {discard: true} (auto-save on: they are saved, and "
+          "a failed save refuses), and only then does the import start.",
           Needs::Window },
         { "samples", "project.samples() -> [name]",
           "The base names of every sample scene this tree ships, both sets (the Jahshaka samples and our "
@@ -158,10 +182,21 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "bookkeeping at every slice boundary whether or not anything drew (app.renderStats() "
           ".resourceAdvances) — but a poll with no frame is slow and paints nothing.",
           Needs::Window },
+        { "openRefusal", "project.openRefusal() -> string",
+          "WHY THE LAST OPEN WAS REFUSED, in the user's words — \"\" unless the most recent open (either "
+          "route: project.open, project.openAsync, a desktop tile, an archive import's open) was refused "
+          "(STUDIO-HYGIENE-1). The sentence is the one project.open fails with and the tile's box shows: "
+          "\"'<name>' could not be opened: <why>\" — a scene blob that does not parse, or one another build "
+          "wrote. A threaded open refuses at its first slice, so poll project.openState() to 'idle' first.",
+          Needs::Document },
         { "save", "project.save() -> bool",
           "Saves the open scene into the project's DB blob. Works headless (blob-only; the thumbnail refreshes only when a viewport can render one).",
           Needs::Document },
-        { "close", "project.close() -> bool",
+        { "close", "project.close({discard}) -> bool",
+          "THE WORLD THAT IS OPEN IS CLOSED FIRST, AND NO CLOSE DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): with auto-save on "
+          "it is saved, and a save that FAILS refuses the call (the world stays open, the reason in the error); "
+          "with auto-save off and unsaved changes (editor.undoState().dirty) the call is REFUSED with a "
+          "sentence unless `discard: true` is passed, which drops them. "
           "Closes the open project — INCLUDING one that is still opening: a threaded open in flight is "
           "drained first (its install finishes, then the world closes), so a close can never leave install "
           "slices queued against a project that is gone. "
@@ -186,7 +221,12 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "dialogs put in their name box, and what an archive import (a sample reopen) names its project.",
           Needs::Document },
         { "remove", "project.remove(guid) -> bool",
-          "Deletes a project: its folder tree, its DB row and its asset/dependency rows. Refuses to delete the open project. NOT undoable.",
+          "Deletes a project: its folder tree, its DB row and its asset/dependency rows — THE ONE DELETE, the Desktop "
+          "tile's Delete calls the same function. Refused, by a sentence: an unknown guid, the OPEN project "
+          "(project.close() first), and a project whose recorded location is not there. The folder is renamed "
+          "aside at once (gone from its place when this returns; a folder that cannot be moved refuses with "
+          "the rows kept) and its bytes are removed on a worker, so a large export never freezes the window. "
+          "NOT undoable.",
           Needs::Document },
         { "list", "project.list({desktop}) -> [{guid, name, desktop, x, y}]",
           "Lists projects; desktop 1-4 filters, omit for all.",
@@ -293,6 +333,16 @@ QString ProjectApi::resolveGuid(const QString &guidOrName, QString *nameOut)
 // thing that differs: whether the shell drains the runner before returning.
 // `verb` is what a refusal calls itself, so the message names the verb the
 // caller actually used.
+namespace {
+/// WHAT A SCRIPT'S CLOSE DOES WITH UNSAVED CHANGES (services/closeunsaved.h): refused with a sentence,
+/// unless the caller said {discard: true} — no verb drops edits silently.
+CloseUnsaved scriptCloseUnsaved(const QVariantMap &options)
+{
+    return options.value(QStringLiteral("discard"), false).toBool() ? CloseUnsaved::Discard
+                                                                     : CloseUnsaved::Refuse;
+}
+}   // namespace
+
 QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
                                bool async, const QString &verb)
 {
@@ -302,7 +352,8 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
     // UNKNOWN KEYS ARE REFUSED, not ignored (the house rule): `{tempalte: "empty"}`
     // silently making the template is exactly the class of bug the option maps
     // exist to prevent.
-    static const QStringList known = { QStringLiteral("template"), QStringLiteral("location") };
+    static const QStringList known = { QStringLiteral("template"), QStringLiteral("location"),
+                                       QStringLiteral("discard") };
     for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
         if (known.contains(it.key())) continue;
         fail(QStringLiteral("%1: unknown option '%2' (known: %3)")
@@ -319,6 +370,28 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
         }
     }
     const QString location = options.value(QStringLiteral("location")).toString();
+
+    // THE OPEN WORLD CLOSES FIRST, BEFORE A ROW IS MINTED (STUDIO-HYGIENE-1 audit):
+    // unsaved changes refuse the create unless {discard: true}, and a failed
+    // auto-save refuses it whatever — nothing is created then.
+    // ...after the create's OWN refusals (a name, a location): a refused create leaves the open world open.
+    if (const QString refusal = host.services->project->createRefusal(name, location); !refusal.isEmpty()) {
+        fail(QStringLiteral("%1: %2").arg(verb, refusal));
+        return QString();
+    }
+    // AN OPEN IN FLIGHT IS PART OF THE WORLD THAT CLOSES (the final read's W5): closeProject drains it and then
+    // settles the world it installed. Skipped, the runner's drain installed it AFTER the row was minted, its close
+    // was refused by the backstop, and the verb returned the guid of an empty row as a success.
+    if (host.services->project->isSceneOpen() || host.shell->isOpeningProject()) {
+        host.endRunUndoMacro();
+        QString closeWhy;
+        const bool closed = host.shell->closeProject(false, scriptCloseUnsaved(options), &closeWhy);
+        host.beginRunUndoMacro();
+        if (!closed) {
+            fail(QStringLiteral("%1: %2").arg(verb, closeWhy));
+            return QString();
+        }
+    }
 
     // The data half (guid, current project, folder, DB row, desktop) is
     // ProjectService's; MainWindow::newProject then builds the default scene
@@ -361,14 +434,14 @@ QString ProjectApi::createAsync(const QString &name, const QVariantMap &options)
     // THE SAME RULE project.openAsync follows, and the same predicate: while
     // project.openState() reads 'opening' a second one is refused, never
     // queued. (project.create cannot refuse — its contract is a loaded world —
-    // so it drains instead, inside MainWindow::startCreateRun.)
+    // so its close drains the open in flight first: createInto, the final read's W5.)
     if (openInFlight())
         return (fail("project.createAsync: an open or create is already in flight "
                      "(project.openState() reads 'opening' until it finishes)"), QString());
     return createInto(name, options, true, QStringLiteral("project.createAsync"));
 }
 
-bool ProjectApi::open(const QString &guidOrName)
+bool ProjectApi::open(const QString &guidOrName, const QVariantMap &options)
 {
     if (!host.shell || !host.services || !host.services->project)
         return fail("project: not available in this session");
@@ -416,9 +489,15 @@ bool ProjectApi::open(const QString &guidOrName)
     // and open a fresh one for what the script does in the new project.
     host.endRunUndoMacro();
     // The close is the first half of this open: the page the user is on stays
-    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
-    if (host.services->project->isSceneOpen())
-        host.shell->closeProject(true);
+    // (MainWindow::CloseIntent, VIEW-REBUILD-1). Unsaved changes refuse it unless
+    // {discard: true}; a failed auto-save refuses it whatever (STUDIO-HYGIENE-1).
+    if (host.services->project->isSceneOpen()) {
+        QString closeWhy;
+        if (!host.shell->closeProject(true, scriptCloseUnsaved(options), &closeWhy)) {
+            host.beginRunUndoMacro();
+            return fail(QStringLiteral("project.open: %1").arg(closeWhy));
+        }
+    }
 
     // The ledger starts HERE, not in MainWindow::openProject: the session
     // registrations are part of what an open costs and they happen inside it.
@@ -431,6 +510,10 @@ bool ProjectApi::open(const QString &guidOrName)
     host.services->project->pointAtProject(guid, name);
     host.shell->openProject(false);
     host.beginRunUndoMacro();
+    // A REFUSED SCENE (STUDIO-HYGIENE-1): one that does not parse, or one a
+    // newer build wrote — the runner's one sentence, nothing opened.
+    if (const QString refusal = host.shell->openRefusal(); !refusal.isEmpty())
+        return fail(QStringLiteral("project.open: %1").arg(refusal));
     return true;
 }
 
@@ -478,9 +561,14 @@ bool ProjectApi::openAsync(const QString &guidOrName, const QVariantMap &options
     }
     host.endRunUndoMacro();   // CLOSE-2 item 2, as project.open
     // The close is the first half of this open: the page the user is on stays
-    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
-    if (host.services->project->isSceneOpen())
-        host.shell->closeProject(true);
+    // (MainWindow::CloseIntent, VIEW-REBUILD-1) — refused as project.open's is.
+    if (host.services->project->isSceneOpen()) {
+        QString closeWhy;
+        if (!host.shell->closeProject(true, scriptCloseUnsaved(options), &closeWhy)) {
+            host.beginRunUndoMacro();
+            return fail(QStringLiteral("project.openAsync: %1").arg(closeWhy));
+        }
+    }
 
     LoadTimeline::begin(QStringLiteral("open(script-async) %1").arg(name.isEmpty() ? guid : name));
     // The open's first slices do the session registrations themselves, with
@@ -496,7 +584,7 @@ QStringList ProjectApi::samples()
     return ProjectManager::sampleNames();
 }
 
-bool ProjectApi::openSample(const QString &name)
+bool ProjectApi::openSample(const QString &name, const QVariantMap &options)
 {
     if (!host.shell) return fail("project.openSample: this verb needs the editor window");
     ProjectManager *page = host.shell->projectPage();
@@ -510,18 +598,23 @@ bool ProjectApi::openSample(const QString &name)
     if (ProjectArchiver::anyRunning())
         return fail("project.openSample: an archive operation is already running "
                     "(project.archiveState() reads 'running' until it finishes)");
-    // The undo entry closes with the world that is leaving, exactly as
-    // project.open/openAsync do — the import + open that follows belongs to the
-    // sample being opened, not to the project being left.
     QString why;
-    if (!page->openSampleByName(name, &why))
-        return fail(QStringLiteral("project.openSample: %1").arg(why));
-    // Only once the sample is really on its way: a refusal must not end the
-    // run's undo entry (project.open/openAsync end theirs on the same edge —
-    // the world that is leaving takes the run's edits with it).
+    const QString archive = page->sampleArchive(name, &why);
+    if (archive.isEmpty()) return fail(QStringLiteral("project.openSample: %1").arg(why));
+    // THE OPEN WORLD IS SETTLED BEFORE THE IMPORT (the final read's B5), as project.open settles it: the
+    // import-finished close is a person's Ask, which a driven session refuses with nobody told — the verb
+    // returned true and opened nothing. The undo entry closes with the world that is leaving.
     host.endRunUndoMacro();
+    if (host.services && host.services->project && host.services->project->isSceneOpen()) {
+        QString closeWhy;
+        if (!host.shell->closeProject(true, scriptCloseUnsaved(options), &closeWhy)) {
+            host.beginRunUndoMacro();
+            return fail(QStringLiteral("project.openSample: %1").arg(closeWhy));
+        }
+    }
+    const bool started = page->openSampleArchive(archive, &why);
     host.beginRunUndoMacro();
-    return true;
+    return started ? true : fail(QStringLiteral("project.openSample: %1").arg(why));
 }
 
 bool ProjectApi::openInFlight() const
@@ -533,6 +626,12 @@ QString ProjectApi::openState()
 {
     if (!host.shell) { fail("project: not available in this session"); return QStringLiteral("idle"); }
     return openInFlight() ? QStringLiteral("opening") : QStringLiteral("idle");
+}
+
+QString ProjectApi::openRefusal()
+{
+    if (!host.shell) { fail("project: not available in this session"); return QString(); }
+    return host.shell->openRefusal();
 }
 
 QVariantMap ProjectApi::thumbnail(const QString &path, const QString &guid)
@@ -572,19 +671,22 @@ QVariantMap ProjectApi::thumbnail(const QString &path, const QString &guid)
 bool ProjectApi::save()
 {
     if (!requireProject()) return false;
-    if (!host.services || !host.services->project || !host.services->project->saveProjectBlob())
-        return fail("project.save: the blob save failed");
+    if (!host.services || !host.services->project) return fail("project: not available in this session");
+    // THE ONE SAVE DOOR (STUDIO-HYGIENE-1): true only when the row was written.
+    QString why;
+    if (!host.services->project->save(host.project->getProjectGuid(), ProjectService::SaveReason::Script, &why))
+        return fail(QStringLiteral("project.save: the scene could not be saved: %1").arg(why));
     return true;
 }
 
-bool ProjectApi::close()
+bool ProjectApi::close(const QVariantMap &options)
 {
     // AN OPEN IN FLIGHT IS SOMETHING TO CLOSE (lane OPEN-FRAMES-1). Until this
     // lane, "is a project open?" meant "has a scene finished being installed?",
     // so the ONE moment a close matters most — a world half-installed, with
     // slices still queued that will mount panels and push geometry — was the
     // one moment this verb refused, and the caller was left with an install it
-    // could not stop. MainWindow::closeProject drains the runner first (the
+    // could not stop. The shell's closeProject (MainWindow::closeWorld) drains the runner first (the
     // window-close and shutdown paths always did), so the close is coherent:
     // the install finishes, then the world closes.
     //
@@ -592,9 +694,10 @@ bool ProjectApi::close()
     // in-flight project's history dies with it.
     if (openInFlight()) {
         host.endRunUndoMacro();
-        host.shell->closeProject();
+        QString closeWhy;
+        const bool closed = host.shell->closeProject(false, scriptCloseUnsaved(options), &closeWhy);
         host.beginRunUndoMacro();
-        return true;
+        return closed ? true : fail(QStringLiteral("project.close: %1").arg(closeWhy));
     }
     if (!requireProject()) return false;
     // The run's edits so far become ONE undo step of the project being closed,
@@ -602,9 +705,12 @@ bool ProjectApi::close()
     // (CLOSE-2 item 2). Without this the whole stack survived the close,
     // holding commands that name a document that no longer exists.
     host.endRunUndoMacro();
-    host.shell->closeProject();
+    QString closeWhy;
+    const bool closed = host.shell->closeProject(false, scriptCloseUnsaved(options), &closeWhy);
     host.beginRunUndoMacro();
-    return true;
+    // REFUSED, NOT DISCARDED (STUDIO-HYGIENE-1 audit): unsaved changes with
+    // auto-save off, or an auto-save that failed — the world stays open.
+    return closed ? true : fail(QStringLiteral("project.close: %1").arg(closeWhy));
 }
 
 QString ProjectApi::nextFreeName(const QString &name)
@@ -637,26 +743,21 @@ bool ProjectApi::remove(const QString &guid)
 {
     if (!host.db || !host.services || !host.services->project)
         return fail("project: not available in this session");
-    if (host.services->project->isSceneOpen() && host.project->getProjectGuid() == guid)
-        return fail("project.remove: this project is open — project.close() first");
-
-    QString name;
-    if (resolveGuid(guid, &name) != guid)
-        return fail(QStringLiteral("project.remove: no project with guid '%1'").arg(guid));
-
-    // …and a delete cannot reach a folder on a drive that is not there: it must
-    // not quietly drop the catalog rows that name files it cannot remove
-    // (fix round F1).
-    {
-        QString whyMissing;
-        if (host.services->project->projectLocationMissing(guid, &whyMissing))
-            return fail(QStringLiteral("project.remove: %1").arg(whyMissing));
-    }
-
-    // Folder first (like the widget), then the DB rows — through the
-    // guid-parameterised service: host.project is NOT mutated (§1.6.1).
-    if (!host.services->project->removeProject(guid))
-        return fail("project.remove: could not remove the project folder");
+    // A PROJECT WHOSE OPEN IS IN FLIGHT is not deleted under it (the audit's W3):
+    // the door reads sceneOpen, which a threaded open sets only at its bind — the
+    // install would then build a world for a row that is gone. (Whether the
+    // Desktop's Delete can be clicked while an open runs is unverified: the
+    // open's progress dialog is up — a leftover line for the door itself.)
+    if (openInFlight() && host.project->getProjectGuid() == guid)
+        return fail(QStringLiteral("project.remove: '%1' is opening — wait until project.openState() reads "
+                                   "'idle'").arg(guid));
+    // THE ONE DELETE (STUDIO-HYGIENE-1): the Desktop tile's Delete calls the
+    // same function, and it owns every refusal (an unknown guid, the open
+    // project, a location that is not there) — host.project is NOT mutated
+    // (SCRIPTING_SPEC §1.6.1).
+    QString why;
+    if (!host.services->project->removeProject(guid, &why))
+        return fail(QStringLiteral("project.remove: %1").arg(why));
     return true;
 }
 

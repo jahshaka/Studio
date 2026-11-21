@@ -184,24 +184,23 @@ ProjectManager::~ProjectManager()
 
 void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode)
 {
-	if (project->getProjectGuid() == widget->tileData.guid) {
-		    shell->setSpace(QStringLiteral("editor"));
-
+	// THE OPEN WORLD'S OWN TILE goes to the editor — the world must BE open, as
+	// both project verbs check: a guid left pointed with no scene (a close, a
+	// refused open) sent a second click into an EMPTY editor with no message
+	// (STUDIO-HYGIENE-1 audit).
+	if (project->getProjectGuid() == widget->tileData.guid && shell->services()->project->isSceneOpen()) {
+		shell->setSpace(QStringLiteral("editor"));
 		return;
 	}
-
-    // If we're opening a new scene, close the old one first — and the page the
-    // user is on stays, because this close is the first half of an open
-    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
-    if (shell->services()->project->isSceneOpen())
-        shell->closeProject(true);   // the first half of an open: the page stays
 
 	// WHERE THIS PROJECT ACTUALLY IS (SMALL-UI-A fix round F1). This rebuilt
 	// the path from the DEFAULT projects root, so a project created at a chosen
 	// location (the New Scene dialog's Browse button) opened pointing at a
 	// folder that does not exist — silently, with its baked maps and exports
 	// going somewhere else. ProjectService::projectFolderFor is the one
-	// resolver; the tile knows the guid and nothing else.
+	// resolver; the tile knows the guid and nothing else. JUDGED BEFORE THE
+	// CLOSE (the final read's W4), as the verbs judge it: a refused open leaves
+	// the open world open (it closed it, then refused).
 	if (!projectService) return;
 	QString whyMissing;
 	if (projectService->projectLocationMissing(widget->tileData.guid, &whyMissing)) {
@@ -213,6 +212,16 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 		                        .arg(widget->tileData.name, whyMissing));
 		return;
 	}
+
+    // If we're opening a new scene, close the old one first — and the page the
+    // user is on stays, because this close is the first half of an open
+    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
+    // A person's route: unsaved changes are asked about, and a Cancel (or an
+    // auto-save that failed, said by the save door) stops the open here, before
+    // the project is re-pointed (STUDIO-HYGIENE-1 audit).
+    if (shell->services()->project->isSceneOpen()
+        && !shell->closeProject(true, CloseUnsaved::Ask))   // the first half of an open: the page stays
+        return;
 
 	project->setProjectPath(projectService->projectFolderFor(widget->tileData.guid),
 	                        widget->tileData.name);
@@ -393,8 +402,13 @@ void ProjectManager::onArchiveImportFinished(bool canceled)
         // one was simply dropped: no autosave under `auto_save`, no undo-stack
         // reset, the user's unsaved edits gone. It has to happen BEFORE the
         // re-point, because closeProject saves the project the pointer names.
-        if (shell->services()->project->isSceneOpen())
-            shell->closeProject(true);   // the first half of an open: the page stays
+        // ...asking about unsaved changes, as a tile does: a Cancel (or a failed
+        // auto-save) keeps the open world and leaves the import a tile.
+        if (shell->services()->project->isSceneOpen()
+            && !shell->closeProject(true, CloseUnsaved::Ask)) {   // the first half of an open: the page stays
+            hideOpenProgress();
+            return;
+        }
         project->setProjectPath(pDir, result.worldName);
         project->setProjectGuid(result.projectGuid);
         LoadTimeline::begin(QStringLiteral("open(import) %1").arg(result.worldName));
@@ -461,62 +475,29 @@ void ProjectManager::renameProjectFromWidget(ItemGridWidget *widget)
 void ProjectManager::closeProjectFromWidget(ItemGridWidget *widget)
 {
     Q_UNUSED(widget);
-    emit closeProject();
-    project->setProjectGuid(QString());
+    // A person's route: unsaved changes asked about; a Cancel keeps the world (and its pointer).
+    if (shell->closeProject(false, CloseUnsaved::Ask)) project->setProjectGuid(QString());
 }
 
 void ProjectManager::deleteProjectFromWidget(ItemGridWidget *widget)
 {
     if (!projectService) return;
-    // THE PROJECT'S OWN FOLDER, wherever it is (fix round F1). Built from the
-    // DEFAULT root, this deleted the rows of a located project and left its
-    // real folder on disk forever — the tile disappeared and the gigabytes
-    // stayed. A location that is not reachable refuses instead: a delete that
-    // cannot reach the files must not quietly drop the catalog rows that name
-    // them.
-    QString whyMissing;
-    if (projectService->projectLocationMissing(widget->tileData.guid, &whyMissing)) {
-        reportImportProblem(tr("Delete Scene"),
-                            tr("'%1' could not be deleted: %2")
-                                .arg(widget->tileData.name, whyMissing));
-        return;
-    }
-
     auto option = QMessageBox::question(this,
                                         "Deleting Project",
                                         "Are you sure you want to delete this project?",
                                         QMessageBox::Yes | QMessageBox::Cancel);
-
-    if (option == QMessageBox::Yes) {
-        QDir dirToRemove(projectService->projectFolderFor(widget->tileData.guid));
-        if (dirToRemove.removeRecursively()) {
-            // The catalog half, by the deleted project's OWN guid (read before
-            // the tile goes). This used to stamp that guid onto the LIVE
-            // Project — which then carried a deleted project's identity around
-            // the desktop — and unlink every row NAME the deletes returned
-            // from `project->getProjectFolder()`: the folder of whatever
-            // project was open last, or the working directory for the startup
-            // placeholder, never the one just removed (that is gone already,
-            // recursively, above). Those names were the flat per-project
-            // copies; the last of them (the default scene's Tile.png, the sky
-            // and material presets, the particle image) became pinned store
-            // objects with plan item 15c, so the loops could only ever delete
-            // the wrong project's files. ProjectService::removeProject (the
-            // verb's door) never had them.
-            const QString guid = widget->tileData.guid;
-            dynamicGrid->deleteTile(widget);
-            db->deleteProject(guid);
-            db->deleteFolderAndDependencies(guid);
-            db->deleteAssetAndDependencies(guid);
-
-            checkForEmptyState();
-        } else {
-            QMessageBox::warning(this,
-                                 "Delete Failed!",
-                                 "Failed to remove entire project folder, please try again!",
-                                 QMessageBox::Ok);
-        }
-    }
+    if (option != QMessageBox::Yes) return;
+    // THE ONE DELETE (STUDIO-HYGIENE-1): project.remove's door. This slot had a
+    // SECOND copy — a recursive folder delete on the UI thread (the window
+    // frozen through a web export's files, and HALF a folder left after a
+    // failure, rows kept), with no refusal of the open project and no stop of
+    // the tile's thumbnail encode. The service refuses by a sentence, renames
+    // the folder aside, drops the rows and the tile, and removes the bytes on a
+    // worker.
+    const QString name = widget->tileData.name;
+    QString why;
+    if (!projectService->removeProject(widget->tileData.guid, &why))
+        reportImportProblem(tr("Delete Scene"), tr("'%1' could not be deleted: %2").arg(name, why));
 }
 
 void ProjectManager::searchProjects()
@@ -920,12 +901,12 @@ QStringList ProjectManager::sampleNames()
     return names;
 }
 
-bool ProjectManager::openSampleByName(const QString &name, QString *why)
+QString ProjectManager::sampleArchive(const QString &name, QString *why) const
 {
     const QString wanted = name.trimmed();
     if (wanted.isEmpty()) {
         if (why) *why = tr("a sample name is required");
-        return false;
+        return QString();
     }
     // The Ogre tab shows a sample's TITLE, not its base name (the archive is
     // named for the entry), so a caller may legitimately hand over either.
@@ -935,17 +916,16 @@ bool ProjectManager::openSampleByName(const QString &name, QString *why)
 
     for (const QString &d : sampleDirectories()) {
         const QString path = QDir(d).absoluteFilePath(base + QStringLiteral(".zip"));
-        if (QFileInfo::exists(path)) return openSampleArchive(path, why);
+        if (QFileInfo::exists(path)) return path;
         // Case-insensitively too: the tree's names are title-cased and a script
         // that types "matcaps" is asking for the same file.
         for (const QFileInfo &fi : QDir(d).entryInfoList({ QStringLiteral("*.zip") }, QDir::Files))
-            if (fi.completeBaseName().compare(base, Qt::CaseInsensitive) == 0)
-                return openSampleArchive(fi.absoluteFilePath(), why);
+            if (fi.completeBaseName().compare(base, Qt::CaseInsensitive) == 0) return fi.absoluteFilePath();
     }
     if (why)
         *why = tr("no sample named '%1' is shipped (%2)")
                    .arg(wanted, sampleNames().join(QStringLiteral(", ")));
-    return false;
+    return QString();
 }
 
 bool ProjectManager::openSampleArchive(const QString &archivePath, QString *why)
@@ -992,6 +972,18 @@ void ProjectManager::newProject()
 
 	const ProjectInfo info = dialog.getProjectInfo();
 	if (!projectService) return;   // headless/stub host: nothing to create with
+	if (info.projectName.trimmed().isEmpty()) return;   // a cancelled dialog
+	// The create's own refusals first (a name, a location): a refused create closes nothing.
+	if (const QString refusal = projectService->createRefusal(info.projectName, info.projectPath); !refusal.isEmpty()) {
+		reportImportProblem(tr("Create Scene"), tr("The scene could not be created: %1").arg(refusal));
+		return;
+	}
+	// THE OPEN WORLD CLOSES FIRST, asking about unsaved changes, BEFORE a row is
+	// minted: a Cancel (or a failed auto-save) creates nothing (STUDIO-HYGIENE-1). An open in flight is part of
+	// it (W5): the close drains it and settles the world it installed, before the row.
+	if ((shell->services()->project->isSceneOpen() || shell->isOpeningProject())
+	    && !shell->closeProject(false, CloseUnsaved::Ask))
+		return;
 
 	QString why, folder;
 	const QString projectGuid =

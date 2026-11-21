@@ -21,6 +21,7 @@ For more information see the LICENSE file
 #include <QFile>
 #include <QJsonArray>
 #include <QJsonObject>
+#include <QSet>
 #include <QJsonDocument>
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/animation/keyframeanimation.h"
@@ -38,6 +39,9 @@ public:
     QByteArray getSceneObject(QString projectPath,
                               iris::ScenePtr scene,
                               EditorData *editorData);
+    /// Nodes (by guid) getSceneObject leaves out, with their subtrees: the nodes a Play spawned, during a save
+    /// made while playing (STUDIO-HYGIENE-1, player/editpose.h — the play-start set is the document).
+    void setOmittedNodes(QSet<QString> guids) { mOmitted = std::move(guids); }
 
 public:
     void writeScene(QJsonObject& projectObj, iris::ScenePtr scene);
@@ -52,7 +56,10 @@ public:
     /// in a scene file).
     static SceneFragment captureFragment(const iris::SceneNodePtr &node);
 
-    static void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
+    /// `omitted`: the guids getSceneObject leaves out (setOmittedNodes), passed down the walk; a library blob or
+    /// a fragment omits nothing.
+    static void writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr node,
+                               const QSet<QString> *omitted = nullptr);
 	static void writeAnimationData(QJsonObject& sceneNodeObj, iris::SceneNodePtr node);
     static void writeMeshData(QJsonObject& sceneNodeObject, iris::MeshNodePtr node);
 	static void writeParticleData(QJsonObject& sceneNodeObject, iris::ParticleSystemNodePtr node);
@@ -75,6 +82,9 @@ public:
 	static QString getLightNodeTypeName(iris::LightType lightType);
 	static QString getKeyTangentTypeName(iris::TangentType tangentType);
 	static QString getKeyHandleModeName(iris::HandleMode handleMode);
+
+private:
+    QSet<QString> mOmitted;
 };
 
 #endif // SCENEWRITER_H

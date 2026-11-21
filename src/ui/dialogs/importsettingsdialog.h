@@ -46,7 +46,7 @@ For more information see the LICENSE file
 // a widget in sight.
 //
 // THEME: Qlementine through ThemeRoles only — no raw stylesheet anywhere
-// (theme.no_raw_sheets), and the dialog is registered in the app's dialog
+// (source.no_raw_sheets), and the dialog is registered in the app's dialog
 // catalog (shell/mainwindowdialogs.cpp) so the live theme walk opens it twice
 // like every other dialog.
 

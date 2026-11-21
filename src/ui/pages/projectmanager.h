@@ -153,23 +153,25 @@ public slots:
     void switchDesktop(int desktop);
 
 public:
-    /// THE SAMPLE BROWSER'S OPEN, AS A VERB (API-first, SCRIPTING_SPEC §2.3 —
-    /// `project.openSample(name)`). `name` is the sample's base name, which is
+    /// An import or open problem, told to whoever is actually there: a box for
+    /// a person, a log line for a DRIVEN run (see the definition). Public for
+    /// the window's refused open (MainWindow::showOpenRefusal).
+    void reportImportProblem(const QString &title, const QString &text);
+
+    /// THE SAMPLE BROWSER'S ARCHIVE, BY NAME (API-first, SCRIPTING_SPEC §2.3 —
+    /// `project.openSample(name)` resolves here, then settles the open world,
+    /// then calls openSampleArchive). `name` is the sample's base name, which is
     /// also its archive's file name, in either shipped set: the Jahshaka
     /// samples (scenes/<name>.zip) or our ports of Ogre's (scenes/ogre/<name>.zip,
-    /// matched on the catalog's base name OR its display title). The dialog's
-    /// tiles call this too, so the browser and a script take the same road.
-    ///
-    /// Imports the archive if the library has never seen it and then opens it
-    /// IN THE EDITOR — a sample is something to look at and edit; the Player is
-    /// a separate statement (`app.space("player")`, the tile's Play button).
-    /// Returns false with `why` filled when there is no such sample.
-    bool openSampleByName(const QString &name, QString *why = nullptr);
-    /// The one route behind every sample tile and openSampleByName: import the
-    /// archive and open the world it carries in the editor.
+    /// matched on the catalog's base name OR its display title). Returns the
+    /// archive's path, or empty with `why` filled when there is no such sample.
+    QString sampleArchive(const QString &name, QString *why = nullptr) const;
+    /// The one route behind every sample tile and project.openSample: import the
+    /// archive and open the world it carries IN THE EDITOR — a sample is something
+    /// to look at and edit; the Player is a separate statement (`app.space("player")`).
     bool openSampleArchive(const QString &archivePath, QString *why = nullptr);
     /// Every sample this tree ships, by base name (both tabs) — what
-    /// openSampleByName resolves against, and what its refusal lists.
+    /// sampleArchive resolves against, and what its refusal lists.
     static QStringList sampleNames();
 
 protected slots:
@@ -229,16 +231,12 @@ signals:
     void importProject();
     /// A tile's Export: the project `guid` (the current project is untouched).
     void exportProject(const QString &guid, const QString &name);
-    void closeProject();
 
 private:
     /// Hands the pointed-at project to the shell's threaded open, in the space
     /// the ROUTE asked for. `mode` is an argument and never a member: see
     /// ProjectOpenMode above.
     void loadProjectAssets(ProjectOpenMode mode);
-    /// An import problem, told to whoever is actually there: a box for a person,
-    /// a log line for a DRIVEN run (see the definition).
-    void reportImportProblem(const QString &title, const QString &text);
 
     // desktops (DESKTOPS_SPEC.md + DESKTOP_SLIDER_SPEC.md)
     void setupDesktopControls();

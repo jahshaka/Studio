@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 #include "services/materialmembers.h"
 #include "services/memberstamp.h"
+#include "services/undoservice.h"
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/animationfile.h"
@@ -341,8 +342,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
         { "importAndPlace", "assets.importAndPlace(path, {position, drawer}) -> {assetGuid, projectGuid, nodeId, summary: {movable, static, meshes, animatedNodes, lights, cameras, lightUnits, cutouts, glass, contentScale, missingMaps, sun}}",
           "THE way to get a model file on disk into the open scene, in one call: it runs the one "
           "import pipeline (assets.importFile), pins the result into the open project "
-          "(assets.addToProject) and instantiates it (assets.addToScene) — the three-call flow "
-          "scene.addMesh used to short-circuit into a node that came back empty on the next open. "
+          "(assets.addToProject) and instantiates it (assets.addToScene) — the three-call flow, "
+          "so the node carries an asset guid and comes back on the next open. "
           "`drawer` files the library asset in a drawer (id from assets.drawers()); `position` "
           "places the node (without it, it spawns in front of the editor camera). "
           "PARTLY UNDOABLE, and the split matters: the import and the pin are PERMANENT (an undo "
@@ -1006,14 +1007,10 @@ bool AssetsApi::rename(const QString &guid, const QString &name)
                     "can be found by)");
     if (host.db->fetchAsset(guid).guid.isEmpty())
         return fail(QStringLiteral("assets.rename: no asset with guid '%1'").arg(guid));
-    // THE REFUSAL IS ENFORCED IN assettags::write (the one place both this
-    // verb and the Assets page's Update button write a name); this says WHY,
-    // in the sentence the definition writer already uses for the same law.
-    const QString shipped = MaterialBundle::shippedPresetName(guid);
-    if (!shipped.isEmpty() && wanted != shipped)
-        return fail(QStringLiteral("assets.rename: '%1' is a material the app ships and is "
-                                   "read-only - materials.edit gives you this project's own copy "
-                                   "of it, and that one renames").arg(shipped));
+    // THE REFUSAL IS ENFORCED IN assettags::write (the one place every name
+    // write goes through); this says WHY, in its one sentence.
+    if (const QString why = assettags::nameRefusal(guid, wanted); !why.isEmpty())
+        return fail(QStringLiteral("assets.rename: %1").arg(why));
     if (!assettags::rename(host.db, guid, wanted))
         return fail(QStringLiteral("assets.rename: the database refused the rename of '%1'")
                         .arg(guid));
@@ -1425,11 +1422,13 @@ QString AssetsApi::createFolder(const QString &name, const QVariantMap &options)
         return QString();
     }
 
-    if (host.undoStack) {
+    if (host.services && host.services->undo) {
         // The outcome is read out of a box the CALLER owns: a command that
-        // turns out to be a no-op deletes itself inside push().
+        // turns out to be a no-op deletes itself inside push(). Through the
+        // service, as the panel's own create (the edit gate, the run's macro,
+        // the push count "unsaved" reads — source.one_undo_push).
         auto outcome = std::make_shared<FolderCommandOutcome>();
-        host.undoStack->push(new CreateProjectFolderCommand(host.db, projectGuid, name,
+        host.services->undo->push(new CreateProjectFolderCommand(host.db, projectGuid, name,
                                                             parent, outcome));
         if (!outcome->error.isEmpty()) {        // lost a race with another writer
             fail(QStringLiteral("assets.createFolder: %1").arg(outcome->error));
@@ -1507,9 +1506,9 @@ int AssetsApi::moveToFolder(const QVariant &guidOrGuids, const QVariant &folderG
     }
     if (judged.moved == 0) return 0;            // nothing to do, and nothing to undo
 
-    if (host.undoStack) {
+    if (host.services && host.services->undo) {
         auto outcome = std::make_shared<FolderCommandOutcome>();
-        host.undoStack->push(new MoveToProjectFolderCommand(host.db, projectGuid, guids,
+        host.services->undo->push(new MoveToProjectFolderCommand(host.db, projectGuid, guids,
                                                             target, outcome));
         if (!outcome->error.isEmpty())          // lost a race with another writer
             fail(QStringLiteral("assets.moveToFolder: %1").arg(outcome->error));
@@ -1609,9 +1608,9 @@ QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
 
 // AI_SURFACE_PROGRAM_SPEC lane D #7 — the other half of the F1 story.
 //
-// scene.addMesh(diskPath) existed because it LOOKED like the obvious verb; it
-// wrote a disk path where the reader expects a guid and now refuses, naming
-// this verb. So this composes the three real calls and nothing more: no fourth
+// A verb that parsed a disk path straight into the scene wrote that path where
+// the reader expects a guid (the node came back empty; that verb is deleted,
+// STUDIO-HYGIENE-1). So this composes the three real calls and nothing more: no fourth
 // import route (ASSET_PIPELINE_SPEC: one pipeline), no new placement path.
 //
 // It is deliberately not "atomic". The import and the pin are permanent

@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "services/projectservice.h"
 
 #include <QBuffer>
+#include <QDateTime>
 #include <QDir>
 #include <QFileInfo>
 #include <QStandardPaths>
@@ -30,6 +31,9 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "services/loadtimeline.h"
 #include "services/jahlog.h"
+#include "player/editpose.h"
+#include "player/iplayerhost.h"
+#include "player/playback.h"
 
 #include <QElapsedTimer>
 #include <QFutureWatcher>
@@ -46,6 +50,10 @@ ProjectService::ProjectService(Database *db,
     : db(db), project(project), projectManager(nullptr), settings(settings),
       viewport(viewport), undo(undo), sceneProvider(std::move(sceneProvider))
 {
+    // A FOLDER A KILLED DELETE LEFT ASIDE is swept at start-up, on a worker (the audit's W4): only a later
+    // delete in the same directory swept it before, so a root nobody deleted from again kept it for ever.
+    // (A project filed at a chosen location is swept by the next delete there.)
+    if (settings) removeAsideFoldersLater(QDir(projectsRoot()).filePath(QStringLiteral("Projects")));
 }
 
 ProjectService::~ProjectService()
@@ -65,7 +73,7 @@ ProjectService::~ProjectService()
 //
 // A save used to deflate its thumbnail PNG on the UI thread: ~100 ms of every
 // close, every Ctrl+S and every create (measured: the create's
-// `saveInitialScene` 131 ms, of which the screenshot 25-36 and the rest the
+// initial save 131 ms, of which the screenshot 25-36 and the rest the
 // encode). The picture is the presented frame read back (CLOSE-SHOT-2,
 // requestTile) and the QImage it hands back is ENCODED on a worker; the database write and the
 // tile follow on this thread when the worker is done (the DB is SQLite on the
@@ -217,29 +225,17 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
         return QString();
     };
 
-    if (name.trimmed().isEmpty())
-        return fail(QStringLiteral("a non-empty name is required"));
-    // ONE NAME, ONE PROJECT (PROJECT-NAMES-1): a taken name is refused with
-    // the free one named, before anything is minted.
-    if (const QString refusal = nameRefusal(name); !refusal.isEmpty()) return fail(refusal);
+    if (const QString refusal = createRefusal(name, location); !refusal.isEmpty()) return fail(refusal);
+    // A WORLD STILL OPEN IS REFUSED HERE, BEFORE ANYTHING IS MINTED (the final read 2): every create route closes
+    // the open world first, by its own policy (and drains an open in flight: W5). The runner's backstop that
+    // refused AFTER this minted the row, the tile and the folder is gone.
+    if (sceneOpen) return fail(QStringLiteral("'%1' is still open: close it before a scene is created")
+                                   .arg(project ? project->getProjectName() : QString()));
 
     // WHERE IT LANDS. The user's projects root unless the dialog's Browse (or
-    // the verb's `location`) named somewhere else. Checked before a guid is
-    // minted or a pointer moves: a create that fails half way through leaves
-    // `project` pointing at a folder that does not exist.
+    // the verb's `location`) named somewhere else (createRefusal judged it).
     QString root = location.trimmed();
-    if (root.isEmpty()) {
-        root = projectsRoot();
-    } else {
-        const QFileInfo info(root);
-        if (!info.exists())
-            return fail(QStringLiteral("the location '%1' does not exist").arg(root));
-        if (!info.isDir())
-            return fail(QStringLiteral("the location '%1' is not a folder").arg(root));
-        if (!info.isWritable())
-            return fail(QStringLiteral("the location '%1' is not writable").arg(root));
-        root = QDir(root).absolutePath();
-    }
+    root = root.isEmpty() ? projectsRoot() : QDir(root).absolutePath();
 
     const QString guid = GUIDManager::generateGUID();
     const QString fullProjectPath = folderUnder(root, guid);
@@ -249,7 +245,7 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
     // close's autosave wrote the OLD world into the NEW project's row (and its
     // folder), and the old project lost every edit since its last save
     // (measured: 3 cubes added, create, reopen — gone). The shell re-points
-    // after the close (MainWindow::startCreateRun, pointAtProject).
+    // after the close (ProjectRunner::startCreateRun, pointAtProject).
     QDir projectDir(fullProjectPath);
     if (!projectDir.exists() && !projectDir.mkpath("."))
         return fail(QStringLiteral("the project folder '%1' could not be created")
@@ -274,6 +270,25 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
     projectManager->addTile(guid);
     if (folderOut) *folderOut = fullProjectPath;
     return guid;
+}
+
+QString ProjectService::createRefusal(const QString &name, const QString &location) const
+{
+    if (name.trimmed().isEmpty()) return QStringLiteral("a non-empty name is required");
+    // ONE NAME, ONE PROJECT (PROJECT-NAMES-1): a taken name is refused with
+    // the free one named, before anything is minted.
+    if (const QString refusal = nameRefusal(name); !refusal.isEmpty()) return refusal;
+    // WHERE IT LANDS: checked before a guid is minted or a pointer moves — a
+    // create that fails half way through leaves `project` pointing at a folder
+    // that does not exist.
+    const QString root = location.trimmed();
+    if (!root.isEmpty()) {
+        const QFileInfo info(root);
+        if (!info.exists()) return QStringLiteral("the location '%1' does not exist").arg(root);
+        if (!info.isDir()) return QStringLiteral("the location '%1' is not a folder").arg(root);
+        if (!info.isWritable()) return QStringLiteral("the location '%1' is not writable").arg(root);
+    }
+    return QString();
 }
 
 QString ProjectService::nextFreeName(const QString &name, const QString &exceptGuid) const
@@ -313,21 +328,119 @@ void ProjectService::pointAtProject(const QString &guid, const QString &name)
     project->setProjectGuid(guid);
 }
 
-bool ProjectService::removeProject(const QString &guid)
-{
-    // THE PROJECT'S OWN FOLDER, wherever it is (fix round F1): this rebuilt the
-    // path from the default root, so deleting a project created at a chosen
-    // location dropped its rows and left the real folder on disk forever.
-    QDir dirToRemove(projectFolderFor(guid));
-    if (dirToRemove.exists() && !dirToRemove.removeRecursively()) return false;
+namespace {
+/// The prefix of a project folder renamed aside for its removal, beside the
+/// guid folders of the same Projects directory (a dot: no project's guid).
+const QString kAsidePrefix = QStringLiteral(".removing-");
+}   // namespace
 
-    db->deleteProject(guid);
-    db->deleteFolderAndDependencies(guid);
-    db->deleteAssetAndDependencies(guid);
+bool ProjectService::removeProject(const QString &guid, QString *whyOut)
+{
+    if (whyOut) whyOut->clear();
+    const auto fail = [whyOut](const QString &why) {
+        if (whyOut) *whyOut = why;
+        return false;
+    };
+    if (!db) return fail(QStringLiteral("no library in this session"));
+    ProjectTileData row;
+    if (guid.isEmpty() || !db->fetchProjectTile(guid, &row))
+        return fail(QStringLiteral("no project with guid '%1'").arg(guid));
+    if (sceneOpen && project && project->getProjectGuid() == guid)
+        return fail(QStringLiteral("this project is open — close it first"));
+    QString whyMissing;
+    if (projectLocationMissing(guid, &whyMissing)) return fail(whyMissing);
+
+    // THE FOLDER LEAVES AT ONCE, ITS BYTES ON A WORKER (STUDIO-HYGIENE-1). The
+    // project's OWN folder, wherever it is (fix round F1), renamed aside in its
+    // own directory: one rename(2), so the project is gone from disk the moment
+    // this returns and a failure (a busy or read-only folder) leaves folder and
+    // rows exactly as they were. The recursive delete — a web export is a
+    // viewer, a glb and its textures — ran HERE, on the UI thread, and kept
+    // going after a failure, leaving half a folder behind its kept rows.
+    const QString folder = projectFolderFor(guid);
+    const QFileInfo folderInfo(folder);
+    const QString projectsDir = folderInfo.absolutePath();
+    QString aside;
+    if (folderInfo.exists()) {
+        aside = QDir(projectsDir).filePath(
+            kAsidePrefix + guid + QLatin1Char('-') + QString::number(QDateTime::currentMSecsSinceEpoch()));
+        if (!QDir().rename(folder, aside))
+            return fail(QStringLiteral("the project folder '%1' could not be moved aside for removal "
+                                       "(is it open in another program?)")
+                            .arg(folder));
+    }
+
+    // THE ROWS GO TOGETHER OR NOT AT ALL (the audit's W4): one transaction over the three deletes (their own
+    // guards nest into it), and a failure puts the folder BACK where it was — a refused delete changes nothing.
+    // Their results were ignored: a row delete that failed still returned true with the folder aside.
+    // THE SCRUBS WAIT FOR THAT COMMIT (the final read's B4): the nested deletes hand up their sidecar removals and
+    // session de-registrations, applied only once the rows are gone — a refused delete leaves every file.
+    bool rowsOk = false;
+    QVector<Database::PendingAssetScrub> scrubs;
+    {
+        DbTransaction tx(db->getDb());
+        bool foldersOk = true, assetsOk = true;
+        const bool projectOk = db->deleteProject(guid, &scrubs);
+        db->deleteFolderAndDependencies(guid, &foldersOk, &scrubs);
+        db->deleteAssetAndDependencies(guid, &assetsOk, /*force*/ false, &scrubs);
+        rowsOk = projectOk && foldersOk && assetsOk && tx.commit();
+    }
+    if (!rowsOk) {
+        if (!aside.isEmpty() && !QDir().rename(aside, folder))
+            qWarning("project delete: the rows of %s were kept but its folder could not be put back from '%s' "
+                     "(the next start-up, or the next delete there, puts it back: a kept row claims it)",
+                     qUtf8Printable(guid), qUtf8Printable(aside));
+        return fail(QStringLiteral("the library refused to delete the project's rows; nothing was deleted"));
+    }
+    db->applyAssetScrubs(scrubs);
 
     supersedeThumbnail(guid);
     if (projectManager) projectManager->removeTile(guid);
+    removeAsideFoldersLater(projectsDir);
     return true;
+}
+
+void ProjectService::removeAsideFoldersLater(const QString &projectsDir)
+{
+    // Every folder aside in this directory that no worker owns yet: a delete's
+    // own, and any a killed process left behind (one directory read, here).
+    // ONLY A FOLDER NO ROW CLAIMS IS REMOVED (the final read's B3): a delete killed between its rename and its
+    // commit, or a refused one whose put-back rename failed, leaves a LIVE project's folder aside under its kept
+    // row; the name (`.removing-<guid>-<ms>`, removeProject) names the guid, and a claimed folder is renamed
+    // back, never removed. A library that cannot be read (or none) sweeps nothing.
+    if (!db) return;
+    QStringList unclaimed;
+    for (const QFileInfo &entry : QDir(projectsDir).entryInfoList(
+             { kAsidePrefix + QLatin1Char('*') }, QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot)) {
+        const QString path = entry.absoluteFilePath();
+        const QString rest = entry.fileName().mid(kAsidePrefix.size());
+        const qsizetype dash = rest.lastIndexOf(QLatin1Char('-'));
+        const QString guid = dash > 0 ? rest.left(dash) : rest;
+        bool readOk = false;
+        if (db->hasProjectRow(guid, &readOk)) {
+            const QString home = QDir(projectsDir).filePath(guid);
+            if (QDir().rename(path, home))
+                qWarning("project delete: '%s' is the folder of the project %s, whose row is kept: put back at '%s'",
+                         qUtf8Printable(path), qUtf8Printable(guid), qUtf8Printable(home));
+            else
+                qWarning("project delete: '%s' is the folder of the project %s, whose row is kept, and it could not "
+                         "be put back at '%s': left aside, never removed", qUtf8Printable(path), qUtf8Printable(guid),
+                         qUtf8Printable(home));
+            continue;
+        }
+        if (!readOk) {
+            qWarning("project delete: the library could not be read, so no folder aside in '%s' is removed",
+                     qUtf8Printable(projectsDir));
+            return;
+        }
+        unclaimed.append(path);
+    }
+    mFolderRemoval.start(unclaimed);   // a path a worker already holds is skipped there
+}
+
+FolderRemoval::Drained ProjectService::drainFolderDeletes(int capMs)
+{
+    return mFolderRemoval.drain(capMs);
 }
 
 iris::ScenePtr ProjectService::readProjectScene(const QJsonObject &projectObj,
@@ -350,11 +463,14 @@ iris::ScenePtr ProjectService::readProjectScene(const QJsonObject &projectObj,
 //
 // The blob does not go to a file; it goes to SQLite, as ONE statement —
 // Database::updateProject / updateProjectBlob are a single
-// `UPDATE projects SET scene=?, … WHERE guid=?` in autocommit, and there is no
-// `PRAGMA journal_mode` anywhere in the tree, so SQLite runs its default
-// rollback journal. A `kill -9` mid-UPDATE therefore leaves the PREVIOUS blob
-// intact by construction: there is no window in which the project row holds
-// half a scene.
+// `UPDATE projects SET scene=?, … WHERE guid=?` (in autocommit, or inside the
+// script run's gesture batch, which commits it whole). The library runs in WAL
+// mode with synchronous=NORMAL (Database::initializeDatabase,
+// applyDurabilityPragmas — FSYNC-2): a committed transaction is in the -wal file
+// and a recovery replays the -wal up to the last COMPLETE transaction, so a
+// `kill -9` mid-UPDATE leaves the PREVIOUS blob intact by construction: there is
+// no window in which the project row holds half a scene. (A power cut may lose
+// the last few seconds of commits; it cannot tear one.)
 //
 // This is worth writing down because the property is invisible, unguarded and
 // easy to destroy. Splitting the save into several statements (blob here,
@@ -371,133 +487,141 @@ iris::ScenePtr ProjectService::readProjectScene(const QJsonObject &projectObj,
 //
 // The write in the save/store path that could NOT tear is the CAS object copy;
 // that one is fixed at src/services/assetcas.cpp storeObject.
-bool ProjectService::saveProjectBlob()
+bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOut)
 {
-    // The SAVE BLOCK (SESSION_LOG_SPEC §5) is emitted from here, not from the
-    // verb: this is what project.save calls AND what the UI save path calls, so
-    // one record covers both.
-    if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
+    if (whyOut) whyOut->clear();
     QElapsedTimer clock;
     clock.start();
-    // The blob-only save (SCRIPTING_SPEC §1.6.2). Unlike saveOpenScene() this
-    // NEVER silently no-ops: the scene lives only in the DB projects table,
-    // and a scripted or headless save must actually write it. The thumbnail
-    // is refreshed only when a viewport can render one (and kept otherwise).
-    auto scene = sceneProvider ? sceneProvider() : iris::ScenePtr();
-    if (!scene || project->getProjectGuid().isEmpty()) return false;
-
-    SceneWriter writer;
-    auto blob = writer.getSceneObject(project->getProjectFolder(),
-                                      scene,
-                                      (viewport && viewport->isInitialized()) ? viewport->getEditorData() : nullptr);
-
-    bool ok;
-    // A null screenshot (engine scene mid-swap, or a readback failure) must
-    // never overwrite the stored tile with an empty PNG — fall back to the
-    // blob-only save.
-    // THE PRESENTED FRAME, READ NOW (CLOSE-SHOT-2): this verb's contract is a
-    // written row, so it takes the synchronous door — one frame and its fence,
-    // never a settle.
-    QImage img;
-    if (viewport && viewport->isInitialized())
-        img = tileFromFrame(viewport->capturePresentedFrame());
-    // THE VERB'S ENCODE STAYS SYNCHRONOUS (CREATE-GAP-1, stated): this is
-    // project.save — a script's call, never a person's key, whose contract is
-    // that the row (thumbnail included) is written when it returns. It
-    // supersedes an encode still in flight from an earlier save, which would
-    // otherwise land an OLDER picture over this one.
-    const QString guid = project->getProjectGuid();
-    supersedeThumbnail(guid);
-    if (!img.isNull()) {
-        const QByteArray thumb = encodeThumbnailPng(img);
-        ok = db->updateProject(blob, thumb, guid);
-        projectManager->updateTile(guid, thumb);
-    } else {
-        ok = db->updateProjectBlob(blob, guid);
-    }
-    projectManager->touchTile(guid);
-
-    undo->markSaved();
-    JahLog::write(JahLog::scene, ok ? JahLog::Level::Display : JahLog::Level::Error,
-            QStringLiteral("=== SCENE SAVE === '%1' (%2) %3 in %4 ms, blob %5 bytes")
-                .arg(project->getProjectName(), project->getProjectGuid(),
-                     ok ? QStringLiteral("ok") : QStringLiteral("FAILED"))
-                .arg(clock.elapsed()).arg(blob.size()));
-    return ok;
-}
-
-void ProjectService::saveOpenScene()
-{
-    if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
-    // if the viewport isnt initialized then the scene was never opened in
-    // edit mode. This also means no renderer was initialized. There's no
-    // need to save (nick)
-    if (!viewport->isInitialized()) return;
-
-    // The ledger's view of a save (CREATE-GAP-1): a create's closing save is
-    // inside the create's run now, and these say where its time goes. They
-    // are no-ops outside a run.
-    const QString guid = project->getProjectGuid();
     QByteArray blob;
-    {
-        LoadTimeline::Accumulate row(QStringLiteral("saveOpen:serialize"));
-        SceneWriter writer;
-        blob = writer.getSceneObject(project->getProjectFolder(),
-                                     sceneProvider(),
-                                     viewport->getEditorData());
-    }
-    {
-        // THE TILE IS THE NEXT PRESENTED FRAME (CLOSE-SHOT-2): asked for here,
-        // answered by the driver's next tick (or by the close's settle, before
-        // the world is torn down) — this row measures the ask, which is all the
-        // save pays.
-        LoadTimeline::Accumulate row(QStringLiteral("saveOpen:thumbnail"));
-        requestTile(guid);
-    }
-    {
-        // THE ESSENTIAL WRITE IS SYNCHRONOUS: the scene is in the row before
-        // this returns. Only the thumbnail's PNG encode leaves the thread.
-        LoadTimeline::Accumulate row(QStringLiteral("saveOpen:write"));
-        db->updateProjectBlob(blob, guid);
-    }
-    undo->markSaved();
-    projectManager->touchTile(guid);
-}
+    QSet<QString> spawned;   // the nodes a run added: not part of the document this save writes
+    const auto fail = [&](const QString &why) {
+        if (whyOut) *whyOut = why;
+        const QString sentence = QStringLiteral("the scene could not be saved: %1").arg(why);
+        JahLog::write(JahLog::scene, JahLog::Level::Error,
+                      QStringLiteral("=== SCENE SAVE === '%1' (%2) FAILED in %3 ms: %4")
+                          .arg(project ? project->getProjectName() : QString(), guid)
+                          .arg(clock.elapsed()).arg(why));
+        if (mSaveFailed) mSaveFailed(sentence);
+        return false;
+    };
 
-void ProjectService::saveInitialScene(const QString &projectPath)
-{
     {
         LoadTimeline::Accumulate row(QStringLiteral("save:preWrite"));
-        if (mPreWrite) mPreWrite();  // a save writes the ORIGINAL material
+        if (mPreWrite) mPreWrite();      // a save writes the ORIGINAL material
     }
-    SceneWriter writer;
-    QByteArray sceneObject;
+    const bool hasView = viewport && viewport->isInitialized();
+    // AN EDITOR SAVE WITH NO WORLD OPEN (Ctrl+S on the Desktop, after a close or
+    // a refused open: file.save works in any space) has nothing to save — a
+    // success, silent, nothing written (the audit's W1: it popped a failure box).
+    if (reason == SaveReason::Editor && !sceneOpen) return true;
+    // ...and one with no view (a headless run: the NULL render system never
+    // initializes one) writes the blob when there is something to write — the
+    // close's auto-save rides this door, and a no-op here dropped a headless
+    // run's edits at its close without a word. Clean: nothing to write.
+    if (reason == SaveReason::Editor && !hasView && !(undo && undo->isDirty())) return true;
+
+    if (!db) return fail(QStringLiteral("there is no library in this session"));
+    if (guid.isEmpty() || !project || project->getProjectGuid() != guid)
+        return fail(QStringLiteral("'%1' is not the open project").arg(guid));
+    const iris::ScenePtr scene = sceneProvider ? sceneProvider() : iris::ScenePtr();
+    if (!scene) return fail(QStringLiteral("there is no open scene to save"));
+
     {
         LoadTimeline::Accumulate row(QStringLiteral("save:serialize"));
-        sceneObject = writer.getSceneObject(projectPath,
-                                            sceneProvider(),
-                                            viewport->isInitialized() ? viewport->getEditorData()
-                                                                      : nullptr);
+        SceneWriter writer;
+        // A SAVE DURING PLAY OR SIMULATE WRITES THE EDITED SCENE (STUDIO-HYGIENE-1, player/editpose.h): the
+        // document's edit pose — whichever of the editor's and the Player's runs started first, else the bodies
+        // Simulate holds — is swapped in for the walk and the moved pose put back on EVERY exit of this block
+        // (the guard), with no frame between: the mirror reads only the dirty marks at its next sync and finds
+        // the pose it had. A node a run added is left out. No command is pushed: the saved state (UndoService)
+        // is the edit pose this writes, which is what Stop restores.
+        QVector<editpose::Played<iris::SceneNodePtr, PlayBackNodeTransform>> played;
+        struct PutBack {
+            QVector<editpose::Played<iris::SceneNodePtr, PlayBackNodeTransform>> &played;
+            ~PutBack() { editpose::putBack(played); }
+        } putBack{ played };
+        const auto edit = PlayBack::documentEditPose(
+            scene, { viewport ? viewport->playBack() : nullptr, mPlayerHost ? mPlayerHost->playBack() : nullptr });
+        if (!edit.pose.isEmpty()) {
+            played = editpose::swapIn(scene->nodes.values(), edit.pose, edit.wholeDocument ? &spawned : nullptr);
+            writer.setOmittedNodes(spawned);
+        }
+        blob = writer.getSceneObject(projectFolderFor(guid), scene,
+                                     hasView ? viewport->getEditorData() : nullptr);
     }
 
-    // Headless (scripted project.create): the viewport never initialized, so
-    // there is no picture and the row keeps its empty thumbnail. Otherwise the
-    // tile is the new world's first PRESENTED frame (CLOSE-SHOT-2), asked for
-    // below and stored when the reveal has drawn it — no second render, and so
-    // nothing here arms GI for a picture (the GI park this used to need is gone).
-    const bool wantTile = viewport->isInitialized();
-    const QString guid = project->getProjectGuid();
+    bool ok = false;
+    QByteArray thumb;
+    if (reason == SaveReason::Script && hasView) {
+        // THE VERB'S TILE IS WRITTEN WITH ITS ROW (CREATE-GAP-1, CLOSE-SHOT-2):
+        // project.save's contract is that the row, thumbnail included, is
+        // written when it returns — the presented frame read now (one frame and
+        // its fence, never a settle), encoded here. A null frame (a scene
+        // mid-swap, a failed readback) never overwrites the stored tile.
+        LoadTimeline::Accumulate row(QStringLiteral("save:thumbnail"));
+        const QImage img = tileFromFrame(viewport->capturePresentedFrame());
+        if (!img.isNull()) thumb = encodeThumbnailPng(img);
+    }
+    // ...and it supersedes an encode still in flight from an earlier save, which
+    // would otherwise land an OLDER picture over this one.
+    if (!thumb.isEmpty()) supersedeThumbnail(guid);
+    // THE RUN'S EARLIER WRITES ARE COMMITTED FIRST, AND THAT COMMIT IS CHECKED (the final read's Q2): the guard
+    // below would stand the batch down unchecked, and a save committed over rolled-back rows names asset rows that
+    // are gone (before the guard both were one transaction).
+    if (!db->commitBatchNow()) {
+        if (undo) undo->markUnsaved();
+        return fail(QStringLiteral("the library could not commit the run's earlier changes (they were rolled back), "
+                                   "so the scene was not written over them"));
+    }
     {
-        LoadTimeline::Accumulate row(QStringLiteral("save:updateProject"));
-        db->updateProjectBlob(sceneObject, guid);
+        // "SAVED" MEANS COMMITTED (STUDIO-HYGIENE-1 audit). A script run holds the database's gesture batch for
+        // its whole length, and the UPDATE inside it was counted (one row) and reported saved while its COMMIT
+        // waited for the run's end: a kill or a failed batch commit later in the run left the row at the
+        // previous scene with the scene marked clean. A TOP-LEVEL guard stands the batch down — it commits what
+        // the batch holds and reopens at the next statement (DbTransaction, database.h) — and this guard's own
+        // commit is the save's truth. WAL + synchronous=NORMAL: a commit is a WAL append, no fsync.
+        LoadTimeline::Accumulate row(QStringLiteral("save:write"));
+        DbTransaction tx(db->getDb());
+        ok = thumb.isEmpty() ? db->updateProjectBlob(blob, guid) : db->updateProject(blob, thumb, guid);
+        if (ok && !tx.commit()) ok = false;
+    }
+    if (!ok) {
+        // THE ROW DOES NOT HOLD THE DOCUMENT, whatever the stack said: a create's world (its stack just
+        // cleared) whose first save failed read CLEAN, and its close dropped it without a word.
+        if (undo) undo->markUnsaved();
+        ProjectTileData row;
+        return fail(db->fetchProjectTile(guid, &row)
+                        ? QStringLiteral("the library did not write its row (the log has the database's answer)")
+                        : QStringLiteral("the project's row is no longer in the library"));
     }
 
-    undo->markSaved();
-    projectManager->touchTile(guid);
-    if (wantTile) {
-        LoadTimeline::Accumulate shot(QStringLiteral("save:thumbnail"));
-        requestTile(guid);
+    // ONLY A WRITTEN ROW IS A SAVED SCENE — and only a row that holds the WHOLE document (the final read's B2): a
+    // node a run added was left out, so the scene stays unsaved (the close asks, or saves it after Stop, when the
+    // node is part of the document). A user's Add and a simulation's spawn are not told apart.
+    if (spawned.isEmpty()) {
+        if (undo) undo->markSaved();
+    } else {
+        if (undo) undo->markUnsaved();
+        const QString note = QStringLiteral("saved the scene as edited; %1 object(s) added during Play are saved "
+                                            "when Play stops").arg(spawned.size());
+        if (whyOut) *whyOut = note;
+        JahLog::write(JahLog::scene, JahLog::Level::Warning,
+                      QStringLiteral("=== SCENE SAVE === '%1' (%2): %3").arg(project->getProjectName(), guid, note));
     }
+    if (projectManager) {
+        if (!thumb.isEmpty()) projectManager->updateTile(guid, thumb);
+        projectManager->touchTile(guid);
+    }
+    // THE TILE IS THE NEXT PRESENTED FRAME (CLOSE-SHOT-2) for the editor's and
+    // the create's saves: asked for here, answered by the driver's next tick (or
+    // by the close's settle) and encoded on a worker — the ask is all the save
+    // pays. A create with no view yet takes it after its reveal (ProjectRunner).
+    if (reason != SaveReason::Script && hasView) requestTile(guid);
+    JahLog::write(JahLog::scene, JahLog::Level::Display,
+                  QStringLiteral("=== SCENE SAVE === '%1' (%2) ok in %3 ms, blob %4 bytes")
+                      .arg(project->getProjectName(), guid)
+                      .arg(clock.elapsed()).arg(blob.size()));
+    return true;
 }
 
 void ProjectService::updateCurrentSceneThumbnail()

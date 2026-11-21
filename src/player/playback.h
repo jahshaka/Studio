@@ -8,6 +8,10 @@
 #include <QPointF>
 #include <QSharedPointer>
 
+#include <initializer_list>
+
+#include "player/editpose.h"
+
 #include "irisgl/irisglfwd.h"
 
 namespace iris
@@ -72,8 +76,21 @@ class PlayBack
 	/// pre-play transforms and the animation clock all survive it.
 	bool _isPaused = false;
 	QMap<QString, PlayBackNodeTransform> nodeTransforms;
+	/// Which cold start this run is (rising across every PlayBack of the process): documentEditPose's "earliest".
+	quint64 mPlaySerial = 0;
 public:
-	bool isScenePlaying() { return _isPlaying; }
+	bool isScenePlaying() const { return _isPlaying; }
+	/// Every node's local transform when Play started, by guid (the edit pose a save during Play writes:
+	/// player/editpose.h). Empty when not playing.
+	const QMap<QString, PlayBackNodeTransform> &playStartPose() const { return nodeTransforms; }
+	quint64 playSerial() const { return mPlaySerial; }
+	/// The document this run plays (setScene's).
+	const iris::ScenePtr &document() const { return scene; }
+	/// THE DOCUMENT'S EDIT POSE — what every save during a run or a simulation writes (STUDIO-HYGIENE-1 final read
+	/// B1; the rule in player/editpose.h): the earliest-started of `runs` playing on `document`, else the bodies a
+	/// simulation holds. Empty when nothing moves the document.
+	static editpose::EditPose<PlayBackNodeTransform> documentEditPose(const iris::ScenePtr &document,
+	                                                                  std::initializer_list<const PlayBack *> runs);
 	bool isScenePaused() { return _isPaused; }
 
 	void setEditorViewport(IEditorViewport* viewport) { editorViewport = viewport; }

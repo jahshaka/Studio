@@ -90,6 +90,21 @@ inline int versionOf(const QJsonObject &projectObj)
     const int v = projectObj.value(QStringLiteral("formatVersion")).toInt(0);
     return v > 0 ? v : 1;
 }
+/// THE VERSION GATE (STUDIO-HYGIENE-1, forward-only): "" when `projectObj` is this build's format, else
+/// "format version N, made by a newer|an older Jahshaka; this build reads version 2" — a blob with no
+/// formatVersion is v1, the format before v2. Nothing reads another version: a newer one read as this one
+/// drops what that build added, an older one (v1: an euler `rot`, which is not read) comes back with every
+/// rotation lost, and either is then saved back as v2. The open (openreads::readPlan) and the archive import
+/// (Database::importProject) refuse with it, each naming what it read ("its scene is ...").
+inline QString versionRefusal(const QJsonObject &projectObj)
+{
+    const int v = versionOf(projectObj);
+    if (v == kVersion) return QString();
+    return QStringLiteral("format version %1, made by %2 Jahshaka; this build reads version %3")
+        .arg(v)
+        .arg(v > kVersion ? QStringLiteral("a newer") : QStringLiteral("an older"))
+        .arg(kVersion);
+}
 
 /// The reflection roughness cutoff, in whole per cent, out of a scene object:
 /// the `reflectionRoughnessCutoff` key (the World row's id, the engine desc's

@@ -271,6 +271,10 @@ public:
     /// true for a level the database ABANDONED under the caller — see
     /// closeDatabase).
     bool endBatch();
+    /// Commits what the open batch holds NOW, the scope left open (a no-op with none live) - what a top-level
+    /// guard's stand-down does, but with its answer: false = the commit failed and the batch's rows were rolled
+    /// back (announced). The scene save asks it first (the final read's Q2).
+    bool commitBatchNow() { return commitBatchTransaction(); }
     /// WHO TELLS THE USER when a batch cannot commit. A whole gesture's rows
     /// are rolled back then — a script run's library writes, gone — and a warn
     /// line in the log has an audience of one. The app installs a listener that
@@ -369,7 +373,10 @@ public:
     int createCollection(const QString &collectionName, const int parent = -1);
 
     // DELETE ===============================================================================
-    bool deleteProject(const QString &guid);
+    struct PendingAssetScrub;   // below, with applyAssetScrubs
+    /// `deferred`: nested in a caller's transaction, the reaped rows' sidecar and session scrubs are handed up
+    /// for the caller to apply after ITS commit (as deleteFolderAndDependencies).
+    bool deleteProject(const QString &guid, QVector<PendingAssetScrub> *deferred = nullptr);
 	bool destroyTable(const QString &table);
 	void wipeDatabase();
     /// LIBRARY DELETE KEEPS PROJECT PINS (owner, 2026-09-09).
@@ -471,13 +478,18 @@ public:
     /// The returned list is the on-disk files the caller should unlink. The
     /// optional `ok` reports whether every row actually went: a delete that
     /// could not run (closed connection, failed statement) must never look
-    /// like a successful one to the caller.
-    QStringList deleteFolderAndDependencies(const QString &guid, bool *ok = nullptr);
+    /// like a successful one to the caller. NESTED in a caller's transaction,
+    /// the rows are real only at the caller's commit: with `deferred` the
+    /// sidecar and session scrubs are handed up for the caller to apply after
+    /// it (applyAssetScrubs), never run here (the final read's B4).
+    QStringList deleteFolderAndDependencies(const QString &guid, bool *ok = nullptr,
+                                            QVector<PendingAssetScrub> *deferred = nullptr);
     /// `force` carries the hard delete through the whole closure (see
     /// deleteAsset): without it, any member a project still pins is unlisted
-    /// instead of removed.
+    /// instead of removed. `deferred`: as deleteFolderAndDependencies.
     QStringList deleteAssetAndDependencies(const QString &guid, bool *ok = nullptr,
-                                           bool force = false);
+                                           bool force = false,
+                                           QVector<PendingAssetScrub> *deferred = nullptr);
     bool deleteRecord(const QString &table, const QString &row, const QVariant &value);
 
     // UPDATE ===============================================================================
@@ -487,7 +499,6 @@ public:
     /// Reparents a drawer (parent -1 = top level). Refuses ids <= 0, unknown
     /// drawers/parents, and cycles (a drawer cannot move under its own subtree).
     bool setCollectionParent(const int collectionId, const int parent);
-    bool renameAsset(const QString &guid, const QString &newName);
     /// WHERE A ROW IS FILED (DRAWERS-1). `assets.parent` carries both kinds of
     /// parent — a FOLDER guid for a filed row, the owning ASSET's guid for an
     /// import member — so this is only ever called on a row the project owns,
@@ -503,6 +514,8 @@ public:
                                const QString &folder);
     bool updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail, const QString &projectGuid);
     bool updateProjectBlob(const QByteArray &sceneBlob, const QString &projectGuid);
+    /// The two writers above succeed only when they wrote exactly ONE row.
+    static bool wroteOneProjectRow(const QSqlQuery &query, const QString &projectGuid);
     bool updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail);
     bool updateAssetAsset(const QString &guid, const QByteArray &asset);
     bool updateSceneThumbnail(const QString &guid, const QByteArray &asset);
@@ -667,6 +680,9 @@ public:
     /// ONE project's desktop row, no thumbnail (the grid's incremental add and
     /// the guid resolve — O(1) by the primary key); false when no row has `guid`.
     bool fetchProjectTile(const QString &guid, ProjectTileData *out);
+    /// Whether a project row has `guid`, told apart from a library that could not be read: `readOk` false =
+    /// nothing is known (the folder sweep then touches nothing).
+    bool hasProjectRow(const QString &guid, bool *readOk);
     /// The projects called exactly `name` (the name half of a guid-or-name resolve).
     QVector<ProjectTileData> fetchProjectsNamed(const QString &name);
     /// THE PROJECT NAME RULE (PROJECT-NAMES-1), the one place it lives. A
@@ -743,7 +759,9 @@ public:
     /// row keeps its guid otherwise; `value(guid, guid)` reads identity), and
     /// `knownGuids` the archive guids this library already held at the same
     /// type — the same asset, whose row the import left alone.
-    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids, QSet<QString> *knownGuids = nullptr);
+    /// `whyOut`, when the import is refused for a reason the user can act on (an archive scene that is
+    /// not a JSON object, STUDIO-HYGIENE-1), says so; it stays empty for a database failure.
+    bool importProject(const QString &inFilePath, const QString &newGuid, QString &worldName, QMap<QString, QString> &assetGuids, QSet<QString> *knownGuids = nullptr, QString *whyOut = nullptr);
 
     // EXPORT ===============================================================================
     /// THE PROJECT ARCHIVE'S CATALOG SNAPSHOT, in two halves (STUDIO-D1 item 4): the READ

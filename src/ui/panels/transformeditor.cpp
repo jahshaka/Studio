@@ -183,7 +183,7 @@ void TransformEditor::addRow(QGridLayout* grid, int row, const QString& title,
         scaleLockBtn->setIconSize(QSize(kLockIconPx, kLockIconPx));
         // The app's own chain-link icon (app/icons.qrc) — the affordance
         // Unreal and Blender both use for "these numbers move together". No
-        // stylesheet: the CHECKED state is the style's own (theme.no_raw_sheets),
+        // stylesheet: the CHECKED state is the style's own (source.no_raw_sheets),
         // and the OFF state is the same link drawn at a third of its opacity,
         // which is how the hierarchy's lock column reads too (a dim icon and a
         // filled one).

@@ -51,7 +51,7 @@ the component and the alternative, so it cannot be mistaken for something else.
 
 Debian and Ubuntu carry `python3` in the base system, so this is only ever a fresh-container
 problem (`apt-get install -y python3`). Python is ALSO what four source gates are written in
-— `document.reader_defaults`, `theme.no_raw_sheets`, `source.gate_scope_rules` and
+— `document.reader_defaults`, `source.no_raw_sheets`, `source.gate_scope_rules` and
 `source.notices_coverage` — and without it those four are not registered at all; the
 configure says so with a warning that names them.
 

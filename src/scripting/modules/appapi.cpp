@@ -822,8 +822,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "for anything else). Where several widgets share the name, the first one on screen answers. "
           "Returns {} when no widget has the name.",
           Needs::Window },
-        { "quit", "app.quit() -> bool",
-          "Closes the main window through the normal close path (autosave/unsaved-changes rules apply, background work is shut down). The verb returns before the window actually closes.",
+        { "quit", "app.quit({discard}) -> bool",
+          "Closes the main window through the normal close path (background work is shut down). The verb returns before the window actually closes. NO QUIT DROPS EDITS SILENTLY (STUDIO-HYGIENE-1): the open world is settled when the verb is called, as project.close settles it - with auto-save on it is saved, and a save that fails (or that left out what a run added) refuses the quit; with auto-save off and unsaved changes (editor.undoState().dirty) the quit is REFUSED with a sentence unless `discard: true` is passed, which drops them. A refusal returns false, the window stays, and nothing is closed. The window's close then settles the same way, and never raises a box.",
           Needs::Window },
     };
 }
@@ -1078,9 +1078,15 @@ bool AppApi::flushShaderCache(int budgetMs)
     return engine->flushShaderCache(unsigned(qMax(0, budgetMs)));
 }
 
-bool AppApi::quit()
+bool AppApi::quit(const QVariantMap &options)
 {
     if (!host.shell) return fail("app: not available in this session");
+    // SETTLED NOW, refused by a sentence (the final read's W1): the deferred close below used to reach the window
+    // close's own box, ungated, which a driven session (an MCP client) cannot answer.
+    const CloseUnsaved unsaved = options.value(QStringLiteral("discard"), false).toBool() ? CloseUnsaved::Discard
+                                                                                          : CloseUnsaved::Refuse;
+    QString why;
+    if (!host.shell->settleForQuit(unsaved, &why)) return fail(QStringLiteral("app.quit: %1").arg(why));
     // Deferred: let the calling script (and its undo macro) finish first. It
     // has to go through the host's afterRun hook — a plain queued call is
     // delivered BETWEEN TWO VERBS now that the script runs off the UI thread,
@@ -1345,7 +1351,7 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     ProjectService *projects = host.services ? host.services->project : nullptr;
     if (projects && projects->isSceneOpen() && host.shell) {
         host.endRunUndoMacro();
-        host.shell->closeProject();
+        host.shell->closeProject(false, CloseUnsaved::Discard);   // the reset drops it, by its contract
         host.beginRunUndoMacro();
     }
 

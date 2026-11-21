@@ -591,8 +591,7 @@ void SceneEditService::addMaterialMesh(bool ignore, iris::Vec3 position, const Q
     // still existed lost its own clip.)
 
     // Honour the drop position (the viewport computed where the cursor hit the
-    // scene) — legacy addMesh does the same; without this every dropped asset
-    // landed at the asset's authored origin (ASSET_ADD_AUDIT D1) — and REST it
+    // scene); without this every dropped asset landed at the asset's authored origin (ASSET_ADD_AUDIT D1) — and REST it
     // on that point when the position came from a drop (owner, 2026-09-14: a
     // model whose pivot is its centre was buried to the waist in the floor).
     // The asset's size is BAKED (SPECS/IMPORT_DIALOG_SPEC.md §6), so the

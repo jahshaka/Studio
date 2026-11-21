@@ -363,6 +363,70 @@ QString ThemeManager::chromeButtonSheet()
         "QPushButton:disabled, QToolButton:disabled { background: #333; color: #777; }"));
 }
 
+QString ThemeManager::claudeChatSheet()
+{
+    // BOTH THEMES (thememanager.h): no Classic early-out — the window opts out of
+    // both cascades by carrying its own palette on every widget.
+    return themeSheet(QStringLiteral(R"(
+QWidget#claudeChatRoot {
+    background: #202124; border: 1px solid #3c3f44; border-radius: 6px;
+}
+QWidget#claudeChatHeader { background: #2a2c30; border-bottom: 1px solid #3c3f44; }
+QLabel { color: #e8e8ea; background: transparent; }
+QLabel#claudeTitle { font-weight: bold; color: #e8e8ea; }
+QLabel#claudeStatus { color: #9aa0a6; font-size: 11px; }
+QLabel#claudeCost { color: #7d8288; font-size: 11px; }
+QLabel#claudeInfoLine { color: #9aa0a6; font-size: 11px; font-style: italic; }
+QLabel#claudeImage { background: #26272b; border: 1px solid #3c3f44; border-radius: 6px; }
+QComboBox#claudeModel {
+    background: #35373c; color: #b8bcc2; border: 1px solid #4a4d52;
+    border-radius: 4px; padding: 1px 6px; font-size: 11px;
+}
+QComboBox#claudeModel QAbstractItemView {
+    background: #2a2c30; color: #e8e8ea; selection-background-color: #3d6db5;
+}
+QLabel#claudeBubbleUser {
+    background: #2f4f77; color: #eef2f8; border-radius: 8px; padding: 7px 10px;
+}
+QLabel#claudeBubbleAssistant {
+    background: #2e3035; color: #e8e8ea; border-radius: 8px; padding: 7px 10px;
+}
+QLabel#claudeBubbleError {
+    background: #4a2b2b; color: #ffb3ab; border-radius: 8px; padding: 7px 10px;
+}
+QLabel#claudeToolDetail {
+    background: #26272b; color: #b8bcc2; border-radius: 6px; padding: 6px;
+    font-family: monospace; font-size: 11px;
+}
+QToolButton#claudeToolLine {
+    color: #8ab4f8; background: transparent; border: none; font-size: 11px;
+    text-align: left; padding: 1px;
+}
+QScrollArea#claudeScroll, QWidget#claudeMessages { background: #202124; border: none; }
+QPlainTextEdit#claudeInput {
+    background: #2a2c30; color: #e8e8ea; border: 1px solid #3c3f44;
+    border-radius: 6px; padding: 4px; font-size: 13px;
+}
+QPushButton {
+    background: #35373c; color: #e8e8ea; border: 1px solid #4a4d52;
+    border-radius: 5px; padding: 5px 14px;
+}
+QPushButton:hover { background: #3f4247; }
+QPushButton:disabled { color: #6a6d72; background: #2c2e32; }
+QPushButton#claudeSend { background: #3d6db5; border-color: #3d6db5; }
+QPushButton#claudeSend:hover { background: #4a7bc4; }
+QPushButton#claudeSend:disabled { background: #2c3a4f; color: #7d8794; }
+QPushButton#claudeStop { background: #8a3d3d; border-color: #8a3d3d; }
+QToolButton#claudeHeaderBtn {
+    color: #b8bcc2; background: transparent; border: none;
+    font-size: 13px; padding: 3px;
+}
+QToolButton#claudeHeaderBtn:hover { color: #ffffff; background: #3c3f44; border-radius: 4px; }
+QWidget#claudeMcpBanner { background: #4a4023; border-bottom: 1px solid #5c5230; }
+QLabel#claudeMcpBannerText { color: #e8d9a0; font-size: 11px; }
+)"));
+}
+
 QString ThemeManager::chromeAccentButtonSheet()
 {
     if (s_classicActive) return QString();

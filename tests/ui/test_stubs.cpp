@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "io/materialreader.h"
 #include "services/materialbundle.h"
-#include "io/scenewriter.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 
 // CALL COUNTERS — ui.db_handles (archived: archive/tests/ui) asserts that the library bookkeeping a panel
@@ -87,10 +86,6 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject definition, Dat
 {
     if (definition.isEmpty()) return iris::MaterialPtr();
     return iris::PbrMaterial::create().staticCast<iris::Material>();
-}
-
-void SceneWriter::writeSceneNode(QJsonObject &, iris::SceneNodePtr)
-{
 }
 
 #include "services/sceneeditservice.h"

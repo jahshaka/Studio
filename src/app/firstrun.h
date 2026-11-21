@@ -59,9 +59,13 @@ namespace FirstRun {
 ///   4. `--mcp-port` — an MCP session; the client on the other end has no hands.
 ///   5. `--engine-selftest`, or `QT_QPA_PLATFORM=offscreen` — there is no screen
 ///      to show it on.
-inline bool isDrivenSession(const CliOptions &cli)
+///
+/// SCRIPTED is signals 2-5 alone: nobody is at the screen. A forced data root
+/// alone is a hermetic run that a PERSON may be using (a rig launch, a second
+/// library): it suppresses an unprompted box, never a QUESTION a person's own
+/// hand raised (the unsaved-changes box: the lead's ruling, 2026-11-21).
+inline bool isScriptedSession(const CliOptions &cli)
 {
-    if (AppPaths::isOverridden())            return true;
     if (cli.isScriptRun())                    return true;
     if (cli.headlessScript)                   return true;
     if (!cli.dumpDocsPath.isEmpty())          return true;
@@ -69,6 +73,11 @@ inline bool isDrivenSession(const CliOptions &cli)
     if (!cli.selftestPng.isEmpty())           return true;
     if (qgetenv("QT_QPA_PLATFORM").split(':').value(0) == "offscreen") return true;   // (the host names its screen after a ':')
     return false;
+}
+
+inline bool isDrivenSession(const CliOptions &cli)
+{
+    return AppPaths::isOverridden() || isScriptedSession(cli);
 }
 
 /// True when the first-launch donate dialog should be shown for this run.
@@ -89,20 +98,23 @@ inline bool shouldGreet(const CliOptions &cli, bool alreadySeen)
 // nowhere near main()'s CliOptions, so main() records the answer ONCE, here,
 // and they ask for it.
 namespace detail {
-inline bool &drivenLatch()      // one instance per program (inline function statics)
+inline bool &scriptedLatch()    // one instance per program (inline function statics)
 {
-    static bool driven = false;
-    return driven;
+    static bool scripted = false;
+    return scripted;
 }
 }   // namespace detail
 
-/// Called once from main(), with what isDrivenSession(cli) answered.
-inline void rememberDriven(bool driven) { detail::drivenLatch() = driven; }
+/// Called once from main(), with what isScriptedSession(cli) answered.
+inline void rememberScripted(bool scripted) { detail::scriptedLatch() = scripted; }
 
-/// Is this process being DRIVEN? The latch main() set, plus the forced data
-/// root — which is process-wide state in its own right, so the answer is right
-/// even in a unit test that never ran main()'s line.
-inline bool isDrivenSession() { return detail::drivenLatch() || AppPaths::isOverridden(); }
+/// Is nobody at the screen? The latch main() set.
+inline bool isScriptedSession() { return detail::scriptedLatch(); }
+
+/// Is this process being DRIVEN? The latch, plus the forced data root — which
+/// is process-wide state in its own right, so the answer is right even in a
+/// unit test that never ran main()'s line.
+inline bool isDrivenSession() { return isScriptedSession() || AppPaths::isOverridden(); }
 
 }   // namespace FirstRun
 

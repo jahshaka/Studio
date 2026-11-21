@@ -163,9 +163,19 @@ float PlayBack::update(iris::Viewport& viewport, float dt)
 
 void PlayBack::saveNodeTransforms()
 {
-	for (auto node : scene->nodes) {
-		nodeTransforms.insert(node->guid, PlayBackNodeTransform(node->getLocalPos(), node->getLocalRot(), node->getLocalScale()));
-	}
+	// A body Simulate Physics has already moved starts the run from its pose BEFORE that simulation (the
+	// environment's held copy, which the run's physics start below overwrites): Stop and a save during the run both
+	// mean the edited pose (player/editpose.h playStartSnapshot).
+	const auto env = scene->getPhysicsEnvironment();
+	nodeTransforms = editpose::playStartSnapshot<PlayBackNodeTransform>(
+		scene->nodes, env ? env->nodeTransforms : QHash<QString, iris::Environment::SavedLocal>());
+}
+
+editpose::EditPose<PlayBackNodeTransform> PlayBack::documentEditPose(const iris::ScenePtr &document,
+                                                                     std::initializer_list<const PlayBack *> runs)
+{
+	const auto env = document ? document->getPhysicsEnvironment() : QSharedPointer<iris::Environment>();
+	return editpose::documentEditPose<PlayBackNodeTransform>(runs, document, env ? &env->nodeTransforms : nullptr);
 }
 
 void PlayBack::restoreNodeTransforms()
@@ -237,6 +247,8 @@ void PlayBack::playScene()
 	if (_isPlaying) return;
 
 	_isPlaying = true;
+	static quint64 sPlayStarts = 0;   // the UI thread's: every run starts there
+	mPlaySerial = ++sPlayStarts;
 	// Start from a clean input state: a key already down when Play was pressed
 	// produced no press edge here, so counting it would walk the character
 	// from frame one with nothing the user can release to stop it.
@@ -289,7 +301,7 @@ void PlayBack::stopScene()
 	// cannot fault. Everything below this line is guarded for the same reason.
 	clearInputState();
 	// A scene switch can arrive with play state still armed against the
-	// PREVIOUS project: closeProject tears the old scene down (cleanup()
+	// PREVIOUS project: closeWorld tears the old scene down (cleanup()
 	// drops its root node) without routing through here, and the next
 	// setScene's stopPlayingScene then found scene->getRootNode() null —
 	// restoreNodeTransformations walked ->children on null

@@ -43,7 +43,7 @@ PropertiesTabStrip::PropertiesTabStrip(SceneNodePropertiesWidget *panel, QWidget
 
     // THE FILTER BOX, UNDER THE BAR AND INSIDE THE TAB. A QLineEdit with the
     // style's own clear button — no sheet of our own anywhere in this widget
-    // (theme.no_raw_sheets); RowFit keeps its minimum width off the column's
+    // (source.no_raw_sheets); RowFit keeps its minimum width off the column's
     // (the line edit's natural minimum is tens of px, the law is 300).
     box = new QLineEdit(this);
     box->setObjectName(QStringLiteral("propertiesFilterBox"));
