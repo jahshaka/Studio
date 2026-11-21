@@ -136,13 +136,13 @@ OGRE_ENGINE_FUNCTIONS = {
     # the frame loop, present, the window, init, the views and scenes, the Hlms registration: everything that renders
     **{f: _ALL for f in ("beginPresentation", "interpolateScene", "interpolateFrame")},   # U3 stage 5's fix round
     **{f: _ALL for f in ("init", "renderOneFrame", "runFrame", "fillPublished", "drainFrameInput", "submitFrame",
-                         "applySceneStream", "syncHostViews", "noteDevice", "deviceRayQuery", "appliedFrameDelta",
+                         "applySceneStream", "syncHostViews", "noteDevice", "deviceRayQuery",
                          "pendingGiConfiguration", "closeRenderFrame", "frameCloseStep", "createView",
                          "createOffscreenView", "createOffscreen", "createStereoPairView", "destroyView", "createScene",
                          "destroyScene", "drainPendingSceneDestroys", "scenesFeedingEnabledViews", "updateScene",
                          "advanceResources", "hasEnabledViews", "listViews", "setVsync", "ensureHlms",
                          "registerCommonMaterials", "tellEveryHlms", "create", "OgreEngine", "~OgreEngine",
-                         "setFixedFrameDelta", "fixedFrameDelta", "documentGraphScene", "blankSceneManager",
+                         "documentGraphScene", "blankSceneManager",
                          "viewNameTaken", "setTransformWriteCounter",
                          "asyncViewCount", "noteAsyncView", "isAlive")},
     # the device's faults: loss, OOM, the injected frame faults (tests/engine's fault rows)
@@ -202,7 +202,7 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: _CORE for f in ("interpolate", "noteInterpolated", "restoreInterpolated", "InterpolateTask",
                           "forgetInterpolationPointers")},
     # ONE-FRAME-1 stage 1: the scene's clock (its document's serial, the frame's steps, the particles' time)
-    **{f: _CORE for f in ("beginFrameClock", "endFrameParticleTime", "particleSeconds")},
+    **{f: _CORE for f in ("beginFrameClock", "endFrameParticleTime")},
     # (the inspect door's free functions inspect::scene / inspect::view — the maps are PER FILE, so OgreView::scene
     #  is OGRE_VIEW_FUNCTIONS's "scene", never this needle; OgreScene.cpp defines no other scene()/view())
     "scene": _CORE, "view": _CORE,
