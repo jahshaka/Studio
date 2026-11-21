@@ -636,8 +636,9 @@ set_tests_properties(gi.area_follow PROPERTIES JAHSHAKA_TEST_FRAMES 420)
 # gi.soft_mover_ghost / gi.mover_bus_sky (PHOTON-7 stage 8A, A1; ONE_PICTURE B2) — A MOVER IS GI GEOMETRY, by region:
 # a door opened in play leaves no closed-door voxel or bounce (the store at rest is a fresh build's - geometry bit for
 # bit, light within a code), and a bus 10 m away occludes the floor's sky share (the store took it where it stopped,
-# the floor beside it darker than the empty court's), the region's price printed
-# (test_gi_mover_geometry.cpp says the laws). A fixture, four rows (one proof each, each under the fixture's 10 s).
+# the floor beside it darker than the empty court's), the region's price printed; and a mover removed with GI off is
+# owed to no chain (gi.mover_gi_off_removal, NONDET-1 1a)
+# (test_gi_mover_geometry.cpp says the laws). A fixture, five rows (one proof each, each under the fixture's 10 s).
 add_executable(test_gi_mover_geometry test_gi_mover_geometry.cpp)
 set_target_properties(test_gi_mover_geometry PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -658,7 +659,9 @@ jah_gpu_row(gi.mover_bus_sky CLASS engine COMMAND test_gi_mover_geometry bus
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 jah_gpu_row(gi.mover_lamp_step CLASS engine COMMAND test_gi_mover_geometry lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.soft_mover_ghost gi.mover_bus_geometry gi.mover_bus_sky gi.mover_lamp_step PROPERTIES
+jah_gpu_row(gi.mover_gi_off_removal CLASS engine COMMAND test_gi_mover_geometry gi_off_removal
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.soft_mover_ghost gi.mover_bus_geometry gi.mover_bus_sky gi.mover_lamp_step gi.mover_gi_off_removal PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 set_tests_properties(gi.soft_mover_ghost PROPERTIES JAHSHAKA_TEST_FRAMES 148)
 set_tests_properties(gi.mover_bus_geometry PROPERTIES JAHSHAKA_TEST_FRAMES 138)

@@ -401,3 +401,19 @@ target_include_directories(test_hit_list_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/
 add_test(NAME engine.hit_list_law COMMAND test_hit_list_law)
 set_tests_properties(engine.hit_list_law PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.hit_list_law)
+
+# engine.compute_job_slots (NONDET-1 1a, fork items iii and iii-b) — A COMPUTE JOB'S SLOT THAT CHANGES TYPE KEEPS ITS
+# LISTENERS TRUE: a buffer over a texture slot stops the job listening to that texture; a texture over a buffer slot calls
+# nothing on the buffer (the slot is a union). The fork's HlmsComputeJob on the NULL render system: a CPU code row.
+add_executable(test_compute_job_slots test_compute_job_slots.cpp)
+set_target_properties(test_compute_job_slots PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_compute_job_slots PRIVATE JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}")
+target_link_libraries(test_compute_job_slots PRIVATE OgreNext)
+add_test(NAME engine.compute_job_slots COMMAND test_compute_job_slots WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.compute_job_slots PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.compute_job_slots)

@@ -26,6 +26,9 @@
 //       own law (every cascade its range meets completes the round within 2 x lightWorkFrames + 1 frames): the region
 //       rebuild's injection carries the owed relight slab (the one-writer latch). RED before: the relights skipped every
 //       cascade the mover's region injected, for as long as it moved.
+//   `gi_off_removal` (gi.mover_gi_off_removal): A MOVER REMOVED WITH GI OFF IS OWED TO NO CHAIN: the next chain serves no
+//       mover region rebuild (every cascade's moverRegionRebuilds 0 at its rest). RED before (NONDET-1 1a): the removal's
+//       box waited in the mover queue with no chain and was served in the next chain's first frame.
 // Counted in frames; each row under the engine fixture's 10 s.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -402,6 +405,40 @@ int main(int argc, char **argv)
         scene->removeNode(lamp);
         GiParams off;
         off.mode = GiMode::Off;
+        scene->setGlobalIllumination(off);
+        run(2);
+    }
+
+    if (arm.empty() || arm == "gi_off_removal") {
+        // A MOVER REMOVED WITH GI OFF IS OWED TO NO CHAIN (NONDET-1 1a): its departing slot is listed at its last box
+        // (OgreScene::removeItemSlot -> listGiMover) while no chain exists, and the next chain is built from the table as
+        // it is - so that chain serves NO mover region: every cascade's moverRegionRebuilds stays 0 through its build and
+        // its rest. RED BEFORE: the box waited in PhotonComponent's mover queue (filled with no chain, emptied only by a
+        // built one) and was served as a region rebuild in the next chain's first frame.
+        std::printf("\n== gi_off_removal: a mover removed with GI off ==\n");
+        CHECK(scene->setGlobalIllumination(chainGi()), "the court is up");
+        e->waitForAsyncShaders();
+        const NodeId mover = addBox(scene, Vec3(0.0f, 0.5f, -3.0f), Vec3(0.6f, 1.0f, 0.6f), Colour(0.8f, 0.8f, 0.8f), true);
+        CHECK(mover != 0 && settle(1200) >= 0, "the movable box comes to rest");
+        GiParams off;
+        off.mode = GiMode::Off;
+        scene->setGlobalIllumination(off);
+        run(2);
+        scene->removeNode(mover);   // (no chain: GI is off)
+        run(2);
+        CHECK(scene->setGlobalIllumination(chainGi()), "the next chain is asked for");
+        e->waitForAsyncShaders();
+        const int rest = settle(1200);
+        const GiStatus g = scene->published().gi;
+        unsigned long long served = 0ull;
+        std::printf("   at rest in %d frames, %zu cascades; mover region rebuilds:", rest, g.cascades.size());
+        for (size_t k = 0; k < g.cascades.size(); ++k) {
+            std::printf(" c%zu %llu", k, g.cascades[k].moverRegionRebuilds);
+            served += g.cascades[k].moverRegionRebuilds;
+        }
+        std::printf("\n");
+        CHECK(rest >= 0 && !g.cascades.empty(), "the next chain is built and comes to rest");
+        CHECK(served == 0ull, "A MOVER REMOVED WITH GI OFF IS OWED TO NO CHAIN: the next chain serves no mover region rebuild");
         scene->setGlobalIllumination(off);
         run(2);
     }
