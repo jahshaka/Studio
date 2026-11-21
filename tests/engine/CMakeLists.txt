@@ -407,6 +407,23 @@ add_test(NAME engine.compute_record COMMAND test_compute_record)
 set_tests_properties(engine.compute_record PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.compute_record)
 
+# engine.exit_only_teardown — THE FIXTURES' EXIT (COLD-BOOT-1's added item; spikes/exit-race/VERIFY.md): a fixture that
+# takes the harness's exit-only teardown ends at its engine's death - a handler registered after the boot never runs, and
+# the status is what the run returned; its negative control (no engine: the late handler runs). A headless (NULL) engine
+# in a forked child: no card, no display.
+add_executable(test_exit_only_teardown test_exit_only_teardown.cpp)
+set_target_properties(test_exit_only_teardown PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_exit_only_teardown PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_exit_only_teardown PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_exit_only_teardown PRIVATE JahshakaEngine)
+add_dependencies(test_exit_only_teardown JahshakaEngineMedia)
+add_test(NAME engine.exit_only_teardown COMMAND test_exit_only_teardown WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.exit_only_teardown PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.exit_only_teardown)
+
 add_executable(test_hit_list_law test_hit_list_law.cpp)
 set_target_properties(test_hit_list_law PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
 target_include_directories(test_hit_list_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)

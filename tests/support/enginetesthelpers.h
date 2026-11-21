@@ -111,34 +111,62 @@ inline void applyHarnessDefaults(EngineConfig &cfg)
 /// THE EXIT-ONLY TEARDOWN, every fixture's (URGENT #102, jahshaka/engine/ProcessExit.h): the process is marked, so
 /// the fixture's engine — destroyed at main's end as always — tears down with its caches saved and joined but keeps
 /// Root (no vkDestroyDevice, which waits for the NVIDIA driver's background compile: 10-20 s on a fixture's first run
-/// after a shader change, measured); then exit()'s handlers run LIFO — every one registered after this (the shader-
-/// compile check below among them) first — and this one ends the process with std::_Exit(status), before the
-/// driver's and Ogre's finalizers would run against the live device. glibc's on_exit is the one handler that is
-/// handed the exit status; without it (macOS) the fixture keeps the real destroy. The driver's per-exe cache of a
-/// fixture is still cold on its first run after a shader change and pays that compile once — stored DURING the
-/// run (measured), never awaited at the exit. A fixture whose subject is the destroy says realDestroy().
+/// after a shader change, measured). THE PROCESS THEN ENDS AT THE ENGINE'S DEATH (COLD-BOOT-1, the fixtures' exit;
+/// spikes/exit-race/VERIFY.md): the teardown calls the process-exit hook right after its log line, the hook registers
+/// exitOnlyFinal THEN - the newest exit handler, so exit() runs it FIRST - and exitOnlyFinal runs the fixture's exit
+/// checks by name, flushes and std::_Exit(status). Nothing registered earlier runs: no static destructor, no library
+/// finalizer against the live device and the driver's threads (an on_exit registered at the run's FIRST line, the old
+/// way, ran LAST: gi.scroll_slab.scroll crashed in libnvidia-gpucomp.so 2 times in 3 after its laws passed). glibc's
+/// on_exit is the one handler that is handed the exit status; without it (macOS) the fixture keeps the real destroy.
+/// The driver's per-exe cache of a fixture is still cold on its first run after a shader change and pays that compile
+/// once — stored DURING the run (measured), never awaited at the exit. A fixture whose subject is the destroy says
+/// realDestroy(). engine.exit_only_teardown holds it.
+///
+/// A FIXTURE WHOSE ENGINE FAILED TO COMPILE A SHADER FAILS (URGENT #83's law for the fixtures, PHOTON-7 10-4): a program
+/// that does not compile is logged and survived, and its draws simply never happen - a black reading that a law of
+/// "nothing lit here" calls green (gi.fog_sealed passed that way while its colour pass's shader was refused). At the
+/// process's exit, whatever its laws said, a fixture whose engine logged a failed compile prints the count and exits 1.
+inline int checkEveryShaderCompiled(int status)
+{
+    const unsigned long long failed = Engine::processShaderCompileErrors();
+    if (failed == 0) return status;
+    std::fprintf(stderr, "FAIL: %llu shader program(s) failed to compile in this fixture (its readings are of "
+                         "draws that never happened) - see its Ogre log\n", failed);
+    return 1;
+}
+
+#if defined(__GLIBC__)
+/// The fixture's last act (takeExitOnlyTeardown): its exit checks BY NAME, then the process's end.
+inline void exitOnlyFinal(int status, void *)
+{
+    status = checkEveryShaderCompiled(status);
+    std::fflush(nullptr);
+    std::_Exit(status);
+}
+#endif
+
 inline void takeExitOnlyTeardown()
 {
 #if defined(__GLIBC__)
     static const bool once = [] {
         markProcessExit();
-        on_exit([](int status, void *) { std::fflush(nullptr); std::_Exit(status); }, nullptr);
+        setProcessExitHook([] { on_exit(&exitOnlyFinal, nullptr); });
         return true;
     }();
     (void)once;
 #endif
 }
 
-inline void requireEveryShaderCompiled()
+/// The compile check of a fixture that keeps the REAL destroy (realDestroy, or no glibc): it never reaches the exit-only
+/// teardown's hook, so its check is an ordinary exit handler - no device is left live behind it.
+inline void requireEveryShaderCompiledAtExit()
 {
     static const bool once = [] {
         std::atexit([] {
-            const unsigned long long failed = Engine::processShaderCompileErrors();
-            if (failed == 0) return;
-            std::fprintf(stderr, "FAIL: %llu shader program(s) failed to compile in this fixture (its readings are of "
-                                 "draws that never happened) - see its Ogre log\n", failed);
+            const int status = checkEveryShaderCompiled(0);
+            if (status == 0) return;
             std::fflush(stderr);
-            std::_Exit(1);
+            std::_Exit(status);
         });
         return true;
     }();
@@ -147,8 +175,12 @@ inline void requireEveryShaderCompiled()
 
 inline EngineConfig testEngineConfig(std::string logFile, const EngineOverrides &o = EngineOverrides())
 {
-    if (!o.mRealDestroy) takeExitOnlyTeardown();   // FIRST: its handler must run after the compile check's
-    requireEveryShaderCompiled();
+#if defined(__GLIBC__)
+    if (!o.mRealDestroy) takeExitOnlyTeardown();   // the compile check runs in its final handler, by name
+    else requireEveryShaderCompiledAtExit();
+#else
+    requireEveryShaderCompiledAtExit();
+#endif
     EngineConfig cfg;
     cfg.pluginDir = JAHSHAKA_TEST_PLUGIN_DIR;
     cfg.hlmsMediaDir = JAHSHAKA_TEST_MEDIA_DIR;
