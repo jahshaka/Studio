@@ -150,11 +150,7 @@ int main(int argc, char **argv)
     }
     std::printf("== part: %s ==\n", part.c_str());
     std::string err;
-    auto cfg = enginetest::testEngineConfig("test-gi-cascades-ogre.log");
-    // NONDET-1 E4a (A MEASURING ARM, reverted by its own commit): mover_routes boots with the ray tier OFF and skips its
-    // rays-on run (ri 3), so the tier never opens and never closes before the still's run (run 4's switch to off is then
-    // a no-op: OgreRayQuery.cpp:13666), and the tier is not reopened after it.
-    if (doMoverRoutes) cfg.rayTracing = false;
+    const auto cfg = enginetest::testEngineConfig("test-gi-cascades-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
@@ -1389,7 +1385,6 @@ int main(int argc, char **argv)
         for (int ri = 0; ri < 5; ++ri) {
         // (the part: `mover` the three poses with the rays off - A2's law; `mover_routes` the rays-on corner and the still)
         if (ri < 3 ? !doMover : !doMoverRoutes) continue;
-        if (doMoverRoutes && ri == 3) continue;   // (NONDET-1 E4a: the rays-on run skipped)
         const Run &run = runs[ri];
         const Pose &pose = *run.pose;
         const int raysOn = run.raysOn;
@@ -1522,10 +1517,8 @@ int main(int argc, char **argv)
             scene->removeNode(turner);
         }
         }
-        if (!doMoverRoutes) {   // (NONDET-1 E4a: the tier is not reopened after the still)
         e->setRayTracing(true);
         render(e, 2);
-        }
     }
     }   // (mover / mover_routes: case 12)
 
