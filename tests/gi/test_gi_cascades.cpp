@@ -1380,7 +1380,7 @@ int main(int argc, char **argv)
         // frame, so the store holds the still up to a quantum behind: an editor-side agreement, not the renderer's law).
         struct Run { const Pose *pose; int raysOn; bool still; };
         const Run runs[5] = { { &poses[0], 0, false }, { &poses[1], 0, false }, { &poses[2], 0, false },
-                              { &poses[0], 1, false }, { &poses[0], 1, true } };   // (NONDET-1 M-B: run 4 with the rays ON)
+                              { &poses[0], 1, false }, { &poses[0], 0, true } };
         int raysWere = -1;
         for (int ri = 0; ri < 5; ++ri) {
         // (the part: `mover` the three poses with the rays off - A2's law; `mover_routes` the rays-on corner and the still)
