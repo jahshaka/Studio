@@ -1396,6 +1396,18 @@ int main(int argc, char **argv)
         std::printf("   -- %s, the rays %s --\n", run.still ? "a STILL turned by script (printed: the move quantum)"
                                                           : "a MOVER turning",
                     raysOn ? "ON (printed: the non-gathering route's residue)" : "OFF (A2's law)");
+        if (doMoverRoutes && ri == 3) {   // NONDET-1 M-E (a measuring arm): run 3 = its two chain builds and teardowns only
+            view->setCamera(enginetest::testCameraDescLookAt(pose.cam, Vec3(0.0f, 1.0f, 0.0f)));
+            GiParams meOff; meOff.mode = GiMode::Off;
+            for (int k = 0; k < 2; ++k) {
+                CHECK(scene->setGlobalIllumination(cascadeGi()), "M-E: a chain up");
+                render(e, 1);
+                CHECK(scene->setGlobalIllumination(meOff), "M-E: the chain down");
+                render(e, 2);
+            }
+            std::printf("   NONDET-1 M-E: run 3 = two chains built and torn down (a frame each), 6 frames\n");
+            continue;
+        }
         {
             view->setCamera(enginetest::testCameraDescLookAt(pose.cam, Vec3(0.0f, 1.0f, 0.0f)));
             const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
