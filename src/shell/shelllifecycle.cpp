@@ -302,8 +302,13 @@ void ShellLifecycle::stopBackgroundWork()
     if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr) {
         const int drained = projectService->drainThumbnailEncodes();
         if (drained) qInfo("shutdown: wrote %d pending project thumbnail(s)", drained);
-        const int folders = projectService->drainFolderDeletes();
-        if (folders) qInfo("shutdown: finished %d project folder removal(s)", folders);
+        // A PROJECT FOLDER'S BYTES are waited for at the same 3-s cap as every join here (the final read 2's
+        // M1: this wait had none, with the window still on screen); a removal past it stops between two
+        // files, its folder stays aside, and the next start's sweep removes it.
+        const FolderRemoval::Drained folders = projectService->drainFolderDeletes(FolderRemoval::kQuitCapMs);
+        if (folders.waited)
+            qInfo("shutdown: %d project folder removal(s), %d stopped at the cap (finished by the next start)",
+                  folders.waited, folders.stopped);
     }
 
     // Reap the remaining pool workers (metadata/peaks/bake futures) so
@@ -368,7 +373,7 @@ void ShellLifecycle::teardownWindow()
     if (ProjectService *projectService = mParts.services ? mParts.services->project() : nullptr) {
         projectService->settleThumbnailCapture();
         projectService->drainThumbnailEncodes();
-        projectService->drainFolderDeletes();
+        projectService->drainFolderDeletes(FolderRemoval::kQuitCapMs);
     }
 
     // The modules. ONE TEARDOWN PATH: on the window-close path step 3 has

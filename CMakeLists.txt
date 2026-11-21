@@ -414,6 +414,7 @@ set(SRCS
     src/services/livevideo.cpp
     src/services/assetservice.h
     src/services/projectservice.cpp
+    src/services/folderremoval.cpp
     src/services/materialpreviewservice.cpp
     src/services/sceneeditservice.cpp
     src/services/clipboardservice.cpp

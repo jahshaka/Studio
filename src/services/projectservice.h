@@ -27,17 +27,16 @@ For more information see the LICENSE file
 #include <functional>
 #include <memory>
 
-#include <QFuture>
 #include <QHash>
 #include <QJsonObject>
 #include <QList>
-#include <QMutex>
 #include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
 
 #include "io/missingclipref.h"
+#include "services/folderremoval.h"
 
 #include "irisgl/irisglfwd.h"
 #include "irisgl/import/meshprewarm.h"
@@ -180,9 +179,10 @@ public:
     /// worker, never on the calling thread. The worker also takes any folder a
     /// killed process left aside in that directory.
     bool removeProject(const QString &guid, QString *whyOut = nullptr);
-    /// Waits for every folder removal in flight (the shutdown paths and the
-    /// destructor). Returns how many it waited for.
-    int drainFolderDeletes();
+    /// Waits for the folder removals in flight at most `capMs`, then stops the rest
+    /// (their folders stay aside; the next start's sweep removes them): the shutdown
+    /// paths, at FolderRemoval::kQuitCapMs. The destructor drains at the same cap.
+    FolderRemoval::Drained drainFolderDeletes(int capMs);
 
     /// The model files the LAST readProjectScene found with no current bake
     /// (FORWARD-ONLY-1): missing from the open, never parsed. The shell raises
@@ -297,9 +297,7 @@ private:
     QHash<QString, QFutureWatcher<QByteArray> *> mThumbEncodes;
     /// The folder removals in flight (removeProject), and the aside paths they
     /// own — a later delete never hands a second worker the same folder.
-    QList<QFuture<void>> mFolderDeletes;
-    std::shared_ptr<QSet<QString>> mFoldersAside = std::make_shared<QSet<QString>>();
-    std::shared_ptr<QMutex> mFoldersAsideLock = std::make_shared<QMutex>();
+    FolderRemoval mFolderRemoval;
     /// What an asynchronous tile request holds instead of `this`: the viewport
     /// may answer after this service is gone.
     std::shared_ptr<char> mAlive = std::make_shared<char>(0);

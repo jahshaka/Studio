@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-// services.core — unit contracts of the Phase-1 service layer
+// services.core — unit contracts of the Phase-1 service layer (and the folder removal's quit cap)
 // (APP_ARCHITECTURE_AUDIT §3.3):
 //
 //  UndoService: push/undo/redo guards, the script-macro clear guard (a script
@@ -33,10 +33,14 @@ For more information see the LICENSE file
 #include "player/editpose.h"
 #include "app/firstrun.h"
 #include "services/closeunsaved.h"
+#include "services/folderremoval.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 
 #include <QHash>
+#include <QDir>
+#include <QFile>
+#include <QFileInfo>
 #include <QTemporaryDir>
 #include <QMap>
 #include <memory>
@@ -325,6 +329,55 @@ void testDocumentEditPose()
           "editpose: a run started over a running simulation takes the body's PRE-SIMULATE pose, every other node's own");
 }
 
+// A QUIT NEVER WAITS FOR A PROJECT FOLDER'S BYTES WITHOUT A LIMIT (the final read 2's M1; services/folderremoval.h).
+// The shutdown waited for every removal in flight with no cap while the window was still on screen. Now a drain
+// waits at most its cap, STOPS the worker between two entries and joins it; the folder stays aside, and the next
+// start (a new owner: ProjectService's sweep) removes it. Red on the base: there the drain had no cap at all.
+void testFolderRemovalCap()
+{
+    QTemporaryDir root;
+    const auto makeTree = [&](const QString &name, int dirs, int filesPerDir) {
+        const QString top = root.filePath(name);
+        for (int d = 0; d < dirs; ++d) {
+            const QString dir = top + QStringLiteral("/exports/d%1").arg(d);
+            QDir().mkpath(dir);
+            for (int f = 0; f < filesPerDir; ++f) {
+                QFile file(dir + QStringLiteral("/f%1").arg(f));
+                if (file.open(QIODevice::WriteOnly)) file.write("x");
+            }
+        }
+        return top;
+    };
+    // A small folder inside the cap: removed whole, nothing stopped.
+    const QString small = makeTree(QStringLiteral(".removing-small-0"), 2, 3);
+    {
+        FolderRemoval removal;
+        CHECK(removal.start({ small }) == 1, "folders: a start takes the folder");
+        CHECK(removal.start({ small }) == 0, "folders: ...and a second start never hands a second worker the same one");
+        const FolderRemoval::Drained d = removal.drain(FolderRemoval::kQuitCapMs);
+        CHECK(d.waited == 1 && d.stopped == 0 && !QFileInfo::exists(small),
+              "folders: a removal that ends inside the cap is waited for and the folder is gone");
+    }
+    // A large folder drained at a cap of 0 (the quit's cap, reached): the drain STOPS the worker and returns; the
+    // folder stays aside. 20,000 files: a worker cannot unlink them between its start and the drain's next line.
+    const QString large = makeTree(QStringLiteral(".removing-large-0"), 40, 500);
+    {
+        FolderRemoval removal;
+        removal.start({ large });
+        const FolderRemoval::Drained d = removal.drain(0);
+        CHECK(d.waited == 1 && d.stopped == 1, "folders: a drain past its cap stops the removal (not waited out)");
+        CHECK(QFileInfo::exists(large) && !removal.owns(large),
+              "folders: ...the folder stays aside, and no worker holds it any more");
+    }
+    // The next start (a new owner) finishes it.
+    {
+        FolderRemoval removal;
+        removal.start({ large });
+        const FolderRemoval::Drained d = removal.drain(60000);
+        CHECK(d.stopped == 0 && !QFileInfo::exists(large), "folders: the next start removes the folder left aside");
+    }
+}
+
 // WHO ANSWERS AN UNSAVED WORLD (services/closeunsaved.h decideUnsaved, the lead's ruling 2026-11-21): the box is a
 // person's unless nobody is at the screen. A forced data root alone (an app launched with --data-root, no script,
 // no MCP client) is a person's session: it is driven, but not scripted, and its close over unsaved changes ASKS.
@@ -361,6 +414,7 @@ int main(int argc, char *argv[])
     testUiStep();
     testEditPose();
     testDocumentEditPose();
+    testFolderRemovalCap();
     testUnsavedDecision();
     std::printf(failures ? "FAILURES: %d\n" : "ALL PASS\n", failures);
     return failures ? 1 : 0;

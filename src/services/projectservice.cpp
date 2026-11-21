@@ -58,7 +58,6 @@ ProjectService::ProjectService(Database *db,
 
 ProjectService::~ProjectService()
 {
-    drainFolderDeletes();   // the --script exit never reaches the shutdown order's drain
     // The shell drains at shutdown (ShellLifecycle::stopBackgroundWork), while the
     // database is still open; anything still here is only waited for, never
     // written — the rows it would write may already be gone.
@@ -431,36 +430,12 @@ void ProjectService::removeAsideFoldersLater(const QString &projectsDir)
         }
         unclaimed.append(path);
     }
-    QStringList owned;
-    {
-        QMutexLocker locked(mFoldersAsideLock.get());
-        for (const QString &path : unclaimed) {
-            if (mFoldersAside->contains(path)) continue;
-            mFoldersAside->insert(path);
-            owned.append(path);
-        }
-    }
-    if (!owned.isEmpty()) {
-        mFolderDeletes.removeIf([](const QFuture<void> &f) { return f.isFinished(); });
-        mFolderDeletes.append(QtConcurrent::run(
-            [owned, aside = mFoldersAside, lock = mFoldersAsideLock]() {
-                for (const QString &path : owned) {
-                    if (!QDir(path).removeRecursively())
-                        qWarning("project delete: '%s' could not be removed in full; the next delete "
-                                 "in its directory tries again", qUtf8Printable(path));
-                    QMutexLocker locked(lock.get());
-                    aside->remove(path);
-                }
-            }));
-    }
+    mFolderRemoval.start(unclaimed);   // a path a worker already holds is skipped there
 }
 
-int ProjectService::drainFolderDeletes()
+FolderRemoval::Drained ProjectService::drainFolderDeletes(int capMs)
 {
-    const int pending = int(mFolderDeletes.size());
-    for (QFuture<void> &future : mFolderDeletes) future.waitForFinished();
-    mFolderDeletes.clear();
-    return pending;
+    return mFolderRemoval.drain(capMs);
 }
 
 iris::ScenePtr ProjectService::readProjectScene(const QJsonObject &projectObj,
