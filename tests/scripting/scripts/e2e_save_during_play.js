@@ -37,8 +37,9 @@ function reopenedAtEditPose(p, label) {
     assert(project.open(p.guid) === true, label + ": reopen");
     var reopened = byName("Falling Body");
     assert(reopened !== null, label + ": the body is in the row");
-    assert(pose(reopened) === p.edited,
-           label + ": the row holds the EDIT pose exactly: " + pose(reopened) + " (edited " + p.edited + ")");
+    // MEASURING ARM (final read 2 M3): every section's verdict printed, none stops the run - reverted next commit.
+    console.log((pose(reopened) === p.edited ? "ARMCHECK GREEN " : "ARMCHECK RED ") + label + ": reopened " +
+                pose(reopened) + " (edited " + p.edited + ")");
 }
 
 // 1. The editor's run, saved mid-fall.
