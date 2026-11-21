@@ -36,9 +36,14 @@
 #       samples AND kReflectStopFrames = 8 frames (jah_reflect_rest.glsl), at most kReflectRestRaysCap = 64 samples a
 #       frame, one frame's batch of overshoot past the 300 - so it stops at v <= v_need + max( 300 + 64, 8 x 64 ) =
 #       v_need + 512, and THE LAW: the largest v at which a texel stopped past 2N (the lab's status restStopVMax) <= the
-#       largest v_need at 2N (restNeedMax) + 512. THE RESIDUAL, named: v_need is the 2N estimate of e (sigma over the
+#       largest v_need at 2N (restNeedMax) + 512. THE RESIDUALS, named: (i) v_need is the 2N estimate of e (sigma over the
 #       samples a texel holds at 2N, ~150 at 960x540) - a heavy-tailed texel whose e rises after 2N owes more, the stop
-#       law's own delta (kReflectStopSamples' note). The FRAMES the hold takes are not a stop law (the converging texels
+#       law's own delta (kReflectStopSamples' note); (ii) RE-ENTRY: the window's frame count restarts on any frame out of
+#       the share (rq_reflect_temporal.comp's st.stop = 0) while its start (refine.z) stands, so the 512 runs from the LAST
+#       time a texel re-enters its share - which can come well after v_need for a texel whose e wanders across it. And the
+#       law is a WEAK FORM: it compares two population maxima (the largest stop v against the LARGEST need), so it reds
+#       only a texel that stops past the WORST texel's need + 512, never a light texel that ran long (measured 2,638
+#       against 14,227 / 14,739) - a per-texel form needs each texel's own need, which the engine does not publish. The FRAMES the hold takes are not a stop law (the converging texels
 #       share the tail's ray budget, held to its ramp, and a batch ends at a record): see WIN below;
 #   (c) THE MIRROR CONVERGES (PHOTON-7-9A stage 2, the lead's ruling C2; the old "<= 1 code mean change" bar, a picked
 #       number, deleted): the mirror is a fixed estimator (the centre ray, M = 1) - at rest it takes its mean from its
