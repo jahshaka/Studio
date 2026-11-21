@@ -88,6 +88,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
+#include <memory>
+#include <sstream>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -192,6 +195,20 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->setRayTracing(false);
+    // NONDET-1's INSTRUMENT: JAH_TEST_ARMS="name=value,name=value" sets measuring arms for the whole process (a measuring
+    // run's command line - one binary carries every arm of a side branch). Unset in every gate run.
+    if (const char *arms = std::getenv("JAH_TEST_ARMS")) {
+        std::stringstream list(arms);
+        std::string item;
+        while (std::getline(list, item, ',')) {
+            const size_t eq = item.find('=');
+            if (eq == std::string::npos) continue;
+            const std::string name = item.substr(0, eq);
+            const double value = std::atof(item.c_str() + eq + 1);
+            std::printf("JAH_TEST_ARMS: %s = %g\n", name.c_str(), value);
+            e->setArm(name, value);
+        }
+    }
     int frames = 1;
     e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
@@ -268,9 +285,15 @@ int main(int argc, char **argv)
     // (the lamp at 200 at rest - the world the fade also ends in, within (5)'s code). None = every part.
     const std::string part = argc > 2 ? argv[2] : "";
     const bool doSeries = part.empty() || part == "series";
-    const bool doFade = part.empty() || part == "fade";
+    // NONDET-1's INSTRUMENT (`fade` with JAH_TRIALS set by a measuring run's caller; unset in every gate run): the fade's
+    // state, then JAH_TRIALS trials in this one process in place of the fade arm, each a FRESH chain (GI off and on: no
+    // store carried from the last trial) at the lamp of 400 at rest, the fade over JAH_TRIAL_FRAMES frames to 200, its rest
+    // judged by (5)'s own law against the resume arm's Jacobi, and the detector gi.foreignDetect (JAH_FOREIGN_BAR codes)
+    // read per cascade, with the rest's digests.
+    const bool doTrials = (part.empty() || part == "fade") && std::getenv("JAH_TRIALS") != nullptr;
+    const bool doFade = (part.empty() || part == "fade") && !doTrials;
     const bool doStep = part.empty() || part == "lamp";
-    const bool doLamp = doFade || doStep;
+    const bool doLamp = doFade || doStep || doTrials;
     const bool doRays = part == "rays";
     for (int t = 0; t < 4; ++t) {
         if (argc > 1 && std::string(argv[1]) != names[t]) continue;
@@ -559,6 +582,85 @@ int main(int argc, char **argv)
             // THE START: the lamp at 400, at rest, and (the fade's travel) its Jacobi
             setLamp(400.0f);
             toRest(900);
+            if (doTrials) {
+                const auto envInt = [](const char *n, int d) { const char *v = std::getenv(n); return v ? std::atoi(v) : d; };
+                const int trials = std::max(1, envInt("JAH_TRIALS", 5));
+                const int fadeFrames = std::max(2, envInt("JAH_TRIAL_FRAMES", kFadeFrames));
+                const char *barEnv = std::getenv("JAH_FOREIGN_BAR");
+                const double bar = barEnv ? std::atof(barEnv) : 5.0;
+                GiParams gi;
+                gi.mode = GiMode::Vct;
+                gi.quality = tiers[t];
+                gi.ddgi = GiToggle::Off;
+                gi.cards = false;
+                gi.bounces = true;
+                gi.updateBudget = 0;
+                int fails = 0, detected = 0, both = 0;
+                for (int k = 0; k < trials; ++k) {
+                    GiParams off;
+                    off.mode = GiMode::Off;
+                    m.scene->setGlobalIllumination(off);
+                    run(2);
+                    m.scene->setGlobalIllumination(gi);
+                    e->waitForAsyncShaders();
+                    const int buildRest = toRest(900);
+                    e->setArm("gi.foreignDetect", bar);
+                    const GiStatus g0 = m.scene->published().gi;   // (the feedback's bricks so far: the fade's work below)
+                    const unsigned long long fadeStart = m.scene->published().frame;
+                    for (int f = 1; f <= fadeFrames; ++f) {
+                        setLamp(400.0f - 200.0f * float(f) / float(fadeFrames));
+                        run(1);
+                    }
+                    const unsigned long long fadeEnd = m.scene->published().frame;
+                    const int rest = toRest(900);
+                    const GiStatus g = m.scene->published().gi;
+                    e->setArm("gi.foreignDetect", 0.0);
+                    const Reading fe = read(m.scene);
+                    double worst = 0.0;
+                    size_t over = 0;
+                    const bool same = fe.ok && fe.voxels == lj.voxels && lj.voxels == outside.size();
+                    for (size_t i = 0; same && i < fe.voxels; ++i) {
+                        if (!outside[i]) continue;
+                        const double rf = std::fabs(double(fe.L[i]) - double(lj.L[i])) / std::max(double(lj.L[i]), 1e-6);
+                        worst = std::max(worst, rf);
+                        over += rf > 0.01 ? 1u : 0u;
+                    }
+                    const bool fail = !same || rest < 0 || over != 0u;
+                    bool hit = false;
+                    for (const GiStatus::CascadeStatus &c : g.cascades) hit = hit || c.foreignFirstFrame != 0u;
+                    fails += fail ? 1 : 0;
+                    detected += hit ? 1 : 0;
+                    both += (fail && hit) ? 1 : 0;
+                    auto dg = std::make_shared<GiVoxelDigests>();
+                    m.scene->requestGiVoxelDigests(dg);
+                    for (int w = 0; w < 120 && !dg->ready; ++w) run(1);
+                    std::printf("   TRIAL %d %s: built at rest in %d, the fade %d frames (engine frames %llu-%llu), rest %d after: beyond, "
+                                "worst %.3f codes, %zu over one | detector (bar %.1f codes) %s\n", k, fail ? "FAIL" : "pass", buildRest,
+                                fadeFrames, fadeStart, fadeEnd, rest, 100.0 * worst, over, bar, hit ? "FIRED" : "quiet");
+                    {   // THE FEEDBACK'S WORK over the fade and its rest: bricks listed (each a bounce group when it runs)
+                        unsigned long long ran = 0;
+                        for (size_t c = 0; c < g.cascades.size() && c < g0.cascades.size(); ++c)
+                            ran += g.cascades[c].feedbackBricksRan - g0.cascades[c].feedbackBricksRan;
+                        std::printf("     the feedback listed %llu brick-passes over the fade and its rest (%.1f a fade frame)\n", ran,
+                                    double(ran) / double(fadeFrames));
+                    }
+                    for (size_t c = 0; c < g.cascades.size(); ++c) {
+                        const GiStatus::CascadeStatus &cs = g.cascades[c];
+                        std::printf("     c%zu: readings %llu (skipped %llu), word0 max %.3f, word1 max %.3f codes; first over: frame %llu "
+                                    "(fade frame %lld) word %u brick %u %.3f codes (skipped by then %llu); digests direct %s light %s\n",
+                                    c, cs.foreignReadings, cs.brickReadingsSkipped, double(cs.foreignDirectMax),
+                                    double(cs.foreignBounceMax), cs.foreignFirstFrame,
+                                    cs.foreignFirstFrame ? (long long)cs.foreignFirstFrame - (long long)fadeStart : -1ll,
+                                    cs.foreignFirstWord, cs.foreignFirstBrick, double(cs.foreignFirstCodes), cs.foreignFirstSkipped,
+                                    dg->ready && c < dg->direct.size() ? dg->direct[c].substr(0, 16).c_str() : "-",
+                                    dg->ready && c < dg->light.size() ? dg->light[c].substr(0, 16).c_str() : "-");
+                    }
+                    std::fflush(stdout);
+                }
+                std::printf("   TRIALS %d: %d FAIL by (5)'s law, the detector fired in %d, both in %d (missed fails %d, false fires %d)\n",
+                            trials, fails, detected, both, fails - both, detected - both);
+                CHECK(fails == 0, "TRIALS: every trial's fade ends where its Jacobi says");
+            }
             Reading o400, sEnd, fEnd;
             if (doFade) {
                 e->setArm("gi.bounceJacobi", 1.0);
