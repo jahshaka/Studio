@@ -641,9 +641,15 @@ int main(int argc, char **argv)
                     e->setArm("gi.foreignDetect", bar);
                     const GiStatus g0 = m.scene->published().gi;   // (the feedback's bricks so far: the fade's work below)
                     const unsigned long long fadeStart = m.scene->published().frame;
+                    std::printf("     FADE MARK trial %d: the fade begins at engine frame %llu\n", k, fadeStart);
+                    std::fflush(stdout);
                     for (int f = 1; f <= fadeFrames; ++f) {
                         setLamp(400.0f - 200.0f * float(f) / float(fadeFrames));
                         run(1);
+                        if (f % 100 == 0) {   // (the engine's own log lines - a compile in the frame - fall between these)
+                            std::printf("     FADE MARK trial %d: fade frame %d\n", k, f);
+                            std::fflush(stdout);
+                        }
                         if (signDumped && inC >= 0 && k > 0 && inFrame == f) {
                             dumpInputs("CONTROL (this trial, the same fade frame)");
                             inC = -1;
