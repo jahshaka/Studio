@@ -693,6 +693,15 @@ function(jah_timing_script _in _out)
     set_property(DIRECTORY APPEND PROPERTY CMAKE_CONFIGURE_DEPENDS "${_in}")
 endfunction()
 
+# jah_no_warm_store(<row>...) - THE ROW REACHES NO BOX's WARM STORE (URGENT #193's own red, 2026-11-21): a row that drives
+# scripts/warm-app-cache.sh runs with JAH_WARM_STORE unset - a toy under an inherited store published toy caches at the real key
+# (the script also refuses a toy-shaped call itself; this is the registration's half: a hand-run ctest is safe too).
+# source.no_box_paths's census holds every such row to it.
+function(jah_no_warm_store)
+    foreach(_t IN LISTS ARGV)
+        set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT_MODIFICATION "JAH_WARM_STORE=unset:")
+    endforeach()
+endfunction()
 function(jah_no_display)
     foreach(_t IN LISTS ARGV)
         set_property(TEST ${_t} APPEND PROPERTY ENVIRONMENT_MODIFICATION

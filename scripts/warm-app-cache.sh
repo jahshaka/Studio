@@ -139,16 +139,16 @@
 # <each cold boot's why>" (exit 3 under --check; else their boots, in order).
 set -u
 BUILD=""; INHERIT=""; CHECK=0; KEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=1170; COLDROWS=""
-ARGV=("$0" "$@"); TAKE_RIG=0   # (URGENT #195: the call as given, for the refusal's safe line)
+ARGV=("$0" "$@"); TAKE_RIG=0; FAKED=""   # (URGENT #195: the call as given, for the refusal's safe line)
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
         --rig) TAKE_RIG=1; shift ;;
         --key) KEYONLY=1; shift ;;
-        --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; shift 2 ;;
-        --app) APP="${2:?--app needs an executable}"; shift 2 ;;
-        --lab) LAB="${2:?--lab needs an executable}"; shift 2 ;;
-        --cold-rows) COLDROWS="${2:?--cold-rows needs a file}"; shift 2 ;;
+        --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; FAKED="$FAKED --tests-dir"; shift 2 ;;
+        --app) APP="${2:?--app needs an executable}"; FAKED="$FAKED --app"; shift 2 ;;
+        --lab) LAB="${2:?--lab needs an executable}"; FAKED="$FAKED --lab"; shift 2 ;;
+        --cold-rows) COLDROWS="${2:?--cold-rows needs a file}"; FAKED="$FAKED --cold-rows"; shift 2 ;;
         --only) ONLY="${2:?--only needs a boot}"; shift 2 ;;
         --inherit) INHERIT="${2:?--inherit needs the parent build dir}"; shift 2 ;;
         --budget) BUDGET="${2:?--budget needs seconds}"; shift 2
@@ -424,7 +424,18 @@ compute_run() {   # RUN and why: the boots this call asked for that are cold, an
 # for the same exe NAME: the driver keeps its per-exe cache in the one user home every tree's run shares (gpu-exclusive.sh
 # exports it; HARNESS-1 measured it keyed on the name). After the boots, a cache warm at KEY is PUBLISHED (a copy renamed in;
 # the newer replaces). THE COLD ROWS ARE NOT IN THE STORE (this first cut): their primes stay each tree's own cold-on boot.
+# THE STORE DEFENDS ITSELF (URGENT #193's own red, 2026-11-21 16:01: toy rows run under a lead tool INHERITED the real store and
+# published 10-byte toy caches at the REAL key - they drive this script on the real build dir, so they compute its real key, with
+# fake apps and a scratch tests dir). A call that overrides --app, --lab, --tests-dir or --cold-rows - the shape of every toy and
+# of no real warm-up - never reaches a store, UNLESS JAH_WARM_STORE_ALLOW_FAKES=1 says the store is the toy's own scratch (the
+# store's toy part sets both, explicitly). And a publish carries only a cache that passes its manifest AND whose engine-id stamp
+# is this build's (the stamp a real -off boot writes after its promotion); a take needs the store's copy to carry the same
+# stamp. (A size floor was the other candidate - a guess at what a toy is; the call's shape and the build's own stamp are not.)
 STORE=${JAH_WARM_STORE:-}; SK=""; STORE_LOCKED=""
+if [ -n "$STORE" ] && [ -n "$FAKED" ] && [ "${JAH_WARM_STORE_ALLOW_FAKES:-}" != 1 ]; then
+    echo "warm-app-cache: the warm store is NOT used - this call overrides$FAKED (a toy's shape; a store toy sets JAH_WARM_STORE_ALLOW_FAKES=1 with its own scratch store)"
+    STORE=""
+fi
 store_open() {   # <wait s>: the key's directory and lock; 0 locked, 1 not (the store then unused this call)
     [ -n "$STORE" ] || return 1
     SK="$STORE/$KEY"
@@ -443,7 +454,7 @@ store_take() {   # the cold -off caches (and their -on stamps) this call asked f
     for b in $RUN; do
         case "$b" in app-off) c=app sh=$APP_SHARED st=$APP_STAMP ;; engine-off) c=engine sh=$ENG_SHARED st=$ENG_STAMP ;; *) continue ;; esac
         S="$SK/$c"
-        [ -d "$S/cache" ] && [ "$(sed -n 1p "$S/warm-key" 2>/dev/null)" = "$KEY" ] || continue
+        [ -d "$S/cache" ] && [ "$(sed -n 1p "$S/warm-key" 2>/dev/null)" = "$KEY" ] && [ -s "$S/engine-id" ] || continue
         python3 -I "$SRC/tests/support/shadercache_check.py" "$S/cache" > /dev/null 2>&1 ||
             { echo "warm-app-cache: the store's $c cache at $KEY fails its own manifest - not taken"; continue; }
         nxt="$sh.store.$$"; rm -rf "$nxt"
@@ -467,6 +478,8 @@ store_publish() {   # every cache of this tree warm at KEY (and its -on stamp) i
     for c in app engine; do
         if [ $c = app ]; then sh=$APP_SHARED st=$APP_STAMP ds=$APP_DSTAMP; else sh=$ENG_SHARED st=$ENG_STAMP ds=$ENG_DSTAMP; fi
         [ -f "$st" ] && [ -z "$(TOPUP_CHECK=0 cold_why "$sh" "$st")" ] || continue
+        [ "$(cat "$sh.engine-id" 2>/dev/null)" = "$ENGINE_ID" ] ||
+            { echo "warm-app-cache: the $c cache is not published - its engine-id stamp is not this build's ($ENGINE_ID)"; continue; }
         S="$SK/$c"
         if cmp -s "$st" "$S/warm-key" && cmp -s "$sh.engine-id" "$S/engine-id"; then   # the store holds these bytes already
             [ -f "$ds" ] && [ "$(sed -n 1p "$ds")" = "$KEY" ] && ! cmp -s "$ds" "$S/driver-key" && cp "$ds" "$S/driver-key" && pub="$pub $c-on"

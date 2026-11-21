@@ -212,6 +212,7 @@ if(Python3_Interpreter_FOUND)
     # SHIP-CUT-2 2026-11-03)
     set_tests_properties(source.shaders_spirv_valid PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling" JAH_BOOTS "app-off;engine-off")
     jah_no_display(source.shaders_spirv_valid)
+    jah_no_warm_store(source.shaders_spirv_valid)
     # gate.serve_red (URGENT #54) — A RED AT THE SAME INPUT IS SERVED-RED, NEVER RE-RUN: ci_gate_check.py serve's
     # decision on synthetic records (a red result at this tree with equal configuration / declaration / data hashes is
     # served-red; an ancestor's red runs; a PASS serves as before; NOTRUN / NOADMIT are not results). No build, no git.
@@ -274,6 +275,7 @@ if(Python3_Interpreter_FOUND)
                  COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/warm_app_cache.sh" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}" ${_wpart})
         set_tests_properties(tooling.${_wrow} PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
         jah_no_display(tooling.${_wrow})
+        jah_no_warm_store(tooling.${_wrow})
     endforeach()
     # tooling.gpu_lock_fifo — THE CARD's LOCK IS FIRST COME, FIRST SERVED (URGENT #113): scripts/gpu-exclusive.sh's ticket
     # queue on a private lock (sleeps, no GPU): the grants in ticket order, a dead ticket skipped, --wait-max's bound kept,
@@ -615,10 +617,11 @@ add_test(NAME source.display_guard
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/display_guard.sh" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
 set_tests_properties(source.display_guard PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
 jah_no_display(source.display_guard)
+jah_no_warm_store(source.display_guard)
 # source.no_box_paths (CODING_RULES § 7, the owner and the lead 2026-11-21: THE STUDIO REPO KNOWS NO BOX): no tracked Studio or
 # irisgl file names the lead repo's box-local root, literally or composed; today's two namings sit in the
 # shrink-only tests/hygiene/box_paths_pending.txt with their fix (BOX-SILO-1 stage 3, S1/S2). Its self-test first.
 add_test(NAME source.no_box_paths
-         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_box_paths.py" "${CMAKE_SOURCE_DIR}")
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_box_paths.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
 set_tests_properties(source.no_box_paths PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_box_paths)

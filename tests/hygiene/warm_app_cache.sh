@@ -528,7 +528,7 @@ if want store; then
 # answers "warm"; S2 another tree at the SAME key, cold, TAKES them - warm with no boot (its fake app never runs), its files the
 # store's bytes and the store's not written through it; S3 a TORN stored cache is not taken - that boot runs; S4 with
 # JAH_WARM_STORE unset nothing is read or written there (as before); S5 the key's lock held by another tree: this call WAITS on
-# it (said, no card) and takes after it; S6 another key takes nothing
+# it (said, no card) and takes after it; S6 another key takes nothing; S7 a toy-shaped call under an inherited store writes nothing
 [ "$PART" = store ] && toy_tree() {   # (the keys and inherit parts' helper; this part may run alone)
     local b="$1/build"
     mkdir -p "$b/engine/generated" "$b/bin/media/Hlms" "$b/bin/media/Photon" "$b/bin/media/x" "$b/tests/.shadercache"
@@ -538,8 +538,10 @@ if want store; then
 }
 ST="$T/store"; mkdir -p "$ST"
 printf '#!/bin/sh\necho "BOOTED $*" >> %s/s-booted\nexec %s "$@"\n' "$T" "$T/fake-app" > "$T/s-app"; chmod +x "$T/s-app"
-SX() { local b="$1"; shift; DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$b" --app "$T/s-app" --lab "$T/s-app" --cold-rows "$T/cold-none" \
-           --only app-off,app-on,engine-off,engine-on "$@"; }
+# (the store toys drive the script with fakes: they say so - JAH_WARM_STORE_ALLOW_FAKES=1, with THEIR OWN scratch store - or the
+# store refuses a call of a toy's shape, S7)
+SX() { local b="$1"; shift; DISPLAY=:99 JAH_GPU_LOCK_HELD=1 JAH_WARM_STORE_ALLOW_FAKES=1 "$W" "$b" --app "$T/s-app" --lab "$T/s-app" \
+           --cold-rows "$T/cold-none" --only app-off,app-on,engine-off,engine-on "$@"; }
 toy_tree "$T/sP"; PB="$T/sP/build"; PT="$PB/tests"
 pk=$("$W" "$PB" --key); pid=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$PB/engine/generated/jahshaka_engine_build_id.h")
 rm -rf "$PT/.shadercache"; toy_cache "$PT/.shadercache" 1 2; toy_cache "$PT/.shadercache-engine" 1 2
@@ -579,6 +581,16 @@ wait $lp
 [ $rc = 0 ] && echo "$out" | grep -q "is being warmed by another tree .* waiting on the store's key lock (no card)" &&
     echo "$out" | grep -q "TAKEN from the box's warm store" && [ ! -e "$T/s-booted" ] &&
     ok "S5: the key's lock held by another tree - this call waits on it (no card) and then takes, no boot" || no "S5 the key lock: '$out' rc $rc"
+# S7 THE NEGATIVE CONTROL (URGENT #193's own red, 2026-11-21 16:01): a toy run under an INHERITED real-looking store - the
+# script on the REAL build dir (its real key), fakes, a scratch tests dir, no ALLOW - writes NOTHING there: neither the cold
+# toy's take/boot nor the warm toy's publish (red on photon-7 8407d7fff: it published 10-byte caches at the real key)
+RS="$T/real-looking-store"; mkdir -p "$RS"; RB="$T/s7"; mkdir -p "$RB/tests"
+o1=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 JAH_WARM_STORE="$RS" "$W" "$BUILD" --tests-dir "$RB/tests" "${F[@]}" --only engine-off 2>&1)
+o2=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 JAH_WARM_STORE="$RS" "$W" "$PB" --app "$T/s-app" --lab "$T/s-app" --cold-rows "$T/cold-none" \
+     --only app-off,engine-off 2>&1)
+[ -z "$(ls -A "$RS")" ] && echo "$o1" | grep -q "the warm store is NOT used - this call overrides" &&
+    echo "$o2" | grep -q "the warm store is NOT used" && ok "S7: a toy-shaped call under an inherited store (the real build's key, fakes) writes NOTHING there, warm or cold" ||
+    no "S7 the inherited store: $(ls -A "$RS" | head -3) // $(echo "$o1" | tail -1) // $(echo "$o2" | tail -1)"
 toy_tree "$T/sK"; KB="$T/sK/build"; printf 'H' > "$KB/bin/media/Hlms/a.any"; rm -f "$T/s-booted"
 out=$(JAH_WARM_STORE="$ST" SX "$KB" --only engine-off); rc=$?
 ! echo "$out" | grep -q "TAKEN" && [ -e "$T/s-booted" ] && ok "S6: another key takes nothing from the store - it warms itself" || no "S6 another key: '$out' rc $rc"
