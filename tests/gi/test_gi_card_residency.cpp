@@ -543,25 +543,29 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
             Image prev, cur;
             bool havePrev = view->readPixels(prev);
             int worst = 0, quiet = 0;
-            // (the transition ends EARLY once the picture has rested 30 frames AND the cache owes its readers nothing - no
-            // pop can still come from it; PHOTON-7 stage 10, the row's budget: the fixed 120 frames ran on past both)
+            // THE TRANSITION ENDS AT THE ENGINE's REST (V2 plan 0.2, the lead's ruling 2026-11-21; CODING_RULES § 5: "at rest"
+            // is the engine's predicate, never a frame count): GiStatus::giAtRest with the cache owing its readers nothing,
+            // held kQuiet frames - every frame's picture judged against the one before until then. (It counted 30 frames of
+            // an unchanged picture of its own, twice a run: the row read 10.18 s against the fixture's 10 s.)
             for (int f = 0; f < 120; ++f) {
-                if (quiet >= 30 && !scene->published().gi.cards.readersHoldOwed) break;
+                if (quiet >= kQuiet) break;
                 run(1);
+                const GiStatus gq = scene->published().gi;
+                const bool rested = gq.giAtRest && !gq.cards.readersHoldOwed;
                 if (!view->readPixels(cur)) continue;
                 int frameMax = 0;
                 if (havePrev && cur.rgba.size() == prev.rgba.size())
                     for (size_t i = 0; i < cur.rgba.size(); ++i)
                         if (i % 4u != 3u) frameMax = std::max(frameMax, std::abs(int(cur.rgba[i]) - int(prev.rgba[i])));
                 worst = std::max(worst, frameMax);
-                quiet = frameMax == 0 ? quiet + 1 : 0;
+                quiet = rested ? quiet + 1 : 0;
                 prev.rgba.swap(cur.rgba);
                 prev.width = cur.width;
                 prev.height = cur.height;
                 havePrev = true;
             }
             (phase == 0 ? out.popIn : out.popOut) = worst;
-            (phase == 0 ? out.popInRest : out.popOutRest) = quiet >= 30;
+            (phase == 0 ? out.popInRest : out.popOutRest) = quiet >= kQuiet;
         }
     }
     if (holdCard && out.b.pillars.size() > 8u) {
