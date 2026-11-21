@@ -597,6 +597,38 @@ int main(int argc, char **argv)
                 gi.updateBudget = 0;
                 int fails = 0, detected = 0, both = 0;
                 bool signDumped = false;   // (one sign dump a process)
+                // THE INPUTS AT THE FLAGGED VOXEL (the injection's own-voxel inputs, the voxeliser's level 0 and the halves'
+                // faces), read back at the sign dump and at the same fade frame of the NEXT trial (the clean control)
+                int inC = -1, inFrame = -1;
+                size_t inX = 0, inY = 0, inZ = 0, inHalf = 0;
+                const auto dumpInputs = [&](const char *tag) {
+                    GiVoxelVolume v, hv;
+                    const bool okV = m.scene->giVoxelVolume(inC, v), okH = m.scene->giVoxelHalves(inC, hv);
+                    if (!okV || !okH || v.width <= 0) {
+                        std::printf("     INPUTS %s c%d: no readback\n", tag, inC);
+                        return;
+                    }
+                    const size_t w = size_t(v.width), h = size_t(v.height);
+                    const size_t i = (inZ * h + inY) * w + inX, a = inHalf / 2u;
+                    const auto q = [&](const std::vector<float> &arr, size_t idx) {
+                        static char buf[96];
+                        if (arr.size() < 4u * idx + 4u) return std::string("-");
+                        std::snprintf(buf, sizeof buf, "(%.6g %.6g %.6g %.6g)", double(arr[4u * idx]), double(arr[4u * idx + 1u]),
+                                      double(arr[4u * idx + 2u]), double(arr[4u * idx + 3u]));
+                        return std::string(buf);
+                    };
+                    std::printf("     INPUTS %s c%d voxel (%zu,%zu,%zu) half %zu at world (%.3f, %.3f, %.3f): albedo %s emissive %s "
+                                "emitP %s emitN %s covP %s covN %s posP %s posN %s halfSide[%zu] %s halfNormal[%zu] %s\n",
+                                tag, inC, inX, inY, inZ, inHalf, double(v.origin[0] + v.cell[0] * (float(inX) + 0.5f)),
+                                double(v.origin[1] + v.cell[1] * (float(inY) + 0.5f)), double(v.origin[2] + v.cell[2] * (float(inZ) + 0.5f)),
+                                q(v.albedo, i).c_str(), q(v.emissive, i).c_str(), q(v.emitP, i).c_str(), q(v.emitN, i).c_str(),
+                                q(v.coverageP, i).c_str(), q(v.coverageN, i).c_str(), q(v.positionP, i).c_str(), q(v.positionN, i).c_str(),
+                                a, q(hv.halfSide[a], i).c_str(), a, q(hv.halfNormal[a], i).c_str());
+                    for (size_t b = 0; b < 6u; ++b) {
+                        const size_t t = ((inZ * h + inY) * 6u + b) * w + inX;
+                        std::printf("       half %zu: total %s direct %s\n", b, q(v.halfLight, t).c_str(), q(hv.halfDirect, t).c_str());
+                    }
+                };
                 for (int k = 0; k < trials; ++k) {
                     GiParams off;
                     off.mode = GiMode::Off;
@@ -612,6 +644,10 @@ int main(int argc, char **argv)
                     for (int f = 1; f <= fadeFrames; ++f) {
                         setLamp(400.0f - 200.0f * float(f) / float(fadeFrames));
                         run(1);
+                        if (signDumped && inC >= 0 && k > 0 && inFrame == f) {
+                            dumpInputs("CONTROL (this trial, the same fade frame)");
+                            inC = -1;
+                        }
                         if (signDumped) continue;
                         const GiStatus gs = m.scene->published().gi;
                         for (size_t c = 0; c < gs.cascades.size() && !signDumped; ++c) {
@@ -638,6 +674,13 @@ int main(int argc, char **argv)
                                         "%zu negative channels of %zu texels; the smallest %.6g at voxel (%zu,%zu,%zu) half %zu = brick %zu\n",
                                         c, (long long)gs.cascades[c].signFirstFrame - (long long)fadeStart, gs.cascades[c].signFirstBrick,
                                         f, negatives, texels, double(lo), x, y, z, half, x / 8u + bw * (y / 8u + bh * (z / 8u)));
+                            inC = int(c);
+                            inFrame = f;
+                            inX = x;
+                            inY = y;
+                            inZ = z;
+                            inHalf = half;
+                            dumpInputs("AT THE SIGN");
                         }
                     }
                     const unsigned long long fadeEnd = m.scene->published().frame;
