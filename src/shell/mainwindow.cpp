@@ -1189,30 +1189,42 @@ bool MainWindow::settleUnsaved(CloseUnsaved unsaved, QString *whyOut)
     if (!projectService->isSceneOpen() || unsaved == CloseUnsaved::Discard) return true;
     const QString name = project->getProjectName();
     const QString guid = project->getProjectGuid();
+    // SETTLED = the row holds the whole document. A save can fail, or write the edit pose and leave out the nodes
+    // a run added (ProjectService::save: true, still dirty); either way the world is not settled, and `why` says so.
+    const auto saveWhy = [&](QString *why) {
+        QString door;
+        if (!projectService->save(guid, ProjectService::SaveReason::Editor, &door))
+            *why = tr("'%1' could not be saved, so it stays open: %2").arg(name, door);
+        else if (undoService->isDirty())
+            *why = tr("'%1' is not saved whole, so it stays open: %2").arg(name, door);
+        else
+            return true;
+        return false;
+    };
+    QString why;
     if (settings->get(settingkeys::autoSave)) {
         // closePrevious:save — a create's ledger shows its close (CREATE-GAP-1); a no-op outside a run.
         LoadTimeline::Accumulate row(QStringLiteral("closePrevious:save"));
-        QString why;
-        if (projectService->save(guid, ProjectService::SaveReason::Editor, &why)) return true;
-        // A FAILED AUTO-SAVE REFUSES THE CLOSE: the world stays, and the save door has said why (once).
-        if (whyOut) *whyOut = tr("'%1' could not be saved, so it stays open: %2").arg(name, why);
-        return false;
+        if (saveWhy(&why)) return true;
+    } else if (!undoService->isDirty()) {
+        return true;
+    } else {
+        why = tr("'%1' has unsaved changes and auto-save is off").arg(name);
     }
-    if (!undoService->isDirty()) return true;
+    // A PERSON DECIDES, and is never trapped: Save (again) / Discard / Cancel, until the save holds or they choose.
     if (unsaved == CloseUnsaved::Ask && !FirstRun::isDrivenSession()) {
-        const auto reply = QMessageBox::question(this, tr("Unsaved Changes"),
-                                                 tr("'%1' has unsaved changes. Save before closing?").arg(name),
-                                                 QMessageBox::Yes | QMessageBox::No | QMessageBox::Cancel);
-        if (reply == QMessageBox::No) return true;
-        // A "Yes" whose save failed is a Cancel: the save door has said why.
-        if (reply == QMessageBox::Yes && projectService->save(guid, ProjectService::SaveReason::Editor))
-            return true;
+        for (;;) {
+            const auto reply = QMessageBox::question(this, tr("Unsaved Changes"), tr("%1.\nSave before closing?").arg(why),
+                                                     QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
+            if (reply == QMessageBox::Discard) return true;
+            if (reply != QMessageBox::Save) break;
+            if (saveWhy(&why)) return true;
+        }
         if (whyOut) *whyOut = tr("the close of '%1' was cancelled").arg(name);
         return false;
     }
-    if (whyOut)
-        *whyOut = tr("'%1' has unsaved changes and auto-save is off — save it first (project.save), or pass "
-                     "{discard: true} to drop them").arg(name);
+    // ...and nobody can answer a box in a driven session, or on a script's route: refused, with the way out.
+    if (whyOut) *whyOut = tr("%1 — save it first (project.save), or pass {discard: true} to drop them").arg(why);
     return false;
 }
 

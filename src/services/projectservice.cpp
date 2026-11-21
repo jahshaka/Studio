@@ -573,8 +573,19 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
                         : QStringLiteral("the project's row is no longer in the library"));
     }
 
-    // ONLY A WRITTEN ROW IS A SAVED SCENE.
-    if (undo) undo->markSaved();
+    // ONLY A WRITTEN ROW IS A SAVED SCENE — and only a row that holds the WHOLE document (the final read's B2): a
+    // node a run added was left out, so the scene stays unsaved (the close asks, or saves it after Stop, when the
+    // node is part of the document). A user's Add and a simulation's spawn are not told apart.
+    if (spawned.isEmpty()) {
+        if (undo) undo->markSaved();
+    } else {
+        if (undo) undo->markUnsaved();
+        const QString note = QStringLiteral("saved the scene as edited; %1 object(s) added during Play are saved "
+                                            "when Play stops").arg(spawned.size());
+        if (whyOut) *whyOut = note;
+        JahLog::write(JahLog::scene, JahLog::Level::Warning,
+                      QStringLiteral("=== SCENE SAVE === '%1' (%2): %3").arg(project->getProjectName(), guid, note));
+    }
     if (projectManager) {
         if (!thumb.isEmpty()) projectManager->updateTile(guid, thumb);
         projectManager->touchTile(guid);

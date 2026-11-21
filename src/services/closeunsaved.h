@@ -13,11 +13,12 @@ For more information see the LICENSE file
 #define CLOSEUNSAVED_H
 
 /// WHAT A CLOSE DOES WITH UNSAVED CHANGES (STUDIO-HYGIENE-1 audit) — every route that closes a world names one,
-/// so no route discards edits silently. The close (MainWindow::closeWorld) settles BEFORE it touches the world:
-/// with auto-save on it saves, and a save that FAILS refuses the close whatever this says (the world stays; the
-/// save door has told the user once). With auto-save off and the scene dirty (UndoService::isDirty):
+/// so no route discards edits silently. The close (MainWindow::settleUnsaved) settles BEFORE it touches the world:
+/// with auto-save on it saves, and a save that FAILS, or that left out the nodes a run added (the scene stays
+/// dirty), is NOT settled - nor is a dirty scene with auto-save off. An unsettled world then goes by this:
 enum class CloseUnsaved {
-    Ask,      ///< a person's route (a tile, the Close button, the menu, New Scene): Save / Discard / Cancel. In a
+    Ask,      ///< a person's route (a tile, the Close button, the menu, New Scene): Save (again,
+              ///< until it holds) / Discard / Cancel, the reason in the box. In a
               ///< DRIVEN session (a suite, a script, an MCP client: FirstRun::isDrivenSession) nobody can answer a
               ///< box, so it refuses as Refuse does.
     Refuse,   ///< a script's route (project.open/openAsync/close/create): refused with a sentence unless the

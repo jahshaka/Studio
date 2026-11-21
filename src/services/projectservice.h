@@ -239,7 +239,11 @@ public:
     /// — returns false with `whyOut` set, tells the save-failed hook "the scene
     /// could not be saved: <why>", and leaves the stack DIRTY, so the close
     /// asks. Every door logs one SAVE line (SESSION_LOG_SPEC §5).
-
+    ///
+    /// DURING A RUN OR A SIMULATION it writes the document's EDIT pose (PlayBack::documentEditPose); a node a run
+    /// added is not part of it and is left out — and then the row does not hold the whole document: true (the row
+    /// was written), the scene stays UNSAVED, and `whyOut` carries the one sentence that says so ("saved the scene
+    /// as edited; N object(s) added during Play are saved when Play stops"), logged once.
     bool save(const QString &guid, SaveReason reason, QString *whyOut = nullptr);
 
     /// The presented frame -> scene thumbnail + desktop tile, synchronously

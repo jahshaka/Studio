@@ -114,4 +114,25 @@ editor.simulate(false);
 assert(project.close() === true, "close");
 reopenedAtEditPose(p, "simulate then play");
 
+// 6. A NODE ADDED DURING PLAY (the final read's B2) is not part of the document a save writes: the save succeeds
+//    and the scene stays UNSAVED; after Stop it is part of the document, and the next save writes it.
+p = bodyProject("added in play");
+assert(editor.play() === true, "play");
+editor.frame(10);
+var added = scene.addPrimitive("sphere", { position: { x: 3, y: 1, z: 0 } });
+node.rename(added, "Added In Play");
+assert(project.save() === true, "a save with a node added during play succeeds");
+assert(dirty() === true, "...and the scene stays UNSAVED (it was marked saved without the node)");
+var closeWhy = null;
+try { project.close(); } catch (e) { closeWhy = String(e && e.message ? e.message : e); }
+assert(closeWhy !== null && closeWhy.indexOf("is not saved whole") >= 0 && closeWhy.indexOf("discard") >= 0,
+       "...so the close (auto-save on) is REFUSED, naming {discard: true}: its auto-save left the node out (" +
+       closeWhy + ")");
+assert(project.current() && project.current().guid === p.guid, "...and the world stays");
+assert(editor.stop() === true, "stop");
+assert(byName("Added In Play") !== null, "Stop keeps the added node");
+assert(project.save() === true && dirty() === false, "saved after Stop: clean");
+assert(project.close() === true, "close");
+assert(project.open(p.guid) === true, "reopen");
+assert(byName("Added In Play") !== null, "the node added during play is in the reopened scene");
 console.log("save during play: ALL OK");
