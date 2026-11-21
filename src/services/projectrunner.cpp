@@ -643,30 +643,20 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
         qWarning("project create: an open was still in flight — draining it first");
         mRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
     }
-    // THE LEDGER COVERS THE CLOSE (CREATE-GAP-1). It began after it, so the
-    // create's own record was the smaller half of the verb: 800-1200 ms of a
-    // create over an open world — the autosave, the teardown, the page switch
-    // — sat in front of the run and in no stage. `closePrevious` is that
-    // span, and its counters (closePrevious:save / :teardown / :switch, and
-    // the save's own saveOpen:*) say where it went.
+    // THE CREATE'S LEDGER BEGINS HERE. Since every route closes the open world
+    // before the row is minted (STUDIO-HYGIENE-1), that close runs BEFORE this
+    // ledger and is not in it (CREATE-GAP-1 had put it in, as `closePrevious`;
+    // its counters closePrevious:save / :teardown / :switch now count only when
+    // a ledger already runs).
     if (!LoadTimeline::isRunning())
         LoadTimeline::begin(QStringLiteral("create %1").arg(filename));
     // EVERY CREATE ROUTE CLOSES THE OPEN WORLD ITSELF, FIRST, by its own policy (the
     // New Scene dialog asks, project.create refuses unless told to discard) —
     // before a row is minted, an open in flight included (the routes drain it in
-    // their close: the final read's W5). This is the backstop: a world still open
-    // here is closed only if nothing would be lost, and a refusal stops the create.
-    if (mProjectService->isSceneOpen()) {
-        LoadTimeline::mark(QStringLiteral("closePrevious"));
-        QString why;
-        if (!close(false, CloseUnsaved::Refuse, &why)) {
-            qWarning("project create: the open world could not be closed, so nothing was created: %s",
-                     qUtf8Printable(why));
-            LoadTimeline::end();
-            return;
-        }
-    }
-    // ...AND ONLY NOW IS THE CURRENT PROJECT THE NEW ONE: the close above
+    // their close: the final read's W5); ProjectService::createProjectShell refuses
+    // a world still open before it mints anything (the final read 2: the backstop
+    // that stood here refused AFTER the mint, and no route could reach it).
+    // ...AND ONLY NOW IS THE CURRENT PROJECT THE NEW ONE: the route's close
     // autosaved the old world into the old project's own row (createProject-
     // Shell used to re-point first, and the old project's edits went into the
     // new one's row — CREATE-GAP-1).

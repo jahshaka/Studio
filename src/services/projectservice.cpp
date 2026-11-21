@@ -226,6 +226,11 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
     };
 
     if (const QString refusal = createRefusal(name, location); !refusal.isEmpty()) return fail(refusal);
+    // A WORLD STILL OPEN IS REFUSED HERE, BEFORE ANYTHING IS MINTED (the final read 2): every create route closes
+    // the open world first, by its own policy (and drains an open in flight: W5). The runner's backstop that
+    // refused AFTER this minted the row, the tile and the folder is gone.
+    if (sceneOpen) return fail(QStringLiteral("'%1' is still open: close it before a scene is created")
+                                   .arg(project ? project->getProjectName() : QString()));
 
     // WHERE IT LANDS. The user's projects root unless the dialog's Browse (or
     // the verb's `location`) named somewhere else (createRefusal judged it).
@@ -240,7 +245,7 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
     // close's autosave wrote the OLD world into the NEW project's row (and its
     // folder), and the old project lost every edit since its last save
     // (measured: 3 cubes added, create, reopen — gone). The shell re-points
-    // after the close (MainWindow::startCreateRun, pointAtProject).
+    // after the close (ProjectRunner::startCreateRun, pointAtProject).
     QDir projectDir(fullProjectPath);
     if (!projectDir.exists() && !projectDir.mkpath("."))
         return fail(QStringLiteral("the project folder '%1' could not be created")
