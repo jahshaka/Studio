@@ -310,7 +310,7 @@ scripting.e2e.world_stillness.fresh_home 0.23  jahshaka-raul RTX 5060 Ti 615.71.
 scripting.e2e.second_project_capture 9.27  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T051447-e4427ba87, 1-min load 1.8; V2 plan 0.2)
 scripting.e2e.second_project_capture.fresh_home 0.23  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T051447-e4427ba87, 1-min load 1.7; V2 plan 0.2)
 scripting.live 5.40  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T051531-e4427ba87, 1-min load 1.4; V2 plan 0.2)
-services.core 0.02  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044402-e4427ba87, 1-min load 1.4; V2 plan 0.2)
+services.core 0.32  solo 2026-11-21 at 0ba714a9e (spec.sh reprice, run 20261121T160130-0ba714a9e)
 services.memory 0.08  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044402-e4427ba87, 1-min load 1.4; V2 plan 0.2)
 settings.store 0.61  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044404-e4427ba87, 1-min load 1.4; V2 plan 0.2)
 shader.async_after_open 21.73  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T051537-e4427ba87, 1-min load 1.4; V2 plan 0.2)
