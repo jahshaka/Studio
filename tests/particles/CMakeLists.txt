@@ -19,6 +19,23 @@ jah_gpu_row(particles.document_to_engine SHIP CLASS engine COMMAND test_particle
 set_tests_properties(particles.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 357)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(particles.document_to_engine PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "particles")
 
+# particles.ring_full_handles — a full ParticleFX2 ring never hands one slot to two allocations (OGRE-BUMP-2; upstream
+# c5d535f3c): setBillboards' shape (fill to capacity, free from the back, grow again) on a never-initialised billboard
+# definition. Pure OgreMain and a bare Root: no engine, no render system, no display, no GPU - display-free and in the
+# leak lane; sub-second (the header of test_particles_ring.cpp says what each check proves).
+add_executable(test_particles_ring test_particles_ring.cpp)
+set_target_properties(test_particles_ring PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_particles_ring PRIVATE OgreNext)
+add_test(NAME particles.ring_full_handles COMMAND test_particles_ring
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(particles.ring_full_handles PROPERTIES TIMEOUT 60 LABELS "particles")
+jah_no_display(particles.ring_full_handles)
+jah_lsan_lane(particles.ring_full_handles)
+
 # The same suite over the SANITISED copy of the backend (tests/engine defines
 # JahshakaEngineAsan; tests/ adds engine before particles). Particle definitions
 # outlive their nodes by design and their datablocks are destroyed after the
