@@ -573,6 +573,35 @@ def product_paths(paths):
     return [p for p in paths if not NON_PRODUCT.search(p)]
 
 
+# THE SIX's INPUTS (CARD-QUEUE-1 T.10; CODING_RULES § 7 "The six are SERVED, not run, for a lane whose diff cannot reach them").
+# The six run THE WHOLE APP (`bin/Jahshaka --engine-selftest`: MainWindow, its layout, the scripting verbs fixture B is built by,
+# the default scene, the editor view - poses 1/2 render at the size the LAYOUT gives the view, and URGENT #157 measured a hash
+# moving with the view's size alone, src/app/cli/selftestrunner.cpp), so EVERY file compiled into it, every medium, every build
+# file and every pin can reach them. AN ALLOW-LIST, FAILING CLOSED: a path reaches NO selftest input only when it is one of these
+# - the docs, the tests' own files that are not build files, the tools under scripts/ but the six's own runners (gpu-exclusive.sh
+# and display-guard.sh set the app's environment - JAHSHAKA_VR, DISPLAY; gate_runlog.py judges "an equal environment", the
+# serving's own test). Anything else - src/**, media/**, cmake/**, any CMakeLists.txt or *.cmake, the irisgl gitlink (a pin), a
+# new top-level directory, a path this list does not name - REACHES them: the six run. (A .md counts only at the top level or
+# under the docs: one under src/ may be compiled in - src/scripting/claude/skills/*.md.)
+SIX_SERVABLE = re.compile(r"^(docs/|irisgl/docs/|testing/|\.claude/|tests/|scripts/)|^[^/]+\.md$")
+SIX_RUNNERS = re.compile(r"^scripts/(gpu-exclusive\.sh|display-guard\.sh|gate_runlog\.py)$")
+BUILD_FILE = re.compile(r"(^|/)CMakeLists\.txt$|\.cmake$")
+
+
+def six_inputs(paths):
+    """[(path, why)] of the touched paths that CAN reach the six (SIX_SERVABLE above, failing closed); [] = none can: the six
+    are served from a complete run at the commit the paths are measured from."""
+    out = []
+    for p in paths:
+        if BUILD_FILE.search(p):
+            out.append((p, "a build-system file: it can change what the app is built from"))
+        elif SIX_RUNNERS.match(p):
+            out.append((p, "the six's own runner (the app's environment, or the equal-environment test)"))
+        elif not SIX_SERVABLE.search(p):
+            out.append((p, "compiled into, loaded by or pinned under the app the six run (or a path the allow-list does not name)"))
+    return out
+
+
 # THE SMOKE PAIR (a boot that renders + the contract of the scripting surface, ~15 s together) — selected by a change
 # to THE TEST HARNESS only (TESTING-SPEED-A item 5, SPECS/TESTING_SPEED_SPEC.md §2 A6): the helpers every row runs
 # through, the rows' macros, the CMake helpers. A product change is guarded at every merge by the six hash lines and by
@@ -3337,6 +3366,7 @@ def reach(paths, rng, build):
             "full_tier": S.full_tier, "fallback": S.fallback, "fork_bump": S.fork_bump,
             "rationale": [{"path": p, "why": w} for p, w in S.rationale], "graph": S.graph is not None,
             "tooling_only": S.tooling_only, "code_moved": S.code_moved,
+            "six": {"reached": bool(six_inputs(paths)), "why": [{"path": p, "why": w} for p, w in six_inputs(paths)]},
             "never_selected": sorted(n for n in S.selected if inv[n]["labels"] & NEVER_SELECTED), "_S": S}
 
 
@@ -3371,6 +3401,11 @@ def main():
         print(f"\n(modules called by >40% of scripts select nothing on their own: {sorted(S.skipped_ubiquitous)})")
     if R["never_selected"]:
         print(f"\n(reached, never selected — measure / target rows, the sprint's ship runs them: {R['never_selected']})")
+    sx = R["six"]
+    print(("\nTHE SIX: REACHED (they run) - " + "; ".join(f"{x['path']}: {x['why']}" for x in sx["why"][:3])
+           + (f"; +{len(sx['why']) - 3} more" if len(sx["why"]) > 3 else "")) if sx["reached"] else
+          "\nTHE SIX: NOT REACHED - every path is docs, tests' own files or tools (CODING_RULES § 7): served from the newest complete six at an "
+          "equal environment below the tip (spec.sh test), never called this lane's own cold six")
     if not R["rows"]:
         if R["code_moved"]:
             sys.stderr.write("gate-scope: a code path selected NO row — the rules fired (see above) but named nothing "
