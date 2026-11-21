@@ -1792,9 +1792,6 @@ bool Session::monitor(const Command &c)
         m["count:cards.relit_texels_direct"] = double(g.cards.relitTexelsLastFrame);
         m["count:cards.relit_texels_indirect"] = double(g.cards.indirectTexelsLastFrame);
         m["count:cards.captured_texels"] = double(g.cards.texelsLastFrame);
-        // (ROUGH-LOBE-HISTORY-1's measuring arm gather.roughCarry 2: the clamp's pixels and its largest cut x 16 codes)
-        m["count:gather.arm_w2"] = double(g.gather.starvedDiffuse);
-        m["count:gather.arm_w3"] = double(g.gather.starvedRough);
     };
     counts(0ull);   // the baseline of the cumulative counters
     const iris::Vec3 e0 = mCamera.position(), t0 = mCamera.target();
