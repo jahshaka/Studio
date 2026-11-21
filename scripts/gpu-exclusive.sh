@@ -90,6 +90,12 @@
 # passes its own caller, warm-app-cache.sh its own pid) loses the class: its next --short holds long (<lock>.q/.lost/). Never
 # killed. Under a holder (JAH_GPU_LOCK_HELD) --short means nothing: the call goes at once. With no short ticket in the queue the
 # grant order is exactly the first-come order above (tooling.gpu_lock_fifo's cases).
+# A CALL HOLDS ONE PLACE (CARD-QUEUE-1, the lead's add; measured 2026-11-21: 13 feature-end calls ended 75 IN THEIR WARM-UP, no row
+# reached - 5.42 h of wall, >= 4.27 h of it waiting - because each warm-up boot took a fresh ticket and its call, re-called,
+# queued at the BACK). JAH_GPU_PLACE=<key> (spec.sh test sets it for its warm-up's boots; util.CardLock's holds read it too): a
+# hold of the call adopts the call's reservation `R <expiry> <key>` - its NUMBER, the call's place in the line - and at its end
+# (or an exit 75) writes it back at that number, JAH_GPU_PLACE_S (600 s) ahead; while the call is away between its holds the
+# reservation is passed over (it never idles the card). A hold with a place is long (--short is dropped, said).
 export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
 here="$(cd "$(dirname "$0")" && pwd)"
 card_lock=/tmp/jah-gpu.lock
@@ -339,12 +345,17 @@ if [ -n "$short" ] && [ -e "$lostf" ]; then
     short=""
 fi
 ticket=""
-for f in "$q"/[0-9]*; do   # a reservation under this label: its place adopted (the re-call after an exit 75) - of its own class
+# A CALL's ONE PLACE (CARD-QUEUE-1, the lead's add; the header's ONE PLACE): JAH_GPU_PLACE names the call this hold is part of;
+# its reservation (R <expiry> <place>) is adopted whatever this hold's label, and the hold is long (the place is the call's)
+place=${JAH_GPU_PLACE:-}
+if [ -n "$place" ] && [ -n "$short" ]; then echo "gpu-lock: --short $short: this hold takes its call's place ($place) - long, at that place"; short=""; fi
+for f in "$q"/[0-9]*; do   # a reservation under this label (or this call's place): adopted (the re-call after an exit 75) - of its own class
     case "$f" in *.tmp.*) continue ;; esac
     [ -e "$f" ] || continue   # (an empty queue: the glob unmatched - its redirect would print before 2>/dev/null applies)
     case "${f##*/}" in *.s[0-9]*) [ -n "$short" ] || continue ;; *) [ -z "$short" ] || continue ;; esac
     read -r p1 p2 p3 < "$f" 2>/dev/null || continue
-    [ "$p1" = R ] && [ "${p2:-0}" -gt "$(date +%s)" ] && [ "$p3" = "$me" ] && { ticket=$f; break; }
+    [ "$p1" = R ] && [ "${p2:-0}" -gt "$(date +%s)" ] || continue
+    { [ "$p3" = "$me" ] || { [ -n "$place" ] && [ "$p3" = "$place" ]; }; } && { ticket=$f; break; }
 done
 if [ -z "$ticket" ]; then
     n=$(( $(cat "$q/counter" 2>/dev/null || echo 0) + 1 ))
@@ -356,7 +367,11 @@ echo "$$ $(starttime $$) $me" > "$ticket.tmp.$$" && mv -f "$ticket.tmp.$$" "$tic
 flock -u 8
 exec 8>&-
 mark_take "$@"
-trap 'rm -f "$ticket"; mark_release' EXIT   # (no TERM/INT trap: bash would defer it past a blocking flock; a killed waiter's ticket is a dead pid's)
+keep_place() {   # the call's place kept at its number for the call's next hold: R <expiry> <place> (passed over while the call is away)
+    local pt="$q/$(basename "$ticket" | cut -c1-12)"
+    echo "R $(( $(date +%s) + ${JAH_GPU_PLACE_S:-600} )) $place" > "$pt.tmp.$$" && mv -f "$pt.tmp.$$" "$pt"
+}
+trap 'rm -f "$ticket"; [ -z "$place" ] || keep_place; mark_release' EXIT   # (no TERM/INT trap: bash would defer it past a blocking flock; a killed waiter's ticket is a dead pid's)
 alive() {   # a ticket's pid and start time: the same live process (a recycled pid is another start time: dead)
     [ -n "$1" ] && [ -n "$2" ] && [ "$(starttime "$1")" = "$2" ]
 }
@@ -377,7 +392,11 @@ head_ticket() {   # THE HEAD: the lowest ticket whose pid is alive - unless it i
         case "$f" in *.tmp.*) continue ;; esac
         [ -e "$f" ] || continue
         read -r pid exp _ < "$f" 2>/dev/null || pid=""
-        if [ "$pid" = R ]; then [ "${exp:-0}" -gt "$(date +%s)" ] || rm -f "$f"; continue; fi
+        if [ "$pid" = R ]; then   # (passed over; removed once expired - a call's place at once when its caller died: ONE PLACE)
+            read -r _ _ k < "$f" 2> /dev/null
+            case "$k" in place:*-*) k=${k#place:}; alive "${k%-*}" "${k##*-}" || exp=0 ;; esac
+            [ "${exp:-0}" -gt "$(date +%s)" ] || rm -f "$f"; continue
+        fi
         alive "$pid" "$exp" || { rm -f "$f"; continue; }
         s=$(short_of "$f")
         if [ -z "$s" ]; then [ -n "$first" ] || first=$f; longs+=("$pid $exp"); continue; fi
@@ -412,7 +431,8 @@ unticketed() {   # a live holder whose line lacks the ticketed mark: named once 
 stayed() {   # the place kept for the re-call (the header): the ticket rewritten as a reservation, the trap's removal off
     trap - EXIT
     mark_release
-    echo "R $(( $(date +%s) + ${JAH_GPU_RESERVE_S:-120} )) $me" > "$ticket.tmp.$$" && mv -f "$ticket.tmp.$$" "$ticket"
+    if [ -n "$place" ]; then rm -f "$ticket"; keep_place
+    else echo "R $(( $(date +%s) + ${JAH_GPU_RESERVE_S:-120} )) $me" > "$ticket.tmp.$$" && mv -f "$ticket.tmp.$$" "$ticket"; fi
     echo "gpu-lock: the card stayed held ${wm} s (by: $(holder)) - nothing ran (the place kept ${JAH_GPU_RESERVE_S:-120} s for a re-call labelled '$me')"
     exit 75
 }
