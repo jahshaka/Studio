@@ -7,6 +7,9 @@
 // stepped, saved or closed (auto-save on, the default) mid-fall -> the moved pose is still on screen after a save,
 // and the reopened row holds the PRE-PLAY (pre-simulate) pose bit for bit. Red before the door's swap: the row held
 // where the fall had got to; red before the final read's B1 fix for the Player's run and for Simulate.
+// A SECTION THAT SAVES DURING THE RUN CLOSES WITH {discard: true} AFTER THE STOP (the final read 2's M3): a close
+// with auto-save on saves AGAIN, after Stop has put the edit pose back, so the reopened row was the close's write
+// and those sections passed with no swap at all. Discarded, the row is what the save DURING the run wrote.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -47,7 +50,7 @@ assert(played !== p.edited, "60 frames of play moved the body (" + played + ")")
 assert(project.save() === true, "a save DURING play succeeds");
 assert(pose(p.body) === played, "...and the play pose is still the one on screen (put back after the walk)");
 assert(editor.stop() === true, "stop");
-assert(project.close() === true, "close");
+assert(project.close({ discard: true }) === true, "close, discarding (the row is the mid-play save's)");
 reopenedAtEditPose(p, "editor save");
 
 // 2. The Player page's run (its own PlayBack on the same document), saved mid-fall, then closed mid-fall.
@@ -59,7 +62,7 @@ assert(pose(p.body) !== p.edited, "30 Player frames moved the body");
 assert(project.save() === true, "a save during the PLAYER's run succeeds");
 assert(player.stop() === true, "the Player stops");
 app.space("editor");
-assert(project.close() === true, "close");
+assert(project.close({ discard: true }) === true, "close, discarding (the row is the mid-run save's)");
 reopenedAtEditPose(p, "player save");
 
 p = bodyProject("player close");
@@ -80,7 +83,7 @@ assert(project.save() === true, "a save with both runs playing succeeds");
 player.stop();
 app.space("editor");
 editor.stop();
-assert(project.close() === true, "close");
+assert(project.close({ discard: true }) === true, "close, discarding (the row is the mid-run save's)");
 reopenedAtEditPose(p, "both runs");
 
 // 4. Simulate Physics (no run): a save and a close mid-fall write the pre-simulate pose.
@@ -92,7 +95,7 @@ assert(simulated !== p.edited, "30 simulated frames moved the body");
 assert(project.save() === true, "a save DURING Simulate succeeds");
 assert(pose(p.body) === simulated, "...and the simulated pose is still the one on screen");
 assert(editor.simulate(false) === true, "simulate off");
-assert(project.close() === true, "close");
+assert(project.close({ discard: true }) === true, "close, discarding (the row is the mid-simulate save's)");
 reopenedAtEditPose(p, "simulate save");
 
 p = bodyProject("simulate close");
@@ -111,7 +114,7 @@ editor.frame(10);
 assert(project.save() === true, "a save during that run succeeds");
 editor.stop();
 editor.simulate(false);
-assert(project.close() === true, "close");
+assert(project.close({ discard: true }) === true, "close, discarding (the row is the mid-run save's)");
 reopenedAtEditPose(p, "simulate then play");
 
 // 6. A NODE ADDED DURING PLAY (the final read's B2) is not part of the document a save writes: the save succeeds
