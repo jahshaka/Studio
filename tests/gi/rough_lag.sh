@@ -40,8 +40,9 @@
 #   gi.walk_rough.walk   `rough_lag.sh <jahlab> <walk dir> walk`: the walk session (a converged hold at the start, the
 #                        teleport, hold:1, the 60-frame walk, the door's 8 frames and its 60-frame trail, the dump) - its
 #                        dump pruned to frames 14 / 28 / 59 (FIXTURES_SETUP gi_walk_rough_dump);
-#   gi.walk_rough.k<k>   `rough_lag.sh <jahlab> <walk dir> <k> <own dir>`: the converged poses k and k + 1 (the law's step
-#                        term) and the twelve raw frames at k, then the law at k on the walk's frame k.
+#   gi.walk_rough.k<k>   `rough_lag.sh <jahlab> <walk dir> <k> <own dir>`: the converged poses k - h (the re-derived law's
+#                        slope), k and k + 1 (the old law's step term) and the twelve raw frames at k, then the law at k on
+#                        the walk's frame k.
 # 960x540; one jahlab session a row (.walk 350 frames, its rest 279; .k14 / .k28 / .k59 506 / 519 / 550, their rests
 # 208-291 - the whole row was 4,314). Each row prints its law's numbers as LAW lines (tests/support/lawline.h).
 # THE SAME LAW, SPLIT (one run each at 1e1c4d97e, no B5, 2026-10-29): the split 2.01 / 5.14 / 17.82 %, the whole row
@@ -220,9 +221,31 @@ if [ "$PART" = walk ]; then
     exit 0
 fi
 K=$PART
+# THE FLOOR h, READ from the walk's own stillness record (its settle_frames: one value over the walk, inverted - the header)
+TSV=$WALK/data/stillness/rough-walk.tsv
+HF=$(python3 -I -c "$LAW_PY
+$(cat <<'PY'
+import csv, sys
+try:
+    rows = [r for r in csv.DictReader(open(sys.argv[1]), delimiter='\t') if r['window'] == 'walk-move']
+except (OSError, KeyError) as e:
+    print('FAIL: the walk\'s record %s is unreadable (%s)' % (sys.argv[1], e)); sys.exit(1)
+settles = sorted({int(r['settle_frames']) for r in rows})
+h = history_of_settle(settles[0]) if len(settles) == 1 else None
+if h is None:
+    print('FAIL: the walk\'s record names no single history floor (settle_frames %s over %d walk frames)' % (settles, len(rows)))
+    sys.exit(1)
+print('%d %d' % (h, settles[0]))
+PY
+)" "$TSV")
+[ $? -eq 0 ] || { echo "$HF"; exit 1; }
+read -r HH SETTLE <<< "$HF"
+KB=$((K - HH))
+[ "$KB" -ge 0 ] || { echo "FAIL: walk frame $K is younger than the history's floor $HH: no converged pose $KB"; exit 1; }
+echo "gi.walk_rough.k$K: the history's floor h = $HH (the walk's settle $SETTLE); the slope's pose k - h = $KB"
 {
     printf 'row reflectionRoughnessCutoff 0\n'
-    for k in $K $((K + 1)); do
+    for k in $KB $K $((K + 1)); do
         python3 -I -c "
 s=(0.0,1.6,2.4); e=(0.0,1.6,0.4); k=$k/60.0
 print('camera %.6f,%.6f,%.6f,0,0,-3' % tuple(a+(b-a)*k for a,b in zip(s,e)))"
@@ -236,7 +259,8 @@ print('camera %.6f,%.6f,%.6f,0,0,-3' % tuple(a+(b-a)*k for a,b in zip(s,e)))"
     printf 'quit\n'
 } > "$WD/conv.lab"
 session conv
-python3 -I - "$WD/data" "$DUMP" "$K" "$WD" <<'PY'
+python3 -I -c "$LAW_PY
+$(cat <<'PY'
 import os, sys
 import numpy as np
 from PIL import Image
@@ -257,7 +281,8 @@ gw, gh = map(int, open(base + '.gsize').read().split())
 n = np.fromfile(base + '.ghc', dtype=np.uint8).reshape(gh, gw).astype(np.float64)
 if (gw, gh) != (W, H):   # (the history's grid onto the picture's)
     n = n[(np.arange(H) * gh // H)][:, (np.arange(W) * gw // W)]
-c0, c1 = png('conv%d' % k), png('conv%d' % (k + 1))
+hh, kb = int(sys.argv[5]), int(sys.argv[6])
+c0, c1, ckb = png('conv%d' % k), png('conv%d' % (k + 1)), png('conv%d' % kb)
 raw = np.stack([png('raw%d_%d' % (k, j)) for j in range(12)])
 sigma = raw.std(axis=0, ddof=1).max(axis=2)
 N = np.maximum(n, 1.0)
@@ -276,6 +301,16 @@ print('walk frame %d: rough %d px, N median %.0f, sigma median %.2f codes, SE_wa
 print('LAW k%d.breaking %.4f %% <= 1' % (k, 100 * share))
 print('LAW k%d.lag_mean %.4f codes' % (k, lhs[rough].mean()))
 print('LAW k%d.lag_p99 %.4f codes' % (k, np.percentile(lhs[rough], 99)))
+# THE REFUTATION (stage 2C's first card read, the spec's ruling: if the two shares agree within 0.2 %, C is refuted): the
+# re-derived law's share BESIDE the old one, on the same pixels, the same noise term - only the lag term differs
+grant = lag_allowance({k: c0, kb: ckb}, k, n, hh)
+slope = np.abs(c0 - ckb).max(axis=2)
+breaks_new = rough & (lhs > grant + 3.0 * se + 1.0)
+share_new = breaks_new.sum() / rough.sum()
+print('RESIDUE k%d THE RE-DERIVED LAW (h %d; the slope from pose %d): breaking %.4f %% beside the old law\'s %.4f %% '
+      '(%+.4f); breaking under both %d px, the old alone %d, the new alone %d' % (k, hh, kb, 100 * share_new, 100 * share,
+      100 * (share_new - share), int((breaks & breaks_new).sum()), int((breaks & ~breaks_new).sum()),
+      int((breaks_new & ~breaks).sum())))
 # THE RESIDUE's DUMP (ROUGH-LOBE-HISTORY-1 stage 2.0; the reader's candidates, spikes/rough-lobe-history-1/RESIDUE.md):
 # WHERE the breaking pixels sit, printed and kept - never a law, never a bar (no LAW line). Kept in the k's own work dir
 # (rough_lag.sh removes it only at the row's next run): breaks.png (red a breaking EDGE pixel, white a breaking INTERIOR
@@ -284,7 +319,9 @@ print('LAW k%d.lag_p99 %.4f codes' % (k, np.percentile(lhs[rough], 99)))
 #     4-neighbours of the walk dump's own view distance for this frame (.dist, the history's grid, mapped as .ghc is; 0 = no
 #     surface, itself a break) - or of a CLASS-MAP BOUNDARY (.cls: a 4-neighbour of another class). INTERIOR: the rest.
 #   STEP 0 (candidate C, the law's own allowance collapsing): the law's step |conv(k+1) - conv(k)| reads 0 codes, so the
-#     allowance is 3 SE + 1 alone.
+#     allowance is 3 SE + 1 alone. SLOPE 0: the re-derived law's |conv(k) - conv(k - h)| reads 0 codes.
+#   Each reading is printed under the OLD law and under the RE-DERIVED one (stage 2C's refutation), and the inputs kept as
+#   law.npz beside the pictures (walk, the three converged poses, sigma, the count, the classes, the edge mask, h).
 #   LOW N (candidate D, young pixels): the history count N under the gather's young frames (kYoungFrames 12,
 #     OgreScreenProbeGather.cpp - the young read's reach narrows to the bilinear at 12 frames); with the bottom band's share
 #     (the breakers in the picture's lowest quarter of rows, against the rough class's own share there).
@@ -314,24 +351,33 @@ cb = np.zeros((H, W), dtype=bool)
 cb[:, :-1] |= cls[:, :-1] != cls[:, 1:]; cb[:, 1:] |= cls[:, :-1] != cls[:, 1:]
 cb[:-1, :] |= cls[:-1, :] != cls[1:, :]; cb[1:, :] |= cls[:-1, :] != cls[1:, :]
 edge = dilate(edge | cb, 2)
-nb = int(breaks.sum())
-def sh(m):
-    return 100.0 * (m & breaks).sum() / max(nb, 1)
 band = np.zeros((H, W), dtype=bool); band[3 * H // 4:, :] = True
 signed = (walk - c0)
 bright = np.take_along_axis(signed, np.abs(signed).argmax(axis=2)[..., None], axis=2)[..., 0] > 0
-print('RESIDUE k%d: %d breaking px of %d rough (%s); EDGE %.1f %% / INTERIOR %.1f %% (the rough class: %.1f %% edge); '
-      'STEP 0 %.1f %% (the rough class: %.1f %%); LOW N (< 12) %.1f %% (the rough class: %.1f %%); bottom quarter %.1f %% '
-      '(the rough class: %.1f %%); walk BRIGHTER %.1f %%' % (
-      k, nb, rough.sum(), 'the dump has .dist' if dist is not None else 'NO .dist: class seams only', sh(edge),
-      100.0 - sh(edge), 100.0 * (edge & rough).sum() / rough.sum(), sh(step == 0),
-      100.0 * ((step == 0) & rough).sum() / rough.sum(), sh(N < 12), 100.0 * ((N < 12) & rough).sum() / rough.sum(),
-      sh(band), 100.0 * (band & rough).sum() / rough.sum(), sh(bright)))
-if nb:
-    print('RESIDUE k%d breakers: N p10/p50/p90 %.0f/%.0f/%.0f; |walk - conv| p50/p90 %.0f/%.0f codes; step p50/p90 %.0f/%.0f; '
-          'EDGE and STEP 0 %.1f %%; INTERIOR and STEP 0 %.1f %%' % (
-          k, *np.percentile(N[breaks], [10, 50, 90]), *np.percentile(lhs[breaks], [50, 90]),
-          *np.percentile(step[breaks], [50, 90]), sh(edge & (step == 0)), sh(~edge & (step == 0))))
+def residue(tag, brk):
+    nb = int(brk.sum())
+    def sh(m):
+        return 100.0 * (m & brk).sum() / max(nb, 1)
+    print('RESIDUE k%d%s: %d breaking px of %d rough (%s); EDGE %.1f %% / INTERIOR %.1f %% (the rough class: %.1f %% edge); '
+          'STEP 0 %.1f %% (the rough class: %.1f %%); SLOPE 0 %.1f %% (the rough class: %.1f %%); LOW N (< 12) %.1f %% (the '
+          'rough class: %.1f %%); bottom quarter %.1f %% (the rough class: %.1f %%); walk BRIGHTER %.1f %%' % (
+          k, tag, nb, rough.sum(), 'the dump has .dist' if dist is not None else 'NO .dist: class seams only', sh(edge),
+          100.0 - sh(edge), 100.0 * (edge & rough).sum() / rough.sum(), sh(step == 0),
+          100.0 * ((step == 0) & rough).sum() / rough.sum(), sh(slope == 0), 100.0 * ((slope == 0) & rough).sum() / rough.sum(),
+          sh(N < 12), 100.0 * ((N < 12) & rough).sum() / rough.sum(), sh(band), 100.0 * (band & rough).sum() / rough.sum(),
+          sh(bright)))
+    if nb:
+        print('RESIDUE k%d%s breakers: N p10/p50/p90 %.0f/%.0f/%.0f; |walk - conv| p50/p90 %.0f/%.0f codes; step p50/p90 '
+              '%.0f/%.0f; slope (|conv(k) - conv(k - h)|) p50/p90 %.0f/%.0f; EDGE and STEP 0 %.1f %%; INTERIOR and STEP 0 %.1f %%'
+              % (k, tag, *np.percentile(N[brk], [10, 50, 90]), *np.percentile(lhs[brk], [50, 90]),
+                 *np.percentile(step[brk], [50, 90]), *np.percentile(slope[brk], [50, 90]), sh(edge & (step == 0)),
+                 sh(~edge & (step == 0))))
+residue(' (the old law)', breaks)
+residue(' (the re-derived law)', breaks_new)
+# (the refutation's inputs kept beside the pictures, so a reading needs no second card run)
+np.savez_compressed(os.path.join(wd, 'law.npz'), walk=walk.astype(np.uint8), c0=c0.astype(np.uint8), c1=c1.astype(np.uint8),
+                    ckb=ckb.astype(np.uint8), sigma=sigma.astype(np.float32), n=n.astype(np.uint8), cls=cls, edge=edge, h=hh,
+                    kb=kb)
 img = np.zeros((H, W, 3), dtype=np.uint8)
 img[rough] = 96
 img[breaks & ~edge] = 255
@@ -345,6 +391,7 @@ if share > 0.01:
 for f in fails: print('FAIL: ' + f)
 sys.exit(1 if fails else 0)
 PY
+)" "$WD/data" "$DUMP" "$K" "$WD" "$HH" "$KB"
 rc=$?
 rm -rf "$WD/data/shots"
 rm -f "$DUMP/rough-walk-t$(printf '%03d' "$K")."*   # (this k's frame read: the walk row writes it afresh)
