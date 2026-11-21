@@ -33,6 +33,7 @@
 set(SOURCE_DIR ${CMAKE_SOURCE_DIR})
 set(_samples "Matcaps" "Mirror Room" "Particles" "Physics" "Showroom" "Showroom 2" "Skeletal Animation" "Tornado" "World Background")
 
+set(CLEANSTART_PART first-run)   # (cleanstart.js.in's PART: every sample's first run; the Mirror Room's selection row below)
 foreach(SAMPLE IN LISTS _samples)
     string(REPLACE " " "_" _slug "${SAMPLE}")
     configure_file(scripts/cleanstart.js.in
@@ -169,11 +170,34 @@ set_tests_properties(samples.mirror_room_boots.boot2 PROPERTIES LABELS "scriptin
 # the boot's startup-gate frames included, counted on this tree's Debug build on 2026-10-12 (the count and its
 # method: spikes/testing-speed-b2/frames_pass1.tsv). A pool's is the sum over its arms. A headless row renders
 # the one empty frame a headless engine walks.
+# samples.mirror_room.selection_reflection (V2 plan 0.2, the lead's ruling 2026-11-21) - SELECTION NEVER LEAKS INTO A
+# REFLECTION, split by proof out of samples.cleanstart.Mirror_Room (over the 60-s cap on this card: its time was settled
+# shots, this probe's four ~20.6 s of them): the Mirror Room imported on its own virgin home, opened, the panel's interior
+# probed unselected and selected (cleanstart.js.in selectionStaysOutOfTheMirror: 40/255 a channel - the flood moved green
+# by ~133), the engine's errors read. The same script, PART "selection"; every law of the first run stays on cleanstart.
+set(SAMPLE "Mirror Room")
+set(CLEANSTART_PART selection)
+configure_file(scripts/cleanstart.js.in ${CMAKE_CURRENT_BINARY_DIR}/cleanstart_Mirror_Room_selection.js @ONLY)
+set(_home ${CMAKE_CURRENT_BINARY_DIR}/home-Mirror_Room_selection)
+file(MAKE_DIRECTORY ${_home}/run)
+jah_gpu_row(samples.mirror_room.selection_reflection CLASS app TIER document FRAMES 352
+         COMMAND sh ${JAH_FRESH_HOME} --warm ${_home} -- $<TARGET_FILE:${CMAKE_PROJECT_NAME}>
+                 --script ${CMAKE_CURRENT_BINARY_DIR}/cleanstart_Mirror_Room_selection.js
+         WORKING_DIRECTORY ${_home}/run
+         DATA "samples/Mirror Room")
+set_tests_properties(samples.mirror_room.selection_reflection PROPERTIES
+    ENVIRONMENT "HOME=${_home};JAHSHAKA_DATA_ROOT=${_home}/.local/share/Jahshaka"
+    LABELS "scripting"
+    TIMEOUT 60)
+
 if(TEST samples.cleanstart.Matcaps)
     set_property(TEST samples.cleanstart.Matcaps PROPERTY JAHSHAKA_TEST_FRAMES 1470)
 endif()
 if(TEST samples.cleanstart.Mirror_Room)
-    set_property(TEST samples.cleanstart.Mirror_Room PROPERTY JAHSHAKA_TEST_FRAMES 1547)
+    # (measured 2026-11-21 after the split: gdb's hit count on RenderThread::tickWith, every engine frame of the process -
+    # spikes/te-tools/mirror-room/count_frames.sh; the selection probe and the BAKED reopen left it: 1547 before, counted
+    # by the 10-12 method)
+    set_property(TEST samples.cleanstart.Mirror_Room PROPERTY JAHSHAKA_TEST_FRAMES 580)
 endif()
 if(TEST samples.cleanstart.Particles)
     set_property(TEST samples.cleanstart.Particles PROPERTY JAHSHAKA_TEST_FRAMES 1808)

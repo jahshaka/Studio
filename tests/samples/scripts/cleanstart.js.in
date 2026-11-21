@@ -42,6 +42,11 @@
 // the gold dragon must BE gold.
 
 var SAMPLE = "@SAMPLE@";
+// THE ROW's PART (V2 plan 0.2, the lead's ruling 2026-11-21: samples.cleanstart.Mirror_Room sat over the 60-s cap on this card,
+// its time in settled shots - the selection probe's four alone ~20.6 s): "first-run" - the owner's post-wipe first run, every
+// sample; "selection" - the Mirror Room's selection-in-the-mirror law on its own row and its own virgin home
+// (samples.mirror_room.selection_reflection): import, open, the probe, the engine's errors. ONE ROW PER PROOF; every law kept.
+var PART = "@CLEANSTART_PART@";
 var ZIP = "@SOURCE_DIR@/scenes/" + SAMPLE + ".zip";
 
 function assert(cond, msg) {
@@ -897,178 +902,197 @@ assert(imported.objects >= wantObjects,
 
 // 2. OPEN and check the content is the content.
 assert(project.open(imported.guid) === true, "project.open");
-
-// THE PHOTON TIER THE SAMPLE WAS AUTHORED AT (push #17 gate finding, 2026-09-13):
-// nothing in this suite asserted it, so the reader change that deleted the P2
-// migration had no safety net here — the gate had to check the eight samples by
-// hand. A sample must open at its own tier with NO deviations: `custom` true (or
-// a non-empty deviation list) means a pin or a stale override is dragging the
-// dial off the table, which is exactly what that migration used to paper over.
-var ray = world.photon();
-assert(ray.tier === want.tier,
-       SAMPLE + " opens at its authored tier (" + ray.tier + " === " + want.tier + ")");
-assert(ray.custom === false && (!ray.deviations || ray.deviations.length === 0),
-       "  ...with no deviations (custom " + ray.custom + ", deviations " +
-       JSON.stringify(ray.deviations || []) + ")");
-// THE GRADE THE SAMPLE SHIPS WITH (the exposure lane, 2026-09-13; re-spelled by
-// EXPOSURE-1, 2026-09-17). Five of the eight archives — Matcaps, Particles,
-// Physics, Skeletal Animation and World Background — once carried "exposure": 0
-// in their saved scene while the document class default was +0.6, so half the
-// shipped samples opened about half as bright as the same scene made today
-// (Physics mean luma 18.5 versus 38.1; spikes/render-review-2026-09-13/
-// darkness/INDEX.md). Nothing asserted it, so nothing caught it for as long as
-// it was true.
-//
-// IT IS ALSO THE READER'S ABSENT-KEY CONTRACT, ON A REAL FILE. Every shipped
-// archive predates the exposure keys, so it carries NONE of them, and these
-// eight runs are the only place "an absent key reads the CONSTRUCTOR" is
-// exercised against a document on disk rather than against a literal in a test
-// (nothing links SceneReader; tests/mirror records why). The constructor is
-// MANUAL at zero stops — zero being the grade the scene's own lights derive —
-// and a sample with nothing to say about exposure must come back as exactly
-// that. SINCE IMAGE-1 every sample carries its own exposure, KEYED on its floor
-// card (scenes/tools/reauthor_samples.js; the table's exposureEv), so the
-// absent-key half of this claim is the template's, not these archives'.
-var DOC_EXPOSURE_EV = 0.0;    // iris::Scene's constructor, in STOPS
-var wantExposure = want.exposureEv === undefined ? DOC_EXPOSURE_EV : want.exposureEv;
-var shipFx = world.postFx();
-assert(Math.abs(shipFx.exposureEv - wantExposure) < 1e-4,
-       SAMPLE + " ships at exposure " + wantExposure + " stops (" + shipFx.exposureEv + ")");
-assert(world.settings().exposureMode.valueId === "manual",
-       "  ...and at the constructor's MODE, manual — an absent key is the ctor");
-assert(shipFx.exposureMin === -3.5 && shipFx.exposureMax === 3.5,
-       "  ...and the constructor's automatic window (" + shipFx.exposureMin + ".." +
-       shipFx.exposureMax + ")");
-
-var s = structure();
-console.log("structure: " + J(s.byType) + " total " + s.count);
-assert(s.count >= want.nodes, "node count >= " + want.nodes + " (" + s.count + ")");
-for (var i = 0; i < want.names.length; i++)
-    assert(s.names[want.names[i]] === true, "the '" + want.names[i] + "' node is in the scene");
-for (var t in want.types)
-    assert((s.byType[t] || 0) >= want.types[t],
-           "at least " + want.types[t] + " " + t + " nodes (" + (s.byType[t] || 0) + ")");
-if (want.lightsExactly !== undefined)
-    assert((s.byType.light || 0) === want.lightsExactly,
-           "exactly " + want.lightsExactly + " lights (" + (s.byType.light || 0) + ")");
-(want.absent || []).forEach(function (n) {
-    assert(s.names[n] !== true, "no '" + n + "' node (the new-scene template's, stripped by the generator)");
-});
-
-// 2b. THE SCENE-SCALE CONVENTION. Document verbs only, so it costs nothing on
-//     top of the open that just happened.
-checkScale();
-
-// 3. MATERIALS resolve to files, never to bare guids or nothing.
-var GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
-var textured = 0;
-var nodes = scene.nodes();
-for (i = 0; i < nodes.length; i++) {
-    if (nodes[i].type !== "mesh") continue;
-    var m = material.get(nodes[i].id);
-    var maps = ["diffuseTexture", "normalTexture", "baseColorMap", "normalMap", "roughnessMap"];
-    for (var k = 0; k < maps.length; k++) {
-        var v = m[maps[k]];
-        if (typeof v !== "string" || v.length === 0) continue;
-        assert(!GUID_RE.test(v), nodes[i].name + "." + maps[k] + " is a path, not a raw guid (" + v + ")");
-        textured++;
-    }
+if (PART === "selection") {
+    selectionStaysOutOfTheMirror();
+    errorsClean("after the selection probe");
+    console.log("samples.mirror_room.selection_reflection[" + SAMPLE + "]: ALL OK");
 }
-console.log("resolved texture references: " + textured);
 
-// 4. RENDER, then read the pump.
-renderSanity("open");
-// 4b. MATERIALS AND EXACT COLOURS, before the pump is drained: an error raised
-//     while photographing the gold dragon is an error this sample caused.
-if (FIDELITY[SAMPLE]) FIDELITY[SAMPLE]();
-errorsClean("after open");
-if (SAMPLE === "Mirror Room") selectionStaysOutOfTheMirror();
-var s0 = snapshot();
+// THE FIRST RUN's REST (every sample's PART "first-run"): the content, the render, the round trip, the bake, the floor. A BLOCK,
+// never a function: its `var`s stay the script's own globals, as the functions above read them (GUID_RE, textured - a
+// function here made them local and assertTexturePath's samples died "ReferenceError: GUID_RE is not defined", 2026-11-21)
+if (PART === "first-run") {
 
-// 5. SAVE / CLOSE / REOPEN — the field diff.
-assert(project.save() === true, "project.save");
-assert(project.close() === true, "project.close");
-assert(project.open(imported.guid) === true, "project.open (REOPEN)");
-var d = diffs(s0, snapshot());
-assert(d.length === 0, "the document survived save/close/reopen unchanged: " + J(d));
-renderSanity("reopen");
-// 5b. THE HALF ONLY A ROUND TRIP CAN ASSERT: the writer once recovered a
-//     texture's asset guid by matching its FILE NAME, and since the CAS a file
-//     name is a sha256 — so one save wrote "" for every emitter texture and the
-//     next open rendered the fire as white squares. Nothing that only imported
-//     ever caught it.
-if (REOPEN_FIDELITY[SAMPLE]) REOPEN_FIDELITY[SAMPLE]();
-errorsClean("after reopen");
+    // THE PHOTON TIER THE SAMPLE WAS AUTHORED AT (push #17 gate finding, 2026-09-13):
+    // nothing in this suite asserted it, so the reader change that deleted the P2
+    // migration had no safety net here — the gate had to check the eight samples by
+    // hand. A sample must open at its own tier with NO deviations: `custom` true (or
+    // a non-empty deviation list) means a pin or a stale override is dragging the
+    // dial off the table, which is exactly what that migration used to paper over.
+    var ray = world.photon();
+    assert(ray.tier === want.tier,
+           SAMPLE + " opens at its authored tier (" + ray.tier + " === " + want.tier + ")");
+    assert(ray.custom === false && (!ray.deviations || ray.deviations.length === 0),
+           "  ...with no deviations (custom " + ray.custom + ", deviations " +
+           JSON.stringify(ray.deviations || []) + ")");
+    // THE GRADE THE SAMPLE SHIPS WITH (the exposure lane, 2026-09-13; re-spelled by
+    // EXPOSURE-1, 2026-09-17). Five of the eight archives — Matcaps, Particles,
+    // Physics, Skeletal Animation and World Background — once carried "exposure": 0
+    // in their saved scene while the document class default was +0.6, so half the
+    // shipped samples opened about half as bright as the same scene made today
+    // (Physics mean luma 18.5 versus 38.1; spikes/render-review-2026-09-13/
+    // darkness/INDEX.md). Nothing asserted it, so nothing caught it for as long as
+    // it was true.
+    //
+    // IT IS ALSO THE READER'S ABSENT-KEY CONTRACT, ON A REAL FILE. Every shipped
+    // archive predates the exposure keys, so it carries NONE of them, and these
+    // eight runs are the only place "an absent key reads the CONSTRUCTOR" is
+    // exercised against a document on disk rather than against a literal in a test
+    // (nothing links SceneReader; tests/mirror records why). The constructor is
+    // MANUAL at zero stops — zero being the grade the scene's own lights derive —
+    // and a sample with nothing to say about exposure must come back as exactly
+    // that. SINCE IMAGE-1 every sample carries its own exposure, KEYED on its floor
+    // card (scenes/tools/reauthor_samples.js; the table's exposureEv), so the
+    // absent-key half of this claim is the template's, not these archives'.
+    var DOC_EXPOSURE_EV = 0.0;    // iris::Scene's constructor, in STOPS
+    var wantExposure = want.exposureEv === undefined ? DOC_EXPOSURE_EV : want.exposureEv;
+    var shipFx = world.postFx();
+    assert(Math.abs(shipFx.exposureEv - wantExposure) < 1e-4,
+           SAMPLE + " ships at exposure " + wantExposure + " stops (" + shipFx.exposureEv + ")");
+    assert(world.settings().exposureMode.valueId === "manual",
+           "  ...and at the constructor's MODE, manual — an absent key is the ctor");
+    assert(shipFx.exposureMin === -3.5 && shipFx.exposureMax === 3.5,
+           "  ...and the constructor's automatic window (" + shipFx.exposureMin + ".." +
+           shipFx.exposureMax + ")");
 
-// 6. BAKE the sample's models, then reopen: an open that LOADS geometry must
-//    produce the same document as one that parses it.
-var dry = assets.bakeAll({ dryRun: true });
-console.log("bakeAll dry run: " + J(dry));
-var baked = assets.bakeAll({ dryRun: false });
-console.log("bakeAll: " + J(baked));
-assert(baked.failed === 0, "every bake succeeded (" + J(baked.errors) + ")");
-assert(baked.baked === dry.needed, "the dry run counted what the real run baked (" +
-       dry.needed + " vs " + baked.baked + ")");
-var s1 = snapshot();
-assert(project.close() === true, "project.close (after bake)");
-assert(project.open(imported.guid) === true, "project.open (BAKED)");
-d = diffs(s1, snapshot());
-assert(d.length === 0, "the baked open produced the same document: " + J(d));
-renderSanity("baked");
-errorsClean("after baked reopen");
-
-// 7. THE DEFAULT FLOOR (owner, 2026-09-12: "the demo scenes don't have the
-//    checker default floor, just a grey nothing — ALL the demo scenes should
-//    have that default floor"). Every demo stands on ONE default floor — the
-//    document flag, not the name (services/defaultfloormaterial.h) — which wears the
-//    checker (World Background's floor is its own metal deck, by design) and
-//    RENDERS a texture: a top-down look at the floor, with everything but the
-//    floor and the lights hidden (so no object or shadow is in the shot), must
-//    show the two tones' edges across a probe grid. A flat untextured floor
-//    under the same lights changes by a level or two between neighbouring
-//    probes; the checker's cells (2 m checks: the template's textureScale 25
-//    on the floor's 100 m face) change by a step.
-//    Last on purpose: it hides nodes, and nothing after it looks.
-function checkDefaultFloor() {
-    var floors = scene.nodes().filter(function (r) {
-        return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+    var s = structure();
+    console.log("structure: " + J(s.byType) + " total " + s.count);
+    assert(s.count >= want.nodes, "node count >= " + want.nodes + " (" + s.count + ")");
+    for (var i = 0; i < want.names.length; i++)
+        assert(s.names[want.names[i]] === true, "the '" + want.names[i] + "' node is in the scene");
+    for (var t in want.types)
+        assert((s.byType[t] || 0) >= want.types[t],
+               "at least " + want.types[t] + " " + t + " nodes (" + (s.byType[t] || 0) + ")");
+    if (want.lightsExactly !== undefined)
+        assert((s.byType.light || 0) === want.lightsExactly,
+               "exactly " + want.lightsExactly + " lights (" + (s.byType.light || 0) + ")");
+    (want.absent || []).forEach(function (n) {
+        assert(s.names[n] !== true, "no '" + n + "' node (the new-scene template's, stripped by the generator)");
     });
-    assert(floors.length === 1, "the demo stands on ONE default floor (" + floors.length + ")");
-    var floor = floors[0].id;
-    var fm = material.get(floor);
-    assert(("" + fm.baseColorMap).length > 0, "the default floor wears a texture");
-    // Showroom 2's checker grows with its room (its SCALE block says why).
-    var checker = (SCALE[SAMPLE] && SCALE[SAMPLE].floorTextureScale) || 25;
-    if (SAMPLE !== "World Background")
-        assert(Math.abs(fm.textureScale - checker) < 1e-4,
-               "... the checker at textureScale " + checker + " (" + fm.textureScale + ")");
 
-    var root = scene.root();
-    scene.nodes({ depth: 1 }).forEach(function (r) {
-        if (r.id === root || r.id === floor || r.type === "light") return;
-        node.setProperty(r.id, "visible", false);
-    });
-    editor.select(null);
-    editor.gameView(true);   // no editor grid lines drawn over the floor
-    editor.setCamera({ position: { x: 0, y: 4, z: 0 }, lookAt: { x: 0, y: 0, z: 0 }, fov: 60 });
-    editor.frame(30, 1.0 / 60.0);
-    var COLS = 16, ROWS = 9, pts = [];
-    for (var y = 0; y < ROWS; y++) for (var x = 0; x < COLS; x++)
-        pts.push({ x: 0.05 + x * (0.9 / (COLS - 1)), y: 0.05 + y * (0.9 / (ROWS - 1)) });
-    var shot = editor.screenshot("cleanstart_floor_" + SAMPLE.replace(/ /g, "_") + ".png", 640, 360, pts);
-    var lum = shot.probes.map(function (p) { return (p.r + p.g + p.b) / 3; });
-    var lo = 255, hi = 0, edges = 0;
-    for (var i = 0; i < lum.length; i++) { lo = Math.min(lo, lum[i]); hi = Math.max(hi, lum[i]); }
-    for (y = 0; y < ROWS; y++) for (x = 0; x < COLS; x++) {
-        var here = lum[y * COLS + x];
-        if (x + 1 < COLS && Math.abs(lum[y * COLS + x + 1] - here) >= 6) edges++;
-        if (y + 1 < ROWS && Math.abs(lum[(y + 1) * COLS + x] - here) >= 6) edges++;
+    // 2b. THE SCENE-SCALE CONVENTION. Document verbs only, so it costs nothing on
+    //     top of the open that just happened.
+    checkScale();
+
+    // 3. MATERIALS resolve to files, never to bare guids or nothing.
+    var GUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+    var textured = 0;
+    var nodes = scene.nodes();
+    for (i = 0; i < nodes.length; i++) {
+        if (nodes[i].type !== "mesh") continue;
+        var m = material.get(nodes[i].id);
+        var maps = ["diffuseTexture", "normalTexture", "baseColorMap", "normalMap", "roughnessMap"];
+        for (var k = 0; k < maps.length; k++) {
+            var v = m[maps[k]];
+            if (typeof v !== "string" || v.length === 0) continue;
+            assert(!GUID_RE.test(v), nodes[i].name + "." + maps[k] + " is a path, not a raw guid (" + v + ")");
+            textured++;
+        }
     }
-    console.log("floor probe: luminance " + Math.round(lo) + ".." + Math.round(hi) + ", " + edges + " tone edges");
-    assert(hi - lo >= 8 && edges >= 10,
-           "the default floor RENDERS its texture — two tones (range " + Math.round(hi - lo) +
-           ", " + edges + " tone edges across a " + COLS + "x" + ROWS + " grid)");
-}
-checkDefaultFloor();
+    console.log("resolved texture references: " + textured);
 
-console.log("samples.cleanstart[" + SAMPLE + "]: ALL OK");
+    // 4. RENDER, then read the pump.
+    renderSanity("open");
+    // 4b. MATERIALS AND EXACT COLOURS, before the pump is drained: an error raised
+    //     while photographing the gold dragon is an error this sample caused.
+    if (FIDELITY[SAMPLE]) FIDELITY[SAMPLE]();
+    errorsClean("after open");
+    // (the Mirror Room's selection-in-the-mirror probe is its own row: PART "selection", above)
+    var s0 = snapshot();
+
+    // 5. SAVE / CLOSE / REOPEN — the field diff.
+    assert(project.save() === true, "project.save");
+    assert(project.close() === true, "project.close");
+    assert(project.open(imported.guid) === true, "project.open (REOPEN)");
+    var d = diffs(s0, snapshot());
+    assert(d.length === 0, "the document survived save/close/reopen unchanged: " + J(d));
+    renderSanity("reopen");
+    // 5b. THE HALF ONLY A ROUND TRIP CAN ASSERT: the writer once recovered a
+    //     texture's asset guid by matching its FILE NAME, and since the CAS a file
+    //     name is a sha256 — so one save wrote "" for every emitter texture and the
+    //     next open rendered the fire as white squares. Nothing that only imported
+    //     ever caught it.
+    if (REOPEN_FIDELITY[SAMPLE]) REOPEN_FIDELITY[SAMPLE]();
+    errorsClean("after reopen");
+
+    // 6. BAKE the sample's models, then reopen: an open that LOADS geometry must
+    //    produce the same document as one that parses it.
+    var dry = assets.bakeAll({ dryRun: true });
+    console.log("bakeAll dry run: " + J(dry));
+    var baked = assets.bakeAll({ dryRun: false });
+    console.log("bakeAll: " + J(baked));
+    assert(baked.failed === 0, "every bake succeeded (" + J(baked.errors) + ")");
+    assert(baked.baked === dry.needed, "the dry run counted what the real run baked (" +
+           dry.needed + " vs " + baked.baked + ")");
+    // THE BAKED REOPEN ONLY WHEN SOMETHING BAKED (the lead's ruling, 2026-11-21): with nothing to bake (the script-built samples'
+    // primitives: needed 0) the open LOADS nothing it did not PARSE, so a third open re-proves the REOPEN above - one row per
+    // proof. The path taken is asserted by name, so a sample that bakes can never skip it silently.
+    if (dry.needed > 0) {
+        assert(baked.baked > 0, "the bake path: " + baked.baked + " model(s) baked - the BAKED reopen runs");
+        var s1 = snapshot();
+        assert(project.close() === true, "project.close (after bake)");
+        assert(project.open(imported.guid) === true, "project.open (BAKED)");
+        d = diffs(s1, snapshot());
+        assert(d.length === 0, "the baked open produced the same document: " + J(d));
+        renderSanity("baked");
+        errorsClean("after baked reopen");
+    } else {
+        assert(baked.baked === 0, "the bake path: nothing to bake (needed 0) - the BAKED reopen would re-prove the REOPEN: not run");
+    }
+
+    // 7. THE DEFAULT FLOOR (owner, 2026-09-12: "the demo scenes don't have the
+    //    checker default floor, just a grey nothing — ALL the demo scenes should
+    //    have that default floor"). Every demo stands on ONE default floor — the
+    //    document flag, not the name (services/defaultfloormaterial.h) — which wears the
+    //    checker (World Background's floor is its own metal deck, by design) and
+    //    RENDERS a texture: a top-down look at the floor, with everything but the
+    //    floor and the lights hidden (so no object or shadow is in the shot), must
+    //    show the two tones' edges across a probe grid. A flat untextured floor
+    //    under the same lights changes by a level or two between neighbouring
+    //    probes; the checker's cells (2 m checks: the template's textureScale 25
+    //    on the floor's 100 m face) change by a step.
+    //    Last on purpose: it hides nodes, and nothing after it looks.
+    function checkDefaultFloor() {
+        var floors = scene.nodes().filter(function (r) {
+            return r.type === "mesh" && node.property(r.id, "defaultFloor") === true;
+        });
+        assert(floors.length === 1, "the demo stands on ONE default floor (" + floors.length + ")");
+        var floor = floors[0].id;
+        var fm = material.get(floor);
+        assert(("" + fm.baseColorMap).length > 0, "the default floor wears a texture");
+        // Showroom 2's checker grows with its room (its SCALE block says why).
+        var checker = (SCALE[SAMPLE] && SCALE[SAMPLE].floorTextureScale) || 25;
+        if (SAMPLE !== "World Background")
+            assert(Math.abs(fm.textureScale - checker) < 1e-4,
+                   "... the checker at textureScale " + checker + " (" + fm.textureScale + ")");
+
+        var root = scene.root();
+        scene.nodes({ depth: 1 }).forEach(function (r) {
+            if (r.id === root || r.id === floor || r.type === "light") return;
+            node.setProperty(r.id, "visible", false);
+        });
+        editor.select(null);
+        editor.gameView(true);   // no editor grid lines drawn over the floor
+        editor.setCamera({ position: { x: 0, y: 4, z: 0 }, lookAt: { x: 0, y: 0, z: 0 }, fov: 60 });
+        editor.frame(30, 1.0 / 60.0);
+        var COLS = 16, ROWS = 9, pts = [];
+        for (var y = 0; y < ROWS; y++) for (var x = 0; x < COLS; x++)
+            pts.push({ x: 0.05 + x * (0.9 / (COLS - 1)), y: 0.05 + y * (0.9 / (ROWS - 1)) });
+        var shot = editor.screenshot("cleanstart_floor_" + SAMPLE.replace(/ /g, "_") + ".png", 640, 360, pts);
+        var lum = shot.probes.map(function (p) { return (p.r + p.g + p.b) / 3; });
+        var lo = 255, hi = 0, edges = 0;
+        for (var i = 0; i < lum.length; i++) { lo = Math.min(lo, lum[i]); hi = Math.max(hi, lum[i]); }
+        for (y = 0; y < ROWS; y++) for (x = 0; x < COLS; x++) {
+            var here = lum[y * COLS + x];
+            if (x + 1 < COLS && Math.abs(lum[y * COLS + x + 1] - here) >= 6) edges++;
+            if (y + 1 < ROWS && Math.abs(lum[(y + 1) * COLS + x] - here) >= 6) edges++;
+        }
+        console.log("floor probe: luminance " + Math.round(lo) + ".." + Math.round(hi) + ", " + edges + " tone edges");
+        assert(hi - lo >= 8 && edges >= 10,
+               "the default floor RENDERS its texture — two tones (range " + Math.round(hi - lo) +
+               ", " + edges + " tone edges across a " + COLS + "x" + ROWS + " grid)");
+    }
+    checkDefaultFloor();
+
+    console.log("samples.cleanstart[" + SAMPLE + "]: ALL OK");
+}
