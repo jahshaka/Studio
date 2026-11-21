@@ -19,6 +19,9 @@
 //       dispatching no group WITHOUT the mark still throws (BUGS-6's guard; the door gi.screenZeroUnmarked). Before the fix the first
 //       view's passes dispatched over the third's bindings and Ogre's barrier solver threw ("Transitioning texture ...
 //       from Undefined to a read-only layout"): the frame lost for every view.
+//       "AN ERROR" IS READ BY ITS FRAME: the newest PublishedEngineFrame::frameErrors entry's `frame` (every frame its
+//       own number), never its `serial` - that is the RECORD the frame applied, and this fixture submits none, so every
+//       frame carries serial 0 and a new error would read as no error (ONE-FRAME-1's fix pass: the row was blind so).
 //   (2) THE CAPTURE: mid-rest (the area history still accumulating), a clean frame capture of the live view
 //       (View::requestFrameCapture: its chain a second time, the same frame): the capture is the frame presented, byte
 //       for byte, and the live view's next frames are bit-identical to its twin's (before the fix: the capture's trace
