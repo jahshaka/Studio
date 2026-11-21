@@ -394,6 +394,19 @@ int main(int argc, char **argv)
     // The script also asserted save -> files, clear -> no files; it prints its
     // own ok:/FAIL: lines, which the exit code folds in.
     CHECK(cold.value("afterSaveFiles").toInt() > 0, "app.saveShaderCache() wrote files");
+    // THE COMPUTE COUNTER's NEGATIVE CONTROL (SHADER-SYSTEM-1, the start preflight's F7): a cold launch parsed compute
+    // templates in its frames - the counter run 2 bars at 0 is fed, never a constant.
+    {
+        const QJsonObject a = cold.value("async").toObject();
+        // ...and the waits a destroyed job's running compile cost the frame (F4: the lead rules the content-keyed
+        // request on this number and run 2's).
+        std::printf("   run 1: compute parsed in a frame %lld, compute PSOs built in a frame %lld; destroy waits %lld "
+                    "(%.1f ms)\n",
+                    qlonglong(a.value("computeParsedInFrame").toDouble()), qlonglong(a.value("computePsoInFrame").toDouble()),
+                    qlonglong(a.value("computeDestroyWaits").toDouble()), a.value("computeDestroyWaitMs").toDouble());
+        CHECK(a.value("computeParsedInFrame").toDouble() > 0,
+              "run 1 (cold) parsed compute templates in its frames: the counter is fed");
+    }
     // EXACTLY ONE FILE SURVIVES A CLEAR, AND IT IS THE LOCK (audit F10).
     //
     // This used to assert 0, because clearShaderCacheOnDisk() called
@@ -486,6 +499,24 @@ int warmLaws(const QString &home, const QString &scripts, const QJsonObject &col
     std::printf("   run 2: compiled %d, loaded %d\n", warm.value("compiledThisRun").toInt(),
                 warm.value("loadedThisRun").toInt());
     CHECK(warm.value("compiledThisRun").toInt() == 0, "run 2 compiled NOTHING AT ALL");
+    // THE COMPUTE LAYER (COLD-BOOT-1 stage 3; SHADER-SYSTEM-1 3F): run 1's records are read back, none stale (F1: the
+    // prune runs where the compute media is found), and NO compute template is parsed in any frame of the launch - the
+    // gate's and the editor's first 30 (base 22: spikes/cold-boot-1/S1b). Run 1's > 0 is this bar's negative control
+    // (F7). The PSOs built in those frames are REPORTED (F6: the in-frame PSO is stage 7's law).
+    {
+        const QJsonObject a0 = warm.value("asyncAtStart").toObject(), a1 = warm.value("asyncAfter30").toObject();
+        std::printf("   run 2: compute records loaded %d, stale %d, rejected %d; parsed in a frame %lld (gate) -> %lld "
+                    "(+30 frames); compute PSOs built in a frame %lld -> %lld; destroy waits %lld (%.1f ms)\n",
+                    warm.value("computeRecordsLoaded").toInt(), warm.value("computeRecordsStale").toInt(),
+                    warm.value("computeRecordsRejected").toInt(), qlonglong(a0.value("computeParsedInFrame").toDouble()),
+                    qlonglong(a1.value("computeParsedInFrame").toDouble()),
+                    qlonglong(a0.value("computePsoInFrame").toDouble()), qlonglong(a1.value("computePsoInFrame").toDouble()),
+                    qlonglong(a1.value("computeDestroyWaits").toDouble()), a1.value("computeDestroyWaitMs").toDouble());
+        CHECK(warm.value("computeRecordsLoaded").toInt() > 0 && warm.value("computeRecordsStale").toInt() == 0,
+              "run 2 read run 1's compute records, none stale");
+        CHECK(!a1.isEmpty() && a1.value("computeParsedInFrame").toDouble() == 0,
+              "run 2 parsed NO compute template in any frame (the gate's and the editor's first 30)");
+    }
 
     std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
     return finish(failures ? 1 : 0);

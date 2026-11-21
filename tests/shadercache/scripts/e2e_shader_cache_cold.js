@@ -4,6 +4,9 @@
 
 var s = app.shaderCache();
 if (!s.enabled) throw new Error("shader cache disabled in a default session");
+// THE COMPUTE COUNTERS' NEGATIVE CONTROL (SHADER-SYSTEM-1, the start preflight's F7): a cold launch parsed compute
+// templates in its frames, so the counter the warm row bars at 0 reads above 0 here.
+s.async = app.asyncShaders();
 
 // Save on demand, then read the file count back through the same verb. The
 // save SERIALIZES here and writes on the engine's writer thread (FSYNC-1), so

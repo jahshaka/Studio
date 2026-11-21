@@ -31,12 +31,14 @@ editor.setCamera({ position: { x: 3, y: 2, z: 4 }, lookAt: { x: 0, y: 0.5, z: 0 
 editor.frame(30, 1 / 60);
 
 var sc0 = app.shaderCache();
+var as0 = app.asyncShaders();
 var st = capture.start({ path: app.dataRoot().root + "/capture-first/first.mp4" });
 assert(st !== null, "the first recording of the process starts " + app.lastError());
 console.log("the click's own UI-thread time: " + st.startMs + " ms (VIDEO-REC-1's first click: 585 ms)");
 var guard = 0;
 while (capture.status().frames < 10 && guard++ < 200) editor.frame(1, 1 / 60);
 var sc1 = app.shaderCache();
+var as1 = app.asyncShaders();
 var first = capture.status();
 console.log("the first click: " + first.startMs.toFixed(1) + " ms of UI time, Qt's encoder probe " + first.probeMs.toFixed(2) + " ms");
 console.log("compiled " + sc0.compiledThisRun + " -> " + sc1.compiledThisRun + ", loaded " + sc0.loadedThisRun +
@@ -49,6 +51,13 @@ assert(sc1.liveCompiles === sc0.liveCompiles, "and no live compile was reported"
 // never drew would still have to LOAD its programs (the NV12 job) on its first frames.
 assert(sc1.loadedThisRun === sc0.loadedThisRun, "nor loaded one from the cache: " +
        (sc1.loadedThisRun - sc0.loadedThisRun));
+// ...NOR PARSED A COMPUTE TEMPLATE IN A FRAME (COLD-BOOT-1 stage 3; SHADER-SYSTEM-1 3F): the recorder's jobs come from the
+// compute layer's records (the counter's liveness, > 0 on a cold launch: shadercache.app.cold). Its PSOs built in the
+// frames are printed (SHADER-SYSTEM-1 F6: stage 7's law, not this row's).
+console.log("compute parsed in a frame " + as0.computeParsedInFrame + " -> " + as1.computeParsedInFrame +
+            ", compute PSOs built in a frame " + as0.computePsoInFrame + " -> " + as1.computePsoInFrame);
+assert(as1.computeParsedInFrame === as0.computeParsedInFrame, "nor parsed a compute template in a frame: " +
+       (as1.computeParsedInFrame - as0.computeParsedInFrame));
 // THE NAMED BACKEND IS THE ONE THE ENCODER USES: on an NVIDIA adapter the app names cuda, and Qt still
 // opens NVENC (a named list that silently fell back to libx264 would pass every bar here).
 console.log("encoder " + first.encoder + " (hardware " + first.hardwareEncoder + "), backend named: '" +
