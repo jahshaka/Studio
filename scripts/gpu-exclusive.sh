@@ -96,6 +96,11 @@
 # hold of the call adopts the call's reservation `R <expiry> <key>` - its NUMBER, the call's place in the line - and at its end
 # (or an exit 75) writes it back at that number, JAH_GPU_PLACE_S (600 s) ahead; while the call is away between its holds the
 # reservation is passed over (it never idles the card). A hold with a place is long (--short is dropped, said).
+# THE CALL's IDENTITY STOPS AT THE HOLD (CARD-QUEUE-1 M1, the second engineer's review: a call's place in a row's environment
+# turned the lock's own rows red): JAH_GPU_PLACE and JAH_GPU_CALLER are read here, for this hold, and REMOVED before the command
+# runs (a nested call included) - the command and every row under it never take the call's place or its caller. The one list
+# of what a hold's command (and so a row) may see of the lock - tooling.row_lock_env reads the next line:
+# A HOLD's COMMAND SEES: JAH_GPU_LOCK_HELD JAH_GPU_HOLD JAH_GPU_LOCK JAH_GPU_HOLD_LOG JAH_GPU_RESERVE_S JAH_GPU_PLACE_S JAH_GPU_MEM_MAX JAH_GPU_SWAP_MAX JAH_GPU_NO_SCOPE JAH_GPU_SWEEP_GRACE
 export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
 here="$(cd "$(dirname "$0")" && pwd)"
 card_lock=/tmp/jah-gpu.lock
@@ -203,6 +208,9 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 [ "$#" -gt 0 ] || { echo "usage: gpu-exclusive.sh [--run-timeout <s>] [--wait-max <s>] [--label <text>] [--short <s>] <command> [args...]" >&2; exit 64; }
+# (the header's THE CALL's IDENTITY STOPS AT THE HOLD: this hold's call and caller, read once, never passed to the command)
+place=${JAH_GPU_PLACE:-} caller_env=${JAH_GPU_CALLER:-}
+unset JAH_GPU_PLACE JAH_GPU_CALLER
 # NOTHING UNDER THE LOCK SEES A DISPLAY THAT IS NOT A RIG (URGENT #195, 2026-11-21): every GPU run passes through here, and an
 # agent's shell inherits DISPLAY=:0 - the OWNER's. A DISPLAY outside :60-:99 is UNSET for the command, said on one line: a tool
 # under it then takes its tree's rig (warm-app-cache.sh, dolly, perf-ab) and a bare app finds no display and stops - never :0.
@@ -339,7 +347,7 @@ flock 8
 me="${label:-$1}"
 starttime() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20; }   # /proc/<pid>/stat field 22
 # THE CLASS LOST (the header's SHORT HOLDS PASS): a caller one of whose short holds overran its declared time holds long from then on
-caller=${JAH_GPU_CALLER:-$PPID}; lostf="$q/.lost/$caller-$(starttime "$caller")"
+caller=${caller_env:-$PPID}; lostf="$q/.lost/$caller-$(starttime "$caller")"
 if [ -n "$short" ] && [ -e "$lostf" ]; then
     echo "gpu-lock: --short $short NOT HONOURED: an earlier short hold of this caller (pid $caller) overran its declared time - this hold is long"
     short=""
@@ -347,7 +355,7 @@ fi
 ticket=""
 # A CALL's ONE PLACE (CARD-QUEUE-1, the lead's add; the header's ONE PLACE): JAH_GPU_PLACE names the call this hold is part of;
 # its reservation (R <expiry> <place>) is adopted whatever this hold's label, and the hold is long (the place is the call's)
-place=${JAH_GPU_PLACE:-}
+# ($place: read before the option-less nested path, above)
 if [ -n "$place" ] && [ -n "$short" ]; then echo "gpu-lock: --short $short: this hold takes its call's place ($place) - long, at that place"; short=""; fi
 for f in "$q"/[0-9]*; do   # a reservation under this label (or this call's place): adopted (the re-call after an exit 75) - of its own class
     case "$f" in *.tmp.*) continue ;; esac

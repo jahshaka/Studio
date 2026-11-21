@@ -323,6 +323,13 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/gpu_lock_fifo.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
     set_tests_properties(tooling.gpu_lock_fifo PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.gpu_lock_fifo)
+    # tooling.row_lock_env — A ROW AND A HOLD's COMMAND CARRY NO CALL's IDENTITY OF THE LOCK (CARD-QUEUE-1 M1): this row's own
+    # environment and a private-lock hold's command hold no JAH_GPU_* variable but those gpu-exclusive.sh's "A HOLD's COMMAND
+    # SEES:" line names - never the call's place (JAH_GPU_PLACE) or its caller (JAH_GPU_CALLER) (row_lock_env.sh).
+    add_test(NAME tooling.row_lock_env
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/row_lock_env.sh" "${CMAKE_SOURCE_DIR}/scripts/gpu-exclusive.sh")
+    set_tests_properties(tooling.row_lock_env PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.row_lock_env)
     # tooling.gpu_lock_sweep — THE HOLD's PROCESSES DIE WITH THE HOLD (URGENT #144): scripts/gpu-exclusive.sh on a private lock
     # (sleeps, no GPU): a hold's escaped (setsid) child sits in the hold's own scope and is swept - at the command's exit, at its
     # --run-timeout, KILLED past the grace when it ignores TERM, by the mark with no user manager, under a holder's nested call -
