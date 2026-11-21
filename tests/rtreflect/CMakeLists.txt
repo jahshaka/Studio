@@ -395,7 +395,7 @@ if(TARGET jahlab)
     # screen-ray difference between neighbouring pixels away from the ray picture's edges; the base's fixed coin did,
     # along a seam (mirror_blend.sh). 960x540; one jahlab session, 156 frames.
     jah_gpu_row(rtreflect.mirror_blend CLASS engine FRAMES 156
-        COMMAND sh ${CMAKE_CURRENT_SOURCE_DIR}/mirror_blend.sh $<TARGET_FILE:jahlab>
+        COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/mirror_blend.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/mirror_blend
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.mirror_blend PROPERTIES TIMEOUT 60 LABELS "engine")
