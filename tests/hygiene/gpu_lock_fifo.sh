@@ -10,10 +10,15 @@
 #   (4) no ticket left behind (an expired reservation removed by the next call);
 #   (5) A BOUNDED WAITER KEEPS ITS PLACE: exit 75, a later arrival queues, the re-call under the same label is served
 #       first (URGENT #113's loss: each 75 sent its re-call to the back of the line).
+#   (7) SHORT HOLDS PASS (CARD-QUEUE-1, CODING_RULES § 7): a --short waiter is granted before a long one that queued first; its
+#       ticket <n>.s<s>, the HOLD lines' 7th field the class, the passed long's credit file written;
+#   (8) the fairness law: past the long's credit (a toy allowance, JAH_GPU_PASS_ALLOW_S=2) the next short waits behind it;
+#   (9) an OVERRUN is logged and said, never cut, and its caller's next --short holds long; --short outside 1-90 is 64;
+#       --report lists the short holds and the overrun. With no short ticket, (1)-(6) are the grant order, unchanged.
 # THE CASES RUN SIDE BY SIDE, EACH ON ITS OWN PRIVATE LOCK (V2 plan 0.2's source.row_budget red, 2026-11-21: run one after
 # another its holds summed 9 s of sleeps and the row read 11.6 s solo against its 10-s class budget): every law here is a law of
-# ONE lock's queue, so four locks - (1); (2); (3)+(5)+(4), which share one because (4) reads what (3) and (5) left; (6) - are four
-# independent proofs at once. Each keeps its own sleeps as its margins (CODING_RULES §6), none shortened; the row's wall is the
+# ONE lock's queue, so seven locks - (1); (2); (3)+(5)+(4), which share one because (4) reads what (3) and (5) left; (6); (7); (8);
+# (9) - are independent proofs at once. Each keeps its own sleeps as its margins (CODING_RULES §6), none shortened; the row's wall is the
 # longest chain's.
 # usage: gpu_lock_fifo.sh <the tree's scripts/gpu-exclusive.sh>
 set -u
@@ -105,9 +110,57 @@ wait
 want "$(grep -q 'held by: pid [0-9]* H6 since .* ticketed' "$T/W2.out" && ! grep -q 'UNTICKETED' "$T/W2.out" && echo 1)" \
      "(6) a ticketed holder (this script) is never named: its holder line carries the mark"
 }
-for c in 1 2 35 6; do ( export JAH_GPU_LOCK="$T/lock${c:0:1}"; "chain$c" ) > "$T/chain$c.out" 2>&1 & done
+chain7() {
+# (7) A SHORT HOLD PASSES A WAITING LONG ONE (CARD-QUEUE-1, CODING_RULES § 7 SHORT HOLDS PASS): a holder, a long waiter, then a
+# --short waiter: the short is granted before the long one that queued first; its ticket is named .s<s>; the HOLD lines carry the
+# class (the 7th field); the long's credit file holds what passed it (red on the old script: plain first come, first served)
+local g=$T/grants7
+"$LOCKSH" --label H7 sh -c "echo H7 >> '$g'; sleep 1.2" > /dev/null 2>&1 &
+sleep 0.3
+"$LOCKSH" --label L7 sh -c "echo L7 >> '$g'" > "$T/L7.out" 2>&1 &
+sleep 0.3
+"$LOCKSH" --short 5 --label S7 sh -c "echo S7 >> '$g'; ls '$JAH_GPU_LOCK.q' > '$T/q7'" > "$T/S7.out" 2>&1 &
 wait
-cat "$T/chain1.out" "$T/chain2.out" "$T/chain35.out" "$T/chain6.out"
+want "$([ "$(tr '\n' ' ' < "$g")" = "H7 S7 L7 " ] && echo 1)" "(7) a short hold passes a waiting long one: $(tr '\n' ' ' < "$g")(want H7 S7 L7)"
+want "$(grep -qP '^HOLD\t\d{12}\.s5\t\d+\t\S+\t[0-9.]+\tS7\tshort:5$' "$JAH_GPU_LOCK.holds" && grep -qP '^HOLD\t\d{12}\t\d+\t\S+\t[0-9.]+\tL7\tlong$' "$JAH_GPU_LOCK.holds" && echo 1)" \
+     "(7) the hold log: the short's ticket <n>.s5 and class short:5, the long's class long (7 fields)"
+want "$(cat "$JAH_GPU_LOCK.q/.credit/"* 2> /dev/null | grep -qE '^0 [01] 1$' && echo 1)" \
+     "(7) the passed long's credit: 'held passed count' = 0 <the short's actual s> 1 ($(cat "$JAH_GPU_LOCK.q/.credit/"* 2> /dev/null))"
+}
+chain8() {
+# (8) THE FAIRNESS LAW: a long ticket is passed only while passed + s <= its allowance (+ 15 % of its own held s): with a toy
+# allowance of 2 s (JAH_GPU_PASS_ALLOW_S) the first short (declared 2 s, holds ~1 s) passes the waiting long, the second
+# (2 more s: over the allowance) waits behind it
+local g=$T/grants8
+export JAH_GPU_PASS_ALLOW_S=2
+"$LOCKSH" --label H8 sh -c "echo H8 >> '$g'; sleep 1.2" > /dev/null 2>&1 &
+sleep 0.3
+"$LOCKSH" --label L8 sh -c "echo L8 >> '$g'" > /dev/null 2>&1 &
+sleep 0.3
+"$LOCKSH" --short 2 --label S8a sh -c "echo S8a >> '$g'; sleep 1.1" > /dev/null 2>&1 &
+sleep 0.3
+"$LOCKSH" --short 2 --label S8b sh -c "echo S8b >> '$g'" > /dev/null 2>&1 &
+wait
+want "$([ "$(tr '\n' ' ' < "$g")" = "H8 S8a L8 S8b " ] && echo 1)" \
+     "(8) the fairness law: one short within the long's credit passes it, the next waits behind it: $(tr '\n' ' ' < "$g")(want H8 S8a L8 S8b)"
+}
+chain9() {
+# (9) OVERRUN: a short hold past its declared time is logged (an OVERRUN line), said, never cut (its command ends on its own),
+# and its CALLER loses the class: the same caller's next --short holds long, said; --short outside 1-90 is refused (64)
+sh -c "\"$LOCKSH\" --short 1 --label O9 sleep 2.2; \"$LOCKSH\" --short 5 --label P9 true" > "$T/O9.out" 2>&1
+"$LOCKSH" --short 91 --label X9 true > "$T/X9.out" 2>&1; rx=$?
+"$LOCKSH" --short abc --label X9 true > /dev/null 2>&1; ry=$?
+want "$(grep -qP '^OVERRUN\t\d{12}\.s1\t\d+\t1\t[23]\tO9$' "$JAH_GPU_LOCK.holds" && grep -q "OVERRUN - 'O9' declared a short hold of 1 s" "$T/O9.out" \
+        && grep -q 'NOT HONOURED' "$T/O9.out" && grep -qP '^HOLD\t\d{12}\t\d+\t\S+\t[0-9.]+\tP9\tlong$' "$JAH_GPU_LOCK.holds" && echo 1)" \
+     "(9) an overrun: its OVERRUN line and its loud line, the command not cut; the caller's next --short held long"
+want "$([ $rx = 64 ] && [ $ry = 64 ] && grep -q 'takes the hold.s declared seconds, 1 to 90' "$T/X9.out" && echo 1)" "(9) --short 91 / abc refused: 64 ($rx/$ry)"
+"$LOCKSH" --report > "$T/R9.out" 2>&1
+want "$(grep -q '^SHORT HOLDS - 1: ' "$T/R9.out" && grep -q 'OVERRUNS (a fault of the caller) - 1:' "$T/R9.out" && grep -q 'declared 1 s, held [23] s .* O9' "$T/R9.out" && echo 1)" \
+     "(9) --report: the one short hold (P9 held long), the overrun listed ($(grep -E '^SHORT|declared' "$T/R9.out" | tr '\n' '|'))"
+}
+for c in 1 2 35 6 7 8 9; do ( export JAH_GPU_LOCK="$T/lock${c:0:1}"; "chain$c" ) > "$T/chain$c.out" 2>&1 & done
+wait
+cat "$T/chain1.out" "$T/chain2.out" "$T/chain35.out" "$T/chain6.out" "$T/chain7.out" "$T/chain8.out" "$T/chain9.out"
 fails=$(cat "$T"/chain*.out "$T/c0.out" 2>/dev/null | grep -c '^  FAIL')
 echo "tooling.gpu_lock_fifo: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
 exit $(( fails > 0 ))

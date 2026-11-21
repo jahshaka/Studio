@@ -1,5 +1,6 @@
 #!/usr/bin/env bash
-# gpu-exclusive.sh [--run-timeout <s>] [--wait-max <s>] [--label <text>] <command> [args...] — run <command> holding THE CARD: the one
+# gpu-exclusive.sh [--run-timeout <s>] [--wait-max <s>] [--label <text>] [--short <s>] <command> [args...] — run <command> holding
+# THE CARD: the one
 # lock on the GPU (DOCS/PROCESS.md; TESTING-SIMPLE). An exclusive flock on /tmp/jah-gpu.lock (JAH_GPU_LOCK overrides),
 # waited for with one `gpu-lock: waiting …` line and one `gpu-lock: waited <s> s` line; the command runs with
 # JAH_GPU_LOCK_HELD=1, so a row that takes the lock itself under a holder that has it (spec.sh test / merge and
@@ -52,8 +53,9 @@
 # logged): every hold of the card appends to <lock>.holds, one line when the card is TAKEN and one when it is RELEASED,
 # paired by the ticket (a SIGKILLed holder leaves its HOLD line alone - a kill cannot write its end; the reader closes it at
 # the next line of that pid, or reads it open):
-#   HOLD <ticket> <pid> <start, ISO seconds> <the wait, s> <label>
+#   HOLD <ticket> <pid> <start, ISO seconds> <the wait, s> <label> <class: long | short:<declared s>>
 #   DONE <ticket> <pid> <end, ISO seconds> <rc> <held, s>
+#   OVERRUN <ticket> <pid> <declared s> <held s> <label>          (a short hold past its declared time: SHORT HOLDS PASS below)
 # tab-separated, each line one write (O_APPEND: whole lines from concurrent holders). A nested call (a holder's own row)
 # and an exit 75 (never held) write none. The lead's util.CardLock writes the same lines (its rc "-": it does not run the
 # command). Two lines a hold, not one at the release: a killed holder's hold would otherwise leave no trace at all.
@@ -72,6 +74,22 @@
 # is a TARGET (CLAUDE.md "The box and the card"): an overrun is REPORTED here, a running call is never cut.
 # The kernel's GPU faults while the command ran are printed after it (scripts/kernel_xid.py): an Xid is never
 # environmental. The desktop route by default: JAHSHAKA_VR=0 unless the caller set JAHSHAKA_VR (`--vr` runs set it).
+# SHORT HOLDS PASS (CARD-QUEUE-1, CODING_RULES § 7; measured 2026-11-21: 465 of 568 holds were under 90 s, held 2.43 h and
+# WAITED 11.87 h - mostly behind long calls). `--short <s>` (1-90 s, else 64) DECLARES a hold short: one row (`ctest -R`), a one-shot
+# trial, a warm-up boot whose measured wall fits - never a whole check (spec.sh test, merge, ship: the lead's util.CardLock) and
+# never the six. Its ticket is named <n>.s<s> (a long one <n>, as ever; a stale copy of this script globs it as an ordinary
+# ticket in its order and degrades to first come, first served). THE HEAD: the lowest live ticket - unless that is LONG and the
+# FIRST waiting short has CREDIT on every long ticket below it: then that short. THE FAIRNESS LAW: a long ticket is passed while
+# passed + s <= 90 s + 15 % of its owner's own held seconds (<lock>.q/.credit/<pid>-<start>: "held passed count"), so a long call's
+# wall grows by at most 90 s + 15 % of its own hold (+ any logged overrun); the credits are written ONLY by the card's holder (a
+# short at its grant charges its declared time to each long ticket it passed, corrected to its actual time at its release; the
+# long caller its held time) - the flock itself serialises them, and a short that wins the flock reads the head again under it.
+# A long call BETWEEN ITS ROWS (util.CardLock in spec.sh's gate, at a batch boundary) passes the card to a waiting short within
+# credit and keeps its place: it re-enters as <its n>.y<k> (after n, before n+1). A running row is never cut. OVERRUN: a short
+# hold held past its declared time writes an OVERRUN line, says so, and its CALLER (JAH_GPU_CALLER, else the parent pid; rig.sh
+# passes its own caller, warm-app-cache.sh its own pid) loses the class: its next --short holds long (<lock>.q/.lost/). Never
+# killed. Under a holder (JAH_GPU_LOCK_HELD) --short means nothing: the call goes at once. With no short ticket in the queue the
+# grant order is exactly the first-come order above (tooling.gpu_lock_fifo's cases).
 export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
 here="$(cd "$(dirname "$0")" && pwd)"
 card_lock=/tmp/jah-gpu.lock
@@ -104,11 +122,14 @@ holds, byk, skipped = [], {}, 0
 for ln in lines:
     f = ln.split("\t")
     try:
-        if len(f) == 6 and f[0] == "HOLD":
-            h = {"t": f[1], "pid": int(f[2]), "start": ts(f[3]), "wait": float(f[4]), "label": f[5], "end": None, "rc": "?", "how": ""}
+        if len(f) in (6, 7) and f[0] == "HOLD":   # (the 7th field, CARD-QUEUE-1: the class, long | short:<s>)
+            h = {"t": f[1], "pid": int(f[2]), "start": ts(f[3]), "wait": float(f[4]), "label": f[5], "end": None, "rc": "?", "how": "",
+                 "cls": f[6] if len(f) == 7 else "", "over": None}
             holds.append(h); byk[(f[1], f[2])] = h
         elif len(f) == 6 and f[0] == "DONE" and (f[1], f[2]) in byk:
             h = byk[(f[1], f[2])]; h["end"], h["rc"] = h["start"] + int(f[5]), f[4]
+        elif len(f) == 6 and f[0] == "OVERRUN" and (f[1], f[2]) in byk:   # <ticket> <pid> <declared> <held> <label>
+            byk[(f[1], f[2])]["over"] = (int(f[3]), int(f[4]))
         else:
             skipped += 1
     except ValueError:
@@ -147,6 +168,14 @@ print(f"HOLDS OVER {LONG} s - {len(over)} (the ~10-min hold is a target: reporte
 for h in over:
     print(f"  {day(h['start'])}  {side(h):<4} held {held(h):>5.0f} s  waited {h['wait']:>5.0f} s  rc {h['rc']:<2} pid {h['pid']:<8}"
           f" {h['label']}" + (f"  [{h['how']}]" if h["how"] else ""))
+sh = [h for h in sel if h["cls"].startswith("short:")]
+yl = [h for h in sel if ".y" in h["t"]]
+ov = [h for h in sel if h["over"]]
+if sh or yl or ov:   # SHORT HOLDS PASS (CARD-QUEUE-1): the class's holds, the long calls' yields to them, the overruns
+    print(f"SHORT HOLDS - {len(sh)}: held {sum(held(h) for h in sh):.0f} s, waited {sum(h['wait'] for h in sh):.0f} s; "
+          f"a long call passed the card to them at a row boundary {len(yl)} time(s); OVERRUNS (a fault of the caller) - {len(ov)}:")
+    for h in ov:
+        print(f"  {day(h['start'])}  declared {h['over'][0]} s, held {h['over'][1]} s  pid {h['pid']:<8} {h['label']}")
 op = [h for h in sel if h["how"]]
 if op:
     print(f"OPEN HOLDS (a HOLD line with no DONE) - {len(op)}:")
@@ -154,16 +183,20 @@ if op:
         print(f"  {day(h['start'])}  {side(h):<4} pid {h['pid']:<8} {h['label']}  [{h['how']}]")
 PY
 fi
-rt="" label=""
+rt="" label="" short=""
 while [ "$#" -gt 0 ]; do
     case "$1" in
         --run-timeout) rt="${2:?--run-timeout needs seconds}"; shift 2 ;;
         --wait-max) wm="${2:?--wait-max needs seconds}"; shift 2 ;;
         --label) label="${2:?--label needs text}"; shift 2 ;;
+        --short) short="${2:-}"; shift 2 2> /dev/null || shift
+                 case "$short" in [1-9]|[1-8][0-9]|90) ;; *)
+                     echo "gpu-exclusive.sh: --short takes the hold's declared seconds, 1 to 90 (a short hold: CODING_RULES § 7) - got '$short'" >&2
+                     exit 64 ;; esac ;;
         *) break ;;
     esac
 done
-[ "$#" -gt 0 ] || { echo "usage: gpu-exclusive.sh [--run-timeout <s>] [--wait-max <s>] [--label <text>] <command> [args...]" >&2; exit 64; }
+[ "$#" -gt 0 ] || { echo "usage: gpu-exclusive.sh [--run-timeout <s>] [--wait-max <s>] [--label <text>] [--short <s>] <command> [args...]" >&2; exit 64; }
 # NOTHING UNDER THE LOCK SEES A DISPLAY THAT IS NOT A RIG (URGENT #195, 2026-11-21): every GPU run passes through here, and an
 # agent's shell inherits DISPLAY=:0 - the OWNER's. A DISPLAY outside :60-:99 is UNSET for the command, said on one line: a tool
 # under it then takes its tree's rig (warm-app-cache.sh, dolly, perf-ab) and a bare app finds no display and stops - never :0.
@@ -299,18 +332,26 @@ exec 8>>"$q/.counter.lock"
 flock 8
 me="${label:-$1}"
 starttime() { sed 's/.*) //' "/proc/$1/stat" 2>/dev/null | cut -d' ' -f20; }   # /proc/<pid>/stat field 22
+# THE CLASS LOST (the header's SHORT HOLDS PASS): a caller one of whose short holds overran its declared time holds long from then on
+caller=${JAH_GPU_CALLER:-$PPID}; lostf="$q/.lost/$caller-$(starttime "$caller")"
+if [ -n "$short" ] && [ -e "$lostf" ]; then
+    echo "gpu-lock: --short $short NOT HONOURED: an earlier short hold of this caller (pid $caller) overran its declared time - this hold is long"
+    short=""
+fi
 ticket=""
-for f in "$q"/[0-9]*; do   # a reservation under this label: its place adopted (the re-call after an exit 75)
+for f in "$q"/[0-9]*; do   # a reservation under this label: its place adopted (the re-call after an exit 75) - of its own class
     case "$f" in *.tmp.*) continue ;; esac
     [ -e "$f" ] || continue   # (an empty queue: the glob unmatched - its redirect would print before 2>/dev/null applies)
+    case "${f##*/}" in *.s[0-9]*) [ -n "$short" ] || continue ;; *) [ -z "$short" ] || continue ;; esac
     read -r p1 p2 p3 < "$f" 2>/dev/null || continue
     [ "$p1" = R ] && [ "${p2:-0}" -gt "$(date +%s)" ] && [ "$p3" = "$me" ] && { ticket=$f; break; }
 done
 if [ -z "$ticket" ]; then
     n=$(( $(cat "$q/counter" 2>/dev/null || echo 0) + 1 ))
     echo "$n" > "$q/counter"
-    ticket="$q/$(printf '%012d' "$n")"
+    ticket="$q/$(printf '%012d' "$n")${short:+.s$short}"
 fi
+case "${ticket##*/}" in *.s[0-9]*) short=${ticket##*.s} ;; esac   # (an adopted short reservation keeps its declared time)
 echo "$$ $(starttime $$) $me" > "$ticket.tmp.$$" && mv -f "$ticket.tmp.$$" "$ticket"
 flock -u 8
 exec 8>&-
@@ -319,16 +360,40 @@ trap 'rm -f "$ticket"; mark_release' EXIT   # (no TERM/INT trap: bash would defe
 alive() {   # a ticket's pid and start time: the same live process (a recycled pid is another start time: dead)
     [ -n "$1" ] && [ -n "$2" ] && [ "$(starttime "$1")" = "$2" ]
 }
-head_ticket() {   # the lowest ticket whose pid is alive; the dead ones ahead of it removed; a reservation is passed
-                  # over (an absent caller never idles the card) and kept until it expires
-    local f pid exp
+# THE FAIRNESS LAW (CODING_RULES § 7; util.py PASS_ALLOW_S / PASS_SHARE hold the same two numbers - lock_test holds them equal):
+# a long ticket is passed by shorts while passed + s <= 90 s + 15 % of its owner's own held seconds
+PASS_ALLOW_S=${JAH_GPU_PASS_ALLOW_S:-90} PASS_SHARE_PCT=15   # (JAH_GPU_PASS_ALLOW_S: the suites' toy allowance, never set by a tool)
+short_of() { case "${1##*/}" in *.s[0-9]*) echo "${1##*.s}" ;; esac; }   # a short ticket's declared seconds; empty: a long one
+credit_ok() {   # <pid> <start> <s>: may the owner of this long ticket be passed by <s> more seconds of shorts
+    local held=0 passed=0
+    read -r held passed _ < "$q/.credit/$1-$2" 2> /dev/null
+    [ $(( 100 * (${passed:-0} + $3) )) -le $(( 100 * PASS_ALLOW_S + PASS_SHARE_PCT * ${held:-0} )) ]
+}
+head_ticket() {   # THE HEAD: the lowest ticket whose pid is alive - unless it is LONG and the first waiting SHORT ticket has credit
+                  # on every long ticket below it (then that short); the dead ones removed; a reservation is passed over (an
+                  # absent caller never idles the card) and kept until it expires. With no short ticket: the lowest live, as ever.
+    local f pid exp first="" longs=() s l ok
     for f in "$q"/[0-9]*; do
         case "$f" in *.tmp.*) continue ;; esac
         [ -e "$f" ] || continue
         read -r pid exp _ < "$f" 2>/dev/null || pid=""
         if [ "$pid" = R ]; then [ "${exp:-0}" -gt "$(date +%s)" ] || rm -f "$f"; continue; fi
-        if alive "$pid" "$exp"; then echo "$f"; return; fi
-        rm -f "$f"
+        alive "$pid" "$exp" || { rm -f "$f"; continue; }
+        s=$(short_of "$f")
+        if [ -z "$s" ]; then [ -n "$first" ] || first=$f; longs+=("$pid $exp"); continue; fi
+        [ -n "$first" ] || { echo "$f"; return; }                 # a short at the front: first come, first served
+        ok=1; for l in "${longs[@]}"; do credit_ok $l "$s" || { ok=""; break; }; done
+        [ -n "$ok" ] && { echo "$f"; return; }
+        break                                                     # the FIRST waiting short only: shorts keep their order
+    done
+    echo "$first"
+}
+charge() {   # <seconds, may be negative>: added to `passed` of every long ticket this short hold passed (charged[]) - written
+             # only by the card's holder (this hold), by rename: the flock itself serialises every credit write
+    local k held passed n
+    for k in "${charged[@]}"; do
+        held=0 passed=0 n=0; read -r held passed n < "$q/.credit/$k" 2> /dev/null
+        echo "${held:-0} $(( ${passed:-0} + $1 )) $(( ${n:-0} + ${2:-0} ))" > "$q/.credit/$k.tmp.$$" && mv -f "$q/.credit/$k.tmp.$$" "$q/.credit/$k"
     done
 }
 holder() { cat "$lock.holder" 2>/dev/null || echo '?'; }
@@ -358,22 +423,50 @@ while :; do
     # adopting an earlier ticket could not pass it - the head re-reads the queue between tries (0.2 s; the others 0.5 s: a
     # new head notices within it, the card's idle at a hand-off)
     h=$(head_ticket)
-    [ "$h" = "$ticket" ] && flock -n 9 && break
+    if [ "$h" = "$ticket" ] && flock -n 9; then
+        # the credits move only under the flock: read again now it is held - a short whose credit was spent meanwhile waits on
+        [ "$(head_ticket)" = "$ticket" ] && break
+        flock -u 9
+    fi
     [ -n "$waiting" ] || { echo "gpu-lock: waiting for the card (held by: $(holder))"; waiting=1; }
     [ "$h" = "$ticket" ] && unticketed   # (the head alone: it is the one the flock refused)
     [ -n "${wm:-}" ] && [ $(( $(date +%s) - t0 )) -ge "$wm" ] && stayed
     if [ "$h" = "$ticket" ]; then sleep 0.2; else sleep 0.5; fi
 done
+charged=()
+if [ -n "$short" ]; then   # A SHORT HOLD's GRANT: it passes every live long ticket below its own - each charged its declared time
+    mkdir -p "$q/.credit" "$q/.lost"
+    for f in "$q"/[0-9]*; do
+        case "$f" in *.tmp.*) continue ;; esac
+        [ -e "$f" ] && [[ ${f##*/} < ${ticket##*/} ]] && [ -z "$(short_of "$f")" ] || continue
+        read -r pid exp _ < "$f" 2> /dev/null; [ "$pid" != R ] && alive "$pid" "$exp" && charged+=("$pid-$exp")
+    done
+    charge "$short" 1
+    for f in "$q/.credit"/* "$q/.lost"/*; do   # the credit and the lost mark of a process gone: removed by the card's holder
+        [ -e "$f" ] || continue; case "$f" in *.tmp.*) continue ;; esac
+        k=${f##*/}; alive "${k%-*}" "${k##*-}" || rm -f "$f"
+    done
+fi
 rm -f "$ticket"
 waited=$(awk -v a="$t0f" -v b="$(date +%s.%N)" 'BEGIN{printf "%.1f", b-a}')
 [ -z "$waiting" ] || echo "gpu-lock: waited $waited s"   # tenths (#95)
 echo "pid $$ ${label:-$1} since $(date '+%F %T') ticketed" > "$lock.holder"   # (#141: the mark a waiter reads)
 start=$(date +%s)
 holds=$(holds_log); mkdir -p "$(dirname "$holds")" 2> /dev/null; tno=$(basename "$ticket")
-printf 'HOLD\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$(date -d "@$start" '+%FT%T%z')" "$waited" "$me" >> "$holds" 2> /dev/null || true
-hold_run "jahgpu-$(basename "$ticket")-$$" "${bound[@]}" "$@"   # (#144: the hold's cgroup, swept before the release)
+printf 'HOLD\t%s\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$(date -d "@$start" '+%FT%T%z')" "$waited" "$me" \
+    "$([ -n "$short" ] && echo "short:$short" || echo long)" >> "$holds" 2> /dev/null || true
+hold_run "jahgpu-${tno//./_}-$$" "${bound[@]}" "$@"   # (#144: the hold's cgroup, swept before the release)
 rc=$?
 mark_release
-printf 'DONE\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$(date '+%FT%T%z')" "$rc" "$(( $(date +%s) - start ))" >> "$holds" 2> /dev/null || true
+held=$(( $(date +%s) - start ))
+if [ -n "$short" ]; then   # (still under the flock) the passed longs charged the hold's ACTUAL time; an overrun is its caller's fault
+    charge $(( held - short )) 0
+    if [ "$held" -gt "$short" ]; then
+        printf 'OVERRUN\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$short" "$held" "$me" >> "$holds" 2> /dev/null || true
+        echo "gpu-lock: OVERRUN - '$me' declared a short hold of $short s and held $held s: logged; the short class is lost for its caller (pid $caller) - its next --short holds long (CODING_RULES § 7: a running call is never cut)"
+        : > "$lostf" 2> /dev/null || true
+    fi
+fi
+printf 'DONE\t%s\t%s\t%s\t%s\t%s\n' "$tno" "$$" "$(date '+%FT%T%z')" "$rc" "$held" >> "$holds" 2> /dev/null || true
 python3 "$here/kernel_xid.py" since "$start" 2>&1 | sed 's/^/gpu-lock: /'
 exit $rc

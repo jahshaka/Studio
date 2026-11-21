@@ -577,13 +577,17 @@ fmt_tenths() { echo "$(( $1 / 10 )).$(( $1 % 10 ))"; }
 note_wall() {
     { grep -v "^$1 " "$WALLS" 2>/dev/null; echo "$1 $2"; } > "$WALLS.tmp" && mv "$WALLS.tmp" "$WALLS"
 }
-T0=$(date +%s); RAN=0; WAIT=0
+T0=$(date +%s); RAN=0; WAIT=0; SHORT=()
 FLOOR=$(( BUDGET / 10 )); [ "$FLOOR" -le 60 ] || FLOOR=60   # the first boot's least wait: 60 s (the default budget 1170 leaves a boot ~830 s of wait, #130)
 # room <boot> <boots left>: the card's wait this boot may take (WAIT), or exit 75 when the boot no longer fits the call
 room() {
     local est left
     est=$(est_of "$1"); left=$(( BUDGET - ($(date +%s) - T0) ))
     WAIT=$(( left - est ))
+    # A BOOT THAT FITS A SHORT HOLD DECLARES ONE (CARD-QUEUE-1, CODING_RULES § 7 SHORT HOLDS PASS): its measured own wall (est) x 2
+    # + 10 s within 90 s - an engine-on boot (~1 s) or a warm app-on (~20 s); never a cold one. An overrun is logged by the lock and
+    # this warm-up (JAH_GPU_CALLER, its pid) holds long from then on.
+    SHORT=(); [ $(( 2 * est + 10 )) -le 90 ] && SHORT=(--short $(( 2 * est + 10 )))
     if [ "$RAN" = 0 ]; then
         [ "$WAIT" -ge "$FLOOR" ] || WAIT=$FLOOR
     elif [ "$WAIT" -lt $(( FLOOR / 2 )) ]; then
@@ -611,7 +615,7 @@ boot() {
     # THE DRIVER's CACHE OFF for this boot (URGENT #100): every pipeline is compiled into the engine's VkPipelineCache,
     # which every exe loads - a driver-cache hit would leave it out of it
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
-          __GL_SHADER_DISK_CACHE=0 nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" \
+          __GL_SHADER_DISK_CACHE=0 nice -n 10 env JAH_GPU_CALLER=$$ "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" "${SHORT[@]}" \
           --label "warm-app-cache ($name)" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
     rc=$?
     [ $rc = 75 ] && held "$log" "$name" "$name $rest"
@@ -656,7 +660,7 @@ driver_boot() {
     b0=$(du -sb "$dpath" 2>/dev/null | cut -f1)
     t0=$(now_ns)
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
-          env -u __GL_SHADER_DISK_CACHE nice -n 10 "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" \
+          env -u __GL_SHADER_DISK_CACHE nice -n 10 env JAH_GPU_CALLER=$$ "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" "${SHORT[@]}" \
           --label "warm-app-cache ($name)" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
     rc=$?
     [ $rc = 75 ] && held "$log" "$name" "$name $rest"

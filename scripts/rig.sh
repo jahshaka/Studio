@@ -10,9 +10,11 @@
 #                            home/ are made. Prints DISPLAY, the data root and the CPUs; --env prints them as shell
 #                            assignments for `eval` (DISPLAY, JAH_RIG_DATA, JAH_CPUS, RIG_STARTED=1|0). A rig already up in
 #                            the tree is reused, said, RIG_STARTED=0 (a script brings down only a rig it started).
-#   rig.sh run <label> [--run-timeout S] [--wait-max S] -- <cmd...>
+#   rig.sh run <label> [--run-timeout S] [--wait-max S] [--short S] -- <cmd...>
 #                            <cmd> on the tree's rig, holding the card: this tree's scripts/gpu-exclusive.sh --label <label>
-#                            (the ticket queue, the hold log, the hold's cgroup), then `taskset -c <our CPUs> nice -n 10` with
+#                            (the ticket queue, the hold log, the hold's cgroup). --short S (1-90) DECLARES the hold short - one
+#                            row (`ctest -R '^<row>$'`), one trial: it passes a waiting long call at its row boundary (CODING_RULES
+#                            § 7); held past S it is logged an OVERRUN and this caller's later --short holds long. Then `taskset -c <our CPUs> nice -n 10` with
 #                            DISPLAY=:NN, HOME=<data root>/home, JAHSHAKA_VR=0 (VR runs go through tests/vr/run_vr_app.sh),
 #                            JAH_CPUS and JAH_RIG_DATA; a Jahshaka or jahlab binary given no --data-root gets
 #                            `--data-root <data root>`. Refused (2) with no live rig of the tree - :0 is never used.
@@ -51,7 +53,7 @@ users="$pidf.users"   # "<pid> <start time>" a line: the rig's live users (W1)
 data="$tree.data"
 xdir=${JAH_RIG_XDIR:-/tmp}   # where X servers keep their lock files and sockets (a suite's fake server: its own)
 die() { echo "rig.sh: $*" >&2; exit 2; }
-usage() { sed -n '4,35p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 64; }
+usage() { sed -n '4,/^# exit:/p' "${BASH_SOURCE[0]}" | sed 's/^# \{0,1\}//' >&2; exit 64; }
 
 cpus() {
     local c=${JAH_CPUS:-} f="${JAH_LOCAL_ROOT:-${JAH_LEAD_ROOT:-$uhome/Developer}/local}/CPUS"
@@ -171,7 +173,7 @@ cmd_run() {
     local lockopts=()
     while [ "$#" -gt 0 ]; do
         case "$1" in
-            --run-timeout|--wait-max) lockopts+=("$1" "${2:?$1 needs seconds}"); shift 2 ;;
+            --run-timeout|--wait-max|--short) lockopts+=("$1" "${2:?$1 needs seconds}"); shift 2 ;;
             --) shift; break ;;
             *) break ;;
         esac
@@ -192,7 +194,8 @@ cmd_run() {
     local rc; ( exec 7> "$data/.rig.lock"; flock -x 7; JAH_RIG_USER=$$ enroll )
     # (DISPLAY is the rig's for the LOCK too, URGENT #195's guard: with the caller's inherited :0 the lock said "unset" on
     # every run - the command below always had the rig's)
-    DISPLAY="$rdisp" "$here/gpu-exclusive.sh" "${lockopts[@]}" --label "$label" \
+    # (the CALLER a short hold's overrun is charged to: rig.sh's own caller - a loop of runs loses the class together)
+    DISPLAY="$rdisp" JAH_GPU_CALLER="${JAH_GPU_CALLER:-$PPID}" "$here/gpu-exclusive.sh" "${lockopts[@]}" --label "$label" \
         env DISPLAY="$rdisp" HOME="$data/home" JAHSHAKA_VR=0 JAH_CPUS="$c" JAH_RIG_DATA="$data" \
         taskset -c "$c" nice -n 10 "${cmd[@]}"
     rc=$?

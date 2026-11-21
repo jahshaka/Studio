@@ -201,9 +201,15 @@ exec 8>"$T/gpu.lock"; flock 8
 t0=$(date +%s)
 # (JAH_GPU_LOCK_HELD unset: a row run under a holder - spec.sh test, gpu-exclusive.sh - inherits it, and the script
 # under test would take the held card for its own and boot)
+# (A BOOT THAT FITS DECLARES A SHORT HOLD, CARD-QUEUE-1: app-on's measured own wall 20 s -> --short 50, its ticket - kept as the
+# exit 75's reservation - named <n>.s50)
+cp "$B/tests/.warm-walls" "$T/walls.keep" 2> /dev/null; echo "app-on 20" > "$B/tests/.warm-walls"
 out=$(env -u JAH_GPU_LOCK_HELD DISPLAY=:99 JAH_GPU_LOCK="$T/gpu.lock" "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}" --only app-on --budget 10); rc=$?
 s=$(( $(date +%s) - t0 ))
 exec 8>&-
+if [ -e "$T/walls.keep" ]; then mv "$T/walls.keep" "$B/tests/.warm-walls"; else rm -f "$B/tests/.warm-walls"; fi
+ls "$T/gpu.lock.q" 2> /dev/null | grep -qE '^[0-9]{12}\.s50$' && ok "a boot that fits a short hold declares one: app-on (own wall 20 s) took ticket <n>.s50" \
+    || no "app-on with an own wall of 20 s did not declare --short 50: $(ls "$T/gpu.lock.q" 2> /dev/null | tr '\n' ' ')"
 [ $rc = 75 ] && echo "$out" | grep -q 'the card stayed held 1 s' && echo "$out" | grep -q 'call again: --only app-on$' &&
     [ ! -e "$B/tests/.shadercache.driver-key" ] && [ $s -lt 10 ] &&
     ok "the card held past the boot's wait (a tenth of a 10-s budget): exit 75 in $s s, nothing booted" ||

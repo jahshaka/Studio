@@ -1,7 +1,8 @@
 #!/bin/bash
 # tooling.gpu_lock_holds - EVERY HOLD OF THE CARD IS COUNTED ONCE (TEST-STREAMLINE-1 1d): scripts/gpu-exclusive.sh on a PRIVATE
 # lock (JAH_GPU_LOCK in a scratch dir, a scratch HOME; no GPU: the commands are sleeps) appends to <lock>.holds a HOLD line when
-# it takes the card and a DONE line when it releases it, paired by the ticket:
+# it takes the card (7 fields: the 7th its class, long | short:<s> - CARD-QUEUE-1) and a DONE line (6) when it releases it,
+# paired by the ticket:
 #   (1) two holds in turn: two HOLD/DONE pairs, the second's wait > 0, each DONE with its command's rc and its held seconds;
 #   (2) a nested call under a holder (JAH_GPU_LOCK_HELD) writes nothing of its own;
 #   (3) an exit 75 (the card stayed held past --wait-max) writes nothing: it never held;
@@ -19,7 +20,7 @@ H="$T/lock.holds"
 fails=0
 want() { if [ "$1" = 1 ]; then echo "  ok   $2"; else echo "  FAIL $2"; fails=$((fails + 1)); fi; }
 pairs() {   # the number of tickets with exactly one HOLD and one DONE, every line well formed
-    awk -F'\t' '($1 == "HOLD" && NF == 6) { h[$2]++ } ($1 == "DONE" && NF == 6) { d[$2]++ } ($1 != "HOLD" && $1 != "DONE") || NF != 6 { bad++ }
+    awk -F'\t' '($1 == "HOLD" && NF == 7) { h[$2]++ } ($1 == "DONE" && NF == 6) { d[$2]++ } ($1 != "HOLD" && $1 != "DONE") || ($1 == "HOLD" && NF != 7) || ($1 == "DONE" && NF != 6) { bad++ }
                 END { n = 0; for (t in h) if (h[t] == 1 && d[t] == 1) n++; print (bad ? -1 : n) }' "$H" 2> /dev/null || echo 0
 }
 # (1) two holds in turn
@@ -41,11 +42,11 @@ want "$([ "$(pairs)" = 1 ] && ! grep -q inner "$H" && echo 1)" "(2) a nested cal
 sleep 0.3
 "$LOCKSH" --wait-max 1 --label W true > "$T/w.out" 2>&1; rc=$?
 wait
-want "$([ $rc = 75 ] && ! grep -q "	W$" "$H" && [ "$(pairs)" = 1 ] && echo 1)" "(3) an exit 75: no line of its own (rc $rc), the holder's pair alone"
+want "$([ $rc = 75 ] && ! grep -q "	W	" "$H" && [ "$(pairs)" = 1 ] && echo 1)" "(3) an exit 75: no line of its own (rc $rc), the holder's pair alone"
 # (4) a SIGKILLed holder leaves its HOLD line alone
 : > "$H"
 setsid "$LOCKSH" --label K sleep 30 > /dev/null 2>&1 & K=$!
-for _ in $(seq 50); do grep -q "	K$" "$H" 2> /dev/null && break; sleep 0.05; done
+for _ in $(seq 50); do grep -q "	K	" "$H" 2> /dev/null && break; sleep 0.05; done
 kill -9 -- -"$K" 2> /dev/null; wait "$K" 2> /dev/null
 "$LOCKSH" --label L true > /dev/null 2>&1
 k=$(awk -F'\t' '$1 == "HOLD" && $6 == "K" { print $2 }' "$H")
@@ -62,7 +63,7 @@ want "$([ "$(pairs)" = 10 ] && [ "$(wc -l < "$H")" = 20 ] && echo 1)" "(5) ten h
 : > "$H"
 JAH_GPU_HOLD_LOG="$T/card.log" "$LOCKSH" --label P true > /dev/null 2>&1
 pl=$(JAH_GPU_HOLD_LOG="$T/card.log" "$LOCKSH" --holds-log)
-want "$([ ! -e "$T/card.log" ] && [ "$(pairs)" = 1 ] && grep -q "	P$" "$H" && [ "$pl" = "$H" ] && echo 1)" \
+want "$([ ! -e "$T/card.log" ] && [ "$(pairs)" = 1 ] && grep -q "	P	" "$H" && [ "$pl" = "$H" ] && echo 1)" \
      "(6) a private lock with JAH_GPU_HOLD_LOG set: its pair in <lock>.holds, the card's log untouched (--holds-log '$pl')"
 echo "tooling.gpu_lock_holds: $([ $fails = 0 ] && echo PASS || echo "FAIL ($fails)")"
 exit $((fails > 0))
