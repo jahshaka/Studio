@@ -96,7 +96,7 @@ print('camera %.6f,%.6f,%.6f,0,0,-3' % tuple(a+(b-a)*k for a,b in zip(s,e)))"
     printf 'quit\n'
 } > "$WD/conv.lab"
 session conv
-python3 -I - "$WD/data" "$DUMP" "$K" <<'PY'
+python3 -I - "$WD/data" "$DUMP" "$K" "$WD" <<'PY'
 import os, sys
 import numpy as np
 from PIL import Image
@@ -136,6 +136,69 @@ print('walk frame %d: rough %d px, N median %.0f, sigma median %.2f codes, SE_wa
 print('LAW k%d.breaking %.4f %% <= 1' % (k, 100 * share))
 print('LAW k%d.lag_mean %.4f codes' % (k, lhs[rough].mean()))
 print('LAW k%d.lag_p99 %.4f codes' % (k, np.percentile(lhs[rough], 99)))
+# THE RESIDUE's DUMP (ROUGH-LOBE-HISTORY-1 stage 2.0; the reader's candidates, spikes/rough-lobe-history-1/RESIDUE.md):
+# WHERE the breaking pixels sit, printed and kept - never a law, never a bar (no LAW line). Kept in the k's own work dir
+# (rough_lag.sh removes it only at the row's next run): breaks.png (red a breaking EDGE pixel, white a breaking INTERIOR
+# one, grey a rough pixel within the law, black the rest) and lag.png (|walk - conv| in codes, the law's left side).
+#   EDGE (candidate A, another surface's history): within 2 px of a DEPTH BREAK - a relative jump over 5 % between two
+#     4-neighbours of the walk dump's own view distance for this frame (.dist, the history's grid, mapped as .ghc is; 0 = no
+#     surface, itself a break) - or of a CLASS-MAP BOUNDARY (.cls: a 4-neighbour of another class). INTERIOR: the rest.
+#   STEP 0 (candidate C, the law's own allowance collapsing): the law's step |conv(k+1) - conv(k)| reads 0 codes, so the
+#     allowance is 3 SE + 1 alone.
+#   LOW N (candidate D, young pixels): the history count N under the gather's young frames (kYoungFrames 12,
+#     OgreScreenProbeGather.cpp - the young read's reach narrows to the bilinear at 12 frames); with the bottom band's share
+#     (the breakers in the picture's lowest quarter of rows, against the rough class's own share there).
+#   SIGN (candidate E, the clamp): the share of breakers whose walk is BRIGHTER than conv (the larger channel's sign).
+wd = sys.argv[4]
+def dilate(m, r):
+    p = np.pad(m, r)
+    out = np.zeros_like(m)
+    for dy in range(-r, r + 1):
+        for dx in range(-r, r + 1):
+            out |= p[r + dy:r + dy + m.shape[0], r + dx:r + dx + m.shape[1]]
+    return out
+dist = np.fromfile(base + '.dist', dtype=np.float32).reshape(gh, gw).astype(np.float64) if os.path.exists(base + '.dist') else None
+edge = np.zeros((H, W), dtype=bool)
+if dist is not None:
+    if (gw, gh) != (W, H):
+        dist = dist[(np.arange(H) * gh // H)][:, (np.arange(W) * gw // W)]
+    brk = np.zeros((H, W), dtype=bool)
+    for a, b, sl_a, sl_b in ((dist[:, :-1], dist[:, 1:], (slice(None), slice(None, -1)), (slice(None), slice(1, None))),
+                             (dist[:-1, :], dist[1:, :], (slice(None, -1), slice(None)), (slice(1, None), slice(None)))):
+        lo = np.minimum(a, b)
+        jump = (lo <= 0.0) & (np.maximum(a, b) > 0.0) | (lo > 0.0) & (np.abs(a - b) > 0.05 * np.maximum(lo, 1e-9))
+        brk[sl_a] |= jump
+        brk[sl_b] |= jump
+    edge |= brk
+cb = np.zeros((H, W), dtype=bool)
+cb[:, :-1] |= cls[:, :-1] != cls[:, 1:]; cb[:, 1:] |= cls[:, :-1] != cls[:, 1:]
+cb[:-1, :] |= cls[:-1, :] != cls[1:, :]; cb[1:, :] |= cls[:-1, :] != cls[1:, :]
+edge = dilate(edge | cb, 2)
+nb = int(breaks.sum())
+def sh(m):
+    return 100.0 * (m & breaks).sum() / max(nb, 1)
+band = np.zeros((H, W), dtype=bool); band[3 * H // 4:, :] = True
+signed = (walk - c0)
+bright = np.take_along_axis(signed, np.abs(signed).argmax(axis=2)[..., None], axis=2)[..., 0] > 0
+print('RESIDUE k%d: %d breaking px of %d rough (%s); EDGE %.1f %% / INTERIOR %.1f %% (the rough class: %.1f %% edge); '
+      'STEP 0 %.1f %% (the rough class: %.1f %%); LOW N (< 12) %.1f %% (the rough class: %.1f %%); bottom quarter %.1f %% '
+      '(the rough class: %.1f %%); walk BRIGHTER %.1f %%' % (
+      k, nb, rough.sum(), 'the dump has .dist' if dist is not None else 'NO .dist: class seams only', sh(edge),
+      100.0 - sh(edge), 100.0 * (edge & rough).sum() / rough.sum(), sh(step == 0),
+      100.0 * ((step == 0) & rough).sum() / rough.sum(), sh(N < 12), 100.0 * ((N < 12) & rough).sum() / rough.sum(),
+      sh(band), 100.0 * (band & rough).sum() / rough.sum(), sh(bright)))
+if nb:
+    print('RESIDUE k%d breakers: N p10/p50/p90 %.0f/%.0f/%.0f; |walk - conv| p50/p90 %.0f/%.0f codes; step p50/p90 %.0f/%.0f; '
+          'EDGE and STEP 0 %.1f %%; INTERIOR and STEP 0 %.1f %%' % (
+          k, *np.percentile(N[breaks], [10, 50, 90]), *np.percentile(lhs[breaks], [50, 90]),
+          *np.percentile(step[breaks], [50, 90]), sh(edge & (step == 0)), sh(~edge & (step == 0))))
+img = np.zeros((H, W, 3), dtype=np.uint8)
+img[rough] = 96
+img[breaks & ~edge] = 255
+img[breaks & edge] = (255, 0, 0)
+Image.fromarray(img).save(os.path.join(wd, 'breaks.png'))
+Image.fromarray(np.clip(lhs, 0, 255).astype(np.uint8)).save(os.path.join(wd, 'lag.png'))
+print('RESIDUE k%d: kept %s and %s' % (k, os.path.join(wd, 'breaks.png'), os.path.join(wd, 'lag.png')))
 if share > 0.01:
     fails.append('walk frame %d: %.2f %% of the rough pixels lag their converged picture past their memory and noise'
                  % (k, 100 * share))
