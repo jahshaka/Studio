@@ -679,6 +679,14 @@ add_test(NAME source.compute_size_keys
 set_tests_properties(source.compute_size_keys PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.compute_size_keys)
 
+# source.gate_pace (COLD-BOOT-1 stage 4): THE STREAMING PACE IS THE GATE's AND THE VIEWPORT's, NOWHERE ELSE - a Complete
+# frame owes the whole picture (the reveal law), the startup gate's frames are shown to nobody: only src/app/
+# shaderbuildgate.cpp (gateFrame, every frame of the gate) and the viewport's own pace set Streaming. Its negative control first.
+add_test(NAME source.gate_pace
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/gate_pace.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.gate_pace PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.gate_pace)
+
 # source.webgpu_census (DOORS-0 stage 0, V2 plan 0.5): WHAT WEBGPU REFUSES AND EVERY ONE-EYE-ONLY GATE ONLY FALLS - one
 # table (class, regex, path set, ceiling, the plan item that lowers it) over irisgl/engine, comments stripped: device
 # address, push constants, image atomics, read-write rg images, texel buffers, early fragment tests, binding arrays,

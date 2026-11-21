@@ -324,3 +324,14 @@ endif()
 if(TEST app.test_needs_boot)
     set_property(TEST app.test_needs_boot PROPERTY JAHSHAKA_TEST_FRAMES 710)
 endif()
+
+# app.gate_settle — THE STARTUP GATE's SETTLE ON PUBLISHED STATE (COLD-BOOT-1 stage 4; test_gate_settle.cpp says the
+# laws): a frame is settled when the background compiler is idle and the frame deferred no dispatch, drew no placeholder
+# and skipped no draw - the ray builds too in a world phase; the hang guard counts the WALL with nothing moving, never
+# frames. A header-only pure function: CPU, no engine, no display.
+add_executable(test_gate_settle test_gate_settle.cpp)
+set_target_properties(test_gate_settle PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_gate_settle PRIVATE ${CMAKE_SOURCE_DIR}/src)
+add_test(NAME app.gate_settle COMMAND test_gate_settle)
+set_tests_properties(app.gate_settle PROPERTIES TIMEOUT 60 LABELS "scripting")
+jah_no_display(app.gate_settle)

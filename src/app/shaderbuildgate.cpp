@@ -6,6 +6,7 @@
 #include "data/settingsmanager.h"
 #include "jah_startup_pass_id.h"   // JAH_STARTUP_PASS_CODE_ID (cmake/startup_pass_id.py)
 #include "app/startuppasskey.h"
+#include "app/gatesettle.h"   // the settle on published state (COLD-BOOT-1 stage 4)
 #include <QCoreApplication>
 #include "services/defaultfloormaterial.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
@@ -55,23 +56,16 @@ void applyBornWorld(const iris::ScenePtr &doc)
     else worldmodes::setMode(doc, worldmodes::Mode::Epic);
 }
 
-/// THE SETTLE, IN FRAMES (SPEED-CPU, perf audit CS-2; ENGINE trap 7 — the engine
-/// has no wall clock). Every compile this gate can cause runs INSIDE a frame: the
-/// parallel Hlms queue is joined before renderOneFrame returns (fork
-/// OgreRenderQueue.cpp, stopAndWait), HlmsDiskCache::applyTo joins its threads, and
-/// a compute job compiles synchronously on its dispatch. So the build is over the
-/// first time a whole frame compiles nothing — and a frame cannot pass that test
-/// while anything is still being built. This used to be a 250 ms wall-clock wait
-/// for the count to stand still, paid on every launch, warm or cold (measured: the
-/// whole warm gate was 251-252 ms of which 250 were the wait). The bound below is a
-/// hang guard for a pathological driver, not a settle.
+/// THE SETTLE, ON PUBLISHED STATE (COLD-BOOT-1 stage 4; app/gatesettle.h). The gate's scene is ASYNCHRONOUS for the
+/// whole gate: its permutations build on the background compiler and its ray pipelines on their builders (all started
+/// at the gate's first frame, Engine::prepareRayPipelines), so a frame never waits for a compile and the splash's events
+/// are pumped between frames - the window answers throughout. What the gate waits for is the engine's published state
+/// saying the work is done (nothing pending, no dispatch deferred, no placeholder drawn): never a join on the UI thread.
+/// (It used to compile INSIDE its frames, and the reflection's two cold driver compiles were one 100-s freeze of the
+/// window: spikes/cold-boot-1/S1b.) Every frame is on the Streaming pace (gateFrame). The final settle's bound is a frame
+/// count over SETTLED frames; every wait of the gate ends only by gatesettle::Settle::waitOver - settled, NOTHING LANDING
+/// for kStallMs, or the gate's ceiling kCeilingMs - the last two with a FAIL line naming what is pending.
 constexpr int kSettleFrameCap = 64;
-
-/// Hard ceiling. A gate that can hang the launch forever is worse than a launch
-/// that shows the window with a few shaders still to build: if we are still
-/// compiling after this long, something is wrong (a pathological driver, a
-/// machine under extreme load) and the user gets their app.
-constexpr int kDeadlineMs = 30000;
 
 /// The warm-up view. Small on purpose: nothing about which SHADERS get built
 /// depends on the resolution, and a 32x32 render target costs nothing.
@@ -144,6 +138,19 @@ void addPresetRow(const iris::ScenePtr &doc, Database *db)
     }
 }
 
+/// THE GATE's FRAME (COLD-BOOT-1 stage 4): every frame the gate renders is on the STREAMING pace. A frame on the
+/// Complete pace owes the whole picture, so every consumer JOINS what it needs (OgreScene::compilesInBackground is false
+/// under it: a ray pipeline build is waited for in the frame - the 47-s join of spikes/cold-boot-1/S4arm - and the lighting
+/// arm runs whole); that is the reveal law of every view a user sees, and the editor's frames keep it (the viewport sets
+/// its own pace). The gate's frames are shown to nobody but the splash: here, and only here, a compile lands frames later
+/// and the gate waits for it on the published state (gatesettle.h). The pace is consumed by the next frame (the engine
+/// resets it to Complete after it), so it is set before every one. (source.gate_pace: nothing else sets Streaming.)
+void gateFrame(Engine &engine)
+{
+    engine.setFramePace(FramePace::Streaming);
+    engine.renderOneFrame();
+}
+
 /// THE EDITOR'S WORLD, AS THE EDITOR DRAWS IT (SHADER-WARM-2; see the call site). The
 /// template's own document, a mirror configured as EngineSceneViewport configures its
 /// own, the editor's helpers at their defaults (plus the grid and a selected node with
@@ -154,8 +161,9 @@ void addPresetRow(const iris::ScenePtr &doc, Database *db)
 /// frames rendered.
 int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &shape,
                     Database *db, SceneTemplate kind, bool presets,
-                    const std::function<void()> &poll)
+                    const std::function<void()> &poll, const gatesettle::Settle &settle)
 {
+    const auto settled = [&](bool needRays) { return settle.settled(needRays); };
     iris::ScenePtr doc = scenetemplate::build(kind, db, nullptr);
     if (!doc || !view) return 0;
     applyBornWorld(doc);
@@ -213,7 +221,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             gizmo.updateSize(camera);
             overlay.update(selected ? &gizmo : nullptr, camera->getGlobalPosition(),
                            iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
-            engine.renderOneFrame();
+            gateFrame(engine);
             ++frames;
             poll();
         };
@@ -246,14 +254,29 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         engine.shaderBuildProgress(c, f, e);
         unsigned last = c;
         int quiet = 0;
-        while (frames < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames) {
-            frame();
-            engine.shaderBuildProgress(c, f, e);
-            const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
-            const bool armed = gi.mode == GiMode::Off || gi.vctBound;
-            quiet = (c == last && armed) ? quiet + 1 : 0;
-            last = c;
-        }
+        const auto untilQuiet = [&](bool needRays) {
+            int phaseFrames = 0;
+            quiet = 0;
+            while (phaseFrames < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames) {
+                frame();
+                ++phaseFrames;
+                engine.shaderBuildProgress(c, f, e);
+                const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
+                const bool armed = gi.mode == GiMode::Off || gi.vctBound;
+                quiet = (c == last && armed && settled(needRays)) ? quiet + 1 : 0;
+                last = c;
+            }
+        };
+        untilQuiet(false);
+        // (2a) THE RAY PIPELINES' CONSUMERS (COLD-BOOT-1 stage 4): the builds started at the gate's first frame are waited
+        // for HERE, on the published state, frames flowing and the window answering (never a join): then this world's
+        // frames run the reflection, the gather, the cards' and the glass's passes on built pipelines, and what those
+        // compile is built before the phase ends. The wait ENDS (gatesettle::Settle::waitOver): settled, or nothing
+        // landing for kStallMs, or the gate's ceiling - the second and third loudly (a gate never spins).
+        while (!settle.waitOver(true)) frame();
+        if (settle.failed(true))
+            qWarning("FAIL: shader build gate: the world's ray pipelines did not settle - %s", settle.describe().c_str());
+        untilQuiet(true);
         // (2b) EVERY OTHER TIER'S PLACEHOLDERS (ASYNC-SHADERS-1). A tier is a new PASS, and the
         // grey placeholder an object waits under is itself a permutation of that pass — so
         // unless it is built here, a tier change has nothing to draw its waiting objects with
@@ -268,19 +291,13 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             const bool photonOn = worldmodes::photonEnabled(doc);
             // SCOPED: the mode is process-wide, and left on it would leave every asynchronous
             // object of the session on its placeholder. Whatever leaves this block turns it off.
+            // (The view is asynchronous for the whole gate: COLD-BOOT-1 stage 4.)
             struct PlaceholdersOnly {
                 Engine &e;
-                View *v;
-                PlaceholdersOnly(Engine &engine_, View *view_) : e(engine_), v(view_) {
-                    v->setAsyncShaders(true);
-                    e.setAsyncShaderPlaceholdersOnly(true);
-                }
-                ~PlaceholdersOnly() {
-                    e.setAsyncShaderPlaceholdersOnly(false);
-                    v->setAsyncShaders(false);
-                }
+                explicit PlaceholdersOnly(Engine &engine_) : e(engine_) { e.setAsyncShaderPlaceholdersOnly(true); }
+                ~PlaceholdersOnly() { e.setAsyncShaderPlaceholdersOnly(false); }
             };
-            std::optional<PlaceholdersOnly> sweep(std::in_place, engine, view);
+            std::optional<PlaceholdersOnly> sweep(std::in_place, engine);
             for (int t = 0; t <= 3; ++t) {
                 const worldmodes::PhotonTier tier = worldmodes::PhotonTier(t);
                 if (tier == born) continue;
@@ -292,13 +309,12 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 last = c;
                 quiet = 0;
                 for (int tf = 0; tf < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames; ++tf) {
-                    frame();
-                    engine.request([](jahshaka::engine::Engine &e) { e.waitForAsyncShaders(); });   // a REQUEST (U3 4a)
+                    frame();   // (settled() below: the placeholders built - never a wait on the UI thread)
                     as = engine.published().shaders;
                     engine.shaderBuildProgress(c, f, e);
                     const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
                     const bool armed = gi.mode == GiMode::Off || gi.vctBound;
-                    quiet = (c == last && as.completed == lastDone && armed) ? quiet + 1 : 0;
+                    quiet = (c == last && as.completed == lastDone && armed && settled(false)) ? quiet + 1 : 0;
                     last = c;
                     lastDone = as.completed;
                 }
@@ -333,6 +349,9 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             View *rv = recordingview::create(engine, es, "startup-warmup-recording", recordingview::kWidth,
                                              recordingview::kHeight, /*helpers*/ false, &why);
             if (rv) {
+                // ...asynchronous like the warm view (a view hands its flag to its scene: OgreView::setScene), so the
+                // world's scene stays asynchronous for the whole gate (COLD-BOOT-1 stage 4)
+                rv->setAsyncShaders(true);
                 unsigned c = 0, f = 0, e = 0;
                 engine.shaderBuildProgress(c, f, e);
                 unsigned last = c + f;
@@ -344,7 +363,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                     frame();
                     engine.request([&](Engine &) { while (rv->takeVideoFrame(picture, false)) {} });
                     engine.shaderBuildProgress(c, f, e);
-                    quiet = (c + f == last) ? quiet + 1 : 0;
+                    quiet = (c + f == last && settled(false)) ? quiet + 1 : 0;
                     last = c + f;
                 }
                 engine.request([&](Engine &) { while (rv->takeVideoFrame(picture, true)) {} });
@@ -416,42 +435,44 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     unsigned last = entryTotal;
     bool shown = false;
 
+    // AFTER EVERY FRAME: the settle fed from the published state, the splash moved when the count did, and the window's
+    // events pumped - every frame, so the window answers throughout (COLD-BOOT-1 stage 4). User input stays out: a click
+    // on a QSplashScreen hides it.
+    gatesettle::Settle settle;
     auto poll = [&]() {
+        const AsyncShaderStats as = engine->published().shaders;
         engine->shaderBuildProgress(compiled, cached, expected);
+        gatesettle::Sample smp;
+        smp.rayBuildsInFlight = as.rayBuildsInFlight;
+        smp.hlmsOutstanding = as.pending - std::min(as.pending, as.rayBuildsInFlight);
+        smp.computeDeferred = as.computeDeferred;
+        smp.placeholderDraws = as.placeholderDraws;
+        smp.pendingSkips = as.pendingSkips;
+        smp.completed = unsigned(as.completed);
+        smp.compiled = compiled + cached;
+        settle.feed(smp, total.elapsed(), false);
         const unsigned now = compiled + cached;
-        if (now == last) return;
-        last = now;
-        splash.showShaderBuild(int(now), int(expected));
-        shown = true;
-        splash.repaint();
+        if (now != last) {
+            last = now;
+            splash.showShaderBuild(int(now), int(expected));
+            shown = true;
+            splash.repaint();
+        }
         app.processEvents(QEventLoop::ExcludeUserInputEvents, 5);
     };
-    // THE BAR MOVES INSIDE A FRAME TOO (SHADER-WARM-2). A frame that builds the
-    // warm scene's lighting arm compiles thirty-odd compute permutations in ONE
-    // renderOneFrame — measured 1,667 ms on the owner's cold launch with the bar
-    // standing still. The engine calls this after each compile it makes on this
-    // thread; it repaints the splash and nothing else (no event processing: we
-    // are inside the frame), at most every 33 ms.
-    QElapsedTimer sincePaint; sincePaint.start();
-    engine->setCompileObserver([&]() {
-        if (sincePaint.elapsed() < 33) return;
-        sincePaint.restart();
-        unsigned c = 0, f = 0, e = 0;
-        engine->shaderBuildProgress(c, f, e);
-        splash.showShaderBuild(int(c + f), int(e));
-        shown = true;
-        // QWidget's repaint, NOT QSplashScreen's: the splash's own repaint()
-        // calls QCoreApplication::processEvents() (qsplashscreen.cpp), and an
-        // event pass from inside a compile runs the render loop's timer — a
-        // frame inside a frame, which deadlocked on Ogre's log mutex (measured,
-        // the first cut of this lane).
-        splash.QWidget::repaint();
-    });
-    // ...cleared on every way out: it captures this function's locals.
-    struct ClearObserver {
-        Engine *engine = nullptr;
-        ~ClearObserver() { if (engine) engine->setCompileObserver({}); }
-    } clearObserver{ engine.get() };
+    const auto settled = [&](bool needRays) { return settle.settled(needRays); };
+    // BEFORE A SCENE OR A TIER GOES: its requests land first. Destroying a compute job CANCELS its request on the
+    // background compiler (fork HlmsCompute::destroyComputeJob -> cancelKey): a phase that ended on its frame cap with
+    // its permutations still building would lose them (built live in the editor later). Frames until the settle's
+    // wait is over; a stall or the ceiling ends it, loudly.
+    const auto drain = [&](const char *what) {
+        while (!settle.waitOver(false)) {
+            gateFrame(*engine);
+            poll();
+        }
+        if (settle.failed(false))
+            qWarning("FAIL: shader build gate: %s did not settle - %s", what, settle.describe().c_str());
+    };
 
     // ---- Drive the build ---------------------------------------------------
     // MEASURED, and the reason this function is not just a wait loop: at this
@@ -491,6 +512,14 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
                                                  Colour(0.0f, 0.0f, 0.0f, 1.0f), OffscreenContract::Live);
+    // THE RAY PIPELINES START NOW, ALL OF THEM, the reflection's first (COLD-BOOT-1 stage 4): their cold driver compiles
+    // (~100 s of a first launch, serial at their consumers' first frames before) run on their builders beside everything
+    // below; the world phases wait for them on the published state before their consumers' frames. And the warm view's
+    // scenes compile in the BACKGROUND for the whole gate: a frame never waits for a compile.
+    if (warmView) {
+        engine->prepareRayPipelines();
+        warmView->setAsyncShaders(true);
+    }
     // LIVE (View::setOffscreenContract): its frames are never read as a picture
     // (its scene's GI below is there to compile the compute set, not to be seen).
     // PRIMARY, NOT UTILITY, AND THIS IS THE WHOLE OF PHASE P4(a)
@@ -627,7 +656,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // and the permutation set is a property of the CONTENT. Those are compiled
     // on the open path instead, behind the loading cover (View::warmUpShaders).
     for (int i = 0; i < kWarmUpFrames && warmView; ++i) {
-        engine->renderOneFrame();
+        gateFrame(*engine);
         poll();
     }
     // ...and the GI's frames, ONLY ON A COLD CACHE (the frames above compiled something: a warm
@@ -674,10 +703,10 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     for (; runPass && warmScene && giFrames < kWarmUpGiFrames &&
            ((quiet < kGiQuietFrames && !warmScene->published().gi.giAtRest) || boundFrames < kWarmUpFrames);
          ++giFrames) {
-        engine->renderOneFrame();
+        gateFrame(*engine);
         poll();
         engine->shaderBuildProgress(compiled, cached, expected);
-        quiet = compiled == lastCompiled ? quiet + 1 : 0;
+        quiet = (compiled == lastCompiled && settled(false)) ? quiet + 1 : 0;
         lastCompiled = compiled;
         if (armBound()) ++boundFrames;
     }
@@ -691,7 +720,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     if (runPass && warmScene && haveWarmGi && warmGi.mode != GiMode::Off) {
         warmScene->setAtomDrawEnabled(false);
         for (int i = 0; i < kWarmUpFrames; ++i) {
-            engine->renderOneFrame();
+            gateFrame(*engine);
             poll();
         }
         warmScene->setAtomDrawEnabled(true);
@@ -707,10 +736,10 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         engine->shaderBuildProgress(compiled, cached, expected);
         unsigned deltaLast = compiled;
         for (; frames < kWarmUpGiFrames && deltaQuiet < kGiQuietFrames; ++frames) {
-            engine->renderOneFrame();
+            gateFrame(*engine);
             poll();
             engine->shaderBuildProgress(compiled, cached, expected);
-            deltaQuiet = compiled == deltaLast ? deltaQuiet + 1 : 0;
+            deltaQuiet = (compiled == deltaLast && settled(false)) ? deltaQuiet + 1 : 0;
             deltaLast = compiled;
         }
         return frames;
@@ -742,14 +771,15 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             for (; tierFrames < kWarmUpGiFrames &&
                    (tierQuiet < kGiQuietFrames || !warmScene->published().gi.vctBound);
                  ++tierFrames) {
-                engine->renderOneFrame();
+                gateFrame(*engine);
                 poll();
                 engine->shaderBuildProgress(compiled, cached, expected);
-                tierQuiet = compiled == tierLast ? tierQuiet + 1 : 0;
+                tierQuiet = (compiled == tierLast && settled(false)) ? tierQuiet + 1 : 0;
                 tierLast = compiled;
             }
             giFrames += tierFrames;
             if (gi.mode != GiMode::Off) giFrames += warmDelta();
+            drain("a tier's compute set");   // before the next tier rebuilds the arm (its jobs, its requests)
         }
         // NO RESTORE (BUGS-7 (c)): the born tier's arm was built above, and the warm-up scene is destroyed next — a
         // push back to it built a lighting arm nothing drew (four frames of the gate).
@@ -776,6 +806,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // ensureEngineScene / pushEditorHelpers), under the world's own environment
     // (buildEnvironment — the same call the viewport makes every frame).
     if (runPass && warmView && db) {
+        drain("the GI compute set's warm-up");   // before its scene goes (its jobs, its requests)
         warmView->setScene(nullptr);
         if (warmScene) engine->destroyScene(warmScene);
         warmScene = nullptr;
@@ -785,7 +816,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             const unsigned before = compiled;
             QElapsedTimer worldTimer; worldTimer.start();
             const int frames = warmEditorWorld(*engine, warmView, shape, db, kind,
-                                               /*presets*/ kind == SceneTemplate::Basic, poll);
+                                               /*presets*/ kind == SceneTemplate::Basic, poll, settle);
             engine->shaderBuildProgress(compiled, cached, expected);
             qInfo("startup shader build: the %s template's world took %d frames, %lld ms and "
                   "compiled %u shader(s)",
@@ -841,20 +872,23 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     if (warmScene) engine->destroyScene(warmScene);
     if (warmView)  warmView->setEnabled(false);
 
-    // ---- Settle: until one whole frame compiles nothing -----------------------
-    // The splash gets its events between frames; the count is read after each.
-    for (int frame = 0; frame < kSettleFrameCap; ++frame) {
-        app.processEvents(QEventLoop::AllEvents);
+    // ---- Settle: until a whole frame's work is there, the ray builds joined -----------
+    // On the published state (gatesettle.h), the window's events pumped between frames (poll); counted in SETTLED frames
+    // - a frame that settles and compiled nothing ends it. The hang guard is the settle's (nothing LANDING for kStallMs,
+    // or the gate's ceiling): a FAIL line, and the editor opens with the work still landing - never a freeze or a spin.
+    for (int settledFrames = 0; settledFrames < kSettleFrameCap;) {
         engine->shaderBuildProgress(compiled, cached, expected);
         const unsigned before = compiled + cached;
-        engine->renderOneFrame();
+        gateFrame(*engine);
         poll();
-        if (last == before) break;
-        if (total.elapsed() > kDeadlineMs) {
-            qWarning("shader build gate: still compiling after %d ms (%u shaders) — "
-                     "showing the window anyway", kDeadlineMs, last);
+        if (settle.failed(true)) {
+            qWarning("FAIL: shader build gate: the final settle did not settle (%u shaders) - %s - showing the window; "
+                     "the rest lands in the background", last, settle.describe().c_str());
             break;
         }
+        if (!settled(true)) continue;
+        ++settledFrames;
+        if (last == before) break;
     }
 
     if (shown) splash.showShaderBuild(-1, 0);
