@@ -151,17 +151,20 @@ QVector<VerbInfo> ProjectApi::verbs() const
           "it by leaving a flag on the page for every other route to read. It is an argument here for the "
           "same reason.",
           Needs::Window },
-        { "openSample", "project.openSample(name) -> bool",
+        { "openSample", "project.openSample(name, {discard}) -> bool",
           "Opens one of the samples this tree ships, by base name (\"Matcaps\", \"Showroom 2\") or by an "
           "Ogre port's display title — THE SAMPLE BROWSER'S OWN ROUTE, which imports the archive and then "
-          "opens the imported world. The dialog's tiles call this, so a script and a double-click take the "
-          "same road. It lands in the EDITOR: a sample is something to look at and edit, and the Player is a "
+          "opens the imported world. The dialog's tiles take the same import (ProjectManager::openSampleArchive), "
+          "so a script and a double-click take the same road; a tile asks a person about unsaved changes. It lands in the EDITOR: a sample is something to look at and edit, and the Player is a "
           "separate statement (app.space('player')). BOTH HALVES ARE THREADED, like the browser's, and "
           "they run in that order: poll project.archiveState() until 'idle' (the import), then "
           "project.openState() until 'idle' (the open), with a frame in the loop. project.samples() "
           "lists the names. A REOPENED SAMPLE IS ALWAYS A FRESH COPY, UNIQUELY NAMED: the first open of "
           "Matcaps makes \"Matcaps\", the next \"Matcaps 2\", then \"Matcaps 3\" (project.nextFreeName's "
-          "rule; every archive import names its project the same way).",
+          "rule; every archive import names its project the same way). THE OPEN WORLD IS SETTLED FIRST, as "
+          "project.open settles it: an unknown name is refused with the world untouched; then unsaved changes "
+          "refuse the open with project.open's sentence unless {discard: true} (auto-save on: they are saved, and "
+          "a failed save refuses), and only then does the import start.",
           Needs::Window },
         { "samples", "project.samples() -> [name]",
           "The base names of every sample scene this tree ships, both sets (the Jahshaka samples and our "
@@ -578,7 +581,7 @@ QStringList ProjectApi::samples()
     return ProjectManager::sampleNames();
 }
 
-bool ProjectApi::openSample(const QString &name)
+bool ProjectApi::openSample(const QString &name, const QVariantMap &options)
 {
     if (!host.shell) return fail("project.openSample: this verb needs the editor window");
     ProjectManager *page = host.shell->projectPage();
@@ -592,18 +595,23 @@ bool ProjectApi::openSample(const QString &name)
     if (ProjectArchiver::anyRunning())
         return fail("project.openSample: an archive operation is already running "
                     "(project.archiveState() reads 'running' until it finishes)");
-    // The undo entry closes with the world that is leaving, exactly as
-    // project.open/openAsync do — the import + open that follows belongs to the
-    // sample being opened, not to the project being left.
     QString why;
-    if (!page->openSampleByName(name, &why))
-        return fail(QStringLiteral("project.openSample: %1").arg(why));
-    // Only once the sample is really on its way: a refusal must not end the
-    // run's undo entry (project.open/openAsync end theirs on the same edge —
-    // the world that is leaving takes the run's edits with it).
+    const QString archive = page->sampleArchive(name, &why);
+    if (archive.isEmpty()) return fail(QStringLiteral("project.openSample: %1").arg(why));
+    // THE OPEN WORLD IS SETTLED BEFORE THE IMPORT (the final read's B5), as project.open settles it: the
+    // import-finished close is a person's Ask, which a driven session refuses with nobody told — the verb
+    // returned true and opened nothing. The undo entry closes with the world that is leaving.
     host.endRunUndoMacro();
+    if (host.services && host.services->project && host.services->project->isSceneOpen()) {
+        QString closeWhy;
+        if (!host.shell->closeProject(true, scriptCloseUnsaved(options), &closeWhy)) {
+            host.beginRunUndoMacro();
+            return fail(QStringLiteral("project.openSample: %1").arg(closeWhy));
+        }
+    }
+    const bool started = page->openSampleArchive(archive, &why);
     host.beginRunUndoMacro();
-    return true;
+    return started ? true : fail(QStringLiteral("project.openSample: %1").arg(why));
 }
 
 bool ProjectApi::openInFlight() const

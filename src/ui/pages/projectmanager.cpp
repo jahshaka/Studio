@@ -899,12 +899,12 @@ QStringList ProjectManager::sampleNames()
     return names;
 }
 
-bool ProjectManager::openSampleByName(const QString &name, QString *why)
+QString ProjectManager::sampleArchive(const QString &name, QString *why) const
 {
     const QString wanted = name.trimmed();
     if (wanted.isEmpty()) {
         if (why) *why = tr("a sample name is required");
-        return false;
+        return QString();
     }
     // The Ogre tab shows a sample's TITLE, not its base name (the archive is
     // named for the entry), so a caller may legitimately hand over either.
@@ -914,17 +914,16 @@ bool ProjectManager::openSampleByName(const QString &name, QString *why)
 
     for (const QString &d : sampleDirectories()) {
         const QString path = QDir(d).absoluteFilePath(base + QStringLiteral(".zip"));
-        if (QFileInfo::exists(path)) return openSampleArchive(path, why);
+        if (QFileInfo::exists(path)) return path;
         // Case-insensitively too: the tree's names are title-cased and a script
         // that types "matcaps" is asking for the same file.
         for (const QFileInfo &fi : QDir(d).entryInfoList({ QStringLiteral("*.zip") }, QDir::Files))
-            if (fi.completeBaseName().compare(base, Qt::CaseInsensitive) == 0)
-                return openSampleArchive(fi.absoluteFilePath(), why);
+            if (fi.completeBaseName().compare(base, Qt::CaseInsensitive) == 0) return fi.absoluteFilePath();
     }
     if (why)
         *why = tr("no sample named '%1' is shipped (%2)")
                    .arg(wanted, sampleNames().join(QStringLiteral(", ")));
-    return false;
+    return QString();
 }
 
 bool ProjectManager::openSampleArchive(const QString &archivePath, QString *why)

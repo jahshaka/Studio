@@ -105,6 +105,26 @@ function autosaveOff() {
     assert(project.open(byName("Doors Round Trip")) === true && meshes() === before + 1,
            "...and the discarded edit is gone, the saved one kept (" + meshes() + ")");
 
+    // project.openSample SETTLES THE OPEN WORLD FIRST, as project.open does (the final read's B5): over a dirty
+    // world it returned true, and the import-finished close (a person's Ask, refused in a driven session) then
+    // opened nothing and said nothing.
+    var trip = project.current().guid;
+    scene.addPrimitive("sphere");
+    why = refusal(function () { if (project.openSample("IesProfiles") !== true) throw new Error("returned true"); });
+    console.log("openSample with auto-save off: " + why);
+    assert(why !== null && why.indexOf("unsaved changes and auto-save is off") >= 0 && why.indexOf("discard") >= 0,
+           "a sample opened over a dirty world with auto-save off is REFUSED, naming {discard: true}");
+    assert(project.archiveState() === "idle" && project.current().guid === trip && dirty() === true,
+           "...no import started, and the world stays, still dirty");
+    assert(refusal(function () { project.openSample("No Such Sample", { discard: true }); }) !== null
+           && project.current().guid === trip, "an unknown sample is refused with the world untouched");
+    assert(project.openSample("IesProfiles", { discard: true }) === true, "{discard: true} drops them and imports");
+    var turns = 0;
+    while ((project.archiveState() !== "idle" || project.openState() !== "idle") && turns < 200000) ++turns;
+    assert(project.current() && project.current().name.indexOf("IES Profiles") === 0,
+           "...and the sample opens (" + (project.current() ? project.current().name : "nothing open") + ")");
+    assert(project.open(trip) === true && meshes() === before + 1, "...and the discarded sphere is gone");
+
     // A CREATE WHOSE FIRST SAVE FAILS (the trigger drops that row's writes) is UNSAVED, not clean: the create
     // cleared the stack, and the scene read clean though its row holds no scene - the close then dropped it.
     project.create("Doors Create Fails", { template: "empty" });

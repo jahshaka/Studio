@@ -41,7 +41,7 @@ public:
     Q_INVOKABLE bool open(const QString &guidOrName, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE bool openAsync(const QString &guidOrName,
                                const QVariantMap &options = QVariantMap());
-    Q_INVOKABLE bool openSample(const QString &name);
+    Q_INVOKABLE bool openSample(const QString &name, const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QStringList samples();
     Q_INVOKABLE QString openState();
     Q_INVOKABLE QString openRefusal();
