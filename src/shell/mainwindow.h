@@ -351,7 +351,8 @@ public slots:
     void sceneNodeSelected(iris::SceneNodePtr sceneNode);
 
     /// THE EDITOR'S SAVE (Ctrl+S, the toolbar, the close's auto-save): the one
-    /// door, ProjectService::save(Editor). False when it failed (said to the user).
+    /// door, ProjectService::save(Editor). False when it failed (said to the user); a save that left out the
+    /// nodes a run added says so once in the viewport readout (the scene stays unsaved).
     bool saveScene();
 
     void showPreferences();

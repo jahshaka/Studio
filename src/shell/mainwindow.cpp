@@ -964,7 +964,12 @@ bool MainWindow::startInteractiveImport(const QStringList &files)
 
 bool MainWindow::saveScene()
 {
-	return projectService->save(project->getProjectGuid(), ProjectService::SaveReason::Editor);
+	QString note;
+	if (!projectService->save(project->getProjectGuid(), ProjectService::SaveReason::Editor, &note)) return false;
+	// A SAVE THAT LEFT OUT THE NODES A RUN ADDED (true, still unsaved) is said where the person is looking: once
+	// per save, in the viewport's transient readout (the lead's ruling: not a scene-error notice, not a box).
+	if (!note.isEmpty() && !FirstRun::isDrivenSession()) showViewportToast(tr("Save Scene"), note);
+	return true;
 }
 
 
