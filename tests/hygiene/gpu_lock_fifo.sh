@@ -126,6 +126,8 @@ want "$(grep -qP '^HOLD\t\d{12}\.s5\t\d+\t\S+\t[0-9.]+\tS7\tshort:5$' "$JAH_GPU_
      "(7) the hold log: the short's ticket <n>.s5 and class short:5, the long's class long (7 fields)"
 want "$(cat "$JAH_GPU_LOCK.q/.credit/"* 2> /dev/null | grep -qE '^0 [01] 1$' && echo 1)" \
      "(7) the passed long's credit: 'held passed count' = 0 <the short's actual s> 1 ($(cat "$JAH_GPU_LOCK.q/.credit/"* 2> /dev/null))"
+want "$(! grep -q 'No such file' "$T/S7.out" "$T/L7.out" && echo 1)" \
+     "(7) a waiter whose long ticket has no credit yet prints nothing of it (a missing credit file is read silently: $(grep -c 'No such file' "$T/S7.out") line(s))"
 }
 chain8() {
 # (8) THE FAIRNESS LAW: a long ticket is passed only while passed + s <= its allowance (+ 15 % of its own held s): with a toy

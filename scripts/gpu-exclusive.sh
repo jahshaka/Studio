@@ -389,7 +389,7 @@ PASS_ALLOW_S=${JAH_GPU_PASS_ALLOW_S:-90} PASS_SHARE_PCT=15   # (JAH_GPU_PASS_ALL
 short_of() { case "${1##*/}" in *.s[0-9]*) echo "${1##*.s}" ;; esac; }   # a short ticket's declared seconds; empty: a long one
 credit_ok() {   # <pid> <start> <s>: may the owner of this long ticket be passed by <s> more seconds of shorts
     local held=0 passed=0
-    read -r held passed _ < "$q/.credit/$1-$2" 2> /dev/null
+    { read -r held passed _ < "$q/.credit/$1-$2"; } 2> /dev/null   # (braced: a missing file's error is the redirect's own, N)
     [ $(( 100 * (${passed:-0} + $3) )) -le $(( 100 * PASS_ALLOW_S + PASS_SHARE_PCT * ${held:-0} )) ]
 }
 head_ticket() {   # THE HEAD: the lowest ticket whose pid is alive - unless it is LONG and the first waiting SHORT ticket has credit
@@ -419,7 +419,7 @@ charge() {   # <seconds, may be negative>: added to `passed` of every long ticke
              # only by the card's holder (this hold), by rename: the flock itself serialises every credit write
     local k held passed n
     for k in "${charged[@]}"; do
-        held=0 passed=0 n=0; read -r held passed n < "$q/.credit/$k" 2> /dev/null
+        held=0 passed=0 n=0; { read -r held passed n < "$q/.credit/$k"; } 2> /dev/null
         echo "${held:-0} $(( ${passed:-0} + $1 )) $(( ${n:-0} + ${2:-0} ))" > "$q/.credit/$k.tmp.$$" && mv -f "$q/.credit/$k.tmp.$$" "$q/.credit/$k"
     done
 }
