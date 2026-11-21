@@ -680,6 +680,15 @@ add_test(NAME source.webgpu_census
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/webgpu_census.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.webgpu_census PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.webgpu_census)
+# source.ray_seam (DOORS-0 stage 1, V2 plan 0.5): THE CARD'S RAY API IS SPELLED IN ONE FILE - comments stripped, no
+# rayQuery*EXT / gl_RayQuery*EXT / gl_RayFlags*EXT / accelerationStructureEXT outside irisgl's
+# engine/src/rayquery/include/jah_rq.glsl (irisgl/engine and the fork's Hlms media read), and the seam holds #defines
+# only (no function: no OpFunction, no OpName - the compiled words stay the card's own). RED with every site; its
+# self-test first (one call per family red outside the seam and quiet in a comment; a function in the seam red).
+add_test(NAME source.ray_seam
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/ray_seam.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.ray_seam PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.ray_seam)
 # source.display_guard (URGENT #195, 2026-11-21): NO TOOL BOOTS ON A DISPLAY THAT IS NOT A RIG - an agent's shell inherits
 # DISPLAY=:0, the OWNER's, and warm-app-cache.sh booted jahlab there. scripts/display-guard.sh is the one definition (:60-:99);
 # the census classes every user of DISPLAY under scripts/ and tests/support/ (a new one is red until classed); warm-app-cache.sh
