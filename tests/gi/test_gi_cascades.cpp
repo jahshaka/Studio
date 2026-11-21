@@ -1473,8 +1473,7 @@ int main(int argc, char **argv)
                 std::printf("\n");
             }
             // ...the SAME POSE at rest, after everything has caught up...
-            if (run.still) for (int q = 0; q < 120; ++q) { render(e, 1); Image im; view->readPixels(im); }   // (NONDET-1 M-C: every rest frame of run 4 synced by a readback)
-            else render(e, raysOn ? 56 : 120);
+            render(e, raysOn ? 56 : 120);
             Image rest; CHECK(view->readPixels(rest), "the rest frame reads back");
             // ...and THE ORACLE: the chain built fresh at that pose.
             GiParams off; off.mode = GiMode::Off;
