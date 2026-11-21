@@ -529,12 +529,14 @@ jah_gpu_row(frame.particles_once_a_frame CLASS engine FRAMES 11 COMMAND test_fra
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.particles_once_a_frame PROPERTIES TIMEOUT 60 LABELS "engine")
 # engine.rough_lobe_transport — THE ROUGH LOBE's HISTORY IS CARRIED TO THE CURRENT VIEW BEFORE IT IS BLENDED (ROUGH-LOBE-HISTORY-1,
-# V2 plan 1.8; test_rough_lobe_transport.cpp says the laws): the carried mean's expectation tracks L(V_now) on a walk (the bare
-# blend lags by (N - 1) dL: its negative control), delta is +0.0 bit-exact when the eye's view did not move, and each eye reads
-# only its own previous camera (no stereo card row reaches the gather: the per-eye law rests here). The shader's functions
-# transcribed; source.rough_lobe_transport holds the shader's text to the same form. A CPU code row.
+# V2 plan 1.8; test_rough_lobe_transport.cpp says the laws): on irisgl's RoughLobeCarry.h (the shader's one-line update as a
+# pure function), the carried mean's expectation is L_t on a linear walk, young and at the floor (the bare blend's closed-form
+# lags n dL / 2 and (N - 1) dL are its negative control), and without a carry the history and the mean keep their bits.
+# source.rough_lobe_transport pins the shader's lines to the header (and holds the per-eye and one-call-site laws). A CPU
+# code row.
 add_executable(test_rough_lobe_transport test_rough_lobe_transport.cpp)
 set_target_properties(test_rough_lobe_transport PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_rough_lobe_transport PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
 add_test(NAME engine.rough_lobe_transport COMMAND test_rough_lobe_transport)
 set_tests_properties(engine.rough_lobe_transport PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.rough_lobe_transport)
