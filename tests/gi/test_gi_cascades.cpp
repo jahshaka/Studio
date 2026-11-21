@@ -65,6 +65,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <unistd.h>
 #include <string>
 #include <vector>
 
@@ -1404,6 +1405,14 @@ int main(int argc, char **argv)
             enginetest::setNodeScale(scene, turner, Vec3(2.0f, 2.0f, 2.0f));
             CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the motion");
             render(e, 60);
+            {   // NONDET-1 (instrument): the cube's GPU-scene slot, read from the CPU mirror (Scene::gpuSceneEntry: no GPU read)
+                const unsigned slots = scene->published().gpuScene.slotCount;
+                int found = -1;
+                GpuSceneEntry ge;
+                for (unsigned i = 0; i < slots && found < 0; ++i)
+                    if (scene->gpuSceneEntry(i, ge) && ge.nodeId == turner) found = int(i);
+                std::printf("NONDET-1 slot: run %d cube node %llu at GPU-scene slot %d of %u\n", ri, turner, found, slots);
+            }
             int faces = 0;
             {
                 const GiStatus g = scene->published().gi;
@@ -1482,6 +1491,21 @@ int main(int argc, char **argv)
             CHECK(scene->setGlobalIllumination(cascadeGi()), "...and is built fresh at the final pose");
             render(e, 120);
             Image truth; CHECK(view->readPixels(truth), "the fresh build reads back");
+            const auto nondetDump = [&](const Image &im, const char *what) {   // NONDET-1 (instrument): the image as read back
+                const char *root = std::getenv("JAH_RIG_DATA");
+                if (!root || im.rgba.empty()) return;
+                const std::string path = std::string(root) + "/nondet1-img-pid" + std::to_string(::getpid()) + "-run" +
+                                         std::to_string(ri) + "-" + what + ".ppm";
+                if (FILE *f = std::fopen(path.c_str(), "wb")) {
+                    std::fprintf(f, "P6\n%u %u\n255\n", im.width, im.height);
+                    for (size_t i = 0; i + 3 < im.rgba.size(); i += 4) std::fwrite(&im.rgba[i], 1, 3, f);
+                    std::fclose(f);
+                    std::printf("NONDET-1 image: %s\n", path.c_str());
+                }
+            };
+            nondetDump(motion, "motion");
+            nondetDump(rest, "rest");
+            nondetDump(truth, "fresh");
             int restMax = 0, motionMax = 0, motionTruthMax = 0;
             unsigned restOver = 0, motionOver = 0, motionTruthOver = 0;
             diffOf(rest, truth, restMax, restOver);
@@ -1514,7 +1538,7 @@ int main(int argc, char **argv)
             }
             CHECK(scene->setGlobalIllumination(off), "the motion's chain comes down");
             render(e, 2);
-            scene->removeNode(turner);
+            if (!(doMoverRoutes && ri == 3)) scene->removeNode(turner);   // (NONDET-1 M-G: run 3's cube stays in the scene)
         }
         }
         e->setRayTracing(true);
