@@ -111,8 +111,17 @@ static NodeId addMesh(Scene *s, const MeshData &md, const Colour &albedo, const 
 /// 40..88 of 128 here and is 5/16..11/16 there, which is those pixels exactly).
 using enginetest::leakroom::meanRG;
 
-int main()
+int main(int argc, char **argv)
 {
+    // ONE ROW A PROOF (V2 plan 0.2, the lead's ruling 2026-11-21: the three proofs in one process ran 10.4 s, over the
+    // fixture's 10 s): argv[1] = bars (the leak through a wall at four thicknesses, the field on the chain), seam (the fold's
+    // seam: a curved single-sided surface is one surface), cards (the leak on a carded wall, card against the store). Each part
+    // builds its own scenes and requires nothing from another: the view it shares with the bars is made here for all three.
+    const std::string part = argc > 1 ? argv[1] : "";
+    if (part != "bars" && part != "seam" && part != "cards") {
+        std::printf("FAIL: which part? (bars | seam | cards), not '%s'\n", part.c_str());
+        return 1;
+    }
     const float thicknesses[4] = { 0.5f, 0.2f, 0.1f, 0.05f };
     // THE BARS, DERIVED FROM THE STORE (PHOTON-VOXEL-4, SUITES-REANCHOR-1): an opaque wall leaks
     // nothing in the physics, so the bar is what the store may still let through - its quantum
@@ -145,6 +154,7 @@ int main()
                  float fieldSpan = 0.0f; };
     Row rows[4];
 
+    if (part == "bars") {
     for (int a = 0; a < 4; ++a) {
         const float T = thicknesses[a];
         Scene *s = e->createScene("leak" + std::to_string(a));
@@ -166,6 +176,9 @@ int main()
             gi.bounces = true;
             if (!s->setGlobalIllumination(gi))
                 std::printf("   engine error: %s\n", e->lastError().c_str());
+            // THE DECLARED ROUTE (URGENT #146, R16; the split's rows left routes_pending): a Live view runs the SCREEN
+            // INTEGRATE; ddgi On = the field; GiMode::Vct = the store; budget 1 = live - asserted on the next frame
+            enginetest::declareRoutes(view, s, enginetest::Routes().integrate().field().store(), "gi.leak_room.bars's view");
             enginetest::leakroom::setOutsideIntensity(s, room, 25.0f);
             s->refreshGlobalIllumination();
             render(e, 10);
@@ -213,6 +226,7 @@ int main()
     }
     CHECK(rows[0].greenChain > 0.02f,
           "the room is lit by its own lamp (the leak is measured on a lit wall, not a black one)");
+    }
     // =====================================================================
     // THE FOLD'S SEAM — a curved SINGLE-SIDED surface is one surface
     // (fork ad452604a+155a56bf8+0338ca7f2+c4c80b5f7 (was 0065); the review's F1)
@@ -236,8 +250,8 @@ int main()
     // volume. A sphere's far side must stay dark; a plate thinner than a voxel
     // IS two-sided and its far side must NOT — that is the pin's behaviour and
     // the half of the test that stops the fix from being "never flag anything".
+    if (part == "seam") {
     std::printf("\n== the fold's seam: a curved single-sided surface is ONE surface ==\n");
-    {
         // A FIXED GRADE, or this measures the auto-exposure instead of the light:
         // the scene is one lamp over a black void, so the 1x1 luminance history
         // opens all the way up on the dark side and reads a black frame as white
@@ -313,6 +327,10 @@ int main()
                 gi.bounces = true;
                 if (!s->setGlobalIllumination(gi))
                     std::printf("   engine error: %s\n", e->lastError().c_str());
+                // THE DECLARED ROUTE (URGENT #146, R16): the measured state, GI ON - the Live view's screen integrate over the
+                // store, paused (budget 0), the cone bounce read directly (ddgi Off: no field)
+                if (on) enginetest::declareRoutes(view, s, enginetest::Routes().integrate().store().paused(),
+                                                  "gi.leak_room.seam's view, GI on");
                 render(e, 6);
             };
 
@@ -398,8 +416,8 @@ int main()
     view->setScene(nullptr);
     e->destroyView(view);
     // ---- THE CARDS' ARM ----------------------------------------------------------------------------------------------
+    if (part == "cards") {
     std::printf("\n== the cards: the leak on a carded wall, card against the store ==\n");
-    {
         e->setRayTracing(true);
         View *cv = e->createOffscreenView("leak_cards", 256, 256, Colour(0, 0, 0), OffscreenContract::StillPicture);
         Scene *s = e->createScene("leak_cards");
@@ -530,6 +548,10 @@ int main()
             return r;
         };
         s->setGlobalIllumination(gi);
+        // THE DECLARED ROUTE (URGENT #146, R16): a StillPicture view with the rays on and ssr 1 GATHERS and runs the ray
+        // REFLECTION; the CARDS and the voxel STORE live; budget 0 = PAUSED - asserted on the next frame
+        enginetest::declareRoutes(cv, s, enginetest::Routes().gather().reflection().cards().store().paused(),
+                                  "gi.leak_room.cards's view");
         e->waitForAsyncShaders();
         // THE LOBE ARM's queries: the panel's face toward the room, head-on (the read's viewer along its facing)
         std::vector<CardReadQuery> lobeQ;

@@ -792,9 +792,18 @@ target_compile_definitions(test_gi_leak_room PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_leak_room PRIVATE JahshakaEngine)
 add_dependencies(test_gi_leak_room JahshakaEngineMedia)
-jah_gpu_row(gi.leak_room CLASS engine FRAMES 425 COMMAND test_gi_leak_room
-         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(gi.leak_room PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+# ONE ROW A PROOF (V2 plan 0.2, the lead's ruling 2026-11-21: the three proofs in one process ran 10.4 s): .bars (the leak
+# through a wall at four thicknesses, the field on the chain), .seam (the fold's seam: a curved single-sided surface is one
+# surface), .cards (the leak on a carded wall, card against the store). Each part builds its own scenes from nothing: none
+# REQUIRES another. FRAMES each part's own count (its fixture prints it).
+foreach(_pf "bars|80" "seam|96" "cards|248")
+    string(REPLACE "|" ";" _p "${_pf}")
+    list(GET _p 0 _part)
+    list(GET _p 1 _f)
+    jah_gpu_row(gi.leak_room.${_part} CLASS engine FRAMES ${_f} COMMAND test_gi_leak_room ${_part}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(gi.leak_room.${_part} PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+endforeach()
 
 # gi.relight_credit (stage 5's read B1) — A LAMP'S RELIGHT AFTER A SHADER WAIT SPENDS ONE FRAME'S COUNT: the test door
 # gi.relightShaderHold holds every cascade's relight 40 frames over a lamp step; then no frame relights more than the
