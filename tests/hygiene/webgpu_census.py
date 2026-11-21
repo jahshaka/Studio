@@ -199,7 +199,7 @@ def read_tree(engine):
                 if in_set(rel, 'shaders+decl') or in_set(rel, 'src') or rel == VR_POLICY_FILE:
                     with open(os.path.join(d, f), encoding='utf-8', errors='replace') as fh:
                         files.append((rel, strip(fh.read())))
-    return files
+    return sorted(files)   # one order on every box: the listings diff cleanly
 
 
 # ---- the self-test: the stripper, one violation per class, the law's three cases ------------------------------------
@@ -334,10 +334,14 @@ def main():
     red = judge(got, vk)
     for r in red:
         print(r)
+    # every run lists the one-eye-only gates and prints the exempt three's counts (held by no one, seen in every log)
+    for s in got['one-eye-only gates']:
+        print('eye  %s:%d  %s' % s)
+    for rel in RAW_VK_EXEMPT:
+        print('free raw Vulkan in %s: %d (exempt, not held: D7)' % (rel, len(vk.get(rel, []))))
     held = sum(len(got[c[0]]) for c in CLASSES) + sum(len(s) for r, s in vk.items() if r not in RAW_VK_EXEMPT)
-    free = sum(len(vk.get(r, [])) for r in RAW_VK_EXEMPT)
-    print('%s: %d files read, %d classes + raw Vulkan in %d files; %d sites held, %d raw Vulkan in the exempt three' %
-          ('FAILED' if red else 'PASSED', len(files), len(CLASSES), len(vk), held, free))
+    print('%s: %d files read, %d classes + raw Vulkan in %d files; %d sites held' %
+          ('FAILED' if red else 'PASSED', len(files), len(CLASSES), len(vk), held))
     return 1 if red else 0
 
 
