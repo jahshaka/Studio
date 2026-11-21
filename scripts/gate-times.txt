@@ -461,7 +461,7 @@ pool.host_epic::frame_step 0.34  the arm's ARM line in pool.host_epic's solo run
 tooling.gpu_lock_mark 3.10  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044620-e4427ba87, 1-min load 1.2; V2 plan 0.2)
 source.display_guard 0.87  solo (alone in its own ctest call, 2026-11-21, load 3.5; URGENT #195: CPU only, fakes)
 samples.mirror_room.selection_reflection 22.74  solo (alone in its own ctest call, rig :64, 2026-11-21; V2 plan 0.2: split by proof out of samples.cleanstart.Mirror_Room)
-gi.card_residency.walk 12.13  solo (one -j1 call, rig :64, 2026-11-21; the card_residency split, V2 plan 0.2; the first run of the relinked exe in the call)
+gi.card_residency.walk 11.26  solo (one -j1 call, rig :64, 2026-11-21, load 1.4 after; law (7) re-pointed at a lit edge, its Jacobi reference read until still: 24 frames, not 64; 321 frames)
 gi.card_residency.teleport 7.88  solo (one -j1 call, rig :64, 2026-11-21; the card_residency split, V2 plan 0.2; its own run)
 gi.card_residency_held.in 7.86  solo (one -j1 call, rig :64, 2026-11-21; the card_residency split, V2 plan 0.2; its own run)
 gi.card_residency_held.out 8.99  solo (rig :64, 2026-11-21, after its writer in one -j1 call; the NO POP ends on giAtRest: 319 frames, MORE than the 290 before - the lower wall is the quieter box, not the change)

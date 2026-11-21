@@ -84,6 +84,7 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
+#include <cstring>
 #include <dlfcn.h>
 #include <fstream>
 #include <sstream>
@@ -189,8 +190,10 @@ struct Run {
     /// each cascade's placement at B (the pinned arm (6) takes the walk's)
     std::vector<Vec3> builtAtB;
     /// (7)'s CONVEX EDGE (the toggle the readback named, PHOTON-7 stage 10): cascade 0's front at the world point of the
-    /// walk's toggling cell c0 67,93,84 - the top front edge of a court box - at B's rest (ok: the cascade holds it)
+    /// centre pillar's vertical edge facing the lamp, at y 3.0 (kEdgeWorld) - at B's rest (ok: the cascade holds it)
     bool edgeOk = false, edgeRefOk = false;
+    /// the Jacobi re-solve's frames until the edge cell stopped moving (printed)
+    int edgeRefFrames = 0;
     float edge[3] = { 0.f, 0.f, 0.f }, edgeRef[3] = { 0.f, 0.f, 0.f };
     /// (8)'s NO POP (the held-out run): the card's ARRIVAL then its DEPARTURE at B's rest - the largest change of any
     /// pixel in one frame through each (display codes), and whether the picture came to rest again after each
@@ -215,8 +218,16 @@ static bool gEdgeReference = false;
 static const int kQuiet = 2;
 /// THE WALK's frames from A to B (24 m; 120 before the rows' split - the law reads B's rest, not the walk's pace)
 static const int kWalkFrames = 60;
-/// the edge's world point: the walk's cascade 0 cell 67,93,84 at B (the readback's, spikes/photon-7/stage10/10-2)
-static const float kEdgeWorld[3] = { 12.30f, 4.02f, 4.10f };
+/// THE EDGE's WORLD POINT, RE-POINTED (V2 plan 0.2, the lead's ruling 2026-11-21): the old point (12.30 4.02 4.10) lay inside
+/// the solid junction of room B's ceiling and its +z wall - the OUTER top edge of a sealed room, where no light is (it was the
+/// photon-court scene's cell 67,93,84 carried into a fixture with no court) - and (7) compared 0 0 0 with 0 0 0 from its
+/// first kept log (10-26). The LAW's SUBJECT is a convex edge that RECEIVES light at B's rest: the centre pillar's vertical edge
+/// between its +x and +z faces, both facing the lamp (13.2 3.0 1.2) directly - at y 3.0 the cell straddling the edge (cascade
+/// 0, 0.078 m: cell 60 70 34, cover 0.56 - the faces' full cells beside it read cover 1.0, light ~4.6), measured 2026-11-21:
+/// light 2.25 2.00 1.74. The DEFECT it catches: the feedback's fixed point at a CONVEX EDGE CELL - a mixed-cover cell whose two
+/// faces' halves of the store (VOXEL-R13) meet - drifting from or toggling around the Jacobi's fixed point of the same grid
+/// (PHOTON-7 stage 10's "toggling cell" class), which no full-cover face cell can show.
+static const float kEdgeWorld[3] = { 12.20f, 3.00f, 0.20f };
 
 bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, int gatherLate = 0,
              const std::vector<Vec3> *pinTo = nullptr, int holdCard = 0) {
@@ -602,12 +613,21 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
     if (holdCard) e->setArm("cards.force", 0.0);
     if (gEdgeReference && walk && !crowded && !pinTo && !gatherLate && out.edgeOk) {
         // (7)'s REFERENCE for the convex edge: the same placement re-solved by THE JACOBI DOOR (gi.bounceJacobi: every
-        // cascade restarted from its direct term, every brick a pass a frame) - the fixed point by another path, the
-        // same grid; read once it holds (64 frames: bounce_series' Jacobi-64)
+        // cascade restarted from its direct term, every brick a pass a frame) - the fixed point by another path, the same
+        // grid - READ UNTIL IT STOPS MOVING (CODING_RULES § 2): the edge cell read at frame 16, then every 8 frames, until two
+        // reads hold the same bits (at most 64: bounce_series' Jacobi-64). Measured 2026-11-21 (spikes/te-tools/walk-edge/):
+        // the restart is real - frame 1 reads 2.115 against the walk's 2.246 (5.8 % low: red at (7)'s bar), frame 4 0.26 %
+        // low, the bits fixed from frame 16 on. (Read in steps: each read copies the whole cascade back - a read every frame,
+        // 11 of them, cost the row 3 s more than the 64 frames it saved.)
         e->setArm("gi.bounceJacobi", 4.0);
-        run(64);
-        GiVoxelVolume z;
-        if (scene->giVoxelLight(0, z) && z.available) {
+        float last[3] = { -1.f, -1.f, -1.f };
+        int still = 0;
+        for (int jf = 0; jf < 64 && still < 1;) {
+            const int step = jf == 0 ? 16 : 8;
+            run(step);
+            jf += step;
+            GiVoxelVolume z;
+            if (!scene->giVoxelLight(0, z) || !z.available) continue;
             int q[3];
             bool inside = true;
             for (int k = 0; k < 3; ++k) {
@@ -616,10 +636,12 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
                 inside = inside && q[k] >= 0 && q[k] < n;
             }
             const size_t i = inside ? (size_t(q[2]) * size_t(z.height) + size_t(q[1])) * size_t(z.width) + size_t(q[0]) : 0;
-            if (inside && z.light.size() >= 4 * i + 3) {
-                out.edgeRefOk = true;
-                for (int k = 0; k < 3; ++k) out.edgeRef[k] = z.light[4 * i + size_t(k)];
-            }
+            if (!inside || z.light.size() < 4 * i + 3) continue;
+            out.edgeRefOk = true;
+            const bool same = std::memcmp(last, &z.light[4 * i], sizeof(last)) == 0;
+            for (int k = 0; k < 3; ++k) out.edgeRef[k] = last[k] = z.light[4 * i + size_t(k)];
+            still = same ? still + 1 : 0;
+            out.edgeRefFrames = jf;
         }
         e->setArm("gi.bounceJacobi", 0.0);
         run(2);
@@ -1130,13 +1152,18 @@ int main(int argc, char **argv)
         // (7)'s CONVEX EDGE against its reference: the walk's toggling cell at B's rest against the same placement's
         // Jacobi re-solve, within a code (1 % over the store's floor) plus the store's achievable quantum under the
         // iteration (0.5 / (1 - r) steps: 1.5e-7 at the floor at r 0.8)
+        // (7)'s PREMISE (the lead's ruling 2026-11-21): the cell HOLDS LIGHT at B's rest - its largest channel over the store's
+        // floor - or the law compares two zeros and guards nothing (it did from its first kept log, 10-26: 0 0 0 vs 0 0 0)
+        const double edgeMax = std::max({ double(w.edge[0]), double(w.edge[1]), double(w.edge[2]) });
+        CHECK(w.edgeOk && edgeMax > double(kGiBrickFloor),
+              "(7)'s PREMISE: the convex edge's cell holds light at B's rest (its largest channel over the store's floor)");
         bool within = w.edgeOk && w.edgeRefOk;
         for (int k = 0; k < 3 && within; ++k)
             within = std::fabs(double(w.edge[k]) - double(w.edgeRef[k])) <=
                      0.01 * std::max(double(std::fabs(w.edgeRef[k])), double(kGiBrickFloor)) + 1.5e-7;
         std::printf("   (7) the convex edge (%.2f %.2f %.2f) at B's rest: the walk %.6g %.6g %.6g, its Jacobi re-solve %.6g %.6g "
-                    "%.6g\n", kEdgeWorld[0], kEdgeWorld[1], kEdgeWorld[2], w.edge[0], w.edge[1], w.edge[2], w.edgeRef[0],
-                    w.edgeRef[1], w.edgeRef[2]);
+                    "%.6g (still after %d frames)\n", kEdgeWorld[0], kEdgeWorld[1], kEdgeWorld[2], w.edge[0], w.edge[1], w.edge[2],
+                    w.edgeRef[0], w.edgeRef[1], w.edgeRef[2], w.edgeRefFrames);
         CHECK(within, "(7) THE CONVEX EDGE HOLDS: the walk's toggling cell within a code of its Jacobi re-solve");
     }
     CHECK(gOrbitOver == 0u,
