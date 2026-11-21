@@ -10,6 +10,11 @@
 #   (4) no ticket left behind (an expired reservation removed by the next call);
 #   (5) A BOUNDED WAITER KEEPS ITS PLACE: exit 75, a later arrival queues, the re-call under the same label is served
 #       first (URGENT #113's loss: each 75 sent its re-call to the back of the line).
+# THE CASES RUN SIDE BY SIDE, EACH ON ITS OWN PRIVATE LOCK (V2 plan 0.2's source.row_budget red, 2026-11-21: run one after
+# another its holds summed 9 s of sleeps and the row read 11.6 s solo against its 10-s class budget): every law here is a law of
+# ONE lock's queue, so four locks - (1); (2); (3)+(5)+(4), which share one because (4) reads what (3) and (5) left; (6) - are four
+# independent proofs at once. Each keeps its own sleeps as its margins (CODING_RULES §6), none shortened; the row's wall is the
+# longest chain's.
 # usage: gpu_lock_fifo.sh <the tree's scripts/gpu-exclusive.sh>
 set -u
 LOCKSH=${1:?gpu-exclusive.sh}
@@ -17,12 +22,13 @@ T=$(mktemp -d "${TMPDIR:-/tmp}/gpu-lock-fifo.XXXXXX")
 trap 'rm -rf "$T"' EXIT
 export HOME="$T" JAH_GPU_LOCK="$T/lock"
 unset JAH_GPU_LOCK_HELD
-fails=0
-want() { if [ "$1" = 1 ]; then echo "  ok   $2"; else echo "  FAIL $2"; fails=$((fails + 1)); fi; }
+want() { if [ "$1" = 1 ]; then echo "  ok   $2"; else echo "  FAIL $2"; fi; }   # (counted from the chains' outputs)
 log=$T/grants
 # (0) AN EMPTY QUEUE PRINTS NOTHING (8B's master check: an unmatched glob's redirect printed "No such file" once)
 "$LOCKSH" --label E true > "$T/E.out" 2>&1
-want "$([ ! -s "$T/E.out" ] && echo 1)" "(0) an empty queue: the lock prints nothing ($(head -c 120 "$T/E.out"))"
+want "$([ ! -s "$T/E.out" ] && echo 1)" "(0) an empty queue: the lock prints nothing ($(head -c 120 "$T/E.out"))" > "$T/c0.out"
+cat "$T/c0.out"
+chain1() {
 # (1) THE ORDER: five waiters, then the late short one (measured: the kernel itself served blocked flock waiters in
 # arrival order 4 runs of 4 - (1) guards the queue's order; (0), (2), (4) and (5) are red on the plain flock)
 "$LOCKSH" --label H sh -c "echo H >> '$log'; sleep 1.5" > "$T/H.out" 2>&1 &
@@ -38,16 +44,20 @@ echo "   the grants: $order"
 want "$([ "$order" = "H W1 W2 W3 W4 W5 L " ] && echo 1)" "(1) the grants in ticket order: a holder, five waiters, a late short one last"
 want "$(grep -q 'gpu-lock: waiting for the card (held by: pid [0-9]* H since' "$T/W1.out" && grep -qE '^gpu-lock: waited [0-9]+(\.[0-9])? s$' "$T/W1.out" && echo 1)" \
      "(1) a waiter's two lines unchanged: 'waiting for the card (held by: …)' and 'waited N.N s' (tenths, #95)"
+}
+chain2() {
 # (2) A DEAD TICKET AHEAD
 dead=$(sh -c 'echo $$')
-mkdir -p "$T/lock.q"
-echo "$dead dead" > "$T/lock.q/000000000000"
+mkdir -p "$T/lock2.q"
+echo "$dead dead" > "$T/lock2.q/000000000000"
 t0=$(date +%s%N)
 "$LOCKSH" --label D true > "$T/D.out" 2>&1
 rd=$?
 ms=$(( ($(date +%s%N) - t0) / 1000000 ))
-want "$([ "$rd" -eq 0 ] && [ "$ms" -lt 3000 ] && [ ! -e "$T/lock.q/000000000000" ] && echo 1)" \
+want "$([ "$rd" -eq 0 ] && [ "$ms" -lt 3000 ] && [ ! -e "$T/lock2.q/000000000000" ] && echo 1)" \
      "(2) a dead pid's ticket ahead is skipped and removed ($ms ms)"
+}
+chain35() {
 # (3) THE BOUND: --wait-max bounds the whole wait (the queue's too); its reservation never idles the card
 "$LOCKSH" --label H2 sleep 2 > "$T/H2.out" 2>&1 &
 sleep 0.4
@@ -75,16 +85,18 @@ want "$([ "$rc1" -eq 75 ] && [ "$order2" = "C N " ] && echo 1)" \
      "(5) a bounded waiter's re-call under its label keeps its place: served before a later arrival ($rc1; $order2)"
 # (4) NOTHING LEFT (the expired reservation removed by the next call's scan: (3)'s 1-s reservation expired during (5))
 "$LOCKSH" true > /dev/null 2>&1
-left=$(ls "$T/lock.q" | grep -c '^[0-9]' || true)
+left=$(ls "$T/lock3.q" | grep -c '^[0-9]' || true)
 want "$([ "$left" -eq 0 ] && echo 1)" "(4) no ticket left behind ($left)"
+}
+chain6() {
 # (6) AN UNTICKETED HOLDER IS NAMED (URGENT #141): an old copy's hold - a bare flock and a holder line with no ticketed
 # mark - makes the waiter print ONE loud line naming it and log it to <lock>.log; a ticketed holder is never named
-( exec 9>>"$T/lock"; flock 9; echo "pid $BASHPID ue-old-copy since now" > "$T/lock.holder"; sleep 2 ) &
+( exec 9>>"$T/lock6"; flock 9; echo "pid $BASHPID ue-old-copy since now" > "$T/lock6.holder"; sleep 2 ) &
 sleep 0.4
 "$LOCKSH" --label W true > "$T/W.out" 2>&1
 wait
 n=$(grep -c 'AN UNTICKETED HOLDER: pid [0-9]* ue-old-copy - an old gpu-exclusive.sh copy' "$T/W.out")
-want "$([ "$n" = 1 ] && grep -q "waiter 'W'.*AN UNTICKETED HOLDER: pid [0-9]* ue-old-copy" "$T/lock.log" && echo 1)" \
+want "$([ "$n" = 1 ] && grep -q "waiter 'W'.*AN UNTICKETED HOLDER: pid [0-9]* ue-old-copy" "$T/lock6.log" && echo 1)" \
      "(6) an unticketed holder (an old copy's bare flock) named ONCE by the waiting head and in <lock>.log ($n)"
 "$LOCKSH" --label H6 sleep 1.5 > /dev/null 2>&1 &
 sleep 0.4
@@ -92,5 +104,10 @@ sleep 0.4
 wait
 want "$(grep -q 'held by: pid [0-9]* H6 since .* ticketed' "$T/W2.out" && ! grep -q 'UNTICKETED' "$T/W2.out" && echo 1)" \
      "(6) a ticketed holder (this script) is never named: its holder line carries the mark"
+}
+for c in 1 2 35 6; do ( export JAH_GPU_LOCK="$T/lock${c:0:1}"; "chain$c" ) > "$T/chain$c.out" 2>&1 & done
+wait
+cat "$T/chain1.out" "$T/chain2.out" "$T/chain35.out" "$T/chain6.out"
+fails=$(cat "$T"/chain*.out "$T/c0.out" 2>/dev/null | grep -c '^  FAIL')
 echo "tooling.gpu_lock_fifo: $([ $fails -eq 0 ] && echo PASS || echo FAIL)"
 exit $(( fails > 0 ))
