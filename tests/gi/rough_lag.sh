@@ -47,8 +47,148 @@
 # THE SAME LAW, SPLIT (one run each at 1e1c4d97e, no B5, 2026-10-29): the split 2.01 / 5.14 / 17.82 %, the whole row
 # 2.15 / 4.93 / 17.22 % - |walk - conv| mean 1.46 / 1.91 / 2.93 and p99 13 / 13 / 11 codes identical, the rest the twelve
 # raw frames' sigma; the declared 1.79 / 4.59 / 16.07 above are cafcc1f64's (the tree moved since, not the split).
-# usage: rough_lag.sh <jahlab> <walk dir> walk | rough_lag.sh <jahlab> <walk dir> 14|28|59 <work dir>
+# THE LAG LAW RE-DERIVED (ROUGH-LOBE-HISTORY-1 stage 2C, 2026-11-21; the arithmetic is LAW_PY below, self-checked by
+# gi.walk_rough.law; it replaces the forward-step form above once the refutation run has read both on k14):
+#   THE HISTORY (rq_probe_integrate.comp:1257-1294; the rough lobe takes the diffuse's blend, Lumen's one N for both):
+#     m_j = (1 - b_j) m_(j-1) + b_j x_j,  b_j = max(1 / n_j, alpha),  alpha = 1 / h,
+#   n_j the history count (the frames the mean holds, this one included; 4 bits, so it SATURATES at 15), h the floor's
+#   frames; the fast update only RAISES b (N' = min(N, (1 - F)(h - 1)), b = 1 / (1 + N'), the stored count round(N') + 1:
+#   so b >= 1 / (n + 1/2) at the stored count n). Its expectation's lag behind the converged picture c:
+#     lag_j = c_j - E[m_j] = (1 - b_j) (lag_(j-1) + c_j - c_(j-1))
+#   - the sum Sum_j alpha (1 - alpha)^j (c(k) - c(k - j)) at the floor. For a RAMP (c_j - c_(j-1) = s) its fixed point
+#   at b = alpha is lag = ((1 - alpha) / alpha) s = (h - 1) s; and as b_j >= alpha on every frame, lag <= (h - 1) s holds
+#   whatever the history's past (refusals, fast cuts) - so one frame at b >= 1 / n_eff from it bounds
+#     lag <= (1 - 1/n_eff) h s,   n_eff = min(n + 1/2, h)   ((h - 1) s for every n >= h - every saturated count; 0 at n = 0).
+#   THE SLOPE is read BACKWARD over the window the EMA remembers: s = |c(k) - c(k - h)| / h, from ONE MORE CONVERGED POSE
+#   h frames behind k. Both pictures are 8-bit, so |c(k) - c(k - h)| is known to +-1 code (the slope to +-1/h a frame),
+#   and the bound grants that rounding (else a true lag at the bound breaks by the pictures' rounding alone):
+#     lag(k) <= (1 - 1/n_eff) (|conv(k) - conv(k - h)| + 1)
+#   THE NEW LAW:  |walk(k) - conv(k)| <= (1 - 1/n_eff) (|conv(k) - conv(k - h)| + 1) + 3 SE_walk + 1
+#   (the noise term as before). It is TIGHTER where the count saturates (9 steps of the slope where the old form gave 14)
+#   and stops collapsing where the slope is under half a code a frame. WHAT THE OLD FORM GOT WRONG: (N - 1)
+#   |conv(k+1) - conv(k)| took (a) the COUNT for the memory - 15 against the EMA's h = 10 - and (b) ONE FORWARD 8-bit step,
+#   +-1 code: a ramp of 0.3 code a frame lags 2.7 codes and reads a step of 0 at 70 % of the rounding offsets (granted 0),
+#   1 at the rest (granted 14). A pixel starved of samples (blend 0: the hit list full) keeps its mean and lags past the
+#   bound - the law shows it.
+#   h IS READ, NEVER WRITTEN HERE: no status field carries the history's floor itself (GatherTuning::historyFrames is the
+#   A/B door, 0 = the shipped kHistoryFrames, OgreScreenProbeGather.cpp:360-366; the lab's status has no such field). The
+#   walk's OWN stillness record carries its settle (rough-walk.tsv settle_frames, GiStatus's settleFrames), which is
+#   settleFramesOf(h) = ceil(ln(1/D) / ln(1 - 1/max(h, 2))) at D = kGatherSettleCodes = 5 (OgreScreenProbeGather.cpp:372,
+#   Types.h): one-to-one on h = 3..15 (h 1 and 2 share the settle 3), so the row inverts it (16 -> 10) and refuses a
+#   settle that names no single h.
+# usage: rough_lag.sh law (the law's self-check: no card, no display) | rough_lag.sh <jahlab> <walk dir> walk |
+#        rough_lag.sh <jahlab> <walk dir> 14|28|59 <work dir>
 set -u
+# THE LAW's ARITHMETIC (the one copy: the self-check below runs it; the header derives it)
+LAW_PY=$(cat <<'PY'
+import math
+import numpy as np
+KCOUNT_MAX = 15        # the packed count's four bits (jah_probe_history.glsl kHistoryCountMax)
+SETTLE_CODES = 5.0     # kGatherSettleCodes (Types.h): the step the settle waits out
+def settle_of(h):
+    """the engine's settleFramesOf(h) (OgreScreenProbeGather.cpp)"""
+    return int(math.ceil(math.log(1.0 / SETTLE_CODES) / math.log(1.0 - 1.0 / float(max(h, 2)))))
+def history_of_settle(settle):
+    """the floor h whose settle the record carries; None when no single h in 1..15 has it"""
+    hs = [h for h in range(1, KCOUNT_MAX + 1) if settle_of(h) == settle]
+    return hs[0] if len(hs) == 1 else None
+def lag_steps(n, h):
+    """(1 - 1/n_eff) h, n_eff = min(n + 1/2, h): the lag's bound in frames of the slope at the stored count n (0: none)"""
+    n = np.asarray(n, dtype=np.float64)
+    return np.where(n >= 1.0, h * (1.0 - 1.0 / np.minimum(n + 0.5, float(h))), 0.0)
+def lag_allowance(conv, k, n, h):
+    """the lag the law grants at walk frame k: conv maps a pose to its converged picture in codes (the larger channel's
+    change where the picture has channels), n the history count, h the floor read from the walk's record"""
+    d = np.abs(np.asarray(conv[k], dtype=np.float64) - np.asarray(conv[k - h], dtype=np.float64))
+    if d.ndim == 3:
+        d = d.max(axis=2)
+    return lag_steps(n, h) / h * (d + 1.0)
+PY
+)
+if [ "${1:-}" = law ]; then
+    # gi.walk_rough.law: THE LAW's ARITHMETIC CHECKED ON SYNTHETIC RAMPS (no card, no display; RED for the old form: a
+    # ramp of 0.3 code a frame read through one forward step granted 0 for a lag of 2.7)
+    python3 -I -c "$LAW_PY
+$(cat <<'PY'
+import sys
+fails = []
+def check(ok, what):
+    print(('ok   ' if ok else 'FAIL ') + what, flush=True)
+    if not ok:
+        fails.append(what)
+# 1. THE READ OF h: the settle the walk's record carries names one h (the engine's documented 16 at h = 10, Types.h)
+by = {}
+for h in range(3, KCOUNT_MAX + 1):
+    by.setdefault(settle_of(h), []).append(h)
+check(all(len(v) == 1 for v in by.values()) and all(history_of_settle(settle_of(h)) == h for h in range(3, KCOUNT_MAX + 1)),
+      'the settle names its floor one-to-one on h = 3..15: %s' % ' '.join('%d->%d' % (s, v[0]) for s, v in sorted(by.items())))
+check(settle_of(10) == 16 and history_of_settle(16) == 10, 'settle 16 <-> h 10 (Types.h: 16 at the shipped 10 frames)')
+check(history_of_settle(settle_of(1)) is None, 'a settle of %d (h 1 or 2) names no single h: refused' % settle_of(1))
+# THE SHADER's HISTORY, frame by frame (rq_probe_integrate.comp:1257-1290): count 0 takes the frame whole; the blend
+# max(1 / (count + 1), 1 / h); the fast update at amount F caps N' = min(1 / b - 1, (1 - F)(h - 1)), b = 1 / (1 + N'), and
+# stores round(N') + 1; the count saturates at 15. A REFUSAL (another surface's history) restarts it at count 1.
+def history(xs, h, events):
+    m, cnt, out = None, 0, []
+    for j, x in enumerate(xs):
+        ev = events.get(j)
+        if m is None or ev == 'refuse':
+            m, cnt = x, 1
+        else:
+            b = max(1.0 / (cnt + 1), 1.0 / h)
+            nxt = cnt + 1
+            if isinstance(ev, float):
+                nf = min(1.0 / b - 1.0, (1.0 - ev) * (h - 1.0))
+                b = 1.0 / (1.0 + nf)
+                nxt = int(nf + 0.5) + 1
+            m = m + b * (x - m)
+            cnt = min(nxt, KCOUNT_MAX)
+        out.append((m, cnt))
+    return out
+# 2. THE CLOSED FORM: on a ramp at the floor the lag is (1/alpha - 1) s = (h - 1) s exactly
+worst = 0.0
+for h in (2, 5, 10, 15):
+    for s in (0.05, 0.3, 3.0):
+        xs = [s * j for j in range(600)]
+        m, _ = history(xs, h, {})[-1]
+        worst = max(worst, abs((xs[-1] - m) - (h - 1.0) * s) / ((h - 1.0) * s))
+check(worst < 1e-9, 'an EMA on a ramp lags (1/alpha - 1) s: the largest relative error %.1e over h 2/5/10/15, s 0.05/0.3/3' % worst)
+# 3. THE BOUND HOLDS WHATEVER THE PAST: random refusals and fast cuts; at every frame 0 <= lag <= lag_steps(count, h) s
+rng = np.random.default_rng(20261121)
+over, frames = 0.0, 0
+for trial in range(1500):
+    h = int(rng.integers(2, KCOUNT_MAX + 1)); s = float(rng.uniform(0.01, 3.0))
+    ev = {}
+    for j in rng.choice(np.arange(1, 160), size=int(rng.integers(0, 12)), replace=False):
+        ev[int(j)] = 'refuse' if rng.random() < 0.3 else float(rng.uniform(0.01, 0.9))
+    xs = [s * j for j in range(160)]
+    for j, (m, cnt) in enumerate(history(xs, h, ev)):
+        lag = xs[j] - m
+        over = max(over, lag - float(lag_steps(cnt, h)) * s, -lag)
+        frames += 1
+check(over <= 1e-9, 'the lag never passes (1 - 1/n_eff) h s, n_eff = min(n + 1/2, h), at the stored count: %d frames of '
+      '1500 histories with refusals and fast cuts, the largest excess %.2e codes' % (frames, over))
+# 4. READ FROM TWO 8-BIT CONVERGED PICTURES (display rounding), at every slope 0..3 code a frame and every rounding offset:
+#    the allowance is a BOUND on the true lag (h - 1) s, and no looser than the pictures' rounding (2 (1 - 1/h) codes)
+k = 30
+s = np.arange(0.0, 3.0005, 0.01)[:, None]; a = np.arange(0.0, 1.0, 0.01)[None, :]
+for h in (5, 10, 15):
+    conv = {j: np.floor(100.0 + a + s * j + 0.5) for j in range(k - h, k + 2)}
+    grant = lag_allowance(conv, k, np.full(s.shape, 15.0), h) * np.ones_like(a)
+    true = (h - 1.0) * s * np.ones_like(a)
+    short, loose = float((true - grant).max()), float((grant - true).max())
+    check(short <= 1e-9 and loose <= 2.0 * (1.0 - 1.0 / h) + 1e-9,
+          'h %d: the allowance from 8-bit pictures bounds the true lag at every slope and offset (short by at most %.3f '
+          'codes; loose by at most %.3f, the rounding\'s %.3f)' % (h, max(short, 0.0), loose, 2.0 * (1.0 - 1.0 / h)))
+    if h == 10:
+        i = int(round(0.3 / 0.01))
+        check(float(grant[i].min()) >= 2.7 - 1e-9, 'h 10, a ramp of 0.3 code a frame lags 2.70 codes: the law grants %.2f..%.2f'
+              % (float(grant[i].min()), float(grant[i].max())))
+print('gi.walk_rough.law: %s' % ('FAIL (%d)' % len(fails) if fails else 'PASS'))
+sys.exit(1 if fails else 0)
+PY
+)"
+    exit $?
+fi
 LAB=${1:?jahlab}; WALK=${2:?the walk dir}; PART=${3:?walk, 14, 28 or 59}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 case $PART in

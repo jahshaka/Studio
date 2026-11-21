@@ -1378,6 +1378,16 @@ if(TARGET jahlab)
     set_tests_properties(gi.walk_rough.k59 PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
 endif()
+# gi.walk_rough.law (ROUGH-LOBE-HISTORY-1 stage 2C) — THE LAG LAW's ARITHMETIC IS THE EMA's: `rough_lag.sh law` runs the
+# k rows' own allowance (LAW_PY, derived in its header) on synthetic ramps through the shader's history rule - the closed
+# form (h - 1) s exact, the bound (1 - 1/n_eff) h s under refusals and fast cuts, the allowance read from two 8-bit
+# pictures h frames apart a bound at every slope and offset and no looser than their rounding, and the floor h read back
+# from the settle the walk's record carries (one-to-one on 3..15). RED for the old forward-step form (granted 0 for a
+# 2.7-code lag). No card, no display.
+add_test(NAME gi.walk_rough.law COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh law)
+set_tests_properties(gi.walk_rough.law PROPERTIES LABELS "gi" TIMEOUT 60)
+set_tests_properties(gi.walk_rough.law PROPERTIES JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(gi.walk_rough.law)
 
 # gi.walk_area (PHOTON-7 stage 7: the walk 7-A owed, at the stage's master check) — THE AREA LIGHT'S PENUMBRA WALK:
 # walk.sh --area on photon-area (a plate's 3 m penumbra across the floor, a glossy strip through it): M1 and the live
