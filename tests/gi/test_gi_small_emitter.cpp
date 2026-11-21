@@ -65,7 +65,6 @@ int main(int, char **)
     Engine *e = engine.get();
     e->setRayTracing(false);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     const float kMirrorZ = 0.0f, kCamZ = 0.6f, kY = 1.0f;
     const float arms[2] = { 1.2f, 3.0f };   // the emitter's face distance from the mirror: near (c1), far (c2)

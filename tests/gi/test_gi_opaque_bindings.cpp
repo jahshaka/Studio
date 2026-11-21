@@ -76,7 +76,6 @@ int main()
     Engine *e = engine.get();
     e->setRayTracing(true);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     View *view = e->createOffscreenView("opaque_bindings", 256, 256, Colour(0, 0, 0),
                                         OffscreenContract::StillPicture);   // (each chain below sets its own)

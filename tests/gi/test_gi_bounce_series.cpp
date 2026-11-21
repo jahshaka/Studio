@@ -70,6 +70,14 @@
 //       code of a 64-pass Jacobi of the end state; the arm can fail (the voxels beyond move over a code). RED with the
 //       carried section unread (High: 296 voxels over a code, the worst 2.25; the door's other half alone,
 //       the passed bricks' moves read, is green either way: under a 120-frame fade the bounces' moves alone resume them).
+//   (9) THE FADE NEVER FLIPS A DIRECT TERM'S SIGN (NONDET-1 stage 2; the part `fade`): a voxel's direct term is affine in the
+//       lamp with non-negative terms (its halves' cosine, visibility, albedo and the lamp's colour all >= 0, the emissive
+//       independent of the lamp), so a relight's relative change of it (the brick mask's word 0, jahBrickChange: |b - a| /
+//       max(|a|, |b|)) is at most 1 - 200/400 at the lamp's step and far less a fade frame; OVER 100 % (100 codes) it needs
+//       an old and a new term of OPPOSITE signs, which no input makes. Read over the fade and its rest by the detector
+//       gi.foreignDetect. RED on the injection's dynamically indexed local arrays on NVIDIA (12 of 14 first fades of a
+//       process; the fault is a process's FIRST fade only - a second fresh chain in the same process never showed it, so a
+//       run proves one first fade: the miss rate on a broken build is 2 in 14 a row, ~2 % for the two rows together).
 //   (8) AT THE RAY TIER (PHOTON-7 stage 10, 10-2b; the part `rays`, High and Epic): the voxel sides are gathered by TLAS
 //       rays (rq_voxel_sides.comp) - the sky-leak arm with the rays on: the sides' gather ran (its dispatches and sides
 //       read back, GiStatus::voxelSides), and the inner-wall voxels of cascades 0 and 1 read under 1 % of the sky (L9's
@@ -88,6 +96,9 @@
 
 #include <algorithm>
 #include <chrono>
+#include <cstdlib>
+#include <memory>
+#include <sstream>
 #include <cmath>
 #include <cstdio>
 #include <string>
@@ -192,8 +203,21 @@ int main(int argc, char **argv)
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->setRayTracing(false);
+    // NONDET-1's INSTRUMENT: JAH_TEST_ARMS="name=value,name=value" sets measuring arms for the whole process (a measuring
+    // run's command line - one binary carries every arm of a side branch). Unset in every gate run.
+    if (const char *arms = std::getenv("JAH_TEST_ARMS")) {
+        std::stringstream list(arms);
+        std::string item;
+        while (std::getline(list, item, ',')) {
+            const size_t eq = item.find('=');
+            if (eq == std::string::npos) continue;
+            const std::string name = item.substr(0, eq);
+            const double value = std::atof(item.c_str() + eq + 1);
+            std::printf("JAH_TEST_ARMS: %s = %g\n", name.c_str(), value);
+            e->setArm(name, value);
+        }
+    }
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     const GiQuality tiers[4] = { GiQuality::Low, GiQuality::Medium, GiQuality::High, GiQuality::Epic };
     const char *names[4] = { "low", "medium", "high", "epic" };
@@ -268,9 +292,15 @@ int main(int argc, char **argv)
     // (the lamp at 200 at rest - the world the fade also ends in, within (5)'s code). None = every part.
     const std::string part = argc > 2 ? argv[2] : "";
     const bool doSeries = part.empty() || part == "series";
-    const bool doFade = part.empty() || part == "fade";
+    // NONDET-1's INSTRUMENT (`fade` with JAH_TRIALS set by a measuring run's caller; unset in every gate run): the fade's
+    // state, then JAH_TRIALS trials in this one process in place of the fade arm, each a FRESH chain (GI off and on: no
+    // store carried from the last trial) at the lamp of 400 at rest, the fade over JAH_TRIAL_FRAMES frames to 200, its rest
+    // judged by (5)'s own law against the resume arm's Jacobi, and the detector gi.foreignDetect (JAH_FOREIGN_BAR codes)
+    // read per cascade, with the rest's digests.
+    const bool doTrials = (part.empty() || part == "fade") && std::getenv("JAH_TRIALS") != nullptr;
+    const bool doFade = (part.empty() || part == "fade") && !doTrials;
     const bool doStep = part.empty() || part == "lamp";
-    const bool doLamp = doFade || doStep;
+    const bool doLamp = doFade || doStep || doTrials;
     const bool doRays = part == "rays";
     for (int t = 0; t < 4; ++t) {
         if (argc > 1 && std::string(argv[1]) != names[t]) continue;
@@ -531,6 +561,9 @@ int main(int argc, char **argv)
         size_t carryOver = 0, carryMoved = 0;
         double carryWorst = 0.0;
         int carryRest = -1;
+        unsigned long long fadeSignReadings = 0;   // (9): the direct-term readings of the fade over the sign bar
+        unsigned fadeSignCascades = 0;
+        bool fadeSignRead = false;
         unsigned long long carryResumes = 0, carryCarried = 0;
         bool carryOk = false;
         int fadeRoundGap = -1, fadeRounds = 0, fadeRoundBound = 0;
@@ -559,6 +592,173 @@ int main(int argc, char **argv)
             // THE START: the lamp at 400, at rest, and (the fade's travel) its Jacobi
             setLamp(400.0f);
             toRest(900);
+            if (doTrials) {
+                const auto envInt = [](const char *n, int d) { const char *v = std::getenv(n); return v ? std::atoi(v) : d; };
+                const int trials = std::max(1, envInt("JAH_TRIALS", 5));
+                const int fadeFrames = std::max(2, envInt("JAH_TRIAL_FRAMES", kFadeFrames));
+                const char *barEnv = std::getenv("JAH_FOREIGN_BAR");
+                const double bar = barEnv ? std::atof(barEnv) : 50.0;   // (READ-9's bound: a relight moves D by 50 codes at most)
+                GiParams gi;
+                gi.mode = GiMode::Vct;
+                gi.quality = tiers[t];
+                gi.ddgi = GiToggle::Off;
+                gi.cards = false;
+                gi.bounces = true;
+                gi.updateBudget = 0;
+                int fails = 0, detected = 0, both = 0;
+                bool signDumped = false;   // (one sign dump a process)
+                // THE INPUTS AT THE FLAGGED VOXEL (the injection's own-voxel inputs, the voxeliser's level 0 and the halves'
+                // faces), read back at the sign dump and at the same fade frame of the NEXT trial (the clean control)
+                int inC = -1, inFrame = -1;
+                size_t inX = 0, inY = 0, inZ = 0, inHalf = 0;
+                const auto dumpInputs = [&](const char *tag) {
+                    GiVoxelVolume v, hv;
+                    const bool okV = m.scene->giVoxelVolume(inC, v), okH = m.scene->giVoxelHalves(inC, hv);
+                    if (!okV || !okH || v.width <= 0) {
+                        std::printf("     INPUTS %s c%d: no readback\n", tag, inC);
+                        return;
+                    }
+                    const size_t w = size_t(v.width), h = size_t(v.height);
+                    const size_t i = (inZ * h + inY) * w + inX, a = inHalf / 2u;
+                    const auto q = [&](const std::vector<float> &arr, size_t idx) {
+                        static char buf[96];
+                        if (arr.size() < 4u * idx + 4u) return std::string("-");
+                        std::snprintf(buf, sizeof buf, "(%.6g %.6g %.6g %.6g)", double(arr[4u * idx]), double(arr[4u * idx + 1u]),
+                                      double(arr[4u * idx + 2u]), double(arr[4u * idx + 3u]));
+                        return std::string(buf);
+                    };
+                    std::printf("     INPUTS %s c%d voxel (%zu,%zu,%zu) half %zu at world (%.3f, %.3f, %.3f): albedo %s emissive %s "
+                                "emitP %s emitN %s covP %s covN %s posP %s posN %s halfSide[%zu] %s halfNormal[%zu] %s\n",
+                                tag, inC, inX, inY, inZ, inHalf, double(v.origin[0] + v.cell[0] * (float(inX) + 0.5f)),
+                                double(v.origin[1] + v.cell[1] * (float(inY) + 0.5f)), double(v.origin[2] + v.cell[2] * (float(inZ) + 0.5f)),
+                                q(v.albedo, i).c_str(), q(v.emissive, i).c_str(), q(v.emitP, i).c_str(), q(v.emitN, i).c_str(),
+                                q(v.coverageP, i).c_str(), q(v.coverageN, i).c_str(), q(v.positionP, i).c_str(), q(v.positionN, i).c_str(),
+                                a, q(hv.halfSide[a], i).c_str(), a, q(hv.halfNormal[a], i).c_str());
+                    for (size_t b = 0; b < 6u; ++b) {
+                        const size_t t = ((inZ * h + inY) * 6u + b) * w + inX;
+                        std::printf("       half %zu: total %s direct %s\n", b, q(v.halfLight, t).c_str(), q(hv.halfDirect, t).c_str());
+                    }
+                };
+                for (int k = 0; k < trials; ++k) {
+                    GiParams off;
+                    off.mode = GiMode::Off;
+                    m.scene->setGlobalIllumination(off);
+                    setLamp(400.0f);   // (the last trial's fade ended at 200: every trial starts at 400, at rest)
+                    run(2);
+                    m.scene->setGlobalIllumination(gi);
+                    e->waitForAsyncShaders();
+                    const int buildRest = toRest(900);
+                    e->setArm("gi.foreignDetect", bar);
+                    const GiStatus g0 = m.scene->published().gi;   // (the feedback's bricks so far: the fade's work below)
+                    const unsigned long long fadeStart = m.scene->published().frame;
+                    std::printf("     FADE MARK trial %d: the fade begins at engine frame %llu\n", k, fadeStart);
+                    std::fflush(stdout);
+                    for (int f = 1; f <= fadeFrames; ++f) {
+                        setLamp(400.0f - 200.0f * float(f) / float(fadeFrames));
+                        run(1);
+                        if (f % 100 == 0) {   // (the engine's own log lines - a compile in the frame - fall between these)
+                            std::printf("     FADE MARK trial %d: fade frame %d\n", k, f);
+                            std::fflush(stdout);
+                        }
+                        if (signDumped && inC >= 0 && k > 0 && inFrame == f) {
+                            dumpInputs("CONTROL (this trial, the same fade frame)");
+                            inC = -1;
+                        }
+                        if (signDumped) continue;
+                        const GiStatus gs = m.scene->published().gi;
+                        for (size_t c = 0; c < gs.cascades.size() && !signDumped; ++c) {
+                            if (!gs.cascades[c].signFirstFrame) continue;
+                            signDumped = true;
+                            GiVoxelVolume v;
+                            if (!m.scene->giVoxelDirect(int(c), v) || v.halfDirect.empty()) {
+                                std::printf("     SIGN DUMP c%zu at fade frame %d: no readback\n", c, f);
+                                break;
+                            }
+                            // (the half direct store: ((z * height + y) * 6 + half) * width + x, four floats a texel)
+                            float lo = 0.0f;
+                            size_t at = 0, negatives = 0, texels = v.halfDirect.size() / 4u;
+                            for (size_t t = 0; t < texels; ++t)
+                                for (int ch = 0; ch < 3; ++ch) {
+                                    const float x = v.halfDirect[4u * t + size_t(ch)];
+                                    if (x < 0.0f) ++negatives;
+                                    if (x < lo) { lo = x; at = t; }
+                                }
+                            const size_t w = size_t(v.width), h = size_t(v.height);
+                            const size_t x = at % w, rest = at / w, half = rest % 6u, y = (rest / 6u) % h, z = rest / 6u / h;
+                            const size_t bw = (w + 7u) / 8u, bh = (h + 7u) / 8u;
+                            std::printf("     SIGN DUMP c%zu (first over 100 at fade frame %lld, brick %u): read back at fade frame %d - "
+                                        "%zu negative channels of %zu texels; the smallest %.6g at voxel (%zu,%zu,%zu) half %zu = brick %zu\n",
+                                        c, (long long)gs.cascades[c].signFirstFrame - (long long)fadeStart, gs.cascades[c].signFirstBrick,
+                                        f, negatives, texels, double(lo), x, y, z, half, x / 8u + bw * (y / 8u + bh * (z / 8u)));
+                            inC = int(c);
+                            inFrame = f;
+                            inX = x;
+                            inY = y;
+                            inZ = z;
+                            inHalf = half;
+                            dumpInputs("AT THE SIGN");
+                        }
+                    }
+                    const unsigned long long fadeEnd = m.scene->published().frame;
+                    const int rest = toRest(900);
+                    const GiStatus g = m.scene->published().gi;
+                    e->setArm("gi.foreignDetect", 0.0);
+                    const Reading fe = read(m.scene);
+                    double worst = 0.0;
+                    size_t over = 0;
+                    const bool same = fe.ok && fe.voxels == lj.voxels && lj.voxels == outside.size();
+                    for (size_t i = 0; same && i < fe.voxels; ++i) {
+                        if (!outside[i]) continue;
+                        const double rf = std::fabs(double(fe.L[i]) - double(lj.L[i])) / std::max(double(lj.L[i]), 1e-6);
+                        worst = std::max(worst, rf);
+                        over += rf > 0.01 ? 1u : 0u;
+                    }
+                    const bool fail = !same || rest < 0 || over != 0u;
+                    bool hit = false;
+                    unsigned signs = 0;
+                    for (const GiStatus::CascadeStatus &c : g.cascades) {
+                        hit = hit || c.foreignFirstFrame != 0u;
+                        signs += c.signReadings ? 1u : 0u;
+                    }
+                    fails += fail ? 1 : 0;
+                    detected += hit ? 1 : 0;
+                    both += (fail && hit) ? 1 : 0;
+                    auto dg = std::make_shared<GiVoxelDigests>();
+                    m.scene->requestGiVoxelDigests(dg);
+                    for (int w = 0; w < 120 && !dg->ready; ++w) run(1);
+                    std::printf("   TRIAL %d %s: built at rest in %d, the fade %d frames (engine frames %llu-%llu), rest %d after: beyond, "
+                                "worst %.3f codes, %zu over one | detector (bar %.1f codes) %s, SIGN in %u cascades\n", k, fail ? "FAIL" : "pass",
+                                buildRest, fadeFrames, fadeStart, fadeEnd, rest, 100.0 * worst, over, bar, hit ? "FIRED" : "quiet",
+                                signs);
+                    {   // THE FEEDBACK'S WORK over the fade and its rest: bricks listed (each a bounce group when it runs)
+                        unsigned long long ran = 0;
+                        for (size_t c = 0; c < g.cascades.size() && c < g0.cascades.size(); ++c)
+                            ran += g.cascades[c].feedbackBricksRan - g0.cascades[c].feedbackBricksRan;
+                        std::printf("     the feedback listed %llu brick-passes over the fade and its rest (%.1f a fade frame)\n", ran,
+                                    double(ran) / double(fadeFrames));
+                    }
+                    for (size_t c = 0; c < g.cascades.size(); ++c) {
+                        const GiStatus::CascadeStatus &cs = g.cascades[c];
+                        std::printf("     c%zu: readings %llu (skipped %llu), word0 max %.3f (brick %u), word1 max %.3f (brick %u) codes; "
+                                    "first over %.0f: fade frame %lld word %u brick %u %.3f codes, %u bricks over (skipped by then "
+                                    "%llu); SIGN (word0 > 100): %llu readings, first at fade frame %lld brick %u %.3f codes, %u "
+                                    "bricks; digests direct %s light %s\n",
+                                    c, cs.foreignReadings, cs.brickReadingsSkipped, double(cs.foreignDirectMax),
+                                    cs.foreignDirectMaxBrick, double(cs.foreignBounceMax), cs.foreignBounceMaxBrick, bar,
+                                    cs.foreignFirstFrame ? (long long)cs.foreignFirstFrame - (long long)fadeStart : -1ll,
+                                    cs.foreignFirstWord, cs.foreignFirstBrick, double(cs.foreignFirstCodes), cs.foreignFirstCount,
+                                    cs.foreignFirstSkipped, cs.signReadings,
+                                    cs.signFirstFrame ? (long long)cs.signFirstFrame - (long long)fadeStart : -1ll,
+                                    cs.signFirstBrick, double(cs.signFirstCodes), cs.signFirstCount,
+                                    dg->ready && c < dg->direct.size() ? dg->direct[c].substr(0, 16).c_str() : "-",
+                                    dg->ready && c < dg->light.size() ? dg->light[c].substr(0, 16).c_str() : "-");
+                    }
+                    std::fflush(stdout);
+                }
+                std::printf("   TRIALS %d: %d FAIL by (5)'s law, the detector fired in %d, both in %d (missed fails %d, false fires %d)\n",
+                            trials, fails, detected, both, fails - both, detected - both);
+                CHECK(fails == 0, "TRIALS: every trial's fade ends where its Jacobi says");
+            }
             Reading o400, sEnd, fEnd;
             if (doFade) {
                 e->setArm("gi.bounceJacobi", 1.0);
@@ -584,6 +784,9 @@ int main(int argc, char **argv)
             unsigned long long rounds0 = m.scene->published().gi.cascades.empty()
                                              ? 0ull : m.scene->published().gi.cascades[0].relightRounds;
             int lastRound = 0, roundGap = 0, roundsDone = 0;
+            // (9)'s DETECTOR over the fade and its rest: every brick reading of the injection's relative change of the
+            // direct term (gi.foreignDetect, 50 codes; the sign bar at 100)
+            e->setArm("gi.foreignDetect", 50.0);
             for (int f = 1; f <= kFadeFrames; ++f) {
                 setLamp(400.0f - 200.0f * float(f) / float(kFadeFrames));
                 run(1);
@@ -603,6 +806,15 @@ int main(int argc, char **argv)
             fadeRoundBound = int(2u * lwf + 2u);
             fadeRest = toRest(900);
             fEnd = read(m.scene);
+            {
+                const GiStatus gs = m.scene->published().gi;
+                fadeSignReadings = 0;
+                for (const GiStatus::CascadeStatus &c : gs.cascades) fadeSignReadings += c.signReadings;
+                fadeSignCascades = 0;
+                for (const GiStatus::CascadeStatus &c : gs.cascades) fadeSignCascades += c.signReadings ? 1 : 0;
+                fadeSignRead = !gs.cascades.empty() && gs.cascades[0].foreignReadings > 0u;
+            }
+            e->setArm("gi.foreignDetect", 0.0);
             }
             // each arm against the end state's Jacobi (the resume arm's, the lamp at 200), beyond the range
             fadeOk = lj.voxels == outside.size() && (!doFade || (o400.ok && fEnd.ok && o400.voxels == lj.voxels &&
@@ -769,6 +981,11 @@ int main(int argc, char **argv)
                   "(5) the slow fade moves the voxels beyond the range over a code in all, every voxel under a step a frame");
             CHECK(fadeOk && fadeOver == 0u,
                   "(5) THE SLOW FADE ENDS WHERE THE STEP ENDS: beyond the range, the FADE arm within one code of a 64-pass Jacobi");
+            std::printf("   (9) the fade's direct-term readings over the sign bar (100 codes): %llu, in %u cascades\n",
+                        fadeSignReadings, fadeSignCascades);
+            law("fade_sign_readings", double(fadeSignReadings), "readings", "==", 0.0);
+            CHECK(fadeSignRead && fadeSignReadings == 0ull,
+                  "(9) A RELIGHT NEVER FLIPS A DIRECT TERM'S SIGN: no brick reading of the fade over 100 codes");
         }
         if (lampArm && doStep) {
             law("step_over", double(stepOver), "voxels", "==", 0.0);

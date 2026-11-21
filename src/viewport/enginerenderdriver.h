@@ -156,6 +156,12 @@ private:
     bool mLastTickUiOverrun = false, mLastTickFrameOverrun = false;   ///< the last free tick's attribution
     bool mStarted = false;                    ///< start() .. stop()
     bool mPresentPaced = false;               ///< free-running with views: the published frames post the ticks
+    /// NOTHING TO DRAW (ONE-FRAME-1 stage 3, ruling R4): no view enabled — every viewport hidden, minimised or not
+    /// exposed — and no VR session. The tick slows to kPresentFallbackMs: the document clock keeps true time (100 ms
+    /// buys 6 steps, under the clock's 8), the error pump and the scripting service keep running, nothing is drawn.
+    bool mIdlePacing = false;
+    /// THE TIMER's INTERVAL, ONE RULE: idle or present-paced -> the fallback; held -> kHeldIntervalMs; else the pacing.
+    int currentIntervalMs() const;
     std::atomic<bool> mTickPosted{ false };   ///< one posted tick at a time (set on the render thread)
     unsigned long long mLastTickSerial = 0;   ///< the serial the last free tick's record is drawn as (0: none)
     static constexpr int kPresentFallbackMs = 100;   ///< the timer while the present paces: a stalled loop's fallback

@@ -7,8 +7,8 @@
 // moves. That is what this renders.
 //
 // The comparison is about MOTION, and the clock is the DOCUMENT's: the mirror
-// accumulates the SimulationClock's frameSeconds() — the whole 1/60 s steps
-// each host frame bought (no wall clock, trap 7) — unless a scrubbed timeline
+// counts the SimulationClock's steps, each once (a StepCursor, ONE-FRAME-1) — the
+// whole 1/60 s steps each host frame bought (no wall clock, trap 7) — unless a scrubbed timeline
 // or a test pins it with setShaderTimeOverride. So what a real editor gets is
 // "the surface changes on its own" at simulated speed, whatever the frame rate.
 // The control is the same scene with a material that has no piece — its
@@ -25,6 +25,7 @@
 #include "../support/enginetesthelpers.h"
 
 #include "bridge/enginematerialpreviewscene.h"
+#include "irisgl/mirror/scenemirror.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 
 #include "modules/materials/core/bakeprogram.h"
@@ -46,6 +47,14 @@ static LibraryV1 *suiteLibrary()
 
 
 using namespace jahshaka::engine;
+
+/// The preview with its mirror in reach: the extra-sync case syncs the mirror with no advance between, the way a
+/// screenshot's helper restore or a second picture of the same frame does.
+struct ProbedPreview : EngineMaterialPreviewScene
+{
+    using EngineMaterialPreviewScene::EngineMaterialPreviewScene;
+    using EnginePreviewScene::mirror;
+};
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
@@ -140,7 +149,7 @@ int main(int argc, char **argv)
     CHECK(view != nullptr, "offscreen view");
     if (!view) return 1;
 
-    EngineMaterialPreviewScene preview(engine);
+    ProbedPreview preview(engine);
     CHECK(preview.attach(view), "preview scene + mirror attached");
     // The subject primitive is built by setPreviewMesh, not by attach: without
     // this the centre pixel is the preview's grey background and every
@@ -203,6 +212,16 @@ int main(int argc, char **argv)
         std::printf("    one frame of 2/60 s advanced the shader clock %.6f s\n", double(advanced2));
         CHECK(std::fabs(advanced2 - 2.0f / 60.0f) < 1e-4f,
               "a frame that buys two grid steps advances the shader clock 2/60 s (stepped, not sync-counted)");
+        // A SYNC WITH NO STEP ADVANCES NOTHING (ONE-FRAME-1 stage 0): a second sync of the same frame — a
+        // screenshot's helper restore, a second picture — hands the engine the same shader time. RED on the base
+        // 273b8e638 / irisgl 4576b132: the mirror re-added frameSeconds() per sync, +1/60 s here (the CPU twin,
+        // mirror.shader_clock_steps, read 33 steps for 30 with 3 bare syncs).
+        const float before3 = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime();
+        preview.mirror()->sync();
+        enginetest::frames(engine, 1);
+        const float advanced3 = jahshaka::engine::inspect::scene(preview.engineScene())->shaderTime() - before3;
+        std::printf("    a bare sync (no step) advanced the shader clock %.6f s\n", double(advanced3));
+        CHECK(advanced3 == 0.0f, "a sync with no new grid step advances the shader clock 0");
     }
 
     // ---- and back: dropping the piece stops the motion ----------------------

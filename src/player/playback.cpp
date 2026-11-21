@@ -96,7 +96,7 @@ void PlayBack::setController(CameraControllerBase * controller)
 	}
 }
 
-float PlayBack::update(iris::Viewport& viewport, float dt)
+void PlayBack::update(iris::Viewport& viewport, float dt)
 {
     // must update the mouse controller's viewport
     // needed for picking
@@ -152,13 +152,11 @@ float PlayBack::update(iris::Viewport& viewport, float dt)
 	}
 
 	// A paused scene is frozen: the clock does not advance and the document is
-	// left exactly as the pause found it — and the 0 returned here freezes the
-	// engine-side simulation (particles) with it.
-	float simulated = 0.0f;
-	if (!_isPaused && scene) simulated = scene->advance(dt);
+	// left exactly as the pause found it — and with no new step the engine-side
+	// simulation (particles, the shader clock) holds with it (ONE-FRAME-1).
+	if (!_isPaused && scene) scene->advance(dt);
 
 	camController->postUpdate(dt);
-	return simulated;
 }
 
 void PlayBack::saveNodeTransforms()

@@ -75,6 +75,16 @@ inline constexpr int kMinIntervalMs = 4;
 /// something absurd) must not pace the editor slower than that.
 inline constexpr int kMaxIntervalMs = 33;
 
+/// THE RENDER LOOP's TICK INTERVAL, ONE RULE (EngineRenderDriver::currentIntervalMs; ONE-FRAME-1 stage 3, ruling R4):
+/// NOTHING TO DRAW (no view enabled: every viewport hidden, minimised or not exposed, and no headset session) or a
+/// present that paces the ticks -> the fallback; a held tick -> the held interval; otherwise the pacing's. A pure
+/// function of the loop's state, so the rule is testable with no engine.
+inline int tickIntervalMs(bool nothingToDraw, bool presentPaced, bool held, int pacedMs, int fallbackMs, int heldMs)
+{
+    if (nothingToDraw || presentPaced) return fallbackMs;
+    return held ? heldMs : pacedMs;
+}
+
 }   // namespace framepacing
 
 #endif   // FRAMEPACING_H

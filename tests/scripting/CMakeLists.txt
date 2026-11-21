@@ -1075,6 +1075,11 @@ if("host_epic" IN_LIST JAH_HOST_POOLS)
     jah_pool_arm(host_epic change_then_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_change_then_shot.js 2)
     jah_pool_arm(host_epic paused_shot ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_paused_shot.js 4)
     jah_pool_arm(host_epic frame_step ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_frame_step.js 1)
+    # picture.advances_nothing (ONE-FRAME-1 stage 2; e2e_picture_still.js says the law): A PICTURE ADVANCES NOTHING - across
+    # editor.screenshot the scene's time, its grid serial, the shader clock and the document clock are exactly unchanged
+    # (a photon-gathering scene: the shot's settle draws many frames); the next scripted frame moves them one step. A
+    # host arm (editor.frame needs an engine). Its seconds an estimate until its first run (the card is the feature end's).
+    jah_pool_arm(host_epic picture_advances_nothing ${CMAKE_CURRENT_SOURCE_DIR}/scripts/e2e_picture_still.js 4)
     jah_add_pool(host_epic TIER epic NEEDS photon APP_ARGS ${JAH_HOST_ARGS} LABELS "scripting")
-    set_property(TEST pool.host_epic PROPERTY JAHSHAKA_TEST_FRAMES 847)   # the two rows' measured 400 + 400, + frame_step's 47 (its 37 + 10 editor frames; its project's boundary frames uncounted)
+    set_property(TEST pool.host_epic PROPERTY JAHSHAKA_TEST_FRAMES 908)   # the two rows' measured 400 + 400, + frame_step's 47 (its 37 + 10 editor frames; its project's boundary frames uncounted), + picture_advances_nothing's 61 editor frames (its shot's settle frames counted at its first run: ONE-FRAME-1)
 endif()

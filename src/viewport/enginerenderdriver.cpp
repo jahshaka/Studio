@@ -219,7 +219,7 @@ void EngineRenderDriver::tick(bool fromPresent)
         mTimer->start(kHeldIntervalMs);
     } else if (!held && mHeldPacing) {
         mHeldPacing = false;
-        if (mTimer->isActive()) mTimer->start(pacedIntervalMs());
+        if (mTimer->isActive()) mTimer->start(currentIntervalMs());
     }
     // THE LIVE STATE, not a lifetime counter (owner review answer Q3): the
     // tick that draws nothing no longer increments anything at all — it
@@ -232,10 +232,16 @@ void EngineRenderDriver::tick(bool fromPresent)
     // publishes posts the next tick (setFramePublishedHook) — one beat, the display's, never a timer beating against
     // it. The timer is then only the fallback for a render loop that stopped publishing (100 ms); it paces the ticks
     // again whenever no view presents. The UI thread still never waits: a posted tick is an event like any other.
+    // NOTHING TO DRAW SLOWS THE TICK (ONE-FRAME-1 stage 3, ruling R4): with no view enabled the tick beats at the
+    // fallback interval — the document clock, the mirror's sync, the error pump keep running at it; the first tick
+    // after a view is enabled again (a show, a restore, an expose) is back at the pacing's interval and draws.
+    const bool idle = !anythingToDraw;
+    const bool idleChanged = idle != mIdlePacing;
+    mIdlePacing = idle;
     const bool presentPaced = mFreeRunning && rendering;
-    if (presentPaced != mPresentPaced) {
+    if (presentPaced != mPresentPaced || idleChanged) {
         mPresentPaced = presentPaced;
-        if (mStarted) mTimer->start(presentPaced ? kPresentFallbackMs : (mHeldPacing ? kHeldIntervalMs : pacedIntervalMs()));
+        if (mStarted) mTimer->start(currentIntervalMs());
     } else if (presentPaced && mStarted) {
         mTimer->start(kPresentFallbackMs);   // re-armed each tick: it fires only when no frame published for that long
     }
@@ -433,8 +439,15 @@ void EngineRenderDriver::start()
         mPostedAtNs.store(steadyNs(), std::memory_order_release);
         QCoreApplication::postEvent(this, new QEvent(tickEventType()), Qt::HighEventPriority);
     });
-    mTimer->start(mPresentPaced ? kPresentFallbackMs : pacedIntervalMs());
+    mTimer->start(currentIntervalMs());
 }
+
+int EngineRenderDriver::currentIntervalMs() const
+{
+    return framepacing::tickIntervalMs(mIdlePacing, mPresentPaced, mHeldPacing, pacedIntervalMs(), kPresentFallbackMs,
+                                       kHeldIntervalMs);
+}
+
 void EngineRenderDriver::stop()
 {
     mStarted = false;
@@ -537,7 +550,7 @@ double EngineRenderDriver::scriptPacePeriodMs() const
 
 void EngineRenderDriver::applyPacing()
 {
-    const int want = mPresentPaced ? kPresentFallbackMs : pacedIntervalMs();
+    const int want = currentIntervalMs();
     if (mTimer->isActive() && mTimer->interval() != want) mTimer->start(want);
     else mTimer->setInterval(want);
     emit pacingChanged();

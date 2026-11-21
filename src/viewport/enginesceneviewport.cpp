@@ -2546,13 +2546,12 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
     const float dt = offlineStep ? (recordable ? float(iris::SimulationClock::kStepSeconds) : 0.0f)
                                  : (dtOverride >= 0.0f ? dtOverride : wall);
     // THE ONE CLOCK (ENGINEERING_DEBT_SPEC A4.2): `dt` goes to the document's
-    // SimulationClock through exactly one of these two calls, and the seconds
-    // it converts into grid steps come back as `simulated` — physics and
-    // animation moved by that much, and the engine's own simulation (particles,
-    // shader time) is told to move by the same amount below. In the editor
-    // (not playing, not simulating) the document ignores the steps and only
-    // the engine-side delta is produced.
-    float simulated = 0.0f;
+    // SimulationClock through exactly one of these two calls; the grid steps it
+    // buys move physics and animation, and the engine's own simulation of the
+    // scene (particles, the meter, the clouds, the looks) moves by the same steps
+    // through the mirror's stamp of the clock's serial (ONE-FRAME-1: the engine
+    // applies a serial's steps once; no delta is pushed from here). In the editor
+    // (not playing, not simulating) the document ignores the steps; the clock ticks.
     // THE HOST'S STAGE TREE (RENDER_LOOP_MONITOR_SPEC §4.2). Each scope is a
     // pair of not-taken branches while no capture runs; inside one they report
     // EXCLUSIVE milliseconds into the frame record the engine is building, so
@@ -2563,7 +2562,7 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
     framemonitor::Stage docStage("host.doc");
     if (mPlaying && mPlayback) {
         iris::Viewport vp; vp.width = width(); vp.height = height(); vp.pixelRatioScale = 1.0f;
-        simulated = mPlayback->update(vp, dt);   // physics, animation, play controllers move the document
+        mPlayback->update(vp, dt);   // physics, animation, play controllers move the document
         // EJECTED: the editor's own camera controller runs too (PLAY-SELECT-1).
         // The fly is a per-frame integration of held keys, and while a run has
         // the keyboard nothing in this branch drives it — so without this the
@@ -2604,10 +2603,10 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         if (mCamController)            mCamController->update(dt);
         // A PAUSED play-in-place (PlayBack still playing, this flag down so the
         // editor camera answers the mouse) holds the document AND the engine's
-        // simulation: no clock step, a 0 delta below. Otherwise the editor's
-        // clock ticks — for the Simulate physics and the engine's particles.
+        // simulation: no clock step, so the scene's serial stands still. Otherwise
+        // the editor's clock ticks — for the Simulate physics and the engine's particles.
         if (mScene && !(mPlayback && mPlayback->isScenePaused()))
-            simulated = mScene->advance(dt);
+            mScene->advance(dt);
     }
     }
     // THE FOLLOW CAMERA (AVATAR_LOCOMOTION_SPEC §8.5) NEEDS NO HAND-OFF HERE.
@@ -2714,28 +2713,17 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
         framemonitor::Stage camStage("host.camera");
         syncPip();
     }
-    // A SCRIPTED step (editor.frame(n, dt)) has to be deterministic for the
-    // particles too. They are simulated inside the engine, which has NO clock
-    // of its own (Engine.h "Simulation clock"): every frame is told how many
-    // seconds to simulate, and that is the document clock's answer for this
-    // frame — the same grid steps physics and animation just took — times the
-    // scene's particle time scale. A frame that bought no step (a 144 Hz
-    // panel's odd frames, a paused scene) freezes the flame for that frame,
-    // exactly as it freezes the falling crate.
-    mLastFrameDelta = simulated * (mScene ? mScene->particleTimeScale : 1.0f);
+    // A SCRIPTED step (editor.frame(n, dt)) is deterministic for the engine's simulation too: the scene's time is
+    // the document clock's steps, stamped by the mirror's sync (its lifetime serial, ONE-FRAME-1) — a frame that
+    // bought no step (a 144 Hz panel's odd frames, a paused scene) freezes the flame for that frame, exactly as it
+    // freezes the falling crate.
     if (mEngine) {
         // ...AND THE USER'S GESTURE, AS THIS HOST KNOWS IT (U0 3a; read since 3c — the engine infers no drag from
         // motion): a gizmo DRAG (this widget's or the wearer's — one gizmo per mode in the process), with the node it
         // moves. Only a drag: a material hover moves nothing (it rides the record as `materialPreview`), and naming
         // the selected node under one would promote it if physics or a script moved it meanwhile (the 3c read, C).
         // Every frame, so the release lands on the frame it happens.
-        jahshaka::engine::FrameInput frame = jahshaka::engine::FrameInput::delta(mLastFrameDelta);
-        // THE GRID STATE THIS RECORD IS (ENGINE-UPGRADE-U3): the document clock's step count, stamped on every node
-        // record the frame applies (stage 5 interpolates between the last two).
-        if (mScene) frame.stepSerial = mScene->simulationClock().steps();
-        // ...AND THE GRID'S STEP (decision 55): the interpolation's period is the clock's 1/60, never this record's
-        // frameDelta (the particles' — simulated x particleTimeScale).
-        frame.stepPeriod = float(iris::SimulationClock::kStepSeconds);
+        jahshaka::engine::FrameInput frame;
         if (mEngineScene) {
             jahshaka::engine::FrameInputGesture gesture;
             gesture.active = mGizmo && mGizmo->isDragging();
@@ -3766,7 +3754,6 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
     PictureRequest req;
     req.view = shot;
     req.hdr = wantRadiance;
-    req.restoreDelta = mLastFrameDelta;
     mLastShotSettleFrames = -1;
     mLastShotAtRest = true;
     mLastShotRestReason.clear();

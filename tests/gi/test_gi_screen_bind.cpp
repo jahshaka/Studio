@@ -19,6 +19,9 @@
 //       dispatching no group WITHOUT the mark still throws (BUGS-6's guard; the door gi.screenZeroUnmarked). Before the fix the first
 //       view's passes dispatched over the third's bindings and Ogre's barrier solver threw ("Transitioning texture ...
 //       from Undefined to a read-only layout"): the frame lost for every view.
+//       "AN ERROR" IS READ BY ITS FRAME: the newest PublishedEngineFrame::frameErrors entry's `frame` (every frame its
+//       own number), never its `serial` - that is the RECORD the frame applied, and this fixture submits none, so every
+//       frame carries serial 0 and a new error would read as no error (ONE-FRAME-1's fix pass: the row was blind so).
 //   (2) THE CAPTURE: mid-rest (the area history still accumulating), a clean frame capture of the live view
 //       (View::requestFrameCapture: its chain a second time, the same frame): the capture is the frame presented, byte
 //       for byte, and the live view's next frames are bit-identical to its twin's (before the fix: the capture's trace
@@ -141,7 +144,6 @@ int main()
     Engine *e = engine.get();
     e->setRayTracing(false);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
 
     Scene *s1 = buildScene(e, "screen_bind_live");
@@ -265,9 +267,12 @@ int main()
         const int restT = settle(400);
         // A FRAME IS DRAWN: every view presented it, and the engine wrote no error for it (a stale binding threw in
         // Ogre's barrier solver - the whole frame lost, every view's picture the one before)
+        // An error is told apart by the FRAME it was written in (FrameError::frame: every frame its own number) - never
+        // by FrameError::serial, the RECORD the frame applied: a fixture that submits no record runs every frame on
+        // serial 0, so a serial cannot tell a new error from none (ONE-FRAME-1: the harness submits no record).
         const auto errors = [&]() {
             const auto &fe = e->published().frameErrors;
-            return fe.empty() ? 0ull : fe.back().serial;
+            return fe.empty() ? 0ull : fe.back().frame;
         };
         struct Three { Pics p; ImageF t; unsigned long long shown[3] = {}; };
         const auto read3 = [&](View *t) {
@@ -331,7 +336,7 @@ int main()
         e->setArm("gi.screenZeroUnmarked", 1.0);
         run(1);
         const auto &fe = e->published().frameErrors;
-        const bool guarded = !fe.empty() && fe.back().serial != err2 &&
+        const bool guarded = !fe.empty() && fe.back().frame != err2 &&
                              fe.back().text.find("num_thread_groups not set") != std::string::npos;
         e->setArm("gi.screenZeroUnmarked", 0.0);
         run(1);

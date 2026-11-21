@@ -1956,7 +1956,6 @@ int main(int argc, char **argv)
                                             : "test-shadow-atom-cut-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     gE = engine.get();
     const int rc = mode == "--parity"        ? parityMain()
                  : mode == "--first-frame" ? firstFrameMain()

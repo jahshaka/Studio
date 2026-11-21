@@ -71,7 +71,6 @@ int main(int argc, char **argv)
     // A fixed step, for the same reason engine.particles_pfx2 (archived: archive/tests/engine) uses one: an
     // offscreen frame takes about a millisecond, so wall-clock frames buy
     // milliseconds of simulated fire and no assertion below would mean anything.
-    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
     Image img;
 
     // ---- Part 1: the billboard verbs, no document ----
@@ -258,6 +257,15 @@ int main(int argc, char **argv)
 
         SceneMirror mirror(target);
         mirror.setSource(doc);
+        // THE SCENE's TIME IS ITS DOCUMENT's (ONE-FRAME-1): a frame steps the document's clock one step and the mirror
+        // stamps it (a bare sync), as every host does — the document still simulates nothing of the particles.
+        const auto stepped = [&](int frames) {
+            for (int f = 0; f < frames; ++f) {
+                doc->advance(1.0f / 60.0f);
+                mirror.sync();
+                enginetest::frames(engine, 1);
+            }
+        };
         const int n = mirror.sync();
         CHECK(n == 1, "sync mirrored the emitter node");
         const NodeId eng = mirror.engineNode(ps.data());
@@ -266,11 +274,11 @@ int main(int argc, char **argv)
 
         // The sync's record — and the definition it builds — lands in the FIRST frame; the baseline is that frame's
         // snapshot, and the 89 engine-only frames after it are inside the guarded window (U3 stage 2b / decision 24).
-        enginetest::frames(engine, 1);
+        stepped(1);
         const unsigned defsAfterFirst = target->published().particleDefinitionsCreated;
-        enginetest::frames(engine, 89);
+        stepped(89);
         std::printf("    after 90 engine frames: %u live particles\n", target->published().particlesOf(eng));
-        CHECK(target->published().particlesOf(eng) > 0, "the ENGINE emitted, with no document tick at all");
+        CHECK(target->published().particlesOf(eng) > 0, "the ENGINE emitted over the document clock's steps, the document simulating nothing");
         view->readPixels(img);
         const int lit = countBright(img);
         std::printf("    mirrored emitter: %d bright pixels\n", lit);
@@ -279,7 +287,7 @@ int main(int argc, char **argv)
         // THE POINT OF THE MIGRATION: a still emitter costs the mirror nothing.
         // Before this, every sync rebuilt a BillboardInstance array of every
         // live particle and pushed it into the engine, sixty times a second.
-        for (int f = 0; f < 30; ++f) { mirror.sync(); enginetest::frames(engine, 1); }
+        for (int f = 0; f < 30; ++f) stepped(1);
         CHECK(target->published().particleDefinitionsCreated == defsAfterFirst,
               "30 syncs of an unchanged emitter build no definitions");
         view->readPixels(img);
@@ -292,24 +300,24 @@ int main(int argc, char **argv)
         // Long enough for the particles ALREADY in flight to expire: a rate of 0
         // stops new emission, it does not retroactively shorten anyone's life.
         // ttl is 2 s here, so 150 frames at 1/60 is 2.5 s.
-        enginetest::frames(engine, 150);
+        stepped(150);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "rate 0 in the document stops emission in the engine");
         ps->particlesPerSecond = 300.0f;
         mirror.sync();
-        enginetest::frames(engine, 60);
+        stepped(60);
         view->readPixels(img);
         CHECK(countBright(img) > 100, "and turning it back on refills the plume");
 
         // Visibility follows the document node, and kills particles in flight.
         ps->setVisible(false);
         mirror.sync();
-        enginetest::frames(engine, 2);
+        stepped(2);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "hidden emitter renders nothing");
         ps->setVisible(true);
         mirror.sync();
-        enginetest::frames(engine, 2);
+        stepped(2);
         view->readPixels(img);
         CHECK(countBright(img) > 100, "shown again");
 
@@ -317,7 +325,7 @@ int main(int argc, char **argv)
         doc->getRootNode()->removeChild(ps);
         mirror.sync();
         CHECK(mirror.engineNode(ps.data()) == 0, "removed emitter has no engine node");
-        enginetest::frames(engine, 2);
+        stepped(2);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "removed emitter renders nothing");
 

@@ -114,11 +114,10 @@ public:
 
 	/// One frame without drawing: controller selection and update, then the
 	/// document's simulation clock (iris::Scene::advance — keyframe and
-	/// skeletal animation, physics, avatars, possession) fed `dt` seconds.
-	/// Returns the simulated seconds the clock actually advanced this frame
-	/// (0 while paused, or on a frame that bought no grid step) — the host
-	/// hands exactly that to the engine as its frame delta.
-	float update(iris::Viewport& viewport, float dt);
+	/// skeletal animation, physics, avatars, possession) fed `dt` seconds;
+	/// a paused scene's clock does not advance. The engine reads the clock's
+	/// steps through the mirror (ONE-FRAME-1): nothing is handed to it here.
+	void update(iris::Viewport& viewport, float dt);
 
 	void saveNodeTransforms();
 	void restoreNodeTransforms();

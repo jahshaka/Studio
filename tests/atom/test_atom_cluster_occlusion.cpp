@@ -200,7 +200,6 @@ int main()
     const auto cfg = enginetest::testEngineConfig("test-atom-cluster-occlusion-ogre.log");
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine create: %s\n", err.c_str()); return 1; }
-    engine->submitFrame(FrameInput::delta(1.0f / 60.0f));
     gE = engine.get();
 
     World on, ref, shut;

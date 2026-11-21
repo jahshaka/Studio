@@ -795,7 +795,6 @@ int main(int argc, char **argv)
     // (THE MEASURING HOOK of 10-2e's margin: JAH_HIT_LEVEL_MARGIN=<cells> sets the door gi.hitLevelMargin for the run)
     if (const char *m = std::getenv("JAH_HIT_LEVEL_MARGIN")) e->setArm("gi.hitLevelMargin", std::atof(m));
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
 
     gEdgeReference = mode == "walk";
     Run w, t, c, l, pnd, hin, hout;

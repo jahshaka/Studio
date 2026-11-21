@@ -150,7 +150,7 @@ target_compile_definitions(test_engine_interpolation PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_engine_interpolation PRIVATE JahshakaEngine)
 add_dependencies(test_engine_interpolation JahshakaEngineMedia)
-jah_gpu_row(frame.interpolation CLASS engine FRAMES 20 COMMAND test_engine_interpolation
+jah_gpu_row(frame.interpolation CLASS engine FRAMES 34 COMMAND test_engine_interpolation   # +14 the rewound-serial case (ONE-FRAME-1: 2 lockstep + 12 free, counted by reading)
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.interpolation PROPERTIES TIMEOUT 60 LABELS "engine")
 
@@ -401,3 +401,130 @@ target_include_directories(test_hit_list_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/
 add_test(NAME engine.hit_list_law COMMAND test_hit_list_law)
 set_tests_properties(engine.hit_list_law PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.hit_list_law)
+
+# engine.compute_job_slots (NONDET-1 1a, fork items iii and iii-b) — A COMPUTE JOB'S SLOT THAT CHANGES TYPE KEEPS ITS
+# LISTENERS TRUE: a buffer over a texture slot stops the job listening to that texture; a texture over a buffer slot calls
+# nothing on the buffer (the slot is a union). The fork's HlmsComputeJob on the NULL render system: a CPU code row.
+add_executable(test_compute_job_slots test_compute_job_slots.cpp)
+set_target_properties(test_compute_job_slots PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_compute_job_slots PRIVATE JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}")
+target_link_libraries(test_compute_job_slots PRIVATE OgreNext)
+add_test(NAME engine.compute_job_slots COMMAND test_compute_job_slots WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.compute_job_slots PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.compute_job_slots)
+
+# engine.cascade_resolution_law (NONDET-1 D1) — A CASCADE IS BUILT AT A MULTIPLE OF 8 in 16..256, rounded up (Types.h
+# giCascadeResolution: the voxel passes run whole bricks with no bound check). The header only: a CPU code row.
+add_executable(test_cascade_resolution_law test_cascade_resolution_law.cpp)
+set_target_properties(test_cascade_resolution_law PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_cascade_resolution_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+add_test(NAME engine.cascade_resolution_law COMMAND test_cascade_resolution_law)
+set_tests_properties(engine.cascade_resolution_law PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.cascade_resolution_law)
+
+# engine.param_array (NONDET-1 D2) — AN ARRAY PARAMETER OF OURS LONGER THAN 16 ELEMENTS REACHES ITS SHADER WHOLE
+# (PhotonParamArray: Ogre's setManualValue keeps 64 bytes and drops the rest). A real ShaderParams::Param: a CPU code row.
+add_executable(test_param_array test_param_array.cpp)
+set_target_properties(test_param_array PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_param_array PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+target_link_libraries(test_param_array PRIVATE OgreNext)
+add_test(NAME engine.param_array COMMAND test_param_array)
+set_tests_properties(engine.param_array PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.param_array)
+
+# engine.region_grid_law (NONDET-1 H2) — A PASS OVER A REGION DISPATCHES ONLY THE TEXELS THE REGION HOLDS: an empty or
+# past-the-end box is no dispatch (photon/voxel/PhotonRegionGrid.h, the arithmetic setRegionGrid sets its job from). The
+# header only: a CPU code row.
+add_executable(test_region_grid_law test_region_grid_law.cpp)
+set_target_properties(test_region_grid_law PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_region_grid_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.region_grid_law COMMAND test_region_grid_law)
+set_tests_properties(engine.region_grid_law PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.region_grid_law)
+
+# THE SCENE'S CLOCK (ONE-FRAME-1 stage 1; test_frame_clock.cpp says each law): the pure value type every engine scene
+# keeps (irisgl/engine/src/SceneClock.h), driven directly — one binary, one row per proof, CPU only (no engine, no card).
+#   frame.clock_once         a serial's steps apply once; an empty frame 0 (red on the base: +0.016667 s); a reassert
+#                            keeps the steps, a new document's epoch re-primes (bug 2: red on 8060febd, 0 steps);
+#                            the harness steps only never-stamped scenes.
+#   frame.two_scenes         two scenes' clocks are independent; a join's count is consumed by the next frame, once.
+#   frame.particle_scale     the particles' time = steps x period x particleTimeScale (0.25, 4), the scene's unscaled.
+#   frame.clock_drawn_only   an undrawn frame keeps the scene's steps and hands it 0; 36,000 owed arrive as 8 (bug 1).
+add_executable(test_frame_clock test_frame_clock.cpp)
+set_target_properties(test_frame_clock PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_frame_clock PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src
+    ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+foreach(_pair "clock_once;clock-once" "two_scenes;two-scenes" "particle_scale;particle-scale" "clock_drawn_only;drawn-only")
+    list(GET _pair 0 _row)
+    list(GET _pair 1 _flag)
+    add_test(NAME frame.${_row} COMMAND test_frame_clock --${_flag} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(frame.${_row} PROPERTIES TIMEOUT 60 LABELS "engine")
+    jah_no_display(frame.${_row})
+endforeach()
+# frame.meter_time — THE HDR METER ADAPTS IN ITS VIEWER's TIME (ONE-FRAME-1 stage 1; test_frame_meter.cpp says the law):
+# a live view adapts one presented step a frame (stepped or not, any particle scale); a picture has no history (equal
+# exposure after 2 and 200 frames).
+# A card row (the meter runs on a view).
+add_executable(test_frame_meter test_frame_meter.cpp)
+set_target_properties(test_frame_meter PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_frame_meter PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_frame_meter PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_frame_meter PRIVATE JahshakaEngine)
+add_dependencies(test_frame_meter JahshakaEngineMedia)
+jah_gpu_row(frame.meter_time CLASS engine FRAMES 206 COMMAND test_frame_meter
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.meter_time PROPERTIES TIMEOUT 60 LABELS "engine")
+# frame.clock_integration — A FRAME CONSUMES THE STEPS OF THE SCENES IT DRAWS, AND ONLY THEIRS (ONE-FRAME-1, the stage-1
+# audit's bug 1; test_frame_integration.cpp says the law): through the real drain and drawn set. A card row.
+add_executable(test_frame_integration test_frame_integration.cpp)
+set_target_properties(test_frame_integration PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_frame_integration PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_frame_integration PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_frame_integration PRIVATE JahshakaEngine)
+add_dependencies(test_frame_integration JahshakaEngineMedia)
+jah_gpu_row(frame.clock_integration CLASS engine FRAMES 5 COMMAND test_frame_integration
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.clock_integration PROPERTIES TIMEOUT 60 LABELS "engine")
+# THE PARTICLES RUN ON THEIR SCENE's TIME, AND ONLY IN ITS FRAME (ONE-FRAME-1; test_frame_particles.cpp says the laws).
+# Card rows (PFX2 on a drawn scene).
+#   frame.particles_per_scene    two scenes, +1 and +3 steps a hand-over: 40 and 120 particles (red with the fork's
+#                                override line reverted: both on Ogre's one frame time).
+#   frame.particles_once_a_frame a pose resolve between frames advances the particles nothing.
+add_executable(test_frame_particles test_frame_particles.cpp)
+set_target_properties(test_frame_particles PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_frame_particles PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_frame_particles PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_frame_particles PRIVATE JahshakaEngine)
+add_dependencies(test_frame_particles JahshakaEngineMedia)
+jah_gpu_row(frame.particles_per_scene CLASS engine FRAMES 21 COMMAND test_frame_particles --per-scene
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.particles_per_scene PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_gpu_row(frame.particles_once_a_frame CLASS engine FRAMES 11 COMMAND test_frame_particles --resolve
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.particles_once_a_frame PROPERTIES TIMEOUT 60 LABELS "engine")

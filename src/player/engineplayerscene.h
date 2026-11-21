@@ -127,8 +127,8 @@ public:
 
     /// One frame: PlayBack::update (controllers, then the document's
     /// simulation clock — animation, physics, avatars), then document ->
-    /// engine, sky -> view, scene camera -> view, and the clock's simulated
-    /// seconds -> the engine's frame delta. `dt` < 0 charges the wall clock
+    /// engine (the clock's lifetime steps on the scene's part: ONE-FRAME-1),
+    /// sky -> view, scene camera -> view. `dt` < 0 charges the wall clock
     /// (the time since the previous step); a fixed dt is what makes a scripted
     /// assertion deterministic. `width`/`height` are the view's pixel size
     /// (controller picking + aspect ratio).

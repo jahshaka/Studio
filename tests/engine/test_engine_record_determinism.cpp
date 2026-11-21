@@ -47,10 +47,9 @@ bool noSubmit(int f) { return f % 11 == 5; }
 FrameInput nodeRecord(Scene *scene, NodeId node, int f, int half)
 {
     FrameInput in;
-    in.frameDelta = 1.0f / 60.0f;
-    in.stepSerial = (unsigned long long)(f);
     FrameInputScene part;
     part.scene = scene;
+    part.stepSerial = (unsigned long long)(f);   // the scene's clock (ONE-FRAME-1: per scene)
     NodeRecord r;
     r.id = node;
     r.fields = NodeRecord::Trs;
@@ -75,7 +74,6 @@ int child(const char *out)
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("CHILD-FAIL: engine create: %s\n", err.c_str()); return 2; }
     Engine *e = engine.get();
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     View *view = e->createOffscreenView("record_determinism", 96, 96, Colour(0.05f, 0.06f, 0.08f, 1.0f), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = view ? e->createScene("record_determinism") : nullptr;
     if (!view || !scene) { std::printf("CHILD-FAIL: view/scene: %s\n", e->lastError().c_str()); return 2; }

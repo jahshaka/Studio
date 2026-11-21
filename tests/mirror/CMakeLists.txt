@@ -36,3 +36,19 @@ set_tests_properties(mirror.document_to_engine PROPERTIES JAHSHAKA_TEST_FRAMES 8
 # model is drawn must carry the same resource the app ships or it would be
 # testing a path the product does not use.
 qt6_add_resources(_vr_proxies_qrc ${CMAKE_SOURCE_DIR}/app/models.qrc)
+
+# mirror.shader_clock_steps — THE MIRROR's CLOCKS COUNT GRID STEPS, NEVER SYNC CALLS (ONE-FRAME-1 stage 0, V2 plan 2.1;
+# test_shader_clock.cpp says the law): the step cursor (a pure function of the clock), the shader clock through a real
+# SceneMirror and focus smoothing's dt — a sync with no new step advances 0 (red on the base: +1 step per bare sync).
+# The NULL render system and the offscreen platform: no display, no card.
+add_executable(test_shader_clock test_shader_clock.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_shader_clock PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_shader_clock PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_shader_clock PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_shader_clock)
+add_test(NAME mirror.shader_clock_steps COMMAND test_shader_clock WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mirror.shader_clock_steps PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
+jah_no_display(mirror.shader_clock_steps)

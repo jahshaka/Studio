@@ -38,6 +38,7 @@
 // Runs with QT_QPA_PLATFORM=offscreen and a reachable DISPLAY (Vulkan).
 
 #include <QGuiApplication>
+#include <functional>
 
 #include "../support/testmesh.h"
 #include <QVariantList>
@@ -94,7 +95,17 @@ unsigned long long pixelHash(const Image &img)
     return h;
 }
 
-void frames(int n) { enginetest::frames(gEngine, n);}
+/// THE SUITE's GRID (ONE-FRAME-1): a scene's time is its document's steps. Part A's engine-only scenes are the
+/// harness's (enginetest::frames steps them); parts B and D render a DOCUMENT's scene, so while they run each frame
+/// first advances the document one step and lets the mirror stamp it (a bare sync), as every real host does.
+std::function<void()> gStepDocument;
+void frames(int n)
+{
+    for (int i = 0; i < n; ++i) {
+        if (gStepDocument) gStepDocument();
+        enginetest::frames(gEngine, 1);
+    }
+}
 
 // ---------------------------------------------------------------------------
 // SETTLING, AND WHY IT IS COUNTED IN FRAMES
@@ -104,11 +115,11 @@ void frames(int n) { enginetest::frames(gEngine, n);}
 // charged in wall clock". IT IS NOT, and has not been since the A4.2
 // fixed-clock merge (2026-09-10). The adaptation step is
 // HDR/DownScale03_SumLumEnd's `timeSinceLast`, declared
-// `param_named_auto timeSinceLast frame_time 1`, and Ogre's frame_time comes
-// from ControllerManager — which this engine puts in FRAME-DELAY mode at boot,
-// at a fixed Engine::kDefaultFrameDelta = 1/60 s (OgreEngine.cpp:154). Every
-// rendered frame therefore advances the exposure history by exactly 1/60 s,
-// and NO rendered frame advances it by wall clock.
+// then a frame_time auto-param; since ONE-FRAME-1 it is the SCENE's time this
+// frame (its document's steps x 1/60, set per view by the engine), and frames()
+// below steps every scene one grid step a frame. Every rendered frame therefore
+// advances the exposure history by exactly 1/60 s, and NO rendered frame
+// advances it by wall clock.
 //
 // So the old helper measured the wrong axis: in 1.5 wall-clock seconds a quiet
 // box got ~150 frames (2.5 s of adaptation) and a box under a -j4 gate got a
@@ -526,6 +537,7 @@ void partB()
     Doc doc;
     SceneMirror mirror(target);
     mirror.setSource(doc.scene);
+    gStepDocument = [&] { doc.scene->advance(1.0f / 60.0f); mirror.sync(); };
 
     // ---- B3 first: INHERIT changes nothing --------------------------------
     unsigned long long inheritHash = 0;
@@ -708,7 +720,7 @@ void partB()
     // The shape every thumbnail, preview and pixel suite has: an offscreen view
     // that never opted in. It must be byte-identical whatever the camera says.
     View *plain = gEngine->createOffscreenView("plainView", 96, 96, Colour(0.10f, 0.10f, 0.12f), jahshaka::engine::OffscreenContract::Live);
-    if (!plain) { std::printf("FAIL: plain view\n"); ++failures; return; }
+    if (!plain) { std::printf("FAIL: plain view\n"); ++failures; gStepDocument = nullptr; return; }
     plain->setScene(target);
     unsigned long long neutral = 0;
     shoot(mirror, plain, doc.camera, false, &neutral, 18);
@@ -735,6 +747,7 @@ void partB()
     gEngine->destroyView(view);
     // UNBIND BEFORE DESTROYING: an engine scene destroyed under a bound
     // mirror leaves every engine id the mirror holds stale.
+    gStepDocument = nullptr;
     mirror.setSource(iris::ScenePtr());
     gEngine->destroyScene(target);
 }
@@ -852,6 +865,7 @@ void partD()
     if (!target || !view) { std::printf("FAIL: part D scene/view\n"); ++failures; return; }
     SceneMirror mirror(target);
     mirror.setSource(doc.scene);
+    gStepDocument = [&] { doc.scene->advance(1.0f / 60.0f); mirror.sync(); };
     view->setScene(target);
 
     // ---- D1: the document's defaults -----------------------------------
@@ -958,6 +972,7 @@ void partD()
           "could not resist are out of the measurement", keepAll, cutBright);
 
     gEngine->destroyView(view);
+    gStepDocument = nullptr;
     mirror.setSource(iris::ScenePtr());
     gEngine->destroyScene(target);
 }

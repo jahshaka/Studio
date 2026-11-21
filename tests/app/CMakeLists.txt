@@ -266,6 +266,24 @@ add_test(NAME app.render_route COMMAND ${CMAKE_BINARY_DIR}/bin/test_render_route
 set_tests_properties(app.render_route PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "scripting")
 jah_no_display(app.render_route)
 
+# view.hidden_draws_nothing — NOTHING RENDERS WHEN NOBODY LOOKS (ONE-FRAME-1 stage 3; test_view_hidden.cpp says the laws):
+# minimise hides the view (the premise, measured), a top-level expose is read by the widget, not-exposed stops the
+# drawing, and nothing to draw ticks the loop at its fallback interval. The offscreen platform: no display, no card.
+add_executable(test_view_hidden test_view_hidden.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/engineviewwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/viewport/engineviewwidget.h
+    ${CMAKE_SOURCE_DIR}/src/services/framepacing.cpp)
+set_target_properties(test_view_hidden PROPERTIES AUTOMOC ON AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_BINARY_DIR}/bin"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_view_hidden PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_view_hidden PRIVATE JahshakaEngine Qt6::Widgets)
+add_test(NAME view.hidden_draws_nothing COMMAND ${CMAKE_BINARY_DIR}/bin/test_view_hidden
+         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(view.hidden_draws_nothing PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "scripting")
+jah_no_display(view.hidden_draws_nothing)
+
 # app.render_offscreen_host — THE HEADLESS HOST's DOOR THROUGH THE REAL APP, on the CPU (TEST-STREAMLINE-1 3a;
 # render_offscreen_host.sh says the three laws): the NULL route's DEVICE row, --render-offscreen refused with DISPLAY
 # unset (exit 3, one line, no document-only run in its place), and without --headless (a CLI error). DISPLAY unset,

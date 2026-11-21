@@ -225,7 +225,6 @@ int main(int, char **)
     Engine *e = engine.get();
     e->setRayTracing(true);
     int frames = 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     const auto run = [&](int n) { enginetest::frames(e, n); frames += n; };
     bool premise = true, t1Cascades = true, t1Card = true, t2Cascades = true, t2Card = true;
     // FOUR ARMS, each its own scene (a cache at rest re-gathers nothing, so the ray count is set before it is built): the

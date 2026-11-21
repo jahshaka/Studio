@@ -22,14 +22,14 @@ static int failures = 0;
 #define CHECK(cond, ...) do { if (cond) { std::printf("ok:   "); std::printf(__VA_ARGS__); std::printf("\n"); } \
     else { std::printf("FAIL: "); std::printf(__VA_ARGS__); std::printf("\n"); ++failures; } std::fflush(stdout); } while (0)
 
-static FrameInput record(Scene *scene, NodeId node, unsigned long long step, float x, float frameDelta = 1.0f / 60.0f)
+static FrameInput record(Scene *scene, NodeId node, unsigned long long step, float x, float particleScale = 1.0f)
 {
     FrameInput in;
-    in.frameDelta = frameDelta;          // the PARTICLES' delta (simulated x particleTimeScale) — never the grid's
-    in.stepSerial = step;
-    in.stepPeriod = 1.0f / 60.0f;        // the grid's step (the host's SimulationClock::kStepSeconds; decision 55)
     FrameInputScene part;
     part.scene = scene;
+    part.stepSerial = step;                  // the scene's clock (ONE-FRAME-1: per scene)
+    part.stepPeriod = 1.0f / 60.0f;          // the grid's step (the host's SimulationClock::kStepSeconds; decision 55)
+    part.particleTimeScale = particleScale;  // the PARTICLES' factor — never the grid's
     NodeRecord r;
     r.id = node;
     r.fields = NodeRecord::Trs;
@@ -53,7 +53,6 @@ static int applyMeasure()
     if (!engine) { std::printf("FAIL: engine create (%s)\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     const inspect::EngineEcho *echo = inspect::engine(e);
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     View *view = e->createOffscreenView("interp-apply", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("interp-apply", 8u);
     if (!view || !scene) { std::printf("FAIL: view/scene\n"); return 1; }
@@ -129,7 +128,6 @@ int main(int argc, char **argv)
     const inspect::EngineEcho *echo = inspect::engine(e);
     CHECK(echo != nullptr, "the engine's probes");
     if (!echo) return 1;
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     View *view = e->createOffscreenView("interp", 64, 64, Colour(0, 0, 0), jahshaka::engine::OffscreenContract::Live);
     Scene *scene = e->createScene("interp");
     CHECK(view && scene && view->setScene(scene), "a view on a scene");
@@ -175,13 +173,13 @@ int main(int argc, char **argv)
     enginetest::frames(e, 1);
     CHECK(std::fabs(drawnX() - float(step - 1)) < 1e-6f, "a lockstep frame after them draws the newest state exactly");
 
-    // THE GRID'S STEP IS THE CLOCK'S, NEVER THE PARTICLES' DELTA (decision 55): the same pattern with every record's
-    // frameDelta at a particle time scale of 2 and of 0.5 draws the same closed form — the weight is never pinned.
-    const auto pattern = [&](float frameDelta, unsigned long long &s, float base, std::vector<float> &out) {
+    // THE GRID'S STEP IS THE CLOCK'S, NEVER THE PARTICLES' TIME (decision 55): the same pattern with every record at a
+    // particle time scale of 2 and of 0.5 draws the same closed form — the weight is never pinned.
+    const auto pattern = [&](float particleScale, unsigned long long &s, float base, std::vector<float> &out) {
         for (int pair = 0; pair < 4; ++pair)
             for (int k : { 2, 1 }) {
                 ++s;
-                e->submitFrame(record(scene, node, s, float(s - 1), frameDelta));
+                e->submitFrame(record(scene, node, s, float(s - 1), particleScale));
                 for (int f = 0; f < k; ++f) {
                     const_cast<inspect::EngineEcho *>(echo)->presentationFrame();
                     out.push_back(drawnX() - base);
@@ -193,7 +191,7 @@ int main(int argc, char **argv)
         enginetest::frames(e, 1);
         const float base = drawnX();
         std::vector<float> d;
-        pattern(scale / 60.0f, step, base, d);
+        pattern(scale, step, base, d);
         std::printf("    particle time scale %.1f, drawn x - x0:", double(scale));
         for (float x : d) std::printf(" %.4f", double(x));
         std::printf("\n");
@@ -204,19 +202,19 @@ int main(int argc, char **argv)
               "particle time scale %.1f: every free frame a new pose, two steps per three frames (%d of %zu rising, "
               "%.4f per three)", double(scale), monotone, d.size() - 1, double(stepSize));
     }
-    // A TWO-STEP HITCH (the tick that carries two steps at once: stepSerial + 2, frameDelta 2/60): the drawn pose never
+    // A TWO-STEP HITCH (the tick that carries two steps at once: stepSerial + 2): the drawn pose never
     // steps back to an older state and never jumps more than the record did — and the cadence after it is the closed
     // form's again (two steps per three frames).
     {
         enginetest::frames(e, 1);
         const float base = drawnX();
         std::vector<float> d;
-        pattern(1.0f / 60.0f, step, base, d);
+        pattern(1.0f, step, base, d);
         step += 2;
-        e->submitFrame(record(scene, node, step, float(step - 1), 2.0f / 60.0f));
+        e->submitFrame(record(scene, node, step, float(step - 1)));
         for (int f = 0; f < 2; ++f) { const_cast<inspect::EngineEcho *>(echo)->presentationFrame(); d.push_back(drawnX() - base); }
         const size_t after = d.size();
-        pattern(1.0f / 60.0f, step, base, d);
+        pattern(1.0f, step, base, d);
         std::printf("    a two-step hitch, drawn x - x0:");
         for (float x : d) std::printf(" %.4f", double(x));
         std::printf("\n");
@@ -229,6 +227,29 @@ int main(int argc, char **argv)
         CHECK(back == 0, "the hitch never draws an older pose after a newer one (%d steps back)", back);
         CHECK(worst <= 2.0f + 1e-4f, "no frame jumps further than the hitch's own two steps (worst %.4f)", double(worst));
         CHECK(std::fabs(cadence - 2.0f) < 1e-4f, "after the hitch, two steps per three frames again (%.4f)", double(cadence));
+    }
+    // A REWOUND SERIAL (ONE-FRAME-1 stage 1; the play-edge defect the stage-0 audit found): the viewport stamped the
+    // document clock's steps(), which resets to 0 at every play / stop / simulate edge, while the engine kept its newest
+    // serial and raised it only on a larger one — so after ten minutes of editing, Play left the presentation clamped at
+    // the old grid state for as many steps (alpha far above 1, every free frame drawing cur). The mirror now stamps the
+    // monotone lifetime serial, and a scene's cursor re-primes on a lower one: the free frames after a rewind draw
+    // between the grid states again at once. RED on the base engine (the newest serial held): the two free frames per
+    // record drew one pose.
+    {
+        enginetest::frames(e, 1);
+        const float base = drawnX();
+        unsigned long long rewound = 1;   // far below `step`: the base's serial after Play
+        e->submitFrame(record(scene, node, rewound, float(rewound - 1)));
+        enginetest::frames(e, 1);
+        std::vector<float> d;
+        pattern(1.0f, rewound, base, d);
+        std::printf("    after a rewound serial (%llu -> 1), drawn x - x0:", (unsigned long long)step);
+        for (float x : d) std::printf(" %.4f", double(x));
+        std::printf("\n");
+        int monotone = 0;
+        for (size_t j = 1; j < d.size(); ++j) if (d[j] > d[j - 1] + 1e-5f) ++monotone;
+        CHECK(monotone == int(d.size()) - 1, "after a rewound serial every free frame draws a new pose (%d of %zu rising)",
+              monotone, d.size() - 1);
     }
     view->setScene(nullptr);
     e->destroyScene(scene);

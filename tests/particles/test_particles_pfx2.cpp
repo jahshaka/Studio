@@ -138,15 +138,10 @@ int main(int argc, char **argv)
     // particles, and nothing ever visibly rises. Every count and every band
     // ratio below is written against 1/60 s per frame.
     // ...and since ENGINEERING_DEBT_SPEC A4.2 the engine has no wall clock at
-    // all: it BOOTS on that grid step, so a host that never pushes a delta
-    // (thumbnails, previews, this suite before the line below) simulates one
-    // deterministic 1/60 s per frame.
-    CHECK(std::fabs(engine->fixedFrameDelta() - Engine::kDefaultFrameDelta) < 1e-6f &&
-          std::fabs(Engine::kDefaultFrameDelta - 1.0f / 60.0f) < 1e-6f,
-          "the engine boots on the 1/60 s grid step (no wall clock)");
-    engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));
-    CHECK(std::fabs(engine->fixedFrameDelta() - 1.0f / 60.0f) < 1e-6f,
-          "a submitted frame delta is the one the engine runs on");
+    // all; since ONE-FRAME-1 a scene's time is its document's steps, and this
+    // engine-only scene's are the harness's: enginetest::frames steps it one
+    // deterministic 1/60 s per frame (frame.particles_per_scene proves that
+    // PFX2 ages each scene by its own steps).
 
     // ---- 0. The plugin is actually loaded -----------------------------------
     // Every emitter and affector FACTORY lives in Plugin_ParticleFX2. If the
@@ -264,16 +259,14 @@ int main(int argc, char **argv)
     }
 
     // ---- 3b. The clock: freeze and resume -----------------------------------
-    // a frame delta of 0 (FrameInput::frameDelta) must stop the simulation dead — two captures 30
-    // frames apart become IDENTICAL, which is also the "it stops" half of the
-    // fire gate in phase 3. It is process-wide (one frame-time source in the
-    // backend), so the grid step is restored after.
+    // frames nobody steps (enginetest::frozenFrames: the scene's serial stands still) must stop the simulation dead —
+    // two captures 30 frames apart become IDENTICAL, which is also the "it stops" half of the fire gate in phase 3.
+    // Then stepped frames resume it.
     {
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(0.0f));
-        warm(engine.get(), 2);
+        enginetest::frozenFrames(engine.get(), 2);
         Image frozenA, frozenB;
         view->readPixels(frozenA);
-        warm(engine.get(), 30);
+        enginetest::frozenFrames(engine.get(), 30);
         view->readPixels(frozenB);
         int moved = 0;
         for (unsigned y = 0; y < frozenA.height; ++y)
@@ -284,9 +277,8 @@ int main(int argc, char **argv)
             }
         std::printf("    frozen: %d pixels changed over 30 frames\n", moved);
         CHECK(countBright(frozenA) > 50, "the frozen plume is still on screen");
-        CHECK(moved == 0, "a frame delta of 0 freezes the simulation exactly");
+        CHECK(moved == 0, "frames that step no grid step freeze the simulation exactly");
 
-        engine->submitFrame(jahshaka::engine::FrameInput::delta(1.0f / 60.0f));   // resumes on the grid step
         warm(engine.get(), 30);
         view->readPixels(img);
         int movedAgain = 0;
