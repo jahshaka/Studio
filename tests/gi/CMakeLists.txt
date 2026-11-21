@@ -408,7 +408,7 @@ jah_gpu_row(gi.scroll_lag CLASS engine COMMAND test_gi_scroll_lag
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.scroll_lag PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.scroll_lag PROPERTIES JAHSHAKA_TEST_FRAMES 794)
+set_tests_properties(gi.scroll_lag PROPERTIES JAHSHAKA_TEST_FRAMES 797)
 
 # gi.changed_regions (PHOTON-7 stage 3, AB S1; L2) — ONE CHANGED-REGION LIST A FRAME SAYS WHERE THE WORLD CHANGED: a
 # settled scene lists nothing for 600 frames; a lamp step lists exactly its old sphere joined with its new; a mover its
@@ -433,7 +433,7 @@ jah_gpu_row(gi.changed_regions CLASS engine COMMAND test_gi_changed_regions
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.changed_regions PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.changed_regions PROPERTIES JAHSHAKA_TEST_FRAMES 1071)
+set_tests_properties(gi.changed_regions PROPERTIES JAHSHAKA_TEST_FRAMES 1726)
 
 # gi.card_oracle (PHOTON-7 stage 5, 5-1) — THE CARDS REFINE ONLY WHAT CHANGED, AND WHAT THEY KEEP IS STILL RIGHT: a lamp
 # step on a carded court against an ORACLE (the same final state solved whole: the GI torn down and built again) - every
@@ -456,7 +456,7 @@ jah_gpu_row(gi.card_oracle CLASS engine COMMAND test_gi_card_oracle
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_oracle PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 355)
+set_tests_properties(gi.card_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 441)
 
 # gi.field_oracle (PHOTON-7 stage 5, 5-4) — THE FIELD REFINES ONLY WHAT CHANGED, AND WHAT IT KEEPS IS STILL RIGHT: a lamp
 # step in the leak room, every probe against a whole re-solve (test_gi_field_oracle.cpp says the laws). A fixture.
@@ -487,10 +487,10 @@ jah_gpu_row(gi.cache_level_picture CLASS engine COMMAND test_gi_field_oracle pic
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.field_oracle gi.field_oracle_marks gi.field_oracle_shells gi.cache_level_picture PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.field_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 780)
-set_tests_properties(gi.field_oracle_marks PROPERTIES JAHSHAKA_TEST_FRAMES 1508)
-set_tests_properties(gi.field_oracle_shells PROPERTIES JAHSHAKA_TEST_FRAMES 949)
-set_tests_properties(gi.cache_level_picture PROPERTIES JAHSHAKA_TEST_FRAMES 666)
+set_tests_properties(gi.field_oracle PROPERTIES JAHSHAKA_TEST_FRAMES 900)
+set_tests_properties(gi.field_oracle_marks PROPERTIES JAHSHAKA_TEST_FRAMES 1536)
+set_tests_properties(gi.field_oracle_shells PROPERTIES JAHSHAKA_TEST_FRAMES 978)
+set_tests_properties(gi.cache_level_picture PROPERTIES JAHSHAKA_TEST_FRAMES 631)
 
 # gi.card_residency (PHOTON-7 stage 5, 5-2) — THE CARDS RESIDENT ARE THE ONES THE READERS READ, AND A WALK EQUALS A
 # TELEPORT ON THEM: two sealed carded rooms that do not both fit the atlas, the gather's hits the readers; a walk from one
@@ -580,7 +580,7 @@ jah_gpu_row(gi.gather_sliver CLASS engine COMMAND test_gi_gather_sliver
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.gather_sliver PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.gather_sliver PROPERTIES JAHSHAKA_TEST_FRAMES 833)
+set_tests_properties(gi.gather_sliver PROPERTIES JAHSHAKA_TEST_FRAMES 847)
 
 # gi.card_lamp_shadow (PHOTON-7 stage 5, 5-3) — THE CARDS SEE LAMP SHADOWS, TRACED: a blocker between a lamp and a
 # carded floor - the card's direct half 0 in the umbra and the lamp's closed form past it (R12), and
@@ -609,8 +609,8 @@ jah_gpu_row(gi.card_lamp_shadow_area CLASS engine COMMAND test_gi_card_lamp_shad
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_lamp_shadow gi.card_lamp_shadow_area PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.card_lamp_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 283)
-set_tests_properties(gi.card_lamp_shadow_area PROPERTIES JAHSHAKA_TEST_FRAMES 893)
+set_tests_properties(gi.card_lamp_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 394)
+set_tests_properties(gi.card_lamp_shadow_area PROPERTIES JAHSHAKA_TEST_FRAMES 667)
 
 # gi.area_follow (PHOTON-7 stage 8B, B2; a builder's row, archived at the merge) — THE AREA LIGHT'S VISIBILITY RESTS
 # PER TEXEL: a movable block slides under an area light; the far penumbra of a still plate keeps its rest bit for bit
@@ -660,10 +660,10 @@ jah_gpu_row(gi.mover_lamp_step CLASS engine COMMAND test_gi_mover_geometry lamp
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.soft_mover_ghost gi.mover_bus_geometry gi.mover_bus_sky gi.mover_lamp_step PROPERTIES
                      ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
-set_tests_properties(gi.soft_mover_ghost PROPERTIES JAHSHAKA_TEST_FRAMES 148)
+set_tests_properties(gi.soft_mover_ghost PROPERTIES JAHSHAKA_TEST_FRAMES 147)
 set_tests_properties(gi.mover_bus_geometry PROPERTIES JAHSHAKA_TEST_FRAMES 138)
 set_tests_properties(gi.mover_bus_sky PROPERTIES JAHSHAKA_TEST_FRAMES 138)
-set_tests_properties(gi.mover_lamp_step PROPERTIES JAHSHAKA_TEST_FRAMES 101)
+set_tests_properties(gi.mover_lamp_step PROPERTIES JAHSHAKA_TEST_FRAMES 97)
 
 # gi.share_law (BISTRO-REST-1) - THE HIT READ's BOUNCE SHARE IS LINEAR IN THE STORE IT READS: the shipped share
 # (jah_rq_hit.glsl, through Engine::giShareLaw's test-only job) continuous and monotone across the dim range, the read's
@@ -820,7 +820,7 @@ target_compile_definitions(test_gi_relight_credit PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_relight_credit PRIVATE JahshakaEngine)
 add_dependencies(test_gi_relight_credit JahshakaEngineMedia)
-jah_gpu_row(gi.relight_credit CLASS engine FRAMES 410 COMMAND test_gi_relight_credit
+jah_gpu_row(gi.relight_credit CLASS engine FRAMES 428 COMMAND test_gi_relight_credit
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.relight_credit PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
 
