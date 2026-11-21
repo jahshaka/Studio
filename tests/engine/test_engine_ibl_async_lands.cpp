@@ -50,7 +50,6 @@ int main()
     CHECK(engine != nullptr, "engine created (%s)", err.c_str());
     if (!engine) return 1;
     Engine *e = engine.get();
-    e->submitFrame(FrameInput::delta(1.0f / 60.0f));
     View *view = e->createOffscreenView("ibl", 64, 64, Colour(0, 0, 0), OffscreenContract::Live);
     Scene *scene = e->createScene("ibl");
     if (!view || !scene) { std::printf("FAIL: view/scene (%s)\n", e->lastError().c_str()); return 1; }
