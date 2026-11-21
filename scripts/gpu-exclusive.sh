@@ -357,13 +357,15 @@ ticket=""
 # its reservation (R <expiry> <place>) is adopted whatever this hold's label, and the hold is long (the place is the call's)
 # ($place: read before the option-less nested path, above)
 if [ -n "$place" ] && [ -n "$short" ]; then echo "gpu-lock: --short $short: this hold takes its call's place ($place) - long, at that place"; short=""; fi
-for f in "$q"/[0-9]*; do   # a reservation under this label (or this call's place): adopted (the re-call after an exit 75) - of its own class
+for f in "$q"/[0-9]*; do   # a reservation under this label (a hold with a place: under its place only): adopted (the re-call after an exit 75) - of its own class
     case "$f" in *.tmp.*) continue ;; esac
     [ -e "$f" ] || continue   # (an empty queue: the glob unmatched - its redirect would print before 2>/dev/null applies)
     case "${f##*/}" in *.s[0-9]*) [ -n "$short" ] || continue ;; *) [ -z "$short" ] || continue ;; esac
     read -r p1 p2 p3 < "$f" 2>/dev/null || continue
     [ "$p1" = R ] && [ "${p2:-0}" -gt "$(date +%s)" ] || continue
-    { [ "$p3" = "$me" ] || { [ -n "$place" ] && [ "$p3" = "$place" ]; }; } && { ticket=$f; break; }
+    # A HOLD WITH A PLACE ADOPTS ITS PLACE ONLY, NEVER A LABEL (note 6, the second engineer's review: every lane's warm-up boot has
+    # the same label, and a placed boot took ANOTHER lane's bare exit-75 reservation by it - lock_test 14f); a bare hold, its label
+    if [ -n "$place" ]; then [ "$p3" = "$place" ]; else [ "$p3" = "$me" ]; fi && { ticket=$f; break; }
 done
 if [ -z "$ticket" ]; then
     n=$(( $(cat "$q/counter" 2>/dev/null || echo 0) + 1 ))
