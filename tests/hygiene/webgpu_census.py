@@ -80,10 +80,15 @@ CLASSES = [
     # CALL whose name merely ends in Stereo and that TAKES ARGUMENTS (`!reflectChainMatchesStereo(stereo, eyeLayers)`) is a
     # predicate over the stereo value, true or false for either shape - never a gate (the lead, 2026-11-21: the census's first
     # false positive, OgreRayQuery.cpp's shape refusal); the lookahead refuses only that form, an accessor's `()` still counts
-    ('one-eye-only gates', r'!(?!=)\s*\(*\s*(\w+\s*(\.|->)\s*)*(?!\w+Stereo\s*\(\s*[^)\s])\w*[sS]tereo\b', 'src', 15,
-     'PHOTON-7-9A (two, ground read B3), NO-RAY-CUT-1 (OgreView screenIntegrate, OgreChain ssr)'),
-    ('one-eye-only gates: applyVrViewPolicy assignments', 'VR_POLICY', 'include', 10,
-     'each pass made per layer deletes its line (bloom, ssao, smaa, hzb, refractions, distortion, the screen sources)'),
+    # 15 -> 16 at PHOTON-7-9A's landing: 9A: the Photon term view, a debug view, mono; per-eye in the VR program (OgreView.cpp
+    # d.photonTerm; it replaced a `!photon` inside two gates already counted). The lead's ruling of 2026-11-21 on a branch built
+    # BEFORE the census (its ceilings were measured at photon-7 without 9A's code) - a one-off re-base, NOT a precedent: a gate
+    # born after the census is refused.
+    ('one-eye-only gates', r'!(?!=)\s*\(*\s*(\w+\s*(\.|->)\s*)*(?!\w+Stereo\s*\(\s*[^)\s])\w*[sS]tereo\b', 'src', 16,
+     'the VR program (the Photon term view per eye), NO-RAY-CUT-1 (OgreView screenIntegrate, OgreChain ssr)'),
+    # 10 -> 9 at PHOTON-7-9A: the reflection has no mode, so `fx.reflectSources = ReflectSources::Rays` is deleted
+    ('one-eye-only gates: applyVrViewPolicy assignments', 'VR_POLICY', 'include', 9,
+     'each pass made per layer deletes its line (bloom, ssao, smaa, hzb, refractions, distortion)'),
 ]
 # THE CLASSES HELD AS A FLOOR (the count only rises): the rest are ceilings (the count only falls)
 FLOORS = ('multiview (the target)',)
