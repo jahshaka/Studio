@@ -282,7 +282,7 @@ QVector<VerbInfo> AppApi::verbs() const
         { "asyncShaders", "app.asyncShaders() -> {policy, active, running, threads, pending, completed, "
                           "failed, placeholderDraws, pendingSkips, captureDeferredDraws, compiledInBackground, "
                           "paramsMisfits, compileErrors, computeParsedInFrame, computePsoInFrame, glslangCompiles, "
-                          "glslangMs, graphicsPsos, graphicsPsoMs, computePsos, computePsoMs}",
+                          "glslangMs, graphicsPsos, graphicsPsoMs, computePsos, computePsoMs, rayBuildsJoinedWaiting}",
           "THE BACKGROUND SHADER COMPILER (ASYNC-SHADERS-1). After a project is open the editor's "
           "view never waits for a shader: a permutation it has not built yet goes to the engine's "
           "compile service (its own low-priority threads) and the object draws with a neutral grey "
@@ -307,7 +307,9 @@ QVector<VerbInfo> AppApi::verbs() const
           "(a warm launch's frames read 0: the compute layer's records serve them); computePsoInFrame compute "
           "pipelines built inside a frame by any path; glslangCompiles / glslangMs the shaders glslang compiled and "
           "its time, every thread summed; graphicsPsos / graphicsPsoMs and computePsos / computePsoMs the driver's "
-          "pipeline creations and their time, every thread summed.",
+          "pipeline creations and their time, every thread summed. rayBuildsJoinedWaiting counts the times a frame or a "
+          "wait blocked on a ray pipeline build that was not finished (COLD-BOOT-1 stage 4: the startup gate waits on "
+          "pending, never on a join, so it reads 0 after the gate and in every editor frame).",
           Needs::Engine },
         { "setAsyncShaders", "app.setAsyncShaders(on) -> app.asyncShaders()",
           "Turns the background compile policy on or off for this session (see app.asyncShaders). A "
@@ -550,13 +552,14 @@ QVector<VerbInfo> AppApi::verbs() const
           "threads any one pass can compile on and the count the shader disk cache is applied "
           "with at startup. Cheap: two engine reads and a walk of the scene list.",
           Needs::Engine },
-        { "threadBudget", "app.threadBudget() -> {hardware, game, foreground, bulletThreads, render, ogrePool, writer, streaming, multiload, dedicated, background, activeSet, total, live: {bulletThreads, qtPoolMax, bakePoolThreads}}",
+        { "threadBudget", "app.threadBudget() -> {hardware, game, foreground, bulletThreads, render, ogrePool, writer, streaming, multiload, rayBuilds, dedicated, background, activeSet, total, live: {bulletThreads, qtPoolMax, bakePoolThreads}}",
           "THE ONE CORE BUDGET (THREADING-1; irisgl/core/threadbudget.h): the tiers every "
           "thread pool of the process is sized from. `foreground` is Bullet's workers beside "
           "the game thread (`bulletThreads` = game + foreground, the physics step's "
           "scheduler); `render` + `ogrePool` the render thread and the primary scene's "
           "SceneManager pool; `dedicated` = `writer` (the shader cache's) + `streaming` "
-          "(Ogre's texture thread) + `multiload` (the texture multiload pool); `background` "
+          "(Ogre's texture thread) + `multiload` (the texture multiload pool) + `rayBuilds` (the ray "
+          "tier's pipeline builders at once, below the render thread's priority); `background` "
           "the width of each below-normal pool (Qt's global pool, the bake pool's workers). "
           "THE LAW: the per-frame `activeSet` (game + foreground + render + ogrePool) never "
           "exceeds `hardware` once the box holds the floors, and `background` is what it "
@@ -1070,6 +1073,7 @@ QVariantMap AppApi::asyncShaders()
     m["graphicsPsoMs"]        = s.graphicsPsoMs;
     m["computePsos"]          = QVariant::fromValue(qulonglong(s.computePsos));
     m["computePsoMs"]         = s.computePsoMs;
+    m["rayBuildsJoinedWaiting"] = QVariant::fromValue(qulonglong(s.rayBuildsJoinedWaiting));
     return m;
 }
 
@@ -2069,6 +2073,7 @@ QVariantMap AppApi::threadBudget()
     out.insert("writer", b.writer);
     out.insert("streaming", b.streaming);
     out.insert("multiload", b.multiload);
+    out.insert("rayBuilds", b.rayBuilds);
     out.insert("dedicated", b.dedicated());
     out.insert("background", b.background);
     out.insert("activeSet", b.activeSet());
