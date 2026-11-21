@@ -7,7 +7,10 @@
 // gi.scroll_slab.scroll crashed 2 times in 3 inside libnvidia-gpucomp.so after its laws passed.
 // THE LAW, on a headless (NULL) engine taking the harness's exit-only teardown, in a child process:
 //   (1) a handler registered with atexit AFTER the engine booted NEVER RUNS - the process ends at the engine's death;
-//   (2) the exit status is what the run returned (3).
+//   (2) the exit status is what the run returned (3);
+//   (3) THE FIXTURE'S EXIT CHECKS STILL RUN, BY NAME, in the final handler: a route declaration no frame asserted
+//       (PHOTON-7-9A's PendingRoutes - a static whose destructor this exit path never reaches) is a FAIL by name and the
+//       exit is 1.
 // NEGATIVE CONTROL: the same child WITHOUT an engine - the late handler runs (the marker is readable at all).
 #include <jahshaka/engine/Engine.h>
 #include "enginetesthelpers.h"
@@ -29,7 +32,7 @@ namespace {
 const char *kMarker = "LATE-ATEXIT-RAN";
 
 /// The child's run, as a fixture's main: boot (or not), register a late handler, return 3 through exit().
-[[noreturn]] void child(bool withEngine)
+[[noreturn]] void child(bool withEngine, bool pendingRoute = false)
 {
     {
         std::unique_ptr<Engine> e;
@@ -40,13 +43,15 @@ const char *kMarker = "LATE-ATEXIT-RAN";
             if (!e) { std::printf("child: Engine::create: %s\n", err.c_str()); std::fflush(stdout); std::_Exit(90); }
         }
         std::atexit([] { std::printf("%s\n", kMarker); std::fflush(stdout); });
+        // a declaration no frame will assert (the view and scene are never read: only the declaration's text)
+        if (pendingRoute) enginetest::declareRoutes(nullptr, nullptr, enginetest::Routes().gather(), "the exit row's view");
     }   // the engine dies here, as at a fixture's main's end
     std::exit(3);
 }
 
 struct Run { int status = -1; std::string out; };
 
-Run runChild(bool withEngine)
+Run runChild(bool withEngine, bool pendingRoute = false)
 {
     Run r;
     int fd[2];
@@ -58,7 +63,7 @@ Run runChild(bool withEngine)
         dup2(fd[1], 2);
         close(fd[0]);
         close(fd[1]);
-        child(withEngine);
+        child(withEngine, pendingRoute);
     }
     close(fd[1]);
     char buf[4096];
@@ -84,7 +89,12 @@ int main()
           "(1) an atexit registered after the engine booted never runs: the process ends at the engine's death (%s)",
           eng.out.find(kMarker) == std::string::npos ? "absent" : "PRINTED");
     CHECK(eng.status == 3, "(2) the exit status is what the run returned (3): %d", eng.status);
-    if (gFailures) std::printf("---- the child's output ----\n%s----\n", eng.out.c_str());
+    const Run pend = runChild(true, true);
+    CHECK(pend.status == 1 && pend.out.find("the exit row's view declared") != std::string::npos &&
+              pend.out.find(kMarker) == std::string::npos,
+          "(3) a route declaration no frame asserted fails the exit by name (status %d, the FAIL line %s)", pend.status,
+          pend.out.find("the exit row's view declared") != std::string::npos ? "printed" : "ABSENT");
+    if (gFailures) std::printf("---- the children's output ----\n%s----\n%s----\n", eng.out.c_str(), pend.out.c_str());
     std::printf(gFailures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", gFailures);
     return gFailures ? 1 : 0;
 }

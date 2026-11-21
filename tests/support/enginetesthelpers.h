@@ -136,10 +136,13 @@ inline int checkEveryShaderCompiled(int status)
 }
 
 #if defined(__GLIBC__)
-/// The fixture's last act (takeExitOnlyTeardown): its exit checks BY NAME, then the process's end.
+namespace framesdetail { inline int checkPendingRoutes(int status); }   // below: the route declarations' judgement
+/// The fixture's last act (takeExitOnlyTeardown): its exit checks BY NAME - the shader compiles, the route declarations
+/// no frame asserted (PHOTON-7-9A's PendingRoutes) - then the process's end.
 inline void exitOnlyFinal(int status, void *)
 {
     status = checkEveryShaderCompiled(status);
+    status = framesdetail::checkPendingRoutes(status);
     std::fflush(nullptr);
     std::_Exit(status);
 }
@@ -307,19 +310,29 @@ struct DeclaredRoutes { View *v; Scene *s; Routes r; std::string what; int frame
 /// fixture that declared and returned before its first frame, a view destroyed first - enginetest::destroyView below
 /// drops it then) is a row that measured nothing it said: at the process's exit every one still pending is a FAIL by
 /// name and the exit is 1 - never a silent green. (A declaration's view is never read here: only its text.)
+/// The judgement, BY NAME: exitOnlyFinal calls it (a fixture ending at its engine's death never reaches a static
+/// destructor - COLD-BOOT-1, the fixtures' exit); ~PendingRoutes calls it for a fixture that keeps the real destroy.
+/// Every pending declaration is a FAIL line; the status becomes 1 and the list is emptied (judged once).
+inline int failPendingRoutes(std::vector<DeclaredRoutes> &d, int status)
+{
+    if (d.empty()) return status;
+    for (const DeclaredRoutes &x : d)
+        std::fprintf(stderr, "FAIL: %s declared {%s} and no frame asserted it before the process ended (URGENT #146)\n",
+                     x.what.c_str(), routesText(x.r).c_str());
+    d.clear();
+    return 1;
+}
 struct PendingRoutes {
     std::vector<DeclaredRoutes> d;
     ~PendingRoutes()
     {
-        if (d.empty()) return;
-        for (const DeclaredRoutes &x : d)
-            std::fprintf(stderr, "FAIL: %s declared {%s} and no frame asserted it before the process ended (URGENT #146)\n",
-                         x.what.c_str(), routesText(x.r).c_str());
+        if (failPendingRoutes(d, 0) == 0) return;
         std::fflush(nullptr);
         std::_Exit(1);
     }
 };
 inline PendingRoutes &pendingRoutes() { static PendingRoutes p; return p; }
+inline int checkPendingRoutes(int status) { return failPendingRoutes(pendingRoutes().d, status); }
 inline std::vector<DeclaredRoutes> &declaredRoutes() { return pendingRoutes().d; }
 inline void checkDeclaredRoutes()
 {
