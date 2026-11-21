@@ -128,8 +128,9 @@ set_tests_properties(vr.photon_term_stereo PROPERTIES
     RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
     SKIP_RETURN_CODE 77
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_term_home};JAHSHAKA_DATA_ROOT=${_vr_term_home}/.local/share/Jahshaka")
-# THE FRAMES (R7): the script's pump, counted by it - 10 + 33 pumps for 30 eye frames = 43 (its first run, 2026-11-21, :63)
-set_tests_properties(vr.photon_term_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 43)
+# THE FRAMES (R7): the script's pump, counted by it - 10 + the pre-term pumps to the stereo list's first reading (7) + 30
+# pumps for 30 eye frames = 47 (its run of 2026-11-21 with law (4); the first run's 33 pumps for 30 frames: 50 at most)
+set_tests_properties(vr.photon_term_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 50)
 
 # vr.start_broken (archived: archive/tests/vr) (VR-START-1 case d): the active manifest's runtime library cannot be
 # loaded. The runner still owns a private runtime (unused); the manifest is ours.

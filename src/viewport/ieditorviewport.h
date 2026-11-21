@@ -1006,6 +1006,7 @@ public:
             /// ...and PER LIVE VIEW (RayQueryStatus::hitViews, PHOTON-7 stage 0's read R4).
             struct HitListView {
                 int     eyes = 1;
+                bool    photonTerm = false;   ///< the view's built chain carries the Photon term view (PHOTON-7-9A M4)
                 int     eyeWidth = 0, eyeHeight = 0;
                 quint64 firstCapacity = 0, capacity = 0, records = 0, dropped = 0;
             };

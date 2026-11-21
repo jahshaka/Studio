@@ -3194,6 +3194,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         for (const auto &v : rq.hitViews) {
             IEditorViewport::GiStatusInfo::RayQueryInfo::HitListView h;
             h.eyes = int(v.eyes);
+            h.photonTerm = v.photonTerm;
             h.eyeWidth = int(v.eyeWidth);
             h.eyeHeight = int(v.eyeHeight);
             h.firstCapacity = quint64(v.firstCapacity);
