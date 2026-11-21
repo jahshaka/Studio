@@ -1348,30 +1348,32 @@ endif()
 # gi.walk_rough.walk / .k14 / .k28 / .k59 (PHOTON-7 stage 7, 7-3; R12; SPLIT BY PROOF in HARNESS-3 (a): whole it ran 55.78
 # / 57.69 s, over the 45-s quiet law) — THE ROUGH SPECULAR'S WALK LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS MEMORY AND
 # ITS NOISE: rough_lag.sh on photon-rough (its four rough metal strips, the lobe alone): at walk frame k per rough pixel
-# |walk - conv| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1, breaking <= 1 % (the lag law; N the gather's history
-# count, SE_walk its raw lobe's sigma / sqrt N) - ONE ROW PER k, each on the walk's dump (a fixture chain: .walk writes
+# |walk - conv| <= (1 - 1/n_eff)(|conv(k) - conv(k - h)| + 1) + 3 sd + 1, breaking <= 1 % (the lag law, RE-DERIVED in
+# ROUGH-LOBE-HISTORY-1 stage 2C: the EMA's own lag from the slope h frames behind, n_eff = min(n + 1/2, h); sd the spread
+# of walk - conv, sigma sqrt(V(n) + 1/R); h and R read from the walk's record; derived in rough_lag.sh's header, its
+# arithmetic checked by gi.walk_rough.law) - ONE ROW PER k, each on the walk's dump (a fixture chain: .walk writes
 # it, FIXTURES_SETUP; run one k alone with `ctest -R gi.walk_rough.k14 -FS gi_walk_rough_dump`). CONVERGED is the lab's
-# `rest 600` (GiStatus::giAtRest; rough_lag.sh derives it - the picked 600 frames it replaced). Declared red: rough_lag.sh
-# says it. 960x540; one jahlab session a row; FRAMES as the rows ran them (the rests' measured counts).
+# `rest 600` (GiStatus::giAtRest; rough_lag.sh derives it - the picked 600 frames it replaced). 960x540; one jahlab
+# session a row; FRAMES as the rows ran them (the sessions' measured counts, stage 2C's run).
 if(TARGET jahlab)
     jah_gpu_row(gi.walk_rough.walk CLASS engine TOKENS 8 FRAMES 350
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
                 walk
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_rough.walk PROPERTIES TIMEOUT 60 LABELS "engine" FIXTURES_SETUP gi_walk_rough_dump)
-    jah_gpu_row(gi.walk_rough.k14 CLASS engine TOKENS 8 FRAMES 506
+    jah_gpu_row(gi.walk_rough.k14 CLASS engine TOKENS 8 FRAMES 454
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
                 14 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k14
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_rough.k14 PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
-    jah_gpu_row(gi.walk_rough.k28 CLASS engine TOKENS 8 FRAMES 519
+    jah_gpu_row(gi.walk_rough.k28 CLASS engine TOKENS 8 FRAMES 438
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
                 28 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k28
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(gi.walk_rough.k28 PROPERTIES TIMEOUT 60 LABELS "engine"
                          FIXTURES_REQUIRED gi_walk_rough_dump DEPENDS gi.walk_rough.walk)
-    jah_gpu_row(gi.walk_rough.k59 CLASS engine TOKENS 8 FRAMES 550
+    jah_gpu_row(gi.walk_rough.k59 CLASS engine TOKENS 8 FRAMES 420
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/rough_lag.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough
                 59 ${CMAKE_CURRENT_BINARY_DIR}/work/walk_rough_k59
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
