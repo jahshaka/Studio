@@ -37,8 +37,8 @@
 # old K_max 512 + the rest's start, and since 11-2 (8) the glass holds ~1,000 rest frames in - "eref held at frame 601 of
 # 600"). No frame count holds a rest (K_max deleted, the rest stops each texel by its own standard error), so the window is
 # the OBSERVATION SPAN the law asks the hold inside, sized under the row's 45-s law - never a physics bound.
-# SPLIT BY PROOF (the two 1,200-frame windows no longer fit one row): .ref (the reference session, FIXTURES_SETUP) then
-# .step (the step session and (e)'s judgement of both).
+# SPLIT BY PROOF (the two 1,200-frame windows no longer fit one row): .ref (the reference session and ITS OWN laws - held,
+# no capped texel, no rise; FIXTURES_SETUP) then .step (the step session's same laws and (e) against the reference).
 # usage: lamp_step_held.sh <jahlab> <work dir> ref|step
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}; PART=${3:?ref or step}
@@ -62,10 +62,12 @@ for run in $PART; do
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($run) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$run.log" | head; tail -5 "$WD/$run.log"; exit 1; }
 done
 HERE=$(cd "$(dirname "$0")" && pwd)
-[ "$PART" = ref ] && { echo "rtreflect.lamp_step_held.ref: PASS (the reference session; .step judges it)"; exit 0; }
-python3 -I - "$WD" "$WIN" "$HERE/../support" <<'PY'
+# EACH PART JUDGES ITS OWN SESSION (the final read, the lead's ruling: one row per proof): .ref the reference session's
+# laws (held inside its window, no capped texel at the hold, no rise from the rest's settle); .step the step session's
+# same laws and (e) - LAW 1 / LAW 2 against the reference's held picture.
+python3 -I - "$WD" "$WIN" "$HERE/../support" "$PART" <<'PY'
 import csv, os, sys
-wd, win = sys.argv[1], int(sys.argv[2])
+wd, win, part = sys.argv[1], int(sys.argv[2]), sys.argv[4]
 sys.path.insert(0, sys.argv[3])
 import rise_law
 fails = list(rise_law.selfcheck())
@@ -81,7 +83,7 @@ def holdOf(rows):
     # not held.
     late = [i for i in range(1, len(rows)) if rows[i]["refl_held"] != "1"]
     return (late[-1] + 1) if late else 1
-for name in ("estep", "eref"):
+for name in (("eref",) if part == "ref" else ("estep",)):
     r = window(name)
     if not r or len(r) != win + 1:
         fails.append("(e) the %s session's door window: %s" % (name, "no TSV" if not r else len(r)))
@@ -109,7 +111,9 @@ try:
     from PIL import Image
 except ImportError:
     Image = None
-if not Image:
+if part == "ref":
+    pass   # (the comparison is the step part's)
+elif not Image:
     fails.append("(e) PIL is missing: the lamp-step pictures cannot be compared")
 elif all(os.path.exists(os.path.join(wd, "data", "shots", n + ".png")) for n in ("e-step", "e-ref")):
     a = Image.open(os.path.join(wd, "data", "shots", "e-step.png")).convert("RGB").tobytes()
@@ -133,6 +137,6 @@ elif all(os.path.exists(os.path.join(wd, "data", "shots", n + ".png")) for n in 
 else:
     fails.append("(e) the step's or the reference's shot is missing")
 for f in fails: print("FAIL:", f)
-print("rtreflect.lamp_step_held: %s" % ("FAIL" if fails else "PASS"))
+print("rtreflect.lamp_step_held.%s: %s" % (part, "FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)
 PY

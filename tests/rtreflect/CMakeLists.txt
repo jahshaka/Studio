@@ -352,7 +352,7 @@ if(TARGET jahlab)
         WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
     set_tests_properties(rtreflect.still_after_stop.hold rtreflect.still_after_stop.path PROPERTIES TIMEOUT 60 LABELS "engine")
     # rtreflect.lamp_step_held SPLIT BY PROOF (HARNESS-3 (f): two 1,200-frame door windows - lamp_step_held.sh says the
-    # sizing): .ref (the reference session) -> .step (the step session + (e)).
+    # sizing): .ref (the reference session + its own laws) -> .step (the step session's laws + (e)).
     jah_gpu_row(rtreflect.lamp_step_held.ref CLASS engine FRAMES 1222
         COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/lamp_step_held.sh $<TARGET_FILE:jahlab>
                 ${CMAKE_CURRENT_BINARY_DIR}/work/lamp_step_held ref

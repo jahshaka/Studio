@@ -46,18 +46,20 @@
 #       (jah_reflect_rest.glsl): its mean change falls as 1/v from the stop and never rises - judged by THE RISE LAW on the
 #       mirror pixels' series, as (a) on the glossy (tests/support/rise_law.py), from the rest's own settle to the hold;
 #       the held end state is the stop's own guarantee (every displayed SE under one code).
-#   (d) walk vs teleport at EQUAL placements, at an EQUAL REST INDEX before the hold (PHOTON-7-9A stage 0, the lead's
-#       ruling on the builder's derivation; the old "glossy mean <= 0.5 and p99 <= 2" were picked numbers, deleted and
-#       printed): EVERY GLOSSY PIXEL WITHIN 1 CODE, read from the door's max. THE DERIVATION: past the 2N hand-over (frame
-#       450 >> 2N / 4) both pictures are the rest means of the SAME samples at the SAME count (per-index determinism: a
-#       texel's k-th rest sample is a function of its seed pixel and k), so they differ only by what the samples' hits
-#       read - the GI's held state, path-dependent inside its rest zone. That zone is RELATIVE radiance: one fp16 step is
-#       at most 2^-10 of the value and the orbit kill's rest zone is step / (1 - lambda) (DOCS/traps/ENGINE.md "AN fp16
-#       CONTRACTION ORBITS"), z = 0.98 % at lambda = 0.9. A reflection F L then moves by F dL <= z (F L), whose display
-#       shift is at most z g(u) with g(u) = u c'(u) the film-and-sRGB curve's log slope (c = 255 srgb(film(u)), u the
-#       post-exposure input) - max g = 58.6 codes per unit ln u, at u 0.505 (code 176), for EVERY F and L, the shoulder
-#       included (spikes/photon-7-9a/r5/slope.cpp, slope.txt: the plain "F c'(F L) <= c'(L)" fails in the shoulder, ratio
-#       11.05, so a bound in hit codes would not hold). z max g = 0.57 codes; one 8-bit rounding: floor(0.57) + 1 = 1.
+#   (d) walk vs teleport at EQUAL placements, BOTH HELD (the final read's HEAD 4, the lead's ruling: ONE law, the one
+#       rtreflect.lamp_step_held derives - lamp_step_held.sh's header has the derivation in full): the door compares the
+#       two windows' last pictures (window frame WINP); each window's hold (the view held: every reader, the reflection
+#       included - StillnessWindow::holdFrame) must come BEFORE it, so two HELD pictures are judged. THE TERMS: (i) the
+#       GI's held state differs by the path inside its relative rest zone z = 2^-10 / (1 - 0.9) = 0.98 %, at most
+#       z max g = 0.0098 x 58.6 = 0.57 display codes for every F and L (g the film-and-sRGB curve's log slope,
+#       spikes/photon-7-9a/r5/slope.txt); (ii) THE STOP: the two holds' per-texel counts may differ (the stop and the
+#       tail's rate are decided by the samples), and two means of one sequence at counts v1 < v2 differ with SD <= SE
+#       sqrt(1 - v1 / v2) <= the stop's SE, under one display code: s = 1 code, a STANDARD ERROR; (iii) one 8-bit
+#       rounding, + 1. LAW 1 (every glossy pixel, family-wise over the N compared): the max <= floor(0.57 + sqrt(2 ln N)
+#       s) + 1. LAW 2 (the tail): the glossy pixels over floor(0.57 + 3 s) + 1 = 4 codes <= 0.27 % of N (the two-sided
+#       3-sigma tail). (The old "every glossy pixel within 1 code" dropped term (ii) - deleted; the parent's "mean <= 0.5,
+#       p99 <= 2" were picked numbers.) The measured max 18 at (663,415), equal to the pixel on both boxes, is
+#       deterministic and fails LAW 1: the red is genuine, declared at 1.10 (HISTORY-1).
 #       (The MIRROR's half is stage 5's, R2: printed, not judged.)
 #   (e) the held small lamp step is rtreflect.lamp_step_held's (lamp_step_held.sh).
 #   (g) THE REST's COST (re-derived, HARNESS-3 (c)): a rest frame never outweighs a tile frame - read as THE TRACE's
@@ -78,9 +80,8 @@
 # SPLIT BY PROOF (PHOTON-7 8B B2, the lead's ruling): the hold now lands at 828 (the stop counts samples), so the
 # 1,000-frame walk window and the path's two windows no longer fit one row under the minute - `hold` runs the walk alone
 # and judges (a), (a2), (b'), (c), (g); `path` runs the walk and the teleport at equal placements and judges (d) alone,
-# AT AN EQUAL REST INDEX BEFORE THE HOLD (both windows 450 frames; the lead's ruling): the rest's samples are a function
-# of the sequence index (per-index determinism), so equal placements give equal pictures at equal frames, held or not -
-# (d) tests the rest estimate's path-independence, NOT a held picture: the hold is .hold's (b').
+# on the two windows' last pictures (450 frames each), BOTH HELD before it (the final read's HEAD 4: the hybrid holds at
+# window frames ~250-310 here; the row checks it, never assumes it).
 # usage: still_after_stop.sh <jahlab> <work dir> hold|path
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}; PART=${3:?hold or path}
@@ -120,25 +121,43 @@ done
 grep '^LAB STILLNESS' "$WD/run.log" | cut -c1-400
 HERE=$(cd "$(dirname "$0")" && pwd)
 if [ "$PART" = path ]; then
-python3 -I - "$WD" <<'PY'
+python3 -I - "$WD" "$WINP" <<'PY'
 import math, os, re, sys
 log = open(os.path.join(sys.argv[1], "run.log")).read()
 fails = []
 m = re.search(r"path walk-vs-teleport \(at equal placements\) \| picture mean/p99/max codes, pixels >= 1: (.*?) \|", log)
-if not m:
-    fails.append("(d) the path line is missing")
+t = re.search(r"\| pixels N and over 1\.\.(\d+) codes: (.*?) \|", log)
+holds = dict(re.findall(r"STILLNESS (walk|teleport) stop=\S+ frames=\d+ visible=\S+ lastGiRow=-?\d+ lastHoldKey=-?\d+ hold=(-?\d+)", log))
+win = int(sys.argv[2])
+cls = {}
+if not m or not t:
+    fails.append("(d) the path line (or its tail) is missing")
 else:
     cls = {k: (float(a), int(b), int(c)) for k, a, b, c in re.findall(r"(\w+)=([\d.]+)/(\d+)/(\d+),\d+", m.group(1))}
-    # THE LAW (the header's derivation): every glossy pixel within floor(z max g) + 1 = 1 code, z = 2^-10 / (1 - 0.9)
-    z, gmax = 2.0 ** -10 / (1.0 - 0.9), 58.6
-    bound = int(math.floor(z * gmax)) + 1
-    g = cls.get("glossy")
-    if g is None:
-        fails.append("(d) the door's line has no glossy class")
+    tail = {k: (int(n), [int(x) for x in o.split(",")]) for k, n, o in re.findall(r"(\w+)=(\d+):([\d,]+)", t.group(2))}
+    # AT THE HOLD: both windows held before the compared frame (the window's last, WINP)
+    hw, ht = int(holds.get("walk", -1)), int(holds.get("teleport", -1))
+    print("(d) the holds: walk at window frame %d, teleport at %d; the pictures compared at %d" % (hw, ht, win))
+    if not (0 <= hw < win and 0 <= ht < win):
+        fails.append("(d) both windows must hold before the compared frame %d (walk %d, teleport %d): two held pictures "
+                     "are the law's subject" % (win, hw, ht))
+    # THE TWO LAWS (the header's derivation; lamp_step_held.sh's)
+    zg, s = 2.0 ** -10 / (1.0 - 0.9) * 58.6, 1.0
+    g, gt = cls.get("glossy"), tail.get("glossy")
+    if g is None or gt is None or gt[0] <= 1:
+        fails.append("(d) the door's line has no glossy class (or no pixels)")
     else:
-        print("(d) walk vs teleport at equal placements: glossy mean %.3f p99 %d max %d (printed: mean, p99); the law: "
-              "max <= floor(z %.4f x max g %.1f = %.2f) + 1 = %d" % (g[0], g[1], g[2], z, gmax, z * gmax, bound))
-        if g[2] > bound: fails.append("(d) every glossy pixel within %d code(s) (the zone's 0.57 + a rounding): max %d" % (bound, g[2]))
+        n = gt[0]
+        maxBound = int(math.floor(zg + math.sqrt(2.0 * math.log(n)) * s)) + 1
+        tailCode = int(math.floor(zg + 3.0 * s)) + 1
+        over = gt[1][tailCode - 1] if tailCode - 1 < len(gt[1]) else -1
+        print("(d) walk vs teleport, held: glossy mean %.3f p99 %d max %d (mean, p99 printed); LAW 1: N = %d, the max <= "
+              "floor(%.2f + sqrt(2 ln N) %.2f x s %.0f) + 1 = %d; LAW 2: %d px (%.4f %%) over %d codes, bar 0.27 %%"
+              % (g[0], g[1], g[2], n, zg, math.sqrt(2.0 * math.log(n)), s, maxBound, over, 100.0 * over / n, tailCode))
+        if g[2] > maxBound:
+            fails.append("(d) LAW 1, every glossy pixel within %d codes (N = %d): max %d" % (maxBound, n, g[2]))
+        if over < 0 or over > 0.0027 * n:
+            fails.append("(d) LAW 2, <= 0.27 %% of the glossy pixels over %d codes: %d (%.4f %%)" % (tailCode, over, 100.0 * over / n))
     print("(d) the mirror's half is stage 5's (R2), not judged here: %s" % (cls.get("mirror"),))
 for f in fails: print("FAIL:", f)
 print("rtreflect.still_after_stop.path: %s" % ("FAIL" if fails else "PASS"))
