@@ -20,11 +20,19 @@
 # CLAUSE (2), THE COMPUTE LAYER's RECORD KEY (COLD-BOOT-1 stage 3; the lead's condition 3 on P6: per VIEW, no per-run
 # value): the input key a record is found by (irisgl engine/src/ComputeRecord.h, ComputeKeyInputs and
 # computeRecordInputKey) reads EXACTLY what a template's parse reads - the template's bytes, the piece files, the C++
-# pieces, the properties - plus the ROOT LAYOUT's bytes (ruled in by SHADER-SYSTEM-1's start preflight, F2a: a slot's type
-# reaches no property, and two jobs of equal text with other slot types need two programs) - and nothing of a view: the
+# pieces, the properties - plus the ROOT LAYOUT's bytes (ruled in by the lead, 2026-11-22: SHADER-SYSTEM-1's start
+# preflight F2a - a slot's type reaches no property, and two jobs of equal text with other slot types need two programs) -
+# and nothing of a view: the
 # struct holds exactly those five fields, and neither it nor the key function names a view, a camera, an eye, a viewport
 # or a size. A new field is red until the lead rules it in here.
 # Its negative control first: a synthetic struct with a view's width added is refused.
+#
+# CLAUSE (3), THE RECORD MAP's WRITERS (SHADER-SYSTEM-1 stage 3F; the lead's ruling of 2026-11-22 on condition 1): the
+# fork's HlmsCompute files a record it did not build itself ONLY through its door, jahPrewarmCode, which refuses a record
+# whose source does not hash to its program key - so the hit never re-checks one. Held here: in the fork's
+# OgreHlmsCompute.cpp the record map (mJahRecords) is written only inside jahFileRecord and jahPrewarmCode, and
+# jahFileRecord is called only by the two build sites (compileShader, asyncComputePublished), whose records are their
+# own parse's. A third writer, or a third caller, is red. Its negative control: a synthetic file with one is refused.
 import glob, json, os, re, sys, tempfile
 
 SIZE_READ = re.compile(r'num_thread_groups_[xyz]|\b(?:texture|uav)\d+_(?:width|height|depth|mipmaps)\b|_(?:width|height|depth)_with_lod\b')
@@ -76,6 +84,37 @@ KEY_FIELDS = ['templateText', 'pieceFiles', 'cppPieces', 'properties', 'rootLayo
 VIEW_WORDS = re.compile(r'\b\w*(?:[Vv]iew|[Cc]amera|[Ee]ye|[Vv]iewport|[Ww]idth|[Hh]eight|[Rr]esolution|[Ss]ize)\w*\b')
 
 
+MAP_WRITE = re.compile(r'\bmJahRecords\s*(?:\[|\.\s*(?:insert|emplace|emplace_hint|erase|clear|swap)\b|=(?!=))')
+FILE_CALL = re.compile(r'\bjahFileRecord\s*\(')
+FUNC_DEF = re.compile(r'^\s*(?:[\w:<>,*&\s]+\s)?HlmsCompute::(?:\w+::)?(\w+)\s*\(', re.M)
+MAP_WRITERS = {'jahFileRecord', 'jahPrewarmCode'}
+FILE_CALLERS = {'compileShader', 'asyncComputePublished'}
+
+
+def record_writer_faults(cpp):
+    """The record map's writers and jahFileRecord's callers, by the function each line sits in (clause 3)."""
+    text = strip_comments(cpp)
+    defs = [(m.start(), m.group(1)) for m in FUNC_DEF.finditer(text)]
+    def owner(pos):
+        name = None
+        for at, n in defs:
+            if at > pos:
+                break
+            name = n
+        return name
+    bad = []
+    for m in MAP_WRITE.finditer(text):
+        if owner(m.start()) not in MAP_WRITERS:
+            bad.append('the record map written in %s' % owner(m.start()))
+    for m in FILE_CALL.finditer(text):
+        o = owner(m.start())
+        if o == 'jahFileRecord' and text[m.start() - 13:m.start()].endswith('HlmsCompute::'):
+            continue   # its own definition
+        if o not in FILE_CALLERS:
+            bad.append('jahFileRecord called in %s' % o)
+    return bad
+
+
 def strip_comments(text):
     text = re.sub(r'/\*.*?\*/', '', text, flags=re.S)
     return re.sub(r'//[^\n]*', '', text)
@@ -125,7 +164,14 @@ def self_test():
     good_c = 'ComputeKey128 computeRecordInputKey(const ComputeKeyInputs &in) {\n    k.u64(in.pieceFiles.size());\n}\n'
     bad_c = good_c.replace('k.u64(in.pieceFiles.size());', 'k.u64(in.pieceFiles.size()); k.u64(eyeIndex);')
     rk = (not record_key_faults(good_h, good_c)) and bool(record_key_faults(bad_h, good_c)) and bool(record_key_faults(good_h, bad_c))
-    return got == ['flagless_plain', 'missing'] and rk, (got, rk)
+    good_w = ('    void HlmsCompute::jahFileRecord( const JahCodeRecordPtr &r )\n    {\n        mJahRecords[key] = r;\n    }\n'
+              '    void HlmsCompute::jahPrewarmCode( V &records )\n    {\n        mJahRecords[key] = record;\n    }\n'
+              '    HlmsComputePso HlmsCompute::compileShader( HlmsComputeJob *job, uint32 h )\n    {\n'
+              '        jahFileRecord( record );\n    }\n')
+    bad_w = good_w + '    void HlmsCompute::jahHit( const Hash &k )\n    {\n        mJahRecords.erase( k );\n    }\n'
+    bad_c3 = good_w + '    void HlmsCompute::requestAsync( HlmsComputeJob *job )\n    {\n        jahFileRecord( r );\n    }\n'
+    rw = (not record_writer_faults(good_w)) and bool(record_writer_faults(bad_w)) and bool(record_writer_faults(bad_c3))
+    return got == ['flagless_plain', 'missing'] and rk and rw, (got, rk, rw)
 
 
 def main():
@@ -137,7 +183,8 @@ def main():
     ok, got = self_test()
     print(('  ok   ' if ok else '  FAIL ') + 'the negative controls: a flagless job reading no size and a missing source are refused, '
           'a job reading num_thread_groups_x and a flag-false job are not; a record key with a view width or an eye is '
-          'refused, the five-field key is not (%s)' % (got,))
+          'refused, the five-field key is not; a third writer of the record map or caller of jahFileRecord is refused (%s)'
+          % (got,))
     fails += 0 if ok else 1
     jsons = sorted(glob.glob(os.path.join(root, 'irisgl', 'engine', 'media', '**', '*.material.json'), recursive=True))
     jobs = sum(len(json.load(open(f)).get('compute', {})) for f in jsons)
@@ -157,6 +204,16 @@ def main():
         print('  FAIL (2) ' + f)
     print(('  ok   ' if not rk else '  FAIL ') + '(2) the compute record key reads the parse\'s inputs and the root layout, nothing of a view')
     fails += 1 if rk else 0
+    fork = os.path.join(root, 'irisgl', 'thirdparty', 'ogre-next', 'OgreMain', 'src', 'OgreHlmsCompute.cpp')
+    try:
+        rw = record_writer_faults(open(fork).read())
+    except OSError as e:
+        rw = ['cannot read the fork\'s HlmsCompute: %s' % e]
+    for f in rw:
+        print('  FAIL (3) ' + f)
+    print(('  ok   ' if not rw else '  FAIL ') + '(3) the record map is written only by jahFileRecord (the two build sites) and '
+          'jahPrewarmCode (the door)')
+    fails += 1 if rw else 0
     print('source.compute_size_keys: ' + ('PASSED' if not fails else 'FAILED (%d)' % fails))
     sys.stdout.flush()
     return 1 if fails else 0
