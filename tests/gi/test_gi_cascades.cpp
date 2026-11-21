@@ -65,7 +65,6 @@
 #include <cmath>
 #include <cstdio>
 #include <cstdlib>
-#include <unistd.h>
 #include <string>
 #include <vector>
 
@@ -1400,22 +1399,11 @@ int main(int argc, char **argv)
         {
             view->setCamera(enginetest::testCameraDescLookAt(pose.cam, Vec3(0.0f, 1.0f, 0.0f)));
             const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
-            // NONDET-1 M-F (a measuring arm): run 3's cube is added, placed and removed as at base, NEVER declared movable and
-            // NEVER turned - a static 2 m cube that comes and goes
-            const bool mfStatic = doMoverRoutes && ri == 3;
-            if (!run.still && !mfStatic) scene->setNodeMovable(turner, true);   // (a declared mover: A2's subject)
+            if (!run.still) scene->setNodeMovable(turner, true);   // (a declared mover: A2's subject)
             enginetest::setNodePosition(scene, turner, Vec3(0.0f, 1.0f, 0.0f));
             enginetest::setNodeScale(scene, turner, Vec3(2.0f, 2.0f, 2.0f));
             CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the motion");
             render(e, 60);
-            {   // NONDET-1 (instrument): the cube's GPU-scene slot, read from the CPU mirror (Scene::gpuSceneEntry: no GPU read)
-                const unsigned slots = scene->published().gpuScene.slotCount;
-                int found = -1;
-                GpuSceneEntry ge;
-                for (unsigned i = 0; i < slots && found < 0; ++i)
-                    if (scene->gpuSceneEntry(i, ge) && ge.nodeId == turner) found = int(i);
-                std::printf("NONDET-1 slot: run %d cube node %llu at GPU-scene slot %d of %u\n", ri, turner, found, slots);
-            }
             int faces = 0;
             {
                 const GiStatus g = scene->published().gi;
@@ -1437,7 +1425,7 @@ int main(int argc, char **argv)
             const auto yaw = [&](float deg) {
                 const float r = deg * 3.14159265358979323846f / 180.0f * 0.5f;
                 const Quat q{ 0.0f, std::sin(r), 0.0f, std::cos(r) };
-                if (!mfStatic) scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
+                scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
             };
             const GiStatus g0 = scene->published().gi;
             // (the region's own bounce PRICED at the turner: its monitor rows over the motion, the first pose with the rays
@@ -1494,21 +1482,6 @@ int main(int argc, char **argv)
             CHECK(scene->setGlobalIllumination(cascadeGi()), "...and is built fresh at the final pose");
             render(e, 120);
             Image truth; CHECK(view->readPixels(truth), "the fresh build reads back");
-            const auto nondetDump = [&](const Image &im, const char *what) {   // NONDET-1 (instrument): the image as read back
-                const char *root = std::getenv("JAH_RIG_DATA");
-                if (!root || im.rgba.empty()) return;
-                const std::string path = std::string(root) + "/nondet1-img-pid" + std::to_string(::getpid()) + "-run" +
-                                         std::to_string(ri) + "-" + what + ".ppm";
-                if (FILE *f = std::fopen(path.c_str(), "wb")) {
-                    std::fprintf(f, "P6\n%u %u\n255\n", im.width, im.height);
-                    for (size_t i = 0; i + 3 < im.rgba.size(); i += 4) std::fwrite(&im.rgba[i], 1, 3, f);
-                    std::fclose(f);
-                    std::printf("NONDET-1 image: %s\n", path.c_str());
-                }
-            };
-            nondetDump(motion, "motion");
-            nondetDump(rest, "rest");
-            nondetDump(truth, "fresh");
             int restMax = 0, motionMax = 0, motionTruthMax = 0;
             unsigned restOver = 0, motionOver = 0, motionTruthOver = 0;
             diffOf(rest, truth, restMax, restOver);
