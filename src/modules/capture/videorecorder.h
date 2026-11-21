@@ -91,8 +91,8 @@ public:
     static constexpr int kWidth = int(recordingview::kWidth), kHeight = int(recordingview::kHeight), kFps = 60;
     static constexpr int kBitRate = 14000000;   // §10.4: ~12-16 Mbps
     /// Frames the recording view renders before the first recorded one: its own
-    /// young histories (the gather's pixel history, the ray tier's young-view
-    /// fade, the exposure's first meter) settle in them — a quarter second of
+    /// young histories (the gather's pixel history, the reflection's first
+    /// samples, the exposure's first meter) settle in them — a quarter second of
     /// latency after the click, never a settle loop inside a frame.
     static constexpr int kWarmFrames = 16;
     /// The encoder queue's bound (~75 MB of 1080p NV12). Real-time: a frame past

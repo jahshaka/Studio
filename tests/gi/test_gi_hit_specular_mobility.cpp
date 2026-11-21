@@ -77,9 +77,13 @@ Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, 
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;
-    fx.reflectSources = ReflectSources::Rays;
     fx.hdrReadback = true;
     v->setPostFx(fx);
+    // THE ROUTE AND THE RAY'S OWN ANSWER (PHOTON-7-9A, the lead's ruling R7): the reflection is the hybrid, and this row's
+    // law is the RAY's (the hit's specular by its mobility), so the screen half answers no texel (enginetest::rayReflectionOnly: the test arm
+    // reflect.screenOff); the view's route declared and asserted on its first frame (URGENT #146)
+    CHECK(enginetest::rayReflectionOnly(e), "the arm reflect.screenOff (the ray's own answer: this row's law is the ray's)");
+    enginetest::declareRoutes(v, s, enginetest::Routes().gather().reflection().store(), "gi.hit_specular_mobility's view");
     PbrParams matte;
     matte.albedo = Colour(0.5f, 0.5f, 0.5f);
     matte.roughness = 0.9f;
@@ -99,7 +103,7 @@ Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, 
     GiParams gi;
     gi.mode = GiMode::Vct;
     gi.quality = GiQuality::High;
-    if (!s->setGlobalIllumination(gi)) { e->destroyView(v); e->destroyScene(s); return r; }
+    if (!s->setGlobalIllumination(gi)) { failures += enginetest::destroyView(e, v); e->destroyScene(s); return r; }
     enginetest::testCameraLookAt(v, kEye, kAt);
     e->waitForAsyncShaders();
     for (int f = 0, quiet = 0; f < 400; ++f) {
@@ -149,7 +153,7 @@ Reading arm(Engine *e, int &frames, const char *name, const PbrParams &slabMat, 
         r.ok = r.n > 500u;
     }
     v->setScene(nullptr);
-    e->destroyView(v);
+    failures += enginetest::destroyView(e, v);   // (0: its route asserted on the first frame)
     e->destroyScene(s);
     enginetest::frames(e, 2);
     frames += 2;

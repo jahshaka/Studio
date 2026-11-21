@@ -1,12 +1,19 @@
 #!/bin/bash
-# rtreflect.mirror_blend (PHOTON-7 stage 6, READ_B F2) — THE MIRROR TAKES THE COIN'S EXPECTATION: NO SEAM WHERE THE
-# SCREEN'S TRUST FADES. The reflection's lobe CENTRE ray (a mirror's whole sample, every frame) in Both mode is answered
-# by the screen trace where the screen vouches for it and by the ray where it does not; inside the fade (0 < vouch < 1)
-# it takes BOTH, vouch x screen + (1 - vouch) x ray (rq_reflect.comp's (1)). The base took a FIXED coin of one half:
-# the screen's answer whole where vouch > 1/2, the ray's whole elsewhere - a hard seam wherever the two disagree, that
-# moved with the camera.
-# THE LAW, read on Both (B) against Rays (R) at the same pose: the mirror is deterministic (the centre ray, no history,
-# no spatial support), so the screen's share E = B - R is exactly 0 where the ray answers alone and
+# rtreflect.mirror_blend (PHOTON-7 stage 6, READ_B F2; RESTORED by PHOTON-7-9A: the hybrid's own blend) — THE MIRROR
+# TAKES THE COIN'S EXPECTATION: NO SEAM WHERE THE SCREEN'S TRUST FADES. The reflection's lobe CENTRE ray (a mirror's
+# whole sample, every frame) on THE HYBRID (the one shape, the owner's ruling: screen first, then rays) is answered by the
+# screen trace where the screen vouches for it and by the ray where it does not; inside the fade (0 < vouch < 1) it
+# takes BOTH, vouch x screen + (1 - vouch) x ray (rq_reflect.comp's (1)). The base took a FIXED coin of one half: the
+# screen's answer whole where vouch > 1/2, the ray's whole elsewhere - a hard seam wherever the two disagree, that moved
+# with the camera.
+# THE RAY'S OWN PICTURE R WITH NO MODE (PHOTON-7-9A: the reflection has none): the test arm reflect.screenOff (the lead's
+# ruling; latched per frame, set by no product frame) - the hybrid's screen half gives no answer, the ray's hits shaded as
+# shipped - for 8 frames at the pose, then 8 frames off (B): the base's Both/Rays pairing. THE CONTROL: R taken twice (the
+# arm on, off for 8 frames, on again) agrees within a code on the mirror - a reference that moved between its two takes is
+# no reference (a camera cut's frame failed exactly this: spikes/photon-7-9a/mirror_blend/). The world is held (the arm
+# gi.freeze 2: no GI cache works, the reflections run live) so nothing but the screen's share moves.
+# THE LAW, read on the hybrid (B) against the ray's picture (R) at the same pose: the mirror is deterministic (the centre
+# ray, no noise of its own), so the screen's share E = B - R is exactly 0 where the ray answers alone and
 # vouch x (screen - ray) inside the fade. Its step between neighbouring pixels is then at most |screen - ray| x the
 # fade's slope plus vouch x the step of (screen - ray): the fades are smoothsteps no narrower than a few dozen pixels
 # here (the camera reversal's over 0.25..0.85 of the view-ray dot, the arrival's over 0.2, the frame edge's over 12 % of
@@ -20,20 +27,25 @@
 # poses of a slow pan (the camera 3 m up, 1.2 / 1.5 / 1.8 m to the side, looking down at photon-glass's mirror on the
 # far wall: incidence near 28 degrees, where the camera-reversal fade crosses one half inside the mirror).
 # THE BASE (the fixed coin, measured on this pan): red - the seam runs across the mirror's lower half at every pose.
-# jahlab at 960x540; one session: a 60-frame prime, then per pose 8 frames in Both and 8 in Rays (108 frames).
+# jahlab at 960x540; one session: a 60-frame prime, then per pose
+# 8 frames under reflect.screenOff (R), 8 without, 8 under it again (the control R'), then 8 without (B) - 156 frames.
 # usage: mirror_blend.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 rm -rf "$WD"; mkdir -p "$WD"
 {
-    echo 'reflections both'
+    echo 'routes gather reflection store'   # THE ROUTE (URGENT #177): judged on the first frame, the store by the 16th
     echo 'camera 1.5,3.0,1.0,0,0.8,-4'
     echo 'frames 60'
+    echo 'arm gi.freeze 2'
     for x in 1.2 1.5 1.8; do
         echo "camera $x,3.0,1.0,0,0.8,-4"
-        echo 'reflections both'; echo 'frames 8'; echo "shot b$x"
-        echo 'reflections rays'; echo 'frames 8'; echo "shot r$x"
+        echo 'arm reflect.screenOff 1'; echo 'frames 8'; echo "shot r$x"
+        echo 'arm reflect.screenOff 0'; echo 'frames 8'
+        echo 'arm reflect.screenOff 1'; echo 'frames 8'; echo "shot q$x"
+        echo 'arm reflect.screenOff 0'
+        echo 'frames 8'; echo "shot b$x"
     done
     echo 'quit'
 } > "$WD/pan.lab"
@@ -41,10 +53,6 @@ rm -rf "$WD"; mkdir -p "$WD"
     > "$WD/pan.log" 2>&1
 rc=$?
 [ $rc -eq 0 ] || { echo "FAIL: jahlab exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/pan.log" | head; exit 1; }
-# THE MODE LABEL: each shot's sources as the engine ran them (b<x> Both, r<x> Rays)
-HERE=$(cd "$(dirname "$0")" && pwd)
-python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/pan.log" -- b=both r=rays
-srcrc=$?
 python3 -I - "$WD/data/shots" <<'PY'
 import math, os, sys
 import numpy as np
@@ -84,9 +92,13 @@ def dilate(mask, k):
     return out
 total = 0
 for x in ('1.2', '1.5', '1.8'):
-    B, R = lum('b' + x), lum('r' + x)
-    if B is None or R is None: continue
+    B, R, Q = lum('b' + x), lum('r' + x), lum('q' + x)
+    if B is None or R is None or Q is None: continue
     M = mirrorMask((float(x), 3.0, 1.0), (0.0, 0.8, -4.0))
+    # THE CONTROL: R is the ray's alone only if no previous picture reached it - two different ones give one picture
+    ctl = int((M & (np.abs(R - Q) > 1.0)).sum())
+    print('pose x %s: the two takes of R differ by more than a code on %d of the mirror\'s px (the control: 0)' % (x, ctl))
+    if ctl: fails.append('pose x %s: the two takes of R differ on %d mirror px - the reference moved' % (x, ctl))
     E = B - R
     band = int((M & (np.abs(E) > 1.0)).sum())
     # THE RAY PICTURE'S EDGES, 3 px around (a reflected silhouette): there the screen's own same-surface acceptance is
@@ -117,6 +129,4 @@ for f in fails: print('FAIL: ' + f)
 print('rtreflect.mirror_blend: %s' % ('FAIL' if fails else 'PASS'))
 sys.exit(1 if fails else 0)
 PY
-rc=$?
-[ $srcrc -eq 0 ] || { echo "rtreflect.mirror_blend: FAIL (the mode label)"; exit 1; }
-exit $rc
+exit $?

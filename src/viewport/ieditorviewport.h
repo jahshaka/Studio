@@ -981,10 +981,11 @@ public:
             unsigned reflectShotRestFrames = 0;
             bool    reflectShotHeld = false;
             unsigned reflectShotRests = 0;
-            /// THE REST'S STILL-CONVERGING AND CAPPED TEXELS (-1 none read), ITS BOUND (-1 until 2N is read) and THE NEE
-            /// (PHOTON-7 stage 11; RayQueryStatus's).
-            int reflectRestActive = -1, reflectRestCapped = -1, reflectRestBound = -1;
-            unsigned reflectRestBoundOwed = 0, reflectRestNeedMax = 0;
+            /// THE REST'S STILL-CONVERGING AND CAPPED TEXELS (-1 none read), ITS SAMPLE LAW (the largest need at 2N and
+            /// the largest v at a stop after it, 0 until 2N is read) and THE NEE (PHOTON-7 stage 11; RayQueryStatus's).
+            int reflectRestActive = -1, reflectRestCapped = -1;
+            unsigned reflectRestNeedMax = 0, reflectRestStopVMax = 0;
+            unsigned long long reflectShapeRefusals = 0;   ///< (PHOTON-7-9A) recordings refused for a chain not at its view's stereo shape: 0 is the law
             int reflectEmitters = -1;
             unsigned long long reflectNeeRays = 0, reflectNeeHits = 0;
             /// THE HIT DECODE's list (PLANAR-RECORDS-1): records appended in the
@@ -1005,6 +1006,7 @@ public:
             /// ...and PER LIVE VIEW (RayQueryStatus::hitViews, PHOTON-7 stage 0's read R4).
             struct HitListView {
                 int     eyes = 1;
+                bool    photonTerm = false;   ///< the view's built chain carries the Photon term view (PHOTON-7-9A M4)
                 int     eyeWidth = 0, eyeHeight = 0;
                 quint64 firstCapacity = 0, capacity = 0, records = 0, dropped = 0;
             };

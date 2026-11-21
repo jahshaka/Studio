@@ -22,14 +22,15 @@ const std::vector<VerbDoc> &verbs()
           "the document's animation clock (Scene::setPlaying; each frame Scene::advance one 1/60 s step): the scene's "
           "animated nodes play - Bistro's, under the stillness door (PHOTON-2 round 2, G6); REFUSED where nothing carries "
           "an animation (it would move nothing: `slide` moves an object)" },
-        { "reflections", "reflections both|rays|screen|off", 1, 1,
-          "the view's reflection sources (PostFxDesc::reflectSources): both = the one estimator (the screen trace first, "
-          "the rays for the rest), rays = the rays alone, screen = the screen alone (its misses no sample) - the agreement "
-          "row's door (Both vs Rays); off = no reflection at all (PostFxDesc::ssr 0 - the chain without its prepass: an "
-          "A/B's arm, PHOTON-7 8B's pop); a graph rebuild, the histories restart" },
+        { "reflections", "reflections on|off", 1, 1,
+          "the view's reflection: on = the world's (the hybrid where the scene traces rays - the screen first, then the "
+          "rays; the march where it does not - the reflection has no mode, PHOTON-7-9A); off = no reflection at all (PostFxDesc::ssr 0 - the chain without its "
+          "prepass: an A/B's arm, PHOTON-7 8B's pop); a graph rebuild, the histories restart" },
         { "photon", "photon off|voxels|probes|cards|screenProbes|diffuse|reflections|hits|gatherHits", 1, 1,
-          "the scene's Photon view (Scene::setPhotonView): 'reflections' shows the specular environment term alone - "
-          "rtreflect.contact's crease arm reads the reflection there, free of the receiver's own diffuse" },
+          "the scene's Photon view (Scene::setPhotonView): 'reflections' shows THE OPAQUE SURFACES' specular environment "
+          "term alone ('diffuse' their indirect diffuse; glass and blended surfaces are not in either; the picture under "
+          "it keeps the scene's light, which the reflection's screen trace reads) - rtreflect.contact's crease arm reads "
+          "the reflection there, free of the receiver's own diffuse" },
         { "frames", "frames N", 1, 1, "render N frames (the engine's fixed 1/60 s grid; frames, never time)" },
         { "settle", "settle [maxFrames]", 0, 1,
           "render until the Atom status is steady: nothing pending and the cut's triangles unchanged over 8 frames (cap 1200)" },
@@ -110,6 +111,19 @@ const std::vector<VerbDoc> &verbs()
         { "lamp", "lamp <name> intensity <v> | lamp <name> position x,y,z", 3, 3,
           "a lamp step: the named light's intensity or position written in the document (the mirror pushes it on the "
           "next frame); no frame is drawn" },
+        { "routes", "routes <gather|integrate|reflection|field|cards|store|paused ...> | routes none", 1, 7,
+          "THE ROW DECLARES THE ROUTE IT MEASURES (URGENT #146 for the lab; PHOTON-7-9A): the lab view's chain (the "
+          "gather, the screen integrate, the ray reflection - EXACT, a route it runs and the line did not name is a "
+          "mismatch too), the GI pause (exact) and the scene's products (field, cards, store: live by the 16th frame) "
+          "judged after the NEXT frame drawn against that frame's own record (the inspect door and the published "
+          "GiStatus - enginetest::requireRoutes' doors); prints LAB ROUTES ... ok, or LAB FAILED routes and the run "
+          "ends with exit 1" },
+        { "sky", "sky brightness <v> | sky rayleigh <v>", 2, 2,
+          "THE SKY's DIALS (PHOTON-7-9A, the sky-invariance row's levers): the realistic sky's skyBrightness (Unreal's "
+          "sky luminance factor: the sky's pixels, the Sky Light, reflections, the aerial in-scatter - never the sun) or "
+          "its rayleighScale (the molecular density: the sky's COLOUR, and the sun's through the air) written in the "
+          "document, a number in 0..10 (the document's own range; outside it is REFUSED, never clamped); refused on a "
+          "scene whose sky is not the realistic one; the mirror pushes it on the next frame" },
         { "material", "material <object> colour r,g,b | material <object> roughness <v>", 3, 3,
           "a material edit (PHOTON-2 fix F5): the named object's PBR base colour (0..1 each) or roughness written in "
           "the document (the mirror pushes it on the next frame); no frame is drawn" },
@@ -312,6 +326,59 @@ std::string helpText()
     o << "\na --script line the lab refuses STOPS the script there (exit 1, LAB SCRIPT STOPPED naming the line and its "
          "reason);\n  try <line>\n      opts that one line out: its refusal is said (LAB TRY) and the script goes on\n";
     return o.str();
+}
+
+bool parseSkyDial(const std::string &word, float &out, std::string &error)
+{
+    // a plain decimal: strtod's whole word, finite by its BITS' meaning (no "nan", "inf", hex floats), in the document's
+    // range [0, 10] (Scene::clampSkyRealistic) - refused outside it, never clamped (the row must set what it says)
+    char *end = nullptr;
+    const double v = word.empty() ? 0.0 : std::strtod(word.c_str(), &end);
+    bool plain = !word.empty();
+    for (char ch : word)
+        plain = plain && (std::isdigit(static_cast<unsigned char>(ch)) || ch == '.' || ch == '-' || ch == '+');
+    if (!plain || !end || *end || !(v >= 0.0 && v <= 10.0)) {
+        error = "'" + word + "' is not a sky dial's value (a number in 0..10)";
+        return false;
+    }
+    out = float(v);
+    return true;
+}
+
+bool parseRoutes(const std::vector<std::string> &words, RouteSet &out, std::string &error)
+{
+    out = RouteSet();
+    if (words.size() == 1 && words[0] == "none") return true;
+    for (const std::string &w : words) {
+        bool *slot = w == "gather" ? &out.gather : w == "integrate" ? &out.integrate : w == "reflection" ? &out.reflection
+                   : w == "field" ? &out.field : w == "cards" ? &out.cards : w == "store" ? &out.store
+                   : w == "paused" ? &out.paused : nullptr;
+        if (!slot) { error = "'" + w + "' is not a route (gather integrate reflection field cards store paused, or none)"; return false; }
+        if (*slot) { error = "'" + w + "' named twice"; return false; }
+        *slot = true;
+    }
+    if (words.empty()) { error = "no route named (none for none)"; return false; }
+    return true;
+}
+
+std::string routesText(const RouteSet &r)
+{
+    std::string t;
+    const auto add = [&t](bool on, const char *w) { if (on) { if (!t.empty()) t += ' '; t += w; } };
+    add(r.gather, "gather"); add(r.integrate, "integrate"); add(r.reflection, "reflection");
+    add(r.field, "field"); add(r.cards, "cards"); add(r.store, "store"); add(r.paused, "paused");
+    return t.empty() ? std::string("none") : t;
+}
+
+RouteVerdict judgeRoutes(const RouteSet &declared, const RouteSet &actual, int frame)
+{
+    const bool chainOk = declared.gather == actual.gather && declared.integrate == actual.integrate &&
+                         declared.reflection == actual.reflection && declared.paused == actual.paused;
+    const bool productsOk = (!declared.field || actual.field) && (!declared.cards || actual.cards) &&
+                            (!declared.store || actual.store);
+    if (chainOk && productsOk) return RouteVerdict::Match;
+    if (chainOk && frame < kRouteProductFrames) return RouteVerdict::Wait;   // a product still coming live
+    return RouteVerdict::Mismatch;
 }
 
 }   // namespace lab

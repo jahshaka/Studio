@@ -80,10 +80,13 @@ CLASSES = [
     # CALL whose name merely ends in Stereo and that TAKES ARGUMENTS (`!reflectChainMatchesStereo(stereo, eyeLayers)`) is a
     # predicate over the stereo value, true or false for either shape - never a gate (the lead, 2026-11-21: the census's first
     # false positive, OgreRayQuery.cpp's shape refusal); the lookahead refuses only that form, an accessor's `()` still counts
+    # (16 for one commit of PHOTON-7-9A - the Photon term view's mono-only gate, OgreView.cpp - and back to 15 by its final
+    # read's M4: the term's composite is one multiview quad, so the view runs on either eye shape and the gate is gone)
     ('one-eye-only gates', r'!(?!=)\s*\(*\s*(\w+\s*(\.|->)\s*)*(?!\w+Stereo\s*\(\s*[^)\s])\w*[sS]tereo\b', 'src', 15,
-     'PHOTON-7-9A (two, ground read B3), NO-RAY-CUT-1 (OgreView screenIntegrate, OgreChain ssr)'),
-    ('one-eye-only gates: applyVrViewPolicy assignments', 'VR_POLICY', 'include', 10,
-     'each pass made per layer deletes its line (bloom, ssao, smaa, hzb, refractions, distortion, the screen sources)'),
+     'NO-RAY-CUT-1 (OgreView screenIntegrate, OgreChain ssr)'),
+    # 10 -> 9 at PHOTON-7-9A: the reflection has no mode, so `fx.reflectSources = ReflectSources::Rays` is deleted
+    ('one-eye-only gates: applyVrViewPolicy assignments', 'VR_POLICY', 'include', 9,
+     'each pass made per layer deletes its line (bloom, ssao, smaa, hzb, refractions, distortion)'),
 ]
 # THE CLASSES HELD AS A FLOOR (the count only rises): the rest are ceilings (the count only falls)
 FLOORS = ('multiview (the target)',)

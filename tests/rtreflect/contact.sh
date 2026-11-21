@@ -1,10 +1,11 @@
 #!/bin/bash
 # rtreflect.contact (PHOTON-7 stage 6, AB E15 / ONE_PICTURE C3; READ_A findings 1 and 2) — THE CONTACT MEETS ITS
 # REFLECTION, AND NO RAY HITS ITS OWN SURFACE. jahlab, 1920x1080 (the 45-degree view the projection below assumes), 50
-# frames a shot (the mirror is the lobe's centre ray: exact on its first frame; 50 clears the young view's warm-up and
-# the GI's first frames). Two sessions:
+# frames a shot (the mirror is the lobe's centre ray: exact on its first frame; 50 clears the reflection's first
+# samples and the GI's first frames). Two sessions:
 #   photon-ramp: the 0.00 strip's post on its 10 cm matte black FOOT (0.02-0.12 m), an emitter above it, from 2.4 m
-#     (envcam 2) and 1 m (envcam 3), the reflections RAYS-only and BOTH (the screen trace first).
+#     (envcam 2) and 1 m (envcam 3) - THE HYBRID, the one shape (PHOTON-7-9A, the owner's ruling: the screen trace first
+#     where the previous picture vouches for the hit, the ray from the lifted origin elsewhere; no mode).
 #   photon-contact: the same mark on a CHAINED, CORRUGATED mirror floor (a welded grid each of whose vertices sits 0.2 mm
 #     above or below the plane by a hashed sign: Atom's cut draws coarse clusters, parts of which lie BELOW level 0,
 #     while every ray traces level 0) beside a FLAT LEVEL-0 mirror (x < -2.2: a box), from 2.4 m and 1 m (envcams 1,
@@ -17,11 +18,12 @@
 #   (b) the foot's reflected top edge (the half-level crossing from the dark foot to the post's bright reflection)
 #       within 1 px of where the mirror puts it FROM THE LIFTED ORIGIN - the origin law's own, bounded offset: the ray
 #       starts the drawn surface's bound (Epic's 1 px footprint x the drift ratio 2 at the floor point's Euclidean
-#       distance) above the floor, so it meets the foot that much higher (~2 px) - on the flat strip's RAYS arms; on its
-#       BOTH arms within 1 px of the interval between that and the plain mirror (the screen trace marches from the drawn
-#       surface itself, which needs no lift) (BOTH is the one estimator since PHOTON-7 stage 6
-#       commit 5: the screen trace answers the mirror's centre ray where the screen vouches for it, the ray the rest - the
-#       raster march's -2.1 px it replaced); the corrugated floor's (its zigzag is a fifth of a pixel) is printed.
+#       distance) above the floor, so it meets the foot that much higher (~2 px) - where the RAY answers; where the
+#       SCREEN answers (it marches from the drawn surface itself, which needs no lift) the plain mirror's edge. The
+#       hybrid answers the mirror's centre ray from the screen where it vouches and from the ray elsewhere, so on the flat
+#       strip the edge lies within 1 px of the INTERVAL between the two mirrors (measured as Both at photon-7 8a8503057:
+#       +1.4 / +0.9 px from the lifted one, 0.0 from the interval); the corrugated floor's (its zigzag is a fifth of a
+#       pixel) is printed.
 #   (c) NO RAY HITS ITS OWN FLOOR (READ_A finding 2; READ_B F4, the lead's round-7 ruling): inside the band where each
 #       mirror floor reflects the emitter panel over the far wall (y 0.8-7.9; a 0.15 m margin, 5 cm either side of the
 #       floors' seam, the post, the foot, the block and the walls kept out) the picture is the mirror image of one
@@ -47,40 +49,32 @@
 #       the third, plus the encode's 2 codes - a ray whose lift went SIDEWAYS (the depth's nearer neighbour across the
 #       crease: the side pick before the fix) keeps the drawn plane under level 0 and hits its own floor: a one-row line
 #       along the crease (measured with the old pick: 132 of 747 columns; with the fix 0).
-#       DECLARED RED FOR STAGE 11 (its C2, THE HIT'S MISSING SPECULAR; PHOTON-7 stage 10, the lead's ruling): since the
-#       cards' indirect is gathered by TLAS rays (10-2a (2), irisgl 37224f80) the block's base texels' downward rays hit
-#       the mirror floor's CARD, which holds the diffuse lobe alone (black on a metal), where the voxel path answers a
-#       metal hit with its specular share of the bounce (jahHitBounceToward) - the base comes out dark and its reflection
-#       steps: 1 of 747 columns (586: 101.07 against 104, 104). THE ARM (measured once, reverted): the card gather's
-#       downward hits reading the voxel path instead of the card - 0 columns. Not worked around here: stage 11's C2
-#       gives every TLAS hit reader the hit's specular.
+#       DECLARED RED - CAUSE (2), THE BLOCK'S CARD (the cards' cache, not the reflection's; fixer GATHER-TRUTH-1 S0): the
+#       first floor row's reflection ray lands on the block's lowest texels and a CARD answers it (green under `photon hits`)
+#       ~10 % dark there (86 under the rows' 97 in the composite), so that row steps: 283 of 747 columns (the row's own
+#       reading on the hybrid, PHOTON-7-9A; spikes/photon-7-9a/crease/CAUSE2_CARD_AT_CONTACT.txt). Every ray hit answered by
+#       its instance's constant (reflect.flatHits) reads 0 columns - the trace and its lift are right. (Its old cause (1),
+#       a Photon term view's screen source, was fixed by 23e5d5b0; stage 11's C2 by 11-2 (3).)
 # THE BASE (photon-2 round 5, the 1/2-cell bias + tMin, Both): at 1 m the reflected foot ENTIRELY missing (SEAM 99.3
 # rows, the top edge 84.9 rows off); at 2.4 m SEAM 7.4 rows, the edge 5.7 off.
-# 11 shots x 50 = 550 frames; two jahlab sessions.
+# 9 shots x 50 = 450 frames; two jahlab sessions.
 # usage: contact.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; exit 1; }
 rm -rf "$WD"; mkdir -p "$WD"
 cat > "$WD/ramp.lab" <<S
-reflections rays
+routes gather reflection store
 envcam 2
 frames 50
-shot rays-2p4
+shot hybrid-2p4
 envcam 3
 frames 50
-shot rays-1m
-reflections both
-envcam 2
-frames 50
-shot both-2p4
-envcam 3
-frames 50
-shot both-1m
+shot hybrid-1m
 quit
 S
 cat > "$WD/chained.lab" <<S
-reflections rays
+routes gather reflection store
 envcam 1
 frames 50
 shot chained-2p4
@@ -115,11 +109,6 @@ for run in ramp:photon-ramp chained:photon-contact; do
     rc=$?
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($name) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR' "$WD/$name.log" | head; tail -5 "$WD/$name.log"; exit 1; }
 done
-# THE MODE LABEL: each shot's sources as the engine ran them, against the mode its session set
-HERE=$(cd "$(dirname "$0")" && pwd)
-python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/ramp.log" "$WD/chained.log" -- \
-    rays-=rays both-=both chained-=rays crease-=rays nocut-=rays nopoint-=rays
-srcrc=$?
 python3 -I - "$WD/data/shots" <<'PY'
 import math, os, sys
 import numpy as np
@@ -175,20 +164,18 @@ def seam(name, eye, gateEdge):
         if col[k] < thr <= col[k + 1]:
             seen = k + (thr - col[k]) / max(col[k + 1] - col[k], 1e-9); break
     edge = seen - liftedTop[1]
-    # BOTH: the screen trace answers from the DRAWN SURFACE itself (it marches the depth the view drew - no level to
-    # clear) and the ray from the lifted origin, so the edge lies between the two mirrors: its distance is to that
-    # interval (RAYS: to the lifted mirror alone).
+    # THE HYBRID: the screen answers from the DRAWN SURFACE itself (it marches the depth the view drew - no level to
+    # clear) and the ray from the lifted origin, so the edge lies between the two mirrors: its distance is to that interval
     lo, hi = min(liftedTop[1], mirTop[1]), max(liftedTop[1], mirTop[1])
-    off = edge if gateEdge != 'both' else (seen - hi if seen > hi else (seen - lo if seen < lo else 0.0))
+    off = seen - hi if seen > hi else (seen - lo if seen < lo else 0.0)
     print('%-12s contact line row %.1f, first dark row %s -> SEAM %.1f px; top edge seen %.1f, the mirror %.1f, from the'
           ' lifted origin (%.2f mm) %.1f -> %+.1f px%s (dark %.1f bright %.1f)' %
           (name, foot[1], first, gap, seen, mirTop[1], 1000.0 * h, liftedTop[1], edge,
-           '' if gateEdge == 'rays' else (' [to the two mirrors %+.1f]' % off if gateEdge == 'both' else ' [printed]'),
+           (' [to the two mirrors %+.1f]' % off) if gateEdge else ' [printed]',
            dark, bright))
     if not (gap <= 1.0): fails.append('%s: the seam at the contact %.1f px > 1' % (name, gap))
     if gateEdge and not (abs(off) <= 1.0):
-        fails.append('%s: the reflected top edge %+.1f px from %s (> 1)' %
-                     (name, off, 'the lifted mirror' if gateEdge == 'rays' else 'the two mirrors'))
+        fails.append('%s: the reflected top edge %+.1f px from the two mirrors (> 1)' % (name, off))
 # THE BOXES a reflected ray or a view ray must keep clear of (lo, hi), inflated by the margin
 BOXES = [((-1.93, 0.02, -3.15), (-1.83, 0.62, -3.0)),        # the foot and the post
          ((1.0, 0.02, -2.57), (2.8, 0.8, -2.17))]            # the crease block
@@ -263,8 +250,7 @@ def crease(name):
           (name, cols, lineCols, (' ' + str(worst)) if worst else ''))
     if cols < 200: fails.append('%s: the crease spans %d columns (< 200): the fixture moved' % (name, cols))
     if lineCols: fails.append('%s: %d columns of the crease hit their own floor (a line along it)' % (name, lineCols))
-for name, eye, gate in (('rays-2p4', (-1.88, 1.02, -0.8), 'rays'), ('rays-1m', (-1.88, 0.62, -2.2), 'rays'),
-                        ('both-2p4', (-1.88, 1.02, -0.8), 'both'), ('both-1m', (-1.88, 0.62, -2.2), 'both'),
+for name, eye, gate in (('hybrid-2p4', (-1.88, 1.02, -0.8), 'hybrid'), ('hybrid-1m', (-1.88, 0.62, -2.2), 'hybrid'),
                         ('chained-2p4', (-1.88, 1.02, -0.8), ''), ('chained-1m', (-1.88, 0.62, -2.2), '')):
     seam(name, eye, gate)
 # (c) EVERY ARM AT EVERY DISTANCE, each gated on its own (the lead's round-7 ruling - no one-of-two acceptance):
@@ -294,6 +280,4 @@ for f in fails: print('FAIL: ' + f)
 print('rtreflect.contact: %s' % ('FAIL' if fails else 'PASS'))
 sys.exit(1 if fails else 0)
 PY
-rc=$?
-[ $srcrc -eq 0 ] || { echo "rtreflect.contact: FAIL (the mode label)"; exit 1; }
-exit $rc
+exit $?

@@ -453,17 +453,14 @@ void Session::frame()
     fv.sky = true;
     fv.camera = mCamera.node();
     fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless || mReflectSources != ReflectSources::Both || mHdrReadback || mReflectOff) {
+    if (mOpt.headless || mHdrReadback || mReflectOff) {
         // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
-        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections rays` /
-        // `reflections screen` (the one estimator's sources narrowed to one).
+        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections off`.
         const bool headless = mOpt.headless;
-        const ReflectSources sources = mReflectSources;
         const bool hdr = mHdrReadback, reflectOff = mReflectOff;
-        fv.finish = [headless, sources, hdr, reflectOff](FrameInputView &part, View *v) {
+        fv.finish = [headless, hdr, reflectOff](FrameInputView &part, View *v) {
             PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
             if (headless) fx.allowOffscreen = true;
-            if (sources != ReflectSources::Both) fx.reflectSources = sources;
             if (hdr) fx.hdrReadback = true;
             if (reflectOff) fx.ssr = 0;
             part.postFx = fx;
@@ -472,6 +469,7 @@ void Session::frame()
     mMirror->sync(SceneMirror::FrameViews{ { fv } });
     mEngine->renderOneFrame();
     ++mFrames;
+    if (mRoutesPending) judgeDeclaredRoutes();
     if (mFrames % (kStatsWindowFrames / 2) == 0) mEngine->publishRenderStats(kStatsWindowFrames);
     if (mOverlay && mFrames % kOverlayEveryFrames == 0) pushOverlay();
 }
@@ -570,10 +568,8 @@ bool Session::shot(const std::string &nameIn)
         labFail("LAB SHOT FAILED %s: cannot write\n", qPrintable(path));
         return false;
     }
-    // (THE MODE LABEL: the sources the reflection traced this picture with - what it ran, read from the engine)
-    const int sources = mScene->published().rayQuery.reflectSources;
-    std::printf("LAB SHOT %s %ux%u colours %zu frame %llu sources %s%s\n", qPrintable(path), img.width, img.height,
-                colours.size(), mFrames, sources < 0 ? "-" : reflectSourcesName(ReflectSources(sources)),
+    std::printf("LAB SHOT %s %ux%u colours %zu frame %llu%s\n", qPrintable(path), img.width, img.height,
+                colours.size(), mFrames,
                 extra ? (" (+" + std::to_string(extra) + " frames for the capture)").c_str() : "");
     std::fflush(stdout);
     return true;
@@ -732,12 +728,12 @@ std::string Session::statusJson()
         // THE REFLECTION'S REST AND ITS NEE (PHOTON-7 stage 11): the rest as the last view drew it, the emitter table and
         // the cone's hit rate (RayQueryStatus)
         const RayQueryStatus &rq = mScene->published().rayQuery;
-        o << ",\"reflect\":{\"sources\":" << rq.reflectSources << ",\"restFrames\":" << rq.reflectRestFrames
+        o << ",\"reflect\":{\"restFrames\":" << rq.reflectRestFrames
           << ",\"held\":" << (rq.reflectHeld ? "true" : "false") << ",\"restActive\":" << rq.reflectRestActive
           << ",\"restCapped\":" << rq.reflectRestCapped << ",\"emitters\":" << rq.reflectEmitters << ",\"portals\":" << rq.reflectPortals
           << ",\"emittersOver\":" << rq.reflectEmittersOver << ",\"neeRays\":" << rq.reflectNeeRays
-          << ",\"neeHits\":" << rq.reflectNeeHits << ",\"restBound\":" << rq.reflectRestBound
-          << ",\"restBoundOwed\":" << rq.reflectRestBoundOwed << ",\"restNeedMax\":" << rq.reflectRestNeedMax << "}";
+          << ",\"neeHits\":" << rq.reflectNeeHits << ",\"restNeedMax\":" << rq.reflectRestNeedMax
+          << ",\"restStopVMax\":" << rq.reflectRestStopVMax << "}";
     }
     o << "}";
     return o.str();
@@ -799,17 +795,13 @@ bool Session::exec(const Command &c)
         if (!onOff(a0, mDraw, v)) { ok = false; labFail("LAB REFUSED draw '%s'\n", a0.c_str()); }
         else { mDraw = v; mScene->setAtomDrawEnabled(v); }
     } else if (c.verb == "reflections") {
-        // THE REFLECTION'S SOURCES (the agreement row's door): both = the one estimator, rays = the rays alone (the
-        // screen sources leave the chain: a graph rebuild, the histories restart), screen = the screen alone
-        if (a0 == "both" || a0 == "rays" || a0 == "screen" || a0 == "off") {
+        // THE REFLECTION ON OR OFF (an A/B's arm): the reflection has no mode (PHOTON-7-9A)
+        if (a0 == "on" || a0 == "off") {
             mReflectOff = a0 == "off";
-            if (!mReflectOff)
-                mReflectSources = a0 == "both" ? ReflectSources::Both : a0 == "rays" ? ReflectSources::Rays
-                                                                                    : ReflectSources::Screen;
             std::printf("LAB REFLECTIONS %s\n", a0.c_str());
         } else {
             ok = false;
-            labFail("LAB REFUSED reflections '%s' (both|rays|screen|off)\n", a0.c_str());
+            labFail("LAB REFUSED reflections '%s' (on|off)\n", a0.c_str());
         }
     } else if (c.verb == "play") {
         if (!onOff(a0, mPlaying, v)) { ok = false; labFail("LAB REFUSED play '%s'\n", a0.c_str()); }
@@ -1335,6 +1327,10 @@ bool Session::exec(const Command &c)
         ok = stillness(c);
     } else if (c.verb == "lamp") {
         ok = lamp(c);
+    } else if (c.verb == "sky") {
+        ok = sky(c);
+    } else if (c.verb == "routes") {
+        ok = routes(c);
     } else if (c.verb == "material") {
         ok = material(c);
     } else if (c.verb == "photon") {
@@ -1597,6 +1593,68 @@ bool Session::lamp(const Command &c)
     }
     labFail("LAB REFUSED lamp: '%s' (intensity | position)\n", c.args[1].c_str());
     return false;
+}
+
+// THE ROUTES VERB (URGENT #146 for the lab; PHOTON-7-9A): the declaration, then judged after each frame drawn until it
+// matches, against that frame's own PUBLISHED record (a host's door, never the fixtures': R11): the view's chain as built
+// (PublishedEngineFrame::ViewFrames' routes - enginetest::requireRoutes holds them equal to the inspect door's on every
+// frame a declaring fixture judges), the scene's products (GiStatus) and the pause as this host set it (the document's GI
+// update budget, what the mirror pushes).
+bool Session::routes(const Command &c)
+{
+    RouteSet r;
+    std::string why;
+    if (!parseRoutes(c.args, r, why)) { labFail("LAB REFUSED routes: %s\n", why.c_str()); return false; }
+    mRoutesDeclared = r;
+    mRoutesPending = true;
+    mRoutesFrames = 0;
+    return true;
+}
+
+void Session::judgeDeclaredRoutes()
+{
+    RouteSet a;
+    const PublishedEngineFrame::ViewFrames row = mView->published();
+    a.gather = row.routeGather; a.integrate = row.routeIntegrate; a.reflection = row.routeReflect;
+    const GiStatus gs = mScene->published().gi;
+    a.field = gs.ifdBound;
+    a.cards = gs.cards.built;
+    a.store = !gs.cascades.empty();
+    a.paused = mDoc->giUpdateBudget == 0;   // (the host's own: SceneMirror pushes GiParams::updateBudget from it)
+    const RouteVerdict v = judgeRoutes(mRoutesDeclared, a, ++mRoutesFrames);
+    if (v == RouteVerdict::Wait) return;
+    mRoutesPending = false;
+    if (v == RouteVerdict::Match) {
+        std::printf("LAB ROUTES declared {%s}, the frame ran {%s} (frame %d after the declaration) - ok\n",
+                    routesText(mRoutesDeclared).c_str(), routesText(a).c_str(), mRoutesFrames);
+        return;
+    }
+    labFail("LAB FAILED routes: declared {%s} but the frame's own record says {%s} (frame %d after the declaration; "
+            "the chain exact, the products live by frame %d) - fix the row's premise or its declaration before any law\n",
+            routesText(mRoutesDeclared).c_str(), routesText(a).c_str(), mRoutesFrames, kRouteProductFrames);
+    std::fflush(stdout);
+    mExit = 1;
+    mQuit = true;
+}
+
+bool Session::sky(const Command &c)
+{
+    const bool brightness = c.args[0] == "brightness", rayleigh = c.args[0] == "rayleigh";
+    if (!brightness && !rayleigh) {
+        labFail("LAB REFUSED sky: '%s' (brightness | rayleigh)\n", c.args[0].c_str());
+        return false;
+    }
+    float v = 1.0f;
+    std::string why;
+    if (!parseSkyDial(c.args[1], v, why)) { labFail("LAB REFUSED sky: %s\n", why.c_str()); return false; }
+    if (mDoc->skyType != iris::SkyType::REALISTIC) {
+        labFail("LAB REFUSED sky: this scene's sky is not the realistic one (its brightness dial moves nothing)\n");
+        return false;
+    }
+    iris::SkyRealistic r = mDoc->skyRealistic;
+    (brightness ? r.skyBrightness : r.rayleighScale) = v;
+    mDoc->setSkyRealistic(r);
+    return true;
 }
 
 bool Session::material(const Command &c)
@@ -2270,6 +2328,11 @@ int Session::run(const Options &opt)
                         "window's close or `quit`\n", mOpt.readStdin ? ", stdin is closed" : "");
             std::fflush(stdout);
         }
+    }
+    if (mRoutesPending) {   // a declaration no frame judged: the row measured nothing it said (the helper's exit law)
+        labFail("LAB FAILED routes: declared {%s} and no frame judged it before the run ended\n",
+                routesText(mRoutesDeclared).c_str());
+        mExit = 1;
     }
     std::printf("LAB END frames %llu, %.0f ms, exit %d\n", mFrames, msSinceStart(), mExit);
     std::fflush(stdout);

@@ -325,6 +325,33 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_engine_asan PRIVATE -fsanitize=address)
 endif()
 
+# engine.chain_reflect_sources / engine.reflect_chain_shape — THE REFLECTION CHAIN's RULES as pure functions (PHOTON-7-9A;
+# irisgl/engine/src/ReflectChainRules.h, test_chain_reflect.cpp says the laws): the hybrid's screen sources (mono and the
+# SSR row on; a stereo chain none - VR's one explicit difference), the raster march, the screen trace's source and the
+# composed picture over every combination; and the stereo shape a recording must find (a mismatch is refused and
+# counted, never a silent frame). The header only: no device, no Ogre - CPU code rows, one per law.
+add_executable(test_chain_reflect test_chain_reflect.cpp)
+set_target_properties(test_chain_reflect PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_chain_reflect PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.chain_reflect_sources COMMAND test_chain_reflect sources)
+add_test(NAME engine.reflect_chain_shape COMMAND test_chain_reflect shape)
+set_tests_properties(engine.chain_reflect_sources engine.reflect_chain_shape PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.chain_reflect_sources)
+jah_no_display(engine.reflect_chain_shape)
+
+# engine.route_declarations.forget / .exit — THE ROUTE DECLARATIONS' LIFETIME (PHOTON-7-9A, the reader's audit of R7;
+# test_route_declarations.cpp says the laws): a destroyed view's pending declarations are dropped (no read after free),
+# each a FAIL by name; one still pending at the process's end exits 1 by name. The helper header only, no engine created:
+# CPU code rows, one per law.
+add_executable(test_route_declarations test_route_declarations.cpp)
+set_target_properties(test_route_declarations PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_route_declarations PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+add_test(NAME engine.route_declarations.forget COMMAND test_route_declarations forget)
+add_test(NAME engine.route_declarations.exit COMMAND test_route_declarations exit)
+set_tests_properties(engine.route_declarations.forget engine.route_declarations.exit PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.route_declarations.forget)
+jah_no_display(engine.route_declarations.exit)
+
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.

@@ -193,7 +193,6 @@ QVariantMap postFxMap(const View &view, const PublishedEngineFrame::ViewFrames &
     m[QStringLiteral("ssao")] = fx.ssao;
     m[QStringLiteral("smaaPreset")] = fx.smaaPreset;
     m[QStringLiteral("ssr")] = fx.ssr;
-    m[QStringLiteral("reflectSources")] = QString::fromLatin1(reflectSourcesName(fx.reflectSources));
     m[QStringLiteral("reflectionRoughnessCutoff")] = fx.reflectionRoughnessCutoff;
     m[QStringLiteral("refractions")] = fx.refractions;
     m[QStringLiteral("distortion")] = fx.distortion;
@@ -606,7 +605,7 @@ QVector<VerbInfo> VrApi::verbs() const
           "side-by-side stereo target cannot carry: `bloom` (the grade's multiview arm reads "
           "one bloom texture for both eyes, so one eye's highlights would glow in the other), `ssao` "
           "(one projection for two eyes), `smaaPreset` (its search walks up to 16 texels "
-          "across the seam), `reflectSources` (\"rays\": the screen sources are not per layer), `refractions` and "
+          "across the seam), `refractions` and "
           "`distortion` (both READ the target at an offset coordinate and fall back only at "
           "the FRAME's edges, so a refractor at an eye's nasal edge shows the other eye), "
           "`hzb`, and the looks whose geometry is measured from the frame's centre — which in "

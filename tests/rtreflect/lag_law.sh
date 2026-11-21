@@ -1,8 +1,11 @@
 #!/bin/bash
 # rtreflect.lag_law (PHOTON-7 stage 6, REFLECT-MOVING-1's row; the lead's law and its noise term) — THE MOVING
 # REFLECTION LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS MEMORY AND ITS OWN NOISE: gi.walk_glass's walk (photon-glass,
-# -1.2,1.8,3.4 -> 1.2,1.8,1.0 looking at 0,0.5,-3, 60 frames from a converged hold) in RAYS with the hits flattened (the
-# arm reflect.flatHits: the reflection's own estimator, the hit caches out) and the world held; at walk frames k = 14,
+# -1.2,1.8,3.4 -> 1.2,1.8,1.0 looking at 0,0.5,-3, 60 frames from a converged hold) with the hits flattened (the arm
+# reflect.flatHits: the reflection's own RAY estimator and denoiser, the caches out - under the arm the screen gives no
+# answer, its read of the previous picture being a cache: PHOTON-7-9A, the lead's ruling (A) - which is the STEREO
+# chain's route; the desktop hybrid's lag is rtreflect.history_detectors', its motion rtreflect.walk_world_hybrid's) and
+# the world held; at walk frames k = 14,
 # 28 and 59, per glossy pixel
 #     |walk(k) - conv(k)| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1
 # conv(k) the picture converged at the walk's pose k (the world held), N the texel's moving count (the door's .rhc),
@@ -16,7 +19,7 @@
 # out at 60.06 s under two builds' load - a row at the cap with no margin, #96's class): ONE ROW PER WALK FRAME's LAW, a
 # fixture chain on one work dir -
 #   walk (rtreflect.lag_law.walk, FIXTURES_SETUP): the prime (6 frames) and the world-held walk (640 + its door's 69) -
-#     715 frames; its proof: the walk's mode label (the door ran Rays) and the three frames' dumps; it keeps the dumps of
+#     715 frames; its proof: the three frames' dumps; it keeps the dumps of
 #     k = 14 / 28 / 59 only and SNAPSHOTS the shader cache, so every converged part boots on the bytes the converged
 #     session booted on in the one row (a grown cache draws other variants: walk_world.sh's measure, 2,712 px at a hold);
 #   14 | 28 | 59 (rtreflect.lag_law.k14 / .k28 / .k59): the world settled at the start pose and held (640 frames, the
@@ -47,16 +50,15 @@ session() {   # name (the script is $WD/<name>.lab)
     [ $rc -eq 0 ] || { echo "FAIL: jahlab ($1) exited $rc"; grep -E 'LAB (REFUSED|FAILED)|ERROR|stillness:' "$WD/$1.log" | head -5; exit 1; }
 }
 S=-1.2,1.8,3.4; T=0,0.5,-3; E=1.2,1.8,1.0
-ARMS='reflections rays\narm reflect.flatHits 1\n'
+ARMS='arm reflect.flatHits 1\n'
 if [ "$PART" = walk ]; then
-    printf "$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
+    # THE ROUTE (URGENT #177): each session declares it; the 6-frame prime the chain only (the store has until frame 16)
+    printf 'routes gather reflection\n'"$ARMS"'camera %s,%s\nframes 3\ncamera %s,%s\nframes 3\nquit\n' "$S" "$T" "$E" "$T" > "$WD/prime.lab"
     session prime
-    printf "$ARMS"'camera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-world freeze=world out=glass-world\nquit\n' \
+    printf 'routes gather reflection store\n'"$ARMS"'camera %s,%s\nframes 640\nstillness teleport:%s,%s/hold:1/walk:%s,%s:60 8 trail=60 dump=glass-world freeze=world out=glass-world\nquit\n' \
         "$S" "$T" "$S" "$T" "$E" "$T" > "$WD/walk.lab"
     session walk
-    # THE MODE LABEL: the walk's source as the engine ran it
-    python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/glass-world.tsv" -- rays
-    rc=$?
+    rc=0
     for k in 014 028 059; do
         for x in rgb cls rhc rse rsize; do
             [ -f "$DUMP/glass-world-t$k.$x" ] || { echo "FAIL: the walk wrote no glass-world-t$k.$x"; rc=1; }
@@ -72,7 +74,7 @@ if [ -n "${JAHSHAKA_SHADER_CACHE_DIR:-}" ]; then
     rm -rf "$JAHSHAKA_SHADER_CACHE_DIR"; cp -a "$WD/cache.snap" "$JAHSHAKA_SHADER_CACHE_DIR"
 fi
 {
-    printf "$ARMS"'camera %s,%s\nframes 640\narm gi.freeze 2\n' "$S" "$T"
+    printf 'routes gather reflection store\n'"$ARMS"'camera %s,%s\nframes 640\narm gi.freeze 2\n' "$S" "$T"
     for k in $PART $((PART + 1)); do
         python3 -I -c "
 s=(-1.2,1.8,3.4); e=(1.2,1.8,1.0); k=$k/60.0
@@ -82,9 +84,6 @@ print('camera %.6f,%.6f,%.6f,0,0.5,-3' % tuple(a+(b-a)*k for a,b in zip(s,e)))"
     printf 'quit\n'
 } > "$WD/conv$PART.lab"
 session conv$PART
-# THE MODE LABEL: the converged shots' sources as the engine ran them (the walk's: the walk part's)
-python3 -I "$HERE/../support/reflect_sources.py" shots "$WD/conv$PART.log" -- lag=rays
-srcrc=$?
 python3 -I - "$WD/data" "$PART" <<'PY'
 import os, sys
 import numpy as np
@@ -133,6 +132,5 @@ for f in fails: print('FAIL: ' + f)
 sys.exit(1 if fails else 0)
 PY
 rc=$?
-[ $srcrc -eq 0 ] || rc=1
 echo "rtreflect.lag_law k$PART: $([ $rc -eq 0 ] && echo PASS || echo FAIL)"
 exit $rc

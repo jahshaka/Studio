@@ -60,7 +60,6 @@ static void rayTier(Scene *s, View *view)
     PostFxDesc fx;
     fx.allowOffscreen = true;
     fx.ssr = 2;
-    fx.reflectSources = ReflectSources::Rays;
     view->setPostFx(fx);
 }
 
@@ -77,8 +76,8 @@ int main()
     View *view = e->createOffscreenView("emitters", kWidth, kHeight, Colour(0.45f, 0.55f, 0.70f),
                                         jahshaka::engine::OffscreenContract::Live);
     if (!(e->rayQueryAvailable() && e->rayTracing())) {
-        std::printf("ok: no ray queries on this machine - the row is about the ray tier\n");
-        return 0;
+        std::printf("SKIP: no ray-query device here - the row is about the ray tier\n");
+        return 77;   // ctest's SKIP_RETURN_CODE: never a green that measured nothing (its declaration comes after)
     }
     Scene *s = e->createScene("emitters");
     view->setScene(s);
@@ -107,6 +106,9 @@ int main()
     }
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
     rayTier(s, view);
+    // THE ROUTE (PHOTON-7-9A, the lead's ruling R7; URGENT #146): declared and asserted on the first frame - the row reads
+    // the emitter table the trace uploads (RayQueryStatus), which the hybrid's screen half does not touch, so no arm
+    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(), "rtreflect.emitters's view");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 5.0f, 14.0f), Vec3(0.0f, 1.0f, 0.0f));
     enginetest::frames(e, 30);
 

@@ -3169,9 +3169,9 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         out.rayQuery.reflectShotRests = rq.reflectShotRests;
         out.rayQuery.reflectRestActive = rq.reflectRestActive;
         out.rayQuery.reflectRestCapped = rq.reflectRestCapped;
-        out.rayQuery.reflectRestBound = rq.reflectRestBound;
-        out.rayQuery.reflectRestBoundOwed = rq.reflectRestBoundOwed;
         out.rayQuery.reflectRestNeedMax = rq.reflectRestNeedMax;
+        out.rayQuery.reflectRestStopVMax = rq.reflectRestStopVMax;
+        out.rayQuery.reflectShapeRefusals = rq.reflectShapeRefusals;
         out.rayQuery.reflectEmitters = rq.reflectEmitters;
         out.rayQuery.reflectNeeRays = rq.reflectNeeRays;
         out.rayQuery.reflectNeeHits = rq.reflectNeeHits;
@@ -3194,6 +3194,7 @@ IEditorViewport::GiStatusInfo EngineSceneViewport::giStatus() const
         for (const auto &v : rq.hitViews) {
             IEditorViewport::GiStatusInfo::RayQueryInfo::HitListView h;
             h.eyes = int(v.eyes);
+            h.photonTerm = v.photonTerm;
             h.eyeWidth = int(v.eyeWidth);
             h.eyeHeight = int(v.eyeHeight);
             h.firstCapacity = quint64(v.firstCapacity);

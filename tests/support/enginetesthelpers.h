@@ -238,6 +238,20 @@ constexpr int kRouteProductFrames = 16;
 inline bool requireRoutes(View *v, Scene *s, const Routes &declared, const char *what = "the measured view", int frame = 0)
 {
     const Routes a = actualRoutes(v, s);
+    // THE TWO DOORS AGREE (PHOTON-7-9A, the lead's ruling: the chain's routes are PUBLISHED for a host - the lab's
+    // `routes` verb reads PublishedEngineFrame::ViewFrames' routeGather / routeIntegrate / routeReflect - and the
+    // fixtures' door above answers them): on the frame judged, the view's published row says what inspect says, or
+    // FAIL by name - every declaring fixture is this law's code test, so the two doors cannot drift.
+    {
+        const PublishedEngineFrame::ViewFrames row = v->published();
+        if (row.id != 0 && (row.routeGather != a.g || row.routeIntegrate != a.i || row.routeReflect != a.r)) {
+            std::fprintf(stderr, "FAIL: %s's PUBLISHED routes {gather %d integrate %d reflection %d} differ from the inspect "
+                                 "door's {%d %d %d} on the same frame (PHOTON-7-9A: the two doors must agree)\n", what,
+                         int(row.routeGather), int(row.routeIntegrate), int(row.routeReflect), int(a.g), int(a.i), int(a.r));
+            std::fflush(nullptr);
+            std::_Exit(1);
+        }
+    }
     const bool chainOk = a.g == declared.g && a.i == declared.i && a.r == declared.r && a.p == declared.p;
     const bool productsOk = (!declared.f || a.f) && (!declared.c || a.c) && (!declared.s || a.s);
     if (chainOk && !productsOk && frame > 0 && frame < kRouteProductFrames) return false;
@@ -257,7 +271,24 @@ inline bool requireRoutes(View *v, Scene *s, const Routes &declared, const char 
 }
 namespace framesdetail {
 struct DeclaredRoutes { View *v; Scene *s; Routes r; std::string what; int frames; };
-inline std::vector<DeclaredRoutes> &declaredRoutes() { static std::vector<DeclaredRoutes> d; return d; }
+/// THE PENDING DECLARATIONS, JUDGED AT EXIT (PHOTON-7-9A, the reader's audit): a declaration no frame ever asserted (a
+/// fixture that declared and returned before its first frame, a view destroyed first - enginetest::destroyView below
+/// drops it then) is a row that measured nothing it said: at the process's exit every one still pending is a FAIL by
+/// name and the exit is 1 - never a silent green. (A declaration's view is never read here: only its text.)
+struct PendingRoutes {
+    std::vector<DeclaredRoutes> d;
+    ~PendingRoutes()
+    {
+        if (d.empty()) return;
+        for (const DeclaredRoutes &x : d)
+            std::fprintf(stderr, "FAIL: %s declared {%s} and no frame asserted it before the process ended (URGENT #146)\n",
+                         x.what.c_str(), routesText(x.r).c_str());
+        std::fflush(nullptr);
+        std::_Exit(1);
+    }
+};
+inline PendingRoutes &pendingRoutes() { static PendingRoutes p; return p; }
+inline std::vector<DeclaredRoutes> &declaredRoutes() { return pendingRoutes().d; }
 inline void checkDeclaredRoutes()
 {
     auto &d = declaredRoutes();
@@ -267,11 +298,46 @@ inline void checkDeclaredRoutes()
         else ++k;
     }
 }
+/// Drops every pending declaration of `v` (its view about to die: checkDeclaredRoutes would read it after free) and
+/// says each one it dropped - a view destroyed before any frame asserted its route is a FAIL by name, at once.
+inline int forgetRoutes(View *v)
+{
+    auto &d = declaredRoutes();
+    int dropped = 0;
+    for (size_t k = 0; k < d.size();) {
+        if (d[k].v != v) { ++k; continue; }
+        std::fprintf(stderr, "FAIL: %s declared {%s} and its view was destroyed before a frame asserted it (URGENT #146)\n",
+                     d[k].what.c_str(), routesText(d[k].r).c_str());
+        d.erase(d.begin() + long(k));
+        ++dropped;
+    }
+    return dropped;
+}
 }  // namespace framesdetail
-/// The declaration, asserted on the first frame enginetest::frames() renders after it (the view must outlive it).
+/// The declaration, asserted on the first frame enginetest::frames() renders after it. Its view dies through
+/// enginetest::destroyView (below), never a bare Engine::destroyView while the declaration may be pending.
 inline void declareRoutes(View *v, Scene *s, const Routes &declared, const char *what = "the measured view")
 {
     framesdetail::declaredRoutes().push_back({v, s, declared, what, 0});
+}
+/// A fixture's view destroyed: its pending route declarations dropped first (each a FAIL by name: it measured nothing),
+/// then Engine::destroyView. Returns the declarations dropped (0 on the healthy path: asserted, then destroyed).
+inline int destroyView(Engine *e, View *v)
+{
+    const int dropped = framesdetail::forgetRoutes(v);
+    e->destroyView(v);
+    return dropped;
+}
+
+/// THE RAY'S OWN ANSWER (PHOTON-7-9A, the lead's ruling R7): the reflection is the hybrid - the screen first, then the rays
+/// (ChainDesc::screenSources) - so a row whose law is the reflection RAY's (a hit's record, a far copy, a pane's light, a
+/// dispatch's shape, the hit's specular) sets the test arm reflect.screenOff: the screen half answers no texel, the hits
+/// as shipped (the arm is never a product frame's). Through a request (the render thread's door). True when the arm took.
+inline bool rayReflectionOnly(Engine *e)
+{
+    bool ok = false;
+    e->request([&](Engine &x) { ok = x.setArm("reflect.screenOff", 1.0); });
+    return ok;
 }
 
 /// THE TEST DOOR'S ONE FRAME VERB (ENGINE-UPGRADE-U3 stage 2b): every engine suite steps the engine through here —

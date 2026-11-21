@@ -46,7 +46,6 @@ gi.glass_escape                          gather reflection field store paused  #
 gi.glass_escape_weight                   gather reflection field store paused  # tests/gi/test_gi_glass_escape.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
 gi.glass_pass                            gather reflection field store paused  # tests/gi/test_gi_glass_pass.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
 gi.hit_list_demand                       gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-gi.hit_specular_mobility                 gather reflection store  # tests/gi/test_gi_hit_specular_mobility.cpp: Live 0 / StillPicture 2 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
 gi.hold_after_stop                       gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.hold_after_stop.court                 gather  # gi.hold_after_stop's court sessions, split out by URGENT #147 (the same lab view: StillPicture, GI on, at its budget)
 gi.lamps_outside                         gather reflection store paused  # tests/gi/test_gi_lamps_outside.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 1, ssr 1
@@ -72,7 +71,6 @@ gi.rest_oracle_lamp                      gather  # the lab's view: StillPicture 
 gi.rest_oracle_mover                     gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.rough_lobe_quadrature                 gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.rough_reference                       gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-gi.rt_reflect_asan                       integrate reflection store  # tests/rtreflect/test_rt_reflect.cpp (ASan): Live views, post chain + ssr 2, rays on (the rays-off arms are A/B inside the row)
 gi.screen_bind                           integrate store ; integrate reflection store (screen_bind_live_rays)  # tests/gi/test_gi_screen_bind.cpp: StillPicture with RayTracingMode::Off (no rays: no gather, no ray reflection); Live screen_bind_live_rays rays on, ssr 1
 gi.scroll_lag                            integrate store paused  # tests/gi/test_gi_scroll_lag.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
 gi.sealed_hall                           gather reflection field store paused  # tests/gi/test_gi_sealed_hall.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
@@ -94,28 +92,3 @@ gi.walk_rough.k14                        gather  # the lab's view: StillPicture 
 gi.walk_rough.k28                        gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.walk_rough.k59                        gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.walk_rough.walk                       gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.contact                        gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.emitters                       integrate reflection store  # tests/rtreflect/test_rtreflect_emitters.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
-rtreflect.far_record                     integrate reflection store  # tests/rtreflect/test_far_record.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
-rtreflect.history_detectors              integrate reflection store  # tests/rtreflect/test_rtreflect_history_detectors.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
-rtreflect.hit_area_shadow                gather reflection store  # tests/rtreflect/test_hit_area_shadow.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
-rtreflect.lag_law.k14                    gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.lag_law.k28                    gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.lag_law.k59                    gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.lag_law.walk                   gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.lamp_step_held.ref             gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.lamp_step_held.step            gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.mirror_blend                   gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.nee_firefly                    gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.odd_size                       integrate reflection store  # tests/rtreflect/test_odd_size.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
-rtreflect.pane_record                    integrate reflection store  # tests/rtreflect/test_pane_record.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
-rtreflect.sphere_glint                   none  # tests/rtreflect/test_sphere_glint.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 0, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 0
-rtreflect.still_after_stop.hold          gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.still_after_stop.path          gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.tilted_normal                  integrate reflection store  # tests/rtreflect/test_tilted_normal.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
-rtreflect.walk_world.frozen              gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.walk_world.worldA              gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.walk_world.worldB              gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.walk_world_both.frozen         gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.walk_world_both.worldA         gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-rtreflect.walk_world_both.worldB         gather reflection  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget

@@ -14,7 +14,7 @@
 #include "labscene.h"
 #include "labwindow.h"
 #include "envs/env.h"
-#include "jahshaka/engine/Types.h"   // ReflectSources
+#include "jahshaka/engine/Types.h"
 
 #include <QString>
 
@@ -93,6 +93,11 @@ private:
     /// THE STILLNESS DOOR's lab verb (PHOTON-2 stage 0; irisgl Stillness.h), the lamp step and the scripted move.
     bool stillness(const Command &c);
     bool lamp(const Command &c);
+    /// `sky brightness|rayleigh <v>` (PHOTON-7-9A): the realistic sky's dial in the document (parseSkyDial's rule).
+    bool sky(const Command &c);
+    /// `routes <words>` (PHOTON-7-9A): the lab's route declaration, judged after each frame drawn (judgeDeclaredRoutes)
+    bool routes(const Command &c);
+    void judgeDeclaredRoutes();
     bool material(const Command &c);
     bool move(const Command &c);
     bool slide(const Command &c);
@@ -129,13 +134,13 @@ private:
     int mTier = 3;              ///< worldmodes::Mode (Low 0 .. Epic 3)
     bool mGi = true, mOcclusion = true, mDraw = true, mOverlay = false;
     bool mPlaying = false;   ///< `play on`: the document's clock advances one fixed step a frame
-    /// `reflections both|rays|screen`: the view's reflection SOURCES (PostFxDesc::reflectSources - the one estimator, the
-    /// rays alone, the screen alone): the agreement row's door (Both vs Rays).
-    jahshaka::engine::ReflectSources mReflectSources = jahshaka::engine::ReflectSources::Both;
     bool mReflectOff = false;   ///< `reflections off`: PostFxDesc::ssr 0 (an A/B's arm)
     bool mHdrReadback = false;   ///< `cardat` turned the view's float readback on (PostFxDesc::hdrReadback)
     bool mQuit = false;
     int mExit = 0;
+    RouteSet mRoutesDeclared;     ///< the `routes` verb's declaration (judged after each frame while pending)
+    bool mRoutesPending = false;
+    int mRoutesFrames = 0;
     unsigned long long mFrames = 0;
     unsigned long long mSceneTriangles = 0;
     int mShotSerial = 0;

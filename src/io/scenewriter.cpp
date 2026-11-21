@@ -200,7 +200,6 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     sceneObj["smaaPreset"] = scene->smaaPreset;
     sceneObj["ssrMode"] = scene->ssrMode;
     sceneObj["ssrMarch"] = scene->ssrMarch;
-    sceneObj["reflectionSources"] = scene->reflectionSources;
     sceneObj["reflectionResolution"] = scene->reflectionResolution;
     // ONE name, the World row's (lane SMALL-ITEMS D).
     sceneObj["reflectionRoughnessCutoff"] = scene->reflectionRoughnessCutoff;

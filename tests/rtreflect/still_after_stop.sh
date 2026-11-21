@@ -5,7 +5,7 @@
 # THE MOTION, within its bound (the room's law, gi.hold_after_stop's, PHOTON-7 stage 5, 5-5: the demand's read-back
 # lags, so a card arrival and a field plane's refinement come after the stop; tests/support/owed_rows.py judges both
 # rows), so the reflection's law is judged on a still world - the stop, then the path's teleport back to the stop at EQUAL GI placements (the door's
-# placement pin). One 1,000-frame window (the rest re-founded, PHOTON-7 stage 6 commit 8: four rest rays a texel a frame,
+# placement pin). One 500-frame window, PHOTON-7-9A's observation span for the engine's own bound - THE WINDOW below (the rest re-founded, PHOTON-7 stage 6 commit 8: four rest rays a texel a frame,
 # no frame cap - PREFLIGHT_R section 3's estimate, (2N + the measured samples) / 4 + 8, about 100 frames).
 # THE LAW (physics: under still lights and geometry a reflection is a function of the world and the eye): once the eye
 # stops, each texel hands its moving history over to its own rest mean (eased out over 2N = 38 samples,
@@ -30,9 +30,42 @@
 #       hold NO CAPPED TEXEL (the door's refl_rest_capped 0: every texel stopped by its own standard error within its
 #       share of the one-code display budget, sqrt( n_eff ) codes at its pixel - so the displayed SE is under one code
 #       where the neighbours' n_eff match, the stop's own guarantee; a capped one stopped at its count's ceiling);
-#   (c) before the hold the mirror's per-frame mean change <= 1 code with the mover parked (its fixed estimator);
-#   (d) walk vs teleport at EQUAL placements: glossy mean <= 0.5 codes and p99 <= 2 (the MIRROR's half is stage 5's,
-#       R2: printed, not judged);
+#       and THE STOP LAW IN SAMPLES (the final read's M1, the lead's ruling A): at rest frame 2N a texel still converging
+#       needs v_need = v ( e / share )^2 samples to come within its share (its SE e over v samples: sigma^2 = e^2 v, and
+#       sigma^2 / v_need = share^2); its stop window opens at that crossing and closes after kReflectStopSamples = 300
+#       samples AND kReflectStopFrames = 8 frames (jah_reflect_rest.glsl), at most kReflectRestRaysCap = 64 samples a
+#       frame, one frame's batch of overshoot past the 300 - so it stops at v <= v_need + max( 300 + 64, 8 x 64 ) =
+#       v_need + 512, and THE LAW: the largest v at which a texel stopped past 2N (the lab's status restStopVMax) <= the
+#       largest v_need at 2N (restNeedMax) + 512. THE RESIDUALS, named: (i) v_need is the 2N estimate of e (sigma over the
+#       samples a texel holds at 2N, ~150 at 960x540) - a heavy-tailed texel whose e rises after 2N owes more, the stop
+#       law's own delta (kReflectStopSamples' note); (ii) RE-ENTRY: the window's frame count restarts on any frame out of
+#       the share (rq_reflect_temporal.comp's st.stop = 0) while its start (refine.z) stands, so the 512 runs from the LAST
+#       time a texel re-enters its share - which can come well after v_need for a texel whose e wanders across it. And the
+#       law is a WEAK FORM: it compares two population maxima (the largest stop v against the LARGEST need), so it reds
+#       only a texel that stops past the WORST texel's need + 512, never a light texel that ran long (measured 2,638
+#       against 14,227 / 14,739) - a per-texel form needs each texel's own need, which the engine does not publish. The FRAMES the hold takes are not a stop law (the converging texels
+#       share the tail's ray budget, held to its ramp, and a batch ends at a record): see WIN below;
+#   (c) THE MIRROR CONVERGES (PHOTON-7-9A stage 2, the lead's ruling C2; the old "<= 1 code mean change" bar, a picked
+#       number, deleted): the mirror is a fixed estimator (the centre ray, M = 1) - at rest it takes its mean from its
+#       first rest sample and folds k a frame, so a frame's change of a texel's mean has variance sigma^2 k / (v_{t-1} v_t)
+#       (jah_reflect_rest.glsl): its mean change falls as 1/v from the stop and never rises - judged by THE RISE LAW on the
+#       mirror pixels' series, as (a) on the glossy (tests/support/rise_law.py), from the rest's own settle to the hold;
+#       the held end state is the stop's own guarantee (every displayed SE under one code).
+#   (d) walk vs teleport at EQUAL placements, BOTH HELD (the final read's HEAD 4, the lead's ruling: ONE law, the one
+#       rtreflect.lamp_step_held derives - lamp_step_held.sh's header has the derivation in full): the door compares the
+#       two windows' last pictures (window frame WINP); each window's hold (the view held: every reader, the reflection
+#       included - StillnessWindow::holdFrame) must come BEFORE it, so two HELD pictures are judged. THE TERMS: (i) the
+#       GI's held state differs by the path inside its relative rest zone z = 2^-10 / (1 - 0.9) = 0.98 %, at most
+#       z max g = 0.0098 x 58.6 = 0.57 display codes for every F and L (g the film-and-sRGB curve's log slope,
+#       spikes/photon-7-9a/r5/slope.txt); (ii) THE STOP: the two holds' per-texel counts may differ (the stop and the
+#       tail's rate are decided by the samples), and two means of one sequence at counts v1 < v2 differ with SD <= SE
+#       sqrt(1 - v1 / v2) <= the stop's SE, under one display code: s = 1 code, a STANDARD ERROR; (iii) one 8-bit
+#       rounding, + 1. LAW 1 (every glossy pixel, family-wise over the N compared): the max <= floor(0.57 + sqrt(2 ln N)
+#       s) + 1. LAW 2 (the tail): the glossy pixels over floor(0.57 + 3 s) + 1 = 4 codes <= 0.27 % of N (the two-sided
+#       3-sigma tail). (The old "every glossy pixel within 1 code" dropped term (ii) - deleted; the parent's "mean <= 0.5,
+#       p99 <= 2" were picked numbers.) The measured max 18 at (663,415), equal to the pixel on both boxes, is
+#       deterministic and fails LAW 1: the red is genuine, declared at 1.10 (HISTORY-1).
+#       (The MIRROR's half is stage 5's, R2: printed, not judged.)
 #   (e) the held small lamp step is rtreflect.lamp_step_held's (lamp_step_held.sh).
 #   (g) THE REST's COST (re-derived, HARNESS-3 (c)): a rest frame never outweighs a tile frame - read as THE TRACE's
 #       WORK through its GPU time, so judged where that time is the work's: in every 10-frame window of the compact
@@ -52,9 +85,8 @@
 # SPLIT BY PROOF (PHOTON-7 8B B2, the lead's ruling): the hold now lands at 828 (the stop counts samples), so the
 # 1,000-frame walk window and the path's two windows no longer fit one row under the minute - `hold` runs the walk alone
 # and judges (a), (a2), (b'), (c), (g); `path` runs the walk and the teleport at equal placements and judges (d) alone,
-# AT AN EQUAL REST INDEX BEFORE THE HOLD (both windows 450 frames; the lead's ruling): the rest's samples are a function
-# of the sequence index (per-index determinism), so equal placements give equal pictures at equal frames, held or not -
-# (d) tests the rest estimate's path-independence, NOT a held picture: the hold is .hold's (b').
+# on the two windows' last pictures (450 frames each), BOTH HELD before it (the final read's HEAD 4: the hybrid holds at
+# window frames ~250-310 here; the row checks it, never assumes it).
 # usage: still_after_stop.sh <jahlab> <work dir> hold|path
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}; PART=${3:?hold or path}
@@ -63,23 +95,25 @@ case "$PART" in hold|path) ;; *) echo "FAIL: the part is hold or path, not '$PAR
 HERE=$(cd "$(dirname "$0")" && pwd)
 rm -rf "$WD"; mkdir -p "$WD"
 POSE=1.5,1.8,3.4,1.5,0.5,-3
-# THE WINDOW (PHOTON-7 8B B2's re-derivation): the observation span the law asks the hold inside - the glass holds at
-# 828 since the stop counts samples (kReflectStopSamples 300, the measured tail; it held at 534 when a texel could stop on
-# 32 samples of a heavy tail and keep a biased mean), plus the law's margin: 1,000.
-WIN=1000
+# THE WINDOW WIN - A STATED BEHAVIOUR, NOT A DERIVED LAW (the lead's design call, 2026-11-21: "a glossy floor goes still
+# after a stop" is a product behaviour the owner asked for by name, and a row with no time law would pass a hold that took
+# ten times longer): the hold must be reached inside WIN = 500 window frames - 8.3 s at 60 fps - from the stop. MEASURED
+# (PHOTON-7-9A, 960x540, RTX 5060 Ti, 2026-11-21): the rest began at window frame 56 and held at rest frame 190, window frame
+# 246 - the margin about 2x. A hold outside WIN is a red to investigate; WIN is NEVER widened to pass (the lead sets it).
+WIN=500
 LAGK=17,24,32,48,64,96   # (a2)'s frames after the stop: from the rest's hand-over (2N / 4 frames) + its 16
-# (the sources this row's bars are Both's: set, never assumed - the mode label below asserts what ran)
 WINP=450
 if [ "$PART" = path ]; then
 cat > "$WD/run.lab" <<S
-reflections both
+routes gather reflection store
 stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WINP path trail=1 out=still
 quit
 S
 else
 cat > "$WD/run.lab" <<S
-reflections both
+routes gather reflection store
 stillness teleport:0.3,1.8,3.4,0.3,0.5,-3/hold:200/walk:$POSE:30 $WIN trail=1 dump=still dumpwin=$LAGK,$WIN out=still
+status
 quit
 S
 fi
@@ -91,21 +125,45 @@ for run in run; do
 done
 grep '^LAB STILLNESS' "$WD/run.log" | cut -c1-400
 HERE=$(cd "$(dirname "$0")" && pwd)
-python3 -I "$HERE/../support/reflect_sources.py" tsv "$WD/data/stillness/still.tsv" -- both || {
-    echo "rtreflect.still_after_stop: FAIL (the mode label)"; exit 1; }
 if [ "$PART" = path ]; then
-python3 -I - "$WD" <<'PY'
-import os, re, sys
+python3 -I - "$WD" "$WINP" <<'PY'
+import math, os, re, sys
 log = open(os.path.join(sys.argv[1], "run.log")).read()
 fails = []
 m = re.search(r"path walk-vs-teleport \(at equal placements\) \| picture mean/p99/max codes, pixels >= 1: (.*?) \|", log)
-if not m:
-    fails.append("(d) the path line is missing")
+t = re.search(r"\| pixels N and over 1\.\.(\d+) codes: (.*?) \|", log)
+holds = dict(re.findall(r"STILLNESS (walk|teleport) stop=\S+ frames=\d+ visible=\S+ lastGiRow=-?\d+ lastHoldKey=-?\d+ hold=(-?\d+)", log))
+win = int(sys.argv[2])
+cls = {}
+if not m or not t:
+    fails.append("(d) the path line (or its tail) is missing")
 else:
-    cls = {k: (float(a), int(b)) for k, a, b in re.findall(r"(\w+)=([\d.]+)/(\d+)/\d+,\d+", m.group(1))}
-    print("(d) walk vs teleport at equal placements: glossy %s mirror %s" % (cls["glossy"], cls["mirror"]))
-    if cls["glossy"][0] > 0.5 or cls["glossy"][1] > 2: fails.append("(d) glossy mean <= 0.5 and p99 <= 2: %s" % (cls["glossy"],))
-    print("(d) the mirror's half is stage 5's (R2), not judged here: %s" % (cls["mirror"],))
+    cls = {k: (float(a), int(b), int(c)) for k, a, b, c in re.findall(r"(\w+)=([\d.]+)/(\d+)/(\d+),\d+", m.group(1))}
+    tail = {k: (int(n), [int(x) for x in o.split(",")]) for k, n, o in re.findall(r"(\w+)=(\d+):([\d,]+)", t.group(2))}
+    # AT THE HOLD: both windows held before the compared frame (the window's last, WINP)
+    hw, ht = int(holds.get("walk", -1)), int(holds.get("teleport", -1))
+    print("(d) the holds: walk at window frame %d, teleport at %d; the pictures compared at %d" % (hw, ht, win))
+    if not (0 <= hw < win and 0 <= ht < win):
+        fails.append("(d) both windows must hold before the compared frame %d (walk %d, teleport %d): two held pictures "
+                     "are the law's subject" % (win, hw, ht))
+    # THE TWO LAWS (the header's derivation; lamp_step_held.sh's)
+    zg, s = 2.0 ** -10 / (1.0 - 0.9) * 58.6, 1.0
+    g, gt = cls.get("glossy"), tail.get("glossy")
+    if g is None or gt is None or gt[0] <= 1:
+        fails.append("(d) the door's line has no glossy class (or no pixels)")
+    else:
+        n = gt[0]
+        maxBound = int(math.floor(zg + math.sqrt(2.0 * math.log(n)) * s)) + 1
+        tailCode = int(math.floor(zg + 3.0 * s)) + 1
+        over = gt[1][tailCode - 1] if tailCode - 1 < len(gt[1]) else -1
+        print("(d) walk vs teleport, held: glossy mean %.3f p99 %d max %d (mean, p99 printed); LAW 1: N = %d, the max <= "
+              "floor(%.2f + sqrt(2 ln N) %.2f x s %.0f) + 1 = %d; LAW 2: %d px (%.4f %%) over %d codes, bar 0.27 %%"
+              % (g[0], g[1], g[2], n, zg, math.sqrt(2.0 * math.log(n)), s, maxBound, over, 100.0 * over / n, tailCode))
+        if g[2] > maxBound:
+            fails.append("(d) LAW 1, every glossy pixel within %d codes (N = %d): max %d" % (maxBound, n, g[2]))
+        if over < 0 or over > 0.0027 * n:
+            fails.append("(d) LAW 2, <= 0.27 %% of the glossy pixels over %d codes: %d (%.4f %%)" % (tailCode, over, 100.0 * over / n))
+    print("(d) the mirror's half is stage 5's (R2), not judged here: %s" % (cls.get("mirror"),))
 for f in fails: print("FAIL:", f)
 print("rtreflect.still_after_stop.path: %s" % ("FAIL" if fails else "PASS"))
 sys.exit(1 if fails else 0)
@@ -154,7 +212,25 @@ if rows:
     rest = int(rows[hold]["refl_rest_frames"]) if held else -1
     capped = int(rows[hold]["refl_rest_capped"]) if held else -1
     print("(b') at the hold: %d rest frames; capped texels %d (the door's refl_rest_capped)" % (rest, capped))
-    if not held: fails.append("(b') the glass never held (no texel active) inside the %d-frame window" % (len(rows) - 1))
+    # (b') THE STOP LAW IN SAMPLES (the header's): the largest v at a stop past 2N <= the largest need at 2N + 512, both
+    # this rest's, published by the lab's `status` after the window (the rest that held)
+    mn = re.findall(r'"restNeedMax":(-?\d+)', log)
+    ms = re.findall(r'"restStopVMax":(-?\d+)', log)
+    need = int(mn[-1]) if mn else -1
+    stopv = int(ms[-1]) if ms else -1
+    print("(b') the stop law in samples: the largest v at a stop past 2N %d, the largest need at 2N %d, the bound %d "
+          "(need + 512)" % (stopv, need, need + 512))
+    if need <= 0 or stopv <= 0:
+        fails.append("(b') the engine published no stop-law words (status restNeedMax %s, restStopVMax %s): the law "
+                     "cannot be judged" % (mn[-1] if mn else "absent", ms[-1] if ms else "absent"))
+    elif stopv > need + 512:
+        fails.append("(b') a texel stopped at v %d, past its stop law's need %d + 512" % (stopv, need))
+    # (b') THE STATED BEHAVIOUR (the header's WIN note): the hold inside WIN - the window frame it lands at, beside WIN
+    rest0 = hold - rest if held else -1   # the window frame of the rest's frame 0
+    print("(b') the stated behaviour: the hold at window frame %s (the rest began at %d, held at rest frame %d) inside "
+          "WIN %d (%.1f s at 60 fps)" % (hold if held else "none", rest0, rest, win, win / 60.0))
+    if not held: fails.append("(b') THE STATED BEHAVIOUR: the glass never held (no texel active) inside WIN, %d frames "
+                              "(%.1f s at 60 fps) - a red to investigate, never a wider WIN" % (len(rows) - 1, (len(rows) - 1) / 60.0))
     elif capped != 0: fails.append("(b') capped texels at the hold: %d (the rest's defect reading must be 0)" % capped)
     elif not still: fails.append("(b') the glass moved after the hold")
     end = hold if held else len(rows)
@@ -176,9 +252,15 @@ if rows:
     if rising: print("(a) the GI rows at the rises' frames (+-10): %s" % (sorted(set(sum([giAt(max(0, r.frame - 10), r.frame + 11) for r in rising], []))) or "none"))
     active = {i: rows[i]["refl_rest_active"] for i in (80, 300, 600) if i < len(rows)}
     print("(b') the rest's active texels at frames 80 / 300 / 600: %s" % " / ".join(str(active.get(i, "-")) for i in (80, 300, 600)))
-    mirror = max(float(r["mirror_mean"]) for r in rows[1:max(hold, 2)])
-    print("(c) the mirror's mean change before the hold: max %.3f" % mirror)
-    if mirror > 1.0: fails.append("(c) the mirror's mean change before the hold <= 1 code: %.3f" % mirror)
+    mirror = [float(r["mirror_mean"]) for r in rows]
+    mwin = [sum(mirror[a:b]) / (b - a) for a, b in spans]
+    print("(c) mirror mean change, 10-frame windows from %d to the hold: %s" % (start, " ".join("%.4f" % w for w in mwin)))
+    mj = rise_law.judge(mirror, start, end, max(1e-4, 1.0 / max(1, int(rows[1]["mirror_px"]))))   # (by name: URGENT #149)
+    msigma, mrising, mdips = mj.sigma, mj.rises, mj.dips
+    print("(c) the mirror's rise-law noise %.5f; rises %d (the first frame's change %.3f, printed)" % (msigma, len(mrising), mirror[1] if len(mirror) > 1 else -1))
+    if mdips: print("(c): a one-frame DIP (the change fell and came back; not a rise - the lead's leftover, URGENT #138): %s" % " ".join(d.text() for d in mdips))
+    if mrising: fails.append("(c) the mirror converges with no rise to the hold (the rise law): rises (kind, frame, from, to, bound) %s"
+                             % " ".join(r.text() for r in mrising[:10]))
     # (g) THE REST'S COST (the lead's bar, PHOTON-7 stage 6): no rest frame's trace costs more than one full TILE frame -
     # THE MAX OVER THE TILE FRAMES (k 4 over every batching texel, the hand-over included; frame 5 alone was a proxy
     # 2.5 % low: the residual's store begins at v = 2N, frames 14-15) - the compact path's tail included (its frames:

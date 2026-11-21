@@ -282,7 +282,7 @@ OGRE_VIEW_FUNCTIONS = {
     **{f: ["engine", "perf"] for f in ("framesPresented", "notePresented", "blankFramesPresented")},
     **{f: ["shadow", "lights"] for f in ("shadows", "setShadows", "applyShadows", "dropWorkspaceForShadowRebuild",
                                          "recreateWorkspaceAfterShadowRebuild", "shadowNodeInstance")},
-    **{f: _REFL for f in ("readReflectionHdr", "readSsrHistoryHdr")},
+    **{f: _REFL for f in ("readReflectionHdr",)},
     "updateParticles": ["particles"],
     "updateGi": ["gi"],
     **{f: ["shadercache", "threading"] for f in ("setAsyncShaders", "asyncShaders", "computeHlms", "warmUpShaders")},
@@ -3201,7 +3201,7 @@ def select(paths, rng, build, graph=None, inv=None, quiet_graph=False):
 # precisely (gate.selection's U1-A); and a WHOLE TIER a harness path sets (a compile option in tests/CMakeLists.txt changes
 # every test binary: the FAST pass, never one row per class - its TOOLING-3 cases).
 # THE PLUMBING, BY NAME (the stage-1 audit's finding 3, the lead's ruling: only the runners, the home, the warm-up and the
-# CMake helpers collapse; a LAW helper - rise_law.py, owed_rows.py, reflect_sources.py, any module a row's law imports -
+# CMake helpers collapse; a LAW helper - rise_law.py, owed_rows.py, any module a row's law imports -
 # reaches every row that imports it, by import: LAW_HELPER_IMPORTERS below)
 SHARED_HARNESS = re.compile(r"^(tests/support/(fresh_home\.sh|run_pool\.py|samepath\.sh|test_boot\.cmake|warm_app_boot\.sh|"
                             r"warm_cold_rows\.sh|warm_tier\.js|shadercache_check\.py)$|tests/cmake/|tests/CMakeLists\.txt$|"

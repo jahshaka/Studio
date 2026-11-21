@@ -246,7 +246,7 @@ int main(int argc, char **argv)
         std::printf("ok: this build/machine has no ray queries (available=%d wanted=%d) — "
                     "gi.rt_reflect is about the tier and skips cleanly\n",
                     int(e->rayQueryAvailable()), int(e->rayTracing()));
-        return 0;
+        return 77;   // ctest's SKIP_RETURN_CODE: never a green that measured nothing
     }
 
     // Grey ambient: what the wall falls back to when nothing answers, and a
@@ -336,6 +336,9 @@ int main(int argc, char **argv)
     fx.allowOffscreen = true;     // the ONE door through the offscreen guarantee
     fx.ssr = 2;                   // Epic: full-resolution rays
     view->setPostFx(fx);
+    // THE ROUTE (PHOTON-7-9A, URGENT #177): declared with the chain the arms measure, asserted on the first frame after
+    // it (the control above has no post chain); the rays-off A/Bs below switch the reflection on the same view later.
+    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(), "gi.rt_reflect's view");
 
     // ---- 1 + 2: the two arms ------------------------------------------------
     Image img;
@@ -488,6 +491,8 @@ int main(int argc, char **argv)
             fresh->setScene(s);
             PostFxDesc ffx = fx;
             fresh->setPostFx(ffx);
+            enginetest::declareRoutes(fresh, s, enginetest::Routes().integrate().reflection().store(),
+                                      "gi.rt_reflect's fresh pan view");
             enginetest::testCameraLookAt(fresh, eye, target);
             render(e, 24);                       // the fresh view's own mean settles
             fresh->readPixels(pannedFresh);
@@ -510,7 +515,7 @@ int main(int argc, char **argv)
                       "A MIRROR DOES NOT GHOST: one frame after a pan it matches a fresh render "
                       "to %.2f/255 at the 99th percentile (bar 6)",
                       p99);
-            e->destroyView(fresh);
+            enginetest::destroyView(e, fresh);   // its declaration asserted by then (24 frames)
         }
         enginetest::testCameraLookAt(view, eye, Vec3(0.0f, 2.0f, 5.0f));
         render(e, 16);
@@ -914,7 +919,7 @@ static int costMain(Engine *e, const char *, const char *)
     enginetest::GpuTimingWindow gpuTiming(e);
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
         std::printf("ok: no ray queries on this machine — gi.rt_reflect_cost skips cleanly\n");
-        return 0;
+        return 77;
     }
     s->setAmbient(Colour(0.20f, 0.20f, 0.20f), Colour(0.15f, 0.15f, 0.15f));
 
@@ -1242,7 +1247,7 @@ static int lampMain(Engine *e, bool target)
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
         std::printf("ok: this build/machine has no ray queries — the lamp arm is about the ray "
                     "tier's units and skips cleanly\n");
-        return 0;
+        return 77;
     }
 
     // NOTHING BUT THE EMITTER EMITS: no ambient, no sky, no light. Whatever the
@@ -1485,7 +1490,7 @@ static int hitresMain(Engine *e)
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
         std::printf("ok: this build/machine has no ray queries — F1-HITRES is about the ray "
                     "tier's hit and skips cleanly\n");
-        return 0;
+        return 77;
     }
     s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
     const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
@@ -1885,7 +1890,7 @@ static int envRayMatchMain(Engine *e)
     view->setScene(s);
     if (!e->rayQueryAvailable() || !e->rayTracing()) {
         std::printf("ok: no ray queries on this machine — skips cleanly\n");
-        return 0;
+        return 77;
     }
     // THE REALISTIC SKY: the analytic atmosphere at its clear-sky defaults, the
     // sun 35 degrees up (behind the camera), its SH and the environment light at
