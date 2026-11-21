@@ -540,3 +540,15 @@ target_include_directories(test_rough_lobe_transport PRIVATE ${CMAKE_SOURCE_DIR}
 add_test(NAME engine.rough_lobe_transport COMMAND test_rough_lobe_transport)
 set_tests_properties(engine.rough_lobe_transport PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.rough_lobe_transport)
+
+# engine.stillness_history_column — THE STILLNESS RECORD CARRIES THE HISTORY's FLOOR h (ROUGH-LOBE-HISTORY-1; the law in
+# test_stillness_history_column.cpp): StillnessReport::tsv's history_frames column (GatherStatus::historyFrames) beside
+# settle_frames, in both parts of a window - what gi.walk_rough.k<k>'s lag law reads (it inverted the settle before). A CPU
+# code row on the record's text: it links the engine, opens no device.
+add_executable(test_stillness_history_column test_stillness_history_column.cpp)
+set_target_properties(test_stillness_history_column PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+                      BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_stillness_history_column PRIVATE JahshakaEngine)
+add_test(NAME engine.stillness_history_column COMMAND test_stillness_history_column)
+set_tests_properties(engine.stillness_history_column PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.stillness_history_column)
