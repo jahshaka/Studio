@@ -427,6 +427,25 @@ add_test(NAME engine.compute_record COMMAND test_compute_record)
 set_tests_properties(engine.compute_record PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.compute_record)
 
+# engine.compute_layer_prune — THE COMPUTE LAYER's STALE PRUNE RUNS WHERE THE COMPUTE MEDIA IS FOUND (SHADER-SYSTEM-1
+# stage 3F, the start preflight's F1; test_compute_layer_prune.cpp says why): the engine's order - the cache's load, then
+# the compute media's folders, then the prewarm - keeps a record whose files are staged unchanged and prunes the one whose
+# file changed (red before: a prune at load found no file and dropped every record). A NULL Root and a real ShaderCache
+# on a scratch directory: no card, no display.
+add_executable(test_compute_layer_prune test_compute_layer_prune.cpp)
+set_target_properties(test_compute_layer_prune PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+set_source_files_properties(test_compute_layer_prune.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
+target_include_directories(test_compute_layer_prune PRIVATE
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+target_compile_definitions(test_compute_layer_prune PRIVATE JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}")
+target_link_libraries(test_compute_layer_prune PRIVATE JahshakaEngine OgreNext)
+add_test(NAME engine.compute_layer_prune COMMAND test_compute_layer_prune
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.compute_layer_prune PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.compute_layer_prune)
+
 # engine.ray_builder_slots — THE RAY PIPELINE BUILDERS' SLOTS (COLD-BOOT-1 stage 4; RayBuilderSlots.h): the width bounds
 # the builders at once; the reflection pair's second builder is taken only if a slot is free NOW (a tier one wide builds
 # the pair serially - no width deadlocks); a width below one is one. CPU only: no card, no engine.

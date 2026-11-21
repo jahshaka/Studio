@@ -548,3 +548,4 @@ gi.card_build_late.corrupt 3.87  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, 
 library.statements 7.17  solo 2026-11-22 at ae0f98ffe (spec.sh reprice, run 20261122T073053-ae0f98ffe)
 desktops.grid_lookup 0.19  solo 2026-11-22 at 0a85a6529 (spec.sh reprice, run 20261122T060833-0a85a6529)
 library.scale 26.25  solo 2026-11-22 at ae0f98ffe (spec.sh reprice, run 20261122T073026-ae0f98ffe)
+engine.compute_layer_prune 0.09  by hand (spec.sh reprice, 2026-11-22)
