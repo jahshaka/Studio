@@ -127,6 +127,11 @@ int main(int argc, char **argv)
         }
         return quiet >= 8 ? n : -1;
     };
+    // THE ROUTE EVERY ARM MEASURES (CODING_RULES section 6, source.testing_rules R16): the Live view's screen integrate
+    // over the voxel store, GI paused (updateBudget 0); asserted on the first frame an arm renders after its GI comes on
+    const auto declareCourt = [&](const char *arm) {
+        enginetest::declareRoutes(view, scene, enginetest::Routes().integrate().store().paused(), arm);
+    };
     // THE LIGHT OF ONE CASCADE ALONE (Scene::giVoxelLight: a row that judges one cascade's light reads no more)
     const auto readLight = [&](size_t cascades, size_t k, Store &out) {
         out.c.assign(cascades, GiVoxelVolume());
@@ -149,6 +154,7 @@ int main(int argc, char **argv)
         Vec3 doorAt(0.0f, 1.0f, -3.0f);
         const NodeId door = addBox(scene, doorAt, doorSize, Colour(0.9f, 0.2f, 0.1f), false);
         CHECK(door != 0 && scene->setGlobalIllumination(chainGi()), "the court and its still door are up");
+        declareCourt("ghost's view");
         e->waitForAsyncShaders();
         const int rest0 = settle(1200);
         const size_t n = scene->published().gi.cascades.size();
@@ -211,6 +217,7 @@ int main(int argc, char **argv)
         const Vec3 busSize(10.0f, 2.5f, 2.5f);
         Vec3 busAt(-3.0f, 1.25f, -10.0f);
         CHECK(scene->setGlobalIllumination(chainGi()), "the empty court is up");
+        declareCourt("bus's view");
         e->waitForAsyncShaders();
         const int rest0 = settle(1200);
         const size_t n = scene->published().gi.cascades.size();
@@ -348,6 +355,7 @@ int main(int argc, char **argv)
         // plus the frame the step is owed in (the list's Lamp region is owed after the frame's region service).
         std::printf("\n== lamp: a lamp stepping while a mover moves ==\n");
         CHECK(scene->setGlobalIllumination(chainGi()), "the court is up");
+        declareCourt("lamp's view");
         e->waitForAsyncShaders();
         const NodeId lamp = scene->createNode();
         LightDesc ld;
@@ -417,6 +425,7 @@ int main(int argc, char **argv)
         // built one) and was served as a region rebuild in the next chain's first frame.
         std::printf("\n== gi_off_removal: a mover removed with GI off ==\n");
         CHECK(scene->setGlobalIllumination(chainGi()), "the court is up");
+        declareCourt("gi_off_removal's view");
         e->waitForAsyncShaders();
         const NodeId mover = addBox(scene, Vec3(0.0f, 0.5f, -3.0f), Vec3(0.6f, 1.0f, 0.6f), Colour(0.8f, 0.8f, 0.8f), true);
         CHECK(mover != 0 && settle(1200) >= 0, "the movable box comes to rest");

@@ -496,3 +496,8 @@ rtreflect.sky_invariant.first 10.22  solo 2026-11-20 at c36f9c492 on the RTX 506
 rtreflect.sky_invariant.hold 15.06  solo 2026-11-20 at c36f9c492 on the RTX 5060 Ti box, a full run (its law red), the card lock held (spec.sh reprice by hand)
 vr.photon_term_stereo.fresh_home 0.22  solo, rig.sh run (the card lock held), :63, warm (PHOTON-7-9A M4, 2026-11-21: the row's home wipe)
 vr.photon_term_stereo 9.05  solo, rig.sh run (the card lock held), :63, warm fixture home, run_vr_app.sh against Monado (PHOTON-7-9A M4, 2026-11-21: the Photon term view in the stereo view - 30 eye frames, the stereo list read on 27, 0 shape refusals)
+engine.cascade_resolution_law 0.02  by hand (spec.sh reprice, 2026-11-21)
+engine.compute_job_slots 0.02  by hand (spec.sh reprice, 2026-11-21)
+engine.param_array 0.02  by hand (spec.sh reprice, 2026-11-21)
+engine.region_grid_law 0.02  by hand (spec.sh reprice, 2026-11-21)
+gi.mover_gi_off_removal 1.94  by hand (spec.sh reprice, 2026-11-21)

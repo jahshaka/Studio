@@ -667,6 +667,7 @@ set_tests_properties(gi.soft_mover_ghost PROPERTIES JAHSHAKA_TEST_FRAMES 148)
 set_tests_properties(gi.mover_bus_geometry PROPERTIES JAHSHAKA_TEST_FRAMES 138)
 set_tests_properties(gi.mover_bus_sky PROPERTIES JAHSHAKA_TEST_FRAMES 138)
 set_tests_properties(gi.mover_lamp_step PROPERTIES JAHSHAKA_TEST_FRAMES 101)
+set_tests_properties(gi.mover_gi_off_removal PROPERTIES JAHSHAKA_TEST_FRAMES 81)   # (the fixture's own count, its green run)
 
 # gi.share_law (BISTRO-REST-1) - THE HIT READ's BOUNCE SHARE IS LINEAR IN THE STORE IT READS: the shipped share
 # (jah_rq_hit.glsl, through Engine::giShareLaw's test-only job) continuous and monotone across the dim range, the read's
