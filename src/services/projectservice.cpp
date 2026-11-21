@@ -537,7 +537,7 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
         } putBack{ played };
         const auto edit = PlayBack::documentEditPose(
             scene, { viewport ? viewport->playBack() : nullptr, mPlayerHost ? mPlayerHost->playBack() : nullptr });
-        if (false && !edit.pose.isEmpty()) {   // MEASURING ARM (final read 2 M3): the swap reverted - reverted by the next commit
+        if (!edit.pose.isEmpty()) {
             played = editpose::swapIn(scene->nodes.values(), edit.pose, edit.wholeDocument ? &spawned : nullptr);
             writer.setOmittedNodes(spawned);
         }
