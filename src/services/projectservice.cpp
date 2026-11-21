@@ -585,6 +585,14 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
     // ...and it supersedes an encode still in flight from an earlier save, which
     // would otherwise land an OLDER picture over this one.
     if (!thumb.isEmpty()) supersedeThumbnail(guid);
+    // THE RUN'S EARLIER WRITES ARE COMMITTED FIRST, AND THAT COMMIT IS CHECKED (the final read's Q2): the guard
+    // below would stand the batch down unchecked, and a save committed over rolled-back rows names asset rows that
+    // are gone (before the guard both were one transaction).
+    if (!db->commitBatchNow()) {
+        if (undo) undo->markUnsaved();
+        return fail(QStringLiteral("the library could not commit the run's earlier changes (they were rolled back), "
+                                   "so the scene was not written over them"));
+    }
     {
         // "SAVED" MEANS COMMITTED (STUDIO-HYGIENE-1 audit). A script run holds the database's gesture batch for
         // its whole length, and the UPDATE inside it was counted (one row) and reported saved while its COMMIT

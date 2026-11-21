@@ -653,8 +653,9 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
         LoadTimeline::begin(QStringLiteral("create %1").arg(filename));
     // EVERY CREATE ROUTE CLOSES THE OPEN WORLD ITSELF, FIRST, by its own policy (the
     // New Scene dialog asks, project.create refuses unless told to discard) —
-    // before a row is minted. This is the backstop: a world still open here is
-    // closed only if nothing would be lost, and a refusal stops the create.
+    // before a row is minted, an open in flight included (the routes drain it in
+    // their close: the final read's W5). This is the backstop: a world still open
+    // here is closed only if nothing would be lost, and a refusal stops the create.
     if (mProjectService->isSceneOpen()) {
         LoadTimeline::mark(QStringLiteral("closePrevious"));
         QString why;

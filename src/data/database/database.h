@@ -271,6 +271,10 @@ public:
     /// true for a level the database ABANDONED under the caller — see
     /// closeDatabase).
     bool endBatch();
+    /// Commits what the open batch holds NOW, the scope left open (a no-op with none live) - what a top-level
+    /// guard's stand-down does, but with its answer: false = the commit failed and the batch's rows were rolled
+    /// back (announced). The scene save asks it first (the final read's Q2).
+    bool commitBatchNow() { return commitBatchTransaction(); }
     /// WHO TELLS THE USER when a batch cannot commit. A whole gesture's rows
     /// are rolled back then — a script run's library writes, gone — and a warn
     /// line in the log has an audience of one. The app installs a listener that

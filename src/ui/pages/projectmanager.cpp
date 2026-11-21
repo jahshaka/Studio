@@ -979,8 +979,10 @@ void ProjectManager::newProject()
 		return;
 	}
 	// THE OPEN WORLD CLOSES FIRST, asking about unsaved changes, BEFORE a row is
-	// minted: a Cancel (or a failed auto-save) creates nothing (STUDIO-HYGIENE-1).
-	if (shell->services()->project->isSceneOpen() && !shell->closeProject(false, CloseUnsaved::Ask))
+	// minted: a Cancel (or a failed auto-save) creates nothing (STUDIO-HYGIENE-1). An open in flight is part of
+	// it (W5): the close drains it and settles the world it installed, before the row.
+	if ((shell->services()->project->isSceneOpen() || shell->isOpeningProject())
+	    && !shell->closeProject(false, CloseUnsaved::Ask))
 		return;
 
 	QString why, folder;

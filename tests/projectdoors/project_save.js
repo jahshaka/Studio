@@ -24,9 +24,11 @@ function make() {
     assert(dirty() === true, "a push makes the scene dirty");
     var commits = editor.undoState().dbCommits;
     assert(project.save() === true, "the save writes the row");
-    assert(editor.undoState().dbCommits > commits,
+    // EXACTLY TWO: the run's batch (the create and the cubes) committed by the save first, then the save's own
+    // transaction (a rise of one is the batch's alone: the row written, not committed).
+    assert(editor.undoState().dbCommits === commits + 2,
            "...COMMITTED before it said saved (dbCommits " + commits + " -> " + editor.undoState().dbCommits +
-           "): inside a script run's gesture batch the row was written but not committed");
+           ", +2: the batch, then the save): inside a script run's gesture batch the row was written but not committed");
     assert(dirty() === false, "...and the scene is clean");
     scene.addPrimitive("sphere");
     assert(dirty() === true, "a push AFTER a save is dirty (the coerced counter read it as saved: the close never asked)");

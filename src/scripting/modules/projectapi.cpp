@@ -379,7 +379,10 @@ QString ProjectApi::createInto(const QString &name, const QVariantMap &options,
         fail(QStringLiteral("%1: %2").arg(verb, refusal));
         return QString();
     }
-    if (host.services->project->isSceneOpen()) {
+    // AN OPEN IN FLIGHT IS PART OF THE WORLD THAT CLOSES (the final read's W5): closeProject drains it and then
+    // settles the world it installed. Skipped, the runner's drain installed it AFTER the row was minted, its close
+    // was refused by the backstop, and the verb returned the guid of an empty row as a success.
+    if (host.services->project->isSceneOpen() || host.shell->isOpeningProject()) {
         host.endRunUndoMacro();
         QString closeWhy;
         const bool closed = host.shell->closeProject(false, scriptCloseUnsaved(options), &closeWhy);
