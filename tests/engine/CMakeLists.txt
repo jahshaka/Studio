@@ -440,3 +440,13 @@ target_link_libraries(test_param_array PRIVATE OgreNext)
 add_test(NAME engine.param_array COMMAND test_param_array)
 set_tests_properties(engine.param_array PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.param_array)
+
+# engine.region_grid_law (NONDET-1 H2) — A PASS OVER A REGION DISPATCHES ONLY THE TEXELS THE REGION HOLDS: an empty or
+# past-the-end box is no dispatch (photon/voxel/PhotonRegionGrid.h, the arithmetic setRegionGrid sets its job from). The
+# header only: a CPU code row.
+add_executable(test_region_grid_law test_region_grid_law.cpp)
+set_target_properties(test_region_grid_law PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_region_grid_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.region_grid_law COMMAND test_region_grid_law)
+set_tests_properties(engine.region_grid_law PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.region_grid_law)
