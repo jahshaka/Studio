@@ -110,9 +110,26 @@ set_tests_properties(vr.hit_list_stereo PROPERTIES
     ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_hit_home};JAHSHAKA_DATA_ROOT=${_vr_hit_home}/.local/share/Jahshaka")
 # THE FRAMES (R7): the script's pump, counted by it - 73 editor frames (10 + 63 pumps for 60 eye frames, read from the
 # first; PHOTON-7 stage 0's read R4, 2026-10-23, one run, :71) + PHOTON-7-9A's shape control: the pumps to one eye frame
-# under the arm reflect.shapeMismatch (1 when the runtime draws each pump, as the 63-for-60 read says) + 10 = 84 (estimated;
-# re-counted from its first run at the feature end)
-set_tests_properties(vr.hit_list_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 84)
+# under the arm reflect.shapeMismatch (1 when the runtime draws each pump, as the 63-for-60 read says) + the arm-off loop's
+# 10 + the session end's loop's 10 (e2e_vr_hit_list.js: the final read's D4 - the second loop was not counted) = 94
+set_tests_properties(vr.hit_list_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 94)
+# vr.photon_term_stereo (PHOTON-7-9A, the final read's M4; CODING_RULES 1: MULTIVIEW IS THE TARGET) — THE PHOTON VIEW'S TERM
+# RUNS IN THE STEREO VIEW, IN ONE MULTIVIEW PASS: a live session against Monado with world.setPhotonView('reflections'):
+# the eyes drawn, the stereo view's chain running its ray work, no shape refusal (e2e_vr_photon_term.js says the laws).
+set(_vr_term_home "${CMAKE_CURRENT_BINARY_DIR}/vr-photon-term-home")
+jah_gpu_row(vr.photon_term_stereo WARM_HOME "${CMAKE_CURRENT_BINARY_DIR}/vr-photon-term-home" CLASS vr TIER epic NEEDS photon
+         COMMAND "${CMAKE_CURRENT_SOURCE_DIR}/run_vr_app.sh"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${JAH_MONADO_MANIFEST}"
+                 "${CMAKE_SOURCE_DIR}/tests/scripting/scripts/e2e_vr_photon_term.js"
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(vr.photon_term_stereo PROPERTIES
+    LABELS "scripting"
+    TIMEOUT 60
+    RESOURCE_LOCK monado COST ${JAH_COST_MONADO}
+    SKIP_RETURN_CODE 77
+    ENVIRONMENT "${JAH_TEST_DISPLAY_ENV}HOME=${_vr_term_home};JAHSHAKA_DATA_ROOT=${_vr_term_home}/.local/share/Jahshaka")
+# THE FRAMES (R7): the script's pump, counted by it - 10 + 33 pumps for 30 eye frames = 43 (its first run, 2026-11-21, :63)
+set_tests_properties(vr.photon_term_stereo PROPERTIES JAHSHAKA_TEST_FRAMES 43)
 
 # vr.start_broken (archived: archive/tests/vr) (VR-START-1 case d): the active manifest's runtime library cannot be
 # loaded. The runner still owns a private runtime (unused); the manifest is ours.
@@ -164,6 +181,10 @@ endforeach()
 if(TEST vr.hit_list_stereo)
     jah_fresh_home_fixture(vr.hit_list_stereo.fresh_home vrHitListFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-hit-list-home" WARM LABELS "scripting;vr")
     set_property(TEST vr.hit_list_stereo APPEND PROPERTY FIXTURES_REQUIRED vrHitListFreshHome)
+endif()
+if(TEST vr.photon_term_stereo)
+    jah_fresh_home_fixture(vr.photon_term_stereo.fresh_home vrPhotonTermFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-photon-term-home" WARM LABELS "scripting;vr")
+    set_property(TEST vr.photon_term_stereo APPEND PROPERTY FIXTURES_REQUIRED vrPhotonTermFreshHome)
 endif()
 if(TEST vr.mirror_live)
     jah_fresh_home_fixture(vr.mirror_live.fresh_home vrMirrorLiveFreshHome "${CMAKE_CURRENT_BINARY_DIR}/vr-mirror-live-home" WARM LABELS "scripting;vr")
