@@ -1385,9 +1385,6 @@ int main(int argc, char **argv)
         for (int ri = 0; ri < 5; ++ri) {
         // (the part: `mover` the three poses with the rays off - A2's law; `mover_routes` the rays-on corner and the still)
         if (ri < 3 ? !doMover : !doMoverRoutes) continue;
-        // (NONDET-1 E4b, a measuring arm reverted by its own commit: the rays-on run skipped - the tier boots open and
-        // closes at run 4's own switch, without run 3's rays-on chain and its work)
-        if (doMoverRoutes && ri == 3) continue;
         const Run &run = runs[ri];
         const Pose &pose = *run.pose;
         const int raysOn = run.raysOn;
