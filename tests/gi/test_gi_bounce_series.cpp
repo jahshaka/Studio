@@ -600,6 +600,7 @@ int main(int argc, char **argv)
                     GiParams off;
                     off.mode = GiMode::Off;
                     m.scene->setGlobalIllumination(off);
+                    setLamp(400.0f);   // (the last trial's fade ended at 200: every trial starts at 400, at rest)
                     run(2);
                     m.scene->setGlobalIllumination(gi);
                     e->waitForAsyncShaders();
