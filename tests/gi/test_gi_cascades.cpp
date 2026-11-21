@@ -1398,14 +1398,10 @@ int main(int argc, char **argv)
                     raysOn ? "ON (printed: the non-gathering route's residue)" : "OFF (A2's law)");
         {
             view->setCamera(enginetest::testCameraDescLookAt(pose.cam, Vec3(0.0f, 1.0f, 0.0f)));
-            // NONDET-1 M-D (a measuring arm): run 3 WITHOUT its turner - no cube added, moved or removed; every chain and frame kept
-            const bool noCube = doMoverRoutes && ri == 3;
-            const NodeId turner = noCube ? NodeId{} : enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
-            if (!noCube) {
+            const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
             if (!run.still) scene->setNodeMovable(turner, true);   // (a declared mover: A2's subject)
             enginetest::setNodePosition(scene, turner, Vec3(0.0f, 1.0f, 0.0f));
             enginetest::setNodeScale(scene, turner, Vec3(2.0f, 2.0f, 2.0f));
-            }
             CHECK(scene->setGlobalIllumination(cascadeGi()), "the chain is up for the motion");
             render(e, 60);
             int faces = 0;
@@ -1429,7 +1425,7 @@ int main(int argc, char **argv)
             const auto yaw = [&](float deg) {
                 const float r = deg * 3.14159265358979323846f / 180.0f * 0.5f;
                 const Quat q{ 0.0f, std::sin(r), 0.0f, std::cos(r) };
-                if (!noCube) scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
+                scene->setNodeTransform(turner, Vec3(0.0f, 1.0f, 0.0f), q, Vec3(2.0f, 2.0f, 2.0f));
             };
             const GiStatus g0 = scene->published().gi;
             // (the region's own bounce PRICED at the turner: its monitor rows over the motion, the first pose with the rays
@@ -1518,7 +1514,7 @@ int main(int argc, char **argv)
             }
             CHECK(scene->setGlobalIllumination(off), "the motion's chain comes down");
             render(e, 2);
-            if (!noCube) scene->removeNode(turner);
+            scene->removeNode(turner);
         }
         }
         e->setRayTracing(true);
