@@ -90,7 +90,6 @@
 #include <chrono>
 #include <cmath>
 #include <cstdio>
-#include <cstdlib>
 #include <string>
 #include <vector>
 
@@ -539,17 +538,6 @@ int main(int argc, char **argv)
         int stepRest = -1, fadeRest = -1;
         bool fadeOk = false;
         if (lampArm && lampOk && doLamp) {
-            {   // NONDET-1 M-SV (a measuring arm): the validation layer's own proof line (as engine_selftest.sh:64-75 reads it),
-                // and the sync setting the process was given
-                const ValidationStatus vs = e->validation();
-                std::string libs;
-                for (const std::string &l : vs.layers) libs += l + " ";
-                const char *sync = std::getenv("VK_KHRONOS_VALIDATION_VALIDATE_SYNC");
-                std::printf("NONDET-1 M-SV: validation requested %s active %s (vkCmdDraw -> %s; layers: %s; VALIDATE_SYNC=%s)\n",
-                            vs.requested ? "yes" : "no", vs.active ? "yes" : "no", vs.drawEntry.c_str(), libs.c_str(),
-                            sync ? sync : "(unset)");
-                std::fflush(stdout);
-            }
             const auto toRest = [&](int cap) {
                 int f = 0, quiet = 0;
                 for (; f < cap && quiet < 8; ++f) {
