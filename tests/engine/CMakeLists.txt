@@ -511,3 +511,25 @@ add_dependencies(test_frame_integration JahshakaEngineMedia)
 jah_gpu_row(frame.clock_integration CLASS engine FRAMES 5 COMMAND test_frame_integration
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.clock_integration PROPERTIES TIMEOUT 60 LABELS "engine")
+# THE PARTICLES RUN ON THEIR SCENE's TIME, AND ONLY IN ITS FRAME (ONE-FRAME-1; test_frame_particles.cpp says the laws).
+# Card rows (PFX2 on a drawn scene).
+#   frame.particles_per_scene    two scenes, +1 and +3 steps a hand-over: 40 and 120 particles (red with the fork's
+#                                override line reverted: both on Ogre's one frame time).
+#   frame.particles_once_a_frame a pose resolve between frames advances the particles nothing.
+add_executable(test_frame_particles test_frame_particles.cpp)
+set_target_properties(test_frame_particles PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_frame_particles PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_frame_particles PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_frame_particles PRIVATE JahshakaEngine)
+add_dependencies(test_frame_particles JahshakaEngineMedia)
+jah_gpu_row(frame.particles_per_scene CLASS engine FRAMES 21 COMMAND test_frame_particles --per-scene
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.particles_per_scene PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_gpu_row(frame.particles_once_a_frame CLASS engine FRAMES 11 COMMAND test_frame_particles --resolve
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.particles_once_a_frame PROPERTIES TIMEOUT 60 LABELS "engine")

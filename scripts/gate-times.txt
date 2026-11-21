@@ -512,3 +512,5 @@ pool.host_epic::picture_advances_nothing 4.00  by hand (spec.sh reprice, 2026-11
 view.hidden_draws_nothing 0.02  by hand (spec.sh reprice, 2026-11-21)
 frame.clock_drawn_only 0.01  by hand (spec.sh reprice, 2026-11-21)
 frame.clock_integration 2.00  by hand (spec.sh reprice, 2026-11-21)
+frame.particles_per_scene 2.00  by hand (spec.sh reprice, 2026-11-21)
+frame.particles_once_a_frame 2.00  by hand (spec.sh reprice, 2026-11-21)

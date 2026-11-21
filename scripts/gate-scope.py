@@ -202,7 +202,7 @@ OGRE_SCENE_FUNCTIONS = {
     **{f: _CORE for f in ("interpolate", "noteInterpolated", "restoreInterpolated", "InterpolateTask",
                           "forgetInterpolationPointers")},
     # ONE-FRAME-1 stage 1: the scene's clock (its document's serial, the frame's steps, the particles' time)
-    **{f: _CORE for f in ("beginFrameClock", "particleSeconds")},
+    **{f: _CORE for f in ("beginFrameClock", "endFrameParticleTime", "particleSeconds")},
     # (the inspect door's free functions inspect::scene / inspect::view — the maps are PER FILE, so OgreView::scene
     #  is OGRE_VIEW_FUNCTIONS's "scene", never this needle; OgreScene.cpp defines no other scene()/view())
     "scene": _CORE, "view": _CORE,
