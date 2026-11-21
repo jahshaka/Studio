@@ -1,0 +1,6 @@
+# THE STUDIO FILES THAT STILL NAME THE LEAD REPO's BOX ROOT (~/Developer/local) - source.no_box_paths's ratchet: it only SHRINKS.
+# Each line: <path>  <what names it - its fix>. THE FIX IS BOX-SILO-1 STAGE 3 (~/Developer/SPECS/BOX_SILO_1_SPEC.md, the audit's
+# table S, items S1 and S2), the lead side first - every caller of these scripts (card.sh, spec.sh, the agents' briefs) exports
+# the value, THEN the default goes; a new naming is never added here (the row reds it).
+scripts/gpu-exclusive.sh  the hold log's default (<passwd home>/Developer/local/lock/holds.log when JAH_GPU_HOLD_LOG and JAH_LOCAL_ROOT are unset) - S1: the lead side exports JAH_LOCAL_ROOT, then the default is the lock's own directory
+scripts/rig.sh  cpus(): the CPU set's default (${JAH_LOCAL_ROOT:-${JAH_LEAD_ROOT:-~/Developer}/local}/CPUS) - S2: the lead side exports JAH_CPUS / JAH_LOCAL_ROOT, then the default is the machine's own affinity (nproc)

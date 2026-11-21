@@ -14,7 +14,7 @@
 set -u
 # (the boots' DISPLAY is :99 - a RIG number, URGENT #195: warm-app-cache.sh refuses any other; the fakes connect to nothing)
 SRC=${1:?source}; BUILD=${2:?build}; PART=${3:-all}
-case "$PART" in all|boots|cold|coldcall|keys|inherit) ;; *) echo "warm_app_cache.sh: <part> is boots, cold, coldcall, keys or inherit, not $PART" >&2; exit 64 ;; esac
+case "$PART" in all|boots|cold|coldcall|keys|inherit|store) ;; *) echo "warm_app_cache.sh: <part> is boots, cold, coldcall, keys, inherit or store, not $PART" >&2; exit 64 ;; esac
 want() { [ "$PART" = all ] || [ "$PART" = "$1" ]; }
 W="$SRC/scripts/warm-app-cache.sh"
 T=${KEEP_T:-$(mktemp -d)}; [ -n "${KEEP_T:-}" ] || trap 'rm -rf "$T"' EXIT   # (KEEP_T=<dir>: a hand debug run keeps its toys)
@@ -521,6 +521,67 @@ toy_tree "$T/iE"; EB="$T/iE/build"; printf '9876543210' > "$PT/.shadercache/hlms
 out=$(IX "$EB" --inherit "$PB"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q "the parent's .shadercache not taken" && [ ! -e "$EB/tests/.shadercache/cache-manifest.txt" ] &&
     ok "I4: a TORN parent cache is not taken (#117)" || no "I4 torn: '$out' rc $rc"
+fi
+if want store; then
+# THE BOX's WARM STORE (URGENT #193's class; the lead's design 2026-11-21): JAH_WARM_STORE names a store directory (the lead's
+# tools set it; this repo names no box path). S1 a tree warm at its key PUBLISHES its caches (and its -on stamps) when it
+# answers "warm"; S2 another tree at the SAME key, cold, TAKES them - warm with no boot (its fake app never runs), its files the
+# store's bytes and the store's not written through it; S3 a TORN stored cache is not taken - that boot runs; S4 with
+# JAH_WARM_STORE unset nothing is read or written there (as before); S5 the key's lock held by another tree: this call WAITS on
+# it (said, no card) and takes after it; S6 another key takes nothing
+[ "$PART" = store ] && toy_tree() {   # (the keys and inherit parts' helper; this part may run alone)
+    local b="$1/build"
+    mkdir -p "$b/engine/generated" "$b/bin/media/Hlms" "$b/bin/media/Photon" "$b/bin/media/x" "$b/tests/.shadercache"
+    cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$b/engine/generated/"
+    printf 'CMAKE_BUILD_TYPE:STRING=Debug\n' > "$b/CMakeCache.txt"
+    printf 'h' > "$b/bin/media/Hlms/a.any"; printf 'p' > "$b/bin/media/Photon/b.any"; printf 'x' > "$b/bin/media/x/c.png"
+}
+ST="$T/store"; mkdir -p "$ST"
+printf '#!/bin/sh\necho "BOOTED $*" >> %s/s-booted\nexec %s "$@"\n' "$T" "$T/fake-app" > "$T/s-app"; chmod +x "$T/s-app"
+SX() { local b="$1"; shift; DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$b" --app "$T/s-app" --lab "$T/s-app" --cold-rows "$T/cold-none" \
+           --only app-off,app-on,engine-off,engine-on "$@"; }
+toy_tree "$T/sP"; PB="$T/sP/build"; PT="$PB/tests"
+pk=$("$W" "$PB" --key); pid=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$PB/engine/generated/jahshaka_engine_build_id.h")
+rm -rf "$PT/.shadercache"; toy_cache "$PT/.shadercache" 1 2; toy_cache "$PT/.shadercache-engine" 1 2
+printf '%s\n%s\n%s\n' "$pk" "k1 k2 " "sets none" > "$PT/.shadercache.warm-key"; printf '%s\n%s\n' "$pk" "k1 k2 " > "$PT/.shadercache-engine.warm-key"
+printf '%s\n%s\n' "$pk" s-app > "$PT/.shadercache.driver-key"; printf '%s\n%s\n' "$pk" s-app > "$PT/.shadercache-engine.driver-key"
+echo "$pid" > "$PT/.shadercache.engine-id"; echo "$pid" > "$PT/.shadercache-engine.engine-id"
+out=$(JAH_WARM_STORE="$ST" SX "$PB"); rc=$?
+[ $rc = 0 ] && [ "$(echo "$out" | head -1)" = "warm at $pk" ] && echo "$out" | grep -q "PUBLISHED to the box's warm store at $pk" &&
+    cmp -s "$PT/.shadercache/hlms.1.bin" "$ST/$pk/app/cache/hlms.1.bin" && [ -f "$ST/$pk/engine/cache/cache-manifest.txt" ] &&
+    [ "$(sed -n 2p "$ST/$pk/app/driver-key")" = s-app ] && ok "S1: a tree warm at $pk publishes its two caches and their -on stamps when it answers warm" ||
+    no "S1 publish: '$out' rc $rc"
+toy_tree "$T/sC"; CB="$T/sC/build"; CT="$CB/tests"; rm -f "$T/s-booted"
+out=$(JAH_WARM_STORE="$ST" SX "$CB"); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q "TAKEN from the box's warm store at $pk" && echo "$out" | grep -q "from the store, nothing booted" &&
+    [ ! -e "$T/s-booted" ] && cmp -s "$ST/$pk/app/cache/hlms.1.bin" "$CT/.shadercache/hlms.1.bin" &&
+    [ "$(SX "$CB" --check)" = "warm at $pk" ] && ok "S2: a tree cold at the SAME key takes both caches and the -on stamps: warm, its app never booted" ||
+    no "S2 take: '$out' rc $rc booted [$(cat "$T/s-booted" 2>/dev/null)]"
+printf 'GROWN' >> "$CT/.shadercache/hlms.1.bin"
+[ "$(cat "$ST/$pk/app/cache/hlms.1.bin")" = 0123456789 ] && ok "S2b: the taken files are copies - written in the tree, the store's stay as they were" ||
+    no "S2b: the store was written through the tree"
+toy_tree "$T/sU"; UB="$T/sU/build"; rm -f "$T/s-booted"
+out=$(env -u JAH_WARM_STORE bash -c "$(declare -f SX); W='$W'; T='$T'; SX '$UB' --only engine-off" 2>&1); rc=$?
+[ -e "$T/s-booted" ] && ! echo "$out" | grep -q "store" && ok "S4: JAH_WARM_STORE unset - no store read or written, the cold tree boots as before" ||
+    no "S4 unset: '$out' rc $rc"
+printf '9876543210' > "$ST/$pk/engine/cache/hlms.1.bin"
+toy_tree "$T/sT"; TB="$T/sT/build"; rm -f "$T/s-booted"
+out=$(JAH_WARM_STORE="$ST" SX "$TB" --only engine-off); rc=$?
+echo "$out" | grep -q "the store's engine cache at $pk fails its own manifest - not taken" && [ -e "$T/s-booted" ] &&
+    ok "S3: a TORN stored cache is not taken - its boot runs (#117's rule)" || no "S3 torn: '$out' rc $rc"
+rm -rf "$ST/$pk/engine"; cp -a "$PT/.shadercache-engine" "$T/eng.ok"; mkdir -p "$ST/$pk/engine"; cp -a "$T/eng.ok" "$ST/$pk/engine/cache"
+cp "$PT/.shadercache-engine.warm-key" "$ST/$pk/engine/warm-key"; cp "$PT/.shadercache-engine.engine-id" "$ST/$pk/engine/engine-id"
+toy_tree "$T/sL"; LB="$T/sL/build"; rm -f "$T/s-booted"
+( exec 8>"$ST/$pk/.key.lock"; flock 8; sleep 1.5 ) & lp=$!
+sleep 0.3
+out=$(JAH_WARM_STORE="$ST" SX "$LB" --only engine-off --budget 20); rc=$?
+wait $lp
+[ $rc = 0 ] && echo "$out" | grep -q "is being warmed by another tree .* waiting on the store's key lock (no card)" &&
+    echo "$out" | grep -q "TAKEN from the box's warm store" && [ ! -e "$T/s-booted" ] &&
+    ok "S5: the key's lock held by another tree - this call waits on it (no card) and then takes, no boot" || no "S5 the key lock: '$out' rc $rc"
+toy_tree "$T/sK"; KB="$T/sK/build"; printf 'H' > "$KB/bin/media/Hlms/a.any"; rm -f "$T/s-booted"
+out=$(JAH_WARM_STORE="$ST" SX "$KB" --only engine-off); rc=$?
+! echo "$out" | grep -q "TAKEN" && [ -e "$T/s-booted" ] && ok "S6: another key takes nothing from the store - it warms itself" || no "S6 another key: '$out' rc $rc"
 fi
 echo "tooling.warm_app_cache ($PART): $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail

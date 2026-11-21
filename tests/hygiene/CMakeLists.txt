@@ -262,8 +262,11 @@ if(Python3_Interpreter_FOUND)
     # once and boots nothing, no stamp / a moved key / a replaced or missing cache read cold, the fake boots, the budget and
     # the bounded wait (URGENT #52, #106); cold - the cold-on runner's rows (#119, #155, the seeds); coldcall - a call's own
     # bounds (the held card, the deadline, the logs); keys - the key's terms, the top-up, #126's nonce, the path-free stamps;
-    # inherit - a fresh tree takes its parent's warm caches at an equal key (TEST-STREAMLINE-1 1a).
-    foreach(_wp IN ITEMS "warm_app_cache:boots" "warm_cold_rows:cold" "warm_cold_calls:coldcall" "warm_key:keys" "warm_inherit:inherit")
+    # inherit - a fresh tree takes its parent's warm caches at an equal key (TEST-STREAMLINE-1 1a); store - THE BOX's WARM STORE
+    # (URGENT #193's class, 2026-11-21): one warm per key per box - published by a tree warm at its key, taken by a verified copy
+    # by another at the same key, a torn one refused, a second tree waiting on the key's lock (no card), unset = as before.
+    foreach(_wp IN ITEMS "warm_app_cache:boots" "warm_cold_rows:cold" "warm_cold_calls:coldcall" "warm_key:keys" "warm_inherit:inherit"
+                         "warm_store:store")
         string(REPLACE ":" ";" _wp "${_wp}")
         list(GET _wp 0 _wrow)
         list(GET _wp 1 _wpart)
@@ -612,3 +615,10 @@ add_test(NAME source.display_guard
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/display_guard.sh" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
 set_tests_properties(source.display_guard PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
 jah_no_display(source.display_guard)
+# source.no_box_paths (CODING_RULES § 7, the owner and the lead 2026-11-21: THE STUDIO REPO KNOWS NO BOX): no tracked Studio or
+# irisgl file names the lead repo's box-local root, literally or composed; today's two namings sit in the
+# shrink-only tests/hygiene/box_paths_pending.txt with their fix (BOX-SILO-1 stage 3, S1/S2). Its self-test first.
+add_test(NAME source.no_box_paths
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_box_paths.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.no_box_paths PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.no_box_paths)

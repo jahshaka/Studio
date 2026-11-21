@@ -401,20 +401,106 @@ fi
 if [ "$CHECK" = 0 ] && [ -f "$TESTS/seed-key-inputs.txt" ] && case " $SEL " in *" app-off "*) true ;; *) false ;; esac; then
     sh "$SRC/tests/support/seed_home.sh" make "$APPX" "$TESTS" || true
 fi
-RUN=""; why=""
-for b in $SEL; do
-    w=$(why_of "$b")
-    [ -n "$w" ] || continue
-    RUN="$RUN $b"
-    why="${why:+$why; }$(what_of "$b") ($b): $w"
-done
-RUN=${RUN# }
+compute_run() {   # RUN and why: the boots this call asked for that are cold, and why each
+    RUN=""; why=""
+    local b w
+    for b in $SEL; do
+        w=$(why_of "$b")
+        [ -n "$w" ] || continue
+        RUN="$RUN $b"
+        why="${why:+$why; }$(what_of "$b") ($b): $w"
+    done
+    RUN=${RUN# }
+}
+# ---- THE BOX's WARM STORE (URGENT #193's class, the lead's design 2026-11-21: five trees warmed their own copy of the same
+# caches, ~15 min of card each) - ONE WARM PER KEY PER BOX. The store is a directory the CALLER names in JAH_WARM_STORE (box
+# data: the lead's tools set it; this repo names no box path, CODING_RULES § 7); unset, nothing here runs and the tree warms
+# itself as before. <store>/<KEY>/{app,engine}/ holds a cache warm at KEY (cache/, its warm-key and engine-id stamps, and the
+# driver-key stamp of its -on boot). Under the key's lock (<store>/<KEY>/.key.lock - a second tree at the key WAITS there,
+# never on the card): a cold -off cache is TAKEN by a verified copy (its manifest checked by the engine's own rule,
+# tests/support/shadercache_check.py; copied to a sibling and renamed in under the tree's own lock, as --inherit takes - never
+# linked: the store is another tree's and another filesystem's), its stamps with it, then JUDGED AGAIN here like any other
+# (a stamp at another sets digest or engine id still reads cold or a top-up and boots). An -on boot's stamp is taken only
+# for the same exe NAME: the driver keeps its per-exe cache in the one user home every tree's run shares (gpu-exclusive.sh
+# exports it; HARNESS-1 measured it keyed on the name). After the boots, a cache warm at KEY is PUBLISHED (a copy renamed in;
+# the newer replaces). THE COLD ROWS ARE NOT IN THE STORE (this first cut): their primes stay each tree's own cold-on boot.
+STORE=${JAH_WARM_STORE:-}; SK=""; STORE_LOCKED=""
+store_open() {   # <wait s>: the key's directory and lock; 0 locked, 1 not (the store then unused this call)
+    [ -n "$STORE" ] || return 1
+    SK="$STORE/$KEY"
+    mkdir -p "$SK" 2>/dev/null || { echo "warm-app-cache: the warm store $STORE cannot be written - this call warms here" >&2; STORE=""; return 1; }
+    exec 7>"$SK/.key.lock"
+    if ! flock -n 7; then
+        [ "$1" = 0 ] && { exec 7>&-; return 1; }
+        echo "warm-app-cache: key $KEY is being warmed by another tree ($(cat "$SK/.warming" 2>/dev/null || echo '?')) - waiting on the store's key lock (no card), at most $1 s"
+        flock -w "$1" 7 || { echo "warm-app-cache: the key lock not released in $1 s - this call warms here"; exec 7>&-; return 1; }
+    fi
+    echo "pid $$ $(basename "$SRC") since $(date '+%F %T')" > "$SK/.warming"
+    STORE_LOCKED=1
+}
+store_take() {   # the cold -off caches (and their -on stamps) this call asked for, from <store>/<KEY>
+    local b c sh st ds x S nxt got=""
+    for b in $RUN; do
+        case "$b" in app-off) c=app sh=$APP_SHARED st=$APP_STAMP ;; engine-off) c=engine sh=$ENG_SHARED st=$ENG_STAMP ;; *) continue ;; esac
+        S="$SK/$c"
+        [ -d "$S/cache" ] && [ "$(sed -n 1p "$S/warm-key" 2>/dev/null)" = "$KEY" ] || continue
+        python3 -I "$SRC/tests/support/shadercache_check.py" "$S/cache" > /dev/null 2>&1 ||
+            { echo "warm-app-cache: the store's $c cache at $KEY fails its own manifest - not taken"; continue; }
+        nxt="$sh.store.$$"; rm -rf "$nxt"
+        cp -a "$S/cache" "$nxt" || { rm -rf "$nxt"; continue; }
+        ( flock -w 60 9 || exit 1; rm -rf "$sh.old.$$"; [ -e "$sh" ] && mv "$sh" "$sh.old.$$"; mv "$nxt" "$sh"; rm -rf "$sh.old.$$" ) \
+            9>"$sh.lock" || { rm -rf "$nxt"; continue; }
+        cp "$S/warm-key" "$st"
+        if [ -f "$S/engine-id" ]; then cp "$S/engine-id" "$sh.engine-id"; else rm -f "$sh.engine-id"; fi
+        got="$got $c ($(du -sh "$sh" | cut -f1))"
+    done
+    for b in $RUN; do
+        case "$b" in app-on) c=app ds=$APP_DSTAMP x=$APPX ;; engine-on) c=engine ds=$ENG_DSTAMP x=$LABX ;; *) continue ;; esac
+        S="$SK/$c/driver-key"
+        [ "$(sed -n 1p "$S" 2>/dev/null)" = "$KEY" ] && [ "$(sed -n 2p "$S")" = "$(exe_id "$x")" ] && cp "$S" "$ds" && got="$got $c-on"
+    done
+    [ -n "$got" ] && echo "warm-app-cache: TAKEN from the box's warm store at $KEY ($SK):$got - no boot for them, no card"
+    return 0
+}
+store_publish() {   # every cache of this tree warm at KEY (and its -on stamp) into <store>/<KEY>, the newer replacing
+    local c sh st ds S nxt pub=""
+    for c in app engine; do
+        if [ $c = app ]; then sh=$APP_SHARED st=$APP_STAMP ds=$APP_DSTAMP; else sh=$ENG_SHARED st=$ENG_STAMP ds=$ENG_DSTAMP; fi
+        [ -f "$st" ] && [ -z "$(TOPUP_CHECK=0 cold_why "$sh" "$st")" ] || continue
+        S="$SK/$c"
+        if cmp -s "$st" "$S/warm-key" && cmp -s "$sh.engine-id" "$S/engine-id"; then   # the store holds these bytes already
+            [ -f "$ds" ] && [ "$(sed -n 1p "$ds")" = "$KEY" ] && ! cmp -s "$ds" "$S/driver-key" && cp "$ds" "$S/driver-key" && pub="$pub $c-on"
+            continue
+        fi
+        nxt="$SK/.$c.new.$$"; rm -rf "$nxt"; mkdir -p "$nxt"
+        ( flock -s -w 60 9 || exit 1; cp -a "$sh" "$nxt/cache" && cp "$st" "$nxt/warm-key" &&
+              { [ ! -f "$sh.engine-id" ] || cp "$sh.engine-id" "$nxt/engine-id"; } ) 9>"$sh.lock" || { rm -rf "$nxt"; continue; }
+        [ -f "$ds" ] && [ "$(sed -n 1p "$ds")" = "$KEY" ] && cp "$ds" "$nxt/driver-key"
+        python3 -I "$SRC/tests/support/shadercache_check.py" "$nxt/cache" > /dev/null 2>&1 || { rm -rf "$nxt"; continue; }
+        rm -rf "$S.old.$$"; [ -e "$S" ] && mv "$S" "$S.old.$$"; mv "$nxt" "$S"; rm -rf "$S.old.$$"
+        pub="$pub $c ($(du -sh "$S/cache" | cut -f1))"
+    done
+    [ -n "$pub" ] && echo "warm-app-cache: PUBLISHED to the box's warm store at $KEY ($SK):$pub"
+    return 0
+}
+compute_run
 if [ -z "$RUN" ]; then
     echo "warm at $KEY"
+    # (a tree warm here seeds the store when its key is free: never waits)
+    [ "$CHECK" = 0 ] && store_open 0 && store_publish
     exit 0
 fi
 echo "cold at $KEY: $why"
 [ "$CHECK" = 1 ] && exit 3
+if store_open "$BUDGET"; then
+    store_take
+    compute_run
+    if [ -z "$RUN" ]; then
+        echo "warm-app-cache: warm at $KEY - $(echo "$SEL" | xargs) from the store, nothing booted"
+        exit 0
+    fi
+    echo "warm-app-cache: still cold after the store: $why"
+fi
 # AN -on BOOT RUNS ON ITS -off BOOT's CACHE: asked for alone while that cache is cold, nothing boots
 for b in $RUN; do
     case "$b" in *-on) off="${b%-on}-off"
@@ -685,4 +771,5 @@ for b in $SEL; do [ -z "$(why_of "$b")" ] || still="$still $b"; done
 if [ -z "$still" ]; then
     echo "warm-app-cache: warm at $KEY - $(echo $SEL | tr ' ' ',')"
 fi
+[ -n "$STORE_LOCKED" ] && store_publish
 exit 0
