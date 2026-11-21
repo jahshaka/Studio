@@ -15,9 +15,15 @@
 // ParticleSystem's constructor reads for its frame number):
 //   (a) the positive control: filling an 8-slot ring gives 8 distinct handles, and a ninth is refused (InvalidHandle);
 //   (b) after two LIFO frees, two allocations get two DISTINCT valid handles, both among the two freed slots;
-//   (c) the ring is then full again: a third allocation is refused.
-// RED ON THE OLD PIN (cb862d184) BY CONSTRUCTION: (b)'s second allocation returned the first's handle (7, 7), and (c)
-// returned 7 a third time.
+//   (c) the ring is then full again: a third allocation is refused;
+//   (d) setBillboards(0) then a refill of the whole quota (particles.document_to_engine's "clears" / "re-populate"):
+//       every slot freed from the top, then quota distinct valid handles - the merged fork 5eb057200 gave 2 and refused
+//       6, and BillboardSet::allocBillboard wrote through the InvalidHandle (the row's segfault);
+//   (e) the same after a hole below the top: the ring-full search must cover the whole ring.
+// RED ON THE OLD PIN (cb862d184) BY CONSTRUCTION: (b)'s two allocations shared one handle and (c) returned it again.
+// RED ON THE MERGED FORK (5eb057200, upstream's c5d535f3c in): (d) 2 distinct handles, 6 refused; (e) red too. GREEN
+// with the fork's ParticleFX2 allocator fix (the top-free seen as LIFO when mLastParticleIdx == quota; the ring-full
+// search over the whole ring); (e) alone stays red with only the first of the two.
 #include <OgreAbiUtils.h>
 #include <OgreRoot.h>
 #include <OgreLogManager.h>
@@ -89,25 +95,63 @@ int main()
         const uint32_t ninth = ring->allocParticle();
         CHECK_MSG(ninth == invalid, "fill: a ninth allocation from a full ring returned %u, want InvalidHandle", ninth);
 
-        // (b) setBillboards' shrink: free the two at the BACK, last first.
-        const uint32_t freedTop = live.back();
-        live.pop_back();
-        ring->deallocParticle(freedTop);
-        const uint32_t freedNext = live.back();
-        live.pop_back();
-        ring->deallocParticle(freedNext);
-        // ... and its regrowth: two allocations, two handles.
+        // (b) two holes in the MIDDLE of a full ring (neither the first slot nor the top): the regrowth runs the hard
+        //     (ring-full) path, which must mark each hole it hands out.
+        const uint32_t holeHigh = live[5], holeLow = live[3];
+        ring->deallocParticle(holeHigh);
+        ring->deallocParticle(holeLow);
         const uint32_t a = ring->allocParticle();
         const uint32_t b = ring->allocParticle();
-        std::printf("regrowth after freeing %u then %u: handles %u, %u\n", freedTop, freedNext, a, b);
+        std::printf("regrowth after freeing %u then %u: handles %u, %u\n", holeHigh, holeLow, a, b);
         CHECK_MSG(a != invalid && b != invalid, "regrowth: a refused allocation (%u, %u) with two slots free", a, b);
         CHECK_MSG(a != b, "regrowth: two allocations got ONE handle (%u): the ring-full path did not mark its slot", a);
-        const bool aFreed = a == freedTop || a == freedNext, bFreed = b == freedTop || b == freedNext;
-        CHECK_MSG(aFreed && bFreed, "regrowth: handles %u, %u are not the freed slots %u, %u", a, b, freedTop, freedNext);
+        const bool aFreed = a == holeHigh || a == holeLow, bFreed = b == holeHigh || b == holeLow;
+        CHECK_MSG(aFreed && bFreed, "regrowth: handles %u, %u are not the freed slots %u, %u", a, b, holeHigh, holeLow);
 
         // (c) full again: refused.
         const uint32_t c = ring->allocParticle();
         CHECK_MSG(c == invalid, "refill: a third allocation into a full ring returned %u, want InvalidHandle", c);
+
+        // (d) setBillboards(0) then setBillboards(quota) - particles.document_to_engine's "clears" then "re-populate":
+        //     every slot freed from the BACK (the top first), then the whole quota allocated again. An empty ring must
+        //     take the whole quota: quota distinct valid handles, then refused. (The fork at 5eb057200 refused the THIRD
+        //     allocation - the LIFO frees left the tracked range [1, 8) over an empty bitset - and BillboardSet::
+        //     allocBillboard wrote through that InvalidHandle: the segfault.)
+        for (uint32_t h = kQuota; h-- > 0;)
+            ring->deallocParticle(h);
+        std::set<uint32_t> refilled;
+        uint32_t refused = 0;
+        for (uint32_t i = 0; i < kQuota; ++i) {
+            const uint32_t h = ring->allocParticle();
+            if (h == invalid) ++refused; else refilled.insert(h);
+        }
+        std::printf("refill after freeing all from the top: %zu distinct handles, %u refused\n", refilled.size(), refused);
+        CHECK_MSG(refused == 0, "refill: %u of %u allocations refused from an EMPTY ring", refused, kQuota);
+        CHECK_MSG(refilled.size() == kQuota, "refill: %zu distinct handles, want %u", refilled.size(), kQuota);
+        CHECK_MSG(ring->allocParticle() == invalid, "refill: an allocation past the quota was not refused");
+
+        // (e) a hole BELOW the top, then the rest freed from the top down: the top-free shrinks the tracked range only
+        //     to the hole (slot 3 stays inside it), and slot 0's FIFO free leaves the empty ring tracking [1; 4). The
+        //     refill then reaches the ring-full search with free slots ABOVE the first tracked one (2 and 3): the
+        //     search must cover the whole ring. (Red with the top-free fix alone: 2 of 8 refused.)
+        for (uint32_t h = kQuota; h-- > 0;)
+            ring->deallocParticle(h);                       // (d) left the ring full: empty it from the top
+        for (uint32_t i = 0; i < kQuota; ++i)
+            ring->allocParticle();                          // full again, [0; quota) in order
+        ring->deallocParticle(3);                           // the hole
+        for (uint32_t h = kQuota; h-- > 0;)
+            if (h != 3) ring->deallocParticle(h);
+        std::set<uint32_t> again;
+        uint32_t refusedAgain = 0;
+        for (uint32_t i = 0; i < kQuota; ++i) {
+            const uint32_t h = ring->allocParticle();
+            if (h == invalid) ++refusedAgain; else again.insert(h);
+        }
+        std::printf("refill after a hole and the top-down frees: %zu distinct handles, %u refused\n", again.size(),
+                    refusedAgain);
+        CHECK_MSG(refusedAgain == 0, "refill after a hole: %u of %u allocations refused from an EMPTY ring", refusedAgain,
+                  kQuota);
+        CHECK_MSG(again.size() == kQuota, "refill after a hole: %zu distinct handles, want %u", again.size(), kQuota);
 
         delete ring;
     }
