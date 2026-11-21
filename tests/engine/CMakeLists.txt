@@ -426,3 +426,17 @@ target_include_directories(test_cascade_resolution_law PRIVATE ${CMAKE_SOURCE_DI
 add_test(NAME engine.cascade_resolution_law COMMAND test_cascade_resolution_law)
 set_tests_properties(engine.cascade_resolution_law PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.cascade_resolution_law)
+
+# engine.param_array (NONDET-1 D2) — AN ARRAY PARAMETER OF OURS LONGER THAN 16 ELEMENTS REACHES ITS SHADER WHOLE
+# (PhotonParamArray: Ogre's setManualValue keeps 64 bytes and drops the rest). A real ShaderParams::Param: a CPU code row.
+add_executable(test_param_array test_param_array.cpp)
+set_target_properties(test_param_array PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_param_array PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+target_link_libraries(test_param_array PRIVATE OgreNext)
+add_test(NAME engine.param_array COMMAND test_param_array)
+set_tests_properties(engine.param_array PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.param_array)
