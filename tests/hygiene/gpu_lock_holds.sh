@@ -6,7 +6,8 @@
 #   (2) a nested call under a holder (JAH_GPU_LOCK_HELD) writes nothing of its own;
 #   (3) an exit 75 (the card stayed held past --wait-max) writes nothing: it never held;
 #   (4) a SIGKILLed holder leaves its HOLD line alone (a kill writes no end) and the next holder's pair follows;
-#   (5) ten holders at once: ten well-formed pairs, every ticket once (whole lines from concurrent appends).
+#   (5) ten holders at once: ten well-formed pairs, every ticket once (whole lines from concurrent appends);
+#   (6) a private lock never writes the card's log, whatever JAH_GPU_HOLD_LOG says (CARD-QUEUE-1).
 # usage: gpu_lock_holds.sh <the tree's scripts/gpu-exclusive.sh>
 set -u
 LOCKSH=${1:?gpu-exclusive.sh}
@@ -55,5 +56,13 @@ want "$([ -n "$k" ] && ! awk -F'\t' -v k="$k" '$1 == "DONE" && $2 == k' "$H" | g
 for i in $(seq 10); do "$LOCKSH" --label "c$i" true > /dev/null 2>&1 & done
 wait
 want "$([ "$(pairs)" = 10 ] && [ "$(wc -l < "$H")" = 20 ] && echo 1)" "(5) ten holders at once: ten well-formed pairs, every ticket once ($(pairs))"
+# (6) A PRIVATE LOCK NEVER WRITES THE CARD's LOG (CARD-QUEUE-1, 2026-11-21: the box's env.sh exports JAH_GPU_HOLD_LOG, the
+# card's log, to every tool a lead tool starts - 162 toy holds of one day landed in the card's record): with JAH_GPU_HOLD_LOG
+# set, a hold of a private lock still writes <lock>.holds, and the named log stays untouched
+: > "$H"
+JAH_GPU_HOLD_LOG="$T/card.log" "$LOCKSH" --label P true > /dev/null 2>&1
+pl=$(JAH_GPU_HOLD_LOG="$T/card.log" "$LOCKSH" --holds-log)
+want "$([ ! -e "$T/card.log" ] && [ "$(pairs)" = 1 ] && grep -q "	P$" "$H" && [ "$pl" = "$H" ] && echo 1)" \
+     "(6) a private lock with JAH_GPU_HOLD_LOG set: its pair in <lock>.holds, the card's log untouched (--holds-log '$pl')"
 echo "tooling.gpu_lock_holds: $([ $fails = 0 ] && echo PASS || echo "FAIL ($fails)")"
 exit $((fails > 0))
