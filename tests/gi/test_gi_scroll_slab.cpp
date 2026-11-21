@@ -150,8 +150,17 @@ static bool sameStore(const GiVoxelVolume &a, const GiVoxelVolume &b, const char
 /// (B asserts two or more chunk frames).
 static const double kSpreadFrames = 6.0;
 
-int main()
+int main(int argc, char **argv)
 {
+    // TWO ROWS A PROOF GROUP (V2 plan 0.2, the lead's ruling 2026-11-21: the whole ran 10.2 s, over the fixture's 10 s):
+    // argv[1] = scroll - THE SCROLL IS THE BUILD (H one-frame commits, A three slabs, B the spread and a cut step, C an edit in
+    // the box, E chained scrolls and a live-box edit, F a torn shift, F2 its twice-failed repair); light - WHAT THE COMMIT
+    // LIGHTS AND OWES (G the commit's light, B2 a cut remainder taken back, I an outer commit and cascade 0, V the VRAM at Epic).
+    // Each part starts at `home` with the same scene and chain (every block moves the camera relative to where it stands, and
+    // each law is judged at the placement its own block makes), so neither part requires the other.
+    const std::string part = argc > 1 ? argv[1] : "";
+    const bool scrollPart = part == "scroll", lightPart = part == "light";
+    if (!scrollPart && !lightPart) { std::printf("FAIL: which part? (scroll | light), not '%s'\n", part.c_str()); return 1; }
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-gi-scroll-slab-ogre.log");
     auto engine = Engine::create(cfg, err);
@@ -221,6 +230,10 @@ int main()
     };
     look(home);
     CHECK(scene->setGlobalIllumination(small), "a two-cascade chain at 64 cells builds");
+    // THE DECLARED ROUTE (URGENT #146, R16; the split's two rows left routes_pending): a Live view runs the SCREEN INTEGRATE
+    // over the voxel STORE, the budget 0 = PAUSED, no field (ddgi Off) - asserted on the next frame
+    enginetest::declareRoutes(view, scene, enginetest::Routes().integrate().store().paused(),
+                              ("gi.scroll_slab." + part + "'s view").c_str());
     run(8);
     // THE COMMIT'S SHADER BUILT BEFORE ANY ARM COUNTS FRAMES: the chain's first build hands the delta injection's
     // permutation to the background compiler, and a commit waits while it builds - a wall-clock wait; the arms count
@@ -450,7 +463,7 @@ int main()
     // 186 INTERIOR cells against a whole build (a mid-frame submit used to hide it); with the store's prior use given to
     // the solver, a whole build's. Run first, from home, then home restored.
     std::printf("\n== H: one-frame commits are the store a whole build writes ==\n");
-    {
+    if (scrollPart) {   // (H: the scroll part)
         const Vec3 steps[2] = { Vec3(16.2f * cell, 0.0f, 0.0f), Vec3(0.0f, 16.2f * cell, 0.0f) };
         for (int k = 0; k < 2; ++k) {
             e->setArm("gi.scrollFrames", 1.0);
@@ -484,7 +497,7 @@ int main()
 
     // ---- A. one scroll, three slabs ----------------------------------------------------------
     std::printf("\n== A: a scroll by three slabs is the store a whole build writes ==\n");
-    {
+    if (scrollPart) {   // (A: the scroll part)
         // ITS OWN CHAIN: cascade 0's step pinned at TWO cells, the lattice at Q = 2 (on a step of 16 every shift is a
         // multiple of four, and the bounds guard is never met). Built at home.
         GiParams q2 = small;
@@ -535,7 +548,7 @@ int main()
 
     // ---- B. the spread, and a step past the scratch's layers ---------------------------------
     std::printf("\n== B: the slab spread over frames commits the same store ==\n");
-    {
+    if (scrollPart) {   // (B: the scroll part)
         e->setArm("gi.scrollFrames", kSpreadFrames);
         run(1);
         const GiStatus pre = scene->published().gi;
@@ -586,7 +599,7 @@ int main()
 
     // ---- C. an edit in the box being built -------------------------------------------------------
     std::printf("\n== C: an edit reaching only the box being built drops the scroll ==\n");
-    {
+    if (scrollPart) {   // (C: the scroll part)
         e->setArm("gi.scrollFrames", kSpreadFrames);
         run(1);
         const GiStatus pre = scene->published().gi;
@@ -617,7 +630,7 @@ int main()
 
     // ---- E. two scrolls chained; a live-box edit mid-flight -----------------------------------
     std::printf("\n== E: two scrolls with no rebuild between; a live-box edit drops a scroll ==\n");
-    {
+    if (scrollPart) {   // (E: the scroll part)
         const GiStatus pre = scene->published().gi;
         look(Vec3(cam.x + 1.05f * step, cam.y, cam.z));
         untilScrolls(pre.cascades[0].scrolls + 1u, 32);
@@ -662,7 +675,7 @@ int main()
 
     // ---- F. a shift that throws half way -------------------------------------------------------
     std::printf("\n== F: a shift that throws half way leaves a torn store that never scrolls ==\n");
-    {
+    if (scrollPart) {   // (F: the scroll part)
         const GiStatus pre = scene->published().gi;
         e->setArm("gi.cascadeFaultCommit", 0.0);
         look(Vec3(cam.x + 1.05f * step, cam.y, cam.z));
@@ -694,7 +707,7 @@ int main()
 
     // ---- F2. a torn store whose whole rebuild fails TWICE ----------------------------------------
     std::printf("\n== F2: a torn store whose whole rebuild fails twice is cleared and stood down ==\n");
-    {
+    if (scrollPart) {   // (F2: the scroll part)
         const GiStatus pre = scene->published().gi;
         e->setArm("gi.cascadeFaultCommit", 0.0);
         look(Vec3(cam.x + 1.05f * step, cam.y, cam.z));
@@ -731,7 +744,7 @@ int main()
 
     // ---- G. what is lit at a commit (PHOTON-7 stage 2) --------------------------------------------
     std::printf("\n== G: the commit's light - the direct as a delta, the feedback over the bricks it changed ==\n");
-    {
+    if (lightPart) {   // (G: the light part)
         // NOTHING OF THE CHAIN IN FLIGHT (an outer commit re-injects cascade 0 too), THE FEEDBACK AT REST (PHOTON-7 stage
         // 4: no brick still converging) AND THE LAST COMMIT'S COUNT LANDED (read back a few frames late): the counts and
         // the store's changes below are this step's commit's alone.
@@ -873,7 +886,7 @@ int main()
     // A cut scroll leaves its cascade owed the rest; if the camera comes back to where the cut placed the cascade
     // before the rest is planned, nothing is owed - no zero-shift scroll (it would re-inject the whole cascade as a delta).
     std::printf("\n== B2: a cut scroll's remainder taken back by the camera owes nothing ==\n");
-    {
+    if (lightPart) {   // (B2: the light part)
         e->setArm("gi.scrollFrames", kSpreadFrames);
         run(1);
         const GiStatus pre = scene->published().gi;
@@ -897,7 +910,7 @@ int main()
 
     // ---- I. an outer commit and cascade 0 (PHOTON-7 stage 4's read R1) ----------------------------
     std::printf("\n== I: an outer commit and cascade 0: never one frame; still, cascade 0's direct is a whole build's ==\n");
-    {
+    if (lightPart) {   // (I: the light part)
         const auto chainBusy = [&]() {
             for (const GiStatus::CascadeStatus &cs : scene->published().gi.cascades)
                 if (cs.pending || cs.scrolling || cs.feedbackOwed) return true;
@@ -975,7 +988,7 @@ int main()
 
     // ---- V. the VRAM at Epic ---------------------------------------------------------------------
     std::printf("\n== V: the scroll scratches' VRAM at Epic (the texture-memory door) ==\n");
-    {
+    if (lightPart) {   // (V: the light part)
         GiParams epic = chainGi();
         epic.quality = GiQuality::Epic;
         CHECK(scene->setGlobalIllumination(epic), "the Epic chain builds");
