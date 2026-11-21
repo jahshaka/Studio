@@ -427,6 +427,18 @@ add_test(NAME engine.compute_record COMMAND test_compute_record)
 set_tests_properties(engine.compute_record PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.compute_record)
 
+# engine.ray_builder_slots — THE RAY PIPELINE BUILDERS' SLOTS (COLD-BOOT-1 stage 4; RayBuilderSlots.h): the width bounds
+# the builders at once; the reflection pair's second builder is taken only if a slot is free NOW (a tier one wide builds
+# the pair serially - no width deadlocks); a width below one is one. CPU only: no card, no engine.
+add_executable(test_ray_builder_slots test_ray_builder_slots.cpp)
+set_target_properties(test_ray_builder_slots PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_ray_builder_slots PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+find_package(Threads REQUIRED)
+target_link_libraries(test_ray_builder_slots PRIVATE Threads::Threads)
+add_test(NAME engine.ray_builder_slots COMMAND test_ray_builder_slots)
+set_tests_properties(engine.ray_builder_slots PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.ray_builder_slots)
+
 # engine.exit_only_teardown — THE FIXTURES' EXIT (COLD-BOOT-1's added item; spikes/exit-race/VERIFY.md): a fixture that
 # takes the harness's exit-only teardown ends at its engine's death - a handler registered after the boot never runs, and
 # the status is what the run returned; its negative control (no engine: the late handler runs). A headless (NULL) engine
