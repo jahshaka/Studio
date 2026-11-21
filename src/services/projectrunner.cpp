@@ -635,14 +635,6 @@ void ProjectRunner::createAsync(const QString &guid, const QString &filename,
 void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
                                    const QString &projectPath, SceneTemplate kind)
 {
-    // AN OPEN IN FLIGHT FINISHES FIRST — before this create's ledger begins:
-    // its run is the one LoadTimeline holds until the open ends it, so a begin
-    // skipped because "a run is running" would leave the create's marks on no
-    // run at all once the drain's end() closed the open's (fix round).
-    if (isOpening()) {
-        qWarning("project create: an open was still in flight — draining it first");
-        mRunner->waitForDone(kOpenWaitBudgetMs, kOpenWaitIdleMs);
-    }
     // THE CREATE'S LEDGER BEGINS HERE. Since every route closes the open world
     // before the row is minted (STUDIO-HYGIENE-1), that close runs BEFORE this
     // ledger and is not in it (CREATE-GAP-1 had put it in, as `closePrevious`;

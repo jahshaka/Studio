@@ -434,7 +434,7 @@ QString ProjectApi::createAsync(const QString &name, const QVariantMap &options)
     // THE SAME RULE project.openAsync follows, and the same predicate: while
     // project.openState() reads 'opening' a second one is refused, never
     // queued. (project.create cannot refuse — its contract is a loaded world —
-    // so it drains instead, inside ProjectRunner::startCreateRun.)
+    // so its close drains the open in flight first: createInto, the final read's W5.)
     if (openInFlight())
         return (fail("project.createAsync: an open or create is already in flight "
                      "(project.openState() reads 'opening' until it finishes)"), QString());
