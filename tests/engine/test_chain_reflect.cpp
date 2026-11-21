@@ -4,7 +4,9 @@
 //            chain; alone - the raster march - without rays); a STEREO chain reads no screen (VR's one explicit
 //            difference); the SSR row off reads nothing. The screen trace reads the last LINEAR stage (the refractives'
 //            copy, else the composite), never the distortion's warp nor the AO apply; the composed picture (the stop's
-//            displayed pixel) is the LAST stage that runs, in build's order refraction -> distortion -> AO.
+//            displayed pixel) is the LAST stage that runs, in build's order refraction -> distortion -> AO; the stop reads
+//            it only where nothing writes the scene target before the filter - a LETTERBOXED chain declines it (its
+//            prologue fills the target with the bars and the background: the final read's M3).
 //   shape    THE STEREO SHAPE: a stereo view's target is two layers, a mono one's one; a recording whose chain holds
 //            another count is refused (RayQueryTier::recordReflect counts it - a defect, never a silent frame).
 #include <cstdio>
@@ -50,6 +52,17 @@ static int sources()
     }
     check(bad == 0, "the screen trace reads the refractives' copy or the composite (never the warp or the AO); the "
                     "composed picture is the last of refraction -> distortion -> AO that runs (8 combinations)");
+    // THE STOP's READ OF THE COMPOSED PICTURE (M3): a letterboxed chain's prologue writes the scene target before the
+    // filter (OgreChain.cpp: addLetterboxPrologue in front of photon_resolve), so the composite there is the background -
+    // a pixel darker than it would hold on max(term, background): LOOSER. The rule declines it; a plain chain reads it.
+    check(reflectComposedRead(false), "a plain chain's stop reads the composed picture (frame t-1's displayed pixel)");
+    check(!reflectComposedRead(true), "a LETTERBOXED chain's stop declines it (the prologue filled it): the term alone, "
+                                      "stricter, never looser");
+    // NEGATIVE CONTROL: the stage-2 text read the composite on every chain ("the stand-in reads 0" was assumed, never
+    // made) - that rule differs from this one on a letterboxed chain, so the check above can fail
+    const auto alwaysRead = [](bool) { return true; };
+    check(alwaysRead(true) != reflectComposedRead(true),
+          "negative control: reading the composite on every chain is NOT the rule (it differs on a letterboxed chain)");
     // NEGATIVE CONTROL: the deleted mode's 'Rays' (no screen on a mono ray chain) differs from the rule - the check can fail
     const auto raysMode = [](int ssr, bool stereo, bool rays) { return ssr > 0 && !stereo && !rays; };
     check(raysMode(2, false, true) != reflectScreenSources(2, false),
