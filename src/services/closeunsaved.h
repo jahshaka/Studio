@@ -17,12 +17,12 @@ For more information see the LICENSE file
 /// with auto-save on it saves, and a save that FAILS, or that left out the nodes a run added (the scene stays
 /// dirty), is NOT settled - nor is a dirty scene with auto-save off. An unsettled world then goes by this:
 enum class CloseUnsaved {
-    Ask,      ///< a person's route (a tile, the Close button, the menu, New Scene): Save (again,
+    Ask,      ///< a person's route (a tile, the Close button, the menu, New Scene, the window's close): Save (again,
               ///< until it holds) / Discard / Cancel, the reason in the box. In a
               ///< DRIVEN session (a suite, a script, an MCP client: FirstRun::isDrivenSession) nobody can answer a
               ///< box, so it refuses as Refuse does.
-    Refuse,   ///< a script's route (project.open/openAsync/close/create): refused with a sentence unless the
-              ///< caller passed {discard: true}.
+    Refuse,   ///< a script's route (project.open/openAsync/close/create/openSample, app.quit): refused with a
+              ///< sentence unless the caller passed {discard: true}.
     Discard   ///< the caller DECIDED the edits go: a verb's explicit {discard: true}, the library reset. Nothing
               ///< is saved, not even by auto-save.
 };

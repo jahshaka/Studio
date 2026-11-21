@@ -131,5 +131,17 @@ function autosaveOff() {
     assert(dirty() === true, "a created world whose first save failed is DIRTY (it read clean)");
     assert(refusal(function () { project.close(); }) !== null, "...so its close is refused, not silent");
     assert(project.close({ discard: true }) === true, "...and {discard: true} closes it");
+
+    // NO QUIT DROPS EDITS SILENTLY (the final read's W1): app.quit over a dirty world with auto-save off is REFUSED
+    // by a sentence when it is called (it returned true, and the window's close then raised a box nobody in a
+    // driven session can answer); {discard: true} quits. (A --script run ends through its own exit, not the close.)
+    assert(project.open(byName("Doors Round Trip")) === true, "reopened for the quit");
+    scene.addPrimitive("sphere");
+    why = refusal(function () { if (app.quit() !== true) throw new Error("returned false"); });
+    console.log("quit with auto-save off: " + why);
+    assert(why !== null && why.indexOf("unsaved changes and auto-save is off") >= 0 && why.indexOf("discard") >= 0,
+           "app.quit over a dirty world with auto-save off is REFUSED, naming {discard: true}");
+    assert(project.current() && dirty() === true, "...and the world stays, still dirty");
+    assert(app.quit({ discard: true }) === true, "{discard: true} quits");
     console.log("autosave off: ALL OK");
 }

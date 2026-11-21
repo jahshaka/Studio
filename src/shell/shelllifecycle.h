@@ -54,6 +54,8 @@ For more information see the LICENSE file
 #include <functional>
 #include <memory>
 
+#include "services/closeunsaved.h"
+
 class AssetView;
 class ClaudeAssistant;
 class Database;
@@ -93,8 +95,9 @@ public:
         ClaudeAssistant *assistant = nullptr;
         /// The Assets page, or null while it has never been built.
         std::function<AssetView *()> assetsPage;
-        /// The force save (autosave / "save before closing?").
-        std::function<bool()> saveScene;   ///< the editor's save; false = it failed (and said so)
+        /// THE ONE DECISION over the open world's unsaved changes (MainWindow::settleUnsaved, the same every
+        /// close of a world takes); false = the close is refused and `whyOut` says why.
+        std::function<bool(CloseUnsaved, QString *whyOut)> settleUnsaved;
         /// Step 5's last act: the window forgets the plain services and
         /// deletes its Ui:: struct.
         std::function<void()> deleteUi;
@@ -115,6 +118,9 @@ public:
     /// STEP 1: the close event. Accepts or ignores `event`; on accept the
     /// background work is stopped before the window disappears.
     void closeRequested(QCloseEvent *event);
+    /// The NEXT close event settles with `unsaved` instead of a person's Ask (app.quit: Refuse, or Discard
+    /// when the caller said so); it goes back to Ask once a close has decided.
+    void armCloseUnsaved(CloseUnsaved unsaved) { mCloseUnsaved = unsaved; }
     /// STEP 2 (+3): bounded, run-once. Also wired to aboutToQuit.
     void stopBackgroundWork();
     /// STEPS 5-7: the window body's ordered teardown (~MainWindow). Runs the
@@ -125,6 +131,7 @@ private:
     void destroyEngineViews();
 
     Parts mParts;
+    CloseUnsaved mCloseUnsaved = CloseUnsaved::Ask;
     Database *mDb = nullptr;
     bool mBackgroundStopped = false;
     std::weak_ptr<jahshaka::engine::Engine> mEngineWatch;

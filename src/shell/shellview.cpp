@@ -73,6 +73,11 @@ bool ShellView::closeProject(bool reopenInPlace, CloseUnsaved unsaved, QString *
     return mWindow->projectRunner()->close(reopenInPlace, unsaved, whyOut);
 }
 
+bool ShellView::settleForQuit(CloseUnsaved unsaved, QString *whyOut)
+{
+    return mWindow->settleForQuit(unsaved, whyOut);
+}
+
 bool ShellView::waitForOpen()
 {
     return mWindow->projectRunner()->waitForOpen();

@@ -227,6 +227,9 @@ public:
     /// The Player page's widget, and the one live Project.
     PlayerWidget *playerPage() const { return playerView; }
     Project *currentProject() const { return project; }
+    /// app.quit's half (IShellView::settleForQuit): the open world settled now by `unsaved`
+    /// (settleUnsaved), and the window's next close armed with the same.
+    bool settleForQuit(CloseUnsaved unsaved, QString *whyOut);
 
     /// One toast, reused, for every transient viewport readout (snap size, fly
     /// speed) — and for a gesture the viewport has to REFUSE: a material or an

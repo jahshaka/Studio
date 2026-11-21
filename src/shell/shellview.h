@@ -36,6 +36,7 @@ public:
     void newProject(const QString &guid, const QString &name, const QString &folder, SceneTemplate kind) override;
     void newProjectAsync(const QString &guid, const QString &name, const QString &folder, SceneTemplate kind) override;
     bool closeProject(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut = nullptr) override;
+    bool settleForQuit(CloseUnsaved unsaved, QString *whyOut) override;
     bool waitForOpen() override;
     bool isOpeningProject() const override;
     unsigned openSliceBoundaries() const override;

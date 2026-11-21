@@ -91,6 +91,10 @@ public:
     /// one, so no route discards edits silently. False = refused or cancelled:
     /// the world is untouched and `whyOut` says why.
     virtual bool closeProject(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut = nullptr) = 0;
+    /// THE WINDOW'S CLOSE, AS A VERB ASKS IT (app.quit): the open world is settled NOW by `unsaved` (Refuse or
+    /// Discard), and the window's next close settles with the same; false = refused, `whyOut` says why, nothing
+    /// is armed. The caller then closes the window (window()->close()).
+    virtual bool settleForQuit(CloseUnsaved unsaved, QString *whyOut) = 0;
     /// Drains an open in flight; true when nothing is (or is still) in flight.
     virtual bool waitForOpen() = 0;
     virtual bool isOpeningProject() const = 0;

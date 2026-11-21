@@ -425,7 +425,7 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 	parts.docks = docks;
 	parts.assistant = assistant;
 	parts.assetsPage = [this]() { return _assetView; };
-	parts.saveScene = [this]() { return saveScene(); };
+	parts.settleUnsaved = [this](CloseUnsaved unsaved, QString *whyOut) { return settleUnsaved(unsaved, whyOut); };
 	parts.deleteUi = [this]() {
 		// The plain services are gone (step 5): nothing reaches them after.
 		services = nullptr;
@@ -1231,6 +1231,15 @@ bool MainWindow::settleUnsaved(CloseUnsaved unsaved, QString *whyOut)
     // ...and nobody can answer a box in a driven session, or on a script's route: refused, with the way out.
     if (whyOut) *whyOut = tr("%1 — save it first (project.save), or pass {discard: true} to drop them").arg(why);
     return false;
+}
+
+bool MainWindow::settleForQuit(CloseUnsaved unsaved, QString *whyOut)
+{
+    // An open in flight is drained by the close event itself (ShellLifecycle::closeRequested), which settles
+    // again with the same `unsaved`: what was settled here is what the close finds.
+    if (!settleUnsaved(unsaved, whyOut)) return false;
+    lifecycle->armCloseUnsaved(unsaved);
+    return true;
 }
 
 bool MainWindow::closeWorld(bool reopenInPlace, CloseUnsaved unsaved, QString *whyOut)
