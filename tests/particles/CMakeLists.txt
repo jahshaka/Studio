@@ -30,6 +30,9 @@ set_target_properties(test_particles_ring PROPERTIES
     BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
     INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_link_libraries(test_particles_ring PRIVATE OgreNext)
+# THE SHIFT LAW (case (f)): the header's bitset searches compile into this target; a shift by the type's width aborts it.
+target_compile_options(test_particles_ring PRIVATE -fsanitize=shift -fno-sanitize-recover=shift)
+target_link_options(test_particles_ring PRIVATE -fsanitize=shift)
 add_test(NAME particles.ring_full_handles COMMAND test_particles_ring
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(particles.ring_full_handles PROPERTIES TIMEOUT 60 LABELS "particles")

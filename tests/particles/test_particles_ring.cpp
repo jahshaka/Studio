@@ -28,6 +28,8 @@
 #include <OgreRoot.h>
 #include <OgreLogManager.h>
 #include <Math/Array/OgreObjectMemoryManager.h>
+#include <OgreBitset.h>
+#include <OgreBitset.inl>   // the searches inline: compiled into THIS target, under its shift sanitizer
 #include <ParticleSystem/OgreParticleSystem2.h>
 
 #include <cstdio>
@@ -153,6 +155,49 @@ int main()
                   kQuota);
         CHECK_MSG(again.size() == kQuota, "refill after a hole: %zu distinct handles, want %u", again.size(), kQuota);
 
+        delete ring;
+    }
+    // (f) THE SEARCH AT A WORD'S EDGE: the ring-full search is findLastBitUnset() = findLastBitUnset( capacity ), and a
+    //     capacity that is a multiple of 64 (a quota of 64, 128, ...) ends on a word's edge. The last word's mask was
+    //     `~0 >> ( 64 - ( startFrom & 63 ) )` - a shift by 64 there, undefined in C++ (x86 shifts by 0 and happens to
+    //     answer right). This target is built with -fsanitize=shift -fno-sanitize-recover, and these calls compile the
+    //     header's search into it: the shift aborts the row (RED on the fork before its bitset commit), the masked form
+    //     passes. findLastBitSetPlusOne( startFrom ), deallocParticle's search, had the same line.
+    for (const size_t cap : {size_t(64), size_t(128)}) {
+        Ogre::bitset64 bits;
+        bits.reset(cap);
+        bits.setAll();
+        bits.unset(cap - 1u);                               // the word's top bit is the only free one
+        CHECK_MSG(bits.findLastBitUnset() == cap - 1u, "bitset %zu: findLastBitUnset() %zu, want %zu", cap,
+                  bits.findLastBitUnset(), cap - 1u);
+        CHECK_MSG(bits.findLastBitUnset(cap) == cap - 1u, "bitset %zu: findLastBitUnset(%zu) %zu, want %zu", cap, cap,
+                  bits.findLastBitUnset(cap), cap - 1u);
+        Ogre::bitset64 one;
+        one.reset(cap);
+        one.set(cap - 1u);                                  // only the top bit set
+        CHECK_MSG(one.findLastBitSetPlusOne(cap) == cap, "bitset %zu: findLastBitSetPlusOne(%zu) %zu, want %zu", cap, cap,
+                  one.findLastBitSetPlusOne(cap), cap);
+    }
+    // ... and the allocator at those quotas: (d)'s clear-and-refill through a full-word ring.
+    for (const uint32_t quota : {64u, 128u}) {
+        std::vector<Ogre::ArrayReal> ttl(quota / ARRAY_PACKED_REALS + 1);
+        Ogre::ObjectMemoryManager mgr;
+        auto *ring = new RingProbe(&mgr, ttl.data());
+        ring->setParticleQuota(quota);
+        for (uint32_t i = 0; i < quota; ++i) ring->allocParticle();
+        ring->deallocParticle(quota / 2u);                  // a hole, then everything else from the top
+        for (uint32_t h = quota; h-- > 0;)
+            if (h != quota / 2u) ring->deallocParticle(h);
+        std::set<uint32_t> got;
+        uint32_t refused = 0;
+        for (uint32_t i = 0; i < quota; ++i) {
+            const uint32_t h = ring->allocParticle();
+            if (h == Ogre::ParticleSystemDef::InvalidHandle) ++refused; else got.insert(h);
+        }
+        std::printf("quota %u: refill after a hole and the top-down frees: %zu distinct handles, %u refused\n", quota,
+                    got.size(), refused);
+        CHECK_MSG(refused == 0 && got.size() == quota, "quota %u: %zu distinct, %u refused, want %u and 0", quota,
+                  got.size(), refused, quota);
         delete ring;
     }
     delete root;
