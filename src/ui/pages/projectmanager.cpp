@@ -193,22 +193,14 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 		return;
 	}
 
-    // If we're opening a new scene, close the old one first — and the page the
-    // user is on stays, because this close is the first half of an open
-    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
-    // A person's route: unsaved changes are asked about, and a Cancel (or an
-    // auto-save that failed, said by the save door) stops the open here, before
-    // the project is re-pointed (STUDIO-HYGIENE-1 audit).
-    if (shell->services()->project->isSceneOpen()
-        && !shell->closeProject(true, CloseUnsaved::Ask))   // the first half of an open: the page stays
-        return;
-
 	// WHERE THIS PROJECT ACTUALLY IS (SMALL-UI-A fix round F1). This rebuilt
 	// the path from the DEFAULT projects root, so a project created at a chosen
 	// location (the New Scene dialog's Browse button) opened pointing at a
 	// folder that does not exist — silently, with its baked maps and exports
 	// going somewhere else. ProjectService::projectFolderFor is the one
-	// resolver; the tile knows the guid and nothing else.
+	// resolver; the tile knows the guid and nothing else. JUDGED BEFORE THE
+	// CLOSE (the final read's W4), as the verbs judge it: a refused open leaves
+	// the open world open (it closed it, then refused).
 	if (!projectService) return;
 	QString whyMissing;
 	if (projectService->projectLocationMissing(widget->tileData.guid, &whyMissing)) {
@@ -220,6 +212,16 @@ void ProjectManager::openProjectFromWidget(ItemGridWidget *widget, bool playMode
 		                        .arg(widget->tileData.name, whyMissing));
 		return;
 	}
+
+    // If we're opening a new scene, close the old one first — and the page the
+    // user is on stays, because this close is the first half of an open
+    // (MainWindow::CloseIntent, VIEW-REBUILD-1).
+    // A person's route: unsaved changes are asked about, and a Cancel (or an
+    // auto-save that failed, said by the save door) stops the open here, before
+    // the project is re-pointed (STUDIO-HYGIENE-1 audit).
+    if (shell->services()->project->isSceneOpen()
+        && !shell->closeProject(true, CloseUnsaved::Ask))   // the first half of an open: the page stays
+        return;
 
 	project->setProjectPath(projectService->projectFolderFor(widget->tileData.guid),
 	                        widget->tileData.name);
