@@ -732,8 +732,8 @@ std::string Session::statusJson()
           << ",\"held\":" << (rq.reflectHeld ? "true" : "false") << ",\"restActive\":" << rq.reflectRestActive
           << ",\"restCapped\":" << rq.reflectRestCapped << ",\"emitters\":" << rq.reflectEmitters << ",\"portals\":" << rq.reflectPortals
           << ",\"emittersOver\":" << rq.reflectEmittersOver << ",\"neeRays\":" << rq.reflectNeeRays
-          << ",\"neeHits\":" << rq.reflectNeeHits << ",\"restBound\":" << rq.reflectRestBound
-          << ",\"restBoundOwed\":" << rq.reflectRestBoundOwed << ",\"restNeedMax\":" << rq.reflectRestNeedMax << "}";
+          << ",\"neeHits\":" << rq.reflectNeeHits << ",\"restNeedMax\":" << rq.reflectRestNeedMax
+          << ",\"restStopVMax\":" << rq.reflectRestStopVMax << "}";
     }
     o << "}";
     return o.str();

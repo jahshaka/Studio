@@ -30,6 +30,16 @@
 #       hold NO CAPPED TEXEL (the door's refl_rest_capped 0: every texel stopped by its own standard error within its
 #       share of the one-code display budget, sqrt( n_eff ) codes at its pixel - so the displayed SE is under one code
 #       where the neighbours' n_eff match, the stop's own guarantee; a capped one stopped at its count's ceiling);
+#       and THE STOP LAW IN SAMPLES (the final read's M1, the lead's ruling A): at rest frame 2N a texel still converging
+#       needs v_need = v ( e / share )^2 samples to come within its share (its SE e over v samples: sigma^2 = e^2 v, and
+#       sigma^2 / v_need = share^2); its stop window opens at that crossing and closes after kReflectStopSamples = 300
+#       samples AND kReflectStopFrames = 8 frames (jah_reflect_rest.glsl), at most kReflectRestRaysCap = 64 samples a
+#       frame, one frame's batch of overshoot past the 300 - so it stops at v <= v_need + max( 300 + 64, 8 x 64 ) =
+#       v_need + 512, and THE LAW: the largest v at which a texel stopped past 2N (the lab's status restStopVMax) <= the
+#       largest v_need at 2N (restNeedMax) + 512. THE RESIDUAL, named: v_need is the 2N estimate of e (sigma over the
+#       samples a texel holds at 2N, ~150 at 960x540) - a heavy-tailed texel whose e rises after 2N owes more, the stop
+#       law's own delta (kReflectStopSamples' note). The FRAMES the hold takes are not a stop law (the converging texels
+#       share the tail's ray budget, held to its ramp, and a batch ends at a record): see WIN below;
 #   (c) THE MIRROR CONVERGES (PHOTON-7-9A stage 2, the lead's ruling C2; the old "<= 1 code mean change" bar, a picked
 #       number, deleted): the mirror is a fixed estimator (the centre ray, M = 1) - at rest it takes its mean from its
 #       first rest sample and folds k a frame, so a frame's change of a texel's mean has variance sigma^2 k / (v_{t-1} v_t)
@@ -79,12 +89,11 @@ case "$PART" in hold|path) ;; *) echo "FAIL: the part is hold or path, not '$PAR
 HERE=$(cd "$(dirname "$0")" && pwd)
 rm -rf "$WD"; mkdir -p "$WD"
 POSE=1.5,1.8,3.4,1.5,0.5,-3
-# THE WINDOW (PHOTON-7-9A, the lead's ruling): (b')'s law is THE ENGINE's OWN STOP-LAW BOUND - the hold lands at or before
-# RayQueryStatus::reflectRestBound (2N + ceil(the samples the converging texels owe at rest frame 2N / the tail's rays a
-# frame) + the stop's 8 frames, read at 2N; the lab's `status` prints it as restBound) plus the read-back lag (the host
-# reads the rest's active count kReadLag frames late). WIN is only the OBSERVATION SPAN that must contain that bound:
-# 2 x the hybrid's measured hold (246 at 960x540, PHOTON-7-9A; Both's 828 sized the old 1,000), rounded up - and the row
-# reds itself BY NAME when the bound it reads lands past WIN (the span too short to judge the law, never a green).
+# THE WINDOW WIN - A STATED BEHAVIOUR, NOT A DERIVED LAW (the lead's design call, 2026-11-21: "a glossy floor goes still
+# after a stop" is a product behaviour the owner asked for by name, and a row with no time law would pass a hold that took
+# ten times longer): the hold must be reached inside WIN = 500 window frames - 8.3 s at 60 fps - from the stop. MEASURED
+# (PHOTON-7-9A, 960x540, RTX 5060 Ti, 2026-11-21): the rest began at window frame 56 and held at rest frame 190, window frame
+# 246 - the margin about 2x. A hold outside WIN is a red to investigate; WIN is NEVER widened to pass (the lead sets it).
 WIN=500
 LAGK=17,24,32,48,64,96   # (a2)'s frames after the stop: from the rest's hand-over (2N / 4 frames) + its 16
 WINP=450
@@ -179,25 +188,25 @@ if rows:
     rest = int(rows[hold]["refl_rest_frames"]) if held else -1
     capped = int(rows[hold]["refl_rest_capped"]) if held else -1
     print("(b') at the hold: %d rest frames; capped texels %d (the door's refl_rest_capped)" % (rest, capped))
-    # (b') THE ENGINE's OWN BOUND (the header's WIN note): the hold at or before RayQueryStatus::reflectRestBound (the rest
-    # frame the stop law bounds the hold by, published by the lab's `status` after the window - this rest's, the one that
-    # held) + the read-back lag READ_LAG = the reflection ring's 3 frames in flight (kReflectRing, OgreRayQuery.cpp) + the
-    # frame the read lands in. The window must CONTAIN the bound: a WIN too short reds by name, never judges green.
-    READ_LAG = 3 + 1
-    mb = re.findall(r'"restBound":(-?\d+)', log)
-    rbound = int(mb[-1]) if mb else -1
+    # (b') THE STOP LAW IN SAMPLES (the header's): the largest v at a stop past 2N <= the largest need at 2N + 512, both
+    # this rest's, published by the lab's `status` after the window (the rest that held)
+    mn = re.findall(r'"restNeedMax":(-?\d+)', log)
+    ms = re.findall(r'"restStopVMax":(-?\d+)', log)
+    need = int(mn[-1]) if mn else -1
+    stopv = int(ms[-1]) if ms else -1
+    print("(b') the stop law in samples: the largest v at a stop past 2N %d, the largest need at 2N %d, the bound %d "
+          "(need + 512)" % (stopv, need, need + 512))
+    if need <= 0 or stopv <= 0:
+        fails.append("(b') the engine published no stop-law words (status restNeedMax %s, restStopVMax %s): the law "
+                     "cannot be judged" % (mn[-1] if mn else "absent", ms[-1] if ms else "absent"))
+    elif stopv > need + 512:
+        fails.append("(b') a texel stopped at v %d, past its stop law's need %d + 512" % (stopv, need))
+    # (b') THE STATED BEHAVIOUR (the header's WIN note): the hold inside WIN - the window frame it lands at, beside WIN
     rest0 = hold - rest if held else -1   # the window frame of the rest's frame 0
-    print("(b') the engine's rest bound: %d rest frames (+ the read-back lag %d); the rest began at window frame %d; "
-          "the hold at rest frame %d; the span WIN %d" % (rbound, READ_LAG, rest0, rest, win))
-    if rbound < 0:
-        fails.append("(b') the engine published no rest bound (status restBound %s)" % (mb[-1] if mb else "absent"))
-    elif held and rest0 + rbound + READ_LAG > win:
-        fails.append("(b') WIN %d is too short to judge the law: the engine's bound lands at window frame %d"
-                     % (win, rest0 + rbound + READ_LAG))
-    elif held and rest > rbound + READ_LAG:
-        fails.append("(b') the hold at rest frame %d is past the engine's stop-law bound %d + the lag %d"
-                     % (rest, rbound, READ_LAG))
-    if not held: fails.append("(b') the glass never held (no texel active) inside the %d-frame window" % (len(rows) - 1))
+    print("(b') the stated behaviour: the hold at window frame %s (the rest began at %d, held at rest frame %d) inside "
+          "WIN %d (%.1f s at 60 fps)" % (hold if held else "none", rest0, rest, win, win / 60.0))
+    if not held: fails.append("(b') THE STATED BEHAVIOUR: the glass never held (no texel active) inside WIN, %d frames "
+                              "(%.1f s at 60 fps) - a red to investigate, never a wider WIN" % (len(rows) - 1, (len(rows) - 1) / 60.0))
     elif capped != 0: fails.append("(b') capped texels at the hold: %d (the rest's defect reading must be 0)" % capped)
     elif not still: fails.append("(b') the glass moved after the hold")
     end = hold if held else len(rows)

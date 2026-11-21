@@ -1350,14 +1350,14 @@ static QVariantMap rayQueryToJs(const IEditorViewport::GiStatusInfo::RayQueryInf
                         { QStringLiteral("reflectShotRestFrames"), double(rq.reflectShotRestFrames) },
                         { QStringLiteral("reflectShotHeld"), rq.reflectShotHeld },
                         { QStringLiteral("reflectShotRests"), double(rq.reflectShotRests) },
-                        // ...ITS STILL-CONVERGING TEXELS, ITS BOUND AND ITS NEE (PHOTON-7 stage 11: the newest read-back
-                        // frame's active and capped texels, -1 none read; the rest bound at 2N, -1 until read; the
-                        // emitter table and the NEE cone's rays and hits)
+                        // ...ITS STILL-CONVERGING TEXELS, ITS SAMPLE LAW AND ITS NEE (PHOTON-7 stage 11: the newest
+                        // read-back frame's active and capped texels, -1 none read; the largest need at 2N and the largest
+                        // v at a stop after it, 0 until read - RayQueryStatus::reflectRestStopVMax's law; the emitter
+                        // table and the NEE cone's rays and hits)
                         { QStringLiteral("reflectRestActive"), rq.reflectRestActive },
                         { QStringLiteral("reflectRestCapped"), rq.reflectRestCapped },
-                        { QStringLiteral("reflectRestBound"), rq.reflectRestBound },
-                        { QStringLiteral("reflectRestBoundOwed"), double(rq.reflectRestBoundOwed) },
                         { QStringLiteral("reflectRestNeedMax"), double(rq.reflectRestNeedMax) },
+                        { QStringLiteral("reflectRestStopVMax"), double(rq.reflectRestStopVMax) },
                         // ...AND ITS SHAPE REFUSALS (PHOTON-7-9A: a recording on a chain not at its view's stereo shape -
                         // a defect counter, the tier's; 0 is the law)
                         { QStringLiteral("reflectShapeRefusals"), double(rq.reflectShapeRefusals) },
