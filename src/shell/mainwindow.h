@@ -509,6 +509,8 @@ private:
 	ActionHost *actionHost = nullptr;
 	ModuleHub *moduleHub = nullptr;
 	ShellLifecycle *lifecycle = nullptr;
+	/// settleUnsaved is deciding (its boxes are nested event loops): a second close is refused meanwhile.
+	bool settlingUnsaved = false;
 	/// The window as the layers below see it (ui/ishellview.h); owned here.
 	std::unique_ptr<ShellView> shellView;
 	ViewController *viewController = nullptr;

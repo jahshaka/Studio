@@ -47,6 +47,7 @@ For more information see the LICENSE file
 #include <qstandarditemmodel.h>
 #include <QDockWidget>
 #include <QMessageBox>
+#include <QScopeGuard>
 #include <QUndoStack>
 
 #include <QApplication>
@@ -1191,6 +1192,16 @@ bool MainWindow::settleUnsaved(CloseUnsaved unsaved, QString *whyOut)
     // NO CLOSE DISCARDS EDITS SILENTLY (STUDIO-HYGIENE-1 audit; services/closeunsaved.h). Settled BEFORE the
     // close touches anything, so a refusal leaves the world exactly as it was (still playing, if it was).
     if (whyOut) whyOut->clear();
+    // ONE DECISION AT A TIME (the final read's W2): the boxes below are nested event loops, and a close delivered
+    // under one (a queued project.close({discard: true}), a second click) ran the whole teardown, the outer close
+    // then reading a null scene. Refused while one decides — whatever it would do with the edits.
+    if (settlingUnsaved) {
+        if (whyOut) *whyOut = tr("another close of '%1' is still deciding about its unsaved changes")
+                                  .arg(project->getProjectName());
+        return false;
+    }
+    settlingUnsaved = true;
+    const auto decided = qScopeGuard([this] { settlingUnsaved = false; });
     if (!projectService->isSceneOpen() || unsaved == CloseUnsaved::Discard) return true;
     const QString name = project->getProjectName();
     const QString guid = project->getProjectGuid();
@@ -1251,6 +1262,7 @@ bool MainWindow::closeWorld(bool reopenInPlace, CloseUnsaved unsaved, QString *w
     // nothing to close.
     if (!scene) return true;
     if (!settleUnsaved(unsaved, whyOut)) return false;
+    if (!scene) return true;   // ...and the settle pumped events: whatever closed it meanwhile, nothing is left (W2)
     {
         scene->getPhysicsEnvironment()->stopPhysics();
         scene->getPhysicsEnvironment()->stopSimulation();
