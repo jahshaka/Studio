@@ -1,31 +1,47 @@
 #!/bin/bash
-# gi.walk_rough (PHOTON-7 stage 7, 7-3; re-pointed in 10-3 R12) — THE ROUGH SPECULAR'S WALK LAGS ITS CONVERGED PICTURE BY
-# NO MORE THAN ITS MEMORY AND ITS OWN NOISE: photon-rough's four rough metal strips (0.45 - 0.75), the reflection's
-# cutoff 0 (no traced reflection: the strips' environment term is the probes' prefiltered lobe whole, riding the gather's
-# history), Epic, 960x540; a 2 m walk along them (0,1.6,2.4 -> 0,1.6,0.4 looking at 0,0,-3, 60 frames from a converged
-# hold), and at walk frames k = 14, 28 and 59, per ROUGH pixel (the class map's 2)
-#     |walk(k) - conv(k)| <= (N - 1) |conv(k+1) - conv(k)| + 3 SE_walk + 1
-# THE LAG LAW (rtreflect.lag_law's, the lead's ruling): conv(k) the picture converged at the walk's pose k (the GI at
-# rest there: CONVERGED, below), N the gather's history count at the pixel (the dump's .ghc: the frames its mean holds), SE_walk = sigma / sqrt N,
-# sigma the pixel's per-frame standard deviation of the RAW lobe at pose k (gather.temporal 0: twelve frames' estimates
-# alone, in the same session - the lead's option B: a test's statistic, no engine channel), the +1 the two 8-bit
-# pictures' rounding. THE BAR: the breaking share <= 1 % of the rough pixels at each k (at 3 sigma an honest estimate
-# breaks ~0.3 % by chance). (It replaced the live residual against "the cone's recorded 48.32 %", the producer the
-# lobe replaced - a picked bar.)
-# DECLARED RED (2026-10-27, the lead's ruling: a stage-8 item, beside rough_reference's (a)/(b) - the gather's rough
-# lobe): breaking 1.79 / 4.59 / 16.07 % at k 14 / 28 / 59, on the two smoother strips (0.45 / 0.55, the pure lobe) in
-# blotches, the walk DARKER (-1.9 codes over the class at k 59, -3.7 on the breaking pixels). THE CAUSE, measured: NOT a
-# bias of the moving rule (the moving rule held at pose 59 - gather.restOff - for 64 frames against the rest mean there:
-# -0.015 codes, each strip within 0.3) and NOT the statistics (at that fixed pose the moving error's p99 2.5 codes sits
-# inside 3 SE + 1): the excess exists only under MOTION - the lobe rides the diffuse's SURFACE reprojection, and a
-# view-dependent lobe reprojected along the surface lags past what its window implies (the reflection takes a
-# virtual-point history for the same reason).
-# 8B (2026-10-29; measured with the whole row before HARNESS-3's split, the same law): B5's fast update takes k 59 to 0.27 % (the walk's scroll changes bricks; the history shortens there);
-# k 14 / 28 stay RED at 1.86 / 4.60 %. B4's VIRTUAL-POINT history was built and measured here and REVERTED (the lead's
-# ruling (b)): 3.51 / 3.99 / 0.11 bare, 3.55 / 3.53 / 0.23 with a same-plane tap, 3.16 / 3.05 / 0.24 with Lumen's 3 x 3
-# pick - k 14 doubled, because one mean distance across a lobe spanning a depth break (a near strip edge before the far
-# walls) names a point on neither. The distance layers are deleted with it (no reader); the leftover re-adds them with
-# the distance's variance as a third moment and blends the two histories by the parallax error it predicts.
+# gi.walk_rough (PHOTON-7 stage 7, 7-3; re-pointed in 10-3 R12; THE LAW RE-DERIVED in ROUGH-LOBE-HISTORY-1 stage 2C) — THE
+# ROUGH SPECULAR'S WALK LAGS ITS CONVERGED PICTURE BY NO MORE THAN ITS HISTORY'S OWN LAG AND ITS OWN NOISE: photon-rough's
+# four rough metal strips (0.45 - 0.75), the reflection's cutoff 0 (no traced reflection: the strips' environment term is
+# the probes' prefiltered lobe whole, riding the gather's history), Epic, 960x540; a 2 m walk along them (0,1.6,2.4 ->
+# 0,1.6,0.4 looking at 0,0,-3, 60 frames from a converged hold), and at walk frames k = 14, 28 and 59, per ROUGH pixel
+# (the class map's 2)
+#     |walk(k) - conv(k)| <= (1 - 1/n_eff) (|conv(k) - conv(k - h)| + 1) + 3 SE_walk + 1,   n_eff = min(n + 1/2, h)
+# conv(j) the picture converged at the walk's pose j (the GI at rest there: CONVERGED, below), n the gather's history
+# count at the pixel (the dump's .ghc: the frames its mean holds, saturating at 15), h the history's floor in frames (READ
+# from the walk's record, below), SE_walk = sigma / sqrt(max(n, 1)), sigma the pixel's per-frame standard deviation of
+# the RAW lobe at pose k (gather.temporal 0: twelve frames' estimates alone, in the same session - the lead's option B: a
+# test's statistic, no engine channel), the +1 the two 8-bit pictures' rounding. THE BAR: the breaking share <= 1 % of
+# the rough pixels at each k (at 3 sigma an honest estimate breaks ~0.3 % by chance). (It replaced the live residual
+# against "the cone's recorded 48.32 %", the producer the lobe replaced - a picked bar.)
+# THE LAG TERM, DERIVED (the arithmetic is LAW_PY below, self-checked by gi.walk_rough.law):
+#   THE HISTORY (rq_probe_integrate.comp:1257-1294; the rough lobe takes the diffuse's blend, Lumen's one N for both):
+#     m_j = (1 - b_j) m_(j-1) + b_j x_j,  b_j = max(1 / n_j, alpha),  alpha = 1 / h,
+#   n_j the count (this frame included); the fast update only RAISES b (N' = min(N, (1 - F)(h - 1)), b = 1 / (1 + N'),
+#   the stored count round(N') + 1: so b >= 1 / (n + 1/2) at the stored count n). Its expectation's lag behind c:
+#     lag_j = c_j - E[m_j] = (1 - b_j) (lag_(j-1) + c_j - c_(j-1))
+#   - the sum Sum_j alpha (1 - alpha)^j (c(k) - c(k - j)) at the floor. For a RAMP (c_j - c_(j-1) = s) its fixed point
+#   at b = alpha is lag = ((1 - alpha) / alpha) s = (h - 1) s; and as b_j >= alpha on every frame, lag <= (h - 1) s holds
+#   whatever the history's past (refusals, fast cuts) - so one frame at b >= 1 / n_eff from it bounds
+#     lag <= (1 - 1/n_eff) h s,   n_eff = min(n + 1/2, h)   ((h - 1) s for every n >= h - every saturated count; 0 at n = 0).
+#   THE SLOPE is read BACKWARD over the window the EMA remembers: s = |c(k) - c(k - h)| / h, from the converged pose h
+#   frames behind k. Both pictures are 8-bit, so |c(k) - c(k - h)| is known to +-1 code (the slope to +-1/h a frame), and
+#   the bound grants that rounding (else a true lag at the bound breaks by the pictures' rounding alone).
+#   The law the row held before (N - 1) |conv(k+1) - conv(k)| took the COUNT for the memory (15 against h = 10) and ONE
+#   FORWARD 8-bit step (+-1 code: a ramp of 0.3 code a frame lags 2.7 codes and reads a step of 0 at 70 % of the rounding
+#   offsets - granted 0 - and 1 at the rest - granted 14); on k14 it read 1.8066 % where this law reads 0.8915 %, the
+#   same pixels and noise (spikes/rough-lobe-history-1/REFUTE-2C.log). A pixel starved of samples (blend 0: the hit list
+#   full) keeps its mean and lags past the bound - the law shows it.
+#   h IS READ, NEVER WRITTEN HERE: no status field carries the history's floor itself (GatherTuning::historyFrames is the
+#   A/B door, 0 = the shipped kHistoryFrames, OgreScreenProbeGather.cpp:360-366; the lab's status has no such field). The
+#   walk's OWN stillness record carries its settle (rough-walk.tsv settle_frames, GiStatus's settleFrames), which is
+#   settleFramesOf(h) = ceil(ln(1/D) / ln(1 - 1/max(h, 2))) at D = kGatherSettleCodes = 5 (OgreScreenProbeGather.cpp:372,
+#   Types.h) - this read depends on that constant: one-to-one on h = 3..15 (h 1 and 2 share the settle 3), so the row
+#   inverts it (16 -> 10) and refuses a settle that names no single h.
+# THE TAIL UNDER MOTION, measured (2026-10-27): NOT a bias of the moving rule (the moving rule held at pose 59 -
+# gather.restOff - for 64 frames against the rest mean there: -0.015 codes, each strip within 0.3) and NOT the statistics
+# (at that fixed pose the moving error's p99 2.5 codes sits inside the noise term): the excess exists only under MOTION.
+# B4's VIRTUAL-POINT history (PHOTON-7 8B) was built and measured here and REVERTED: one mean distance across a lobe
+# spanning a depth break (a near strip edge before the far walls) names a point on neither (k 14 doubled).
 # CONVERGED (HARNESS-3 (a), RE-DERIVED; it was a picked 600 frames): a converged picture is the one the engine's own settle
 # predicate says has stopped moving - GiStatus::giAtRest, the one --engine-selftest waits on: the chain owes nothing, the
 # cards' rest decision is taken, and the gather's history is settled (an EMA at h = 10 takes ceil(ln(1/D) / ln(1 - 1/h))
@@ -40,43 +56,9 @@
 #   gi.walk_rough.walk   `rough_lag.sh <jahlab> <walk dir> walk`: the walk session (a converged hold at the start, the
 #                        teleport, hold:1, the 60-frame walk, the door's 8 frames and its 60-frame trail, the dump) - its
 #                        dump pruned to frames 14 / 28 / 59 (FIXTURES_SETUP gi_walk_rough_dump);
-#   gi.walk_rough.k<k>   `rough_lag.sh <jahlab> <walk dir> <k> <own dir>`: the converged poses k - h (the re-derived law's
-#                        slope), k and k + 1 (the old law's step term) and the twelve raw frames at k, then the law at k on
-#                        the walk's frame k.
-# 960x540; one jahlab session a row (.walk 350 frames, its rest 279; .k14 / .k28 / .k59 506 / 519 / 550, their rests
-# 208-291 - the whole row was 4,314). Each row prints its law's numbers as LAW lines (tests/support/lawline.h).
-# THE SAME LAW, SPLIT (one run each at 1e1c4d97e, no B5, 2026-10-29): the split 2.01 / 5.14 / 17.82 %, the whole row
-# 2.15 / 4.93 / 17.22 % - |walk - conv| mean 1.46 / 1.91 / 2.93 and p99 13 / 13 / 11 codes identical, the rest the twelve
-# raw frames' sigma; the declared 1.79 / 4.59 / 16.07 above are cafcc1f64's (the tree moved since, not the split).
-# THE LAG LAW RE-DERIVED (ROUGH-LOBE-HISTORY-1 stage 2C, 2026-11-21; the arithmetic is LAW_PY below, self-checked by
-# gi.walk_rough.law; it replaces the forward-step form above once the refutation run has read both on k14):
-#   THE HISTORY (rq_probe_integrate.comp:1257-1294; the rough lobe takes the diffuse's blend, Lumen's one N for both):
-#     m_j = (1 - b_j) m_(j-1) + b_j x_j,  b_j = max(1 / n_j, alpha),  alpha = 1 / h,
-#   n_j the history count (the frames the mean holds, this one included; 4 bits, so it SATURATES at 15), h the floor's
-#   frames; the fast update only RAISES b (N' = min(N, (1 - F)(h - 1)), b = 1 / (1 + N'), the stored count round(N') + 1:
-#   so b >= 1 / (n + 1/2) at the stored count n). Its expectation's lag behind the converged picture c:
-#     lag_j = c_j - E[m_j] = (1 - b_j) (lag_(j-1) + c_j - c_(j-1))
-#   - the sum Sum_j alpha (1 - alpha)^j (c(k) - c(k - j)) at the floor. For a RAMP (c_j - c_(j-1) = s) its fixed point
-#   at b = alpha is lag = ((1 - alpha) / alpha) s = (h - 1) s; and as b_j >= alpha on every frame, lag <= (h - 1) s holds
-#   whatever the history's past (refusals, fast cuts) - so one frame at b >= 1 / n_eff from it bounds
-#     lag <= (1 - 1/n_eff) h s,   n_eff = min(n + 1/2, h)   ((h - 1) s for every n >= h - every saturated count; 0 at n = 0).
-#   THE SLOPE is read BACKWARD over the window the EMA remembers: s = |c(k) - c(k - h)| / h, from ONE MORE CONVERGED POSE
-#   h frames behind k. Both pictures are 8-bit, so |c(k) - c(k - h)| is known to +-1 code (the slope to +-1/h a frame),
-#   and the bound grants that rounding (else a true lag at the bound breaks by the pictures' rounding alone):
-#     lag(k) <= (1 - 1/n_eff) (|conv(k) - conv(k - h)| + 1)
-#   THE NEW LAW:  |walk(k) - conv(k)| <= (1 - 1/n_eff) (|conv(k) - conv(k - h)| + 1) + 3 SE_walk + 1
-#   (the noise term as before). It is TIGHTER where the count saturates (9 steps of the slope where the old form gave 14)
-#   and stops collapsing where the slope is under half a code a frame. WHAT THE OLD FORM GOT WRONG: (N - 1)
-#   |conv(k+1) - conv(k)| took (a) the COUNT for the memory - 15 against the EMA's h = 10 - and (b) ONE FORWARD 8-bit step,
-#   +-1 code: a ramp of 0.3 code a frame lags 2.7 codes and reads a step of 0 at 70 % of the rounding offsets (granted 0),
-#   1 at the rest (granted 14). A pixel starved of samples (blend 0: the hit list full) keeps its mean and lags past the
-#   bound - the law shows it.
-#   h IS READ, NEVER WRITTEN HERE: no status field carries the history's floor itself (GatherTuning::historyFrames is the
-#   A/B door, 0 = the shipped kHistoryFrames, OgreScreenProbeGather.cpp:360-366; the lab's status has no such field). The
-#   walk's OWN stillness record carries its settle (rough-walk.tsv settle_frames, GiStatus's settleFrames), which is
-#   settleFramesOf(h) = ceil(ln(1/D) / ln(1 - 1/max(h, 2))) at D = kGatherSettleCodes = 5 (OgreScreenProbeGather.cpp:372,
-#   Types.h): one-to-one on h = 3..15 (h 1 and 2 share the settle 3), so the row inverts it (16 -> 10) and refuses a
-#   settle that names no single h.
+#   gi.walk_rough.k<k>   `rough_lag.sh <jahlab> <walk dir> <k> <own dir>`: the converged poses k - h (the slope) and k and
+#                        the twelve raw frames at k, then the law at k on the walk's frame k.
+# 960x540; one jahlab session a row. Each row prints its law's numbers as LAW lines (tests/support/lawline.h).
 # usage: rough_lag.sh law (the law's self-check: no card, no display) | rough_lag.sh <jahlab> <walk dir> walk |
 #        rough_lag.sh <jahlab> <walk dir> 14|28|59 <work dir>
 set -u
@@ -245,7 +227,7 @@ KB=$((K - HH))
 echo "gi.walk_rough.k$K: the history's floor h = $HH (the walk's settle $SETTLE); the slope's pose k - h = $KB"
 {
     printf 'row reflectionRoughnessCutoff 0\n'
-    for k in $KB $K $((K + 1)); do
+    for k in $KB $K; do
         python3 -I -c "
 s=(0.0,1.6,2.4); e=(0.0,1.6,0.4); k=$k/60.0
 print('camera %.6f,%.6f,%.6f,0,0,-3' % tuple(a+(b-a)*k for a,b in zip(s,e)))"
@@ -282,35 +264,27 @@ n = np.fromfile(base + '.ghc', dtype=np.uint8).reshape(gh, gw).astype(np.float64
 if (gw, gh) != (W, H):   # (the history's grid onto the picture's)
     n = n[(np.arange(H) * gh // H)][:, (np.arange(W) * gw // W)]
 hh, kb = int(sys.argv[5]), int(sys.argv[6])
-c0, c1, ckb = png('conv%d' % k), png('conv%d' % (k + 1)), png('conv%d' % kb)
+c0, ckb = png('conv%d' % k), png('conv%d' % kb)
 raw = np.stack([png('raw%d_%d' % (k, j)) for j in range(12)])
 sigma = raw.std(axis=0, ddof=1).max(axis=2)
 N = np.maximum(n, 1.0)
 se = sigma / np.sqrt(N)
 lhs = np.abs(walk - c0).max(axis=2)
-step = np.abs(c1 - c0).max(axis=2)
 rough = cls == 2
 if rough.sum() < 50000:
     print('FAIL: walk frame %d: %d rough pixels (< 50,000): the fixture moved' % (k, rough.sum())); sys.exit(1)
-breaks = rough & (lhs > (N - 1.0) * step + 3.0 * se + 1.0)
+grant = lag_allowance({k: c0, kb: ckb}, k, n, hh)
+slope = np.abs(c0 - ckb).max(axis=2)
+breaks = rough & (lhs > grant + 3.0 * se + 1.0)
 share = breaks.sum() / rough.sum()
-print('walk frame %d: rough %d px, N median %.0f, sigma median %.2f codes, SE_walk median %.2f (p90 %.2f); '
-      '|walk - conv| mean %.2f p99 %.1f; breaking %.2f %% (bar 1 %%)' % (k, rough.sum(), np.median(N[rough]),
-      np.median(sigma[rough]), np.median(se[rough]), np.percentile(se[rough], 90), lhs[rough].mean(),
-      np.percentile(lhs[rough], 99), 100 * share))
+print('walk frame %d: rough %d px, h %d (the slope from pose %d), n median %.0f, sigma median %.2f codes, SE_walk median %.2f '
+      '(p90 %.2f); |walk - conv| mean %.2f p99 %.1f; the lag granted median %.2f (p90 %.2f) codes; breaking %.2f %% (bar 1 %%)'
+      % (k, rough.sum(), hh, kb, np.median(n[rough]), np.median(sigma[rough]), np.median(se[rough]),
+         np.percentile(se[rough], 90), lhs[rough].mean(), np.percentile(lhs[rough], 99), np.median(grant[rough]),
+         np.percentile(grant[rough], 90), 100 * share))
 print('LAW k%d.breaking %.4f %% <= 1' % (k, 100 * share))
 print('LAW k%d.lag_mean %.4f codes' % (k, lhs[rough].mean()))
 print('LAW k%d.lag_p99 %.4f codes' % (k, np.percentile(lhs[rough], 99)))
-# THE REFUTATION (stage 2C's first card read, the spec's ruling: if the two shares agree within 0.2 %, C is refuted): the
-# re-derived law's share BESIDE the old one, on the same pixels, the same noise term - only the lag term differs
-grant = lag_allowance({k: c0, kb: ckb}, k, n, hh)
-slope = np.abs(c0 - ckb).max(axis=2)
-breaks_new = rough & (lhs > grant + 3.0 * se + 1.0)
-share_new = breaks_new.sum() / rough.sum()
-print('RESIDUE k%d THE RE-DERIVED LAW (h %d; the slope from pose %d): breaking %.4f %% beside the old law\'s %.4f %% '
-      '(%+.4f); breaking under both %d px, the old alone %d, the new alone %d' % (k, hh, kb, 100 * share_new, 100 * share,
-      100 * (share_new - share), int((breaks & breaks_new).sum()), int((breaks & ~breaks_new).sum()),
-      int((breaks_new & ~breaks).sum())))
 # THE RESIDUE's DUMP (ROUGH-LOBE-HISTORY-1 stage 2.0; the reader's candidates, spikes/rough-lobe-history-1/RESIDUE.md):
 # WHERE the breaking pixels sit, printed and kept - never a law, never a bar (no LAW line). Kept in the k's own work dir
 # (rough_lag.sh removes it only at the row's next run): breaks.png (red a breaking EDGE pixel, white a breaking INTERIOR
@@ -318,14 +292,13 @@ print('RESIDUE k%d THE RE-DERIVED LAW (h %d; the slope from pose %d): breaking %
 #   EDGE (candidate A, another surface's history): within 2 px of a DEPTH BREAK - a relative jump over 5 % between two
 #     4-neighbours of the walk dump's own view distance for this frame (.dist, the history's grid, mapped as .ghc is; 0 = no
 #     surface, itself a break) - or of a CLASS-MAP BOUNDARY (.cls: a 4-neighbour of another class). INTERIOR: the rest.
-#   STEP 0 (candidate C, the law's own allowance collapsing): the law's step |conv(k+1) - conv(k)| reads 0 codes, so the
-#     allowance is 3 SE + 1 alone. SLOPE 0: the re-derived law's |conv(k) - conv(k - h)| reads 0 codes.
-#   Each reading is printed under the OLD law and under the RE-DERIVED one (stage 2C's refutation), and the inputs kept as
-#   law.npz beside the pictures (walk, the three converged poses, sigma, the count, the classes, the edge mask, h).
+#   SLOPE 0: the law's |conv(k) - conv(k - h)| reads 0 codes (the lag term at its rounding's grant alone).
 #   LOW N (candidate D, young pixels): the history count N under the gather's young frames (kYoungFrames 12,
 #     OgreScreenProbeGather.cpp - the young read's reach narrows to the bilinear at 12 frames); with the bottom band's share
 #     (the breakers in the picture's lowest quarter of rows, against the rough class's own share there).
 #   SIGN (candidate E, the clamp): the share of breakers whose walk is BRIGHTER than conv (the larger channel's sign).
+#   The inputs are kept as law.npz beside the pictures (walk, the two converged poses, sigma, the count, the classes, the
+#   edge mask, h), so a reading needs no second card run.
 wd = sys.argv[4]
 def dilate(m, r):
     p = np.pad(m, r)
@@ -359,23 +332,20 @@ def residue(tag, brk):
     def sh(m):
         return 100.0 * (m & brk).sum() / max(nb, 1)
     print('RESIDUE k%d%s: %d breaking px of %d rough (%s); EDGE %.1f %% / INTERIOR %.1f %% (the rough class: %.1f %% edge); '
-          'STEP 0 %.1f %% (the rough class: %.1f %%); SLOPE 0 %.1f %% (the rough class: %.1f %%); LOW N (< 12) %.1f %% (the '
+          'SLOPE 0 %.1f %% (the rough class: %.1f %%); LOW N (< 12) %.1f %% (the '
           'rough class: %.1f %%); bottom quarter %.1f %% (the rough class: %.1f %%); walk BRIGHTER %.1f %%' % (
           k, tag, nb, rough.sum(), 'the dump has .dist' if dist is not None else 'NO .dist: class seams only', sh(edge),
-          100.0 - sh(edge), 100.0 * (edge & rough).sum() / rough.sum(), sh(step == 0),
-          100.0 * ((step == 0) & rough).sum() / rough.sum(), sh(slope == 0), 100.0 * ((slope == 0) & rough).sum() / rough.sum(),
+          100.0 - sh(edge), 100.0 * (edge & rough).sum() / rough.sum(),
+          sh(slope == 0), 100.0 * ((slope == 0) & rough).sum() / rough.sum(),
           sh(N < 12), 100.0 * ((N < 12) & rough).sum() / rough.sum(), sh(band), 100.0 * (band & rough).sum() / rough.sum(),
           sh(bright)))
     if nb:
-        print('RESIDUE k%d%s breakers: N p10/p50/p90 %.0f/%.0f/%.0f; |walk - conv| p50/p90 %.0f/%.0f codes; step p50/p90 '
-              '%.0f/%.0f; slope (|conv(k) - conv(k - h)|) p50/p90 %.0f/%.0f; EDGE and STEP 0 %.1f %%; INTERIOR and STEP 0 %.1f %%'
-              % (k, tag, *np.percentile(N[brk], [10, 50, 90]), *np.percentile(lhs[brk], [50, 90]),
-                 *np.percentile(step[brk], [50, 90]), *np.percentile(slope[brk], [50, 90]), sh(edge & (step == 0)),
-                 sh(~edge & (step == 0))))
-residue(' (the old law)', breaks)
-residue(' (the re-derived law)', breaks_new)
-# (the refutation's inputs kept beside the pictures, so a reading needs no second card run)
-np.savez_compressed(os.path.join(wd, 'law.npz'), walk=walk.astype(np.uint8), c0=c0.astype(np.uint8), c1=c1.astype(np.uint8),
+        print('RESIDUE k%d%s breakers: n p10/p50/p90 %.0f/%.0f/%.0f; |walk - conv| p50/p90 %.0f/%.0f codes; slope '
+              '(|conv(k) - conv(k - h)|) p50/p90 %.0f/%.0f; the lag granted p50/p90 %.1f/%.1f codes' % (
+              k, tag, *np.percentile(n[brk], [10, 50, 90]), *np.percentile(lhs[brk], [50, 90]),
+              *np.percentile(slope[brk], [50, 90]), *np.percentile(grant[brk], [50, 90])))
+residue('', breaks)
+np.savez_compressed(os.path.join(wd, 'law.npz'), walk=walk.astype(np.uint8), c0=c0.astype(np.uint8),
                     ckb=ckb.astype(np.uint8), sigma=sigma.astype(np.float32), n=n.astype(np.uint8), cls=cls, edge=edge, h=hh,
                     kb=kb)
 img = np.zeros((H, W, 3), dtype=np.uint8)
