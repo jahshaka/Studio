@@ -89,7 +89,6 @@
 #include <algorithm>
 #include <chrono>
 #include <cmath>
-#include <cstdint>
 #include <cstdio>
 #include <string>
 #include <vector>
@@ -539,63 +538,10 @@ int main(int argc, char **argv)
         int stepRest = -1, fadeRest = -1;
         bool fadeOk = false;
         if (lampArm && lampOk && doLamp) {
-            // NONDET-1 STAGE 0, E1 + E2 (A MEASURING ARM: its own commit, measured once, reverted by a new commit).
-            // E1: every frame from the fade's start state through the fade and its settle, every field the chain
-            // PUBLISHES (no GPU read: published() is the host's copy), one line a frame, prefixed "E1".
-            // E2: at the fade's start and at its rest, per cascade, the digests the store doors already give
-            // (giVoxelStats: the voxeliser's store, the direct term, every light volume; giHalfStoreWords: the total's
-            // own words) and each input's peak, prefixed "E2".
-            const char *e1Phase = nullptr;
-            int e1Frame = 0;
-            const auto e1Line = [&]() {
-                const GiStatus g = m.scene->published().gi;
-                std::printf("E1 %s %d | owed %d fbOwed %d rests %llu atRest %d regions %u closes %llu full %llu",
-                            e1Phase, e1Frame++, int(g.chainOwed), int(g.feedbackOwed), g.feedbackRests, int(g.giAtRest),
-                            g.regionCount, g.regionCloses, g.cascadeFullRebuilds);
-                for (size_t c = 0; c < g.cascades.size(); ++c) {
-                    const GiStatus::CascadeStatus &k = g.cascades[c];
-                    std::printf(" | c%zu reb %llu pend %d scr %llu act %u prior %u owed %d pass %llu ran %llu stop %llu "
-                                "res %llu sat %llu rd %llu car %llu rlcar %llu rnd %llu rlvox %llu rlslab %llu "
-                                "lit %llu/%llu cells %llu/%llu cnt %llu march %llu rreb %llu rcells %llu rowed %u mowed %u "
-                                "rbp %llu rbl %u lights %d/%d bD %u bB %u bA %u bupd %llu brd %llu bskip %llu gath %lld/%lld",
-                                c, k.rebuilds, k.pending, k.scrolls, k.feedbackActive, k.feedbackOnPrior,
-                                int(k.feedbackOwed), k.feedbackPasses, k.feedbackBricksRan, k.feedbackStops,
-                                k.feedbackResumes, k.feedbackSaturated, k.feedbackReadings, k.feedbackCarried,
-                                k.relightCarried, k.relightRounds, k.relightVoxels, k.relightSlab, k.commitLitSlab,
-                                k.commitLitBand, k.commitSlabCells, k.commitInjectCells, k.commitCounted, k.deltaMarched,
-                                k.regionRebuilds, k.regionCells, k.regionOwed, k.marchOwed, k.regionBouncePasses,
-                                k.regionBounceLast, k.lightsInRange, k.lightsInjected, k.bricksDirectLast,
-                                k.bricksBounceLast, k.bricksActiveLast, k.brickUpdates, k.brickReadings,
-                                k.brickReadingsSkipped, k.voxelGathers, k.voxelReadingGather);
-                }
-                std::printf("\n");
-                std::fflush(stdout);
-            };
-            const auto e2Read = [&](const char *when) {
-                const size_t n = m.scene->published().gi.cascades.size();
-                for (size_t c = 0; c < n; ++c) {
-                    const GiVoxelStats st = m.scene->giVoxelStats(int(c));
-                    std::vector<std::uint16_t> words;
-                    const bool hw = m.scene->giHalfStoreWords(int(c), words);
-                    unsigned long long h = 1469598103934665603ull;
-                    for (std::uint16_t w : words) {
-                        h ^= w;
-                        h *= 1099511628211ull;
-                    }
-                    std::printf("E2 %s c%zu avail %d | store %s | direct %s | light %s | total %016llx (%zu words, %d) | "
-                                "peak total %.9g direct %.9g emissive %.9g | meanLit %.9g lit %lld aboveOne %lld\n",
-                                when, c, int(st.available), st.storeDigest.c_str(), st.directDigest.c_str(),
-                                st.lightDigest.c_str(), hw ? h : 0ull, words.size(), int(hw), double(st.peak),
-                                double(st.peakDirect), double(st.peakEmissive), st.meanLit, st.voxelsLit,
-                                st.voxelsAboveOne);
-                }
-                std::fflush(stdout);
-            };
             const auto toRest = [&](int cap) {
                 int f = 0, quiet = 0;
                 for (; f < cap && quiet < 8; ++f) {
                     run(1);
-                    if (e1Phase) e1Line();
                     const GiStatus g = m.scene->published().gi;
                     quiet = (!g.chainOwed && !g.feedbackOwed) ? quiet + 1 : 0;
                 }
@@ -619,9 +565,7 @@ int main(int argc, char **argv)
                 run(64);
                 o400 = read(m.scene);
                 e->setArm("gi.bounceJacobi", 0.0);
-                e1Phase = "pre";   // (NONDET-1 E1: from the Jacobi's end at 400 to the fade's first frame)
-                e1Frame = 0;
-                for (int q = 0; q < 2; ++q) { run(1); e1Line(); }
+                run(2);
                 toRest(900);
             }
             // THE STEP ARM: 400 -> 200 in one frame
@@ -640,13 +584,9 @@ int main(int argc, char **argv)
             unsigned long long rounds0 = m.scene->published().gi.cascades.empty()
                                              ? 0ull : m.scene->published().gi.cascades[0].relightRounds;
             int lastRound = 0, roundGap = 0, roundsDone = 0;
-            e2Read("start");   // (NONDET-1 E2: the stores at the fade's start, at rest)
-            e1Phase = "fade";
-            e1Frame = 1;
             for (int f = 1; f <= kFadeFrames; ++f) {
                 setLamp(400.0f - 200.0f * float(f) / float(kFadeFrames));
                 run(1);
-                e1Line();
                 const GiStatus g = m.scene->published().gi;
                 const unsigned long long r0 = g.cascades.empty() ? 0ull : g.cascades[0].relightRounds;
                 if (r0 != rounds0) {
@@ -661,12 +601,8 @@ int main(int argc, char **argv)
             fadeRoundGap = roundGap;
             fadeRounds = roundsDone;
             fadeRoundBound = int(2u * lwf + 2u);
-            e1Phase = "settle";
-            e1Frame = 0;
             fadeRest = toRest(900);
-            e1Phase = nullptr;
             fEnd = read(m.scene);
-            e2Read("rest");   // (NONDET-1 E2: the stores at the fade's rest, after the row's own read)
             }
             // each arm against the end state's Jacobi (the resume arm's, the lamp at 200), beyond the range
             fadeOk = lj.voxels == outside.size() && (!doFade || (o400.ok && fEnd.ok && o400.voxels == lj.voxels &&
