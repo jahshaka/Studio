@@ -519,3 +519,4 @@ tooling.row_lock_env 0.23  solo (alone in its own ctest call, 2026-11-22, load 4
 engine.rough_lobe_transport 0.04  by hand (spec.sh reprice, 2026-11-21)
 source.rough_lobe_transport 0.02  by hand (spec.sh reprice, 2026-11-21)
 gi.walk_rough.law 1.84  by hand (spec.sh reprice, 2026-11-21)
+engine.stillness_history_column 0.02  by hand (spec.sh reprice, 2026-11-21)
