@@ -290,7 +290,9 @@ private:
     /// Drops `guid`'s encode in flight (a synchronous write or a delete
     /// replaces what it would have written).
     void supersedeThumbnail(const QString &guid);
-    /// Hands every `.removing-*` folder of `projectsDir` no worker owns yet to a worker that removes it.
+    /// Hands every `.removing-<guid>-*` folder of `projectsDir` no worker owns yet and NO PROJECT ROW CLAIMS to a
+    /// worker that removes it; a claimed one (a live project's, left aside by a killed or refused delete) is
+    /// renamed back to `<guid>`; an unreadable library removes nothing.
     void removeAsideFoldersLater(const QString &projectsDir);
     QHash<QString, QFutureWatcher<QByteArray> *> mThumbEncodes;
     /// The folder removals in flight (removeProject), and the aside paths they

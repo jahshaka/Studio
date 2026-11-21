@@ -380,7 +380,8 @@ bool ProjectService::removeProject(const QString &guid, QString *whyOut)
     }
     if (!rowsOk) {
         if (!aside.isEmpty() && !QDir().rename(aside, folder))
-            qWarning("project delete: the rows of %s were kept but its folder could not be put back from '%s'",
+            qWarning("project delete: the rows of %s were kept but its folder could not be put back from '%s' "
+                     "(the next start-up, or the next delete there, puts it back: a kept row claims it)",
                      qUtf8Printable(guid), qUtf8Printable(aside));
         return fail(QStringLiteral("the library refused to delete the project's rows; nothing was deleted"));
     }
@@ -395,12 +396,41 @@ void ProjectService::removeAsideFoldersLater(const QString &projectsDir)
 {
     // Every folder aside in this directory that no worker owns yet: a delete's
     // own, and any a killed process left behind (one directory read, here).
+    // ONLY A FOLDER NO ROW CLAIMS IS REMOVED (the final read's B3): a delete killed between its rename and its
+    // commit, or a refused one whose put-back rename failed, leaves a LIVE project's folder aside under its kept
+    // row; the name (`.removing-<guid>-<ms>`, removeProject) names the guid, and a claimed folder is renamed
+    // back, never removed. A library that cannot be read (or none) sweeps nothing.
+    if (!db) return;
+    QStringList unclaimed;
+    for (const QFileInfo &entry : QDir(projectsDir).entryInfoList(
+             { kAsidePrefix + QLatin1Char('*') }, QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot)) {
+        const QString path = entry.absoluteFilePath();
+        const QString rest = entry.fileName().mid(kAsidePrefix.size());
+        const qsizetype dash = rest.lastIndexOf(QLatin1Char('-'));
+        const QString guid = dash > 0 ? rest.left(dash) : rest;
+        bool readOk = false;
+        if (db->hasProjectRow(guid, &readOk)) {
+            const QString home = QDir(projectsDir).filePath(guid);
+            if (QDir().rename(path, home))
+                qWarning("project delete: '%s' is the folder of the project %s, whose row is kept: put back at '%s'",
+                         qUtf8Printable(path), qUtf8Printable(guid), qUtf8Printable(home));
+            else
+                qWarning("project delete: '%s' is the folder of the project %s, whose row is kept, and it could not "
+                         "be put back at '%s': left aside, never removed", qUtf8Printable(path), qUtf8Printable(guid),
+                         qUtf8Printable(home));
+            continue;
+        }
+        if (!readOk) {
+            qWarning("project delete: the library could not be read, so no folder aside in '%s' is removed",
+                     qUtf8Printable(projectsDir));
+            return;
+        }
+        unclaimed.append(path);
+    }
     QStringList owned;
     {
         QMutexLocker locked(mFoldersAsideLock.get());
-        for (const QFileInfo &entry : QDir(projectsDir).entryInfoList(
-                 { kAsidePrefix + QLatin1Char('*') }, QDir::Dirs | QDir::Hidden | QDir::NoDotAndDotDot)) {
-            const QString path = entry.absoluteFilePath();
+        for (const QString &path : unclaimed) {
             if (mFoldersAside->contains(path)) continue;
             mFoldersAside->insert(path);
             owned.append(path);

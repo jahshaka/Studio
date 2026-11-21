@@ -3037,6 +3037,16 @@ bool Database::fetchProjectTile(const QString &guid, ProjectTileData *out)
     return true;
 }
 
+bool Database::hasProjectRow(const QString &guid, bool *readOk)
+{
+    QSqlQuery query;
+    query.prepare("SELECT 1 FROM projects WHERE guid = ?");
+    query.addBindValue(guid);
+    const bool ok = executeAndCheckQuery(query, "hasProjectRow");
+    if (readOk) *readOk = ok;
+    return ok && query.next();
+}
+
 QStringList Database::fetchProjectGuids(int desktop)
 {
     QSqlQuery query;

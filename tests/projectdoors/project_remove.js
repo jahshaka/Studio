@@ -21,6 +21,7 @@ function make() {
     project.create("Doors Undeletable", { template: "empty" });
     console.log("UNDELETABLE FOLDER=" + project.current().folder);
     project.create("Doors Keep", { template: "empty" });
+    console.log("KEEP FOLDER=" + project.current().folder);
     console.log("make: ALL OK");
 }
 
@@ -40,6 +41,8 @@ function readOnly() {
 // Process 2b: a boot that deletes nothing (the shell checks the start-up sweep took the stale folder).
 function boot() {
     assert(project.list().length >= 2, "the library boots");
+    var keep = project.list().filter(function (p) { return p.name === "Doors Keep"; });
+    assert(keep.length === 1, "the project whose folder a killed delete left aside keeps its row");
     console.log("boot: ALL OK");
 }
 

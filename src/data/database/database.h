@@ -668,6 +668,9 @@ public:
     /// ONE project's desktop row, no thumbnail (the grid's incremental add and
     /// the guid resolve — O(1) by the primary key); false when no row has `guid`.
     bool fetchProjectTile(const QString &guid, ProjectTileData *out);
+    /// Whether a project row has `guid`, told apart from a library that could not be read: `readOk` false =
+    /// nothing is known (the folder sweep then touches nothing).
+    bool hasProjectRow(const QString &guid, bool *readOk);
     /// The projects called exactly `name` (the name half of a guid-or-name resolve).
     QVector<ProjectTileData> fetchProjectsNamed(const QString &name);
     /// THE PROJECT NAME RULE (PROJECT-NAMES-1), the one place it lives. A
