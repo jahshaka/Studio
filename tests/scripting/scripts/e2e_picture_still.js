@@ -8,6 +8,9 @@
 // the stage's): the shot synced the mirror twice, and each sync re-added the last step to the shader clock (+1/60 s,
 // measured by mirror.shader_clock_steps on the base); takePicture restored the frame delay and THEN drew its >= 2 stable
 // frames at the live delta, so particles, the meter and the clouds advanced >= 2 steps per shot.
+// NOT RUN ON THE BASE and not measurable there: the base's mechanism was deleted across stages 0-2 (the mirror's per-sync
+// shader clock in 0, the host-pushed delta in 1, the picture's live-delta stable frames in 2) and this row's verbs are the
+// lane's; no single revert arm restores it (the lead's ruling 2026-11-21).
 var g = project.create(project.nextFreeName("picture-still"), { template: "empty" });
 if (!g || g.length < 10) throw new Error("project.create refused");
 var sun = scene.addLight("directional", { position: { x: 0, y: 12, z: 0 }, rotation: { x: -52, y: 28, z: 0 },
