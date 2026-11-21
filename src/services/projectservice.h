@@ -47,6 +47,7 @@ class Project;
 class ProjectManager;
 class SettingsManager;
 class IEditorViewport;
+class IPlayerHost;
 class UndoService;
 class EditorData;
 class QImage;
@@ -66,6 +67,9 @@ public:
     /// first so pages and modules can be constructed against them); wired as
     /// soon as the page exists.
     void setProjectManager(ProjectManager *pm) { projectManager = pm; }
+    /// The Player page's host (its run plays the same document as the editor's): a save asks both runs for the
+    /// document's edit pose (PlayBack::documentEditPose). Null in a session with no player backend.
+    void setPlayerHost(IPlayerHost *host) { mPlayerHost = host; }
 
     /// The user's projects root (default_directory setting or Documents). The
     /// DEFAULT — a project created through the New Scene dialog's Browse button
@@ -235,6 +239,7 @@ public:
     /// — returns false with `whyOut` set, tells the save-failed hook "the scene
     /// could not be saved: <why>", and leaves the stack DIRTY, so the close
     /// asks. Every door logs one SAVE line (SESSION_LOG_SPEC §5).
+
     bool save(const QString &guid, SaveReason reason, QString *whyOut = nullptr);
 
     /// The presented frame -> scene thumbnail + desktop tile, synchronously
@@ -302,6 +307,7 @@ private:
     ProjectManager *projectManager;
     SettingsManager *settings;
     IEditorViewport *viewport;
+    IPlayerHost *mPlayerHost = nullptr;
     UndoService *undo;
     std::function<iris::ScenePtr()> sceneProvider;
     std::function<void()> mPreWrite;

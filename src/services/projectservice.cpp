@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "services/loadtimeline.h"
 #include "services/jahlog.h"
 #include "player/editpose.h"
+#include "player/iplayerhost.h"
 #include "player/playback.h"
 
 #include <QElapsedTimer>
@@ -478,6 +479,7 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
     QElapsedTimer clock;
     clock.start();
     QByteArray blob;
+    QSet<QString> spawned;   // the nodes a run added: not part of the document this save writes
     const auto fail = [&](const QString &why) {
         if (whyOut) *whyOut = why;
         const QString sentence = QStringLiteral("the scene could not be saved: %1").arg(why);
@@ -513,19 +515,21 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
     {
         LoadTimeline::Accumulate row(QStringLiteral("save:serialize"));
         SceneWriter writer;
-        // A SAVE DURING PLAY WRITES THE EDITED SCENE (STUDIO-HYGIENE-1 audit, player/editpose.h): the
-        // play-start snapshot is swapped in for the walk and the play pose put back on EVERY exit of this
-        // block (the guard), with no frame between — the mirror reads only the dirty marks at its next sync
-        // and finds the play pose it had. A node Play spawned is left out. No command is pushed: the saved
-        // state (UndoService) is the edit pose this writes, which is what Play's stop restores.
-        QSet<QString> spawned;
+        // A SAVE DURING PLAY OR SIMULATE WRITES THE EDITED SCENE (STUDIO-HYGIENE-1, player/editpose.h): the
+        // document's edit pose — whichever of the editor's and the Player's runs started first, else the bodies
+        // Simulate holds — is swapped in for the walk and the moved pose put back on EVERY exit of this block
+        // (the guard), with no frame between: the mirror reads only the dirty marks at its next sync and finds
+        // the pose it had. A node a run added is left out. No command is pushed: the saved state (UndoService)
+        // is the edit pose this writes, which is what Stop restores.
         QVector<editpose::Played<iris::SceneNodePtr, PlayBackNodeTransform>> played;
         struct PutBack {
             QVector<editpose::Played<iris::SceneNodePtr, PlayBackNodeTransform>> &played;
             ~PutBack() { editpose::putBack(played); }
         } putBack{ played };
-        if (const QMap<QString, PlayBackNodeTransform> *pose = viewport ? viewport->playStartPose() : nullptr) {
-            played = editpose::swapIn(scene->nodes.values(), *pose, &spawned);
+        const auto edit = PlayBack::documentEditPose(
+            scene, { viewport ? viewport->playBack() : nullptr, mPlayerHost ? mPlayerHost->playBack() : nullptr });
+        if (!edit.pose.isEmpty()) {
+            played = editpose::swapIn(scene->nodes.values(), edit.pose, edit.wholeDocument ? &spawned : nullptr);
             writer.setOmittedNodes(spawned);
         }
         blob = writer.getSceneObject(projectFolderFor(guid), scene,

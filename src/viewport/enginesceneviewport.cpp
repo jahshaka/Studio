@@ -1884,11 +1884,6 @@ void EngineSceneViewport::setScene(iris::ScenePtr scene)
     presentBackground();
 }
 
-const QMap<QString, PlayBackNodeTransform> *EngineSceneViewport::playStartPose() const
-{
-    return (mPlayback && mPlayback->isScenePlaying()) ? &mPlayback->playStartPose() : nullptr;
-}
-
 void EngineSceneViewport::startPlayingScene()
 {
     if (!mScene || !mPlayback) return;

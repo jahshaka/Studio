@@ -32,6 +32,8 @@ For more information see the LICENSE file
 
 #include "viewport/flystep.h"
 
+class PlayBack;
+
 class IPlayerHost
 {
 public:
@@ -39,6 +41,9 @@ public:
 
     /// Is the scene RUNNING (PlayBack driving physics/animation/controllers)?
     virtual bool isScenePlaying() = 0;
+    /// The Player page's run, bound to the editor's document: what a save asks for the document's edit pose
+    /// (PlayBack::documentEditPose, STUDIO-HYGIENE-1). Null before the page has a scene.
+    virtual const PlayBack *playBack() const = 0;
     virtual void playScene() = 0;
     virtual void stopScene() = 0;
 

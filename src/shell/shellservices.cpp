@@ -63,6 +63,7 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     mPlayer->setHost(deps.playerBackend);
 
     mProject = new ProjectService(db, project, deps.settings, deps.viewport, mUndo, scene);
+    mProject->setPlayerHost(deps.playerBackend);   // a save asks the Player's run too (the document's edit pose)
     mSceneEdit = new SceneEditService(db, project, mUndo, mSelection, deps.viewport, scene, this);
 
     // THE CLIPBOARD (CLIPBOARD_SPEC D3 b) — one component, over the system

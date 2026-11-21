@@ -16,7 +16,6 @@
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QList>
-#include <QMap>
 #include <QPointF>
 #include <QObject>
 #include <QImage>
@@ -38,7 +37,7 @@ class Project;
 class EditorData;
 class Gizmo;
 class SceneMirror;
-struct PlayBackNodeTransform;
+class PlayBack;
 namespace jahshaka { namespace engine { class Scene; class View; struct StillnessSpec; struct StillnessReport; } }
 enum class SceneMode;         // playbackservice.h
 
@@ -370,10 +369,9 @@ public:
     /// desynced once, 2026-09-05, and every editor click went to the player
     /// controller). Verb surface: editor.playing().
     virtual bool isPlaying() const = 0;
-    /// THE EDIT POSE WHILE PLAYING (STUDIO-HYGIENE-1): every node's local transform when Play started, by
-    /// guid — what a save during Play writes (player/editpose.h). Null when not playing (and in a viewport
-    /// that never plays).
-    virtual const QMap<QString, PlayBackNodeTransform> *playStartPose() const { return nullptr; }
+    /// The play-in-place run (STUDIO-HYGIENE-1): what a save asks for the document's edit pose
+    /// (PlayBack::documentEditPose). Null in a viewport that never plays.
+    virtual const PlayBack *playBack() const { return nullptr; }
     /// EJECT (PLAY-SELECT-1, owner R13 — Unreal's F8). While a run owns the
     /// input (a possessed avatar), ejecting hands the mouse and the keyboard
     /// back to the editor WITHOUT stopping the simulation; un-ejecting gives

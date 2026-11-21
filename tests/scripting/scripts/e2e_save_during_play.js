@@ -1,10 +1,12 @@
 // scripting.e2e.save_during_play (an arm of the editor pool) — A SAVE DURING PLAY WRITES THE EDITED SCENE
-// (STUDIO-HYGIENE-1 audit, player/editpose.h). Play moves the document's own nodes; the save door swaps the
-// play-start snapshot in for the walk and puts the play pose back. Engine up: play steps only on frames.
+// (STUDIO-HYGIENE-1, player/editpose.h). Three things move one document's nodes: the editor's run, the Player page's
+// run and Simulate Physics; the save door swaps the document's edit pose (PlayBack::documentEditPose) in for the walk
+// and puts the moved pose back. Engine up: play and simulate step only on frames.
 //
-// THE LAW, exact (no tolerance: the snapshot is the very floats Play found): a rigid body dropped from 5 m,
-// stepped 60 frames, saved mid-fall -> the play pose is still on screen after the save, and the reopened row
-// holds the PRE-PLAY pose bit for bit. Red before the door's swap: the row held where the fall had got to.
+// THE LAW, exact (no tolerance: the snapshot is the very floats the run found): a rigid body dropped from 5 m,
+// stepped, saved or closed (auto-save on, the default) mid-fall -> the moved pose is still on screen after a save,
+// and the reopened row holds the PRE-PLAY (pre-simulate) pose bit for bit. Red before the door's swap: the row held
+// where the fall had got to; red before the final read's B1 fix for the Player's run and for Simulate.
 
 function assert(cond, msg) {
     if (!cond) throw new Error("assert failed: " + msg);
@@ -18,25 +20,98 @@ function byName(name) {
     var n = scene.nodes().filter(function (r) { return r.name === name; });
     return n.length === 1 ? n[0].id : null;
 }
+function dirty() { return editor.undoState().dirty; }
+// A saved project holding one rigid body 5 m up: {guid, body, edited (its pose as saved)}.
+function bodyProject(label) {
+    var g = project.create("Save During Play " + label + " " + Date.now(), { template: "basic" });
+    var body = scene.addPrimitive("cube", { position: { x: 0, y: 5, z: 0 } });
+    node.rename(body, "Falling Body");
+    assert(node.physics(body, { type: "rigidbody", shape: "convexhull", mass: 1 }) === true, label + ": a rigid body");
+    assert(project.save() === true, label + ": the edited scene is saved");
+    return { guid: g, body: body, edited: pose(body) };
+}
+function reopenedAtEditPose(p, label) {
+    assert(project.open(p.guid) === true, label + ": reopen");
+    var reopened = byName("Falling Body");
+    assert(reopened !== null, label + ": the body is in the row");
+    assert(pose(reopened) === p.edited,
+           label + ": the row holds the EDIT pose exactly: " + pose(reopened) + " (edited " + p.edited + ")");
+}
 
-var g = project.create("Save During Play " + Date.now(), { template: "basic" });
-var body = scene.addPrimitive("cube", { position: { x: 0, y: 5, z: 0 } });
-node.rename(body, "Falling Body");
-assert(node.physics(body, { type: "rigidbody", shape: "convexhull", mass: 1 }) === true, "the cube is a rigid body");
-assert(project.save() === true, "the edited scene is saved");
-var edited = pose(body);
-
+// 1. The editor's run, saved mid-fall.
+var p = bodyProject("editor save");
 assert(editor.play() === true, "play");
 editor.frame(60);
-var played = pose(body);
-assert(played !== edited, "60 frames of play moved the body (" + played + ")");
+var played = pose(p.body);
+assert(played !== p.edited, "60 frames of play moved the body (" + played + ")");
 assert(project.save() === true, "a save DURING play succeeds");
-assert(pose(body) === played, "...and the play pose is still the one on screen (put back after the walk)");
+assert(pose(p.body) === played, "...and the play pose is still the one on screen (put back after the walk)");
 assert(editor.stop() === true, "stop");
 assert(project.close() === true, "close");
-assert(project.open(g) === true, "reopen");
-var reopened = byName("Falling Body");
-assert(reopened !== null, "the body is in the row");
-assert(pose(reopened) === edited,
-       "the row holds the PRE-PLAY pose exactly: " + pose(reopened) + " (edited " + edited + ", played " + played + ")");
+reopenedAtEditPose(p, "editor save");
+
+// 2. The Player page's run (its own PlayBack on the same document), saved mid-fall, then closed mid-fall.
+p = bodyProject("player save");
+app.space("player");
+assert(player.playing() === true, "the Player page plays the scene");
+player.frame(30);
+assert(pose(p.body) !== p.edited, "30 Player frames moved the body");
+assert(project.save() === true, "a save during the PLAYER's run succeeds");
+assert(player.stop() === true, "the Player stops");
+app.space("editor");
+assert(project.close() === true, "close");
+reopenedAtEditPose(p, "player save");
+
+p = bodyProject("player close");
+app.space("player");
+player.frame(30);
+assert(pose(p.body) !== p.edited, "30 Player frames moved the body");
+assert(project.close() === true, "a close during the PLAYER's run (its auto-save) closes");
+reopenedAtEditPose(p, "player close");
+
+// 3. Both runs at once (the editor's first, then the Player page: nothing stops the editor's run): the EARLIEST
+//    run's snapshot is the edit pose; the Player's is the editor's play pose.
+p = bodyProject("both runs");
+assert(editor.play() === true, "the editor plays");
+editor.frame(30);
+app.space("player");
+player.frame(10);
+assert(project.save() === true, "a save with both runs playing succeeds");
+player.stop();
+app.space("editor");
+editor.stop();
+assert(project.close() === true, "close");
+reopenedAtEditPose(p, "both runs");
+
+// 4. Simulate Physics (no run): a save and a close mid-fall write the pre-simulate pose.
+p = bodyProject("simulate save");
+assert(editor.simulate(true) === true, "simulate");
+editor.frame(30);
+var simulated = pose(p.body);
+assert(simulated !== p.edited, "30 simulated frames moved the body");
+assert(project.save() === true, "a save DURING Simulate succeeds");
+assert(pose(p.body) === simulated, "...and the simulated pose is still the one on screen");
+assert(editor.simulate(false) === true, "simulate off");
+assert(project.close() === true, "close");
+reopenedAtEditPose(p, "simulate save");
+
+p = bodyProject("simulate close");
+assert(editor.simulate(true) === true, "simulate");
+editor.frame(30);
+assert(project.close() === true, "a close DURING Simulate (its auto-save) closes");
+reopenedAtEditPose(p, "simulate close");
+
+// 5. Simulate first, then Play: the run's snapshot takes the bodies' PRE-SIMULATE pose (the run's physics start
+//    overwrites the environment's copy with the simulated one).
+p = bodyProject("simulate then play");
+assert(editor.simulate(true) === true, "simulate");
+editor.frame(30);
+assert(editor.play() === true, "play over the simulation");
+editor.frame(10);
+assert(project.save() === true, "a save during that run succeeds");
+editor.stop();
+editor.simulate(false);
+assert(project.close() === true, "close");
+reopenedAtEditPose(p, "simulate then play");
+
 console.log("save during play: ALL OK");

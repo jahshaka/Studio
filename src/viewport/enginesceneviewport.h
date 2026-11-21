@@ -160,7 +160,7 @@ public:
     void pausePlayingScene() override;
     void stopPlayingScene() override;
     bool isPlaying() const override { return mPlaying; }
-    const QMap<QString, PlayBackNodeTransform> *playStartPose() const override;
+    const PlayBack *playBack() const override { return mPlayback; }
     QRect widgetRectInWindow() const override;
     bool playEjected() const override { return mPlayEjected; }
     /// A RUN EXISTS — not "a run is stepping" (PLAY-SELECT-1 fix round, F5).

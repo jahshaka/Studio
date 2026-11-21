@@ -34,6 +34,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 
+#include <QHash>
 #include <QMap>
 #include <memory>
 
@@ -267,6 +268,60 @@ void testEditPose()
           "editpose: no nodes, nothing swapped");
 }
 
+// THE DOCUMENT'S EDIT POSE (player/editpose.h documentEditPose, the final read's B1): three things move one document
+// — the editor's run, the Player's run, Simulate Physics. Stand-in runs: the answer is the EARLIEST-started run
+// playing on the document, else the simulation's held bodies; and a run that starts over a running simulation takes
+// the bodies' pre-simulate pose.
+struct RunStandIn
+{
+    bool playingNow = false;
+    quint64 serial = 0;
+    int doc = 0;
+    QMap<QString, PoseEntry> pose;
+    bool isScenePlaying() const { return playingNow; }
+    quint64 playSerial() const { return serial; }
+    int document() const { return doc; }
+    const QMap<QString, PoseEntry> &playStartPose() const { return pose; }
+};
+
+void testDocumentEditPose()
+{
+    const auto entry = [](float y) { return PoseEntry{ iris::Vec3(0, y, 0), iris::Vec3(1, 1, 1), iris::Quat() }; };
+    RunStandIn editor, player;
+    editor.playingNow = player.playingNow = true;
+    editor.doc = player.doc = 1;
+    editor.serial = 1;                      // the editor's run started first (editor.play, then the Player page)...
+    player.serial = 2;
+    editor.pose.insert("body", entry(5));   // ...so it holds the pose before any Play
+    player.pose.insert("body", entry(-3));  // ...and the Player's snapshot is the editor's PLAY pose
+    const QHash<QString, PoseEntry> none;
+
+    auto edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &player, &editor }, 1, &none);
+    CHECK(edit.wholeDocument && edit.pose.value("body").pos == iris::Vec3(0, 5, 0),
+          "editpose: two runs playing on one document - the EARLIEST-started one's snapshot is the edit pose");
+    editor.playingNow = false;
+    edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &editor, &player }, 1, &none);
+    CHECK(edit.wholeDocument && edit.pose.value("body").pos == iris::Vec3(0, -3, 0),
+          "editpose: the Player's run alone - its snapshot (the editor's run is stopped)");
+    player.doc = 2;
+    QHash<QString, PoseEntry> simulated;
+    simulated.insert("body", entry(9));
+    edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &editor, &player }, 1, &simulated);
+    CHECK(!edit.wholeDocument && edit.pose.size() == 1 && edit.pose.value("body").pos == iris::Vec3(0, 9, 0),
+          "editpose: no run on this document - Simulate's held bodies, and not a whole document (nothing is spawned)");
+    edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &editor, nullptr }, 1, &none);
+    CHECK(!edit.wholeDocument && edit.pose.isEmpty(), "editpose: nothing moves the document - no pose to swap");
+
+    auto body = std::make_shared<PoseNode>(), lamp = std::make_shared<PoseNode>();
+    body->guid = "body"; lamp->guid = "lamp";
+    body->pos = iris::Vec3(0, -20, 0);      // Simulate Physics dropped it before Play was pressed
+    lamp->pos = iris::Vec3(4, 4, 4);
+    const auto snap = editpose::playStartSnapshot<PoseEntry>(QList<std::shared_ptr<PoseNode>>{ body, lamp }, simulated);
+    CHECK(snap.value("body").pos == iris::Vec3(0, 9, 0) && snap.value("lamp").pos == iris::Vec3(4, 4, 4) &&
+              snap.size() == 2,
+          "editpose: a run started over a running simulation takes the body's PRE-SIMULATE pose, every other node's own");
+}
+
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
@@ -274,6 +329,7 @@ int main(int argc, char *argv[])
     testSelectionService();
     testUiStep();
     testEditPose();
+    testDocumentEditPose();
     std::printf(failures ? "FAILURES: %d\n" : "ALL PASS\n", failures);
     return failures ? 1 : 0;
 }
