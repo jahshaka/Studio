@@ -80,7 +80,7 @@ set_tests_properties(physics.many_movers PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM
 jah_lsan_lane(document.characterisation)
 
 # document.no_silent_setters (archived: archive/tests/document) — the STATIC half of the dirty-set law
-# (SPECS/DIRTY_SET_MIRROR_SPEC.md §3.8 item 3), shaped like theme.no_raw_sheets (archived: archive/tests/theme).
+# (SPECS/DIRTY_SET_MIRROR_SPEC.md §3.8 item 3), shaped like source.no_raw_sheets (tests/hygiene).
 # Since the mirror only looks at a node the DOCUMENT says changed, a setter that
 # writes a reflected field and reports nothing is a change that never reaches
 # the screen — not a crash, not visible in any pixel test, and healed a second
@@ -92,7 +92,7 @@ find_package(Python3 COMPONENTS Interpreter QUIET)
 
 # document.reader_defaults (archived: archive/tests/document) — THE READER-DEFAULTS LAW, as a command (render audit
 # I-5, lane READER-DEFAULTS-1), shaped like document.no_silent_setters (archived: archive/tests/document) and
-# theme.no_raw_sheets (archived: archive/tests/theme): a lint over the source, because the class it guards
+# source.no_raw_sheets (tests/hygiene): a lint over the source, because the class it guards
 # against is a LITERAL somebody types, not a value somebody can assert.
 #
 # `src/io/scenereader.cpp` default-constructs the document object and overwrites

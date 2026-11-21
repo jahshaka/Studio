@@ -301,7 +301,7 @@ void PlayBack::stopScene()
 	// cannot fault. Everything below this line is guarded for the same reason.
 	clearInputState();
 	// A scene switch can arrive with play state still armed against the
-	// PREVIOUS project: closeProject tears the old scene down (cleanup()
+	// PREVIOUS project: closeWorld tears the old scene down (cleanup()
 	// drops its root node) without routing through here, and the next
 	// setScene's stopPlayingScene then found scene->getRootNode() null —
 	// restoreNodeTransformations walked ->children on null

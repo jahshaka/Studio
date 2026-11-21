@@ -386,7 +386,7 @@ public:
     void presentBackground();
     /// Frames presented since the CURRENT world was bound to this viewport.
     /// Not simply View::framesPresented(): a project close/open reuses the
-    /// engine scene (MainWindow::closeProject leaves it bound), so the engine's
+    /// engine scene (MainWindow::closeWorld leaves it bound), so the engine's
     /// own counter does not restart — the viewport has to remember where the
     /// new world started.
     qulonglong presentsSinceBind() const;
