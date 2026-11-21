@@ -664,3 +664,11 @@ add_test(NAME source.no_box_paths
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_box_paths.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
 set_tests_properties(source.no_box_paths PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_box_paths)
+# source.scripts_executable (TE-TOOLS-3, 2026-11-21): A SCRIPT OUR TEXTS TELL A PERSON TO EXECUTE IS EXECUTABLE - every tracked
+# file directly under scripts/ with a shebang has git mode 100755 (gate_runlog.py, kernel_xid.py, ci_gate_check.py and
+# coverage_map.py did not, while their usage lines, the triage skill and GATE_AND_RIG.md run them by path: exit 126). Its
+# negative control first (a toy repo).
+add_test(NAME source.scripts_executable
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/scripts_executable.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.scripts_executable PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.scripts_executable)
