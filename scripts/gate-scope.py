@@ -579,12 +579,14 @@ def product_paths(paths):
 # moving with the view's size alone, src/app/cli/selftestrunner.cpp), so EVERY file compiled into it, every medium, every build
 # file and every pin can reach them. AN ALLOW-LIST, FAILING CLOSED: a path reaches NO selftest input only when it is one of these
 # - the docs, the tests' own files that are not build files, the tools under scripts/ but the six's own runners (gpu-exclusive.sh
-# and display-guard.sh set the app's environment - JAHSHAKA_VR, DISPLAY; gate_runlog.py judges "an equal environment", the
-# serving's own test). Anything else - src/**, media/**, cmake/**, any CMakeLists.txt or *.cmake, the irisgl gitlink (a pin), a
+# and display-guard.sh set the app's environment - JAHSHAKA_VR, DISPLAY; rig.sh makes the display the six render on - its Xvfb's
+# 1920x1080x24 screen is the window the layout sizes the view in; gate_runlog.py judges "an equal environment", the
+# serving's own test; this file and gate_graph.py ARE the selector that says what reaches them: a change to the judge is never
+# judged by itself - the lead's util.six_served_from loads the TREE's copy of this file, the second engineer's review). Anything else - src/**, media/**, cmake/**, any CMakeLists.txt or *.cmake, the irisgl gitlink (a pin), a
 # new top-level directory, a path this list does not name - REACHES them: the six run. (A .md counts only at the top level or
 # under the docs: one under src/ may be compiled in - src/scripting/claude/skills/*.md.)
 SIX_SERVABLE = re.compile(r"^(docs/|irisgl/docs/|testing/|\.claude/|tests/|scripts/)|^[^/]+\.md$")
-SIX_RUNNERS = re.compile(r"^scripts/(gpu-exclusive\.sh|display-guard\.sh|gate_runlog\.py)$")
+SIX_RUNNERS = re.compile(r"^scripts/(gpu-exclusive\.sh|display-guard\.sh|gate_runlog\.py|gate-scope\.py|gate_graph\.py|rig\.sh)$")
 BUILD_FILE = re.compile(r"(^|/)CMakeLists\.txt$|\.cmake$")
 
 
@@ -596,7 +598,7 @@ def six_inputs(paths):
         if BUILD_FILE.search(p):
             out.append((p, "a build-system file: it can change what the app is built from"))
         elif SIX_RUNNERS.match(p):
-            out.append((p, "the six's own runner (the app's environment, or the equal-environment test)"))
+            out.append((p, "the six's own runner or their judge (the app's environment, the equal-environment test, this selector)"))
         elif not SIX_SERVABLE.search(p):
             out.append((p, "compiled into, loaded by or pinned under the app the six run (or a path the allow-list does not name)"))
     return out
