@@ -9,6 +9,9 @@
 // RED ON THE BASE 273b8e638 / irisgl 4576b132 (derived from its code; this row's probe is the stage's): (a) the meter's
 // frame_time was simulated x particleTimeScale (0.0125 s at scale 0.25, 0.2 s at 4, 0 on a stepless frame); (b) a
 // picture's meter adapted 1/60 s a frame from its first frame's value, so its exposure moved with its settle's length.
+// (b)'s CHECK THAT CATCHES THE BASE is "a picture's meter has no history" (>= 1000): the revert arm of the base's rule
+// (2026-11-21, spikes/one-frame-1/revert-proofs/meter.out) read 0.0 s there, while "equal after 2 and after 200 frames"
+// PASSED on it (1 and 1) - a meter that never moves is equal too.
 // RED ON irisgl 95a46e7e for both (its rule: the scene's stepped time, 0 for a still scene: a thumbnail kept its first
 // frame's brightness for ever). A card row: the meter runs on a view.
 #include <cmath>
