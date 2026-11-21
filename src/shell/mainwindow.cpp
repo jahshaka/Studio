@@ -1693,10 +1693,15 @@ void MainWindow::setupDesktop()
 	pmContainer = new ProjectManager(db, project, this);
 	pmContainer->shell = shellView.get();
 	projectService->setProjectManager(pmContainer);
-	// A FAILED SAVE IS SAID (STUDIO-HYGIENE-1): "the scene could not be saved: <why>" —
-	// a box for a person, a log line for a driven run (the page's one reporter).
+	// A FAILED SAVE IS SAID (STUDIO-HYGIENE-1): "the scene could not be saved: <why>" — a box for a
+	// person, a log line in a SCRIPTED session (nobody can answer a box there). A forced data root alone
+	// is a person's session (FirstRun::isScriptedSession; the lead's ruling, 2026-11-21, the final read 2's
+	// M2): the page's reporter gates on isDrivenSession, which hid a failed Ctrl+S from that person.
 	projectService->setSaveFailedHook([this](const QString &sentence) {
-		if (pmContainer) pmContainer->reportImportProblem(tr("Save Scene"), sentence);
+		qWarning("Jahshaka save: %s%s", qUtf8Printable(sentence),
+		         FirstRun::isScriptedSession() ? " (a scripted session: no box)" : "");
+		if (FirstRun::isScriptedSession()) return;
+		QMessageBox::warning(this, tr("Save Scene"), sentence, QMessageBox::Ok);
 	});
 	// ...and the other half of that pairing: the desktop's New Scene button
 	// creates through the SERVICE, not through a second copy of it (R1).

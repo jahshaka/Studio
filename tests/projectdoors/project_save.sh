@@ -54,6 +54,11 @@ grep -E "^ok:|assert failed|^save:" save.log
 check $rc "process 2 (the failed save) passes (exit $rc)"
 grep -q "save: ALL OK" save.log
 check $? "process 2 reached its end"
+# A FAILED SAVE IS SAID, AND NEVER BLOCKS A SCRIPTED SESSION (the final read 2's M2): the window's save-failed hook
+# ran, logged the sentence and showed no box (a box nobody can answer would hold the process to its timeout). A
+# forced data root alone is a person's session and gets the box (services.core: not scripted).
+grep -q "Jahshaka save: the scene could not be saved: .* (a scripted session: no box)" save.log
+check $? "the failed save reached the window's hook: its sentence logged, no box in a scripted session"
 python3 -I - "$LIB" "$(cat trap.txt)" <<'PY'
 import hashlib, sqlite3, sys
 conn = sqlite3.connect(sys.argv[1])
