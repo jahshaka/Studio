@@ -190,6 +190,26 @@ jah_gpu_row(frame.streaming_picture CLASS engine FRAMES 60
          COMMAND test_engine_streaming_picture
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.streaming_picture PROPERTIES TIMEOUT 60 LABELS "engine")
+# sky.ibl_async_lands — AN ASYNCHRONOUS SCENE's SKY CHANGE GETS ITS REFLECTION (COLD-BOOT-1): an offscreen view in
+# asynchronous mode on the Streaming pace, no shader cache (the convolution's permutations cold), an atmosphere sky. Laws
+# in frames: the convolution deferred at least once; once the background compiler is empty the environment lands within
+# 5 frames (lag + 2, derived in the source); no try after it. RED before the kept workspace (each try's clones cancelled
+# their own requests: the startup gate's livelock, spikes/cold-boot-1/S4arm).
+add_executable(test_engine_ibl_async_lands test_engine_ibl_async_lands.cpp)
+set_target_properties(test_engine_ibl_async_lands PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_ibl_async_lands PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_ibl_async_lands PRIVATE JahshakaEngine)
+add_dependencies(test_engine_ibl_async_lands JahshakaEngineMedia)
+jah_gpu_row(sky.ibl_async_lands CLASS engine FRAMES 200
+         COLD "the convolution's permutations must be cold in the process: the fixture's shaderCacheOff"
+         COMMAND test_engine_ibl_async_lands
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(sky.ibl_async_lands PROPERTIES TIMEOUT 60 LABELS "engine")
 # engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
 # proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
 # read every frame — and in the TSan arm, zero reports.
