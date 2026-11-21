@@ -42,8 +42,8 @@ int main(int argc, char **argv)
     const QString out = QString::fromUtf8(proc.readAll());
     QJsonObject r;
     // THE OFFENDERS, PER SAMPLE: what the engine said it built on the main thread inside each
-    // sample's watch window (Hlms "built in the frame", HlmsCompute "compiles a permutation
-    // in the frame", the compiler's "MAIN-THREAD BUILD of a queued permutation", and the raw
+    // sample's watch window (Hlms "built in the frame", HlmsCompute "parsed its template in
+    // the frame", the compiler's "MAIN-THREAD BUILD of a queued permutation", and the raw
     // shader compiles beside them). Printed on that sample's FAIL line.
     QMap<QString, QStringList> offenders;
     QStringList offStacks;
@@ -71,7 +71,7 @@ int main(int argc, char **argv)
         }
         if (!watching.isEmpty() &&
             (line.contains(QStringLiteral("built in the frame")) ||
-             line.contains(QStringLiteral("compiles a permutation in the frame")) ||
+             line.contains(QStringLiteral("parsed its template in the frame")) ||
              line.contains(QStringLiteral("MAIN-THREAD BUILD")) ||
              (line.startsWith(QStringLiteral("Shader ")) &&
               line.contains(QStringLiteral(" compiled successfully")))))

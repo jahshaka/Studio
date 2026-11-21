@@ -549,3 +549,4 @@ library.statements 7.17  solo 2026-11-22 at ae0f98ffe (spec.sh reprice, run 2026
 desktops.grid_lookup 0.19  solo 2026-11-22 at 0a85a6529 (spec.sh reprice, run 20261122T060833-0a85a6529)
 library.scale 26.25  solo 2026-11-22 at ae0f98ffe (spec.sh reprice, run 20261122T073026-ae0f98ffe)
 engine.compute_layer_prune 0.09  by hand (spec.sh reprice, 2026-11-22)
+engine.compute_record_hit 0.01  by hand (spec.sh reprice, 2026-11-22)

@@ -498,6 +498,25 @@ add_test(NAME engine.compute_job_slots COMMAND test_compute_job_slots WORKING_DI
 set_tests_properties(engine.compute_job_slots PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.compute_job_slots)
 
+# engine.compute_record_hit (SHADER-SYSTEM-1 stage 3F (b), the fork half of COLD-BOOT-1 stage 3) — THE COMPUTE CODE
+# RECORDS in the fork's HlmsCompute (test_compute_record_hit.cpp says each law): no hook = upstream exactly; a clone of
+# equal inputs hits its record (no parse); the hook's key is the only key; a record whose source does not hash to its
+# program key is not filed; clearShaderCache clears the file memo; equal text with slots of other types never shares a
+# program (F2a); the render system's properties are the key's (F2b); a second launch's prewarmed code serves the first
+# dispatch with no parse. Two NULL Roots in turn: a CPU code row.
+add_executable(test_compute_record_hit test_compute_record_hit.cpp)
+set_target_properties(test_compute_record_hit PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_compute_record_hit PRIVATE JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}")
+target_link_libraries(test_compute_record_hit PRIVATE OgreNext)
+add_test(NAME engine.compute_record_hit COMMAND test_compute_record_hit WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.compute_record_hit PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.compute_record_hit)
+
 # engine.cascade_resolution_law (NONDET-1 D1) — A CASCADE IS BUILT AT A MULTIPLE OF 8 in 16..256, rounded up (Types.h
 # giCascadeResolution: the voxel passes run whole bricks with no bound check). The header only: a CPU code row.
 add_executable(test_cascade_resolution_law test_cascade_resolution_law.cpp)
