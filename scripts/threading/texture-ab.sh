@@ -52,6 +52,10 @@ while [ $# -gt 0 ]; do
     *) echo "unknown option: $1" >&2; exit 2;;
   esac
 done
+# A RIG DISPLAY ONLY (URGENT #195, 2026-11-21: the default was the caller's DISPLAY - an agent's shell inherits :0, the OWNER's)
+. "$here/../display-guard.sh"
+jah_rig_display "$display" || { echo "texture-ab: REFUSED (exit 2): display '$display' is not a rig display (60-99; :0 is the OWNER's):" \
+    "$(cd "$here/.." && pwd)/rig.sh up, then --display \$($(cd "$here/.." && pwd)/rig.sh display)" >&2; exit 2; }
 
 [ -x "$binary" ] || { echo "no such binary: $binary" >&2; exit 2; }
 [ -n "$display" ] || { echo "no X display (pass --display :N)" >&2; exit 2; }

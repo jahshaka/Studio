@@ -120,6 +120,16 @@ while [ "$d" != "/" ] && [ -n "$d" ]; do
     if [ "$(basename "$d")" = tests ] && [ -f "$(dirname "$d")/CMakeCache.txt" ]; then tests_dir="$d"; break; fi
     d="$(dirname "$d")"
 done
+# NO ROW ON A DISPLAY THAT IS NOT A RIG (URGENT #195, 2026-11-21): every GPU row runs through this script, and a bare
+# `ctest` in an agent's shell hands it the inherited DISPLAY=:0 - the OWNER's. A DISPLAY outside :60-:99 is REFUSED before
+# anything runs; an empty one passes (a headless row; an engine that needs a display stops by itself). (scripts/display-guard.sh)
+srcroot="$(cd "$here/../.." && /bin/pwd -P)"
+. "$srcroot/scripts/display-guard.sh"
+if [ -n "${DISPLAY:-}" ] && ! jah_rig_display "$DISPLAY"; then
+    echo "fresh_home.sh: REFUSED (exit 2): DISPLAY=$DISPLAY is not a rig display (60-99; :0 is the OWNER's) - nothing run." \
+         "Run the row on your rig: $srcroot/scripts/rig.sh up, then $srcroot/scripts/rig.sh run <label> -- <your ctest line>" >&2
+    exit 2
+fi
 cache_rel=.local/share/Jahshaka/shadercache
 shared=""
 [ -n "$tests_dir" ] && shared="$tests_dir/.shadercache${key:+-$key}"
@@ -260,7 +270,7 @@ fi
 # THE WARM-UP's STAMP (URGENT #140, the header): a cold shared cache refused in a second, never a row timed out at its cap
 warm_refuse() {   # <boot> <why>
     echo "fresh_home.sh: this build's $1 is not warmed ($2) - a row on it compiles its pipelines under its 60-s cap and times" \
-         "out: run \`spec.sh test <spec>\` (it warms first) or \`scripts/warm-app-cache.sh $(dirname "$tests_dir") --only $1\`" \
+         "out: run \`spec.sh test <spec>\` (it warms first) or \`env -u DISPLAY $srcroot/scripts/warm-app-cache.sh $(dirname "$tests_dir") --only $1\`" \
          "(URGENT #140)" >&2
     exit 1
 }

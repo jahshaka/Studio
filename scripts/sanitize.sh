@@ -133,8 +133,10 @@ run_lsan() {
     echo "sanitize: LeakSanitizer runtime $lsan_lib (canary ok)"
 
     [ -f "$BUILD_DIR/CMakeCache.txt" ] || die "$BUILD_DIR is not configured (see docs/BUILDING_LINUX.md)"
-    [ -n "${DISPLAY:-}" ] || [ -n "${JAH_SAN_BUILD_ONLY:-}" ] \
-        || die "no DISPLAY: the lane's app-spawning rows boot Jahshaka (your own Xvfb, under scripts/gpu-exclusive.sh)"
+    # A RIG DISPLAY ONLY (URGENT #195, 2026-11-21: any non-empty DISPLAY passed - an agent's shell inherits :0, the OWNER's)
+    . "$REPO_ROOT/scripts/display-guard.sh"
+    jah_rig_display "${DISPLAY:-}" || [ -n "${JAH_SAN_BUILD_ONLY:-}" ] \
+        || die "DISPLAY='${DISPLAY:-}' is not a rig display (60-99; :0 is the OWNER's): the lane's app-spawning rows boot Jahshaka - $REPO_ROOT/scripts/rig.sh up, then DISPLAY=\$($REPO_ROOT/scripts/rig.sh display) and this line again"
     if [ -z "${JAH_SAN_NO_BUILD:-}" ]; then
         echo "sanitize: building $BUILD_DIR at -j$(build_jobs)"
         cmake --build "$BUILD_DIR" -j"$(build_jobs)" > "$BUILD_DIR/sanitize-lsan-build.log" 2>&1 \

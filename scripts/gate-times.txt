@@ -463,3 +463,4 @@ pool.host_epic::change_then_shot 2.07  the arm's ARM line in pool.host_epic's so
 pool.host_epic::paused_shot 3.07  the arm's ARM line in pool.host_epic's solo run (TE7, 2026-11-04; 3.02 / 2.97 s in the clean-state orders)
 pool.host_epic::frame_step 0.34  the arm's ARM line in pool.host_epic's solo run (TE9, 2026-11-04, card/te9/3-host_epic.out: 338 ms; 333 ms in the first card call's solo run, 331 ms beside lab.monitor)
 tooling.gpu_lock_mark 3.10  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044620-e4427ba87, 1-min load 1.2; V2 plan 0.2)
+source.display_guard 0.87  solo (alone in its own ctest call, 2026-11-21, load 3.5; URGENT #195: CPU only, fakes)

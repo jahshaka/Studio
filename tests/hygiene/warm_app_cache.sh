@@ -12,6 +12,7 @@
 # takes its parent's caches at an equal key); none = all five, a hand run.
 # usage: warm_app_cache.sh <source-dir> <build-dir> [boots|cold|coldcall|keys|inherit]
 set -u
+# (the boots' DISPLAY is :99 - a RIG number, URGENT #195: warm-app-cache.sh refuses any other; the fakes connect to nothing)
 SRC=${1:?source}; BUILD=${2:?build}; PART=${3:-all}
 case "$PART" in all|boots|cold|coldcall|keys|inherit) ;; *) echo "warm_app_cache.sh: <part> is boots, cold, coldcall, keys or inherit, not $PART" >&2; exit 64 ;; esac
 want() { [ "$PART" = all ] || [ "$PART" = "$1" ]; }
@@ -152,7 +153,7 @@ out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'the shared cache is gone' && ok "no shared cache: cold, exit 3" || no "gone cache: '$out' rc $rc"
 "$W" "$BUILD" --check --tests-dir "$T" --only app-of > /dev/null 2>&1; rc=$?
 [ $rc = 64 ] && ok "a bad --only value: exit 64" || no "a bad --only: rc $rc"
-out=$(FAKE_RACE="$B/tests/.shadercache" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
+out=$(FAKE_RACE="$B/tests/.shadercache" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q 'NOT promoted' && [ ! -e "$B/tests/.shadercache.warm-key" ] &&
     ok "a promotion fresh_home SKIPS (its rule 3, NOT replaced): the boot passed, NO stamp" || no "skipped promotion: '$out' rc $rc"
 [ ! -e "$B/tests/.shadercache.driver-key" ] && echo "$out" | grep -q 'app-on waits for the app rows. cache' &&
@@ -162,7 +163,7 @@ out=$(FAKE_RACE="$B/tests/.shadercache" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "
     ok "...while the engine rows' cache, booted by the lab and promoted, is stamped, and its -on boot after it" || no "the engine boots: '$out'"
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'no warm-up recorded' && ok "...so the next call reads cold and warms again" || no "after the skip: '$out' rc $rc"
-out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
+out=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q "warm-app-cache: warm at $key" && [ -e "$B/tests/.shadercache.warm-key" ] &&
     [ -e "$B/tests/.shadercache.driver-key" ] && [ "$(sed -n 3p "$B/tests/.shadercache.warm-key")" = "$SD" ] &&
     echo "$out" | grep -q "^warm_app_boot: test tier " && grep -q 'shaders 3' "$B/tests/.shadercache/cache-manifest.txt" &&
@@ -188,7 +189,7 @@ awk '{ n[$1] = 1 } END { exit (n["app-off"] && n["app-on"] && n["engine-off"] &&
 # THE BUDGET (#106): a boot that no longer fits the call's budget is not started - exit 75, the boots left named
 rm -f "$B/tests/.shadercache.warm-key" "$B/tests/.shadercache.driver-key"
 echo "app-on 1000" >> "$B/tests/.warm-walls"
-out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}" --only app --budget 100); rc=$?
+out=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}" --only app --budget 100); rc=$?
 [ $rc = 75 ] && echo "$out" | grep -q 'the app-on boot (est. 1000 s) does not fit this call.s budget' &&
     echo "$out" | grep -q 'call again: --only app-on$' && [ -e "$B/tests/.shadercache.warm-key" ] &&
     [ ! -e "$B/tests/.shadercache.driver-key" ] &&
@@ -200,7 +201,7 @@ exec 8>"$T/gpu.lock"; flock 8
 t0=$(date +%s)
 # (JAH_GPU_LOCK_HELD unset: a row run under a holder - spec.sh test, gpu-exclusive.sh - inherits it, and the script
 # under test would take the held card for its own and boot)
-out=$(env -u JAH_GPU_LOCK_HELD DISPLAY=:fake JAH_GPU_LOCK="$T/gpu.lock" "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}" --only app-on --budget 10); rc=$?
+out=$(env -u JAH_GPU_LOCK_HELD DISPLAY=:99 JAH_GPU_LOCK="$T/gpu.lock" "$W" "$BUILD" --tests-dir "$B/tests" "${F[@]}" --only app-on --budget 10); rc=$?
 s=$(( $(date +%s) - t0 ))
 exec 8>&-
 [ $rc = 75 ] && echo "$out" | grep -q 'the card stayed held 1 s' && echo "$out" | grep -q 'call again: --only app-on$' &&
@@ -219,7 +220,7 @@ B2="$T/b2"; mkdir -p "$B2/tests"; touch "$B2/CMakeCache.txt"; toy_cache "$B2/tes
 printf 'pass=an-earlier-boot\n' > "$B2/tests/.shadercache/warm-pass.key"
 printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$B2/tests/.shadercache.warm-key"; echo 0000000000000000 > "$B2/tests/.shadercache.engine-id"
 : > "$T/b2.pass"
-out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B2/tests" "${F[@]}" --only app-off); rc=$?
+out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B2/tests" "${F[@]}" --only app-off); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q 'a TOP-UP' && echo "$out" | grep -q -- '--drop-hlms: the home.s hlms layer and its startup-pass record left out' &&
     ! grep -q '^file hlms\.' "$B2/tests/.shadercache/cache-manifest.txt" && grep -q '^file pipeline.cache' "$B2/tests/.shadercache/cache-manifest.txt" &&
     [ "$(cat "$B2/tests/.shadercache.engine-id")" = "$EID" ] &&
@@ -259,7 +260,7 @@ rm -f "$T/held4"
   for _ in $(seq 300); do set -- "$T/gpu4.lock.q"/[0-9]*; [ -e "$1" ] && break; sleep 0.05; done; sleep 2 ) 7>"$T/gpu4.lock" & hp=$!
 for _ in $(seq 50); do [ -e "$T/held4" ] && break; sleep 0.1; done
 tc0=$(date +%s%N)
-out=$(env -u JAH_GPU_LOCK_HELD DISPLAY=:fake JAH_GPU_LOCK="$T/gpu4.lock" "$W" "$BUILD" --tests-dir "$B4/tests" "${F[@]}" --only app-off --budget 300); rc=$?
+out=$(env -u JAH_GPU_LOCK_HELD DISPLAY=:99 JAH_GPU_LOCK="$T/gpu4.lock" "$W" "$BUILD" --tests-dir "$B4/tests" "${F[@]}" --only app-off --budget 300); rc=$?
 cw=$(( ($(date +%s%N) - tc0) / 100000000 ))   # the call's own wall, tenths (floored: the bar below is the stricter for it, +1)
 wait $hp
 ln=$(echo "$out" | grep "warm at $key - the boot")
@@ -272,9 +273,9 @@ B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n' > "$B3/CMakeCa
 printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/covapp"; chmod +x "$T/covapp"
 mkdir -p "$B3/engine/generated" "$B3/bin/media"; cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B3/engine/generated/"
 cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B3/bin/media/" 2>/dev/null
-DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
+DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
 printf '%s\n%s\n%s\n' "$("$W" "$B3" --key)" "k1 k2 " "sets none" > "$B3/tests/.shadercache.warm-key"; echo "$EID" > "$B3/tests/.shadercache.engine-id"
-DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
+DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
 [ "$(cat "$T/b3.prefix" 2>/dev/null)" = "$B3/coverage/boots/app-on" ] && [ -d "$B3/coverage/boots/app-on" ] &&
     ok "a JAH_COVERAGE build's boot writes its profile under coverage/boots/<boot>" || no "the boot's GCOV_PREFIX: '$(cat "$T/b3.prefix" 2>/dev/null)'"
 fi
@@ -287,7 +288,7 @@ if want cold; then
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q "the cold rows' own caches (cold-on): 1 of 1 to prime: x.cold (no prime recorded)" &&
     ok "a cold row listed, never primed at the key: cold-on cold, the row named, exit 3" || no "cold-on unstamped: '$out' rc $rc"
-out=$(JAH_GONE_X=1 JAHSHAKA_SHADER_CACHE_DIR=/x __GL_SHADER_DISK_CACHE=0 DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+out=$(JAH_GONE_X=1 JAHSHAKA_SHADER_CACHE_DIR=/x __GL_SHADER_DISK_CACHE=0 DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q '^warm_cold_rows: x.cold: PRIMED - its run [0-9]* s (exit 3; .*its own red, printed: FAIL: its own law' &&
     [ "$(sed -n 1p "$CS/x.cold.driver-key" 2>/dev/null)" = "$key" ] &&
     [ "$(cat "$T/cold-ran" 2>/dev/null)" = "$T/cwd|arg1|unset|on|epic photon|unset" ] &&
@@ -309,7 +310,7 @@ printf 'y.cold\t%s\t\t%s\nz.cold\t%s\t\t%s\n' "$T/y" "$T/seqfx" "$T/z" "$T/seqfx
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q '2 of 3 to prime: y.cold (no prime recorded); z.cold (no prime recorded)' &&
     ok "two rows newly registered COLD: cold-on cold for those two alone, exit 3" || no "new cold rows: '$out' rc $rc"
-out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+out=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 0 ] && [ ! -e "$T/cold-ran" ] && [ -e "$CS/y.cold.driver-key" ] && [ -e "$CS/z.cold.driver-key" ] &&
     [ "$(cut -d' ' -f1,2 "$T/order" | tr '\n' '|')" = "start y|end y|start z|end z|" ] &&
     ok "...run ONE AT A TIME (y ended before z started), the primed x.cold not run again, each stamped" ||
@@ -317,7 +318,7 @@ out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${
 # A PRIME THAT CRASHED IS NEVER STAMPED (URGENT #155: .cold's prime died out of GPU memory and the stamp was written over it)
 printf '#!/bin/sh\necho "VkResult = VK_ERROR_OUT_OF_DEVICE_MEMORY"\necho "*** Jahshaka crashed"\nexit 1\n' > "$T/oomfx"; chmod +x "$T/oomfx"
 printf 'o.cold\t%s\t\t%s\n' "$T/cwd" "$T/oomfx" >> "$CR"
-out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+out=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 1 ] && echo "$out" | grep -q '^warm_cold_rows: o.cold: NOT PRIMED - its run CRASHED (exit 1, VK_ERROR_OUT_OF_DEVICE_MEMORY)' &&
     [ "$(echo "$out" | tail -1 | grep -c 'the cold-on boot FAILED after [0-9]* s - A PRIME CRASHED, NOT STAMPED: o.cold (its run CRASHED: exit 1, VK_ERROR_OUT_OF_DEVICE_MEMORY)')" = 1 ] && [ ! -e "$CS/o.cold.driver-key" ] &&
     "$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on | grep -q '1 of 4 to prime: o.cold (no prime recorded)' &&
@@ -331,10 +332,10 @@ sed -i '/^o\.cold/d' "$CR"
 printf '#!/bin/sh\ncase "$1" in --seed-check) [ -f fresh ] && exit 0; exit 3 ;; --seed) [ -f fresh ] && exit 0; [ "$JAH_COLD_PRIME" = 1 ] || { echo "FAIL: stale, the warm-up makes it"; exit 1; }; [ -n "$SEED_FAILS" ] || touch fresh; echo PASS; exit 0 ;; esac\nexit 64\n' > "$T/seedfx"
 chmod +x "$T/seedfx"; mkdir -p "$T/s"
 printf 's.seed\t%s\t\t%s\t--seed\n' "$T/s" "$T/seedfx" >> "$CR"
-out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 SEED_FAILS=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+out=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 SEED_FAILS=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 1 ] && echo "$out" | grep -q '^warm_cold_rows: s.seed: NOT PRIMED - the seed is not fresh after its run' && [ ! -e "$CS/s.seed.driver-key" ] &&
     ok "a seed row whose run left its seed stale: NOT PRIMED, no stamp, exit 1" || no "a seed left stale: '$out' rc $rc"
-out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+out=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q '^warm_cold_rows: s.seed: PRIMED' && [ -e "$CS/s.seed.driver-key" ] && [ -f "$T/s/fresh" ] &&
     ok "...its run made it fresh: PRIMED and stamped" || no "a seed made: '$out' rc $rc"
 rm -f "$T/s/fresh"
@@ -342,7 +343,7 @@ out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc
 [ $rc = 3 ] && echo "$out" | grep -q '1 of 4 to prime: s.seed (its startup seed is stale (a new Studio build))' &&
     ok "a seed row stamped at the key whose --seed-check says stale (a new Studio build): cold-on cold for it alone, exit 3" ||
     no "a stale seed: '$out' rc $rc"
-out=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+out=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 0 ] && [ -f "$T/s/fresh" ] && echo "$out" | grep -q 'warm_cold_rows: s.seed: PRIMED' && ! echo "$out" | grep -q 'warm_cold_rows: [xyz].cold: PRIMED' &&
     ok "...and the warm-up re-makes it before any row (the other rows not run again)" || no "the stale seed re-made: '$out' rc $rc"
 rm -f "$T/s/fresh"; out=$(cd "$T/s" && "$T/seedfx" --seed); rc=$?
@@ -352,11 +353,11 @@ fi
 if want coldcall; then
 # THE CALL's OWN CASES (tooling.warm_cold_calls) start from every listed cold row primed - alone, its three rows listed first
 [ "$PART" = coldcall ] && printf 'y.cold\t%s\t\t%s\nz.cold\t%s\t\t%s\n' "$T/y" "$T/seqfx" "$T/z" "$T/seqfx" >> "$CR"
-DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on > /dev/null 2>&1
+DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on > /dev/null 2>&1
 # EACH ROW ITS OWN HOLD: the card held past a row's wait - that row NOT RUN, exit 75, nothing stamped, the next call primes it
 rm -f "$CS/z.cold.driver-key"
 exec 8>"$T/gpu.lock"; flock 8
-out=$(env -u JAH_GPU_LOCK_HELD JAH_COLD_MIN_LEFT=5 DISPLAY=:fake JAH_GPU_LOCK="$T/gpu.lock" "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on --budget 22); rc=$?   # (the least budget whose row still starts: its card wait ~2 s, the law the same)
+out=$(env -u JAH_GPU_LOCK_HELD JAH_COLD_MIN_LEFT=5 DISPLAY=:99 JAH_GPU_LOCK="$T/gpu.lock" "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on --budget 22); rc=$?   # (the least budget whose row still starts: its card wait ~2 s, the law the same)
 exec 8>&-
 [ $rc = 75 ] && echo "$out" | grep -q '^warm_cold_rows: z.cold: NOT RUN - the card stayed held' && [ ! -e "$CS/z.cold.driver-key" ] &&
     echo "$out" | grep -q 'call again: --only cold-on$' &&
@@ -369,8 +370,8 @@ out=$(JAH_GPU_LOCK_HELD=1 JAH_COLD_MIN_LEFT=0 bash "$SRC/tests/support/warm_cold
 [ $rc = 75 ] && echo "$out" | grep -q 'z.slow: NOT PRIMED - killed at the call.s end' && [ $(( $(date +%s) - t0 )) -lt 15 ] &&
     ok "an exe past the call's end (its deadline) is killed and named - NOT PRIMED, exit 75" || no "the bound: '$out' rc $rc"
 # EACH CALL's LOGS KEPT (SHIP-CUT-2 0c): two calls that boot leave two log directories, each with its rows' logs
-rm -f "$CS/x.cold.driver-key"; out1=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on)
-rm -f "$CS/x.cold.driver-key"; out2=$(DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on)
+rm -f "$CS/x.cold.driver-key"; out1=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on)
+rm -f "$CS/x.cold.driver-key"; out2=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on)
 l1=$(echo "$out1" | sed -n "s/^warm-app-cache: this call's logs: //p"); l2=$(echo "$out2" | sed -n "s/^warm-app-cache: this call's logs: //p")
 [ -n "$l1" ] && [ -n "$l2" ] && [ "$l1" != "$l2" ] && [ -f "$l1/cold-on/x.cold.log" ] && [ -f "$l2/cold-on/x.cold.log" ] && [ -f "$l1/cold-on.log" ] &&
     ok "two calls leave two sets of logs (each call's directory, its rows' logs in it)" || no "two calls' logs: [$l1] [$l2]"
@@ -392,7 +393,7 @@ toy_tree() {   # <dir>: a toy build the key reads, a cold row under it
 }
 toy_tree "$T/tA"; toy_tree "$T/tB"; touch -d '2001-01-01' "$T/tB/build/bin/media/x/c.png"
 for t in tA tB; do
-    DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$T/$t/build" --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/$t/build/tests/rows.txt" \
+    DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$T/$t/build" --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/$t/build/tests/rows.txt" \
         --only cold-on > "$T/$t.out" 2>&1
 done
 sa=$(sed -n 2,3p "$T/tA/build/tests/.cold-rows/p.cold.driver-key" 2>/dev/null); sb=$(sed -n 2,3p "$T/tB/build/tests/.cold-rows/p.cold.driver-key" 2>/dev/null)
@@ -420,7 +421,7 @@ toy_cache "$KT/.shadercache" 1 2; toy_cache "$KT/.shadercache-engine" 1 2
 printf '%s\n%s\n%s\n' "$kk" "k1 k2 " "sets none" > "$KT/.shadercache.warm-key"; printf '%s\n%s\n' "$kk" "k1 k2 " > "$KT/.shadercache-engine.warm-key"
 printf '%s\n%s\n' "$kk" app > "$KT/.shadercache.driver-key"; printf '%s\n%s\n' "$kk" lab > "$KT/.shadercache-engine.driver-key"
 echo "$kid" > "$KT/.shadercache.engine-id"; echo "$kid" > "$KT/.shadercache-engine.engine-id"
-DISPLAY=:fake JAH_GPU_LOCK_HELD=1 "$W" "$KB" "${KX[@]}" --only cold-on > /dev/null 2>&1
+DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$KB" "${KX[@]}" --only cold-on > /dev/null 2>&1
 out=$("$W" "$KB" --check "${KX[@]}"); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $kk" ] && ok "the narrowed key's toy tree warm at $kk (every boot)" || no "the toy tree warm: '$out' rc $rc"
 sed -i 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\)/#define JAHSHAKA_ENGINE_BUILD_ID "f\1/' "$KB/engine/generated/jahshaka_engine_build_id.h"
@@ -475,7 +476,7 @@ rm -rf "$PT/.shadercache"; toy_cache "$PT/.shadercache" 1 2; toy_cache "$PT/.sha
 printf '%s\n%s\n%s\n' "$pk" "k1 k2 " "sets none" > "$PT/.shadercache.warm-key"; printf '%s\n%s\n' "$pk" "k1 k2 " > "$PT/.shadercache-engine.warm-key"
 printf '%s\n%s\n' "$pk" app > "$PT/.shadercache.driver-key"; printf '%s\n%s\n' "$pk" lab > "$PT/.shadercache-engine.driver-key"
 echo "$pid" > "$PT/.shadercache.engine-id"; echo "$pid" > "$PT/.shadercache-engine.engine-id"
-DISPLAY=:fake JAH_GPU_LOCK_HELD=1 IX "$PB" --only cold-on > /dev/null 2>&1
+DISPLAY=:99 JAH_GPU_LOCK_HELD=1 IX "$PB" --only cold-on > /dev/null 2>&1
 mkdir -p "$PT/row/dc" "$PT/row/seed-x"; echo drv > "$PT/row/dc/GLCache.bin"; echo k > "$PT/row/seed-x/tree-key.txt"
 out=$(IX "$PB" --check); rc=$?
 [ $rc = 0 ] && ok "the parent toy tree warm at $pk (every boot)" || no "the parent toy tree: '$out' rc $rc"

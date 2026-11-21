@@ -33,7 +33,7 @@ done
 js=$(ctest --test-dir "$BUILD" --show-only=json-v1 -R "^$(printf '%s' "$ROW" | sed 's/[][\.*^$+?(){}|]/\\&/g')\$" 2>/dev/null) \
     || { echo "row-env.sh: ctest --show-only failed in $BUILD" >&2; exit 2; }
 ROW_ENV_GIVEN=$GIVEN exec python3 -I - "$BUILD" "$ROW" "$run" "$scratch" "$HERE" "$js" <<'PY'
-import json, os, shutil, subprocess, sys
+import json, os, shlex, shutil, subprocess, sys
 build, row, run, scratch, here, js = sys.argv[1], sys.argv[2], sys.argv[3] == "1", sys.argv[4], sys.argv[5], sys.argv[6]
 tests = [t for t in json.loads(js or "{}").get("tests", []) if t["name"] == row]
 if not tests:
@@ -89,8 +89,9 @@ if scratch:
         have = open(stamp).readline().strip() if os.path.isfile(stamp) else ""
         if cur and have != cur:
             print("row-env.sh: REFUSED - this build's %s cache is not warmed (%s, the build's key %s): run `spec.sh test` or "
-                  "`scripts/warm-app-cache.sh %s --only %s-off` first" % (key or "app", have or "no warm-up recorded", cur,
-                  build, key or "app"), file=sys.stderr); sys.exit(2)
+                  "`env -u DISPLAY %s %s --only %s-off` first (URGENT #195: no DISPLAY - it takes the tree's rig)" % (key or "app",
+                  have or "no warm-up recorded", cur, os.path.join(here, "warm-app-cache.sh"), build, key or "app"),
+                  file=sys.stderr); sys.exit(2)
         name = ".shadercache%s" % ("-" + key if key else "")
         src = os.path.join(build, "tests", name)
         if os.path.isdir(src):
@@ -128,9 +129,12 @@ for e in env_mod:
         print("row-env.sh: unknown ENVIRONMENT_MODIFICATION op %s" % e, file=sys.stderr); sys.exit(2)
 if gpu:
     d = env.get("DISPLAY", "")
-    if not d or d in (":0", ":0.0"):
-        print("row-env.sh: REFUSED - a GPU row runs on an explicit DISPLAY=:NN of your own Xvfb, never :0 (got '%s'): "
-              "`scripts/rig.sh up`, then DISPLAY=$(scripts/rig.sh display)" % d, file=sys.stderr); sys.exit(2)
+    # A RIG DISPLAY ONLY (URGENT #195: scripts/display-guard.sh, the one definition - :0 was refused, :1 or :10.0 passed)
+    if subprocess.run(["bash", os.path.join(here, "display-guard.sh"), "check", d]).returncode != 0:
+        print("row-env.sh: REFUSED (exit 2) - a GPU row runs on a rig display (DISPLAY=:60-:99, your tree's Xvfb), never :0 "
+              "(got '%s'): %s up, then DISPLAY=$(%s display) %s" % (d, os.path.join(here, "rig.sh"), os.path.join(here, "rig.sh"),
+              " ".join(shlex.quote(a) for a in [os.path.join(here, "row-env.sh"), os.environ.get("ROW_ENV_GIVEN") or build, row,
+                                                 "--run"] + (["--scratch", scratch] if scratch else []))), file=sys.stderr); sys.exit(2)
     if env.get("JAH_GPU_LOCK_HELD") != "1":
         cmd = [os.path.join(here, "gpu-exclusive.sh"), "--label", "row-env " + row] + cmd
 # OUR CPUs (the box split with the Unreal session): the one setting, scripts/rig.sh cpus (WORKFLOW-STREAMLINE-1 5.8)

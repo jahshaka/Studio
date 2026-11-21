@@ -163,6 +163,15 @@ while [ "$#" -gt 0 ]; do
     esac
 done
 [ "$#" -gt 0 ] || { echo "usage: gpu-exclusive.sh [--run-timeout <s>] [--wait-max <s>] [--label <text>] <command> [args...]" >&2; exit 64; }
+# NOTHING UNDER THE LOCK SEES A DISPLAY THAT IS NOT A RIG (URGENT #195, 2026-11-21): every GPU run passes through here, and an
+# agent's shell inherits DISPLAY=:0 - the OWNER's. A DISPLAY outside :60-:99 is UNSET for the command, said on one line: a tool
+# under it then takes its tree's rig (warm-app-cache.sh, dolly, perf-ab) and a bare app finds no display and stops - never :0.
+# A caller that names its rig (rig.sh run, the lead tools' rows) is untouched. (scripts/display-guard.sh: the one definition.)
+. "$here/display-guard.sh"
+if [ -n "${DISPLAY:-}" ] && ! jah_rig_display "$DISPLAY"; then
+    echo "gpu-lock: DISPLAY=$DISPLAY is not a rig display (60-99; :0 is the OWNER's) - unset for this command (a rig: $here/rig.sh up, then $here/rig.sh run <label> -- <command>)" >&2
+    unset DISPLAY
+fi
 bound=(); [ -n "$rt" ] && bound=(timeout -k 10 "$rt")
 [ "${JAH_GPU_LOCK_HELD:-}" = 1 ] && [ -n "${JAH_GPU_HOLD:-}" ] && exec "${bound[@]}" "$@"   # inside a hold: its sweep is ours
 lock="${JAH_GPU_LOCK:-$card_lock}"

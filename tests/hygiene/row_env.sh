@@ -6,7 +6,7 @@
 #   (3) --run --scratch writes NOTHING under the build: the outputs land in the scratch, an input file the row names is
 #       copied in, a fresh_home.sh --warm row's shared cache copied with its stamps (the home warm in the scratch);
 #   (4) a row that requires fixtures is REFUSED (ctest runs their setups); a GPU row (JAH_CLASS) without an explicit
-#       DISPLAY is REFUSED, with one it runs under the tree's gpu-exclusive.sh (JAH_GPU_LOCK_HELD=1 inside).
+#       DISPLAY (or one outside :60-:99, URGENT #195) is REFUSED, with one it runs under the tree's gpu-exclusive.sh (JAH_GPU_LOCK_HELD=1 inside).
 # usage: row_env.sh <the tree's scripts/row-env.sh>
 set -u
 RE=${1:?row-env.sh}
@@ -64,7 +64,11 @@ want "$(grep -qx blob "$T/s2/tests/w/warm.txt" 2>/dev/null && [ -z "$newer" ] &&
 bash "$RE" "$B" toy.fx --run > "$T/f.out" 2>&1; rc=$?
 want "$([ $rc = 2 ] && grep -q 'REFUSED.*fixtures home' "$T/f.out" && echo 1)" "(4) a row requiring fixtures is refused (exit $rc)"
 env -u DISPLAY bash "$RE" "$B" toy.gpu --run > "$T/g0.out" 2>&1; rc=$?
-want "$([ $rc = 2 ] && grep -q 'explicit DISPLAY' "$T/g0.out" && echo 1)" "(4) a GPU row without an explicit DISPLAY is refused (exit $rc)"
+want "$([ $rc = 2 ] && grep -q 'runs on a rig display' "$T/g0.out" && echo 1)" "(4) a GPU row without an explicit DISPLAY is refused (exit $rc)"
+# URGENT #195: a RIG display only (scripts/display-guard.sh) - :0 (the OWNER's) and :1 refused, the safe line absolute
+DISPLAY=:0 bash "$RE" "$B" toy.gpu --run > "$T/g00.out" 2>&1; r0=$?; DISPLAY=:1 bash "$RE" "$B" toy.gpu --run > "$T/g01.out" 2>&1; r1=$?
+want "$([ $r0 = 2 ] && [ $r1 = 2 ] && grep -q "got ':0'.*/rig.sh up, then DISPLAY=\$(.*/rig.sh display) .*/row-env.sh .* toy.gpu --run" "$T/g00.out" && echo 1)" \
+     "(4) DISPLAY=:0 and :1 refused (exit $r0, $r1), the line to paste absolute ($(cut -c1-90 "$T/g00.out"))"
 DISPLAY=:99 bash "$RE" "$B" toy.gpu --run > "$T/g.out" 2>&1
 want "$(grep -qx 'held=1' "$B/tests/w/gpu.txt" 2>/dev/null && echo 1)" "(4) a GPU row runs under the tree's gpu-exclusive.sh ($(cat "$B/tests/w/gpu.txt" 2>/dev/null))"
 # (5) --scratch IN A BUILD CONFIGURED UNDER A LINK's SPELLING (the ~/Developer -> /mnt/work/Developer case, 2026-11-20: a --scratch

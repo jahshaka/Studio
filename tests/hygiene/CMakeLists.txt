@@ -601,3 +601,12 @@ add_test(NAME source.webgpu_census
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/webgpu_census.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.webgpu_census PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.webgpu_census)
+# source.display_guard (URGENT #195, 2026-11-21): NO TOOL BOOTS ON A DISPLAY THAT IS NOT A RIG - an agent's shell inherits
+# DISPLAY=:0, the OWNER's, and warm-app-cache.sh booted jahlab there. scripts/display-guard.sh is the one definition (:60-:99);
+# the census classes every user of DISPLAY under scripts/ and tests/support/ (a new one is red until classed); warm-app-cache.sh
+# refuses :0 (exit 2, a safe line) or with --rig takes the tree's rig, the lock unsets it for its command, fresh_home.sh refuses
+# it. CPU only: fakes for the app, jahlab and Xvfb, a private lock (display_guard.sh).
+add_test(NAME source.display_guard
+         COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/display_guard.sh" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+set_tests_properties(source.display_guard PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+jah_no_display(source.display_guard)

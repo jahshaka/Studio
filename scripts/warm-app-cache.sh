@@ -41,6 +41,8 @@
 #                    Xvfb (60-99, 1920x1080x24, killed by its recorded pid); prints each boot's wall and the cache's size;
 #                    exits 0 when every boot passed (a failed boot's log kept under <tests-dir>/.evidence by fresh_home).
 #   --check          the answer alone, never a boot: exit 0 warm, 3 cold.
+#   --rig            a DISPLAY that is not a rig (outside :60-:99 - :0 is the OWNER's) is set aside and the tree's rig taken;
+#                    without it such a DISPLAY is REFUSED (exit 2) before any boot (URGENT #195; scripts/display-guard.sh).
 #   --inherit <b>    A FRESH TREE TAKES ITS PARENT's WARM CACHES AT AN EQUAL KEY (TEST-STREAMLINE-1 1a; `spec.sh new` calls it
 #                    after the build): <b> is the parent tree's build dir. Its key, computed by THIS script, must equal this
 #                    tree's (else exit 3, nothing taken); then each shared cache the parent holds stamped at the key, passing
@@ -137,9 +139,11 @@
 # <each cold boot's why>" (exit 3 under --check; else their boots, in order).
 set -u
 BUILD=""; INHERIT=""; CHECK=0; KEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=1170; COLDROWS=""
+ARGV=("$0" "$@"); TAKE_RIG=0   # (URGENT #195: the call as given, for the refusal's safe line)
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
+        --rig) TAKE_RIG=1; shift ;;
         --key) KEYONLY=1; shift ;;
         --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; shift 2 ;;
         --app) APP="${2:?--app needs an executable}"; shift 2 ;;
@@ -165,7 +169,7 @@ for o in $(echo "${ONLY:-$ALL}" | tr ',' ' '); do
     esac
 done
 SEL=$(for b in $ALL; do case " $SEL " in *" $b "*) printf '%s ' "$b" ;; esac; done)
-USAGE="usage: warm-app-cache.sh <build-dir> [--check] [--only <boot>[,<boot>...]] [--budget <s>] [--tests-dir <dir>] [--app <exe>] [--lab <exe>] [--cold-rows <file>]"
+USAGE="usage: warm-app-cache.sh <build-dir> [--check] [--rig] [--only <boot>[,<boot>...]] [--budget <s>] [--tests-dir <dir>] [--app <exe>] [--lab <exe>] [--cold-rows <file>]"
 [ -n "$BUILD" ] && [ -d "$BUILD" ] || { echo "$USAGE" >&2; exit 64; }
 BUILD=$(cd "$BUILD" && pwd)
 HERE=$(cd "$(dirname "$0")" && pwd)
@@ -442,7 +446,12 @@ echo "warm-app-cache: this call's logs: $LOGS"
 RIG_STARTED=""
 cleanup() { [ -n "$RIG_STARTED" ] && JAH_RIG_USER=$$ bash "$SRC/scripts/rig.sh" "$([ "$RIG_STARTED" = 1 ] && echo down || echo release)" > /dev/null 2>&1; }
 trap cleanup EXIT
-if [ -z "${DISPLAY:-}" ]; then
+# NEVER A DISPLAY THAT IS NOT A RIG (URGENT #195, 2026-11-21): an agent's shell inherits DISPLAY=:0, the OWNER's, and this
+# script once took the rig only when DISPLAY was EMPTY - a by-hand engine-off booted jahlab on :0. Now a rig display (:60-:99)
+# is kept, an empty one takes the tree's rig, and any other is REFUSED (exit 2, the safe line printed) - or, with --rig, set
+# aside for the tree's rig (scripts/display-guard.sh, the one definition; tests/hygiene/display_guard.sh holds it)
+. "$SRC/scripts/display-guard.sh"
+if ! jah_display_guard warm-app-cache "$TAKE_RIG" -- "${ARGV[@]}"; then
     rigenv=$(JAH_RIG_USER=$$ bash "$SRC/scripts/rig.sh" up --env 2> /dev/null | grep '^DISPLAY=') || { echo "warm-app-cache: no display (scripts/rig.sh up failed)" >&2; exit 2; }
     eval "$rigenv"; export DISPLAY
 fi
