@@ -448,6 +448,7 @@ open.streams_to_the_end 20.62  solo, the card lock held (OPEN-PATH-1 stage 1, 20
 gi.light_order 5.65  solo, the card lock held, :71, warm (PHOTON-7 stage 2, 2026-10-23: the read's F3 - twenty lamps of one key in two creation orders; F4 - 132 lamps over the slots)
 source.shaders_spirv_valid 5.13  loaded (79 % CPU-idle)
 source.half_store_rounded 0.05  no card, by ctest (REDS-1 item 5, 2026-10-29: every half-float store rounds first - jahRoundHalf; its negative control)
+source.webgpu_census 0.47  solo, CPU, no card, nice 10, by its own command (no build: the lane compiles nothing), load 4.5 on 28 CPUs (DOORS-0 stage 0, 2026-11-21: what WebGPU refuses + the one-eye-only gates only fall; its self-test first)
 gi.pane_stack 7.20  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F4 2026-10-28: the ray tier - a Forward+ lamp through twelve glass slabs against the hole, the GI on: the reading rays' overflow counted; 19 frames)
 gi.pane_stack_cards 3.29  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F3 2026-10-28: the cards' direct half through twelve slabs and through one pane at 0.3, the cards at rest; 197 frames)
 rtreflect.pane_record 4.44  the card lock held, :74, by ctest (PHOTON-7 10-4 fix round F6 2026-10-28: a mirror's far block - a record - with and without a glass slab, the block shown and hidden; 121 frames at 256x144)

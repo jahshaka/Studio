@@ -589,3 +589,15 @@ add_test(NAME source.half_store_rounded
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/half_store_rounded.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.half_store_rounded PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.half_store_rounded)
+
+# source.webgpu_census (DOORS-0 stage 0, V2 plan 0.5): WHAT WEBGPU REFUSES AND EVERY ONE-EYE-ONLY GATE ONLY FALLS - one
+# table (class, regex, path set, ceiling, the plan item that lowers it) over irisgl/engine, comments stripped: device
+# address, push constants, image atomics, read-write rg images, texel buffers, early fragment tests, binding arrays,
+# subgroups, 64-bit ints, fp16, nonuniform, geometry/tessellation, draw parameters, scalar layout, multiview (a named VR
+# difference), the one-eye-only gates and applyVrViewPolicy's assignments, raw Vulkan per engine file (the ray tier, the
+# gather and the VR session exempt). Over a ceiling = RED with every site; under = RED "lower the ceiling to M in the same
+# commit". Its self-test first: the stripper, one violation per class, the law both ways.
+add_test(NAME source.webgpu_census
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/webgpu_census.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.webgpu_census PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.webgpu_census)
