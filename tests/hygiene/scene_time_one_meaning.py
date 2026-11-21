@@ -14,7 +14,11 @@ the card's frame.meter_time):
   T2 NO MEDIA READS OGRE's TIME AUTO-PARAMS (irisgl/engine/media: *.material, *.json, *.compositor, *.program): no
      frame_time, time, time_0_x, time_0_1, time_0_2pi, costime*, sintime*, tantime*, fps. The converted sites: the HDR
      meter's timeSinceLast (JahshakaCompute.material.json) and the OldMovie look's lookTime (JahLooks.material), both set
-     per view from the view's scene (OgreChain.cpp).
+     per view by the engine (OgreChain.cpp).
+  T2b ...NOR THE FORK MEDIA WE STAGE (irisgl/engine/CMakeLists.txt: Hlms/{Common,Pbs,Unlit}, 2.0/scripts/materials/{Common,
+     HDR,Tutorial_SSAO,Tutorial_SMAA}, Compute/{Tools,Algorithms/IBL}), but for a program our graph never draws, each
+     named here WITH its proof: no non-comment line of our C++ names it. Today one: HDR.material's
+     HDR/DownScale03_SumLumEnd_ps (frame_time), replaced by the meter's resolve job since EXPOSURE-2.
   T3 THE METER's TIME IS ITS VIEWER's (the lead's ruling reversing R6): OgreChain.cpp hands the meter resolve's
      timeSinceLast the view's OgreEngine::meterSecondsFor (a picture: no history; a live view: presented time), and
      the job declares it a manual float.
@@ -90,6 +94,29 @@ def t2(media):
     return bad
 
 
+FORK_STAGED = ["Hlms/Common", "Hlms/Pbs", "Hlms/Unlit", "2.0/scripts/materials/Common", "2.0/scripts/materials/HDR",
+               "2.0/scripts/materials/Tutorial_SSAO", "2.0/scripts/materials/Tutorial_SMAA", "Compute/Tools",
+               "Compute/Algorithms/IBL"]
+# (the staged file, the program or material the time auto-param sits in) -> why it is never drawn
+FORK_UNUSED = {("HDR.material", "HDR/DownScale03_SumLumEnd_ps"): "replaced by Jahshaka/HdrMeterResolve (EXPOSURE-2)"}
+BLOCK = re.compile(r"^\s*(?:fragment_program|vertex_program|material|compute_job|abstract\s+\w+)\s+(\S+)")
+
+
+def t2b(media):
+    """media: {relpath: text} of staged fork files -> [(file, block, line)] time auto-params outside FORK_UNUSED."""
+    bad = []
+    for p, t in media.items():
+        block = ""
+        for i, line in enumerate(strip_media(t).split("\n")):
+            b = BLOCK.match(line)
+            if b:
+                block = b.group(1)
+            for m in list(V1_AUTO.finditer(line)) + list(JOB_AUTO.finditer(line)):
+                if m.group(1) in TIME_AUTOS and (os.path.basename(p), block) not in FORK_UNUSED:
+                    bad.append(f"{p}:{i + 1} ({block}): {line.strip()}")
+    return bad
+
+
 def t3(chain, json):
     set_ok = ('meterSeconds = meterTime;' in chain
               and 'setMeterParam(kMeterResolveJob, "timeSinceLast", meterSeconds);' in chain
@@ -137,6 +164,13 @@ def main(root):
     check(bool(t4({"tests/x.cpp": "e->submitFrame(FrameInput::delta(1.0f / 60.0f));"})), "T4 flags a host delta (mutant)")
     check(bool(t5({"src/viewport/x.cpp": "echo->harnessStep(1);"})), "T5 flags a src/ caller of the harness door (mutant)")
 
+    check(bool(t2b({"x/Sky.material": "fragment_program Sky_ps glsl\n{\n  param_named_auto t time_0_x 1\n}\n"})) and
+          not t2b({"HDR/HDR.material": "fragment_program HDR/DownScale03_SumLumEnd_ps unified\n{\n"
+                                       "  param_named_auto timeSinceLast frame_time 1\n}\n"}) and
+          bool([1 for t in ['m->getMaterial("HDR/DownScale03_SumLumEnd");'] if "HDR/DownScale03_SumLumEnd" in
+                re.sub(r"//[^\n]*", "", t)]),
+          "T2b flags a staged fork program on a time auto-param, never a named unused one (mutants)")
+
     # ---- the tree ----
     r, w = t1(ours)
     check(not r, f"T1 no reader of Ogre's frame clock in our C++ ({len(ours)} files; readers: {r})")
@@ -145,6 +179,26 @@ def main(root):
           "T1 ...and OgreEngine.cpp does write it (the frame's delay is set)")
     bad = t2(media)
     check(not bad, f"T2 no media reads Ogre's time auto-params ({len(media)} files; {bad[:4]})")
+    fork_root = os.path.join(root, "irisgl/thirdparty/ogre-next/Samples/Media")
+    fork_media = {}
+    for d in FORK_STAGED:
+        for base, _, files in os.walk(os.path.join(fork_root, d)):
+            for f in files:
+                if f.endswith((".material", ".json", ".compositor", ".program")):
+                    p = os.path.join(base, f)
+                    fork_media[rel(p)] = open(p, encoding="utf-8", errors="replace").read()
+    check(len(fork_media) > 0, f"T2b the staged fork media is found ({len(fork_media)} files)")
+    bad = t2b(fork_media)
+    check(not bad, f"T2b no staged fork program our graph draws reads Ogre's time auto-params ({bad[:4]})")
+    # (comments stripped, STRINGS KEPT: a material is named in a string; our own media's scripts may name it too)
+    named = {rel(p): re.sub(r"//[^\n]*", "", re.sub(r"/\*.*?\*/", " ", open(p, encoding="utf-8", errors="replace").read(),
+                                                  flags=re.S))
+             for p in cpp_files(root, ["irisgl/engine/src", "irisgl/mirror", "src"])}
+    named.update({p: strip_media(t) for p, t in media.items()})
+    for (_, prog), why in FORK_UNUSED.items():
+        name = prog[:-3] if prog.endswith("_ps") else prog   # the material's own name, as our code would name it
+        users = [p for p, t in named.items() if name in t]
+        check(not users, f"T2b ...{prog} is never drawn ({why}): no non-comment line of our C++ names it ({users})")
     check(t3(chain, json), "T3 the meter's timeSinceLast is its viewer's time (meterSecondsFor), a manual float")
     d = t4(everywhere)
     check(not d, f"T4 no host-written delta anywhere ({len(everywhere)} files; {d[:6]})")

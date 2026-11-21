@@ -140,7 +140,8 @@ int main(int argc, char **argv)
     // ...and since ENGINEERING_DEBT_SPEC A4.2 the engine has no wall clock at
     // all; since ONE-FRAME-1 a scene's time is its document's steps, and this
     // engine-only scene's are the harness's: enginetest::frames steps it one
-    // deterministic 1/60 s per frame (frame.particle_scale proves the age law).
+    // deterministic 1/60 s per frame (frame.particles_per_scene proves that
+    // PFX2 ages each scene by its own steps).
 
     // ---- 0. The plugin is actually loaded -----------------------------------
     // Every emitter and affector FACTORY lives in Plugin_ParticleFX2. If the
