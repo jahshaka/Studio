@@ -969,7 +969,7 @@ bool MainWindow::saveScene()
 	if (!projectService->save(project->getProjectGuid(), ProjectService::SaveReason::Editor, &note)) return false;
 	// A SAVE THAT LEFT OUT THE NODES A RUN ADDED (true, still unsaved) is said where the person is looking: once
 	// per save, in the viewport's transient readout (the lead's ruling: not a scene-error notice, not a box).
-	if (!note.isEmpty() && !FirstRun::isDrivenSession()) showViewportToast(tr("Save Scene"), note);
+	if (!note.isEmpty() && !FirstRun::isScriptedSession()) showViewportToast(tr("Save Scene"), note);
 	return true;
 }
 
@@ -1218,17 +1218,20 @@ bool MainWindow::settleUnsaved(CloseUnsaved unsaved, QString *whyOut)
         return false;
     };
     QString why;
-    if (settings->get(settingkeys::autoSave)) {
+    const bool autoSave = settings->get(settingkeys::autoSave);
+    bool saveHeld = false;
+    if (autoSave) {
         // closePrevious:save — a create's ledger shows its close (CREATE-GAP-1); a no-op outside a run.
         LoadTimeline::Accumulate row(QStringLiteral("closePrevious:save"));
-        if (saveWhy(&why)) return true;
-    } else if (!undoService->isDirty()) {
-        return true;
-    } else {
+        saveHeld = saveWhy(&why);
+    } else if (undoService->isDirty()) {
         why = tr("'%1' has unsaved changes and auto-save is off").arg(name);
     }
+    const UnsavedVerdict verdict =
+        decideUnsaved(unsaved, FirstRun::isScriptedSession(), autoSave, undoService->isDirty(), saveHeld);
+    if (verdict == UnsavedVerdict::Close) return true;
     // A PERSON DECIDES, and is never trapped: Save (again) / Discard / Cancel, until the save holds or they choose.
-    if (unsaved == CloseUnsaved::Ask && !FirstRun::isDrivenSession()) {
+    if (verdict == UnsavedVerdict::Ask) {
         for (;;) {
             const auto reply = QMessageBox::question(this, tr("Unsaved Changes"), tr("%1.\nSave before closing?").arg(why),
                                                      QMessageBox::Save | QMessageBox::Discard | QMessageBox::Cancel);
@@ -1239,7 +1242,7 @@ bool MainWindow::settleUnsaved(CloseUnsaved unsaved, QString *whyOut)
         if (whyOut) *whyOut = tr("the close of '%1' was cancelled").arg(name);
         return false;
     }
-    // ...and nobody can answer a box in a driven session, or on a script's route: refused, with the way out.
+    // ...and nobody can answer a box in a scripted session, or on a script's route: refused, with the way out.
     if (whyOut) *whyOut = tr("%1 — save it first (project.save), or pass {discard: true} to drop them").arg(why);
     return false;
 }

@@ -193,8 +193,9 @@ int main(int argc, char *argv[])
     // WHETHER A PERSON IS LOOKING AT THIS PROCESS, recorded once for everything
     // that has no CliOptions to ask with (app/firstrun.h): an error box raised
     // deep in a page is unanswerable in a driven run and spends the run's whole
-    // budget waiting to be dismissed.
-    FirstRun::rememberDriven(FirstRun::isDrivenSession(cli));
+    // budget waiting to be dismissed. (The data root is not initialised yet: the
+    // forced-root half of "driven" is read live, FirstRun::isDrivenSession().)
+    FirstRun::rememberScripted(FirstRun::isScriptedSession(cli));
 
     // Pin the application identity instead of letting Qt infer it from the
     // executable's file name — that inference is what a renamed or bundled

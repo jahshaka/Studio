@@ -31,10 +31,13 @@ For more information see the LICENSE file
 #include "services/uistep.h"
 #include "services/undoservice.h"
 #include "player/editpose.h"
+#include "app/firstrun.h"
+#include "services/closeunsaved.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 
 #include <QHash>
+#include <QTemporaryDir>
 #include <QMap>
 #include <memory>
 
@@ -322,6 +325,34 @@ void testDocumentEditPose()
           "editpose: a run started over a running simulation takes the body's PRE-SIMULATE pose, every other node's own");
 }
 
+// WHO ANSWERS AN UNSAVED WORLD (services/closeunsaved.h decideUnsaved, the lead's ruling 2026-11-21): the box is a
+// person's unless nobody is at the screen. A forced data root alone (an app launched with --data-root, no script,
+// no MCP client) is a person's session: it is driven, but not scripted, and its close over unsaved changes ASKS.
+// Run last: it forces this process's data root.
+void testUnsavedDecision()
+{
+    QTemporaryDir root;
+    AppPaths::initialize(root.path());   // what --data-root does; main()'s latch never ran: no script, no MCP
+    CHECK(FirstRun::isDrivenSession() && !FirstRun::isScriptedSession(),
+          "unsaved: a forced data root alone is driven, not scripted");
+    CHECK(decideUnsaved(CloseUnsaved::Ask, FirstRun::isScriptedSession(), false, true, false) == UnsavedVerdict::Ask,
+          "unsaved: a person's close in a --data-root session over unsaved changes, auto-save off - asked");
+    CHECK(decideUnsaved(CloseUnsaved::Ask, FirstRun::isScriptedSession(), true, true, false) == UnsavedVerdict::Ask,
+          "unsaved: a person's close in a --data-root session whose auto-save failed - asked");
+    FirstRun::rememberScripted(true);   // a --script / --headless run or an --mcp-port client
+    CHECK(decideUnsaved(CloseUnsaved::Ask, FirstRun::isScriptedSession(), false, true, false) == UnsavedVerdict::Refuse,
+          "unsaved: a scripted session's close over unsaved changes - refused, never a box nobody answers");
+    FirstRun::rememberScripted(false);
+    CHECK(decideUnsaved(CloseUnsaved::Refuse, false, false, true, false) == UnsavedVerdict::Refuse,
+          "unsaved: a script's route without {discard} - refused, even with a person at the screen");
+    CHECK(decideUnsaved(CloseUnsaved::Discard, true, false, true, false) == UnsavedVerdict::Close,
+          "unsaved: {discard: true} - closes");
+    CHECK(decideUnsaved(CloseUnsaved::Ask, false, true, true, true) == UnsavedVerdict::Close,
+          "unsaved: auto-save on and the save held the whole document - closes");
+    CHECK(decideUnsaved(CloseUnsaved::Ask, true, false, false, false) == UnsavedVerdict::Close,
+          "unsaved: auto-save off and nothing changed - closes");
+}
+
 int main(int argc, char *argv[])
 {
     QGuiApplication app(argc, argv);
@@ -330,6 +361,7 @@ int main(int argc, char *argv[])
     testUiStep();
     testEditPose();
     testDocumentEditPose();
+    testUnsavedDecision();
     std::printf(failures ? "FAILURES: %d\n" : "ALL PASS\n", failures);
     return failures ? 1 : 0;
 }
