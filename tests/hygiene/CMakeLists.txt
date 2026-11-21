@@ -643,6 +643,15 @@ add_test(NAME source.half_store_rounded
 set_tests_properties(source.half_store_rounded PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.half_store_rounded)
 
+# source.rough_lobe_transport (ROUGH-LOBE-HISTORY-1, V2 plan 1.8): THE ROUGH LOBE's HISTORY CARRIED TO THE CURRENT VIEW, in
+# rq_probe_integrate.comp's own text - probeLobe and probeLobeBrute one call site each (the loop of two inside roughLobeNow),
+# V_prev through jahEyeBefore( eye ), the history read carried by the lobe's change before the blend, gLobeFellBack the V
+# evaluation's; its negative control (the bare form) first. The law itself: engine.rough_lobe_transport.
+add_test(NAME source.rough_lobe_transport
+         COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/rough_lobe_transport.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.rough_lobe_transport PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.rough_lobe_transport)
+
 # source.webgpu_census (DOORS-0 stage 0, V2 plan 0.5): WHAT WEBGPU REFUSES AND EVERY ONE-EYE-ONLY GATE ONLY FALLS - one
 # table (class, regex, path set, ceiling, the plan item that lowers it) over irisgl/engine, comments stripped: device
 # address, push constants, image atomics, read-write rg images, texel buffers, early fragment tests, binding arrays,
