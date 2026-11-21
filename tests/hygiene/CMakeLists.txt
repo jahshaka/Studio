@@ -664,3 +664,13 @@ add_test(NAME source.no_box_paths
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_box_paths.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
 set_tests_properties(source.no_box_paths PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_box_paths)
+
+# source.brick_list_bounded (NONDET-1 fix items D; READ-8 R8-1..R8-3): THE FEEDBACK'S DATA-DRIVEN READS ARE BOUNDED IN THE
+# SHADER - every read of the GPU-written brick list by the group index (the bounce, the copy-back, the directional steps
+# 0 and 1, the ray tier's sides gather) returns at or past the list's length and at a brick (or texel) past the volume;
+# the side-gather scratch is bounded by its length; the feedback's box loops read min( fbFlags.y, 16u ), ACCUM's counts
+# are clamped to the source's bricks and its bricks to the source's dims. Its negative control first.
+add_test(NAME source.brick_list_bounded
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/brick_list_bounded.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.brick_list_bounded PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.brick_list_bounded)
