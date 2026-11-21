@@ -909,7 +909,7 @@ endforeach()
 foreach(_tier high epic)
     set_tests_properties(gi.bounce_series.${_tier} PROPERTIES JAHSHAKA_TEST_FRAMES 302)
     set_tests_properties(gi.bounce_series.${_tier}_fade PROPERTIES JAHSHAKA_TEST_FRAMES 1530)
-    set_tests_properties(gi.bounce_series.${_tier}_lamp PROPERTIES JAHSHAKA_TEST_FRAMES 459)
+    set_tests_properties(gi.bounce_series.${_tier}_lamp PROPERTIES JAHSHAKA_TEST_FRAMES 412)   # (the lamp part from the feedback's rest: 412 measured at High and Epic, 2026-11-21; was 459)
     set_tests_properties(gi.bounce_series.${_tier}_rays PROPERTIES JAHSHAKA_TEST_FRAMES 203)
 endforeach()
 

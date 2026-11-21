@@ -387,12 +387,22 @@ int main(int argc, char **argv)
                     atRest.cascades[0].feedbackResumes, atRest.cascades[0].feedbackSaturated);
         if (doSeries) CHECK(m.restFrames >= 0, "THE FEEDBACK STOPS: the chain owes nothing at its rest");
         const Reading fb = m.cascades[0];
+        // THE LAMP PART STARTS FROM THE MAIN ARM's OWN FEEDBACK REST (V2 plan 0.2, the lead's ruling 2026-11-21: the row
+        // read 10.8 s against the fixture's 10 s): the Jacobi-64 below and its tail to rest are the SERIES' laws ((1)-(3):
+        // j64 and the door's count are judged under doSeries only) - the STEP arm's laws (5) and (7) are judged against the
+        // resume arm's OWN Jacobi (lj, the lamp at 200), and the room at the feedback's rest has every brick stopped, which
+        // is all the resume arm asks. So `lamp` alone skips them, and its resume arm reads the feedback's rest (fb) where the
+        // series reads the Jacobi's (j64: the voxel set's count, the moved-voxel prints). Gated on part "lamp" ONLY: the
+        // series and the fade (NONDET-1's) run every call they ran before, in the same order.
+        const bool lampOnly = part == "lamp";
+        Reading j64 = fb;
+        if (!lampOnly) {
         // THE JACOBI OVER CASCADE 0 (the door set to 1): restarted from its direct term, every brick a pass a frame, the
         // outer cascades holding their state - the feedback's rest, so cascade 0's two answers are fixed points of one
         // operator.
         e->setArm("gi.bounceJacobi", 1.0);
         run(64);   // the arm latches at the frame's top: its first frame restarts from the direct term, then a pass a frame
-        const Reading j64 = read(m.scene);
+        j64 = read(m.scene);
         e->setArm("gi.bounceJacobi", 0.0);
         run(2);
         // THE DOOR RAN (the arm can fail): cascade 0 ran EVERY brick a frame through the window (its books land a few
@@ -406,6 +416,7 @@ int main(int argc, char **argv)
         if (doSeries)
             CHECK(jRan >= 56ull * bricks0 && outerRan == 0ull,
                   "the Jacobi door ran every brick of cascade 0 a frame, the outer cascades held");
+        }
         // (4) THE RESUME ARM: a lamp over the floor's centre, the room at its rest (the Jacobi's tail stopped first, so
         // every brick the lamp's sphere does not activate is STOPPED) - at the ray tiers' chain only (High, Epic: 128^3, a
         // 0.625 m brick); at Low and Medium (64^3, 1.25 m bricks) the walls a brick outside the range sit at the room's own
@@ -420,7 +431,7 @@ int main(int argc, char **argv)
         std::vector<char> outside;
         Reading lj;   // the resume arm's Jacobi (the lamp at 200): the fade's start
         if (lampArm) {
-            for (int f = 0, quiet = 0; f < 900 && quiet < 8; ++f) {   // the Jacobi's tail to its rest
+            for (int f = 0, quiet = 0; !lampOnly && f < 900 && quiet < 8; ++f) {   // the Jacobi's tail to its rest (none run: lamp)
                 run(1);
                 const GiStatus g = m.scene->published().gi;
                 quiet = (!g.chainOwed && !g.feedbackOwed) ? quiet + 1 : 0;
