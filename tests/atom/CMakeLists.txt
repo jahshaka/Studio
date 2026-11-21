@@ -110,6 +110,17 @@ set_source_files_properties(test_atom_hidden_cut.cpp PROPERTIES COMPILE_DEFINITI
 # picture shows equal the history-less twin's word for word and the picture the door-shut world's byte for byte. ATOM-8's
 # base number for the occlusion rows, measured by its stage 0 instruments: 53.8 % of the Bistro Exterior law88 frame
 # (98,318 of 182,807 triangles at High, 924 x 565) is drawn for objects with no visible pixel.
+# atom.receiver_two_sizes (COLD-BOOT-1 stage 2's owed row, built by SHADER-SYSTEM-1 stage 3F (e); the lead's ruling P1) —
+# NO PERMUTATION OF THE RECEIVER GRID IS KEYED ON A VIEW'S SIZE: one Atom view with shadows drawn at 128 x 128 and at
+# 320 x 96, the receiver depth job's properties hold no group count at either size (one permutation); its negative
+# control, the job told its sizes (the base's state), keys two. Frames, never time (48). A new row: priced from its solo
+# run at the lane's feature end, never SHIP.
+add_executable(test_atom_receiver_two_sizes test_atom_receiver_two_sizes.cpp)
+jah_atom_engine_target(test_atom_receiver_two_sizes)
+jah_gpu_row(atom.receiver_two_sizes CLASS engine FRAMES 48 COMMAND test_atom_receiver_two_sizes
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.receiver_two_sizes PROPERTIES TIMEOUT 60 LABELS "engine")
+
 add_executable(test_atom_hidden_cut test_atom_hidden_cut.cpp)
 jah_atom_engine_target(test_atom_hidden_cut)
 jah_gpu_row(atom.hidden_cut CLASS engine FRAMES 33 COMMAND test_atom_hidden_cut
