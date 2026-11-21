@@ -417,3 +417,12 @@ target_link_libraries(test_compute_job_slots PRIVATE OgreNext)
 add_test(NAME engine.compute_job_slots COMMAND test_compute_job_slots WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.compute_job_slots PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.compute_job_slots)
+
+# engine.cascade_resolution_law (NONDET-1 D1) — A CASCADE IS BUILT AT A MULTIPLE OF 8 in 16..256, rounded up (Types.h
+# giCascadeResolution: the voxel passes run whole bricks with no bound check). The header only: a CPU code row.
+add_executable(test_cascade_resolution_law test_cascade_resolution_law.cpp)
+set_target_properties(test_cascade_resolution_law PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_cascade_resolution_law PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+add_test(NAME engine.cascade_resolution_law COMMAND test_cascade_resolution_law)
+set_tests_properties(engine.cascade_resolution_law PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.cascade_resolution_law)
