@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""source.webgpu_census - WHAT WEBGPU REFUSES, AND EVERY ONE-EYE-ONLY GATE, ONLY FALLS (DOORS-0 stage 0; V2 plan 0.5).
+"""source.webgpu_census - WHAT WEBGPU REFUSES, AND EVERY ONE-EYE-ONLY GATE, ONLY FALLS; MULTIVIEW ONLY RISES (DOORS-0 stage 0; V2 plan 0.5).
 
 The doors (V2 2026-11-20, the owner): no new shader feature WebGPU refuses, no new raw Vulkan outside the ray tier / the
 gather / the VR session, no new one-eye-only gate. Each class below is a comment-stripped count over its path set under
@@ -7,6 +7,8 @@ irisgl/engine, held at a CEILING taken at photon-7's tip (8075ee1f2, irisgl 4576
 B3, re-measured). THE LAW, both ways:
   count > ceiling  RED - every site of the class is printed (which one is new needs history: "ceiling N, found M");
   count < ceiling  RED - "lower the ceiling to M in the same commit", so a fall is recorded and cannot creep back;
+  THE ONE FLOOR, MULTIVIEW (the target, CODING_RULES § 1): the law reversed - count < floor RED with every site (a per-eye
+  pass lost), count > floor RED "raise the floor to M in the same commit" (a rise recorded, never undone silently);
   a class at 0 stays 0. The raw Vulkan class is held PER FILE (a file not in its table has ceiling 0); the three files
   the doors exempt (OgreRayQuery.cpp the ray tier, OgreScreenProbeGather.cpp the gather, OgreVrSession.cpp VR) are
   counted and printed, never held.
@@ -70,8 +72,10 @@ CLASSES = [
     ('draw parameters', r'\bgl_(DrawID|BaseVertex|BaseInstance)(ARB)?\b|GL_ARB_shader_draw_parameters', 'shaders', 0,
      'keep 0'),
     ('scalar layout', r'GL_EXT_scalar_block_layout|\blayout\s*\([^)\n]*\bscalar\b', 'shaders', 0, 'keep 0'),
-    ('multiview (a named VR difference)', r'\bgl_ViewIndex\b|GL_EXT_multiview', 'shaders', 8,
-     'held, not lowered: the per-eye arm is VR\'s named difference (the owner\'s word pending)'),
+    # MULTIVIEW IS THE TARGET (CODING_RULES § 1, the owner and the lead 2026-11-21: both eyes in ONE pass): its count is a
+    # FLOOR that only RISES - a fall is the red (a per-eye pass lost), a rise raises the floor in the same commit (FLOORS)
+    ('multiview (the target)', r'\bgl_ViewIndex\b|GL_EXT_multiview', 'shaders', 8,
+     'a FLOOR - only rises: every pass made per eye inside one pass adds its sites (CODING_RULES § 1)'),
     # a negated stereo VALUE or ACCESSOR (`!mStereo`, `!d.stereo`, `!view->stereo()`, `!(p.stereo.w > 0.5)`) is a gate; a negated
     # CALL whose name merely ends in Stereo and that TAKES ARGUMENTS (`!reflectChainMatchesStereo(stereo, eyeLayers)`) is a
     # predicate over the stereo value, true or false for either shape - never a gate (the lead, 2026-11-21: the census's first
@@ -81,6 +85,8 @@ CLASSES = [
     ('one-eye-only gates: applyVrViewPolicy assignments', 'VR_POLICY', 'include', 10,
      'each pass made per layer deletes its line (bloom, ssao, smaa, hzb, refractions, distortion, the screen sources)'),
 ]
+# THE CLASSES HELD AS A FLOOR (the count only rises): the rest are ceilings (the count only falls)
+FLOORS = ('multiview (the target)',)
 # The raw Vulkan class: \bvk[A-Z]\w*\( in engine/src C++, held per file. Growth is allowed only in the exempt three.
 RAW_VK = r'\bvk[A-Z]\w*\('
 RAW_VK_EXEMPT = ('src/OgreRayQuery.cpp', 'src/OgreScreenProbeGather.cpp', 'src/OgreVrSession.cpp')
@@ -185,8 +191,15 @@ def judge(got, vk):
         elif found < ceiling:
             red.append('RED  %s: ceiling %d, found %d - lower the ceiling to %d in the same commit' %
                        (what, ceiling, found, found))
+    def floor(what, found, held, why, every):
+        if found < held:
+            red.append('RED  %s: floor %d, found %d - the count only rises (%s); a site of it was lost - every site:' %
+                       (what, held, found, why))
+            red.extend('       %s:%d  %s' % s for s in every)
+        elif found > held:
+            red.append('RED  %s: floor %d, found %d - raise the floor to %d in the same commit' % (what, held, found, found))
     for name, _, _, ceiling, lower in CLASSES:
-        hold(name, len(got[name]), ceiling, lower, got[name])
+        (floor if name in FLOORS else hold)(name, len(got[name]), ceiling, lower, got[name])
     for rel in sorted(set(vk) | set(RAW_VK_CEILINGS)):
         if rel not in RAW_VK_EXEMPT:
             hold('raw Vulkan in ' + rel, len(vk.get(rel, [])), RAW_VK_CEILINGS.get(rel, 0), RAW_VK_LOWER,
@@ -223,7 +236,7 @@ VIOLATIONS = {
     'geometry/tessellation stages': ('media/Hlms/x.material', 'geometry_program X\n'),
     'draw parameters': ('media/Hlms/x_vs.glsl', 'uint d = gl_DrawID;\n'),
     'scalar layout': ('src/rayquery/x.comp', 'layout( scalar, set = 0, binding = 1 ) buffer B { vec3 v[]; };\n'),
-    'multiview (a named VR difference)': ('media/Hlms/x_vs.glsl', 'int eye = gl_ViewIndex;\n'),
+    'multiview (the target)': ('media/Hlms/x_vs.glsl', 'int eye = gl_ViewIndex;\n'),
     'one-eye-only gates': ('src/OgreX.cpp', 'if( !d.view->isStereo() ) draw();\n'),
     'one-eye-only gates: applyVrViewPolicy assignments': (
         VR_POLICY_FILE, 'inline void applyVrViewPolicy(PostFxDesc &fx) { fx.bloom = false; }\n'
@@ -290,6 +303,20 @@ def self_test():
         add, _ = census([(rel, strip(text))])
         got[name] = got[name] + add[name]
         red = judge(got, vk)
+        if name in FLOORS:
+            # A FLOOR, BOTH WAYS: one site MORE reds only with the floor to raise (a rise is the target, recorded); one site
+            # FEWER reds with every remaining site listed (a per-eye pass lost)
+            if reds_of(red, name) != red or len(red) != 1 or 'raise the floor to %d' % (ceiling + 1) not in red[0]:
+                bad.append('the floor %s: one site more did not red it alone with the floor to raise: %r' % (name, red[:2]))
+            got, vk = at_ceilings()
+            got[name] = got[name][1:]
+            red = judge(got, vk)
+            if not reds_of(red, name) or 'the count only rises' not in red[0] or len(red) != ceiling:
+                bad.append('the floor %s: one site fewer did not red with every site: %r' % (name, red[:2]))
+            quiet, _ = census([(rel, strip('/* ' + text.rstrip('\n') + ' */\n// ' + text))])
+            if quiet[name]:
+                bad.append('the control of %s counted a commented-out site' % name)
+            continue
         if len(red) < 2 or reds_of(red, name) != red[:1] or 'found %d' % (ceiling + 1) not in red[0] \
                 or ('%s:1 ' % rel) not in red[-1]:
             bad.append('the control of %s (%s: %r) did not red it alone: %r' % (name, rel, text, red[:3]))
@@ -332,7 +359,7 @@ def main():
     if '--counts' in sys.argv:
         for name, _, pset, ceiling, _ in CLASSES:
             nf = len({s[0] for s in got[name]})
-            print('%-52s %5d sites %3d files   ceiling %d' % (name, len(got[name]), nf, ceiling))
+            print('%-52s %5d sites %3d files   %s %d' % (name, len(got[name]), nf, 'floor' if name in FLOORS else 'ceiling', ceiling))
         for rel in sorted(vk):
             print('%-52s %5d sites            %s' % ('raw Vulkan ' + rel, len(vk[rel]),
                                                     'exempt' if rel in RAW_VK_EXEMPT else
