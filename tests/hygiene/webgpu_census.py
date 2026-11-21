@@ -72,7 +72,11 @@ CLASSES = [
     ('scalar layout', r'GL_EXT_scalar_block_layout|\blayout\s*\([^)\n]*\bscalar\b', 'shaders', 0, 'keep 0'),
     ('multiview (a named VR difference)', r'\bgl_ViewIndex\b|GL_EXT_multiview', 'shaders', 8,
      'held, not lowered: the per-eye arm is VR\'s named difference (the owner\'s word pending)'),
-    ('one-eye-only gates', r'!(?!=)\s*\(*\s*(\w+\s*(\.|->)\s*)*\w*[sS]tereo\b', 'src', 15,
+    # a negated stereo VALUE or ACCESSOR (`!mStereo`, `!d.stereo`, `!view->stereo()`, `!(p.stereo.w > 0.5)`) is a gate; a negated
+    # CALL whose name merely ends in Stereo and that TAKES ARGUMENTS (`!reflectChainMatchesStereo(stereo, eyeLayers)`) is a
+    # predicate over the stereo value, true or false for either shape - never a gate (the lead, 2026-11-21: the census's first
+    # false positive, OgreRayQuery.cpp's shape refusal); the lookahead refuses only that form, an accessor's `()` still counts
+    ('one-eye-only gates', r'!(?!=)\s*\(*\s*(\w+\s*(\.|->)\s*)*(?!\w+Stereo\s*\(\s*[^)\s])\w*[sS]tereo\b', 'src', 15,
      'PHOTON-7-9A (two, ground read B3), NO-RAY-CUT-1 (OgreView screenIntegrate, OgreChain ssr)'),
     ('one-eye-only gates: applyVrViewPolicy assignments', 'VR_POLICY', 'include', 10,
      'each pass made per layer deletes its line (bloom, ssao, smaa, hzb, refractions, distortion, the screen sources)'),
@@ -229,8 +233,14 @@ NEAR_MISSES = [   # (class, path, text) that must count nothing: the regexes' ed
     ('read-write two-channel image', 'src/rayquery/x.comp', 'layout( rg16f, binding = 1 ) uniform readonly image2D r;\n'
      'layout( rgba16f, binding = 2 ) uniform image2D w;\nlayout( r32ui, binding = 3 ) uniform uimage2D a;\n'),
     ('one-eye-only gates', 'src/OgreX.cpp', 'if( a != stereo || !monoStereoX ) f();\n'),
+    ('one-eye-only gates', 'src/OgreX.cpp', 'const bool w = !fooMatchesStereo(a, b) || !x->barStereo( s );\n'),
     ('subgroups', 'media/Hlms/x.material', 'subgroup 2\n'),
     ('raw Vulkan', 'src/OgreX.cpp', 'err = "vkCreateX (pipeline) failed"; myvkFoo( 1 );\n'),
+]
+MUST_COUNT = [   # (class, path, text, sites): the forms a regex edge must never drop (the lead, 2026-11-21)
+    ('one-eye-only gates', 'src/OgreX.cpp', 'if( !view->stereo() ) a();\n'
+     'if( !mStereo && !d.stereo ) b();\n'
+     'restTakes = !noSample && !( p.stereo.w > 0.5 && prevCount > 0u );\n', 4),
 ]
 STRIP_CASES = [   # (text, the stripped text)
     ('a // vkCmdX(\nb', 'a \nb'),
@@ -267,6 +277,10 @@ def self_test():
         got, vk = census([(rel, strip(text))])
         if (vk if name == 'raw Vulkan' else got[name]):
             bad.append('the near miss of %s (%s: %r) counted' % (name, rel, text))
+    for name, rel, text, n in MUST_COUNT:
+        got, _ = census([(rel, strip(text))])
+        if len(got[name]) != n:
+            bad.append('the must-count case of %s (%s: %r) counted %d, want %d' % (name, rel, text, len(got[name]), n))
     # per class: ONE violation in a scratch file at a path of its set, added to a census at the ceilings, reds that
     # class alone ("ceiling N, found N+1", its site listed); the same text commented out counts nothing; one site
     # fewer than the ceiling reds with the ceiling to lower to
@@ -330,7 +344,8 @@ def main():
     if bad:
         return 1
     print('ok   the self-test: the stripper (%d cases), %d classes fed one violation each (and its commented copy), '
-          'the law both ways, the policy body, raw Vulkan per file' % (len(STRIP_CASES), len(VIOLATIONS)))
+          'the law both ways, the policy body, raw Vulkan per file, %d must-count form(s), %d near misses'
+          % (len(STRIP_CASES), len(VIOLATIONS), len(MUST_COUNT), len(NEAR_MISSES)))
     red = judge(got, vk)
     for r in red:
         print(r)
