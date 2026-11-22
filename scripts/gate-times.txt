@@ -159,7 +159,7 @@ gi.light_is_world 17.69  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e442
 gi.one_writer 19.99  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T045717-e4427ba87, 1-min load 1.4; V2 plan 0.2)
 gi.one_writer.fresh_home 0.23  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T045717-e4427ba87, 1-min load 1.3; V2 plan 0.2)
 gi.ray_level_fixed 0.99  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T045812-e4427ba87, 1-min load 1.1; V2 plan 0.2)
-gi.rayquery_asan 9.73  quiet n=41
+gi.rayquery_asan 5.80  solo 2026-11-22 at 73be35f3d (spec.sh reprice, run 20261122T213432-73be35f3d-p4032181)
 gi.rt_reflect_asan 9.12  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T045839-e4427ba87, 1-min load 1.3; V2 plan 0.2)
 gi.sun_contact_acne 0.93  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T043917-e4427ba87, 1-min load 1.3; V2 plan 0.2)
 gi.hit_specular_mobility 3.62  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T043812-e4427ba87, 1-min load 1.7; V2 plan 0.2)
