@@ -1,3 +1,4 @@
+#include <cstdio>
 #include <cstring>
 #include "irisgl/core/math/vec.h"
 #include "viewport/gizmooverlay.h"
@@ -63,6 +64,10 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
         if (slot.source != src) {
             MeshId m = meshFor(src);
             if (m) { scenecmd::call(mTarget, &jahshaka::engine::Scene::attachMesh, slot.node, m, slot.material); slot.mesh = m; slot.source = src; }
+            // GIZMO-ORDER-1 MEASURING ARM (reverted by its own commit): which handle each slot's node carries.
+            std::fprintf(stderr, "GIZMO-ARM studio slot=%d node=%llu mesh=%u colour=%d,%d,%d\n", i, (unsigned long long)slot.node,
+                         unsigned(m), item.colour.red(), item.colour.green(), item.colour.blue());
+            std::fflush(stderr);
         }
         // ON CHANGE ONLY, TRANSFORM INCLUDED (ENGINE-4 F5; the colour half is
         // fps audit F14 below). The gizmo is screen-scaled and follows the
