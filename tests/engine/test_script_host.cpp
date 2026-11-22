@@ -605,6 +605,59 @@ int main()
                                   {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(nan), Value(0), Value(0)})}})}),
                          "transform.position[0] is not a finite number"),
               "setTransform({position: [NaN, 0, 0]}) FAILS before the engine is asked (it reached setNodeTransform before)");
+
+        // AN ARRAY's MAXIMUM COUNT and AN EXCLUSIVE MINIMUM (2a a2): declared, checked by the host, printed
+        d.add({"test.bounded",
+               {Access::Reads,
+                {object("o", {arg("v", Kind::Array, Value(Value::Array{})).upTo(3),
+                              arg("pos", Kind::Number, Value(1.0)).above(0).in("m")})},
+                Kind::Null},
+               "a bounded array and a positive number"},
+              [](Call &) { return Value(); });
+        const auto bounded = [&](const char *k, Value v) { return d.call("test.bounded", {Value(Value::Object{{k, std::move(v)}})}); };
+        const Value three(Value::Array{Value(1), Value(2), Value(3)}), four(Value::Array{Value(1), Value(2), Value(3), Value(4)});
+        check(bounded("v", three).status == Status::Ok && failedWith(bounded("v", four), "o.v holds 4 elements, at most 3") &&
+                  bounded("pos", Value(0.001)).status == Status::Ok &&
+                  failedWith(bounded("pos", Value(0)), "o.pos 0 is outside > 0 m") &&
+                  signatureText(*d.find("test.bounded")) ==
+                      "test.bounded(o: object {v: number[] <= 3 = default, pos: number > 0 m = default}) -> null [reads]",
+              "maxCount: 3 elements pass, 4 FAIL by name; an exclusive minimum: 0.001 passes, 0 FAILS; printed: " +
+                  signatureText(*d.find("test.bounded")));
+
+        // engine.gi.set's CASCADES HOLD THE GI's OWN LAW (L4; PhotonComponent::resolveCascadeTable): each bound FAILS by
+        // name BEFORE the engine is asked (no engine here: a table that passes every bound reaches "did not start")
+        const auto cas = [](double hs, int res, double step) {
+            return Value(Value::Object{{"halfSize", Value(hs)}, {"resolution", Value(res)}, {"stepCells", Value(step)}});
+        };
+        const auto giSet = [&](Value::Array table) {
+            return eng.call("engine.gi.set", {fakeScene, Value(Value::Object{{"mode", Value("vct")},
+                                                                             {"cascades", Value(std::move(table))}})});
+        };
+        const struct { Value::Array table; const char *names; } refused[] = {
+            {{cas(1, 64, 0), cas(2, 64, 0), cas(4, 64, 0), cas(8, 64, 0), cas(16, 64, 0)}, "params.cascades holds 5 elements, at most 4"},
+            {{cas(32, 8, 0)}, "params.cascades[0].resolution 8 is outside 16..256 cells"},
+            {{cas(32, 264, 0)}, "params.cascades[0].resolution 264 is outside 16..256 cells"},
+            {{cas(32, 20, 0)}, "params.cascades[0].resolution 20 is not a multiple of 8 (the engine would build 24"},
+            {{cas(0, 64, 0)}, "params.cascades[0].halfSize 0 is outside > 0 m"},
+            {{cas(1e-50, 64, 0)}, "params.cascades[0].halfSize is no float above 0"},
+            {{cas(32, 64, -1)}, "params.cascades[0].stepCells -1 is outside 0..128 cells"},
+            {{cas(32, 64, 0.5)}, "params.cascades[0].stepCells must be 0 (the engine derives it) or 1..32 cells"},
+            {{cas(32, 64, 33)}, "params.cascades[0].stepCells must be 0 (the engine derives it) or 1..32 cells"},
+            {{cas(32, 64, 0), cas(16, 64, 0)}, "params.cascades[1] does not grow outward"},
+            {{cas(16, 64, 0), cas(32, 256, 0)}, "params.cascades[1] does not grow outward"},
+        };
+        std::string missed;
+        for (const auto &x : refused) {
+            const Result r = giSet(x.table);
+            if (!failedWith(r, std::string("engine.gi.set: ") + x.names)) missed += "\n      " + std::string(x.names) + " <- " + r.message;
+        }
+        check(missed.empty(), "engine.gi.set: each of the GI's 11 cascade bounds FAILS by name" + missed);
+        check(failedWith(giSet({cas(8, 64, 1), cas(32, 64, 32)}), "the engine did not start") &&
+                  failedWith(giSet({}), "the engine did not start") &&
+                  signatureText(*eng.find("engine.gi.set")).find("cascades: object[] <= 4 {halfSize: number > 0 m, resolution: "
+                                                                  "int 16..256 cells, stepCells: number 0..128 cells = default}") !=
+                      std::string::npos,
+              "THE CONTROL: a table inside every bound (and none) passes them, to the engine; the bounds are printed");
     }
 
     // 10. THE LANGUAGE TABLE (the lead's S5): a script's language is its name's extension; a SECOND LANGUAGE is one small
