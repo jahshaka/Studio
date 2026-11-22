@@ -3,7 +3,7 @@
 // includes it - irisgl/ never does (tests/hygiene/no_qt_below.py holds that). Conversions only: no logic lives here.
 #pragma once
 
-#include "core/files.h"
+#include "irisgl/core/files.h"
 
 #include <QByteArray>
 #include <QString>

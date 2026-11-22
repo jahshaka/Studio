@@ -74,7 +74,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/meshbakestore.h"
 #include "services/editgate.h"
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/materialpreset.h"
 #include "irisgl/core/logger.h"
 #include "services/assetmetadata.h"

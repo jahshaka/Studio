@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include <QString>
 #include <functional>
 
-#include "core/signal.h"
+#include "irisgl/core/signal.h"
 #include "services/assetimporter.h"
 #include "services/materialpresetseeder.h"
 

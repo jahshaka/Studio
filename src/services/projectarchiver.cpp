@@ -30,7 +30,7 @@ For more information see the LICENSE file
 #include <memory>
 
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "export/exportmanifest.h"
 #include "io/ziphelper.h"

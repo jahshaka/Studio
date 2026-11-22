@@ -17,7 +17,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/materialpreset.h"
 #include "io/builtinmaterials.h"
 #include "io/materialpresets.h"

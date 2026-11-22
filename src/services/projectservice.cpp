@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "services/apppaths.h"
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"
 #include "irisgl/document/scenegraph/scene.h"

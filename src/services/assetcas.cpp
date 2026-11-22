@@ -36,8 +36,8 @@ For more information see the LICENSE file
 #include "data/project.h"          // ModelTypes — the asset `type` column
 #include "services/assetstorepaths.h"
 #include "app/qtstd.h"
-#include "core/files.h"
-#include "core/guid.h"
+#include "irisgl/core/files.h"
+#include "irisgl/core/guid.h"
 
 namespace AssetCas
 {

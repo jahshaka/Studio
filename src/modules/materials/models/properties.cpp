@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QUuid>
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 
 Property::Property()
 {

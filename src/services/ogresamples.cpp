@@ -13,7 +13,7 @@ For more information see the LICENSE file
 
 #include "data/settingsmanager.h"
 #include "app/qtstd.h"
-#include "core/files.h"
+#include "irisgl/core/files.h"
 
 #include <QCoreApplication>
 #include <QDir>

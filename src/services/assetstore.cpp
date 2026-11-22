@@ -27,7 +27,7 @@ For more information see the LICENSE file
 #include "data/assethomekind.h"
 #include "services/assetstorepaths.h"
 #include "app/qtstd.h"
-#include "core/files.h"
+#include "irisgl/core/files.h"
 
 const char *AssetStoreService::kSettingKey = "assets/storeRoot";
 const char *AssetStoreService::kStoreIdKey = "assets/storeId";

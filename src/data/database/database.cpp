@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "io/sceneformat.h"   // the scene version gate the import shares with the open
 #include "irisgl/irisglfwd.h"
 #include "irisgl/core/logger.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "io/assetmanager.h"
 #include "services/assethelper.h"
 #include "services/assetcas.h"

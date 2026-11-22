@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include <QSet>
 
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "services/assetcas.h"
 #include "services/assetdelete.h"

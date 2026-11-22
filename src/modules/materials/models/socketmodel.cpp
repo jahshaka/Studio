@@ -11,7 +11,7 @@ For more information see the LICENSE file
 #include <QUuid>
 #include "socketmodel.h"
 #include "connectionmodel.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 
 void SocketModel::setGraph(NodeGraph *value)
 {

@@ -40,7 +40,7 @@ For more information see the LICENSE file
 #include "modules/capture/mp4faststart.h"
 #include "services/livevideo.h"
 #include "app/qtstd.h"
-#include "core/files.h"
+#include "irisgl/core/files.h"
 #include "viewport/ieditorviewport.h"
 
 namespace {

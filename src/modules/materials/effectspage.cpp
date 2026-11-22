@@ -47,7 +47,7 @@ For more information see the LICENSE file
 #include <QPixmap>
 #include <QScrollBar>
 #include <QShortcut>
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include <QDesktopServices>
 #include "nodes/test.h"
 #include "nodes/pbrmasternode.h"

@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "services/assetdelete.h"
 #include "services/materialbundle.h"

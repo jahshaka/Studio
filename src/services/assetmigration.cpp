@@ -27,7 +27,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstore.h"
 #include "services/assetstorepaths.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 
 namespace AssetMigration
 {

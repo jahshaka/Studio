@@ -26,7 +26,7 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "io/assetmanager.h"
 #include "io/builtinmaterials.h"

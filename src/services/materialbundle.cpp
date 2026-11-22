@@ -24,7 +24,7 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "services/assetcas.h"

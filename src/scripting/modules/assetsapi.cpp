@@ -69,7 +69,7 @@ For more information see the LICENSE file
 #include "services/previewservice.h"
 #include "services/videoutils.h"
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "bridge/engineassetscene.h"
 #include "ui/pages/assetview.h"

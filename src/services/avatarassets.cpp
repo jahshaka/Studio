@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "services/assethome.h"
 #include "services/assettags.h"

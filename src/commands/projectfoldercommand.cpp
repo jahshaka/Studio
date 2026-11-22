@@ -13,7 +13,7 @@ For more information see the LICENSE file
 
 #include <QObject>
 
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "services/projectfolders.h"
 
 namespace {

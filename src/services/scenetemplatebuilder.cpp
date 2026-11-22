@@ -18,7 +18,7 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 #include "data/project.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/document/assets/texture2d.h"

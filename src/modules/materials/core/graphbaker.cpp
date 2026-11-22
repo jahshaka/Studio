@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/colorjson.h"
 
 #include "app/qtstd.h"
-#include "core/files.h"
+#include "irisgl/core/files.h"
 
 #include <QColor>
 #include <QJsonArray>

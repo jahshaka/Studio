@@ -42,7 +42,7 @@ class AssetService;
 class AmbienceService;
 class PerfSampler;
 
-#include "core/signal.h"
+#include "irisgl/core/signal.h"
 
 #include <functional>
 

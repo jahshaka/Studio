@@ -32,7 +32,7 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 #include "io/sceneformat.h"
 #include "services/scenefolders.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 
 #include "data/constants.h"
 #include "data/database/database.h"

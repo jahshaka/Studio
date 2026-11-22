@@ -33,7 +33,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetclosure.h"
 #include "services/assetstorepaths.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 
 namespace assetshare {
 

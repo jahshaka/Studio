@@ -28,7 +28,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/projectassets.h"
 #include "scripting/modules/moduleshared.h"
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 
 using clipboardformat::ClipAsset;
 using clipboardformat::ClipFile;
