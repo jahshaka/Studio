@@ -131,3 +131,6 @@ target_link_libraries(test_bundle_writer PRIVATE Qt6::Core Qt6::Concurrent zip)
 add_test(NAME bundle.writer COMMAND test_bundle_writer WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(bundle.writer PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "assets" TIMEOUT 60)
 jah_no_display(bundle.writer)
+
+# WHAT EACH SCRIPT ROW HERE NEEDS BUILT beyond the binary on its command line (jah_builds, tests/CMakeLists.txt): nothing.
+jah_builds(none ROWS library.scale)

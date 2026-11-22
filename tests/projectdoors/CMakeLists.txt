@@ -77,3 +77,6 @@ set_tests_properties(project.save_door PROPERTIES
     LABELS "scripting"
     TIMEOUT 60)
 jah_no_display(project.save_door)
+
+# WHAT EACH SCRIPT ROW HERE NEEDS BUILT beyond the binary on its command line (jah_builds, tests/CMakeLists.txt): nothing.
+jah_builds(none ROWS project.refuses_unreadable project.remove_folder project.save_door)

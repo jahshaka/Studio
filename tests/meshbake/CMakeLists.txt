@@ -254,3 +254,6 @@ add_test(NAME atom2.lost_external_at_its_position COMMAND $<TARGET_FILE:test_mes
 set_tests_properties(atom2.lost_external_at_its_position PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(atom2.lost_external_at_its_position)
+
+# WHAT EACH SCRIPT ROW HERE NEEDS BUILT beyond the binary on its command line (jah_builds, tests/CMakeLists.txt): nothing.
+jah_builds(none ROWS bake.determinism.standin bake.determinism.shell bake.determinism.throws.early bake.determinism.throws.late bake.determinism.reference_run meshbake.archive_bakes.import meshbake.archive_bakes.rebuild meshbake.archive_bakes.missing)

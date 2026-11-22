@@ -9,6 +9,16 @@ cmake/built_from.py, with a toy irisgl and fork beside it. Each case is a law of
   3 a FORK file restored with an old mtime: the line names build-ogre.sh, stale_fork=1, and it STAYS stale over a Studio
     pass until the install's BUILT_FROM is newer than the touch;
   4 an ordinary edit (a new mtime) rebuilds in one pass, stale=0.
+THE TARGETS IT CLAIMS (ENGINE-HEADERS-1 stage 0, build by reach: `targets=`, cmake/BuiltFrom.cmake), two out-of-`all` targets A
+and B that both depend on one "library" L (lib.txt), each built by a `--target` pass and stamped by jah_built_reach:
+  5 after a commit, a by-reach pass of A claims A alone (the whole build's `all` was another state's); a second pass of B at the
+    same state ADDS B (A,B: the last --code call's targets stay servable);
+  6 a commit, then a pass of B: B alone - A, built at the old tip, is never claimed at the new one;
+  7 L's source EDITED between two passes at one tip (A not rebuilt, its output on disk from the old L): the pass of B claims B
+    alone - A's claim falls with the content; L only TOUCHED (its bytes equal): A stays claimed (its output IS from these bytes);
+  8 a whole build at an equal state keeps the reach's targets beside `all`; 9 jah_built_reach without JAH_BUILT_REACH refuses;
+  10 THE RECORDS (scripts/gate_runlog.py coverage + stale_build, scripts/row_targets.py): after 6 (A built at the old tip, B at
+    this one) a row needing A is `built.uncovered` [A] - its record is never its tip's - and a row needing B is covered.
 No GPU, no display; seconds. usage: built_from_heals.py <source dir>"""
 import os
 import shutil
@@ -39,6 +49,17 @@ def build():
     return r.returncode, r.stdout + r.stderr, stamp
 
 
+def reach(*targets):
+    """A BY-REACH PASS as util.build makes one: `--target <T>`, then - only on its exit 0 - jah_built_reach in its own call."""
+    r = subprocess.run(["cmake", "--build", B, "--target", *targets], capture_output=True, text=True)
+    if r.returncode:
+        return r.returncode, r.stdout + r.stderr, {}
+    env = dict(os.environ, JAH_BUILT_REACH=",".join(targets))
+    r2 = subprocess.run(["cmake", "--build", B, "--target", "jah_built_reach"], capture_output=True, text=True, env=env)
+    stamp = dict(l.split("=", 1) for l in open(os.path.join(B, "BUILT_FROM")).read().splitlines() if "=" in l)
+    return r2.returncode, r.stdout + r2.stdout + r2.stderr, stamp
+
+
 def restore(path, text):
     """`text` into `path` the way an archive's restore does: the content new, the mtime an old one (2001)."""
     tmp = os.path.join(T, "restore.tmp")
@@ -63,9 +84,21 @@ try:
         "add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/media.txt COMMAND ${CMAKE_COMMAND} -E copy "
         "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/Media/piece.txt ${CMAKE_BINARY_DIR}/media.txt "
         "DEPENDS ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next/Media/piece.txt)\n"
-        "add_custom_target(app ALL DEPENDS ${CMAKE_BINARY_DIR}/app.txt ${CMAKE_BINARY_DIR}/media.txt)\ninclude(BuiltFrom)\n")
+        "add_custom_target(app ALL DEPENDS ${CMAKE_BINARY_DIR}/app.txt ${CMAKE_BINARY_DIR}/media.txt)\n"
+        # A and B: out of `all`, each "linking" L (a copy of lib.txt) - the shape of two test executables and their library
+        "add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/L.txt COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_SOURCE_DIR}/lib.txt "
+        "${CMAKE_BINARY_DIR}/L.txt DEPENDS ${CMAKE_SOURCE_DIR}/lib.txt)\n"
+        "add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/A.txt COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/L.txt "
+        "${CMAKE_BINARY_DIR}/A.txt DEPENDS ${CMAKE_BINARY_DIR}/L.txt)\n"
+        "add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/B.txt COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/L.txt "
+        "${CMAKE_BINARY_DIR}/B.txt DEPENDS ${CMAKE_BINARY_DIR}/L.txt)\n"
+        "add_custom_target(A DEPENDS ${CMAKE_BINARY_DIR}/A.txt)\nadd_custom_target(B DEPENDS ${CMAKE_BINARY_DIR}/B.txt)\n"
+        "enable_testing()\nadd_test(NAME ra COMMAND sh -c true)\nadd_test(NAME rb COMMAND sh -c true)\n"
+        "set_tests_properties(ra PROPERTIES JAH_BUILD_TARGETS A)\nset_tests_properties(rb PROPERTIES JAH_BUILD_TARGETS B)\n"
+        "include(BuiltFrom)\n")
     open(os.path.join(S, ".gitignore"), "w").write("build/\nirisgl/\n")
     open(os.path.join(S, "main.txt"), "w").write("OLD\n")
+    open(os.path.join(S, "lib.txt"), "w").write("L1\n")
     open(os.path.join(F, "Media", "piece.txt"), "w").write("piece OLD\n")
     open(os.path.join(INST, "BUILT_FROM"), "w").write("fork=x\n")
     git(S, "init", "-q"); git(S, "add", "-A"); git(S, "commit", "-qm", "toy")
@@ -116,6 +149,50 @@ try:
     rc, out, st = build()
     want("4 an ordinary edit rebuilds in one pass, stale=0", open(os.path.join(B, "app.txt")).read().strip() == "EDITED"
          and st.get("stale") == "0" and "STALE" not in out, f"{st} {out}")
+    want("4 a whole build claims `all`", st.get("targets") == "all", f"{st}")
+
+    git(S, "commit", "-qam", "edit")
+    rc, out, st = reach("A")
+    want("5 after a commit, a by-reach pass of A claims A alone", rc == 0 and st.get("targets") == "A"
+         and st.get("stale") == "0", f"rc {rc} {st} {out}")
+    rc, out, st = reach("B")
+    want("5 a second pass at the same state ADDS its target: A,B", rc == 0 and st.get("targets") == "A,B", f"rc {rc} {st}")
+
+    open(os.path.join(S, "main.txt"), "w").write("COMMITTED\n")
+    git(S, "commit", "-qam", "move")
+    rc, out, st = reach("B")
+    want("6 a commit, then a pass of B: B alone (A was built at the old tip)", rc == 0 and st.get("targets") == "B", f"rc {rc} {st}")
+    sys.path.insert(0, os.path.join(src, "scripts"))
+    import gate_runlog
+    cov = gate_runlog.coverage(B)
+    ua, ub = cov("ra"), cov("rb")
+    tip = {"studio": st["studio"], "irisgl": st["irisgl"], "built": dict(gate_runlog.built_from(B), uncovered=ua)}
+    why = gate_runlog.stale_build(tip)
+    want("10 a row needing A (built at the old tip) is uncovered [A] and its record is not its tip's; a row needing B is covered",
+         ua == ["A"] and ub == [] and why is not None and "did not build this row's targets (A)" in why, f"ra {ua} rb {ub} why {why}")
+
+    open(os.path.join(S, "main.txt"), "w").write("DIRTY\n")        # dirty already: only the content can tell the two apart
+    rc, out, st = reach("A")
+    time.sleep(0.05)
+    open(os.path.join(S, "lib.txt"), "w").write("L2\n")             # the library's source edited, A not rebuilt
+    rc, out, st = reach("B")
+    a = open(os.path.join(B, "A.txt")).read().strip()
+    want("7 L edited between two passes at one tip: the pass of B claims B alone (A's output still from L1)",
+         rc == 0 and st.get("targets") == "B" and a == "L1" and open(os.path.join(B, "B.txt")).read().strip() == "L2",
+         f"rc {rc} {st} A.txt {a}")
+    rc, out, st = reach("A")
+    time.sleep(0.05)
+    os.utime(os.path.join(S, "lib.txt"))                              # touched: the same bytes, a new mtime
+    rc, out, st = reach("B")
+    want("7 L only touched (its bytes equal): A stays claimed beside B", rc == 0 and st.get("targets") == "A,B", f"rc {rc} {st}")
+
+    rc, out, st = build()
+    want("8 a whole build at an equal state keeps the reach's targets beside `all`", rc == 0 and st.get("targets") == "A,B,all",
+         f"rc {rc} {st}")
+    r = subprocess.run(["cmake", "--build", B, "--target", "jah_built_reach"], capture_output=True, text=True,
+                       env={k: v for k, v in os.environ.items() if k != "JAH_BUILT_REACH"})
+    want("9 jah_built_reach without JAH_BUILT_REACH refuses (no stamp claims an unnamed pass)",
+         r.returncode != 0 and "JAH_BUILT_REACH" in r.stdout + r.stderr, f"rc {r.returncode}")
 finally:
     shutil.rmtree(T, ignore_errors=True)
 print("tooling.built_from_heals: " + ("PASS" if not fails else f"FAIL ({len(fails)})"), flush=True)

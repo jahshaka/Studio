@@ -1624,3 +1624,7 @@ jah_gpu_row(gi.hit_specular_mobility CLASS engine COMMAND test_gi_hit_specular_m
 set_tests_properties(gi.hit_specular_mobility PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" SKIP_RETURN_CODE 77)
 set_tests_properties(gi.hit_specular_mobility PROPERTIES JAHSHAKA_TEST_FRAMES 895)
+
+# WHAT A SCRIPT ROW HERE NEEDS BUILT beyond its command line (jah_builds, tests/CMakeLists.txt): the walk's law part checks
+# its own arithmetic (rough_lag.sh law), nothing the build makes.
+jah_builds(none ROWS gi.walk_rough.law)

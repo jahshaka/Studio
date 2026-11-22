@@ -967,7 +967,7 @@ def the_rules_catch():
     src = {"test_l": {"/s/l.cpp"}, "test_l_asan": {"/s/l.cpp"}, "test_k": {"/s/k.cpp"}, "test_k_asan": {"/s/k.cpp"}}
     same = r17_bad([A("l.e", "test_l", ["engine"]), A("l.e_asan", "test_l_asan", ["engine", "long"], [asan])], src)
     G = dict(A("l.e_asan", "test_l_asan", ["engine", "long"], [asan]))
-    G["command"] = G["command"][:4] + ["/usr/bin/sh", "/s/tests/support/on_demand.sh", "/b", "test_l_asan_on_demand"] + G["command"][4:]
+    G["command"] = G["command"][:4] + ["/usr/bin/sh", "/s/tests/support/on_demand.sh", "/b", "test_l_asan"] + G["command"][4:]
     guarded = r17_bad([A("l.e", "test_l", ["engine"]), G], src)
     G2 = dict(G, command=G["command"][:-1] + ["/b/test_l2_asan"])
     other_bin = r17_bad([A("l.e", "test_l", ["engine"]), G2])

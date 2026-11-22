@@ -471,7 +471,10 @@ if(Python3_Interpreter_FOUND)
     # tooling.built_from_heals (URGENT #187) — A SOURCE NINJA COULD NOT SEE IS HEALED, NEVER STAMPED AS BUILT: a toy CMake +
     # ninja project with the tree's cmake/BuiltFrom.cmake + cmake/built_from.py - a cp -p restore (an old mtime) prints the
     # loud line, is touched, stamps stale=1, and the next pass rebuilds it (stale=0); a fork file names build-ogre.sh and stays
-    # stale until the install's stamp is newer; a clean pass and an ordinary edit stamp stale=0. No GPU, no display.
+    # stale until the install's stamp is newer; a clean pass and an ordinary edit stamp stale=0; THE TARGETS IT CLAIMS (build by
+    # reach, ENGINE-HEADERS-1 stage 0): a by-reach pass claims its targets, a second at an equal state adds, a commit or an
+    # edited source starts the set again, and a record whose row's targets the stamp does not claim is never its tip's (cases
+    # 5-10). No GPU, no display.
     add_test(NAME tooling.built_from_heals
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/built_from_heals.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(tooling.built_from_heals PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
@@ -832,11 +835,12 @@ add_test(NAME source.display_guard_toy
                  $<TARGET_FILE:display_guard_probe> $<TARGET_FILE:display_guard_probe_unguarded>)
 set_tests_properties(source.display_guard_linked source.display_guard_toy PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
 jah_no_display(source.display_guard_linked source.display_guard_toy)
-# source.on_demand_rows + source.on_demand_toy (ENGINE-HEADERS-1 stage 0): A ROW WHOSE BINARY IS OUT OF THE DEFAULT BUILD (the
-# sanitizer twin's `*_asan` executables, jah_on_demand in tests/CMakeLists.txt) IS BUILT BEFORE IT RUNS AND NEVER RUNS ABSENT OR
-# STALE - rows: every such row runs through tests/support/on_demand.sh and names its target in JAH_BUILD_TARGETS (the lead tools
-# build those before the rows); toy: on_demand.sh fails by name on a missing stamp, a missing binary, an unstamped one and a stale
-# one, and runs a current one with its arguments and its exit. CPU only (on_demand.py).
+# source.on_demand_rows + source.on_demand_toy (ENGINE-HEADERS-1 stage 0): A ROW RUNS ONLY BINARIES THE CALL BUILT - rows: every
+# row whose binary is out of the default build (the sanitizer twin's `*_asan` executables, jah_on_demand in tests/CMakeLists.txt)
+# runs through tests/support/on_demand.sh and names its target in JAH_BUILD_TARGETS, and every CODE row whose command is a
+# script declares JAH_BUILD_TARGETS (jah_builds: `spec.sh test --code` builds by reach, scripts/row_targets.py); toy: on_demand.sh
+# fails by name on a missing stamp, a missing binary and a stamp that does not claim its target (`all` alone, other targets, a
+# name containing its own), and runs a claimed one with its arguments and its exit. CPU only (on_demand.py).
 add_test(NAME source.on_demand_rows
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/on_demand.py" rows "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
 add_test(NAME source.on_demand_toy
@@ -889,3 +893,33 @@ add_test(NAME source.scene_time_one_meaning
          COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/scene_time_one_meaning.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.scene_time_one_meaning PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.scene_time_one_meaning)
+
+# WHAT EACH SCRIPT ROW HERE NEEDS BUILT (jah_builds, tests/CMakeLists.txt; build by reach): every one read for what its script
+# runs or reads of the build (ENGINE-HEADERS-1 stage 0, 2026-11-22).
+# nothing the build makes - the sources, its own toys, ctest's listing, compile_commands.json, configure outputs:
+jah_builds(none ROWS source.no_glsl_path source.fork_stamp source.no_raw_transaction source.no_ui_folder_delete
+    source.one_asset_name_write source.one_save_door source.one_undo_push source.db_pointers_initialised
+    source.panel_rows_guarded source.bake_key_guard source.no_engine_transform_reads source.one_readfile
+    source.assimp_import_only source.one_material_resolve source.photon_never_pinned source.material_page_identity
+    source.no_live_read_at_write source.no_raw_sheets source.shader_cache_key source.bake_key_versioned
+    source.gpu_table_strides source.code_rows gate.serve_red source.testing_rules source.row_budget source.timeout_cap
+    tooling.gpu_lock_fifo tooling.row_lock_env tooling.gpu_lock_sweep tooling.gpu_lock_holds tooling.gpu_lock_mark
+    tooling.evidence_cap source.debug_hot_loops tooling.width_pair.plan tooling.width_pair.judge tooling.width_pair.refuse
+    tooling.width_pair.bars tooling.width_pair.gain tooling.width_pair.reds tooling.width_pair.log tooling.width_pair.budget
+    tooling.width_pair.perrow tooling.owner_home_guard tooling.coverage_map tooling.row_env tooling.one_spelling
+    tooling.build_ogre_spelling tooling.law_records tooling.runlog_facts tooling.built_from_heals source.no_renders_tracked
+    source.member_init source.notices_coverage source.one_fonticons source.settings_keys source.gpu_rows_closure
+    source.row_declares_needs source.scene_no_friends source.photon_one_dispatch source.graphics_queue_seams
+    source.moving_sample source.scene_maps source.selftest_shapes source.presented_predicate source.scene_no_photon_members
+    source.atom_no_registries source.no_fixed_gi_volume source.shell_boundaries source.half_store_rounded
+    source.rough_lobe_transport source.gate_pace source.test_arms_unreachable source.webgpu_census source.ray_seam
+    source.display_guard_toy source.on_demand_rows source.on_demand_toy source.no_box_paths source.brick_list_bounded
+    source.scene_time_one_meaning)
+# the warm-up's key of this build (scripts/warm-app-cache.sh --key: the staged media and the engine's build id):
+jah_builds(JahshakaEngineMedia JahshakaEngineBuildId ROWS tooling.warm_app_cache tooling.warm_cold_rows
+    tooling.warm_cold_calls tooling.warm_key tooling.warm_inherit tooling.warm_store source.display_guard)
+jah_builds(JahshakaEngineMedia ROWS source.compute_size_keys)                  # <build>/bin/media, the staged media
+jah_builds(JahStartupPassId ROWS source.startup_pass_closure)                  # <build>/startup-pass-files.txt
+jah_builds(JahshakaEngine Jahshaka jahlab IrisGL jahengine ROWS source.script_neutral)   # nm on each
+# the whole default build: every test binary ctest runs (readelf), the build's whole dependency graph (its deps log)
+jah_builds(all ROWS source.display_guard_linked gate.selection gate.reach_cache source.gate_scope_rules)

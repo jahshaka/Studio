@@ -195,7 +195,34 @@ def built_from(build):
         return None
     return {"studio": kv.get("studio", ""), "irisgl": kv.get("irisgl", ""), "dirty": kv.get("dirty") == "1",
             "fork_dirty": kv.get("fork_dirty") != "0", "content": kv.get("content"),
-            "stale": kv.get("stale") not in (None, "0")}
+            "stale": kv.get("stale") not in (None, "0"), "targets": [t for t in kv.get("targets", "").split(",") if t]}
+
+
+def coverage(build):
+    """THE STAMP COVERS A ROW OR ITS RECORD IS NOT ITS TIP's (ENGINE-HEADERS-1 stage 0, build by reach): a function row ->
+    the targets that row needs (scripts/row_targets.py: its command's artefacts, JAH_BUILD_TARGETS, its fixtures' rows) that
+    the build's stamp does not claim at its state (BUILT_FROM `targets=`); [] when covered. A build that cannot be read
+    answers every row uncovered (["?"]): a record it cannot vouch for never serves."""
+    b = built_from(build) or {}
+    try:
+        sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
+        import row_targets
+        nj, doc = row_targets.Ninja.load(build), row_targets.ctest_doc(build)
+        if nj is None or doc is None:
+            raise OSError("no build.ninja or ctest listing")
+    except (OSError, ValueError, ImportError):
+        return lambda name: ["?"]
+    pl = row_targets.pulls(doc)
+    by = {t["name"]: t for t in doc.get("tests", [])}
+
+    def of(name):
+        if name not in by:
+            return ["?"]
+        need = set()
+        for m in [name, *sorted(pl.get(name, ()))]:
+            need |= row_targets.own_targets(by[m], nj)[0]
+        return row_targets.uncovered(b.get("targets"), need, nj)
+    return of
 
 
 def stale_build(shas):
@@ -207,6 +234,9 @@ def stale_build(shas):
         return "built from a DIRTY tree"
     if b.get("stale"):
         return "built while a source ninja could not see (an old mtime) was older than its objects: STALE (build again)"
+    if b.get("uncovered"):
+        return "built by a pass that did not build this row's targets (%s): its binaries are not the tip's" % ", ".join(
+            b["uncovered"][:6])
     if b.get("studio") != shas.get("studio") or b.get("irisgl") != shas.get("irisgl"):
         return "built from studio %s / irisgl %s, not the tip" % ((b.get("studio") or "?")[:9], (b.get("irisgl") or "?")[:9])
     return None
@@ -556,6 +586,8 @@ def run_ctest(cmd, build, tier, lane, echo=True):
         print(f"gate_runlog: the evidence cap failed ({e}) - nothing removed", flush=True)
     shas = tree_shas(_git(["rev-parse", "--show-toplevel"], build) or ROOT)
     shas["built"] = built_from(build)
+    (shas["built"] or {}).pop("targets", None)   # (the claim is judged per row below; a record keeps what it misses)
+    covers = coverage(build) if shas["built"] else (lambda name: [])
     facts, config, config_why = row_facts(build)
     run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{shas['studio'][:9]}-p{os.getpid()}"   # #209: one per call
     display = os.environ.get("DISPLAY")
@@ -630,7 +662,9 @@ def run_ctest(cmd, build, tier, lane, echo=True):
             nulls["data_hash"] = f.get("data_why") or "no data hash"
         if config is None:
             nulls["config"] = config_why
-        base = {"schema": SCHEMA, "run": run_id, "tier": tier, "lanes": [lane], "tip": shas, "suite": name,
+        unc = covers(name)
+        tip = dict(shas, built=dict(shas["built"], uncovered=unc)) if unc else shas
+        base = {"schema": SCHEMA, "run": run_id, "tier": tier, "lanes": [lane], "tip": tip, "suite": name,
                 "labels": sorted(f.get("labels") or []), "declaration": f.get("declaration"),
                 "data_hash": f.get("data_hash"), "config": config, "display": display, "nulls": nulls,
                 "env": env_fingerprint(build),

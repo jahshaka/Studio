@@ -5,3 +5,5 @@ jah_ship_row(devprocess.kernel_journal)   # THE SHIP SET (TEST-CUT-1)
 set_tests_properties(devprocess.kernel_journal PROPERTIES TIMEOUT 60 LABELS "tooling" SKIP_RETURN_CODE 77)
 jah_no_display(devprocess.kernel_journal)
 
+# WHAT A SCRIPT ROW HERE NEEDS BUILT (jah_builds, tests/CMakeLists.txt): the kernel's journal, nothing the build makes.
+jah_builds(none ROWS devprocess.kernel_journal)

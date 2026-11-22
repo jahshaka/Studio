@@ -456,19 +456,32 @@ endfunction()
 # executable that links it are OUT OF THE DEFAULT BUILD - they were 53 of the 376 objects one edit of Types.h recompiled (the
 # ground read, spikes/engine-headers/GROUND.md § 4), and their rows run only at a feature's end and in LONG (CODING_RULES § 5;
 # skeletal.share_asan, a code row, when a diff reaches it). NO ROW IS LOST: every row stays registered and selected as before;
-# `jah_on_demand(<exe>)` makes <exe> EXCLUDE_FROM_ALL and adds the target `<exe>_on_demand` (the binary, then its stamp: the
-# build's BUILT_FROM copied to <binary>.built_from); a row of <exe> (jah_gpu_row, or `_jah_on_demand_run` at an add_test site)
-# runs through tests/support/on_demand.sh - an unbuilt or stale binary is a FAILED row by name, never a skip - and carries the
-# property JAH_BUILD_TARGETS <exe>_on_demand, which the lead tools build before they run it (spec.sh test, --code, sprint.sh
-# ship). source.on_demand_rows holds every row whose binary is outside the default build to it.
+# `jah_on_demand(<exe>)` makes <exe> EXCLUDE_FROM_ALL; a row of <exe> (jah_gpu_row, or `_jah_on_demand_run` at an add_test
+# site) runs through tests/support/on_demand.sh - an unbuilt binary, or one the build's stamp does not claim at its state
+# (BUILT_FROM's `targets=`, cmake/BuiltFrom.cmake), is a FAILED row by name, never a skip - and carries the property
+# JAH_BUILD_TARGETS <exe>, which the lead tools build before they run it (spec.sh test, --code, sprint.sh ship: a `--target`
+# pass, then the stamp naming it). source.on_demand_rows holds every row whose binary is outside the default build to it.
 set(JAH_ON_DEMAND_SH "${CMAKE_SOURCE_DIR}/tests/support/on_demand.sh")
 function(jah_on_demand _exe)
-    set_target_properties(${_exe} PROPERTIES EXCLUDE_FROM_ALL TRUE JAH_ON_DEMAND ${_exe}_on_demand)
-    add_custom_target(${_exe}_on_demand
-        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/BUILT_FROM" "$<TARGET_FILE:${_exe}>.built_from"
-        COMMENT "ON DEMAND: ${_exe} built, stamped at the build's BUILT_FROM"
-        VERBATIM)
-    add_dependencies(${_exe}_on_demand ${_exe})
+    set_target_properties(${_exe} PROPERTIES EXCLUDE_FROM_ALL TRUE JAH_ON_DEMAND ${_exe})
+endfunction()
+# jah_builds(<target>... | none | all  ROWS <row>...): WHAT A SCRIPT ROW NEEDS BUILT (ENGINE-HEADERS-1 stage 0, build by reach;
+# CODING_RULES § 4 "WHICH BUILD"). `spec.sh test --code` builds only the targets of the rows it runs (scripts/row_targets.py):
+# a row's command's artefacts (its executable, a binary it is handed) plus this property, JAH_BUILD_TARGETS. A row whose command
+# is a SCRIPT (python3, sh, bash) says here what its script runs or reads of the build beyond its command line: CMake target
+# names, `none` (sources, toys, ctest's listing, configure outputs: nothing the build makes), or `all` (it reads every binary
+# of the default build). An undeclared code row is red at source.on_demand_rows (and costs its call the whole build).
+function(jah_builds)
+    cmake_parse_arguments(B "" "" "ROWS" ${ARGN})
+    if(NOT B_UNPARSED_ARGUMENTS OR NOT B_ROWS)
+        message(FATAL_ERROR "jah_builds(<target>... | none | all ROWS <row>...): both are required")
+    endif()
+    foreach(_r IN LISTS B_ROWS)
+        if(NOT TEST ${_r})
+            message(FATAL_ERROR "jah_builds: ${_r} is no row of ${CMAKE_CURRENT_SOURCE_DIR}")
+        endif()
+        set_property(TEST ${_r} PROPERTY JAH_BUILD_TARGETS ${B_UNPARSED_ARGUMENTS})
+    endforeach()
 endfunction()
 # _jah_on_demand_run(<exe target> <out var>): the command words that run <exe> - through on_demand.sh when it is built on demand
 # (its target named), else the bare $<TARGET_FILE:...>; <out var>_TARGET is the on-demand target ("" when none).
@@ -708,6 +721,8 @@ function(jah_fresh_home_fixture row fixture home)
     # --setup: the wipe BEFORE and the THEN only — the wipe after is the consumer's exit (round 14 addendum 2)
     add_test(NAME ${row} COMMAND sh "${JAH_FRESH_HOME}" --setup ${_flags} ${F_ARGS} "${home}" ${_then})
     set_tests_properties(${row} PROPERTIES FIXTURES_SETUP ${fixture} TIMEOUT 60)
+    # the wrapper runs nothing the build makes; a THEN's binary is on its command line (jah_builds above)
+    jah_builds(none ROWS ${row})
     # a home WIPE reads no data (fresh_home.sh is the harness, never data): DATA NONE (RUNNER-A2B)
     set_property(TEST ${row} APPEND PROPERTY JAH_DATA NONE)
     if(F_LABELS)

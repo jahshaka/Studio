@@ -131,3 +131,6 @@ jah_gpu_row(lab.commit_reach CLASS engine FRAMES 180
             ${CMAKE_CURRENT_BINARY_DIR}/work/commit_reach
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.commit_reach PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# WHAT EACH SCRIPT ROW HERE NEEDS BUILT beyond the binary on its command line (jah_builds, tests/CMakeLists.txt): nothing.
+jah_builds(none ROWS lab.envs_build)

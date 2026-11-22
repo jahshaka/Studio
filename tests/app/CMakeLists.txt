@@ -368,3 +368,6 @@ set_tests_properties(app.window_answers.clean PROPERTIES TIMEOUT 60 LABELS "scri
 jah_no_display(app.window_answers.clean)
 # (its frames, counted by the s1bprobe's Root::_updateAllRenderTargets events in the row's process, 2026-11-22: spikes/cold-boot-1/FE)
 set_property(TEST app.window_answers PROPERTY JAHSHAKA_TEST_FRAMES 2458)
+
+# WHAT EACH SCRIPT ROW HERE NEEDS BUILT beyond the binary on its command line (jah_builds, tests/CMakeLists.txt): nothing.
+jah_builds(none ROWS pool.runner pool.clean_state.law pool.clean_state.docs app.seed_home_template app.render_offscreen_host)

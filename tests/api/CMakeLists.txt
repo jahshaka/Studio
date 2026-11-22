@@ -34,3 +34,6 @@ set_tests_properties(api.contract PROPERTIES
 # generating the docs needs the registry and a document, never a pixel. Run with
 # DISPLAY stripped so that stays true.
 jah_no_display(api.contract)
+
+# WHAT EACH SCRIPT ROW HERE NEEDS BUILT beyond the binary on its command line (jah_builds, tests/CMakeLists.txt): nothing.
+jah_builds(none ROWS api.contract)

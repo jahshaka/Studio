@@ -1157,3 +1157,6 @@ if("host_epic" IN_LIST JAH_HOST_POOLS)
     jah_add_pool(host_epic TIER epic NEEDS photon APP_ARGS ${JAH_HOST_ARGS} LABELS "scripting")
     set_property(TEST pool.host_epic PROPERTY JAHSHAKA_TEST_FRAMES 908)   # the two rows' measured 400 + 400, + frame_step's 47 (its 37 + 10 editor frames; its project's boundary frames uncounted), + picture_advances_nothing's 61 editor frames (its shot's settle frames counted at its first run: ONE-FRAME-1)
 endif()
+
+# WHAT EACH SCRIPT ROW HERE NEEDS BUILT beyond the binary on its command line (jah_builds, tests/CMakeLists.txt): nothing.
+jah_builds(none ROWS scripting.e2e.clip_ref scripting.e2e.tex_ref scripting.e2e.clipboard_budget)

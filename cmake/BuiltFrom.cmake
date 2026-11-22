@@ -6,7 +6,9 @@
 # so it goes stale on every rebuild without a reconfigure. So EVERY BUILD writes <build>/BUILT_FROM — the
 # studio and irisgl HEADs and whether either tree was dirty — as its LAST step: the stamp target depends on
 # every build target of the project, so a build that fails or is stopped never refreshes it, and a
-# `--target <one>` build does not either (the stamp then reads stale, which only ever costs a no-op build).
+# `--target <one>` build by hand does not either (the stamp then reads stale, which only ever costs a no-op build).
+# The lead tools' BY-REACH build (a `--target` pass of the targets its rows need) stamps through jah_built_reach, and the
+# stamp's `targets=` line says which targets it claims (below).
 # scripts/gate_runlog.py copies it into each record (`tip.built`); ci_gate_check.py treats a record whose
 # built studio/irisgl sha is not the tip's — or was built dirty, untracked files included, or carries no
 # stamp at all — as studio_dirty (never the tip's run). Every gate first runs a no-op `cmake --build`
@@ -63,11 +65,56 @@ if(CMAKE_SCRIPT_MODE_FILE)
             set(extra "content=?\nstale=?\nstale_fork=0\nstale_files=\n")
         endif()
     endif()
-    set(text "studio=${studio}\nirisgl=${irisgl}\ndirty=${dirty}\nfork_dirty=${fdirty}\n${extra}")
+    set(head "studio=${studio}\nirisgl=${irisgl}\ndirty=${dirty}\nfork_dirty=${fdirty}\n")
+    # THE TARGETS THIS STAMP CLAIMS (ENGINE-HEADERS-1 stage 0, BUILD BY REACH; CODING_RULES § 4 "WHICH BUILD"): `targets=` names
+    # what is current at this state - `all` (every default target: the jah_built_from step, after every one of them) and/or
+    # the CMake targets a `--target` pass built (jah_built_reach: the lead tools' util.build runs it as its OWN ninja call, only
+    # after the `--target <T>` call exited 0, with JAH_BUILT_REACH=<T, comma-separated>). A target named here was built WITH
+    # EVERYTHING IT LINKS AND DEPENDS ON at this state: a `--target T` ninja call brings T's whole input closure up to date
+    # before T, by construction. THE STATE is studio, irisgl, dirty, fork_dirty and content= (one hash over every file's bytes,
+    # the uncommitted ones included: cmake/built_from.py): a stamp at an EQUAL state and not STALE ADDS its targets to the
+    # set on disk (two --code calls at one tip: A then B = A + B); at any other state - a commit, an edit, a library's source
+    # changed between two by-reach calls - the set STARTS EMPTY, so a binary built from older bytes is never claimed. A FAILED
+    # build leaves no stamp (util.build removes it). tests/hygiene/built_from_heals.py cases 5-8; the readers:
+    # scripts/row_targets.py (a row's targets), gate_runlog.py (a record whose row's targets are not here is never its tip's),
+    # tests/support/on_demand.sh (an on-demand binary runs only when named here).
+    if(REACH)
+        set(now "$ENV{JAH_BUILT_REACH}")
+        if(now STREQUAL "")
+            message(FATAL_ERROR "BUILT_FROM: jah_built_reach needs JAH_BUILT_REACH=<target>[,<target>...] - the targets the "
+                                "pass before it built (the lead tools' util.build sets it); never built by hand")
+        endif()
+        string(REPLACE "," ";" now "${now}")
+    else()
+        set(now "all")
+    endif()
     set(old "")
     if(EXISTS "${OUT}")
         file(READ "${OUT}" old)
     endif()
+    # _jah_kv(<text> <key> <out>): the value of `<key>=` on its own line of <text> ("" when absent)
+    function(_jah_kv text key out)
+        if("\n${text}" MATCHES "\n${key}=([^\n]*)")
+            set(${out} "${CMAKE_MATCH_1}" PARENT_SCOPE)
+        else()
+            set(${out} "" PARENT_SCOPE)
+        endif()
+    endfunction()
+    _jah_kv("${extra}" content new_content)
+    _jah_kv("${extra}" stale new_stale)
+    _jah_kv("${old}" content old_content)
+    _jah_kv("${old}" stale old_stale)
+    _jah_kv("${old}" targets old_targets)
+    string(FIND "${old}" "${head}" at)
+    if(at EQUAL 0 AND old_content STREQUAL new_content AND NOT new_content STREQUAL "?" AND old_stale STREQUAL "0"
+       AND new_stale STREQUAL "0" AND NOT old_targets STREQUAL "")
+        string(REPLACE "," ";" old_targets "${old_targets}")
+        list(APPEND now ${old_targets})
+    endif()
+    list(REMOVE_DUPLICATES now)
+    list(SORT now)
+    list(JOIN now "," now)
+    set(text "${head}${extra}targets=${now}\n")
     if(NOT old STREQUAL text)
         file(WRITE "${OUT}" "${text}")
     endif()
@@ -98,8 +145,15 @@ add_custom_target(jah_built_from ALL
             -P ${CMAKE_CURRENT_LIST_DIR}/BuiltFrom.cmake
     COMMENT "BUILT_FROM: the studio and irisgl commits this build was made from"
     VERBATIM)
+# THE BY-REACH STAMP (the comment at `targets=` above): no dependency, out of `all`; only util.build runs it, after its pass
+add_custom_target(jah_built_reach
+    COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DOUT=${CMAKE_BINARY_DIR}/BUILT_FROM
+            -DPY=${Python3_EXECUTABLE} -DOGRE_PREFIX=${OGRE_NEXT_PREFIX} -DREACH=1
+            -P ${CMAKE_CURRENT_LIST_DIR}/BuiltFrom.cmake
+    COMMENT "BUILT_FROM: the targets a by-reach pass built (JAH_BUILT_REACH)"
+    VERBATIM)
 _jah_collect_targets("${CMAKE_SOURCE_DIR}" _jah_all_targets)
-list(REMOVE_ITEM _jah_all_targets jah_built_from)
+list(REMOVE_ITEM _jah_all_targets jah_built_from jah_built_reach)
 if(_jah_all_targets)
     add_dependencies(jah_built_from ${_jah_all_targets})
 endif()
