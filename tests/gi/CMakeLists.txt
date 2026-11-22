@@ -1358,6 +1358,17 @@ jah_gpu_row(gi.card_build_late.complete CLASS engine COMMAND test_gi_card_build_
 set_tests_properties(gi.card_build_late.complete PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 60)
 
+# gi.route_landing.gather (SHADER-SYSTEM-1 stage 7, P3; the lead's ruling): A RAY ROUTE JOINS A FRAME ONLY WHEN ITS
+# PIPELINE AND ITS LANDED SET ARE BOTH BUILT - the gather's build held while the room draws, then released: its landing and
+# the frames after it build nothing in a frame, draw no placeholder, skip nothing (RED before P3: 30 pending skips, the
+# picture cut to black); at rest 0 ahead passes (the arm shaders.aheadPassOff's picture compare is OWED: no verdict in this
+# room). COLD: its subject is permutations still unbuilt. A new row: priced from its solo run, never SHIP.
+jah_gpu_row(gi.route_landing.gather CLASS engine COMMAND test_gi_card_build_late landing_gather
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+         COLD "its subject is the landed pass's permutations still unbuilt: the room's must be cold in the process (the fixture's shaderCacheOff)")
+set_tests_properties(gi.route_landing.gather PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 1100)
+
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
 # a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark at the ray tier, its control

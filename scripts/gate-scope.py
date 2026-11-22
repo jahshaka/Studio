@@ -204,6 +204,9 @@ OGRE_SCENE_FUNCTIONS = {
     "bindEngine": _CORE, "publishBonePoses": ["skeletal", "avatar", "sockets", "mirror"],
     # COLD-BOOT-1 item 3: the frame's completeness, noted for every drawn scene before its cards plan (giAtRest, the rest)
     "noteFrameCompleteness": _CORE,
+    # SHADER-SYSTEM-1 stage 7, P3: the ray routes' landed sets (the door's input) and the ahead pass's count, latched there
+    **{f: ["gi"] + _CORE for f in ("aheadPassOff", "aheadPassesPrepared", "noteAheadPass", "noteRouteAheadWanted",
+                                   "noteRouteNotReady", "routeSetBuilt")},
     # U3 stage 4a: the host's scene commands as messages, a host-made scene adopted at its create's drain
     **{f: _CORE for f in ("adoptManager", "hostPosts", "postSceneMessage", "requestOnEngine")},
     # U3 stage 5: the two grid states drawn between (the free frames' interpolation)

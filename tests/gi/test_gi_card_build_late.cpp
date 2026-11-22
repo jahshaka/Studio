@@ -63,6 +63,18 @@
 //               (2) the scene comes to rest, complete (the wait ends: a placeholder's request is urgent, never failed by the
 //               door). RED before the fix: the FAILED entry was returned and counted as nothing - the frames read
 //               complete with every object missing (Hlms::getMaterialAsync's tail).
+//   landing_gather - A ROUTE JOINS A FRAME ONLY WHEN ITS PIPELINE AND ITS LANDED SET ARE BOTH BUILT (SHADER-SYSTEM-1
+//               stage 7, P3; row gi.route_landing.gather; COLD: the room's permutations must be unbuilt in the process):
+//               the gather's build held while the room draws - (0) THE CONTROLS: while held, ahead passes prepared and
+//               permutations requested (both above 0) and the frames INCOMPLETE by bit 2; (1) NOT HERE: the frame
+//               with the measuring arm shaders.aheadPassOff on equal to it off is OWED (this room's picture never held
+//               still across an A/B/A compare: spikes/shader-system/ss7/p3/hold2-green.log, no verdict); (2) released once the background compiler is quiet: over the landing frame and kLandingWatch
+//               frames after it, 0 graphics permutations built in a frame, 0 placeholder draws, 0 pending skips - RED
+//               before P3 (30 pending skips: the room's draw skipped every frame, the picture cut to black;
+//               spikes/shader-system/ss7/p3/hold1-red.log; b8-hold/RESULT.md); the permutations REQUESTED at the landing
+//               printed (OPEN: the hit decode's PBS twins and the GI's bounce injection are still asked for there); (3)
+//               THE CONTROL: the gather is DRAWN within kLandingBound frames of its release; (4) at rest, ZERO COST: 0
+//               ahead passes and 0 requests over kRestWatch frames.
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/GiParams.h"
@@ -109,6 +121,11 @@ const double kHoldForever = 100000.0;
 const int kAfterLanding = 24;
 /// The frames a run may take to come to rest (a bound on the fixture, not a law)
 const int kRestCap = 1500;
+/// THE LANDING ROWS (P3): the frames watched from the release (the landing and after it), the bound on the frames until
+/// the released route is drawn (its harvest at the next frame's head, its set measured the frame before: 2, + the
+/// published status's frame of lag), the cap on the hold's wait for a quiet background compiler, and the frames watched
+/// at rest for the zero cost
+const int kLandingWatch = 30, kLandingBound = 4, kQuietCap = 1500, kRestWatch = 30;
 /// The explicit node ids (both scenes the same: residentHash is over (node id, card index))
 const NodeId kFirstId = 1ull << 40;
 
@@ -260,7 +277,7 @@ int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "late";
     const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt",
-                                             "window", "failwait", "silent", "complete" };
+                                             "window", "failwait", "silent", "complete", "landing_gather" };
     if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
         std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt, window, failwait, "
                     "silent or complete, not '%s'\n", mode.c_str());
@@ -271,7 +288,7 @@ int main(int argc, char **argv)
     // loads the room's permutations ready (every green row's run promotes its cache: tests/support/fresh_home.sh); so is
     // .failwait's placeholder
     const std::string log = "test-gi-card-build-late-" + mode + "-ogre.log";
-    const bool cold = mode == "pso" || mode == "failwait";
+    const bool cold = mode == "pso" || mode == "failwait" || mode == "landing_gather";
     auto engine = Engine::create(cold ? enginetest::testEngineConfig(log, enginetest::EngineOverrides().shaderCacheOff())
                                       : enginetest::testEngineConfig(log),
                                  err);
@@ -282,6 +299,66 @@ int main(int argc, char **argv)
     int frames = 0;
     char w[320];
     const auto inFlight = [&]() { return e->published().shaders.rayBuildsInFlight; };
+
+    // ---- .landing_gather: the gather joins only when its pipeline AND its landed set are built (P3) -------------------
+    if (mode == "landing_gather") {
+        e->setArm("rays.buildHold", kHoldForever);
+        e->setArm("rays.buildHoldIds", 32.0);
+        Room r = buildRoom(e, "route_landing_gather");
+        if (!r.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+        const auto shaders = [&]() { return e->published().shaders; };
+        const unsigned long long submittedAt = shaders().submitted, aheadAt = shaders().aheadPasses;
+        // THE HOLD: until the background compiler is quiet (only the held build in flight) and the frame incomplete
+        int f = 0, withTerm = 0;
+        for (; f < kQuietCap; ++f) {
+            enginetest::frames(e, 1);
+            ++frames;
+            const AsyncShaderStats a = shaders();
+            if (r.scene->published().completeness.terms & 4u) ++withTerm;
+            if (f > 10 && a.pending == 1u && a.rayBuildsInFlight == 1u) break;
+        }
+        const AsyncShaderStats held = shaders();
+        std::snprintf(w, sizeof(w), "(0) the hold: the compiler quiet after %d frames (pending %u, ray builds in flight %u), "
+                      "%llu permutations requested, %llu ahead passes, %d frames INCOMPLETE by bit 2", f, held.pending,
+                      held.rayBuildsInFlight, held.submitted - submittedAt, held.aheadPasses - aheadAt, withTerm);
+        check(f < kQuietCap && held.submitted > submittedAt && held.aheadPasses > aheadAt &&
+                  (r.scene->published().completeness.terms & 4u) != 0u, w);
+        // THE RELEASE: the landing and the frames after it
+        const AsyncShaderStats before = shaders();
+        e->setArm("rays.buildHold", 0.0);
+        int drawnAt = -1;
+        for (int k = 0; k < kLandingWatch; ++k) {
+            enginetest::frames(e, 1);
+            ++frames;
+            const bool drawn = r.scene->published().gi.gather.running;
+            if (drawn && drawnAt < 0) drawnAt = k + 1;
+        }
+        const AsyncShaderStats after = shaders();
+        const unsigned long long requested = after.submitted - before.submitted;
+        const unsigned long long built = after.graphicsBuiltInFrame - before.graphicsBuiltInFrame;
+        const unsigned long long ph = after.placeholderDraws - before.placeholderDraws;
+        const unsigned long long skips = after.pendingSkips - before.pendingSkips;
+        std::snprintf(w, sizeof(w), "(2) the landing and %d frames after it: %llu graphics permutations built in a frame, "
+                      "%llu placeholder draws, %llu pending skips", kLandingWatch, built, ph, skips);
+        check(built == 0ull && ph == 0ull && skips == 0ull, w);
+        std::printf("   (2) OPEN, printed: %llu permutations requested of the background compiler at the landing\n",
+                    requested);
+        std::snprintf(w, sizeof(w), "(3) the control: the released route drawn %d frames after its release (bound %d)", drawnAt,
+                      kLandingBound);
+        check(drawnAt > 0 && drawnAt <= kLandingBound, w);
+        // AT REST: ZERO COST
+        const int took = toRest(e, r.scene, frames);
+        const AsyncShaderStats rest = shaders();
+        enginetest::frames(e, kRestWatch);
+        frames += kRestWatch;
+        const AsyncShaderStats restAfter = shaders();
+        std::snprintf(w, sizeof(w), "(4) at rest (after %d frames): over %d frames %llu ahead passes, %llu requests", took,
+                      kRestWatch, restAfter.aheadPasses - rest.aheadPasses, restAfter.submitted - rest.submitted);
+        check(took >= 0 && restAfter.aheadPasses == rest.aheadPasses && restAfter.submitted == rest.submitted, w);
+        drop(e, r);
+        std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+        return g_fail ? 1 : 0;
+    }
 
     // ---- .complete: a Complete frame of an asynchronous room never joins; a synchronous room does (the control) -------
     if (mode == "complete") {
