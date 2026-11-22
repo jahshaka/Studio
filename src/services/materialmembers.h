@@ -115,7 +115,7 @@ QVector<Member> describe(Database *db, Project *project, const QString &material
 /// nothing uses at all (that one is a tile so the user can see and remove it —
 /// it is also what `unused` reports). The stamp is read from the records' own
 /// properties; the dependers of the stamped rows are ONE statement
-/// (Database::fetchDependerTypes), whatever the listing's size.
+/// (Database::fetchUsedOnlyByMaterials), whatever the listing's size.
 QSet<QString> hiddenAsMembers(Database *db, const QVector<AssetRecord> &records);
 
 /// Every asset and scene node that names `guid` — the "used by N" count. The

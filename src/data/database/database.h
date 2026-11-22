@@ -620,10 +620,11 @@ public:
     QHash<QString, QString> fetchAssetOwners(const QStringList &guids);
     /// The stored `asset` blob of each of `guids` that has one, guid → bytes.
     QHash<QString, QByteArray> fetchAssetDataFor(const QStringList &guids);
-    /// Every DISTINCT depender of each of `dependees` (unscoped, as hasMultipleDependers), with the
-    /// depender's catalog type: dependee → the dependers' types, -1 for a depender the catalog does not
-    /// know (a scene node's use). The batch form of the V-2 fold's per-row questions (LARGE-LIBRARY-1).
-    QHash<QString, QVector<int>> fetchDependerTypes(const QStringList &dependees);
+    /// For each of `dependees` that something uses (unscoped, as hasMultipleDependers): true when EVERY
+    /// depender is a material row, false when one is not (another type, or a depender the catalog does
+    /// not know: a scene node's use); a dependee nothing uses is absent. The batch form of the V-2 fold's
+    /// per-row questions (LARGE-LIBRARY-1), answered from idx_assets_material_copies.
+    QHash<QString, bool> fetchUsedOnlyByMaterials(const QStringList &dependees);
     /// Every dependency edge recorded for `projectGuid`, as dependee →
     /// dependers (duplicates removed). The batch form of fetchDependers.
     QHash<QString, QStringList> fetchProjectDependers(const QString &projectGuid);

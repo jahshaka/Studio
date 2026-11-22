@@ -2511,25 +2511,29 @@ QHash<QString, QByteArray> Database::fetchAssetDataFor(const QStringList &guids)
     return out;
 }
 
-QHash<QString, QVector<int>> Database::fetchDependerTypes(const QStringList &dependees)
+QHash<QString, bool> Database::fetchUsedOnlyByMaterials(const QStringList &dependees)
 {
-    QHash<QString, QVector<int>> out;
+    QHash<QString, bool> out;
     QStringList unique = dependees;
     unique.removeAll(QString());
     unique.removeDuplicates();
     if (unique.isEmpty()) return out;
 
     QSqlQuery query;
-    // DISTINCT depender, as hasMultipleDependers asks it: the question is WHO uses the row. The type is read
-    // from the depender's own row by its guid (`type` is stored before the row's thumbnail).
-    query.prepare("SELECT D.dependee, D.depender, MAX(A.type) FROM dependencies D "
-                  "LEFT JOIN assets A ON A.guid = D.depender "
-                  "WHERE D.dependee IN (" + placeholders(unique.size()) + ") "
-                  "GROUP BY D.dependee, D.depender");
+    // ONE ROW PER USED DEPENDEE, unscoped as hasMultipleDependers asks it: is EVERY depender a material?
+    // A depender the catalog does not know (a scene node's id) or of another type is not. The question is
+    // answered by idx_assets_material_copies (partial over the material rows, covering: Database::
+    // createIndexes), never by the depender's table row, which stores its rendered tile before `type`'s
+    // neighbours (LARGE-LIBRARY-1: 48 pages more at 1,000 with tiles than without). The index is named,
+    // and the type is a literal, because a partial index serves only a WHERE that states its own.
+    query.prepare(QStringLiteral("SELECT D.dependee, MIN(EXISTS (SELECT 1 FROM assets M INDEXED BY "
+                                 "idx_assets_material_copies WHERE M.guid = D.depender AND M.type = %1)) "
+                                 "FROM dependencies D WHERE D.dependee IN (%2) GROUP BY D.dependee")
+                      .arg(static_cast<int>(ModelTypes::Material))
+                      .arg(placeholders(unique.size())));
     for (const QString &guid : unique) query.addBindValue(guid);
-    executeAndCheckQuery(query, "fetchDependerTypes");
-    while (query.next())
-        out[query.value(0).toString()].append(query.value(2).isNull() ? -1 : query.value(2).toInt());
+    executeAndCheckQuery(query, "fetchUsedOnlyByMaterials");
+    while (query.next()) out.insert(query.value(0).toString(), query.value(1).toInt() != 0);
     return out;
 }
 

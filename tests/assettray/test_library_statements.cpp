@@ -671,6 +671,12 @@ int main(int argc, char **argv)
                   static_cast<long long>(with.bytes), static_cast<long long>(bare.bytes));
         };
         law("the Assets page's listing (fetchAssetsForAssetView)", w.listing, c.listing);
+        // ...and the page's default, its members OFF: the listing plus the V-2 fold's one batched read, whose
+        // "is this depender a material?" is answered by idx_assets_material_copies (partial over the material
+        // rows, covering), never by the depender's table row. RED before: 190 pages against 142 (48 pages, one
+        // per stamped picture's material: spikes/large-library-1/stage2/red-first-members-off.txt).
+        law("the Assets page with its members off (libraryList: the listing and the fold)", with.membersOff,
+            none.membersOff);
         law("the drawers' counts (countAssetsInCollections)", w.counts, c.counts);
         law("a preset's copies (presetedit copiesOf)", w.copies, c.copies);
 

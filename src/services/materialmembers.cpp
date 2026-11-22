@@ -67,20 +67,15 @@ QSet<QString> hiddenAsMembers(Database *db, const QVector<AssetRecord> &records)
             stamped << record.guid;   // the user's own image carries no stamp: a tile, always
     if (stamped.isEmpty()) return out;
 
-    const QHash<QString, QVector<int>> dependers = db->fetchDependerTypes(stamped);
-    for (const QString &guid : std::as_const(stamped)) {
-        const QVector<int> types = dependers.value(guid);
-        // Used by nothing: a tile, so the user can SEE it and clean it up. This is
-        // the row `unused` reports, and a row nobody can see is a row nobody can
-        // delete.
-        if (types.isEmpty()) continue;
-        // A depender the catalog does not know (-1) is a SCENE NODE's use (the
-        // editor records use as a dependency with the node's id): the picture
-        // is on something the user can see, so it is a thing of its own.
-        bool onlyMaterials = true;
-        for (int type : types) onlyMaterials &= type == static_cast<int>(ModelTypes::Material);
-        if (onlyMaterials) out.insert(guid);
-    }
+    // Used by nothing: absent, a tile, so the user can SEE it and clean it up
+    // (the row `unused` reports; a row nobody can see is a row nobody can
+    // delete). Used by something that is not a material — a model, or a
+    // depender the catalog does not know, which is a SCENE NODE's use (the
+    // editor records use as a dependency with the node's id) — false: the
+    // picture is on something the user can see, so it is a thing of its own.
+    const QHash<QString, bool> onlyMaterials = db->fetchUsedOnlyByMaterials(stamped);
+    for (const QString &guid : std::as_const(stamped))
+        if (onlyMaterials.value(guid, false)) out.insert(guid);
     return out;
 }
 
