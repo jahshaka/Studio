@@ -819,6 +819,45 @@ set_tests_properties(scripting.e2e.material_from_node PROPERTIES
     TIMEOUT 60)
 jah_no_display(scripting.e2e.material_from_node)
 
+# scripting.e2e.previews_state — PREVIEWS-1 stage 1: previews.state, by keys, headless - every row once with its type,
+# 'none' for nothing to draw (Mesh, Sky, platform furniture); materials.create 'missing', addTexture and graph.save MOVE
+# its key; a Texture import 'stale' then 'ok' after previews.render; a material's headless render fails and changes
+# nothing; the type and scope filters. RED ON THE BASE: no previews module. A FRESH HOME.
+set(_pvsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-previews_state)
+set(JAH_PREVIEWS_PNG "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/implane_wide.png")
+configure_file(scripts/e2e_previews_state.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_previews_state.js @ONLY)
+jah_fresh_home_fixture(scripting.e2e.previews_state.fresh_home previewsStateHome "${_pvsHome}" LABELS "scripting")   # NULL render system (--headless): no shader cache
+file(MAKE_DIRECTORY ${_pvsHome}/run)
+add_test(NAME scripting.e2e.previews_state
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_previews_state.js --headless
+         WORKING_DIRECTORY ${_pvsHome}/run)
+set_tests_properties(scripting.e2e.previews_state PROPERTIES
+    ENVIRONMENT "HOME=${_pvsHome};JAHSHAKA_DATA_ROOT=${_pvsHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED previewsStateHome
+    LABELS "scripting"
+    TIMEOUT 60)
+jah_no_display(scripting.e2e.previews_state)
+
+# scripting.e2e.preview_keeps_on_fail — PREVIEWS-1 stage 1 (spec call 3): a Texture rendered 'ok', its store taken
+# OFFLINE by assets.setStoreRoot (an empty root the fixture makes), previews.render fails with its reason and the stored
+# picture and key are unchanged; the store back, 'ok' again. Headless (the CPU branch). RED ON THE BASE: no previews
+# module. A FRESH HOME.
+set(_pkfHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-preview_keeps_on_fail)
+set(JAH_PREVIEWS_OFFLINE "${_pkfHome}/offline-store")
+configure_file(scripts/e2e_preview_keeps_on_fail.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_preview_keeps_on_fail.js @ONLY)
+jah_fresh_home_fixture(scripting.e2e.preview_keeps_on_fail.fresh_home previewKeepsHome "${_pkfHome}"
+    ARGS --mkdir "${JAH_PREVIEWS_OFFLINE}" LABELS "scripting")   # NULL render system (--headless): no shader cache
+file(MAKE_DIRECTORY ${_pkfHome}/run)
+add_test(NAME scripting.e2e.preview_keeps_on_fail
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_preview_keeps_on_fail.js --headless
+         WORKING_DIRECTORY ${_pkfHome}/run)
+set_tests_properties(scripting.e2e.preview_keeps_on_fail PROPERTIES
+    ENVIRONMENT "HOME=${_pkfHome};JAHSHAKA_DATA_ROOT=${_pkfHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED previewKeepsHome
+    LABELS "scripting"
+    TIMEOUT 60)
+jah_no_display(scripting.e2e.preview_keeps_on_fail)
+
 # scripting.e2e.preset_edit (archived: archive/tests/scripting) — PRESET-EDIT-1: A PRESET A PROJECT HOLDS IS THE
 # PROJECT'S TO EDIT, and the FIRST EDIT is what makes the copy (the owner's
 # rule, 2026-09-21). The copy keeps the preset's NAME, the project's pin moves

@@ -1,0 +1,57 @@
+// scripting.e2e.preview_keeps_on_fail — PREVIEWS-1 stage 1 (spec call 3): A FAILED RENDER CHANGES
+// NOTHING STORED. Headless: a Texture's preview is its CPU branch's (the image decoded from its store
+// file), so it can be drawn and stored with no engine - and made to FAIL honestly by taking its store
+// OFFLINE (assets.setStoreRoot to an empty directory: the file can no longer be read).
+//
+//   1. the Texture is rendered: 'ok', key k, its stored picture's facts (assets.thumbnail);
+//   2. the store offline, previews.render answers {ok: false, reason} naming the unreadable image;
+//   3. the stored picture's facts and its storedKey are UNCHANGED - the failure wrote nothing;
+//   4. the store back, a render is 'ok' again.
+// The base's erase-on-fail path (a null picture written as empty bytes) has UI callers only; its
+// negative control is previews.writer's unguarded writer. RED ON THE BASE: no `previews` module.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function rowOf(guid) {
+    var hit = previews.state({ type: "texture" }).filter(function (r) { return r.guid === guid; });
+    return hit.length === 1 ? hit[0] : null;
+}
+function facts(guid) {
+    var t = assets.thumbnail(guid);
+    return J({ empty: t.empty, bytes: t.bytes, width: t.width, height: t.height, centre: t.centre, coverage: t.coverage });
+}
+
+var PNG = "@JAH_PREVIEWS_PNG@";
+var OFFLINE = "@JAH_PREVIEWS_OFFLINE@";
+var proj = project.create("Preview Keeps " + Date.now());
+assert(proj.length > 10, "project.create");
+
+// ---- 1. RENDERED AND STORED -----------------------------------------------------------------
+var t = assets.importFile(PNG);
+assert(t.length > 10, "a Texture imported");
+var first = previews.render(t);
+assert(first.ok === true, "previews.render(texture): " + J(first));
+var before = rowOf(t);
+assert(before.state === "ok" && before.key.length === 16 && before.storedKey === before.key, "'ok', its key stored: " + J(before));
+var stored = facts(t);
+assert(JSON.parse(stored).empty === false && JSON.parse(stored).bytes > 0, "a picture is stored: " + stored);
+
+// ---- 2. THE STORE OFFLINE: AN HONEST FAILURE -------------------------------------------------
+assert(assets.setStoreRoot(OFFLINE, { force: true }) === true, "the store is taken offline (an empty root)");
+var failed = previews.render(t);
+assert(failed.ok === false && failed.reason.indexOf("could not be read") >= 0,
+       "previews.render fails with its reason: " + J(failed));
+
+// ---- 3. NOTHING CHANGED -----------------------------------------------------------------------
+assert(facts(t) === stored, "the stored picture is UNCHANGED: " + facts(t));
+var after = rowOf(t);
+assert(after.storedKey === before.storedKey, "the stored key is UNCHANGED: " + J(after));
+
+// ---- 4. THE STORE BACK ------------------------------------------------------------------------
+assert(assets.setStoreRoot("", {}) === true, "the store is back at its default root");
+assert(previews.render(t).ok === true && rowOf(t).state === "ok", "a render is 'ok' again");
+
+console.log("preview_keeps_on_fail: all assertions passed");

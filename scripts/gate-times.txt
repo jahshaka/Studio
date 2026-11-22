@@ -592,3 +592,7 @@ previews.key 0.00  solo 2026-11-22 at 5e2d6f77c (spec.sh reprice, run 20261122T0
 previews.writer 1.34  solo 2026-11-22 at 7569634b3 (spec.sh reprice, run 20261122T064352-7569634b3)
 previews.ui_writes 0.34  solo 2026-11-22 at 182e8c0ec (spec.sh reprice, run 20261122T065056-182e8c0ec)
 source.no_live_read_at_write 0.08  by hand (spec.sh reprice, 2026-11-22)
+scripting.e2e.previews_state 3.95  by hand (spec.sh reprice, 2026-11-22)
+scripting.e2e.previews_state.fresh_home 0.04  by hand (spec.sh reprice, 2026-11-22)
+scripting.e2e.preview_keeps_on_fail 3.56  by hand (spec.sh reprice, 2026-11-22)
+scripting.e2e.preview_keeps_on_fail.fresh_home 0.02  by hand (spec.sh reprice, 2026-11-22)

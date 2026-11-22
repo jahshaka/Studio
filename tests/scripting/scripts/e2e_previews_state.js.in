@@ -1,0 +1,107 @@
+// scripting.e2e.previews_state — PREVIEWS-1 stage 1: EVERY ROW'S STORED PREVIEW, AGAINST WHAT IT
+// DEPICTS, BY KEYS (previews.state; services/previewservice.h, services/previewkey.h). Headless: the
+// NULL render system draws no engine picture, so what this proves is the KEY, never a picture:
+//
+//   1. every library row is listed ONCE with its type; a row with nothing to draw reads 'none' with
+//      no key (Mesh and Sky have no preset until stages 2 and 4; platform furniture; a builtin row);
+//      every other row carries a 16-hex key;
+//   2. materials.create reads 'missing' (headless no tile is drawn); materials.addTexture into a slot
+//      and a graph edit saved by graph.save each MOVE its key while storedKey stays empty (a texture
+//      added with no slot changes no picture: the key stays);
+//   3. a Texture import reads 'stale' (the importer's tile carries no key until stage 2 routes the
+//      import's commit), and 'ok' after previews.render (its CPU branch), key == storedKey;
+//   4. previews.render of a MATERIAL headless fails by name and changes nothing ('missing' still);
+//   5. `type` filters to one type; `scope: "project"` lists only the open project's pinned rows.
+// RED ON THE BASE: there is no `previews` module (a TypeError at the first call).
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function rowOf(guid, rows) {
+    rows = rows || previews.state();
+    var hit = rows.filter(function (r) { return r.guid === guid; });
+    return hit.length === 1 ? hit[0] : null;
+}
+function hex16(k) { return typeof k === "string" && /^[0-9a-f]{16}$/.test(k); }
+
+var PNG = "@JAH_PREVIEWS_PNG@";
+var stamp = Date.now();
+var proj = project.create("Previews State " + stamp);
+assert(proj.length > 10, "project.create");
+
+// ---- 1. EVERY ROW, ONCE, WITH ITS TYPE -------------------------------------------------------
+var all = previews.state();
+var seen = {};
+var duplicates = 0;
+all.forEach(function (r) { if (seen[r.guid]) ++duplicates; seen[r.guid] = true; });
+assert(all.length > 0 && duplicates === 0, "every library row listed once (" + all.length + " rows)");
+assert(all.every(function (r) { return typeof r.type === "string" && r.type.length > 0; }), "every row names its type");
+var byType = {};
+all.forEach(function (r) { var k = r.type + ":" + r.state; byType[k] = (byType[k] || 0) + 1; });
+console.log("the fresh library, type:state -> rows: " + J(byType));
+var none = all.filter(function (r) { return r.state === "none"; });
+assert(none.every(function (r) { return r.key === ""; }), "a 'none' row carries no key (" + none.length + " rows)");
+assert(all.filter(function (r) { return r.state !== "none"; }).every(function (r) { return hex16(r.key); }),
+       "every row with something to draw carries a 16-hex key");
+assert(all.filter(function (r) { return r.type === "mesh" || r.type === "sky"; })
+          .every(function (r) { return r.state === "none"; }),
+       "Mesh and Sky rows read 'none' (no preset until stages 2 and 4)");
+var platform = all.filter(function (r) { return r.type === "texture" && r.state === "none"; });
+assert(platform.length >= 1, "platform furniture (the floor's checker texture) reads 'none': " + platform.length);
+
+// ---- 2. A MATERIAL: MISSING, AND ITS KEY FOLLOWS ITS DEFINITION -------------------------------
+var m = materials.create("Preview Probe " + stamp);
+var m0 = rowOf(m);
+assert(m0 && m0.type === "material" && m0.state === "missing", "materials.create reads 'missing': " + J(m0));
+assert(hex16(m0.key) && m0.storedKey === "", "...with a key and no stored key");
+materials.addTexture(m, PNG);
+var mPinned = rowOf(m);
+assert(mPinned.key === m0.key, "materials.addTexture with NO slot (a member that changes no picture) leaves the key: " + J(mPinned));
+materials.addTexture(m, PNG, { slot: "baseColorMap" });
+var m1 = rowOf(m);
+assert(m1.key !== m0.key && m1.storedKey === "", "materials.addTexture into a slot MOVES the key; storedKey stays: " + J(m1));
+var g = materials.create("Preview Graph " + stamp, { graph: true });   // its graph opens as the current one
+var g0 = rowOf(g);
+assert(g0 && g0.state === "missing" && hex16(g0.key), "a graph material reads 'missing' with a key: " + J(g0));
+var master = graph.nodes().filter(function (n) { return n.master; })[0];
+var f = graph.addNode("float");
+assert(graph.setValue(f, 0.73) === true && graph.connect(f, 0, master.id, "Roughness") === true
+       && graph.save() === true, "a graph edit saved by graph.save");
+var g1 = rowOf(g);
+assert(g1.key !== g0.key && g1.storedKey === "", "graph.save MOVES the key; storedKey stays: " + J(g1));
+var m2 = rowOf(m);
+
+// ---- 3. A TEXTURE: STALE AT IMPORT, OK AFTER ITS RENDER ---------------------------------------
+var t = assets.importFile(PNG);
+var t0 = rowOf(t);
+assert(t0 && t0.type === "texture" && t0.state === "stale" && t0.storedKey === "",
+       "a Texture import reads 'stale' (the importer's tile carries no key until stage 2): " + J(t0));
+var rendered = previews.render(t);
+assert(rendered.ok === true, "previews.render(texture) headless: " + J(rendered));
+var t1 = rowOf(t);
+assert(t1.state === "ok" && t1.key === t1.storedKey && t1.key === t0.key, "...now 'ok', key == storedKey: " + J(t1));
+
+// ---- 4. A MATERIAL HEADLESS: A NAMED FAILURE THAT CHANGES NOTHING -----------------------------
+var failed = previews.render(m);
+assert(failed.ok === false && typeof failed.reason === "string" && failed.reason.length > 0,
+       "previews.render(material) headless fails by name: " + J(failed));
+var m3 = rowOf(m);
+assert(m3.state === "missing" && m3.key === m2.key && m3.storedKey === "", "...and changes nothing: " + J(m3));
+
+// ---- 5. THE FILTERS ---------------------------------------------------------------------------
+var mats = previews.state({ type: "material" });
+assert(mats.length >= 1 && mats.every(function (r) { return r.type === "material"; }) && rowOf(m, mats),
+       "type: 'material' lists only materials, ours among them (" + mats.length + ")");
+var inProject = previews.state({ scope: "project" });
+var libraryNow = {};
+previews.state().forEach(function (r) { libraryNow[r.guid] = true; });
+assert(inProject.every(function (r) { return libraryNow[r.guid] === true; }),
+       "every project row is a library row (" + inProject.length + " pinned)");
+assert(rowOf(m, inProject) === null, "the library-only material is not in the project's rows");
+var refused = false;
+try { previews.state({ scope: "elsewhere" }); } catch (e) { refused = true; }
+assert(refused, "an unknown scope is refused");
+
+console.log("previews_state: all assertions passed");
