@@ -633,3 +633,4 @@ core.signal 0.00  solo 2026-11-22 at 877441811 (spec.sh reprice, run 20261122T18
 core.bound 0.03  solo 2026-11-22 at 877441811 (spec.sh reprice, run 20261122T184722-877441811-p1510073)
 core.guid 0.15  solo 2026-11-22 at 877441811 (spec.sh reprice, run 20261122T184723-877441811-p1510141)
 engine.shader_cache_temps 0.04  by hand (spec.sh reprice, 2026-11-22)
+mcp.session 0.01  solo 2026-11-22 at 6f74be4f0 (spec.sh reprice, run 20261122T224450-6f74be4f0-p3107979)
