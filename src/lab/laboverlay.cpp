@@ -37,6 +37,7 @@ std::vector<std::string> overlayRows(const OverlayInput &in)
     rows.push_back(b);
     if (!in.js.empty()) {
         rows.push_back("js " + in.js + "   F9 run   F10 next   " + in.jsState);
+        rows.push_back("scripts: " + in.jsFolder);
         if (!in.jsError.empty()) rows.push_back("js error: " + in.jsError);
     }
     return rows;

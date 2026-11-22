@@ -83,6 +83,34 @@ add_test(NAME lab.js_verbs COMMAND test_lab_js_verbs)
 set_tests_properties(lab.js_verbs PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(lab.js_verbs)
 
+# lab.strip_hits (LAB-SCRIPTS-1 stage 2) — THE BUTTON STRIP's GEOMETRY (test_lab_strip_hits.cpp says the law): a click's
+# strip pixel maps to its button's command line - Run `js run`, Load `js next`, Clear `js clear` - its edges exact, nothing
+# between the buttons or off the strip. The table compiles alone (src/lab/labcommands.cpp): a CPU code row.
+add_executable(test_lab_strip_hits test_lab_strip_hits.cpp ${CMAKE_SOURCE_DIR}/src/lab/labcommands.cpp)
+set_target_properties(test_lab_strip_hits PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_lab_strip_hits PRIVATE ${CMAKE_SOURCE_DIR}/src/lab)
+add_test(NAME lab.strip_hits COMMAND test_lab_strip_hits)
+set_tests_properties(lab.strip_hits PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(lab.strip_hits)
+
+# lab.js_folder (LAB-SCRIPTS-1 stage 2, the lead's ruling on Load) — THE SCRIPTS FOLDER Load walks (test_lab_js_folder.cpp
+# says the law): every .js in bytewise order, re-read at every press (files added or deleted between presses seen),
+# wrapping; an empty folder answers `no scripts in <folder>`. src/lab/labscripts.cpp compiles alone: a CPU code row.
+add_executable(test_lab_js_folder test_lab_js_folder.cpp ${CMAKE_SOURCE_DIR}/src/lab/labscripts.cpp)
+set_target_properties(test_lab_js_folder PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_lab_js_folder PRIVATE ${CMAKE_SOURCE_DIR}/src/lab)
+add_test(NAME lab.js_folder COMMAND test_lab_js_folder)
+set_tests_properties(lab.js_folder PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(lab.js_folder)
+
+# lab.strip_click (LAB-SCRIPTS-1 stage 2) — THE STRIP's RUN BUTTON RUNS THE SCRIPT: the lab in a WINDOW on the rig's display,
+# a real click (xdotool) on Run is `js run` through the one parser; F9 is the control (strip_click.sh says the law). The
+# first frame and 2 x 3 frames after the inputs.
+jah_gpu_row(lab.strip_click CLASS engine FRAMES 7
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/strip_click.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/strip_click
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.strip_click PROPERTIES TIMEOUT 60 LABELS "lab")
+
 # lab.js_window_view (LAB-SCRIPTS-1 stage 1) — AN ENGINE SCRIPT DRAWS IN THE LAB's OWN VIEW: `jahlab --headless --js
 # demo_spiral.js` on an empty lab world takes the view by lab.view(), draws its spiral and reads it; the lab's own shot
 # after the run shows the same centre (js_window_view.sh says the laws). The first frame, 240 of the script's, its read.

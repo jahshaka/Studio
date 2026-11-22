@@ -12,6 +12,7 @@ add_executable(jahlab
     labcommands.cpp
     laboverlay.cpp
     labscene.cpp
+    labscripts.cpp
     labsession.cpp
     labwindow.cpp
     envs/envbuild.cpp

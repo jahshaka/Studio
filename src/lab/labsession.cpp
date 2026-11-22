@@ -2,6 +2,7 @@
 
 #include "labclasses.h"
 #include "laboverlay.h"
+#include "labscripts.h"
 
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/scenegraph/cameranode.h"
@@ -228,7 +229,7 @@ bool Session::boot(std::string &error)
         mView = mEngine->createOffscreenView("jahlab", mOpt.width, mOpt.height, kViewClear, OffscreenContract::StillPicture);
         // A STILL PICTURE: it gathers where the scene gathers (the editor screenshot's contract).
     } else {
-        mView = mEngine->createView("jahlab", static_cast<NativeWindowHandle>(mWindow.windowHandle()), mOpt.width,
+        mView = mEngine->createView("jahlab", static_cast<NativeWindowHandle>(mWindow.viewHandle()), mOpt.width,
                                     mOpt.height, kViewClear);
     }
     if (!mView) { error = "view: " + mEngine->lastError(); return false; }
@@ -248,6 +249,9 @@ bool Session::boot(std::string &error)
                 mOpt.headless ? "offscreen view (--headless)" : "window", mOpt.width, mOpt.height,
                 qPrintable(mOpt.dataRoot));
     if (mWindow.isOpen()) std::printf("LAB WINDOW %llu\n", mWindow.windowHandle());   // an agent's xdotool target
+    // THE SCRIPTS FOLDER the owner drops his files in (Load walks it when no script is loaded and no --js-dir is given)
+    QDir().mkpath(QDir(mOpt.dataRoot).filePath(QStringLiteral("scripts")));
+    showJs();
     std::fflush(stdout);
     return true;
 }
@@ -464,6 +468,12 @@ void Session::frame()
             const std::string line = keyLine(k);
             if (!line.empty()) execLine(line, "key");
         }
+        // THE STRIP's BUTTONS ARE LINES too (labcommands.h stripHit): a click runs its button's line through the parser
+        const std::vector<std::pair<int, int>> clicks = mInput.stripClicks;
+        for (const auto &c : clicks) {
+            const std::string line = stripHit(c.first, c.second);
+            if (!line.empty()) execLine(line, "strip");
+        }
         mCamera.fly(mInput.held, mInput.dx, mInput.dy);
     }
     // THE VIEW LENT TO A SCRIPT (lab.view()): it shows the script's scene - the lab's world is neither advanced nor
@@ -535,8 +545,10 @@ void Session::pushOverlay()
     in.cam[0] = p.x(); in.cam[1] = p.y(); in.cam[2] = p.z();
     in.target[0] = t.x(); in.target[1] = t.y(); in.target[2] = t.z();
     in.frame = mFrames;
-    if (!mJsPath.empty()) {
-        in.js = QFileInfo(QString::fromStdString(mJsPath)).fileName().toStdString();
+    if (!mJsPath.empty() || !mJsState.empty()) {
+        in.js = mJsPath.empty() ? std::string("-")
+                                : scriptPlace(jsFolder(), QFileInfo(QString::fromStdString(mJsPath)).fileName().toStdString());
+        in.jsFolder = jsFolder();
         in.jsState = mJsState;
         in.jsError = mJsError;
     }
@@ -2259,13 +2271,16 @@ bool Session::js(const Command &c)
         std::printf("LAB JS CLEAR: the lab's world is shown%s\n", mJsPath.empty() ? "" : " (the script stays loaded)");
         return true;
     }
-    // next: the next .js of the loaded file's folder by name; after the last, the first
-    if (mJsPath.empty()) { labFail("LAB REFUSED js next: no script loaded (js load <file.js>, or --js)\n"); return false; }
-    const QFileInfo cur(QString::fromStdString(mJsPath));
-    const QStringList all = cur.absoluteDir().entryList({ QStringLiteral("*.js") }, QDir::Files, QDir::Name);
-    if (all.isEmpty()) { labFail("LAB REFUSED js next: no .js left in %s\n", qPrintable(cur.absolutePath())); return false; }
-    const int at = int(all.indexOf(cur.fileName()));
-    return jsLoad(cur.absoluteDir().filePath(all[at < 0 ? 0 : (at + 1) % int(all.size())]).toStdString());
+    // next (Load): THE SCRIPTS FOLDER's next .js, the list read from disk now (labscripts.h: bytewise order, wrapping)
+    const std::string folder = jsFolder();
+    const ScriptPick pick = nextScript(folder, mJsPath.empty() ? std::string() : QFileInfo(QString::fromStdString(mJsPath)).fileName().toStdString());
+    if (!pick.ok) {
+        mJsState = pick.message;   // an empty folder says so: never a silent no-op
+        showJs();
+        labFail("LAB REFUSED js next: %s\n", pick.message.c_str());
+        return false;
+    }
+    return jsLoad(pick.path);
 }
 
 bool Session::jsLoad(const std::string &path)
@@ -2278,9 +2293,30 @@ bool Session::jsLoad(const std::string &path)
     mJsPath = f.absoluteFilePath().toStdString();
     mJsState = "loaded";
     mJsError.clear();
-    std::printf("LAB JS LOADED %s\n", mJsPath.c_str());
-    if (mOverlay) pushOverlay();
+    std::printf("LAB JS LOADED %s (%s)\n", mJsPath.c_str(),
+                scriptPlace(jsFolder(), f.fileName().toStdString()).c_str());
+    showJs();
     return true;
+}
+
+std::string Session::jsFolder() const
+{
+    // THE SCRIPTS FOLDER: the loaded script's, else --js-dir's, else <data root>/scripts (made at boot)
+    if (!mJsPath.empty()) return QFileInfo(QString::fromStdString(mJsPath)).absolutePath().toStdString();
+    if (!mOpt.jsDir.isEmpty()) return QDir(mOpt.jsDir).absolutePath().toStdString();
+    return QDir(mOpt.dataRoot).filePath(QStringLiteral("scripts")).toStdString();
+}
+
+void Session::showJs()
+{
+    if (mWindow.isOpen()) {
+        const std::string name = mJsPath.empty() ? std::string() : QFileInfo(QString::fromStdString(mJsPath)).fileName().toStdString();
+        mWindow.setStripText(name.empty() ? (mJsState.empty() ? "no script loaded (Load: the next .js of " + jsFolder() + ")"
+                                                              : mJsState)
+                                          : scriptPlace(jsFolder(), name) + "   " + mJsState +
+                                                (mJsError.empty() ? std::string() : "   " + mJsError));
+    }
+    if (mOverlay) pushOverlay();
 }
 
 void Session::jsClear()
@@ -2365,7 +2401,7 @@ bool Session::jsRun()
         }
     }
     std::fflush(stdout);
-    if (mOverlay) pushOverlay();
+    showJs();
     if (!watched && faults) gLabLastFailure = "JS " + file + " FAILED (" + std::to_string(faults) + "): " + mJsError;
     return watched || faults == 0;
 }

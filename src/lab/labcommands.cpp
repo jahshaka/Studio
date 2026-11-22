@@ -182,8 +182,9 @@ const std::vector<VerbDoc> &verbs()
           "the script (the rest of the line is its path); `run` re-reads it from disk and runs it in a FRESH host to its "
           "end - its lines printed `LAB JS ...`, then `LAB JS END <file> ok (k checks, f frames)` or `FAILED (n)` (in "
           "the window a run that failed nothing and checked nothing reads `ran: no checks`); a failed run sets the exit "
-          "to 1 and never ends the lab; `next` loads the next .js of the loaded file's folder by name (the first after "
-          "the last); `clear` shows the lab's world again. A script draws in the lab's view through `lab.view()` (the "
+          "to 1 and never ends the lab; `next` (Load) loads the next .js of THE SCRIPTS FOLDER - the loaded script's, "
+          "else --js-dir's, else <data root>/scripts - in bytewise name order, the list re-read at every press, the "
+          "first after the last (an empty folder says `no scripts in <folder>`); `clear` shows the lab's world again. A script draws in the lab's view through `lab.view()` (the "
           "view handed over DETACHED: the script binds its own scene, engine.view.setScene). LIMIT: the scenes and views "
           "a run makes live until the lab exits (no destroy command yet), and a view a script makes keeps drawing" },
         { "help", "help", 0, 0, "print this table" },
@@ -210,6 +211,24 @@ const std::vector<std::pair<std::string, std::string>> &keyTable()
         { "Escape", "quit" },
     };
     return t;
+}
+
+const std::vector<StripButton> &stripButtons()
+{
+    static const std::vector<StripButton> b = {
+        { "Run", "js run", 4, 68 },
+        { "Load", "js next", 72, 136 },
+        { "Clear", "js clear", 140, 204 },
+    };
+    return b;
+}
+
+std::string stripHit(int x, int y)
+{
+    if (y < 0 || y >= kStripHeight) return std::string();
+    for (const StripButton &b : stripButtons())
+        if (x >= b.x0 && x < b.x1) return b.line;
+    return std::string();
 }
 
 std::string keyLine(const std::string &key)
@@ -339,6 +358,8 @@ std::string helpText()
          "  --script <file>     run the file's command lines after the load (then stdin, unless --no-stdin)\n"
          "  --js <file.js>      load the engine script and run it once after the first frame (`js load` + `js run`; the\n"
          "                      overlay on); with no model and no --env the lab's world is EMPTY\n"
+         "  --js-dir <dir>      the scripts folder Load (`js next`, F10) walks while no script is loaded (default\n"
+         "                      <data root>/scripts, made at boot: drop your .js files there)\n"
          "  --no-stdin          do not read commands from stdin\n"
          "  --env <name>        a generated test environment instead of a file (--env-list: the catalogue)\n"
          "  --seed N            the environment's seed (default 1)\n"
@@ -355,7 +376,10 @@ std::string helpText()
          "  --help              this text\n\n"
          "keys (each runs the command line beside it, through the same parser):\n";
     for (const auto &k : keyTable()) o << "  " << k.first << std::string(k.first.size() < 8 ? 8 - k.first.size() : 1, ' ') << k.second << "\n";
-    o << "  W/A/S/D move, Q/E down/up, Shift x4, right mouse button held = look\n\n"
+    o << "  W/A/S/D move, Q/E down/up, Shift x4, right mouse button held = look\n"
+         "the strip above the window's picture (each button runs the command line beside it, through the same parser):\n";
+    for (const StripButton &b : stripButtons()) o << "  " << b.label << std::string(8 - std::string(b.label).size(), ' ') << b.line << "\n";
+    o << "\n"
          "commands (--script lines, stdin lines and the keys' lines):\n";
     for (const VerbDoc &v : verbs()) o << "  " << v.usage << "\n      " << v.what << "\n";
     o << "\na --script line the lab refuses STOPS the script there (exit 1, LAB SCRIPT STOPPED naming the line and its "

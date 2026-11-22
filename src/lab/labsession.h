@@ -46,6 +46,7 @@ struct Options
     int footprint = 2;         ///< the occlusion test's footprint in texels the expectations assume (envs/env.h Optics)
     QString script;
     QString js;                ///< --js: an engine script loaded and run once after the first frame
+    QString jsDir;             ///< --js-dir: the scripts folder Load walks when no script is loaded
     QString dataRoot;
     QString binDir;            ///< the binary's directory (media, app/content)
     bool headless = false;     ///< an OFFSCREEN Vulkan view, no window (never EngineConfig::headless; DISPLAY still needed)
@@ -116,6 +117,10 @@ private:
     bool jsRun();
     /// The lab's world back in the window's view (a script was handed it by lab.view()); then the last run's host ends.
     void jsClear();
+    /// THE SCRIPTS FOLDER `js next` walks (labscripts.h): the loaded script's, else --js-dir's, else <data root>/scripts.
+    std::string jsFolder() const;
+    /// The script's state on the strip and the overlay, now.
+    void showJs();
     void nameEngineNodes();
     double msSinceStart() const;
 

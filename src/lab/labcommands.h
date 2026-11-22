@@ -35,6 +35,17 @@ std::string keyLine(const std::string &key);
 /// Every command key and its line, in table order (F1's help and --help print it).
 const std::vector<std::pair<std::string, std::string>> &keyTable();
 
+/// THE BUTTON STRIP (LAB-SCRIPTS-1 stage 2): a strip of kStripHeight pixels above the window's picture whose buttons
+/// are command LINES through the one parser, exactly as a key (Run = `js run`, Load = `js next`, Clear = `js clear`).
+/// A button covers x in [x0, x1) and the strip's whole height, y in [0, kStripHeight).
+constexpr int kStripHeight = 24;
+struct StripButton { const char *label = nullptr; const char *line = nullptr; int x0 = 0, x1 = 0; };
+const std::vector<StripButton> &stripButtons();
+/// The line of the button at strip pixel (x, y): empty between the buttons and outside the strip.
+std::string stripHit(int x, int y);
+/// Where the strip's text (the script and its state) begins, past the last button.
+constexpr int kStripTextX = 212;
+
 /// Parses one line. Blank lines and `#` comments answer false with an EMPTY error (nothing to run); an unknown verb
 /// or a wrong argument count answers false with the reason.
 bool parse(const std::string &line, Command &out, std::string &error);
