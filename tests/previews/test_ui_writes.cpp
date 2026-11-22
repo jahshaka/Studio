@@ -26,20 +26,28 @@ For more information see the LICENSE file
 //      product's shape since G3) it succeeds. The product function's own window cannot be driven
 //      from a row (no seam between its read and its write): source.no_live_read_at_write guards it.
 //   4. A STALE LIVE READ (probe case 6: no BEGIN can close it): a DbTransaction opened behind it FAILS
-//      LOUDLY - its commit() answers false and the failure is logged by name. RED when the BEGIN is
-//      deferred: the BEGIN passes, the write fails alone and commit() answers true.
+//      LOUDLY AND WRITES NOTHING - its commit() answers false, the failure is logged by name, every
+//      write in its scope is refused (through Database's funnel, a raw exec, a nested guard), every
+//      table is byte-equal after it, and the next transaction on the connection works. RED when the
+//      BEGIN is deferred: the BEGIN passes, a write fails alone and commit() answers true.
+//   5. A BEGIN THAT TIMES OUT behind ANOTHER writer, which lets go before the scope's statements run
+//      (the UI connection's busy timeout set to 50 ms for the case): the scope still writes NOTHING -
+//      without the refusal its statements would autocommit, half a unit landing under a commit() that
+//      answers false (the door of 182e8c0ec: red, spikes/previews-1/stage1/ui_writes-refused-red.txt).
 
 #include <cstdio>
 #include <functional>
 #include <memory>
 
 #include <QCoreApplication>
+#include <QCryptographicHash>
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QImage>
 #include <QSqlDatabase>
 #include <QSqlError>
 #include <QSqlQuery>
+#include <QSqlRecord>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QVariant>
@@ -98,6 +106,41 @@ QString nameOf(const QString &guid)
     q.prepare(QStringLiteral("SELECT name FROM assets WHERE guid = ?"));
     q.addBindValue(guid);
     return q.exec() && q.next() ? q.value(0).toString() : QString();
+}
+
+QByteArray digestOf(QSqlDatabase conn)
+{
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    QStringList tables;
+    {
+        QSqlQuery t(conn);
+        t.exec(QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"));
+        while (t.next()) tables << t.value(0).toString();
+    }
+    for (const QString &table : tables) {
+        QSqlQuery q(conn);
+        q.exec(QStringLiteral("SELECT * FROM \"%1\" ORDER BY rowid").arg(table));
+        hash.addData(table.toUtf8());
+        while (q.next())
+            for (int c = 0; c < q.record().count(); ++c) hash.addData(q.value(c).toByteArray() + '\x1f');
+    }
+    return hash.result();
+}
+
+/// Every table's every row, hashed: "byte-equal" for the whole library - read on a FRESH connection
+/// of its own (the UI connection's own view is the stale snapshot under test).
+QByteArray libraryDigest(const QString &path)
+{
+    QByteArray digest;
+    {
+        QSqlDatabase fresh = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("digest"));
+        fresh.setDatabaseName(path);
+        fresh.open();
+        digest = digestOf(fresh);
+        fresh.close();
+    }
+    QSqlDatabase::removeDatabase(QStringLiteral("digest"));
+    return digest;
 }
 
 QImage solid(QRgb colour)
@@ -223,11 +266,18 @@ int main(int argc, char **argv)
         check(previewLandsOrWaits(writer, QStringLiteral("p5"), QStringLiteral("00000000000000p5"), drops, &landed) && landed,
               "4: a preview lands while a read is live");
         warnings.clear();
-        bool committed = true;
+        const QByteArray before = libraryDigest(path);
+        bool committed = true, funnel = true, raw = true, nested = true;
         {
             DbTransaction tx(QSqlDatabase::database());
+            funnel = db.updateAssetAsset(QStringLiteral("t4"), QByteArrayLiteral("{\"half\":1}"));
             QSqlQuery w;
-            w.exec(QStringLiteral("UPDATE assets SET name = 'behind-stale' WHERE guid = 't4'"));
+            raw = w.exec(QStringLiteral("UPDATE assets SET name = 'behind-stale' WHERE guid = 't4'"));
+            {
+                DbTransaction inner(QSqlDatabase::database());
+                QSqlQuery n;
+                nested = n.exec(QStringLiteral("UPDATE assets SET name = 'nested' WHERE guid = 'u1'")) && inner.commit();
+            }
             committed = tx.commit();
         }
         stale.finish();
@@ -235,7 +285,59 @@ int main(int argc, char **argv)
                            && !warnings.filter(QStringLiteral("stale snapshot")).isEmpty();
         for (const QString &w : warnings) std::printf("     4: warned: %s\n", qUtf8Printable(w));
         check(!committed, "4: the transaction behind a stale live read answers commit() FALSE");
+        check(!funnel && !raw && !nested,
+              "4: every write in its scope is REFUSED - Database's funnel, a raw exec, a nested guard");
+        check(libraryDigest(path) == before, "4: A FAILED UNIT WRITES NOTHING - every table is byte-equal after it");
+        bool next = false;
+        {
+            DbTransaction tx(QSqlDatabase::database());
+            QSqlQuery w;
+            next = w.exec(QStringLiteral("UPDATE assets SET name = 'after' WHERE guid = 't4'")) && tx.commit();
+        }
+        check(next && nameOf(QStringLiteral("t4")) == QStringLiteral("after"),
+              "4: the next transaction on the connection works (the refusal ended with its scope)");
         check(named, "4: ...and the failure is logged by name (a read left active holds a stale snapshot)");
+    }
+
+    // 5. A BEGIN that times out behind another writer: nothing written, even after it lets go.
+    {
+        QSqlQuery shortWait;
+        shortWait.exec(QStringLiteral("PRAGMA busy_timeout = 50"));
+        QSqlDatabase other = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("other"));
+        other.setDatabaseName(path);
+        other.open();
+        {
+            QSqlQuery hold(other);
+            check(hold.exec(QStringLiteral("BEGIN IMMEDIATE")), "5: another connection holds the write lock");
+        }
+        const QByteArray before = libraryDigest(path);
+        bool committed = true, funnel = true, raw = true;
+        warnings.clear();
+        {
+            DbTransaction tx(QSqlDatabase::database());   // its BEGIN times out at 50 ms
+            {
+                QSqlQuery release(other);
+                release.exec(QStringLiteral("COMMIT"));   // the lock is free before the scope writes
+            }
+            funnel = db.updateAssetAsset(QStringLiteral("t4"), QByteArrayLiteral("{\"half\":2}"));
+            QSqlQuery w;
+            raw = w.exec(QStringLiteral("UPDATE assets SET name = 'half-a-unit' WHERE guid = 't4'"));
+            committed = tx.commit();
+        }
+        check(!warnings.filter(QStringLiteral("could NOT BEGIN")).isEmpty(), "5: the BEGIN failed (timed out), by name");
+        check(!committed && !funnel && !raw, "5: every write of the scope is refused although the lock is free");
+        check(libraryDigest(path) == before, "5: A FAILED UNIT WRITES NOTHING - every table is byte-equal after it");
+        other.close();
+        other = QSqlDatabase();
+        QSqlDatabase::removeDatabase(QStringLiteral("other"));
+        shortWait.exec(QStringLiteral("PRAGMA busy_timeout = 5000"));
+        bool next = false;
+        {
+            DbTransaction tx(QSqlDatabase::database());
+            QSqlQuery w;
+            next = w.exec(QStringLiteral("UPDATE assets SET name = 'after-5' WHERE guid = 't4'")) && tx.commit();
+        }
+        check(next && nameOf(QStringLiteral("t4")) == QStringLiteral("after-5"), "5: the next transaction works");
     }
 
     qInstallMessageHandler(nullptr);

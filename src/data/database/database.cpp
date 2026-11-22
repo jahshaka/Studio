@@ -243,10 +243,12 @@ void Database::standDownBatchFor(const QSqlDatabase &connection)
     commitBatchTransaction();
 }
 
-void Database::beginBatchAtWrite(const QSqlQuery &query)
+bool Database::beginBatchAtWrite(const QSqlQuery &query)
 {
+    bool live = true;
     for (Database *instance : liveDatabases())
-        if (instance->db.driver() == query.driver()) instance->resumeBatchIfNeeded();
+        if (instance->db.driver() == query.driver()) live = instance->resumeBatchIfNeeded() && live;
+    return live;
 }
 
 Database::~Database()
@@ -388,7 +390,17 @@ bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
     // and leaves the preview writer free; its reads autocommit, each released when finished. Found
     // through the registry by the query's driver, never through `this` (see above).
     const bool write = isWriteStatement(query.lastQuery());
-    if (write && !DbTransaction::anyGuardLive()) beginBatchAtWrite(query);
+    // A FAILED UNIT WRITES NOTHING (database.h, DbTransaction): its scope refuses every write on
+    // its connection, unexecuted - said once, by the transaction, at its BEGIN.
+    if (write && DbTransaction::refusesWrites(query.driver())) return false;
+    // THE BATCH IS A SCOPE OF INDEPENDENT GESTURES, NOT ONE UNIT: a batch BEGIN that fails refuses
+    // THIS write by name, and the next write tries the BEGIN again.
+    if (write && !DbTransaction::anyGuardLive() && !beginBatchAtWrite(query)) {
+        iris::Logger::getSingleton()->warn(
+            QStringLiteral("'%1' was REFUSED: the database batch could not begin (the next write tries again)")
+                .arg(name));
+        return false;
+    }
     const bool unbatchedWrite = !DbTransaction::anyGuardLive()
                                 && !DbTransaction::anyBatchLive()
                                 && write;
@@ -440,22 +452,22 @@ bool Database::endBatch()
     return commitBatchTransaction();
 }
 
-void Database::resumeBatchIfNeeded()
+bool Database::resumeBatchIfNeeded()
 {
-    if (batchOpenCount == 0 || batchTxLive) return;
-    if (!db.isOpen()) return;
+    if (batchOpenCount == 0 || batchTxLive) return true;
+    if (!db.isOpen()) return true;
     // Never while somebody else owns a transaction on this connection: the
     // batch is the thing that YIELDS, it never takes. Per CONNECTION (H2) —
     // a guard on an export's own connection is not an owner of ours.
-    if (DbTransaction::activeGuards(db.connectionName()) > 0) return;
+    if (DbTransaction::activeGuards(db.connectionName()) > 0) return true;
     // IMMEDIATE, like DbTransaction's (database.h): no other connection commits inside the batch.
     QSqlQuery begin(db);
     batchTxLive = begin.exec(QStringLiteral("BEGIN IMMEDIATE"));
     if (batchTxLive) DbTransaction::noteBatchLive(true);
     else
         iris::Logger::getSingleton()->warn(
-            QStringLiteral("The database batch could NOT BEGIN (%1): its writes autocommit one by one")
-                .arg(begin.lastError().text()));
+            QStringLiteral("The database batch could NOT BEGIN (%1)").arg(begin.lastError().text()));
+    return batchTxLive;
 }
 
 bool Database::commitBatchTransaction()

@@ -72,8 +72,11 @@ public:
         // - a DEFERRED BEGIN whose first statement is a read failed its first write with 517
         // SQLITE_BUSY_SNAPSHOT once another connection had committed (spikes/previews-1/stage1/
         // probe.out, cases 4-5). The BEGIN waits for another writer's one row at most (the busy
-        // timeout). A BEGIN that fails is NAMED: commit() answers false with its reason, never a
-        // silent autocommit reported as a commit.
+        // timeout). A BEGIN THAT FAILS WRITES NOTHING: the scope REFUSES every write on this
+        // connection until it ends - SQLite's query_only on the connection (a raw exec() fails
+        // too) and Database::executeAndCheckQuery returning false unexecuted - it still counts as
+        // the outermost guard (a nested one rides it and never begins a sub-unit), it is logged
+        // ONCE here, and commit() answers false. Reads still run.
         QSqlQuery begin(database);
         if (begin.exec(QStringLiteral("BEGIN IMMEDIATE"))) {
             active = true;
@@ -84,12 +87,17 @@ public:
         beginError = error.nativeErrorCode().toInt() == 517   // SQLITE_BUSY_SNAPSHOT
             ? QStringLiteral("a read left active on this connection holds a stale snapshot (%1)").arg(error.text())
             : error.text();
-        qWarning("DbTransaction: the transaction on '%s' could NOT BEGIN: %s - its statements run uncovered "
-                 "and its commit() answers false", qUtf8Printable(connection), qUtf8Printable(beginError));
+        refusing = true;
+        retain(connection);
+        setRefused(database, true);
+        qWarning("DbTransaction: the transaction on '%s' could NOT BEGIN: %s - every write on it is REFUSED "
+                 "until this scope ends, and its commit() answers false", qUtf8Printable(connection),
+                 qUtf8Printable(beginError));
     }
 
     ~DbTransaction()
     {
+        if (refusing) endRefusal();
         if (!active) return;
         db.rollback();
         release();
@@ -102,10 +110,11 @@ public:
     bool commit()
     {
         if (!outermost) return true;   // nested: the outer guard's commit is the unit's
-        if (!active) {
-            qWarning("DbTransaction: commit() of a transaction that never began: %s", qUtf8Printable(beginError));
+        if (refusing) {   // it never began: nothing was written, and the unit says so
+            endRefusal();
             return false;
         }
+        if (!active) return false;
         active = false;
         const bool ok = db.commit();
         if (ok) noteCommit(); else db.rollback();
@@ -120,6 +129,7 @@ public:
     // object cleanup became a no-op. Idempotent; a no-op on a degraded guard.
     void rollback()
     {
+        if (refusing) { endRefusal(); return; }
         if (!active) return;
         active = false;
         db.rollback();
@@ -174,6 +184,9 @@ public:
     /// and approximate by design: it counts what goes through this layer, so a
     /// raw QSqlQuery::exec() somewhere else is invisible to it.
     static quint64 commitCount() { return sCommits; }
+    /// Is a failed unit's scope REFUSING writes on the connection `driver` belongs to? Asked by
+    /// Database::executeAndCheckQuery for every write (a static: that funnel touches no member).
+    static bool refusesWrites(const QSqlDriver *driver) { return driver && sRefused.contains(driver); }
     static void noteCommit() { ++sCommits; }
 
 private:
@@ -181,6 +194,21 @@ private:
     {
         ++sActive[connection];
         ++sActiveTotal;
+    }
+
+    static void setRefused(QSqlDatabase database, bool on)
+    {
+        QSqlQuery pragma(database);
+        pragma.exec(on ? QStringLiteral("PRAGMA query_only = ON") : QStringLiteral("PRAGMA query_only = OFF"));
+        if (on) sRefused.insert(database.driver());
+        else sRefused.remove(database.driver());
+    }
+
+    void endRefusal()
+    {
+        refusing = false;
+        setRefused(db, false);
+        release();
     }
 
     void release()
@@ -195,12 +223,14 @@ private:
     QSqlDatabase db;
     bool active;
     bool outermost = false;
+    bool refusing = false;   ///< the outermost BEGIN failed: this scope refuses every write
     QString beginError;
 
     inline static QHash<QString, int> sActive;
     inline static int sActiveTotal = 0;
     inline static int sBatchesLive = 0;
     inline static quint64 sCommits = 0;
+    inline static QSet<const QSqlDriver *> sRefused;
     inline static BatchYieldHook sBatchYield = BatchYieldHook();
 };
 
@@ -939,10 +969,12 @@ private:
     int  batchScopesAbandoned = 0;
     /// Opens the batch transaction (IMMEDIATE) if the scope is open and it is not live (and nothing
     /// else owns a transaction on this connection). Called at a WRITE only (beginBatchAtWrite).
-    void resumeBatchIfNeeded();
-    /// The write funnel's half: the instance whose connection runs `query` opens its batch. A
-    /// static walk of the registry: executeAndCheckQuery never touches `this`.
-    static void beginBatchAtWrite(const QSqlQuery &query);
+    /// False only when it tried and the BEGIN failed.
+    bool resumeBatchIfNeeded();
+    /// The write funnel's half: the instance whose connection runs `query` opens its batch; false
+    /// when that BEGIN failed (the write is then refused). A static walk of the registry:
+    /// executeAndCheckQuery never touches `this`.
+    static bool beginBatchAtWrite(const QSqlQuery &query);
     /// Commits the batch transaction if it is live, leaving the SCOPE open.
     /// The stand-down path and the outermost endBatch both go through it.
     bool commitBatchTransaction();
