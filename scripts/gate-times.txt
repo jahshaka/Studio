@@ -462,7 +462,7 @@ gi.card_residency.walk 12.13  solo (one -j1 call, rig :64, 2026-11-21; the card_
 gi.card_residency.teleport 7.88  solo (one -j1 call, rig :64, 2026-11-21; the card_residency split, V2 plan 0.2; its own run)
 gi.card_residency_held.in 7.86  solo (one -j1 call, rig :64, 2026-11-21; the card_residency split, V2 plan 0.2; its own run)
 gi.card_residency_held.out 10.18  solo (one -j1 call, rig :64, 2026-11-21; the card_residency split, V2 plan 0.2; its own run)
-tooling.warm_store 3.23  solo (alone in its own ctest call, 2026-11-21; URGENT #193's store, toy trees, no card)
+tooling.warm_store 6.66  solo 2026-11-23 at d029560df (spec.sh reprice, run 20261123T001445-d029560df-p678269)
 source.no_box_paths 0.25  solo (alone in its own ctest call, 2026-11-21; CPU)
 gi.leak_room.bars 1.50  solo (one -j1 call, rig :64, 2026-11-21; V2 plan 0.2: split by proof)
 gi.leak_room.seam 4.62  solo (one -j1 call, rig :64, 2026-11-21; V2 plan 0.2: split by proof)
