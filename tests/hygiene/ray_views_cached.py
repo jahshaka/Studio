@@ -12,6 +12,9 @@
 #   RayQueryTier::ensureDummyImages  3  the black stand-ins: our own 1x1 images, made once
 #   RayQueryTier::makeStorageImage   1  our own storage images, made once per size
 # A new site is a lookup through RayQueryTier::textureView / GatherHost::gatherView, never a new create.
+# AND NO CALL OF A RETIRED VIEW HELPER: `layerView(`, `gatherLayerView(` and `gatherRetireView(` (each made or retired a
+# view a frame; the cache replaced them) appear in no code line - a branch written beside stage 1 that still calls one
+# (PHOTON-7-9A's composed scene did, OgreRayQuery.cpp:7914 before irisgl fa738bb3) is named here, not only by the compiler.
 #
 # argv[1] = the repo root
 import os
@@ -23,6 +26,7 @@ EXTS = (".cpp", ".cc", ".h", ".hpp", ".inl")
 ALLOWED = {"RayQueryTier::makeView": 2, "RayQueryTier::ensureDummyImages": 3, "RayQueryTier::makeStorageImage": 1}
 CREATE = re.compile(r"(->|\.)createView\(|\b_createView\(|\bvkCreateImageView\(")
 # a function definition opens at column 0 and names its qualified name before its parameter list
+RETIRED = re.compile(r"\b(layerView|gatherLayerView|gatherRetireView)\s*\(")
 DEFN = re.compile(r"^[A-Za-z][^;]*?\b([A-Za-z_]\w*(?:::~?[A-Za-z_]\w*)+)\s*\(")
 
 
@@ -70,6 +74,8 @@ def main():
             m = DEFN.match(line)
             if m:
                 owner = m.group(1)
+            if RETIRED.search(line):
+                bad.append("%s:%d (in %s): a retired view helper called: %s" % (rel, n, owner or "?", line.strip()))
             if not CREATE.search(line):
                 continue
             if owner in ALLOWED:
