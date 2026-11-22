@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Generates material_workflows.glb, the fixture for tests/importer/test_importer_materials.cpp.
+"""Generates material_workflows.glb, the fixture tests/importer/test_importer_fbx.cpp reads (section 3).
 
 ONE GLB, seven quads, seven materials — one per glTF material shape the importer
 has to tell apart. They are written here rather than downloaded so the exact
