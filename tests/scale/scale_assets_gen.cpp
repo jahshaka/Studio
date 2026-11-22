@@ -1,5 +1,5 @@
 // scale_assets_gen — THE LARGE ASSETS (lane D1-SCALE-FIXTURES, brief §4.2), a BOX-PREP TOOL (EXCLUDE_FROM_ALL), never
-// a row: RESTORED by ATOM-TESTS-BACK-1 stage 5 (it was the archived fixture row scale.assets' command, 163d90223) and
+// a row: RESTORED by ATOM-TESTS-BACK-1 stage 5 (it was the command of scale.assets, the fixture row TEST-CUT-1 archived) and
 // driven by scripts/scale-shells.sh, which builds it and runs it once per box and bake format (the shells are minutes
 // and gigabytes of bake: it prints each one's time and peak memory). The scale LONG rows read the shells it bakes
 // and FAIL naming this tool when one is missing or stale (scale_world.cpp requireShell).

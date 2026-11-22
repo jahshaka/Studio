@@ -1,6 +1,6 @@
 // atom.masked_coverage — A CUT-OUT'S COVERAGE IS ITS LEVEL 0'S AT EVERY MINIFICATION (ATOM-3 stage 2; SPECS/ATOM-3.md).
-// RE-REGISTERED by ATOM-TESTS-BACK-1 stage 3 (archived at 163d90223 by TEST-CUT-1 for time, never for law; its device read
-// AlphaMaskStore::readBits restored by irisgl 53d6c217). The law as the trap file states it (atom-and-lod.md, CUT-OUTS RIDE
+// RE-REGISTERED by ATOM-TESTS-BACK-1 stage 3 (archived by TEST-CUT-1 for time, never for law; its device read
+// AlphaMaskStore::readBits restored in irisgl by the same stage). The law as the trap file states it (atom-and-lod.md, CUT-OUTS RIDE
 // ATOM THROUGH A COVERAGE-PRESERVING 1-BIT PYRAMID).
 //
 // A 1-bit mask sampled at one level is the point sample of level 0: a 1-texel checker minified 2x draws 50 % through

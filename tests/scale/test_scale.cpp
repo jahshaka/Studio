@@ -930,7 +930,7 @@ static int lightsCostMain()
 // ===========================================================================
 // THE LARGE ASSET for W3 / W4: THE 10 M SHELL from the shared scale cache (requireShell —
 // a missing shell is the row's FAIL, never a smaller asset measured in its place; the
-// fixture row scale.assets (archived: archive/tests/scale) bakes it once per bake producer for the whole box).
+// box-prep tool scripts/scale-shells.sh bakes it once per bake format for the whole box).
 // ===========================================================================
 static constexpr size_t kLargeAsset = 10000000;
 

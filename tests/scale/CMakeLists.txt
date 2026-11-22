@@ -27,7 +27,7 @@
 # (default ~/Developer/testing/scale-cache — outside every tree, so a new worktree reads the
 # shells the last one baked), one sub-directory per bake FORMAT VERSION (v<kFormatVersion>,
 # scale_world.cpp cacheDir; ~1.1 GB): every reader checks a blob's fingerprint from its header,
-# and a blob another bake producer made is STALE — scale.assets (archived: archive/tests/scale) re-bakes it in place.
+# and a blob another bake producer made is STALE — scripts/scale-shells.sh re-bakes it in place (a row only FAILS naming it).
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Core Network Sql)
 find_package(X11 REQUIRED)
 
@@ -67,10 +67,9 @@ add_executable(scale_assets_gen EXCLUDE_FROM_ALL scale_assets_gen.cpp ${_scale_w
 jah_scale_target(scale_assets_gen)
 
 # ---------------------------------------------------------------------------
-# THE MERGE TIER'S SCALE ROWS (TESTING-SPEED-B3, the ROWS table and the lead's verdicts on the profile): atom.decode_exact (archived: archive/tests/atom)
-# and atom.removechild_leak (archived: archive/tests/atom). scale.occlusion (archived: archive/tests/scale), atom.coverage_trace (archived: archive/tests/atom) and the bars that TIME the world (scale.cpu_walks,
-# scale.shadow_cut (archived: archive/tests/scale), scale.gpu_coverage (archived: archive/tests/scale)) are stage-close: measurements of a whole world.
-# The `scale-target` rows print, never gate, and are untouched.
+# THE SCALE ROWS NOW: scale.cpu_walks (a bar, the ship set) and the LONG measure rows scale.levels, .residency, .occlusion
+# and .cut_cost (below); scale.shadow_cut is unregistered (below). atom.decode_exact, atom.removechild_leak,
+# atom.coverage_trace and scale.gpu_coverage are archived (archive/tests/atom, archive/tests/scale).
 #
 # THE ROWS — one per wall. Label `scale-target` on every one (TARGET_LABELS). The rows
 # that time the GPU or the frame go through the GPU-timing lock (their names are in
@@ -91,10 +90,6 @@ function(jah_scale_row _name _mode _timeout _locked)
     endif()
     set_tests_properties(${_name} PROPERTIES LABELS "scale" ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
 endfunction()
-# W7 IS CLOSED (ATOM-OCCLUSION-1): its row is a BAR — the two-pass id pass within 1.25x of the
-# reference cull and its id image the frustum-only one at every pose — and not a target.
-# STAGE-CLOSE (TESTING-SPEED-B3, the lead's verdict): case-bound — 3 arms x 8 poses of id readbacks ARE the
-# measurement (45 s quiet); a scale property. atom.occlusion_exact (archived: archive/tests/atom) is the merge tier's occlusion guard.
 jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)   # W13
 # THE SHIP SET (TEST-CUT-1): the scale prefix's end-to-end row — the 10k-node world's CPU walks, timed under the lock.
 jah_ship_row(scale.cpu_walks)
@@ -113,6 +108,8 @@ set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 # cut_cost and the unregistered shadow cut.
 jah_scale_row(scale.levels       --levels        60    FALSE)   # W4: the coarsest end reachable (the 10 M shell)
 jah_scale_row(scale.residency    --residency     60    FALSE)   # W5: everything resident (the 1 / 5 / 10 M shells)
+# W7 IS CLOSED (ATOM-OCCLUSION-1): scale.occlusion's law is a BAR — the two-pass id pass within 1.25x of the reference
+# cull and its id image the frustum-only one at every pose; 3 arms x 8 poses of id readbacks ARE the measurement.
 jah_scale_row(scale.occlusion    --occlusion     60    FALSE)   # W7: the two-pass id pass against the reference cull (a bar)
 jah_scale_row(scale.cut_cost     --cut-cost      60    TRUE)    # D1's decision number: the cluster cut's cost (locked)
 # scale.shadow_cut (`test_scale --shadow-cut`, ATOM-SHADOWS-1) is UNREGISTERED: its three-arm law needs 1170 frames a world,
@@ -127,16 +124,8 @@ set_tests_properties(scale.levels scale.residency scale.occlusion scale.cut_cost
 # (label `scale`); locked: it reads GPU time. Measured 208 s after the admission in Debug
 # (the lattice's settle is most of it); the run budget is ~3x that.
 
-# scale.assets (archived: archive/tests/scale) — THE SHELLS' FIXTURE ROW (V2-P0A): bakes every shell the rows read (250 k,
-# 1 M, 5 M, 10 M) into the shared cache when it is missing or STALE (another bake producer's,
-# re-baked in place), and otherwise reports the bake records from their side files without
-# reading a blob. It sweeps the pieces a killed baker left first. CPU only (no Vulkan, no
-# display); a lock per shell, so two trees' rows never bake one shell twice. The four took
-# 25 min at nice 19 beside a live gate (the 10 M 1,015 s at a 3.9 GB peak, 4 bake threads):
-# RUN_SERIAL with its 4 PROCESSORS, so no gate row shares its CPU.
-# ctest adds this row to any selection naming a row that requires it.
-
-file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/removechild_leak")
+# scale.assets, the shells' fixture row, is archived; the box-prep TOOL scripts/scale-shells.sh (scale_assets_gen,
+# above) bakes the shells in its place.
 
 # FRAMES — THE FRAMES EACH ROW RENDERS (TESTING-SPEED-B3; SPECS/TESTING_SPEED_SPEC.md §2 A8): the test property
 # JAHSHAKA_TEST_FRAMES, measured 2026-10-12 at the lane's tip by spikes/testing-speed-b3/framecount (an LD_PRELOAD meter of

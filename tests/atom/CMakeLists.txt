@@ -106,8 +106,6 @@ if(JAHSHAKA_ASAN)
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(atom.component_asan PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # its plain twin's
 endif()
-# EnginePrivate.h names a local `slots`: Qt's keyword macro would eat it.
-set_source_files_properties(test_shadow_atom_cut.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
 
 # atom.pass_table — THE FULLEST PASS FITS THE PASS-TEXTURE TABLE (BUGS-1 item 1; preflight-atom-3 §A): an Epic world on
 # the Basic template with sun contact, the 2D clouds and the World fog (+ one area light created and removed: the LTC
@@ -198,7 +196,8 @@ foreach(_arm_frames materials=12 normal_map=28 point=12 spot=12 area=12)
     set_tests_properties(atom.decode_parity.${_arm} PROPERTIES TIMEOUT 60 LABELS "engine")
 endforeach()
 
-# atom.masked_coverage (RE-REGISTERED by ATOM-TESTS-BACK-1 stage 3; its device read restored by irisgl 53d6c217) — THE MASK'S
+# atom.masked_coverage (RE-REGISTERED by ATOM-TESTS-BACK-1 stage 3; its device read, AlphaMaskStore::readBits, restored in
+# irisgl by the same stage) — THE MASK'S
 # PYRAMID KEEPS LEVEL 0'S COVERAGE: the device's pyramid read back against bit_i = round(S_i) - round(S_(i-1)) level by level
 # (a 1-texel checker bit for bit; a non-power-of-two hash pattern), and the id pass's coverage of the checker at 1x / 2x / 4x /
 # 8x minification = level 0's 1/2 within one texel (DOCS/traps/engine/atom-and-lod.md, CUT-OUTS).
