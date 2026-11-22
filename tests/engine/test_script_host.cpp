@@ -1646,6 +1646,46 @@ int main()
                   std::to_string(spins) + " spins > 0)");
     }
 
+    // 16. THE COMPLETION VALUE (MCP-ON-HOST-1 stage 2.3: run_script answers it): with completionBounds stated a run's
+    //     value is its last expression - a promise's settled value - converted within the bounds; past one (elements,
+    //     depth, bytes), a function, a promise pending or rejected, the run FAILS by name and the host serves the next run;
+    //     with no bounds stated (jahengine) the value is dropped
+    {
+        Host::Options o;
+        o.completionBounds = ValueBounds{8, 3, 4096};
+        Host h(o);
+        h.setConsole([](const std::string &) {});
+        const Result two = h.run("1 + 1\n", "two.js");
+        const Result three = h.run("(async () => { await null; return 3; })()\n", "three.js");
+        const Result shaped = h.run("({a: [1, 'x', null], b: {c: true}})\n", "shaped.js");
+        const Value want(Value::Object{{"a", Value(Value::Array{Value(1), Value("x"), Value()})},
+                                       {"b", Value(Value::Object{{"c", Value(true)}})}});
+        check(two.status == Status::Ok && two.value == Value(2) && three.status == Status::Ok && three.value == Value(3) &&
+                  shaped.status == Status::Ok && shaped.value == want,
+              "the completion value: 1 + 1 is 2, (async () => 3)() is 3, an object of an array is itself");
+        const std::string cannot = "the script's completion value cannot be carried: ";
+        const Result wide = h.run("const a = []; a.length = 4e9; a\n", "wide.js");
+        const Result deep = h.run("[[[[1]]]]\n", "deep.js");
+        const Result big = h.run("'x'.repeat(5000)\n", "big.js");
+        const Result fn = h.run("(() => 1)\n", "fn.js");
+        const Result pending = h.run("new Promise(() => {})\n", "pending.js");
+        const Result after = h.run("'fine'\n", "after.js");
+        check(failedWith(wide, cannot + "the value holds 4000000000 elements, past the 8 one array may hold") &&
+                  failedWith(deep, cannot) && deep.message.find("nested deeper than 3") != std::string::npos &&
+                  failedWith(big, cannot) && big.message.find("past its 4096 bytes") != std::string::npos &&
+                  failedWith(fn, cannot + "a function cannot be carried") &&
+                  failedWith(pending, cannot + "a promise still pending") && after.status == Status::Ok &&
+                  after.value == Value("fine"),
+              "a completion value past its bounds (4e9 elements, nesting 4 > 3, 5000 bytes), a function and a pending "
+              "promise each FAIL the run by name, and the next run is served (" + wide.message + " | " + deep.message +
+                  " | " + big.message + ")");
+        Host plainHost;
+        plainHost.setConsole([](const std::string &) {});
+        const Result dropped = plainHost.run("'x'.repeat(5000)\n", "dropped.js");
+        check(dropped.status == Status::Ok && dropped.value.isNull(),
+              "with no completion bounds stated (jahengine) the completion value is dropped and the run is Ok");
+    }
+
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
     else std::printf("script.host: PASSED\n");
     return gFail ? 1 : 0;
