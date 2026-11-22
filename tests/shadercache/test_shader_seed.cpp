@@ -43,8 +43,10 @@ int gFrames = 0;   // the frames this suite rendered (its FRAMES declaration)
 ShaderCacheStats cycle(const char *what, const std::string &cacheDir, const std::string &seedDir)
 {
     ShaderCacheStats stats;
+    // A REAL DESTROY: this suite runs several engine lifetimes in ONE process, and the fixtures' exit-only teardown keeps
+    // Root to the process's end (COLD-BOOT-1's exit fix) - the next Engine::create would be refused while it lives.
     EngineConfig cfg = enginetest::testEngineConfig("test-shader-seed-ogre.log",
-                                                    enginetest::EngineOverrides().shaderCacheDir(cacheDir));
+                                                    enginetest::EngineOverrides().shaderCacheDir(cacheDir).realDestroy());
     // THE SEED IS THIS SUITE'S SUBJECT, a config field the helper has no override for: stated on the config.
     cfg.shaderCacheSeedDir = seedDir;
     std::string err;

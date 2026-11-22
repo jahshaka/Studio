@@ -366,3 +366,5 @@ set_tests_properties(app.window_answers PROPERTIES
 add_test(NAME app.window_answers.clean COMMAND sh ${JAH_FRESH_HOME} ${_whome})
 set_tests_properties(app.window_answers.clean PROPERTIES TIMEOUT 60 LABELS "scripting" FIXTURES_CLEANUP appWindowAnswersHome)
 jah_no_display(app.window_answers.clean)
+# (its frames, counted by the s1bprobe's Root::_updateAllRenderTargets events in the row's process, 2026-11-22: spikes/cold-boot-1/FE)
+set_property(TEST app.window_answers PROPERTY JAHSHAKA_TEST_FRAMES 2458)
