@@ -8,8 +8,8 @@ THE CLOSURE: every project header the COMPILER reads for src/app/shaderbuildgate
 -MM: the same set ninja's deps log holds for its object), each with the source that defines it (<header>.cpp beside it), plus
 the named sources the pass calls into that no header of it names (the extras, CMakeLists.txt: the gizmo's meshes and its other
 handles, whose overlay materials the pass draws). The id: sha256 over every file's content in sorted path order, then the
-engine's full build id. Writes the header only when the value moves, the depfile (ninja re-runs this when any file of the
-closure changes) and the list (<build>/startup-pass-files.txt, read by shadercache.startup_pass_key). No tree path is hashed."""
+engine's full build id and its ray SPIR-V's id. Writes the header only when the value moves, the depfile (ninja re-runs this
+when any file of the closure changes) and the list (<build>/startup-pass-files.txt, read by shadercache.startup_pass_key). No tree path is hashed."""
 import hashlib
 import json
 import os
@@ -57,6 +57,19 @@ def compiler_deps():
     return sorted({p for p in (project(os.path.join(e["directory"], w)) for w in words) if p})
 
 
+def engine_terms(idh):
+    """THE ENGINE's TWO IDS the key folds (SHADER-SYSTEM-1 stage 6a): its full build id (its C++) and the ray SPIR-V's id (the
+    ray pipelines the pass builds: a changed ray shader re-runs the pass and moves every reader of this key, the warm-up's
+    included), as their header's lines. source.ray_spirv_id drives it."""
+    terms = b""
+    for name, tag in (("JAHSHAKA_ENGINE_BUILD_ID", b"engine "), ("JAHSHAKA_RAY_SPIRV_ID", b"\nray ")):
+        line = next((l for l in open(idh) if l.startswith("#define " + name + " ")), None)
+        if not line:
+            sys.exit(f"startup_pass_id.py: no {name} in {idh}")
+        terms += tag + line.strip().encode()
+    return terms
+
+
 deps = compiler_deps()
 files = set(deps)
 for h in deps:
@@ -72,10 +85,7 @@ files = sorted(files)
 h = hashlib.sha256()
 for f in files:
     h.update(f.encode() + b"\0" + hashlib.sha256(open(os.path.join(src, f), "rb").read()).digest())
-eng = next((l for l in open(idh) if l.startswith("#define JAHSHAKA_ENGINE_BUILD_ID ")), None)
-if not eng:
-    sys.exit(f"startup_pass_id.py: no JAHSHAKA_ENGINE_BUILD_ID in {idh}")
-h.update(b"engine " + eng.strip().encode())
+h.update(engine_terms(idh))
 text = ('// GENERATED - do not edit, do not commit. See cmake/startup_pass_id.py.\n#pragma once\n'
         f'#define JAH_STARTUP_PASS_CODE_ID "{h.hexdigest()}"\n')
 if not os.path.isfile(out) or open(out).read() != text:

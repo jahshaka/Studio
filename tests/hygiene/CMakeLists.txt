@@ -240,6 +240,13 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/startup_pass_closure.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
     set_tests_properties(source.startup_pass_closure PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.startup_pass_closure)
+    # source.ray_spirv_id — SHADER-SYSTEM-1 stage 6a: the ray tier's SPIR-V is in the engine's identity (JAHSHAKA_RAY_SPIRV_ID,
+    # folded into the startup pass's key): one byte moves it and only it, a path does not, the build's list is every header.
+    add_test(NAME source.ray_spirv_id
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/ray_spirv_id.py" "${CMAKE_SOURCE_DIR}"
+                     "${CMAKE_BINARY_DIR}" "${CMAKE_COMMAND}")
+    set_tests_properties(source.ray_spirv_id PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.ray_spirv_id)
     # source.code_rows — TEST-STREAMLINE-1 1b: the `code` label (tests/CMakeLists.txt jah_code_label_pass, derived) is exactly
     # the rows that take no card - `spec.sh test --code` runs them with no lock and no warm-up (code_rows.py says the rule).
     add_test(NAME source.code_rows
