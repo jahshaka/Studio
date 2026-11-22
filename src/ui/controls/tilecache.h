@@ -57,7 +57,8 @@ class QThreadPool;
 /// that has not published, or whose view is hidden, is UNKNOWN: its own asks are kept, never
 /// dropped. An ask with no token (a dialog's single tile, a verb, the Desktop grid) is always wanted.
 /// Each publish hands the wanted guids (the publisher's first) to the kind's DEMAND (setDemand: the
-/// shell's render demand) — a hidden view publishes nothing, so a page not shown renders nothing.
+/// shell's render demand) — a hidden or closed view takes its rows out of it, so a page not shown
+/// renders nothing.
 /// UI thread only (QPixmap) — except the Sources, which the pool calls.
 class TileCache : public QObject
 {
@@ -96,11 +97,14 @@ public:
     /// A view that shows tiles of `kind`: its token (never 0) until closeView.
     int openView(Kind kind);
     /// The view is gone: its set with it; its queued requests are dropped at the next flush unless
-    /// another shown view wants their guid.
+    /// another shown view wants their guid. A view that had published: the kind's demand hears what
+    /// the views still shown want (an empty list included).
     void closeView(int token);
     /// The view's VISIBLE guids now (top-left first), replacing its set; then the kind's demand.
     void publishVisible(int token, const QStringList &guids);
-    /// The view cannot say (it is hidden): UNKNOWN until its next publish — its asks are kept.
+    /// The view cannot say (it is hidden): UNKNOWN until its next publish — its asks are kept. A view
+    /// that had published: the kind's demand hears what the views still shown want (an empty list
+    /// included), so a hidden page's rows are not rendered.
     void withdrawVisible(int token);
     /// Every live view publishes once more (its own queued publish): a script run ended, and the
     /// render demand it suspended hears what is on screen now.
@@ -176,6 +180,8 @@ private:
     static QString keyOf(Kind kind, const QString &guid, const Spec &spec);
     void scheduleFlush();
     bool wanted(const Request &request) const;
+    /// The kind's demand told every guid its shown views want (`first`'s rows first; 0: none first).
+    void tellDemand(Kind kind, int first);
     void flush();
     void land(const QVector<Decoded> &batch);
 

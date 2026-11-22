@@ -77,7 +77,8 @@ endfunction()
 jah_d11_suite(test_library_model library.model test_library_model.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/librarymodel.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
-    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp)
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/previewdemand.cpp)
 jah_ship_row(library.model)   # THE SHIP SET (TEST-CUT-1)
 
 # library.statements — LARGE-LIBRARY-1 stage 1: the library's statements, counted by SQLite's own

@@ -20,7 +20,11 @@ For more information see the LICENSE file
 //       requested;
 //   (5) an empty publish reads nothing (an empty guid list would be no filter at all);
 //   (6) a script run SUSPENDS it: 0 reads (the shell's read is the demand's FetchPreview* statements) and
-//       0 requests during the run, pending dropped; after it a publish is read again.
+//       0 requests during the run, pending dropped; after it a publish is read again;
+//   (7) A NEWER PUBLISH BEFORE ITS SETTLE (the final read's C1): the rows waiting for the PREVIOUS screen are
+//       never requested while the user scrolls on, and the new settle requests only the new screen;
+//   (8) A VIEW HIDDEN AFTER ITS PUBLISH (TileCache::withdrawVisible tells the demand what is still shown:
+//       here nothing): 0 further requests for its rows.
 // No engine, no database, no display.
 
 #include <QCoreApplication>
@@ -192,6 +196,47 @@ int main(int argc, char **argv)
     CHECK(reads == readsBefore + 1 && demand.requested() - requested == int(during.size()) - kCap,
           "...after it, the re-publish is read and the %d never requested are (%d)", int(during.size()) - kCap,
           demand.requested() - requested);
+
+    // (7) A NEWER PUBLISH BEFORE ITS SETTLE. Screen A settles (its first row is requested, 19 wait a turn
+    // each), then the user scrolls on to screen B before those turns: while B settles NOTHING is requested,
+    // and B's settle drops A's rows. Case (4) calls runNow() straight after its second want(), so it never
+    // runs a turn between a publish and its settle and could not see this. The law counts requests, never
+    // the settle's clock: if the box is slow enough for B's settle to fire inside the turns, A's rows are
+    // still never requested.
+    {
+        order.clear();
+        const QStringList a = guidsOf("p", 0, 20), b = guidsOf("p", 40, 20);
+        for (const QString &g : a + b) stamps.insert(g, QStringLiteral("missing|k1"));
+        const auto askedOf = [&](const QStringList &guids) {
+            int n = 0;
+            for (const QString &g : guids) n += asked.value(g);
+            return n;
+        };
+        demand.want(a);
+        demand.runNow();   // A settles
+        demand.want(b);    // the scroll moved on: B's settle is pending
+        turns();
+        CHECK(askedOf(a.mid(1)) == 0, "A NEWER PUBLISH BEFORE ITS SETTLE: 0 of the previous screen's 19 waiting rows "
+                                      "are requested while it settles (%d)", askedOf(a.mid(1)));
+        demand.runNow();   // B's settle
+        turns();
+        CHECK(askedOf(a.mid(1)) == 0 && askedOf(b) == 20,
+              "...and the new settle requests the new screen only (%d of A's waiting rows, %d of B's 20)",
+              askedOf(a.mid(1)), askedOf(b));
+
+        // (8) A VIEW HIDDEN AFTER ITS PUBLISH: the cache re-tells the demand what the shown views still want
+        // (TileCache::withdrawVisible; here no view is left: an empty list) - 0 further requests for its rows.
+        const QStringList shown = guidsOf("q", 0, 20);
+        for (const QString &g : shown) stamps.insert(g, QStringLiteral("missing|k1"));
+        demand.want(shown);
+        demand.runNow();   // its first row is requested, 19 wait
+        demand.want({});   // the page was hidden
+        turns();
+        demand.runNow();   // the empty publish's settle
+        turns();
+        CHECK(askedOf(shown.mid(1)) == 0, "A VIEW HIDDEN AFTER ITS PUBLISH: 0 further requests for its 19 waiting rows (%d)",
+              askedOf(shown.mid(1)));
+    }
 
     // (5) AN EMPTY PUBLISH READS NOTHING.
     readsBefore = reads;

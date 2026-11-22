@@ -63,7 +63,9 @@ void PreviewDemand::settle()
 void PreviewDemand::pump()
 {
     mPumpScheduled = false;
-    if (mSuspended || mPending.isEmpty() || mInFlight >= mCap || !mRequest) return;
+    // A NEWER PUBLISH IS SETTLING: its settle replaces what is pending (a scroll's or a hide's rows are
+    // dropped there, never rendered meanwhile); the settle pumps again.
+    if (mSuspended || mSettle.isActive() || mPending.isEmpty() || mInFlight >= mCap || !mRequest) return;
     const QString guid = mPending.takeFirst();
     mAsked.insert(guid, mStamps.value(guid));
     ++mInFlight;

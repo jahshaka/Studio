@@ -16,7 +16,8 @@ jah_no_display(previews.key)
 # previews.demand — THE RENDER DEMAND (services/previewdemand.cpp) over fakes of its read and its request: scrolling
 # through 1,000 rows requests each missing row exactly once, by the window's guids only, one request a turn; a publish
 # alone requests nothing; once a guid until its state or key moves; at most the cap in flight, the most wanted first, and a
-# row that scrolls out before its turn is never requested; an empty publish reads nothing. It counts requests and never
+# row that scrolls out before its turn is never requested; nothing is requested while a newer publish settles, nor for a
+# view hidden after its publish (red at db670c1c0: spikes/previews-1/stage2/c1/); an empty publish reads nothing. It counts requests and never
 # waits on the settle (runNow). No engine, no database, no display.
 add_executable(test_preview_demand test_preview_demand.cpp ${CMAKE_SOURCE_DIR}/src/services/previewdemand.cpp)
 set_target_properties(test_preview_demand PROPERTIES CXX_STANDARD 17 AUTOMOC ON)

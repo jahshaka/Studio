@@ -55,6 +55,7 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "services/assetcas.h"
 #include "services/assettray.h"
+#include "services/previewdemand.h"
 #include "ui/controls/librarymodel.h"
 #include "ui/controls/tilecache.h"
 
@@ -473,6 +474,54 @@ int main(int argc, char **argv)
                   "republishAll: the shown view published once (%d), the hidden one none (%d)",
                   publishes - shownBefore, hiddenPublishes);
             delete hidden;
+        }
+
+        // A HIDDEN VIEW TELLS THE DEMAND (the final read's C1): Hide re-tells the kind's demand what the shown
+        // views still want (here none: an empty list), so a page switched away from stops rendering its rows.
+        // A real PreviewDemand over fakes (every row missing, every request completing at once); its settle
+        // is driven by runNow, never by its clock.
+        {
+            int requests = 0;
+            PreviewDemand demand(
+                [](const QStringList &guids) {
+                    QHash<QString, QString> need;
+                    for (const QString &g : guids) need.insert(g, QStringLiteral("missing|k1"));
+                    return need;
+                },
+                [&](const QString &, std::function<void()> done) { ++requests; done(); }, 8);
+            QVector<QStringList> told;
+            cache.setDemand(TileCache::Kind::Asset, [&](const QStringList &wanted) {
+                told.append(wanted);
+                demand.want(wanted);
+            });
+            const auto turnsOf = [&] {
+                for (int i = 0; i < 200; ++i) {
+                    const int before = requests;
+                    QCoreApplication::processEvents();
+                    if (requests == before && i > 2) break;
+                }
+            };
+            const int publishedBefore = publishes;
+            cache.republishAll();
+            turnsOf();
+            CHECK(publishes - publishedBefore == 1 && !told.isEmpty() && told.last() == lastPublished
+                      && lastPublished.size() > 1,
+                  "the shown view's publish tells the demand its %lld rows", static_cast<long long>(lastPublished.size()));
+            demand.runNow();   // its settle: the first row is requested, the rest wait a turn each
+            const int toldBefore = int(told.size());
+            view->hide();
+            CHECK(told.size() == toldBefore + 1 && told.last().isEmpty(),
+                  "HIDE re-tells the demand what the shown views still want: %lld call(s), %lld guids",
+                  static_cast<long long>(told.size() - toldBefore),
+                  static_cast<long long>(told.isEmpty() ? -1 : told.last().size()));
+            turnsOf();
+            demand.runNow();   // the hidden page's settle
+            turnsOf();
+            CHECK(requests == 1, "A VIEW HIDDEN AFTER ITS PUBLISH: 0 further requests for its rows (%d of %lld requested)",
+                  requests, static_cast<long long>(lastPublished.size()));
+            cache.setDemand(TileCache::Kind::Asset, {});
+            view->show();
+            for (int i = 0; i < 5; ++i) QCoreApplication::processEvents();
         }
 
         // A tokenless ask is always wanted; a DESTROYED view's token is gone, its queued asks dropped.

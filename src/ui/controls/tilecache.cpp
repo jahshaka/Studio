@@ -122,7 +122,12 @@ int TileCache::openView(Kind kind)
 
 void TileCache::closeView(int token)
 {
-    mViews.remove(token);
+    const auto it = mViews.find(token);
+    if (it == mViews.end()) return;
+    const Kind kind = it->kind;
+    const bool known = it->known;
+    mViews.erase(it);
+    if (known) tellDemand(kind, 0);
 }
 
 void TileCache::publishVisible(int token, const QStringList &guids)
@@ -132,29 +137,36 @@ void TileCache::publishVisible(int token, const QStringList &guids)
     it->known = true;
     it->order = guids;
     it->guids = QSet<QString>(guids.cbegin(), guids.cend());
-    const Kind kind = it->kind;
-    const auto demand = mDemands.constFind(int(kind));
-    if (demand == mDemands.constEnd()) return;
-    // The publisher's own rows first (what the user is looking at now), then every other shown view's.
-    QStringList wanted = guids;
-    QSet<QString> listed = it->guids;
-    for (auto v = mViews.cbegin(); v != mViews.cend(); ++v) {
-        if (v.key() == token || !v->known || v->kind != kind) continue;
-        for (const QString &guid : v->order)
-            if (!listed.contains(guid)) { listed.insert(guid); wanted.append(guid); }
-    }
-    // A copy: the demand may reach back into the cache.
-    const Demand call = *demand;
-    call(wanted);
+    tellDemand(it->kind, token);
 }
 
 void TileCache::withdrawVisible(int token)
 {
     const auto it = mViews.find(token);
-    if (it == mViews.end()) return;
+    if (it == mViews.end() || !it->known) return;
     it->known = false;
     it->order.clear();
     it->guids.clear();
+    tellDemand(it->kind, 0);
+}
+
+void TileCache::tellDemand(Kind kind, int first)
+{
+    const auto demand = mDemands.constFind(int(kind));
+    if (demand == mDemands.constEnd()) return;
+    // `first`'s rows first (the publisher: what the user is looking at now), then every other shown view's.
+    QStringList wanted;
+    QSet<QString> listed;
+    const auto add = [&](const ViewSet &v) {
+        for (const QString &guid : v.order)
+            if (!listed.contains(guid)) { listed.insert(guid); wanted.append(guid); }
+    };
+    if (first) add(mViews.value(first));
+    for (auto v = mViews.cbegin(); v != mViews.cend(); ++v)
+        if (v.key() != first && v->known && v->kind == kind) add(*v);
+    // A copy: the demand may reach back into the cache.
+    const Demand call = *demand;
+    call(wanted);
 }
 
 QString TileCache::keyOf(Kind kind, const QString &guid, const Spec &spec)

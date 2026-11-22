@@ -18,7 +18,9 @@ For more information see the LICENSE file
 // request renders inline today), a guid at most once until its state or key changes. Raised from a
 // view's publish (TileCache::setDemand), never from a showEvent and never per paint; it reads the
 // wanted guids' state BY GUID (never the library) once the publishes have SETTLED. A row that scrolls
-// out before its turn is not rendered: every settle replaces what is pending.
+// out before its turn is not rendered: NOTHING is requested while a publish settles, and every settle
+// replaces what is pending. A hidden or closed view is a publish too (TileCache tells the demand what the
+// views still shown want, an empty list included).
 //
 // IT SERVES A PERSON LOOKING AT A VIEW, NEVER A SCRIPT (the lead's ruling): while a script runs it is
 // SUSPENDED - no read, no render (a render inside a script's loop turns lands at a time nobody chose); a
