@@ -5,7 +5,8 @@
 // argument, an undeclared object member, a missing argument with no default and a non-integral number for an integer
 // each FAIL by name; null and absent take the declared default; an integral number is an integer; a fail is the
 // caller's mistake (Failed, null), a refuse the engine's state (Refused, the declared return's falsy value, the message
-// kept as lastError).
+// kept as lastError). Its own commands are tagged as the engine's are: one that holds, releases or stores state (test.make
+// of a handle, test.free, test.keep, test.ping) CHANGES it; the rest READ.
 #include "jahshaka/engine/Script.h"
 #include "script/RouteDeclaration.h"   // the route declaration's judgement (engine-private, pure)
 
@@ -172,7 +173,7 @@ int main()
                                          arg("raw", Kind::Bytes)});
     Value kept;
     hr.add({"test.make", {Access::Reads, {}, Kind::Object}, "one value of every kind"}, [&made](Call &) { return made; });
-    hr.add({"test.keep", {Access::Reads, {keepParam}, Kind::Null}, "stores its argument"},
+    hr.add({"test.keep", {Access::Changes, {keepParam}, Kind::Null}, "stores its argument"},
            [&kept](Call &c) { kept = c[0]; return Value(); });
     hr.call("test.keep", {hr.call("test.make", {}).value});
     const Value byCpp = kept;
@@ -524,14 +525,14 @@ int main()
     {
         Registry a, other;
         const auto make = [](Registry &r) {
-            r.add({"test.make", {Access::Reads, {arg("kind", Kind::String)}, Kind::Int}, "a held int of that kind -> handle"},
+            r.add({"test.make", {Access::Changes, {arg("kind", Kind::String)}, Kind::Int}, "a held int of that kind -> handle"},
                   [](Call &c) { return c.hold(c[0].asString(), std::make_shared<int>(7)); });
         };
         make(a);
         make(other);
         a.add({"test.use", {Access::Reads, {target(handle("scene", "scene"))}, Kind::Int}, "the held int"},
               [](Call &c) { return Value(*c.object<int>(c[0])); });
-        a.add({"test.free", {Access::Reads, {target(handle("scene", "scene"))}, Kind::Bool}, "releases it"},
+        a.add({"test.free", {Access::Changes, {target(handle("scene", "scene"))}, Kind::Bool}, "releases it"},
               [](Call &c) { return Value(c.registry().release(c[0].asInt())); });
         a.add({"test.named", {Access::Reads, {target(handle("scene", "scene")), object("o", {handle("node", "node")})}, Kind::Int},
                "the node's engine id"},
@@ -739,7 +740,7 @@ int main()
         };
         Host two;
         int pings = 0;
-        two.registry().add({"test.ping", {Access::Reads, {}, Kind::Null}, "counts a ping"}, [&pings](Call &) { ++pings; return Value(); });
+        two.registry().add({"test.ping", {Access::Changes, {}, Kind::Null}, "counts a ping"}, [&pings](Call &) { ++pings; return Value(); });
         two.addLanguage(".lines", [](Host &h) { return std::unique_ptr<Host::Language>(new Lines(h)); });
         const Result byLines = two.run("test.ping\ntest.ping\n", "two.lines");
         const Result byJs = two.run("test.ping();\n", "one.js");
