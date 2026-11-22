@@ -28,6 +28,7 @@ using namespace jahshaka::engine::script;
 // shared_ptr<const T>
 namespace tr {
 enum class Mode { Off, Fast, Slow };
+enum class Partial { Named, AlsoNamed, Unnamed };   // (12f: its table names two of three)
 struct Inner {
     int level = 2;
     Vec3 at{1, 2, 3};
@@ -53,6 +54,7 @@ struct Outer {
 }  // namespace tr
 namespace jahshaka { namespace engine { namespace script {
 JAH_ENUM_NAMES(tr::Mode, {{tr::Mode::Off, "off"}, {tr::Mode::Fast, "fast"}, {tr::Mode::Slow, "slow"}});
+JAH_ENUM_NAMES(tr::Partial, {{tr::Partial::Named, "named"}, {tr::Partial::AlsoNamed, "alsoNamed"}});
 JAH_RECORD_COUNT(tr::Inner, 2);
 JAH_RECORD_COUNT(tr::Outer, 16);
 const Table<tr::Inner> &Record<tr::Inner>::table()
@@ -1199,6 +1201,59 @@ int main()
                   (past.status == Status::Failed ? std::string() : "\n      past: not refused") +
                   (fits.status == Status::Ok ? std::string() : "\n      fits: " + fits.message) +
                   (batch.status == Status::Ok ? std::string() : "\n      batch: " + batch.message));
+    }
+
+    // 12f. THE SMALL LAWS (2b's final read L-d, L-f, L-g, L-h), each FAILS by name where it went through silently:
+    //      a member name holding a NUL is refused (it was cut at the NUL - 'v\0x' read as the declared 'v'); a
+    //      DETACHED ArrayBuffer is refused with the JS engine's own error taken (it was carried as empty bytes, the
+    //      error left pending); a kind MINTED by Registry::name is a named kind from then on, so a later binding of it
+    //      to a C++ type is a registry FAULT (it bound silently); an enum value its name table lacks FAILS by name (it
+    //      went out as an integer under a declared string). THE CONTROL: the next call reaches its command (reached
+    //      1), a fresh kind still binds, and a named enum value goes out as its name.
+    {
+        Host small;
+        std::vector<std::string> said;
+        small.setConsole([&said](const std::string &l) { said.push_back(l); });
+        int reached = 0;
+        small.registry().add({"test.capped",
+                              {Access::Reads, {object("o", {arg("v", Kind::Array, Value(Value::Array{})).upTo(4)})}, Kind::Int},
+                              "how many numbers (at most 4)"},
+                             [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0]["v"].asArray().size())); });
+        small.registry().add({"test.size", {Access::Reads, {arg("b", Kind::Bytes)}, Kind::Int}, "how many bytes"},
+                             [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0].asBytes().size())); });
+        const Result r = small.run(
+            "const caught = (f) => { try { f(); return 'no failure'; } catch (e) { return e.message; } };\n"
+            "console.log(caught(() => test.capped({'v\\0x': [1]})));\n"
+            "const gone = new ArrayBuffer(8);\n"
+            "gone.transfer();\n"
+            "console.log(caught(() => test.size(gone)));\n"
+            "console.log(test.size(new Uint8Array(3)));\n",
+            "small.js");
+        const char *want[] = {"test.capped: argument 1: o has a member name holding a NUL character",
+                              "test.size: argument 1: b: TypeError: ",
+                              "3"};
+        std::string missed;
+        for (std::size_t i = 0; i < 3; ++i)
+            if (i >= said.size() || said[i].rfind(want[i], 0) != 0)
+                missed += "\n      want " + std::string(want[i]) + " <- " + (i < said.size() ? said[i] : std::string("(no line)"));
+        Registry minted;
+        const bool mintedOk = minted.name("gadget", 7) != 0;
+        minted.bindKind<int>("gadget");
+        minted.bindKind<int>("fresh");
+        const std::vector<std::string> faults = minted.validate();
+        std::string unnamed = "no failure";
+        try {
+            toValue(tr::Partial::Unnamed);
+        } catch (const std::exception &e) {
+            unnamed = e.what();
+        }
+        check(r.status == Status::Ok && missed.empty() && reached == 1 && mintedOk && faults.size() == 1 &&
+                  faults[0].rfind("gadget: ", 0) == 0 && unnamed.find("has no name in its table") != std::string::npos &&
+                  toValue(tr::Partial::AlsoNamed) == Value("alsoNamed"),
+              "THE SMALL LAWS: a NUL in a member name, a detached ArrayBuffer, a minted kind bound later (" +
+                  std::to_string(faults.size()) + " fault(s)) and an unnamed enum value (" + unnamed + ") each FAIL by "
+                  "name; THE CONTROL: the next call reaches its command (" + std::to_string(reached) + " reached), a "
+                  "fresh kind binds, a named value goes out as its name" + missed);
     }
 
     // 13. ONE FIELD TABLE PER RECORD (2b b1; records.h): a record's fields named once - the member pointer DERIVES the
