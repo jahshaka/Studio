@@ -213,8 +213,9 @@ class QListWidgetItem;
 /// `visualRect` over the root's rows, then the walk across the viewport: O(log n + visible), never a
 /// walk of the model (the rows' rectangles advance with their row along the flow — a list, an icon
 /// grid, a flat tree; a hidden row is not supported). A hidden view publishes NOTHING (it withdraws
-/// its set): a page not shown raises no render demand, and its showing raises none either — the
-/// first publish after it is its next scroll, resize or reset.
+/// its set): a page not shown raises no render demand. Its showing QUEUES one publish (the next turn,
+/// never inside the show event; no row is mounted, rebuilt or deleted), so a page shown again fills
+/// its missing tiles with no scroll.
 class TileViewWatcher : public QObject
 {
     Q_OBJECT

@@ -416,9 +416,11 @@ TileViewWatcher::~TileViewWatcher()
 bool TileViewWatcher::eventFilter(QObject *watched, QEvent *event)
 {
     if (watched == mView->viewport() && event->type() == QEvent::Resize) schedule();
-    // Hidden (the view, or a page above it): it says nothing until its next publish. A Show
-    // publishes nothing (a page's showing raises no demand).
+    // Hidden (the view, or a page above it): it says nothing until its next publish. Shown (again):
+    // ONE publish QUEUED to the next turn, never run inside the show (it reads the visible range and
+    // touches no row), so a page shown again fills its missing tiles with no scroll.
     if (watched == mView && event->type() == QEvent::Hide) TileCache::instance().withdrawVisible(mToken);
+    if (watched == mView && event->type() == QEvent::Show) schedule();
     return QObject::eventFilter(watched, event);
 }
 

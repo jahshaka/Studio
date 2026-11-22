@@ -29,7 +29,8 @@ For more information see the LICENSE file
 //   * THE QUEUE (PREVIEWS-1 stage 2): the newest batch is read first; a view STATES its visible
 //     rows by its token (TileViewWatcher) and a row that left it is never decoded (counted); a row
 //     painted once and still visible is decoded with no second paint; a tokenless ask is always
-//     wanted and a destroyed view's asks are dropped.
+//     wanted and a destroyed view's asks are dropped; a HIDDEN view re-tells the render demand (0
+//     further requests for its rows) and a view SHOWN AGAIN queues exactly one publish, touching no row.
 //   * THE INDEXES the listings' predicates need exist, and SQLite's planner uses
 //     them (EXPLAIN QUERY PLAN).
 // Headless (offscreen); never touches the user's JahLibrary.db.
@@ -519,9 +520,30 @@ int main(int argc, char **argv)
             turnsOf();
             CHECK(requests == 1, "A VIEW HIDDEN AFTER ITS PUBLISH: 0 further requests for its rows (%d of %lld requested)",
                   requests, static_cast<long long>(lastPublished.size()));
-            cache.setDemand(TileCache::Kind::Asset, {});
+
+            // A SHOWN-AGAIN PAGE (the lead's ruling): Show QUEUES exactly one publish - one turn later, never
+            // inside the show handler - which tells the demand what is visible, so a page shown again fills
+            // its missing tiles with no scroll; the watcher mounts, rebuilds and deletes NO row (the model
+            // signals nothing).
+            int rowSignals = 0;
+            const auto touched = [&] { ++rowSignals; };
+            QObject probe;
+            QObject::connect(&queueModel, &QAbstractItemModel::rowsAboutToBeInserted, &probe, touched);
+            QObject::connect(&queueModel, &QAbstractItemModel::rowsAboutToBeRemoved, &probe, touched);
+            QObject::connect(&queueModel, &QAbstractItemModel::modelAboutToBeReset, &probe, touched);
+            QObject::connect(&queueModel, &QAbstractItemModel::layoutAboutToBeChanged, &probe, touched);
+            QObject::connect(&queueModel, &QAbstractItemModel::dataChanged, &probe, touched);
+            const int beforeShow = publishes;
+            const int toldBeforeShow = int(told.size());
             view->show();
+            const int inShow = publishes - beforeShow;
             for (int i = 0; i < 5; ++i) QCoreApplication::processEvents();
+            CHECK(inShow == 0 && publishes - beforeShow == 1,
+                  "SHOWN AGAIN: exactly one publish (%d), queued (%d inside the show)", publishes - beforeShow, inShow);
+            CHECK(told.size() == toldBeforeShow + 1 && told.last() == lastPublished && !lastPublished.isEmpty(),
+                  "...it tells the demand the %lld visible rows", static_cast<long long>(lastPublished.size()));
+            CHECK(rowSignals == 0, "...and no row is mounted, rebuilt or deleted (%d model signals)", rowSignals);
+            cache.setDemand(TileCache::Kind::Asset, {});
         }
 
         // A tokenless ask is always wanted; a DESTROYED view's token is gone, its queued asks dropped.
