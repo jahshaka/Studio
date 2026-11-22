@@ -14,8 +14,10 @@
 #include "script/RouteDeclaration.h"   // the route declaration's judgement (engine-private, pure)
 #include "script/records.h"            // ONE FIELD TABLE PER RECORD (engine-private): the machinery, on this file's records
 
+#include <algorithm>
 #include <cstdio>
 #include <cstdlib>
+#include <ctime>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -1181,6 +1183,28 @@ int main()
                   " MiB\n      over: " + over.message.substr(0, 80) +
                   (next.status == Status::Ok ? std::string() : "\n      next: " + next.message));
     }
+    // 12d (bis). A CONVERSION's STRING REFUSED BY THE LIMIT IS GIVEN BACK (MCP-ON-HOST-1: the JS engine's C-string
+    //      conversion leaked it on that failure - the vendored JS engine's patch 0002): under a 4 MiB limit a 1.5 MiB string of
+    //      U+00E9 (its UTF-8 3 MiB) FAILS its command by name "out of memory"; THE CONTROL, the next run allocates
+    //      3 MiB and is served - before the patch the leaked 1.5 MiB made that run fail too
+    {
+        Host::Options four;
+        four.memoryLimit = std::size_t(4) << 20;
+        Host heap(four);
+        heap.setConsole([](const std::string &) {});
+        int reached = 0;
+        heap.registry().add({"test.utf8", {Access::Reads, {object("o", {arg("s", Kind::String)})}, Kind::Int}, "its length"},
+                            [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0]["s"].asString().size())); });
+        const Result inside = heap.run("test.utf8({s: '\\u00e9'.repeat(1536 * 1024)});\n", "inside.js");
+        const Result near = heap.run("globalThis.near = new Uint8Array(3 << 20);\n"
+                                     "host.check({ok: near.length > 0 && test.utf8({s: 'ok'}) === 2, what: 'served'});\n",
+                                     "near.js");
+        check(failedWith(inside, "out of memory") && near.status == Status::Ok && reached == 1,
+              "A CONVERSION REFUSED BY THE HEAP LIMIT GIVES ITS STRING BACK: a 1.5 MiB U+00E9 string's UTF-8 FAILS by name "
+              "under 4 MiB; THE CONTROL: the next run allocates 3 MiB and is served (" + std::to_string(reached) +
+                  " reached)\n      inside: " + inside.message.substr(0, 90) +
+                  (near.status == Status::Ok ? std::string() : "\n      near: " + near.message.substr(0, 120)));
+    }
     // 12e. THE DERIVATION's x2 TERM, PROVED SMALL (the lead's ruling: no 1 GiB in a CPU row): a host that STATES small
     //      bounds - a 4 MiB picture cap and callBounds.bytes = the cap + an eighth, as the default derives them - holds
     //      a heap of 2 x its bytes + the floor (25 MiB). In it a picture AT ITS CAP made from the script's bytes AND read
@@ -1712,6 +1736,68 @@ int main()
                   failedWith(localArm, "the engine did not start"),
               "a host for an outside client refuses engine.arm by name (" + refusedArm.message +
                   "); an ordinary host's goes past it (" + localArm.message + ")");
+    }
+
+    // 18. A PROXY's OWN-KEY LIST IS CHECKED IN LINEAR TIME (MCP-ON-HOST-1: the vendored JS engine's patch 0001; its quadratic scan
+    //     ran in the JS engine's C, where no cancel reaches): (a) THE LAWS KEPT EXACTLY - the trap's ORDER is the
+    //     result's; a duplicate is a TypeError (at 3 keys, and at index 50,000 repeating index 7); a non-configurable
+    //     target key the trap leaves out, and an extra key on a non-extensible target, are TypeErrors; both accepted
+    //     when right; (b) THE SCALING LAW, in this thread's CPU time (never the wall), the key list prebuilt: listing 4n
+    //     keys costs under 8x listing n (linear: ~4x; the quadratic scan ~16x - a 2x margin each side), n = 32,768
+    {
+        Host::Options o;
+        o.completionBounds = ValueBounds{8, 4, 4096};
+        o.freshRealmPerRun = true;   // each case its own realm
+        Host h(o);
+        h.setConsole([](const std::string &) {});
+        const auto text = [&h](const std::string &src) {
+            const Result r = h.run(src, "keys.js");
+            return r.status == Status::Ok && r.value.kind() == Kind::String ? r.value.asString() : "<" + r.message + ">";
+        };
+        const std::string order = text("Reflect.ownKeys(new Proxy({}, {ownKeys: () => ['z', 'a', 'm']})).join()\n");
+        const std::string dupSmall = text("try { Reflect.ownKeys(new Proxy({}, {ownKeys: () => ['a', 'b', 'a']})); 'no' }"
+                                          " catch (e) { (e instanceof TypeError) + ' ' + e.message }\n");
+        const std::string dupLarge = text("const k = []; for (let i = 0; i < 60000; ++i) k.push('k' + i); k[50000] = 'k7';\n"
+                                          "try { Reflect.ownKeys(new Proxy({}, {ownKeys: () => k})); 'no' }"
+                                          " catch (e) { (e instanceof TypeError) + ' ' + e.message }\n");
+        const std::string fixedOut = text("const t = Object.defineProperty({}, 'fixed', {value: 1, configurable: false});\n"
+                                          "let a, b; try { Reflect.ownKeys(new Proxy(t, {ownKeys: () => ['other']})); a = 'no' }"
+                                          " catch (e) { a = String(e instanceof TypeError) }\n"
+                                          "b = Reflect.ownKeys(new Proxy(t, {ownKeys: () => ['other', 'fixed']})).join(); a + ' ' + b\n");
+        const std::string sealedExtra = text("const t = Object.preventExtensions({a: 1});\n"
+                                             "let a, b; try { Reflect.ownKeys(new Proxy(t, {ownKeys: () => ['a', 'b']})); a = 'no' }"
+                                             " catch (e) { a = String(e instanceof TypeError) }\n"
+                                             "b = Reflect.ownKeys(new Proxy(t, {ownKeys: () => ['a']})).join(); a + ' ' + b\n");
+        check(order == "z,a,m" && dupSmall == "true proxy: duplicate property" && dupLarge == "true proxy: duplicate property" &&
+                  fixedOut == "true other,fixed" && sealedExtra == "true a",
+              "THE OWN-KEY LAWS KEPT: the trap's order (" + order + "); a duplicate a TypeError at 3 keys (" + dupSmall +
+                  ") and at 60,000 (" + dupLarge + "); a non-configurable key left out, and an extra key on a "
+                  "non-extensible target, TypeErrors, the right lists accepted (" + fixedOut + " | " + sealedExtra + ")");
+        Host::Options plain;
+        plain.completionBounds = ValueBounds{8, 4, 4096};
+        Host t(plain);   // one realm across its runs: the key lists are built once, outside the measured runs
+        t.setConsole([](const std::string &) {});
+        const Result built = t.run("globalThis.lists = [32768, 131072].map(n => { const k = []; for (let i = 0; i < n; ++i)"
+                                   " k.push('p' + i); return k; }); 0\n", "build.js");
+        const auto cpu = [&t](int which) {
+            double best = 1e300;
+            for (int rep = 0; rep < 3; ++rep) {   // the least of three: the run's own cost, never a neighbour's
+                timespec a{}, b{};
+                clock_gettime(CLOCK_THREAD_CPUTIME_ID, &a);
+                const Result r = t.run("Reflect.ownKeys(new Proxy({}, {ownKeys: () => lists[" + std::to_string(which) +
+                                           "]})).length\n", "list.js");
+                clock_gettime(CLOCK_THREAD_CPUTIME_ID, &b);
+                if (r.status != Status::Ok) return -1.0;
+                best = std::min(best, double(b.tv_sec - a.tv_sec) + 1e-9 * double(b.tv_nsec - a.tv_nsec));
+            }
+            return best;
+        };
+        const double small = cpu(0), large = cpu(1);
+        const double ratio = small > 0 ? large / small : 1e9;
+        check(built.status == Status::Ok && small > 0 && large > 0 && ratio < 8.0,
+              "THE SCALING LAW: listing 131,072 keys of a Proxy costs " + std::to_string(ratio) + "x listing 32,768 (under 8: "
+              "linear ~4, the quadratic scan ~16), in this thread's CPU time (" + std::to_string(small) + " s, " +
+              std::to_string(large) + " s)");
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);

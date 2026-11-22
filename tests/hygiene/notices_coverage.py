@@ -55,6 +55,9 @@ NOT_A_COMPONENT = {
     "bullet-patches": "OUR OWN patch stack for the vendored bullet3 (irisgl/CMakeLists.txt applies it "
                       "at configure through irisgl/cmake/ApplyVendorPatches.cmake, BULLET-BATCHING-1) — "
                       "Jahshaka source, not a third party's; Bullet's notice is bullet3's",
+    "quickjs-ng-patches": "OUR OWN patch stack for the vendored quickjs-ng (irisgl/CMakeLists.txt applies it "
+                          "at configure through irisgl/cmake/ApplyVendorPatches.cmake, MCP-ON-HOST-1) - "
+                          "Jahshaka source, not a third party's; the JS engine's notice is quickjs-ng's",
     "ogre-next-install": "a BUILD OUTPUT — the engine's install prefix, produced by "
                          "build-ogre.sh from the ogre-next submodule beside it",
 }
