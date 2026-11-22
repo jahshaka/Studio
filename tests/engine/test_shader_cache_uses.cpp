@@ -25,6 +25,8 @@
 //       preprocessor change silently compiles the old processed source). The salt has no getter and the checksum is its
 //       function: the loaded checksum equals the one with that salt set again, and the control - salt zero, the block
 //       skipped (upstream's checksum) - differs from it.
+//   (7) A RE-PARSE IS SAVED (SHADER-SYSTEM-1 7a, R5): after a template edit, the launch that re-parsed the recipes saves
+//       the layer with the live checksum (the header read back), so the next launch loads in date.
 // engine.shader_cache_temps (NOQT-CORE-1 stage 1, the engine link; --temps) - A KILLED WRITE's TEMP IS SWEPT AT THE NEXT
 // OPEN, A LIVE WRITER's NEVER: every cache write stages "<name>.tmp-<pid>-<serial>" (iris::files) and a write killed before
 // its rename used to leave it in the directory for ever, outside the manifest and the cap (OgreShaderCache.cpp load):
@@ -471,24 +473,53 @@ static int run(const std::string &mode) {
         mkdirs(dir + "/unlit");
         writeFile(dir + "/unlit/VertexShader_vs.glsl", "#version 450\nvoid main() {}\n");
         runLaws(dir, [&dir](const std::string &c) { return std::unique_ptr<Toy>(new HlmsToy(c, dir + "/unlit")); });
-        HlmsToy t(dir + "/salt", dir + "/unlit");
-        t.begin(kRoomy);
-        const std::string id = JAHSHAKA_COMPILE_PATH_PREPROCESSOR_ID;
-        const Ogre::uint64 salt[2] = { std::stoull(id.substr(0, 16), nullptr, 16), std::stoull(id.substr(16, 16), nullptr, 16) };
-        const Ogre::uint64 zero[2] = { 0u, 0u };
-        Ogre::uint64 loaded[2], expected[2], unsalted[2];
-        t.unlit->getTemplateChecksum(loaded);
-        t.unlit->setJahTemplateSalt(zero);
-        t.unlit->getTemplateChecksum(unsalted);
-        t.unlit->setJahTemplateSalt(salt);
-        t.unlit->getTemplateChecksum(expected);
-        t.end();
-        CHECK(loaded[0] == expected[0] && loaded[1] == expected[1],
-              "(5) after the load the template checksum is the one salted with the preprocessor group %.16s (%016llx)",
-              id.c_str(), (unsigned long long)loaded[0]);
-        CHECK(unsalted[0] != loaded[0] || unsalted[1] != loaded[1],
-              "(5) ...and the control, the salt zero (the block skipped), differs from it (%016llx): the law can fail",
-              (unsigned long long)unsalted[0]);
+        {   // (5): one Root at a time (a toy owns its process's Ogre state)
+            HlmsToy t(dir + "/salt", dir + "/unlit");
+            t.begin(kRoomy);
+            const std::string id = JAHSHAKA_COMPILE_PATH_PREPROCESSOR_ID;
+            const Ogre::uint64 salt[2] = { std::stoull(id.substr(0, 16), nullptr, 16), std::stoull(id.substr(16, 16), nullptr, 16) };
+            const Ogre::uint64 zero[2] = { 0u, 0u };
+            Ogre::uint64 loaded[2], expected[2], unsalted[2];
+            t.unlit->getTemplateChecksum(loaded);
+            t.unlit->setJahTemplateSalt(zero);
+            t.unlit->getTemplateChecksum(unsalted);
+            t.unlit->setJahTemplateSalt(salt);
+            t.unlit->getTemplateChecksum(expected);
+            t.end();
+            CHECK(loaded[0] == expected[0] && loaded[1] == expected[1],
+                  "(5) after the load the template checksum is the one salted with the preprocessor group %.16s (%016llx)",
+                  id.c_str(), (unsigned long long)loaded[0]);
+            CHECK(unsalted[0] != loaded[0] || unsalted[1] != loaded[1],
+                  "(5) ...and the control, the salt zero (the block skipped), differs from it (%016llx): the law can fail",
+                  (unsigned long long)unsalted[0]);
+        }
+        // (7) A RE-PARSE IS SAVED: a launch whose templates changed re-parses the saved recipes ("the templates have
+        // changed", OgreHlmsDiskCache.cpp's load) and its save writes the layer with the LIVE checksum, so the next
+        // launch loads in date instead of re-parsing again at every boot (spikes/hlms-cache-outofdate/DIAGNOSIS.md).
+        // RED before the fork's fix: applyTo tagged the Hlms up to date after the re-parse, the save wrote no hlms layer
+        // and the header kept the old checksum. CONTROL: the template edit moved the checksum (else no re-parse ran).
+        mkdirs(dir + "/unlit-reparse");
+        writeFile(dir + "/unlit-reparse/VertexShader_vs.glsl", "#version 450\nvoid main() {}\n");
+        HlmsToy r(dir + "/reparse", dir + "/unlit-reparse");
+        r.begin(kRoomy); r.use("A"); r.end();                               // launch 1: the layer written at checksum X
+        Ogre::uint64 before[2];
+        r.unlit->getTemplateChecksum(before);
+        writeFile(dir + "/unlit-reparse/VertexShader_vs.glsl", "#version 450\n// edited\nvoid main() {}\n");
+        r.begin(kRoomy);                                                    // launch 2: the templates changed
+        const bool reparsedA = r.present("A");
+        Ogre::uint64 live[2];
+        r.unlit->getTemplateChecksum(live);
+        r.end();
+        Ogre::uint64 saved[2] = { 0u, 0u };
+        const std::string file = readFile(dir + "/reparse/hlms." + std::to_string(int(Ogre::HLMS_UNLIT)) + ".bin");
+        if (file.size() >= 22u) std::memcpy(saved, file.data() + 6, 16u);   // the header: u16 x3, then the checksum
+        CHECK(before[0] != live[0] || before[1] != live[1],
+              "(7) CONTROL: the template edit moved the checksum (%016llx -> %016llx)", (unsigned long long)before[0],
+              (unsigned long long)live[0]);
+        CHECK(reparsedA, "(7) the changed templates' launch kept the recipe (re-parsed, not dropped)");
+        CHECK(saved[0] == live[0] && saved[1] == live[1],
+              "(7) the re-parse was SAVED: the layer's header holds the live checksum (%016llx, live %016llx): the next "
+              "launch loads in date", (unsigned long long)saved[0], (unsigned long long)live[0]);
     } else if (mode == "--compute") {
         std::printf("\n== the compute layer ==\n");
         mkdirs(dir + "/media");

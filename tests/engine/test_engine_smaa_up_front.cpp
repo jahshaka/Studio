@@ -89,7 +89,7 @@ static int pictureMode()
     Run runs[] = { { 0, 3 }, { 3, 0 }, { 2, 0 }, { -1, 3 } };
     for (Run &r : runs) {
         EngineConfig cfg = enginetest::testEngineConfig("test-engine-smaa-picture-ogre.log",
-                                                        enginetest::EngineOverrides().shaderCacheOff().realDestroy());
+                                                        enginetest::EngineOverrides().realDestroy());
         std::string err;
         auto engine = Engine::create(cfg, err);
         if (!engine) { std::printf("FAIL: engine (%s)\n", err.c_str()); return 1; }

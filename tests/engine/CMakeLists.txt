@@ -246,6 +246,30 @@ jah_gpu_row(engine.smaa_up_front CLASS engine FRAMES 380
          COMMAND test_engine_smaa_up_front
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(engine.smaa_up_front PROPERTIES TIMEOUT 60 LABELS "engine")
+# engine.smaa_preset_picture (SHADER-SYSTEM-1 7a, R1/R3) - AN SMAA PRESET CHANGE REACHES THE PICTURE: four fresh engines
+# (0->3, 3->0, 2->0, off->3), each switched picture equal to the fresh picture of its preset, exact codes
+# (test_engine_smaa_up_front.cpp `picture`).
+jah_gpu_row(engine.smaa_preset_picture CLASS engine FRAMES 32
+         COMMAND test_engine_smaa_up_front picture
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.smaa_preset_picture PROPERTIES TIMEOUT 60 LABELS "engine")
+# sky.clones_share_pipelines (SHADER-SYSTEM-1 7a, R1) - A SECOND SCENE's SKY BUILDS NO LOW-LEVEL PIPELINE: the per-scene
+# clones of the sky, sun disc and height fog materials share one pipeline (the low-level key is the content), with
+# scene A's builds as the control (test_engine_sky_clones_share.cpp).
+add_executable(test_engine_sky_clones_share test_engine_sky_clones_share.cpp)
+set_target_properties(test_engine_sky_clones_share PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_sky_clones_share PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_sky_clones_share PRIVATE JahshakaEngine)
+add_dependencies(test_engine_sky_clones_share JahshakaEngineMedia)
+jah_gpu_row(sky.clones_share_pipelines CLASS engine FRAMES 8
+         COMMAND test_engine_sky_clones_share
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(sky.clones_share_pipelines PROPERTIES TIMEOUT 60 LABELS "engine")
 # engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
 # proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
 # read every frame — and in the TSan arm, zero reports.
