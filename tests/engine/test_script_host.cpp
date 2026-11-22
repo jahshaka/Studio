@@ -190,9 +190,49 @@ int main()
 
     lines.clear();
     run = host.run("host.check({ok: true, what: 'held'});\nhost.check({ok: 1 > 2, what: 'broken'});\n", "check.js");
-    check(run.status == Status::Ok && host.checksFailed() == 1 && lines.size() == 2 && lines[0] == "ok:   held" &&
-              lines[1] == "FAIL: broken",
-          "host.check prints each law and counts the failures (1)");
+    check(run.status == Status::Ok && host.checksFailed() == 1 && host.checksRun() == 2 && lines.size() == 2 &&
+              lines[0] == "ok:   held" && lines[1] == "FAIL: broken",
+          "host.check prints each law and counts the checks that ran (2) and the failures (1)");
+
+    // 4b. THE VERDICT (jahengine's): a script that checked nothing FAILS by name; the async work a script queued runs to
+    //     its end; a rejected promise no handler took FAILS the run by name
+    {
+        Host quiet;
+        std::vector<std::string> said;
+        quiet.setConsole([&said](const std::string &l) { said.push_back(l); });
+        const Result r0 = quiet.run("const x = 1 + 1;\n", "nothing.js");
+        check(r0.status == Status::Ok && quiet.verdict(r0) == 1 && !said.empty() &&
+                  said.back().find("FAIL: the script checked nothing") == 0,
+              "a script with no host.check FAILS its verdict by name (" + (said.empty() ? "" : said.back()) + ")");
+    }
+    {
+        Host later;
+        std::vector<std::string> said;
+        later.setConsole([&said](const std::string &l) { said.push_back(l); });
+        const Result r1 = later.run("async function t() {\n  await 0;\n  host.check({ok: true, what: 'after the await'});\n}\nt();\n",
+                                    "await.js");
+        check(r1.status == Status::Ok && later.checksRun() == 1 && later.verdict(r1) == 0,
+              "a check after an `await` RUNS (the queued work is drained after the script): " +
+                  std::to_string(later.checksRun()) + " check(s) ran");
+    }
+    {
+        Host rejected;
+        rejected.setConsole([](const std::string &) {});
+        const Result r2 = rejected.run("host.check({ok: true, what: 'before'});\n"
+                                       "Promise.reject(new Error('nobody handles me'));\n", "reject.js");
+        check(r2.status == Status::Failed && r2.message.find("an unhandled promise rejection") != std::string::npos &&
+                  r2.message.find("nobody handles me") != std::string::npos && rejected.verdict(r2) == 1,
+              "a rejected promise nobody handles FAILS the run by name: " + r2.message.substr(0, r2.message.find('\n')));
+        const Result r3 = rejected.run("Promise.reject(new Error('handled')).catch(() => host.check({ok: true, what: 'caught'}));\n",
+                                       "handled.js");
+        check(r3.status == Status::Ok && rejected.checksRun() == 2,
+              "a rejection a handler takes is no fault, and the handler's check runs");
+        const Result r4 = rejected.run("async function t() {\n  await 0;\n  throw new Error('late');\n}\nt();\n", "late.js");
+        check(r4.status == Status::Failed && r4.message.find("late") != std::string::npos &&
+                  r4.message.find("late.js:3") != std::string::npos,
+              "an error thrown after an `await` FAILS the run with its message and line: " +
+                  r4.message.substr(0, r4.message.find('\n')));
+    }
 
     // 5. THE ENGINE'S COMMANDS WITH NO ENGINE (a process whose engine did not start still has a host that says why), and
     //    the picture's native reductions against their closed forms on a synthetic 4 x 2 picture
