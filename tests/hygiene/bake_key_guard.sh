@@ -62,7 +62,9 @@ WATCHED=(document/assets/mesh.cpp
          document/assets/mesh.h
          document/assets/skeleton.cpp
          document/assets/skeleton.h
-         document/scenegraph/meshnode.cpp
+         # (document/scenegraph/meshnode.cpp LEFT this list with NOQT-DOCUMENT-1 stage 1: its import builders moved to
+         # import/scenebuilder.cpp, on the hashed list; what is left of it CONSUMES a bake - MeshBake::buildFragment -
+         # and writes none.)
          core/geometry/trimesh.cpp
          # Three more layout PRODUCERS the second read found (2026-09-15): the
          # vertex-attribute enum VALUES are the baked integers, the bounding
@@ -117,7 +119,18 @@ for w in "${WATCHED[@]}" "$VERSION_FILE"; do
     echo "FAIL: $w does not exist — this gate's file list is stale (a rename?)."
     failures=$((failures + 1))
 done
-echo "ok:   ${#WATCHED[@]} version-covered file(s) watched (the window below reads their commits)"
+# THE CONTROL: the watched pathspec must match commits in this history at all (the window below may hold none, which is
+# a pass): a pathspec that matches nothing - a moved tree, a wrong directory, a renamed file family - would pass the
+# window by reading nothing.
+if git rev-parse --git-dir > /dev/null 2>&1; then
+    ever=$(git log --no-merges --format=%H -- "${WATCHED[@]}" 2>/dev/null | wc -l)
+    if [ "$ever" -eq 0 ]; then
+        echo "FAIL: the ${#WATCHED[@]} watched paths match NO commit of this history - the window below would read nothing."
+        failures=$((failures + 1))
+    else
+        echo "ok:   the ${#WATCHED[@]} watched paths match $ever commit(s) of this history (the control: > 0)"
+    fi
+fi
 
 # --- 2. the version constant is still there and readable -------------------
 if ! grep -qE "$VERSION_RE" "$VERSION_FILE"; then

@@ -562,7 +562,6 @@ static void theKey()
     const QStringList versionCovered = {
         QStringLiteral("document/assets/mesh.cpp"),   QStringLiteral("document/assets/mesh.h"),
         QStringLiteral("document/assets/skeleton.cpp"), QStringLiteral("document/assets/skeleton.h"),
-        QStringLiteral("document/scenegraph/meshnode.cpp"),
         QStringLiteral("core/geometry/trimesh.cpp"),
         QStringLiteral("import/importflags.h"),       QStringLiteral("import/importflags.cpp")};
     QStringList leaked;
