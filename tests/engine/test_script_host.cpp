@@ -1154,28 +1154,51 @@ int main()
               "derived, " + std::to_string(derived >> 20) + " MiB\n      over: " + over.message.substr(0, 80) +
                   "\n      endless: " + endless.message.substr(0, 120));
     }
-    // 12e. THE LIMIT LEAVES THE LARGEST LEGITIMATE CALLS ALONE (the control of 12d, under the DEFAULT limit): a picture
-    //      at the cap made from the script's bytes AND read back beside them (the two terms of the derivation: 1 GiB in
-    //      the script's heap), and a full setTransforms batch (65,536 nodes, the one node of the headless engine named
-    //      in every element) each pass
+    // 12e. THE DERIVATION's x2 TERM, PROVED SMALL (the lead's ruling: no 1 GiB in a CPU row): a host that STATES small
+    //      bounds - a 4 MiB picture cap and callBounds.bytes = the cap + an eighth, as the default derives them - holds
+    //      a heap of 2 x its bytes + the floor (25 MiB). In it a picture AT ITS CAP made from the script's bytes AND read
+    //      back (both held: the two terms) leaves the room the derivation says: one byte past that room FAILS "out of
+    //      memory", and that room less 1 MiB (the interpreter's own base, measured 0.11 MiB) fits. A derivation of one
+    //      x bytes (20.5 MiB) would refuse the second. THE CONTROL, under the DEFAULT limit: a full setTransforms batch
+    //      (65,536 nodes, the headless engine's one node named in every element: 12.6 MiB of JS numbers) passes.
     {
+        Host::Options small;
+        small.pictureBytesCap = std::size_t(4) << 20;
+        small.callBounds.bytes = small.pictureBytesCap + small.pictureBytesCap / 8;
+        const std::size_t limit = 2 * small.callBounds.bytes + Host::Options::kHeapFloor;
+        const std::size_t room = limit - 2 * small.pictureBytesCap;
+        Host term(small);
+        term.setConsole([](const std::string &) {});
+        registerEngineCommands(term, nullptr, "no device here", false);
+        const Result held = term.run(
+            "globalThis.rgba = new Uint8Array(1024 * 1024 * 4);\n"
+            "globalThis.p = engine.picture.create({width: 1024, height: 1024, rgba});\n"
+            "globalThis.back = engine.picture.bytes(p.picture);\n"
+            "host.check({ok: back.length === rgba.length, what: 'a picture at the cap, made and read back'});\n",
+            "held.js");
+        const Result past = term.run("globalThis.past = new Uint8Array(" + std::to_string(room + 1) + ");\n", "past.js");
+        const Result fits = term.run("globalThis.fits = new Uint8Array(" + std::to_string(room - (std::size_t(1) << 20)) +
+                                         ");\nhost.check({ok: fits.length > 0, what: 'the room less 1 MiB'});\n",
+                                     "fits.js");
         Host full;
         full.setConsole([](const std::string &) {});
         registerEngineCommands(full, headless.get(), bootError, false);
-        const Result r = full.run(
-            "const w = 16384, h = 8192;\n"
-            "const p = engine.picture.create({width: w, height: h, rgba: new Uint8Array(w * h * 4)});\n"
-            "const back = engine.picture.bytes(p.picture);\n"
-            "host.check({ok: back.length === w * h * 4, what: 'a picture at the cap, made and read back'});\n"
+        const Result batch = full.run(
             "const s = engine.scene.create('full-batch'), n = engine.node.create(s), N = 65536;\n"
             "engine.node.setTransforms(s, {nodes: new Array(N).fill(n), positions: new Array(3 * N).fill(0.5),\n"
             "                              rotations: new Array(4 * N).fill(0.5), scales: new Array(3 * N).fill(0.5)});\n"
             "host.check({ok: true, what: 'the full batch'});\n",
-            "full.js");
-        check(r.status == Status::Ok && full.checksRun() == 2 && full.checksFailed() == 0,
-              "UNDER THE DEFAULT LIMIT (" + std::to_string(Host::Options().heapLimit() >> 20) + " MiB) a picture at the "
-              "512 MiB cap made and read back, and a 65,536-node setTransforms batch, each pass" +
-                  (r.status == Status::Ok ? std::string() : "\n      the run: " + r.message));
+            "batch.js");
+        check(term.options().heapLimit() == limit && held.status == Status::Ok && failedWith(past, "out of memory") &&
+                  fits.status == Status::Ok && term.checksRun() == 2 && term.checksFailed() == 0 &&
+                  batch.status == Status::Ok && full.checksFailed() == 0,
+              "THE x2 TERM: a host of a 4 MiB cap derives " + std::to_string(term.options().heapLimit() >> 10) +
+                  " KiB; with a picture at its cap made and read back, one byte past the room FAILS and the room less "
+                  "1 MiB fits; THE CONTROL: the full 65,536-node batch passes under the default limit" +
+                  (held.status == Status::Ok ? std::string() : "\n      held: " + held.message) +
+                  (past.status == Status::Failed ? std::string() : "\n      past: not refused") +
+                  (fits.status == Status::Ok ? std::string() : "\n      fits: " + fits.message) +
+                  (batch.status == Status::Ok ? std::string() : "\n      batch: " + batch.message));
     }
 
     // 13. ONE FIELD TABLE PER RECORD (2b b1; records.h): a record's fields named once - the member pointer DERIVES the
