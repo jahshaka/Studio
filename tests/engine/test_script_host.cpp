@@ -334,8 +334,8 @@ int main()
     Registry &eng = engHost.registry();
     std::size_t engineCommands = 0;
     for (const CommandInfo *c : eng.commands()) engineCommands += c->name.rfind("engine.", 0) == 0;
-    check(engineCommands == 24 && eng.validate().empty(),
-          "the 24 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
+    check(engineCommands == 29 && eng.validate().empty(),
+          "the 29 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
     {
         // THE ACCESS of the 26 (the spec's table, 2a a1, + setTransforms): these read; every other changes the engine
         const std::vector<std::string> reads = {"host.check", "host.lastError", "engine.view.routes",
@@ -349,7 +349,7 @@ int main()
             ++checked;
             if (c->signature.access != (read ? Access::Reads : Access::Changes)) wrong += " " + signatureText(*c);
         }
-        check(checked == 26 && wrong.empty(),
+        check(checked == 31 && wrong.empty(),
               "every one of the " + std::to_string(checked) + " commands declares the access of the spec's table: 8 " +
                   "reads, the rest changes" + (wrong.empty() ? std::string() : " - wrong:" + wrong));
         check(signatureText(*eng.find("engine.picture.hash")) == "engine.picture.hash(picture: target picture handle) -> string [reads]",
@@ -1143,6 +1143,98 @@ int main()
                   sig.find("turn: float[4] = default") != std::string::npos,
               "THE SIGNATURE SAYS single precision (`float`, a double is `number`) and a flat vector's bound in numbers: " +
                   sig.substr(0, 200));
+    }
+
+    // 14. DESTROY AND THE OWNERSHIP LAW (2b b2; the lead's ruling for the lab's fresh host per Run), on the headless
+    //     engine. DESTROY (L7): a destroyed node, mesh and material, and another scene's node, each FAIL by name at the
+    //     next use (the engine is asked); a destroyed scene's handle is STALE; a scene the host's owner handed in is not
+    //     the script's to destroy. THE OWNERSHIP: a host that made a scene of its own, and a mesh, a material and a node
+    //     drawing them in a scene its owner HANDED IN, ends - the handed-in scene survives, everything the run made is
+    //     gone (the presence reads; the made scene's name is free again); THE CONTROL: all of it present while the host
+    //     lived. (The views' half needs a device: the card batch.)
+    {
+        Host d;
+        d.setConsole([](const std::string &) {});
+        registerEngineCommands(d, headless.get(), bootError, false);
+        Registry &dr = d.registry();
+        const auto made = [&](const char *name, Value::Array args) { return dr.call(name, std::move(args)).value; };
+        const Value sa = made("engine.scene.create", {Value("destroy-a")}), sb = made("engine.scene.create", {Value("destroy-b")});
+        const Value na = made("engine.node.create", {sa}), nb = made("engine.node.create", {sb});
+        const Value mesh = made("engine.mesh.unitCube", {sa}), mat = made("engine.material.createPbr", {sa, Value(Value::Object{})});
+        const auto draw = [&](const Value &node) {
+            return dr.call("engine.node.attachMesh", {sa, node, Value(Value::Object{{"mesh", mesh}, {"material", mat}})});
+        };
+        const bool live = draw(na).status == Status::Ok;
+        const bool gone = dr.call("engine.node.destroy", {sa, na}).value == Value(true) &&
+                          failedWith(dr.call("engine.node.setTransform", {sa, na, Value(Value::Object{})}),
+                                     "node: node " + std::to_string(Call::idOf(na)) + " is not a node of scene 'destroy-a'") &&
+                          failedWith(dr.call("engine.node.setTransform", {sa, nb, Value(Value::Object{})}),
+                                     "is not a node of scene 'destroy-a'") &&
+                          dr.call("engine.mesh.destroy", {sa, mesh}).value == Value(true) &&
+                          dr.call("engine.material.destroy", {sa, mat}).value == Value(true) &&
+                          failedWith(draw(made("engine.node.create", {sa})), "mesh: mesh " + std::to_string(Call::idOf(mesh)) +
+                                                                              " is not a mesh of scene 'destroy-a'");
+        const std::int64_t sbHandle = sb.asInt();
+        const bool stale = dr.call("engine.scene.destroy", {sb}).value == Value(true) &&
+                           failedWith(dr.call("engine.node.create", {sb}), "is stale (its scene was released)") &&
+                           failedWith(dr.call("engine.node.setTransform", {sb, nb, Value(Value::Object{})}), "is stale") &&
+                           sbHandle == sb.asInt();
+        Scene *handed = headless->createScene("handed-in");
+        const Value h(dr.hold("scene", std::shared_ptr<Scene>(handed, [](Scene *) {})));
+        check(live && gone && stale &&
+                  failedWith(dr.call("engine.scene.destroy", {h}), "the scene 'handed-in' was handed in by the host's owner"),
+              "DESTROY: a destroyed node, mesh and material and another scene's node FAIL by name at the next use; a "
+              "destroyed scene's handle is stale; a handed-in scene is not the script's to destroy; THE CONTROL: the "
+              "node drew its mesh while they lived");
+        headless->destroyScene(handed);
+    }
+    {
+        Scene *handed = headless->createScene("handed-in");
+        NodeId node = 0;
+        MeshId mesh = 0;
+        MaterialId mat = 0;
+        bool whileLived = false;
+        {
+            Host run;
+            run.setConsole([](const std::string &) {});
+            registerEngineCommands(run, headless.get(), bootError, false);
+            const Value h(run.registry().hold("scene", std::shared_ptr<Scene>(handed, [](Scene *) {})));
+            const Result r = run.run("const s = " + std::to_string(h.asInt()) + ";\n"
+                                     "const mesh = engine.mesh.unitCube(s), material = engine.material.createPbr(s, {});\n"
+                                     "globalThis.node = engine.node.create(s);\n"
+                                     "engine.node.attachMesh(s, node, {mesh, material});\n"
+                                     "globalThis.ids = [mesh, material];\n"
+                                     "const own = engine.scene.create('made-by-run');\n"
+                                     "engine.node.attachMesh(own, engine.node.create(own), {mesh: engine.mesh.unitCube(own),\n"
+                                     "                       material: engine.material.createPbr(own, {})});\n"
+                                     "host.check({ok: true, what: 'made'});\n",
+                                     "ownership.js");
+            // the made ids, read back through the script's own globals
+            std::vector<std::string> said;
+            run.setConsole([&said](const std::string &l) { said.push_back(l); });
+            run.run("console.log(node, ids[0], ids[1]);\n", "ids.js");
+            if (r.status == Status::Ok && said.size() == 1) {
+                unsigned long long n = 0, m = 0, t = 0;
+                std::sscanf(said[0].c_str(), "%llu %llu %llu", &n, &m, &t);
+                node = NodeId(n & 0xffffffffull);
+                mesh = MeshId(m & 0xffffffffull);
+                mat = MaterialId(t & 0xffffffffull);
+            }
+            whileLived = node && mesh && mat && handed->nodePresence(node) == Scene::Presence::Present &&
+                         handed->meshPresence(mesh) == Scene::Presence::Present &&
+                         handed->materialPresence(mat) == Scene::Presence::Present &&
+                         headless->createScene("made-by-run") == nullptr;   // (its name is taken: the run's scene lives)
+        }   // THE HOST ENDS
+        Scene *again = headless->createScene("made-by-run");
+        check(whileLived && handed->nodePresence(node) == Scene::Presence::Absent &&
+                  handed->meshPresence(mesh) == Scene::Presence::Absent &&
+                  handed->materialPresence(mat) == Scene::Presence::Absent && again != nullptr &&
+                  headless->createScene("handed-in") == nullptr,   // (the handed-in scene's name still taken: it lives)
+              "THE OWNERSHIP LAW: a run's node, mesh and material in a HANDED-IN scene are gone at its host's end (the "
+              "node first: it drew them), the scene the run made is destroyed (its name free again), the handed-in scene "
+              "survives; THE CONTROL: all of it present while the host lived");
+        if (again) headless->destroyScene(again);
+        headless->destroyScene(handed);
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
