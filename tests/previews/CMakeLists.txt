@@ -22,7 +22,8 @@ find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia Concurrent)
 set(_previews_db_closure
     ${CMAKE_SOURCE_DIR}/src/services/previewwriter.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
-    # database.cpp's link closure (the set tests/desktops links)
+    # database.cpp's link closure (the set tests/desktops links; the statement trace LARGE-LIBRARY-1 added)
+    ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
