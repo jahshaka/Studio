@@ -2446,6 +2446,9 @@ QMap<QString, qint64> Database::fetchAssetFileSizes()
 // answers: a NULL parent or a folder's guid names no asset, so the row stays.
 QString Database::memberSubquery(const QString &alias)
 {
+    // A TABLE ALIAS, never a column ("A", not "A.guid"): a dotted one builds "MEMBER_OF.guid = A.guid.parent",
+    // which compiles and fails only when the statement runs (relistUnlistedMatch then mints a duplicate row).
+    Q_ASSERT_X(!alias.contains(QLatin1Char('.')), "Database::memberSubquery", "a table alias, not a column");
     return QStringLiteral("NOT EXISTS (SELECT 1 FROM assets MEMBER_OF WHERE MEMBER_OF.guid = %1.parent)")
         .arg(alias);
 }

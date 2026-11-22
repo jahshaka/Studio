@@ -588,6 +588,31 @@ int main(int argc, char **argv)
               "6: a model import is untouched by any of this");
     }
 
+    // 7. A RE-IMPORT OF AN UNLISTED ASSET RE-LISTS THE SAME ROW (AssetImportService::relistUnlistedMatch;
+    // LARGE-LIBRARY-1's final read: no row reached it). A library delete a project vetoed leaves the row
+    // unlisted; importing the same bytes again answers with THAT row, listed, and mints no second one. Its match
+    // statement carries Database::memberSubquery("A") — an alias with a dot (a mis-merge's "A.guid") asserts
+    // there, and in a release build would fail the statement and mint a duplicate here.
+    {
+        AssetImportService service(&db, nullptr);
+        const QString png7 = writeUniquePng(cwd + "/tex_relist.png");
+        ImportRequest first;
+        first.sourcePath = png7;
+        first.typeHint = static_cast<int>(ModelTypes::Texture);
+        const ImportResult imported = service.import(first);
+        CHECK(imported.ok() && db.setAssetListed(imported.assetGuid, false),
+              "7: an imported picture, then unlisted (a library delete a project vetoed)");
+        const int rowsBefore = countRows(conn, "SELECT COUNT(*) FROM assets");
+        ImportRequest again = first;
+        const ImportResult relisted = service.import(again);
+        CHECK(relisted.ok() && relisted.assetGuid == imported.assetGuid,
+              "7: the re-import of the same bytes answers with THE SAME row");
+        CHECK(countRows(conn, QStringLiteral("SELECT COUNT(*) FROM assets WHERE guid = '%1' AND listed = 1")
+                                  .arg(imported.assetGuid)) == 1,
+              "7: ...listed again");
+        CHECK(countRows(conn, "SELECT COUNT(*) FROM assets") == rowsBefore, "7: ...and no second row was minted");
+    }
+
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }
