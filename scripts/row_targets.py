@@ -24,7 +24,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-_VERSION = 1
+_VERSION = 2
 
 
 def _names(v):
@@ -72,7 +72,7 @@ class Ninja:
     def _parse(self, path):
         sys.path.insert(0, HERE)
         from gate_graph import _find_unescaped, _split_ninja
-        ins_of, phony = {}, {}
+        ins_of, phony, linked = {}, {}, []
         for line in open(path, errors="replace").read().replace("$\n", "").split("\n"):
             if not line.startswith("build "):
                 continue
@@ -90,6 +90,8 @@ class Ninja:
             expl = words[1:words.index("|")] if "|" in words else words[1:words.index("||")] if "||" in words else words[1:]
             for o in outs:
                 ins_of[o] = ins
+            if "_LINKER" in rule and outs:
+                linked.append(outs[0])
             if rule == "phony" and len(outs) == 1 and "/" not in outs[0] and outs[0] != "all" \
                     and not outs[0].startswith("cmake_object_order_depends_target_"):
                 phony[outs[0]] = expl
@@ -107,6 +109,13 @@ class Ninja:
             ins = phony[t]
             if len(ins) == 1:
                 self.target_of.setdefault(os.path.realpath(self._abs(ins[0])), t)
+        # an artefact at the build's top whose path IS its target's name has no phony edge (CMake writes none): its link edge
+        for o in linked:
+            if "/" not in o and o not in phony:
+                self.targets.add(o)
+                self.target_of.setdefault(os.path.realpath(self._abs(o)), o)
+                if o in seen:
+                    self.default.add(o)
 
 
 def ctest_doc(build):
