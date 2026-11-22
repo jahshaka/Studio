@@ -138,7 +138,9 @@ void LabWindow::pump(WindowInput &in)
         case ButtonPress:
             if (ev.xbutton.window == mStrip && ev.xbutton.button == Button1)
                 in.stripClicks.emplace_back(ev.xbutton.x, ev.xbutton.y);   // the session runs its button's line
-            if (ev.xbutton.button == Button3) { mRight = true; mHaveLast = false; }
+            // the strip takes ONLY its own button: it selects no ButtonRelease, so a right press there would turn the
+            // mouse-look on with nothing to turn it off (the audit's F5)
+            if (ev.xbutton.window != mStrip && ev.xbutton.button == Button3) { mRight = true; mHaveLast = false; }
             break;
         case Expose:
             if (ev.xexpose.window == mStrip && ev.xexpose.count == 0) drawStrip();
