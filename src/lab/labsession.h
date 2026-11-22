@@ -125,7 +125,7 @@ private:
     bool jsRun();
     /// The lab's world back in the window's view (a script was handed it by lab.view()); then the last run's host ends.
     void jsClear();
-    /// The view lent by lab.view() given back: the lab's scene bound again, its background re-applied.
+    /// The view lent by lab.view() given back: the lab's scene bound again, the mirror's fields re-asserted.
     void giveViewBack();
     /// THE SCRIPTS FOLDER `js next` walks (labscripts.h): the loaded script's, else --js-dir's, else <data root>/scripts.
     std::string jsFolder() const;
@@ -180,7 +180,6 @@ private:
     std::string mJsPlace;   ///< mJsPath's place in its folder, read at the press that loaded it (labscripts.h)
     std::unique_ptr<jahshaka::engine::script::Host> mJsHost;
     bool mViewLent = false;
-    jahshaka::engine::Colour mLabBackground;   ///< the lab world's background while the view is lent (given back at clear)
     int mJsRuns = 0;
     std::string mJsState, mJsError;
 };

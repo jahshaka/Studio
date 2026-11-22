@@ -2326,8 +2326,14 @@ void Session::giveViewBack()
 {
     if (!mViewLent) return;
     mView->setScene(nullptr);
-    mView->setBackground(mLabBackground);   // the lab's own again (a record re-applies only a change: set it here)
     mView->setScene(mScene);
+    // THE MIRROR RETAKES THE VIEW (SceneMirror::invalidateEnvironment, its door for exactly this): the next frame
+    // RE-ASSERTS the scene's and the view's fields - the camera, the background, the post-fx the lend reset. A bind
+    // makes the view a NEW camera (OgreView::setScene: Ogre's defaults), and the engine applies a field only when it
+    // differs from the one it last applied: without the re-assert the lab's unchanged camera never reached the new
+    // one (measured: every pixel moved, for good, 38 frames). With it, neither the lab's background nor its post-fx
+    // needs keeping by hand (measured: 0 px with each restore removed, photon-room and the empty world).
+    mMirror->invalidateEnvironment();
     mViewLent = false;
 }
 
@@ -2376,11 +2382,11 @@ bool Session::jsRun()
                             if (!mViewLent) {
                                 // detached, cleared with the view's own colour and graded by the DEFAULT post-fx
                                 // (a script view's, as jahengine's): the lab world's background (its document's sky
-                                // fallback) and its post chain (exposure, meter, hdr, the offscreen opt-in) are the
-                                // lab's, never the script's - the same script gives the same picture in any lab world
-                                // (the audit's F2); the mirror pushes the world's grade again on the lab's next frame
+                                // fallback) and the lab's post-fx record (its offscreen opt-in, the camera's grade, the
+                                // lab's arms) are the lab's, never the script's - the same script gives the same
+                                // picture in any lab world (the audit's F2). The give-back re-asserts the lab's own
+                                // (giveViewBack)
                                 mView->setScene(nullptr);
-                                mLabBackground = mView->pushedBackground();
                                 mView->setBackground(kViewClear);
                                 mView->setPostFx(PostFxDesc());
                                 mViewLent = true;
