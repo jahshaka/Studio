@@ -14,6 +14,12 @@ equal input at an ancestor serves the row (ci_gate_check.py serve). It decides n
 ctest runs INSIDE --build (its cwd): a ctest `--test-dir` is REFUSED by name, before anything runs (DEV_ERRORS 52: three holds
 void - a relative one was read from inside the build and ctest failed to start). A run's id is unique per call: the second,
 the tip and the call's pid (URGENT #209: two solo calls in one second shared an id, and the solo test read neither as solo).
+A PRICE's FACTS (DEV_ERRORS 49: rows priced from runs that compiled shaders in their frames, or at load 12): each row record
+carries `inframe` (its output's lines saying a frame compiled a shader: Ogre's ` - its shader COMPILED in the frame` and
+`HlmsCompute: job '<name>' parsed its template in the frame (`, fork OgreHlms.cpp:3035 / OgreHlmsCompute.cpp:381; counted
+past the output cap), `coldRow` (the row is declared COLD: tests/test-cold-rows.txt - its in-frame compiles are its subject),
+`load` (the box's 1-minute load averaged over the row: /proc/loadavg sampled at its start, every 2 s and at its end;
+$JAH_LOADAVG_FILE a toy's) and `ncpu` (our CPUs: this process's affinity). The lead's `spec.sh reprice` refuses such a run.
 """
 import argparse
 import datetime
@@ -24,6 +30,7 @@ import re
 import shlex
 import subprocess
 import sys
+import time
 
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 SCHEMA = 4                        # 4: `laws` (HARNESS-3 (b))
@@ -53,6 +60,10 @@ OUTPUT_CAP = 262144
 # THE LAW LINE (tests/support/lawline.h): `LAW <name> <value> <unit> [<op> <bar>]` - collected past OUTPUT_CAP too
 _LAW = re.compile(r"^\s*LAW\s+([A-Za-z0-9_.:+\-]+)\s+(\S+)\s+(\S+)(?:\s+(<=|<|>=|>|==)\s+(\S+))?\s*$")
 _NONFINITE = ("nan", "inf", "infinity")
+# A FRAME THAT COMPILED (DEV_ERRORS 49; spikes/hlms-cache-outofdate/DIAGNOSIS.md "How a row can DETECT a half-cold run"): Ogre's
+# line for a permutation whose shader compiled inside a frame, and HlmsCompute's for a job whose template was parsed inside one.
+# "built in the frame from CACHED shader code - a PSO only" is warm and never matches.
+_INFRAME = re.compile(r" - its shader COMPILED in the frame|HlmsCompute: job '.*' parsed its template in the frame \(")
 
 
 # THE VERDICTS A RECORD WRITES that are not green - the one list (verdict_of below writes all but NOADMIT, the admission
@@ -509,6 +520,24 @@ def _row_output(build, run_id, row, text):
         return None
 
 
+def _load1():
+    """The box's 1-minute load average now (/proc/loadavg, or $JAH_LOADAVG_FILE), or None."""
+    try:
+        with open(os.environ.get("JAH_LOADAVG_FILE") or "/proc/loadavg") as f:
+            return float(f.read().split()[0])
+    except (OSError, ValueError, IndexError):
+        return None
+
+
+def _cold_rows(build):
+    """The rows declared COLD (<build>/tests/test-cold-rows.txt, one `<row>\t...` line each): their first frames compile by law."""
+    try:
+        return {l.split("\t", 1)[0].strip() for l in open(os.path.join(build, "tests", "test-cold-rows.txt"), errors="replace")
+                if l.strip()}
+    except OSError:
+        return set()
+
+
 def refused_test_dir(cmd):
     """DEV_ERRORS 52: the --test-dir argument a ctest command carries, or None (ctest runs inside --build already)."""
     return next((c for c in cmd if c == "--test-dir" or c.startswith("--test-dir=")), None)
@@ -534,9 +563,21 @@ def run_ctest(cmd, build, tier, lane, echo=True):
     p = subprocess.Popen(vcmd, cwd=build, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
                          errors="replace")
     buf, size, pre, reds, lawbuf, late, armbuf = {}, {}, {}, [], {}, {}, {}
+    inframe, cold = {}, _cold_rows(build)
+    ncpu = len(os.sched_getaffinity(0)) if hasattr(os, "sched_getaffinity") else os.cpu_count()
+    loads, started, last = [], {}, 0.0    # (monotonic, load) samples of the whole call; a row's start index by name
     deps = None   # the last `Failed test dependencies:` names, for the next result line
     for line in p.stdout:
         ln = line.rstrip("\n")
+        now_m = time.monotonic()
+        if now_m - last >= 2.0:
+            last = now_m
+            ld = _load1()
+            if ld is not None:
+                loads.append(ld)
+        ms = _START.match(ln)
+        if ms:
+            started[ms.group(1)] = len(loads) - 1 if loads else 0
         md = _DEPS.match(ln)
         if md:
             deps = md.group(1).split()
@@ -554,6 +595,8 @@ def run_ctest(cmd, build, tier, lane, echo=True):
                 pre[i] = False
             if txt.lstrip().startswith("LAW"):
                 lawbuf.setdefault(i, []).append(txt)
+            if _INFRAME.search(txt):                        # past the output cap too (DEV_ERRORS 49)
+                inframe[i] = inframe.get(i, 0) + 1
             if _ARM.match(txt) or _ARM_BEGIN.match(txt):   # a pool's arm lines, past the cap too (TE7: run_pool echoes
                 armbuf.setdefault(i, []).append(txt)        # every arm's output, so a pool's output passes 256 KB)
             if size.get(i, 0) < OUTPUT_CAP:
@@ -573,6 +616,9 @@ def run_ctest(cmd, build, tier, lane, echo=True):
         behind, deps = deps, None
         text = "\n".join(buf.pop(i, []))
         laws, badlaws = laws_of("\n".join(lawbuf.pop(i, [])))
+        nframe = inframe.pop(i, 0)
+        ld = _load1()
+        mine = loads[started.pop(name, len(loads)):] + ([ld] if ld is not None else [])
         armtext = "\n".join(armbuf.pop(i, []))
         late_fail = late.pop(i, None)
         pre.pop(i, None); size.pop(i, None)
@@ -590,7 +636,10 @@ def run_ctest(cmd, build, tier, lane, echo=True):
                 "env": env_fingerprint(build),
                 "ts": datetime.datetime.now().astimezone().isoformat(timespec="seconds"), "source": "run"}
         v = verdict_of(status)
-        row = dict(base, arm=None, verdict=v, status=status.strip("* "), seconds=secs)
+        row = dict(base, arm=None, verdict=v, status=status.strip("* "), seconds=secs, inframe=nframe,
+                   load=round(sum(mine) / len(mine), 2) if mine else None, ncpu=ncpu)
+        if name in cold:
+            row["coldRow"] = True
         # NOT RUN BEHIND ITS FIXTURE (URGENT #123): a row ctest did not run because a row it needs is red is RECORDED so,
         # the rows it waited on named - ci_gate_check.py serve reads it served-red while they stay red at this tree, so a
         # plan never lists it to run again for nothing (8B's master check re-ran its part seven times: ~25 min of card)

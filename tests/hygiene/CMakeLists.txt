@@ -461,8 +461,9 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/law_records.py" "${CMAKE_SOURCE_DIR}/scripts/gate_runlog.py")
     set_tests_properties(tooling.law_records PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.law_records)
-    # tooling.runlog_facts — WHAT gate_runlog.py REFUSES AND HOW IT NAMES A RUN (DEV_ERRORS 52, URGENT #209): a ctest --test-dir
-    # refused by name; two calls together get two run ids (the pid) (runlog_facts.py; a fake ctest)
+    # tooling.runlog_facts — WHAT gate_runlog.py REFUSES AND WHAT A RECORD SAYS FOR A PRICE (DEV_ERRORS 49 + 52, URGENT #209): a
+    # ctest --test-dir refused by name; two calls together get two run ids (the pid); a row's in-frame shader compiles counted
+    # (`inframe`), a declared cold row marked, the load over the row and our CPUs recorded (runlog_facts.py; a fake ctest)
     add_test(NAME tooling.runlog_facts
              COMMAND ${Python3_EXECUTABLE} "${CMAKE_CURRENT_SOURCE_DIR}/runlog_facts.py" "${CMAKE_SOURCE_DIR}/scripts/gate_runlog.py")
     set_tests_properties(tooling.runlog_facts PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
