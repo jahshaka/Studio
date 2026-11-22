@@ -10,6 +10,7 @@
 #include "script/RouteDeclaration.h"   // the route declaration's judgement (engine-private, pure)
 
 #include <cstdio>
+#include <memory>
 #include <stdexcept>
 #include <string>
 
@@ -253,8 +254,9 @@ int main()
     for (const CommandInfo *c : eng.commands()) engineCommands += c->name.rfind("engine.", 0) == 0;
     check(engineCommands == 20 && eng.validate().empty(),
           "the 20 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
+    const Value fakeScene(eng.hold("scene", std::make_shared<int>(0))), fakeNode(eng.name("node", 1));
     check(failedWith(eng.call("engine.node.setTransform",
-                              {Value(1), Value(1), Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
+                              {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
                      "engine.node.setTransform: transform.position must hold 3 elements"),
           "a 2-element position FAILS by name (the host checks a vector's length, before the engine is asked)");
     check(failedWith(eng.call("engine.scene.create", {Value("s")}), "engine.scene.create: the engine did not start: no device here") &&
@@ -369,6 +371,73 @@ int main()
                   js.message.find("throws.js:2") != std::string::npos,
               "a command's C++ exception is a Failed call by name - catchable in JS, an uncaught one ends the run with "
               "its line (never terminate with no verdict)");
+    }
+
+    // 8. TYPED HANDLES (the final read's W1; the lead's S1): a handle carries its owner and its kind; a held one goes
+    //    stale when released; a named one (the engine's own id) is asked of its family's existence check
+    {
+        Registry a, other;
+        const auto make = [](Registry &r) {
+            r.add({"test.make", {{arg("kind", Kind::String)}, Kind::Int}, "a held int of that kind -> handle"},
+                  [](Call &c) { return c.hold(c[0].asString(), std::make_shared<int>(7)); });
+        };
+        make(a);
+        make(other);
+        a.add({"test.use", {{target(handle("scene", "scene"))}, Kind::Int}, "the held int"},
+              [](Call &c) { return Value(*c.object<int>(c[0])); });
+        a.add({"test.free", {{target(handle("scene", "scene"))}, Kind::Bool}, "releases it"},
+              [](Call &c) { return Value(c.registry().release(c[0].asInt())); });
+        a.add({"test.named", {{target(handle("scene", "scene")), object("o", {handle("node", "node")})}, Kind::Int},
+               "the node's engine id"},
+              [](Call &c) { return Value(std::int64_t(Call::idOf(c[1]["node"]))); });
+        a.add({"test.mint", {{arg("id", Kind::Int)}, Kind::Int, "node"}, "a node handle of that id"},
+              [](Call &c) { return c.name("node", (unsigned long long)c[0].asInt()); });
+        a.checkKind("node", [](const Call &, std::uint32_t id, std::string &why) {
+            if (id == 5) return true;
+            why = "node " + std::to_string(id) + " is not a node of the scene";
+            return false;
+        });
+        const Value scene = a.call("test.make", {Value("scene")}).value, view = a.call("test.make", {Value("view")}).value;
+        const Value foreign = other.call("test.make", {Value("scene")}).value;
+        const std::int64_t hs = scene.asInt();
+        check(a.validate().empty() && hs > 0 && hs < (std::int64_t(1) << 53) && a.call("test.use", {scene}).value == Value(7),
+              "a held handle is a plain script number (< 2^53) and names its object");
+        check(failedWith(a.call("test.use", {view}), "is a view handle, not a scene handle") &&
+                  failedWith(a.call("test.use", {Value(1)}), "1 is no scene handle of this host") &&
+                  failedWith(a.call("test.use", {foreign}), "is no scene handle of this host"),
+              "a view handle for a scene, a plain number, and ANOTHER HOST's scene handle each FAIL by name");
+        check(a.call("test.free", {scene}).value == Value(true) &&
+                  failedWith(a.call("test.use", {scene}), "is stale (its scene was released)"),
+              "a released handle is STALE by name");
+        const Value scene2 = a.call("test.make", {Value("scene")}).value;
+        const Value node5 = a.call("test.mint", {Value(5)}).value, node6 = a.call("test.mint", {Value(6)}).value;
+        const Value mesh(a.name("mesh", 5));
+        const auto named = [&](const Value &n) { return a.call("test.named", {scene2, Value(Value::Object{{"node", n}})}); };
+        check(named(node5).value == Value(5) && failedWith(named(node6), "test.named: node: node 6 is not a node of the scene"),
+              "a NAMED handle carries the engine's id; its existence check FAILS a dead or foreign id by name");
+        check(failedWith(named(mesh), "is a mesh handle, not a node handle"),
+              "a mesh handle where a node is declared FAILS by name (the kind is in the bits, no lookup)");
+        check(failedWith(a.call("test.mint", {Value(std::int64_t(1) << 32 | 5)}), "does not fit a handle's 32 bits"),
+              "an engine id over 2^32 - 1 is refused at minting (2^32 + 5 never becomes 5)");
+        check(signatureText(*a.find("test.named")) == "test.named(scene: target scene handle, o: object {node: node handle}) -> int" &&
+                  signatureText(*a.find("test.mint")) == "test.mint(id: int) -> node handle",
+              "the signature prints the handles' kinds: " + signatureText(*a.find("test.named")));
+        Host jsHost;
+        jsHost.setConsole([](const std::string &) {});
+        make(jsHost.registry());
+        jsHost.registry().add({"test.use", {{target(handle("scene", "scene"))}, Kind::Int}, "the held int"},
+                              [](Call &c) { return Value(*c.object<int>(c[0])); });
+        const Result js = jsHost.run("const s = test.make('scene'), v = test.make('view');\n"
+                                     "host.check({ok: test.use(s) === 7, what: 'a scene handle through JS'});\n"
+                                     "test.use(v);\n", "handles.js");
+        check(js.status == Status::Failed && jsHost.checksFailed() == 0 && js.message.find("handles.js:3") != std::string::npos &&
+                  js.message.find("is a view handle, not a scene handle") != std::string::npos,
+              "through JS a handle is a number that keeps its kind: the wrong kind FAILS with the script's line");
+        // the engine's own commands, no engine: a view handle bound as the scene FAILS before the command runs
+        const Value v(eng.hold("view", std::make_shared<int>(0)));
+        check(failedWith(eng.call("engine.view.setScene", {v, Value(Value::Object{{"scene", v}})}),
+                         "bind.scene: " + std::to_string(v.asInt()) + " is a view handle, not a scene handle"),
+              "engine.view.setScene(view, {scene: view}) FAILS by name (it bound the wrong object silently before)");
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
