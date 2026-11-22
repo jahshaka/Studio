@@ -57,7 +57,8 @@
 #   --key            THE TREE's SHADER KEY alone (below), printed, exit 0 - its one definition, read by a row that keeps
 #                    a cache of its own (shader.async_after_open.seed's stamp, URGENT #125), never a second formula.
 #   --cold-key       THE COLD ROWS' KEY alone, printed, exit 0 (TE-WARM-WHY (C): the key above with the fork COMMIT replaced by
-#                    the engine's three compile-path ids - "THE COLD ROWS' KEY" below, and what it does NOT cover); both keys
+#                    the engine's three compile-path ids and the fork's Hlms implementation by content - "THE COLD ROWS' KEY"
+#                    below, and what it does NOT cover); both keys
 #                    exit 2 on an unbuilt tree or a build-id header that cannot name an id.
 #   --tests-dir <d>  the shared cache's directory (default <build>/tests) - the guard row's own scratch.
 #   --app <exe>      the app the boot runs (default <build>/bin/Jahshaka) - the guard row's fake, which compiles nothing.
@@ -116,7 +117,7 @@
 #   warm_cold_rows.sh; SHIP-CUT-2 0b, URGENT #155: run all at once, a prime died out of GPU memory and was stamped).
 #   A STAMP PER ROW, written only for a run the runner judged PRIMED (it reached its own end; a seed fresh after it):
 #   <tests>/.cold-rows/<row>.driver-key - the COLD key (--cold-key: a fork commit outside ShaderCompilePath.txt moves the
-#   key above, never this one; NOT COVERED: a fork edit outside that list that changes generated shader text - "THE COLD
+#   key above, never this one; NOT COVERED: a fork edit outside that list and Components/Hlms that changes shader text - "THE COLD
 #   ROWS' KEY" below), the row's line digest (its command: a new or changed COLD row reads
 #   cold) and the BUILT digest, the size and time of every staged media file: what a row's own cache stamp keys on beyond
 #   this key (the seed's stamp is this key, all of bin/media by content and the fork's BUILT_FROM; never a binary's bytes -
@@ -218,22 +219,35 @@ KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
 # three ids (irisgl/cmake/ShaderCompilePath.txt, EngineBuildId.cmake: JAHSHAKA_COMPILE_PATH_{MICROCODE,PREPROCESSOR,COMPUTE}_ID).
 # The cold rows' stamps take key_inputs' lines with the fork commit REPLACED by those three ids; the rig KEY (the -off and -on
 # boots) and the seeds' staleness are unchanged. One function, cold_inputs(), swapped for the binary's printed identity when it
-# lands. NOT COVERED, by design and written here for the next reader: a fork edit OUTSIDE ShaderCompilePath.txt that changes
-# generated shader TEXT (an Hlms implementation's properties) moves no id - the cold row's driver then compiles those pipelines
-# under its cap, once (the same is true of every irisgl engine edit: the KEY holds only the cache's own code id). Such a file
-# BELONGS IN ShaderCompilePath.txt (the engine's own law there: "a fork commit that touches none of these costs no compile
-# anywhere"): a cold row caught compiling after a fork-only move is a FINDING - the file is added to the list.
+# lands. The fork's Hlms implementation (Components/Hlms) is a term of its own (below). NOT COVERED, by design and written here
+# for the next reader: a fork edit OUTSIDE ShaderCompilePath.txt and Components/Hlms that changes generated shader TEXT moves no
+# term - the fork's other property writers, read 2026-11-23: OgreMain's Forward+ family (OgreForwardPlusBase, OgreForward3D,
+# OgreForwardClustered), OgreHlmsLowLevel, OgreRadialDensityMask, Components/Atmosphere's OgreAtmosphereNpr - and the cold row's
+# driver then compiles those pipelines under its cap, once (slow, never wrongly green; the same is true of every irisgl engine
+# edit: the KEY holds only the cache's own code id). A cold row caught compiling after a move no term saw is a FINDING: its
+# file joins ShaderCompilePath.txt (the engine's own law there: "a fork commit that touches none of these costs no compile
+# anywhere") or this key's Hlms term, its toy red first.
 # IT FAILS CLOSED (the lead's ruling 2026-11-23), as key_inputs does for the code id: a header that cannot say one of the three
 # ids gives NO key (exit 2, --key too: a tree whose engine cannot say what its shaders are made from has no key to give) - never
 # a cold key that silently drops the fork's producers, and never the fork commit kept in its place (a fallback).
+# THE FORK's Hlms IMPLEMENTATION (the lead's ruling 2026-11-23, from TE-WARM-C's final read): Components/Hlms/{Pbs,Unlit,Common}
+# WRITE shader text - OgreHlmsPbs.cpp 139 setProperty/setPiece calls, OgreHlmsUnlit.cpp 50 - and are in no compile-path id (a
+# ShaderCompilePath group would re-parse the engine's cache too, which keys on the merged properties and needs no such term). The
+# cold key alone hashes them by content: every file under Components/Hlms/*/src and */include of the fork the build names
+# (CMakeCache OGRE_NEXT_SOURCE), by its path under Components/Hlms - the headers carry no piece or property TEXT (the IdString
+# names' strings are in src) but their enums, constants and inline code feed the values src sets. Failed closed like the ids.
 cold_inputs() {
-    local id="$BUILD/engine/generated/jahshaka_engine_build_id.h" g v
+    local id="$BUILD/engine/generated/jahshaka_engine_build_id.h" g v hd
     printf '%s\n' "$INPUTS" | grep -v '^fork '
     for g in MICROCODE PREPROCESSOR COMPUTE; do
         v=$(sed -n "s/^#define JAHSHAKA_COMPILE_PATH_${g}_ID \"\([0-9a-f]*\)\"$/\1/p" "$id")
         [ -n "$v" ] || { echo "warm-app-cache: no JAHSHAKA_COMPILE_PATH_${g}_ID in $id (build the tree first)" >&2; return 1; }
         echo "compile-$(echo "$g" | tr 'A-Z' 'a-z') $v"
     done
+    hd="$(sed -n 's/^OGRE_NEXT_SOURCE:PATH=//p' "$BUILD/CMakeCache.txt" 2>/dev/null | head -1)/Components/Hlms"
+    [ "$hd" != /Components/Hlms ] && [ -n "$(cd "$hd" 2>/dev/null && find . -mindepth 3 -path './*/src/*' -type f | head -1)" ] ||
+        { echo "warm-app-cache: no fork Hlms implementation at $hd (OGRE_NEXT_SOURCE in $BUILD/CMakeCache.txt; build the tree first)" >&2; return 1; }
+    echo "hlms-impl $(cd "$hd" && find . -mindepth 3 \( -path './*/src/*' -o -path './*/include/*' \) -type f -print0 | LC_ALL=C sort -z | xargs -0 sha256sum | sha256sum | cut -c1-64)"
 }
 COLD_INPUTS=$(cold_inputs) || exit 2
 CKEY=$(printf '%s\n' "$COLD_INPUTS" | sha256sum | cut -c1-16)

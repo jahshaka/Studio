@@ -33,6 +33,9 @@ toy_cache() {
     # build judge it; a toy build with no generated id judges none; P1-P3 and S9 write their own)
     [ -z "$RPASS" ] || printf 'pass=%s|media=m|cache=c\n' "$RPASS" > "$1/warm-pass.key"
 }
+# THE FORK's SOURCE, as the real build names it (CMakeCache OGRE_NEXT_SOURCE): the cold key hashes its Hlms implementation
+# (TE-WARM-C), so every toy build the key is computed on carries the line
+OGRE_LINE=$(grep -m1 '^OGRE_NEXT_SOURCE:PATH=' "$BUILD/CMakeCache.txt")
 RPASS=$(sed -n 's/^#define JAH_STARTUP_PASS_CODE_ID "\([0-9a-f]*\)"$/\1/p' "$BUILD/generated/jah_startup_pass_id.h" 2>/dev/null)
 toy_cache "$T/.shadercache" 1 2
 toy_cache "$T/.shadercache-engine" 1 2
@@ -88,7 +91,7 @@ chmod +x "$T/seqfx"; mkdir -p "$T/y" "$T/z"
 # THE STALE-RECORD TOY (the boots part's P1-P3 and the short part's B1-B4): a toy build warm at its key whose app cache's
 # startup-pass record names pass aaaa.. while the build's pass id is bbbb.. (sets B4, k4, i4)
 b4_toy() {
-    B4="$T/b4"; rm -rf "$B4"; mkdir -p "$B4/tests" "$B4/engine/generated" "$B4/generated" "$B4/bin/media"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2
+    B4="$T/b4"; rm -rf "$B4"; mkdir -p "$B4/tests" "$B4/engine/generated" "$B4/generated" "$B4/bin/media"; echo "$OGRE_LINE" > "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2
     cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B4/engine/generated/"; cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B4/bin/media/" 2>/dev/null
     printf '#define JAH_STARTUP_PASS_CODE_ID "%s"\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > "$B4/generated/jah_startup_pass_id.h"
     printf 'pass=%s|media=m|cache=c\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "$B4/tests/.shadercache/warm-pass.key"
@@ -236,7 +239,7 @@ ls "$T/gpu.lock.q" 2> /dev/null | grep -qE '^[0-9]{12}\.s50$' && ok "a boot that
 # the startup pass's record untouched, the same inodes). (red on the old script: "a TOP-UP", a boot whose promotion dropped
 # the hlms and compute layers) This toy build has NO generated pass id: its record is not judged - the real engine id is a
 # term of the pass id, and a moved pass id is the case below (P1-P3), one boot that keeps the union
-B2="$T/b2"; mkdir -p "$B2/tests" "$B2/engine/generated" "$B2/bin/media"; touch "$B2/CMakeCache.txt"; toy_cache "$B2/tests/.shadercache" 1 2
+B2="$T/b2"; mkdir -p "$B2/tests" "$B2/engine/generated" "$B2/bin/media"; echo "$OGRE_LINE" > "$B2/CMakeCache.txt"; toy_cache "$B2/tests/.shadercache" 1 2
 cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B2/engine/generated/"; cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B2/bin/media/" 2>/dev/null
 printf 'pass=an-earlier-boot\n' > "$B2/tests/.shadercache/warm-pass.key"
 k2=$("$W" "$B2" --key); printf '%s\n%s\n%s\n' "$k2" "k1 k2 " "sets none" > "$B2/tests/.shadercache.warm-key"
@@ -271,7 +274,7 @@ out=$(P4); rc=$?
     ok "P3: the next call is warm at the key and boots nothing (the control: an equal record)" ||
     no "P3 after the refresh: rc $rc '$out' pass [$(tr '\n' ' ' < "$T/b4.pass")]"
 # A COVERAGE BUILD's BOOT WRITES ITS PROFILE UNDER coverage/boots/<boot> (the 2a audit's finding 1; red before: nothing set it)
-B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n' > "$B3/CMakeCache.txt"; toy_cache "$B3/tests/.shadercache" 1 2
+B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n%s\n' "$OGRE_LINE" > "$B3/CMakeCache.txt"; toy_cache "$B3/tests/.shadercache" 1 2
 printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/covapp"; chmod +x "$T/covapp"
 mkdir -p "$B3/engine/generated" "$B3/bin/media"; cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B3/engine/generated/"
 cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B3/bin/media/" 2>/dev/null
@@ -334,7 +337,7 @@ out=$(B4P old-media FAKE_SHADERS=3); rc=$?
 # THE BOOT's OWN WALL (block A, 2026-11-03: "the boot 75 s" was 27.5 s of the card's wait + 47.5 s of boot): another holder keeps
 # the card 2 s past the call's ticket, the toy boot takes ~0 s - the line prints the boot's own wall and the wait beside it (red
 # before: "the boot 3 s")
-B4="$T/b4"; mkdir -p "$B4/tests"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2   # (cold: no warm-up recorded)
+B4="$T/b4"; mkdir -p "$B4/tests"; echo "$OGRE_LINE" > "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2   # (cold: no warm-up recorded)
 # (RED ONCE UNDER -j4, 2026-11-03, two races: (1) the walls were whole seconds and the wait floored - "own = wall - wait"
 # read 2 s for a 0.4-s boot when the 2.1 s spanned three second boundaries; both are tenths now; (2) "sleep 0.3" assumed the
 # holder had the lock by then - a loaded box can start the call first (wait 0): the call now starts only once the holder has
@@ -486,7 +489,7 @@ toy_tree() {   # <dir>: a toy build the key reads, a cold row under it
     local b="$1/build"
     mkdir -p "$b/engine/generated" "$b/bin/media/Hlms" "$b/bin/media/Photon" "$b/bin/media/x" "$b/tests/row" "$b/tests/.shadercache"
     cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$b/engine/generated/"
-    printf 'CMAKE_BUILD_TYPE:STRING=Debug\n' > "$b/CMakeCache.txt"
+    printf 'CMAKE_BUILD_TYPE:STRING=Debug\n%s\n' "$OGRE_LINE" > "$b/CMakeCache.txt"
     printf 'h' > "$b/bin/media/Hlms/a.any"; printf 'p' > "$b/bin/media/Photon/b.any"; printf 'x' > "$b/bin/media/x/c.png"
     printf '#!/bin/sh\nexit 0\n' > "$b/tests/row/fx"; chmod +x "$b/tests/row/fx"
     printf 'p.cold\t%s\t-JAH_X\tenv\t__GL_SHADER_DISK_CACHE_PATH=%s\t%s\t--in\t%s\n' "$b/tests/row" "$b/tests/row/dc" "$b/tests/row/fx" \
@@ -583,6 +586,26 @@ cp "$T/id.bak" "$KB/engine/generated/jahshaka_engine_build_id.h"
 [ -z "$c3" ] && [ "$("$W" "$KB" --cold-key)" = "$ck" ] && [ "$("$W" "$KB" --key)" = "$kk" ] &&
     ok "C3: a header without a compile-path id: --cold-key and --key exit 2 naming it (each of the three); the whole header gives both keys" ||
     no "C3 the cold key fails closed: [$c3] ($("$W" "$KB" --cold-key 2>&1))"
+# C4 THE FORK's Hlms IMPLEMENTATION IS A TERM OF THE COLD KEY (the lead's ruling 2026-11-23, from the final read: OgreHlmsPbs.cpp
+# and OgreHlmsUnlit.cpp WRITE shader text - setProperty/setPiece - and are in no compile-path id): the toy build's fork is a toy
+# tree (OGRE_NEXT_SOURCE) - an edit of a fork file OUTSIDE Components/Hlms (OgreMain) leaves the cold key equal; an edit of
+# Components/Hlms/*/src and of */include moves it, a cold row naming the term (hlms-impl); a fork with no Components/Hlms gives
+# no key (exit 2, failed closed). (red before: the src edit moved nothing, the missing tree gave a key)
+FK="$T/fork4"; mkdir -p "$FK/OgreMain/src" "$FK/Components/Hlms/Pbs/src" "$FK/Components/Hlms/Pbs/include"
+printf 'log 1' > "$FK/OgreMain/src/OgreLog.cpp"; printf 'pbs 1' > "$FK/Components/Hlms/Pbs/src/OgreHlmsPbs.cpp"
+printf 'hdr 1' > "$FK/Components/Hlms/Pbs/include/OgreHlmsPbs.h"
+cp "$KB/CMakeCache.txt" "$T/kcache.bak"; printf 'CMAKE_BUILD_TYPE:STRING=Debug\nOGRE_NEXT_SOURCE:PATH=%s\n' "$FK" > "$KB/CMakeCache.txt"
+c40=$("$W" "$KB" --cold-key); k40=$("$W" "$KB" --key)
+printf 'log 2' > "$FK/OgreMain/src/OgreLog.cpp"; c41=$("$W" "$KB" --cold-key)
+printf 'pbs 2' > "$FK/Components/Hlms/Pbs/src/OgreHlmsPbs.cpp"; c42=$("$W" "$KB" --cold-key)
+o=$("$W" "$KB" --check "${KX[@]}" --only cold-on)
+printf 'hdr 2' > "$FK/Components/Hlms/Pbs/include/OgreHlmsPbs.h"; c43=$("$W" "$KB" --cold-key); k43=$("$W" "$KB" --key)
+mv "$FK/Components" "$FK/Components.gone"; e=$("$W" "$KB" --cold-key 2>&1 >/dev/null); r=$?
+mv "$FK/Components.gone" "$FK/Components"; cp "$T/kcache.bak" "$KB/CMakeCache.txt"
+[ -n "$c40" ] && [ "$c41" = "$c40" ] && [ "$c42" != "$c41" ] && [ "$c43" != "$c42" ] && [ "$k43" = "$k40" ] &&
+    echo "$o" | grep -q "moved: .*hlms-impl" && [ $r = 2 ] && echo "$e" | grep -q "no fork Hlms implementation" &&
+    ok "C4: the fork's Hlms implementation is a cold-key term - an OgreMain edit leaves it equal, a Components/Hlms src or include edit moves it (named hlms-impl), the rig key unmoved by either; no Components/Hlms: exit 2" ||
+    no "C4 the Hlms implementation term: keys [$c40 $c41 $c42 $c43] rig [$k40 $k43] '$(echo "$o" | head -1 | cut -c1-200)' missing rc $r '$e'"
 fi
 if want inherit; then
 # THE INHERITANCE (TEST-STREAMLINE-1 1a; the reader's I1-I7; WARM-SHARE-1 B4): a parent toy tree warm at its key (both shared
@@ -594,7 +617,7 @@ if want inherit; then
     local b="$1/build"
     mkdir -p "$b/engine/generated" "$b/bin/media/Hlms" "$b/bin/media/Photon" "$b/bin/media/x" "$b/tests/row" "$b/tests/.shadercache"
     cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$b/engine/generated/"
-    printf 'CMAKE_BUILD_TYPE:STRING=Debug\n' > "$b/CMakeCache.txt"
+    printf 'CMAKE_BUILD_TYPE:STRING=Debug\n%s\n' "$OGRE_LINE" > "$b/CMakeCache.txt"
     printf 'h' > "$b/bin/media/Hlms/a.any"; printf 'p' > "$b/bin/media/Photon/b.any"; printf 'x' > "$b/bin/media/x/c.png"
     printf '#!/bin/sh\nexit 0\n' > "$b/tests/row/fx"; chmod +x "$b/tests/row/fx"
     printf 'p.cold\t%s\t-JAH_X\tenv\t__GL_SHADER_DISK_CACHE_PATH=%s\t%s\t--in\t%s\n' "$b/tests/row" "$b/tests/row/dc" "$b/tests/row/fx" \
@@ -655,7 +678,7 @@ if want store; then
     local b="$1/build"
     mkdir -p "$b/engine/generated" "$b/bin/media/Hlms" "$b/bin/media/Photon" "$b/bin/media/x" "$b/tests/.shadercache"
     cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$b/engine/generated/"
-    printf 'CMAKE_BUILD_TYPE:STRING=Debug\n' > "$b/CMakeCache.txt"
+    printf 'CMAKE_BUILD_TYPE:STRING=Debug\n%s\n' "$OGRE_LINE" > "$b/CMakeCache.txt"
     printf 'h' > "$b/bin/media/Hlms/a.any"; printf 'p' > "$b/bin/media/Photon/b.any"; printf 'x' > "$b/bin/media/x/c.png"
 }
 ST="$T/store"; mkdir -p "$ST"
