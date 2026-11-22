@@ -234,6 +234,10 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         // stamp inside the demand window that build opened.
         bool cardsBuiltSeen = false;
         unsigned buildsAtCardBuild = 0u;
+        // ...AND THE LAST FRAME THAT WAS INCOMPLETE (the card line): the cache's frame of the last gate frame whose views
+        // drew a placeholder, and of the last that skipped a pending draw (AsyncShaderStats: the views' draws, the
+        // capture's excluded) - a reader on a placeholder (rough 0.8) traces no reflection ray and stamps nothing
+        unsigned long long placeholdersSeen = 0ull, skipsSeen = 0ull, lastPlaceholderFrame = 0ull, lastSkipFrame = 0ull;
         auto frame = [&]() {
             SceneMirror::FrameView fv;
             fv.view = view;
@@ -249,6 +253,14 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             if (!cardsBuiltSeen && es->published().gi.cards.built) {
                 cardsBuiltSeen = true;
                 buildsAtCardBuild = engine.published().shaders.rayBuildsInFlight;
+            }
+            {
+                const AsyncShaderStats &as = engine.published().shaders;
+                const unsigned long long cacheFrame = es->published().gi.cards.cacheFrame;
+                if (as.placeholderDraws != placeholdersSeen) lastPlaceholderFrame = cacheFrame;
+                if (as.pendingSkips != skipsSeen) lastSkipFrame = cacheFrame;
+                placeholdersSeen = as.placeholderDraws;
+                skipsSeen = as.pendingSkips;
             }
             ++frames;
             poll();
@@ -327,13 +339,13 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             qInfo("startup shader build: the %s world's %s: a Complete tail of %d frames, %lld ms, the longest frame %lld ms;"
                   " its cards %s, admitted %llu, captured %llu, queued %u, resident %u; demand: cache frame %llu, changed"
                   " %llu, first %llu/%llu, newest %llu/%llu, rest decisions %llu (readers %u, admitted %u), ray builds in"
-                  " flight at the cache's build %u",
+                  " flight at the cache's build %u, the last placeholder at %llu, the last pending skip at %llu",
                   es->name().c_str(), what, tail.frames(), static_cast<long long>(wall.elapsed()),
                   static_cast<long long>(longest), gi.cards.built ? "built" : "NOT BUILT", gi.cards.admitted,
                   gi.cards.captures, gi.cards.queueLength, gi.cards.cardsResident, gi.cards.cacheFrame,
                   gi.cards.demandChangeFrame, gi.cards.demandFirst[0], gi.cards.demandFirst[1], gi.cards.demandNewest[0],
                   gi.cards.demandNewest[1], gi.cards.restDecisions, gi.cards.decisionReaders, gi.cards.decisionAdmitted,
-                  buildsAtCardBuild);
+                  buildsAtCardBuild, lastPlaceholderFrame, lastSkipFrame);
             if (tail.failed())   // the cap, never a silent pass
                 qWarning("FAIL: shader build gate: the %s world's %s Complete tail did not go quiet in %d frames - %s",
                          es->name().c_str(), what, gatesettle::Tail::kCap, settle.describe().c_str());
