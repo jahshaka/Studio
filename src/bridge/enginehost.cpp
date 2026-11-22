@@ -499,6 +499,15 @@ void EngineHost::startShaderCacheWatchdog()
     mCacheWatchdog->start();
 }
 
+void EngineHost::shaderCacheSaved()
+{
+    if (!mEngine) return;
+    unsigned compiled = 0, cached = 0, expected = 0;
+    mEngine->shaderBuildProgress(compiled, cached, expected);
+    mShadersSeen = mShadersSaved = compiled + cached;
+    mQuietTicks = 0;
+}
+
 void EngineHost::shutdown()
 {
     if (mCacheWatchdog) { mCacheWatchdog->stop(); delete mCacheWatchdog; mCacheWatchdog = nullptr; }

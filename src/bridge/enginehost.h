@@ -64,6 +64,9 @@ public:
     /// it a crash (or a pkill, which this codebase's history is full of) throws
     /// away the whole session's compile work. Idempotent.
     void startShaderCacheWatchdog();
+    /// The startup gate's save has landed (shaderbuildgate.cpp): what it saved is the watchdog's baseline, so the first
+    /// quiet ticks do not save it again.
+    void shaderCacheSaved();
 
     /// Creates the Engine and its render driver (idempotent: true if already
     /// running). Requires the xcb platform and a QApplication. The driver is

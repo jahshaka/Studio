@@ -106,7 +106,7 @@ int finish(int rc)
 /// row's log - the cold run's 60-s TIMEOUTs on two master checks recorded an EMPTY output (this launcher printed only
 /// after the app exited, into a fully buffered pipe).
 QJsonObject runApp(const QString &home, const QString &script, const QStringList &extraArgs,
-                   int *exitCodeOut)
+                   int *exitCodeOut, const QByteArray &killOn = QByteArray(), bool *killedOut = nullptr)
 {
     QProcess app;
     QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
@@ -133,10 +133,18 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     app.start(QStringLiteral(JAHSHAKA_BINARY), QStringList() << extraArgs << "--script" << script);
     if (!app.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); ++failures; return {}; }
     QByteArray all;
-    const auto forward = [&all, &app](bool rest) {
+    // THE HARNESS's KILL (shadercache.app.killed): SIGKILL the moment the app prints `killOn` - no quit, no save, no
+    // exit handler; what is on disk then is what the app had written by that line.
+    bool killed = false;
+    const auto forward = [&all, &app, &killOn, &killed](bool rest) {
         while (app.canReadLine() || (rest && app.bytesAvailable() > 0)) {
             const QByteArray line = app.canReadLine() ? app.readLine() : app.readAll();
             all += line;
+            if (!killed && !killOn.isEmpty() && line.contains(killOn)) {
+                app.kill();
+                killed = true;
+                std::printf("    | ---- the harness KILLED the app on this line ----\n");
+            }
             if (line.contains("Freetype returned null")) continue;   // (the overlay font's 160 lines of noise)
             std::printf("    | %s%s", line.constData(), line.endsWith('\n') ? "" : "\n");
         }
@@ -155,6 +163,7 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
         return {};
     }
     forward(true);
+    if (killedOut) *killedOut = killed;
     if (exitCodeOut) *exitCodeOut = app.exitCode();
     std::printf("   launch %s: %.1f s\n", qPrintable(QFileInfo(script).fileName()), launch.elapsed() / 1000.0);
     const QString out = QString::fromUtf8(all);
@@ -176,14 +185,17 @@ int main(int argc, char **argv)
     const QString mode = argc > 1 ? QString::fromLocal8Bit(argv[1]) : QString();
     const bool clearedRow = mode == QStringLiteral("--cleared");
     const bool coldRow = mode == QStringLiteral("--cold"), warmRow = mode == QStringLiteral("--warm");
-    if (!churnRow && !clearedRow && !coldRow && !warmRow && mode != QStringLiteral("--clean")) {
-        std::printf("usage: test_shader_cache_app --cold | --warm | --cleared | --clean | --churn (one row a launch, "
-                    "URGENT #136)\n");
+    const bool killedRow = mode == QStringLiteral("--killed");
+    if (!churnRow && !clearedRow && !coldRow && !warmRow && !killedRow && mode != QStringLiteral("--clean")) {
+        std::printf("usage: test_shader_cache_app --cold | --warm | --cleared | --clean | --killed | --churn (one row a "
+                    "launch, URGENT #136)\n");
         return 64;
     }
 
     const QString home = QDir::current().absoluteFilePath(
-        churnRow ? QStringLiteral("e2e-home-shadercache-churn") : QStringLiteral("e2e-home-shadercache"));
+        churnRow    ? QStringLiteral("e2e-home-shadercache-churn")
+        : killedRow ? QStringLiteral("e2e-home-shadercache-killed")
+                    : QStringLiteral("e2e-home-shadercache"));
     if (mode == QStringLiteral("--clean")) {
         // THE FIXTURE's CLEANUP (shadercache.app.clean): the home the cold, warm and cleared rows shared, removed after every
         // part that ran - no launch, no card. A PART THAT DID NOT END GREEN (red, or killed at the cap: its `.started`
@@ -215,7 +227,7 @@ int main(int argc, char **argv)
     // run 1 never starts (main's build-linux, 2026-10-20, a home from an earlier schema; FORWARD-BUILDING: app data is
     // wiped at a format bump, and a row owns its own state).
     // (shadercache.app.warm and .cleared keep it: their subject is the cache the row before left)
-    if (churnRow || coldRow) {
+    if (churnRow || coldRow || killedRow) {
         QDir(home + "/.local/share/Jahshaka").removeRecursively();
         QFile::remove(home + "/cold-run.json");
     }
@@ -332,6 +344,30 @@ int main(int argc, char **argv)
         return finish(failures ? 1 : 0);
     }
 
+    if (killedRow) {
+        // ---- shadercache.app.killed: A FIRST LAUNCH KILLED RIGHT AFTER ITS GATE KEEPS WHAT THE GATE COMPILED -----
+        // (SHADER-SYSTEM-1 stage 7a, call 9.) A wiped data root; the harness SIGKILLs the app the moment it prints the
+        // gate's last line (no quit, no clean-quit save, no exit handler) and reads the cache directory. Red before the
+        // gate's own save: the host's watchdog saves a burst only after three quiet seconds and starts after the gate, so
+        // the cold-wipe's first launch, killed 2.4 s after its gate, kept only cache.lock and warm-pass.key (318 compiles
+        // lost: spikes/cold-wipe/launch1-appcache-after.txt). Its home is its own: its data root wiped at its start and after a green end.
+        bool killed = false;
+        runApp(home, scripts + "e2e_shader_cache_killed.js", {}, &rc, QByteArrayLiteral(" from cache) in "), &killed);
+        CHECK(killed, "the harness killed the app on the startup gate's last line");
+        const QString dir = home + QStringLiteral("/.local/share/Jahshaka/shadercache");
+        const QStringList files = QDir(dir).entryList(QDir::Files, QDir::Name);
+        std::printf("   on disk after the kill: %s\n", qPrintable(files.join(QStringLiteral(" "))));
+        const bool manifest = QFileInfo(dir + QStringLiteral("/cache-manifest.txt")).size() > 0;
+        const bool microcode = QFileInfo(dir + QStringLiteral("/microcode.cache")).size() > 0;
+        int recipes = 0;
+        for (const QString &f : files) recipes += f.startsWith(QStringLiteral("hlms.")) && f.endsWith(QStringLiteral(".bin")) ? 1 : 0;
+        CHECK(manifest && microcode && recipes > 0,
+              "a launch killed right after its gate kept the gate's layers: the manifest, the microcode, the recipes");
+        if (!failures) QDir(home + QStringLiteral("/.local/share/Jahshaka")).removeRecursively();   // a red keeps it
+        std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
+        return finish(failures ? 1 : 0);
+    }
+
     if (clearedRow) {
         // ---- run 3: --clear-shader-cache (shadercache.app.cleared) ------------
         // ITS START IS A WARM CACHE: the one run 2 (shadercache.app.warm) loaded and saved (the fixture chain).
@@ -389,8 +425,20 @@ int main(int argc, char **argv)
     // before the window, so by the time a script runs, the shaders are built.
     CHECK(cold.value("compiledThisRun").toInt() > 0,
           "run 1 compiled its shaders during startup, before the script ran");
-    CHECK(cold.value("expectedShaders").toInt() == 0,
-          "a first-ever run has no progress denominator yet");
+    // THE GATE's WORK IS ON DISK BEFORE THE SCRIPT's FIRST ACT (SHADER-SYSTEM-1 stage 7a, call 9): the object is the
+    // script's FIRST verb, read before it saves anything itself. Red before the gate's save: the host's watchdog saves only
+    // after three quiet seconds and starts after the gate (written 0, no denominator yet). The save's count is the
+    // session's (the next launch's denominator), never more than this run built or served.
+    {
+        const QJsonObject save = cold.value("save").toObject();
+        const int expected = cold.value("expectedShaders").toInt();
+        const int total = cold.value("compiledThisRun").toInt() + cold.value("loadedThisRun").toInt();
+        std::printf("   run 1 at the script's first act: saves written %d, denominator %d of %d\n",
+                    save.value("written").toInt(), expected, total);
+        CHECK(save.value("written").toInt() >= 1, "the startup gate's save had landed before the script's first act");
+        CHECK(expected > 0 && expected <= total,
+              "the gate's save recorded this session's count as the next launch's denominator");
+    }
     // The script also asserted save -> files, clear -> no files; it prints its
     // own ok:/FAIL: lines, which the exit code folds in.
     CHECK(cold.value("afterSaveFiles").toInt() > 0, "app.saveShaderCache() wrote files");
@@ -454,6 +502,14 @@ int warmLaws(const QString &home, const QString &scripts, const QJsonObject &col
     CHECK(warm.value("hlmsCachesLoaded").toInt() > 0, "the Hlms layer loaded");
     CHECK(warm.value("expectedShaders").toInt() > 0,
           "the progress counter has a denominator on the second launch");
+    // A GATE THAT COMPILED NOTHING SAVES NOTHING AND ADDS NOTHING (SHADER-SYSTEM-1 stage 7a, the lead's condition): no
+    // save at the gate - none written before the script's first act, and the gate's own line says so (run 1's gate saved:
+    // its first-act law in --cold).
+    CHECK(warm.value("compiledThisRun").toInt() > 0 || warm.value("save").toObject().value("written").toInt() == 0,
+          "a warm gate that compiled nothing wrote no save before the script's first act");
+    CHECK(warm.value("compiledThisRun").toInt() > 0 ||
+              gLastOutput.contains(QStringLiteral("the gate compiled nothing - no save at the gate (0 frames)")),
+          "a warm gate that compiled nothing says it saved nothing (0 frames added)");
     CHECK(warm.value("fingerprint").toString() == cold.value("fingerprint").toString(),
           "the fingerprint is stable between launches");
     // THE LOG NAMES THE KEYS A RUN READ AT (URGENT #126, HARNESS-4): one line per boot, the directory and this build's

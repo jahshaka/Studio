@@ -39,6 +39,7 @@
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QThread>
 
 #include <cstdio>
 #include "jahshaka/engine/Camera.h"
@@ -1025,6 +1026,43 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         if (!settled(true)) continue;
         ++settledFrames;
         if (last == before) break;
+    }
+
+    // THE GATE's WORK IS SAVED WHEN IT RETURNS (SHADER-SYSTEM-1 stage 7a, call 9). The host's watchdog saves a burst only
+    // after three quiet seconds, and it starts after the gate (main.cpp): a first launch killed 2.4 s after its gate lost
+    // all 318 compiles (spikes/cold-wipe L1). The gate has settled here - the watchdog's own condition - so a gate that
+    // COMPILED posts its save now, ONCE: the cache's own job (its copy in chunks on the frames below, its write on the
+    // cache's writer), and the gate returns when it has landed (ShaderCacheStats::saveInFlight), frames flowing and the
+    // window answering; the watchdog takes it as its baseline (EngineHost::shaderCacheSaved). A gate that compiled
+    // nothing saves nothing and adds nothing (its stamps are the watchdog's, as before: the eviction law writes them in
+    // the sidecar alone). The wait is BOUNDED by kGateSaveWaitMs - a hang guard on the writer's wall-clock work (an
+    // fsync measured up to 403 ms behind writeback), never a settle: past it a FAIL line and the gate opens, the write
+    // still landing. A gate that did not settle leaves the save to the watchdog: its work is still landing.
+    constexpr long long kGateSaveWaitMs = 10000;
+    engine->shaderBuildProgress(compiled, cached, expected);
+    if (compiled == 0) {
+        qInfo("startup shader build: the gate compiled nothing - no save at the gate (0 frames)");
+    } else if (!settle.failed(true)) {
+        engine->saveShaderCache();
+        bool inFlight = true;
+        int saveFrames = 0;
+        QElapsedTimer saveTimer; saveTimer.start();
+        while (inFlight && saveTimer.elapsed() < kGateSaveWaitMs && !settle.pastCeiling()) {
+            gateFrame(*engine);
+            poll();
+            ++saveFrames;
+            engine->request([&](Engine &e) { inFlight = e.shaderCacheStats().saveInFlight; });   // a REQUEST (U3 stage 3)
+            // ...and NO SPIN while it lands: an empty gate frame costs ~0.05 ms (measured: 3,506 frames for a 153-ms
+            // save), and only the copy's chunks need frames - the write is the writer's
+            if (inFlight) QThread::msleep(1);
+        }
+        if (inFlight)
+            qWarning("FAIL: shader build gate: its save did not land in %lld ms (%d frames) - the gate opens, the write "
+                     "still in flight", kGateSaveWaitMs, saveFrames);
+        else
+            EngineHost::instance().shaderCacheSaved();
+        qInfo("startup shader build: the gate's save of %u compiled shader(s) took %d frames, %lld ms", compiled,
+              saveFrames, static_cast<long long>(saveTimer.elapsed()));
     }
 
     if (shown) splash.showShaderBuild(-1, 0);

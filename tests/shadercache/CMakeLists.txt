@@ -78,6 +78,17 @@ set_tests_properties(shadercache.app.clean PROPERTIES TIMEOUT 60 LABELS "shaderc
     FIXTURES_CLEANUP "shadercacheAppCold;shadercacheAppWarm")
 jah_no_display(shadercache.app.clean)
 jah_ship_row(shadercache.app.clean)   # THE SHIP SET (TEST-CUT-1): the cleanup of two ship rows' fixtures
+# shadercache.app.killed (SHADER-SYSTEM-1 stage 7a, call 9) - A FIRST LAUNCH KILLED RIGHT AFTER ITS GATE KEEPS WHAT THE GATE
+# COMPILED: a wiped data root, SIGKILLed by the harness on the gate's last line, its cache directory read (the manifest,
+# the microcode, the recipes). Its own home and its own driver cache (written by this row only), primed COLD like .cold's.
+set(_scdriverkilled ${CMAKE_CURRENT_BINARY_DIR}/app-driver-cache-killed)
+file(MAKE_DIRECTORY ${_scdriverkilled})
+# FRAMES: the startup gate's frames of a cleared launch (measured 2026-11-22: 425 GI + 1,077 Basic + 438 World + its save's).
+jah_gpu_row(shadercache.app.killed CLASS app TIER document FRAMES 2100
+         COLD "a wiped data root is the subject (what the gate wrote before the kill) - its driver cache is its own, primed here"
+         COMMAND env __GL_SHADER_DISK_CACHE_PATH=${_scdriverkilled} $<TARGET_FILE:test_shader_cache_app> --killed
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(shadercache.app.killed PROPERTIES TIMEOUT 60 LABELS "shadercache")
 
 # shader.async_after_open (ASYNC-SHADERS-1): after a project is open, a new material and a tier
 # change compile in the BACKGROUND — 0 UI-thread compiles, the placeholder in the presented

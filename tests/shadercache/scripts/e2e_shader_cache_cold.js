@@ -2,6 +2,7 @@
 // removes it, and the session carries on with its cache deleted underneath it.
 // The driver (test_shader_cache_app.cpp) asserts on the object printed last.
 
+// THE FIRST ACT: read before this script saves anything, so s.save says what the startup gate's own save left on disk.
 var s = app.shaderCache();
 if (!s.enabled) throw new Error("shader cache disabled in a default session");
 // THE COMPUTE COUNTERS' NEGATIVE CONTROL (SHADER-SYSTEM-1, the start preflight's F7): a cold launch parsed compute
