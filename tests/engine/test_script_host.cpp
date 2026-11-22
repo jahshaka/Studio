@@ -19,6 +19,11 @@
 #include <memory>
 #include <stdexcept>
 #include <string>
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Published.h"
 
 using namespace jahshaka::engine;
 using namespace jahshaka::engine::script;
