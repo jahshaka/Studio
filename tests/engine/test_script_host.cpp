@@ -1372,6 +1372,79 @@ int main()
         if (again) headless->destroyScene(again);
         headless->destroyScene(handed);
     }
+    // 14c. A HANDED-IN SCENE's OWN OBJECTS ARE READ-ONLY TO A SCRIPT (2b's final read L-a; the lead's ruling (ii)): a
+    //      handle is computable (owner | kind | id), so a script can name its owner's node, mesh and material. A command
+    //      CHANGES or DESTROYS only what its own host made there (the per-scene made record is the authority): the
+    //      owner's node moved (setTransform, setTransforms), re-drawn (attachMesh) or removed, its mesh and material
+    //      removed, and the scene's own settings (setAmbient, gi.set) each FAIL by name, and the owner's objects are all
+    //      present and unmoved after. THE CONTROL: the script's OWN node in the same scene moves, draws and is
+    //      destroyed. (A handed-in VIEW is the script's to drive, not to destroy: script.view_ownership, on the card.)
+    {
+        Scene *handed = headless->createScene("owner-world");
+        const NodeId ownerNode = handed->createNode();
+        const MeshId ownerMesh = handed->createMesh(enginetest::unitCubeMesh());
+        const MaterialId ownerMat = handed->createPbrMaterial(PbrParams{});
+        handed->setNodeTransform(ownerNode, Vec3(0, 0, 0), Quat(), Vec3(1, 1, 1));
+        NodeId mineId = 0;
+        bool moved = false;
+        Result r;
+        std::vector<std::string> said;
+        {
+            Host guest;
+            guest.setConsole([&said](const std::string &l) { said.push_back(l); });
+            registerEngineCommands(guest, headless.get(), bootError, false);
+            const Value h(guest.registry().hold("scene", std::shared_ptr<Scene>(handed, [](Scene *) {})));
+            r = guest.run(
+                "const s = " + std::to_string(h.asInt()) + ";\n"
+                "const caught = (f) => { try { f(); return 'no failure'; } catch (e) { return e.message; } };\n"
+                "const forge = (own, id) => Math.floor(own / 2 ** 32) * 2 ** 32 + id;\n"
+                "const node = engine.node.create(s), gone = engine.node.create(s);\n"
+                "const mesh = engine.mesh.unitCube(s), material = engine.material.createPbr(s, {});\n"
+                "const theirs = forge(node, " + std::to_string(ownerNode) + ");\n"
+                "console.log(caught(() => engine.node.setTransform(s, theirs, {position: [5, 5, 5]})));\n"
+                "console.log(caught(() => engine.node.setTransforms(s, {nodes: [node, theirs], positions: [1, 2, 3, 5, 5, 5]})));\n"
+                "console.log(caught(() => engine.node.attachMesh(s, theirs, {mesh, material})));\n"
+                "console.log(caught(() => engine.node.destroy(s, theirs)));\n"
+                "console.log(caught(() => engine.mesh.destroy(s, forge(mesh, " + std::to_string(ownerMesh) + "))));\n"
+                "console.log(caught(() => engine.material.destroy(s, forge(material, " + std::to_string(ownerMat) + "))));\n"
+                "console.log(caught(() => engine.scene.setAmbient(s, {upper: [1, 1, 1], lower: [0, 0, 0]})));\n"
+                "console.log(caught(() => engine.gi.set(s, {mode: 'off', cascades: []})));\n"
+                "engine.node.setTransform(s, node, {position: [1, 2, 3]});\n"
+                "engine.node.attachMesh(s, node, {mesh, material});\n"
+                "console.log(engine.node.destroy(s, gone), node % 2 ** 32);\n",
+                "readonly.js");
+            if (said.size() == 9) mineId = NodeId(std::stoull(said[8].substr(said[8].find(' ') + 1)));
+            Vec3 p;
+            Quat q;
+            moved = mineId && handed->nodeWorldPose(mineId, p, q) && p.x == 1.0f && p.y == 2.0f && p.z == 3.0f;
+        }
+        const std::string owner = "the scene 'owner-world' was handed in by the host's owner";
+        const std::string want[] = {"node " + std::to_string(ownerNode) + " is not this host's to change: " + owner,
+                                    "node " + std::to_string(ownerNode) + " is not this host's to change: " + owner,
+                                    "node " + std::to_string(ownerNode) + " is not this host's to change: " + owner,
+                                    "node " + std::to_string(ownerNode) + " is not this host's to destroy: " + owner,
+                                    "mesh " + std::to_string(ownerMesh) + " is not this host's to destroy: " + owner,
+                                    "material " + std::to_string(ownerMat) + " is not this host's to destroy: " + owner,
+                                    owner + ": its settings are not this host's to change",
+                                    owner + ": its settings are not this host's to change",
+                                    "true "};
+        std::string missed;
+        for (std::size_t i = 0; i < 9; ++i)
+            if (i >= said.size() || said[i].find(want[i]) == std::string::npos)
+                missed += "\n      want " + want[i] + " <- " + (i < said.size() ? said[i] : std::string("(no line)"));
+        Vec3 at;
+        Quat turn;
+        const bool unmoved = handed->nodeWorldPose(ownerNode, at, turn) && at.x == 0.0f && at.y == 0.0f && at.z == 0.0f;
+        check(r.status == Status::Ok && missed.empty() && moved && unmoved &&
+                  handed->nodePresence(ownerNode) == Scene::Presence::Present &&
+                  handed->meshPresence(ownerMesh) == Scene::Presence::Present &&
+                  handed->materialPresence(ownerMat) == Scene::Presence::Present,
+              "A HANDED-IN SCENE's OWN OBJECTS ARE READ-ONLY: the owner's node moved (one and in a batch), re-drawn and "
+              "removed, its mesh and material removed, and the scene's settings each FAIL by name; the owner's objects "
+              "present and unmoved after; THE CONTROL: the script's own node moved, drew and was destroyed" +
+                  (r.status == Status::Ok ? std::string() : "\n      the run: " + r.message) + missed);
+        headless->destroyScene(handed);
+    }
 
     // 15. THE FRAME's PUBLIC DOOR AND ONE CLOCK WRITER A SCENE (2b b3; ruling 6, the lead's ruling on the stamp): a frame
     //     steps each scene THIS HOST MADE through its FrameInput part (one submitFrame a frame, stepSerial +1); a scene
