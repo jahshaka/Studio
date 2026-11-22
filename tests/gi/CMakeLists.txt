@@ -1246,6 +1246,33 @@ jah_gpu_row(gi.lamps_outside_cards CLASS engine COMMAND test_gi_lamps_outside ca
 set_tests_properties(gi.lamps_outside_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 120)
 
+# gi.card_build_late (COLD-BOOT-1 item 3) - A CARD READER WHOSE BUILD IS IN FLIGHT IS A READER: a closed room on the
+# Streaming pace, its view asynchronous; .late holds the two card readers' builds (the test door rays.buildHold) past the
+# cache's demand window - no rest decision and giAtRest false while they are held, then the SAME resident set as a control
+# scene whose readers ran from its first frame; .unasked holds a build no reader asks for (the glass escape in a room
+# with no blended material) - the room rests while it is in flight and its landing changes nothing
+# (test_gi_card_build_late.cpp says the laws). A fixture, one row a law.
+add_executable(test_gi_card_build_late test_gi_card_build_late.cpp)
+set_target_properties(test_gi_card_build_late PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_card_build_late PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_card_build_late PRIVATE JahshakaEngine)
+add_dependencies(test_gi_card_build_late JahshakaEngineMedia)
+jah_gpu_row(gi.card_build_late.late CLASS engine COMMAND test_gi_card_build_late late
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.late PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 400)
+jah_gpu_row(gi.card_build_late.unasked CLASS engine COMMAND test_gi_card_build_late unasked
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.unasked PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 200)
+
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
 # a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark at the ray tier, its control
