@@ -49,6 +49,11 @@ namespace jahshaka { namespace engine { class Scene; } }
 
 namespace previewenv {
 
+/// THE ENVIRONMENT'S VERSION (PREVIEWS-1): an input of every studio-lit preview's key
+/// (services/previewkey.h). Bump it with any change to what this file paints or how a preview is
+/// graded: every material and model tile then reads stale and is drawn again.
+inline constexpr int kVersion = 1;
+
 /// A softbox, as the picture is authored: the world direction its centre hangs
 /// in, its half-extents in DEGREES about that direction, and its radiance.
 struct Softbox

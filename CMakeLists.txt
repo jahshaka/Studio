@@ -557,6 +557,7 @@ set(SRCS
     src/services/thumbnailrebuild.cpp 
     src/services/materialtile.cpp
     src/services/thumbnailstop.cpp 
+    src/services/previewkey.cpp
     src/bridge/enginepreviewscene.cpp
     src/bridge/previewenvironment.cpp
     src/bridge/enginethumbnailrenderer.cpp 
@@ -865,6 +866,7 @@ set(HEADERS
     src/services/thumbnailgenerator.h 
     src/services/thumbnailrebuild.h 
     src/services/thumbnailstop.h 
+    src/services/previewkey.h
     src/ui/dialogs/donatedialog.h
     src/ui/pages/assetview.h
     src/ui/pages/importviewertail.h
