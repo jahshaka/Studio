@@ -39,12 +39,15 @@ ROOT = os.environ.get("JAH_SCOPE_ROOT") or os.path.dirname(os.path.dirname(os.pa
 # under irisgl/engine/ (specific -> generic). A TOKEN is a test DIRECTORY (tests/<token>/) or a ROW PREFIX (a dotted token
 # is a name prefix: `engine.atom_`); special tokens: *engine-fixtures (every compiled row linking the engine archive),
 # *picture (THE PICTURE SET: hdr ssr looks mirror and every app row / pool arm whose script takes a screenshot),
-# *screenshots (the picture set's script part alone). The shared headers go through header_symbols; OgreEngine.cpp,
+# *screenshots (the picture set's script part alone), *engine-scripts (every row whose COMMAND runs jahengine: the
+# engine's script rows, by their command line - never a list of names). The shared headers go through header_symbols; OgreEngine.cpp,
 # OgreScene.cpp and OgreView.cpp through the function maps below. The whole-engine guard at every merge is the six hashes.
 ENGINE_SUBSYSTEMS = [
-    # THE ENGINE's SCRIPT HOST (SCRIPT-IN-ENGINE-1): the value and the registry, the host, the one JS binding, the engine's
-    # commands and jahengine - the host's own row (script.host) and every row a script drives through jahengine
-    (r"^src/script/|^jahengine/", ["script.", "rtreflect.odd_size"], "the engine's script host and its commands"),
+    # THE ENGINE's SCRIPT HOST (SCRIPT-IN-ENGINE-1): the value and the registry, the host, the language bindings, the
+    # engine's commands and jahengine - the host's own row (script.host) and EVERY ROW WHOSE COMMAND RUNS jahengine (a
+    # RULE, read from each row's command line: a new script row is selected the day it is registered). A row's own .js
+    # selects it through its argv (_row_files); an engine file the table maps reaches the script rows by their family.
+    (r"^src/script/|^jahengine/", ["script.", "*engine-scripts"], "the engine's script host and its commands"),
     # the post chain: bloom, the display encode, the HDR meter, the screen-space passes it composes
     # (+ the exposure picture and the visibility buffer's draw — the chain composes both: the suites audit's S2 subjects,
     # defaults.exposure_plane and engine.atom_draw/parity, gate_selection_cases.json "S2 the chain")
@@ -1202,6 +1205,11 @@ class Selection:
                 continue
             if d == "*engine-fixtures":
                 self.add(sorted(self.engine_fixture_rows()), f"{why} [every engine fixture]")
+                continue
+            if d == "*engine-scripts":
+                self.add(sorted(n for n, t in self.inv.items()
+                                if any(os.path.basename(str(w)) == "jahengine" for w in t.get("cmd") or [])),
+                         f"{why} [every row whose command runs jahengine]")
                 continue
             if d in ("*vulkan-scripts", "*headless-scripts", "*all-scripts", "*app-rows"):
                 for n, t in self.inv.items():

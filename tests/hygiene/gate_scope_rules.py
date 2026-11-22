@@ -349,6 +349,25 @@ def speed_cases(source, build):
     S = sel(["newtopdir/tool.cpp"])
     check(S.fallback and not S.full_tier and not S.selected,
           "24. ...and a top-level path no directory rule owns selects nothing more (never the tier)")
+    # 28. THE ENGINE's SCRIPT ROWS ARE SELECTED BY A RULE (SCRIPT-IN-ENGINE-1 S7): a src/script/ or jahengine/ change
+    # selects script.* and EVERY ROW WHOSE COMMAND RUNS jahengine - read from the command line, never a list of names: a
+    # script row registered tomorrow (here a synthetic one in another directory, named nothing like odd_size) is selected
+    # the day it exists. RED on 6efb7d6c5's rule (it named rtreflect.odd_size by hand).
+    scripted = [n for n, t in inv0.items() if any(os.path.basename(str(w)) == "jahengine" for w in t.get("cmd") or [])]
+    if not scripted:
+        check(False, "28. the build registers a jahengine row (rtreflect.odd_size) to model the rule on")
+    else:
+        inv1 = copy.deepcopy(inv0)
+        probe = copy.deepcopy(inv0[scripted[0]])
+        probe["dir"] = "lights"
+        inv1["lights.zz_script_probe"] = probe
+        S = gs.select(["irisgl/engine/src/script/commands_view.cpp"], None, build, graph=graph, inv=inv1, quiet_graph=True)
+        want = set(scripted) | {"lights.zz_script_probe"} | {n for n in inv0 if n.startswith("script.")}
+        stray = sorted(n for n in S.selected if inv1[n]["kind"] != "app" and n not in want
+                       and not n.startswith("source.") and not (inv1[n]["labels"] & {"hygiene", "tooling"}))
+        check(want <= set(S.selected) and not stray,
+              "28. a src/script/ change selects script.* and every row whose command runs jahengine (%d, a new one "
+              "included), nothing else of the engine (%s)" % (len(want), stray[:4]))
 
 
 def main(source, build):
