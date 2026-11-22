@@ -11,7 +11,6 @@ For more information see the LICENSE file
 #include "properties.h"
 #include <QJsonObject>
 #include <QJsonValue>
-#include <QUuid>
 #include "irisgl/core/guid.h"
 
 Property::Property()

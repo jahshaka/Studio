@@ -8,7 +8,6 @@ and/or modify it under the terms of the MIT License
 
 For more information see the LICENSE file
 *************************************************************************/
-#include <QUuid>
 #include "connectionmodel.h"
 #include "irisgl/core/guid.h"
 
