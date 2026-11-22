@@ -75,6 +75,11 @@ public:
         QString reason;   ///< empty when ok
         int drops = 0;    ///< how often this write was dropped past its budget before it landed
         qint64 waitedMs = 0;   ///< from its first drop to its landing; 0 when never dropped
+        /// THE ORDER OF ITS EVENTS, on the writer's one serial (each event takes the next number): its
+        /// PNG's encode ending, and its (last) transaction beginning. encodedAt < begunAt is the law that
+        /// the lock is held for the row only.
+        quint64 encodedAt = 0;
+        quint64 begunAt = 0;
     };
     using Done = std::function<void(const Landed &)>;
     using DropHook = std::function<void(const QString &guid, const QString &reason)>;
@@ -108,6 +113,7 @@ private:
         Done done;
         int drops = 0;
         qint64 firstDropMs = 0;   ///< the writer's clock at its first drop
+        quint64 encodedAt = 0;    ///< the serial when its encode ended (once: kept across a drop)
     };
     void run();
 
@@ -116,6 +122,7 @@ private:
     const int mBudgetMs;
     std::shared_ptr<bool> mAlive;   ///< read and cleared on the application's thread only
     std::atomic<int> mPending{ 0 };
+    quint64 mSerial = 0;   ///< the order of the worker's events; the worker's only
     DropHook mDropHook;
     std::mutex mMutex;
     std::condition_variable mWake;

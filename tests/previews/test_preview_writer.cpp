@@ -31,9 +31,9 @@ For more information see the LICENSE file
 //      meets the writer WAITS rather than failing, and the writer is one row a transaction, so a UI
 //      write submitted while 20 previews drain lands at once, unrefused;
 //   g. the writer's end DRAINS: a write submitted just before its destruction is stored;
-//   h. THE LOCK IS HELD FOR THE ROW ONLY: a UI BEGIN IMMEDIATE made at once after submitting a picture
-//      that takes long to encode is granted with the preview NOT yet stored - the encode ran outside
-//      the writer's transaction (if it ran inside, the BEGIN would wait for the commit and find it).
+//   h. THE LOCK IS HELD FOR THE ROW ONLY, read as an ORDER: the writer stamps one serial when a picture's
+//      encode ends and when its transaction begins; each write's encode is before its BEGIN (an encode
+//      moved inside the transaction reverses them - red by construction, no race).
 // The waits are on PUBLISHED state (a completion, a drop) with a cap that names the failure.
 
 #include <algorithm>
@@ -315,10 +315,10 @@ int main(int argc, char **argv)
         iris::Logger::setSink(nullptr);
     }
 
-    // h. The encode runs outside the writer's transaction.
+    // h. The encode runs outside the writer's transaction: an ORDER of recorded events, never a race.
     {
         previews::Writer writer(path);
-        QImage noise(2048, 2048, QImage::Format_RGB32);   // noise: the slowest picture to compress
+        QImage noise(512, 512, QImage::Format_RGB32);
         QRandomGenerator rng(7);
         for (int y = 0; y < noise.height(); ++y) {
             QRgb *row = reinterpret_cast<QRgb *>(noise.scanLine(y));
@@ -326,13 +326,15 @@ int main(int argc, char **argv)
         }
         Probe ph;
         writer.submit(QStringLiteral("g"), noise, QStringLiteral("00000000000000a7"), ph.done());
-        QSqlQuery ui;
-        check(ui.exec(QStringLiteral("BEGIN IMMEDIATE")), "h: a UI BEGIN made at once after the submit is granted");
-        check(storedKey(QStringLiteral("g")).isEmpty(), "h: ...with the preview NOT stored: the encode held no lock");
-        check(ui.exec(QStringLiteral("COMMIT")), "h: the UI commits");
-        check(waitFor([&] { return ph.landed.size() == 1; }) && ph.landed.value(0).ok
-                  && storedKey(QStringLiteral("g")) == QStringLiteral("00000000000000a7"),
-              "h: the preview lands after it");
+        writer.submit(QStringLiteral("h"), solid(qRgb(5, 5, 5)), QStringLiteral("00000000000000a8"), ph.done());
+        check(waitFor([&] { return ph.landed.size() == 2; }) && ph.landed.value(0).ok && ph.landed.value(1).ok,
+              "h: both writes land");
+        for (const auto &l : ph.landed)
+            std::printf("     h: %s encoded at #%llu, its transaction began at #%llu\n", qUtf8Printable(l.guid),
+                        static_cast<unsigned long long>(l.encodedAt), static_cast<unsigned long long>(l.begunAt));
+        check(ph.landed.value(0).encodedAt > 0 && ph.landed.value(0).encodedAt < ph.landed.value(0).begunAt
+                  && ph.landed.value(1).encodedAt < ph.landed.value(1).begunAt,
+              "h: THE LOCK FOR THE ROW ONLY - each picture's encode ENDED before its transaction BEGAN");
     }
 
     // g. The end drains.

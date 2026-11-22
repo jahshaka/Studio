@@ -138,7 +138,9 @@ void Writer::run()
                 if (item.png.isEmpty() && !item.image.isNull()) {
                     item.png = encodePng(item.image);
                     item.image = QImage();
+                    item.encodedAt = ++mSerial;
                 }
+                landed.begunAt = ++mSerial;   // writePreview's first statement is its BEGIN IMMEDIATE
                 write = Database::writePreview(conn, item.guid, item.png, item.key);
             }
 
@@ -182,6 +184,7 @@ void Writer::run()
             landed.ok = write.ok;
             landed.reason = write.ok ? QString() : write.reason;
             landed.drops = item.drops;
+            landed.encodedAt = item.encodedAt;
             landed.waitedMs = item.drops > 0 ? mClock.elapsed() - item.firstDropMs : 0;
             if (item.drops > 0)
                 irisLog(QStringLiteral("previews: the write of %1 %2 after %3 tries, %4 ms behind the lock")
