@@ -7,13 +7,9 @@
 
 namespace startuppass {
 
-/// THE STAGED MEDIA BY CONTENT: every file under `dir` (the binary's media/), by its path RELATIVE to `dir` and its
-/// bytes, sorted - the low-level material scripts, the compositors, the compute and Hlms media the pass compiles. Never
-/// a tree's path (#154: two trees at one content read one digest), never a file's time. Hex sha256; "none" for no dir.
-QString mediaDigest(const QString &dir);
-
-/// THE KEY: the pass's code id (JAH_STARTUP_PASS_CODE_ID: its own sources + the engine's full build id), the staged media
-/// by content and the engine shader cache's fingerprint (the fork, the templates, the GPU, the cache's own code).
+/// THE KEY: the pass's code id (JAH_STARTUP_PASS_CODE_ID: its own sources, the engine's build id and its ray SPIR-V's id),
+/// the staged media by content (jahshaka::engine::mediaDigest) and the shader cache's build terms
+/// (jahshaka::engine::shaderIdentity().fingerprint: no device term).
 QString passKey(const QString &passCodeId, const QString &mediaDigest, const QString &fingerprint);
 
 }   // namespace startuppass

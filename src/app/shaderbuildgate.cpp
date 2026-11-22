@@ -541,13 +541,9 @@ QString startupPassKey(const QString &mediaDigest)
 
 int printShaderIdentity(const QString &mediaDir)
 {
-    const jahshaka::engine::ShaderIdentity id = jahshaka::engine::shaderIdentity();
-    const QString media = startuppass::mediaDigest(mediaDir);
-    std::printf("shader-identity 1\nlayer.pipeline %s\nlayer.microcode %s\nlayer.hlms %s\nlayer.compute %s\ncache %s\n"
-                "engine %s\nray-spirv %s\npass-code %s\nmedia %s\nidentity %s\n",
-                id.pipelineKey.c_str(), id.microcodeKey.c_str(), id.hlmsKey.c_str(), id.computeKey.c_str(),
-                id.fingerprint.c_str(), id.engineBuildId.c_str(), id.raySpirvId.c_str(), JAH_STARTUP_PASS_CODE_ID,
-                qPrintable(media), qPrintable(startupPassKey(media)));
+    const std::string media = jahshaka::engine::mediaDigest(mediaDir.toStdString());
+    std::printf("%spass-code %s\nidentity %s\n", jahshaka::engine::shaderIdentityText(media).c_str(),
+                JAH_STARTUP_PASS_CODE_ID, qPrintable(startupPassKey(QString::fromStdString(media))));
     std::fflush(stdout);
     return 0;
 }
@@ -558,8 +554,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     if (!engine) return 0;   // headless: no engine, no shaders, no wait
     // THE STAGED MEDIA's DIGEST, a term of the global pass's key (below), read OFF the UI thread (~4 MB, 17 ms measured in
     // Debug: shadercache.startup_pass_key prints it) while the warm-up's frames run; joined where the key is formed
-    std::future<QString> mediaDigest = std::async(std::launch::async, startuppass::mediaDigest,
-                                                  QCoreApplication::applicationDirPath() + QStringLiteral("/media"));
+    std::future<std::string> mediaDigest = std::async(std::launch::async, jahshaka::engine::mediaDigest,
+                                                      (QCoreApplication::applicationDirPath() + QStringLiteral("/media")).toStdString());
 
     unsigned compiled = 0, cached = 0, expected = 0;
     engine->shaderBuildProgress(compiled, cached, expected);
@@ -853,7 +849,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // device term, so `--print-shader-identity` prints it with no GPU), and a driver or a card change is seen where the
     // cache sees it - the layers whose key holds the GPU are dropped at the load (layersNotLoaded). The compile count
     // does not see it: the dropped recipes regenerate from a whole microcode layer and compile nothing.
-    const QString passKey = startupPassKey(mediaDigest.get());
+    const QString passKey = startupPassKey(QString::fromStdString(mediaDigest.get()));
     std::vector<std::string> notLoaded;
     engine->request([&](jahshaka::engine::Engine &e) { notLoaded = e.shaderCacheStats().layersNotLoaded; });   // a REQUEST (U3 stage 3)
     const bool keyMoved = readWarmPassRecord() != passKey;   // the record in the cache it describes (URGENT #104)

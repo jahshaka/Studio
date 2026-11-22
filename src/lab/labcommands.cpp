@@ -379,6 +379,7 @@ std::string helpText()
          "  --camera x,y,z,tx,ty,tz   the camera at the start\n"
          "  --tier low|medium|high|epic   the World Mode at the start (default epic, a new scene's)\n"
          "  --size WxH          the window / offscreen size (default 1920x1080)\n"
+         "  --print-shader-identity   the engine's shader identity for this binary's media/ (no window, no GPU); exits\n"
          "  --help              this text\n\n"
          "keys (each runs the command line beside it, through the same parser):\n";
     for (const auto &k : keyTable()) o << "  " << k.first << std::string(k.first.size() < 8 ? 8 - k.first.size() : 1, ' ') << k.second << "\n";

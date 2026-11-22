@@ -3,6 +3,7 @@
 // sky — and ONE command surface (labcommands.h) that the keys, --script and stdin share. Links the engine (its script
 // host too: `--js` and the `js` verb run the engine's scripts, as jahengine does), irisgl's document / import / mirror and
 // Qt Core/Gui; nothing of Studio's src/ (no services, no UI, no Studio scripting, no QCoreApplication, no widgets).
+#include "jahshaka/engine/Engine.h"   // shaderIdentityText / mediaDigest: --print-shader-identity
 #include "jahshaka/engine/ProcessExit.h"
 #include "labcommands.h"
 #include "labsession.h"
@@ -107,6 +108,13 @@ int main(int argc, char **argv)
         const std::string a = argv[i];
         const auto next = [&]() -> const char * { return i + 1 < argc ? argv[++i] : nullptr; };
         if (a == "--help" || a == "-h") { std::printf("%s", lab::helpText().c_str()); return 0; }
+        // THE ENGINE's IDENTITY, NO DEVICE (SHADER-SYSTEM-1 stage 6a): the lines the engine writes for its media/ (the lab's
+        // own, beside the binary: labsession.cpp's appMedia), nothing booted - the warm-up keys jahlab's state on it
+        else if (a == "--print-shader-identity") {
+            const std::string media = jahshaka::engine::mediaDigest(opt.binDir.toStdString() + "/media");
+            std::fputs(jahshaka::engine::shaderIdentityText(media).c_str(), stdout);
+            return 0;
+        }
         else if (a == "--headless") opt.headless = true;
         else if (a == "--no-stdin") opt.readStdin = false;
         else if (a == "--no-idle-frames") opt.idleFrames = false;

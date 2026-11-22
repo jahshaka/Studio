@@ -100,14 +100,15 @@ set_tests_properties(shadercache.app.killed PROPERTIES TIMEOUT 60 LABELS "shader
 # lead, 2026-10-12): the background-compile guard is reached only when the shader service changes, and it is guarded
 # nowhere else in the merge tier.
 # THE SEED's KEY IS THE PASS KEY's TERMS (TEST-STREAMLINE-1 point 3): the app's src/app/startuppasskey.cpp compiled in (one
-# definition of the media digest and the key) and the build's JAH_STARTUP_PASS_CODE_ID header
+# definition of the key), the engine's media digest (linked) and the build's JAH_STARTUP_PASS_CODE_ID header
 add_executable(test_async_after_open test_async_after_open.cpp ${CMAKE_SOURCE_DIR}/src/app/startuppasskey.cpp)
 target_include_directories(test_async_after_open PRIVATE ${CMAKE_SOURCE_DIR}/src)
 add_dependencies(test_async_after_open JahStartupPassId)
 set_source_files_properties(test_async_after_open.cpp PROPERTIES OBJECT_DEPENDS "${JAH_STARTUP_PASS_HEADER}")
 set_target_properties(test_async_after_open PROPERTIES CXX_STANDARD 17
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-target_link_libraries(test_async_after_open PRIVATE Qt6::Core Qt6::Gui)
+target_link_libraries(test_async_after_open PRIVATE Qt6::Core Qt6::Gui JahshakaEngine)
+set_target_properties(test_async_after_open PROPERTIES BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_compile_definitions(test_async_after_open PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_BINARY="$<TARGET_FILE:${CMAKE_PROJECT_NAME}>"
@@ -144,7 +145,7 @@ jah_no_display(shadercache.startup_pass_key)
 # the record the gate writes (identity_print.py says the laws).
 add_test(NAME shadercache.identity_print
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/identity_print.py"
-                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_BINARY_DIR}")
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "$<$<TARGET_EXISTS:jahlab>:$<TARGET_FILE:jahlab>>" "${CMAKE_BINARY_DIR}")
 set_tests_properties(shadercache.identity_print PROPERTIES TIMEOUT 60 LABELS "shadercache")
 jah_no_display(shadercache.identity_print)
 

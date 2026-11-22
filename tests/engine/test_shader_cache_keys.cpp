@@ -9,11 +9,22 @@
 //       composition moves the microcode, hlms and compute keys on a fork commit and the hlms key on a media byte;
 //   (4) a changed PREPROCESSOR moves the compute key and NOT the hlms key - the hlms layer's guard is Ogre's re-parse under
 //       the salted template checksum (ruling 2; engine.template_checksum_salt), never a drop.
+//   (5) THE ENGINE's MEDIA DIGEST (SHADER-SYSTEM-1 stage 6a; jahshaka::engine::mediaDigest, the term of every printed
+//       identity - it was Studio's Qt one, and its laws move here with it): content, never a path or a time; and
+//       EQUAL BEHAVIOUR with what it replaced where it decides the digest - the file set (a symlinked FILE followed, a
+//       symlinked DIRECTORY not), the path relative with '/' (a nested directory), the BYTEWISE order (never a locale's:
+//       "B.x" before "a.x"), each by a case restating the digest's text over the cache's own hex128.
 #include "ShaderCacheKeys.h"
+#include "EnginePrivate.h"            // cachefile::hex128: the digest's hash, restated in (5)
+#include "jahshaka/engine/Engine.h"   // mediaDigest
 
+#include <chrono>
 #include <cstdio>
+#include <filesystem>
+#include <fstream>
 #include <functional>
 #include <string>
+#include <unistd.h>
 #include <vector>
 
 using namespace jahshaka::engine::detail;
@@ -125,6 +136,59 @@ int main() {
     const Moved p = moved(k0, composeLayerKeys(pre));
     CHECK(p.compute && !p.hlms, "(4) a changed preprocessor drops the compute records and NOT the recipes (Ogre "
                                 "re-parses them under the salted checksum)");
+
+    // (5) THE MEDIA DIGEST
+    {
+        namespace fs = std::filesystem;
+        const fs::path t = fs::temp_directory_path() / ("shader-cache-keys-media-" + std::to_string(::getpid()));
+        fs::remove_all(t);
+        const auto put = [](const fs::path &p, const std::string &bytes) {
+            fs::create_directories(p.parent_path());
+            std::ofstream(p, std::ios::binary | std::ios::trunc) << bytes;
+        };
+        const auto digest = [](const fs::path &p) { return jahshaka::engine::mediaDigest(p.string()); };
+        const auto h = [](const std::string &b) { return cachefile::hex128(b.data(), b.size()); };
+        for (const char *tree : { "a/media", "some/other/b/media" }) {
+            put(t / tree / "Hlms/Pbs/x.any", "hlms");
+            put(t / tree / "2.0/y.material", "material");
+        }
+        const std::string da = digest(t / "a/media");
+        CHECK(da.size() == 32 && da == digest(t / "some/other/b/media"),
+              "(5) two trees at two paths, one content: one digest of 32 hex (%s)", da.c_str());
+        fs::last_write_time(t / "some/other/b/media/2.0/y.material", fs::file_time_type::clock::now() - std::chrono::hours(48));
+        CHECK(digest(t / "some/other/b/media") == da, "(5) ...a file's time moved: the same digest");
+        put(t / "some/other/b/media/2.0/y.material", "materiaL");
+        CHECK(digest(t / "some/other/b/media") != da, "(5) ...a file's content moved: another digest");
+        put(t / "a/media/2.0/z.compositor", "c");
+        CHECK(digest(t / "a/media") != da, "(5) ...a file added: another digest");
+        CHECK(digest(t / "none") == "none" && digest(fs::path()) == "none", "(5) ...no media directory: \"none\"");
+        // the nested path with '/' and the BYTEWISE order: "B.x" (0x42) before "a.x" (0x61), "Hlms/Pbs/x.any" after both;
+        // a locale's order would put "a.x" first
+        put(t / "o/media/a.x", "lower");
+        put(t / "o/media/B.x", "upper");
+        put(t / "o/media/Hlms/Pbs/x.any", "nested");
+        const auto line = [&](const std::string &rel, const std::string &bytes) { return rel + "\n" + h(bytes) + "\n"; };
+        const std::string bytewise = line("B.x", "upper") + line("Hlms/Pbs/x.any", "nested") + line("a.x", "lower");
+        const std::string locale = line("a.x", "lower") + line("B.x", "upper") + line("Hlms/Pbs/x.any", "nested");
+        CHECK(digest(t / "o/media") == h(bytewise) && h(bytewise) != h(locale),
+              "(5) the digest is hex128 over \"<rel>\\n<hex128 of its bytes>\\n\" in BYTEWISE order, a nested path with '/' "
+              "(the locale's order would read %s)", h(locale).c_str());
+        // the file set: a symlinked FILE is read through (a copy of its target reads the same), a symlinked DIRECTORY is
+        // not walked (the digest does not move when one is added)
+        put(t / "outside/target.x", "through");
+        put(t / "s/media/k.x", "k");
+        put(t / "c/media/k.x", "k");
+        put(t / "c/media/l.x", "through");
+        fs::create_symlink(t / "outside/target.x", t / "s/media/l.x");
+        CHECK(digest(t / "s/media") == digest(t / "c/media"), "(5) a symlinked file is read through: it digests as its copy");
+        put(t / "outside/target.x", "moved");
+        CHECK(digest(t / "s/media") != digest(t / "c/media"), "(5) ...and its target's bytes move the digest");
+        const std::string before = digest(t / "c/media");
+        put(t / "outside/dir/inner.x", "inner");
+        fs::create_directory_symlink(t / "outside/dir", t / "c/media/linked");
+        CHECK(digest(t / "c/media") == before, "(5) a symlinked directory is not walked: adding one moves nothing");
+        fs::remove_all(t);
+    }
 
     std::printf(gFailures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", gFailures);
     return gFailures ? 1 : 0;

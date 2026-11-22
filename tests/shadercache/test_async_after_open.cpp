@@ -43,6 +43,7 @@
 #include <QCoreApplication>
 #include "app/startuppasskey.h"   // the pass key's one definition (src/app)
 #include "jah_startup_pass_id.h"     // JAH_STARTUP_PASS_CODE_ID (cmake/startup_pass_id.py)
+#include "jahshaka/engine/Engine.h"  // mediaDigest: the pass key's media term (the engine's own)
 #include <QDir>
 #include <QFileInfo>
 #include <QImage>
@@ -80,9 +81,9 @@ QString treeKey()
     const QByteArray shaderKey = keyed ? key.readAllStandardOutput().trimmed() : QByteArray();
     if (shaderKey.isEmpty()) return QString();
     h.addData("shader-key " + shaderKey + "\n");
-    // THE STAGED MEDIA BY CONTENT under its media-relative path - the pass key's own term (startuppass::mediaDigest; it
-    // hashed each file's ABSOLUTE path here, so no tree's seed could serve another, #154)
-    h.addData("media " + startuppass::mediaDigest(bin.absolutePath() + QStringLiteral("/media")).toLatin1() + "\n");
+    // THE STAGED MEDIA BY CONTENT under its media-relative path - the pass key's own term (jahshaka::engine::mediaDigest;
+    // it hashed each file's ABSOLUTE path here, so no tree's seed could serve another, #154)
+    h.addData("media " + QByteArray::fromStdString(jahshaka::engine::mediaDigest((bin.absolutePath() + QStringLiteral("/media")).toStdString())) + "\n");
     QFile built(QStringLiteral(JAHSHAKA_OGRE_INSTALL) + QStringLiteral("/BUILT_FROM"));
     if (built.open(QIODevice::ReadOnly)) h.addData(built.readAll());
     // THE GLOBAL PASS's CODE (URGENT #139; TEST-STREAMLINE-1 point 3): the app's pass re-runs over a seed whose recorded
@@ -256,23 +257,8 @@ int keySelfTest()
         QFile f(path);
         return f.open(QIODevice::WriteOnly | QIODevice::Truncate) && f.write(bytes) == bytes.size();
     };
-    for (const QString &tree : {QStringLiteral("/a/media"), QStringLiteral("/some/other/b/media")}) {
-        put(t + tree + QStringLiteral("/Hlms/x.any"), "hlms");
-        put(t + tree + QStringLiteral("/2.0/y.material"), "material");
-    }
-    const QString da = startuppass::mediaDigest(t + QStringLiteral("/a/media"));
-    const QString db = startuppass::mediaDigest(t + QStringLiteral("/some/other/b/media"));
-    CHECK(da.size() == 64 && da == db, "the media digest: two trees at two paths, one content - one digest (no path)");
-    {
-        QFile f(t + QStringLiteral("/some/other/b/media/2.0/y.material"));
-        if (f.open(QIODevice::ReadWrite)) f.setFileTime(QDateTime::fromSecsSinceEpoch(978307200), QFileDevice::FileModificationTime);
-    }
-    CHECK(startuppass::mediaDigest(t + QStringLiteral("/some/other/b/media")) == da, "...a file's time moved: the same digest");
-    put(t + QStringLiteral("/some/other/b/media/2.0/y.material"), "materiaL");
-    CHECK(startuppass::mediaDigest(t + QStringLiteral("/some/other/b/media")) != da, "...a file's content moved: another digest");
-    put(t + QStringLiteral("/a/media/2.0/z.compositor"), "c");
-    CHECK(startuppass::mediaDigest(t + QStringLiteral("/a/media")) != da, "...a file added: another digest");
-    CHECK(startuppass::mediaDigest(t + QStringLiteral("/none")) == QStringLiteral("none"), "...no media dir: 'none'");
+    // (THE MEDIA DIGEST's own laws are the engine's: engine.shader_cache_keys law 5 - SHADER-SYSTEM-1 stage 6a moved it.)
+    const QString da = QStringLiteral("da"), db = QStringLiteral("da");
     const QString k = startuppass::passKey(QStringLiteral("P"), da, QStringLiteral("F"));
     CHECK(k == startuppass::passKey(QStringLiteral("P"), db, QStringLiteral("F")) &&
               k != startuppass::passKey(QStringLiteral("Q"), da, QStringLiteral("F")) &&
@@ -316,8 +302,9 @@ int keySelfTest()
     }
     {   // THE LAUNCH's PRICE of the media term (the app hashes its staged media at every launch's gate): measured, printed
         QElapsedTimer m; m.start();
-        const QString d = startuppass::mediaDigest(QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).absolutePath() + QStringLiteral("/media"));
-        std::printf("    the build's staged media digest %s in %lld ms (the app pays it once a launch)\n", qPrintable(d.left(16)),
+        const std::string d = jahshaka::engine::mediaDigest(
+            (QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).absolutePath() + QStringLiteral("/media")).toStdString());
+        std::printf("    the build's staged media digest %s in %lld ms (the app pays it once a launch)\n", d.substr(0, 16).c_str(),
                     static_cast<long long>(m.elapsed()));
     }
     QDir(t).removeRecursively();

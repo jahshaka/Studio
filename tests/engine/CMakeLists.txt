@@ -730,7 +730,8 @@ jah_no_display(engine.gpu_params_autos)
 # why): the four layer keys as one function of their inputs - the pipeline key's text byte-identical to the one it
 # replaced (F5's golden case), each key moving on each of its producer terms and on no other key's, none holding the
 # fork's commit or a media tree (NEGATIVE CONTROL: today's composition moves on both), a preprocessor change dropping
-# compute records and not recipes. CPU only: no card, no engine.
+# compute records and not recipes; the engine's media digest (law 5: content, the file set, '/' paths, bytewise order).
+# CPU only: no card, no engine.
 add_executable(test_shader_cache_keys test_shader_cache_keys.cpp)
 set_target_properties(test_shader_cache_keys PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
