@@ -1,5 +1,7 @@
 // script.host — THE ENGINE'S SCRIPT HOST, ITS LAWS ON THE CPU (SCRIPT-IN-ENGINE-1 stage 1; jahshaka/engine/Script.h).
-// No device, no engine: a registry of this file's own commands.
+// No device: a registry of this file's own commands, and ONE HEADLESS (NULL) ENGINE (no card, no display) whose real scenes
+// and nodes the engine commands' argument laws are proved on - each failure before the engine is asked, each control
+// reaching a real engine.
 // THE LAWS: a value of every kind is itself after a copy and compares by content (an Int equals a Number of the same
 // number); every command carries a name and a doc (validate is empty); THE STRICT CALL — an unregistered name, a surplus
 // argument, an undeclared object member, a missing argument with no default and a non-integral number for an integer
@@ -8,6 +10,7 @@
 // kept as lastError). Its own commands are tagged as the engine's are: one that holds, releases or stores state (test.make
 // of a handle, test.free, test.keep, test.ping) CHANGES it; the rest READ.
 #include "jahshaka/engine/Script.h"
+#include "enginetesthelpers.h"         // the headless (NULL) engine's config: no Qt, no card, no display
 #include "script/RouteDeclaration.h"   // the route declaration's judgement (engine-private, pure)
 
 #include <cstdio>
@@ -300,17 +303,64 @@ int main()
         check(signatureText(*eng.find("engine.picture.hash")) == "engine.picture.hash(picture: target picture handle) -> string [reads]",
               "the signature prints its access last: " + signatureText(*eng.find("engine.picture.hash")));
     }
-    const Value fakeScene(eng.hold("scene", std::make_shared<int>(0))), fakeNode(eng.name("node", 1));
-    check(failedWith(eng.call("engine.node.setTransform",
-                              {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
-                     "engine.node.setTransform: transform.position must hold 3 elements"),
-          "a 2-element position FAILS by name (the host checks a vector's length, before the engine is asked)");
-    // A HELD KIND IS BOUND TO ONE C++ TYPE (2b; MCP-ON-HOST-1 stage 1's finding): fakeScene holds an int under the
-    // engine's "scene" kind, and the node's existence check reads its scene through the TYPED accessor - so the call
-    // FAILS by name (the untyped read took the int AS a Scene and called into it: a crash)
-    check(failedWith(eng.call("engine.node.setTransform", {fakeScene, fakeNode, Value(Value::Object{})}),
-                     "engine.node.setTransform: node: a node is named with its scene"),
-          "a scene handle holding another C++ type FAILS the node's existence check by name (it is never read as a Scene)");
+    // ONE HEADLESS (NULL) ENGINE and a host over it: real scenes and nodes (the engine.exit_only_teardown pattern: the
+    // harness's config, the exit-only teardown; the hosts hold no engine object - their scene handles never own one)
+    std::string bootError;
+    const std::unique_ptr<Engine> headless =
+        Engine::create(enginetest::testEngineConfig("test-script-host-ogre.log", enginetest::EngineOverrides().headless()),
+                       bootError);
+    check(headless != nullptr, "a headless (NULL) engine boots for the commands' laws (" + bootError + ")");
+    Host liveHost;
+    registerEngineCommands(liveHost, headless.get(), bootError, false);
+    Registry &live = liveHost.registry();
+    const Value realScene = live.call("engine.scene.create", {Value("script-host")}).value;
+    const Value realNode = live.call("engine.node.create", {realScene}).value;
+    check(live.object<Scene>(realScene.asInt()) && realNode.kind() == Kind::Int,
+          "the live host makes a real scene and a real node through its commands");
+    check(failedWith(live.call("engine.node.setTransform",
+                               {realScene, realNode, Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
+                     "engine.node.setTransform: transform.position must hold 3 elements") &&
+              live.call("engine.node.setTransform", {realScene, realNode, Value(Value::Object{})}).status == Status::Ok,
+          "a 2-element position FAILS by name (the host checks a vector's length, before the engine is asked); THE "
+          "CONTROL: the whole call reaches the real engine");
+    // A HELD KIND IS BOUND TO ONE C++ TYPE AT REGISTRATION (2b; MCP-ON-HOST-1 stage 1's finding, the lead's ruling):
+    // in a host with the engine's commands no hold claims an engine kind for another type, in any order; a stand-in is
+    // a kind of the test's own, refused where a scene is declared before anything is read; a kind bound before the
+    // engine's registration is a FAULT; and a handle is minted only by the door that owns its kind
+    {
+        std::string why, mint;
+        const std::int64_t claimed = eng.hold("scene", std::make_shared<int>(0), false, &why);
+        const Value stand(eng.hold("test.scene", std::make_shared<int>(0)));
+        check(claimed == 0 && why.find("the scene kind is bound to another C++ type") == 0 &&
+                  failedWith(eng.call("engine.node.setTransform", {stand, Value(eng.name("node", 1)), Value(Value::Object{})}),
+                             "engine.node.setTransform: scene: " + std::to_string(stand.asInt()) +
+                                 " is a test.scene handle, not a scene handle") &&
+                  eng.hold("node", std::make_shared<int>(0)) == 0,
+              "AN ENGINE KIND IS BOUND AT REGISTRATION: an int held as a scene is refused by name; a stand-in of the "
+              "test's own kind FAILS where a scene is declared (never read); a named kind holds nothing (" + why + ")");
+        Host early;
+        early.setConsole([](const std::string &) {});
+        early.registry().hold("scene", std::make_shared<int>(0));
+        registerEngineCommands(early, nullptr, "no device here", false);
+        const Result refused = early.run("host.check({ok: true, what: 'never'});\n", "early.js");
+        check(!early.registry().validate().empty() &&
+                  early.registry().validate()[0].find("scene: the kind is bound to another C++ type") == 0 &&
+                  refused.status == Status::Failed,
+              "a kind held as another type BEFORE the engine's registration is a registry FAULT and the host refuses "
+              "every run (" + (early.registry().validate().empty() ? std::string("none") : early.registry().validate()[0]) +
+                  ")");
+        Registry forge;
+        const std::int64_t held = forge.hold("thing", std::make_shared<int>(1));
+        const std::int64_t minted = forge.name("thing", 1, &mint);
+        forge.add({"test.forge", {Access::Changes, {}, Kind::Int}, "mints a thing handle from an id"},
+                  [](Call &c) { return c.name("thing", 1); });
+        check(held > 0 && minted == 0 &&
+                  mint == "the thing kind is HELD: its handles are made by holding a thing, never minted from an id" &&
+                  failedWith(forge.call("test.forge", {}), "test.forge: the thing kind is HELD") &&
+                  eng.name("scene", 1) == 0,
+              "A HANDLE IS MINTED ONLY BY THE DOOR THAT OWNS ITS KIND: an id minted under a held kind (it would name the "
+              "table's slot 1 - the first held object: a forged handle) is refused by name (" + mint + ")");
+    }
     {
         // ... and the binding itself: the first hold binds the kind; another type under it is refused by name (a
         // command's Call::hold FAILS with it); a read as another type answers null
@@ -329,24 +379,19 @@ int main()
               "and through a command; the int reads back as an int and never as a double (" + why + ")");
     }
     {
-        // THE FLAT BATCH (engine.node.setTransforms, 2a a4): its shape is checked before any node moves - here the node
-        // kind's existence check is this file's (no engine: node 4 is dead, the rest live), so the checks are seen to
-        // run in order and a call that passes them all reaches the engine (absent here)
-        Host batchHost;
-        registerEngineCommands(batchHost, nullptr, "no device here", false);
-        Registry &b = batchHost.registry();
-        b.checkKind("node", [](const Call &, std::uint32_t id, std::string &why) {
-            if (id != 4) return true;
-            why = "node 4 is not a node of the scene";
-            return false;
-        });
-        const Value scene(b.hold("scene", std::make_shared<int>(0)));
+        // THE FLAT BATCH (engine.node.setTransforms, 2a a4): its shape is checked before any node moves - on the headless
+        // engine's real scene: three live nodes, a fourth made and REMOVED (dead), and a call that passes every check
+        // reaches the engine
+        Registry &b = live;
+        const Value scene = realScene;
         Value::Array nodes;
-        for (std::uint32_t i = 1; i <= 3; ++i) nodes.push_back(Value(b.name("node", i)));
+        for (int i = 0; i < 3; ++i) nodes.push_back(b.call("engine.node.create", {scene}).value);
+        const Value dead = b.call("engine.node.create", {scene}).value;
+        b.object<Scene>(scene.asInt())->removeNode(NodeId(Call::idOf(dead)));
         const auto numbersOf = [](std::size_t n, double x) { return Value(Value::Array(n, Value(x))); };
         const auto batch = [&](Value::Object o) { return b.call("engine.node.setTransforms", {scene, Value(std::move(o))}); };
         Value::Array withDead = nodes;
-        withDead.push_back(Value(b.name("node", 4)));
+        withDead.push_back(dead);
         Value::Array tooMany(65537, nodes[0]);
         Value::Array nanAt7 = numbersOf(9, 1.0).asArray();
         nanAt7[7] = Value(std::numeric_limits<double>::quiet_NaN());
@@ -359,18 +404,19 @@ int main()
               "setTransforms: a part whose length is not 3 n / 4 n / 3 n FAILS by name");
         check(failedWith(batch({{"nodes", Value(nodes)}, {"positions", Value(nanAt7)}}),
                          "transforms.positions[7] is not a finite number") &&
-                  failedWith(batch({{"nodes", Value(withDead)}}), "engine.node.setTransforms: nodes[3]: node 4 is not a node") &&
+                  failedWith(batch({{"nodes", Value(withDead)}}), "engine.node.setTransforms: nodes[3]: node " +
+                                                                      std::to_string(Call::idOf(dead)) + " is not a node") &&
                   failedWith(batch({{"nodes", Value(tooMany)}}), "transforms.nodes holds 65537 elements, at most 65536"),
               "setTransforms: a NaN at positions[7], a dead node at nodes[3] and 65,537 nodes each FAIL by name");
-        check(failedWith(batch({{"nodes", Value(nodes)}}), "the engine did not start") &&
-                  failedWith(batch({{"nodes", Value(nodes)}, {"positions", numbersOf(9, 0)}, {"rotations", numbersOf(12, 0)},
-                                    {"scales", numbersOf(9, 1)}}),
-                             "the engine did not start") &&
+        check(batch({{"nodes", Value(nodes)}}).status == Status::Ok &&
+                  batch({{"nodes", Value(nodes)}, {"positions", numbersOf(9, 0)}, {"rotations", numbersOf(12, 0)},
+                         {"scales", numbersOf(9, 1)}}).status == Status::Ok &&
                   signatureText(*b.find("engine.node.setTransforms")) ==
                       "engine.node.setTransforms(scene: target scene handle, transforms: object {nodes: node handle[] <= 65536, "
                       "positions: number[] <= 196608 = default, rotations: number[] <= 262144 = default, scales: number[] <= "
                       "196608 = default}) -> null [changes]",
-              "THE CONTROL: every part absent, and every part whole, pass the checks to the engine; the signature: " +
+              "THE CONTROL: every part absent, and every part whole, pass the checks and the real engine takes them; the "
+              "signature: " +
                   signatureText(*b.find("engine.node.setTransforms")));
     }
     check(failedWith(eng.call("engine.scene.create", {Value("s")}), "engine.scene.create: the engine did not start: no device here") &&
@@ -633,11 +679,12 @@ int main()
         check(js.status == Status::Failed && jsHost.checksFailed() == 0 && js.message.find("handles.js:3") != std::string::npos &&
                   js.message.find("is a view handle, not a scene handle") != std::string::npos,
               "through JS a handle is a number that keeps its kind: the wrong kind FAILS with the script's line");
-        // the engine's own commands, no engine: a view handle bound as the scene FAILS before the command runs
-        const Value v(eng.hold("view", std::make_shared<int>(0)));
-        check(failedWith(eng.call("engine.view.setScene", {v, Value(Value::Object{{"scene", v}})}),
-                         "bind.scene: " + std::to_string(v.asInt()) + " is a view handle, not a scene handle"),
-              "engine.view.setScene(view, {scene: view}) FAILS by name (it bound the wrong object silently before)");
+        // the engine's own engine.view.setScene: its bound scene is DECLARED a scene handle, so the kind check above
+        // refuses a view there before the command runs (a headless engine makes no offscreen view: the declaration is
+        // the proof; it bound the wrong object silently before 2a)
+        check(signatureText(*live.find("engine.view.setScene")) ==
+                  "engine.view.setScene(view: target view handle, bind: object {scene: scene handle}) -> bool [changes]",
+              "engine.view.setScene declares its scene a scene handle: " + signatureText(*live.find("engine.view.setScene")));
     }
 
     // 9. THE SIGNATURE DECLARES ITS DOMAIN (the lead's S2): choices, ranges and units are the signature's - checked by
@@ -680,8 +727,8 @@ int main()
                       std::string::npos &&
                   signatureText(*eng.find("engine.frames")) == "engine.frames(n: int >= 0 frames) -> null [changes]",
               "the engine's commands declare theirs: " + signatureText(*eng.find("engine.frames")));
-        check(failedWith(eng.call("engine.node.setTransform",
-                                  {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(nan), Value(0), Value(0)})}})}),
+        check(failedWith(live.call("engine.node.setTransform",
+                                  {realScene, realNode, Value(Value::Object{{"position", Value(Value::Array{Value(nan), Value(0), Value(0)})}})}),
                          "transform.position[0] is not a finite number"),
               "setTransform({position: [NaN, 0, 0]}) FAILS before the engine is asked (it reached setNodeTransform before)");
 
@@ -709,7 +756,7 @@ int main()
             return Value(Value::Object{{"halfSize", Value(hs)}, {"resolution", Value(res)}, {"stepCells", Value(step)}});
         };
         const auto giSet = [&](Value::Array table) {
-            return eng.call("engine.gi.set", {fakeScene, Value(Value::Object{{"mode", Value("vct")},
+            return live.call("engine.gi.set", {realScene, Value(Value::Object{{"mode", Value("vct")},
                                                                              {"cascades", Value(std::move(table))}})});
         };
         const struct { Value::Array table; const char *names; } refused[] = {
@@ -731,12 +778,11 @@ int main()
             if (!failedWith(r, std::string("engine.gi.set: ") + x.names)) missed += "\n      " + std::string(x.names) + " <- " + r.message;
         }
         check(missed.empty(), "engine.gi.set: each of the GI's 11 cascade bounds FAILS by name" + missed);
-        check(failedWith(giSet({cas(8, 64, 1), cas(32, 64, 32)}), "the engine did not start") &&
-                  failedWith(giSet({}), "the engine did not start") &&
+        check(giSet({cas(8, 64, 1), cas(32, 64, 32)}).status != Status::Failed && giSet({}).status != Status::Failed &&
                   signatureText(*eng.find("engine.gi.set")).find("cascades: object[] <= 4 {halfSize: number > 0 m, resolution: "
                                                                   "int 16..256 cells, stepCells: number 0..128 cells = default}") !=
                       std::string::npos,
-              "THE CONTROL: a table inside every bound (and none) passes them, to the engine; the bounds are printed");
+              "THE CONTROL: a table inside every bound (and none) passes them to the real engine; the bounds are printed");
     }
 
     // 10. THE LANGUAGE TABLE (the lead's S5): a script's language is its name's extension; a SECOND LANGUAGE is one small
@@ -889,7 +935,7 @@ int main()
                                "how many numbers (at most 4)"},
                               [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0]["v"].asArray().size())); });
         registerEngineCommands(capped, nullptr, "no device here", false);
-        const std::string scene = std::to_string(capped.registry().hold("scene", std::make_shared<int>(0)));
+        const std::string scene = "1";   // (any number: the conversion FAILS the call before the registry reads it)
         const Result r = capped.run(
             "const huge = []; huge.length = 4e9;\n"
             "const caught = (f) => { try { f(); return 'no failure'; } catch (e) { return e.message; } };\n"

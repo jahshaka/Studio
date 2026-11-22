@@ -422,14 +422,20 @@ jah_no_display(engine.moving_sample)
 
 # script.host — THE ENGINE'S SCRIPT HOST, ITS LAWS ON THE CPU (SCRIPT-IN-ENGINE-1 stage 1; test_script_host.cpp says
 # them): the value's kinds, the documented commands, the strict call (an unknown name, a surplus argument, an undeclared
-# member, a missing required argument, a non-integral integer FAIL by name), fail against refuse. No device: a code row.
+# member, a missing required argument, a non-integral integer FAIL by name), fail against refuse. No card, no display:
+# a code row - the engine commands' laws on ONE headless (NULL) engine's real scenes and nodes (2b; the
+# engine.exit_only_teardown pattern: the harness's config, its exit-only teardown).
 add_executable(test_script_host test_script_host.cpp)
 set_target_properties(test_script_host PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_link_libraries(test_script_host PRIVATE JahshakaEngine)
 # the route declaration's judgement (irisgl/engine/src/script/RouteDeclaration.h: pure, engine-private) proved on the CPU
-target_include_directories(test_script_host PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
-add_test(NAME script.host COMMAND test_script_host)
+target_include_directories(test_script_host PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_script_host PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_script_host JahshakaEngineMedia)
+add_test(NAME script.host COMMAND test_script_host WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(script.host PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(script.host)
 
