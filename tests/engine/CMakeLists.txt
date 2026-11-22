@@ -452,6 +452,17 @@ add_test(NAME script.json COMMAND test_script_json)
 set_tests_properties(script.json PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(script.json)
 
+# mcp.schema — THE SIGNATURE AS A SCHEMA, ON THE CPU (MCP-ON-HOST-1 stage 1; test_mcp_schema.cpp says the laws): every
+# Param form to its expected text, every registered command (no engine) to a structurally valid schema with no unmapped
+# field, the three real signatures byte for byte, an unmappable field a named fault. No device: a code row.
+add_executable(test_mcp_schema test_mcp_schema.cpp)
+set_target_properties(test_mcp_schema PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_mcp_schema PRIVATE JahshakaEngineMcp JahshakaEngine)
+add_test(NAME mcp.schema COMMAND test_mcp_schema)
+set_tests_properties(mcp.schema PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(mcp.schema)
+
 # engine.hit_list_law — THE REFLECTION REST's RECORD ALLOWANCE as a pure function (URGENT #157; test_hit_list_law.cpp says
 # the law): a function of the view's target (its hit list's creation capacity) and the rest's batching count, never of
 # how large the list once grew; a list smaller than its creation size caps it. The header only: a CPU code row.
