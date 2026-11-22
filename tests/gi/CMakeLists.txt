@@ -1276,11 +1276,11 @@ jah_gpu_row(gi.card_build_late.pso CLASS engine COMMAND test_gi_card_build_late 
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
          COLD "its subject is a permutation still compiling: the room's must be cold in the process (the fixture's shaderCacheOff)")
 set_tests_properties(gi.card_build_late.pso PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 533)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 283)
 jah_gpu_row(gi.card_build_late.texture CLASS engine COMMAND test_gi_card_build_late texture
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.texture PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 387)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 239)
 jah_gpu_row(gi.card_build_late.psofail CLASS engine COMMAND test_gi_card_build_late psofail
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.psofail PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
