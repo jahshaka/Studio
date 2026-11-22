@@ -667,6 +667,35 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             l.castShadows = shape.shadows;
             warmScene->setLight(sun, l);
         }
+        // THE SKY's ENVIRONMENT LANDS BEFORE ANY OBJECT IS DRAWN (SHADER-SYSTEM-1, the final read's item 3b): the
+        // analytic sky's capture, its convolution and its SH become every PBS datablock's reflection cube
+        // (OgreScene::landEnvironmentIfComplete -> applyReflectionToAll), and the cube is in a permutation's hash and
+        // root layout - in the stock depth prepass too. It used to land when the GI frames ran on a cold cache (the
+        // convolution compiling in the background: ~frame 52) but at frame 1 on a warm one, while the box was still
+        // in its first, stock frames: a warm launch drew a state - the box in the stock depth pass WITH the cube - no
+        // cleared launch reached, and compiled it in a frame (hlms.1 #45, shadercache.app.warm). So the sky first, and
+        // the boxes only once the scene PUBLISHES its environment landed (environmentPending false, the SH valid): on
+        // every cache the box's first frames draw under the cube. A stall or the ceiling ends the wait, loudly.
+        {
+            SkyDesc sky;
+            sky.mode = SkyMode::Atmosphere;
+            warmScene->setSky(sky);
+        }
+        const auto environmentOwed = [&]() {
+            return warmScene->published().environmentPending || !warmScene->published().skyAmbientShValid;
+        };
+        int envFrames = 0;
+        QElapsedTimer envTimer; envTimer.start();
+        while (environmentOwed() && !settle.stalled() && !settle.pastCeiling()) {
+            gateFrame(*engine);
+            poll();
+            ++envFrames;
+        }
+        if (environmentOwed())
+            qWarning("FAIL: shader build gate: the warm-up scene's environment did not land - %s",
+                     settle.describe().c_str());
+        qInfo("startup shader build: the warm-up scene's sky environment landed after %d frames, %lld ms (before its "
+              "boxes are drawn)", envFrames, (long long)envTimer.elapsed());
         // THE GI COMPUTE SET (PHOTON-VOXEL-5; owner smoke from a wiped data root = a cold cache):
         // a box and the tier a new scene is born with (Epic, the Photon table), so the voxeliser,
         // the light injection, the bounce, step 0/1, the field and the card light job DISPATCH
@@ -679,7 +708,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         boxMat.albedo = Colour(0.8f, 0.8f, 0.8f);
         const MaterialId boxMatId = boxMesh ? warmScene->createPbrMaterial(boxMat) : MaterialId(0);
         // ...TEXTURED (the voxeliser's texture-pool permutation - every world's ground has a map)
-        // under the ANALYTIC SKY (the bounce, the field and the cards read its environment cube:
+        // under the ANALYTIC SKY set above (the bounce, the field and the cards read its environment cube:
         // their `jah_env` permutation) - the default world's shape.
         if (boxMatId) {
             const unsigned char grey[4 * 4 * 4] = {
@@ -689,11 +718,6 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
                 180, 180, 180, 255, 200, 200, 200, 255, 180, 180, 180, 255, 200, 200, 200, 255 };
             const TextureId tex = warmScene->createTexture(4u, 4u, grey, true, true);
             if (tex) warmScene->setPbrTexture(boxMatId, PbrTextureSlot::Albedo, tex);
-        }
-        {
-            SkyDesc sky;
-            sky.mode = SkyMode::Atmosphere;
-            warmScene->setSky(sky);
         }
         // THE VOXELISER'S OTHER TWO VARIANTS (ASYNC-SHADERS-1). The voxeliser compiles one
         // compute variant per texture combination it meets (none, albedo, emissive, both —
