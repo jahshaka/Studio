@@ -11,7 +11,11 @@
 //   3. a Texture import reads 'stale' (the importer's tile carries no key until stage 2 routes the
 //      import's commit), and 'ok' after previews.render (its CPU branch), key == storedKey;
 //   4. previews.render of a MATERIAL headless fails by name and changes nothing ('missing' still);
-//   5. `type` filters to one type; `scope: "project"` lists only the open project's pinned rows.
+//   5. `type` filters to one type; `scope: "project"` lists only the open project's pinned rows;
+//   6. A SCRIPT THAT WRITES, THEN previews.renderAll over more rows than the writer's cap (8): the run's
+//      batch is stood down when the verb starts and the sweep waits at the cap, so the writer's
+//      high-water mark (peakQueued) never passes the cap, and every row lands 'ok'. RED when the
+//      batch stood down only after the sweep and the queue had no cap: peakQueued = every row.
 // RED ON THE BASE: there is no `previews` module (a TypeError at the first call).
 
 function assert(cond, msg) {
@@ -103,5 +107,21 @@ assert(rowOf(m, inProject) === null, "the library-only material is not in the pr
 var refused = false;
 try { previews.state({ scope: "elsewhere" }); } catch (e) { refused = true; }
 assert(refused, "an unknown scope is refused");
+
+// ---- 6. A WRITE, THEN A SWEEP OVER MORE ROWS THAN THE WRITER'S CAP ----------------------------
+var CAP = 8;
+var many = [];
+for (var i = 0; i < 12; ++i) many.push(assets.importFile(PNG));
+var distinct = {};
+many.forEach(function (g) { distinct[g] = true; });
+assert(Object.keys(distinct).length === 12, "12 Texture rows imported");
+assert(assets.createDrawer("Batch " + stamp) > 0, "the script WRITES: the run's batch is live");
+var swept = previews.renderAll();
+var failedGuids = swept.failed.map(function (f) { return f.guid; }).sort();
+assert(J(failedGuids) === J([m, g].sort()) && swept.rendered >= 12,
+       "renderAll renders every texture; its only failures are the two materials, headless: " + J(swept));
+assert(swept.peakQueued >= 1 && swept.peakQueued <= CAP,
+       "the writer's high-water mark stays within its cap of " + CAP + ": " + swept.peakQueued);
+assert(many.every(function (g) { return rowOf(g).state === "ok"; }), "every row reads 'ok' after the sweep");
 
 console.log("previews_state: all assertions passed");

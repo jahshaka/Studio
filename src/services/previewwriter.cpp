@@ -102,6 +102,7 @@ bool Writer::submit(const QString &guid, const QImage &image, const QString &key
         item.key = key;
         item.done = std::move(done);
         mQueue.push_back(std::move(item));
+        ++mPending;
     }
     mWake.notify_one();
     return true;
@@ -170,6 +171,7 @@ void Writer::run()
                         Done old = std::move(item.done);
                         post(mAlive, [old, superseded]() { old(superseded); });
                     }
+                    --mPending;
                     continue;
                 }
                 mQueue.push_front(std::move(item));
@@ -188,6 +190,7 @@ void Writer::run()
             if (!write.ok)
                 irisLog(QStringLiteral("previews: the preview of %1 was not stored: %2").arg(item.guid, write.reason));
             Done done = std::move(item.done);
+            --mPending;
             post(mAlive, [landed, done]() {
                 if (landed.ok) Database::announceAssetThumbnailWritten(landed.guid);
                 if (done) done(landed);

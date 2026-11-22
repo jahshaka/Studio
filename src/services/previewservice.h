@@ -105,6 +105,10 @@ public:
         bool projectOnly = false;  ///< the open project's pinned rows
         int limit = 0;             ///< 0 = no limit, else at most this many requests
         std::function<bool()> cancelled;   ///< an extra stop source, asked once a row
+        /// THE DOOR'S WAIT AT THE WRITER'S CAP (previews::Writer::kQueueCap): called while that many
+        /// writes are pending; it waits (bounded, the door's own loop) and answers whether one LANDED.
+        /// Null, or false: the sweep stops there, `stalled`. This service never waits itself.
+        std::function<bool()> waitForLanding;
     };
     struct SweepResult
     {
@@ -112,6 +116,8 @@ public:
         int requested = 0;         ///< requests made; each completes through `each`
         int skipped = 0;           ///< nothing to draw
         bool cancelled = false;    ///< a stop arrived before the end
+        bool stalled = false;      ///< the writer stayed at its cap: the sweep stopped there
+        int peakPending = 0;       ///< the most writes pending in the writer during the sweep
     };
     /// One request a row, `yield` between rows (the caller keeps its UI alive with it; a library
     /// can hold hundreds of renders), `each` with every row's outcome as it completes.

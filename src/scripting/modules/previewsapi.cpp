@@ -29,8 +29,8 @@ namespace {
 
 // THE VERBS' WAIT FOR A LANDED PREVIEW (PREVIEWS-1, the lead's A1 and G2) - in these synchronous
 // verbs' door ONLY: PreviewService::request never waits (PICTURE-REQUEST-1 stage 3 replaces this by
-// a ticket). The run's database batch is stood down first (the commit a top-level DbTransaction
-// makes; it begins again at its next write), or the writer would wait behind it to the run's end.
+// a ticket). The run's database batch is stood down WHEN THE VERB STARTS (the commit a top-level
+// DbTransaction makes; it begins again at its next write), or every write would wait behind it.
 // The event loop turns with user input held back (assetshare.cpp's import wait). BOUNDED: the wait
 // ends when every write has landed, or when none has landed for kVerbWaitMs - one write ahead of it
 // under its budget, then its own - with a named failure.
@@ -44,10 +44,9 @@ struct PreviewWait
 };
 
 /// Waits for `wait->completed` to reach `wait->requested`; false when the bound passed first.
-bool waitForPreviews(ScriptHost &host, const std::shared_ptr<PreviewWait> &wait)
+bool waitForPreviews(const std::shared_ptr<PreviewWait> &wait)
 {
     if (wait->completed >= wait->requested) return true;
-    if (host.db) host.db->commitBatchNow();
     QEventLoop loop;
     QTimer stall;
     stall.setSingleShot(true);
@@ -60,6 +59,21 @@ bool waitForPreviews(ScriptHost &host, const std::shared_ptr<PreviewWait> &wait)
     }
     wait->loop = nullptr;
     return wait->completed >= wait->requested;
+}
+
+/// THE SWEEP'S WAIT AT THE WRITER'S CAP: until one more completion lands, bounded by kVerbWaitMs.
+bool waitForOneLanding(const std::shared_ptr<PreviewWait> &wait)
+{
+    const int before = wait->completed;
+    QEventLoop loop;
+    QTimer stall;
+    stall.setSingleShot(true);
+    QObject::connect(&stall, &QTimer::timeout, &loop, &QEventLoop::quit);
+    wait->loop = &loop;
+    stall.start(kVerbWaitMs);
+    loop.exec(QEventLoop::ExcludeUserInputEvents);
+    wait->loop = nullptr;
+    return wait->completed > before;
 }
 
 /// The completion a waited request reports to.
@@ -99,12 +113,14 @@ QVector<VerbInfo> PreviewsApi::verbs() const
           "failure changes NOTHING stored and says why; so does a write that does not land within the bound "
           "(the library stayed locked). Throws for a guid that names no asset.",
           Needs::Document },
-        { "renderAll", "previews.renderAll({staleOnly, projectOnly, limit}) -> {considered, rendered, skipped, cancelled, failed: [{guid, reason}]}",
+        { "renderAll", "previews.renderAll({staleOnly, projectOnly, limit}) -> {considered, rendered, skipped, cancelled, peakQueued, failed: [{guid, reason}]}",
           "Draws many previews, one row a turn with the window painting between them, and waits for them to be "
           "stored. `staleOnly` (default true) takes the 'missing' and 'stale' rows of previews.state; false "
           "redraws every drawable row. `projectOnly` (default false): the open project's pinned rows. `limit` "
           "(default 0 = no limit) caps the requests. `skipped` counts rows with nothing to draw; `cancelled` is "
-          "true when a stop arrived (the app quitting, the script stopped) - what was stored stays stored.",
+          "true when a stop arrived (the app quitting, the script stopped) - what was stored stays stored. "
+          "`peakQueued` is the most previews waiting in the writer at once: never above its cap (8); at the cap "
+          "the sweep waits for a landing.",
           Needs::Document },
     };
 }
@@ -157,6 +173,7 @@ QVariantMap PreviewsApi::render(const QString &guid)
         fail(QStringLiteral("previews.render: no asset with guid '%1'").arg(guid));
         return out;
     }
+    host.db->commitBatchNow();   // the run's batch stands down before the request: the write never waits behind it
     auto wait = std::make_shared<PreviewWait>();
     wait->requested = 1;
     auto outcome = std::make_shared<PreviewService::Outcome>();
@@ -164,7 +181,7 @@ QVariantMap PreviewsApi::render(const QString &guid)
         *outcome = o;
         notePreview(wait);
     });
-    if (!waitForPreviews(host, wait)) {
+    if (!waitForPreviews(wait)) {
         outcome->ok = false;
         outcome->reason = notLanded(1);
     }
@@ -196,12 +213,14 @@ QVariantMap PreviewsApi::renderAll(const QVariantMap &options)
     if (options.contains("staleOnly")) sweep.staleOnly = options.value("staleOnly").toBool();
     if (options.contains("projectOnly")) sweep.projectOnly = options.value("projectOnly").toBool();
     if (options.contains("limit")) sweep.limit = options.value("limit").toInt();
+    if (host.db) host.db->commitBatchNow();   // stood down BEFORE the sweep: its writes land as it goes
 
     // THE YIELD (THUMBS-1 item 4): one render a row, and a library can hold hundreds. USER INPUT IS
     // EXCLUDED - a click that re-entered the sweep through a menu would be a second sweep over the
     // same rows. AND IT IS STOPPABLE: a yield can deliver the window's close, a script can be
     // stopped; ScriptEngine::stop and the shutdown set the service's stop, checked a row.
     auto wait = std::make_shared<PreviewWait>();
+    sweep.waitForLanding = [wait] { return waitForOneLanding(wait); };
     auto rendered = std::make_shared<int>(0);
     auto failures = std::make_shared<QVariantList>();
     const auto result = previews->sweep(
@@ -213,7 +232,12 @@ QVariantMap PreviewsApi::renderAll(const QVariantMap &options)
         },
         [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
     wait->requested = result.requested;
-    if (!result.cancelled && !waitForPreviews(host, wait))
+    if (result.stalled)
+        failures->append(QVariantMap{ { "guid", QString() },
+                                      { "reason", QStringLiteral("the preview writer stayed at its cap of %1 for %2 ms: "
+                                                                 "the sweep stopped").arg(previews::Writer::kQueueCap)
+                                                      .arg(kVerbWaitMs) } });
+    if (!result.cancelled && !waitForPreviews(wait))
         failures->append(QVariantMap{ { "guid", QString() },
                                       { "reason", notLanded(wait->requested - wait->completed) } });
 
@@ -221,6 +245,7 @@ QVariantMap PreviewsApi::renderAll(const QVariantMap &options)
     out["rendered"] = *rendered;
     out["skipped"] = result.skipped;
     out["cancelled"] = result.cancelled;
+    out["peakQueued"] = result.peakPending;
     out["failed"] = *failures;
     return out;
 }

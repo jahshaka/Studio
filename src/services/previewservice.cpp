@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "services/previewservice.h"
 
+#include <algorithm>
+
 #include <QFileInfo>
 #include <QImage>
 #include <QPixmap>
@@ -299,9 +301,16 @@ PreviewService::SweepResult PreviewService::sweep(Project *project, const SweepO
         if (row.state == State::None) {
             ++result.skipped;
         } else if (!options.staleOnly || row.state != State::Ok) {
+            // AT THE WRITER'S CAP the sweep waits for a landing (the door's bounded wait) - never a
+            // queue that holds every row's picture until the sweep ends.
+            bool full = mWriter && mWriter->pending() >= previews::Writer::kQueueCap;
+            while (full && options.waitForLanding && options.waitForLanding())
+                full = mWriter->pending() >= previews::Writer::kQueueCap;
+            if (full) { result.stalled = true; break; }
             ++result.requested;
             const QString guid = row.guid;
             request(project, guid, [each, guid](const Outcome &outcome) { if (each) each(guid, outcome); });
+            if (mWriter) result.peakPending = std::max(result.peakPending, mWriter->pending());
             rendered = true;
         }
         // BETWEEN ROWS, NOT INSIDE ONE: each request is a synchronous render. A YIELD CAN DELIVER THE

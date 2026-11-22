@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/qtinterop.h"
 #include "services/previewservice.h"
+#include "services/previewwriter.h"
 #include "bridge/enginehost.h"
 #include "ui/pages/assetview.h"
 #include "ui/pages/iassetviewer.h"
@@ -2578,9 +2579,23 @@ void AssetView::rebuildMissingThumbnails(bool afterUpdate)
 	// THE ANSWER COMES WITH THE LAST COMPLETION: a request renders now and its write lands after,
 	// so the tally is shared and the report is made by whichever comes last - the sweep's end or
 	// the last landing. Nothing here waits.
-	struct Tally { int rebuilt = 0; int completed = 0; int requested = -1; QStringList failures; };
+	struct Tally { int rebuilt = 0; int completed = 0; int requested = -1; QStringList failures; QEventLoop *loop = nullptr; };
 	const auto tally = std::make_shared<Tally>();
 	QPointer<AssetView> self(this);
+	// AT THE WRITER'S CAP the sweep waits for a landing, bounded (one write ahead under its budget,
+	// then its own), with user input held back as between rows.
+	options.waitForLanding = [tally] {
+		const int before = tally->completed;
+		QEventLoop loop;
+		QTimer stall;
+		stall.setSingleShot(true);
+		QObject::connect(&stall, &QTimer::timeout, &loop, &QEventLoop::quit);
+		tally->loop = &loop;
+		stall.start(2 * previews::Writer::kBudgetMs);
+		loop.exec(QEventLoop::ExcludeUserInputEvents);
+		tally->loop = nullptr;
+		return tally->completed > before;
+	};
 	const auto reportIfDone = [self, tally, afterUpdate]() {
 		if (self && tally->requested >= 0 && tally->completed == tally->requested)
 			self->reportPreviewSweep(tally->rebuilt, tally->failures, afterUpdate);
@@ -2589,6 +2604,7 @@ void AssetView::rebuildMissingThumbnails(bool afterUpdate)
 	    project, options,
 	    [self, tally, reportIfDone](const QString &guid, const PreviewService::Outcome &outcome) {
 		    ++tally->completed;
+		    if (tally->loop) tally->loop->quit();
 		    // Each rebuilt tile repaints from its new stored picture (the write dropped the cached
 		    // one; the view reads it again, off this thread).
 		    if (outcome.ok) { ++tally->rebuilt; if (self) self->libraryModel->refreshTile(guid); }
@@ -2602,6 +2618,8 @@ void AssetView::rebuildMissingThumbnails(bool afterUpdate)
 	// time we are back here, the page is on its way out, and a toast — let alone
 	// the modal box below — would be the "modal swallowed the quit" zombie.
 	if (result.cancelled) return;
+	if (result.stalled)
+		tally->failures << tr("the preview writer stayed full: the rebuild stopped after %1 thumbnails").arg(result.requested);
 	tally->requested = result.requested;
 	reportIfDone();
 }

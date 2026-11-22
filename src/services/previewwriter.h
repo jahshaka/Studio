@@ -47,6 +47,7 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QImage>
 #include <QString>
+#include <atomic>
 #include <condition_variable>
 #include <deque>
 #include <functional>
@@ -61,6 +62,10 @@ class Writer
 public:
     /// The writer's budget: how long one write waits for the library's lock before it is dropped.
     static constexpr int kBudgetMs = 2000;
+    /// THE QUEUE'S CAP ACROSS GUIDS: at most this many writes pending (queued or in flight), each holding
+    /// its picture (1 MiB a 512-px tile) until it lands. A sweep at the cap waits for a landing
+    /// (PreviewService::SweepOptions::waitForLanding); a single request is never refused by it.
+    static constexpr int kQueueCap = 8;
 
     struct Landed
     {
@@ -90,6 +95,9 @@ public:
     /// Told of every drop past the budget, on the application's thread.
     void setDropHook(DropHook hook);
 
+    /// Writes submitted and not yet completed (queued or in flight). Any thread.
+    int pending() const { return mPending.load(); }
+
 private:
     struct Item
     {
@@ -107,6 +115,7 @@ private:
     const QString mPath;
     const int mBudgetMs;
     std::shared_ptr<bool> mAlive;   ///< read and cleared on the application's thread only
+    std::atomic<int> mPending{ 0 };
     DropHook mDropHook;
     std::mutex mMutex;
     std::condition_variable mWake;
