@@ -1197,6 +1197,9 @@ set_tests_properties(gi.photon_window_sky PROPERTIES JAHSHAKA_TEST_FRAMES 329)
 # BLOCKED BY THEIR COUNT: twelve glass slabs over a floor, a Forward+ lamp above them - the floor reads T^12 of the hole
 # (test_gi_pane_stack.cpp says the laws; red on the base: the ninth pane was confirmed opaque, the floor read 0); the GI on,
 # a reading ray through them is counted past its list (rayQuery.panesOverflow). A fixture.
+# ITS PRICE (GATHER-HANG-1, the final re-read's (c)): each run compiles four VCT/LightVctBounceInject compute permutations in its
+# frames (its GI-on arm's; the warm-up's scenes never instance them and a row's own compiles are not promoted to the shared
+# cache), so its ~2.6 s solo is its honest warm price, not a cold one.
 add_executable(test_gi_pane_stack test_gi_pane_stack.cpp)
 set_target_properties(test_gi_pane_stack PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
