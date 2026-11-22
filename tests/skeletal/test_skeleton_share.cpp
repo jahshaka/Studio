@@ -148,7 +148,14 @@ int main()
     CHECK(scene->shareSkeleton(hair, body), "sharing again is idempotent");
 
     // ---- refusals --------------------------------------------------------
-    CHECK(!scene->shareSkeleton(body, body), "a node cannot share with itself");
+    {
+        // a node with NO share state (no source, no followers), so the self-share refusal is this CHECK's only guard
+        // (`body` has the follower `hair`: "the follower has followers" refused body->body as well, and hid the first)
+        const NodeId lone = scene->createNode();
+        CHECK(scene->attachSkinnedMesh(lone, scene->createMesh(quad(1)), mat, rig, hairMap, 1), "a lone piece");
+        CHECK(!scene->shareSkeleton(lone, lone), "a node cannot share with itself");
+        scene->removeNode(lone);
+    }
     {
         const NodeId third = scene->createNode();
         const MeshId m = scene->createMesh(quad(1));
