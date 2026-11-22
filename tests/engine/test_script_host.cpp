@@ -44,6 +44,8 @@ struct Outer {
     Inner inner;
     std::vector<Inner> list;
     std::vector<Vec3> points;
+    std::vector<Quat> turns;
+    std::vector<Colour> tints;
     float sh[3] = {1, 2, 3};
     std::optional<int> maybe;
     std::shared_ptr<const Inner> shared;
@@ -52,7 +54,7 @@ struct Outer {
 namespace jahshaka { namespace engine { namespace script {
 JAH_ENUM_NAMES(tr::Mode, {{tr::Mode::Off, "off"}, {tr::Mode::Fast, "fast"}, {tr::Mode::Slow, "slow"}});
 JAH_RECORD_COUNT(tr::Inner, 2);
-JAH_RECORD_COUNT(tr::Outer, 14);
+JAH_RECORD_COUNT(tr::Outer, 16);
 const Table<tr::Inner> &Record<tr::Inner>::table()
 {
     static const Table<tr::Inner> t({field("level", &tr::Inner::level).range(0, 9), field("at", &tr::Inner::at)});
@@ -65,7 +67,8 @@ const Table<tr::Outer> &Record<tr::Outer>::table()
                                      field("exact", &tr::Outer::exact), field("label", &tr::Outer::label),
                                      field("turn", &tr::Outer::turn), field("tint", &tr::Outer::tint),
                                      field("inner", &tr::Outer::inner), field("list", &tr::Outer::list).upTo(4),
-                                     field("points", &tr::Outer::points).upTo(12), field("sh", &tr::Outer::sh),
+                                     field("points", &tr::Outer::points).upTo(12), field("turns", &tr::Outer::turns).upTo(8),
+                                     field("tints", &tr::Outer::tints).upTo(8), field("sh", &tr::Outer::sh),
                                      field("maybe", &tr::Outer::maybe), field("shared", &tr::Outer::shared)});
     return t;
 }
@@ -445,12 +448,13 @@ int main()
         Value::Array nanAt7 = numbersOf(9, 1.0).asArray();
         nanAt7[7] = Value(std::numeric_limits<double>::quiet_NaN());
         check(failedWith(batch({{"nodes", Value(nodes)}, {"positions", numbersOf(8, 0)}}),
-                         "engine.node.setTransforms: transforms.positions holds 8 numbers, not 3 x 3 nodes") &&
+                         "engine.node.setTransforms: transforms.positions holds 8 numbers, not a multiple of 3") &&
                   failedWith(batch({{"nodes", Value(nodes)}, {"rotations", numbersOf(9, 0)}}),
-                             "transforms.rotations holds 9 numbers, not 4 x 3 nodes") &&
+                             "transforms.rotations holds 9 numbers, not a multiple of 4") &&
                   failedWith(batch({{"nodes", Value(nodes)}, {"scales", numbersOf(12, 1)}}),
                              "transforms.scales holds 12 numbers, not 3 x 3 nodes"),
-              "setTransforms: a part whose length is not 3 n / 4 n / 3 n FAILS by name");
+              "setTransforms: a part whose length is not 3 n / 4 n / 3 n FAILS by name (no multiple of its stride: the "
+              "declaration's check; a multiple for another count of nodes: the command's)");
         check(failedWith(batch({{"nodes", Value(nodes)}, {"positions", Value(nanAt7)}}),
                          "transforms.positions[7] is not a finite number") &&
                   failedWith(batch({{"nodes", Value(withDead)}}), "engine.node.setTransforms: nodes[3]: node " +
@@ -462,8 +466,8 @@ int main()
                          {"scales", numbersOf(9, 1)}}).status == Status::Ok &&
                   signatureText(*b.find("engine.node.setTransforms")) ==
                       "engine.node.setTransforms(scene: target scene handle, transforms: object {nodes: node handle[] <= 65536, "
-                      "positions: number[] <= 196608 = default, rotations: number[] <= 262144 = default, scales: number[] <= "
-                      "196608 = default}) -> null [changes]",
+                      "positions: float[3n] <= 196608 numbers = default, rotations: float[4n] <= 262144 numbers = default, "
+                      "scales: float[3n] <= 196608 numbers = default}) -> null [changes]",
               "THE CONTROL: every part absent, and every part whole, pass the checks and the real engine takes them; the "
               "signature: " +
                   signatureText(*b.find("engine.node.setTransforms")));
@@ -1094,8 +1098,10 @@ int main()
         filled.tint = Colour(1, 0.5f, 0.25f, 0.75f);
         filled.inner.level = 9;
         filled.inner.at = Vec3(-1, -2, -3);
-        filled.list = {tr::Inner{3, Vec3(4, 5, 6)}, tr::Inner{0, Vec3()}};
+        filled.list = {tr::Inner{3, Vec3(4, 5, 6)}, tr::Inner{0, Vec3()}};   // (a list: elements, not flat)
         filled.points = {Vec3(1, 1, 1), Vec3(2, 2, 2)};
+        filled.turns = {Quat(0, 1, 0, 0)};
+        filled.tints = {Colour(1, 1, 1, 0.5f), Colour(0, 0, 0, 1)};
         filled.sh[0] = 7;
         filled.sh[2] = -7;
         filled.maybe = -5;
@@ -1106,7 +1112,8 @@ int main()
         const Result w1 = rec.call("test.record", {whole});
         const bool backEqual = w1.status == Status::Ok && w1.value == whole && seen.count == 4000000000u &&
                                seen.shared && seen.shared->at == Vec3(9, 8, 7) && seen.maybe == -5 && seen.sh[2] == -7.0f &&
-                               seen.points.size() == 2 && seen.list[0].at == Vec3(4, 5, 6) && seen.mode == tr::Mode::Slow;
+                               seen.points.size() == 2 && seen.list[0].at == Vec3(4, 5, 6) && seen.mode == tr::Mode::Slow &&
+                               seen.turns.size() == 1 && seen.tints[1] == Colour(0, 0, 0, 1);
         const auto with = [&](const char *member, Value v) {
             return rec.call("test.record", {Value(Value::Object{{member, std::move(v)}})});
         };
@@ -1120,11 +1127,22 @@ int main()
         const Result past = with("gain", Value(1e39));
         check(failedWith(past, "test.record: r.gain ") && past.message.find(" is beyond a float") != std::string::npos &&
                   failedWith(with("points", Value(Value::Array{Value(1), Value(2)})),
-                             "test.record: r.points holds 2 numbers, not 3 an element") &&
+                             "test.record: r.points holds 2 numbers, not a multiple of 3") &&
+                  failedWith(with("turns", Value(Value::Array(5, Value(0)))), "r.turns holds 5 numbers, not a multiple of 4") &&
+                  failedWith(with("tints", Value(Value::Array(6, Value(0)))), "r.tints holds 6 numbers, not a multiple of 4") &&
+                  failedWith(with("points", Value(Value::Array{Value(1e39), Value(0), Value(0)})), "r.points[0] ") &&
+                  with("points", Value(Value::Array{Value(1e39), Value(0), Value(0)})).message.find(" is beyond a float") !=
+                      std::string::npos &&
                   failedWith(with("mode", Value("medium")), "r.mode 'medium' is not one of \"off\"|\"fast\"|\"slow\"") &&
                   failedWith(with("count", Value(-1)), "r.count -1 is outside 0..4294967295"),
-              "a float past its range, a flat vector of a broken length, an unnamed enum value and a negative unsigned "
-              "each FAIL by name; the signature: " + signatureText(*rec.find("test.record")).substr(0, 160));
+              "a float past its range (a field and a flat vector's element), a flat vector of a broken length (each stride: "
+              "3, 4, 4), an unnamed enum value and a negative unsigned each FAIL by name");
+        const std::string sig = signatureText(*rec.find("test.record"));
+        check(sig.find("gain: float = default") != std::string::npos && sig.find("exact: number = default") != std::string::npos &&
+                  sig.find("points: float[3n] <= 12 numbers = default") != std::string::npos &&
+                  sig.find("turn: float[4] = default") != std::string::npos,
+              "THE SIGNATURE SAYS single precision (`float`, a double is `number`) and a flat vector's bound in numbers: " +
+                  sig.substr(0, 200));
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
