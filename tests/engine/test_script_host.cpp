@@ -305,6 +305,29 @@ int main()
                               {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
                      "engine.node.setTransform: transform.position must hold 3 elements"),
           "a 2-element position FAILS by name (the host checks a vector's length, before the engine is asked)");
+    // A HELD KIND IS BOUND TO ONE C++ TYPE (2b; MCP-ON-HOST-1 stage 1's finding): fakeScene holds an int under the
+    // engine's "scene" kind, and the node's existence check reads its scene through the TYPED accessor - so the call
+    // FAILS by name (the untyped read took the int AS a Scene and called into it: a crash)
+    check(failedWith(eng.call("engine.node.setTransform", {fakeScene, fakeNode, Value(Value::Object{})}),
+                     "engine.node.setTransform: node: a node is named with its scene"),
+          "a scene handle holding another C++ type FAILS the node's existence check by name (it is never read as a Scene)");
+    {
+        // ... and the binding itself: the first hold binds the kind; another type under it is refused by name (a
+        // command's Call::hold FAILS with it); a read as another type answers null
+        Registry typed;
+        std::string why;
+        const std::int64_t gadget = typed.hold("gadget", std::make_shared<int>(7));
+        const std::int64_t other = typed.hold("gadget", std::make_shared<double>(2.5), false, &why);
+        typed.add({"test.wrongType", {Access::Changes, {}, Kind::Int}, "holds a double as a gadget"},
+                  [](Call &c) { return c.hold("gadget", std::make_shared<double>(1.0)); });
+        check(gadget > 0 && other == 0 &&
+                  why == "the gadget kind is bound to another C++ type (one kind, one type: a gadget handle names only "
+                         "what its first hold named)" &&
+                  failedWith(typed.call("test.wrongType", {}), "test.wrongType: the gadget kind is bound to another C++ type") &&
+                  typed.object<int>(gadget) && *typed.object<int>(gadget) == 7 && !typed.object<double>(gadget),
+              "A HELD KIND IS BOUND TO ONE C++ TYPE: a double under the int-bound kind is refused by name, at the registry "
+              "and through a command; the int reads back as an int and never as a double (" + why + ")");
+    }
     {
         // THE FLAT BATCH (engine.node.setTransforms, 2a a4): its shape is checked before any node moves - here the node
         // kind's existence check is this file's (no engine: node 4 is dead, the rest live), so the checks are seen to
