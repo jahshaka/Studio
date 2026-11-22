@@ -35,6 +35,8 @@ if (MODE === "first") {
     // opens) — the returning session's first entry RESTORES it (EffectsPage::showEvent).
     project.open(OPEN);
     app.space("materials");
+    // A SECOND material, never opened here: the returning session opens it FROM THE DRAWER (step openFromDrawer).
+    materials.create("library.scale drawer", { graph: true });
     var made = materials.create("library.scale tab", { graph: true });
     materials.open(made);
     var open = materials.tabs().map(function (t) { return t.guid; });
@@ -53,6 +55,10 @@ if (MODE === "law") {
     var drawer = materials.customDrawer().map(function (t) { return t.guid; });
     line("restored " + (restored.length > 0 && drawer.indexOf(restored[0]) >= 0 ? "ok" : "missing") + " tabs=" +
          JSON.stringify(restored) + " drawer=" + drawer.length);
+    // THE USER's PATH: a material opened from the custom drawer (the verb is the drawer's door: EffectsPage::openDocument).
+    var fromDrawer = materials.customDrawer().filter(function (t) { return t.name === "library.scale drawer"; });
+    line("drawerMaterial " + (fromDrawer.length === 1 ? "ok" : "missing"));
+    if (fromDrawer.length === 1) step("openFromDrawer", function () { return materials.open(fromDrawer[0].guid); });
     step("desktop", function () { return app.space("desktop"); });
     var grid = desktop.gridStats();
     line("grid " + JSON.stringify(grid));

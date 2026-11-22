@@ -28,6 +28,10 @@
 #      - THE FIRST ENTRY TO MATERIALS FILLS THE CUSTOM DRAWER ONCE: the first session saved the open project's tab
 #        set with a Materials-home material open (one made by materials.create), so the entry restores it (EffectsPage::showEvent) — the drawer's
 #        listing runs once, never from the show path and again from the space's entry;
+#      - THE MEMBERS PANEL LISTS ONCE: the first entry to Materials (a restored tab) and a material opened from the
+#        custom drawer each list the Members panel's home pictures ONCE (fetchAssetsInHome.type2 == 1: its
+#        materialmembers::unused) - an open used to show the same document three times and re-ask the panel twice
+#        more (5 at the entry, 4 an open; NOQT-DATABASE-1);
 #      - NEGATIVE CONTROL: a step made N+1 on purpose grows with the library (the comparer sees growth).
 #      PRINTED, never barred: the logged counts by name (the workers' tile reads among them: ruled call 3 — only the
 #      default connection is traced), the ms, the heartbeat's worst gap, and RESIDUE (B): the first entry to
@@ -83,6 +87,8 @@ for r in a b; do
     png=""; [ "$r" = a ] && png="$PNG"
     run "$r" law "$open" "$png"
     check $? "root $r's returning session ended 0"
+    grep -aq "^SCALE drawerMaterial ok" "law-$r.log"
+    check $? "root $r: the custom drawer shows the first session's second material (the open-from-drawer step's input)"
     grep -aq "^SCALE restored ok" "law-$r.log"
     check $? "root $r: the first entry restored the saved tab set, its material's tile in the drawer ($(sed -n 's/^SCALE restored //p' "law-$r.log" | cut -c1-80))"
     ! grep -aq "index statement(s) built before the shell opened it" "law-$r.log"
@@ -108,7 +114,7 @@ def steps(path):
         elif line.startswith("SCALE heartbeat "): beat = json.loads(line[len("SCALE heartbeat "):])
     return out, grid, beat
 (a, ga, ha), (b, gb, hb) = steps(la), steps(lb)
-order = ["boot", "open", "list", "listMembers", "selected", "materials", "desktop", "create"]
+order = ["boot", "open", "list", "listMembers", "selected", "materials", "openFromDrawer", "desktop", "create"]
 bounded = {"boot", "open", "create", "desktop"}
 bar = 50 * added
 def ok(cond, text): print(("ok:   " if cond else "FAIL: ") + text)
@@ -144,8 +150,13 @@ for r, steps_ in (("a", a), ("b", b)):
     names = dict(kv.split("=") for kv in steps_["materials"].get("byName", "").split(",") if "=" in kv)
     fills = names.get("fetchAssetsInHome.type1", "0")   # the drawer lists the home's MATERIALS (ModelTypes::Material = 1)
     ok(fills == "1", f"root {r}: the first entry to Materials with a saved tab set fills the custom drawer once ({fills})")
-    print(f"   root {r}: the Members panel listed the Materials home's pictures {names.get('fetchAssetsInHome.type2', '0')} time(s) "
-          f"in the same entry (materialmembers.cpp unused: residue, printed)")
+# THE MEMBERS PANEL LISTS ONCE an entry and an open (materialmembers::unused reads the home's pictures).
+for r, steps_ in (("a", a), ("b", b)):
+    for s, what in (("materials", "the first entry to Materials (a restored tab)"), ("openFromDrawer", "an open from the custom drawer")):
+        if s not in steps_: continue
+        names = dict(kv.split("=") for kv in steps_[s].get("byName", "").split(",") if "=" in kv)
+        n_ = names.get("fetchAssetsInHome.type2", "0")
+        ok(n_ == "1", f"root {r}: {what} lists the Members panel's home pictures once ({n_}; {steps_[s]['bytes']} B read)")
 for s in ("open", "materials", "desktop", "create"):
     if s in a and s in b: print(f"   by name, {s}: A {a[s].get('byName', '')}\n   by name, {s}: B {b[s].get('byName', '')}")
 if "materials" in a and "materials" in b:

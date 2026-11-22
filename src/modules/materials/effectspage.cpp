@@ -237,6 +237,13 @@ void EffectsPage::bindGraph(MaterialDocument *doc, NodeGraph *graph)
 void EffectsPage::showDocument(MaterialDocument *doc)
 {
 	if (!doc || !doc->scene || !doc->graph) return;
+	// SHOWN ONCE (NOQT-DATABASE-1, the Materials entry's five Members listings): a document already on
+	// the canvas WITH THIS SCENE is shown - a re-show re-applies nothing that changed (a rebind brings a
+	// new scene and shows; what changes on a shown document says so itself: a save refreshes the Members
+	// panel, a copy-on-write re-points it, a rename sets the settings' name, an undo its own command).
+	// An open used to show the same document three times: its bind, the boot canvas's close, the
+	// restore's activation of the tab already active.
+	if (graphicsView->QGraphicsView::scene() == doc->scene) return;   // the view's own state (nulled when a scene dies)
 	// A REBIND IS NOT AN EDIT: `setMaterialSettings` emits `settingsChanged`,
 	// and that signal pushes an undoable MaterialSettingsChangeCommand — so
 	// every activation would leave a command on the tab it activated.
@@ -480,10 +487,7 @@ bool EffectsPage::closeMaterialTab(const QVariant &tabOrGuid)
 void EffectsPage::documentChanged(MaterialDocument *doc)
 {
 	if (!doc) return;
-	if (doc == activeDoc()) {
-		if (membersPanel) membersPanel->setMaterial(doc->info.GUID);
-		refreshCurrentTile();
-	}
+	if (doc == activeDoc()) refreshCurrentTile();
 	syncTabBar();   // the label is the document's name
 }
 
@@ -990,8 +994,6 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 
 	restoreGraphPositions(doc, obj["shadergraph"].toObject());
 	restoringGraph = false;
-	// The Members panel follows the open bundle.
-	if (membersPanel && doc == activeDoc()) membersPanel->setMaterial(doc->info.GUID);
 	refreshCurrentTile();
 	// The boot canvas stands aside for the first material that opens (C8).
 	dropUntouchedAnonymous(doc);
@@ -1543,6 +1545,9 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 		doc->info.GUID = assetGuid;
 		doc->info.name = newShader;
 		doc->info.origin = shaderInfo::Origin::Library;   // created in the library
+		// The document became a material AFTER its canvas was shown: the Members panel follows the new
+		// identity here, where it changed (the show bound the anonymous one).
+		if (membersPanel) membersPanel->setMaterial(doc->info.GUID);
 		documentChanged(doc);
 		// The boot canvas stands aside for a material, this one included.
 		dropUntouchedAnonymous(doc);
