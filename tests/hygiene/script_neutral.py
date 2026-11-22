@@ -4,7 +4,9 @@ the value type and the registry know nothing of JavaScript, and a second languag
 
   N1 THE JS ENGINE IS NAMED IN ONE PLACE. No C/C++ source or header under src/, tests/ or irisgl/ (irisgl/thirdparty/ - the
      vendored trees - excluded) names the JS engine (`JS_<name>`, `quickjs`, any case) except irisgl/engine/src/script/js_*.cpp,
-     the language's binding. (The build files name the library they build: they are not sources.)
+     the language's binding. (The build files name the library they build: they are not sources.) A TEST ROW's NAME is
+     not the engine's API: `lab.js_verbs` (a lowercase word, a dot, `js_`, lowercase) is read past; a member access
+     `foo.JS_NewObject(` and a bare `js_free(` are not (LAB-SCRIPTS-1, the lead's ruling).
   N2 THE HOST's NEUTRAL FILES INCLUDE NOTHING BUT THE STANDARD LIBRARY AND THEMSELVES: jahshaka/engine/Script.h,
      jahshaka/engine/ScriptJson.h and src/script/{registry.cpp, host.cpp, Language.h, json.cpp} include no Qt, Ogre or
      JS-engine header.
@@ -59,6 +61,14 @@ BINDING = re.compile(r"^irisgl/engine/src/script/js_[^/]+\.cpp$")
 # the JS engine's functions and macros (JS_*), its types (JSContext, JSValue, JSRuntime: the final read's leftover - a
 # forward-declared `struct JSContext;` passed N1) and its name; JSON is not it (JS + an upper-case letter + a lower-case one)
 JS_NAME = re.compile(r"(?i:\bJS_[A-Za-z]|quickjs)|\bJS[A-Z][a-z]")
+# A TEST ROW's NAME IS NOT THE ENGINE's API (LAB-SCRIPTS-1, the lead's ruling): `lab.js_verbs` - a lowercase word, a dot,
+# `js_`, lowercase - is taken out before JS_NAME reads a file. Only that shape: a member access `foo.JS_NewObject(` is
+# still the API (a "skip anything after a dot" would pass it), and a bare `js_free(ctx, p)` still is.
+ROW_NAME = re.compile(r"\b[a-z]+\.js_[a-z]\w*")
+
+
+def names_js_engine(text):
+    return JS_NAME.search(ROW_NAME.sub("", text)) is not None
 NEUTRAL = ("irisgl/engine/include/jahshaka/engine/Script.h", "irisgl/engine/src/script/registry.cpp",
            "irisgl/engine/src/script/host.cpp", "irisgl/engine/src/script/Language.h",
            "irisgl/engine/src/script/LanguageTable.inc",
@@ -86,7 +96,7 @@ def n1_bad(root):
                 rel = os.path.join(rel_d, n).replace(os.sep, "/")
                 if BINDING.match(rel):
                     continue
-                if JS_NAME.search(open(os.path.join(d, n), errors="replace").read()):
+                if names_js_engine(open(os.path.join(d, n), errors="replace").read()):
                     bad.append(rel)
     return sorted(bad)
 
@@ -266,8 +276,15 @@ def self_test():
         check(len(n2_bad(t)) == 5 and n2_bad(t)[4].startswith("irisgl/engine/src/script/json.cpp: #include <QJ"),
               "N2 names a Qt include in the JSON codec (%s)" % n2_bad(t)[4:])
         write(t, "src/x/fwd.h", "struct JSContext;\nvoid f(JSContext *c); // JSON stays\n")
-        check(n1_bad(t)[-1:] == ["src/x/fwd.h"] and not JS_NAME.search("JSON.stringify(x); // a JSONL file"),
+        check(n1_bad(t)[-1:] == ["src/x/fwd.h"] and not names_js_engine("JSON.stringify(x); // a JSONL file"),
               "N1 names a forward-declared JSContext (the engine's type names), never JSON")
+        write(t, "tests/lab/test_row.cpp", '// lab.js_verbs - a row\nstd::printf("lab.js_verbs: PASSED\\n");\n')
+        write(t, "tests/x/member.cpp", "auto v = foo.JS_NewObject(ctx);\n")   # no JSValue: the member call alone
+        write(t, "tests/x/bare.cpp", "js_free(ctx, p);\n")
+        check("tests/lab/test_row.cpp" not in n1_bad(t), "N1 passes a test row's name (lab.js_verbs) in a test source")
+        check({"tests/x/member.cpp", "tests/x/bare.cpp"} <= set(n1_bad(t)),
+              "N1 names a member access foo.JS_NewObject( and a bare js_free( (the API, wherever it is called) (%s)"
+              % n1_bad(t))
     with tempfile.TemporaryDirectory() as t:
         SD = "irisgl/engine/src/script/"
         mk = "std::unique_ptr<Host::Language> detail::%s(Host &host) { return nullptr; }\n"
