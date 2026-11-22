@@ -17,8 +17,11 @@ the value type and the registry know nothing of JavaScript, and a second languag
      Its negative controls (the self-test): a second, dummy language added as one file and one line PASSES; the file
      without its line, the line without its file, and a maker named in a command file each FAIL.
 
-  N3b THE ENGINE ARCHIVE HOLDS NO QT: `nm` on <build>/engine/libJahshakaEngine*.a names no Qt symbol, defined or needed (the
-     final read measured it; N3 proves only what jahengine pulls in).
+  N3b THE ENGINE AND SCRIPT ARCHIVES HOLD NO QT: `nm` on <build>/engine/libJahshakaEngine*.a and libJahshakaScript*.a names
+     no Qt symbol, defined or needed (the final read measured it; N3 proves only what jahengine pulls in).
+  N3c THE SCRIPT HOST IS AN ARCHIVE OF ITS OWN (SCRIPT-IN-ENGINE-1 2b): the engine archive names no symbol of the host and
+     none of the JS engine, defined or needed - so no link of the engine can pull a host member out by a weak std symbol
+     (DOCS/traps/engine/build-media-and-bake.md); THE CONTROL: the script archive defines them (> 0).
   N5 THE COMMANDS ARE LISTED (the seed of the generated documentation): `jahengine --list` (no engine booted) exits 0 and
      prints at least one command, each its signature line ending with its ACCESS tag (` [reads]`, ` [changes]`, ` [files]`
      or ` [test]`: SCRIPT-IN-ENGINE-1 2a, MCP-ON-HOST-1's read-only surface) and a non-empty doc line, and no FAULT
@@ -289,12 +292,17 @@ def main():
     check(dump.returncode == 0 and needed and not n3_bad(dump.stdout),
           "N3 jahengine's NEEDED list holds no Qt and no IrisGL (%d libraries: %s)" % (len(needed), " ".join(needed)))
     archives = [os.path.join(sys.argv[2], "engine", n) for n in sorted(os.listdir(os.path.join(sys.argv[2], "engine")))
-                if re.match(r"libJahshakaEngined?\.a$", n)] if os.path.isdir(os.path.join(sys.argv[2], "engine")) else []
-    qt = []
+                if re.match(r"libJahshaka(Engine|Script)d?\.a$", n)] if os.path.isdir(os.path.join(sys.argv[2], "engine")) else []
+    qt, inEngine, inScript = [], [], []
     for a in archives:
-        qt += nm_bad(subprocess.run(["nm", a], capture_output=True, text=True).stdout, QT_SYMBOL)
-    check(archives and not qt, "N3b the engine archive (%s) names no Qt symbol (%d: %s)"
+        text = subprocess.run(["nm", a], capture_output=True, text=True).stdout
+        qt += nm_bad(text, QT_SYMBOL)
+        (inScript if "Script" in os.path.basename(a) else inEngine).extend(nm_bad(text, HOST_SYMBOL))
+    check(len(archives) == 2 and not qt, "N3b the engine and script archives (%s) name no Qt symbol (%d: %s)"
           % (" ".join(os.path.basename(a) for a in archives), len(qt), qt[:3]))
+    check(len(archives) == 2 and not inEngine and len(inScript) > 0,
+          "N3c the engine archive names no script-host or JS symbol (%d: %s); the control: the script archive's %d"
+          % (len(inEngine), inEngine[:3], len(inScript)))
     listing = subprocess.run([jahengine, "--list"], capture_output=True, text=True)
     bad = n5_bad(listing.stdout, listing.returncode)
     n = len([l for l in listing.stdout.splitlines() if l and not l.startswith((" ", "FAULT"))])

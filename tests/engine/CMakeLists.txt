@@ -311,12 +311,12 @@ option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean. OUT OF THE DEFAULT BUILD (ENGINE-HEADERS-1
     # stage 0: 53 of the 376 objects an edit of Types.h recompiled): built through the `*_asan` executables' on-demand targets.
-    add_library(JahshakaEngineAsan STATIC EXCLUDE_FROM_ALL ${JAHSHAKA_ENGINE_SOURCES} ${JAHSHAKA_ENGINE_SCRIPT_SOURCES})
+    add_library(JahshakaEngineAsan STATIC EXCLUDE_FROM_ALL ${JAHSHAKA_ENGINE_SOURCES})   # (the script host: its own archive)
     target_include_directories(JahshakaEngineAsan
         PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include
         PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${JAHSHAKA_ENGINE_BUILD_ID_DIR}
                 ${CMAKE_SOURCE_DIR}/irisgl)   # core/threadbudget.h, as the real library (THREADING-1)
-    target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES} qjs)
+    target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES})   # (qjs is the script host's: JahshakaScript)
     # Same shader-cache fingerprint terms as the real library (irisgl/engine/
     # CMakeLists.txt) — OgreShaderCache.cpp will not compile without them. The
     # engine BUILD ID now arrives as a generated header on the include path
@@ -429,7 +429,7 @@ add_executable(test_script_host test_script_host.cpp)
 set_target_properties(test_script_host PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_link_libraries(test_script_host PRIVATE JahshakaEngine)
+target_link_libraries(test_script_host PRIVATE JahshakaScript)
 # the route declaration's judgement (irisgl/engine/src/script/RouteDeclaration.h: pure, engine-private) proved on the CPU
 target_include_directories(test_script_host PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${CMAKE_SOURCE_DIR}/tests/support)
 target_compile_definitions(test_script_host PRIVATE
@@ -449,7 +449,7 @@ set_target_properties(test_script_view_ownership PROPERTIES CXX_STANDARD 17 AUTO
 target_include_directories(test_script_view_ownership PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
 target_compile_definitions(test_script_view_ownership PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_script_view_ownership PRIVATE JahshakaEngine)
+target_link_libraries(test_script_view_ownership PRIVATE JahshakaScript)
 add_dependencies(test_script_view_ownership JahshakaEngineMedia)
 jah_gpu_row(script.view_ownership CLASS engine FRAMES 0 COMMAND test_script_view_ownership
             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
@@ -469,7 +469,7 @@ set_tests_properties(script.batch_equals_single PROPERTIES TIMEOUT 60 LABELS "en
 add_executable(test_script_json test_script_json.cpp)
 set_target_properties(test_script_json PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_link_libraries(test_script_json PRIVATE JahshakaEngine)
+target_link_libraries(test_script_json PRIVATE JahshakaScript)
 add_test(NAME script.json COMMAND test_script_json)
 set_tests_properties(script.json PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(script.json)
@@ -480,7 +480,7 @@ jah_no_display(script.json)
 add_executable(test_mcp_schema test_mcp_schema.cpp)
 set_target_properties(test_mcp_schema PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_link_libraries(test_mcp_schema PRIVATE JahshakaEngineMcp JahshakaEngine)
+target_link_libraries(test_mcp_schema PRIVATE JahshakaEngineMcp)
 add_test(NAME mcp.schema COMMAND test_mcp_schema)
 set_tests_properties(mcp.schema PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(mcp.schema)
