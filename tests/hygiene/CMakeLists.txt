@@ -543,6 +543,18 @@ if(Python3_Interpreter_FOUND)
     jah_no_display(source.ray_loops_bounded)
 endif()
 
+# source.view_ray_origin — GATHER-HANG-1 stage 3: every ray that starts on a point the view drew takes the one view-ray
+# origin (jah_ray_origin.glsl jahViewRayOrigin: the float bound, the point's error and the drawn surface's bound); every
+# other jahRayOrigin( caller is a named hit or cache ray, and a new caller is red until it says which. Red on the base:
+# the lamp ray and the glass escape lifted by the float bound alone (the black specks, lights.lamp_ray_origin). Its
+# negative control first. See the script's header.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME source.view_ray_origin
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/view_ray_origin.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.view_ray_origin PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.view_ray_origin)
+endif()
+
 # source.notices_coverage — NOTICES-1: every vendored component under
 # thirdparty/ and irisgl/thirdparty/ is claimed by app/notices.json, every
 # entry's notice file exists and reads like a licence, and no entry points at

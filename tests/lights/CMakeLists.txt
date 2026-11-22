@@ -28,3 +28,25 @@ jah_gpu_row(lights.falloff SHIP CLASS engine COMMAND test_light_falloff
 set_tests_properties(lights.falloff PROPERTIES TIMEOUT 60 LABELS "engine")
 set_tests_properties(lights.falloff PROPERTIES JAHSHAKA_TEST_FRAMES 54)
 
+
+# lights.lamp_ray_origin — A LAMP's VISIBILITY RAY NEVER HITS THE SURFACE IT STARTS ON (GATHER-HANG-1 stage 3; the
+# diagnosis spikes/black-specks/DIAGNOSIS.md): a two-triangle plane, a non-shadowing point light 0.3 m from it, no
+# ambient, GI off; no pixel of the light's footprint reads exactly 0 with the ray tier on - an 80 m and a 200 m plane,
+# the Atom and the stock draw path - its negative controls the ray tier off and the plane in 10 m quads. Red first on
+# the base (24 specks at 80 m: spikes/gather-hang-1/stage3/). Frames: 6 pictures x 8, counted with its price at its first run.
+add_executable(test_lamp_ray_origin test_lamp_ray_origin.cpp)
+set_target_properties(test_lamp_ray_origin PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_lamp_ray_origin PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_lamp_ray_origin PRIVATE JahshakaEngine)
+add_dependencies(test_lamp_ray_origin JahshakaEngineMedia)
+jah_gpu_row(lights.lamp_ray_origin CLASS engine COMMAND test_lamp_ray_origin
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(lights.lamp_ray_origin PROPERTIES TIMEOUT 60 LABELS "engine")
+set_tests_properties(lights.lamp_ray_origin PROPERTIES JAHSHAKA_TEST_FRAMES 48)

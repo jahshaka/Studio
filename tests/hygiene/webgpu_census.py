@@ -74,7 +74,7 @@ CLASSES = [
     ('scalar layout', r'GL_EXT_scalar_block_layout|\blayout\s*\([^)\n]*\bscalar\b', 'shaders', 0, 'keep 0'),
     # MULTIVIEW IS THE TARGET (CODING_RULES § 1, the owner and the lead 2026-11-21: both eyes in ONE pass): its count is a
     # FLOOR that only RISES - a fall is the red (a per-eye pass lost), a rise raises the floor in the same commit (FLOORS)
-    ('multiview (the target)', r'\bgl_ViewIndex\b|GL_EXT_multiview', 'shaders', 8,
+    ('multiview (the target)', r'\bgl_ViewIndex\b|GL_EXT_multiview', 'shaders', 9,
      'a FLOOR - only rises: every pass made per eye inside one pass adds its sites (CODING_RULES § 1)'),
     # a negated stereo VALUE or ACCESSOR (`!mStereo`, `!d.stereo`, `!view->stereo()`, `!(p.stereo.w > 0.5)`) is a gate; a negated
     # CALL whose name merely ends in Stereo and that TAKES ARGUMENTS (`!reflectChainMatchesStereo(stereo, eyeLayers)`) is a
