@@ -42,6 +42,9 @@ ROOT = os.environ.get("JAH_SCOPE_ROOT") or os.path.dirname(os.path.dirname(os.pa
 # *screenshots (the picture set's script part alone). The shared headers go through header_symbols; OgreEngine.cpp,
 # OgreScene.cpp and OgreView.cpp through the function maps below. The whole-engine guard at every merge is the six hashes.
 ENGINE_SUBSYSTEMS = [
+    # THE ENGINE's SCRIPT HOST (SCRIPT-IN-ENGINE-1): the value and the registry, the host, the one JS binding, the engine's
+    # commands and jahengine - the host's own row (script.host) and every row a script drives through jahengine
+    (r"^src/script/|^jahengine/", ["script.", "rtreflect.odd_size"], "the engine's script host and its commands"),
     # the post chain: bloom, the display encode, the HDR meter, the screen-space passes it composes
     # (+ the exposure picture and the visibility buffer's draw — the chain composes both: the suites audit's S2 subjects,
     # defaults.exposure_plane and engine.atom_draw/parity, gate_selection_cases.json "S2 the chain")

@@ -21,7 +21,10 @@
 #   (5) IRISGL's OWN CALLERS (the final read's leftover: Stillness.cpp sets fixed measuring arms through Engine::setArm):
 #       every `setArm("<name>"` in irisgl/engine names no TEST arm (the names are the arm table's X(Id, "name") rows,
 #       EnginePrivate.h), and a `setArm(` whose name is not a literal is only a forwarder - inside a function itself
-#       named setArm, in a file whose every other call is a literal.
+#       named setArm, in a file whose every other call is a literal;
+#   (6) THE ENGINE's SCRIPT DOOR (SCRIPT-IN-ENGINE-1: the command engine.arm, irisgl/engine/src/script/commands_engine.cpp)
+#       sets an arm by a name that is no literal only after reading the arm's `.test` AND the host's `testDoors` (a TEST
+#       arm opens only in a host started with --test-doors: jahengine's test rows) - the verb's law (3), the flag added.
 # A NEGATIVE CONTROL runs first: synthetic trees with a test arm unflagged, a second src/ caller of setArm, a verb that sets
 # without refusing, a src/ call of _jahFailRequests, an irisgl caller of a TEST arm by its name, a non-literal irisgl caller that is no
 # forwarder (each red), and the lawful shape (green).
@@ -35,6 +38,7 @@ VERB = os.path.join('src', 'scripting', 'modules', 'engineapi.cpp')
 LAB = os.path.join('src', 'lab') + os.sep
 TABLE = os.path.join('irisgl', 'engine', 'src', 'EnginePrivate.h')
 ENGINE = os.path.join('irisgl', 'engine')
+SCRIPT_DOOR = os.path.join('irisgl', 'engine', 'src', 'script', 'commands_engine.cpp')
 
 
 def strip_comments(text):
@@ -108,6 +112,11 @@ def check_irisgl(root):
                     continue
                 if arg.startswith('const '):
                     continue   # a declaration or the definition of a setArm (its parameter list)
+                if rel == SCRIPT_DOOR:
+                    before = src[:m.start()]
+                    if '.test' not in before or 'testDoors' not in before:
+                        bad.append('(6) %s sets an arm without reading its .test and the host\'s testDoors first' % rel)
+                    continue
                 # A FORWARDER: the non-literal name is the parameter of a setArm defined just above it, in this file
                 fwd = [d for d in re.finditer(r'\bsetArm\(\s*const\s[^,]*?(\w+)\s*,', src)
                        if d.start() < m.start() <= d.start() + 400 and d.group(1) == arg]
@@ -142,12 +151,18 @@ LAWFUL_STILLNESS = '''struct M {
 };
 '''
 STILLNESS = os.path.join(ENGINE, 'src', 'Stillness.cpp')
+LAWFUL_DOOR = '''Value arm(Call &c) {
+    for (const ArmInfo &a : e->arms()) if (a.name == name) { test = a.test; }
+    if (test && !st->testDoors) return c.fail("a test arm");
+    e->request([&](Engine &x) { ok = x.setArm(name, value); });
+}
+'''
 
 
 def synthetic(monitor, verb, extra=None):
     root = tempfile.mkdtemp(prefix='test-arms-')
     files = {MONITOR: monitor, VERB: verb, os.path.join(LAB, 'labsession.cpp'): 'void f() { e->setArm("x", 1.0); }',
-             TABLE: LAWFUL_TABLE, STILLNESS: LAWFUL_STILLNESS}
+             TABLE: LAWFUL_TABLE, STILLNESS: LAWFUL_STILLNESS, SCRIPT_DOOR: LAWFUL_DOOR}
     files.update(extra or {})
     for rel, text in files.items():
         os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
@@ -174,6 +189,8 @@ def self_test():
         ('a non-literal irisgl caller that is no forwarder',
          synthetic(LAWFUL_MONITOR, LAWFUL_VERB,
                    {os.path.join(ENGINE, 'src', 'Other.cpp'): 'void go(const char *n) { engine.setArm(n, 1.0); }'}), True),
+        ('the script door that never reads testDoors',
+         synthetic(LAWFUL_MONITOR, LAWFUL_VERB, {SCRIPT_DOOR: LAWFUL_DOOR.replace(' && !st->testDoors', '')}), True),
         ('the lawful shape', synthetic(LAWFUL_MONITOR, LAWFUL_VERB), False),
     ]
     ok = True
