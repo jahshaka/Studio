@@ -530,6 +530,19 @@ if(Python3_Interpreter_FOUND)
     jah_no_display(source.card_report_layout)
 endif()
 
+# source.ray_loops_bounded — GATHER-HANG-1 stage 2: every ray query loop is bounded in the shader (CODING_RULES section 2).
+# In every shader text of irisgl/engine (comments stripped by webgpu_census.strip), jahRqProceed( appears once outside
+# the seam's own define: in jah_rq_alpha.glsl's counted form (JAH_RQ_LOOP_BEGIN_), which terminates its query at
+# jahRqStepBoundNow() (never above kJahRqStepBound = 4 x the law, 1024 trips); the host's mirror (ScreenProbeGather.h)
+# holds the same numbers. Red on the base: 29 unbounded loops (27 through the three macros, 2 raw). Its negative
+# control first. See the script's header.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME source.ray_loops_bounded
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/ray_loops_bounded.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.ray_loops_bounded PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.ray_loops_bounded)
+endif()
+
 # source.notices_coverage — NOTICES-1: every vendored component under
 # thirdparty/ and irisgl/thirdparty/ is claimed by app/notices.json, every
 # entry's notice file exists and reads like a licence, and no entry points at

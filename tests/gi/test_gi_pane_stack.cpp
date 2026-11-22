@@ -15,7 +15,16 @@
 //       on 2047 steps), within ONE CODE at T^12 H's level (the display's sRGB code width there) plus the readback's half
 //       code of H;
 //   (2) THE READING RAYS - the GI on at High (the screen probe gather traces from the floor up through the stack): the
-//       overflow counter moves (a reading ray met more than eight panes and was counted, not blocked).
+//       overflow counter moves (a reading ray met more than eight panes and was counted, not blocked);
+//   (3) THE BOUND OF THE RAY QUERY LOOPS (GATHER-HANG-1 stage 2; jah_rq_alpha.glsl): a loop publishes its trips only at
+//       the law (1024) or past it - here no loop comes near it, so rayQuery.proceedStepsMax reads 0 after the GI's frames;
+//   (4) ...THE BOUND FIRES - the test door rayquery.stepBound 8 (the loops of the jobs with the hit params cut at 8 trips;
+//       the gather's reading rays cross 24 candidates here): the frames still end, and the counter reads EXACTLY 8 (a cut
+//       is always published: the threshold never exceeds the bound). Before (5): the counter is a max, never reset;
+//   (5) ...ITS NEGATIVE CONTROL - the test door rayquery.proceedPublishAll (every loop publishes): a reading ray from the
+//       floor straight up crosses each slab's bottom and top face, two candidates a slab (the instances cull no face: the
+//       shader decides facing), so the counter reads at least 2 x 12 = 24 trips - and under the bound, 4096 (no cut).
+//   (The direct light of (1) is the Forward+ lamp ray's, which has no hit params: no door reaches it.)
 // THE CARDS ARM (argv[1] "cards"; the one read's F3: the cards saw a lamp through glass as 0 or 1 by a > 0.5 test - its
 // table bit - so a lamp behind T = 0.7 read 1 and one behind T^12 = 0.28 read 0): the GI on with the cards, their direct
 // half alone (no bounce), the cards at rest; over the floor's card texels under the stack, the direct half's mean D:
@@ -233,6 +242,32 @@ int main(int argc, char **argv)
     }
     std::printf("== the GI on: the overflow counter %llu -> %llu (%d frames)\n", before, after, frames);
     check(after > before, "(2) THE READING RAYS: a ray through twelve panes is counted past the list, never blocked");
+    // (3) THE BOUND at its law, (4) the bound lowered to 8, (5) every loop publishing
+    const auto deepest = [&]() { return scene->published().rayQuery.proceedStepsMax; };
+    const unsigned long long atLaw = deepest();
+    std::printf("== the deepest ray query loop published at the law: %llu\n", atLaw);
+    check(atLaw == 0ull, "(3) THE BOUND: no loop reached the law (1024 trips): the counter reads 0");
+    if (!e->setArm("rayquery.stepBound", 8.0)) { std::printf("FAIL: the door rayquery.stepBound\n"); return 1; }
+    unsigned long long cut = 0ull;
+    const int cutFrom = frames;
+    for (int f = 0; f < 60 && cut == 0ull; ++f) {
+        run(1);
+        cut = deepest();
+    }
+    e->setArm("rayquery.stepBound", 0.0);
+    std::printf("== the bound at 8: the counter %llu (%d frames ran)\n", cut, frames - cutFrom);
+    check(cut == 8ull, "(4) THE BOUND FIRES: the loops cut at 8 trips, the frames end, the counter reads exactly 8");
+    if (!e->setArm("rayquery.proceedPublishAll", 1.0)) { std::printf("FAIL: the door rayquery.proceedPublishAll\n"); return 1; }
+    unsigned long long armed = cut;
+    for (int f = 0; f < 60 && armed < 2ull * kSlabs; ++f) {
+        run(1);
+        armed = deepest();
+    }
+    e->setArm("rayquery.proceedPublishAll", 0.0);
+    std::printf("== every loop publishing: the deepest loop %llu trips (%d frames)\n", armed, frames);
+    check(armed >= 2ull * kSlabs && armed < 4096ull,
+          "(5) THE BOUND's NEGATIVE CONTROL: every loop publishing, the deepest crossed both faces of all twelve slabs "
+          "(>= 24 trips) and was not cut (< 4096)");
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
     return g_fail ? 1 : 0;
 }
