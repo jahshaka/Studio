@@ -1654,3 +1654,21 @@ set_tests_properties(gi.async_arm_cold PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=o
 jah_gpu_row(gi.async_arm_warm CLASS engine FRAMES 900 COMMAND test_gi_async_arm_cold warm
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.async_arm_warm PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+# gi.complete_joins (SHADER-SYSTEM-1 7a, R2 (c)) - A COMPLETE FRAME's LIGHTING ARM IS A FUNCTION OF THE FRAMES, NEVER OF THE
+# SERVICE's WALL TIME: an asynchronous scene with the background compiler held slow (the test door shaders.serviceSlow)
+# draws on Complete frames exactly what a synchronous one does, deferring nothing (test_gi_complete_joins.cpp).
+add_executable(test_gi_complete_joins test_gi_complete_joins.cpp)
+set_target_properties(test_gi_complete_joins PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_complete_joins PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_complete_joins PRIVATE JahshakaEngine)
+add_dependencies(test_gi_complete_joins JahshakaEngineMedia)
+jah_gpu_row(gi.complete_joins CLASS engine FRAMES 16 COMMAND test_gi_complete_joins
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.complete_joins PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
