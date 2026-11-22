@@ -42,6 +42,8 @@ For more information see the LICENSE file
 #include <QUuid>
 
 #include <algorithm>
+#include <cstring>
+#include <iterator>
 #include <atomic>
 #include <condition_variable>
 #include <memory>
@@ -579,11 +581,12 @@ public:
 
     /// Statements the worker runs on its own connection before its next look at the -wal: the covering
     /// indexes an existing library must build over its rows (Database::createIndexes), off the UI thread.
-    void build(const QStringList &statements)
+    /// `published` is set once every one of them has run without an error.
+    void build(const QStringList &statements, std::shared_ptr<std::atomic<bool>> published)
     {
         {
             std::lock_guard<std::mutex> lock(mMutex);
-            mPending << statements;
+            mPending.append({ statements, std::move(published) });
         }
         mWake.notify_all();
     }
@@ -604,18 +607,24 @@ private:
             mWake.wait_for(lock, std::chrono::milliseconds(kPollMs), [this] { return mStop || !mPending.isEmpty(); });
             if (mStop) break;
             if (!mPending.isEmpty()) {
-                const QStringList statements = std::exchange(mPending, QStringList());
+                const QVector<Build> builds = std::exchange(mPending, QVector<Build>());
                 lock.unlock();
-                QElapsedTimer timer;
-                timer.start();
-                for (const QString &sql : statements) {
-                    QSqlQuery index(scoped.db);
-                    if (!index.exec(sql))
-                        irisLog(QStringLiteral("library: an index could not be built (%1): %2")
-                                    .arg(sql.left(80), index.lastError().text()));
+                for (const Build &build : builds) {
+                    QElapsedTimer timer;
+                    timer.start();
+                    bool all = true;
+                    for (const QString &sql : build.statements) {
+                        QSqlQuery index(scoped.db);
+                        if (!index.exec(sql)) {
+                            all = false;
+                            irisLog(QStringLiteral("library: an index could not be built (%1): %2")
+                                        .arg(sql.left(80), index.lastError().text()));
+                        }
+                    }
+                    if (all) build.published->store(true);
+                    irisLog(QStringLiteral("library: %1 index statement(s) run on the library worker in %2 ms")
+                                .arg(build.statements.size()).arg(timer.elapsed()));
                 }
-                irisLog(QStringLiteral("library: %1 index statement(s) run on the library worker in %2 ms")
-                            .arg(statements.size()).arg(timer.elapsed()));
                 lock.lock();
                 continue;
             }
@@ -643,7 +652,11 @@ private:
     std::condition_variable mWake;
     bool mStop = false;
     QDateTime mLastCheckpointed;
-    QStringList mPending;
+    struct Build {
+        QStringList statements;
+        std::shared_ptr<std::atomic<bool>> published;
+    };
+    QVector<Build> mPending;
 };
 
 /// One worker per open library Database (normally exactly one in the app; a
@@ -664,14 +677,29 @@ void startCheckpointer(const Database *owner, const QString &path)
     std::lock_guard<std::mutex> lock(checkpointersLock());
     checkpointers()[owner] = std::make_unique<WalCheckpointer>(path);
 }
-/// Hands `statements` to `owner`'s worker; false when it has none (the library is not in WAL mode).
-bool buildOnWorker(const Database *owner, const QStringList &statements)
+/// Hands `statements` to `owner`'s worker, which sets `published` when they have all run; false when it has
+/// none (the library is not in WAL mode).
+bool buildOnWorker(const Database *owner, const QStringList &statements, std::shared_ptr<std::atomic<bool>> published)
 {
     std::lock_guard<std::mutex> lock(checkpointersLock());
     auto it = checkpointers().find(owner);
     if (it == checkpointers().end()) return false;
-    it->second->build(statements);
+    it->second->build(statements, std::move(published));
     return true;
+}
+
+/// The covering indexes createIndexes builds (kCovering), by name: indexedBy names only these.
+const char *const kCoveringIndexes[] = { "idx_assets_collection_listed", "idx_assets_library", "idx_assets_material_copies" };
+
+/// Does the open library hold every covering index? One read of its schema.
+bool coveringIndexesPresent(const QSqlDatabase &conn)
+{
+    QStringList names;
+    for (const char *name : kCoveringIndexes) names << QStringLiteral("'%1'").arg(QLatin1String(name));
+    QSqlQuery query(conn);
+    return query.exec(QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN (%1)")
+                          .arg(names.join(QLatin1Char(','))))
+           && query.next() && query.value(0).toInt() == int(std::size(kCoveringIndexes));
 }
 void stopCheckpointer(const Database *owner)
 {
@@ -734,6 +762,8 @@ bool Database::initializeDatabase(const QString &pathToBlob)
             irisLog(QStringLiteral("JAH_DB_STATEMENT_TRACE=1, but the statement trace could not be registered "
                                    "(app.databaseReads says why)"));
         if (db.isOpen() && applyDurabilityPragmas(db)) startCheckpointer(this, pathToBlob);
+        // A NEW flag per open: a build handed to a previous open's worker publishes into that open's flag.
+        coveringPublished = std::make_shared<std::atomic<bool>>(db.isOpen() && coveringIndexesPresent(db));
         return db.isOpen();
     }
     else {
@@ -1139,13 +1169,22 @@ void Database::createIndexes()
     QSqlQuery any;
     const bool empty = !any.exec(QStringLiteral("SELECT 1 FROM assets LIMIT 1")) || !any.next();
     any.finish();
-    if (empty || !buildOnWorker(this, covering)) {
+    if (empty || !buildOnWorker(this, covering, coveringPublished)) {
+        bool all = true;
         for (const QString &statement : std::as_const(covering)) {
             QSqlQuery index;
             index.prepare(statement);
-            executeAndCheckQuery(index, "CreateIndex");
+            all &= executeAndCheckQuery(index, "CreateIndex");
         }
+        if (all) coveringPublished->store(true);
     }
+}
+
+QString Database::indexedBy(const char *index) const
+{
+    Q_ASSERT(std::any_of(std::begin(kCoveringIndexes), std::end(kCoveringIndexes),
+                         [index](const char *name) { return std::strcmp(name, index) == 0; }));
+    return coveringPublished->load() ? QStringLiteral("INDEXED BY %1").arg(QLatin1String(index)) : QString();
 }
 
 // WHERE A PROJECT'S FOLDER LIVES. Empty clears the row back to "the default
@@ -2524,11 +2563,14 @@ QHash<QString, bool> Database::fetchUsedOnlyByMaterials(const QStringList &depen
     // A depender the catalog does not know (a scene node's id) or of another type is not. The question is
     // answered by idx_assets_material_copies (partial over the material rows, covering: Database::
     // createIndexes), never by the depender's table row, which stores its rendered tile before `type`'s
-    // neighbours (LARGE-LIBRARY-1: 48 pages more at 1,000 with tiles than without). The index is named,
-    // and the type is a literal, because a partial index serves only a WHERE that states its own.
-    query.prepare(QStringLiteral("SELECT D.dependee, MIN(EXISTS (SELECT 1 FROM assets M INDEXED BY "
-                                 "idx_assets_material_copies WHERE M.guid = D.depender AND M.type = %1)) "
-                                 "FROM dependencies D WHERE D.dependee IN (%2) GROUP BY D.dependee")
+    // neighbours (LARGE-LIBRARY-1: 48 pages more at 1,000 with tiles than without). The index is named
+    // (the planner takes the primary key unprompted) through indexedBy — until an upgraded library's worker
+    // has built it, the same answer from the table — and the type is a literal, because a partial index
+    // serves only a WHERE that states its own.
+    query.prepare(QStringLiteral("SELECT D.dependee, MIN(EXISTS (SELECT 1 FROM assets M %1 "
+                                 "WHERE M.guid = D.depender AND M.type = %2)) "
+                                 "FROM dependencies D WHERE D.dependee IN (%3) GROUP BY D.dependee")
+                      .arg(indexedBy("idx_assets_material_copies"))
                       .arg(static_cast<int>(ModelTypes::Material))
                       .arg(placeholders(unique.size())));
     for (const QString &guid : unique) query.addBindValue(guid);

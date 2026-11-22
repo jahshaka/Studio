@@ -88,6 +88,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/database/databasereads.h"
+#include "irisgl/core/logger.h"
 #include "services/assettray.h"
 #include "services/assetcas.h"
 #include "services/memberstamp.h"
@@ -333,25 +334,30 @@ static QString planOf(QString sql, const QStringList &values)
     return plan;
 }
 
-/// A preset's copies, the statement of presetedit.cpp copiesOf with its type (that file is not in this row's
-/// closure; the row checks the text is still the one there).
-static const char *const kCopiesOfText[] = { "SELECT guid, properties FROM assets INDEXED BY idx_assets_material_copies ",
-                                             "WHERE type = %1 ORDER BY rowid" };
-static QString copiesOfSql()
+/// A preset's copies, the statement of presetedit.cpp copiesOf with its type, its index named through the one
+/// door (Database::indexedBy) — that file is not in this row's closure; the row checks the text is still the
+/// one there.
+static const char *const kCopiesOfText[] = { "SELECT guid, properties FROM assets %1 WHERE type = %2 ORDER BY rowid",
+                                             ".arg(db->indexedBy(\"idx_assets_material_copies\"))" };
+static QString copiesOfSql(Database &db)
 {
-    return QStringLiteral("SELECT guid, properties FROM assets INDEXED BY idx_assets_material_copies WHERE type = %1 ORDER BY rowid")
+    return QStringLiteral("SELECT guid, properties FROM assets %1 WHERE type = %2 ORDER BY rowid")
+        .arg(db.indexedBy("idx_assets_material_copies"))
         .arg(static_cast<int>(ModelTypes::Material));
 }
 
-static void copiesOfRun()
+/// copiesOf's rows ("guid properties" each, in its order); `ok` false when the statement failed.
+static QStringList copiesOfRows(Database &db, bool *ok = nullptr)
 {
     QSqlQuery q(QSqlDatabase::database());
-    q.exec(copiesOfSql());   // with the previous index set (no such index) it fails, as presetedit's would: read the table
-    if (q.lastError().isValid()) {
-        q.exec(QStringLiteral("SELECT guid, properties FROM assets WHERE type = %1 ORDER BY rowid").arg(int(ModelTypes::Material)));
-    }
-    while (q.next()) {}
+    const bool ran = q.exec(copiesOfSql(db));
+    if (ok) *ok = ran;
+    QStringList out;
+    while (q.next()) out << q.value(0).toString() + QLatin1Char(' ') + q.value(1).toString();
+    return out;
 }
+
+static void copiesOfRun(Database &db) { copiesOfRows(db); }
 
 /// The three statements the covering indexes serve, each on a cold connection.
 struct Covered {
@@ -370,7 +376,7 @@ static Covered coldCovered(Database &db, const QString &dbPath, const libraryfix
     Covered out;
     out.listing = cold([&] { db.fetchAssetsForAssetView(); });
     out.counts = cold([&] { db.countAssetsInCollections({ lib.drawer }); });
-    out.copies = cold([&] { copiesOfRun(); });
+    out.copies = cold([&] { copiesOfRun(db); });
     return out;
 }
 
@@ -416,6 +422,78 @@ static QVector<Reading> coldResidue(Database &db, const QString &dbPath, const l
         out.append(around([&] { r.run(db, lib); }));
     }
     return out;
+}
+
+/// THE BUILD'S WINDOW: on an UPGRADED library (the previous index set) the covering indexes are built by the
+/// library's worker after the open; until that build commits, every statement that names one (indexedBy: the
+/// V-2 fold's batched read, a preset's copies) answers the SAME rows by its old plan and logs no error. The
+/// build is HELD by another connection's write lock (BEGIN IMMEDIATE: the worker's CREATE INDEX waits on it,
+/// inside its connection's 5-s busy timeout; the open's own CREATE ... IF NOT EXISTS of what exists, and the
+/// reads, do not). NEGATIVE CONTROL: the INDEXED BY phrasing sent in the window fails.
+static void theBuildWindow()
+{
+    const QString path = QStringLiteral("library_statements_window.db");
+    const QString store = QDir::currentPath() + QStringLiteral("/library_statements_window_store");
+    QFile::remove(path);
+    QDir(store).removeRecursively();
+    Database db;
+    db.initializeDatabase(path);
+    db.createAllTables();
+    libraryfixture::Library lib;
+    QString error;
+    libraryfixture::grow(&db, store, 100, 2, lib, {}, &error);
+    previousIndexSet();
+    db.closeDatabase();
+
+    db.initializeDatabase(path);
+    QStringList warnings;
+    iris::Logger::setSink([&warnings](int severity, const QString &text) {
+        if (severity >= 1 || text.contains(QLatin1String("no such index"))) warnings << text;
+    });
+    QSqlDatabase holder = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("window_holder"));
+    holder.setDatabaseName(path);
+    holder.open();
+    QSqlQuery hold(holder);
+    const bool held = hold.exec(QStringLiteral("BEGIN IMMEDIATE"));
+    db.createAllTables();   // ShellLifecycle::openLibrary: the worker is handed the build, and waits
+    CHECK(held && db.indexedBy("idx_assets_material_copies").isEmpty(),
+          "WINDOW: the build is held and the covering indexes are not published (indexedBy answers the plain phrasing)");
+    const auto folded = [&db] {
+        QStringList out = assettray::libraryHidden(&db, assettray::libraryList(&db, true), false);
+        out.sort();
+        return out;
+    };
+    const QStringList foldEarly = folded();
+    bool copiesRan = false;
+    const QStringList copiesEarly = copiesOfRows(db, &copiesRan);
+    QSqlQuery early(QSqlDatabase::database());
+    const bool namedRan = early.exec(QStringLiteral("SELECT guid FROM assets INDEXED BY idx_assets_material_copies WHERE type = %1")
+                                         .arg(static_cast<int>(ModelTypes::Material)));
+    CHECK(!namedRan && early.lastError().text().contains(QLatin1String("no such index")),
+          "WINDOW NEGATIVE CONTROL: the INDEXED BY phrasing sent before the build commits fails (%s)",
+          qPrintable(early.lastError().text()));
+    const int windowWarnings = int(warnings.size());
+    hold.exec(QStringLiteral("ROLLBACK"));
+    hold.finish();
+    holder.close();
+    QElapsedTimer t;
+    t.start();
+    while (db.indexedBy("idx_assets_material_copies").isEmpty() && t.elapsed() < 20000) QThread::msleep(5);
+    iris::Logger::setSink({});
+    CHECK(!db.indexedBy("idx_assets_material_copies").isEmpty(),
+          "WINDOW: released, the worker's build publishes the indexes (%lld ms)", static_cast<long long>(t.elapsed()));
+    CHECK(!foldEarly.isEmpty() && foldEarly == folded(),
+          "WINDOW: the V-2 fold folds the SAME %d pictures before the build as after it", int(foldEarly.size()));
+    CHECK(copiesRan && !copiesEarly.isEmpty() && copiesEarly == copiesOfRows(db),
+          "WINDOW: a preset's copies statement reads the SAME %d material rows before the build as after it",
+          int(copiesEarly.size()));
+    CHECK(windowWarnings == 0, "WINDOW: no SQL error is logged in it (%d%s%s)", windowWarnings,
+          windowWarnings ? ": " : "", windowWarnings ? qPrintable(warnings.first()) : "");
+    db.closeDatabase();
+    QSqlDatabase::removeDatabase(QStringLiteral("window_holder"));
+    QFile::remove(path);
+    QDir(store).removeRecursively();
+    QDir(store + QStringLiteral("-sources")).removeRecursively();
 }
 
 /// (1): a library written with the previous index set keeps its generation, its rows and its schema check.
@@ -700,7 +778,7 @@ int main(int argc, char **argv)
         QFile databaseSource(QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/src/data/database/database.cpp"));
         CHECK(databaseSource.open(QIODevice::ReadOnly) && databaseSource.readAll().contains(kCountsText),
               "(2) the counts statement planned is database.cpp's own text");
-        const QString copiesPlan = planOf(copiesOfSql(), {});
+        const QString copiesPlan = planOf(copiesOfSql(db), {});
         std::printf("   (2) plans: listing [%s]; counts [%s]; copies [%s]\n", qPrintable(listingPlan), qPrintable(countsPlan),
                     qPrintable(copiesPlan));
         CHECK(listingPlan.contains(QLatin1String("COVERING INDEX idx_assets_library"))
@@ -804,6 +882,7 @@ int main(int argc, char **argv)
     }
 
     theOldLibraryKeeps();
+    theBuildWindow();
 
     db.closeDatabase();
     QFile::remove(dbPath);
