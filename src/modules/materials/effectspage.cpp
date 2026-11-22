@@ -47,6 +47,7 @@ For more information see the LICENSE file
 #include <QPixmap>
 #include <QScrollBar>
 #include <QShortcut>
+#include "core/guid.h"
 #include <QDesktopServices>
 #include "nodes/test.h"
 #include "nodes/pbrmasternode.h"
@@ -819,14 +820,6 @@ void EffectsPage::saveDefaultShader()
 // callers and no body worth the name: it serialised the open graph into a
 // local QJsonDocument and dropped it on the floor.)
 
-QString EffectsPage::genGUID()
-{
-	auto id = QUuid::createUuid();
-	auto guid = id.toString().remove(0, 1);
-	guid.chop(1);
-	return guid;
-}
-
 void EffectsPage::importGraph()
 {
 	// IMPORT A MATERIAL = THE SHARE FILE (MATERIAL_BUNDLE_SPEC 5, owner Q5).
@@ -1495,7 +1488,7 @@ void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const 
 	item->setTextAlignment(Qt::AlignCenter);
 	item->setIcon(QIcon(":/icons/icons8-file-72.png"));
 
-	auto assetGuid = genGUID();
+	auto assetGuid = QString::fromStdString(iris::newGuid());
 
 	item->setData(MODEL_GUID_ROLE, assetGuid);
 	item->setData(MODEL_ITEM_TYPE, MODEL_ASSET);

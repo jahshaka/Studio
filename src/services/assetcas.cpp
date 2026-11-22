@@ -23,7 +23,6 @@ For more information see the LICENSE file
 #include <QSet>
 #include <QSqlError>
 #include <QSqlQuery>
-#include <QUuid>
 #include <QVector>
 #include <atomic>
 
@@ -38,6 +37,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "app/qtstd.h"
 #include "core/files.h"
+#include "core/guid.h"
 
 namespace AssetCas
 {
@@ -709,7 +709,7 @@ bool writeStoreInfo(const QString &root, QString *errorOut)
             storeId = obj.value("storeId").toString();
         }
     }
-    if (storeId.isEmpty()) storeId = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    if (storeId.isEmpty()) storeId = QString::fromStdString(iris::newGuid());
 
     QJsonObject info;
     info["storeId"] = storeId;

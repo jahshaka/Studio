@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 #include "services/livetextures.h"
 
-#include <QUuid>
+#include "core/guid.h"
 
 #include "io/assetmanager.h"
 #include "irisgl/document/assets/livetextures.h"
@@ -38,7 +38,7 @@ QString LiveTextureCatalog::create(const QString &name, int width, int height, b
     if (width > 8192 || height > 8192)
         return refuse(QStringLiteral("a live texture is limited to 8192 x 8192"));
 
-    const QString guid = QUuid::createUuid().toString(QUuid::WithoutBraces);
+    const QString guid = QString::fromStdString(iris::newGuid());
     iris::Texture2DPtr tex = iris::LiveTextures::create(guid, name, width, height, mipmaps);
     if (!tex) return refuse(QStringLiteral("the live texture could not be created"));
 

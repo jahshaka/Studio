@@ -156,7 +156,6 @@ public:
 	/// it came from, and therefore whose version is read and written — see
 	/// shaderInfo::Origin.
 	void loadGraph(QString guid, shaderInfo::Origin origin = shaderInfo::Origin::Library);
-	static QString genGUID();
 
 	// §3a selection bridge for the graph.selectNode/selectedNode/deselect
 	// verbs (wired up by MaterialsModule::registerApi)

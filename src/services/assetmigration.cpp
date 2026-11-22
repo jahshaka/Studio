@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstore.h"
 #include "services/assetstorepaths.h"
+#include "core/guid.h"
 
 namespace AssetMigration
 {
@@ -439,7 +440,7 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
             insertEdge.addBindValue(edge.value("dependeeType").toInt());
             insertEdge.addBindValue(guid);
             insertEdge.addBindValue(dependee);
-            insertEdge.addBindValue(QUuid::createUuid().toString(QUuid::WithoutBraces));
+            insertEdge.addBindValue(QString::fromStdString(iris::newGuid()));
             if (insertEdge.exec()) ++report.edges;
         }
     }
