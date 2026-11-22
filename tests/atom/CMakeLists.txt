@@ -2,6 +2,29 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 
 # ---------------------------------------------------------------------------
+# THE CLUSTER CUT'S CPU LAWS (ATOM-TESTS-BACK-1 stage 1; test_atom_cut_laws.cpp says each law): one verb a row, 0 frames,
+# no display, no card - the harness meshes (tests/support/clustermesh.h, proceduralshell.h; no sample model) baked by the
+# product's bake, handed across by the product's SceneMirror::toMeshData, cut by Types.h's clusterCut (the rule
+# engine.lod_rule_parity holds the device to). The scenemirror and the engine library are the hand-off's, never a frame.
+add_executable(test_atom_cut_laws test_atom_cut_laws.cpp cluster_fixtures.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_atom_cut_laws PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_atom_cut_laws PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_atom_cut_laws PRIVATE IrisGL Qt6::Gui)
+jah_document_graph(test_atom_cut_laws)
+# atom.cut_closed.multi_mesh is RED by design (SPECS/OPEN_REDS.md, homed at plan 3.5: one DAG a mesh never locks its open
+# border, so the split sphere's seam cracks from t 2.465 px; its first run: 38 of 64 t, the worst 84 unmatched edges).
+foreach(_row cut_partition cut_closed cut_closed.multi_mesh switch_bracket)
+    add_test(NAME atom.${_row} COMMAND test_atom_cut_laws atom.${_row} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.${_row} PROPERTIES
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "atom" JAHSHAKA_TEST_FRAMES 0)
+    jah_no_display(atom.${_row})
+endforeach()
+
+# ---------------------------------------------------------------------------
 # THE ENGINE-REACHING TARGETS: a row that reaches past the public Engine API
 # (EnginePrivate.h, HlmsAtom.h, AtomPass.h) and links Ogre, building its own
 # workspaces on the scene's manager.
