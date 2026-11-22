@@ -29,6 +29,13 @@
 #       march's resolution and the young reach bit-tested and held), and the other count loops are on
 #       ray_count_loops_pending.txt - every entry's header still in its file, at most kPendingAtMost entries: the list
 #       ONLY SHRINKS (an entry clamped leaves it and the number falls in the same commit).
+#   (7) EVERY EXIT OF AN UNBOUNDED LOOP FORM IS NAMED (the final read's F1: law (6) lists its clamps by hand, from the
+#       preflight's census of loop HEADERS - a `for( ;; )` has no header bound, so the voxel march's SECOND exit, a finer
+#       cascade's segment `itSub >= maxK` with maxK from the raw resolution, was never read and law (6) read green over
+#       it): every `for( ;; )` / `while( true )` / `do {` in the shader texts is in UNBOUNDED (a new one is red until
+#       named); inside its body every counter exit `it<name> >= <bound>` is one of its named exits (a new exit red);
+#       each bound is built from resolutions that come ONLY from jahVoxResAtLaw( (the one clamped form: finite3, then
+#       [1, kJahVoxResMax]), defined once.
 # The row prints the loops it found through the counted family (the four JAH_RQ_PROCEED forms' call sites).
 # A NEGATIVE CONTROL runs first: synthetic trees with a raw loop, a family head with no cut, a bound a door can raise
 # and a mirror that differs (each red), a raw loop inside a comment and the lawful shape (green).
@@ -69,8 +76,8 @@ CLAMPED = (
      "the cards' gather's rays, bit-tested, to 4096"),
     ("src/rayquery/rq_voxel_sides.comp", r"const\s+int\s+rays\s*=\s*finite1\s*\(\s*p\.knobs\.x\s*\)\s*\?\s*clamp\s*\(\s*int\s*\(\s*min\s*\(\s*p\.knobs\.x\s*,\s*4096\.0\s*\)\s*\)\s*,\s*1\s*,\s*4096\s*\)", 1,
      "the voxel sides' rays, bit-tested, to 4096"),
-    ("src/rayquery/include/jah_voxel_ray.glsl", r"resI\s*=\s*finite3\s*\(\s*res\s*\)\s*\?\s*clamp\s*\(\s*ivec3\s*\(\s*min\s*\(\s*res\s*,\s*vec3\s*\(\s*kJahVoxResMax\s*\)", 1,
-     "the voxel march's resolution, bit-tested, to kJahVoxResMax (it steers maxSteps)"),
+    ("src/rayquery/include/jah_voxel_ray.glsl", r"return\s+finite3\s*\(\s*res\s*\)\s*\?\s*clamp\s*\(\s*ivec3\s*\(\s*min\s*\(\s*res\s*,\s*vec3\s*\(\s*kJahVoxResMax\s*\)", 1,
+     "jahVoxResAtLaw: a cascade's resolution, bit-tested, to kJahVoxResMax (it steers maxSteps and maxK: law (7))"),
     ("src/rayquery/rq_probe_integrate.comp", r"youngReach\s*=\s*finite1\s*\(\s*p\.young\.y\s*\)\s*\?\s*clamp\s*\(\s*p\.young\.y\s*,\s*1\.0\s*,\s*64\.0\s*\)", 1,
      "the young reach, bit-tested, to 64 cells (it steers the tent's two loops)"),
     ("src/rayquery/rq_probe_integrate.comp", r"youngFrames\s*=\s*finite1\s*\(\s*p\.young\.x\s*\)", 1,
@@ -82,9 +89,60 @@ def norm(t):
     return " ".join(t.split())
 
 
-def check_counts(root, texts, pending_path):
-    """law (6)'s faults"""
+# law (7): each unbounded loop form's file, how many it holds, its counter exits (counter -> bound), and the
+# resolutions its bounds are built from (each assigned ONLY from jahVoxResAtLaw)
+UNBOUNDED = {
+    "src/rayquery/include/jah_voxel_ray.glsl": (1, {"itMain": "maxSteps", "itSub": "maxK"},
+                                                 {"maxSteps": "resI", "maxK": "resIK"}),
+}
+UNBOUNDED_FORM = re.compile(r"\bfor\s*\(\s*;\s*;\s*\)|\bwhile\s*\(\s*(?:true|1)\s*\)|\bdo\s*\{")
+COUNTER_EXIT = re.compile(r"\b(it\w*)\s*>=\s*(\w+)")
+
+
+def body_at(text, at):
+    """the braced body of the loop whose header starts at `at` (from its first '{')"""
+    i = text.find("{", at)
+    depth = 0
+    for j in range(i, len(text)):
+        depth += 1 if text[j] == "{" else -1 if text[j] == "}" else 0
+        if depth == 0:
+            return text[i:j + 1]
+    return text[i:]
+
+
+def check_unbounded(texts):
+    """law (7)'s faults"""
     bad = []
+    helpers = sum(len(re.findall(r"\bivec3\s+jahVoxResAtLaw\s*\(", t)) for t in texts.values())
+    for rel, t in sorted(texts.items()):
+        forms = [m.start() for m in UNBOUNDED_FORM.finditer(t)]
+        want, exits, built = UNBOUNDED.get(rel, (0, {}, {}))
+        if len(forms) != want:
+            bad.append("(7) %s: %d unbounded loop form(s), %d named - name its every exit in UNBOUNDED" % (rel, len(forms), want))
+            continue
+        for at in forms:
+            body = body_at(t, at)
+            found = {(c, b) for c, b in COUNTER_EXIT.findall(body)}
+            for c, b in sorted(found - set(exits.items())):
+                bad.append("(7) %s: an unnamed exit `%s >= %s` in an unbounded loop" % (rel, c, b))
+            for c, b in sorted(set(exits.items()) - found):
+                bad.append("(7) %s: the named exit `%s >= %s` is gone" % (rel, c, b))
+        for bound, res in built.items():
+            if not re.search(r"\b%s\s*=\s*%s\.x\s*\+\s*%s\.y\s*\+\s*%s\.z\b" % (bound, res, res, res), t):
+                bad.append("(7) %s: %s is not built from %s's three sides" % (rel, bound, res))
+            sets = re.findall(r"\b%s\s*=(?!=)\s*([^;]*);" % res, t)
+            # (a literal zero is the declaration's "no segment yet", never a bound a float steers)
+            sets = [v for v in sets if not re.fullmatch(r"ivec3\s*\(\s*0\s*\)", v.strip())]
+            if not sets or any(not re.match(r"jahVoxResAtLaw\s*\(", v.strip()) for v in sets):
+                bad.append("(7) %s: %s is assigned other than by jahVoxResAtLaw( (%s)" % (rel, res, "; ".join(v.strip() for v in sets) or "never"))
+    if any(UNBOUNDED.values()) and helpers != 1:
+        bad.append("(7) jahVoxResAtLaw is defined %d time(s) (1 wanted)" % helpers)
+    return bad
+
+
+def check_counts(root, texts, pending_path):
+    """law (6)'s and law (7)'s faults"""
+    bad = check_unbounded(texts)
     for rel, pat, want, what in CLAMPED:
         got = len(re.findall(pat, texts.get(rel, "")))
         if got != want:
@@ -330,8 +388,11 @@ LAWFUL_CLAMPED = {
     "src/rayquery/rq_card_movers.comp": "for( uint i = 0u; i < min( lampCount.x, uint( lamps.length() ) ); ++i )",
     "src/rayquery/rq_card_gather.comp": "const int n = finite1( p.knobs.x ) ? clamp( int( min( p.knobs.x, 4096.0 ) ), 1, 4096 ) : 1;",
     "src/rayquery/rq_voxel_sides.comp": "const int rays = finite1( p.knobs.x ) ? clamp( int( min( p.knobs.x, 4096.0 ) ), 1, 4096 ) : 1;",
-    "src/rayquery/include/jah_voxel_ray.glsl": "const ivec3 resI = finite3( res ) ? clamp( ivec3( min( res, vec3( kJahVoxResMax ) ) "
-    "+ 0.5 ), ivec3( 1 ), ivec3( kJahVoxResMax ) ) : ivec3( 1 );\n\tfor( int j = 0; j < JAH_VOX_COUNT; ++j )",
+    "src/rayquery/include/jah_voxel_ray.glsl": "ivec3 jahVoxResAtLaw( vec3 res )\n{\n\treturn finite3( res ) ? clamp( ivec3( min( "
+    "res, vec3( kJahVoxResMax ) ) + 0.5 ), ivec3( 1 ), ivec3( kJahVoxResMax ) ) : ivec3( 1 );\n}\n"
+    "const ivec3 resI = jahVoxResAtLaw( res );\nconst int maxSteps = resI.x + resI.y + resI.z + 3;\n"
+    "\tfor( int j = 0; j < JAH_VOX_COUNT; ++j )\nfor( ;; )\n{\n\tif( !sub && itMain >= maxSteps ) break;\n"
+    "\tlost = itSub >= maxK;\n\tresIK = jahVoxResAtLaw( resK );\n\tmaxK = resIK.x + resIK.y + resIK.z + 3;\n}\n",
     "src/rayquery/rq_probe_integrate.comp": "const float youngFrames = finite1( p.young.x ) ? p.young.x : 0.0;\n"
     "const float youngReach = finite1( p.young.y ) ? clamp( p.young.y, 1.0, 64.0 ) : 1.0;",
 }
@@ -352,7 +413,17 @@ def self_test_counts():
             fh.write("src/rayquery/rq_share_law.comp\tfor( int it = 0; it < n; ++it )\n")
         unclamped = dict(LAWFUL_CLAMPED)
         unclamped["src/rayquery/rq_card_movers.comp"] = "for( uint i = 0u; i < lampCount.x; ++i )"
+        vox = "src/rayquery/include/jah_voxel_ray.glsl"
+        rawsub = dict(LAWFUL_CLAMPED)   # F1: the segment's resolution raw
+        rawsub[vox] = LAWFUL_CLAMPED[vox].replace("resIK = jahVoxResAtLaw( resK );", "resIK = ivec3( resK + 0.5 );")
+        newexit = dict(LAWFUL_CLAMPED)   # a third exit nobody named
+        newexit[vox] = LAWFUL_CLAMPED[vox].replace("\tlost = itSub >= maxK;", "\tlost = itSub >= maxK || itFar >= farK;")
+        newloop = dict(LAWFUL_CLAMPED)   # a fifth march, an unbounded form nobody named
+        newloop["src/rayquery/rq_card_gather.comp"] += "\nwhile( true ) { if( itX >= n ) break; }"
         cases = [("a clamp removed (the card movers' lamps)", unclamped, one, True),
+                 ("law (7): a finer segment's resolution raw (F1)", rawsub, one, True),
+                 ("law (7): an unnamed exit in the unbounded march", newexit, one, True),
+                 ("law (7): a new unbounded loop form", newloop, one, True),
                  ("a pending loop gone from its file", LAWFUL_CLAMPED, gone, True),
                  ("the list grown past its bound", LAWFUL_CLAMPED, many, True),
                  ("the lawful counts", LAWFUL_CLAMPED, one, False)]
