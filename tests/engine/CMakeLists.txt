@@ -554,7 +554,9 @@ jah_no_display(engine.shader_cache_keys)
 # AGE ALONE NEVER DROPS AN ENTRY (test_shader_cache_uses.cpp says why): per layer, through its real path and a real
 # ShaderCache - 100 launches that use nothing drop nothing; over the budget the least recently used go and the just-used
 # stay, the backstop wipes only past this launch's own entries; a launch that compiled nothing writes no layer and no
-# manifest (the sidecar alone); a torn sidecar prunes nothing and is rewritten whole. NULL Roots: CPU code rows.
+# manifest (the sidecar alone); a torn sidecar prunes nothing and is rewritten whole; and in the hlms row the load seeds
+# the template checksum with the preprocessor group's salt (the layer's guard of a changed preprocessor). NULL Roots: CPU
+# code rows.
 add_executable(test_shader_cache_uses test_shader_cache_uses.cpp)
 set_target_properties(test_shader_cache_uses PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"

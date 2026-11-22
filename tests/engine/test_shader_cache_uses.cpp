@@ -18,7 +18,15 @@
 //   (4) A TORN SIDECAR EVICTS NOTHING: one byte of entry-uses.bin flipped AND the layers over the budget, the launch drops
 //       nothing and wipes nothing (a damaged 1-KB file is no reason to throw 256 MB away: the lead) and rewrites a whole
 //       table; the eviction runs at the next save whose stamps were read intact.
+// The hlms row holds one more law, of the layer's own guard (the final read's item 2):
+//   (5) THE PREPROCESSOR's SALT: after ShaderCache::load, the HlmsUnlit's template checksum is the one seeded with the
+//       compile path's preprocessor group (JAHSHAKA_COMPILE_PATH_PREPROCESSOR_ID, OgreShaderCache.cpp load) - the hlms
+//       layer's ONLY guard against a changed preprocessor now that no fork commit is in its key (without it a
+//       preprocessor change silently compiles the old processed source). The salt has no getter and the checksum is its
+//       function: the loaded checksum equals the one with that salt set again, and the control - salt zero, the block
+//       skipped (upstream's checksum) - differs from it.
 #include "EnginePrivate.h"
+#include "jahshaka_engine_build_id.h"   // JAHSHAKA_COMPILE_PATH_PREPROCESSOR_ID: law (5)
 
 #include <OgreAbiUtils.h>
 #include <OgreArchiveManager.h>
@@ -346,6 +354,24 @@ static int run(const std::string &mode) {
         mkdirs(dir + "/unlit");
         writeFile(dir + "/unlit/VertexShader_vs.glsl", "#version 450\nvoid main() {}\n");
         runLaws(dir, [&dir](const std::string &c) { return std::unique_ptr<Toy>(new HlmsToy(c, dir + "/unlit")); });
+        HlmsToy t(dir + "/salt", dir + "/unlit");
+        t.begin(kRoomy);
+        const std::string id = JAHSHAKA_COMPILE_PATH_PREPROCESSOR_ID;
+        const Ogre::uint64 salt[2] = { std::stoull(id.substr(0, 16), nullptr, 16), std::stoull(id.substr(16, 16), nullptr, 16) };
+        const Ogre::uint64 zero[2] = { 0u, 0u };
+        Ogre::uint64 loaded[2], expected[2], unsalted[2];
+        t.unlit->getTemplateChecksum(loaded);
+        t.unlit->setJahTemplateSalt(zero);
+        t.unlit->getTemplateChecksum(unsalted);
+        t.unlit->setJahTemplateSalt(salt);
+        t.unlit->getTemplateChecksum(expected);
+        t.end();
+        CHECK(loaded[0] == expected[0] && loaded[1] == expected[1],
+              "(5) after the load the template checksum is the one salted with the preprocessor group %.16s (%016llx)",
+              id.c_str(), (unsigned long long)loaded[0]);
+        CHECK(unsalted[0] != loaded[0] || unsalted[1] != loaded[1],
+              "(5) ...and the control, the salt zero (the block skipped), differs from it (%016llx): the law can fail",
+              (unsigned long long)unsalted[0]);
     } else if (mode == "--compute") {
         std::printf("\n== the compute layer ==\n");
         mkdirs(dir + "/media");
