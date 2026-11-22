@@ -1052,8 +1052,10 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             poll();
             ++saveFrames;
             engine->request([&](Engine &e) { inFlight = e.shaderCacheStats().saveInFlight; });   // a REQUEST (U3 stage 3)
-            // ...and NO SPIN while it lands: an empty gate frame costs ~0.05 ms (measured: 3,506 frames for a 153-ms
-            // save), and only the copy's chunks need frames - the write is the writer's
+            // ...and A YIELD, NOT A SETTLE: while the writer's job runs (its fsync is wall-clock work no frame
+            // advances) the UI thread gives up 1 ms between frames instead of spinning empty ones (measured: 3,506
+            // frames for a 153-ms save); the copy's chunks still get a frame each, the window's events are pumped
+            // (poll), and the end is read from the published state above, never from this wait
             if (inFlight) QThread::msleep(1);
         }
         if (inFlight)
