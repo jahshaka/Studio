@@ -1,4 +1,4 @@
-# source.engine_headers' CEILINGS (tests/hygiene/engine_headers.py H3, H4): per public header of irisgl/engine/include/jahshaka/engine,
+# source.engine_headers' CEILINGS (tests/hygiene/engine_headers.py H3, H4; H6 at the end): per public header of irisgl/engine/include/jahshaka/engine,
 # its LINE count and its FAN-OUT (how many other public headers' include closure reaches it), taken at ENGINE-HEADERS-1
 # stage 1's landing (the split). They only FALL: a value under its line is RED until the line is lowered in the same commit;
 # over is RED. A new public header adds its two lines when it is born (engine_headers.py --counts prints them).
@@ -86,3 +86,13 @@ lines VoxelReader.h 68
 fanout VoxelReader.h 0
 lines Vr.h 777
 fanout Vr.h 1
+# H6 (the lead, 2026-11-23): per header of REACH (engine_headers.py), the SOURCE files (.cpp/.mm/.cc of the Studio tree
+# and irisgl, no thirdparty) whose include closure reaches it - the build's width per file, the law both ways; taken at
+# the re-made split (Studio a1df0658e / irisgl c1f2579e). The split's first form (9fab3ef28 / 900e0ec8) read 332 / 321 x5;
+# before the split, Types.h was reached by 286.
+reach GiParams.h 254
+reach FrameInput.h 245
+reach Monitor.h 246
+reach Sky.h 251
+reach Fog.h 245
+reach Planar.h 245
