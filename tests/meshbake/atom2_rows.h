@@ -19,8 +19,8 @@
 //                                position the output lost ITS OWN distance to the output: the weld id is the MESH's,
 //                                never an index into the group's local positions
 
-#include "import/atomdag/adjacency.h"
-#include "import/atomdag/measure.h"
+#include "irisgl/import/atomdag/adjacency.h"
+#include "irisgl/import/atomdag/measure.h"
 #include "jahshaka/engine/Mesh.h"
 
 namespace atom2

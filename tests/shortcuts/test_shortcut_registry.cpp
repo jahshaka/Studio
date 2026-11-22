@@ -16,7 +16,7 @@
 #include <QtTest/QTest>
 #include <cstdio>
 
-#include "document/input/inputmap.h"
+#include "irisgl/document/input/inputmap.h"
 #include "services/shortcutregistry.h"
 #include "viewport/snapsettings.h"
 

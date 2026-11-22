@@ -57,7 +57,7 @@
 #include "../support/proceduralshell.h"
 #include "../support/surfacedistance.h"
 
-#include "import/atomdag/adjacency.h"
+#include "irisgl/import/atomdag/adjacency.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
 
 #include <QCoreApplication>
