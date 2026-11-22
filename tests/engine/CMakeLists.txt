@@ -485,6 +485,17 @@ add_test(NAME mcp.schema COMMAND test_mcp_schema)
 set_tests_properties(mcp.schema PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(mcp.schema)
 
+# mcp.session — THE MCP SESSION ON THE CPU (MCP-ON-HOST-1 stage 2; test_mcp_session.cpp says the laws): the protocol
+# (revision 2026-07-28), the five tools, the lazy engine host, cancel and progress - the transport-free Session over
+# synthetic hosts. No device: a code row.
+add_executable(test_mcp_session test_mcp_session.cpp)
+set_target_properties(test_mcp_session PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_mcp_session PRIVATE JahshakaEngineMcp JahshakaEngine)
+add_test(NAME mcp.session COMMAND test_mcp_session)
+set_tests_properties(mcp.session PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(mcp.session)
+
 # engine.hit_list_law — THE REFLECTION REST's RECORD ALLOWANCE as a pure function (URGENT #157; test_hit_list_law.cpp says
 # the law): a function of the view's target (its hit list's creation capacity) and the rest's batching count, never of
 # how large the list once grew; a list smaller than its creation size caps it. The header only: a CPU code row.
