@@ -399,14 +399,18 @@ def never_compiled_case(source):
             + "".join("build %s: C_COMPILER__toy %s/%s\n" % (o, src, s) for o, s in objs)
             + "build exe_plain: C_EXECUTABLE_LINKER__toy plain.dir/a.c.o\nbuild exe_twin: C_EXECUTABLE_LINKER__toy twin.dir/a.c.o\n"
             "build exe_lone: C_EXECUTABLE_LINKER__toy lone.dir/b.c.o\nbuild all: phony exe_plain\ndefault all\n")
-        json.dump([{"directory": b, "file": "%s/%s" % (src, s), "output": o, "command": "cc -c %s/%s -o %s" % (src, s, o)}
-                   for o, s in objs], open(os.path.join(b, "compile_commands.json"), "w"))
+        # (CMake writes `output` ABSOLUTE in the configuring spelling; the graph is read through ANOTHER spelling of the build
+        # below - a symlink, as reach_test's private view and a symlinked root are - and must still find the command)
+        json.dump([{"directory": b, "file": "%s/%s" % (src, s), "output": os.path.join(b, o),
+                    "command": "cc -c %s/%s -o %s" % (src, s, o)} for o, s in objs], open(os.path.join(b, "compile_commands.json"), "w"))
         p = subprocess.run(["ninja", "-C", b], capture_output=True, text=True)
         if p.returncode != 0:
             check(False, "27. the toy build ran (ninja: %s)" % (p.stdout + p.stderr).strip()[-200:])
             return
-        g = gg.NinjaGraph.load(b)
-        ex = lambda *n: {os.path.join(b, x) for x in n}   # noqa: E731
+        view = os.path.join(w, "view")
+        os.symlink(b, view)
+        g = gg.NinjaGraph.load(view)
+        ex = lambda *n: {os.path.join(view, x) for x in n}   # noqa: E731
         rx, ry = set(g.reach(os.path.join(src, "x.h"))), set(g.reach(os.path.join(src, "y.h")))
         check(rx == ex("exe_plain", "exe_twin") and ry == ex("exe_lone")
               and not os.path.exists(os.path.join(b, "exe_twin")) and not os.path.exists(os.path.join(b, "lone.dir/b.c.o")),
@@ -417,7 +421,7 @@ def never_compiled_case(source):
         time.sleep(0.05)
         open(os.path.join(src, "b.c"), "w").write('#include "y.h"\n#include "z.h"\nint main(void) { return Y - Z; }\n')
         os.utime(os.path.join(b, "build.ninja"))   # (the graph's own cache keys on build.ninja's mtime: a fresh parse)
-        g2 = gg.NinjaGraph.load(b)
+        g2 = gg.NinjaGraph.load(view)
         rz = set(g2.reach(os.path.join(src, "z.h")))
         check(rz == ex("exe_lone"), "27. ...and a header the lone source starts to include reaches it at the next read (z.h %s)"
               % sorted(os.path.basename(e) for e in rz))

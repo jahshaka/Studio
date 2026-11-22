@@ -307,7 +307,9 @@ class NinjaGraph:
         import shlex
         cc = os.path.join(self.build, "compile_commands.json")
         try:
-            cmds = {self._abs(e["output"]) if not os.path.isabs(e["output"]) else os.path.normpath(e["output"]): e
+            # keyed by the object's path RELATIVE to its build (an entry names it absolute, in the configuring spelling; a
+            # private view of the build, or another spelling of it, is the same object)
+            cmds = {os.path.normpath(os.path.relpath(e["output"], e["directory"]) if os.path.isabs(e["output"]) else e["output"]): e
                     for e in json.load(open(cc)) if "output" in e}
         except (OSError, ValueError) as e:
             raise GraphError(f"{len(objs)} object(s) of on-demand targets have no deps record and {cc} is unreadable ({e}): "
@@ -320,7 +322,7 @@ class NinjaGraph:
         mt = lambda f: os.path.getmtime(f) if os.path.exists(f) else -1.0   # noqa: E731
 
         def one(o):
-            e = cmds.get(o)
+            e = cmds.get(os.path.normpath(os.path.relpath(o, self.build)))
             if e is None:
                 raise GraphError(f"{o} (an on-demand target's object) has no deps record and no compile_commands.json entry")
             key = hashlib.sha256(e["command"].encode()).hexdigest()
