@@ -849,6 +849,17 @@ add_test(NAME source.script_neutral
 set_tests_properties(source.script_neutral PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.script_neutral)
 
+# source.script_build_id (SCRIPT-IN-ENGINE-1 2a a3): THE SCRIPT HOST IS OUTSIDE THE ENGINE BUILD ID, AND IT IS A HOST - the
+# build's own EngineBuildId.cmake inputs (build.ninja) name no file of irisgl/engine/src/script/ or jahengine/; those files
+# include only the public engine API, script/, the standard library and (js_*.cpp) the JS engine; and the ID, recomputed
+# by the build's own script on a scratch copy, is the build's, stays put when a command file is edited and moves when an
+# engine input is (script_build_id.py says the rules). Its self-test first.
+add_test(NAME source.script_build_id
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/script_build_id.py" "${CMAKE_SOURCE_DIR}"
+                 "${CMAKE_BINARY_DIR}" "${CMAKE_COMMAND}")
+set_tests_properties(source.script_build_id PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.script_build_id)
+
 # source.brick_list_bounded (NONDET-1 fix items D; READ-8 R8-1..R8-3): THE FEEDBACK'S DATA-DRIVEN READS ARE BOUNDED IN THE
 # SHADER - every read of the GPU-written brick list by the group index (the bounce, the copy-back, the directional steps
 # 0 and 1, the ray tier's sides gather) returns at or past the list's length and at a brick (or texel) past the volume;

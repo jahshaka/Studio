@@ -310,7 +310,7 @@ jah_tsan_render(engine.gpuscene_identity)
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
     # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
-    add_library(JahshakaEngineAsan STATIC ${JAHSHAKA_ENGINE_SOURCES})
+    add_library(JahshakaEngineAsan STATIC ${JAHSHAKA_ENGINE_SOURCES} ${JAHSHAKA_ENGINE_SCRIPT_SOURCES})
     target_include_directories(JahshakaEngineAsan
         PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include
         PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${JAHSHAKA_ENGINE_BUILD_ID_DIR}
