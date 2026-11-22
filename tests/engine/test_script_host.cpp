@@ -766,6 +766,78 @@ int main()
               "another seed draws another (" + (c.empty() ? std::string("?") : c[0]) + ")");
     }
 
+    // 12. THE CALL BY NAMED ARGUMENTS (MCP-ON-HOST-1 stage 1: Registry::callNamed - the adapter knows no command): the
+    //     members go to the signature's POSITIONS (never the object's order), and every strict law holds through it in
+    //     the same words as the positional call
+    {
+        const auto same = [](const Result &a, const Result &b) {
+            return a.status == b.status && a.message == b.message && a.value == b.value;
+        };
+        Registry nr;
+        nr.add({"test.pair",
+                {{target(handle("scene", "scene")), target(handle("node", "node")),
+                  object("opts", {arg("x", Kind::Number, Value(1.0))}, Value(Value::Object{}))},
+                 Kind::Array},
+                "the scene, the node and opts.x, in that order"},
+               [](Call &c) { return Value(Value::Array{c[0], c[1], c[2]["x"]}); });
+        const Value scene(nr.hold("scene", std::make_shared<int>(1))), node(nr.name("node", 5));
+        const Value opts(Value::Object{{"x", Value(2.0)}});
+        const Result positional = nr.call("test.pair", {scene, node, opts});
+        const Result inOrder = nr.callNamed("test.pair", {{"scene", scene}, {"node", node}, {"opts", opts}});
+        const Result reversed = nr.callNamed("test.pair", {{"opts", opts}, {"node", node}, {"scene", scene}});
+        check(positional.status == Status::Ok && same(inOrder, positional) && same(reversed, positional) &&
+                  reversed.value == Value(Value::Array{scene, node, Value(2.0)}),
+              "callNamed puts each member at its parameter's position: the two targets named in either order give the "
+              "same call as the positional one (" + reversed.message + ")");
+        check(same(nr.callNamed("test.pair", {{"node", node}, {"scene", scene}}), nr.call("test.pair", {scene, node})),
+              "an absent member is null: its parameter's default, as the positional call's absent argument");
+        const Result misspelt = nr.callNamed("test.pair", {{"scene", scene}, {"nodee", node}});
+        const Result unknown = nr.callNamed("test.pair", {{"scene", scene}, {"node", node}, {"colour", Value(1)}});
+        const std::string sig = "(" + signatureText(*nr.find("test.pair")) + ")";
+        check(failedWith(misspelt, "test.pair: has no parameter 'nodee' " + sig) &&
+                  failedWith(unknown, "test.pair: has no parameter 'colour' " + sig),
+              "a misspelt member and an unknown parameter FAIL by name with the signature (" + misspelt.message + ")");
+        check(failedWith(nr.callNamed("test.pair", {{"scene", scene}}), "test.pair: node is required") &&
+                  same(nr.callNamed("test.pair", {{"scene", scene}}), nr.call("test.pair", {scene})),
+              "a missing required parameter FAILS 'is required', in the positional call's words");
+        check(failedWith(nr.callNamed("test.pairs", {}), "test.pairs is not a command") &&
+                  same(nr.callNamed("test.pairs", {}), nr.call("test.pairs", {})),
+              "an unknown command FAILS in the positional call's words");
+        check(failedWith(nr.callNamed("test.pair", {{"scene", scene}, {"scene", scene}, {"node", node}}),
+                         "test.pair: the parameter 'scene' is named twice"),
+              "a parameter named twice FAILS by name");
+        const auto both = [&](const Value &s, const Value &n, const Value &o, const std::string &part) {
+            const Result named = nr.callNamed("test.pair", {{"scene", s}, {"node", n}, {"opts", o}});
+            return failedWith(named, part) && same(named, nr.call("test.pair", {s, n, o}));
+        };
+        const Value stale(nr.hold("scene", std::make_shared<int>(2)));
+        nr.release(stale.asInt());
+        check(both(scene, Value(5.5), opts, "node must be an integer") &&
+                  both(node, node, opts, "is a node handle, not a scene handle") &&
+                  both(stale, node, opts, "is stale (its scene was released)") &&
+                  both(scene, node, Value(Value::Object{{"y", Value(1)}}), "opts has no member 'y'") &&
+                  both(scene, node, Value(Value::Object{{"x", Value("1")}}), "opts.x must be number"),
+              "a non-integral Int, a wrong-kind handle, a dead handle, an undeclared member and a wrong kind FAIL through "
+              "callNamed with the positional call's text");
+        // THE THREE REAL SHAPES (the engine's commands, no engine): the named call is the positional call, word for word.
+        // (`es` holds no Scene: the node's existence check would read it as one - so the node is a MESH handle, refused by
+        // its kind bits at the node's position, before any check reads the scene.)
+        const Value es(eng.hold("scene", std::make_shared<int>(3))), en(eng.name("mesh", 7));
+        const Value tr(Value::Object{{"position", Value(Value::Array{Value(1), Value(2), Value(3)})}});
+        const Value gi(Value::Object{{"mode", Value("vct")}, {"cascades", Value(Value::Array{})}});
+        const Result f1 = engHost.callNamed("engine.frames", {{"n", Value(3)}}), f2 = engHost.call("engine.frames", {Value(3)});
+        const Result t1 = eng.callNamed("engine.node.setTransform", {{"transform", tr}, {"node", en}, {"scene", es}});
+        const Result t2 = eng.call("engine.node.setTransform", {es, en, tr});
+        const Result g1 = eng.callNamed("engine.gi.set", {{"params", gi}, {"scene", es}});
+        const Result g2 = eng.call("engine.gi.set", {es, gi});
+        check(same(f1, f2) && same(t1, t2) && same(g1, g2) && f1.message.find("the engine did not start") != std::string::npos &&
+                  g1.message.find("the engine did not start") != std::string::npos &&
+                  t1.message.find("engine.node.setTransform: node: ") == 0 &&
+                  t1.message.find("is a mesh handle, not a node handle") != std::string::npos,
+              "engine.frames, engine.node.setTransform and engine.gi.set by name (members in any order) are their "
+              "positional calls word for word (" + t1.message + ")");
+    }
+
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
     else std::printf("script.host: PASSED\n");
     return gFail ? 1 : 0;
