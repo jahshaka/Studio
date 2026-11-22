@@ -341,6 +341,20 @@ QVector<PreviewService::Row> PreviewService::state(Project *project, bool projec
     return out;
 }
 
+PreviewService::Counts PreviewService::counts(Project *project, bool projectOnly)
+{
+    Counts out;
+    for (const Row &row : state(project, projectOnly)) {
+        switch (row.state) {
+        case State::Ok: ++out.ok; break;
+        case State::Missing: ++out.missing; break;
+        case State::Stale: ++out.stale; break;
+        case State::None: ++out.none; break;
+        }
+    }
+    return out;
+}
+
 // ---- the sweep ----------------------------------------------------------------------------------
 
 PreviewService::SweepResult PreviewService::sweep(Project *project, const SweepOptions &options,

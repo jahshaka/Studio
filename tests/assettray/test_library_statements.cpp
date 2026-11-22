@@ -367,9 +367,14 @@ struct PreviewPages {
     Reading state;      ///< fetchPreviewRows, the default cache
     Reading stateWide;  ///< fetchPreviewRows, a 64-MB cache
     Reading scanWide;   ///< the assets table's b-tree once, header-only, a 64-MB cache
+    /// previews.state / previews.counts over the OPEN PROJECT's rows (fetchPreviewRows, projectOnly), and its control:
+    /// a header-only read of the SAME rows by the SAME WHERE and order (the planner reaches the assets table alike).
+    Reading projectWide;
+    Reading projectScanWide;
+    Reading projectChainWide;   ///< NEGATIVE CONTROL: the same rows reading `properties` from the table (a chain walk)
 };
 
-static PreviewPages coldPreviewPages(Database &db, const QString &dbPath)
+static PreviewPages coldPreviewPages(Database &db, const QString &dbPath, const QString &openProject)
 {
     const auto cold = [&](bool wide, const std::function<void()> &step) {
         db.closeDatabase();
@@ -384,6 +389,24 @@ static PreviewPages coldPreviewPages(Database &db, const QString &dbPath)
     out.scanWide = cold(true, [] {
         QSqlQuery q(QSqlDatabase::database());
         q.exec(QStringLiteral("SELECT sum(length(thumbnail) > 0) + sum(length(asset) > 0) FROM assets NOT INDEXED"));
+        while (q.next()) {}
+    });
+    out.projectWide = cold(true, [&db, &openProject] { db.fetchPreviewRows(openProject, true, -1); });
+    out.projectScanWide = cold(true, [&openProject] {
+        QSqlQuery q(QSqlDatabase::database());
+        q.prepare(QStringLiteral("SELECT length(a.thumbnail) > 0, length(a.asset) > 0 FROM assets a WHERE 1 AND a.guid IN "
+                                 "(SELECT asset_guid FROM project_assets WHERE project_guid = ?) ORDER BY a.rowid"));
+        q.addBindValue(openProject);
+        q.exec();
+        while (q.next()) {}
+    });
+    out.projectChainWide = cold(true, [&openProject] {
+        QSqlQuery q(QSqlDatabase::database());
+        q.prepare(QStringLiteral("SELECT length(a.thumbnail) > 0, instr(COALESCE(a.properties, ''), '\"platform\"') > 0 "
+                                 "FROM assets a WHERE 1 AND a.guid IN "
+                                 "(SELECT asset_guid FROM project_assets WHERE project_guid = ?) ORDER BY a.rowid"));
+        q.addBindValue(openProject);
+        q.exec();
         while (q.next()) {}
     });
     return out;
@@ -793,7 +816,7 @@ int main(int argc, char **argv)
         none = coldListing(db, bare);
         coveredNone = coldCovered(db, bare, bareLib);
         residueNone = coldResidue(db, bare, bareLib);
-        previewsNone = coldPreviewPages(db, bare);
+        previewsNone = coldPreviewPages(db, bare, bareLib.openProject);
         db.closeDatabase();
         QFile::remove(bare);
     }
@@ -927,7 +950,7 @@ int main(int argc, char **argv)
     // stamp read as instr(properties) in the main statement): 7,766 against 81
     // (spikes/previews-1/stage2/fix1-pages-red.txt). The default cache's reading is printed beside it (one page more
     // with thumbnails: the larger table pushes one page out of the 2-MB cache and it is read again).
-    const PreviewPages previewsWith = coldPreviewPages(db, dbPath);
+    const PreviewPages previewsWith = coldPreviewPages(db, dbPath, lib.openProject);
     {
         const PreviewPages &w = previewsWith, &n = previewsNone;
         CHECK(w.stateWide.pages - w.scanWide.pages == n.stateWide.pages - n.scanWide.pages,
@@ -938,6 +961,22 @@ int main(int argc, char **argv)
         CHECK(w.scanWide.pages > n.scanWide.pages,
               "FIX 1 POSITIVE CONTROL: the header-only scan does see the inline thumbnails (%lld pages against %lld)",
               static_cast<long long>(w.scanWide.pages), static_cast<long long>(n.scanWide.pages));
+        // PREVIEWS-1 stage 2, previews.counts({scope: 'project'}) (and previews.state's project scope): THE SAME LAW
+        // over the open project's rows - its OWN statement (the projectOnly WHERE), unproved by the library clause.
+        // Its control is a header-only read of the same rows by the same WHERE: rows that carry an inline tile sit
+        // one to a leaf page, so even a header read touches more pages with thumbnails; everything beyond it must be
+        // page-for-page alike. A column stored after `thumbnail` read from the table breaks the equality.
+        CHECK(w.projectWide.pages - w.projectScanWide.pages == n.projectWide.pages - n.projectScanWide.pages
+                  && w.projectWide.pages > 0,
+              "previews.counts / state over the open project read no thumbnail chain - beyond a header-only read of the "
+              "same rows they read %lld pages with 256-px thumbnails and %lld with none (cache 64 MB)",
+              static_cast<long long>(w.projectWide.pages - w.projectScanWide.pages),
+              static_cast<long long>(n.projectWide.pages - n.projectScanWide.pages));
+        CHECK(w.projectChainWide.pages - w.projectScanWide.pages != n.projectChainWide.pages - n.projectScanWide.pages,
+              "...NEGATIVE CONTROL: the same rows reading `properties` from the table break it (%lld pages beyond the "
+              "header read with thumbnails, %lld with none)",
+              static_cast<long long>(w.projectChainWide.pages - w.projectScanWide.pages),
+              static_cast<long long>(n.projectChainWide.pages - n.projectScanWide.pages));
         std::printf("   previews.state at the product's default cache: %lld pages with thumbnails, %lld with none\n",
                     static_cast<long long>(w.state.pages), static_cast<long long>(n.state.pages));
         std::printf("   residue | %-78s | %-8s | %5lld / %5lld pages = %.1fx | %s\n",
@@ -1004,10 +1043,23 @@ int main(int argc, char **argv)
     printIndexSizes("10,000 assets");
     {
         // FIX 1 AT 10,000: previews.state is the same statements (a sweep's start and a verb), its table pass printed.
-        const PreviewPages big = coldPreviewPages(db, dbPath);
+        const PreviewPages big = coldPreviewPages(db, dbPath, lib.openProject);
         CHECK(big.state.statements == previewsWith.state.statements && big.state.statements > 0,
               "FIX 1: previews.state runs the SAME statements at 10,000 as at 1,000 (%lld and %lld)",
               static_cast<long long>(big.state.statements), static_cast<long long>(previewsWith.state.statements));
+        CHECK(big.projectWide.statements == previewsWith.projectWide.statements && big.projectWide.statements > 0,
+              "previews.counts / state over the open project: the SAME statements at 10,000 as at 1,000 (%lld and %lld)",
+              static_cast<long long>(big.projectWide.statements), static_cast<long long>(previewsWith.projectWide.statements));
+        // RESIDUE, printed: the platform set is read over the WHOLE idx_assets_library whatever the scope
+        // (database.cpp fetchPreviewRows, the FetchPreviewPlatform statement), so a project-scope read grows with the
+        // library's index - no thumbnail chain (the clause above), but O(library) index pages.
+        std::printf("   residue | %-78s | %-8s | %5lld / %5lld pages = %.1fx | %s\n",
+                    "previews.counts / state, scope 'project' (fixed size): pages beyond its rows' header read",
+                    "library", static_cast<long long>(big.projectWide.pages - big.projectScanWide.pages),
+                    static_cast<long long>(previewsWith.projectWide.pages - previewsWith.projectScanWide.pages),
+                    double(big.projectWide.pages - big.projectScanWide.pages)
+                        / double(std::max<qint64>(1, previewsWith.projectWide.pages - previewsWith.projectScanWide.pages)),
+                    "database.cpp fetchPreviewRows (the platform set: idx_assets_library whole)");
         std::printf("   residue (bytes) previews.state's table pass at 10,000 with thumbnails: %lld pages = %lld B (default "
                     "cache: the state reads %lld pages)\n", static_cast<long long>(big.scanWide.pages),
                     static_cast<long long>(big.scanWide.bytes), static_cast<long long>(big.state.pages));

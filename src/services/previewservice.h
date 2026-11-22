@@ -111,6 +111,16 @@ public:
     };
     /// Every library row (projectOnly: the open project's pinned rows), `type` >= 0 one type.
     QVector<Row> state(Project *project, bool projectOnly, int type = -1);
+    /// "N previews to refresh": state()'s rows TALLIED - the same one catalog read (the key is a hash
+    /// the catalog cannot compute, so the comparison is this side's), no per-row statement.
+    struct Counts
+    {
+        int ok = 0;
+        int missing = 0;
+        int stale = 0;
+        int none = 0;
+    };
+    Counts counts(Project *project, bool projectOnly);
 
     // ---- THE SWEEP (renderAll) -------------------------------------------------------------
     struct SweepOptions

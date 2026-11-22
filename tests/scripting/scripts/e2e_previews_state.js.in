@@ -20,6 +20,8 @@
 //      batch is stood down when the verb starts and the sweep waits at the cap, so the writer's
 //      high-water mark (peakQueued) never passes the cap, and every row lands 'ok'. RED when the
 //      batch stood down only after the sweep and the queue had no cap: peakQueued = every row.
+//      previews.counts({scope:'project'}) is that state tallied, ONE catalog read (2 logged statements),
+//      and renderAll draws exactly its missing + stale;
 //   7. THE MESH PRESET (stage 2): a model import's MESH row reads 'missing' with a key (headless no
 //      picture is drawn) - RED at af01a8d13, where every Mesh row read 'none' (no preset); its key
 //      MOVES when assets.reimport makes a new bake and its Object's tile is not its key; a headless
@@ -139,10 +141,25 @@ many.forEach(function (g) { assets.addToProject(g); });
 assert(many.every(function (g) { return rowOf(g).state === "stale"; }),
        "a PIN moves the key: the 12 pinned textures read 'stale'");
 assert(assets.createDrawer("Batch " + stamp) > 0, "the script WRITES: the run's batch is live");
+// previews.counts: state's rows TALLIED, from the same one read (two logged statements: the platform set and the
+// rows), and its missing + stale is exactly what renderAll then draws.
+var tally = { ok: 0, missing: 0, stale: 0, none: 0 };
+previews.state({ scope: "project" }).forEach(function (r) { ++tally[r.state]; });
+app.queryLog({ on: true });
+var c6 = previews.counts({ scope: "project" });
+var ql = app.queryLog({ on: false });
+assert(["ok", "missing", "stale", "none"].every(function (k) { return c6[k] === tally[k]; }) && c6.stale >= 12, "previews.counts({scope:'project'}) = previews.state tallied: " + J(c6));
+var qlNames = ql.byName.map(function (e) { return e.name + "=" + e.count; }).sort().join(",");
+assert(ql.statements === 2 && qlNames === "FetchPreviewPlatform=1,FetchPreviewRows=1",
+       "previews.counts is ONE catalog read, no statement per row: " + ql.statements + " (" + qlNames + ")");
+var cLib = previews.counts();
+assert(cLib.ok + cLib.missing + cLib.stale + cLib.none === previews.state().length, "previews.counts() covers every library row: " + J(cLib));
 var swept = previews.renderAll({ projectOnly: true });
 // The project's template pins model rows too: an engine kind fails headless by name, never one of ours.
 assert(swept.rendered >= 12 && swept.failed.every(function (f) { return !distinct[f.guid]; }),
        "renderAll over the project renders every pinned texture; none of them fails: " + J(swept));
+assert(swept.rendered + swept.failed.length === c6.missing + c6.stale,
+       "renderAll drew exactly counts' missing + stale (" + (c6.missing + c6.stale) + ")");
 assert(swept.peakQueued >= 1 && swept.peakQueued <= CAP,
        "the writer's high-water mark stays within its cap of " + CAP + ": " + swept.peakQueued);
 assert(many.every(function (g) { return rowOf(g).state === "ok"; }), "every row reads 'ok' after the sweep");

@@ -37,6 +37,7 @@ public:
     QVector<VerbInfo> verbs() const override;
 
     Q_INVOKABLE QVariantList state(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap counts(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap render(const QString &guid);
     Q_INVOKABLE QVariantMap renderAll(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap settle();

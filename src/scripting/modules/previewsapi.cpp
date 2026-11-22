@@ -114,6 +114,12 @@ QVector<VerbInfo> PreviewsApi::verbs() const
           "asked for (an import's picture included) lands through the one writer: until previews.settle, "
           "previews.render or the run's end lands it, its row reads 'missing' or 'stale'.",
           Needs::Document },
+        { "counts", "previews.counts({scope}) -> {ok, missing, stale, none}",
+          "How many rows' previews are in each state - previews.state's rows tallied, from the SAME one "
+          "catalog read (no render, no decode, no statement per row). `scope` 'library' (default) or "
+          "'project' (the open project's pinned rows). `missing` + `stale` is what previews.renderAll "
+          "draws (\"N previews to refresh\").",
+          Needs::Document },
         { "render", "previews.render(guid) -> {ok, reason}",
           "Draws one row's preview through the preview service and waits for it to be STORED with its key. "
           "Textures, video frames, pose strips, photometric lobes and icons are drawn on the CPU (headless too); "
@@ -173,6 +179,31 @@ QVariantList PreviewsApi::state(const QVariantMap &options)
                                 { "key", row.key },
                                 { "storedKey", row.storedKey } });
     }
+    return out;
+}
+
+QVariantMap PreviewsApi::counts(const QVariantMap &options)
+{
+    QVariantMap out;
+    PreviewService *previews = host.services ? host.services->previews : nullptr;
+    if (!previews) { fail("previews: there is no preview service in this session"); return out; }
+    const QString refusal = refuseUnknownKeys(QStringLiteral("previews.counts"), options, { QStringLiteral("scope") });
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+    const QString scope = options.value(QStringLiteral("scope"), QStringLiteral("library")).toString();
+    if (scope != QLatin1String("library") && scope != QLatin1String("project")) {
+        fail(QStringLiteral("previews.counts: unknown scope '%1' (library | project)").arg(scope));
+        return out;
+    }
+    const bool projectOnly = scope == QLatin1String("project");
+    if (projectOnly && !host.isProjectOpen()) {
+        fail("previews.counts: scope 'project' needs an open project");
+        return out;
+    }
+    const PreviewService::Counts c = previews->counts(host.project, projectOnly);
+    out["ok"] = c.ok;
+    out["missing"] = c.missing;
+    out["stale"] = c.stale;
+    out["none"] = c.none;
     return out;
 }
 
