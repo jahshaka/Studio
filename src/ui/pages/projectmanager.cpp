@@ -618,13 +618,10 @@ bool ProjectManager::moveTileToSliderPos(const QString &guid, int row, int index
     if (currentLayoutMode != "sliders") return false;
     finishGridBuild();
 
-    foreach (ItemGridWidget *widget, dynamicGrid->originalItems) {
-        if (widget->tileData.guid == guid) {
-            dynamicGrid->moveTileToRow(widget, row, index);
-            return true;
-        }
-    }
-    return false;
+    ItemGridWidget *widget = dynamicGrid->tile(guid);   // by guid (DynamicGrid's index), never a walk of the tiles
+    if (!widget) return false;
+    dynamicGrid->moveTileToRow(widget, row, index);
+    return true;
 }
 
 int ProjectManager::sliderRows() const

@@ -577,7 +577,6 @@ public:
     /// How often the worker looks at the -wal's size (a stat; no I/O wait).
     static constexpr int kPollMs = 500;
 
-
 private:
     void run()
     {
