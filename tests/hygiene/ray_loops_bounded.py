@@ -25,6 +25,7 @@
 #       and there are as many JAH_RQ_INIT( calls as ray query loops;
 #   (6) THE COUNTS AT THEIR LAWS (the lead's calls 1 and 7): the five count loops that trace a ray a trip and the three
 #       marches a float steers carry their clamp (CLAMPED below: the hit table's lights to the section the host wrote,
+#       and to an ABSOLUTE ceiling, the host's word of the light records its buffer holds - a wholly garbage header held),
 #       the card movers' lamps to their buffer, the two gathers' rays to 4096 with their float bit-tested, the voxel
 #       march's resolution and the young reach bit-tested and held), and the other count loops are on
 #       ray_count_loops_pending.txt - every entry's header still in its file, at most kPendingAtMost entries: the list
@@ -68,8 +69,12 @@ kPendingAtMost = 26
 CLAMPED = (
     ("src/rayquery/include/jah_rq_hit_direct.glsl", r"const\s+uint\s+count\s*=\s*jahHitLightCount\s*\(\s*T\s*\)", 2,
      "the hit table's lights to the section the host wrote (two loops)"),
-    ("src/rayquery/include/jah_rq_hit_direct.glsl", r"min\s*\(\s*T\.u\[0\]\s*,\s*e\s*>\s*b\s*\?\s*\(\s*e\s*-\s*b\s*\)\s*/\s*kJahHitLightWords", 1,
-     "jahHitLightCount: u[0] held to (u[3] - u[2]) / kJahHitLightWords"),
+    ("src/rayquery/include/jah_rq_hit_direct.glsl", r"min\s*\(\s*min\s*\(\s*T\.u\[0\]\s*,\s*e\s*>\s*b\s*\?\s*\(\s*e\s*-\s*b\s*\)\s*/\s*kJahHitLightWords\s*:\s*0u\s*\)\s*,\s*cap\s*\)", 1,
+     "jahHitLightCount: u[0] held to (u[3] - u[2]) / kJahHitLightWords AND to the buffer's capacity (cap)"),
+    ("src/rayquery/include/jah_rq_hit_direct.glsl", r"cap\s*=\s*finite1\s*\(\s*capF\s*\)\s*\?\s*uint\s*\(\s*clamp\s*\(\s*capF\s*,\s*0\.0\s*,", 1,
+     "the table's ABSOLUTE ceiling: the host's word (JAH_HIT_PARAMS.worldMax.w), bit-tested - a wholly garbage header held"),
+    ("src/rayquery/include/jah_rq_hit_direct.glsl", r"capF\s*=\s*JAH_HIT_PARAMS\.worldMax\.w\s*;", 1,
+     "the ceiling read from the host's hit params, never from the table"),
     ("src/rayquery/rq_card_movers.comp", r"i\s*<\s*min\s*\(\s*lampCount\.x\s*,\s*uint\s*\(\s*lamps\.length\s*\(\s*\)\s*\)\s*\)", 1,
      "the card movers' lamps to their buffer's records"),
     ("src/rayquery/rq_card_gather.comp", r"const\s+int\s+n\s*=\s*finite1\s*\(\s*p\.knobs\.x\s*\)\s*\?\s*clamp\s*\(\s*int\s*\(\s*min\s*\(\s*p\.knobs\.x\s*,\s*4096\.0\s*\)\s*\)\s*,\s*1\s*,\s*4096\s*\)", 1,
@@ -384,7 +389,9 @@ def self_test():
 
 LAWFUL_CLAMPED = {
     "src/rayquery/include/jah_rq_hit_direct.glsl": "const uint count = jahHitLightCount( T );\nconst uint count = "
-    "jahHitLightCount( T );\nreturn min( T.u[0], e > b ? ( e - b ) / kJahHitLightWords : 0u );",
+    "jahHitLightCount( T );\nconst float capF = JAH_HIT_PARAMS.worldMax.w;\n"
+    "const uint cap = finite1( capF ) ? uint( clamp( capF, 0.0, 16777216.0 ) ) : 0u;\n"
+    "return min( min( T.u[0], e > b ? ( e - b ) / kJahHitLightWords : 0u ), cap );",
     "src/rayquery/rq_card_movers.comp": "for( uint i = 0u; i < min( lampCount.x, uint( lamps.length() ) ); ++i )",
     "src/rayquery/rq_card_gather.comp": "const int n = finite1( p.knobs.x ) ? clamp( int( min( p.knobs.x, 4096.0 ) ), 1, 4096 ) : 1;",
     "src/rayquery/rq_voxel_sides.comp": "const int rays = finite1( p.knobs.x ) ? clamp( int( min( p.knobs.x, 4096.0 ) ), 1, 4096 ) : 1;",
