@@ -137,7 +137,13 @@ jah_gpu_row(lab.js_run_twice CLASS engine FRAMES 483
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.js_run_twice PROPERTIES TIMEOUT 60 LABELS "lab")
 
-
+# lab.js_scene_held (LAB-SCRIPTS-1, the audit's item 5) — BETWEEN RUNS THE LAB HOLDS THE SCRIPT's LAST FRAME STILL: its
+# own frames at +1 and +120 equal the script's last frame, every byte (js_scene_held.sh says the law). The first frame,
+# js_cube.js's 3, then 1 + 119 of the lab's own.
+jah_gpu_row(lab.js_scene_held CLASS engine FRAMES 124
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_scene_held.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/js_scene_held
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_scene_held PROPERTIES TIMEOUT 60 LABELS "lab")
 
 # lab.js_error_survives (LAB-SCRIPTS-1 stage 1) — A SCRIPT's ERROR NEVER ENDS THE LAB: a throwing script fails its run (and
 # the process's exit), naming its line; the next script runs (js_error_survives.sh says the laws). The first frame only.

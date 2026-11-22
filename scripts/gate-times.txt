@@ -648,3 +648,4 @@ lab.js_log_prefixed 1.04  by hand, solo, 2026-11-23 at b8b54fe09: the lane's gre
 lab.js_clear_restores 2.98  by hand, solo, 2026-11-23 at b8b54fe09: the lane's green sitting (spikes/lab-scripts-1/green-b2/; spec.sh reprice not used: URGENT #215)
 lab.js_watched_no_checks 1.16  by hand, solo, 2026-11-23 at b8b54fe09: the lane's green sitting (spikes/lab-scripts-1/green-b2/; spec.sh reprice not used: URGENT #215)
 lab.js_run_twice 2.50  by hand, solo, 2026-11-23 at 873e9182a: the lane's Part 2 green hold (spikes/lab-scripts-1/green-b2/part2/; spec.sh reprice not used: URGENT #215)
+lab.js_scene_held 1.70  by hand, solo, 2026-11-23 at 873e9182a: the lane's Part 2 green hold (spikes/lab-scripts-1/green-b2/part2/; spec.sh reprice not used: URGENT #215)
