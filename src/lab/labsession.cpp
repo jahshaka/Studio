@@ -453,7 +453,7 @@ void Session::setTitle()
                      atomViewNames()[size_t(mAtomView)]);
 }
 
-void Session::frame()
+void Session::pumpWindow()
 {
     if (mWindow.isOpen()) {
         mWindow.pump(mInput);
@@ -476,6 +476,11 @@ void Session::frame()
         }
         mCamera.fly(mInput.held, mInput.dx, mInput.dy);
     }
+}
+
+void Session::frame()
+{
+    pumpWindow();
     // THE VIEW LENT TO A SCRIPT (lab.view()): it shows the script's scene - the lab's world is neither advanced nor
     // synced into it (the mirror would push the lab's sky, environment and camera into the script's view); the frame
     // draws and presents what the view shows
@@ -2515,6 +2520,20 @@ int Session::run(const Options &opt)
             if (!mOpt.readStdin || !mStdinOpen) break;
             pollfd p{ 0, POLLIN, 0 };
             ::poll(&p, 1, 50);
+            readStdinLines();
+            continue;
+        }
+        if (!mOpt.idleFrames) {
+            // --no-idle-frames: THE WINDOW DRAWS NO FRAME UNASKED - it waits for the next line (a driver's stdin) or
+            // ends, and SERVES ITS EVENTS meanwhile without a frame (a close, a key, a strip click run now: their lines
+            // through the one parser; the fly moves the camera the next frame shows): the loop BLOCKS on stdin and the
+            // X connection together - no busy wait, no clock. Events Xlib already queued are drained first (the fd
+            // would not wake for them).
+            if (!mOpt.readStdin || !mStdinOpen) break;
+            pumpWindow();
+            if (mQuit) break;
+            pollfd p[2] = { { 0, POLLIN, 0 }, { mWindow.connectionFd(), POLLIN, 0 } };
+            ::poll(p, 2, -1);
             readStdinLines();
             continue;
         }

@@ -51,6 +51,9 @@ struct Options
     QString binDir;            ///< the binary's directory (media, app/content)
     bool headless = false;     ///< an OFFSCREEN Vulkan view, no window (never EngineConfig::headless; DISPLAY still needed)
     bool readStdin = true;
+    /// --no-idle-frames: the window draws no frame unasked (it waits on stdin as --headless does) - a card row's
+    /// declared frames are then the frames it draws, never a count paced by the driver's wall clock
+    bool idleFrames = true;
     bool bakeOnly = false;     ///< bake (or verify the cached bake of) the file and exit: CPU only, no engine, no GPU
     bool hasCamera = false;
     iris::Vec3 camPos, camTarget;
@@ -77,8 +80,11 @@ public:
 private:
     bool boot(std::string &error);
     bool load(std::string &error);
-    /// One frame: the window's input (keys -> their lines, the fly), the sync, the render, the overlay.
+    /// One frame: the window's input (pumpWindow), the sync, the render, the overlay.
     void frame();
+    /// The window's input, drained: keys and strip clicks -> their lines through the one parser, the close, the
+    /// resize, the fly. Every frame's first step, and - without a frame - the window's service under --no-idle-frames.
+    void pumpWindow();
     void renderFrames(int n);
     void pushOverlay();
     bool shot(const std::string &name);

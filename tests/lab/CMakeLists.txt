@@ -105,7 +105,7 @@ jah_no_display(lab.js_folder)
 
 # lab.strip_click (LAB-SCRIPTS-1 stage 2) — THE STRIP's RUN BUTTON RUNS THE SCRIPT: the lab in a WINDOW on the rig's display,
 # a real click (xdotool) on Run is `js run` through the one parser; F9 is the control (strip_click.sh says the law). The
-# first frame and 2 x 3 frames after the inputs.
+# first frame and 2 x 3 frames after the inputs - EXACTLY (--no-idle-frames: the window draws only what is asked).
 jah_gpu_row(lab.strip_click CLASS engine FRAMES 7
     COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/strip_click.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/strip_click
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

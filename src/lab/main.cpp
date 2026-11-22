@@ -109,6 +109,7 @@ int main(int argc, char **argv)
         if (a == "--help" || a == "-h") { std::printf("%s", lab::helpText().c_str()); return 0; }
         else if (a == "--headless") opt.headless = true;
         else if (a == "--no-stdin") opt.readStdin = false;
+        else if (a == "--no-idle-frames") opt.idleFrames = false;
         else if (a == "--bake-only") opt.bakeOnly = true;
         else if (a == "--env") { const char *v = next(); if (!v) return usage("--env needs a name (--env-list)"); opt.env = QString::fromLocal8Bit(v); }
         else if (a == "--seed") { const char *v = next(); char *end = nullptr; if (!v) return usage("--seed needs a number"); opt.seed = unsigned(std::strtoul(v, &end, 10)); if (!end || *end) return usage("--seed needs a number"); }

@@ -58,6 +58,9 @@ public:
     unsigned long long windowHandle() const { return mWindow; }
     unsigned long long viewHandle() const { return mViewChild; }
     bool isOpen() const { return mDisplay != nullptr; }
+    /// The X connection's file descriptor (ConnectionNumber): a lab that draws no frame unasked (--no-idle-frames)
+    /// blocks on it beside stdin, so the window's events are served without a frame and without a busy wait.
+    int connectionFd() const;
 
 private:
     void *mDisplay = nullptr;

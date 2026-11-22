@@ -6,6 +6,9 @@
 # THE LAW: the click is the line `js run` through the one parser - `LAB OK (strip) js run`, the script's run 2 ending
 # `ok (1 checks, 0 frames)` - before the click's echo.
 # CONTROL: F9 prints the same run (`LAB OK (key) js run`, run 3): the window takes input at all.
+# THE FRAMES: `--no-idle-frames` - the window draws only what is asked (the first frame, then 3 after each input: its
+# events are read at the next frame drawn), so the row draws EXACTLY its declared 7 (`LAB END frames 7`), never a count
+# paced by the driver's wall clock.
 # The driver reads the lab's lines as they come (a coprocess): no sleep, no clock; ctest's timeout bounds a lab that never
 # answers. usage: strip_click.sh <jahlab> <work dir>
 set -u
@@ -16,7 +19,7 @@ rm -rf "$WD"; mkdir -p "$WD"
 printf '%s\n' 'host.check({ok: true, what: "one.js ran"});' > "$WD/one.js"
 # the Run button's centre, from the lab's own table (labcommands.cpp stripButtons: Run [4, 68) x [0, 24))
 RX=36; RY=12
-coproc LABP { exec "$LAB" --size 320x180 --data-root "$WD/data" --js "$WD/one.js" 2>&1; }
+coproc LABP { exec "$LAB" --no-idle-frames --size 320x180 --data-root "$WD/data" --js "$WD/one.js" 2>&1; }
 pid=$LABP_PID
 to=${LABP[1]}
 wid=
@@ -58,6 +61,8 @@ if key is None or "LAB OK (key) js run" not in key:
     fails.append("CONTROL: F9 did not run the script (the window took no input)")
 if rc != 0:
     fails.append("the lab exited %d" % rc)
+if not any(l.startswith("LAB END frames 7,") for l in lines):
+    fails.append("THE FRAMES: the lab did not draw exactly its declared 7 (%s)" % [l for l in lines if l.startswith("LAB END")])
 for f in fails:
     print("FAIL: " + f)
 print("lab.strip_click: " + ("FAILED (%d)" % len(fails) if fails else "PASSED"))

@@ -98,6 +98,8 @@ void LabWindow::drawStrip()
     XFlush(d);
 }
 
+int LabWindow::connectionFd() const { return mDisplay ? ConnectionNumber(static_cast<Display *>(mDisplay)) : -1; }
+
 void LabWindow::setTitle(const std::string &title)
 {
     if (!mDisplay) return;
