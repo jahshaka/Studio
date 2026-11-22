@@ -183,7 +183,9 @@ one whose `await`ed work or rejected promise never ran or was never handled; a r
 frame FAILS. The host is STRICT: an unknown command, a misspelt option, a missing argument, a value outside its declared
 choices or range, NaN or infinity, a handle of the wrong kind or a released one each FAIL by name - fix the script,
 never loosen the command. `--test-doors` opens the engine's TEST arms (`engine.arm({name, value})` on one FAILS
-without it). FRAMES is what the script draws (`engine.frames(n)` and each `readPixels` frame). One host serves ONE
+without it). FRAMES is what the script draws (`engine.frames(n)` and each `readPixels` frame). THE ENGINE HAS NO WALL CLOCK, AND NEITHER
+HAS A SCRIPT: there is no `Date` and no `performance`, and `Math.random` is a fixed-seed stream (the same sequence every run) -
+a script counts frames. One host serves ONE
 engine (a second engine is a second host). A row's own `.js`, a command it calls (`irisgl/engine/src/script/`) and
 jahengine select it in `gate-scope` by its command line: nothing to list by hand.
 

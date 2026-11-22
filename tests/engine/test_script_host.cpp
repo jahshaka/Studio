@@ -419,10 +419,18 @@ int main()
         thrower.registry().add({"test.throws", {{}, Kind::Null}, "throws a std::exception"},
                                [](Call &) -> Value { throw std::runtime_error("boom"); });
         thrower.registry().add({"test.throwsOdd", {{}, Kind::Null}, "throws an int"}, [](Call &) -> Value { throw 42; });
+        thrower.registry().add({"test.checked", {{target(handle("thing", "gadget"))}, Kind::Null}, "an existence check throws"},
+                               [](Call &) { return Value(); });
+        thrower.registry().checkKind("gadget", [](const Call &, std::uint32_t, std::string &) -> bool {
+            throw std::runtime_error("the engine's read threw");
+        });
+        const Result inCheck = thrower.registry().call("test.checked", {Value(thrower.registry().name("gadget", 3))});
         const Result direct = thrower.registry().call("test.throws", {});
         const Result odd = thrower.registry().call("test.throwsOdd", {});
         const Result js = thrower.run("try { test.throws(); } catch (e) { console.log(e.message); }\ntest.throwsOdd();\n",
                                       "throws.js");
+        check(failedWith(inCheck, "test.checked: threw: the engine's read threw"),
+              "an existence check's exception is a Failed call by name too (the try covers the checks)");
         check(failedWith(direct, "test.throws: threw: boom") && failedWith(odd, "not a std::exception") &&
                   !said.empty() && said[0] == "test.throws: threw: boom" && js.status == Status::Failed &&
                   js.message.find("throws.js:2") != std::string::npos,
@@ -576,6 +584,32 @@ int main()
                   none.message.find("no script language reads 'x.lua' (this host reads: *.js *.lines)") == 0,
               "a second language registered from a test file runs beside JavaScript; an unknown extension FAILS by name (" +
                   none.message + ")");
+    }
+
+    // 11. NO WALL CLOCK AND NO UNSEEDED RANDOM IN A SCRIPT (the re-read's C1; CODING_RULES § 5: tests count frames): the
+    //     realm has no Date and no performance; Math.random is a FIXED-SEED stream (Host::Options::randomSeed, a fixed
+    //     default) - the same sequence every run, in every host, unless a host states another seed
+    {
+        const char *draw = "console.log(typeof Date, typeof performance, Math.random(), Math.random(), Math.random());\n"
+                           "host.check({ok: true, what: 'drawn'});\n";
+        std::vector<std::string> a, b, c;
+        Host one, two;
+        one.setConsole([&a](const std::string &l) { a.push_back(l); });
+        two.setConsole([&b](const std::string &l) { b.push_back(l); });
+        const Result r1 = one.run(draw, "clock1.js"), r2 = one.run(draw, "clock2.js"), r3 = two.run(draw, "clock3.js");
+        Host::Options seeded;
+        seeded.randomSeed = 12345;
+        Host other(seeded);
+        other.setConsole([&c](const std::string &l) { c.push_back(l); });
+        const Result r4 = other.run(draw, "clock4.js");
+        const bool ran = r1.status == Status::Ok && r2.status == Status::Ok && r3.status == Status::Ok &&
+                         r4.status == Status::Ok && a.size() == 4 && b.size() == 2 && c.size() == 2;
+        check(ran && a[0].rfind("undefined undefined ", 0) == 0,
+              "the realm has NO wall clock: typeof Date and typeof performance are 'undefined' (" +
+                  (a.empty() ? std::string("?") : a[0]) + ")");
+        check(ran && a[0] == a[2] && a[0] == b[0] && c[0] != a[0],
+              "Math.random is a FIXED-SEED stream: two runs and two hosts draw the same sequence; a host that states "
+              "another seed draws another (" + (c.empty() ? std::string("?") : c[0]) + ")");
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
