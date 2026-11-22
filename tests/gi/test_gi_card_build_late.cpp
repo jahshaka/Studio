@@ -40,6 +40,12 @@
 //               4: an object entering the view under a sub-pixel turn while its permutation compiles) - (1) no rest decision
 //               is taken while they are incomplete; (2) released, the scene comes to rest, complete. RED before the fix: the
 //               decision fired on the due frame, incomplete (the schedule's term only, OgreSurfaceCache.cpp's decide).
+//   failwait  - A FAILURE WAITS FOR ITS ANSWER (COLD-BOOT-1's leftover L1): every object's own permutation FAILS
+//               (shaders.asyncFail) on a COLD boot, so its placeholder is still compiling when it fails - (1) those frames
+//               are published INCOMPLETE by a pending skip (bit 1: the object waits for the placeholder it will draw);
+//               (2) the scene comes to rest, complete (the wait ends: a placeholder's request is urgent, never failed by the
+//               door). RED before the fix: the FAILED entry was returned and counted as nothing - the frames read
+//               complete with every object missing (Hlms::getMaterialAsync's tail).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -223,18 +229,20 @@ int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "late";
     const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt",
-                                             "window" };
+                                             "window", "failwait" };
     if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
-        std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt or window, not '%s'\n",
-                    mode.c_str());
+        std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt, window or failwait, not "
+                    "'%s'\n", mode.c_str());
         return 2;
     }
     std::string err;
     // .pso IS a permutation still compiling: its row is COLD (its CMake line) and boots with no shader cache - a warm one
-    // loads the room's permutations ready (every green row's run promotes its cache: tests/support/fresh_home.sh)
+    // loads the room's permutations ready (every green row's run promotes its cache: tests/support/fresh_home.sh); so is
+    // .failwait's placeholder
     const std::string log = "test-gi-card-build-late-" + mode + "-ogre.log";
-    auto engine = Engine::create(mode == "pso" ? enginetest::testEngineConfig(log, enginetest::EngineOverrides().shaderCacheOff())
-                                               : enginetest::testEngineConfig(log),
+    const bool cold = mode == "pso" || mode == "failwait";
+    auto engine = Engine::create(cold ? enginetest::testEngineConfig(log, enginetest::EngineOverrides().shaderCacheOff())
+                                      : enginetest::testEngineConfig(log),
                                  err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
@@ -414,6 +422,39 @@ int main(int argc, char **argv)
         std::snprintf(w, sizeof(w), "(2) released, the scene comes to rest (%d frames, the cap %d)", rest, kRestCap);
         check(rest >= 0, w);
         checkComplete("W", h.scene);
+    } else if (mode == "failwait") {
+        e->setArm("shaders.asyncFail", 1.0);   // latched at the next frame's start: before the room's first draw
+        Room h = buildRoom(e, "build_late_failwait");
+        if (!h.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+        // THE FIRST FRAMES: every object's own request FAILS, its placeholder's (urgent) is still compiling - a compile
+        // publishes at a frame point, so the frame that requests it draws without it
+        const int kFirstFrames = 10;
+        unsigned termsSeen = 0u;
+        int incompleteSeen = 0;
+        for (int f = 0; f < kFirstFrames; ++f) {
+            enginetest::frames(e, 1);
+            ++frames;
+            const PublishedFrame::Completeness c = h.scene->published().completeness;
+            termsSeen |= c.terms;
+            if (c.incomplete) ++incompleteSeen;
+        }
+        const AsyncShaderStats first = e->published().shaders;
+        std::printf("   the first %d frames: %d published incomplete (terms seen %u); permutations failed %llu, pending skips "
+                    "%llu, placeholder draws %llu\n", kFirstFrames, incompleteSeen, termsSeen,
+                    (unsigned long long)first.failed, first.pendingSkips, first.placeholderDraws);
+        check(first.failed > 0u, "the objects' own permutations FAIL (AsyncShaderStats::failed)");
+        std::snprintf(w, sizeof(w), "(1) a failed object waiting for its placeholder is a PENDING SKIP: the frame is incomplete "
+                      "(terms seen %u, wanted bit 2; %llu pending skips)", termsSeen, first.pendingSkips);
+        check((termsSeen & 2u) != 0u && first.pendingSkips > 0ull, w);
+        // THE READERS READY (as .pso: the ray builds and the placeholders waited for on their published state)
+        e->prepareRayPipelines();
+        e->waitForAsyncShaders();
+        const int rest = toRest(e, h.scene, frames);
+        printCards("FW at rest", h.scene->published().gi, inFlight());
+        std::snprintf(w, sizeof(w), "(2) the wait ends: the scene comes to rest on its placeholders (%d frames, the cap %d)",
+                      rest, kRestCap);
+        check(rest >= 0, w);
+        checkComplete("FW", h.scene);
     } else {
         // ---- the failure rows: a failure is final - the scene comes to rest on the picture it can draw ---------------
         Look look, control;

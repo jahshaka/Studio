@@ -1299,6 +1299,13 @@ jah_gpu_row(gi.card_build_late.window CLASS engine COMMAND test_gi_card_build_la
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.window PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 372)
+# .failwait (COLD-BOOT-1's leftover L1, built by SHADER-SYSTEM-1): an object whose own permutation FAILED while its
+# placeholder still compiles is a pending skip - the frame is incomplete until its answer lands. A new row: never SHIP.
+jah_gpu_row(gi.card_build_late.failwait CLASS engine COMMAND test_gi_card_build_late failwait
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+         COLD "its subject is a placeholder still compiling: the room's must be cold in the process (the fixture's shaderCacheOff)")
+set_tests_properties(gi.card_build_late.failwait PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 215)
 
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
