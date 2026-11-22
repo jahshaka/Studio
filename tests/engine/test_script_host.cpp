@@ -47,8 +47,9 @@ int main()
     // 2. A REGISTRY of this file's commands
     Registry reg;
     const bool added =
-        reg.add({"test.add", {{arg("a", Kind::Int), arg("b", Kind::Int, Value(10))}, Kind::Int}, "a + b"},
-                [](Call &c) { return Value(c[0].asInt() + c[1].asInt()); }) &&
+        reg.add({"test.add", {{target("a", Kind::Int), object("more", {arg("b", Kind::Int, Value(10))}, Value(Value::Object{}))},
+                             Kind::Int}, "a + more.b"},
+                [](Call &c) { return Value(c[0].asInt() + c[1]["b"].asInt()); }) &&
         reg.add({"test.opts", {{object("opts", {arg("n", Kind::Number, Value(1.0)), numbers("v", 3)})}, Kind::Number},
                  "opts.n + the sum of opts.v"},
                 [](Call &c) {
@@ -62,24 +63,34 @@ int main()
                 [](Call &c) { return c.refuse("not now"); });
     check(added && !reg.add({"test.add", {}, "again"}, [](Call &) { return Value(); }),
           "four commands registered; a second command of one name is not");
-    check(reg.validate().empty(), "validate is empty: every command has a name, a signature and a doc");
+    check(reg.validate().empty(), "validate is empty: every command has a name, a signature and a doc, and its shape");
     Registry undocumented;
     undocumented.add({"test.bare", {{arg("", Kind::Int)}, Kind::Null}, ""}, [](Call &) { return Value(); });
     check(undocumented.validate().size() == 2, "validate names a command with no doc and a parameter with no name");
+    Registry misshapen;
+    misshapen.add({"test.pair", {{arg("a", Kind::Int), arg("b", Kind::Int)}, Kind::Null}, "two positional numbers"},
+                  [](Call &) { return Value(); });
+    misshapen.add({"test.late", {{arg("opts", Kind::Bool), target("scene", Kind::Int)}, Kind::Null}, "a target last"},
+                  [](Call &) { return Value(); });
+    const std::vector<std::string> faults = misshapen.validate();
+    check(faults.size() == 2 && faults[0].find("test.pair: 2 positional parameters are not targets") == 0 &&
+              faults[1].find("test.late: the target 'scene' follows a named parameter") == 0,
+          "THE SHAPE RULE: validate names two non-target positional parameters and a target after a named one");
 
     // 3. THE CALL BY NAME, AND ITS LAWS
-    Result r = reg.call("test.add", {Value(2), Value(3)});
-    check(r.status == Status::Ok && r.value == Value(5), "test.add(2, 3) = 5 by name");
+    const auto more = [](int b) { return Value(Value::Object{{"b", Value(b)}}); };
+    Result r = reg.call("test.add", {Value(2), more(3)});
+    check(r.status == Status::Ok && r.value == Value(5), "test.add(2, {b: 3}) = 5 by name");
     check(failedWith(reg.call("test.nothing", {}), "test.nothing is not a command"),
           "an unregistered name FAILS, naming it");
     check(reg.call("test.add", {Value(2)}).value == Value(12) && reg.call("test.add", {Value(2), Value()}).value == Value(12),
           "an absent or null argument takes its declared default");
     check(failedWith(reg.call("test.add", {}), "a is required") && failedWith(reg.call("test.add", {Value()}), "a is required"),
           "an absent or null argument with no default FAILS, naming it");
-    check(reg.call("test.add", {Value(3.0), Value(4)}).value == Value(7), "an integral number (3.0) is an integer");
+    check(reg.call("test.add", {Value(3.0), more(4)}).value == Value(7), "an integral number (3.0) is an integer");
     check(failedWith(reg.call("test.add", {Value(3.7)}), "a must be an integer"),
           "3.7 for an integer FAILS (never truncated to 3)");
-    check(failedWith(reg.call("test.add", {Value(1), Value(2), Value(3)}), "3 arguments given, it takes 2"),
+    check(failedWith(reg.call("test.add", {Value(1), more(2), Value(3)}), "3 arguments given, it takes 2"),
           "a surplus argument FAILS");
     check(failedWith(reg.call("test.add", {Value("2")}), "a must be int"), "a string for an integer FAILS");
     const Value v3(Value::Array{Value(1), Value(2), Value(3)});
@@ -99,7 +110,7 @@ int main()
     check(r.status == Status::Refused && r.value == Value(false) && r.message == "test.notNow: not now" &&
               reg.lastError() == "test.notNow: not now",
           "a refuse answers the declared return's falsy value (false) and keeps its message as lastError");
-    check(signatureText(*reg.find("test.add")) == "test.add(a: int, b: int = default) -> int",
+    check(signatureText(*reg.find("test.add")) == "test.add(a: target int, more: object {b: int = default} = default) -> int",
           "the signature reads as text: " + signatureText(*reg.find("test.add")));
 
     // 4. THE HOST AND ITS SCRIPT LANGUAGE (JavaScript): the same registry's commands as functions of their roots
@@ -107,8 +118,9 @@ int main()
     std::vector<std::string> lines;
     host.setConsole([&lines](const std::string &l) { lines.push_back(l); });
     Registry &hr = host.registry();
-    hr.add({"test.add", {{arg("a", Kind::Int), arg("b", Kind::Int, Value(10))}, Kind::Int}, "a + b"},
-           [](Call &c) { return Value(c[0].asInt() + c[1].asInt()); });
+    hr.add({"test.add", {{target("a", Kind::Int), object("more", {arg("b", Kind::Int, Value(10))}, Value(Value::Object{}))},
+                        Kind::Int}, "a + more.b"},
+           [](Call &c) { return Value(c[0].asInt() + c[1]["b"].asInt()); });
     hr.add({"test.opts", {{object("opts", {arg("n", Kind::Number, Value(1.0)), numbers("v", 3)})}, Kind::Number},
             "opts.n + the sum of opts.v"},
            [](Call &c) {
@@ -143,7 +155,7 @@ int main()
           "(every kind, a 2^60 integer as a BigInt and back, bytes as a Uint8Array and back)");
 
     lines.clear();
-    run = host.run("console.log('two', 1 + 1, [3, 4]);\nconsole.log(test.add(2, 3), test.add(2), test.opts({v: [1, 2, 3]}));\n",
+    run = host.run("console.log('two', 1 + 1, [3, 4]);\nconsole.log(test.add(2, {b: 3}), test.add(2), test.opts({v: [1, 2, 3]}));\n",
                    "console.js");
     check(run.status == Status::Ok && lines.size() == 2 && lines[0] == "two 2 3,4" && lines[1] == "5 12 7",
           "console lines are captured, and commands answer by name in JS (" + (lines.empty() ? "" : lines.back()) + ")");
@@ -161,7 +173,7 @@ int main()
               run.message.find("uncaught.js:2") != std::string::npos,
           "an uncaught fail ends the run Failed with its message and line (3.7 for an integer, through JS)");
     const char *strict[][2] = {{"test.nothing();", "nothing"},
-                               {"test.add(1, 2, 3);", "3 arguments given"},
+                               {"test.add(1, {b: 2}, 3);", "3 arguments given"},
                                {"test.opts({v: [1, 2, 3], m: 1});", "opts has no member 'm'"},
                                {"test.add();", "a is required"},
                                {"test.add(() => 1);", "a function cannot be carried"}};
@@ -177,10 +189,51 @@ int main()
           "a refuse answers falsy in JS and host.lastError() holds its message (" + (lines.empty() ? "" : lines[0]) + ")");
 
     lines.clear();
-    run = host.run("host.check(true, 'held');\nhost.check(1 > 2, 'broken');\n", "check.js");
+    run = host.run("host.check({ok: true, what: 'held'});\nhost.check({ok: 1 > 2, what: 'broken'});\n", "check.js");
     check(run.status == Status::Ok && host.checksFailed() == 1 && lines.size() == 2 && lines[0] == "ok:   held" &&
               lines[1] == "FAIL: broken",
           "host.check prints each law and counts the failures (1)");
+
+    // 5. THE ENGINE'S COMMANDS WITH NO ENGINE (a process whose engine did not start still has a host that says why), and
+    //    the picture's native reductions against their closed forms on a synthetic 4 x 2 picture
+    Registry eng;
+    registerEngineCommands(eng, nullptr, "no device here", false);
+    std::size_t engineCommands = 0;
+    for (const CommandInfo *c : eng.commands()) engineCommands += c->name.rfind("engine.", 0) == 0;
+    check(engineCommands == 19 && eng.validate().empty(),
+          "the 19 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
+    check(failedWith(eng.call("engine.node.setTransform",
+                              {Value(1), Value(1), Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
+                     "engine.node.setTransform: transform.position must hold 3 elements"),
+          "a 2-element position FAILS by name (the host checks a vector's length, before the engine is asked)");
+    check(failedWith(eng.call("engine.scene.create", {Value("s")}), "engine.scene.create: the engine did not start: no device here") &&
+              failedWith(eng.call("engine.frames", {Value(1)}), "the engine did not start: no device here"),
+          "with no engine every engine command FAILS saying why the engine is absent");
+    Value::Bytes px(4 * 2 * 4);
+    for (std::size_t i = 0; i < px.size(); ++i) px[i] = std::uint8_t(i * 7);   // byte i = 7 i: a column steps 28 a channel
+    const Value pic(Value::Object{{"width", Value(4)}, {"height", Value(2)}, {"rgba", Value::bytes(px)}});
+    unsigned long long h = 14695981039346656037ull;
+    for (std::uint8_t b : px) { h ^= b; h *= 1099511628211ull; }
+    char hex[17];
+    std::snprintf(hex, sizeof hex, "%016llx", h);
+    check(eng.call("engine.view.hash", {pic}).value == Value(hex), std::string("engine.view.hash is the FNV-1a 64 of the bytes (") + hex + ")");
+    const auto span = [](const char *axis, int a, int b, int from, int to) {
+        return Value(Value::Object{{"axis", Value(axis)}, {"a", Value(a)}, {"b", Value(b)}, {"from", Value(from)}, {"to", Value(to)}});
+    };
+    // column 3 against column 2: every byte 4 apart = 28 codes; row 1 against row 0: 16 bytes apart = 112 codes
+    check(eng.call("engine.view.columnStep", {pic, span("column", 3, 2, 0, 2)}).value == Value(28.0) &&
+              eng.call("engine.view.columnStep", {pic, span("row", 1, 0, 1, 3)}).value == Value(112.0),
+          "engine.view.columnStep: a column step of 4 bytes = 28 codes, a row step of 16 bytes = 112 codes");
+    const Value rect(Value::Object{{"x0", Value(1)}, {"y0", Value(0)}, {"x1", Value(3)}, {"y1", Value(2)}});
+    // pixels (1,0) (2,0) (1,1) (2,1) = byte bases 4, 8, 20, 24: the red mean 7 * 14 = 98, each channel one step up
+    check(eng.call("engine.view.mean", {pic, rect}).value ==
+              Value(Value::Array{Value(98.0), Value(105.0), Value(112.0), Value(119.0)}),
+          "engine.view.mean over [1,3) x [0,2) = [98, 105, 112, 119]");
+    check(failedWith(eng.call("engine.view.columnStep", {pic, span("column", 4, 2, 0, 2)}), "outside the picture") &&
+              failedWith(eng.call("engine.view.mean", {Value(Value::Object{{"width", Value(4)}, {"height", Value(3)},
+                                                                            {"rgba", Value::bytes(px)}}), rect}),
+                         "not width x height x 4"),
+          "a span outside the picture and a picture whose bytes are not width x height x 4 FAIL");
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
     else std::printf("script.host: PASSED\n");
