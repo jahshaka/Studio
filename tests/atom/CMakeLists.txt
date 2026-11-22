@@ -72,6 +72,15 @@ function(jah_atom_engine_target _t)
     add_dependencies(${_t} JahshakaEngineMedia)
 endfunction()
 
+# atom.component (ATOM-TESTS-BACK-1 stage 3: the plain twin back; test_atom_component.cpp says the law) — Atom is a component
+# of its scene: the pass order per view, the words step once a frame, each scene its own caster state, owners retiring with
+# their objects. Counts only.
+add_executable(test_atom_component test_atom_component.cpp)
+jah_atom_engine_target(test_atom_component)
+jah_gpu_row(atom.component CLASS engine FRAMES 37 COMMAND test_atom_component
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.component PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # atom.component_asan — test_atom_component.cpp UNDER THE SANITIZER: the owners' retire windows (a
 # destroyed view's stats ring and a destroyed scene's caster ring, reaped 8 frames later through the
 # device's window) are raw Vulkan memory handed between owners — the use-after-free class a sanitizer is for.
@@ -92,7 +101,8 @@ if(JAHSHAKA_ASAN)
     target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
     jah_gpu_row(atom.component_asan CLASS engine COMMAND test_atom_component_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-    set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 60 LABELS "engine"
+    # a sanitizer twin whose laws are its plain row's: LONG and a feature end its diff reaches, never FAST (CODING_RULES § 5)
+    set_tests_properties(atom.component_asan PROPERTIES TIMEOUT 60 LABELS "engine;long"
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     set_tests_properties(atom.component_asan PROPERTIES JAHSHAKA_TEST_FRAMES 37)   # its plain twin's
 endif()
@@ -166,3 +176,30 @@ jah_atom_engine_target(test_atom_cluster_occlusion)
 jah_gpu_row(atom.cluster_occlusion CLASS engine FRAMES 145 COMMAND test_atom_cluster_occlusion
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_occlusion PROPERTIES TIMEOUT 60 LABELS "engine")
+
+# atom.masked_coverage (RE-REGISTERED by ATOM-TESTS-BACK-1 stage 3; its device read restored by irisgl 53d6c217) — THE MASK'S
+# PYRAMID KEEPS LEVEL 0'S COVERAGE: the device's pyramid read back against bit_i = round(S_i) - round(S_(i-1)) level by level
+# (a 1-texel checker bit for bit; a non-power-of-two hash pattern), and the id pass's coverage of the checker at 1x / 2x / 4x /
+# 8x minification = level 0's 1/2 within one texel (DOCS/traps/engine/atom-and-lod.md, CUT-OUTS).
+add_executable(test_atom_masked_coverage test_atom_masked_coverage.cpp)
+jah_atom_engine_target(test_atom_masked_coverage)
+jah_gpu_row(atom.masked_coverage CLASS engine FRAMES 64 COMMAND test_atom_masked_coverage
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.masked_coverage PROPERTIES TIMEOUT 60 LABELS "engine")
+
+# atom.cut_overflow_whole / atom.still_does_nothing (ATOM-TESTS-BACK-1 stage 4; test_atom_cut_overflow.cpp says the laws) —
+# COUNTS, NEVER MS: the test door at 1/8 of the scene's ask draws every instance whole (coarse from the reserve, nothing
+# missing), the budget grows ONCE to its closed form and the overflow is read on at most F + 2 frames (F the frames in flight:
+# the read-back's latency, derived in the source); a still frame visits no word slot and re-sizes no cut. The closed sphere baked by the product's bake (cluster_fixtures), the engine's private read of F.
+add_executable(test_atom_cut_overflow test_atom_cut_overflow.cpp cluster_fixtures.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+jah_atom_engine_target(test_atom_cut_overflow)
+target_include_directories(test_atom_cut_overflow PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_atom_cut_overflow PRIVATE IrisGL Qt6::Gui)
+set_source_files_properties(test_atom_cut_overflow.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
+jah_document_graph(test_atom_cut_overflow)
+jah_gpu_row(atom.still_does_nothing CLASS engine FRAMES 26 COMMAND test_atom_cut_overflow still
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.still_does_nothing PROPERTIES TIMEOUT 60 LABELS "engine"
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen")

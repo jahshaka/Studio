@@ -571,3 +571,6 @@ atom.no_pop.measure_agrees.closed_sphere 4.91  by hand (spec.sh reprice, 2026-11
 atom.no_pop.measure_agrees.round_bar 0.26  by hand (spec.sh reprice, 2026-11-22)
 atom.no_pop.measure_agrees.shell_4936 0.12  by hand (spec.sh reprice, 2026-11-22)
 atom.no_pop.picture 1.67  by hand (spec.sh reprice, 2026-11-22)
+atom.masked_coverage 1.68  by hand (spec.sh reprice, 2026-11-22)
+atom.component 1.21  by hand (spec.sh reprice, 2026-11-22)
+atom.still_does_nothing 1.23  by hand (spec.sh reprice, 2026-11-22)
