@@ -25,6 +25,10 @@ namespace {
 std::mutex gHoldersMutex;
 std::map<std::string, std::string> gHolders;
 
+// THE BORROWED HANDLES: one state per handle, shared by every borrower while any of them lives.
+std::mutex gBorrowedMutex;
+std::map<sqlite3 *, std::weak_ptr<Connection::State>> gBorrowed;
+
 std::string fileOf(sqlite3 *handle)
 {
     const char *file = sqlite3_db_filename(handle, "main");
@@ -114,7 +118,7 @@ bool checkVersion(int minimum, Error *e)
     return false;
 }
 
-Connection::Connection() : mState(std::make_unique<State>()) {}
+Connection::Connection() : mState(std::make_shared<State>()) {}
 
 Connection::~Connection()
 {
@@ -123,7 +127,7 @@ Connection::~Connection()
 
 Connection::Connection(Connection &&other) noexcept : mState(std::move(other.mState))
 {
-    other.mState = std::make_unique<State>();
+    other.mState = std::make_shared<State>();
 }
 
 Connection &Connection::operator=(Connection &&other) noexcept
@@ -131,7 +135,7 @@ Connection &Connection::operator=(Connection &&other) noexcept
     if (this == &other) return *this;
     if (mState && mState->owned && mState->handle) sqlite3_close_v2(mState->handle);
     mState = std::move(other.mState);
-    other.mState = std::make_unique<State>();
+    other.mState = std::make_shared<State>();
     return *this;
 }
 
@@ -177,8 +181,17 @@ Connection Connection::borrow(sqlite3 *handle, std::string name, Error *e)
         if (e) *e = detail::refusal(c.mState.get(), "no handle to borrow", {});
         return c;
     }
-    c.mState->handle = handle;
-    c.mState->file = fileOf(handle);
+    std::lock_guard<std::mutex> lock(gBorrowedMutex);
+    std::weak_ptr<State> &shared = gBorrowed[handle];
+    if (std::shared_ptr<State> live = shared.lock()) {
+        c.mState = std::move(live);   // the handle's one state (its first borrower's name and thread)
+    } else {
+        c.mState->handle = handle;
+        c.mState->file = fileOf(handle);
+        shared = c.mState;
+    }
+    for (auto it = gBorrowed.begin(); it != gBorrowed.end();)   // a handle no borrower holds any more
+        it = it->second.expired() ? gBorrowed.erase(it) : std::next(it);
     if (e) *e = Error();
     return c;
 }
@@ -227,5 +240,9 @@ bool Connection::exec(std::string_view sql, Error *e)
 std::int64_t Connection::lastInsertRowid() const { return isOpen() ? sqlite3_last_insert_rowid(mState->handle) : 0; }
 
 int Connection::changes() const { return isOpen() ? sqlite3_changes(mState->handle) : 0; }
+
+int Connection::guards() const { return mState ? mState->depth : 0; }
+
+bool Connection::refusesWrites() const { return mState && mState->refusing; }
 
 }   // namespace db

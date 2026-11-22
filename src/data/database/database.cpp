@@ -232,15 +232,15 @@ Database::Database() : mConnection(std::make_unique<db::Connection>())
     // registry is walked instead and each instance answers for its OWN
     // connection.
     liveDatabases().push_back(this);
-    DbTransaction::setBatchYieldHook([](const QSqlDatabase &connection) {
+    DbTransaction::setBatchYieldHook([](const db::Connection &connection) {
         for (Database *instance : liveDatabases()) instance->standDownBatchFor(connection);
     });
 }
 
-void Database::standDownBatchFor(const QSqlDatabase &connection)
+void Database::standDownBatchFor(const db::Connection &connection)
 {
-    if (!batchTxLive) return;
-    if (connection.connectionName() != db.connectionName()) return;
+    if (!batchTx) return;
+    if (connection.state() != mConnection->state()) return;   // another connection's guard
     commitBatchTransaction();
 }
 
@@ -392,8 +392,11 @@ bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
     // through the registry by the query's driver, never through `this` (see above).
     const bool write = isWriteStatement(query.lastQuery());
     // A FAILED UNIT WRITES NOTHING (database.h, DbTransaction): its scope refuses every write on
-    // its connection, unexecuted - said once, by the transaction, at its BEGIN.
-    if (write && DbTransaction::refusesWrites(query.driver())) return false;
+    // its connection, unexecuted - said once, by the transaction, at its BEGIN. The connection's
+    // own state says so (the registry walk: never `this`).
+    if (write)
+        for (Database *instance : liveDatabases())
+            if (instance->db.driver() == query.driver() && instance->mConnection->refusesWrites()) return false;
     // THE BATCH IS A SCOPE OF INDEPENDENT GESTURES, NOT ONE UNIT: a batch BEGIN that fails refuses
     // THIS write by name, and the next write tries the BEGIN again.
     if (write && !DbTransaction::anyGuardLive() && !beginBatchAtWrite(query)) {
@@ -455,37 +458,40 @@ bool Database::endBatch()
 
 bool Database::resumeBatchIfNeeded()
 {
-    if (batchOpenCount == 0 || batchTxLive) return true;
+    if (batchOpenCount == 0 || batchTx) return true;
     if (!db.isOpen()) return true;
     // Never while somebody else owns a transaction on this connection: the
     // batch is the thing that YIELDS, it never takes. Per CONNECTION (H2) —
     // a guard on an export's own connection is not an owner of ours.
-    if (DbTransaction::activeGuards(db.connectionName()) > 0) return true;
-    // IMMEDIATE, like DbTransaction's (database.h): no other connection commits inside the batch.
-    QSqlQuery begin(db);
-    batchTxLive = begin.exec(QStringLiteral("BEGIN IMMEDIATE"));
-    if (batchTxLive) DbTransaction::noteBatchLive(true);
-    else
-        iris::Logger::getSingleton()->warn(
-            QStringLiteral("The database batch could NOT BEGIN (%1)").arg(begin.lastError().text()));
-    return batchTxLive;
+    if (mConnection->guards() > 0) return true;
+    // IMMEDIATE, like DbTransaction's (database.h): no other connection commits inside the batch;
+    // and the lock's holder is NAMED for any connection that meets it (NOQT-DATABASE-1 ruling 6).
+    batchTx = std::make_unique<db::Transaction>(*mConnection, "the editor's gesture batch");
+    if (!batchTx->beginError()) {
+        DbTransaction::noteBatchLive(true);
+        return true;
+    }
+    iris::Logger::getSingleton()->warn(
+        QStringLiteral("The database batch could NOT BEGIN (%1)").arg(dbqt::describe(batchTx->beginError())));
+    batchTx.reset();   // its refusal ends with it: this write is refused, the next tries again
+    return false;
 }
 
 bool Database::commitBatchTransaction()
 {
-    if (!batchTxLive) return true;
-    batchTxLive = false;
+    if (!batchTx) return true;
     DbTransaction::noteBatchLive(false);
-    if (db.commit()) {
+    db::Error error;
+    const bool ok = batchTx->commit(&error);   // a failed commit rolls back: no transaction left nobody owns
+    batchTx.reset();
+    if (ok) {
         DbTransaction::noteCommit();
         announceBatchCommit(true);
         return true;
     }
-    // A failed commit leaves the connection mid-transaction otherwise, and the
-    // next statement would then run inside a transaction nobody owns.
-    db.rollback();
     iris::Logger::getSingleton()->warn(
-        "The database batch FAILED to commit — the gesture's rows were rolled back.");
+        QStringLiteral("The database batch FAILED to commit — the gesture's rows were rolled back (%1)")
+            .arg(dbqt::describe(error)));
     announceBatchCommit(false);
     return false;
 }
@@ -713,26 +719,39 @@ bool Database::initializeDatabase(const QString &pathToBlob)
 
     if (db.isValid()) {
         if (!db.open()) irisLog(QString("Couldn't open a database connection! %1").arg(db.lastError().text()));
+        // connection(): the same handle on the std-only layer, borrowed (NOQT-DATABASE-1 ruling 3).
+        // Where it cannot be borrowed the library does NOT open: every transaction and the batch run
+        // on the layer, and a library that opened would refuse every write.
+        QString borrowError;
+        if (db.isOpen() && !borrowConnection(db.driver() ? db.driver()->handle() : QVariant(), &borrowError)) {
+            irisLog(borrowError);
+            db.close();
+            return false;
+        }
         // At the open, before the pragmas: the boot's statements are counted too.
         if (db.isOpen() && traceStatements && !databasereads::installStatementTrace(db))
             irisLog(QStringLiteral("JAH_DB_STATEMENT_TRACE=1, but the statement trace could not be registered "
                                    "(app.databaseReads says why)"));
         if (db.isOpen() && applyDurabilityPragmas(db)) startCheckpointer(this, pathToBlob);
-        if (db.isOpen()) {
-            // connection(): the same handle on the std-only layer, borrowed (NOQT-DATABASE-1 ruling 3).
-            QString why;
-            db::Error error;
-            *mConnection = db::Connection::borrow(databasereads::systemHandle(db.driver() ? db.driver()->handle() : QVariant(), &why), "editor", &error);
-            if (error)
-                irisLog(QStringLiteral("The library's connection could not be borrowed (%1): %2")
-                            .arg(why, QString::fromStdString(error.message)));
-        }
         return db.isOpen();
     }
     else {
         irisLog(QString("The database connection is invalid! %1").arg(db.lastError().text()));
     }
 
+    return false;
+}
+
+bool Database::borrowConnection(const QVariant &driverHandle, QString *errorOut)
+{
+    QString why;
+    db::Error error;
+    *mConnection = db::Connection::borrow(databasereads::systemHandle(driverHandle, &why), "editor", &error);
+    if (!error) return true;
+    *errorOut = QStringLiteral("this build cannot open the library until NOQT-DATABASE-1 stage 3 (the layer cannot "
+                               "borrow the Qt driver's SQLite: %1; %2)")
+                    .arg(why.isEmpty() ? QStringLiteral("the handle is not the system SQLite's") : why,
+                         QString::fromStdString(error.message));
     return false;
 }
 
@@ -743,7 +762,7 @@ void Database::closeDatabase()
     // the flush below would then run inside a transaction nobody owns. The
     // SCOPE is dropped as well: whoever holds the DbBatch is unwinding
     // through a close, and its endBatch() must not find a stale depth.
-    if (batchOpenCount > 0 || batchTxLive) {
+    if (batchOpenCount > 0 || batchTx) {
         commitBatchTransaction();
         // The scope goes, but it is REMEMBERED: whoever holds the DbBatch is
         // still going to unwind through endBatch() and must not be told it is

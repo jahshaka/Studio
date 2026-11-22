@@ -37,6 +37,7 @@ Transaction::Transaction(Connection &connection, std::string_view why) : mConnec
     }
     mBeginError = e;
     mRefusing = true;
+    mConnection->refusing = true;
     Error ignored;
     connection.exec("PRAGMA query_only = ON", &ignored);
 }
@@ -80,6 +81,7 @@ void Transaction::rollback()
     if (!mOutermost) return;
     if (mRefusing) {
         mRefusing = false;
+        mConnection->refusing = false;
         sqlite3_exec(mConnection->handle, "PRAGMA query_only = OFF", nullptr, nullptr, nullptr);
         return;
     }

@@ -12,10 +12,9 @@
 # AssetGc::sweep would have committed dropped `files` rows while leaving their
 # objects on disk (assetgc.cpp, round 2 H1).
 #
-# AND EVERY TRANSACTION ON IT BEGINS IMMEDIATE, AT ONE OF TWO DOORS (PREVIEWS-1 stage 1): the
-# DbTransaction guard (database.h) and the batch (Database::resumeBatchIfNeeded). The std-only layer's
-# guard (db::Transaction's constructor, src/data/db/transaction.cpp: NOQT-DATABASE-1) is the third
-# door, the one the first two move onto. The library has a
+# AND EVERY TRANSACTION ON IT BEGINS IMMEDIATE, AT ONE DOOR (PREVIEWS-1 stage 1; NOQT-DATABASE-1):
+# the std-only layer's guard, db::Transaction's constructor (src/data/db/transaction.cpp), which the
+# DbTransaction guard (database.h) and the batch (Database::resumeBatchIfNeeded) both are. The library has a
 # second WRITING connection (the preview writer, services/previewwriter.h): a DEFERRED transaction
 # whose first statement is a read fails its first write with 517 SQLITE_BUSY_SNAPSHOT once the
 # writer has committed (spikes/previews-1/stage1/probe.out, case 4); IMMEDIATE takes the lock at the
@@ -60,20 +59,13 @@ fi
 span() {   # span <file> <start ERE> <end ERE>: "first last" lines of the first block from start to end
     awk -v s="$2" -v e="$3" 'f == 0 && $0 ~ s { f = NR } f && NR > f && $0 ~ e { print f, NR; exit }' "$1"
 }
-read -r tx0 tx1 <<< "$(span src/data/database/database.h '^class DbTransaction' '^};')"
-read -r bt0 bt1 <<< "$(span src/data/database/database.cpp '^bool Database::resumeBatchIfNeeded\\(' '^}')"
 read -r wp0 wp1 <<< "$(span src/data/database/database.cpp '^Database::PreviewWrite Database::writePreview\\(' '^}')"
 read -r lt0 lt1 <<< "$(span src/data/db/transaction.cpp '^Transaction::Transaction\\(' '^}')"
 allowed_begin() {   # allowed_begin <file> <line> <text>
     case "$1" in
-        src/data/database/database.h)
-            [ -n "$tx0" ] && [ "$2" -gt "$tx0" ] && [ "$2" -lt "$tx1" ] \
-                && printf '%s' "$3" | grep -qE 'begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)' ;;
         src/data/database/database.cpp)
-            { [ -n "$bt0" ] && [ "$2" -gt "$bt0" ] && [ "$2" -lt "$bt1" ] \
-                  && printf '%s' "$3" | grep -qE 'batchTxLive = begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)'; } \
-            || { [ -n "$wp0" ] && [ "$2" -gt "$wp0" ] && [ "$2" -lt "$wp1" ] \
-                  && printf '%s' "$3" | grep -qE 'QStringLiteral\("BEGIN IMMEDIATE"\)'; } ;;
+            [ -n "$wp0" ] && [ "$2" -gt "$wp0" ] && [ "$2" -lt "$wp1" ] \
+                && printf '%s' "$3" | grep -qE 'QStringLiteral\("BEGIN IMMEDIATE"\)' ;;
         src/data/db/transaction.cpp)
             [ -n "$lt0" ] && [ "$2" -gt "$lt0" ] && [ "$2" -lt "$lt1" ] \
                 && printf '%s' "$3" | grep -qE 'connection\.exec\("BEGIN IMMEDIATE", &e\)' ;;
@@ -88,18 +80,18 @@ while IFS= read -r hit; do
 "
 done <<< "$(grep -rnE '"BEGIN' src/ 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(//|\*|/\*)' || true)"
 if [ -n "$begins" ]; then
-    echo "FAIL: a raw BEGIN outside the two doors (DbTransaction, the batch) and the preview writer's own connection."
+    echo "FAIL: a raw BEGIN outside the door (db::Transaction) and the preview writer's own connection."
     echo "$begins"
     failures=$((failures + 1))
 else
-    echo "ok:   every BEGIN is at a door (DbTransaction, the batch) or on the preview writer's own connection"
+    echo "ok:   every BEGIN is at the door (db::Transaction) or on the preview writer's own connection"
 fi
-for door in 'src/data/database/database.h:begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)' \
-            'src/data/database/database.cpp:batchTxLive = begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)' \
-            'src/data/db/transaction.cpp:connection\.exec\("BEGIN IMMEDIATE", &e\)'; do
+for door in 'src/data/db/transaction.cpp:connection\.exec\("BEGIN IMMEDIATE", &e\)' \
+            'src/data/database/database.h:tx\.emplace\(conn, ' \
+            'src/data/database/database.cpp:batchTx = std::make_unique<db::Transaction>\(\*mConnection, '; do
     file=${door%%:*}; pattern=${door#*:}
     if grep -qE "$pattern" "$file"; then
-        echo "ok:   $file begins IMMEDIATE"
+        echo "ok:   $file begins IMMEDIATE (at the door)"
     else
         echo "FAIL: $file no longer begins its transaction IMMEDIATE"
         failures=$((failures + 1))
@@ -107,7 +99,7 @@ for door in 'src/data/database/database.h:begin\.exec\(QStringLiteral\("BEGIN IM
 done
 
 # ...and the guard itself must still be the thing that yields the batch.
-if grep -q 'sBatchYield(database)' src/data/database/database.h; then
+if grep -q 'sBatchYield(conn)' src/data/database/database.h; then
     echo "ok:   DbTransaction still stands the batch down when it opens"
 else
     echo "FAIL: DbTransaction no longer calls the batch-yield hook (database.h)"

@@ -35,6 +35,7 @@ struct Connection::State
     int depth = 0;                  ///< live Transaction guards on this connection
     bool holding = false;           ///< this connection's outermost Transaction holds the write lock
     bool firstWriteNamed = false;   ///< the held transaction's first write is in the holder line
+    bool refusing = false;          ///< the outermost Transaction's BEGIN failed: query_only until it ends
 };
 
 namespace detail {

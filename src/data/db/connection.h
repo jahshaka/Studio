@@ -68,8 +68,10 @@ public:
     /// Opens (and owns) the file. A failure returns a connection with no handle and fills `e`.
     static Connection open(const std::string &path, const Options &options, Error *e);
     /// Uses a handle someone else opened and will close (the Qt driver's, until the Database
-    /// opens its own: ruling 3); the borrowed handle is never closed here. A null handle, or a
-    /// library below kMinimumVersion, returns a connection with no handle and fills `e`.
+    /// opens its own: ruling 3); the borrowed handle is never closed here. EVERY BORROWER OF ONE
+    /// HANDLE SHARES ONE STATE (its transaction depth, its refusal, its holder): two borrowers of
+    /// one connection are one connection. A null handle, or a library below kMinimumVersion,
+    /// returns a connection with no handle and fills `e`.
     static Connection borrow(sqlite3 *handle, std::string name, Error *e);
 
     bool isOpen() const;
@@ -79,12 +81,16 @@ public:
     bool exec(std::string_view sql, Error *e);
     std::int64_t lastInsertRowid() const;
     int changes() const;
+    /// Live Transaction guards on this connection (0: the next one is the outermost).
+    int guards() const;
+    /// The outermost Transaction's BEGIN failed and its scope still stands: writes are refused.
+    bool refusesWrites() const;
 
     struct State;   // the layer's own (connection.cpp, statement.cpp, transaction.cpp)
     State *state() const { return mState.get(); }
 
 private:
-    std::unique_ptr<State> mState;
+    std::shared_ptr<State> mState;
 };
 
 }   // namespace db
