@@ -139,13 +139,14 @@
 # content beyond the born World compiles on every run (the residue named, HARNESS-1). ONE answer for the boots named: "warm at <key>" when every one is, else "cold at <key>:
 # <each cold boot's why>" (exit 3 under --check; else their boots, in order).
 set -u
-BUILD=""; INHERIT=""; CHECK=0; KEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=1170; COLDROWS=""
+BUILD=""; INHERIT=""; CHECK=0; KEYONLY=0; COLDKEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=1170; COLDROWS=""
 ARGV=("$0" "$@"); TAKE_RIG=0; FAKED=""   # (URGENT #195: the call as given, for the refusal's safe line)
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
         --rig) TAKE_RIG=1; shift ;;
         --key) KEYONLY=1; shift ;;
+        --cold-key) KEYONLY=1; COLDKEYONLY=1; shift ;;
         --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; FAKED="$FAKED --tests-dir"; shift 2 ;;
         --app) APP="${2:?--app needs an executable}"; FAKED="$FAKED --app"; shift 2 ;;
         --lab) LAB="${2:?--lab needs an executable}"; FAKED="$FAKED --lab"; shift 2 ;;
@@ -205,15 +206,35 @@ key_inputs() {
 }
 INPUTS=$(key_inputs) || exit 2
 KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
-[ "$KEYONLY" = 1 ] && { echo "$KEY"; exit 0; }
+# THE COLD ROWS' KEY (TE-WARM-WHY (C), the lead's ruling 2026-11-22): a COLD row boots on no shared engine cache - every pipeline
+# is the NVIDIA driver's, from that exe's own driver cache, which keys a pipeline on the SPIR-V it is handed (and the GPU and
+# driver). The rig KEY's `fork <commit>` moved on ANY fork commit - a comment, a tool, a sample - and re-primed every cold row in
+# every tree; what the fork contributes to a shader byte is its PRODUCER files, which the engine already hashes BY CONTENT into
+# three ids (irisgl/cmake/ShaderCompilePath.txt, EngineBuildId.cmake: JAHSHAKA_COMPILE_PATH_{MICROCODE,PREPROCESSOR,COMPUTE}_ID).
+# The cold rows' stamps take key_inputs' lines with the fork commit REPLACED by those three ids; the rig KEY (the -off and -on
+# boots) and the seeds' staleness are unchanged. One function, cold_inputs(), swapped for the binary's printed identity when it
+# lands. NOT COVERED, by design and written here for the next reader: a fork edit OUTSIDE ShaderCompilePath.txt that changes
+# generated shader TEXT (an Hlms implementation's properties) moves no id - the cold row's driver then compiles those pipelines
+# under its cap, once (the same is true of every irisgl engine edit: the KEY holds only the cache's own code id). Such a file
+# BELONGS IN ShaderCompilePath.txt (the engine's own law there: "a fork commit that touches none of these costs no compile
+# anywhere"): a cold row caught compiling after a fork-only move is a FINDING - the file is added to the list.
+cold_inputs() {
+    local id="$BUILD/engine/generated/jahshaka_engine_build_id.h" g
+    printf '%s\n' "$INPUTS" | grep -v '^fork '
+    for g in MICROCODE PREPROCESSOR COMPUTE; do
+        echo "compile-$(echo "$g" | tr 'A-Z' 'a-z') $(sed -n "s/^#define JAHSHAKA_COMPILE_PATH_${g}_ID \"\([0-9a-f]*\)\"$/\1/p" "$id")"
+    done
+}
+COLD_INPUTS=$(cold_inputs); CKEY=$(printf '%s\n' "$COLD_INPUTS" | sha256sum | cut -c1-16)
+[ "$KEYONLY" = 1 ] && { if [ "$COLDKEYONLY" = 1 ]; then echo "$CKEY"; else echo "$KEY"; fi; exit 0; }
 # THE KEY's INPUTS KEPT BESIDE EVERY STAMP (TE-WARM-WHY (A), the lead's ruling 2026-11-22): a stamp names its key, a hash - "the
 # key moved" said nothing of WHICH term moved (the fork? the staged media? the ray SPIR-V?). Every stamp written at KEY gets
 # <stamp>.inputs, key_inputs' lines at that moment; a later "the key moved" names the terms whose lines differ.
-stamp_inputs() { printf '%s\n' "$INPUTS" > "$1.inputs"; }   # <stamp>
-moved_terms() {   # <stamp>: " - moved: <term>, <term>" when its kept inputs differ from this build's, else nothing
+stamp_inputs() { printf '%s\n' "${2:-$INPUTS}" > "$1.inputs"; }   # <stamp> [<inputs>: the cold rows' own]
+moved_terms() {   # <stamp> [<inputs>]: " - moved: <term>, <term>" when its kept inputs differ from this build's, else nothing
     [ -f "$1.inputs" ] || return 0
     local m
-    m=$(printf '%s\n' "$INPUTS" | awk 'NR == FNR { old[$1] = $0; next } { seen[$1] = 1; if (old[$1] != $0) print $1 }
+    m=$(printf '%s\n' "${2:-$INPUTS}" | awk 'NR == FNR { old[$1] = $0; next } { seen[$1] = 1; if (old[$1] != $0) print $1 }
             END { for (k in old) if (!(k in seen)) print k }' "$1.inputs" - | LC_ALL=C sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g')
     [ -n "$m" ] && echo " - moved: $m"
 }
@@ -264,7 +285,7 @@ row_digest() {   # <the row's line> [<build> <src>]: its command, its tier, its 
 row_stamp_why() {   # <row> <line>: empty when this row's prime ran at this key, for this command, on this build
     local st="$COLD_SDIR/$1.driver-key"
     if [ ! -f "$st" ]; then echo "no prime recorded"
-    elif [ "$(sed -n 1p "$st")" != "$KEY" ]; then echo "the key moved (primed at $(sed -n 1p "$st")$(moved_terms "$st"))"
+    elif [ "$(sed -n 1p "$st")" != "$CKEY" ]; then echo "the cold key moved (primed at $(sed -n 1p "$st")$(moved_terms "$st" "$COLD_INPUTS"))"
     elif [ "$(sed -n 2p "$st")" != "$(row_digest "$2")" ]; then echo "its registration changed"
     elif [ "$(sed -n 3p "$st")" != "$BUILT_KEY" ]; then echo "the staged media rebuilt since"
     fi
@@ -353,10 +374,11 @@ if [ -n "$INHERIT" ]; then
     PB=$(cd "$INHERIT" 2>/dev/null && pwd) || { echo "warm-app-cache: --inherit: no build dir $INHERIT" >&2; exit 64; }
     [ "$PB" != "$BUILD" ] || { echo "warm-app-cache: --inherit: the parent is this build" >&2; exit 64; }
     PSRC=$(cd "$PB/.." && pwd); PT="$PB/tests"
-    # THE PARENT's KEY BY THIS SCRIPT's FORMULA (a stamp is comparable only at one formula): equal, or nothing moves
-    PKEY=$(bash "$0" "$PB" --key 2>/dev/null)
-    if [ -z "$PKEY" ] || [ "$PKEY" != "$KEY" ]; then
-        echo "warm-app-cache: inherited nothing - the parent's key ${PKEY:-unreadable} is not this tree's $KEY ($PB)"
+    # THE PARENT's COLD KEY BY THIS SCRIPT's FORMULA (a stamp is comparable only at one formula; what is inherited is cold-row
+    # primes and the seed template, both judged by the cold key since TE-WARM-WHY (C)): equal, or nothing moves
+    PKEY=$(bash "$0" "$PB" --cold-key 2>/dev/null)
+    if [ -z "$PKEY" ] || [ "$PKEY" != "$CKEY" ]; then
+        echo "warm-app-cache: inherited nothing - the parent's cold key ${PKEY:-unreadable} is not this tree's $CKEY ($PB)"
         exit 3
     fi
     got=""
@@ -394,7 +416,7 @@ if [ -n "$INHERIT" ]; then
             [ -z "$(row_stamp_why "$row" "$line")" ] && continue   # ours primed already
             pline=$(awk -F'\t' -v r="$row" '$1 == r' "$PROWS" | head -1); pst="$PT/.cold-rows/$row.driver-key"
             [ -n "$pline" ] && [ -f "$pst" ] || continue
-            [ "$(sed -n 1p "$pst")" = "$KEY" ] && [ "$(sed -n 2p "$pst")" = "$(row_digest "$pline" "$PB" "$PSRC")" ] &&
+            [ "$(sed -n 1p "$pst")" = "$CKEY" ] && [ "$(sed -n 2p "$pst")" = "$(row_digest "$pline" "$PB" "$PSRC")" ] &&
                 [ "$(sed -n 3p "$pst")" = "$PBUILT" ] && [ "$PBUILT" = "$BUILT_KEY" ] &&
                 [ "$(row_digest "$pline" "$PB" "$PSRC")" = "$(row_digest "$line")" ] || continue
             readarray -t -d $'\t' f < <(printf '%s' "$pline")
@@ -408,7 +430,7 @@ if [ -n "$INHERIT" ]; then
                 rel=${sd%/}; rel=${rel#"$PB"/}
                 [ -f "$sd/tree-key.txt" ] && case "$sd" in "$PB"/*) take "${sd%/}" "$BUILD/$rel" ;; esac
             done
-            printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; stamp_inputs "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
+            printf '%s\n%s\n%s\n' "$CKEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; stamp_inputs "$COLD_SDIR/$row.driver-key" "$COLD_INPUTS"; n=$((n + 1))
         done < "$COLDROWS"
     fi
     [ "$n" -gt 0 ] && got="$got $n cold row(s)"
@@ -799,7 +821,7 @@ cold_boot() {
         [ -n "$line" ] || continue
         row=${line%%$'\t'*}
         if grep -qF "warm_cold_rows: $row: PRIMED" "$log"; then
-            printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; stamp_inputs "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
+            printf '%s\n%s\n%s\n' "$CKEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; stamp_inputs "$COLD_SDIR/$row.driver-key" "$COLD_INPUTS"; n=$((n + 1))
         fi
     done < "$COLDROWS"
     note_wall cold-on "$(grep -oE 'PRIMED - its run [0-9]+ s' "$log" | awk '{ s += $(NF - 1) } END { print s + 0 }')"
@@ -818,7 +840,7 @@ cold_boot() {
         echo "warm-app-cache: the cold-on boot FAILED (exit $rc) after ${wall} s - its log $log"
         return 1
     fi
-    echo "warm-app-cache: $(what_of cold-on) primed at $KEY - ${n} row(s), the boot ${wall} s"
+    echo "warm-app-cache: $(what_of cold-on) primed at the cold key $CKEY - ${n} row(s), the boot ${wall} s"
     return 0
 }
 # THE WARM-UP's BOOTS WRITE THEIR COVERAGE (TEST-STREAMLINE-1 stage 2, the 2a audit's finding 1, the lead's ruling): in a

@@ -376,7 +376,7 @@ echo "$out" | grep -q "^warm-app-cache: booting .* (cold-on): 1 of 1 row(s) on :
     ok "cold-on says what it will prime before its first hold: the rows, their count, ~13 s by the price file (#204)" ||
     no "cold-on's line (#204): $(echo "$out" | grep 'booting' | head -1)"
 [ $rc = 0 ] && echo "$out" | grep -q '^warm_cold_rows: x.cold: PRIMED - its run [0-9]* s (exit 3; .*its own red, printed: FAIL: its own law' &&
-    [ "$(sed -n 1p "$CS/x.cold.driver-key" 2>/dev/null)" = "$key" ] &&
+    [ "$(sed -n 1p "$CS/x.cold.driver-key" 2>/dev/null)" = "$("$W" "$BUILD" --cold-key)" ] &&   # (the cold rows' own key: TE-WARM-WHY (C))
     [ "$(cat "$T/cold-ran" 2>/dev/null)" = "$T/cwd|arg1|unset|on|epic photon|unset" ] &&
     ok "cold-on runs the row's command once in its working directory with its args and its test tier (set and unset), the shared cache unset, the driver's cache on; its own red printed, the row PRIMED and stamped" ||
     no "cold-on run: '$out' rc $rc ran: $(cat "$T/cold-ran" 2>&1)"
@@ -500,7 +500,8 @@ out=$("$W" "$T/tB/build" --check --app "$T/fake-app" --lab "$T/fake-app" --cold-
 # a toy tree warmed by hand at its key - ONLY the engine's full build id moved: the key holds, EVERY boot warm (no top-up); a byte of the staged Hlms media, a ray-tier SPIR-V header or the shader cache's code id moved:
 # the KEY moves, every boot cold (the shader that changed is the one that runs - the card half is block A)
 toy_tree "$T/tK"; KB="$T/tK/build"; KT="$KB/tests"; mkdir -p "$KB/engine/generated/rayquery"; printf 'spv1' > "$KB/engine/generated/rayquery/rq_x_spv.h"
-kk=$("$W" "$KB" --key)
+printf '[{"command": "c++ -DJAHSHAKA_OGRE_FORK_COMMIT=%s -c x.cpp"}]\n' 1111111111111111111111111111111111111111 > "$KB/compile_commands.json"
+kk=$("$W" "$KB" --key); ck=$("$W" "$KB" --cold-key)
 KX=(--app "$T/app" --lab "$T/lab" --cold-rows "$KB/tests/rows.txt" --tests-dir "$KT")
 toy_cache "$KT/.shadercache" 1 2; toy_cache "$KT/.shadercache-engine" 1 2
 printf '%s\n%s\n%s\n' "$kk" "k1 k2 " "sets none" > "$KT/.shadercache.warm-key"; printf '%s\n%s\n' "$kk" "k1 k2 " > "$KT/.shadercache-engine.warm-key"
@@ -525,12 +526,28 @@ nonce() {   # <what> <file> <bytes> <term>: the key moves, every boot cold; a st
     cp "$2" "$T/nonce.bak"; printf '%s' "$3" >> "$2"
     local o r; o=$("$W" "$KB" --check "${KX[@]}"); r=$?
     [ $r = 3 ] && [ "$("$W" "$KB" --key)" != "$kk" ] && echo "$o" | grep -q '(app-on): the key moved' &&
-        echo "$o" | grep -q "(cold-on): 1 of 1 to prime: p.cold (the key moved (primed at $kk - moved: $4))" &&
+        echo "$o" | grep -q "(cold-on): 1 of 1 to prime: p.cold (the cold key moved (primed at $ck - moved: $4))" &&
         ok "a NONCE in $1: the key moves, every boot cold, the prime's stamp names the term that moved ($4)" || no "the nonce in $1: '$o' rc $r"
     cp "$T/nonce.bak" "$2"
 }
 nonce "the staged Hlms media" "$KB/bin/media/Hlms/a.any" "// nonce" media-Hlms
 nonce "a ray-tier SPIR-V header" "$KB/engine/generated/rayquery/rq_x_spv.h" "1" rq-spirv
+# THE COLD ROWS' KEY (TE-WARM-WHY (C)): a FORK-ONLY move (the fork commit, no producer file: the three compile-path ids equal)
+# moves the rig KEY - the -off/-on boots cold - and leaves the cold rows WARM (their driver caches read no fork commit); a
+# compile-path id moved re-primes them, the term named. (red before (C): the fork commit re-primed every cold row)
+cp "$KB/compile_commands.json" "$T/cc.bak"; sed -i 's/=1111111111111111111111111111111111111111/=2222222222222222222222222222222222222222/' "$KB/compile_commands.json"
+o=$("$W" "$KB" --check "${KX[@]}"); r=$?
+[ $r = 3 ] && [ "$("$W" "$KB" --key)" != "$kk" ] && [ "$("$W" "$KB" --cold-key)" = "$ck" ] && echo "$o" | grep -q '(app-off): the key moved' &&
+    ! echo "$o" | grep -q '(cold-on)' && [ -z "$("$W" "$KB" --check "${KX[@]}" --only cold-on | grep -v "^warm at")" ] &&
+    ok "C1: a fork-only move (the commit, the compile-path ids equal): the rig key moves, the cold rows stay WARM at their cold key" ||
+    no "C1 the fork-only move: '$o' rc $r"
+cp "$T/cc.bak" "$KB/compile_commands.json"; cp "$KB/engine/generated/jahshaka_engine_build_id.h" "$T/idc.bak"
+sed -i 's/^#define JAHSHAKA_COMPILE_PATH_MICROCODE_ID "\([0-9a-f]\)/#define JAHSHAKA_COMPILE_PATH_MICROCODE_ID "f\1/' "$KB/engine/generated/jahshaka_engine_build_id.h"
+o=$("$W" "$KB" --check "${KX[@]}" --only cold-on); r=$?
+[ $r = 3 ] && echo "$o" | grep -q "p.cold (the cold key moved (primed at $ck - moved: compile-microcode))" &&
+    ok "C2: a compile-path id moved (a producer file of the fork): the cold rows re-prime, the term named (compile-microcode)" ||
+    no "C2 the compile-path move: '$o' rc $r"
+cp "$T/idc.bak" "$KB/engine/generated/jahshaka_engine_build_id.h"
 cp "$KB/engine/generated/jahshaka_engine_build_id.h" "$T/id.bak"
 sed -i 's/^#define JAHSHAKA_SHADER_CACHE_CODE_ID "\([0-9a-f]\)/#define JAHSHAKA_SHADER_CACHE_CODE_ID "e\1/' "$KB/engine/generated/jahshaka_engine_build_id.h"
 o=$("$W" "$KB" --check "${KX[@]}"); r=$?
@@ -592,7 +609,7 @@ printf 'grown by the child' >> "$CT/row/dc/GLCache.bin"; printf 'x' >> "$CT/row/
 # I3: a child whose key differs (a staged Hlms byte) takes nothing and stays cold
 toy_tree "$T/iD"; DB="$T/iD/build"; printf 'H' > "$DB/bin/media/Hlms/a.any"
 out=$(IX "$DB" --inherit "$PB"); rc=$?
-[ $rc = 3 ] && echo "$out" | grep -q "inherited nothing - the parent's key $pk is not this tree's" && [ ! -e "$DB/tests/.shadercache.warm-key" ] &&
+[ $rc = 3 ] && echo "$out" | grep -q "inherited nothing - the parent's cold key $("$W" "$PB" --cold-key) is not this tree's" && [ ! -e "$DB/tests/.shadercache.warm-key" ] &&
     ok "I3: a child at another key: nothing taken, exit 3" || no "I3 another key: '$out' rc $rc"
 fi
 if want store; then
