@@ -178,6 +178,29 @@ void gateDrawsWhatTheEditorDraws(const char *run, const QJsonObject &after)
               "the editor's window was created once, at its world's count (the gate's), and never recreated");
         CHECK(encode == 0 && blend == 0,
               "the editor's frames built no final-target pipeline (the gate drew into the window's format and samples)");
+        // THE GATE DRAWS THE WINDOW's ROUTE (SHADER-SYSTEM-1 stage 7a, the lead's ruling): the warm view is a PRESENTED
+        // STAND-IN, so it gathers as the window does - each world's warm view and the editor's window SAY the routes the
+        // engine published for them, and they are equal, the gather on (red before: the gate's Live view drew the field's
+        // screen integrate - gather 0, integrate 1 - while the window gathered: its gather permutations built in its
+        // first frames, spikes/shader-system/ss7/r4/).
+        const QRegularExpression gateRoute(QStringLiteral("the (\\w+) world's warm view drew the routes (gather=\\d "
+                                                          "integrate=\\d reflect=\\d)"));
+        const QRegularExpression windowRoute(QStringLiteral("editor viewport: its window's routes (gather=\\d integrate=\\d "
+                                                            "reflect=\\d)"));
+        QStringList gateRoutes;
+        QString editorRoute;
+        for (const QString &line : lines) {
+            const QRegularExpressionMatch g = gateRoute.match(line);
+            if (g.hasMatch()) gateRoutes << g.captured(1) + QStringLiteral(" ") + g.captured(2);
+            const QRegularExpressionMatch w = windowRoute.match(line);
+            if (w.hasMatch() && editorRoute.isEmpty()) editorRoute = w.captured(1);
+        }
+        bool equal = !gateRoutes.isEmpty() && !editorRoute.isEmpty();
+        for (const QString &g : gateRoutes) equal = equal && g.section(QLatin1Char(' '), 1) == editorRoute;
+        std::printf("   %s, the routes: the gate's %s; the editor's window %s\n", run,
+                    qPrintable(gateRoutes.join(QStringLiteral(", "))), qPrintable(editorRoute));
+        CHECK(equal && editorRoute.startsWith(QStringLiteral("gather=1")),
+              "the gate's warm view drew the editor window's routes, the gather on (both read back from the engine)");
     }
 }
 
@@ -456,6 +479,24 @@ int main(int argc, char **argv)
         for (const QString &f : files) recipes += f.startsWith(QStringLiteral("hlms.")) && f.endsWith(QStringLiteral(".bin")) ? 1 : 0;
         CHECK(manifest && microcode && recipes > 0,
               "a launch killed right after its gate kept the gate's layers: the manifest, the microcode, the recipes");
+        // THE PRINT IS THE KEY THE GATE WROTE (SHADER-SYSTEM-1 stage 6a): `Jahshaka --print-shader-identity`, run with no
+        // display, prints as `identity` exactly the warm-pass.key this launch's gate wrote (startupPassKey, one function).
+        {
+            QFile rec(dir + QStringLiteral("/warm-pass.key"));
+            const QString written = rec.open(QIODevice::ReadOnly) ? QString::fromUtf8(rec.readAll()).trimmed() : QString();
+            QProcess print;
+            QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
+            env.remove(QStringLiteral("DISPLAY"));
+            print.setProcessEnvironment(env);
+            print.start(QStringLiteral(JAHSHAKA_BINARY), { QStringLiteral("--print-shader-identity") });
+            const bool ran = print.waitForFinished(20000) && print.exitCode() == 0;
+            QString printed;
+            for (const QString &l : QString::fromUtf8(print.readAllStandardOutput()).split(QLatin1Char('\n')))
+                if (l.startsWith(QStringLiteral("identity "))) printed = l.mid(9);
+            std::printf("   warm-pass.key %s\n   printed       %s\n", qPrintable(written), qPrintable(printed));
+            CHECK(ran && !written.isEmpty() && written == printed,
+                  "the gate's warm-pass.key is the no-device print's identity, byte for byte");
+        }
         if (!failures) QDir(home + QStringLiteral("/.local/share/Jahshaka")).removeRecursively();   // a red keeps it
         std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
         return finish(failures ? 1 : 0);
