@@ -40,6 +40,14 @@
 //               4: an object entering the view under a sub-pixel turn while its permutation compiles) - (1) no rest decision
 //               is taken while they are incomplete; (2) released, the scene comes to rest, complete. RED before the fix: the
 //               decision fired on the due frame, incomplete (the schedule's term only, OgreSurfaceCache.cpp's decide).
+//   silent    - EVERY RAY CONSUMER REFUSED BY ITS BUILD OWES ITS TERM (SHADER-SYSTEM-1 stage 7, the lead's ruling P1): the
+//               builds of the card gather, the card movers and the voxel sides held - (0) the CONTROL: the voxel sides ran
+//               and refused (GiStatus::voxelSides.waits above 0). The card gather's and the movers' consumers are NOT
+//               reached in this room (no mover; the card gather runs only behind the reflection's card demand:
+//               spikes/shader-system/ss7/b8-hold/RESULT.md) - their door is the same line of aheadReady, printed;
+//               (1) every frame after both refused, while held, is published INCOMPLETE with bit 2; (2) released, the
+//               room comes to rest, complete. RED before the fix: only the card readers' builds (the reflection, the
+//               gather, the glass escape) named their scene - these three refused silently, their frames complete.
 //   failwait  - A FAILURE WAITS FOR ITS ANSWER (COLD-BOOT-1's leftover L1): every object's own permutation FAILS
 //               (shaders.asyncFail) on a COLD boot, so its placeholder is still compiling when it fails - (1) those frames
 //               are published INCOMPLETE by a pending skip (bit 1: the object waits for the placeholder it will draw);
@@ -79,6 +87,13 @@ const int kHeldPastBuild = 60;
 /// rays.buildHoldIds / rays.buildFail: bit k for AheadId k (OgreFrameMonitor.cpp's row) - the reflection (1) and the
 /// gather (32); the glass escape (16)
 const double kReaderBuilds = 1.0 + 32.0, kGlassEscapeBuild = 16.0;
+/// .silent's held builds: the three consumers that refused SILENTLY before - the card gather (2), the card movers (4), the
+/// voxel sides (8)
+const double kSilentBuilds = 2.0 + 4.0 + 8.0;
+/// .silent's bound on the frames until its reached consumer (the voxel sides) has refused (it runs with the room's first arm)
+const int kSilentReachCap = 600;
+/// .silent's frames held after both refused (the term must stand on every one of them)
+const int kSilentHeldFrames = 30;
 /// A hold the run releases itself (arm back to 0): longer than any run
 const double kHoldForever = 100000.0;
 /// The frames the unasked run watches after its held build lands
@@ -236,10 +251,10 @@ int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "late";
     const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt",
-                                             "window", "failwait" };
+                                             "window", "failwait", "silent" };
     if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
-        std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt, window or failwait, not "
-                    "'%s'\n", mode.c_str());
+        std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt, window, failwait or "
+                    "silent, not '%s'\n", mode.c_str());
         return 2;
     }
     std::string err;
@@ -258,6 +273,50 @@ int main(int argc, char **argv)
     int frames = 0;
     char w[320];
     const auto inFlight = [&]() { return e->published().shaders.rayBuildsInFlight; };
+
+    // ---- .silent: the three consumers that refused silently name their scene (bit 2) ---------------------------------
+    if (mode == "silent") {
+        e->setArm("rays.buildHold", kHoldForever);
+        e->setArm("rays.buildHoldIds", kSilentBuilds);
+        Room h = buildRoom(e, "build_late_silent");
+        if (!h.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+        // (0) until the reached consumer has refused (it counts its wait where the door said "not this frame")
+        int reachedAt = -1;
+        for (int f = 0; f < kSilentReachCap && reachedAt < 0; ++f) {
+            enginetest::frames(e, 1);
+            ++frames;
+            const GiStatus g = h.scene->published().gi;
+            if (g.voxelSides.waits > 0ull) reachedAt = frames;
+        }
+        {
+            const GiStatus g = h.scene->published().gi;
+            std::snprintf(w, sizeof(w), "(0) the control: the voxel sides ran and refused (voxel side waits %llu, at frame "
+                          "%d of a bound of %d; card gather waits %llu - not reached here)", g.voxelSides.waits, reachedAt,
+                          kSilentReachCap, g.cards.gatherWaits);
+            check(reachedAt > 0, w);
+        }
+        // (1) every frame after it, held, carries bit 2 (the term is noted at a frame's head)
+        int heldFrames = 0, withTerm = 0;
+        for (int f = 0; f < kSilentHeldFrames && reachedAt > 0; ++f) {
+            enginetest::frames(e, 1);
+            ++frames;
+            ++heldFrames;
+            const PublishedFrame::Completeness c = h.scene->published().completeness;
+            if (c.incomplete && (c.terms & 4u)) ++withTerm;
+        }
+        std::snprintf(w, sizeof(w), "(1) while held, every frame is published INCOMPLETE by bit 2, a ray consumer refused by "
+                      "its build (%d of %d held frames)", withTerm, heldFrames);
+        check(heldFrames > 0 && withTerm == heldFrames, w);
+        check(inFlight() >= 1u, "the held builds are in flight to the hold's end");
+        e->setArm("rays.buildHold", 0.0);   // THE BUILDS LAND
+        const int rest = toRest(e, h.scene, frames);
+        std::printf("   at rest %d frames after the release\n", rest);
+        check(rest >= 0, "(2) released, the room comes to rest");
+        checkComplete("the silent room", h.scene);
+        drop(e, h);
+        std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+        return g_fail ? 1 : 0;
+    }
 
     // ---- the held rows: hold, the law in the hold, release, at rest against the control ----------------------------
     if (mode == "late" || mode == "pso" || mode == "texture") {

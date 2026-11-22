@@ -1342,6 +1342,14 @@ jah_gpu_row(gi.card_build_late.failwait CLASS engine COMMAND test_gi_card_build_
 set_tests_properties(gi.card_build_late.failwait PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 215)
 
+# .silent (SHADER-SYSTEM-1 stage 7, the lead's ruling P1): EVERY ray consumer refused by its build in flight marks its
+# scene's frame incomplete (bit 2) - the card gather, the card movers and the voxel sides refused silently before. A new
+# row: priced from its solo run, never SHIP.
+jah_gpu_row(gi.card_build_late.silent CLASS engine COMMAND test_gi_card_build_late silent
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.silent PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 805)
+
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
 # a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark at the ray tier, its control
