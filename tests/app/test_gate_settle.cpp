@@ -12,6 +12,9 @@
 //       counted them as movement: the startup gate spun 48,363 frames, spikes/cold-boot-1/S4arm);
 //   (5) a ray build STARTING (the in-flight count rising) is no landing;
 //   (6) the ceiling: a gate that lands something every frame and never settles still ends, at kCeilingMs.
+//   (7) THE COMPLETE TAIL (gatesettle::Tail): kQuietFrames Complete frames in a row that compiled nothing and settled end
+//       it; a compile or an unsettled frame resets the count (the captures a reader's demand brings compile INSIDE the
+//       tail and are built before it ends); at kCap it ends FAILED, never silently.
 #include "app/gatesettle.h"
 
 #include <cstdio>
@@ -121,6 +124,23 @@ int main()
         }
         CHECK(!stalledOnce && g.pastCeiling() && g.failed(false) && t == gatesettle::kCeilingMs,
               "(6) a landing every frame and never settled: no stall, the wait ends at the ceiling (%lld ms)", t);
+    }
+    {
+        using gatesettle::Tail;
+        Tail t;
+        for (int i = 0; i < Tail::kQuietFrames - 1; ++i) t.feed(0u, true);
+        CHECK(!t.done(), "(7) %d quiet Complete frames: not yet done", Tail::kQuietFrames - 1);
+        t.feed(2u, true);   // a capture's permutations compiled in the tail
+        CHECK(t.quiet() == 0 && !t.done(), "(7) a compile in the tail resets the count");
+        for (int i = 0; i < Tail::kQuietFrames - 1; ++i) t.feed(0u, true);
+        t.feed(0u, false);
+        CHECK(t.quiet() == 0 && !t.done(), "(7) an unsettled frame (a placeholder, a deferral) resets it too");
+        for (int i = 0; i < Tail::kQuietFrames; ++i) t.feed(0u, true);
+        CHECK(t.done() && !t.failed(), "(7) %d quiet settled frames end it (after %d frames)", Tail::kQuietFrames, t.frames());
+        Tail churn;
+        while (!churn.done()) churn.feed(churn.frames() % 7 == 0 ? 1u : 0u, true);
+        CHECK(churn.failed() && churn.frames() == Tail::kCap, "(7) a tail that never goes quiet ends FAILED at kCap (%d)",
+              churn.frames());
     }
     std::printf(gFailures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", gFailures);
     return gFailures ? 1 : 0;

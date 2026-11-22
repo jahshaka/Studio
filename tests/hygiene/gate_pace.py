@@ -14,13 +14,17 @@
 #
 # THE LAW, over src/ with comments stripped:
 #   (1) `FramePace::Streaming` and `setFramePace(` appear only in those two files;
-#   (2) in the gate's file, renderOneFrame( exactly once and setFramePace(FramePace::Streaming) exactly once (gateFrame's
-#       body): every frame of the gate is a gateFrame;
+#   (2) in the gate's file, renderOneFrame( exactly once (gateFrame's body, which sets the pace it is given): every frame
+#       of the gate is a gateFrame;
 #   (3) in the gate's file, a DESTRUCTOR's body (the gate's scope guard: every way out) sets the pace back -
 #       setFramePace(FramePace::Complete) - and the warm view's compiles back - setAsyncShaders(false) - and the gate's
-#       file sets the pace nowhere else.
+#       file calls setFramePace( nowhere else but gateFrame;
+#   (4) THE COMPLETE TAIL: a world phase ends on Complete frames - the gate's file runs a gatesettle::Tail with the frames'
+#       pace set to FramePace::Complete (`pace = FramePace::Complete`) - the frames the editor draws, so what they ask for
+#       (the cards a reader demands, their captures) is built in the gate on every launch alike (shadercache.app.warm).
 # A NEGATIVE CONTROL runs first: a synthetic tree with a third setter (red), a bare renderOneFrame in the gate (red), a
-# gate that never gives the pace back (red), one that gives it back outside a destructor (red), the lawful shape (green).
+# gate that never gives the pace back (red), one that gives it back outside a destructor (red), a gate with no Complete
+# tail (red), the lawful shape (green).
 # usage: gate_pace.py <source dir>
 import os, re, sys, tempfile
 
@@ -66,34 +70,39 @@ def gate_law(rel, code):
     bad = []
     nospace = re.sub(r'\s+', '', code)
     sets = nospace.count('setFramePace(')
-    streaming = nospace.count('setFramePace(FramePace::Streaming)')
     complete = nospace.count('setFramePace(FramePace::Complete)')
     frames = nospace.count('renderOneFrame(')
-    if streaming != 1 or frames != 1:
-        bad.append('(2) %s: setFramePace(FramePace::Streaming) %d time(s), renderOneFrame( %d time(s) - every gate frame '
-                   'must be gateFrame (one of each, in its body)' % (rel, streaming, frames))
+    if frames != 1:
+        bad.append('(2) %s: renderOneFrame( %d time(s) - every gate frame must be gateFrame (one, in its body)' %
+                   (rel, frames))
     guards = [re.sub(r'\s+', '', b) for b in destructor_bodies(code)]
     if not any('setFramePace(FramePace::Complete)' in g and 'setAsyncShaders(false)' in g for g in guards):
         bad.append('(3) %s: no destructor gives the pace back (setFramePace(FramePace::Complete)) and the warm view\'s '
                    'compiles back (setAsyncShaders(false)) - the gate must leave the engine as it found it on every way '
                    'out' % rel)
-    if sets != streaming + 1 or complete != 1:
-        bad.append('(3) %s: setFramePace( %d time(s) - only gateFrame\'s Streaming and the scope guard\'s Complete' %
-                   (rel, sets))
+    if sets != 2 or complete != 1:
+        bad.append('(3) %s: setFramePace( %d time(s) - only gateFrame\'s and the scope guard\'s Complete' % (rel, sets))
+    if 'gatesettle::Tail' not in nospace or 'pace=FramePace::Complete' not in nospace:
+        bad.append('(4) %s: no world phase ends on a Complete tail (a gatesettle::Tail over frames at '
+                   'pace = FramePace::Complete)' % rel)
     return bad
 
 
 def control():
-    frame = 'void gateFrame(E &e) { e.setFramePace(FramePace::Streaming); e.renderOneFrame(); }\n// renderOneFrame( in a comment\n'
+    frame = ('void gateFrame(E &e, FramePace pace = FramePace::Streaming) { e.setFramePace(pace); e.renderOneFrame(); }\n'
+             '// renderOneFrame( in a comment\n')
     guard = 'struct S { E &e; V *v; ~S() { e.setFramePace( FramePace::Complete ); if (v) { v->setAsyncShaders(false); } } };\n'
-    gate_ok = frame + guard
+    tail = 'void w(E &e) { FramePace pace; gatesettle::Tail t; pace = FramePace::Complete; gateFrame(e, pace); }\n'
+    gate_ok = frame + guard + tail
     cases = [
         ('a third setter', {GATE: gate_ok, 'src/ui/x.cpp': 'void f(E &e) { e.setFramePace(FramePace::Streaming); }'}, True),
         ('a bare frame in the gate', {GATE: gate_ok + 'void g(E &e) { e.renderOneFrame(); }'}, True),
-        ('a gate that never gives the pace back', {GATE: frame}, True),
+        ('a gate that never gives the pace back', {GATE: frame + tail}, True),
+        ('a gate with no Complete tail', {GATE: frame + guard}, True),
         ('the pace given back outside a destructor',
-         {GATE: frame + 'void end(E &e, V *v) { e.setFramePace(FramePace::Complete); v->setAsyncShaders(false); }'}, True),
-        ('the warm view left asynchronous', {GATE: frame + 'struct S { E &e; ~S() { e.setFramePace(FramePace::Complete); } };'}, True),
+         {GATE: frame + tail + 'void end(E &e, V *v) { e.setFramePace(FramePace::Complete); v->setAsyncShaders(false); }'}, True),
+        ('the warm view left asynchronous',
+         {GATE: frame + tail + 'struct S { E &e; ~S() { e.setFramePace(FramePace::Complete); } };'}, True),
         ('the lawful shape', {GATE: gate_ok, VIEWPORT: 'P p() { return FramePace::Streaming; } void s(E *e) { e->setFramePace(p()); }'}, False),
     ]
     ok = True

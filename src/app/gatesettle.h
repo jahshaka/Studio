@@ -107,4 +107,29 @@ private:
     unsigned long long mFrameDeferred = 0, mFramePlaceholders = 0, mFrameSkips = 0;
 };
 
+/// THE COMPLETE TAIL (COLD-BOOT-1): a gate phase whose Streaming build-up has gone quiet ends on COMPLETE frames - the frames
+/// the editor will draw (every consumer joins what it needs, the lighting arm whole) - until kQuietFrames of them in a row
+/// compiled nothing and settled. A compile or an unsettled frame resets the count, so the work those frames ask for (the
+/// cards a reader demanded, their captures' permutations) is built before the phase ends: the old gate's construction, every
+/// frame Complete, which built it the same on every launch (shadercache.app.warm 26 of 26 on record). Bounded by kCap
+/// frames, past which it FAILED (the caller's FAIL line: never a silent pass on a cap).
+class Tail {
+public:
+    static constexpr int kQuietFrames = 30;
+    static constexpr int kCap = 240;
+    /// One Complete frame: `compiledDelta` shaders compiled in it, `settled` the settle's reading after it.
+    void feed(unsigned compiledDelta, bool settled)
+    {
+        ++mFrames;
+        mQuiet = (compiledDelta == 0u && settled) ? mQuiet + 1 : 0;
+    }
+    bool done() const { return mQuiet >= kQuietFrames || mFrames >= kCap; }
+    bool failed() const { return mQuiet < kQuietFrames && mFrames >= kCap; }
+    int frames() const { return mFrames; }
+    int quiet() const { return mQuiet; }
+
+private:
+    int mFrames = 0, mQuiet = 0;
+};
+
 }  // namespace gatesettle

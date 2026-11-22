@@ -29,6 +29,7 @@
 #include "viewport/translationgizmo.h"
 #include "viewport/recordingview.h"
 
+#include <algorithm>
 #include <functional>
 #include <future>
 #include <optional>
@@ -138,17 +139,18 @@ void addPresetRow(const iris::ScenePtr &doc, Database *db)
     }
 }
 
-/// THE GATE's FRAME (COLD-BOOT-1 stage 4): every frame the gate renders is on the STREAMING pace. A frame on the
+/// THE GATE's FRAME (COLD-BOOT-1 stage 4): the gate's frames build up on the STREAMING pace. A frame on the
 /// Complete pace owes the whole picture, so every consumer JOINS what it needs (OgreScene::compilesInBackground is false
 /// under it: a ray pipeline build is waited for in the frame - the 47-s join of spikes/cold-boot-1/S4arm - and the lighting
 /// arm runs whole); that is the reveal law of every view a user sees, and the editor's frames keep it (the viewport sets
 /// its own pace). The gate's frames are shown to nobody but the splash: here, and only here, a compile lands frames later
 /// and the gate waits for it on the published state (gatesettle.h). The pace is IN FORCE UNTIL SET AGAIN (Engine::
 /// setFramePace; the engine never lowers it), so the gate gives it back with everything else it changed: GateScope.
-/// (source.gate_pace: nothing else sets Streaming, and the gate's scope restores it.)
-void gateFrame(Engine &engine)
+/// A world phase ENDS on COMPLETE frames (gatesettle::Tail, completeTail below): the frames the editor will draw.
+/// (source.gate_pace: nothing else sets Streaming, every gate frame is this one, and the gate's scope restores the pace.)
+void gateFrame(Engine &engine, FramePace pace = FramePace::Streaming)
 {
-    engine.setFramePace(FramePace::Streaming);
+    engine.setFramePace(pace);
     engine.renderOneFrame();
 }
 
@@ -226,6 +228,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         // ONE FRAME: the sky and the camera on the warm-up view (and the recorder's view when one is warming),
         // in the frame's input (U0 3a).
         SceneMirror::FrameView recorderView;   // empty unless the recorder warms (3)
+        FramePace pace = FramePace::Streaming;   // the build-up's; a phase's COMPLETE TAIL sets Complete (completeTail)
         auto frame = [&]() {
             SceneMirror::FrameView fv;
             fv.view = view;
@@ -237,7 +240,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             gizmo.updateSize(camera);
             overlay.update(selected ? &gizmo : nullptr, camera->getGlobalPosition(),
                            iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
-            gateFrame(engine);
+            gateFrame(engine, pace);
             ++frames;
             poll();
         };
@@ -270,33 +273,52 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         engine.shaderBuildProgress(c, f, e);
         unsigned last = c;
         int quiet = 0;
-        // ...AND, once the rays are built, until the world's CARDS ARE CAPTURED (COLD-BOOT-1): the surface cache's queue
-        // is paced by a texel budget a frame and the readers' demand read-back, not by compiles, so 30 frames without a
-        // compile can end the phase with cards still waiting - and the tier sweep after it is placeholders-only, where a
-        // capture builds nothing real. Whether a world's card-capture permutations were built then depended on timing:
-        // a cold launch built one, the warm launch after it six (shadercache.app.warm; spikes/cold-boot-1/repro-warm).
         const auto untilQuiet = [&](bool needRays) {
             int phaseFrames = 0;
             quiet = 0;
-            bool cardsDone = true;
             while (phaseFrames < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames) {
                 frame();
                 ++phaseFrames;
                 engine.shaderBuildProgress(c, f, e);
                 const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
                 const bool armed = gi.mode == GiMode::Off || gi.vctBound;
-                cardsDone = !needRays || !gi.cards.built || gi.cards.queueLength == 0u;
-                quiet = (c == last && armed && cardsDone && settled(needRays)) ? quiet + 1 : 0;
+                quiet = (c == last && armed && settled(needRays)) ? quiet + 1 : 0;
                 last = c;
             }
+        };
+        // THE COMPLETE TAIL (COLD-BOOT-1; gatesettle::Tail): the Streaming build-up gone quiet, the phase ends on COMPLETE
+        // frames - the frames the editor draws: every consumer joins what it needs (all built by now), the lighting arm
+        // whole - until 30 of them in a row compiled nothing and settled, a compile resetting the count. So what those
+        // frames ask for is built inside them, on every launch alike: the cards a reader demanded, admitted and captured,
+        // and their capture permutations (the Streaming phase alone left them to timing: a cold launch built one, the warm
+        // launch after it six - shadercache.app.warm, spikes/cold-boot-1/repro-warm; the old gate, every frame Complete,
+        // built them on every launch). Its frames, wall and longest frame are logged: a Complete frame that compiles holds
+        // the window for that compile. `oneFrame` is the phase's own frame (the recorder's arms its video frame).
+        const auto completeTail = [&](const std::function<void()> &oneFrame, const char *what) {
+            gatesettle::Tail tail;
+            QElapsedTimer wall; wall.start();
+            qint64 longest = 0;
+            pace = FramePace::Complete;
+            while (!tail.done()) {
+                engine.shaderBuildProgress(c, f, e);
+                const unsigned before = c + f;
+                QElapsedTimer one; one.start();
+                oneFrame();
+                longest = std::max(longest, one.elapsed());
+                engine.shaderBuildProgress(c, f, e);
+                tail.feed(c + f - before, settled(true));
+            }
+            pace = FramePace::Streaming;
+            last = c;
             const GiStatus &gi = es->published().gi;
-            if (needRays)
-                qInfo("startup shader build: the %s world's cards: %s, admitted %llu, captured %llu, queued %u, resident %u",
-                      es->name().c_str(), gi.cards.built ? "built" : "NOT BUILT", gi.cards.admitted, gi.cards.captures,
-                      gi.cards.queueLength, gi.cards.cardsResident);
-            if (!cardsDone)   // the cap, never a silent pass
-                qWarning("FAIL: shader build gate: the %s world's cards were not all captured in %d frames - %u queued",
-                         es->name().c_str(), kWarmWorldFrameCap, gi.cards.queueLength);
+            qInfo("startup shader build: the %s world's %s: a Complete tail of %d frames, %lld ms, the longest frame %lld ms;"
+                  " its cards %s, admitted %llu, captured %llu, queued %u, resident %u",
+                  es->name().c_str(), what, tail.frames(), static_cast<long long>(wall.elapsed()),
+                  static_cast<long long>(longest), gi.cards.built ? "built" : "NOT BUILT", gi.cards.admitted,
+                  gi.cards.captures, gi.cards.queueLength, gi.cards.cardsResident);
+            if (tail.failed())   // the cap, never a silent pass
+                qWarning("FAIL: shader build gate: the %s world's %s Complete tail did not go quiet in %d frames - %s",
+                         es->name().c_str(), what, gatesettle::Tail::kCap, settle.describe().c_str());
         };
         untilQuiet(false);
         // (2a) THE RAY PIPELINES' CONSUMERS (COLD-BOOT-1 stage 4): the builds started at the gate's first frame are waited
@@ -308,6 +330,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         if (settle.failed(true))
             qWarning("FAIL: shader build gate: the world's ray pipelines did not settle - %s", settle.describe().c_str());
         untilQuiet(true);
+        completeTail(frame, "view");
         // (2b) EVERY OTHER TIER'S PLACEHOLDERS (ASYNC-SHADERS-1). A tier is a new PASS, and the
         // grey placeholder an object waits under is itself a permutation of that pass — so
         // unless it is built here, a tier change has nothing to draw its waiting objects with
@@ -389,14 +412,21 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                 int quiet = 0;
                 jahshaka::engine::VideoFrameNv12 picture;
                 recorderView = recordingview::frameView(rv, camera, 0.0f);
-                for (int i = 0; i < kWarmRecordFrameCap && quiet < kWarmRecordQuietFrames; ++i) {
-                    engine.request([&](Engine &) { rv->armVideoFrame(quint64(i)); });   // REQUESTS (U3 4a)
+                quint64 armed = 0;
+                const auto recordedFrame = [&]() {   // one ARMED frame, as the recorder draws it
+                    engine.request([&](Engine &) { rv->armVideoFrame(armed++); });   // REQUESTS (U3 4a)
                     frame();
                     engine.request([&](Engine &) { while (rv->takeVideoFrame(picture, false)) {} });
+                };
+                for (int i = 0; i < kWarmRecordFrameCap && quiet < kWarmRecordQuietFrames; ++i) {
+                    recordedFrame();
                     engine.shaderBuildProgress(c, f, e);
                     quiet = (c + f == last && settled(false)) ? quiet + 1 : 0;
                     last = c + f;
                 }
+                // ...and ITS COMPLETE TAIL: the recorder's view takes the gather, so its readers demand cards the warm
+                // view does not; those cards' captures and their light job are built here, in the frames a recording draws.
+                completeTail(recordedFrame, "recorder view");
                 engine.request([&](Engine &) { while (rv->takeVideoFrame(picture, true)) {} });
                 recorderView = SceneMirror::FrameView();
                 engine.destroyView(rv);
