@@ -12,6 +12,7 @@
 #include "jahshaka/engine/Script.h"
 #include "enginetesthelpers.h"         // the headless (NULL) engine's config: no Qt, no card, no display
 #include "script/RouteDeclaration.h"   // the route declaration's judgement (engine-private, pure)
+#include "script/records.h"            // ONE FIELD TABLE PER RECORD (engine-private): the machinery, on this file's records
 
 #include <cstdio>
 #include <limits>
@@ -21,6 +22,54 @@
 
 using namespace jahshaka::engine;
 using namespace jahshaka::engine::script;
+
+// THE FILE's OWN RECORDS (2b b1): every generic a field table carries - bool, an enum, integers, float, double, a
+// string, Quat, Colour, a nested record, a vector of records, a FLAT vector of Vec3, a float[3], an optional and a
+// shared_ptr<const T>
+namespace tr {
+enum class Mode { Off, Fast, Slow };
+struct Inner {
+    int level = 2;
+    Vec3 at{1, 2, 3};
+};
+struct Outer {
+    bool on = true;
+    Mode mode = Mode::Fast;
+    unsigned count = 7;
+    float gain = 0.5f;
+    double exact = 0.125;
+    std::string label = "x";
+    Quat turn;
+    Colour tint{0.1f, 0.2f, 0.3f, 1.0f};
+    Inner inner;
+    std::vector<Inner> list;
+    std::vector<Vec3> points;
+    float sh[3] = {1, 2, 3};
+    std::optional<int> maybe;
+    std::shared_ptr<const Inner> shared;
+};
+}  // namespace tr
+namespace jahshaka { namespace engine { namespace script {
+JAH_ENUM_NAMES(tr::Mode, {{tr::Mode::Off, "off"}, {tr::Mode::Fast, "fast"}, {tr::Mode::Slow, "slow"}});
+JAH_RECORD_COUNT(tr::Inner, 2);
+JAH_RECORD_COUNT(tr::Outer, 14);
+const Table<tr::Inner> &Record<tr::Inner>::table()
+{
+    static const Table<tr::Inner> t({field("level", &tr::Inner::level).range(0, 9), field("at", &tr::Inner::at)});
+    return t;
+}
+const Table<tr::Outer> &Record<tr::Outer>::table()
+{
+    static const Table<tr::Outer> t({field("on", &tr::Outer::on), field("mode", &tr::Outer::mode),
+                                     field("count", &tr::Outer::count), field("gain", &tr::Outer::gain),
+                                     field("exact", &tr::Outer::exact), field("label", &tr::Outer::label),
+                                     field("turn", &tr::Outer::turn), field("tint", &tr::Outer::tint),
+                                     field("inner", &tr::Outer::inner), field("list", &tr::Outer::list).upTo(4),
+                                     field("points", &tr::Outer::points).upTo(12), field("sh", &tr::Outer::sh),
+                                     field("maybe", &tr::Outer::maybe), field("shared", &tr::Outer::shared)});
+    return t;
+}
+}}}  // namespace jahshaka::engine::script
 
 static int gFail = 0;
 static void check(bool ok, const std::string &what)
@@ -1010,6 +1059,72 @@ int main()
                   defaults.pictureBytesCap == Host::Options::kPictureBytesCap && ValueBounds().bytes == 0,
               "THE DEFAULT CALL BOUND IS DERIVED from the picture cap (one picture at it + an eighth: " +
                   std::to_string(defaults.callBounds.bytes >> 20) + " MiB); a ValueBounds states nothing by itself");
+    }
+
+    // 13. ONE FIELD TABLE PER RECORD (2b b1; records.h): a record's fields named once - the member pointer DERIVES the
+    //     parameter (the record's default as each member's), both conversions, and the guard. On this file's records:
+    //     the table is the record's fields in order (the structured binding's offsets); the record's default and a
+    //     record with EVERY field changed each go C++ -> value -> the registry's check -> C++ and come back equal; a
+    //     float past its range and a flat vector of a broken length FAIL by name. THE CONTROL: a table with two entries
+    //     swapped is found out of order (by name)
+    {
+        std::string why, swappedWhy;
+        const bool ordered = Record<tr::Inner>::table().inOrder(why) && Record<tr::Outer>::table().inOrder(why);
+        const Table<tr::Inner> swapped({field("at", &tr::Inner::at), field("level", &tr::Inner::level)});
+        const bool caught = !swapped.inOrder(swappedWhy) &&
+                            swappedWhy == "entry 0 'at' is not the record's field 0 (its offset 4, the field's 0)";
+        Registry rec;
+        tr::Outer seen;
+        const bool added = rec.add({"test.record", {Access::Changes, {Record<tr::Outer>::table().param("r")}, Kind::Object},
+                                    "answers the record it was given, through C++"},
+                                   [&seen](Call &c) -> Value {
+                                       std::string w;
+                                       seen = tr::Outer();
+                                       if (!Record<tr::Outer>::table().fromValue(c[0], seen, "r", w)) return c.fail(w);
+                                       return Record<tr::Outer>::table().toValue(seen);
+                                   });
+        tr::Outer filled;
+        filled.on = false;
+        filled.mode = tr::Mode::Slow;
+        filled.count = 4000000000u;
+        filled.gain = -2.25f;
+        filled.exact = 1.0 / 3.0;
+        filled.label = "utf-8 \xc3\xa9";
+        filled.turn = Quat(0.5f, 0.5f, 0.5f, 0.5f);
+        filled.tint = Colour(1, 0.5f, 0.25f, 0.75f);
+        filled.inner.level = 9;
+        filled.inner.at = Vec3(-1, -2, -3);
+        filled.list = {tr::Inner{3, Vec3(4, 5, 6)}, tr::Inner{0, Vec3()}};
+        filled.points = {Vec3(1, 1, 1), Vec3(2, 2, 2)};
+        filled.sh[0] = 7;
+        filled.sh[2] = -7;
+        filled.maybe = -5;
+        filled.shared = std::make_shared<const tr::Inner>(tr::Inner{1, Vec3(9, 8, 7)});
+        const Value defaults = Record<tr::Outer>::table().toValue(tr::Outer());
+        const Value whole = Record<tr::Outer>::table().toValue(filled);
+        const Result d1 = rec.call("test.record", {}), d2 = rec.call("test.record", {Value(Value::Object{})});
+        const Result w1 = rec.call("test.record", {whole});
+        const bool backEqual = w1.status == Status::Ok && w1.value == whole && seen.count == 4000000000u &&
+                               seen.shared && seen.shared->at == Vec3(9, 8, 7) && seen.maybe == -5 && seen.sh[2] == -7.0f &&
+                               seen.points.size() == 2 && seen.list[0].at == Vec3(4, 5, 6) && seen.mode == tr::Mode::Slow;
+        const auto with = [&](const char *member, Value v) {
+            return rec.call("test.record", {Value(Value::Object{{member, std::move(v)}})});
+        };
+        check(ordered && caught && added && rec.validate().empty(),
+              "THE GUARD: each table is its record's fields in declaration order (" + why + "); THE CONTROL: two entries "
+              "swapped are caught by name (" + swappedWhy + "); the record's command registers clean");
+        check(d1.status == Status::Ok && d1.value == defaults && d2.value == defaults && backEqual,
+              "a record's DEFAULT (absent, and {}) and a record with EVERY field changed (an enum, 4e9 unsigned, a float, "
+              "1/3, UTF-8, a Quat, a Colour, a nested record, a vector of records, a flat Vec3 vector, a float[3], an "
+              "optional, a shared_ptr<const T>) go C++ -> value -> the registry -> C++ and come back equal");
+        const Result past = with("gain", Value(1e39));
+        check(failedWith(past, "test.record: r.gain ") && past.message.find(" is beyond a float") != std::string::npos &&
+                  failedWith(with("points", Value(Value::Array{Value(1), Value(2)})),
+                             "test.record: r.points holds 2 numbers, not 3 an element") &&
+                  failedWith(with("mode", Value("medium")), "r.mode 'medium' is not one of \"off\"|\"fast\"|\"slow\"") &&
+                  failedWith(with("count", Value(-1)), "r.count -1 is outside 0..4294967295"),
+              "a float past its range, a flat vector of a broken length, an unnamed enum value and a negative unsigned "
+              "each FAIL by name; the signature: " + signatureText(*rec.find("test.record")).substr(0, 160));
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
