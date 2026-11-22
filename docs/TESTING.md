@@ -172,7 +172,7 @@ host.check({ok: m[0] > 20, what: "the floor is lit (" + m[0].toFixed(1) + " code
 and ONE registration beside it:
 
 ```cmake
-jah_gpu_row(<family>.my_law CLASS engine FRAMES 30
+jah_gpu_row(<family>.my_law CLASS engine FRAMES 31   # 30 + readPixels' own frame
          COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/my_law.js" --name <family>.my_law [--test-doors]
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(<family>.my_law PROPERTIES TIMEOUT 60 LABELS "engine")
