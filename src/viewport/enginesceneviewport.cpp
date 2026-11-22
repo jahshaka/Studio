@@ -1027,8 +1027,11 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
         // gathers (it drives the scene's GI, and its pictures are the
         // screenshot verbs', taken at rest).
         setFallbackContract(jahshaka::engine::OffscreenContract::StillPicture);
+        // BORN AT ITS WORLD's SHAPE (SHADER-SYSTEM-1 stage 7a): the count the mirror pushes and the startup gate drew
+        // with (SceneMirror::windowPass) - a window born at the config's count drew its covered frames at a shape it
+        // never kept, then was recreated with its swapchain once the mirror's push arrived.
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
-                   Colour(0.10f, 0.11f, 0.14f));
+                   Colour(0.10f, 0.11f, 0.14f), mScene ? SceneMirror::windowPass(*mScene).samples : 0u);
     }
     // …and bind it, whether the scene is born here or was born earlier for the
     // Player (ensureEngineScene returns early then, so the bind is its own call).

@@ -32,7 +32,8 @@ public:
     bool createView(const std::shared_ptr<jahshaka::engine::Engine> &engine,
                     const QString &name,
                     const jahshaka::engine::Colour &background =
-                        jahshaka::engine::Colour(0.10f, 0.11f, 0.14f));
+                        jahshaka::engine::Colour(0.10f, 0.11f, 0.14f),
+                    unsigned samples = 0);   ///< the window's count at birth (Engine::createView), 0 = the config's
     /// Releases the View now (idempotent). The destructor does this too.
     void destroyView();
 
@@ -159,6 +160,7 @@ private:
     /// What createView() was called with, so a WinIdChange can repeat it.
     QString                                 mViewName;
     jahshaka::engine::Colour                mBackground{0.10f, 0.11f, 0.14f};
+    unsigned                                mBornSamples = 0;   ///< createView's count: a new native window's view is born at it too
     QString                                 mCreateError;
     jahshaka::engine::OffscreenContract     mFallbackContract = jahshaka::engine::OffscreenContract::Live;
     bool                                    mDeclaredOffscreen = false;

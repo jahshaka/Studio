@@ -136,6 +136,29 @@ void gateDrawsWhatTheEditorDraws(const char *run, const QJsonObject &after)
         std::printf("   %s, the final target's pipelines built in the editor's frames: DisplayEncode %d, "
                     "SMAA/NeighborhoodBlending %d\n", run, encode, blend);
         CHECK(lastGateLine >= 0, "the gate's summary line is in the run's output");
+        // THE EDITOR's WINDOW IS BORN AT ITS WORLD's SHAPE (SHADER-SYSTEM-1 7a): created once, at the count the gate
+        // asked the window system for (both SceneMirror::windowPass), never recreated for it (red before: born at 1
+        // sample, its covered frames drew at 1 - DisplayEncode and ShadowTransmitRelease built for a shape it never
+        // kept - then recreated at 2 with its swapchain; spikes/shader-system/ss7/r4/green-cold.log). The control: the
+        // world's count (2) is not the config's default (1), so a window born at the default reads red here.
+        int created = 0, recreated = 0, bornSamples = -1, askedSamples = -1;
+        const QRegularExpression made(QStringLiteral("Jahshaka view 'editor-viewport-[^']*': its window target is "
+                                                     "[A-Z0-9_]+, (\\d+) sample\\(s\\)( \\(recreated\\))?"));
+        const QRegularExpression asked(QStringLiteral("a window's target shape \\(a temporary surface\\): [A-Z0-9_]+, "
+                                                      "(\\d+) sample"));
+        for (const QString &line : lines) {
+            if (line.contains(QStringLiteral("[shutdown]"))) break;
+            const QRegularExpressionMatch a = asked.match(line);
+            if (a.hasMatch() && askedSamples < 0) askedSamples = a.captured(1).toInt();
+            const QRegularExpressionMatch m = made.match(line);
+            if (!m.hasMatch()) continue;
+            if (m.captured(2).isEmpty()) { ++created; bornSamples = m.captured(1).toInt(); }
+            else ++recreated;
+        }
+        std::printf("   %s, the editor's window: created %d, recreated %d, born at %d sample(s), the gate asked %d\n",
+                    run, created, recreated, bornSamples, askedSamples);
+        CHECK(created == 1 && recreated == 0 && bornSamples == askedSamples && askedSamples > 1,
+              "the editor's window was created once, at its world's count (the gate's), and never recreated");
         CHECK(encode == 0 && blend == 0,
               "the editor's frames built no final-target pipeline (the gate drew into the window's format and samples)");
     }

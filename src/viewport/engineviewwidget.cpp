@@ -30,12 +30,13 @@ EngineViewWidget::~EngineViewWidget() { destroyView(); }
 
 bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine> &engine,
                                   const QString &name,
-                                  const jahshaka::engine::Colour &background)
+                                  const jahshaka::engine::Colour &background, unsigned samples)
 {
     if (!engine || mView) return false;
     mEngine = engine;
     mViewName = name;
     mBackground = background;
+    mBornSamples = samples;
     mCreateError.clear();
     // OFFSCREEN BY DECLARATION (setOffscreen): no native attempt at all - the View is offscreen from its first frame,
     // with the contract it was declared with.
@@ -58,7 +59,7 @@ bool EngineViewWidget::createView(const std::shared_ptr<jahshaka::engine::Engine
         mView = engine->createView(name.toStdString(),
                                    static_cast<jahshaka::engine::NativeWindowHandle>(winId()),
                                    static_cast<unsigned>(width()),
-                                   static_cast<unsigned>(height()), background);
+                                   static_cast<unsigned>(height()), background, samples);
         if (!mView) mCreateError = QString::fromStdString(engine->lastError());
     }
     // Fallback, not the normal path: if the platform has no on-screen backend, or
@@ -157,7 +158,7 @@ void EngineViewWidget::recreateViewForNewWindow()
     // (see viewAboutToBeDestroyed) — destroyView() is one line away.
     viewAboutToBeDestroyed();
     destroyView();
-    createView(engine, name, background);
+    createView(engine, name, background, mBornSamples);
     pushDrawing();
     viewRecreated();
 }
