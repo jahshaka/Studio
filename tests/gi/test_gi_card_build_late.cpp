@@ -48,6 +48,12 @@
 //               (1) every frame after both refused, while held, is published INCOMPLETE with bit 2; (2) released, the
 //               room comes to rest, complete. RED before the fix: only the card readers' builds (the reflection, the
 //               gather, the glass escape) named their scene - these three refused silently, their frames complete.
+//   complete  - A BUILD IS NEVER JOINED ON A COMPLETE FRAME OF A SCENE ON THE SERVICE (SHADER-SYSTEM-1 stage 7, call 3; the
+//               lead's ruling P1): the card readers' builds held, the engine on the COMPLETE pace - (1) the asynchronous
+//               room: every frame of the hold is published INCOMPLETE by bit 2 and the builds stay in flight (RED before:
+//               a Complete frame joined them - the term never set, the builds landed at once); (2) THE CONTROL, a
+//               SYNCHRONOUS room on the same pace and hold: the builds are joined at once (none in flight), bit 2 never
+//               set - the join kept on purpose where frames are counted.
 //   failwait  - A FAILURE WAITS FOR ITS ANSWER (COLD-BOOT-1's leftover L1): every object's own permutation FAILS
 //               (shaders.asyncFail) on a COLD boot, so its placeholder is still compiling when it fails - (1) those frames
 //               are published INCOMPLETE by a pending skip (bit 1: the object waits for the placeholder it will draw);
@@ -251,10 +257,10 @@ int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "late";
     const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt",
-                                             "window", "failwait", "silent" };
+                                             "window", "failwait", "silent", "complete" };
     if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
-        std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt, window, failwait or "
-                    "silent, not '%s'\n", mode.c_str());
+        std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt, window, failwait, "
+                    "silent or complete, not '%s'\n", mode.c_str());
         return 2;
     }
     std::string err;
@@ -273,6 +279,43 @@ int main(int argc, char **argv)
     int frames = 0;
     char w[320];
     const auto inFlight = [&]() { return e->published().shaders.rayBuildsInFlight; };
+
+    // ---- .complete: a Complete frame of an asynchronous room never joins; a synchronous room does (the control) -------
+    if (mode == "complete") {
+        e->setFramePace(FramePace::Complete);
+        e->setArm("rays.buildHold", kHoldForever);
+        e->setArm("rays.buildHoldIds", kReaderBuilds);
+        for (const bool async : { true, false }) {
+            Room r = buildRoom(e, async ? "build_late_complete_async" : "build_late_complete_sync");
+            if (!r.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+            if (!async) r.view->setAsyncShaders(false);   // THE CONTROL: a synchronous room
+            int withTerm = 0, held = 0;
+            unsigned inFlightMin = ~0u;
+            for (int f = 0; f < kSilentHeldFrames; ++f) {
+                enginetest::frames(e, 1);
+                ++frames;
+                if (f < 2) continue;   // the readers' first call and the term's note at the next frame's head
+                ++held;
+                const PublishedFrame::Completeness c = r.scene->published().completeness;
+                if (c.incomplete && (c.terms & 4u)) ++withTerm;
+                inFlightMin = std::min(inFlightMin, inFlight());
+            }
+            if (async) {
+                std::snprintf(w, sizeof(w), "(1) the asynchronous room on the Complete pace: every held frame INCOMPLETE by "
+                              "bit 2 (%d of %d), the readers' builds still in flight (at least %u) - never joined", withTerm,
+                              held, inFlightMin);
+                check(held > 0 && withTerm == held && inFlightMin >= 1u, w);
+            } else {
+                std::snprintf(w, sizeof(w), "(2) the control, a synchronous room on the same pace and hold: the builds joined "
+                              "(in flight at most %u), bit 2 on %d of %d frames", inFlightMin, withTerm, held);
+                check(held > 0 && withTerm == 0 && inFlightMin == 0u, w);
+            }
+            drop(e, r);
+        }
+        e->setArm("rays.buildHold", 0.0);
+        std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+        return g_fail ? 1 : 0;
+    }
 
     // ---- .silent: the three consumers that refused silently name their scene (bit 2) ---------------------------------
     if (mode == "silent") {

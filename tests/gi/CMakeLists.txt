@@ -1348,7 +1348,15 @@ set_tests_properties(gi.card_build_late.failwait PROPERTIES ENVIRONMENT "QT_QPA_
 jah_gpu_row(gi.card_build_late.silent CLASS engine COMMAND test_gi_card_build_late silent
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.silent PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 805)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 135)
+
+# .complete (SHADER-SYSTEM-1 stage 7, call 3; the lead's ruling P1): a ray build in flight is never joined on a COMPLETE
+# frame of an asynchronous room (its frames incomplete by bit 2); a synchronous room joins it, on purpose (the control).
+# A new row: priced from its solo run, never SHIP.
+jah_gpu_row(gi.card_build_late.complete CLASS engine COMMAND test_gi_card_build_late complete
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.complete PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 60)
 
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,

@@ -651,6 +651,16 @@ add_test(NAME engine.ray_builder_slots COMMAND test_ray_builder_slots)
 set_tests_properties(engine.ray_builder_slots PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.ray_builder_slots)
 
+# engine.ray_ahead_door — THE RAY CONSUMER's DOOR (SHADER-SYSTEM-1 stage 7, call 3; RayAheadDoor.h): a build still running
+# in a scene on the background compiler is never joined, at any pace; a synchronous scene joins it on purpose; a finished
+# build is joined at once. CPU only: no card, no engine.
+add_executable(test_ray_ahead_door test_ray_ahead_door.cpp)
+set_target_properties(test_ray_ahead_door PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_ray_ahead_door PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.ray_ahead_door COMMAND test_ray_ahead_door)
+set_tests_properties(engine.ray_ahead_door PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.ray_ahead_door)
+
 # engine.exit_only_teardown — THE FIXTURES' EXIT (COLD-BOOT-1's added item; spikes/exit-race/VERIFY.md): a fixture that
 # takes the harness's exit-only teardown ends at its engine's death - a handler registered after the boot never runs, and
 # the status is what the run returned; its negative control (no engine: the late handler runs). A headless (NULL) engine
