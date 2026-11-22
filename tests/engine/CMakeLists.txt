@@ -539,7 +539,7 @@ set(JAH_LOBE_PIECES
     "${OGRE_NEXT_HLMS_SOURCE_DIR}/Pbs/Any/JahSpecularAlbedo_piece_all.any")
 add_executable(test_lobe_energy test_lobe_energy.cpp)
 set_target_properties(test_lobe_energy PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
-target_include_directories(test_lobe_energy PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+target_include_directories(test_lobe_energy PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
 jah_glsl_as_cpp(test_lobe_energy OUT jah_lobe_pieces.h PIECES ${JAH_LOBE_PIECES} OUT_PARAMS 5 ARRAYS 1)
 add_test(NAME engine.lobe_energy COMMAND test_lobe_energy)
 set_tests_properties(engine.lobe_energy PROPERTIES TIMEOUT 60 LABELS "engine")
