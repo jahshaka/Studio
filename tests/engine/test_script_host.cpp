@@ -1561,6 +1561,33 @@ int main()
         headless->destroyScene(handed);
     }
 
+    // 13. THE DOCUMENTATION-ONLY HOST (MCP-ON-HOST-1 stage 2.2: jahengine --list, and the MCP server before its first
+    //     tools/call): it LISTS every command and serves NO run and NO call - not even the picture family, which runs
+    //     with no engine (the control: the same call on an ordinary engine-less host runs)
+    {
+        Host::Options docsOnly;
+        docsOnly.documentationOnly = true;
+        Host docs(docsOnly);
+        docs.setConsole([](const std::string &) {});
+        registerEngineCommands(docs, nullptr, "documentation only", false);
+        Host plain;
+        plain.setConsole([](const std::string &) {});
+        registerEngineCommands(plain, nullptr, "no device here", false);
+        const Value picture(Value::Object{{"width", Value(1)}, {"height", Value(1)}, {"rgba", Value::bytes({1, 2, 3, 4})}});
+        const std::string why = "this host lists commands for documentation only";
+        const Result made = docs.call("engine.picture.create", {picture});
+        const Result named = docs.callNamed("engine.picture.create", {{"picture", picture}});
+        const Result indexed = docs.callAt(0, {Value(Value::Object{{"ok", Value(true)}, {"what", Value("never")}})});
+        const Result ran = docs.run("host.check({ok: true, what: 'never'});\n", "docs.js");
+        const bool control = plain.call("engine.picture.create", {picture}).status == Status::Ok;
+        check(docs.registry().commands().size() == plain.registry().commands().size() && docs.registry().commands().size() >= 26 &&
+                  failedWith(made, why) && failedWith(named, why) && failedWith(indexed, why) && failedWith(ran, why) &&
+                  docs.checksRun() == 0 && control,
+              "a documentation-only host lists all " + std::to_string(docs.registry().commands().size()) +
+                  " commands and FAILS every call and run by name, the picture family's too (the control: an "
+                  "engine-less host's engine.picture.create runs): " + made.message);
+    }
+
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
     else std::printf("script.host: PASSED\n");
     return gFail ? 1 : 0;
