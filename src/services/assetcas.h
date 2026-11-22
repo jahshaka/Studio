@@ -106,7 +106,8 @@ bool stage(const QString &root, Staged &file);
 
 /// Flush every copy in `files` to the device — one pass, and the only place in
 /// the two-phase ingest that waits for hardware. Call it before the first
-/// commitStaged of the batch.
+/// commitStaged of the batch. A copy whose flush FAILED is discarded (its temp
+/// removed, its oid cleared, `error` set): its commitStaged fails by that name.
 void flushStaged(QVector<Staged> &files);
 
 /// HOW MANY TIMES THIS PROCESS HAS WAITED FOR THE DEVICE, counted where the

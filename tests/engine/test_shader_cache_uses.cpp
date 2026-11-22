@@ -405,8 +405,7 @@ void runTemps(const std::string &dir) {
             char b;
             if (::read(go[0], &b, 1) != 1) ::_exit(2);   // the parent's open runs while this write is in flight
             if (::write(fd, whole.data() + 4096, 4096) != 4096 || ::close(fd) != 0) ::_exit(2);
-            iris::files::fsyncPath(tmp);
-            ::_exit(iris::files::atomicRename(tmp, iris::files::path(live.target)) ? 0 : 1);
+            ::_exit(iris::files::fsyncPath(tmp) && iris::files::atomicRename(tmp, iris::files::path(live.target)) ? 0 : 1);
         }
         ::close(ready[1]);
         ::close(go[0]);

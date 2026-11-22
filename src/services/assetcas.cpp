@@ -131,8 +131,13 @@ bool storeObject(const QString &srcPath, const QString &root,
         // the exact failure the rename exists to prevent. The directory entry
         // is deliberately NOT fsynced: losing the rename loses the object, and
         // a missing object is a re-ingest, not a corruption.
-        iris::files::fsyncPath(qtstd::toPath(tmpPath));
+        const bool flushed = iris::files::fsyncPath(qtstd::toPath(tmpPath));
         noteDeviceWait();
+        if (!flushed) {   // bytes that may not be on the device are never published under their content's name
+            QFile::remove(tmpPath);
+            if (errorOut) *errorOut = QStringLiteral("cannot flush %1 to its device (fsync failed): nothing stored").arg(dstPath);
+            return false;
+        }
     }
 
     std::string renameError;
@@ -207,10 +212,18 @@ void flushStaged(QVector<Staged> &files)
     // has no bytes of its own, and the directory entry is deliberately not
     // flushed (losing a rename loses an object, which is a re-ingest — losing
     // an object's CONTENT is a corruption, which is what this prevents).
+    // A COPY WHOSE FLUSH FAILED IS DISCARDED, never published: its temp is removed, its oid cleared and its error set, so
+    // its commitStaged fails by that name.
     for (Staged &file : files)
         if (file.copied && !file.tmpPath.isEmpty()) {
-            iris::files::fsyncPath(qtstd::toPath(file.tmpPath));
+            const bool flushed = iris::files::fsyncPath(qtstd::toPath(file.tmpPath));
             noteDeviceWait();
+            if (!flushed) {
+                QFile::remove(file.tmpPath);
+                file.error = QStringLiteral("cannot flush %1 to its device (fsync failed): nothing stored").arg(file.srcPath);
+                file.tmpPath.clear();
+                file.oid.clear();
+            }
         }
 }
 

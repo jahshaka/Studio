@@ -165,8 +165,13 @@ bool copyFileAtomic(const QString &srcPath, const QString &dstPath, QString *err
         if (errorOut) *errorOut = QStringLiteral("copy failed: %1 -> %2").arg(srcPath, dstPath);
         return false;
     }
-    iris::files::fsyncPath(qtstd::toPath(tmpPath));
+    const bool flushed = iris::files::fsyncPath(qtstd::toPath(tmpPath));
     AssetCas::noteDeviceWait();   // the store-move's own wait counts too
+    if (!flushed) {   // a moved file that may not be on the device is never published
+        QFile::remove(tmpPath);
+        if (errorOut) *errorOut = QStringLiteral("cannot flush %1 to its device (fsync failed)").arg(dstPath);
+        return false;
+    }
     std::string renameError;
     if (iris::files::atomicRename(qtstd::toPath(tmpPath), qtstd::toPath(dstPath), &renameError)) return true;
     if (errorOut) *errorOut = qtstd::toQString(renameError);

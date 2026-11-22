@@ -626,7 +626,10 @@ void VideoRecorder::startFastStart()
             QFile::remove(partial);
             return error.isEmpty() ? QStringLiteral("fast-start failed") : error;
         }
-        iris::files::fsyncPath(qtstd::toPath(partial));
+        if (!iris::files::fsyncPath(qtstd::toPath(partial))) {   // a recording that may not be on the device is not published
+            QFile::remove(partial);
+            return QStringLiteral("cannot flush the recording to its device (fsync failed)");
+        }
         return QString();
     }));
 }

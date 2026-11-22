@@ -112,8 +112,7 @@ int main()
         std::FILE *f = std::fopen(tmp.c_str(), "wb");
         std::fwrite(big.data(), 1, big.size(), f);
         std::fclose(f);
-        fsyncPath(tmp);
-        ::_exit(42);                         // dies here: no rename
+        ::_exit(fsyncPath(tmp) ? 42 : 43);   // dies here: no rename
     }
     ::waitpid(child, &st, 0);
     const auto left = temps(dir);
@@ -159,9 +158,8 @@ int main()
         std::fputs("STAGED", f);
         std::fclose(f);
     }
-    fsyncPath(staged);
     std::string err;
-    check(atomicRename(staged, target, &err) && readAll(target) == std::string("STAGED"), "the staged steps replaced the file whole");
+    check(fsyncPath(staged) && atomicRename(staged, target, &err) && readAll(target) == std::string("STAGED"), "the staged steps replaced the file whole");
     check(!atomicRename(dir / "no-such.tmp", dir / "x", &err) && err.find("could not place") == 0, "a failed rename says so: " + err);
 
     // ---- a non-ASCII UTF-8 path; a missing file
