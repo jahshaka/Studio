@@ -610,3 +610,4 @@ engine.ray_view_cache 0.00  solo 2026-11-22 at 1c3544dd9 (spec.sh reprice, run 2
 source.ray_views_cached 0.33  solo 2026-11-22 at 1c3544dd9 (spec.sh reprice, run 20261122T115628-1c3544dd9)
 source.card_report_layout 0.04  solo 2026-11-22 at 1c3544dd9 (spec.sh reprice, run 20261122T115708-1c3544dd9)
 source.ray_loops_bounded 0.09  solo 2026-11-22 at a29828fac (spec.sh reprice, run 20261122T120235-a29828fac)
+engine.ray_input_guard 0.00  solo 2026-11-22 at c09490de1 (spec.sh reprice, run 20261122T123300-c09490de1)
