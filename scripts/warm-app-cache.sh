@@ -45,12 +45,11 @@
 #   --check          the answer alone, never a boot: exit 0 warm, 3 cold.
 #   --rig            a DISPLAY that is not a rig (outside :60-:99 - :0 is the OWNER's) is set aside and the tree's rig taken;
 #                    without it such a DISPLAY is REFUSED (exit 2) before any boot (URGENT #195; scripts/display-guard.sh).
-#   --inherit <b>    A FRESH TREE TAKES ITS PARENT's WARM CACHES AT AN EQUAL KEY (TEST-STREAMLINE-1 1a; `spec.sh new` calls it
-#                    after the build): <b> is the parent tree's build dir. Its key, computed by THIS script, must equal this
-#                    tree's (else exit 3, nothing taken); then each shared cache the parent holds stamped at the key, passing
-#                    its own manifest (#117) and not warm here already, is taken under the parent's shared lock - by hard links
-#                    (the files are never written in place: a promotion renames a new directory over the old), with its
-#                    stamps; the -off boot's dump at the key; each cold row the parent primed at the key
+#   --inherit <b>    A FRESH TREE TAKES ITS PARENT's COLD-ROW PRIMES AT AN EQUAL KEY (TEST-STREAMLINE-1 1a; `spec.sh new` calls
+#                    it after the build): <b> is the parent tree's build dir. Its key, computed by THIS script, must equal this
+#                    tree's (else exit 3, nothing taken). NEVER THE TWO SHARED CACHES (WARM-SHARE-1 B4): the box's warm store
+#                    is the one way a tree takes another's warm shader caches (its first warm-up call, at the key, no card).
+#                    Taken: each cold row the parent primed at the key
 #                    for the same registration (paths aside) and the same media by content, with its private driver cache
 #                    (a *CACHE*PATH* value under the parent's build: COPIED - the driver writes it in place) and its startup seed (a directory beside its working dir
 #                    holding tree-key.txt - its own freshness check still judges it). Prints what it took and what is still
@@ -305,7 +304,7 @@ what_of() {
         cold-on) echo "the cold rows' own caches" ;;
     esac
 }
-# ---- THE INHERITANCE (TEST-STREAMLINE-1 1a): a fresh tree takes its PARENT's warm caches at an EQUAL key ----------------
+# ---- THE INHERITANCE (TEST-STREAMLINE-1 1a): a fresh tree takes its PARENT's cold-row primes at an EQUAL key ------------
 if [ -n "$INHERIT" ]; then
     PB=$(cd "$INHERIT" 2>/dev/null && pwd) || { echo "warm-app-cache: --inherit: no build dir $INHERIT" >&2; exit 64; }
     [ "$PB" != "$BUILD" ] || { echo "warm-app-cache: --inherit: the parent is this build" >&2; exit 64; }
@@ -317,40 +316,25 @@ if [ -n "$INHERIT" ]; then
         exit 3
     fi
     got=""
-    # take <src> <dst> [copy]: a cache directory into a sibling first, then renamed over ours under OUR lock - BY HARD LINKS
-    # only where every writer of its files REPLACES them by rename (the engine's caches: cachefile::writeAtomic; a promotion
-    # renames a new directory over the old, fresh_home.sh), else COPIED (`copy`): the NVIDIA driver writes its cache files
-    # IN PLACE (it grows a GLCache .bin mid-run), so a linked driver cache would let a child write its parent's file (the
-    # stage-1 audit's finding 1); the cold rows' seeds likewise (their stamps are written by a test, not by rename)
+    # take <src> <dst>: a directory COPIED into a sibling first, then renamed over ours under OUR lock - every thing taken here
+    # is written IN PLACE by its writer (the NVIDIA driver grows a GLCache .bin mid-run; a seed's stamp is written by a test),
+    # so a link would let a child write its parent's file (the stage-1 audit's finding 1)
     take() {
         local nxt="$2.inherit.$$"
         mkdir -p "$(dirname "$2")"; rm -rf "$nxt"
-        if [ "${3:-}" = copy ]; then cp -a "$1" "$nxt" || { rm -rf "$nxt"; return 1; }
-        else cp -al "$1" "$nxt" 2>/dev/null || { rm -rf "$nxt"; cp -a "$1" "$nxt"; } || { rm -rf "$nxt"; return 1; }
-        fi
+        cp -a "$1" "$nxt" || { rm -rf "$nxt"; return 1; }
         ( flock -w 60 9 || exit 1; rm -rf "$2.old.$$"; [ -e "$2" ] && mv "$2" "$2.old.$$"; mv "$nxt" "$2"; rm -rf "$2.old.$$" ) \
             9>"$2.lock"
     }
-    # the two shared caches: the parent's stamped at this key and passing its own manifest, ours not warm at it
-    for c in app engine; do
-        if [ $c = app ]; then sh_=.shadercache; st=.warm-key; dk=.driver-key; else sh_=.shadercache-engine; st=.warm-key; dk=.driver-key; fi
-        P="$PT/$sh_"; M="$TESTS/$sh_"
-        [ -f "$P$st" ] && [ "$(sed -n 1p "$P$st")" = "$KEY" ] && [ "$(sed -n 2p "$P$st")" = "$(layer_keys "$P")" ] || continue
-        if [ -f "$M$st" ] && [ -z "$(cold_why "$M" "$M$st")" ]; then continue; fi
-        ( flock -s -w "${JAH_INHERIT_LOCK_WAIT:-60}" 9 || exit 1   # (the knob: tooling.warm_inherit's held lock, seconds)
-          python3 -I "$SRC/tests/support/shadercache_check.py" "$P" > /dev/null || exit 1
-          take "$P" "$M" ) 9>"$P.lock" || { echo "warm-app-cache: the parent's $sh_ not taken (its lock, or its manifest)"; continue; }
-        cp "$P$st" "$M$st"
-        [ -f "$P$dk" ] && [ "$(sed -n 1p "$P$dk")" = "$KEY" ] && cp "$P$dk" "$M$dk"
-        got="$got $sh_ ($(du -sh "$M" | cut -f1))"
-    done
+    # (THE TWO SHARED CACHES ARE NOT INHERITED: the box's warm store is the one way a tree takes another's - its first warm-up
+    #  call takes them at the key, no card (WARM-SHARE-1 B4); this tree's own -on stamps follow its own boots)
     [ -f "$TESTS/.warm-walls" ] || { [ -f "$PT/.warm-walls" ] && cp "$PT/.warm-walls" "$TESTS/.warm-walls"; }
     # the seeded library template (TEST-STREAMLINE-1 3a item 5), COPIED - a home writes its library in place - when the
     # parent's is at this tree's seed key (its own, not the warm key: tests/support/seed_home.sh)
     bk=$(sh "$SRC/tests/support/seed_home.sh" key "$TESTS")
     if [ -n "$bk" ] && [ "$(head -1 "$PT/.seedhome/seed-key" 2>/dev/null)" = "$bk" ] \
            && [ "$(head -1 "$TESTS/.seedhome/seed-key" 2>/dev/null)" != "$bk" ]; then
-        take "$PT/.seedhome" "$TESTS/.seedhome" copy && got="$got .seedhome"
+        take "$PT/.seedhome" "$TESTS/.seedhome" && got="$got .seedhome"
     fi
     # THE COLD ROWS: each row the parent primed at this key, for the same registration (paths aside) and the same staged
     # media by content, takes the parent's stamp and the row's own state - its private driver cache (a *CACHE*PATH* value
@@ -373,12 +357,12 @@ if [ -n "$INHERIT" ]; then
             wd=${f[1]}
             for a in "${f[@]:2}"; do
                 for v in $(printf '%s' "$a" | tr '\037' '\n'); do
-                    case "$v" in *CACHE*PATH*=*) d=${v#*=}; case "$d" in "$PB"/*) [ -d "$d" ] && take "$d" "$BUILD/${d#"$PB"/}" copy ;; esac ;; esac
+                    case "$v" in *CACHE*PATH*=*) d=${v#*=}; case "$d" in "$PB"/*) [ -d "$d" ] && take "$d" "$BUILD/${d#"$PB"/}" ;; esac ;; esac
                 done
             done
             for sd in "$wd"/*/; do
                 rel=${sd%/}; rel=${rel#"$PB"/}
-                [ -f "$sd/tree-key.txt" ] && case "$sd" in "$PB"/*) take "${sd%/}" "$BUILD/$rel" copy ;; esac
+                [ -f "$sd/tree-key.txt" ] && case "$sd" in "$PB"/*) take "${sd%/}" "$BUILD/$rel" ;; esac
             done
             printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
         done < "$COLDROWS"

@@ -457,12 +457,11 @@ grep -v SHADER_CACHE_CODE_ID "$T/id.bak" > "$KB/engine/generated/jahshaka_engine
 [ $r = 2 ] && ok "a build id header without the code id (an unbuilt or older tree): no key, exit 2 - never a key without the cache's code" || no "no code id: rc $r"
 fi
 if want inherit; then
-# THE INHERITANCE (TEST-STREAMLINE-1 1a; the reader's I1-I7): a parent toy tree warm at its key (both shared caches stamped,
-# one generation each; a cold row primed, its private driver cache and its startup seed beside it) and a child toy tree of
-# the same content at another path. --inherit: the child reads warm with no boot (I1); its files are the parent's bytes and a
-# child promotion (a rename over its cache) leaves the parent's untouched (I2); a child whose key differs takes nothing (I3);
-# a TORN parent cache is not taken (I4, #117); the parent's cache lock held - not taken, no torn copy (I5); the cold row's
-# stamp, its driver cache and its seed taken (I6/I7, the path-free stamps of 1a-1)
+# THE INHERITANCE (TEST-STREAMLINE-1 1a; the reader's I1-I7; WARM-SHARE-1 B4): a parent toy tree warm at its key (both shared
+# caches stamped; a cold row primed, its private driver cache and its startup seed beside it) and a child toy tree of the same
+# content at another path. --inherit: the cold row's stamp, its driver cache and its seed taken (I6/I7, the path-free stamps of
+# 1a-1), the two shared caches NEVER (I1: the box's warm store is the one way); the child's driver writing its taken files
+# leaves the parent's as they were (I2b); a child whose key differs takes nothing (I3).
 [ "$PART" = inherit ] && toy_tree() {   # (the keys part's helper; this part may run alone)
     local b="$1/build"
     mkdir -p "$b/engine/generated" "$b/bin/media/Hlms" "$b/bin/media/Photon" "$b/bin/media/x" "$b/tests/row" "$b/tests/.shadercache"
@@ -485,29 +484,22 @@ out=$(IX "$PB" --check); rc=$?
 [ $rc = 0 ] && ok "the parent toy tree warm at $pk (every boot)" || no "the parent toy tree: '$out' rc $rc"
 out=$(IX "$CB" --check); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'no warm-up recorded' && ok "...the child, the same content at another path: cold before" || no "the child before: '$out' rc $rc"
-# I5 first: the parent's app cache lock held - that cache is not taken (no torn copy), the rest is
-exec 7>"$PT/.shadercache.lock"; flock 7
-out=$(JAH_INHERIT_LOCK_WAIT=1 IX "$CB" --inherit "$PB"); rc=$?
-exec 7>&-
-[ $rc = 0 ] && echo "$out" | grep -q "the parent's .shadercache not taken (its lock, or its manifest)" && [ ! -e "$CT/.shadercache/cache-manifest.txt" ] &&
-    [ -f "$CT/.shadercache-engine/cache-manifest.txt" ] && echo "$out" | grep -q '1 cold row(s)' &&
-    ok "I5: the parent's cache lock held - that cache NOT taken (no torn copy), the engine's and the cold row taken" ||
-    no "I5 the held lock: '$out' rc $rc"
+# I1 (WARM-SHARE-1 B4: THE STORE IS THE ONE WAY): --inherit takes the parent's cold-row prime - its stamp, its private driver
+# cache, its startup seed - and NEVER the two shared caches: the child's app and engine caches stay its own (cold here; the
+# box's warm store serves them at its first warm-up). (red on the old script: both shared caches taken, the child "warm")
 out=$(IX "$CB" --inherit "$PB"); rc=$?
-[ $rc = 0 ] && echo "$out" | grep -q "inherited at $pk from $PB: .shadercache (" && ! echo "$out" | grep -q 'cold row' &&
-    echo "$out" | grep -q 'still to warm here: nothing' && ok "I1: --inherit again - the app cache taken now, the primed cold row not again, nothing left to warm" ||
+[ $rc = 0 ] && echo "$out" | grep -q "inherited at $pk from $PB: 1 cold row(s)" && ! echo "$out" | grep -q '\.shadercache' &&
+    [ ! -e "$CT/.shadercache/cache-manifest.txt" ] && [ ! -e "$CT/.shadercache-engine/cache-manifest.txt" ] &&
+    [ ! -e "$CT/.shadercache.warm-key" ] && [ ! -e "$CT/.shadercache.driver-key" ] &&
+    ok "I1: --inherit takes the cold row's prime and NEVER the two shared caches (the store is the one way, B4)" ||
     no "I1 inherit: '$out' rc $rc"
 out=$(IX "$CB" --check); rc=$?
-[ $rc = 0 ] && [ "$out" = "warm at $pk" ] && ok "...the child reads warm with no boot (every boot, cold-on included)" || no "the child after: '$out' rc $rc"
-cmp -s "$PT/.shadercache/hlms.1.bin" "$CT/.shadercache/hlms.1.bin" && [ -f "$CT/row/dc/GLCache.bin" ] && [ -f "$CT/row/seed-x/tree-key.txt" ] &&
+[ $rc = 3 ] && echo "$out" | grep -q "the app rows' cache (app-off): no warm-up recorded" && ! echo "$out" | grep -q '(cold-on)' &&
+    ok "...the child's cold rows warm, its shared caches cold until the store or a boot warms them" || no "the child after: '$out' rc $rc"
+[ -f "$CT/row/dc/GLCache.bin" ] && [ -f "$CT/row/seed-x/tree-key.txt" ] &&
     [ "$(sed -n 2,3p "$CT/.cold-rows/p.cold.driver-key")" = "$(sed -n 2,3p "$PT/.cold-rows/p.cold.driver-key")" ] &&
-    ok "I6/I7: the cache's bytes, the cold row's private driver cache and its seed taken; its stamp the parent's, paths aside" ||
+    ok "I6/I7: the cold row's private driver cache and its seed taken; its stamp the parent's, paths aside" ||
     no "I6/I7: the taken state"
-# I2: a child promotion renames a new directory over its cache - the parent's files stay as they were
-mkdir -p "$CT/.shadercache.next"; printf 'NEW' > "$CT/.shadercache.next/hlms.1.bin"
-rm -rf "$CT/.shadercache"; mv "$CT/.shadercache.next" "$CT/.shadercache"
-[ "$(cat "$PT/.shadercache/hlms.1.bin")" = 0123456789 ] && python3 -I "$CK" "$PT/.shadercache" > /dev/null &&
-    ok "I2: a child promotion (a rename over its cache) leaves the parent's cache whole" || no "I2: the parent's cache changed"
 # I2b (the stage-1 audit's finding 1): the DRIVER writes its cache file in place - a child's driver appending to the taken
 # cache must leave the parent's bytes as they were (red when the inheritance hard-linked it)
 printf 'grown by the child' >> "$CT/row/dc/GLCache.bin"; printf 'x' >> "$CT/row/seed-x/tree-key.txt"
@@ -519,11 +511,6 @@ toy_tree "$T/iD"; DB="$T/iD/build"; printf 'H' > "$DB/bin/media/Hlms/a.any"
 out=$(IX "$DB" --inherit "$PB"); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q "inherited nothing - the parent's key $pk is not this tree's" && [ ! -e "$DB/tests/.shadercache.warm-key" ] &&
     ok "I3: a child at another key: nothing taken, exit 3" || no "I3 another key: '$out' rc $rc"
-# I4: a TORN parent cache (a file of other bytes than its manifest) is not taken
-toy_tree "$T/iE"; EB="$T/iE/build"; printf '9876543210' > "$PT/.shadercache/hlms.1.bin.t"; mv "$PT/.shadercache/hlms.1.bin.t" "$PT/.shadercache/hlms.1.bin"
-out=$(IX "$EB" --inherit "$PB"); rc=$?
-[ $rc = 0 ] && echo "$out" | grep -q "the parent's .shadercache not taken" && [ ! -e "$EB/tests/.shadercache/cache-manifest.txt" ] &&
-    ok "I4: a TORN parent cache is not taken (#117)" || no "I4 torn: '$out' rc $rc"
 fi
 if want store; then
 # THE BOX's WARM STORE (URGENT #193's class; the lead's design 2026-11-21): JAH_WARM_STORE names a store directory (the lead's
