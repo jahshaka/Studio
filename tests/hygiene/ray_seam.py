@@ -8,7 +8,8 @@ and touches no reader. THE LAW, comments stripped (webgpu_census.strip, the one 
       any text the app compiles outside jah_rq.glsl: irisgl/engine's src, media and include (shaders, Hlms pieces and
       C++), and EVERY FOLDER THE ENGINE STAGES (the shaders of each `copy_directory` source of irisgl
       engine/CMakeLists.txt's media staging, resolved by the CMake files' own set() lines - so a newly staged folder is
-      read without anyone remembering it, and a source the row cannot resolve is RED); RED with every site;
+      read without anyone remembering it; a source the row cannot resolve, and a staging line in a form it does not
+      parse - unquoted, `-E copy` / `copy_if_different`, `file(COPY` - are RED); RED with every site;
   (2) jah_rq.glsl holds nothing but #defines, its include guard and comments - no function, so the seam adds no
       OpFunction and no OpName and the compiled words stay the card's own (DOORS-0's byte proof); RED with every other
       line; a missing seam is RED;
@@ -45,6 +46,7 @@ OGRE_CMAKE = 'cmake/IncludeOgre.cmake'
 FLOORS = {'engine': 335, 'staged': 115}
 SEAM_LINE = re.compile(r'#\s*(define\s+\w+|ifndef\s+JAH_RQ_GLSL\s*$|endif\s*$)')
 COPY = re.compile(r'copy_directory\s+"\$\{(\w+)\}([^"]*)"')
+STAGE_FORM = re.compile(r'\bcopy_directory\b|-E\s+copy(_if_different)?\b|\bfile\s*\(\s*COPY\b')
 SET = re.compile(r'^\s*set\(\s*(\w+)\s+"([^"]*)"', re.M)
 DIRNAME = re.compile(r'get_filename_component\(\s*(\w+)\s+"\$\{(\w+)\}"\s+DIRECTORY\s*\)')
 
@@ -64,7 +66,10 @@ def staged(engine_cmake, ogre_cmake):
         for name, of in dirs:
             if of in var:
                 var.setdefault(name, os.path.dirname(var[of]))
-    out, bad = [], []
+    # a staging line the parser does not match (unquoted, a file copy, file(COPY)) is unresolved, never unseen
+    code = [x.split('#', 1)[0] for x in engine_cmake.split('\n')]
+    bad = ['(a staging line the row does not parse) ' + l.strip() for l in code if STAGE_FORM.search(l) and not COPY.search(l)]
+    out = []
     for name, sub in COPY.findall(engine_cmake):
         if name in var:
             out.append((var[name] + sub).strip('/'))
@@ -188,6 +193,13 @@ def self_test():
         bad.append('the staging resolved %r unresolved %r, want %r and the new variable' % (got, unres, want))
     if not any('cannot resolve' in r for r in judge([(SEAM, seam)], unresolved=unres)):
         bad.append('an unresolved staging source did not red')
+    # a staging line in a form the parser does not match (unquoted, a file copy, file(COPY)) is unresolved too, never
+    # unseen; the same forms in a comment are not staging
+    for line in ('COMMAND ${CMAKE_COMMAND} -E copy_directory ${OGRE_NEXT_IBL_MEDIA_DIR} "${JAHSHAKA_MEDIA_DIR}/I"',
+                 'COMMAND ${CMAKE_COMMAND} -E copy_if_different "${OGRE_NEXT_IBL_MEDIA_DIR}/a.glsl" "x"',
+                 'file(COPY "${OGRE_NEXT_IBL_MEDIA_DIR}/b" DESTINATION "x")'):
+        if len(staged(eng + line + '\n# ' + line + '\n', ogre)[1]) != 2:
+            bad.append('the unmatched staging form %r was not unresolved exactly once' % line)
     # THE READING (3): a tree whose fork path is broken - the engine's staging names folders that are not there - reads
     # none of them and reds at its floor; the same tree with one staged file in place reads it
     with tempfile.TemporaryDirectory(prefix='ray-seam-') as t:
