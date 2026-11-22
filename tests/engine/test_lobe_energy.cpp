@@ -43,7 +43,8 @@
 // GUARDS: f( L, V ) = f( V, L ) exactly (Form B, today's diffuse, the shipped specular); kS 0 -> Form B = rho / pi exactly
 // (today's Disney ignores kS: an arm); Es <= 1 (a metal returns at most what it receives).
 // PRINTED, NOT GATED (the lead's rulings 3 and 4): an area light's coupling at its centre direction against the exact
-// ( 1 - Es )-weighted rectangle, and at the form-factor vector's direction (over 1 % anywhere: back to the lead); the
+// ( 1 - Es )-weighted rectangle, and at the form-factor vector's direction (ruling 3 reversed by its own 1 % trigger: P8 (a)
+// takes the form-factor vector, -43 % -> -3.2 % for a horizon-clipped wide light; -6.2 % stays at grazing, r 0); the
 // coupling's roughness - jahLobePerceptualRoughness against the material's (specular AA) and against a sphere light's
 // widened alpha.
 #include <algorithm>
@@ -409,7 +410,8 @@ int main()
                 std::printf("   %2.0f deg wide, centre mu %.1f: centre %+8.3f %% (F0 %.2f, r %.2f) | form-factor vector %+8.3f %%\n",
                             widthDeg, muc, 100.0 * worstC, f0C, rC, 100.0 * worstF);
             }
-        if (over) std::printf("   THE CENTRE COUPLING IS OVER 1 %% ON THIS GRID: back to the lead (ruling 3)\n");
+        if (over) std::printf("   the centre is over 1 %% on this grid: RULED P8 (a) - the area light takes the FORM-FACTOR VECTOR; its "
+                              "residual at grazing on a smooth dielectric is a later item (the coupling over the solid angle)\n");
     }
 
     // ---- PRINTED (ruling 4): the roughness the coupling reads
