@@ -690,9 +690,17 @@ cold_boot() {
     # 15-s margin comes off the first wait too (#122's proof: the seed finished 1 s inside the bound after a 248-s wait)
     deadline=$(( T0 + BUDGET - 15 ))
     WAIT=$(( WAIT - 15 )); [ "$WAIT" -ge 1 ] || WAIT=1
+    # WHAT IT WILL PRIME AND FOR HOW LONG, before the first hold (URGENT #204: a lane waited 745 s behind a 14-row prime it could
+    # not see coming): the rows' own prices summed from the price file (JAH_GATE_TIMES: a toy's), the unpriced named
+    local expect=0 unpriced="" r p prices=${JAH_GATE_TIMES:-$SRC/scripts/gate-times.txt}
+    for r in $names; do
+        p=$(awk -v r="$r" '$1 == r { print $2; exit }' "$prices" 2>/dev/null)
+        case "$p" in ''|*[!0-9.]*) unpriced="$unpriced $r" ;; *) expect=$(awk -v a="$expect" -v b="$p" 'BEGIN { print a + b }') ;; esac
+    done
     echo "warm-app-cache: booting $(what_of cold-on) (cold-on): $(printf '%s\n' "$todo" | grep -c .) of $(grep -c . "$COLDROWS")" \
          "row(s) on $DISPLAY, one at a time, each its own hold, uncapped (to the call's end, $(( deadline - $(date +%s) )) s from" \
-         "now; each row's card wait at most ${WAIT} s): $names"
+         "now; each row's card wait at most ${WAIT} s), expected ~$(printf '%.0f' "$expect") s by the rows' prices" \
+         "(${prices##*/}${unpriced:+; unpriced:$unpriced}): $names"
     t0=$(date +%s)
     ( H="$TESTS/warm-cold-home"; rm -rf "$H"; mkdir -p "$H"
       HOME="$H" JAH_COLD_ONLY="$names" JAH_COLD_WAIT="$WAIT" env -u __GL_SHADER_DISK_CACHE $(cov_env cold-on) nice -n 10 \

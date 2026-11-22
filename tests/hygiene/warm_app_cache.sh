@@ -298,7 +298,12 @@ if want cold; then
 out=$("$W" "$BUILD" --check --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q "the cold rows' own caches (cold-on): 1 of 1 to prime: x.cold (no prime recorded)" &&
     ok "a cold row listed, never primed at the key: cold-on cold, the row named, exit 3" || no "cold-on unstamped: '$out' rc $rc"
-out=$(JAH_GONE_X=1 JAHSHAKA_SHADER_CACHE_DIR=/x __GL_SHADER_DISK_CACHE=0 DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+printf '# toy prices\nx.cold 12.6  a toy line\n' > "$T/prices.txt"
+out=$(JAH_GATE_TIMES="$T/prices.txt" JAH_GONE_X=1 JAHSHAKA_SHADER_CACHE_DIR=/x __GL_SHADER_DISK_CACHE=0 DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B/tests" "${C[@]}" --only cold-on); rc=$?
+# (URGENT #204: what it will prime and for how long, said before its first hold)
+echo "$out" | grep -q "^warm-app-cache: booting .* (cold-on): 1 of 1 row(s) on :99, .*, expected ~13 s by the rows' prices (prices.txt): x.cold$" &&
+    ok "cold-on says what it will prime before its first hold: the rows, their count, ~13 s by the price file (#204)" ||
+    no "cold-on's line (#204): $(echo "$out" | grep 'booting' | head -1)"
 [ $rc = 0 ] && echo "$out" | grep -q '^warm_cold_rows: x.cold: PRIMED - its run [0-9]* s (exit 3; .*its own red, printed: FAIL: its own law' &&
     [ "$(sed -n 1p "$CS/x.cold.driver-key" 2>/dev/null)" = "$key" ] &&
     [ "$(cat "$T/cold-ran" 2>/dev/null)" = "$T/cwd|arg1|unset|on|epic photon|unset" ] &&
