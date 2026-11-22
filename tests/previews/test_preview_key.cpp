@@ -14,19 +14,17 @@ For more information see the LICENSE file
 //
 //   1. it MOVES on each input alone: a definition oid, a member oid, the project pin, the preset's
 //      version (here: a row of another preset with the same content), previewenv's version;
-//   2. it is EQUAL under a rename (no name is an input) and under any order of the two oid lists;
+//   2. it is EQUAL under any order of the two oid lists (no name is an input: the RENAME law is the
+//      catalog's, driven by assets.rename in scripting.e2e.previews_state);
 //   3. previewenv's version moves a MATERIAL's key and NOT a TEXTURE's (a texture's tile is its
 //      own pixels: the studio is not in it — the lead's ruling A3);
 //   4. a row with no content of its own (no file, no pin) keys on its GUID: two such rows differ,
 //      the same row is equal; a row WITH content does not key on its guid (a copy keeps its key);
-//   5. a type with no preset (Mesh, Sky, a SoundEffect today) has no key;
-//   6. the NEGATIVE CONTROL: a NAME-KEYED key (the key with the name folded in) breaks law 2's
-//      rename half — the row asserts that its own law catches it.
+//   5. a type with no preset (Mesh, Sky, a SoundEffect today) has no key.
 
 #include <algorithm>
 #include <cstdio>
 
-#include <QCryptographicHash>
 
 #include "data/project.h"
 #include "services/previewkey.h"
@@ -51,12 +49,6 @@ previews::KeySource material()
     return s;
 }
 
-/// The negative control: what a key that also hashed the row's NAME would answer.
-QString nameKeyed(const previews::KeySource &s, const QString &name, int env)
-{
-    return QString::fromLatin1(QCryptographicHash::hash((previews::key(s, env) + name).toUtf8(),
-                                                        QCryptographicHash::Sha256).left(8).toHex());
-}
 
 }   // namespace
 
@@ -92,16 +84,11 @@ int main()
     s.type = int(ModelTypes::Object);   // the ASSET preset over the same content
     check(previews::key(s, env) != k, "the preset is in the key (same content, another preset)");
 
-    // 2. Rename and order.
+    // 2. Order.
     s = base;
     std::reverse(s.files.begin(), s.files.end());
     std::reverse(s.members.begin(), s.members.end());
     check(previews::key(s, env) == k, "the oid lists' order is not in the key");
-    // A rename changes no input of KeySource: the name is not one of its fields. The law is then
-    // the negative control's: a key that DID read the name would move.
-    check(nameKeyed(base, QStringLiteral("Brick"), env) != nameKeyed(base, QStringLiteral("Brick 2"), env),
-          "NEGATIVE CONTROL: a name-keyed key moves on a rename (the law catches it)");
-    check(previews::key(base, env) == k, "the real key is equal across the rename");
 
     // 3. The studio is not in a texture's key.
     previews::KeySource tex;

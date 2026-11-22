@@ -9,7 +9,9 @@
 //      and a graph edit saved by graph.save each MOVE its key while storedKey stays empty (a texture
 //      added with no slot changes no picture: the key stays);
 //   3. a Texture import reads 'stale' (the importer's tile carries no key until stage 2 routes the
-//      import's commit), and 'ok' after previews.render (its CPU branch), key == storedKey;
+//      import's commit), and 'ok' after previews.render (its CPU branch), key == storedKey; A RENAME
+//      (assets.rename) of the material and of the texture moves NEITHER key nor state: no name is in
+//      what a preview depicts;
 //   4. previews.render of a MATERIAL headless fails by name and changes nothing ('missing' still);
 //   5. `type` filters to one type; `scope: "project"` lists only the open project's pinned rows;
 //   6. A SCRIPT THAT WRITES, THEN previews.renderAll over more rows than the writer's cap (8): the run's
@@ -86,6 +88,14 @@ var rendered = previews.render(t);
 assert(rendered.ok === true, "previews.render(texture) headless: " + J(rendered));
 var t1 = rowOf(t);
 assert(t1.state === "ok" && t1.key === t1.storedKey && t1.key === t0.key, "...now 'ok', key == storedKey: " + J(t1));
+assert(assets.rename(t, "Renamed Texture " + stamp) === true, "assets.rename(texture)");
+var t2 = rowOf(t);
+assert(t2.key === t1.key && t2.state === "ok", "a RENAME moves neither the texture's key nor its state: " + J(t2));
+var mBefore = rowOf(m);
+assert(assets.rename(m, "Renamed Probe " + stamp) === true, "assets.rename(material)");
+var mAfter = rowOf(m);
+assert(mAfter.key === mBefore.key && mAfter.state === mBefore.state,
+       "a RENAME moves neither the material's key nor its state: " + J(mAfter));
 
 // ---- 4. A MATERIAL HEADLESS: A NAMED FAILURE THAT CHANGES NOTHING -----------------------------
 var failed = previews.render(m);

@@ -2,8 +2,8 @@
 
 # previews.key — the preview key moves with what the picture depicts and with nothing else: each
 # input alone (a definition oid, a member oid, the project pin, the preset, previewenv's version for a
-# studio-lit preset only), equal under a rename and any oid order, the guid only for a row with no
-# content; negative control a name-keyed key. The pure function: services/previewkey.cpp alone.
+# studio-lit preset only), equal under any oid order (the rename law: scripting.e2e.previews_state), the guid only for a row with no
+# content. The pure function: services/previewkey.cpp alone.
 find_package(Qt6 REQUIRED COMPONENTS Core)
 add_executable(test_preview_key test_preview_key.cpp ${CMAKE_SOURCE_DIR}/src/services/previewkey.cpp)
 set_target_properties(test_preview_key PROPERTIES CXX_STANDARD 17 AUTOMOC OFF)
