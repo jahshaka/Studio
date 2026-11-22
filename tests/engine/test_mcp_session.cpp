@@ -57,6 +57,7 @@ static std::string toolCall(const std::string &id, const std::string &tool, cons
 /// One session over the synthetic hosts, every line it sends kept (text and parsed).
 struct Rig {
     int docsMade = 0, engineMade = 0, polls = 0;
+    Host::Options engineOptions, docsOptions;   // what the session STATED for each host it asked for
     bool faulty = false;
     std::vector<std::string> sent, logged;
     std::vector<Value> parsed;
@@ -70,6 +71,7 @@ struct Rig {
         mcp::Session::Doors d;
         d.makeHost = [this](const Host::Options &o, bool engine) {
             ++(engine ? engineMade : docsMade);
+            (engine ? engineOptions : docsOptions) = o;
             auto h = std::make_unique<Host>(o);
             Host *hp = h.get();
             Registry &r = h->registry();
@@ -218,6 +220,11 @@ int main()
         check(second["result"]["structuredContent"]["result"] == Value("undefined") && g.engineMade == 1 && g.docsMade == 0,
               "a FRESH realm per run_script (a global of the last call is undefined); the engine host made ONCE, and "
               "api_docs after it reads that host (no docs host made)");
+        const Host::Options &e = g.engineOptions;
+        check(e.freshRealmPerRun && e.outsideClient && e.memoryLimit == mcp::kHeapLimit && e.heapLimit() == (32u << 20) &&
+                  e.completionBounds && e.completionBounds->bytes == mcp::kCompletionBounds.bytes && !e.documentationOnly,
+              "the session STATES its engine host's options: a fresh realm, an outside client (engine.arm refused), the "
+              "32 MiB heap limit and the completion bounds");
         const Value pic = g.one(toolCall("10", "picture", "{\"pictures\":[1]}"));
         check(pic["result"]["isError"] == Value(true), "picture is an error result until stage 3");
     }

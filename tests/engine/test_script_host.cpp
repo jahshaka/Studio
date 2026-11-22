@@ -1684,6 +1684,39 @@ int main()
         const Result dropped = plainHost.run("'x'.repeat(5000)\n", "dropped.js");
         check(dropped.status == Status::Ok && dropped.value.isNull(),
               "with no completion bounds stated (jahengine) the completion value is dropped and the run is Ok");
+        // THE DOOR's REFUSED CLASSES (SCRIPT-IN-ENGINE-1 2b, D1 / R1) reach the completion value too: each FAILS the run
+        // by its class, before a key is listed; a Uint8Array is carried (bytes: the control)
+        const char *refused[] = {"new Proxy({a: 1}, {})", "new Int8Array(4)", "new String('s')",
+                                 "(function () { return arguments; })(1, 2)", "new DataView(new ArrayBuffer(4))"};
+        int byClass = 0;
+        std::string said;
+        for (const char *src : refused) {
+            const Result x = h.run(std::string(src) + "\n", "refused.js");
+            byClass += failedWith(x, cannot) && x.message.find("its class is ") != std::string::npos;
+            said += x.message.substr(x.message.find("its class is ") == std::string::npos ? 0 : x.message.find("its class is ")) + "; ";
+        }
+        const Result bytes = h.run("new Uint8Array([1, 2, 3])\n", "bytes.js");
+        check(byClass == 5 && bytes.status == Status::Ok && bytes.value == Value::bytes({1, 2, 3}),
+              "a completion value that is a Proxy, an Int8Array, a String object, an arguments object or a DataView FAILS "
+              "the run by its class (" + said + "); a Uint8Array is carried as bytes (the control)");
+    }
+
+    // 17. A HOST FOR AN OUTSIDE CLIENT (MCP-ON-HOST-1, 2b's ruling: an arm is engine-wide): engine.arm FAILS by name before
+    //     the engine is asked; the control - an ordinary host's engine.arm goes past that check (to "the engine did not
+    //     start" here, no engine)
+    {
+        Host::Options o;
+        o.outsideClient = true;
+        Host outside(o), local;
+        registerEngineCommands(outside, nullptr, "no device here", false);
+        registerEngineCommands(local, nullptr, "no device here", false);
+        const Value arm(Value::Object{{"name", Value("anything")}, {"value", Value(1.0)}});
+        const Result refusedArm = outside.call("engine.arm", {arm});
+        const Result localArm = local.call("engine.arm", {arm});
+        check(failedWith(refusedArm, "arms are engine-wide: this host serves an outside client") &&
+                  failedWith(localArm, "the engine did not start"),
+              "a host for an outside client refuses engine.arm by name (" + refusedArm.message +
+                  "); an ordinary host's goes past it (" + localArm.message + ")");
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
