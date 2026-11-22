@@ -936,6 +936,11 @@ int main()
         check(r.status == Status::Ok && said.size() == 4 && missed.empty() && reached == 2,
               "THE CALLER's BOUNDS: an array past its elements, a value past its depth and a string past its bytes each "
               "FAIL by name; the next calls reach their commands (" + std::to_string(reached) + " reached)" + missed);
+        const Host::Options defaults;
+        check(defaults.callBounds.bytes == Host::Options::kPictureBytesCap + Host::Options::kPictureBytesCap / 8 &&
+                  defaults.pictureBytesCap == Host::Options::kPictureBytesCap && ValueBounds().bytes == 0,
+              "THE DEFAULT CALL BOUND IS DERIVED from the picture cap (one picture at it + an eighth: " +
+                  std::to_string(defaults.callBounds.bytes >> 20) + " MiB); a ValueBounds states nothing by itself");
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
