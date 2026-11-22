@@ -114,6 +114,10 @@ int main()
           "2^53+1 and INT64_MIN are exact as Int both ways");
     CHECK(refused("9223372036854775808", "outside a 64-bit integer", why), "an integer past int64 is refused (" + why + ")");
     CHECK(refused("1e400", "outside a double's range", why), "a number past a double's range is refused (" + why + ")");
+    const Value tiny = read("4.9e-324", why);
+    CHECK(refused("1e-400", "outside a double's range", why) && refused("-1e-400", "outside a double's range", why) &&
+              tiny.kind() == Kind::Number && bits(tiny.asNumber()) == 1,
+          "an UNDERFLOW is refused, never read as zero (" + why + "); the smallest subnormal 4.9e-324 reads exactly (bits 1)");
     CHECK(refused("01", "leading zero", why) && refused("+1", "begins no value", why) && refused("1.", "after '.'", why),
           "JSON's number grammar: no leading zero, no '+', a digit after '.' (" + why + ")");
     const Value nan(Value::Object{{"transform", Value(Value::Object{{"position", Value(Value::Array{
