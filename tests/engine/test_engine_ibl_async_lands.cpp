@@ -22,6 +22,12 @@
 //      call (landEnvironmentIfComplete). So lag + 2 = 5 frames bound it. RED before the fix: the compiler is empty at
 //      every frame's close (each request is cancelled inside the try that made it) and the environment never lands.
 //  (3) no try after the landing: the deferral count stands still once the environment has landed.
+//  (4) THE ATMOSPHERE's TABLES NEVER COMPILE IN A FRAME (SHADER-SYSTEM-1 7a, fix A): the four LUT jobs run under the
+//      convolution's deferral (OgreScene::updateAtmosphere), so their cold permutations go to the background compiler:
+//      (a) the deferred path ran - AtmosphereStatus::deferredUpdates > 0 (the cold arm, F7: else the row proves nothing);
+//      (b) no compute template was parsed and no compute pipeline built inside any frame of the run (the published
+//      computeParsedInFrame / computePsoInFrame, process totals: 0 from the first frame to the last). RED before the
+//      fix: the four tables parsed and built in the capture's first frame (spikes/shader-system/ss7/gate-measure).
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/Monitor.h"
 #include "jahshaka/engine/Published.h"
@@ -82,6 +88,7 @@ int main()
         if (emptyFrames > kLandFrames) break;   // law 2 has failed: nothing on the compiler, the environment still owed
     }
     const unsigned long long deferrals = scene->published().iblConvolutionDeferrals;
+    const AsyncShaderStats inFrame = e->published().shaders;
     std::printf("    %d frames: landed %d, the convolution deferred %llu try(s), the compiler's queue at most %llu, "
                 "frames with it empty and the environment owed %d\n",
                 f + 1, landed ? 1 : 0, deferrals, maxOutstanding, emptyFrames);
@@ -89,6 +96,12 @@ int main()
                          "background compiler)", deferrals);
     CHECK(landed, "(2) the environment LANDED: within %d frames of the compiler's queue emptying (%d frames empty, "
                   "%d frames in all)", kLandFrames, emptyFrames, f + 1);
+    CHECK(scene->published().atmosphereStatus.deferredUpdates > 0u,
+          "(4a) the atmosphere's table rebuild deferred at least once: %u try(s) (its cold jobs on the background "
+          "compiler)", scene->published().atmosphereStatus.deferredUpdates);
+    CHECK(inFrame.computeParsedInFrame == 0ull && inFrame.computePsoInFrame == 0ull,
+          "(4b) nothing compiled in a frame: %llu compute template(s) parsed and %llu compute pipeline(s) built inside "
+          "a frame (bar 0 each)", inFrame.computeParsedInFrame, inFrame.computePsoInFrame);
     if (landed) {
         for (int i = 0; i < kLandFrames; ++i) frame();
         const unsigned long long after = scene->published().iblConvolutionDeferrals;
