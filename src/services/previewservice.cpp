@@ -51,19 +51,6 @@ QString storeFileFor(const QString &guid)
     return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
 }
 
-/// NOTHING TO DRAW: platform furniture (the app's own content, shown in no tile grid), a MODEL row
-/// with no content at all (no file, no pin, no blob) - a builtin primitive's Object row (a
-/// template's Floor), a document thing that never had a model - or a MESH row with no bake (the Mesh
-/// preset draws the bake and nothing else).
-bool nothingToDraw(const Database::PreviewRow &row)
-{
-    if (row.platform) return true;
-    const auto type = static_cast<ModelTypes>(row.type);
-    if (type == ModelTypes::Mesh) return previews::bakeOf(row.files).isEmpty();
-    const bool model = type == ModelTypes::Object || type == ModelTypes::ParticleSystem;
-    return model && row.files.isEmpty() && row.pin.isEmpty() && !row.hasBlob;
-}
-
 PreviewService::Outcome failure(const QString &why, bool nothing = false)
 {
     PreviewService::Outcome out;
@@ -231,7 +218,7 @@ bool PreviewService::keyFor(Project *project, const QString &guid, int *typeOut,
         *refused = failure(QStringLiteral("this asset type (%1) has no preview").arg(row.type), true);
         return false;
     }
-    if (nothingToDraw(row)) {
+    if (previews::nothingToDraw(row)) {
         *refused = failure(row.platform
                                ? QStringLiteral("'%1' is platform furniture (the app's own content, shown in "
                                                 "no tile grid): nothing to draw").arg(guid)
@@ -332,7 +319,7 @@ QVector<PreviewService::Row> PreviewService::state(Project *project, bool projec
         r.guid = row.guid;
         r.type = row.type;
         r.storedKey = row.storedKey;
-        if (previews::presetFor(row.type) && !nothingToDraw(row)) {
+        if (previews::presetFor(row.type) && !previews::nothingToDraw(row)) {
             r.key = previews::key(previews::sourceOf(row), previewenv::kVersion);
             r.state = !row.hasBytes ? State::Missing : (row.storedKey == r.key ? State::Ok : State::Stale);
         }
@@ -353,6 +340,31 @@ PreviewService::Counts PreviewService::counts(Project *project, bool projectOnly
         }
     }
     return out;
+}
+
+QImage PreviewService::emptyStudio(int type, QSize size, bool fresh, QString *reason)
+{
+    const auto say = [reason](const QString &why) { if (reason) *reason = why; return QImage(); };
+    const previews::Preset *preset = previews::presetFor(type);
+    if (!preset || !preset->studioLit)
+        return say(QStringLiteral("this asset type (%1) is not drawn in the studio: its preview has no empty-studio "
+                                  "control").arg(type));
+    using View = EngineThumbnailRenderer::StudioView;
+    const View view = static_cast<ModelTypes>(type) == ModelTypes::Material ? View::Material : View::Asset;
+    const QString cacheKey = QStringLiteral("%1|%2|%3|%4").arg(view == View::Material ? 0 : 1)
+                                 .arg(size.width()).arg(size.height()).arg(previewenv::kVersion);
+    if (!fresh) {
+        const auto kept = mEmptyStudio.constFind(cacheKey);
+        if (kept != mEmptyStudio.constEnd()) return kept.value();
+    }
+    const auto engine = mEngine ? mEngine() : std::shared_ptr<Engine>();
+    if (!engine) return say(QStringLiteral("the engine is not running (the empty studio is a render)"));
+    auto loan = EngineThumbnailRenderer::borrow(engine, "the empty studio");
+    if (!loan) return say(loan.reason());
+    const QImage image = loan->renderStudio(view, size);
+    if (image.isNull()) return say(loan->lastFailure());
+    if (!fresh) mEmptyStudio.insert(cacheKey, image);
+    return image;
 }
 
 // ---- the sweep ----------------------------------------------------------------------------------

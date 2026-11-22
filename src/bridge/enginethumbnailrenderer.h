@@ -105,6 +105,13 @@ public:
     QImage renderNode(iris::SceneNodePtr subject, QSize size);
     /// Renders `material` on the preview sphere (app/content/primitives/sphere.obj).
     QImage renderMaterial(iris::MaterialPtr material, QSize size);
+    /// THE EMPTY STUDIO at a preset's VIEW, nothing in it (PREVIEWS-1 stage 2): the control a tile's
+    /// SUBJECT coverage is measured against. Both views aim a FIXED way - the material view along
+    /// previewenv::viewDirection, the asset view down -Z (renderNode's framing backs out along +Z) - and
+    /// the studio holds no geometry, only its sky at infinity: so the empty picture does not depend on
+    /// where a subject put the camera, and one serves every tile of its view and size.
+    enum class StudioView { Material, Asset };
+    QImage renderStudio(StudioView view, QSize size);
 
     /// WHY the last render returned a null image, in words. Empty after a
     /// render that produced pixels. A THUMBNAIL THAT FAILS IS NEVER SILENT

@@ -12,6 +12,8 @@ For more information see the LICENSE file
 #include "services/apppaths.h"
 #include "scripting/modules/assetsapi.h"
 
+#include <QCryptographicHash>
+
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
@@ -370,8 +372,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "No LIVE entries means the asset is used by no project, i.e. assets.remove would really delete it. "
           "Reads the catalog only — the project does not have to be open, and the asset does not have to be listed.",
           Needs::Document },
-        { "thumbnail", "assets.thumbnail(guid) -> {guid, empty, bytes, width, height, centre: {r, g, b}, coverage}",
-          "The thumbnail stored for an asset, as facts rather than pixels: byte size of the PNG blob, its decoded dimensions, the colour of its centre pixel (0-255) and `coverage` — the fraction of the image (0..1) that differs from the background the renderer cleared to, i.e. how much of the tile the subject fills. empty is true when the row carries no image. Document-only — it reads the database, it does not render.",
+        { "thumbnail", "assets.thumbnail(guid) -> {guid, empty, bytes, sha, width, height, centre: {r, g, b}}",
+          "The thumbnail stored for an asset, as facts rather than pixels: byte size of the PNG blob, `sha` (the first 16 hex digits of the bytes' sha256: two pictures are the same picture exactly when their shas are), its decoded dimensions and the colour of its centre pixel (0-255). empty is true when the row carries no image. How much of the tile its subject fills is previews.coverage (against the empty studio). Document-only — it reads the database, it does not render.",
           Needs::Document },
         { "select", "assets.select(guid) -> bool",
           "Selects an asset in the ASSETS PAGE: the tile becomes current, is scrolled into view and its preview loads — exactly what a double-click on the tile does. This is what an import does with the asset it just made (the tile used to appear unselected and had to be hunted for). False when the page has no tile for that guid (a guid the current drawer/filter hides, or a session with no window).",
@@ -1871,25 +1873,13 @@ QVariantMap AssetsApi::thumbnail(const QString &guid)
     if (!image.isNull()) {
         const QColor c = image.pixelColor(image.width() / 2, image.height() / 2);
         out["centre"] = QVariantMap{ { "r", c.red() }, { "g", c.green() }, { "b", c.blue() } };
-        // HOW MUCH OF THE TILE THE SUBJECT FILLS. A thumbnail can be textured
-        // and still be wrong — the owner's ruined-city tile was a correct
-        // render of a 50 m model framed for a box that also had to contain the
-        // world origin, so it came out a smudge in the middle of 512x512
-        // (smoke S6). Coverage is the fraction of pixels that differ from the
-        // corner (the background the renderer cleared to), which is the number
-        // that says so.
-        const QRgb background = image.pixel(1, 1);
-        const int bgR = qRed(background), bgG = qGreen(background), bgB = qBlue(background);
-        qint64 lit = 0;
-        for (int y = 0; y < image.height(); ++y)
-            for (int x = 0; x < image.width(); ++x) {
-                const QRgb p = image.pixel(x, y);
-                if (std::abs(qRed(p) - bgR) > 8 || std::abs(qGreen(p) - bgG) > 8
-                    || std::abs(qBlue(p) - bgB) > 8)
-                    ++lit;
-            }
-        out["coverage"] = double(lit) / double(qMax(1, image.width() * image.height()));
     }
+    // THE STORED BYTES' IDENTITY: two pictures are the same picture exactly when their bytes are
+    // (sha256, its first 16 hex digits). How much of a tile its SUBJECT fills is previews.coverage's
+    // measure, against the empty studio (the old count against the corner pixel could not see an
+    // empty tile: the studio's own gradient read 0.4587).
+    if (!record.thumbnail.isEmpty())
+        out["sha"] = QString::fromLatin1(QCryptographicHash::hash(record.thumbnail, QCryptographicHash::Sha256).toHex().left(16));
     return out;
 }
 

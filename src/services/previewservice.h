@@ -46,6 +46,7 @@ For more information see the LICENSE file
 // to draw), missing (no bytes), stale (bytes whose stored key is not the key now — none stored is
 // stale too), ok. One catalog statement a call (Database::fetchPreviewRows).
 
+#include <QHash>
 #include <QImage>
 #include <QSize>
 #include <QString>
@@ -122,6 +123,13 @@ public:
     };
     Counts counts(Project *project, bool projectOnly);
 
+    /// THE EMPTY STUDIO of a studio-lit preset's view (the material view, or the asset view of an
+    /// Object, ParticleSystem, Avatar and Mesh) at `size`: the control a tile's SUBJECT coverage is
+    /// measured against (previews.coverage). Rendered ONCE a view, size and previewenv version and
+    /// kept; `fresh` renders it again and keeps nothing (the control's own control). Null with
+    /// `reason` for a CPU preset (no studio) or no engine.
+    QImage emptyStudio(int type, QSize size, bool fresh, QString *reason);
+
     // ---- THE SWEEP (renderAll) -------------------------------------------------------------
     struct SweepOptions
     {
@@ -184,6 +192,7 @@ private:
     int mSweeps = 0;
     /// The landing listener, shared with every completion in flight (never `this` across the writer).
     std::shared_ptr<LandingFn> mLanding = std::make_shared<LandingFn>();
+    QHash<QString, QImage> mEmptyStudio;   ///< emptyStudio's kept pictures, by view|width|height|previewenv version
 };
 
 #endif   // SERVICES_PREVIEWSERVICE_H

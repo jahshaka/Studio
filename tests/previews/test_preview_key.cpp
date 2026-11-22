@@ -25,6 +25,8 @@ For more information see the LICENSE file
 //      versions - it MOVES on the bake's oid and on previewenv's version, and is EQUAL across its
 //      source oid, a project pin, members and a blob stamp (none of them is in a Mesh's picture);
 //      the same content keys differently as a Mesh and as an Object (two presets).
+//   7. NOTHING TO DRAW (state `none`), the catalog's decision: a Mesh with no bake ROW (its source alone);
+//      a Mesh with one is drawable; a content-less Object; platform furniture of any type.
 
 #include <algorithm>
 #include <cstdio>
@@ -160,6 +162,26 @@ int main()
     check(previews::key(m, env) != km, "the same files key differently as an Object (another preset)");
     check(previews::bakeOf(mesh.files) == QStringList{ QStringLiteral("bake:2222") },
           "bakeOf keeps the bake role's entries only");
+
+    // 7. Nothing to draw.
+    struct Row
+    {
+        int type = 0;
+        QStringList files;
+        QString pin;
+        bool hasBlob = false;
+        bool platform = false;
+    };
+    Row meshNoBake{ int(ModelTypes::Mesh), { QStringLiteral("source:1111") } };
+    Row meshBaked{ int(ModelTypes::Mesh), { QStringLiteral("source:1111"), QStringLiteral("bake:2222") } };
+    check(previews::nothingToDraw(meshNoBake), "a Mesh with NO bake row has nothing to draw (none)");
+    check(!previews::nothingToDraw(meshBaked), "a Mesh with its bake row is drawable");
+    Row bareObject{ int(ModelTypes::Object) };
+    check(previews::nothingToDraw(bareObject), "an Object with no file, pin or blob has nothing to draw");
+    Row blobObject{ int(ModelTypes::Object), {}, QString(), true };
+    check(!previews::nothingToDraw(blobObject), "an Object with a blob is drawable");
+    Row furniture{ int(ModelTypes::Texture), { QStringLiteral("source:abcd") }, QString(), false, true };
+    check(previews::nothingToDraw(furniture), "platform furniture has nothing to draw");
 
     std::printf("previews.key: %s\n", failures ? QByteArray("FAILED (" + QByteArray::number(failures) + ")").constData()
                                                 : "PASSED");

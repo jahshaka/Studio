@@ -1060,6 +1060,10 @@ int main(int argc, char **argv)
                     double(big.projectWide.pages - big.projectScanWide.pages)
                         / double(std::max<qint64>(1, previewsWith.projectWide.pages - previewsWith.projectScanWide.pages)),
                     "database.cpp fetchPreviewRows (the platform set: idx_assets_library whole)");
+        std::printf("   residue (bytes) previews.counts / state, scope 'project': %lld B at 10,000 and %lld B at 1,000 (the "
+                    "whole read, cache 64 MB; the named residue beside (B))\n",
+                    static_cast<long long>(big.projectWide.bytes), static_cast<long long>(previewsWith.projectWide.bytes));
+        std::fflush(stdout);
         std::printf("   residue (bytes) previews.state's table pass at 10,000 with thumbnails: %lld pages = %lld B (default "
                     "cache: the state reads %lld pages)\n", static_cast<long long>(big.scanWide.pages),
                     static_cast<long long>(big.scanWide.bytes), static_cast<long long>(big.state.pages));

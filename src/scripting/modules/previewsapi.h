@@ -41,6 +41,7 @@ public:
     Q_INVOKABLE QVariantMap render(const QString &guid);
     Q_INVOKABLE QVariantMap renderAll(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap settle();
+    Q_INVOKABLE QVariantMap coverage(const QString &guid);
 };
 
 #endif // SCRIPTING_PREVIEWSAPI_H

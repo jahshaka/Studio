@@ -379,6 +379,17 @@ QImage EngineThumbnailRenderer::renderNode(iris::SceneNodePtr subject, QSize siz
     return img;
 }
 
+/// THE MATERIAL VIEW: from the environment's own viewpoint (previewenv::viewDirection) at `dist`,
+/// looking at the origin - renderMaterial's camera and its empty studio's (renderStudio).
+static void aimMaterialCamera(iris::CameraNodePtr cam, float dist)
+{
+    float v[3];
+    previewenv::viewDirection(v);
+    cam->setLocalPos(iris::Vec3(v[0] * dist, v[1] * dist, v[2] * dist));
+    cam->lookAt(iris::Vec3(0, 0, 0));
+    cam->update(0);
+}
+
 QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize size)
 {
     if (!mSphere) {
@@ -414,11 +425,22 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
     // side of it is a different picture of the same material: measured 108.1
     // against the dock's 118.4 on an 18 % grey ball, ten codes apart, before
     // this line. The two agree to under one code with it.
-    float v[3];
-    previewenv::viewDirection(v);
-    cam->setLocalPos(iris::Vec3(v[0] * dist, v[1] * dist, v[2] * dist));
-    cam->lookAt(iris::Vec3(0, 0, 0));
-    cam->update(0);
+    aimMaterialCamera(cam, dist);
+    return render(document, cam, size);
+}
+
+QImage EngineThumbnailRenderer::renderStudio(StudioView view, QSize size)
+{
+    iris::CameraNodePtr cam;
+    auto document = studioDocument(cam);
+    if (view == StudioView::Material) {
+        cam->setAspectRatio(size.height() > 0 ? float(size.width()) / float(size.height()) : 1.0f);
+        aimMaterialCamera(cam, 1.0f);   // any distance: the sky is at infinity
+    } else {
+        cam->setLocalPos(iris::Vec3(0, 0, 1));   // frameCamera's axis: back along +Z, looking down -Z
+        cam->lookAt(iris::Vec3(0, 0, 0));
+        cam->update(0);
+    }
     return render(document, cam, size);
 }
 

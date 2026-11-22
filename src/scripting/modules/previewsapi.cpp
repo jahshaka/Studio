@@ -134,6 +134,15 @@ QVector<VerbInfo> PreviewsApi::verbs() const
           "never waits behind it). BOUNDED: when no write lands for 2 x the writer's budget (4000 ms) it "
           "answers {ok:false, reason} naming how many are still pending; nothing is cancelled.",
           Needs::Document },
+        { "coverage", "previews.coverage(guid) -> {ok, reason, coverage, controlCoverage, width, height}",
+          "A MEASURE of the row's STORED preview: its SUBJECT coverage - the fraction of its pixels that differ "
+          "(any channel, by any code) from THE EMPTY STUDIO rendered at the same view and size (the material "
+          "view, or the asset view of a model, particle system, avatar or mesh: both aim a fixed way at a sky "
+          "at infinity, so one empty picture serves every tile of its view; rendered once and kept). "
+          "`controlCoverage` compares a FRESH empty studio with the kept one: 0 when the studio is "
+          "reproducible. Needs the engine; a CPU preset (a texture's own pixels) has no studio and is "
+          "refused by name, so is a row with no stored picture. Throws for a guid that names no asset.",
+          Needs::Document },
         { "renderAll", "previews.renderAll({staleOnly, projectOnly, limit}) -> {considered, rendered, skipped, cancelled, peakQueued, failed: [{guid, reason}]}",
           "Draws many previews, one row a turn with the window painting between them, and waits for them to be "
           "stored. `staleOnly` (default true) takes the 'missing' and 'stale' rows of previews.state; false "
@@ -315,5 +324,55 @@ QVariantMap PreviewsApi::settle()
         return out;
     }
     out["ok"] = true;
+    return out;
+}
+
+namespace {
+/// The fraction of `tile`'s pixels whose colour differs (any channel, by any code) from `control`'s.
+double differingFraction(const QImage &tile, const QImage &control)
+{
+    const QImage a = tile.convertToFormat(QImage::Format_RGB32);
+    const QImage b = control.convertToFormat(QImage::Format_RGB32);
+    qint64 differ = 0;
+    for (int y = 0; y < a.height(); ++y) {
+        const QRgb *pa = reinterpret_cast<const QRgb *>(a.constScanLine(y));
+        const QRgb *pb = reinterpret_cast<const QRgb *>(b.constScanLine(y));
+        for (int x = 0; x < a.width(); ++x)
+            if (qRed(pa[x]) != qRed(pb[x]) || qGreen(pa[x]) != qGreen(pb[x]) || qBlue(pa[x]) != qBlue(pb[x]))
+                ++differ;
+    }
+    return double(differ) / double(qMax<qint64>(1, qint64(a.width()) * a.height()));
+}
+}   // namespace
+
+QVariantMap PreviewsApi::coverage(const QString &guid)
+{
+    QVariantMap out;
+    out["ok"] = false;
+    PreviewService *previews = host.services ? host.services->previews : nullptr;
+    if (!host.db || !previews) { fail("previews: there is no preview service in this session"); return out; }
+    const AssetRecord record = host.db->fetchAsset(guid);
+    if (record.guid.isEmpty()) {
+        fail(QStringLiteral("previews.coverage: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    const auto refused = [&](const QString &why) {
+        out["reason"] = why;
+        refuse(QStringLiteral("previews.coverage: %1").arg(why));
+        return out;
+    };
+    QImage tile;
+    if (record.thumbnail.isEmpty() || !tile.loadFromData(record.thumbnail, "PNG"))
+        return refused(QStringLiteral("'%1' has no stored picture to measure").arg(record.name));
+    QString why;
+    const QImage empty = previews->emptyStudio(record.type, tile.size(), false, &why);
+    if (empty.isNull()) return refused(why);
+    const QImage again = previews->emptyStudio(record.type, tile.size(), true, &why);
+    if (again.isNull()) return refused(why);
+    out["ok"] = true;
+    out["coverage"] = differingFraction(tile, empty);
+    out["controlCoverage"] = differingFraction(again, empty);
+    out["width"] = tile.width();
+    out["height"] = tile.height();
     return out;
 }

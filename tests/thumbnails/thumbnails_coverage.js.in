@@ -1,0 +1,131 @@
+// thumbnails.coverage — PREVIEWS-1 stage 2: A TILE SHOWS ITS SUBJECT, AND TWO DEFINITIONS ARE TWO PICTURES. The app on
+// the card (the tile is a render), a fresh warm home, no demo scene: our own fixtures only.
+//
+// THE MEASURE (previews.coverage): a tile's SUBJECT coverage = the fraction of its pixels that differ, in any channel by
+// any code, from THE EMPTY STUDIO rendered at the same view and size. The thumbnail grade turns bloom, SSAO, SMAA and SSR
+// off (bridge/secondarysurfacetonemap.h apply), the studio holds no light node and does not gather (stage 0's
+// measurement: gather.on 0 on every tile), and its sky is at infinity: so a background pixel of a tile is the empty
+// studio's pixel to the code, and a pixel is the subject's exactly when its CENTRE sample falls on the subject (no AA).
+// `controlCoverage` (a fresh empty studio against the kept one) reads 0: the control is reproducible.
+//
+// THE MATERIAL PRESET'S BALL — ITS PROJECTED DISC, A CLOSED FORM. renderMaterial (bridge/enginethumbnailrenderer.cpp):
+// a 512x512 tile, the camera's vertical angle 45 deg (CameraNode's default, no framing hold), aspect 1, so
+// t = tan(22.5 deg) = 0.414214; the sphere's framing radius R = its furthest vertex (previewframing.h subjectRadius) and
+// its distance d = R / (0.8 t) (previewDistance, fill 0.8) = 3.01777 R. A ball of radius p seen from d subtends
+// sin(a) = p/d; its silhouette is a circle of radius tan(a)/t of the half-frame, area fraction (pi/4) (tan(a)/t)^2.
+// The preview mesh (app/content/primitives/sphere.obj, 482 vertices, 960 faces) is CONVEX with every vertex at
+// R = 1.0000 and its nearest face plane at 0.99044 R (measured from the file): it contains the ball of radius 0.99044 R
+// and lies in the ball of radius R, so its silhouette lies between theirs:
+//     p = R:        tan(a) = 1/sqrt(3.01777^2 - 1)         = 0.351215 -> tan(a)/t = 0.847909 -> 0.564659
+//     p = 0.99044R: tan(a) = 0.99044/sqrt(3.01777^2 - 0.98097) = 0.347450 -> 0.838821 -> 0.552624
+// CENTRE SAMPLING moves the count by at most the pixels the boundary crosses: a circle of radius r px crosses at most
+// 8r + 4 unit squares (it meets each row and each column of pixels at most twice per quadrant's monotone arc), r =
+// 0.847909 x 256 = 217.07 px: 1741 px = 0.00664 of 262,144. THE BAR: 0.552624 - 0.00664 <= coverage <= 0.564659 +
+// 0.00664, i.e. [0.54598, 0.57130].
+//
+// THE BOX (tests/thumbnails' box.obj, a 1 m cube centred on its origin) — ITS SILHOUETTE. renderNode frames by the
+// world AABB (previewframing.h frameBounds): r = half its diagonal = sqrt(3)/2, the camera on the box's axis at
+// D = 1.2 r / t = 2.50892 from its centre, looking down -Z. From the axis only the FRONT FACE shows (a side face's
+// points project inside its front edge: x / (D - z) is largest at z = +0.5), so the silhouette is the front face, a
+// square of half side 0.5 at depth D - 0.5 = 2.00892: half side over half frame = 0.5 / (2.00892 t) = 0.600874, area
+// fraction 0.600874^2 = 0.361050 (free of the box's scale and position: D scales with r, the target is its centre).
+// Its edges cross at most 4 (307.65 + 1) pixels = 0.00471. THE BAR: [0.35634, 0.36576]. THE BOX's MESH ROW (the Mesh
+// preset: its bake in one neutral material, through the same framing) has the same silhouette and the same bar.
+// THE TETRA's MESH ROW: subject coverage > 0 (a Mesh tile that is an empty studio fails).
+//
+// THE BYTES: two materials whose definitions differ (one plain, one with a baseColorMap added after its creation) have
+// different tile bytes by sha, after ONE renderAll of what is stale - RED at stage 0's base: the two tiles were byte-
+// identical (sha 797bd607dbba99df twice, spikes/previews-1/stage0/MEASURE.md), nothing re-rendered after the edit.
+//
+// A MESH WHOSE BAKE FILE IS ABSENT (the store taken offline: assets.setStoreRoot to an empty root): previews.render
+// fails by name and changes nothing (sha and storedKey). (A Mesh with no bake ROW reads 'none': previews.key, CPU.)
+//
+// THE EMITTER (scene.addParticles -> node.exportArchive -> assets.import, stage 0's recipe): its subject coverage is
+// PRINTED, not barred - the particle preset's pre-roll is stage 4's, where "> 0" is its law; today it reads 0 (its
+// tile is the empty studio), which is that stage's red first.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function rowOf(guid) {
+    var hit = previews.state().filter(function (r) { return r.guid === guid; });
+    return hit.length === 1 ? hit[0] : null;
+}
+function newMeshAfter(fn) {
+    var before = {};
+    previews.state({ type: "mesh" }).forEach(function (r) { before[r.guid] = true; });
+    var out = fn();
+    var made = previews.state({ type: "mesh" }).filter(function (r) { return !before[r.guid]; });
+    assert(made.length === 1, "one new Mesh row: " + J(made));
+    return { object: out, mesh: made[0].guid };
+}
+function within(x, lo, hi) { return typeof x === "number" && x >= lo && x <= hi; }
+
+var PNG = "@JAH_THUMB_PNG@";
+var BOX = "@JAH_THUMB_BOX_OBJ@";
+var TETRA = "@JAH_THUMB_TETRA_OBJ@";
+var OFFLINE = "@JAH_THUMB_OFFLINE@";
+var OUT = "@JAH_THUMB_OUT@";
+var stamp = Date.now();
+assert(project.create("Thumbnail Coverage " + stamp).length > 10, "project.create");
+
+// ---- the subjects -------------------------------------------------------------------------------
+var plain = materials.create("Coverage Plain " + stamp);
+var mapped = materials.create("Coverage Mapped " + stamp);
+materials.addTexture(mapped, PNG, { slot: "baseColorMap" });
+var box = newMeshAfter(function () { return assets.import(BOX); });
+var tetra = newMeshAfter(function () { return assets.import(TETRA); });
+var emitterNode = scene.addParticles("fire");
+var bundle = OUT + "/coverage-emitter-" + stamp + ".jbundle";
+node.exportArchive(emitterNode, bundle, { type: "particleSystem" });
+var emitter = assets.import(bundle);
+assert(typeof emitter === "string" && emitter.length > 10, "the emitter imported as an asset");
+
+// ---- ONE sweep of what is missing or stale, landed ----------------------------------------------
+var swept = previews.renderAll();
+assert(previews.settle().ok === true, "every preview landed: " + J(swept));
+var ours = { plain: plain, mapped: mapped, box: box.object, boxMesh: box.mesh, tetraMesh: tetra.mesh, emitter: emitter };
+Object.keys(ours).forEach(function (k) {
+    var r = rowOf(ours[k]);
+    assert(r && r.state === "ok", k + " reads 'ok' after one renderAll: " + J(r));
+});
+
+// ---- THE BYTES ----------------------------------------------------------------------------------
+var shaPlain = assets.thumbnail(plain).sha, shaMapped = assets.thumbnail(mapped).sha;
+assert(/^[0-9a-f]{16}$/.test(shaPlain) && /^[0-9a-f]{16}$/.test(shaMapped) && shaPlain !== shaMapped,
+       "two materials, two definitions, two pictures by sha (stage 0: 797bd607dbba99df twice): " + shaPlain + " / " + shaMapped);
+
+// ---- THE COVERAGES ------------------------------------------------------------------------------
+function cover(name) {
+    var c = previews.coverage(ours[name]);
+    console.log("COVERAGE " + name + " " + J(c));
+    assert(c.ok === true && c.width === 512 && c.height === 512 && c.controlCoverage === 0,
+           name + ": measured on its 512x512 tile, the empty studio reproducible (control 0)");
+    return c.coverage;
+}
+var ball = cover("plain");
+assert(within(ball, 0.54598, 0.57130), "the plain material's ball = its projected disc [0.54598, 0.57130]: " + ball);
+var ballMapped = cover("mapped");
+assert(within(ballMapped, 0.54598, 0.57130), "the mapped material's ball = the same disc: " + ballMapped);
+var boxCov = cover("box");
+assert(within(boxCov, 0.35634, 0.36576), "the box = its front face's silhouette [0.35634, 0.36576]: " + boxCov);
+var boxMeshCov = cover("boxMesh");
+assert(within(boxMeshCov, 0.35634, 0.36576), "the box's MESH row (its bake, the neutral material) = the same silhouette: " + boxMeshCov);
+var tetraCov = cover("tetraMesh");
+assert(tetraCov > 0, "the tetra's MESH row shows its subject (> 0, an empty studio fails): " + tetraCov);
+var emitterCov = cover("emitter");
+console.log("EMITTER (stage 4's law, printed): subject coverage " + emitterCov);
+
+// ---- A MESH WHOSE BAKE FILE IS ABSENT -----------------------------------------------------------
+var meshBefore = { sha: assets.thumbnail(box.mesh).sha, storedKey: rowOf(box.mesh).storedKey };
+assert(assets.setStoreRoot(OFFLINE, { force: true }) === true, "the store is taken offline (an empty root)");
+var failed = previews.render(box.mesh);
+assert(failed.ok === false && typeof failed.reason === "string" && failed.reason.length > 0,
+       "the box's Mesh with its bake file absent: previews.render fails by name: " + J(failed));
+assert(assets.thumbnail(box.mesh).sha === meshBefore.sha && rowOf(box.mesh).storedKey === meshBefore.storedKey,
+       "...and changes nothing (sha and storedKey)");
+assert(assets.setStoreRoot("", {}) === true, "the store is back at its default root");
+
+console.log("thumbnails.coverage: all assertions passed");

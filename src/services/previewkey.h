@@ -41,6 +41,8 @@ For more information see the LICENSE file
 #include <QString>
 #include <QStringList>
 
+#include "data/project.h"   // ModelTypes
+
 namespace previews {
 
 struct Preset
@@ -80,6 +82,22 @@ KeySource sourceOf(const Row &row)
 
 /// The "bake:<oid>" entries of a row's files (a Mesh's key and its "has a bake" test read one list).
 QStringList bakeOf(const QStringList &files);
+
+/// NOTHING TO DRAW (state `none`), from the catalog alone: platform furniture (the app's own
+/// content, shown in no tile grid), a MODEL row with no content at all (no file, no pin, no blob -
+/// a builtin primitive's Object row, a template's Floor), or a MESH row with no bake ROW (the Mesh
+/// preset draws the bake and nothing else). A bake FILE gone from the store with its row present
+/// is not decided here (no file is opened at a listing): the row reads missing or stale and its
+/// render fails by name.
+template <class Row>
+bool nothingToDraw(const Row &row)
+{
+    if (row.platform) return true;
+    const auto type = static_cast<ModelTypes>(row.type);
+    if (type == ModelTypes::Mesh) return bakeOf(row.files).isEmpty();
+    const bool model = type == ModelTypes::Object || type == ModelTypes::ParticleSystem;
+    return model && row.files.isEmpty() && row.pin.isEmpty() && !row.hasBlob;
+}
 
 /// The key, 16 lowercase hex digits; empty when the type has no preset. Pure: no catalog, no clock.
 QString key(const KeySource &source, int previewenvVersion);

@@ -24,7 +24,7 @@ function rowOf(guid) {
 }
 function facts(guid) {
     var t = assets.thumbnail(guid);
-    return J({ empty: t.empty, bytes: t.bytes, width: t.width, height: t.height, centre: t.centre, coverage: t.coverage });
+    return J({ empty: t.empty, bytes: t.bytes, sha: t.sha, width: t.width, height: t.height, centre: t.centre });
 }
 
 var PNG = "@JAH_PREVIEWS_PNG@";

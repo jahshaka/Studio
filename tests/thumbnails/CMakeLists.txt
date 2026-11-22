@@ -77,6 +77,43 @@ target_compile_definitions(test_preview_environment PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_preview_environment PRIVATE IrisGL JahshakaEngine Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_preview_environment JahshakaEngineMedia)
+# thumbnails.coverage — PREVIEWS-1 stage 2: A TILE SHOWS ITS SUBJECT (previews.coverage against the EMPTY studio at the
+# same view: the material ball = its projected disc by a closed form, the box and its Mesh row = the front face's
+# silhouette, the tetra's Mesh > 0), two definitions are two pictures by sha after one renderAll (RED at stage 0's base:
+# 797bd607dbba99df twice), a Mesh whose bake file is absent fails by name and changes nothing. The derivations are the
+# script's header. The app on the card, a fresh WARM home; the tetra written here at configure (no binary mesh in the
+# tree). Its own row: a builder's, priced solo, never SHIP.
+set(_tcHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_coverage)
+set(JAH_THUMB_TETRA_OBJ "${CMAKE_CURRENT_BINARY_DIR}/fixtures/tetra.obj")
+file(WRITE "${JAH_THUMB_TETRA_OBJ}" "# tetra.obj - written by tests/thumbnails/CMakeLists.txt (PREVIEWS-1 stage 2)
+o Tetra
+v 0 0.6 0
+v -0.5 -0.3 0.4
+v 0.5 -0.3 0.4
+v 0 -0.3 -0.55
+f 1 2 3
+f 1 3 4
+f 1 4 2
+f 2 4 3
+")
+set(JAH_THUMB_PNG "${CMAKE_SOURCE_DIR}/tests/scripting/fixtures/implane_wide.png")
+set(JAH_THUMB_OFFLINE "${_tcHome}/offline-store")
+set(JAH_THUMB_OUT "${_tcHome}/out")
+configure_file(thumbnails_coverage.js.in ${CMAKE_CURRENT_BINARY_DIR}/thumbnails_coverage.js @ONLY)
+file(MAKE_DIRECTORY ${_tcHome}/run)
+jah_host_args(thumbnails.coverage _tcHost)
+jah_gpu_row(thumbnails.coverage WARM_HOME "${_tcHome}" CLASS app TIER low NEEDS NONE
+         NEEDS_WHY "the tile's studio takes no tier feature (no GI, no post: secondarysurfacetonemap.h): subject coverage against the empty studio"
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/thumbnails_coverage.js ${_tcHost}
+         WORKING_DIRECTORY ${_tcHome}/run)
+set_tests_properties(thumbnails.coverage PROPERTIES
+    ENVIRONMENT "HOME=${_tcHome};JAHSHAKA_DATA_ROOT=${_tcHome}/.local/share/Jahshaka"
+    LABELS "mirror"
+    TIMEOUT 60)
+jah_fresh_home_fixture(thumbnails.coverage.fresh_home thumbnailsCoverageHome "${_tcHome}" WARM
+    ARGS --mkdir "${JAH_THUMB_OFFLINE}" --mkdir "${JAH_THUMB_OUT}" LABELS "mirror")
+set_property(TEST thumbnails.coverage APPEND PROPERTY FIXTURES_REQUIRED thumbnailsCoverageHome)
+
 jah_gpu_row(thumbnails.studio_env SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/bin/test_preview_environment
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(thumbnails.studio_env PROPERTIES JAHSHAKA_TEST_FRAMES 64)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
