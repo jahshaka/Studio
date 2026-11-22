@@ -14,10 +14,20 @@ set_target_properties(test_atom_cut_laws PROPERTIES
 target_include_directories(test_atom_cut_laws PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_link_libraries(test_atom_cut_laws PRIVATE IrisGL Qt6::Gui)
+# (the independent measure's branch and bound, tests/support/surfacedistance.h, is the no-pop rows' CPU half: optimised, so
+# the rows keep the CPU row's 10 s budget in a Debug tree - test_gi_mirror_closed_form's precedent)
+target_compile_options(test_atom_cut_laws PRIVATE -O2)
+# (measure_agrees reads the bake's tightness literal from its source: irisgl/import/atomdag/measure.cpp)
+target_compile_definitions(test_atom_cut_laws PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 jah_document_graph(test_atom_cut_laws)
 # atom.cut_closed.multi_mesh is RED by design (SPECS/OPEN_REDS.md, homed at plan 3.5: one DAG a mesh never locks its open
 # border, so the split sphere's seam cracks from t 2.465 px; its first run: 38 of 64 t, the worst 84 unmatched edges).
-foreach(_row cut_partition cut_closed cut_closed.multi_mesh switch_bracket)
+# atom.no_pop.corner and .every_tier are RED by design (SPECS/OPEN_REDS.md, homed at plan 3.4: the rule budgets the group's
+# NEAREST point; the corner's 1 + tan^2 theta and a tier's own tolerance pass the owner's 1 px).
+foreach(_row cut_partition cut_closed cut_closed.multi_mesh switch_bracket
+        no_pop.centre no_pop.corner no_pop.every_tier
+        # the bake's step against the independent measure, split BY FIXTURE (each under the CPU row's 10 s; every group)
+        no_pop.measure_agrees.closed_sphere no_pop.measure_agrees.round_bar no_pop.measure_agrees.shell_4936)
     add_test(NAME atom.${_row} COMMAND test_atom_cut_laws atom.${_row} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(atom.${_row} PROPERTIES
         ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "atom" JAHSHAKA_TEST_FRAMES 0)

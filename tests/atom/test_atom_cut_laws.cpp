@@ -25,12 +25,38 @@
 //                        never a bar on how many - and the fixtures are chosen so each view has them: the closed sphere
 //                        all 22 of its 22 groups in each of the three views, the card soup 2 of its 4 (first run,
 //                        2026-11-22); a view with none is red (the law would be vacuous there).
+//
+// STAGE 2 — THE NO-POP ROWS: the owner's law "Atom never pops: the switch error under ONE pixel at every tier", measured as
+// a CPU sweep over EVERY flip of EVERY group of the harness meshes (the closed sphere, the round bar, the procedural shell
+// at the 4,936-triangle class), judged by THE INDEPENDENT MEASURE (tests/support/surfacedistance.h: never the bake's
+// measure.h). For each finite group g and view v the instance is placed so g flips at t: its sphere's centre on the ray
+// through the view's aim at D_c = r_g + error_g P11 H / (2 t) (Types.h:314-325, :342-344: t*_g = error_g s / F_g,
+// F_g = 2 max(0, D_c - r_g s) / (P11 H); s = 1), and switch_px(g, v) is read over the points that project within the
+// WINDOW: a disc of radius kWindowFraction x the half-height about the aim's pixel.
+// THE BOUND, DERIVED (the spec's premise): a point at distance D and angle theta off the axis, moved delta across its ray,
+// moves (P11 H / 2) delta / (D cos^2 theta) px; the rule spends delta <= error_g at the footprint of the group's NEAREST
+// point, D_c - r: switch_px / t <= (D_c - r) / (D cos^2 theta) <= 1 + tan^2 theta (D >= D_c - r). At the frame's centre
+// theta ~ 0: switch_px <= t. At the corner of a vertical fov phi, aspect a: 1 + tan^2(phi/2)(1 + a^2) = 1.714 at 45 deg,
+// 16:9; at an eye corner of tangents (tx, ty): 1 + tx^2 + ty^2 = 3.0 at kEyeCornerTan. A tier of tolerance t_k flips at
+// t_k px, so the switch reaches t_k = 4 / 3 / 2 / 1 px at Low / Medium / High / Epic against the owner's 1 px.
+//   atom.no_pop.centre      the centre view, t = 1: switch_px <= t at every flip. Every no-pop row runs the measure's own
+//                           checks first (two parallel planes at d read d; the flush shutter without its dropped-island
+//                           term reads < 1 px, with it its diagonal) and asserts the literal projected pair never passes
+//                           the certified bound.
+//   atom.no_pop.measure_agrees  the bake's step beside the measure's own world reading, as the bake's stated contract
+//                           (rowMeasureAgrees): the bake misses no term, and is within its own tightness of the measure.
+//   atom.no_pop.corner      the same at the desktop's 45-deg 16:9 corner and at the eye corner. RED by design (plan 3.4).
+//   atom.no_pop.every_tier  the centre view at each tier's tolerance (worldmodes::row("atomPixelError")->tier[]):
+//                           switch_px <= 1 px. RED by design at Low/Medium/High (plan 3.4: its deletion of the tier row
+//                           breaks this row's build - the fold into centre/corner is forced there).
 #include "cluster_fixtures.h"
 #include "../support/clustermesh.h"
 #include "../support/lawline.h"
 #include "../support/proceduralshell.h"
+#include "../support/surfacedistance.h"
 
 #include "import/atomdag/adjacency.h"
+#include "irisgl/document/scenegraph/worldmodes.h"
 
 #include <QCoreApplication>
 
@@ -38,6 +64,8 @@
 #include <cfloat>
 #include <cmath>
 #include <cstdio>
+#include <cstdlib>
+#include <future>
 #include <cstring>
 #include <set>
 #include <string>
@@ -468,6 +496,320 @@ static void rowSwitchBracket()
     }
 }
 
+// ---- THE NO-POP ROWS (stage 2) ------------------------------------------------------------------------------------
+namespace sd = surfacedistance;
+
+/// The window's radius: this fraction of the frame's half-height about the aim's pixel ("within 10 % of the frame
+/// centre", the spec's centre row; the same disc at a corner, its in-frame quarter).
+constexpr double kWindowFraction = 0.10;
+
+/// THE MEASURE's PRECISION in pixels: 1 % of the reading, and nothing under a hundredth of a pixel resolved (neither can
+/// move a law whose bars are 1 px and its multiples); in world units (the bake's step beside it): 0.1 %, and a millionth of
+/// the extent (under the bake's own floor, 1e-5 of its largest axis).
+constexpr double kPixelRel = 1e-2, kPixelFloor = 1e-2, kWorldRel = 1e-3, kWorldFloorOfExtent = 1e-6;
+
+/// Group g's members (outputs false) or the clusters it produced (true) as triangles, the mesh translated by `t`.
+static std::vector<sd::Tri> groupTris(const MeshData &d, int g, bool outputs, const double t[3])
+{
+    std::vector<sd::Tri> out;
+    for (const MeshCluster &c : d.clusters) {
+        if ((outputs ? c.refined : c.group) != g) continue;
+        for (unsigned i = 0; i + 2 < c.indexCount; i += 3) {
+            sd::Tri tri;
+            for (int k = 0; k < 3; ++k) {
+                const unsigned v = d.clusterIndices[c.firstIndex + i + unsigned(k)];
+                for (int a = 0; a < 3; ++a) tri.p[k][size_t(a)] = double(d.positions[size_t(v) * 3 + size_t(a)]) + t[a];
+            }
+            out.push_back(tri);
+        }
+    }
+    return out;
+}
+
+static sd::View pixelView(const Lens &l)
+{
+    sd::View v;
+    v.tanX = l.tanX;
+    v.tanY = l.tanY;
+    v.width = l.width;
+    v.height = l.height;
+    v.winX = (l.aimX * 0.5 + 0.5) * l.width;
+    v.winY = (l.aimY * 0.5 + 0.5) * l.height;
+    v.winR = kWindowFraction * 0.5 * l.height;
+    return v;
+}
+
+/// ONE FLIP of one group in one view, read by the independent measure.
+struct Flip
+{
+    int group = -1, depth = 0;
+    double t = 0.0;          ///< the flip's tolerance by the product's own footprint (clusterGroupFootprint), px
+    double px = 0.0;         ///< switch_px: the attained reading (surface term, dropped islands), px
+    double upper = 0.0;      ///< its certified upper bound, px
+    double surface = 0.0, islands = 0.0;
+    double literal = 0.0;    ///< the largest literal |proj(p) - proj(q)| over every point sampled, px
+    bool counted = false;    ///< some point of the switch projected in the window
+};
+
+static std::vector<Flip> flipsAt(const clusterfix::Fixture &f, const Lens &l, double tol)
+{
+    std::vector<Flip> out;
+    const MeshData &d = f.data;
+    const sd::View view = pixelView(l);
+    double dir[3];
+    aimDirection(l, dir);
+    for (size_t g = 0; g < d.clusterGroups.size(); ++g) {
+        const MeshClusterGroup &gr = d.clusterGroups[g];
+        if (!(gr.error > 0.0f) || gr.error >= kClusterTerminal) continue;
+        const double dc = double(gr.radius) + double(gr.error) * (1.0 / l.tanY) * l.height / (2.0 * tol);
+        double tr[3];
+        for (int k = 0; k < 3; ++k) tr[k] = dir[k] * dc - double(gr.centre[k]);
+        const ClusterCutView cv = cutView(l, tr, float(tol), 0.0f);
+        const float F = clusterGroupFootprint(gr, cv);
+        Flip fl;
+        fl.group = int(g);
+        fl.depth = gr.depth;
+        fl.t = F > 0.0f ? double(gr.error) * double(cv.scale) / double(F) : 0.0;
+        const sd::Switch s = sd::measure(groupTris(d, int(g), false, tr), groupTris(d, int(g), true, tr), &view, kPixelRel,
+                                         kPixelFloor);
+        fl.surface = s.surface();
+        fl.islands = s.islands;
+        fl.px = s.total();
+        fl.upper = s.upper();
+        fl.counted = s.aToB.any || s.bToA.any || s.islands > 0.0;
+        fl.literal = std::max(s.aToB.literal, s.bToA.literal);
+        out.push_back(fl);
+    }
+    return out;
+}
+
+static std::vector<std::pair<std::string, enginetest::ShellMesh>> noPopMeshes()
+{
+    std::vector<std::pair<std::string, enginetest::ShellMesh>> m;
+    m.push_back({ "closed-sphere", clustermesh::closedSphere() });
+    m.push_back({ "round-bar", clustermesh::roundBar(4.0f, 0.25f, 64, 48, 0.08f) });
+    m.push_back({ "shell-4936", enginetest::proceduralShell(4936) });
+    return m;
+}
+
+/// The sweep of one (fixture, lens, tolerance): every flip judged against `bar` px (0: against its own t). Prints the
+/// worst flip; returns the number over the bar.
+static size_t judge(const clusterfix::Fixture &f, const Lens &l, double tol, double bar, const std::string &tag)
+{
+    const std::vector<Flip> fl = flipsAt(f, l, tol);
+    size_t counted = 0, over = 0, literalPast = 0;
+    const Flip *worst = nullptr;
+    double worstRatio = 0.0;
+    for (const Flip &x : fl) {
+        if (!x.counted || !(x.t > 0.0)) continue;
+        ++counted;
+        if (x.literal > x.upper * (1.0 + 1e-9)) ++literalPast;
+        const double b = bar > 0.0 ? bar : x.t;
+        if (x.px > b * (1.0 + 1e-6)) ++over;
+        const double ratio = x.px / b;
+        if (!worst || ratio > worstRatio) { worst = &x; worstRatio = ratio; }
+    }
+    if (worst)
+        std::printf("   %-13s %-10s t %4.1f: %3zu flips read, %3zu over %s; the worst group %d (depth %d): switch %.4f px "
+                    "(upper %.4f; surface %.4f, islands %.4f; the largest literal projected pair %.4f) at t %.4f px = "
+                    "%.4f x the bar\n", f.name.c_str(), l.name, tol, counted, over, bar > 0.0 ? "1 px" : "its t", worst->group,
+                    worst->depth, worst->px, worst->upper, worst->surface, worst->islands, worst->literal, worst->t,
+                    worstRatio);
+    enginetest::lawLine(enginetest::lawName(tag + ":worst_ratio").c_str(), worstRatio, "x", "<=", 1.0);
+    check(counted > 0, tag + ": the sweep reads at least one flip in the window");
+    check(literalPast == 0, tag + ": the literal projected pair never passes the certified bound (" +
+                                std::to_string(literalPast) + " flips past it)");
+    return over;
+}
+
+/// THE MEASURE's OWN CHECKS (closed forms, no bake): two parallel planes at d read d; the flush shutter dropped onto its
+/// plate reads its thickness without the island term and its diagonal with it.
+static void measureChecks()
+{
+    // two 1 m squares (4 x 4 cells each) at y = 0 and y = d: every point of either is exactly d from the other
+    const double dPlanes = 0.0125;
+    std::vector<sd::Tri> a, b;
+    for (int j = 0; j < 4; ++j)
+        for (int i = 0; i < 4; ++i)
+            for (int h = 0; h < 2; ++h) {
+                const double x0 = -0.5 + 0.25 * i, z0 = -0.5 + 0.25 * j, x1 = x0 + 0.25, z1 = z0 + 0.25;
+                sd::Tri t = h == 0 ? sd::Tri { { { x0, 0, z0 }, { x0, 0, z1 }, { x1, 0, z0 } } }
+                                   : sd::Tri { { { x1, 0, z0 }, { x0, 0, z1 }, { x1, 0, z1 } } };
+                a.push_back(t);
+                for (auto &p : t.p) p[1] = dPlanes;
+                b.push_back(t);
+            }
+    const sd::Switch planes = sd::measure(a, b, nullptr, 1e-9, 1e-12);
+    std::printf("   the measure's checks: parallel planes at d = %.4f read %.9f (upper %.9f; the sheet's island: %d dropped, %d "
+                "replaced by the new sheet)\n", dPlanes, planes.total(), planes.upper(), planes.dropped, planes.replaced);
+    check(std::fabs(planes.total() - dPlanes) <= 1e-9 && planes.upper() <= dPlanes + 2e-9 && planes.dropped == 1 &&
+              planes.replaced == 1,
+          "the measure: two parallel planes at d read d (each side against the other, every facet; the replaced sheet "
+          "charged its distance to the new one, never its diagonal)");
+
+    // THE FLUSH SHUTTER: the plate + the box against the plate alone, turned to face the eye (+Y -> +Z) and placed at the
+    // centre where the box's diagonal projects to 1 px (D = diagonal x P11 H / 2): without the island term the switch is
+    // the thickness (~0.007 px) - under 1 px though the whole box vanished; with it, the diagonal.
+    const clustermesh::FlushShutter fs = clustermesh::flushShutter();
+    const double D = double(fs.diagonal) / kCentre.tanY * kCentre.height / 2.0;
+    std::vector<sd::Tri> in, plateOnly;
+    for (size_t t = 0; t < fs.mesh.indices.size() / 3; ++t) {
+        sd::Tri tri;
+        for (int k = 0; k < 3; ++k) {
+            const float *p = &fs.mesh.positions[size_t(fs.mesh.indices[t * 3 + size_t(k)]) * 3];
+            tri.p[k] = { double(p[0]), -double(p[2]), double(p[1]) - D };   // a quarter turn about X, then -D along Z
+        }
+        in.push_back(tri);
+        if (t < fs.plateTriangles) plateOnly.push_back(tri);
+    }
+    const sd::Switch w = sd::measure(in, plateOnly, nullptr, 1e-9, 1e-12);
+    const sd::View view = pixelView(kCentre);
+    const sd::Switch px = sd::measure(in, plateOnly, &view, kPixelRel, 1e-6);
+    std::printf("   the flush shutter (box %.3f m diagonal, %.4f m thick) dropped: world surface %.6f, island %.6f; at the "
+                "centre: without the island term %.4f px, with it %.4f px\n", double(fs.diagonal), double(fs.thickness),
+                w.surface(), w.islands, px.surface(), px.total());
+    check(std::fabs(w.surface() - double(fs.thickness)) <= 1e-7 && std::fabs(w.islands - double(fs.diagonal)) <= 1e-7 &&
+              w.dropped == 1 && w.replaced == 0,
+          "the measure: the shutter's surface term is its thickness, its dropped island its diagonal (closed forms)");
+    check(px.surface() < 1.0 && px.total() - px.surface() > 0.5,
+          "the measure's negative control: without the dropped-island term the vanished shutter reads under 1 px; with "
+          "it, its diagonal (the difference over half a pixel)");
+}
+
+static void rowNoPopCentre()
+{
+    measureChecks();
+    size_t over = 0;
+    for (const auto &m : noPopMeshes()) {
+        clusterfix::Fixture f;
+        if (!bakeShell(f, m.second, m.first)) continue;
+        over += judge(f, kCentre, 1.0, 0.0, m.first + " centre");
+    }
+    check(over == 0, "THE NO-POP LAW AT THE CENTRE: every flip's switch at most its t (1 px)");
+}
+
+/// THE BAKE's STATED TIGHTNESS, READ FROM ITS CODE (never retyped): facetMax closes a piece when its bound is within
+/// c x max(stop, best) of its centre's distance (irisgl/import/atomdag/measure.cpp, the line below - an inline literal,
+/// no named constant: a finding for plan 3.5). With stop <= the stored step S, every closed piece's bound is <= T + c S
+/// (T the true maximum), so S <= T / (1 - c): K = 1 / (1 - c) (the comment's "TIGHT to 1.05x" is the first-order 1 + c).
+/// 0 when the line is not there (the row then fails, naming it).
+static double bakeTightness(std::string &line)
+{
+    FILE *fp = std::fopen(JAHSHAKA_TEST_SOURCE_DIR "/irisgl/import/atomdag/measure.cpp", "r");
+    if (!fp) return 0.0;
+    char buf[512];
+    double c = 0.0;
+    while (std::fgets(buf, sizeof(buf), fp)) {
+        const char *at = std::strstr(buf, "const float tol = std::max(floorTol, ");
+        if (!at || !std::strstr(buf, "* std::max(stop, best));")) continue;
+        c = std::atof(at + std::strlen("const float tol = std::max(floorTol, "));
+        line = buf;
+        while (!line.empty() && (line.back() == '\n' || line.back() == ' ')) line.pop_back();
+        break;
+    }
+    std::fclose(fp);
+    return c > 0.0 && c < 1.0 ? 1.0 / (1.0 - c) : 0.0;
+}
+
+/// atom.no_pop.measure_agrees.<fixture> (closed_sphere, round_bar, shell_4936: split by fixture, each under the CPU row's
+/// 10 s; every group of each) - the bake's step (its group record) beside the independent measure's own world
+/// reading, as the bake's stated contract: bake_step >= mine (the bake misses no term: a group below is a red of the BAKE,
+/// printed) and bake_step <= K x mine_upper + the bake's floor (K its tightness, read from its code), where both are
+/// defined: a reduction (record kind 0), no card merge, a non-empty output, the bake's step above its floor.
+static void rowMeasureAgrees(const std::string &only)
+{
+    std::string line;
+    const double K = bakeTightness(line);
+    std::printf("   the bake's tightness: K = %.6f from measure.cpp's line \"%s\"\n", K, line.c_str());
+    check(K > 1.0, "the bake's facetMax tolerance line is found in irisgl/import/atomdag/measure.cpp");
+    if (!(K > 1.0)) return;
+    size_t compared = 0, below = 0, above = 0;
+    double worstAbove = 0.0, worstBelow = 0.0;
+    for (const auto &m : noPopMeshes()) {
+        std::string key = m.first;   // the row's suffix spells the fixture with '_' for '-'
+        std::replace(key.begin(), key.end(), '-', '_');
+        if (key != only) continue;
+        clusterfix::Fixture f;
+        iris::MeshBake::ClusterDagOptions o;
+        o.wantGroups = true;
+        const bool ok = clusterfix::bake(f, clusterfix::meshFromShell(m.second), m.first, o) && !f.data.clusters.empty();
+        check(ok, m.first + ": bakes to a cluster DAG");
+        if (!ok) continue;
+        const double zero[3] = { 0.0, 0.0, 0.0 };
+        // Each group's reading is independent and deterministic: measured four at a time (the leaf groups' walks are
+        // seconds each), printed in group order.
+        std::vector<const iris::atomdag::GroupRecord *> todo;
+        for (const auto &rec : f.stats.records)
+            if (!(rec.dagGroup < 0 || rec.kind != 0 || rec.cards || rec.outTris == 0 || !(rec.step > f.stats.floorLen)))
+                todo.push_back(&rec);
+        std::vector<sd::Switch> readings(todo.size());
+        for (size_t i = 0; i < todo.size(); i += 4) {
+            std::vector<std::future<sd::Switch>> jobs;
+            for (size_t j = i; j < std::min(todo.size(), i + 4); ++j)
+                jobs.push_back(std::async(std::launch::async, [&f, &zero, rec = todo[j]] {
+                    return sd::measure(groupTris(f.data, rec->dagGroup, false, zero),
+                                       groupTris(f.data, rec->dagGroup, true, zero), nullptr, kWorldRel,
+                                       kWorldFloorOfExtent * double(f.extent));
+                }));
+            for (size_t j = i; j < std::min(todo.size(), i + 4); ++j) readings[j] = jobs[j - i].get();
+        }
+        for (size_t i = 0; i < todo.size(); ++i) {
+            const auto &rec = *todo[i];
+            const sd::Switch &s = readings[i];
+            ++compared;
+            const double step = double(rec.step), lo = s.total(), hi = K * s.upper() + double(f.stats.floorLen);
+            const bool isBelow = step < lo, isAbove = step > hi;
+            below += isBelow ? 1u : 0u;
+            above += isAbove ? 1u : 0u;
+            worstBelow = std::max(worstBelow, lo / step);
+            worstAbove = std::max(worstAbove, step / s.upper());
+            std::printf("   %-13s group %3d (depth %d): the bake's step %.7g (removed %.3g lost %.3g added %.3g island %.3g "
+                        "locked %.3g), the measure's %.7g .. %.7g (surface %.7g, islands %.7g): step / upper %.4f%s\n",
+                        m.first.c_str(), rec.dagGroup, rec.level, step, double(rec.removedVertex), double(rec.lostFacet),
+                        double(rec.addedFacet), double(rec.droppedIsland), double(rec.lostLocked), lo, s.upper(),
+                        s.surface(), s.islands, step / s.upper(),
+                        isBelow ? "  THE BAKE BELOW THE MEASURE (a missing term)" : (isAbove ? "  PAST K x upper" : ""));
+        }
+    }
+    std::printf("   %zu groups compared: %zu with the bake's step below the measure (worst mine / step %.4f), %zu past K x "
+                "the measure's upper bound (worst step / upper %.4f, K %.4f)\n", compared, below, worstBelow, above,
+                worstAbove, K);
+    enginetest::lawLine("step_over_upper", worstAbove, "x", "<=", K);
+    check(compared > 0, "at least one group where both are defined");
+    check(below == 0, "the bake's step is never below the independent measure (the bake misses no term)");
+    check(above == 0, "the bake's step is within its own stated tightness K of the independent measure's upper bound");
+}
+
+static void rowNoPopCorner()
+{
+    measureChecks();
+    size_t over = 0;
+    for (const auto &m : noPopMeshes()) {
+        clusterfix::Fixture f;
+        if (!bakeShell(f, m.second, m.first)) continue;
+        over += judge(f, kCorner, 1.0, 0.0, m.first + " corner");
+        over += judge(f, kEyeCorner, 1.0, 0.0, m.first + " eye_corner");
+    }
+    check(over == 0, "THE NO-POP LAW AT THE CORNERS (desktop 45 deg 16:9, the eye's): every flip's switch at most its t");
+}
+
+static void rowNoPopEveryTier()
+{
+    measureChecks();
+    const worldmodes::Row *row = worldmodes::row(QStringLiteral("atomPixelError"));
+    check(row != nullptr, "the tier row atomPixelError exists");
+    if (!row) return;
+    const char *names[4] = { "Low", "Medium", "High", "Epic" };
+    size_t over = 0;
+    for (const auto &m : noPopMeshes()) {
+        clusterfix::Fixture f;
+        if (!bakeShell(f, m.second, m.first)) continue;
+        for (int k = 0; k < 4; ++k)
+            over += judge(f, kCentre, double(row->tier[k]), 1.0, m.first + " " + names[k]);
+    }
+    check(over == 0, "THE OWNER'S LAW AT EVERY TIER: every flip's switch at most 1 px at the tier's tolerance");
+}
+
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
@@ -477,9 +819,15 @@ int main(int argc, char **argv)
     else if (row == "atom.cut_closed") rowCutClosed();
     else if (row == "atom.cut_closed.multi_mesh") rowCutClosedMultiMesh();
     else if (row == "atom.switch_bracket") rowSwitchBracket();
+    else if (row == "atom.no_pop.centre") rowNoPopCentre();
+    else if (row == "atom.no_pop.corner") rowNoPopCorner();
+    else if (row == "atom.no_pop.every_tier") rowNoPopEveryTier();
+    else if (row.rfind("atom.no_pop.measure_agrees", 0) == 0)
+        rowMeasureAgrees(row.size() > 27 ? row.substr(27) : std::string("(a fixture)"));
     else {
         std::printf("usage: test_atom_cut_laws <atom.cut_partition | atom.cut_closed | atom.cut_closed.multi_mesh | "
-                    "atom.switch_bracket>\n");
+                    "atom.switch_bracket | atom.no_pop.centre | atom.no_pop.corner | atom.no_pop.every_tier | "
+                    "atom.no_pop.measure_agrees.<closed_sphere | round_bar | shell_4936>>\n");
         return 2;
     }
     if (gFailures == 0) std::printf("%s: PASSED\n", row.c_str());
