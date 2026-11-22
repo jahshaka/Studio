@@ -49,6 +49,7 @@ For more information see the LICENSE file
 class Database;
 class IEditorViewport;
 class MaterialPreviewService;
+class PreviewService;
 class UndoService;
 class SelectionService;
 
@@ -516,6 +517,8 @@ public:
     /// a live preview before it pushes. Null in headless hosts — which have no
     /// pointer to hover.
     void setMaterialPreview(MaterialPreviewService *service) { preview = service; }
+    /// The stored previews (services/previewservice.h): a material made here gets its tile there.
+    void setPreviews(PreviewService *service) { previews = service; }
 
     /// RESETS the mesh node's material to the node's OWN default (owner,
     /// 2026-09-12; services/materialdefaults.h — the default floor is the
@@ -533,7 +536,7 @@ public:
     /// PROJECT's own (MaterialBundle::create — the definition a store object,
     /// its members derived as edges), pinned into the project with its members
     /// and filed in `folderGuid` (empty or the project's guid = the root), then
-    /// its tile rendered (materialtile::mint). Named after the node, made
+    /// its tile rendered (PreviewService::mint). Named after the node, made
     /// unique. Answers the new guid, or empty with `error` saying why.
     /// `materials.createFromNode` and the editor's Create Material both call it.
     QString createMaterialFromNode(iris::SceneNodePtr node, const QString &folderGuid,
@@ -596,6 +599,7 @@ private:
     SelectionService *selection;
     IEditorViewport *viewport;
     MaterialPreviewService *preview = nullptr;
+    PreviewService *previews = nullptr;
     /// The content id each material's meshes were last dressed from — the
     /// "did anything actually change?" answer (see refreshMaterialUsers).
     QHash<QString, QString> mDressedFrom;

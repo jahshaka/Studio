@@ -23,7 +23,7 @@
 // name (OgreEngine::viewNameTaken), and this class used to be constructed
 // freely: ThumbnailGenerator kept ONE alive for the whole session from the
 // first material/shader thumbnail, and every TEMPORARY instance after that —
-// assetthumb::renderObject, `assets.refreshThumbnail` — then failed to create
+// the model thumbnail routine, `assets.refreshThumbnail` — then failed to create
 // its View, produced a null image and said nothing. Order-dependent and
 // therefore invisible in a fresh session: fine until the first material
 // thumbnail, broken for every model import afterwards.

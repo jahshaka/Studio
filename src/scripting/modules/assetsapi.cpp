@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
+#include <QTimer>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -64,12 +65,12 @@ For more information see the LICENSE file
 #include "services/import/assetimportservice.h"
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
-#include "services/thumbnailrebuild.h"
+#include "services/previewservice.h"
+#include "services/previewwriter.h"
 #include "services/videoutils.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
 #include "data/project.h"
-#include "bridge/assetthumbnail.h"
 #include "bridge/engineassetscene.h"
 #include "ui/pages/assetview.h"
 #include "ui/pages/engineassetviewer.h"
@@ -93,6 +94,50 @@ For more information see the LICENSE file
 using namespace scriptmod;
 
 namespace {
+
+// THE VERBS' WAIT FOR A LANDED PREVIEW (PREVIEWS-1, the lead's A1 and G2) - in the synchronous verbs'
+// door ONLY: PreviewService::request never waits (PICTURE-REQUEST-1 stage 3 replaces this by a
+// ticket). The run's database batch is stood down first (the commit a top-level DbTransaction makes;
+// it begins again at its next write), or the writer would wait behind it to the run's end. The
+// event loop turns with user input held back (assetshare.cpp's import wait). BOUNDED: the wait ends
+// when every write has landed, or when none has landed for kVerbWaitMs - one write ahead of it under
+// its budget, then its own - with a named failure.
+constexpr int kVerbWaitMs = 2 * previews::Writer::kBudgetMs;
+
+struct PreviewWait
+{
+    int requested = 0;
+    int completed = 0;
+    QEventLoop *loop = nullptr;
+};
+
+/// Waits for `wait->completed` to reach `wait->requested`; false when the bound passed first.
+bool waitForPreviews(ScriptHost &host, const std::shared_ptr<PreviewWait> &wait)
+{
+    if (wait->completed >= wait->requested) return true;
+    if (host.db) host.db->commitBatchNow();
+    QEventLoop loop;
+    QTimer stall;
+    stall.setSingleShot(true);
+    bool stalled = false;
+    QObject::connect(&stall, &QTimer::timeout, &loop, [&] { stalled = true; loop.quit(); });
+    wait->loop = &loop;
+    int seen = wait->completed;
+    while (wait->completed < wait->requested && !stalled) {
+        stall.start(kVerbWaitMs);
+        loop.exec(QEventLoop::ExcludeUserInputEvents);
+        if (wait->completed > seen) { seen = wait->completed; stalled = false; }
+    }
+    wait->loop = nullptr;
+    return wait->completed >= wait->requested;
+}
+
+/// The completion a waited request reports to.
+void notePreview(const std::shared_ptr<PreviewWait> &wait)
+{
+    ++wait->completed;
+    if (wait->loop) wait->loop->quit();
+}
 
 QString typeName(int type)
 {
@@ -1772,18 +1817,28 @@ QVariantMap AssetsApi::refreshThumbnail(const QString &guid)
         return out;
     }
 
-    // THE ONE ROUTINE (THUMBS-1). The switch that used to live here is
-    // services/thumbnailrebuild.h, so the bulk repair below, the Assets page's
-    // menu entry and this verb cannot drift apart — and the Avatar branch this
-    // verb never had is in all three at once.
-    const thumbrebuild::Outcome outcome =
-        thumbrebuild::rebuildOne(host.db, host.project, guid, EngineHost::instance().engine());
-    out["ok"] = outcome.ok;
-    if (!outcome.ok) {
-        out["reason"] = outcome.reason;
+    // THE ONE REQUEST (services/previewservice.h), waited for in this door only: the answer is
+    // whether the preview was STORED, not only drawn.
+    PreviewService *previews = host.services ? host.services->previews : nullptr;
+    if (!previews) { fail("assets: there is no preview service in this session"); return out; }
+    auto wait = std::make_shared<PreviewWait>();
+    wait->requested = 1;
+    auto outcome = std::make_shared<PreviewService::Outcome>();
+    previews->request(host.project, guid, [wait, outcome](const PreviewService::Outcome &o) {
+        *outcome = o;
+        notePreview(wait);
+    });
+    if (!waitForPreviews(host, wait)) {
+        outcome->ok = false;
+        outcome->reason = QStringLiteral("the preview was drawn but its write did not land within %1 ms "
+                                         "(the library stayed locked)").arg(kVerbWaitMs);
+    }
+    out["ok"] = outcome->ok;
+    if (!outcome->ok) {
+        out["reason"] = outcome->reason;
         // A REFUSAL, not a throw: the answer IS the return value, and the
         // reason travels in it (the caller can still read app.lastError()).
-        refuse(QStringLiteral("assets.refreshThumbnail: %1").arg(outcome.reason));
+        refuse(QStringLiteral("assets.refreshThumbnail: %1").arg(outcome->reason));
     }
     return out;
 }
@@ -1807,8 +1862,10 @@ QVariantMap AssetsApi::rebuildThumbnails(const QVariantMap &options)
         }
     }
 
-    thumbrebuild::SweepOptions sweep;
-    if (options.contains("missingOnly")) sweep.missingOnly = options.value("missingOnly").toBool();
+    PreviewService *previews = host.services ? host.services->previews : nullptr;
+    if (!previews) { fail("assets: there is no preview service in this session"); return out; }
+    PreviewService::SweepOptions sweep;
+    if (options.contains("missingOnly")) sweep.staleOnly = options.value("missingOnly").toBool();
     if (options.contains("projectOnly")) sweep.projectOnly = options.value("projectOnly").toBool();
     if (options.contains("limit")) sweep.limit = options.value("limit").toInt();
 
@@ -1818,18 +1875,29 @@ QVariantMap AssetsApi::rebuildThumbnails(const QVariantMap &options)
     //
     // AND IT IS STOPPABLE (fix round F1): a yield can deliver the window's
     // close, and a script can be stopped or time out while this one verb is
-    // still rendering. ScriptEngine::stop and the app's shutdown both set the
-    // flag thumbrebuild checks per row; `cancelled` comes back in the result
+    // still rendering. ScriptEngine::stop and the app's shutdown set the
+    // service's stop, checked per row; `cancelled` comes back in the result
     // so a caller can tell "nothing left to do" from "we were stopped".
-    const auto result = thumbrebuild::rebuildMissing(
-        host.db, host.project, EngineHost::instance().engine(), sweep,
+    auto wait = std::make_shared<PreviewWait>();
+    auto rebuilt = std::make_shared<int>(0);
+    auto failures = std::make_shared<QVariantList>();
+    const auto result = previews->sweep(
+        host.project, sweep,
+        [wait, rebuilt, failures](const QString &guid, const PreviewService::Outcome &o) {
+            if (o.ok) ++*rebuilt;
+            else if (!o.nothingToDraw) failures->append(QVariantMap{ { "guid", guid }, { "reason", o.reason } });
+            notePreview(wait);
+        },
         [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
+    wait->requested = result.requested;
+    if (!result.cancelled && !waitForPreviews(host, wait))
+        failures->append(QVariantMap{ { "guid", QString() },
+                                      { "reason", QStringLiteral("%1 preview(s) were drawn but did not land within %2 ms")
+                                                      .arg(wait->requested - wait->completed).arg(kVerbWaitMs) } });
 
-    QVariantList failed;
-    for (const auto &f : result.failed)
-        failed.append(QVariantMap{ { "guid", f.guid }, { "reason", f.reason } });
+    QVariantList failed = *failures;
     out["considered"] = result.considered;
-    out["rebuilt"] = result.rebuilt;
+    out["rebuilt"] = *rebuilt;
     out["skipped"] = result.skipped;
     out["cancelled"] = result.cancelled;
     out["failed"] = failed;

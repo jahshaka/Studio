@@ -82,7 +82,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/imagematerial.h"
 #include "services/materialdefaults.h"
 #include "services/materialbundle.h"
-#include "services/materialtile.h"
+#include "services/previewservice.h"
 #include "services/materialpresetassets.h"
 #include "services/presetedit.h"
 #include "services/materialpresetseeder.h"
@@ -1870,9 +1870,9 @@ QString SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const 
         if (!filed.ok) return refuse(filed.error);
     }
     projectfolders::announce(projectGuid);
-    // ONE GESTURE, ONE RENDER: the tile is a render of the material
-    // (materialtile.h); headless the stored fallback stands.
-    materialtile::mint(db, project, guid, "materials.createFromNode");
+    // ONE GESTURE, ONE RENDER: the tile is a render of the material (services/previewservice.h);
+    // headless the stored fallback stands.
+    if (previews) previews->mint(project, guid, "materials.createFromNode");
     return guid;
 }
 

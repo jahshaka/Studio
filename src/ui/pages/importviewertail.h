@@ -82,8 +82,8 @@ private:
 /// The per-mesh tail body: the library preview + the row's camera properties.
 /// One item's worth of UI/engine-thread work.
 ///
-/// The THUMBNAIL is not written here: it is assetthumb::storeObject (the one
-/// routine `assets.refreshThumbnail` uses), called by the page — so a page
+/// The THUMBNAIL is not written here: it is the preview service's request (the one
+/// `previews.render` makes), asked by the page — so a page
 /// import and a scripted import store the same image instead of two renders
 /// of two different nodes.
 namespace ImportMeshTail

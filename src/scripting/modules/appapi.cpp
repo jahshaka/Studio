@@ -1385,7 +1385,7 @@ QVariantMap AppApi::resetLibrary(const QVariantMap &options)
     // THE REFUSAL, TAKEN HERE AS WELL AS IN THE SERVICE, so the caller is told
     // before anything closes: a library being written to — or one whose store
     // is on a drive that is not there — is not a library to delete.
-    const QString why = libraryreset::refusalReason();
+    const QString why = libraryreset::refusalReason(host.services ? host.services->previews : nullptr);
     if (!why.isEmpty()) {
         refuse(QStringLiteral("app.resetLibrary: %1").arg(why));
         return out;

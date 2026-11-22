@@ -10,7 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "scripting/scriptengine.h"
-#include "services/thumbnailstop.h"
+#include "services/previewservice.h"
+#include "services/services.h"
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -181,7 +182,7 @@ void ScriptEngine::stop()
     // boundary; `assets.rebuildThumbnails` is one verb call that may render
     // for minutes on the main thread, so the stop has to reach the sweep
     // itself or a stopped script keeps rendering.
-    thumbrebuild::requestStop();
+    if (mHost.services && mHost.services->previews) mHost.services->previews->requestStop();
     // Documented thread safe, and the only control surface QJSEngine offers:
     // the run ABORTS at the next bytecode boundary, it does not pause.
     mWorker->engine()->setInterrupted(true);
@@ -194,8 +195,8 @@ ScriptResult ScriptEngine::evaluate(const QString &source, const QString &fileNa
     result.fileName = fileName;
 
     // A NEW RUN IS A NEW INTENT: whatever stopped the last one does not stop
-    // this one (services/thumbnailstop.h).
-    thumbrebuild::clearStop();
+    // this one (PreviewService's stop).
+    if (mHost.services && mHost.services->previews) mHost.services->previews->clearStop();
 
     // ONE RUN AT A TIME. Verbs that spin the event loop themselves
     // (project.open, an import, a progress dialog) can dispatch a console

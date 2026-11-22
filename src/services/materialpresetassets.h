@@ -75,6 +75,8 @@ struct MaterialPreset;
 class Database;
 class Project;
 
+class PreviewService;
+
 namespace MaterialPresetAssets
 {
 
@@ -175,10 +177,11 @@ QString customiseName(Database *db, const QString &wanted);
 /// material's tile is a picture OF THAT MATERIAL on the studio sphere, and the
 /// copy inherits the shipped preset's ICON until something draws it. That is
 /// here rather than at each of the three Customise doors — through
-/// services/materialtile.h, which logs a refusal instead of discarding it.
-/// Headless it fails by name and the inherited tile stands.
+/// the preview service's mint door (services/previewservice.h, `previews`; null:
+/// no tile), which logs a refusal instead of discarding it. Headless it fails by
+/// name and the inherited tile stands.
 QString createFromPreset(const QString &presetOrGuid, const QString &name, Database *db,
-                         QString *errorOut = nullptr);
+                         PreviewService *previews, QString *errorOut = nullptr);
 
 } // namespace MaterialPresetAssets
 

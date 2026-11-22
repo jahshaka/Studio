@@ -182,6 +182,8 @@ public:
 	/// tile's thumbnail (3D types through the asset viewer screenshot path,
 	/// images via ThumbnailManager, audio/files back to their type icon).
 	void rebuildTileThumbnail(const QString &guid);
+	/// The tile rebuild's answer: the reason in a box, or the tile refreshed.
+	void showTileRebuild(const QString &guid, const QString &reason);
 	/// Library ▾ → "Rebuild missing thumbnails": the bulk repair for rows whose
 	/// stored thumbnail is absent or undecodable — the same routine per asset
 	/// as `assets.refreshThumbnail`, run over the library one row at a time
@@ -190,6 +192,9 @@ public:
 	/// storages (ASSETS-HOME-1) — nobody clicked, so failures go to the log and
 	/// a toast, never a modal box.
 	void rebuildMissingThumbnails(bool afterUpdate = false);
+	/// The sweep's answer, once its LAST completion has arrived (the writes land after the
+	/// requests): a toast, or the reasons in a box.
+	void reportPreviewSweep(int rebuilt, const QStringList &failures, bool afterUpdate);
 	/// Tile context menu → "Create Material from Image" (IMAGE_PLANE_SPEC
 	/// option B1): mints the companion PBR material asset, pins it into the
 	/// open project and adds its library tile.
@@ -232,8 +237,8 @@ private:
 	/// land (the busy state shows on the tile overlay + the status strip).
 	void scheduleViewerTails();
 	/// One mesh tail item: previews the COMMITTED asset (ImportMeshTail) and
-	/// stores its thumbnail through the one thumbnail routine
-	/// (assetthumb::storeObject — what `assets.refreshThumbnail` runs).
+	/// requests its preview from the one preview service
+	/// (services/previewservice.h — what `previews.render` runs).
 	void finishMeshTailItem(const ImportResult &result, const QString &fileName);
 	/// Images/audio/video: build + wire the library tile for a committed row.
 	void addLibraryTileForAsset(const QString &guid);

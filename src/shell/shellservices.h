@@ -46,6 +46,7 @@ class SelectionService;
 class SessionMarkers;
 class SettingsManager;
 class ThumbnailService;
+class PreviewService;
 class UndoService;
 struct StudioServices;
 
@@ -81,6 +82,7 @@ public:
     MaterialPreviewService *materialPreview() const { return mPreview; }
     ClipboardService *clipboard() const { return mClipboard; }
     ThumbnailService *thumbnails() const { return mThumbnails; }
+    PreviewService *previews() const { return mPreviews; }
     AssetService *assets() const { return mAssets; }
     AmbienceService *ambience() const { return mAmbience; }
 
@@ -96,6 +98,7 @@ private:
     MaterialPreviewService *mPreview = nullptr;
     ClipboardService *mClipboard = nullptr;
     ThumbnailService *mThumbnails = nullptr;
+    PreviewService *mPreviews = nullptr;
     AssetService *mAssets = nullptr;
     AmbienceService *mAmbience = nullptr;
     PerfSampler *mPerf = nullptr;

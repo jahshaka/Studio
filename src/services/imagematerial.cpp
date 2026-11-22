@@ -114,7 +114,7 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
 
     // THE STORED FALLBACK: the image itself, at the size every other thumbnail
     // is stored at (it used to be 72x72 — see the header for why the RENDER is
-    // not made here). `thumbrebuild::rebuildOne` on this guid replaces it with
+    // not made here). The preview service's request on this guid replaces it with
     // the material on the preview sphere, asked for by the gesture that minted
     // it, off this function's critical path.
     QByteArray thumbnail;

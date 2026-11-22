@@ -30,7 +30,7 @@ For more information see the LICENSE file
 #include "services/materialpresetseeder.h"
 #include "services/primitiveassets.h"
 #include "services/thumbnailmanager.h"
-#include "services/thumbnailrebuild.h"
+#include "services/previewservice.h"
 
 namespace {
 
@@ -134,13 +134,13 @@ QVariantMap Kept::toMap() const
     return out;
 }
 
-QString refusalReason()
+QString refusalReason(const PreviewService *previews)
 {
     if (ImportBatchRunner::anyRunning())
         return QStringLiteral("an import is running");
     if (MaterialPresetSeeder::instance().isRunning())
         return QStringLiteral("the first-run preset seed is running");
-    if (thumbrebuild::sweepRunning())
+    if (previews && previews->sweepRunning())
         return QStringLiteral("a thumbnail rebuild is running");
     // AN OFFLINE STORE IS NOT AN EMPTY ONE. The root is a user-chosen path
     // (assets/storeRoot) and it may be an unmounted drive: wiping the catalog

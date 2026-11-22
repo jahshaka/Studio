@@ -39,9 +39,7 @@ For more information see the LICENSE file
 #include <QProcess>
 #include <QTimer>
 
-#include "bridge/enginehost.h"
-#include "services/materialtile.h"
-#include "services/thumbnailrebuild.h"
+#include "services/previewservice.h"
 #include "ui/controls/tilecache.h"
 #include <QComboBox>
 
@@ -1231,9 +1229,10 @@ void AssetWidget::createMaterialFromImage()
 
     // THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1, owner review R9(a)): the
     // mint stores the image as a fallback and one gesture can afford one
-    // render. Through the ONE door (services/materialtile.h), so a refused
+    // render. Through the ONE door (services/previewservice.h), so a refused
     // borrow is logged by name instead of discarded.
-    materialtile::mint(db, project, materialGuid, "the tray's Create Material from Image");
+    if (services && services->previews)
+        services->previews->mint(project, materialGuid, "the tray's Create Material from Image");
 
     updateAssetView(assetItem.selectedGuid);
 }
@@ -2034,28 +2033,27 @@ void AssetWidget::drainThumbnailBacklog()
 {
 	if (thumbnailBacklog.isEmpty()) return;
 	const QString guid = thumbnailBacklog.takeFirst();
-	// THE ONE ROUTINE (services/thumbnailrebuild.h): a model from its stored
+	// THE ONE REQUEST (services/previewservice.h): a model from its stored
 	// blob, fitted and framed; a companion material on the preview sphere —
-	// whichever this row is. Its failures are logged by it; the tray has no
-	// surface to put a message on, and an import that succeeded must not become
-	// an error dialog because a tile is grey.
-	const thumbrebuild::Outcome outcome =
-	    thumbrebuild::rebuildOne(db, project, guid, EngineHost::instance().engine());
-
-	// ONE TILE, NOT THE WHOLE TRAY (fix round F9). This used to call
-	// updateAssetView per render — a full repopulate of the panel (the tray
-	// query, every row's blob, every icon rebuilt) for one changed icon, once
-	// per imported model.
-	if (outcome.ok) {
-		// The stored picture changed (the write dropped its cached tile): the
-		// item asks the tile cache again, decoded off this thread.
-		for (int i = 0; i < ui->assetView->count(); ++i) {
-			QListWidgetItem *item = ui->assetView->item(i);
-			if (item->data(MODEL_GUID_ROLE).toString() == guid) {
-				tiles()->refresh(item, guid, QIcon(":/icons/empty_object.png"));
-				break;
+	// whichever this row is. Its failures are the service's to log; the tray has
+	// no surface to put a message on, and an import that succeeded must not
+	// become an error dialog because a tile is grey.
+	//
+	// ONE TILE, NOT THE WHOLE TRAY (fix round F9), once the WRITE has landed:
+	// the stored picture changed (the write dropped its cached tile), so the
+	// item asks the tile cache again, decoded off this thread.
+	if (services && services->previews) {
+		QPointer<AssetWidget> self(this);
+		services->previews->request(project, guid, [self, guid](const PreviewService::Outcome &outcome) {
+			if (!self || !outcome.ok) return;
+			for (int i = 0; i < self->ui->assetView->count(); ++i) {
+				QListWidgetItem *item = self->ui->assetView->item(i);
+				if (item->data(MODEL_GUID_ROLE).toString() == guid) {
+					self->tiles()->refresh(item, guid, QIcon(":/icons/empty_object.png"));
+					break;
+				}
 			}
-		}
+		});
 	}
 	// ONE PER EVENT-LOOP TURN: the window keeps painting between renders.
 	if (!thumbnailBacklog.isEmpty()) QTimer::singleShot(0, this, [this] { drainThumbnailBacklog(); });

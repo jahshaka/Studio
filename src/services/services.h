@@ -37,6 +37,7 @@ class SceneEditService;
 class MaterialPreviewService;
 class ClipboardService;
 class ThumbnailService;
+class PreviewService;
 class AssetService;
 class AmbienceService;
 class PerfSampler;
@@ -63,6 +64,9 @@ struct StudioServices
     /// over the system clipboard. Null in hosts with no library.
     ClipboardService *clipboard  = nullptr;
     ThumbnailService *thumbnails = nullptr;
+    /// THE PREVIEW SERVICE (PREVIEWS-1, services/previewservice.h): every stored preview of a
+    /// library row, its key and its one writer. Null in hosts with no library.
+    PreviewService   *previews   = nullptr;
     AssetService     *assets     = nullptr;
     AmbienceService  *ambience   = nullptr;   ///< the world's music, played (audit D8)
     /// The session log's periodic performance sampler (SESSION_LOG_SPEC §8-R3).

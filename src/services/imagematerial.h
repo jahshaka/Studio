@@ -47,7 +47,7 @@ namespace ImageMaterial
 //
 // So the image stays the stored fallback (headless-correct, instant), and the
 // RENDER is asked for afterwards by whoever made the gesture:
-// `thumbrebuild::rebuildOne(materialGuid)` for a single mint, or the tray's
+// the preview service's mint (services/previewservice.h) for a single mint, or the tray's
 // one-per-event-loop-turn backlog for a batch.
 
 /// Resolves the texture's bytes (pin-first through the CAS; falls back to

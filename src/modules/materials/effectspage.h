@@ -36,6 +36,7 @@ class GraphNodeScene;
 class NodeGraph;
 class NodeLibraryItem;
 class Database;
+class PreviewService;
 class Project;
 class SettingsManager;
 class UndoRedo;
@@ -105,6 +106,8 @@ public:
 	/// and restores the incoming one's. LIBRARY tabs stay across the switch:
 	/// the library is the same library.
 	void onProjectChanged();
+	/// The stored previews (services/previewservice.h): a material this page makes gets its tile there.
+	void setPreviews(PreviewService *service) { mPreviews = service; }
 private:
 	std::function<bool()> mSceneOpenProbe;
 	Project *mProject = nullptr;
@@ -563,6 +566,7 @@ private:
 
 	ShaderAssetWidget *assetWidget = nullptr;
 	Database *dataBase = nullptr;
+	PreviewService *mPreviews = nullptr;
 };
 
 }

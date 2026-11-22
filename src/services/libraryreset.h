@@ -64,6 +64,8 @@ For more information see the LICENSE file
 class Database;
 class SettingsManager;
 
+class PreviewService;
+
 namespace libraryreset {
 
 /// What the reset removed. Counted BEFORE anything is deleted, so the numbers
@@ -134,7 +136,11 @@ struct Result
 /// root is a user-chosen path and may be an unmounted drive; wiping the
 /// catalog while the bytes are unreachable leaves the whole store orphaned on
 /// that drive with nothing left that names it.
-QString refusalReason();
+///
+/// The sweep is asked of the preview service (`previews`; null where none can be running - the
+/// startup generation check). reset()'s own check passes none: its caller (app.resetLibrary) has
+/// asked with the session's service before anything closes.
+QString refusalReason(const PreviewService *previews = nullptr);
 
 /// THE RESET. `keep` names the user's storages that survive it (above); with
 /// none kept it is the whole first-launch reset described here.

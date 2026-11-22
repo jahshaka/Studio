@@ -29,7 +29,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "services/assetcas.h"
 #include "services/materialbundle.h"
-#include "services/materialtile.h"
+#include "services/previewservice.h"
 #include "services/memberstamp.h"
 #include "services/shippedassets.h"
 
@@ -374,7 +374,7 @@ QString customiseName(Database *db, const QString &wanted)
 }
 
 QString createFromPreset(const QString &presetOrGuid, const QString &name, Database *db,
-                         QString *errorOut)
+                         PreviewService *previews, QString *errorOut)
 {
     const auto fail = [errorOut](const QString &why) {
         if (errorOut) *errorOut = why;
@@ -426,9 +426,9 @@ QString createFromPreset(const QString &presetOrGuid, const QString &name, Datab
     // material at all for silver or glass. Three doors called Customise (the
     // verb, the module's tile menu, the tray panel's) and each carried its own
     // copy of the call, so a fourth would have had to remember.
-    // (services/materialtile.h: one gesture, one render, and a refusal is
+    // (services/previewservice.h: one gesture, one render, and a refusal is
     // logged by name instead of discarded.)
-    materialtile::mint(db, nullptr, copy, "Create material from preset");
+    if (previews) previews->mint(nullptr, copy, "Create material from preset");
     return copy;
 }
 

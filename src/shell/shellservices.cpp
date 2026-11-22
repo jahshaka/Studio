@@ -23,6 +23,8 @@ For more information see the LICENSE file
 #include "services/loadtimeline.h"
 #include "services/materialpreviewservice.h"
 #include "services/perfsampler.h"
+#include "services/previewservice.h"
+#include "bridge/enginehost.h"
 #include "services/playbackservice.h"
 #include "player/engineplayerview.h"
 #include "services/playerservice.h"
@@ -73,6 +75,8 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     mClipboard = new ClipboardService(db, project, mSceneEdit, mSelection, mUndo, nullptr, this);
 
     mThumbnails = new ThumbnailService(db, project);
+    // THE PREVIEWS (PREVIEWS-1): the one adapter that knows where the engine lives is this line.
+    mPreviews = new PreviewService(db, [] { return EngineHost::instance().engine(); });
     mAssets = new AssetService(db, project);
 
     // THE HOVER PREVIEW (MATERIAL-PREVIEW-1). Constructed after the service
@@ -93,6 +97,8 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     mAggregate->materialPreview = mPreview;
     mAggregate->clipboard = mClipboard;
     mAggregate->thumbnails = mThumbnails;
+    mAggregate->previews = mPreviews;
+    mSceneEdit->setPreviews(mPreviews);
     mAggregate->assets = mAssets;
     // THE WORLD'S MUSIC (audit D8): a Music guid resolves the way every bound
     // asset does — the project's pin, else the library's bytes.
@@ -146,6 +152,9 @@ void ShellServices::destroyPlain()
     mProject = nullptr;
     delete mThumbnails;
     mThumbnails = nullptr;
+    // Its writer DRAINS here and joins - before the library closes (shutdown step 7).
+    delete mPreviews;
+    mPreviews = nullptr;
     delete mAssets;
     mAssets = nullptr;
     delete mUndo;

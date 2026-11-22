@@ -32,7 +32,6 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 #include "bridge/enginehost.h"
 #include "bridge/enginethumbnailrenderer.h"
-#include "services/thumbnailstop.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 
 ThumbnailGenerator* ThumbnailGenerator::instance = nullptr;
@@ -72,11 +71,6 @@ void ThumbnailGenerator::shutdown()
     // the main window is gone); the renderer checks anyway.
     if (tick) tick->stop();
     pending.clear();
-    // A SWEEP MAY BE ON THE STACK ABOVE US (fix round F1). This runs from
-    // ShellLifecycle::stopBackgroundWork, which is also what a window close
-    // delivered INSIDE a sweep's yield reaches — so ask the sweep to stop
-    // before destroying the renderer it is about to borrow again.
-    thumbrebuild::requestStop();
     // The renderer is the PROCESS's, not this queue's (THUMBS-1). Destroying it
     // here is still right — this runs while the Engine is alive and nothing is
     // rendering — and EngineHost::shutdown() does it again for a session that
@@ -163,7 +157,7 @@ QImage ThumbnailGenerator::renderEngineRequest(EngineThumbnailRenderer &renderer
         // hands the guid and nothing else, and then the definition is the
         // bundle's — its CAS `source` file, pin-first
         // (MATERIAL_BUNDLE_SPEC D-2), which is exactly what
-        // `thumbnailrebuild` and `SceneEditService::resolveMaterial` read.
+        // the preview service and `SceneEditService::resolveMaterial` read.
         //
         // The guid route exists because the Materials module used to ask for
         // a SHADER render of its own material: that branch read the row blob

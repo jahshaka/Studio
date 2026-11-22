@@ -10,9 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/qtinterop.h"
-#include "bridge/assetthumbnail.h"
-#include "services/materialtile.h"
-#include "services/thumbnailrebuild.h"
+#include "services/previewservice.h"
 #include "bridge/enginehost.h"
 #include "ui/pages/assetview.h"
 #include "ui/pages/iassetviewer.h"
@@ -1387,10 +1385,10 @@ void AssetView::finishMeshTailItem(const ImportResult &result, const QString &fi
     // THE ONE THUMBNAIL ROUTINE (smoke S6). This used to persist the viewer's
     // shot of the LIVE import fragment — a white, untextured render, because
     // that fragment's material paths point into the staging directory the
-    // commit deleted. assetthumb::storeObject is what `assets.refreshThumbnail`
+    // commit deleted. The preview service's request is what `previews.render`
     // runs: the committed blob, fitted, framed like the editor's F. A page
     // import and a scripted import now store the same image.
-    assetthumb::storeObject(db, project, result.assetGuid, EngineHost::instance().engine());
+    if (services && services->previews) services->previews->request(project, result.assetGuid, {});
 
     // The tile's picture follows the stored thumbnail by itself (the write drops
     // the cached tile; the next paint reads the new one). Its loading pulse ends.
@@ -2554,9 +2552,10 @@ void AssetView::createMaterialFromImageTile(const QString &textureGuid)
 
 	// THE TILE IS A RENDER OF THE MATERIAL (THUMBS-1, owner review R9(a)): the
 	// mint stores the image as a fallback and one gesture can afford one
-	// render. Through the ONE door (services/materialtile.h), so a refused
+	// render. Through the ONE door (services/previewservice.h), so a refused
 	// borrow is logged by name instead of discarded.
-	materialtile::mint(db, project, materialGuid, "the Assets page's Create Material from Image");
+	if (services && services->previews)
+		services->previews->mint(project, materialGuid, "the Assets page's Create Material from Image");
 
 	// The library tile for the new material, same tail the import path uses.
 	addLibraryTileForAsset(materialGuid);
@@ -2571,11 +2570,31 @@ void AssetView::rebuildMissingThumbnails(bool afterUpdate)
 	// batch's tails. User input is excluded so a second click on the menu
 	// cannot start a second sweep over the same rows.
 	// The user clicked the menu, so the app is alive and this is a new intent
-	// (services/thumbnailstop.h): whatever stopped a previous sweep is cleared.
-	thumbrebuild::clearStop();
-	thumbrebuild::SweepOptions options;   // missingOnly: the repair, not a redraw of everything
-	const auto result = thumbrebuild::rebuildMissing(
-	    db, project, EngineHost::instance().engine(), options,
+	// (PreviewService's stop): whatever stopped a previous sweep is cleared.
+	PreviewService *previews = services ? services->previews : nullptr;
+	if (!previews) return;
+	previews->clearStop();
+	PreviewService::SweepOptions options;   // staleOnly: the missing and the stale, not a redraw of everything
+	// THE ANSWER COMES WITH THE LAST COMPLETION: a request renders now and its write lands after,
+	// so the tally is shared and the report is made by whichever comes last - the sweep's end or
+	// the last landing. Nothing here waits.
+	struct Tally { int rebuilt = 0; int completed = 0; int requested = -1; QStringList failures; };
+	const auto tally = std::make_shared<Tally>();
+	QPointer<AssetView> self(this);
+	const auto reportIfDone = [self, tally, afterUpdate]() {
+		if (self && tally->requested >= 0 && tally->completed == tally->requested)
+			self->reportPreviewSweep(tally->rebuilt, tally->failures, afterUpdate);
+	};
+	const auto result = previews->sweep(
+	    project, options,
+	    [self, tally, reportIfDone](const QString &guid, const PreviewService::Outcome &outcome) {
+		    ++tally->completed;
+		    // Each rebuilt tile repaints from its new stored picture (the write dropped the cached
+		    // one; the view reads it again, off this thread).
+		    if (outcome.ok) { ++tally->rebuilt; if (self) self->libraryModel->refreshTile(guid); }
+		    else if (!outcome.nothingToDraw) tally->failures << QStringLiteral("%1: %2").arg(guid, outcome.reason);
+		    reportIfDone();
+	    },
 	    [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
 
 	// STOPPED MEANS SILENT (fix round F1). A yield delivers the window's close:
@@ -2583,12 +2602,13 @@ void AssetView::rebuildMissingThumbnails(bool afterUpdate)
 	// time we are back here, the page is on its way out, and a toast — let alone
 	// the modal box below — would be the "modal swallowed the quit" zombie.
 	if (result.cancelled) return;
+	tally->requested = result.requested;
+	reportIfDone();
+}
 
-	// Each rebuilt tile repaints from its new stored picture (the write
-	// dropped the cached one; the view reads it again, off this thread).
-	for (const QString &guid : result.rebuiltGuids) libraryModel->refreshTile(guid);
-
-	if (result.rebuilt == 0 && result.failed.isEmpty()) {
+void AssetView::reportPreviewSweep(int rebuilt, const QStringList &lines, bool afterUpdate)
+{
+	if (rebuilt == 0 && lines.isEmpty()) {
 		if (!afterUpdate)
 			libraryToast()->showToast(tr("Thumbnails"),
 			                          tr("Every asset that can have a thumbnail already has one."));
@@ -2596,29 +2616,26 @@ void AssetView::rebuildMissingThumbnails(bool afterUpdate)
 	}
 	// THE DENOMINATOR IS WHAT WAS ATTEMPTED, not what was looked at (F10):
 	// "Rebuilt 2 of 5,431" reads as a catastrophe on a healthy library.
-	const int attempted = result.rebuilt + result.failed.size();
-	if (result.failed.isEmpty()) {
+	const int attempted = rebuilt + int(lines.size());
+	if (lines.isEmpty()) {
 		libraryToast()->showToast(tr("Thumbnails"),
 		                          tr("Rebuilt %1 of %2 thumbnails.")
-		                              .arg(result.rebuilt).arg(attempted));
+		                              .arg(rebuilt).arg(attempted));
 		return;
 	}
 	// A FAILURE IS NEVER SILENT: the reasons are what the user needs to act on
-	// (no engine, a model whose bytes are gone, a shader with no baked material).
-	QStringList lines;
-	for (const auto &failure : result.failed)
-		lines << QStringLiteral("%1: %2").arg(failure.guid, failure.reason);
+	// (no engine, a model whose bytes are gone, a material with no definition).
 	if (afterUpdate) {
 		irisLog(QStringLiteral("thumbnails after the update: %1 of %2 rebuilt; not rebuilt: %3")
-		            .arg(result.rebuilt).arg(attempted).arg(lines.join(QStringLiteral("; "))));
+		            .arg(rebuilt).arg(attempted).arg(lines.join(QStringLiteral("; "))));
 		libraryToast()->showToast(tr("Thumbnails"),
 		                          tr("Rebuilt %1 of %2 thumbnails after the update; the log lists "
-		                             "the rest.").arg(result.rebuilt).arg(attempted));
+		                             "the rest.").arg(rebuilt).arg(attempted));
 		return;
 	}
 	QMessageBox::warning(this, tr("Rebuild missing thumbnails"),
 	                     tr("Rebuilt %1 of %2. These could not be rebuilt:\n\n%3")
-	                         .arg(result.rebuilt)
+	                         .arg(rebuilt)
 	                         .arg(attempted)
 	                         .arg(lines.mid(0, 12).join(QStringLiteral("\n"))),
 	                     QMessageBox::Ok);
@@ -2636,10 +2653,10 @@ void AssetView::rebuildTileThumbnail(const QString &guid)
 	// it — and, when nothing could be drawn, a box saying "Could not rebuild
 	// this thumbnail." with the reason dropped on the floor.
 	//
-	// Now every type goes through thumbrebuild::rebuildOne (which also STORES
-	// it, so nothing is written twice), the page still loads the matching
+	// Now every type goes through the preview service's one request (which also
+	// STORES it, through its one writer), the page still loads the matching
 	// preview because that is what the user asked to look at, and a failure
-	// shows the reason it already has.
+	// shows the reason it already has - when the request's completion arrives.
 	if (guid.isEmpty()) return;
 	const auto record = db->fetchAsset(guid);
 	if (record.guid.isEmpty()) return;
@@ -2680,18 +2697,23 @@ void AssetView::rebuildTileThumbnail(const QString &guid)
 			db->updateAssetThumbnail(guid, AssetHelper::makeBlobFromPixmap(pixmap));
 		}
 	} else {
-		const thumbrebuild::Outcome outcome =
-		    thumbrebuild::rebuildOne(db, project, guid, EngineHost::instance().engine());
-		if (!outcome.ok) reason = outcome.reason;
+		if (!services || !services->previews) return;
+		QPointer<AssetView> self(this);
+		services->previews->request(project, guid, [self, guid](const PreviewService::Outcome &outcome) {
+			if (self) self->showTileRebuild(guid, outcome.ok ? QString() : outcome.reason);
+		});
+		return;
 	}
+	showTileRebuild(guid, reason);
+}
 
+void AssetView::showTileRebuild(const QString &guid, const QString &reason)
+{
 	if (!reason.isEmpty()) {
 		// THE REASON IS THE POINT: "could not" with no because is what sent the
 		// owner looking at grey tiles with nothing to go on.
 		QMessageBox::warning(this, tr("Rebuild Thumbnail"),
-		                     reason.isEmpty()
-		                         ? tr("Could not rebuild this thumbnail.")
-		                         : tr("Could not rebuild this thumbnail:\n\n%1").arg(reason),
+		                     tr("Could not rebuild this thumbnail:\n\n%1").arg(reason),
 		                     QMessageBox::Ok);
 		return;
 	}

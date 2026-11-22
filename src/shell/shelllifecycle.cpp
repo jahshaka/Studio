@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "shell/shelllifecycle.h"
+#include "services/previewservice.h"
 #include "services/forcedexit.h"
 
 #include <QCloseEvent>
@@ -292,6 +293,11 @@ void ShellLifecycle::stopBackgroundWork()
     // the Claude chat subprocess closes stdin, waits briefly, and is killed.
     if (mParts.assistant) mParts.assistant->shutdown();
 
+    // A PREVIEW SWEEP MAY BE ON THE STACK ABOVE US (THUMBS-1 fix round F1): this is also what a
+    // window close delivered INSIDE a sweep's yield reaches, so the sweep is asked to stop before
+    // the renderer it is about to borrow again is destroyed.
+    if (PreviewService *previews = mParts.services ? mParts.services->previews() : nullptr)
+        previews->requestStop();
     ThumbnailGenerator::getSingleton()->shutdown();
 
     // THE LAST SAVE'S THUMBNAIL (CREATE-GAP-1): a save encodes its PNG on a

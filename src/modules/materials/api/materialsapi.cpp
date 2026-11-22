@@ -45,8 +45,7 @@ For more information see the LICENSE file
 #include "services/materialmembers.h"
 #include "services/memberstamp.h"
 #include "bridge/previewenvironment.h"
-#include "services/materialtile.h"
-#include "services/thumbnailrebuild.h"
+#include "services/previewservice.h"
 #include "services/materialdefaults.h"
 #include "io/materialpresets.h"
 #include "services/materialpreviewservice.h"
@@ -76,6 +75,13 @@ For more information see the LICENSE file
 using namespace scriptmod;
 
 namespace {
+
+/// A material just made, copied or saved gets its own tile: the preview service's mint door
+/// (services/previewservice.h), which never waits and logs a render that could have happened.
+void mintTile(ScriptHost &host, Project *project, const QString &guid, const char *who)
+{
+    if (host.services && host.services->previews) host.services->previews->mint(project, guid, who);
+}
 
 // The material.* key vocabulary, at file scope so material.set, its refusal
 // message and material.properties all read the SAME lists. They used to be
@@ -634,7 +640,7 @@ QString MaterialsApi::createFromImage(const QString &textureGuid, const QVariant
     // image as a fallback — correct and instant, and the only answer headless;
     // ONE gesture can afford ONE render, so ask for it here. A batch (a drop of
     // a hundred images) goes through the tray's one-per-turn backlog instead.
-    materialtile::mint(host.db, host.project, materialGuid, "materials.createFromImage");
+    mintTile(host, host.project, materialGuid, "materials.createFromImage");
     return materialGuid;
 }
 
@@ -662,7 +668,8 @@ QString MaterialsApi::createFromPreset(const QString &presetOrGuid, const QVaria
     MaterialPresetSeeder::instance().finishNow();   // one importer at a time
     QString error;
     const QString copy = MaterialPresetAssets::createFromPreset(
-        presetOrGuid, options.value(QStringLiteral("name")).toString(), host.db, &error);
+        presetOrGuid, options.value(QStringLiteral("name")).toString(), host.db,
+        host.services ? host.services->previews : nullptr, &error);
     if (copy.isEmpty()) {
         fail(QStringLiteral("materials.createFromPreset: %1").arg(error));
         return QString();
@@ -673,7 +680,7 @@ QString MaterialsApi::createFromPreset(const QString &presetOrGuid, const QVaria
     AssetManager::addAsset(std::move(asset));
     // (The copy's TILE is rendered inside `customise` now — one place for all
     // three Customise doors, and a refused render is logged rather than
-    // discarded; PREVIEWENV-2 item c, services/materialtile.h.)
+    // discarded; PREVIEWENV-2 item c, services/previewservice.h.)
     return copy;
 }
 
@@ -748,7 +755,7 @@ QString MaterialsApi::createImageGraph(const QString &textureGuid)
     // THE MATERIAL'S TILE IS A RENDER OF IT ON THE STUDIO SPHERE (owner review
     // R9(a)). The graph twin of createFromImage minted its bundle with no tile
     // while its VALUES twin rendered one.
-    materialtile::mint(host.db, host.project, assetGuid, "materials.createImageGraph");
+    mintTile(host, host.project, assetGuid, "materials.createImageGraph");
 
     if (mGraphApi) mGraphApi->setCurrent(std::move(ownedGraph), assetGuid);
     return assetGuid;
@@ -873,7 +880,7 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     // THE MATERIAL'S TILE IS A RENDER OF IT ON THE STUDIO SPHERE (owner review
     // R9(a)). A minted bundle carried NO thumbnail at all, so a material made
     // this way was a grey tile until some sweep found it.
-    materialtile::mint(host.db, host.project, assetGuid, "materials.create");
+    mintTile(host, host.project, assetGuid, "materials.create");
 
     // `folder` PUTS IT IN THE PROJECT, FILED (DRAWERS-1, the owner's "creating
     // in the project should add it to the project drawer in Materials
@@ -1154,8 +1161,8 @@ QString MaterialsApi::duplicate(const QString &materialGuid, const QVariantMap &
     // inherits the SOURCE row's tile, which is the right picture only while
     // the copy is untouched and the wrong one the moment the source's was an
     // icon. ONE implementation, and it says so when it cannot
-    // (services/materialtile.h).
-    materialtile::mint(host.db, host.project, copy, "materials.duplicate");
+    // (services/previewservice.h).
+    mintTile(host, host.project, copy, "materials.duplicate");
     return copy;
 }
 
@@ -1175,7 +1182,7 @@ QString MaterialsApi::saveToAssets(const QString &materialGuid, const QVariantMa
         fail(QStringLiteral("materials.saveToAssets: %1").arg(error));
         return QString();
     }
-    materialtile::mint(host.db, nullptr, saved, "materials.saveToAssets");
+    mintTile(host, nullptr, saved, "materials.saveToAssets");
     return saved;
 }
 

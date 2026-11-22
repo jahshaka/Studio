@@ -511,7 +511,7 @@ int main(int argc, char **argv)
         CHECK(AssetHelper::meshParseCount() == parsesBefore + 1,
               "the pipeline's single parse is still the only one the tail itself does");
         CHECK(db.fetchAsset(meshResult.assetGuid).thumbnail == thumbBeforeTail,
-              "the tail writes NO thumbnail of its own — assetthumb::storeObject does, on the "
+              "the tail writes NO thumbnail of its own — the preview service does, for the "
               "page, from the stored blob (the old tail persisted the white fragment render)");
 
         // The row survived the tail's property merge with its determinism

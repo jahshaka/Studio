@@ -41,6 +41,7 @@ void MaterialsModule::initialize(StudioContext &host)
         page->setSceneOpenProbe([projectService]() { return projectService->isSceneOpen(); });
     }
     page->setProject(host.project);
+    page->setPreviews(host.services ? host.services->previews : nullptr);
     // EVERY RETURN TO EDIT MODE re-hands the page's asset drawer the library,
     // which (with a scene open) re-reads it — what the shell's edit-mode
     // chrome did for this page by hand before the module owned it.

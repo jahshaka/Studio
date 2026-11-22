@@ -1,0 +1,308 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the MIT License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+#include "services/previewservice.h"
+
+#include <QFileInfo>
+#include <QImage>
+#include <QPixmap>
+#include <QSqlDatabase>
+
+#include "bridge/enginethumbnailrenderer.h"
+#include "bridge/previewenvironment.h"
+#include "data/database/database.h"
+#include "data/project.h"
+#include "io/materialreader.h"
+#include "irisgl/core/irisutils.h"
+#include "irisgl/core/logger.h"
+#include "irisgl/document/scenegraph/scenenode.h"
+#include "jahshaka/engine/Engine.h"
+#include "services/animationfile.h"
+#include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include "services/avatarassets.h"
+#include "services/iesprofile.h"
+#include "services/libraryassetnode.h"
+#include "services/materialbundle.h"
+#include "services/meshbakestore.h"
+#include "services/previewkey.h"
+#include "services/previewwriter.h"
+#include "services/thumbnailmanager.h"
+#include "services/videoutils.h"
+
+using jahshaka::engine::Engine;
+
+namespace {
+
+QString storeFileFor(const QString &guid)
+{
+    return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
+}
+
+previews::KeySource keySourceOf(const Database::PreviewRow &row)
+{
+    previews::KeySource source;
+    source.guid = row.guid;
+    source.type = row.type;
+    source.files = row.files;
+    source.pin = row.pin;
+    source.members = row.members;
+    return source;
+}
+
+/// A MODEL row with no content at all (no file, no pin, no blob): a builtin primitive's Object row
+/// (a template's Floor) - a document thing that never had a model.
+bool nothingToDraw(const Database::PreviewRow &row)
+{
+    const auto type = static_cast<ModelTypes>(row.type);
+    const bool model = type == ModelTypes::Object || type == ModelTypes::ParticleSystem;
+    return model && row.files.isEmpty() && row.pin.isEmpty() && !row.hasBlob;
+}
+
+PreviewService::Outcome failure(const QString &why, bool nothing = false)
+{
+    PreviewService::Outcome out;
+    out.reason = why;
+    out.nothingToDraw = nothing;
+    return out;
+}
+
+QString projectGuidOf(Project *project)
+{
+    return project ? project->getProjectGuid() : QString();
+}
+
+}   // namespace
+
+PreviewService::PreviewService(Database *db, EngineProvider engine)
+    : mDb(db), mEngine(std::move(engine))
+{
+    if (mDb && !mDb->filePath().isEmpty()) mWriter = std::make_unique<previews::Writer>(mDb->filePath());
+}
+
+// The writer drains its queue and joins here: before the library closes (ShellServices::destroyPlain).
+PreviewService::~PreviewService() = default;
+
+const char *PreviewService::stateName(State state)
+{
+    switch (state) {
+    case State::Ok: return "ok";
+    case State::Missing: return "missing";
+    case State::Stale: return "stale";
+    case State::None: break;
+    }
+    return "none";
+}
+
+// ---- the per-type pictures (the bodies of thumbrebuild::rebuildOne and assetthumb::renderObject) ----
+
+QImage PreviewService::renderPicture(Project *project, const QString &guid, int type, QSize size,
+                                     Outcome *out)
+{
+    const auto engineOrNull = [this]() { return mEngine ? mEngine() : std::shared_ptr<Engine>(); };
+    const auto say = [out](const QString &why) { *out = failure(why); return QImage(); };
+    const QSize cpu = size.isEmpty() ? QSize(256, 256) : size;
+    const QSize studio = size.isEmpty() ? QSize(512, 512) : size;
+
+    // A MODEL through the one thumbnail renderer, framed to its bounds. ALWAYS from the stored blob:
+    // the session-registered import node carries texture paths into a staging directory the commit
+    // deleted (rendering it gave a white, untextured tile).
+    const auto renderModel = [&](const QString &modelGuid) -> QImage {
+        iris::SceneNodePtr node = libraryasset::fromLibrary(mDb, project, modelGuid);
+        if (!node) {
+            if (mDb->fetchAsset(modelGuid).guid.isEmpty())
+                return say(QStringLiteral("the model '%1' is no longer in the library").arg(modelGuid));
+            return say(QStringLiteral("the stored model for '%1' could not be read: its bytes are missing, "
+                                      "or its blob carries no geometry").arg(modelGuid));
+        }
+        const auto engine = engineOrNull();
+        if (!engine) return say(QStringLiteral("the engine is not running (a model preview is a render)"));
+        auto loan = EngineThumbnailRenderer::borrow(engine, "the model preview");
+        if (!loan) return say(loan.reason());
+        const QImage image = loan->renderNode(node, studio);
+        if (image.isNull()) return say(loan->lastFailure());
+        return image;
+    };
+
+    switch (static_cast<ModelTypes>(type)) {
+    case ModelTypes::Texture: {
+        // THE ONE IMAGE DECODE of the CPU kinds (SKY-LIGHT-1 adds `.hdr` here).
+        auto thumb = ThumbnailManager::createThumbnail(storeFileFor(guid), cpu.width(), cpu.height());
+        if (!thumb || thumb->thumb.isNull()) return say(QStringLiteral("the image could not be read"));
+        return thumb->thumb;
+    }
+    case ModelTypes::Music:
+        return QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
+    case ModelTypes::Video:
+        // The first-second frame; VideoUtils falls back to the film icon when decode fails.
+        return VideoUtils::thumbnailFor(storeFileFor(guid)).toImage();
+    case ModelTypes::Animation: {
+        // The POSE STRIP, from the CLIP BAKE (SHIPPED-BAKES-1), never a parse: a stale or missing
+        // bake is rebuilt from the source on a worker first.
+        QImage strip;
+        if (const iris::BakedClipPtr clip = MeshBakeStore::ensureClip(storeFileFor(guid)))
+            animfile::describe(clip->info, QFileInfo(mDb->fetchAsset(guid).name).completeBaseName(), &strip,
+                               cpu.width(), cpu.height());
+        if (strip.isNull()) return say(QStringLiteral("the animation's clip bake could not be read"));
+        return strip;
+    }
+    case ModelTypes::File:
+        return QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
+    case ModelTypes::LightProfile: {
+        // The candela lobe: two .ies files look identical as names and completely different as light.
+        const IesProfile profile = IesProfile::parse(storeFileFor(guid));
+        if (!profile.ok)
+            return say(QStringLiteral("the photometric profile could not be read: %1").arg(profile.error));
+        return profile.polarThumbnail(cpu.width());
+    }
+    case ModelTypes::Object:
+    case ModelTypes::ParticleSystem:
+        return renderModel(guid);
+    case ModelTypes::Avatar: {
+        // An avatar LOOKS like its character: its preview is its model's, rendered now.
+        AvatarAssets::Loaded loaded = AvatarAssets::load(guid, AvatarAssets::Scope::Library, mDb, project);
+        if (!loaded.ok() && project)
+            loaded = AvatarAssets::load(guid, AvatarAssets::Scope::Project, mDb, project);
+        if (!loaded.ok())
+            return say(QStringLiteral("the avatar definition could not be read: %1").arg(loaded.error));
+        if (loaded.definition.modelAsset.isEmpty()) return say(QStringLiteral("this avatar names no model to draw"));
+        const QImage image = renderModel(loaded.definition.modelAsset);
+        if (image.isNull()) out->reason = QStringLiteral("the avatar's model could not be rendered: %1").arg(out->reason);
+        return image;
+    }
+    case ModelTypes::Material: {
+        // THE BUNDLE'S DEFINITION, pin-first (MATERIAL_BUNDLE_SPEC D-2): a tile shows the version the
+        // open project holds. An EMPTY definition is a named failure, never a default ball.
+        const QJsonObject definition = MaterialBundle::read(mDb, guid, project);
+        if (definition.isEmpty()) return say(QStringLiteral("the material has no definition to draw"));
+        const auto engine = engineOrNull();
+        if (!engine) return say(QStringLiteral("the engine is not running (a material preview is a render)"));
+        auto loan = EngineThumbnailRenderer::borrow(engine, "the material preview");
+        if (!loan) return say(loan.reason());
+        MaterialReader reader;
+        reader.setProject(project);
+        const QImage image = loan->renderMaterial(reader.parseMaterialTyped(definition, mDb), studio);
+        if (image.isNull()) return say(loan->lastFailure());
+        return image;
+    }
+    default:
+        break;
+    }
+    *out = failure(QStringLiteral("this asset type (%1) has no preview").arg(type), true);
+    return QImage();
+}
+
+// ---- the request --------------------------------------------------------------------------------
+
+void PreviewService::request(Project *project, const QString &guid, Done done, QSize size)
+{
+    const auto finish = [&done](const Outcome &outcome) { if (done) done(outcome); };
+    if (!mDb) return finish(failure(QStringLiteral("there is no library in this session")));
+    const QVector<Database::PreviewRow> rows = mDb->fetchPreviewRows(projectGuidOf(project), false, -1, { guid });
+    if (rows.isEmpty()) return finish(failure(QStringLiteral("no asset with guid '%1'").arg(guid)));
+    const Database::PreviewRow &row = rows.first();
+    if (!previews::presetFor(row.type))
+        return finish(failure(QStringLiteral("this asset type (%1) has no preview").arg(row.type), true));
+    if (nothingToDraw(row))
+        return finish(failure(QStringLiteral("'%1' stores no model definition (a builtin primitive's row has "
+                                             "nothing to draw)").arg(guid), true));
+    // THE KEY AT THE REQUEST, written with the bytes: a definition that moves in flight reads stale.
+    const QString key = previews::key(keySourceOf(row), previewenv::kVersion);
+    Outcome outcome;
+    const QImage image = renderPicture(project, guid, row.type, size, &outcome);
+    if (image.isNull()) {
+        if (outcome.reason.isEmpty()) outcome.reason = QStringLiteral("the render produced no image");
+        return finish(outcome);   // A FAILED DELIVERY CHANGES NOTHING
+    }
+    if (!mWriter) return finish(failure(QStringLiteral("this session has no preview writer")));
+    QString refused;
+    const bool queued = mWriter->submit(guid, image, key, [done](const previews::Writer::Landed &landed) {
+        Outcome out;
+        out.ok = landed.ok;
+        out.reason = landed.reason;
+        if (done) done(out);
+    }, &refused);
+    if (!queued) finish(failure(refused));
+}
+
+void PreviewService::mint(Project *project, const QString &guid, const char *who)
+{
+    if (guid.isEmpty()) return;
+    const QString door = QString::fromUtf8(who ? who : "a material");
+    const auto engine = mEngine ? mEngine() : std::shared_ptr<Engine>();
+    // Headless (or with no engine) "no picture" is the expected answer and the fallback tile stands:
+    // saying so once per minted material would be noise. What is said is a render that COULD have
+    // happened and did not - a refused borrow above all (the renderer busy with another render).
+    const bool couldRender = engine && !engine->isHeadless();
+    request(project, guid, [door, guid, couldRender](const Outcome &outcome) {
+        if (!outcome.ok && couldRender)
+            irisLog(QStringLiteral("%1: no preview stored for %2 - %3").arg(door, guid, outcome.reason));
+    });
+}
+
+// ---- the state ----------------------------------------------------------------------------------
+
+QVector<PreviewService::Row> PreviewService::state(Project *project, bool projectOnly, int type)
+{
+    QVector<Row> out;
+    if (!mDb) return out;
+    const QVector<Database::PreviewRow> rows = mDb->fetchPreviewRows(projectGuidOf(project), projectOnly, type);
+    out.reserve(rows.size());
+    for (const Database::PreviewRow &row : rows) {
+        Row r;
+        r.guid = row.guid;
+        r.type = row.type;
+        r.storedKey = row.storedKey;
+        if (previews::presetFor(row.type) && !nothingToDraw(row)) {
+            r.key = previews::key(keySourceOf(row), previewenv::kVersion);
+            r.state = !row.hasBytes ? State::Missing : (row.storedKey == r.key ? State::Ok : State::Stale);
+        }
+        out.append(r);
+    }
+    return out;
+}
+
+// ---- the sweep ----------------------------------------------------------------------------------
+
+PreviewService::SweepResult PreviewService::sweep(Project *project, const SweepOptions &options,
+                                                  const std::function<void(const QString &, const Outcome &)> &each,
+                                                  const std::function<void()> &yield)
+{
+    SweepResult result;
+    if (!mDb) return result;
+    // A SWEEP IN FLIGHT is what app.resetLibrary refuses on: it deletes exactly the rows this writes.
+    ++mSweeps;
+    const QVector<Row> rows = state(project, options.projectOnly);
+    // The yield is not free (it pumps the event loop), so a healthy library does not pay one a row;
+    // but it pays them REGULARLY, or a sweep that finds nothing to do is still one long stall.
+    const int kYieldEvery = 16;
+    int since = 0;
+    for (const Row &row : rows) {
+        if (mStop || (options.cancelled && options.cancelled())) { result.cancelled = true; break; }
+        if (options.limit > 0 && result.requested >= options.limit) break;
+        if (!previews::presetFor(row.type)) continue;
+        ++result.considered;
+        bool rendered = false;
+        if (row.state == State::None) {
+            ++result.skipped;
+        } else if (!options.staleOnly || row.state != State::Ok) {
+            ++result.requested;
+            const QString guid = row.guid;
+            request(project, guid, [each, guid](const Outcome &outcome) { if (each) each(guid, outcome); });
+            rendered = true;
+        }
+        // BETWEEN ROWS, NOT INSIDE ONE: each request is a synchronous render. A YIELD CAN DELIVER THE
+        // WINDOW'S CLOSE: the stop check at the top of the loop stops us before the next render.
+        if (yield && (rendered || ++since >= kYieldEvery)) { since = 0; yield(); }
+    }
+    --mSweeps;
+    return result;
+}

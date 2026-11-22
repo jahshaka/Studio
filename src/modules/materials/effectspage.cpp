@@ -63,8 +63,7 @@ For more information see the LICENSE file
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
 #include "services/sceneissues.h"
-#include "services/materialtile.h"
-#include "services/thumbnailrebuild.h"
+#include "services/previewservice.h"
 #include "ui/controls/assetpickerwidget.h"
 #include "services/projectassets.h"
 #include "services/projectmembership.h"
@@ -822,7 +821,7 @@ void EffectsPage::requestShaderThumbnail(const QString &shaderGuid)
 	// any definition with no `pbrMaterial` key — a key a bundle definition does
 	// not have. So every autosave of every graph material in this module
 	// logged "nothing was rendered", burned a queue tick and left a BLANK
-	// TILE, while the library's own sweep (thumbnailrebuild, which reads the
+	// TILE, while the library's own sweep (the preview service, which reads the
 	// bundle) rendered the same material perfectly. Two readers for one
 	// question; there is one now, and it is the bundle's.
 	mPendingThumbnails.insert(shaderGuid);
@@ -1243,8 +1242,8 @@ void EffectsPage::duplicateShader(QString guid)
 	// R9(a)): a duplicate inherits the source row's thumbnail, which is the
 	// wrong picture the moment that one was a preset's shipped icon. Before
 	// the drawers refill, so they show the render and not the inherited tile.
-	// (services/materialtile.h — one implementation, and a refusal is logged.)
-	materialtile::mint(dataBase, mProject, copy, "the module's Duplicate");
+	// (services/previewservice.h — one implementation, and a refusal is logged.)
+	if (mPreviews) mPreviews->mint(mProject, copy, "the module's Duplicate");
 	// THE DRAWERS FIRST, THEN THE OPEN (fix round F1): `loadGraph` finds its
 	// tile in the widgets, so opening the copy before the Custom list is
 	// refilled used to dereference a tile that did not exist.
@@ -1264,7 +1263,7 @@ void EffectsPage::createMaterialFromPreset(const QString &presetGuid)
 	MaterialPresetSeeder::instance().finishNow();   // one importer at a time
 	QString error;
 	const QString copy = MaterialPresetAssets::createFromPreset(presetGuid, QString(), dataBase,
-	                                                            &error);
+	                                                            mPreviews, &error);
 	if (copy.isEmpty()) {
 		QMessageBox::warning(this, tr("Create material"),
 		                     tr("The material could not be created: %1").arg(error));
@@ -1294,7 +1293,7 @@ void EffectsPage::saveMaterialToAssets(const QString &guid)
 		                     tr("The material could not be saved to Assets: %1").arg(error));
 		return;
 	}
-	materialtile::mint(dataBase, nullptr, saved, "the module's Save to Assets");
+	if (mPreviews) mPreviews->mint(nullptr, saved, "the module's Save to Assets");
 	QMessageBox::information(this, tr("Save to Assets"),
 	                         tr("\"%1\" is in Assets now.").arg(dataBase->fetchAsset(saved).name));
 }

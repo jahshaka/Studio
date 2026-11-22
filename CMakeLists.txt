@@ -394,7 +394,6 @@ set(SRCS
     src/services/libraryassetnode.cpp
     src/services/libraryreset.cpp
     src/services/librarygeneration.cpp
-    src/bridge/assetthumbnail.cpp
     src/services/rigsignature.cpp
     src/services/animationfile.cpp
     src/services/avatarassets.cpp
@@ -554,11 +553,9 @@ set(SRCS
     src/ui/controls/sliderlayoutmodel.cpp
     src/ui/dialogs/renameprojectdialog.cpp 
     src/services/thumbnailgenerator.cpp 
-    src/services/thumbnailrebuild.cpp 
-    src/services/materialtile.cpp
-    src/services/thumbnailstop.cpp 
     src/services/previewkey.cpp
     src/services/previewwriter.cpp
+    src/services/previewservice.cpp
     src/bridge/enginepreviewscene.cpp
     src/bridge/previewenvironment.cpp
     src/bridge/enginethumbnailrenderer.cpp 
@@ -719,7 +716,6 @@ set(HEADERS
     src/services/libraryassetnode.h
     src/services/libraryreset.h
     src/services/librarygeneration.h
-    src/bridge/assetthumbnail.h
     src/services/rigsignature.h
     src/services/animationfile.h
     src/services/avatarassets.h
@@ -865,10 +861,9 @@ set(HEADERS
     src/ui/controls/sliderlayoutmodel.h
     src/ui/dialogs/renameprojectdialog.h 
     src/services/thumbnailgenerator.h 
-    src/services/thumbnailrebuild.h 
-    src/services/thumbnailstop.h 
     src/services/previewkey.h
     src/services/previewwriter.h
+    src/services/previewservice.h
     src/ui/dialogs/donatedialog.h
     src/ui/pages/assetview.h
     src/ui/pages/importviewertail.h
