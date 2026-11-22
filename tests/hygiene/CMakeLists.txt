@@ -914,12 +914,14 @@ jah_builds(none ROWS source.no_glsl_path source.fork_stamp source.no_raw_transac
     source.atom_no_registries source.no_fixed_gi_volume source.shell_boundaries source.half_store_rounded
     source.rough_lobe_transport source.gate_pace source.test_arms_unreachable source.webgpu_census source.ray_seam
     source.display_guard_toy source.on_demand_rows source.on_demand_toy source.no_box_paths source.brick_list_bounded
-    source.scene_time_one_meaning)
+    source.scene_time_one_meaning source.ray_views_cached source.card_report_layout source.ray_loops_bounded
+    source.view_ray_origin)
 # the warm-up's key of this build (scripts/warm-app-cache.sh --key: the staged media and the engine's build id):
 jah_builds(JahshakaEngineMedia JahshakaEngineBuildId ROWS tooling.warm_app_cache tooling.warm_cold_rows
     tooling.warm_cold_calls tooling.warm_key tooling.warm_inherit tooling.warm_store source.display_guard)
 jah_builds(JahshakaEngineMedia ROWS source.compute_size_keys)                  # <build>/bin/media, the staged media
 jah_builds(JahStartupPassId ROWS source.startup_pass_closure)                  # <build>/startup-pass-files.txt
 jah_builds(JahshakaEngine Jahshaka jahlab IrisGL jahengine ROWS source.script_neutral)   # nm on each
+jah_builds(IrisCore ROWS source.no_qt_below)                                   # nm on IrisCore's archive (+ build.ninja)
 # the whole default build: every test binary ctest runs (readelf), the build's whole dependency graph (its deps log)
 jah_builds(all ROWS source.display_guard_linked gate.selection gate.reach_cache source.gate_scope_rules)
