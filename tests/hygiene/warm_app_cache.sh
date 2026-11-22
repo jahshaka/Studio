@@ -28,7 +28,11 @@ toy_cache() {
     printf 'jahshaka-shader-cache 2\nsaved %s\nshaders %s\nfile hlms.1.bin 10 %s k1\nfile pipeline.cache 20 %s k2\nfile compute.bin 8 %s k1\n' "$2" "$3" \
         "$(python3 -I "$CK" --hash "$1/hlms.1.bin")" "$(python3 -I "$CK" --hash "$1/pipeline.cache")" \
         "$(python3 -I "$CK" --hash "$1/compute.bin")" > "$1/cache-manifest.txt"
+    # (warm in EVERY term: the startup pass's record at the real build's pass id - the cases that drive the script on the real
+    # build judge it; a toy build with no generated id judges none; P1-P3 and S9 write their own)
+    [ -z "$RPASS" ] || printf 'pass=%s|media=m|cache=c\n' "$RPASS" > "$1/warm-pass.key"
 }
+RPASS=$(sed -n 's/^#define JAH_STARTUP_PASS_CODE_ID "\([0-9a-f]*\)"$/\1/p' "$BUILD/generated/jah_startup_pass_id.h" 2>/dev/null)
 toy_cache "$T/.shadercache" 1 2
 toy_cache "$T/.shadercache-engine" 1 2
 fail=0
@@ -60,10 +64,12 @@ if [ -n "${FAKE_RACE:-}" ]; then
     printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\n%s\n' "$files" > "$FAKE_RACE/cache-manifest.txt"
 fi
 # with FAKE_PASS_LOG set, the startup gate's global pass as the app decides it: a record in the cache = skipped; none = the
-# pass runs and writes its record (a new file - the seeded one is a hard link of the shared one)
+# pass runs and writes its record (a new file - the seeded one is a hard link of the shared one). With FAKE_PASS_ID set too,
+# the app's own rule (src/app/shaderbuildgate.cpp keyMoved): skipped only when the record names THIS build's pass id
 if [ -n "${FAKE_PASS_LOG:-}" ]; then
-    if [ -f "$c/warm-pass.key" ]; then echo skipped >> "$FAKE_PASS_LOG"
-    else echo ran >> "$FAKE_PASS_LOG"; printf 'pass=this-boot\n' > "$c/warm-pass.key"; fi
+    if [ -n "${FAKE_PASS_ID:-}" ] && grep -q "^pass=$FAKE_PASS_ID|" "$c/warm-pass.key" 2>/dev/null; then echo skipped >> "$FAKE_PASS_LOG"
+    elif [ -z "${FAKE_PASS_ID:-}" ] && [ -f "$c/warm-pass.key" ]; then echo skipped >> "$FAKE_PASS_LOG"
+    else echo ran >> "$FAKE_PASS_LOG"; rm -f "$c/warm-pass.key"; printf 'pass=%s|media=m|cache=c\n' "${FAKE_PASS_ID:-this-boot}" > "$c/warm-pass.key"; fi
 fi
 exit 0
 APP
@@ -217,7 +223,8 @@ ls "$T/gpu.lock.q" 2> /dev/null | grep -qE '^[0-9]{12}\.s50$' && ok "a boot that
 # every row compiled again): an -off cache warm at the key whose ENGINE BUILD ID moved since its stamp (the engine's code alone
 # changed) is WARM - nothing boots, the shared union keeps every recipe a green row promoted (its hlms and compute layers and
 # the startup pass's record untouched, the same inodes). (red on the old script: "a TOP-UP", a boot whose promotion dropped
-# the hlms and compute layers)
+# the hlms and compute layers) This toy build has NO generated pass id: its record is not judged - the real engine id is a
+# term of the pass id, and a moved pass id is the case below (P1-P3), one boot that keeps the union
 B2="$T/b2"; mkdir -p "$B2/tests" "$B2/engine/generated" "$B2/bin/media"; touch "$B2/CMakeCache.txt"; toy_cache "$B2/tests/.shadercache" 1 2
 cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B2/engine/generated/"; cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B2/bin/media/" 2>/dev/null
 printf 'pass=an-earlier-boot\n' > "$B2/tests/.shadercache/warm-pass.key"
@@ -231,6 +238,32 @@ out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B2" --te
     [ "$(stat -c %i "$B2/tests/.shadercache/hlms.1.bin")" = "$i2" ] && [ "$(cat "$B2/tests/.shadercache/warm-pass.key")" = pass=an-earlier-boot ] &&
     ok "NO TOP-UP: the engine's code moved alone (its build id) - warm at the key, nothing booted, the union's hlms and compute layers and the pass record kept (the same inode)" ||
     no "no top-up: rc $rc '$out' pass [$(tr '\n' ' ' < "$T/b2.pass")] $(tr '\n' ';' < "$B2/tests/.shadercache/cache-manifest.txt")"
+# THE STARTUP PASS's RECORD (TE-WARM-WHY (D); spikes/validation-slow/): a cache warm at the key whose record names ANOTHER
+# build's pass id (an engine or a Studio edit kept the key; a copy taken from the store) is COLD for app-off - ONE boot over the
+# warm cache (no --drop-hlms: the hlms and compute layers kept, the same inodes) runs the pass, its promotion carries the record;
+# the next call is warm and boots nothing; an equal record boots nothing (the control). The fake app runs the pass unless the
+# record names FAKE_PASS_ID. (red on the script before (D): "warm at", nothing booted - the record stays stale, every row pays)
+B4="$T/b4"; mkdir -p "$B4/tests" "$B4/engine/generated" "$B4/generated" "$B4/bin/media"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2
+cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B4/engine/generated/"; cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B4/bin/media/" 2>/dev/null
+printf '#define JAH_STARTUP_PASS_CODE_ID "%s"\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > "$B4/generated/jah_startup_pass_id.h"
+printf 'pass=%s|media=m|cache=c\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "$B4/tests/.shadercache/warm-pass.key"
+k4=$("$W" "$B4" --key); printf '%s\n%s\n%s\n' "$k4" "k1 k2 " "sets none" > "$B4/tests/.shadercache.warm-key"
+i4=$(stat -c %i "$B4/tests/.shadercache/hlms.1.bin"); : > "$T/b4.pass"
+P4() { FAKE_PASS_ID=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb FAKE_PASS_LOG="$T/b4.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 \
+       "$W" "$B4" --tests-dir "$B4/tests" "${F[@]}" --only app-off "$@"; }
+out=$(P4 --check); rc=$?
+[ $rc = 3 ] && echo "$out" | grep -q "the startup pass's record is another build's (pass aaaaaaaa, this build's bbbbbbbb)" &&
+    ok "P1: a record of another build's pass id reads COLD under --check, naming both ids" || no "P1 --check: rc $rc '$out'"
+out=$(P4); rc=$?
+[ $rc = 0 ] && [ "$(cat "$T/b4.pass")" = ran ] && grep -q '^pass=bbbbbbbb' "$B4/tests/.shadercache/warm-pass.key" &&
+    grep -q '^file hlms\.1\.bin' "$B4/tests/.shadercache/cache-manifest.txt" && grep -q '^file compute\.bin' "$B4/tests/.shadercache/cache-manifest.txt" &&
+    [ "$(stat -c %i "$B4/tests/.shadercache/hlms.1.bin")" = "$i4" ] &&
+    ok "P2: ONE app-off boot ran the pass and its promotion carried the record (pass bbbbbbbb), the hlms and compute layers kept (the same inode)" ||
+    no "P2 the refresh: rc $rc pass [$(tr '\n' ' ' < "$T/b4.pass")] record [$(cut -c1-13 "$B4/tests/.shadercache/warm-pass.key")] '$(echo "$out" | tail -3)'"
+out=$(P4); rc=$?
+[ $rc = 0 ] && [ "$out" = "warm at $k4" ] && [ "$(cat "$T/b4.pass")" = ran ] &&
+    ok "P3: the next call is warm at the key and boots nothing (the control: an equal record)" ||
+    no "P3 after the refresh: rc $rc '$out' pass [$(tr '\n' ' ' < "$T/b4.pass")]"
 # THE BOOT's OWN WALL (block A, 2026-11-03: "the boot 75 s" was 27.5 s of the card's wait + 47.5 s of boot): another holder keeps
 # the card 2 s past the call's ticket, the toy boot takes ~0 s - the line prints the boot's own wall and the wait beside it (red
 # before: "the boot 3 s")
@@ -606,17 +639,41 @@ o2=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 JAH_WARM_STORE="$RS" "$W" "$PB" --app "$T/s
 XS=$(mktemp -d /dev/shm/warm-store-toy.XXXXXX); cp -a "$ST/$pk" "$XS/"
 toy_tree "$T/sX"; XB="$T/sX/build"; rm -f "$T/s-booted"
 out=$(JAH_WARM_STORE="$XS" SX "$XB" --only engine-off); rc=$?
-mkdir -p "$T/b8/tests"; touch "$T/b8/CMakeCache.txt"; toy_cache "$XS/fh" 1 2; ln -s "$XS/fh" "$T/b8/tests/.shadercache"
+mkdir -p "$T/b8/tests"; touch "$T/b8/CMakeCache.txt"; toy_cache "$XS/fh" 1 2; f8=$(find "$XS/fh" -type f | wc -l); ln -s "$XS/fh" "$T/b8/tests/.shadercache"
 o8=$(env -u DISPLAY JAH_WARM_CHECK=0 sh "$SRC/tests/support/fresh_home.sh" --warm --keep-home "$T/b8/tests/h8" -- true 2>&1)
 n8=$(find "$T/b8/tests/h8/.local/share/Jahshaka/shadercache" -type f 2>/dev/null | wc -l)
 rm -rf "$XS"
 echo "$out" | grep -q "the store's engine cache NOT taken - $XS is not on the filesystem of" && [ -e "$T/s-booted" ] &&
-    echo "$o8" | grep -q "4 file(s) of $T/b8/tests/.shadercache NOT linked into the home" && [ "$n8" = 0 ] &&
+    echo "$o8" | grep -q "$f8 file(s) of $T/b8/tests/.shadercache NOT linked into the home" && [ "$n8" = 0 ] &&
     ok "S8: ONE FILESYSTEM - a store on another is not taken (said, the tree boots); a shared cache on another is not linked by fresh_home.sh (said) - never a copy" ||
     no "S8 one filesystem: rc $rc '$(echo "$out" | grep -i store | head -2)' fresh_home '$o8' files $n8"
 toy_tree "$T/sK"; KB="$T/sK/build"; printf 'H' > "$KB/bin/media/Hlms/a.any"; rm -f "$T/s-booted"
 out=$(JAH_WARM_STORE="$ST" SX "$KB" --only engine-off); rc=$?
 ! echo "$out" | grep -q "TAKEN" && [ -e "$T/s-booted" ] && ok "S6: another key takes nothing from the store - it warms itself" || no "S6 another key: '$out' rc $rc"
+# S9 THE STORE's COPY CARRIES ITS PUBLISHER's STARTUP-PASS RECORD (TE-WARM-WHY (D); spikes/validation-slow/: the box's store held
+# records of 14:18 and 15:10 while every tree taking from it had another pass id): a tree at the SAME key but another pass id
+# takes the app cache and its -on stamp from the store (no card) and is still COLD for the record - ONE app-off boot (the fake
+# app runs the pass; the union kept), then warm. (red on the script before (D): "from the store, nothing booted", the record
+# the publisher's - every app row of that tree then paid the pass, the two validation rows under the layer each)
+p9a=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; p9b=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+ST9="$T/store9"; mkdir -p "$ST9"
+toy_tree "$T/sQ"; QB="$T/sQ/build"; QT="$QB/tests"; mkdir -p "$QB/generated"
+printf '#define JAH_STARTUP_PASS_CODE_ID "%s"\n' "$p9a" > "$QB/generated/jah_startup_pass_id.h"
+rm -rf "$QT/.shadercache"; toy_cache "$QT/.shadercache" 1 2; toy_cache "$QT/.shadercache-engine" 1 2
+printf 'pass=%s|media=m|cache=c\n' "$p9a" > "$QT/.shadercache/warm-pass.key"
+printf '%s\n%s\n%s\n' "$pk" "k1 k2 " "sets none" > "$QT/.shadercache.warm-key"; printf '%s\n%s\n' "$pk" "k1 k2 " > "$QT/.shadercache-engine.warm-key"
+printf '%s\n%s\n' "$pk" s-app > "$QT/.shadercache.driver-key"; printf '%s\n%s\n' "$pk" s-app > "$QT/.shadercache-engine.driver-key"
+o9p=$(JAH_WARM_STORE="$ST9" SX "$QB")
+toy_tree "$T/sR"; RB9="$T/sR/build"; mkdir -p "$RB9/generated"
+printf '#define JAH_STARTUP_PASS_CODE_ID "%s"\n' "$p9b" > "$RB9/generated/jah_startup_pass_id.h"
+rm -f "$T/s-booted"; : > "$T/s9.pass"
+out=$(FAKE_PASS_ID=$p9b FAKE_PASS_LOG="$T/s9.pass" JAH_WARM_STORE="$ST9" SX "$RB9" --only app-off,app-on); rc=$?
+[ $rc = 0 ] && echo "$o9p" | grep -q "PUBLISHED to the box's warm store at $pk" && echo "$out" | grep -q "TAKEN from the box's warm store at $pk" &&
+    echo "$out" | grep -q "the startup pass's record is another build's (pass aaaaaaaa, this build's bbbbbbbb)" &&
+    [ "$(grep -c BOOTED "$T/s-booted" 2>/dev/null)" = 1 ] && [ "$(cat "$T/s9.pass")" = ran ] &&
+    grep -q "^pass=$p9b|" "$RB9/tests/.shadercache/warm-pass.key" && [ "$(SX "$RB9" --only app-off,app-on --check)" = "warm at $pk" ] &&
+    ok "S9: a store copy at the key carries its publisher's pass record - taken, then ONE app-off boot ran the pass, the record this build's, warm" ||
+    no "S9 the store's pass record: rc $rc booted [$(cat "$T/s-booted" 2>/dev/null | tr '\n' ' ')] pass [$(tr '\n' ' ' < "$T/s9.pass")] '$(echo "$out" | grep -iE "taken|record|cold at|warm at" | head -4 | tr '\n' '|')'"
 fi
 echo "tooling.warm_app_cache ($PART): $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail

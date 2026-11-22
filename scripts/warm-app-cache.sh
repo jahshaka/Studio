@@ -279,6 +279,24 @@ coldrows_why() {   # the cold rows: empty when every one is primed at this key a
     [ -n "$l" ] || return 0
     echo "$(printf '%s\n' "$l" | grep -c .) of $(grep -c . "$COLDROWS") to prime: $(printf '%s\n' "$l" | sed 's/\t/ (/; s/$/)/' | tr '\n' ';' | sed 's/;$//; s/;/; /g')"
 }
+# THE STARTUP PASS's RECORD (TE-WARM-WHY (D), the lead's ruling 2026-11-22; spikes/validation-slow/TABLE.md + repro-fixture/): the
+# app's startup gate re-runs its global pass in every boot whose cache's record (<cache>/warm-pass.key, src/app/shaderbuildgate.cpp)
+# names another pass id than this build's JAH_STARTUP_PASS_CODE_ID (cmake/startup_pass_id.py: the pass's dependency closure and
+# the engine's FULL build id) - ~10 s off the layer, ~20 s under it - and a run under Vulkan layers never promotes the record it
+# wrote (fresh_home.sh), so the two validation rows paid it in every check (31-60 s against 12-17 s, 2026-11-22). The KEY does
+# not hold that id (an engine or a Studio edit keeps it): the app cache is warm only when its record names this build's id too,
+# else ONE app-off boot over the warm cache (fresh_home --warm, never --drop-hlms: the union is kept) runs the pass and its
+# promotion carries the record. A cache TAKEN from the store carries its publisher's record and is judged the same. A build
+# with no generated id (a toy's) is not judged.
+pass_why() {   # <shared>: empty when its startup-pass record names this build's pass id
+    local id rec
+    id=$(sed -n 's/^#define JAH_STARTUP_PASS_CODE_ID "\([0-9a-f]*\)"$/\1/p' "$BUILD/generated/jah_startup_pass_id.h" 2>/dev/null)
+    [ -n "$id" ] || return 0
+    rec=$(sed -n 's/^pass=\([0-9a-f]*\)|.*/\1/p' "$1/warm-pass.key" 2>/dev/null)
+    [ "$rec" = "$id" ] && return 0
+    if [ -n "$rec" ]; then echo "the startup pass's record is another build's (pass ${rec:0:8}, this build's ${id:0:8}) - its global pass re-runs in every app boot until one promotes it"
+    else echo "no startup pass's record - its global pass runs in every app boot until one promotes it"; fi
+}
 exe_id() {   # <exe>: the name the driver keys its per-exe cache on - its file name (measured below)
     basename "$1"
 }
@@ -288,9 +306,16 @@ driver_why() {   # <stamp> <exe>: empty when this exe's driver cache was stored 
     elif [ "$(sed -n 2p "$1")" != "$(exe_id "$2")" ]; then echo "stored for another exe ($(sed -n 2p "$1"))"
     fi
 }
-why_of() {   # <boot>: empty when warm
+cache_why() {   # <-off boot>: its cache warm at the key (what an -on boot boots on); empty when warm
     case "$1" in
         app-off) cold_why "$APP_SHARED" "$APP_STAMP" "$SETS_DIGEST" ;;
+        engine-off) cold_why "$ENG_SHARED" "$ENG_STAMP" ;;
+    esac
+}
+why_of() {   # <boot>: empty when warm
+    local w
+    case "$1" in
+        app-off) w=$(cache_why app-off); if [ -n "$w" ]; then echo "$w"; else pass_why "$APP_SHARED"; fi ;;
         app-on) driver_why "$APP_DSTAMP" "$APPX" ;;
         engine-off) cold_why "$ENG_SHARED" "$ENG_STAMP" ;;
         engine-on) driver_why "$ENG_DSTAMP" "$LABX" ;;
@@ -498,7 +523,7 @@ fi
 # AN -on BOOT RUNS ON ITS -off BOOT's CACHE: asked for alone while that cache is cold, nothing boots
 for b in $RUN; do
     case "$b" in *-on) off="${b%-on}-off"
-        if [ -n "$(why_of "$off")" ] && ! case " $RUN " in *" $off "*) true ;; *) false ;; esac; then
+        if [ -n "$(cache_why "$off")" ] && ! case " $RUN " in *" $off "*) true ;; *) false ;; esac; then
             echo "warm-app-cache: $b boots on $(what_of "$off"), cold - call --only $off first; nothing booted"
             exit 3
         fi ;;
@@ -591,7 +616,7 @@ boot() {
     room "$name" "$rest"
     echo "warm-app-cache: booting $(what_of "$name") ($name): $(basename "$EXE") on $DISPLAY (home $home;" \
          "the card's wait at most ${WAIT} s)"
-    local t0 rc wall skipped waited
+    local t0 rc wall skipped waited w
     t0=$(now_ns)
     # THE HOLD's LABEL NAMES THE KEY IT WARMS (WARM-SHARE-1 S2): a miss is a hold "warm-app-cache (<boot>) at <key>" in the hold
     # log, a hit is none - the saving MEASURED, never predicted (the key: the rig KEY until the engine prints its identity)
@@ -629,6 +654,11 @@ boot() {
     fi
     echo "warm-app-cache: $(what_of "$name") warm at $KEY - the boot ${wall} s (the card's wait ${waited} s), $(du -sh "$shared" | cut -f1)" \
          "($(sed -n 's/^shaders //p' "$shared/cache-manifest.txt") shaders)"
+    # THE PASS's RECORD AFTER THE BOOT (TE-WARM-WHY (D)): a promoted app-off boot leaves the record at this build's pass id; one
+    # that does not (the pass never completed: src/app/shaderbuildgate.cpp writes the record only then) is said, never re-booted
+    # in a loop - the next call judges it again
+    [ "$name" = app-off ] && w=$(pass_why "$shared") && [ -n "$w" ] &&
+        echo "warm-app-cache: FAULT: the app-off boot was promoted but $w - its log $log"
     return 0
 }
 # driver_boot <name> <dstamp> <exe> <home> <log> <boots left> <command...>: the -on boot (the driver's cache on, the
@@ -732,7 +762,7 @@ for b in $RUN; do
     left=${left#"$b"}; left=${left# }
     # an -on boot after its -off boot in this call: only on the cache that boot promoted
     case "$b" in *-on) off="${b%-on}-off"
-        if [ -n "$(why_of "$off")" ]; then
+        if [ -n "$(cache_why "$off")" ]; then
             echo "warm-app-cache: $b waits for $(what_of "$off") (not promoted by this call's $off boot) - the next call warms both"
             continue
         fi ;;
