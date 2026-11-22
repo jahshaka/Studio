@@ -467,7 +467,7 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Re-hashes every catalogued object against its oid: reports corrupt (bit-rot) and missing objects with counts and bytes. Defaults to the live library.",
           Needs::Document },
         { "rebuildCatalog", "assets.rebuildCatalog(dbPath, {root}) -> report",
-          "Reconstructs catalog rows (assets + files + asset_files) from the store's sidecar/*.json into the given database — the disaster-recovery path. dbPath is REQUIRED (rebuilding into the live catalog is not implied); existing guids are left untouched; thumbnails are regenerable, not recovered. Sidecars whose recorded objects are ALL absent are skipped as tombstones (reported as `skipped`) — an old store's leftover sidecars must not resurrect deleted assets.",
+          "Reconstructs catalog rows (assets + files + asset_files) from the store's sidecar/*.json into the given database — the disaster-recovery path. dbPath is REQUIRED (rebuilding into the live catalog is not implied) and the LIVE library's own file is refused by name (the rebuild writes through a connection of its own and would wait on this session's lock); existing guids are left untouched; thumbnails are regenerable, not recovered. Sidecars whose recorded objects are ALL absent are skipped as tombstones (reported as `skipped`) — an old store's leftover sidecars must not resurrect deleted assets.",
           Needs::Document },
         { "gc", "assets.gc({dryRun: true, root, force}) -> report",
           "Store garbage collection. Finds — and, with {dryRun: false}, removes — four classes of leaked artifact: "
@@ -2035,6 +2035,17 @@ QVariantMap AssetsApi::rebuildCatalog(const QString &dbPath, const QVariantMap &
 {
     if (dbPath.isEmpty()) {
         fail("assets.rebuildCatalog: dbPath is required (rebuilding into the live catalog is never implied)");
+        return QVariantMap();
+    }
+    // THE LIVE LIBRARY IS REFUSED BY NAME: the rebuild writes through its OWN connection
+    // (AssetMigration), so on this session's own file it would wait behind this thread's lock (a
+    // script's batch holds one) for the whole busy timeout, then fail - and between the two it
+    // would rewrite rows under the open session. Disaster recovery rebuilds into another file.
+    const QFileInfo target(dbPath), live(liveDbPath());
+    if (target.absoluteFilePath() == live.absoluteFilePath()
+        || (target.exists() && target.canonicalFilePath() == live.canonicalFilePath())) {
+        fail(QStringLiteral("assets.rebuildCatalog: '%1' is the LIVE library this session has open - rebuild into "
+                            "another file (the disaster-recovery path never writes the open catalog)").arg(dbPath));
         return QVariantMap();
     }
     const QString root = options.value("root", AssetStorePaths::root()).toString();

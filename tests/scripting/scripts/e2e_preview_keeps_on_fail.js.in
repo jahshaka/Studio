@@ -6,7 +6,10 @@
 //   1. the Texture is rendered: 'ok', key k, its stored picture's facts (assets.thumbnail);
 //   2. the store offline, previews.render answers {ok: false, reason} naming the unreadable image;
 //   3. the stored picture's facts and its storedKey are UNCHANGED - the failure wrote nothing;
-//   4. the store back, a render is 'ok' again.
+//   4. the store back, a render is 'ok' again;
+//   5. assets.rebuildCatalog REFUSES the live library by name (it would rewrite the open catalog through
+//      a connection of its own, waiting on this session's lock) and changes nothing; another file is not
+//      refused.
 // The base's erase-on-fail path (a null picture written as empty bytes) has UI callers only; its
 // negative control is previews.writer's unguarded writer. RED ON THE BASE: no `previews` module.
 
@@ -53,5 +56,15 @@ assert(after.storedKey === before.storedKey, "the stored key is UNCHANGED: " + J
 // ---- 4. THE STORE BACK ------------------------------------------------------------------------
 assert(assets.setStoreRoot("", {}) === true, "the store is back at its default root");
 assert(previews.render(t).ok === true && rowOf(t).state === "ok", "a render is 'ok' again");
+
+// ---- 5. A REBUILD NEVER TARGETS THE LIVE LIBRARY ---------------------------------------------
+var live = app.dataRoot().database;
+var refused = "";
+try { assets.rebuildCatalog(live, {}); } catch (e) { refused = String(e); }
+assert(refused.indexOf("LIVE library") >= 0, "assets.rebuildCatalog refuses the live library by name: " + refused);
+assert(rowOf(t).state === "ok", "...and the open catalog is unchanged");
+var other = "";
+try { assets.rebuildCatalog("rebuild-elsewhere.db", {}); } catch (e) { other = String(e); }
+assert(other.indexOf("LIVE library") < 0, "another file is not refused as the live library: " + (other || "rebuilt"));
 
 console.log("preview_keeps_on_fail: all assertions passed");
