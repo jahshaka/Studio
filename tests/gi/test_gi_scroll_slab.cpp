@@ -236,9 +236,10 @@ int main(int argc, char **argv)
     };
     look(home);
     CHECK(scene->setGlobalIllumination(small), "a two-cascade chain at 64 cells builds");
-    // THE DECLARED ROUTE (URGENT #146, R16; the split's two rows left routes_pending): a Live view runs the SCREEN INTEGRATE
-    // over the voxel STORE, the budget 0 = PAUSED, no field (ddgi Off) - asserted on the next frame
-    enginetest::declareRoutes(view, scene, enginetest::Routes().integrate().store().paused(),
+    // THE DECLARED ROUTE (URGENT #146, R16; the split's two rows left routes_pending): the view of this ray scene runs the
+    // GATHER (every view does: ROUTE-ROWS-1) over the voxel STORE, the budget 0 = PAUSED, no field (ddgi Off) - asserted
+    // on the next frame
+    enginetest::declareRoutes(view, scene, enginetest::Routes().gather().store().paused(),
                               ("gi.scroll_slab." + part + "'s view").c_str());
     run(8);
     // THE COMMIT'S SHADER BUILT BEFORE ANY ARM COUNTS FRAMES: the chain's first build hands the delta injection's

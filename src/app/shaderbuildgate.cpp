@@ -473,8 +473,9 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
                     quiet = (c + f == last && settled(false)) ? quiet + 1 : 0;
                     last = c + f;
                 }
-                // ...and ITS COMPLETE TAIL: the recorder's view takes the gather, so its readers demand cards the warm
-                // view does not; those cards' captures and their light job are built here, in the frames a recording draws.
+                // ...and ITS COMPLETE TAIL: the recorder's view gathers at its own size and pose, so its readers may demand
+                // cards the warm view's did not; those cards' captures and their light job are built here, in the frames a
+                // recording draws.
                 completeTail(recordedFrame, "recorder view");
                 engine.request([&](Engine &) { while (rv->takeVideoFrame(picture, true)) {} });
                 recorderView = SceneMirror::FrameView();
@@ -847,8 +848,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     }
     // ...AND THE STATE A WARM CACHE DRAWS FIRST (the diagnosis: spikes/test-tier-1/coldgate/). On a
     // warm cache the arm binds inside the first frames — before the visibility buffer has taken the
-    // box over — so the box is drawn once through STOCK PBS with the cone tracer and the probes'
-    // cube and no prepass (the warm view is Live: it takes no gather). A cold boot, whose arm binds
+    // box over — so the box is drawn once through STOCK PBS on the warm view's GI route (the editor's:
+    // it gathers where the scene traces, as every view does - ROUTE-ROWS-1). A cold boot, whose arm binds
     // only after its compute set compiled, has handed the box to Atom by then and never draws that
     // permutation; the second boot after every cache rebuild compiled it and ran this whole warm-up
     // again. Drawn here on the cold boot: the id pass off.

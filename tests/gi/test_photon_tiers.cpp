@@ -333,7 +333,7 @@ static void testOffscreenContract()
               qPrintable(QStringLiteral("%1: a lower picture says what it renders").arg(k.kind)));
     }
     for (const char *want : { "viewport", "screenshot.scene", "screenshot.viewport", "screenshot.plain",
-                              "screenshot.tonemap", "projectTile", "liveOffscreen", "probeCapture", "cardCapture" })
+                              "screenshot.tonemap", "projectTile", "probeCapture", "cardCapture" })
         CHECK(names.contains(QLatin1String(want)),
               qPrintable(QStringLiteral("the table declares %1").arg(QLatin1String(want))));
     for (const worldmodes::OffscreenPicture &k : kinds)

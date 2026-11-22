@@ -348,7 +348,7 @@ int main(int argc, char **argv)
     view->setPostFx(fx);
     // THE ROUTE (PHOTON-7-9A, URGENT #177): declared with the chain the arms measure, asserted on the first frame after
     // it (the control above has no post chain); the rays-off A/Bs below switch the reflection on the same view later.
-    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(), "gi.rt_reflect's view");
+    enginetest::declareRoutes(view, s, enginetest::Routes().gather().reflection().store(), "gi.rt_reflect's view");
 
     // ---- 1 + 2: the two arms ------------------------------------------------
     Image img;
@@ -501,7 +501,7 @@ int main(int argc, char **argv)
             fresh->setScene(s);
             PostFxDesc ffx = fx;
             fresh->setPostFx(ffx);
-            enginetest::declareRoutes(fresh, s, enginetest::Routes().integrate().reflection().store(),
+            enginetest::declareRoutes(fresh, s, enginetest::Routes().gather().reflection().store(),
                                       "gi.rt_reflect's fresh pan view");
             enginetest::testCameraLookAt(fresh, eye, target);
             render(e, 24);                       // the fresh view's own mean settles

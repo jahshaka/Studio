@@ -68,8 +68,8 @@
 //        row's wrapper to judge by tests/support/rise_law.py (gi.hold_after_stop (f)'s law), with a PIC line a frame (the
 //        store's own sum of |delta| over the strip's voxels, the field's restarts that frame, its dispatch and owed
 //        restarts, the store's active bricks: what wrote that frame).
-// A fixture: one offscreen view - StillPicture in the picture parts (the editor's own picture: the screen-probe gather
-// runs), Live in the store parts (the screen integrate: store laws only, the view exists to tick the frame) - each part's
+// A fixture: one offscreen view - StillPicture in the picture parts (the editor's own picture), Live in the store parts
+// (store laws only, the view exists to tick the frame), the screen-probe gather in both (ROUTE-ROWS-1) - each part's
 // route declared and asserted on its first frame (enginetest::declareRoutes, URGENT #146) -
 // GI live at the shipped default updateBudget 1 (the GI state), the rays on; the cards off but in the room part, the
 // field off but in the lamp and room parts.
@@ -271,12 +271,10 @@ int main(int argc, char **argv)
     // at 3.5-4.5 m, every surface matte rho 0.5, no emission; the lamp 6 m up, range 20 (src/lab/envs/photon_room.cpp)
     const std::string ingredients = room && argc > 3 ? "," + std::string(argv[3]) + "," : std::string();
     const auto has = [&](const char *k) { return ingredients.find("," + std::string(k) + ",") != std::string::npos; };
-    // THE ROUTE. The picture parts (lamp, room): the view declares StillPicture - the editor's own picture - so at this
-    // ray chain it runs the screen-probe GATHER (OgreView.cpp: an offscreen view gathers only under StillPicture; a
-    // Live one takes the no-ray route's screen integrate, which NO-RAY-CUT-1 deletes - PROBE-GATHER-REST-1's audit).
-    // The store parts (box, pair, scroll): their laws read the store alone; the view exists to tick the frame, and it
-    // is Live, so it runs the SCREEN INTEGRATE (the field and the cards are off there) - declared as such below, the
-    // truth today; re-pointing them to the gather is ROUTE-ROWS-1's (they join its 42 integrate rows).
+    // THE ROUTE: every part's view runs the screen-probe GATHER at this ray chain (ROUTE-ROWS-1: every view of a ray
+    // scene gathers; the contract is no input of the route). The picture parts (lamp, room) declare StillPicture - the
+    // editor's own picture, no meter history. The store parts (box, pair, scroll): their laws read the store alone; the
+    // view exists to tick the frame (Live).
     const bool picturePart = scene == "lamp" || room;
     View *view = e->createOffscreenView("feedback", room ? 960 : 64, room ? 540 : 64, Colour(0, 0, 0),
                                         picturePart ? OffscreenContract::StillPicture : OffscreenContract::Live);
@@ -284,11 +282,11 @@ int main(int argc, char **argv)
     if (!view || !s) { std::printf("FAIL: the view and the scene\n"); return 1; }
     view->setScene(s);
     // THE DECLARED ROUTE (URGENT #146; enginetest::declareRoutes): the view's chain and the GI state, asserted on the
-    // first frame - the picture parts the gather, the store parts the integrate; no ray reflection (an offscreen view
+    // first frame - the gather in every part; no ray reflection (an offscreen view
     // has no post chain, so no SSR row); GI live (updateBudget 1, the shipped default); the voxel store (GiMode::Vct)
     // live within kRouteProductFrames. The field (the lamp and room parts) and the cards (the room part) are declared
     // at the first rest (requireRoutes below), where they are built whatever their start-up takes.
-    enginetest::Routes route = (picturePart ? enginetest::Routes().gather() : enginetest::Routes().integrate()).store();
+    enginetest::Routes route = enginetest::Routes().gather().store();
     enginetest::declareRoutes(view, s, route, ("gi.feedback " + part + "'s view").c_str());
     float sh[27] = {};
     s->setAmbientSh(sh);   // no sky

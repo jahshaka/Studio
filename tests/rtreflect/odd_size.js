@@ -40,7 +40,7 @@ host.check({ok: engine.arm({name: "reflect.screenOff", value: 1}),
 engine.view.lookAt(view, {eye: [0, 1.6, 6], target: [0, 0.4, -4]});
 
 // THE ROUTE IT MEASURES (URGENT #146): the view's chain exactly, the store live by frame 16 - judged by every frame
-engine.view.declareRoutes(view, {integrate: true, reflection: true, store: true});
+engine.view.declareRoutes(view, {gather: true, reflection: true, store: true});
 
 engine.frames(89);
 const shot = engine.view.readPixels({view});   // the 90th frame, drawn and read: held natively, by its handle
