@@ -436,6 +436,15 @@ if(Python3_Interpreter_FOUND)
              COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/one_spelling.sh" "${CMAKE_SOURCE_DIR}/cmake/OneSpelling.cmake")
     set_tests_properties(tooling.one_spelling PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(tooling.one_spelling)
+    # tooling.build_ogre_spelling — build-ogre.sh BUILDS UNDER THE TREE's ONE SPELLING whichever spelling it was called by
+    # (CODING_RULES §4, URGENT #208): irisgl's script in a toy irisgl under a scratch HOME whose Developer is a symlink, a stub
+    # cmake recording -S, -B and the install prefix - called through the link, from the target's spelling, by an absolute
+    # target path, OGRE_PREFIX in the target's spelling: all under the link; JAH_ONE_SPELLING_LINK=none and a real-directory
+    # Developer untouched (build_ogre_spelling.sh; CPU, no build).
+    add_test(NAME tooling.build_ogre_spelling
+             COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/build_ogre_spelling.sh" "${CMAKE_SOURCE_DIR}/irisgl/scripts/build-ogre.sh")
+    set_tests_properties(tooling.build_ogre_spelling PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(tooling.build_ogre_spelling)
     # tooling.law_records — A RECORD KEEPS ITS ROW's LAW NUMBERS (HARNESS-3 (b)): scripts/gate_runlog.py over a fake ctest
     # stream keeps every `LAW <name> <value> <unit> [<op> <bar>]` line (tests/support/lawline.h) in the row's record, a
     # green row's and a red row's, one past the 256-KB output cap too (law_records.py; a scratch HOME and run-log dir).
