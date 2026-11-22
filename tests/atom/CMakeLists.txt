@@ -199,7 +199,9 @@ target_include_directories(test_atom_cut_overflow PRIVATE ${CMAKE_SOURCE_DIR} ${
 target_link_libraries(test_atom_cut_overflow PRIVATE IrisGL Qt6::Gui)
 set_source_files_properties(test_atom_cut_overflow.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
 jah_document_graph(test_atom_cut_overflow)
+jah_gpu_row(atom.cut_overflow_whole CLASS engine FRAMES 22 COMMAND test_atom_cut_overflow overflow
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 jah_gpu_row(atom.still_does_nothing CLASS engine FRAMES 26 COMMAND test_atom_cut_overflow still
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.still_does_nothing PROPERTIES TIMEOUT 60 LABELS "engine"
+set_tests_properties(atom.cut_overflow_whole atom.still_does_nothing PROPERTIES TIMEOUT 60 LABELS "engine"
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
