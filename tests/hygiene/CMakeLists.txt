@@ -773,9 +773,9 @@ set_tests_properties(source.gate_pace PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.gate_pace)
 
 # source.compute_pace_one_place (SHADER-SYSTEM-1 7a, R2 (c)): A COMPUTE PERMUTATION's LATENESS MEETS THE FRAME's PACE IN ONE
-# PLACE - the frame head tells the fork once (_jahSetFrameOwesPicture), no compute site asks compilesInBackground (it asks
-# computeOnService and the fork decides), and compilesInBackground reads the pace through the fork. Its negative control
-# first.
+# PLACE - the frame head tells the fork once (_jahSetFrameOwesPicture), and no second pace rule exists (compilesInBackground
+# deleted at stage 7: every site asks computeOnService; a compute permutation's lateness is the fork's answer by the pace).
+# Its negative control first.
 add_test(NAME source.compute_pace_one_place
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/compute_pace_one_place.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.compute_pace_one_place PROPERTIES TIMEOUT 60 LABELS "hygiene")
