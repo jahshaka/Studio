@@ -34,6 +34,24 @@ foreach(_row cut_partition cut_closed cut_closed.multi_mesh switch_bracket
     jah_no_display(atom.${_row})
 endforeach()
 
+# atom.no_pop.picture (ATOM-TESTS-BACK-1 stage 2; test_atom_no_pop_picture.cpp says the law): ONE card row confirming the
+# CPU sweep - one S1 bracket of the closed sphere in two views of one scene (centre, corner), t = 1 -+ 1e-3: the changed ids
+# name only the group's clusters, every coverage change within ceil(the CPU's switch_px) of a pixel covered on both. The
+# measure's CPU half optimised as the cut laws' is (the same -O2 reason).
+add_executable(test_atom_no_pop_picture test_atom_no_pop_picture.cpp cluster_fixtures.cpp
+    ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+set_target_properties(test_atom_no_pop_picture PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+target_include_directories(test_atom_no_pop_picture PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_atom_no_pop_picture PRIVATE IrisGL Qt6::Gui)
+target_compile_options(test_atom_no_pop_picture PRIVATE -O2)
+jah_document_graph(test_atom_no_pop_picture)
+jah_gpu_row(atom.no_pop.picture CLASS engine FRAMES 16 COMMAND test_atom_no_pop_picture
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.no_pop.picture PROPERTIES TIMEOUT 60 LABELS "engine" ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+
 # ---------------------------------------------------------------------------
 # THE ENGINE-REACHING TARGETS: a row that reaches past the public Engine API
 # (EnginePrivate.h, HlmsAtom.h, AtomPass.h) and links Ogre, building its own

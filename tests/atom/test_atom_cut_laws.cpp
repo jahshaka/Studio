@@ -49,6 +49,7 @@
 //   atom.no_pop.every_tier  the centre view at each tier's tolerance (worldmodes::row("atomPixelError")->tier[]):
 //                           switch_px <= 1 px. RED by design at Low/Medium/High (plan 3.4: its deletion of the tier row
 //                           breaks this row's build - the fold into centre/corner is forced there).
+#include "atom_fixture.h"
 #include "cluster_fixtures.h"
 #include "../support/clustermesh.h"
 #include "../support/lawline.h"
@@ -72,6 +73,7 @@
 #include <vector>
 
 using namespace jahshaka::engine;
+using namespace atomfix;
 
 static int gFailures = 0;
 static void check(bool ok, const std::string &what)
@@ -79,62 +81,6 @@ static void check(bool ok, const std::string &what)
     std::printf("%s: %s\n", ok ? "ok" : "FAIL", what.c_str());
     std::fflush(stdout);
     if (!ok) ++gFailures;
-}
-
-// ---- THE VIEWS -----------------------------------------------------------------------------------------------------
-// A view is a LENS (its tangents at the frame's edges, its target size, perspective or orthographic) and an AIM (the NDC
-// point of the frame the instance is placed on). The eye sits at the origin looking down -Z.
-
-/// THE HEADSET EYE'S CORNER (the lead's call C2): tangents (1.0, 1.0) at the eye buffer's corner = a 90 x 90 degree eye,
-/// corner ratio 1 + tx^2 + ty^2 = 3.0. UNVERIFIED until plan 3.6 measures a headset's eye (its own projection).
-constexpr double kEyeCornerTan[2] = { 1.0, 1.0 };
-
-struct Lens
-{
-    const char *name;
-    double tanX, tanY;     ///< the tangents of the half-angles at the frame's right and top edges
-    double width, height;  ///< the target, pixels (square pixels: width / height = tanX / tanY)
-    bool ortho;
-    double aimX, aimY;     ///< NDC point the instance is placed on
-};
-/// The desktop view: 45 degrees vertical, 16:9, 1920 x 1080.
-constexpr double kDeskTanY = 0.41421356237309503;   // tan(22.5 deg)
-static const Lens kCentre = { "centre", kDeskTanY * 16.0 / 9.0, kDeskTanY, 1920.0, 1080.0, false, 0.0, 0.0 };
-static const Lens kCorner = { "corner", kDeskTanY * 16.0 / 9.0, kDeskTanY, 1920.0, 1080.0, false, 1.0, 1.0 };
-/// The eye buffer's size is not a law term (every ratio here is size-free); 1080 x 1080 for readable numbers.
-static const Lens kEyeCorner = { "eye_corner", kEyeCornerTan[0], kEyeCornerTan[1], 1080.0, 1080.0, false, 1.0, 1.0 };
-/// The orthographic view: a window 4 extents tall (projScaleY = 2 / window: the footprint is window / height).
-static const Lens kOrtho = { "ortho", 0.0, 0.0, 1920.0, 1080.0, true, 0.0, 0.0 };
-
-/// The unit direction through the lens's aim point.
-static void aimDirection(const Lens &l, double d[3])
-{
-    d[0] = l.aimX * l.tanX;
-    d[1] = l.aimY * l.tanY;
-    d[2] = -1.0;
-    const double n = std::sqrt(d[0] * d[0] + d[1] * d[1] + d[2] * d[2]);
-    for (int k = 0; k < 3; ++k) d[k] /= n;
-}
-
-/// The cut's view of ONE instance: identity rotation, scale 1, translated by `t`; the lens's projection.
-static ClusterCutView cutView(const Lens &l, const double t[3], float tolerance, float orthoWindow)
-{
-    ClusterCutView v;
-    for (int r = 0; r < 3; ++r) v.worldRow[r][3] = float(t[r]);
-    v.scale = 1.0f;
-    v.tolerance = tolerance;
-    v.orthographic = l.ortho;
-    v.projScaleY = l.ortho ? 2.0f / orthoWindow : float(1.0 / l.tanY);
-    v.viewportHeight = float(l.height);
-    return v;
-}
-
-/// The translation that puts the mesh's box centre `c` at distance `dist` along the lens's aim.
-static void placeAt(const Lens &l, const float c[3], double dist, double t[3])
-{
-    double d[3];
-    aimDirection(l, d);
-    for (int k = 0; k < 3; ++k) t[k] = d[k] * dist - double(c[k]);
 }
 
 static void boxCentre(const MeshData &d, float c[3])
@@ -497,92 +443,6 @@ static void rowSwitchBracket()
 }
 
 // ---- THE NO-POP ROWS (stage 2) ------------------------------------------------------------------------------------
-namespace sd = surfacedistance;
-
-/// The window's radius: this fraction of the frame's half-height about the aim's pixel ("within 10 % of the frame
-/// centre", the spec's centre row; the same disc at a corner, its in-frame quarter).
-constexpr double kWindowFraction = 0.10;
-
-/// THE MEASURE's PRECISION in pixels: 1 % of the reading, and nothing under a hundredth of a pixel resolved (neither can
-/// move a law whose bars are 1 px and its multiples); in world units (the bake's step beside it): 0.1 %, and a millionth of
-/// the extent (under the bake's own floor, 1e-5 of its largest axis).
-constexpr double kPixelRel = 1e-2, kPixelFloor = 1e-2, kWorldRel = 1e-3, kWorldFloorOfExtent = 1e-6;
-
-/// Group g's members (outputs false) or the clusters it produced (true) as triangles, the mesh translated by `t`.
-static std::vector<sd::Tri> groupTris(const MeshData &d, int g, bool outputs, const double t[3])
-{
-    std::vector<sd::Tri> out;
-    for (const MeshCluster &c : d.clusters) {
-        if ((outputs ? c.refined : c.group) != g) continue;
-        for (unsigned i = 0; i + 2 < c.indexCount; i += 3) {
-            sd::Tri tri;
-            for (int k = 0; k < 3; ++k) {
-                const unsigned v = d.clusterIndices[c.firstIndex + i + unsigned(k)];
-                for (int a = 0; a < 3; ++a) tri.p[k][size_t(a)] = double(d.positions[size_t(v) * 3 + size_t(a)]) + t[a];
-            }
-            out.push_back(tri);
-        }
-    }
-    return out;
-}
-
-static sd::View pixelView(const Lens &l)
-{
-    sd::View v;
-    v.tanX = l.tanX;
-    v.tanY = l.tanY;
-    v.width = l.width;
-    v.height = l.height;
-    v.winX = (l.aimX * 0.5 + 0.5) * l.width;
-    v.winY = (l.aimY * 0.5 + 0.5) * l.height;
-    v.winR = kWindowFraction * 0.5 * l.height;
-    return v;
-}
-
-/// ONE FLIP of one group in one view, read by the independent measure.
-struct Flip
-{
-    int group = -1, depth = 0;
-    double t = 0.0;          ///< the flip's tolerance by the product's own footprint (clusterGroupFootprint), px
-    double px = 0.0;         ///< switch_px: the attained reading (surface term, dropped islands), px
-    double upper = 0.0;      ///< its certified upper bound, px
-    double surface = 0.0, islands = 0.0;
-    double literal = 0.0;    ///< the largest literal |proj(p) - proj(q)| over every point sampled, px
-    bool counted = false;    ///< some point of the switch projected in the window
-};
-
-static std::vector<Flip> flipsAt(const clusterfix::Fixture &f, const Lens &l, double tol)
-{
-    std::vector<Flip> out;
-    const MeshData &d = f.data;
-    const sd::View view = pixelView(l);
-    double dir[3];
-    aimDirection(l, dir);
-    for (size_t g = 0; g < d.clusterGroups.size(); ++g) {
-        const MeshClusterGroup &gr = d.clusterGroups[g];
-        if (!(gr.error > 0.0f) || gr.error >= kClusterTerminal) continue;
-        const double dc = double(gr.radius) + double(gr.error) * (1.0 / l.tanY) * l.height / (2.0 * tol);
-        double tr[3];
-        for (int k = 0; k < 3; ++k) tr[k] = dir[k] * dc - double(gr.centre[k]);
-        const ClusterCutView cv = cutView(l, tr, float(tol), 0.0f);
-        const float F = clusterGroupFootprint(gr, cv);
-        Flip fl;
-        fl.group = int(g);
-        fl.depth = gr.depth;
-        fl.t = F > 0.0f ? double(gr.error) * double(cv.scale) / double(F) : 0.0;
-        const sd::Switch s = sd::measure(groupTris(d, int(g), false, tr), groupTris(d, int(g), true, tr), &view, kPixelRel,
-                                         kPixelFloor);
-        fl.surface = s.surface();
-        fl.islands = s.islands;
-        fl.px = s.total();
-        fl.upper = s.upper();
-        fl.counted = s.aToB.any || s.bToA.any || s.islands > 0.0;
-        fl.literal = std::max(s.aToB.literal, s.bToA.literal);
-        out.push_back(fl);
-    }
-    return out;
-}
-
 static std::vector<std::pair<std::string, enginetest::ShellMesh>> noPopMeshes()
 {
     std::vector<std::pair<std::string, enginetest::ShellMesh>> m;
@@ -596,7 +456,7 @@ static std::vector<std::pair<std::string, enginetest::ShellMesh>> noPopMeshes()
 /// worst flip; returns the number over the bar.
 static size_t judge(const clusterfix::Fixture &f, const Lens &l, double tol, double bar, const std::string &tag)
 {
-    const std::vector<Flip> fl = flipsAt(f, l, tol);
+    const std::vector<Flip> fl = flipsAt(f.data, l, tol);
     size_t counted = 0, over = 0, literalPast = 0;
     const Flip *worst = nullptr;
     double worstRatio = 0.0;
