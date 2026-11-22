@@ -20,6 +20,7 @@
 #include <OgreRoot.h>
 
 #include <cstdio>
+#include <exception>
 
 using namespace jahshaka::engine;
 
@@ -45,7 +46,7 @@ void informSizes(bool on) {
 }
 }  // namespace
 
-int main() {
+static int run() {
     std::string err;
     const auto cfg = enginetest::testEngineConfig("test-atom-receiver-two-sizes-ogre.log");
     auto engine = Engine::create(cfg, err);
@@ -96,4 +97,14 @@ int main() {
 
     std::printf(failures ? "\n%d CHECK(S) FAILED\n" : "\nall checks passed\n", failures);
     return failures ? 1 : 0;
+}
+
+// A LAW THAT FAILS FAILS - it never crashes or aborts the row: an exception (Ogre's included) is a FAIL line and exit 1.
+int main() {
+    try {
+        return run();
+    } catch (const std::exception &e) {
+        std::printf("FAIL: an exception ended the row: %s\nRESULT: 1 FAILURE(S)\n", e.what());
+        return 1;
+    }
 }

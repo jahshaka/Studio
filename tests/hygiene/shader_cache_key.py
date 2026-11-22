@@ -13,6 +13,14 @@ irisgl/engine/src that calls a SOURCE-BUILDING API reds, unless it is
     root layout, the fork's OgreVulkanProgram.cpp getNameForMicrocodeCache) - never the hlms layer.
 The fix for a red: the file goes into JAHSHAKA_SHADER_CACHE_CODE_SOURCES (an edit of it then re-keys the hlms layer), or, for a
 low-level program, into LOW_LEVEL with its reason. Its negative control: --self-test seeds each API into a toy tree and requires a red.
+
+THE COMPILE PATH's LIST (SHADER-SYSTEM-1 stage 5; the lead's ruling 1 and the start preflight's F3): the microcode, compute and
+hlms layers no longer key on the fork's COMMIT but on the content of its PRODUCER files, listed in irisgl/cmake/
+ShaderCompilePath.txt's three groups. An unlisted producer would change a cached byte under an unmoved key - so this row also
+reds: a fork file of the built render system (RenderSystems/Vulkan) or OgreMain that calls glslang's API or reads or writes a
+microcode frame and is not in [microcode]; a file that defines the compute parse's set-up or the root layout not in [compute];
+the preprocessor or its disk cache not in [preprocessor]; a listed file that does not exist. Its negative control: --self-test
+plants an unlisted glslang caller into a toy fork and requires a red.
 usage: shader_cache_key.py <studio source dir> | --self-test
 """
 import os
@@ -108,7 +116,76 @@ def offenders(src):
     return seen, bad
 
 
+# THE COMPILE PATH (stage 5): what makes a fork file a producer of each group.
+MICROCODE_API = re.compile(r"\bglslang::|#\s*include\s*[\"<]glslang/|"
+                           r"\b(addMicrocodeToCache|saveMicrocodeCache|loadMicrocodeCache|createMicrocode|"
+                           r"getMicrocodeFromCache)\s*\(")
+DEFINES = {   # a definition (in code, comments stripped) -> the group its file must be in
+    "compute": [re.compile(r"\bHlmsCompute::compileShader\s*\("), re.compile(r"\bHlmsComputeJob::setupRootLayout\s*\("),
+                re.compile(r"\bHlmsComputeJob::_updateAutoProperties\s*\("), re.compile(r"\bclass\s+_OgreExport\s+RootLayout\b")],
+    "preprocessor": [re.compile(r"\bHlms::parseMath\s*\("), re.compile(r"\bHlms::getTemplateChecksum\s*\("),
+                     re.compile(r"\bHlmsDiskCache::applyTo\s*\(")],
+}
+SCANNED = ("OgreMain/src", "OgreMain/include", "RenderSystems/Vulkan/src", "RenderSystems/Vulkan/include")
+
+
+def compile_path_groups(src):
+    """irisgl/cmake/ShaderCompilePath.txt: {group: [fork-relative path]}, or None when the list is missing."""
+    path = os.path.join(src, "irisgl", "cmake", "ShaderCompilePath.txt")
+    if not os.path.isfile(path):
+        return None
+    groups, cur = {}, None
+    for line in open(path):
+        line = line.strip()
+        if not line or line.startswith("#"):
+            continue
+        m = re.match(r"^\[([a-z]+)\]$", line)
+        if m:
+            cur = groups.setdefault(m.group(1), [])
+        elif cur is not None:
+            cur.append(line)
+    return groups
+
+
+def compile_path_offenders(src):
+    groups = compile_path_groups(src)
+    if groups is None:
+        return 0, ["irisgl/cmake/ShaderCompilePath.txt is missing"]
+    fork = os.path.join(src, "irisgl", "thirdparty", "ogre-next")
+    bad, seen = [], 0
+    for g in ("microcode", "preprocessor", "compute"):
+        if not groups.get(g):
+            bad.append(f"the compile-path list has no [{g}] group")
+    for g, files in groups.items():
+        for rel in files:
+            if not os.path.isfile(os.path.join(fork, rel)):
+                bad.append(f"the compile-path list's [{g}] names {rel}, which the fork does not hold")
+    for top in SCANNED:
+        for d, _, files in os.walk(os.path.join(fork, top)):
+            for f in sorted(files):
+                if not f.endswith((".cpp", ".h", ".inl")):
+                    continue
+                rel = os.path.relpath(os.path.join(d, f), fork)
+                seen += 1
+                text = strip_comments(open(os.path.join(d, f), errors="replace").read())
+                if MICROCODE_API.search(text) and rel not in groups.get("microcode", []):
+                    bad.append(f"{rel} calls glslang or frames a microcode entry and is not in the compile-path list's "
+                               f"[microcode]")
+                for g, pats in DEFINES.items():
+                    if any(p.search(text) for p in pats) and rel not in groups.get(g, []):
+                        bad.append(f"{rel} defines the {g} producer and is not in the compile-path list's [{g}]")
+    return seen, bad
+
+
 def check(src):
+    cp_seen, cp_bad = compile_path_offenders(src)
+    if cp_bad:
+        print("source.shader_cache_key: FAIL - the shader compile path's list (irisgl/cmake/ShaderCompilePath.txt) is "
+              "incomplete: a producer it does not hash would change a cached byte under an unmoved key:")
+        for b in cp_bad:
+            print("  " + b)
+        return 1
+    print(f"source.shader_cache_key: the compile-path list holds every producer of the {cp_seen} fork files read")
     seen, bad = offenders(src)
     if bad:
         print("source.shader_cache_key: FAIL - engine C++ that builds shader SOURCE text outside the hlms layer's key "
@@ -155,6 +232,32 @@ def self_test():
         seen, bad = offenders(t)
         if not (len(bad) == 1 and bad[0].startswith("OgreChain.cpp:8 (in other)")):
             print(f"  FAIL a source call in another function of OgreChain.cpp not caught by call site: {bad}"); fails += 1
+    # THE COMPILE PATH (stage 5): a toy fork whose one glslang caller is listed passes; an unlisted one, or a listed file
+    # that is gone, reds.
+    with tempfile.TemporaryDirectory() as t:
+        fork = os.path.join(t, "irisgl", "thirdparty", "ogre-next")
+        os.makedirs(os.path.join(fork, "RenderSystems", "Vulkan", "src"))
+        os.makedirs(os.path.join(fork, "OgreMain", "src"))
+        os.makedirs(os.path.join(t, "irisgl", "cmake"))
+        open(os.path.join(fork, "RenderSystems", "Vulkan", "src", "Prog.cpp"), "w").write("void f() { glslang::TShader s; }\n")
+        open(os.path.join(fork, "OgreMain", "src", "Hlms.cpp"), "w").write("bool Hlms::parseMath( int a ) {}\n")
+        open(os.path.join(fork, "OgreMain", "src", "Comp.cpp"), "w").write("void HlmsCompute::compileShader( int j ) {}\n")
+        lst = os.path.join(t, "irisgl", "cmake", "ShaderCompilePath.txt")
+        good = ("[microcode]\nRenderSystems/Vulkan/src/Prog.cpp\n[preprocessor]\nOgreMain/src/Hlms.cpp\n"
+                "[compute]\nOgreMain/src/Comp.cpp\n")
+        open(lst, "w").write(good)
+        if compile_path_offenders(t)[1]:
+            print(f"  FAIL a complete toy list reads red: {compile_path_offenders(t)[1]}"); fails += 1
+        open(os.path.join(fork, "RenderSystems", "Vulkan", "src", "Other.cpp"), "w").write(
+            "// glslang:: in a comment is no call\nvoid g() { gpm.addMicrocodeToCache( k, m ); }\n")
+        bad = compile_path_offenders(t)[1]
+        if not (len(bad) == 1 and "Other.cpp" in bad[0]):
+            print(f"  FAIL a planted unlisted microcode writer not caught: {bad}"); fails += 1
+        os.remove(os.path.join(fork, "RenderSystems", "Vulkan", "src", "Other.cpp"))
+        open(lst, "w").write(good.replace("[compute]\nOgreMain/src/Comp.cpp\n", "[compute]\nOgreMain/src/Gone.cpp\n"))
+        bad = compile_path_offenders(t)[1]
+        if not (any("Gone.cpp" in b for b in bad) and any("Comp.cpp" in b for b in bad)):
+            print(f"  FAIL a gone listed file / an unlisted compute producer not caught: {bad}"); fails += 1
     print("source.shader_cache_key --self-test: " + ("PASS" if fails == 0 else f"FAIL ({fails})"))
     return 1 if fails else 0
 

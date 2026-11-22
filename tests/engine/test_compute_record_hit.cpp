@@ -35,6 +35,7 @@
 #include <Vao/OgreVaoManager.h>
 
 #include <cstdio>
+#include <exception>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
@@ -114,7 +115,7 @@ Ogre::HlmsComputeJob *makeJob(Ogre::HlmsCompute *hc, const std::string &name, co
 
 }  // namespace
 
-int main() {
+static int run() {
     std::setvbuf(stdout, nullptr, _IOLBF, 0);
     char cwd[4096];
     if (!getcwd(cwd, sizeof cwd)) return 1;
@@ -316,4 +317,14 @@ int main() {
     std::system(("rm -rf '" + dir + "'").c_str());
     std::printf(gFailures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", gFailures);
     return gFailures ? 1 : 0;
+}
+
+// A LAW THAT FAILS FAILS - it never crashes or aborts the row: an exception (Ogre's included) is a FAIL line and exit 1.
+int main() {
+    try {
+        return run();
+    } catch (const std::exception &e) {
+        std::printf("FAIL: an exception ended the row: %s\nRESULT: 1 FAILURE(S)\n", e.what());
+        return 1;
+    }
 }

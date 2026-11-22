@@ -19,6 +19,8 @@
 #include <OgreRoot.h>
 
 #include <cstdio>
+#include <exception>
+#include <stdexcept>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
@@ -58,6 +60,7 @@ LaunchResult launch(const std::string &dir, const char *log) {
     static const Ogre::AbiCookie cookie = Ogre::generateAbiCookie();
     auto root = std::make_unique<Ogre::Root>(&cookie, "", "", dir + "/" + log, "chain");
     root->loadPlugin(std::string(JAHSHAKA_TEST_PLUGIN_DIR) + "/RenderSystem_NULL", false, nullptr);
+    if (root->getAvailableRenderers().empty()) throw std::runtime_error("no NULL render system");
     root->setRenderSystem(root->getAvailableRenderers().front());
     root->initialise(false);
     root->createRenderWindow("chain", 1u, 1u, false);
@@ -67,7 +70,7 @@ LaunchResult launch(const std::string &dir, const char *log) {
         setForkComputeKeyHook(true);
         std::unique_ptr<ComputeCodeStore> store = makeForkComputeStore(hc);
         ShaderCache cache;
-        cache.configure(dir + "/cache", std::string(), dir + "/media/");
+        cache.configure(dir + "/cache", std::string());
         cache.setComputeStore(store.get());
         cache.load(root.get());
         Ogre::ResourceGroupManager &rgm = Ogre::ResourceGroupManager::getSingleton();
@@ -102,7 +105,7 @@ LaunchResult launch(const std::string &dir, const char *log) {
 
 }  // namespace
 
-int main() {
+static int run() {
     std::setvbuf(stdout, nullptr, _IOLBF, 0);
     char cwd[4096];
     if (!getcwd(cwd, sizeof cwd)) return 1;
@@ -147,4 +150,14 @@ int main() {
     std::system(("rm -rf '" + dir + "'").c_str());
     std::printf(gFailures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", gFailures);
     return gFailures ? 1 : 0;
+}
+
+// A LAW THAT FAILS FAILS - it never crashes or aborts the row: an exception (Ogre's included) is a FAIL line and exit 1.
+int main() {
+    try {
+        return run();
+    } catch (const std::exception &e) {
+        std::printf("FAIL: an exception ended the row: %s\nRESULT: 1 FAILURE(S)\n", e.what());
+        return 1;
+    }
 }

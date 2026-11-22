@@ -17,6 +17,7 @@
 #include <OgreRoot.h>
 
 #include <cstdio>
+#include <exception>
 #include <cstdlib>
 #include <fstream>
 #include <memory>
@@ -78,7 +79,7 @@ void writeFile(const std::string &path, const std::string &bytes) { std::ofstrea
 
 }  // namespace
 
-int main() {
+static int run() {
     std::setvbuf(stdout, nullptr, _IOLBF, 0);
     // The scratch directory lives in the row's own working directory (its build directory), removed at the end.
     char cwd[4096];
@@ -109,7 +110,7 @@ int main() {
             std::make_shared<ComputeCodeRecord>(record("edited", "JahPruneEdited_cs.glsl", "edited v1\n")));
         store.gen = 1;
         ShaderCache c;
-        c.configure(cacheDir, std::string(), mediaDir + "/");
+        c.configure(cacheDir, std::string());
         c.load(ogre.get());
         c.setComputeStore(&store);
         CHECK(c.saveWhole(ogre.get()) && c.flushWrites(30000u), "the first launch saved its two records");
@@ -119,7 +120,7 @@ int main() {
     // THE NEXT LAUNCH, in the engine's order: the load, then the compute media's folder, then the prewarm.
     FakeStore store;
     ShaderCache c;
-    c.configure(cacheDir, std::string(), mediaDir + "/");
+    c.configure(cacheDir, std::string());
     c.load(ogre.get());
     Ogre::ResourceGroupManager &rgm = Ogre::ResourceGroupManager::getSingleton();
     rgm.addResourceLocation(mediaDir, "FileSystem", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME, false);
@@ -141,4 +142,14 @@ int main() {
     std::system(("rm -rf '" + root + "'").c_str());
     std::printf(gFailures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", gFailures);
     return gFailures ? 1 : 0;
+}
+
+// A LAW THAT FAILS FAILS - it never crashes or aborts the row: an exception (Ogre's included) is a FAIL line and exit 1.
+int main() {
+    try {
+        return run();
+    } catch (const std::exception &e) {
+        std::printf("FAIL: an exception ended the row: %s\nRESULT: 1 FAILURE(S)\n", e.what());
+        return 1;
+    }
 }

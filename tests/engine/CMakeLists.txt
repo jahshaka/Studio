@@ -536,6 +536,38 @@ add_test(NAME engine.compute_record_hit COMMAND test_compute_record_hit WORKING_
 set_tests_properties(engine.compute_record_hit PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.compute_record_hit)
 
+# engine.shader_cache_keys (SHADER-SYSTEM-1 stage 5) — ONLY A PRODUCER DROPS A LAYER (test_shader_cache_keys.cpp says
+# why): the four layer keys as one function of their inputs - the pipeline key's text byte-identical to the one it
+# replaced (F5's golden case), each key moving on each of its producer terms and on no other key's, none holding the
+# fork's commit or a media tree (NEGATIVE CONTROL: today's composition moves on both), a preprocessor change dropping
+# compute records and not recipes. CPU only: no card, no engine.
+add_executable(test_shader_cache_keys test_shader_cache_keys.cpp)
+set_target_properties(test_shader_cache_keys PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_shader_cache_keys PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+target_link_libraries(test_shader_cache_keys PRIVATE JahshakaEngine OgreNext)
+add_test(NAME engine.shader_cache_keys COMMAND test_shader_cache_keys)
+set_tests_properties(engine.shader_cache_keys PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.shader_cache_keys)
+
+# engine.template_checksum_salt (SHADER-SYSTEM-1 stage 5, ruling 2) — THE PREPROCESSOR GUARD IS OGRE's OWN RE-PARSE
+# (test_template_checksum_salt.cpp says why): the fork's per-Hlms salt moves the template checksum (zero = upstream's), and
+# the checksum covers a library's pieces and the template - what the hlms layer's key no longer hashes as a media tree. A
+# real HlmsUnlit on the NULL render system over scratch folders: a CPU code row.
+add_executable(test_template_checksum_salt test_template_checksum_salt.cpp)
+set_target_properties(test_template_checksum_salt PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_template_checksum_salt PRIVATE JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}")
+target_link_libraries(test_template_checksum_salt PRIVATE OgreNext)
+add_test(NAME engine.template_checksum_salt COMMAND test_template_checksum_salt
+    WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.template_checksum_salt PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.template_checksum_salt)
+
 # engine.cascade_resolution_law (NONDET-1 D1) — A CASCADE IS BUILT AT A MULTIPLE OF 8 in 16..256, rounded up (Types.h
 # giCascadeResolution: the voxel passes run whole bricks with no bound check). The header only: a CPU code row.
 add_executable(test_cascade_resolution_law test_cascade_resolution_law.cpp)
