@@ -4,6 +4,10 @@
 // (the startup gate's frames behind it) and after the editor's first 30 live frames.
 var s = app.shaderCache();
 s.asyncAtStart = app.asyncShaders();
+// THE OWNER's LAUNCH (SHADER-SYSTEM-1 7a, the lead's ruling): an interactive session's editor compiles in the
+// BACKGROUND (main.cpp's policy); a scripted run is synchronous unless it asks - this one asks, before the editor's first
+// frame, so a gate gap shows as what the owner meets: a background compile, a placeholder draw, a Complete frame's join.
+app.setAsyncShaders(true);
 editor.frame(30, 1 / 60);
 s.asyncAfter30 = app.asyncShaders();
 // ...then until nothing is pending (SHADER-SYSTEM-1 stage 7a: what the editor's frames built since the gate, read

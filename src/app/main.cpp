@@ -542,6 +542,9 @@ int main(int argc, char *argv[])
             end.lowLevelBuiltInFrame = g.lowLevelBuiltInFrame;
             end.computeParsedInFrame = g.computeParsedInFrame;
             end.computePsoInFrame = g.computePsoInFrame;
+            end.compiledInBackground = g.compiledInBackground;
+            end.placeholderDraws = g.placeholderDraws;
+            end.computeJoins = g.computeJoins;
             livecompiles::noteGateEnd(end);
         }
         livecompiles::arm([weak = std::weak_ptr<jahshaka::engine::Engine>(engine)]() {

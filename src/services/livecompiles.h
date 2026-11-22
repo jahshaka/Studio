@@ -49,6 +49,9 @@ struct State
     struct GateEnd {
         unsigned long long graphicsBuiltInFrame = 0, graphicsCompiledInFrame = 0, lowLevelBuiltInFrame = 0,
                            computeParsedInFrame = 0, computePsoInFrame = 0;
+        /// ...and the BACKGROUND path's (the interactive editor's): a gate gap there is a background compile, a
+        /// placeholder draw or a Complete frame's join, never an in-frame build.
+        unsigned long long compiledInBackground = 0, placeholderDraws = 0, computeJoins = 0;
         bool noted = false;
     } gateEnd;
 };

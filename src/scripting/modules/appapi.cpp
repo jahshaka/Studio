@@ -292,7 +292,8 @@ QVector<VerbInfo> AppApi::verbs() const
                           "paramsMisfits, compileErrors, computeParsedInFrame, computePsoInFrame, computeDestroyWaits, "
                           "computeDestroyWaitMs, glslangCompiles, "
                           "glslangMs, graphicsPsos, graphicsPsoMs, computePsos, computePsoMs, graphicsBuiltInFrame, "
-                          "graphicsCompiledInFrame, lowLevelBuiltInFrame, rayBuildsJoinedWaiting, atGate}",
+                          "graphicsCompiledInFrame, lowLevelBuiltInFrame, rayBuildsJoinedWaiting, computeJoins, computeJoinMs, "
+                          "atGate}",
           "THE BACKGROUND SHADER COMPILER (ASYNC-SHADERS-1). After a project is open the editor's "
           "view never waits for a shader: a permutation it has not built yet goes to the engine's "
           "compile service (its own low-priority threads) and the object draws with a neutral grey "
@@ -323,10 +324,13 @@ QVector<VerbInfo> AppApi::verbs() const
           "compiled there, lowLevelBuiltInFrame the post chain's low-level pipelines (always built in the frame that "
           "first draws them): after the startup gate the editor's frames move none of the three - atGate holds the five in-a-frame "
           "totals as the startup gate returned (graphicsBuiltInFrame, graphicsCompiledInFrame, lowLevelBuiltInFrame, "
-          "computeParsedInFrame, computePsoInFrame; empty when no gate ran), the base the editor's frames are read against. "
+          "computeParsedInFrame, computePsoInFrame; empty when no gate ran) and the background path's three "
+          "(compiledInBackground, placeholderDraws, computeJoins), the base the editor's frames are read against. "
           "rayBuildsJoinedWaiting counts the times a frame or a "
           "wait blocked on a ray pipeline build that was not finished (COLD-BOOT-1 stage 4: the startup gate waits on "
-          "pending, never on a join, so it reads 0 after the gate and in every editor frame).",
+          "pending, never on a join, so it reads 0 after the gate and in every editor frame). computeJoins / "
+          "computeJoinMs: compute dispatches of a frame that owes its picture that JOINED their permutation's build "
+          "in flight on the background compiler, and the time they waited.",
           Needs::Engine },
         { "setAsyncShaders", "app.setAsyncShaders(on) -> app.asyncShaders()",
           "Turns the background compile policy on or off for this session (see app.asyncShaders). A "
@@ -1099,6 +1103,8 @@ QVariantMap AppApi::asyncShaders()
     m["graphicsCompiledInFrame"] = QVariant::fromValue(qulonglong(s.graphicsCompiledInFrame));
     m["lowLevelBuiltInFrame"] = QVariant::fromValue(qulonglong(s.lowLevelBuiltInFrame));
     m["rayBuildsJoinedWaiting"] = QVariant::fromValue(qulonglong(s.rayBuildsJoinedWaiting));
+    m["computeJoins"]         = QVariant::fromValue(qulonglong(s.computeJoins));
+    m["computeJoinMs"]        = s.computeJoinMs;
     if (const livecompiles::State::GateEnd &g = livecompiles::gateEnd(); g.noted) {
         QVariantMap at;
         at["graphicsBuiltInFrame"]    = QVariant::fromValue(qulonglong(g.graphicsBuiltInFrame));
@@ -1106,6 +1112,9 @@ QVariantMap AppApi::asyncShaders()
         at["lowLevelBuiltInFrame"]    = QVariant::fromValue(qulonglong(g.lowLevelBuiltInFrame));
         at["computeParsedInFrame"]    = QVariant::fromValue(qulonglong(g.computeParsedInFrame));
         at["computePsoInFrame"]       = QVariant::fromValue(qulonglong(g.computePsoInFrame));
+        at["compiledInBackground"]    = QVariant::fromValue(qulonglong(g.compiledInBackground));
+        at["placeholderDraws"]        = QVariant::fromValue(qulonglong(g.placeholderDraws));
+        at["computeJoins"]            = QVariant::fromValue(qulonglong(g.computeJoins));
         m["atGate"] = at;
     }
     return m;
