@@ -268,10 +268,10 @@ int main()
     Registry &eng = engHost.registry();
     std::size_t engineCommands = 0;
     for (const CommandInfo *c : eng.commands()) engineCommands += c->name.rfind("engine.", 0) == 0;
-    check(engineCommands == 23 && eng.validate().empty(),
-          "the 23 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
+    check(engineCommands == 24 && eng.validate().empty(),
+          "the 24 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
     {
-        // THE 25's ACCESS (the spec's table, 2a a1): these read; every other command changes the engine's state
+        // THE ACCESS of the 26 (the spec's table, 2a a1, + setTransforms): these read; every other changes the engine
         const std::vector<std::string> reads = {"host.check", "host.lastError", "engine.view.routes",
                                                 "engine.view.declareRoutes", "engine.picture.bytes", "engine.picture.hash",
                                                 "engine.picture.columnStep", "engine.picture.mean"};
@@ -283,7 +283,7 @@ int main()
             ++checked;
             if (c->signature.access != (read ? Access::Reads : Access::Changes)) wrong += " " + signatureText(*c);
         }
-        check(checked == 25 && wrong.empty(),
+        check(checked == 26 && wrong.empty(),
               "every one of the " + std::to_string(checked) + " commands declares the access of the spec's table: 8 " +
                   "reads, the rest changes" + (wrong.empty() ? std::string() : " - wrong:" + wrong));
         check(signatureText(*eng.find("engine.picture.hash")) == "engine.picture.hash(picture: target picture handle) -> string [reads]",
@@ -294,6 +294,51 @@ int main()
                               {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
                      "engine.node.setTransform: transform.position must hold 3 elements"),
           "a 2-element position FAILS by name (the host checks a vector's length, before the engine is asked)");
+    {
+        // THE FLAT BATCH (engine.node.setTransforms, 2a a4): its shape is checked before any node moves - here the node
+        // kind's existence check is this file's (no engine: node 4 is dead, the rest live), so the checks are seen to
+        // run in order and a call that passes them all reaches the engine (absent here)
+        Host batchHost;
+        registerEngineCommands(batchHost, nullptr, "no device here", false);
+        Registry &b = batchHost.registry();
+        b.checkKind("node", [](const Call &, std::uint32_t id, std::string &why) {
+            if (id != 4) return true;
+            why = "node 4 is not a node of the scene";
+            return false;
+        });
+        const Value scene(b.hold("scene", std::make_shared<int>(0)));
+        Value::Array nodes;
+        for (std::uint32_t i = 1; i <= 3; ++i) nodes.push_back(Value(b.name("node", i)));
+        const auto numbersOf = [](std::size_t n, double x) { return Value(Value::Array(n, Value(x))); };
+        const auto batch = [&](Value::Object o) { return b.call("engine.node.setTransforms", {scene, Value(std::move(o))}); };
+        Value::Array withDead = nodes;
+        withDead.push_back(Value(b.name("node", 4)));
+        Value::Array tooMany(65537, nodes[0]);
+        Value::Array nanAt7 = numbersOf(9, 1.0).asArray();
+        nanAt7[7] = Value(std::numeric_limits<double>::quiet_NaN());
+        check(failedWith(batch({{"nodes", Value(nodes)}, {"positions", numbersOf(8, 0)}}),
+                         "engine.node.setTransforms: transforms.positions holds 8 numbers, not 3 x 3 nodes") &&
+                  failedWith(batch({{"nodes", Value(nodes)}, {"rotations", numbersOf(9, 0)}}),
+                             "transforms.rotations holds 9 numbers, not 4 x 3 nodes") &&
+                  failedWith(batch({{"nodes", Value(nodes)}, {"scales", numbersOf(12, 1)}}),
+                             "transforms.scales holds 12 numbers, not 3 x 3 nodes"),
+              "setTransforms: a part whose length is not 3 n / 4 n / 3 n FAILS by name");
+        check(failedWith(batch({{"nodes", Value(nodes)}, {"positions", Value(nanAt7)}}),
+                         "transforms.positions[7] is not a finite number") &&
+                  failedWith(batch({{"nodes", Value(withDead)}}), "engine.node.setTransforms: nodes[3]: node 4 is not a node") &&
+                  failedWith(batch({{"nodes", Value(tooMany)}}), "transforms.nodes holds 65537 elements, at most 65536"),
+              "setTransforms: a NaN at positions[7], a dead node at nodes[3] and 65,537 nodes each FAIL by name");
+        check(failedWith(batch({{"nodes", Value(nodes)}}), "the engine did not start") &&
+                  failedWith(batch({{"nodes", Value(nodes)}, {"positions", numbersOf(9, 0)}, {"rotations", numbersOf(12, 0)},
+                                    {"scales", numbersOf(9, 1)}}),
+                             "the engine did not start") &&
+                  signatureText(*b.find("engine.node.setTransforms")) ==
+                      "engine.node.setTransforms(scene: target scene handle, transforms: object {nodes: node handle[] <= 65536, "
+                      "positions: number[] <= 196608 = default, rotations: number[] <= 262144 = default, scales: number[] <= "
+                      "196608 = default}) -> null [changes]",
+              "THE CONTROL: every part absent, and every part whole, pass the checks to the engine; the signature: " +
+                  signatureText(*b.find("engine.node.setTransforms")));
+    }
     check(failedWith(eng.call("engine.scene.create", {Value("s")}), "engine.scene.create: the engine did not start: no device here") &&
               failedWith(eng.call("engine.frames", {Value(1)}), "the engine did not start: no device here"),
           "with no engine every engine command FAILS saying why the engine is absent");

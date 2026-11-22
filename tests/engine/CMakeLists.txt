@@ -431,6 +431,14 @@ add_test(NAME script.host COMMAND test_script_host)
 set_tests_properties(script.host PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(script.host)
 
+# script.batch_equals_single (SCRIPT-IN-ENGINE-1 2a a4) — ONE engine.node.setTransforms CALL PUTS N NODES WHERE N
+# engine.node.setTransform CALLS PUT THEM: twin scenes of 64 cubes (+ one set back to the identity, every part left out),
+# placed each way, their pictures byte-equal; the control: the cubes are drawn. A script run by jahengine. 32 frames.
+jah_gpu_row(script.batch_equals_single CLASS engine FRAMES 32
+         COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/script_batch_equals_single.js" --name script.batch_equals_single
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(script.batch_equals_single PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # engine.hit_list_law — THE REFLECTION REST's RECORD ALLOWANCE as a pure function (URGENT #157; test_hit_list_law.cpp says
 # the law): a function of the view's target (its hit list's creation capacity) and the rest's batching count, never of
 # how large the list once grew; a list smaller than its creation size caps it. The header only: a CPU code row.
