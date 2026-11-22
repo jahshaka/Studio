@@ -17,6 +17,10 @@ For more information see the LICENSE file
 //     the query log's by N; a raw QSqlQuery loop of N grows only the traced count; a trigger's
 //     sub-statement and the read's own PRAGMA are not counted; with JAH_DB_STATEMENT_TRACE unset (a
 //     child run of this binary) `traced` is false and `statements` 0 — nothing is registered.
+//   * M1, THE FIRST MEASUREMENT (printed, never barred): the pages the Library listing reads on a cold
+//     connection at 1,000 assets, with 256-px thumbnails and with none — members off (the page's default,
+//     the fold included) and members on (the listing's scan alone). Does a listing read each row's thumbnail
+//     pages? (The assets table stores `thumbnail` before properties, view_filter and listed.)
 //   * THE GENERATOR (tests/support/libraryfixture.h) writes the library the laws run on; its rows are
 //     checked here by what the listings see of them. `--generate <db> <store> <assets> <projects>` writes
 //     one library and exits (the column comparison's input; stage 2's roots).
@@ -36,6 +40,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QUuid>
 #include <cstdio>
+#include <functional>
 
 #include "data/database/database.h"
 #include "data/database/databasereads.h"
@@ -68,6 +73,50 @@ static int envUnsetControl(const QString &dbPath)
     db.closeDatabase();
     QFile::remove(dbPath);
     return 0;
+}
+
+/// What the default connection did around one step: the pages its pager read from the file and the
+/// statements it ran.
+struct Reading {
+    qint64 pages = 0;
+    qint64 bytes = 0;
+    qint64 statements = 0;
+};
+
+static Reading around(const std::function<void()> &step)
+{
+    const databasereads::Stats a = databasereads::read();
+    step();
+    const databasereads::Stats b = databasereads::read();
+    return { b.pages - a.pages, (b.pages - a.pages) * b.pageSize, b.statements - a.statements };
+}
+
+/// The Library listing on a COLD connection (closed and reopened: the pager's cache empty), members off and on.
+struct ColdListing {
+    Reading membersOff;
+    Reading membersOn;
+};
+
+static ColdListing coldListing(Database &db, const QString &dbPath)
+{
+    db.closeDatabase();
+    db.initializeDatabase(dbPath);
+    ColdListing out;
+    out.membersOff = around([&] { assettray::libraryList(&db, false); });
+    db.closeDatabase();
+    db.initializeDatabase(dbPath);
+    out.membersOn = around([&] { assettray::libraryList(&db, true); });
+    return out;
+}
+
+static void printM1(const char *label, const ColdListing &l, qint64 thumbnailBytes)
+{
+    std::printf("   M1 %s (%lld thumbnail bytes in the library): libraryList members off %lld pages = %lld B, %lld statements;"
+                " members on %lld pages = %lld B, %lld statements\n",
+                label, static_cast<long long>(thumbnailBytes), static_cast<long long>(l.membersOff.pages),
+                static_cast<long long>(l.membersOff.bytes), static_cast<long long>(l.membersOff.statements),
+                static_cast<long long>(l.membersOn.pages), static_cast<long long>(l.membersOn.bytes),
+                static_cast<long long>(l.membersOn.statements));
 }
 
 /// `--generate`: one library, written and closed.
@@ -197,13 +246,39 @@ int main(int argc, char **argv)
     db.createAllTables();
 
     theTrace(db);
+    db.closeDatabase();
+    QFile::remove(dbPath);
 
-    // ---- THE LIBRARY AT 1,000 ASSETS / 50 PROJECTS ----------------------------------------------------
+    // ---- M1 WITH NO THUMBNAILS: its own library at 1,000 / 50 ---------------------------------------
     const QString store = QDir::currentPath() + QStringLiteral("/library_statements_store");
-    QDir(store).removeRecursively();
-    QDir(store + QStringLiteral("-sources")).removeRecursively();
-    libraryfixture::Library lib;
+    const auto clearStore = [&] {
+        QDir(store).removeRecursively();
+        QDir(store + QStringLiteral("-sources")).removeRecursively();
+    };
     QString error;
+    ColdListing none;
+    {
+        clearStore();
+        const QString bare = QStringLiteral("library_statements_bare.db");
+        QFile::remove(bare);
+        CHECK(db.initializeDatabase(bare), "the thumbnail-free database opened");
+        db.createAllTables();
+        libraryfixture::Library bareLib;
+        libraryfixture::Options options;
+        options.thumbnails = false;
+        CHECK(libraryfixture::grow(&db, store, 1000, 50, bareLib, options, &error) && bareLib.thumbnailBytes == 0,
+              "the generator wrote 1,000 assets with no thumbnail%s%s", error.isEmpty() ? "" : ": ", qPrintable(error));
+        none = coldListing(db, bare);
+        db.closeDatabase();
+        QFile::remove(bare);
+    }
+
+    // ---- THE LIBRARY AT 1,000 ASSETS / 50 PROJECTS (thumbnails), the one the laws run on ---------------
+    clearStore();
+    QFile::remove(dbPath);
+    CHECK(db.initializeDatabase(dbPath), "the library database opened");
+    db.createAllTables();
+    libraryfixture::Library lib;
     QElapsedTimer timer;
     timer.start();
     CHECK(libraryfixture::grow(&db, store, 1000, 50, lib, {}, &error), "the generator wrote 1,000 assets and 50 projects%s%s",
@@ -212,10 +287,17 @@ int main(int argc, char **argv)
                 static_cast<long long>(lib.thumbnailBytes));
     theGenerator(db, lib, 1000);
 
+    // ---- M1: THE TWO NUMBERS ----------------------------------------------------------------------------
+    const ColdListing with = coldListing(db, dbPath);
+    printM1("with 256-px thumbnails", with, lib.thumbnailBytes);
+    printM1("with none             ", none, 0);
+    CHECK(with.membersOn.statements == none.membersOn.statements,
+          "M1: the listing's scan runs the same statements with and without thumbnails (%lld)",
+          static_cast<long long>(with.membersOn.statements));
+
     db.closeDatabase();
     QFile::remove(dbPath);
-    QDir(store).removeRecursively();
-    QDir(store + QStringLiteral("-sources")).removeRecursively();
+    clearStore();
     if (failures) std::printf("library.statements: FAILED (%d)\n", failures);
     else std::printf("library.statements: PASSED\n");
     return failures ? 1 : 0;
