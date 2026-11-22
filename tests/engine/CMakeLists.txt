@@ -137,6 +137,23 @@ jah_gpu_row(engine.message_order CLASS engine FRAMES 7 COMMAND test_engine_messa
 set_tests_properties(engine.message_order PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_tsan_render(frame.record_determinism engine.message_order)   # the render thread's TSan arm (U3 decision 47)
 
+# engine.draw_order — THE PICTURE NEVER DEPENDS ON CREATION ORDER (GIZMO-ORDER-1): two coincident on-top parts drawn
+# in a stated order (Scene::setNodeDrawOrder) give the same bytes in both creation orders and the higher order shows;
+# a blended on-top part still draws after an ordered opaque one; the verb refuses by name. A law in exact codes; 16 frames.
+add_executable(test_engine_draw_order test_engine_draw_order.cpp)
+set_target_properties(test_engine_draw_order PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_draw_order PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_draw_order PRIVATE JahshakaEngine)
+add_dependencies(test_engine_draw_order JahshakaEngineMedia)
+jah_gpu_row(engine.draw_order CLASS engine FRAMES 16 COMMAND test_engine_draw_order
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.draw_order PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # frame.interpolation — THE OWNER'S MODE DRAWS BETWEEN THE GRID STATES (ENGINE-UPGRADE-U3 stage 5): a 60 Hz mover at
 # a 90 Hz display period, three poses per two steps, x = (2/3) j a closed form; lockstep frames draw the newest
 # state exactly. frame.interpolation_apply (archived: archive/tests/frame) (`--apply`, measure): 10,000 nodes' apply on the pool vs the frame's thread.
