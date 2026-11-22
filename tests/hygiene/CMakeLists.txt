@@ -733,6 +733,16 @@ add_test(NAME source.webgpu_census
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/webgpu_census.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.webgpu_census PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.webgpu_census)
+# source.no_qt_below (NOQT-CORE-1 stage 0, V2 plan 0.12): NO Qt BELOW THE EDITOR's UI, AND WHAT IS LEFT ONLY FALLS - per line
+# of no_qt_below_ceilings.txt (the irisgl/* directories: every Qt token and include; one QtSql-only line per src/* directory),
+# comments and literals stripped, the law both ways (over = RED with every site; under = RED "lower the ceiling to M in the
+# same commit"); the Qt-free IrisCore target read from the build (no Qt include directory on its compile lines, no Qt symbol
+# in its archive, no include outside core/ and the standard library); nothing under irisgl/ includes src/app/qtstd.h. Its
+# self-test first.
+add_test(NAME source.no_qt_below
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_qt_below.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+set_tests_properties(source.no_qt_below PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.no_qt_below)
 # source.ray_seam (DOORS-0 stage 1, V2 plan 0.5): THE CARD'S RAY API IS SPELLED IN ONE FILE - comments stripped, no
 # rayQuery*EXT / gl_RayQuery*EXT / gl_RayFlags*EXT / accelerationStructureEXT outside irisgl's
 # engine/src/rayquery/include/jah_rq.glsl (irisgl/engine and the fork's Hlms media read), and the seam holds #defines

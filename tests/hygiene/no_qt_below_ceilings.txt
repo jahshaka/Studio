@@ -1,0 +1,26 @@
+# source.no_qt_below's CEILINGS (tests/hygiene/no_qt_below.py says the law): what is left of Qt below the editor's UI ONLY FALLS.
+# Measured by the row's own counter at photon-7 a87874341 (irisgl c6658e39). A line under its ceiling is RED until the ceiling is
+# lowered to its count IN THE SAME COMMIT; a rise is written here only by the lead's ruling, named on its line.
+# kind qt: every Qt token and include line; kind qtsql: QSql* tokens and QSql*/QtSql include lines only (NOQT-CORE-1 choice C).
+# (A Qt include counts once as an include and once as a token: its header's name.)
+#
+# line            | kind  | tokens | includes | paths                                         # the plan item that lowers it
+irisgl/core       | qt    |    194 |       35 | irisgl/core                                   # NOQT-CORE-1 (0.12): 0 at its stage 4
+irisgl/document   | qt    |   2485 |      112 | irisgl/document irisgl/irisglfwd.h irisgl/irisgl.h  # NOQT-DOCUMENT-1: 0 at its end
+irisgl/import     | qt    |   1333 |       66 | irisgl/import                                 # NOQT-DOCUMENT-1 (its stage 1 raises it by the moved seam, ruled)
+irisgl/mirror     | qt    |    538 |        8 | irisgl/mirror                                 # NOQT-DOCUMENT-1
+irisgl/engine     | qt    |      0 |        0 | irisgl/engine                                 # stays 0
+src/app           | qtsql |      0 |        0 | src/app                                       # NOQT-DATABASE-1: stays 0
+src/bridge        | qtsql |      0 |        0 | src/bridge                                    # NOQT-DATABASE-1: stays 0
+src/commands      | qtsql |     10 |        2 | src/commands                                  # NOQT-DATABASE-1: 0 at its end
+src/data          | qtsql |    246 |        8 | src/data                                      # NOQT-DATABASE-1: 0 at its end
+src/export        | qtsql |      5 |        2 | src/export                                    # NOQT-DATABASE-1: 0 at its end
+src/io            | qtsql |     11 |        4 | src/io                                        # NOQT-DATABASE-1: 0 at its end
+src/lab           | qtsql |      0 |        0 | src/lab                                       # NOQT-DATABASE-1: stays 0
+src/modules       | qtsql |     27 |        8 | src/modules                                   # NOQT-DATABASE-1: 0 at its end
+src/player        | qtsql |      0 |        0 | src/player                                    # NOQT-DATABASE-1: stays 0
+src/scripting     | qtsql |     19 |        4 | src/scripting                                 # NOQT-DATABASE-1: 0 at its end
+src/services      | qtsql |    362 |       52 | src/services                                  # NOQT-DATABASE-1: 0 at its end
+src/shell         | qtsql |      4 |        2 | src/shell                                     # NOQT-DATABASE-1: 0 at its end
+src/ui            | qtsql |     29 |       10 | src/ui                                        # NOQT-DATABASE-1: 0 at its end
+src/viewport      | qtsql |      2 |        0 | src/viewport                                  # NOQT-DATABASE-1: 0 at its end
