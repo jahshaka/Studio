@@ -519,6 +519,17 @@ if(Python3_Interpreter_FOUND)
     jah_no_display(source.ray_views_cached)
 endif()
 
+# source.card_report_layout — GATHER-HANG-1 stage 2: JahCardIndirect_cs.glsl's report is sized to what the shader
+# writes. Its layout's one home is irisgl/engine/src/CardReportLayout.h: the shader's highest caReport[k + caMode.z]
+# equals kCardReportFrameWords, and the cards' and the irradiance field's report buffers (and the cards' read-back)
+# go through cardReportWords. Red on the base: the field's 1 + probes stored two words past its buffer every clear.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME source.card_report_layout
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/card_report_layout.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.card_report_layout PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.card_report_layout)
+endif()
+
 # source.notices_coverage — NOTICES-1: every vendored component under
 # thirdparty/ and irisgl/thirdparty/ is claimed by app/notices.json, every
 # entry's notice file exists and reads like a licence, and no entry points at
