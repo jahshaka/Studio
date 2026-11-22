@@ -34,6 +34,12 @@
 //               runs, the scene comes to rest with no card admitted.
 //   corrupt   - the floor wears a texture whose file is corrupt (the loader's fallback is its final texture): the scene comes
 //               to rest with the control's cards (the same room, no texture: an albedo map moves no reader's ray).
+//   window    - THE DECISION's FIRE SITE (COLD-BOOT-1's leftover L2): the rest decision is SCHEDULED on a complete frame
+//               (CardCacheStatus::decisionReaders armed, restDecisions 0) and fires SurfaceCache::demandDueFrames (~9) frames
+//               later; the frames between turn INCOMPLETE with no demand change (the door frames.incompleteHold, term bit
+//               4: an object entering the view under a sub-pixel turn while its permutation compiles) - (1) no rest decision
+//               is taken while they are incomplete; (2) released, the scene comes to rest, complete. RED before the fix: the
+//               decision fired on the due frame, incomplete (the schedule's term only, OgreSurfaceCache.cpp's decide).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -216,9 +222,11 @@ void drop(Engine *e, Room &r)
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "late";
-    const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt" };
+    const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt",
+                                             "window" };
     if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
-        std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail or corrupt, not '%s'\n", mode.c_str());
+        std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt or window, not '%s'\n",
+                    mode.c_str());
         return 2;
     }
     std::string err;
@@ -361,6 +369,51 @@ int main(int argc, char **argv)
         check(after.cards.demandChangeFrame == before.cards.demandChangeFrame &&
                   after.cards.restDecisions == before.cards.restDecisions &&
                   after.cards.residentHash == before.cards.residentHash && after.giAtRest, w);
+    } else if (mode == "window") {
+        Room h = buildRoom(e, "build_late_window");
+        if (!h.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+        // THE SCHEDULE, read on its published state (a frame late; the door latches at the next frame's start: ~7 of the
+        // due's ~9 frames remain)
+        int scheduledAt = -1, decidedFirst = -1;
+        for (int f = 0; f < kRestCap && scheduledAt < 0 && decidedFirst < 0; ++f) {
+            enginetest::frames(e, 1);
+            ++frames;
+            const GiStatus g = h.scene->published().gi;
+            if (g.cards.restDecisions > 0ull) decidedFirst = frames;
+            else if (g.cards.decisionReaders != 0u) scheduledAt = frames;
+        }
+        std::snprintf(w, sizeof(w), "the decision is seen SCHEDULED before it fires (scheduled at frame %d, decided first at "
+                      "%d)", scheduledAt, decidedFirst);
+        check(scheduledAt > 0, w);
+        if (scheduledAt < 0) { std::printf("\nFAIL (%d failures, %d frames)\n", g_fail, frames); return 1; }
+        e->setArm("frames.incompleteHold", 1.0);   // THE FRAMES BETWEEN TURN INCOMPLETE
+        // held 3 x the due: the decision would have fired inside it
+        const int kHeld = 30;
+        int incompleteSeen = 0, decidedIncomplete = 0;
+        unsigned termsSeen = 0u;
+        for (int f = 0; f < kHeld; ++f) {
+            enginetest::frames(e, 1);
+            ++frames;
+            const PublishedFrame::Completeness c = h.scene->published().completeness;
+            termsSeen |= c.terms;
+            if (!c.incomplete) continue;
+            ++incompleteSeen;
+            if (h.scene->published().gi.cards.restDecisions > 0ull) ++decidedIncomplete;
+        }
+        printCards("W, incomplete", h.scene->published().gi, inFlight());
+        std::printf("   scheduled at frame %d; %d held frames, %d published incomplete (terms seen %u), %d of them decided\n",
+                    scheduledAt, kHeld, incompleteSeen, termsSeen, decidedIncomplete);
+        check(incompleteSeen >= kHeld - 2 && (termsSeen & 16u) != 0u,
+              "the held frames are published INCOMPLETE by the door's own term (bit 4)");
+        std::snprintf(w, sizeof(w), "(1) a frame that turns incomplete after the decision is scheduled takes no decision (%d "
+                      "of %d incomplete frames decided)", decidedIncomplete, incompleteSeen);
+        check(incompleteSeen > 0 && decidedIncomplete == 0, w);
+        e->setArm("frames.incompleteHold", 0.0);   // THE FRAME BECOMES COMPLETE: a demand change, the window reopens
+        const int rest = toRest(e, h.scene, frames);
+        printCards("W at rest", h.scene->published().gi, inFlight());
+        std::snprintf(w, sizeof(w), "(2) released, the scene comes to rest (%d frames, the cap %d)", rest, kRestCap);
+        check(rest >= 0, w);
+        checkComplete("W", h.scene);
     } else {
         // ---- the failure rows: a failure is final - the scene comes to rest on the picture it can draw ---------------
         Look look, control;

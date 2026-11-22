@@ -1293,6 +1293,12 @@ jah_gpu_row(gi.card_build_late.corrupt CLASS engine COMMAND test_gi_card_build_l
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.corrupt PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 233)
+# .window (COLD-BOOT-1's leftover L2, built by SHADER-SYSTEM-1): a frame that turns incomplete between the rest decision's
+# schedule and its fire takes no decision (the door frames.incompleteHold). A new row: priced from its solo run, never SHIP.
+jah_gpu_row(gi.card_build_late.window CLASS engine COMMAND test_gi_card_build_late window
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.window PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 372)
 
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
