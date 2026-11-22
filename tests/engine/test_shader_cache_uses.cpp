@@ -15,8 +15,9 @@
 //       launch that USES a loaded entry, every file the manifest names and the manifest itself keep their bytes and
 //       mtime - the stamp it moved is written to the sidecar alone (fresh_home.sh's promotion hashes the manifest: a
 //       row that grew nothing never replaces a shared rig cache);
-//   (4) A TORN SIDECAR PRUNES NOTHING: one byte of entry-uses.bin flipped, the next launch drops nothing and rewrites a
-//       whole table.
+//   (4) A TORN SIDECAR EVICTS NOTHING: one byte of entry-uses.bin flipped AND the layers over the budget, the launch drops
+//       nothing and wipes nothing (a damaged 1-KB file is no reason to throw 256 MB away: the lead) and rewrites a whole
+//       table; the eviction runs at the next save whose stamps were read intact.
 #include "EnginePrivate.h"
 
 #include <OgreAbiUtils.h>
@@ -161,16 +162,26 @@ void runLaws(const std::string &dir, const MakeToy &make) {
         std::string torn = readFile(c + "/entry-uses.bin");
         if (torn.size() > 20) torn[torn.size() / 2] ^= 0x5a;          // one byte: the table's checksum no longer holds
         writeFile(c + "/entry-uses.bin", torn);
-        t->begin(kRoomy); t->use("A"); t->end();
-        t->begin(kRoomy);
+        t->begin(1u); t->use("A"); t->end();                           // a torn sidecar AND a budget the layers pass
+        const unsigned long long layers = layerBytes(c);
+        t->begin(layers - 1u);
         const bool a2 = t->present("A"), b2 = t->present("B");
-        t->end();
-        CHECK(a2 && b2, "(4) a TORN sidecar pruned nothing (A %d, B %d)", a2, b2);
+        t->use("A");
+        t->end();                                                      // the next save, its stamps trustworthy again
+        CHECK(a2 && b2 && layers > 0u,
+              "(4) a TORN sidecar over the budget evicted nothing and wiped nothing (A %d, B %d, %llu bytes of layers)",
+              a2, b2, layers);
         const std::string rebuilt = readFile(c + "/entry-uses.bin");
         UseTable table;
         std::uint32_t launch = 0;
-        CHECK(rebuilt != torn && readUseTable(rebuilt.data(), rebuilt.size(), table, launch) && table.size() >= 2u,
+        CHECK(rebuilt != torn && readUseTable(rebuilt.data(), rebuilt.size(), table, launch) && table.size() >= 1u,
               "(4) ...and a whole table was rewritten (%zu stamps, launch %u)", table.size(), launch);
+        t->begin(kRoomy);
+        const bool a3 = t->present("A"), b3 = t->present("B");
+        t->end();
+        CHECK(a3 && !b3,
+              "(4) ...and the eviction ran at the next save with stamps: the entry this launch did not use went (%d), the "
+              "used one stayed (%d)", !b3, a3);
     }
     {   // (2): over the budget
         const std::string c = dir + "/over";
