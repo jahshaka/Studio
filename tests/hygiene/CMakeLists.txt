@@ -775,6 +775,14 @@ add_test(NAME source.no_box_paths
 set_tests_properties(source.no_box_paths PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.no_box_paths)
 
+# source.script_neutral (SCRIPT-IN-ENGINE-1 stage 1): THE ENGINE'S SCRIPT HOST IS LANGUAGE-NEUTRAL - the JS engine is named by
+# irisgl/engine/src/script/js_*.cpp alone, and the value, the registry and the host include no Qt, Ogre or JS header
+# (script_neutral.py says the rules). Its self-test first.
+add_test(NAME source.script_neutral
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/script_neutral.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.script_neutral PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.script_neutral)
+
 # source.brick_list_bounded (NONDET-1 fix items D; READ-8 R8-1..R8-3): THE FEEDBACK'S DATA-DRIVEN READS ARE BOUNDED IN THE
 # SHADER - every read of the GPU-written brick list by the group index (the bounce, the copy-back, the directional steps
 # 0 and 1, the ray tier's sides gather) returns at or past the list's length and at a brick (or texel) past the volume;
