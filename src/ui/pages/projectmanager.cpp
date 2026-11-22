@@ -710,10 +710,17 @@ void ProjectManager::addTile(const QString &guid)
 {
     if (!gridBuilt || guid.isEmpty() || dynamicGrid->tile(guid)) return;
     // A row still waiting for its slice is built NOW, at the head (a
-    // touched project goes first, as a rebuild would put it).
-    pendingRows.remove(guid);
+    // touched project goes first, as a rebuild would put it), from its own
+    // waiting record — kept in step by renameTile / moveTile / removeTile — so
+    // a touch runs no statement whether the sliced build has reached the row
+    // or not (LARGE-LIBRARY-1: a create at 500 projects re-read it, at 50 not).
     ProjectTileData record;
-    if (!db->fetchProjectTile(guid, &record) || record.desktop != currentDesktop) return;
+    if (ProjectTileData *waiting = pendingRows.find(guid)) {
+        record = *waiting;
+        pendingRows.remove(guid);
+    } else if (!db->fetchProjectTile(guid, &record) || record.desktop != currentDesktop) {
+        return;
+    }
     dynamicGrid->insertTileAtHead(record, isOpenProjectTile(guid));
     checkForEmptyState();
     irisLog(QStringLiteral("desktop: tile added — %1 on desktop %2 (%3 tile(s))")
