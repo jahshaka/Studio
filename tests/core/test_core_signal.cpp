@@ -3,7 +3,7 @@
 // subscribers connected when it began, in connection order; the next notify sees the change. THE LAW KEPT FROM THE LISTS IT
 // REPLACES (services.h / assetservice.h at the base: "Iterate a COPY"): a subscriber DISCONNECTED by an EARLIER one in the
 // same notify IS STILL CALLED by that notify - the snapshot was taken when it began - and is not called by the next.
-#include "core/signal.h"
+#include "irisgl/core/signal.h"
 
 #include <cstdio>
 #include <string>

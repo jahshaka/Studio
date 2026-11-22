@@ -12,7 +12,7 @@
 // never existed with a wider one - the one creation of its temp is seen by this binary's own open() (interposed the same
 // way), exclusive and 0600 at creation, under a umask of 0; its control: a Default write under that umask publishes 0666.
 // POSIX (fork; ELF interposition).
-#include "core/files.h"
+#include "irisgl/core/files.h"
 
 #include <atomic>
 #include <csignal>

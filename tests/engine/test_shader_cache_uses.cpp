@@ -47,7 +47,7 @@
 #include <OgreResourceGroupManager.h>
 #include <OgreRoot.h>
 
-#include "core/files.h"   // the staged primitives the temps' writers use (law 6)
+#include "irisgl/core/files.h"   // the staged primitives the temps' writers use (law 6)
 
 #include <cstdio>
 #include <cstdlib>

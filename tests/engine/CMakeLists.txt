@@ -648,7 +648,7 @@ set_target_properties(test_shader_cache_uses PROPERTIES CXX_STANDARD 17 AUTOMOC 
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 set_source_files_properties(test_shader_cache_uses.cpp PROPERTIES COMPILE_DEFINITIONS QT_NO_KEYWORDS)
 target_include_directories(test_shader_cache_uses PRIVATE
-    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
+    "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}" "${CMAKE_SOURCE_DIR}")   # "irisgl/core/files.h"
 target_compile_definitions(test_shader_cache_uses PRIVATE JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}")
 target_link_libraries(test_shader_cache_uses PRIVATE JahshakaEngine OgreNext IrisCore)
 foreach(_layer microcode hlms compute)

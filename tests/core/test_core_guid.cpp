@@ -1,7 +1,7 @@
 // core.guid - THE ONE GUID's FORM (NOQT-CORE-1 stage 1; core/guid.h): 36 characters, lowercase hex, dashes at 8/13/18/23,
 // version 4, variant 8-b; 100,000 drawn are unique (across 4 threads). The stored keys it must match are checked by
 // tests/core/guid_library.py over the seeded template library (the same form, by the same row).
-#include "core/guid.h"
+#include "irisgl/core/guid.h"
 
 #include <cstdio>
 #include <mutex>

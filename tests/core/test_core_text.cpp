@@ -3,7 +3,7 @@
 // shortest text parses back to the SAME BITS over 100,000 seeded doubles and the edges (+-0, the denormal edges, 2^53 +- 1,
 // +-1e308, +-inf), also under a decimal-COMMA locale (de_DE.UTF-8, else en_DK.UTF-8: a locale-bound parse fails there); parseInt
 // refuses trailing text and overflow. A missing locale prints SKIPPED with its name; the C-locale pass always runs.
-#include "core/text.h"
+#include "irisgl/core/text.h"
 
 #include <clocale>
 #include <cmath>

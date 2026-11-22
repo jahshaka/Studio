@@ -1,7 +1,7 @@
 // core.bound - iris::bound IS qBound, BIT FOR BIT (NOQT-CORE-1 stage 1; core/math/scalar.h): over a seeded set of (lo, v, hi)
 // with NaN, +-inf and +-0 among them (hi < lo never: qBound's own precondition), iris::bound(lo, v, hi) has the same bits as qBound(lo, v, hi), floats and doubles.
 // Links QtCore for the reference only (like math.parity).
-#include "core/math/scalar.h"
+#include "irisgl/core/math/scalar.h"
 
 #include <QtGlobal>
 
