@@ -2,7 +2,7 @@
 // walks. ONE folder - the loaded script's, else --js-dir's, else <data root>/scripts (made at boot: the owner drops his
 // files there) - its EVERY `.js` file in BYTEWISE name order, RE-READ from disk at every press (a file just saved is in
 // the list, a deleted one is gone: never a stale list), wrapping after the last. An empty folder answers its own line,
-// never a silent no-op. No Qt, no engine: lab.js_folder's CPU row compiles it alone.
+// never a silent no-op. No Qt, no engine: its CPU row (test_lab_js_folder.cpp) compiles it alone.
 #pragma once
 
 #include <string>
@@ -30,7 +30,7 @@ std::string scriptPlace(const std::string &folder, const std::string &name);
 
 /// THE FOLDER's READS in this process (each scriptsIn is one): a press reads the folder ONCE (nextScript, or
 /// scriptPlace for a `js load`) and the lab keeps the place it read; the frame loop reads none (the audit's F4: the
-/// overlay used to list the folder every 10 frames). lab.js_folder counts them.
+/// overlay used to list the folder every 10 frames). The scripts folder's CPU row counts them.
 int scriptListings();
 
 }   // namespace lab
