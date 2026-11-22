@@ -185,9 +185,12 @@ bool Session::boot(std::string &error)
     } else {
         cfg.shaderCacheDir = QDir(mOpt.dataRoot).filePath(QStringLiteral("shadercache")).toStdString();
     }
-    // THE APP'S SHAPE: the host's calls are records and the frames are drawn on the engine's render thread.
-    cfg.hostRecords = true;
-    cfg.renderThread = true;
+    // THE ENGINE ON THIS THREAD, NO HOST RECORDS (jahengine's shape, LAB-SCRIPTS-1 ruling 1): the EngineConfig defaults -
+    // every call applies where it is made, every frame is drawn inside renderOneFrame on this thread. The script host
+    // runs its commands inline on the calling thread and asks the engine whether a node, mesh or material exists
+    // (Scene::nodePresence ...), which a render thread's records leave unanswered: in that shape no script could attach
+    // or move a node. The cost, stated: the lab no longer exercises the render thread (the app's rows do), and a
+    // windowed lab's frame rate is not the app's.
     // --headless is an OFFSCREEN Vulkan view, never the NULL render system (createOffscreenView refuses there). It still
     // needs an X server: Ogre-Next's VulkanXcbSupport connects to $DISPLAY at boot (measured: unset = "XCB: failed to
     // connect to the display server", then a refused config) — display 0 only means "no window of ours".
@@ -2011,7 +2014,7 @@ bool Session::pin(const Command &c)
     using namespace jahshaka::engine;
     if (c.args[0] == "off") {
         if (c.args.size() != 1) { labFail("LAB REFUSED pin: 'pin off' takes nothing more\n"); return false; }
-        mScene->setGiPlacementPin(GiPlacementPin());   // a message: applied at the next frame's drain
+        mScene->setGiPlacementPin(GiPlacementPin());   // applied at the call (no host records), drawn by the frame below
         frame();
         std::printf("LAB PIN off\n");
         return true;

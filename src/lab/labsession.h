@@ -4,9 +4,9 @@
 // THE FRAME, the app's order (DOCS/ARCHITECTURE.md "How one frame happens"; Engine.h:1971-1989): the window (or an
 // offscreen view) BEFORE the scene, the scene, the view bound to it, the document mirrored into it; each frame
 // doc->refresh(), mirror->sync(the view's environment + sky + camera), Engine::renderOneFrame() — LOCKSTEP (the frame is
-// drawn inside the call, the newest record exactly), on the engine's render thread as the app runs it
-// (EngineConfig::renderThread + hostRecords, src/bridge/enginehost.cpp). Teardown mirrors it: the mirror, the
-// document, the engine, then the X connection the engine presented through.
+// drawn inside the call), the engine on THIS thread with no host records (jahengine's shape: the EngineConfig defaults,
+// so the engine's script host can run here - labsession.cpp boot()). Teardown mirrors it: the mirror, the document,
+// the engine, then the X connection the engine presented through.
 #pragma once
 
 #include "labcamera.h"

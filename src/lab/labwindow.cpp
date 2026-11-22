@@ -13,8 +13,9 @@ LabWindow::~LabWindow() { close(); }
 
 bool LabWindow::open(unsigned w, unsigned h, const std::string &title, std::string &error)
 {
-    // THE ENGINE'S RENDER THREAD USES THIS CONNECTION TOO (EngineConfig::renderThread: the fork's Vulkan window reads
-    // its attributes there), while this thread pumps its events: Xlib must be told before the first connection.
+    // THE ENGINE PRESENTS THROUGH THIS CONNECTION (the fork's Vulkan window reads its attributes from it). The engine runs
+    // on this thread (labsession.cpp boot()); XInitThreads before the first connection is kept because the driver's
+    // window-system code may touch the connection from threads of its own (unverified) and the call costs nothing.
     XInitThreads();
     Display *d = XOpenDisplay(nullptr);
     if (!d) {
