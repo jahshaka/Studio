@@ -173,18 +173,22 @@ QVector<VerbInfo> AppApi::verbs() const
           "SELECTS A THUMBNAIL listed with its SQL and whether its WHERE is keyed by guid "
           "(`guid = ?` or `guid IN (...)`). A LISTING never carries a thumbnail BLOB — a view reads "
           "the pictures it paints by guid through the tile cache — so over any session every "
-          "thumbnail select must read byGuid true; scale.library asserts it over a boot, the Library "
-          "page, an open and a create at 10,000 assets. {on:true} starts the log EMPTY, {on:false} "
+          "thumbnail select must read byGuid true; library.statements asserts it of every listing at "
+          "10,000 assets. {on:true} starts the log EMPTY, {on:false} "
           "stops it (the read still answers what was logged); no argument only reads. Off by "
           "default; the cost while on is one hash lookup per statement.",
           Needs::Document },
-        { "databaseReads", "app.databaseReads() -> {pages, pageSize, bytes, available, why}",
+        { "databaseReads", "app.databaseReads() -> {pages, pageSize, bytes, statements, traced, available, why}",
           "WHAT THE LIBRARY DATABASE READ ON THE REQUEST PATH (data/database/databasereads.h): the "
           "pages SQLite's own pager read from the file on the UI thread's default connection since "
           "it opened (`bytes` = pages x pageSize) — SQLite counts them anyway; nothing runs until "
           "this verb asks. Worker connections are not counted, so a reading taken before and after "
-          "one verb is what that verb read, whenever it is taken. scale.library's counted bars read "
-          "it. `available` false (zeros, `why` says) where the Qt driver carries its own SQLite, "
+          "one verb is what that verb read, whenever it is taken. `statements` counts EVERY statement "
+          "the default connection ran since the process started — raw SQL and the boot included, a "
+          "trigger's sub-statements and this verb's own read not — through SQLite's statement trace, "
+          "which is registered only when the app was started with JAH_DB_STATEMENT_TRACE=1 (`traced` "
+          "true); without it `traced` is false and `statements` 0. The large-library rows read both. "
+          "`available` false (zeros, `why` says) where the Qt driver carries its own SQLite, "
           "which this build may not call into.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
@@ -887,6 +891,8 @@ QVariantMap AppApi::databaseReads()
     return { { QStringLiteral("pages"), r.pages },
              { QStringLiteral("pageSize"), r.pageSize },
              { QStringLiteral("bytes"), r.pages * qint64(r.pageSize) },
+             { QStringLiteral("statements"), r.statements },
+             { QStringLiteral("traced"), r.traced },
              { QStringLiteral("available"), r.available },
              { QStringLiteral("why"), r.why } };
 }

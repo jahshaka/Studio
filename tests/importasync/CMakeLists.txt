@@ -35,6 +35,7 @@ add_executable(test_import_async test_import_async.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     # database.cpp's link closure (same as tests/assetmigrate)
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp

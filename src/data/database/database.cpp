@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QMutexLocker>
 #include <atomic>
 #include "data/database/casschema.h"
+#include "data/database/databasereads.h"
 #include "data/constants.h"
 #include "io/sceneformat.h"   // the scene version gate the import shares with the open
 #include "irisgl/irisglfwd.h"
@@ -683,8 +684,16 @@ bool Database::initializeDatabase(const QString &pathToBlob)
     db = QSqlDatabase::addDatabase(Constants::DB_DRIVER);
     db.setDatabaseName(pathToBlob);
 
+    // THE STATEMENT TRACE's DOOR (LARGE-LIBRARY-1, data/database/databasereads.h): read once per
+    // process; unset, nothing is registered and nothing is paid.
+    static const bool traceStatements = qEnvironmentVariable("JAH_DB_STATEMENT_TRACE") == QLatin1String("1");
+
     if (db.isValid()) {
         if (!db.open()) irisLog(QString("Couldn't open a database connection! %1").arg(db.lastError().text()));
+        // At the open, before the pragmas: the boot's statements are counted too.
+        if (db.isOpen() && traceStatements && !databasereads::installStatementTrace(db))
+            irisLog(QStringLiteral("JAH_DB_STATEMENT_TRACE=1, but the statement trace could not be registered "
+                                   "(app.databaseReads says why)"));
         if (db.isOpen() && applyDurabilityPragmas(db)) startCheckpointer(this, pathToBlob);
         return db.isOpen();
     }

@@ -44,6 +44,7 @@ set(_d11_db_closure
     ${CMAKE_SOURCE_DIR}/src/services/loadtimeline.cpp
     ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
     ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
@@ -78,6 +79,19 @@ jah_d11_suite(test_library_model library.model test_library_model.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
     ${CMAKE_SOURCE_DIR}/src/ui/controls/assetdrag.cpp)
 jah_ship_row(library.model)   # THE SHIP SET (TEST-CUT-1)
+
+# library.statements — LARGE-LIBRARY-1 stage 1: the library's statements, counted by SQLite's own
+# statement trace on the default connection (data/database/databasereads.h), do not grow with the
+# library; the trace's negative controls. THE STATED LIMIT (ruled call 3): only the default connection
+# is traced — a per-asset query moved onto a worker connection would not be seen. The trace needs the
+# SYSTEM SQLite the Qt driver uses, linked as the app links it (the Studio CMakeLists.txt's SQLite3 block).
+jah_d11_suite(test_library_statements library.statements test_library_statements.cpp)
+find_package(SQLite3 QUIET)
+if(SQLite3_FOUND)
+    target_link_libraries(test_library_statements PRIVATE SQLite::SQLite3)
+    target_compile_definitions(test_library_statements PRIVATE JAH_HAVE_SQLITE3=1)
+endif()
+set_tests_properties(library.statements PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAH_DB_STATEMENT_TRACE=1")
 
 # bundle.writer — EXPORT-THREAD-1: the share file's writer (services/bundlewriter.*) on a worker
 # writes the same manifest + payload bytes as on the calling thread, for a 200-entry pack; the

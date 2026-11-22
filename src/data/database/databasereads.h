@@ -27,8 +27,22 @@ For more information see the LICENSE file
 // installer's macOS and Windows builds) a call into ours with its handle would be undefined
 // behaviour: `available` is false there, and the counted suites skip saying so.
 
+//
+// THE STATEMENT TRACE (LARGE-LIBRARY-1). The query log (Database::setQueryLog) sees only the statements
+// that pass `executeAndCheckQuery`; raw SQL — `checkIfTableExists`, a service's own QSqlQuery — and the
+// boot are invisible to it. SQLite's statement trace (sqlite3_trace_v2, SQLITE_TRACE_STMT) fires once per
+// statement EXECUTION on its connection, whoever runs it: `installStatementTrace` registers it on a
+// connection's handle, and `read` reports the count of every statement the traced connections ran
+// (`statements`; a trigger's sub-statements — text starting `--` — are not counted, and `read`'s own
+// `PRAGMA page_size` is not either). Database::initializeDatabase calls it ONLY when the process was
+// started with JAH_DB_STATEMENT_TRACE=1 (read once): unset, no callback is registered and nothing is
+// paid — `traced` false, `statements` 0. THE STATED LIMIT: only the DEFAULT (UI-thread) connection is
+// traced; a statement a worker connection runs is not counted here.
+
 #include <QString>
 #include <QtGlobal>
+
+class QSqlDatabase;
 
 namespace databasereads {
 
@@ -37,9 +51,15 @@ struct Stats {
     QString why;              ///< when not available: the reason, printed by the caller
     qint64 pages = 0;         ///< pages the default connection's pager read from the file
     int pageSize = 0;         ///< the file's page size
+    bool traced = false;      ///< the statement trace is registered on the default connection
+    qint64 statements = 0;    ///< statements the traced connections ran since the process started
 };
 
 Stats read();
+
+/// Registers the statement trace on `connection`'s handle; false (nothing registered) where `read`
+/// would answer unavailable.
+bool installStatementTrace(const QSqlDatabase &connection);
 
 }   // namespace databasereads
 

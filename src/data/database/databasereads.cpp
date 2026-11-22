@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QVariant>
 
+#include <atomic>
 #include <cstring>
 
 #if defined(JAH_HAVE_SQLITE3)
@@ -53,6 +54,43 @@ int scanObject(struct dl_phdr_info *info, size_t, void *data)
 }
 #endif
 
+#if defined(JAH_HAVE_SQLITE3) && defined(__linux__)
+/// The connection's sqlite3* when it belongs to the system SQLite this TU links, else null with
+/// the reason in `why`.
+sqlite3 *systemHandle(const QSqlDatabase &connection, QString *why)
+{
+    if (!connection.isOpen() || !connection.driver()) { *why = QStringLiteral("the library database is not open"); return nullptr; }
+    PluginScan scan;
+    dl_iterate_phdr(scanObject, &scan);
+    if (!scan.pluginSeen || !scan.needsSystemSqlite) {
+        *why = scan.pluginSeen ? QStringLiteral("the qsqlite plugin carries its own SQLite")
+                               : QStringLiteral("the qsqlite plugin is not loaded");
+        return nullptr;
+    }
+    const QVariant h = connection.driver()->handle();
+    if (!h.isValid() || std::strcmp(h.typeName(), "sqlite3*") != 0) {
+        *why = QStringLiteral("the driver's handle is not an sqlite3*");
+        return nullptr;
+    }
+    sqlite3 *db = *static_cast<sqlite3 *const *>(h.constData());
+    if (!db) *why = QStringLiteral("the driver's handle is null");
+    return db;
+}
+
+std::atomic<qint64> gStatements{0};
+std::atomic<sqlite3 *> gTracedHandle{nullptr};
+bool gOwnStatement = false;   // `read`'s own PRAGMA, on the UI thread that runs it
+
+int onStatement(unsigned type, void *, void *, void *sql)
+{
+    if (type != SQLITE_TRACE_STMT || gOwnStatement) return 0;
+    const char *text = static_cast<const char *>(sql);
+    if (text && text[0] == '-' && text[1] == '-') return 0;   // a trigger's sub-statement
+    gStatements.fetch_add(1, std::memory_order_relaxed);
+    return 0;
+}
+#endif
+
 }   // namespace
 
 Stats read()
@@ -66,21 +104,8 @@ Stats read()
     return out;
 #else
     const QSqlDatabase main = QSqlDatabase::database(QLatin1String(QSqlDatabase::defaultConnection), false);
-    if (!main.isOpen() || !main.driver()) { out.why = QStringLiteral("the library database is not open"); return out; }
-    PluginScan scan;
-    dl_iterate_phdr(scanObject, &scan);
-    if (!scan.pluginSeen || !scan.needsSystemSqlite) {
-        out.why = scan.pluginSeen ? QStringLiteral("the qsqlite plugin carries its own SQLite")
-                                  : QStringLiteral("the qsqlite plugin is not loaded");
-        return out;
-    }
-    const QVariant h = main.driver()->handle();
-    if (!h.isValid() || std::strcmp(h.typeName(), "sqlite3*") != 0) {
-        out.why = QStringLiteral("the driver's handle is not an sqlite3*");
-        return out;
-    }
-    sqlite3 *db = *static_cast<sqlite3 *const *>(h.constData());
-    if (!db) { out.why = QStringLiteral("the driver's handle is null"); return out; }
+    sqlite3 *db = systemHandle(main, &out.why);
+    if (!db) return out;
     int cur = 0, high = 0;
     if (sqlite3_db_status(db, SQLITE_DBSTATUS_CACHE_MISS, &cur, &high, 0) != SQLITE_OK) {
         out.why = QStringLiteral("sqlite3_db_status refused");
@@ -88,9 +113,27 @@ Stats read()
     }
     out.available = true;
     out.pages = cur;
+    out.traced = gTracedHandle.load() == db;
+    out.statements = gStatements.load();
+    gOwnStatement = true;
     QSqlQuery q(main);
     if (q.exec(QStringLiteral("PRAGMA page_size")) && q.next()) out.pageSize = q.value(0).toInt();
+    gOwnStatement = false;
     return out;
+#endif
+}
+
+bool installStatementTrace(const QSqlDatabase &connection)
+{
+#if defined(JAH_HAVE_SQLITE3) && defined(__linux__)
+    QString why;
+    sqlite3 *db = systemHandle(connection, &why);
+    if (!db || sqlite3_trace_v2(db, SQLITE_TRACE_STMT, onStatement, nullptr) != SQLITE_OK) return false;
+    gTracedHandle.store(db);
+    return true;
+#else
+    Q_UNUSED(connection);
+    return false;
 #endif
 }
 
