@@ -186,8 +186,9 @@ const std::vector<VerbDoc> &verbs()
           "to 1 and never ends the lab; `next` (Load) loads the next .js of THE SCRIPTS FOLDER - the loaded script's, "
           "else --js-dir's, else <data root>/scripts - in bytewise name order, the list re-read at every press, the "
           "first after the last (an empty folder says `no scripts in <folder>`); `clear` shows the lab's world again. A script draws in the lab's view through `lab.view()` (the "
-          "view handed over DETACHED: the script binds its own scene, engine.view.setScene). LIMIT: the scenes and views "
-          "a run makes live until the lab exits (no destroy command yet), and a view a script makes keeps drawing" },
+          "view handed over DETACHED: the script binds its own scene, engine.view.setScene; it drives that view, never "
+          "destroys it). A run's scenes and views END WITH ITS HOST - at the next run, `js clear` or the lab's end: Run "
+          "pressed twice starts clean" },
         { "help", "help", 0, 0, "print this table" },
         { "echo", "echo words...", 0, 64, "print the words (an agent's sync marker on stdout)" },
         { "quit", "quit", 0, 0, "end the run" },

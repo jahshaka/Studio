@@ -2372,12 +2372,15 @@ bool Session::jsRun()
     host.setConsole(say);
     script::registerEngineCommands(host, mEngine.get(), std::string(), false);
     // lab.view(): THE WINDOW's VIEW, HANDED OVER DETACHED (ruling 3) - View::setScene refuses a second bind and a script
-    // cannot detach, so the lab detaches its world here; the handle holds the view UNOWNED (the lab made it, the lab
-    // keeps it: a host's end never takes it)
+    // cannot detach, so the lab detaches its world here. THE HOLD IS A HANDED-IN VIEW (SCRIPT-IN-ENGINE-1 2b's ownership
+    // law, registerEngineCommands): held by the lab, unowned (the no-op deleter), so the script may DRIVE it - bind its
+    // scene, place it, grade it, read it - and never destroy it (engine.view.destroy FAILS by name: not the script's);
+    // the host's end takes only what its commands made (the scene, the nodes it bound), never this view
     host.registry().add({ "lab.view", { script::Access::Changes, {}, script::Kind::Int, "view" },
                           "The lab's own view (its window, or its offscreen view under --headless), handed over DETACHED: "
                           "bind the script's scene to it (engine.view.setScene) and draw with engine.frames; answers -> "
-                          "view handle. `js clear` (or the next run) shows the lab's world again." },
+                          "view handle. The view is the lab's: the script drives it, never destroys it. `js clear` (or the "
+                          "next run) shows the lab's world again." },
                         [this](script::Call &c) -> script::Value {
                             if (!mViewLent) {
                                 // detached, cleared with the view's own colour and graded by the DEFAULT post-fx

@@ -935,7 +935,7 @@ jah_builds(JahshakaEngineMedia JahshakaEngineBuildId ROWS tooling.warm_app_cache
     tooling.warm_cold_calls tooling.warm_key tooling.warm_inherit tooling.warm_store source.display_guard)
 jah_builds(JahshakaEngineMedia ROWS source.compute_size_keys)                  # <build>/bin/media, the staged media
 jah_builds(JahStartupPassId ROWS source.startup_pass_closure)                  # <build>/startup-pass-files.txt
-jah_builds(JahshakaEngine JahshakaScript Jahshaka jahlab IrisGL jahengine ROWS source.script_neutral)   # nm on each
+jah_builds(JahshakaEngine JahshakaScript Jahshaka IrisGL jahengine ROWS source.script_neutral)   # nm on each
 jah_builds(IrisCore ROWS source.no_qt_below)                                   # nm on IrisCore's archive (+ build.ninja)
 jah_builds(JahshakaEngineBuildId ROWS source.script_build_id)                  # the build's generated build-id header (its B3)
 # the whole default build: every test binary ctest runs (readelf), the build's whole dependency graph (its deps log)

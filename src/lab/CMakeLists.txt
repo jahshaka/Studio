@@ -43,7 +43,8 @@ target_include_directories(jahlab PRIVATE
 target_compile_definitions(jahlab PRIVATE
     JAHLAB_OGRE_PLUGIN_DIR_DEFAULT="${OGRE_NEXT_PLUGIN_DIR}"
     JAHLAB_OGRE_MEDIA_DIR_DEFAULT="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(jahlab PRIVATE IrisGL JahshakaEngine Qt6::Gui ${X11_LIBRARIES})
+# the engine's script host is an archive of its own (SCRIPT-IN-ENGINE-1 2b): jahlab is a client of it, as jahengine is
+target_link_libraries(jahlab PRIVATE IrisGL JahshakaEngine JahshakaScript Qt6::Gui ${X11_LIBRARIES})
 # THE STILLNESS DOOR'S CLASS IMAGE AT -O2 IN DEBUG (PHOTON-2 stage 0; labclasses.h says why).
 set_source_files_properties(labclasses.cpp PROPERTIES COMPILE_OPTIONS "$<$<CONFIG:Debug>:-O2>")
 add_dependencies(jahlab JahshakaEngineMedia)
