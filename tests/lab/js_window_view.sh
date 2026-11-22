@@ -10,13 +10,16 @@
 #       mean the script read there (`LAB JS centre r g b a`): the view still shows the script's scene, and the shot reads
 #       the same frame's bytes (no frame drawn between);
 #   CONTROL: that centre is above zero (a black picture would hold (2) trivially).
+#   (3) THE FRAME LOOP NEVER READS THE SCRIPTS FOLDER (the audit's F4): the lab's `status` counts the folder's reads
+#       (scriptListings); 30 of the lab's own frames with the overlay on (it is pushed every 10) add NONE.
+#   CONTROL: the count rose by one at the --js load (1 at the first status: the press read the folder once).
 # usage: js_window_view.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
 HERE=$(cd "$(dirname "$0")" && pwd)
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; echo "lab.js_window_view: FAILED (1)"; exit 1; }
 rm -rf "$WD"; mkdir -p "$WD"
-printf 'shot after\nquit\n' > "$WD/after.lab"
+printf 'shot after\nstatus\noverlay on\nframes 30\nstatus\nquit\n' > "$WD/after.lab"
 "$LAB" --headless --no-stdin --size 320x180 --data-root "$WD/data" --js "$HERE/demo_spiral.js" --script "$WD/after.lab" \
     > "$WD/run.log" 2>&1
 rc=$?
@@ -59,6 +62,13 @@ else:
         fails.append("(2) the shot's centre %s is not the script's %s" % (got, want))
     if not sum(got) > 0:
         fails.append("CONTROL: the centre reads 0 in every channel (no picture)")
+import json
+counts = [json.loads(s)["lab"].get("scriptListings") for s in re.findall(r"^LAB STATUS (\{.*\})$", log, re.M)]
+print("the scripts folder's reads at the two status lines: %s" % counts)
+if len(counts) != 2 or counts[0] != 1:
+    fails.append("CONTROL (3): the --js load did not read the folder once (the counts %s)" % counts)
+elif counts[1] != counts[0]:
+    fails.append("(3) the lab's 30 frames read the scripts folder %s time(s)" % (counts[1] - counts[0]))
 for f in fails:
     print("FAIL: " + f)
 print("lab.js_window_view: " + ("FAILED (%d)" % len(fails) if fails else "PASSED"))

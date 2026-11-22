@@ -637,6 +637,7 @@ std::string Session::statusJson()
       << "\",\"viewPaints\":" << (mAtomView == 0 || mScene->published().atomViewPaintable ? "true" : "false")
       << ",\"gi\":" << (mGi ? "true" : "false") << ",\"occlusion\":" << (mOcclusion ? "true" : "false")
       << ",\"draw\":" << (mDraw ? "true" : "false") << ",\"sceneTriangles\":" << mSceneTriangles
+      << ",\"scriptListings\":" << scriptListings()   // the scripts folder's reads (labscripts.h: one a press, none a frame)
       << ",\"camera\":{\"position\":[" << p.x() << "," << p.y() << "," << p.z() << "],\"target\":[" << t.x() << ","
       << t.y() << "," << t.z() << "]}}";
     o << ",\"atom\":{";

@@ -113,8 +113,9 @@ set_tests_properties(lab.strip_click PROPERTIES TIMEOUT 60 LABELS "lab")
 
 # lab.js_window_view (LAB-SCRIPTS-1 stage 1) — AN ENGINE SCRIPT DRAWS IN THE LAB's OWN VIEW: `jahlab --headless --js
 # demo_spiral.js` on an empty lab world takes the view by lab.view(), draws its spiral and reads it; the lab's own shot
-# after the run shows the same centre (js_window_view.sh says the laws). The first frame, 240 of the script's, its read.
-jah_gpu_row(lab.js_window_view CLASS engine FRAMES 242
+# after the run shows the same centre; 30 of the lab's frames read no folder (js_window_view.sh says the laws). The first
+# frame, 240 of the script's, its read, 30 of the lab's own.
+jah_gpu_row(lab.js_window_view CLASS engine FRAMES 272
     COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_window_view.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/js_window_view
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
