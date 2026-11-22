@@ -20,6 +20,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "ui/controls/librarymodel.h"
+#include "ui/controls/tilecache.h"
 
 QString LibraryAssetPicker::pick(ModelTypes type, Database *db, const QString &title,
                                  QWidget *parent)
@@ -66,6 +67,7 @@ LibraryAssetPicker::LibraryAssetPicker(ModelTypes type, Database *db, const QStr
     mList->setSpacing(2);
     mList->setUniformItemSizes(true);
     mList->setSelectionMode(QAbstractItemView::SingleSelection);
+    mModel->setTileToken((new TileViewWatcher(mList, TileCache::Kind::Asset, LibraryModel::GuidRole))->token());
     layout->addWidget(mList, 1);
 
     auto *buttons = new QDialogButtonBox(QDialogButtonBox::Ok | QDialogButtonBox::Cancel, this);

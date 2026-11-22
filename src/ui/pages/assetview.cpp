@@ -95,6 +95,7 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include "services/projectservice.h"
 #include "ui/controls/librarymodel.h"
+#include "ui/controls/tilecache.h"
 #include "ui/controls/drawertreewidget.h"
 #include "services/assethelper.h"
 #include "services/assetimporter.h"
@@ -772,6 +773,9 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	tileView->setContextMenuPolicy(Qt::CustomContextMenu);
 	tileView->setVerticalScrollMode(QAbstractItemView::ScrollPerPixel);
 	tileView->setCursor(Qt::PointingHandCursor);
+	// The grid STATES the tiles it shows (PREVIEWS-1): a tile scrolled past before its decode is
+	// dropped, and its publish is the render demand's (the list mode's rows ask for no picture).
+	libraryModel->setTileToken((new TileViewWatcher(tileView, TileCache::Kind::Asset, LibraryModel::GuidRole))->token());
 	{
 		QPixmap placeholder(LibraryTileDelegate::kTileWidth, LibraryTileDelegate::kPictureHeight - 2);
 		placeholder.fill(Qt::transparent);

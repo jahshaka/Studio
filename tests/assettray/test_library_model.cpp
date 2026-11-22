@@ -26,6 +26,10 @@ For more information see the LICENSE file
 //     those 60 by guid (in batches of TileCache::kBatch) and decodes them on its
 //     pool — nothing else of the library is read or decoded; a second read is a
 //     hit; a thumbnail write drops the cached tile.
+//   * THE QUEUE (PREVIEWS-1 stage 2): the newest batch is read first; a view STATES its visible
+//     rows by its token (TileViewWatcher) and a row that left it is never decoded (counted); a row
+//     painted once and still visible is decoded with no second paint; a tokenless ask is always
+//     wanted and a destroyed view's asks are dropped.
 //   * THE INDEXES the listings' predicates need exist, and SQLite's planner uses
 //     them (EXPLAIN QUERY PLAN).
 // Headless (offscreen); never touches the user's JahLibrary.db.
@@ -37,6 +41,9 @@ For more information see the LICENSE file
 #include <QFile>
 #include <QImage>
 #include <QListView>
+#include <QAtomicInt>
+#include <QMutex>
+#include <QThread>
 #include <QPixmap>
 #include <QSqlDatabase>
 #include <QSqlQuery>
@@ -322,6 +329,149 @@ int main(int argc, char **argv)
                   && qAbs(got.blue() - want.blue()) <= 3,
               "the first painted tile shows its own thumbnail (%s: got %d,%d,%d want %d,%d,%d)", qPrintable(name),
               got.red(), got.green(), got.blue(), want.red(), want.green(), want.blue());
+    }
+
+    // ---- THE QUEUE: WHAT A VIEW STILL SHOWS, NEWEST FIRST (PREVIEWS-1 stage 2) ----
+    // The asks below are the test's own (a tile view's paints): the views over `queueModel` paint no
+    // picture (setDecorated(false), the default delegate), so every ask is counted here, never inferred.
+    // The posted calls are delivered ONE AT A TIME where the order is the law (sendPostedEvents to one
+    // receiver delivers what was posted before the call, never what it posts itself).
+    {
+        TileCache &cache = TileCache::instance();
+        const TileCache::Spec spec{ QSize(96, 96), 0 };
+        const auto ask = [&](const QStringList &guids, int token) {
+            for (const QString &g : guids) cache.tile(TileCache::Kind::Asset, g, spec, token);
+        };
+        const auto rowGuids = [&](int from, int count) {
+            QStringList out;
+            for (int r = from; r < from + count; ++r) out << model.rows().at(r).guid;
+            return out;
+        };
+
+        // (1) A..Z: THE NEWEST BATCH DECODES FIRST. Two batches asked in one turn, A then B (tokenless):
+        // the first flush takes B, the last asked - the source is handed B's guids before A's exist
+        // in any batch.
+        cache.clear();
+        QMutex seenLock;
+        QVector<QStringList> seen;
+        QAtomicInt calls = 0;
+        cache.setSource(TileCache::Kind::Asset, [libraryFile, &seenLock, &seen, &calls](const QStringList &g) {
+            { QMutexLocker lock(&seenLock); seen.append(g); }
+            calls.fetchAndAddOrdered(1);
+            return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Assets, g);
+        });
+        const QStringList batchA = rowGuids(200, TileCache::kBatch), batchB = rowGuids(300, TileCache::kBatch);
+        ask(batchA, 0);
+        ask(batchB, 0);
+        QCoreApplication::sendPostedEvents(&cache, QEvent::MetaCall);   // ONE flush
+        for (int spins = 0; calls.loadAcquire() < 1 && spins < 20000; ++spins) QThread::msleep(1);
+        {
+            QMutexLocker lock(&seenLock);
+            QStringList first = seen.value(0), wantB = batchB;
+            std::sort(first.begin(), first.end());
+            std::sort(wantB.begin(), wantB.end());
+            CHECK(seen.size() == 1 && first == wantB,
+                  "A..Z: the first batch read is the NEWEST asked (B: %lld guids, %s), never the FIFO's A",
+                  static_cast<long long>(first.size()), first == wantB ? "B" : "not B");
+        }
+        CHECK(cache.drain(20000), "...and both batches land");
+        {
+            // (The FIFO this replaces read A first: this row's red on the base, kept with the stage's evidence.)
+            QMutexLocker lock(&seenLock);
+            QStringList second = seen.value(1), wantA = batchA;
+            std::sort(second.begin(), second.end());
+            std::sort(wantA.begin(), wantA.end());
+            CHECK(seen.size() == 2 && second == wantA, "...the older batch A second");
+        }
+        cache.setSource(TileCache::Kind::Asset, [libraryFile](const QStringList &g) {
+            return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Assets, g);
+        });
+
+        // A VIEW and its watcher: an icon grid over 2,000 rows, offscreen.
+        LibraryModel queueModel;
+        queueModel.setDecorated(false);
+        queueModel.setRows(QVector<LibraryRow>(model.rows().cbegin(), model.rows().cbegin() + 2000));
+        auto *view = new QListView;
+        view->setModel(&queueModel);
+        view->setViewMode(QListView::IconMode);
+        view->setUniformItemSizes(true);
+        view->setGridSize(QSize(100, 100));
+        view->resize(520, 330);
+        auto *watcher = new TileViewWatcher(view, TileCache::Kind::Asset, LibraryModel::GuidRole);
+        int publishes = 0;
+        QStringList lastPublished;
+        QObject::connect(watcher, &TileViewWatcher::published, watcher, [&](const QStringList &g) {
+            ++publishes;
+            lastPublished = g;
+        });
+        view->show();
+        for (int i = 0; i < 50 && publishes == 0; ++i) QCoreApplication::processEvents();
+        const QStringList top = lastPublished;
+        CHECK(publishes > 0 && top.size() > 0 && top.size() < 60 && top.first() == queueModel.rows().first().guid,
+              "the watcher publishes the view's visible range only: %lld guids of 2,000, the first row first",
+              static_cast<long long>(top.size()));
+
+        // (2) A ROW THAT LEFT THE VIEW IS NEVER DECODED. The top screen is asked (painted) once; the view
+        // scrolls to the bottom and publishes BEFORE the flush runs: every top request is dropped.
+        cache.clear();
+        int decodes = cache.decodes(), dropped = cache.dropped();
+        ask(top, watcher->token());
+        view->scrollToBottom();
+        QCoreApplication::sendPostedEvents(watcher, QEvent::MetaCall);   // the scroll's publish first
+        const QStringList bottom = lastPublished;
+        CHECK(!bottom.isEmpty() && !bottom.contains(top.first()), "the scroll published the bottom rows (%lld)",
+              static_cast<long long>(bottom.size()));
+        ask(bottom, watcher->token());
+        CHECK(cache.drain(20000), "the cache drains");
+        int topDecoded = 0;
+        for (const QString &g : top) topDecoded += cache.peek(TileCache::Kind::Asset, g, spec).isNull() ? 0 : 1;
+        CHECK(topDecoded == 0 && cache.dropped() - dropped == top.size(),
+              "a row that left the view is NEVER decoded: %d of the %lld top rows decoded, %d dropped (counted)",
+              topDecoded, static_cast<long long>(top.size()), cache.dropped() - dropped);
+        CHECK(cache.decodes() - decodes == bottom.size(), "...only the %lld visible rows were (%d decodes)",
+              static_cast<long long>(bottom.size()), cache.decodes() - decodes);
+
+        // (3) THE NEGATIVE CONTROL OF THE REFUSED DESIGN ("re-asked each paint"): a row painted ONCE and
+        // still visible is decoded with NO second paint - a publish (a resize) lands before the flush and
+        // the view's stated range still holds it.
+        cache.clear();
+        decodes = cache.decodes();
+        dropped = cache.dropped();
+        ask(bottom, watcher->token());
+        view->resize(521, 330);
+        QCoreApplication::sendPostedEvents(watcher, QEvent::MetaCall);
+        CHECK(publishes > 0 && lastPublished.contains(bottom.first()), "the resize published, the rows still shown");
+        CHECK(cache.drain(20000), "the cache drains");
+        int stillDecoded = 0;
+        for (const QString &g : bottom) stillDecoded += cache.peek(TileCache::Kind::Asset, g, spec).isNull() ? 0 : 1;
+        CHECK(stillDecoded == bottom.size() && cache.dropped() == dropped,
+              "a row painted ONCE and still visible IS decoded with no second paint (%d of %lld; %d dropped)",
+              stillDecoded, static_cast<long long>(bottom.size()), cache.dropped() - dropped);
+
+        // A NEW PICTURE STORED (the shell's thumbnail-written hook calls renew): a shown row is decoded
+        // again at the view's size with no ask; a row no view shows is only forgotten.
+        decodes = cache.decodes();
+        cache.renew(TileCache::Kind::Asset, bottom.first());
+        cache.renew(TileCache::Kind::Asset, top.first());
+        CHECK(cache.pending() == 1, "renew queues the shown row only (%d pending)", cache.pending());
+        CHECK(cache.drain(20000) && cache.decodes() - decodes == 1
+                  && !cache.peek(TileCache::Kind::Asset, bottom.first(), spec).isNull(),
+              "...and it is decoded again (%d decode)", cache.decodes() - decodes);
+
+        // A tokenless ask is always wanted; a DESTROYED view's token is gone, its queued asks dropped.
+        cache.clear();
+        dropped = cache.dropped();
+        const QStringList loose = rowGuids(1000, 3);
+        ask(top, watcher->token());
+        ask(loose, 0);
+        delete view;   // the watcher with it
+        CHECK(cache.drain(20000), "the cache drains after the view is gone");
+        int looseDecoded = 0, goneDecoded = 0;
+        for (const QString &g : loose) looseDecoded += cache.peek(TileCache::Kind::Asset, g, spec).isNull() ? 0 : 1;
+        for (const QString &g : top) goneDecoded += cache.peek(TileCache::Kind::Asset, g, spec).isNull() ? 0 : 1;
+        CHECK(looseDecoded == 3 && goneDecoded == 0 && cache.dropped() - dropped == top.size(),
+              "a tokenless ask is decoded (%d of 3); a destroyed view's are dropped (%d decoded, %d dropped)",
+              looseDecoded, goneDecoded, cache.dropped() - dropped);
     }
 
     const QString rewritten = proxy.index(0, 0).data(LibraryModel::GuidRole).toString();

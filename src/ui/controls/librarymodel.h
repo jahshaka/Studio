@@ -82,6 +82,9 @@ public:
     /// reads TileRole): a view that shows no picture — the Library's list mode —
     /// must not make the cache fetch and decode one per row it lays out.
     void setDecorated(bool on) { mDecorated = on; }
+    /// The token of the ONE view that paints this model's tiles (its TileViewWatcher): the cache
+    /// drops a queued tile that view no longer shows. 0 (the default): every ask always wanted.
+    void setTileToken(int token) { mTileToken = token; }
 
     /// Replace every row (one reset).
     void setRows(const QVector<LibraryRow> &rows);
@@ -124,6 +127,7 @@ private:
     QPixmap mPlaceholder;
     QString mLoadingGuid;
     bool mDecorated = true;
+    int mTileToken = 0;
     int mNextOrder = 0;
     std::function<QString(int)> mTypeName;
 };

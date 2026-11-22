@@ -94,8 +94,10 @@ Database *ShellLifecycle::openLibrary()
 	TileCache::instance().setSource(TileCache::Kind::Project, [libraryFile](const QStringList &guids) {
 		return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Projects, guids);
 	});
+	// A stored picture reaches every view that shows its row (PREVIEWS-1: the tile is decoded
+	// again at that view's size and the view repaints on its landing).
 	Database::setAssetThumbnailWritten([](const QString &guid) {
-		TileCache::instance().invalidate(TileCache::Kind::Asset, guid);
+		TileCache::instance().renew(TileCache::Kind::Asset, guid);
 	});
     // THE SEEDS (services/primitiveassets.h). The primitives and the samples'
     // Teapot are baked library assets now: one import and one bake each,

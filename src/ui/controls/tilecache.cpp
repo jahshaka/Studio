@@ -16,8 +16,11 @@ For more information see the LICENSE file
 #include <QFutureWatcher>
 #include <QImage>
 #include <QListWidget>
+#include <QAbstractItemView>
+#include <QEvent>
 #include <QPainter>
 #include <QPainterPath>
+#include <QScrollBar>
 #include <QThread>
 #include <QThreadPool>
 
@@ -102,6 +105,58 @@ void TileCache::setSource(Kind kind, Source source)
     mSources.insert(int(kind), std::move(source));
 }
 
+void TileCache::setDemand(Kind kind, Demand demand)
+{
+    if (demand) mDemands.insert(int(kind), std::move(demand));
+    else mDemands.remove(int(kind));
+}
+
+int TileCache::openView(Kind kind)
+{
+    const int token = mNextToken++;
+    ViewSet view;
+    view.kind = kind;
+    mViews.insert(token, view);
+    return token;
+}
+
+void TileCache::closeView(int token)
+{
+    mViews.remove(token);
+}
+
+void TileCache::publishVisible(int token, const QStringList &guids)
+{
+    const auto it = mViews.find(token);
+    if (it == mViews.end()) return;
+    it->known = true;
+    it->order = guids;
+    it->guids = QSet<QString>(guids.cbegin(), guids.cend());
+    const Kind kind = it->kind;
+    const auto demand = mDemands.constFind(int(kind));
+    if (demand == mDemands.constEnd()) return;
+    // The publisher's own rows first (what the user is looking at now), then every other shown view's.
+    QStringList wanted = guids;
+    QSet<QString> listed = it->guids;
+    for (auto v = mViews.cbegin(); v != mViews.cend(); ++v) {
+        if (v.key() == token || !v->known || v->kind != kind) continue;
+        for (const QString &guid : v->order)
+            if (!listed.contains(guid)) { listed.insert(guid); wanted.append(guid); }
+    }
+    // A copy: the demand may reach back into the cache.
+    const Demand call = *demand;
+    call(wanted);
+}
+
+void TileCache::withdrawVisible(int token)
+{
+    const auto it = mViews.find(token);
+    if (it == mViews.end()) return;
+    it->known = false;
+    it->order.clear();
+    it->guids.clear();
+}
+
 QString TileCache::keyOf(Kind kind, const QString &guid, const Spec &spec)
 {
     return QStringLiteral("%1|%2|%3x%4|%5")
@@ -124,14 +179,29 @@ bool TileCache::isMissing(Kind kind, const QString &guid, const Spec &spec) cons
     return mMissing.contains(keyOf(kind, guid, spec));
 }
 
-QPixmap TileCache::tile(Kind kind, const QString &guid, const Spec &spec)
+QPixmap TileCache::tile(Kind kind, const QString &guid, const Spec &spec, int token)
 {
     if (guid.isEmpty() || !spec.size.isValid()) return QPixmap();
+    if (token) {
+        const auto view = mViews.find(token);
+        if (view != mViews.end()) {
+            view->spec = spec;
+            // The view asks for it now: it is on screen now (until its next publish says otherwise).
+            if (view->known) view->guids.insert(guid);
+        }
+    }
     const QString key = keyOf(kind, guid, spec);
     if (const QPixmap *hit = mEntries.object(key)) return *hit;
-    if (mMissing.contains(key) || mQueued.contains(key)) return QPixmap();
+    if (mMissing.contains(key)) return QPixmap();
+    if (mQueued.contains(key)) {
+        // A tokenless ask makes a queued request always wanted.
+        if (!token)
+            for (Request &r : mQueue)
+                if (r.key == key) r.token = 0;
+        return QPixmap();
+    }
     mQueued.insert(key);
-    mQueue.append({ kind, guid, spec, key });
+    mQueue.append({ kind, guid, spec, key, token });
     scheduleFlush();
     return QPixmap();
 }
@@ -170,8 +240,22 @@ void TileCache::invalidate(Kind kind, const QString &guid)
     // row when its batch runs, which is after this change.
 }
 
+void TileCache::renew(Kind kind, const QString &guid)
+{
+    invalidate(kind, guid);
+    for (auto v = mViews.cbegin(); v != mViews.cend(); ++v) {
+        if (!v->known || v->kind != kind || !v->spec.size.isValid() || !v->guids.contains(guid)) continue;
+        const QString key = keyOf(kind, guid, v->spec);
+        if (mQueued.contains(key)) continue;
+        mQueued.insert(key);
+        mQueue.append({ kind, guid, v->spec, key, v.key() });
+        scheduleFlush();
+    }
+}
+
 void TileCache::clear()
 {
+    // (The views' tokens and sets stay: they are the views', not the pictures'.)
     mEntries.clear();
     mMissing.clear();
     mHashes.clear();
@@ -188,18 +272,36 @@ void TileCache::scheduleFlush()
     QMetaObject::invokeMethod(this, [this]() { flush(); }, Qt::QueuedConnection);
 }
 
+bool TileCache::wanted(const Request &request) const
+{
+    if (!request.token) return true;
+    const auto own = mViews.constFind(request.token);
+    if (own != mViews.constEnd() && !own->known) return true;   // its view cannot say: kept
+    for (const ViewSet &v : mViews)
+        if (v.known && v.kind == request.kind && v.guids.contains(request.guid)) return true;
+    return false;
+}
+
 void TileCache::flush()
 {
     mFlushScheduled = false;
+    // WHAT NO SHOWN VIEW WANTS ANY MORE IS DROPPED (a row scrolled past before its turn); it leaves
+    // mQueued, so the view's next ask queues it again.
+    for (int i = int(mQueue.size()) - 1; i >= 0; --i) {
+        if (wanted(mQueue.at(i))) continue;
+        mQueued.remove(mQueue.at(i).key);
+        mQueue.removeAt(i);
+        ++mDropped;
+    }
     if (mQueue.isEmpty()) return;
 
-    // ONE KIND per batch, in request order (what the view asked for first is
-    // what it is showing).
-    const Kind kind = mQueue.first().kind;
+    // ONE KIND per batch, NEWEST FIRST: what the view asked for last is what it
+    // is showing now (a scroll's older asks are behind it, or dropped above).
+    const Kind kind = mQueue.last().kind;
     QVector<Request> batch;
     QStringList guids;
-    for (int i = 0; i < mQueue.size() && batch.size() < kBatch;) {
-        if (mQueue.at(i).kind != kind) { ++i; continue; }
+    for (int i = int(mQueue.size()) - 1; i >= 0 && batch.size() < kBatch; --i) {
+        if (mQueue.at(i).kind != kind) continue;
         const Request r = mQueue.takeAt(i);
         batch.append(r);
         if (!guids.contains(r.guid)) guids.append(r.guid);
@@ -273,27 +375,125 @@ bool TileCache::drain(int timeoutMs)
     return true;
 }
 
+// ---- TileViewWatcher ---------------------------------------------------------
+
+TileViewWatcher::TileViewWatcher(QAbstractItemView *view, TileCache::Kind kind, int guidRole)
+    : QObject(view), mView(view), mGuidRole(guidRole), mToken(TileCache::instance().openView(kind))
+{
+    view->installEventFilter(this);
+    view->viewport()->installEventFilter(this);
+    connect(view->verticalScrollBar(), &QScrollBar::valueChanged, this, &TileViewWatcher::schedule);
+    connect(view->horizontalScrollBar(), &QScrollBar::valueChanged, this, &TileViewWatcher::schedule);
+    // The model the view shows now (a view whose model is replaced later is not followed: none is).
+    if (QAbstractItemModel *model = view->model()) {
+        connect(model, &QAbstractItemModel::modelReset, this, &TileViewWatcher::schedule);
+        connect(model, &QAbstractItemModel::layoutChanged, this, &TileViewWatcher::schedule);
+        connect(model, &QAbstractItemModel::rowsInserted, this, &TileViewWatcher::schedule);
+        connect(model, &QAbstractItemModel::rowsRemoved, this, &TileViewWatcher::schedule);
+        connect(model, &QAbstractItemModel::rowsMoved, this, &TileViewWatcher::schedule);
+    }
+    schedule();
+}
+
+TileViewWatcher::~TileViewWatcher()
+{
+    TileCache::instance().closeView(mToken);
+}
+
+bool TileViewWatcher::eventFilter(QObject *watched, QEvent *event)
+{
+    if (watched == mView->viewport() && event->type() == QEvent::Resize) schedule();
+    // Hidden (the view, or a page above it): it says nothing until its next publish. A Show
+    // publishes nothing (a page's showing raises no demand).
+    if (watched == mView && event->type() == QEvent::Hide) TileCache::instance().withdrawVisible(mToken);
+    return QObject::eventFilter(watched, event);
+}
+
+void TileViewWatcher::schedule()
+{
+    if (mScheduled) return;
+    mScheduled = true;
+    QMetaObject::invokeMethod(this, [this]() { publish(); }, Qt::QueuedConnection);
+}
+
+void TileViewWatcher::publish()
+{
+    mScheduled = false;
+    if (!mView->isVisible()) {
+        TileCache::instance().withdrawVisible(mToken);
+        return;
+    }
+    const QStringList guids = visibleGuids();
+    TileCache::instance().publishVisible(mToken, guids);
+    emit published(guids);
+}
+
+QStringList TileViewWatcher::visibleGuids() const
+{
+    QAbstractItemModel *model = mView->model();
+    if (!model) return {};
+    const QModelIndex root = mView->rootIndex();
+    const int rows = model->rowCount(root);
+    if (rows == 0) return {};
+    const QListView *list = qobject_cast<const QListView *>(mView);
+    const int column = list ? list->modelColumn() : 0;
+    // The axis the rows advance along: a list or a wrapping icon grid scrolls down; a strip across.
+    const bool across = list && ((list->flow() == QListView::LeftToRight) != list->isWrapping());
+    const QRect port = mView->viewport()->rect();
+    const auto rectOf = [&](int row) { return mView->visualRect(model->index(row, column, root)); };
+    const auto before = [&](const QRect &r) { return across ? r.right() < port.left() : r.bottom() < port.top(); };
+    const auto after = [&](const QRect &r) { return across ? r.left() > port.right() : r.top() > port.bottom(); };
+    int lo = 0, hi = rows;   // the first row not wholly before the viewport
+    while (lo < hi) {
+        const int mid = lo + (hi - lo) / 2;
+        if (before(rectOf(mid))) lo = mid + 1;
+        else hi = mid;
+    }
+    QStringList out;
+    for (int row = lo; row < rows; ++row) {
+        const QRect r = rectOf(row);
+        if (after(r)) break;
+        if (!r.intersects(port)) continue;
+        const QString guid = model->index(row, 0, root).data(mGuidRole).toString();
+        if (!guid.isEmpty()) out.append(guid);
+    }
+    return out;
+}
+
 // ---- ListTileBinder ----------------------------------------------------------
 
 ListTileBinder::ListTileBinder(QListWidget *list, const TileCache::Spec &spec, QObject *parent)
-    : QObject(parent ? parent : list), mList(list), mSpec(spec)
+    : QObject(parent ? parent : list), mList(list), mSpec(spec),
+      mWatcher(new TileViewWatcher(list, TileCache::Kind::Asset, kGuidRole))
 {
     connect(&TileCache::instance(), &TileCache::tileReady, this, &ListTileBinder::onReady);
+    connect(mWatcher, &TileViewWatcher::published, this, &ListTileBinder::onPublished);
+    // A cleared list's items are gone: so are their indexes.
+    connect(list->model(), &QAbstractItemModel::modelReset, this, [this]() {
+        mAssigned.clear();
+        mWaiting.clear();
+    });
 }
 
 void ListTileBinder::assign(QListWidgetItem *item, const QString &guid, const QIcon &placeholder)
 {
     if (!item || !mList) return;
-    const QPixmap tile = TileCache::instance().tile(TileCache::Kind::Asset, guid, mSpec);
+    item->setData(kGuidRole, guid);
+    const QModelIndex index = mList->indexFromItem(item);
+    // An item not yet in the list has no index: the caller adds it first.
+    if (index.isValid()) {
+        QList<QPersistentModelIndex> &shown = mAssigned[guid];
+        shown.removeIf([](const QPersistentModelIndex &i) { return !i.isValid(); });
+        if (!shown.contains(index)) shown.append(QPersistentModelIndex(index));
+    }
+    const QPixmap tile = TileCache::instance().tile(TileCache::Kind::Asset, guid, mSpec, token());
     if (!tile.isNull()) {
         item->setIcon(QIcon(tile));
         return;
     }
     item->setIcon(placeholder);
     if (TileCache::instance().isMissing(TileCache::Kind::Asset, guid, mSpec)) return;
-    const QModelIndex index = mList->indexFromItem(item);
-    // An item not yet in the list has no index: the caller adds it first.
-    if (index.isValid()) mWaiting[guid].append(QPersistentModelIndex(index));
+    if (index.isValid()) mWaiting.insert(guid);
 }
 
 void ListTileBinder::refresh(QListWidgetItem *item, const QString &guid, const QIcon &placeholder)
@@ -305,9 +505,24 @@ void ListTileBinder::refresh(QListWidgetItem *item, const QString &guid, const Q
 void ListTileBinder::onReady(TileCache::Kind kind, const QString &guid)
 {
     if (kind != TileCache::Kind::Asset || !mList) return;
-    const auto waiting = mWaiting.take(guid);
     const QPixmap tile = TileCache::instance().peek(kind, guid, mSpec);
-    if (tile.isNull()) return;   // no picture: the placeholder stays
-    for (const QPersistentModelIndex &index : waiting)
+    if (tile.isNull()) {
+        // No picture: the placeholder stays for good (a dropped request never lands here).
+        if (TileCache::instance().isMissing(kind, guid, mSpec)) mWaiting.remove(guid);
+        return;
+    }
+    mWaiting.remove(guid);
+    // Every item of the guid takes it: a waiting placeholder, or a renewed (re-rendered) picture.
+    for (const QPersistentModelIndex &index : mAssigned.value(guid))
         if (index.isValid()) mList->model()->setData(index, QIcon(tile), Qt::DecorationRole);
+}
+
+void ListTileBinder::onPublished(const QStringList &guids)
+{
+    for (const QString &guid : guids) {
+        if (!mWaiting.contains(guid)) continue;
+        // Queued again if a flush dropped it while it was out of view; a hit lands at once.
+        if (!TileCache::instance().tile(TileCache::Kind::Asset, guid, mSpec, token()).isNull())
+            onReady(TileCache::Kind::Asset, guid);
+    }
 }

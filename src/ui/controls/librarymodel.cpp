@@ -195,7 +195,7 @@ QVariant LibraryModel::data(const QModelIndex &index, int role) const
         // THE TILE BY GUID: a hit, or the placeholder while the cache fetches
         // and decodes it off this thread (dataChanged repaints it on arrival).
         const QPixmap tile = TileCache::instance().tile(TileCache::Kind::Asset, row.guid,
-                                                        { mTileSize, 0 });
+                                                        { mTileSize, 0 }, mTileToken);
         return tile.isNull() ? mPlaceholder : tile;
     }
     case GuidRole: return row.guid;
