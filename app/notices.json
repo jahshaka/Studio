@@ -63,6 +63,15 @@
       "file": "LICENSE.md"
     },
     {
+      "id": "quickjs-ng",
+      "name": "QuickJS-ng",
+      "role": "Runs the JavaScript of the engine's own script host (jahengine and the engine's test scripts).",
+      "homepage": "https://github.com/quickjs-ng/quickjs",
+      "licence": "MIT",
+      "path": "irisgl/thirdparty/quickjs-ng",
+      "file": "LICENSE"
+    },
+    {
       "id": "zip",
       "name": "zip",
       "role": "Reads and writes the .zip containers projects are exported and imported as.",
