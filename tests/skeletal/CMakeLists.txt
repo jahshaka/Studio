@@ -45,6 +45,16 @@ function(jahshaka_share_test target)
     add_dependencies(${target} JahshakaEngineMedia)
 endfunction()
 
+# skeletal.share - THE STAGE LOOP's ROW OF SKELETON SHARING, on the plain engine (restored by ENGINE-HEADERS-1 stage 0, the
+# lead's ruling 2026-11-22: archived by TEST-CUT-1 stage 4's non-ship cut, 06ff0b62e, never red). Its sanitizer twin
+# skeletal.share_asan carries the same laws under ASan and runs at a feature's end and in LONG (CODING_RULES § 5), so the
+# stage loop never builds the twin.
+jahshaka_share_test(test_skeleton_share)
+target_link_libraries(test_skeleton_share PRIVATE JahshakaEngine)
+add_test(NAME skeletal.share COMMAND test_skeleton_share WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(skeletal.share PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(skeletal.share)
+
 if(JAHSHAKA_ASAN)
     jahshaka_share_test(test_skeleton_share_asan)
     target_link_libraries(test_skeleton_share_asan PRIVATE JahshakaEngineAsan)
@@ -55,8 +65,8 @@ if(JAHSHAKA_ASAN)
     set_property(TEST skeletal.share_asan PROPERTY JAH_BUILD_TARGETS ${_run_TARGET})
     # LeakSanitizer off for the same reason tests/engine gives: the only leaks
     # are Ogre's own, and this suite is here for use-after-free, not for leaks.
-    # An ASAN twin runs at the stage close (TESTING-SPEED-B4): skeletal.share (archived: archive/tests/skeletal) is the merge row.
-    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 60 LABELS "engine"
+    # `long`: the twin of skeletal.share (above), the same laws under the sanitizer - a feature's end and LONG, never the code loop.
+    set_tests_properties(skeletal.share_asan PROPERTIES TIMEOUT 60 LABELS "engine;long"
         ENVIRONMENT "${JAH_ASAN_ENGINE_OPTIONS}")
     jah_no_display(skeletal.share_asan)
 endif()

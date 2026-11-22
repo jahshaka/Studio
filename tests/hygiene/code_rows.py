@@ -37,7 +37,7 @@ def judge(tests):
     warm = {n for n, c in C.items() if any(x.endswith("fresh_home.sh") for x in c)
             and any(x in ("--warm", "--promote", "--seed") for x in c)}
     takes = {n for n, p in P.items()
-             if p.get("RESOURCE_GROUPS") or p.get("JAH_CLASS") or "measure" in _list(p.get("LABELS")) or p.get("JAH_BOOTS")
+             if p.get("RESOURCE_GROUPS") or p.get("JAH_CLASS") or {"measure", "long"} & set(_list(p.get("LABELS"))) or p.get("JAH_BOOTS")
              or p.get("JAH_CARD_LOCK") or n in warm}
     code = set(P) - takes
     setups, users = {}, {}
@@ -62,7 +62,7 @@ def judge(tests):
     for n in sorted(labelled - code):
         p = P[n]
         why = ("card slots" if p.get("RESOURCE_GROUPS") else "a JAH_CLASS" if p.get("JAH_CLASS") else
-               "a measure row" if "measure" in _list(p.get("LABELS")) else "a warm-up's product (JAH_BOOTS)"
+               "a measure row" if "measure" in _list(p.get("LABELS")) else "a sanitizer twin (`long`)" if "long" in _list(p.get("LABELS")) else "a warm-up's product (JAH_BOOTS)"
                if p.get("JAH_BOOTS") else "held to the card's lock (JAH_CARD_LOCK)" if p.get("JAH_CARD_LOCK")
                else "a warm-up's product (fresh_home.sh --warm/--promote/--seed)" if n in warm
                else "a card row's fixture half, or it requires a setup that takes the card")
@@ -84,9 +84,9 @@ def main(source, build):
              T("c.setup_ok", LABELS=["code"], FIXTURES_SETUP=["fxc"]), T("c.user_ok", LABELS=["code"], FIXTURES_REQUIRED=["fxc"]),
              T("c.left_out", LABELS=["hygiene"]),
              dict(T("c.warm", LABELS=["code"]), command=["sh", "/s/tests/support/fresh_home.sh", "--warm", "/b/h", "--", "x"]),
-             T("c.lock", LABELS=["code"], JAH_CARD_LOCK="a policy")]
+             T("c.lock", LABELS=["code"], JAH_CARD_LOCK="a policy"), T("c.long", LABELS=["long", "code"])]
     _, wrong, left = judge(synth)
-    check(sorted(n for n, _ in wrong) == ["c.boots", "c.class", "c.half", "c.lock", "c.measure", "c.pulls", "c.slots", "c.warm"] and left == ["c.left_out"],
+    check(sorted(n for n, _ in wrong) == ["c.boots", "c.class", "c.half", "c.lock", "c.long", "c.measure", "c.pulls", "c.slots", "c.warm"] and left == ["c.left_out"],
           "card slots, a class, a measure row, a warm-up product (named, or a fresh_home --warm command), a lock policy, a GPU row's fixture half and a row pulling a GPU setup are "
           "refused the label; a CPU setup of a CPU row keeps it; an unlabelled CPU row is named (%s / %s)" % (wrong, left))
     sys.path.insert(0, os.path.join(source, "scripts"))

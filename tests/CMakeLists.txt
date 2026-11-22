@@ -1398,7 +1398,8 @@ jah_ship_closure_pass()
 # THE CODE TESTS (TEST-STREAMLINE-1 1b; CODING_RULES §5 "the stage loop"): the label `code` DERIVED here for every row a stage's
 # gate (`spec.sh test <spec> --code`: ctest -j12, no card lock, no warm-up) may run - a row that takes NO card: no card
 # slots (RESOURCE_GROUPS), no JAH_CLASS, not `measure`, no warm-up product (JAH_BOOTS: source.shaders_spirv_valid reads the
-# app-off boot's dump - it runs with the six at a stage's end) - and is no fixture half of a card row (a setup or cleanup
+# app-off boot's dump - it runs with the six at a stage's end), not `long` (a sanitizer twin: a feature's end and LONG, never the
+# stage loop - CODING_RULES § 5; ENGINE-HEADERS-1 stage 0) - and is no fixture half of a card row (a setup or cleanup
 # whose fixture a non-code row requires: `ctest -L code` would run it unlocked), and requires no setup that is not code
 # (ctest pulls a required setup in outside -L: a GPU setup would run unlocked), to a fixed point. Never a hand label: a row
 # is a code test by what it takes, so a new CPU row is one at once. source.code_rows (tests/hygiene) holds the label to
@@ -1413,7 +1414,7 @@ function(jah_code_label_pass)
         get_property(_bt TEST ${_t} DIRECTORY "${_d}" PROPERTY JAH_BOOTS)
         get_property(_lk TEST ${_t} DIRECTORY "${_d}" PROPERTY JAH_CARD_LOCK)   # a CPU row a policy holds to the lock
         get_property(_l TEST ${_t} DIRECTORY "${_d}" PROPERTY LABELS)
-        if(NOT _rg AND NOT _cl AND NOT _bt AND NOT _lk AND NOT "measure" IN_LIST _l)
+        if(NOT _rg AND NOT _cl AND NOT _bt AND NOT _lk AND NOT "measure" IN_LIST _l AND NOT "long" IN_LIST _l)
             list(APPEND _code ${_t})
         endif()
     endforeach()
