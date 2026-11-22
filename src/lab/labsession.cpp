@@ -25,6 +25,7 @@
 #include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/RayQuery.h"
 #include "jahshaka/engine/Stats.h"
+#include "jahshaka/engine/Script.h"
 #include "jahshaka/engine/Stillness.h"
 
 #include <QDir>
@@ -81,6 +82,9 @@ constexpr int kSettleSteadyFrames = 8;
 constexpr int kSettleDefaultCap = 1200;
 /// rest: the cap without one (a refusal past it, never a longer wait).
 constexpr int kRestDefaultCap = 1200;
+/// THE LAB VIEW's OWN CLEAR COLOUR, its creation's: what a script is handed (lab.view()) - the lab world's background
+/// (its document's sky fallback, the mirror's push) stays the lab's
+const Colour kViewClear(0, 0, 0);
 
 const char *tierName(int t) { return tierNames()[size_t(std::max(0, std::min(3, t)))].c_str(); }
 
@@ -149,6 +153,10 @@ Session::~Session()
 {
     // TEARDOWN MIRRORS THE BOOT (ENGINE.md trap 1): the mirror lets go of the document and its engine objects, the
     // document's meshes go, the engine (its views, its scenes, Root), and only then the X connection it presented on.
+    // The last script run's host first, after the view it was lent is taken back (a host's end may take what its run
+    // made: the view must not be left showing it).
+    if (mViewLent && mView) mView->setScene(nullptr);
+    mJsHost.reset();
     if (mMirror) mMirror->setSource(iris::ScenePtr());
     mMirror.reset();
     mDoc.reset();
@@ -217,11 +225,11 @@ bool Session::boot(std::string &error)
     }
     // THE ORDER (Engine.h:1971): a View before any Scene.
     if (mOpt.headless) {
-        mView = mEngine->createOffscreenView("jahlab", mOpt.width, mOpt.height, Colour(0, 0, 0), OffscreenContract::StillPicture);
+        mView = mEngine->createOffscreenView("jahlab", mOpt.width, mOpt.height, kViewClear, OffscreenContract::StillPicture);
         // A STILL PICTURE: it gathers where the scene gathers (the editor screenshot's contract).
     } else {
         mView = mEngine->createView("jahlab", static_cast<NativeWindowHandle>(mWindow.windowHandle()), mOpt.width,
-                                    mOpt.height, Colour(0, 0, 0));
+                                    mOpt.height, kViewClear);
     }
     if (!mView) { error = "view: " + mEngine->lastError(); return false; }
     // NO EDITOR FURNITURE: the lights' wires and icons are the editor's helpers; the lab's picture is the world alone
@@ -458,29 +466,34 @@ void Session::frame()
         }
         mCamera.fly(mInput.held, mInput.dx, mInput.dy);
     }
-    // THE ANIMATION CLOCK (`play on`): one fixed step a frame - the engine's own grid (frames, never wall time)
-    if (mPlaying) mDoc->advance(1.0f / 60.0f);
-    mDoc->refresh();
-    SceneMirror::FrameView fv;
-    fv.view = mView;
-    fv.environment = true;
-    fv.sky = true;
-    fv.camera = mCamera.node();
-    fv.framingAspect = mCamera.node()->framingAspect();
-    if (mOpt.headless || mHdrReadback || mReflectOff) {
-        // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
-        // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections off`.
-        const bool headless = mOpt.headless;
-        const bool hdr = mHdrReadback, reflectOff = mReflectOff;
-        fv.finish = [headless, hdr, reflectOff](FrameInputView &part, View *v) {
-            PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
-            if (headless) fx.allowOffscreen = true;
-            if (hdr) fx.hdrReadback = true;
-            if (reflectOff) fx.ssr = 0;
-            part.postFx = fx;
-        };
+    // THE VIEW LENT TO A SCRIPT (lab.view()): it shows the script's scene - the lab's world is neither advanced nor
+    // synced into it (the mirror would push the lab's sky, environment and camera into the script's view); the frame
+    // draws and presents what the view shows
+    if (!mViewLent) {
+        // THE ANIMATION CLOCK (`play on`): one fixed step a frame - the engine's own grid (frames, never wall time)
+        if (mPlaying) mDoc->advance(1.0f / 60.0f);
+        mDoc->refresh();
+        SceneMirror::FrameView fv;
+        fv.view = mView;
+        fv.environment = true;
+        fv.sky = true;
+        fv.camera = mCamera.node();
+        fv.framingAspect = mCamera.node()->framingAspect();
+        if (mOpt.headless || mHdrReadback || mReflectOff) {
+            // THE OFFSCREEN CHAIN'S OPT-IN (PostFxDesc::allowOffscreen): the world's post chain on the offscreen view, the
+            // editor screenshot's door (enginesceneviewport.cpp takeScreenshot's Viewport grade) - and `reflections off`.
+            const bool headless = mOpt.headless;
+            const bool hdr = mHdrReadback, reflectOff = mReflectOff;
+            fv.finish = [headless, hdr, reflectOff](FrameInputView &part, View *v) {
+                PostFxDesc fx = part.postFx ? *part.postFx : v->pushedPostFx();
+                if (headless) fx.allowOffscreen = true;
+                if (hdr) fx.hdrReadback = true;
+                if (reflectOff) fx.ssr = 0;
+                part.postFx = fx;
+            };
+        }
+        mMirror->sync(SceneMirror::FrameViews{ { fv } });
     }
-    mMirror->sync(SceneMirror::FrameViews{ { fv } });
     mEngine->renderOneFrame();
     ++mFrames;
     if (mRoutesPending) judgeDeclaredRoutes();
@@ -522,6 +535,11 @@ void Session::pushOverlay()
     in.cam[0] = p.x(); in.cam[1] = p.y(); in.cam[2] = p.z();
     in.target[0] = t.x(); in.target[1] = t.y(); in.target[2] = t.z();
     in.frame = mFrames;
+    if (!mJsPath.empty()) {
+        in.js = QFileInfo(QString::fromStdString(mJsPath)).fileName().toStdString();
+        in.jsState = mJsState;
+        in.jsError = mJsError;
+    }
     ViewOverlayDesc d;
     d.stats = true;
     d.lines = overlayRows(in);
@@ -1411,6 +1429,8 @@ bool Session::exec(const Command &c)
         ok = voxels(c);
     } else if (c.verb == "regions") {
         ok = regions(c);
+    } else if (c.verb == "js") {
+        ok = js(c);
     } else if (c.verb == "help") {
         std::printf("%s", helpText().c_str());
     } else if (c.verb == "echo") {
@@ -2227,6 +2247,129 @@ bool Session::voxels(const Command &c)
     return ok;
 }
 
+// ---- THE ENGINE's SCRIPTS (LAB-SCRIPTS-1 stage 1): the engine's script host in the lab ------------------------------
+
+bool Session::js(const Command &c)
+{
+    const std::string &w = c.args[0];
+    if (w == "load") return jsLoad(c.args[1]);
+    if (w == "run") return jsRun();
+    if (w == "clear") {
+        jsClear();
+        std::printf("LAB JS CLEAR: the lab's world is shown%s\n", mJsPath.empty() ? "" : " (the script stays loaded)");
+        return true;
+    }
+    // next: the next .js of the loaded file's folder by name; after the last, the first
+    if (mJsPath.empty()) { labFail("LAB REFUSED js next: no script loaded (js load <file.js>, or --js)\n"); return false; }
+    const QFileInfo cur(QString::fromStdString(mJsPath));
+    const QStringList all = cur.absoluteDir().entryList({ QStringLiteral("*.js") }, QDir::Files, QDir::Name);
+    if (all.isEmpty()) { labFail("LAB REFUSED js next: no .js left in %s\n", qPrintable(cur.absolutePath())); return false; }
+    const int at = int(all.indexOf(cur.fileName()));
+    return jsLoad(cur.absoluteDir().filePath(all[at < 0 ? 0 : (at + 1) % int(all.size())]).toStdString());
+}
+
+bool Session::jsLoad(const std::string &path)
+{
+    const QFileInfo f(QString::fromStdString(path));
+    if (!f.isFile() || !f.isReadable()) {
+        labFail("LAB REFUSED js load: %s is not a readable file\n", path.c_str());
+        return false;
+    }
+    mJsPath = f.absoluteFilePath().toStdString();
+    mJsState = "loaded";
+    mJsError.clear();
+    std::printf("LAB JS LOADED %s\n", mJsPath.c_str());
+    if (mOverlay) pushOverlay();
+    return true;
+}
+
+void Session::jsClear()
+{
+    // THE VIEW GIVEN BACK BEFORE THE HOST ENDS: a host's end may take the objects its run made (the scene the view shows)
+    if (mViewLent) {
+        mView->setScene(nullptr);
+        mView->setBackground(mLabBackground);   // the lab's own again (a record re-applies only a change: set it here)
+        mView->setScene(mScene);
+        mViewLent = false;
+    }
+    mJsHost.reset();
+}
+
+bool Session::jsRun()
+{
+    if (mJsPath.empty()) { labFail("LAB REFUSED js run: no script loaded (js load <file.js>, or --js)\n"); return false; }
+    std::ifstream in(mJsPath, std::ios::binary);   // RE-READ AT EVERY RUN: the owner edits, then presses F9
+    if (!in) { labFail("LAB REFUSED js run: cannot read %s\n", mJsPath.c_str()); return false; }
+    std::ostringstream source;
+    source << in.rdbuf();
+    jsClear();   // the last run's view back and its host ended: A FRESH HOST PER RUN (ruling 5: a realm, a registry, checks)
+    const std::string file = QFileInfo(QString::fromStdString(mJsPath)).fileName().toStdString();
+    std::printf("LAB JS RUN %s (run %d)\n", file.c_str(), ++mJsRuns);
+    std::fflush(stdout);
+    mJsError.clear();
+    // THE HOST's LINES, PREFIXED (`LAB JS ok:   ...`, `LAB JS FAIL: ...`, console.log's): each line of a many-line text
+    // (an error's stack) its own; the first FAIL is the overlay's error line
+    const auto say = [this](const std::string &text) {
+        std::istringstream lines(text);
+        std::string l;
+        while (std::getline(lines, l)) {
+            std::printf("LAB JS %s\n", l.c_str());
+            if (mJsError.empty() && l.rfind("FAIL: ", 0) == 0) mJsError = l.substr(6);
+        }
+        std::fflush(stdout);
+    };
+    mJsHost.reset(new script::Host(script::Host::Options{}));
+    script::Host &host = *mJsHost;
+    host.setConsole(say);
+    script::registerEngineCommands(host, mEngine.get(), std::string(), false);
+    // lab.view(): THE WINDOW's VIEW, HANDED OVER DETACHED (ruling 3) - View::setScene refuses a second bind and a script
+    // cannot detach, so the lab detaches its world here; the handle holds the view UNOWNED (the lab made it, the lab
+    // keeps it: a host's end never takes it)
+    host.registry().add({ "lab.view", { script::Access::Changes, {}, script::Kind::Int, "view" },
+                          "The lab's own view (its window, or its offscreen view under --headless), handed over DETACHED: "
+                          "bind the script's scene to it (engine.view.setScene) and draw with engine.frames; answers -> "
+                          "view handle. `js clear` (or the next run) shows the lab's world again." },
+                        [this](script::Call &c) -> script::Value {
+                            if (!mViewLent) {
+                                // detached, and cleared with the view's own colour: the lab world's background (its
+                                // document's sky fallback) is the lab's, never the script's scene's
+                                mView->setScene(nullptr);
+                                mLabBackground = mView->pushedBackground();
+                                mView->setBackground(kViewClear);
+                                mViewLent = true;
+                            }
+                            return c.hold("view", std::shared_ptr<View>(mView, [](View *) {}));
+                        });
+    const unsigned long long frame0 = mEngine->published().frame;
+    const script::Result r = host.run(source.str(), mJsPath);
+    // THE VERDICT (ruling 8): the host's, unchanged - except IN THE WINDOW a run that failed nothing and checked nothing:
+    // a script the owner watches is not a test, so its "checked nothing" fault is neither printed nor counted
+    std::vector<std::string> verdictLines;
+    host.setConsole([&verdictLines](const std::string &l) { verdictLines.push_back(l); });
+    const int faults = host.verdict(r);
+    host.setConsole(say);
+    const unsigned long long frames = mEngine->published().frame - frame0;
+    const bool watched = !mOpt.headless && r.status != script::Status::Failed && host.checksRun() == 0 && faults == 1;
+    if (watched) {
+        mJsState = "ran: no checks";
+        std::printf("LAB JS END %s ran: no checks (%llu frames)\n", file.c_str(), frames);
+    } else {
+        for (const std::string &l : verdictLines) say(l);
+        if (faults == 0) {
+            mJsState = "ran ok, " + std::to_string(host.checksRun()) + " checks";
+            std::printf("LAB JS END %s ok (%d checks, %llu frames)\n", file.c_str(), host.checksRun(), frames);
+        } else {
+            mJsState = "FAILED (" + std::to_string(faults) + ")";
+            std::printf("LAB JS END %s FAILED (%d)\n", file.c_str(), faults);
+            mExit = 1;   // a failed run fails the process (as a refused --script line does) and never ends the lab
+        }
+    }
+    std::fflush(stdout);
+    if (mOverlay) pushOverlay();
+    if (!watched && faults) gLabLastFailure = "JS " + file + " FAILED (" + std::to_string(faults) + "): " + mJsError;
+    return watched || faults == 0;
+}
+
 void Session::readStdinLines()
 {
     if (!mStdinOpen || !mOpt.readStdin) return;
@@ -2286,7 +2429,9 @@ int Session::run(const Options &opt)
         }
     }
     if (!boot(err)) { std::fprintf(stderr, "jahlab: %s\n", err.c_str()); return 3; }
-    if (!load(err)) { std::fprintf(stderr, "jahlab: %s\n", err.c_str()); return 4; }
+    // --js ALONE (no model, no --env): the lab's world is EMPTY - the engine script brings its own scene
+    if (mOpt.file.isEmpty() && mOpt.env.isEmpty()) std::printf("LAB EMPTY WORLD (--js with no model and no --env)\n");
+    else if (!load(err)) { std::fprintf(stderr, "jahlab: %s\n", err.c_str()); return 4; }
     // THE FIRST FRAME: every mesh of the world is built by this sync (the mirror unbudgeted — the whole world arrives
     // in the frame, as a script's or a screenshot's sync does in the app).
     const double t0 = msSinceStart();
@@ -2299,6 +2444,12 @@ int Session::run(const Options &opt)
     if (!mJlab.occlusion) execLine("occlusion off", "flag");
     if (!mJlab.draw) execLine("draw off", "flag");
     if (mJlab.overlay) execLine("overlay on", "flag");
+    // --js: loaded and run once, after the first frame (in the window with the overlay on: the owner reads the run there)
+    if (!mOpt.js.isEmpty()) {
+        if (!mOpt.headless && !mOverlay) execLine("overlay on", "flag");
+        if (execLine("js load " + mOpt.js.toStdString(), "flag")) execLine("js run", "flag");
+        else mExit = 1;
+    }
 
     int scriptLine = 0;
     while (!mQuit) {

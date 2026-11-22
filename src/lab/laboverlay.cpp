@@ -35,6 +35,10 @@ std::vector<std::string> overlayRows(const OverlayInput &in)
     std::snprintf(b, sizeof b, "camera %.2f,%.2f,%.2f -> %.2f,%.2f,%.2f", in.cam[0], in.cam[1], in.cam[2], in.target[0],
                   in.target[1], in.target[2]);
     rows.push_back(b);
+    if (!in.js.empty()) {
+        rows.push_back("js " + in.js + "   F9 run   F10 next   " + in.jsState);
+        if (!in.jsError.empty()) rows.push_back("js error: " + in.jsError);
+    }
     return rows;
 }
 

@@ -23,9 +23,10 @@
 #include <string>
 #include <utility>
 #include <vector>
+#include "jahshaka/engine/Math.h"
 
 class SceneMirror;
-namespace jahshaka { namespace engine { class Engine; class Scene; class View; } }
+namespace jahshaka { namespace engine { class Engine; class Scene; class View; namespace script { class Host; } } }
 
 namespace lab {
 
@@ -44,6 +45,7 @@ struct Options
     unsigned seed = 1;         ///< the environment's seed
     int footprint = 2;         ///< the occlusion test's footprint in texels the expectations assume (envs/env.h Optics)
     QString script;
+    QString js;                ///< --js: an engine script loaded and run once after the first frame
     QString dataRoot;
     QString binDir;            ///< the binary's directory (media, app/content)
     bool headless = false;     ///< an OFFSCREEN Vulkan view, no window (never EngineConfig::headless; DISPLAY still needed)
@@ -108,6 +110,12 @@ private:
     bool voxels(const Command &c);
     /// THE CHANGED-REGION LIST (PHOTON-7 stage 3): the last frame's, printed.
     bool regions(const Command &c);
+    /// THE ENGINE's SCRIPTS (LAB-SCRIPTS-1 stage 1): `js load|run|next|clear`, and the run itself.
+    bool js(const Command &c);
+    bool jsLoad(const std::string &path);
+    bool jsRun();
+    /// The lab's world back in the window's view (a script was handed it by lab.view()); then the last run's host ends.
+    void jsClear();
     void nameEngineNodes();
     double msSinceStart() const;
 
@@ -148,6 +156,17 @@ private:
     bool mStdinOpen = true;
     bool mWaitingSaid = false;
     std::chrono::steady_clock::time_point mStart;
+
+    // THE SCRIPT (LAB-SCRIPTS-1): the loaded file, the LAST run's host (kept until the next run, `js clear` or the end,
+    // after the view is given back: a host's end may take the objects its run made), whether the window's view is
+    // lent to a script (lab.view(): the lab's world detached, frame() then draws without the mirror's sync), and what
+    // the overlay says of it
+    std::string mJsPath;
+    std::unique_ptr<jahshaka::engine::script::Host> mJsHost;
+    bool mViewLent = false;
+    jahshaka::engine::Colour mLabBackground;   ///< the lab world's background while the view is lent (given back at clear)
+    int mJsRuns = 0;
+    std::string mJsState, mJsError;
 };
 
 }   // namespace lab

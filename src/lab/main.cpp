@@ -1,8 +1,8 @@
 // jahlab — the engine-only harness (LAB-1; SPECS/LAB_1_SPEC.md, DOCS/LAB.md): one window (or an offscreen view), one
 // model through the real import + bake, the engine's full frame — Atom's cut, Photon at the chosen tier, the sun and
-// sky — and ONE command surface (labcommands.h) that the keys, --script and stdin share. Links the engine, irisgl's
-// document / import / mirror and Qt Core/Gui; nothing of Studio's src/ (no services, no UI, no scripting host, no
-// QCoreApplication, no widgets).
+// sky — and ONE command surface (labcommands.h) that the keys, --script and stdin share. Links the engine (its script
+// host too: `--js` and the `js` verb run the engine's scripts, as jahengine does), irisgl's document / import / mirror and
+// Qt Core/Gui; nothing of Studio's src/ (no services, no UI, no Studio scripting, no QCoreApplication, no widgets).
 #include "jahshaka/engine/ProcessExit.h"
 #include "labcommands.h"
 #include "labsession.h"
@@ -117,6 +117,7 @@ int main(int argc, char **argv)
         else if (a == "--env-check") envCheckWanted = true;
         else if (a == "--data-root") { const char *v = next(); if (!v) return usage("--data-root needs a directory"); opt.dataRoot = QDir(QString::fromLocal8Bit(v)).absolutePath(); }
         else if (a == "--script") { const char *v = next(); if (!v) return usage("--script needs a file"); opt.script = QString::fromLocal8Bit(v); }
+        else if (a == "--js") { const char *v = next(); if (!v) return usage("--js needs a file.js"); opt.js = QString::fromLocal8Bit(v); }
         else if (a == "--tier") { const char *v = next(); if (!v) return usage("--tier needs low|medium|high|epic"); opt.tier = QString::fromLocal8Bit(v); }
         else if (a == "--arm") { const char *v = next(); const char *eq = v ? std::strchr(v, '=') : nullptr; if (!eq) return usage("--arm needs <name>=<value>"); opt.bootArms.emplace_back(std::string(v, size_t(eq - v)), std::strtod(eq + 1, nullptr)); }
         else if (a == "--camera") { const char *v = next(); if (!v || !sixFloats(v, opt.camPos, opt.camTarget)) return usage("--camera x,y,z,tx,ty,tz"); opt.hasCamera = true; }
@@ -134,7 +135,8 @@ int main(int argc, char **argv)
     if (envCheckWanted) return envCheck(opt.seed, opt.env.toStdString());
     if (!opt.env.isEmpty() && !opt.file.isEmpty()) return usage("a file or --env, not both");
     if (!opt.env.isEmpty() && !lab::envs::find(opt.env.toStdString())) return usage("no such environment (--env-list)");
-    if (opt.file.isEmpty() && opt.env.isEmpty()) return usage("no scene file (or --env <name>)");
+    if (opt.file.isEmpty() && opt.env.isEmpty() && opt.js.isEmpty()) return usage("no scene file (or --env <name>, or --js <file.js>)");
+    if (!opt.js.isEmpty() && !QFileInfo(opt.js).isFile()) return usage("--js: no such file");
     if (opt.tier.isEmpty() && (!opt.env.isEmpty() || !opt.file.endsWith(QStringLiteral(".jlab"), Qt::CaseInsensitive)))
         opt.tier = QStringLiteral("epic");
     // THE EXIT-ONLY TEARDOWN (URGENT #102, jahshaka/engine/ProcessExit.h): the lab makes one engine a process and

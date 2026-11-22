@@ -23,6 +23,9 @@ struct OverlayInput
     bool gi = true, occlusion = true, draw = true;
     float cam[3] = {}, target[3] = {};
     unsigned long long frame = 0;
+    /// the engine script (LAB-SCRIPTS-1): its file name (empty: none loaded), its state ("loaded", "ran ok, 3 checks",
+    /// "FAILED (1)", "ran: no checks") and the first error line of its last run
+    std::string js, jsState, jsError;
 };
 
 /// The rows, top to bottom.

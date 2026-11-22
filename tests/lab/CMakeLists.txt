@@ -73,6 +73,40 @@ add_test(NAME lab.routes_verb COMMAND test_lab_routes_verb)
 set_tests_properties(lab.routes_verb PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(lab.routes_verb)
 
+# lab.js_verbs (LAB-SCRIPTS-1 stage 1) — THE `js` VERB's grammar and its keys (test_lab_js_verbs.cpp says the law): `js load
+# <path> | run | next | clear` parse, their wrong shapes are refused with a reason, F9 / F10 are `js run` / `js next`. The
+# parser compiles alone (src/lab/labcommands.cpp): a CPU code row.
+add_executable(test_lab_js_verbs test_lab_js_verbs.cpp ${CMAKE_SOURCE_DIR}/src/lab/labcommands.cpp)
+set_target_properties(test_lab_js_verbs PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_lab_js_verbs PRIVATE ${CMAKE_SOURCE_DIR}/src/lab)
+add_test(NAME lab.js_verbs COMMAND test_lab_js_verbs)
+set_tests_properties(lab.js_verbs PROPERTIES TIMEOUT 60 LABELS "lab" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(lab.js_verbs)
+
+# lab.js_window_view (LAB-SCRIPTS-1 stage 1) — AN ENGINE SCRIPT DRAWS IN THE LAB's OWN VIEW: `jahlab --headless --js
+# demo_spiral.js` on an empty lab world takes the view by lab.view(), draws its spiral and reads it; the lab's own shot
+# after the run shows the same centre (js_window_view.sh says the laws). The first frame, 240 of the script's, its read.
+jah_gpu_row(lab.js_window_view CLASS engine FRAMES 242
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_window_view.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/js_window_view
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_window_view PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# lab.js_rerun (LAB-SCRIPTS-1 stage 1) — A RUN IS A FRESH HOST: one lab runs a script twice, the file rewritten between;
+# run 2 reads the new file in a fresh realm (js_rerun.sh says the laws). The lab's first frame only.
+jah_gpu_row(lab.js_rerun CLASS engine FRAMES 1
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_rerun.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/js_rerun
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_rerun PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# lab.js_error_survives (LAB-SCRIPTS-1 stage 1) — A SCRIPT's ERROR NEVER ENDS THE LAB: a throwing script fails its run (and
+# the process's exit), naming its line; the next script runs (js_error_survives.sh says the laws). The first frame only.
+jah_gpu_row(lab.js_error_survives CLASS engine FRAMES 1
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_error_survives.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/js_error_survives
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_error_survives PROPERTIES TIMEOUT 60 LABELS "lab")
+
 # lab.env_expectation_printed (stage 2) — `jahlab --env-list` prints every environment's law and its closed-form
 # expectation at each dolly stop (22 / 88 / 177 / 354 m), every value a finite number. CPU only.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)

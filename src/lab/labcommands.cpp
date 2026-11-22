@@ -177,6 +177,15 @@ const std::vector<VerbDoc> &verbs()
           "(rtreflect.walk_world: the reflection's own estimator alone). "
           "Writes "
           "<data-root>/stillness/<out>.tsv and the windows' last pictures; prints the STILLNESS lines" },
+        { "js", "js load <file.js> | js run | js next | js clear", 1, 64,
+          "THE ENGINE's SCRIPTS IN THE LAB (LAB-SCRIPTS-1; the engine's script host, jahengine's commands): `load` names "
+          "the script (the rest of the line is its path); `run` re-reads it from disk and runs it in a FRESH host to its "
+          "end - its lines printed `LAB JS ...`, then `LAB JS END <file> ok (k checks, f frames)` or `FAILED (n)` (in "
+          "the window a run that failed nothing and checked nothing reads `ran: no checks`); a failed run sets the exit "
+          "to 1 and never ends the lab; `next` loads the next .js of the loaded file's folder by name (the first after "
+          "the last); `clear` shows the lab's world again. A script draws in the lab's view through `lab.view()` (the "
+          "view handed over DETACHED: the script binds its own scene, engine.view.setScene). LIMIT: the scenes and views "
+          "a run makes live until the lab exits (no destroy command yet), and a view a script makes keeps drawing" },
         { "help", "help", 0, 0, "print this table" },
         { "echo", "echo words...", 0, 64, "print the words (an agent's sync marker on stdout)" },
         { "quit", "quit", 0, 0, "end the run" },
@@ -195,6 +204,8 @@ const std::vector<std::pair<std::string, std::string>> &keyTable()
         { "F6", "occlusion toggle" },
         { "F7", "draw toggle" },
         { "F8", "gi toggle" },
+        { "F9", "js run" },
+        { "F10", "js next" },
         { "F12", "shot" },
         { "Escape", "quit" },
     };
@@ -288,6 +299,27 @@ bool parse(const std::string &lineIn, Command &out, std::string &error)
         if (out.verb == "slide" && !number(2, 0, true)) return false;
         if (out.verb == "stillness" && !number(1, 2, true)) return false;
         if (out.verb == "arm" && !number(1, -1e9, false)) return false;
+        // js: one of its four words; `load` takes the REST OF THE LINE as the path (a path may hold spaces), the others
+        // nothing more
+        if (out.verb == "js") {
+            const std::string &w0 = out.args[0];
+            if (w0 == "load") {
+                // the words: the verb, `load`, then the path's first character
+                size_t b = line.find_first_not_of(" \t");
+                for (int word = 0; word < 2 && b != std::string::npos; ++word)
+                    b = line.find_first_not_of(" \t", line.find_first_of(" \t", b));
+                std::string path = b == std::string::npos ? std::string() : line.substr(b);
+                while (!path.empty() && (path.back() == ' ' || path.back() == '\t')) path.pop_back();
+                if (path.empty()) { error = "'" + line + "': js load needs a file (" + v_usage(out.verb) + ")"; return false; }
+                out.args = { "load", path };
+            } else if (w0 != "run" && w0 != "next" && w0 != "clear") {
+                error = "'" + line + "': '" + w0 + "' is not load|run|next|clear (" + v_usage(out.verb) + ")";
+                return false;
+            } else if (out.args.size() != 1) {
+                error = "'" + line + "': js " + w0 + " takes nothing more (" + v_usage(out.verb) + ")";
+                return false;
+            }
+        }
         return true;
     }
     error = "'" + line + "': unknown command '" + out.verb + "' (help lists them)";
@@ -298,12 +330,15 @@ std::string helpText()
 {
     std::ostringstream o;
     o << "jahlab - the engine-only harness (Atom + Photon + the core engine, no Studio)\n\n"
-         "usage: jahlab [flags] <scene.fbx|.obj|.gltf|.glb|.jlab>   |   jahlab [flags] --env <name>\n\n"
+         "usage: jahlab [flags] <scene.fbx|.obj|.gltf|.glb|.jlab>   |   jahlab [flags] --env <name>   |   jahlab [flags] "
+         "--js <file.js>\n\n"
          "flags:\n"
          "  --data-root <dir>   bakes, shots, .jlab saves and the shader cache (default ~/.local/share/jahlab)\n"
          "  --headless          render OFFSCREEN (a Vulkan offscreen view, no window; Ogre-Next's Vulkan still opens an X\n"
          "                      connection at boot, so DISPLAY must name a server — the rig's Xvfb)\n"
          "  --script <file>     run the file's command lines after the load (then stdin, unless --no-stdin)\n"
+         "  --js <file.js>      load the engine script and run it once after the first frame (`js load` + `js run`; the\n"
+         "                      overlay on); with no model and no --env the lab's world is EMPTY\n"
          "  --no-stdin          do not read commands from stdin\n"
          "  --env <name>        a generated test environment instead of a file (--env-list: the catalogue)\n"
          "  --seed N            the environment's seed (default 1)\n"

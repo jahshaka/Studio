@@ -29,9 +29,10 @@ the value type and the registry know nothing of JavaScript, and a second languag
      prints at least one command, each its signature line ending with its ACCESS tag (` [reads]`, ` [changes]`, ` [files]`
      or ` [test]`: SCRIPT-IN-ENGINE-1 2a, MCP-ON-HOST-1's read-only surface) and a non-empty doc line, and no FAULT
      (an array with neither a count nor a maximum is one: Registry::add refuses it, script.host holds that law).
-  N6 NOTHING THE APP RUNS CARRIES THE HOST: `nm` on bin/Jahshaka, bin/jahlab and bin/libIrisGLd.so finds no symbol of the
-     script host (jahshaka::engine::script) and none of the JS engine (JS_*): the archive's members are never pulled in
-     until a client calls the host (STUDIO-CLIENT-1).
+  N6 NOTHING THE APP RUNS CARRIES THE HOST: `nm` on bin/Jahshaka and bin/libIrisGLd.so finds no symbol of the script host
+     (jahshaka::engine::script) and none of the JS engine (JS_*): the archive's members are never pulled in until a client
+     calls the host (STUDIO-CLIENT-1). jahlab is NOT read: it is a client of the host BY DESIGN, as jahengine is
+     (LAB-SCRIPTS-1, the lead's ruling 2: `jahlab --js` and its `js` verb run the engine's scripts in its window).
   N7 THE HARNESS's SHADER CACHE HAS ONE HOME (the lead's S8): jahengine/main.cpp and tests/support/enginetesthelpers.h
      set no shaderCacheMaxBytes of their own - both take
      inspect::applyHarnessShaderCache (EngineInspect.h), so a cap raised for the fixtures is jahengine's too (a smaller
@@ -406,7 +407,7 @@ def main():
           % (files, bad[:4]))
     bin_dir = os.path.join(sys.argv[2], "bin")
     irisgl = next((n for n in ("libIrisGLd.so", "libIrisGL.so") if os.path.isfile(os.path.join(bin_dir, n))), "libIrisGLd.so")
-    for name in ("Jahshaka", "jahlab", irisgl):
+    for name in ("Jahshaka", irisgl):
         path = os.path.join(bin_dir, name)
         if not os.path.isfile(path):
             check(False, "N6 %s is built (the app's binaries are read)" % path)
