@@ -7,10 +7,12 @@
 // caller's mistake (Failed, null), a refuse the engine's state (Refused, the declared return's falsy value, the message
 // kept as lastError).
 #include "jahshaka/engine/Script.h"
+#include "script/RouteDeclaration.h"   // the route declaration's judgement (engine-private, pure)
 
 #include <cstdio>
 #include <string>
 
+using namespace jahshaka::engine;
 using namespace jahshaka::engine::script;
 
 static int gFail = 0;
@@ -236,12 +238,13 @@ int main()
 
     // 5. THE ENGINE'S COMMANDS WITH NO ENGINE (a process whose engine did not start still has a host that says why), and
     //    the picture's native reductions against their closed forms on a synthetic 4 x 2 picture
-    Registry eng;
-    registerEngineCommands(eng, nullptr, "no device here", false);
+    Host engHost;
+    registerEngineCommands(engHost, nullptr, "no device here", false);
+    Registry &eng = engHost.registry();
     std::size_t engineCommands = 0;
     for (const CommandInfo *c : eng.commands()) engineCommands += c->name.rfind("engine.", 0) == 0;
-    check(engineCommands == 19 && eng.validate().empty(),
-          "the 19 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
+    check(engineCommands == 20 && eng.validate().empty(),
+          "the 20 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
     check(failedWith(eng.call("engine.node.setTransform",
                               {Value(1), Value(1), Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
                      "engine.node.setTransform: transform.position must hold 3 elements"),
@@ -274,6 +277,54 @@ int main()
                                                                             {"rgba", Value::bytes(px)}}), rect}),
                          "not width x height x 4"),
           "a span outside the picture and a picture whose bytes are not width x height x 4 FAIL");
+
+    // 6. THE ROUTE DECLARATION's JUDGEMENT (engine.view.declareRoutes; RouteDeclaration.h): exactly requireRoutes' law
+    {
+        RouteWords decl;
+        decl.integrate = decl.reflection = decl.store = true;
+        RouteWords ran = decl;
+        ran.store = false;   // the chain holds, the store not live yet
+        std::string line;
+        const bool waits = judgeRoutes("v", decl, ran, true, ran, 1, line) == RouteJudgement::Wait &&
+                           judgeRoutes("v", decl, ran, true, ran, inspect::kRouteProductFrames - 1, line) ==
+                               RouteJudgement::Wait;
+        const bool late = judgeRoutes("v", decl, ran, true, ran, inspect::kRouteProductFrames, line) == RouteJudgement::Broken &&
+                          line.find("MISMATCH") != std::string::npos;
+        check(waits && late, "a declared product not live waits while the chain holds, and is BROKEN on frame " +
+                                 std::to_string(inspect::kRouteProductFrames));
+        ran.store = true;
+        check(judgeRoutes("v", decl, ran, true, ran, 3, line) == RouteJudgement::Held &&
+                  line == "ROUTES v: declared {integrate reflection store}, the frame ran {integrate reflection store} "
+                          "(frame 3 after the declaration)",
+              "the declaration held prints both sides: " + line);
+        RouteWords gathered = ran;
+        gathered.gather = true;
+        gathered.integrate = false;
+        check(judgeRoutes("v", decl, gathered, true, gathered, 1, line) == RouteJudgement::Broken &&
+                  line.find("declared {integrate reflection store}, the frame ran {gather reflection store}") != std::string::npos,
+              "a chain other than the declared one is BROKEN on the first frame, both sides named");
+        RouteWords pub = ran;
+        pub.integrate = false;
+        check(judgeRoutes("v", decl, ran, true, pub, 1, line) == RouteJudgement::Broken &&
+                  line.find("PUBLISHED routes {reflection} differ from the engine's own {integrate reflection}") !=
+                      std::string::npos &&
+                  judgeRoutes("v", decl, ran, false, pub, 1, line) == RouteJudgement::Held,
+              "THE TWO DOORS: a published row unlike the engine's own record is BROKEN by name (no published row yet: "
+              "the engine's own record judges)");
+        RouteWords paused = ran;
+        paused.paused = true;
+        check(judgeRoutes("v", decl, paused, true, paused, 1, line) == RouteJudgement::Broken,
+              "GI paused when the declaration did not say paused is BROKEN");
+    }
+    // THE VERDICT's JUDGES: a judgement registered with the host runs before the count, its law a check
+    {
+        Host judged;
+        judged.setConsole([](const std::string &) {});
+        judged.atVerdict([&judged]() { judged.law(false, "a declaration no frame asserted"); });
+        const Result r = judged.run("host.check({ok: true, what: 'one law held'});\n", "judged.js");
+        check(r.status == Status::Ok && judged.verdict(r) == 1 && judged.checksRun() == 2,
+              "a judge the verdict runs fails it by name (a pending route declaration at the script's end)");
+    }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
     else std::printf("script.host: PASSED\n");

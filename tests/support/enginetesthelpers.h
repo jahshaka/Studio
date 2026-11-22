@@ -264,10 +264,10 @@ inline Routes actualRoutes(View *v, Scene *s)
     if (const inspect::SceneEcho *se = inspect::scene(s)) a.p = se->giUpdateBudget() == 0;
     return a;
 }
-/// The frames a declared product (field, cards, store) has to come live in after its declaration. A bound on a
-/// startup, not a law: the store's first voxelisation and the field's first pass land in the first frames, read back
-/// at the renderer's lag (4 on this stack); a fixture whose product starts later declares it there (requireRoutes).
-constexpr int kRouteProductFrames = 16;
+/// The frames a declared product (field, cards, store) has to come live in after its declaration: the test surface's
+/// one number (inspect::kRouteProductFrames, EngineInspect.h - the engine's script host judges by it too); a fixture
+/// whose product starts later declares it there (requireRoutes).
+constexpr int kRouteProductFrames = inspect::kRouteProductFrames;
 /// `frame` > 0: the declaration's frame count (the frames() hook); a product not live yet waits (returns false)
 /// until kRouteProductFrames. 0: everything now.
 inline bool requireRoutes(View *v, Scene *s, const Routes &declared, const char *what = "the measured view", int frame = 0)

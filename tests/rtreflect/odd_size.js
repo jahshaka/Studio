@@ -39,17 +39,10 @@ host.check({ok: engine.arm({name: "reflect.screenOff", value: 1}),
 // looking down the floor toward the wall, its reflection under the floor's horizon and to the frame's right edge
 engine.view.lookAt(view, {eye: [0, 1.6, 6], target: [0, 0.4, -4]});
 
-// THE ROUTE, DECLARED AND READ BACK ON FRAME 1 (URGENT #146): the view's chain exactly, the store live by frame 16
-const declared = {gather: false, integrate: true, reflection: true, paused: false, store: true};
-engine.frames(1);
-let ran = engine.view.routes(view), frame = 1;
-const chain = ["gather", "integrate", "reflection", "paused"].every((k) => ran[k] === declared[k]);
-for (; chain && !ran.store && frame < 16; ++frame, ran = engine.view.routes(view)) engine.frames(1);
-host.check({ok: chain && ran.store,
-            what: "ROUTES declared " + JSON.stringify(declared) + ", the frame ran " + JSON.stringify(ran) +
-                  " (store live on frame " + frame + ")"});
+// THE ROUTE IT MEASURES (URGENT #146): the view's chain exactly, the store live by frame 16 - judged by every frame
+engine.view.declareRoutes(view, {integrate: true, reflection: true, store: true});
 
-engine.frames(89 - frame);
+engine.frames(89);
 const pic = engine.view.readPixels({view});   // the 90th frame, drawn and read
 host.check({ok: pic.width === W && pic.height === H, what: "the picture reads back " + pic.width + " x " + pic.height});
 

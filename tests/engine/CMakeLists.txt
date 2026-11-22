@@ -408,6 +408,8 @@ add_executable(test_script_host test_script_host.cpp)
 set_target_properties(test_script_host PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_link_libraries(test_script_host PRIVATE JahshakaEngine)
+# the route declaration's judgement (irisgl/engine/src/script/RouteDeclaration.h: pure, engine-private) proved on the CPU
+target_include_directories(test_script_host PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
 add_test(NAME script.host COMMAND test_script_host)
 set_tests_properties(script.host PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(script.host)

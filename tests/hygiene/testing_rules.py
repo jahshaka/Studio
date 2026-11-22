@@ -602,10 +602,11 @@ _ROUTES_CALL = re.compile(r"\b(declareRoutes|requireRoutes)\s*\(")
 # whitespace, or after a written `\n` (a printf's line); its words from the routes' set
 _ROUTE_ALT = "|".join(sorted(ROUTE_WORDS))
 _LAB_ROUTES = re.compile(r"(?:^|[\s'\"]|\\n)routes\s+(?:%s)(?:[ \t]+(?:%s))*" % ((_ROUTE_ALT,) * 2), re.MULTILINE)
-# THE ENGINE SCRIPT's DECLARATION (SCRIPT-IN-ENGINE-1): a jahengine row's script reads its view's route back with
-# engine.view.routes( and asserts it against the declaration it states (tests/rtreflect/odd_size.js) - in its code, never a
-# comment or a string
-_SCRIPT_ROUTES = re.compile(r"\bengine\.view\.routes\s*\(")
+# THE ENGINE SCRIPT's DECLARATION (SCRIPT-IN-ENGINE-1, the final read's F2): a jahengine row's script calls
+# engine.view.declareRoutes( - the ONE native command that asserts (judged by every frame the host draws, as requireRoutes;
+# a pending one fails the verdict) - in its code, never a comment or a string. engine.view.routes( is a plain reader and
+# declares nothing: a call that only reads or prints the route asserts nothing
+_SCRIPT_ROUTES = re.compile(r"\bengine\.view\.declareRoutes\s*\(")
 
 
 def _sh_blank(text):
@@ -643,8 +644,8 @@ def r16_fixture_sources(source):
 def r16_declares(sources):
     """declares(test) -> True when the row's fixture calls declareRoutes / requireRoutes outside a comment or string, or -
     a jahlab row - when a shell script its command names holds a lab `routes <words>` line outside a comment (the lab's
-    declaration, PHOTON-7-9A), or - a jahengine row - when the .js script its command names reads its route back with
-    engine.view.routes( outside a comment or string (SCRIPT-IN-ENGINE-1); False otherwise."""
+    declaration, PHOTON-7-9A), or - a jahengine row - when the .js script its command names calls
+    engine.view.declareRoutes( outside a comment or string (SCRIPT-IN-ENGINE-1); False otherwise."""
     memo = {}
 
     def declares(t):
@@ -992,12 +993,16 @@ def the_rules_catch():
         check(d16(lab16("rtreflect.lab_decl", decl)) and not d16(lab16("rtreflect.lab_cmt", cmt)),
               "R16 reads a jahlab row's declaration from its script's `routes` line, never from a shell comment")
         js, jscmt = os.path.join(td16, "decl.js"), os.path.join(td16, "cmt.js")
-        open(js, "w").write("engine.frames(1);\nconst ran = engine.view.routes(view);\n")
-        open(jscmt, "w").write("// engine.view.routes(view)\nconst s = 'engine.view.routes(';\nengine.frames(1);\n")
+        jsread = os.path.join(td16, "read.js")
+        open(js, "w").write("engine.view.declareRoutes(view, {gather: true, store: true});\nengine.frames(1);\n")
+        open(jscmt, "w").write("// engine.view.declareRoutes(view, {gather: true})\n"
+                               "const s = 'engine.view.declareRoutes(';\nengine.frames(1);\n")
+        open(jsread, "w").write("engine.frames(1);\nconsole.log(JSON.stringify(engine.view.routes(view)));\n")
         eng16 = lambda name, f: dict(T(name, JAH_CLASS="engine"), command=["/b/bin/jahengine", "--script", f, "--test-doors"])
-        check(d16(eng16("rtreflect.js_decl", js)) and not d16(eng16("rtreflect.js_cmt", jscmt)),
-              "R16 reads a jahengine row's declaration from its script's engine.view.routes( call, never from a comment "
-              "or a string")
+        check(d16(eng16("rtreflect.js_decl", js)) and not d16(eng16("rtreflect.js_cmt", jscmt))
+              and not d16(eng16("rtreflect.js_read", jsread)),
+              "R16 reads a jahengine row's declaration from its script's engine.view.declareRoutes( call - never from a "
+              "comment or a string, and never from engine.view.routes( (a reader that asserts nothing)")
     blank = _r10_blank('// enginetest::declareRoutes(v, s, r)\nconst char *x = "requireRoutes(";\n')
     check(not _ROUTES_CALL.search(blank) and _ROUTES_CALL.search(_r10_blank("enginetest::declareRoutes (v, s, r);")),
           "R16 reads a fixture's declaration in its code, never in a comment or a string")
