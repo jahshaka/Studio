@@ -537,6 +537,8 @@ store_publish() {   # every cache of this tree warm at KEY (and its -on stamp) i
             # count) replaces the store's copy whole (below); a POORER one refreshes ONLY the store's record - a new file by rename, so
             # the store's caches and every taker's hard links stay as they were: a richer union is never replaced by a poorer one
             [ $c = app ] && [ -f "$sh/warm-pass.key" ] && ! cmp -s "$sh/warm-pass.key" "$S/cache/warm-pass.key" || continue
+            # (RICHER IS THE COUNT, NOT THE SET - the lead's ruling 2026-11-23: the engine's manifest holds no entry ids, only
+            # `saved`, `shaders` and its `file` lines, so a superset cannot be read cheaply; an EQUAL count with another set replaces)
             if [ "$(shaders_of "$sh")" -lt "$(shaders_of "$S/cache")" ]; then
                 cp "$sh/warm-pass.key" "$S/cache/.warm-pass.key.$$" && mv -f "$S/cache/.warm-pass.key.$$" "$S/cache/warm-pass.key" &&
                     pub="$pub app-record"
