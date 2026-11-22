@@ -2387,6 +2387,13 @@ bool Session::jsRun()
                             }
                             return c.hold("view", std::shared_ptr<View>(mView, [](View *) {}));
                         });
+    // WHILE THE SCRIPT HOLDS THE VIEW's FRAMES (the audit's F3): the STRIP says `running` - a child window of its own,
+    // drawn and flushed now, never in the engine's frame - and the lab's OVERLAY is hidden: it is geometry (its quads
+    // are submitted triangles) and a scripted frame never carries it (sky-particles-overlay-view.md); showJs() after
+    // the run pushes it again
+    mJsState = "running";
+    showJs();
+    if (mOverlay) mView->setOverlay(ViewOverlayDesc());
     const unsigned long long frame0 = mEngine->published().frame;
     const script::Result r = host.run(source.str(), mJsPath);
     // A VIEW LEFT WITH NO SCENE IS GIVEN BACK (the audit's F1): a script that took it and failed (or never bound) before

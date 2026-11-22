@@ -154,6 +154,14 @@ jah_gpu_row(lab.js_world_neutral CLASS engine FRAMES 484
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.js_world_neutral PROPERTIES TIMEOUT 60 LABELS "lab")
 
+# lab.js_no_overlay (LAB-SCRIPTS-1, the audit's F3) — A SCRIPTED FRAME NEVER CARRIES THE LAB's OVERLAY: js_cube.js's last
+# frame is the same picture with the lab's overlay off and on (js_no_overlay.sh says the law). Two labs of the first
+# frame, js_cube.js's 3 and 1 of the lab's own.
+jah_gpu_row(lab.js_no_overlay CLASS engine FRAMES 10
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_no_overlay.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/js_no_overlay
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_no_overlay PROPERTIES TIMEOUT 60 LABELS "lab")
+
 # lab.env_expectation_printed (stage 2) — `jahlab --env-list` prints every environment's law and its closed-form
 # expectation at each dolly stop (22 / 88 / 177 / 354 m), every value a finite number. CPU only.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
