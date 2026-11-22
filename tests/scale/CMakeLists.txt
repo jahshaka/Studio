@@ -133,7 +133,7 @@ set_tests_properties(scale.levels scale.residency scale.occlusion scale.cut_cost
 foreach(_row_frames
         "scale.cpu_walks=517"
         # ATOM-TESTS-BACK-1 stage 5: each its own priced run's "FRAMES <n>" line (scale_world.cpp shutdown)
-        "scale.levels=58" "scale.residency=220" "scale.cut_cost=201" "scale.occlusion=213"
+        "scale.levels=110" "scale.residency=220" "scale.cut_cost=201" "scale.occlusion=213"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)
