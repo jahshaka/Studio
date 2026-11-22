@@ -268,7 +268,7 @@ public:
 	QVariantList projectDrawerTiles() const;
 	/// WHAT THE CUSTOM DRAWER IS SHOWING, in order (PRESET-FOLD-1): the
 	/// `materials.customDrawer()` verb, through the page delegate.
-	QVariantList customDrawerTiles() const;
+	QVariantList customDrawerTiles();
 
     ~EffectsPage();
 
@@ -374,6 +374,12 @@ private:
 	void setNodeLibraryItem(QListWidgetItem *item, NodeLibraryItem *tile);
 	bool createNewGraph(bool loadNewGraph = true);
 	void updateAssetDock();
+	/// THE CUSTOM DRAWER IS FILLED ON ITS FIRST USE, never at boot (LARGE-LIBRARY-1: the Materials home's listing
+	/// reads each material's row behind its rendered tile — 42.5 MB at 10,000 assets — and the boot built the
+	/// page and filled it whether or not the user ever went there). Every reader of the drawer's rows comes
+	/// through here; an entry to the space refills it anyway (refreshShaderGraph).
+	void ensureDrawerFilled();
+	bool mDrawerFilled = false;
 
 	bool eventFilter(QObject *watched, QEvent *event);
 

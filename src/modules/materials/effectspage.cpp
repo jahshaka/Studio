@@ -456,10 +456,11 @@ QVariantList EffectsPage::projectDrawerTiles() const
 	return assetWidget ? assetWidget->shownTiles() : QVariantList();
 }
 
-QVariantList EffectsPage::customDrawerTiles() const
+QVariantList EffectsPage::customDrawerTiles()
 {
 	QVariantList out;
 	if (!effects) return out;
+	ensureDrawerFilled();
 	for (int i = 0; i < effects->count(); ++i) {
 		const QListWidgetItem *item = effects->item(i);
 		if (!item) continue;
@@ -1503,12 +1504,12 @@ void EffectsPage::configureAssetsDock()
 
 	assetsDock->setWidget(tabWidget);
 	assetsDock->setStyleSheet(StyleSheet::EffectsDock());
-
-	updateAssetDock();
+	// (The custom drawer is NOT filled here: ensureDrawerFilled, at its first use.)
 }
 
 void EffectsPage::createShader(NodeGraphPreset preset, bool loadNewGraph, const QString &wanted)
 {
+	ensureDrawerFilled();   // the new tile joins the drawer's rows, never a fill that would clear it later
 	// (A NEW MATERIAL IS THE USER'S — PRESET-UNIFY-1 — and it is editable, so
 	// the read-only banner goes. That is done by `loadGraphFromTemplate` on
 	// the NEW document, below. It used to be done HERE, on whatever document
@@ -1981,8 +1982,14 @@ bool EffectsPage::createNewGraph(bool loadNewGraph)
 	return false;
 }
 
+void EffectsPage::ensureDrawerFilled()
+{
+	if (!mDrawerFilled) updateAssetDock();
+}
+
 void EffectsPage::updateAssetDock()
 {
+	mDrawerFilled = true;
 	// THE PAGE HOLDS A POINTER INTO THIS LIST (`currentProjectShader`), and
 	// `clear()` DELETES the items. Refilling the drawer while that pointer
 	// still names a freed item is the same class of crash as opening a
@@ -2537,6 +2544,7 @@ void EffectsPage::updateEnginePreviewMaterial()
 
 QListWidgetItem * EffectsPage::selectCorrectItemFromDrop(QString guid)
 {
+	ensureDrawerFilled();
 	// THE PRESETS DRAWER IS A DRAWER TOO (PRESET-UNIFY-1). A shipped preset
 	// opens read-only now, and every line after the lookup in `loadGraph`
 	// reads the tile — so leaving this blind to the Presets list meant a
@@ -2580,6 +2588,7 @@ shaderInfo::Origin EffectsPage::originForItem(QString guid)
 
 int EffectsPage::selectCorrectTabForItem(QString guid)
 {
+	ensureDrawerFilled();
 	for (int i = 0; i < presets->count(); i++)
 	{
 		if (guid == presets->item(i)->data(MODEL_GUID_ROLE))	return (int) ShaderWorkspace::Presets;
