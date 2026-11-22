@@ -478,7 +478,10 @@ int main(int argc, char **argv)
         const float ambientOff = measureArm(off, "GI off");
         // HOW THE LOSS SCALES WITH THE CHAIN LENGTH — the diagnostic that says
         // whether it is the chain's composite (per-hop) or the cascades
-        // themselves (per-cascade placement).
+        // themselves (per-cascade placement). A FINDING (ROUTE-ROWS-1, homed at
+        // 1.2 stage 3): the chain-of-N sweep reads equal at every N on both routes
+        // (the integrate: 0.0738 x4; the gather since stage 0: 0.0756-0.0757), so
+        // this law does not test the chain's length. No assert changed.
         for (int n = 1; n <= 4; ++n) {
             GiParams p = cascadeGi();
             p.cascadeCount = n;
@@ -486,7 +489,9 @@ int main(int argc, char **argv)
             const int   ress[4]   = { 128, 128, 64, 64 };
             for (int i = 0; i < n; ++i) p.cascadeSet[i] = GiParams::GiCascadeDesc{ halves[i], ress[i], 0.0f };
             const float v = measureArm(p, n == 1 ? "chain length sweep" : "chain length sweep");
-            std::printf("   chain of %d: ambient %.4f (%.2fx of GI off)\n", n, v, v / ambientOff);
+            std::printf("   chain of %d: ambient %.4f (%.2fx of GI off)%s\n", n, v, v / ambientOff,
+                        n == 4 ? " - the chain-of-N sweep reads equal at every N on both routes: this law does not "
+                                 "test the chain's length (ROUTE-ROWS-1: a finding, 1.2 stage 3)" : "");
         }
         const float ambientOne = measureArm(one, "a chain of ONE camera-centred cascade");
         const float ambientChain = measureArm(cascadeGi(), "the full chain again");

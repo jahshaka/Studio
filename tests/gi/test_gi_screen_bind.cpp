@@ -428,7 +428,11 @@ int main()
         const AreaVisStatus st = s3->published().areaVis;
         const PublishedEngineFrame::ViewFrames route = lv->published();
         // the ray tier's own residency (OgreRayQuery.cpp recordAreaVis: the trace's images at the trace's size, the
-        // product at the target's) - a second producer's images on top of it would double it
+        // product at the target's) - a second producer's images on top of it would double it. WHY THE ROUTE IS ASSERTED
+        // TOO: the two producers' residency formulas are the SAME bytes (128 B a trace texel + 8 B a target pixel: the
+        // no-ray producer's 6 x 16 + 2 x 16, OgreAreaVis.cpp; the ray tier's 8 x 8 + 2 x 16 + 4 x 8,
+        // OgreRayQuery.cpp:10501), so the bytes alone cannot tell which one runs - the old law stayed green on the deleted
+        // premise for exactly that reason; the published route says which.
         const unsigned long long own = (unsigned long long)st.traceW * st.traceH * (8u * 8u + 2u * 16u + 4u * 8u) +
                                        (unsigned long long)st.targetW * st.targetH * 8u;
         std::printf("   (4) a Live view of a ray scene: route gather %d integrate %d; area running %d, trace %ux%u of "
