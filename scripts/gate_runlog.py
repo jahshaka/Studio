@@ -10,6 +10,10 @@ equal input at an ancestor serves the row (ci_gate_check.py serve). It decides n
 
     scripts/gate_runlog.py run --tier spec|merge|ship --lane <name> [--build build-linux] -- ctest -j8 ...
     scripts/gate_runlog.py clocks          # the GPU's clock state now (exit 3 when it reads locked)
+
+ctest runs INSIDE --build (its cwd): a ctest `--test-dir` is REFUSED by name, before anything runs (DEV_ERRORS 52: three holds
+void - a relative one was read from inside the build and ctest failed to start). A run's id is unique per call: the second,
+the tip and the call's pid (URGENT #209: two solo calls in one second shared an id, and the solo test read neither as solo).
 """
 import argparse
 import datetime
@@ -505,6 +509,11 @@ def _row_output(build, run_id, row, text):
         return None
 
 
+def refused_test_dir(cmd):
+    """DEV_ERRORS 52: the --test-dir argument a ctest command carries, or None (ctest runs inside --build already)."""
+    return next((c for c in cmd if c == "--test-dir" or c.startswith("--test-dir=")), None)
+
+
 def run_ctest(cmd, build, tier, lane, echo=True):
     """Run one ctest command (argv) verbose in `build`; append every row's records as it ends; return (rc, reds)."""
     if tier not in TIERS:
@@ -519,7 +528,7 @@ def run_ctest(cmd, build, tier, lane, echo=True):
     shas = tree_shas(_git(["rev-parse", "--show-toplevel"], build) or ROOT)
     shas["built"] = built_from(build)
     facts, config, config_why = row_facts(build)
-    run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{shas['studio'][:9]}"
+    run_id = f"{datetime.datetime.now().strftime('%Y%m%dT%H%M%S')}-{shas['studio'][:9]}-p{os.getpid()}"   # #209: one per call
     display = os.environ.get("DISPLAY")
     vcmd = [cmd[0], "-V"] + [c for c in cmd[1:] if c != "--output-on-failure"]
     p = subprocess.Popen(vcmd, cwd=build, stdout=subprocess.PIPE, stderr=subprocess.STDOUT, text=True, bufsize=1,
@@ -625,6 +634,12 @@ def main():
         ap.error("give the ctest command after --")
     if len(cmd) == 1:
         cmd = shlex.split(cmd[0])
+    td = refused_test_dir(cmd)
+    if td:
+        print(f"gate_runlog: REFUSED - the ctest command carries {td!r}: gate_runlog runs ctest INSIDE --build ({a.build}) "
+              "already, so a --test-dir is read from there and the call runs nothing (DEV_ERRORS 52: three holds void). Drop "
+              "--test-dir and name the build with --build <dir>; nothing ran, nothing recorded", file=sys.stderr)
+        sys.exit(2)
     build = os.path.abspath(a.build)
     rc, _ = run_ctest(cmd, build, a.tier, a.lane)
     sys.exit(rc)
