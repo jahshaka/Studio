@@ -458,6 +458,23 @@ int main(int argc, char **argv)
                   && !cache.peek(TileCache::Kind::Asset, bottom.first(), spec).isNull(),
               "...and it is decoded again (%d decode)", cache.decodes() - decodes);
 
+        // A SCRIPT RUN's END: every live view publishes ONCE (TileCache::republishAll); a hidden one, none.
+        {
+            auto *hidden = new QListView;
+            hidden->setModel(&queueModel);
+            auto *hiddenWatcher = new TileViewWatcher(hidden, TileCache::Kind::Asset, LibraryModel::GuidRole);
+            int hiddenPublishes = 0;
+            QObject::connect(hiddenWatcher, &TileViewWatcher::published, hiddenWatcher, [&] { ++hiddenPublishes; });
+            for (int i = 0; i < 5; ++i) QCoreApplication::processEvents();
+            const int shownBefore = publishes;
+            cache.republishAll();
+            for (int i = 0; i < 5; ++i) QCoreApplication::processEvents();
+            CHECK(publishes - shownBefore == 1 && hiddenPublishes == 0,
+                  "republishAll: the shown view published once (%d), the hidden one none (%d)",
+                  publishes - shownBefore, hiddenPublishes);
+            delete hidden;
+        }
+
         // A tokenless ask is always wanted; a DESTROYED view's token is gone, its queued asks dropped.
         cache.clear();
         dropped = cache.dropped();

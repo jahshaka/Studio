@@ -13,6 +13,19 @@ add_test(NAME previews.key COMMAND test_preview_key WORKING_DIRECTORY ${CMAKE_CU
 set_tests_properties(previews.key PROPERTIES LABELS "previews" TIMEOUT 60)
 jah_no_display(previews.key)
 
+# previews.demand — THE RENDER DEMAND (services/previewdemand.cpp) over fakes of its read and its request: scrolling
+# through 1,000 rows requests each missing row exactly once, by the window's guids only, one request a turn; a publish
+# alone requests nothing; once a guid until its state or key moves; at most the cap in flight, the most wanted first, and a
+# row that scrolls out before its turn is never requested; an empty publish reads nothing. It counts requests and never
+# waits on the settle (runNow). No engine, no database, no display.
+add_executable(test_preview_demand test_preview_demand.cpp ${CMAKE_SOURCE_DIR}/src/services/previewdemand.cpp)
+set_target_properties(test_preview_demand PROPERTIES CXX_STANDARD 17 AUTOMOC ON)
+target_include_directories(test_preview_demand PRIVATE ${CMAKE_SOURCE_DIR}/src)
+target_link_libraries(test_preview_demand PRIVATE Qt6::Core)
+add_test(NAME previews.demand COMMAND test_preview_demand WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(previews.demand PROPERTIES LABELS "previews" TIMEOUT 60)
+jah_no_display(previews.demand)
+
 # previews.writer — THE ONE PREVIEW WRITER (services/previewwriter.cpp) on a temp library (the real Database, its own
 # file): bytes and key in one transaction; a null image or an empty PNG changes nothing (negative control: the unguarded
 # updateAssetThumbnail blanks the tile); a write submitted under the UI's write lock returns at once and lands after it;

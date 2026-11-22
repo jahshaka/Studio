@@ -557,6 +557,7 @@ set(SRCS
     src/services/previewkey.cpp
     src/services/previewwriter.cpp
     src/services/previewservice.cpp
+    src/services/previewdemand.cpp
     src/bridge/enginepreviewscene.cpp
     src/bridge/previewenvironment.cpp
     src/bridge/enginethumbnailrenderer.cpp 
@@ -866,6 +867,7 @@ set(HEADERS
     src/services/previewkey.h
     src/services/previewwriter.h
     src/services/previewservice.h
+    src/services/previewdemand.h
     src/ui/dialogs/donatedialog.h
     src/ui/pages/assetview.h
     src/ui/pages/importviewertail.h

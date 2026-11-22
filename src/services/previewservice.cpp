@@ -308,11 +308,12 @@ void PreviewService::mint(Project *project, const QString &guid, const char *who
 
 // ---- the state ----------------------------------------------------------------------------------
 
-QVector<PreviewService::Row> PreviewService::state(Project *project, bool projectOnly, int type)
+QVector<PreviewService::Row> PreviewService::state(Project *project, bool projectOnly, int type,
+                                                   const QStringList &guids)
 {
     QVector<Row> out;
     if (!mDb) return out;
-    const QVector<Database::PreviewRow> rows = mDb->fetchPreviewRows(projectGuidOf(project), projectOnly, type);
+    const QVector<Database::PreviewRow> rows = mDb->fetchPreviewRows(projectGuidOf(project), projectOnly, type, guids);
     out.reserve(rows.size());
     for (const Database::PreviewRow &row : rows) {
         Row r;

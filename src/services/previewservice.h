@@ -110,8 +110,9 @@ public:
         QString key;         ///< the key now; empty for none
         QString storedKey;   ///< the key the stored bytes were drawn from; empty when none was
     };
-    /// Every library row (projectOnly: the open project's pinned rows), `type` >= 0 one type.
-    QVector<Row> state(Project *project, bool projectOnly, int type = -1);
+    /// Every library row (projectOnly: the open project's pinned rows), `type` >= 0 one type; a
+    /// non-empty `guids` those rows only (the render demand's read: by guid, never the library).
+    QVector<Row> state(Project *project, bool projectOnly, int type = -1, const QStringList &guids = QStringList());
     /// "N previews to refresh": state()'s rows TALLIED - the same one catalog read (the key is a hash
     /// the catalog cannot compute, so the comparison is this side's), no per-row statement.
     struct Counts

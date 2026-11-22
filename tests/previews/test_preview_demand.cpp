@@ -1,0 +1,204 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the MIT License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+// previews.demand — THE RENDER DEMAND (services/previewdemand.h; PREVIEWS-1 stage 2, the lead's ruling) over
+// fakes of its two functions: it COUNTS REQUESTS and never waits on the settle (runNow is its door).
+//   (1) scrolling through 1,000 rows (a window of 20, half a window a step, settled at each) requests every
+//       missing row EXACTLY once, reads only the window's guids, ONE request a turn;
+//   (2) a publish alone requests nothing (never per publish: only a settle reads);
+//   (3) a row is asked once until its stamp (state|key) moves: a failed render is not asked again, a
+//       moved key is;
+//   (4) at most `cap` in flight, the most wanted first; a row that scrolls out before its turn is NEVER
+//       requested;
+//   (5) an empty publish reads nothing (an empty guid list would be no filter at all);
+//   (6) a script run SUSPENDS it: 0 reads (the shell's read is the demand's FetchPreview* statements) and
+//       0 requests during the run, pending dropped; after it a publish is read again.
+// No engine, no database, no display.
+
+#include <QCoreApplication>
+#include <QHash>
+#include <QStringList>
+#include <QVector>
+#include <algorithm>
+#include <cstdio>
+#include <functional>
+
+#include "services/previewdemand.h"
+
+static int failures = 0;
+#define CHECK(cond, ...)                                                                   \
+    do {                                                                                   \
+        if (cond) { std::printf("ok:   "); std::printf(__VA_ARGS__); std::printf("\n"); }  \
+        else { std::printf("FAIL: "); std::printf(__VA_ARGS__); std::printf("\n"); ++failures; } \
+        std::fflush(stdout);                                                               \
+    } while (0)
+
+int main(int argc, char **argv)
+{
+    QCoreApplication app(argc, argv);
+    const int kCap = 8;
+
+    QHash<QString, QString> stamps;          // the library: guid -> "state|key" of a row needing a render
+    int reads = 0, widestRead = 0, emptyReads = 0;
+    QHash<QString, int> asked;
+    QStringList order;
+    bool hold = false;
+    QVector<std::function<void()>> held;
+
+    PreviewDemand demand(
+        [&](const QStringList &guids) {
+            ++reads;
+            widestRead = std::max(widestRead, int(guids.size()));
+            if (guids.isEmpty()) ++emptyReads;
+            QHash<QString, QString> need;
+            for (const QString &g : guids)
+                if (stamps.contains(g)) need.insert(g, stamps.value(g));
+            return need;
+        },
+        [&](const QString &guid, std::function<void()> done) {
+            asked[guid] += 1;
+            order << guid;
+            if (hold) { held.append(done); return; }
+            stamps.remove(guid);   // drawn: ok now
+            done();
+        },
+        kCap);
+    // The event loop's turns until nothing moves (bounded: a turn a request at most).
+    const auto turns = [&] {
+        for (int i = 0; i < 5000; ++i) {
+            const int before = demand.requested();
+            QCoreApplication::processEvents();
+            if (demand.requested() == before && i > 2) break;
+        }
+    };
+    const auto guidsOf = [](const char *prefix, int from, int count) {
+        QStringList out;
+        for (int i = from; i < from + count; ++i) out << QStringLiteral("%1-%2").arg(QLatin1String(prefix)).arg(i, 4, 10, QLatin1Char('0'));
+        return out;
+    };
+
+    // (1) THE SCROLL THROUGH 1,000 ROWS.
+    const QStringList library = guidsOf("g", 0, 1000);
+    for (const QString &g : library) stamps.insert(g, QStringLiteral("missing|k1"));
+    bool oneATurn = true;
+    for (int top = 0; top + 20 <= 1000; top += 10) {
+        demand.want(library.mid(top, 20));
+        const int before = demand.requested();
+        demand.runNow();
+        oneATurn &= demand.requested() - before <= 1;
+        turns();
+    }
+    int twice = 0;
+    for (const QString &g : library) twice += asked.value(g) > 1 ? 1 : 0;
+    CHECK(demand.requested() == 1000 && asked.size() == 1000 && twice == 0,
+          "scrolling through 1,000 rows requests each missing row EXACTLY once (%d requests, %lld rows, %d twice)",
+          demand.requested(), static_cast<long long>(asked.size()), twice);
+    CHECK(widestRead == 20, "...reading only the window's guids, never the library (widest read %d guids)", widestRead);
+    CHECK(oneATurn, "...ONE request a turn (a render is inline: the next waits for the next turn)");
+
+    // (2) A PUBLISH ALONE REQUESTS NOTHING.
+    const QStringList fresh = guidsOf("f", 0, 20);
+    for (const QString &g : fresh) stamps.insert(g, QStringLiteral("missing|k1"));
+    int requested = demand.requested(), readsBefore = reads;
+    demand.want(fresh);
+    CHECK(demand.requested() == requested && reads == readsBefore, "a publish alone reads and requests nothing");
+    demand.runNow();
+    turns();
+    CHECK(demand.requested() - requested == 20, "...its settle requests the 20 missing (%d)", demand.requested() - requested);
+
+    // (3) ONCE UNTIL ITS STAMP MOVES.
+    requested = demand.requested();
+    stamps.insert(fresh.first(), QStringLiteral("missing|k1"));   // its render "failed": the same stamp
+    demand.want({ fresh.first() });
+    demand.runNow();
+    turns();
+    CHECK(demand.requested() == requested, "a row whose render left it at the SAME state and key is not asked again");
+    stamps.insert(fresh.first(), QStringLiteral("stale|k2"));      // its definition moved
+    demand.want({ fresh.first() });
+    demand.runNow();
+    turns();
+    CHECK(demand.requested() - requested == 1 && asked.value(fresh.first()) == 2,
+          "...and IS when its key moves (%d request)", demand.requested() - requested);
+
+    // (4) THE CAP; A ROW THAT SCROLLS OUT BEFORE ITS TURN.
+    hold = true;
+    order.clear();
+    const QStringList first = guidsOf("h", 0, 20), second = guidsOf("h", 20, 20);
+    for (const QString &g : first + second) stamps.insert(g, QStringLiteral("missing|k1"));
+    requested = demand.requested();
+    demand.want(first);
+    demand.runNow();
+    turns();
+    CHECK(demand.requested() - requested == kCap && demand.inFlight() == kCap && order == first.mid(0, kCap),
+          "at most the cap (%d) in flight, the most wanted first (%d requested)", kCap, demand.requested() - requested);
+    demand.want(second);   // the view scrolled on before the rest's turn
+    demand.runNow();
+    turns();
+    CHECK(demand.requested() - requested == kCap, "...a settle at the cap requests nothing more");
+    for (int round = 0; round < 10 && !held.isEmpty(); ++round) {
+        const QVector<std::function<void()>> landing = held;
+        held.clear();
+        for (const auto &done : landing) done();
+        turns();
+    }
+    int scrolledOut = 0, secondOnce = 0;
+    for (const QString &g : first.mid(kCap)) scrolledOut += asked.value(g);
+    for (const QString &g : second) secondOnce += asked.value(g) == 1 ? 1 : 0;
+    CHECK(scrolledOut == 0, "the %d rows that scrolled out before their turn are NEVER requested (%d requests)",
+          int(first.size()) - kCap, scrolledOut);
+    CHECK(secondOnce == 20 && order.mid(kCap) == second, "...the rows now shown each once, in their order (%d)", secondOnce);
+    hold = false;
+
+    // (6) A SCRIPT RUN SUSPENDS IT (the lead's ruling: it serves a person looking at a view, never a
+    // script): no read and no render while suspended - what was pending is dropped, a request already made
+    // completes; after the run a publish is read again.
+    hold = true;
+    order.clear();
+    const QStringList during = guidsOf("s", 0, 20);
+    for (const QString &g : during) stamps.insert(g, QStringLiteral("missing|k1"));
+    requested = demand.requested();
+    demand.want(during);
+    demand.runNow();
+    turns();
+    CHECK(demand.inFlight() == kCap && demand.requested() - requested == kCap, "before the run: the cap in flight (%d)",
+          demand.inFlight());
+    demand.setSuspended(true);   // ScriptEngine::runningChanged(true)
+    readsBefore = reads;
+    requested = demand.requested();
+    demand.want(guidsOf("s", 20, 20));
+    demand.runNow();
+    for (int round = 0; round < 10 && !held.isEmpty(); ++round) {
+        const QVector<std::function<void()>> landing = held;
+        held.clear();
+        for (const auto &done : landing) done();
+        turns();
+    }
+    CHECK(reads == readsBefore && demand.requested() == requested && demand.inFlight() == 0,
+          "DURING A SCRIPT RUN: 0 demand reads, 0 requests (%d reads, %d requests; the %d made before completed)",
+          reads - readsBefore, demand.requested() - requested, kCap);
+    demand.setSuspended(false);  // the run ended: the views re-publish (TileCache::republishAll)
+    hold = false;
+    demand.want(during);
+    demand.runNow();
+    turns();
+    CHECK(reads == readsBefore + 1 && demand.requested() - requested == int(during.size()) - kCap,
+          "...after it, the re-publish is read and the %d never requested are (%d)", int(during.size()) - kCap,
+          demand.requested() - requested);
+
+    // (5) AN EMPTY PUBLISH READS NOTHING.
+    readsBefore = reads;
+    demand.want({});
+    demand.runNow();
+    CHECK(reads == readsBefore && emptyReads == 0, "an empty publish reads nothing (%d empty reads)", emptyReads);
+
+    std::printf(failures ? "previews.demand: FAILED (%d)\n" : "previews.demand: PASSED\n", failures);
+    return failures ? 1 : 0;
+}

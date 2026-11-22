@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "shell/shellscripting.h"
 
+#include <QPointer>
+
 #include "bridge/enginehost.h"
 #include "data/database/database.h"
 #include "data/project.h"
@@ -22,9 +24,11 @@ For more information see the LICENSE file
 #include "scripting/scripthost.h"
 #include "services/editgate.h"
 #include "services/materialpreviewservice.h"
+#include "services/previewdemand.h"
 #include "services/projectservice.h"
 #include "services/services.h"
 #include "services/undoservice.h"
+#include "ui/controls/tilecache.h"
 #include "shell/modulehub.h"
 #include "ui/dialogs/preferencesdialog.h"
 #include "ui/panels/scriptconsole.h"
@@ -154,6 +158,13 @@ ShellScripting::ShellScripting(const Deps &deps, QObject *parent) : QObject(pare
 	// the run, after the one notice had already been raised.
 	connect(scriptEngine, &ScriptEngine::runningChanged, this, [refreshProperties](bool running) {
 		if (!running && refreshProperties) refreshProperties();
+	});
+	// THE RENDER DEMAND SERVES A PERSON LOOKING AT A VIEW, NEVER A SCRIPT (PREVIEWS-1): suspended for
+	// the run; at its end every live view publishes once, so the rows on screen are demanded then.
+	QPointer<PreviewDemand> demand(deps.services->previewDemand);
+	connect(scriptEngine, &ScriptEngine::runningChanged, this, [demand](bool running) {
+		if (demand) demand->setSuspended(running);
+		if (!running) TileCache::instance().republishAll();
 	});
 	// LIVE SCRIPT FEEDBACK, as the user left it (Preferences > Scripting,
 	// app.scriptPolicy). Live is the default: a person or an agent driving the

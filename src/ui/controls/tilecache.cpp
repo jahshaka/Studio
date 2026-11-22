@@ -384,6 +384,7 @@ TileViewWatcher::TileViewWatcher(QAbstractItemView *view, TileCache::Kind kind, 
     view->viewport()->installEventFilter(this);
     connect(view->verticalScrollBar(), &QScrollBar::valueChanged, this, &TileViewWatcher::schedule);
     connect(view->horizontalScrollBar(), &QScrollBar::valueChanged, this, &TileViewWatcher::schedule);
+    connect(&TileCache::instance(), &TileCache::republishRequested, this, &TileViewWatcher::schedule);
     // The model the view shows now (a view whose model is replaced later is not followed: none is).
     if (QAbstractItemModel *model = view->model()) {
         connect(model, &QAbstractItemModel::modelReset, this, &TileViewWatcher::schedule);

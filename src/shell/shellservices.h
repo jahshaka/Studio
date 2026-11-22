@@ -46,6 +46,7 @@ class SelectionService;
 class SessionMarkers;
 class SettingsManager;
 class ThumbnailService;
+class PreviewDemand;
 class PreviewService;
 class UndoService;
 struct StudioServices;
@@ -99,6 +100,7 @@ private:
     ClipboardService *mClipboard = nullptr;
     ThumbnailService *mThumbnails = nullptr;
     PreviewService *mPreviews = nullptr;
+    PreviewDemand *mDemand = nullptr;   ///< the shown views' render demand (TileCache::setDemand); before mPreviews dies
     Database *mDb = nullptr;   ///< the library the previews' import sink is set on (destroyPlain clears it)
     AssetService *mAssets = nullptr;
     AmbienceService *mAmbience = nullptr;

@@ -24,7 +24,9 @@ For more information see the LICENSE file
 #include "services/loadtimeline.h"
 #include "services/materialpreviewservice.h"
 #include "services/perfsampler.h"
+#include "services/previewdemand.h"
 #include "services/previewservice.h"
+#include "services/previewwriter.h"
 #include "bridge/enginehost.h"
 #include "services/playbackservice.h"
 #include "player/engineplayerview.h"
@@ -38,6 +40,7 @@ For more information see the LICENSE file
 #include "services/thumbnailgenerator.h"
 #include "services/thumbnailservice.h"
 #include "services/undoservice.h"
+#include "ui/controls/tilecache.h"
 
 ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent)
 {
@@ -90,6 +93,26 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
             });
         });
     }
+    // THE RENDER DEMAND (PREVIEWS-1 stage 2): what the shown views want and is missing or stale, read
+    // by guid and requested here (a sweep in flight draws them itself: nothing is read meanwhile).
+    {
+        PreviewService *previews = mPreviews;
+        mDemand = new PreviewDemand(
+            [previews, project](const QStringList &guids) {
+                QHash<QString, QString> need;
+                if (previews->sweepRunning()) return need;
+                for (const PreviewService::Row &row : previews->state(project, false, -1, guids))
+                    if (row.state == PreviewService::State::Missing || row.state == PreviewService::State::Stale)
+                        need.insert(row.guid, QStringLiteral("%1|%2").arg(QString::fromLatin1(PreviewService::stateName(row.state)), row.key));
+                return need;
+            },
+            [previews, project](const QString &guid, std::function<void()> done) {
+                previews->request(project, guid, [done](const PreviewService::Outcome &) { done(); });
+            },
+            previews::Writer::kQueueCap, this);
+        PreviewDemand *demand = mDemand;
+        TileCache::instance().setDemand(TileCache::Kind::Asset, [demand](const QStringList &wanted) { demand->want(wanted); });
+    }
     mAssets = new AssetService(db, project);
 
     // THE HOVER PREVIEW (MATERIAL-PREVIEW-1). Constructed after the service
@@ -111,6 +134,7 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     mAggregate->clipboard = mClipboard;
     mAggregate->thumbnails = mThumbnails;
     mAggregate->previews = mPreviews;
+    mAggregate->previewDemand = mDemand;
     mSceneEdit->setPreviews(mPreviews);
     mAggregate->assets = mAssets;
     // THE WORLD'S MUSIC (audit D8): a Music guid resolves the way every bound
@@ -166,8 +190,11 @@ void ShellServices::destroyPlain()
     delete mThumbnails;
     mThumbnails = nullptr;
     // Its writer DRAINS here and joins - before the library closes (shutdown step 7). The import
-    // sink that names it goes first.
+    // sink and the render demand that name it go first.
     if (mDb) mDb->setImportPictureSink({});
+    TileCache::instance().setDemand(TileCache::Kind::Asset, {});
+    delete mDemand;
+    mDemand = nullptr;
     delete mPreviews;
     mPreviews = nullptr;
     delete mAssets;

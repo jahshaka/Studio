@@ -102,6 +102,9 @@ public:
     void publishVisible(int token, const QStringList &guids);
     /// The view cannot say (it is hidden): UNKNOWN until its next publish — its asks are kept.
     void withdrawVisible(int token);
+    /// Every live view publishes once more (its own queued publish): a script run ended, and the
+    /// render demand it suspended hears what is on screen now.
+    void republishAll() { emit republishRequested(); }
 
     /// The tile, or a null pixmap while it is on its way (the request is queued). `token` 0: wanted
     /// whatever any view shows; else the asking view's token.
@@ -138,6 +141,8 @@ public:
 
 signals:
     void tileReady(TileCache::Kind kind, const QString &guid);
+    /// republishAll: every TileViewWatcher schedules its publish.
+    void republishRequested();
 
 private:
     TileCache();

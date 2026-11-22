@@ -38,6 +38,7 @@ class MaterialPreviewService;
 class ClipboardService;
 class ThumbnailService;
 class PreviewService;
+class PreviewDemand;
 class AssetService;
 class AmbienceService;
 class PerfSampler;
@@ -67,6 +68,8 @@ struct StudioServices
     /// THE PREVIEW SERVICE (PREVIEWS-1, services/previewservice.h): every stored preview of a
     /// library row, its key and its one writer. Null in hosts with no library.
     PreviewService   *previews   = nullptr;
+    /// The shown views' render demand (services/previewdemand.h): suspended while a script runs.
+    PreviewDemand    *previewDemand = nullptr;
     AssetService     *assets     = nullptr;
     AmbienceService  *ambience   = nullptr;   ///< the world's music, played (audit D8)
     /// The session log's periodic performance sampler (SESSION_LOG_SPEC §8-R3).
