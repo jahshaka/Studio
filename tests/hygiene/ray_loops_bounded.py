@@ -15,7 +15,10 @@
 #       jahRqTerminate( q ) and breaks; every definition of jahRqStepBoundNow answers kJahRqStepBound or a min() with it
 #       (a test door may LOWER the bound, never raise it);
 #   (3) the law is kJahRqStepLaw = 1024u and the bound kJahRqStepBound = 4u * kJahRqStepLaw, and the host's mirror
-#       (ScreenProbeGather.h kRayQueryStepLaw / kRayQueryStepBound) holds the same numbers.
+#       (ScreenProbeGather.h kRayQueryStepLaw / kRayQueryStepBound) holds the same numbers;
+#   (4) A CUT RAY ANSWERS AS OCCLUDED (the lead's ruling (B)): JAH_RQ_LOOP_BEGIN_ raises its `cut` flag at the bound,
+#       JAH_RQ_PROCEED_TRANSMIT sets its T to 0 on it, and every call of JAH_RQ_PROCEED, _PANES and _OPAQUE names a
+#       `cut` flag that its caller READS again within the next 12 code lines (the flag never left unread).
 # The row prints the loops it found through the counted family (the four JAH_RQ_PROCEED forms' call sites).
 # A NEGATIVE CONTROL runs first: synthetic trees with a raw loop, a family head with no cut, a bound a door can raise
 # and a mirror that differs (each red), a raw loop inside a comment and the lawful shape (green).
@@ -38,6 +41,7 @@ SRC_EXTS = (".comp", ".glsl", ".vert", ".frag")
 MEDIA_EXTS = (".glsl", ".any")
 PROCEED = re.compile(r"\bjahRqProceed\s*\(")
 FAMILY = re.compile(r"\b(JAH_RQ_PROCEED(?:_TRANSMIT|_PANES|_OPAQUE)?)\s*\(")
+FLAGGED = re.compile(r"\bJAH_RQ_PROCEED(?:_PANES|_OPAQUE)?\s*\(([^()]*)\)")
 LAW = 1024
 
 
@@ -83,6 +87,13 @@ def check(root):
             fm = FAMILY.search(line)
             if fm and not re.match(r"\s*#\s*define\b", line) and not (rel == ALPHA and define):
                 loops.append("%s:%d %s" % (rel, n, fm.group(1)))
+                gm = FLAGGED.search(line)
+                if gm:
+                    flag = gm.group(1).split(",")[-1].strip()
+                    after = "\n".join(text.split("\n")[n:n + 12])
+                    if not re.fullmatch(r"[A-Za-z_]\w*", flag) or not re.search(r"\b%s\b" % re.escape(flag), after):
+                        bad.append("(4) %s:%d: %s's cut flag '%s' is not read within 12 lines (a cut ray must answer "
+                                   "as occluded)" % (rel, n, fm.group(1), flag))
             if not line.rstrip().endswith("\\"):
                 define = None
     if good != 1:
@@ -92,6 +103,11 @@ def check(root):
     if not (re.search(r"jahRqBound_\s*=\s*jahRqStepBoundNow\s*\(\s*\)", head) and
             re.search(r">=\s*jahRqBound_", head) and re.search(r"\bjahRqTerminate\s*\(", head) and "break" in head):
         bad.append("(2) %s: JAH_RQ_LOOP_BEGIN_ does not terminate its query at jahRqStepBoundNow()'s bound" % ALPHA)
+    if not re.search(r"\(\s*cut\s*\)\s*=\s*true", head):
+        bad.append("(4) %s: JAH_RQ_LOOP_BEGIN_ raises no cut flag at the bound" % ALPHA)
+    transmit = macro(alpha, "JAH_RQ_PROCEED_TRANSMIT") or ""
+    if not re.search(r"if\s*\(\s*jahRqCutT_\s*\)\s*\\?\s*\(\s*T\s*\)\s*=\s*0\.0", transmit):
+        bad.append("(4) %s: JAH_RQ_PROCEED_TRANSMIT does not answer a cut ray's T as 0 (blocked)" % ALPHA)
     bodies = re.findall(r"uint\s+jahRqStepBoundNow\s*\(\s*\)\s*\{(.*?)\n?\}", alpha, flags=re.S)
     if not bodies:
         bad.append("(2) %s: no jahRqStepBoundNow()" % ALPHA)
@@ -126,26 +142,36 @@ uint jahRqStepBoundNow()
 	const uint b = 0u;
 	return b == 0u ? kJahRqStepBound : min( b, kJahRqStepBound );
 }
-#define JAH_RQ_LOOP_BEGIN_( q ) \\
+#define JAH_RQ_LOOP_BEGIN_( q, cut ) \\
 	{ \\
 		const uint jahRqBound_ = jahRqStepBoundNow(); \\
 		uint jahRqTrips_ = 0u; \\
+		( cut ) = false; \\
 		while( jahRqProceed( q ) ) \\
 		{ \\
 			if( ++jahRqTrips_ >= jahRqBound_ ) \\
 			{ \\
 				jahRqTerminate( q ); \\
+				( cut ) = true; \\
 				break; \\
 			}
 #define JAH_RQ_LOOP_END_ \\
 		} \\
 	}
-#define JAH_RQ_PROCEED( q ) \\
-	JAH_RQ_LOOP_BEGIN_( q ) \\
+#define JAH_RQ_PROCEED( q, cut ) \\
+	JAH_RQ_LOOP_BEGIN_( q, cut ) \\
 	JAH_RQ_LOOP_END_
+#define JAH_RQ_PROCEED_TRANSMIT( q, T ) \\
+	{ \\
+	bool jahRqCutT_; \\
+	JAH_RQ_LOOP_BEGIN_( q, jahRqCutT_ ) \\
+	JAH_RQ_LOOP_END_ \\
+	if( jahRqCutT_ ) \\
+		( T ) = 0.0; \\
+	}
 '''
 LAWFUL_MIRROR = "constexpr uint32_t kRayQueryStepLaw = 1024u;\nconstexpr uint32_t kRayQueryStepBound = 4u * kRayQueryStepLaw;\n"
-LAWFUL_JOB = "void main()\n{\n\tJahRq q;\n\tJAH_RQ_PROCEED( q )\n}\n"
+LAWFUL_JOB = "void main()\n{\n\tJahRq q;\n\tbool cut;\n\tJAH_RQ_PROCEED( q, cut )\n\tif( cut )\n\t\treturn;\n}\n"
 
 
 def synthetic(**over):
@@ -170,6 +196,9 @@ def self_test():
          True),
         ("a bound a door can raise", {ALPHA.replace("/", "__"): LAWFUL_ALPHA.replace(
             "return b == 0u ? kJahRqStepBound : min( b, kJahRqStepBound );", "return b == 0u ? kJahRqStepBound : b;")}, True),
+        ("a cut flag never read", {"src__rayquery__rq_job.comp": LAWFUL_JOB.replace("\tif( cut )\n\t\treturn;\n", "")}, True),
+        ("a transmit that keeps its T on a cut", {ALPHA.replace("/", "__"): LAWFUL_ALPHA.replace("( T ) = 0.0;", "( T ) = ( T );")},
+         True),
         ("a mirror that differs", {MIRROR.replace("/", "__"): LAWFUL_MIRROR.replace("1024u", "2048u")}, True),
         ("a raw loop inside a comment", {"src__rayquery__rq_quiet.comp": "/* " + raw + " */\n// while( jahRqProceed( q ) )\n"},
          False),
@@ -199,7 +228,7 @@ def main():
         print("  FAIL: " + b)
     if not bad:
         print("  ok: one jahRqProceed(, in JAH_RQ_LOOP_BEGIN_, cut at kJahRqStepBound = 4096 (the law 1024); the host's "
-              "mirror equal; %d ray query loops through the counted family:" % len(loops))
+              "mirror equal; every cut answered as occluded; %d ray query loops through the counted family:" % len(loops))
         for l in loops:
             print("    " + l)
     fails += len(bad)

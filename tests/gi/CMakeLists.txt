@@ -1219,6 +1219,27 @@ jah_gpu_row(gi.pane_stack_cards CLASS engine COMMAND test_gi_pane_stack cards
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.pane_stack_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 197)
+# ...and its CUT arm (GATHER-HANG-1 stage 2, the lead's ruling (B): a cut ray answers as occluded; test_gi_pane_cut.cpp, its
+# own file: its view declares its route): a mirror floor under four
+# slabs and an emissive ceiling, the reflection's rays alone - uncut the floor reads T^4 of the hole; the door
+# rayquery.stepBound 2 cuts every reflection ray: every texel finite, the floor exactly 0, the counter 2. Red on the base:
+# the status field (rayQuery.proceedStepsMax) and the door do not exist.
+add_executable(test_gi_pane_cut test_gi_pane_cut.cpp)
+set_target_properties(test_gi_pane_cut PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_pane_cut PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_pane_cut PRIVATE JahshakaEngine)
+add_dependencies(test_gi_pane_cut JahshakaEngineMedia)
+jah_gpu_row(gi.pane_stack_cut CLASS engine COMMAND test_gi_pane_cut
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.pane_stack_cut PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 55)
 # gi.lamps_outside (PHOTON-7 10-4, R9; L9) — SEVENTEEN LAMPS OUTSIDE A SEALED BOX LIGHT NOTHING INSIDE IT: a closed box in a
 # black world, seventeen casting point lamps around it, the shadow-map budget at 2 (fifteen Forward+ lamps); through an
 # opening they light the inside (the control), sealed every pixel inside reads 0 within a code (test_gi_lamps_outside.cpp
