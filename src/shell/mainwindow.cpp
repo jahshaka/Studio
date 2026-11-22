@@ -1523,8 +1523,13 @@ void MainWindow::duplicateNode()
 
 void MainWindow::createMaterial()
 {
-    sceneEditService->createMaterialFromNode(selectionService->selected(),
-                                             docks->assetTray()->assetItem.selectedGuid);
+    // THE VERB's SERVICE FUNCTION (materials.createFromNode calls the same).
+    QString error;
+    if (sceneEditService->createMaterialFromNode(selectionService->selected(),
+                                                 docks->assetTray()->assetItem.selectedGuid,
+                                                 &error).isEmpty())
+        QMessageBox::warning(this, tr("Create Material"),
+                             tr("The material could not be created: %1").arg(error));
 }
 
 

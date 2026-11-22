@@ -528,9 +528,16 @@ public:
     /// this.
     bool resetMaterial(iris::SceneNodePtr node);
 
-    /// Snapshots the node's material into a .material asset registered under
-    /// folderGuid (the shell passes its asset browser's current folder).
-    void createMaterialFromNode(iris::SceneNodePtr node, const QString &folderGuid);
+    /// CREATE MATERIAL FROM A NODE (PREVIEWS-1 stage 0): the mesh node's
+    /// material, snapshotted into a NEW material bundle that is the OPEN
+    /// PROJECT's own (MaterialBundle::create — the definition a store object,
+    /// its members derived as edges), pinned into the project with its members
+    /// and filed in `folderGuid` (empty or the project's guid = the root), then
+    /// its tile rendered (materialtile::mint). Named after the node, made
+    /// unique. Answers the new guid, or empty with `error` saying why.
+    /// `materials.createFromNode` and the editor's Create Material both call it.
+    QString createMaterialFromNode(iris::SceneNodePtr node, const QString &folderGuid,
+                                   QString *error = nullptr);
 
     /// What an export did. `error` empty = the archive was written.
     struct NodeExportResult {

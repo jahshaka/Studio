@@ -219,6 +219,15 @@ QVector<VerbInfo> MaterialsApi::verbs() const
           "the root — and both project drawers, the editor's asset tray and the Materials module's, show it at "
           "once. It is what the tray's right-click > Create Material passes. Without the key nothing is pinned.",
           Needs::Document },
+        { "createFromNode", "materials.createFromNode(nodeId, {folder}) -> guid",
+          "The editor's CREATE MATERIAL on a mesh node, as a verb (the menu calls the same service function): "
+          "the node's material is snapshotted into a NEW material bundle that is THE OPEN PROJECT'S OWN — its "
+          "definition a store object naming its maps by guid, its member textures derived as edges and pinned "
+          "into the project — named after the node (made unique), filed in {folder} (a folder guid from "
+          "assets.folders(), or the project's guid or nothing for the root), and its tile rendered on the "
+          "studio sphere (headless the stored fallback stands). Refuses a node that is not a mesh and a session "
+          "with no project open.",
+          Needs::Document },
         { "projectDrawer", "materials.projectDrawer() -> [{guid, name}]",
           "What the Materials module's PROJECT drawer is showing, in order — read off the widget, so a script "
           "(and scripting.e2e.tray_panel) can prove the two project drawers are ONE list. The drawer is the "
@@ -896,6 +905,24 @@ QString MaterialsApi::create(const QString &name, const QVariantMap &options)
     // Adopt the freshly built graph as the current one directly.
     if (ownedGraph && mGraphApi) mGraphApi->setCurrent(std::move(ownedGraph), assetGuid);
     return assetGuid;
+}
+
+QString MaterialsApi::createFromNode(const QString &nodeId, const QVariantMap &options)
+{
+    if (!host.db || !host.services || !host.services->sceneEdit) {
+        fail("materials: not available in this session");
+        return QString();
+    }
+    if (!requireProject()) return QString();
+    const auto scene = host.services->sceneEdit->scene();
+    if (!scene) { fail("materials.createFromNode: no scene is open"); return QString(); }
+    QString error;
+    const QString guid = host.services->sceneEdit->createMaterialFromNode(
+        findNodeByGuid(scene->getRootNode(), nodeId),
+        options.value(QStringLiteral("folder")).toString(), &error);
+    if (guid.isEmpty())
+        fail(QStringLiteral("materials.createFromNode: '%1': %2").arg(nodeId, error));
+    return guid;
 }
 
 QVariantList MaterialsApi::projectDrawer()

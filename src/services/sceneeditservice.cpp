@@ -32,7 +32,6 @@ For more information see the LICENSE file
 #include <QDebug>
 #include <QDir>
 #include <QDirIterator>
-#include <QFile>
 #include <QFileInfo>
 #include <QImageReader>
 #include <QJsonDocument>
@@ -83,15 +82,16 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/imagematerial.h"
 #include "services/materialdefaults.h"
 #include "services/materialbundle.h"
+#include "services/materialtile.h"
 #include "services/materialpresetassets.h"
 #include "services/presetedit.h"
 #include "services/materialpresetseeder.h"
 #include "services/projectassets.h"
+#include "services/projectfolders.h"
 #include "services/shippedassets.h"
 #include "services/scenenodehelper.h"
 #include "services/thumbnailmanager.h"
 #include "viewport/ieditorviewport.h"
-#include "services/thumbnailgenerator.h"
 #include "bridge/enginehost.h"
 #include "io/assetmanager.h"
 #include "io/ziphelper.h"
@@ -1833,104 +1833,47 @@ bool SceneEditService::resetMaterial(iris::SceneNodePtr node)
     return true;
 }
 
-void SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QString &folderGuid)
+QString SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const QString &folderGuid,
+                                                 QString *error)
 {
-    if (!!node) {
-        QJsonObject materialDef;
-        // (nick) the material version gets updated during writing so
-        // it's safe to assume we're working the v2 material structure
-        SceneWriter::writeSceneNodeMaterial(
-            materialDef,
-            node.staticCast<iris::MeshNode>()->getMaterial()
-        );
+    const auto refuse = [error](const QString &why) {
+        if (error) *error = why;
+        return QString();
+    };
+    if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh)
+        return refuse(QStringLiteral("the node is not a mesh node"));
+    if (!db || !project || project->getProjectGuid().isEmpty())
+        return refuse(QStringLiteral("no project is open"));
+    const auto mesh = node.staticCast<iris::MeshNode>();
+    if (!mesh->getMaterial()) return refuse(QStringLiteral("the node has no material"));
+    const QString projectGuid = project->getProjectGuid();
 
-        // materialDef will be mutated
-        // it's only used to generate a file for the thumbnail
-        auto materialDefOriginal = materialDef;
+    // THE NODE'S MATERIAL AS A DEFINITION: its maps are named by asset guid
+    // (SceneWriter, TEX-REF-1), so the bundle's members are derived from it.
+    QJsonObject definition;
+    SceneWriter::writeSceneNodeMaterial(definition, mesh->getMaterial());
+    const QString name = MaterialBundle::uniqueName(
+        db, mesh->getName().isEmpty() ? QStringLiteral("New Material") : mesh->getName());
 
-        // replace material guid with texture name
-        auto materialValues = materialDef["values"].toObject();
-        for (const auto &key : materialValues.keys()) {
-            if (materialValues[key].isString())
-            {
-                auto texName = db->fetchAsset(materialValues[key].toString()).name;
-                if (texName.isEmpty())
-                    continue;
-                materialValues[key] = texName;
-            }
-        }
-        materialDef["values"] = materialValues;
-
-        QJsonDocument saveDoc;
-        saveDoc.setObject(materialDefOriginal);
-
-        QString fileName = IrisUtils::join(
-            project->getProjectFolder(),
-            IrisUtils::buildFileName(node.staticCast<iris::MeshNode>()->getName(), "material")
-        );
-
-        QFile file(fileName);
-        file.open(QFile::WriteOnly);
-        file.write(saveDoc.toJson());
-        file.close();
-
-        // WRITE TO DATABASE
-        const QString assetGuid = GUIDManager::generateGUID();
-        QByteArray binaryMat = QJsonDocument(materialDefOriginal).toJson();
-        db->createAssetEntry(
-            assetGuid,
-            QFileInfo(fileName).fileName(),
-            static_cast<int>(ModelTypes::Material),
-            folderGuid,
-            assethome::project(project->getProjectGuid()),
-            assethome::Origin::Create,
-            QString(),
-            QString(),
-            QByteArray(),
-            QByteArray(),
-            QByteArray(),
-            binaryMat
-        );
-
-        ThumbnailGenerator::getSingleton()->requestThumbnail(
-            ThumbnailRequestType::Material, fileName, assetGuid
-        );
-
-        emit assetViewRefreshRequested();
-
-
-        MaterialReader reader;
-        reader.setProject(project);
-        auto material = reader.parseMaterialTyped(materialDefOriginal, db);
-
-        // Add all its textures as dependencies too
-        auto values = materialDefOriginal["values"].toObject();
-        for (const auto &prop : material->properties()) {
-            if (prop->type == iris::PropertyType::Texture) {
-                if (!values.value(prop->name).toString().isEmpty()) {
-                    db->createDependency(
-                        static_cast<int>(ModelTypes::Material),
-                        static_cast<int>(ModelTypes::Texture),
-                        assetGuid, values.value(prop->name).toString(),
-                        project->getProjectGuid()
-                    );
-                }
-            }
-        }
-
-        // No AssetManager material payload (MATERIAL-PREVIEW-1 item c): the
-        // session registry carries guids and names, never hydrated materials.
-        // The one reader there ever was — the viewport's hover preview —
-        // resolves through resolveMaterial now.
-
-        // it's assumed that the thumbnail rendering will
-        // be finished by the time this is executed
-        QFile::remove(fileName);
+    // THE ONE MINT (MaterialBundle::create): the definition a store object,
+    // its edges reconciled, its sidecar written — the project's own row.
+    QString why;
+    const QString guid = MaterialBundle::create(db, name, definition,
+                                                assethome::project(projectGuid), QByteArray(), &why);
+    if (guid.isEmpty()) return refuse(why);
+    const ProjectAssets::Result pinned =
+        ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Direct);
+    if (!pinned.ok()) return refuse(pinned.error);
+    if (!folderGuid.isEmpty() && folderGuid != projectGuid) {
+        const projectfolders::Result filed =
+            projectfolders::moveTo(db, projectGuid, { guid }, folderGuid);
+        if (!filed.ok) return refuse(filed.error);
     }
-    else {
-        qDebug() << "Need an active scenenode!";
-        return;
-    }
+    projectfolders::announce(projectGuid);
+    // ONE GESTURE, ONE RENDER: the tile is a render of the material
+    // (materialtile.h); headless the stored fallback stands.
+    materialtile::mint(db, project, guid, "materials.createFromNode");
+    return guid;
 }
 
 assetshare::BundleStage SceneEditService::stageNodeExport(const iris::SceneNodePtr &node,

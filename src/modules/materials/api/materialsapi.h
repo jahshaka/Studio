@@ -78,6 +78,12 @@ public:
     /// was this with the flag always on and a second ModelTypes::Shader row —
     /// one name survives (CRUD).
     Q_INVOKABLE QString create(const QString &name, const QVariantMap &options = QVariantMap());
+    /// CREATE MATERIAL FROM A NODE (PREVIEWS-1 stage 0): the mesh node's
+    /// material as a new bundle of the open project, filed in {folder} —
+    /// SceneEditService::createMaterialFromNode, which the editor's Create
+    /// Material calls too.
+    Q_INVOKABLE QString createFromNode(const QString &nodeId,
+                                       const QVariantMap &options = QVariantMap());
     /// THE MODULE'S PROJECT DRAWER, as the widget shows it: [{guid, name}]
     /// (DRAWERS-1). A read verb, so a suite can prove the module's drawer and
     /// the editor's tray are ONE list.

@@ -1,0 +1,92 @@
+// scripting.e2e.material_from_node — PREVIEWS-1 stage 0: CREATE MATERIAL FROM A
+// NODE MINTS A MATERIAL BUNDLE (materials.createFromNode; the editor's Create
+// Material calls the same SceneEditService function).
+//
+// The base minted a RAW row past MaterialBundle (createAssetEntry with the
+// definition as the row's blob only: no store object, no sidecar, no pin) and
+// wrote a temporary .material file into the project folder for a queued render
+// that read it after it was deleted. What this answers, headless:
+//
+//   1. THROUGH THE BUNDLE: the definition is a STORE OBJECT (assets.exportRaw
+//      of the row alone writes a file; a blob-only row has none), and the
+//      material read back onto a second node is the first node's material —
+//      its colour, its roughness and its map by asset guid.
+//   2. IN THE PROJECT: the project's own row (home "project"), pinned by the
+//      open project, listed in its materials and filed in the folder given.
+//   3. WITH ITS EDGES: the map is a member of the bundle (slot baseColorMap)
+//      and a dependency of the row.
+//   4. NAMED AFTER THE NODE, unique: a second create from the same node takes
+//      "<name>-1"; exactly one row is minted a create.
+//   5. A node that is not a mesh is refused and mints nothing.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+
+var PNG = "@JAH_MFN_PNG@";
+var EXPORT_DIR = "@JAH_MFN_EXPORT@";
+
+var stamp = Date.now();
+var proj = project.create("Material From Node " + stamp);
+assert(proj.length > 10, "project.create");
+
+var cube = scene.addPrimitive("Cube");
+assert(material.set(cube, { baseColor: "#c03020", roughness: 0.35, baseColorMap: PNG }) === true,
+       "material.set: a colour, a roughness and a map from a file");
+var source = material.get(cube);
+var tex = source.textureAssets.baseColorMap;
+assert(tex && tex.length > 10, "the node's map names an asset guid");
+
+var folder = assets.createFolder("From Node " + stamp);
+assert(folder.length > 10, "assets.createFolder");
+var materialsBefore = assets.list({ scope: "project", type: "material" }).length;
+
+var guid = materials.createFromNode(cube, { folder: folder });
+assert(guid && guid.length > 10, "materials.createFromNode -> a guid");
+
+// ---- 1. THROUGH THE BUNDLE ------------------------------------------------
+var raw = assets.exportRaw(guid, EXPORT_DIR + "/" + stamp, { dependencies: false, hash: false });
+assert(raw.files.length === 1,
+       "the definition is a STORE OBJECT: exportRaw of the row alone wrote " + raw.files.length + " file(s)");
+var meta = assets.metadata(guid);
+assert(meta.type === "material", "the row is a material");
+var wearer = scene.addPrimitive("Sphere");
+assert(material.apply(wearer, guid) === true, "material.apply(<the new material>) on a second node");
+var back = material.get(wearer);
+assert(JSON.stringify(back.baseColor) === JSON.stringify(source.baseColor),
+       "read back: baseColor " + JSON.stringify(back.baseColor));
+assert(Math.abs(back.roughness - source.roughness) < 1e-6, "read back: roughness " + back.roughness);
+assert(back.textureAssets.baseColorMap === tex, "read back: baseColorMap names the same asset");
+
+// ---- 2. IN THE PROJECT ----------------------------------------------------
+assert(meta.home === "project", "the project's own row (home " + meta.home + ")");
+assert(assets.pins(guid).some(function (p) { return p.project === proj; }),
+       "pinned by the open project");
+var listed = assets.list({ scope: "project", type: "material" });
+assert(listed.some(function (a) { return a.guid === guid; }), "listed in the project's materials");
+assert(listed.length === materialsBefore + 1, "exactly one material minted");
+var filedIn = assets.folders().filter(function (f) { return f.guid === folder; });
+assert(filedIn.length === 1 && filedIn[0].count === 1, "filed in the folder given (count 1)");
+
+// ---- 3. WITH ITS EDGES ----------------------------------------------------
+var members = materials.members(guid);
+assert(members.some(function (m) { return m.guid === tex && m.slot === "baseColorMap"; }),
+       "the map is a member of the bundle, in slot baseColorMap");
+assert(assets.dependencies(guid).indexOf(tex) >= 0, "and a dependency of the row");
+
+// ---- 4. NAMED AFTER THE NODE, UNIQUE ---------------------------------------
+var second = materials.createFromNode(cube);
+assert(second.length > 10 && second !== guid, "a second create from the same node -> a second guid");
+assert(assets.metadata(second).name === meta.name + "-1",
+       "named unique: '" + meta.name + "' then '" + assets.metadata(second).name + "'");
+
+// ---- 5. NOT A MESH: REFUSED -----------------------------------------------
+var light = scene.addLight("point");
+var before = assets.list({ scope: "project", type: "material" }).length;
+var refused = false;
+try { materials.createFromNode(light); } catch (e) { refused = true; }
+assert(refused, "a light is refused");
+assert(assets.list({ scope: "project", type: "material" }).length === before, "…and nothing is minted");
+
+console.log("material_from_node: all assertions passed");

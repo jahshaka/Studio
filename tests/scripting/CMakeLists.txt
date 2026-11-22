@@ -799,6 +799,26 @@ set_tests_properties(scripting.e2e.preset_apply PROPERTIES
     LABELS "scripting"
     TIMEOUT 60)
 
+# scripting.e2e.material_from_node — PREVIEWS-1 stage 0: materials.createFromNode (the editor's Create Material)
+# mints a MATERIAL BUNDLE: its definition a store object read back onto a second node, the project's own row pinned
+# and filed in the folder given, its map a member and an edge, named after the node and unique, a light refused.
+# Document verbs only -> --headless. A FRESH HOME: the unique-name arm reads every material's name.
+set(_mfnHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-material_from_node)
+set(JAH_MFN_PNG "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/implane_wide.png")
+set(JAH_MFN_EXPORT "${_mfnHome}/export")
+configure_file(scripts/e2e_material_from_node.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_from_node.js @ONLY)
+jah_fresh_home_fixture(scripting.e2e.material_from_node.fresh_home materialFromNodeHome "${_mfnHome}" LABELS "scripting")   # NULL render system (--headless): no shader cache
+file(MAKE_DIRECTORY ${_mfnHome}/run)
+add_test(NAME scripting.e2e.material_from_node
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/e2e_material_from_node.js --headless
+         WORKING_DIRECTORY ${_mfnHome}/run)
+set_tests_properties(scripting.e2e.material_from_node PROPERTIES
+    ENVIRONMENT "HOME=${_mfnHome};JAHSHAKA_DATA_ROOT=${_mfnHome}/.local/share/Jahshaka"
+    FIXTURES_REQUIRED materialFromNodeHome
+    LABELS "scripting"
+    TIMEOUT 60)
+jah_no_display(scripting.e2e.material_from_node)
+
 # scripting.e2e.preset_edit (archived: archive/tests/scripting) — PRESET-EDIT-1: A PRESET A PROJECT HOLDS IS THE
 # PROJECT'S TO EDIT, and the FIRST EDIT is what makes the copy (the owner's
 # rule, 2026-09-21). The copy keeps the preset's NAME, the project's pin moves
