@@ -484,18 +484,28 @@ int main(int argc, char **argv)
             heavy.albedo = Colour(0.3f, 0.6f, 0.9f);
             heavy.metalness = 0.0f;
             heavy.roughness = 0.5f;
-            const MaterialId heavyMat = ps->createPbrMaterial(heavy);
-            for (int i = 0; i < 6; ++i) {
-                // 24x24 .. 34x34 quads: 1,152 to 2,312 triangles each, against
-                // the editor's twelve-triangle cubes. A compaction answer taken
-                // from the wrong structure is then wrong by orders of magnitude,
-                // which is what makes the copy land in an undersized buffer
-                // instead of quietly working.
-                const NodeId c = ps->createNode();
-                const MeshId m = ps->createMesh(gridMesh(24u + unsigned(i) * 2u));
-                ps->attachMesh(c, m, heavyMat);
-                enginetest::setNodePosition(ps, c, Vec3(float(i) * 2.0f, 0.0f, 0.0f));
-            }
+            // THE SIX GRIDS, built the same way in the parked scene and, below, in
+            // the CONTROL scene: the same meshes, material, positions and camera.
+            // Returns their triangles by construction (2 n^2 each: 10,232).
+            const auto addGrids = [&heavy](Scene *s) {
+                const MaterialId mat = s->createPbrMaterial(heavy);
+                int tris = 0;
+                for (int i = 0; i < 6; ++i) {
+                    // 24x24 .. 34x34 quads: 1,152 to 2,312 triangles each, against
+                    // the editor's twelve-triangle cubes. A compaction answer taken
+                    // from the wrong structure is then wrong by orders of magnitude,
+                    // which is what makes the copy land in an undersized buffer
+                    // instead of quietly working.
+                    const unsigned n = 24u + unsigned(i) * 2u;
+                    const NodeId c = s->createNode();
+                    const MeshId m = s->createMesh(gridMesh(n));
+                    s->attachMesh(c, m, mat);
+                    enginetest::setNodePosition(s, c, Vec3(float(i) * 2.0f, 0.0f, 0.0f));
+                    tris += int(2u * n * n);
+                }
+                return tris;
+            };
+            const int gridTris = addGrids(ps);
             pv->setCamera(enginetest::testCameraDescLookAt(Vec3(0, 3, 10), Vec3(0, 0, 0)));
             render(e, 1);                       // build its BLASes, queue the size queries
             const RayQueryStatus parked = ps->published().rayQuery;
@@ -538,23 +548,6 @@ int main(int argc, char **argv)
                         (unsigned long long)back.blasBytes, int(back.enabled));
             CHECK(back.enabled && back.instances == 6,
                   "the UN-PARKED scene reads its own compaction answers and still holds its set");
-            // AND THEY ARE ITS OWN ANSWERS. This is the assertion that actually
-            // catches a stolen slot, and it is a SIZE one because on this driver
-            // the corruption is silent: an 86 KB structure compacted into a
-            // 1,152-byte buffer neither crashes nor renders visibly wrong, it
-            // just records an impossible size. A compacted bottom-level
-            // structure runs about 25.7 bytes per triangle on Ada (NVIDIA's
-            // published figure; measured here at 22.9), and a scene that read
-            // another structure's answers reports far less — measured at 13.9
-            // with the previous cursor-and-count ring, which handed this scene's
-            // slots to the editor's churn. Eighteen sits between them with room
-            // on both sides and means something physically: no real compaction
-            // fits a triangle into eighteen bytes.
-            CHECK_MSG(back.triangles > 0 &&
-                          back.blasBytes >= (unsigned long long)(back.triangles) * 18ull,
-                  "...and those answers are its OWN: %llu bytes for %d triangles (%.1f B/tri)",
-                  (unsigned long long)back.blasBytes, back.triangles,
-                  back.triangles ? double(back.blasBytes) / double(back.triangles) : 0.0);
             {
                 std::vector<float> pr, ph;
                 // Straight down onto the first grid, whose surface is y = 0.5.
@@ -572,6 +565,72 @@ int main(int argc, char **argv)
                       "...and the editor scene is unharmed");
             }
             pv->setScene(nullptr);
+
+            // AND THOSE ANSWERS ARE ITS OWN — held against a CONTROL, never a
+            // vendor's bytes-per-triangle figure. It is a SIZE check because on
+            // this driver the corruption is silent: an 86 KB structure compacted
+            // into a 1,152-byte buffer neither crashes nor renders visibly wrong,
+            // it just records another structure's size.
+            // THE LAW: a compacted bottom-level structure's size is what the
+            // device's compacted-size query answers for THAT build, a function of
+            // its geometry (vertices, indices, their order), its build flags and
+            // the device. The control scene below holds the SAME six grids
+            // (addGrids: the same meshes, material, positions and camera), built
+            // fresh in this process on this device and drawn alone until its
+            // compaction ran (no churn, no park). So a parked scene that read ITS
+            // OWN compaction answers holds exactly the control's triangles and
+            // exactly the control's bytes; one that read another structure's
+            // answer (a stolen or neighbouring slot: measured 13.9 B/tri with the
+            // old cursor-and-count ring, against 17.5 its own) records that
+            // structure's size and the equality breaks. A byte count: no band.
+            View *cv = e->createOffscreenView("rayquery-control", 64, 64, Colour(0, 0, 0),
+                                              jahshaka::engine::OffscreenContract::Live);
+            Scene *cs = e->createScene("rayquery-control");
+            CHECK(cv && cs, "a control view and scene exist");
+            if (cv && cs) {
+                cv->setScene(cs);
+                cs->setAmbient(Colour(0.3f, 0.3f, 0.3f), Colour(0.2f, 0.2f, 0.2f));
+                addGrids(cs);
+                cv->setCamera(enginetest::testCameraDescLookAt(Vec3(0, 3, 10), Vec3(0, 0, 0)));
+                // THE SETTLE, BOUNDED: frame 1 builds the six structures and asks
+                // for their compacted sizes; the answers are read frames later
+                // (runCompaction: not before the frames in flight, and only once
+                // the query is available), and the status is re-summed on the
+                // frame the copies replace the structures. Settled = the bytes
+                // fell below the as-built bytes and then held still for
+                // kStillFrames; never past kSettleBound frames.
+                constexpr int kStillFrames = 4, kSettleBound = 30;
+                render(e, 1);
+                const unsigned long long built = cs->published().rayQuery.blasBytes;
+                unsigned long long last = built;
+                int still = 0, frames = 1;
+                while (frames < kSettleBound && !(last < built && still >= kStillFrames)) {
+                    render(e, 1);
+                    ++frames;
+                    const unsigned long long b = cs->published().rayQuery.blasBytes;
+                    still = (b == last) ? still + 1 : 0;
+                    last = b;
+                }
+                const RayQueryStatus control = cs->published().rayQuery;
+                std::printf("   control: %d blas / %d tris, %llu blasBytes (as built %llu), settled in %d frames\n",
+                            control.blasCount, control.triangles,
+                            (unsigned long long)control.blasBytes, built, frames);
+                CHECK_MSG(last < built && still >= kStillFrames,
+                          "the control's compaction ran and settled within %d frames (%d)", kSettleBound,
+                          frames);
+                // THE CONTROL READS ABOVE ZERO, and its geometry is the six grids.
+                CHECK_MSG(control.blasBytes > 0ull && control.triangles == gridTris,
+                          "the control holds %llu bytes for %d triangles (the six grids: %d)",
+                          (unsigned long long)control.blasBytes, control.triangles, gridTris);
+                CHECK_MSG(back.triangles == control.triangles && back.blasBytes == control.blasBytes,
+                          "...and the parked scene's answers are its OWN: %llu bytes for %d triangles, "
+                          "the control %llu for %d",
+                          (unsigned long long)back.blasBytes, back.triangles,
+                          (unsigned long long)control.blasBytes, control.triangles);
+                cv->setScene(nullptr);
+            }
+            if (cs) e->destroyScene(cs);
+            if (cv) e->destroyView(cv);
 
             // Destroying the parked scene hands its slots back, and everything
             // keeps working.
