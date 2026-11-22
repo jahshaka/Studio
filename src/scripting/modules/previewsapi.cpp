@@ -120,12 +120,15 @@ QVector<VerbInfo> PreviewsApi::verbs() const
           "'project' (the open project's pinned rows). `missing` + `stale` is what previews.renderAll "
           "draws (\"N previews to refresh\").",
           Needs::Document },
-        { "render", "previews.render(guid) -> {ok, reason}",
+        { "render", "previews.render(guid) -> {ok, reason, transient}",
           "Draws one row's preview through the preview service and waits for it to be STORED with its key. "
           "Textures, video frames, pose strips, photometric lobes and icons are drawn on the CPU (headless too); "
           "materials, models, meshes (a Mesh row's bake in one neutral material), particle systems and avatars on the engine (with none: {ok:false, reason}). A "
           "failure changes NOTHING stored and says why; so does a write that does not land within the bound "
-          "(the library stayed locked). Throws for a guid that names no asset.",
+          "(the library stayed locked). `transient` is true for a failure whose cause can change with no change "
+          "to the row (the engine not running, the renderer busy with another render): the views' render demand "
+          "asks again at its next settle; any other failure is final until the row's definition moves. Throws for "
+          "a guid that names no asset.",
           Needs::Document },
         { "settle", "previews.settle() -> {ok, reason}",
           "Waits until the preview writer has NOTHING PENDING - every preview a door asked for (an import's "
@@ -241,6 +244,7 @@ QVariantMap PreviewsApi::render(const QString &guid)
         outcome->reason = notLanded(1);
     }
     out["ok"] = outcome->ok;
+    out["transient"] = !outcome->ok && outcome->transient;
     if (!outcome->ok) {
         out["reason"] = outcome->reason;
         // A REFUSAL, not a throw: the answer IS the return value (app.lastError() has it too).
