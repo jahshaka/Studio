@@ -101,6 +101,9 @@ int main()
     gi.quality = GiQuality::High;
     gi.bounces = true;
     if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
+    // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the row left routes_pending): the view of this ray scene
+    // runs the GATHER (every view does), over the voxel store, GI live (budget 1) - asserted on the first frame after it
+    enginetest::declareRoutes(view, scene, enginetest::Routes().gather().store(), "gi.voxel_ray_wall's view");
     e->waitForAsyncShaders();
     enginetest::frames(e, 30);
     const GiStatus g0 = scene->published().gi;

@@ -459,16 +459,18 @@ int main(int argc, char **argv)
         rough.roughness = 0.8f;              // far above the cutoff's 0.4 default
         CHECK(s->setPbrMaterial(wallMat, rough), "the wall accepts roughness 0.8");
         const float redRough = measure(e, view, "wall at roughness 0.8", 20);
-        // RE-POINTED AT THE MERGE (PHOTON-7 stage 7, 7-3 and 7-6): above the gate the wall's specular is the chain's own
-        // lobe - this undeclared view's no-ray screen integrate's cone, which reaches the emissive cube behind the
-        // camera (a rough wall reflects its light: the red excess is physics, not a ray) - so "no ray is spent" is
-        // stated as what it means: the same wall with the rays OFF reads the same (the traced share zero).
+        // LAW 5 IS VACUOUS ON THE GATHER SINCE ROUTE-ROWS-1 STAGE 0 (a finding, OPEN_REDS, homed at 1.2 stage 3): its
+        // red excess came from the no-ray screen integrate's cone, which reached the emissive cube behind the camera;
+        // the view now gathers (rays on) while rays off it integrates - two producers - and both arms read 0 (measured:
+        // rays on 0.0000, rays off 0.0000), so the assert below proves nothing. Stage 3 re-derives it: the gather with
+        // the reflection's trace on against off, on a lit lobe. The assert is kept as written until then.
         e->setRayTracing(false);
         const float redRoughNoRays = measure(e, view, "wall at roughness 0.8, rays off", 24);
         e->setRayTracing(true);
         render(e, 24);
         CHECK_MSG(std::fabs(redRough - redRoughNoRays) < 0.005f,
-                  "ABOVE THE GATE NO RAY IS SPENT: rays on %.4f, rays off %.4f - the chain's own lobe answers",
+                  "law 5: VACUOUS on the gather since ROUTE-ROWS-1 stage 0 - both arms read 0; re-derived at stage 3: "
+                  "OPEN_REDS (rays on %.4f, rays off %.4f)",
                   redRough, redRoughNoRays);
         CHECK(s->setPbrMaterial(wallMat, wallParams), "the wall goes back to a mirror");
         render(e, 8);

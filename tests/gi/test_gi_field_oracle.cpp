@@ -200,6 +200,10 @@ int main(int argc, char **argv)
             return quiet >= 30 ? f - quiet : -1;
         };
         if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
+        // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the rows left routes_pending): the view of this ray
+        // scene runs the GATHER (every view does); ddgi On = the field; GiMode::Vct = the store; GI live - asserted on
+        // the first frame after it, the products within kRouteProductFrames
+        enginetest::declareRoutes(view, scene, enginetest::Routes().gather().field().store(), "gi.field_oracle's view");
         e->waitForAsyncShaders();
         const int rest0 = settle();
         Probes before, step, oracle;
@@ -347,6 +351,10 @@ int main(int argc, char **argv)
             return quiet >= 30 ? f - quiet : -1;
         };
         if (!s2->setGlobalIllumination(gi)) { std::printf("FAIL: the rooms' GI builds\n"); return 1; }
+        // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the rows left routes_pending): the view of this ray
+        // scene runs the GATHER (every view does); ddgi On = the field; GiMode::Vct = the store; GI live - asserted on
+        // the first frame after it, the products within kRouteProductFrames
+        enginetest::declareRoutes(v2, s2, enginetest::Routes().gather().field().store(), "gi.field_oracle's rooms view");
         e->waitForAsyncShaders();
         const int rest3 = settle2();
         Probes rb, rs, ro;
@@ -508,6 +516,7 @@ int main(int argc, char **argv)
             return quiet >= 30 ? f - quiet : -1;
         };
         if (!s3->setGlobalIllumination(gi)) { std::printf("FAIL: the open GI builds\n"); return 1; }
+        enginetest::declareRoutes(v3, s3, enginetest::Routes().gather().field().store(), "gi.field_oracle's open view");
         e->waitForAsyncShaders();
         const int rest6 = settle3();
         Probes ob, os, oo;
@@ -611,6 +620,10 @@ int main(int argc, char **argv)
                 return quiet >= 30 ? f - quiet : -1;
             };
             if (!s5->setGlobalIllumination(gi)) { std::printf("FAIL: the c1 GI builds\n"); return 1; }
+            // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the rows left routes_pending): the view of this ray
+            // scene runs the GATHER (every view does); ddgi On = the field; GiMode::Vct = the store; GI live - asserted on
+            // the first frame after it, the products within kRouteProductFrames
+            enginetest::declareRoutes(v5, s5, enginetest::Routes().gather().field().store(), "gi.field_oracle's c1 view");
             e->waitForAsyncShaders();
             const int rest8 = settle5();
             Probes c1, c0;
@@ -719,6 +732,7 @@ int main(int argc, char **argv)
                 s6->setGlobalIllumination(off);
                 run(2);
                 if (!s6->setGlobalIllumination(with)) return -1;
+                enginetest::declareRoutes(v6, s6, enginetest::Routes().gather().field().store(), "gi.field_oracle's shells view");
                 e->waitForAsyncShaders();
                 const int rest = settle6();
                 st = s6->published().gi;
@@ -817,6 +831,10 @@ int main(int argc, char **argv)
         // cascade 0's step at this tier (the placement lattice's), read off a first build
         enginetest::testCameraLookAt(v7, Vec3(11.5f, 1.6f, -1.0f), Vec3(10.5f, 1.2f, -0.6f));
         if (!s7->setGlobalIllumination(g7)) { std::printf("FAIL: the picture's GI\n"); return 1; }
+        // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: gi.cache_level_picture left routes_pending with the
+        // binary's other rows): the gather, the ray reflection (the post chain, ssr 1), the field (ddgi On), the store
+        enginetest::declareRoutes(v7, s7, enginetest::Routes().gather().reflection().field().store(),
+                                  "gi.cache_level_picture's view");
         run(2);
         const GiStatus first = s7->published().gi;
         const float step0 = first.cascades.empty() ? 0.0f : first.cascades[0].step;

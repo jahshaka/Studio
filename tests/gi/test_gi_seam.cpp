@@ -71,6 +71,9 @@ int main()
     gi.updateBudget = 0;
     gi.bounces = true;
     CHECK(scene->setGlobalIllumination(gi), "the chain is up");
+    // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the row left routes_pending): the view of this ray scene
+    // runs the GATHER (every view does), over the voxel store, paused (budget 0) - asserted on the first frame after it
+    enginetest::declareRoutes(view, scene, enginetest::Routes().gather().store().paused(), "gi.directional_seam's view");
     enginetest::frames(e, 24);
     const auto axisRead = [&](int c, float x, float y, float z, bool positive, float level, float out[4]) {
         VoxelReaderCone cone;
