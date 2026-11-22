@@ -9,7 +9,8 @@ the value type and the registry know nothing of JavaScript, and a second languag
      jahshaka/engine/ScriptJson.h and src/script/{registry.cpp, host.cpp, Language.h, json.cpp} include no Qt, Ogre or
      JS-engine header.
   N3 jahengine LINKS THE ENGINE AND NO QT: its NEEDED list (`objdump -p`) names no Qt library and no IrisGL (the document
-     library that carries Qt today); the JS engine and the engine are static inside it.
+     library that carries Qt today); the JS engine and the engine are static inside it, and libIrisCore - the Qt-free core
+     the engine links (NOQT-CORE-1), shared, one copy in a process - is the one library of ours it NEEDS.
   N4 THE LANGUAGE TABLE (the lead's S5): a language is ONE source file and ONE table line - every
      JAH_SCRIPT_LANGUAGE("<ext>", <maker>) line of irisgl/engine/src/script/LanguageTable.inc names a maker defined by exactly
      one source of src/script/ (the language's file), every maker a source defines has its one line, no extension or

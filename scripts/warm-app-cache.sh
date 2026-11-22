@@ -489,7 +489,7 @@ compute_run() {   # RUN and why: the boots this call asked for that are cold, an
 # driver-key stamp of its -on boot). Under the key's lock (<store>/<KEY>/.key.lock - a second tree at the key WAITS there,
 # never on the card): a cold -off cache is TAKEN verified (its manifest checked by the engine's own rule,
 # tests/support/shadercache_check.py) BY HARD LINKS into a sibling, renamed in under the tree's own lock - NO COPY: the engine
-# writes a cache file only by rename (cachefile::writeAtomic), never in place, and a promotion renames a new directory over the
+# writes a cache file only by rename (iris::files::writeAtomic), never in place, and a promotion renames a new directory over the
 # old, so a link is never written through; THE STORE LIVES ON THE TREES' FILESYSTEM (the owner, 2026-11-22: the box's
 # local/warm-store on the NVMe - a link cannot cross a filesystem; a store on another is refused by name, never copied), its
 # stamps with it, then JUDGED AGAIN here like any other

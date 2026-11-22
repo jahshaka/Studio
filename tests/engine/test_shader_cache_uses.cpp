@@ -25,6 +25,14 @@
 //       preprocessor change silently compiles the old processed source). The salt has no getter and the checksum is its
 //       function: the loaded checksum equals the one with that salt set again, and the control - salt zero, the block
 //       skipped (upstream's checksum) - differs from it.
+// engine.shader_cache_temps (NOQT-CORE-1 stage 1, the engine link; --temps) - A KILLED WRITE's TEMP IS SWEPT AT THE NEXT
+// OPEN, A LIVE WRITER's NEVER: every cache write stages "<name>.tmp-<pid>-<serial>" (iris::files) and a write killed before
+// its rename used to leave it in the directory for ever, outside the manifest and the cap (OgreShaderCache.cpp load):
+//   (6) a temp whose writer was KILLED (a child staged it through iris::files, wrote half and took SIGKILL) and one last
+//       written BEFORE THIS BOOT (its pid alive: the boot is the proof) are gone after a writer's open; the temp of a
+//       writer ALIVE in another process (a child, half its bytes written, blocked on a pipe) survives the open and its
+//       write then completes WHOLE; a file of another shape (warmup.set) is not touched. CONTROLS: the child's death by
+//       SIGKILL observed (waitpid) and both stale temps seen on disk before the open.
 #include "EnginePrivate.h"
 #include "jahshaka_engine_build_id.h"   // JAHSHAKA_COMPILE_PATH_PREPROCESSOR_ID: law (5)
 
@@ -39,6 +47,8 @@
 #include <OgreResourceGroupManager.h>
 #include <OgreRoot.h>
 
+#include "core/files.h"   // the staged primitives the temps' writers use (law 6)
+
 #include <cstdio>
 #include <cstdlib>
 #include <cstring>
@@ -50,7 +60,11 @@
 #include <sstream>
 #include <stdexcept>
 #include <string>
+#include <csignal>
+#include <fcntl.h>
 #include <sys/stat.h>
+#include <sys/time.h>
+#include <sys/wait.h>
 #include <unistd.h>
 
 using namespace jahshaka::engine::detail;
@@ -336,6 +350,110 @@ struct ComputeToy final : Toy {
     }
 };
 
+/// (6) A KILLED WRITE's TEMP IS SWEPT AT THE NEXT OPEN, A LIVE WRITER's NEVER (the header). A first launch saves a
+/// cache (a manifest: the open under test then WIPES nothing - a wipe would take every temp and prove nothing); the
+/// children are forked after its Root is gone; the live one is killed by the guard if a law throws first.
+void runTemps(const std::string &dir) {
+    const std::string c = dir + "/temps";
+    mkdirs(c);
+    { MicrocodeToy first(c); first.begin(kRoomy); first.use("A"); first.end(); }
+    const std::string manifest = readFile(c + "/cache-manifest.txt");
+    std::string killed;                       // (6) the killed writer's temp
+    bool killedBySignal = false;
+    {
+        int names[2];
+        if (::pipe(names) != 0) throw std::runtime_error("pipe");
+        const pid_t child = ::fork();
+        if (child == 0) {
+            const std::string tmp = iris::files::utf8(iris::files::stagingTempPath(iris::files::path(c + "/pipeline.cache")));
+            { std::ofstream(tmp, std::ios::binary) << "the first half of a pipeline blob"; }
+            if (::write(names[1], tmp.data(), tmp.size()) != ssize_t(tmp.size())) ::_exit(2);
+            ::close(names[1]);
+            ::kill(::getpid(), SIGKILL);      // killed between its write and its rename
+            ::_exit(3);
+        }
+        ::close(names[1]);
+        char buf[4096];
+        const ssize_t n = ::read(names[0], buf, sizeof buf);
+        ::close(names[0]);
+        if (n > 0) killed.assign(buf, size_t(n));
+        int status = 0;
+        ::waitpid(child, &status, 0);
+        killedBySignal = WIFSIGNALED(status) && WTERMSIG(status) == SIGKILL;
+    }
+    struct LiveWriter {
+        pid_t pid = -1;
+        int go = -1;
+        std::string tmp, target;
+        ~LiveWriter() { if (pid > 0) { ::kill(pid, SIGKILL); ::waitpid(pid, nullptr, 0); } }
+    } live;
+    live.target = c + "/texture-channels.txt";
+    const std::string whole = std::string(4096, 'a') + std::string(4096, 'b');
+    {
+        int ready[2], go[2];
+        if (::pipe(ready) != 0 || ::pipe(go) != 0) throw std::runtime_error("pipe");
+        const pid_t child = ::fork();
+        if (child == 0) {
+            ::close(ready[0]);
+            ::close(go[1]);
+            const std::filesystem::path tmp = iris::files::stagingTempPath(iris::files::path(live.target));
+            const int fd = ::open(tmp.c_str(), O_WRONLY | O_CREAT | O_TRUNC, 0644);
+            if (fd < 0 || ::write(fd, whole.data(), 4096) != 4096) ::_exit(2);
+            const std::string name = iris::files::utf8(tmp);
+            if (::write(ready[1], name.data(), name.size()) != ssize_t(name.size())) ::_exit(2);
+            ::close(ready[1]);
+            char b;
+            if (::read(go[0], &b, 1) != 1) ::_exit(2);   // the parent's open runs while this write is in flight
+            if (::write(fd, whole.data() + 4096, 4096) != 4096 || ::close(fd) != 0) ::_exit(2);
+            iris::files::fsyncPath(tmp);
+            ::_exit(iris::files::atomicRename(tmp, iris::files::path(live.target)) ? 0 : 1);
+        }
+        ::close(ready[1]);
+        ::close(go[0]);
+        live.pid = child;
+        live.go = go[1];
+        char buf[4096];
+        const ssize_t n = ::read(ready[0], buf, sizeof buf);
+        ::close(ready[0]);
+        if (n > 0) live.tmp.assign(buf, size_t(n));
+    }
+    // A temp last written before this boot, its pid ALIVE (the live writer's): only the boot says it is stale.
+    const std::string beforeBoot = c + "/hlms.1.bin.tmp-" + std::to_string(live.pid) + "-9";
+    writeFile(beforeBoot, "a write of the last boot");
+    const timeval old[2] = { { 1000000000, 0 }, { 1000000000, 0 } };   // 2001
+    ::utimes(beforeBoot.c_str(), old);
+    writeFile(c + "/warmup.set", "a host's set: no temp");
+    const bool staleSeen = !killed.empty() && exists(killed) && exists(beforeBoot);
+    const bool liveSeen = !live.tmp.empty() && exists(live.tmp);
+
+    {   // the writer's open
+        Boot boot(c + "-ogre.log");
+        ShaderCache cache;
+        cache.configure(c, std::string(), kRoomy);
+        cache.load(boot.root.get());
+        cache.finishWrites();
+    }
+    CHECK(killedBySignal && staleSeen,
+          "(6) controls: the writer died by SIGKILL between its write and its rename, and both stale temps were on disk "
+          "before the open (%s)", killed.c_str());
+    CHECK(!manifest.empty() && readFile(c + "/cache-manifest.txt") == manifest,
+          "(6) controls: the open wiped nothing - the first launch's manifest stands (%zu bytes)", manifest.size());
+    CHECK(staleSeen && !exists(killed), "(6) the KILLED writer's temp is gone after the open");
+    CHECK(staleSeen && !exists(beforeBoot), "(6) the temp last written BEFORE THIS BOOT is gone, its pid alive or not");
+    CHECK(liveSeen && exists(live.tmp), "(6) the LIVE writer's temp survived the open in another process (%s)",
+          live.tmp.c_str());
+    CHECK(exists(c + "/warmup.set"), "(6) a file of another shape is not touched (warmup.set)");
+    char b = 'g';
+    const bool told = ::write(live.go, &b, 1) == 1;
+    ::close(live.go);
+    int status = 0;
+    ::waitpid(live.pid, &status, 0);
+    live.pid = -1;
+    CHECK(told && WIFEXITED(status) && WEXITSTATUS(status) == 0 && readFile(live.target) == whole && !exists(live.tmp),
+          "(6) ...and the live write then completed WHOLE (%zu of %zu bytes, its temp renamed away)",
+          readFile(live.target).size(), whole.size());
+}
+
 }  // namespace
 
 static int run(const std::string &mode) {
@@ -379,8 +497,11 @@ static int run(const std::string &mode) {
             writeFile(dir + "/media/JahUses" + n + ".glsl",
                       std::string("#version 450\n// ") + n + "\nlayout( local_size_x = 1 ) in;\nvoid main() {}\n");
         runLaws(dir, [&dir](const std::string &c) { return std::unique_ptr<Toy>(new ComputeToy(c, dir + "/media")); });
+    } else if (mode == "--temps") {
+        std::printf("\n== the stale temps ==\n");
+        runTemps(dir);
     } else {
-        std::printf("usage: test_shader_cache_uses --microcode | --hlms | --compute\n");
+        std::printf("usage: test_shader_cache_uses --microcode | --hlms | --compute | --temps\n");
         return 64;
     }
     std::system(("rm -rf '" + dir + "'").c_str());

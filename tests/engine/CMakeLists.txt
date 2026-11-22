@@ -314,9 +314,9 @@ if(JAHSHAKA_ASAN)
     add_library(JahshakaEngineAsan STATIC EXCLUDE_FROM_ALL ${JAHSHAKA_ENGINE_SOURCES})   # (the script host: its own archive)
     target_include_directories(JahshakaEngineAsan
         PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include
-        PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${JAHSHAKA_ENGINE_BUILD_ID_DIR}
-                ${CMAKE_SOURCE_DIR}/irisgl)   # core/threadbudget.h, as the real library (THREADING-1)
-    target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES})   # (qjs is the script host's: JahshakaScript)
+        PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${JAHSHAKA_ENGINE_BUILD_ID_DIR})
+    # IrisCore as the real library links it (NOQT-CORE-1): the caches' file I/O and core/threadbudget.h's include root.
+    target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES} IrisCore)   # (qjs is the script host's: JahshakaScript)
     # Same shader-cache fingerprint terms as the real library (irisgl/engine/
     # CMakeLists.txt) — OgreShaderCache.cpp will not compile without them. The
     # engine BUILD ID now arrives as a generated header on the include path
@@ -650,13 +650,19 @@ set_source_files_properties(test_shader_cache_uses.cpp PROPERTIES COMPILE_DEFINI
 target_include_directories(test_shader_cache_uses PRIVATE
     "${CMAKE_SOURCE_DIR}/irisgl/engine/src" "${JAHSHAKA_ENGINE_BUILD_ID_DIR}")
 target_compile_definitions(test_shader_cache_uses PRIVATE JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}")
-target_link_libraries(test_shader_cache_uses PRIVATE JahshakaEngine OgreNext)
+target_link_libraries(test_shader_cache_uses PRIVATE JahshakaEngine OgreNext IrisCore)
 foreach(_layer microcode hlms compute)
     add_test(NAME engine.shader_cache_uses.${_layer} COMMAND test_shader_cache_uses --${_layer}
         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
     set_tests_properties(engine.shader_cache_uses.${_layer} PROPERTIES TIMEOUT 60 LABELS "engine")
     jah_no_display(engine.shader_cache_uses.${_layer})
 endforeach()
+# engine.shader_cache_temps (NOQT-CORE-1 stage 1, the engine link) - A KILLED WRITE's TEMP IS SWEPT AT THE NEXT OPEN, A
+# LIVE WRITER's NEVER (test_shader_cache_uses.cpp, law 6): forked writers through iris::files' staged primitives, one
+# killed and one alive across a real ShaderCache's open on a NULL Root. CPU code row.
+add_test(NAME engine.shader_cache_temps COMMAND test_shader_cache_uses --temps WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.shader_cache_temps PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.shader_cache_temps)
 
 # engine.template_checksum_salt (SHADER-SYSTEM-1 stage 5, ruling 2) — THE PREPROCESSOR GUARD IS OGRE's OWN RE-PARSE
 # (test_template_checksum_salt.cpp says why): the fork's per-Hlms salt moves the template checksum (zero = upstream's), and
