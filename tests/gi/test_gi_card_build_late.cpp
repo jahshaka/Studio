@@ -258,10 +258,15 @@ int main(int argc, char **argv)
         Room h = buildRoom(e, "build_late_held", look);
         if (!h.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
         if (mode != "late") {
-            // the readers ready: every ray build launched at the first frame and landed before the hold's frames count
+            // THE READERS READY: every ray build launched at the first frame and WAITED FOR on its published state before
+            // the hold's frames count (a build is wall-clock work: CODING_RULES § 5) - .pso is COLD, its driver cache its
+            // own; a row that ended at its frame cap before a cold build landed (the gather's, ~13 s) left it unstored,
+            // and every run held that reader too (the feature end's red, 2026-11-22). Under placeholders-only the wait
+            // takes the placeholders' jobs alone: the room's own permutations stay unrequested.
             enginetest::frames(e, 1);
             ++frames;
             e->prepareRayPipelines();
+            e->waitForAsyncShaders();
         }
         const unsigned long long phBefore = e->published().shaders.placeholderDraws;
         int builtAt = -1, heldFrames = 0, decidedInHold = 0, atRestInHold = 0, firstBad = -1;
