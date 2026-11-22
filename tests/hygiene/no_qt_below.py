@@ -17,7 +17,8 @@ THE Qt-FREE TARGET, IrisCore (irisgl/core/CMakeLists.txt), read from the build:
   T1 its compile lines in build.ninja (at least one) name no Qt include directory, no Qt define and no Qt code generator's
      output (an _autogen directory) - so no Qt header can be reached;
   T2 `nm -C` of its archive lists at least one defined symbol (it read an archive) and names no Qt symbol;
-  T3 no source of it includes, transitively, a header outside irisgl/core/ and the standard library.
+  T3 no source of it includes, transitively, a header outside irisgl/core/, the standard library and the few platform C
+     headers SYSTEM_HEADERS names (POSIX open/fsync/getpid).
 THE APP's Qt-CONVERSION HEADER, src/app/qtstd.h: no C++ file under irisgl/ includes it (it lives above the line).
 Run: no_qt_below.py <source-root> <build-dir> [--counts]   (--counts prints the measured lines, never fails: a builder's aid)
 The self-test runs first, always: the stripper's cases, every token and include form counted and its commented and quoted
@@ -199,8 +200,8 @@ functional future initializer_list iomanip ios iosfwd iostream istream iterator 
 memory_resource mutex new numbers numeric optional ostream queue random ranges ratio regex scoped_allocator semaphore set
 shared_mutex source_location span sstream stack stdexcept stop_token streambuf string string_view syncstream system_error
 thread tuple type_traits typeindex typeinfo unordered_map unordered_set utility valarray variant vector version'''.split())
-# the platform's own C headers a core source may need (none yet: stage 1's files.cpp names its POSIX headers here)
-SYSTEM_HEADERS = set()
+# the platform's own C headers a core source may need: POSIX open/fsync/getpid (core/files.cpp), Windows' _getpid
+SYSTEM_HEADERS = {'fcntl.h', 'unistd.h', 'process.h'}
 
 
 def ninja_target(text, target=TARGET):
