@@ -68,7 +68,6 @@ For more information see the LICENSE file
 #include "services/projectarchiver.h"
 #include "services/assetstorepaths.h"
 #include "services/ogresamples.h"
-#include <QSqlDatabase>
 #include "services/loadtimeline.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
