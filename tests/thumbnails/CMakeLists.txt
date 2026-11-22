@@ -112,7 +112,9 @@ set(JAH_THUMB_OUT "${_tcHome}/out")
 configure_file(thumbnails_coverage.js.in ${CMAKE_CURRENT_BINARY_DIR}/thumbnails_coverage.js @ONLY)
 file(MAKE_DIRECTORY ${_tcHome}/run)
 jah_host_args(thumbnails.coverage _tcHost)
-jah_gpu_row(thumbnails.coverage WARM_HOME "${_tcHome}" CLASS app TIER low NEEDS NONE
+# FRAMES 121: measured 2026-11-22 (pv2-thumbnails.coverage-frames, Ogre::Root::_fireFrameEnded counted over the row's
+# app process at 64f68b889).
+jah_gpu_row(thumbnails.coverage WARM_HOME "${_tcHome}" CLASS app TIER low NEEDS NONE FRAMES 121
          NEEDS_WHY "the tile's studio takes no tier feature (no GI, no post: secondarysurfacetonemap.h): subject coverage against the empty studio"
          COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/thumbnails_coverage.js ${_tcHost}
          WORKING_DIRECTORY ${_tcHome}/run)
