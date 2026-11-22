@@ -757,16 +757,18 @@ rm -rf "$WT/.shadercache"; toy_cache "$WT/.shadercache" 1 2; printf 'pass=%s|med
 printf '%s\n%s\n%s\n' "$pk" "k1 k2 " "sets none" > "$WT/.shadercache.warm-key"
 iH=$(stat -c %i "$WT/.shadercache/hlms.1.bin"); iC=$(stat -c %i "$WT/.shadercache/compute.bin")
 rm -f "$T/k10.held" "$T/s-booted"; : > "$T/s10.pass"
-( exec 8>"$ST10/$pk/.key.lock"; flock 8; : > "$T/k10.held"; sleep 4 ) & kp=$!
+( exec 8>"$ST10/$pk/.key.lock"; flock 8; : > "$T/k10.held"; sleep ${S10_HOLD:-15} ) & kp=$!
 for _ in $(seq 50); do [ -e "$T/k10.held" ] && break; sleep 0.1; done
 out=$(FAKE_PASS_ID=$p10b FAKE_PASS_LOG="$T/s10.pass" JAH_WARM_STORE="$ST10" SX "$WB" --only app-off --budget 20 2>&1); rc=$?
-wait $kp 2>/dev/null
-[ $rc = 0 ] && ! echo "$out" | grep -q "TAKEN" && ! echo "$out" | grep -q "being warmed by another tree" &&
+# (the holder is KILLED once the call is back, after asserting it still held the lock all through - its margin a 15-s sleep;
+# waiting its sleep out cost the row 4 s of its 10-s budget)
+kill -0 $kp 2>/dev/null; held=$?; kill $kp 2>/dev/null; wait $kp 2>/dev/null
+[ $rc = 0 ] && [ $held = 0 ] && ! echo "$out" | grep -q "TAKEN" && ! echo "$out" | grep -q "being warmed by another tree" &&
     [ "$(grep -c BOOTED "$T/s-booted" 2>/dev/null)" = 1 ] && [ "$(cat "$T/s10.pass")" = ran ] &&
     [ "$(stat -c %i "$WT/.shadercache/hlms.1.bin")" = "$iH" ] && [ "$(stat -c %i "$WT/.shadercache/compute.bin")" = "$iC" ] &&
     ! grep -q '^shaders 9' "$WT/.shadercache/cache-manifest.txt" && grep -q "^pass=$p10b|" "$WT/.shadercache/warm-pass.key" &&
     ok "S10: a cache warm at the key with only a stale pass record - no take, no key lock, ONE refresh boot on the tree's own union (the same inodes)" ||
-    no "S10 the warm tree and the store: rc $rc booted [$(cat "$T/s-booted" 2>/dev/null | tr '\n' ' ')] pass [$(tr '\n' ' ' < "$T/s10.pass")] '$(echo "$out" | grep -iE "taken|lock|warmed by|cold at|warm at" | head -4 | tr '\n' '|')'"
+    no "S10 the warm tree and the store: rc $rc still-held $held booted [$(cat "$T/s-booted" 2>/dev/null | tr '\n' ' ')] pass [$(tr '\n' ' ' < "$T/s10.pass")] '$(echo "$out" | grep -iE "taken|lock|warmed by|cold at|warm at" | head -4 | tr '\n' '|')'"
 # S11 THE STORE TAKES A REFRESHED RECORD, NEVER A POORER UNION (WARM-SHARE-1 stage 3's line, the lead's ruling 2026-11-22): a tree
 # warm at the key the store already holds (the same stamp) whose startup-pass record differs - a POORER union (fewer shaders than
 # the store's) refreshes ONLY the store's record (a new file: the store's caches and every taker's links untouched); a union at
