@@ -5,10 +5,14 @@
 //   (1) THE HOLE: the slabs hidden, the floor's mean R over a code (the ceiling reflected: R = F E);
 //   (2) THE UNCUT STACK: the four slabs (eight candidate faces a ray), the mean is T^4 R within ONE CODE at its level plus
 //       the readback's half code of R - the panes multiply, never block (no pane has its own light: nothing lights it);
-//   (3) THE CUT: the test door rayquery.stepBound 2 (every reflection ray meets eight candidates, so every one is CUT):
-//       (a) every texel of the picture FINITE by its bits, (b) the floor's every texel EXACTLY 0 (a cut reading ray
-//       answers a BLACK hit at its end - no radiance, no sky, no pane light: a cut never adds light), (c) the counter
-//       rayQuery.proceedStepsMax reads exactly 2 (the cut published).
+//   (3) THE CUT, under a FLAT ENVIRONMENT an escaping ray reads (the ambient's constant band, kEnv: with no cube it is
+//       what a miss answers, OgreScene::rayEnvironment - so a cut ray wrongly answered as an ESCAPE reads kEnv, never 0;
+//       the final read's F3): the test door rayquery.stepBound 2 (every reflection ray meets eight candidates, so every
+//       one is CUT): (a) every texel of the picture FINITE by its bits, (b) the floor's every texel EXACTLY 0 (a cut
+//       reading ray answers a BLACK hit at its end - no radiance, no sky, no pane light: a cut never adds light), (c) the
+//       counter rayQuery.proceedStepsMax reads exactly 2 (the cut published); (d) THE CONTROL that (b) can fail: the door
+//       off and the ceiling hidden, the rays escape and the floor reads the environment (its mean over half of kEnv's
+//       reflected share) - an escape is not black here.
 // The cut arm of gi.pane_stack (test_gi_pane_stack.cpp: the same slabs, T = 0.9 as the pane word stores it), its own
 // file because its view declares its route (CODING_RULES section 6) and the stack's two arms are still on the ratchet.
 // Red on the base: the status field rayQuery.proceedStepsMax and the door rayquery.stepBound do not exist.
@@ -92,7 +96,7 @@ int main(int argc, char **argv)
     ceiling.albedo = Colour(0.0f, 0.0f, 0.0f);
     ceiling.emissive = Colour(0.5f, 0.5f, 0.5f);
     ceiling.roughness = 1.0f;
-    box(scene, Vec3(0.0f, 3.2f, 0.0f), Vec3(8.0f, 0.2f, 8.0f), scene->createPbrMaterial(ceiling));
+    const NodeId ceilingNode = box(scene, Vec3(0.0f, 3.2f, 0.0f), Vec3(8.0f, 0.2f, 8.0f), scene->createPbrMaterial(ceiling));
     PbrParams glass;
     glass.albedo = Colour(0.3f, 0.3f, 0.3f);
     glass.roughness = 0.9f;
@@ -188,7 +192,13 @@ int main(int argc, char **argv)
     std::snprintf(what, sizeof(what), "(2) THE UNCUT STACK: four panes pass T^4 of the reflection (%.6f against %.6f, "
                   "within %.6f)", stack, want, bar);
     check(ok && std::fabs(stack - want) <= bar, what);
-    // (3) THE CUT
+    // (3) THE CUT, under the flat environment an escape reads (kEnv)
+    constexpr float kEnv = 0.25f;
+    {
+        float env[27] = { 0 };
+        env[0] = env[1] = env[2] = kEnv;   // the constant band: the mean radiance a direction-free environment answers
+        scene->setAmbientSh(env);
+    }
     const unsigned long long before = scene->published().rayQuery.proceedStepsMax;
     if (!e->setArm("rayquery.stepBound", 2.0)) { std::printf("FAIL: the door rayquery.stepBound\n"); return 1; }
     settle();
@@ -201,12 +211,24 @@ int main(int argc, char **argv)
         if (!read(cutMean, cutFinite, cutZero)) break;
     }
     e->setArm("rayquery.stepBound", 0.0);
-    std::printf("== the cut (bound 2): the floor's mean %.9f, every texel finite %d, every middle texel 0 %d; the counter "
-                "%llu -> %llu (%d frames)\n", cutMean, int(cutFinite), int(cutZero), before, counter, frames);
+    std::printf("== the cut (bound 2, under the environment %.2f): the floor's mean %.9f, every texel finite %d, every "
+                "middle texel 0 %d; the counter %llu -> %llu (%d frames)\n", double(kEnv), cutMean, int(cutFinite),
+                int(cutZero), before, counter, frames);
+    // (3d) the control: the door off, the ceiling hidden - the rays escape and read the environment
+    for (NodeId n : slabs) scene->setNodeVisible(n, false);
+    scene->setNodeVisible(ceilingNode, false);
+    settle();
+    double escapeMean = 0.0;
+    bool escFinite = false, escZero = false;
+    const bool escOk = read(escapeMean, escFinite, escZero);
+    std::printf("== the escape (the ceiling hidden, the door off): the floor's mean %.6f\n", escapeMean);
     check(before == 0ull, "(3) before the door no loop reached the law: the counter reads 0");
     check(cutFinite, "(3a) THE CUT: every texel of the picture is finite (by its bits)");
     check(cutZero, "(3b) THE CUT: a cut reading ray answers a BLACK hit - the floor's every middle texel is exactly 0");
     check(counter == 2ull, "(3c) THE CUT: the counter reads exactly 2 (the cut published)");
+    check(escOk && escapeMean > 0.5 * 0.04 * double(kEnv),
+          "(3d) THE CONTROL: an escaping ray reads the environment (the floor's mean over half of a dielectric-floor "
+          "F0 0.04 x kEnv - the mirror's F is higher) - so (3b)'s exact 0 is a cut answered as a BLACK hit, never a miss");
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
     return g_fail ? 1 : 0;
 }
