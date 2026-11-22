@@ -22,7 +22,13 @@
 #   (5) EVERY RAY's INPUTS ARE DEFINED (the lead's calls 2-3): `jahRqInit(` appears only in the seam's own #define and
 #       ONCE in jah_rq_alpha.glsl's #define JAH_RQ_INIT, which tests the ray by jahRqRayDefined (finite3 / finite1 - the
 #       bits, never x == x - tMin >= 0, tMin <= tMax) and initialises an empty query (cull mask 0) otherwise, counted;
-#       and there are as many JAH_RQ_INIT( calls as ray query loops.
+#       and there are as many JAH_RQ_INIT( calls as ray query loops;
+#   (6) THE COUNTS AT THEIR LAWS (the lead's calls 1 and 7): the five count loops that trace a ray a trip and the three
+#       marches a float steers carry their clamp (CLAMPED below: the hit table's lights to the section the host wrote,
+#       the card movers' lamps to their buffer, the two gathers' rays to 4096 with their float bit-tested, the voxel
+#       march's resolution and the young reach bit-tested and held), and the other count loops are on
+#       ray_count_loops_pending.txt - every entry's header still in its file, at most kPendingAtMost entries: the list
+#       ONLY SHRINKS (an entry clamped leaves it and the number falls in the same commit).
 # The row prints the loops it found through the counted family (the four JAH_RQ_PROCEED forms' call sites).
 # A NEGATIVE CONTROL runs first: synthetic trees with a raw loop, a family head with no cut, a bound a door can raise
 # and a mirror that differs (each red), a raw loop inside a comment and the lawful shape (green).
@@ -49,6 +55,59 @@ INIT = re.compile(r"\bjahRqInit\s*\(")
 INIT_CALL = re.compile(r"\bJAH_RQ_INIT\s*\(")
 FLAGGED = re.compile(r"\bJAH_RQ_PROCEED(?:_PANES|_OPAQUE)?\s*\(([^()]*)\)")
 LAW = 1024
+PENDING = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ray_count_loops_pending.txt")
+kPendingAtMost = 26
+# (file under irisgl/engine, the clamp's pattern in its comment-stripped text, how many times, what it is)
+CLAMPED = (
+    ("src/rayquery/include/jah_rq_hit_direct.glsl", r"const\s+uint\s+count\s*=\s*jahHitLightCount\s*\(\s*T\s*\)", 2,
+     "the hit table's lights to the section the host wrote (two loops)"),
+    ("src/rayquery/include/jah_rq_hit_direct.glsl", r"min\s*\(\s*T\.u\[0\]\s*,\s*e\s*>\s*b\s*\?\s*\(\s*e\s*-\s*b\s*\)\s*/\s*kJahHitLightWords", 1,
+     "jahHitLightCount: u[0] held to (u[3] - u[2]) / kJahHitLightWords"),
+    ("src/rayquery/rq_card_movers.comp", r"i\s*<\s*min\s*\(\s*lampCount\.x\s*,\s*uint\s*\(\s*lamps\.length\s*\(\s*\)\s*\)\s*\)", 1,
+     "the card movers' lamps to their buffer's records"),
+    ("src/rayquery/rq_card_gather.comp", r"const\s+int\s+n\s*=\s*finite1\s*\(\s*p\.knobs\.x\s*\)\s*\?\s*clamp\s*\(\s*int\s*\(\s*min\s*\(\s*p\.knobs\.x\s*,\s*4096\.0\s*\)\s*\)\s*,\s*1\s*,\s*4096\s*\)", 1,
+     "the cards' gather's rays, bit-tested, to 4096"),
+    ("src/rayquery/rq_voxel_sides.comp", r"const\s+int\s+rays\s*=\s*finite1\s*\(\s*p\.knobs\.x\s*\)\s*\?\s*clamp\s*\(\s*int\s*\(\s*min\s*\(\s*p\.knobs\.x\s*,\s*4096\.0\s*\)\s*\)\s*,\s*1\s*,\s*4096\s*\)", 1,
+     "the voxel sides' rays, bit-tested, to 4096"),
+    ("src/rayquery/include/jah_voxel_ray.glsl", r"resI\s*=\s*finite3\s*\(\s*res\s*\)\s*\?\s*clamp\s*\(\s*ivec3\s*\(\s*min\s*\(\s*res\s*,\s*vec3\s*\(\s*kJahVoxResMax\s*\)", 1,
+     "the voxel march's resolution, bit-tested, to kJahVoxResMax (it steers maxSteps)"),
+    ("src/rayquery/rq_probe_integrate.comp", r"youngReach\s*=\s*finite1\s*\(\s*p\.young\.y\s*\)\s*\?\s*clamp\s*\(\s*p\.young\.y\s*,\s*1\.0\s*,\s*64\.0\s*\)", 1,
+     "the young reach, bit-tested, to 64 cells (it steers the tent's two loops)"),
+    ("src/rayquery/rq_probe_integrate.comp", r"youngFrames\s*=\s*finite1\s*\(\s*p\.young\.x\s*\)", 1,
+     "the young frames, bit-tested"),
+)
+
+
+def norm(t):
+    return " ".join(t.split())
+
+
+def check_counts(root, texts, pending_path):
+    """law (6)'s faults"""
+    bad = []
+    for rel, pat, want, what in CLAMPED:
+        got = len(re.findall(pat, texts.get(rel, "")))
+        if got != want:
+            bad.append("(6) %s: %s - the clamp found %d time(s), want %d" % (rel, what, got, want))
+    try:
+        with open(pending_path) as fh:
+            entries = [l.rstrip("\n").split("\t", 1) for l in fh if l.strip() and not l.startswith("#")]
+    except OSError as e:
+        return bad + ["(6) cannot read %s (%s)" % (pending_path, e)]
+    if len(entries) > kPendingAtMost:
+        bad.append("(6) %d pending count loops, at most %d: the list only shrinks" % (len(entries), kPendingAtMost))
+    want = {}
+    for e in entries:
+        if len(e) != 2:
+            bad.append("(6) a pending entry is not <file> TAB <header>: %r" % "\t".join(e))
+            continue
+        want[(e[0], norm(e[1]))] = want.get((e[0], norm(e[1])), 0) + 1
+    for (rel, head), n in sorted(want.items()):
+        lines = [norm(l) for l in texts.get(rel, "").split("\n")]
+        if lines.count(head) < n:
+            bad.append("(6) %s: the pending loop '%s' is gone (clamped or moved): take it off the list and lower "
+                       "kPendingAtMost" % (rel, head))
+    return bad
 
 
 def shader_files(root):
@@ -67,7 +126,7 @@ def macro(text, name):
     return m.group(0) if m else None
 
 
-def check(root):
+def check(root, pending=PENDING):
     """(faults, loops through the family)"""
     bad, loops, read = [], [], 0
     texts = {}
@@ -162,6 +221,8 @@ def check(root):
     if not hl or int(hl.group(1)) != LAW or not re.search(r"kRayQueryStepBound\s*=\s*4u\s*\*\s*kRayQueryStepLaw\s*;", mirror):
         bad.append("(3) %s: the host's mirror is kRayQueryStepLaw = %du, kRayQueryStepBound = 4u * kRayQueryStepLaw"
                    % (MIRROR, LAW))
+    if pending:
+        bad += check_counts(root, texts, pending)
     return bad, loops
 
 
@@ -254,7 +315,7 @@ def self_test():
     for name, over, want_red in cases:
         root = synthetic(**over)
         try:
-            red = bool(check(root)[0])
+            red = bool(check(root, pending=None)[0])
         finally:
             shutil.rmtree(root, ignore_errors=True)
         good = red == want_red
@@ -263,18 +324,63 @@ def self_test():
     return ok
 
 
+LAWFUL_CLAMPED = {
+    "src/rayquery/include/jah_rq_hit_direct.glsl": "const uint count = jahHitLightCount( T );\nconst uint count = "
+    "jahHitLightCount( T );\nreturn min( T.u[0], e > b ? ( e - b ) / kJahHitLightWords : 0u );",
+    "src/rayquery/rq_card_movers.comp": "for( uint i = 0u; i < min( lampCount.x, uint( lamps.length() ) ); ++i )",
+    "src/rayquery/rq_card_gather.comp": "const int n = finite1( p.knobs.x ) ? clamp( int( min( p.knobs.x, 4096.0 ) ), 1, 4096 ) : 1;",
+    "src/rayquery/rq_voxel_sides.comp": "const int rays = finite1( p.knobs.x ) ? clamp( int( min( p.knobs.x, 4096.0 ) ), 1, 4096 ) : 1;",
+    "src/rayquery/include/jah_voxel_ray.glsl": "const ivec3 resI = finite3( res ) ? clamp( ivec3( min( res, vec3( kJahVoxResMax ) ) "
+    "+ 0.5 ), ivec3( 1 ), ivec3( kJahVoxResMax ) ) : ivec3( 1 );\n\tfor( int j = 0; j < JAH_VOX_COUNT; ++j )",
+    "src/rayquery/rq_probe_integrate.comp": "const float youngFrames = finite1( p.young.x ) ? p.young.x : 0.0;\n"
+    "const float youngReach = finite1( p.young.y ) ? clamp( p.young.y, 1.0, 64.0 ) : 1.0;",
+}
+
+
+def self_test_counts():
+    """law (6)'s negative control: a clamp removed, a pending loop gone, the list grown (each red); the lawful shape green"""
+    d = tempfile.mkdtemp(prefix="ray-counts-")
+    try:
+        one = os.path.join(d, "one.txt")
+        with open(one, "w") as fh:
+            fh.write("# a header line\nsrc/rayquery/include/jah_voxel_ray.glsl\tfor( int j = 0;   j < JAH_VOX_COUNT; ++j )\n")
+        many = os.path.join(d, "many.txt")
+        with open(many, "w") as fh:
+            fh.write("src/rayquery/include/jah_voxel_ray.glsl\tfor( int j = 0; j < JAH_VOX_COUNT; ++j )\n" * (kPendingAtMost + 1))
+        gone = os.path.join(d, "gone.txt")
+        with open(gone, "w") as fh:
+            fh.write("src/rayquery/rq_share_law.comp\tfor( int it = 0; it < n; ++it )\n")
+        unclamped = dict(LAWFUL_CLAMPED)
+        unclamped["src/rayquery/rq_card_movers.comp"] = "for( uint i = 0u; i < lampCount.x; ++i )"
+        cases = [("a clamp removed (the card movers' lamps)", unclamped, one, True),
+                 ("a pending loop gone from its file", LAWFUL_CLAMPED, gone, True),
+                 ("the list grown past its bound", LAWFUL_CLAMPED, many, True),
+                 ("the lawful counts", LAWFUL_CLAMPED, one, False)]
+        ok = True
+        for name, texts, pending, want_red in cases:
+            red = bool(check_counts(d, texts, pending))
+            good = red == want_red
+            ok = ok and good
+            print("  %s: the negative control - %s is %s" % ("ok" if good else "FAIL", name, "red" if red else "green"))
+        return ok
+    finally:
+        shutil.rmtree(d, ignore_errors=True)
+
+
 def main():
     if len(sys.argv) != 2:
         print("usage: ray_loops_bounded.py <source root>")
         print("source.ray_loops_bounded: FAILED (1)")
         return 2
     fails = 0 if self_test() else 1
+    fails += 0 if self_test_counts() else 1
     bad, loops = check(sys.argv[1])
     for b in bad:
         print("  FAIL: " + b)
     if not bad:
         print("  ok: one jahRqProceed(, in JAH_RQ_LOOP_BEGIN_, cut at kJahRqStepBound = 4096 (the law 1024); the host's "
-              "mirror equal; every cut answered as occluded; every ray through JAH_RQ_INIT; %d ray query loops through the counted family:" % len(loops))
+              "mirror equal; every cut answered as occluded; every ray through JAH_RQ_INIT; the counts at their laws (at "
+              "most %d pending); %d ray query loops through the counted family:" % (kPendingAtMost, len(loops)))
         for l in loops:
             print("    " + l)
     fails += len(bad)

@@ -1,0 +1,31 @@
+# THE COUNT LOOPS STILL TO CLAMP (GATHER-HANG-1 stage 2, the lead's call 1; homed at the V2 plan's 0.3 hygiene): loops in
+# the ray and voxel shaders whose trip count comes from a uniform or a buffer, unclamped, but that trace no ray a trip.
+# source.ray_loops_bounded (law 6) holds this list: every entry's header still in its file, and the list ONLY SHRINKS
+# (the row's kPendingAtMost; an entry clamped at its law leaves the list and that number falls in the same commit).
+# <file under irisgl/engine>	<the loop's header, whitespace-normalised>
+src/rayquery/include/jah_rq_card.glsl	for( uint k = 0u; k < inst.y; ++k )
+src/rayquery/include/jah_rq_card_lights.glsl	for( uint i = 0u; i < count; ++i )
+src/rayquery/include/jah_rq_hit.glsl	for( int c = 0; c < count; ++c )
+src/rayquery/include/jah_voxel_march.glsl	for( int j = 1; j < JAH_VOX_COUNT && result.alpha < 0.95; ++j )
+src/rayquery/include/jah_voxel_ray.glsl	for( int j = 0; j < JAH_VOX_COUNT; ++j )
+src/rayquery/include/jah_voxel_ray.glsl	for( int c = 0; c < JAH_VOX_COUNT; ++c )
+src/rayquery/include/jah_voxel_ray.glsl	for( int k = 0; k < JAH_VOX_COUNT && k < j && held < 0; ++k )
+src/rayquery/rq_probe_place.comp	for( uint y = 0u; y < uint( grid.y ); ++y )
+src/rayquery/rq_probe_place.comp	for( uint k = tid, j = 0u; k < uint( s * s ); k += 64u, ++j )
+src/rayquery/rq_probe_resume.comp	for( ; l < levels; ++l )
+src/rayquery/rq_probe_resume.comp	while( l + 1u < r.brickPyramid[c].y && float( 1u << l ) * brick < 2.0 * rad )
+src/rayquery/rq_probe_resume.comp	for( uint k = tid; k < uint( s * s ); k += 64u )
+src/rayquery/rq_probe_gather.comp	for( int y = lo.y; y < hi.y; ++y )
+src/rayquery/rq_probe_gather.comp	for( int x = lo.x; x < hi.x; ++x )
+src/rayquery/rq_share_law.comp	for( int it = 0; it < n; ++it )
+src/rayquery/rq_reflect.comp	while( subgroupAny( remaining > 0u || phase == 1u ) )
+src/rayquery/rq_reflect.comp	for( int y = lo.y; y < hi.y; ++y )
+src/rayquery/rq_reflect.comp	for( int x = lo.x; x < hi.x; ++x )
+media/Hlms/Jahshaka/JahCardIndirect_cs.glsl	for( uint k = lid; k < size * size; k += 64u )
+media/Hlms/Jahshaka/JahCardIndirect_cs.glsl	for( uint j = 0u; j < caMode.y; ++j )
+media/Hlms/Jahshaka/JahCardLight_cs.glsl	for( uint i = 0u; i < n; ++i )
+media/Hlms/Jahshaka/JahVoxelGatherScan_cs.glsl	for( uint p = 0u; p < rangeCount; ++p )
+media/Hlms/Jahshaka/JahVoxelGather_cs.glsl	for( uint j = 0u; j < L.partCount; ++j )
+media/Hlms/Jahshaka/JahVoxelGather_cs.glsl	for( uint o = 0u; o < params.counts.y; ++o )
+src/rayquery/include/jah_voxel_cones.glsl	for( int i = 0; i < n; ++i )
+src/rayquery/include/jah_voxel_cones.glsl	for( int i = 0; i < n; ++i )
