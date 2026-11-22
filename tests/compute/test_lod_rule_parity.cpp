@@ -37,6 +37,7 @@
 #include "EnginePrivate.h"
 #include "cluster_draw.h"
 #include "cluster_fixtures.h"
+#include "../support/clustermesh.h"
 
 #include "photon/voxel/PhotonVoxelizer.h"
 
@@ -124,7 +125,7 @@ static MeshData chainedMesh(const std::vector<float> &bounds = kBounds)
 // copy isolates the rule: the device half runs through a TEST job (tests/atom/media) the cluster
 // harness dispatches over the DAG's own tables: one thread per (view, cluster),
 // each writing whether the rule draws that cluster. It must pick THE SAME SET as
-// the C++ `clusterCut`, bit for bit, over the shipped meshes (their DAGs baked by
+// the C++ `clusterCut`, bit for bit, over the harness meshes (their DAGs baked by
 // the product's own bake) at 20 distances x 6 scales x 3 tolerances, with the
 // instance ROTATED and scaled NON-UNIFORMLY so the rows of its transform and the
 // level rule's column scale are exercised, not just the translation. Answers
@@ -136,27 +137,9 @@ static MeshData chainedMesh(const std::vector<float> &bounds = kBounds)
 // clusters: affordable, the object draws nothing there (a card under its own extent vanishes). The runtime must
 // agree on it: the twin and the device draw nothing for an affordable empty group and not its members. Since ATOM-2
 // every mesh's DAG ends in an empty top (its error the last cluster's extent), so a far view affords it on every
-// fixture and the whole object vanishes; the card soup stays as the many-islands case.
-static iris::MeshPtr cardSoup(int cards)
-{
-    std::vector<float> p, n;
-    std::vector<unsigned> idx;
-    unsigned seed = 77u;
-    const auto rnd = [&]() { seed = seed * 1664525u + 1013904223u; return float(seed >> 8) / float(1u << 24); };
-    for (int c = 0; c < cards; ++c) {
-        const float cx = rnd() * 2.0f - 1.0f, cy = rnd() * 2.0f - 1.0f, cz = rnd() * 2.0f - 1.0f, h = 0.05f;
-        const float tilt = rnd() * 3.14159265f;
-        const float ux = std::cos(tilt), uz = std::sin(tilt);
-        const unsigned b = unsigned(p.size() / 3);
-        const float corners[4][2] = { { -1, -1 }, { 1, -1 }, { 1, 1 }, { -1, 1 } };
-        for (const auto &k : corners) {
-            p.insert(p.end(), { cx + h * k[0] * ux, cy + h * k[1], cz + h * k[0] * uz });
-            n.insert(n.end(), { -uz, 0.0f, ux });
-        }
-        idx.insert(idx.end(), { b, b + 1, b + 2, b, b + 2, b + 3 });
-    }
-    return clusterfix::meshFromArrays(p, n, {}, idx);
-}
+// fixture and the whole object vanishes; the card soup (tests/support/clustermesh.h) stays as the many-islands case.
+// THE HARNESS MESHES (ATOM-TESTS-BACK-1 stage 1): the product's primitives, the closed sphere and the procedural shell
+// at the Physics sample's 4,936-triangle class (proceduralShell(4936): 5,292) — no sample model.
 static void clusterCutParity(Engine *e)
 {
     std::printf("\n== the fourth copy: the CLUSTER CUT, C++ against the GLSL piece ==\n");
@@ -170,10 +153,9 @@ static void clusterCutParity(Engine *e)
         const auto ms = clusterfix::loadModel(prim + name);
         if (!ms.empty()) meshes.push_back({ name, ms.front() });
     }
-    const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
-    if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
-    meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
-    meshes.push_back({ "cards", cardSoup(400) });   // a card soup (ATOM-6's empty-top fixture; every mesh ends empty now)
+    meshes.push_back({ "shell-4936", clusterfix::meshFromShell(enginetest::proceduralShell(4936)) });
+    meshes.push_back({ "closed-sphere-20k", clusterfix::meshFromShell(clustermesh::closedSphere()) });
+    meshes.push_back({ "cards", clusterfix::meshFromShell(clustermesh::cardSoup(400)) });   // ATOM-6's empty-top fixture
 
     // The instance: rotated 30 degrees about Y then 20 about X, scaled NON-UNIFORMLY
     // (1 : 0.6 : 1.3 along its own axes, times the sweep's scale), placed `dist`
@@ -287,7 +269,7 @@ static void clusterCutParity(Engine *e)
         CHECK(distinct >= 4u, msg);
     }
     char msg[200];
-    std::snprintf(msg, sizeof(msg), "the cluster cut ran on %zu shipped meshes", meshesRun);
+    std::snprintf(msg, sizeof(msg), "the cluster cut ran on %zu harness meshes", meshesRun);
     CHECK(meshesRun >= 5u, msg);
     std::snprintf(msg, sizeof(msg),
                   "THE GLSL CUT AND THE C++ CUT PICK THE SAME CLUSTERS: %llu (view, cluster) answers, "
@@ -310,7 +292,7 @@ static void clusterCutParity(Engine *e)
 // PRODUCT runs it in the cull's cut job (JahCullCut_cs.glsl) over the GPU scene's
 // cluster tables, with the instance's rows from the scene's table, the eye and
 // footprint from the request, and the drawn set COMPACTED into records — so this
-// arm drives the real thing: each shipped mesh's baked DAG attached to eight
+// arm drives the real thing: each harness mesh's baked DAG attached to eight
 // instances (inside its bounds out to 500 radii, scaled 0.5-4, one rotated and
 // scaled non-uniformly), the cull asked in mode 3 through the public gpuCull door
 // at seven parameter sets (tolerance, lens, height; one orthographic), and the drawn
@@ -326,10 +308,9 @@ static void productCutParity(Engine *e, View *view)
         const auto ms = clusterfix::loadModel(prim + name);
         if (!ms.empty()) meshes.push_back({ name, ms.front() });
     }
-    const auto phys = clusterfix::loadModel(std::string(CLUSTER_FIXTURE_DIR) + "/physics_model.obj");
-    if (!phys.empty()) meshes.push_back({ "physics-model", phys.front() });
-    meshes.push_back({ "uv-sphere-20k", clusterfix::uvSphere() });
-    meshes.push_back({ "cards", cardSoup(400) });   // a card soup (ATOM-6's empty-top fixture; every mesh ends empty now)
+    meshes.push_back({ "shell-4936", clusterfix::meshFromShell(enginetest::proceduralShell(4936)) });
+    meshes.push_back({ "closed-sphere-20k", clusterfix::meshFromShell(clustermesh::closedSphere()) });
+    meshes.push_back({ "cards", clusterfix::meshFromShell(clustermesh::cardSoup(400)) });   // ATOM-6's empty-top fixture
 
     struct Set { float tol, fovDeg, height; bool ortho; };
     // ...and the tiers' 2 and 3 px (ATOM-3 stage 1: High's and Medium's rows).
@@ -338,17 +319,12 @@ static void productCutParity(Engine *e, View *view)
                           { 1.0f, 45.0f, 1080.0f, true },  { 2.0f, 45.0f, 1080.0f, false },
                           { 3.0f, 60.0f, 1080.0f, false } };
     unsigned long long pairs = 0, bad = 0, nearBad = 0, nearCount = 0, drawnTotal = 0, overflow = 0;
-    unsigned long long coverageBad = 0, overlapBad = 0, emptyTopVanished = 0;
+    unsigned long long emptyTopVanished = 0;
     unsigned depthHist[16] = {};
     size_t meshesRun = 0;
     for (const auto &m : meshes) {
         clusterfix::Fixture f;
-        if (!clusterfix::bake(f, m.second, m.first, /*wantRegions=*/true) || f.data.clusters.empty()) continue;
-        // THE GROUPS WITH NO OUTPUT CLUSTERS (the empty groups): where one is affordable its members' regions
-        // are covered by nothing — the object vanishes there, which is the empty group's meaning.
-        std::vector<unsigned char> hasOutput(f.data.clusterGroups.size(), 0);
-        for (const MeshCluster &c : f.data.clusters)
-            if (c.refined >= 0) hasOutput[size_t(c.refined)] = 1;
+        if (!clusterfix::bake(f, m.second, m.first) || f.data.clusters.empty()) continue;
         Scene *sc = e->createScene("cut-" + m.first);
         view->setScene(sc);
         const MeshId mesh = sc->createMesh(f.data);
@@ -439,38 +415,10 @@ static void productCutParity(Engine *e, View *view)
                     if (std::fabs(a - gr.error) <= 1.0e-4f * gr.error) { near = true; break; }
                 }
                 meshNear += near ? 1u : 0u;
-                // THE DEVICE'S SET IS ONE CUT ON ITS OWN (the fix round's F2): no drawn
-                // cluster sits under another drawn one (a drawn cluster produced by a
-                // group whose member is drawn), and the drawn clusters' regions cover
-                // every level-0 triangle exactly once (the bake's provenance partition,
-                // atom.cluster_cut (archived: archive/tests/atom)'s own count).
-                {
-                    std::vector<unsigned char> isDrawn(f.data.clusters.size(), 0);
-                    for (unsigned c : gpu) if (c < isDrawn.size()) isDrawn[c] = 1;
-                    std::vector<unsigned char> groupHasDrawnMember(f.data.clusterGroups.size(), 0);
-                    for (unsigned c : gpu) groupHasDrawnMember[size_t(f.data.clusters[c].group)] = 1;
-                    for (unsigned c : gpu) {
-                        const int ref = f.data.clusters[c].refined;
-                        if (ref >= 0 && groupHasDrawnMember[size_t(ref)]) ++overlapBad;
-                    }
-                    std::vector<unsigned> cover(f.triangles, 0u);
-                    for (unsigned c : gpu)
-                        if (int(c) < f.stats.clusterRegions.size())
-                            for (quint32 t : f.stats.clusterRegions.at(int(c)))
-                                if (t < cover.size()) ++cover[t];
-                    // under an AFFORDABLE EMPTY group nothing is the right cover
-                    std::vector<unsigned char> vanished(f.triangles, 0u);
-                    for (size_t c = 0; c < f.data.clusters.size(); ++c) {
-                        const int g = f.data.clusters[c].group;
-                        if (hasOutput[size_t(g)] || !clusterGroupVerdict(f.data.clusterGroups[size_t(g)], v)) continue;
-                        if (int(c) < f.stats.clusterRegions.size())
-                            for (quint32 t : f.stats.clusterRegions.at(int(c)))
-                                if (t < vanished.size()) vanished[t] = 1;
-                    }
-                    for (size_t t = 0; t < cover.size(); ++t)
-                        coverageBad += (cover[t] == 1u || (cover[t] == 0u && vanished[t])) ? 0u : 1u;
-                    if (gpu.empty()) ++emptyTopVanished;   // every mesh ends in an empty top (ATOM-2)
-                }
+                // THE CUT'S OWN LAWS (one cut: no drawn cluster under a drawn one, every level-0 triangle covered once)
+                // are atom.cut_partition's, on the CPU (ATOM-TESTS-BACK-1): the device's set equal to clusterCut's, below,
+                // carries them here.
+                if (gpu.empty()) ++emptyTopVanished;   // every mesh ends in an empty top (ATOM-2)
                 if (gpu == cpu) continue;
                 if (near) ++meshNearBad; else ++meshBad;
                 if (meshBad + meshNearBad <= 2u)
@@ -498,14 +446,10 @@ static void productCutParity(Engine *e, View *view)
     for (int i = 0; i < 16; ++i) if (depthHist[i]) std::printf("%d:%u ", i, depthHist[i]);
     std::printf("\n");
     char msg[260];
-    std::snprintf(msg, sizeof(msg), "the product's cut ran on %zu shipped meshes", meshesRun);
+    std::snprintf(msg, sizeof(msg), "the product's cut ran on %zu harness meshes", meshesRun);
     CHECK(meshesRun >= 6u, msg);
     std::snprintf(msg, sizeof(msg), "no instance overflowed the cut's stream (%llu)", overflow);
     CHECK(overflow == 0u, msg);
-    std::snprintf(msg, sizeof(msg), "THE DEVICE'S SETS ARE CUTS: no drawn cluster under a drawn one (%llu) and every "
-                  "level-0 triangle covered exactly once by the drawn regions (%llu triangle-cuts off)",
-                  overlapBad, coverageBad);
-    CHECK(overlapBad == 0u && coverageBad == 0u, msg);
     std::snprintf(msg, sizeof(msg), "THE EMPTY TOP GROUP (ATOM-6): %llu (instance, view) cuts where the object vanished, "
                   "the device and the twin alike", emptyTopVanished);
     CHECK(emptyTopVanished > 0u, msg);

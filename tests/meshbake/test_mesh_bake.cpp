@@ -45,6 +45,7 @@
 #include <QCryptographicHash>
 
 #include "../support/testmesh.h"
+#include "../support/proceduralshell.h"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
@@ -85,7 +86,6 @@
 #include "irisgl/import/parsecensus.h"
 #include "services/primitiveassets.h"
 #include "data/primitives.h"
-#include "../support/testmesh.h"
 #include "export/exportcontentsource.h"
 
 #include "irisgl/core/geometry/trimesh.h"
@@ -2528,12 +2528,14 @@ static int bakeBlobTool(const QString &path, int threads, const QString &outPath
 /// query loop chunked across the pool) must give byte-identical blobs. Subjects
 /// that reach every parallel path: a MULTI-MESH model (two copies of the scan
 /// stand-in as two objects — concurrent meshes, the displacement lock's passes,
-/// island caps, the DAG's waves) and the Stanford dragon (normals + UVs in the
-/// attribute metric, a 68k-triangle DAG, the SDF's band). Each hardware bake runs
+/// island caps, the DAG's waves) and the procedural shell at the 68,220-triangle class
+/// (enginetest::proceduralShell(68220): 69,312 triangles, normals + UVs in the attribute
+/// metric, a 69k-triangle DAG, the SDF's band; ATOM-TESTS-BACK-1 C1: no sample model). Each hardware bake runs
 /// TWICE, so a race that happens to reproduce the serial bytes once is still
 /// asked again.
-/// `part` (TEST-CUT-1: three rows, each at most 60 s): "standin" (the multi-mesh model), "dragon" (the Stanford
-/// dragon), "throws" (the throw-in-every-unit cases on the multi-mesh model); empty runs all three.
+/// `part` (TEST-CUT-1: three rows, each at most 60 s): "standin" (the multi-mesh model), "shell" (the procedural
+/// shell, written as the binary PLY the import reads), "throws" (the throw-in-every-unit cases on the multi-mesh model);
+/// empty runs all three.
 /// THE THROWS SPLIT BY PROOF (TEST-STREAMLINE-1 5c: "throws" ran 17.92 s solo against a CPU row's 10 s, 5.26 s of it the
 /// one-thread reference bake the "standin" part already makes): with `refDir`, "standin" WRITES its one-thread blob of
 /// the multi-mesh model there (only once its three blobs agree), beside the sha256 of the model it baked, and
@@ -2622,12 +2624,17 @@ static void bakeDeterminism(const QString &part = QString(), const QString &refR
     CHECK_LOUD(hardware >= 2, "the box has more than one thread (else this suite proves nothing)");
     QStringList subjects;
     if (part.isEmpty() || part == QStringLiteral("standin")) subjects << twoPath;
-    if (part.isEmpty() || part == QStringLiteral("dragon")) subjects << QStringLiteral(JAH_CLUSTER_FIXTURE_DIR "/matcaps_dragon.obj");
+    if (part.isEmpty() || part == QStringLiteral("shell")) {
+        const QString shellPath = tmp.path() + QStringLiteral("/shell_68220.ply");
+        CHECK_LOUD(enginetest::writeBinaryPly(enginetest::proceduralShell(68220), shellPath.toStdString()),
+                   "the procedural shell (68,220-triangle class) is written");
+        subjects << shellPath;
+    }
     const bool throws = part.isEmpty() || part == QStringLiteral("throws") || part.startsWith(QStringLiteral("throws:"));
     const QString throwSet = part.startsWith(QStringLiteral("throws:")) ? part.mid(7) : QString();
     CHECK_LOUD((!subjects.isEmpty() || throws) && (throwSet.isEmpty() || throwSet == QStringLiteral("early")
                                                     || throwSet == QStringLiteral("late")),
-               qUtf8Printable(QStringLiteral("the part '%1' is one of standin, dragon, throws, throws:early, throws:late")
+               qUtf8Printable(QStringLiteral("the part '%1' is one of standin, shell, throws, throws:early, throws:late")
                               .arg(part)));
     CHECK_LOUD(throwSet.isEmpty() || !refDir.isEmpty(), "a throws:<set> part reads the serial reference: its directory given");
     const auto modelSha = [&twoPath]() {

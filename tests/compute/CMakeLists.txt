@@ -2,8 +2,8 @@
 # engine.lod_rule_parity (a SHIP row from ATOM-5 to draft B, TEST-STREAMLINE-1 4a; LONG since) — the quality currency's C++ half against its GLSL half,
 # over 10,000 evaluations of the REAL cull shader on the device.
 # ATOM stage 2 (lane ATOM-CLUSTER-1) added the FOURTH copy — the cluster cut's C++
-# rule against the product GLSL piece JahClusterCut.glsl, over the shipped meshes'
-# baked DAGs. That arm needs the bake (IrisGL), the mirror's hand-off, the
+# rule against the product GLSL piece JahClusterCut.glsl, over the harness meshes'
+# baked DAGs (tests/support/clustermesh.h, proceduralshell.h, the product's primitives). That arm needs the bake (IrisGL), the mirror's hand-off, the
 # cluster fixtures and the harness's device runner (tests/atom/cluster_*), and the
 # harness reaches EnginePrivate.h and links Ogre, as tests/shadow's spike does.
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
@@ -33,9 +33,8 @@ set_tests_properties(chain.hzb PROPERTIES TIMEOUT 60 LABELS "engine")
 # C++ twin and the device's rule are held equal here (a change to one side without the other reds it — the subsystem's guard);
 # the quality currency's C++ half against its GLSL half - the ONE walk piece through both of its users, the cull's
 # job 1 (and its mode-2 draw writer) and the voxel gather's job, over two mesh entries (ATOM-HOUSE-1) - and the cluster
-# cut's exact rule in the fourth copy (the GLSL piece over the shipped meshes' DAGs) and the fifth (the product's cut
-# job), the cut ONE cut (no drawn cluster under another, every level-0 triangle covered once). ATOM-6 deleted the
-# density cap the earlier text named.
+# cut's exact rule in the fourth copy (the GLSL piece over the harness meshes' DAGs) and the fifth (the product's cut
+# job), cell-identical to clusterCut, whose cut is ONE cut by atom.cut_partition (tests/atom: the CPU laws).
 add_executable(test_lod_rule_parity test_lod_rule_parity.cpp
     ${CMAKE_SOURCE_DIR}/tests/atom/cluster_draw.cpp
     ${CMAKE_SOURCE_DIR}/tests/atom/cluster_fixtures.cpp
@@ -54,7 +53,6 @@ target_compile_definitions(test_lod_rule_parity PRIVATE
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/"
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    CLUSTER_FIXTURE_DIR="${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures"
     CLUSTER_TEST_MEDIA_DIR="${CMAKE_SOURCE_DIR}/tests/atom/media")
 target_link_libraries(test_lod_rule_parity PRIVATE IrisGL JahshakaEngine OgreNext Qt6::Gui Qt6::OpenGL)
 add_dependencies(test_lod_rule_parity JahshakaEngineMedia)

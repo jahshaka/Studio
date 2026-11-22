@@ -518,21 +518,15 @@ void shutdown(Env &env)
 // the world
 // ---------------------------------------------------------------------------
 
-/// The world's meshes: the sixteen shipped primitives + the two shipped
-/// high-poly models (the Matcaps dragon, the Physics sample's model), each
-/// through the bake.
-static std::vector<std::pair<QString, QString>> worldMeshSources(bool withModels)
+/// The world's meshes: the sixteen shipped primitives, each through the bake (buildWorld adds the two
+/// procedural shells after them).
+static std::vector<std::pair<QString, QString>> worldMeshSources()
 {
     std::vector<std::pair<QString, QString>> out;
     const QDir prim(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives"));
     for (const QString &f : prim.entryList({ "*.obj" }, QDir::Files, QDir::Name)) {
         if (f == QLatin1String("endlessplane.obj") || f == QLatin1String("plane.obj")) continue;
         out.push_back({ prim.filePath(f), QFileInfo(f).baseName() });
-    }
-    if (withModels) {
-        const QDir fx(QStringLiteral(SCALE_MODEL_DIR));
-        out.push_back({ fx.filePath("matcaps_dragon.obj"), "matcaps-dragon" });
-        out.push_back({ fx.filePath("physics_model.obj"), "physics-model" });
     }
     return out;
 }
@@ -595,12 +589,23 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     auto t0 = Clock::now();
     std::vector<iris::MeshPtr> meshes;
     std::vector<float> extents;
-    for (const auto &src : worldMeshSources(spec.withShippedModels)) {
+    for (const auto &src : worldMeshSources()) {
         BakeInfo info;
         iris::MeshPtr m = bakedMesh(src.first, src.second, &info);
         if (m.isNull()) { std::printf("FAIL: world mesh %s\n", qPrintable(src.second)); return false; }
         meshes.push_back(m);
         extents.push_back(std::max(1e-3f, meshExtent(m)));
+        world.meshes.push_back(info);
+    }
+    // THE TWO DENSE MESHES (ATOM-TESTS-BACK-1 stage 1: no sample model): the procedural shell at the 68,220-triangle
+    // class (the Matcaps dragon's, the world's before) and the 4,936-triangle class (the Physics sample's model's), baked
+    // through the same door into the shared cache once (shellAsset).
+    for (const size_t tris : { size_t(68220), size_t(4936) }) {
+        BakeInfo info;
+        const QList<iris::MeshPtr> ms = shellAsset(tris, &info, /*bakeIfMissing=*/true);
+        if (ms.isEmpty()) { std::printf("FAIL: world mesh shell-%zu\n", tris); return false; }
+        meshes.push_back(ms.first());
+        extents.push_back(std::max(1e-3f, meshExtent(ms.first())));
         world.meshes.push_back(info);
     }
     BakeInfo groundInfo;

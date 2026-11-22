@@ -1,30 +1,4 @@
 
-# ---------------------------------------------------------------------------
-# ATOM stage 2 — THE CLUSTER DAG (lane ATOM-CLUSTER-1; SPECS/atom/B2_CLUSTER_DAG_DESIGN.md).
-#
-# THE TWO SHIPPED HIGH-POLY MODELS, extracted at CONFIGURE time from the sample
-# archives the product ships (scenes/*.zip): the Matcaps sample's Stanford dragon
-# and the Physics sample's model. The fixtures read them from the build tree so
-# no suite unzips anything at run time.
-set(_cluster_fixture_dir ${CMAKE_CURRENT_BINARY_DIR}/cluster-fixtures)
-set(_cluster_models
-    "Matcaps.zip|objects/adc9ec963f064a673e5f3157b7b1a2a789025d723302c49f5fbd1df6a0b7a1ca.obj|matcaps_dragon.obj"
-    "Physics.zip|objects/a9a3c340a9acfb5af1e5b090a8c89f079f8ae2be303362d30becb26b73d4d5e7.obj|physics_model.obj")
-foreach(_m IN LISTS _cluster_models)
-    string(REPLACE "|" ";" _parts "${_m}")
-    list(GET _parts 0 _zip)
-    list(GET _parts 1 _member)
-    list(GET _parts 2 _name)
-    if(NOT EXISTS ${_cluster_fixture_dir}/${_name})
-        set(_tmp ${CMAKE_CURRENT_BINARY_DIR}/cluster-fixtures-extract)
-        file(ARCHIVE_EXTRACT INPUT "${CMAKE_SOURCE_DIR}/scenes/${_zip}" DESTINATION ${_tmp}
-             PATTERNS ${_member})
-        file(MAKE_DIRECTORY ${_cluster_fixture_dir})
-        file(RENAME ${_tmp}/${_member} ${_cluster_fixture_dir}/${_name})
-        file(REMOVE_RECURSE ${_tmp})
-    endif()
-endforeach()
-
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 
 # ---------------------------------------------------------------------------

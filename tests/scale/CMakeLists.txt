@@ -12,7 +12,8 @@
 #
 # THE FIXTURES are built at test time, never checked in:
 #   the WORLD   — scale_world.cpp (a document through the product's mirror and
-#                 tier tables; ~20 meshes through the product's bake);
+#                 tier tables; the sixteen primitives + two procedural shells (68,220
+#                 and 4,936-triangle classes) through the product's bake);
 #   the ASSETS  — enginetest::proceduralShell (tests/support/proceduralshell.h)
 #                 at 250 k / 1 M / 5 M / 10 M triangles through the same bake. The
 #                 big bakes are W11 itself (minutes and gigabytes), so they are made
@@ -31,9 +32,6 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Core Network Sql)
 find_package(X11 REQUIRED)
 
-# The two shipped high-poly models, from the tests/atom configure-time extraction
-# (tests/atom/CMakeLists.txt: the Matcaps dragon and the Physics model).
-set(_scale_model_dir ${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures)
 set(JAH_SCALE_ASSET_CACHE_ROOT "$ENV{HOME}/Developer/testing/scale-cache" CACHE PATH
     "The shared scale-suite bake cache (one per box; per-producer sub-directories)")
 
@@ -54,7 +52,6 @@ function(jah_scale_target _t)
         ${CMAKE_SOURCE_DIR}/irisgl/engine/include ${CMAKE_CURRENT_SOURCE_DIR})
     target_compile_definitions(${_t} PRIVATE
         JAHSHAKA_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-        SCALE_MODEL_DIR="${_scale_model_dir}"
         SCALE_ASSET_CACHE_ROOT="${JAH_SCALE_ASSET_CACHE_ROOT}"
         JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
         JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")

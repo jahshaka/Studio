@@ -193,7 +193,6 @@ struct WorldSpec {
     /// DISTINCT base-colour textures cycled over the materials (0 = untextured).
     /// The decode's bucket count follows them (HlmsAtom::BucketKey::textures).
     int   textures = 0;
-    bool  withShippedModels = true;  ///< the dragon + the physics model
 };
 
 struct World {

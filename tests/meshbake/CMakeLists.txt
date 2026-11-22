@@ -58,9 +58,7 @@ target_include_directories(test_mesh_bake PRIVATE
     # meshoptimizer.h for the stock arm (its entry points are libIrisGL's exported ones)
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/meshoptimizer/src)
 target_compile_definitions(test_mesh_bake PRIVATE
-    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
-    # the Stanford dragon tests/atom extracts at configure time (atom.lod_bound_bar (archived: archive/tests/atom))
-    JAH_CLUSTER_FIXTURE_DIR="${CMAKE_BINARY_DIR}/tests/atom/cluster-fixtures")
+    JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 target_link_libraries(test_mesh_bake PRIVATE IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia
     meshoptimizer)   # the cut curve's STOCK arm: the clusterizer + partitioner libIrisGL no longer pulls in
@@ -89,12 +87,13 @@ file(MAKE_DIRECTORY ${_quit_home}/run)
 # THE BAKE DOES NOT DEPEND ON ITS THREADS (IMPORT-SPEED-1) — `bake.determinism.*`.
 # The bake runs its meshes, its chains/DAGs and every nearest-surface loop on the
 # hardware's threads with ordered reductions; the claim that the OUTPUT is the
-# serial one is this suite: a multi-mesh model and the Stanford dragon baked on 1
-# thread and on every thread (twice) give byte-identical blobs, and a throw in any
+# serial one is this suite: a multi-mesh model and the procedural shell at the dragon's 68,220-triangle class
+# (enginetest::proceduralShell, ATOM-TESTS-BACK-1: no sample model) baked on 1 thread and on every thread (twice) give
+# byte-identical blobs, and a throw in any
 # unit of the bake answers "no bake" and leaves the next bake whole.
 # REBUILT TO ITS LAW (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s): every bake of the law kept — each subject
 # once serial and twice on every thread, the ten throw cases (two widths x five units) each followed by a whole bake —
-# as THREE rows of the same binary (`--determinism standin|dragon|throws`), each its own process and home; one row was
+# as THREE rows of the same binary (`--determinism standin|shell|throws`), each its own process and home; one row was
 # 65 s. A CPU row renders nothing (FRAMES 0); each under the CPU row's 10 s since TEST-STREAMLINE-1 5c (no `measure`).
 # THE THROWS SPLIT BY PROOF (TEST-STREAMLINE-1 5c): the throws part ran 17.92 s solo against a CPU row's 10 s, 5.26 s of it
 # the one-thread reference bake the standin part already makes - so the standin part WRITES its one-thread blob (once its
@@ -103,10 +102,10 @@ file(MAKE_DIRECTORY ${_quit_home}/run)
 # compared with the same one-thread bytes, refused when the model is not the one the reference baked. The reference is
 # removed by bake.determinism.reference.clean (FIXTURES_CLEANUP); it is the CALL's (below). Run one alone: ctest -R bake.determinism.throws.late.
 set(_bake_ref ${_bake_home}/serial-reference)
-foreach(_part standin dragon throws.early throws.late)
+foreach(_part standin shell throws.early throws.late)
     string(REPLACE "throws." "throws:" _arg ${_part})
     set(_ref_arg "")
-    if(NOT _part STREQUAL "dragon")
+    if(NOT _part STREQUAL "shell")
         set(_ref_arg "${_bake_ref}")
     endif()
     add_test(NAME bake.determinism.${_part}
