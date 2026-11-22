@@ -1629,3 +1629,23 @@ set_tests_properties(gi.hit_specular_mobility PROPERTIES JAHSHAKA_TEST_FRAMES 89
 # WHAT A SCRIPT ROW HERE NEEDS BUILT beyond its command line (jah_builds, tests/CMakeLists.txt): the walk's law part checks
 # its own arithmetic (rough_lag.sh law), nothing the build makes.
 jah_builds(none ROWS gi.walk_rough.law)
+# gi.async_arm_cold (SHADER-SYSTEM-1 7a, fixes B, C, D) - THE LIGHTING ARM OF AN ASYNCHRONOUS SCENE NEVER COMPILES IN A
+# FRAME: no shader cache, an offscreen Live view compiling in the background on the Streaming pace, a floor, a box, a sun
+# and the voxel GI; the deferred path ran, 0 compute templates parsed and 0 pipelines built in any frame, the arm lands
+# once the compiler is empty (test_gi_async_arm_cold.cpp says the laws). A fixture.
+add_executable(test_gi_async_arm_cold test_gi_async_arm_cold.cpp)
+set_target_properties(test_gi_async_arm_cold PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_gi_async_arm_cold PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_gi_async_arm_cold PRIVATE JahshakaEngine)
+add_dependencies(test_gi_async_arm_cold JahshakaEngineMedia)
+jah_gpu_row(gi.async_arm_cold CLASS engine FRAMES 640 COMMAND test_gi_async_arm_cold
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+         COLD "its subject is the arm's permutations compiling: they must be cold in the process (the fixture's shaderCacheOff)")
+set_tests_properties(gi.async_arm_cold PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
