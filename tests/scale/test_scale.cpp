@@ -196,10 +196,13 @@ static void printPath(const char *label, const std::vector<MonitorRecord> &recs)
     std::fflush(stdout);
 }
 
-static bool bootWorld(Env &env, World &w, const char *log, WorldSpec spec = WorldSpec())
+/// `settleCap`: the frames the world may wait for GI to rest (buildWorld's loop). 0 for a row whose law reads no GI or ray
+/// state: the scale world never reports giAtRest (a declared engine finding, SPECS/OPEN_REDS.md), so a wait spends its whole
+/// cap - 600 frames - for nothing such a law needs.
+static bool bootWorld(Env &env, World &w, const char *log, WorldSpec spec = WorldSpec(), int settleCap = 600)
 {
     if (!boot(env, log)) return false;
-    if (!buildWorld(env, spec, w)) return false;
+    if (!buildWorld(env, spec, w, settleCap)) return false;
     armMonitor(env);
     return true;
 }
@@ -1065,6 +1068,28 @@ static IdRead readIdPass(Env &env, int frames)
 /// kLodBudgetPixels (1 px) reference drew ~1.8x the id pass's cut (0.56x at 1.3 R, 0.58x at 5 R).
 /// Types.h clusterCut over the model's pieces at the view's eye. `root`: an unbounded
 /// tolerance and no frustum — the DAG's ROOT, the coarsest cut the DAG can draw.
+/// The cut's view of one instance (uniform scale k at `pos`) through the view's own camera and the scene's tolerance - the
+/// cut job's inputs (fillCullView). `root`: the tolerance infinite, no frustum (the root cut).
+static ClusterCutView cutView(Env &env, const GpuCullRequest &req, const iris::Vec3 &pos, float k, bool root)
+{
+    ClusterCutView v;
+    v.worldRow[0][0] = k; v.worldRow[0][3] = pos.x();
+    v.worldRow[1][1] = k; v.worldRow[1][3] = pos.y();
+    v.worldRow[2][2] = k; v.worldRow[2][3] = pos.z();
+    v.scale = k;
+    std::memcpy(v.eye, req.eye, sizeof(v.eye));
+    const auto *applied = jahshaka::engine::inspect::scene(env.scene);
+    v.tolerance = root ? 1e30f : applied->pixelTolerance() * applied->lodBias();
+    v.projScaleY = req.projScaleY;
+    v.viewportHeight = req.viewportHeight;
+    // ...and the view's frustum, cluster by cluster, as the cut job tests it
+    // (SPEED-VR-MEM, Types.h clusterInFrustum).
+    v.cullPlanes = !root;
+    for (int i = 0; i < 6; ++i)
+        for (int c = 0; c < 4; ++c) v.planes[i][c] = req.planes[i * 4 + c];
+    return v;
+}
+
 static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const iris::Vec3 &pos, float k,
                            bool root = false)
 {
@@ -1074,25 +1099,52 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
     for (const iris::MeshPtr &m : pieces) {
         MeshData d;
         if (!SceneMirror::toMeshData(m.data(), d) || d.clusters.empty()) continue;
-        ClusterCutView v;
-        v.worldRow[0][0] = k; v.worldRow[0][3] = pos.x();
-        v.worldRow[1][1] = k; v.worldRow[1][3] = pos.y();
-        v.worldRow[2][2] = k; v.worldRow[2][3] = pos.z();
-        v.scale = k;
-        std::memcpy(v.eye, req.eye, sizeof(v.eye));
-        const auto *applied = jahshaka::engine::inspect::scene(env.scene);
-        v.tolerance = root ? 1e30f : applied->pixelTolerance() * applied->lodBias();
-        v.projScaleY = req.projScaleY;
-        v.viewportHeight = req.viewportHeight;
-        // ...and the view's frustum, cluster by cluster, as the cut job tests it
-        // (SPEED-VR-MEM, Types.h clusterInFrustum).
-        v.cullPlanes = !root;
-        for (int i = 0; i < 6; ++i)
-            for (int c = 0; c < 4; ++c) v.planes[i][c] = req.planes[i * 4 + c];
         std::vector<unsigned> drawn;
-        total += clusterCut(d.clusterGroups, d.clusters, v, drawn);
+        total += clusterCut(d.clusterGroups, d.clusters, cutView(env, req, pos, k, root), drawn);
     }
     return total;
+}
+
+/// THE CUT'S MINIMALITY (W4's law, the lead's ruling 2026-11-22): no drawn cluster's MEMBER group (the group that would
+/// simplify it further, MeshCluster::group) is one the rule affords - else the cut would have collapsed further. Counted
+/// over every piece's drawn clusters at the view's tolerance (Types.h clusterGroupVerdict, the rule itself). `tooFine`: the
+/// NEGATIVE CONTROL - in each piece, the first drawn cluster produced by a finite affordable group r is replaced by r's
+/// MEMBERS (the cut one level too fine there), which the law must flag. `cut` returns the triangles of the cut checked.
+static size_t cutMinimalityViolations(Env &env, const QList<iris::MeshPtr> &pieces, const iris::Vec3 &pos, float k,
+                                      bool tooFine, size_t &cut)
+{
+    cut = 0;
+    GpuCullRequest req;
+    if (!env.engine->fillCullView(env.view, req)) return ~size_t(0);
+    size_t violations = 0;
+    for (const iris::MeshPtr &m : pieces) {
+        MeshData d;
+        if (!SceneMirror::toMeshData(m.data(), d) || d.clusters.empty()) continue;
+        const ClusterCutView v = cutView(env, req, pos, k, false);
+        std::vector<unsigned char> affordable(d.clusterGroups.size(), 0);
+        for (size_t g = 0; g < d.clusterGroups.size(); ++g) affordable[g] = clusterGroupVerdict(d.clusterGroups[g], v) ? 1 : 0;
+        std::vector<unsigned> drawn;
+        clusterCutFromAffordable(d.clusters, affordable, drawn);
+        if (tooFine) {
+            for (unsigned c : drawn) {
+                const int r = d.clusters[c].refined;
+                if (r < 0 || !affordable[size_t(r)]) continue;
+                std::vector<unsigned> finer;
+                for (unsigned x : drawn)
+                    if (d.clusters[x].refined != r) finer.push_back(x);
+                for (size_t x = 0; x < d.clusters.size(); ++x)
+                    if (d.clusters[x].group == r) finer.push_back(unsigned(x));
+                drawn.swap(finer);
+                break;
+            }
+        }
+        for (unsigned c : drawn) {
+            cut += d.clusters[c].indexCount / 3u;
+            const int g = d.clusters[c].group;
+            if (g >= 0 && affordable[size_t(g)]) ++violations;
+        }
+    }
+    return violations;
 }
 
 // ===========================================================================
@@ -1212,7 +1264,10 @@ static int cutCostMain()
 {
     Env env;
     World w;
-    if (!bootWorld(env, w, "test-scale-cut-cost-ogre.log")) return 1;
+    // MEASURED WITH THE WORLD's GI NOT AT REST; THIS LAW DOES NOT READ IT (settleCap 0). Its timings are the id pass's cull
+    // jobs' OWN GPU timestamp spans (the monitor rows id.cull.*): GI work still converging runs in other passes, outside them;
+    // what it can still move is the GPU they share (an async queue's overlap, caches) - UNVERIFIED for this world.
+    if (!bootWorld(env, w, "test-scale-cut-cost-ogre.log", WorldSpec(), 0)) return 1;
     frame(env, 10);
     std::vector<double> cutMs, emitMs, testMs, compactMs, idMs, evaluated, clusters, tris, indices;
     unsigned overflow = 0, sampled = 0;
@@ -1272,6 +1327,15 @@ static int cutCostMain()
 // the cut, whose terminal groups' clusters are drawn when nothing finer is affordable.
 // Number: the triangles the id pass draws for the asset at 1 km against the chain's
 // coarsest level (the level table keeps 8 levels for the voxeliser and the casters, D6).
+// THE LAWS (re-derived by ATOM-TESTS-BACK-1 stage 5, the lead's ruling 2026-11-22; the old "the cut reaches the DAG's root
+// within 1.2x" is DELETED: since the empty top (v26: every DAG ends in a top that draws nothing, atom-and-lod.md) the root
+// at an infinite tolerance is 0 triangles by construction, so no cut above 0 could meet it):
+//   (a) the id pass draws the CPU cut at 1 km (within 1.2x: the id pass's own count against the rule's);
+//   (b) THE CUT IS MINIMAL at 1 km: no drawn cluster's member group is one the rule affords (cutMinimalityViolations) -
+//       NEGATIVE CONTROL: the cut forced one level too fine in each piece is flagged;
+//   (c) MONOTONE: the cut's triangle count never rises as the distance grows, over 100 / 250 / 500 / 1000 m (the rule
+//       affords a group when error x s < tolerance x F, and F shrinks as the eye moves away: a group afforded nearer
+//       stays afforded farther, so the cut only coarsens).
 // ===========================================================================
 static int levelsMain()
 {
@@ -1293,34 +1357,43 @@ static int levelsMain()
     // The document camera's far plane is 500 m by default (CameraNode) — the
     // editor's own view ends there; 1 km needs it moved for this one pose.
     env.camera->farClip = 5000.0f;
+    // (c) MONOTONE over the distances (the CPU cut at each pose, the view's own camera)
+    size_t prevCut = 0, rises = 0;
+    for (float dist : { 100.0f, 250.0f, 500.0f }) {
+        setCamera(env, at + iris::Vec3(0, 0.05f * dist, dist), at);
+        frame(env, 2);
+        const size_t c = cutTriangles(env, shell, at, radius);
+        std::printf("W4 at %.0f m: the CPU cut %zu tris\n", double(dist), c);
+        if (prevCut && c > prevCut) ++rises;
+        prevCut = c;
+    }
     setCamera(env, at + iris::Vec3(0, 50.0f, 1000.0f), at);
     frame(env, 10);
     const IdRead r = readIdPass(env, 30);
     const AtomDrawStatus st = env.scene->atomDrawStatus();
     const size_t cut = cutTriangles(env, shell, at, radius);
-    const size_t root = cutTriangles(env, shell, at, radius, true);
+    if (prevCut && cut > prevCut) ++rises;
+    size_t minimalCut = 0, tooFineCut = 0;
+    const size_t violations = cutMinimalityViolations(env, shell, at, radius, false, minimalCut);
+    const size_t controlViolations = cutMinimalityViolations(env, shell, at, radius, true, tooFineCut);
     const double drawn = r.tris + r.lateTris;
     std::printf("W4 at 1 km: the id pass draws %.0f tris (early %.0f + late %.0f; overflow %u) | the CPU cut at the "
-                "same pose %zu | THE DAG ROOT (the coarsest the DAG can draw) %zu = %.0f a piece | the LOD chain's "
-                "coarsest level %zu (a different structure: the voxeliser's and the casters')\n",
-                drawn, r.tris, r.lateTris, st.cutOverflow, cut, root, info.pieces ? double(root) / info.pieces : 0.0,
+                "same pose %zu | minimality: %zu of its clusters' member groups affordable (the cut one level too fine: "
+                "%zu, %zu tris) | the LOD chain's coarsest level %zu (a different structure: the voxeliser's and the "
+                "casters')\n",
+                drawn, r.tris, r.lateTris, st.cutOverflow, cut, violations, controlViolations, tooFineCut,
                 info.coarsestTriangles);
     target("W4", double(info.levels), "levels", "the asset's chain length (longest piece, level 0 included)");
     target("W4", drawn, "tris", "triangles the id pass's CUT draws for the asset at 1 km");
-    // THE DAG'S FLOOR (a BAKE property, V2-P0A's verdict): the split's pieces keep their open
-    // borders LOCKED through the simplification (meshbake.cpp, the locked-border pass), so the
-    // groups along the seams stop converging — the 10 M bake's log reads 48-210 UNCONVERGED
-    // groups a piece (735-1,552 retries) and only 0-3 made terminal — and every piece's root
-    // keeps ~2.36 k triangles, 11x the chain's coarsest level (whose levels are not locked).
-    // A finding for the audit spec, not a cut defect: the cut reaches this root.
-    target("W4", double(root), "tris", "THE DAG FLOOR: the 10 M shell's DAG root over its pieces (the locked seams)");
-    // THE BARS (ATOM-CLUSTER-CUT closes W4), LIKE FOR LIKE: the id pass draws the CPU cut at
-    // 1 km (within 1.2x), and that cut has reached the DAG's root (within 1.2x of it) —
-    // the coarsest end the DAG holds is reachable.
     REQUIRE(cut > 0 && drawn <= 1.2 * double(cut) && drawn * 1.2 >= double(cut),
             "W4: at 1 km the id pass draws %.0f tris, within 1.2x of the CPU cut's %zu", drawn, cut);
-    REQUIRE(root > 0 && double(cut) <= 1.2 * double(root),
-            "W4: at 1 km the cut (%zu) reaches the DAG's root (%zu) within 1.2x", cut, root);
+    REQUIRE(violations == 0u && minimalCut > 0u,
+            "W4 (b): at 1 km the cut is MINIMAL - no drawn cluster's member group is affordable (%zu of %zu tris' groups)",
+            violations, minimalCut);
+    REQUIRE(controlViolations > 0u && tooFineCut > minimalCut,
+            "W4 (b) NEGATIVE CONTROL: the cut forced one level too fine is flagged (%zu violations, %zu > %zu tris)",
+            controlViolations, tooFineCut, minimalCut);
+    REQUIRE(rises == 0u, "W4 (c): the cut never rises as the distance grows (100 / 250 / 500 / 1000 m: %zu rises)", rises);
     REQUIRE(st.cutOverflow == 0 && st.cutMissing == 0, "W4: the cut fits its stream (%u overflowed, %u missing)",
             st.cutOverflow, st.cutMissing);
     // THE 100-LEVEL CASE (brief §4.4): the chain halves until 128 triangles
@@ -1347,9 +1420,8 @@ static int levelsMain()
 // measured FIRST) read the formula + the one-time term (63 MB, ~14 MB of it arrived with
 // ATOM-SHADOWS-1's caster buffers). So the row attaches the 250 k shell once COLD (its delta
 // less its warm delta is the one-time term), releases it, and then measures every shell WARM.
-// THE BARS: each shell's warm VRAM within 1.15x of the formula (measured +0 / +12 / +9 / +7 %
-// at 250 k / 1 M / 5 M / 10 M), and the one-time term at most 72 MB (62.9 measured, +15 %)
-// PLUS the late caster list's cut buffers (below).
+// THE BARS: each shell's warm VRAM within 1.15x of the formula. The one-time term is printed, measured, no law (its
+// empirical bar deleted by ATOM-TESTS-BACK-1 stage 5: below).
 // ENGINE-UPGRADE-U5 stage 4 (the light's own depth) changed two premises, both measured
 // (spikes/ship-fff575ecb/ATOM-REPORT.md):
 //  * THE SCENE'S SUN-MAP PYRAMIDS ride every shell here: a sun map of a scene with Atom casters
@@ -1362,10 +1434,7 @@ static int levelsMain()
 //    R x R, R/2 x R/2, R/2 x R/2, OgreShadow.cpp planShadowAtlas). At R = 2048: 21.33 + 5.33 +
 //    5.33 MiB of pyramid + (87,381 + 2 x 21,845) x 4 B of grid = 32.5 MiB, the +32.5 MB every
 //    shell read over the old formula at the ship (fff575ecb).
-//  * THE LATE CASTER LIST (AtomComponent::casterCullLate) is one more GpuCull whose cut buffers
-//    follow the caster cut's budget: per index 4 B of stream + 8/3 B of triangle words + 16/24 B
-//    of records (OgreGpuCull.cpp ensureCut, kCutIndicesPerRecord 24) = 7.33 B, once per process:
-//    at the 2,097,152-index budget 14.67 MiB, the +14.7 MB the one-time term grew by.
+// THE FIRST MESH's ONE-TIME ALLOCATIONS are printed as MEASURED, NO LAW (its old empirical bar deleted: below).
 // ===========================================================================
 static int residencyMain()
 {
@@ -1451,18 +1520,13 @@ static int residencyMain()
         REQUIRE(d.used <= 1.15 * d.formula, "W5 %zu: warm VRAM %.1f MB within 1.15x of the formula's %.1f MB", t, d.used,
                 d.formula);
         if (t == 250000) {
-            // The late caster list's cut buffers (the header): 7.33 B an index of the caster budget.
-            const double lateMB =
-                double(env.scene->atomDrawStatus().casterIndexBudget) * (4.0 + 8.0 / 3.0 + 16.0 / 24.0) / 1048576.0;
-            const double bar = 72.0 + lateMB;
-            std::printf("W5 the first mesh's one-time allocations: %.1f MB (the 250 k shell cold %.1f, warm %.1f) | bar "
-                        "72 + the late caster list %.1f = %.1f MB\n",
-                        cold.used - d.used, cold.used, d.used, lateMB, bar);
+            // MEASURED, NO LAW (ATOM-TESTS-BACK-1 stage 5, the lead's ruling 2026-11-22): the old bar "<= 72 MB + the late
+            // caster list" was an empirical constant, not a closed form, and is DELETED; the engine publishes no list of
+            // its one-time pools (MemoryStats: the pool totals only) from which a closed form could be summed.
+            std::printf("W5 the first mesh's one-time allocations: %.1f MB (the 250 k shell cold %.1f, warm %.1f) - "
+                        "measured, no law\n", cold.used - d.used, cold.used, d.used);
             target("W5", cold.used - d.used, "MB", "the engine's one-time allocations the FIRST mesh a process "
-                   "attaches pays (the cut's and casters' buffers: the 250 k shell cold less warm)",
-                   "<= 72 MB + the late caster list");
-            REQUIRE(cold.used - d.used <= bar, "W5: the first mesh's one-time allocations %.1f MB <= %.1f MB",
-                    cold.used - d.used, bar);
+                   "attaches pays (the cut's and casters' buffers: the 250 k shell cold less warm)", "measured, no law");
         }
     }
     REQUIRE(measured == 4, "the four shells were measured warm (%d)", measured);
@@ -1531,8 +1595,9 @@ static int decodeMain()
 //        the id pass's own request (the cut, mode 3) replayed through Engine::gpuCull
 //        against that pyramid: what a single cull against this frame's whole depth keeps;
 //   ON   the product: the door open, no pyramid of the view's own (the id pass's alone);
-//   ON+  the door open WITH the view's complete-depth pyramid rebuilt after the opaque pass
-//        (the design question: does the first cull gain from the complete depth).
+//   (ON+, the door open WITH the view's complete-depth pyramid rebuilt after the opaque pass - the design question "does
+//   the first cull gain from the complete depth" - is DELETED by ATOM-TESTS-BACK-1 stage 5 to bring the row under its
+//   cap: it was printed, never asserted, and its answer is in: it drew exactly ON's triangles at all 8 poses.)
 // THE BAR (brief §1): the ON arm draws within 1.25x of the reference (median over the
 // walk), and its SETTLED id image equals the OFF arm's word for word at every pose. The
 // frame-by-frame proof — the first frame after a camera cut included — is
@@ -1583,14 +1648,15 @@ static int occlusionMain()
     Env env;
     World w;
     // D1's DENSE WORLD: the bar is a ratio on a dense scene, not a scale stick (V2-P0A).
-    if (!bootWorld(env, w, "test-scale-occlusion-ogre.log", denseWorld())) return 1;
+    // MEASURED WITH THE WORLD's GI NOT AT REST; THIS LAW DOES NOT READ IT (settleCap 0): ids and triangle counts only.
+    if (!bootWorld(env, w, "test-scale-occlusion-ogre.log", denseWorld(), 0)) return 1;
     const int kPoses = 8, kSettle = 10;
     auto pose = [&](int s) {
         const float x = -90.0f + 25.0f * float(s);
         setCamera(env, iris::Vec3(x, 1.7f, 0.0f), iris::Vec3(x + 10.0f, 1.7f, -2.0f));
     };
     std::vector<std::vector<uint32_t>> offIds(kPoses);
-    std::vector<double> offTris(kPoses, 0.0), refTris(kPoses, 0.0), onTris(kPoses, 0.0), onPlusTris(kPoses, 0.0);
+    std::vector<double> offTris(kPoses, 0.0), refTris(kPoses, 0.0), onTris(kPoses, 0.0);
     std::vector<unsigned> occluded(kPoses, 0u), disoccluded(kPoses, 0u), refOccluded(kPoses, 0u);
     unsigned bad = 0, missingPx = 0, comparedPoses = 0, unstableOff = 0, unstableOn = 0;
 
@@ -1643,25 +1709,12 @@ static int occlusionMain()
                     refTris[s] > 0 ? onTris[s] / refTris[s] : 0.0, onTris[s] > 0 ? offTris[s] / onTris[s] : 0.0,
                     d == ~size_t(0) ? size_t(0) : d, m);
     }
-    // ---- ON+ (the complete-depth pyramid rebuilt after the opaque pass too) ---------
-    env.fxOverride = [](PostFxDesc &fx) { fx.hzb = true; fx.hzbFarthest = true; };
-    frame(env, 10);
-    for (int s = 0; s < kPoses; ++s) {
-        pose(s);
-        frame(env, kSettle);
-        onPlusTris[s] = double(env.scene->atomDrawStatus().cutTriangles);
-    }
-    env.fxOverride = nullptr;
-
-    std::vector<double> ratio, gain, ratioPlus;
+    std::vector<double> ratio, gain;
     for (int s = 0; s < kPoses; ++s) {
         if (refTris[s] > 0 && onTris[s] > 0) {
             ratio.push_back(onTris[s] / refTris[s]);
             gain.push_back(offTris[s] / onTris[s]);
         }
-        if (refTris[s] > 0 && onPlusTris[s] > 0) ratioPlus.push_back(onPlusTris[s] / refTris[s]);
-        std::printf("W7 x %6.1f: the ON+ arm (the complete-depth pyramid first) %9.0f tris = %.2fx the reference\n",
-                    -90.0 + 25.0 * s, onPlusTris[s], refTris[s] > 0 ? onPlusTris[s] / refTris[s] : 0.0);
     }
     std::printf("W7 settle: reads that disagreed with the next frame's before two agreed — frustum-only %u, two-pass %u "
                 "(the base's id-image transient after a jump; see settledIds)\n", unstableOff, unstableOn);
@@ -1679,7 +1732,6 @@ static int occlusionMain()
     target("W7", stats(onTris).median, "tris", "drawn per frame on the walk, the two-pass occlusion (the product)");
     target("W7", stats(gain).median, "x", "frustum-only / two-pass, median over the walk");
     target("W7", medRatio, "x", "two-pass / the reference, median over the walk", "<= 1.25");
-    target("W7", stats(ratioPlus).median, "x", "the ON+ arm (the complete-depth pyramid first) / the reference");
     shutdown(env);
     return failures ? 1 : 0;
 }
@@ -2459,7 +2511,11 @@ static int shadowCutMain()
         Env env;
         World w;
         const std::string log = std::string("test-scale-shadow-cut-") + label + "-ogre.log";
-        if (!bootWorld(env, w, log.c_str(), spec)) { ++failures; return; }
+        // MEASURED WITH THE WORLD's GI NOT AT REST; THIS LAW DOES NOT READ IT (settleCap 0). Its numbers are the shadow node's
+        // passes' OWN CPU and GPU spans (FramePass cpuMs / gpuMs), the arms alternated in one process (each its own 60-frame
+        // settle): GI work converging runs outside those passes, but its worker threads share the CPU and its passes the GPU,
+        // so it can stretch a pass's own span - a drift the alternation cancels only where it is common to both arms.
+        if (!bootWorld(env, w, log.c_str(), spec, 0)) { ++failures; return; }
         pathStill(env, 60);
         Arm shipped, cut, pbs;   // `cut` = shadow.lightDepth 0, the casters' own cost (the paired-arm law)
         unsigned long long shippedTris = 0ull;
@@ -2518,6 +2574,10 @@ static int shadowCutMain()
     // shutdown is itself the regression test of MONITOR-RETIRE-1 F2 (the frame
     // monitor used to outlive its engine and crash the next boot's first frame
     // in FrameMonitor::beginFrame).
+    // UNREGISTERED (ATOM-TESTS-BACK-1 stage 5, the lead's ruling 2026-11-22): each world's three-arm law needs 1170 frames
+    // (60 still + 2 rounds x 3 arms x (60 + 120) + 30), past a row's 60-s cap on either world; never cut to fit (its sample
+    // is its law). Both proofs are OWED together as a fixture chain (the world built once, one arm a row) at the caster
+    // cut's item; this mode is their source.
     runWorld("world", denseWorld(), 1.0 / 3.0, kGpuMsPerMapBar);   // calibrated on D1's dense world (V2-P0A)
     WorldSpec small;
     small.instances = 200;
@@ -2740,6 +2800,7 @@ int main(int argc, char **argv)
     if (mode == "--frame-arms-lattice") return frameArmsMain(true);
     if (mode == "--gpu-coverage") return gpuCoverageMain();
     std::printf("usage: test_scale --world|--voxel-scroll|--lights|--cluster-cut|--levels|--cut-cost|--residency|--decode|"
-                "--lights-cost|--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--lattice-owed|--gpu-coverage\n");
+                "--lights-cost|--occlusion|--tlas|--atlas|--far-field|--bake|--hit-list|--cpu-walks|--shadow-cut|"
+                "--lattice-owed|--gpu-coverage\n");
     return 2;
 }

@@ -506,6 +506,8 @@ void shutdown(Env &env)
     env.mirror.reset();
     env.doc.reset();
     env.camera.reset();
+    // THE ROW'S FRAMES (its JAHSHAKA_TEST_FRAMES, tests/scale/CMakeLists.txt: the frames the process closed)
+    if (env.engine) std::printf("FRAMES %llu (frames the engine closed)\n", env.engine->published().frame);
     env.engine.reset();
     if (env.xDisplay) {
         closeRigWindow(env.xDisplay, env.xWindow);

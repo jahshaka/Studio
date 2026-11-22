@@ -104,15 +104,20 @@ jah_ship_row(scale.cpu_walks)
 set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
 # THE LONG MEASURE ROWS (ATOM-TESTS-BACK-1 stage 5; the spec's "scale as LONG measure rows"): label `measure` - never FAST,
 # never a feature end (scripts/gate-scope.py: `measure` runs at the sprint's ship, the LONG pass). Each prints its wall's
-# numbers; a shell it reads is the box's (scripts/scale-shells.sh), else it FAILS naming that tool. Locked as before their
-# archiving (163d90223): the two that time the GPU or the frame (cut_cost, shadow_cut) under the GPU-timing lock.
-# THE WARM CACHE: every one boots on the engine rows' shared warm shader cache, which a GREEN run promotes; a run killed at
-# its cap promotes nothing (scale.cpu_walks' declared red, OPEN_REDS: 56 of its world's shaders cold, frame 48 of 517 at
-# 60 s) - each row's price, cold and warm, is its LONG-style solo run's.
+# numbers; a shell it reads is the box's (scripts/scale-shells.sh), else it FAILS naming that tool. The one that reads GPU
+# time (cut_cost) runs under the GPU-timing lock (tests/CMakeLists.txt JAH_GPU_EXCLUSIVE_SUITES).
+# THE CAP: every one boots on the engine rows' shared warm shader cache (a GREEN run promotes). What passed the cap was not
+# compiling (the same frame reached at 60 s with 52 or 206 programs compiled) but the world's GI settle: buildWorld waits up
+# to 600 frames for giAtRest, which the scale world never reports (a declared engine finding, SPECS/OPEN_REDS.md). The three
+# whose laws read no GI or ray state boot with no settle (test_scale.cpp, bootWorld's settleCap 0; GI stays on): occlusion,
+# cut_cost and the unregistered shadow cut.
 jah_scale_row(scale.levels       --levels        60    FALSE)   # W4: the coarsest end reachable (the 10 M shell)
 jah_scale_row(scale.residency    --residency     60    FALSE)   # W5: everything resident (the 1 / 5 / 10 M shells)
 jah_scale_row(scale.occlusion    --occlusion     60    FALSE)   # W7: the two-pass id pass against the reference cull (a bar)
-set_tests_properties(scale.levels scale.residency scale.occlusion PROPERTIES
+jah_scale_row(scale.cut_cost     --cut-cost      60    TRUE)    # D1's decision number: the cluster cut's cost (locked)
+# scale.shadow_cut (`test_scale --shadow-cut`, ATOM-SHADOWS-1) is UNREGISTERED: its three-arm law needs 1170 frames a world,
+# past the cap on either world; owed as a fixture chain at the caster cut's item (the lead's ruling 2026-11-22).
+set_tests_properties(scale.levels scale.residency scale.occlusion scale.cut_cost PROPERTIES
                      LABELS "scale;measure")
 
 # scale.gpu_coverage (archived: archive/tests/scale) — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5): on
@@ -138,6 +143,8 @@ file(MAKE_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}/removechild_leak")
 # Ogre::Root::_fireFrameEnded, summed over the row's processes); 0 = a row that renders nothing.
 foreach(_row_frames
         "scale.cpu_walks=517"
+        # ATOM-TESTS-BACK-1 stage 5: each its own priced run's "FRAMES <n>" line (scale_world.cpp shutdown)
+        "scale.levels=58" "scale.residency=220" "scale.cut_cost=201" "scale.occlusion=213"
         )
     string(REPLACE "=" ";" _rf "${_row_frames}")
     list(GET _rf 0 _r)

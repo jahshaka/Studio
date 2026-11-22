@@ -278,6 +278,9 @@ set(JAH_GPU_EXCLUSIVE_SUITES
     capture.first_recording.timing
     # D1-SCALE-FIXTURES: the scale world's timed walls — scale.cpu_walks is the scale prefix's ship row.
     scale.cpu_walks
+    # ATOM-TESTS-BACK-1 stage 5, the lead's verdict 2026-11-22: the LONG measure row that reads GPU time (a row timing the
+    # card beside another GPU user measures the other user).
+    scale.cut_cost
 )
 # THE CARD'S SLOTS (TESTING-SIMPLE): the boot declaration and the width per class (tests/support/test_boot.cmake), the
 # resource spec ctest schedules the GPU rows on (tests/cmake/vram_rows.cmake). No admission wraps a row: one ctest at a
