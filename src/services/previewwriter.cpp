@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "services/previewwriter.h"
 
+#include <algorithm>
+
 #include <QBuffer>
 #include <QCoreApplication>
 #include <QSqlDatabase>
@@ -46,6 +48,7 @@ void post(const std::shared_ptr<bool> &alive, std::function<void()> fn)
 Writer::Writer(const QString &libraryFile, int budgetMs)
     : mPath(libraryFile), mBudgetMs(budgetMs), mAlive(std::make_shared<bool>(true))
 {
+    mClock.start();
     mThread = std::thread([this]() { run(); });
 }
 
@@ -75,6 +78,24 @@ bool Writer::submit(const QString &guid, const QImage &image, const QString &key
     }
     {
         std::lock_guard<std::mutex> lock(mMutex);
+        for (Item &waiting : mQueue) {
+            if (waiting.guid != guid) continue;
+            // ONE WAITING WRITE A GUID: the newer replaces it, in its place.
+            Landed superseded;
+            superseded.guid = guid;
+            superseded.key = waiting.key;
+            superseded.reason = QStringLiteral("superseded by a newer preview of the same row");
+            superseded.drops = waiting.drops;
+            if (waiting.done) {
+                Done old = std::move(waiting.done);
+                post(mAlive, [old, superseded]() { old(superseded); });
+            }
+            waiting.image = image;
+            waiting.png.clear();
+            waiting.key = key;
+            waiting.done = std::move(done);
+            return true;
+        }
         Item item;
         item.guid = guid;
         item.image = image;   // implicitly shared; read-only on the worker
@@ -123,13 +144,33 @@ void Writer::run()
             lock.lock();
             if (write.busy && !stopping) {
                 // DROPPED PAST THE BUDGET: said, and back at the HEAD so the order holds.
-                ++item.drops;
                 const QString why = write.reason;
-                irisLog(QStringLiteral("previews: the write of %1 was dropped: %2 — it re-queues").arg(item.guid, why));
+                if (item.drops == 0) {
+                    item.firstDropMs = mClock.elapsed();
+                    irisLog(QStringLiteral("previews: the write of %1 waits behind the library's lock (%2); "
+                                           "it re-queues at the head until it lands").arg(item.guid, why));
+                }
+                ++item.drops;
                 if (mDropHook) {
                     DropHook hook = mDropHook;
                     const QString guid = item.guid;
                     post(mAlive, [hook, guid, why]() { hook(guid, why); });
+                }
+                // A NEWER write of the same guid already waits: this one is superseded, never a
+                // second waiting write of the guid.
+                const bool newer = std::any_of(mQueue.begin(), mQueue.end(),
+                                               [&item](const Item &q) { return q.guid == item.guid; });
+                if (newer) {
+                    Landed superseded;
+                    superseded.guid = item.guid;
+                    superseded.key = item.key;
+                    superseded.reason = QStringLiteral("superseded by a newer preview of the same row");
+                    superseded.drops = item.drops;
+                    if (item.done) {
+                        Done old = std::move(item.done);
+                        post(mAlive, [old, superseded]() { old(superseded); });
+                    }
+                    continue;
                 }
                 mQueue.push_front(std::move(item));
                 continue;
@@ -139,6 +180,11 @@ void Writer::run()
             landed.ok = write.ok;
             landed.reason = write.ok ? QString() : write.reason;
             landed.drops = item.drops;
+            landed.waitedMs = item.drops > 0 ? mClock.elapsed() - item.firstDropMs : 0;
+            if (item.drops > 0)
+                irisLog(QStringLiteral("previews: the write of %1 %2 after %3 tries, %4 ms behind the lock")
+                            .arg(item.guid, write.ok ? QStringLiteral("landed") : QStringLiteral("failed"))
+                            .arg(item.drops + 1).arg(landed.waitedMs));
             if (!write.ok)
                 irisLog(QStringLiteral("previews: the preview of %1 was not stored: %2").arg(item.guid, write.reason));
             Done done = std::move(item.done);

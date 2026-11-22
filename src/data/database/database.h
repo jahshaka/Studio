@@ -32,9 +32,9 @@ For more information see the LICENSE file
 // phase 0): begin on construction, roll back on destruction unless commit()
 // was called — so every early-return path inside a multi-statement DB
 // operation unwinds cleanly instead of leaving half the rows behind (and a
-// .jaf import stops paying one fsync per row).  If the driver can't start a
-// transaction (nested, or non-transactional driver) the guard degrades to a
-// no-op: statements simply autocommit as before.
+// .jaf import stops paying one fsync per row). A guard NESTED inside another on the
+// same connection is a no-op that rides the outer one; the OUTERMOST begins IMMEDIATE, and a
+// BEGIN that fails is reported by its commit() (see the constructor).
 class DbTransaction
 {
 public:
@@ -51,8 +51,8 @@ public:
         // rollback into a no-op — the failed import's rows would then ride the
         // batch's commit. So a TOP-LEVEL guard (sActive == 0, i.e. no guard of
         // ours is live and this one is about to be the outermost) tells the
-        // batch to commit what it has and stand down first; the batch reopens
-        // itself at Database's next statement. Guards nested inside another
+        // batch to commit what it has and stand down first; the batch begins
+        // again at its next write. Guards nested inside another
         // guard are untouched — their degrade-to-no-op is the intended
         // "one transaction per operation" behaviour and must stay.
         // OUTERMOST IS PER CONNECTION (CLOSE-2 round 2, H2). A process-wide
@@ -64,14 +64,28 @@ public:
         // to the no-op the whole design exists to prevent. A transaction on
         // another connection cannot be an outer transaction of this one.
         const QString connection = database.connectionName();
-        const bool outermost = (activeGuards(connection) == 0);
-        if (outermost && sBatchYield) sBatchYield(database);
-        active = database.transaction();
-        if (active) retain(connection);
-        // Stood the batch down and then failed to begin (a closed connection,
-        // or a transaction opened outside this layer): put it back rather than
-        // leave it waiting for a release that will never come.
-        else if (outermost && sBatchResume) sBatchResume(database);
+        outermost = (activeGuards(connection) == 0);
+        if (!outermost) return;   // nested: it rides the outer transaction (the intended no-op)
+        if (sBatchYield) sBatchYield(database);
+        // IMMEDIATE (PREVIEWS-1): the write lock is taken HERE, so no other connection (the
+        // preview writer's) can commit inside this transaction and its snapshot can never go stale
+        // - a DEFERRED BEGIN whose first statement is a read failed its first write with 517
+        // SQLITE_BUSY_SNAPSHOT once another connection had committed (spikes/previews-1/stage1/
+        // probe.out, cases 4-5). The BEGIN waits for another writer's one row at most (the busy
+        // timeout). A BEGIN that fails is NAMED: commit() answers false with its reason, never a
+        // silent autocommit reported as a commit.
+        QSqlQuery begin(database);
+        if (begin.exec(QStringLiteral("BEGIN IMMEDIATE"))) {
+            active = true;
+            retain(connection);
+            return;
+        }
+        const QSqlError error = begin.lastError();
+        beginError = error.nativeErrorCode().toInt() == 517   // SQLITE_BUSY_SNAPSHOT
+            ? QStringLiteral("a read left active on this connection holds a stale snapshot (%1)").arg(error.text())
+            : error.text();
+        qWarning("DbTransaction: the transaction on '%s' could NOT BEGIN: %s - its statements run uncovered "
+                 "and its commit() answers false", qUtf8Printable(connection), qUtf8Printable(beginError));
     }
 
     ~DbTransaction()
@@ -87,7 +101,11 @@ public:
     // it — deep audit 2026-09, area 6).
     bool commit()
     {
-        if (!active) return true;
+        if (!outermost) return true;   // nested: the outer guard's commit is the unit's
+        if (!active) {
+            qWarning("DbTransaction: commit() of a transaction that never began: %s", qUtf8Printable(beginError));
+            return false;
+        }
         active = false;
         const bool ok = db.commit();
         if (ok) noteCommit(); else db.rollback();
@@ -108,9 +126,12 @@ public:
         release();
     }
 
-    /// True while this guard owns a live transaction (false when it degraded
-    /// to a no-op because the connection was already in one, or closed).
-    bool isActive() const { return active; }
+    /// True when this guard is the OUTERMOST on its connection: it owns the unit, and its
+    /// commit() is the unit's answer (false when nested: the caller's commit is). An outermost guard
+    /// whose BEGIN failed still answers true here, so its owner reaches commit() and hears the failure.
+    bool isActive() const { return outermost; }
+    /// Why the BEGIN failed; empty when it did not.
+    QString beginFailure() const { return beginError; }
 
     DbTransaction(const DbTransaction &) = delete;
     DbTransaction &operator=(const DbTransaction &) = delete;
@@ -125,13 +146,6 @@ public:
     /// database.cpp.
     using BatchYieldHook = std::function<void(const QSqlDatabase &)>;
     static void setBatchYieldHook(BatchYieldHook hook) { sBatchYield = std::move(hook); }
-    /// The other half: called when the LAST guard on a connection lets go, so
-    /// a batch that stood down can take its transaction back. Event-driven on
-    /// purpose — the alternative (reopening lazily before each statement) put
-    /// a member read into Database::executeAndCheckQuery, and that funnel is
-    /// reached today through at least one uninitialised Database pointer
-    /// (AssetPanel::populateFavorites, fixed alongside this).
-    static void setBatchResumeHook(BatchYieldHook hook) { sBatchResume = std::move(hook); }
     /// Is a gesture batch holding a transaction right now? Process-wide, for
     /// the durable-commit accounting only.
     static bool anyBatchLive() { return sBatchesLive > 0; }
@@ -176,18 +190,18 @@ private:
         if (it != sActive.end() && --it.value() <= 0)
             sActive.erase(it);   // side connections are named per use — never grow the map
         --sActiveTotal;
-        if (activeGuards(connection) == 0 && sBatchResume) sBatchResume(db);
     }
 
     QSqlDatabase db;
     bool active;
+    bool outermost = false;
+    QString beginError;
 
     inline static QHash<QString, int> sActive;
     inline static int sActiveTotal = 0;
     inline static int sBatchesLive = 0;
     inline static quint64 sCommits = 0;
     inline static BatchYieldHook sBatchYield = BatchYieldHook();
-    inline static BatchYieldHook sBatchResume = BatchYieldHook();
 };
 
 // Every project-scoped function takes the project guid explicitly — the data
@@ -257,8 +271,8 @@ public:
     // WHAT A BATCH DOES NOT DO: it never holds somebody else's transaction
     // hostage. A top-level DbTransaction opened while a batch is live makes
     // the batch commit what it has and stand down (DbTransaction's
-    // constructor); the batch reopens itself at this Database's next
-    // statement. So an import inside a script run still owns a real
+    // constructor); the batch begins again at this Database's next WRITE
+    // (never at a read: an IMMEDIATE batch holds the write lock). So an import inside a script run still owns a real
     // transaction it can roll back.
     //
     // FAILURE POLICY: a run that ends with the batch still open commits — the
@@ -289,8 +303,8 @@ public:
     static void setBatchCommitListener(BatchCommitListener listener);
     /// How many levels are open (editor.undoState().dbBatchDepth).
     int  batchDepth() const { return batchOpenCount; }
-    /// True while the batch actually holds a transaction — false between a
-    /// stand-down and the next statement. Diagnostics only.
+    /// True while the batch actually holds a transaction — false before the scope's
+    /// first write and between a stand-down and the next write. Diagnostics only.
     bool batchTransactionLive() const { return batchTxLive; }
     /// The process's durable write commits so far (DbTransaction::commitCount).
     static quint64 durableCommits() { return DbTransaction::commitCount(); }
@@ -751,6 +765,25 @@ public:
     /// The thumbnail hook (setAssetThumbnailWritten) for a write made off this connection; called
     /// on the UI thread by whoever made it.
     static void announceAssetThumbnailWritten(const QString &guid);
+    /// WHAT A PREVIEW DEPICTS, AND WHAT IS STORED (PREVIEWS-1; services/previewkey.h): per row its
+    /// type, whether it holds bytes and a definition blob, its stored key, and the key's inputs —
+    /// its asset_files role:oid, `projectGuid`'s pin of it, its members' dependee:oid. ONE
+    /// statement a call however many rows (LARGE-LIBRARY-1's law); no thumbnail or blob is read
+    /// (their lengths only). `projectOnly` keeps `projectGuid`'s pinned rows, `type` >= 0 one
+    /// type, a non-empty `guids` those rows.
+    struct PreviewRow
+    {
+        QString guid;
+        int type = 0;
+        bool hasBytes = false;
+        bool hasBlob = false;
+        QString storedKey;
+        QStringList files;
+        QString pin;
+        QStringList members;
+    };
+    QVector<PreviewRow> fetchPreviewRows(const QString &projectGuid, bool projectOnly, int type,
+                                         const QStringList &guids = QStringList());
     /// The library file this connection opened (what readThumbnailBytes is handed).
     QString filePath() const;
     QByteArray fetchAssetData(const QString &guid) const;
@@ -896,7 +929,7 @@ private:
     /// The gesture batch (see beginBatch). `batchOpenCount` is the counted
     /// scope; `batchTxLive` says whether the transaction behind it is open
     /// right now — it goes false when the batch stands down for a nested
-    /// owner, and true again at the next statement.
+    /// owner, and true again at the next write.
     int  batchOpenCount = 0;
     bool batchTxLive = false;
     /// Levels the database DROPPED while their guards were still alive
@@ -904,10 +937,12 @@ private:
     /// guard is unwinding through a close it never asked for, and warning it
     /// about an imbalance it did not cause is noise.
     int  batchScopesAbandoned = 0;
-    /// Opens the batch transaction if the scope is open and it is not live
-    /// (and nothing else owns a transaction on this connection). Called when
-    /// the batch is opened and whenever the last guard lets go.
+    /// Opens the batch transaction (IMMEDIATE) if the scope is open and it is not live (and nothing
+    /// else owns a transaction on this connection). Called at a WRITE only (beginBatchAtWrite).
     void resumeBatchIfNeeded();
+    /// The write funnel's half: the instance whose connection runs `query` opens its batch. A
+    /// static walk of the registry: executeAndCheckQuery never touches `this`.
+    static void beginBatchAtWrite(const QSqlQuery &query);
     /// Commits the batch transaction if it is live, leaving the SCOPE open.
     /// The stand-down path and the outermost endBatch both go through it.
     bool commitBatchTransaction();
@@ -916,8 +951,6 @@ private:
     /// The stand-down hook's per-instance half: commit and go quiet if the
     /// connection about to open a transaction is OURS.
     void standDownBatchFor(const QSqlDatabase &connection);
-    /// …and the resume half, when that connection's last guard lets go.
-    void resumeBatchFor(const QSqlDatabase &connection);
 
     /// The deferred-delete queue (see enqueueAssetDelete). Guid + the hard
     /// delete flag, in the order the commands died.

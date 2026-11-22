@@ -234,9 +234,6 @@ Database::Database()
     DbTransaction::setBatchYieldHook([](const QSqlDatabase &connection) {
         for (Database *instance : liveDatabases()) instance->standDownBatchFor(connection);
     });
-    DbTransaction::setBatchResumeHook([](const QSqlDatabase &connection) {
-        for (Database *instance : liveDatabases()) instance->resumeBatchFor(connection);
-    });
 }
 
 void Database::standDownBatchFor(const QSqlDatabase &connection)
@@ -246,10 +243,10 @@ void Database::standDownBatchFor(const QSqlDatabase &connection)
     commitBatchTransaction();
 }
 
-void Database::resumeBatchFor(const QSqlDatabase &connection)
+void Database::beginBatchAtWrite(const QSqlQuery &query)
 {
-    if (connection.connectionName() != db.connectionName()) return;
-    resumeBatchIfNeeded();
+    for (Database *instance : liveDatabases())
+        if (instance->db.driver() == query.driver()) instance->resumeBatchIfNeeded();
 }
 
 Database::~Database()
@@ -386,9 +383,15 @@ bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
     // (AssetPanel::populateFavorites) and used to survive it by never
     // touching a member. Keeping that property here is cheaper than trusting
     // every caller in the tree.
+    // THE BATCH BEGINS AT ITS FIRST WRITE (PREVIEWS-1), never at a read: an IMMEDIATE batch holds
+    // the library's write lock, so a scope that only READS (a script run that lists) takes no lock
+    // and leaves the preview writer free; its reads autocommit, each released when finished. Found
+    // through the registry by the query's driver, never through `this` (see above).
+    const bool write = isWriteStatement(query.lastQuery());
+    if (write && !DbTransaction::anyGuardLive()) beginBatchAtWrite(query);
     const bool unbatchedWrite = !DbTransaction::anyGuardLive()
                                 && !DbTransaction::anyBatchLive()
-                                && isWriteStatement(query.lastQuery());
+                                && write;
 
     if (!query.exec()) {
         // LOUD, and at warn level: a failed query here silently no-ops a user
@@ -419,8 +422,7 @@ bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
 
 void Database::beginBatch()
 {
-    if (batchOpenCount++ > 0) return;   // an inner level rides the outer one
-    resumeBatchIfNeeded();
+    ++batchOpenCount;   // the SCOPE; its transaction begins at the scope's first write
 }
 
 bool Database::endBatch()
@@ -446,8 +448,14 @@ void Database::resumeBatchIfNeeded()
     // batch is the thing that YIELDS, it never takes. Per CONNECTION (H2) —
     // a guard on an export's own connection is not an owner of ours.
     if (DbTransaction::activeGuards(db.connectionName()) > 0) return;
-    batchTxLive = db.transaction();
+    // IMMEDIATE, like DbTransaction's (database.h): no other connection commits inside the batch.
+    QSqlQuery begin(db);
+    batchTxLive = begin.exec(QStringLiteral("BEGIN IMMEDIATE"));
     if (batchTxLive) DbTransaction::noteBatchLive(true);
+    else
+        iris::Logger::getSingleton()->warn(
+            QStringLiteral("The database batch could NOT BEGIN (%1): its writes autocommit one by one")
+                .arg(begin.lastError().text()));
 }
 
 bool Database::commitBatchTransaction()
@@ -1232,12 +1240,15 @@ QString Database::ensureFolder(const QString &folderName, const QString &project
 {
     if (folderName.isEmpty() || projectGuid.isEmpty()) return QString();
 
-    QSqlQuery query;
-    query.prepare("SELECT guid FROM folders WHERE name = ? AND project_guid = ? LIMIT 1");
-    query.addBindValue(folderName);
-    query.addBindValue(projectGuid);
-    if (executeAndCheckQuery(query, "ensureFolder") && query.next())
-        return query.value(0).toString();
+    {
+        // Block-scoped: the read is finished before the write below (source.no_live_read_at_write).
+        QSqlQuery query;
+        query.prepare("SELECT guid FROM folders WHERE name = ? AND project_guid = ? LIMIT 1");
+        query.addBindValue(folderName);
+        query.addBindValue(projectGuid);
+        if (executeAndCheckQuery(query, "ensureFolder") && query.next())
+            return query.value(0).toString();
+    }
 
     const QString guid = GUIDManager::generateGUID();
     // The project's own folders hang off the project guid, as the editor's
@@ -1651,6 +1662,55 @@ Database::PreviewWrite Database::writePreview(QSqlDatabase conn, const QString &
 void Database::announceAssetThumbnailWritten(const QString &guid)
 {
     if (thumbnailWrittenHook()) thumbnailWrittenHook()(guid);
+}
+
+QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectGuid, bool projectOnly,
+                                                         int type, const QStringList &guids)
+{
+    // The correlated sub-selects are SQLite's per row, inside this ONE statement; the oid lists
+    // come back in no promised order (previews::key sorts them).
+    QString sql = QStringLiteral(
+        "SELECT a.guid, a.type, length(a.thumbnail) > 0, length(a.asset) > 0, t.hash, "
+        "(SELECT group_concat(f.role || ':' || f.oid) FROM asset_files f WHERE f.asset_guid = a.guid), "
+        "(SELECT p.oid_pin FROM project_assets p WHERE p.project_guid = ? AND p.asset_guid = a.guid), "
+        "(SELECT group_concat(d.dependee || ':' || m.oid) FROM dependencies d "
+        " JOIN asset_files m ON m.asset_guid = d.dependee WHERE d.depender = a.guid) "
+        "FROM assets a LEFT JOIN thumbnails t ON t.guid = a.guid WHERE 1");
+    if (projectOnly)
+        sql += QStringLiteral(" AND a.guid IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)");
+    if (type >= 0) sql += QStringLiteral(" AND a.type = ?");
+    if (!guids.isEmpty()) {
+        QStringList marks;
+        for (int i = 0; i < guids.size(); ++i) marks << QStringLiteral("?");
+        sql += QStringLiteral(" AND a.guid IN (%1)").arg(marks.join(QLatin1Char(',')));
+    }
+    sql += QStringLiteral(" ORDER BY a.rowid");
+    QSqlQuery query;
+    query.prepare(sql);
+    query.addBindValue(projectGuid);
+    if (projectOnly) query.addBindValue(projectGuid);
+    if (type >= 0) query.addBindValue(type);
+    for (const QString &guid : guids) query.addBindValue(guid);
+    QVector<PreviewRow> rows;
+    if (!executeAndCheckQuery(query, QStringLiteral("FetchPreviewRows"))) return rows;
+    const auto split = [](const QVariant &v) {
+        QStringList list = v.toString().split(QLatin1Char(','), Qt::SkipEmptyParts);
+        list.removeDuplicates();   // an edge stamped in two projects names its member twice
+        return list;
+    };
+    while (query.next()) {
+        PreviewRow row;
+        row.guid = query.value(0).toString();
+        row.type = query.value(1).toInt();
+        row.hasBytes = query.value(2).toBool();
+        row.hasBlob = query.value(3).toBool();
+        row.storedKey = query.value(4).toString();
+        row.files = split(query.value(5));
+        row.pin = query.value(6).toString();
+        row.members = split(query.value(7));
+        rows.append(row);
+    }
+    return rows;
 }
 
 QString Database::filePath() const
@@ -4128,6 +4188,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     auto sceneThumb = query.value(2).toByteArray();
     auto sceneVersion = query.value(3).toString();
     auto oldSceneGuid = query.value(4).toString();
+    query.finish();   // read whole: no statement left active (source.no_live_read_at_write)
 
     // AN ARCHIVE SCENE THAT IS NOT A JSON OBJECT IS REFUSED (STUDIO-HYGIENE-1). The guid remap below
     // round-trips the blob through QJsonDocument, and a blob that does not parse came out of it EMPTY:

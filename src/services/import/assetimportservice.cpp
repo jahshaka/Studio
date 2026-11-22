@@ -111,10 +111,15 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
     // The common case pays exactly this: an unlisted row only exists after a
     // library delete that projects vetoed, so most libraries answer 0 here and
     // nothing else in this function runs.
-    QSqlQuery any(conn);
-    if (!any.exec("SELECT COUNT(*) FROM assets WHERE listed = 0") || !any.next()
-        || any.value(0).toInt() == 0)
-        return QString();
+    // EVERY READ HERE IS FINISHED BEFORE THE WRITE BELOW (PREVIEWS-1): a single-row read left
+    // active holds a WAL snapshot, and once the preview writer has committed the write fails at
+    // once with 517 SQLITE_BUSY_SNAPSHOT (spikes/previews-1/stage1/probe.out, case 2).
+    {
+        QSqlQuery any(conn);
+        if (!any.exec("SELECT COUNT(*) FROM assets WHERE listed = 0") || !any.next()
+            || any.value(0).toInt() == 0)
+            return QString();
+    }
 
     // The source oid is ALREADY known: prepare() stamps it into the
     // determinism record for EVERY import — from the importer's own hash when
@@ -145,20 +150,22 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
     // be what the user wants back (the catalog records no deletion time, so
     // creation recency is what there is). rowid breaks the ties date_created
     // cannot: it is second-resolution, and two rows of one import share it.
-    QSqlQuery match(conn);
-    match.prepare("SELECT AF.asset_guid FROM asset_files AF "
-                  "JOIN assets A ON A.guid = AF.asset_guid "
-                  "WHERE AF.role = 'source' AND AF.oid = ? AND A.listed = 0 "
-                  // ONE HOME: an unlisted row of another home is not this
-                  // import's to take (ASSETS-HOME-1, no cross-home rows).
-                  "AND A.view_filter = ? "
-                  "AND " + Database::memberSubquery(QStringLiteral("A")) + " "
-                  "ORDER BY A.date_created DESC, A.rowid DESC LIMIT 1");
-    match.addBindValue(oid);
-    match.addBindValue(request.home.stored());
-    if (!match.exec() || !match.next()) return QString();
-
-    const QString guid = match.value(0).toString();
+    QString guid;
+    {
+        QSqlQuery match(conn);
+        match.prepare("SELECT AF.asset_guid FROM asset_files AF "
+                      "JOIN assets A ON A.guid = AF.asset_guid "
+                      "WHERE AF.role = 'source' AND AF.oid = ? AND A.listed = 0 "
+                      // ONE HOME: an unlisted row of another home is not this
+                      // import's to take (ASSETS-HOME-1, no cross-home rows).
+                      "AND A.view_filter = ? "
+                      "AND " + Database::memberSubquery(QStringLiteral("A")) + " "
+                      "ORDER BY A.date_created DESC, A.rowid DESC LIMIT 1");
+        match.addBindValue(oid);
+        match.addBindValue(request.home.stored());
+        if (!match.exec() || !match.next()) return QString();
+        guid = match.value(0).toString();
+    }
     return db->setAssetListed(guid, true) ? guid : QString();
 }
 

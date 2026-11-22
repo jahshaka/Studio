@@ -20,18 +20,26 @@ For more information see the LICENSE file
 //      (Database::updateAssetThumbnail with empty bytes, the base's erase-on-fail path) BLANKS them;
 //   c. a write submitted while the UI connection holds a write transaction RETURNS AT ONCE (submit
 //      returns on the very thread holding the lock), has not landed, and lands after the UI commits;
-//   d. two writes for one guid land in SUBMIT ORDER (completions in order, the second one stored);
-//   e. PAST ITS BUDGET (a short one here; the product's is Writer::kBudgetMs) a write is DROPPED with
-//      its reason, reported, RE-QUEUED AT THE HEAD (the lead's ruling A5): two locked-out writes for
-//      one guid still land in submit order once the UI commits;
+//   d. two writes for one guid complete in SUBMIT ORDER, the second stored (the first landed, or was
+//      superseded while it waited);
+//   e. PAST ITS BUDGET (a short one here; the product's is Writer::kBudgetMs) a write is DROPPED, the
+//      drop hook told, RE-QUEUED AT THE HEAD (the lead's ruling A5): (i) QUIET - however many drops,
+//      ONE log line when it first waits and ONE when it lands, its tries counted; (ii) two locked-out
+//      writes of two guids complete in submit order; (iii) BOUNDED PER GUID - a newer submit of a
+//      waiting guid supersedes it (its completion says so) and the newer is stored;
 //   f. THE UI CONNECTION's busy timeout, read (PRAGMA busy_timeout; spec UNVERIFIED): a UI write that
 //      meets the writer WAITS rather than failing, and the writer is one row a transaction, so a UI
 //      write submitted while 20 previews drain lands at once, unrefused;
-//   g. the writer's end DRAINS: a write submitted just before its destruction is stored.
+//   g. the writer's end DRAINS: a write submitted just before its destruction is stored;
+//   h. THE LOCK IS HELD FOR THE ROW ONLY: a UI BEGIN IMMEDIATE made at once after submitting a picture
+//      that takes long to encode is granted with the preview NOT yet stored - the encode ran outside
+//      the writer's transaction (if it ran inside, the BEGIN would wait for the commit and find it).
 // The waits are on PUBLISHED state (a completion, a drop) with a cap that names the failure.
 
+#include <algorithm>
 #include <cstdio>
 #include <functional>
+#include <mutex>
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -42,9 +50,11 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 #include <QStringList>
 #include <QTemporaryDir>
+#include <QRandomGenerator>
 #include <QVariant>
 
 #include "data/database/database.h"
+#include "irisgl/core/logger.h"
 #include "services/previewwriter.h"
 
 namespace {
@@ -137,7 +147,7 @@ int main(int argc, char **argv)
     Database::setAssetThumbnailWritten([&announced](const QString &guid) { announced.append(guid); });
 
     const QByteArray old = QByteArrayLiteral("OLD-TILE-BYTES");
-    for (const char *g : { "a", "b", "c", "d", "e", "f", "g", "h" }) addAsset(QString::fromLatin1(g), old);
+    for (const char *g : { "a", "b", "c", "d", "e", "e2", "f", "g", "h" }) addAsset(QString::fromLatin1(g), old);
 
     // f, first: the UI connection's busy timeout (Qt's QSQLITE default when no option is given).
     {
@@ -218,6 +228,8 @@ int main(int argc, char **argv)
         check(waitFor([&] { return pd.landed.size() == 2; }), "d: both writes complete");
         check(pd.landedKeys == QStringList({ QStringLiteral("00000000000000d1"), QStringLiteral("00000000000000d2") }),
               "d: they complete in submit order");
+        check(pd.landed.value(0).ok || pd.landed.value(0).reason.contains(QStringLiteral("superseded")),
+              "d: the first landed, or was superseded by name while it waited");
         check(storedKey(QStringLiteral("d")) == QStringLiteral("00000000000000d2")
                   && decodesTo(storedBytes(QStringLiteral("d")), qRgb(255, 255, 0)),
               "d: the second is stored, bytes and key together");
@@ -235,27 +247,92 @@ int main(int argc, char **argv)
         check(waitFor([&] { return pf.landed.size() == 20; }), "f: the 20 complete");
     }
 
-    // e. Past the budget: dropped, said, re-queued at the head, order kept.
+    // e. Past the budget: dropped, told, re-queued at the head - quiet, in order, bounded per guid.
     {
         const int budgetMs = 100;
         previews::Writer writer(path, budgetMs);
         QStringList drops;
         writer.setDropHook([&drops](const QString &guid, const QString &reason) { drops.append(guid + QLatin1Char(':') + reason); });
+        QStringList lines;   // appended on the writer's thread: guarded
+        std::mutex linesLock;
+        iris::Logger::setSink([&lines, &linesLock](int, const QString &text) {
+            if (!text.startsWith(QStringLiteral("previews:"))) return;
+            std::lock_guard<std::mutex> hold(linesLock);
+            lines.append(text);
+        });
+
+        // (i) one write, four drops at least: two lines.
         QSqlQuery ui;
         check(ui.exec(QStringLiteral("BEGIN IMMEDIATE")), "e: the UI holds the lock");
         Probe pe;
         writer.submit(QStringLiteral("e"), solid(qRgb(10, 20, 30)), QStringLiteral("00000000000000e1"), pe.done());
-        writer.submit(QStringLiteral("e"), solid(qRgb(40, 50, 60)), QStringLiteral("00000000000000e2"), pe.done());
-        check(waitFor([&] { return !drops.isEmpty(); }), "e: past its budget the write is DROPPED and reported");
+        check(waitFor([&] { return drops.size() >= 4; }), "e: past its budget the write is DROPPED, again and again, each told");
         check(drops.value(0).startsWith(QStringLiteral("e:")) && drops.value(0).contains(QStringLiteral("budget")),
               "e: the drop names its guid and its reason (the budget)");
         check(pe.landed.isEmpty(), "e: nothing landed while locked out");
         check(ui.exec(QStringLiteral("COMMIT")), "e: the UI lets go");
-        check(waitFor([&] { return pe.landed.size() == 2; }), "e: the re-queued writes complete");
-        check(pe.landed.value(0).ok && pe.landed.value(0).drops >= 1, "e: the dropped write landed, its drops counted");
-        check(pe.landedKeys == QStringList({ QStringLiteral("00000000000000e1"), QStringLiteral("00000000000000e2") })
-                  && storedKey(QStringLiteral("e")) == QStringLiteral("00000000000000e2"),
-              "e: re-queued at the HEAD - submit order kept, the second stored");
+        check(waitFor([&] { return pe.landed.size() == 1; }), "e: the re-queued write completes");
+        check(pe.landed.value(0).ok && pe.landed.value(0).drops >= 4 && storedKey(QStringLiteral("e")) == QStringLiteral("00000000000000e1"),
+              "e: it landed, its drops counted");
+        {
+            std::lock_guard<std::mutex> hold(linesLock);   // the writer is idle now: read the lines
+            const int waits = int(std::count_if(lines.begin(), lines.end(), [](const QString &l) { return l.contains(QStringLiteral("waits behind")); }));
+            const int landedLines = int(std::count_if(lines.begin(), lines.end(), [](const QString &l) { return l.contains(QStringLiteral("landed after")); }));
+            std::printf("     %d drops -> %d 'waits' line(s), %d 'landed' line(s)\n", int(drops.size()), waits, landedLines);
+            check(waits == 1 && landedLines == 1, "e: QUIET - one line when it first waits, one when it lands, whatever the drops");
+            check(lines.filter(QStringLiteral("landed after")).value(0).contains(QStringLiteral("after %1 tries").arg(pe.landed.value(0).drops + 1)),
+                  "e: the landing line counts its tries");
+        }
+
+        // (ii) two guids, both locked out: submit order.
+        drops.clear();
+        check(ui.exec(QStringLiteral("BEGIN IMMEDIATE")), "e: the UI holds the lock again");
+        Probe pboth;
+        writer.submit(QStringLiteral("e"), solid(qRgb(1, 1, 1)), QStringLiteral("00000000000000e2"), pboth.done());
+        writer.submit(QStringLiteral("e2"), solid(qRgb(2, 2, 2)), QStringLiteral("00000000000000f2"), pboth.done());
+        check(waitFor([&] { return !drops.isEmpty(); }), "e: the first is dropped");
+        check(ui.exec(QStringLiteral("COMMIT")), "e: the UI lets go");
+        check(waitFor([&] { return pboth.landed.size() == 2; }), "e: both complete");
+        check(pboth.landedKeys == QStringList({ QStringLiteral("00000000000000e2"), QStringLiteral("00000000000000f2") }),
+              "e: re-queued at the HEAD - two guids complete in submit order");
+
+        // (iii) one guid twice while locked out: the newer supersedes the waiting one.
+        drops.clear();
+        check(ui.exec(QStringLiteral("BEGIN IMMEDIATE")), "e: the UI holds the lock a third time");
+        Probe pnew;
+        writer.submit(QStringLiteral("e"), solid(qRgb(3, 3, 3)), QStringLiteral("00000000000000e3"), pnew.done());
+        check(waitFor([&] { return !drops.isEmpty(); }), "e: the older is waiting (dropped once)");
+        writer.submit(QStringLiteral("e"), solid(qRgb(4, 4, 4)), QStringLiteral("00000000000000e4"), pnew.done());
+        check(waitFor([&] { return pnew.landed.size() == 1; }), "e: the older completes at once, superseded");
+        check(!pnew.landed.value(0).ok && pnew.landed.value(0).key == QStringLiteral("00000000000000e3")
+                  && pnew.landed.value(0).reason.contains(QStringLiteral("superseded")),
+              "e: BOUNDED PER GUID - the waiting write is superseded by name, never a second one waiting");
+        check(ui.exec(QStringLiteral("COMMIT")), "e: the UI lets go");
+        check(waitFor([&] { return pnew.landed.size() == 2; }), "e: the newer completes");
+        check(pnew.landed.value(1).ok && storedKey(QStringLiteral("e")) == QStringLiteral("00000000000000e4")
+                  && decodesTo(storedBytes(QStringLiteral("e")), qRgb(4, 4, 4)),
+              "e: the newer is stored, bytes and key");
+        iris::Logger::setSink(nullptr);
+    }
+
+    // h. The encode runs outside the writer's transaction.
+    {
+        previews::Writer writer(path);
+        QImage noise(2048, 2048, QImage::Format_RGB32);   // noise: the slowest picture to compress
+        QRandomGenerator rng(7);
+        for (int y = 0; y < noise.height(); ++y) {
+            QRgb *row = reinterpret_cast<QRgb *>(noise.scanLine(y));
+            for (int x = 0; x < noise.width(); ++x) row[x] = rng.generate() | 0xff000000u;
+        }
+        Probe ph;
+        writer.submit(QStringLiteral("g"), noise, QStringLiteral("00000000000000a7"), ph.done());
+        QSqlQuery ui;
+        check(ui.exec(QStringLiteral("BEGIN IMMEDIATE")), "h: a UI BEGIN made at once after the submit is granted");
+        check(storedKey(QStringLiteral("g")).isEmpty(), "h: ...with the preview NOT stored: the encode held no lock");
+        check(ui.exec(QStringLiteral("COMMIT")), "h: the UI commits");
+        check(waitFor([&] { return ph.landed.size() == 1; }) && ph.landed.value(0).ok
+                  && storedKey(QStringLiteral("g")) == QStringLiteral("00000000000000a7"),
+              "h: the preview lands after it");
     }
 
     // g. The end drains.

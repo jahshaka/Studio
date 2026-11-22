@@ -25,6 +25,8 @@ jah_no_display(source.fork_stamp)
 # guard; a raw QSqlDatabase::transaction() on the main connection silently gets
 # no transaction at all and loses its rollback. The allowed side-connection
 # sites are listed in the script.
+# PREVIEWS-1 stage 1: and every transaction on it begins IMMEDIATE at one of the two doors (DbTransaction, the
+# batch) - a second writing connection (the preview writer) makes a deferred one fail with 517.
 add_test(NAME source.no_raw_transaction
          COMMAND bash "${CMAKE_CURRENT_SOURCE_DIR}/no_raw_transaction.sh"
                  "${CMAKE_SOURCE_DIR}")
@@ -195,6 +197,13 @@ if(Python3_Interpreter_FOUND)
     # source.no_raw_sheets — the static half of the no-raw-stylesheet law (CODING_RULES §2), restored by
     # STUDIO-HYGIENE-1 stage 4 from archive/tests/theme with NO allowlist and a third rule: a CSS-shaped string
     # literal outside src/ui/style/ (a sheet passed as a named constant). See the script's header.
+    # source.no_live_read_at_write — PREVIEWS-1 stage 1: no QSqlQuery member or returned cursor, and a query read one
+    # row at a time is scoped or finish()ed before its connection's next write (a live read's WAL snapshot fails
+    # that write with 517 once the preview writer has committed). Its limits are in the script's header.
+    add_test(NAME source.no_live_read_at_write
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_live_read_at_write.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.no_live_read_at_write PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.no_live_read_at_write)
     add_test(NAME source.no_raw_sheets
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_raw_sheets.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.no_raw_sheets PROPERTIES TIMEOUT 60 LABELS "hygiene")

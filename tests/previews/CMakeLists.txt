@@ -19,7 +19,7 @@ jah_no_display(previews.key)
 # submit order; past a (short) budget a write is dropped, reported and re-queued at the head; the UI connection's busy
 # timeout read; the writer's end drains. No engine, no display.
 find_package(Qt6 REQUIRED COMPONENTS Gui Widgets Sql Multimedia Concurrent)
-add_executable(test_preview_writer test_preview_writer.cpp
+set(_previews_db_closure
     ${CMAKE_SOURCE_DIR}/src/services/previewwriter.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     # database.cpp's link closure (the set tests/desktops links)
@@ -40,6 +40,7 @@ add_executable(test_preview_writer test_preview_writer.cpp
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
+add_executable(test_preview_writer test_preview_writer.cpp ${_previews_db_closure})
 set_target_properties(test_preview_writer PROPERTIES AUTOMOC ON CXX_STANDARD 17)
 target_include_directories(test_preview_writer PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
@@ -47,3 +48,16 @@ target_link_libraries(test_preview_writer PRIVATE IrisGL Qt6::Gui Qt6::Widgets Q
 add_test(NAME previews.writer COMMAND test_preview_writer WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(previews.writer PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "previews" TIMEOUT 60)
 jah_no_display(previews.writer)
+
+# previews.ui_writes — A UI WRITE NEVER FAILS BECAUSE A PREVIEW WAS WRITTEN (the lead's G1-G3): a DbTransaction that reads
+# first, the script run's batch that reads first, the import claim's statement sequence (live reads: the negative
+# control; scoped: green) and a transaction behind a stale live read failing LOUDLY. The real Database and writer on a
+# temp library; red first on deferred BEGINs (spikes/previews-1/stage1/ui_writes-red.txt).
+add_executable(test_ui_writes test_ui_writes.cpp ${_previews_db_closure})
+set_target_properties(test_ui_writes PROPERTIES AUTOMOC ON CXX_STANDARD 17)
+target_include_directories(test_ui_writes PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_ui_writes PRIVATE IrisGL Qt6::Gui Qt6::Widgets Qt6::Sql Qt6::Multimedia)
+add_test(NAME previews.ui_writes COMMAND test_ui_writes WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(previews.ui_writes PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "previews" TIMEOUT 60)
+jah_no_display(previews.ui_writes)

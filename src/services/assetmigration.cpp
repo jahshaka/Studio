@@ -416,12 +416,17 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
             const QJsonObject edge = value.toObject();
             const QString dependee = edge.value("dependee").toString();
             if (dependee.isEmpty() || !restored.contains(dependee)) continue;
-            QSqlQuery have(conn);
-            have.prepare("SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? "
-                         "AND project_guid IS NULL");
-            have.addBindValue(guid);
-            have.addBindValue(dependee);
-            if (have.exec() && have.next()) continue;
+            bool known = false;
+            {
+                // Block-scoped: finished before the write (source.no_live_read_at_write).
+                QSqlQuery have(conn);
+                have.prepare("SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? "
+                             "AND project_guid IS NULL");
+                have.addBindValue(guid);
+                have.addBindValue(dependee);
+                known = have.exec() && have.next();
+            }
+            if (known) continue;
             QSqlQuery insertEdge(conn);
             insertEdge.prepare("INSERT INTO dependencies (depender_type, dependee_type, project_guid, "
                                "depender, dependee, id) VALUES (?, ?, NULL, ?, ?, ?)");

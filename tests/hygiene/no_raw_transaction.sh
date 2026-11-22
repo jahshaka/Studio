@@ -12,6 +12,14 @@
 # AssetGc::sweep would have committed dropped `files` rows while leaving their
 # objects on disk (assetgc.cpp, round 2 H1).
 #
+# AND EVERY TRANSACTION ON IT BEGINS IMMEDIATE, AT ONE OF TWO DOORS (PREVIEWS-1 stage 1): the
+# DbTransaction guard (database.h) and the batch (Database::resumeBatchIfNeeded). The library has a
+# second WRITING connection (the preview writer, services/previewwriter.h): a DEFERRED transaction
+# whose first statement is a read fails its first write with 517 SQLITE_BUSY_SNAPSHOT once the
+# writer has committed (spikes/previews-1/stage1/probe.out, case 4); IMMEDIATE takes the lock at the
+# BEGIN, so no other connection commits inside it (case 5). A raw `BEGIN` anywhere else is red; the
+# preview writer's own BEGIN IMMEDIATE (Database::writePreview, on ITS connection) is listed.
+#
 # Raw calls on a SIDE connection are fine — a connection nobody else is using
 # cannot collide with the batch, and the guard count is per connection. They
 # are listed here by file:symbol so that adding one is a deliberate act.
@@ -26,10 +34,8 @@ failures=0
 
 # The allowed raw calls, each on a connection that TU opened itself:
 #   src/data/database/database.cpp  exportConnection / dbe  (bundle writers)
-#   src/data/database/database.cpp  db.transaction()        (the batch itself)
 #   src/services/assetmigration.cpp conn  (a ScopedConnection over a recovery DB)
-#   src/data/database/database.h    DbTransaction's own BEGIN — it IS the guard
-ALLOWED='^src/data/database/database\.cpp:[0-9]+:.*(exportConnection|dbe|batchTxLive = db)\.transaction\(\)|^src/services/assetmigration\.cpp:[0-9]+:.*conn\.transaction\(\)|^src/data/database/database\.h:[0-9]+:.*database\.transaction\(\)'
+ALLOWED='^src/data/database/database\.cpp:[0-9]+:.*(exportConnection|dbe)\.transaction\(\)|^src/services/assetmigration\.cpp:[0-9]+:.*conn\.transaction\(\)'
 
 # Comments are not calls: a line whose first non-space characters are // or *
 # is prose about the rule, which several of these files carry.
@@ -46,6 +52,29 @@ if [ -n "$hits" ]; then
 else
     echo "ok:   no raw .transaction() on the main connection"
 fi
+
+# The raw BEGINs: exactly the two doors and the preview writer's own connection.
+BEGIN_ALLOWED='^src/data/database/database\.h:[0-9]+:.*begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)|^src/data/database/database\.cpp:[0-9]+:.*batchTxLive = begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)|^src/data/database/database\.cpp:[0-9]+:.*(noteQuery\(QStringLiteral\("WritePreview"\), QStringLiteral\("BEGIN IMMEDIATE"\)\)|query\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\))'
+begins=$(grep -rnE '"BEGIN' src/ 2>/dev/null \
+         | grep -vE ':[0-9]+:[[:space:]]*(//|\*|/\*)' \
+         | grep -vE "$BEGIN_ALLOWED" || true)
+if [ -n "$begins" ]; then
+    echo "FAIL: a raw BEGIN outside the two doors (DbTransaction, the batch) and the preview writer's own connection."
+    echo "$begins"
+    failures=$((failures + 1))
+else
+    echo "ok:   every BEGIN is at a door (DbTransaction, the batch) or on the preview writer's own connection"
+fi
+for door in 'src/data/database/database.h:begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)' \
+            'src/data/database/database.cpp:batchTxLive = begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)'; do
+    file=${door%%:*}; pattern=${door#*:}
+    if grep -qE "$pattern" "$file"; then
+        echo "ok:   $file begins IMMEDIATE"
+    else
+        echo "FAIL: $file no longer begins its transaction IMMEDIATE"
+        failures=$((failures + 1))
+    fi
+done
 
 # ...and the guard itself must still be the thing that yields the batch.
 if grep -q 'sBatchYield(database)' src/data/database/database.h; then

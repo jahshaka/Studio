@@ -26,8 +26,17 @@ For more information see the LICENSE file
 //   - SUBMIT ORDER: writes land one at a time in the order submitted, ONE ROW A TRANSACTION, so a UI
 //     write that meets the writer waits for one row at most (the UI connection's busy timeout).
 //   - A NAMED BUDGET: the writer waits for the library's lock at most kBudgetMs (SQLite's busy
-//     timeout on its connection). Past it the write is DROPPED with its reason — reported — and
-//     RE-QUEUED AT THE HEAD, so the order holds; it is tried again at once.
+//     timeout on its connection). Past it the write is DROPPED with its reason — told to the drop
+//     hook — and RE-QUEUED AT THE HEAD, so the order holds; it is tried again at once. A UI batch can
+//     hold the lock for a whole script run (Database::beginBatch), so the writer is QUIET while it
+//     waits: one log line when a write first waits, one when it lands (its tries, the ms waited).
+//   - BOUNDED PER GUID: at most ONE write of a guid waits (beside the one in flight). A newer submit
+//     of the same guid REPLACES the waiting one in its place in the queue; the replaced write's
+//     completion says so (not ok, "superseded"), in submit order. A preview older than one already
+//     asked for is never worth storing.
+//   - THE LOCK IS HELD FOR THE ROW ONLY: the PNG is encoded, and every byte allocated, BEFORE the
+//     transaction begins (Database::writePreview takes bytes, never an image), so a UI BEGIN behind
+//     the writer waits for two statements, never an encode.
 //   - A FAILED WRITE CHANGES NOTHING: an empty PNG, a row that is gone, any statement's failure
 //     roll the transaction back.
 //   - THE COMPLETION and the library's thumbnail hook (the tile cache drops the guid's tile) are
@@ -35,6 +44,7 @@ For more information see the LICENSE file
 //   - THE END: the destructor lets the queue drain (each write under its budget) and joins; a write
 //     still locked out then is lost — derived data, it reads stale at the next session.
 
+#include <QElapsedTimer>
 #include <QImage>
 #include <QString>
 #include <condition_variable>
@@ -59,6 +69,7 @@ public:
         bool ok = false;
         QString reason;   ///< empty when ok
         int drops = 0;    ///< how often this write was dropped past its budget before it landed
+        qint64 waitedMs = 0;   ///< from its first drop to its landing; 0 when never dropped
     };
     using Done = std::function<void(const Landed &)>;
     using DropHook = std::function<void(const QString &guid, const QString &reason)>;
@@ -88,9 +99,11 @@ private:
         QString key;
         Done done;
         int drops = 0;
+        qint64 firstDropMs = 0;   ///< the writer's clock at its first drop
     };
     void run();
 
+    QElapsedTimer mClock;   ///< for the waited ms of a log line, never a decision
     const QString mPath;
     const int mBudgetMs;
     std::shared_ptr<bool> mAlive;   ///< read and cleared on the application's thread only

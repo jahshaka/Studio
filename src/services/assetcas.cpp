@@ -525,6 +525,7 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
         const QJsonDocument blob = QJsonDocument::fromJson(assetQuery.value(10).toByteArray());
         if (blob.isObject()) sidecar["asset"] = blob.object();
     }
+    assetQuery.finish();   // its last column read: no statement left active (source.no_live_read_at_write)
 
     // INTRINSIC DEPENDENCY EDGES (G5): the ones with NO project stamp — a
     // bundle's own membership, derived from its definition
