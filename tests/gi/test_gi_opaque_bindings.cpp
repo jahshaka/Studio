@@ -9,7 +9,8 @@
 // pass on a gathering chain), a lamp and a sun, one offscreen view with the chain. Every
 // tier (Low, Medium, High, Epic: the GiQuality + the World Mode's SSR row; every Auto toggle the tier's) on TWO
 // chains: a RAY chain (the rays on, a still picture: the view gathers like a window) and a LIVE offscreen chain (the rays
-// on, the Live contract: a live preview takes no gather - the screen integrate's products). (The NO-RAY chain's arm, the
+// on, the Live contract) - which since ROUTE-ROWS-1 stage 0 GATHERS too (the route is the scene's, never the view's
+// kind), so the live arm repeats the ray arm: a finding homed at 1.2 stage 3. (The NO-RAY chain's arm, the
 // scene's rays Off, and its pane in (5) archived by NO-RAY-CUT-1, 2026-10-30: the minimum GPU traces.)
 // THE LAWS, per arm:
 //   (1) the door saw the opaque pass ("Jahshaka opaque") in the frames read (never vacuous);
@@ -23,7 +24,8 @@
 // Every record of every arm is printed. Red on the base (the opaque passes bind the 40 voxel volumes and the field's
 // two textures at Epic); the ray arms went green at 7-5, the live arms at 7-6.
 // AND ONCE, AT HIGH (7-5):
-//   (5) THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN: the blended pane's pixels (alpha 1: its own shading alone, the
+//   (5) VACUOUS SINCE ROUTE-ROWS-1 STAGE 0 (a finding, homed at 1.2 stage 3: both chains gather now, so it compares the
+//       gather to itself; the assert kept until then). THE TRANSLUCENT ROUTE IS ONE ON EVERY CHAIN: the blended pane's pixels (alpha 1: its own shading alone, the
 //       picture behind it weighed by zero) on the ray chain against the live ray chain - on every
 //       one its own pass after the opaque one (7-6; before it the two drew it inside the opaque pass with the
 //       prepass's properties withdrawn) - each at the GI's rest: the same function of the same world caches, lights and shadow maps, stored once into the
@@ -146,8 +148,13 @@ int main()
             resetPhotonPassBindings();
             run(2);
             const std::vector<PhotonPassBindingRecord> recs = photonPassBindings();
-            std::printf("\n  [%s, %s chain] rays resolved %d, %zu pass records:\n", t.name, ch.name,
-                        int(scene->rayTracingResolved()), recs.size());
+            // THE LIVE ARM IS A DUPLICATE OF THE RAY ARM SINCE ROUTE-ROWS-1 STAGE 0 (a finding, homed at 1.2 stage 3):
+            // both chains of this ray scene gather, so the live arm reads the ray arm's passes again.
+            std::printf("\n  [%s, %s chain] rays resolved %d, %zu pass records%s:\n", t.name, ch.name,
+                        int(scene->rayTracingResolved()), recs.size(),
+                        ch.contract == OffscreenContract::Live
+                            ? " (DUPLICATE of the ray arm since ROUTE-ROWS-1 stage 0: both chains gather; re-derived at "
+                              "1.2 stage 3: OPEN_REDS)" : "");
             bool sawOpaque = false, opaqueScreenOnly = true, refractivesWorld = false, sawBlended = false,
                  blendedWorld = false;
             std::string offenders;
@@ -270,7 +277,8 @@ int main()
             meanLiveRay += b;
         }
         if (n) { meanRay /= double(n); meanLiveRay /= double(n); }
-        std::printf("\n   (5) the blended pane (alpha 1), %zu channel samples: the ray chain (gather %s, at rest after %d "
+        std::printf("\n   (5) VACUOUS on the gather since ROUTE-ROWS-1 stage 0 - both chains gather; re-derived at "
+                    "stage 3: OPEN_REDS. The blended pane (alpha 1), %zu channel samples: the ray chain (gather %s, at rest after %d "
                     "frames) mean %.5f, the live ray chain (at rest after %d) mean %.5f; worst %.2f fp16 ulps, %zu past one\n",
                     n, gRay.on ? "on" : "OFF", restRay, meanRay, restLiveRay, meanLiveRay, worstUlps, past);
         CHECK(okRay && okLiveRay && gRay.on && n >= 3u * 40u && meanRay > 0.0 && past == 0u,

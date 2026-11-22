@@ -29,9 +29,11 @@
 //   (3) THE SCREENSHOT AT ANOTHER SIZE (EngineSceneViewport::takeScreenshot's route: a still picture of S1 of its own,
 //       192 x 128, the live view's camera): while it renders and after it is destroyed, the live view's frames are
 //       bit-identical to its twin's.
-//   (4) ONE AREA PRODUCER A VIEW: a Live view of a scene that traces rays (its chain does not gather: the no-ray
-//       route) - the scene's area visibility is the no-ray producer's alone, its residency the producer's own (before
-//       the fix the ray tier traced and registered its own visibility for the same view, both paid every frame).
+//   (4) ONE AREA PRODUCER A VIEW: a Live view of a scene that traces rays GATHERS (ROUTE-ROWS-1 stage 0: the route is
+//       the scene's, never the view's kind) - its published route is the gather and not the integrate, and the scene's
+//       area visibility is ONE producer's, the ray tier's: its residency one producer's own (stage 7's F1: two
+//       producers for one view paid both every frame). (Until stage 0 this view took the no-ray route and the law named
+//       the no-ray producer: that premise was deleted with the contract's GI meaning.)
 //   (5) A DISPATCH THAT NEVER RAN (the door gi.screenShaderCold: the three jobs' permutations built in the background,
 //       the views compiling in the background), mid-rest: a deferred trace neither ages nor flips the area history -
 //       the first frame that traces again is one rest frame past the last that did; a new view whose integrate still builds reads its targets as the
@@ -424,17 +426,19 @@ int main()
         e->waitForAsyncShaders();
         run(40);
         const AreaVisStatus st = s3->published().areaVis;
-        // the no-ray producer's own residency (OgreAreaVis.cpp: the sums' pairs, the surface words' pair and the rest
-        // means at the trace's size, the product at the target's) - the ray tier's images on top of it were a second
-        // producer's
-        const unsigned long long own = (unsigned long long)st.traceW * st.traceH * (6u * 16u + 2u * 16u) +
+        const PublishedEngineFrame::ViewFrames route = lv->published();
+        // the ray tier's own residency (OgreRayQuery.cpp recordAreaVis: the trace's images at the trace's size, the
+        // product at the target's) - a second producer's images on top of it would double it
+        const unsigned long long own = (unsigned long long)st.traceW * st.traceH * (8u * 8u + 2u * 16u + 4u * 8u) +
                                        (unsigned long long)st.targetW * st.targetH * 8u;
-        std::printf("   (4) a Live view of a ray scene: running %d, trace %ux%u of %ux%u, %llu B resident (the no-ray "
-                    "producer's own %llu B)%s%s\n", int(st.running), st.traceW, st.traceH, st.targetW, st.targetH,
+        std::printf("   (4) a Live view of a ray scene: route gather %d integrate %d; area running %d, trace %ux%u of "
+                    "%ux%u, %llu B resident (the ray tier's own %llu B)%s%s\n", int(route.routeGather),
+                    int(route.routeIntegrate), int(st.running), st.traceW, st.traceH, st.targetW, st.targetH,
                     st.vramBytes, own, st.reason.empty() ? "" : " - ", st.reason.c_str());
-        CHECK(st.running && st.targetW == 256u && st.vramBytes == own,
-              "(4) a Live view of a ray scene (a chain that does not gather: the no-ray route) runs ONE area producer, "
-              "the no-ray route's - the ray tier's trace yields");
+        CHECK(route.id != 0 && route.routeGather && !route.routeIntegrate && st.running && st.targetW == 256u &&
+                  st.vramBytes == own,
+              "(4) a Live view of a ray scene GATHERS and runs ONE area producer, the ray tier's (its published route the "
+              "gather, never the integrate; the residency one producer's own)");
         lv->setScene(nullptr);
         e->destroyView(lv);
         e->destroyScene(s3);
