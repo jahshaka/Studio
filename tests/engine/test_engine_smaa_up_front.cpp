@@ -1,26 +1,26 @@
 // engine.smaa_up_front — NO SMAA PROGRAM IS COMPILED IN A FRAME (SHADER-SYSTEM-1 7a, the SMAA item). The SMAA preset is
-// a DOCUMENT's setting (iris::Scene::smaaPreset), unknowable when the engine is created, and a preset is applied by
-// reloading the six SMAA programs with its defines (chain::initSmaa, from applyRecompileGlobals at the top of a frame):
-// on a cache that lacks the preset that reload is six glslang compiles INSIDE the frame (the startup gate's Basic world:
-// spikes/shader-system/ss7/gate-measure). The engine compiles every preset (0-3) where it parses the materials, so a
-// frame's reload is six microcode-cache hits (the key carries the defines: OgreVulkanProgram.cpp:171-174, :740).
+// a DOCUMENT's setting (iris::Scene::smaaPreset), unknowable when the engine is created. Each preset is its own set of
+// materials and programs with its defines fixed at creation (chain::createSmaaPresets, where the engine parses the
+// materials: R3), and the chain's SMAA passes name the preset's set - a preset asked later compiles nothing and reloads
+// nothing. (Before: one set reloaded with the preset's defines at the top of a frame - six glslang compiles INSIDE the
+// frame on a cache that lacked the preset: the startup gate's Basic world, spikes/shader-system/ss7/gate-measure.)
 // THE SCRIPT: one engine on its OWN shader cache, EMPTY at the start (an app's first launch: every SMAA program cold,
 // so the up-front compile is the only thing that can have made a preset's programs before its frame; NOT the cache
 // off - with no cache Ogre keeps no microcode at all, OgreShaderCache.cpp's load turns the saving on only for an
-// enabled cache, and every reload compiles again; the app always has one); an offscreen Live view in asynchronous mode
-// (the editor's), the chain allowed offscreen; a lit cube. Phase A: the chain without SMAA, frames until the background
-// compiler holds nothing and no pipeline is built for kQuietFrames frames. Phase B: SMAA at preset 2 (High: the editor's
-// at the High tier, a document's usual first ask). Phase C: SMAA at preset 0 (Low: a different preset asked later in
-// the same launch - the same reload a launch whose document asks Low makes at its first SMAA frame).
-// THE LAW: (1) each SMAA phase compiled 0 shaders on a thread other than the background compiler's (the
-// published compiledInForeground, a process total read before and after the phase: everything a frame waited for).
+// enabled cache; the app always has one); an offscreen Live view in asynchronous mode (the editor's), the chain allowed
+// offscreen; a lit cube. Phase A: the chain without SMAA, frames until the background compiler holds nothing and no
+// pipeline is built for kQuietFrames frames. Phase B: SMAA at preset 2 (High: the editor's at the High tier, a
+// document's usual first ask). Phase C: SMAA at preset 0 (Low: a different preset asked later in the same launch).
+// THE LAW: (1) each SMAA phase compiled 0 shaders on a thread other than the background compiler's (the published
+// compiledInForeground, a process total read before and after the phase: everything a frame waited for).
 // RED before the up-front compile: 6 in each phase.
-// PRINTED, NOT A LAW (the lead's ruling waits on it): the graphics pipelines each SMAA phase built (the fork's
-// process-wide count and driver time; the background compiler is empty and the scene unchanged, so they are the frame's
-// own: the SMAA quads' low-level pipelines, built on the render thread at their first draw, HlmsLowLevel has no async
-// path). Run it with the driver's shader cache empty (__GL_SHADER_DISK_CACHE_PATH at an empty directory) and warm.
+// PRINTED, NOT A LAW: the graphics pipelines each SMAA phase built (the fork's process-wide count and driver time; the
+// background compiler is empty and the scene unchanged, so they are the frame's own: the SMAA quads' low-level
+// pipelines, built on the render thread at their first draw - a preset's set is new programs, so its quads build theirs
+// at the set's first frame).
 // `--keep` (by hand only): the cache the last run saved is kept, not emptied - the up-front compile's cost on a WARM
 // app cache (the engine log's "SMAA presets" line).
+// `picture` (engine.smaa_preset_picture): A PRESET CHANGE REACHES THE PICTURE (pictureMode below).
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include <cstdio>
@@ -73,9 +73,10 @@ static PhaseCounts runPhase(Engine *e)
     return c;
 }
 
-/// `picture` (the lead's verification, ss7-smaa-picture): DOES A PRESET CHANGE REACH THE PICTURE? The low-level
-/// renderable hash holds the macroblock, the blendblock and the pass id only (OgreHlmsLowLevel.cpp calculateHashFor),
-/// so a quad's pipeline built at the first SMAA frame may keep the old programs after initSmaa reloads them. Three
+/// `picture` (engine.smaa_preset_picture): DOES A PRESET CHANGE REACH THE PICTURE? It did not while a change RELOADED
+/// one set's programs and the low-level key held no program identity (a quad kept the pipeline of the old code: red on
+/// fork ed4edeb8a; the content key, fork c1412ac93, made it green; the four sets, R3, make a change a different material
+/// by construction). Three
 /// fresh engines (the real destroy between them) and a fourth with SMAA off first, each: one emissive cube rotated 2
 /// degrees on black (test_engine's smaa_smooths_edges scene at a SHALLOW angle: its silhouette's runs are ~29 px long,
 /// past Low's 4 search steps (two pixels a step) and within High's 16 and Ultra's 32 - SMAA.hlsl:312-330), the FIRST preset's picture,
@@ -138,11 +139,41 @@ static int pictureMode()
     std::printf("    0 -> 3: vs fresh 3 %d, vs fresh 0 %d\n", differ(sw3, fresh3), differ(sw3, fresh0));
     std::printf("    3 -> 0: vs fresh 0 %d, vs fresh 3 %d\n", differ(sw0from3, fresh0), differ(sw0from3, fresh3));
     std::printf("    2 -> 0: vs fresh 0 %d, vs fresh 2 %d\n", differ(sw0from2, fresh0), differ(sw0from2, fresh2));
+    // THE FILTER's OWN BOUND (R3: a broken filter drew 2976 px away from off - the twins lost their viewportSize and
+    // worldViewProj autos): SMAA's neighborhood blending mixes a pixel only with a neighbour ACROSS a detected edge
+    // (SMAA.hlsl SMAANeighborhoodBlendingPS: the blend weights of the pixel's own left/top and its right/bottom
+    // neighbours'), and the edge pass marks an edge only where the luma steps between 4-neighbours. So a pixel whose
+    // code equals all four neighbours' codes in the SMAA-off picture is never changed by SMAA at any preset.
+    const auto offEdge = [](const Image &x, unsigned px, unsigned py) {
+        const auto code = [&](unsigned qx, unsigned qy) {
+            const size_t i = (size_t(qy) * x.width + qx) * 4;
+            return (unsigned(x.rgba[i]) << 16) | (unsigned(x.rgba[i + 1]) << 8) | unsigned(x.rgba[i + 2]);
+        };
+        const unsigned c = code(px, py);
+        return (px > 0 && code(px - 1, py) != c) || (px + 1 < x.width && code(px + 1, py) != c) ||
+               (py > 0 && code(px, py - 1) != c) || (py + 1 < x.height && code(px, py + 1) != c);
+    };
+    const auto changedOffEdge = [&](const Image &on) {
+        int n = 0;
+        for (unsigned py = 0; py < off.height; ++py)
+            for (unsigned px = 0; px < off.width; ++px) {
+                const size_t i = (size_t(py) * off.width + px) * 4;
+                const bool changed = off.rgba[i] != on.rgba[i] || off.rgba[i + 1] != on.rgba[i + 1] ||
+                                     off.rgba[i + 2] != on.rgba[i + 2];
+                if (changed && !offEdge(off, px, py)) ++n;
+            }
+        return n;
+    };
+    std::printf("    changed away from an edge of the SMAA-off picture: fresh 0 %d, fresh 2 %d, fresh 3 %d\n",
+                changedOffEdge(fresh0), changedOffEdge(fresh2), changedOffEdge(fresh3));
     CHECK(differ(off, fresh0) > 0 && differ(off, fresh3) > 0, "the instrument: SMAA changes this edge at 0 and at 3");
     CHECK(differ(fresh0, fresh3) > 0, "the instrument: presets 0 and 3 draw this edge differently when fresh");
+    CHECK(changedOffEdge(fresh0) == 0 && changedOffEdge(fresh2) == 0 && changedOffEdge(fresh3) == 0,
+          "SMAA changes no pixel away from an edge at presets 0, 2 and 3 (a broken filter does)");
     CHECK(differ(sw3, fresh3) == 0, "a change 0 -> 3 draws preset 3's picture");
     CHECK(differ(sw0from3, fresh0) == 0, "a change 3 -> 0 draws preset 0's picture");
     CHECK(differ(sw0from2, fresh0) == 0, "a change 2 -> 0 draws preset 0's picture");
+    CHECK(differ(sw3fromOff, fresh3) == 0, "a change off -> 3 draws preset 3's picture");
     std::printf("engine.smaa_up_front picture: %s\n", failures ? "FAIL" : "PASS");
     return failures ? 1 : 0;
 }

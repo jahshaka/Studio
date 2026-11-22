@@ -695,6 +695,20 @@ add_test(NAME engine.compute_record_hit COMMAND test_compute_record_hit WORKING_
 set_tests_properties(engine.compute_record_hit PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.compute_record_hit)
 
+# engine.gpu_params_autos (SHADER-SYSTEM-1 7a, R3) — A PROGRAM's AUTO CONSTANTS SURVIVE A COPY BY NAME (the fork's
+# copyMatchingNamedConstantsFrom: a program reload, a twin program; test_gpu_params_autos.cpp says each law). CPU, no Root.
+add_executable(test_gpu_params_autos test_gpu_params_autos.cpp)
+set_target_properties(test_gpu_params_autos PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH   "${OGRE_NEXT_PREFIX}/lib"
+    INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_gpu_params_autos PRIVATE OgreNext)
+add_test(NAME engine.gpu_params_autos COMMAND test_gpu_params_autos WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.gpu_params_autos PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.gpu_params_autos)
+
 # engine.shader_cache_keys (SHADER-SYSTEM-1 stage 5) — ONLY A PRODUCER DROPS A LAYER (test_shader_cache_keys.cpp says
 # why): the four layer keys as one function of their inputs - the pipeline key's text byte-identical to the one it
 # replaced (F5's golden case), each key moving on each of its producer terms and on no other key's, none holding the

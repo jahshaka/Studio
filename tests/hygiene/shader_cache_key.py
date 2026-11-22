@@ -37,8 +37,8 @@ SOURCE_APIS = re.compile(r"\bsetPiece\s*\(|\bsetCustomPieceCodeFromMemory\b|\b_a
 # setPiece anywhere in it would have passed): (file relative to irisgl/engine/src, its top-level function) -> why its
 # source-building is outside the hlms layer. A call in any other function of the file reds.
 LOW_LEVEL = {
-    ("OgreChain.cpp", "multiviewMaterial"): "the stereo chain's multiview twin of a LOW-LEVEL fragment program: "
-                                            "microcode-keyed on its source + preamble, never in an Hlms entry",
+    ("OgreChain.cpp", "programTwin"): "a LOW-LEVEL program's twin with other defines (the stereo chain's /Multiview, an "
+                                      "SMAA preset's set): microcode-keyed on its source + preamble, never in an Hlms entry",
 }
 
 
@@ -207,7 +207,7 @@ def self_test():
         os.makedirs(os.path.join(t, "irisgl", "engine", "src"))
         open(os.path.join(t, "irisgl", "engine", "src", "OgreShaderCache.cpp"), "w").write("// setPiece( in a comment is not a call\n")
         chain = os.path.join(t, "irisgl", "engine", "src", "OgreChain.cpp")
-        open(chain, "w").write("namespace chain {\nvoid multiviewMaterial(int x) {\n    pm.createProgram(a, b, c, d);\n}\n}\n")
+        open(chain, "w").write("namespace chain {\nvoid programTwin(int x) {\n    pm.createProgram(a, b, c, d);\n}\n}\n")
         cm = os.path.join(t, "irisgl", "engine", "CMakeLists.txt")
         open(cm, "w").write("set(JAHSHAKA_SHADER_CACHE_CODE_SOURCES ${CMAKE_CURRENT_SOURCE_DIR}/src/OgreShaderCache.cpp)\n")
         seen, bad = offenders(t)
