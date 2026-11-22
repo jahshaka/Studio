@@ -339,13 +339,16 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             qInfo("startup shader build: the %s world's %s: a Complete tail of %d frames, %lld ms, the longest frame %lld ms;"
                   " its cards %s, admitted %llu, captured %llu, queued %u, resident %u; demand: cache frame %llu, changed"
                   " %llu, first %llu/%llu, newest %llu/%llu, rest decisions %llu (readers %u, admitted %u), ray builds in"
-                  " flight at the cache's build %u, the last placeholder at %llu, the last pending skip at %llu",
+                  " flight at the cache's build %u, the last placeholder at %llu, the last pending skip at %llu; the frame"
+                  " %s (terms %u, %llu incomplete in a row, completion serial %llu)",
                   es->name().c_str(), what, tail.frames(), static_cast<long long>(wall.elapsed()),
                   static_cast<long long>(longest), gi.cards.built ? "built" : "NOT BUILT", gi.cards.admitted,
                   gi.cards.captures, gi.cards.queueLength, gi.cards.cardsResident, gi.cards.cacheFrame,
                   gi.cards.demandChangeFrame, gi.cards.demandFirst[0], gi.cards.demandFirst[1], gi.cards.demandNewest[0],
                   gi.cards.demandNewest[1], gi.cards.restDecisions, gi.cards.decisionReaders, gi.cards.decisionAdmitted,
-                  buildsAtCardBuild, lastPlaceholderFrame, lastSkipFrame);
+                  buildsAtCardBuild, lastPlaceholderFrame, lastSkipFrame,
+                  es->published().completeness.incomplete ? "INCOMPLETE" : "complete", es->published().completeness.terms,
+                  es->published().completeness.incompleteFrames, es->published().completeness.completionSerial);
             if (tail.failed())   // the cap, never a silent pass
                 qWarning("FAIL: shader build gate: the %s world's %s Complete tail did not go quiet in %d frames - %s",
                          es->name().c_str(), what, gatesettle::Tail::kCap, settle.describe().c_str());

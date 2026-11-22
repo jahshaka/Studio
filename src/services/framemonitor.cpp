@@ -489,6 +489,10 @@ void FrameMonitor::Bundle::writeFrame(const MonitorRecord &r)
         { "shaderCompiles", int(r.shaderCompiles) },
         // the process's failed program loads so far (above 0: a dead shader in the running app, URGENT #83)
         { "shaderCompileErrors", double(r.shaderCompileErrors) },
+        // the scenes this frame drew whose frame was INCOMPLETE (a placeholder, a pending skip, a reader waiting on its
+        // build, a texture loading) and their longest incomplete run: a scene that never completes never rests
+        { "incompleteScenes", int(r.incompleteScenes) },
+        { "incompleteFramesMax", double(r.incompleteFramesMax) },
         // Was the render system COUNTING while this frame rendered? Recording
         // is off in Ogre until something asks for renderStats(), and a frame
         // rendered with it off reports zeros for every geometry counter.

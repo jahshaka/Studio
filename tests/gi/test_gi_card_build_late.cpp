@@ -193,6 +193,17 @@ void printCards(const char *what, const GiStatus &g, unsigned inFlight)
                 g.cards.restDecisions, g.cards.decisionReaders, g.cards.decisionAdmitted, int(g.giAtRest), inFlight);
 }
 
+/// THE FRAME's COMPLETENESS at rest (PublishedFrame::Completeness): complete, no incomplete frame in a row - a scene stuck
+/// incomplete is visible there (the lead's condition: no term held for ever)
+void checkComplete(const char *who, Scene *s)
+{
+    const PublishedFrame::Completeness c = s->published().completeness;
+    char w[200];
+    std::snprintf(w, sizeof(w), "(visible) %s at rest is complete: incomplete %d, terms %u, %llu incomplete frames in a row, "
+                  "completion serial %llu", who, int(c.incomplete), c.terms, c.incompleteFrames, c.completionSerial);
+    check(!c.incomplete && c.incompleteFrames == 0ull, w);
+}
+
 void drop(Engine *e, Room &r)
 {
     e->destroyView(r.view);
@@ -211,7 +222,12 @@ int main(int argc, char **argv)
         return 2;
     }
     std::string err;
-    auto engine = Engine::create(enginetest::testEngineConfig("test-gi-card-build-late-" + mode + "-ogre.log"), err);
+    // .pso IS a permutation still compiling: its row is COLD (its CMake line) and boots with no shader cache - a warm one
+    // loads the room's permutations ready (every green row's run promotes its cache: tests/support/fresh_home.sh)
+    const std::string log = "test-gi-card-build-late-" + mode + "-ogre.log";
+    auto engine = Engine::create(mode == "pso" ? enginetest::testEngineConfig(log, enginetest::EngineOverrides().shaderCacheOff())
+                                               : enginetest::testEngineConfig(log),
+                                 err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
     Engine *e = engine.get();
     e->setRayTracing(true);
@@ -249,12 +265,13 @@ int main(int argc, char **argv)
         }
         const unsigned long long phBefore = e->published().shaders.placeholderDraws;
         int builtAt = -1, heldFrames = 0, decidedInHold = 0, atRestInHold = 0, firstBad = -1;
-        unsigned awaitingSeen = 0u;
+        unsigned awaitingSeen = 0u, termsSeen = 0u;
         for (int f = 0; f < kRestCap; ++f) {
             enginetest::frames(e, 1);
             ++frames;
             const GiStatus g = h.scene->published().gi;
             awaitingSeen = std::max(awaitingSeen, e->published().streaming.materialsAwaitingTexture);
+            termsSeen |= h.scene->published().completeness.terms;
             if (builtAt < 0 && g.cards.built) builtAt = frames;
             if (builtAt < 0) continue;
             ++heldFrames;
@@ -268,6 +285,13 @@ int main(int argc, char **argv)
                     "at frame %d); placeholder draws in the hold %llu, materials awaiting a texture (most) %u\n", builtAt,
                     heldFrames, decidedInHold, atRestInHold, firstBad, phHeld, awaitingSeen);
         check(builtAt > 0, "the cache is built while the frame is held incomplete");
+        {
+            // the hold's own term on the published record (bit 0 a placeholder, 1 a skip, 2 a refused reader, 3 a texture)
+            const unsigned want = mode == "late" ? 4u : mode == "pso" ? 1u : 8u;
+            std::snprintf(w, sizeof(w), "the frame is published INCOMPLETE by the hold's own term (terms seen %u, wanted bit "
+                          "%u)", termsSeen, want);
+            check((termsSeen & want) != 0u, w);
+        }
         if (mode == "late") check(inFlight() >= 1u, "the held builds are in flight to the hold's end");
         if (mode == "pso") check(phHeld > 0ull, "the held objects draw their placeholders through the hold");
         if (mode == "texture") check(awaitingSeen > 0u, "the floor's material awaits its texture through the hold");
@@ -279,6 +303,7 @@ int main(int argc, char **argv)
         const GiStatus gh = h.scene->published().gi;
         printCards("H at rest", gh, inFlight());
         std::printf("   at rest %d frames after the release\n", restH);
+        checkComplete("H", h.scene);
         drop(e, h);
         // RUN C: the same room, everything landed before its first frame
         Room c = buildRoom(e, "build_late_control", look);
@@ -364,6 +389,7 @@ int main(int argc, char **argv)
                     (unsigned long long)as.failed, as.placeholderDraws, as.pendingSkips);
         std::snprintf(w, sizeof(w), "(1) a failure is final: the scene comes to rest (%d frames, the cap %d)", rest, kRestCap);
         check(rest >= 0, w);
+        checkComplete("F", h.scene);
         if (mode == "psofail") check(as.failed > 0u, "the forced failures are counted (AsyncShaderStats::failed)");
         if (mode == "buildfail") {
             std::snprintf(w, sizeof(w), "(2) no reader runs: no card is admitted (%u resident)", gh.cards.cardsResident);
