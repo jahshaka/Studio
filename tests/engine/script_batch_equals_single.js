@@ -3,8 +3,8 @@
 //
 // THE LAW: two twin scenes, each 64 cubes plus one, each seen by its own offscreen view at one pose; scene A places the
 // 64 by single calls, scene B by ONE batch of flat arrays (positions, rotations, scales - every node's different) after a
-// first batch elsewhere; the 65th cube is moved away and set back to the identity in both - by setTransform with every
-// part left out in A, by setTransforms with every part left out in B. The two pictures are BYTE-EQUAL: the same engine
+// first batch elsewhere (each node TURNED as well); the 65th cube is moved and turned away and set back to the identity
+// in both - by setTransform with every part left out in A, by setTransforms with every part left out in B. The two pictures are BYTE-EQUAL: the same engine
 // state (a stride or an order slip moves a cube; a part left out that is not the identity's moves the 65th).
 // THE CONTROL: the picture is not the background (the cubes are drawn: the frame's centre against its top rows).
 // Frames: 30, then one for each view's picture: 32.
@@ -40,12 +40,14 @@ function pose(i) {
 const A = twin("single"), B = twin("batch");
 
 for (let i = 0; i < N; ++i) engine.node.setTransform(A.scene, A.nodes[i], pose(i));
-engine.node.setTransform(A.scene, A.nodes[N], {position: [5, 5, 5], scale: [2, 2, 2]});
+// (away: turned 30 degrees about (1, 1, 0) - so a rotation left out that is NOT the identity's shows: the 2a final read's L2)
+const AWAY = [0.183013, 0.183013, 0, 0.9659258];
+engine.node.setTransform(A.scene, A.nodes[N], {position: [5, 5, 5], rotation: AWAY, scale: [2, 2, 2]});
 engine.node.setTransform(A.scene, A.nodes[N], {});
 
 // B: first ONE batch elsewhere (every node, the 65th too), then ONE batch to the same poses as A, flat
-const away = {nodes: B.nodes, positions: [], scales: []};
-for (let i = 0; i <= N; ++i) away.positions.push(i, 4, -10), away.scales.push(2, 2, 2);
+const away = {nodes: B.nodes, positions: [], rotations: [], scales: []};
+for (let i = 0; i <= N; ++i) away.positions.push(i, 4, -10), away.rotations.push(...AWAY), away.scales.push(2, 2, 2);
 engine.node.setTransforms(B.scene, away);
 const flat = {nodes: B.nodes.slice(0, N), positions: [], rotations: [], scales: []};
 for (let i = 0; i < N; ++i) {
