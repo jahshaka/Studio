@@ -35,6 +35,12 @@
 //      counted in frame k's publish (the atmosphere's tries + the convolution's) reads term 64 in frame k's publish or
 //      frame k+1's - every such frame, and at least one (the cold arm); and the frame after the landing's settle reads
 //      it clear. RED before the term: no frame carried it (28 owed it, spikes/shader-system/ss7/term64-red).
+//  (6) A PENDING CONVOLUTION NEVER DRAINS THE PROCESS's TEXTURE STREAM (SHADER-SYSTEM-1 7a, the texture wait (b)):
+//      kStreamTextures large textures are loaded (streamed) in the frame the convolution's first deferred try is
+//      published, so they arrive while the convolution is still owed; every frame is on the Streaming pace, which collects and never waits - the frame
+//      head's drains (StreamingWork::textureDrains) stand at 0 over the run. RED before the fix: a Streaming frame
+//      drained the whole stream whenever a scene had a convolution pending (the gate's ~957 ms, twelve presets'
+//      textures in one frame).
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/Monitor.h"
 #include "jahshaka/engine/Published.h"
@@ -43,7 +49,9 @@
 #include "../support/enginetesthelpers.h"
 #include <algorithm>
 #include <cstdio>
+#include <cstring>
 #include <string>
+#include <vector>
 using namespace jahshaka::engine;
 
 static int failures = 0;
@@ -54,6 +62,36 @@ static int failures = 0;
 static constexpr int kFramesInFlight = 3;
 /// THE LANDING's bound (law 2's derivation, above).
 static constexpr int kLandFrames = kFramesInFlight + 2;
+/// (6)'s textures: enough decode work that some is still streaming at the frames the convolution is owed.
+static constexpr int kStreamTextures = 8;
+static constexpr unsigned kStreamTextureSize = 2048u;
+
+/// An uncompressed 32-bit TGA with a pattern (a solid colour would be no different to decode, but the loader is fed a
+/// real file it must read and decode on its worker).
+static bool writeTga(const std::string &path, unsigned n, unsigned seed)
+{
+    FILE *f = std::fopen(path.c_str(), "wb");
+    if (!f) return false;
+    unsigned char hdr[18];
+    std::memset(hdr, 0, sizeof(hdr));
+    hdr[2] = 2;
+    hdr[12] = (unsigned char)(n & 0xFF); hdr[13] = (unsigned char)(n >> 8);
+    hdr[14] = (unsigned char)(n & 0xFF); hdr[15] = (unsigned char)(n >> 8);
+    hdr[16] = 32;
+    hdr[17] = 0x28;
+    std::fwrite(hdr, 1, sizeof(hdr), f);
+    std::vector<unsigned char> px(size_t(n) * n * 4u);
+    for (size_t i = 0; i < size_t(n) * n; ++i) {
+        px[i * 4 + 0] = (unsigned char)(i * 7u + seed);
+        px[i * 4 + 1] = (unsigned char)((i >> 3) + seed * 31u);
+        px[i * 4 + 2] = (unsigned char)(i >> 11);
+        px[i * 4 + 3] = 255u;
+    }
+    std::fwrite(px.data(), 1, px.size(), f);
+    std::fclose(f);
+    return true;
+}
+
 /// The hang guard of the wait for the compiler (never the law's bar: law 2 is counted from the compiler's empty state).
 static constexpr int kFrameCap = 3000;
 
@@ -77,6 +115,30 @@ int main()
     sky.mode = SkyMode::Atmosphere;
     CHECK(scene->setSky(sky), "the atmosphere sky set (%s)", e->lastError().c_str());
 
+    // (6) THE STREAM: the files written now; loaded through the scene (each a scheduled decode the frame head's drain
+    // would wait for, worn in turn by one material) the frame the convolution is first owed (its first deferred try
+    // published); removed at the end
+    std::vector<std::string> streamFiles;
+    for (int i = 0; i < kStreamTextures; ++i) {
+        streamFiles.push_back("ibl_async_stream_" + std::to_string(i) + ".tga");
+        if (!writeTga(streamFiles.back(), kStreamTextureSize, unsigned(i))) streamFiles.back().clear();
+    }
+    StreamingWork streamBefore;
+    bool streamLoaded = false;
+    const auto loadStream = [&]() {
+        streamLoaded = true;
+        streamBefore = e->published().streaming;
+        PbrParams p;
+        const MaterialId mat = scene->createPbrMaterial(p);
+        int loaded = 0;
+        for (const std::string &path : streamFiles) {
+            if (path.empty()) continue;
+            const TextureId t = scene->loadTexture(path, true);
+            if (t && mat && scene->setPbrTexture(mat, PbrTextureSlot::Albedo, t)) ++loaded;
+        }
+        CHECK(loaded == kStreamTextures, "(6) %d of %d textures streaming while the convolution is owed", loaded,
+              kStreamTextures);
+    };
     const auto frame = [&]() {
         e->setFramePace(FramePace::Streaming);   // consumed by the next frame (the engine resets it to Complete after it)
         enginetest::frames(e, 1);
@@ -98,6 +160,7 @@ int main()
         const unsigned outstanding = as.pending - std::min(as.pending, as.rayBuildsInFlight);
         if (outstanding > maxOutstanding) maxOutstanding = outstanding;
         const PublishedFrame &pub = scene->published();
+        if (!streamLoaded && pub.iblConvolutionDeferrals > 0ull) loadStream();
         const bool term = (pub.completeness.terms & 64u) != 0u;
         termFrames += term ? 1 : 0;
         const unsigned long long deferralsNow = deferralCount();
@@ -111,6 +174,7 @@ int main()
     }
     const unsigned long long deferrals = scene->published().iblConvolutionDeferrals;
     const AsyncShaderStats inFrame = e->published().shaders;
+    const StreamingWork streamAfter = e->published().streaming;
     std::printf("    %d frames: landed %d, the convolution deferred %llu try(s), the compiler's queue at most %llu, "
                 "frames with it empty and the environment owed %d\n",
                 f + 1, landed ? 1 : 0, deferrals, maxOutstanding, emptyFrames);
@@ -124,6 +188,10 @@ int main()
     CHECK(inFrame.computeParsedInFrame == 0ull && inFrame.computePsoInFrame == 0ull,
           "(4b) nothing compiled in a frame: %llu compute template(s) parsed and %llu compute pipeline(s) built inside "
           "a frame (bar 0 each)", inFrame.computeParsedInFrame, inFrame.computePsoInFrame);
+    CHECK(streamLoaded && streamAfter.textureDrains == streamBefore.textureDrains,
+          "(6) no frame drained the texture stream while the convolution was owed: %llu drain(s), %llu texture(s) "
+          "waited for (bar 0)", streamAfter.textureDrains - streamBefore.textureDrains,
+          streamAfter.textureDrainLanded - streamBefore.textureDrainLanded);
     if (landed) {
         for (int i = 0; i < kLandFrames; ++i) frame();
         const unsigned long long after = scene->published().iblConvolutionDeferrals;
@@ -137,6 +205,8 @@ int main()
     CHECK(termFrames > 0 && termMissing == 0,
           "(5a) every frame that deferred a dispatch read the term 'a compute dispatch deferred' in its own publish or "
           "the next: %d frame(s) carried it, %d owed it and did not", termFrames, termMissing);
+    for (const std::string &path : streamFiles)
+        if (!path.empty()) std::remove(path.c_str());
     std::printf(failures ? "sky.ibl_async_lands: FAIL (%d)\n" : "sky.ibl_async_lands: PASS\n", failures);
     return failures ? 1 : 0;
 }
