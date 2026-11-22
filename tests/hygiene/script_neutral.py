@@ -21,9 +21,8 @@ the value type and the registry know nothing of JavaScript, and a second languag
      final read measured it; N3 proves only what jahengine pulls in).
   N5 THE COMMANDS ARE LISTED (the seed of the generated documentation): `jahengine --list` (no engine booted) exits 0 and
      prints at least one command, each its signature line ending with its ACCESS tag (` [reads]`, ` [changes]`, ` [files]`
-     or ` [test]`: SCRIPT-IN-ENGINE-1 2a, MCP-ON-HOST-1's read-only surface), every array of no fixed count with its
-     declared maximum (`[] <= N`: an unbounded array is a caller's unbounded work), and a non-empty doc line, and no
-     FAULT.
+     or ` [test]`: SCRIPT-IN-ENGINE-1 2a, MCP-ON-HOST-1's read-only surface) and a non-empty doc line, and no FAULT
+     (an array with neither a count nor a maximum is one: Registry::add refuses it, script.host holds that law).
   N6 NOTHING THE APP RUNS CARRIES THE HOST: `nm` on bin/Jahshaka, bin/jahlab and bin/libIrisGLd.so finds no symbol of the
      script host (jahshaka::engine::script) and none of the JS engine (JS_*): the archive's members are never pulled in
      until a client calls the host (STUDIO-CLIENT-1).
@@ -154,7 +153,6 @@ def nm_bad(nm_text, pattern):
 
 
 ACCESS_TAG = re.compile(r" \[(reads|changes|files|test)\]$")
-UNBOUNDED = re.compile(r"\[\](?! <= \d)")
 
 
 def n5_bad(list_text, rc):
@@ -167,8 +165,6 @@ def n5_bad(list_text, rc):
     for i in commands:
         if not ACCESS_TAG.search(lines[i]):
             bad.append("%s: no access tag" % lines[i].split("(")[0])
-        if UNBOUNDED.search(lines[i]):
-            bad.append("%s: an array with no declared maximum" % lines[i].split("(")[0])
         if i + 1 >= len(lines) or not lines[i + 1].startswith("    ") or not lines[i + 1].strip():
             bad.append("%s: no doc line" % lines[i].split("(")[0])
     bad += [l for l in lines if l.startswith("FAULT")]
@@ -265,12 +261,9 @@ def self_test():
     check(not n5_bad(good, 0) and n5_bad("engine.frames(n: int) -> null [changes]\n    \nFAULT: x: no doc\n", 0) ==
           ["engine.frames: no doc line", "FAULT: x: no doc"] and n5_bad("", 0) == ["no command listed"] and
           n5_bad("engine.frames(n: int) -> null\n    Draws.\nhost.x() -> null [write]\n    X.\n", 0) ==
-          ["engine.frames: no access tag", "host.x: no access tag"] and
-          n5_bad("a.b(o: object {v: number[], w: number[] <= 4, x: number[3]}) -> null [reads]\n    A.\n", 0) ==
-          ["a.b: an array with no declared maximum"] and
-          not n5_bad("a.b(o: object {w: number[] <= 4, x: number[3]}) -> null [reads]\n    A.\n", 0),
-          "N5 reads a listing: a command with no doc line, with no access tag or an unknown one, with an array of no "
-          "declared maximum (never one with its maximum or its fixed count), a FAULT and an empty list each fail")
+          ["engine.frames: no access tag", "host.x: no access tag"],
+          "N5 reads a listing: a command with no doc line, with no access tag or an unknown one, a FAULT and an empty "
+          "list each fail")
 
 
 def main():

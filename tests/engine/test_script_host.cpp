@@ -95,6 +95,16 @@ int main()
           "THE ACCESS TAG: a command that declares no access is refused and kept as a fault (" +
               (untagged.validate().empty() ? std::string("none") : untagged.validate()[0]) + ")");
 
+    Registry unbounded;
+    const bool open = unbounded.add({"test.open", {Access::Reads, {object("o", {arg("v", Kind::Array, Value(Value::Array{}))})},
+                                                   Kind::Null}, "an array with no bound"},
+                                    [](Call &) { return Value(); });
+    check(!open && unbounded.validate().size() == 1 &&
+              unbounded.validate()[0] == "test.open: the array 'v' declares neither a count nor a maximum" &&
+              unbounded.commands().empty(),
+          "AN ARRAY DECLARES ITS BOUND: one with neither a count nor a maximum is refused and kept as a fault (" +
+              (unbounded.validate().empty() ? std::string("none") : unbounded.validate()[0]) + ")");
+
     // 3. THE CALL BY NAME, AND ITS LAWS
     const auto more = [](int b) { return Value(Value::Object{{"b", Value(b)}}); };
     Result r = reg.call("test.add", {Value(2), more(3)});
@@ -554,7 +564,7 @@ int main()
         check(failedWith(named(mesh), "is a mesh handle, not a node handle"),
               "a mesh handle where a node is declared FAILS by name (the kind is in the bits, no lookup)");
         // AN ARRAY OF HANDLES (handles(); 2a a2): every element kind-checked AND asked of its kind's existence check
-        a.add({"test.many", {Access::Reads, {target(handle("scene", "scene")), object("o", {handles("nodes", "node")})},
+        a.add({"test.many", {Access::Reads, {target(handle("scene", "scene")), object("o", {handles("nodes", "node").upTo(8)})},
                              Kind::Int}, "how many nodes"},
               [](Call &c) { return Value(std::int64_t(c[1]["nodes"].asArray().size())); });
         const auto many = [&](Value::Array nodes) {
@@ -569,7 +579,7 @@ int main()
         {
             Registry counted;
             int asked = 0;
-            counted.add({"test.many", {Access::Reads, {target(handle("scene", "scene")), object("o", {handles("nodes", "node")})},
+            counted.add({"test.many", {Access::Reads, {target(handle("scene", "scene")), object("o", {handles("nodes", "node").upTo(8)})},
                                        Kind::Int}, "how many nodes"},
                         [](Call &c) { return Value(std::int64_t(c[1]["nodes"].asArray().size())); });
             counted.checkKind("node", [&asked](const Call &, std::uint32_t, std::string &) { ++asked; return true; });
@@ -579,9 +589,9 @@ int main()
             const Result r7 = counted.call("test.many", {s, Value(Value::Object{{"nodes", Value(seven)}})});
             check(r7.value == Value(7) && asked == 7 &&
                       signatureText(*counted.find("test.many")) ==
-                          "test.many(scene: target scene handle, o: object {nodes: node handle[]}) -> int [reads]",
+                          "test.many(scene: target scene handle, o: object {nodes: node handle[] <= 8}) -> int [reads]",
                   "the existence check is asked once for EACH of 7 elements (" + std::to_string(asked) +
-                      " asked); the signature prints node handle[]");
+                      " asked); the signature prints node handle[] <= 8");
         }
         check(failedWith(a.call("test.mint", {Value(std::int64_t(1) << 32 | 5)}), "does not fit a handle's 32 bits"),
               "an engine id over 2^32 - 1 is refused at minting (2^32 + 5 never becomes 5)");
@@ -837,6 +847,51 @@ int main()
                   t1.message.find("is a mesh handle, not a node handle") != std::string::npos,
               "engine.frames, engine.node.setTransform and engine.gi.set by name (members in any order) are their "
               "positional calls word for word (" + t1.message + ")");
+    }
+
+    // 12. AN ARRAY's LENGTH IS JUDGED BEFORE IT IS CONVERTED (SCRIPT-IN-ENGINE-1 2b; the 2a final read's L1): a script's
+    //     `a.length = 4e9` costs it nothing, and converting it would cost the host 4e9 values (a bad_alloc through the
+    //     JS engine's C frames: the process ends). THE LAW: the length is checked against the declaration - its count or
+    //     its maximum - BEFORE any element is converted or any room reserved; an array the declaration does not take
+    //     there (an argument too many, an undeclared member) is never read; each is a FAIL of that call by name, and the
+    //     host lives on. THE CONTROL: the next call in the same host reaches its command (reached = 1, its answer 4)
+    {
+        Host capped;
+        std::vector<std::string> said;
+        capped.setConsole([&said](const std::string &l) { said.push_back(l); });
+        int reached = 0;
+        capped.registry().add({"test.capped",
+                               {Access::Reads, {object("o", {arg("v", Kind::Array, Value(Value::Array{})).upTo(4)})}, Kind::Int},
+                               "how many numbers (at most 4)"},
+                              [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0]["v"].asArray().size())); });
+        registerEngineCommands(capped, nullptr, "no device here", false);
+        const std::string scene = std::to_string(capped.registry().hold("scene", std::make_shared<int>(0)));
+        const Result r = capped.run(
+            "const huge = []; huge.length = 4e9;\n"
+            "const caught = (f) => { try { f(); return 'no failure'; } catch (e) { return e.message; } };\n"
+            "console.log(caught(() => test.capped({v: huge})));\n"
+            "console.log(caught(() => test.capped({v: [1, 2, 3, 4, 5]})));\n"
+            "console.log(caught(() => test.capped({v: [1]}, huge)));\n"
+            "console.log(caught(() => test.capped({v: [1], w: huge})));\n"
+            "console.log(caught(() => engine.node.setTransforms(" + scene + ", {nodes: huge})));\n"
+            "console.log(caught(() => engine.node.setTransforms(" + scene + ", {nodes: Array(65537).fill(1)})));\n"
+            "console.log(test.capped({v: [1, 2, 3, 4]}));\n",
+            "capped.js");
+        const char *want[] = {"test.capped: argument 1: o.v holds 4000000000 elements, at most 4",
+                              "test.capped: argument 1: o.v holds 5 elements, at most 4",
+                              "test.capped: 2 arguments given, it takes 1",
+                              "test.capped: o has no member 'w'",
+                              "engine.node.setTransforms: argument 2: transforms.nodes holds 4000000000 elements, at most 65536",
+                              "engine.node.setTransforms: argument 2: transforms.nodes holds 65537 elements, at most 65536",
+                              "4"};
+        std::string missed;
+        for (std::size_t i = 0; i < 7; ++i)
+            if (i >= said.size() || said[i].rfind(want[i], 0) != 0)
+                missed += "\n      want " + std::string(want[i]) + " <- " + (i < said.size() ? said[i] : std::string("(no line)"));
+        check(r.status == Status::Ok && said.size() == 7 && missed.empty() && reached == 1,
+              "AN ARRAY OF LENGTH 4e9 (and one past its maximum, and one the declaration does not take) FAILS that call by "
+              "name before a single element is converted, and the host lives on: the next call reaches its command (" +
+                  std::to_string(reached) + " reached)" + missed);
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
