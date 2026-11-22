@@ -4,7 +4,8 @@
 
 A row's TARGETS (CMake target names) are read from ctest's own listing and build.ninja, never guessed:
   * every word of its command (or the path after `--opt=`) that is the artefact of a target of the build - its executable,
-    a library it is handed;
+    a library it is handed - and, for an executable that LAUNCHES THE APP (compiled with JAHSHAKA_BINARY=<the app's path>), the
+    app's target;
   * its property JAH_BUILD_TARGETS: target names, `all` (the row reads every binary of the default build), or `none` (its
     script runs nothing the build makes beyond its command line). A row whose command is NOT an artefact (a python, sh,
     bash or cmake script) and that declares nothing is UNDECLARED: it needs `all` (a script may run any binary of the build:
@@ -20,11 +21,12 @@ usage: row_targets.py <build dir> < rows (one a line)   -> JSON {"targets": [...
 import json
 import os
 import pickle
+import re
 import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-_VERSION = 2
+_VERSION = 3
 
 
 def _names(v):
@@ -41,6 +43,7 @@ class Ninja:
         self.target_of = {}     # artefact (realpath) -> target name
         self.targets = set()    # every target name
         self.default = set()    # target names inside the closure of `all`
+        self.drives = {}        # artefact (realpath) -> the target of the app it SPAWNS (compiled with JAHSHAKA_BINARY=<its path>)
 
     @classmethod
     def load(cls, build):
@@ -72,9 +75,15 @@ class Ninja:
     def _parse(self, path):
         sys.path.insert(0, HERE)
         from gate_graph import _find_unescaped, _split_ninja
-        ins_of, phony, linked = {}, {}, []
+        ins_of, phony, linked, spawns, cur = {}, {}, [], {}, None
         for line in open(path, errors="replace").read().replace("$\n", "").split("\n"):
+            if line.startswith("  DEFINES") and cur and "JAHSHAKA_BINARY=" in line:
+                m = re.search(r'JAHSHAKA_BINARY=\\?"?([^\s"\\]+)', line)
+                if m:
+                    spawns[cur] = m.group(1)          # an object of an executable that launches the app at this path
+                continue
             if not line.startswith("build "):
+                cur = None if line and not line.startswith(" ") else cur
                 continue
             body = line[6:]
             c = _find_unescaped(body, ":")
@@ -90,6 +99,7 @@ class Ninja:
             expl = words[1:words.index("|")] if "|" in words else words[1:words.index("||")] if "||" in words else words[1:]
             for o in outs:
                 ins_of[o] = ins
+            cur = outs[0] if outs and "_COMPILER" in rule else None
             if "_LINKER" in rule and outs:
                 linked.append(outs[0])
             if rule == "phony" and len(outs) == 1 and "/" not in outs[0] and outs[0] != "all" \
@@ -116,6 +126,14 @@ class Ninja:
                 self.target_of.setdefault(os.path.realpath(self._abs(o)), o)
                 if o in seen:
                     self.default.add(o)
+        # AN EXECUTABLE THAT LAUNCHES THE APP NEEDS THE APP BUILT (the final read's L1: nine test executables carry the app's
+        # path, JAHSHAKA_BINARY, and none depends on its target - a row would pass against an app the call never built): each
+        # link edge with an object compiled with that define needs the target whose artefact is the define's path
+        for o in linked:
+            for i in ins_of.get(o, ()):
+                app = self.target_of.get(os.path.realpath(spawns[i])) if i in spawns else None
+                if app:
+                    self.drives[os.path.realpath(self._abs(o))] = app
 
 
 def ctest_doc(build):
@@ -158,6 +176,8 @@ def own_targets(t, nj):
             tg = nj.target_of.get(os.path.realpath(w))
             if tg:
                 out.add(tg)
+                if os.path.realpath(w) in nj.drives:
+                    out.add(nj.drives[os.path.realpath(w)])   # it launches the app: the app's target too
     declared = "JAH_BUILD_TARGETS" in props
     unknown = []
     for v in _names(props.get("JAH_BUILD_TARGETS")):

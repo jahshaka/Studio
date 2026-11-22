@@ -137,6 +137,37 @@ def toy(src):
              "the row's (exit %d, argv %r)" % (p.returncode, got))
     finally:
         shutil.rmtree(w, ignore_errors=True)
+    spawner(src)
+
+
+def spawner(src):
+    """THE FINAL READ's L1: a test executable compiled with JAHSHAKA_BINARY=<the app's path> launches the app, so its row needs
+    the app's target too (scripts/row_targets.py) - a toy build.ninja: test_x's object carries the define, test_y's does not."""
+    sys.path.insert(0, os.path.join(src, "scripts"))
+    import row_targets
+    w = tempfile.mkdtemp(prefix="on-demand-spawn-")
+    try:
+        b = os.path.join(w, "build")
+        os.makedirs(b)
+        app = os.path.join(b, "bin", "App")
+        open(os.path.join(b, "build.ninja"), "w").write(
+            "rule CXX_COMPILER__t\n  command = c\nrule CXX_EXECUTABLE_LINKER__t\n  command = l\nrule phony\n"
+            "build x.o: CXX_COMPILER__test_x_Debug /s/x.cpp\n  DEFINES = -DJAHSHAKA_BINARY=\\\"%s\\\" -DOTHER=1\n"
+            "build y.o: CXX_COMPILER__test_y_Debug /s/y.cpp\n  DEFINES = -DOTHER=1\n"
+            "build a.o: CXX_COMPILER__App_Debug /s/a.cpp\n  DEFINES = -DOTHER=1\n"
+            "build tests/test_x: CXX_EXECUTABLE_LINKER__test_x_Debug x.o\n"
+            "build tests/test_y: CXX_EXECUTABLE_LINKER__test_y_Debug y.o\n"
+            "build bin/App: CXX_EXECUTABLE_LINKER__App_Debug a.o\n"
+            "build test_x: phony tests/test_x\nbuild test_y: phony tests/test_y\nbuild App: phony bin/App\n"
+            "build all: phony App test_x test_y\n" % app)
+        nj = row_targets.Ninja(b)
+        nj._parse(os.path.join(b, "build.ninja"))
+        own = lambda exe: row_targets.own_targets({"command": [os.path.join(b, "tests", exe)], "properties": []}, nj)[0]  # noqa: E731
+        x, y = own("test_x"), own("test_y")
+        want(x == {"test_x", "App"} and y == {"test_y"}, "an executable compiled with JAHSHAKA_BINARY=<the app> needs the app's "
+             "target with its own; one without the define needs its own alone (%s %s)" % (sorted(x), sorted(y)))
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
 
 
 if __name__ == "__main__":
