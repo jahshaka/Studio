@@ -13,13 +13,29 @@
 #   (3) THE FRAME LOOP NEVER READS THE SCRIPTS FOLDER (the audit's F4): the lab's `status` counts the folder's reads
 #       (scriptListings); 30 of the lab's own frames with the overlay on (it is pushed every 10) add NONE.
 #   CONTROL: the count rose by one at the --js load (1 at the first status: the press read the folder once).
+#   (4) THE VIEW IS HANDED IN (SCRIPT-IN-ENGINE-1 2b's ownership law, its view half): a second script takes lab.view()
+#       and binds its scene (engine.view.setScene) and places it (engine.view.lookAt) - ALLOWED - and its
+#       engine.view.destroy is REFUSED by name ("handed in ... not the script's to destroy"): `LAB JS END view_law.js
+#       ok (3 checks, 0 frames)`; then a shot (the lab's view still there: its destroy did not happen).
 # usage: js_window_view.sh <jahlab> <work dir>
 set -u
 LAB=${1:?jahlab}; WD=${2:?work dir}
 HERE=$(cd "$(dirname "$0")" && pwd)
 [ -n "${DISPLAY:-}" ] || { echo "FAIL: no DISPLAY (the rig's)"; echo "lab.js_window_view: FAILED (1)"; exit 1; }
 rm -rf "$WD"; mkdir -p "$WD"
-printf 'shot after\nstatus\noverlay on\nframes 30\nstatus\nquit\n' > "$WD/after.lab"
+cat > "$WD/view_law.js" <<'JS'
+// the handed-in view: driven (a scene bound, placed), never destroyed
+const view = lab.view();
+const scene = engine.scene.create("view-law");
+let bound = false, placed = false, destroyed = true, why = "";
+try { engine.view.setScene(view, {scene}); bound = true; } catch (e) { why = String(e); }
+try { engine.view.lookAt(view, {eye: [0, 1, 5], target: [0, 0, 0]}); placed = true; } catch (e) { why = String(e); }
+try { engine.view.destroy(view); } catch (e) { destroyed = false; why = String(e); }
+host.check({ok: bound, what: "the handed-in view takes the script's scene (engine.view.setScene)"});
+host.check({ok: placed, what: "the handed-in view is placed (engine.view.lookAt)"});
+host.check({ok: !destroyed && /handed in/.test(why), what: "the handed-in view is not the script's to destroy (" + why + ")"});
+JS
+printf 'shot after\nstatus\noverlay on\nframes 30\nstatus\njs load %s\njs run\nframes 1\nshot law\nquit\n' "$WD/view_law.js" > "$WD/after.lab"
 "$LAB" --headless --no-stdin --size 320x180 --data-root "$WD/data" --js "$HERE/demo_spiral.js" --script "$WD/after.lab" \
     > "$WD/run.log" 2>&1
 rc=$?
@@ -69,6 +85,11 @@ if len(counts) != 2 or counts[0] != 1:
     fails.append("CONTROL (3): the --js load did not read the folder once (the counts %s)" % counts)
 elif counts[1] != counts[0]:
     fails.append("(3) the lab's 30 frames read the scripts folder %s time(s)" % (counts[1] - counts[0]))
+law = re.search(r"^LAB JS END view_law\.js (.*)$", log, re.M)
+if not law or law.group(1) != "ok (3 checks, 0 frames)":
+    fails.append("(4) the handed-in view's law reads %r, not 'ok (3 checks, 0 frames)'" % (law.group(1) if law else None))
+if not os.path.isfile(os.path.join(wd, "data", "shots", "law.png")):
+    fails.append("(4) no shot of the lab's view after the refused destroy")
 for f in fails:
     print("FAIL: " + f)
 print("lab.js_window_view: " + ("FAILED (%d)" % len(fails) if fails else "PASSED"))
