@@ -681,7 +681,8 @@ jah_no_display(source.compute_size_keys)
 
 # source.gate_pace (COLD-BOOT-1 stage 4): THE STREAMING PACE IS THE GATE's AND THE VIEWPORT's, NOWHERE ELSE - a Complete
 # frame owes the whole picture (the reveal law), the startup gate's frames are shown to nobody: only src/app/
-# shaderbuildgate.cpp (gateFrame, every frame of the gate) and the viewport's own pace set Streaming. Its negative control first.
+# shaderbuildgate.cpp (gateFrame, every frame of the gate) and the viewport's own pace set Streaming; and the gate's scope guard gives
+# the pace (in force until set again) and its kept view's compiles back on every way out. Its negative control first.
 add_test(NAME source.gate_pace
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/gate_pace.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.gate_pace PROPERTIES TIMEOUT 60 LABELS "hygiene")

@@ -143,13 +143,29 @@ void addPresetRow(const iris::ScenePtr &doc, Database *db)
 /// under it: a ray pipeline build is waited for in the frame - the 47-s join of spikes/cold-boot-1/S4arm - and the lighting
 /// arm runs whole); that is the reveal law of every view a user sees, and the editor's frames keep it (the viewport sets
 /// its own pace). The gate's frames are shown to nobody but the splash: here, and only here, a compile lands frames later
-/// and the gate waits for it on the published state (gatesettle.h). The pace is consumed by the next frame (the engine
-/// resets it to Complete after it), so it is set before every one. (source.gate_pace: nothing else sets Streaming.)
+/// and the gate waits for it on the published state (gatesettle.h). The pace is IN FORCE UNTIL SET AGAIN (Engine::
+/// setFramePace; the engine never lowers it), so the gate gives it back with everything else it changed: GateScope.
+/// (source.gate_pace: nothing else sets Streaming, and the gate's scope restores it.)
 void gateFrame(Engine &engine)
 {
     engine.setFramePace(FramePace::Streaming);
     engine.renderOneFrame();
 }
+
+/// THE GATE LEAVES THE ENGINE AS IT FOUND IT (COLD-BOOT-1, the leak of stage 4's gate): on every way out, the pace back
+/// to Complete (the state of an engine no driver has paced - the gate runs before any viewport frame) and the kept warm
+/// view back to blocking compiles (its state at creation). Left as they were, every later frame of the session - the
+/// editor's, a script's, the selftest's six - rendered on the Streaming pace, its lighting arm built one stage a frame
+/// (PhotonComponent: a Complete frame builds it whole), and the kept view counted as compiling in the background.
+struct GateScope {
+    Engine &engine;
+    View *warmView = nullptr;
+    ~GateScope()
+    {
+        engine.setFramePace(FramePace::Complete);
+        if (warmView) warmView->setAsyncShaders(false);
+    }
+};
 
 /// THE EDITOR'S WORLD, AS THE EDITOR DRAWS IT (SHADER-WARM-2; see the call site). The
 /// template's own document, a mirror configured as EngineSceneViewport configures its
@@ -512,6 +528,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
                                                  Colour(0.0f, 0.0f, 0.0f, 1.0f), OffscreenContract::Live);
+    const GateScope gateScope{ *engine, warmView };   // before the gate's first frame: every way out gives it all back
     // THE RAY PIPELINES START NOW, ALL OF THEM, the reflection's first (COLD-BOOT-1 stage 4): their cold driver compiles
     // (~100 s of a first launch, serial at their consumers' first frames before) run on their builders beside everything
     // below; the world phases wait for them on the published state before their consumers' frames. And the warm view's
