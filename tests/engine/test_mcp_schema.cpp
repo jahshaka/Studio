@@ -193,7 +193,8 @@ int main()
     const CommandInfo bad{"test.bad",
                           {Access::Reads,
                            {object("o", {arg("s", Kind::String).range(0, 1), arg("i", Kind::Int).oneOf({"x"}), counted,
-                                         arg("m", Kind::Int).upTo(2), arg("bad name!", Kind::Int)})},
+                                         arg("m", Kind::Int).upTo(2), numbers("fixed", 3).upTo(5),
+                                         arg("bad name!", Kind::Int)})},
                            Kind::Null},
                           "unmappable"};
     Value ignored;
@@ -205,6 +206,7 @@ int main()
               badWhy.find("o.i: its 'choices' on a int has no schema form") != std::string::npos &&
               badWhy.find("o.c: its 'count' on a int has no schema form") != std::string::npos &&
               badWhy.find("o.m: its 'maxCount' on a int has no schema form") != std::string::npos &&
+              badWhy.find("o.fixed: its 'maxCount' beside a fixed count has no schema form") != std::string::npos &&
               badWhy.find("the name 'bad name!' is not 1-64") != std::string::npos,
           "the control: unmappable fields read " + std::to_string(unmappedCount) + " named faults (" + badWhy + ")");
 
