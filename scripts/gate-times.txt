@@ -604,3 +604,4 @@ thumbnails.library_complete.fresh_home 1.11  by hand (spec.sh reprice, 2026-11-2
 script.host 0.03  solo 2026-11-22 at 6bde2bf50 (spec.sh reprice, run 20261122T135551-6bde2bf50)
 source.script_neutral 2.84  solo 2026-11-22 at 6bde2bf50 (spec.sh reprice, run 20261122T135553-6bde2bf50)
 tooling.runlog_facts 0.17  solo 2026-11-22 at 3cc4126e9 (spec.sh reprice, run 20261122T150737-3cc4126e9-p2397850)
+engine.draw_order 1.67  by hand (spec.sh reprice, 2026-11-22)
