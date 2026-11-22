@@ -95,6 +95,24 @@ endif()
 target_compile_definitions(test_library_statements PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 set_tests_properties(library.statements PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAH_DB_STATEMENT_TRACE=1")
 
+# library.scale — LARGE-LIBRARY-1 stage 2: 10,000 assets / 500 projects run as many statements as 1,000 / 50 on every
+# step a returning user takes (the boot, open, the Assets page, Materials, the Desktop, create), with the boot's one-time
+# index gate and the generator's real bakes in its first session per library (library_scale.sh says the laws). Two
+# --headless sessions per generated root; the trace counts the DEFAULT connection only (ruled call 3: the workers'
+# named reads are printed). `--headless` stands on the command line (gate-scope reads a headless script row from it).
+set(_lscale_home ${CMAKE_CURRENT_BINARY_DIR}/home-library_scale)
+file(MAKE_DIRECTORY ${_lscale_home}/run)
+add_test(NAME library.scale
+         COMMAND sh "${JAH_FRESH_HOME}" "${_lscale_home}" --
+                 bash ${CMAKE_CURRENT_SOURCE_DIR}/library_scale.sh $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --headless
+                 $<TARGET_FILE:test_library_statements> ${CMAKE_CURRENT_SOURCE_DIR}/scripts/library_scale.js
+                 ${CMAKE_CURRENT_SOURCE_DIR}/library_columns.py ${CMAKE_SOURCE_DIR}/tests/scripting/fixtures/implane_wide.png
+         WORKING_DIRECTORY ${_lscale_home}/run)
+set_tests_properties(library.scale PROPERTIES ENVIRONMENT "HOME=${_lscale_home}" LABELS "assets" TIMEOUT 60
+                     SKIP_RETURN_CODE 77)
+set_property(TEST library.scale APPEND PROPERTY ENVIRONMENT_MODIFICATION "JAHSHAKA_DATA_ROOT=unset:")
+jah_no_display(library.scale)
+
 # bundle.writer — EXPORT-THREAD-1: the share file's writer (services/bundlewriter.*) on a worker
 # writes the same manifest + payload bytes as on the calling thread, for a 200-entry pack; the
 # calling thread's event loop turns while it writes (a 1 ms timer ticks — a count); a cancelled

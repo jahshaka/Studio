@@ -1,0 +1,56 @@
+// library.scale's session script (LARGE-LIBRARY-1 stage 2; tests/assettray/library_scale.sh writes the prefix:
+// MODE, OPEN, PNG). One --headless session per generated library; every line it prints starts "SCALE ".
+//   MODE "first": the library's FIRST session — the seed of the shipped primitives and, on a library written with
+//                 the previous index set, the boot's one-time index gate. Its boot is printed, never barred.
+//   MODE "law":   a RETURNING user's session: the boot, then the steps, each read around by app.databaseReads
+//                 (TRACED statements and pages of the default connection) with the query log on (the named view:
+//                 the workers' tile reads are printed by name in it).
+function reads() { return app.databaseReads(); }
+function line(text) { console.log("SCALE " + text); }
+
+var boot = reads();
+if (!boot.available) { line("unavailable " + boot.why); }
+line("step=boot statements=" + boot.statements + " bytes=" + boot.bytes + " traced=" + boot.traced);
+
+function step(name, fn) {
+    app.queryLog({ on: true });
+    var r0 = reads();
+    var t0 = Date.now();
+    var out = fn();
+    var ms = Date.now() - t0;
+    var r1 = reads();
+    var log = app.queryLog({ on: false });
+    var nonGuid = 0;
+    (log.thumbnailSelects || []).forEach(function (t) { if (!t.byGuid) nonGuid += t.count; });
+    var names = (log.byName || []).map(function (e) { return e.name + "=" + e.count; }).join(",");
+    line("step=" + name + " statements=" + (r1.statements - r0.statements) + " bytes=" + (r1.bytes - r0.bytes) +
+         " logged=" + log.statements + " ms=" + ms + " nonGuidThumbnailSelects=" + nonGuid + " lastError=" +
+         app.lastError() + " byName=" + names);
+    return out;
+}
+
+if (MODE === "law") {
+    app.heartbeat(100);
+    step("open", function () { return project.open(OPEN); });
+    var rows = step("list", function () { return assets.list(); });
+    step("listMembers", function () { return assets.list({ members: true }); });
+    step("selected", function () { return assets.selected(); });
+    step("materials", function () { return app.space("materials"); });   // its first entry: residue (B), printed
+    step("desktop", function () { return app.space("desktop"); });
+    var grid = desktop.gridStats();
+    line("grid " + JSON.stringify(grid));
+    step("create", function () { return project.create("library.scale create"); });
+    // THE NEGATIVE CONTROL: a step made N+1 ON PURPOSE (assets.metadata, a by-guid read, for every 100th listed
+    // row) — the comparer must see it grow with the library.
+    step("negativeControl", function () {
+        for (var i = 0; i < rows.length; i += 100) assets.metadata(rows[i].guid);
+        return rows.length;
+    });
+    line("heartbeat " + JSON.stringify(app.heartbeatStats()));
+    app.heartbeat(0);
+    if (PNG) {
+        var g = assets.importFile(PNG);
+        line("import " + g + " lastError=" + app.lastError());
+    }
+}
+line("end");
