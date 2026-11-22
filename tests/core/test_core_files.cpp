@@ -3,14 +3,18 @@
 // child that dies between the staged write and the rename leaves the old file (its temp seen: the death observed where it
 // must be); 8 threads x 100 writes of one file while a reader reads it: every read is one whole version; the staged steps
 // (stagingTempPath + fsyncPath + atomicRename) replace an existing file whole, under the shape the library GC reads
-// (<target>.tmp-<pid>-<serial>); a non-ASCII UTF-8 path round-trips; readAll of a missing file is nothing. POSIX (fork).
+// (<target>.tmp-<pid>-<serial>); a non-ASCII UTF-8 path round-trips; readAll of a missing file is nothing; readAll ANSWERS
+// "nothing" and never throws for what it cannot read - a DIRECTORY (on ext4 its seek-to-end says 2^63-1 bytes) and a file
+// larger than the memory it may take (a sparse 64-GiB file in a child under a 16-GiB address-space limit). POSIX (fork).
 #include "core/files.h"
 
 #include <atomic>
 #include <csignal>
 #include <cstdio>
 #include <cstdlib>
+#include <exception>
 #include <filesystem>
+#include <optional>
 #include <regex>
 #include <string>
 #include <thread>
@@ -146,6 +150,33 @@ int main()
     check(writeAtomic(path(name), "u") && readAll(path(name)) == std::string("u") && utf8(path(name)) == name,
           "a non-ASCII UTF-8 path round-trips");
     check(!readAll(dir / "missing.json"), "readAll of a missing file is nothing");
+
+    // ---- what readAll cannot read is nothing, never a throw (the header's promise)
+    bool threw = false;
+    std::optional<std::string> got;
+    try {
+        got = readAll(dir);
+    } catch (const std::exception &e) {
+        threw = true;
+        std::printf("readAll(<a directory>) threw: %s\n", e.what());
+    }
+    check(!threw && !got, "readAll of a directory is nothing, not a throw");
+    const fs::path huge = dir / "huge.bin";
+    std::error_code sparse;
+    std::FILE *empty = std::fopen(huge.c_str(), "wb");
+    if (empty) std::fclose(empty);
+    fs::resize_file(huge, std::uintmax_t(1) << 36, sparse);   // 64 GiB, no blocks
+    check(empty && !sparse && fs::file_size(huge) == (std::uintmax_t(1) << 36), "a sparse 64-GiB file");
+    child = ::fork();
+    if (child == 0) {
+        rlimit as{ rlim_t(16) << 30, rlim_t(16) << 30 };   // 16 GiB of address space: the 64-GiB buffer cannot exist
+        ::setrlimit(RLIMIT_AS, &as);
+        ::_exit(readAll(huge) ? 3 : 0);                       // a throw escapes: terminate, SIGABRT
+    }
+    ::waitpid(child, &st, 0);
+    check(WIFEXITED(st) && WEXITSTATUS(st) == 0,
+          "readAll of a file larger than its memory is nothing, not a throw (child status " + std::to_string(st) +
+              (WIFSIGNALED(st) ? ", killed by signal " + std::to_string(WTERMSIG(st)) : std::string()) + ")");
 
     fs::remove_all(dir);
     std::printf("%d checks, %d failures; %ld concurrent reads, 0 torn wanted\n", checks, failures, reads.load());
