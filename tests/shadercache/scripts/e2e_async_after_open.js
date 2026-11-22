@@ -29,7 +29,7 @@ function phase(label, change) {
     var liveBefore = live();
     change();
     var p = { phase: label, pendingPeak: 0, placeholderDraws: 0, pendingSkips: 0, frames: 0,
-              worstFrameMs: 0, pictureDuring: "" };
+              worstFrameMs: 0, pictureDuring: "", burstPeakTotal: 0 };
     // FRAMES, never time: step until nothing is pending (bounded), then settle.
     for (var i = 0; i < 3000; ++i) {   // a bound in frames
         var t0 = Date.now();
@@ -38,6 +38,8 @@ function phase(label, change) {
         var s = st();
         if (ms > p.worstFrameMs) p.worstFrameMs = ms;
         if (s.pending > p.pendingPeak) p.pendingPeak = s.pending;
+        // THE NOTICE's FACT (SHADER-SYSTEM-1 stage 7): the burst's "n of m" as the engine publishes it
+        if (s.pending > 0 && s.shaderBurst.total > p.burstPeakTotal) p.burstPeakTotal = s.shaderBurst.total;
         // The first frame that drew a placeholder is photographed as presented.
         if (!p.pictureDuring && s.placeholderDraws > before.placeholderDraws) {
             p.pictureDuring = OUTDIR + "/" + label + "_during.png";
@@ -49,6 +51,7 @@ function phase(label, change) {
     editor.frame(120);
     var after = st();
     p.pendingEnd = after.pending;
+    p.burstEnd = after.shaderBurst;
     p.placeholderDraws = after.placeholderDraws - before.placeholderDraws;
     p.pendingSkips = after.pendingSkips - before.pendingSkips;
     p.failed = after.failed - before.failed;

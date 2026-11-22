@@ -53,7 +53,10 @@
 //               room: every frame of the hold is published INCOMPLETE by bit 2 and the builds stay in flight (RED before:
 //               a Complete frame joined them - the term never set, the builds landed at once); (2) THE CONTROL, a
 //               SYNCHRONOUS room on the same pace and hold: the builds are joined at once (none in flight), bit 2 never
-//               set - the join kept on purpose where frames are counted.
+//               set - the join kept on purpose where frames are counted. AND THE NOTICE's FACT (AsyncShaderStats::rayBurst,
+//               rayBuildsLanded): held, the ray burst's open part (total - landed) is the builds in flight (at least the
+//               2 held; the unheld builds the room launched land inside the burst); joined, total of total and
+//               rayBuildsLanded risen by the joined builds (RED with the burst not fed: 0 of 0).
 //   failwait  - A FAILURE WAITS FOR ITS ANSWER (COLD-BOOT-1's leftover L1): every object's own permutation FAILS
 //               (shaders.asyncFail) on a COLD boot, so its placeholder is still compiling when it fails - (1) those frames
 //               are published INCOMPLETE by a pending skip (bit 1: the object waits for the placeholder it will draw);
@@ -291,6 +294,7 @@ int main(int argc, char **argv)
             if (!async) r.view->setAsyncShaders(false);   // THE CONTROL: a synchronous room
             int withTerm = 0, held = 0;
             unsigned inFlightMin = ~0u;
+            const unsigned long long landedBefore = e->published().shaders.rayBuildsLanded;
             for (int f = 0; f < kSilentHeldFrames; ++f) {
                 enginetest::frames(e, 1);
                 ++frames;
@@ -305,10 +309,19 @@ int main(int argc, char **argv)
                               "bit 2 (%d of %d), the readers' builds still in flight (at least %u) - never joined", withTerm,
                               held, inFlightMin);
                 check(held > 0 && withTerm == held && inFlightMin >= 1u, w);
+                const AsyncShaderStats::Burst rb = e->published().shaders.rayBurst;
+                std::snprintf(w, sizeof(w), "(1) the notice: the ray burst while held reads %u of %u (the builds in flight "
+                              "%u)", rb.landed, rb.total, inFlight());
+                check(inFlight() >= 2u && rb.total - rb.landed == inFlight(), w);
             } else {
                 std::snprintf(w, sizeof(w), "(2) the control, a synchronous room on the same pace and hold: the builds joined "
                               "(in flight at most %u), bit 2 on %d of %d frames", inFlightMin, withTerm, held);
                 check(held > 0 && withTerm == 0 && inFlightMin == 0u, w);
+                const AsyncShaderStats::Burst rb = e->published().shaders.rayBurst;
+                const unsigned long long landed = e->published().shaders.rayBuildsLanded - landedBefore;
+                std::snprintf(w, sizeof(w), "(2) the notice: joined, the ray burst reads %u of %u, %llu landed", rb.landed,
+                              rb.total, landed);
+                check(rb.total >= 2u && rb.landed == rb.total && landed >= 2ull, w);
             }
             drop(e, r);
         }

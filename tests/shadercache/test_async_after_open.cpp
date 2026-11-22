@@ -406,6 +406,17 @@ int main(int argc, char **argv)
         CHECK(c.value("pendingPeak").toInt() > 0, ("cold " + n + ": the pending count rose").constData());
         CHECK(c.value("pendingEnd").toInt() == 0, ("cold " + n + ": ...and fell back to 0").constData());
         CHECK(c.value("failed").toInt() == 0, ("cold " + n + ": no permutation failed").constData());
+        {
+            // THE NOTICE's FACT (SHADER-SYSTEM-1 stage 7; app.asyncShaders().shaderBurst): the phase's burst counted at
+            // least what was pending at its peak, and its end reads total of total
+            const QJsonObject b = c.value("burstEnd").toObject();
+            const int peak = c.value("burstPeakTotal").toInt(), landed = b.value("landed").toInt(),
+                      total = b.value("total").toInt();
+            std::printf("    cold %s: the burst %d of %d at its end, its total %d at the peak (pending peak %d)\n",
+                        n.constData(), landed, total, peak, c.value("pendingPeak").toInt());
+            CHECK(peak >= c.value("pendingPeak").toInt() && peak > 0 && landed == total && total >= peak,
+                  ("cold " + n + ": the burst counted the phase's builds and ends total of total").constData());
+        }
         // WHILE A SHADER BUILDS THE WAITING OBJECTS DRAW GREY: the PBS and the Atom decode
         // placeholders (a tier's are built by the startup gate's sweep, the placeholders-only
         // pass). Every frame is presented (BUGS-7: the held frame is deleted).

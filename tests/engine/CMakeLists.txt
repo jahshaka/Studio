@@ -661,6 +661,15 @@ add_test(NAME engine.ray_ahead_door COMMAND test_ray_ahead_door)
 set_tests_properties(engine.ray_ahead_door PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.ray_ahead_door)
 
+# engine.build_burst — THE BUILDS' BURST (SHADER-SYSTEM-1 stage 7; BuildBurst.h): the notice's "n of m" - a burst begins
+# when the pending count rises from 0, counts its own landings from its own base, and reads m of m when it ends. CPU only.
+add_executable(test_build_burst test_build_burst.cpp)
+set_target_properties(test_build_burst PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_build_burst PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.build_burst COMMAND test_build_burst)
+set_tests_properties(engine.build_burst PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.build_burst)
+
 # engine.exit_only_teardown — THE FIXTURES' EXIT (COLD-BOOT-1's added item; spikes/exit-race/VERIFY.md): a fixture that
 # takes the harness's exit-only teardown ends at its engine's death - a handler registered after the boot never runs, and
 # the status is what the run returned; its negative control (no engine: the late handler runs). A headless (NULL) engine

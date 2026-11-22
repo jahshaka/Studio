@@ -668,3 +668,4 @@ shadercache.identity_print 0.11  solo 2026-11-22 at 946dd7031 (spec.sh reprice, 
 gi.card_build_late.silent 3.35  by hand (spec.sh reprice, 2026-11-22)
 gi.card_build_late.complete 1.80  by hand (spec.sh reprice, 2026-11-22)
 engine.ray_ahead_door 0.01  by hand (spec.sh reprice, 2026-11-22)
+engine.build_burst 0.01  by hand (spec.sh reprice, 2026-11-22)

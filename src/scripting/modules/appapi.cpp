@@ -292,7 +292,8 @@ QVector<VerbInfo> AppApi::verbs() const
                           "paramsMisfits, compileErrors, computeParsedInFrame, computePsoInFrame, computeDestroyWaits, "
                           "computeDestroyWaitMs, glslangCompiles, "
                           "glslangMs, graphicsPsos, graphicsPsoMs, computePsos, computePsoMs, graphicsBuiltInFrame, "
-                          "graphicsCompiledInFrame, lowLevelBuiltInFrame, rayBuildsJoinedWaiting, atGate}",
+                          "graphicsCompiledInFrame, lowLevelBuiltInFrame, rayBuildsJoinedWaiting, rayBuildsLanded, "
+                          "shaderBurst{landed, total}, rayBurst{landed, total}, atGate}",
           "THE BACKGROUND SHADER COMPILER (ASYNC-SHADERS-1). After a project is open the editor's "
           "view never waits for a shader: a permutation it has not built yet goes to the engine's "
           "compile service (its own low-priority threads) and the object draws with a neutral grey "
@@ -326,7 +327,12 @@ QVector<VerbInfo> AppApi::verbs() const
           "computeParsedInFrame, computePsoInFrame; empty when no gate ran), the base the editor's frames are read against. "
           "rayBuildsJoinedWaiting counts the times a frame or a "
           "wait blocked on a ray pipeline build that was not finished (COLD-BOOT-1 stage 4: the startup gate waits on "
-          "pending, never on a join, so it reads 0 after the gate and in every editor frame).",
+          "pending, never on a join, so it reads 0 after the gate and in every editor frame). rayBuildsLanded counts the "
+          "ray pipeline builds that landed (a failure included). THE BUILDS' BURST, the notice's 'n of m' (SHADER-SYSTEM-1 "
+          "stage 7; the engine publishes it once for every host): shaderBurst for the background compiler's jobs, rayBurst "
+          "for the ray pipeline builds - a burst begins when its pending count rises from 0, landed counts its landings "
+          "(a failure is one), total = landed + pending; when pending returns to 0 it reads total of total until the next "
+          "begins.",
           Needs::Engine },
         { "setAsyncShaders", "app.setAsyncShaders(on) -> app.asyncShaders()",
           "Turns the background compile policy on or off for this session (see app.asyncShaders). A "
@@ -1099,6 +1105,12 @@ QVariantMap AppApi::asyncShaders()
     m["graphicsCompiledInFrame"] = QVariant::fromValue(qulonglong(s.graphicsCompiledInFrame));
     m["lowLevelBuiltInFrame"] = QVariant::fromValue(qulonglong(s.lowLevelBuiltInFrame));
     m["rayBuildsJoinedWaiting"] = QVariant::fromValue(qulonglong(s.rayBuildsJoinedWaiting));
+    m["rayBuildsLanded"]      = QVariant::fromValue(qulonglong(s.rayBuildsLanded));
+    // THE BUILDS' BURST (SHADER-SYSTEM-1 stage 7): the engine's one fact, as published
+    m["shaderBurst"] = QVariantMap{ { QStringLiteral("landed"), s.shaderBurst.landed },
+                                    { QStringLiteral("total"), s.shaderBurst.total } };
+    m["rayBurst"] = QVariantMap{ { QStringLiteral("landed"), s.rayBurst.landed },
+                                 { QStringLiteral("total"), s.rayBurst.total } };
     if (const livecompiles::State::GateEnd &g = livecompiles::gateEnd(); g.noted) {
         QVariantMap at;
         at["graphicsBuiltInFrame"]    = QVariant::fromValue(qulonglong(g.graphicsBuiltInFrame));
