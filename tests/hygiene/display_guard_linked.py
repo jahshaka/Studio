@@ -2,8 +2,9 @@
 """source.display_guard_linked - EVERY TEST BINARY CARRIES THE DISPLAY GUARD (DEV_ERRORS 37 + 38, 2026-11-22;
 tests/support/display_guard.cpp, linked by tests/cmake/display_guard.cmake's walk). CPU only, no display.
   (A) every ELF executable a ctest row runs from inside the build (ctest's own listing, --show-only=json-v1: never a walk of
-      the build tree) carries the guard's section `jah_display_guard` (readelf -S: the headers only) - except the app and
-      jahlab (not test targets: they run through rig.sh or the owner's launch) and the ONE negative control,
+      the build tree) carries the guard's section `jah_display_guard` (readelf -S: the headers only) - except the app,
+      jahlab and jahengine (not test targets: hosts that run through rig.sh or the owner's launch; jahengine opens no
+      display at all, its views offscreen) and the ONE negative control,
       display_guard_probe_unguarded, which must NOT carry it (source.display_guard_toy's control); red with every binary named;
   (B) THE WALK REACHES A TARGET ADDED LATER: a scratch project that includes the module and defines executables in a NEW
       subdirectory and a sub-subdirectory, with no line naming the guard, builds them guarded - their section present, and
@@ -13,7 +14,7 @@ usage: display_guard_linked.py <source dir> <build dir>"""
 import json, os, re, shutil, subprocess, sys, tempfile
 
 SRC, BUILD = os.path.realpath(sys.argv[1]), os.path.realpath(sys.argv[2])
-NOT_TESTS = {"Jahshaka", "jahlab"}
+NOT_TESTS = {"Jahshaka", "jahlab", "jahengine"}   # jahengine: the engine's script host (SCRIPT-IN-ENGINE-1), as jahlab
 CONTROL = "display_guard_probe_unguarded"
 fails = 0
 

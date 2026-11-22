@@ -10,7 +10,7 @@ the value type and the registry know nothing of JavaScript, and a second languag
   N3 jahengine LINKS THE ENGINE AND NO QT: its NEEDED list (`objdump -p`) names no Qt library and no IrisGL (the document
      library that carries Qt today); the JS engine and the engine are static inside it.
 
-usage: script_neutral.py <source-root> <jahengine binary>
+usage: script_neutral.py <source-root> <build dir>   (jahengine is <build dir>/bin/jahengine)
 Its self-test runs first, on synthetic files: each rule red on a violation, green on the allowed file.
 """
 import os
@@ -102,10 +102,11 @@ def self_test():
 
 def main():
     if len(sys.argv) != 3:
-        print("usage: script_neutral.py <source-root> <jahengine binary>")
+        print("usage: script_neutral.py <source-root> <build dir>")
         print("source.script_neutral: FAILED (1)")
         return 1
-    root, jahengine = sys.argv[1], sys.argv[2]
+    # the build dir, never the binary, on the row's command line: to the selector a row naming jahengine is one of ITS rows
+    root, jahengine = sys.argv[1], os.path.join(sys.argv[2], "bin", "jahengine")
     self_test()
     print("the tree:")
     bad = n1_bad(root)
