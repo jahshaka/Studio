@@ -109,6 +109,12 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
             slot.colour = item.colour;
             slot.colourPushed = true;
         }
+        // THE STATED ORDER ON CHANGE ONLY (GIZMO-ORDER-1): a pooled slot carries
+        // another part when the set of parts changes, and its order with it.
+        if (slot.order != item.order) {
+            scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeDrawOrder, slot.node, unsigned(item.order));
+            slot.order = item.order;
+        }
         if (!slot.shown) { scenecmd::call(mTarget, &jahshaka::engine::Scene::setNodeVisible, slot.node, true); slot.shown = true; }
         ++mVisible;
     }

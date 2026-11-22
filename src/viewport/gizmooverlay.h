@@ -5,7 +5,8 @@
 //
 // Each frame: ask the gizmo what it would draw (GizmoDrawItem), keep one engine
 // node per item slot, convert each handle mesh once (SceneMirror::toMeshData), give
-// every slot its own unlit depth-test-off material and push transform + colour.
+// every slot its own unlit depth-test-off material and push transform, colour
+// and draw order.
 // Studio code: iris + engine abstraction, never Ogre.
 #include "irisgl/core/math/vec.h"
 #include <QHash>
@@ -36,6 +37,10 @@ private:
         /// const-buffer write) happened per part per frame — fps audit F14.
         QColor colour;
         bool colourPushed = false;
+        /// The draw order last pushed to `node` (GIZMO-ORDER-1). The engine
+        /// keeps a node's order across a re-attach and starts it at 0, so only
+        /// a change is pushed.
+        int order = 0;
         /// The transform last pushed to `node`, as a hash of its sixteen
         /// floats, and whether one ever was. The gizmo is screen-scaled and
         /// follows the camera, so this DOES change whenever the camera moves —

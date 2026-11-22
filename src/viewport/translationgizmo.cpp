@@ -713,12 +713,25 @@ QVector<GizmoDrawItem> TranslationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3
 	resolvePickRay(rayPos, rayDir, viewDir);
 	const RayPickScope raySpace(vrPickArmed() ? this : nullptr);
 	const QColor highlight(255, 255, 0);
+	// THE SHARED LEGS DRAW IN A STATED ORDER (GIZMO-ORDER-1). Two plane frames share
+	// each inner leg: the same tube at the same transform (gizmomeshes.cpp planeHandle),
+	// so the one drawn last shows. The rule: XY 1, YZ 2, XZ 3 (the X leg reads XZ, the
+	// Y leg YZ, the Z leg XZ), the hovered or dragged part 4, on top of them all.
+	const auto orderOf = [](const TranslationHandle *h) {
+		switch (h->axis) {
+		case GizmoAxis::XYPlane: return 1;
+		case GizmoAxis::YZPlane: return 2;
+		case GizmoAxis::XZPlane: return 3;
+		default: return 0;
+		}
+	};
+	const int kLitOrder = 4;
 	if (dragging) {
 		for (int i = 0; i < handles.size(); i++) {
 			if (handles[i] != draggedHandle) continue;
 			auto transform = this->getTransform();
 			transform.scale(getGizmoScale() * handles[i]->handleScale);
-			items.append({ handleMeshes[i], transform, highlight });
+			items.append({ handleMeshes[i], transform, highlight, kLitOrder });
 		}
 		return items;
 	}
@@ -731,7 +744,9 @@ QVector<GizmoDrawItem> TranslationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3
 		if (handles[i]->isPlane() && !handles[i]->planeFacesCamera()) continue;
 		auto transform = this->getTransform();
 		transform.scale(getGizmoScale() * handles[i]->handleScale);
-		items.append({ handleMeshes[i], transform, handles[i] == hitHandle ? highlight : handles[i]->getHandleColor() });
+		const bool lit = handles[i] == hitHandle;
+		items.append({ handleMeshes[i], transform, lit ? highlight : handles[i]->getHandleColor(),
+					   lit ? kLitOrder : orderOf(handles[i]) });
 	}
 	return items;
 }

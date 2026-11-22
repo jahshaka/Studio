@@ -128,14 +128,18 @@ public:
     }
 };
 
-/// What a gizmo would draw this frame, as data: a mesh, its world transform and a
-/// flat colour. The engine viewport
+/// What a gizmo would draw this frame, as data: a mesh, its world transform, a
+/// flat colour and its draw order. The engine viewport
 /// turns these into on-top overlay items (VIEWPORT_MIGRATION_PLAN.md step 8).
 struct GizmoDrawItem
 {
     iris::MeshPtr mesh;
     iris::Mat4 transform;
     QColor colour;
+    /// WHICH PART SHOWS WHERE TWO COINCIDE (GIZMO-ORDER-1): 0..6, the higher drawn
+    /// later and winning a tie at one depth (Scene::setNodeDrawOrder). A gizmo whose
+    /// parts share geometry states it; without it the allocator decides.
+    int order = 0;
 };
 
 struct StudioServices;
