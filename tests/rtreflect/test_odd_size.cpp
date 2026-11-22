@@ -97,11 +97,6 @@ int main()
     enginetest::frames(e, 90);
     Image img;
     CHECK(view->readPixels(img) && img.width == kWidth && img.height == kHeight, "the picture reads back");
-    {   // MEASURING ARM (SCRIPT-IN-ENGINE-1 stage 1, the equality proof): the picture's FNV-1a 64 - reverted by a new commit
-        unsigned long long h = 14695981039346656037ull;
-        for (unsigned char b : img.rgba) { h ^= b; h *= 1099511628211ull; }
-        std::printf("ARM picture fnv1a64 %016llx (%ux%u)\n", h, img.width, img.height);
-    }
     if (failures) { std::printf("rtreflect.odd_size: FAIL\n"); return 1; }
     // THE FLOOR'S REFLECTION: the lower half of the frame (the wall's reflection is the bright band under the horizon).
     const unsigned y0 = kHeight / 2 + 4, y1 = kHeight - 2;

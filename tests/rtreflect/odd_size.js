@@ -68,5 +68,3 @@ host.check({ok: colRem <= colPair + 2,
 host.check({ok: rowRem <= rowPair + 2,
             what: "the odd remainder ROW is written like its neighbours (" + rowRem.toFixed(2) + " against " +
                   rowPair.toFixed(2) + " + 2)"});
-
-console.log("ARM picture fnv1a64 " + engine.view.hash(pic) + " (" + pic.width + "x" + pic.height + ")");   // MEASURING ARM - reverted by a new commit
