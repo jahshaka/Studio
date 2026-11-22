@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "data/settingkeys.h"
 #include "claudelaunchconfig.h"
+#include "app/qtstd.h"
+#include "irisgl/core/files.h"
 
 #include <QDir>
 #include <QFile>
@@ -47,17 +49,17 @@ QString skillResource(const QString &name)
     return QStringLiteral(":/claude/skills/%1.md").arg(name);
 }
 
-bool writeFileAtomic(const QString &path, const QByteArray &content, QString *errorOut)
+// THE LAUNCH FILES (the MCP config's bearer token, the session id, the pid, the skills) are written through the one atomic
+// writer, OWNER-ONLY from their temp's creation on (iris::files::Access::OwnerOnly), Derived: each is re-written by a launch
+// and none waits for the device on this thread (as before: none was flushed).
+bool writeOwnerOnly(const QString &path, const QByteArray &content, QString *errorOut)
 {
-    QFile file(path);
-    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) {
-        if (errorOut) *errorOut = QStringLiteral("cannot write %1: %2").arg(path, file.errorString());
-        return false;
-    }
-    file.write(content);
-    file.close();
-    file.setPermissions(QFile::ReadOwner | QFile::WriteOwner);
-    return true;
+    std::string error;
+    if (iris::files::writeAtomic(qtstd::toPath(path), qtstd::toView(content), iris::files::Durability::Derived, &error,
+                                 iris::files::Access::OwnerOnly))
+        return true;
+    if (errorOut) *errorOut = qtstd::toQString(error);
+    return false;
 }
 
 } // namespace
@@ -101,7 +103,7 @@ bool ClaudeLaunchConfig::writePid(const QString &projectFolder, qint64 pid)
     if (projectFolder.isEmpty()) return false;
     QDir project(projectFolder);
     if (!project.mkpath(QStringLiteral(".claude"))) return false;
-    return writeFileAtomic(pidFilePath(projectFolder),
+    return writeOwnerOnly(pidFilePath(projectFolder),
                            QByteArray::number(pid) + "\n", nullptr);
 }
 
@@ -165,7 +167,7 @@ bool ClaudeLaunchConfig::writeProjectConfig(const QString &projectFolder, quint1
             {"url", QStringLiteral("http://127.0.0.1:%1/mcp").arg(mcpPort)},
             {"headers", QJsonObject{{"Authorization", QStringLiteral("Bearer %1").arg(token)}}}};
         QJsonObject root{{"mcpServers", QJsonObject{{"jahshaka", server}}}};
-        if (!writeFileAtomic(mcpConfigPath(projectFolder),
+        if (!writeOwnerOnly(mcpConfigPath(projectFolder),
                              QJsonDocument(root).toJson(QJsonDocument::Indented), errorOut))
             return false;
     } else {
@@ -199,7 +201,7 @@ bool ClaudeLaunchConfig::installSkills(const QString &claudeDir, QString *errorO
             existing.close();
             if (installedVersion >= shippedVersion) continue; // user's or current
         }
-        if (!writeFileAtomic(target, shipped, errorOut)) return false;
+        if (!writeOwnerOnly(target, shipped, errorOut)) return false;
     }
     return true;
 }
@@ -248,7 +250,7 @@ bool ClaudeLaunchConfig::writeSessionId(const QString &projectFolder, const QStr
     QDir project(projectFolder);
     if (!project.mkpath(QStringLiteral(".claude"))) return false;
     const QJsonObject root{{"sessionId", sessionId}};
-    return writeFileAtomic(project.filePath(QStringLiteral(".claude/") + kChatFile),
+    return writeOwnerOnly(project.filePath(QStringLiteral(".claude/") + kChatFile),
                            QJsonDocument(root).toJson(QJsonDocument::Indented), nullptr);
 }
 

@@ -8,7 +8,10 @@
 // larger than the memory it may take (a sparse 64-GiB file in a child under a 16-GiB address-space limit); a Flush write
 // whose fsync FAILS fails by name and is NOT renamed into place (the old file stands, no temp): the fault is injected by
 // this binary's own fsync, which the dynamic linker binds ahead of libc's for libIrisCore's call (no seam in the product;
-// its control: the interposer counted the call). POSIX (fork; ELF interposition).
+// its control: the interposer counted the call); an OWNER-ONLY write (Access::OwnerOnly) publishes mode 0600 and its temp
+// never existed with a wider one - the one creation of its temp is seen by this binary's own open() (interposed the same
+// way), exclusive and 0600 at creation, under a umask of 0; its control: a Default write under that umask publishes 0666.
+// POSIX (fork; ELF interposition).
 #include "core/files.h"
 
 #include <atomic>
@@ -24,7 +27,12 @@
 #include <vector>
 
 #include <cerrno>
+#include <cstdarg>
+#include <cstring>
+#include <mutex>
+#include <fcntl.h>
 #include <sys/resource.h>
+#include <sys/stat.h>
 #include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -42,6 +50,47 @@ extern "C" int fsync(int fd)
         return -1;
     }
     return static_cast<int>(::syscall(SYS_fsync, fd));
+}
+
+// THE WITNESS OF A TEMP's CREATION: every open() of this process that CREATES a staged temp ("....tmp-<pid>-<n>"), with its
+// mode right after the creation (fstat: the umask applied) and whether it was exclusive; then the real call.
+struct Creation
+{
+    std::string path;
+    mode_t mode = 0;
+    bool exclusive = false;
+};
+static std::mutex gCreationsMutex;
+static std::vector<Creation> gCreations;
+extern "C" int open(const char *file, int flags, ...)
+{
+    mode_t mode = 0;
+    if (flags & O_CREAT) {
+        va_list ap;
+        va_start(ap, flags);
+        mode = static_cast<mode_t>(va_arg(ap, int));
+        va_end(ap);
+    }
+    const int fd = static_cast<int>(::syscall(SYS_openat, AT_FDCWD, file, flags, mode));
+    if (fd >= 0 && (flags & O_CREAT) && std::strstr(file, ".tmp-")) {
+        struct stat st {};
+        ::fstat(fd, &st);
+        std::lock_guard<std::mutex> lock(gCreationsMutex);
+        gCreations.push_back({ file, st.st_mode & 07777, (flags & O_EXCL) != 0 });
+    }
+    return fd;
+}
+
+static mode_t modeOf(const fs::path &p)
+{
+    struct stat st {};
+    return ::stat(p.c_str(), &st) == 0 ? (st.st_mode & 07777) : 07777;
+}
+static std::string octal(mode_t m)
+{
+    char b[16];
+    std::snprintf(b, sizeof b, "%04o", unsigned(m));
+    return b;
 }
 
 static int failures = 0, checks = 0;
@@ -183,6 +232,30 @@ int main()
     check(!stagedFlush, "fsyncPath says a failed flush failed");
     check(writeAtomic(target, "DURABLE", Durability::Flush) && readAll(target) == std::string("DURABLE"),
           "the next Flush write, its fsync whole, is published");
+
+    // ---- an owner-only write: 0600 from its temp's creation on, under a umask that would let a default one be 0666
+    const mode_t umaskWas = ::umask(0);
+    check(writeAtomic(dir / "open.json", "anyone", Durability::Derived) && modeOf(dir / "open.json") == 0666,
+          "control: a Default write under umask 0 is published 0666 (" + octal(modeOf(dir / "open.json")) + ")");
+    {
+        std::lock_guard<std::mutex> lock(gCreationsMutex);
+        gCreations.clear();
+    }
+    const fs::path secret = dir / "token.json";
+    check(writeAtomic(secret, "a bearer token", Durability::Derived, nullptr, Access::OwnerOnly) &&
+              readAll(secret) == std::string("a bearer token"),
+          "an owner-only write publishes its bytes");
+    check(modeOf(secret) == 0600, "...at mode 0600 (" + octal(modeOf(secret)) + ")");
+    std::vector<Creation> made;
+    {
+        std::lock_guard<std::mutex> lock(gCreationsMutex);
+        for (const Creation &c : gCreations)
+            if (fs::path(c.path).filename().string().rfind("token.json.tmp-", 0) == 0) made.push_back(c);
+    }
+    check(made.size() == 1 && made[0].exclusive && made[0].mode == 0600,
+          "...and its temp never existed wider: ONE exclusive creation seen, 0600 at creation (" + std::to_string(made.size()) +
+              " seen" + (made.empty() ? std::string() : ", mode " + octal(made[0].mode)) + ")");
+    ::umask(umaskWas);
 
     // ---- what readAll cannot read is nothing, never a throw (the header's promise)
     bool threw = false;
