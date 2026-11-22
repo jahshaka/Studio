@@ -779,6 +779,13 @@ int main(int argc, char **argv)
           error.isEmpty() ? "" : ": ", qPrintable(error));
     std::printf("   generated in %lld ms, %lld thumbnail bytes\n", static_cast<long long>(timer.elapsed()),
                 static_cast<long long>(lib.thumbnailBytes));
+    // THE PAGE LAWS' POSITIVE CONTROL: the with-thumbnails library really holds its pictures (else "the same pages
+    // with thumbnails as with none" would pass on nothing): every texture, material and model row carries one.
+    const qint64 pictures = scalar(QStringLiteral("SELECT COUNT(*) FROM assets WHERE length(thumbnail) > 0"));
+    const qint64 pictureBytes = scalar(QStringLiteral("SELECT SUM(length(thumbnail)) FROM assets"));
+    CHECK(lib.thumbnailBytes > 0 && pictures >= lib.assets - int(lib.meshes.size()) && pictureBytes == lib.thumbnailBytes,
+          "POSITIVE CONTROL: the library the page laws read holds %lld thumbnails, %lld bytes (the generator wrote %lld)",
+          static_cast<long long>(pictures), static_cast<long long>(pictureBytes), static_cast<long long>(lib.thumbnailBytes));
     theGenerator(db, lib, 1000);
     // A generated model is a real import's: its source parses and its bake is current, so the boot's bake sweep
     // (MeshBakeStore::startBackgroundRebuild plans with modelBakesNeeded) finds NOTHING to rebuild. A fake
@@ -863,6 +870,10 @@ int main(int argc, char **argv)
 
         // THE RESIDUE (B): printed with its factor, never asserted (the owner's question).
         const QVector<Reading> r = coldResidue(db, dbPath, lib);
+        CHECK(!r.isEmpty() && r.at(0).pages > 2 * residueNone.at(0).pages,
+              "POSITIVE CONTROL: a statement that does read the rows behind their thumbnails reads more with them (the "
+              "Materials drawer: %lld pages against %lld)", static_cast<long long>(r.value(0).pages),
+              static_cast<long long>(residueNone.value(0).pages));
         std::printf("   residue: needs the thumbnail out of the row (the owner's question) — cold pages at 1,000, with / none:\n");
         const QVector<ResidueRow> rows = residueRows();
         for (int i = 0; i < rows.size(); ++i)
