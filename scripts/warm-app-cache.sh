@@ -206,12 +206,23 @@ key_inputs() {
 INPUTS=$(key_inputs) || exit 2
 KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
 [ "$KEYONLY" = 1 ] && { echo "$KEY"; exit 0; }
+# THE KEY's INPUTS KEPT BESIDE EVERY STAMP (TE-WARM-WHY (A), the lead's ruling 2026-11-22): a stamp names its key, a hash - "the
+# key moved" said nothing of WHICH term moved (the fork? the staged media? the ray SPIR-V?). Every stamp written at KEY gets
+# <stamp>.inputs, key_inputs' lines at that moment; a later "the key moved" names the terms whose lines differ.
+stamp_inputs() { printf '%s\n' "$INPUTS" > "$1.inputs"; }   # <stamp>
+moved_terms() {   # <stamp>: " - moved: <term>, <term>" when its kept inputs differ from this build's, else nothing
+    [ -f "$1.inputs" ] || return 0
+    local m
+    m=$(printf '%s\n' "$INPUTS" | awk 'NR == FNR { old[$1] = $0; next } { seen[$1] = 1; if (old[$1] != $0) print $1 }
+            END { for (k in old) if (!(k in seen)) print k }' "$1.inputs" - | LC_ALL=C sort -u | tr '\n' ',' | sed 's/,$//; s/,/, /g')
+    [ -n "$m" ] && echo " - moved: $m"
+}
 layer_keys() {   # the shared cache's per-layer keys (its manifest's last column), sorted, one line
     [ -f "$1/cache-manifest.txt" ] && awk '$1 == "file" { print $NF }' "$1/cache-manifest.txt" | LC_ALL=C sort -u | tr '\n' ' '
 }
 cold_why() {   # <shared> <stamp> [<sets digest>]: empty when warm at the key, else why not
     if [ ! -f "$2" ]; then echo "no warm-up recorded"
-    elif [ "$(sed -n 1p "$2")" != "$KEY" ]; then echo "the key moved (warmed at $(sed -n 1p "$2"))"
+    elif [ "$(sed -n 1p "$2")" != "$KEY" ]; then echo "the key moved (warmed at $(sed -n 1p "$2")$(moved_terms "$2"))"
     elif [ ! -f "$1/cache-manifest.txt" ]; then echo "the shared cache is gone"
     elif [ "$(sed -n 2p "$2")" != "$(layer_keys "$1")" ]; then echo "the shared cache was replaced at another key since"
     elif ! torn=$(python3 -I "$SRC/tests/support/shadercache_check.py" "$1"); then   # its stderr (#132's fallback line) passes
@@ -253,7 +264,7 @@ row_digest() {   # <the row's line> [<build> <src>]: its command, its tier, its 
 row_stamp_why() {   # <row> <line>: empty when this row's prime ran at this key, for this command, on this build
     local st="$COLD_SDIR/$1.driver-key"
     if [ ! -f "$st" ]; then echo "no prime recorded"
-    elif [ "$(sed -n 1p "$st")" != "$KEY" ]; then echo "the key moved (primed at $(sed -n 1p "$st"))"
+    elif [ "$(sed -n 1p "$st")" != "$KEY" ]; then echo "the key moved (primed at $(sed -n 1p "$st")$(moved_terms "$st"))"
     elif [ "$(sed -n 2p "$st")" != "$(row_digest "$2")" ]; then echo "its registration changed"
     elif [ "$(sed -n 3p "$st")" != "$BUILT_KEY" ]; then echo "the staged media rebuilt since"
     fi
@@ -302,7 +313,7 @@ exe_id() {   # <exe>: the name the driver keys its per-exe cache on - its file n
 }
 driver_why() {   # <stamp> <exe>: empty when this exe's driver cache was stored at the key, else why not
     if [ ! -f "$1" ]; then echo "no driver-cache boot recorded"
-    elif [ "$(sed -n 1p "$1")" != "$KEY" ]; then echo "the key moved (stored at $(sed -n 1p "$1"))"
+    elif [ "$(sed -n 1p "$1")" != "$KEY" ]; then echo "the key moved (stored at $(sed -n 1p "$1")$(moved_terms "$1"))"
     elif [ "$(sed -n 2p "$1")" != "$(exe_id "$2")" ]; then echo "stored for another exe ($(sed -n 2p "$1"))"
     fi
 }
@@ -389,7 +400,7 @@ if [ -n "$INHERIT" ]; then
                 rel=${sd%/}; rel=${rel#"$PB"/}
                 [ -f "$sd/tree-key.txt" ] && case "$sd" in "$PB"/*) take "${sd%/}" "$BUILD/$rel" ;; esac
             done
-            printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
+            printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; stamp_inputs "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
         done < "$COLDROWS"
     fi
     [ "$n" -gt 0 ] && got="$got $n cold row(s)"
@@ -469,13 +480,13 @@ store_take() {   # the cold -off caches (and their -on stamps) this call asked f
                    "cross one; the box's store lives beside the trees: one way, never a copy)"; rm -rf "$nxt"; continue; }
         ( flock -w 60 9 || exit 1; rm -rf "$sh.old.$$"; [ -e "$sh" ] && mv "$sh" "$sh.old.$$"; mv "$nxt" "$sh"; rm -rf "$sh.old.$$" ) \
             9>"$sh.lock" || { rm -rf "$nxt"; continue; }
-        cp "$S/warm-key" "$st"
+        cp "$S/warm-key" "$st"; stamp_inputs "$st"
         got="$got $c ($(du -sh "$sh" | cut -f1))"
     done
     for b in $RUN; do
         case "$b" in app-on) c=app ds=$APP_DSTAMP x=$APPX ;; engine-on) c=engine ds=$ENG_DSTAMP x=$LABX ;; *) continue ;; esac
         S="$SK/$c/driver-key"
-        [ "$(sed -n 1p "$S" 2>/dev/null)" = "$KEY" ] && [ "$(sed -n 2p "$S")" = "$(exe_id "$x")" ] && cp "$S" "$ds" && got="$got $c-on"
+        [ "$(sed -n 1p "$S" 2>/dev/null)" = "$KEY" ] && [ "$(sed -n 2p "$S")" = "$(exe_id "$x")" ] && cp "$S" "$ds" && stamp_inputs "$ds" && got="$got $c-on"
     done
     [ -n "$got" ] && echo "warm-app-cache: TAKEN from the box's warm store at $KEY ($SK):$got - no boot for them, no card"
     return 0
@@ -510,6 +521,7 @@ if [ -z "$RUN" ]; then
     exit 0
 fi
 echo "cold at $KEY: $why"
+FIRST_WHY=$why
 [ "$CHECK" = 1 ] && exit 3
 if store_open "$BUDGET"; then
     store_take
@@ -540,6 +552,9 @@ LOGS="${JAH_WARM_LOG_DIR:-$WLOGS/$(date +%Y%m%dT%H%M%S)-$$-$(echo "$RUN" | tr ' 
 mkdir -p "$LOGS"
 ls -1dt "$WLOGS"/*/ 2>/dev/null | tail -n +41 | xargs -r rm -rf
 echo "warm-app-cache: this call's logs: $LOGS"
+# WHY THIS CALL BOOTS (TE-WARM-WHY (A)): <logs>/why.txt - the "cold at" line as the call first said it, the why after the store,
+# and key_inputs' lines (the key's terms; cache.sh status reads it beside the stamps' kept inputs)
+{ echo "cold at $KEY: $FIRST_WHY"; [ "$why" = "$FIRST_WHY" ] || echo "after the store: $why"; echo "inputs:"; printf '%s\n' "$INPUTS"; } > "$LOGS/why.txt"
 # THE DISPLAY IS THE TREE's RIG (WORKFLOW-STREAMLINE-1 5.8: one way to get a display): with no DISPLAY given, `rig.sh up --env`
 # (its Xvfb by its real pid, a rig already up in the tree reused) and `rig.sh down` at the exit only when this call started it
 # (the Xvfb this script once started itself was recorded as `$!` of its wrapper - the class GATE_AND_RIG names - and killed by it)
@@ -652,6 +667,7 @@ boot() {
     else
         printf '%s\n%s\n' "$KEY" "$(layer_keys "$shared")" > "$stamp"
     fi
+    stamp_inputs "$stamp"
     echo "warm-app-cache: $(what_of "$name") warm at $KEY - the boot ${wall} s (the card's wait ${waited} s), $(du -sh "$shared" | cut -f1)" \
          "($(sed -n 's/^shaders //p' "$shared/cache-manifest.txt") shaders)"
     # THE PASS's RECORD AFTER THE BOOT (TE-WARM-WHY (D)): a promoted app-off boot leaves the record at this build's pass id; one
@@ -686,7 +702,7 @@ driver_boot() {
     fi
     waited=$(waited_of "$log"); wall=$(( wall - waited )); [ "$wall" -ge 0 ] || wall=0   # THE BOOT's OWN WALL (block A), tenths
     note_wall "$name" "$(( (wall + 5) / 10 ))"; waited=$(fmt_tenths "$waited"); wall=$(fmt_tenths "$wall")
-    printf '%s\n%s\n' "$KEY" "$(exe_id "$exe")" > "$dstamp"
+    printf '%s\n%s\n' "$KEY" "$(exe_id "$exe")" > "$dstamp"; stamp_inputs "$dstamp"
     echo "warm-app-cache: $(what_of "$name") stored at $KEY - the boot ${wall} s (the card's wait ${waited} s), the driver cache" \
          "$(( (${b1:-0} - ${b0:-0}) / 1048576 )) MB grown"
     return 0
@@ -726,7 +742,7 @@ cold_boot() {
         [ -n "$line" ] || continue
         row=${line%%$'\t'*}
         if grep -qF "warm_cold_rows: $row: PRIMED" "$log"; then
-            printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
+            printf '%s\n%s\n%s\n' "$KEY" "$(row_digest "$line")" "$BUILT_KEY" > "$COLD_SDIR/$row.driver-key"; stamp_inputs "$COLD_SDIR/$row.driver-key"; n=$((n + 1))
         fi
     done < "$COLDROWS"
     note_wall cold-on "$(grep -oE 'PRIMED - its run [0-9]+ s' "$log" | awk '{ s += $(NF - 1) } END { print s + 0 }')"

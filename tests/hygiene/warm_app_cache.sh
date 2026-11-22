@@ -464,6 +464,13 @@ toy_cache "$KT/.shadercache" 1 2; toy_cache "$KT/.shadercache-engine" 1 2
 printf '%s\n%s\n%s\n' "$kk" "k1 k2 " "sets none" > "$KT/.shadercache.warm-key"; printf '%s\n%s\n' "$kk" "k1 k2 " > "$KT/.shadercache-engine.warm-key"
 printf '%s\n%s\n' "$kk" app > "$KT/.shadercache.driver-key"; printf '%s\n%s\n' "$kk" lab > "$KT/.shadercache-engine.driver-key"
 DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$KB" "${KX[@]}" --only cold-on > /dev/null 2>&1
+# WHY A CALL BOOTS, KEPT (TE-WARM-WHY (A)): the cold-on call's own log dir holds why.txt - its "cold at <key>: <why>" line and the
+# key's inputs, one line a term (red before (A): no why.txt)
+wy=$(ls -1t "$KT"/warm-logs/*/why.txt 2> /dev/null | head -1)
+[ -n "$wy" ] && grep -q "^cold at $kk: the cold rows' own caches (cold-on): 1 of 1 to prime: p.cold (no prime recorded)" "$wy" &&
+    grep -q '^inputs:$' "$wy" && grep -q '^cache-code [0-9a-f]' "$wy" && grep -q '^media-Hlms [0-9a-f]' "$wy" && grep -q '^rq-spirv [0-9a-f]' "$wy" &&
+    ok "A2: a booting call keeps why.txt in its log dir - the cold-at line and the key's inputs, a term a line" ||
+    no "A2 why.txt: [${wy:-none}] $(tr '\n' '|' < "${wy:-/dev/null}" | cut -c1-300)"
 out=$("$W" "$KB" --check "${KX[@]}"); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $kk" ] && ok "the narrowed key's toy tree warm at $kk (every boot)" || no "the toy tree warm: '$out' rc $rc"
 sed -i 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\)/#define JAHSHAKA_ENGINE_BUILD_ID "f\1/' "$KB/engine/generated/jahshaka_engine_build_id.h"
@@ -471,16 +478,17 @@ out=$("$W" "$KB" --check "${KX[@]}"); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $kk" ] && [ "$("$W" "$KB" --key)" = "$kk" ] &&
     ok "an engine edit alone (the full build id): the KEY holds and every boot reads WARM - no top-up (WARM-SHARE-1 ruling 5)" ||
     no "the engine edit alone: '$out' rc $rc"
-nonce() {   # <what> <file> <bytes>: the key moves, every boot cold
+nonce() {   # <what> <file> <bytes> <term>: the key moves, every boot cold; a stamp that kept its inputs names the moved term
+    # (TE-WARM-WHY (A): the cold row's stamp was written by its prime - <stamp>.inputs; the hand-made -off/-on stamps kept none)
     cp "$2" "$T/nonce.bak"; printf '%s' "$3" >> "$2"
     local o r; o=$("$W" "$KB" --check "${KX[@]}"); r=$?
     [ $r = 3 ] && [ "$("$W" "$KB" --key)" != "$kk" ] && echo "$o" | grep -q '(app-on): the key moved' &&
-        echo "$o" | grep -q '(cold-on): 1 of 1 to prime: p.cold (the key moved' &&
-        ok "a NONCE in $1: the key moves, every boot cold" || no "the nonce in $1: '$o' rc $r"
+        echo "$o" | grep -q "(cold-on): 1 of 1 to prime: p.cold (the key moved (primed at $kk - moved: $4))" &&
+        ok "a NONCE in $1: the key moves, every boot cold, the prime's stamp names the term that moved ($4)" || no "the nonce in $1: '$o' rc $r"
     cp "$T/nonce.bak" "$2"
 }
-nonce "the staged Hlms media" "$KB/bin/media/Hlms/a.any" "// nonce"
-nonce "a ray-tier SPIR-V header" "$KB/engine/generated/rayquery/rq_x_spv.h" "1"
+nonce "the staged Hlms media" "$KB/bin/media/Hlms/a.any" "// nonce" media-Hlms
+nonce "a ray-tier SPIR-V header" "$KB/engine/generated/rayquery/rq_x_spv.h" "1" rq-spirv
 cp "$KB/engine/generated/jahshaka_engine_build_id.h" "$T/id.bak"
 sed -i 's/^#define JAHSHAKA_SHADER_CACHE_CODE_ID "\([0-9a-f]\)/#define JAHSHAKA_SHADER_CACHE_CODE_ID "e\1/' "$KB/engine/generated/jahshaka_engine_build_id.h"
 o=$("$W" "$KB" --check "${KX[@]}"); r=$?
