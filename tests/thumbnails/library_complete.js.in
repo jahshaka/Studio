@@ -1,0 +1,81 @@
+// thumbnails.library_complete — PREVIEWS-1 stage 2's ACCEPTANCE ON OUR OWN FIXTURE (the lead's ruling: the shipped
+// catalogs are measured once at the feature end by catalogs_complete.js, never a row): A LIBRARY READS 0 MISSING / 0
+// STALE AFTER ONE previews.renderAll. The app on the card (a material, model or mesh preview is a render), a fresh warm
+// home whose library is tests/support/libraryfixture's (test_library_statements --generate, the setup's THEN: 100
+// assets - textures with real PNG sources, Assets- and Materials-home materials sampling them, models with their real
+// bakes and Mesh members - and two projects, the first with 20 rows of its own and 15 pins), plus what it lacks: a
+// material made by materials.create and an emitter (its subject coverage PRINTED only: the particle preset's pre-roll
+// is stage 4's law).
+//
+// THE LAW, in order:
+//   1. with the first project open, ONE renderAll and settle: 0 missing / 0 stale at the project's scope AND the
+//      library's, every write landed, no named failure;
+//   2. THE SECOND PROJECT OPENS (it pins nothing): a preview's key holds the OPEN project's pin of its row
+//      (services/previewkey.h), so exactly the rows the FIRST project pins AT AN OID read stale now - the fixture's 15
+//      (its first 10 textures and 5 Materials-home materials) and the emitter's texture member (MEASURED: 16) - and no
+//      row outside the first project's scope moves. The emitter itself is in that scope and KEEPS its key: a member is
+//      pinned at its source oid (projectassets.cpp:88, AssetCas::sourceOid), and a row whose definition is its blob has
+//      no source file, so its pin carries no oid under either project. 0 missing; stale = the moved keys;
+//   3. one more renderAll there: 0 missing / 0 stale again.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+function keys() {
+    var out = {};
+    previews.state().forEach(function (r) { out[r.guid] = r; });
+    return out;
+}
+var OUT = "@JAH_LC_OUT@";
+var kFirstPins = 15;   // libraryfixture.cpp: the open project pins its first 10 textures and 5 Materials-home materials
+
+// ---- 1. THE FIRST PROJECT: ONE SWEEP ------------------------------------------------------------
+assert(project.open("Fixture project 0000") === true, "the generated library's open project is opened");
+var made = materials.create("Library Complete " + Date.now());
+assert(typeof made === "string" && made.length > 10, "a material made by materials.create");
+var emitterNode = scene.addParticles("fire");
+var bundle = OUT + "/library-complete-emitter.jbundle";
+node.exportArchive(emitterNode, bundle, { type: "particleSystem" });
+var emitter = assets.import(bundle);
+assert(typeof emitter === "string" && emitter.length > 10, "an emitter imported as an asset");
+console.log("BEFORE library " + J(previews.counts({ scope: "library" })) + " project " + J(previews.counts({ scope: "project" })));
+
+var swept = previews.renderAll();
+var settled = previews.settle();
+var lib1 = previews.counts({ scope: "library" }), own1 = previews.counts({ scope: "project" });
+console.log("SWEEP " + J({ considered: swept.considered, rendered: swept.rendered, skipped: swept.skipped,
+                           peakQueued: swept.peakQueued, failed: swept.failed, settled: settled }));
+console.log("AFTER library " + J(lib1) + " project " + J(own1));
+console.log("EMITTER (printed: stage 4's law) " + J(previews.coverage(emitter)));
+assert(settled.ok === true && swept.failed.length === 0, "every preview drawn and landed, no named failure");
+assert(own1.missing === 0 && own1.stale === 0, "THE PROJECT reads 0 missing / 0 stale after ONE renderAll: " + J(own1));
+assert(lib1.missing === 0 && lib1.stale === 0, "THE LIBRARY reads 0 missing / 0 stale after it: " + J(lib1));
+assert(lib1.ok > 100, "...over the generated library's rows (" + lib1.ok + " ok)");
+
+// ---- 2. THE SECOND PROJECT OPENS ----------------------------------------------------------------
+var at1 = keys();
+var scope1 = previews.state({ scope: "project" });
+assert(project.open("Fixture project 0001", { discard: true }) === true, "the second project is opened");
+var at2 = keys(), moved = [];
+Object.keys(at2).forEach(function (g) { if (at1[g] && at1[g].key !== at2[g].key) moved.push(g); });
+var lib2 = previews.counts({ scope: "library" });
+var outside = moved.filter(function (g) { return !scope1.some(function (r) { return r.guid === g; }); });
+var keptInScope = scope1.filter(function (r) { return moved.indexOf(r.guid) < 0; })
+                        .map(function (r) { return r.guid === emitter ? "the emitter" : r.guid + " " + r.type; });
+console.log("SECOND library " + J(lib2) + " moved " + moved.length + " of the first project's " + scope1.length +
+            " scoped rows; kept there: " + J(keptInScope));
+assert(outside.length === 0, "no row outside the first project's scope moved its key: " + J(outside));
+assert(keptInScope.length === 1 && keptInScope[0] === "the emitter",
+       "every row the first project pins AT AN OID moved (" + moved.length + ": the fixture's " + kFirstPins +
+       " and the emitter's texture member); only the emitter kept its key - pinned at no oid: " + J(keptInScope));
+assert(lib2.missing === 0 && lib2.stale === moved.length, "...and exactly those read stale, 0 missing: " + J(lib2));
+
+// ---- 3. ONE MORE SWEEP --------------------------------------------------------------------------
+var swept2 = previews.renderAll();
+assert(previews.settle().ok === true && swept2.rendered === moved.length, "one renderAll redraws those " + moved.length + " (" +
+       swept2.rendered + ")");
+var lib3 = previews.counts({ scope: "library" });
+assert(lib3.missing === 0 && lib3.stale === 0, "...and the library reads 0 missing / 0 stale again: " + J(lib3));
+console.log("thumbnails.library_complete: all assertions passed");

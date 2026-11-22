@@ -131,10 +131,11 @@ jah_gpu_row(thumbnails.studio_env SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/
 set_tests_properties(thumbnails.studio_env PROPERTIES JAHSHAKA_TEST_FRAMES 64)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(thumbnails.studio_env PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 
-# thumbnails.catalogs_complete — PREVIEWS-1 stage 2's ACCEPTANCE (the final read's C3): each shipped sample catalog
-# (scenes/*.zip) imported into one library and opened reads 0 missing / 0 stale after ONE previews.renderAll, at its
-# project's scope and the library's. The app on the card, a fresh WARM home. A builder's row, priced solo, never SHIP.
-set(_ccHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_catalogs_complete)
+# THE CATALOGS' ACCEPTANCE — NOT A ROW (the lead, 2026-11-22: CODING_RULES § 5, no demo scene in any test or lane proof;
+# the shipped samples are audited at the milestones only). PREVIEWS-1 stage 2's acceptance ("each shipped sample catalog
+# reads 0 missing / 0 stale after ONE renderAll") is MEASURED by this script, configured here with the nine scenes/*.zip
+# and run ONCE at the feature end by hand on the lane's rig (its command and its kept output: the script's header). Its
+# registered proof of the same law on our own fixtures is thumbnails.library_complete.
 file(GLOB _ccCatalogs LIST_DIRECTORIES false "${CMAKE_SOURCE_DIR}/scenes/*.zip")
 list(SORT _ccCatalogs)
 set(JAH_CATALOGS_JS "")
@@ -142,15 +143,33 @@ foreach(_c IN LISTS _ccCatalogs)
     string(APPEND JAH_CATALOGS_JS "\"${_c}\", ")
 endforeach()
 configure_file(catalogs_complete.js.in ${CMAKE_CURRENT_BINARY_DIR}/catalogs_complete.js @ONLY)
-file(MAKE_DIRECTORY ${_ccHome}/run)
-jah_host_args(thumbnails.catalogs_complete _ccHost)
-jah_gpu_row(thumbnails.catalogs_complete WARM_HOME "${_ccHome}" CLASS app TIER low NEEDS NONE
-         NEEDS_WHY "the tile's studio takes no tier feature (no GI, no post: secondarysurfacetonemap.h): the catalogs' state after one sweep"
-         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/catalogs_complete.js ${_ccHost}
-         WORKING_DIRECTORY ${_ccHome}/run)
-set_tests_properties(thumbnails.catalogs_complete PROPERTIES
-    ENVIRONMENT "HOME=${_ccHome};JAHSHAKA_DATA_ROOT=${_ccHome}/.local/share/Jahshaka"
+
+# thumbnails.library_complete — PREVIEWS-1 stage 2's ACCEPTANCE ON OUR OWN FIXTURE: a library reads 0 missing / 0 stale
+# after ONE previews.renderAll at the project's scope and the library's; when a second project opens exactly the first
+# project's pinned rows read stale (the open project's pin is in the key) and one more renderAll clears them. The library
+# is tests/support/libraryfixture's, generated into the fresh WARM home's data root by test_library_statements
+# --generate (the setup's THEN), plus a material made by materials.create and an emitter (printed). The app on
+# the card. A builder's row, priced solo, never SHIP.
+set(_lcHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_library_complete)
+set(_lcRoot ${_lcHome}/.local/share/Jahshaka)
+set(JAH_LC_OUT "${_lcHome}/out")
+configure_file(library_complete.js.in ${CMAKE_CURRENT_BINARY_DIR}/library_complete.js @ONLY)
+file(MAKE_DIRECTORY ${_lcHome}/run)
+jah_host_args(thumbnails.library_complete _lcHost)
+# FRAMES 169: measured 2026-11-22 (Ogre::Root::_fireFrameEnded counted over the row's app process by the preload meter
+# spikes/previews-1/stage2/coverage/framecount-meter.c, at 9342d3786 + this row).
+jah_gpu_row(thumbnails.library_complete WARM_HOME "${_lcHome}" CLASS app TIER low NEEDS NONE FRAMES 169
+         NEEDS_WHY "the tile's studio takes no tier feature (no GI, no post: secondarysurfacetonemap.h): the library's state after one sweep"
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/library_complete.js ${_lcHost}
+         WORKING_DIRECTORY ${_lcHome}/run)
+set_tests_properties(thumbnails.library_complete PROPERTIES
+    ENVIRONMENT "HOME=${_lcHome};JAHSHAKA_DATA_ROOT=${_lcRoot}"
     LABELS "mirror"
     TIMEOUT 60)
-jah_fresh_home_fixture(thumbnails.catalogs_complete.fresh_home thumbnailsCatalogsHome "${_ccHome}" WARM LABELS "mirror")
-set_property(TEST thumbnails.catalogs_complete APPEND PROPERTY FIXTURES_REQUIRED thumbnailsCatalogsHome)
+# THE SETUP: the fresh WARM home, THEN the generated library grown into its data root (the generator library.scale uses).
+jah_fresh_home_fixture(thumbnails.library_complete.fresh_home thumbnailsLibraryHome "${_lcHome}" WARM
+    ARGS --mkdir "${JAH_LC_OUT}"
+    THEN $<TARGET_FILE:test_library_statements> --generate ${_lcRoot}/JahLibrary.db ${_lcRoot}/AssetStore 100 2
+    LABELS "mirror")
+set_property(TEST thumbnails.library_complete.fresh_home APPEND PROPERTY ENVIRONMENT "QT_QPA_PLATFORM=offscreen")
+set_property(TEST thumbnails.library_complete APPEND PROPERTY FIXTURES_REQUIRED thumbnailsLibraryHome)

@@ -1,7 +1,13 @@
-// thumbnails.catalogs_complete — PREVIEWS-1 stage 2's ACCEPTANCE (the final read's C3): EACH SHIPPED SAMPLE CATALOG
-// READS 0 MISSING / 0 STALE AFTER ONE previews.renderAll. The app on the card (a material, model or mesh preview is a
-// render), a fresh warm home. The catalogs are the shipped samples (scenes/*.zip, configured into CATALOGS) - the
-// product's own content, not a test scene: the law is about them.
+// THE CATALOGS' ACCEPTANCE — PREVIEWS-1 stage 2 (the final read's C3): EACH SHIPPED SAMPLE CATALOG READS 0 MISSING /
+// 0 STALE AFTER ONE previews.renderAll. NOT A ROW (CODING_RULES § 5: no demo scene in a test or a lane proof; the
+// shipped samples are audited at the milestones): THE FEATURE END's NAMED COMMAND, run once on the lane's rig with a
+// fresh data root (the app on the card: a material, model or mesh preview is a render), its output kept under
+// ~/Developer/spikes/<spec>/stage2/acceptance/:
+//     scripts/rig.sh run catalogs-acceptance -- build-linux/bin/Jahshaka --script build-linux/tests/thumbnails/catalogs_complete.js
+//         --data-root <a fresh directory>
+// A catalog that reads missing or stale is a product finding about the shipped samples, reported with its numbers.
+// The catalogs are scenes/*.zip, configured into CATALOGS (tests/thumbnails/CMakeLists.txt). Its registered proof of
+// the same law on our own fixtures is thumbnails.library_complete.
 //
 // FOR EACH CATALOG, in one library: project.importArchive (its rows, its models baked), project.open, ONE
 // previews.renderAll (missing and stale rows of the library), previews.settle (every write landed), then
@@ -42,4 +48,4 @@ results.forEach(function (r) {
     assert(r.library.missing === 0 && r.library.stale === 0,
            r.name + ": ...and so does the whole library after it: " + J(r.library));
 });
-console.log("thumbnails.catalogs_complete: all assertions passed");
+console.log("catalogs_complete: all assertions passed");

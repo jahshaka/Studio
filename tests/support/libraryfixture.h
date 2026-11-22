@@ -18,7 +18,8 @@ For more information see the LICENSE file
 //
 //   createAssetEntry (real-shaped `properties`: `import` + `metadata`), createDependency (the intrinsic
 //   edges a material and a model write), memberstamp::stamp (a picture picked into a material),
-//   AssetCas::stage + commitStaged (a DISTINCT store object and its files / asset_files rows per asset),
+//   AssetCas::stage + commitStaged (a DISTINCT store object and its files / asset_files rows per asset; a texture's
+//   is a real PNG, so its preview decodes),
 //   MeshBakeStore::bakeSource (a model's REAL bake of a real OBJ: a generated library boots with nothing for the
 //   bake sweep to rebuild), AssetCas::writePin, createProject (a scene blob SceneWriter writes at this build's format version, a
 //   tile-sized thumbnail).

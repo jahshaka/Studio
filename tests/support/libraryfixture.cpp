@@ -219,7 +219,21 @@ bool row(Database *db, const QString &guid, const QString &name, ModelTypes type
     return true;
 }
 
-QByteArray sourceBytes(const QString &guid) { return QByteArrayLiteral("libraryfixture source ") + guid.toUtf8(); }
+/// A texture's source: a REAL PNG (4 x 4 pixels and a text chunk, both from the guid), so it decodes as an imported
+/// picture does (a preview of it is drawn, PREVIEWS-1) and every texture has a store object of its own.
+QByteArray sourceBytes(const QString &guid)
+{
+    const QByteArray h = QCryptographicHash::hash(guid.toUtf8(), QCryptographicHash::Md5);
+    QImage img(4, 4, QImage::Format_RGB888);
+    for (int i = 0; i < 16; ++i)
+        img.setPixel(i % 4, i / 4, qRgb(uchar(h.at(i)), uchar(h.at((i + 5) % 16)), uchar(h.at((i + 11) % 16))));
+    img.setText(QStringLiteral("libraryfixture"), guid);
+    QByteArray bytes;
+    QBuffer buf(&bytes);
+    buf.open(QIODevice::WriteOnly);
+    img.save(&buf, "PNG");
+    return bytes;
+}
 
 /// A model's source: a real OBJ (a tetrahedron), distinct per model by its comment line, so it parses and bakes
 /// as an import's does and every model has a store object of its own.
@@ -385,9 +399,11 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
         lib.openProject = lib.projects.first();
         for (int i = 0; i < 20; ++i) {
             const QString guid = nextGuid(lib);
-            if (!row(db, guid, QStringLiteral("own_%1.png").arg(i), ModelTypes::Texture, QString(),
-                     assethome::project(lib.openProject), assethome::Origin::Create, thumb(i), QByteArray(), QByteArray(),
-                     error))
+            const QString name = QStringLiteral("own_%1.png").arg(i);
+            if (!row(db, guid, name, ModelTypes::Texture, QString(), assethome::project(lib.openProject),
+                     assethome::Origin::Create, thumb(i), QByteArray(), QByteArray(), error)
+                || !storeObject(storeRoot, sources, { guid }, QStringLiteral("source"), name, sourceBytes(guid), nullptr,
+                                error))
                 return false;
         }
         QSqlDatabase conn = QSqlDatabase::database();
