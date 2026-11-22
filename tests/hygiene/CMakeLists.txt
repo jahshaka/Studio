@@ -923,5 +923,6 @@ jah_builds(JahshakaEngineMedia ROWS source.compute_size_keys)                  #
 jah_builds(JahStartupPassId ROWS source.startup_pass_closure)                  # <build>/startup-pass-files.txt
 jah_builds(JahshakaEngine Jahshaka jahlab IrisGL jahengine ROWS source.script_neutral)   # nm on each
 jah_builds(IrisCore ROWS source.no_qt_below)                                   # nm on IrisCore's archive (+ build.ninja)
+jah_builds(JahshakaEngineBuildId ROWS source.script_build_id)                  # the build's generated build-id header (its B3)
 # the whole default build: every test binary ctest runs (readelf), the build's whole dependency graph (its deps log)
 jah_builds(all ROWS source.display_guard_linked gate.selection gate.reach_cache source.gate_scope_rules)
