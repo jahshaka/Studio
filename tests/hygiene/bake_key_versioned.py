@@ -36,6 +36,7 @@ RECORD = "import/meshbake.key"
 
 def fail(msg):
     print("FAIL: " + msg)
+    print("source.bake_key_versioned: FAILED (1)")
     sys.stdout.flush()
     sys.exit(1)
 
@@ -176,7 +177,7 @@ def main():
             print("ok:   the record's last change (%s) moved kFormatVersion with it" % last[:12])
         else:
             print("ok:   the record has not changed since it was written")
-    print("source.bake_key_versioned: ok")
+    print("source.bake_key_versioned: PASSED")
     sys.stdout.flush()
 
 

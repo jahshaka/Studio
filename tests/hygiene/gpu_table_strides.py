@@ -33,6 +33,7 @@ RULES = [
 
 def fail(msg):
     print("FAIL: " + msg)
+    print("source.gpu_table_strides: FAILED (1)")
     sys.stdout.flush()
     sys.exit(1)
 
@@ -92,9 +93,11 @@ def main():
               " property, JahLevelTable's macro or `@value( jah_levels_per_mesh )u`):" % len(found))
         for h in found:
             print("        " + h)
+        print("source.gpu_table_strides: FAILED (1)")
         sys.stdout.flush()
         sys.exit(1)
-    print("source.gpu_table_strides: ok (%d media files, no hand copy of either stride)" % files)
+    print("ok:   %d media files, no hand copy of either stride" % files)
+    print("source.gpu_table_strides: PASSED")
     sys.stdout.flush()
 
 
