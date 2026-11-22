@@ -5,7 +5,10 @@
 // (stagingTempPath + fsyncPath + atomicRename) replace an existing file whole, under the shape the library GC reads
 // (<target>.tmp-<pid>-<serial>); a non-ASCII UTF-8 path round-trips; readAll of a missing file is nothing; readAll ANSWERS
 // "nothing" and never throws for what it cannot read - a DIRECTORY (on ext4 its seek-to-end says 2^63-1 bytes) and a file
-// larger than the memory it may take (a sparse 64-GiB file in a child under a 16-GiB address-space limit). POSIX (fork).
+// larger than the memory it may take (a sparse 64-GiB file in a child under a 16-GiB address-space limit); a Flush write
+// whose fsync FAILS fails by name and is NOT renamed into place (the old file stands, no temp): the fault is injected by
+// this binary's own fsync, which the dynamic linker binds ahead of libc's for libIrisCore's call (no seam in the product;
+// its control: the interposer counted the call). POSIX (fork; ELF interposition).
 #include "core/files.h"
 
 #include <atomic>
@@ -20,11 +23,27 @@
 #include <thread>
 #include <vector>
 
+#include <cerrno>
 #include <sys/resource.h>
+#include <sys/syscall.h>
 #include <sys/wait.h>
 #include <unistd.h>
 
 namespace fs = std::filesystem;
+
+// THE FAULT: fsync as the kernel would answer a failed flush (EIO), while gFailFsync is set; else the real call.
+static std::atomic<bool> gFailFsync{ false };
+static std::atomic<int> gFsyncCalls{ 0 };
+extern "C" int fsync(int fd)
+{
+    ++gFsyncCalls;
+    if (gFailFsync.load()) {
+        errno = EIO;
+        return -1;
+    }
+    return static_cast<int>(::syscall(SYS_fsync, fd));
+}
+
 static int failures = 0, checks = 0;
 static void check(bool ok, const std::string &what)
 {
@@ -150,6 +169,22 @@ int main()
     check(writeAtomic(path(name), "u") && readAll(path(name)) == std::string("u") && utf8(path(name)) == name,
           "a non-ASCII UTF-8 path round-trips");
     check(!readAll(dir / "missing.json"), "readAll of a missing file is nothing");
+
+    // ---- a Flush write whose fsync fails is not published
+    check(writeAtomic(target, "BEFORE THE FAILED FLUSH"), "the old file");
+    gFsyncCalls = 0;
+    gFailFsync = true;
+    err.clear();
+    const bool flushed = writeAtomic(target, "NOT DURABLE", Durability::Flush, &err);
+    const bool stagedFlush = fsyncPath(target);
+    gFailFsync = false;
+    check(gFsyncCalls >= 2, "the interposed fsync was called (" + std::to_string(gFsyncCalls.load()) + " calls)");
+    check(!flushed && err.find("fsync") != std::string::npos, "a Flush write whose fsync failed FAILED by name: " + err);
+    check(readAll(target) == std::string("BEFORE THE FAILED FLUSH") && temps(dir).empty(),
+          "...and was not renamed into place: the old file stands, no temp");
+    check(!stagedFlush, "fsyncPath says a failed flush failed");
+    check(writeAtomic(target, "DURABLE", Durability::Flush) && readAll(target) == std::string("DURABLE"),
+          "the next Flush write, its fsync whole, is published");
 
     // ---- what readAll cannot read is nothing, never a throw (the header's promise)
     bool threw = false;
