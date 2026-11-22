@@ -654,4 +654,5 @@ hdr.bloom_isotropic 2.40  ARCHIVED, an interim line (archive/tests/hdr/ROWS.txt,
 hdr.display_encode 1.88  ARCHIVED, an interim line (archive/tests/hdr/ROWS.txt, held at 163d90223; registered again by ROUTE-ROWS-1, the lead's ruling 2026-11-04) - re-priced from its own solo run at the feature end
 engine.chain_gi_routes 0.00  by hand (spec.sh reprice, 2026-11-22)
 shadercache.app.killed 19.00  by hand (spec.sh reprice, 2026-11-22: its command run solo under rig.sh, box driver cache, launch 17.8 s; a solo record owed)
-gi.async_arm_cold 1.72  by hand (its solo run ss7-armcold-bc2, 2026-11-22; spec.sh reprice owed)
+gi.async_arm_cold 2.68  by hand (its solo run ss7-armcold-d, 2026-11-22, at fix D; spec.sh reprice owed)
+gi.async_arm_warm 1.31  by hand (its solo run ss7-armwarm-d, 2026-11-22; spec.sh reprice owed)

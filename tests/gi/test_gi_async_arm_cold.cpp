@@ -8,7 +8,11 @@
 // clone, a record) had its pipeline built in the frame even under the deferral (fork HlmsCompute::dispatch's "known"
 // branch, fix D).
 //
-// THE SCRIPT: one engine with NO persistent shader cache (every compute permutation cold in this process), an offscreen
+// TWO ARMS, ONE ROW EACH: `cold` (gi.async_arm_cold) - NO persistent shader cache, every compute permutation cold in
+// this process; `warm` (gi.async_arm_warm) - the rig's shared warm cache, every compute record a hit: the arm's codes are
+// KNOWN, so before fix D each deferred dispatch of one built its pipeline in the frame (law 2's pipeline count), and with
+// it the pipeline is requested on the background compiler like any other permutation (law 1's deferrals then > 0).
+// THE SCRIPT: one engine on the arm's cache, an offscreen
 // Live view in asynchronous mode, every frame on the Streaming pace; one scene - a floor, a box, a shadowing sun - with
 // the voxel GI on (High, bounces on). Frames until the arm is bound, the background compiler holds nothing and no frame
 // owes a deferred dispatch, or the cap.
@@ -40,11 +44,14 @@ static constexpr int kSettleFrames = 10;
 /// The hang guard of the wait for the compiler (never the law's bar: law 3 is counted from the compiler's empty state).
 static constexpr int kFrameCap = 3000;
 
-int main()
+int main(int argc, char **argv)
 {
-    std::printf("== gi.async_arm_cold: the lighting arm of an asynchronous scene never compiles in a frame\n");
-    EngineConfig cfg = enginetest::testEngineConfig("test-gi-async-arm-cold-ogre.log",
-                                                    enginetest::EngineOverrides().shaderCacheOff());
+    const bool warm = argc > 1 && std::string(argv[1]) == "warm";
+    const char *row = warm ? "gi.async_arm_warm" : "gi.async_arm_cold";
+    std::printf("== %s: the lighting arm of an asynchronous scene never compiles in a frame\n", row);
+    EngineConfig cfg = warm ? enginetest::testEngineConfig("test-gi-async-arm-warm-ogre.log")
+                            : enginetest::testEngineConfig("test-gi-async-arm-cold-ogre.log",
+                                                           enginetest::EngineOverrides().shaderCacheOff());
     std::string err;
     auto engine = Engine::create(cfg, err);
     CHECK(engine != nullptr, "engine created (%s)", err.c_str());
@@ -73,7 +80,8 @@ int main()
     CHECK(ok, "the scene built: a floor, a box, a sun, the voxel GI (%s)", e->lastError().c_str());
     if (!ok) return 1;
     // THE DECLARED ROUTE (CODING_RULES § 6): a Live offscreen view runs the screen integrate; the scene's cards and store
-    enginetest::declareRoutes(view, scene, enginetest::Routes().integrate().cards().store(), "gi.async_arm_cold's view");
+    enginetest::declareRoutes(view, scene, enginetest::Routes().integrate().cards().store(),
+                              (std::string(row) + "'s view").c_str());
 
     const auto frame = [&]() {
         e->setFramePace(FramePace::Streaming);   // consumed by the next frame (the engine resets it to Complete after it)
@@ -104,6 +112,7 @@ int main()
     CHECK(settled, "(3) the arm landed: bound and no deferred dispatch owed within %d frames of the compiler's queue "
                    "emptying (%d frames empty, %d frames in all)", kSettleFrames, emptyFrames, f + 1);
     enginetest::poseRegistry().erase(scene);
-    std::printf(failures ? "gi.async_arm_cold: FAIL (%d)\n" : "gi.async_arm_cold: PASS\n", failures);
+    if (failures) std::printf("%s: FAIL (%d)\n", row, failures);
+    else std::printf("%s: PASS\n", row);
     return failures ? 1 : 0;
 }

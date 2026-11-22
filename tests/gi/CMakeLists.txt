@@ -1645,7 +1645,12 @@ target_compile_definitions(test_gi_async_arm_cold PRIVATE
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
 target_link_libraries(test_gi_async_arm_cold PRIVATE JahshakaEngine)
 add_dependencies(test_gi_async_arm_cold JahshakaEngineMedia)
-jah_gpu_row(gi.async_arm_cold CLASS engine FRAMES 640 COMMAND test_gi_async_arm_cold
+jah_gpu_row(gi.async_arm_cold CLASS engine FRAMES 900 COMMAND test_gi_async_arm_cold
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
          COLD "its subject is the arm's permutations compiling: they must be cold in the process (the fixture's shaderCacheOff)")
 set_tests_properties(gi.async_arm_cold PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
+# gi.async_arm_warm (SHADER-SYSTEM-1 7a, fix D) - the same law on the rig's shared warm cache: every compute record a hit,
+# so the arm's codes are KNOWN and their pipelines must be requested on the background compiler, never built in a frame.
+jah_gpu_row(gi.async_arm_warm CLASS engine FRAMES 900 COMMAND test_gi_async_arm_cold warm
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.async_arm_warm PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "engine")
