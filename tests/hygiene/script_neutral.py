@@ -7,12 +7,15 @@ the value type and the registry know nothing of JavaScript, and a second languag
      the language's binding. (The build files name the library they build: they are not sources.)
   N2 THE HOST's NEUTRAL FILES INCLUDE NOTHING BUT THE STANDARD LIBRARY AND THEMSELVES: jahshaka/engine/Script.h and
      src/script/{registry.cpp, host.cpp, Language.h} include no Qt, Ogre or JS-engine header.
+  N3 jahengine LINKS THE ENGINE AND NO QT: its NEEDED list (`objdump -p`) names no Qt library and no IrisGL (the document
+     library that carries Qt today); the JS engine and the engine are static inside it.
 
-usage: script_neutral.py <source-root>
+usage: script_neutral.py <source-root> <jahengine binary>
 Its self-test runs first, on synthetic files: each rule red on a violation, green on the allowed file.
 """
 import os
 import re
+import subprocess
 import sys
 import tempfile
 
@@ -63,6 +66,12 @@ def n2_bad(root):
     return bad
 
 
+def n3_bad(objdump_text):
+    """[library] of the NEEDED entries that are Qt's or IrisGL's, read from `objdump -p` text."""
+    needed = re.findall(r"^\s*NEEDED\s+(\S+)", objdump_text, re.MULTILINE)
+    return [n for n in needed if re.match(r"libQt|libIrisGL", n)]
+
+
 def write(root, rel, text):
     p = os.path.join(root, rel)
     os.makedirs(os.path.dirname(p), exist_ok=True)
@@ -85,20 +94,28 @@ def self_test():
         write(t, NEUTRAL[0], "#include <QString>\n#include \"quickjs.h\"\n#include <OgreRoot.h>\n")
         write(t, NEUTRAL[1], "#include <QtCore/QVariant>\n")
         check(len(n2_bad(t)) == 4, "N2 names a Qt, a JS-engine and an Ogre include in the neutral files (%s)" % n2_bad(t))
+    dump = "Dynamic Section:\n  NEEDED               libOgreMain.so.4.0\n  NEEDED               libQt6Core.so.6\n" \
+           "  NEEDED               libIrisGLd.so\n  NEEDED               libc.so.6\n"
+    check(n3_bad(dump) == ["libQt6Core.so.6", "libIrisGLd.so"], "N3 names a Qt and an IrisGL library in a NEEDED list (%s)"
+          % n3_bad(dump))
 
 
 def main():
-    if len(sys.argv) != 2:
-        print("usage: script_neutral.py <source-root>")
+    if len(sys.argv) != 3:
+        print("usage: script_neutral.py <source-root> <jahengine binary>")
         print("source.script_neutral: FAILED (1)")
         return 1
-    root = sys.argv[1]
+    root, jahengine = sys.argv[1], sys.argv[2]
     self_test()
     print("the tree:")
     bad = n1_bad(root)
     check(not bad, "N1 the JS engine is named only by irisgl/engine/src/script/js_*.cpp (%d others: %s)" % (len(bad), bad[:8]))
     bad = n2_bad(root)
     check(not bad, "N2 Script.h, registry.cpp, host.cpp and Language.h include no Qt, Ogre or JS-engine header (%s)" % bad[:8])
+    dump = subprocess.run(["objdump", "-p", jahengine], capture_output=True, text=True)
+    needed = re.findall(r"^\s*NEEDED\s+(\S+)", dump.stdout, re.MULTILINE)
+    check(dump.returncode == 0 and needed and not n3_bad(dump.stdout),
+          "N3 jahengine's NEEDED list holds no Qt and no IrisGL (%d libraries: %s)" % (len(needed), " ".join(needed)))
     if FAILURES:
         print("source.script_neutral: FAILED (%d)" % len(FAILURES))
         return 1
