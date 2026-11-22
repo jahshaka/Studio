@@ -1964,7 +1964,7 @@ QVariantMap AssetsApi::exportRaw(const QString &guid, const QString &dir, const 
     // The resolver-backed source (final half): entries by oid through the
     // catalog. Library exports carry no project pin context.
     Q_UNUSED(hash);   // oids come from the catalog, not a re-hash
-    CasContentSource source(AssetMetadata::storeRootPath());
+    CasContentSource source(&host.db->connection(), AssetMetadata::storeRootPath());
     const auto r = RawExporter::exportAssets(infos, source, dir.trimmed());
     if (!r.ok) { fail(QStringLiteral("assets.exportRaw: %1").arg(r.error)); return out; }
 

@@ -931,7 +931,7 @@ QVariantMap ProjectApi::exportManifest(const QString &dir)
 
     // The resolver-backed source (final half): entries by oid through the
     // catalog, source role at the project's pinned content.
-    CasContentSource source(AssetMetadata::storeRootPath(), projectGuid);
+    CasContentSource source(&host.db->connection(), AssetMetadata::storeRootPath(), projectGuid);
     const auto r = RawExporter::exportAssets(infos, source, outDir,
                                              QStringLiteral("project"), /*copyFiles=*/false);
     if (!r.ok) { fail(QStringLiteral("project.exportManifest: %1").arg(r.error)); return out; }

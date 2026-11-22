@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include <QString>
 #include <QVector>
 
+namespace db { class Connection; }
+
 class ExportContentSource
 {
 public:
@@ -51,11 +53,12 @@ public:
 /// `asset_files`/`files` catalog and point into objects/. When a project
 /// guid is given, the SOURCE role serves the project's PINNED content
 /// (spec §3.1.5 — exports materialize the bytes the project renders with).
+/// The catalog is read on `connection` (the Database's: its thread's); none = no catalog, no entries.
 class CasContentSource : public ExportContentSource
 {
 public:
-    explicit CasContentSource(const QString &storeRoot,
-                              const QString &projectGuid = QString());
+    CasContentSource(db::Connection *connection, const QString &storeRoot,
+                     const QString &projectGuid = QString());
 
     QVector<Entry> filesForAsset(const QString &guid,
                                  const QString &nameHint = QString()) override;
@@ -65,6 +68,7 @@ public:
     static int statements() { return sStatements; }
 
 private:
+    db::Connection *connection = nullptr;
     QString root;
     QString project;
     static int sStatements;

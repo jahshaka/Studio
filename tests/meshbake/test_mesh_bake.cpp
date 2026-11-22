@@ -874,7 +874,7 @@ static void storeIntegration()
     // installation refuses on sight. The export walker must not enumerate it;
     // the imported project re-bakes lazily on its first open.
     {
-        CasContentSource source(storeRoot.path());
+        CasContentSource source(&db.connection(), storeRoot.path());
         bool sawSource = false, sawBake = false;
         for (const auto &entry : source.filesForAsset(result.assetGuid)) {
             if (entry.role == QLatin1String("source")) sawSource = true;

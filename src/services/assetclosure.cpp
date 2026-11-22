@@ -128,7 +128,7 @@ struct Describer::State
     QMap<QString, clipboardformat::ClipAsset> out;
     int inlined = 0, referenced = 0;
     State(Database *d, const Options &o, QVector<DeferredRead> *def)
-        : db(d), options(o), deferredOut(def), content(o.storeRoot, o.projectGuid), budget(o.inlineLimitBytes) {}
+        : db(d), options(o), deferredOut(def), content(d ? &d->connection() : nullptr, o.storeRoot, o.projectGuid), budget(o.inlineLimitBytes) {}
 };
 
 Describer::Describer(const QStringList &guids, Database *db, const Options &options,
