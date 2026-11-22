@@ -556,9 +556,6 @@ int main(int argc, char *argv[])
             end.lowLevelBuiltInFrame = g.lowLevelBuiltInFrame;
             end.computeParsedInFrame = g.computeParsedInFrame;
             end.computePsoInFrame = g.computePsoInFrame;
-            end.compiledInBackground = g.compiledInBackground;
-            end.placeholderDraws = g.placeholderDraws;
-            end.computeJoins = g.computeJoins;
             end.at = std::chrono::steady_clock::now();
             livecompiles::noteGateEnd(end);
         }

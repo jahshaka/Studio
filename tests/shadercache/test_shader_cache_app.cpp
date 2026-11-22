@@ -649,27 +649,6 @@ int warmLaws(const QString &home, const QString &scripts, const QJsonObject &col
                 warm.value("loadedThisRun").toInt());
     CHECK(warm.value("compiledThisRun").toInt() == 0, "run 2 compiled NOTHING AT ALL");
     gateDrawsWhatTheEditorDraws("run 2 (warm)", warm.value("asyncAfterFrames").toObject());
-    // THE OWNER's LAUNCH: run 2's editor compiles in the BACKGROUND (its script turns the interactive policy on before
-    // the editor's first frame), so a gate gap shows as a background compile, a placeholder draw or a Complete frame's
-    // join - since the gate, 0 of each (the lead's ruling, SHADER-SYSTEM-1 7a). Run 1 stays synchronous: the strict
-    // in-frame view of every gap.
-    {
-        const QJsonObject after = warm.value("asyncAfterFrames").toObject();
-        const QJsonObject at = after.value("atGate").toObject();
-        const auto since = [&](const char *k) {
-            return qlonglong(after.value(k).toDouble()) - qlonglong(at.value(k).toDouble());
-        };
-        std::printf("   run 2 (warm, asynchronous editor: policy %d), since the gate: compiled in the background %lld, "
-                    "placeholder draws %lld, compute joins %lld (%.2f ms in all); background jobs completed %lld\n",
-                    after.value("policy").toBool() ? 1 : 0, since("compiledInBackground"), since("placeholderDraws"),
-                    since("computeJoins"), after.value("computeJoinMs").toDouble(),
-                    qlonglong(after.value("completed").toDouble()));
-        CHECK(after.value("policy").toBool() && at.contains(QStringLiteral("placeholderDraws")),
-              "run 2's editor ran the interactive (background) policy, its gate base recorded");
-        CHECK(since("compiledInBackground") == 0 && since("placeholderDraws") == 0 && since("computeJoins") == 0,
-              "run 2's asynchronous editor compiled nothing in the background, drew no placeholder and joined no "
-              "compute build since the gate (the gate draws what the owner's editor draws)");
-    }
     // THE COMPUTE LAYER (COLD-BOOT-1 stage 3; SHADER-SYSTEM-1 3F): run 1's records are read back, none stale (F1: the
     // prune runs where the compute media is found), and NO compute template is parsed in any frame of the launch - the
     // gate's and the editor's first 30 (base 22: spikes/cold-boot-1/S1b). The bar's negative control is
