@@ -1663,19 +1663,6 @@ public:
     /// ends) — the open's dialog repaints its line from it.
     virtual unsigned warmUpShaders(const std::function<void(unsigned)> &onCompile = {})
     { (void)onCompile; return 0; }
-    /// Remembers the PASS SHAPE the editor is drawing this world with — shadows
-    /// on/off and the ACHIEVED MSAA sample count — for the NEXT launch's
-    /// startup gate, whose tiny offscreen warm-up view is built to match
-    /// (SHADER_CACHE_AUDIT F1b): an Hlms permutation is a function of the pass
-    /// as much as of the renderable, and the gate has no other way to know what
-    /// pass this machine's editor draws.
-    ///
-    /// Two settings values, written only on change. It is what SURVIVES the
-    /// recorded warm-up SET (WARMUPSET-2, 2026-09-21): the set named its
-    /// materials by a process-unique datablock name and warmed nothing in the
-    /// next process, so it went — the pass shape is a different fact and feeds
-    /// a warm-up that does work. No-op with no engine or no world.
-    virtual void rememberPassShape() {}
 
     // ---- lifecycle ----
     virtual void begin() = 0;

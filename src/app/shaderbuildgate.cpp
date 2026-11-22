@@ -194,7 +194,8 @@ struct GateScope {
 /// a created world (the parked arm's permutations), then released so the arm builds (its
 /// compute set and the lit permutations), then graded like the project tile. Returns the
 /// frames rendered.
-int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &shape,
+int warmEditorWorld(Engine &engine, View *view,
+                    const std::function<WindowTargetShape(const iris::Scene &)> &windowShape,
                     Database *db, SceneTemplate kind, bool presets,
                     const std::function<void()> &poll, const gatesettle::Settle &settle)
 {
@@ -227,8 +228,10 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         es->setLoading(true);
         mirror.setSource(doc);
         view->setScene(es);
-        view->setShadows(shape.shadows);
-        if (shape.samples > 1) view->setSampleCount(shape.samples);
+        // THE EDITOR WINDOW's PASS FOR THIS WORLD (SceneMirror::windowPass through the window's validation): the
+        // offscreen view is not a presented one, so the mirror pushes it no sample count of its own.
+        view->setShadows(SceneMirror::windowPass(*doc).shadows);
+        view->setSampleCount(windowShape(*doc).samples);
         view->setVrHelpersVisible(true);
         mirror.invalidateEnvironment();
         // pushEditorHelpers at the editor's defaults, and the grid on (a View
@@ -617,13 +620,29 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // never draws, cached them, and counted them into expectedShaders — the
     // splash denominator — as shaders somebody wanted.
     //
-    // EngineHost::warmUpShape() is what the last session's editor view actually
-    // used (recorded on the open path beside the warm-up set itself), so this
-    // is measured rather than guessed. A first-ever launch gets the defaults
-    // and is no worse off than the old code.
-    const EngineHost::WarmUpShape shape = EngineHost::warmUpShape();
+    // THE SHAPE COMES FROM WHERE THE EDITOR's OWN VIEW TAKES IT AT THIS LAUNCH (SHADER-SYSTEM-1 stage 7a; the
+    // remembered `shader_warmup_samples` key it replaces warmed 1 sample on a first launch while the editor drew 2):
+    // the pass from the document through the mirror's one function (SceneMirror::windowPass - the editor's window
+    // view is pushed exactly that), and the TARGET from the window system (Engine::windowTargetShape: the swapchain's
+    // own format choice and sample validation on a temporary surface - a final pass's pipeline keys on both: the
+    // display encode and SMAA's blend built in the editor's first frame when the gate drew into RGBA8). The window
+    // asked about is the SPLASH's: the host's one display connection and the default visual the editor's window also
+    // gets (neither is translucent), and a surface's format list follows its window's visual - so the editor's
+    // viewport widget never makes its native window early for this.
+    const iris::ScenePtr born = iris::Scene::create();
+    applyBornWorld(born);
+    const auto windowShape = [&](const iris::Scene &doc) {
+        WindowTargetShape t;
+        t.samples = SceneMirror::windowPass(doc).samples;
+        if (!engine->windowTargetShape(NativeWindowHandle(splash.winId()), t.samples, t))
+            qWarning("startup shader build: the window's target shape is unknown (%s) - the warm view draws RGBA8 at "
+                     "%u sample(s)", engine->lastError().c_str(), t.samples);
+        return t;
+    };
+    const WindowTargetShape target = windowShape(*born);
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
-                                                 Colour(0.0f, 0.0f, 0.0f, 1.0f), OffscreenContract::Live);
+                                                 Colour(0.0f, 0.0f, 0.0f, 1.0f), OffscreenContract::Live,
+                                                 target.format);
     const GateScope gateScope{ *engine, warmView };   // before the gate's first frame: every way out gives it all back
     // THE RAY PIPELINES START NOW, ALL OF THEM, the reflection's first (COLD-BOOT-1 stage 4): their cold driver compiles
     // (~100 s of a first launch, serial at their consumers' first frames before) run on their builders beside everything
@@ -663,8 +682,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
                                 : nullptr;
     if (warmScene) {
         warmView->setScene(warmScene);
-        warmView->setShadows(shape.shadows);
-        if (shape.samples > 1) warmView->setSampleCount(shape.samples);
+        warmView->setShadows(SceneMirror::windowPass(*born).shadows);
+        warmView->setSampleCount(target.samples);
         // A REPRESENTATIVE LIGHT RIG, not a lit scene: one shadow-casting
         // directional plus ambient is the smallest thing that makes the pass
         // hash look like the editor's (it is also exactly what
@@ -682,7 +701,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             l.type = LightType::Directional;
             l.colour = Colour(1.0f, 1.0f, 1.0f);
             l.intensity = 1.0f;
-            l.castShadows = shape.shadows;
+            l.castShadows = SceneMirror::windowPass(*born).shadows;
             warmScene->setLight(sun, l);
         }
         // THE SKY's ENVIRONMENT LANDS BEFORE ANY OBJECT IS DRAWN (SHADER-SYSTEM-1, the final read's item 3b): the
@@ -772,8 +791,6 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             // test tier (TEST-TIER-1, services/testtier.h — a Low test process must not build
             // the Epic chain here either: measured, this warm-up was a 1.28 GB transient in a
             // process whose scenes then held 0.3 GB), resolved through the World Mode registry.
-            const iris::ScenePtr born = iris::Scene::create();
-            applyBornWorld(born);
             const worldmodes::PhotonTier tier = worldmodes::photonTier(born);
             GiParams gi;
             gi.mode = worldmodes::photonEnabled(born)
@@ -952,7 +969,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             engine->shaderBuildProgress(compiled, cached, expected);
             const unsigned before = compiled;
             QElapsedTimer worldTimer; worldTimer.start();
-            const int frames = warmEditorWorld(*engine, warmView, shape, db, kind,
+            const int frames = warmEditorWorld(*engine, warmView, windowShape, db, kind,
                                                /*presets*/ kind == SceneTemplate::Basic, poll, settle);
             engine->shaderBuildProgress(compiled, cached, expected);
             qInfo("startup shader build: the %s template's world took %d frames, %lld ms and "
@@ -978,8 +995,8 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     //
     // What remains on this path is the PROCESS-WIDE half above, which is real:
     // Hlms registration, the low-level material scripts and the compositor
-    // chain, compiled in a view shaped like the editor's (EngineHost::
-    // warmUpShape — the pass shape a world OPEN writes down). The per-world
+    // chain, compiled in a view shaped like the editor's window (SceneMirror::
+    // windowPass + Engine::windowTargetShape, above). The per-world
     // Hlms permutations are compiled behind the loading cover by the per-scene
     // precache instead (View::warmUpShaders).
     // The SCENE goes; the VIEW stays, disabled, for the life of the process.

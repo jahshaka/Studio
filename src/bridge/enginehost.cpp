@@ -447,25 +447,6 @@ bool EngineHost::startEngine(QString &error)
     return true;
 }
 
-EngineHost::WarmUpShape EngineHost::warmUpShape()
-{
-    WarmUpShape s;
-    SettingsManager *sm = SettingsManager::getDefaultManager();
-    s.samples = unsigned(qBound(1, sm->get(settingkeys::shaderWarmupSamples), 16));
-    s.shadows = sm->get(settingkeys::shaderWarmupShadows);
-    return s;
-}
-
-void EngineHost::rememberWarmUpShape(const WarmUpShape &shape)
-{
-    SettingsManager *sm = SettingsManager::getDefaultManager();
-    // Written only on change (the store writes the file on its own thread,
-    // but an unchanged preference is not a change).
-    const WarmUpShape had = warmUpShape();
-    if (had.samples != shape.samples) sm->set(settingkeys::shaderWarmupSamples, int(shape.samples));
-    if (had.shadows != shape.shadows) sm->set(settingkeys::shaderWarmupShadows, shape.shadows);
-}
-
 void EngineHost::startShaderCacheWatchdog()
 {
     if (mCacheWatchdog || !mEngine) return;

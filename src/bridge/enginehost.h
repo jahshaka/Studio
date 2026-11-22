@@ -42,23 +42,6 @@ public:
     /// The `shader_cache_enabled` preference, in one place. Everything that
     /// writes into the cache DIRECTORY has to ask.
     static bool shaderCacheEnabled();
-    /// THE PASS SHAPE the last session's editor actually drew with.
-    ///
-    /// Hlms permutations are a function of the PASS, not only the renderable:
-    /// shadows change the shader, and MSAA sample count is literally a shader
-    /// property (HlmsBaseProp::MsaaSamples, set from the target's sample
-    /// description). So replaying a recorded set into a lightless, shadowless,
-    /// 1x offscreen scene compiles variants the editor never draws — and caches
-    /// them, inflating the splash denominator with shaders nobody wants (audit
-    /// F1b). The startup gate reads this to build a warm view with the right
-    /// shape; a first-ever launch gets the defaults below and is no worse off
-    /// than before.
-    struct WarmUpShape {
-        unsigned samples = 1;      ///< achieved MSAA count of the editor's on-screen view
-        bool     shadows = true;   ///< the editor's default, and the expensive variant
-    };
-    static WarmUpShape warmUpShape();
-    static void rememberWarmUpShape(const WarmUpShape &shape);
     /// Starts the burst-settle save watchdog: once shaders have been compiled
     /// and then NOT compiled for a few seconds, the cache is written. Without
     /// it a crash (or a pkill, which this codebase's history is full of) throws

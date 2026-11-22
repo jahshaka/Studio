@@ -4834,27 +4834,6 @@ unsigned EngineSceneViewport::warmUpShaders(const std::function<void(unsigned)> 
     return after - before;
 }
 
-void EngineSceneViewport::rememberPassShape()
-{
-    // THE PASS SHAPE, AND ONLY THE PASS SHAPE (WARMUPSET-2, 2026-09-21). This
-    // function used to also RECORD the world's permutation set for the next
-    // launch to replay; that set identified each permutation by a datablock
-    // NAME and this engine's names are process-unique counters, so it warmed
-    // nothing and was deleted with its whole machinery. What is left is the
-    // half that still pays: the startup gate builds a tiny offscreen view to
-    // compile the process-wide materials in, and a permutation depends on the
-    // PASS as much as on the renderable, so the gate needs to know whether this
-    // machine's editor draws with shadows and at how many samples.
-    //
-    // sampleCount() is the ACHIEVED count (the driver may clamp below what the
-    // scene asked for) — matching what was REQUESTED would build variants this
-    // machine cannot render. Two settings values, written only on change.
-    if (!mEngine || !mEngineScene) return;
-    if (View *v = view())
-        if (const auto pv = publishedView())   // the achieved MSAA as the last frame drew it (U3 stage 2)
-            EngineHost::rememberWarmUpShape({ pv->sampleCount, v->pushedShadows() });
-}
-
 void EngineSceneViewport::coverIfNotPresenting()
 {
     // Called right after the editor page is switched to, i.e. right after this
@@ -4905,12 +4884,6 @@ void EngineSceneViewport::clearScene()
     // draws is still whole: the recorder drains its readback and finishes the
     // file, then the view goes.
     endRecordingForTeardown();
-    // THE PASS SHAPE, BEFORE THE WORLD GOES (WARMUPSET-2). The view still
-    // answers for the pass the editor was drawing; a line later the scene is
-    // gone. (This used to record the permutation SET as well — deleted: it
-    // named its materials by a process-unique datablock name and warmed
-    // nothing in the next process.)
-    rememberPassShape();
     if (mOverlay) { mOverlay->clear(); mOverlay.reset(); }
     // THE INSET IS WITHDRAWN BEFORE THE MIRROR GOES (VIEWS-XID-1). Once the
     // mirror is reset syncPip has no camera to preview and cannot speak for

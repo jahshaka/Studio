@@ -302,9 +302,6 @@ void ProjectRunner::open(bool playMode)
 	// THE WORLD IS INSTALLED (BUGS-6 stage 1): this route renders no frame before
 	// its reveal, so the arm builds on the reveal's own first frame, inside the open.
 	mViewport->releaseLightingArm();
-	// The pass shape this machine's editor draws with, for the NEXT launch's
-	// startup gate (F1b): two settings values, written only on change.
-	mViewport->rememberPassShape();
 	stageReveal(playMode);
 	// THE LOAD IS OVER (OPEN_COVER_SPEC §2 A). Said here and at the runner's
 	// `finished` — the two ends of the two routes — and NOT inside
@@ -557,21 +554,10 @@ void ProjectRunner::startOpenRun(bool playMode)
 			if (built) qInfo("scene open: precompiled %u shader(s) behind the cover", built);
 		} });
 	}
-	// THE PASS SHAPE for the next launch's startup gate (SHADER_CACHE_AUDIT
-	// F1b): two settings values, written only on change.
-	//
-	// (What used to be here as well — WARMUPSET-2, 2026-09-21 — was the
-	// RECORDING of this world's permutation set "for the next launch". That set
-	// named its materials by a process-unique datablock name, so it resolved
-	// nothing in the next process and warmed the default datablock instead; the
-	// whole machinery is deleted. The slice above, the per-scene PSO precache
-	// behind the cover, is what actually precompiles a world, and it stays.)
 	// NO MEDIA HERE (SC1-NEWPROJECT-STALL, lead decision 2026-10-10): an open or a
 	// create never touches Qt Multimedia. Its encoder probe (the FFmpeg backend's
 	// hardware-context check, ~0.7 s measured) is the FIRST RECORDING's, made by
 	// the recorder's own start (modules/capture/videorecorder.cpp).
-	slices.append({ QStringLiteral("Precompiling shaders…"), 96,
-	                [this]() { mViewport->rememberPassShape(); } });
 	slices.append({ QStringLiteral("Opening…"), 100,
 	                [this, playMode]() { stageReveal(playMode); } });
 
@@ -697,14 +683,6 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
             if (built) qInfo("scene create: precompiled %u shader(s) behind the cover", built);
         } });
     }
-    // The pass shape for the next launch's startup gate (SHADER_CACHE_AUDIT
-    // F1b) — two settings values, written only on change. (This slice used to
-    // RECORD the world's permutation set as well; the set named its materials
-    // by a process-unique datablock name and warmed nothing in the next
-    // process, so the machinery was deleted — WARMUPSET-2, 2026-09-21.)
-    // NO MEDIA HERE: the encoder probe is the first recording's (see the open's note).
-    slices.append({ QStringLiteral("Precompiling shaders…"), 96,
-                    [this]() { mViewport->rememberPassShape(); } });
     // THE INITIAL SAVE GOES LAST, AFTER THE WARM-UP. It ASKS for the project's
     // TILE — the new world's first presented frame (CLOSE-SHOT-2), stored when
     // the reveal below has drawn it; nothing is rendered for it here.

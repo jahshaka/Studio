@@ -41,8 +41,6 @@ namespace settingkeys {
 /// The engine-drawn frame-stats readout (F3; STATS_OVERLAY_SPEC §5.3).
 inline constexpr SettingKey<bool> showFps{ "show_fps", false };
 inline constexpr SettingKey<bool> shadowMeshOptimization{ "shadow_mesh_optimization", true };
-inline constexpr SettingKey<int>  shaderWarmupSamples{ "shader_warmup_samples", 1 };
-inline constexpr SettingKey<bool> shaderWarmupShadows{ "shader_warmup_shadows", true };
 inline constexpr SettingKey<bool> shaderWarmupOnOpen{ "shader_warmup_on_open", true };
 inline constexpr SettingKey<bool> shaderCacheEnabled{ "shader_cache_enabled", true };
 /// "default" | "jahshaka" (left-drag orbits in the Jahshaka scheme).

@@ -412,10 +412,6 @@ int main(int argc, char *argv[])
                                   yesNo(sm->get(settingkeys::watchdogEnabled)) };
         r << SessionHeader::Row { QStringLiteral("shadowMeshOptimization"),
                                   yesNo(sm->get(settingkeys::shadowMeshOptimization)) };
-        r << SessionHeader::Row { QStringLiteral("shaderWarmupSamples"),
-                                  QString::number(sm->get(settingkeys::shaderWarmupSamples)) };
-        r << SessionHeader::Row { QStringLiteral("shaderWarmupShadows"),
-                                  yesNo(sm->get(settingkeys::shaderWarmupShadows)) };
         return r;
     });
     SessionHeader::addProvider(QStringLiteral("assets"), [] {

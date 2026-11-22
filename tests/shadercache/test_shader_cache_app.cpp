@@ -107,6 +107,32 @@ void gateDrawsWhatTheEditorDraws(const char *run, const QJsonObject &after)
     CHECK(since("graphicsBuiltInFrame") == 0 && since("lowLevelBuiltInFrame") == 0,
           "the editor's frames built no graphics permutation and no low-level pipeline the gate did not (the gate "
           "draws what the editor draws)");
+    // THE GATE DRAWS INTO THE WINDOW's SHAPE (R4 (A)): the passes that write the editor's FINAL target - the display
+    // encode and SMAA's blend - key their pipeline on its format and samples. The gate's final-target frames are drawn
+    // into an offscreen target of the window's shape (Engine::windowTargetShape), so the editor's frames build none of
+    // them (red before: the gate drew into RGBA8 while the window is the surface's own format - 1 + 1 built after the
+    // gate, spikes/shader-system/ss7/r4/remeasure-red.log; the control, the gate's frame in the old format, reads them
+    // again). Counted
+    // from the engine's own line for each low-level pipeline built in a frame, after the gate's summary line.
+    {
+        const QString gateEnd = QStringLiteral("startup shader build: ");
+        const QString built = QStringLiteral("' built its pipeline in the frame");
+        int lastGateLine = -1;
+        const QStringList lines = gLastOutput.split('\n');
+        for (int i = 0; i < lines.size(); ++i)
+            if (lines[i].contains(gateEnd) && lines[i].contains(QStringLiteral(" from cache) in "))) lastGateLine = i;
+        int encode = 0, blend = 0;
+        for (int i = lastGateLine + 1; lastGateLine >= 0 && i < lines.size(); ++i) {
+            if (!lines[i].contains(built)) continue;
+            if (lines[i].contains(QStringLiteral("material 'Jahshaka/DisplayEncode'"))) ++encode;
+            if (lines[i].contains(QStringLiteral("material 'SMAA/NeighborhoodBlending"))) ++blend;   // + "/P<preset>"
+        }
+        std::printf("   %s, the final target's pipelines built in the editor's frames: DisplayEncode %d, "
+                    "SMAA/NeighborhoodBlending %d\n", run, encode, blend);
+        CHECK(lastGateLine >= 0, "the gate's summary line is in the run's output");
+        CHECK(encode == 0 && blend == 0,
+              "the editor's frames built no final-target pipeline (the gate drew into the window's format and samples)");
+    }
 }
 
 /// THE PART's MARKERS (ORPHAN-REDS-1 item 6, 2026-11-03): `part-<mode>.started` at a part's start, `.green` at its green
