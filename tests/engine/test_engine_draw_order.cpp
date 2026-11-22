@@ -145,6 +145,7 @@ int main()
 
     e->destroyView(v);
     enginetest::frames(e, 1);
+    engine.reset();   // the engine's teardown logs; the verdict is the row's last line
     if (failures) std::printf("engine.draw_order: FAILED (%d)\n", failures);
     else std::printf("engine.draw_order: PASSED\n");
     return failures ? 1 : 0;
