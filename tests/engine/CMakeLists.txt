@@ -637,7 +637,8 @@ jah_no_display(engine.compute_job_slots)
 # program key is not filed; clearShaderCache clears the file memo; equal text with slots of other types never shares a
 # program (F2a); the render system's properties are the key's (F2b); a second launch's prewarmed code serves the first
 # dispatch with no parse, and one made BEFORE that code is published joins its code job (no parse: the warm boot's
-# atmosphere dispatches). Three NULL Roots in turn: a CPU code row.
+# atmosphere dispatches); a shared job's asynchronous publish applies and consumes none of its values - each program gets them whole at
+# its own first dispatch (stage 7a: the voxel clear's fClearValue ITEM_NOT_FOUND). Four NULL Roots in turn: a CPU code row.
 add_executable(test_compute_record_hit test_compute_record_hit.cpp)
 set_target_properties(test_compute_record_hit PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

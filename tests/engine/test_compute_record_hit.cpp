@@ -19,12 +19,16 @@
 //       - and the job's first dispatch builds its PSO with NO parse.
 //   (8) THE JOIN (the final read's item 3a): the same, dispatched BEFORE the prewarmed code is published (its program
 //       enters the code cache only at the code job's publish, on the main thread) - the hit joins the job: NO parse.
+//   (9) THE SHARED JOB's PUBLISH (stage 7a): an asynchronously published permutation writes none of the job's values
+//       (they are its current permutation's) and consumes none; each program gets them whole at its own first dispatch,
+//       and a dispatch clears with ITS value - read back from the program's parameters.
 #include <OgreAbiUtils.h>
 #include <OgreGpuProgramManager.h>
 #include <OgreHlmsCompute.h>
 #include <OgreHlmsComputeJob.h>
 #include <OgreHlmsManager.h>
 #include <OgreHlmsAsyncCompiler.h>
+#include <OgreShaderParams.h>
 #include <OgreRenderSystem.h>
 #include <OgreRenderSystemCapabilities.h>
 #include <OgreResourceGroupManager.h>
@@ -42,6 +46,7 @@
 #include <fstream>
 #include <memory>
 #include <string>
+#include <vector>
 #include <unistd.h>
 
 static int gFailures = 0;
@@ -70,9 +75,36 @@ std::string templateText(const std::string &marker) {
     return "#version 450\n// " + marker + "\nlayout( local_size_x = 1 ) in;\nvoid main() { @insertpiece( Body ) }\n";
 }
 
+/// Every parameters object a PSO was given, in the order they were made (law 9 reads the values a dispatch applied).
+std::vector<Ogre::GpuProgramParametersSharedPtr> gMadeParams;
+bool gCaptureParams = false;   // law 9 only, released before its Root goes
+
 /// THE NULL RENDER SYSTEM MAKES NO GpuProgramManager (each real one makes its own) and a PSO's parameters come from one:
-/// one that creates nothing stands in.
+/// one that creates nothing stands in. Its parameters DECLARE the shared clear job's two names - fClearValue (float4)
+/// and uClearValue (uint4), each at offset 0 of its buffer - so a value applied to a program is READ BACK from it (law 9);
+/// the laws before it apply none.
 class NullGpuProgramManager final : public Ogre::GpuProgramManager {
+public:
+    Ogre::GpuProgramParametersSharedPtr createParameters() override {
+        Ogre::GpuProgramParametersSharedPtr p = Ogre::GpuProgramManager::createParameters();
+        Ogre::GpuNamedConstantsPtr named(OGRE_NEW Ogre::GpuNamedConstants());
+        Ogre::GpuConstantDefinition f;
+        f.constType = Ogre::GCT_FLOAT4;
+        f.physicalIndex = 0u;
+        f.logicalIndex = 0u;
+        f.elementSize = 4u;
+        f.arraySize = 1u;
+        named->map.emplace("fClearValue", f);
+        Ogre::GpuConstantDefinition u = f;
+        u.constType = Ogre::GCT_UINT4;
+        named->map.emplace("uClearValue", u);
+        named->floatBufferSize = 4u;
+        named->uintBufferSize = 4u;
+        p->_setNamedConstants(named);
+        if (gCaptureParams) gMadeParams.push_back(p);
+        return p;
+    }
+private:
     Ogre::Resource *createImpl(const Ogre::String &, Ogre::ResourceHandle, const Ogre::String &, bool,
                                Ogre::ManualResourceLoader *, Ogre::GpuProgramType, const Ogre::String &) override {
         return nullptr;
@@ -336,6 +368,84 @@ static int run() {
               "(8) a dispatch while the record's code job is in flight JOINS it: parsed +%llu, PSOs +%llu",
               (unsigned long long)(hc->getJahParsedInFrame() - p0), (unsigned long long)(hc->getJahPsoInFrame() - s0));
         hc->destroyComputeJob("join/a");
+        compiler->setNumThreads(0u);
+        Ogre::HlmsCompute::msJahComputeKeyHook = nullptr;
+    }
+
+    // (9) THE SHARED JOB's PUBLISH (stage 7a): one job, two permutations - A (fClearValue, a float target's clear) and B
+    // (uClearValue, a uint target's): the voxel clear's ComputeTools job interleaves them. A is built and dispatched with
+    // V0; the job then holds A's NEXT value V1, pending, when the compiler publishes B (a publish runs between two
+    // dispatches: HlmsCompute::waitForAsyncPermutation, the frame's publish). 8010ec7bb FORCED the job's values onto every
+    // published program: B's took V1 (on a program that declares no fClearValue, Ogre's ITEM_NOT_FOUND - twice on every
+    // first launch) and the visit cleared V1's dirty flag, so A's next dispatch, which applies only dirty values on a
+    // counter change, kept V0 - A cleared with a STALE value. The law: a publish writes no value and consumes none; each
+    // program gets the job's values whole at its own first dispatch; a dispatch clears with ITS value.
+    {
+        Launch l;
+        if (!l.boot(dir, "hit-4.log")) { std::printf("FAIL: the fourth NULL boot\n"); return 1; }
+        Ogre::HlmsCompute *hc = l.hc;
+        Ogre::HlmsCompute::msJahComputeKeyHook = hook;
+        Ogre::HlmsAsyncCompiler *compiler = l.root->getHlmsManager()->getAsyncCompiler();
+        compiler->setNumThreads(1u, 0);   // one service thread: the publishes come in request order
+        Ogre::HlmsComputeJob *job = makeJob(hc, "clear/shared", "JahHitA");
+        const auto pending = [&](const char *name, float base) {   // what ComputeTools::clearUav does before its dispatch
+            Ogre::ShaderParams &sp = job->getShaderParams("default");
+            sp.mParams.clear();
+            Ogre::ShaderParams::Param p;
+            p.name = name;
+            if (name[0] == 'u') {
+                const Ogre::uint32 v[4] = { Ogre::uint32(base), Ogre::uint32(base) + 1u, Ogre::uint32(base) + 2u,
+                                            Ogre::uint32(base) + 3u };
+                p.setManualValue(v, 4u);
+            } else {
+                const float v[4] = { base, base + 1.0f, base + 2.0f, base + 3.0f };
+                p.setManualValue(v, 4u);
+            }
+            sp.mParams.push_back(p);
+            sp.setDirty();
+        };
+        const auto stillPending = [&]() {
+            const Ogre::ShaderParams &sp = job->getShaderParams("default");
+            return !sp.mParams.empty() && sp.mParams[0].isDirty;
+        };
+        const auto floatOf = [](const Ogre::GpuProgramParametersSharedPtr &p) { return p ? *p->getFloatPointer(0) : -1.0f; };
+        const auto uintOf = [](const Ogre::GpuProgramParametersSharedPtr &p) { return p ? *p->getUnsignedIntPointer(0) : 0u; };
+        gMadeParams.clear();
+        gCaptureParams = true;
+        // A: requested, published, dispatched with V0 = 1
+        hc->setDeferredDispatch(true);
+        job->setProperty("jah_clear_kind", 0);
+        pending("fClearValue", 1.0f);
+        hc->dispatch(job, nullptr, nullptr);
+        compiler->waitForAll();
+        hc->setDeferredDispatch(false);
+        hc->dispatch(job, nullptr, nullptr);
+        const Ogre::GpuProgramParametersSharedPtr a = gMadeParams.size() == 1u ? gMadeParams[0] : nullptr;
+        CHECK(a && floatOf(a) == 1.0f, "(9) A built asynchronously and dispatched: its program holds V0 (%g)", floatOf(a));
+        // B: requested
+        hc->setDeferredDispatch(true);
+        job->setProperty("jah_clear_kind", 1);
+        pending("uClearValue", 20.0f);
+        hc->dispatch(job, nullptr, nullptr);
+        // the job back on A with A's next value V1 = 5 pending, when B publishes
+        job->setProperty("jah_clear_kind", 0);
+        pending("fClearValue", 5.0f);
+        compiler->waitForAll();
+        hc->setDeferredDispatch(false);
+        const Ogre::GpuProgramParametersSharedPtr b = gMadeParams.size() == 2u ? gMadeParams[1] : nullptr;
+        CHECK(b && floatOf(b) == 0.0f && uintOf(b) == 0u && stillPending(),
+              "(9) B's publish wrote no value into its program (float %g, uint %u; 8010ec7bb: the job's V1) and consumed "
+              "none (A's V1 %s)", floatOf(b), uintOf(b), stillPending() ? "still pending" : "CONSUMED");
+        hc->dispatch(job, nullptr, nullptr);
+        CHECK(floatOf(a) == 5.0f, "(9) A's next dispatch clears with ITS value V1 (%g; 8010ec7bb: the stale V0 = 1)",
+              floatOf(a));
+        job->setProperty("jah_clear_kind", 1);
+        pending("uClearValue", 30.0f);
+        hc->dispatch(job, nullptr, nullptr);
+        CHECK(uintOf(b) == 30u, "(9) B's own first dispatch clears with B's value (%u)", uintOf(b));
+        gCaptureParams = false;
+        gMadeParams.clear();
+        hc->destroyComputeJob("clear/shared");
         compiler->setNumThreads(0u);
         Ogre::HlmsCompute::msJahComputeKeyHook = nullptr;
     }
