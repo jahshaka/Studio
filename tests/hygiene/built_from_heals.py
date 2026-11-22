@@ -19,6 +19,8 @@ and B that both depend on one "library" L (lib.txt), each built by a `--target` 
   8 a whole build at an equal state keeps the reach's targets beside `all`; 9 jah_built_reach without JAH_BUILT_REACH refuses;
   11 a claim never outlives a build the stamp did not see: A built by hand at an edited state, the edit reverted - the next
     pass does not claim A (its output is from the edit); a by-reach pass claims it again;
+  12 `all` the same way: a DEFAULT target built by hand at an edited state, the edit reverted - a by-reach pass does not carry the
+    old `all`; a whole pass claims it again (and says nothing about its own rebuilds);
   10 THE RECORDS (scripts/gate_runlog.py coverage + stale_build, scripts/row_targets.py): after 6 (A built at the old tip, B at
     this one) a row needing A is `built.uncovered` [A] - its record is never its tip's - and a row needing B is covered.
 No GPU, no display; seconds. usage: built_from_heals.py <source dir>"""
@@ -97,6 +99,7 @@ try:
         "add_custom_target(A DEPENDS ${CMAKE_BINARY_DIR}/A.txt)\nadd_custom_target(B DEPENDS ${CMAKE_BINARY_DIR}/B.txt)\n"
         "set_target_properties(A PROPERTIES JAH_ARTEFACT ${CMAKE_BINARY_DIR}/A.txt)\n"
         "set_target_properties(B PROPERTIES JAH_ARTEFACT ${CMAKE_BINARY_DIR}/B.txt)\n"
+        "set_target_properties(app PROPERTIES JAH_ARTEFACT ${CMAKE_BINARY_DIR}/app.txt)\n"
         "enable_testing()\nadd_test(NAME ra COMMAND sh -c true)\nadd_test(NAME rb COMMAND sh -c true)\n"
         "set_tests_properties(ra PROPERTIES JAH_BUILD_TARGETS A)\nset_tests_properties(rb PROPERTIES JAH_BUILD_TARGETS B)\n"
         "include(BuiltFrom)\n")
@@ -218,6 +221,25 @@ try:
     want("11 a by-reach pass of A claims it again, and the next whole pass keeps it (the stamp touched after A was built)",
          rc == 0 and open(os.path.join(B, "A.txt")).read().strip() == lib.strip() and "A" in st2.get("targets", "").split(","),
          f"rc {rc} {st} then {st2}")
+
+    # 12 (the re-read's L5) `all` THE SAME WAY: a whole pass claims `all`; main.txt edited, the default target `app` built BY HAND,
+    # the edit reverted: a by-reach pass at this state must not carry the old `all` (app.txt is from the edit); a whole pass
+    # rebuilds it and claims `all` again
+    rc, out, st = build()
+    want("12 a whole pass claims `all`", rc == 0 and "all" in st.get("targets", "").split(","), f"rc {rc} {st}")
+    time.sleep(0.05)
+    main = open(os.path.join(S, "main.txt")).read()
+    open(os.path.join(S, "main.txt"), "w").write("HAND\n")
+    subprocess.run(["cmake", "--build", B, "--target", "app"], capture_output=True, text=True)
+    open(os.path.join(S, "main.txt"), "w").write(main)
+    rc, out, st = reach("B")
+    app = open(os.path.join(B, "app.txt")).read().strip()
+    want("12 after a hand build of a DEFAULT target at an edited state, reverted: a by-reach pass does NOT carry `all`",
+         rc == 0 and app == "HAND" and "all" not in st.get("targets", "").split(",") and "B" in st.get("targets", "").split(","),
+         f"rc {rc} {st} app.txt {app}")
+    rc, out, st = build()
+    want("12 a whole pass rebuilds it and claims `all` again", rc == 0 and open(os.path.join(B, "app.txt")).read() == main
+         and "all" in st.get("targets", "").split(",") and "no longer claimed" not in out, f"rc {rc} {st}")
 finally:
     shutil.rmtree(T, ignore_errors=True)
 print("tooling.built_from_heals: " + ("PASS" if not fails else f"FAIL ({len(fails)})"), flush=True)

@@ -1114,6 +1114,7 @@ add_custom_command(
     COMMENT "Hashing the startup shader pass's dependency closure for its key"
     VERBATIM)
 add_custom_target(JahStartupPassId DEPENDS "${JAH_STARTUP_PASS_HEADER}")
+set_target_properties(JahStartupPassId PROPERTIES JAH_ARTEFACT "${JAH_STARTUP_PASS_HEADER}")   # BUILT_FROM's claims (cmake/BuiltFrom.cmake)
 
 # (OGRE_PATCH_STACK — the 88 patch FILENAMES a capture bundle used to list — is
 # DELETED with the patch stack itself, 2026-09-22: the engine source is our fork

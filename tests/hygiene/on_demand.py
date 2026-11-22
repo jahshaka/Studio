@@ -92,6 +92,18 @@ def rows(src, build):
          % "".join("\n         " + r for r in unk + mixed))
     want(scripts > 0, "the code rows whose command is a script are counted (%d; %d declare `all`: %s)"
          % (scripts, len(alls), ", ".join(alls) or "none"))
+    # A CLAIM THE STAMP CAN TAKE BACK (the final read's L2/L5): cmake/BuiltFrom.cmake drops an old claim whose artefact was built
+    # after the stamp - so every target a row names must HAVE an artefact in the build's map (<build>/built_from_artefacts.txt:
+    # an executable's or library's file, a custom target's JAH_ARTEFACT); a name without one could keep a claim a hand build voided
+    amap = os.path.join(build, "built_from_artefacts.txt")
+    have = {l.split("=", 1)[0] for l in open(amap).read().splitlines() if "=" in l} if os.path.isfile(amap) else set()
+    named = set()
+    for t in json.loads(raw).get("tests", []):
+        props = {p["name"]: p["value"] for p in t.get("properties", [])}
+        named |= {x for x in row_targets._names(props.get("JAH_BUILD_TARGETS")) if x not in ("all", "none")}
+    lack = sorted(x for x in named if x not in have)
+    want(bool(have) and not lack, "every target a row names has an artefact in the build's map (%d named, %d in the map)%s"
+         % (len(named), len(have), "".join("\n         " + x + " (no file: give its custom target a JAH_ARTEFACT)" for x in lack)))
 
 
 def toy(src):

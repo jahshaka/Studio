@@ -11,8 +11,9 @@
 # stamp's `targets=` line says which targets it claims (below).
 # scripts/gate_runlog.py copies it into each record (`tip.built`); ci_gate_check.py treats a record whose
 # built studio/irisgl sha is not the tip's — or was built dirty, untracked files included, or carries no
-# stamp at all — as studio_dirty (never the tip's run). Every gate first runs a no-op `cmake --build`
-# (gate_runlog.prebuild): a stale binary or a `--target` build's leftovers are rebuilt and the stamp is fresh.
+# stamp at all — as studio_dirty (never the tip's run); gate_runlog.stale_build refuses a record built dirty, stale, from
+# another commit or by a pass that did not build its row's targets. NOTHING rebuilds before a gate by itself: the lead tools
+# build before they run rows (util.build, util.build_rows), and a claim built after the stamp is dropped (below).
 #
 # THE CONTENT (URGENT #187): ninja rebuilds by mtime, so a source restored with an OLD mtime (tar xf, cp -p) rebuilt nothing
 # and this always-run step stamped the tree as it is now - a stamp naming content the binary was never built from.
@@ -114,22 +115,38 @@ if(CMAKE_SCRIPT_MODE_FILE)
         # old claim is dropped. Its artefact is the build's own map (MAP: $<TARGET_FILE> of each executable and library, a
         # custom target's JAH_ARTEFACT); the stamp is TOUCHED by every by-reach pass, so a target the tools just built is older
         # than it (built_from_heals case 11).
+        # `all` is checked the same way through its lines `all=<file>` (every default target's artefact): a default target
+        # built by hand after the stamp voids the old `all` (the targets THIS pass built are its own claim: never checked)
         set(art "")
         if(DEFINED MAP AND EXISTS "${MAP}")
             file(STRINGS "${MAP}" art)
         endif()
-        foreach(t IN LISTS old_targets)
-            set(keep TRUE)
+        set(drop "")
+        set(allfiles "")   # a whole pass (not REACH) built every default target itself: those claims are its own
+        if(NOT REACH)
             foreach(line IN LISTS art)
-                if(line MATCHES "^${t}=(.+)$")   # (CMAKE_MATCH_1 is read in the NEXT command: an if's arguments expand first)
-                    set(f "${CMAKE_MATCH_1}")
-                    if(EXISTS "${f}" AND "${f}" IS_NEWER_THAN "${OUT}")
-                        set(keep FALSE)
-                        message(STATUS "BUILT_FROM: ${t} was built after this stamp (by hand, at another state?) - no longer claimed")
-                    endif()
+                if(line MATCHES "^all=(.+)$")
+                    list(APPEND allfiles "${CMAKE_MATCH_1}")
                 endif()
             endforeach()
-            if(keep)
+        endif()
+        foreach(line IN LISTS art)
+            if(line MATCHES "^([^=]+)=(.+)$")   # (CMAKE_MATCH_n is read in the NEXT command: an if's arguments expand first)
+                set(n "${CMAKE_MATCH_1}")
+                set(f "${CMAKE_MATCH_2}")
+                if(n IN_LIST old_targets AND NOT n IN_LIST drop AND NOT f IN_LIST allfiles AND NOT (n STREQUAL "all" AND NOT REACH)
+                   AND EXISTS "${f}" AND "${f}" IS_NEWER_THAN "${OUT}")
+                    list(FIND now "${n}" mine)
+                    get_filename_component(fn "${f}" NAME)
+                    if(n STREQUAL "all" OR mine EQUAL -1)
+                        list(APPEND drop "${n}")
+                        message(STATUS "BUILT_FROM: ${n} (${fn}) was built after this stamp (by hand, at another state?) - no longer claimed")
+                    endif()
+                endif()
+            endif()
+        endforeach()
+        foreach(t IN LISTS old_targets)
+            if(NOT t IN_LIST drop)
                 list(APPEND now ${t})
             endif()
         endforeach()
@@ -187,11 +204,17 @@ function(_jah_artefacts dir out)
     foreach(t IN LISTS ts)
         get_target_property(type ${t} TYPE)
         if(type MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY)$")
-            string(APPEND lines "${t}=$<TARGET_FILE:${t}>\n")
+            set(f "$<TARGET_FILE:${t}>")
         elseif(type STREQUAL "UTILITY")
-            get_target_property(a ${t} JAH_ARTEFACT)
-            if(a)
-                string(APPEND lines "${t}=${a}\n")
+            get_target_property(f ${t} JAH_ARTEFACT)
+        else()
+            set(f "")
+        endif()
+        if(f)
+            string(APPEND lines "${t}=${f}\n")
+            get_target_property(excluded ${t} EXCLUDE_FROM_ALL)
+            if(NOT excluded AND NOT t MATCHES "^jah_built_(from|reach)$")
+                string(APPEND lines "all=${f}\n")   # a default target's file: what `all` claims
             endif()
         endif()
     endforeach()
