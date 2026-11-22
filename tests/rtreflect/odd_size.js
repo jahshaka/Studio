@@ -43,16 +43,17 @@ engine.view.lookAt(view, {eye: [0, 1.6, 6], target: [0, 0.4, -4]});
 engine.view.declareRoutes(view, {integrate: true, reflection: true, store: true});
 
 engine.frames(89);
-const pic = engine.view.readPixels({view});   // the 90th frame, drawn and read
-host.check({ok: pic.width === W && pic.height === H, what: "the picture reads back " + pic.width + " x " + pic.height});
+const shot = engine.view.readPixels({view});   // the 90th frame, drawn and read: held natively, by its handle
+host.check({ok: shot.width === W && shot.height === H, what: "the picture reads back " + shot.width + " x " + shot.height});
+const pic = shot.picture;
 
 // THE FLOOR'S REFLECTION: the lower half of the frame (the wall's reflection is the bright band under the horizon)
 const y0 = Math.floor(H / 2) + 4, y1 = H - 2, x0 = Math.floor(W / 4), x1 = Math.floor(W * 3 / 4);
-const colRem = engine.view.columnStep(pic, {axis: "column", a: W - 1, b: W - 2, from: y0, to: y1});
-const colPair = engine.view.columnStep(pic, {axis: "column", a: W - 2, b: W - 3, from: y0, to: y1});
-const rowRem = engine.view.columnStep(pic, {axis: "row", a: H - 1, b: H - 2, from: x0, to: x1});
-const rowPair = engine.view.columnStep(pic, {axis: "row", a: H - 2, b: H - 3, from: x0, to: x1});
-const beside = engine.view.mean(pic, {x0: W - 2, y0, x1: W - 1, y1});
+const colRem = engine.picture.columnStep(pic, {axis: "column", a: W - 1, b: W - 2, from: y0, to: y1});
+const colPair = engine.picture.columnStep(pic, {axis: "column", a: W - 2, b: W - 3, from: y0, to: y1});
+const rowRem = engine.picture.columnStep(pic, {axis: "row", a: H - 1, b: H - 2, from: x0, to: x1});
+const rowPair = engine.picture.columnStep(pic, {axis: "row", a: H - 2, b: H - 3, from: x0, to: x1});
+const beside = engine.picture.mean(pic, {x0: W - 2, y0, x1: W - 1, y1});
 const lum = (beside[0] + beside[1]) / 2;
 host.check({ok: lum > 20, what: "the floor beside the remainder reflects the wall (" + lum.toFixed(1) + " codes)"});
 host.check({ok: colRem <= colPair + 2,

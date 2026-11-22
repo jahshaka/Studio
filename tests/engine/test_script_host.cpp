@@ -253,8 +253,8 @@ int main()
     Registry &eng = engHost.registry();
     std::size_t engineCommands = 0;
     for (const CommandInfo *c : eng.commands()) engineCommands += c->name.rfind("engine.", 0) == 0;
-    check(engineCommands == 20 && eng.validate().empty(),
-          "the 20 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
+    check(engineCommands == 23 && eng.validate().empty(),
+          "the 23 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
     const Value fakeScene(eng.hold("scene", std::make_shared<int>(0))), fakeNode(eng.name("node", 1));
     check(failedWith(eng.call("engine.node.setTransform",
                               {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
@@ -265,29 +265,74 @@ int main()
           "with no engine every engine command FAILS saying why the engine is absent");
     Value::Bytes px(4 * 2 * 4);
     for (std::size_t i = 0; i < px.size(); ++i) px[i] = std::uint8_t(i * 7);   // byte i = 7 i: a column steps 28 a channel
-    const Value pic(Value::Object{{"width", Value(4)}, {"height", Value(2)}, {"rgba", Value::bytes(px)}});
+    const Result made4x2 =
+        eng.call("engine.picture.create", {Value(Value::Object{{"width", Value(4)}, {"height", Value(2)}, {"rgba", Value::bytes(px)}})});
+    const Value pic = made4x2.value["picture"];
     unsigned long long h = 14695981039346656037ull;
     for (std::uint8_t b : px) { h ^= b; h *= 1099511628211ull; }
     char hex[17];
     std::snprintf(hex, sizeof hex, "%016llx", h);
-    check(eng.call("engine.view.hash", {pic}).value == Value(hex), std::string("engine.view.hash is the FNV-1a 64 of the bytes (") + hex + ")");
+    check(made4x2.status == Status::Ok && made4x2.value["width"] == Value(4) && made4x2.value["height"] == Value(2) &&
+              eng.call("engine.picture.hash", {pic}).value == Value(hex),
+          std::string("PICTURES BY HANDLE: engine.picture.create answers {picture, width, height}; engine.picture.hash is the "
+                      "FNV-1a 64 of the bytes, read in place (") + hex + ")");
     const auto span = [](const char *axis, int a, int b, int from, int to) {
         return Value(Value::Object{{"axis", Value(axis)}, {"a", Value(a)}, {"b", Value(b)}, {"from", Value(from)}, {"to", Value(to)}});
     };
     // column 3 against column 2: every byte 4 apart = 28 codes; row 1 against row 0: 16 bytes apart = 112 codes
-    check(eng.call("engine.view.columnStep", {pic, span("column", 3, 2, 0, 2)}).value == Value(28.0) &&
-              eng.call("engine.view.columnStep", {pic, span("row", 1, 0, 1, 3)}).value == Value(112.0),
-          "engine.view.columnStep: a column step of 4 bytes = 28 codes, a row step of 16 bytes = 112 codes");
+    check(eng.call("engine.picture.columnStep", {pic, span("column", 3, 2, 0, 2)}).value == Value(28.0) &&
+              eng.call("engine.picture.columnStep", {pic, span("row", 1, 0, 1, 3)}).value == Value(112.0),
+          "engine.picture.columnStep: a column step of 4 bytes = 28 codes, a row step of 16 bytes = 112 codes");
     const Value rect(Value::Object{{"x0", Value(1)}, {"y0", Value(0)}, {"x1", Value(3)}, {"y1", Value(2)}});
     // pixels (1,0) (2,0) (1,1) (2,1) = byte bases 4, 8, 20, 24: the red mean 7 * 14 = 98, each channel one step up
-    check(eng.call("engine.view.mean", {pic, rect}).value ==
+    check(eng.call("engine.picture.mean", {pic, rect}).value ==
               Value(Value::Array{Value(98.0), Value(105.0), Value(112.0), Value(119.0)}),
-          "engine.view.mean over [1,3) x [0,2) = [98, 105, 112, 119]");
-    check(failedWith(eng.call("engine.view.columnStep", {pic, span("column", 4, 2, 0, 2)}), "outside the picture") &&
-              failedWith(eng.call("engine.view.mean", {Value(Value::Object{{"width", Value(4)}, {"height", Value(3)},
-                                                                            {"rgba", Value::bytes(px)}}), rect}),
+          "engine.picture.mean over [1,3) x [0,2) = [98, 105, 112, 119]");
+    check(eng.call("engine.picture.bytes", {pic}).value == Value::bytes(px),
+          "engine.picture.bytes copies the picture into the script only when asked (the same bytes)");
+    check(failedWith(eng.call("engine.picture.columnStep", {pic, span("column", 4, 2, 0, 2)}), "outside the picture") &&
+              failedWith(eng.call("engine.picture.create", {Value(Value::Object{{"width", Value(4)}, {"height", Value(3)},
+                                                                                {"rgba", Value::bytes(px)}})}),
                          "not width x height x 4"),
-          "a span outside the picture and a picture whose bytes are not width x height x 4 FAIL");
+          "a span outside the picture and bytes that are not width x height x 4 FAIL");
+    check(eng.call("engine.picture.release", {pic}).value == Value(true) &&
+              failedWith(eng.call("engine.picture.hash", {pic}), "is stale (its picture was released)"),
+          "a released picture's handle is STALE by name");
+    {
+        // THE CAP (512 MiB of live pictures): two 8192 x 8192 RGBA pictures (256 MiB each) fill it EXACTLY (the bound is
+        // in); one more pixel FAILS by name; one released, it is taken (the cap counts the LIVE pictures)
+        // (the arguments built once: each create's peak is the argument, the host's checked copy and the held picture)
+        Value::Array big{Value(Value::Object{{"width", Value(8192)}, {"height", Value(8192)},
+                                             {"rgba", Value::bytes(Value::Bytes(std::size_t(8192) * 8192 * 4, 3))}})};
+        const Result p1 = eng.call("engine.picture.create", big), p2 = eng.call("engine.picture.create", big);
+        big.clear();
+        const Value one(Value::Object{{"width", Value(1)}, {"height", Value(1)}, {"rgba", Value::bytes({1, 2, 3, 4})}});
+        const Result p3 = eng.call("engine.picture.create", {one});
+        const bool full = p1.status == Status::Ok && p2.status == Status::Ok &&
+                          failedWith(p3, "would hold 536870916 bytes, over the cap 536870912 (512 MiB): release one first");
+        eng.call("engine.picture.release", {p1.value["picture"]});
+        const Result p4 = eng.call("engine.picture.create", {one});
+        check(full && p4.status == Status::Ok, "the live pictures are capped at 512 MiB: past it a picture FAILS by name; a "
+                                               "release makes room (" + p3.message.substr(0, 70) + ")");
+        eng.call("engine.picture.release", {p2.value["picture"]});
+        eng.call("engine.picture.release", {p4.value["picture"]});
+    }
+    {
+        // A PICTURE LIVES ACROSS CALLS AND RUNS until released (MCP-ON-HOST-1); jahengine releases the scoped ones at its
+        // script's end (Registry::releaseScoped)
+        Host live;
+        live.setConsole([](const std::string &) {});
+        registerEngineCommands(live, nullptr, "no device here", false);
+        const Result r1 = live.run("globalThis.p = engine.picture.create({width: 1, height: 1, rgba: new Uint8Array([1, 2, 3, 4])});\n"
+                                   "host.check({ok: p.width === 1, what: 'made'});\n", "make.js");
+        const Result r2 = live.run("host.check({ok: engine.picture.hash(p.picture).length === 16, what: 'still held'});\n",
+                                   "later.js");
+        live.registry().releaseScoped();
+        const Result r3 = live.run("engine.picture.hash(p.picture);\n", "after.js");
+        check(r1.status == Status::Ok && r2.status == Status::Ok && live.checksFailed() == 0 && r3.status == Status::Failed &&
+                  r3.message.find("is stale") != std::string::npos,
+              "a picture handle lives across runs until released; the host's end-of-script release makes it stale");
+    }
 
     // 6. THE ROUTE DECLARATION's JUDGEMENT (engine.view.declareRoutes; RouteDeclaration.h): exactly requireRoutes' law
     {
