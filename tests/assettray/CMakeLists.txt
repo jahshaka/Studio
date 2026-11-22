@@ -85,7 +85,8 @@ jah_ship_row(library.model)   # THE SHIP SET (TEST-CUT-1)
 # library; the trace's negative controls. THE STATED LIMIT (ruled call 3): only the default connection
 # is traced — a per-asset query moved onto a worker connection would not be seen. The trace needs the
 # SYSTEM SQLite the Qt driver uses, linked as the app links it (the Studio CMakeLists.txt's SQLite3 block).
-jah_d11_suite(test_library_statements library.statements test_library_statements.cpp)
+jah_d11_suite(test_library_statements library.statements test_library_statements.cpp
+    ${CMAKE_SOURCE_DIR}/tests/support/libraryfixture.cpp)
 find_package(SQLite3 QUIET)
 if(SQLite3_FOUND)
     target_link_libraries(test_library_statements PRIVATE SQLite::SQLite3)

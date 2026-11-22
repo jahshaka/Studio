@@ -17,6 +17,9 @@ For more information see the LICENSE file
 //     the query log's by N; a raw QSqlQuery loop of N grows only the traced count; a trigger's
 //     sub-statement and the read's own PRAGMA are not counted; with JAH_DB_STATEMENT_TRACE unset (a
 //     child run of this binary) `traced` is false and `statements` 0 — nothing is registered.
+//   * THE GENERATOR (tests/support/libraryfixture.h) writes the library the laws run on; its rows are
+//     checked here by what the listings see of them. `--generate <db> <store> <assets> <projects>` writes
+//     one library and exits (the column comparison's input; stage 2's roots).
 //
 // THE STATED LIMIT (ruled call 3): only the default connection is traced; a per-asset query moved onto
 // a worker connection would not be seen here.
@@ -24,6 +27,8 @@ For more information see the LICENSE file
 // JAH_DB_STATEMENT_TRACE=1 (tests/assettray/CMakeLists.txt).
 
 #include <QApplication>
+#include <QDir>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QProcess>
 #include <QProcessEnvironment>
@@ -34,6 +39,8 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/database/databasereads.h"
+#include "services/assettray.h"
+#include "../support/libraryfixture.h"
 
 static int failures = 0;
 #define CHECK(cond, ...)                                                                   \
@@ -61,6 +68,55 @@ static int envUnsetControl(const QString &dbPath)
     db.closeDatabase();
     QFile::remove(dbPath);
     return 0;
+}
+
+/// `--generate`: one library, written and closed.
+static int generateOnly(const QStringList &args)
+{
+    const QString dbPath = args.at(2), store = args.at(3);
+    const int assets = args.at(4).toInt(), projects = args.at(5).toInt();
+    QFile::remove(dbPath);
+    Database db;
+    if (!db.initializeDatabase(dbPath)) { std::printf("generate: open failed\n"); return 2; }
+    db.createAllTables();
+    libraryfixture::Library lib;
+    QString error;
+    QElapsedTimer timer;
+    timer.start();
+    const bool ok = libraryfixture::grow(&db, store, assets, projects, lib, {}, &error);
+    std::printf("generate: %s — %d assets, %d projects in %lld ms (thumbnails %lld B); open project %s%s%s\n",
+                ok ? "ok" : "FAILED", lib.assets, int(lib.projects.size()), static_cast<long long>(timer.elapsed()),
+                static_cast<long long>(lib.thumbnailBytes), qPrintable(lib.openProject), ok ? "" : " — ",
+                qPrintable(error));
+    std::printf("generate: texture %s material %s picked %s home %s homePicked %s object %s mesh %s project %s\n",
+                qPrintable(lib.textures.value(1)), qPrintable(lib.assetsMaterials.value(0)),
+                qPrintable(lib.stampedTextures.value(0)), qPrintable(lib.homeMaterials.value(0)),
+                qPrintable(lib.homePicked.value(0)),
+                qPrintable(lib.objects.value(0)), qPrintable(lib.meshes.value(0)), qPrintable(lib.projects.value(1)));
+    db.closeDatabase();
+    return ok ? 0 : 1;
+}
+
+/// The generator's rows, as the listings see them.
+static void theGenerator(Database &db, const libraryfixture::Library &lib, int assets)
+{
+    CHECK(lib.assets == assets && lib.textures.size() == assets * 46 / 100 && lib.stampedTextures.size() == assets * 7 / 100
+              && lib.homeMaterials.size() == assets / 10 && lib.homePicked.size() == assets / 10
+              && lib.objects.size() == assets / 10,
+          "the mix at %d: %d textures, %d stamped, %d Materials-home materials, %d models", assets,
+          int(lib.textures.size()), int(lib.stampedTextures.size()), int(lib.homeMaterials.size()),
+          int(lib.objects.size()));
+    // The Assets page lists the textures, the Assets-home materials and the models (a Mesh is a member);
+    // the stamped pictures fold into their materials unless the members are shown.
+    const int shown = assets * (46 + 7 + 10) / 100;
+    const int listed = int(assettray::libraryList(&db, false).size());
+    const int withMembers = int(assettray::libraryList(&db, true).size());
+    CHECK(listed == shown, "the Library listing at %d assets holds %d rows (%d)", assets, shown, listed);
+    CHECK(withMembers == shown + int(lib.stampedTextures.size()), "...and %d with the member textures shown (%d)",
+          shown + int(lib.stampedTextures.size()), withMembers);
+    CHECK(db.fetchAssetsInHome(assethome::Kind::MaterialsLibrary, static_cast<int>(ModelTypes::Material)).size()
+              == lib.homeMaterials.size(),
+          "the Materials home holds the %d generated materials", int(lib.homeMaterials.size()));
 }
 
 static void theTrace(Database &db)
@@ -112,6 +168,7 @@ int main(int argc, char **argv)
     QApplication app(argc, argv);
     const QStringList args = QCoreApplication::arguments();
     if (args.size() == 3 && args.at(1) == QLatin1String("--env-unset-control")) return envUnsetControl(args.at(2));
+    if (args.size() == 6 && args.at(1) == QLatin1String("--generate")) return generateOnly(args);
 
     CHECK(qEnvironmentVariable("JAH_DB_STATEMENT_TRACE") == QLatin1String("1"),
           "the row runs with JAH_DB_STATEMENT_TRACE=1");
@@ -141,8 +198,24 @@ int main(int argc, char **argv)
 
     theTrace(db);
 
+    // ---- THE LIBRARY AT 1,000 ASSETS / 50 PROJECTS ----------------------------------------------------
+    const QString store = QDir::currentPath() + QStringLiteral("/library_statements_store");
+    QDir(store).removeRecursively();
+    QDir(store + QStringLiteral("-sources")).removeRecursively();
+    libraryfixture::Library lib;
+    QString error;
+    QElapsedTimer timer;
+    timer.start();
+    CHECK(libraryfixture::grow(&db, store, 1000, 50, lib, {}, &error), "the generator wrote 1,000 assets and 50 projects%s%s",
+          error.isEmpty() ? "" : ": ", qPrintable(error));
+    std::printf("   generated in %lld ms, %lld thumbnail bytes\n", static_cast<long long>(timer.elapsed()),
+                static_cast<long long>(lib.thumbnailBytes));
+    theGenerator(db, lib, 1000);
+
     db.closeDatabase();
     QFile::remove(dbPath);
+    QDir(store).removeRecursively();
+    QDir(store + QStringLiteral("-sources")).removeRecursively();
     if (failures) std::printf("library.statements: FAILED (%d)\n", failures);
     else std::printf("library.statements: PASSED\n");
     return failures ? 1 : 0;
