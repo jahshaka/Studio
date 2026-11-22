@@ -1621,6 +1621,12 @@ int main()
                   said.size() == 1,
               "a JS for(;;) is cancelled by the hook (\"" + spun.message + "\" at poll " + std::to_string(jsPolls) +
                   "), no catch takes it, it had counted " + std::to_string(counted) + " (> 0), and the next run is served");
+        h.setKeepGoing([](double, double) -> bool { throw std::runtime_error("the hook threw"); });
+        const Result threw = h.run("for (;;) {}\n", "threw.js");
+        h.setKeepGoing(nullptr);
+        check(threw.status == Status::Failed && threw.message == "cancelled" && h.run("1\n", "next.js").status == Status::Ok,
+              "a keep-going hook that THROWS stops the script as a cancel (no C++ exception crosses the JS engine), and "
+              "the next run is served (" + threw.message + ")");
         long spins = 0;
         h.registry().add({"test.spin", {Access::Reads, {}, Kind::Null}, "loops on the host's keep-going hook"},
                          [&h, &spins](Call &c) {
