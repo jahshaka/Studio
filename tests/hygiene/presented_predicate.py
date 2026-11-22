@@ -36,7 +36,6 @@ def check(ok, what):
 # (file, the text that must stand at the site, what the site is)
 SITES = [
     ("irisgl/engine/src/OgreView.cpp", "d.lodHysteresis  = (presentsAsWindow() ||", "the LOD switch band"),
-    ("irisgl/engine/src/OgreView.cpp", "const bool presents = presentsAsWindow() || mStereo;", "the gather's contract"),
     ("irisgl/engine/src/OgreView.cpp", "if (!presentsAsWindow() && !mPostFx.allowOffscreen) {", "the post chain"),
     ("irisgl/engine/src/OgreView.cpp", "return presentsAsWindow() || mOverlay.allowOffscreen;", "the overlay"),
     ("irisgl/engine/src/OgreView.cpp", "return presentsAsWindow() || mPip.allowOffscreen;", "the PiP inset"),

@@ -874,3 +874,15 @@ add_test(NAME engine.ray_input_guard
                  "${CMAKE_SOURCE_DIR}/irisgl/engine/src/OgreScreenProbeGather.cpp")
 set_tests_properties(engine.ray_input_guard PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.ray_input_guard)
+
+# engine.chain_gi_routes — THE CHAIN'S DIFFUSE-GI ROUTE as a pure function (ROUTE-ROWS-1;
+# irisgl/engine/src/GiChainRules.h, test_chain_gi_routes.cpp says the law): ONE WORLD, ONE DIFFUSE PRODUCER PER VIEW - the
+# gather wherever the GI is on and the scene traces, in every kind of view (the Live/StillPicture contract's GI meaning gave
+# a live offscreen picture of a ray scene the integrate); the integrate only where the scene does not trace, mono; never
+# both. The header only: no device, no Ogre - a CPU code row.
+add_executable(test_chain_gi_routes test_chain_gi_routes.cpp)
+set_target_properties(test_chain_gi_routes PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_chain_gi_routes PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.chain_gi_routes COMMAND test_chain_gi_routes)
+set_tests_properties(engine.chain_gi_routes PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.chain_gi_routes)

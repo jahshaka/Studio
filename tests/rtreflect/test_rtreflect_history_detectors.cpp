@@ -204,8 +204,9 @@ static LampStepArrivals lampStep(Engine *e, View *view)
     enginetest::testCameraLookAt(view, eye, target);
     rayTier(s, view);
     // THE ROUTE (PHOTON-7-9A, URGENT #177): declared here, asserted on the first frame below - (a) reads the hybrid's
-    // reflection on the ray tier's integrate chain with the voxel store live.
-    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(),
+    // reflection on the ray tier's gathering chain (every view of a ray scene gathers: ROUTE-ROWS-1) with the voxel
+    // store live.
+    enginetest::declareRoutes(view, s, enginetest::Routes().gather().reflection().store(),
                               "rtreflect.history_detectors (a)'s view");
 
     // The box's front face centre (0, 1, -2.5) mirrored in the floor: where its reflection is;
@@ -298,7 +299,7 @@ static SlideLaw slideLaw(Engine *e, View *view)
     }
     enginetest::addDirectionalLight(s, Vec3(-0.3f, -1.0f, 0.4f), 2.0f);
     rayTier(s, view);
-    enginetest::declareRoutes(view, s, enginetest::Routes().integrate().reflection().store(),
+    enginetest::declareRoutes(view, s, enginetest::Routes().gather().reflection().store(),
                               "rtreflect.history_detectors (b)'s view");
     e->setArm("reflect.historyReadback", 1.0);
     auto pose = [&](int frame) {

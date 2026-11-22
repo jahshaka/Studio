@@ -184,9 +184,10 @@ int main(int argc, char **argv)
             gi.bounces = true;
             if (!s->setGlobalIllumination(gi))
                 std::printf("   engine error: %s\n", e->lastError().c_str());
-            // THE DECLARED ROUTE (URGENT #146, R16; the split's rows left routes_pending): a Live view runs the SCREEN
-            // INTEGRATE; ddgi On = the field; GiMode::Vct = the store; budget 1 = live - asserted on the next frame
-            enginetest::declareRoutes(view, s, enginetest::Routes().integrate().field().store(), "gi.leak_room.bars's view");
+            // THE DECLARED ROUTE (URGENT #146, R16; the split's rows left routes_pending): the view of this ray scene
+            // runs the GATHER (every view does: ROUTE-ROWS-1); ddgi On = the field; GiMode::Vct = the store; budget 1 =
+            // live - asserted on the next frame
+            enginetest::declareRoutes(view, s, enginetest::Routes().gather().field().store(), "gi.leak_room.bars's view");
             enginetest::leakroom::setOutsideIntensity(s, room, 25.0f);
             s->refreshGlobalIllumination();
             render(e, 10);
@@ -335,9 +336,9 @@ int main(int argc, char **argv)
                 gi.bounces = true;
                 if (!s->setGlobalIllumination(gi))
                     std::printf("   engine error: %s\n", e->lastError().c_str());
-                // THE DECLARED ROUTE (URGENT #146, R16): the measured state, GI ON - the Live view's screen integrate over the
-                // store, paused (budget 0), the cone bounce read directly (ddgi Off: no field)
-                if (on) enginetest::declareRoutes(view, s, enginetest::Routes().integrate().store().paused(),
+                // THE DECLARED ROUTE (URGENT #146, R16): the measured state, GI ON - the view's gather (ROUTE-ROWS-1: every
+                // view of a ray scene) over the store, paused (budget 0), no field (ddgi Off)
+                if (on) enginetest::declareRoutes(view, s, enginetest::Routes().gather().store().paused(),
                                                   "gi.leak_room.seam's view, GI on");
                 render(e, 6);
             };
@@ -437,8 +438,8 @@ int main(int argc, char **argv)
             fx.ssr = 1;
             cv->setPostFx(fx);
         }
-        // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
-        // chain gathers, and a Live view takes the field's answer)
+        // THE VIEW GATHERS (every view of a ray scene does: ROUTE-ROWS-1; PHOTON-7 7-5: the gather is recorded only for
+        // a view whose chain gathers)
         const float T = 0.2f;
         enginetest::leakroom::Room room = enginetest::leakroom::build(s, cv, T, 0.0f, true);
         // THE GLOSSY PANEL before the +Z wall (its card's lobe is the lobe arm's subject)

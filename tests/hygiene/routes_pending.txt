@@ -1,7 +1,7 @@
 # THE ROUTES RATCHET (URGENT #146, 2026-11-02; source.testing_rules R16): every gi.* / rtreflect.* engine row that renders
 # declares the route its measured view runs - enginetest::declareRoutes / requireRoutes in its fixture (asserted on the first
 # frame against the frame's own record: tests/support/enginetesthelpers.h) - or is listed here with its DECLARATION, derived
-# STATICALLY from its fixture (the view's OffscreenContract: Live -> the screen integrate, StillPicture -> the gather (rays on);
+# STATICALLY from its fixture (rays on -> the gather in every view, Live or StillPicture: ROUTE-ROWS-1 stage 0; rays off -> the screen integrate;
 # the post chain + ssr row -> the ray reflection; ddgi On -> the field; GiMode::Vct -> the store; updateBudget 0 -> paused).
 # A row LEAVES the list the commit its fixture declares (its first run asserts what is written here); a name is never added
 # (R16's ratchet). Several views: `;` between their declarations. jahlab rows: the lab's view is StillPicture
@@ -25,19 +25,19 @@ gi.card_law                              none  # tests/gi/test_gi_card_law.cpp: 
 gi.card_oracle                           gather reflection store paused  # tests/gi/test_gi_card_oracle.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 1, ssr 1
 gi.card_sun_lift                         gather reflection store  # tests/gi/test_card_sun_lift.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
 gi.card_truth                            gather reflection field store paused  # tests/gi/test_gi_card_truth.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
-gi.cascades_asan.ambient                 integrate store paused  # tests/gi/test_gi_cascades.cpp ambient: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
-gi.cascades_asan.edits                   integrate store paused  # tests/gi/test_gi_cascades.cpp edits: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
-gi.cascades_asan.faults                  integrate store paused  # tests/gi/test_gi_cascades.cpp faults: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
-gi.cascades_asan.mover                   integrate store paused  # tests/gi/test_gi_cascades.cpp mover: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
-gi.cascades_asan.mover_routes            integrate store paused  # tests/gi/test_gi_cascades.cpp mover_routes: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
-gi.cascades_asan.schedule                integrate store paused  # tests/gi/test_gi_cascades.cpp schedule: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
-gi.changed_regions                       integrate store  # tests/gi/test_gi_changed_regions.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
-gi.directional_seam                      integrate store paused  # tests/gi/test_gi_seam.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
+gi.cascades_asan.ambient                 gather store paused  # tests/gi/test_gi_cascades.cpp ambient: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
+gi.cascades_asan.edits                   gather store paused  # tests/gi/test_gi_cascades.cpp edits: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
+gi.cascades_asan.faults                  gather store paused  # tests/gi/test_gi_cascades.cpp faults: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
+gi.cascades_asan.mover                   gather store paused  # tests/gi/test_gi_cascades.cpp mover: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
+gi.cascades_asan.mover_routes            gather store paused  # tests/gi/test_gi_cascades.cpp mover_routes: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
+gi.cascades_asan.schedule                gather store paused  # tests/gi/test_gi_cascades.cpp schedule: Live 'cascades', cascadeGi() budget 0 at the declaration (chainF arms raise it later)
+gi.changed_regions                       gather store  # tests/gi/test_gi_changed_regions.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
+gi.directional_seam                      gather store paused  # tests/gi/test_gi_seam.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
 gi.emitter_energy                        integrate store paused  # tests/gi/test_gi_emitter_energy.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 1, post chain 0, ssr 0
 gi.fast_update                           gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-gi.field_oracle                          integrate field store  # tests/gi/test_gi_field_oracle.cpp step: the Live views field_oracle/_rooms/_open (no post chain)
-gi.field_oracle_marks                    integrate field store  # tests/gi/test_gi_field_oracle.cpp marks: Live views (no post chain)
-gi.field_oracle_shells                   integrate field store  # tests/gi/test_gi_field_oracle.cpp shells: the Live views field_oracle_c1/_shells (no post chain)
+gi.field_oracle                          gather field store  # tests/gi/test_gi_field_oracle.cpp step: the Live views field_oracle/_rooms/_open (no post chain)
+gi.field_oracle_marks                    gather field store  # tests/gi/test_gi_field_oracle.cpp marks: Live views (no post chain)
+gi.field_oracle_shells                   gather field store  # tests/gi/test_gi_field_oracle.cpp shells: the Live views field_oracle_c1/_shells (no post chain)
 gi.fog_far_hall                          gather store  # tests/gi/test_gi_fog_inscatter.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 0
 gi.fog_sealed                            gather store  # tests/gi/test_gi_fog_inscatter.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 0
 gi.fog_shaft                             gather store  # tests/gi/test_gi_fog_inscatter.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 0
@@ -51,34 +51,34 @@ gi.hold_after_stop.court                 gather  # gi.hold_after_stop's court se
 gi.lamps_outside                         gather reflection store paused  # tests/gi/test_gi_lamps_outside.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 1, ssr 1
 gi.lamps_outside_cards                   gather reflection store paused  # tests/gi/test_gi_lamps_outside.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 1, ssr 1
 gi.light_is_world                        gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-gi.light_order                           integrate store paused  # tests/gi/test_gi_light_order.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
+gi.light_order                           gather store paused  # tests/gi/test_gi_light_order.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
 gi.long_hall                             gather reflection field store paused  # tests/gi/test_gi_long_hall.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
 gi.low_gather                            gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.mirror_closed_form                    gather reflection field store paused  # tests/gi/test_gi_mirror_closed_form.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
-gi.opaque_bindings                       gather reflection store ; integrate reflection store (live)  # tests/gi/test_gi_opaque_bindings.cpp: the chains 'ray' StillPicture and 'live' Live, both post chain + ssr, rays on
+gi.opaque_bindings                       gather reflection store ; gather reflection store (live)  # tests/gi/test_gi_opaque_bindings.cpp: the chains 'ray' StillPicture and 'live' Live, both post chain + ssr, rays on
 gi.pane_stack                            gather store paused  # tests/gi/test_gi_pane_stack.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 2, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 1, ssr 0
 gi.pane_stack_cards                      gather store paused  # tests/gi/test_gi_pane_stack.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 2, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 1, ssr 0
 gi.photon_window                         gather reflection field store paused  # tests/gi/test_gi_photon_window.cpp: Live 0 / StillPicture 2 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
 gi.photon_window_sky                     gather reflection field store paused  # tests/gi/test_gi_photon_window.cpp: Live 0 / StillPicture 2 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
-gi.probe_court                           integrate store paused  # tests/gi/test_gi_probe_court.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 0, rays off 0, post chain 0, ssr 0
+gi.probe_court                           gather store paused  # tests/gi/test_gi_probe_court.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 0, rays off 0, post chain 0, ssr 0
 gi.ray_level_fixed                       none reflection  # tests/gi/test_ray_level_fixed.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 0, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 1
 gi.rayquery_asan                         none  # tests/gi/test_gi_rayquery.cpp: Live 3 / StillPicture 0 views, GiMode::Vct 0, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 0, ssr 0
-gi.relight_credit                        integrate store  # tests/gi/test_gi_relight_credit.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
+gi.relight_credit                        gather store  # tests/gi/test_gi_relight_credit.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
 gi.rest_oracle_lamp                      gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.rest_oracle_mover                     gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.rough_lobe_quadrature                 gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.rough_reference                       gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
-gi.screen_bind                           integrate store ; integrate reflection store (screen_bind_live_rays)  # tests/gi/test_gi_screen_bind.cpp: StillPicture with RayTracingMode::Off (no rays: no gather, no ray reflection); Live screen_bind_live_rays rays on, ssr 1
-gi.scroll_lag                            integrate store paused  # tests/gi/test_gi_scroll_lag.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
+gi.screen_bind                           integrate store ; gather reflection store (screen_bind_live_rays)  # tests/gi/test_gi_screen_bind.cpp: StillPicture with RayTracingMode::Off (no rays: no gather, no ray reflection); Live screen_bind_live_rays rays on, ssr 1
+gi.scroll_lag                            gather store paused  # tests/gi/test_gi_scroll_lag.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
 gi.sealed_hall                           gather reflection field store paused  # tests/gi/test_gi_sealed_hall.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
 gi.sealed_sky                            gather reflection field store paused  # tests/gi/test_gi_sealed_sky.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
 gi.sealed_sky_epic                       gather reflection field store paused  # tests/gi/test_gi_sealed_sky.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
 gi.sealed_sky_shift                      gather reflection field store paused  # tests/gi/test_gi_sealed_sky.cpp: Live 0 / StillPicture 1 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 1 / off 0, rays off 0, post chain 1, ssr 1
 gi.share_law                             none  # tests/gi/test_gi_share_law.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 0, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 0, ssr 0
-gi.shell_ends                            integrate store paused  # tests/gi/test_gi_shells.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
+gi.shell_ends                            gather store paused  # tests/gi/test_gi_shells.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 1 (other 0), ddgi on 0 / off 1, rays off 0, post chain 0, ssr 0
 gi.small_emitter                         integrate field store paused  # tests/gi/test_gi_small_emitter.cpp: StillPicture with rays OFF (no gather: the integrate), ssr 0, ddgi on, budget 0
 gi.sun_contact_acne                      none  # tests/gi/test_sun_contact_acne.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 0, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 1, ssr 0
-gi.voxel_ray_wall                        integrate store  # tests/gi/test_gi_voxel_ray.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 0, ssr 0
+gi.voxel_ray_wall                        gather store  # tests/gi/test_gi_voxel_ray.cpp: Live 1 / StillPicture 0 views, GiMode::Vct 1, updateBudget=0 0 (other 0), ddgi on 0 / off 0, rays off 0, post chain 0, ssr 0
 gi.walk_area                             gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.walk_court                            gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
 gi.walk_glass.frozen                     gather  # the lab's view: StillPicture (src/lab/labsession.cpp createOffscreenView ... StillPicture), GI on, at its budget
