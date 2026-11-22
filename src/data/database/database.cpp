@@ -2843,7 +2843,9 @@ QVector<AssetRecord> Database::fetchAssetsInHome(assethome::Kind home, int type)
 	query.prepare(sql);
 	query.addBindValue(assethome::Home{ home, QString() }.stored());
 	if (type >= 0) query.addBindValue(type);
-	executeAndCheckQuery(query, "fetchAssetsInHome");
+	// Named by its type for the query log's view (a storage's drawer and the Members panel's pictures are
+	// different readers of one statement: library.scale counts the drawer's fills).
+	executeAndCheckQuery(query, QStringLiteral("fetchAssetsInHome.type%1").arg(type));
 
 	QVector<AssetRecord> tileData;
 	while (query.next()) {

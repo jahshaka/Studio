@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "modules/materials/effectspage.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include <QScopedValueRollback>
 #include <QSqlDatabase>
 #include <QActionGroup>
 #include "graph/graphnode.h"
@@ -968,8 +969,9 @@ MaterialDocument *EffectsPage::openDocument(const QString &guid, shaderInfo::Ori
 	// that made it work). The repopulate is synchronous, and it stands the
 	// project drawer's queued one down with it (ShaderAssetWidget::refresh),
 	// so the view is current before the name is read and no second refill is
-	// left armed behind this open.
-	if (!selectCorrectItemFromDrop(guid)) refreshShaderGraph();
+	// left armed behind this open. UNDER THE SHOW PATH'S HOLD (showEvent's tab restore) nothing is refilled
+	// here: the space's entry refreshes both drawers right after (LARGE-LIBRARY-1, the final read's F1).
+	if (!mDrawerFillHeld && !selectCorrectItemFromDrop(guid)) refreshShaderGraph();
 
 	restoringGraph = true;
 	// Parented + deleted below: this used to leak one orphanable top-level
@@ -1984,7 +1986,7 @@ bool EffectsPage::createNewGraph(bool loadNewGraph)
 
 void EffectsPage::ensureDrawerFilled()
 {
-	if (!mDrawerFilled) updateAssetDock();
+	if (!mDrawerFilled && !mDrawerFillHeld) updateAssetDock();
 }
 
 void EffectsPage::updateAssetDock()
@@ -2375,7 +2377,14 @@ void EffectsPage::showEvent(QShowEvent *event)
     // and not on a project open: deserialising half a dozen graphs and
     // building their canvases is real work, and a user who opens a project
     // lands in the editor. By the time they walk to Materials it is done.
-    if (mTabsRestorePending) restoreTabs();
+    // ...WITHOUT THE CUSTOM DRAWER'S ROWS (LARGE-LIBRARY-1, the final read's F1): a panel never mounts rows from
+    // showEvent, and the drawer is filled at its first use. The page is shown by a space switch, whose
+    // onSpaceChanged -> refreshShaderGraph fills the drawer ONCE right after this and re-resolves the restored
+    // tab's tile (updateAssetDock, refreshCurrentTile); until then a lookup in the drawer finds nothing.
+    if (mTabsRestorePending) {
+        const QScopedValueRollback<bool> held(mDrawerFillHeld, true);
+        restoreTabs();
+    }
     if (mColumnsSized) return;
     mColumnsSized = true;
     applyColumnWidths();

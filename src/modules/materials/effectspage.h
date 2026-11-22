@@ -380,6 +380,9 @@ private:
 	/// through here; an entry to the space refills it anyway (refreshShaderGraph).
 	void ensureDrawerFilled();
 	bool mDrawerFilled = false;
+	/// The show path's hold (showEvent's tab restore): the drawer is not filled from showEvent (CODING_RULES § 2:
+	/// no rows mounted there) — the space's entry fills it right after and re-resolves the active tile.
+	bool mDrawerFillHeld = false;
 
 	bool eventFilter(QObject *watched, QEvent *event);
 

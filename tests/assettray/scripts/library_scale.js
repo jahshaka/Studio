@@ -29,6 +29,18 @@ function step(name, fn) {
     return out;
 }
 
+if (MODE === "first") {
+    // A USER WHO HAS WORKED IN MATERIALS: the open project's tab set saved with a material of the Materials home
+    // open in it (made here by the module's own verb: a generated material's store payload is not a graph the page
+    // opens) — the returning session's first entry RESTORES it (EffectsPage::showEvent).
+    project.open(OPEN);
+    app.space("materials");
+    var made = materials.create("library.scale tab", { graph: true });
+    materials.open(made);
+    var open = materials.tabs().map(function (t) { return t.guid; });
+    line("tabs " + (open.indexOf(made) >= 0 ? "saved" : "missing") + " " + JSON.stringify(open) + " lastError=" + app.lastError());
+    app.space("desktop");
+}
 if (MODE === "law") {
     app.heartbeat(100);
     step("open", function () { return project.open(OPEN); });
@@ -36,6 +48,11 @@ if (MODE === "law") {
     step("listMembers", function () { return assets.list({ members: true }); });
     step("selected", function () { return assets.selected(); });
     step("materials", function () { return app.space("materials"); });   // its first entry: residue (B), printed
+    // ...which RESTORED the saved tab set, and the restored material's tile is in the drawer the entry filled.
+    var restored = materials.tabs().map(function (t) { return t.guid; }).filter(function (g) { return g; });
+    var drawer = materials.customDrawer().map(function (t) { return t.guid; });
+    line("restored " + (restored.length > 0 && drawer.indexOf(restored[0]) >= 0 ? "ok" : "missing") + " tabs=" +
+         JSON.stringify(restored) + " drawer=" + drawer.length);
     step("desktop", function () { return app.space("desktop"); });
     var grid = desktop.gridStats();
     line("grid " + JSON.stringify(grid));

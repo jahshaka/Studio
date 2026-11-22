@@ -23,6 +23,9 @@
 #        == P: the grid builds in slices that run only when a verb turns the event loop, and a script holds the loop
 #        for its whole run (scriptrunner.cpp), so how far the build got is not the script's to settle — every
 #        project is a tile or waiting for one, exactly once;
+#      - THE FIRST ENTRY TO MATERIALS FILLS THE CUSTOM DRAWER ONCE: the first session saved the open project's tab
+#        set with a Materials-home material open (one made by materials.create), so the entry restores it (EffectsPage::showEvent) — the drawer's
+#        listing runs once, never from the show path and again from the space's entry;
 #      - NEGATIVE CONTROL: a step made N+1 on purpose grows with the library (the comparer sees growth).
 #      PRINTED, never barred: the logged counts by name (the workers' tile reads among them: ruled call 3 — only the
 #      default connection is traced), the ms, the heartbeat's worst gap, and RESIDUE (B): the first entry to
@@ -73,9 +76,13 @@ for r in a b; do
     gate=$(grep -a "index statement(s) built before the shell opened it" "first-$r.log" | head -1)
     [ -n "$gate" ]; check $? "root $r's first boot ran the one-time index gate before the shell: ${gate#*library: }"
     echo "   root $r first session: $(grep -a '^SCALE step=boot' "first-$r.log" | sed 's/^SCALE //') (printed, never barred)"
+    grep -aq "^SCALE tabs saved .* lastError=null" "first-$r.log"
+    check $? "root $r's first session saved the open project's tab set with a Materials-home material open in it"
     png=""; [ "$r" = a ] && png="$PNG"
     run "$r" law "$open" "$png"
     check $? "root $r's returning session ended 0"
+    grep -aq "^SCALE restored ok" "law-$r.log"
+    check $? "root $r: the first entry restored the saved tab set, its material's tile in the drawer ($(sed -n 's/^SCALE restored //p' "law-$r.log" | cut -c1-80))"
     ! grep -aq "index statement(s) built before the shell opened it" "law-$r.log"
     check $? "root $r's returning boot: the gate runs nothing on a prepared library"
     ! grep -aq "library: DEFECT" "first-$r.log" "law-$r.log"
@@ -120,6 +127,16 @@ for s in order:
     if s != "boot":
         ok(a[s].get("nonGuidThumbnailSelects") == "0" and b[s].get("nonGuidThumbnailSelects") == "0",
            f"{s}: every thumbnail select keyed by guid (listings select none)")
+# THE FIRST ENTRY TO MATERIALS FILLS THE CUSTOM DRAWER ONCE, the saved tab set restored (EffectsPage::showEvent):
+# the drawer's listing (fetchAssetsInHome) runs once in the step, never from the show path and again from the
+# space's entry (residue (B)'s read paid twice).
+for r, steps_ in (("a", a), ("b", b)):
+    if "materials" not in steps_: continue
+    names = dict(kv.split("=") for kv in steps_["materials"].get("byName", "").split(",") if "=" in kv)
+    fills = names.get("fetchAssetsInHome.type1", "0")   # the drawer lists the home's MATERIALS (ModelTypes::Material = 1)
+    ok(fills == "1", f"root {r}: the first entry to Materials with a saved tab set fills the custom drawer once ({fills})")
+    print(f"   root {r}: the Members panel listed the Materials home's pictures {names.get('fetchAssetsInHome.type2', '0')} time(s) "
+          f"in the same entry (materialmembers.cpp unused: residue, printed)")
 for s in ("open", "materials", "desktop", "create"):
     if s in a and s in b: print(f"   by name, {s}: A {a[s].get('byName', '')}\n   by name, {s}: B {b[s].get('byName', '')}")
 if "materials" in a and "materials" in b:
