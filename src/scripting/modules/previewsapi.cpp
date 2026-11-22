@@ -14,6 +14,7 @@ For more information see the LICENSE file
 #include <QCoreApplication>
 #include <QEventLoop>
 #include <QTimer>
+#include <functional>
 #include <memory>
 
 #include "data/database/database.h"
@@ -61,19 +62,24 @@ bool waitForPreviews(const std::shared_ptr<PreviewWait> &wait)
     return wait->completed >= wait->requested;
 }
 
-/// THE SWEEP'S WAIT AT THE WRITER'S CAP: until one more completion lands, bounded by kVerbWaitMs.
-bool waitForOneLanding(const std::shared_ptr<PreviewWait> &wait)
+/// THE WAIT FOR THE WRITER ITSELF: until `enough()` holds, waking at EVERY write the writer completes
+/// (whoever asked: an import's store as much as this verb's own requests - PreviewService's landing
+/// notice), bounded by kVerbWaitMs WITHOUT A LANDING. True when `enough()` held.
+bool waitForWriter(PreviewService *previews, const std::function<bool()> &enough)
 {
-    const int before = wait->completed;
+    if (enough()) return true;
     QEventLoop loop;
     QTimer stall;
     stall.setSingleShot(true);
-    QObject::connect(&stall, &QTimer::timeout, &loop, &QEventLoop::quit);
-    wait->loop = &loop;
-    stall.start(kVerbWaitMs);
-    loop.exec(QEventLoop::ExcludeUserInputEvents);
-    wait->loop = nullptr;
-    return wait->completed > before;
+    bool stalled = false;
+    QObject::connect(&stall, &QTimer::timeout, &loop, [&] { stalled = true; loop.quit(); });
+    const PreviewService::LandingFn previous = previews->setLandingListener([&loop] { loop.quit(); });
+    while (!enough() && !stalled) {
+        stall.start(kVerbWaitMs);   // restarted at every landing: no landing for kVerbWaitMs = stalled
+        loop.exec(QEventLoop::ExcludeUserInputEvents);
+    }
+    previews->setLandingListener(previous);
+    return enough();
 }
 
 /// The completion a waited request reports to.
@@ -102,9 +108,10 @@ QVector<VerbInfo> PreviewsApi::verbs() const
           "type with no preview, a row with no definition, platform furniture). `key` is what the preview "
           "depicts now (the row's content oids, the open project's pin of it, its members' oids, the preset's "
           "version and the studio's for a studio-lit preset - never its name); `storedKey` what the stored one "
-          "was drawn from. Mesh and Sky rows read 'none' until their presets arrive (PREVIEWS-1 stages 2 and 4); "
-          "a tile an import stored reads 'stale' until stage 2 keys it; inside a script run a preview a door "
-          "requested reads 'missing' or 'stale' until previews.render or the run's end lands it.",
+          "was drawn from. Mesh and Sky rows read 'none' until their presets arrive (PREVIEWS-1 stages 2 and 4). A "
+          "preview a door "
+          "asked for (an import's picture included) lands through the one writer: until previews.settle, "
+          "previews.render or the run's end lands it, its row reads 'missing' or 'stale'.",
           Needs::Document },
         { "render", "previews.render(guid) -> {ok, reason}",
           "Draws one row's preview through the preview service and waits for it to be STORED with its key. "
@@ -112,6 +119,13 @@ QVector<VerbInfo> PreviewsApi::verbs() const
           "materials, models, particle systems and avatars on the engine (with none: {ok:false, reason}). A "
           "failure changes NOTHING stored and says why; so does a write that does not land within the bound "
           "(the library stayed locked). Throws for a guid that names no asset.",
+          Needs::Document },
+        { "settle", "previews.settle() -> {ok, reason}",
+          "Waits until the preview writer has NOTHING PENDING - every preview a door asked for (an import's "
+          "pictures, a mint, a request) stored with its key or failed - so a script reads previews.state after "
+          "it as the library holds it. The run's database batch is stood down when the verb starts (a write "
+          "never waits behind it). BOUNDED: when no write lands for 2 x the writer's budget (4000 ms) it "
+          "answers {ok:false, reason} naming how many are still pending; nothing is cancelled.",
           Needs::Document },
         { "renderAll", "previews.renderAll({staleOnly, projectOnly, limit}) -> {considered, rendered, skipped, cancelled, peakQueued, failed: [{guid, reason}]}",
           "Draws many previews, one row a turn with the window painting between them, and waits for them to be "
@@ -220,7 +234,11 @@ QVariantMap PreviewsApi::renderAll(const QVariantMap &options)
     // same rows. AND IT IS STOPPABLE: a yield can deliver the window's close, a script can be
     // stopped; ScriptEngine::stop and the shutdown set the service's stop, checked a row.
     auto wait = std::make_shared<PreviewWait>();
-    sweep.waitForLanding = [wait] { return waitForOneLanding(wait); };
+    // AT THE CAP: until the writer is below it again, whoever's writes are ahead (an import's stores
+    // land in the same queue as this sweep's requests).
+    sweep.waitForLanding = [previews] {
+        return waitForWriter(previews, [previews] { return previews->pendingWrites() < previews::Writer::kQueueCap; });
+    };
     auto rendered = std::make_shared<int>(0);
     auto failures = std::make_shared<QVariantList>();
     const auto result = previews->sweep(
@@ -247,5 +265,23 @@ QVariantMap PreviewsApi::renderAll(const QVariantMap &options)
     out["cancelled"] = result.cancelled;
     out["peakQueued"] = result.peakPending;
     out["failed"] = *failures;
+    return out;
+}
+
+QVariantMap PreviewsApi::settle()
+{
+    QVariantMap out;
+    out["ok"] = false;
+    PreviewService *previews = host.services ? host.services->previews : nullptr;
+    if (!previews) { fail("previews: there is no preview service in this session"); return out; }
+    if (host.db) host.db->commitBatchNow();   // the run's batch stands down: no write waits behind it
+    if (!waitForWriter(previews, [previews] { return previews->pendingWrites() == 0; })) {
+        const QString reason = QStringLiteral("%1 preview write(s) still pending: none landed within %2 ms (the "
+                                              "library stayed locked)").arg(previews->pendingWrites()).arg(kVerbWaitMs);
+        out["reason"] = reason;
+        refuse(QStringLiteral("previews.settle: %1").arg(reason));
+        return out;
+    }
+    out["ok"] = true;
     return out;
 }

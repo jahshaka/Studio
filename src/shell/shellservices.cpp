@@ -15,6 +15,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/project.h"
+#include "irisgl/core/logger.h"
 #include "services/ambienceservice.h"
 #include "services/assetcas.h"
 #include "services/assetservice.h"
@@ -77,6 +78,18 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     mThumbnails = new ThumbnailService(db, project);
     // THE PREVIEWS (PREVIEWS-1): the one adapter that knows where the engine lives is this line.
     mPreviews = new PreviewService(db, [] { return EngineHost::instance().engine(); });
+    // AN IMPORT's PICTURES through the one writer (PREVIEWS-1 stage 2): the library's sink, on THIS
+    // library's instance, to the service's store door; a picture that is not stored is said once.
+    mDb = db;
+    if (db) {
+        PreviewService *previews = mPreviews;
+        db->setImportPictureSink([previews, project](const QString &guid, const QImage &picture) {
+            previews->store(project, guid, picture, [guid](const PreviewService::Outcome &outcome) {
+                if (!outcome.ok && !outcome.superseded && !outcome.nothingToDraw)
+                    irisLog(QStringLiteral("import: no preview stored for %1 - %2").arg(guid, outcome.reason));
+            });
+        });
+    }
     mAssets = new AssetService(db, project);
 
     // THE HOVER PREVIEW (MATERIAL-PREVIEW-1). Constructed after the service
@@ -152,7 +165,9 @@ void ShellServices::destroyPlain()
     mProject = nullptr;
     delete mThumbnails;
     mThumbnails = nullptr;
-    // Its writer DRAINS here and joins - before the library closes (shutdown step 7).
+    // Its writer DRAINS here and joins - before the library closes (shutdown step 7). The import
+    // sink that names it goes first.
+    if (mDb) mDb->setImportPictureSink({});
     delete mPreviews;
     mPreviews = nullptr;
     delete mAssets;

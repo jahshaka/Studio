@@ -18,7 +18,6 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QJsonArray>
 #include <QJsonDocument>
-#include <QBuffer>
 #include <QImage>
 #include <QJsonObject>
 #include <QTextStream>
@@ -53,18 +52,8 @@ For more information see the LICENSE file
 namespace {
 
 // Convert() runs on a worker thread (ImportBatchRunner) — QImage only, never
-// QPixmap (GUI-thread-bound). PNG bytes via QBuffer, the exact blob
-// AssetHelper::makeBlobFromPixmap produced.
-QByteArray pngBlobFromImage(const QImage &image)
-{
-    if (image.isNull()) return QByteArray();
-    QByteArray bytes;
-    QBuffer buffer(&bytes);
-    buffer.open(QIODevice::WriteOnly);
-    image.save(&buffer, "PNG");
-    return bytes;
-}
-
+// QPixmap (GUI-thread-bound). The picture stays an image: the one preview
+// writer encodes it, with its key, after the commit (StagedRow::thumbnail).
 QImage thumbnailImageFor(int type, const QString &filePath)
 {
     switch (static_cast<ModelTypes>(type)) {
@@ -361,7 +350,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         texRow.name = entry.fileName;
         texRow.type = static_cast<int>(ModelTypes::Texture);
         texRow.parent = out.mainGuid;
-        texRow.thumbnail = pngBlobFromImage(texThumb);
+        texRow.thumbnail = texThumb;
         out.rows.append(texRow);
 
         out.deps.append({ static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture),
@@ -503,7 +492,7 @@ bool MediaImporter::convert(const ImportRequest &request, const QString &staging
     row.guid = out.mainGuid;
     row.name = sourceInfo.fileName();
     row.type = mType;
-    row.thumbnail = pngBlobFromImage(thumbnailImageFor(mType, request.sourcePath));
+    row.thumbnail = thumbnailImageFor(mType, request.sourcePath);
     out.rows.append(row);
     return true;
 }
@@ -561,7 +550,7 @@ bool IesImporter::convert(const ImportRequest &request, const QString &stagingDi
     row.type = static_cast<int>(ModelTypes::LightProfile);
     // A polar plot of the candela lobe: two profiles look identical as file
     // names and completely different as light.
-    row.thumbnail = pngBlobFromImage(profile.polarThumbnail(256));
+    row.thumbnail = profile.polarThumbnail(256);
     out.rows.append(row);
     return true;
 }
@@ -687,7 +676,7 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
     // Three projected poses across the clip. Two clip files are otherwise
     // indistinguishable as tiles, which is the same reason a light profile
     // gets a polar plot instead of a file icon.
-    row.thumbnail = pngBlobFromImage(poseStrip);
+    row.thumbnail = poseStrip;
     out.rows.append(row);
 
     for (const auto &clip : contents.clips)
@@ -776,7 +765,7 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
         texRow.name = tex.fileName;
         texRow.type = static_cast<int>(ModelTypes::Texture);
         texRow.parent = out.mainGuid;
-        texRow.thumbnail = pngBlobFromImage(texThumb);
+        texRow.thumbnail = texThumb;
         out.rows.append(texRow);
         out.deps.append({ static_cast<int>(ModelTypes::Material), static_cast<int>(ModelTypes::Texture),
                           out.mainGuid, tex.guid, QString() });

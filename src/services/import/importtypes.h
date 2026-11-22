@@ -24,8 +24,9 @@ For more information see the LICENSE file
 // cannot diverge on storage behavior — the defect class that produced five
 // parallel import implementations.
 
-#include <QJsonObject>
 #include <QHash>
+#include <QImage>
+#include <QJsonObject>
 #include <QMap>
 #include <QString>
 #include <QStringList>
@@ -82,7 +83,6 @@ struct ImportRequest
     int drawerId = -1;          // > 0: file the imported asset in this drawer
     QString projectGuid;        // stamps created rows (may be empty)
     QJsonObject settings;       // recorded per-import; part of the determinism key
-    bool wantViewerThumbnail = false;  // UI refreshes the thumbnail after preview
     Intent intent = Intent::User;      // see above — every user-facing door
     /// WHERE EVERY ROW THIS IMPORT MINTS LIVES (ASSETS-HOME-1,
     /// data/assethomekind.h) — the main row and its members alike (a member is
@@ -127,7 +127,12 @@ struct StagedRow
     QString name;
     int type = 0;               // ModelTypes value
     QString parent;             // parent guidchain ("" = root)
-    QByteArray thumbnail;       // PNG bytes (may be empty)
+    /// THE ROW'S PICTURE, made on the prepare worker (QImage is reentrant: it crosses threads; a
+    /// QPixmap never would). NOT written by the commit: after it, the picture goes to the preview
+    /// service's store door through the library's import picture sink (Database::
+    /// setImportPictureSink), which reads the row's key THEN and hands bytes + key to the one
+    /// preview writer (PREVIEWS-1 stage 2). Null: no picture (the row reads missing).
+    QImage thumbnail;
     QByteArray properties;      // JSON (may be empty)
     QByteArray tags;
     QByteArray asset;           // node/definition JSON blob (may be empty)
@@ -186,8 +191,8 @@ struct StagedAsset
 
 /// The output of AssetImportService::prepare — everything the CPU-heavy half
 /// of the pipeline produced, ready for the DB-thread commit. Carries NO live
-/// Qt GUI objects (thumbnails are PNG byte arrays, images decode to QImage
-/// before this point), so it may cross threads freely. The staging dir that
+/// Qt GUI objects (a row's picture is a QImage, never a QPixmap), so it may
+/// cross threads freely. The staging dir that
 /// backs StagedFile paths is owned here and must outlive commit().
 struct PreparedImport
 {

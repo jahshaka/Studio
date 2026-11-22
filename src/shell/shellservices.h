@@ -99,6 +99,7 @@ private:
     ClipboardService *mClipboard = nullptr;
     ThumbnailService *mThumbnails = nullptr;
     PreviewService *mPreviews = nullptr;
+    Database *mDb = nullptr;   ///< the library the previews' import sink is set on (destroyPlain clears it)
     AssetService *mAssets = nullptr;
     AmbienceService *mAmbience = nullptr;
     PerfSampler *mPerf = nullptr;

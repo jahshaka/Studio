@@ -28,6 +28,8 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 
+class QImage;
+
 // RAII transaction over one QSqlDatabase connection (ASSET_PIPELINE_SPEC
 // phase 0): begin on construction, roll back on destruction unless commit()
 // was called — so every early-return path inside a multi-statement DB
@@ -782,6 +784,16 @@ public:
     /// The thumbnail hook (setAssetThumbnailWritten) for a write made off this connection; called
     /// on the UI thread by whoever made it.
     static void announceAssetThumbnailWritten(const QString &guid);
+    /// AN IMPORT's PICTURES (PREVIEWS-1 stage 2): an import's commit writes NO tile; after its
+    /// transaction commits, each staged row's picture goes to this sink — the preview service's
+    /// store door, which reads the row's key THEN and hands bytes + key to the one preview writer
+    /// (services/previewservice.h). Set on THIS library's instance by the preview service's owner
+    /// (ShellServices) and cleared before that service goes — never a process-wide hook. Unset (a
+    /// suite that links the import alone, a host with no preview service) an import stores no
+    /// picture: its rows read `missing` until a render draws them.
+    using ImportPictureSink = std::function<void(const QString &guid, const QImage &picture)>;
+    void setImportPictureSink(ImportPictureSink sink) { importPictureSink = std::move(sink); }
+    const ImportPictureSink &importPictures() const { return importPictureSink; }
     /// WHAT A PREVIEW DEPICTS, AND WHAT IS STORED (PREVIEWS-1; services/previewkey.h): per row its
     /// type, whether it holds bytes and a definition blob, its stored key, and the key's inputs —
     /// its asset_files role:oid, `projectGuid`'s pin of it, its members' dependee:oid. ONE
@@ -946,6 +958,7 @@ private:
 
 
     QSqlDatabase db;
+    ImportPictureSink importPictureSink;   ///< setImportPictureSink
 
     /// The gesture batch (see beginBatch). `batchOpenCount` is the counted
     /// scope; `batchTxLive` says whether the transaction behind it is open

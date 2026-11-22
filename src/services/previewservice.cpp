@@ -195,39 +195,88 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
 
 // ---- the request --------------------------------------------------------------------------------
 
-void PreviewService::request(Project *project, const QString &guid, Done done, QSize size)
+bool PreviewService::keyFor(Project *project, const QString &guid, int *typeOut, QString *keyOut,
+                            Outcome *refused)
 {
-    const auto finish = [&done](const Outcome &outcome) { if (done) done(outcome); };
-    if (!mDb) return finish(failure(QStringLiteral("there is no library in this session")));
+    if (!mDb) { *refused = failure(QStringLiteral("there is no library in this session")); return false; }
     const QVector<Database::PreviewRow> rows = mDb->fetchPreviewRows(projectGuidOf(project), false, -1, { guid });
-    if (rows.isEmpty()) return finish(failure(QStringLiteral("no asset with guid '%1'").arg(guid)));
+    if (rows.isEmpty()) { *refused = failure(QStringLiteral("no asset with guid '%1'").arg(guid)); return false; }
     const Database::PreviewRow &row = rows.first();
-    if (!previews::presetFor(row.type))
-        return finish(failure(QStringLiteral("this asset type (%1) has no preview").arg(row.type), true));
-    if (nothingToDraw(row))
-        return finish(failure(row.platform
-                                  ? QStringLiteral("'%1' is platform furniture (the app's own content, shown in "
-                                                   "no tile grid): nothing to draw").arg(guid)
-                                  : QStringLiteral("'%1' stores no model definition (a builtin primitive's row "
-                                                   "has nothing to draw)").arg(guid), true));
-    // THE KEY AT THE REQUEST, written with the bytes: a definition that moves in flight reads stale.
-    const QString key = previews::key(previews::sourceOf(row), previewenv::kVersion);
-    Outcome outcome;
-    const QImage image = renderPicture(project, guid, row.type, size, &outcome);
-    if (image.isNull()) {
-        if (outcome.reason.isEmpty()) outcome.reason = QStringLiteral("the render produced no image");
-        return finish(outcome);   // A FAILED DELIVERY CHANGES NOTHING
+    if (!previews::presetFor(row.type)) {
+        *refused = failure(QStringLiteral("this asset type (%1) has no preview").arg(row.type), true);
+        return false;
     }
-    if (!mWriter) return finish(failure(QStringLiteral("this session has no preview writer")));
+    if (nothingToDraw(row)) {
+        *refused = failure(row.platform
+                               ? QStringLiteral("'%1' is platform furniture (the app's own content, shown in "
+                                                "no tile grid): nothing to draw").arg(guid)
+                               : QStringLiteral("'%1' stores no model definition (a builtin primitive's row "
+                                                "has nothing to draw)").arg(guid), true);
+        return false;
+    }
+    *typeOut = row.type;
+    *keyOut = previews::key(previews::sourceOf(row), previewenv::kVersion);
+    return true;
+}
+
+void PreviewService::submit(const QString &guid, const QImage &picture, const QString &key, Done done)
+{
+    if (!mWriter) {
+        if (done) done(failure(QStringLiteral("this session has no preview writer")));
+        return;
+    }
     QString refused;
-    const bool queued = mWriter->submit(guid, image, key, [done](const previews::Writer::Landed &landed) {
+    const std::shared_ptr<LandingFn> landing = mLanding;
+    const bool queued = mWriter->submit(guid, picture, key, [done, landing](const previews::Writer::Landed &landed) {
         Outcome out;
         out.ok = landed.ok;
         out.reason = landed.reason;
         out.superseded = landed.superseded;
         if (done) done(out);
+        if (*landing) (*landing)();
     }, &refused);
-    if (!queued) finish(failure(refused));
+    if (!queued && done) done(failure(refused));
+}
+
+void PreviewService::request(Project *project, const QString &guid, Done done, QSize size)
+{
+    const auto finish = [&done](const Outcome &outcome) { if (done) done(outcome); };
+    int type = 0;
+    QString key;
+    Outcome refused;
+    if (!keyFor(project, guid, &type, &key, &refused)) return finish(refused);
+    // THE KEY AT THE REQUEST, written with the bytes: a definition that moves in flight reads stale.
+    Outcome outcome;
+    const QImage image = renderPicture(project, guid, type, size, &outcome);
+    if (image.isNull()) {
+        if (outcome.reason.isEmpty()) outcome.reason = QStringLiteral("the render produced no image");
+        return finish(outcome);   // A FAILED DELIVERY CHANGES NOTHING
+    }
+    submit(guid, image, key, std::move(done));
+}
+
+void PreviewService::store(Project *project, const QString &guid, const QImage &picture, Done done)
+{
+    int type = 0;
+    QString key;
+    Outcome refused;
+    if (!keyFor(project, guid, &type, &key, &refused)) {
+        if (done) done(refused);
+        return;
+    }
+    submit(guid, picture, key, std::move(done));
+}
+
+int PreviewService::pendingWrites() const
+{
+    return mWriter ? mWriter->pending() : 0;
+}
+
+PreviewService::LandingFn PreviewService::setLandingListener(LandingFn listener)
+{
+    LandingFn previous = std::move(*mLanding);
+    *mLanding = std::move(listener);
+    return previous;
 }
 
 void PreviewService::mint(Project *project, const QString &guid, const char *who)

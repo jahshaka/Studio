@@ -38,10 +38,13 @@ For more information see the LICENSE file
 // batch's next stand-down (any top-level DbTransaction, the previews verbs' own) or at the run's end;
 // until then its row reads missing or stale.
 //
+// AN IMPORT's PICTURE is made on its prepare worker and stored through store() after the import's
+// commit (Database::setImportPictureSink, set by this service's owner): the key read then, the bytes
+// and the key to the one writer — the import's transaction writes no tile.
+//
 // THE STATE of every row is a comparison, never a render: none (no preset, or no definition: nothing
 // to draw), missing (no bytes), stale (bytes whose stored key is not the key now — none stored is
-// stale too: an import's tile carries no key until PREVIEWS-1 stage 2 routes the import's commit),
-// ok. One catalog statement a call (Database::fetchPreviewRows).
+// stale too), ok. One catalog statement a call (Database::fetchPreviewRows).
 
 #include <QImage>
 #include <QSize>
@@ -84,6 +87,12 @@ public:
 
     /// THE ONE REQUEST. `size` empty: the preset's own tile size.
     void request(Project *project, const QString &guid, Done done, QSize size = QSize());
+
+    /// THE STORE DOOR: a picture made ELSEWHERE (an import's, on its prepare worker) stored through
+    /// the one writer with the row's key read NOW — the second half of request(), no render. The
+    /// same refusals as request (no such row, no preset, nothing to draw, a null picture) answer
+    /// at once and store nothing.
+    void store(Project *project, const QString &guid, const QImage &picture, Done done);
 
     /// THE MINT DOOR (a material just created, copied or saved): a request whose failure is
     /// logged naming `who` when a render COULD have happened — headless, "no picture" is the
@@ -140,14 +149,31 @@ public:
     /// refuses on (services/libraryreset.h).
     bool sweepRunning() const { return mSweeps > 0; }
 
+    // ---- THE WAITING DOORS' VIEW OF THE WRITER (scripting/modules/previewsapi.cpp) -------------
+    /// Writes submitted to the one writer and not yet completed, whoever asked (any thread).
+    int pendingWrites() const;
+    /// THE LANDING NOTICE: called on the application's thread after EVERY write the writer
+    /// completes — landed, failed or superseded, a request's or a store's. ONE listener; the call
+    /// answers the previous one, which a nested wait puts back when it ends. This service never
+    /// waits on it.
+    using LandingFn = std::function<void()>;
+    LandingFn setLandingListener(LandingFn listener);
+
 private:
     QImage renderPicture(Project *project, const QString &guid, int type, QSize size, Outcome *out);
+    /// The checks a stored picture needs, then the key: false with `refused` filled when the row
+    /// cannot take one (request's and store's shared first half).
+    bool keyFor(Project *project, const QString &guid, int *typeOut, QString *keyOut, Outcome *refused);
+    /// The picture and its key to the one writer, `done` at its completion (the shared second half).
+    void submit(const QString &guid, const QImage &picture, const QString &key, Done done);
 
     Database *mDb = nullptr;
     EngineProvider mEngine;
     std::unique_ptr<previews::Writer> mWriter;
     std::atomic<bool> mStop{ false };   // ScriptEngine::stop is called off the UI thread
     int mSweeps = 0;
+    /// The landing listener, shared with every completion in flight (never `this` across the writer).
+    std::shared_ptr<LandingFn> mLanding = std::make_shared<LandingFn>();
 };
 
 #endif   // SERVICES_PREVIEWSERVICE_H

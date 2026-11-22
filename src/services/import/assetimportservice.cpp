@@ -705,9 +705,11 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         const assethome::Origin origin = request.home.kind == assethome::Kind::Assets
                                              ? assethome::Origin::Import
                                              : assethome::Origin::Create;
+        // NO TILE IN THE IMPORT's TRANSACTION (PREVIEWS-1 stage 2): the picture goes to the one
+        // preview writer, with its key, after the commit (below).
         QString refused;
         if (db->createAssetEntry(row.guid, row.name, row.type, row.parent, request.home, origin,
-                                 QString(), QString(), row.thumbnail, properties,
+                                 QString(), QString(), QByteArray(), properties,
                                  row.tags, row.asset, &refused).isEmpty()) {
             result.error = refused.isEmpty()
                                ? QStringLiteral("the library refused the row '%1'").arg(row.name)
@@ -751,6 +753,14 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         result.error = QStringLiteral("could not commit the import transaction");
         rollbackAndCleanupObjects();
         return false;
+    }
+
+    // THE PICTURES, NOW THE ROWS ARE COMMITTED (PREVIEWS-1 stage 2): each to the preview service's
+    // store door through the library's sink, which reads the row's key at this moment (its files
+    // are committed) and hands bytes + key to the one writer — never a second write path here.
+    if (const Database::ImportPictureSink &store = db->importPictures()) {
+        for (const StagedRow &row : staged.rows)
+            if (!row.thumbnail.isNull()) store(row.guid, row.thumbnail);
     }
 
     // Post-commit, non-fatal: the sidecars (invariant I2). The legacy

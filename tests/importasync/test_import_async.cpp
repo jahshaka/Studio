@@ -9,6 +9,8 @@
 //   3. Cancel mid-import: cancelling at the store stage rolls the
 //      transaction back — no rows, no files rows, no orphan CAS objects.
 //   4. The synchronous facade (assets.importFile's path) is unchanged.
+//   4b. An import's picture reaches the library's picture sink once, AFTER the
+//      commit, and the import's own transaction writes no tile (PREVIEWS-1).
 //   5. The completion tail (the UI-freeze-on-finish fix): ImportMeshTail
 //      previews the COMMITTED asset by guid (smoke S6 — the import-time
 //      fragment ImportResult used to carry is deleted) with NO second assimp
@@ -391,6 +393,63 @@ int main(int argc, char **argv)
         request.typeHint = static_cast<int>(ModelTypes::Texture);
         const ImportResult result = service.import(request);
         CHECK(result.ok(), "synchronous dialog-free import (assets.importFile path) works");
+        CHECK(db.fetchAsset(result.assetGuid).thumbnail.isEmpty(),
+              "4: with NO picture sink set the import stores no tile at all (its row reads missing)");
+    }
+
+    // ---- 4b. AN IMPORT's PICTURE GOES TO THE ONE WRITER's DOOR, AFTER ITS COMMIT (PREVIEWS-1 stage 2)
+    // The import's transaction writes NO tile (the base wrote the staged PNG inside it, a second
+    // write path with no key: its row read 'stale'); after the commit each picture goes to the
+    // library's sink once - the row and its files COMMITTED by then (a second connection, which sees
+    // committed rows only, finds the row and its source file row), its tile still empty.
+    {
+        const QString png4b = writeUniquePng(cwd + "/tex_sink.png");
+        struct Seen
+        {
+            QString guid;
+            bool picture = false;
+            bool committedRow = false;
+            bool committedFile = false;
+            bool emptyTile = false;
+        };
+        QVector<Seen> seen;
+        {
+            QSqlDatabase probe = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("sink-probe"));
+            probe.setDatabaseName(dbPath);
+            CHECK(probe.open(), "4b: a second connection to the library");
+            db.setImportPictureSink([&seen, probe](const QString &guid, const QImage &picture) {
+                Seen s;
+                s.guid = guid;
+                s.picture = !picture.isNull();
+                QSqlQuery row(probe);
+                row.prepare(QStringLiteral("SELECT length(thumbnail) FROM assets WHERE guid = ?"));
+                row.addBindValue(guid);
+                if (row.exec() && row.next()) {
+                    s.committedRow = true;
+                    s.emptyTile = row.value(0).isNull() || row.value(0).toInt() == 0;
+                }
+                QSqlQuery file(probe);
+                file.prepare(QStringLiteral("SELECT 1 FROM asset_files WHERE asset_guid = ? AND role = 'source'"));
+                file.addBindValue(guid);
+                s.committedFile = file.exec() && file.next();
+                seen.append(s);
+            });
+            AssetImportService service(&db, nullptr);
+            ImportRequest request;
+            request.sourcePath = png4b;
+            request.typeHint = static_cast<int>(ModelTypes::Texture);
+            const ImportResult result = service.import(request);
+            db.setImportPictureSink({});
+            CHECK(result.ok(), "4b: a Texture import with the sink set");
+            CHECK(seen.size() == 1 && seen.first().guid == result.assetGuid && seen.first().picture,
+                  "4b: its ONE picture reaches the sink once, for its row");
+            CHECK(!seen.isEmpty() && seen.first().committedRow && seen.first().committedFile,
+                  "4b: ...AFTER the commit: another connection sees the row and its source file");
+            CHECK(!seen.isEmpty() && seen.first().emptyTile,
+                  "4b: ...and the import's transaction wrote NO tile (the one writer stores it, with its key)");
+            probe.close();
+        }
+        QSqlDatabase::removeDatabase(QStringLiteral("sink-probe"));
     }
 
     // ---- 5. the completion tail: THE COMMITTED ASSET, queued per turn ------

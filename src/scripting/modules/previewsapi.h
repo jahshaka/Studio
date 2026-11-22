@@ -17,7 +17,8 @@ For more information see the LICENSE file
 // state() is a comparison of keys, CPU only, headless: what a preview depicts against what the
 // stored one was drawn from. render() and renderAll() draw through the one service and WAIT for the
 // write to land - the one wait of the preview path, in these synchronous verbs' door only, bounded
-// (PICTURE-REQUEST-1 stage 3 replaces it by a ticket). They replace assets.refreshThumbnail and
+// (PICTURE-REQUEST-1 stage 3 replaces it by a ticket); settle() waits for every write the writer
+// holds, whoever asked (an import's pictures). They replace assets.refreshThumbnail and
 // assets.rebuildThumbnails.
 
 #include <QVariant>
@@ -38,6 +39,7 @@ public:
     Q_INVOKABLE QVariantList state(const QVariantMap &options = QVariantMap());
     Q_INVOKABLE QVariantMap render(const QString &guid);
     Q_INVOKABLE QVariantMap renderAll(const QVariantMap &options = QVariantMap());
+    Q_INVOKABLE QVariantMap settle();
 };
 
 #endif // SCRIPTING_PREVIEWSAPI_H
