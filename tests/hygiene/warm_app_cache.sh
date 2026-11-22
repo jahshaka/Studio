@@ -555,6 +555,19 @@ o=$("$W" "$KB" --check "${KX[@]}"); r=$?
 grep -v SHADER_CACHE_CODE_ID "$T/id.bak" > "$KB/engine/generated/jahshaka_engine_build_id.h"
 "$W" "$KB" --key > /dev/null 2>&1; r=$?
 [ $r = 2 ] && ok "a build id header without the code id (an unbuilt or older tree): no key, exit 2 - never a key without the cache's code" || no "no code id: rc $r"
+# C3 THE COLD KEY FAILS CLOSED (the lead's ruling 2026-11-23): a header that cannot say one of the three compile-path ids gives
+# NO key - --cold-key and --key exit 2 naming the id - never a cold key that silently drops the fork's producers (red before: a
+# cold key printed with an empty term, exit 0); the control: the whole header gives both keys
+c3=""
+for g in MICROCODE PREPROCESSOR COMPUTE; do
+    grep -v "JAHSHAKA_COMPILE_PATH_${g}_ID" "$T/id.bak" > "$KB/engine/generated/jahshaka_engine_build_id.h"
+    e=$("$W" "$KB" --cold-key 2>&1 >/dev/null); r1=$?; "$W" "$KB" --key > /dev/null 2>&1; r2=$?
+    [ $r1 = 2 ] && [ $r2 = 2 ] && echo "$e" | grep -q "no JAHSHAKA_COMPILE_PATH_${g}_ID in " || c3="$c3 $g:$r1/$r2"
+done
+cp "$T/id.bak" "$KB/engine/generated/jahshaka_engine_build_id.h"
+[ -z "$c3" ] && [ "$("$W" "$KB" --cold-key)" = "$ck" ] && [ "$("$W" "$KB" --key)" = "$kk" ] &&
+    ok "C3: a header without a compile-path id: --cold-key and --key exit 2 naming it (each of the three); the whole header gives both keys" ||
+    no "C3 the cold key fails closed: [$c3] ($("$W" "$KB" --cold-key 2>&1))"
 fi
 if want inherit; then
 # THE INHERITANCE (TEST-STREAMLINE-1 1a; the reader's I1-I7; WARM-SHARE-1 B4): a parent toy tree warm at its key (both shared

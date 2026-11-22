@@ -218,14 +218,20 @@ KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
 # under its cap, once (the same is true of every irisgl engine edit: the KEY holds only the cache's own code id). Such a file
 # BELONGS IN ShaderCompilePath.txt (the engine's own law there: "a fork commit that touches none of these costs no compile
 # anywhere"): a cold row caught compiling after a fork-only move is a FINDING - the file is added to the list.
+# IT FAILS CLOSED (the lead's ruling 2026-11-23), as key_inputs does for the code id: a header that cannot say one of the three
+# ids gives NO key (exit 2, --key too: a tree whose engine cannot say what its shaders are made from has no key to give) - never
+# a cold key that silently drops the fork's producers, and never the fork commit kept in its place (a fallback).
 cold_inputs() {
-    local id="$BUILD/engine/generated/jahshaka_engine_build_id.h" g
+    local id="$BUILD/engine/generated/jahshaka_engine_build_id.h" g v
     printf '%s\n' "$INPUTS" | grep -v '^fork '
     for g in MICROCODE PREPROCESSOR COMPUTE; do
-        echo "compile-$(echo "$g" | tr 'A-Z' 'a-z') $(sed -n "s/^#define JAHSHAKA_COMPILE_PATH_${g}_ID \"\([0-9a-f]*\)\"$/\1/p" "$id")"
+        v=$(sed -n "s/^#define JAHSHAKA_COMPILE_PATH_${g}_ID \"\([0-9a-f]*\)\"$/\1/p" "$id")
+        [ -n "$v" ] || { echo "warm-app-cache: no JAHSHAKA_COMPILE_PATH_${g}_ID in $id (build the tree first)" >&2; return 1; }
+        echo "compile-$(echo "$g" | tr 'A-Z' 'a-z') $v"
     done
 }
-COLD_INPUTS=$(cold_inputs); CKEY=$(printf '%s\n' "$COLD_INPUTS" | sha256sum | cut -c1-16)
+COLD_INPUTS=$(cold_inputs) || exit 2
+CKEY=$(printf '%s\n' "$COLD_INPUTS" | sha256sum | cut -c1-16)
 [ "$KEYONLY" = 1 ] && { if [ "$COLDKEYONLY" = 1 ]; then echo "$CKEY"; else echo "$KEY"; fi; exit 0; }
 # THE KEY's INPUTS KEPT BESIDE EVERY STAMP (TE-WARM-WHY (A), the lead's ruling 2026-11-22): a stamp names its key, a hash - "the
 # key moved" said nothing of WHICH term moved (the fork? the staged media? the ray SPIR-V?). Every stamp written at KEY gets

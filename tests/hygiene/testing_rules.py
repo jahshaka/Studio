@@ -1194,7 +1194,10 @@ def fresh_home_behaves(source):
         for d in ("engine/generated", "bin/media/Hlms", "bin/media/Photon", "tests/x"):
             os.makedirs(os.path.join(wb, d), exist_ok=True)
         open(os.path.join(wb, "CMakeCache.txt"), "w").write("CMAKE_BUILD_TYPE:STRING=Debug\n")
-        open(os.path.join(wb, "engine/generated/jahshaka_engine_build_id.h"), "w").write("#define JAHSHAKA_ENGINE_BUILD_ID \"1\"\n#define JAHSHAKA_SHADER_CACHE_CODE_ID \"1\"\n")
+        open(os.path.join(wb, "engine/generated/jahshaka_engine_build_id.h"), "w").write("#define JAHSHAKA_ENGINE_BUILD_ID \"1\"\n#define JAHSHAKA_SHADER_CACHE_CODE_ID \"1\"\n"
+            # (the three compile-path ids a built header carries: the warm-up's key refuses a header without them, TE-WARM-C)
+            "#define JAHSHAKA_COMPILE_PATH_MICROCODE_ID \"1\"\n#define JAHSHAKA_COMPILE_PATH_PREPROCESSOR_ID \"1\"\n"
+            "#define JAHSHAKA_COMPILE_PATH_COMPUTE_ID \"1\"\n")
         for d in ("Hlms", "Photon"):
             open(os.path.join(wb, "bin/media", d, "a.txt"), "w").write(d)
         for st in (".shadercache.warm-key", ".shadercache.driver-key"):
