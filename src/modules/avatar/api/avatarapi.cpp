@@ -19,8 +19,6 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QSet>
 #include <QSqlDatabase>
-#include <QSqlQuery>
-#include <QSqlError>
 #include <QFutureWatcher>
 #include <QThread>
 #include <QElapsedTimer>
@@ -45,6 +43,7 @@ For more information see the LICENSE file
 #include "irisgl/document/input/possession.h"
 #include "scripting/modules/moduleshared.h"
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
 #include "data/project.h"
 #include "services/assetcas.h"
 #include "services/assetmetadata.h"
@@ -1301,16 +1300,18 @@ QString AvatarApi::assetForContent(const QString &path) const
     // a clip can come out of (an animation-only download is an Animation row,
     // a "with skin" download is an Object). Ordered so the answer is the same
     // on every machine.
-    QSqlQuery query(QSqlDatabase::database());
-    query.prepare("SELECT AF.asset_guid FROM asset_files AF "
-                  "INNER JOIN assets A ON A.guid = AF.asset_guid "
-                  "WHERE AF.oid = ? AND AF.role = 'source' AND A.listed = 1 "
-                  "  AND A.type IN (?, ?) "
-                  "ORDER BY AF.asset_guid");
-    query.addBindValue(oid);
-    query.addBindValue(static_cast<int>(ModelTypes::Animation));
-    query.addBindValue(static_cast<int>(ModelTypes::Object));
-    if (query.exec() && query.next()) return query.value(0).toString();
+    db::Statement query(host.db->connection(),
+                        "SELECT AF.asset_guid FROM asset_files AF "
+                        "INNER JOIN assets A ON A.guid = AF.asset_guid "
+                        "WHERE AF.oid = ? AND AF.role = 'source' AND A.listed = 1 "
+                        "  AND A.type IN (?, ?) "
+                        "ORDER BY AF.asset_guid");
+    dbqt::bindText(query, 1, oid);
+    query.bindInt(2, static_cast<int>(ModelTypes::Animation));
+    query.bindInt(3, static_cast<int>(ModelTypes::Object));
+    db::Error error;
+    if (query.step(&error)) return dbqt::text(query, 0);
+    if (error) qWarning("avatar: the row of a clip's content: %s", qUtf8Printable(dbqt::describe(error)));
     return QString();
 }
 

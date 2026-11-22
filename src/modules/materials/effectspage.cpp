@@ -17,7 +17,6 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include <QScopedValueRollback>
-#include <QSqlDatabase>
 #include <QActionGroup>
 #include "graph/graphnode.h"
 #include <QMouseEvent>

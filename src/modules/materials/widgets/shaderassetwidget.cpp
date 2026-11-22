@@ -10,7 +10,6 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "shaderassetwidget.h"
 #include "data/project.h"
-#include <QSqlDatabase>
 #include "services/assetcas.h"
 #include "services/assetdelete.h"
 #include "services/assettray.h"
