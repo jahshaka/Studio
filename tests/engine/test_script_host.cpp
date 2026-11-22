@@ -1588,6 +1588,24 @@ int main()
                   "engine-less host's engine.picture.create runs): " + made.message);
     }
 
+    // 14. A FRESH REALM PER RUN (MCP-ON-HOST-1 stage 2.4: run_script's state across calls is only what a handle names):
+    //     with freshRealmPerRun a global set in run 1 is undefined in run 2; without it (jahengine) it survives
+    {
+        const auto twoRuns = [](bool fresh) {
+            Host::Options o;
+            o.freshRealmPerRun = fresh;
+            Host h(o);
+            std::vector<std::string> said;
+            h.setConsole([&said](const std::string &l) { said.push_back(l); });
+            const Result a = h.run("globalThis.kept = 7; var alsoKept = 8;\n", "one.js");
+            const Result b = h.run("console.log(typeof kept + ' ' + typeof alsoKept);\n", "two.js");
+            return a.status == Status::Ok && b.status == Status::Ok && said.size() == 1 ? said[0] : std::string("?");
+        };
+        const std::string fresh = twoRuns(true), kept = twoRuns(false);
+        check(fresh == "undefined undefined" && kept == "number number",
+              "with freshRealmPerRun run 2 sees no global of run 1 (" + fresh + "); without it they survive (" + kept + ")");
+    }
+
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
     else std::printf("script.host: PASSED\n");
     return gFail ? 1 : 0;
