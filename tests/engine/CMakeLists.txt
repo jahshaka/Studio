@@ -528,3 +528,19 @@ set_tests_properties(frame.particles_per_scene PROPERTIES TIMEOUT 60 LABELS "eng
 jah_gpu_row(frame.particles_once_a_frame CLASS engine FRAMES 11 COMMAND test_frame_particles --resolve
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(frame.particles_once_a_frame PROPERTIES TIMEOUT 60 LABELS "engine")
+
+# engine.lobe_energy (MATERIAL-ENERGY-1 stage 1) — THE LOBE RETURNS NO MORE LIGHT THAN IT RECEIVES: the fork's shipped
+# JahBrdf / JahDiffuseAlbedo / JahSpecularAlbedo text COMPILED as C++ (tests/support/glsl_as_cpp.*: the engine's own unwrap
+# step, two counted rewrites), the table #included; the laws and their derivation in test_lobe_energy.cpp. CPU only.
+include(${CMAKE_SOURCE_DIR}/tests/support/glsl_as_cpp.cmake)
+set(JAH_LOBE_PIECES
+    "${OGRE_NEXT_HLMS_SOURCE_DIR}/Pbs/Any/JahBrdf_piece_all.any"
+    "${OGRE_NEXT_HLMS_SOURCE_DIR}/Pbs/Any/JahDiffuseAlbedo_piece_all.any"
+    "${OGRE_NEXT_HLMS_SOURCE_DIR}/Pbs/Any/JahSpecularAlbedo_piece_all.any")
+add_executable(test_lobe_energy test_lobe_energy.cpp)
+set_target_properties(test_lobe_energy PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_lobe_energy PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+jah_glsl_as_cpp(test_lobe_energy OUT jah_lobe_pieces.h PIECES ${JAH_LOBE_PIECES} OUT_PARAMS 5 ARRAYS 1)
+add_test(NAME engine.lobe_energy COMMAND test_lobe_energy)
+set_tests_properties(engine.lobe_energy PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.lobe_energy)
