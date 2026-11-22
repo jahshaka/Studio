@@ -17,7 +17,7 @@
 #include <cmath>
 #include <cstdio>
 
-#include "document/input/inputmap.h"
+#include "irisgl/document/input/inputmap.h"
 
 using namespace iris;
 

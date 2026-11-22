@@ -33,11 +33,11 @@ Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
 #include <QMatrix4x4>
 #include <QMatrix3x3>
 
-#include "core/math/vec.h"
-#include "core/math/quat.h"
-#include "core/math/mat4.h"
-#include "core/math/qtinterop.h"
-#include "core/math/trs.h"
+#include "irisgl/core/math/vec.h"
+#include "irisgl/core/math/quat.h"
+#include "irisgl/core/math/mat4.h"
+#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/core/math/trs.h"
 
 #include <cstdio>
 #include <cstring>

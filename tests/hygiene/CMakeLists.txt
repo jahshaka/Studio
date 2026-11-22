@@ -784,6 +784,16 @@ add_test(NAME source.webgpu_census
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/webgpu_census.py" "${CMAKE_SOURCE_DIR}")
 set_tests_properties(source.webgpu_census PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.webgpu_census)
+# source.engine_headers (ENGINE-HEADERS-1 stage 1, the spec's call 13): THE ENGINE's PUBLIC HEADERS ARE ONE SUBJECT EACH AND ONLY GET
+# SMALLER - Types.h gone (no header, no includer); Engine.h's own engine includes exactly the BASE + Fwd.h; every public header's
+# line count and header fan-out (the STRUCTURE; scripts/lead/fanout.sh measures the BUILD) held at a ceiling
+# (engine_headers_ceilings.txt), the law both ways; and the house spelling of an
+# irisgl include in the Studio tree, "irisgl/<dir>/..." (the lead's, a finding of NOQT-CORE-1's final read). Its self-test first:
+# one synthetic violation per law on a toy tree. Sources only (no build).
+add_test(NAME source.engine_headers
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/engine_headers.py" "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.engine_headers PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.engine_headers)
 # source.no_qt_below (NOQT-CORE-1 stage 0, V2 plan 0.12): NO Qt BELOW THE EDITOR's UI, AND WHAT IS LEFT ONLY FALLS - per line
 # of no_qt_below_ceilings.txt (the irisgl/* directories: every Qt token and include; one QtSql-only line per src/* directory),
 # comments and literals stripped, the law both ways (over = RED with every site; under = RED "lower the ceiling to M in the
@@ -917,7 +927,7 @@ jah_builds(none ROWS source.no_glsl_path source.fork_stamp source.no_raw_transac
     source.rough_lobe_transport source.gate_pace source.test_arms_unreachable source.webgpu_census source.ray_seam
     source.display_guard_toy source.on_demand_rows source.on_demand_toy source.no_box_paths source.brick_list_bounded
     source.scene_time_one_meaning source.ray_views_cached source.card_report_layout source.ray_loops_bounded
-    source.view_ray_origin)
+    source.view_ray_origin source.engine_headers)
 # the warm-up's key of this build (scripts/warm-app-cache.sh --key: the staged media and the engine's build id):
 jah_builds(JahshakaEngineMedia JahshakaEngineBuildId ROWS tooling.warm_app_cache tooling.warm_cold_rows
     tooling.warm_cold_calls tooling.warm_key tooling.warm_inherit tooling.warm_store source.display_guard)
