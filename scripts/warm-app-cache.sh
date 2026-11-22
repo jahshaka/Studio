@@ -606,9 +606,10 @@ est_of() {
     [ -n "$w" ] && { echo "$w"; return; }
     case "$1" in app-off) echo 400 ;; engine-off) echo 340 ;; app-on) echo 120 ;; engine-on) echo 60 ;; cold-on) echo 330 ;; esac   # cold-on: 306 s measured, three rows, loaded (#122)
     # app-off-nothing: an app-off boot PREDICTED to build nothing (TE-WARM-WHY (B): its cache warm at the key, only the startup
-    # pass's record stale) - its own walls, never the cold boot's; before the first: 50 s, the median own wall of the box's five
-    # nothing-built app-off boots of 2026-11-22 (49, 50, 49, 49, 49 s with the pass re-run: spikes/cache-tool/f1/f1.out)
-    [ "$1" = app-off-nothing ] && echo 50
+    # pass's record stale) - this tree's own nothing-built walls, never the cold boot's; before the first, the box's price as the
+    # caller gives it (JAH_WARM_NOTHING_S: the lead tools, from the box's own warm-up history - this repo knows no box, CODING_RULES
+    # § 7); none given: no estimate (the boot holds long, as before)
+    [ "$1" = app-off-nothing ] && echo "${JAH_WARM_NOTHING_S:-}"
 }
 # A BOOT's OWN WALL IN TENTHS (tooling.warm_app_cache's red under -j4, 2026-11-03): the wall was whole seconds of `date +%s`
 # and the wait the lock's tenths FLOORED, so "own = wall - wait" carried up to ~2 s of quantisation - a 1.7-s wait and a
@@ -641,8 +642,11 @@ room() {
     # nothing-built wall + 50 % (never 2 x est + 10 from a cold wall); an overrun is the lock's to log, and a call with a place
     # (JAH_GPU_PLACE) holds long at its place (gpu-exclusive.sh)
     if [ "${PREDICT:-}" = nothing ]; then
-        est=$(est_of "$1-nothing"); WAIT=$(( left - est )); SHORT=()
-        [ $(( (3 * est + 1) / 2 )) -le 90 ] && SHORT=(--short $(( (3 * est + 1) / 2 )))
+        local ne; ne=$(est_of "$1-nothing"); SHORT=()
+        case "$ne" in ""|*[!0-9]*) ;; *)   # (no nothing-built price: long, its wait from the plain estimate)
+            est=$ne; WAIT=$(( left - est ))
+            [ $(( (3 * est + 1) / 2 )) -le 90 ] && SHORT=(--short $(( (3 * est + 1) / 2 ))) ;;
+        esac
     fi
     if [ "$RAN" = 0 ]; then
         [ "$WAIT" -ge "$FLOOR" ] || WAIT=$FLOOR
@@ -686,20 +690,23 @@ boot() {
         return 1
     fi
     waited=$(waited_of "$log"); wall=$(( wall - waited )); [ "$wall" -ge 0 ] || wall=0   # THE BOOT's OWN WALL (block A), tenths
-    # THE PREDICTION PROVED (TE-WARM-WHY (B)): a boot predicted to build nothing reads its own logs (the app's and its tier
-    # boots') - every "startup shader build: N shaders (M compiled" summed; M > 0 is a FAULT naming what compiled and the
-    # record's terms that moved (the terms the warm key does not hold), and its wall is the plain boot's, never a nothing-built
-    # price
-    local wname=$name comp
+    # THE PREDICTION PROVED (TE-WARM-WHY (B); the final read's leftovers, ruled): a boot predicted to build nothing is judged by
+    # the ENGINE's own count - the shared cache manifest's `shaders` line before and after the boot (every process: the gate, the
+    # self-test's poses, each tier scene), never one log line. Built anything: said, its wall the plain boot's, never a
+    # nothing-built price - an engine edit that adds permutations at the same key is expected, not a fault. A FAULT is kept for
+    # what no key saw: the record's media= or cache= term moved (the warm key holds neither whole)
+    local wname=$name nn moved
     if [ "${PREDICT:-}" = nothing ]; then
-        comp=$(cat "$log" "$(dirname "$log")"/warm-tier-*.log 2>/dev/null |
-               sed -n 's/^.*startup shader build: [0-9]* shaders (\([0-9]*\) compiled.*$/\1/p' | awk '{ s += $1 } END { print s + 0 }')
-        if [ "$comp" -gt 0 ]; then
-            echo "warm-app-cache: FAULT: the app-off boot was predicted to build nothing (its cache warm at $KEY, only the startup" \
-                 "pass's record stale) but compiled $comp shader(s) - the record's terms that moved: $(rec_moved "$OLDREC" "$shared/warm-pass.key") - its log $log"
+        nn=$(sed -n 's/^shaders //p' "$shared/cache-manifest.txt" 2>/dev/null)
+        if [ -n "$OLDN" ] && [ -n "$nn" ] && [ "$nn" != "$OLDN" ]; then
+            echo "warm-app-cache: the app-off boot was predicted to build nothing; its cache holds $OLDN -> $nn shaders: the price not kept - its log $log"
         else
             wname=$name-nothing
         fi
+        moved=$(rec_moved "$OLDREC" "$shared/warm-pass.key")
+        case ", $moved," in *", media,"*|*", cache,"*)
+            echo "warm-app-cache: FAULT: the startup pass's record moved in a term no key saw ($moved) - its log $log" ;;
+        esac
     fi
     note_wall "$wname" "$(( (wall + 5) / 10 ))"; waited=$(fmt_tenths "$waited"); wall=$(fmt_tenths "$wall")
     if [ ! -f "$shared/cache-manifest.txt" ]; then
@@ -839,7 +846,7 @@ for b in $RUN; do
             H="$TESTS/warm-app-cache-home"; FH_ARGS="--warm"; EXE="$APPX"
             if [ "$b" = app-off ]; then
                 PREDICT=""; [ -z "$(cache_why app-off)" ] && PREDICT=nothing
-                OLDREC=$(cat "$APP_SHARED/warm-pass.key" 2>/dev/null)
+                OLDREC=$(cat "$APP_SHARED/warm-pass.key" 2>/dev/null); OLDN=$(sed -n 's/^shaders //p' "$APP_SHARED/cache-manifest.txt" 2>/dev/null)
                 # (the GLSL dump this boot once wrote for source.shaders_spirv_valid is gone, 2026-11-21: the row reads the
                 # engine's own bytes in the microcode caches - NONDET-1 F3; its tier boots' logs go to this call's logs)
                 boot app-off "$APP_SHARED" "$APP_STAMP" "$H" "$LOGS/app-off.log" "$left" \

@@ -37,7 +37,7 @@ toy_cache "$T/.shadercache" 1 2
 toy_cache "$T/.shadercache-engine" 1 2
 fail=0
 ok() { echo "  ok: $1"; }
-no() { echo "  FAIL: $1"; fail=1; }
+no() { echo "  FAIL: $1"; fail=$((fail + 1)); }
 # the exes the -on stamps name (the driver's per-exe key is the exe's name): two fakes, the same in every call below
 printf '#!/bin/sh\nexit 0\n' > "$T/app"; printf '#!/bin/sh\nexit 0\n#lab\n' > "$T/lab"; chmod +x "$T/app" "$T/lab"
 cp "$T/app" "$T/app2"
@@ -58,7 +58,7 @@ cat > "$T/fake-app" <<'APP'
 # (the file lines kept as seeded: the linked files are the shared cache's, one generation)
 c="$HOME/.local/share/Jahshaka/shadercache"
 mkdir -p "$c"; files=$(grep '^file ' "$c/cache-manifest.txt"); rm -f "$c/cache-manifest.txt"
-printf 'jahshaka-shader-cache 2\nsaved 2\nshaders 3\n%s\n' "$files" > "$c/cache-manifest.txt"
+printf 'jahshaka-shader-cache 2\nsaved 2\nshaders %s\n%s\n' "${FAKE_SHADERS:-3}" "$files" > "$c/cache-manifest.txt"   # (FAKE_SHADERS: (B)'s count)
 if [ -n "${FAKE_RACE:-}" ]; then
     rm -f "$FAKE_RACE/cache-manifest.txt"
     printf 'jahshaka-shader-cache 2\nsaved 9\nshaders 4\n%s\n' "$files" > "$FAKE_RACE/cache-manifest.txt"
@@ -71,8 +71,6 @@ if [ -n "${FAKE_PASS_LOG:-}" ]; then
     elif [ -z "${FAKE_PASS_ID:-}" ] && [ -f "$c/warm-pass.key" ]; then echo skipped >> "$FAKE_PASS_LOG"
     else echo ran >> "$FAKE_PASS_LOG"; rm -f "$c/warm-pass.key"; printf 'pass=%s|media=m|cache=c\n' "${FAKE_PASS_ID:-this-boot}" > "$c/warm-pass.key"; fi
 fi
-# with FAKE_COMPILED=<n>, the app's own startup line says it compiled n shaders (a predicted-nothing boot that built: (B))
-[ -z "${FAKE_COMPILED:-}" ] || echo "startup shader build: 5 shaders ($FAKE_COMPILED compiled, 0 from cache) in 1 ms"
 exit 0
 APP
 chmod +x "$T/fake-app"
@@ -267,9 +265,11 @@ out=$(P4); rc=$?
     ok "P3: the next call is warm at the key and boots nothing (the control: an equal record)" ||
     no "P3 after the refresh: rc $rc '$out' pass [$(tr '\n' ' ' < "$T/b4.pass")]"
 # A PREDICTED NOTHING-BUILT BOOT IS A SHORT HOLD (TE-WARM-WHY (B)): the app-off boot whose cache is warm at the key and whose
-# only why is the pass record declares its OWN nothing-built wall + 50 % - the measured "app-off-nothing 40" -> --short 60,
-# whatever the cold boot's "app-off 400" says (2 x 400 + 10 would be long) - its ticket <n>.s60 (the card held: exit 75, its
-# reservation kept); with no nothing-built wall yet, the box's measured 50 s -> .s75. (red before (B): a long ticket, no .s)
+# only why is the pass record declares its OWN nothing-built wall + 50 % - the tree's measured "app-off-nothing 40" -> --short
+# 60, whatever the cold boot's "app-off 400" says (2 x 400 + 10 would be long); with none measured, the box's price as the CALLER
+# gives it (JAH_WARM_NOTHING_S=50 -> .s75) - and with none given, LONG (the script names no box price: CODING_RULES § 7). The
+# card held: exit 75, the ticket kept as the reservation. (red before (B): long tickets; before the final read's fix: .s75 with
+# nothing given)
 PB4() {   # <walls line>...: the stale-record toy B4 again, the card held by this shell, a 10-s budget; prints the ticket's suffix
     printf 'pass=%s|media=m|cache=c\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "$B4/tests/.shadercache/warm-pass.key"
     printf '%s\n' "$@" > "$B4/tests/.warm-walls"; rm -rf "$T/gpuP.lock.q"
@@ -278,20 +278,34 @@ PB4() {   # <walls line>...: the stale-record toy B4 again, the card held by thi
     echo "rc $? $(ls "$T/gpuP.lock.q" 2> /dev/null | grep -E '^[0-9]{12}' | tr '\n' ' ')"
     exec 8>&-
 }
-r1=$(PB4 "app-off 400" "app-off-nothing 40"); r2=$(PB4 "app-off 400")
+unset JAH_WARM_NOTHING_S   # (the box's price arrives only as the caller's variable: none here unless a case sets it)
+r1=$(PB4 "app-off 400" "app-off-nothing 40"); r2=$(JAH_WARM_NOTHING_S=50 PB4 "app-off 400"); r3=$(PB4 "app-off 400")
 case "$r1" in "rc 75 "[0-9]*.s60" ") true ;; *) false ;; esac && case "$r2" in "rc 75 "[0-9]*.s75" ") true ;; *) false ;; esac &&
-    ok "B1: a predicted nothing-built app-off declares its own wall + 50 %: 40 s -> .s60 beside a cold 400 s; none measured -> 50 s -> .s75" ||
-    no "B1 the nothing-built short hold: [$r1] [$r2]"
-# ...AND THE PREDICTION IS PROVED BY THE BOOT's OWN LOG (B2): a predicted-nothing boot that compiled is a FAULT line naming what
-# compiled and the record's terms that moved; its wall is NOT a nothing-built price. (red before (B): no line, the wall kept)
-printf 'pass=%s|media=m|cache=c\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "$B4/tests/.shadercache/warm-pass.key"
-echo "app-off-nothing 40" > "$B4/tests/.warm-walls"
-out=$(FAKE_COMPILED=3 FAKE_PASS_ID=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb FAKE_PASS_LOG="$T/b4.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 \
-      "$W" "$B4" --tests-dir "$B4/tests" "${F[@]}" --only app-off); rc=$?
-[ $rc = 0 ] && echo "$out" | grep -q "FAULT: the app-off boot was predicted to build nothing .* but compiled 3 shader(s) - the record's terms that moved: pass" &&
-    [ "$(awk '$1 == "app-off-nothing" { print $2 }' "$B4/tests/.warm-walls")" = 40 ] &&
-    ok "B2: a predicted-nothing boot that compiled 3 shaders says FAULT with the record's moved terms; its wall is no nothing-built price" ||
-    no "B2 the prediction's proof: rc $rc '$(echo "$out" | grep -E "FAULT|warm at" | head -2)' walls [$(tr '\n' ' ' < "$B4/tests/.warm-walls")]"
+    case "$r3" in "rc 75 "[0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9][0-9]" ") true ;; *) false ;; esac &&
+    ok "B1: a predicted nothing-built app-off declares its own wall + 50 %: 40 s -> .s60 beside a cold 400 s; none measured: the caller's JAH_WARM_NOTHING_S=50 -> .s75; none given -> LONG" ||
+    no "B1 the nothing-built short hold: [$r1] [$r2] [$r3]"
+# ...AND THE PREDICTION IS PROVED BY THE ENGINE's OWN COUNT (B2-B4): the shared manifest's `shaders` before and after. B2: the boot
+# grew it (2 -> 3: an engine edit's new permutations at the same key) - said, "the price not kept", the nothing-built wall stays
+# 40, NO FAULT; B3 (the control): it grew nothing - the wall IS kept as the nothing-built price; B4: the record's media= term moved
+# (a term no key holds whole) - a FAULT naming it. (red before the final read's fix: B2 printed FAULT from one log line, B3/B4 absent)
+B4P() { printf 'pass=%s|media=%s|cache=c\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa "$1" > "$B4/tests/.shadercache/warm-pass.key"
+        echo "app-off-nothing 40" > "$B4/tests/.warm-walls"; shift
+        env "$@" FAKE_PASS_ID=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb FAKE_PASS_LOG="$T/b4.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 \
+            "$W" "$B4" --tests-dir "$B4/tests" "${F[@]}" --only app-off; }
+wall_of() { awk '$1 == "app-off-nothing" { print $2 }' "$B4/tests/.warm-walls"; }
+sed -i 's/^shaders .*/shaders 2/' "$B4/tests/.shadercache/cache-manifest.txt"
+out=$(B4P m FAKE_SHADERS=3); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q "predicted to build nothing; its cache holds 2 -> 3 shaders: the price not kept" &&
+    ! echo "$out" | grep -q FAULT && [ "$(wall_of)" = 40 ] &&
+    ok "B2: a predicted-nothing boot that grew the cache (2 -> 3 shaders) is said, the price not kept, no FAULT" ||
+    no "B2 the prediction missed: rc $rc '$(echo "$out" | grep -E "predicted|FAULT|warm at" | head -2)' walls [$(tr '\n' ' ' < "$B4/tests/.warm-walls")]"
+out=$(B4P m FAKE_SHADERS=3); rc=$?   # (the cache holds 3 now: the same count after)
+[ $rc = 0 ] && ! echo "$out" | grep -qE "predicted|FAULT" && [ "$(wall_of)" != 40 ] &&
+    ok "B3: a predicted-nothing boot that grew nothing - its wall kept as the nothing-built price ($(wall_of) s)" ||
+    no "B3 the control: rc $rc '$(echo "$out" | grep -E "predicted|FAULT|warm at" | head -2)' walls [$(tr '\n' ' ' < "$B4/tests/.warm-walls")]"
+out=$(B4P old-media FAKE_SHADERS=3); rc=$?
+[ $rc = 0 ] && echo "$out" | grep -q "FAULT: the startup pass's record moved in a term no key saw (pass, media)" &&
+    ok "B4: the record's media= term moved unseen by any key - a FAULT naming it" || no "B4 the unseen term: rc $rc '$(echo "$out" | grep -E "FAULT|warm at" | head -2)'"
 # THE BOOT's OWN WALL (block A, 2026-11-03: "the boot 75 s" was 27.5 s of the card's wait + 47.5 s of boot): another holder keeps
 # the card 2 s past the call's ticket, the toy boot takes ~0 s - the line prints the boot's own wall and the wait beside it (red
 # before: "the boot 3 s")
@@ -737,5 +751,6 @@ wait $kp 2>/dev/null
     ok "S10: a cache warm at the key with only a stale pass record - no take, no key lock, ONE refresh boot on the tree's own union (the same inodes)" ||
     no "S10 the warm tree and the store: rc $rc booted [$(cat "$T/s-booted" 2>/dev/null | tr '\n' ' ')] pass [$(tr '\n' ' ' < "$T/s10.pass")] '$(echo "$out" | grep -iE "taken|lock|warmed by|cold at|warm at" | head -4 | tr '\n' '|')'"
 fi
-echo "tooling.warm_app_cache ($PART): $([ $fail = 0 ] && echo PASS || echo FAIL)"
-exit $fail
+# THE LAST LINE IS THE VERDICT (CODING_RULES § 4: `<name>: PASSED` or `<name>: FAILED (<n>)`, a non-zero exit on failure)
+echo "tooling.warm_app_cache ($PART): $([ $fail = 0 ] && echo PASSED || echo "FAILED ($fail)")"
+exit $(( fail > 0 ))
