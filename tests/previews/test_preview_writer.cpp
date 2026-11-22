@@ -39,7 +39,8 @@ For more information see the LICENSE file
 //      AFTER it (the writer waiting behind the UI's edit transaction), reads STALE: the key computed now
 //      (previews::sourceOf the catalog row, as PreviewService::state) differs from the stored one. NEGATIVE
 //      CONTROL: the key without the stamp (stage 1's) does not move across the edit - that row would read ok
-//      with the picture of the blob it no longer holds.
+//      with the picture of the blob it no longer holds. i2. the SIDECAR REBUILD (AssetMigration::rebuildCatalog)
+//      writes the stamp of the blob it restores, like every other writer of the blob.
 //   j. THE WRITER's STATEMENTS (the query log's "WritePreview" entries): one landed write is exactly four -
 //      BEGIN IMMEDIATE, UPDATE, INSERT OR REPLACE, COMMIT - once each; a read beside it is counted (the control).
 // The waits are on PUBLISHED state (a completion, a drop) with a cap that names the failure.
@@ -61,8 +62,15 @@ For more information see the LICENSE file
 #include <QRandomGenerator>
 #include <QVariant>
 
+#include <QDir>
+#include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
+#include <QJsonObject>
+
 #include "data/database/database.h"
 #include "irisgl/core/logger.h"
+#include "services/assetmigration.h"
 #include "services/previewkey.h"
 #include "services/previewwriter.h"
 
@@ -392,6 +400,43 @@ int main(int argc, char **argv)
                       && q.value(0).toString() == Database::blobStamp(QByteArrayLiteral("{\"node\": \"after the edit\"}"))
                       && q.value(0).toString().size() == 16,
                   "i: assets.hash holds the stamp of the blob the row now has (16 hex digits)");
+        }
+
+        // i2. THE SIDECAR REBUILD WRITES THE STAMP TOO (the final read's E, leftover L1): an Object restored from
+        //     its sidecar (AssetMigration::rebuildCatalog: a recovery, a Clear Database, a format bump) carries the
+        //     stamp of the blob it restores in assets.hash, as every other writer of the blob does - else it keys
+        //     on an empty stamp until its next in-place edit. Into a fresh catalog file (the rebuild refuses the
+        //     live library).
+        {
+            QTemporaryDir store;
+            QDir(store.path()).mkpath(QStringLiteral("sidecar"));
+            const QJsonObject blob{ { QStringLiteral("node"), QStringLiteral("restored") } };
+            const QJsonObject sidecar{ { QStringLiteral("formatVersion"), 3 },
+                                       { QStringLiteral("guid"), QStringLiteral("rebuilt") },
+                                       { QStringLiteral("name"), QStringLiteral("rebuilt") },
+                                       { QStringLiteral("type"), int(ModelTypes::Object) },
+                                       { QStringLiteral("home"), QStringLiteral("assets") },
+                                       { QStringLiteral("origin"), QStringLiteral("import") },
+                                       { QStringLiteral("asset"), blob },
+                                       { QStringLiteral("files"), QJsonArray() } };
+            QFile file(QDir(store.path()).filePath(QStringLiteral("sidecar/rebuilt.json")));
+            const bool written = file.open(QIODevice::WriteOnly) && file.write(QJsonDocument(sidecar).toJson()) > 0;
+            file.close();
+            const QString rebuiltPath = dir.filePath(QStringLiteral("Rebuilt.db"));
+            const AssetMigration::RebuildReport report = AssetMigration::rebuildCatalog(rebuiltPath, store.path());
+            check(written && report.error.isEmpty() && report.assets == 1, "i2: the sidecar rebuild restores the Object row");
+            QString stamp;
+            {
+                QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("i2-read"));
+                conn.setDatabaseName(rebuiltPath);
+                QSqlQuery q(conn);
+                if (conn.open() && q.exec(QStringLiteral("SELECT hash FROM assets WHERE guid = 'rebuilt'")) && q.next())
+                    stamp = q.value(0).toString();
+            }
+            QSqlDatabase::removeDatabase(QStringLiteral("i2-read"));
+            std::printf("     i2: the rebuilt row's assets.hash = '%s'\n", qUtf8Printable(stamp));
+            check(stamp.size() == 16 && stamp == Database::blobStamp(QJsonDocument(blob).toJson(QJsonDocument::Compact)),
+                  "i2: assets.hash holds the stamp of the blob the rebuild restored (16 hex digits)");
         }
 
         // j. THE WRITER's STATEMENTS, from the existing query log (its "WritePreview" entries, noted under the log's

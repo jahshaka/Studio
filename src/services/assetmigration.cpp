@@ -23,6 +23,7 @@ For more information see the LICENSE file
 #include <QUuid>
 
 #include "data/database/casschema.h"
+#include "data/database/database.h"
 #include "services/assetcas.h"
 #include "services/assetstore.h"
 #include "services/assetstorepaths.h"
@@ -327,11 +328,16 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
         assethome::Home home;
         sidecarHome(sidecar, &home);
 
+        // The blob WITH its stamp (Database::blobStamp, `hash`), as every writer of the blob stores it:
+        // a preview's key reads the stamp (services/previewkey.h).
+        const QByteArray blob = sidecar.contains("asset")
+            ? QJsonDocument(sidecar.value("asset").toObject()).toJson(QJsonDocument::Compact)
+            : QByteArray();
         QSqlQuery insertAsset(conn);
         insertAsset.prepare("INSERT OR IGNORE INTO assets (guid, name, type, view_filter, project_guid, "
-                            "origin, parent, asset, collection, author, license, properties, tags, "
+                            "origin, parent, asset, hash, collection, author, license, properties, tags, "
                             "listed, date_created, last_updated, times_used) "
-                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(), ?)");
+                            "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, datetime(), ?)");
         insertAsset.addBindValue(guid);
         insertAsset.addBindValue(sidecar.value("name").toString());
         insertAsset.addBindValue(sidecar.value("type").toInt());
@@ -340,9 +346,8 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
                                                   : QVariant(QMetaType(QMetaType::QString)));
         insertAsset.addBindValue(sidecar.value("origin").toString());
         insertAsset.addBindValue(sidecar.value("parent").toString());
-        insertAsset.addBindValue(sidecar.contains("asset")
-            ? QJsonDocument(sidecar.value("asset").toObject()).toJson(QJsonDocument::Compact)
-            : QByteArray());
+        insertAsset.addBindValue(blob);
+        insertAsset.addBindValue(Database::blobStamp(blob));
         insertAsset.addBindValue(sidecar.value("collection").toInt());
         insertAsset.addBindValue(sidecar.value("author").toString());
         insertAsset.addBindValue(sidecar.value("license").toString());

@@ -56,7 +56,8 @@ set(_previews_db_closure
     ${CMAKE_SOURCE_DIR}/src/services/vrworld.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetiobase.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp)
-add_executable(test_preview_writer test_preview_writer.cpp ${_previews_db_closure})
+add_executable(test_preview_writer test_preview_writer.cpp ${_previews_db_closure}
+    ${CMAKE_SOURCE_DIR}/src/services/assetmigration.cpp)
 set_target_properties(test_preview_writer PROPERTIES AUTOMOC ON CXX_STANDARD 17)
 target_include_directories(test_preview_writer PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
