@@ -614,6 +614,23 @@ int main()
         check(refused && r.status == Status::Failed && r.message.find("the host did not start") == 0 &&
                   r.message.find("test.bare: no doc") != std::string::npos && broken.checksRun() == 0,
               "a host whose registry refused a command refuses to run, naming it: " + r.message.substr(0, r.message.find('\n')));
+        // ...and serves NO CALL by any door (MCP-ON-HOST-1 stage 2: call / callNamed / callAt went round run's check):
+        // each FAILS with run's words, naming the fault; the control - the same calls on a whole host run
+        const Value law(Value::Object{{"ok", Value(true)}, {"what", Value("a call")}});
+        const Result byName = broken.call("host.check", {law});
+        const Result byNamed = broken.callNamed("host.check", {{"law", law}});
+        const Result byIndex = broken.callAt(0, {law});
+        const auto refusedWhole = [](const Result &x) {
+            return failedWith(x, "the host did not start") && x.message.find("test.bare: no doc") != std::string::npos;
+        };
+        Host whole;
+        whole.setConsole([](const std::string &) {});
+        const bool control = whole.call("host.check", {law}).status == Status::Ok &&
+                             whole.callNamed("host.check", {{"law", law}}).status == Status::Ok &&
+                             whole.callAt(0, {law}).status == Status::Ok;
+        check(refusedWhole(byName) && refusedWhole(byNamed) && refusedWhole(byIndex) && broken.checksRun() == 0 && control,
+              "a faulted host's call, callNamed and callAt each FAIL naming the fault, and run nothing (the control: a "
+              "whole host's three run): " + byIndex.message.substr(0, byIndex.message.find('\n')));
         Host two;
         two.setConsole([](const std::string &) {});
         registerEngineCommands(two, nullptr, "first", false);
