@@ -270,18 +270,32 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         engine.shaderBuildProgress(c, f, e);
         unsigned last = c;
         int quiet = 0;
+        // ...AND, once the rays are built, until the world's CARDS ARE CAPTURED (COLD-BOOT-1): the surface cache's queue
+        // is paced by a texel budget a frame and the readers' demand read-back, not by compiles, so 30 frames without a
+        // compile can end the phase with cards still waiting - and the tier sweep after it is placeholders-only, where a
+        // capture builds nothing real. Whether a world's card-capture permutations were built then depended on timing:
+        // a cold launch built one, the warm launch after it six (shadercache.app.warm; spikes/cold-boot-1/repro-warm).
         const auto untilQuiet = [&](bool needRays) {
             int phaseFrames = 0;
             quiet = 0;
+            bool cardsDone = true;
             while (phaseFrames < kWarmWorldFrameCap && quiet < kWarmWorldQuietFrames) {
                 frame();
                 ++phaseFrames;
                 engine.shaderBuildProgress(c, f, e);
                 const GiStatus &gi = es->published().gi;   // the snapshot (U3 stage 2)
                 const bool armed = gi.mode == GiMode::Off || gi.vctBound;
-                quiet = (c == last && armed && settled(needRays)) ? quiet + 1 : 0;
+                cardsDone = !needRays || !gi.cards.built || gi.cards.queueLength == 0u;
+                quiet = (c == last && armed && cardsDone && settled(needRays)) ? quiet + 1 : 0;
                 last = c;
             }
+            const GiStatus &gi = es->published().gi;
+            if (needRays)
+                qInfo("startup shader build: the %s world's cards: captured %llu, queued %u", es->name().c_str(),
+                      gi.cards.captures, gi.cards.queueLength);
+            if (!cardsDone)   // the cap, never a silent pass
+                qWarning("FAIL: shader build gate: the %s world's cards were not all captured in %d frames - %u queued",
+                         es->name().c_str(), kWarmWorldFrameCap, gi.cards.queueLength);
         };
         untilQuiet(false);
         // (2a) THE RAY PIPELINES' CONSUMERS (COLD-BOOT-1 stage 4): the builds started at the gate's first frame are waited
