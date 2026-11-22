@@ -17,9 +17,14 @@
 #       the TEST flag `true`, and the registry's list() hands it on (`a.test = kArms[i].test`);
 #   (2) in src/, `setArm(` is called only by the verb's file and by jahlab (src/lab/: the lab's own door);
 #   (3) the verb refuses a test arm BEFORE it sets: `.test` is read in engineapi.cpp ahead of its `setArm(`;
-#   (4) `_jahFailRequests` appears nowhere in src/.
+#   (4) `_jahFailRequests` appears nowhere in src/;
+#   (5) IRISGL's OWN CALLERS (the final read's leftover: Stillness.cpp sets fixed measuring arms through Engine::setArm):
+#       every `setArm("<name>"` in irisgl/engine names no TEST arm (the names are the arm table's X(Id, "name") rows,
+#       EnginePrivate.h), and a `setArm(` whose name is not a literal is only a forwarder - inside a function itself
+#       named setArm, in a file whose every other call is a literal.
 # A NEGATIVE CONTROL runs first: synthetic trees with a test arm unflagged, a second src/ caller of setArm, a verb that sets
-# without refusing, a src/ call of _jahFailRequests (each red), and the lawful shape (green).
+# without refusing, a src/ call of _jahFailRequests, an irisgl caller of a TEST arm by its name, a non-literal irisgl caller that is no
+# forwarder (each red), and the lawful shape (green).
 # usage: test_arms_unreachable.py <source dir>
 import os, re, sys, tempfile
 
@@ -28,6 +33,8 @@ TEST_ARMS = ('RayBuildHold', 'RayBuildHoldIds', 'RayBuildFail', 'ShaderAsyncFail
 MONITOR = os.path.join('irisgl', 'engine', 'src', 'OgreFrameMonitor.cpp')
 VERB = os.path.join('src', 'scripting', 'modules', 'engineapi.cpp')
 LAB = os.path.join('src', 'lab') + os.sep
+TABLE = os.path.join('irisgl', 'engine', 'src', 'EnginePrivate.h')
+ENGINE = os.path.join('irisgl', 'engine')
 
 
 def strip_comments(text):
@@ -72,6 +79,41 @@ def check(root):
             at = src.find('setArm(')
             if '.test' not in src[:at]:
                 bad.append('(3) %s sets an arm without refusing a TEST arm first (.test read before setArm()' % rel)
+    bad += check_irisgl(root)
+    return bad
+
+
+def check_irisgl(root):
+    bad = []
+    table = strip_comments(read(root, TABLE) or '')
+    names = dict(re.findall(r'X\(\s*(\w+)\s*,\s*"([^"]+)"\s*\)', table))
+    test_names = set(names.get(a) for a in TEST_ARMS) - {None}
+    if len(test_names) != len(TEST_ARMS):
+        return ['(5) the arm table (%s) does not name every TEST arm (%d of %d)' % (TABLE, len(test_names), len(TEST_ARMS))]
+    for d, _, files in os.walk(os.path.join(root, ENGINE)):
+        for f in files:
+            if not f.endswith(('.cpp', '.h')):
+                continue
+            rel = os.path.relpath(os.path.join(d, f), root)
+            src = strip_comments(read(root, rel) or '')
+            if rel == MONITOR:
+                continue   # the registry: Engine::setArm's own definition
+            for m in re.finditer(r'(?<![\w:])setArm\(\s*([^,)]*)', src):
+                arg = m.group(1).strip()
+                lit = re.fullmatch(r'"([^"]*)"', arg)
+                if lit:
+                    if lit.group(1) in test_names:
+                        bad.append('(5) %s sets the TEST arm "%s" (a fixture\'s door, never irisgl\'s own code)' %
+                                   (rel, lit.group(1)))
+                    continue
+                if arg.startswith('const '):
+                    continue   # a declaration or the definition of a setArm (its parameter list)
+                # A FORWARDER: the non-literal name is the parameter of a setArm defined just above it, in this file
+                fwd = [d for d in re.finditer(r'\bsetArm\(\s*const\s[^,]*?(\w+)\s*,', src)
+                       if d.start() < m.start() <= d.start() + 400 and d.group(1) == arg]
+                if not fwd:
+                    bad.append('(5) %s calls setArm( with a name that is no literal (%s) outside a setArm forwarder' %
+                               (rel, arg))
     return bad
 
 
@@ -93,9 +135,19 @@ LAWFUL_VERB = '''QVariant EngineApi::arm() {
 '''
 
 
+LAWFUL_TABLE = '\n'.join('    X(%s, "test.%s") \\' % (a, a) for a in TEST_ARMS) + '\n    X(GiFreeze, "gi.freeze")\n'
+LAWFUL_STILLNESS = '''struct M {
+    bool setArm(const char *name, double value) { bool ok = false; e.request([&](Engine &e) { ok = e.setArm(name, value); }); return ok; }
+    void restore() { setArm("gi.freeze", 0.0); }
+};
+'''
+STILLNESS = os.path.join(ENGINE, 'src', 'Stillness.cpp')
+
+
 def synthetic(monitor, verb, extra=None):
     root = tempfile.mkdtemp(prefix='test-arms-')
-    files = {MONITOR: monitor, VERB: verb, os.path.join(LAB, 'labsession.cpp'): 'void f() { e->setArm("x", 1.0); }'}
+    files = {MONITOR: monitor, VERB: verb, os.path.join(LAB, 'labsession.cpp'): 'void f() { e->setArm("x", 1.0); }',
+             TABLE: LAWFUL_TABLE, STILLNESS: LAWFUL_STILLNESS}
     files.update(extra or {})
     for rel, text in files.items():
         os.makedirs(os.path.dirname(os.path.join(root, rel)), exist_ok=True)
@@ -116,6 +168,12 @@ def self_test():
         ('a src/ call of _jahFailRequests', synthetic(LAWFUL_MONITOR, LAWFUL_VERB,
                                                       {os.path.join('src', 'app', 'y.cpp'): 'void h() { c->_jahFailRequests(true); }'}),
          True),
+        ('an irisgl caller of a TEST arm by its name',
+         synthetic(LAWFUL_MONITOR, LAWFUL_VERB, {STILLNESS: LAWFUL_STILLNESS.replace('"gi.freeze"', '"test.RayBuildFail"')}),
+         True),
+        ('a non-literal irisgl caller that is no forwarder',
+         synthetic(LAWFUL_MONITOR, LAWFUL_VERB,
+                   {os.path.join(ENGINE, 'src', 'Other.cpp'): 'void go(const char *n) { engine.setArm(n, 1.0); }'}), True),
         ('the lawful shape', synthetic(LAWFUL_MONITOR, LAWFUL_VERB), False),
     ]
     ok = True
@@ -139,7 +197,8 @@ def main():
     for b in bad:
         print('  FAIL: ' + b)
     if not bad:
-        print('  ok: the TEST arms (%s) carry the flag, the verb refuses them, no other src/ caller sets an arm' %
+        print('  ok: the TEST arms (%s) carry the flag, the verb refuses them, no other src/ caller sets an arm, irisgl'
+              ' sets none of them' %
               ', '.join(TEST_ARMS))
     fails += len(bad)
     sys.stdout.flush()
