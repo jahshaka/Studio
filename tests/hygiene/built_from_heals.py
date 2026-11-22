@@ -17,6 +17,8 @@ and B that both depend on one "library" L (lib.txt), each built by a `--target` 
   7 L's source EDITED between two passes at one tip (A not rebuilt, its output on disk from the old L): the pass of B claims B
     alone - A's claim falls with the content; L only TOUCHED (its bytes equal): A stays claimed (its output IS from these bytes);
   8 a whole build at an equal state keeps the reach's targets beside `all`; 9 jah_built_reach without JAH_BUILT_REACH refuses;
+  11 a claim never outlives a build the stamp did not see: A built by hand at an edited state, the edit reverted - the next
+    pass does not claim A (its output is from the edit); a by-reach pass claims it again;
   10 THE RECORDS (scripts/gate_runlog.py coverage + stale_build, scripts/row_targets.py): after 6 (A built at the old tip, B at
     this one) a row needing A is `built.uncovered` [A] - its record is never its tip's - and a row needing B is covered.
 No GPU, no display; seconds. usage: built_from_heals.py <source dir>"""
@@ -93,6 +95,8 @@ try:
         "add_custom_command(OUTPUT ${CMAKE_BINARY_DIR}/B.txt COMMAND ${CMAKE_COMMAND} -E copy ${CMAKE_BINARY_DIR}/L.txt "
         "${CMAKE_BINARY_DIR}/B.txt DEPENDS ${CMAKE_BINARY_DIR}/L.txt)\n"
         "add_custom_target(A DEPENDS ${CMAKE_BINARY_DIR}/A.txt)\nadd_custom_target(B DEPENDS ${CMAKE_BINARY_DIR}/B.txt)\n"
+        "set_target_properties(A PROPERTIES JAH_ARTEFACT ${CMAKE_BINARY_DIR}/A.txt)\n"
+        "set_target_properties(B PROPERTIES JAH_ARTEFACT ${CMAKE_BINARY_DIR}/B.txt)\n"
         "enable_testing()\nadd_test(NAME ra COMMAND sh -c true)\nadd_test(NAME rb COMMAND sh -c true)\n"
         "set_tests_properties(ra PROPERTIES JAH_BUILD_TARGETS A)\nset_tests_properties(rb PROPERTIES JAH_BUILD_TARGETS B)\n"
         "include(BuiltFrom)\n")
@@ -193,6 +197,27 @@ try:
                        env={k: v for k, v in os.environ.items() if k != "JAH_BUILT_REACH"})
     want("9 jah_built_reach without JAH_BUILT_REACH refuses (no stamp claims an unnamed pass)",
          r.returncode != 0 and "JAH_BUILT_REACH" in r.stdout + r.stderr, f"rc {r.returncode}")
+
+    # 11 (the final read's L2) A CLAIM NEVER OUTLIVES A BUILD THE STAMP DID NOT SEE: A claimed at this state; L edited, A built BY
+    # HAND (`--target A`, no stamp), L reverted to its bytes (the state equal again): the next pass must not claim A (its output
+    # is from the edit); a by-reach pass of A at once after claims it again, and a pass after that keeps it
+    rc, out, st = reach("A")
+    want("11 A claimed at this state", rc == 0 and "A" in st.get("targets", "").split(","), f"rc {rc} {st}")
+    time.sleep(0.05)
+    lib = open(os.path.join(S, "lib.txt")).read()
+    open(os.path.join(S, "lib.txt"), "w").write("HAND\n")
+    subprocess.run(["cmake", "--build", B, "--target", "A"], capture_output=True, text=True)
+    open(os.path.join(S, "lib.txt"), "w").write(lib)
+    rc, out, st = build()
+    a = open(os.path.join(B, "A.txt")).read().strip()
+    want("11 after a hand build of A at an edited state, reverted: the next pass does NOT claim A (A.txt is from the edit)",
+         rc == 0 and a == "HAND" and "A" not in st.get("targets", "").split(",") and "all" in st.get("targets", "").split(","),
+         f"rc {rc} {st} A.txt {a}")
+    rc, out, st = reach("A")
+    rc2, out2, st2 = build()
+    want("11 a by-reach pass of A claims it again, and the next whole pass keeps it (the stamp touched after A was built)",
+         rc == 0 and open(os.path.join(B, "A.txt")).read().strip() == lib.strip() and "A" in st2.get("targets", "").split(","),
+         f"rc {rc} {st} then {st2}")
 finally:
     shutil.rmtree(T, ignore_errors=True)
 print("tooling.built_from_heals: " + ("PASS" if not fails else f"FAIL ({len(fails)})"), flush=True)

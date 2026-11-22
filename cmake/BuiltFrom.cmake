@@ -109,7 +109,30 @@ if(CMAKE_SCRIPT_MODE_FILE)
     if(at EQUAL 0 AND old_content STREQUAL new_content AND NOT new_content STREQUAL "?" AND old_stale STREQUAL "0"
        AND new_stale STREQUAL "0" AND NOT old_targets STREQUAL "")
         string(REPLACE "," ";" old_targets "${old_targets}")
-        list(APPEND now ${old_targets})
+        # A CLAIM NEVER OUTLIVES A BUILD THE STAMP DID NOT SEE (the final read's L2): a target built after the old stamp - a
+        # `--target` build by hand, at a state since reverted to this one - is built from bytes this state does not hold, so its
+        # old claim is dropped. Its artefact is the build's own map (MAP: $<TARGET_FILE> of each executable and library, a
+        # custom target's JAH_ARTEFACT); the stamp is TOUCHED by every by-reach pass, so a target the tools just built is older
+        # than it (built_from_heals case 11).
+        set(art "")
+        if(DEFINED MAP AND EXISTS "${MAP}")
+            file(STRINGS "${MAP}" art)
+        endif()
+        foreach(t IN LISTS old_targets)
+            set(keep TRUE)
+            foreach(line IN LISTS art)
+                if(line MATCHES "^${t}=(.+)$")   # (CMAKE_MATCH_1 is read in the NEXT command: an if's arguments expand first)
+                    set(f "${CMAKE_MATCH_1}")
+                    if(EXISTS "${f}" AND "${f}" IS_NEWER_THAN "${OUT}")
+                        set(keep FALSE)
+                        message(STATUS "BUILT_FROM: ${t} was built after this stamp (by hand, at another state?) - no longer claimed")
+                    endif()
+                endif()
+            endforeach()
+            if(keep)
+                list(APPEND now ${t})
+            endif()
+        endforeach()
     endif()
     list(REMOVE_DUPLICATES now)
     list(SORT now)
@@ -117,6 +140,8 @@ if(CMAKE_SCRIPT_MODE_FILE)
     set(text "${head}${extra}targets=${now}\n")
     if(NOT old STREQUAL text)
         file(WRITE "${OUT}" "${text}")
+    elseif(REACH)
+        file(TOUCH "${OUT}")   # the targets this pass built are older than the stamp that claims them (above)
     endif()
     return()
 endif()
@@ -141,7 +166,7 @@ endfunction()
 
 add_custom_target(jah_built_from ALL
     COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DOUT=${CMAKE_BINARY_DIR}/BUILT_FROM
-            -DPY=${Python3_EXECUTABLE} -DOGRE_PREFIX=${OGRE_NEXT_PREFIX}
+            -DPY=${Python3_EXECUTABLE} -DOGRE_PREFIX=${OGRE_NEXT_PREFIX} -DMAP=${CMAKE_BINARY_DIR}/built_from_artefacts.txt
             -P ${CMAKE_CURRENT_LIST_DIR}/BuiltFrom.cmake
     COMMENT "BUILT_FROM: the studio and irisgl commits this build was made from"
     VERBATIM)
@@ -149,9 +174,35 @@ add_custom_target(jah_built_from ALL
 add_custom_target(jah_built_reach
     COMMAND ${CMAKE_COMMAND} -DSRC=${CMAKE_SOURCE_DIR} -DOUT=${CMAKE_BINARY_DIR}/BUILT_FROM
             -DPY=${Python3_EXECUTABLE} -DOGRE_PREFIX=${OGRE_NEXT_PREFIX} -DREACH=1
+            -DMAP=${CMAKE_BINARY_DIR}/built_from_artefacts.txt
             -P ${CMAKE_CURRENT_LIST_DIR}/BuiltFrom.cmake
     COMMENT "BUILT_FROM: the targets a by-reach pass built (JAH_BUILT_REACH)"
     VERBATIM)
+# THE ARTEFACT MAP (the union's check above): `<target>=<its file>` for every executable and library, the out-of-`all` ones
+# included, and every custom target that names its JAH_ARTEFACT
+function(_jah_artefacts dir out)
+    get_property(ts DIRECTORY "${dir}" PROPERTY BUILDSYSTEM_TARGETS)
+    get_property(subs DIRECTORY "${dir}" PROPERTY SUBDIRECTORIES)
+    set(lines "")
+    foreach(t IN LISTS ts)
+        get_target_property(type ${t} TYPE)
+        if(type MATCHES "^(EXECUTABLE|STATIC_LIBRARY|SHARED_LIBRARY|MODULE_LIBRARY)$")
+            string(APPEND lines "${t}=$<TARGET_FILE:${t}>\n")
+        elseif(type STREQUAL "UTILITY")
+            get_target_property(a ${t} JAH_ARTEFACT)
+            if(a)
+                string(APPEND lines "${t}=${a}\n")
+            endif()
+        endif()
+    endforeach()
+    foreach(s IN LISTS subs)
+        _jah_artefacts("${s}" sub)
+        string(APPEND lines "${sub}")
+    endforeach()
+    set(${out} "${lines}" PARENT_SCOPE)
+endfunction()
+_jah_artefacts("${CMAKE_SOURCE_DIR}" _jah_artefact_lines)   # (included last: every target is defined - as _jah_collect_targets)
+file(GENERATE OUTPUT "${CMAKE_BINARY_DIR}/built_from_artefacts.txt" CONTENT "${_jah_artefact_lines}")
 _jah_collect_targets("${CMAKE_SOURCE_DIR}" _jah_all_targets)
 list(REMOVE_ITEM _jah_all_targets jah_built_from jah_built_reach)
 if(_jah_all_targets)
