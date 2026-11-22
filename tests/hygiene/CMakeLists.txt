@@ -718,6 +718,28 @@ add_test(NAME source.display_guard
 set_tests_properties(source.display_guard PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
 jah_no_display(source.display_guard)
 jah_no_warm_store(source.display_guard)
+# source.display_guard_linked + source.display_guard_toy (DEV_ERRORS 37 + 38, 2026-11-22): NO TEST BINARY REACHES A DISPLAY THAT
+# IS NOT A RIG - a builder ran a Qt test binary directly with the shell's DISPLAY=:0 / Wayland session, twice in one night.
+# tests/support/display_guard.cpp runs before main in EVERY test executable (tests/cmake/display_guard.cmake's walk, no line per
+# target). _linked: every binary ctest runs carries it (the app and jahlab are not test targets), and the walk reaches a target
+# in a NEW subdirectory (a scratch project). _toy: the guarded probe with DISPLAY=:0, a demanded xcb, and the agent shell's
+# Wayland session against recording fakes - offscreen, zero connects, REFUSED where X is demanded; the unguarded probe (the
+# negative control, the one target the walk skips) connects. CPU only, no real display.
+find_package(Qt6 REQUIRED COMPONENTS Gui)
+add_executable(display_guard_probe display_guard_probe.cpp)
+add_executable(display_guard_probe_unguarded display_guard_probe.cpp)
+set_target_properties(display_guard_probe display_guard_probe_unguarded PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    CXX_STANDARD 17 RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_target_properties(display_guard_probe_unguarded PROPERTIES JAH_DISPLAY_GUARD_CONTROL ON)
+target_link_libraries(display_guard_probe PRIVATE Qt6::Gui)
+target_link_libraries(display_guard_probe_unguarded PRIVATE Qt6::Gui)
+add_test(NAME source.display_guard_linked
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/display_guard_linked.py" "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+add_test(NAME source.display_guard_toy
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/display_guard_toy.py"
+                 $<TARGET_FILE:display_guard_probe> $<TARGET_FILE:display_guard_probe_unguarded>)
+set_tests_properties(source.display_guard_linked source.display_guard_toy PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+jah_no_display(source.display_guard_linked source.display_guard_toy)
 # source.no_box_paths (CODING_RULES § 7, the owner and the lead 2026-11-21: THE STUDIO REPO KNOWS NO BOX): no tracked Studio or
 # irisgl file names the lead repo's box-local root, literally or composed; today's two namings sit in the
 # shrink-only tests/hygiene/box_paths_pending.txt with their fix (BOX-SILO-1 stage 3, S1/S2). Its self-test first.

@@ -38,6 +38,7 @@ scripts/perf-ab.py own
 scripts/width_pair.py own
 scripts/lab/dolly.sh own
 scripts/lab/warm.sh own
+tests/support/display_guard.cpp own
 scripts/regen-api-docs.sh unset
 tests/support/seed_home.sh unset
 scripts/rig.sh maker

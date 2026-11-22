@@ -285,6 +285,9 @@ set(JAH_GPU_EXCLUSIVE_SUITES
 include(${CMAKE_CURRENT_SOURCE_DIR}/support/test_boot.cmake)
 include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/vram_rows.cmake)
 jah_vram_resource_spec()
+# THE DISPLAY GUARD (DEV_ERRORS 37 + 38): every test executable links it - the walk after the subdirectories below.
+include(${CMAKE_CURRENT_SOURCE_DIR}/cmake/display_guard.cmake)
+jah_display_guard_library()
 
 # THE BOOT DECLARATION ON THE ROW (TEST-NEEDS-1): JAHSHAKA_TEST_TIER / JAHSHAKA_TEST_NEEDS as
 # `set:` ENVIRONMENT_MODIFICATION entries, appended at the end of the row's directory (after the
@@ -1131,6 +1134,8 @@ function(jah_link_testmesh_users _dir)
     endforeach()
 endfunction()
 jah_link_testmesh_users("${CMAKE_CURRENT_SOURCE_DIR}")
+# Every executable under tests/ runs the display guard before main (tests/cmake/display_guard.cmake; no target names it).
+jah_display_guard_all("${CMAKE_CURRENT_SOURCE_DIR}")
 
 # jah_scope_path_defines — AN ABSOLUTE PATH IN A -D LIVES ON THE SUITE'S OWN SOURCES
 # (SPEED-CPU, perf audit B2). A suite's target compiles its own test_*.cpp AND the
