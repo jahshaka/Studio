@@ -291,8 +291,9 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             }
             const GiStatus &gi = es->published().gi;
             if (needRays)
-                qInfo("startup shader build: the %s world's cards: captured %llu, queued %u", es->name().c_str(),
-                      gi.cards.captures, gi.cards.queueLength);
+                qInfo("startup shader build: the %s world's cards: %s, admitted %llu, captured %llu, queued %u, resident %u",
+                      es->name().c_str(), gi.cards.built ? "built" : "NOT BUILT", gi.cards.admitted, gi.cards.captures,
+                      gi.cards.queueLength, gi.cards.cardsResident);
             if (!cardsDone)   // the cap, never a silent pass
                 qWarning("FAIL: shader build gate: the %s world's cards were not all captured in %d frames - %u queued",
                          es->name().c_str(), kWarmWorldFrameCap, gi.cards.queueLength);
