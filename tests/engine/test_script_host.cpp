@@ -10,6 +10,7 @@
 #include "script/RouteDeclaration.h"   // the route declaration's judgement (engine-private, pure)
 
 #include <cstdio>
+#include <limits>
 #include <memory>
 #include <stdexcept>
 #include <string>
@@ -438,6 +439,52 @@ int main()
         check(failedWith(eng.call("engine.view.setScene", {v, Value(Value::Object{{"scene", v}})}),
                          "bind.scene: " + std::to_string(v.asInt()) + " is a view handle, not a scene handle"),
               "engine.view.setScene(view, {scene: view}) FAILS by name (it bound the wrong object silently before)");
+    }
+
+    // 9. THE SIGNATURE DECLARES ITS DOMAIN (the lead's S2): choices, ranges and units are the signature's - checked by
+    //    the host before the command and printed for the docs; a number is finite unless declared otherwise (its bits)
+    {
+        Registry d;
+        Value seen;
+        d.add({"test.domain",
+               {{object("o", {arg("mode", Kind::String, Value("vct")).oneOf({"off", "vct"}),
+                              arg("width", Kind::Int, Value(1)).range(1, 16384).in("px"),
+                              arg("x", Kind::Number, Value(0.0)), arg("wild", Kind::Number, Value(0.0)).allowNonFinite(),
+                              numbers("v", 3, Value(Value::Array{Value(0), Value(0), Value(0)})),
+                              arg("big", Kind::Int, Value(0))})},
+                Kind::Null},
+               "a declared domain"},
+              [&seen](Call &c) { seen = c[0]; return Value(); });
+        const auto call = [&](const char *k, Value v) { return d.call("test.domain", {Value(Value::Object{{k, std::move(v)}})}); };
+        const double nan = std::numeric_limits<double>::quiet_NaN(), inf = std::numeric_limits<double>::infinity();
+        check(failedWith(call("mode", Value("vctPcc")), "o.mode 'vctPcc' is not one of \"off\"|\"vct\"") &&
+                  call("mode", Value("off")).status == Status::Ok,
+              "a String outside its declared choices FAILS by name, listing them");
+        check(failedWith(call("width", Value(0)), "o.width 0 is outside 1..16384 px") &&
+                  failedWith(call("width", Value(16385)), "o.width 16385 is outside 1..16384 px") &&
+                  call("width", Value(16384)).status == Status::Ok,
+              "an Int outside its declared range FAILS by name (with its unit); the bound itself is in");
+        check(failedWith(call("x", Value(nan)), "o.x is not a finite number") &&
+                  failedWith(call("x", Value(-inf)), "o.x is not a finite number") &&
+                  failedWith(call("v", Value(Value::Array{Value(inf), Value(0), Value(0)})), "o.v[0] is not a finite number") &&
+                  call("wild", Value(nan)).status == Status::Ok,
+              "NaN and infinity FAIL by their bits (a vector's element too) unless the parameter declares them allowed");
+        check(failedWith(call("big", Value(1e17)), "o.big 100000000000000000 is beyond 2^53") &&
+                  call("big", Value(std::int64_t(100000000000000000))).status == Status::Ok &&
+                  failedWith(call("big", Value(nan)), "o.big must be an integer"),
+              "an integral Number beyond 2^53 is no exact integer and FAILS for an Int (an Int value - a BigInt - is taken)");
+        check(signatureText(*d.find("test.domain")).find("mode: string \"off\"|\"vct\" = default") != std::string::npos &&
+                  signatureText(*d.find("test.domain")).find("width: int 1..16384 px = default") != std::string::npos &&
+                  signatureText(*d.find("test.domain")).find("wild: number (non-finite allowed)") != std::string::npos,
+              "the signature prints the domain (the generated docs): " + signatureText(*d.find("test.domain")));
+        check(signatureText(*eng.find("engine.gi.set")).find("mode: string \"off\"|\"vct\"|\"vctPccHybrid\"") !=
+                      std::string::npos &&
+                  signatureText(*eng.find("engine.frames")) == "engine.frames(n: int >= 0 frames) -> null",
+              "the engine's commands declare theirs: " + signatureText(*eng.find("engine.frames")));
+        check(failedWith(eng.call("engine.node.setTransform",
+                                  {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(nan), Value(0), Value(0)})}})}),
+                         "transform.position[0] is not a finite number"),
+              "setTransform({position: [NaN, 0, 0]}) FAILS before the engine is asked (it reached setNodeTransform before)");
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
