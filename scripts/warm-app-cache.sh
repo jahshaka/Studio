@@ -522,7 +522,9 @@ store_take() {   # the cold -off caches (and their -on stamps) this call asked f
     [ -n "$got" ] && echo "warm-app-cache: TAKEN from the box's warm store at $KEY ($SK):$got - no boot for them, no card"
     return 0
 }
-store_publish() {   # every cache of this tree warm at KEY (and its -on stamp) into <store>/<KEY>, the newer replacing
+shaders_of() { sed -n 's/^shaders \([0-9]*\)$/\1/p' "$1/cache-manifest.txt" 2>/dev/null | grep . || echo 0; }   # <cache dir>
+store_publish() {   # every cache of this tree warm at KEY (and its -on stamp) into <store>/<KEY>, the newer replacing (a
+    # poorer app union at the store's own stamp: its startup-pass record alone, below)
     local c sh st ds S nxt pub=""
     for c in app engine; do
         if [ $c = app ]; then sh=$APP_SHARED st=$APP_STAMP ds=$APP_DSTAMP; else sh=$ENG_SHARED st=$ENG_STAMP ds=$ENG_DSTAMP; fi
@@ -530,7 +532,16 @@ store_publish() {   # every cache of this tree warm at KEY (and its -on stamp) i
         S="$SK/$c"
         if cmp -s "$st" "$S/warm-key"; then   # the store holds this warm-up already
             [ -f "$ds" ] && [ "$(sed -n 1p "$ds")" = "$KEY" ] && ! cmp -s "$ds" "$S/driver-key" && cp "$ds" "$S/driver-key" && pub="$pub $c-on"
-            continue
+            # A REFRESHED STARTUP-PASS RECORD REACHES THE STORE (WARM-SHARE-1 stage 3, the lead's ruling 2026-11-22): the store kept its
+            # first publisher's record, so every later take paid one refresh boot. A union at least as rich (the manifest's `shaders`
+            # count) replaces the store's copy whole (below); a POORER one refreshes ONLY the store's record - a new file by rename, so
+            # the store's caches and every taker's hard links stay as they were: a richer union is never replaced by a poorer one
+            [ $c = app ] && [ -f "$sh/warm-pass.key" ] && ! cmp -s "$sh/warm-pass.key" "$S/cache/warm-pass.key" || continue
+            if [ "$(shaders_of "$sh")" -lt "$(shaders_of "$S/cache")" ]; then
+                cp "$sh/warm-pass.key" "$S/cache/.warm-pass.key.$$" && mv -f "$S/cache/.warm-pass.key.$$" "$S/cache/warm-pass.key" &&
+                    pub="$pub app-record"
+                continue
+            fi
         fi
         nxt="$SK/.$c.new.$$"; rm -rf "$nxt"; mkdir -p "$nxt"
         ( flock -s -w 60 9 || exit 1; cp -al "$sh" "$nxt/cache" 2>/dev/null && rm -f "$nxt/cache/cache.lock" && cp "$st" "$nxt/warm-key" ) 9>"$sh.lock" ||

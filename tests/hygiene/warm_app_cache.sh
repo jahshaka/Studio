@@ -767,6 +767,28 @@ wait $kp 2>/dev/null
     ! grep -q '^shaders 9' "$WT/.shadercache/cache-manifest.txt" && grep -q "^pass=$p10b|" "$WT/.shadercache/warm-pass.key" &&
     ok "S10: a cache warm at the key with only a stale pass record - no take, no key lock, ONE refresh boot on the tree's own union (the same inodes)" ||
     no "S10 the warm tree and the store: rc $rc booted [$(cat "$T/s-booted" 2>/dev/null | tr '\n' ' ')] pass [$(tr '\n' ' ' < "$T/s10.pass")] '$(echo "$out" | grep -iE "taken|lock|warmed by|cold at|warm at" | head -4 | tr '\n' '|')'"
+# S11 THE STORE TAKES A REFRESHED RECORD, NEVER A POORER UNION (WARM-SHARE-1 stage 3's line, the lead's ruling 2026-11-22): a tree
+# warm at the key the store already holds (the same stamp) whose startup-pass record differs - a POORER union (fewer shaders than
+# the store's) refreshes ONLY the store's record (a new file: the store's caches and every taker's links untouched); a union at
+# least as rich replaces the store's copy whole. (red before: the store kept its first publisher's record, each taker paying one
+# refresh boot)
+ST11="$T/store11"; mkdir -p "$ST11"
+s11() {   # <dir> <shaders> <record id>: a tree warm at $pk, its app cache holding <shaders>, its record <id>
+    toy_tree "$1"; local t="$1/build/tests"; rm -rf "$t/.shadercache"; toy_cache "$t/.shadercache" 1 "$2"
+    printf 'pass=%s|media=m|cache=c\n' "$3" > "$t/.shadercache/warm-pass.key"
+    printf '%s\n%s\n%s\n' "$pk" "k1 k2 " "sets none" > "$t/.shadercache.warm-key"; printf '%s\n%s\n' "$pk" "k1 k2 " > "$t/.shadercache-engine.warm-key"
+    toy_cache "$t/.shadercache-engine" 1 2
+    printf '%s\n%s\n' "$pk" s-app > "$t/.shadercache.driver-key"; printf '%s\n%s\n' "$pk" s-app > "$t/.shadercache-engine.driver-key"
+}
+s11 "$T/s11P" 9 p11a; JAH_WARM_STORE="$ST11" SX "$T/s11P/build" > /dev/null 2>&1
+iS=$(stat -c %i "$ST11/$pk/app/cache/hlms.1.bin")
+s11 "$T/s11Q" 2 p11b; o1=$(JAH_WARM_STORE="$ST11" SX "$T/s11Q/build" 2>&1)
+r1="$(sed -n 's/^shaders //p' "$ST11/$pk/app/cache/cache-manifest.txt") $(cut -d'|' -f1 "$ST11/$pk/app/cache/warm-pass.key") $([ "$(stat -c %i "$ST11/$pk/app/cache/hlms.1.bin")" = "$iS" ] && echo same || echo moved)"
+s11 "$T/s11R" 12 p11c; o2=$(JAH_WARM_STORE="$ST11" SX "$T/s11R/build" 2>&1)
+r2="$(sed -n 's/^shaders //p' "$ST11/$pk/app/cache/cache-manifest.txt") $(cut -d'|' -f1 "$ST11/$pk/app/cache/warm-pass.key")"
+[ "$r1" = "9 pass=p11b same" ] && echo "$o1" | grep -q "PUBLISHED to the box's warm store at $pk.*app-record" && [ "$r2" = "12 pass=p11c" ] &&
+    ok "S11: a poorer tree's refreshed record reaches the store alone (9 shaders kept, the record p11b, the store's files untouched); a richer tree replaces the store's copy (12, p11c)" ||
+    no "S11 the store's record: poorer [$r1] '$(echo "$o1" | grep PUBLISHED)' richer [$r2] '$(echo "$o2" | grep PUBLISHED)'"
 fi
 # THE LAST LINE IS THE VERDICT (CODING_RULES § 4: `<name>: PASSED` or `<name>: FAILED (<n>)`, a non-zero exit on failure)
 echo "tooling.warm_app_cache ($PART): $([ $fail = 0 ] && echo PASSED || echo "FAILED ($fail)")"
