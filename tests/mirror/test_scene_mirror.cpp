@@ -32,6 +32,12 @@
 #include "irisgl/core/properties/property.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Sky.h"
+#include "jahshaka/engine/Stats.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"

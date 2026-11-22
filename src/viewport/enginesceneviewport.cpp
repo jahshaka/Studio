@@ -84,6 +84,23 @@
 #include "data/settingsmanager.h"
 #include "data/settingsstore.h"
 #include "ui/controls/assetdrag.h"
+#include "jahshaka/engine/Camera.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/GiGather.h"
+#include "jahshaka/engine/GiModes.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Overlay.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/PostFx.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
+#include "jahshaka/engine/Skeleton.h"
+#include "jahshaka/engine/Stats.h"
+#include "jahshaka/engine/Vr.h"
 
 
 
@@ -4306,7 +4323,7 @@ QString EngineSceneViewport::composeIndicatorLine(bool driverFrame) const
     // the panel until the second present, then the stream-in exactly as before
     // this lane — and it is NOT byte for byte if the panel carries a caption:
     // the HUD draws the stats text OVER the cover fill by design
-    // (jahshaka/engine/Types.h on ViewOverlayDesc::lines), so a line pushed
+    // (jahshaka/engine/Overlay.h on ViewOverlayDesc::lines), so a line pushed
     // here would appear on the grey panel and again during the ON stream-in.
     // One test, before anything else is computed.
     if (mCoverThisLoad) return QString();

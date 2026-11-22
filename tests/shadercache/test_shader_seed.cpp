@@ -16,6 +16,7 @@
 //   absent   a seed directory that does not exist: "absent" — C compiles;
 // and after all of them the seed is byte-identical, with no file added (no lock, no tmp, no save).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Shaders.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>

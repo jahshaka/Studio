@@ -55,6 +55,15 @@
 // fixture's 10 s budget), each its own fixture: gi.card_lamp_shadow (`lamp`: (1), (2), (2b)), gi.card_lamp_shadow_area
 // (`area`: (3)-(8)); every bar as written above.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiCards.h"
+#include "jahshaka/engine/GiGather.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

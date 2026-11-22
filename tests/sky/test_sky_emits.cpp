@@ -47,6 +47,9 @@
 #include "irisgl/irisglfwd.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 

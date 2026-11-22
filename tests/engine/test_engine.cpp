@@ -4,6 +4,19 @@
 // through createOffscreenView + readPixels; nothing here opens a window.
 // Framework-free on purpose: nothing to fetch, nothing to install.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Fog.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Planar.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Skeleton.h"
+#include "jahshaka/engine/Sky.h"
+#include "jahshaka/engine/Snapshot.h"
+#include "jahshaka/engine/Stats.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "jahshaka/engine/GpuSubstrate.h"   // (the frames in flight: the sky's deferred read is due one past them)   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
@@ -4842,7 +4855,7 @@ void object_counts_track_lifetimes() {
 // reason it exists (the other caller is screenshot({postFx:true})).
 
 /// THE VR VIEW POLICY, AS ARITHMETIC (lane EYE-GRADE-1, LAYERED-STEREO-1;
-/// jahshaka::engine::applyVrViewPolicy, Types.h).
+/// jahshaka::engine::applyVrViewPolicy, PostFx.h).
 ///
 /// The policy decides what the person in the headset sees of the project's post
 /// chain, and until this case it had no direct test at all: it was exercised

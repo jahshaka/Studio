@@ -33,6 +33,8 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 #include "irisgl/mirror/scenemirror.h"
 

@@ -52,6 +52,13 @@
 // quantum (or a cut of one). A's bounds guard (no slab a multiple of the dispatch's four) needs the lattice at Q = 2:
 // A runs its own chain with cascade 0's step pinned at two cells.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Stats.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

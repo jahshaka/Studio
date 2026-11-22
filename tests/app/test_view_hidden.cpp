@@ -26,6 +26,7 @@
 
 #include "services/framepacing.h"
 #include "viewport/engineviewwidget.h"
+#include "jahshaka/engine/Camera.h"
 
 static int gFailures = 0;
 static void check(bool ok, const char *what)

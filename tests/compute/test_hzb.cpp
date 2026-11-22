@@ -59,6 +59,8 @@
 //      brief's budget is < 0.3 ms on the 4080; the number is printed either
 //      way, because a budget nobody can see is not a measurement.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Culling.h"
+#include "jahshaka/engine/Monitor.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/timingbars.h"
 

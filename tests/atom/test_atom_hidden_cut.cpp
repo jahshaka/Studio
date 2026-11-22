@@ -22,6 +22,11 @@
 // passes, the stock depth pass, the decode and the opaque pass are printed per world and shape (information: the
 // bars are the counts). Frames, never time: the engine's fixed clock.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Atom.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "../support/enginetesthelpers.h"
 

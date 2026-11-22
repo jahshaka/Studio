@@ -25,6 +25,13 @@
 // small emitter's image is the cell's size (far / near flux 1.35 measured, (1.8 / 3.6)^2 = 0.25 exact).
 // A fixture (the engine alone, one 128 x 128 offscreen view; 10 s budget).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

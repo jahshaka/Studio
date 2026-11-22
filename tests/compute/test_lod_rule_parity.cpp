@@ -2,7 +2,7 @@
 // PROOF THEY ARE THE SAME (SPECS/atom/A4_SUBSTRATE_CULL_DESIGN.md section 3).
 //
 // THE CURRENCY is `sampleFootprintPerspective` + `allowedWorldError` +
-// `lodLevelForWorldError` in jahshaka/engine/Types.h, and its GLSL twin is
+// `lodLevelForWorldError` in jahshaka/engine/Mesh.h, and its GLSL twin is
 // `jahSampleFootprint` + `jahAllowedWorldError` + `jahLevelForAllowed` in
 // media/Hlms/Jahshaka/JahLevelRule_piece_cs.any (ONE definition each, inserted by
 // the cull's test job and the voxel gather). There are two halves because a
@@ -23,7 +23,7 @@
 // scale of such a transform is 4 - the longest COLUMN of the row-major 3x4 - while
 // every ROW is shorter, so a rule that read rows (the cull did, until this round)
 // divides by too small a scale and answers a COARSER level than the tolerance
-// permits. The CPU reference takes `worldMaxAxisScale` (Types.h), which is checked
+// permits. The CPU reference takes `worldMaxAxisScale` (Mesh.h), which is checked
 // against the authored 4 first, so the reference is the truth and not a twin.
 //
 // THE THRESHOLD CASES ARE COUNTED, NOT HIDDEN. The design asks for agreement to
@@ -33,6 +33,12 @@
 // difference, and a disagreement away from one would be a real defect. Both
 // numbers are printed.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Culling.h"
+#include "jahshaka/engine/GpuSceneRecords.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Stats.h"
 #include "../support/enginetesthelpers.h"
 #include "EnginePrivate.h"
 #include "cluster_draw.h"
@@ -119,7 +125,7 @@ static MeshData chainedMesh(const std::vector<float> &bounds = kBounds)
 // ---- THE FOURTH COPY: THE CLUSTER CUT (ATOM stage 2, lane ATOM-CLUSTER-1) --------
 //
 // The cut's rule is the same currency applied PER GROUP of a mesh's cluster DAG
-// (Types.h `clusterGroupAllowed` / `clusterGroupAffordable` / `clusterDrawn`), and
+// (Mesh.h `clusterGroupAllowed` / `clusterGroupAffordable` / `clusterDrawn`), and
 // its GLSL twin is the product piece media/Hlms/Jahshaka/JahClusterCut.glsl — the
 // piece the product's cut job includes (the FIFTH copy below drives that job). This
 // copy isolates the rule: the device half runs through a TEST job (tests/atom/media) the cluster
@@ -171,7 +177,7 @@ static void clusterCutParity(Engine *e)
     const float tols[5] = { 0.5f, 1.0f, 2.0f, 3.0f, 4.0f };
     const float scales[6] = { 0.25f, 0.5f, 1.0f, 2.0f, 4.0f, 8.0f };
     unsigned long long evaluated = 0, mismatched = 0, nearThreshold = 0, nearMismatched = 0, drawnTotal = 0;
-    // THE ROOT CUT (ATOM-7 stage 4): the device's jahClusterRootDrawn against Types.h clusterRootDrawn at every
+    // THE ROOT CUT (ATOM-7 stage 4): the device's jahClusterRootDrawn against Mesh.h clusterRootDrawn at every
     // (view, cluster). Since ATOM-2 every mesh's DAG ends in an EMPTY TOP (no terminal group exists any more), so on
     // every mesh the root cut is exactly the members of the empty groups — the last non-empty groups' clusters — and
     // never nothing.
@@ -277,7 +283,7 @@ static void clusterCutParity(Engine *e)
                   "of a threshold",
                   evaluated, drawnTotal, mismatched + nearMismatched, nearMismatched, nearThreshold);
     CHECK(mismatched == 0u && nearMismatched == 0u, msg);
-    std::snprintf(msg, sizeof(msg), "THE ROOT CUT (ATOM-7): the device's jahClusterRootDrawn = Types.h clusterRootDrawn "
+    std::snprintf(msg, sizeof(msg), "THE ROOT CUT (ATOM-7): the device's jahClusterRootDrawn = Mesh.h clusterRootDrawn "
                   "at %llu (view, cluster) answers (%llu differ)", rootEvaluated, rootMismatched);
     CHECK(rootEvaluated > 0u && rootMismatched == 0u, msg);
     std::snprintf(msg, sizeof(msg), "the empty top on every mesh (%zu of %zu): the root cut draws the last non-empty "
@@ -296,12 +302,12 @@ static void clusterCutParity(Engine *e)
 // instances (inside its bounds out to 500 radii, scaled 0.5-4, one rotated and
 // scaled non-uniformly), the cull asked in mode 3 through the public gpuCull door
 // at seven parameter sets (tolerance, lens, height; one orthographic), and the drawn
-// set read back per instance. It must be CELL-IDENTICAL to Types.h's clusterCut on
+// set read back per instance. It must be CELL-IDENTICAL to Mesh.h's clusterCut on
 // the same rows; disagreements at a threshold (within 1e-4 of a group's error) are
 // reported apart and still fail. Nothing may overflow the stream's budget here.
 static void productCutParity(Engine *e, View *view)
 {
-    std::printf("\n== the fifth copy: THE PRODUCT'S CUT (the cull's mode 3) against Types.h clusterCut ==\n");
+    std::printf("\n== the fifth copy: THE PRODUCT'S CUT (the cull's mode 3) against Mesh.h clusterCut ==\n");
     const std::string prim = std::string(JAHSHAKA_TEST_SOURCE_DIR) + "/app/content/primitives/";
     std::vector<std::pair<std::string, iris::MeshPtr>> meshes;
     for (const char *name : { "hp_sphere.obj", "torus.obj", "teapot.obj", "capsule.obj", "hemisphere.obj" }) {

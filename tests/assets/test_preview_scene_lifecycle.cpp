@@ -37,6 +37,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 #include "bridge/enginepreviewscene.h"
 

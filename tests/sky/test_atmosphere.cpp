@@ -10,7 +10,7 @@
 // fixture as arm (a): the luma rose monotonically through the horizon, 0.66594
 // one row above it and 0.66652 one row below — a step of 5.8e-4, 0.087 % of the
 // horizon's luma per 0.078-degree row, and the 5 degrees below it read brighter
-// still). The sky is now Hillaire's physical model (Types.h, AtmosphereSky):
+// still). The sky is now Hillaire's physical model (Sky.h, AtmosphereSky):
 // below the horizon the view ray meets the planet.
 //
 // WHAT IS ASSERTED (every arm in this one process, paired where it compares)
@@ -41,6 +41,11 @@
 // And it PRINTS the four tables' cost — each table job's own monitor row in a
 // capture (the COST lines below; no bar here, the number is the lane's report).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

@@ -32,6 +32,9 @@
 // Every arm reports its worst error, so a failure says which curve the bytes
 // are really on.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

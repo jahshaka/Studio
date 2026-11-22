@@ -22,6 +22,11 @@
 // ROUGH mirror (0.12: its draw a VNDF sample the denoiser averages - the case that convicted C2's roulette, (3b)).
 // A fixture (the engine alone, one offscreen view a scene). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

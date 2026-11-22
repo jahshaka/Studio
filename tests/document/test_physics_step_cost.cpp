@@ -73,6 +73,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "btBulletDynamicsCommon.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "../support/enginetesthelpers.h"
 

@@ -18,6 +18,10 @@
 //   * the same script in TWO PROCESSES (Root is one per process) gives the byte-identical picture and the identical
 //     serial sequence — the stage-4 arm runs this same script with the loop on its own thread and must read the same.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <sys/wait.h>

@@ -6,6 +6,7 @@
 // does nothing.
 #pragma once
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiVoxels.h"
 
 #include <cstdio>
 #include <cstdlib>

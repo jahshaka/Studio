@@ -53,7 +53,7 @@ public:
     bool offscreenByDeclaration() const { return mDeclaredOffscreen; }
 
     /// WHY NO VIEW OF ANY KIND CAN EXIST ON `engine`, one line — empty when one can. The NULL render system's engine
-    /// holds none (Types.h EngineConfig::headless: createView and createOffscreenView both refuse). What the headless
+    /// holds none (Config.h EngineConfig::headless: createView and createOffscreenView both refuse). What the headless
     /// host's factory (createOffscreenEditorViewport) refuses with before building a viewport.
     static QString viewRefusal(const jahshaka::engine::Engine *engine);
 

@@ -1,5 +1,5 @@
 // THE VALIDATION LAYER'S PROOF, FOR A TEST BINARY (TESTING-CLEANUP-2 H4; Engine::validation,
-// Types.h ValidationStatus). A row that runs under the Khronos validation layer and fails on
+// Monitor.h ValidationStatus). A row that runs under the Khronos validation layer and fails on
 // "Validation Error" in its log proves nothing when the layer never loaded — no layer, no error,
 // green. Every layered row calls this once its engine is up: it prints the readout and answers
 // false when the layer was asked for (the environment, or the row's JAH_EXPECT_VALIDATION=1) and
@@ -15,6 +15,7 @@
 #pragma once
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Monitor.h"
 
 #include <cstdio>
 #include <cstdlib>

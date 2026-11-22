@@ -26,6 +26,8 @@
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/core/math/quat.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 #include "bridge/engineassetscene.h"
 #include "viewport/previewframing.h"

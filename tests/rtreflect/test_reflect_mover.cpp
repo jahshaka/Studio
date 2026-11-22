@@ -94,6 +94,14 @@
 //      unchanged: a diffuse pixel's irradiance does not depend on the eye, and
 //      the gather's history is a quantity of the surface point.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Atom.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
+#include "jahshaka/engine/Skeleton.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

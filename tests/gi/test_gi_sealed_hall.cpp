@@ -22,6 +22,12 @@
 // on the voxel chain before the cards are resident, 17 codes decaying: the coarse cell, 10-4's R7).
 // A fixture (the engine alone, one 192 x 192 offscreen view; 10 s budget). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/lawline.h"
 

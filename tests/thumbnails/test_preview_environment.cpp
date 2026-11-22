@@ -68,6 +68,8 @@ static const double kGreyHi = greyCardDisplay(130.0, kRoughEnergyFactor);
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 #include "bridge/enginematerialpreviewscene.h"
 #include "bridge/enginethumbnailrenderer.h"

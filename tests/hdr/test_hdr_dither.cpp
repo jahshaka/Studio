@@ -53,6 +53,9 @@
 //      numbers depend on the noise and on nothing a driver's float arithmetic
 //      decides, and therefore the one to compare across drivers by hand.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 

@@ -31,6 +31,13 @@
 //       box waited in the mover queue with no chain and was served in the next chain's first frame.
 // Counted in frames; each row under the engine fixture's 10 s.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

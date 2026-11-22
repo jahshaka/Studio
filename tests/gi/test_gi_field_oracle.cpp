@@ -71,6 +71,11 @@
 // fixture's 10 s budget), each its own fixtures: gi.field_oracle (`step`: (1), (2), (7)), gi.field_oracle_marks
 // (`marks`: (3), (4)), gi.field_oracle_shells (`shells`: (5), (6)); every bar as written above.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

@@ -20,7 +20,7 @@
 #pragma once
 
 #include "jahshaka/engine/Engine.h"
-#include "jahshaka/engine/Types.h"
+#include "jahshaka/engine/Mesh.h"
 
 #include <string>
 #include <vector>

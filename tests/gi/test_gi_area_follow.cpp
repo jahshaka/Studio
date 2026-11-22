@@ -16,6 +16,12 @@
 //       the unshadowed 1 to the store's half step.
 //   (3) THE VIEW HOLDS AGAIN within n^2 + 8 frames of the stop.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiGather.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

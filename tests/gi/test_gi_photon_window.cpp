@@ -29,6 +29,15 @@
 // (the occupancy ray, the TLAS, the field's probe rays), the shadow maps cast its solid silhouette, the traced sun stops at
 // it. A fixture (the engine alone, two small offscreen views of one scene). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiCards.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/displaycode.h"
 

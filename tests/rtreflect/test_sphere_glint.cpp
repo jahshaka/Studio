@@ -18,6 +18,9 @@
 //   (c) THE NEGATIVE CONTROL: a lamp of R 0.001 m (a point) is under half R 0.05's;
 //   and printed: each glint's energy (the summed radiance over its 4 x window).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

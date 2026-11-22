@@ -1,10 +1,11 @@
-// engine.cascade_resolution_law (NONDET-1 D1) - A CASCADE IS BUILT AT A MULTIPLE OF 8 (Types.h giCascadeResolution, the
+// engine.cascade_resolution_law (NONDET-1 D1) - A CASCADE IS BUILT AT A MULTIPLE OF 8 (GiParams.h giCascadeResolution, the
 // one rule PhotonComponent::resolveCascadeTable applies to a pinned row). No device, no Ogre.
 // LAW: every voxel pass runs in whole 8^3 bricks and 4^3 groups with no bound check, so a built resolution is a
 // multiple of 8 in 16..256, never coarser than the row asked for (rounded UP), and a multiple of 8 is kept exactly.
 // RED before: the rule was the clamp alone, so world.gi({cascadeSet}) built a 100 or a 50 as asked.
 #include <cstdio>
-#include "jahshaka/engine/Types.h"
+#include "jahshaka/engine/GiModes.h"
+#include "jahshaka/engine/GiParams.h"
 
 using namespace jahshaka::engine;
 static int gFail = 0;

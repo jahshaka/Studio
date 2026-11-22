@@ -17,6 +17,8 @@
 #include "viewport/engineviewwidget.h"
 #include "viewport/ieditorviewport.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
 
 class SceneMirror;
 class EngineRenderDriver;
@@ -246,7 +248,7 @@ public:
     qulonglong presentedNow() const { const auto pv = publishedView(); return pv ? qulonglong(pv->presented) : 0; }
     /// The view's row of the last frame, BY VALUE — one lookup per use, by the view's id (U3 stage 3, decision 23);
     /// empty before its first frame.
-    std::optional<jahshaka::engine::PublishedEngineFrame::ViewFrames> publishedView() const
+    std::optional<jahshaka::engine::ViewFrames> publishedView() const
     {
         if (!mEngine || !view()) return std::nullopt;
         if (const auto *row = mEngine->published().view(view()->id())) return *row;

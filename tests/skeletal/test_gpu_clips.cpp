@@ -30,6 +30,11 @@
 #include "irisgl/import/scenebuilder.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Skeleton.h"
 #include "../support/enginetesthelpers.h"
 #include "armrig.h"
 

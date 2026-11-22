@@ -23,6 +23,8 @@
 #include "viewport/gizmooverlay.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
 

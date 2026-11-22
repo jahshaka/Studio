@@ -22,6 +22,7 @@
 // HOW IT IS MEASURED. A single small probe patch, the camera looking straight
 // down at it: the centre pixel is then that patch and nothing else.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/lightfalloff.h"
 

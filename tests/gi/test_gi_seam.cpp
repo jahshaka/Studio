@@ -28,6 +28,10 @@
 //
 // A fixture (the engine alone, one offscreen view, the High chain), ~5 s.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/VoxelReader.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

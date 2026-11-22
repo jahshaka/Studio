@@ -6,6 +6,7 @@
 // a CLOSED FORM: frame j shows x = (2/3) j (within 1e-4), three distinct poses per two steps. A LOCKSTEP frame (every
 // test, every hash) draws the newest grid state exactly. Two threads (EngineConfig::renderThread); 30 frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/FrameInput.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "../support/enginetesthelpers.h"
 

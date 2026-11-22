@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "irisgl/document/input/inputmap.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Published.h"
 #include "player/playerwidget.h"
 #include "services/framemonitor.h"
 #include "services/projectservice.h"

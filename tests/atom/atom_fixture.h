@@ -12,6 +12,7 @@
 #include "../support/enginetesthelpers.h"
 #include "../support/surfacedistance.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Mesh.h"
 
 #include <cmath>
 #include <memory>
@@ -135,7 +136,7 @@ struct Flip
 
 /// Where one group flips at `tol` in a lens: the translation carrying mesh space into the eye's (the instance at the
 /// origin, identity, scale 1; its sphere's centre on the aim's ray at D_c = r + error P11 H / (2 tol)), and the flip's t by
-/// the product's own footprint (Types.h clusterGroupFootprint: t*_g = error x s / F_g).
+/// the product's own footprint (Mesh.h clusterGroupFootprint: t*_g = error x s / F_g).
 struct Placement
 {
     double translate[3] = { 0.0, 0.0, 0.0 };

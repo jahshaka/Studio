@@ -45,6 +45,10 @@
 //      destructor leaves behind.
 //   7. A non-plate mesh is REFUSED with a message, not silently accepted.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Planar.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

@@ -85,6 +85,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Vr.h"
 #include "modules/vr/vrarc.h"
 #include "modules/vr/vrgrab.h"
 #include "services/vrworld.h"

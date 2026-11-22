@@ -13,6 +13,7 @@ For more information see the LICENSE file
 
 #include "bridge/enginehost.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Monitor.h"
 
 QVector<VerbInfo> EngineApi::verbs() const
 {

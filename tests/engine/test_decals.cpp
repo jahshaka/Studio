@@ -25,6 +25,10 @@
 // Runtime requirements are tests/engine's: a reachable DISPLAY and a Vulkan
 // driver (lavapipe is fine).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

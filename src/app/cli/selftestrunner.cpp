@@ -33,6 +33,9 @@ For more information see the LICENSE file
 #include "scripting/scriptengine.h"
 #include "shell/mainwindow.h"
 #include "viewport/ieditorviewport.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
 
 namespace {
 

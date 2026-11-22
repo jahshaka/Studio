@@ -16,6 +16,9 @@
 // showing geometry is within kFirstGeometryFrames of the stream-in (the swap's own latency); no later photograph is the
 // plate. RED on the held frame: the plate stays on screen until every permutation of the hole has landed.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>

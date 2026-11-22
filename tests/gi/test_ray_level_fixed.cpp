@@ -17,6 +17,9 @@
 // floor; the eye walks 4 m in 48 frames toward them, then cuts 150 m away. Frames: 1 + 24 settle + 48 walk + 4 + the
 // teleport's 28 = 105.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "../support/enginetesthelpers.h"
 

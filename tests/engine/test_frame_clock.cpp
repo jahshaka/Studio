@@ -3,7 +3,7 @@
 // no card). The integration (the drain, the join, which scenes a frame draws, the particles, the meter) is the card
 // fixtures' (frame.clock_integration, frame.meter_time).
 //
-// THE LAW (Types.h FrameInputScene::stepSerial): a scene's time is its DOCUMENT's steps. A part carries the document
+// THE LAW (FrameInput.h FrameInputScene::stepSerial): a scene's time is its DOCUMENT's steps. A part carries the document
 // clock's lifetime serial; the steps it moved since the last part are owed, ONCE; a frame that DRAWS the scene consumes
 // them, at most FrameInputScene::kMaxStepsPerFrame (the document's catch-up bound), dropping the rest; a frame that does
 // not draw it hands it 0 and leaves its steps.
@@ -30,6 +30,7 @@
 #include <string>
 
 #include "SceneClock.h"
+#include "jahshaka/engine/FrameInput.h"
 
 using jahshaka::engine::FrameInputScene;
 using jahshaka::engine::detail::SceneClock;

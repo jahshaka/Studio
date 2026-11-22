@@ -28,6 +28,7 @@
 #include <functional>
 #include <string>
 #include "irisgl/irisglfwd.h"
+#include "jahshaka/engine/GiModes.h"
 
 class QWidget;
 class IShellView;

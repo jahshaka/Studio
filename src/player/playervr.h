@@ -65,6 +65,7 @@ For more information see the LICENSE file
 
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Vr.h"
 #include "services/vrorigin.h"
 #include "viewport/flystep.h"
 

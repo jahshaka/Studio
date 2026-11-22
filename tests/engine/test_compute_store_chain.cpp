@@ -26,6 +26,7 @@
 #include <memory>
 #include <string>
 #include <unistd.h>
+#include "jahshaka/engine/Shaders.h"
 
 using namespace jahshaka::engine::detail;
 

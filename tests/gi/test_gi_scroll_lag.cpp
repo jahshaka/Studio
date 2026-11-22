@@ -21,6 +21,9 @@
 //     schedule meets the slack at fly speed: the general slot's sharing is the lag).
 // A fixture (the engine alone, one small offscreen view; the gather, the field and the reflection off).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

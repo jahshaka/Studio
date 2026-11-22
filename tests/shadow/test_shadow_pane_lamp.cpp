@@ -23,6 +23,9 @@
 // before F12: every new alpha level was a caster permutation of its own, built while its shadow was missing).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

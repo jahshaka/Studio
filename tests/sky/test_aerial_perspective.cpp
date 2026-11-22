@@ -43,6 +43,11 @@
 //      just above it in every column (the World fog fades towards the sky just
 //      above the horizon).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Fog.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

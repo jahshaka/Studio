@@ -35,6 +35,10 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Snapshot.h"
+#include "jahshaka/engine/Stats.h"
 
 using namespace jahshaka::engine;
 
@@ -415,7 +419,7 @@ void FrameMonitor::Bundle::writeFrame(const MonitorRecord &r)
             { "cpuMs", double(p.cpuMs) },
             // A pass that never reported its end (a workspace boundary closed
             // it): its times and counts are UNKNOWN, not zero, and seeing one
-            // is itself the finding (Types.h FramePass::orphaned).
+            // is itself the finding (Monitor.h FramePass::orphaned).
             { "orphaned", p.orphaned },
             // NEGATIVE means NOT MEASURED, in both of these, and it is written
             // as the negative number rather than dropped: "no GPU timing" and
@@ -442,12 +446,12 @@ void FrameMonitor::Bundle::writeFrame(const MonitorRecord &r)
             { "ms", double(w.ms) },
             // NEGATIVE = not measured, the same contract the passes carry. A
             // GI dispatch is the only GPU time in a capture that is NOT in a
-            // pass (Types.h CacheWork::gpuMs), so this is where it shows.
+            // pass (Monitor.h CacheWork::gpuMs), so this is where it shows.
             { "gpuMs", double(w.gpuMs) },
         });
     }
 
-    // THE REPLAYED-FRAME MARKER (Types.h, FramePass). A frame that executed
+    // THE REPLAYED-FRAME MARKER (Monitor.h, FramePass). A frame that executed
     // passes and whose passes counted NO draws at all. Ogre replays a cached
     // command buffer when a render queue has not changed and only feeds its
     // metrics on the build path, which is the known reason a complete picture

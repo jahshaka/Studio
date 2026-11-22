@@ -36,6 +36,7 @@ For more information see the LICENSE file
 #include <cstring>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
 #include "modules/capture/mp4faststart.h"
 #include "services/livevideo.h"
 #include "services/filewriteatomic.h"
@@ -397,7 +398,7 @@ bool VideoRecorder::start(const Options &options, QString *why)
 
     mFormat = QVideoFrameFormat(QSize(kWidth, kHeight), QVideoFrameFormat::Format_NV12);
     mFormat.setStreamFrameRate(kFps);
-    // What the pass wrote, stated to the encoder (Types.h VideoFrameNv12).
+    // What the pass wrote, stated to the encoder (Pictures.h VideoFrameNv12).
     mFormat.setColorSpace(QVideoFrameFormat::ColorSpace_BT709);
     mFormat.setColorTransfer(QVideoFrameFormat::ColorTransfer_BT709);
     mFormat.setColorRange(QVideoFrameFormat::ColorRange_Video);

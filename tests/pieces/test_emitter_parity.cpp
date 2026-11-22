@@ -25,6 +25,9 @@
 // THE CONTROL at the end proves the comparison can fail: the same fixture
 // rendered against a reference that is 0.05 off must be seen as different.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <QApplication>

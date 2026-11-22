@@ -1,7 +1,7 @@
 // test_atom_cut_laws — THE CLUSTER CUT'S CPU LAWS (ATOM-TESTS-BACK-1 stage 1; SPECS/ATOM_TESTS_BACK_1_SPEC.md). One verb a
 // row (`test_atom_cut_laws <row>`), 0 frames, no engine, no display: the harness meshes (tests/support/clustermesh.h,
 // proceduralshell.h) baked through the product's own bake (MeshBake::buildClusterDag) and handed across by the product's
-// own SceneMirror::toMeshData, and the cut evaluated by the product's own C++ rule (Types.h clusterCut, the GLSL twin's
+// own SceneMirror::toMeshData, and the cut evaluated by the product's own C++ rule (Mesh.h clusterCut, the GLSL twin's
 // reference: engine.lod_rule_parity holds the device cell-identical to it). No sample model, no scene file.
 //
 //   atom.cut_partition   t at 64 log-spaced values in [0.25, 64] px x the views {centre, corner, eye corner, ortho}:
@@ -371,7 +371,7 @@ static void rowSwitchBracket()
             double t[3];
             placeAt(*l, c, 4.0 * double(f.extent), t);
             const ClusterCutView base = cutView(*l, t, 1.0f, 4.0f * f.extent);
-            // every finite group's flip in this view: t*_g = error_g x s / F_g (Types.h clusterGroupFootprint)
+            // every finite group's flip in this view: t*_g = error_g x s / F_g (Mesh.h clusterGroupFootprint)
             std::vector<float> flip(d.clusterGroups.size(), -1.0f);
             for (size_t g = 0; g < d.clusterGroups.size(); ++g) {
                 const MeshClusterGroup &gr = d.clusterGroups[g];

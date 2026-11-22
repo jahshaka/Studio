@@ -18,6 +18,11 @@
 // sun term, the lift it started at, against the level's bound. A still picture with two uncarded walls beside the cap
 // (the readers that make its cards resident, since PHOTON-7 stage 5). Frames: 1 + the cards' residency (<= 400).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiCards.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

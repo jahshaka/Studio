@@ -43,6 +43,13 @@
 // Every answer is also asserted equal between the two halves (the reader's parity). The aperture-0 cone march's
 // escape for the same rays is PRINTED beside each (today's ray: the leak this row was red on).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/VoxelReader.h"
 #include "../support/enginetesthelpers.h"
 #include <cmath>
 #include <cstdio>

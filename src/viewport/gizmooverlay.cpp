@@ -3,6 +3,9 @@
 #include "viewport/gizmooverlay.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "irisgl/document/assets/mesh.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Mesh.h"
 
 using namespace jahshaka::engine;
 

@@ -166,6 +166,10 @@
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Skeleton.h"
+#include "jahshaka/engine/Stats.h"
 #include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;

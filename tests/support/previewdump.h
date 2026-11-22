@@ -21,6 +21,7 @@
 #include <cstring>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
 
 namespace previewdump {
 

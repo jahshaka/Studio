@@ -30,6 +30,13 @@
 // code. RED BEFORE F5: +35.42 codes (the front pane's alpha x the traced light, over).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

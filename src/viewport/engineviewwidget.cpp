@@ -3,6 +3,9 @@
 #include <QGuiApplication>
 #include <QWindow>
 #include <QResizeEvent>
+#include "jahshaka/engine/Camera.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Math.h"
 
 EngineViewWidget::EngineViewWidget(QWidget *parent) : QWidget(parent)
 {

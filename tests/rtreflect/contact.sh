@@ -116,7 +116,7 @@ from PIL import Image
 shots = sys.argv[1]
 fails = []
 TY = math.tan(math.radians(22.5))
-DRIFT = 2.0   # Types.h kLevelDriftOverBound (the bake's ship law atom2.one_step_drift_bound)
+DRIFT = 2.0   # Mesh.h kLevelDriftOverBound (the bake's ship law atom2.one_step_drift_bound)
 FLAT_END = -2.2   # photon-contact's kContactFlatEnd: the flat level-0 mirror is x < it, the chained one x > it
 def load(name):
     path = os.path.join(shots, name + '.png')

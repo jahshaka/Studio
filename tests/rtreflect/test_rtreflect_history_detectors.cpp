@@ -37,6 +37,11 @@
 //       floor the renderer settles to at the same pose, in 8-bit codes.
 // The base numbers are printed and stated in the checks' comments.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

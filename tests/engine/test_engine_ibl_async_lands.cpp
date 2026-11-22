@@ -23,6 +23,10 @@
 //      every frame's close (each request is cancelled inside the try that made it) and the environment never lands.
 //  (3) no try after the landing: the deferral count stands still once the environment has landed.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 #include <algorithm>
 #include <cstdio>

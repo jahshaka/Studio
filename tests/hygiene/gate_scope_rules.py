@@ -138,7 +138,7 @@ def speed_cases(source, build):
           "16. the table is FIRST MATCH, specific -> generic: a GI shader in media/Hlms/Jahshaka is the gi line's")
 
     # 17. THE CORE, by what changed: a Types.h field ADDED and used by one engine TU -> that TU's subsystem only
-    tpath, upath = "irisgl/engine/include/jahshaka/engine/Types.h", "irisgl/engine/src/OgrePhotonView.cpp"
+    tpath, upath = "irisgl/engine/include/jahshaka/engine/GiGather.h", "irisgl/engine/src/OgrePhotonView.cpp"
     ta = open(os.path.join(source, tpath), errors="replace").read()
     ua = open(os.path.join(source, upath), errors="replace").read()
     anchor = "struct GatherStatus {\n"
@@ -166,12 +166,12 @@ def speed_cases(source, build):
                     return subprocess.run(["git", "diff", "--no-index", "-U0", "a", "b"], cwd=d, capture_output=True,
                                           text=True).stdout
         return FakeRevs
-    check(anchor in ta, "17. the anchor `struct GatherStatus {` is in Types.h")
+    check(anchor in ta, "17. the anchor `struct GatherStatus {` is in GiGather.h")
     S = sel([tpath, upath], revs=fake(texts))
     nonshot = [n for n in strictly(S, "vr") if not inv0[n].get("screenshot") and not inv0[n].get("picture_arms")]
     hdr_ = [n for n in strictly(S, "hdr") if not inv0[n].get("screenshot")]
     check(of(S, "gi") and not hdr_ and not nonshot and not S.fallback,
-          "17. a Types.h field ADDED and used by OgrePhotonView.cpp -> the users' subsystem (gi %d + the screenshot rows), "
+          "17. a GiGather.h field ADDED and used by OgrePhotonView.cpp -> the users' subsystem (gi %d + the screenshot rows), "
           "no hdr row, no other vr row (%s)" % (len(of(S, "gi")), (hdr_ + nonshot)[:4]))
     # 18. OgreEngine.cpp by the ENCLOSING FUNCTION: a frame-loop edit -> every engine fixture + the picture set; a VR edit
     ep = "irisgl/engine/src/OgreEngine.cpp"

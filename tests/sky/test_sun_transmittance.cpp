@@ -27,6 +27,9 @@
 //   5. the Earth's occlusion still ends sunlight at the horizon (SUN-DISC-1);
 //   6. a picture sky knows nothing about the air: white.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

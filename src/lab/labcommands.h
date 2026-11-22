@@ -60,7 +60,7 @@ RouteVerdict judgeRoutes(const RouteSet &declared, const RouteSet &actual, int f
 /// The whole help text: the keys, the verbs and the flags.
 std::string helpText();
 
-/// The Atom view names in the engine's AtomView order (Types.h: Off, Triangles, Levels, Buckets, Objects, Density).
+/// The Atom view names in the engine's AtomView order (Overlay.h: Off, Triangles, Levels, Buckets, Objects, Density).
 const std::vector<std::string> &atomViewNames();
 /// The tier names in worldmodes::Mode order (Low, Medium, High, Epic).
 const std::vector<std::string> &tierNames();

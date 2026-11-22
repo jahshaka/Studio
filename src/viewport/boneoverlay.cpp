@@ -11,6 +11,9 @@
 #include <vector>
 
 #include "irisgl/mirror/scenemirror.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Mesh.h"
 
 using namespace jahshaka::engine;
 

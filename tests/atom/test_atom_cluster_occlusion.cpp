@@ -19,6 +19,10 @@
 // THE BASE (printed, not asserted): with engine.arm atom.clusterOcclusion 0 - the objects' own test alone, the base of
 // this spec - the whole back facade is drawn in the first list. Frames, never time: the engine's fixed clock.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Atom.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "../support/enginetesthelpers.h"
 

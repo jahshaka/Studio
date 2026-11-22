@@ -21,7 +21,7 @@
 
 #include "import/atomdag/adjacency.h"
 #include "import/atomdag/measure.h"
-#include "jahshaka/engine/Types.h"   // kLevelDriftOverBound: the drift law the ray origin spends
+#include "jahshaka/engine/Mesh.h"
 
 namespace atom2
 {
@@ -406,7 +406,7 @@ inline int oneStepDriftBound()
             std::printf(" | d%d %d %.4g %.4g", r.depth, r.triangles, double(r.drift), double(r.stored));
             if (r.depth == 0) continue;   // (an EMPTY level is not skipped: everything gone is a drift too)
             if (r.stored > 0.0f) worst = std::max(worst, r.drift / r.stored);
-            // THE LAW IS THE ENGINE'S CONSTANT (Types.h kLevelDriftOverBound): the ray origin multiplies a stored
+            // THE LAW IS THE ENGINE'S CONSTANT (Mesh.h kLevelDriftOverBound): the ray origin multiplies a stored
             // bound by it to reach a distance from level 0 (PHOTON-7 stage 6, READ_B F3).
             if (r.drift > jahshaka::engine::kLevelDriftOverBound * r.stored * (1.0f + 1e-5f)) ++over;
         }

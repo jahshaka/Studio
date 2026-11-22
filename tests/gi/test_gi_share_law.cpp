@@ -19,6 +19,7 @@
 // On the base shader (the trust, its share at the pick texel) this row was RED, run once (BISTRO-REST-1): (i) a 0.0108
 // step at T 5.98e-6, (ii) the slope off by 562, (iii) 2 period-2 orbits and 138 fixed points dark by up to 86.6 steps.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiCards.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

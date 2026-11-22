@@ -34,6 +34,12 @@ For more information see the LICENSE file
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
 #include "viewport/scenepicker.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/PostFx.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Vr.h"
 
 using namespace jahshaka::engine;
 
@@ -135,7 +141,7 @@ bool profileFromName(const QString &raw, VrProfileName &out, QString *error)
 /// views report theirs here — `View::postFx()` is what the view is really
 /// carrying, the VR policy already applied — so the answer is an assertion on
 /// the fields rather than on a picture, and a difference names ITSELF.
-QVariantMap postFxMap(const View &view, const PublishedEngineFrame::ViewFrames &pv)
+QVariantMap postFxMap(const View &view, const ViewFrames &pv)
 {
     const PostFxDesc &fx = pv.postFx;   // the effective chain, as the last frame drew it (U3 stage 2)
     const auto lookName = [](LookKind k) {
@@ -1639,7 +1645,7 @@ QVariantMap VrApi::state()
     // THE GRADE, BOTH PICTURES (lane EYE-GRADE-1): the EFFECTIVE post
     // description the session's eye pair is carrying and the one the desktop's
     // view is carrying, in the same spelling. The eye's is the project's
-    // description with the VR policy applied (`applyVrViewPolicy`, Types.h), so
+    // description with the VR policy applied (`applyVrViewPolicy`, PostFx.h), so
     // the two agree field for field except the policy's own short list — which
     // is exactly what `vr.eye_grade` asserts, and what anybody debugging "the
     // headset looks wrong" should read first.

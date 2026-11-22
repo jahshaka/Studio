@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "data/settingsmanager.h"
 #include "ui/style/thememanager.h"
+#include "jahshaka/engine/Shaders.h"
 
 using namespace jahshaka::engine;
 

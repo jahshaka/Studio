@@ -28,9 +28,16 @@
 #include <vector>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Stats.h"
 #include "jahshaka/engine/ProcessExit.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
-#include "jahshaka/engine/Types.h"
 
 namespace enginetest {
 
@@ -265,11 +272,11 @@ inline bool requireRoutes(View *v, Scene *s, const Routes &declared, const char 
 {
     const Routes a = actualRoutes(v, s);
     // THE TWO DOORS AGREE (PHOTON-7-9A, the lead's ruling: the chain's routes are PUBLISHED for a host - the lab's
-    // `routes` verb reads PublishedEngineFrame::ViewFrames' routeGather / routeIntegrate / routeReflect - and the
+    // `routes` verb reads ViewFrames' routeGather / routeIntegrate / routeReflect - and the
     // fixtures' door above answers them): on the frame judged, the view's published row says what inspect says, or
     // FAIL by name - every declaring fixture is this law's code test, so the two doors cannot drift.
     {
-        const PublishedEngineFrame::ViewFrames row = v->published();
+        const ViewFrames row = v->published();
         if (row.id != 0 && (row.routeGather != a.g || row.routeIntegrate != a.i || row.routeReflect != a.r)) {
             std::fprintf(stderr, "FAIL: %s's PUBLISHED routes {gather %d integrate %d reflection %d} differ from the inspect "
                                  "door's {%d %d %d} on the same frame (PHOTON-7-9A: the two doors must agree)\n", what,

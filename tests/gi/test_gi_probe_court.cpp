@@ -21,6 +21,9 @@
 //   3. the court with a roof (a sealed room)                    18 of 18, as at the base
 // The counts are printed. ONE SCENE AT A TIME.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>

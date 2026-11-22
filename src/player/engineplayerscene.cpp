@@ -19,6 +19,12 @@
 #include "irisgl/core/viewport.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "jahshaka/engine/Camera.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/PostFx.h"
 
 using namespace jahshaka::engine;
 

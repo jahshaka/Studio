@@ -18,6 +18,9 @@
 // halves the record carries the panes in (2^-11 of the level).
 // 256x144; frames 1 + 4 x 30 = 121.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

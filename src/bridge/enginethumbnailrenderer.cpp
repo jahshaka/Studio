@@ -31,6 +31,13 @@
 #include "bridge/previewenvironment.h"
 #include "bridge/stableoffscreenrender.h"
 #include "viewport/previewframing.h"
+#include "jahshaka/engine/Camera.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/PostFx.h"
+#include "jahshaka/engine/Published.h"
 
 using namespace jahshaka::engine;
 

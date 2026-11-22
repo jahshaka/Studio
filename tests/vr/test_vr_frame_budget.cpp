@@ -71,7 +71,7 @@ For more information see the LICENSE file
 //
 // The frame's cost here is GPU + GI: `gpuMs` (every pass's timestamps) plus the
 // GI dispatches, which are the one GPU cost in a capture that is not inside a
-// pass (Types.h CacheWork::gpuMs). `engine.swap` is never in it.
+// pass (Monitor.h CacheWork::gpuMs). `engine.swap` is never in it.
 #include <QByteArray>
 #include <QCoreApplication>
 #include <QDir>

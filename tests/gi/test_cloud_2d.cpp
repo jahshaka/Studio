@@ -47,6 +47,10 @@
 #include "irisgl/irisglfwd.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Sky.h"
+#include "jahshaka/engine/Stats.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
@@ -705,7 +709,7 @@ int caseBakeCost() {
     return 0;
 }
 // cloud_2d.budget (archived: archive/tests/cloud_2d) — THE CLOUD LAYER'S TEXTURE BUDGET (CLOUD-BAKE-MEMORY-1): after a bake, every
-// texture the cloud layer holds — the field (kCloudFieldBytes, Types.h: the 2048^2 R16F tile
+// texture the cloud layer holds — the field (kCloudFieldBytes, Sky.h: the 2048^2 R16F tile
 // with its mip chain, the same at every tier) and its two 1 x 1 stand-ins — within the stated
 // budget, and the bake's three 512^2 intermediates gone with the workspace that made them.
 int caseBudget() {

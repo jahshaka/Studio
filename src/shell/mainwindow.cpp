@@ -169,6 +169,7 @@ For more information see the LICENSE file
 #include "ui/style/thememanager.h"
 #include "ui/style/themeroles.h"
 #include "ui/style/columnedpage.h"
+#include "jahshaka/engine/Published.h"
 
 MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWindow)
 {
