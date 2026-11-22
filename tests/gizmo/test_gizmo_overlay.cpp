@@ -348,22 +348,6 @@ int main(int argc, char **argv)
             enginetest::frames(engine, 2);
             Image shot;
             depthView->readPixels(shot);
-            // GIZMO-ORDER-1 MEASURING ARM (reverted by its own commit): each item's colour and order, and the picture.
-            {
-                const auto armItems = gizmo.drawItems(eye, miss, fwd);
-                for (int ai = 0; ai < armItems.size(); ++ai)
-                    std::printf("    GIZMO-ARM eye.x %.0f item %d colour %d,%d,%d order %d\n", double(eyePos.x()), ai,
-                                armItems[ai].colour.red(), armItems[ai].colour.green(), armItems[ai].colour.blue(),
-                                armItems[ai].order);
-                char armPath[256];
-                const char *armDir = std::getenv("GIZMO_ARM_DIR");
-                std::snprintf(armPath, sizeof armPath, "%s/eye%+.0f.ppm", armDir ? armDir : ".", double(eyePos.x()));
-                if (FILE *f = armDir ? std::fopen(armPath, "wb") : nullptr) {
-                    std::fprintf(f, "P6 %u %u 255\n", shot.width, shot.height);
-                    for (size_t pi = 0; pi + 3 < shot.rgba.size(); pi += 4) std::fwrite(&shot.rgba[pi], 1, 3, f);
-                    std::fclose(f);
-                }
-            }
             return shot.width ? shot.at(shot.width / 2, shot.height / 2) : Colour(0, 0, 0);
         };
         // A hair off the axis, so the view's up vector is defined.
