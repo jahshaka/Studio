@@ -12,14 +12,30 @@ THE LAWS (over irisgl/engine/include/jahshaka/engine, the public headers; commen
      with no line = RED (a new subject is a new header, and its size is recorded when it is born).
   H4 EVERY PUBLIC HEADER HAS A FAN-OUT CEILING (`fanout <header> <n>`): the number of OTHER public headers whose include
      closure reaches it (the header graph; what an edit of it rebuilds beyond its own users). The law both ways, as H3.
-     H4 GUARDS THE STRUCTURE; scripts/lead/fanout.sh MEASURES THE BUILD (the TUs an edit recompiles, from ninja's deps log):
-     a per-TU count grows with every new test, so it is never held here (the lead's ruling, 2026-11-22).
+  H6 THE BUILD's WIDTH PER FILE (the lead, 2026-11-23: the split's final read, its defect 1 - 222 includes of FrameInput.h
+     nothing needed made ~54 more source files reach six heavy headers, and H4 could not see it): for each header of REACH,
+     the number of SOURCE FILES (.cpp/.mm/.cc of the Studio tree and irisgl, no thirdparty) whose include closure reaches it
+     has a ceiling (`reach <header> <n>`), the law both ways, as H3 (a new source file that reaches one of them raises its
+     line in the same commit: every widening is a reviewed line). THE CONTROL: each is reached by at least one file.
+     THE WALK is static (no build): every `#include` line, quoted from the includer's directory then the include roots
+     (ROOTS: the build's own -I directories of our trees), angle-bracket from the roots; a quoted include they do not resolve
+     is followed when exactly one file of ours ends with its path (a target's own -I, e.g. tests/atom from tests/compute).
+     ITS BLIND SPOTS, each counted on every run: (a) `#if` is not evaluated - every include is taken, so the walk can only
+     over-count (an Apple-only include counts on Linux), never hide a rise; (b) the build's GENERATED files are not walked
+     (moc's mocs_compilation.cpp, the SPIR-V arrays, the build-id and provenance headers: none includes an engine header);
+     (c) a quoted include that two files of ours could answer, and a computed `#include MACRO`, could hide a path: each is
+     RED until spelled from an include root. Measured against ninja's deps log at its landing: the same files but the 12
+     sources no target compiles and one target never built (walk +13) and mocs_compilation.cpp (walk -1).
+  WHO GUARDS WHAT: H4 the STRUCTURE (header to header); H6 the BUILD's WIDTH per source file (static, any tree, no build);
+     scripts/lead/fanout.sh MEASURES the build (the objects an edit recompiles, twins and per-target copies included, from
+     ninja's deps log, with their CPU-s).
   H5 THE HOUSE SPELLING OF AN irisgl INCLUDE (the lead, 2026-11-22: a finding of NOQT-CORE-1's final read): in the Studio tree
      (src, tests, lab, tools), a quoted include that resolves to a file under irisgl/ - and not to the includer's own directory
      or src/ - is spelled "irisgl/<dir>/..." (never a bare "core/...", "document/...", "import/..."). The engine's API path
      "jahshaka/engine/..." is its include root's, and is not this law's.
-The self-test runs first, always: one synthetic violation per law on a toy tree must red, the law's both ways for H3 and H4.
-Run: engine_headers.py <source-root> [--counts]   (--counts prints the ceilings file's lines as measured, never fails)
+The self-test runs first, always: one synthetic violation per law on a toy tree must red, the law's both ways for H3, H4 and H6.
+Run: engine_headers.py <source-root> [--counts | --reach <header>]   (--counts prints the ceilings file's lines as measured;
+     --reach the source files that reach a header of REACH; neither fails)
 """
 import os
 import re
@@ -32,6 +48,12 @@ ENGINE_INCLUDES = ["Math.h", "Ids.h", "Config.h", "PostFx.h", "Camera.h", "Overl
 STUDIO = ("src", "tests", "lab", "tools")
 CXX = (".h", ".hpp", ".cpp", ".mm", ".cc")
 INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*"([^"]+)"', re.M)   # ([ \t], never \s: a \s* at ^ eats the newline before)
+REACH = ("GiParams.h", "FrameInput.h", "Monitor.h", "Sky.h", "Fog.h", "Planar.h")   # H6: the heavy headers the split widened
+TUS = (".cpp", ".mm", ".cc")
+WALKED = TUS + (".h", ".hpp", ".inl", ".inc")
+ROOTS = (".", "src", "irisgl", "irisgl/engine/include", "irisgl/engine/src", "irisgl/engine", "irisgl/core", "src/lab", "tests",
+         "tests/support", "extras/downloader")
+ANY_INCLUDE = re.compile(r'^[ \t]*#[ \t]*include[ \t]*(?:"([^"]+)"|<([^>]+)>|([A-Za-z_]\w*))', re.M)
 fails = 0
 
 
@@ -70,12 +92,66 @@ def measure(root):
                 sum(1 for o in hs if o != h and h in reach[o])) for h in hs}
 
 
+def reach(root):
+    """({header of REACH: the source files whose include closure reaches it}, {what the walk followed and its blind spots})."""
+    files = {}
+    for top in STUDIO + ("extras", "irisgl"):
+        for dp, dn, fn in os.walk(os.path.join(root, top)):
+            dn[:] = [d for d in dn if d not in ("fixtures", "thirdparty") and not d.startswith(".")]
+            for f in fn:
+                if f.endswith(WALKED):
+                    p = os.path.join(dp, f)
+                    files[os.path.relpath(p, root)] = p
+    tails = {}
+    for rel in files:
+        parts = rel.split("/")
+        for i in range(len(parts)):
+            tails.setdefault("/".join(parts[i:]), []).append(rel)
+    walk = {"files": len(files), "sources": sum(1 for r in files if r.endswith(TUS)), "roots": 0, "angle": 0, "tail": 0,
+            "not ours": 0, "blind": []}
+    users = {}
+    for rel, p in files.items():
+        for m in ANY_INCLUDE.finditer(open(p, errors="replace").read()):
+            q, a, macro = m.groups()
+            if macro:
+                walk["blind"].append("%s: a computed #include %s" % (rel, macro))
+                continue
+            inc = os.path.normpath(q or a)
+            got = os.path.normpath(os.path.join(os.path.dirname(rel), inc)) if q else None
+            if got not in files:
+                got = next((os.path.normpath(os.path.join(r, inc)) for r in ROOTS
+                            if os.path.normpath(os.path.join(r, inc)) in files), None)
+                if got:
+                    walk["roots" if q else "angle"] += 1
+                elif q and len(tails.get(inc, ())) == 1:
+                    got = tails[inc][0]
+                    walk["tail"] += 1
+                elif q and tails.get(inc):
+                    walk["blind"].append("%s: \"%s\" is %s" % (rel, q, " or ".join(sorted(tails[inc]))))
+                    continue
+                else:
+                    walk["not ours"] += 1
+                    continue
+            users.setdefault(got, []).append(rel)
+    out = {}
+    for h in REACH:
+        seen, stack = set(), [os.path.join(INC, h)]
+        while stack:
+            for u in users.get(stack.pop(), ()):
+                if u not in seen:
+                    seen.add(u)
+                    stack.append(u)
+        if os.path.join(INC, h) in files:
+            out[h] = sorted(u for u in seen if u.endswith(TUS))
+    return out, walk
+
+
 def ceilings(root):
     out = {}
     p = os.path.join(root, "tests", "hygiene", "engine_headers_ceilings.txt")
     for line in open(p).read().splitlines() if os.path.isfile(p) else []:
         w = line.split("#", 1)[0].split()
-        if len(w) == 3 and w[0] in ("lines", "fanout"):
+        if len(w) == 3 and w[0] in ("lines", "fanout", "reach"):
             out[(w[0], w[1])] = int(w[2])
     return out
 
@@ -105,7 +181,7 @@ def bare_irisgl(root):
     return bad
 
 
-def judge(root, say=True):
+def judge(root, say=False):
     """[the laws' faults] of the tree at root."""
     out = []
     if os.path.isfile(os.path.join(root, INC, "Types.h")):
@@ -134,9 +210,33 @@ def judge(root, say=True):
             elif v < cap:
                 out.append("%s %s %s %d under its ceiling %d: lower the ceiling to %d in the same commit" % (law, h, kind, v, cap, v))
     for (kind, h), cap in sorted(c.items()):
-        if h not in m:
+        if kind != "reach" and h not in m:
             out.append("%s a ceiling for %s, which is no public header: delete its line" % ("H3" if kind == "lines" else "H4", h))
     out += ["H5 " + b for b in bare_irisgl(root)]
+    r, walk = reach(root)
+    if say:
+        print("  H6 walk: %d files, %d sources; includes followed %d by the include roots, %d angle-bracket, %d by a unique path"
+              " tail; %d not ours (std, Qt, Ogre, generated); %d blind" % (walk["files"], walk["sources"], walk["roots"],
+                                                                            walk["angle"], walk["tail"], walk["not ours"],
+                                                                            len(walk["blind"])), flush=True)
+    out += ["H6 the walk cannot follow %s: spell it from an include root" % b for b in walk["blind"]]
+    for h in REACH:
+        if h not in r:
+            out.append("H6 %s is no public header: REACH (engine_headers.py) names it" % h)
+            continue
+        n, cap = len(r[h]), c.get(("reach", h))
+        if not n:
+            out.append("H6 %s is reached by no source file: the walk resolved nothing (the control)" % h)
+        if cap is None:
+            out.append("H6 %s has no `reach` ceiling: add `reach %s %d` to engine_headers_ceilings.txt" % (h, h, n))
+        elif n > cap:
+            out.append("H6 %s reached by %d source files, its ceiling %d: over (a header now includes what it only names? "
+                       "engine_headers.py --reach %s lists them)" % (h, n, cap, h))
+        elif n < cap:
+            out.append("H6 %s reached by %d source files under its ceiling %d: lower the ceiling to %d in the same commit"
+                       % (h, n, cap, n))
+    out += ["H6 a reach ceiling for %s, which REACH does not name: delete its line" % h
+            for (kind, h) in sorted(c) if kind == "reach" and h not in REACH]
     return out
 
 
@@ -155,18 +255,54 @@ def selftest():
         open(os.path.join(d, "Engine.h"), "w").write("".join('#include "jahshaka/engine/%s"\n' % h for h in ENGINE_INCLUDES))
         open(os.path.join(t, "irisgl", "core", "math", "vec.h"), "w").write("#pragma once\n")
         open(os.path.join(t, "src", "x", "a.cpp"), "w").write('#include "irisgl/core/math/vec.h"\n')
-        m = measure(t)
-        open(os.path.join(t, "tests", "hygiene", "engine_headers_ceilings.txt"), "w").write(
-            "".join("lines %s %d\nfanout %s %d\n" % (h, n, h, f) for h, (n, f) in sorted(m.items())))
+        # H6's toy: FrameInput.h includes the other five, as the tree's does; three routes reach them - a root
+        # (src/x/r.cpp), the includer's directory then an angle bracket (src/y/b.cpp -> b.h), a unique path tail
+        # (tests/compute/c.cpp -> "helper.h" = tests/atom/helper.h)
+        for h in REACH:
+            open(os.path.join(d, h), "w").write("#pragma once\n" + ("".join('#include "jahshaka/engine/%s"\n' % o for o in REACH
+                                                                            if o != h) if h == "FrameInput.h" else ""))
+        for f, text in (("src/x/r.cpp", '#include "jahshaka/engine/FrameInput.h"\n'), ("src/y/b.cpp", '#include "b.h"\n'),
+                        ("src/y/b.h", "#pragma once\n#include <jahshaka/engine/Sky.h>\n"),
+                        ("tests/atom/helper.h", '#pragma once\n#include "jahshaka/engine/GiParams.h"\n'),
+                        ("tests/compute/c.cpp", '#include "helper.h"\n')):
+            os.makedirs(os.path.dirname(os.path.join(t, f)), exist_ok=True)
+            open(os.path.join(t, f), "w").write(text)
+        m, r = measure(t), reach(t)[0]
+        p_c = os.path.join(t, "tests", "hygiene", "engine_headers_ceilings.txt")
+        open(p_c, "w").write("".join("lines %s %d\nfanout %s %d\n" % (h, n, h, f) for h, (n, f) in sorted(m.items())) +
+                             "".join("reach %s %d\n" % (h, len(us)) for h, us in sorted(r.items())))
         base = judge(t)
-        check(not base and m["Fwd.h"][1] == 2 and m["Engine.h"][1] == 0,
-              "the clean toy passes; Fwd.h's fan-out counts Math.h and Engine.h (%s %s)" % (base, m.get("Fwd.h")))
+        want = {h: 2 if h in ("GiParams.h", "Sky.h") else 1 for h in REACH}
+        check(not base and m["Fwd.h"][1] == 2 and m["Engine.h"][1] == 0 and {h: len(us) for h, us in r.items()} == want,
+              "the clean toy passes; Fwd.h's fan-out counts Math.h and Engine.h; H6 reaches by the three routes (%s %s %s)"
+              % (base, m.get("Fwd.h"), {h: len(us) for h, us in r.items()}))
 
-        def arm(name, do, undo, law):
+        def arm(name, do, undo, law, word=""):
             do()
             got = judge(t)
             undo()
-            check(any(g.startswith(law) for g in got), "%s red: %s (%s)" % (law, name, got[:2]))
+            check(any(g.startswith(law) and word in g for g in got), "%s red: %s (%s)" % (law, name, got[:2]))
+
+        def put(path, text):
+            return lambda: open(path, "w").write(text)
+
+        p_b, p_cc = os.path.join(t, "src", "y", "b.h"), os.path.join(t, "tests", "compute", "c.cpp")
+        p_r = os.path.join(t, "src", "x", "r.cpp")
+        b, cc, rr, cs = open(p_b).read(), open(p_cc).read(), open(p_r).read(), open(p_c).read()
+        arm("a header that named a type now includes FrameInput.h (the split's first form)",
+            put(p_b, b + '#include "jahshaka/engine/FrameInput.h"\n'), put(p_b, b), "H6",
+            "GiParams.h reached by 3 source files, its ceiling 2: over")
+        arm("a source file drops its way to GiParams.h", put(p_cc, ""), put(p_cc, cc), "H6", "lower the ceiling to 1")
+        arm("a header of REACH without its reach line", put(p_c, cs.replace("reach Fog.h 1\n", "")), put(p_c, cs), "H6",
+            "add `reach Fog.h")
+        arm("the control: a walk that reaches nothing reads 0 under ceilings of 0",
+            lambda: [put(p, "")() for p in (p_b, p_cc, p_r)] + [put(p_c, re.sub(r"(reach \S+) \d+", r"\1 0", cs))()],
+            lambda: [put(p, x)() for p, x in ((p_b, b), (p_cc, cc), (p_r, rr), (p_c, cs))], "H6", "reached by no source file")
+        p_o = os.path.join(t, "tests", "other", "helper.h")
+        os.makedirs(os.path.dirname(p_o))
+        arm("a quoted include two files of ours answer", put(p_o, "#pragma once\n"), lambda: os.remove(p_o), "H6",
+            "cannot follow tests/compute/c.cpp")
+        arm("a computed include", put(p_cc, cc + "#include JAH_SOME_HEADER\n"), put(p_cc, cc), "H6", "a computed #include")
 
         p_eng = os.path.join(d, "Engine.h")
         eng = open(p_eng).read()
@@ -211,11 +347,16 @@ if __name__ == "__main__":
     if "--counts" in sys.argv:
         for h, (n, f) in sorted(measure(root).items()):
             print("lines %s %d\nfanout %s %d" % (h, n, h, f))
+        for h, us in sorted(reach(root)[0].items()):
+            print("reach %s %d" % (h, len(us)))
+        sys.exit(0)
+    if "--reach" in sys.argv:
+        print("\n".join(reach(root)[0].get(sys.argv[sys.argv.index("--reach") + 1], [])))
         sys.exit(0)
     selftest()
     print("the tree (%s):" % root)
-    bad = judge(root)
+    bad = judge(root, say=True)
     check(bool(headers(root)), "the public headers are read (%d)" % len(headers(root)))
-    check(not bad, "H1-H5 hold%s" % "".join("\n         " + b for b in bad))
+    check(not bad, "H1-H6 hold%s" % "".join("\n         " + b for b in bad))
     print("source.engine_headers: %s" % ("PASSED" if not fails else "FAILED (%d)" % fails))
     sys.exit(1 if fails else 0)

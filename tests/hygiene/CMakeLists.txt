@@ -786,8 +786,9 @@ set_tests_properties(source.webgpu_census PROPERTIES TIMEOUT 60 LABELS "hygiene"
 jah_no_display(source.webgpu_census)
 # source.engine_headers (ENGINE-HEADERS-1 stage 1, the spec's call 13): THE ENGINE's PUBLIC HEADERS ARE ONE SUBJECT EACH AND ONLY GET
 # SMALLER - Types.h gone (no header, no includer); Engine.h's own engine includes exactly the BASE + Fwd.h; every public header's
-# line count and header fan-out (the STRUCTURE; scripts/lead/fanout.sh measures the BUILD) held at a ceiling
-# (engine_headers_ceilings.txt), the law both ways; and the house spelling of an
+# line count and header fan-out (H4: the STRUCTURE) held at a ceiling; the source files whose include closure reaches each of
+# six heavy headers (H6: the BUILD's WIDTH per file, a static walk; scripts/lead/fanout.sh measures the build's objects)
+# held at a ceiling (engine_headers_ceilings.txt), the laws both ways; and the house spelling of an
 # irisgl include in the Studio tree, "irisgl/<dir>/..." (the lead's, a finding of NOQT-CORE-1's final read). Its self-test first:
 # one synthetic violation per law on a toy tree. Sources only (no build).
 add_test(NAME source.engine_headers
