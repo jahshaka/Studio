@@ -61,7 +61,7 @@ static bool structural(const Value &s, const std::string &where, std::string &wh
 {
     static const std::set<std::string> kKeys = {"type", "description", "properties", "required", "additionalProperties",
                                                 "items", "minItems", "maxItems", "enum", "minimum", "exclusiveMinimum", "maximum",
-                                                "default",
+                                                "default", "format",
                                                 "propertyNames", "minProperties", "contentEncoding", "maxLength", "const"};
     static const std::set<std::string> kTypes = {"null", "boolean", "integer", "number", "string", "array", "object"};
     if (s.kind() != Kind::Object) return why = where + ": not an object", false;
@@ -125,6 +125,7 @@ int main()
     Param others = arg("others", Kind::Array);
     others.element = Kind::Int;
     others.handle = "thing";
+    others.maxCount = 3;   // (an array declares its bound: Registry::add, SCRIPT-IN-ENGINE-1 2b)
     const auto none = [](Call &) { return Value(); };
     const bool added =
         reg.add({"test.forms",
@@ -133,11 +134,12 @@ int main()
                    object("opts", {arg("flag", Kind::Bool, Value(true)), arg("count", Kind::Int).range(1, 8).in("px"),
                                    arg("ratio", Kind::Number, Value(0.5)).range(0, 1), arg("mode", Kind::String).oneOf({"a", "b"}),
                                    numbers("vec", 3, Value(Value::Array{Value(0.0), Value(0.0), Value(1.0)})),
-                                   objects("items", {arg("k", Kind::String)}), arg("blob", Kind::Bytes),
-                                   handle("other", "thing"), others, arg("free", Kind::Array),
+                                   objects("items", {arg("k", Kind::String)}).upTo(2), arg("blob", Kind::Bytes),
+                                   handle("other", "thing"), others, arg("free", Kind::Array).upTo(4),
                                    arg("raw", Kind::Number).allowNonFinite(), arg("nothing", Kind::Null, Value()),
                                    object("nested", {arg("x", Kind::Number, Value(2.0))}, Value(Value::Object{})),
-                                   handles("many", "thing").upTo(5), arg("pos", Kind::Number).above(0)})},
+                                   handles("many", "thing").upTo(5), arg("pos", Kind::Number).above(0),
+                                   arg("flat", Kind::Array, Value()).upTo(6).flat(3).asFloat()})},
                   Kind::Null},
                  "every form"},
                 none) &&
@@ -154,20 +156,24 @@ int main()
         "\"mode\":{\"type\":\"string\",\"enum\":[\"a\",\"b\"]},"
         "\"vec\":{\"type\":\"array\",\"items\":{\"type\":\"number\"},\"minItems\":3,\"maxItems\":3,\"default\":[0.0,0.0,1.0]},"
         "\"items\":{\"type\":\"array\",\"items\":{\"type\":\"object\",\"properties\":{\"k\":{\"type\":\"string\"}},"
-        "\"required\":[\"k\"],\"additionalProperties\":false}},"
+        "\"required\":[\"k\"],\"additionalProperties\":false},\"maxItems\":2},"
         "\"blob\":{\"type\":\"object\",\"propertyNames\":{\"const\":\"$bytes\"},\"minProperties\":1,"
         "\"additionalProperties\":{\"type\":\"string\",\"contentEncoding\":\"base64\",\"maxLength\":1398104},"
         "\"description\":\"bytes as {\\\"$bytes\\\": \\\"<base64>\\\"}, at most 1 MiB\"},"
         "\"other\":{\"type\":\"integer\",\"minimum\":1,\"description\":\"a thing handle\"},"
-        "\"others\":{\"type\":\"array\",\"items\":{\"type\":\"integer\",\"minimum\":1,\"description\":\"a thing handle\"}},"
-        "\"free\":{\"type\":\"array\",\"items\":{\"type\":\"number\"}},"
+        "\"others\":{\"type\":\"array\",\"items\":{\"type\":\"integer\",\"minimum\":1,\"description\":\"a thing handle\"},"
+        "\"maxItems\":3},"
+        "\"free\":{\"type\":\"array\",\"items\":{\"type\":\"number\"},\"maxItems\":4},"
         "\"raw\":{\"type\":\"number\",\"description\":\"NaN and infinity allowed (JSON carries neither)\"},"
         "\"nothing\":{\"type\":\"null\",\"default\":null},"
         "\"nested\":{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\",\"default\":2.0}},"
         "\"additionalProperties\":false,\"default\":{\"x\":2.0}},"
         "\"many\":{\"type\":\"array\",\"items\":{\"type\":\"integer\",\"minimum\":1,\"description\":\"a thing handle\"},"
         "\"maxItems\":5},"
-        "\"pos\":{\"type\":\"number\",\"exclusiveMinimum\":0.0}},"
+        "\"pos\":{\"type\":\"number\",\"exclusiveMinimum\":0.0},"
+        "\"flat\":{\"type\":\"array\",\"items\":{\"type\":\"number\",\"format\":\"float\","
+        "\"description\":\"single precision: past a float's range FAILS\"},\"maxItems\":6,"
+        "\"description\":\"flat: 3 numbers an item, the length a multiple of 3\",\"default\":null}},"
         "\"required\":[\"count\",\"mode\",\"items\",\"blob\",\"other\",\"others\",\"free\",\"raw\",\"many\",\"pos\"],"
         "\"additionalProperties\":false}},\"required\":[\"thing\",\"opts\"],\"additionalProperties\":false}";
     const std::string formsGot = schemaText(*reg.find("test.forms"), why);

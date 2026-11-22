@@ -954,9 +954,10 @@ int main()
               "a non-integral Int, a wrong-kind handle, a dead handle, an undeclared member and a wrong kind FAIL through "
               "callNamed with the positional call's text");
         // THE THREE REAL SHAPES (the engine's commands, no engine): the named call is the positional call, word for word.
-        // (`es` holds no Scene: the node's existence check would read it as one - so the node is a MESH handle, refused by
-        // its kind bits at the node's position, before any check reads the scene.)
-        const Value es(eng.hold("scene", std::make_shared<int>(3))), en(eng.name("mesh", 7));
+        // (`es` is a REAL scene of the headless engine handed into the engine-less host - an engine kind holds only its
+        // type, SCRIPT-IN-ENGINE-1 2b - and the node is a MESH handle, refused by its kind bits at the node's position.)
+        Scene *named = headless->createScene("mcp-named");
+        const Value es(eng.hold("scene", std::shared_ptr<Scene>(named, [](Scene *) {}))), en(eng.name("mesh", 7));
         const Value tr(Value::Object{{"position", Value(Value::Array{Value(1), Value(2), Value(3)})}});
         const Value gi(Value::Object{{"mode", Value("vct")}, {"cascades", Value(Value::Array{})}});
         const Result f1 = engHost.callNamed("engine.frames", {{"n", Value(3)}}), f2 = engHost.call("engine.frames", {Value(3)});
@@ -970,6 +971,7 @@ int main()
                   t1.message.find("is a mesh handle, not a node handle") != std::string::npos,
               "engine.frames, engine.node.setTransform and engine.gi.set by name (members in any order) are their "
               "positional calls word for word (" + t1.message + ")");
+        headless->destroyScene(named);
     }
 
     // 12. AN ARRAY's LENGTH IS JUDGED BEFORE IT IS CONVERTED (SCRIPT-IN-ENGINE-1 2b; the 2a final read's L1): a script's
