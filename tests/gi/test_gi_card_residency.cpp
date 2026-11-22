@@ -244,8 +244,8 @@ bool runOnce(Engine *e, bool walk, Run &out, int &frames, bool crowded = false, 
         fx.ssr = 1;
         view->setPostFx(fx);
     }
-    // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
-    // chain gathers, and a Live view takes the field's answer)
+    // THE VIEW GATHERS (every view of a ray scene does: ROUTE-ROWS-1; PHOTON-7 7-5: the gather is recorded only
+    // for a view whose chain gathers)
     out.a = buildRoom(scene, Vec3(-12.0f, 0.0f, 0.0f), crowded);
     out.b = buildRoom(scene, Vec3(12.0f, 0.0f, 0.0f));
     // (8)'s ARMS: room B's pillar 8's +x face (its card 1, the band face the measurements found) HELD resident or absent

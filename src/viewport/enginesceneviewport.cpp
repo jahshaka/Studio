@@ -3846,9 +3846,9 @@ QImage EngineSceneViewport::takeScreenshot(int width, int height, ScreenshotGrad
 // measurement so the file does not open on a fade — and nothing is ever settled
 // per frame: a settle renders frames of this scene outside the driver's tick and
 // would step every temporal history the viewport shares with it (CLOSE-SHOT-2's
-// app.capture_steps lesson). It is a StillPicture view: it gathers where the
-// scene gathers, exactly like the photo, rather than taking the Live contract's
-// field-only answer — the recording is the picture the photo would be.
+// app.capture_steps lesson). It is a StillPicture view (no meter history); it
+// gathers where the scene gathers, like every view (ROUTE-ROWS-1) — the
+// recording is the picture the photo would be.
 jahshaka::engine::View *EngineSceneViewport::beginRecordingView(unsigned width, unsigned height,
                                                                bool helpers, RecordingHooks hooks,
                                                                QString *why)

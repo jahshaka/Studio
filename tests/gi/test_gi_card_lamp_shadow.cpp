@@ -154,8 +154,8 @@ int main(int argc, char **argv)
             fx.ssr = 1;
             view->setPostFx(fx);
         }
-        // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
-        // chain gathers, and a Live view takes the field's answer)
+        // THE VIEW GATHERS (every view of a ray scene does: ROUTE-ROWS-1; PHOTON-7 7-5: the gather is recorded only
+        // for a view whose chain gathers)
         const NodeId floorNode =
             cube(scene, Vec3(0.0f, -0.05f, 0.0f), Vec3(8.0f, 0.1f, 8.0f), Colour(0.6f, 0.6f, 0.6f), false);   // the floor
         const NodeId wallNode =
@@ -484,8 +484,8 @@ int main(int argc, char **argv)
             fx.ssr = 1;
             av->setPostFx(fx);
         }
-        // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
-        // chain gathers, and a Live view takes the field's answer)
+        // THE VIEW GATHERS (every view of a ray scene does: ROUTE-ROWS-1; PHOTON-7 7-5: the gather is recorded only
+        // for a view whose chain gathers)
         const float kAlbedo = 0.6f;
         MaterialId floorMat = 0;
         cube(as, Vec3(0.0f, -0.05f, 0.0f), Vec3(2.0f, 0.1f, 2.0f), Colour(kAlbedo, kAlbedo, kAlbedo), false, &floorMat);

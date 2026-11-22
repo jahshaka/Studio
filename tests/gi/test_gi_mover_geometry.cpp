@@ -133,8 +133,8 @@ int main(int argc, char **argv)
         }
         return quiet >= 8 ? n : -1;
     };
-    // THE ROUTE EVERY ARM MEASURES (CODING_RULES section 6, source.testing_rules R16): the Live view's screen integrate
-    // over the voxel store, GI paused (updateBudget 0); asserted on the first frame an arm renders after its GI comes on
+    // THE ROUTE EVERY ARM MEASURES (CODING_RULES section 6, source.testing_rules R16): the screen integrate (the rays
+    // are off: e->setRayTracing(false) above) over the voxel store, GI paused (updateBudget 0); asserted on the first frame an arm renders after its GI comes on
     const auto declareCourt = [&](const char *arm) {
         enginetest::declareRoutes(view, scene, enginetest::Routes().integrate().store().paused(), arm);
     };

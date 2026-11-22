@@ -81,8 +81,9 @@ if(JAHSHAKA_ASAN AND TARGET JahshakaEngineAsan)
     #   .ambient       THE CHAIN CARRIES THE AMBIENT AS ONE CASCADE DOES, diffuse and open-space specular, each within a code (4, 7).
     #   .mover         A2's LAW: a declared mover is lit at the pose it is in - motion against rest within 16 codes, no
     #                  pixel off by 10, the rest a fresh build's within a code - at three poses of cascade 0, the rays off.
-    #   .mover_routes  AT REST A FRESH BUILD'S on the two other routes: the rays ON (this view never gathers - the
-    #                  non-gathering route's screen integrate; its motion residue printed, PHOTON-7's leftover) and a STILL
+    #   .mover_routes  AT REST A FRESH BUILD'S on the two other routes: the rays ON (the view GATHERS since ROUTE-ROWS-1
+    #                  stage 0; it took the screen integrate before - NONDET-1's reproduction is that route's, pinned at
+    #                  nondet-1-repro-base; its motion residue printed, PHOTON-7's leftover) and a STILL
     #                  turned by script (the mirror's move quantum printed).
     # (every row NAMED, never a loop variable: the selector resolves a set_tests_properties by the rows it names, and an
     # unresolved name falls back to the whole directory - 94 gi rows for a one-row edit)
@@ -718,8 +719,8 @@ set_tests_properties(gi.share_law PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscr
 #         is the same red on photon-room. The set-aside first fix and its numbers: spikes/feedback-order-1/.
 #   ROUTES (declared in the fixture, asserted on the first frame - URGENT #146): the picture parts (.lamp.*, .room,
 #         .room_geom) StillPicture - the screen-probe gather, the store, the field (and .room's the cards); the store parts
-#         (.up, .down, .scroll, the pair) Live - the SCREEN INTEGRATE and the store (store laws only; the view exists to
-#         tick the frame; ROUTE-ROWS-1 re-points them). GI live at the shipped default updateBudget 1 everywhere.
+#         (.up, .down, .scroll, the pair) Live - the screen-probe gather (since ROUTE-ROWS-1 stage 0) and the store
+#         (store laws only; the view exists to tick the frame). GI live at the shipped default updateBudget 1 everywhere.
 #   .scroll: gi.scroll_slab G's two-cascade chain at High, a pinned cascade-0 scroll bringing an emissive panel in - it comes
 #         to rest and (iii) holds after it.
 add_executable(test_gi_feedback_closed_box test_gi_feedback_closed_box.cpp)
