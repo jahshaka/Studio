@@ -6,17 +6,23 @@ engine/src/rayquery/include/jah_rq.glsl, so a software tracer (WebGPU; a Mac wit
 and touches no reader. THE LAW, comments stripped (webgpu_census.strip, the one stripper):
   (1) no token of the four families - rayQuery*EXT, gl_RayQuery*EXT, gl_RayFlags*EXT, accelerationStructureEXT - in
       any text the app compiles outside jah_rq.glsl: irisgl/engine's src, media and include (shaders, Hlms pieces and
-      C++), and the fork's Hlms media; RED with every site;
+      C++), and EVERY FOLDER THE ENGINE STAGES (the shaders of each `copy_directory` source of irisgl
+      engine/CMakeLists.txt's media staging, resolved by the CMake files' own set() lines - so a newly staged folder is
+      read without anyone remembering it, and a source the row cannot resolve is RED); RED with every site;
   (2) jah_rq.glsl holds nothing but #defines, its include guard and comments - no function, so the seam adds no
-      OpFunction and no OpName and the compiled words stay the card's own (the byte proof:
-      ~/Developer/spikes/doors-0/stage1/seam_proof.sh); RED with every other line; a missing seam is RED.
+      OpFunction and no OpName and the compiled words stay the card's own (DOORS-0's byte proof); RED with every other
+      line; a missing seam is RED;
+  (3) THE READING IS CHECKED, NOT ASSUMED: each path set reads at least its FLOOR of files (a wrong path reads nothing
+      and would pass (1)); a count under the floor is RED - lowered in the same commit only when the files really went.
 The self-test runs first, always: per family one call outside the seam reds and its commented copy counts nothing; a
-function and a declaration in the seam red; the seam's own defines count nothing.
+function, a declaration and an include in the seam red; a missing seam reds; a staging line it cannot resolve reds; a
+tree whose fork path is broken reads under its floor and reds.
 Run: ray_seam.py <source-root>
 """
 import os
 import re
 import sys
+import tempfile
 
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 from webgpu_census import strip  # noqa: E402  (the one comment stripper; its cases are the census's self-test)
@@ -29,12 +35,42 @@ FAMILIES = [
     ('accelerationStructureEXT', r'\baccelerationStructureEXT\b'),
 ]
 TOKEN = re.compile('|'.join(rx for _, rx in FAMILIES))
-# (directory under the root, the sub-directories read, the extensions read)
-SCAN = [
-    ('irisgl/engine', ('src', 'media', 'include'), ('.comp', '.glsl', '.vert', '.frag', '.any', '.cpp', '.h')),
-    ('irisgl/thirdparty/ogre-next/Samples/Media/Hlms', ('',), ('.glsl', '.any')),
-]
+SHADER = ('.comp', '.glsl', '.vert', '.frag', '.any')
+ENGINE = ('irisgl/engine', ('src', 'media', 'include'), SHADER + ('.cpp', '.h'))
+ENGINE_CMAKE = 'irisgl/engine/CMakeLists.txt'
+OGRE_CMAKE = 'cmake/IncludeOgre.cmake'
+# THE FLOORS (3): the files each path set read at irisgl 23b2725c0 / fork 6828d2d78 (engine: shaders and C++ of
+# src/media/include; staged: the shaders of the 9 folders the staging copies from outside irisgl/engine - the fork's
+# Hlms Common/Pbs/Unlit, 2.0/scripts/materials Common/HDR/Tutorial_SSAO/Tutorial_SMAA, Compute/Tools, Compute/Algorithms/IBL)
+FLOORS = {'engine': 335, 'staged': 115}
 SEAM_LINE = re.compile(r'#\s*(define\s+\w+|ifndef\s+JAH_RQ_GLSL\s*$|endif\s*$)')
+COPY = re.compile(r'copy_directory\s+"\$\{(\w+)\}([^"]*)"')
+SET = re.compile(r'^\s*set\(\s*(\w+)\s+"([^"]*)"', re.M)
+DIRNAME = re.compile(r'get_filename_component\(\s*(\w+)\s+"\$\{(\w+)\}"\s+DIRECTORY\s*\)')
+
+
+def staged(engine_cmake, ogre_cmake):
+    """([the staged source folders relative to the root], [the copy_directory sources it could not resolve]): every
+    `copy_directory "${VAR}/..."` of the engine's CMakeLists, VAR resolved through the set() and DIRECTORY lines of the
+    two CMake files (CMAKE_SOURCE_DIR = the root, CMAKE_CURRENT_SOURCE_DIR = irisgl/engine)"""
+    var = {'CMAKE_SOURCE_DIR': '', 'CMAKE_CURRENT_SOURCE_DIR': 'irisgl/engine'}
+    pairs = SET.findall(ogre_cmake) + SET.findall(engine_cmake)
+    dirs = DIRNAME.findall(engine_cmake)
+    for _ in range(8):   # a value names others: resolve until nothing moves
+        for name, value in pairs:
+            v = re.sub(r'\$\{(\w+)\}', lambda m: var.get(m.group(1), '\0'), value)
+            if '\0' not in v:
+                var.setdefault(name, v.lstrip('/'))
+        for name, of in dirs:
+            if of in var:
+                var.setdefault(name, os.path.dirname(var[of]))
+    out, bad = [], []
+    for name, sub in COPY.findall(engine_cmake):
+        if name in var:
+            out.append((var[name] + sub).strip('/'))
+        else:
+            bad.append('${%s}%s' % (name, sub))
+    return sorted(set(out)), bad
 
 
 def outside(files):
@@ -58,7 +94,7 @@ def seam_faults(files):
     return [(i + 1, l.strip()) for i, l in enumerate(code.split('\n')) if l.strip() and not SEAM_LINE.match(l.strip())]
 
 
-def judge(files):
+def judge(files, counts=None, unresolved=()):
     red = ['RED  %s:%d  %s  (the ray API outside the seam: spell it with jah_rq.glsl\'s names)' % s for s in outside(files)]
     faults = seam_faults(files)
     if faults is None:
@@ -66,20 +102,42 @@ def judge(files):
     else:
         red += ['RED  %s:%d  %s  (the seam holds #defines only: no function, no declaration)' % (SEAM, ln, t)
                 for ln, t in faults]
+    red += ['RED  the staging copies %s and the row cannot resolve it: it reads nothing there (resolve the variable)' % u
+            for u in unresolved]
+    for name, n in (counts or {}).items():
+        if n < FLOORS[name]:
+            red.append('RED  the %s path set read %d files, under its floor %d: a wrong scan path reads nothing (lower '
+                       'the floor in the same commit only if the files really went)' % (name, n, FLOORS[name]))
     return red
 
 
+def _read(root, rel_dir, exts, files):
+    n = 0
+    for d, _, names in os.walk(os.path.join(root, rel_dir)):
+        for f in names:
+            if f.endswith(exts):
+                p = os.path.join(d, f)
+                rel = os.path.relpath(p, root).replace(os.sep, '/')
+                if rel in files:
+                    continue
+                with open(p, encoding='utf-8', errors='replace') as fh:
+                    files[rel] = strip(fh.read())
+                n += 1
+    return n
+
+
 def read_tree(root):
-    files = []
-    for top, subs, exts in SCAN:
-        for sub in subs:
-            for d, _, names in os.walk(os.path.join(root, top, sub)):
-                for f in names:
-                    if f.endswith(exts):
-                        p = os.path.join(d, f)
-                        with open(p, encoding='utf-8', errors='replace') as fh:
-                            files.append((os.path.relpath(p, root).replace(os.sep, '/'), strip(fh.read())))
-    return sorted(files)
+    """(the stripped files [(rel, text)], the files read per path set, the unresolved staging sources)"""
+    files = {}
+    top, subs, exts = ENGINE
+    counts = {'engine': sum(_read(root, os.path.join(top, s), exts, files) for s in subs)}
+
+    def text(rel):
+        p = os.path.join(root, rel)
+        return open(p, encoding='utf-8', errors='replace').read() if os.path.isfile(p) else ''
+    folders, bad = staged(text(ENGINE_CMAKE), text(OGRE_CMAKE))
+    counts['staged'] = sum(_read(root, d, SHADER, files) for d in folders if not d.startswith(top + '/'))
+    return sorted(files.items()), counts, bad
 
 
 def self_test():
@@ -100,7 +158,7 @@ def self_test():
     for name, rx in FAMILIES:
         call = calls[name]
         for rel in ('irisgl/engine/src/rayquery/rq_x.comp', 'irisgl/engine/media/Hlms/Jahshaka/X_piece_ps.any',
-                    'irisgl/thirdparty/ogre-next/Samples/Media/Hlms/Pbs/Any/X_piece_all.any'):
+                    'irisgl/thirdparty/ogre-next/Samples/Media/Compute/Tools/X_cs.glsl'):
             red = judge([(SEAM, seam), (rel, strip('void f()\n{\n' + call + '}\n'))])
             if len(red) != 1 or ('%s:3 ' % rel) not in red[0] or not re.search(rx, red[0]):
                 bad.append('the control of %s at %s did not red it alone: %r' % (name, rel, red[:2]))
@@ -113,6 +171,40 @@ def self_test():
             bad.append('the seam holding %r did not red it alone: %r' % (line, red[:2]))
     if not any('is missing' in r for r in judge([])):
         bad.append('a missing seam did not red')
+    # THE STAGING, RESOLVED: the engine's own forms (a fork folder by the media root's DIRECTORY, an engine folder, a
+    # sub-folder of a set variable) resolve; a variable no set() line defines is unresolved, and unresolved reds
+    ogre = 'set(OGRE_NEXT_SOURCE "${CMAKE_SOURCE_DIR}/irisgl/thirdparty/ogre-next"\n' \
+           'set(OGRE_NEXT_HLMS_SOURCE_DIR "${OGRE_NEXT_SOURCE}/Samples/Media/Hlms")\n'
+    eng = 'get_filename_component(_ogre_media_root "${OGRE_NEXT_HLMS_SOURCE_DIR}" DIRECTORY)\n' \
+          'set(OGRE_NEXT_IBL_MEDIA_DIR "${_ogre_media_root}/Compute/Algorithms/IBL")\n' \
+          'COMMAND ${CMAKE_COMMAND} -E copy_directory "${OGRE_NEXT_HLMS_SOURCE_DIR}/Pbs" "${JAHSHAKA_MEDIA_DIR}/Hlms/Pbs"\n' \
+          'COMMAND ${CMAKE_COMMAND} -E copy_directory "${OGRE_NEXT_IBL_MEDIA_DIR}" "${JAHSHAKA_MEDIA_DIR}/Compute/IBL"\n' \
+          'COMMAND ${CMAKE_COMMAND} -E copy_directory "${CMAKE_CURRENT_SOURCE_DIR}/media/Hlms/Atom" "x"\n' \
+          'COMMAND ${CMAKE_COMMAND} -E copy_directory "${OGRE_NEXT_NEW_DIR}" "${JAHSHAKA_MEDIA_DIR}/New"\n'
+    got, unres = staged(eng, ogre)
+    want = ['irisgl/engine/media/Hlms/Atom', 'irisgl/thirdparty/ogre-next/Samples/Media/Compute/Algorithms/IBL',
+            'irisgl/thirdparty/ogre-next/Samples/Media/Hlms/Pbs']
+    if got != want or unres != ['${OGRE_NEXT_NEW_DIR}']:
+        bad.append('the staging resolved %r unresolved %r, want %r and the new variable' % (got, unres, want))
+    if not any('cannot resolve' in r for r in judge([(SEAM, seam)], unresolved=unres)):
+        bad.append('an unresolved staging source did not red')
+    # THE READING (3): a tree whose fork path is broken - the engine's staging names folders that are not there - reads
+    # none of them and reds at its floor; the same tree with one staged file in place reads it
+    with tempfile.TemporaryDirectory(prefix='ray-seam-') as t:
+        os.makedirs(os.path.join(t, 'irisgl', 'engine', 'src'))
+        os.makedirs(os.path.join(t, 'cmake'))
+        open(os.path.join(t, ENGINE_CMAKE), 'w').write(eng.replace('"${OGRE_NEXT_NEW_DIR}"', '"${OGRE_NEXT_IBL_MEDIA_DIR}"'))
+        open(os.path.join(t, OGRE_CMAKE), 'w').write(ogre)
+        _, counts, _ = read_tree(t)
+        red = judge([(SEAM, seam)], counts)
+        if counts['staged'] != 0 or not any('staged path set read 0 files' in r for r in red):
+            bad.append('a broken fork path did not red at the floor: %r %r' % (counts, red[:2]))
+        d = os.path.join(t, 'irisgl', 'thirdparty', 'ogre-next', 'Samples', 'Media', 'Hlms', 'Pbs')
+        os.makedirs(d)
+        open(os.path.join(d, 'X_piece_ps.any'), 'w').write('float x;\n')
+        files, counts, _ = read_tree(t)
+        if counts['staged'] != 1 or 'irisgl/thirdparty/ogre-next/Samples/Media/Hlms/Pbs/X_piece_ps.any' not in dict(files):
+            bad.append('a staged fork file was not read: %r' % counts)
     return bad
 
 
@@ -120,23 +212,28 @@ def main():
     root = sys.argv[1] if len(sys.argv) > 1 else '.'
     if not os.path.isdir(os.path.join(root, 'irisgl', 'engine', 'src')):
         print('FAIL: no %s/irisgl/engine/src - the row reads the tree root (the irisgl submodule checked out)' % root)
+        print('source.ray_seam: FAILED (1)')
         return 1
     bad = self_test()
     for b in bad:
         print('FAIL the self-test: ' + b)
     if bad:
+        print('source.ray_seam: FAILED (%d)' % len(bad))
         return 1
     print('ok   the self-test: %d families each red outside the seam (three path sets) and quiet in a comment; a '
-          'function, a declaration and an include in the seam red; a missing seam reds' % len(FAMILIES))
-    files = read_tree(root)
-    red = judge(files)
+          'function, a declaration and an include in the seam red; a missing seam reds; the staging resolved, an '
+          'unresolved source reds; a broken fork path reds at its floor' % len(FAMILIES))
+    files, counts, unresolved = read_tree(root)
+    red = judge(files, counts, unresolved)
     for r in red:
         print(r)
     names = len(re.findall(r'^\s*#\s*define\s+(?!JAH_RQ_GLSL\b)\w+', dict(files).get(SEAM, ''), re.M))
-    print('%s: %d files read, %d sites outside the seam, the seam %s (%d names)' %
-          ('FAILED' if red else 'PASSED', len(files), len(outside(files)),
-           'missing' if seam_faults(files) is None else 'defines only' if not seam_faults(files) else 'NOT defines only',
-           names))
+    faults = seam_faults(files)
+    print('read: %d files (engine %d, floor %d; staged outside irisgl/engine %d, floor %d), %d sites outside the seam, '
+          'the seam %s (%d names)' % (len(files), counts['engine'], FLOORS['engine'], counts['staged'], FLOORS['staged'],
+                                      len(outside(files)), 'missing' if faults is None else
+                                      'defines only' if not faults else 'NOT defines only', names))
+    print('source.ray_seam: %s' % ('FAILED (%d)' % len(red) if red else 'PASSED'))
     return 1 if red else 0
 
 
