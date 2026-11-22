@@ -129,6 +129,14 @@ jah_gpu_row(lab.js_rerun CLASS engine FRAMES 1
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.js_rerun PROPERTIES TIMEOUT 60 LABELS "lab")
 
+# lab.js_run_twice (LAB-SCRIPTS-1, the lead's ask: THE TWICE-PRESSED DEMO) — RUN PRESSED TWICE STARTS CLEAN: the demo run
+# twice in one lab draws the same 240th frame, every byte (js_run_twice.sh says the laws). The first frame, then twice
+# the demo's 240 and its read.
+jah_gpu_row(lab.js_run_twice CLASS engine FRAMES 483
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_run_twice.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/js_run_twice
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_run_twice PROPERTIES TIMEOUT 60 LABELS "lab")
+
 
 
 # lab.js_error_survives (LAB-SCRIPTS-1 stage 1) — A SCRIPT's ERROR NEVER ENDS THE LAB: a throwing script fails its run (and
