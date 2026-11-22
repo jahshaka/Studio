@@ -11,7 +11,6 @@ For more information see the LICENSE file
 
 #include "services/scenenodehelper.h"
 
-#include "data/guidmanager.h"
 #include "services/primitiveassets.h"
 
 iris::MeshNodePtr SceneNodeHelper::createBasicMeshNode(

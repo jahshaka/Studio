@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "services/apppaths.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -237,7 +237,7 @@ QString ProjectService::createProjectShell(const QString &name, const QString &l
     QString root = location.trimmed();
     root = root.isEmpty() ? projectsRoot() : QDir(root).absolutePath();
 
-    const QString guid = GUIDManager::generateGUID();
+    const QString guid = QString::fromStdString(iris::newGuid());
     const QString fullProjectPath = folderUnder(root, guid);
 
     // THE CURRENT PROJECT IS NOT RE-POINTED HERE (CREATE-GAP-1). It was, and

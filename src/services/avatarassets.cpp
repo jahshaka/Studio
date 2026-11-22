@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include <QTemporaryDir>
 
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "services/assethome.h"
 #include "services/assettags.h"
@@ -93,7 +93,7 @@ QString AvatarAssets::stageDefinition(const iris::AvatarDefinition &definition,
     // to a full copy of every save.
     const QString stagingRoot = QDir(AssetStorePaths::root()).filePath(QStringLiteral("staging"));
     QDir().mkpath(stagingRoot);
-    const QString dir = QDir(stagingRoot).filePath(GUIDManager::generateGUID());
+    const QString dir = QDir(stagingRoot).filePath(QString::fromStdString(iris::newGuid()));
     if (!QDir().mkpath(dir)) {
         if (errorOut) *errorOut = QStringLiteral("could not create a staging directory");
         return QString();
@@ -199,7 +199,7 @@ QString AvatarAssets::create(const QString &objectGuid, Scope scope, Database *d
     }
     if (!definition.clips.isEmpty()) definition.defaultClip = definition.clips.first().name;
 
-    const QString guid = GUIDManager::generateGUID();
+    const QString guid = QString::fromStdString(iris::newGuid());
     const QString fileName = definitionFileName(definition.name);
     QString stagingPath = stageDefinition(definition, fileName, errorOut);
     if (stagingPath.isEmpty()) return QString();

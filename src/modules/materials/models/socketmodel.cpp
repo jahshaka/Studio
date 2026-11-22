@@ -11,7 +11,7 @@ For more information see the LICENSE file
 #include <QUuid>
 #include "socketmodel.h"
 #include "connectionmodel.h"
-#include "../core/guidhelper.h"
+#include "core/guid.h"
 
 void SocketModel::setGraph(NodeGraph *value)
 {
@@ -66,5 +66,5 @@ SocketModel::SocketModel(QString name, QString typeName) :
 	name(name),
 	typeName(typeName)
 {
-	id = GuidHelper::createGuid();
+	id = QString::fromStdString(iris::newGuid());
 }

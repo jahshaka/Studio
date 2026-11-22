@@ -118,7 +118,6 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "io/materialreader.h"
 
-#include "data/guidmanager.h"
 #include "io/assetmanager.h"
 #include "io/scenewriter.h"
 

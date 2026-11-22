@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include <QSet>
 
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "services/assetdelete.h"
 #include "services/projectmembership.h"
 
@@ -157,7 +157,7 @@ Result create(Database *db, const QString &projectGuid, const QString &name,
     const QString under = rootOr(projectGuid, parent);
 
     Result result;
-    result.guid = guid.isEmpty() ? GUIDManager::generateGUID() : guid;
+    result.guid = guid.isEmpty() ? QString::fromStdString(iris::newGuid()) : guid;
     if (!db->createFolder(folderName, under, result.guid, projectGuid)) {
         return failure(QStringLiteral("the folder could not be written"));
     }

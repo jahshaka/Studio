@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "io/sceneformat.h"   // the scene version gate the import shares with the open
 #include "irisgl/irisglfwd.h"
 #include "irisgl/core/logger.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "io/assetmanager.h"
 #include "services/assethelper.h"
 #include "services/assetcas.h"
@@ -1259,7 +1259,7 @@ bool Database::createFolder(const QString &folderName, const QString &parentFold
 // project, Systems (one row per particle emitter) and Presets (one row per
 // applied material preset), and both writers did this:
 //
-//     auto fguid = GUIDManager::generateGUID();
+//     auto fguid = QString::fromStdString(iris::newGuid());
 //     if (!db->checkIfRecordExists("name", "Systems", "folders", ...))
 //         db->createFolder("Systems", ..., fguid, ...);
 //     db->createAssetEntry(..., fguid, ...);          // the row's parent
@@ -1295,7 +1295,7 @@ QString Database::ensureFolder(const QString &folderName, const QString &project
             return query.value(0).toString();
     }
 
-    const QString guid = GUIDManager::generateGUID();
+    const QString guid = QString::fromStdString(iris::newGuid());
     // The project's own folders hang off the project guid, as the editor's
     // folder writers have always filed them.
     if (!createFolder(folderName, projectGuid, guid, projectGuid, visible)) return QString();
@@ -1437,7 +1437,7 @@ bool Database::createDependency(
     const QString &projectGuid)
 {
     QSqlQuery query;
-    auto guid = GUIDManager::generateGUID();
+    auto guid = QString::fromStdString(iris::newGuid());
     query.prepare(
 		"INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
 		"VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
@@ -4331,7 +4331,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
                     if (knownGuids) knownGuids->insert(guid);
                     continue;                              // the same asset, already here
                 }
-                newGuid = GUIDManager::generateGUID();     // a collision: fresh, remapped
+                newGuid = QString::fromStdString(iris::newGuid());     // a collision: fresh, remapped
                 assetGuids.insert(guid, newGuid);
                 outGuids.insert(guid, newGuid);
             }
@@ -4492,7 +4492,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         else                           importDep.bindValue(":project_guid", newSceneGuid);
         importDep.bindValue(":depender", !depender.isEmpty() ? depender : dep.depender);
         importDep.bindValue(":dependee", !dependee.isEmpty() ? dependee : dep.dependee);
-        importDep.bindValue(":id", GUIDManager::generateGUID());
+        importDep.bindValue(":id", QString::fromStdString(iris::newGuid()));
 
         executeAndCheckQuery(importDep, "importDep");
     }
@@ -4527,7 +4527,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
             "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)"
         );
 
-        importFolder.bindValue(":guid", folderGuids.value(folder.guid, GUIDManager::generateGUID()));
+        importFolder.bindValue(":guid", folderGuids.value(folder.guid, QString::fromStdString(iris::newGuid())));
         importFolder.bindValue(":name", folder.name);
         importFolder.bindValue(":parent", remapParent(folder.parent));
         importFolder.bindValue(":count", folder.count);

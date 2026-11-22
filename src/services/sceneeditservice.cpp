@@ -74,7 +74,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "services/meshbakestore.h"
 #include "services/editgate.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/materialpreset.h"
 #include "irisgl/core/logger.h"
 #include "services/assetmetadata.h"
@@ -301,7 +301,7 @@ void SceneEditService::addPrimitive(const QString &text,
     if (!def) return;
     const QString name = QString::fromLatin1(def->name);
 
-    const QString nodeGuid = GUIDManager::generateGUID();
+    const QString nodeGuid = QString::fromStdString(iris::newGuid());
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         QString::fromLatin1(def->mesh), name, nodeGuid, db);
     QJsonObject props;
@@ -468,7 +468,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     // afterwards (the texture, below) survives and anything set before does not.
     if (preset != iris::ParticlePreset::Custom) node->applyPreset(preset);
 
-    auto nodeGuid = GUIDManager::generateGUID();
+    auto nodeGuid = QString::fromStdString(iris::newGuid());
     node->setGUID(nodeGuid);
     // The "Systems" folder and the emitter's ParticleSystem row belong to a
     // PROJECT: with none open (a headless script, the startup placeholder)
@@ -673,7 +673,7 @@ iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
 
     const auto record = db->fetchAsset(textureGuid);
     const QString baseName = QFileInfo(record.name).completeBaseName();
-    const QString nodeGuid = GUIDManager::generateGUID();
+    const QString nodeGuid = QString::fromStdString(iris::newGuid());
 
     iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
         ":/content/primitives/plane.obj",
@@ -753,7 +753,7 @@ iris::DecalNodePtr SceneEditService::addDecal(const QString &textureGuid,
     // The decal node gets a DB object row like the built-in primitives, so the
     // Object->Texture dependency row below has something to hang off (the
     // export walkers and the packaging closure read it).
-    const QString nodeGuid = GUIDManager::generateGUID();
+    const QString nodeGuid = QString::fromStdString(iris::newGuid());
     node->setGUID(nodeGuid);
     if (db && project && !project->getProjectGuid().isEmpty()) {
         QJsonObject props;
@@ -1146,7 +1146,7 @@ void regenerateGuids(const iris::SceneNodePtr &root, QHash<QString, QString> *gu
 {
     QHash<QString, QString> guidMap;
     std::function<void(const iris::SceneNodePtr &)> assign = [&](const iris::SceneNodePtr &n) {
-        const QString fresh = IrisUtils::generateGUID();
+        const QString fresh = QString::fromStdString(iris::newGuid());
         guidMap.insert(n->getGUID(), fresh);
         n->setGUID(fresh);
         const int kids = n->childCount();

@@ -24,7 +24,7 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "services/assetcas.h"
@@ -369,7 +369,7 @@ QJsonObject adoptForeignMembers(Database *db, const QString &materialGuid,
                 continue;
             }
         }
-        const QString copy = GUIDManager::generateGUID();
+        const QString copy = QString::fromStdString(iris::newGuid());
         QJsonObject props = QJsonDocument::fromJson(row.properties).object();
         props.remove(QStringLiteral("member"));
         props.remove(QStringLiteral("memberOf"));
@@ -726,7 +726,7 @@ QString create(Database *db, const QString &name, const QJsonObject &definition,
         return QString();
     }
 
-    return mintRow(db, GUIDManager::generateGUID(), name, definition, thumbnail, home, origin,
+    return mintRow(db, QString::fromStdString(iris::newGuid()), name, definition, thumbnail, home, origin,
                    errorOut);
 }
 
@@ -746,7 +746,7 @@ QString createPresetCopy(Database *db, const QString &guid, const QString &proje
     }
     // THE PROJECT'S OWN ROW (ASSETS-SCOPE-1): it is that project's material,
     // never a library tile.
-    return mintRow(db, guid.isEmpty() ? GUIDManager::generateGUID() : guid, name,
+    return mintRow(db, guid.isEmpty() ? QString::fromStdString(iris::newGuid()) : guid, name,
                    definition, thumbnail, assethome::project(projectGuid),
                    assethome::Origin::Create, errorOut);
 }

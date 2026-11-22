@@ -22,7 +22,6 @@ For more information see the LICENSE file
 #include "scripting/modules/moduleshared.h"
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
 #include "data/materialpreset.h"
 #include "data/project.h"
 #include "commands/changematerialpropertycommand.h"

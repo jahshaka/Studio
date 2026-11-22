@@ -33,6 +33,7 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetclosure.h"
 #include "services/assetstorepaths.h"
+#include "core/guid.h"
 
 namespace assetshare {
 
@@ -230,7 +231,7 @@ BundleStage stageNode(Database *db, Project *project, const QJsonObject &nodeObj
     // row whose `asset` blob is the node — the shape every Object row has and
     // `assets.addToScene` instantiates — minted here, under a fresh guid, so an
     // import is one new library tile however many times the file is opened.
-    const QString rowGuid = IrisUtils::generateGUID();
+    const QString rowGuid = QString::fromStdString(iris::newGuid());
     clipboardformat::ClipAsset row;
     row.guid = rowGuid;
     row.name = name.isEmpty() ? QStringLiteral("Node") : name;

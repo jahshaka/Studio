@@ -46,7 +46,6 @@ set(_d11_db_closure
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp

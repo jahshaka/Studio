@@ -32,7 +32,7 @@ For more information see the LICENSE file
 #include "io/scenereader.h"
 #include "io/sceneformat.h"
 #include "services/scenefolders.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 
 #include "data/constants.h"
 #include "data/database/database.h"
@@ -75,7 +75,6 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 
 #include "io/materialreader.h"
-#include "data/guidmanager.h"
 
 // THE READER-DEFAULTS LAW (render audit I-5, lane READER-DEFAULTS-1) — ONE
 // DEFINITION OF EVERY DEFAULT, AND IT IS THE CONSTRUCTOR'S.
@@ -864,7 +863,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     // scene.find returning an empty id) sailed straight past it. Minting is the
     // only repair that can work: the identity was never written down.
     const QString storedGuid = nodeObj["guid"].toString();
-    sceneNode->setGUID(storedGuid.isEmpty() ? GUIDManager::generateGUID() : storedGuid);
+    sceneNode->setGUID(storedGuid.isEmpty() ? QString::fromStdString(iris::newGuid()) : storedGuid);
     // EVERY FALLBACK BELOW IS THE NODE'S OWN CURRENT VALUE, i.e. the
     // constructor's (the reader-defaults law, I-5): absent and fresh must mean
     // the same node.
@@ -1572,7 +1571,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
 
     // Same rule as readSceneNode's: an empty guid is not an identity.
     const QString storedParticleGuid = nodeObj["guid"].toString();
-    particleNode->setGUID(storedParticleGuid.isEmpty() ? GUIDManager::generateGUID()
+    particleNode->setGUID(storedParticleGuid.isEmpty() ? QString::fromStdString(iris::newGuid())
                                                        : storedParticleGuid);
     // THE FALLBACKS ARE THE EMITTER'S OWN AUTHORING DEFAULTS
     // (ParticleSystemNode::resetAuthoringDefaults — the reader-defaults law,

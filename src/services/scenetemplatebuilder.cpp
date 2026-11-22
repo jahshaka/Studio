@@ -18,7 +18,7 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/document/assets/texture2d.h"
@@ -56,7 +56,7 @@ iris::SceneNodePtr buildFloor(SceneTemplate kind, Database *db, Project *project
     QString tileGuid;
     const QString tilePath = defaultfloormaterial::pinTile(db, project, &tileGuid);
     auto makeFloor = [db, project, &tileGuid, &tilePath](const QString &name, const iris::Vec3 &centre) {
-        const QString guid = GUIDManager::generateGUID();
+        const QString guid = QString::fromStdString(iris::newGuid());
         iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
             QStringLiteral(":/content/primitives/cube.obj"), name, guid, db);
         // cube.obj is a 2 m cube about its centre.

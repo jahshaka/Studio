@@ -24,7 +24,6 @@ For more information see the LICENSE file
 #include "irisgl/core/irisutils.h"
 
 #include "data/constants.h"
-#include "data/guidmanager.h"
 #include "io/materialpresetreader.h"
 #include "bridge/enginehost.h"
 #include "io/assetmanager.h"

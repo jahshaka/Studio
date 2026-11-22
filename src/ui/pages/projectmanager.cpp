@@ -57,7 +57,6 @@ For more information see the LICENSE file
 #include "services/projectservice.h"
 
 #include "data/database/database.h"
-#include "data/guidmanager.h"
 #include "services/thumbnailmanager.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"

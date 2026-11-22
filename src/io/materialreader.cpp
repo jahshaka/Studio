@@ -28,7 +28,6 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "io/assetmanager.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>

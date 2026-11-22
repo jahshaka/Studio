@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include <QObject>
 
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/database/database.h"
 #include "data/project.h"
 #include "services/assetdelete.h"
@@ -96,7 +96,7 @@ void PresetCopyCommand::redo()
 
     // 1. THE COPY. The guid is minted once and kept, so a redo after an undo
     // re-makes the SAME material (see the header).
-    const QString guid = mCopyGuid.isEmpty() ? GUIDManager::generateGUID() : mCopyGuid;
+    const QString guid = mCopyGuid.isEmpty() ? QString::fromStdString(iris::newGuid()) : mCopyGuid;
     QString error;
     const QString made = MaterialBundle::createPresetCopy(mDb, guid, mProjectGuid, mName,
                                                           mDefinition, mThumbnail, &error);

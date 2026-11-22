@@ -17,7 +17,7 @@
 #include "irisgl/mirror/scenemirror.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/materialpreset.h"
 #include "io/builtinmaterials.h"
 #include "io/materialpresets.h"
@@ -146,7 +146,7 @@ void addPresetRow(const iris::ScenePtr &doc, Database *db)
     for (int i = 0; i < presets.size(); ++i) {
         iris::MeshNodePtr node = SceneNodeHelper::createBasicMeshNode(
             QStringLiteral(":/content/primitives/sphere.obj"), presets[i].name,
-            GUIDManager::generateGUID(), db);
+            QString::fromStdString(iris::newGuid()), db);
         if (!node) continue;
         node->setLocalPos(iris::Vec3(-4.0f + 2.0f * float(i % 5), 1.0f, 2.0f - 2.0f * float(i / 5)));
         node->setLocalScale(iris::Vec3(0.8f, 0.8f, 0.8f));

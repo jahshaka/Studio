@@ -10,11 +10,11 @@ For more information see the LICENSE file
 *************************************************************************/
 #include <QUuid>
 #include "connectionmodel.h"
-#include "../core/guidhelper.h"
+#include "core/guid.h"
 
 ConnectionModel::ConnectionModel()
 {
-	id = GuidHelper::createGuid();
+	id = QString::fromStdString(iris::newGuid());
 	leftSocket = nullptr;
 	rightSocket = nullptr;
 }

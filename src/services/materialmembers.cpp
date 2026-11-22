@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include <QSet>
 
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "services/assetcas.h"
 #include "services/assetdelete.h"
@@ -470,7 +470,7 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
     // row and NO disk: the object is already there under its own hash, and
     // both rows now name it. That is the whole trick — "a second row on the
     // same bytes, zero disk" (spec §4).
-    const QString newGuid = GUIDManager::generateGUID();
+    const QString newGuid = QString::fromStdString(iris::newGuid());
     // THE COPY IS THIS MATERIAL'S MEMBER, whatever the row it was copied from
     // carries: the origin of a row minted here is the material that asked for
     // it (memberstamp::stamped replaces, where the by-guid `stamp` never moves

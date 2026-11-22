@@ -34,7 +34,6 @@ For more information see the LICENSE file
 #include "../effectspage.h"
 #include "io/assetmanager.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
 #include "ui/style/stylesheet.h"
 
 ShaderAssetWidget::ShaderAssetWidget(Database *handle) : QWidget()

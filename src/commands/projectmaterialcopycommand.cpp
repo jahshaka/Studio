@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "services/assetdelete.h"
 #include "services/materialbundle.h"
@@ -51,7 +51,7 @@ ProjectMaterialCopyCommand::ProjectMaterialCopyCommand(Database *db, Project *pr
     // THE GUID IS MINTED HERE, not on the first redo: the caller reads it BEFORE
     // the push (a refused push deletes the command — UndoService::push), and every
     // redo re-makes the row under this same guid.
-    mCopyGuid = GUIDManager::generateGUID();
+    mCopyGuid = QString::fromStdString(iris::newGuid());
     mDefinition = materialmembers::copyDefinition(mDb, mProject, mSource, pristine);
     mThumbnail = row.thumbnail;
     if (!mName.isEmpty() && !mDefinition.isEmpty()) {

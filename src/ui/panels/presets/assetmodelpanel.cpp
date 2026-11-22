@@ -26,7 +26,6 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/primitives.h"
 #include "data/materialpreset.h"
-#include "data/guidmanager.h"
 #include "io/materialpresetreader.h"
 #include "services/services.h"
 #include "services/sceneeditservice.h"

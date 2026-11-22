@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/projectassets.h"
 #include "scripting/modules/moduleshared.h"
+#include "core/guid.h"
 
 using clipboardformat::ClipAsset;
 using clipboardformat::ClipFile;
@@ -233,7 +234,7 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
             // The asset lands under a FRESH guid and every item that named the
             // old one is rewritten by the key-aware walk (never a text
             // replace). Practically this only happens with hand-authored ids.
-            const QString fresh = IrisUtils::generateGUID();
+            const QString fresh = QString::fromStdString(iris::newGuid());
             report.guidMap.insert(asset.guid, fresh);
             asset.guid = fresh;
         }

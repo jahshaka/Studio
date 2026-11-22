@@ -54,7 +54,6 @@ For more information see the LICENSE file
 
 #include "ui/ishellview.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"
 #include "services/materialpresetseeder.h"

@@ -72,7 +72,7 @@ bool isReservedGuid(const QString &guid)
 
 bool isGuidValue(const QString &value)
 {
-    // The shape IrisUtils::generateGUID mints: a bare UUID, 8-4-4-4-12 hex.
+    // The shape iris::newGuid mints: a bare UUID, 8-4-4-4-12 hex.
     if (value.size() != 36) return false;
     for (int i = 0; i < 36; ++i) {
         const QChar c = value.at(i);

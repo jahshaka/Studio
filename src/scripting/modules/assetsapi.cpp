@@ -69,7 +69,7 @@ For more information see the LICENSE file
 #include "services/previewservice.h"
 #include "services/videoutils.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "bridge/engineassetscene.h"
 #include "ui/pages/assetview.h"
@@ -1358,7 +1358,7 @@ QString AssetsApi::createSky(const QVariantMap &options)
             return QString();
         }
     }
-    const QString guid = GUIDManager::generateGUID();
+    const QString guid = QString::fromStdString(iris::newGuid());
     definition.insert(QStringLiteral("guid"), guid);
     QJsonObject properties;
     properties.insert(QStringLiteral("sky"), QJsonObject{ { QStringLiteral("type"), int(type) } });

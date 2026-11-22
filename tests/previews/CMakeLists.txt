@@ -41,7 +41,6 @@ set(_previews_db_closure
     # database.cpp's link closure (the set tests/desktops links; the statement trace LARGE-LIBRARY-1 added)
     ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp

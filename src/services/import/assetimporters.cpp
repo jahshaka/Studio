@@ -26,7 +26,7 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "io/assetmanager.h"
 #include "io/builtinmaterials.h"
@@ -163,9 +163,9 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // (a document references a built-in by its seed path, an imported model by
     // its own mesh row), so a reserved id for it would be a constant nobody
     // reads.
-    out.mainGuid = request.reservedGuid.isEmpty() ? GUIDManager::generateGUID()
+    out.mainGuid = request.reservedGuid.isEmpty() ? QString::fromStdString(iris::newGuid())
                                                   : request.reservedGuid;
-    out.meshGuid = GUIDManager::generateGUID();
+    out.meshGuid = QString::fromStdString(iris::newGuid());
 
     // THE IMPORT SETTINGS (SPECS/IMPORT_DIALOG_SPEC.md §3): the user's scale,
     // orientation, origin and tuning, decided once and BAKED into the asset.
@@ -333,7 +333,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
         if (std::any_of(textures.begin(), textures.end(),
                         [&](const TexEntry &t) { return t.fileName == texInfo.fileName(); }))
             continue;
-        TexEntry entry{ texInfo.fileName(), GUIDManager::generateGUID(),
+        TexEntry entry{ texInfo.fileName(), QString::fromStdString(iris::newGuid()),
                         texInfo.absoluteFilePath() };
         textures.append(entry);
 
@@ -471,7 +471,7 @@ bool MediaImporter::convert(const ImportRequest &request, const QString &staging
 {
     Q_UNUSED(stagingDir); Q_UNUSED(db); Q_UNUSED(project); Q_UNUSED(errorOut);
     const QFileInfo sourceInfo(request.sourcePath);
-    out.mainGuid = GUIDManager::generateGUID();
+    out.mainGuid = QString::fromStdString(iris::newGuid());
 
     if (progress && !progress(QStringLiteral("convert"), 0, 0)) {
         if (errorOut) *errorOut = QStringLiteral("cancelled");
@@ -539,7 +539,7 @@ bool IesImporter::convert(const ImportRequest &request, const QString &stagingDi
         return false;
     }
 
-    out.mainGuid = GUIDManager::generateGUID();
+    out.mainGuid = QString::fromStdString(iris::newGuid());
     out.files.append({ sourceInfo.absoluteFilePath(), out.mainGuid,
                        QStringLiteral("source"), sourceInfo.fileName() });
     out.metadata = AssetMetadata::forLightProfileFile(request.sourcePath);
@@ -645,7 +645,7 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
         return false;
     }
 
-    out.mainGuid = GUIDManager::generateGUID();
+    out.mainGuid = QString::fromStdString(iris::newGuid());
     // THE SOURCE FILE IS THE ASSET (no converted intermediate): the avatar
     // module re-reads it through the CAS with the same import flags it uses
     // for a file on disk, so a stored clip and a dropped one take one code
@@ -712,7 +712,7 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
         return false;
     }
 
-    out.mainGuid = GUIDManager::generateGUID();
+    out.mainGuid = QString::fromStdString(iris::newGuid());
 
     // Drive a PbrMaterial's own property rows off the definition's keys,
     // collecting texture references. Only the PBR spellings are read
@@ -734,7 +734,7 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
             // .material file import as members; the reference becomes a guid.
             const QFileInfo texInfo(sourceInfo.dir(), QFileInfo(textureStr).fileName());
             if (texInfo.exists() && texInfo.isFile()) {
-                TexEntry entry{ texInfo.fileName(), GUIDManager::generateGUID(),
+                TexEntry entry{ texInfo.fileName(), QString::fromStdString(iris::newGuid()),
                                 texInfo.absoluteFilePath() };
                 textures.append(entry);
                 // The row binds the file it renders from AND the member asset
@@ -806,7 +806,7 @@ bool FileImporter::convert(const ImportRequest &request, const QString &stagingD
 {
     Q_UNUSED(stagingDir); Q_UNUSED(db); Q_UNUSED(project); Q_UNUSED(errorOut); Q_UNUSED(progress);
     const QFileInfo sourceInfo(request.sourcePath);
-    out.mainGuid = GUIDManager::generateGUID();
+    out.mainGuid = QString::fromStdString(iris::newGuid());
 
     out.files.append({ sourceInfo.absoluteFilePath(), out.mainGuid,
                        QStringLiteral("source"), sourceInfo.fileName() });

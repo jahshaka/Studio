@@ -30,7 +30,7 @@ For more information see the LICENSE file
 #include <memory>
 
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "export/exportmanifest.h"
 #include "io/ziphelper.h"
@@ -535,7 +535,7 @@ void ProjectArchiver::beginInstallImport()
     }
 
     // Catalog rows (fresh guids; scene blob remapped inside importProject).
-    const QString newProjectGuid = GUIDManager::generateGUID();
+    const QString newProjectGuid = QString::fromStdString(iris::newGuid());
     QString importWhy;
     if (!db->importProject(QDir(mStage->path()).filePath(mBlobDbBase), newProjectGuid,
                            mResult.worldName, mGuidMap, &mKnownGuids, &importWhy)) {

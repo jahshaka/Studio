@@ -75,7 +75,6 @@ set(HEADERS
 	${HEADERS}
 	src/modules/materials/core/bakeprogram.h
 	src/modules/materials/core/graphbaker.h
-	src/modules/materials/core/guidhelper.h
 	src/modules/materials/core/materialhelper.h
 	src/modules/materials/core/pbrgraphevaluator.h
 	src/modules/materials/core/pieceemitter.h

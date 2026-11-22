@@ -14,12 +14,12 @@ For more information see the LICENSE file
 
 #include "nodemodel.h"
 #include "socketmodel.h"
-#include "../core/guidhelper.h"
+#include "core/guid.h"
 #include "ui/style/stylesheet.h"
 
 NodeModel::NodeModel()
 {
-	id = GuidHelper::createGuid();
+	id = QString::fromStdString(iris::newGuid());
 	widget = nullptr;
 	headerWidget = nullptr;
 	connect(this, &NodeModel::titleColorChanged, [=]() {

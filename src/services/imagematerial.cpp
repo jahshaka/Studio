@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 
 #include "data/database/database.h"
-#include "data/guidmanager.h"
 #include "data/project.h"
 #include "io/scenewriter.h"
 #include "services/assetcas.h"

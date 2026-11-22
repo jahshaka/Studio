@@ -521,7 +521,6 @@ set(SRCS
     src/data/database/database.cpp 
     src/data/database/databasereads.cpp
     src/data/database/projectdatabase.cpp 
-    src/data/guidmanager.cpp 
     src/commands/transformscenenodecommand.cpp 
     src/commands/changematerialpropertycommand.cpp
     src/commands/changematerialcommand.cpp
@@ -833,7 +832,6 @@ set(HEADERS
     src/ui/panels/timeline/createanimationwidget.h 
     src/data/database/database.h 
     src/data/database/projectdatabase.h 
-    src/data/guidmanager.h 
     src/commands/transformscenenodecommand.h 
     src/commands/changematerialpropertycommand.h
     src/commands/changematerialcommand.h

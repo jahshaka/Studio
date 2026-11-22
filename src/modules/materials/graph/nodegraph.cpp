@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include "../nodes/test.h"
 #include "../nodes/pbrmasternode.h"
 #include "../models/library.h"
-#include "../core/guidhelper.h"
 
 
 #include <QJsonObject>

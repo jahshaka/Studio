@@ -13,7 +13,7 @@ For more information see the LICENSE file
 
 #include <QObject>
 
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "services/projectfolders.h"
 
 namespace {
@@ -35,7 +35,7 @@ CreateProjectFolderCommand::CreateProjectFolderCommand(Database *db, const QStri
                                                        FolderOutcomePtr outcome)
     : QUndoCommand(QObject::tr("New folder")),
       mDb(db), mProjectGuid(projectGuid), mName(name.trimmed()), mParent(parent),
-      mGuid(GUIDManager::generateGUID()), mOutcome(std::move(outcome))
+      mGuid(QString::fromStdString(iris::newGuid())), mOutcome(std::move(outcome))
 {
     if (mOutcome) mOutcome->guid = mGuid;
 }

@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 
 #include "data/database/database.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "data/project.h"
 #include "graphbaker.h"
 #include "materialhelper.h"
@@ -77,7 +77,7 @@ QString bakedMemberRow(Database *db, const QString &materialGuid, const QString 
         if (query.exec() && query.next()) guid = query.value(0).toString();
     }
     if (guid.isEmpty()) {
-        guid = GUIDManager::generateGUID();
+        guid = QString::fromStdString(iris::newGuid());
         // `parent` = the MATERIAL (M-A, the one relation that is right for a
         // baked map: it is born inside exactly one material and is never
         // shared), which is what makes both browsers hide it already. AND

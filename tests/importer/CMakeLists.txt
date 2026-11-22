@@ -50,7 +50,6 @@ add_executable(test_importer_meshformats test_importer_meshformats.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/io/scenewriter.cpp

@@ -48,7 +48,7 @@
 #include "services/assetcas.h"
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
-#include "data/guidmanager.h"
+#include "core/guid.h"
 #include "services/assettags.h"
 #include "services/materialbundle.h"
 
@@ -528,7 +528,7 @@ int main(int argc, char **argv)
     // address by name while the name goes on resolving to the preset.
     {
         const QString goldGuid = Constants::Reserved::DefaultMaterials.key("Gold PBR");
-        const QString mine = GUIDManager::generateGUID();
+        const QString mine = QString::fromStdString(iris::newGuid());
         db.createAssetEntry(mine, QStringLiteral("My Material"),
                             static_cast<int>(ModelTypes::Material), QString(), assethome::assets(), assethome::Origin::Import,
                             QString(), QString(), QByteArray(), QByteArray(), QByteArray(),

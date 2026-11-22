@@ -12,11 +12,11 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QJsonValue>
 #include <QUuid>
-#include "../core/guidhelper.h"
+#include "core/guid.h"
 
 Property::Property()
 {
-	id = GuidHelper::createGuid();
+	id = QString::fromStdString(iris::newGuid());
 }
 
 QJsonObject Property::serialize()

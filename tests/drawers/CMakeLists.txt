@@ -9,7 +9,6 @@ add_executable(test_drawers_db test_drawers_db.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
     # database.cpp's link closure (Project, guids, asset helpers)
     ${CMAKE_SOURCE_DIR}/src/data/project.cpp
-    ${CMAKE_SOURCE_DIR}/src/data/guidmanager.cpp
     ${CMAKE_SOURCE_DIR}/src/services/subscriber.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assethelper.cpp
     ${CMAKE_SOURCE_DIR}/src/io/builtinmaterials.cpp
