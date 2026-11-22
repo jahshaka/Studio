@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "commands/presetcopycommand.h"
+#include "irisgl/core/logger.h"
 
 #include <QJsonDocument>
 #include <QSqlDatabase>
@@ -157,7 +158,13 @@ void PresetCopyCommand::undo()
         // pictures with it.
         assetdelete::removeFromProject(mDb, mCopyGuid, mProjectGuid);
         assetdelete::remove(mDb, mCopyGuid, /*keepShared*/ true, /*force*/ true);
-        tx.commit();
+        // A FAILED UNIT WRITES NOTHING (DbTransaction): the copy is still the project's, so the
+        // meshes keep it - the re-dress below would hand them a master the catalog did not restore.
+        if (!tx.commit()) {
+            mError = QObject::tr("the catalog refused the undo of the copy");
+            irisLog(QStringLiteral("the undo of the preset copy %1 was NOT committed: nothing changed").arg(mCopyGuid));
+            return;
+        }
     }
 
     if (mRedress) mRedress(mMaster);

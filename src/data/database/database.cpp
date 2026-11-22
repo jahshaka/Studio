@@ -946,7 +946,10 @@ void Database::createAllTables()
     if (!checkIfTableExists("favorites"))       createFavoritesTable();
     createCasTables();
     createIndexes();   // after every table, the CAS ones included: the list indexes asset_files too
-    tx.commit();
+    // A FAILED UNIT WRITES NOTHING (DbTransaction): a library whose tables did not commit is said by name.
+    if (!tx.commit())
+        iris::Logger::getSingleton()->warn(
+            "Database::createAllTables: the schema transaction was NOT committed - the library's tables are as they were.");
 }
 
 void Database::createCasTables()
@@ -1919,7 +1922,10 @@ void Database::wipeDatabase()
 	destroyTable("asset_files");
 	destroyTable("files");
 	destroyTable("project_assets");
-	tx.commit();
+	// A FAILED UNIT WRITES NOTHING (DbTransaction): a wipe that did not commit is said by name.
+	if (!tx.commit())
+		iris::Logger::getSingleton()->warn(
+		    "Database::wipeDatabase: the wipe was NOT committed - every table is as it was.");
 }
 
 bool Database::sidecarBelongsHere(const QString &guid)
