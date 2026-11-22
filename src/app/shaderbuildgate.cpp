@@ -320,7 +320,7 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             QElapsedTimer wall; wall.start();
             qint64 longest = 0;
             pace = FramePace::Complete;
-            while (!tail.done() && false) {   // MEASURING ARM (COLD-BOOT-1 item 3: the tail off), reverted after one hold
+            while (!tail.done()) {
                 engine.shaderBuildProgress(c, f, e);
                 const unsigned before = c + f;
                 QElapsedTimer one; one.start();
