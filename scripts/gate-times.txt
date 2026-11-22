@@ -622,3 +622,4 @@ source.script_build_id 0.10  solo 2026-11-22 at 08df5742e (spec.sh reprice, run 
 source.on_demand_rows 1.08  by hand (spec.sh reprice, 2026-11-22)
 source.on_demand_toy 0.03  by hand (spec.sh reprice, 2026-11-22)
 skeletal.share 0.02  by hand (spec.sh reprice, 2026-11-22)
+script.json 0.11  solo 2026-11-22 at e28110e6f (spec.sh reprice, run 20261122T164907-e28110e6f-p2129134)
