@@ -925,8 +925,8 @@ void Database::createAllTables()
     if (!checkIfTableExists("author"))          createAuthorTable();
     if (!checkIfTableExists("folders"))         createFoldersTable();
     if (!checkIfTableExists("favorites"))       createFavoritesTable();
-    createIndexes();
     createCasTables();
+    createIndexes();   // after every table, the CAS ones included: the list indexes asset_files too
     tx.commit();
 }
 
@@ -1066,6 +1066,12 @@ const char *const kIndexStatements[] = {
     "CREATE INDEX IF NOT EXISTS idx_assets_library ON assets "
     "(view_filter, listed, name, guid, parent, type, collection, project_guid, author, license, tags, properties)",
     "CREATE INDEX IF NOT EXISTS idx_assets_material_copies ON assets (guid, properties) WHERE type = 1",
+    // A MODEL'S BAKE BY ITS NAME (LARGE-LIBRARY-1 R5): MeshBakeStore::planFor / clipBakePath look a bake up by
+    // the name its source content keys (`role = 'bake' AND name = ?`), and asset_files is keyed by asset_guid:
+    // every model load on the UI thread read the whole table (363 pages more at 10,000 assets than at 1,000, at
+    // a boot). PARTIAL over the bake rows, so it serves only a statement that states the role literally — no
+    // other statement's plan can move onto it (the plan comparison over every asset_files statement: none did).
+    "CREATE INDEX IF NOT EXISTS idx_asset_files_bake ON asset_files (name) WHERE role = 'bake'",
 };
 
 /// The statements of kIndexStatements `conn`'s library still needs: a CREATE whose index it lacks, a DROP of one

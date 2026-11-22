@@ -404,6 +404,56 @@ static QVector<Reading> coldResidue(Database &db, const QString &dbPath, const l
     return out;
 }
 
+/// THE SWEEP'S PLANNING ON ITS OWN CONNECTION (LARGE-LIBRARY-1 R5): MeshBakeStore::modelBakesNeeded as the boot's
+/// bake sweep runs it — a read-only connection of its own (meshbakestore.cpp startBackgroundRebuild) — its
+/// statements counted by an SQLite statement trace this row registers on THAT connection's handle (the app's
+/// trace, databasereads, is the default connection's only: the ruled limit). `perModel` true runs the single-row
+/// planner (MeshBakeStore::planFor) once per model instead: the negative control, N statements and more.
+struct SweepPlan { qint64 statements = -1; int needed = -1; qint64 ms = 0; };
+#if defined(JAH_HAVE_SQLITE3)
+static int countStatement(unsigned type, void *counter, void *, void *sql)
+{
+    const char *text = static_cast<const char *>(sql);
+    if (type == SQLITE_TRACE_STMT && !(text && text[0] == '-' && text[1] == '-')) ++*static_cast<qint64 *>(counter);
+    return 0;
+}
+#endif
+static SweepPlan sweepPlan(const QString &dbPath, const QString &store, const QStringList &perModel = {})
+{
+    SweepPlan out;
+#if defined(JAH_HAVE_SQLITE3)
+    const QString name = QStringLiteral("sweep-plan-") + newGuid();
+    {
+        QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), name);
+        conn.setDatabaseName(dbPath);
+        conn.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
+        if (conn.open()) {
+            qint64 counter = 0;
+            sqlite3 *handle = *static_cast<sqlite3 *const *>(conn.driver()->handle().constData());
+            sqlite3_trace_v2(handle, SQLITE_TRACE_STMT, countStatement, &counter);
+            QElapsedTimer t;
+            t.start();
+            if (perModel.isEmpty()) {
+                out.needed = int(MeshBakeStore::modelBakesNeeded(conn, store).size());
+            } else {
+                out.needed = 0;
+                for (const QString &guid : perModel)
+                    if (MeshBakeStore::planFor(conn, store, MeshBakeStore::modelSourceFor(conn, store, guid), guid).bakePath.isEmpty())
+                        ++out.needed;
+            }
+            out.ms = t.elapsed();
+            out.statements = counter;
+            sqlite3_trace_v2(handle, 0, nullptr, nullptr);
+            conn.close();
+        }
+    }
+    QSqlDatabase::removeDatabase(name);
+#else
+    Q_UNUSED(dbPath); Q_UNUSED(store); Q_UNUSED(perModel);
+#endif
+    return out;
+}
+
 /// How many index statements an open of the library ran (the query log's CreateIndex entries).
 static int indexStatementsAtOpen(Database &db)
 {
@@ -733,9 +783,11 @@ int main(int argc, char **argv)
     // A generated model is a real import's: its source parses and its bake is current, so the boot's bake sweep
     // (MeshBakeStore::startBackgroundRebuild plans with modelBakesNeeded) finds NOTHING to rebuild. A fake
     // model made the sweep "rebuild" every model at every boot, its failures landing on the UI thread.
-    CHECK(MeshBakeStore::modelBakesNeeded(QSqlDatabase::database(), store).isEmpty(),
-          "the generated library's %d models have current bakes: the bake sweep has nothing to rebuild",
-          int(lib.objects.size()));
+    const SweepPlan sweepSmall = sweepPlan(dbPath, store);
+    CHECK(sweepSmall.needed == 0,
+          "the generated library's %d models have current bakes: the bake sweep has nothing to rebuild (%d)",
+          int(lib.objects.size()), sweepSmall.needed);
+    const SweepPlan perModelSmall = sweepPlan(dbPath, store, lib.objects);
 
     // ---- M1: THE TWO NUMBERS ----------------------------------------------------------------------------
     const ColdListing with = coldListing(db, dbPath);
@@ -845,6 +897,33 @@ int main(int argc, char **argv)
     std::printf("   grown in %lld ms, %lld thumbnail bytes in all\n", static_cast<long long>(timer.elapsed()),
                 static_cast<long long>(lib.thumbnailBytes));
     theGenerator(db, lib, 10000);
+    {
+        // R5: THE SWEEP'S PLANNING IS FLAT. RED before (meshbakestore.cpp modelBakesNeeded: per model an import
+        // record walk and a bake lookup that SCANS asset_files: spikes/large-library-1/stage2/red-first-r5.txt).
+        const SweepPlan large = sweepPlan(dbPath, store), perModelLarge = sweepPlan(dbPath, store, lib.objects);
+        std::printf("   R5 the sweep's planning on its own connection: %lld statements in %lld ms at 1,000 (%d models), "
+                    "%lld in %lld ms at 10,000 (%d models)\n", static_cast<long long>(sweepSmall.statements),
+                    static_cast<long long>(sweepSmall.ms), int(lib.objects.size()) / 10, static_cast<long long>(large.statements),
+                    static_cast<long long>(large.ms), int(lib.objects.size()));
+        CHECK(large.needed == 0, "the bake sweep has nothing to rebuild at 10,000 either (%d)", large.needed);
+        // A model's bake by its name, the UI thread's lookup at every model load (MeshBakeStore::planFor): one seek
+        // of the partial idx_asset_files_bake, never a read of all asset_files (RED before: "SCAN AF",
+        // spikes/large-library-1/stage2/probe-after-r5a.txt: +363 pages at a boot at 10,000).
+        const QString bakePlan = planOf(QStringLiteral("SELECT AF.oid, F.ext, F.size FROM asset_files AF LEFT JOIN files F ON "
+                                                       "AF.oid = F.oid WHERE AF.role = 'bake' AND AF.name = ? ORDER BY AF.rowid DESC"),
+                                        { QStringLiteral("'x.jmb'") });
+        QFile bakeSource(QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/src/services/meshbakestore.cpp"));
+        CHECK(bakeSource.open(QIODevice::ReadOnly) && bakeSource.readAll().contains("\"WHERE AF.role = '%1' AND AF.name = ? ORDER BY AF.rowid DESC\")")
+                  && bakePlan.contains(QLatin1String("USING INDEX idx_asset_files_bake (name=?)")) && !bakePlan.contains(QLatin1String("SCAN")),
+              "R5: a model's bake is found by one seek of idx_asset_files_bake (planFor's own text) [%s]", qPrintable(bakePlan));
+        CHECK(sweepSmall.statements > 0 && large.statements == sweepSmall.statements,
+              "R5: the bake sweep's planning runs the SAME statements on its own connection at 1,000 as at 10,000 "
+              "(%lld and %lld)", static_cast<long long>(sweepSmall.statements), static_cast<long long>(large.statements));
+        CHECK(perModelLarge.statements - perModelSmall.statements >= int(lib.objects.size()) * 9 / 10,
+              "R5 NEGATIVE CONTROL: the single-row planner once per model grows by at least the %d models added (%lld)",
+              int(lib.objects.size()) * 9 / 10,
+              static_cast<long long>(perModelLarge.statements - perModelSmall.statements));
+    }
     printIndexSizes("10,000 assets");
     const QVector<Listing> all = listings(db, lib);
     {

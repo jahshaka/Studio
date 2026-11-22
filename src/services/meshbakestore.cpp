@@ -250,6 +250,20 @@ namespace
 QMutex sSettingsLock;
 QHash<QString, QPair<QString, iris::ImportTransform>> sSettingsCache;
 
+/// A row's import settings (its `import` record's `settings`, and the file's declared unit scale) as the bake
+/// keys on them: the settings hash and the import transform. Identity for a row with no record.
+QPair<QString, iris::ImportTransform> settingsOfRecord(const QJsonObject &props)
+{
+    const QJsonObject record = props.value(QStringLiteral("import")).toObject();
+    const QJsonObject settings = record.value(QStringLiteral("settings")).toObject();
+    const iris::ImportSettings parsed = iris::ImportSettings::fromJson(settings);
+    // The file's own declaration, already measured at import: a unit
+    // OVERRIDE then costs no probe parse (irisgl/import/scenesource.h).
+    const double declared = props.value(QStringLiteral("metadata")).toObject()
+                                 .value(QStringLiteral("unitScale")).toDouble(0.0);
+    return { parsed.hash(), parsed.transform(declared) };
+}
+
 QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const QString &root,
                                                      const QString &sourcePath,
                                                      const QString &assetGuid)
@@ -264,19 +278,14 @@ QPair<QString, iris::ImportTransform> resolveSettings(QSqlDatabase conn, const Q
     QPair<QString, iris::ImportTransform> out(iris::ImportSettings::identityHash(),
                                               iris::ImportTransform());
     const QString oid = oidFromStorePath(root, sourcePath);
-    if (!oid.isEmpty()) {
-        const QJsonObject props = assetGuid.isEmpty() ? importRecordForOid(conn, oid)
-                                                      : importRecordForGuid(conn, assetGuid);
-        const QJsonObject record = props.value(QStringLiteral("import")).toObject();
-        const QJsonObject settings = record.value(QStringLiteral("settings")).toObject();
-        const iris::ImportSettings parsed = iris::ImportSettings::fromJson(settings);
-        // The file's own declaration, already measured at import: a unit
-        // OVERRIDE then costs no probe parse (irisgl/import/scenesource.h).
-        const double declared = props.value(QStringLiteral("metadata")).toObject()
-                                     .value(QStringLiteral("unitScale")).toDouble(0.0);
-        out.first = parsed.hash();
-        out.second = parsed.transform(declared);
-    }
+    if (!oid.isEmpty())
+        out = settingsOfRecord(assetGuid.isEmpty() ? importRecordForOid(conn, oid)
+                                                   : importRecordForGuid(conn, assetGuid));
+    // THE SHARED CACHE IS FILLED BY THE DEFAULT CONNECTION'S LOOKUPS ONLY (LARGE-LIBRARY-1): a worker's
+    // (the bake sweep's, an archive's) filling it made the UI thread's statement count depend on how far
+    // that worker had got — at 10,000 assets the boot's material preview paid its 2 lookups, at 1,000 the
+    // sweep had paid them first. A worker reads what is there; it never writes it.
+    if (conn.connectionName() != QLatin1String(QSqlDatabase::defaultConnection)) return out;
     QMutexLocker locked(&sSettingsLock);
     if (sCacheGeneration.load() == generation) sSettingsCache.insert(key, out);
     return out;
@@ -307,6 +316,32 @@ iris::ImportTransform transformFor(const QString &sourcePath, const QString &ass
 }
 
 
+namespace {
+/// One recorded row of a bake's name: its object, the object's extension and the catalog's size of it.
+struct BakeRow
+{
+    QString oid;
+    QString ext;
+    QVariant size;
+};
+
+/// The newest of a bake name's recorded rows that is the CURRENT bake: its object present, its size the
+/// catalog's, its header's producer fingerprint `fingerprint`. CHEAP, AND ENOUGH (FORWARD-ONLY-1 D3): no
+/// payload is read. Empty when none is.
+QString freshBakeAmong(const QString &root, const QVector<BakeRow> &newestFirst, const QString &fingerprint)
+{
+    for (const BakeRow &row : newestFirst) {
+        const QString path = AssetStorePaths::objectPathIn(root, row.oid, row.ext);
+        const QFileInfo info(path);
+        if (!info.exists()) continue;
+        if (!row.size.isNull() && info.size() != row.size.toLongLong()) continue;
+        if (!iris::MeshBake::headerMatches(path, fingerprint)) continue;
+        return path;
+    }
+    return QString();
+}
+}   // namespace
+
 iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString &sourcePath,
                           const QString &assetGuid)
 {
@@ -333,28 +368,19 @@ iris::PrewarmItem planFor(QSqlDatabase conn, const QString &root, const QString 
     // stops at the first row that is actually the current generation.
     const QString settings = settingsHashFor(conn, root, sourcePath, assetGuid);
     QSqlQuery query(conn);
-    query.prepare("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid "
-                  "WHERE AF.role = ? AND AF.name = ? ORDER BY AF.rowid DESC");
-    query.addBindValue(iris::MeshBake::casRole());
+    // The role is a LITERAL: the partial idx_asset_files_bake (Database's index list) serves only a WHERE that
+    // states its own — a bound role read the whole of asset_files for every model a session loads.
+    query.prepare(QStringLiteral("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
+                                 "LEFT JOIN files F ON AF.oid = F.oid "
+                                 "WHERE AF.role = '%1' AND AF.name = ? ORDER BY AF.rowid DESC")
+                      .arg(iris::MeshBake::casRole()));
     query.addBindValue(iris::MeshBake::fileNameFor(sourceOid, settings));
     if (!query.exec()) return item;
-
+    QVector<BakeRow> rows;
+    while (query.next()) rows.append({ query.value(0).toString(), query.value(1).toString(), query.value(2) });
     const QString fingerprint = iris::MeshBake::fingerprintFor(sourceOid, settings);
-    while (query.next()) {
-        const QString path = AssetStorePaths::objectPathIn(root, query.value(0).toString(),
-                                                           query.value(1).toString());
-        // CHEAP, AND ENOUGH (FORWARD-ONLY-1 D3): the object's size against
-        // the catalog's record of it (a truncated or rewritten object differs)
-        // and the header's producer fingerprint — no payload is read.
-        const QFileInfo info(path);
-        if (!info.exists()) continue;
-        if (!query.value(2).isNull() && info.size() != query.value(2).toLongLong()) continue;
-        if (!iris::MeshBake::headerMatches(path, fingerprint)) continue;
-        item.bakePath = path;
-        item.bakeFingerprint = fingerprint;
-        return item;
-    }
+    item.bakePath = freshBakeAmong(root, rows, fingerprint);
+    if (!item.bakePath.isEmpty()) item.bakeFingerprint = fingerprint;
     return item;
 }
 
@@ -557,36 +583,78 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
                                      const QSet<QString> *onlyGuids, QVector<BakeTarget> *allRows)
 {
     QVector<BakeTarget> out;
-    // ONE CACHE GENERATION FOR THE WHOLE PLAN (I7): the lookups below run inside this statement's
-    // still-stepping SELECT, whose WAL read snapshot is pinned until it finishes — a lookup that
-    // sampled the generation AFTER a commit's clear() would still read the pre-commit snapshot and
-    // plant it as current. Sampled once, here, before the statement, every insert the plan makes
-    // is dropped if any clear() happened since.
+    if (onlyGuids && onlyGuids->isEmpty()) return out;
+    // ONE CACHE GENERATION FOR THE WHOLE PLAN (I7): a clip's lookup below runs inside the files statement's
+    // still-stepping SELECT, whose WAL read snapshot is pinned until it finishes — sampled once, here.
     const PinGeneration pinned;
-    // Every recorded file whose DISPLAY NAME is a model, with the ROW that
-    // names it — one entry per distinct (content, import settings) pair, since
-    // that pair is what a bake is keyed on. Deduplicating by content alone
-    // (what this did until the second read's F3) built one variant and left
-    // every other row parsing on every open, forever.
-    QSqlQuery query(conn);
-    // THE GUID FILTER IS THE QUERY'S (D3): an archive import asks about the
-    // rows it brought, and must not walk the whole library to find them.
-    // The ROW'S TYPE rides along: a clip row's content gets a CLIP bake
-    // (SHIPPED-BAKES-1), every other model file a model bake.
-    QString sql = QStringLiteral("SELECT AF.oid, AF.name, F.ext, AF.asset_guid, A.type FROM asset_files AF "
-                                 "LEFT JOIN files F ON AF.oid = F.oid "
-                                 "LEFT JOIN assets A ON A.guid = AF.asset_guid WHERE AF.role <> ?");
+    // THE GUID FILTER IS THE QUERY'S (D3): an archive import asks about the rows it brought, and must not walk
+    // the whole library to find them.
+    QString guidFilter;
     if (onlyGuids) {
-        if (onlyGuids->isEmpty()) return out;
         QStringList marks;
         for (int i = 0; i < onlyGuids->size(); ++i) marks << QStringLiteral("?");
-        sql += QStringLiteral(" AND AF.asset_guid IN (%1)").arg(marks.join(QLatin1Char(',')));
+        guidFilter = QStringLiteral(" AND AF.asset_guid IN (%1)").arg(marks.join(QLatin1Char(',')));
     }
-    sql += QStringLiteral(" ORDER BY AF.rowid");
-    query.prepare(sql);
-    query.addBindValue(iris::MeshBake::casRole());
-    if (onlyGuids)
-        for (const QString &guid : *onlyGuids) query.addBindValue(guid);
+    const auto bindFilter = [&](QSqlQuery &query) {
+        query.addBindValue(iris::MeshBake::casRole());
+        if (onlyGuids)
+            for (const QString &guid : *onlyGuids) query.addBindValue(guid);
+    };
+
+    // THE PLAN READS THE CATALOG IN THREE STATEMENTS, whatever the library's size (LARGE-LIBRARY-1 R5): it asked
+    // two per model — the row's import record (importRecordForGuid, a walk up to the Object) and its bake's rows
+    // by name, a statement that SCANS asset_files (no index on role, name): O(models x files) at every boot.
+    // (1) THE IMPORT RECORDS of every row naming a model file and of the rows above it (the walk
+    // importRecordForGuid makes, its bound included), read once.
+    QStringList modelNames;
+    for (const QString &ext : Constants::MODEL_EXTS) modelNames << QStringLiteral("AF.name LIKE '%.%1'").arg(ext);
+    QHash<QString, QPair<QString, QByteArray>> records;   // guid -> (parent, properties)
+    {
+        QSqlQuery query(conn);
+        query.prepare(QStringLiteral("WITH RECURSIVE chain(guid, hop) AS ("
+                                     "SELECT DISTINCT AF.asset_guid, 0 FROM asset_files AF WHERE AF.role <> ?%1 AND (%2) "
+                                     "UNION SELECT A.parent, chain.hop + 1 FROM chain JOIN assets A ON A.guid = chain.guid "
+                                     "WHERE A.parent IS NOT NULL AND A.parent <> '' AND chain.hop < 7) "
+                                     "SELECT A.guid, A.parent, A.properties FROM assets A WHERE A.guid IN (SELECT guid FROM chain)")
+                          .arg(guidFilter, modelNames.join(QStringLiteral(" OR "))));
+        bindFilter(query);
+        if (!query.exec()) return out;
+        while (query.next())
+            records.insert(query.value(0).toString(), { query.value(1).toString(), query.value(2).toByteArray() });
+    }
+    const auto recordOf = [&records](QString at) {   // importRecordForGuid over the rows read
+        for (int hop = 0; hop < 8 && !at.isEmpty(); ++hop) {
+            const auto row = records.constFind(at);
+            if (row == records.cend()) return QJsonObject();
+            const QJsonObject props = QJsonDocument::fromJson(row->second).object();
+            if (!props.value(QStringLiteral("import")).toObject().isEmpty()) return props;
+            at = row->first;
+        }
+        return QJsonObject();
+    };
+    // (2) EVERY RECORDED BAKE, by its name, newest first (planFor's lookup, for all of them at once).
+    QHash<QString, QVector<BakeRow>> bakes;
+    {
+        QSqlQuery query(conn);
+        query.prepare("SELECT AF.name, AF.oid, F.ext, F.size FROM asset_files AF "
+                      "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.role = ? ORDER BY AF.rowid DESC");
+        query.addBindValue(iris::MeshBake::casRole());
+        if (!query.exec()) return out;
+        while (query.next())
+            bakes[query.value(0).toString()].append({ query.value(1).toString(), query.value(2).toString(), query.value(3) });
+    }
+
+    // (3) Every recorded file whose DISPLAY NAME is a model, with the ROW that names it — one entry per distinct
+    // (content, import settings) pair, since that pair is what a bake is keyed on. Deduplicating by content alone
+    // (what this did until the second read's F3) built one variant and left every other row parsing on every
+    // open, forever. The ROW'S TYPE rides along: a clip row's content gets a CLIP bake (SHIPPED-BAKES-1), every
+    // other model file a model bake.
+    QSqlQuery query(conn);
+    query.prepare(QStringLiteral("SELECT AF.oid, AF.name, F.ext, AF.asset_guid, A.type FROM asset_files AF "
+                                 "LEFT JOIN files F ON AF.oid = F.oid "
+                                 "LEFT JOIN assets A ON A.guid = AF.asset_guid WHERE AF.role <> ?%1 ORDER BY AF.rowid")
+                      .arg(guidFilter));
+    bindFilter(query);
     if (!query.exec()) return out;
     QSet<QString> seen;          // "<oid>|<settingsHash>"
     QHash<QString, QString> pathForOid;
@@ -612,10 +680,18 @@ QVector<BakeTarget> modelBakesNeeded(QSqlDatabase conn, const QString &root,
             out.append({ path, guid, true });
             continue;
         }
-        const QString key = oid + QLatin1Char('|') + settingsHashFor(conn, root, path, guid);
+        // The bake's key and its freshness as settingsHashFor and isFresh compute them, from the rows read above.
+        const QString storeOid = oidFromStorePath(root, path);
+        const QString settings = storeOid.isEmpty() ? iris::ImportSettings::identityHash()
+                                                    : settingsOfRecord(recordOf(guid)).first;
+        const QString key = oid + QLatin1Char('|') + settings;
         if (seen.contains(key)) continue;
         seen.insert(key);
-        if (isFresh(conn, root, path, guid)) continue;
+        if (!storeOid.isEmpty()
+            && !freshBakeAmong(root, bakes.value(iris::MeshBake::fileNameFor(storeOid, settings)),
+                               iris::MeshBake::fingerprintFor(storeOid, settings))
+                    .isEmpty())
+            continue;
         out.append({ path, guid, false });
     }
     return out;
@@ -921,10 +997,10 @@ QString clipBakePath(QSqlDatabase conn, const QString &root, const QString &sour
     // producer bump leaves the stale generation under the same name until the
     // rebuild retires it.
     QSqlQuery query(conn);
-    query.prepare("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid "
-                  "WHERE AF.role = ? AND AF.name = ? ORDER BY AF.rowid DESC");
-    query.addBindValue(iris::MeshBake::casRole());
+    query.prepare(QStringLiteral("SELECT AF.oid, F.ext, F.size FROM asset_files AF "
+                                 "LEFT JOIN files F ON AF.oid = F.oid "
+                                 "WHERE AF.role = '%1' AND AF.name = ? ORDER BY AF.rowid DESC")
+                      .arg(iris::MeshBake::casRole()));   // literal: idx_asset_files_bake (planFor)
     query.addBindValue(iris::MeshBake::clipFileNameFor(sourceOid));
     if (!query.exec()) return QString();
     const QString fingerprint = iris::MeshBake::clipFingerprintFor(sourceOid);
