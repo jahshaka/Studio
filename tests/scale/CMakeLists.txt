@@ -18,10 +18,9 @@
 #                 at 250 k / 1 M / 5 M / 10 M triangles through the same bake. The
 #                 big bakes are W11 itself (minutes and gigabytes), so they are made
 #                 ONCE PER BAKE FORMAT FOR THE WHOLE BOX (re-baked in place when stale) by
-#                 the fixture row
-#                 `scale.assets` (archived: archive/tests/scale) (the tool `scale_assets_gen`; a no-op once cached)
-#                 into THE SHARED SCALE CACHE; a row whose shell is missing FAILS and
-#                 says how to bake it — no row ever measures a smaller asset instead;
+#                 the box-prep TOOL scripts/scale-shells.sh (it builds and runs `scale_assets_gen`; a no-op
+#                 once cached; never a row) into THE SHARED SCALE CACHE; a row whose shell is missing FAILS
+#                 and names that tool — no row ever measures a smaller asset instead;
 #   the LIBRARY — not here: the large-library rows (library.statements, tests/assettray) generate it
 #                 through the Database's own writers (tests/support/libraryfixture.h).
 # THE SHARED SCALE CACHE (V2-P0A): $JAH_SCALE_ASSET_CACHE, else JAH_SCALE_ASSET_CACHE_ROOT
@@ -62,6 +61,11 @@ endfunction()
 add_executable(test_scale test_scale.cpp ${_scale_world_sources})
 jah_scale_target(test_scale)
 
+# scale_assets_gen — THE SHELLS' BAKER, a box-prep TOOL (ATOM-TESTS-BACK-1 stage 5; scripts/scale-shells.sh builds and runs
+# it): EXCLUDE_FROM_ALL, no row runs it (the 10 M bake is minutes and gigabytes, never under a row's cap).
+add_executable(scale_assets_gen EXCLUDE_FROM_ALL scale_assets_gen.cpp ${_scale_world_sources})
+jah_scale_target(scale_assets_gen)
+
 # ---------------------------------------------------------------------------
 # THE MERGE TIER'S SCALE ROWS (TESTING-SPEED-B3, the ROWS table and the lead's verdicts on the profile): atom.decode_exact (archived: archive/tests/atom)
 # and atom.removechild_leak (archived: archive/tests/atom). scale.occlusion (archived: archive/tests/scale), atom.coverage_trace (archived: archive/tests/atom) and the bars that TIME the world (scale.cpu_walks,
@@ -98,6 +102,19 @@ jah_ship_row(scale.cpu_walks)
 # frame <= 0.5 ms still / 1.5 ms on a mover frame): the part that closed the wall
 # removes the label, so the row gates. The dirty scan stays a printed target inside it.
 set_tests_properties(scale.cpu_walks PROPERTIES LABELS "scale")
+# THE LONG MEASURE ROWS (ATOM-TESTS-BACK-1 stage 5; the spec's "scale as LONG measure rows"): label `measure` - never FAST,
+# never a feature end (scripts/gate-scope.py: `measure` runs at the sprint's ship, the LONG pass). Each prints its wall's
+# numbers; a shell it reads is the box's (scripts/scale-shells.sh), else it FAILS naming that tool. Locked as before their
+# archiving (163d90223): the two that time the GPU or the frame (cut_cost, shadow_cut) under the GPU-timing lock.
+# THE WARM CACHE: every one boots on the engine rows' shared warm shader cache, which a GREEN run promotes; a run killed at
+# its cap promotes nothing (scale.cpu_walks' declared red, OPEN_REDS: 56 of its world's shaders cold, frame 48 of 517 at
+# 60 s) - each row's price, cold and warm, is its LONG-style solo run's.
+jah_scale_row(scale.levels       --levels        60    FALSE)   # W4: the coarsest end reachable (the 10 M shell)
+jah_scale_row(scale.residency    --residency     60    FALSE)   # W5: everything resident (the 1 / 5 / 10 M shells)
+jah_scale_row(scale.occlusion    --occlusion     60    FALSE)   # W7: the two-pass id pass against the reference cull (a bar)
+set_tests_properties(scale.levels scale.residency scale.occlusion PROPERTIES
+                     LABELS "scale;measure")
+
 # scale.gpu_coverage (archived: archive/tests/scale) — EVERY BUSY GPU MILLISECOND HAS A ROW (lane TEST-1, the perf audit's F5): on
 # the lattice at Epic, still and panning, the GPU work no monitor row names against the frame's BUSY
 # span (its own GPU span less the GPU's wait for submissions, MonitorRecord::gpuIdleMs — printed as a

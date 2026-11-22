@@ -1199,7 +1199,7 @@ static int clusterCutMain()
 }
 
 // ===========================================================================
-// scale.cut_cost (archived: archive/tests/scale) — D1's decision number (ATOM-CLUSTER-CUT, SPECS/v2/CLUSTER_CUT_DESIGN.md
+// scale.cut_cost (a LONG measure row again: ATOM-TESTS-BACK-1 stage 5) — D1's decision number (ATOM-CLUSTER-CUT, SPECS/v2/CLUSTER_CUT_DESIGN.md
 // D1): THE FLAT CUT'S COST AT 10k INSTANCES. The world fixture, the id pass's own request
 // (visible | Atom, one sample x the LOD bias, mode 3) at five poses across it. THE GPU
 // NUMBER IS THE ID PASS'S OWN ROW (the monitor's timestamp pair around the pass: the four
@@ -1267,7 +1267,7 @@ static int cutCostMain()
 }
 
 // ===========================================================================
-// scale.levels (archived: archive/tests/scale) — W4: THE COARSEST END IS REACHABLE. Until ATOM-CLUSTER-CUT only the
+// scale.levels (a LONG measure row again: ATOM-TESTS-BACK-1 stage 5) — W4: THE COARSEST END IS REACHABLE. Until ATOM-CLUSTER-CUT only the
 // finest 8 LEVELS reached the GPU path (GpuScene::kLevelsPerMesh); the id pass now draws
 // the cut, whose terminal groups' clusters are drawn when nothing finer is affordable.
 // Number: the triangles the id pass draws for the asset at 1 km against the chain's
@@ -1334,7 +1334,7 @@ static int levelsMain()
 }
 
 // ===========================================================================
-// scale.residency (archived: archive/tests/scale) — W5: EVERYTHING RESIDENT, UNCOMPRESSED.
+// scale.residency (a LONG measure row again: ATOM-TESTS-BACK-1 stage 5) — W5: EVERYTHING RESIDENT, UNCOMPRESSED.
 // Anchor: irisgl/engine/src/OgreMesh.cpp:858-866 (48 B vertices: float3 pos, float3
 // normal, float4 tangent, float2 uv) and :1000-1011 (the shadow chain beside the levels).
 // Number: the VRAM each shell takes when attached, measured through the ENGINE'S OWN STATS
@@ -1521,7 +1521,7 @@ static int decodeMain()
 }
 
 // ===========================================================================
-// scale.occlusion (archived: archive/tests/scale) — W7, CLOSED BY ATOM-OCCLUSION-1: THE ID PASS DRAWS WHAT THE CAMERA CAN SEE.
+// scale.occlusion (a LONG measure row again: ATOM-TESTS-BACK-1 stage 5) — W7, CLOSED BY ATOM-OCCLUSION-1: THE ID PASS DRAWS WHAT THE CAMERA CAN SEE.
 // The id pass culls the Atom queue against the depth pyramid in the two-pass form
 // (OgreAtomIdPass.cpp: the previous frame's pyramid, then the rejected set again against
 // the one built from the first pass's depth). Three arms over the SAME 8 poses of the walk,
@@ -2402,7 +2402,7 @@ static int gpuCoverageMain()
 }
 
 // ---------------------------------------------------------------------------
-// scale.shadow_cut (archived: archive/tests/scale) — THE CASTER PASS FROM THE CUT (ATOM-SHADOWS-1): the shadow node's CPU
+// scale.shadow_cut (a LONG measure row again: ATOM-TESTS-BACK-1 stage 5) — THE CASTER PASS FROM THE CUT (ATOM-SHADOWS-1): the shadow node's CPU
 // and GPU time with the Atom casters drawn by the light's cluster cut (one indirect draw a
 // map) against the per-instance stock PBS caster path (the split's door shut: every item
 // back on PBS, its caster drawn per instance). PAIRED ARMS in one process, alternated

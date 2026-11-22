@@ -395,9 +395,9 @@ QList<iris::MeshPtr> requireShell(size_t triangles, BakeInfo *info)
     QList<iris::MeshPtr> m = shellAsset(triangles, info, false);
     if (m.isEmpty()) {
         std::printf("FAIL: the %zu-triangle shell is %s in the scale cache %s (bake format v%d, producer %s): "
-                    "a scale row measures the REAL asset or nothing. The fixture row bakes it once per bake "
-                    "producer for every tree on the box, re-baking a stale one in place (`ctest -R "
-                    "'^scale\\.assets$'`, ~25 min for the four shells), or `tests/scale/scale_assets_gen %zu` in the build tree.\n",
+                    "a scale row measures the REAL asset or nothing. Bake it once a box and a bake producer with the "
+                    "box-prep tool `scripts/scale-shells.sh <build-dir> %zu` (every shell when no count is given; a "
+                    "stale one is re-baked in place).\n",
                     triangles, state == ShellState::Stale ? "STALE (another bake producer made it)" : "missing",
                     qPrintable(cacheDir()), iris::MeshBake::formatVersion(),
                     qPrintable(iris::MeshBake::producerHash().left(12)), triangles);
