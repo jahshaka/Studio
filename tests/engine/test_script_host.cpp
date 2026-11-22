@@ -532,6 +532,41 @@ int main()
               "setTransform({position: [NaN, 0, 0]}) FAILS before the engine is asked (it reached setNodeTransform before)");
     }
 
+    // 10. THE LANGUAGE TABLE (the lead's S5): a script's language is its name's extension; a SECOND LANGUAGE is one small
+    //     interface implemented in one place - here a dummy one, registered from this file: one command name a line,
+    //     called through Host::call - and the host runs it with nothing else touched
+    {
+        struct Lines final : Host::Language {
+            explicit Lines(Host &h) : host(h) {}
+            Result run(const std::string &source, const std::string &) override
+            {
+                Result r;
+                size_t a = 0;
+                while (a < source.size()) {
+                    const size_t b = source.find('\n', a);
+                    const std::string line = source.substr(a, b == std::string::npos ? std::string::npos : b - a);
+                    a = b == std::string::npos ? source.size() : b + 1;
+                    if (line.empty()) continue;
+                    const Result c = host.call(line, {});
+                    if (c.status == Status::Failed) return c;
+                }
+                return r;
+            }
+            Host &host;
+        };
+        Host two;
+        int pings = 0;
+        two.registry().add({"test.ping", {{}, Kind::Null}, "counts a ping"}, [&pings](Call &) { ++pings; return Value(); });
+        two.addLanguage(".lines", [](Host &h) { return std::unique_ptr<Host::Language>(new Lines(h)); });
+        const Result byLines = two.run("test.ping\ntest.ping\n", "two.lines");
+        const Result byJs = two.run("test.ping();\n", "one.js");
+        const Result none = two.run("test.ping\n", "x.lua");
+        check(byLines.status == Status::Ok && byJs.status == Status::Ok && pings == 3 && none.status == Status::Failed &&
+                  none.message.find("no script language reads 'x.lua' (this host reads: *.js *.lines)") == 0,
+              "a second language registered from a test file runs beside JavaScript; an unknown extension FAILS by name (" +
+                  none.message + ")");
+    }
+
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
     else std::printf("script.host: PASSED\n");
     return gFail ? 1 : 0;
