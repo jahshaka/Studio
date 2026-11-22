@@ -88,6 +88,27 @@ QJsonObject markerObject(const QString &out, const QString &marker)
     return last;
 }
 
+/// THE GATE DRAWS WHAT THE EDITOR DRAWS (SHADER-SYSTEM-1 stage 7a): what the editor's frames built IN A FRAME since the
+/// startup gate returned - `after` (app.asyncShaders() once the script's frames left nothing pending) against its
+/// `atGate` (the totals as the gate returned). Graphics permutations and low-level pipelines: 0 each (red before the
+/// gate warmed the editor's sample count, its HUD and its sky-less first state: >= 3 + the HUD,
+/// spikes/shader-system/ss7/gate-measure). The compute counters are printed beside them.
+void gateDrawsWhatTheEditorDraws(const char *run, const QJsonObject &after)
+{
+    const QJsonObject at = after.value("atGate").toObject();
+    const auto since = [&](const char *k) {
+        return qlonglong(after.value(k).toDouble()) - qlonglong(at.value(k).toDouble());
+    };
+    std::printf("   %s, the editor's frames since the gate (pending %d): graphics built in a frame %lld (compiled %lld), "
+                "low-level pipelines %lld; compute parsed %lld, compute PSOs %lld\n", run, after.value("pending").toInt(),
+                since("graphicsBuiltInFrame"), since("graphicsCompiledInFrame"), since("lowLevelBuiltInFrame"),
+                since("computeParsedInFrame"), since("computePsoInFrame"));
+    CHECK(!at.isEmpty(), "the gate's totals are recorded (app.asyncShaders().atGate)");
+    CHECK(since("graphicsBuiltInFrame") == 0 && since("lowLevelBuiltInFrame") == 0,
+          "the editor's frames built no graphics permutation and no low-level pipeline the gate did not (the gate "
+          "draws what the editor draws)");
+}
+
 /// THE PART's MARKERS (ORPHAN-REDS-1 item 6, 2026-11-03): `part-<mode>.started` at a part's start, `.green` at its green
 /// end - a part the cap KILLED leaves `.started` alone, and the cleanup keeps that home's logs (see --clean).
 QString gPartMarker;
@@ -455,6 +476,7 @@ int main(int argc, char **argv)
         CHECK(a.value("computeParsedInFrame").toDouble() > 0,
               "run 1 (cold) parsed compute templates in its frames: the counter is fed");
     }
+    gateDrawsWhatTheEditorDraws("run 1 (cold)", cold.value("asyncAfterFrames").toObject());
     // EXACTLY ONE FILE SURVIVES A CLEAR, AND IT IS THE LOCK (audit F10).
     //
     // This used to assert 0, because clearShaderCacheOnDisk() called
@@ -555,6 +577,7 @@ int warmLaws(const QString &home, const QString &scripts, const QJsonObject &col
     std::printf("   run 2: compiled %d, loaded %d\n", warm.value("compiledThisRun").toInt(),
                 warm.value("loadedThisRun").toInt());
     CHECK(warm.value("compiledThisRun").toInt() == 0, "run 2 compiled NOTHING AT ALL");
+    gateDrawsWhatTheEditorDraws("run 2 (warm)", warm.value("asyncAfterFrames").toObject());
     // THE COMPUTE LAYER (COLD-BOOT-1 stage 3; SHADER-SYSTEM-1 3F): run 1's records are read back, none stale (F1: the
     // prune runs where the compute media is found), and NO compute template is parsed in any frame of the launch - the
     // gate's and the editor's first 30 (base 22: spikes/cold-boot-1/S1b). Run 1's > 0 is this bar's negative control

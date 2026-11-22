@@ -6,5 +6,9 @@ var s = app.shaderCache();
 s.asyncAtStart = app.asyncShaders();
 editor.frame(30, 1 / 60);
 s.asyncAfter30 = app.asyncShaders();
+// ...then until nothing is pending (SHADER-SYSTEM-1 stage 7a: what the editor's frames built since the gate, read
+// against app.asyncShaders().atGate).
+for (var i = 0; i < 600 && app.asyncShaders().pending > 0; ++i) editor.frame(1, 1 / 60);
+s.asyncAfterFrames = app.asyncShaders();
 console.log("SHADERCACHE " + JSON.stringify(s));
 app.quit();

@@ -43,6 +43,14 @@ struct State
     /// interactive session, off for a scripted run (its frames are deterministic pictures)
     /// unless the script asks (app.setAsyncShaders).
     bool                      asyncPolicy = false;
+    /// WHAT THE FRAMES HAD BUILT WHEN THE GATE RETURNED (SHADER-SYSTEM-1 stage 7a): the engine's in-frame running totals
+    /// (AsyncShaderStats) at that moment, so a script reads what the editor's frames built since - its first act runs
+    /// after the editor's first frames, never at the gate's end.
+    struct GateEnd {
+        unsigned long long graphicsBuiltInFrame = 0, graphicsCompiledInFrame = 0, lowLevelBuiltInFrame = 0,
+                           computeParsedInFrame = 0, computePsoInFrame = 0;
+        bool noted = false;
+    } gateEnd;
 };
 
 inline State &state()
@@ -68,6 +76,10 @@ inline void check(const char *where)
              "(SHADER-WARM-2)",
              n, where, s.live.load(std::memory_order_relaxed));
 }
+
+/// The in-frame totals as the gate returned (State::gateEnd), and the record of them.
+inline void noteGateEnd(const State::GateEnd &g) { state().gateEnd = g; state().gateEnd.noted = true; }
+inline const State::GateEnd &gateEnd() { return state().gateEnd; }
 
 /// The startup gate is over. `total` reads the engine's running compile count; what the
 /// gate built is the gate's.

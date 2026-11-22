@@ -536,6 +536,18 @@ int main(int argc, char *argv[])
     // ...and from here a compile on the UI thread outside a compile dialog is a
     // named defect (services/livecompiles.h, SHADER-WARM-2).
     if (auto engine = EngineHost::instance().engine()) {
+        {
+            // WHAT THE GATE's FRAMES HAD BUILT (SHADER-SYSTEM-1 stage 7a): the editor's frames from here build nothing
+            // the gate did not - app.asyncShaders().atGate is the base a script reads them against.
+            const jahshaka::engine::AsyncShaderStats g = engine->published().shaders;
+            livecompiles::State::GateEnd end;
+            end.graphicsBuiltInFrame = g.graphicsBuiltInFrame;
+            end.graphicsCompiledInFrame = g.graphicsCompiledInFrame;
+            end.lowLevelBuiltInFrame = g.lowLevelBuiltInFrame;
+            end.computeParsedInFrame = g.computeParsedInFrame;
+            end.computePsoInFrame = g.computePsoInFrame;
+            livecompiles::noteGateEnd(end);
+        }
         livecompiles::arm([weak = std::weak_ptr<jahshaka::engine::Engine>(engine)]() {
             auto e = weak.lock();
             if (!e) return 0u;

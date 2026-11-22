@@ -8,6 +8,11 @@ if (!s.enabled) throw new Error("shader cache disabled in a default session");
 // THE COMPUTE COUNTERS' NEGATIVE CONTROL (SHADER-SYSTEM-1, the start preflight's F7): a cold launch parsed compute
 // templates in its frames, so the counter the warm row bars at 0 reads above 0 here.
 s.async = app.asyncShaders();
+// THE GATE DRAWS WHAT THE EDITOR DRAWS (SHADER-SYSTEM-1 stage 7a): the editor's first frames, then frames until nothing is
+// pending; the driver reads what they built in a frame against app.asyncShaders().atGate.
+editor.frame(30, 1 / 60);
+for (var i = 0; i < 600 && app.asyncShaders().pending > 0; ++i) editor.frame(1, 1 / 60);
+s.asyncAfterFrames = app.asyncShaders();
 
 // Save on demand, then read the file count back through the same verb. The
 // save SERIALIZES here and writes on the engine's writer thread (FSYNC-1), so
