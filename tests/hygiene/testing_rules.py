@@ -732,6 +732,14 @@ def _binary_of(row, cmd):
     return os.path.basename(c[-1]) if c else None
 
 
+def _unguarded(cmd):
+    """A row's argv without the on-demand guard `sh <...>/tests/support/on_demand.sh <build> <target>` before its binary."""
+    i = next((k for k, a in enumerate(cmd) if a.endswith("/tests/support/on_demand.sh")), None)
+    if i is None:
+        return list(cmd)
+    return list(cmd[:i - 1 if i and cmd[i - 1] == "sh" else i]) + list(cmd[i + 3:])
+
+
 def r17_bad(tests, sources=None):
     """R17 (TEST-STREAMLINE-1 5b): [`row (why)`] for every row labelled `long` (FAST drops it; the feature end, when reached,
     and LONG run it) that is not the sanitizer TWIN of a guard every pass runs - its name <plain>_asan; <plain> registered and
@@ -757,9 +765,10 @@ def r17_bad(tests, sources=None):
         if {LONG, MEASURE} & set(_list(Q.get("LABELS"))):
             bad.append("%s (its plain twin %s does not run in every pass)" % (n, plain["name"]))
             continue
-        # its own home is named by the row (homes/<row>: fresh_home.sh's per-row cache), its binary <exe>_asan
+        # its own home is named by the row (homes/<row>: fresh_home.sh's per-row cache), its binary <exe>_asan; the on-demand
+        # guard before its binary (`sh on_demand.sh <build> <target>`: ENGINE-HEADERS-1 stage 0) is how it is built, not a law
         strip = lambda a: (lambda a: a[:-len("_asan")] if a.endswith("_asan") else a)(a.replace(n, plain["name"]))
-        if [strip(a) for a in t.get("command") or []] != list(plain.get("command") or []):
+        if [strip(a) for a in _unguarded(t.get("command") or [])] != list(plain.get("command") or []):
             bad.append("%s (another argv than %s's)" % (n, plain["name"]))
         env = lambda X: sorted(e for e in _list(X.get("ENVIRONMENT")) if not e.startswith(SANITIZER_ENV))
         if env(P) != env(Q):
@@ -957,6 +966,11 @@ def the_rules_catch():
                    A("k.e", "test_k", ["engine"]), A("k.e_asan", "test_k_asan", ["engine"])])
     src = {"test_l": {"/s/l.cpp"}, "test_l_asan": {"/s/l.cpp"}, "test_k": {"/s/k.cpp"}, "test_k_asan": {"/s/k.cpp"}}
     same = r17_bad([A("l.e", "test_l", ["engine"]), A("l.e_asan", "test_l_asan", ["engine", "long"], [asan])], src)
+    G = dict(A("l.e_asan", "test_l_asan", ["engine", "long"], [asan]))
+    G["command"] = G["command"][:4] + ["sh", "/s/tests/support/on_demand.sh", "/b", "test_l_asan_on_demand"] + G["command"][4:]
+    guarded = r17_bad([A("l.e", "test_l", ["engine"]), G], src)
+    G2 = dict(G, command=G["command"][:-1] + ["/b/test_l2_asan"])
+    other_bin = r17_bad([A("l.e", "test_l", ["engine"]), G2])
     other = r17_bad([A("l.e", "test_l", ["engine"]), A("l.e_asan", "test_l_asan", ["engine", "long"], [asan])],
                     dict(src, test_l_asan={"/s/l.cpp", "/s/extra_law.cpp"}))
     unread = r17_bad([A("l.e", "test_l", ["engine"]), A("l.e_asan", "test_l_asan", ["engine", "long"], [asan])],
@@ -965,6 +979,9 @@ def the_rules_catch():
           and len(unread) == 1 and "sources unread" in unread[0],
           "R17 flags a twin whose _asan binary compiles other sources than its plain row's binary, or whose sources are "
           "unread, never the same file set (%s %s)" % (other, unread))
+    check(not guarded and len(other_bin) == 1 and "another argv" in other_bin[0],
+          "R17 reads a twin run through the on-demand guard (on_demand.sh <build> <target>) as the plain row's twin, and "
+          "still flags a guarded twin running another binary (%s %s)" % (guarded, other_bin))
     check([b.split(" ")[0] for b in r17] == ["a.e_asan", "f.e_asan", "m.e_asan", "o.e_asan", "p.plain", "q.e_asan"],
           "R17 flags a `long` row that is not a sanitizer twin of an every-pass guard (no _asan name, no plain twin, the twin "
           "itself measure, another argv, environment or frames), never the exact twin or an unlabelled one (%s)" % r17)

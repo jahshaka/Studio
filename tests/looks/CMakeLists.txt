@@ -39,6 +39,7 @@ set_tests_properties(looks.engine PROPERTIES JAHSHAKA_TEST_FRAMES 81)
 if(JAHSHAKA_ASAN)
     jahshaka_looks_test(test_looks_asan)
     target_link_libraries(test_looks_asan PRIVATE JahshakaEngineAsan)
+    jah_on_demand(test_looks_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
     target_compile_options(test_looks_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_looks_asan PRIVATE -fsanitize=address)
     jah_gpu_row(looks.engine_asan CLASS engine COMMAND test_looks_asan

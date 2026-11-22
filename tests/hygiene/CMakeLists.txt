@@ -832,6 +832,17 @@ add_test(NAME source.display_guard_toy
                  $<TARGET_FILE:display_guard_probe> $<TARGET_FILE:display_guard_probe_unguarded>)
 set_tests_properties(source.display_guard_linked source.display_guard_toy PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
 jah_no_display(source.display_guard_linked source.display_guard_toy)
+# source.on_demand_rows + source.on_demand_toy (ENGINE-HEADERS-1 stage 0): A ROW WHOSE BINARY IS OUT OF THE DEFAULT BUILD (the
+# sanitizer twin's `*_asan` executables, jah_on_demand in tests/CMakeLists.txt) IS BUILT BEFORE IT RUNS AND NEVER RUNS ABSENT OR
+# STALE - rows: every such row runs through tests/support/on_demand.sh and names its target in JAH_BUILD_TARGETS (the lead tools
+# build those before the rows); toy: on_demand.sh fails by name on a missing stamp, a missing binary, an unstamped one and a stale
+# one, and runs a current one with its arguments and its exit. CPU only (on_demand.py).
+add_test(NAME source.on_demand_rows
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/on_demand.py" rows "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
+add_test(NAME source.on_demand_toy
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/on_demand.py" toy "${CMAKE_SOURCE_DIR}")
+set_tests_properties(source.on_demand_rows source.on_demand_toy PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+jah_no_display(source.on_demand_rows source.on_demand_toy)
 # source.no_box_paths (CODING_RULES § 7, the owner and the lead 2026-11-21: THE STUDIO REPO KNOWS NO BOX): no tracked Studio or
 # irisgl file names the lead repo's box-local root, literally or composed; today's two namings sit in the
 # shrink-only tests/hygiene/box_paths_pending.txt with their fix (BOX-SILO-1 stage 3, S1/S2). Its self-test first.

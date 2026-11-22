@@ -36,6 +36,7 @@ THE CASES, each a rule of the tool rather than a number:
   16-26. THE SUBSYSTEM TABLE (speed_cases below): a representative file per table line, the core by what changed (a
       Types.h field add, OgreEngine.cpp's frame loop vs vrHaptic, a comment), the fork by component, the picture set,
       the tools' rows for the tools' paths, a fallback that is never the whole inventory.
+  27. A NEVER-COMPILED OBJECT (an on-demand target's, outside `all`) still reads its headers (never_compiled_case below).
 
 Run: gate_scope_rules.py <source-dir> <build-dir>
 """
@@ -370,6 +371,60 @@ def speed_cases(source, build):
               "included), nothing else of the engine (%s)" % (len(want), stray[:4]))
 
 
+def never_compiled_case(source):
+    """27. A NEVER-COMPILED OBJECT STILL READS ITS HEADERS (ENGINE-HEADERS-1 stage 0): a toy ninja build (cc, deps = gcc) whose
+    `all` builds one executable; a twin object of the same source and a lone object of its own source sit outside `all` (an
+    on-demand target's: no deps record). A header each reads reaches their executables - the twin's by its plain copy's
+    record, the lone one's by the compiler's `-M` (compile_commands.json), and a header the lone source starts to include
+    after the first read reaches it too (the cached answer follows the source's mtime). Red before: x.h reached exe_plain
+    alone and y.h nothing - the sanitizer rows of a fresh tree lost from every header's selection."""
+    import importlib.util
+    spec = importlib.util.spec_from_file_location("gate_graph_nc", os.path.join(source, "scripts", "gate_graph.py"))
+    gg = importlib.util.module_from_spec(spec)
+    sys.modules["gate_graph_nc"] = gg   # (the graph pickles its cache: its class must be importable by name)
+    spec.loader.exec_module(gg)
+    w = tempfile.mkdtemp(prefix="gate-graph-never-")
+    try:
+        src, b = os.path.join(w, "src"), os.path.join(w, "build")
+        os.makedirs(src)
+        os.makedirs(b)
+        for f, t in (("x.h", "#define X 1\n"), ("y.h", "#define Y 1\n"), ("z.h", "#define Z 1\n"),
+                     ("a.c", '#include "x.h"\nint main(void) { return X - 1; }\n'),
+                     ("b.c", '#include "y.h"\nint main(void) { return Y - 1; }\n')):
+            open(os.path.join(src, f), "w").write(t)
+        objs = (("plain.dir/a.c.o", "a.c"), ("twin.dir/a.c.o", "a.c"), ("lone.dir/b.c.o", "b.c"))
+        open(os.path.join(b, "build.ninja"), "w").write(
+            "rule C_COMPILER__toy\n  command = cc -MD -MT $out -MF $out.d -c $in -o $out\n  depfile = $out.d\n  deps = gcc\n"
+            "rule C_EXECUTABLE_LINKER__toy\n  command = cc $in -o $out\n"
+            + "".join("build %s: C_COMPILER__toy %s/%s\n" % (o, src, s) for o, s in objs)
+            + "build exe_plain: C_EXECUTABLE_LINKER__toy plain.dir/a.c.o\nbuild exe_twin: C_EXECUTABLE_LINKER__toy twin.dir/a.c.o\n"
+            "build exe_lone: C_EXECUTABLE_LINKER__toy lone.dir/b.c.o\nbuild all: phony exe_plain\ndefault all\n")
+        json.dump([{"directory": b, "file": "%s/%s" % (src, s), "output": o, "command": "cc -c %s/%s -o %s" % (src, s, o)}
+                   for o, s in objs], open(os.path.join(b, "compile_commands.json"), "w"))
+        p = subprocess.run(["ninja", "-C", b], capture_output=True, text=True)
+        if p.returncode != 0:
+            check(False, "27. the toy build ran (ninja: %s)" % (p.stdout + p.stderr).strip()[-200:])
+            return
+        g = gg.NinjaGraph.load(b)
+        ex = lambda *n: {os.path.join(b, x) for x in n}   # noqa: E731
+        rx, ry = set(g.reach(os.path.join(src, "x.h"))), set(g.reach(os.path.join(src, "y.h")))
+        check(rx == ex("exe_plain", "exe_twin") and ry == ex("exe_lone")
+              and not os.path.exists(os.path.join(b, "exe_twin")) and not os.path.exists(os.path.join(b, "lone.dir/b.c.o")),
+              "27. a never-compiled object reads its headers: x.h reaches the twin's executable by its plain copy's record, "
+              "y.h the lone object's by the compiler's -M, neither ever built (x.h %s, y.h %s; lent %s)"
+              % (sorted(os.path.basename(e) for e in rx), sorted(os.path.basename(e) for e in ry), sorted(g.deps_lent.values())))
+        import time
+        time.sleep(0.05)
+        open(os.path.join(src, "b.c"), "w").write('#include "y.h"\n#include "z.h"\nint main(void) { return Y - Z; }\n')
+        os.utime(os.path.join(b, "build.ninja"))   # (the graph's own cache keys on build.ninja's mtime: a fresh parse)
+        g2 = gg.NinjaGraph.load(b)
+        rz = set(g2.reach(os.path.join(src, "z.h")))
+        check(rz == ex("exe_lone"), "27. ...and a header the lone source starts to include reaches it at the next read (z.h %s)"
+              % sorted(os.path.basename(e) for e in rz))
+    finally:
+        shutil.rmtree(w, ignore_errors=True)
+
+
 def main(source, build):
     tool = os.path.join(source, "scripts", "gate-scope.py")
     if not os.path.isfile(os.path.join(build, "CTestTestfile.cmake")):
@@ -405,6 +460,7 @@ def main(source, build):
         code, out, err = run([tool, "--files", "src/services/vrworld.cpp", "--build", empty], source)
         check(code == 2 and "registers no ctest suite" in err, "3. an unconfigured --build dir exits 2 and says so (%d)" % code)
     speed_cases(source, build)
+    never_compiled_case(source)
     if FAILURES:
         print("source.gate_scope_rules: FAILED (%d)" % len(FAILURES))
         return 1

@@ -29,7 +29,8 @@ import sys
 
 CXX_EXT = (".cpp", ".cc", ".cxx", ".c", ".h", ".hh", ".hpp", ".hxx", ".inl", ".mm", ".ipp")
 HEADER_EXT = (".h", ".hh", ".hpp", ".hxx", ".inl", ".ipp")
-_CACHE_VERSION = 8                 # 8: nodes as build.ninja spells them; lookups resolve another spelling by realpath (SYMLINK-ROOT-2)
+_CACHE_VERSION = 9                 # 9: outside_all + the deps lent to never-compiled objects (ENGINE-HEADERS-1); 8: nodes as
+                                   # build.ninja spells them; lookups resolve another spelling by realpath (SYMLINK-ROOT-2)
 # the nm cache's own version: bumped whenever what a cached entry means changes (2: the refusal
 # of H1 — no entry may hold an nm failure's empty tables; 3: TESTING-CLEANUP-2B H8b — an EMPTY member
 # whose nm SUCCEEDED is an answer and is cached: only a failed nm is never one, and that raises)
@@ -98,6 +99,8 @@ class NinjaGraph:
         self._memo = {}
         self.link_inputs = {}       # artefact -> its link edge's inputs (objects, archives, libs)
         self.obj_src = {}           # object -> the source its compile edge compiles
+        self.outside_all = set()    # objects and executables outside the closure of `all`: an on-demand target's (EXCLUDE_FROM_ALL)
+        self.deps_lent = {}         # never-compiled object -> how its header set was read ("twin <object>" / "compiler")
         self._syms = None           # lazily: object/exe -> (defined, undefined) symbol sets
         self._closure = {}
 
@@ -177,6 +180,7 @@ class NinjaGraph:
     def _parse_build_ninja(self, path):
         lines = open(path, errors="replace").read().replace("$\n", "").split("\n")
         cur_out = None
+        fwd = collections.defaultdict(list)   # output -> its inputs (the closure of `all`, below)
         for line in lines:
             if line.startswith("build "):
                 body = line[6:]
@@ -216,6 +220,8 @@ class NinjaGraph:
                 for i in src:
                     for o in all_outs:
                         self.rev[i].add(o)
+                for o in all_outs:
+                    fwd[o].extend(src)
                 cur_out = all_outs[0] if all_outs else None
                 cur_kind = k
             elif line.startswith("  DEFINES") and cur_out and cur_kind == "object":
@@ -223,6 +229,14 @@ class NinjaGraph:
                     self.app_driving.add(cur_out)      # an object; resolved to its exes below
             elif line and not line.startswith(" "):
                 cur_out = None
+        # WHAT A DEFAULT BUILD MAKES: the closure of `all` (an EXCLUDE_FROM_ALL target's objects are outside it)
+        seen, stack = set(), [self._abs("all")]
+        while stack:
+            for i in fwd.get(stack.pop(), ()):
+                if i not in seen:
+                    seen.add(i)
+                    stack.append(i)
+        self.outside_all = {o for o, k in self.kind.items() if k in ("object", "exe") and o not in seen} if seen else set()
         # objects compiled with JAHSHAKA_BINARY -> the executables they link into
         objs = set(self.app_driving)
         self.app_driving = set()
@@ -236,16 +250,115 @@ class NinjaGraph:
             return
         if r.returncode != 0:
             return
-        cur = None
+        cur, od = None, collections.defaultdict(list)
         for line in r.stdout.splitlines():
             if not line:
                 cur = None; continue
             if not line.startswith(" "):
                 cur = self._abs(line.split(":", 1)[0])
                 self.deps_objects += 1
+                od[cur]
                 continue
             if cur:
-                self.rev[self._abs(line.strip())].add(cur)
+                h = self._abs(line.strip())
+                self.rev[h].add(cur)
+                od[cur].append(h)
+        self._lend_deps(od)
+
+    def _lend_deps(self, od):
+        """A NEVER-COMPILED OBJECT STILL READS ITS HEADERS (ENGINE-HEADERS-1 stage 0). An object of an on-demand target (outside
+        `all`: the sanitizer twin, EXCLUDE_FROM_ALL) has no deps record until a run first builds it - in a fresh tree, never - so
+        a header it reads would reach none of its rows: a sanitizer row lost from the selection, silently. Its header set is
+        the record of an object compiling the SAME source (the plain library's copy of an engine source: the same text, the
+        same include path); with none (a twin whose plain row was archived: test_gi_rayquery.cpp), the compiler's own answer
+        (`-M` on its compile_commands.json command, no object written), kept per object while its source, its headers and its
+        command stand still (ninja's own rule for a record). Only objects outside `all`: an object of the default build with no
+        record is a tree not yet built (said by `load`)."""
+        lone = [o for o in sorted(self.outside_all) if o in self.obj_src and o not in od]
+        if not lone:
+            return
+        by_src = collections.defaultdict(list)
+        for o, s in self.obj_src.items():
+            if o in od:
+                by_src[s].append(o)
+        need = []
+        for o in lone:
+            twin = sorted(by_src.get(self.obj_src[o], ()))
+            if twin:
+                for h in od[twin[0]]:
+                    self.rev[h].add(o)
+                self.deps_lent[o] = "twin " + twin[0]
+            else:
+                need.append(o)
+        for o, hs in self._compiler_deps(need).items():
+            for h in hs:
+                self.rev[h].add(o)
+            self.deps_lent[o] = "compiler"
+
+    def _compiler_deps(self, objs):
+        """{object: [the headers its compile reads]} by the compiler's `-M` (compile_commands.json), cached in the build dir per
+        object on (its command, every input's mtime). An object whose command is not in compile_commands.json, or whose `-M`
+        fails, is REFUSED: the selection would lose its rows (GraphError)."""
+        if not objs:
+            return {}
+        import concurrent.futures
+        import hashlib
+        import json
+        import shlex
+        cc = os.path.join(self.build, "compile_commands.json")
+        try:
+            cmds = {self._abs(e["output"]) if not os.path.isabs(e["output"]) else os.path.normpath(e["output"]): e
+                    for e in json.load(open(cc)) if "output" in e}
+        except (OSError, ValueError) as e:
+            raise GraphError(f"{len(objs)} object(s) of on-demand targets have no deps record and {cc} is unreadable ({e}): "
+                             f"their headers cannot be read - build them once (`cmake --build {self.build} --target <target>`)")
+        cache_p = os.path.join(self.build, ".gate-scope-mdeps.pickle")
+        try:
+            cache = pickle.load(open(cache_p, "rb"))
+        except Exception:
+            cache = {}
+        mt = lambda f: os.path.getmtime(f) if os.path.exists(f) else -1.0   # noqa: E731
+
+        def one(o):
+            e = cmds.get(o)
+            if e is None:
+                raise GraphError(f"{o} (an on-demand target's object) has no deps record and no compile_commands.json entry")
+            key = hashlib.sha256(e["command"].encode()).hexdigest()
+            c = cache.get(o)
+            if c and c[0] == key and all(mt(f) == m for f, m in c[1].items()):
+                return o, c[2], c
+            a = shlex.split(e["command"])
+            out, skip = [], False
+            for i, w in enumerate(a):
+                if skip:
+                    skip = False
+                    continue
+                if w in ("-o", "-MT", "-MF", "-MQ"):
+                    skip = True
+                    continue
+                if w in ("-c", "-MD", "-MMD"):
+                    continue
+                out.append(w)
+            p = subprocess.run(out + ["-M", "-MT", "x"], cwd=e["directory"], capture_output=True, text=True, errors="replace")
+            if p.returncode != 0:
+                raise GraphError(f"`-M` of {o} failed ({p.returncode}): {p.stderr.strip()[:200]}")
+            words = p.stdout.replace("\\\n", " ").split(":", 1)[1].replace("\\ ", "\0").split()
+            hs = [os.path.normpath(os.path.join(e["directory"], w.replace("\0", " "))) for w in words]
+            hs = [h for h in hs if h != os.path.normpath(os.path.join(e["directory"], e["file"]))]
+            return o, hs, (key, {f: mt(f) for f in hs + [os.path.join(e["directory"], e["file"])]}, hs)
+
+        got = {}
+        with concurrent.futures.ThreadPoolExecutor(max_workers=min(8, len(objs))) as ex:
+            for o, hs, c in ex.map(one, objs):
+                got[o] = hs
+                cache[o] = c
+        try:
+            with open(cache_p + ".tmp", "wb") as f:
+                pickle.dump(cache, f, protocol=pickle.HIGHEST_PROTOCOL)
+            os.replace(cache_p + ".tmp", cache_p)
+        except OSError:
+            pass
+        return got
 
     # -- queries ---------------------------------------------------------------------------
     def _forward_exes(self, node):

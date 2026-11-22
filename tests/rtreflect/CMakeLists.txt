@@ -32,6 +32,7 @@ if(JAHSHAKA_ASAN)
     # the coverage R1 had to do without.
     jahshaka_rt_reflect_test(test_rt_reflect_asan)
     target_link_libraries(test_rt_reflect_asan PRIVATE JahshakaEngineAsan)
+    jah_on_demand(test_rt_reflect_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
     target_compile_options(test_rt_reflect_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_rt_reflect_asan PRIVATE -fsanitize=address)
     jah_gpu_row(gi.rt_reflect_asan CLASS engine COMMAND test_rt_reflect_asan

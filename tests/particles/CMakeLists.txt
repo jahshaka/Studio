@@ -56,6 +56,7 @@ if(JAHSHAKA_ASAN)
     target_compile_options(test_particles_pfx2_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_particles_pfx2_asan PRIVATE -fsanitize=address)
     target_link_libraries(test_particles_pfx2_asan PRIVATE JahshakaEngineAsan Qt6::Gui)
+    jah_on_demand(test_particles_pfx2_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
     add_dependencies(test_particles_pfx2_asan JahshakaEngineMedia)
     jah_gpu_row(engine.particles_pfx2_asan CLASS engine COMMAND test_particles_pfx2_asan
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

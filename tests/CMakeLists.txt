@@ -452,6 +452,37 @@ function(_jah_cold_row _row _exe _wd)
     set_property(GLOBAL APPEND PROPERTY JAH_COLD_ROWS "${_line}")
 endfunction()
 
+# THE ON-DEMAND TARGETS (ENGINE-HEADERS-1 stage 0): the engine's sanitizer twin (JahshakaEngineAsan) and every `*_asan`
+# executable that links it are OUT OF THE DEFAULT BUILD - they were 53 of the 376 objects one edit of Types.h recompiled (the
+# ground read, spikes/engine-headers/GROUND.md § 4), and their rows run only at a feature's end and in LONG (CODING_RULES § 5;
+# skeletal.share_asan, a code row, when a diff reaches it). NO ROW IS LOST: every row stays registered and selected as before;
+# `jah_on_demand(<exe>)` makes <exe> EXCLUDE_FROM_ALL and adds the target `<exe>_on_demand` (the binary, then its stamp: the
+# build's BUILT_FROM copied to <binary>.built_from); a row of <exe> (jah_gpu_row, or `_jah_on_demand_run` at an add_test site)
+# runs through tests/support/on_demand.sh - an unbuilt or stale binary is a FAILED row by name, never a skip - and carries the
+# property JAH_BUILD_TARGETS <exe>_on_demand, which the lead tools build before they run it (spec.sh test, --code, sprint.sh
+# ship). source.on_demand_rows holds every row whose binary is outside the default build to it.
+set(JAH_ON_DEMAND_SH "${CMAKE_SOURCE_DIR}/tests/support/on_demand.sh")
+function(jah_on_demand _exe)
+    set_target_properties(${_exe} PROPERTIES EXCLUDE_FROM_ALL TRUE JAH_ON_DEMAND ${_exe}_on_demand)
+    add_custom_target(${_exe}_on_demand
+        COMMAND ${CMAKE_COMMAND} -E copy "${CMAKE_BINARY_DIR}/BUILT_FROM" "$<TARGET_FILE:${_exe}>.built_from"
+        COMMENT "ON DEMAND: ${_exe} built, stamped at the build's BUILT_FROM"
+        VERBATIM)
+    add_dependencies(${_exe}_on_demand ${_exe})
+endfunction()
+# _jah_on_demand_run(<exe target> <out var>): the command words that run <exe> - through on_demand.sh when it is built on demand
+# (its target named), else the bare $<TARGET_FILE:...>; <out var>_TARGET is the on-demand target ("" when none).
+function(_jah_on_demand_run _exe _out)
+    get_target_property(_od ${_exe} JAH_ON_DEMAND)
+    if(_od)
+        set(${_out} sh "${JAH_ON_DEMAND_SH}" "${CMAKE_BINARY_DIR}" ${_od} "$<TARGET_FILE:${_exe}>" PARENT_SCOPE)
+        set(${_out}_TARGET ${_od} PARENT_SCOPE)
+    else()
+        set(${_out} "$<TARGET_FILE:${_exe}>" PARENT_SCOPE)
+        set(${_out}_TARGET "" PARENT_SCOPE)
+    endif()
+endfunction()
+
 function(jah_gpu_row _row)
     cmake_parse_arguments(G "TEST_WINDOW;SHIP" "CLASS;TIER;TOKENS;WORKING_DIRECTORY;NEEDS_WHY;FRAMES;COLD;WARM_HOME" "NEEDS;COMMAND;DATA" ${ARGN})
     if(NOT G_CLASS OR NOT G_COMMAND)
@@ -481,8 +512,12 @@ function(jah_gpu_row _row)
                             "add_test() with jah_no_display()")
     endif()
     list(POP_FRONT G_COMMAND _exe)
+    set(_run_TARGET "")
     if(TARGET ${_exe})
+        _jah_on_demand_run(${_exe} _run)
         set(_exe "$<TARGET_FILE:${_exe}>")
+    else()
+        set(_run "${_exe}")
     endif()
     set(_wd)
     if(G_WORKING_DIRECTORY)
@@ -498,11 +533,14 @@ function(jah_gpu_row _row)
         set(_home "${CMAKE_CURRENT_BINARY_DIR}/homes/${_row}")
         add_test(NAME ${_row} COMMAND sh "${JAH_FRESH_HOME}" --warm --cache engine "${_home}" --
                  env "JAHSHAKA_SHADER_CACHE_DIR=${_home}/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0
-                 "${_exe}" ${G_COMMAND} ${_wd})
+                 ${_run} ${G_COMMAND} ${_wd})
     elseif(G_WARM_HOME)
-        add_test(NAME ${_row} COMMAND ${JAH_WARM_CONSUMER} "${G_WARM_HOME}" -- "${_exe}" ${G_COMMAND} ${_wd})
+        add_test(NAME ${_row} COMMAND ${JAH_WARM_CONSUMER} "${G_WARM_HOME}" -- ${_run} ${G_COMMAND} ${_wd})
     else()
-        add_test(NAME ${_row} COMMAND "${_exe}" ${G_COMMAND} ${_wd})
+        add_test(NAME ${_row} COMMAND ${_run} ${G_COMMAND} ${_wd})
+    endif()
+    if(_run_TARGET)
+        set_property(TEST ${_row} PROPERTY JAH_BUILD_TARGETS ${_run_TARGET})
     endif()
     if(DEFINED G_FRAMES)
         set_property(TEST ${_row} PROPERTY JAHSHAKA_TEST_FRAMES ${G_FRAMES})

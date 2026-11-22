@@ -24,6 +24,7 @@ endfunction()
 if(JAHSHAKA_ASAN)
     jahshaka_planar_test(test_planar_asan)
     target_link_libraries(test_planar_asan PRIVATE JahshakaEngineAsan)
+    jah_on_demand(test_planar_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
     target_compile_options(test_planar_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_planar_asan PRIVATE -fsanitize=address)
     jah_gpu_row(engine.planar_asan SHIP CLASS engine COMMAND test_planar_asan

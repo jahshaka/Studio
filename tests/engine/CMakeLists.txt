@@ -309,8 +309,9 @@ jah_tsan_render(engine.gpuscene_identity)
 
 option(JAHSHAKA_ASAN "Also build the engine tests with AddressSanitizer" OFF)
 if(JAHSHAKA_ASAN)
-    # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean.
-    add_library(JahshakaEngineAsan STATIC ${JAHSHAKA_ENGINE_SOURCES} ${JAHSHAKA_ENGINE_SCRIPT_SOURCES})
+    # A private, sanitised copy of the backend: the app's JahshakaEngine stays clean. OUT OF THE DEFAULT BUILD (ENGINE-HEADERS-1
+    # stage 0: 53 of the 376 objects an edit of Types.h recompiled): built through the `*_asan` executables' on-demand targets.
+    add_library(JahshakaEngineAsan STATIC EXCLUDE_FROM_ALL ${JAHSHAKA_ENGINE_SOURCES} ${JAHSHAKA_ENGINE_SCRIPT_SOURCES})
     target_include_directories(JahshakaEngineAsan
         PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include
         PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${JAHSHAKA_ENGINE_BUILD_ID_DIR}
@@ -338,6 +339,7 @@ if(JAHSHAKA_ASAN)
 
     jahshaka_engine_test(test_engine_asan NO_ROW)
     target_link_libraries(test_engine_asan PRIVATE JahshakaEngineAsan)
+    jah_on_demand(test_engine_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
     # TWO ROWS, HALF THE CASES EACH (TEST-CUT-1; CLAUDE.md Testing: every row at most 60 s). THE LAW is test_engine's own
     # 96 cases, every one under AddressSanitizer — a use-after-free or an overflow in the backend is a red — and it needs
     # every case once, not one process: each case builds what it reads on the shared engine and tears it down, which is

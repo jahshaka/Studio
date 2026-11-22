@@ -46,6 +46,7 @@ set_tests_properties(ssr.engine PROPERTIES JAHSHAKA_TEST_FRAMES 676)
 if(JAHSHAKA_ASAN)
     jahshaka_ssr_test(test_ssr_asan)
     target_link_libraries(test_ssr_asan PRIVATE JahshakaEngineAsan)
+    jah_on_demand(test_ssr_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
     target_compile_options(test_ssr_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_ssr_asan PRIVATE -fsanitize=address)
     jah_gpu_row(ssr.engine_asan CLASS engine COMMAND test_ssr_asan

@@ -26,6 +26,7 @@ endfunction()
 if(JAHSHAKA_ASAN)
     jahshaka_sky_test(test_sun_transmittance_asan)
     target_link_libraries(test_sun_transmittance_asan PRIVATE JahshakaEngineAsan)
+    jah_on_demand(test_sun_transmittance_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
     target_compile_options(test_sun_transmittance_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_sun_transmittance_asan PRIVATE -fsanitize=address)
     jah_gpu_row(sky.sun_transmittance_asan CLASS engine COMMAND test_sun_transmittance_asan

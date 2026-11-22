@@ -35,6 +35,7 @@ set_tests_properties(distortion.engine PROPERTIES TIMEOUT 60 LABELS "engine")
 if(JAHSHAKA_ASAN)
     jahshaka_distortion_test(test_distortion_asan)
     target_link_libraries(test_distortion_asan PRIVATE JahshakaEngineAsan)
+    jah_on_demand(test_distortion_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
     target_compile_options(test_distortion_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_distortion_asan PRIVATE -fsanitize=address)
     jah_gpu_row(distortion.engine_asan CLASS engine COMMAND test_distortion_asan

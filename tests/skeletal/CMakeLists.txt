@@ -48,8 +48,11 @@ endfunction()
 if(JAHSHAKA_ASAN)
     jahshaka_share_test(test_skeleton_share_asan)
     target_link_libraries(test_skeleton_share_asan PRIVATE JahshakaEngineAsan)
-    add_test(NAME skeletal.share_asan COMMAND test_skeleton_share_asan
+    jah_on_demand(test_skeleton_share_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
+    _jah_on_demand_run(test_skeleton_share_asan _run)
+    add_test(NAME skeletal.share_asan COMMAND ${_run}
              WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_property(TEST skeletal.share_asan PROPERTY JAH_BUILD_TARGETS ${_run_TARGET})
     # LeakSanitizer off for the same reason tests/engine gives: the only leaks
     # are Ogre's own, and this suite is here for use-after-free, not for leaks.
     # An ASAN twin runs at the stage close (TESTING-SPEED-B4): skeletal.share (archived: archive/tests/skeletal) is the merge row.

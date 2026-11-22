@@ -619,3 +619,5 @@ db.layer 0.02  solo 2026-11-22 at a87874341 (spec.sh reprice, run 20261122T17061
 db.units 0.14  solo 2026-11-22 at b900f2cff (spec.sh reprice, run 20261122T172610-b900f2cff-p4150975)
 script.batch_equals_single 0.88  solo 2026-11-22 at 85c75b80b (spec.sh reprice, run 20261122T155759-85c75b80b)
 source.script_build_id 0.10  solo 2026-11-22 at 08df5742e (spec.sh reprice, run 20261122T160243-08df5742e)
+source.on_demand_rows 1.08  by hand (spec.sh reprice, 2026-11-22)
+source.on_demand_toy 0.03  by hand (spec.sh reprice, 2026-11-22)

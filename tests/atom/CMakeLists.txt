@@ -96,6 +96,7 @@ if(JAHSHAKA_ASAN)
         JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
         JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
     target_link_libraries(test_atom_component_asan PRIVATE JahshakaEngineAsan)
+    jah_on_demand(test_atom_component_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
     add_dependencies(test_atom_component_asan JahshakaEngineMedia)
     target_compile_options(test_atom_component_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
     target_link_options(test_atom_component_asan PRIVATE -fsanitize=address)
