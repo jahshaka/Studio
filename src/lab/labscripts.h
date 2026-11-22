@@ -2,7 +2,7 @@
 // walks. ONE folder - the loaded script's, else --js-dir's, else <data root>/scripts (made at boot: the owner drops his
 // files there) - its EVERY `.js` file in BYTEWISE name order, RE-READ from disk at every press (a file just saved is in
 // the list, a deleted one is gone: never a stale list), wrapping after the last. An empty folder answers its own line,
-// never a silent no-op. No Qt, no engine: lab.strip_hits' CPU row compiles it alone.
+// never a silent no-op. No Qt, no engine: lab.js_folder's CPU row compiles it alone.
 #pragma once
 
 #include <string>

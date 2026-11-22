@@ -1782,7 +1782,7 @@ bool Session::monitor(const Command &c)
     const bool ours = mEngine->published().monitor.level == MonitorLevel::Off;
     if (ours) {
         mEngine->request([](Engine &e) { e.setFrameMonitor(MonitorLevel::Review); });
-        frame();   // the monitor attaches on this frame's drain: not measured
+        frame();   // the monitor's first frame (the request applied at the call, no drain): not measured - the filter below keeps the measured frames only
     }
     std::vector<MonitorRecord> recs, got;
     std::set<unsigned long long> measured;
