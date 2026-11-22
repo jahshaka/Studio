@@ -4,17 +4,18 @@
 # the engine rows' caches with the driver's cache off and each exe's driver cache after it (PHOTON-7 11-2; the two-boot
 # law #100/#102b; one boot a call, the card's wait bounded per boot, #106). On a scratch tests dir (--tests-dir), never
 # the tree's shared cache; the boot itself is the script's own (not a test: once, uncapped, when the key moved).
-# FIVE ROWS, ONE SCRIPT (TEST-STREAMLINE-1: the whole ran 35.8 s quiet at 8a8503057 against a CPU row's 10-s budget and a
+# SEVEN ROWS, ONE SCRIPT (TEST-STREAMLINE-1: the whole ran 35.8 s quiet at 8a8503057 against a CPU row's 10-s budget and a
 # 6.48-s price line - split by proof): <part> = boots (tooling.warm_app_cache: the four boots' answers, the stamps, the
-# fake boots, the budget and the bounded wait), cold (tooling.warm_cold_rows: the cold-on runner's rows - one at a time, the
+# fake boots, the budget and the bounded wait), short (tooling.warm_short: a predicted nothing-built boot's short hold and its
+# proof by the engine's count, the boot's own printed wall, the hold's label - split from boots by proof, TE-WARM-C), cold (tooling.warm_cold_rows: the cold-on runner's rows - one at a time, the
 # crashed prime, the seeds), coldcall (tooling.warm_cold_calls: a call's own bounds - the held card, the deadline, the logs)
 # keys (tooling.warm_key: the key's terms, no top-up, the path-free stamps) or inherit (tooling.warm_inherit: a fresh tree
-# takes its parent's caches at an equal key); none = all five, a hand run.
-# usage: warm_app_cache.sh <source-dir> <build-dir> [boots|cold|coldcall|keys|inherit]
+# takes its parent's caches at an equal key) or store (tooling.warm_store: the box's warm store); none = all seven, a hand run.
+# usage: warm_app_cache.sh <source-dir> <build-dir> [boots|short|cold|coldcall|keys|inherit|store]
 set -u
 # (the boots' DISPLAY is :99 - a RIG number, URGENT #195: warm-app-cache.sh refuses any other; the fakes connect to nothing)
 SRC=${1:?source}; BUILD=${2:?build}; PART=${3:-all}
-case "$PART" in all|boots|cold|coldcall|keys|inherit|store) ;; *) echo "warm_app_cache.sh: <part> is boots, cold, coldcall, keys, inherit or store, not $PART" >&2; exit 64 ;; esac
+case "$PART" in all|boots|short|cold|coldcall|keys|inherit|store) ;; *) echo "warm_app_cache.sh: <part> is boots, short, cold, coldcall, keys, inherit or store, not $PART" >&2; exit 64 ;; esac
 want() { [ "$PART" = all ] || [ "$PART" = "$1" ]; }
 W="$SRC/scripts/warm-app-cache.sh"
 T=${KEEP_T:-$(mktemp -d)}; [ -n "${KEEP_T:-}" ] || trap 'rm -rf "$T"' EXIT   # (KEEP_T=<dir>: a hand debug run keeps its toys)
@@ -84,6 +85,16 @@ printf 'x.cold\t%s\tJAH_TIER_X=epic photon\x1f-JAH_GONE_X\t%s\targ1\n' "$T/cwd" 
 C=(--app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$CR")
 printf '#!/bin/sh\necho "start $(basename "$PWD") $(date +%%s%%N)" >> "%s/order"; sleep 0.3; echo "end $(basename "$PWD") $(date +%%s%%N)" >> "%s/order"\nexit 0\n' "$T" "$T" > "$T/seqfx"
 chmod +x "$T/seqfx"; mkdir -p "$T/y" "$T/z"
+# THE STALE-RECORD TOY (the boots part's P1-P3 and the short part's B1-B4): a toy build warm at its key whose app cache's
+# startup-pass record names pass aaaa.. while the build's pass id is bbbb.. (sets B4, k4, i4)
+b4_toy() {
+    B4="$T/b4"; rm -rf "$B4"; mkdir -p "$B4/tests" "$B4/engine/generated" "$B4/generated" "$B4/bin/media"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2
+    cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B4/engine/generated/"; cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B4/bin/media/" 2>/dev/null
+    printf '#define JAH_STARTUP_PASS_CODE_ID "%s"\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > "$B4/generated/jah_startup_pass_id.h"
+    printf 'pass=%s|media=m|cache=c\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "$B4/tests/.shadercache/warm-pass.key"
+    k4=$("$W" "$B4" --key); printf '%s\n%s\n%s\n' "$k4" "k1 k2 " "sets none" > "$B4/tests/.shadercache.warm-key"
+    i4=$(stat -c %i "$B4/tests/.shadercache/hlms.1.bin"); : > "$T/b4.pass"
+}
 if want boots; then
 out=$("$W" "$BUILD" --check --tests-dir "$T" "${X[@]}"); rc=$?
 key=$(echo "$out" | sed -n 's/^cold at \([0-9a-f]*\): .*/\1/p')
@@ -243,12 +254,7 @@ out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B2" --te
 # warm cache (no --drop-hlms: the hlms and compute layers kept, the same inodes) runs the pass, its promotion carries the record;
 # the next call is warm and boots nothing; an equal record boots nothing (the control). The fake app runs the pass unless the
 # record names FAKE_PASS_ID. (red on the script before (D): "warm at", nothing booted - the record stays stale, every row pays)
-B4="$T/b4"; mkdir -p "$B4/tests" "$B4/engine/generated" "$B4/generated" "$B4/bin/media"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2
-cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B4/engine/generated/"; cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B4/bin/media/" 2>/dev/null
-printf '#define JAH_STARTUP_PASS_CODE_ID "%s"\n' bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb > "$B4/generated/jah_startup_pass_id.h"
-printf 'pass=%s|media=m|cache=c\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "$B4/tests/.shadercache/warm-pass.key"
-k4=$("$W" "$B4" --key); printf '%s\n%s\n%s\n' "$k4" "k1 k2 " "sets none" > "$B4/tests/.shadercache.warm-key"
-i4=$(stat -c %i "$B4/tests/.shadercache/hlms.1.bin"); : > "$T/b4.pass"
+b4_toy
 P4() { FAKE_PASS_ID=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb FAKE_PASS_LOG="$T/b4.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 \
        "$W" "$B4" --tests-dir "$B4/tests" "${F[@]}" --only app-off "$@"; }
 out=$(P4 --check); rc=$?
@@ -264,17 +270,36 @@ out=$(P4); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $k4" ] && [ "$(cat "$T/b4.pass")" = ran ] &&
     ok "P3: the next call is warm at the key and boots nothing (the control: an equal record)" ||
     no "P3 after the refresh: rc $rc '$out' pass [$(tr '\n' ' ' < "$T/b4.pass")]"
+# A COVERAGE BUILD's BOOT WRITES ITS PROFILE UNDER coverage/boots/<boot> (the 2a audit's finding 1; red before: nothing set it)
+B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n' > "$B3/CMakeCache.txt"; toy_cache "$B3/tests/.shadercache" 1 2
+printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/covapp"; chmod +x "$T/covapp"
+mkdir -p "$B3/engine/generated" "$B3/bin/media"; cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B3/engine/generated/"
+cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B3/bin/media/" 2>/dev/null
+DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
+printf '%s\n%s\n%s\n' "$("$W" "$B3" --key)" "k1 k2 " "sets none" > "$B3/tests/.shadercache.warm-key"
+DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
+[ "$(cat "$T/b3.prefix" 2>/dev/null)" = "$B3/coverage/boots/app-on" ] && [ -d "$B3/coverage/boots/app-on" ] &&
+    ok "a JAH_COVERAGE build's boot writes its profile under coverage/boots/<boot>" || no "the boot's GCOV_PREFIX: '$(cat "$T/b3.prefix" 2>/dev/null)'"
+fi
+if want short; then
+# THE SHORT HOLDS AND THE BOOT's OWN WALL (split from boots by proof, TE-WARM-C: the boots part ran 13.5 s against a CPU row's
+# 10-s budget, its 8.38-s price older than TE-WARM-WHY's B1-B4): what a warm-up's hold DECLARES - a predicted nothing-built boot's
+# short ticket (B1), the prediction proved by the engine's own count (B2-B4) - and what its line PRINTS (the boot's own wall, the
+# card's wait apart; the hold's label carries the key)
+b4_toy
 # A PREDICTED NOTHING-BUILT BOOT IS A SHORT HOLD (TE-WARM-WHY (B)): the app-off boot whose cache is warm at the key and whose
 # only why is the pass record declares its OWN nothing-built wall + 50 % - the tree's measured "app-off-nothing 40" -> --short
 # 60, whatever the cold boot's "app-off 400" says (2 x 400 + 10 would be long); with none measured, the box's price as the CALLER
 # gives it (JAH_WARM_NOTHING_S=50 -> .s75) - and with none given, LONG (the script names no box price: CODING_RULES § 7). The
 # card held: exit 75, the ticket kept as the reservation. (red before (B): long tickets; before the final read's fix: .s75 with
 # nothing given)
-PB4() {   # <walls line>...: the stale-record toy B4 again, the card held by this shell, a 10-s budget; prints the ticket's suffix
+PB4() {   # <walls line>...: the stale-record toy B4 again, the card held by this shell, a 5-s budget; prints the ticket's suffix
     printf 'pass=%s|media=m|cache=c\n' aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa > "$B4/tests/.shadercache/warm-pass.key"
     printf '%s\n' "$@" > "$B4/tests/.warm-walls"; rm -rf "$T/gpuP.lock.q"
     exec 8>"$T/gpuP.lock"; flock 8
-    env -u JAH_GPU_LOCK_HELD DISPLAY=:99 JAH_GPU_LOCK="$T/gpuP.lock" "$W" "$B4" --tests-dir "$B4/tests" "${F[@]}" --only app-off --budget 10 > /dev/null 2>&1
+    # (--budget 5: the first boot's least wait is a tenth of the budget in whole seconds - 0 here, so the held card answers at
+    # once instead of 1 s a call; the law read is the TICKET's suffix, which no budget enters)
+    env -u JAH_GPU_LOCK_HELD DISPLAY=:99 JAH_GPU_LOCK="$T/gpuP.lock" "$W" "$B4" --tests-dir "$B4/tests" "${F[@]}" --only app-off --budget 5 > /dev/null 2>&1
     echo "rc $? $(ls "$T/gpuP.lock.q" 2> /dev/null | grep -E '^[0-9]{12}' | tr '\n' ' ')"
     exec 8>&-
 }
@@ -349,16 +374,6 @@ bw=$(echo "$ln" | sed -n "s/.*the boot \([0-9]*\)\.\([0-9]\) s (the card's wait 
 grep -q "	warm-app-cache (app-off) at $key	" "$T/gpu4.lock.holds" &&
     ok "the warm-up's hold is logged with the key it warms: 'warm-app-cache (app-off) at $key'" ||
     no "the hold's label: $(cut -f6 "$T/gpu4.lock.holds" 2>/dev/null | sort -u | tr '\n' '|')"
-# A COVERAGE BUILD's BOOT WRITES ITS PROFILE UNDER coverage/boots/<boot> (the 2a audit's finding 1; red before: nothing set it)
-B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n' > "$B3/CMakeCache.txt"; toy_cache "$B3/tests/.shadercache" 1 2
-printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/covapp"; chmod +x "$T/covapp"
-mkdir -p "$B3/engine/generated" "$B3/bin/media"; cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B3/engine/generated/"
-cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B3/bin/media/" 2>/dev/null
-DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
-printf '%s\n%s\n%s\n' "$("$W" "$B3" --key)" "k1 k2 " "sets none" > "$B3/tests/.shadercache.warm-key"
-DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
-[ "$(cat "$T/b3.prefix" 2>/dev/null)" = "$B3/coverage/boots/app-on" ] && [ -d "$B3/coverage/boots/app-on" ] &&
-    ok "a JAH_COVERAGE build's boot writes its profile under coverage/boots/<boot>" || no "the boot's GCOV_PREFIX: '$(cat "$T/b3.prefix" 2>/dev/null)'"
 fi
 if want cold; then
 # THE COLD ROWS (cold-on, URGENT #119; SHIP-CUT-2 0b): a row declared COLD makes its own cache, so cold-on runs each listed

@@ -323,15 +323,16 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(source.timeout_cap PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
     jah_no_display(source.timeout_cap)
     # tooling.warm_app_cache / warm_cold_rows / warm_cold_calls / warm_key — scripts/warm-app-cache.sh on a scratch tests
-    # dir and toy trees, never the tree's shared cache (warm_app_cache.sh <part>; ONE SCRIPT, FIVE ROWS split by proof,
+    # dir and toy trees, never the tree's shared cache (warm_app_cache.sh <part>; ONE SCRIPT, SEVEN ROWS split by proof,
     # TEST-STREAMLINE-1: the whole ran 35.8 s quiet against a CPU row's 10 s): boots - warm at the build's key it answers at
     # once and boots nothing, no stamp / a moved key / a replaced or missing cache read cold, the fake boots, the budget and
-    # the bounded wait (URGENT #52, #106); cold - the cold-on runner's rows (#119, #155, the seeds); coldcall - a call's own
+    # the bounded wait (URGENT #52, #106); short - a predicted nothing-built boot's short hold proved by the engine's count, the
+    # boot's own printed wall, the hold's label (split from boots by proof, TE-WARM-C: 13.5 s); cold - the cold-on runner's rows (#119, #155, the seeds); coldcall - a call's own
     # bounds (the held card, the deadline, the logs); keys - the key's terms, no top-up, #126's nonce, the path-free stamps;
     # inherit - a fresh tree takes its parent's warm caches at an equal key (TEST-STREAMLINE-1 1a); store - THE BOX's WARM STORE
     # (URGENT #193's class, 2026-11-21): one warm per key per box - published by a tree warm at its key, taken by a verified copy
     # by another at the same key, a torn one refused, a second tree waiting on the key's lock (no card), unset = as before.
-    foreach(_wp IN ITEMS "warm_app_cache:boots" "warm_cold_rows:cold" "warm_cold_calls:coldcall" "warm_key:keys" "warm_inherit:inherit"
+    foreach(_wp IN ITEMS "warm_app_cache:boots" "warm_short:short" "warm_cold_rows:cold" "warm_cold_calls:coldcall" "warm_key:keys" "warm_inherit:inherit"
                          "warm_store:store")
         string(REPLACE ":" ";" _wp "${_wp}")
         list(GET _wp 0 _wrow)
@@ -919,7 +920,7 @@ jah_builds(none ROWS source.no_glsl_path source.fork_stamp source.no_raw_transac
     source.scene_time_one_meaning source.ray_views_cached source.card_report_layout source.ray_loops_bounded
     source.view_ray_origin)
 # the warm-up's key of this build (scripts/warm-app-cache.sh --key: the staged media and the engine's build id):
-jah_builds(JahshakaEngineMedia JahshakaEngineBuildId ROWS tooling.warm_app_cache tooling.warm_cold_rows
+jah_builds(JahshakaEngineMedia JahshakaEngineBuildId ROWS tooling.warm_app_cache tooling.warm_short tooling.warm_cold_rows
     tooling.warm_cold_calls tooling.warm_key tooling.warm_inherit tooling.warm_store source.display_guard)
 jah_builds(JahshakaEngineMedia ROWS source.compute_size_keys)                  # <build>/bin/media, the staged media
 jah_builds(JahStartupPassId ROWS source.startup_pass_closure)                  # <build>/startup-pass-files.txt
