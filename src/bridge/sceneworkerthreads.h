@@ -52,7 +52,7 @@
 
 // For kSceneMainThreadOnly — the boundary's spelling of "no worker pool"
 // (Tier::MainThread below). A POD header; it pulls in no Ogre and no Qt.
-#include "jahshaka/engine/Types.h"
+#include "jahshaka/engine/Config.h"
 // The ONE core budget the primary tier is part of (THREADING-1).
 #include "irisgl/core/threadbudget.h"
 

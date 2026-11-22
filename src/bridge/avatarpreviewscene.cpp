@@ -14,6 +14,10 @@
 #include "viewport/boneoverlay.h"
 #include "viewport/previewframing.h"
 #include "viewport/previeworbit.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Planar.h"
+#include "jahshaka/engine/PostFx.h"
 
 using namespace jahshaka::engine;
 

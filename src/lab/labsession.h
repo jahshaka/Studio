@@ -14,7 +14,6 @@
 #include "labscene.h"
 #include "labwindow.h"
 #include "envs/env.h"
-#include "jahshaka/engine/Types.h"
 
 #include <QString>
 

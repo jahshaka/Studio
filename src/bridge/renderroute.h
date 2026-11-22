@@ -4,7 +4,7 @@
 // THE ONE RENDER-SYSTEM DECISION (TEST-STREAMLINE-1 stage 3a): which render system this process boots, from what it
 // was launched as. A pure function of its inputs (no Qt GUI, no engine) so its table is a code test; EngineHost::start
 // asks it once, through the process's latch, and nothing revises the answer later in the run — Ogre::Root is a
-// singleton and its render system is chosen once (Types.h EngineConfig::headless: there is no mixed mode and no
+// singleton and its render system is chosen once (Config.h EngineConfig::headless: there is no mixed mode and no
 // upgrade from one to the other).
 //
 // The routes:

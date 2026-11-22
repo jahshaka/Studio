@@ -40,6 +40,8 @@
 //      because each change re-runs the capture and the convolution, and it is
 //      the frames AFTER a convolution that sample the cube.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/validationproof.h"
 

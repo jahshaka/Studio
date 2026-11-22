@@ -68,6 +68,8 @@
 #include <QImage>
 #include "irisgl/irisglfwd.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Pictures.h"
 #include "bridge/sceneworkerthreads.h"
 
 class SceneMirror;

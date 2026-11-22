@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "ui/controls/fonticons.h"
 #include "ui/ishellview.h"
 #include "viewport/enginerenderdriver.h"
+#include "jahshaka/engine/Vr.h"
 
 VrModule::VrModule() = default;
 VrModule::~VrModule() = default;

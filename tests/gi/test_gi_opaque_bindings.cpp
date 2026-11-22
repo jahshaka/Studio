@@ -32,6 +32,12 @@
 //       only for a view whose chain gathers (7-5: a live view's opaque pass bound the gather beside the world caches).
 // A fixture (the engine alone, one offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiGather.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/PhotonStatus.h"
 #include "../support/enginetesthelpers.h"
 

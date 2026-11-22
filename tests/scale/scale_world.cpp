@@ -43,6 +43,15 @@
 #include <random>
 #include "../support/enginetesthelpers.h"
 #include "../support/mirrorframe.h"
+#include "jahshaka/engine/Camera.h"
+#include "jahshaka/engine/Config.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/PostFx.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Stats.h"
 
 namespace scale {
 

@@ -58,7 +58,7 @@ For more information see the LICENSE file
 #include <memory>
 #include <vector>
 
-#include "jahshaka/engine/Types.h"
+#include "jahshaka/engine/Pictures.h"
 #include "viewport/recordingview.h"
 
 namespace jahshaka { namespace engine { class View; } }

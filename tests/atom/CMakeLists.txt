@@ -4,7 +4,7 @@ find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL)
 # ---------------------------------------------------------------------------
 # THE CLUSTER CUT'S CPU LAWS (ATOM-TESTS-BACK-1 stage 1; test_atom_cut_laws.cpp says each law): one verb a row, 0 frames,
 # no display, no card - the harness meshes (tests/support/clustermesh.h, proceduralshell.h; no sample model) baked by the
-# product's bake, handed across by the product's SceneMirror::toMeshData, cut by Types.h's clusterCut (the rule
+# product's bake, handed across by the product's SceneMirror::toMeshData, cut by Mesh.h's clusterCut (the rule
 # engine.lod_rule_parity holds the device to). The scenemirror and the engine library are the hand-off's, never a frame.
 add_executable(test_atom_cut_laws test_atom_cut_laws.cpp cluster_fixtures.cpp
     ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)

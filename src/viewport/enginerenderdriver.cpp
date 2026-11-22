@@ -16,6 +16,10 @@
 #include "services/livecompiles.h"
 #include "services/loadtimeline.h"
 #include "viewport/devicelossend.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Vr.h"
 
 namespace {
 /// The stage names the slow-frame line uses (OPEN_COVER_SPEC §7). The engine's

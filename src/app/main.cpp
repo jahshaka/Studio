@@ -72,6 +72,7 @@ For more information see the LICENSE file
 #include "services/testtier.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
 #include "services/sessionheader.h"
+#include "jahshaka/engine/Published.h"
 
 
 // Hints that a dedicated GPU should be used whenever possible

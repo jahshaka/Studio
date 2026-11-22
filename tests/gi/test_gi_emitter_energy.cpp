@@ -15,6 +15,11 @@
 // RED before the fix: both arms stored 16 (L / E 0.2531 and 0.0253). A fixture (the engine alone, one small offscreen
 // view; 10 s budget, so two arms). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

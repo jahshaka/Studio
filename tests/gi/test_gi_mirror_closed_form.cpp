@@ -29,6 +29,13 @@
 // which is real in the store's LEVEL (the all-matte room 1.5275 -> 1.5865 under that arm) and cancels in the ratio.
 // A fixture (the engine alone, one 128 x 128 offscreen view; 10 s budget). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiCards.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

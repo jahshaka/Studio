@@ -23,6 +23,7 @@
 #include "irisgl/core/math/vec.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Monitor.h"
 #include "irisgl/document/scenegraph/worldmodes.h"
 
 #include <QString>

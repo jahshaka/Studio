@@ -2,7 +2,7 @@
 """source.scene_time_one_meaning - A SCENE's TIME HAS ONE MEANING AND ONE SOURCE (ONE-FRAME-1 stage 1, V2 plan 2.1).
 
 A scene's time is its DOCUMENT's steps: its mirror stamps the document clock's lifetime serial on the scene's part, the
-engine advances the scene by the steps the serial moved, once (Types.h FrameInputScene::stepSerial). Ogre's frame clock
+engine advances the scene by the steps the serial moved, once (FrameInput.h FrameInputScene::stepSerial). Ogre's frame clock
 (ControllerManager's one process-wide frame delay) is set every frame to the scene time of the frame's first presented
 view, for a stock Ogre controller only: NOTHING OF OURS READS IT FOR SCENE TIME, because another scene's view may have
 set it. The law, held on the source (the behaviour is frame.clock_once / frame.two_scenes / frame.particle_scale and

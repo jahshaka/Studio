@@ -43,6 +43,10 @@
 //
 // JAH_DISTORTION_DUMP=1 writes a .ppm per measured frame beside the binary.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

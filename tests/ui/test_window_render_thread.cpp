@@ -26,6 +26,7 @@
 #include <thread>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Monitor.h"
 #include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;

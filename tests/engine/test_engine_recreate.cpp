@@ -8,6 +8,9 @@
 //
 // Separate executable on purpose: the main suite shares one Engine per process.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 #include <cmath>
 #include <cstdio>

@@ -8,7 +8,7 @@
 // the order and the calls of meshbake.cpp bakeStages), expect(view) -> the closed form at a camera,
 // describe() -> the catalogue's text (`jahlab --env-list`).
 //
-// THE ONE-PIXEL RULE, as the cut states it (Types.h clusterCut; JahCullCut_cs.glsl jahClusterGroupAllowed): a view
+// THE ONE-PIXEL RULE, as the cut states it (Mesh.h clusterCut; JahCullCut_cs.glsl jahClusterGroupAllowed): a view
 // affords a group the error `allowed = tolerance x (distance / pixelScale)` metres, where pixelScale = H / (2 tan(fovY/2))
 // pixels per metre at one metre (1303.7 at 1080 rows and the free camera's 45 degrees) and tolerance = the World Mode's
 // atomPixelError (Epic 1, High 2, Medium 3, Low 4). A piece of geometry the bake can REMOVE at error e is therefore

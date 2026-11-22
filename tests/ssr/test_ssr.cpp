@@ -121,6 +121,12 @@
 //                    absolute measurement and has no business failing a build
 //                    on somebody else's GPU.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

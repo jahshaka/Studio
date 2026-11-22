@@ -13,8 +13,19 @@
 #include "irisgl/document/scenegraph/worldmodes.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Atom.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/GiCards.h"
+#include "jahshaka/engine/GiGather.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
+#include "jahshaka/engine/Stats.h"
 #include "jahshaka/engine/Stillness.h"
-#include "jahshaka/engine/Types.h"
 
 #include <QDir>
 #include <QFile>
@@ -1597,7 +1608,7 @@ bool Session::lamp(const Command &c)
 
 // THE ROUTES VERB (URGENT #146 for the lab; PHOTON-7-9A): the declaration, then judged after each frame drawn until it
 // matches, against that frame's own PUBLISHED record (a host's door, never the fixtures': R11): the view's chain as built
-// (PublishedEngineFrame::ViewFrames' routes - enginetest::requireRoutes holds them equal to the inspect door's on every
+// (ViewFrames' routes - enginetest::requireRoutes holds them equal to the inspect door's on every
 // frame a declaring fixture judges), the scene's products (GiStatus) and the pause as this host set it (the document's GI
 // update budget, what the mirror pushes).
 bool Session::routes(const Command &c)
@@ -1614,7 +1625,7 @@ bool Session::routes(const Command &c)
 void Session::judgeDeclaredRoutes()
 {
     RouteSet a;
-    const PublishedEngineFrame::ViewFrames row = mView->published();
+    const ViewFrames row = mView->published();
     a.gather = row.routeGather; a.integrate = row.routeIntegrate; a.reflection = row.routeReflect;
     const GiStatus gs = mScene->published().gi;
     a.field = gs.ifdBound;

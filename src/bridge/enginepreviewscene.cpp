@@ -8,6 +8,10 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "bridge/offscreenrenderscope.h"
 #include "bridge/stableoffscreenrender.h"
+#include "jahshaka/engine/Camera.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Pictures.h"
 
 using namespace jahshaka::engine;
 

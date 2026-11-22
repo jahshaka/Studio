@@ -48,6 +48,9 @@
 // an SSR defect (lane SSR-1 falsified that: a resolve forced to zero confidence
 // flickers identically).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

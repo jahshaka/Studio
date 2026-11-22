@@ -38,6 +38,8 @@ For more information see the LICENSE file
 #include <unistd.h>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
 #include "services/forcedexit.h"
 #include "services/jahlog.h"
 

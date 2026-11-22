@@ -51,7 +51,7 @@ For more information see the LICENSE file
 #include "services/meshbakestore.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/vertexbuffer.h"
-#include "jahshaka/engine/Types.h"
+#include "jahshaka/engine/Mesh.h"
 #include "data/constants.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/core/colorjson.h"

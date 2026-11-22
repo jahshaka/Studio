@@ -3,6 +3,8 @@
 // records; every record submitted after the render thread's n-th hand-over is applied by the frame of hand-over
 // n + 1 (PublishedEngineFrame::handOver) — the gesture is never two frames late. A law in frames: 120 records.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>

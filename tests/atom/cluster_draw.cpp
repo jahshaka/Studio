@@ -19,6 +19,8 @@
 
 #include <algorithm>
 #include <cstring>
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Mesh.h"
 
 namespace clusterdraw {
 

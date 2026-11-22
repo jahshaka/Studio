@@ -60,6 +60,7 @@
 #include "irisgl/import/importflags.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Mesh.h"
 #include "../support/enginetesthelpers.h"
 
 #include "bridge/enginethumbnailrenderer.h"

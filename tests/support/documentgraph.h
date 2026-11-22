@@ -15,7 +15,7 @@
 // render system moved.)
 //
 // WHAT IT CANNOT DO: render. createView() and createOffscreenView() both refuse
-// with a reason (Types.h EngineConfig::headless). A suite that wants pixels is
+// with a reason (Config.h EngineConfig::headless). A suite that wants pixels is
 // not a document suite — it boots the real engine like every other engine suite.
 //
 // LIFETIME: declare it FIRST in main(), so it is destroyed LAST.

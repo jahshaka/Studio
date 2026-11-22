@@ -11,6 +11,10 @@
 //     each cascade; the twenty of TIES count nothing.
 // A fixture (the engine alone, one offscreen view, a two-cascade chain: 128 cells at 5 m, 64 at 20 m).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

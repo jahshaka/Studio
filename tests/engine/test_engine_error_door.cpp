@@ -7,6 +7,7 @@
 // the SNAPSHOT (PublishedEngineFrame::refusals), and the host's door never carries the frame's refusal text — and
 // under TSan, zero reports.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 #include <cstdio>
 #include <string>

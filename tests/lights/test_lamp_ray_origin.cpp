@@ -30,6 +30,9 @@
 // thinner than that lying on the receiver casts no Forward+ lamp shadow (DOCS/traps/engine/scene-lights-and-shadows.md).
 // Plus the route: the scene traces on this machine (rayTracingResolved) in the ray arms.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

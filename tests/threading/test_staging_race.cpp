@@ -52,6 +52,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Stats.h"
 #include "../support/enginetesthelpers.h"
 
 using namespace jahshaka::engine;

@@ -18,6 +18,7 @@
 #include <cstdio>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/FrameInput.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "enginetesthelpers.h"
 

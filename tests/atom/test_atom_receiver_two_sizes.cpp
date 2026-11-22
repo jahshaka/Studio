@@ -12,6 +12,7 @@
 //       group count in its properties, and the two sizes give two values - two permutations.
 // Frames, never time: 12 frames at each size and arm (48 in all). The split off on a device is a stated skip.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Atom.h"
 #include "../support/enginetesthelpers.h"
 
 #include <OgreHlmsCompute.h>

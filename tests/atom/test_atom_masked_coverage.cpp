@@ -35,6 +35,11 @@
 //       diagonal pixels whose centres lie under it.
 // FRAMES, NEVER TIME: every reading follows counted frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Atom.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include "AlphaMasks.h"

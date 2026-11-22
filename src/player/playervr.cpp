@@ -17,6 +17,8 @@ For more information see the LICENSE file
 #include "player/playermousecontroller.h"
 #include "services/vrworld.h"
 #include "viewport/cameraspeed.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Vr.h"
 
 using namespace jahshaka::engine;
 

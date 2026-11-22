@@ -14,6 +14,7 @@ For more information see the LICENSE file
 
 #include "services/jahlog.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Published.h"
 
 EngineErrorPump &EngineErrorPump::instance()
 {

@@ -55,6 +55,8 @@
 #include <vector>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include "irisgl/core/math/mat4.h"

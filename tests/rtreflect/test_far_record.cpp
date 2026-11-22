@@ -17,6 +17,12 @@
 // 32 for 42 rows; the near-flagged record, 486 - nine a row).
 // Frames: 1 + 40 + 1 + 24 = 66.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

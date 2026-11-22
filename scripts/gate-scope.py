@@ -259,6 +259,9 @@ OGRE_SCENE_FUNCTIONS = {
     "query": ["engine", "picking"],
     # THE ONE ASYNC-SHADER RULE (ORPHAN-REDS-1): the delta commit's shader (gi) and the ray tier's pipeline builds (gi, rtreflect)
     "compilesInBackground": ["shadercache", "threading", "gi", "rtreflect"],
+    # ENGINE-HEADERS-1 call 8: Scene's default verb bodies OgreScene does not override, moved out of line into
+    # OgreScene.cpp - each by FUNCTION_NAME_KEYWORDS' first match
+    "atomDrawOn": ["atom", "engine", "scale"], "setGatherTuning": ["gi", "rtreflect"], "setPhotonView": ["gi", "rtreflect"],
 }
 OGRE_VIEW_FUNCTIONS = {
     **{f: _CORE for f in ("OgreView", "~OgreView", "setScene", "detachScene", "attachWorkspace", "detachWorkspace",

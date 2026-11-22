@@ -37,6 +37,17 @@
 //   6. THE TIER RULE. With the view's SSR row OFF there is no trace at all,
 //      whatever the machine can do — the trace rides the SSR chain's prepass.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiCards.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
+#include "jahshaka/engine/Sky.h"
+#include "jahshaka/engine/VoxelReader.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

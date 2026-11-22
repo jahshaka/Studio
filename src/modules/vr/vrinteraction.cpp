@@ -35,6 +35,8 @@ For more information see the LICENSE file
 #include "viewport/gizmoray.h"
 #include "viewport/scenepicker.h"
 #include "viewport/snapsettings.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Vr.h"
 
 using namespace jahshaka::engine;
 

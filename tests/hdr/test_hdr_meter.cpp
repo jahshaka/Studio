@@ -45,6 +45,7 @@
 //      cumulative walk over two bins, done below in C++). The shader must agree
 //      with it. That is a hand-computed expectation, not a regression pin.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

@@ -10,6 +10,7 @@
 //       above the key's transparency bit) - created first, its half-alpha green still mixes over the blue;
 //   (4) the verb refuses by name: an unknown node, an order past 6, a node with no on-top part, a blended part.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>

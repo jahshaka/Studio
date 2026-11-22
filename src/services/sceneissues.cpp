@@ -38,6 +38,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "bridge/enginehost.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Vr.h"
 
 namespace {
 

@@ -104,7 +104,7 @@ RAW_VK_CEILINGS = {
 RAW_VK_LOWER = 'D7: a new compute pass is an Ogre compute job, never raw Vulkan'
 
 RW_RG = re.compile(r'\blayout\s*\(([^)]*)\)\s*((?:\w+\s+)*?)[iu]?image\w+\s+\w+')   # the format anywhere in it
-VR_POLICY_FILE = 'include/jahshaka/engine/Types.h'
+VR_POLICY_FILE = 'include/jahshaka/engine/PostFx.h'
 VR_POLICY = re.compile(r'\binline\s+void\s+applyVrViewPolicy\s*\([^)]*\)\s*\{')
 ASSIGN = re.compile(r'\b\w+\s*\.\s*\w+\s*=(?!=)')
 

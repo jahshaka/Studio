@@ -23,6 +23,12 @@
 //       Measured: 196,608 texels, every one exactly E.
 // A fixture (the engine alone, one 128 x 128 offscreen view; 10 s budget). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiCards.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

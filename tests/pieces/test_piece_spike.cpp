@@ -20,6 +20,8 @@
 //
 // Links JahshakaEngine only, like every other engine suite.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

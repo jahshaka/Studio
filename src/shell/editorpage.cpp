@@ -48,6 +48,8 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 #include "viewport/headlesseditorviewport.h"
 #include "viewport/ieditorviewport.h"
+#include "jahshaka/engine/Overlay.h"
+#include "jahshaka/engine/Published.h"
 
 EditorPage::EditorPage(QObject *parent) : QObject(parent)
 {

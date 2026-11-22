@@ -44,6 +44,20 @@
 #include <set>
 #include <string>
 #include <vector>
+#include "jahshaka/engine/Atom.h"
+#include "jahshaka/engine/Culling.h"
+#include "jahshaka/engine/GiCards.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/PostFx.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
+#include "jahshaka/engine/Stats.h"
 
 using namespace scale;
 
@@ -1061,12 +1075,12 @@ static IdRead readIdPass(Env &env, int frames)
 }
 
 /// The LEVEL RULE's answer for one piece at the view's eye: the cluster cut the DAG
-/// gives at the id pass's own tolerance — Types.h clusterCut, the GLSL twin's arithmetic.
+/// gives at the id pass's own tolerance — Mesh.h clusterCut, the GLSL twin's arithmetic.
 /// THE TOLERANCE IS THE ENGINE'S, READ BACK, never a literal (ATOM-3 stage 1): the id pass
 /// cuts at Scene::pixelTolerance() x lodBias() (OgreAtomIdPass.cpp, req.pixelTolerance), the
 /// World Mode's atomPixelError row the mirror pushed — geometryDoc's High is 2 px, so the
 /// kLodBudgetPixels (1 px) reference drew ~1.8x the id pass's cut (0.56x at 1.3 R, 0.58x at 5 R).
-/// Types.h clusterCut over the model's pieces at the view's eye. `root`: an unbounded
+/// Mesh.h clusterCut over the model's pieces at the view's eye. `root`: an unbounded
 /// tolerance and no frustum — the DAG's ROOT, the coarsest cut the DAG can draw.
 /// The cut's view of one instance (uniform scale k at `pos`) through the view's own camera and the scene's tolerance - the
 /// cut job's inputs (fillCullView). `root`: the tolerance infinite, no frustum (the root cut).
@@ -1083,7 +1097,7 @@ static ClusterCutView cutView(Env &env, const GpuCullRequest &req, const iris::V
     v.projScaleY = req.projScaleY;
     v.viewportHeight = req.viewportHeight;
     // ...and the view's frustum, cluster by cluster, as the cut job tests it
-    // (SPEED-VR-MEM, Types.h clusterInFrustum).
+    // (SPEED-VR-MEM, Mesh.h clusterInFrustum).
     v.cullPlanes = !root;
     for (int i = 0; i < 6; ++i)
         for (int c = 0; c < 4; ++c) v.planes[i][c] = req.planes[i * 4 + c];
@@ -1143,7 +1157,7 @@ static double emptyTopDistance(Env &env, const QList<iris::MeshPtr> &pieces, con
 // until then the id pass drew one LEVEL per instance, and inside the bounds d = 0 forced
 // level 0). Anchor: irisgl/engine/media/Hlms/Jahshaka/JahCullCut_cs.glsl (the cull's cut
 // job). Number: triangles the id pass draws for the large asset at three camera distances
-// (inside its bounds, 5 radii, 30 radii) against Types.h clusterCut at the same tolerance
+// (inside its bounds, 5 radii, 30 radii) against Mesh.h clusterCut at the same tolerance
 // — the acceptance is within 1.2x (the GPU's count is the stats ring's, a few frames
 // late, so the reading waits for the still pose). Also the owed row: the id pass's and
 // the decode's GPU ms on the asset.
@@ -1167,7 +1181,7 @@ static int clusterCutMain()
     armMonitor(env);
     const struct { const char *name; float d; } poses[] = {
         { "inside bounds (1.3 R)", 1.3f * radius }, { "5 R", 5.0f * radius }, { "30 R", 30.0f * radius } };
-    // TWO ARMS PER POSE, ONE PROCESS (V2-P0A fix round): the reference (Types.h clusterCut)
+    // TWO ARMS PER POSE, ONE PROCESS (V2-P0A fix round): the reference (Mesh.h clusterCut)
     // applies the frustum and NO occlusion, so it is compared with the id pass's occlusion
     // OFF (frustum-only, one list); with it ON (the shipped two-pass form) the early and
     // late lists' total must stay within the cut (occlusion only ever removes what is
@@ -1199,7 +1213,7 @@ static int clusterCutMain()
         target("W3", twoPass, "tris", whatOn.c_str());
         // THE BAR THIS LANE CLOSES W3 WITH (ATOM-CLUSTER-CUT; the D1 convention: the bar
         // comes with the part that closes the wall): the id pass draws the cut, within
-        // 1.2x of Types.h clusterCut at the same tolerance, either way — frustum against
+        // 1.2x of Mesh.h clusterCut at the same tolerance, either way — frustum against
         // frustum (occlusion off).
         REQUIRE(cut > 0 && r.tris <= 1.2 * double(cut) && r.tris * 1.2 >= double(cut),
                 "W3 %s: with occlusion off the id pass draws %.0f tris, within 1.2x of the cut's %zu", p.name, r.tris, cut);
@@ -1269,7 +1283,7 @@ static int cutCostMain()
         const IdRead ir = readIdPass(env, 20);
         GpuCullRequest req;
         if (!env.engine->fillCullView(env.view, req)) continue;
-        req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h)
+        req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, GpuSceneRecords.h)
         req.pixelTolerance = kLodBudgetPixels * jahshaka::engine::inspect::scene(env.scene)->lodBias();
         req.mode = 3u;
         GpuCullResult r;
@@ -1325,7 +1339,7 @@ static int cutCostMain()
 //   (b) THE EMPTY TOP IS REACHED - the coarsest end the DAG has (D8, irisgl/import/atomdag/build.cpp: every triangle
 //       mesh's chain closes in an EMPTY TOP, a group that produces nothing, its error max(the largest stored error it
 //       closes over, the piece's level-0 box diagonal)). THE DISTANCE, DERIVED FROM THE RULE: a group g is affordable
-//       when error_g < t F_g / s (Types.h clusterGroupAffordable, allowedWorldError), F_g = 2 max(0, |c_g - e| - r_g s)
+//       when error_g < t F_g / s (Mesh.h clusterGroupAffordable, allowedWorldError), F_g = 2 max(0, |c_g - e| - r_g s)
 //       / (P11 H) (clusterGroupFootprint), s = the instance's scale, t = the scene's tolerance x the LOD bias; so the top
 //       is afforded once |c_top - e| > r_top s + error_top s P11 H / (2 t). With |c_top - e| >= D - |c_top - pos| for an
 //       eye at D from the instance's position, every piece's top is afforded at
@@ -1697,7 +1711,7 @@ static int occlusionMain()
         HzbStatus hz;
         GpuCullRequest req;
         if (env.engine->hzbStatus(env.view, hz) && hz.primed && env.engine->fillCullView(env.view, req)) {
-            req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, Types.h): the id pass's
+            req.flagsRequired = 1u | 512u;   // visible | ATOM (GpuSceneEntry::flags, GpuSceneRecords.h): the id pass's
             req.pixelTolerance = kLodBudgetPixels * jahshaka::engine::inspect::scene(env.scene)->lodBias();
             req.mode = 3u;
             req.hzbLevels = hz.levels;

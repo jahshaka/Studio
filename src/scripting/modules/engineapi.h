@@ -15,7 +15,7 @@ For more information see the LICENSE file
 // engine.* — the engine's MEASUREMENT ARMS (lane TEST-1, the perf audit's A2).
 //
 // An arm is a named switch the engine latches once per frame, registered with its
-// default (Engine::setArm / Engine::arms, irisgl Types.h ArmInfo). It replaced the
+// default (Engine::setArm / Engine::arms, irisgl FrameInput.h ArmInfo). It replaced the
 // measuring doors that were environment reads inside per-frame engine code, so two
 // arms of an A/B are two verb calls in ONE process — what scripts/perf-ab.py drives.
 // Nothing in the product sets an arm: every default is the shipped picture.

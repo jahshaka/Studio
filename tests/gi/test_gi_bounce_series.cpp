@@ -91,6 +91,11 @@
 // ONE TIER A ROW (gi.bounce_series.<tier>, the argument; none = every tier). A fixture (the engine alone, one small
 // offscreen view; rays, the gather, the field and the cards off). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/lawline.h"
 

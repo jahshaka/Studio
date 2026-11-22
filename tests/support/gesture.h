@@ -4,6 +4,7 @@
 // drag (the nodes the hand moves) and ends it with an empty one — exactly what the editor viewport sends.
 #include <vector>
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/FrameInput.h"
 
 namespace enginetest {
 

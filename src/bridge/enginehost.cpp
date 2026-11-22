@@ -22,6 +22,8 @@
 #include <QFileInfo>
 #include <QStandardPaths>
 #include <cstring>
+#include "jahshaka/engine/Config.h"
+#include "jahshaka/engine/Ids.h"
 
 namespace {
 bool gCliNoRayQuery = false;

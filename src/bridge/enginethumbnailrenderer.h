@@ -44,6 +44,7 @@
 #include <QString>
 #include "irisgl/irisglfwd.h"
 #include "bridge/enginepreviewscene.h"   // brings jahshaka/engine/Engine.h
+#include "jahshaka/engine/Math.h"
 
 class SceneMirror;
 namespace iris { struct MeshMaterialData; }

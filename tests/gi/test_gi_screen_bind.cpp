@@ -44,6 +44,12 @@
 // A fixture (the engine alone, offscreen views). Counted in frames.
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiGather.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 #include <algorithm>
 #include <cmath>

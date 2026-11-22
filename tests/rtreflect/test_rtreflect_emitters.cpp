@@ -15,6 +15,10 @@
 // FIXTURE: High, rays on, 256 x 144, an offscreen live view; frames, never time.
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

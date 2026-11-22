@@ -23,6 +23,8 @@ For more information see the LICENSE file
 #include <QDateTime>
 #include <QFile>
 #include <QTimer>
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Stats.h"
 
 namespace {
 

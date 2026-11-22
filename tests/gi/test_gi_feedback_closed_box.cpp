@@ -74,6 +74,13 @@
 // GI live at the shipped default updateBudget 1 (the GI state), the rays on; the cards off but in the room part, the
 // field off but in the lamp and room parts.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/lawline.h"
 

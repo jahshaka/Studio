@@ -69,6 +69,13 @@
 // it pins, so its numbers stay about them. The gather has its own suites
 // (gi.gather_*).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/GiVoxels.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/VoxelReader.h"
 #include "../support/enginetesthelpers.h"
 #include "../support/voxel_lab.h"
 #include "../support/voxeldump.h"

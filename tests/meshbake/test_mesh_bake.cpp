@@ -92,7 +92,6 @@
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/assets/mesh.h"
-#include "jahshaka/engine/Types.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/assets/vertexbuffer.h"

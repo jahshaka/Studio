@@ -6,7 +6,7 @@
 // nothing, so the picture with the job ON equals the picture with it OFF there, pixel for pixel. The pixel shows the
 // drawn LOD (a stock item's level) while the ray traces each mesh's LEVEL 0 (ONE RAY LEVEL PER MESH): on a CONVEX
 // surface the drawn facets lie INSIDE level 0, so the origin leaves along the GEOMETRIC normal by the ONE ORIGIN LAW
-// (jah_ray_origin.glsl, Types.h rayOriginDrawnFootprints): the float bound + kLevelDriftOverBound x the tolerance x
+// (jah_ray_origin.glsl, Mesh.h rayOriginDrawnFootprints): the float bound + kLevelDriftOverBound x the tolerance x
 // one footprint at the point's Euclidean distance (over 1 - the view's band; this offscreen view has none).
 // WHY THE DRIFT RATIO, AND WHAT THIS ROW PLACES BETWEEN THE TWO (READ_B F5): the LOD rule spends the bake's STORED
 // error, which bounds each step's deviation from its INPUT, and a level's drift from level 0 may reach 2x it (the
@@ -23,6 +23,12 @@
 // centimetres clears.
 // Frames: 1 + 4 x 16 = 65.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiGather.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

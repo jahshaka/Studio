@@ -16,6 +16,8 @@ For more information see the LICENSE file
 #include <cmath>
 
 #include "irisgl/core/math/quat.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Math.h"
 
 using namespace jahshaka::engine;
 

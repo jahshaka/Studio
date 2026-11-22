@@ -44,6 +44,16 @@
 #include <cstring>
 #include <string>
 #include <vector>
+#include "jahshaka/engine/Atom.h"
+#include "jahshaka/engine/GiModes.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Lights.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/PostFx.h"
 
 using namespace jahshaka::engine;
 using jahshaka::engine::detail::AtomId;

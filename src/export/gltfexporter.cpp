@@ -530,7 +530,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
         // Glass (3) and Refractive (6) — KHR_materials_transmission: fade
         // diffuse, keep specular, the same semantics as the engine's
         // PbrAlphaMode::Glass (audit §1). Refractive is Glass that ALSO bends
-        // what is behind it (Types.h PbrAlphaMode::Refractive), which in glTF
+        // what is behind it (Materials.h PbrAlphaMode::Refractive), which in glTF
         // is exactly transmission + an index of refraction — so mode 6 adds
         // KHR_materials_ior on top. Modes 3 and 6 must never fall through to
         // the default arm: OPAQUE glass was the bug this case exists to fix

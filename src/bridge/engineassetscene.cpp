@@ -24,6 +24,9 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/PostFx.h"
 
 using namespace jahshaka::engine;
 

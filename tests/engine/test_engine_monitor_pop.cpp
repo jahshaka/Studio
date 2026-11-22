@@ -13,6 +13,10 @@
 // frames keep drawing — the copies' cross-thread hand-off, on the fixture's OWN cold cache (a warm one has nothing to
 // save). Under TSan, zero reports.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
+#include "jahshaka/engine/Snapshot.h"
 #include "../support/enginetesthelpers.h"
 #include <cstdio>
 #include <filesystem>

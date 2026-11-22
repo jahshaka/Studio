@@ -18,6 +18,7 @@
 //         |S - ref| and the report its code test;
 //   (iii) A RE-MARCH OF AN UNCHANGED TEXEL REPORTS NOTHING - the texel itself, and a receiver whose gather read it.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiCards.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

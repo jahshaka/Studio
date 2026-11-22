@@ -41,6 +41,8 @@
 #include <vector>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Vr.h"
 
 class OffscreenRenderScope
 {

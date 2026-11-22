@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include "viewport/gizmomode.h"
 #include "viewport/ieditorviewport.h"
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Published.h"
 #include "services/loadingcover.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/simulationclock.h"

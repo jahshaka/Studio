@@ -36,7 +36,8 @@
 #include "irisgl/document/scenegraph/scene.h"
 
 #include "irisgl/document/scenegraph/worldmodes.h"
-#include "jahshaka/engine/Types.h"
+#include "jahshaka/engine/GiModes.h"
+#include "jahshaka/engine/GiParams.h"
 
 #include "../support/documentgraph.h"
 

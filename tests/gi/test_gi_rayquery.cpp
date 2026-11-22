@@ -67,6 +67,10 @@
 // Its own binary like every GI suite: an engine per process (Ogre::Root is a
 // singleton).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/RayQuery.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

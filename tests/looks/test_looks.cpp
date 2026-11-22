@@ -40,6 +40,9 @@
 // JAH_LOOKS_DUMP=1 writes a .ppm per measured frame beside the binary. A number
 // in a log is not pixel evidence.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

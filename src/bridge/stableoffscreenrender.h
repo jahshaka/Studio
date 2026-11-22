@@ -32,6 +32,10 @@
 #include <thread>
 
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
 #include "services/framemonitor.h"
 
 /// Renders at least `minFrames` frames, then keeps rendering while the engine's

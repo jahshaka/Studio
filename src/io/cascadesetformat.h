@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include "irisgl/core/math/vec.h"
-#include "jahshaka/engine/Types.h"
+#include "jahshaka/engine/GiModes.h"
 
 namespace sceneformat {
 

@@ -12,6 +12,10 @@
 // rises to the wall too). Each arm's floor must reflect the wall: green over red and blue, at least half the control's.
 // Frames: 1 + 2 x 30 = 61.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <algorithm>

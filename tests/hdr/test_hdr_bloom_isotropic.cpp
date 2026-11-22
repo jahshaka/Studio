@@ -31,6 +31,9 @@
 //   C  NO BAND: at both ends of the hot spot's row the bloomed picture equals
 //      the bloom-off picture within one code (the base: +34).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/enginetesthelpers.h"
 

@@ -18,6 +18,10 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/input/inputmap.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/Math.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Vr.h"
 
 void EnginePlayerView::viewAboutToBeDestroyed()
 {

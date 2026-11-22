@@ -11,7 +11,7 @@
 
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/import/meshbake.h"
-#include "jahshaka/engine/Types.h"
+#include "jahshaka/engine/Mesh.h"
 #include "../support/proceduralshell.h"
 
 #include <string>

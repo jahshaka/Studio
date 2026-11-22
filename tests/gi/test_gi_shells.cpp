@@ -13,6 +13,9 @@
 //
 // A fixture (the engine alone, one offscreen view, the four tiers built in turn), a few seconds.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GiStatus.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>

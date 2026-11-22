@@ -5,6 +5,7 @@
 // an engine message) ends at the ENGINE's value; the other order ends at the scene's. Before this the engine's
 // stream always drained first and the scene's won both ways. A law in values; 2 x 2 frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Published.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>

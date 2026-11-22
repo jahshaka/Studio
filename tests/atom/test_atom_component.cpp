@@ -21,6 +21,8 @@
 // source.atom_no_registries (the registries this replaces, 14 process-wide variables); this
 // row guards the behaviour the component must keep.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Atom.h"
+#include "jahshaka/engine/Monitor.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cstdio>

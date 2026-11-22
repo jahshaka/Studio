@@ -12,7 +12,7 @@
 //     with the NULL system's own line; the factory's refusal (viewRefusal) names the NULL render system in one line.
 //     The product's native-failure fallback (no declaration) keeps asking for its native window, untouched.
 //
-// LAW: one render system per process, decided once (enginehost.cpp; Types.h EngineConfig::headless), and the host
+// LAW: one render system per process, decided once (enginehost.cpp; Config.h EngineConfig::headless), and the host
 // never degrades silently - every refusal is one named line.
 #include <QApplication>
 #include <QByteArray>

@@ -23,6 +23,14 @@
 // ulp apart) and the table would miss it — a decal riding a moving cube (the GI walk reads its
 // box there) and the view's camera socketed on a moving cube (the plan reads its position there).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/GpuSceneRecords.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Planar.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Skeleton.h"
 #include "jahshaka/engine/GpuSubstrate.h"
 #include "jahshaka/engine/EngineInspect.h"
 #include "../support/enginetesthelpers.h"

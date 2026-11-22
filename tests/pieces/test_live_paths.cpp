@@ -20,6 +20,9 @@
 // material leaves the Atom route by design, and the comparison must be route
 // against route, not decode against stock.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Mesh.h"
+#include "jahshaka/engine/Pictures.h"
 #include "../support/enginetesthelpers.h"
 
 #include <cmath>
