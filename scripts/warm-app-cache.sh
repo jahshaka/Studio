@@ -396,13 +396,16 @@ compute_run() {   # RUN and why: the boots this call asked for that are cold, an
 # data: the lead's tools set it; this repo names no box path, CODING_RULES § 7); unset, nothing here runs and the tree warms
 # itself as before. <store>/<KEY>/{app,engine}/ holds a cache warm at KEY (cache/, its warm-key stamp, and the
 # driver-key stamp of its -on boot). Under the key's lock (<store>/<KEY>/.key.lock - a second tree at the key WAITS there,
-# never on the card): a cold -off cache is TAKEN by a verified copy (its manifest checked by the engine's own rule,
-# tests/support/shadercache_check.py; copied to a sibling and renamed in under the tree's own lock, as --inherit takes - never
-# linked: the store is another tree's and another filesystem's), its stamps with it, then JUDGED AGAIN here like any other
+# never on the card): a cold -off cache is TAKEN verified (its manifest checked by the engine's own rule,
+# tests/support/shadercache_check.py) BY HARD LINKS into a sibling, renamed in under the tree's own lock - NO COPY: the engine
+# writes a cache file only by rename (cachefile::writeAtomic), never in place, and a promotion renames a new directory over the
+# old, so a link is never written through; THE STORE LIVES ON THE TREES' FILESYSTEM (the owner, 2026-11-22: the box's
+# local/warm-store on the NVMe - a link cannot cross a filesystem; a store on another is refused by name, never copied), its
+# stamps with it, then JUDGED AGAIN here like any other
 # (a stamp at another sets digest still reads cold and boots). An -on boot's stamp is taken only
 # for the same exe NAME: the driver keeps its per-exe cache in the one user home every tree's run shares (gpu-exclusive.sh
-# exports it; HARNESS-1 measured it keyed on the name). After the boots, a cache warm at KEY is PUBLISHED (a copy renamed in;
-# the newer replaces). THE COLD ROWS ARE NOT IN THE STORE (this first cut): their primes stay each tree's own cold-on boot.
+# exports it; HARNESS-1 measured it keyed on the name). After the boots, a cache warm at KEY is PUBLISHED (hard links renamed
+# in; the newer replaces). THE COLD ROWS ARE NOT IN THE STORE (this first cut): their primes stay each tree's own cold-on boot.
 # THE STORE DEFENDS ITSELF (URGENT #193's own red, 2026-11-21 16:01: toy rows run under a lead tool INHERITED the real store and
 # published 10-byte toy caches at the REAL key - they drive this script on the real build dir, so they compute its real key, with
 # fake apps and a scratch tests dir). A call that overrides --app, --lab, --tests-dir or --cold-rows - the shape of every toy and
@@ -436,7 +439,9 @@ store_take() {   # the cold -off caches (and their -on stamps) this call asked f
         python3 -I "$SRC/tests/support/shadercache_check.py" "$S/cache" > /dev/null 2>&1 ||
             { echo "warm-app-cache: the store's $c cache at $KEY fails its own manifest - not taken"; continue; }
         nxt="$sh.store.$$"; rm -rf "$nxt"
-        cp -a "$S/cache" "$nxt" || { rm -rf "$nxt"; continue; }
+        cp -al "$S/cache" "$nxt" 2>/dev/null && rm -f "$nxt/cache.lock" ||
+            { echo "warm-app-cache: the store's $c cache NOT taken - $STORE is not on the filesystem of $TESTS (a hard link cannot" \
+                   "cross one; the box's store lives beside the trees: one way, never a copy)"; rm -rf "$nxt"; continue; }
         ( flock -w 60 9 || exit 1; rm -rf "$sh.old.$$"; [ -e "$sh" ] && mv "$sh" "$sh.old.$$"; mv "$nxt" "$sh"; rm -rf "$sh.old.$$" ) \
             9>"$sh.lock" || { rm -rf "$nxt"; continue; }
         cp "$S/warm-key" "$st"
@@ -461,7 +466,9 @@ store_publish() {   # every cache of this tree warm at KEY (and its -on stamp) i
             continue
         fi
         nxt="$SK/.$c.new.$$"; rm -rf "$nxt"; mkdir -p "$nxt"
-        ( flock -s -w 60 9 || exit 1; cp -a "$sh" "$nxt/cache" && cp "$st" "$nxt/warm-key" ) 9>"$sh.lock" || { rm -rf "$nxt"; continue; }
+        ( flock -s -w 60 9 || exit 1; cp -al "$sh" "$nxt/cache" 2>/dev/null && rm -f "$nxt/cache/cache.lock" && cp "$st" "$nxt/warm-key" ) 9>"$sh.lock" ||
+            { echo "warm-app-cache: the $c cache NOT published - $STORE is not on the filesystem of $TESTS (a hard link cannot cross one)"
+              rm -rf "$nxt"; continue; }
         [ -f "$ds" ] && [ "$(sed -n 1p "$ds")" = "$KEY" ] && cp "$ds" "$nxt/driver-key"
         python3 -I "$SRC/tests/support/shadercache_check.py" "$nxt/cache" > /dev/null 2>&1 || { rm -rf "$nxt"; continue; }
         rm -rf "$S.old.$$"; [ -e "$S" ] && mv "$S" "$S.old.$$"; mv "$nxt" "$S"; rm -rf "$S.old.$$"

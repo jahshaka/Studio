@@ -515,10 +515,14 @@ fi
 if want store; then
 # THE BOX's WARM STORE (URGENT #193's class; the lead's design 2026-11-21): JAH_WARM_STORE names a store directory (the lead's
 # tools set it; this repo names no box path). S1 a tree warm at its key PUBLISHES its caches (and its -on stamps) when it
-# answers "warm"; S2 another tree at the SAME key, cold, TAKES them - warm with no boot (its fake app never runs), its files the
-# store's bytes and the store's not written through it; S3 a TORN stored cache is not taken - that boot runs; S4 with
+# answers "warm" - BY HARD LINKS (one inode, no copy); S2 another tree at the SAME key, cold, TAKES them - warm with no boot
+# (its fake app never runs), its files the store's own inodes, and a write the engine's way (by rename) leaves the store's
+# bytes as they were; S3 a TORN stored cache is not taken - that boot runs; S4 with
 # JAH_WARM_STORE unset nothing is read or written there (as before); S5 the key's lock held by another tree: this call WAITS on
-# it (said, no card) and takes after it; S6 another key takes nothing; S7 a toy-shaped call under an inherited store writes nothing
+# it (said, no card) and takes after it; S6 another key takes nothing; S7 a toy-shaped call under an inherited store writes nothing;
+# S8 ONE FILESYSTEM (the owner, 2026-11-22: the box's store beside the trees): a store on another filesystem is NOT taken from
+# (said, the tree boots) and a shared cache on another is NOT linked into a home by fresh_home.sh (said) - never a copy
+# (red on the old harness: both copied, silently)
 [ "$PART" = store ] && toy_tree() {   # (the keys and inherit parts' helper; this part may run alone)
     local b="$1/build"
     mkdir -p "$b/engine/generated" "$b/bin/media/Hlms" "$b/bin/media/Photon" "$b/bin/media/x" "$b/tests/.shadercache"
@@ -540,22 +544,25 @@ printf '%s\n%s\n' "$pk" s-app > "$PT/.shadercache.driver-key"; printf '%s\n%s\n'
 out=$(JAH_WARM_STORE="$ST" SX "$PB"); rc=$?
 [ $rc = 0 ] && [ "$(echo "$out" | head -1)" = "warm at $pk" ] && echo "$out" | grep -q "PUBLISHED to the box's warm store at $pk" &&
     cmp -s "$PT/.shadercache/hlms.1.bin" "$ST/$pk/app/cache/hlms.1.bin" && [ -f "$ST/$pk/engine/cache/cache-manifest.txt" ] &&
+    [ "$(stat -c %i "$PT/.shadercache/hlms.1.bin")" = "$(stat -c %i "$ST/$pk/app/cache/hlms.1.bin")" ] &&
     [ "$(sed -n 2p "$ST/$pk/app/driver-key")" = s-app ] && ok "S1: a tree warm at $pk publishes its two caches and their -on stamps when it answers warm" ||
     no "S1 publish: '$out' rc $rc"
 toy_tree "$T/sC"; CB="$T/sC/build"; CT="$CB/tests"; rm -f "$T/s-booted"
 out=$(JAH_WARM_STORE="$ST" SX "$CB"); rc=$?
 [ $rc = 0 ] && echo "$out" | grep -q "TAKEN from the box's warm store at $pk" && echo "$out" | grep -q "from the store, nothing booted" &&
     [ ! -e "$T/s-booted" ] && cmp -s "$ST/$pk/app/cache/hlms.1.bin" "$CT/.shadercache/hlms.1.bin" &&
+    [ "$(stat -c %i "$ST/$pk/app/cache/hlms.1.bin")" = "$(stat -c %i "$CT/.shadercache/hlms.1.bin")" ] &&
     [ "$(SX "$CB" --check)" = "warm at $pk" ] && ok "S2: a tree cold at the SAME key takes both caches and the -on stamps: warm, its app never booted" ||
     no "S2 take: '$out' rc $rc booted [$(cat "$T/s-booted" 2>/dev/null)]"
-printf 'GROWN' >> "$CT/.shadercache/hlms.1.bin"
-[ "$(cat "$ST/$pk/app/cache/hlms.1.bin")" = 0123456789 ] && ok "S2b: the taken files are copies - written in the tree, the store's stay as they were" ||
+printf 'GROWN' > "$CT/.shadercache/hlms.1.bin.tmp"; mv "$CT/.shadercache/hlms.1.bin.tmp" "$CT/.shadercache/hlms.1.bin"
+[ "$(cat "$ST/$pk/app/cache/hlms.1.bin")" = 0123456789 ] &&
+    ok "S2b: the taken files are the store's own (one inode) - a tree's write the engine's way (by rename) leaves the store's as they were" ||
     no "S2b: the store was written through the tree"
 toy_tree "$T/sU"; UB="$T/sU/build"; rm -f "$T/s-booted"
 out=$(env -u JAH_WARM_STORE bash -c "$(declare -f SX); W='$W'; T='$T'; SX '$UB' --only engine-off" 2>&1); rc=$?
 [ -e "$T/s-booted" ] && ! echo "$out" | grep -q "store" && ok "S4: JAH_WARM_STORE unset - no store read or written, the cold tree boots as before" ||
     no "S4 unset: '$out' rc $rc"
-printf '9876543210' > "$ST/$pk/engine/cache/hlms.1.bin"
+printf '9876543210' > "$ST/$pk/engine/cache/hlms.1.bin.t"; mv "$ST/$pk/engine/cache/hlms.1.bin.t" "$ST/$pk/engine/cache/hlms.1.bin"   # (by rename: its inode is the publisher's too)
 toy_tree "$T/sT"; TB="$T/sT/build"; rm -f "$T/s-booted"
 out=$(JAH_WARM_STORE="$ST" SX "$TB" --only engine-off); rc=$?
 echo "$out" | grep -q "the store's engine cache at $pk fails its own manifest - not taken" && [ -e "$T/s-booted" ] &&
@@ -580,6 +587,19 @@ o2=$(DISPLAY=:99 JAH_GPU_LOCK_HELD=1 JAH_WARM_STORE="$RS" "$W" "$PB" --app "$T/s
 [ -z "$(ls -A "$RS")" ] && echo "$o1" | grep -q "the warm store is NOT used - this call overrides" &&
     echo "$o2" | grep -q "the warm store is NOT used" && ok "S7: a toy-shaped call under an inherited store (the real build's key, fakes) writes NOTHING there, warm or cold" ||
     no "S7 the inherited store: $(ls -A "$RS" | head -3) // $(echo "$o1" | tail -1) // $(echo "$o2" | tail -1)"
+# S8 ONE FILESYSTEM: the same warm store on ANOTHER filesystem (/dev/shm, a tmpfs) - not taken, said, the tree boots; and a
+# tree's shared cache on another filesystem - fresh_home.sh links none of it into a home and says so (never a copy)
+XS=$(mktemp -d /dev/shm/warm-store-toy.XXXXXX); cp -a "$ST/$pk" "$XS/"
+toy_tree "$T/sX"; XB="$T/sX/build"; rm -f "$T/s-booted"
+out=$(JAH_WARM_STORE="$XS" SX "$XB" --only engine-off); rc=$?
+mkdir -p "$T/b8/tests"; touch "$T/b8/CMakeCache.txt"; toy_cache "$XS/fh" 1 2; ln -s "$XS/fh" "$T/b8/tests/.shadercache"
+o8=$(env -u DISPLAY JAH_WARM_CHECK=0 sh "$SRC/tests/support/fresh_home.sh" --warm --keep-home "$T/b8/tests/h8" -- true 2>&1)
+n8=$(find "$T/b8/tests/h8/.local/share/Jahshaka/shadercache" -type f 2>/dev/null | wc -l)
+rm -rf "$XS"
+echo "$out" | grep -q "the store's engine cache NOT taken - $XS is not on the filesystem of" && [ -e "$T/s-booted" ] &&
+    echo "$o8" | grep -q "4 file(s) of $T/b8/tests/.shadercache NOT linked into the home" && [ "$n8" = 0 ] &&
+    ok "S8: ONE FILESYSTEM - a store on another is not taken (said, the tree boots); a shared cache on another is not linked by fresh_home.sh (said) - never a copy" ||
+    no "S8 one filesystem: rc $rc '$(echo "$out" | grep -i store | head -2)' fresh_home '$o8' files $n8"
 toy_tree "$T/sK"; KB="$T/sK/build"; printf 'H' > "$KB/bin/media/Hlms/a.any"; rm -f "$T/s-booted"
 out=$(JAH_WARM_STORE="$ST" SX "$KB" --only engine-off); rc=$?
 ! echo "$out" | grep -q "TAKEN" && [ -e "$T/s-booted" ] && ok "S6: another key takes nothing from the store - it warms itself" || no "S6 another key: '$out' rc $rc"

@@ -309,12 +309,16 @@ else
     rm -rf "$home"
 fi
 mkdir -p "$home/run"
-# THE LINK PASS: every file of a cache directory but its writer lock, hard-linked (else copied) into the home's cache
+# THE LINK PASS: every file of a cache directory but its writer lock, HARD-LINKED into the home's cache - the one way (WARM-SHARE-1:
+# the box's cache lives on the trees' filesystem; the copy this pass once fell back to went with it). A file not linked (one
+# gone mid-promotion, or a cache on another filesystem) is left out, and the count is SAID: the home boots that much colder
 link_cache() {
-    ( cd "$1" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
+    nl_=$( ( cd "$1" && find . -type f ! -name cache.lock -print ) | while IFS= read -r f; do
         mkdir -p "$home/$cache_rel/$(dirname "$f")"
-        ln "$1/$f" "$home/$cache_rel/$f" 2>/dev/null || cp -p "$1/$f" "$home/$cache_rel/$f" 2>/dev/null || true
-    done
+        ln "$1/$f" "$home/$cache_rel/$f" 2>/dev/null || echo x
+    done | wc -l)
+    [ "$nl_" = 0 ] || echo "fresh_home.sh: $nl_ file(s) of $1 NOT linked into the home (gone mid-promotion, or another filesystem:" \
+                           "a hard link cannot cross one) - the home boots that much colder" >&2
 }
 if [ -n "$seed" ]; then
     [ "$warm" = 0 ] && [ "$promote" = 0 ] || { echo "fresh_home.sh: --seed is never --warm or --promote (a seeded home never promotes)" >&2; exit 2; }
