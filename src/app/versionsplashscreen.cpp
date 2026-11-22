@@ -70,3 +70,16 @@ void VersionSplashScreen::showShaderBuild(int done, int total)
     shader_bar_->show();
     shader_bar_->raise();
 }
+
+void VersionSplashScreen::showBusy(const QString &line)
+{
+    if (line.isEmpty()) { shader_label_->hide(); shader_bar_->hide(); return; }
+    shader_label_->setGeometry(0, height() - 40, width() - 14, 22);   // where showShaderBuild says its count
+    shader_label_->setText(line);
+    shader_label_->show();
+    shader_label_->raise();
+    shader_bar_->setGeometry(14, height() - 14, width() - 28, 6);
+    shader_bar_->setRange(0, 0);   // busy: one statement has no denominator
+    shader_bar_->show();
+    shader_bar_->raise();
+}

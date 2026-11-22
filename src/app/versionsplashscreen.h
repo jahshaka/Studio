@@ -25,6 +25,9 @@ public:
     /// progress bar so the user knows what's happening"); with no denominator
     /// the bar is a busy bar and the line the count alone.
     void showShaderBuild(int done, int total);
+    /// A one-time step the startup waits on, said in plain words on the same line, its BAR a busy bar (the
+    /// library's index build: LARGE-LIBRARY-1). An empty line hides them again.
+    void showBusy(const QString &line);
 
 signals:
 

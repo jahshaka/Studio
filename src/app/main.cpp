@@ -26,6 +26,8 @@ For more information see the LICENSE file
 #include <QSurfaceFormat>
 #include <QFontDatabase>
 #include <QtConcurrent>
+#include <QEventLoop>
+#include <QFutureWatcher>
 #include <QStandardPaths>
 
 // needs to be included near the top before
@@ -36,6 +38,7 @@ For more information see the LICENSE file
 #endif
 
 #include "shell/mainwindow.h"
+#include "data/database/database.h"
 #include "services/apppaths.h"
 #include "app/cli/clioptions.h"
 #include "app/firstrun.h"
@@ -474,6 +477,46 @@ int main(int argc, char *argv[])
     splash.show();
 
     app.processEvents();
+
+    // THE LIBRARY'S INDEXES, BUILT BEFORE THE SHELL OPENS IT (LARGE-LIBRARY-1). A library written by an
+    // earlier build lacks the covering indexes this one reads by; their build reads every row of it (the
+    // columns they carry are stored behind each row's thumbnail: 468 MB at 10,000 assets) and holds the
+    // write lock while it does. So it runs HERE — on a worker, the event loop turning, the splash saying
+    // what it does — and the shell opens only a library that has them: no UI write can wait behind the
+    // build and no statement can name an index that is not there yet. A library that has them costs one
+    // read of its schema; a fresh one builds them over its empty tables at its first open. A build that
+    // FAILS (a full disk, a read-only file) is a boot error, said, never a shell on a half-indexed library.
+    {
+        const QString libraryPath = IrisUtils::join(AppPaths::dataRoot(), Constants::JAH_DATABASE);
+        const int statements = QFile::exists(libraryPath) ? Database::indexStatementsToRun(libraryPath) : 0;
+        if (statements > 0) {
+            splash.showBusy(QObject::tr("Preparing the library (one time)\u2026"));
+            QElapsedTimer built;
+            built.start();
+            QFutureWatcher<QString> watcher;
+            QEventLoop wait;
+            QObject::connect(&watcher, &QFutureWatcher<QString>::finished, &wait, &QEventLoop::quit);
+            watcher.setFuture(QtConcurrent::run([libraryPath] {
+                QString error;
+                return Database::prepareIndexes(libraryPath, &error) ? QString() : error;
+            }));
+            if (!watcher.isFinished()) wait.exec();
+            const QString error = watcher.result();
+            splash.showBusy(QString());
+            if (!error.isEmpty()) {
+                const QString reason = QObject::tr("the library's indexes could not be built (%1)").arg(error);
+                std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n", qUtf8Printable(reason));
+                irisLog(QStringLiteral("library: REFUSED — %1").arg(reason));
+                if (!FirstRun::isDrivenSession(cli))
+                    QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
+                                          QObject::tr("The library cannot be opened: %1.").arg(reason));
+                JahLog::stop(QStringLiteral("library index build failed, exit code 4"));
+                return 4;
+            }
+            irisLog(QStringLiteral("library: %1 index statement(s) built before the shell opened it in %2 ms "
+                                   "(one time)").arg(statements).arg(built.elapsed()));
+        }
+    }
 
     // Create our main app window but hide it at the same time while showing the EDITOR first
     // Set the attribute to render invisible while running as normal then hiding it after

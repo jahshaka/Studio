@@ -21,9 +21,7 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QCryptographicHash>
 
-#include <atomic>
 #include <functional>
-#include <memory>
 
 #include "data/assethomekind.h"
 #include "data/project.h"
@@ -308,12 +306,14 @@ public:
     bool createFavoritesTable();
     void createAllTables();
     void createIndexes();
-    /// "INDEXED BY <index>" for a statement that names one of createIndexes' COVERING indexes, once they are
-    /// PUBLISHED on this library; empty until then. An existing library gains them on its worker after the
-    /// open (seconds at 10,000 assets), and a statement naming an index that does not exist yet FAILS
-    /// ("no such index") — so until the build commits the statement runs on its old plan: the same rows,
-    /// more pages, never an error (LARGE-LIBRARY-1). The one door for every INDEXED BY in the tree.
-    QString indexedBy(const char *index) const;
+    /// THE BOOT'S INDEX GATE (LARGE-LIBRARY-1; main.cpp, before the shell opens the library): how many of the
+    /// library's index statements `path`'s library still needs (0: prepared, nothing to build), and their
+    /// build on the calling thread through a connection of its own — each statement its own transaction —
+    /// false with the failed statement and SQLite's reason. Over an existing library the build reads every
+    /// row (the covering indexes carry the columns stored behind each row's thumbnail: 468 MB at 10,000
+    /// assets), so the boot runs it on a worker before any window exists, the splash saying so.
+    static int indexStatementsToRun(const QString &path);
+    static bool prepareIndexes(const QString &path, QString *error);
     void createCasTables();
     /// True when every table this build creates exists here with exactly the
     /// same columns. False = a library from an older build (FORWARD-ONLY-1:
@@ -871,11 +871,6 @@ private:
 
 
     QSqlDatabase db;
-
-    /// Are the covering indexes on THIS open library (indexedBy)? Read from its schema at each open; set by
-    /// the worker when its build of them commits. Shared with that worker, so a build finishing after a
-    /// close or a reopen sets a flag no open reads.
-    std::shared_ptr<std::atomic<bool>> coveringPublished = std::make_shared<std::atomic<bool>>(false);
 
     /// The gesture batch (see beginBatch). `batchOpenCount` is the counted
     /// scope; `batchTxLive` says whether the transaction behind it is open

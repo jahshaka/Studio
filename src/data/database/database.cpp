@@ -42,8 +42,6 @@ For more information see the LICENSE file
 #include <QUuid>
 
 #include <algorithm>
-#include <cstring>
-#include <iterator>
 #include <atomic>
 #include <condition_variable>
 #include <memory>
@@ -579,17 +577,6 @@ public:
     /// How often the worker looks at the -wal's size (a stat; no I/O wait).
     static constexpr int kPollMs = 500;
 
-    /// Statements the worker runs on its own connection before its next look at the -wal: the covering
-    /// indexes an existing library must build over its rows (Database::createIndexes), off the UI thread.
-    /// `published` is set once every one of them has run without an error.
-    void build(const QStringList &statements, std::shared_ptr<std::atomic<bool>> published)
-    {
-        {
-            std::lock_guard<std::mutex> lock(mMutex);
-            mPending.append({ statements, std::move(published) });
-        }
-        mWake.notify_all();
-    }
 
 private:
     void run()
@@ -604,30 +591,8 @@ private:
         const QString wal = mPath + QStringLiteral("-wal");
         std::unique_lock<std::mutex> lock(mMutex);
         while (!mStop) {
-            mWake.wait_for(lock, std::chrono::milliseconds(kPollMs), [this] { return mStop || !mPending.isEmpty(); });
+            mWake.wait_for(lock, std::chrono::milliseconds(kPollMs), [this] { return mStop; });
             if (mStop) break;
-            if (!mPending.isEmpty()) {
-                const QVector<Build> builds = std::exchange(mPending, QVector<Build>());
-                lock.unlock();
-                for (const Build &build : builds) {
-                    QElapsedTimer timer;
-                    timer.start();
-                    bool all = true;
-                    for (const QString &sql : build.statements) {
-                        QSqlQuery index(scoped.db);
-                        if (!index.exec(sql)) {
-                            all = false;
-                            irisLog(QStringLiteral("library: an index could not be built (%1): %2")
-                                        .arg(sql.left(80), index.lastError().text()));
-                        }
-                    }
-                    if (all) build.published->store(true);
-                    irisLog(QStringLiteral("library: %1 index statement(s) run on the library worker in %2 ms")
-                                .arg(build.statements.size()).arg(timer.elapsed()));
-                }
-                lock.lock();
-                continue;
-            }
             // A -wal is not truncated by a checkpoint (the next writer rewinds
             // it), so its SIZE stays past the threshold afterwards: a new
             // checkpoint is owed only once something was written since the last.
@@ -652,11 +617,6 @@ private:
     std::condition_variable mWake;
     bool mStop = false;
     QDateTime mLastCheckpointed;
-    struct Build {
-        QStringList statements;
-        std::shared_ptr<std::atomic<bool>> published;
-    };
-    QVector<Build> mPending;
 };
 
 /// One worker per open library Database (normally exactly one in the app; a
@@ -676,30 +636,6 @@ void startCheckpointer(const Database *owner, const QString &path)
 {
     std::lock_guard<std::mutex> lock(checkpointersLock());
     checkpointers()[owner] = std::make_unique<WalCheckpointer>(path);
-}
-/// Hands `statements` to `owner`'s worker, which sets `published` when they have all run; false when it has
-/// none (the library is not in WAL mode).
-bool buildOnWorker(const Database *owner, const QStringList &statements, std::shared_ptr<std::atomic<bool>> published)
-{
-    std::lock_guard<std::mutex> lock(checkpointersLock());
-    auto it = checkpointers().find(owner);
-    if (it == checkpointers().end()) return false;
-    it->second->build(statements, std::move(published));
-    return true;
-}
-
-/// The covering indexes createIndexes builds (kCovering), by name: indexedBy names only these.
-const char *const kCoveringIndexes[] = { "idx_assets_collection_listed", "idx_assets_library", "idx_assets_material_copies" };
-
-/// Does the open library hold every covering index? One read of its schema.
-bool coveringIndexesPresent(const QSqlDatabase &conn)
-{
-    QStringList names;
-    for (const char *name : kCoveringIndexes) names << QStringLiteral("'%1'").arg(QLatin1String(name));
-    QSqlQuery query(conn);
-    return query.exec(QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE type = 'index' AND name IN (%1)")
-                          .arg(names.join(QLatin1Char(','))))
-           && query.next() && query.value(0).toInt() == int(std::size(kCoveringIndexes));
 }
 void stopCheckpointer(const Database *owner)
 {
@@ -762,8 +698,6 @@ bool Database::initializeDatabase(const QString &pathToBlob)
             irisLog(QStringLiteral("JAH_DB_STATEMENT_TRACE=1, but the statement trace could not be registered "
                                    "(app.databaseReads says why)"));
         if (db.isOpen() && applyDurabilityPragmas(db)) startCheckpointer(this, pathToBlob);
-        // A NEW flag per open: a build handed to a previous open's worker publishes into that open's flag.
-        coveringPublished = std::make_shared<std::atomic<bool>>(db.isOpen() && coveringIndexesPresent(db));
         return db.isOpen();
     }
     else {
@@ -1092,99 +1026,113 @@ bool Database::schemaMatchesFresh()
     return matches;
 }
 
+namespace {
+// THE LIBRARY'S INDEXES, ONE LIST (every statement IF NOT EXISTS / IF EXISTS: what a library already has costs
+// nothing). An index is not part of the schema check (schemaMatchesFresh compares tables' columns): adding,
+// widening or dropping one resets no library.
+//
+// The dependencies table was scanned unindexed on both edge directions (ASSET_PIPELINE_SPEC §1.2 / phase 0).
+// THE PREDICATES' INDEXES (D11-LIBRARY-SCALE, audit V2_F F3): every listing and every project-scoped read
+// filters on one of these columns, and the catalog had no index on any of them.
+// THE COVERING INDEXES (LARGE-LIBRARY-1 stage 1b): an asset row stores its `thumbnail` BLOB before asset, tags,
+// properties, view_filter, origin and listed, so a statement that reads one of those from the TABLE walks the
+// row's thumbnail overflow chain (measured: the Assets page's one-statement listing read 26.9 MB at 1,000
+// assets with 256-px thumbnails, 0.9 MB without). Each answers its statement from the index alone:
+//   idx_assets_library            the Assets page (fetchAssetsForAssetView): its predicate, its order (name),
+//                                 every column it selects and the `parent` its member test probes by guid;
+//   idx_assets_collection_listed  the drawers' counts (countAssetsInCollections);
+//   idx_assets_material_copies    a preset's copies (presetedit copiesOf) and the V-2 fold's "is this depender a
+//                                 material?" (fetchUsedOnlyByMaterials), PARTIAL over the material rows and
+//                                 named by those statements (INDEXED BY): a plain index on `type` took 13 other
+//                                 statements' plans (no planner statistics: `type = ?` rates as selective as a
+//                                 guid) onto every row of a type.
+// The one 1b widens is dropped (forward-only).
+static_assert(static_cast<int>(ModelTypes::Material) == 1,
+              "idx_assets_material_copies (and the statements naming it) name the Material type's stored value");
+const char *const kIndexStatements[] = {
+    "CREATE INDEX IF NOT EXISTS idx_dependencies_depender ON dependencies (depender)",
+    "CREATE INDEX IF NOT EXISTS idx_dependencies_dependee ON dependencies (dependee)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_parent ON assets (parent)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_project_guid ON assets (project_guid)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_view_filter_listed ON assets (view_filter, listed)",
+    // THE DESKTOP'S TILE COLUMNS, COVERING (TC2-LIBRARY-CREATE-READ, 2026-10-10; replaces the bare `desktop`
+    // index): a project row carries its scene and its ~190 KB thumbnail, so ANY scan of the table read one 4 KB
+    // page per project (2 MB a statement at 500 projects, measured). Every such listing (kProjectTileColumns,
+    // nextFreeProjectName, fetchProjectGuids) is answered from this index alone: 66 KB.
+    "CREATE INDEX IF NOT EXISTS idx_projects_tiles ON projects "
+    "(desktop, last_written, name, guid, desktop_x, desktop_y, slider_row, slider_index)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_collection_listed ON assets (collection, listed)",
+    "DROP INDEX IF EXISTS idx_assets_collection",   // retired: -> idx_assets_collection_listed
+    "CREATE INDEX IF NOT EXISTS idx_assets_library ON assets "
+    "(view_filter, listed, name, guid, parent, type, collection, project_guid, author, license, tags, properties)",
+    "CREATE INDEX IF NOT EXISTS idx_assets_material_copies ON assets (guid, properties) WHERE type = 1",
+};
+
+/// The statements of kIndexStatements `conn`'s library still needs: a CREATE whose index it lacks, a DROP of one
+/// it still has. One read of its schema.
+QStringList indexStatementsNeeded(const QSqlDatabase &conn)
+{
+    QSet<QString> present;
+    QSqlQuery schema(conn);
+    if (schema.exec(QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'index'")))
+        while (schema.next()) present.insert(schema.value(0).toString());
+    QStringList out;
+    for (const char *statement : kIndexStatements) {
+        const QString sql = QString::fromLatin1(statement);
+        const bool create = sql.startsWith(QLatin1String("CREATE"));
+        const QString name = sql.section(QLatin1Char(' '), create ? 5 : 4, create ? 5 : 4);
+        if (create != present.contains(name)) out << sql;
+    }
+    return out;
+}
+}   // namespace
+
 void Database::createIndexes()
 {
-    // The dependencies table was scanned unindexed on both edge directions
-    // (ASSET_PIPELINE_SPEC §1.2 / phase 0). IF NOT EXISTS keeps this
-    // idempotent across every startup and older libraries.
-    QSqlQuery byDepender;
-    byDepender.prepare("CREATE INDEX IF NOT EXISTS idx_dependencies_depender ON dependencies (depender)");
-    executeAndCheckQuery(byDepender, "CreateDependenciesDependerIndex");
-
-    QSqlQuery byDependee;
-    byDependee.prepare("CREATE INDEX IF NOT EXISTS idx_dependencies_dependee ON dependencies (dependee)");
-    executeAndCheckQuery(byDependee, "CreateDependenciesDependeeIndex");
-
-    // THE PREDICATES' INDEXES (D11-LIBRARY-SCALE, audit V2_F F3): every listing
-    // and every project-scoped read filters on one of these columns, and the
-    // catalog had no index on any of them — 29 `project_guid` predicates, the
-    // tray's `parent`, the Library's `view_filter`/`listed`, the drawer's
-    // `collection` and the Desktop's `desktop` each scanned every row. Part of
-    // the schema the bootstrap writes (IF NOT EXISTS: the same statement makes a
-    // fresh file and finishes one that predates it — no migration, nothing read).
-    //
-    // THE COVERING INDEXES (LARGE-LIBRARY-1 stage 1b): an asset row stores its `thumbnail` BLOB before
-    // asset, tags, properties, view_filter, origin and listed, so a statement that reads one of those from
-    // the TABLE walks the row's thumbnail overflow chain (measured: the Assets page's one-statement listing
-    // read 26.9 MB at 1,000 assets with 256-px thumbnails, 0.9 MB without). Each index below answers its
-    // statement from the index alone — no table page — so what it reads does not grow with the pictures:
-    //   idx_assets_library            the Assets page (fetchAssetsForAssetView): its predicate, its order
-    //                                 (name), every column it selects and the `parent` its member test
-    //                                 probes by guid (memberSubquery);
-    //   idx_assets_collection_listed  the drawers' counts (countAssetsInCollections);
-    //   idx_assets_material_copies    a preset's copies (presetedit copiesOf), PARTIAL over the material rows
-    //                                 and named by that statement (INDEXED BY): a plain index on `type` took
-    //                                 13 other statements' plans (the library has no planner statistics, so
-    //                                 `type = ?` rates as selective as a guid) onto every row of a type.
-    // An index is not part of the schema check (schemaMatchesFresh compares tables' columns): adding,
-    // widening or dropping one resets no library. The one it widens is dropped (forward-only).
-    static_assert(static_cast<int>(ModelTypes::Material) == 1,
-                  "idx_assets_material_copies (and presetedit copiesOf) name the Material type's stored value");
-    static const char *const kIndexes[] = {
-        "CREATE INDEX IF NOT EXISTS idx_assets_parent ON assets (parent)",
-        "CREATE INDEX IF NOT EXISTS idx_assets_project_guid ON assets (project_guid)",
-        "CREATE INDEX IF NOT EXISTS idx_assets_view_filter_listed ON assets (view_filter, listed)",
-        // THE DESKTOP'S TILE COLUMNS, COVERING (TC2-LIBRARY-CREATE-READ, 2026-10-10; replaces the
-        // bare `desktop` index): a project row carries its scene and its ~190 KB thumbnail, so each
-        // row fills a leaf page of its own and ANY scan of the table — the tile listing, the name
-        // rule's `WHERE guid IS NOT ?` — read one 4 KB page per project (2 MB a statement at 500
-        // projects, measured). Every such listing (kProjectTileColumns, nextFreeProjectName,
-        // fetchProjectGuids) is answered from this index alone: 66 KB.
-        "CREATE INDEX IF NOT EXISTS idx_projects_tiles ON projects "
-        "(desktop, last_written, name, guid, desktop_x, desktop_y, slider_row, slider_index)",
-    };
-    for (const char *statement : kIndexes) {
-        QSqlQuery index;
-        index.prepare(QString::fromLatin1(statement));
-        executeAndCheckQuery(index, "CreateIndex");
-    }
-
-    // THE COVERING ONES, BUILT OFF THE UI THREAD WHEN THEY COST A SCAN. Over an empty table an index is
-    // free (a fresh library, a suite's throwaway file): made here. Over an existing library's rows its
-    // CREATE reads every row — the properties it carries sit behind each row's thumbnail, so a 10,000-asset
-    // library is read whole (measured: 114,256 pages, 468 MB, on the first open) — and that runs on the
-    // library's worker connection (the WAL checkpointer above), not on the thread that opens the shell.
-    // Until it commits the listings plan on the indexes already there: the same rows, more pages. A UI
-    // write meanwhile waits for the builder's write lock, once. The index each one replaces is dropped
-    // after it exists. (No WAL, no worker: built here.)
-    static const char *const kCovering[] = {
-        "CREATE INDEX IF NOT EXISTS idx_assets_collection_listed ON assets (collection, listed)",
-        "DROP INDEX IF EXISTS idx_assets_collection",   // retired: -> idx_assets_collection_listed
-        "CREATE INDEX IF NOT EXISTS idx_assets_library ON assets "
-        "(view_filter, listed, name, guid, parent, type, collection, project_guid, author, license, tags, properties)",
-        "CREATE INDEX IF NOT EXISTS idx_assets_material_copies ON assets (guid, properties) WHERE type = 1",
-    };
-    QStringList covering;
-    for (const char *statement : kCovering) covering << QString::fromLatin1(statement);
+    // THE BOOT HAS BUILT THEM (prepareIndexes, before the shell opens the library: main.cpp), so on an existing
+    // library this runs nothing; over a fresh library's empty tables it builds them at once. An existing
+    // library's rows reaching here unprepared is a DEFECT of the caller — its index build would read every
+    // row behind its thumbnail on THIS (the opening) thread — named so a row sees it, and still built.
+    const QStringList needed = indexStatementsNeeded(db);
+    if (needed.isEmpty()) return;
     QSqlQuery any;
     const bool empty = !any.exec(QStringLiteral("SELECT 1 FROM assets LIMIT 1")) || !any.next();
     any.finish();
-    if (empty || !buildOnWorker(this, covering, coveringPublished)) {
-        bool all = true;
-        for (const QString &statement : std::as_const(covering)) {
-            QSqlQuery index;
-            index.prepare(statement);
-            all &= executeAndCheckQuery(index, "CreateIndex");
-        }
-        if (all) coveringPublished->store(true);
+    if (!empty)
+        irisLog(QStringLiteral("library: DEFECT — %1 index statement(s) run over an existing library's rows on the "
+                               "opening thread; the boot builds them before the shell opens it (Database::prepareIndexes)")
+                    .arg(needed.size()));
+    for (const QString &statement : needed) {
+        QSqlQuery index;
+        index.prepare(statement);
+        executeAndCheckQuery(index, "CreateIndex");
     }
 }
 
-QString Database::indexedBy(const char *index) const
+int Database::indexStatementsToRun(const QString &path)
 {
-    Q_ASSERT(std::any_of(std::begin(kCoveringIndexes), std::end(kCoveringIndexes),
-                         [index](const char *name) { return std::strcmp(name, index) == 0; }));
-    return coveringPublished->load() ? QStringLiteral("INDEXED BY %1").arg(QLatin1String(index)) : QString();
+    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("IndexCheck"), path);
+    if (!scoped.db.open()) return 0;
+    return int(indexStatementsNeeded(scoped.db).size());
+}
+
+bool Database::prepareIndexes(const QString &path, QString *error)
+{
+    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("IndexBuild"), path);
+    if (!scoped.db.open()) {
+        if (error) *error = scoped.db.lastError().text();
+        return false;
+    }
+    // Each statement its own transaction: the write lock is released between them.
+    for (const QString &statement : indexStatementsNeeded(scoped.db)) {
+        QSqlQuery index(scoped.db);
+        if (!index.exec(statement)) {
+            if (error) *error = QStringLiteral("%1: %2").arg(statement.section(QLatin1Char(' '), 0, 5),
+                                                              index.lastError().text());
+            return false;
+        }
+    }
+    return true;
 }
 
 // WHERE A PROJECT'S FOLDER LIVES. Empty clears the row back to "the default
@@ -2563,14 +2511,12 @@ QHash<QString, bool> Database::fetchUsedOnlyByMaterials(const QStringList &depen
     // A depender the catalog does not know (a scene node's id) or of another type is not. The question is
     // answered by idx_assets_material_copies (partial over the material rows, covering: Database::
     // createIndexes), never by the depender's table row, which stores its rendered tile before `type`'s
-    // neighbours (LARGE-LIBRARY-1: 48 pages more at 1,000 with tiles than without). The index is named
-    // (the planner takes the primary key unprompted) through indexedBy — until an upgraded library's worker
-    // has built it, the same answer from the table — and the type is a literal, because a partial index
-    // serves only a WHERE that states its own.
-    query.prepare(QStringLiteral("SELECT D.dependee, MIN(EXISTS (SELECT 1 FROM assets M %1 "
-                                 "WHERE M.guid = D.depender AND M.type = %2)) "
-                                 "FROM dependencies D WHERE D.dependee IN (%3) GROUP BY D.dependee")
-                      .arg(indexedBy("idx_assets_material_copies"))
+    // neighbours (LARGE-LIBRARY-1: 48 pages more at 1,000 with tiles than without). The index is named (the
+    // planner takes the primary key unprompted; the boot builds it before the shell opens the library), and
+    // the type is a literal, because a partial index serves only a WHERE that states its own.
+    query.prepare(QStringLiteral("SELECT D.dependee, MIN(EXISTS (SELECT 1 FROM assets M INDEXED BY "
+                                 "idx_assets_material_copies WHERE M.guid = D.depender AND M.type = %1)) "
+                                 "FROM dependencies D WHERE D.dependee IN (%2) GROUP BY D.dependee")
                       .arg(static_cast<int>(ModelTypes::Material))
                       .arg(placeholders(unique.size())));
     for (const QString &guid : unique) query.addBindValue(guid);
