@@ -28,6 +28,13 @@
 //      (b) no compute template was parsed and no compute pipeline built inside any frame of the run (the published
 //      computeParsedInFrame / computePsoInFrame, process totals: 0 from the first frame to the last). RED before the
 //      fix: the four tables parsed and built in the capture's first frame (spikes/shader-system/ss7/gate-measure).
+//  (5) A FRAME WITH A DEFERRED DISPATCH IS INCOMPLETE (SHADER-SYSTEM-1 7a, the law of every deferral):
+//      PublishedFrame::Completeness's term 64. The note is taken at a frame's head (OgreScene::noteFrameCompleteness,
+//      OgreEngine.cpp's frame head): the convolution's retry runs at that head BEFORE the note (applyPendingIbl), the
+//      atmosphere's tables and a capture's first try inside the frame AFTER it (applyPendingSkyCapture). So a deferral
+//      counted in frame k's publish (the atmosphere's tries + the convolution's) reads term 64 in frame k's publish or
+//      frame k+1's - every such frame, and at least one (the cold arm); and the frame after the landing's settle reads
+//      it clear. RED before the term: no frame carried it (28 owed it, spikes/shader-system/ss7/term64-red).
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/Monitor.h"
 #include "jahshaka/engine/Published.h"
@@ -76,6 +83,14 @@ int main()
     };
     int f = 0, emptyFrames = 0;
     bool landed = false;
+    // (5)'s bookkeeping: the deferral counters as frame k published them, and whether frame k+1 carried the term.
+    const auto deferralCount = [&]() {
+        const PublishedFrame &p = scene->published();
+        return (unsigned long long)p.atmosphereStatus.deferredUpdates + p.iblConvolutionDeferrals;
+    };
+    unsigned long long deferralsSeen = deferralCount();
+    bool owedTerm = false;
+    int termFrames = 0, termMissing = 0;
     unsigned long long maxOutstanding = 0;
     for (; f < kFrameCap; ++f) {
         frame();
@@ -83,6 +98,13 @@ int main()
         const unsigned outstanding = as.pending - std::min(as.pending, as.rayBuildsInFlight);
         if (outstanding > maxOutstanding) maxOutstanding = outstanding;
         const PublishedFrame &pub = scene->published();
+        const bool term = (pub.completeness.terms & 64u) != 0u;
+        termFrames += term ? 1 : 0;
+        const unsigned long long deferralsNow = deferralCount();
+        const bool rose = deferralsNow != deferralsSeen;
+        if (owedTerm && !term) ++termMissing;   // a rise last frame, the term in neither that frame nor this one
+        owedTerm = rose && !term;               // a rise this frame: the term now, or owed next frame
+        deferralsSeen = deferralsNow;
         if (!pub.environmentPending) { landed = true; break; }
         emptyFrames = outstanding == 0 ? emptyFrames + 1 : 0;
         if (emptyFrames > kLandFrames) break;   // law 2 has failed: nothing on the compiler, the environment still owed
@@ -108,7 +130,13 @@ int main()
         CHECK(after == deferrals && !scene->published().environmentPending,
               "(3) no try after the landing: the deferrals %llu -> %llu over %d frames, the environment landed",
               deferrals, after, kLandFrames);
+        CHECK((scene->published().completeness.terms & 64u) == 0u,
+              "(5b) the frame after the landing's settle reads no deferred dispatch (terms %u)",
+              scene->published().completeness.terms);
     }
+    CHECK(termFrames > 0 && termMissing == 0,
+          "(5a) every frame that deferred a dispatch read the term 'a compute dispatch deferred' in its own publish or "
+          "the next: %d frame(s) carried it, %d owed it and did not", termFrames, termMissing);
     std::printf(failures ? "sky.ibl_async_lands: FAIL (%d)\n" : "sky.ibl_async_lands: PASS\n", failures);
     return failures ? 1 : 0;
 }
