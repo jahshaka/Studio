@@ -1,0 +1,45 @@
+// thumbnails.catalogs_complete — PREVIEWS-1 stage 2's ACCEPTANCE (the final read's C3): EACH SHIPPED SAMPLE CATALOG
+// READS 0 MISSING / 0 STALE AFTER ONE previews.renderAll. The app on the card (a material, model or mesh preview is a
+// render), a fresh warm home. The catalogs are the shipped samples (scenes/*.zip, configured into CATALOGS) - the
+// product's own content, not a test scene: the law is about them.
+//
+// FOR EACH CATALOG, in one library: project.importArchive (its rows, its models baked), project.open, ONE
+// previews.renderAll (missing and stale rows of the library), previews.settle (every write landed), then
+// previews.counts at the project's scope (the catalog's pinned rows) AND at the library's (every row so far, the
+// earlier catalogs included: a row whose key moves when another project opens would read stale there). Each count
+// is printed (CATALOG <name> {...}) with the sweep's facts and its named failures before any assertion, so a red
+// carries every catalog's numbers.
+
+function assert(cond, msg) {
+    if (!cond) throw new Error("assert failed: " + msg);
+    console.log("ok: " + msg);
+}
+function J(x) { return JSON.stringify(x); }
+
+var CATALOGS = [@JAH_CATALOGS_JS@];
+assert(CATALOGS.length > 0, "the shipped catalogs are configured: " + CATALOGS.length);
+assert(project.create("Catalogs Complete " + Date.now()).length > 10, "project.create");
+
+var results = [];
+CATALOGS.forEach(function (path) {
+    var name = path.substring(path.lastIndexOf("/") + 1);
+    var imported = project.importArchive(path);
+    assert(imported && imported.guid, "importArchive(" + name + ")");
+    assert(project.open(imported.guid, { discard: true }) === true, "project.open(" + name + ")");
+    var swept = previews.renderAll();
+    var settled = previews.settle();
+    var own = previews.counts({ scope: "project" });
+    var all = previews.counts({ scope: "library" });
+    console.log("CATALOG " + name + " " + J({ project: own, library: all, considered: swept.considered,
+                rendered: swept.rendered, skipped: swept.skipped, failed: swept.failed, settled: settled,
+                bakeFailures: imported.bakeFailures }));
+    results.push({ name: name, project: own, library: all, settled: settled.ok === true });
+});
+
+results.forEach(function (r) {
+    assert(r.settled && r.project.missing === 0 && r.project.stale === 0,
+           r.name + ": the catalog reads 0 missing / 0 stale after ONE renderAll: " + J(r.project));
+    assert(r.library.missing === 0 && r.library.stale === 0,
+           r.name + ": ...and so does the whole library after it: " + J(r.library));
+});
+console.log("thumbnails.catalogs_complete: all assertions passed");

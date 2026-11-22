@@ -130,3 +130,27 @@ jah_gpu_row(thumbnails.studio_env SHIP CLASS engine COMMAND ${CMAKE_BINARY_DIR}/
          WORKING_DIRECTORY ${CMAKE_BINARY_DIR}/bin)
 set_tests_properties(thumbnails.studio_env PROPERTIES JAHSHAKA_TEST_FRAMES 64)   # the frames it renders, counted 2026-10-12 (TESTING-SPEED-B4)
 set_tests_properties(thumbnails.studio_env PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
+
+# thumbnails.catalogs_complete — PREVIEWS-1 stage 2's ACCEPTANCE (the final read's C3): each shipped sample catalog
+# (scenes/*.zip) imported into one library and opened reads 0 missing / 0 stale after ONE previews.renderAll, at its
+# project's scope and the library's. The app on the card, a fresh WARM home. A builder's row, priced solo, never SHIP.
+set(_ccHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-thumbnails_catalogs_complete)
+file(GLOB _ccCatalogs LIST_DIRECTORIES false "${CMAKE_SOURCE_DIR}/scenes/*.zip")
+list(SORT _ccCatalogs)
+set(JAH_CATALOGS_JS "")
+foreach(_c IN LISTS _ccCatalogs)
+    string(APPEND JAH_CATALOGS_JS "\"${_c}\", ")
+endforeach()
+configure_file(catalogs_complete.js.in ${CMAKE_CURRENT_BINARY_DIR}/catalogs_complete.js @ONLY)
+file(MAKE_DIRECTORY ${_ccHome}/run)
+jah_host_args(thumbnails.catalogs_complete _ccHost)
+jah_gpu_row(thumbnails.catalogs_complete WARM_HOME "${_ccHome}" CLASS app TIER low NEEDS NONE
+         NEEDS_WHY "the tile's studio takes no tier feature (no GI, no post: secondarysurfacetonemap.h): the catalogs' state after one sweep"
+         COMMAND $<TARGET_FILE:${CMAKE_PROJECT_NAME}> --script ${CMAKE_CURRENT_BINARY_DIR}/catalogs_complete.js ${_ccHost}
+         WORKING_DIRECTORY ${_ccHome}/run)
+set_tests_properties(thumbnails.catalogs_complete PROPERTIES
+    ENVIRONMENT "HOME=${_ccHome};JAHSHAKA_DATA_ROOT=${_ccHome}/.local/share/Jahshaka"
+    LABELS "mirror"
+    TIMEOUT 60)
+jah_fresh_home_fixture(thumbnails.catalogs_complete.fresh_home thumbnailsCatalogsHome "${_ccHome}" WARM LABELS "mirror")
+set_property(TEST thumbnails.catalogs_complete APPEND PROPERTY FIXTURES_REQUIRED thumbnailsCatalogsHome)
