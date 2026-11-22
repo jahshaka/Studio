@@ -138,12 +138,24 @@ set_tests_properties(lab.js_error_survives PROPERTIES TIMEOUT 60 LABELS "lab")
 
 # lab.js_view_given_back (LAB-SCRIPTS-1, the audit's F1) — A SCRIPT THAT TAKES THE VIEW AND FAILS BEFORE IT BINDS A SCENE
 # GIVES IT BACK: the lab's world is shown again (its shot equal to the one before the run) and the overlay drawn over it
-# (js_world_back.sh scene-less says the laws). On photon-room (low, gi off): the first frame, 2, then 1 + 1 of the lab's.
+# (js_world_back.sh scene-less says the laws). On photon-room (low, gi off), NOT the empty world: an empty world is its
+# background alone, which a scene-less view clears to as well - it cannot tell "given back" from "background only". The
+# first frame, 2, then 1 + 1 of the lab's.
 jah_gpu_row(lab.js_view_given_back CLASS engine FRAMES 5
     COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_world_back.sh $<TARGET_FILE:jahlab>
             ${CMAKE_CURRENT_BINARY_DIR}/work/js_view_given_back scene-less
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.js_view_given_back PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# lab.js_clear_restores (LAB-SCRIPTS-1, ruling 8's sibling) — `js clear` PUTS THE LAB's WORLD BACK: its shot after the
+# clear equals its shot before the script took the view, every byte (js_world_back.sh clear says the laws). On
+# photon-room (low, gi off), NOT the empty world (lab.js_view_given_back says why). The first frame, 2, js_cube.js's 3,
+# then 1 of the lab's own.
+jah_gpu_row(lab.js_clear_restores CLASS engine FRAMES 7
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_world_back.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/js_clear_restores clear
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_clear_restores PROPERTIES TIMEOUT 60 LABELS "lab")
 
 # lab.js_world_neutral (LAB-SCRIPTS-1, the audit's F2) — A SCRIPT's PICTURE DOES NOT DEPEND ON THE LAB's WORLD: the demo's
 # 240th frame is the same picture on an empty world and on photon-room (js_world_neutral.sh says the law). Two labs of
@@ -169,6 +181,14 @@ jah_gpu_row(lab.js_log_prefixed CLASS engine FRAMES 1
     COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_log_prefixed.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/js_log_prefixed
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.js_log_prefixed PROPERTIES TIMEOUT 60 LABELS "lab")
+
+# lab.js_watched_no_checks (LAB-SCRIPTS-1, ruling 8's window half) — IN THE WINDOW A SCRIPT THAT CHECKS NOTHING READS
+# `ran: no checks`, the exit untouched (js_watched_no_checks.sh says the laws). The first frame only (--no-idle-frames).
+jah_gpu_row(lab.js_watched_no_checks CLASS engine FRAMES 1
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_watched_no_checks.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/js_watched_no_checks
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_watched_no_checks PROPERTIES TIMEOUT 60 LABELS "lab")
 
 # lab.env_expectation_printed (stage 2) — `jahlab --env-list` prints every environment's law and its closed-form
 # expectation at each dolly stop (22 / 88 / 177 / 354 m), every value a finite number. CPU only.
