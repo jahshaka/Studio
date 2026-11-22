@@ -299,23 +299,26 @@ int main()
               failedWith(eng.call("engine.picture.hash", {pic}), "is stale (its picture was released)"),
           "a released picture's handle is STALE by name");
     {
-        // THE CAP (512 MiB of live pictures): two 8192 x 8192 RGBA pictures (256 MiB each) fill it EXACTLY (the bound is
-        // in); one more pixel FAILS by name; one released, it is taken (the cap counts the LIVE pictures)
-        // (the arguments built once: each create's peak is the argument, the host's checked copy and the held picture)
-        Value::Array big{Value(Value::Object{{"width", Value(8192)}, {"height", Value(8192)},
-                                             {"rgba", Value::bytes(Value::Bytes(std::size_t(8192) * 8192 * 4, 3))}})};
-        const Result p1 = eng.call("engine.picture.create", big), p2 = eng.call("engine.picture.create", big);
-        big.clear();
-        const Value one(Value::Object{{"width", Value(1)}, {"height", Value(1)}, {"rgba", Value::bytes({1, 2, 3, 4})}});
-        const Result p3 = eng.call("engine.picture.create", {one});
+        // THE CAP (the host's option, Host::Options::pictureBytesCap; 512 MiB by default): a host of a 16-byte cap -
+        // two 1 x 2 pictures (8 bytes each) fill it EXACTLY (the bound is in); one more pixel FAILS by name; one
+        // released, it is taken (the cap counts the LIVE pictures)
+        Host::Options small;
+        small.pictureBytesCap = 16;
+        Host capped(small);
+        registerEngineCommands(capped, nullptr, "no device here", false);
+        Registry &cr = capped.registry();
+        const auto make = [&cr](int w, int h) {
+            return cr.call("engine.picture.create", {Value(Value::Object{{"width", Value(w)}, {"height", Value(h)},
+                                                                        {"rgba", Value::bytes(Value::Bytes(size_t(w * h * 4), 9))}})});
+        };
+        const Result p1 = make(1, 2), p2 = make(1, 2), p3 = make(1, 1);
         const bool full = p1.status == Status::Ok && p2.status == Status::Ok &&
-                          failedWith(p3, "would hold 536870916 bytes, over the cap 536870912 (512 MiB): release one first");
-        eng.call("engine.picture.release", {p1.value["picture"]});
-        const Result p4 = eng.call("engine.picture.create", {one});
-        check(full && p4.status == Status::Ok, "the live pictures are capped at 512 MiB: past it a picture FAILS by name; a "
-                                               "release makes room (" + p3.message.substr(0, 70) + ")");
-        eng.call("engine.picture.release", {p2.value["picture"]});
-        eng.call("engine.picture.release", {p4.value["picture"]});
+                          failedWith(p3, "would hold 20 bytes, over the host's cap 16: release one first");
+        cr.call("engine.picture.release", {p1.value["picture"]});
+        const Result p4 = make(1, 1);
+        check(full && p4.status == Status::Ok && Host().options().pictureBytesCap == (std::size_t(512) << 20),
+              "THE CAP is the host's option (512 MiB by default): past it a picture FAILS by name; a release makes room (" +
+                  p3.message.substr(0, 80) + ")");
     }
     {
         // A PICTURE LIVES ACROSS CALLS AND RUNS until released (MCP-ON-HOST-1); jahengine releases the scoped ones at its
