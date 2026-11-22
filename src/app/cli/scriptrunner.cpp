@@ -508,11 +508,8 @@ int runMcpServe(MainWindow &window, QApplication &app, unsigned short port, bool
     return finalizeAppExit(rc);
 }
 
-namespace {
-/// THE VULKAN DRIVERS THIS PROCESS HAS MAPPED (the dump's after-boot proof): every ICD library the loader's manifests name
-/// (/usr/share/vulkan/icd.d, /etc/vulkan/icd.d, $VK_DRIVER_FILES / $VK_ICD_FILENAMES) found in /proc/self/maps. The loader
-/// opens an ICD only to enumerate or create an instance, so a mapped driver is a Vulkan instance's evidence; the loader
-/// library alone (linked, never called) is not.
+/// (scriptrunner.h) The manifests read: /usr/share/vulkan/icd.d, /etc/vulkan/icd.d, /usr/local/share/vulkan/icd.d and
+/// $VK_DRIVER_FILES / $VK_ICD_FILENAMES. The loader opens an ICD only to enumerate or create an instance.
 QStringList mappedVulkanDrivers()
 {
     QStringList manifests;
@@ -541,7 +538,6 @@ QStringList mappedVulkanDrivers()
         if (text.contains(QLatin1Char('/') + lib) && !hit.contains(lib)) hit << lib;
     return hit;
 }
-}   // namespace
 
 int runDumpApiDocs(MainWindow &window, const QString &outPath)
 {

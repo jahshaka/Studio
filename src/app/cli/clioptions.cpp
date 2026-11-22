@@ -86,6 +86,7 @@ QString CliOptions::usageText()
         "\n"
         "  -h, --help                  print this text and exit\n"
         "  --version                   print the version and exit\n"
+        "  --print-shader-identity     print the shader cache's identity (no window, no GPU) and exit\n"
         "  --data-root <dir>           keep settings, library, asset store and shader cache in <dir>\n"
         "                              (JAHSHAKA_DATA_ROOT is the same override)\n"
         "  --engine-selftest <out.png> render the self-test scene, print the hash lines, exit 0/1\n"
@@ -129,6 +130,7 @@ CliOptions CliOptions::parse(int argc, char *argv[])
         const bool hasNext = i + 1 < argc;
         if (qstrcmp(argv[i], "--help") == 0 || qstrcmp(argv[i], "-h") == 0) o.help = true;
         else if (qstrcmp(argv[i], "--version") == 0) o.version = true;
+        else if (qstrcmp(argv[i], "--print-shader-identity") == 0) o.printShaderIdentity = true;
         else if (qstrcmp(argv[i], "--engine-selftest") == 0) {
             if (hasNext) o.selftestPng = QString::fromLocal8Bit(argv[++i]); else needsValue(argv[i]); }
         else if (qstrcmp(argv[i], "--script") == 0) {

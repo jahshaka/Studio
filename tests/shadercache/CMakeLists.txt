@@ -139,6 +139,14 @@ set_tests_properties(shader.async_after_open PROPERTIES TIMEOUT 60 LABELS "shade
 add_test(NAME shadercache.startup_pass_key COMMAND test_async_after_open --key-self-test)
 set_tests_properties(shadercache.startup_pass_key PROPERTIES TIMEOUT 60 LABELS "shadercache")
 jah_no_display(shadercache.startup_pass_key)
+# shadercache.identity_print (SHADER-SYSTEM-1 stage 6a, CPU: no card, no display) - `Jahshaka --print-shader-identity` prints
+# the startup pass's key with no device: its format, the build's ids, the media digest recomputed, the identity line =
+# the record the gate writes (identity_print.py says the laws).
+add_test(NAME shadercache.identity_print
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/identity_print.py"
+                 "$<TARGET_FILE:${CMAKE_PROJECT_NAME}>" "${CMAKE_BINARY_DIR}")
+set_tests_properties(shadercache.identity_print PROPERTIES TIMEOUT 60 LABELS "shadercache")
+jah_no_display(shadercache.identity_print)
 
 # THE SHIPPED MICROCODE SEED (COLD-BOOT-1 S1; EngineConfig::shaderCacheSeedDir, <exe dir>/shadercache-seed): a build's
 # own warm microcode layer, read only when a launch's cache holds none at this build's key, never written.

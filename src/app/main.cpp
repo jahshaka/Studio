@@ -109,6 +109,20 @@ int main(int argc, char *argv[])
         std::fflush(stdout);
         return 0;
     }
+    // --print-shader-identity ANSWERS AND EXITS HERE TOO (SHADER-SYSTEM-1 stage 6a): the identity the startup pass keys on,
+    // read with no window, no engine and no GPU - the harness's one source of "which shaders does this build warm". A
+    // QCoreApplication only for the binary's own directory (its media/, the app's rule), never a display.
+    if (cli.printShaderIdentity && cli.errors.isEmpty()) {
+        QCoreApplication core(argc, argv);
+        const int rc = printShaderIdentity(QCoreApplication::applicationDirPath() + QStringLiteral("/media"));
+        const QStringList drivers = mappedVulkanDrivers();   // THE PROOF IT TOUCHED NO GPU (the docs dump's own)
+        if (!drivers.isEmpty()) {
+            std::fprintf(stderr, "Jahshaka: --print-shader-identity: a Vulkan driver is mapped into this process (%s) - "
+                                 "an instance was made\n", qPrintable(drivers.join(QStringLiteral(", "))));
+            return 3;
+        }
+        return rc;
+    }
     // A COMMAND LINE THE APP CANNOT HONOUR STOPS HERE (ledger 150): before
     // QApplication, before the log, before a window — loudly, on stderr, with a
     // non-zero exit code. The alternative is what `--mcp-port=8716336` used to

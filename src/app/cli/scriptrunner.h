@@ -52,6 +52,11 @@ int runScriptPool(MainWindow &window, QApplication &app, const QString &scripts,
 /// output — generated, never hand-edited). Returns the process exit code.
 int runDumpApiDocs(MainWindow &window, const QString &outPath);
 
+/// THE VULKAN DRIVERS THIS PROCESS HAS MAPPED: every ICD library the loader's manifests name, found in /proc/self/maps (a
+/// mapped driver is a Vulkan instance's evidence; the loader library alone, linked and never called, is not). The NO-GPU
+/// runs' proof: the docs dump and `--print-shader-identity` (main.cpp) refuse (exit 3) when it is not empty.
+QStringList mappedVulkanDrivers();
+
 /// --mcp-port=N [--headless] (CLAUDE_EDITOR_SPEC.md phase 1): boot like a
 /// script run (windowed = engine viewport up; headless = document verbs only),
 /// start the MCP server on 127.0.0.1:port, print the session token + connect

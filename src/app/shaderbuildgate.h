@@ -34,6 +34,7 @@
 #include <QtGlobal>
 
 class QApplication;
+class QString;
 class VersionSplashScreen;
 class Database;
 
@@ -44,5 +45,19 @@ class Database;
 /// `db` is the library the templates' documents are built against (their floors
 /// wear the shipped, BAKED cube); null skips the editor worlds.
 unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash, Database *db);
+
+/// THE STARTUP PASS's KEY, NO DEVICE (SHADER-SYSTEM-1 stage 6a): the pass's code id (JAH_STARTUP_PASS_CODE_ID: its
+/// sources, the engine's build id and its ray SPIR-V's id), the staged media by content (startuppass::mediaDigest) and
+/// the shader cache's build terms (jahshaka::engine::shaderIdentity().fingerprint) - CONTENT only. The pass writes it
+/// into warm-pass.key; a driver or a card is no term of it (the cache drops the layers those move, and the pass runs on
+/// ShaderCacheStats::layersNotLoaded).
+QString startupPassKey(const QString &mediaDigest);
+
+/// `Jahshaka --print-shader-identity`: prints, one `<name> <value>` line each, the shader identity the pass keys on -
+/// `shader-identity 1` (the format), `layer.pipeline|microcode|hlms|compute`, `cache`, `engine`, `ray-spirv`,
+/// `pass-code`, `media`, then `identity <startupPassKey>` (exactly what the pass writes into warm-pass.key) - reading
+/// the binary's own `mediaDir`. No window, no engine, no GPU (main.cpp proves it: exit 3 when a Vulkan driver is
+/// mapped). Returns the exit code (0).
+int printShaderIdentity(const QString &mediaDir);
 
 #endif // SHADERBUILDGATE_H

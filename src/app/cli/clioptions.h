@@ -152,6 +152,9 @@ struct CliOptions
     bool help = false;
     /// `--version`: print the version line and EXIT 0, exactly like --help.
     bool version = false;
+    /// `--print-shader-identity` (SHADER-SYSTEM-1 stage 6a): print the shader identity the startup pass keys on
+    /// (shaderbuildgate.h, printShaderIdentity) and EXIT 0, like --help: no window, no engine, no GPU, no data root.
+    bool printShaderIdentity = false;
 
     static CliOptions parse(int argc, char *argv[]);
 

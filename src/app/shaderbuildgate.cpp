@@ -533,6 +533,25 @@ void writeWarmPassRecord(const QString &key)
 
 }  // namespace
 
+QString startupPassKey(const QString &mediaDigest)
+{
+    return startuppass::passKey(QStringLiteral(JAH_STARTUP_PASS_CODE_ID), mediaDigest,
+                                QString::fromStdString(jahshaka::engine::shaderIdentity().fingerprint));
+}
+
+int printShaderIdentity(const QString &mediaDir)
+{
+    const jahshaka::engine::ShaderIdentity id = jahshaka::engine::shaderIdentity();
+    const QString media = startuppass::mediaDigest(mediaDir);
+    std::printf("shader-identity 1\nlayer.pipeline %s\nlayer.microcode %s\nlayer.hlms %s\nlayer.compute %s\ncache %s\n"
+                "engine %s\nray-spirv %s\npass-code %s\nmedia %s\nidentity %s\n",
+                id.pipelineKey.c_str(), id.microcodeKey.c_str(), id.hlmsKey.c_str(), id.computeKey.c_str(),
+                id.fingerprint.c_str(), id.engineBuildId.c_str(), id.raySpirvId.c_str(), JAH_STARTUP_PASS_CODE_ID,
+                qPrintable(media), qPrintable(startupPassKey(media)));
+    std::fflush(stdout);
+    return 0;
+}
+
 unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash, Database *db)
 {
     auto engine = EngineHost::instance().engine();
@@ -830,17 +849,24 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // commit re-ran it): this pass's own sources and the engine's full build id
     // (JAH_STARTUP_PASS_CODE_ID), the staged media by content and the cache fingerprint
     // (app/startuppasskey.h, the one definition the test seeds read too); a cold cache runs it as well.
-    std::string fingerprint;
-    engine->request([&](jahshaka::engine::Engine &e) { fingerprint = e.shaderCacheStats().fingerprint; });   // a REQUEST (U3 stage 3)
-    const QString passKey = startuppass::passKey(
-        QStringLiteral(JAH_STARTUP_PASS_CODE_ID),
-        mediaDigest.get(),
-        QString::fromStdString(fingerprint));
+    // ...AND WHEN THE CACHE IT FILLS IS NOT WHOLE (SHADER-SYSTEM-1 stage 6a): the key is CONTENT (startupPassKey: no
+    // device term, so `--print-shader-identity` prints it with no GPU), and a driver or a card change is seen where the
+    // cache sees it - the layers whose key holds the GPU are dropped at the load (layersNotLoaded). The compile count
+    // does not see it: the dropped recipes regenerate from a whole microcode layer and compile nothing.
+    const QString passKey = startupPassKey(mediaDigest.get());
+    std::vector<std::string> notLoaded;
+    engine->request([&](jahshaka::engine::Engine &e) { notLoaded = e.shaderCacheStats().layersNotLoaded; });   // a REQUEST (U3 stage 3)
     const bool keyMoved = readWarmPassRecord() != passKey;   // the record in the cache it describes (URGENT #104)
-    const bool runPass = compiled > 0 || keyMoved;
+    const bool runPass = compiled > 0 || keyMoved || !notLoaded.empty();
     if (keyMoved && compiled == 0)
         qInfo("startup shader build: the global pass's key moved (what it compiles changed: its code, "
               "the engine, the media or the cache) — running it over a warm cache");
+    if (!notLoaded.empty()) {
+        std::string names;
+        for (const std::string &n : notLoaded) names += (names.empty() ? "" : ", ") + n;
+        qInfo("startup shader build: the cache's load left %zu layer(s) empty (%s) - running the global pass",
+              notLoaded.size(), names.c_str());
+    }
     unsigned lastCompiled = compiled;
     int quiet = 0;
     // ...AND UNTIL THE LIGHTING ARM IS BOUND (TEST-TIER-1): the Atom-off frames below draw the
