@@ -1,9 +1,12 @@
 #!/bin/bash
 # lab.js_rerun (LAB-SCRIPTS-1 stage 1) - A RUN IS A FRESH HOST: one lab runs one script twice (`--js`, then `js run` on its
-# stdin), the driver rewriting a marker in the file between the runs. The script declares a top-level `const` and counts
-# its runs in the realm's global (globalThis.n = (globalThis.n || 0) + 1), and checks n === 1.
+# stdin), the driver rewriting a marker in the file between the runs. The script declares a top-level `const`, counts
+# its runs in the realm's global (globalThis.n = (globalThis.n || 0) + 1) and checks n === 1, and - as every engine
+# script does - MAKES A NAMED SCENE and binds it to the lab's view (lab.view()).
 # THE LAWS: run 2 RE-READS THE FILE (it prints the new marker, MARK-2) and runs in a FRESH realm - its `const` is no
-# redeclaration and its n is 1 - so both runs end `ok (1 checks, 0 frames)` and the lab exits 0.
+# redeclaration and its n is 1 - and makes its scene of the SAME NAME again (run 1's host ended with the next run, and
+# what its commands made with it: the engine refuses a second scene of one name, OgreEngine.cpp adoptScene) - so both
+# runs end `ok (2 checks, 0 frames)` and the lab exits 0 (the owner's Run pressed twice).
 # CONTROL: run 1's own check (n === 1) passes - the check can see a run.
 # The driver reads the lab's lines as they come (a coprocess): it rewrites the file on the first END line and sends the
 # second `js run`, then `quit` on the second - no sleep, no clock; ctest's timeout bounds a lab that never answers.
@@ -15,8 +18,11 @@ rm -rf "$WD"; mkdir -p "$WD"
 cat > "$WD/rerun.js" <<'JS'
 const marker = "MARK-1";
 globalThis.n = (globalThis.n || 0) + 1;
+const scene = engine.scene.create("rerun-scene");
 console.log("marker " + marker + " n " + globalThis.n);
 host.check({ok: globalThis.n === 1, what: "a fresh realm: n === 1 (it reads " + globalThis.n + ")"});
+host.check({ok: !!scene && engine.view.setScene(lab.view(), {scene}) === true,
+            what: "the run makes its scene 'rerun-scene' and the lab's view shows it" + (scene ? "" : " (refused: " + host.lastError() + ")")});
 JS
 coproc LABP { exec "$LAB" --headless --size 320x180 --data-root "$WD/data" --js "$WD/rerun.js" 2>&1; }
 pid=$LABP_PID
@@ -53,7 +59,7 @@ else:
     if not any(l == "LAB JS marker MARK-2 n 1" for l in run2):
         fails.append("run 2 did not re-read the file into a fresh realm (no 'LAB JS marker MARK-2 n 1')")
     for k, i in enumerate(ends):
-        if lines[i] != "LAB JS END rerun.js ok (1 checks, 0 frames)":
+        if lines[i] != "LAB JS END rerun.js ok (2 checks, 0 frames)":
             fails.append("run %d ended %r" % (k + 1, lines[i]))
 if rc != 0:
     fails.append("the lab exited %d" % rc)
