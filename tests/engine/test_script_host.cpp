@@ -775,7 +775,8 @@ int main()
         };
         Registry nr;
         nr.add({"test.pair",
-                {{target(handle("scene", "scene")), target(handle("node", "node")),
+                {Access::Reads,
+                 {target(handle("scene", "scene")), target(handle("node", "node")),
                   object("opts", {arg("x", Kind::Number, Value(1.0))}, Value(Value::Object{}))},
                  Kind::Array},
                 "the scene, the node and opts.x, in that order"},

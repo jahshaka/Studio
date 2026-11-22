@@ -60,7 +60,8 @@ static std::string schemaText(const CommandInfo &info, std::string &why)
 static bool structural(const Value &s, const std::string &where, std::string &why)
 {
     static const std::set<std::string> kKeys = {"type", "description", "properties", "required", "additionalProperties",
-                                                "items", "minItems", "maxItems", "enum", "minimum", "maximum", "default",
+                                                "items", "minItems", "maxItems", "enum", "minimum", "exclusiveMinimum", "maximum",
+                                                "default",
                                                 "propertyNames", "minProperties", "contentEncoding", "maxLength", "const"};
     static const std::set<std::string> kTypes = {"null", "boolean", "integer", "number", "string", "array", "object"};
     if (s.kind() != Kind::Object) return why = where + ": not an object", false;
@@ -92,7 +93,8 @@ static bool structural(const Value &s, const std::string &where, std::string &wh
         return why = why.empty() ? where + ": an array with no items" : why, false;
     const Value &lo = s["minItems"], &hi = s["maxItems"];
     if ((!lo.isNull() || !hi.isNull()) &&
-        (t != "array" || lo.kind() != Kind::Int || hi.kind() != Kind::Int || lo.asInt() > hi.asInt()))
+        (t != "array" || (!lo.isNull() && lo.kind() != Kind::Int) || (!hi.isNull() && hi.kind() != Kind::Int) ||
+         (!lo.isNull() && !hi.isNull() && lo.asInt() > hi.asInt())))
         return why = where + ": item counts out of order", false;
     const Value &e = s["enum"];
     if (!e.isNull()) {
@@ -100,7 +102,7 @@ static bool structural(const Value &s, const std::string &where, std::string &wh
         for (const Value &x : e.asArray())
             if (x.kind() != Kind::String) return why = where + ": an enum of no strings", false;
     }
-    for (const char *b : {"minimum", "maximum"}) {
+    for (const char *b : {"minimum", "exclusiveMinimum", "maximum"}) {
         const Value &v = s[b];
         if (!v.isNull() && (!(t == "integer" || t == "number") || (v.kind() != Kind::Int && v.kind() != Kind::Number)))
             return why = where + ": a " + b + " off a number", false;
@@ -126,19 +128,21 @@ int main()
     const auto none = [](Call &) { return Value(); };
     const bool added =
         reg.add({"test.forms",
-                 {{target(handle("thing", "thing")),
+                 {Access::Changes,
+                  {target(handle("thing", "thing")),
                    object("opts", {arg("flag", Kind::Bool, Value(true)), arg("count", Kind::Int).range(1, 8).in("px"),
                                    arg("ratio", Kind::Number, Value(0.5)).range(0, 1), arg("mode", Kind::String).oneOf({"a", "b"}),
                                    numbers("vec", 3, Value(Value::Array{Value(0.0), Value(0.0), Value(1.0)})),
                                    objects("items", {arg("k", Kind::String)}), arg("blob", Kind::Bytes),
                                    handle("other", "thing"), others, arg("free", Kind::Array),
                                    arg("raw", Kind::Number).allowNonFinite(), arg("nothing", Kind::Null, Value()),
-                                   object("nested", {arg("x", Kind::Number, Value(2.0))}, Value(Value::Object{}))})},
+                                   object("nested", {arg("x", Kind::Number, Value(2.0))}, Value(Value::Object{})),
+                                   handles("many", "thing").upTo(5), arg("pos", Kind::Number).above(0)})},
                   Kind::Null},
                  "every form"},
                 none) &&
-        reg.add({"test.reduce", {{target(object("pic", {arg("w", Kind::Int)}))}, Kind::Int}, "reduces"}, none) &&
-        reg.add({"test.none", {{}, Kind::Null}, "nothing"}, none);
+        reg.add({"test.reduce", {Access::Reads, {target(object("pic", {arg("w", Kind::Int)}))}, Kind::Int}, "reduces"}, none) &&
+        reg.add({"test.none", {Access::Reads, {}, Kind::Null}, "nothing"}, none);
     CHECK(added && reg.validate().empty(), "the synthetic registry of every Param form registers");
     const std::string forms =
         "{\"type\":\"object\",\"description\":\"every form\",\"properties\":{"
@@ -160,8 +164,11 @@ int main()
         "\"raw\":{\"type\":\"number\",\"description\":\"NaN and infinity allowed (JSON carries neither)\"},"
         "\"nothing\":{\"type\":\"null\",\"default\":null},"
         "\"nested\":{\"type\":\"object\",\"properties\":{\"x\":{\"type\":\"number\",\"default\":2.0}},"
-        "\"additionalProperties\":false,\"default\":{\"x\":2.0}}},"
-        "\"required\":[\"count\",\"mode\",\"items\",\"blob\",\"other\",\"others\",\"free\",\"raw\"],"
+        "\"additionalProperties\":false,\"default\":{\"x\":2.0}},"
+        "\"many\":{\"type\":\"array\",\"items\":{\"type\":\"integer\",\"minimum\":1,\"description\":\"a thing handle\"},"
+        "\"maxItems\":5},"
+        "\"pos\":{\"type\":\"number\",\"exclusiveMinimum\":0.0}},"
+        "\"required\":[\"count\",\"mode\",\"items\",\"blob\",\"other\",\"others\",\"free\",\"raw\",\"many\",\"pos\"],"
         "\"additionalProperties\":false}},\"required\":[\"thing\",\"opts\"],\"additionalProperties\":false}";
     const std::string formsGot = schemaText(*reg.find("test.forms"), why);
     CHECK(formsGot == forms, "every Param form maps to its expected text" + (formsGot == forms ? std::string() : "\n  got  " + formsGot +
@@ -178,8 +185,9 @@ int main()
     Param counted = arg("c", Kind::Int);
     counted.count = 2;
     const CommandInfo bad{"test.bad",
-                          {{object("o", {arg("s", Kind::String).range(0, 1), arg("i", Kind::Int).oneOf({"x"}), counted,
-                                         arg("bad name!", Kind::Int)})},
+                          {Access::Reads,
+                           {object("o", {arg("s", Kind::String).range(0, 1), arg("i", Kind::Int).oneOf({"x"}), counted,
+                                         arg("m", Kind::Int).upTo(2), arg("bad name!", Kind::Int)})},
                            Kind::Null},
                           "unmappable"};
     Value ignored;
@@ -190,6 +198,7 @@ int main()
     CHECK(!badMapped && unmappedCount >= 1 && badWhy.find("o.s: its 'min/max' on a string has no schema form") != std::string::npos &&
               badWhy.find("o.i: its 'choices' on a int has no schema form") != std::string::npos &&
               badWhy.find("o.c: its 'count' on a int has no schema form") != std::string::npos &&
+              badWhy.find("o.m: its 'maxCount' on a int has no schema form") != std::string::npos &&
               badWhy.find("the name 'bad name!' is not 1-64") != std::string::npos,
           "the control: unmappable fields read " + std::to_string(unmappedCount) + " named faults (" + badWhy + ")");
 
@@ -212,7 +221,9 @@ int main()
           "structurally valid schema the codec carries both ways (" + std::to_string(mapped) + " did" +
               (firstBad.empty() ? std::string() : "; first fault " + firstBad) + ")");
 
-    // 5. THE THREE REAL SIGNATURES, BYTE FOR BYTE (START-PREFLIGHT.md (f); <doc> the command's own doc)
+    // 5. THE THREE REAL SIGNATURES, BYTE FOR BYTE (START-PREFLIGHT.md (f); <doc> the command's own doc). engine.gi.set's
+    //    text is the preflight's PLUS the bounds SCRIPT-IN-ENGINE-1 2a declared where the preflight found them lost
+    //    (commands_gi.cpp: cascades upTo(4), halfSize above(0), resolution 16..256, stepCells 0..128)
     const auto doc = [&](const char *name) {
         std::string t, w;
         toJson(Value(host.registry().find(name)->doc), t, w);
@@ -236,9 +247,11 @@ int main()
             "\"params\":{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"off\",\"vct\","
             "\"vctPccHybrid\"]},\"quality\":{\"type\":\"string\",\"enum\":[\"low\",\"medium\",\"high\",\"epic\"],\"default\":"
             "\"medium\"},\"bounces\":{\"type\":\"boolean\",\"default\":true},\"cascades\":{\"type\":\"array\",\"items\":{\"type\":"
-            "\"object\",\"properties\":{\"halfSize\":{\"type\":\"number\",\"description\":\"m\"},\"resolution\":{\"type\":"
-            "\"integer\",\"description\":\"cells\"},\"stepCells\":{\"type\":\"number\",\"description\":\"cells\",\"default\":0.0}},"
-            "\"required\":[\"halfSize\",\"resolution\"],\"additionalProperties\":false}}},\"required\":[\"mode\",\"cascades\"],"
+            "\"object\",\"properties\":{\"halfSize\":{\"type\":\"number\",\"exclusiveMinimum\":0.0,\"description\":\"m\"},"
+            "\"resolution\":{\"type\":\"integer\",\"minimum\":16,\"maximum\":256,\"description\":\"cells\"},\"stepCells\":"
+            "{\"type\":\"number\",\"minimum\":0.0,\"maximum\":128.0,\"description\":\"cells\",\"default\":0.0}},"
+            "\"required\":[\"halfSize\",\"resolution\"],\"additionalProperties\":false},\"maxItems\":4}},"
+            "\"required\":[\"mode\",\"cascades\"],"
             "\"additionalProperties\":false}},\"required\":[\"scene\",\"params\"],\"additionalProperties\":false}"};
     for (int i = 0; i < 3; ++i) {
         const std::string got = schemaText(*host.registry().find(names[i]), why);
