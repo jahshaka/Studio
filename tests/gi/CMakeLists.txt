@@ -1246,11 +1246,11 @@ jah_gpu_row(gi.lamps_outside_cards CLASS engine COMMAND test_gi_lamps_outside ca
 set_tests_properties(gi.lamps_outside_cards PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 120)
 
-# gi.card_build_late (COLD-BOOT-1 item 3) - A CARD READER WHOSE BUILD IS IN FLIGHT IS A READER: a closed room on the
-# Streaming pace, its view asynchronous; .late holds the two card readers' builds (the test door rays.buildHold) past the
-# cache's demand window - no rest decision and giAtRest false while they are held, then the SAME resident set as a control
-# scene whose readers ran from its first frame; .unasked holds a build no reader asks for (the glass escape in a room
-# with no blended material) - the room rests while it is in flight and its landing changes nothing
+# gi.card_build_late (COLD-BOOT-1 item 3) - THE REST LAW's INPUT IS A COMPLETE FRAME: a closed room on the Streaming pace,
+# its view asynchronous. .late / .pso / .texture hold a card reader's build, every object's permutation, the floor's texture
+# past the cache's demand window - no rest decision and giAtRest false while held, then the SAME resident set as a control;
+# .unasked holds a build no reader asks for - the room rests and its landing changes nothing; .psofail / .buildfail /
+# .corrupt force a FAILURE - final, never pending: the room comes to rest on the picture it can draw
 # (test_gi_card_build_late.cpp says the laws). A fixture, one row a law.
 add_executable(test_gi_card_build_late test_gi_card_build_late.cpp)
 set_target_properties(test_gi_card_build_late PROPERTIES
@@ -1272,6 +1272,26 @@ jah_gpu_row(gi.card_build_late.unasked CLASS engine COMMAND test_gi_card_build_l
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.unasked PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 146)
+jah_gpu_row(gi.card_build_late.pso CLASS engine COMMAND test_gi_card_build_late pso
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.pso PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
+jah_gpu_row(gi.card_build_late.texture CLASS engine COMMAND test_gi_card_build_late texture
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.texture PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
+jah_gpu_row(gi.card_build_late.psofail CLASS engine COMMAND test_gi_card_build_late psofail
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.psofail PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
+jah_gpu_row(gi.card_build_late.buildfail CLASS engine COMMAND test_gi_card_build_late buildfail
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.buildfail PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
+jah_gpu_row(gi.card_build_late.corrupt CLASS engine COMMAND test_gi_card_build_late corrupt
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(gi.card_build_late.corrupt PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
 
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,

@@ -1,36 +1,50 @@
-// gi.card_build_late (COLD-BOOT-1 item 3, the lead's ruling 2026-11-22) - A CARD READER WHOSE BUILD IS IN FLIGHT IS A READER.
+// gi.card_build_late (COLD-BOOT-1 item 3, the lead's rulings 2026-11-22) - THE REST LAW's INPUT IS A COMPLETE FRAME.
 //
-// THE DEFECT IT GUARDS (spikes/cold-boot-1/VERIFY-card-demand.md): in a scene that compiles in the background (its view
-// asynchronous, the engine on the Streaming pace) a card reader whose ray pipeline is still building takes its "not this
-// frame" path (RayQueryTier::aheadReady) and records nothing; a reader that has not recorded was read as NO reader, so the
-// cache's demand window - opened by its own build - closed empty, the rest's ONE decision was taken on nothing, and the
-// build's landing was no change of the demand: the readers' first stamps arrived after the window and nothing was ever
-// admitted (the startup gate's cold Basic world: admitted 0 through every phase). The resident set at a pose then depended
-// on how long a driver compile took.
+// THE DEFECT IT GUARDS (spikes/cold-boot-1/VERIFY-card-demand.md; the second path: the hold F-fix): in a scene that compiles
+// in the background (its view asynchronous, the engine on the Streaming pace) a frame can be INCOMPLETE - a card reader whose
+// ray pipeline is still building takes its "not this frame" path (RayQueryTier::aheadReady) and records nothing; an object
+// whose permutation is still compiling draws the PLACEHOLDER (rough 0.8: the reflection traces no ray there) or is
+// skipped; a material wears a FALLBACK while its texture loads. The cache's demand window, opened by its own build, closed
+// on what those frames read, the rest's ONE decision was taken on it, and the frame that became complete was no change of
+// the demand: the scene's real readers stamped after the window and their cards never arrived (the startup gate's cold
+// Basic world: admitted 0 through every phase). THE LAW (PublishedFrame::Completeness): an incomplete scene is not at rest
+// and takes no rest decision; the frame in which it becomes complete is a demand change (the window reopens, the readers
+// rest anew); and a FAILURE is final, never pending - a scene whose build fails comes to rest on the picture it can draw.
 // THE FIXTURE: a closed 6 x 3 x 6 m room of carded slabs, two carded pillars and a lamp inside, the eye inside; the chain
 // at High, the cards on, the rays on, GI paused; a 128 x 128 StillPicture view with the post chain and the ray reflection
-// (it gathers: both card readers), asynchronous, the engine on the Streaming pace. A late build is the test door
-// rays.buildHold (with rays.buildHoldIds naming the builds): a held build counts as in flight, finished or not, until the
-// arm is set back to 0 (then the frame's harvest lands it).
-// THE ROWS (argv[1]):
-//   late    - THE LAW. Run H: the two card readers' builds (the reflection's, the gather's) HELD from the first frame until
-//             kHeldPastBuild frames after the cache's build (three times its demand window: S + a read period + the read's
-//             lag, ~19 frames), then released. (1) while they are held, NO rest decision is taken and giAtRest is false;
-//             (2) after they land the cache admits and captures, and at rest holds THE SAME RESIDENT SET as run C - the same
-//             room at the same pose, a new scene drawn after every build landed (its readers recorded from its first frame):
-//             CardCacheStatus::residentHash equal (the two scenes' nodes carry the same explicit ids), cards > 0.
-//             RED before the fix: the decision taken in the hold on an empty demand, admitted 0 for ever.
-//   unasked - THE DEFINITION'S OTHER HALF (the lead's condition): a build NO READER ASKED FOR holds no rest. The glass escape's
-//             build launched with the rest (Engine::prepareRayPipelines) and held; the room has no blended material, so its
-//             consumer never runs. (1) the scene comes to rest - its decision taken, giAtRest true - while that build is still
-//             in flight; (2) its landing is no change of the demand: the change frame, the decisions and the resident set the
-//             same kAfterLanding frames after it.
+// (it gathers: both card readers), asynchronous, the engine on the Streaming pace. The doors: rays.buildHold (+ Ids) a ray
+// build held in flight, Engine::setAsyncShaderPlaceholdersOnly every object's own permutation held unrequested (it draws its
+// placeholder), textures.residencyHold every texture bind awaited; rays.buildFail and shaders.asyncFail force failures.
+// THE ROWS (argv[1]), each one law; a held row: run H held from the first frame until kHeldPastBuild frames after the
+// cache's build (three times its demand window: S + a read period + the read's lag, ~19 frames), then released - (1) while
+// held, NO rest decision and giAtRest false; (2) after the release, at rest, THE SAME RESIDENT SET as run C - the same room
+// at the same pose, a new scene drawn after everything landed: CardCacheStatus::residentHash equal (the scenes' nodes carry
+// the same explicit ids), cards > 0:
+//   late      - the two card readers' builds (the reflection's, the gather's) held. RED before the fix: decided on 32 of 61
+//               held frames on an empty demand, 0 cards for ever (spikes/cold-boot-1/build-late-red/).
+//   pso       - every object's own graphics permutation held (placeholders only): the readers ready, the picture not.
+//   texture   - the floor's roughness map awaited (what the reflection traces follows it).
+//   unasked   - a build NO READER ASKED FOR holds no rest: the glass escape's build launched with the rest
+//               (Engine::prepareRayPipelines) and held in a room with no blended material - (1) the scene comes to rest while
+//               it is in flight; (2) its landing is no change: the change frame, the decisions and the resident set the same
+//               kAfterLanding frames after it.
+//   psofail   - every object's own permutation FAILS (shaders.asyncFail): the scene comes to rest on its placeholders - the
+//               resident set of a control room whose materials ARE the placeholder's (albedo 0.18, rough 0.8, dielectric).
+//   buildfail - the readers' builds held past the window, then released into a forced FAILURE (rays.buildFail): no reader
+//               runs, the scene comes to rest with no card admitted.
+//   corrupt   - the floor wears a texture whose file is corrupt (the loader's fallback is its final texture): the scene comes
+//               to rest with the control's cards (the same room, no texture: an albedo map moves no reader's ray).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 
+#include <algorithm>
 #include <cstdio>
+#include <fstream>
+#include <functional>
 #include <string>
+#include <unistd.h>
+#include <vector>
 using namespace jahshaka::engine;
 
 namespace {
@@ -40,11 +54,11 @@ void check(bool ok, const char *what)
     std::printf("%s %s\n", ok ? "  ok  " : "  FAIL", what);
     if (!ok) ++g_fail;
 }
-/// The frames after the cache's build the late run's readers stay held: 3 x the demand window (S 10 + a read period 4 +
-/// the read's lag ~5 frames, SurfaceCache::demandWindowOpen), so a window opened by the build is long closed.
+/// The frames after the cache's build a held run stays held: 3 x the demand window (S 10 + a read period 4 + the read's
+/// lag ~5 frames, SurfaceCache::demandWindowOpen), so a window opened by the build is long closed.
 const int kHeldPastBuild = 60;
-/// rays.buildHoldIds: bit k for AheadId k (OgreFrameMonitor.cpp's row) - the reflection (1) and the gather (32); the glass
-/// escape (16)
+/// rays.buildHoldIds / rays.buildFail: bit k for AheadId k (OgreFrameMonitor.cpp's row) - the reflection (1) and the
+/// gather (32); the glass escape (16)
 const double kReaderBuilds = 1.0 + 32.0, kGlassEscapeBuild = 16.0;
 /// A hold the run releases itself (arm back to 0): longer than any run
 const double kHoldForever = 100000.0;
@@ -68,8 +82,13 @@ NodeId slab(Scene *s, NodeId id, const Vec3 &at, const Vec3 &size, MaterialId ma
     return node;
 }
 
+/// The room's look: as authored, or every material the async placeholder's (OgreEngine.cpp: albedo 0.18, rough 0.8,
+/// dielectric) - psofail's control; and the floor's map: none, a roughness texture, or a corrupt albedo file.
+enum class Floor { Plain, Texture, Corrupt };
+struct Look { bool placeholder = false; Floor floor = Floor::Plain; };
+
 struct Room { View *view = nullptr; Scene *scene = nullptr; };
-Room buildRoom(Engine *e, const char *name)
+Room buildRoom(Engine *e, const char *name, const Look &look = Look())
 {
     Room r;
     r.view = e->createOffscreenView(name, 128, 128, Colour(0, 0, 0), OffscreenContract::StillPicture);
@@ -89,7 +108,32 @@ Room buildRoom(Engine *e, const char *name)
     matte.roughness = 0.9f;
     PbrParams glossy = matte;
     glossy.roughness = 0.25f;   // the floor: the reflection reads cards too
+    if (look.placeholder) {
+        matte.albedo = Colour(0.18f, 0.18f, 0.18f);
+        matte.roughness = 0.8f;
+        matte.metalness = 0.0f;
+        glossy = matte;
+    }
     const MaterialId wall = s->createPbrMaterial(matte), floorMat = s->createPbrMaterial(glossy);
+    if (look.floor == Floor::Texture) {
+        // a ROUGHNESS map (white: the floor's own 0.25): what the reflection traces follows it, and it is no voxel input
+        // (an albedo map is, and the chain waits for those: PhotonComponent::giVoxelTexturesPending)
+        std::vector<unsigned char> px(16u * 16u * 4u, 255u);
+        const TextureId t = s->createTexture(16u, 16u, px.data(), false);
+        if (!t || !s->setPbrTexture(floorMat, PbrTextureSlot::Roughness, t)) return Room();
+    } else if (look.floor == Floor::Corrupt) {
+        char cwd[4096] = { 0 };
+        const std::string path = std::string(getcwd(cwd, sizeof(cwd)) ? cwd : ".") + "/card_build_late_corrupt.png";
+        {
+            std::ofstream f(path, std::ios::binary);
+            const char bytes[] = "\x89PNG\r\n\x1a\nnot an image: the decoder fails here";
+            f.write(bytes, sizeof(bytes));
+        }
+        const TextureId t = s->loadTexture(path, true);
+        std::printf("   the corrupt texture: %s (%s)\n", t ? "loaded (its decode fails: the loader's fallback)"
+                                                            : "refused at its load", t ? "" : e->lastError().c_str());
+        if (t && !s->setPbrTexture(floorMat, PbrTextureSlot::Albedo, t)) return Room();
+    }
     NodeId id = kFirstId;
     bool ok = slab(s, id++, Vec3(0.0f, -0.1f, 0.0f), Vec3(6.4f, 0.2f, 6.4f), floorMat) &&   // floor
               slab(s, id++, Vec3(0.0f, 3.1f, 0.0f), Vec3(6.4f, 0.2f, 6.4f), wall) &&       // roof
@@ -148,13 +192,22 @@ void printCards(const char *what, const GiStatus &g, unsigned inFlight)
                 g.cards.queueLength, g.cards.demandChangeFrame, g.cards.demandFirst[0], g.cards.demandFirst[1],
                 g.cards.restDecisions, g.cards.decisionReaders, g.cards.decisionAdmitted, int(g.giAtRest), inFlight);
 }
+
+void drop(Engine *e, Room &r)
+{
+    e->destroyView(r.view);
+    e->destroyScene(r.scene);
+    enginetest::poseRegistry().erase(r.scene);
+    r = Room();
+}
 }   // namespace
 
 int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "late";
-    if (mode != "late" && mode != "unasked") {
-        std::printf("FAIL: the mode is late or unasked, not '%s'\n", mode.c_str());
+    const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt" };
+    if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
+        std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail or corrupt, not '%s'\n", mode.c_str());
         return 2;
     }
     std::string err;
@@ -164,27 +217,44 @@ int main(int argc, char **argv)
     e->setRayTracing(true);
     e->setFramePace(FramePace::Streaming);   // in force until set again: every frame of the row
     int frames = 0;
+    char w[320];
     const auto inFlight = [&]() { return e->published().shaders.rayBuildsInFlight; };
 
-    e->setArm("rays.buildHold", kHoldForever);
-    e->setArm("rays.buildHoldIds", mode == "late" ? kReaderBuilds : kGlassEscapeBuild);
-    Room h = buildRoom(e, mode == "late" ? "build_late_held" : "build_late_unasked");
-    if (!h.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
-    if (mode == "unasked") {
-        // EVERY BUILD LAUNCHED, the glass escape's among them - at the first frame, as the startup gate does (before it
-        // the ray tier does not exist and the call launches nothing)
-        enginetest::frames(e, 1);
-        ++frames;
-        e->prepareRayPipelines();
-    }
-
-    if (mode == "late") {
-        // RUN H: the readers held until kHeldPastBuild frames after the cache's build; every frame of the hold read
+    // ---- the held rows: hold, the law in the hold, release, at rest against the control ----------------------------
+    if (mode == "late" || mode == "pso" || mode == "texture") {
+        Look look;
+        std::function<void()> release;
+        if (mode == "late") {
+            e->setArm("rays.buildHold", kHoldForever);
+            e->setArm("rays.buildHoldIds", kReaderBuilds);
+            release = [&]() { e->setArm("rays.buildHold", 0.0); };
+        } else if (mode == "pso") {
+            e->setAsyncShaderPlaceholdersOnly(true);
+            release = [&]() { e->setAsyncShaderPlaceholdersOnly(false); };
+        } else {
+            look.floor = Floor::Texture;
+            e->setArm("textures.residencyHold", 1.0);
+            // (an arm is LATCHED at a frame's start, OgreEngine's mArms.latch: one frame first, so the room's bind reads it)
+            enginetest::frames(e, 1);
+            ++frames;
+            release = [&]() { e->setArm("textures.residencyHold", 0.0); };
+        }
+        Room h = buildRoom(e, "build_late_held", look);
+        if (!h.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+        if (mode != "late") {
+            // the readers ready: every ray build launched at the first frame and landed before the hold's frames count
+            enginetest::frames(e, 1);
+            ++frames;
+            e->prepareRayPipelines();
+        }
+        const unsigned long long phBefore = e->published().shaders.placeholderDraws;
         int builtAt = -1, heldFrames = 0, decidedInHold = 0, atRestInHold = 0, firstBad = -1;
+        unsigned awaitingSeen = 0u;
         for (int f = 0; f < kRestCap; ++f) {
             enginetest::frames(e, 1);
             ++frames;
             const GiStatus g = h.scene->published().gi;
+            awaitingSeen = std::max(awaitingSeen, e->published().streaming.materialsAwaitingTexture);
             if (builtAt < 0 && g.cards.built) builtAt = frames;
             if (builtAt < 0) continue;
             ++heldFrames;
@@ -192,27 +262,26 @@ int main(int argc, char **argv)
             if (g.giAtRest) { ++atRestInHold; if (firstBad < 0) firstBad = frames; }
             if (frames - builtAt >= kHeldPastBuild) break;
         }
-        const GiStatus held = h.scene->published().gi;
-        printCards("H, the readers' builds held", held, inFlight());
-        std::printf("   the cache built at frame %d; %d frames held after it: %d with a rest decision, %d at rest "
-                    "(the first at frame %d)\n", builtAt, heldFrames, decidedInHold, atRestInHold, firstBad);
-        check(builtAt > 0, "the cache is built while the readers' builds are held");
-        check(inFlight() >= 1u, "the held builds are in flight to the hold's end");
-        char w[256];
-        std::snprintf(w, sizeof(w), "(1) while a card reader's build is in flight no rest decision is taken and giAtRest is "
-                      "false (%d of %d held frames decided, %d at rest)", decidedInHold, heldFrames, atRestInHold);
+        const unsigned long long phHeld = e->published().shaders.placeholderDraws - phBefore;
+        printCards("H, held", h.scene->published().gi, inFlight());
+        std::printf("   the cache built at frame %d; %d frames held after it: %d with a rest decision, %d at rest (the first "
+                    "at frame %d); placeholder draws in the hold %llu, materials awaiting a texture (most) %u\n", builtAt,
+                    heldFrames, decidedInHold, atRestInHold, firstBad, phHeld, awaitingSeen);
+        check(builtAt > 0, "the cache is built while the frame is held incomplete");
+        if (mode == "late") check(inFlight() >= 1u, "the held builds are in flight to the hold's end");
+        if (mode == "pso") check(phHeld > 0ull, "the held objects draw their placeholders through the hold");
+        if (mode == "texture") check(awaitingSeen > 0u, "the floor's material awaits its texture through the hold");
+        std::snprintf(w, sizeof(w), "(1) while the frame is incomplete (%s) no rest decision is taken and giAtRest is false "
+                      "(%d of %d held frames decided, %d at rest)", mode.c_str(), decidedInHold, heldFrames, atRestInHold);
         check(heldFrames > 0 && decidedInHold == 0 && atRestInHold == 0, w);
-        e->setArm("rays.buildHold", 0.0);   // THE LANDING
+        release();   // THE FRAME BECOMES COMPLETE
         const int restH = toRest(e, h.scene, frames);
         const GiStatus gh = h.scene->published().gi;
         printCards("H at rest", gh, inFlight());
-        std::printf("   at rest %d frames after the landing\n", restH);
-        e->destroyView(h.view);
-        e->destroyScene(h.scene);
-        enginetest::poseRegistry().erase(h.scene);
-
-        // RUN C: the same room, every build landed before its first frame - its readers record from frame 1
-        Room c = buildRoom(e, "build_late_control");
+        std::printf("   at rest %d frames after the release\n", restH);
+        drop(e, h);
+        // RUN C: the same room, everything landed before its first frame
+        Room c = buildRoom(e, "build_late_control", look);
         if (!c.scene) { std::printf("FAIL: the control room: %s\n", e->lastError().c_str()); return 1; }
         const int restC = toRest(e, c.scene, frames);
         const GiStatus gc = c.scene->published().gi;
@@ -220,21 +289,28 @@ int main(int argc, char **argv)
         std::printf("   at rest after %d frames\n", restC);
         check(restH >= 0 && restC >= 0, "both runs come to rest");
         check(gc.cards.cardsResident > 0u, "the control's readers admit cards (the room's faces read)");
-        std::snprintf(w, sizeof(w), "(2) after the readers' builds land the cache admits the SAME resident set as the control "
+        std::snprintf(w, sizeof(w), "(2) once the frame is complete the cache admits the SAME resident set as the control "
                       "(H %u cards, hash %016llx; C %u cards, hash %016llx)", gh.cards.cardsResident,
                       gh.cards.residentHash, gc.cards.cardsResident, gc.cards.residentHash);
         check(gh.cards.cardsResident > 0u && gh.cards.residentHash == gc.cards.residentHash &&
                   gh.cards.cardsResident == gc.cards.cardsResident, w);
-        check(gh.cards.captures > 0ull, "the late readers' cards are captured");
-    } else {
-        // THE UNASKED BUILD: the room comes to rest with the glass escape's build still held
+        check(gh.cards.captures > 0ull, "the late cards are captured");
+    } else if (mode == "unasked") {
+        e->setArm("rays.buildHold", kHoldForever);
+        e->setArm("rays.buildHoldIds", kGlassEscapeBuild);
+        Room h = buildRoom(e, "build_late_unasked");
+        if (!h.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+        // EVERY BUILD LAUNCHED, the glass escape's among them - at the first frame, as the startup gate does (before it
+        // the ray tier does not exist and the call launches nothing)
+        enginetest::frames(e, 1);
+        ++frames;
+        e->prepareRayPipelines();
         const int rest = toRest(e, h.scene, frames);
         const GiStatus before = h.scene->published().gi;
         const unsigned flying = inFlight();
         printCards("U at rest, the glass escape's build held", before, flying);
-        char w[256];
-        std::snprintf(w, sizeof(w), "(1) a build no reader asked for holds no rest: at rest after %d frames with %u ray build(s) "
-                      "in flight", rest, flying);
+        std::snprintf(w, sizeof(w), "(1) a build no reader asked for holds no rest: at rest after %d frames with %u ray "
+                      "build(s) in flight", rest, flying);
         check(rest >= 0 && flying >= 1u, w);
         e->setArm("rays.buildHold", 0.0);   // THE LANDING
         int landed = -1;
@@ -248,13 +324,64 @@ int main(int argc, char **argv)
         const GiStatus after = h.scene->published().gi;
         printCards("U after the landing", after, inFlight());
         check(landed > 0, "the held build lands once released");
-        std::snprintf(w, sizeof(w), "(2) its landing is no change of the demand: changed %llu -> %llu, decisions %llu -> %llu, "
-                      "hash %016llx -> %016llx, at rest %d", before.cards.demandChangeFrame, after.cards.demandChangeFrame,
-                      before.cards.restDecisions, after.cards.restDecisions, before.cards.residentHash,
-                      after.cards.residentHash, int(after.giAtRest));
+        std::snprintf(w, sizeof(w), "(2) its landing is no change of the demand: changed %llu -> %llu, decisions %llu -> "
+                      "%llu, hash %016llx -> %016llx, at rest %d", before.cards.demandChangeFrame,
+                      after.cards.demandChangeFrame, before.cards.restDecisions, after.cards.restDecisions,
+                      before.cards.residentHash, after.cards.residentHash, int(after.giAtRest));
         check(after.cards.demandChangeFrame == before.cards.demandChangeFrame &&
                   after.cards.restDecisions == before.cards.restDecisions &&
                   after.cards.residentHash == before.cards.residentHash && after.giAtRest, w);
+    } else {
+        // ---- the failure rows: a failure is final - the scene comes to rest on the picture it can draw ---------------
+        Look look, control;
+        if (mode == "psofail") {
+            e->setArm("shaders.asyncFail", 1.0);
+            control.placeholder = true;
+        } else if (mode == "buildfail") {
+            e->setArm("rays.buildHold", kHoldForever);
+            e->setArm("rays.buildHoldIds", kReaderBuilds);
+            e->setArm("rays.buildFail", kReaderBuilds);
+        } else {
+            look.floor = Floor::Corrupt;
+        }
+        Room h = buildRoom(e, "build_late_failed", look);
+        if (!h.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+        if (mode == "buildfail") {
+            int builtAt = -1;
+            for (int f = 0; f < kRestCap; ++f) {
+                enginetest::frames(e, 1);
+                ++frames;
+                if (builtAt < 0 && h.scene->published().gi.cards.built) builtAt = frames;
+                if (builtAt >= 0 && frames - builtAt >= kHeldPastBuild) break;
+            }
+            e->setArm("rays.buildHold", 0.0);   // THE LANDING, into the forced failure
+        }
+        const int rest = toRest(e, h.scene, frames);
+        const GiStatus gh = h.scene->published().gi;
+        const AsyncShaderStats as = e->published().shaders;
+        printCards("F at rest", gh, inFlight());
+        std::printf("   at rest after %d frames; permutations failed %llu, placeholder draws %llu, pending skips %llu\n", rest,
+                    (unsigned long long)as.failed, as.placeholderDraws, as.pendingSkips);
+        std::snprintf(w, sizeof(w), "(1) a failure is final: the scene comes to rest (%d frames, the cap %d)", rest, kRestCap);
+        check(rest >= 0, w);
+        if (mode == "psofail") check(as.failed > 0u, "the forced failures are counted (AsyncShaderStats::failed)");
+        if (mode == "buildfail") {
+            std::snprintf(w, sizeof(w), "(2) no reader runs: no card is admitted (%u resident)", gh.cards.cardsResident);
+            check(gh.cards.cardsResident == 0u, w);
+        } else {
+            drop(e, h);
+            e->setArm("shaders.asyncFail", 0.0);
+            Room c = buildRoom(e, "build_late_control", control);
+            if (!c.scene) { std::printf("FAIL: the control room: %s\n", e->lastError().c_str()); return 1; }
+            const int restC = toRest(e, c.scene, frames);
+            const GiStatus gc = c.scene->published().gi;
+            printCards("C at rest", gc, inFlight());
+            std::printf("   at rest after %d frames\n", restC);
+            std::snprintf(w, sizeof(w), "(2) at rest the cards of the picture it can draw: the control's (F %u cards, hash "
+                          "%016llx; C %u cards, hash %016llx)", gh.cards.cardsResident, gh.cards.residentHash,
+                          gc.cards.cardsResident, gc.cards.residentHash);
+            check(restC >= 0 && gc.cards.cardsResident > 0u && gh.cards.residentHash == gc.cards.residentHash, w);
+        }
     }
     std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
     return g_fail ? 1 : 0;
