@@ -19,7 +19,7 @@ For more information see the LICENSE file
 //
 // A texture that arrived INSIDE a material — picked through a material's
 // texture picker, or shipped with a preset and imported by the first-run seed
-// — carries the stamp, and `materialmembers::hiddenAsMember` is what that
+// — carries the stamp, and `materialmembers::hiddenAsMembers` is what that
 // stamp means to a listing: the picture folds into the bundle's tile while
 // ONLY materials use it. A texture the USER imported carries no stamp and is
 // always a tile.

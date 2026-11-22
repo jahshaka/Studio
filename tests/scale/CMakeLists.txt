@@ -21,7 +21,8 @@
 #                 `scale.assets` (archived: archive/tests/scale) (the tool `scale_assets_gen`; a no-op once cached)
 #                 into THE SHARED SCALE CACHE; a row whose shell is missing FAILS and
 #                 says how to bake it — no row ever measures a smaller asset instead;
-#   the LIBRARY — test_scale_library.cpp generates it through the import door.
+#   the LIBRARY — not here: the large-library rows (library.statements, tests/assettray) generate it
+#                 through the Database's own writers (tests/support/libraryfixture.h).
 # THE SHARED SCALE CACHE (V2-P0A): $JAH_SCALE_ASSET_CACHE, else JAH_SCALE_ASSET_CACHE_ROOT
 # (default ~/Developer/testing/scale-cache — outside every tree, so a new worktree reads the
 # shells the last one baked), one sub-directory per bake FORMAT VERSION (v<kFormatVersion>,
@@ -67,9 +68,7 @@ jah_scale_target(test_scale)
 # ---------------------------------------------------------------------------
 # THE MERGE TIER'S SCALE ROWS (TESTING-SPEED-B3, the ROWS table and the lead's verdicts on the profile): atom.decode_exact (archived: archive/tests/atom)
 # and atom.removechild_leak (archived: archive/tests/atom). scale.occlusion (archived: archive/tests/scale), atom.coverage_trace (archived: archive/tests/atom) and the bars that TIME the world (scale.cpu_walks,
-# scale.shadow_cut (archived: archive/tests/scale), scale.gpu_coverage (archived: archive/tests/scale), scale.library (archived: archive/tests/scale)) are stage-close: measurements of a whole world. scale.library (archived: archive/tests/scale)'s
-# setup row scale.library.fixture (archived: archive/tests/scale) keeps its label (the ROWS table: KEEP — a no-op once the template exists; ctest adds it
-# to whatever names scale.library (archived: archive/tests/scale)).
+# scale.shadow_cut (archived: archive/tests/scale), scale.gpu_coverage (archived: archive/tests/scale)) are stage-close: measurements of a whole world.
 # The `scale-target` rows print, never gate, and are untouched.
 #
 # THE ROWS — one per wall. Label `scale-target` on every one (TARGET_LABELS). The rows
@@ -97,8 +96,6 @@ endfunction()
 # measurement (45 s quiet); a scale property. atom.occlusion_exact (archived: archive/tests/atom) is the merge tier's occlusion guard.
 jah_scale_row(scale.cpu_walks    --cpu-walks     ${SCALE_T_WALKS}        TRUE)   # W13
 # THE SHIP SET (TEST-CUT-1): the scale prefix's end-to-end row — the 10k-node world's CPU walks, timed under the lock.
-# (scale.library (archived: archive/tests/scale) was the first pick; its setup scale.library.fixture (archived: archive/tests/scale) generates a 10,000-asset template, 180 s in a
-# fresh tree, so its true price is over the minute: archived.)
 jah_ship_row(scale.cpu_walks)
 # ...A BAR SINCE ATOM-CPU-WALKS-1 (the card candidates, the words and the ray tier's
 # frame <= 0.5 ms still / 1.5 ms on a mover frame): the part that closed the wall

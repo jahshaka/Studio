@@ -21,6 +21,21 @@ For more information see the LICENSE file
 //     connection at 1,000 assets, with 256-px thumbnails and with none — members off (the page's default,
 //     the fold included) and members on (the listing's scan alone). Does a listing read each row's thumbnail
 //     pages? (The assets table stores `thumbnail` before properties, view_filter and listed.)
+//   * THE LAW (acceptance 1-3): each LISTING — libraryList members off and on, the Materials custom
+//     drawer with a project open, the open project's tray (assettray::list), fetchProjects — runs the SAME
+//     number of TRACED statements at 1,000 assets / 50 projects as at 10,000 / 500 (the query log's count
+//     printed beside it), and none of its statements selects a thumbnail, by guid or not (the tile cache's
+//     reads, fetchAssetThumbnailBytes / fetchProjectThumbnailBytes, are counted on their own).
+//     RED AT THE BASE (066417db2, kept in ~/Developer/spikes/large-library-1/stage1/red-first.txt):
+//       the fold +1,890 traced (stamped textures 70 -> 700, 3 statements each: foldedIntoBundle
+//       assettray.cpp:149-157 -> hiddenAsMember materialmembers.cpp:60-80: fetchAsset, hasMultipleDependers,
+//       fetchAsset of the one depender), and those fetchAssets select the thumbnail;
+//       the drawer +1,800 traced / +900 logged (900 more Materials-home materials, 2 each: isAssetPinnedBy
+//       effectspage.cpp:2025-2026 -> database.cpp:1822-1830, whose checkIfTableExists (database.cpp:743-757)
+//       is raw SQL the log never sees).
+//   * THE V-2 RULE, batched (materialmembers::hiddenAsMembers): a stamped picture folds only while it is
+//     used and every user is a material; one a scene node uses (a depender the catalog does not know), one
+//     a model uses, and one nothing uses stay tiles, and an unstamped one is never folded.
 //   * THE GENERATOR (tests/support/libraryfixture.h) writes the library the laws run on; its rows are
 //     checked here by what the listings see of them. `--generate <db> <store> <assets> <projects>` writes
 //     one library and exits (the column comparison's input; stage 2's roots).
@@ -45,6 +60,8 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/database/databasereads.h"
 #include "services/assettray.h"
+#include "services/assetcas.h"
+#include "services/memberstamp.h"
 #include "../support/libraryfixture.h"
 
 static int failures = 0;
@@ -117,6 +134,102 @@ static void printM1(const char *label, const ColdListing &l, qint64 thumbnailByt
                 static_cast<long long>(l.membersOff.bytes), static_cast<long long>(l.membersOff.statements),
                 static_cast<long long>(l.membersOn.pages), static_cast<long long>(l.membersOn.bytes),
                 static_cast<long long>(l.membersOn.statements));
+}
+
+/// One listing's statements, counted both ways.
+struct Count {
+    qint64 traced = 0;          ///< every statement the default connection ran (SQLite's trace)
+    int logged = 0;             ///< the query log's count (executeAndCheckQuery), the tile reads excluded
+    int thumbnailSelects = 0;   ///< logged statements that select a thumbnail column (the tile reads excluded)
+    int tileReads = 0;          ///< fetchAssetThumbnailBytes / fetchProjectThumbnailBytes
+};
+
+static Count countOf(const std::function<void()> &listing)
+{
+    Database::setQueryLog(true);
+    const qint64 t0 = traced();
+    listing();
+    Count out;
+    out.traced = traced() - t0;
+    for (const Database::QueryLogEntry &e : Database::queryLogEntries()) {
+        if (e.name == QLatin1String("fetchAssetThumbnailBytes") || e.name == QLatin1String("fetchProjectThumbnailBytes")) {
+            out.tileReads += e.count;
+            continue;
+        }
+        out.logged += e.count;
+        if (e.selectsThumbnail) out.thumbnailSelects += e.count;
+    }
+    Database::setQueryLog(false);
+    return out;
+}
+
+struct Listing {
+    const char *name;
+    std::function<void()> run;
+};
+
+static QVector<Listing> listings(Database &db, const libraryfixture::Library &lib)
+{
+    Database *d = &db;
+    const QString project = lib.openProject;
+    return {
+        { "libraryList members off", [d] { assettray::libraryList(d, false); } },
+        { "libraryList members on", [d] { assettray::libraryList(d, true); } },
+        { "the custom drawer, a project open", [d, project] { assettray::customDrawer(d, project); } },
+        { "the open project's tray", [d, project] { assettray::list(d, project, QString(), -1, false); } },
+        { "fetchProjects (the Desktop)", [d] { d->fetchProjects(1); } },
+    };
+}
+
+/// The V-2 rule's branches, on five pictures of the Assets home.
+static void theRule(Database &db)
+{
+    const auto picture = [&](const QString &name) {
+        const QString guid = newGuid();
+        db.createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture), QString(), assethome::assets(),
+                            assethome::Origin::Import);
+        return guid;
+    };
+    const auto material = [&](const QString &name) {
+        const QString guid = newGuid();
+        db.createAssetEntry(guid, name, static_cast<int>(ModelTypes::Material), QString(), assethome::assets(),
+                            assethome::Origin::ExplicitSave);
+        return guid;
+    };
+    const QString mat = material(QStringLiteral("rule material")), other = material(QStringLiteral("rule other"));
+    const QString model = newGuid();
+    db.createAssetEntry(model, QStringLiteral("rule model"), static_cast<int>(ModelTypes::Object), QString(),
+                        assethome::assets(), assethome::Origin::Import);
+    const QString folds = picture(QStringLiteral("rule folds.png")), nodeUses = picture(QStringLiteral("rule node.png")),
+                  modelUses = picture(QStringLiteral("rule model.png")), unused = picture(QStringLiteral("rule unused.png")),
+                  unstamped = picture(QStringLiteral("rule unstamped.png"));
+    const int M = static_cast<int>(ModelTypes::Material), T = static_cast<int>(ModelTypes::Texture);
+    db.createDependency(M, T, mat, folds);
+    db.createDependency(M, T, other, folds);
+    db.createDependency(M, T, mat, nodeUses);
+    db.createDependency(static_cast<int>(ModelTypes::Object), T, newGuid(), nodeUses);   // a scene node's id
+    db.createDependency(M, T, mat, modelUses);
+    db.createDependency(static_cast<int>(ModelTypes::Object), T, model, modelUses);
+    db.createDependency(M, T, mat, unstamped);
+    for (const QString &g : { folds, nodeUses, modelUses, unused }) memberstamp::stamp(&db, g, mat);
+    const QStringList hidden = assettray::libraryHidden(&db, assettray::libraryList(&db, true), false);
+    CHECK(hidden.contains(folds), "V-2: a stamped picture two materials use folds into its bundle");
+    CHECK(!hidden.contains(nodeUses), "V-2: ...one a scene node also uses stays a tile");
+    CHECK(!hidden.contains(modelUses), "V-2: ...one a model also uses stays a tile");
+    CHECK(!hidden.contains(unused), "V-2: ...one nothing uses stays a tile");
+    CHECK(!hidden.contains(unstamped), "V-2: ...and the user's own picture a material uses is never folded");
+    CHECK(assettray::libraryHidden(&db, assettray::libraryList(&db, true), true).isEmpty(),
+          "V-2: with the members shown nothing is folded");
+    // The editor tray applies the same rule to a project's pinned pictures.
+    const QString project = newGuid();
+    db.createProject(project, QStringLiteral("rule project"));
+    for (const QString &g : { folds, nodeUses }) AssetCas::writePin(QSqlDatabase::database(), project, g, QString());
+    QStringList tray;
+    for (const AssetRecord &r : assettray::list(&db, project, QString(), -1, false)) tray << r.guid;
+    QStringList trayMembers;
+    for (const AssetRecord &r : assettray::list(&db, project, QString(), -1, true)) trayMembers << r.guid;
+    CHECK(!tray.contains(folds) && tray.contains(nodeUses) && trayMembers.contains(folds),
+          "V-2 in the tray: the folding picture is hidden, the node's picture listed, and both with the members shown");
 }
 
 /// `--generate`: one library, written and closed.
@@ -294,6 +407,55 @@ int main(int argc, char **argv)
     CHECK(with.membersOn.statements == none.membersOn.statements,
           "M1: the listing's scan runs the same statements with and without thumbnails (%lld)",
           static_cast<long long>(with.membersOn.statements));
+
+    // ---- THE LAW: 1,000 / 50 AGAINST 10,000 / 500 ---------------------------------------------------------
+    QVector<Count> small;
+    for (const Listing &l : listings(db, lib)) small.append(countOf(l.run));
+    // THE LAW's NEGATIVE CONTROLS (acceptance 4): two listings made N+1 on purpose — one fetchAsset per listed
+    // row, one raw QSqlQuery per listed row — must differ between the sizes by exactly the rows added.
+    const auto perRowLogged = [&db] {
+        for (const AssetRecord &r : assettray::libraryList(&db, true)) db.fetchAsset(r.guid);
+    };
+    const auto perRowRaw = [&db] {
+        for (const AssetRecord &r : assettray::libraryList(&db, true)) {
+            QSqlQuery raw(QSqlDatabase::database());
+            raw.prepare(QStringLiteral("SELECT type FROM assets WHERE guid = ?"));
+            raw.addBindValue(r.guid);
+            raw.exec();
+        }
+    };
+    const int smallRows = int(assettray::libraryList(&db, true).size());
+    const Count smallLogged = countOf(perRowLogged), smallRaw = countOf(perRowRaw);
+    timer.start();
+    CHECK(libraryfixture::grow(&db, store, 9000, 450, lib, {}, &error), "the generator grew the library to 10,000 / 500%s%s",
+          error.isEmpty() ? "" : ": ", qPrintable(error));
+    std::printf("   grown in %lld ms, %lld thumbnail bytes in all\n", static_cast<long long>(timer.elapsed()),
+                static_cast<long long>(lib.thumbnailBytes));
+    theGenerator(db, lib, 10000);
+    const QVector<Listing> all = listings(db, lib);
+    {
+        const qint64 added = int(assettray::libraryList(&db, true).size()) - smallRows;
+        const Count largeLogged = countOf(perRowLogged), largeRaw = countOf(perRowRaw);
+        CHECK(largeLogged.traced - smallLogged.traced == added && largeLogged.logged - smallLogged.logged == added,
+              "NEGATIVE CONTROL at the law: a fetchAsset per listed row grows traced by %lld and logged by %d (%lld rows added)",
+              static_cast<long long>(largeLogged.traced - smallLogged.traced), largeLogged.logged - smallLogged.logged,
+              static_cast<long long>(added));
+        CHECK(largeRaw.traced - smallRaw.traced == added && largeRaw.logged == smallRaw.logged,
+              "NEGATIVE CONTROL at the law: a raw query per listed row grows traced by %lld and logged by %d",
+              static_cast<long long>(largeRaw.traced - smallRaw.traced), largeRaw.logged - smallRaw.logged);
+    }
+    for (int i = 0; i < all.size(); ++i) {
+        const Count large = countOf(all.at(i).run);
+        const Count &one = small.at(i);
+        CHECK(large.traced == one.traced,
+              "%s: %lld traced statements at 1,000 / 50 and %lld at 10,000 / 500 (logged %d and %d)", all.at(i).name,
+              static_cast<long long>(one.traced), static_cast<long long>(large.traced), one.logged, large.logged);
+        CHECK(one.thumbnailSelects == 0 && large.thumbnailSelects == 0,
+              "%s: no statement selects a thumbnail (%d at 1,000, %d at 10,000; tile reads %d and %d, counted apart)",
+              all.at(i).name, one.thumbnailSelects, large.thumbnailSelects, one.tileReads, large.tileReads);
+    }
+
+    theRule(db);
 
     db.closeDatabase();
     QFile::remove(dbPath);

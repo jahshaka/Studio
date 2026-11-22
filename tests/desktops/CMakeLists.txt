@@ -51,3 +51,29 @@ jah_lsan_lane(desktops.db )
 # the claim into a gate. Verified 2026-09-09: each of these passes displayless
 # with the same assertion count it has with a display.
 jah_no_display(desktops.db  )
+
+# desktops.grid_lookup — LARGE-LIBRARY-1 stage 1 (call 6): at 500 projects every guid finds its tile in the
+# REAL DynamicGrid (a hash beside originalItems) after insertTileAtHead, moveTileToHead, a deletion and
+# resetView, and its waiting row in the REAL PendingTiles after a slice, removals and a rename. The grid
+# widget's own link closure (its tile widget, the tile cache, the theme it reads).
+find_package(Qt6 REQUIRED COMPONENTS Widgets Concurrent)
+add_executable(test_desktops_grid_lookup test_desktops_grid_lookup.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/dynamicgrid.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/itemgridwidget.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/sliderlayoutmodel.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/controls/tilecache.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/dialogs/renameprojectdialog.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/stylesheet.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/classicsheets.cpp
+    ${CMAKE_SOURCE_DIR}/src/ui/style/thememanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/constants.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/project.cpp)
+set_target_properties(test_desktops_grid_lookup PROPERTIES AUTOMOC ON AUTOUIC ON)
+target_include_directories(test_desktops_grid_lookup PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_desktops_grid_lookup PRIVATE IrisGL qlementine Qt6::Widgets Qt6::Concurrent)
+add_test(NAME desktops.grid_lookup COMMAND test_desktops_grid_lookup WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(desktops.grid_lookup PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "desktops")
+jah_no_display(desktops.grid_lookup)

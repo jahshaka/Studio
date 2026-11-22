@@ -57,26 +57,31 @@ int usedBy(Database *db, const QString &guid)
     return db->hasMultipleDependers(guid).size();
 }
 
-bool hiddenAsMember(Database *db, const QString &guid)
+QSet<QString> hiddenAsMembers(Database *db, const QVector<AssetRecord> &records)
 {
-    if (!db || guid.isEmpty()) return false;
-    if (!memberstamp::isStamped(db, guid)) return false;   // the user's own image is a tile, always
+    QSet<QString> out;
+    if (!db) return out;
+    QStringList stamped;
+    for (const AssetRecord &record : records)
+        if (memberstamp::isStamped(record.properties))
+            stamped << record.guid;   // the user's own image carries no stamp: a tile, always
+    if (stamped.isEmpty()) return out;
 
-    const QStringList dependers = db->hasMultipleDependers(guid);
-    // Used by nothing: a tile, so the user can SEE it and clean it up. This is
-    // the row `unused` reports, and a row nobody can see is a row nobody can
-    // delete.
-    if (dependers.isEmpty()) return false;
-
-    for (const QString &depender : dependers) {
-        const AssetRecord row = db->fetchAsset(depender);
-        // A depender the catalog does not know is a SCENE NODE's use (the
+    const QHash<QString, QVector<int>> dependers = db->fetchDependerTypes(stamped);
+    for (const QString &guid : std::as_const(stamped)) {
+        const QVector<int> types = dependers.value(guid);
+        // Used by nothing: a tile, so the user can SEE it and clean it up. This is
+        // the row `unused` reports, and a row nobody can see is a row nobody can
+        // delete.
+        if (types.isEmpty()) continue;
+        // A depender the catalog does not know (-1) is a SCENE NODE's use (the
         // editor records use as a dependency with the node's id): the picture
         // is on something the user can see, so it is a thing of its own.
-        if (row.guid.isEmpty()) return false;
-        if (row.type != static_cast<int>(ModelTypes::Material)) return false;
+        bool onlyMaterials = true;
+        for (int type : types) onlyMaterials &= type == static_cast<int>(ModelTypes::Material);
+        if (onlyMaterials) out.insert(guid);
     }
-    return true;
+    return out;
 }
 
 QVector<Member> describe(Database *db, Project *project, const QString &materialGuid)
@@ -117,9 +122,14 @@ QVector<Member> describe(Database *db, Project *project, const QString &material
     }
 
     const QString projectGuid = project ? project->getProjectGuid() : QString();
+    QVector<AssetRecord> rows;
     for (const QString &guid : MaterialBundle::memberGuids(definition)) {
         const AssetRecord row = db->fetchAsset(guid);
-        if (row.guid.isEmpty()) continue;
+        if (!row.guid.isEmpty()) rows.append(row);
+    }
+    const QSet<QString> folded = hiddenAsMembers(db, rows);
+    for (const AssetRecord &row : std::as_const(rows)) {
+        const QString &guid = row.guid;
         Member member;
         member.guid = guid;
         member.name = row.name;
@@ -131,7 +141,7 @@ QVector<Member> describe(Database *db, Project *project, const QString &material
         member.usedBy = usedBy(db, guid);
         member.pinned = !projectGuid.isEmpty() && db->isAssetPinnedBy(projectGuid, guid);
         member.member = memberstamp::isStamped(db, guid);
-        member.hidden = hiddenAsMember(db, guid);
+        member.hidden = folded.contains(guid);
         out.append(member);
     }
     return out;

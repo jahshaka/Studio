@@ -856,6 +856,7 @@ set(HEADERS
     src/ui/dialogs/screenshotwidget.h 
     src/ui/pages/projectmanager.h 
     src/ui/controls/dynamicgrid.h
+    src/ui/controls/pendingtiles.h
     src/ui/controls/itemgridwidget.h
     src/ui/controls/tilecache.h
     src/ui/controls/librarymodel.h

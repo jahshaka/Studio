@@ -2422,6 +2422,28 @@ QHash<QString, QByteArray> Database::fetchAssetDataFor(const QStringList &guids)
     return out;
 }
 
+QHash<QString, QVector<int>> Database::fetchDependerTypes(const QStringList &dependees)
+{
+    QHash<QString, QVector<int>> out;
+    QStringList unique = dependees;
+    unique.removeAll(QString());
+    unique.removeDuplicates();
+    if (unique.isEmpty()) return out;
+
+    QSqlQuery query;
+    // DISTINCT depender, as hasMultipleDependers asks it: the question is WHO uses the row. The type is read
+    // from the depender's own row by its guid (`type` is stored before the row's thumbnail).
+    query.prepare("SELECT D.dependee, D.depender, MAX(A.type) FROM dependencies D "
+                  "LEFT JOIN assets A ON A.guid = D.depender "
+                  "WHERE D.dependee IN (" + placeholders(unique.size()) + ") "
+                  "GROUP BY D.dependee, D.depender");
+    for (const QString &guid : unique) query.addBindValue(guid);
+    executeAndCheckQuery(query, "fetchDependerTypes");
+    while (query.next())
+        out[query.value(0).toString()].append(query.value(2).isNull() ? -1 : query.value(2).toInt());
+    return out;
+}
+
 QHash<QString, QStringList> Database::fetchProjectDependers(const QString &projectGuid)
 {
     QHash<QString, QStringList> out;

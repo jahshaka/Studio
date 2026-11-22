@@ -25,7 +25,7 @@ For more information see the LICENSE file
 //      size, used-by, baked or picked, pinned, unused. The projection
 //      `materials.members` returns and the panel draws.
 //
-//   2. WHICH TEXTURES GET A TILE OF THEIR OWN?   `hiddenAsMember` — the
+//   2. WHICH TEXTURES GET A TILE OF THEIR OWN?   `hiddenAsMembers` — the
 //      owner's decision Q4, rule V-2. A texture the USER imported is always a
 //      tile. A texture that arrived THROUGH a material's picker is stamped
 //      (services/memberstamp.h, which owns the stamp's two keys and both
@@ -68,12 +68,14 @@ For more information see the LICENSE file
 // find the rows that came in through it and are now referenced by nothing.
 
 #include <QJsonObject>
+#include <QSet>
 #include <QString>
 #include <QStringList>
 #include <QVector>
 
 class Database;
 class Project;
+struct AssetRecord;
 
 namespace materialmembers {
 
@@ -107,12 +109,14 @@ QVector<Member> describe(Database *db, Project *project, const QString &material
 // clearing, and the spine cannot link this file's bundle-layer closure. The
 // projection below is the only reader that matters.)
 
-/// V-2, as a predicate over ONE row: stamped, used, and used by materials
-/// only. False for every row the user imported themselves, for a stamped row
-/// a scene node uses directly, and for a stamped row nothing uses at all
-/// (that one is a tile so the user can see and remove it — it is also what
-/// `unused` reports).
-bool hiddenAsMember(Database *db, const QString &guid);
+/// V-2, over a whole listing: the guids of `records` that fold into their bundle —
+/// stamped, used, and used by materials only. Never a row the user imported
+/// themselves, a stamped row a scene node uses directly, or a stamped row
+/// nothing uses at all (that one is a tile so the user can see and remove it —
+/// it is also what `unused` reports). The stamp is read from the records' own
+/// properties; the dependers of the stamped rows are ONE statement
+/// (Database::fetchDependerTypes), whatever the listing's size.
+QSet<QString> hiddenAsMembers(Database *db, const QVector<AssetRecord> &records);
 
 /// Every asset and scene node that names `guid` — the "used by N" count. The
 /// UNSCOPED list (Database::hasMultipleDependers): a member's users are not

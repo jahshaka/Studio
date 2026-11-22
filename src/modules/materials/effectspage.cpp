@@ -57,6 +57,7 @@ For more information see the LICENSE file
 #include "data/materialpreset.h"
 #include "io/materialpresets.h"
 #include "services/assettags.h"
+#include "services/assettray.h"
 #include "services/materialbundle.h"
 #include "services/materialpresetassets.h"
 #include "services/materialpresetseeder.h"
@@ -1994,38 +1995,15 @@ void EffectsPage::updateAssetDock()
 	effects->clear();
 	// THE MATERIALS MODULE'S OWN STORAGE (ASSETS-HOME-1, the owner 2026-10-04:
 	// "it needs its own storage"): every material the user made here, and
-	// nothing from Assets — Assets is long-term storage the user fills by
-	// importing or saving there. MATERIAL rows by predicate (D11-LIBRARY-SCALE),
-	// no thumbnail column — the tiles come from the tile cache by guid.
-	auto assets = dataBase->fetchAssetsInHome(assethome::Kind::MaterialsLibrary,
-	                                          static_cast<int>(ModelTypes::Material));
-		for (const auto &asset : assets)  //dp something{
+	// nothing from Assets — its rows, and the two rules that drop one (an
+	// image's companion; a material the open project already holds, which is
+	// in the PROJECT drawer), are the service's (services/assettray.h
+	// customDrawer): one listing and one read of the project's pins, whatever
+	// the library's size (LARGE-LIBRARY-1). No thumbnail column — the tiles
+	// come from the tile cache by guid.
+	const QString projectGuid = mProject ? mProject->getProjectGuid() : QString();
+		for (const auto &asset : assettray::customDrawer(dataBase, projectGuid))
 		{
-			// THE CUSTOM DRAWER IS THE USER'S OWN MATERIALS, once (the
-			// four-drawer rule, OWNER_REVIEW 9).
-			//
-			// NOT an image's COMPANION: adding a picture to a project mints a
-			// one-slot PBR material for it (ImageMaterial's `companionOf`
-			// stamp) so the picture has a tile — that material is the
-			// picture, it has no graph, and listing it here filled the
-			// drawer with rows the user never authored. The stamp is the
-			// identity, never the shape: a material the user built on the
-			// same image is theirs and stays.
-			//
-			// NOT a material the open project already holds, either: that one
-			// is in the PROJECT drawer, and a row in both drawers is the same
-			// guid meaning two things in one window.
-			{
-				const QJsonObject blob = QJsonDocument::fromJson(asset.asset).object();
-				const bool companion = !blob.value(QStringLiteral("companionOf")).toString().isEmpty()
-				                       && !blob.contains(QStringLiteral("shadergraph"));
-				if (companion) continue;
-				// (A shipped preset is a PLATFORM row and a project's material
-				// its project's own: neither is ever in this storage.)
-				if (mProject && !mProject->getProjectGuid().isEmpty()
-				    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), asset.guid))
-					continue;
-			}
 			{
 				 
 				auto item = new QListWidgetItem;

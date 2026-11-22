@@ -144,12 +144,17 @@ QStringList hidden(Database *db, const QString &projectGuid,
 /// own rows (a preset's project copy, a material made in the editor) are never
 /// in it at all: the query lists library rows only (ASSETS-SCOPE-1).
 QVector<AssetRecord> libraryList(Database *db, bool showMembers = false);
-/// The guids `libraryList` drops out of `records` (the raw grid rows).
+/// The guids `libraryList` drops out of `records` (the raw grid rows): with
+/// `showMembers` off, the pictures rule 6 folds — ONE statement for the whole
+/// listing, whatever its size; with it on, none.
 QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records,
                           bool showMembers = false);
-/// Exactly the rows the "Show member textures" switch toggles (rule 6 only):
-/// what libraryHidden drops with the switch off and keeps with it on.
-QStringList libraryMembers(Database *db, const QVector<AssetRecord> &records);
+
+/// THE MATERIALS MODULE'S CUSTOM DRAWER (ASSETS-HOME-1, OWNER_REVIEW 9): every material of the Materials
+/// home, less an image's COMPANION (ImageMaterial's `companionOf` stamp on a material with no graph: that
+/// material is the picture, the user never authored it) and less a material the open project `projectGuid`
+/// already pins (it is in the PROJECT drawer). The rows EffectsPage::updateAssetDock lists.
+QVector<AssetRecord> customDrawer(Database *db, const QString &projectGuid);
 
 }   // namespace assettray
 

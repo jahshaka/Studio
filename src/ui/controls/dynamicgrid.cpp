@@ -186,6 +186,7 @@ void DynamicGrid::addToGridView(ProjectTileData tileData, bool highlight)
     ItemGridWidget *gameGridItem = new ItemGridWidget(tileData, tileSize, iconSize, gridWidget, highlight);
 
     originalItems.push_back(gameGridItem);
+    tilesByGuid.insert(tileData.guid, gameGridItem);
 
     gameGridItem->setContextMenuPolicy(Qt::CustomContextMenu);
 
@@ -306,9 +307,7 @@ void DynamicGrid::setLayoutMode(LayoutMode newMode)
 
 ItemGridWidget *DynamicGrid::tileByGuid(const QString &guid) const
 {
-    foreach (ItemGridWidget *gridItem, originalItems)
-        if (gridItem->tileData.guid == guid) return gridItem;
-    return Q_NULLPTR;
+    return tilesByGuid.value(guid, Q_NULLPTR);
 }
 
 void DynamicGrid::scheduleSliderRelayout()
@@ -703,6 +702,7 @@ bool DynamicGrid::containsTiles()
 void DynamicGrid::deleteTile(ItemGridWidget *widget)
 {
     originalItems.removeOne(widget);
+    if (tilesByGuid.value(widget->tileData.guid) == widget) tilesByGuid.remove(widget->tileData.guid);
     // Rows: out of the flow (freeform/slider tiles are free children of the
     // canvas and never in it); the flow closes the gap itself.
     const int index = gridLayout->indexOf(widget);
@@ -756,6 +756,7 @@ void DynamicGrid::resetView()
     foreach (ItemGridWidget *item, originalItems) delete item;
 
     originalItems.clear();
+    tilesByGuid.clear();
     sliderModel.clear();    // row offsets are session state; a repopulate resets them
 }
 

@@ -20,7 +20,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "services/imagematerial.h"
 #include "services/materialmembers.h"
-#include "services/memberstamp.h"
 
 namespace assettray {
 
@@ -145,15 +144,16 @@ bool foldedIntoCompanion(const Batch &batch, const QString &projectGuid, const Q
 /// the only things using it; a scene node, a decal or an emitter that names
 /// the image makes it a tile again. A texture the USER imported carries no
 /// stamp and is never folded, which is the difference between this rule and
-/// the dependency-hiding that was tried and removed in 2026-09-12.
-bool foldedIntoBundle(Database *db, const AssetRecord &record)
+/// the dependency-hiding that was tried and removed in 2026-09-12. The rows
+/// that fold, for a whole listing: the stamp off the records, every stamped
+/// texture's dependers in ONE statement (LARGE-LIBRARY-1: the per-row reads
+/// were 3 statements and 2 thumbnail BLOBs a stamped texture).
+QSet<QString> foldedIntoBundles(Database *db, const QVector<AssetRecord> &records)
 {
-    if (!isType(record, ModelTypes::Texture)) return false;
-    // The cheap half first, off the record we already hold: almost no texture
-    // carries the stamp, and only a stamped one costs a query.
-    if (!memberstamp::isStamped(record.properties))
-        return false;
-    return materialmembers::hiddenAsMember(db, record.guid);
+    QVector<AssetRecord> textures;
+    for (const AssetRecord &record : records)
+        if (isType(record, ModelTypes::Texture)) textures.append(record);
+    return materialmembers::hiddenAsMembers(db, textures);
 }
 
 }   // namespace
@@ -171,6 +171,7 @@ QStringList hidden(Database *db, const QString &projectGuid, const QVector<Asset
     if (!db) return out;
     const QSet<QString> claimed = avatarClosure(db, projectAvatars(db, projectGuid, pinned));
     const Batch batch = gather(db, projectGuid, records);
+    const QSet<QString> folded = showMembers ? QSet<QString>() : foldedIntoBundles(db, records);
     for (const AssetRecord &record : records) {
         // 1. import MEMBERS. The `parent` column carries BOTH kinds of parent —
         // a folder for a filed asset, the owning ASSET for an import member
@@ -202,7 +203,7 @@ QStringList hidden(Database *db, const QString &projectGuid, const QVector<Asset
         }
         // 6. a picture that arrived inside a material bundle (V-2). The
         //    "Show member textures" switch turns exactly this rule off.
-        if (!showMembers && foldedIntoBundle(db, record)) out.append(record.guid);
+        if (folded.contains(record.guid)) out.append(record.guid);
     }
     return out;
 }
@@ -346,43 +347,14 @@ QVector<AssetRecord> listAll(Database *db, const QString &projectGuid, int typeF
     return collapse(db, projectGuid, records, pinned, showMembers);
 }
 
-namespace {
-
-/// WHICH LIBRARY RULE DROPS A ROW, if any — the one classification behind
-/// libraryHidden and libraryMembers, so the two can never disagree.
-enum class LibraryFold { Shown, Member };
-
-LibraryFold libraryFoldOf(Database *db, const AssetRecord &record, bool askMembers)
-{
-    // 6. a picture that arrived inside a material bundle (V-2). The cheap half
-    //    of the test reads the record's own properties; only a stamped row costs
-    //    a query, and a library holds few of those (the preset seed's maps, a
-    //    material's picked textures).
-    if (askMembers && foldedIntoBundle(db, record)) return LibraryFold::Member;
-    return LibraryFold::Shown;
-}
-
-}   // namespace
-
 QStringList libraryHidden(Database *db, const QVector<AssetRecord> &records, bool showMembers)
 {
     QStringList out;
-    if (!db) return out;
-    for (const AssetRecord &record : records) {
-        switch (libraryFoldOf(db, record, /*askMembers=*/!showMembers)) {
-        case LibraryFold::Member:      if (!showMembers) out.append(record.guid); break;
-        case LibraryFold::Shown:       break;
-        }
-    }
-    return out;
-}
-
-QStringList libraryMembers(Database *db, const QVector<AssetRecord> &records)
-{
-    QStringList out;
-    if (!db) return out;
+    if (!db || showMembers) return out;
+    // 6. a picture that arrived inside a material bundle (V-2): the only library rule.
+    const QSet<QString> folded = foldedIntoBundles(db, records);
     for (const AssetRecord &record : records)
-        if (libraryFoldOf(db, record, true) == LibraryFold::Member) out.append(record.guid);
+        if (folded.contains(record.guid)) out.append(record.guid);
     return out;
 }
 
@@ -397,6 +369,30 @@ QVector<AssetRecord> libraryList(Database *db, bool showMembers)
     out.reserve(records.size());
     for (const AssetRecord &record : records)
         if (!dropped.contains(record.guid)) out.append(record);
+    return out;
+}
+
+QVector<AssetRecord> customDrawer(Database *db, const QString &projectGuid)
+{
+    QVector<AssetRecord> out;
+    if (!db) return out;
+    // The open project's pins in ONE statement (LARGE-LIBRARY-1: a pinned-by query per material was two
+    // statements each, one of them raw SQL the query log never saw).
+    const QSet<QString> pinned = db->fetchProjectPinnedGuids(projectGuid);
+    for (const AssetRecord &asset : db->fetchAssetsInHome(assethome::Kind::MaterialsLibrary,
+                                                         static_cast<int>(ModelTypes::Material))) {
+        // NOT an image's COMPANION: adding a picture to a project mints a one-slot PBR material for it
+        // (ImageMaterial's `companionOf` stamp) so the picture has a tile — that material is the picture, it
+        // has no graph, and the user never authored it. The stamp is the identity, never the shape: a
+        // material the user built on the same image is theirs and stays. NOT a material the open project
+        // holds either: that one is in the PROJECT drawer, and a row in both is one guid meaning two things.
+        const QJsonObject blob = QJsonDocument::fromJson(asset.asset).object();
+        const bool companion = !blob.value(QStringLiteral("companionOf")).toString().isEmpty()
+                               && !blob.contains(QStringLiteral("shadergraph"));
+        if (companion) continue;
+        if (pinned.contains(asset.guid)) continue;
+        out.append(asset);
+    }
     return out;
 }
 

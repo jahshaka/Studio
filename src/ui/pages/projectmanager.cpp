@@ -711,8 +711,7 @@ void ProjectManager::addTile(const QString &guid)
     if (!gridBuilt || guid.isEmpty() || dynamicGrid->tile(guid)) return;
     // A row still waiting for its slice is built NOW, at the head (a
     // touched project goes first, as a rebuild would put it).
-    const int pending = pendingRowOf(guid);
-    if (pending >= 0) pendingRows.removeAt(pending);
+    pendingRows.remove(guid);
     ProjectTileData record;
     if (!db->fetchProjectTile(guid, &record) || record.desktop != currentDesktop) return;
     dynamicGrid->insertTileAtHead(record, isOpenProjectTile(guid));
@@ -723,8 +722,7 @@ void ProjectManager::addTile(const QString &guid)
 
 void ProjectManager::removeTile(const QString &guid)
 {
-    const int pending = pendingRowOf(guid);
-    if (pending >= 0) { pendingRows.removeAt(pending); return; }
+    if (pendingRows.remove(guid)) return;
     ItemGridWidget *widget = dynamicGrid->tile(guid);
     if (!widget) return;
     dynamicGrid->deleteTile(widget);
@@ -739,8 +737,7 @@ void ProjectManager::moveTile(const QString &guid, int desktop)
 
 void ProjectManager::renameTile(const QString &guid, const QString &name)
 {
-    const int pending = pendingRowOf(guid);
-    if (pending >= 0) pendingRows[pending].name = name;
+    if (ProjectTileData *pending = pendingRows.find(guid)) pending->name = name;
     else if (ItemGridWidget *widget = dynamicGrid->tile(guid)) widget->updateLabel(name);
 }
 
@@ -765,7 +762,7 @@ void ProjectManager::enterDesktop()
     const QStringList guids = db->fetchProjectGuids(currentDesktop);
     QStringList added, removed;
     for (const QString &guid : guids)
-        if (!dynamicGrid->tile(guid) && pendingRowOf(guid) < 0) added.append(guid);
+        if (!dynamicGrid->tile(guid) && !pendingRows.contains(guid)) added.append(guid);
     const QSet<QString> onDesktop(guids.cbegin(), guids.cend());
     for (ItemGridWidget *widget : std::as_const(dynamicGrid->originalItems))
         if (!onDesktop.contains(widget->tileData.guid)) removed.append(widget->tileData.guid);
@@ -788,7 +785,7 @@ void ProjectManager::populateDesktop()
     // A LISTING, NO THUMBNAILS (D11-LIBRARY-SCALE): each tile asks the session's
     // tile cache for its picture — the placeholder until the bytes, read by guid
     // a batch per turn, are decoded off this thread.
-    pendingRows = db->fetchProjects(currentDesktop);
+    pendingRows.reset(db->fetchProjects(currentDesktop));
     ++buildGeneration;
     gridBuilt = true;
     ++gridBuildCount;
@@ -801,13 +798,6 @@ void ProjectManager::populateDesktop()
     // The first slice now (what the desktop shows first), the rest a slice per turn.
     buildGridSlice(buildGeneration);
     checkForEmptyState();
-}
-
-int ProjectManager::pendingRowOf(const QString &guid) const
-{
-    for (int i = 0; i < pendingRows.size(); ++i)
-        if (pendingRows.at(i).guid == guid) return i;
-    return -1;
 }
 
 void ProjectManager::buildGridSlice(int generation)
@@ -854,7 +844,7 @@ QVariantMap ProjectManager::gridStats() const
     stats["lastBuildSlices"] = lastBuildSlices;
     stats["lastBuildMaxSliceMs"] = lastBuildMaxSliceMs;
     // THE SLICE AS COUNTED WORK (TESTING-CLEANUP-2 item 6): the most tiles one turn built, and
-    // the bound the slicing promises — scale.library's bar, a fact about the code, not the box.
+    // the bound the slicing promises: a fact about the code, not the box.
     stats["lastBuildMaxSliceTiles"] = lastBuildMaxSliceTiles;
     stats["sliceTiles"] = kGridSlice;
     stats["pendingTiles"] = int(pendingRows.size());

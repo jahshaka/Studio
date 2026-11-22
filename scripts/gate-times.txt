@@ -545,4 +545,5 @@ gi.card_build_late.texture 3.52  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, 
 gi.card_build_late.psofail 3.23  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, run 20261122T050118-5f68c1bb6)
 gi.card_build_late.buildfail 0.91  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, run 20261122T050122-5f68c1bb6)
 gi.card_build_late.corrupt 3.87  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, run 20261122T050124-5f68c1bb6)
-library.statements 1.30  solo 2026-11-22 at 4ab753f01 (spec.sh reprice, run 20261122T055833-4ab753f01)
+library.statements 4.69  solo 2026-11-22 at 0a85a6529 (spec.sh reprice, run 20261122T060828-0a85a6529)
+desktops.grid_lookup 0.19  solo 2026-11-22 at 0a85a6529 (spec.sh reprice, run 20261122T060833-0a85a6529)

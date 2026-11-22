@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #ifndef DYNAMICGRID_H
 #define DYNAMICGRID_H
 
+#include <QHash>
 #include <QScrollArea>
 #include "data/project.h"
 #include "ui/controls/sliderlayoutmodel.h"
@@ -105,6 +106,10 @@ private:
     int sliderRowAt(int y) const;                   // canvas y -> row
     void handleSliderDrop(ItemGridWidget*);         // drop pos -> {row, insert index}
     ItemGridWidget *tileByGuid(const QString &guid) const;
+    /// THE TILES BY GUID, kept beside `originalItems` (LARGE-LIBRARY-1: the lookup was a walk of every tile,
+    /// and the Desktop's entry check and the slider layout ask it once per project): written where a tile
+    /// is added, deleted, and where the view is reset.
+    QHash<QString, ItemGridWidget*> tilesByGuid;
 
     QWidget *parent;
     QWidget *gridWidget;

@@ -21,7 +21,8 @@ For more information see the LICENSE file
 #include <QWidget>
 #include <QVector>
 
-#include "data/project.h"   // ProjectTileData (the pending rows)
+#include "data/project.h"   // ProjectTileData
+#include "ui/controls/pendingtiles.h"   // the pending rows
 #include "services/scenetemplate.h"
 
 #include <optional>
@@ -264,10 +265,9 @@ private:
     // is touched, renamed or removed as a row), and a caller that reads every
     // tile — a layout change, a search, the slider verbs — finishes the build.
     static constexpr int kGridSlice = 32;
-    QVector<ProjectTileData> pendingRows;
+    PendingTiles pendingRows;   // found by guid in O(1) (ui/controls/pendingtiles.h)
     int buildGeneration = 0;
     void buildGridSlice(int generation);
-    int pendingRowOf(const QString &guid) const;
     /// Builds every pending tile now (the callers that read the whole grid).
     void finishGridBuild();
     int outOfStepEntries = 0;
