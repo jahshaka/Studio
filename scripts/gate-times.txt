@@ -613,3 +613,5 @@ source.ray_loops_bounded 0.09  solo 2026-11-22 at a29828fac (spec.sh reprice, ru
 engine.ray_input_guard 0.00  solo 2026-11-22 at c09490de1 (spec.sh reprice, run 20261122T123300-c09490de1)
 gi.pane_stack_cut 2.08  solo 2026-11-22 at a1e3d51ad (spec.sh reprice, run 20261122T125328-a1e3d51ad)
 gi.ray_nan_refused 0.66  solo 2026-11-22 at a1e3d51ad (spec.sh reprice, run 20261122T125456-a1e3d51ad)
+lights.lamp_ray_origin 1.25  solo 2026-11-22 at e06d6bca5 (spec.sh reprice, run 20261122T133342-e06d6bca5)
+source.view_ray_origin 0.08  solo 2026-11-22 at e06d6bca5 (spec.sh reprice, run 20261122T133410-e06d6bca5)
