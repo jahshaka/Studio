@@ -546,8 +546,7 @@ void Session::pushOverlay()
     in.target[0] = t.x(); in.target[1] = t.y(); in.target[2] = t.z();
     in.frame = mFrames;
     if (!mJsPath.empty() || !mJsState.empty()) {
-        in.js = mJsPath.empty() ? std::string("-")
-                                : scriptPlace(jsFolder(), QFileInfo(QString::fromStdString(mJsPath)).fileName().toStdString());
+        in.js = mJsPath.empty() ? std::string("-") : mJsPlace;   // kept at the press: no folder read on the frame loop
         in.jsFolder = jsFolder();
         in.jsState = mJsState;
         in.jsError = mJsError;
@@ -2280,10 +2279,10 @@ bool Session::js(const Command &c)
         labFail("LAB REFUSED js next: %s\n", pick.message.c_str());
         return false;
     }
-    return jsLoad(pick.path);
+    return jsLoad(pick.path, pick.message);   // the pick's own listing is the place: one read a press
 }
 
-bool Session::jsLoad(const std::string &path)
+bool Session::jsLoad(const std::string &path, const std::string &place)
 {
     const QFileInfo f(QString::fromStdString(path));
     if (!f.isFile() || !f.isReadable()) {
@@ -2291,10 +2290,10 @@ bool Session::jsLoad(const std::string &path)
         return false;
     }
     mJsPath = f.absoluteFilePath().toStdString();
+    mJsPlace = place.empty() ? scriptPlace(jsFolder(), f.fileName().toStdString()) : place;
     mJsState = "loaded";
     mJsError.clear();
-    std::printf("LAB JS LOADED %s (%s)\n", mJsPath.c_str(),
-                scriptPlace(jsFolder(), f.fileName().toStdString()).c_str());
+    std::printf("LAB JS LOADED %s (%s)\n", mJsPath.c_str(), mJsPlace.c_str());
     showJs();
     return true;
 }
@@ -2309,13 +2308,11 @@ std::string Session::jsFolder() const
 
 void Session::showJs()
 {
-    if (mWindow.isOpen()) {
-        const std::string name = mJsPath.empty() ? std::string() : QFileInfo(QString::fromStdString(mJsPath)).fileName().toStdString();
-        mWindow.setStripText(name.empty() ? (mJsState.empty() ? "no script loaded (Load: the next .js of " + jsFolder() + ")"
-                                                              : mJsState)
-                                          : scriptPlace(jsFolder(), name) + "   " + mJsState +
-                                                (mJsError.empty() ? std::string() : "   " + mJsError));
-    }
+    if (mWindow.isOpen())
+        mWindow.setStripText(mJsPath.empty() ? (mJsState.empty() ? "no script loaded (Load: the next .js of " + jsFolder() + ")"
+                                                                 : mJsState)
+                                             : mJsPlace + "   " + mJsState +
+                                                   (mJsError.empty() ? std::string() : "   " + mJsError));
     if (mOverlay) pushOverlay();
 }
 

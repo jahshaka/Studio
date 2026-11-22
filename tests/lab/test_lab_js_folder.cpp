@@ -6,6 +6,8 @@
 // the last comes the first; each pick says `<i> of <n>: <name>`.
 // (5) A *.js entry whose status cannot be read - a DANGLING link, as an editor's lock file `.#x.js` is - is neither listed
 // nor stops the walk: every script beside it is still seen (the audit's F7).
+// (6) ONE READ OF THE FOLDER A PRESS (the audit's F4): a Load press (nextScript) and a `js load`'s place (scriptPlace) each
+// list the folder once - the lab keeps what the press read, and its frame loop reads none.
 // CONTROL: a press on a folder with one script picks it (a walk that never picks would pass (1) alone).
 #include <cstdio>
 #include <cstdlib>
@@ -44,6 +46,14 @@ int main()
     check(p.ok && p.message == "3 of 3: c.js", "(2) a deleted script is gone, the current one too: after b.js is " + p.message);
     check(lab::scriptPlace(dir, "a.js") == "2 of 3: a.js" && lab::scriptPlace(dir, "gone.js") == "gone.js",
           "a script's place is read as the folder is now");
+    int before = lab::scriptListings();
+    p = lab::nextScript(dir, "a.js");
+    check(lab::scriptListings() - before == 1, "(6) a Load press reads the folder once (" +
+          std::to_string(lab::scriptListings() - before) + " listings)");
+    before = lab::scriptListings();
+    const std::string place = lab::scriptPlace(dir, "c.js");
+    check(lab::scriptListings() - before == 1 && place == "3 of 3: c.js",
+          "(6) a js load's place reads it once (" + std::to_string(lab::scriptListings() - before) + " listings, " + place + ")");
     for (const char *n : { "a.js", "c.js", "B.js", "notes.txt", ".#b.js" }) std::remove((dir + "/" + n).c_str());
     ::rmdir(dir.c_str());
     std::printf("%s\n", gFail ? ("lab.js_folder: FAILED (" + std::to_string(gFail) + ")").c_str() : "lab.js_folder: PASSED");

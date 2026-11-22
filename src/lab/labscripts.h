@@ -28,4 +28,9 @@ ScriptPick nextScript(const std::string &folder, const std::string &current);
 /// "<i> of <n>: <name>" for `name` in the list as it is now ("<name>" alone when it is not in `folder`).
 std::string scriptPlace(const std::string &folder, const std::string &name);
 
+/// THE FOLDER's READS in this process (each scriptsIn is one): a press reads the folder ONCE (nextScript, or
+/// scriptPlace for a `js load`) and the lab keeps the place it read; the frame loop reads none (the audit's F4: the
+/// overlay used to list the folder every 10 frames). lab.js_folder counts them.
+int scriptListings();
+
 }   // namespace lab

@@ -6,8 +6,13 @@
 
 namespace lab {
 
+static int gListings = 0;
+
+int scriptListings() { return gListings; }
+
 std::vector<std::string> scriptsIn(const std::string &folder)
 {
+    ++gListings;
     std::vector<std::string> names;
     std::error_code ec;
     for (std::filesystem::directory_iterator it(folder, ec), end; !ec && it != end; it.increment(ec)) {

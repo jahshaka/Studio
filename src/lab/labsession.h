@@ -113,7 +113,9 @@ private:
     bool regions(const Command &c);
     /// THE ENGINE's SCRIPTS (LAB-SCRIPTS-1 stage 1): `js load|run|next|clear`, and the run itself.
     bool js(const Command &c);
-    bool jsLoad(const std::string &path);
+    /// `place`: the script's "<i> of <n>: <name>" when the press already read the folder (`js next`'s pick); empty = read
+    /// it now - ONE listing a press, kept in mJsPlace (the frame loop never reads the folder: the audit's F4)
+    bool jsLoad(const std::string &path, const std::string &place = std::string());
     bool jsRun();
     /// The lab's world back in the window's view (a script was handed it by lab.view()); then the last run's host ends.
     void jsClear();
@@ -167,6 +169,7 @@ private:
     // lent to a script (lab.view(): the lab's world detached, frame() then draws without the mirror's sync), and what
     // the overlay says of it
     std::string mJsPath;
+    std::string mJsPlace;   ///< mJsPath's place in its folder, read at the press that loaded it (labscripts.h)
     std::unique_ptr<jahshaka::engine::script::Host> mJsHost;
     bool mViewLent = false;
     jahshaka::engine::Colour mLabBackground;   ///< the lab world's background while the view is lent (given back at clear)
