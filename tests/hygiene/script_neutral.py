@@ -23,6 +23,10 @@ the value type and the registry know nothing of JavaScript, and a second languag
   N6 NOTHING THE APP RUNS CARRIES THE HOST: `nm` on bin/Jahshaka, bin/jahlab and bin/libIrisGLd.so finds no symbol of the
      script host (jahshaka::engine::script) and none of the JS engine (JS_*): the archive's members are never pulled in
      until a client calls the host (STUDIO-CLIENT-1).
+  N7 THE HARNESS's SHADER CACHE HAS ONE HOME (the lead's S8): jahengine/main.cpp and tests/support/enginetesthelpers.h
+     set no shaderCacheMaxBytes of their own - both take
+     inspect::applyHarnessShaderCache (EngineInspect.h), so a cap raised for the fixtures is jahengine's too (a smaller
+     cap in a script row would WIPE the fixtures' shared warm cache at its save).
 
 usage: script_neutral.py <source-root> <build dir>   (jahengine is <build dir>/bin/jahengine)
 Its self-test runs first, on synthetic files: each rule red on a violation, green on the allowed file.
@@ -157,6 +161,23 @@ def n5_bad(list_text, rc):
     return bad
 
 
+CACHE_USERS = ("irisgl/engine/jahengine/main.cpp", "tests/support/enginetesthelpers.h")
+CACHE_OWN = re.compile(r"shaderCacheMaxBytes\s*=")
+
+
+def n7_bad(root):
+    """[`file: line`] of a second home of the harness's cache cap, and of a user that does not take the one function."""
+    bad = []
+    for rel in CACHE_USERS:
+        p = os.path.join(root, rel)
+        text = open(p, errors="replace").read() if os.path.isfile(p) else ""
+        code = "\n".join(l.split("//")[0] for l in text.splitlines())
+        bad += ["%s: %s" % (rel, m.group(0)) for m in CACHE_OWN.finditer(code)]
+        if "applyHarnessShaderCache(" not in code:
+            bad.append("%s: does not take inspect::applyHarnessShaderCache" % rel)
+    return bad
+
+
 def write(root, rel, text):
     p = os.path.join(root, rel)
     os.makedirs(os.path.dirname(p), exist_ok=True)
@@ -209,6 +230,14 @@ def self_test():
            "  NEEDED               libIrisGLd.so\n  NEEDED               libc.so.6\n"
     check(n3_bad(dump) == ["libQt6Core.so.6", "libIrisGLd.so"], "N3 names a Qt and an IrisGL library in a NEEDED list (%s)"
           % n3_bad(dump))
+    with tempfile.TemporaryDirectory() as t:
+        write(t, CACHE_USERS[0], "inspect::applyHarnessShaderCache(cfg);   // shaderCacheMaxBytes = 1 GiB, said\n")
+        write(t, CACHE_USERS[1], "inline void f(EngineConfig &c) { inspect::applyHarnessShaderCache(c); }\n")
+        clean = n7_bad(t)
+        write(t, CACHE_USERS[0], 'if (getenv("JAHSHAKA_SHADER_CACHE_DIR")) cfg.shaderCacheMaxBytes = 1ull << 30;\n')
+        check(not clean and len(n7_bad(t)) == 2,
+              "N7 names a second cache cap and a user not taking the one function; a comment is no home "
+              "(%s %s)" % (clean, n7_bad(t)))
     nm = ("0000 T _ZN4Ogre4Root5startEv\n                 U _ZN7QStringC1EPKc\n0000 T _ZN8jahshaka6engine6script4Host3runEv\n"
           "0000 T JS_NewRuntime\n                 U JSON_parse_thing\n0000 T _ZN8jahshaka6engine6Engine6createEv\n")
     check(nm_bad(nm, QT_SYMBOL) == ["U _ZN7QStringC1EPKc"] and len(nm_bad(nm, HOST_SYMBOL)) == 2,
@@ -236,6 +265,8 @@ def main():
                    "header (%s)" % bad[:8])
     bad = n4_bad(root)
     check(not bad, "N4 every language is one source file and one table line (%s)" % bad[:8])
+    bad = n7_bad(root)
+    check(not bad, "N7 jahengine and the fixtures take the harness's shader cache from ONE function (%s)" % bad[:4])
     dump = subprocess.run(["objdump", "-p", jahengine], capture_output=True, text=True)
     needed = re.findall(r"^\s*NEEDED\s+(\S+)", dump.stdout, re.MULTILINE)
     check(dump.returncode == 0 and needed and not n3_bad(dump.stdout),
