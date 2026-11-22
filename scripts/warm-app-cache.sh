@@ -46,8 +46,8 @@
 #   --rig            a DISPLAY that is not a rig (outside :60-:99 - :0 is the OWNER's) is set aside and the tree's rig taken;
 #                    without it such a DISPLAY is REFUSED (exit 2) before any boot (URGENT #195; scripts/display-guard.sh).
 #   --inherit <b>    A FRESH TREE TAKES ITS PARENT's COLD-ROW PRIMES AT AN EQUAL KEY (TEST-STREAMLINE-1 1a; `spec.sh new` calls
-#                    it after the build): <b> is the parent tree's build dir. Its key, computed by THIS script, must equal this
-#                    tree's (else exit 3, nothing taken). NEVER THE TWO SHARED CACHES (WARM-SHARE-1 B4): the box's warm store
+#                    it after the build): <b> is the parent tree's build dir. Its COLD key, computed by THIS script, must equal
+#                    this tree's (else exit 3, nothing taken). NEVER THE TWO SHARED CACHES (WARM-SHARE-1 B4): the box's warm store
 #                    is the one way a tree takes another's warm shader caches (its first warm-up call, at the key, no card).
 #                    Taken: each cold row the parent primed at the key
 #                    for the same registration (paths aside) and the same media by content, with its private driver cache
@@ -56,6 +56,9 @@
 #                    to warm here; boots nothing, takes no card. Exit 0 (something or nothing taken), 3 (keys differ).
 #   --key            THE TREE's SHADER KEY alone (below), printed, exit 0 - its one definition, read by a row that keeps
 #                    a cache of its own (shader.async_after_open.seed's stamp, URGENT #125), never a second formula.
+#   --cold-key       THE COLD ROWS' KEY alone, printed, exit 0 (TE-WARM-WHY (C): the key above with the fork COMMIT replaced by
+#                    the engine's three compile-path ids - "THE COLD ROWS' KEY" below, and what it does NOT cover); both keys
+#                    exit 2 on an unbuilt tree or a build-id header that cannot name an id.
 #   --tests-dir <d>  the shared cache's directory (default <build>/tests) - the guard row's own scratch.
 #   --app <exe>      the app the boot runs (default <build>/bin/Jahshaka) - the guard row's fake, which compiles nothing.
 #   --cold-rows <f>  the cold rows' list cold-on runs (default <build>/tests/test-cold-rows.txt) - the guard
@@ -112,7 +115,9 @@
 #   call's end, never the 60-s cap), the driver's cache ON, ONE ROW AT A TIME, EACH ITS OWN HOLD (tests/support/
 #   warm_cold_rows.sh; SHIP-CUT-2 0b, URGENT #155: run all at once, a prime died out of GPU memory and was stamped).
 #   A STAMP PER ROW, written only for a run the runner judged PRIMED (it reached its own end; a seed fresh after it):
-#   <tests>/.cold-rows/<row>.driver-key - this key, the row's line digest (its command: a new or changed COLD row reads
+#   <tests>/.cold-rows/<row>.driver-key - the COLD key (--cold-key: a fork commit outside ShaderCompilePath.txt moves the
+#   key above, never this one; NOT COVERED: a fork edit outside that list that changes generated shader text - "THE COLD
+#   ROWS' KEY" below), the row's line digest (its command: a new or changed COLD row reads
 #   cold) and the BUILT digest, the size and time of every staged media file: what a row's own cache stamp keys on beyond
 #   this key (the seed's stamp is this key, all of bin/media by content and the fork's BUILT_FROM; never a binary's bytes -
 #   URGENT #125). Only the rows not primed at the key run; the prime's cost is printed per row. A row on the
