@@ -558,6 +558,20 @@ printf 'GROWN' > "$CT/.shadercache/hlms.1.bin.tmp"; mv "$CT/.shadercache/hlms.1.
 [ "$(cat "$ST/$pk/app/cache/hlms.1.bin")" = 0123456789 ] &&
     ok "S2b: the taken files are the store's own (one inode) - a tree's write the engine's way (by rename) leaves the store's as they were" ||
     no "S2b: the store was written through the tree"
+# S2c THE SERVE TAKES NO LOCK (WARM-SHARE-1's law: a second tree at one KEY is served with no card): a third tree at the same
+# key with the card's lock (a private one) HELD by another process all through - the serve ends while the holder still holds
+# it (the margin: the holder's 8-s sleep), nothing booted, and the lock's hold log gains no line. (red with the store taken
+# away - JAH_WARM_STORE unset: the tree boots and waits on the held card)
+sN() { toy_tree "$T/sN$1"; rm -f "$T/s-booted" "$T/gpuN.lock.holds"
+       ( exec 8>"$T/gpuN.lock"; flock 8; : > "$T/gpuN.held"; sleep 8 ) & np=$!
+       for _ in $(seq 50); do [ -e "$T/gpuN.held" ] && break; sleep 0.1; done
+       out=$(env -u JAH_GPU_LOCK_HELD DISPLAY=:99 JAH_GPU_LOCK="$T/gpuN.lock" JAH_WARM_STORE_ALLOW_FAKES=1 ${2:+JAH_WARM_STORE="$2"} "$W" "$T/sN$1/build" \
+             --app "$T/s-app" --lab "$T/s-app" --cold-rows "$T/cold-none" --only app-off,app-on,engine-off,engine-on --budget 20 2>&1); rc=$?
+       kill -0 $np 2>/dev/null; still=$?; kill $np 2>/dev/null; wait $np 2>/dev/null; rm -f "$T/gpuN.held"; }
+sN 1 "$ST"
+[ $rc = 0 ] && [ $still = 0 ] && echo "$out" | grep -q "from the store, nothing booted" && [ ! -e "$T/s-booted" ] && [ ! -s "$T/gpuN.lock.holds" ] &&
+    ok "S2c: the serve takes NO lock - a second tree at the key warm while another holds the card, nothing booted, no hold logged" ||
+    no "S2c the serve's lock: rc $rc still-held $still booted [$(cat "$T/s-booted" 2>/dev/null)] holds [$(cat "$T/gpuN.lock.holds" 2>/dev/null)] '$(echo "$out" | tail -2)'"
 toy_tree "$T/sU"; UB="$T/sU/build"; rm -f "$T/s-booted"
 out=$(env -u JAH_WARM_STORE bash -c "$(declare -f SX); W='$W'; T='$T'; SX '$UB' --only engine-off" 2>&1); rc=$?
 [ -e "$T/s-booted" ] && ! echo "$out" | grep -q "store" && ok "S4: JAH_WARM_STORE unset - no store read or written, the cold tree boots as before" ||
