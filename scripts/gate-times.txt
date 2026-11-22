@@ -605,3 +605,4 @@ script.host 0.03  solo 2026-11-22 at 6bde2bf50 (spec.sh reprice, run 20261122T13
 source.script_neutral 2.84  solo 2026-11-22 at 6bde2bf50 (spec.sh reprice, run 20261122T135553-6bde2bf50)
 tooling.runlog_facts 0.17  solo 2026-11-22 at 3cc4126e9 (spec.sh reprice, run 20261122T150737-3cc4126e9-p2397850)
 engine.draw_order 1.67  by hand (spec.sh reprice, 2026-11-22)
+source.no_qt_below 0.51  solo 2026-11-22 at edf852712 (spec.sh reprice, run 20261122T165907-edf852712-p2676091)
