@@ -974,7 +974,7 @@ int main()
         headless->destroyScene(named);
     }
 
-    // 12. AN ARRAY's LENGTH IS JUDGED BEFORE IT IS CONVERTED (SCRIPT-IN-ENGINE-1 2b; the 2a final read's L1): a script's
+    // 12a. AN ARRAY's LENGTH IS JUDGED BEFORE IT IS CONVERTED (SCRIPT-IN-ENGINE-1 2b; the 2a final read's L1): a script's
     //     `a.length = 4e9` costs it nothing, and converting it would cost the host 4e9 values (a bad_alloc through the
     //     JS engine's C frames: the process ends). THE LAW: the length is checked against the declaration - its count or
     //     its maximum - BEFORE any element is converted or any room reserved; an array the declaration does not take
