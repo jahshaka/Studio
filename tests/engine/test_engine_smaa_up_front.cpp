@@ -73,8 +73,83 @@ static PhaseCounts runPhase(Engine *e)
     return c;
 }
 
+/// `picture` (the lead's verification, ss7-smaa-picture): DOES A PRESET CHANGE REACH THE PICTURE? The low-level
+/// renderable hash holds the macroblock, the blendblock and the pass id only (OgreHlmsLowLevel.cpp calculateHashFor),
+/// so a quad's pipeline built at the first SMAA frame may keep the old programs after initSmaa reloads them. Three
+/// fresh engines (the real destroy between them) and a fourth with SMAA off first, each: one emissive cube rotated 2
+/// degrees on black (test_engine's smaa_smooths_edges scene at a SHALLOW angle: its silhouette's runs are ~29 px long,
+/// past Low's 4 search steps (two pixels a step) and within High's 16 and Ultra's 32 - SMAA.hlsl:312-330), the FIRST preset's picture,
+/// then the SECOND's.
+/// Exact display codes compared: fresh 0 vs fresh 3 must differ (else the instrument proves nothing); a switched
+/// picture must equal the fresh picture of its own preset.
+static int pictureMode()
+{
+    std::printf("== engine.smaa_up_front picture: does a preset change reach the picture?\n");
+    struct Run { int first, second; Image a, b; bool ok = false; };
+    Run runs[] = { { 0, 3 }, { 3, 0 }, { 2, 0 }, { -1, 3 } };
+    for (Run &r : runs) {
+        EngineConfig cfg = enginetest::testEngineConfig("test-engine-smaa-picture-ogre.log",
+                                                        enginetest::EngineOverrides().shaderCacheOff().realDestroy());
+        std::string err;
+        auto engine = Engine::create(cfg, err);
+        if (!engine) { std::printf("FAIL: engine (%s)\n", err.c_str()); return 1; }
+        Engine *e = engine.get();
+        View *v = e->createOffscreenView("smaa-picture", 128, 128, Colour(0, 0, 0), OffscreenContract::Live);
+        Scene *s = e->createScene("smaa-picture");
+        if (!v || !s) { std::printf("FAIL: view/scene (%s)\n", e->lastError().c_str()); return 1; }
+        v->setScene(s);
+        s->setAmbient(Colour(0, 0, 0), Colour(0, 0, 0));
+        const MeshId cube = s->createMesh(enginetest::unitCubeMesh());
+        PbrParams glow; glow.albedo = Colour(0, 0, 0); glow.emissive = Colour(1.0f, 1.0f, 1.0f);
+        const MaterialId mat = s->createPbrMaterial(glow);
+        const NodeId n = s->createNode();
+        const bool built = s->attachMesh(n, cube, mat);
+        s->setNodeTransform(n, Vec3(0, 0, 0), Quat(0, 0, 0.0174524f, 0.9998477f), Vec3(0.9f, 0.9f, 0.9f));
+        enginetest::testCameraLookAt(v, Vec3(0, 0, 3.0f), Vec3(0, 0, 0));
+        PostFxDesc fx;
+        fx.allowOffscreen = true;
+        fx.smaaPreset = r.first;
+        v->setPostFx(fx);
+        enginetest::frames(e, 4);
+        const bool readA = v->readPixels(r.a);
+        fx.smaaPreset = r.second;
+        v->setPostFx(fx);
+        enginetest::frames(e, 4);
+        const bool readB = v->readPixels(r.b);
+        r.ok = built && readA && readB && !r.a.rgba.empty() && r.a.rgba.size() == r.b.rgba.size();
+        std::printf("    engine %d -> %d: %s\n", r.first, r.second, r.ok ? "read" : "FAILED to draw or read");
+        enginetest::poseRegistry().erase(s);
+        engine.reset();
+    }
+    for (const Run &r : runs) if (!r.ok) return 1;
+    const auto differ = [](const Image &x, const Image &y) {
+        int n = 0;
+        for (size_t i = 0; i + 3 < x.rgba.size(); i += 4)
+            if (x.rgba[i] != y.rgba[i] || x.rgba[i + 1] != y.rgba[i + 1] || x.rgba[i + 2] != y.rgba[i + 2]) ++n;
+        return n;
+    };
+    const Image &fresh0 = runs[0].a, &fresh3 = runs[1].a, &fresh2 = runs[2].a;
+    const Image &sw3 = runs[0].b, &sw0from3 = runs[1].b, &sw0from2 = runs[2].b;
+    const Image &off = runs[3].a, &sw3fromOff = runs[3].b;
+    std::printf("    SMAA off vs fresh 0 %d, vs fresh 3 %d, vs off -> 3 %d\n", differ(off, fresh0), differ(off, fresh3),
+                differ(off, sw3fromOff));
+    std::printf("    pixels differing: fresh 0 vs fresh 3 %d, fresh 2 vs fresh 0 %d\n", differ(fresh0, fresh3),
+                differ(fresh2, fresh0));
+    std::printf("    0 -> 3: vs fresh 3 %d, vs fresh 0 %d\n", differ(sw3, fresh3), differ(sw3, fresh0));
+    std::printf("    3 -> 0: vs fresh 0 %d, vs fresh 3 %d\n", differ(sw0from3, fresh0), differ(sw0from3, fresh3));
+    std::printf("    2 -> 0: vs fresh 0 %d, vs fresh 2 %d\n", differ(sw0from2, fresh0), differ(sw0from2, fresh2));
+    CHECK(differ(off, fresh0) > 0 && differ(off, fresh3) > 0, "the instrument: SMAA changes this edge at 0 and at 3");
+    CHECK(differ(fresh0, fresh3) > 0, "the instrument: presets 0 and 3 draw this edge differently when fresh");
+    CHECK(differ(sw3, fresh3) == 0, "a change 0 -> 3 draws preset 3's picture");
+    CHECK(differ(sw0from3, fresh0) == 0, "a change 3 -> 0 draws preset 0's picture");
+    CHECK(differ(sw0from2, fresh0) == 0, "a change 2 -> 0 draws preset 0's picture");
+    std::printf("engine.smaa_up_front picture: %s\n", failures ? "FAIL" : "PASS");
+    return failures ? 1 : 0;
+}
+
 int main(int argc, char **argv)
 {
+    if (argc > 1 && std::strcmp(argv[1], "picture") == 0) return pictureMode();
     const bool keep = argc > 1 && std::strcmp(argv[1], "--keep") == 0;
     std::printf("== engine.smaa_up_front: no SMAA program is compiled in a frame\n");
     // ITS OWN CACHE, EMPTY AT EVERY RUN (frame.monitor_pop's pattern): an app's first launch.
