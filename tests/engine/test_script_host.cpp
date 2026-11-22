@@ -1076,7 +1076,10 @@ int main()
     //      Int8Array(0x7fffffff)` costs the script a lazy 2 GiB and would cost the host ~16 GiB. Under a 4096-byte call
     //      bound the listing's having run shows as a failure on the BYTES at an index member ("o.55 would take ...");
     //      after, nothing is listed. THE CONTROL: a Uint8Array is still carried as bytes (the registry names its kind),
-    //      and the next call reaches its command (reached = 1, its answer 2).
+    //      and the next call reaches its command (reached = 1, its answer 2). A PROXY is refused at the same door
+    //      (2b's re-read R1: its class passes every test above, and with no ownKeys trap the JS engine lists its TARGET's
+    //      indices - a Proxy over a typed array - or whatever its own trap answers): over an Int8Array, over a plain
+    //      object, and with an endless ownKeys trap, each FAILS "its class is Proxy" with nothing listed.
     {
         Host::Options small;
         small.callBounds.bytes = 4096;
@@ -1096,8 +1099,10 @@ int main()
             "for (let i = 0; i < 19; ++i) rope = rope + rope;\n"
             "const sloppy = (function () { return arguments; })(1, 2);\n"
             "const strict = (function () { 'use strict'; return arguments; })(1, 2);\n"
+            "const keys = new Proxy({}, {get: (t, k) => k === 'length' ? 4294967295 : 'k'});\n"
             "for (const v of [new Int8Array(1 << 20), new Float64Array(1 << 20), new DataView(new ArrayBuffer(8)),\n"
-            "                 new String('abc'), new String(rope), sloppy, strict, new Uint8Array(4)])\n"
+            "                 new String('abc'), new String(rope), sloppy, strict, new Proxy(new Int8Array(1 << 20), {}),\n"
+            "                 new Proxy({v: [1]}, {}), new Proxy({}, {ownKeys: () => keys}), new Uint8Array(4)])\n"
             "  console.log(caught(() => test.capped(v)));\n"
             "console.log(caught(() => engine.node.setTransform(s, n, new Int8Array(1 << 20))));\n"
             "console.log(rope.length, test.capped({v: [1, 2]}));\n",
@@ -1109,26 +1114,30 @@ int main()
                               "test.capped: argument 1: o cannot be carried: its class is String",
                               "test.capped: argument 1: o cannot be carried: its class is Arguments",
                               "test.capped: argument 1: o cannot be carried: its class is Arguments",
+                              "test.capped: argument 1: o cannot be carried: its class is Proxy",
+                              "test.capped: argument 1: o cannot be carried: its class is Proxy",
+                              "test.capped: argument 1: o cannot be carried: its class is Proxy",
                               "test.capped: o must be object (it is bytes)",
                               "engine.node.setTransform: argument 3: transform cannot be carried: its class is Int8Array",
                               "1048576 2"};
         std::string missed;
-        for (std::size_t i = 0; i < 10; ++i)
+        for (std::size_t i = 0; i < 13; ++i)
             if (i >= said.size() || said[i].rfind(want[i], 0) != 0)
                 missed += "\n      want " + std::string(want[i]) + " <- " + (i < said.size() ? said[i] : std::string("(no line)"));
-        check(r.status == Status::Ok && said.size() == 10 && missed.empty() && reached == 1,
+        check(r.status == Status::Ok && said.size() == 13 && missed.empty() && reached == 1,
               "THE LAW AT THE DOOR: a typed array but the Uint8Array, a DataView, a String object (a rope of 2^20 units "
-              "too) and an arguments object (mapped, strict) FAIL by name before any own key is listed - and the "
+              "too), an arguments object (mapped, strict) and a Proxy (over an Int8Array, over a plain object, with an "
+              "endless ownKeys trap) FAIL by name before any own key is listed - and the "
               "brief's trigger, engine.node.setTransform(s, n, new Int8Array(...)); THE CONTROL: a Uint8Array is "
               "carried as bytes, and the next call reaches its command (" + std::to_string(reached) + " reached)" +
                   (r.status == Status::Ok ? "" : "\n      the run: " + r.message) + missed);
     }
     // 12d. THE SCRIPT's HEAP LIMIT (D1 (b), the class fix: Host::Options::memoryLimit, heapLimit()): every allocation a
-    //      script drives is refused past the host's limit - its own values (a buffer past it), and what the JS engine
-    //      allocates for a conversion: a Proxy whose ownKeys answers an endless list (2^32 - 1 keys, each the one name)
-    //      grows the engine's own key list, counted in that heap, until the limit refuses it - each FAILS that run by
-    //      name ("out of memory") and the host lives on: THE CONTROL, the next run is served (reached = 1). And no host
-    //      is unlimited: the default is DERIVED, 2 x callBounds.bytes + the floor (1168 MiB).
+    //      script drives is refused past the host's limit - an 8 MiB buffer under a 4 MiB limit FAILS its run by name
+    //      ("out of memory") and the host lives on: THE CONTROL, the next run allocates 3 MiB of the 4 MiB (the refused
+    //      run's heap really given back) and is served (reached = 1). And no host is unlimited: the default is DERIVED,
+    //      2 x callBounds.bytes + the floor (1168 MiB). (A conversion's string refused by the limit is NOT given back:
+    //      the JS engine leaks it - Script.h's named limit, homed at MCP-ON-HOST-1.)
     {
         Host::Options four;
         four.memoryLimit = std::size_t(4) << 20;
@@ -1141,20 +1150,18 @@ int main()
                             [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0]["v"].asArray().size())); });
         const Result over = heap.run("const big = new Uint8Array(8 << 20);\nhost.check({ok: big.length > 0, what: 'made'});\n",
                                      "over.js");
-        const Result endless = heap.run(
-            "const keys = new Proxy({}, {get: (t, k) => k === 'length' ? 4294967295 : 'k'});\n"
-            "test.capped(new Proxy({}, {ownKeys: () => keys}));\n",
-            "endless.js");
-        const Result next = heap.run("host.check({ok: test.capped({v: [1, 2]}) === 2, what: 'served'});\n", "next.js");
+        const Result next = heap.run("globalThis.near = new Uint8Array(3 << 20);\n"
+                                     "host.check({ok: near.length > 0 && test.capped({v: [1, 2]}) === 2, what: 'served'});\n",
+                                     "next.js");
         const Host::Options defaults;
         const std::size_t derived = defaults.heapLimit();
-        check(failedWith(over, "out of memory") && failedWith(endless, "test.capped: argument 1: ") &&
-                  endless.message.find("out of memory") != std::string::npos && next.status == Status::Ok &&
+        check(failedWith(over, "out of memory") && next.status == Status::Ok &&
                   reached == 1 && heap.checksFailed() == 0 && derived == (std::size_t(1168) << 20),
-              "THE HEAP LIMIT: an 8 MiB buffer and an endless ownKeys list each FAIL their run by name under a 4 MiB "
-              "limit; THE CONTROL: the next run is served (" + std::to_string(reached) + " reached); the default is "
-              "derived, " + std::to_string(derived >> 20) + " MiB\n      over: " + over.message.substr(0, 80) +
-                  "\n      endless: " + endless.message.substr(0, 120));
+              "THE HEAP LIMIT: an 8 MiB buffer FAILS its run by name under a 4 MiB limit (an endless Proxy key list "
+              "is refused at the door: 12c); THE CONTROL: the next run allocates 3 MiB and is served (" +
+                  std::to_string(reached) + " reached); the default is derived, " + std::to_string(derived >> 20) +
+                  " MiB\n      over: " + over.message.substr(0, 80) +
+                  (next.status == Status::Ok ? std::string() : "\n      next: " + next.message));
     }
     // 12e. THE DERIVATION's x2 TERM, PROVED SMALL (the lead's ruling: no 1 GiB in a CPU row): a host that STATES small
     //      bounds - a 4 MiB picture cap and callBounds.bytes = the cap + an eighth, as the default derives them - holds
@@ -1457,14 +1464,14 @@ int main()
                 "const mesh = engine.mesh.unitCube(s), material = engine.material.createPbr(s, {});\n"
                 "const theirs = forge(node, " + std::to_string(ownerNode) + ");\n"
                 "console.log(caught(() => engine.node.setTransform(s, theirs, {position: [5, 5, 5]})));\n"
-                "console.log(caught(() => engine.node.setTransforms(s, {nodes: [node, theirs], positions: [1, 2, 3, 5, 5, 5]})));\n"
+                "engine.node.setTransform(s, node, {position: [1, 2, 3]});\n"
+                "console.log(caught(() => engine.node.setTransforms(s, {nodes: [node, theirs], positions: [7, 8, 9, 5, 5, 5]})));\n"
                 "console.log(caught(() => engine.node.attachMesh(s, theirs, {mesh, material})));\n"
                 "console.log(caught(() => engine.node.destroy(s, theirs)));\n"
                 "console.log(caught(() => engine.mesh.destroy(s, forge(mesh, " + std::to_string(ownerMesh) + "))));\n"
                 "console.log(caught(() => engine.material.destroy(s, forge(material, " + std::to_string(ownerMat) + "))));\n"
                 "console.log(caught(() => engine.scene.setAmbient(s, {upper: [1, 1, 1], lower: [0, 0, 0]})));\n"
                 "console.log(caught(() => engine.gi.set(s, {mode: 'off', cascades: []})));\n"
-                "engine.node.setTransform(s, node, {position: [1, 2, 3]});\n"
                 "engine.node.attachMesh(s, node, {mesh, material});\n"
                 "console.log(engine.node.destroy(s, gone), node % 2 ** 32);\n",
                 "readonly.js");
@@ -1496,7 +1503,9 @@ int main()
                   handed->materialPresence(ownerMat) == Scene::Presence::Present,
               "A HANDED-IN SCENE's OWN OBJECTS ARE READ-ONLY: the owner's node moved (one and in a batch), re-drawn and "
               "removed, its mesh and material removed, and the scene's settings each FAIL by name; the owner's objects "
-              "present and unmoved after; THE CONTROL: the script's own node moved, drew and was destroyed" +
+              "present and unmoved after; the refused batch moved NOTHING (the script's own node, its first element, "
+              "still at the (1, 2, 3) it was set to, not the batch's (7, 8, 9)); THE CONTROL: the script's own node "
+              "moved, drew and was destroyed" +
                   (r.status == Status::Ok ? std::string() : "\n      the run: " + r.message) + missed);
         headless->destroyScene(handed);
     }
