@@ -1079,9 +1079,12 @@ QString AssetsApi::import(const QString &path, const QVariantMap &options)
     // thumbnail by its importer, and asking for a rebuild here threw the whole
     // verb AFTER a successful import, which is a passing import reported as a
     // failure (found driving the real UI, where the engine IS up).
+    // ...AND ITS MESH ROW's (PREVIEWS-1 stage 2: the Mesh preset draws the bake the import just made).
     if (host.isEngineReady()
-        && host.db->fetchAsset(result.objectGuid).type == static_cast<int>(ModelTypes::Object))
+        && host.db->fetchAsset(result.objectGuid).type == static_cast<int>(ModelTypes::Object)) {
         requestPreview(host, result.objectGuid);
+        if (!result.meshGuid.isEmpty()) requestPreview(host, result.meshGuid);
+    }
     return result.objectGuid;
 }
 
@@ -1137,8 +1140,10 @@ QString AssetsApi::importFile(const QString &path, int drawerId, const QVariantM
     }
     // Meshes get their preview render when the engine is up (like assets.import).
     if (host.isEngineReady() && host.db
-        && host.db->fetchAsset(result.objectGuid).type == static_cast<int>(ModelTypes::Object))
+        && host.db->fetchAsset(result.objectGuid).type == static_cast<int>(ModelTypes::Object)) {
         requestPreview(host, result.objectGuid);
+        if (!result.meshGuid.isEmpty()) requestPreview(host, result.meshGuid);   // the Mesh preset
+    }
     return result.objectGuid;
 }
 
@@ -2155,7 +2160,10 @@ QVariantMap AssetsApi::reimport(const QString &guid, const QVariantMap &options)
     out["bakeOid"] = result.bakeOid;
     out["previousBakeOid"] = result.previousBakeOid;
     out["swappedNodes"] = swapped;
-    if (host.isEngineReady()) requestPreview(host, guid);
+    if (host.isEngineReady()) {
+        requestPreview(host, guid);
+        if (!result.meshGuid.isEmpty()) requestPreview(host, result.meshGuid);   // its new bake: the Mesh preset
+    }
     return out;
 }
 

@@ -28,12 +28,15 @@ For more information see the LICENSE file
 //     blob (Database::updateAssetAsset: a node's material, a sky's settings, a library save's cache)
 //     moves it, so a picture requested before the edit and stored after it reads stale, never ok;
 //   - the PRESET's version, and previewenv's version for a preset the studio lights.
+// A MESH row depicts its BAKE alone: its key is the bake's role:oid (the "bake" role,
+// iris::MeshBake::casRole) with the preset's and previewenv's versions - nothing else.
 // NOT the name: a rename changes no picture. NOT the guid — except for a row with no content of
 // its own (no file, no pin): an Object whose definition is its blob, fixed at import, keys on its
 // guid. The two oid lists are SORTED first: the catalog answers them in no promised order.
 //
 // THE PRESETS ARE DATA: one row a type that has a preview. A type with no row has nothing to draw
-// (state `none`): Mesh and Sky until their presets arrive (PREVIEWS-1 stages 2 and 4).
+// (state `none`): Sky until its preset arrives (PREVIEWS-1 stage 4). A Mesh with no bake has
+// nothing to draw either (PreviewService).
 
 #include <QString>
 #include <QStringList>
@@ -74,6 +77,9 @@ KeySource sourceOf(const Row &row)
     source.blob = row.blobStamp;
     return source;
 }
+
+/// The "bake:<oid>" entries of a row's files (a Mesh's key and its "has a bake" test read one list).
+QStringList bakeOf(const QStringList &files);
 
 /// The key, 16 lowercase hex digits; empty when the type has no preset. Pure: no catalog, no clock.
 QString key(const KeySource &source, int previewenvVersion);

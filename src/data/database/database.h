@@ -790,7 +790,10 @@ public:
     /// (services/previewservice.h). Set on THIS library's instance by the preview service's owner
     /// (ShellServices) and cleared before that service goes — never a process-wide hook. Unset (a
     /// suite that links the import alone, a host with no preview service) an import stores no
-    /// picture: its rows read `missing` until a render draws them.
+    /// picture: its rows read `missing` until a render draws them. A NOTIFICATION DOOR ONLY: the
+    /// Database hands the picture on and nothing more - it never renders, never decides a key and
+    /// never waits (the preview service does all three); it is the one object all nine import
+    /// construction sites share, which is why the sink lives here.
     using ImportPictureSink = std::function<void(const QString &guid, const QImage &picture)>;
     void setImportPictureSink(ImportPictureSink sink) { importPictureSink = std::move(sink); }
     const ImportPictureSink &importPictures() const { return importPictureSink; }

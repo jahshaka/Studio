@@ -20,7 +20,11 @@ For more information see the LICENSE file
 //      own pixels: the studio is not in it — the lead's ruling A3);
 //   4. a row with no content of its own (no file, no pin) keys on its GUID: two such rows differ,
 //      the same row is equal; a row WITH content does not key on its guid (a copy keeps its key);
-//   5. a type with no preset (Mesh, Sky, a SoundEffect today) has no key.
+//   5. a type with no preset (Sky, a SoundEffect today) has no key;
+//   6. THE MESH PRESET (stage 2): a Mesh's key is its BAKE's oid with the preset's and previewenv's
+//      versions - it MOVES on the bake's oid and on previewenv's version, and is EQUAL across its
+//      source oid, a project pin, members and a blob stamp (none of them is in a Mesh's picture);
+//      the same content keys differently as a Mesh and as an Object (two presets).
 
 #include <algorithm>
 #include <cstdio>
@@ -122,13 +126,42 @@ int main()
           "a content-less Object's MESH member moves its key");
 
     // 5. No preset, no key.
-    for (const ModelTypes t : { ModelTypes::Mesh, ModelTypes::Sky, ModelTypes::SoundEffect, ModelTypes::Undefined }) {
+    for (const ModelTypes t : { ModelTypes::Sky, ModelTypes::SoundEffect, ModelTypes::Undefined }) {
         previews::KeySource n = base;
         n.type = int(t);
         check(previews::key(n, env).isEmpty() && !previews::presetFor(int(t)),
               "a type with no preset has no key");
     }
 
-    std::printf("previews.key: %s\n", failures ? "FAILED" : "PASSED");
+    // 6. The Mesh preset: the bake alone.
+    previews::KeySource mesh;
+    mesh.guid = QStringLiteral("mmmmmmmm-0000-0000-0000-000000000001");
+    mesh.type = int(ModelTypes::Mesh);
+    mesh.files = { QStringLiteral("source:1111"), QStringLiteral("bake:2222") };
+    const QString km = previews::key(mesh, env);
+    check(previews::presetFor(int(ModelTypes::Mesh)) && km.size() == 16, "a Mesh has a preset and a key");
+    previews::KeySource m = mesh;
+    m.files = { QStringLiteral("source:1111"), QStringLiteral("bake:2223") };
+    check(previews::key(m, env) != km, "a Mesh's BAKE oid moves its key");
+    check(previews::key(mesh, env + 1) != km, "previewenv's version moves a Mesh's key (the studio draws it)");
+    m = mesh;
+    m.files = { QStringLiteral("source:1112"), QStringLiteral("bake:2222") };
+    check(previews::key(m, env) == km, "a Mesh's SOURCE oid alone is not in its key (the bake is what it draws)");
+    m = mesh;
+    m.pin = QStringLiteral("9999");
+    m.members = { QStringLiteral("tex-a:3333") };
+    m.blob = QStringLiteral("0123456789abcdef");
+    check(previews::key(m, env) == km, "a pin, members and a blob stamp are not in a Mesh's key");
+    m = mesh;
+    m.guid = QStringLiteral("mmmmmmmm-0000-0000-0000-000000000002");
+    check(previews::key(m, env) == km, "two Mesh rows on one bake key alike (no guid: it has content)");
+    m = mesh;
+    m.type = int(ModelTypes::Object);
+    check(previews::key(m, env) != km, "the same files key differently as an Object (another preset)");
+    check(previews::bakeOf(mesh.files) == QStringList{ QStringLiteral("bake:2222") },
+          "bakeOf keeps the bake role's entries only");
+
+    std::printf("previews.key: %s\n", failures ? QByteArray("FAILED (" + QByteArray::number(failures) + ")").constData()
+                                                : "PASSED");
     return failures ? 1 : 0;
 }

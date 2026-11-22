@@ -108,7 +108,8 @@ QVector<VerbInfo> PreviewsApi::verbs() const
           "type with no preview, a row with no definition, platform furniture). `key` is what the preview "
           "depicts now (the row's content oids, the open project's pin of it, its members' oids, the preset's "
           "version and the studio's for a studio-lit preset - never its name); `storedKey` what the stored one "
-          "was drawn from. Mesh and Sky rows read 'none' until their presets arrive (PREVIEWS-1 stages 2 and 4). A "
+          "was drawn from. A Mesh row draws its bake (no bake: 'none'); Sky rows read 'none' until their preset arrives "
+          "(PREVIEWS-1 stage 4). A "
           "preview a door "
           "asked for (an import's picture included) lands through the one writer: until previews.settle, "
           "previews.render or the run's end lands it, its row reads 'missing' or 'stale'.",
@@ -116,7 +117,7 @@ QVector<VerbInfo> PreviewsApi::verbs() const
         { "render", "previews.render(guid) -> {ok, reason}",
           "Draws one row's preview through the preview service and waits for it to be STORED with its key. "
           "Textures, video frames, pose strips, photometric lobes and icons are drawn on the CPU (headless too); "
-          "materials, models, particle systems and avatars on the engine (with none: {ok:false, reason}). A "
+          "materials, models, meshes (a Mesh row's bake in one neutral material), particle systems and avatars on the engine (with none: {ok:false, reason}). A "
           "failure changes NOTHING stored and says why; so does a write that does not land within the bound "
           "(the library stayed locked). Throws for a guid that names no asset.",
           Needs::Document },

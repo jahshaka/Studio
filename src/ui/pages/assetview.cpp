@@ -1389,7 +1389,11 @@ void AssetView::finishMeshTailItem(const ImportResult &result, const QString &fi
     // commit deleted. The preview service's request is what `previews.render`
     // runs: the committed blob, fitted, framed like the editor's F. A page
     // import and a scripted import now store the same image.
-    if (services && services->previews) services->previews->request(project, result.assetGuid, {});
+    if (services && services->previews) {
+        services->previews->request(project, result.assetGuid, {});
+        // ...and its Mesh row's: the Mesh preset draws the bake this import made (PREVIEWS-1 stage 2).
+        if (!result.meshGuid.isEmpty()) services->previews->request(project, result.meshGuid, {});
+    }
 
     // The tile's picture follows the stored thumbnail by itself (the write drops
     // the cached tile; the next paint reads the new one). Its loading pulse ends.

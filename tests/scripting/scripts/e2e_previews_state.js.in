@@ -3,7 +3,7 @@
 // NULL render system draws no engine picture, so what this proves is the KEY, never a picture:
 //
 //   1. every library row is listed ONCE with its type; a row with nothing to draw reads 'none' with
-//      no key (Mesh and Sky have no preset until stages 2 and 4; platform furniture; a builtin row);
+//      no key (Sky has no preset until stage 4; platform furniture; a builtin row);
 //      every other row carries a 16-hex key;
 //   2. materials.create reads 'missing' (headless no tile is drawn); materials.addTexture into a slot
 //      and a graph edit saved by graph.save each MOVE its key while storedKey stays empty (a texture
@@ -20,6 +20,10 @@
 //      batch is stood down when the verb starts and the sweep waits at the cap, so the writer's
 //      high-water mark (peakQueued) never passes the cap, and every row lands 'ok'. RED when the
 //      batch stood down only after the sweep and the queue had no cap: peakQueued = every row.
+//   7. THE MESH PRESET (stage 2): a model import's MESH row reads 'missing' with a key (headless no
+//      picture is drawn) - RED at af01a8d13, where every Mesh row read 'none' (no preset); its key
+//      MOVES when assets.reimport makes a new bake and its Object's tile is not its key; a headless
+//      previews.render of it fails by name and changes nothing.
 // RED ON THE BASE: there is no `previews` module (a TypeError at the first call).
 
 function assert(cond, msg) {
@@ -53,9 +57,8 @@ var none = all.filter(function (r) { return r.state === "none"; });
 assert(none.every(function (r) { return r.key === ""; }), "a 'none' row carries no key (" + none.length + " rows)");
 assert(all.filter(function (r) { return r.state !== "none"; }).every(function (r) { return hex16(r.key); }),
        "every row with something to draw carries a 16-hex key");
-assert(all.filter(function (r) { return r.type === "mesh" || r.type === "sky"; })
-          .every(function (r) { return r.state === "none"; }),
-       "Mesh and Sky rows read 'none' (no preset until stages 2 and 4)");
+assert(all.filter(function (r) { return r.type === "sky"; }).every(function (r) { return r.state === "none"; }),
+       "Sky rows read 'none' (no preset until stage 4)");
 var platform = all.filter(function (r) { return r.type === "texture" && r.state === "none"; });
 assert(platform.length >= 1, "platform furniture (the floor's checker texture) reads 'none': " + platform.length);
 
@@ -143,5 +146,27 @@ assert(swept.rendered >= 12 && swept.failed.every(function (f) { return !distinc
 assert(swept.peakQueued >= 1 && swept.peakQueued <= CAP,
        "the writer's high-water mark stays within its cap of " + CAP + ": " + swept.peakQueued);
 assert(many.every(function (g) { return rowOf(g).state === "ok"; }), "every row reads 'ok' after the sweep");
+
+// ---- 7. A MESH: ITS BAKE IS ITS PICTURE ------------------------------------------------------
+var OBJ = "@JAH_PREVIEWS_OBJ@";
+var meshBefore = {};
+previews.state({ type: "mesh" }).forEach(function (r) { meshBefore[r.guid] = true; });
+var o = assets.import(OBJ);
+assert(typeof o === "string" && o.length > 10, "assets.import(tetra.obj)");
+var newMeshes = previews.state({ type: "mesh" }).filter(function (r) { return !meshBefore[r.guid]; });
+assert(newMeshes.length === 1, "the model import made ONE Mesh row: " + J(newMeshes));
+var me0 = newMeshes[0];
+assert(me0.state === "missing" && hex16(me0.key) && me0.storedKey === "",
+       "a Mesh with a bake reads 'missing' with a key (af01a8d13: 'none', no preset): " + J(me0));
+assert(rowOf(o).key !== me0.key, "...a key of its own: the Object's (the asset preset) is another");
+var meFailed = previews.render(me0.guid);
+assert(meFailed.ok === false && typeof meFailed.reason === "string" && meFailed.reason.length > 0,
+       "previews.render(mesh) headless fails by name: " + J(meFailed));
+var me1 = rowOf(me0.guid);
+assert(me1.state === "missing" && me1.key === me0.key, "...and changes nothing: " + J(me1));
+var re = assets.reimport(o, { scale: 2 });
+assert(re && typeof re.bakeOid === "string" && re.bakeOid.length > 0, "assets.reimport makes a new bake: " + J(re));
+var me2 = rowOf(me0.guid);
+assert(me2.key !== me0.key && hex16(me2.key), "the NEW BAKE moves the Mesh's key: " + J(me2));
 
 console.log("previews_state: all assertions passed");

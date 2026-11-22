@@ -1981,6 +1981,8 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 		if (type == static_cast<int>(ModelTypes::Object)
 		    || type == static_cast<int>(ModelTypes::ParticleSystem))
 			thumbnailBacklog.append(result.assetGuid);
+		// ...and its Mesh row's: the Mesh preset draws the import's bake (PREVIEWS-1 stage 2).
+		if (!result.meshGuid.isEmpty()) thumbnailBacklog.append(result.meshGuid);
 		// …AND SO IS A COMPANION MATERIAL'S (fix round F9). Adding an image to
 		// a project mints one, and its tile is a render of the material — but
 		// a drop of a hundred images must not be a hundred synchronous renders

@@ -25,6 +25,8 @@ For more information see the LICENSE file
 #include "io/materialreader.h"
 #include "irisgl/core/irisutils.h"
 #include "irisgl/core/logger.h"
+#include "irisgl/document/materials/pbrmaterial.h"
+#include "irisgl/import/meshbake.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "jahshaka/engine/Engine.h"
 #include "services/animationfile.h"
@@ -49,13 +51,15 @@ QString storeFileFor(const QString &guid)
     return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
 }
 
-/// NOTHING TO DRAW: platform furniture (the app's own content, shown in no tile grid), or a MODEL row
+/// NOTHING TO DRAW: platform furniture (the app's own content, shown in no tile grid), a MODEL row
 /// with no content at all (no file, no pin, no blob) - a builtin primitive's Object row (a
-/// template's Floor), a document thing that never had a model.
+/// template's Floor), a document thing that never had a model - or a MESH row with no bake (the Mesh
+/// preset draws the bake and nothing else).
 bool nothingToDraw(const Database::PreviewRow &row)
 {
     if (row.platform) return true;
     const auto type = static_cast<ModelTypes>(row.type);
+    if (type == ModelTypes::Mesh) return previews::bakeOf(row.files).isEmpty();
     const bool model = type == ModelTypes::Object || type == ModelTypes::ParticleSystem;
     return model && row.files.isEmpty() && row.pin.isEmpty() && !row.hasBlob;
 }
@@ -159,6 +163,27 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
     case ModelTypes::Object:
     case ModelTypes::ParticleSystem:
         return renderModel(guid);
+    case ModelTypes::Mesh: {
+        // THE MESH PRESET: the row's BAKE (the geometry its Object draws; the scene reader's own
+        // MeshBakeStore::load of the row's source under its guid), every mesh of it in ONE neutral
+        // material - iris::PbrMaterial's documented default (defaultmaterial: grey, roughness 0.75,
+        // metalness 0) - framed to its bounds in the studio. Never a parse: no bake, no picture.
+        const QString source = storeFileFor(guid);
+        const iris::BakedModelPtr baked = source.isEmpty() ? iris::BakedModelPtr() : MeshBakeStore::load(source, guid);
+        if (!baked || !baked->valid) return say(QStringLiteral("the mesh's bake could not be read (re-import it)"));
+        const iris::MaterialPtr neutral = iris::PbrMaterial::create();
+        iris::SceneNodePtr node = iris::MeshBake::buildFragment(
+            *baked, source, [neutral](iris::MeshPtr, iris::MeshMaterialData &) { return neutral; });
+        if (!node) return say(QStringLiteral("the mesh's bake holds no geometry"));
+        node->update(0.0f);
+        const auto engine = engineOrNull();
+        if (!engine) return say(QStringLiteral("the engine is not running (a mesh preview is a render)"));
+        auto loan = EngineThumbnailRenderer::borrow(engine, "the mesh preview");
+        if (!loan) return say(loan.reason());
+        const QImage image = loan->renderNode(node, studio);
+        if (image.isNull()) return say(loan->lastFailure());
+        return image;
+    }
     case ModelTypes::Avatar: {
         // An avatar LOOKS like its character: its preview is its model's, rendered now.
         AvatarAssets::Loaded loaded = AvatarAssets::load(guid, AvatarAssets::Scope::Library, mDb, project);

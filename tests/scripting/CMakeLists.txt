@@ -820,11 +820,26 @@ set_tests_properties(scripting.e2e.material_from_node PROPERTIES
 jah_no_display(scripting.e2e.material_from_node)
 
 # scripting.e2e.previews_state — PREVIEWS-1 stage 1: previews.state, by keys, headless - every row once with its type,
-# 'none' for nothing to draw (Mesh, Sky, platform furniture); materials.create 'missing', addTexture and graph.save MOVE
-# its key; a Texture import 'stale' then 'ok' after previews.render; a material's headless render fails and changes
-# nothing; the type and scope filters. RED ON THE BASE: no previews module. A FRESH HOME.
+# 'none' for nothing to draw (Sky, platform furniture); materials.create 'missing', addTexture and graph.save MOVE
+# its key; a Texture import 'ok' after previews.settle; a material's headless render fails and changes nothing; the
+# type and scope filters; a model's Mesh row 'missing' with a key its new bake moves. RED ON THE BASE: no previews
+# module. A FRESH HOME.
 set(_pvsHome ${CMAKE_CURRENT_BINARY_DIR}/e2e-home-previews_state)
 set(JAH_PREVIEWS_PNG "${CMAKE_CURRENT_SOURCE_DIR}/fixtures/implane_wide.png")
+# THE MESH PRESET's model (stage 2): a tetrahedron written here at configure (no binary mesh in the tree; bytes no
+# shipped primitive has, so no re-list or member claim answers its import).
+set(JAH_PREVIEWS_OBJ "${CMAKE_CURRENT_BINARY_DIR}/fixtures/previews_tetra.obj")
+file(WRITE "${JAH_PREVIEWS_OBJ}" "# previews_tetra.obj - written by tests/scripting/CMakeLists.txt (PREVIEWS-1 stage 2)
+o Tetra
+v 0 0.6 0
+v -0.5 -0.3 0.4
+v 0.5 -0.3 0.4
+v 0 -0.3 -0.55
+f 1 2 3
+f 1 3 4
+f 1 4 2
+f 2 4 3
+")
 configure_file(scripts/e2e_previews_state.js.in ${CMAKE_CURRENT_BINARY_DIR}/e2e_previews_state.js @ONLY)
 jah_fresh_home_fixture(scripting.e2e.previews_state.fresh_home previewsStateHome "${_pvsHome}" LABELS "scripting")   # NULL render system (--headless): no shader cache
 file(MAKE_DIRECTORY ${_pvsHome}/run)
