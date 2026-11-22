@@ -27,8 +27,10 @@ For more information see the LICENSE file
 // again. The render is inline today (PICTURE-REQUEST-1 stage 3 makes it a ticket on Ready); ONE
 // render is in flight at a time — the one thumbnail renderer's borrow refuses a second by name. A
 // failed or cancelled delivery CHANGES NOTHING: no image, no write. An empty material definition is
-// a named failure. `done` is called exactly once — at once when nothing is written, else on the
-// application's thread when the writer has landed (or failed) the write. THIS SERVICE NEVER WAITS
+// a named failure. `done` is called at most once — at once when nothing is written, else on the
+// application's thread when the writer has landed (or failed, or superseded) the write - and NOT at
+// all for a write still queued when the service is destroyed (its completion dies with the writer,
+// the write itself drained). THIS SERVICE NEVER WAITS
 // AND NEVER SPINS AN EVENT LOOP: the one wait for a landed write lives in the synchronous verbs'
 // door (scripting/modules/previewsapi.cpp), bounded, and PICTURE-REQUEST-1 stage 3 replaces it by a
 // ticket. INSIDE A SCRIPT RUN the run's database batch holds the library's write lock from its first
@@ -74,6 +76,9 @@ public:
         /// The row has nothing to draw and never had (a builtin primitive's Object row, a type with
         /// no preset): a failure to the caller who asked for THIS guid, a skip to a sweep.
         bool nothingToDraw = false;
+        /// A newer request of the same row replaced this one while it waited in the writer: not a
+        /// failure (the newer one is the row's preview).
+        bool superseded = false;
     };
     using Done = std::function<void(const Outcome &)>;
 

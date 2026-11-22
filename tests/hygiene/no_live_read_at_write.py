@@ -17,7 +17,9 @@ THE CLAUSES:
      remove, write, set, ingest, move, store, commit, ...).
 THE LIMITS, said: the SQL of a read must be a string literal (a query prepared from a variable is not
 judged); a write reached through a callee whose name is no write verb is not seen; the connection is not
-resolved, so a side connection's read is judged too (finishing it costs nothing).
+resolved, so a side connection's read is judged too (finishing it costs nothing); a write INSIDE a
+`while (q.next())` body (the read is live mid-loop) is not judged - none in src/ today (the stage-1 audit's
+loop scan).
 Prints `ok:`/`FAIL:` lines; the last line is the verdict. argv[1] = the repo root.
 """
 import os

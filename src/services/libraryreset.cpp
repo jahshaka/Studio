@@ -294,11 +294,8 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     if (keep.any() && !storeRoot.isEmpty() && QDir(storeRoot).exists()) {
         // The rebuild writes through its OWN connection: the main one must hold
         // no transaction (a script run's gesture batch would hold the write
-        // lock) — a top-level guard makes the batch commit and stand down.
-        {
-            DbTransaction yield(db->getDb());
-            yield.commit();
-        }
+        // lock) — the batch commits and stands down (it begins again at its next write).
+        db->commitBatchNow();
         AssetMigration::RebuildOptions options;
         options.homes = keep.homes();
         options.dropDerived = keep.dropDerived;

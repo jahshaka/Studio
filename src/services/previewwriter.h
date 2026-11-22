@@ -74,6 +74,7 @@ public:
         bool ok = false;
         QString reason;   ///< empty when ok
         int drops = 0;    ///< how often this write was dropped past its budget before it landed
+        bool superseded = false;   ///< replaced by a newer write of its guid: not stored, not a failure
         qint64 waitedMs = 0;   ///< from its first drop to its landing; 0 when never dropped
         /// THE ORDER OF ITS EVENTS, on the writer's one serial (each event takes the next number): its
         /// PNG's encode ending, and its (last) transaction beginning. encodedAt < begunAt is the law that

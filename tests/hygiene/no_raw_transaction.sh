@@ -53,11 +53,34 @@ else
     echo "ok:   no raw .transaction() on the main connection"
 fi
 
-# The raw BEGINs: exactly the two doors and the preview writer's own connection.
-BEGIN_ALLOWED='^src/data/database/database\.h:[0-9]+:.*begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)|^src/data/database/database\.cpp:[0-9]+:.*batchTxLive = begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)|^src/data/database/database\.cpp:[0-9]+:.*(noteQuery\(QStringLiteral\("WritePreview"\), QStringLiteral\("BEGIN IMMEDIATE"\)\)|query\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\))'
-begins=$(grep -rnE '"BEGIN' src/ 2>/dev/null \
-         | grep -vE ':[0-9]+:[[:space:]]*(//|\*|/\*)' \
-         | grep -vE "$BEGIN_ALLOWED" || true)
+# The raw BEGINs: exactly the two doors and the preview writer's own connection - each anchored to ITS
+# FUNCTION's lines (the stage-1 audit's L4: a pattern alone would admit the same text anywhere in the file).
+span() {   # span <file> <start ERE> <end ERE>: "first last" lines of the first block from start to end
+    awk -v s="$2" -v e="$3" 'f == 0 && $0 ~ s { f = NR } f && NR > f && $0 ~ e { print f, NR; exit }' "$1"
+}
+read -r tx0 tx1 <<< "$(span src/data/database/database.h '^class DbTransaction' '^};')"
+read -r bt0 bt1 <<< "$(span src/data/database/database.cpp '^bool Database::resumeBatchIfNeeded\\(' '^}')"
+read -r wp0 wp1 <<< "$(span src/data/database/database.cpp '^Database::PreviewWrite Database::writePreview\\(' '^}')"
+allowed_begin() {   # allowed_begin <file> <line> <text>
+    case "$1" in
+        src/data/database/database.h)
+            [ -n "$tx0" ] && [ "$2" -gt "$tx0" ] && [ "$2" -lt "$tx1" ] \
+                && printf '%s' "$3" | grep -qE 'begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)' ;;
+        src/data/database/database.cpp)
+            { [ -n "$bt0" ] && [ "$2" -gt "$bt0" ] && [ "$2" -lt "$bt1" ] \
+                  && printf '%s' "$3" | grep -qE 'batchTxLive = begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)'; } \
+            || { [ -n "$wp0" ] && [ "$2" -gt "$wp0" ] && [ "$2" -lt "$wp1" ] \
+                  && printf '%s' "$3" | grep -qE 'QStringLiteral\("BEGIN IMMEDIATE"\)'; } ;;
+        *) return 1 ;;
+    esac
+}
+begins=""
+while IFS= read -r hit; do
+    [ -n "$hit" ] || continue
+    file=${hit%%:*}; rest=${hit#*:}; line=${rest%%:*}; text=${rest#*:}
+    allowed_begin "$file" "$line" "$text" || begins="$begins$hit
+"
+done <<< "$(grep -rnE '"BEGIN' src/ 2>/dev/null | grep -vE ':[0-9]+:[[:space:]]*(//|\*|/\*)' || true)"
 if [ -n "$begins" ]; then
     echo "FAIL: a raw BEGIN outside the two doors (DbTransaction, the batch) and the preview writer's own connection."
     echo "$begins"

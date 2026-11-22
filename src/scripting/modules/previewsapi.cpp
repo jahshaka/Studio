@@ -227,7 +227,7 @@ QVariantMap PreviewsApi::renderAll(const QVariantMap &options)
         host.project, sweep,
         [wait, rendered, failures](const QString &guid, const PreviewService::Outcome &o) {
             if (o.ok) ++*rendered;
-            else if (!o.nothingToDraw) failures->append(QVariantMap{ { "guid", guid }, { "reason", o.reason } });
+            else if (!o.nothingToDraw && !o.superseded) failures->append(QVariantMap{ { "guid", guid }, { "reason", o.reason } });
             notePreview(wait);
         },
         [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });

@@ -305,7 +305,7 @@ int main(int argc, char **argv)
         writer.submit(QStringLiteral("e"), solid(qRgb(4, 4, 4)), QStringLiteral("00000000000000e4"), pnew.done());
         check(waitFor([&] { return pnew.landed.size() == 1; }), "e: the older completes at once, superseded");
         check(!pnew.landed.value(0).ok && pnew.landed.value(0).key == QStringLiteral("00000000000000e3")
-                  && pnew.landed.value(0).reason.contains(QStringLiteral("superseded")),
+                  && pnew.landed.value(0).reason.contains(QStringLiteral("superseded")) && pnew.landed.value(0).superseded,
               "e: BOUNDED PER GUID - the waiting write is superseded by name, never a second one waiting");
         check(ui.exec(QStringLiteral("COMMIT")), "e: the UI lets go");
         check(waitFor([&] { return pnew.landed.size() == 2; }), "e: the newer completes");

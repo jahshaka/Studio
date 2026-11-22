@@ -2608,7 +2608,7 @@ void AssetView::rebuildMissingThumbnails(bool afterUpdate)
 		    // Each rebuilt tile repaints from its new stored picture (the write dropped the cached
 		    // one; the view reads it again, off this thread).
 		    if (outcome.ok) { ++tally->rebuilt; if (self) self->libraryModel->refreshTile(guid); }
-		    else if (!outcome.nothingToDraw) tally->failures << QStringLiteral("%1: %2").arg(guid, outcome.reason);
+		    else if (!outcome.nothingToDraw && !outcome.superseded) tally->failures << QStringLiteral("%1: %2").arg(guid, outcome.reason);
 		    reportIfDone();
 	    },
 	    [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });

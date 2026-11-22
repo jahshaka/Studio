@@ -85,6 +85,7 @@ bool Writer::submit(const QString &guid, const QImage &image, const QString &key
             superseded.guid = guid;
             superseded.key = waiting.key;
             superseded.reason = QStringLiteral("superseded by a newer preview of the same row");
+            superseded.superseded = true;
             superseded.drops = waiting.drops;
             if (waiting.done) {
                 Done old = std::move(waiting.done);
@@ -168,6 +169,7 @@ void Writer::run()
                     superseded.guid = item.guid;
                     superseded.key = item.key;
                     superseded.reason = QStringLiteral("superseded by a newer preview of the same row");
+                    superseded.superseded = true;
                     superseded.drops = item.drops;
                     if (item.done) {
                         Done old = std::move(item.done);

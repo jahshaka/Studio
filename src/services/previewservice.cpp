@@ -235,6 +235,7 @@ void PreviewService::request(Project *project, const QString &guid, Done done, Q
         Outcome out;
         out.ok = landed.ok;
         out.reason = landed.reason;
+        out.superseded = landed.superseded;
         if (done) done(out);
     }, &refused);
     if (!queued) finish(failure(refused));
