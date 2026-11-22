@@ -153,6 +153,7 @@ int main()
         // (`body` has the follower `hair`: "the follower has followers" refused body->body as well, and hid the first)
         const NodeId lone = scene->createNode();
         CHECK(scene->attachSkinnedMesh(lone, scene->createMesh(quad(1)), mat, rig, hairMap, 1), "a lone piece");
+        std::fflush(stdout);   // the lines so far printed before the call: without its guard the call dies inside Ogre
         CHECK(!scene->shareSkeleton(lone, lone), "a node cannot share with itself");
         scene->removeNode(lone);
     }
