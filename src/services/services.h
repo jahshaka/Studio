@@ -42,8 +42,9 @@ class AssetService;
 class AmbienceService;
 class PerfSampler;
 
+#include "core/signal.h"
+
 #include <functional>
-#include <vector>
 
 struct StudioServices
 {
@@ -91,24 +92,17 @@ struct StudioServices
     // "the scene arrived after the asset changed", which is the same defect
     // seen from the other end.
     //
-    // A plain callback list rather than a Qt signal, exactly like
+    // An iris::Signal (core/signal.h) rather than a Qt signal, exactly like
     // AssetService::onPinChanged: this struct is a bundle of injected pointers
-    // with no QObject in it. Subscriptions live for the session.
+    // with no QObject in it. Subscriptions live for the session. The Signal
+    // notifies over a snapshot: a subscriber that reacts by editing the scene
+    // cannot change the list mid-call.
     using SceneOpenedFn = std::function<void()>;
-    void onSceneOpened(SceneOpenedFn callback)
-    {
-        if (callback) sceneOpenedSubscribers.push_back(std::move(callback));
-    }
-    void announceSceneOpened()
-    {
-        // Iterate a COPY: a subscriber that reacts by editing the scene must
-        // not invalidate the list mid-loop.
-        const auto subscribers = sceneOpenedSubscribers;
-        for (const auto &callback : subscribers) callback();
-    }
+    void onSceneOpened(SceneOpenedFn callback) { sceneOpened.connect(std::move(callback)); }
+    void announceSceneOpened() { sceneOpened.notify(); }
 
 private:
-    std::vector<SceneOpenedFn> sceneOpenedSubscribers;
+    iris::Signal<> sceneOpened;
 };
 
 #endif // SERVICES_H

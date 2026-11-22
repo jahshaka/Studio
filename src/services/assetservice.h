@@ -22,8 +22,8 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QString>
 #include <functional>
-#include <vector>
 
+#include "core/signal.h"
 #include "services/assetimporter.h"
 #include "services/materialpresetseeder.h"
 
@@ -68,18 +68,13 @@ public:
     // page's own import dialog added tiles. Every import now goes through the
     // two entry points above, so the announcement lives here, on the service
     // every caller already holds; the page subscribes once. Same shape and
-    // same lifetime rules as onPinChanged below (callback list, no QObject; a
+    // same lifetime rules as onPinChanged below (an iris::Signal, no QObject; a
     // subscriber touching widgets must marshal to its own thread).
     using LibraryChangedFn = std::function<void(const QString &assetGuid)>;
-    void onLibraryChanged(LibraryChangedFn callback)
-    {
-        if (callback) librarySubscribers.push_back(std::move(callback));
-    }
+    void onLibraryChanged(LibraryChangedFn callback) { libraryChanged.connect(std::move(callback)); }
     void announceLibraryChanged(const QString &assetGuid)
     {
-        if (assetGuid.isEmpty()) return;
-        const auto subscribers = librarySubscribers;
-        for (const auto &callback : subscribers) callback(assetGuid);
+        if (!assetGuid.isEmpty()) libraryChanged.notify(assetGuid);
     }
 
     // ---- THE PIN-CHANGE ANNOUNCEMENT (AVATAR_ASSET_SPEC §4 D4) ------------
@@ -90,24 +85,18 @@ public:
     // they have to do it NOW rather than at the next scene open, or the module
     // saves a clip and the character standing in the viewport ignores it.
     //
-    // A plain callback list rather than a Qt signal: this service is
+    // An iris::Signal (core/signal.h) rather than a Qt signal: this service is
     // deliberately QObject-free (it is constructed and injected, not parented),
     // and the one consumer is a service, not a widget. Subscriptions live for
     // the life of the service; nothing here unsubscribes, so a subscriber must
     // outlive it or capture weakly.
     using PinChangedFn = std::function<void(const QString &assetGuid)>;
-    void onPinChanged(PinChangedFn callback)
-    {
-        if (callback) pinSubscribers.push_back(std::move(callback));
-    }
+    void onPinChanged(PinChangedFn callback) { pinChanged.connect(std::move(callback)); }
     void announcePinChanged(const QString &assetGuid)
     {
-        if (assetGuid.isEmpty()) return;
-        // Iterate a COPY: a subscriber that reacts by adding another asset to
-        // the project (the closure walk does) would otherwise invalidate the
-        // vector mid-loop.
-        const auto subscribers = pinSubscribers;
-        for (const auto &callback : subscribers) callback(assetGuid);
+        // The Signal notifies over a snapshot: a subscriber that reacts by adding another asset to the project (the
+        // closure walk does) cannot change the list mid-call.
+        if (!assetGuid.isEmpty()) pinChanged.notify(assetGuid);
     }
 
 private:
@@ -139,8 +128,8 @@ private:
 
     Database *db = nullptr;
     Project *project;   // the live Project (Phase 4: was Globals::project)
-    std::vector<PinChangedFn> pinSubscribers;
-    std::vector<LibraryChangedFn> librarySubscribers;
+    iris::Signal<const QString &> pinChanged;
+    iris::Signal<const QString &> libraryChanged;
 };
 
 #endif // ASSETSERVICE_H
