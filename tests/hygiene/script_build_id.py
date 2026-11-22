@@ -12,7 +12,9 @@ at every command edit. jahengine/ is its own executable, outside the list by con
      list holds the engine (src/OgreEngine.cpp in it, over 50 files).
   B2 THE SCRIPT HOST CALLS ONLY THE PUBLIC API: every file under irisgl/engine/src/script/ and irisgl/engine/jahengine/
      includes only jahshaka/engine/*.h (an existing public header), script/*, the standard library (<name>, no extension),
-     and - in src/script/js_*.cpp only - the JS engine (quickjs.h). Its control: the files scanned and their includes > 0.
+     and - in src/script/js_*.cpp only - the JS engine (quickjs.h); in jahengine/main.cpp only, the MCP adapter's public
+     headers (mcp/*.h under irisgl/engine/mcp/include: MCP-ON-HOST-1 - a library outside the engine whose own includes
+     are held to Script.h and ScriptJson.h). Its control: the files scanned and their includes > 0.
   B3 THE ID IS THE BUILD's COMPUTATION, AND A SCRIPT EDIT LEAVES IT: EngineBuildId.cmake is run with the build's own
      arguments, its source list remapped onto a scratch copy of every input plus every script source: (a) the copy's ID
      equals the build's generated header (the build is current: this IS its computation); (b) a comment appended to the
@@ -85,6 +87,8 @@ def b2_bad(root):
                         ok = os.path.isfile(os.path.join(root, PUBLIC, inc[len("jahshaka/engine/"):]))
                     elif inc.startswith("script/"):
                         ok = True
+                    elif inc.startswith("mcp/") and rel == "irisgl/engine/jahengine/main.cpp":
+                        ok = os.path.isfile(os.path.join(root, "irisgl/engine/mcp/include", inc))
                     else:
                         ok = inc == "quickjs.h" and re.match(r"^irisgl/engine/src/script/js_[^/]+\.cpp$", rel) is not None
                     if not ok:
@@ -132,17 +136,19 @@ def self_test():
         write(t, "irisgl/engine/src/script/commands_x.cpp",
               '#include "script/commands.h"\n#include "jahshaka/engine/Engine.h"\n#include <cmath>\n')
         write(t, "irisgl/engine/src/script/js_x.cpp", '#include "quickjs.h"\n#include <memory>\n')
-        write(t, "irisgl/engine/jahengine/main.cpp", '#include "jahshaka/engine/Engine.h"\n#include <cstdio>\n')
+        write(t, "irisgl/engine/mcp/include/mcp/stdio.h", "")
+        write(t, "irisgl/engine/jahengine/main.cpp",
+              '#include "jahshaka/engine/Engine.h"\n#include "mcp/stdio.h"\n#include <cstdio>\n')
         clean = b2_bad(t)
         write(t, "irisgl/engine/src/script/commands_y.cpp",
               '#include "EnginePrivate.h"\n#include "jahshaka/engine/Missing.h"\n#include <OgreRoot.h>\n'
-              '#include "quickjs.h"\n#include <QString>\n')
+              '#include "quickjs.h"\n#include <QString>\n#include "mcp/stdio.h"\n')
         dirty = b2_bad(t)
-        check(clean == ([], 3, 7) and len(dirty[0]) == 5 and all(x.startswith("irisgl/engine/src/script/commands_y.cpp")
+        check(clean == ([], 3, 8) and len(dirty[0]) == 6 and all(x.startswith("irisgl/engine/src/script/commands_y.cpp")
                                                                    for x in dirty[0]),
-              "B2: the public headers, script/, the standard library and quickjs.h in js_*.cpp pass; EnginePrivate.h, a "
-              "public name that is no header, Ogre, the JS engine in a command file and Qt each FAIL (%s %s)"
-              % (clean, dirty[0]))
+              "B2: the public headers, script/, the standard library, quickjs.h in js_*.cpp and an MCP header in "
+              "jahengine/main.cpp pass; EnginePrivate.h, a public name that is no header, Ogre, the JS engine in a command "
+              "file, Qt and an MCP header in a command file each FAIL (%s %s)" % (clean, dirty[0]))
     check(header_id('#pragma once\n#define JAHSHAKA_ENGINE_BUILD_ID "00ff"\n#define JAHSHAKA_SHADER_CACHE_CODE_ID "11"\n')
           == "00ff", "B3 reads the generated header's engine build id, not its other ids")
 
