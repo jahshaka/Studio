@@ -1024,6 +1024,23 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // routing around it is one disabled 32x32 view (a 4 KB render target, a
     // camera and a workspace) held for the session, which renderOneFrame skips.
     if (warmScene) engine->destroyScene(warmScene);
+    // THE COVER, ONCE, IN THE WINDOW's SHAPE (SHADER-SYSTEM-1 7a): the editor's window presents its first frames
+    // scene-less - the blank chain, the clear and the cover (EngineSceneViewport::showEvent) - so the blank chain's
+    // pipelines and the cover's HUD pair (Jahshaka/OverlayFill, Fonts/DebugFont) are drawn here first, on this view
+    // in the window's format and samples (offscreen views draw an overlay only when they opt in: allowOffscreen).
+    if (warmView) {
+        if (warmView->scene()) warmView->setScene(nullptr);
+        ViewOverlayDesc cover;
+        cover.cover = ViewOverlayDesc::Cover::Loading;
+        cover.coverTitle = "Loading world";
+        cover.coverSubtitle = "startup";
+        cover.allowOffscreen = true;
+        warmView->setOverlay(cover);
+        gateFrame(*engine);
+        poll();
+        drain("the cover's frame");
+        warmView->setOverlay(ViewOverlayDesc());
+    }
     if (warmView)  warmView->setEnabled(false);
 
     // ---- Settle: until a whole frame's work is there, the ray builds joined -----------

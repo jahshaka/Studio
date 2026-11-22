@@ -97,8 +97,8 @@ QJsonObject markerObject(const QString &out, const QString &marker)
 /// pipelines are joined in its frame (its price, ~0.05 ms) - reported, not barred.
 /// THE LAW's WINDOW is the editor's frames after the gate until nothing is pending. The HUD's two permutations
 /// (Jahshaka/OverlayFill, Fonts/DebugFont) are built at SHUTDOWN in this run (the scene-less frame after the world is
-/// destroyed): nothing the user waits for, so outside the law. A HUD first shown DURING a session (the stats readout
-/// switched on, the "No world open" cover) builds them then: stage 8's line.
+/// destroyed) before the gate drew the cover once; since it does (a blank frame in the window's shape), they are barred
+/// at 0 below. The stats readout's first user-visible draw (another pass) stays stage 8's line.
 void gateDrawsWhatTheEditorDraws(const char *run, const QJsonObject &after)
 {
     const QJsonObject at = after.value("atGate").toObject();
@@ -155,8 +155,25 @@ void gateDrawsWhatTheEditorDraws(const char *run, const QJsonObject &after)
             if (m.captured(2).isEmpty()) { ++created; bornSamples = m.captured(1).toInt(); }
             else ++recreated;
         }
-        std::printf("   %s, the editor's window: created %d, recreated %d, born at %d sample(s), the gate asked %d\n",
-                    run, created, recreated, bornSamples, askedSamples);
+        // NO FRAME OF A WORLD THE MIRROR HAS NOT SYNCED (the lead's ruling): the window's first, covered frames are
+        // presented BEFORE its scene is bound - the blank chain, the clear and the cover - never a scene pass of an
+        // engine scene with nothing of the document in it (red before: 2, the two covered frames of showEvent). And the
+        // cover's HUD pair is the gate's (it draws one blank frame with the cover in the window's shape): built 0 times
+        // after the gate, the scene-less frames of the shutdown included.
+        int unsyncedFrames = 0, hudBuilt = 0;
+        for (int i = lastGateLine + 1; lastGateLine >= 0 && i < lines.size(); ++i) {
+            if (lines[i].contains(QStringLiteral("a covered frame drew its scene before the mirror's first sync")))
+                ++unsyncedFrames;
+            if (lines[i].contains(QStringLiteral("built in the frame")) &&
+                (lines[i].contains(QStringLiteral("datablock 'Jahshaka/OverlayFill'")) ||
+                 lines[i].contains(QStringLiteral("datablock 'Fonts/DebugFont'"))))
+                ++hudBuilt;
+        }
+        std::printf("   %s, the editor's window: created %d, recreated %d, born at %d sample(s), the gate asked %d; "
+                    "frames of an unsynced scene %d; the cover's HUD built after the gate %d\n",
+                    run, created, recreated, bornSamples, askedSamples, unsyncedFrames, hudBuilt);
+        CHECK(unsyncedFrames == 0, "no frame drew the editor's scene before the mirror's first sync");
+        CHECK(hudBuilt == 0, "the cover's HUD pair was the gate's: built 0 times after it");
         CHECK(created == 1 && recreated == 0 && bornSamples == askedSamples && askedSamples > 1,
               "the editor's window was created once, at its world's count (the gate's), and never recreated");
         CHECK(encode == 0 && blend == 0,

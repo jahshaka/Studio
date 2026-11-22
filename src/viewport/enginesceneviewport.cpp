@@ -1033,6 +1033,12 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
         createView(mEngine, "editor-viewport-" + QString::number(reinterpret_cast<uintptr_t>(this)),
                    Colour(0.10f, 0.11f, 0.14f), mScene ? SceneMirror::windowPass(*mScene).samples : 0u);
     }
+    // THE COVERED FRAMES BEFORE THE BIND (SHADER-SYSTEM-1 7a, the lead's ruling): a View that has no scene yet draws
+    // its scene-less blank chain - the clear and the cover - so the window gets our pixels now (M2, below) without a
+    // scene pass of a world the mirror has not synced (no lights, no meshes, no sky: pipelines built for a picture
+    // nobody sees, never used again). A View already bound (a re-show) presents after the bind, as it always did.
+    const bool unbound = view() && !view()->scene();
+    if (unbound) presentCovered();
     // …and bind it, whether the scene is born here or was born earlier for the
     // Player (ensureEngineScene returns early then, so the bind is its own call).
     ensureEngineScene();
@@ -1049,7 +1055,7 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
     // of it, which is why §6.3 rates it weaker than M1 and stronger than
     // nothing. presentCovered draws TWO frames, because a Vulkan present is
     // queued and the first is not yet on screen (M3).
-    presentCovered();
+    if (!unbound) presentCovered();
 }
 
 iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject,
@@ -4493,6 +4499,10 @@ void EngineSceneViewport::presentCovered(int frames)
     for (int i = 0; i < frames; ++i) {
         sampleStreamingWork(false);
         ++mFrameEpoch;
+        // NAMED (SHADER-SYSTEM-1 7a; shadercache.app.* count it, bar 0): a frame of the bound scene before the
+        // mirror's first sync draws a world with nothing of the document in it.
+        if (view()->scene() && (!mMirror || mMirror->syncs() == 0))
+            qWarning("editor viewport: a covered frame drew its scene before the mirror's first sync");
         mEngine->renderOneFrame();
         devicelossend::checkAfterFrame(mEngine.get());
         // These are frames on the display too (DOUBLE-FRAME-1): the pacing
