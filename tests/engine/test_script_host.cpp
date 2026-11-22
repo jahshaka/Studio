@@ -52,41 +52,48 @@ int main()
     // 2. A REGISTRY of this file's commands
     Registry reg;
     const bool added =
-        reg.add({"test.add", {{target("a", Kind::Int), object("more", {arg("b", Kind::Int, Value(10))}, Value(Value::Object{}))},
+        reg.add({"test.add", {Access::Reads, {target("a", Kind::Int), object("more", {arg("b", Kind::Int, Value(10))}, Value(Value::Object{}))},
                              Kind::Int}, "a + more.b"},
                 [](Call &c) { return Value(c[0].asInt() + c[1]["b"].asInt()); }) &&
-        reg.add({"test.opts", {{object("opts", {arg("n", Kind::Number, Value(1.0)), numbers("v", 3)})}, Kind::Number},
+        reg.add({"test.opts", {Access::Reads, {object("opts", {arg("n", Kind::Number, Value(1.0)), numbers("v", 3)})}, Kind::Number},
                  "opts.n + the sum of opts.v"},
                 [](Call &c) {
                     double s = c[0]["n"].asNumber();
                     for (const Value &x : c[0]["v"].asArray()) s += x.asNumber();
                     return Value(s);
                 }) &&
-        reg.add({"test.mistake", {{}, Kind::Bool}, "fails: the caller's mistake"},
+        reg.add({"test.mistake", {Access::Reads, {}, Kind::Bool}, "fails: the caller's mistake"},
                 [](Call &c) { return c.fail("you asked for a mistake"); }) &&
-        reg.add({"test.notNow", {{}, Kind::Bool}, "refuses: the engine's state"},
+        reg.add({"test.notNow", {Access::Reads, {}, Kind::Bool}, "refuses: the engine's state"},
                 [](Call &c) { return c.refuse("not now"); });
     check(added && reg.validate().empty(),
           "four commands registered; validate is empty: every command has a name, a signature and a doc, and its shape");
     Registry twice;
-    const bool first = twice.add({"test.one", {{}, Kind::Null}, "once"}, [](Call &) { return Value(); });
-    const bool second = twice.add({"test.one", {{}, Kind::Null}, "again"}, [](Call &) { return Value(); });
+    const bool first = twice.add({"test.one", {Access::Reads, {}, Kind::Null}, "once"}, [](Call &) { return Value(); });
+    const bool second = twice.add({"test.one", {Access::Reads, {}, Kind::Null}, "again"}, [](Call &) { return Value(); });
     check(first && !second && twice.validate().size() == 1 &&
               twice.validate()[0].find("test.one: registered twice") == 0 && twice.commands().size() == 1,
           "a second command of one name is refused AND kept as a fault (" +
               (twice.validate().empty() ? std::string("none") : twice.validate()[0]) + ")");
     Registry undocumented;
-    undocumented.add({"test.bare", {{arg("", Kind::Int)}, Kind::Null}, ""}, [](Call &) { return Value(); });
+    undocumented.add({"test.bare", {Access::Reads, {arg("", Kind::Int)}, Kind::Null}, ""}, [](Call &) { return Value(); });
     check(undocumented.validate().size() == 2, "validate names a command with no doc and a parameter with no name");
     Registry misshapen;
-    misshapen.add({"test.pair", {{arg("a", Kind::Int), arg("b", Kind::Int)}, Kind::Null}, "two positional numbers"},
+    misshapen.add({"test.pair", {Access::Reads, {arg("a", Kind::Int), arg("b", Kind::Int)}, Kind::Null}, "two positional numbers"},
                   [](Call &) { return Value(); });
-    misshapen.add({"test.late", {{arg("opts", Kind::Bool), target("scene", Kind::Int)}, Kind::Null}, "a target last"},
+    misshapen.add({"test.late", {Access::Reads, {arg("opts", Kind::Bool), target("scene", Kind::Int)}, Kind::Null}, "a target last"},
                   [](Call &) { return Value(); });
     const std::vector<std::string> faults = misshapen.validate();
     check(faults.size() == 2 && faults[0].find("test.pair: 2 positional parameters are not targets") == 0 &&
               faults[1].find("test.late: the target 'scene' follows a named parameter") == 0,
           "THE SHAPE RULE: validate names two non-target positional parameters and a target after a named one");
+    Registry untagged;
+    const bool tagless = untagged.add({"test.untagged", {Access::Unset, {}, Kind::Null}, "declares no access"},
+                                      [](Call &) { return Value(); });
+    check(!tagless && untagged.validate().size() == 1 && untagged.validate()[0] == "test.untagged: no access tag" &&
+              untagged.commands().empty(),
+          "THE ACCESS TAG: a command that declares no access is refused and kept as a fault (" +
+              (untagged.validate().empty() ? std::string("none") : untagged.validate()[0]) + ")");
 
     // 3. THE CALL BY NAME, AND ITS LAWS
     const auto more = [](int b) { return Value(Value::Object{{"b", Value(b)}}); };
@@ -121,7 +128,7 @@ int main()
     check(r.status == Status::Refused && r.value == Value(false) && r.message == "test.notNow: not now" &&
               reg.lastError() == "test.notNow: not now",
           "a refuse answers the declared return's falsy value (false) and keeps its message as lastError");
-    check(signatureText(*reg.find("test.add")) == "test.add(a: target int, more: object {b: int = default} = default) -> int",
+    check(signatureText(*reg.find("test.add")) == "test.add(a: target int, more: object {b: int = default} = default) -> int [reads]",
           "the signature reads as text: " + signatureText(*reg.find("test.add")));
 
     // 4. THE HOST AND ITS SCRIPT LANGUAGE (JavaScript): the same registry's commands as functions of their roots
@@ -129,19 +136,19 @@ int main()
     std::vector<std::string> lines;
     host.setConsole([&lines](const std::string &l) { lines.push_back(l); });
     Registry &hr = host.registry();
-    hr.add({"test.add", {{target("a", Kind::Int), object("more", {arg("b", Kind::Int, Value(10))}, Value(Value::Object{}))},
+    hr.add({"test.add", {Access::Reads, {target("a", Kind::Int), object("more", {arg("b", Kind::Int, Value(10))}, Value(Value::Object{}))},
                         Kind::Int}, "a + more.b"},
            [](Call &c) { return Value(c[0].asInt() + c[1]["b"].asInt()); });
-    hr.add({"test.opts", {{object("opts", {arg("n", Kind::Number, Value(1.0)), numbers("v", 3)})}, Kind::Number},
+    hr.add({"test.opts", {Access::Reads, {object("opts", {arg("n", Kind::Number, Value(1.0)), numbers("v", 3)})}, Kind::Number},
             "opts.n + the sum of opts.v"},
            [](Call &c) {
                double s = c[0]["n"].asNumber();
                for (const Value &x : c[0]["v"].asArray()) s += x.asNumber();
                return Value(s);
            });
-    hr.add({"test.mistake", {{}, Kind::Bool}, "fails: the caller's mistake"},
+    hr.add({"test.mistake", {Access::Reads, {}, Kind::Bool}, "fails: the caller's mistake"},
            [](Call &c) { return c.fail("you asked for a mistake"); });
-    hr.add({"test.notNow", {{}, Kind::Bool}, "refuses: the engine's state"},
+    hr.add({"test.notNow", {Access::Reads, {}, Kind::Bool}, "refuses: the engine's state"},
            [](Call &c) { return c.refuse("not now"); });
     // NEUTRALITY: `test.make` answers one value of every kind; `test.keep` stores what reaches it (declared field by field)
     const Value made(Value::Object{{"nul", Value()}, {"yes", Value(true)}, {"i", Value(-7)},
@@ -154,8 +161,8 @@ int main()
                                          numbers("v", 3), object("o", {arg("k", Kind::String)}),
                                          arg("raw", Kind::Bytes)});
     Value kept;
-    hr.add({"test.make", {{}, Kind::Object}, "one value of every kind"}, [&made](Call &) { return made; });
-    hr.add({"test.keep", {{keepParam}, Kind::Null}, "stores its argument"},
+    hr.add({"test.make", {Access::Reads, {}, Kind::Object}, "one value of every kind"}, [&made](Call &) { return made; });
+    hr.add({"test.keep", {Access::Reads, {keepParam}, Kind::Null}, "stores its argument"},
            [&kept](Call &c) { kept = c[0]; return Value(); });
     hr.call("test.keep", {hr.call("test.make", {}).value});
     const Value byCpp = kept;
@@ -263,6 +270,25 @@ int main()
     for (const CommandInfo *c : eng.commands()) engineCommands += c->name.rfind("engine.", 0) == 0;
     check(engineCommands == 23 && eng.validate().empty(),
           "the 23 engine commands register, each documented and shaped (targets positional, the rest named), with no engine");
+    {
+        // THE 25's ACCESS (the spec's table, 2a a1): these read; every other command changes the engine's state
+        const std::vector<std::string> reads = {"host.check", "host.lastError", "engine.view.routes",
+                                                "engine.view.declareRoutes", "engine.picture.bytes", "engine.picture.hash",
+                                                "engine.picture.columnStep", "engine.picture.mean"};
+        std::size_t checked = 0;
+        std::string wrong;
+        for (const CommandInfo *c : eng.commands()) {
+            bool read = false;
+            for (const std::string &n : reads) read = read || n == c->name;
+            ++checked;
+            if (c->signature.access != (read ? Access::Reads : Access::Changes)) wrong += " " + signatureText(*c);
+        }
+        check(checked == 25 && wrong.empty(),
+              "every one of the " + std::to_string(checked) + " commands declares the access of the spec's table: 8 " +
+                  "reads, the rest changes" + (wrong.empty() ? std::string() : " - wrong:" + wrong));
+        check(signatureText(*eng.find("engine.picture.hash")) == "engine.picture.hash(picture: target picture handle) -> string [reads]",
+              "the signature prints its access last: " + signatureText(*eng.find("engine.picture.hash")));
+    }
     const Value fakeScene(eng.hold("scene", std::make_shared<int>(0))), fakeNode(eng.name("node", 1));
     check(failedWith(eng.call("engine.node.setTransform",
                               {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(0), Value(1)})}})}),
@@ -398,7 +424,7 @@ int main()
     {
         Host broken;
         broken.setConsole([](const std::string &) {});
-        const bool refused = !broken.registry().add({"test.bare", {{}, Kind::Null}, ""}, [](Call &) { return Value(); });
+        const bool refused = !broken.registry().add({"test.bare", {Access::Reads, {}, Kind::Null}, ""}, [](Call &) { return Value(); });
         const Result r = broken.run("host.check({ok: true, what: 'never'});\n", "broken.js");
         check(refused && r.status == Status::Failed && r.message.find("the host did not start") == 0 &&
                   r.message.find("test.bare: no doc") != std::string::npos && broken.checksRun() == 0,
@@ -416,10 +442,10 @@ int main()
         Host thrower;
         std::vector<std::string> said;
         thrower.setConsole([&said](const std::string &l) { said.push_back(l); });
-        thrower.registry().add({"test.throws", {{}, Kind::Null}, "throws a std::exception"},
+        thrower.registry().add({"test.throws", {Access::Reads, {}, Kind::Null}, "throws a std::exception"},
                                [](Call &) -> Value { throw std::runtime_error("boom"); });
-        thrower.registry().add({"test.throwsOdd", {{}, Kind::Null}, "throws an int"}, [](Call &) -> Value { throw 42; });
-        thrower.registry().add({"test.checked", {{target(handle("thing", "gadget"))}, Kind::Null}, "an existence check throws"},
+        thrower.registry().add({"test.throwsOdd", {Access::Reads, {}, Kind::Null}, "throws an int"}, [](Call &) -> Value { throw 42; });
+        thrower.registry().add({"test.checked", {Access::Reads, {target(handle("thing", "gadget"))}, Kind::Null}, "an existence check throws"},
                                [](Call &) { return Value(); });
         thrower.registry().checkKind("gadget", [](const Call &, std::uint32_t, std::string &) -> bool {
             throw std::runtime_error("the engine's read threw");
@@ -443,19 +469,19 @@ int main()
     {
         Registry a, other;
         const auto make = [](Registry &r) {
-            r.add({"test.make", {{arg("kind", Kind::String)}, Kind::Int}, "a held int of that kind -> handle"},
+            r.add({"test.make", {Access::Reads, {arg("kind", Kind::String)}, Kind::Int}, "a held int of that kind -> handle"},
                   [](Call &c) { return c.hold(c[0].asString(), std::make_shared<int>(7)); });
         };
         make(a);
         make(other);
-        a.add({"test.use", {{target(handle("scene", "scene"))}, Kind::Int}, "the held int"},
+        a.add({"test.use", {Access::Reads, {target(handle("scene", "scene"))}, Kind::Int}, "the held int"},
               [](Call &c) { return Value(*c.object<int>(c[0])); });
-        a.add({"test.free", {{target(handle("scene", "scene"))}, Kind::Bool}, "releases it"},
+        a.add({"test.free", {Access::Reads, {target(handle("scene", "scene"))}, Kind::Bool}, "releases it"},
               [](Call &c) { return Value(c.registry().release(c[0].asInt())); });
-        a.add({"test.named", {{target(handle("scene", "scene")), object("o", {handle("node", "node")})}, Kind::Int},
+        a.add({"test.named", {Access::Reads, {target(handle("scene", "scene")), object("o", {handle("node", "node")})}, Kind::Int},
                "the node's engine id"},
               [](Call &c) { return Value(std::int64_t(Call::idOf(c[1]["node"]))); });
-        a.add({"test.mint", {{arg("id", Kind::Int)}, Kind::Int, "node"}, "a node handle of that id"},
+        a.add({"test.mint", {Access::Reads, {arg("id", Kind::Int)}, Kind::Int, "node"}, "a node handle of that id"},
               [](Call &c) { return c.name("node", (unsigned long long)c[0].asInt()); });
         a.checkKind("node", [](const Call &, std::uint32_t id, std::string &why) {
             if (id == 5) return true;
@@ -484,13 +510,13 @@ int main()
               "a mesh handle where a node is declared FAILS by name (the kind is in the bits, no lookup)");
         check(failedWith(a.call("test.mint", {Value(std::int64_t(1) << 32 | 5)}), "does not fit a handle's 32 bits"),
               "an engine id over 2^32 - 1 is refused at minting (2^32 + 5 never becomes 5)");
-        check(signatureText(*a.find("test.named")) == "test.named(scene: target scene handle, o: object {node: node handle}) -> int" &&
-                  signatureText(*a.find("test.mint")) == "test.mint(id: int) -> node handle",
+        check(signatureText(*a.find("test.named")) == "test.named(scene: target scene handle, o: object {node: node handle}) -> int [reads]" &&
+                  signatureText(*a.find("test.mint")) == "test.mint(id: int) -> node handle [reads]",
               "the signature prints the handles' kinds: " + signatureText(*a.find("test.named")));
         Host jsHost;
         jsHost.setConsole([](const std::string &) {});
         make(jsHost.registry());
-        jsHost.registry().add({"test.use", {{target(handle("scene", "scene"))}, Kind::Int}, "the held int"},
+        jsHost.registry().add({"test.use", {Access::Reads, {target(handle("scene", "scene"))}, Kind::Int}, "the held int"},
                               [](Call &c) { return Value(*c.object<int>(c[0])); });
         const Result js = jsHost.run("const s = test.make('scene'), v = test.make('view');\n"
                                      "host.check({ok: test.use(s) === 7, what: 'a scene handle through JS'});\n"
@@ -511,7 +537,7 @@ int main()
         Registry d;
         Value seen;
         d.add({"test.domain",
-               {{object("o", {arg("mode", Kind::String, Value("vct")).oneOf({"off", "vct"}),
+               {Access::Reads, {object("o", {arg("mode", Kind::String, Value("vct")).oneOf({"off", "vct"}),
                               arg("width", Kind::Int, Value(1)).range(1, 16384).in("px"),
                               arg("x", Kind::Number, Value(0.0)), arg("wild", Kind::Number, Value(0.0)).allowNonFinite(),
                               numbers("v", 3, Value(Value::Array{Value(0), Value(0), Value(0)})),
@@ -543,7 +569,7 @@ int main()
               "the signature prints the domain (the generated docs): " + signatureText(*d.find("test.domain")));
         check(signatureText(*eng.find("engine.gi.set")).find("mode: string \"off\"|\"vct\"|\"vctPccHybrid\"") !=
                       std::string::npos &&
-                  signatureText(*eng.find("engine.frames")) == "engine.frames(n: int >= 0 frames) -> null",
+                  signatureText(*eng.find("engine.frames")) == "engine.frames(n: int >= 0 frames) -> null [changes]",
               "the engine's commands declare theirs: " + signatureText(*eng.find("engine.frames")));
         check(failedWith(eng.call("engine.node.setTransform",
                                   {fakeScene, fakeNode, Value(Value::Object{{"position", Value(Value::Array{Value(nan), Value(0), Value(0)})}})}),
@@ -575,7 +601,7 @@ int main()
         };
         Host two;
         int pings = 0;
-        two.registry().add({"test.ping", {{}, Kind::Null}, "counts a ping"}, [&pings](Call &) { ++pings; return Value(); });
+        two.registry().add({"test.ping", {Access::Reads, {}, Kind::Null}, "counts a ping"}, [&pings](Call &) { ++pings; return Value(); });
         two.addLanguage(".lines", [](Host &h) { return std::unique_ptr<Host::Language>(new Lines(h)); });
         const Result byLines = two.run("test.ping\ntest.ping\n", "two.lines");
         const Result byJs = two.run("test.ping();\n", "one.js");

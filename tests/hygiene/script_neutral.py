@@ -19,7 +19,8 @@ the value type and the registry know nothing of JavaScript, and a second languag
   N3b THE ENGINE ARCHIVE HOLDS NO QT: `nm` on <build>/engine/libJahshakaEngine*.a names no Qt symbol, defined or needed (the
      final read measured it; N3 proves only what jahengine pulls in).
   N5 THE COMMANDS ARE LISTED (the seed of the generated documentation): `jahengine --list` (no engine booted) exits 0 and
-     prints at least one command, each its signature line and a non-empty doc line, and no FAULT.
+     prints at least one command, each its signature line ending with its ACCESS tag (` [reads]`, ` [changes]`, ` [files]`
+     or ` [test]`: SCRIPT-IN-ENGINE-1 2a, MCP-ON-HOST-1's read-only surface) and a non-empty doc line, and no FAULT.
   N6 NOTHING THE APP RUNS CARRIES THE HOST: `nm` on bin/Jahshaka, bin/jahlab and bin/libIrisGLd.so finds no symbol of the
      script host (jahshaka::engine::script) and none of the JS engine (JS_*): the archive's members are never pulled in
      until a client calls the host (STUDIO-CLIENT-1).
@@ -147,6 +148,9 @@ def nm_bad(nm_text, pattern):
     return [l.strip() for l in nm_text.splitlines() if pattern.search(l)]
 
 
+ACCESS_TAG = re.compile(r" \[(reads|changes|files|test)\]$")
+
+
 def n5_bad(list_text, rc):
     """[fault] of `jahengine --list`'s output: its exit, its count, each command's doc line, a FAULT line."""
     lines = list_text.splitlines()
@@ -155,6 +159,8 @@ def n5_bad(list_text, rc):
     if not commands:
         bad.append("no command listed")
     for i in commands:
+        if not ACCESS_TAG.search(lines[i]):
+            bad.append("%s: no access tag" % lines[i].split("(")[0])
         if i + 1 >= len(lines) or not lines[i + 1].startswith("    ") or not lines[i + 1].strip():
             bad.append("%s: no doc line" % lines[i].split("(")[0])
     bad += [l for l in lines if l.startswith("FAULT")]
@@ -243,10 +249,14 @@ def self_test():
     check(nm_bad(nm, QT_SYMBOL) == ["U _ZN7QStringC1EPKc"] and len(nm_bad(nm, HOST_SYMBOL)) == 2,
           "N3b / N6 read a Qt symbol, the host's namespace and a JS_ function in nm text, never Ogre's, the engine's or a "
           "JSON name (%s %s)" % (nm_bad(nm, QT_SYMBOL), nm_bad(nm, HOST_SYMBOL)))
-    good = "engine.frames(n: int >= 0 frames) -> null\n    Draws n frames.\nhost.check(law: object) -> bool\n    One law.\n"
-    check(not n5_bad(good, 0) and n5_bad("engine.frames(n: int) -> null\n    \nFAULT: x: no doc\n", 0) ==
-          ["engine.frames: no doc line", "FAULT: x: no doc"] and n5_bad("", 0) == ["no command listed"],
-          "N5 reads a listing: a command with no doc line, a FAULT and an empty list each fail")
+    good = ("engine.frames(n: int >= 0 frames) -> null [changes]\n    Draws n frames.\n"
+            "host.check(law: object) -> bool [reads]\n    One law.\n")
+    check(not n5_bad(good, 0) and n5_bad("engine.frames(n: int) -> null [changes]\n    \nFAULT: x: no doc\n", 0) ==
+          ["engine.frames: no doc line", "FAULT: x: no doc"] and n5_bad("", 0) == ["no command listed"] and
+          n5_bad("engine.frames(n: int) -> null\n    Draws.\nhost.x() -> null [write]\n    X.\n", 0) ==
+          ["engine.frames: no access tag", "host.x: no access tag"],
+          "N5 reads a listing: a command with no doc line, with no access tag or an unknown one, a FAULT and an empty "
+          "list each fail")
 
 
 def main():
@@ -281,7 +291,8 @@ def main():
     listing = subprocess.run([jahengine, "--list"], capture_output=True, text=True)
     bad = n5_bad(listing.stdout, listing.returncode)
     n = len([l for l in listing.stdout.splitlines() if l and not l.startswith((" ", "FAULT"))])
-    check(not bad, "N5 jahengine --list prints %d commands, each with its signature and its doc (%s)" % (n, bad[:4]))
+    check(not bad, "N5 jahengine --list prints %d commands, each with its signature, its access and its doc (%s)"
+          % (n, bad[:4]))
     bin_dir = os.path.join(sys.argv[2], "bin")
     irisgl = next((n for n in ("libIrisGLd.so", "libIrisGL.so") if os.path.isfile(os.path.join(bin_dir, n))), "libIrisGLd.so")
     for name in ("Jahshaka", "jahlab", irisgl):
