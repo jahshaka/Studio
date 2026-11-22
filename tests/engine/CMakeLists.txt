@@ -544,3 +544,12 @@ jah_glsl_as_cpp(test_lobe_energy OUT jah_lobe_pieces.h PIECES ${JAH_LOBE_PIECES}
 add_test(NAME engine.lobe_energy COMMAND test_lobe_energy)
 set_tests_properties(engine.lobe_energy PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.lobe_energy)
+
+# lobe_picture (MATERIAL-ENERGY-1 stage 0; a TOOL, no row) — the owner's before/after PNG of the lobe, rendered through
+# engine.lobe_energy's own code path (tests/support/lobe_energy.h) and the viewport's display chain (thumbnailgrade.h).
+# Run by hand: lobe_picture <out.png>
+add_executable(lobe_picture ${CMAKE_SOURCE_DIR}/tests/support/lobe_picture.cpp)
+set_target_properties(lobe_picture PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(lobe_picture PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+jah_glsl_as_cpp(lobe_picture OUT jah_lobe_pieces.h PIECES ${JAH_LOBE_PIECES} OUT_PARAMS 5 ARRAYS 1)
+target_link_libraries(lobe_picture PRIVATE IrisGL Qt6::Gui)
