@@ -1066,6 +1066,61 @@ int main()
               "THE DEFAULT CALL BOUND IS DERIVED from the picture cap (one picture at it + an eighth: " +
                   std::to_string(defaults.callBounds.bytes >> 20) + " MiB); a ValueBounds states nothing by itself");
     }
+    // 12c. THE LAW AT THE DOOR (2b's final read, D1): a value whose own keys are its INDICES - every typed array but the
+    //      one carried kind (a Uint8Array is bytes), a String object (over a ROPE of 2^20 units: a few nodes of the
+    //      script's), an arguments object (mapped and strict) - and a DataView (else carried silently as {}) FAIL by name,
+    //      "cannot be carried", BEFORE any own key is listed. The JS engine lists every index of such an object (8 bytes
+    //      an index, allocated and filled: the binding's refusedClass) before a single bound could be judged: `new
+    //      Int8Array(0x7fffffff)` costs the script a lazy 2 GiB and would cost the host ~16 GiB. Under a 4096-byte call
+    //      bound the listing's having run shows as a failure on the BYTES at an index member ("o.55 would take ...");
+    //      after, nothing is listed. THE CONTROL: a Uint8Array is still carried as bytes (the registry names its kind),
+    //      and the next call reaches its command (reached = 1, its answer 2).
+    {
+        Host::Options small;
+        small.callBounds.bytes = 4096;
+        Host door(small);
+        std::vector<std::string> said;
+        door.setConsole([&said](const std::string &l) { said.push_back(l); });
+        int reached = 0;
+        door.registry().add({"test.capped",
+                             {Access::Reads, {object("o", {arg("v", Kind::Array, Value(Value::Array{})).upTo(4)})}, Kind::Int},
+                             "how many numbers (at most 4)"},
+                            [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0]["v"].asArray().size())); });
+        registerEngineCommands(door, headless.get(), bootError, false);
+        const Result r = door.run(
+            "const caught = (f) => { try { f(); return 'no failure'; } catch (e) { return e.message; } };\n"
+            "const s = engine.scene.create('door'), n = engine.node.create(s);\n"
+            "let rope = 'ab';\n"
+            "for (let i = 0; i < 19; ++i) rope = rope + rope;\n"
+            "const sloppy = (function () { return arguments; })(1, 2);\n"
+            "const strict = (function () { 'use strict'; return arguments; })(1, 2);\n"
+            "for (const v of [new Int8Array(1 << 20), new Float64Array(1 << 20), new DataView(new ArrayBuffer(8)),\n"
+            "                 new String('abc'), new String(rope), sloppy, strict, new Uint8Array(4)])\n"
+            "  console.log(caught(() => test.capped(v)));\n"
+            "console.log(caught(() => engine.node.setTransform(s, n, new Int8Array(1 << 20))));\n"
+            "console.log(rope.length, test.capped({v: [1, 2]}));\n",
+            "door.js");
+        const char *want[] = {"test.capped: argument 1: o cannot be carried: its class is Int8Array",
+                              "test.capped: argument 1: o cannot be carried: its class is Float64Array",
+                              "test.capped: argument 1: o cannot be carried: its class is DataView",
+                              "test.capped: argument 1: o cannot be carried: its class is String",
+                              "test.capped: argument 1: o cannot be carried: its class is String",
+                              "test.capped: argument 1: o cannot be carried: its class is Arguments",
+                              "test.capped: argument 1: o cannot be carried: its class is Arguments",
+                              "test.capped: o must be object (it is bytes)",
+                              "engine.node.setTransform: argument 3: transform cannot be carried: its class is Int8Array",
+                              "1048576 2"};
+        std::string missed;
+        for (std::size_t i = 0; i < 10; ++i)
+            if (i >= said.size() || said[i].rfind(want[i], 0) != 0)
+                missed += "\n      want " + std::string(want[i]) + " <- " + (i < said.size() ? said[i] : std::string("(no line)"));
+        check(r.status == Status::Ok && said.size() == 10 && missed.empty() && reached == 1,
+              "THE LAW AT THE DOOR: a typed array but the Uint8Array, a DataView, a String object (a rope of 2^20 units "
+              "too) and an arguments object (mapped, strict) FAIL by name before any own key is listed - and the "
+              "brief's trigger, engine.node.setTransform(s, n, new Int8Array(...)); THE CONTROL: a Uint8Array is "
+              "carried as bytes, and the next call reaches its command (" + std::to_string(reached) + " reached)" +
+                  (r.status == Status::Ok ? "" : "\n      the run: " + r.message) + missed);
+    }
 
     // 13. ONE FIELD TABLE PER RECORD (2b b1; records.h): a record's fields named once - the member pointer DERIVES the
     //     parameter (the record's default as each member's), both conversions, and the guard. On this file's records:
