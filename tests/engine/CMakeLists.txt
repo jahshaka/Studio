@@ -227,6 +227,25 @@ jah_gpu_row(sky.ibl_async_lands CLASS engine FRAMES 200
          COMMAND test_engine_ibl_async_lands
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.ibl_async_lands PROPERTIES TIMEOUT 60 LABELS "engine")
+# engine.smaa_up_front (SHADER-SYSTEM-1 7a, the SMAA item) - NO SMAA PROGRAM IS COMPILED IN A FRAME: its own shader
+# cache, emptied at every run (an app's first launch), an offscreen Live view compiling in the background with the chain allowed offscreen; SMAA asked at preset 2, then 0, after
+# the chain settled: 0 shaders compiled off the background compiler in either phase (every preset compiled where the
+# engine parses the materials). Prints the SMAA pipelines each phase built in its frames (test_engine_smaa_up_front.cpp).
+add_executable(test_engine_smaa_up_front test_engine_smaa_up_front.cpp)
+set_target_properties(test_engine_smaa_up_front PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_smaa_up_front PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_smaa_up_front PRIVATE JahshakaEngine)
+add_dependencies(test_engine_smaa_up_front JahshakaEngineMedia)
+jah_gpu_row(engine.smaa_up_front CLASS engine FRAMES 380
+         COLD "its subject is the SMAA programs compiling: they must be cold in the process (the fixture's own cache, emptied at its start)"
+         COMMAND test_engine_smaa_up_front
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.smaa_up_front PROPERTIES TIMEOUT 60 LABELS "engine")
 # engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
 # proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
 # read every frame — and in the TSan arm, zero reports.
