@@ -10,6 +10,7 @@
 #include "script/RouteDeclaration.h"   // the route declaration's judgement (engine-private, pure)
 
 #include <cstdio>
+#include <stdexcept>
 #include <string>
 
 using namespace jahshaka::engine;
@@ -63,9 +64,15 @@ int main()
                 [](Call &c) { return c.fail("you asked for a mistake"); }) &&
         reg.add({"test.notNow", {{}, Kind::Bool}, "refuses: the engine's state"},
                 [](Call &c) { return c.refuse("not now"); });
-    check(added && !reg.add({"test.add", {}, "again"}, [](Call &) { return Value(); }),
-          "four commands registered; a second command of one name is not");
-    check(reg.validate().empty(), "validate is empty: every command has a name, a signature and a doc, and its shape");
+    check(added && reg.validate().empty(),
+          "four commands registered; validate is empty: every command has a name, a signature and a doc, and its shape");
+    Registry twice;
+    const bool first = twice.add({"test.one", {{}, Kind::Null}, "once"}, [](Call &) { return Value(); });
+    const bool second = twice.add({"test.one", {{}, Kind::Null}, "again"}, [](Call &) { return Value(); });
+    check(first && !second && twice.validate().size() == 1 &&
+              twice.validate()[0].find("test.one: registered twice") == 0 && twice.commands().size() == 1,
+          "a second command of one name is refused AND kept as a fault (" +
+              (twice.validate().empty() ? std::string("none") : twice.validate()[0]) + ")");
     Registry undocumented;
     undocumented.add({"test.bare", {{arg("", Kind::Int)}, Kind::Null}, ""}, [](Call &) { return Value(); });
     check(undocumented.validate().size() == 2, "validate names a command with no doc and a parameter with no name");
@@ -203,7 +210,8 @@ int main()
         std::vector<std::string> said;
         quiet.setConsole([&said](const std::string &l) { said.push_back(l); });
         const Result r0 = quiet.run("const x = 1 + 1;\n", "nothing.js");
-        check(r0.status == Status::Ok && quiet.verdict(r0) == 1 && !said.empty() &&
+        const int faults = quiet.verdict(r0);
+        check(r0.status == Status::Ok && faults == 1 && !said.empty() &&
                   said.back().find("FAIL: the script checked nothing") == 0,
               "a script with no host.check FAILS its verdict by name (" + (said.empty() ? "" : said.back()) + ")");
     }
@@ -324,6 +332,43 @@ int main()
         const Result r = judged.run("host.check({ok: true, what: 'one law held'});\n", "judged.js");
         check(r.status == Status::Ok && judged.verdict(r) == 1 && judged.checksRun() == 2,
               "a judge the verdict runs fails it by name (a pending route declaration at the script's end)");
+    }
+
+    // 7. THE REGISTRY ENFORCES ITSELF (the final read's W4): a host whose registry refused a command does not start; a
+    //    second engine registered into one host is refused by name; a command's C++ exception is a Failed call
+    {
+        Host broken;
+        broken.setConsole([](const std::string &) {});
+        const bool refused = !broken.registry().add({"test.bare", {{}, Kind::Null}, ""}, [](Call &) { return Value(); });
+        const Result r = broken.run("host.check({ok: true, what: 'never'});\n", "broken.js");
+        check(refused && r.status == Status::Failed && r.message.find("the host did not start") == 0 &&
+                  r.message.find("test.bare: no doc") != std::string::npos && broken.checksRun() == 0,
+              "a host whose registry refused a command refuses to run, naming it: " + r.message.substr(0, r.message.find('\n')));
+        Host two;
+        two.setConsole([](const std::string &) {});
+        registerEngineCommands(two, nullptr, "first", false);
+        const bool clean = two.registry().validate().empty();
+        registerEngineCommands(two, nullptr, "second", false);
+        const Result r2 = two.run("host.check({ok: true, what: 'never'});\n", "two.js");
+        check(clean && r2.status == Status::Failed && r2.message.find("engine.scene.create: registered twice") != std::string::npos,
+              "a second engine's commands registered into one host are refused by name and the host does not start");
+    }
+    {
+        Host thrower;
+        std::vector<std::string> said;
+        thrower.setConsole([&said](const std::string &l) { said.push_back(l); });
+        thrower.registry().add({"test.throws", {{}, Kind::Null}, "throws a std::exception"},
+                               [](Call &) -> Value { throw std::runtime_error("boom"); });
+        thrower.registry().add({"test.throwsOdd", {{}, Kind::Null}, "throws an int"}, [](Call &) -> Value { throw 42; });
+        const Result direct = thrower.registry().call("test.throws", {});
+        const Result odd = thrower.registry().call("test.throwsOdd", {});
+        const Result js = thrower.run("try { test.throws(); } catch (e) { console.log(e.message); }\ntest.throwsOdd();\n",
+                                      "throws.js");
+        check(failedWith(direct, "test.throws: threw: boom") && failedWith(odd, "not a std::exception") &&
+                  !said.empty() && said[0] == "test.throws: threw: boom" && js.status == Status::Failed &&
+                  js.message.find("throws.js:2") != std::string::npos,
+              "a command's C++ exception is a Failed call by name - catchable in JS, an uncaught one ends the run with "
+              "its line (never terminate with no verdict)");
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
