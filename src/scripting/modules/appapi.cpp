@@ -569,14 +569,15 @@ QVector<VerbInfo> AppApi::verbs() const
           "threads any one pass can compile on and the count the shader disk cache is applied "
           "with at startup. Cheap: two engine reads and a walk of the scene list.",
           Needs::Engine },
-        { "threadBudget", "app.threadBudget() -> {hardware, game, foreground, bulletThreads, render, ogrePool, writer, streaming, multiload, rayBuilds, dedicated, background, activeSet, total, live: {bulletThreads, qtPoolMax, bakePoolThreads}}",
+        { "threadBudget", "app.threadBudget() -> {hardware, game, foreground, bulletThreads, render, ogrePool, writer, streaming, multiload, rayBuilds, compile, dedicated, background, activeSet, total, live: {bulletThreads, qtPoolMax, bakePoolThreads}}",
           "THE ONE CORE BUDGET (THREADING-1; irisgl/core/threadbudget.h): the tiers every "
           "thread pool of the process is sized from. `foreground` is Bullet's workers beside "
           "the game thread (`bulletThreads` = game + foreground, the physics step's "
           "scheduler); `render` + `ogrePool` the render thread and the primary scene's "
           "SceneManager pool; `dedicated` = `writer` (the shader cache's) + `streaming` "
           "(Ogre's texture thread) + `multiload` (the texture multiload pool) + `rayBuilds` (the ray "
-          "tier's pipeline builders at once, below the render thread's priority); `background` "
+          "tier's pipeline builders at once, below the render thread's priority) + `compile` (the "
+          "background shader compile service's threads, niced 10); `background` "
           "the width of each below-normal pool (Qt's global pool, the bake pool's workers). "
           "THE LAW: the per-frame `activeSet` (game + foreground + render + ogrePool) never "
           "exceeds `hardware` once the box holds the floors, and `background` is what it "
@@ -2107,6 +2108,7 @@ QVariantMap AppApi::threadBudget()
     out.insert("streaming", b.streaming);
     out.insert("multiload", b.multiload);
     out.insert("rayBuilds", b.rayBuilds);
+    out.insert("compile", b.compile);
     out.insert("dedicated", b.dedicated());
     out.insert("background", b.background);
     out.insert("activeSet", b.activeSet());
