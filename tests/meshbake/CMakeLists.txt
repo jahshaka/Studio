@@ -59,7 +59,7 @@ target_include_directories(test_mesh_bake PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/meshoptimizer/src)
 target_compile_definitions(test_mesh_bake PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_mesh_bake PRIVATE IrisGL
+target_link_libraries(test_mesh_bake PRIVATE jahshaka_db IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia
     meshoptimizer)   # the cut curve's STOCK arm: the clusterizer + partitioner libIrisGL no longer pulls in
 jah_links_assimp(test_mesh_bake)

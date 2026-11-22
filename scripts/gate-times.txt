@@ -615,3 +615,4 @@ gi.pane_stack_cut 0.84  solo 2026-11-22 at 01156003f (spec.sh reprice, run 20261
 gi.ray_nan_refused 0.66  solo 2026-11-22 at a1e3d51ad (spec.sh reprice, run 20261122T125456-a1e3d51ad)
 lights.lamp_ray_origin 0.72  solo 2026-11-22 at 01156003f (spec.sh reprice, run 20261122T143830-01156003f)
 source.view_ray_origin 0.08  solo 2026-11-22 at e06d6bca5 (spec.sh reprice, run 20261122T133410-e06d6bca5)
+db.layer 0.02  solo 2026-11-22 at a87874341 (spec.sh reprice, run 20261122T170617-a87874341-p2939068)

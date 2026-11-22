@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include <QCryptographicHash>
 
 #include <functional>
+#include <memory>
 
 #include "data/assethomekind.h"
 #include "data/project.h"
@@ -29,6 +30,7 @@ For more information see the LICENSE file
 #include "irisgl/irisglfwd.h"
 
 class QImage;
+namespace db { class Connection; }
 
 // RAII transaction over one QSqlDatabase connection (ASSET_PIPELINE_SPEC
 // phase 0): begin on construction, roll back on destruction unless commit()
@@ -919,6 +921,10 @@ public:
     static bool jafVersionAccepted(const QString &version);
 
     QSqlDatabase getDb() { return db; }
+    /// The library's connection on the std-only layer (src/data/db/, NOQT-DATABASE-1): the handle
+    /// under Qt's default connection, BORROWED until the Database opens its own (ruling 3). No
+    /// handle before initializeDatabase or after closeDatabase: a statement on it answers a named error.
+    db::Connection &connection() { return *mConnection; }
 
 private:
     bool checkIfVersionSupported(const QString& pathToDb, const QString& table_name);
@@ -961,6 +967,7 @@ private:
 
 
     QSqlDatabase db;
+    std::unique_ptr<db::Connection> mConnection;   ///< connection(); borrowed from `db`
     ImportPictureSink importPictureSink;   ///< setImportPictureSink
 
     /// The gesture batch (see beginBatch). `batchOpenCount` is the counted

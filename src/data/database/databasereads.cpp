@@ -30,7 +30,7 @@ For more information see the LICENSE file
 namespace databasereads {
 namespace {
 
-#if defined(JAH_HAVE_SQLITE3) && defined(__linux__)
+#if defined(__linux__)
 /// Does the loaded qsqlite plugin NEED the system libsqlite3 (its DT_NEEDED, read from the mapped
 /// dynamic section)? Then the handle it hands out belongs to the library this TU links.
 struct PluginScan { bool pluginSeen = false; bool needsSystemSqlite = false; };
@@ -55,10 +55,25 @@ int scanObject(struct dl_phdr_info *info, size_t, void *data)
 #endif
 
 #if defined(JAH_HAVE_SQLITE3) && defined(__linux__)
-/// The connection's sqlite3* when it belongs to the system SQLite this TU links, else null with
-/// the reason in `why`.
+std::atomic<qint64> gStatements{0};
+std::atomic<sqlite3 *> gTracedHandle{nullptr};
+bool gOwnStatement = false;   // `read`'s own PRAGMA, on the UI thread that runs it
+
+int onStatement(unsigned type, void *, void *, void *sql)
+{
+    if (type != SQLITE_TRACE_STMT || gOwnStatement) return 0;
+    const char *text = static_cast<const char *>(sql);
+    if (text && text[0] == '-' && text[1] == '-') return 0;   // a trigger's sub-statement
+    gStatements.fetch_add(1, std::memory_order_relaxed);
+    return 0;
+}
+#endif
+
+}   // namespace
+
 sqlite3 *systemHandle(const QSqlDatabase &connection, QString *why)
 {
+#if defined(__linux__)
     if (!connection.isOpen() || !connection.driver()) { *why = QStringLiteral("the library database is not open"); return nullptr; }
     PluginScan scan;
     dl_iterate_phdr(scanObject, &scan);
@@ -75,23 +90,12 @@ sqlite3 *systemHandle(const QSqlDatabase &connection, QString *why)
     sqlite3 *db = *static_cast<sqlite3 *const *>(h.constData());
     if (!db) *why = QStringLiteral("the driver's handle is null");
     return db;
-}
-
-std::atomic<qint64> gStatements{0};
-std::atomic<sqlite3 *> gTracedHandle{nullptr};
-bool gOwnStatement = false;   // `read`'s own PRAGMA, on the UI thread that runs it
-
-int onStatement(unsigned type, void *, void *, void *sql)
-{
-    if (type != SQLITE_TRACE_STMT || gOwnStatement) return 0;
-    const char *text = static_cast<const char *>(sql);
-    if (text && text[0] == '-' && text[1] == '-') return 0;   // a trigger's sub-statement
-    gStatements.fetch_add(1, std::memory_order_relaxed);
-    return 0;
-}
+#else
+    Q_UNUSED(connection);
+    *why = QStringLiteral("the Qt SQL driver here carries its own SQLite (not the system library this build links)");
+    return nullptr;
 #endif
-
-}   // namespace
+}
 
 Stats read()
 {

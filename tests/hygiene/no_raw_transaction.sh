@@ -13,7 +13,9 @@
 # objects on disk (assetgc.cpp, round 2 H1).
 #
 # AND EVERY TRANSACTION ON IT BEGINS IMMEDIATE, AT ONE OF TWO DOORS (PREVIEWS-1 stage 1): the
-# DbTransaction guard (database.h) and the batch (Database::resumeBatchIfNeeded). The library has a
+# DbTransaction guard (database.h) and the batch (Database::resumeBatchIfNeeded). The std-only layer's
+# guard (db::Transaction's constructor, src/data/db/transaction.cpp: NOQT-DATABASE-1) is the third
+# door, the one the first two move onto. The library has a
 # second WRITING connection (the preview writer, services/previewwriter.h): a DEFERRED transaction
 # whose first statement is a read fails its first write with 517 SQLITE_BUSY_SNAPSHOT once the
 # writer has committed (spikes/previews-1/stage1/probe.out, case 4); IMMEDIATE takes the lock at the
@@ -61,6 +63,7 @@ span() {   # span <file> <start ERE> <end ERE>: "first last" lines of the first 
 read -r tx0 tx1 <<< "$(span src/data/database/database.h '^class DbTransaction' '^};')"
 read -r bt0 bt1 <<< "$(span src/data/database/database.cpp '^bool Database::resumeBatchIfNeeded\\(' '^}')"
 read -r wp0 wp1 <<< "$(span src/data/database/database.cpp '^Database::PreviewWrite Database::writePreview\\(' '^}')"
+read -r lt0 lt1 <<< "$(span src/data/db/transaction.cpp '^Transaction::Transaction\\(' '^}')"
 allowed_begin() {   # allowed_begin <file> <line> <text>
     case "$1" in
         src/data/database/database.h)
@@ -71,6 +74,9 @@ allowed_begin() {   # allowed_begin <file> <line> <text>
                   && printf '%s' "$3" | grep -qE 'batchTxLive = begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)'; } \
             || { [ -n "$wp0" ] && [ "$2" -gt "$wp0" ] && [ "$2" -lt "$wp1" ] \
                   && printf '%s' "$3" | grep -qE 'QStringLiteral\("BEGIN IMMEDIATE"\)'; } ;;
+        src/data/db/transaction.cpp)
+            [ -n "$lt0" ] && [ "$2" -gt "$lt0" ] && [ "$2" -lt "$lt1" ] \
+                && printf '%s' "$3" | grep -qE 'connection\.exec\("BEGIN IMMEDIATE", &e\)' ;;
         *) return 1 ;;
     esac
 }
@@ -89,7 +95,8 @@ else
     echo "ok:   every BEGIN is at a door (DbTransaction, the batch) or on the preview writer's own connection"
 fi
 for door in 'src/data/database/database.h:begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)' \
-            'src/data/database/database.cpp:batchTxLive = begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)'; do
+            'src/data/database/database.cpp:batchTxLive = begin\.exec\(QStringLiteral\("BEGIN IMMEDIATE"\)\)' \
+            'src/data/db/transaction.cpp:connection\.exec\("BEGIN IMMEDIATE", &e\)'; do
     file=${door%%:*}; pattern=${door#*:}
     if grep -qE "$pattern" "$file"; then
         echo "ok:   $file begins IMMEDIATE"

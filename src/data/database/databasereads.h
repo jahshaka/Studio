@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include <QtGlobal>
 
 class QSqlDatabase;
+struct sqlite3;
 
 namespace databasereads {
 
@@ -60,6 +61,10 @@ Stats read();
 /// Registers the statement trace on `connection`'s handle; false (nothing registered) where `read`
 /// would answer unavailable.
 bool installStatementTrace(const QSqlDatabase &connection);
+
+/// The connection's sqlite3* when it belongs to the system SQLite this build links (the plugin's own
+/// DT_NEEDED, read above), else null with the reason in `why`. Database::connection() borrows it.
+sqlite3 *systemHandle(const QSqlDatabase &connection, QString *why);
 
 }   // namespace databasereads
 

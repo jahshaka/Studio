@@ -973,6 +973,15 @@ if(UNIX AND NOT APPLE)
     endif()
 endif()
 
+# THE LIBRARY's SQLITE LAYER (NOQT-DATABASE-1, src/data/db/): std only, the one place that calls
+# sqlite3_*; a library of its own so the app and every suite that builds the Database link the same
+# objects. Defined before tests/ so their targets see it.
+find_package(SQLite3 REQUIRED)
+add_library(jahshaka_db STATIC src/data/db/connection.cpp src/data/db/statement.cpp src/data/db/transaction.cpp)
+target_include_directories(jahshaka_db PUBLIC ${CMAKE_CURRENT_SOURCE_DIR}/src)
+target_compile_features(jahshaka_db PUBLIC cxx_std_17)
+target_link_libraries(jahshaka_db PUBLIC SQLite::SQLite3)
+
 option(JAHSHAKA_BUILD_TESTS "Build the headless engine test suite" ON)
 if(JAHSHAKA_BUILD_TESTS)
     include(CTest)
@@ -1210,13 +1219,11 @@ if(USE_BREAKPAD)
 endif(USE_BREAKPAD)
 
 target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE ${LIBS})
-# app.databaseReads (TESTING-CLEANUP-2): the SYSTEM SQLite, called directly — it answers only where
-# the Qt SQL driver is linked to this same library (src/data/database/databasereads.h).
-find_package(SQLite3 QUIET)
-if(SQLite3_FOUND)
-    target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE SQLite::SQLite3)
-    target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAH_HAVE_SQLITE3=1)
-endif()
+# The library's SQLite layer (above), and app.databaseReads (TESTING-CLEANUP-2): the SYSTEM SQLite,
+# called directly — it answers only where the Qt SQL driver is linked to this same library
+# (src/data/database/databasereads.h).
+target_link_libraries(${CMAKE_PROJECT_NAME} PRIVATE jahshaka_db SQLite::SQLite3)
+target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAH_HAVE_SQLITE3=1)
 target_compile_definitions(${CMAKE_PROJECT_NAME} PRIVATE JAHSHAKA_VERSION="${JAHSHAKA_VERSION}")
 
 # A6: these two warning classes are undefined behaviour, not style - keep them fixed.

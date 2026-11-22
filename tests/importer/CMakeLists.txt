@@ -70,7 +70,7 @@ target_compile_definitions(test_importer_meshformats PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}"
     JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
     JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
-target_link_libraries(test_importer_meshformats PRIVATE IrisGL JahshakaEngine
+target_link_libraries(test_importer_meshformats PRIVATE jahshaka_db IrisGL JahshakaEngine
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::OpenGL)
 jah_links_assimp(test_importer_meshformats)
 add_dependencies(test_importer_meshformats JahshakaEngineMedia)

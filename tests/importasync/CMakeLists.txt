@@ -55,7 +55,7 @@ target_include_directories(test_import_async PRIVATE
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
 target_compile_definitions(test_import_async PRIVATE
     JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
-target_link_libraries(test_import_async PRIVATE IrisGL
+target_link_libraries(test_import_async PRIVATE jahshaka_db IrisGL
     Qt6::Widgets Qt6::Sql Qt6::Multimedia Qt6::Concurrent)
 add_test(NAME import.async COMMAND test_import_async
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")

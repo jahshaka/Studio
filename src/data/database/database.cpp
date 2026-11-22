@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <atomic>
 #include "data/database/casschema.h"
 #include "data/database/databasereads.h"
+#include "data/db/connection.h"
 #include "data/constants.h"
 #include "io/sceneformat.h"   // the scene version gate the import shares with the open
 #include "irisgl/irisglfwd.h"
@@ -103,7 +104,7 @@ std::vector<Database *> &liveDatabases()
 }
 }   // namespace
 
-Database::Database()
+Database::Database() : mConnection(std::make_unique<db::Connection>())
 {
     projectsTableSchema =
         "CREATE TABLE IF NOT EXISTS projects ("
@@ -717,6 +718,15 @@ bool Database::initializeDatabase(const QString &pathToBlob)
             irisLog(QStringLiteral("JAH_DB_STATEMENT_TRACE=1, but the statement trace could not be registered "
                                    "(app.databaseReads says why)"));
         if (db.isOpen() && applyDurabilityPragmas(db)) startCheckpointer(this, pathToBlob);
+        if (db.isOpen()) {
+            // connection(): the same handle on the std-only layer, borrowed (NOQT-DATABASE-1 ruling 3).
+            QString why;
+            db::Error error;
+            *mConnection = db::Connection::borrow(databasereads::systemHandle(db, &why), "editor", &error);
+            if (error)
+                irisLog(QStringLiteral("The library's connection could not be borrowed (%1): %2")
+                            .arg(why, QString::fromStdString(error.message)));
+        }
         return db.isOpen();
     }
     else {
@@ -765,6 +775,7 @@ void Database::closeDatabase()
     // The checkpoint worker's connection goes FIRST, so the library's own close
     // is the last one and checkpoints whatever the -wal still holds.
     stopCheckpointer(this);
+    *mConnection = db::Connection();   // the borrow ends before its owner closes the handle
     const QString name = db.connectionName();
     if (db.isOpen()) db.close();
     db = QSqlDatabase(); // important that we make an invalid object
