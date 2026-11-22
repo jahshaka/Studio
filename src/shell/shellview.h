@@ -103,7 +103,6 @@ public:
     void spawnAvatarAsset(const QString &guid, const iris::Vec3 &position, bool hasPosition) override;
     void assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node) override;
     void favoriteAsset(QListWidgetItem *item) override;
-    void refreshAssetThumbnail(QListWidgetItem *item) override;
     void showViewportToast(const QString &title, const QString &text) override;
     void showNotice(const QString &title, const QString &text) override;
     void showPlayerVrState(bool available, bool active) override;

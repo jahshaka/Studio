@@ -71,26 +71,9 @@ ListWidget::~ListWidget()
 {
 }
 
-void ListWidget::updateThumbnailImage(QByteArray arr, QListWidgetItem *item)
-{
-	auto size = 35;
-	auto img = QImage::fromData(arr, "PNG");
-	auto pixmap = QPixmap::fromImage(img);
-	pixmap = pixmap.scaled({ 90,90 }, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-
-	// shader overlay file lost - recreate
-	/*QPixmap pixmap_overlay(":/icons/shader_overlay.png");
-	pixmap_overlay = pixmap_overlay.scaled({ size,size }, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
-	QPainter painter(&pixmap);
-	if(true) painter.drawPixmap(QRect(pixmap.width() - size, 0, size, size), pixmap_overlay);*/
-
-	item->setIcon(QIcon(pixmap));
-
-}
-
 void ListWidget::assignTile(QListWidgetItem *item, const QString &guid)
 {
-	// 90 x 90, the size updateThumbnailImage draws a picture it is handed at.
+	// 90 x 90, the drawer's icon size.
 	if (!mTiles) mTiles = new ListTileBinder(this, { QSize(90, 90), 0 }, this);
 	mTiles->assign(item, guid, QIcon());
 }

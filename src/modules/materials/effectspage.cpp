@@ -45,7 +45,6 @@ For more information see the LICENSE file
 #include <QMimeData>
 #include <QFile>
 #include <QByteArray>
-#include <QBuffer>
 #include <QPixmap>
 #include <QScrollBar>
 #include <QShortcut>
@@ -90,7 +89,6 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "services/assethelper.h"
-#include "services/thumbnailgenerator.h"
 #include "data/guidmanager.h"
 #include "irisgl/core/irisutils.h"
 #include "io/assetmanager.h"
@@ -723,12 +721,17 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 			else if (mMaterialChanged) mMaterialChanged(doc->info.GUID);
 		}
 	}
-	// Thumbnail: queued, never inline. The graph's baked material renders on
-	// the preview sphere through the shell's thumbnail queue (one request per
-	// tick, main thread) and lands in onShaderThumbnail — saving must not block
-	// on a render, and the stored asset data must already be written when the
-	// request is served (the renderer re-reads it from the database).
-	requestShaderThumbnail(doc->info.GUID);
+	// THE PREVIEW, through THE ONE REQUEST (services/previewservice.h): the definition just written
+	// is what it reads; the drawer's tile is asked again once the write has landed.
+	if (mPreviews) {
+		const QString guid = doc->info.GUID;
+		QPointer<EffectsPage> self(this);
+		mPreviews->mint(mProject, guid, "the material editor's save", [self, guid](const PreviewService::Outcome &outcome) {
+			if (!self || !outcome.ok) return;
+			if (QListWidgetItem *item = self->selectCorrectItemFromDrop(guid))
+				if (auto *drawer = qobject_cast<ListWidget *>(item->listWidget())) drawer->assignTile(item, guid);
+		});
+	}
 	// A SAVE CAN CHANGE THE MEMBERS: the final bake mints its maps as member
 	// textures, and a picture picked in a texture node becomes one. Only the
 	// panel's own document, though — it shows the ACTIVE material.
@@ -803,56 +806,6 @@ void EffectsPage::reportGraphRefused(const QString &guid, const QString &why)
 		mRefusalToast->setAnchor(Toast::Anchor::WindowBottom);
 	}
 	mRefusalToast->showToast(tr("Cannot open '%1'").arg(name), why, 8000);
-}
-
-void EffectsPage::requestShaderThumbnail(const QString &shaderGuid)
-{
-	if (shaderGuid.isEmpty()) return;
-	auto generator = ThumbnailGenerator::getSingleton();
-	generator->setDatabase(dataBase);
-	generator->setProject(mProject);   // the definition resolves pin-first against it
-	if (!mThumbnailConnected) {
-		connect(generator, &ThumbnailGenerator::thumbnailComplete,
-		        this, &EffectsPage::onShaderThumbnail);
-		mThumbnailConnected = true;
-	}
-	// A MATERIAL RENDER OF A MATERIAL ROW. This asked for a SHADER render, and
-	// that branch reads the row blob through `parseShaderAsPbr`, which refuses
-	// any definition with no `pbrMaterial` key — a key a bundle definition does
-	// not have. So every autosave of every graph material in this module
-	// logged "nothing was rendered", burned a queue tick and left a BLANK
-	// TILE, while the library's own sweep (the preview service, which reads the
-	// bundle) rendered the same material perfectly. Two readers for one
-	// question; there is one now, and it is the bundle's.
-	mPendingThumbnails.insert(shaderGuid);
-	generator->requestThumbnail(ThumbnailRequestType::Material, QString(), shaderGuid);
-}
-
-void EffectsPage::onShaderThumbnail(const ThumbnailResult &result)
-{
-	// THE QUEUE IS SHARED, and a material render is no longer ours by TYPE
-	// alone — the editor's material panel and the tray's sweep ask for the
-	// same kind. Ours are the guids we asked about.
-	// (The payload used to arrive as a ThumbnailResult* that AssetWidget's
-	// slot had already deleted by the time this one ran — a read-after-free
-	// decided by connection order, and the likely root of shader thumbnails
-	// that "sometimes" failed to save. It is a value now.)
-	if (result.type != ThumbnailRequestType::Material) return;
-	if (result.preview || result.thumbnail.isNull() || result.id.isEmpty()) return;
-	if (mPendingThumbnails.remove(result.id) == 0) return;
-
-	QByteArray bytes;
-	QBuffer buffer(&bytes);
-	buffer.open(QIODevice::WriteOnly);
-	QPixmap::fromImage(result.thumbnail).save(&buffer, "PNG");
-	if (bytes.isEmpty()) return;
-
-	dataBase->updateAssetThumbnail(result.id, bytes);
-	if (auto item = selectCorrectItemFromDrop(result.id))
-		ListWidget::updateThumbnailImage(bytes, item);
-
-	// (There is no second row to copy the picture onto any more: ONE material,
-	// ONE thumbnail — spec 9 item 5.)
 }
 
 void EffectsPage::saveDefaultShader()

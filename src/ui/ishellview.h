@@ -204,7 +204,6 @@ public:
     virtual void spawnAvatarAsset(const QString &guid, const iris::Vec3 &position, bool hasPosition) = 0;
     virtual void assignAnimationAsset(const QString &guid, const iris::SceneNodePtr &node) = 0;
     virtual void favoriteAsset(QListWidgetItem *item) = 0;
-    virtual void refreshAssetThumbnail(QListWidgetItem *item) = 0;
 
     virtual void showViewportToast(const QString &title, const QString &text) = 0;
     /// The window-centre notice (a page that cannot start, VR that did not).

@@ -1431,17 +1431,18 @@ bool Database::addFavorite(const QString &guid)
     // OR REPLACE: asset_guid is the PRIMARY KEY, so favouriting an asset that
     // is already a favourite used to fail on the UNIQUE constraint and report
     // false from a button whose only sane semantics are idempotent (deep audit
-    // 2026-09, area 6). Replacing also refreshes the cached name/thumbnail
-    // after a rename or a re-import.
+    // 2026-09, area 6). Replacing also refreshes the cached name after a rename
+    // or a re-import. NO PICTURE IS COPIED HERE (PREVIEWS-1): the favourites
+    // panel paints the asset's own tile by guid; the `thumbnail` column stays in
+    // the schema (a column change resets the library) and is written by nobody.
     QSqlQuery query;
     query.prepare(
-        "INSERT OR REPLACE INTO favorites (asset_guid, name, date_created, version, thumbnail) "
-        "VALUES (:asset_guid, :name, datetime(), :version, :thumbnail)"
+        "INSERT OR REPLACE INTO favorites (asset_guid, name, date_created, version) "
+        "VALUES (:asset_guid, :name, datetime(), :version)"
     );
     query.bindValue(":asset_guid", guid);
     query.bindValue(":name", asset.name);
     query.bindValue(":version", Constants::CONTENT_VERSION);
-    query.bindValue(":thumbnail", asset.thumbnail);
 
     return executeAndCheckQuery(query, "insertFavorite");
 }

@@ -161,7 +161,6 @@ For more information see the LICENSE file
 #include "services/materialpreviewservice.h"
 #include "services/sceneeditservice.h"
 #include "services/clipboardservice.h"
-#include "services/thumbnailservice.h"
 #include "services/defaultfloormaterial.h"
 #include "services/scenetemplate.h"
 #include "services/scenetemplatebuilder.h"
@@ -432,7 +431,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
 		services = nullptr;
 		materialPreviewService = nullptr;
 		projectService = nullptr;
-		thumbnailService = nullptr;
 		assetService = nullptr;
 		undoService = nullptr;
 		delete ui;
@@ -610,7 +608,6 @@ void MainWindow::setupServices()
     sceneEditService = serviceLayer->sceneEdit();
     materialPreviewService = serviceLayer->materialPreview();
     clipboardService = serviceLayer->clipboard();
-    thumbnailService = serviceLayer->thumbnails();
     assetService = serviceLayer->assets();
     // THE WORLD'S MUSIC FOLLOWS THE DOCUMENT EVERY TICK (audit D8), like the
     // mirror: the driver's beforeFrame fires on every tick, drawn or not, and a
@@ -1411,18 +1408,6 @@ void MainWindow::refreshPropertiesFromDocument()
 SceneHierarchyWidget *MainWindow::hierarchyPanel() const
 {
     return docks ? docks->hierarchy() : nullptr;
-}
-
-void MainWindow::refreshThumbnail(const QString &guid)
-{
-    thumbnailService->refreshObjectThumbnail(guid);
-}
-
-void MainWindow::refreshThumbnail(QListWidgetItem *item)
-{
-    if (item->data(MODEL_TYPE_ROLE).toInt() == static_cast<int>(ModelTypes::Object)) {
-        thumbnailService->refreshObjectThumbnail(item->data(MODEL_GUID_ROLE).toString());
-    }
 }
 
 void MainWindow::setScene(QSharedPointer<iris::Scene> scene)

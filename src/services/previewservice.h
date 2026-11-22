@@ -97,8 +97,8 @@ public:
 
     /// THE MINT DOOR (a material just created, copied or saved): a request whose failure is
     /// logged naming `who` when a render COULD have happened — headless, "no picture" is the
-    /// expected answer and is not said. Never waits.
-    void mint(Project *project, const QString &guid, const char *who);
+    /// expected answer and is not said. Never waits. `then` (optional) hears the outcome after that.
+    void mint(Project *project, const QString &guid, const char *who, Done then = {});
 
     enum class State { None, Missing, Stale, Ok };
     static const char *stateName(State state);

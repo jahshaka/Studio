@@ -45,7 +45,6 @@ class SceneEditService;
 class SelectionService;
 class SessionMarkers;
 class SettingsManager;
-class ThumbnailService;
 class PreviewDemand;
 class PreviewService;
 class UndoService;
@@ -70,7 +69,7 @@ public:
     /// The step-5 teardown of the services that are not QObjects of the
     /// window: the aggregate, the hover preview (before the scene-edit service
     /// it points at, and before the scene dies — it puts any borrowed material
-    /// back), the project, thumbnail, asset and undo services.
+    /// back), the project, preview, asset and undo services.
     void destroyPlain();
 
     StudioServices *aggregate() const { return mAggregate; }
@@ -82,7 +81,6 @@ public:
     SceneEditService *sceneEdit() const { return mSceneEdit; }
     MaterialPreviewService *materialPreview() const { return mPreview; }
     ClipboardService *clipboard() const { return mClipboard; }
-    ThumbnailService *thumbnails() const { return mThumbnails; }
     PreviewService *previews() const { return mPreviews; }
     AssetService *assets() const { return mAssets; }
     AmbienceService *ambience() const { return mAmbience; }
@@ -98,7 +96,6 @@ private:
     SceneEditService *mSceneEdit = nullptr;
     MaterialPreviewService *mPreview = nullptr;
     ClipboardService *mClipboard = nullptr;
-    ThumbnailService *mThumbnails = nullptr;
     PreviewService *mPreviews = nullptr;
     PreviewDemand *mDemand = nullptr;   ///< the shown views' render demand (TileCache::setDemand); before mPreviews dies
     Database *mDb = nullptr;   ///< the library the previews' import sink is set on (destroyPlain clears it)

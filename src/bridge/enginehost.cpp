@@ -544,8 +544,8 @@ void EngineHost::shutdown()
     // THE ONE THUMBNAIL RENDERER holds an engine View and an engine Scene, so it
     // must go while the Engine is still alive — and BEFORE the staging scene is
     // dropped (fix round F11), because everything here unwinds in the order it
-    // was built. ThumbnailGenerator::shutdown() normally gets there first, on
-    // the window-close path; this call is what covers a teardown that never
+    // was built. The shell's window-close path normally gets there first
+    // (shelllifecycle.cpp); this call is what covers a teardown that never
     // closes a window (a --script or --mcp run quits with its window still up).
     // Both are idempotent.
     EngineThumbnailRenderer::shutdown();

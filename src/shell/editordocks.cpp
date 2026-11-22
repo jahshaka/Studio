@@ -34,8 +34,8 @@ For more information see the LICENSE file
 #include "irisgl/core/logger.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/assetshare.h"
+#include "services/previewservice.h"
 #include "services/sceneeditservice.h"
-#include "services/thumbnailservice.h"
 #include "ui/dialogs/bundleexportdialog.h"
 #include "data/constants.h"
 #include "data/settingsmanager.h"
@@ -1449,10 +1449,9 @@ void EditorDocks::exportNode(const iris::SceneNodePtr &node, ModelTypes modelTyp
 {
     if (!node) return;
 
-    // Dispatch a thumbnail request regardless of what happens,
-    // This should finish in the time it takes to spawn a dialog and save
-    // Since the object is already loaded in memory
-    if (services && services->thumbnails) services->thumbnails->refreshObjectThumbnail(node->getGUID());
+    // The node's library row (when it has one) refreshes its preview through THE ONE REQUEST
+    // (services/previewservice.h); a node with no row is refused by name and changes nothing.
+    if (services && services->previews) services->previews->request(project, node->getGUID(), {});
 
     QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
 

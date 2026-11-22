@@ -61,7 +61,7 @@ EngineThumbnailRenderer::~EngineThumbnailRenderer()
 namespace
 {
 /// The instance, its borrow flag, and nothing else. Main thread only — every
-/// caller is (ThumbnailGenerator's tick, the import tails, the verbs).
+/// caller is (the preview service: its requests, sweeps and verbs).
 std::unique_ptr<EngineThumbnailRenderer> gShared;
 bool gLoaned = false;
 }   // namespace
@@ -228,8 +228,8 @@ void EngineThumbnailRenderer::releaseSubject(bool sceneAlive)
     //
     // AND NO SHIPPING PATH REACHES IT: EngineHost::shutdown calls
     // EngineThumbnailRenderer::shutdown() (enginehost.cpp:583) BEFORE
-    // mEngine.reset(), and ThumbnailGenerator::shutdown() does the same on the
-    // window-close path — both with the Engine alive, so `sceneAlive` is true
+    // mEngine.reset(), and the shell's window close (shelllifecycle.cpp) does the
+    // same on the window-close path — both with the Engine alive, so `sceneAlive` is true
     // and the unbind below is the one that runs. What is left is borrow()'s
     // "a new Engine" branch with the old one already expired (a second boot in
     // one test process); the real answer there is to let go of the renderer

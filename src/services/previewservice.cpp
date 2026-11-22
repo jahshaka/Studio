@@ -291,7 +291,7 @@ PreviewService::LandingFn PreviewService::setLandingListener(LandingFn listener)
     return previous;
 }
 
-void PreviewService::mint(Project *project, const QString &guid, const char *who)
+void PreviewService::mint(Project *project, const QString &guid, const char *who, Done then)
 {
     if (guid.isEmpty()) return;
     const QString door = QString::fromUtf8(who ? who : "a material");
@@ -300,9 +300,10 @@ void PreviewService::mint(Project *project, const QString &guid, const char *who
     // saying so once per minted material would be noise. What is said is a render that COULD have
     // happened and did not - a refused borrow above all (the renderer busy with another render).
     const bool couldRender = engine && !engine->isHeadless();
-    request(project, guid, [door, guid, couldRender](const Outcome &outcome) {
+    request(project, guid, [door, guid, couldRender, then](const Outcome &outcome) {
         if (!outcome.ok && couldRender)
             irisLog(QStringLiteral("%1: no preview stored for %2 - %3").arg(door, guid, outcome.reason));
+        if (then) then(outcome);
     });
 }
 

@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include <iostream>
 #include <QDate>
 #include <QAbstractItemModel>
-#include <QBuffer>
 #include <QDebug>
 #include <QDesktopServices>
 #include <QDir>
@@ -60,7 +59,6 @@ For more information see the LICENSE file
 #include "data/settingsmanager.h"
 #include "services/materialpresetseeder.h"
 #include "services/thumbnailmanager.h"
-#include "services/thumbnailgenerator.h"
 #include "services/assethelper.h"
 #include "services/import/assetimportservice.h"
 #include "services/import/importbatchrunner.h"
@@ -175,15 +173,6 @@ AssetWidget::AssetWidget(Database *handle, QWidget *parent) : QWidget(parent), u
 
 	connect(ui->importBtn, SIGNAL(pressed()), SLOT(importAssetB()));
     ui->importBtn->setVisible(false);
-
-	// The signal will be emitted from another thread (Nick) — or, on the engine
-	// viewport, from the main thread. Either way the generator needs the database
-	// for asset/material lookups (the legacy viewport also sets it, later).
-	ThumbnailGenerator::getSingleton()->setDatabase(db);
-	// Function-pointer connect: the payload is a value type now (the old
-	// ThumbnailResult* had two receivers and the first one deleted it).
-	connect(ThumbnailGenerator::getSingleton(), &ThumbnailGenerator::thumbnailComplete,
-	        this, &AssetWidget::onThumbnailResult);
 
 	breadCrumbLayout = new QHBoxLayout;
 	breadCrumbLayout->setSpacing(0);
@@ -1200,7 +1189,7 @@ void AssetWidget::favoriteItem()
 
 void AssetWidget::refreshThumbnail()
 {
-    if (shell) shell->refreshAssetThumbnail(assetItem.wItem);
+    if (assetItem.wItem) requestPreview(assetItem.wItem->data(MODEL_GUID_ROLE).toString());
 }
 
 void AssetWidget::editFileExternally()
@@ -2034,7 +2023,13 @@ void AssetWidget::importAsset(const QStringList &fileNames, bool askImportSettin
 void AssetWidget::drainThumbnailBacklog()
 {
 	if (thumbnailBacklog.isEmpty()) return;
-	const QString guid = thumbnailBacklog.takeFirst();
+	requestPreview(thumbnailBacklog.takeFirst());
+	// ONE PER EVENT-LOOP TURN: the window keeps painting between renders.
+	if (!thumbnailBacklog.isEmpty()) QTimer::singleShot(0, this, [this] { drainThumbnailBacklog(); });
+}
+
+void AssetWidget::requestPreview(const QString &guid)
+{
 	// THE ONE REQUEST (services/previewservice.h): a model from its stored
 	// blob, fitted and framed; a companion material on the preview sphere —
 	// whichever this row is. Its failures are the service's to log; the tray has
@@ -2057,56 +2052,5 @@ void AssetWidget::drainThumbnailBacklog()
 			}
 		});
 	}
-	// ONE PER EVENT-LOOP TURN: the window keeps painting between renders.
-	if (!thumbnailBacklog.isEmpty()) QTimer::singleShot(0, this, [this] { drainThumbnailBacklog(); });
 }
 
-void AssetWidget::onThumbnailResult(const ThumbnailResult &result)
-{
-	QByteArray bytes;
-	QBuffer buffer(&bytes);
-	buffer.open(QIODevice::WriteOnly);
-
-    if (!result.preview) {
-        // Store the render at full size (requests are 512x512): scaling it to
-        // the icon height here permanently degraded every stored thumbnail to
-        // 72px (ASSETS_AUDIT.md finding 5). Views scale at display time.
-        auto thumbnail = QPixmap::fromImage(result.thumbnail);
-        thumbnail.save(&buffer, "PNG");
-
-        db->updateAssetThumbnail(result.id, bytes);
-
-        // Refresh the view if we're still there
-        for (int i = 0; i < ui->assetView->count(); i++) {
-            QListWidgetItem* item = ui->assetView->item(i);
-            if (item->data(MODEL_GUID_ROLE).toString() == result.id) {
-                updateAssetView(assetItem.selectedGuid, activeFilter);
-            }
-        }
-    }
-    else {
-        const QPixmap rendered = QPixmap::fromImage(result.thumbnail);
-        if (rendered.isNull()) {
-            // The render failed and said why in the log (THUMBS-1): the export
-            // has nothing to write, and asking Qt to scale nothing only adds a
-            // second, less useful warning.
-            QMessageBox::warning(this, tr("Export Preview"),
-                                 tr("Nothing was rendered for this preview."), QMessageBox::Ok);
-            return;
-        }
-        auto thumbnail = rendered.scaledToHeight(512, Qt::SmoothTransformation);
-        thumbnail.save(&buffer, "PNG");
-
-        auto filePath = QFileDialog::getSaveFileName(
-            this,
-            "Choose image path",
-            QString("%1_preview.png").arg(QFileInfo(result.path).baseName()),
-            "Supported Image Formats (*.jpg, *.png)"
-        );
-
-        if (filePath.isEmpty() || filePath.isNull()) return;
-        thumbnail.save(filePath);
-    }
-    // No delete: the payload is a value and the OTHER receiver
-    // (EffectsPage::onShaderThumbnail) reads it after this slot returns.
-}

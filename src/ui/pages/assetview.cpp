@@ -117,7 +117,6 @@ For more information see the LICENSE file
 #include "io/builtinmaterials.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "io/materialreader.h"
-#include "services/thumbnailgenerator.h"
 
 #include "data/guidmanager.h"
 #include "io/assetmanager.h"

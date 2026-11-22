@@ -423,7 +423,6 @@ set(SRCS
     src/services/assetclosure.cpp
     src/io/assetrefs.cpp
     src/io/clipboardformat.cpp
-    src/services/thumbnailservice.cpp
     src/services/undoservice.cpp
     src/services/selectionservice.cpp
     src/services/shortcutregistry.cpp
@@ -553,7 +552,6 @@ set(SRCS
     src/ui/controls/librarymodel.cpp
     src/ui/controls/sliderlayoutmodel.cpp
     src/ui/dialogs/renameprojectdialog.cpp 
-    src/services/thumbnailgenerator.cpp 
     src/services/previewkey.cpp
     src/services/previewwriter.cpp
     src/services/previewservice.cpp
@@ -745,7 +743,6 @@ set(HEADERS
     src/services/assetclosure.h
     src/io/assetrefs.h
     src/io/clipboardformat.h
-    src/services/thumbnailservice.h
     src/services/undoservice.h
     src/services/selectionservice.h
     src/services/shortcutregistry.h
@@ -863,7 +860,6 @@ set(HEADERS
     src/ui/controls/librarymodel.h
     src/ui/controls/sliderlayoutmodel.h
     src/ui/dialogs/renameprojectdialog.h 
-    src/services/thumbnailgenerator.h 
     src/services/previewkey.h
     src/services/previewwriter.h
     src/services/previewservice.h

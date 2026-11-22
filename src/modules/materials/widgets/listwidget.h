@@ -43,7 +43,6 @@ public:
 	QSize itemSize;
 	int numberOfItemPerRow;
 	void addToListWidget(QListWidgetItem *item);
-	static void updateThumbnailImage(QByteArray arr, QListWidgetItem *item);
 	/// The item's tile from the session's tile cache, by guid (a listing carries
 	/// no thumbnail — D11-LIBRARY-SCALE): the cached picture, or none until the
 	/// off-thread decode lands. The item must already be in this list.

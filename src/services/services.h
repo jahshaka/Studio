@@ -36,7 +36,6 @@ class ProjectService;
 class SceneEditService;
 class MaterialPreviewService;
 class ClipboardService;
-class ThumbnailService;
 class PreviewService;
 class PreviewDemand;
 class AssetService;
@@ -64,7 +63,6 @@ struct StudioServices
     /// THE clipboard (CLIPBOARD_SPEC D3 b) — one component for every space,
     /// over the system clipboard. Null in hosts with no library.
     ClipboardService *clipboard  = nullptr;
-    ThumbnailService *thumbnails = nullptr;
     /// THE PREVIEW SERVICE (PREVIEWS-1, services/previewservice.h): every stored preview of a
     /// library row, its key and its one writer. Null in hosts with no library.
     PreviewService   *previews   = nullptr;

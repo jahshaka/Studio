@@ -35,7 +35,6 @@ class Subscriber;
 #include "io/assetmanager.h"
 #include "services/import/importtypes.h"
 #include "ui/dialogs/progressdialog.h"
-#include "services/thumbnailgenerator.h"
 #include "data/project.h"
 #include "viewport/ieditorviewport.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -358,8 +357,6 @@ protected slots:
     /// drop, the Import Asset row — and false for the verb (above).
     void importAsset(const QStringList &path, bool askImportSettings = true);
 
-    void onThumbnailResult(const ThumbnailResult &result);
-
 private:
     /// True while the import-settings dialog is up. It is part of the
     /// one-import-at-a-time guard: ImportBatchRunner::isRunning() is false
@@ -396,6 +393,8 @@ private:
 	ListTileBinder *tiles();
 	/// Renders and stores one backlog entry, then re-arms itself for the next.
 	void drainThumbnailBacklog();
+	/// THE ONE REQUEST of `guid`'s preview; its tile asked again when the write has landed.
+	void requestPreview(const QString &guid);
 
     QString currentPath;
 

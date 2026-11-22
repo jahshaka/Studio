@@ -4,10 +4,9 @@
 // EngineThumbnailRenderer — renders asset previews (meshes, materials) through
 // the engine on the MAIN thread, into an offscreen View on a dedicated Scene.
 //
-// This replaces ThumbnailGenerator's legacy RenderThread (own QOpenGLContext on
-// a worker thread) in engine mode: the engine has one thread affinity, so
-// thumbnails are drawn synchronously, one per tick, by ThumbnailGenerator's
-// queue. The document for a preview is an ordinary iris::Scene (GL-free) that
+// The engine has one thread affinity, so a preview is drawn synchronously, on
+// the main thread, by its one caller: the preview service (services/
+// previewservice.h). The document for a preview is an ordinary iris::Scene (GL-free) that
 // SceneMirror pushes into the thumbs engine Scene, exactly like the viewport.
 //
 // An EnginePreviewScene, with one difference from the on-screen previews: it
@@ -21,7 +20,7 @@
 // 'thumbs' already exists` beside `QPixmap::scaleHeight: Pixmap is a null
 // pixmap`). The View name is a fixed string, the Engine refuses a duplicate
 // name (OgreEngine::viewNameTaken), and this class used to be constructed
-// freely: ThumbnailGenerator kept ONE alive for the whole session from the
+// freely: the old thumbnail queue kept ONE alive for the whole session from the
 // first material/shader thumbnail, and every TEMPORARY instance after that —
 // the model thumbnail routine, the thumbnail verb — then failed to create
 // its View, produced a null image and said nothing. Order-dependent and
@@ -91,7 +90,7 @@ public:
     static Loan borrow(const std::shared_ptr<jahshaka::engine::Engine> &engine, const char *who);
 
     /// Destroy the shared renderer while the Engine is still alive (EngineHost::
-    /// shutdown, ThumbnailGenerator::shutdown). Safe with nothing borrowed and
+    /// shutdown, the shell's window close). Safe with nothing borrowed and
     /// safe to call twice; refuses while a loan is out (there is a render on
     /// the stack) and says so in the log.
     static void shutdown();

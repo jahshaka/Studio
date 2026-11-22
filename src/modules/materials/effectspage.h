@@ -40,7 +40,6 @@ class PreviewService;
 class Project;
 class SettingsManager;
 class UndoRedo;
-struct ThumbnailResult;
 
 class QTabBar;
 class QTimer;
@@ -315,13 +314,6 @@ private:
 	                const QString &shippedName, NodeGraph *graph);
 	void saveDefaultShader();
 
-	/// Queues the saved graph's thumbnail on the shell's ThumbnailGenerator
-	/// (the module never reaches into src/bridge itself) and delivers it in
-	/// onShaderThumbnail — the tile, the asset row and the derived material
-	/// all update from there (VISUAL_PARITY_SPEC item 5).
-	void requestShaderThumbnail(const QString &shaderGuid);
-	void onShaderThumbnail(const ThumbnailResult &result);
-	bool mThumbnailConnected = false;
 
 	/// THE OPEN MATERIAL IS A SHIPPED PRESET, ON SCREEN TO BE READ
 	/// (PRESET-UNIFY-1). Selecting a preset shows its graph — the owner's
@@ -348,9 +340,6 @@ private:
 	/// so without this a preset's lock leaks onto the next tab.
 	void applyReadOnlyUi();
 	bool isReadOnly() const;
-	/// The guids WE asked the shared thumbnail queue about (a material render
-	/// is not ours by type alone any more — see requestShaderThumbnail).
-	QSet<QString> mPendingThumbnails;
 
 
 	/// Import a material share file (services/assetshare.h) into the library

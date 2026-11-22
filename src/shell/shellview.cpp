@@ -389,4 +389,3 @@ void ShellView::assignAnimationAsset(const QString &guid, const iris::SceneNodeP
     mWindow->assignAnimationAsset(guid, node);
 }
 void ShellView::favoriteAsset(QListWidgetItem *item) { mWindow->favoriteItem(item); }
-void ShellView::refreshAssetThumbnail(QListWidgetItem *item) { mWindow->refreshThumbnail(item); }

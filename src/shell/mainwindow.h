@@ -83,7 +83,6 @@ class PlayerService;
 class ProjectService;
 class SceneEditService;
 class ClipboardService;
-class ThumbnailService;
 class AssetService;
 
 #include "ui/panels/scenenodepropertieswidget.h"
@@ -298,8 +297,6 @@ public:
      */
 
     void favoriteItem(QListWidgetItem *item);
-    void refreshThumbnail(const QString &guid);
-    void refreshThumbnail(QListWidgetItem *item);
 
     QString originalTitle;
 
@@ -534,7 +531,6 @@ private:
     /// so it is deleted by hand in the destructor.
     MaterialPreviewService *materialPreviewService = nullptr;
     ClipboardService *clipboardService = nullptr;
-    ThumbnailService *thumbnailService = nullptr;
     AssetService *assetService = nullptr;
 
     // scripting (SCRIPTING_SPEC §2): the host struct must outlive the engine

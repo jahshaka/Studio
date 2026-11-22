@@ -37,8 +37,6 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/sessionmarkers.h"
 #include "services/subscriber.h"
-#include "services/thumbnailgenerator.h"
-#include "services/thumbnailservice.h"
 #include "services/undoservice.h"
 #include "ui/controls/tilecache.h"
 
@@ -78,7 +76,6 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     // handed to the shell, the verbs and the tree menu as one pointer.
     mClipboard = new ClipboardService(db, project, mSceneEdit, mSelection, mUndo, nullptr, this);
 
-    mThumbnails = new ThumbnailService(db, project);
     // THE PREVIEWS (PREVIEWS-1): the one adapter that knows where the engine lives is this line.
     mPreviews = new PreviewService(db, [] { return EngineHost::instance().engine(); });
     // AN IMPORT's PICTURES through the one writer (PREVIEWS-1 stage 2): the library's sink, on THIS
@@ -132,7 +129,6 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     mAggregate->sceneEdit = mSceneEdit;
     mAggregate->materialPreview = mPreview;
     mAggregate->clipboard = mClipboard;
-    mAggregate->thumbnails = mThumbnails;
     mAggregate->previews = mPreviews;
     mAggregate->previewDemand = mDemand;
     mSceneEdit->setPreviews(mPreviews);
@@ -175,8 +171,6 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
     // on.
     mUndo->setPrePushHook([this]() { if (mPreview) mPreview->end(); });
     mProject->setPreWriteHook([this]() { if (mPreview) mPreview->end(); });
-
-    ThumbnailGenerator::getSingleton()->setProject(project);
 }
 
 void ShellServices::destroyPlain()
@@ -187,8 +181,6 @@ void ShellServices::destroyPlain()
     mPreview = nullptr;
     delete mProject;
     mProject = nullptr;
-    delete mThumbnails;
-    mThumbnails = nullptr;
     // Its writer DRAINS here and joins - before the library closes (shutdown step 7). The import
     // sink and the render demand that name it go first.
     if (mDb) mDb->setImportPictureSink({});

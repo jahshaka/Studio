@@ -53,7 +53,7 @@ inline iris::AABB worldBoundingBox(const iris::SceneNodePtr &node)
 }
 
 /// The legacy framing rule: back the camera off until 1.2 radii fill the
-/// vertical FOV. AssetViewer::addNodeToScene / ThumbnailGenerator.
+/// vertical FOV. AssetViewer::addNodeToScene.
 ///
 /// `fovDegrees` IS THE RENDERED VERTICAL ANGLE, never `CameraNode::angle`.
 /// A free camera on a window wider than its framing aspect is drawn at a

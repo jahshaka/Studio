@@ -46,7 +46,7 @@ For more information see the LICENSE file
 #include "services/projectarchiver.h"
 #include "services/projectservice.h"
 #include "services/sessionmarkers.h"
-#include "services/thumbnailgenerator.h"
+#include "bridge/enginethumbnailrenderer.h"
 #include "services/undoservice.h"
 #include "shell/editordocks.h"
 #include "shell/modulehub.h"
@@ -300,7 +300,9 @@ void ShellLifecycle::stopBackgroundWork()
     // the renderer it is about to borrow again is destroyed.
     if (PreviewService *previews = mParts.services ? mParts.services->previews() : nullptr)
         previews->requestStop();
-    ThumbnailGenerator::getSingleton()->shutdown();
+    // THE ONE THUMBNAIL RENDERER holds an engine View and Scene: gone while the Engine is alive
+    // (EngineHost::shutdown does it again for a teardown that never closes a window).
+    EngineThumbnailRenderer::shutdown();
 
     // THE LAST SAVE'S THUMBNAIL (CREATE-GAP-1): a save encodes its PNG on a
     // worker and writes it when the worker is done — closeEvent's autosave
