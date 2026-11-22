@@ -2557,6 +2557,15 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
     // blocking during startup and inside an open's or a dialog's window, in the background
     // otherwise — a shader not built yet draws the engine's placeholder until it lands.
     view()->setAsyncShaders(livecompiles::asyncNow());
+    // THE ROUTE THE WINDOW DRAWS, SAID ONCE (SHADER-SYSTEM-1 stage 7a): the chain's routes of the first published frame of
+    // a scene the mirror has synced - the startup gate's warm view says its own (the app rows hold the two equal).
+    if (!mRoutesSaid && view()->presentsAsWindow() && mMirror && mMirror->syncs() > 0) {
+        if (const auto pv = publishedView(); pv && pv->presented > 0) {
+            mRoutesSaid = true;
+            qInfo("editor viewport: its window's routes gather=%d integrate=%d reflect=%d", int(pv->routeGather),
+                  int(pv->routeIntegrate), int(pv->routeReflect));
+        }
+    }
     // The wall clock, unless a caller supplied a step. mFrameTimer is restarted
     // either way: after a fixed-dt frame the NEXT free-running frame must not
     // charge the document for the time the scripted one took. Nanoseconds,

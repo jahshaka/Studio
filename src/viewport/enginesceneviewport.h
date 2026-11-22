@@ -725,6 +725,7 @@ private:
     /// presents on a rising edge.
     bool mPresentingCover = false;
     bool mFirstPresentSaid = false;   ///< the window's first presented frame, said once against the gate's return
+    bool mRoutesSaid = false;         ///< the window's routes of its first synced frame, said once (syncFrame)
     /// What the last INLINE covered present actually put on screen, and at what
     /// target size. Presenting the same thing again costs a full frame of the
     /// scene and shows the user nothing new.

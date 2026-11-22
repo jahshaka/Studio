@@ -194,9 +194,7 @@ struct GateScope {
 /// a created world (the parked arm's permutations), then released so the arm builds (its
 /// compute set and the lit permutations), then graded like the project tile. Returns the
 /// frames rendered.
-int warmEditorWorld(Engine &engine, View *view,
-                    const std::function<WindowTargetShape(const iris::Scene &)> &windowShape,
-                    Database *db, SceneTemplate kind, bool presets,
+int warmEditorWorld(Engine &engine, View *view, Database *db, SceneTemplate kind, bool presets,
                     const std::function<void()> &poll, const gatesettle::Settle &settle)
 {
     const auto settled = [&](bool needRays) { return settle.settled(needRays); };
@@ -228,10 +226,8 @@ int warmEditorWorld(Engine &engine, View *view,
         es->setLoading(true);
         mirror.setSource(doc);
         view->setScene(es);
-        // THE EDITOR WINDOW's PASS FOR THIS WORLD (SceneMirror::windowPass through the window's validation): the
-        // offscreen view is not a presented one, so the mirror pushes it no sample count of its own.
-        view->setShadows(SceneMirror::windowPass(*doc).shadows);
-        view->setSampleCount(windowShape(*doc).samples);
+        // THE EDITOR WINDOW's PASS FOR THIS WORLD: the mirror pushes it (buildViewPostFx: SceneMirror::windowPass's
+        // samples and shadows to a view that presentsAsWindow - the stand-in does), as it does to the editor's window.
         view->setVrHelpersVisible(true);
         mirror.invalidateEnvironment();
         // pushEditorHelpers at the editor's defaults, and the grid on (a View
@@ -285,13 +281,10 @@ int warmEditorWorld(Engine &engine, View *view,
             ++frames;
             poll();
         };
-        // THE WORLD'S ENVIRONMENT ONCE, AND ITS WHOLE CHAIN ON THIS OFFSCREEN VIEW.
-        // An offscreen view ignores the post chain unless the description opts in
-        // (PostFxDesc::allowOffscreen) — measured: the editor's first frames then
-        // compiled SMAA's three passes and the PBS permutations under them. The
-        // screenshot's Scene grade is that opt-in (secondaryfx::applyScene), and it
-        // rides the environment's own record (FrameView::finish): one description per
-        // record, so the two flags never alternate and the workspace is built once.
+        // THE WORLD'S ENVIRONMENT ONCE, AND ITS WHOLE CHAIN. The stand-in takes the window's chain by its contract;
+        // the record also carries the project tile's Scene grade (secondaryfx::applyScene: the fixed exposure) so the
+        // tile's form is warmed too - it rides the environment's own record (FrameView::finish): one description per
+        // record, so the flags never alternate and the workspace is built once.
         const auto environmentOnce = [&]() {
             SceneMirror::FrameView ev;
             ev.view = view;
@@ -488,6 +481,13 @@ int warmEditorWorld(Engine &engine, View *view,
                 qWarning("startup shader build: the recorder's view could not be made: %s", qPrintable(why));
             }
         }
+        // THE ROUTE IT DREW, READ BACK (SHADER-SYSTEM-1 stage 7a): the chain's routes of its last frame as the engine
+        // published them - the editor's window says its own at its first synced frame (EngineSceneViewport::syncFrame);
+        // the app rows hold the two equal, the gather on
+        if (const auto *row = engine.published().view(view->id()))
+            qInfo("startup shader build: the %s world's warm view drew the routes gather=%d integrate=%d reflect=%d",
+                  kind == SceneTemplate::Basic ? "Basic" : "World", int(row->routeGather), int(row->routeIntegrate),
+                  int(row->routeReflect));
         view->setScene(nullptr);
         mirror.setSource(nullptr);
     }
@@ -646,17 +646,13 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
     // viewport widget never makes its native window early for this.
     const iris::ScenePtr born = iris::Scene::create();
     applyBornWorld(born);
-    const auto windowShape = [&](const iris::Scene &doc) {
-        WindowTargetShape t;
-        t.samples = SceneMirror::windowPass(doc).samples;
-        if (!engine->windowTargetShape(NativeWindowHandle(splash.winId()), t.samples, t))
-            qWarning("startup shader build: the window's target shape is unknown (%s) - the warm view draws RGBA8 at "
-                     "%u sample(s)", engine->lastError().c_str(), t.samples);
-        return t;
-    };
-    const WindowTargetShape target = windowShape(*born);
+    WindowTargetShape target;
+    target.samples = SceneMirror::windowPass(*born).samples;
+    if (!engine->windowTargetShape(NativeWindowHandle(splash.winId()), target.samples, target))
+        qWarning("startup shader build: the window's target shape is unknown (%s) - the warm view draws RGBA8 at "
+                 "%u sample(s)", engine->lastError().c_str(), target.samples);
     View *warmView = engine->createOffscreenView("startup-warmup", kWarmUpSize, kWarmUpSize,
-                                                 Colour(0.0f, 0.0f, 0.0f, 1.0f), OffscreenContract::Live,
+                                                 Colour(0.0f, 0.0f, 0.0f, 1.0f), OffscreenContract::PresentedStandIn,
                                                  target.format);
     const GateScope gateScope{ *engine, warmView };   // before the gate's first frame: every way out gives it all back
     // THE RAY PIPELINES START NOW, ALL OF THEM, the reflection's first (COLD-BOOT-1 stage 4): their cold driver compiles
@@ -667,8 +663,11 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
         engine->prepareRayPipelines();
         warmView->setAsyncShaders(true);
     }
-    // LIVE (View::setOffscreenContract): its frames are never read as a picture
-    // (its scene's GI below is there to compile the compute set, not to be seen).
+    // A PRESENTED STAND-IN (OffscreenContract::PresentedStandIn; SHADER-SYSTEM-1 stage 7a): the view STANDS IN FOR THE
+    // EDITOR's WINDOW - every engine branch that tells a presented view from an offscreen picture reads it as the window
+    // (View::presentsAsWindow): the screen-probe gather by the row (a Live view took the field's screen integrate, a
+    // route no product window draws: the editor's first frames built its gather permutations), the window's post chain
+    // and overlay, the GI's on-screen driver, the mirror's sample count. Only its target is a texture.
     // PRIMARY, NOT UTILITY, AND THIS IS THE WHOLE OF PHASE P4(a)
     // (SPECS/THREADING_ADOPTION_SPEC.md §3.4a, interaction I-2).
     //
@@ -697,6 +696,9 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
                                 : nullptr;
     if (warmScene) {
         warmView->setScene(warmScene);
+        // THE ONE PUSH OF A PHASE WITH NO MIRROR: this first phase (the box and the GI's compute set) is no document
+        // synced through a SceneMirror, so nothing else gives the view the window's pass - the window's validated count
+        // and its shadows, as the mirror pushes them to the worlds below.
         warmView->setShadows(SceneMirror::windowPass(*born).shadows);
         warmView->setSampleCount(target.samples);
         // A REPRESENTATIVE LIGHT RIG, not a lit scene: one shadow-casting
@@ -991,7 +993,7 @@ unsigned holdSplashForShaderBuild(QApplication &app, VersionSplashScreen &splash
             engine->shaderBuildProgress(compiled, cached, expected);
             const unsigned before = compiled;
             QElapsedTimer worldTimer; worldTimer.start();
-            const int frames = warmEditorWorld(*engine, warmView, windowShape, db, kind,
+            const int frames = warmEditorWorld(*engine, warmView, db, kind,
                                                /*presets*/ kind == SceneTemplate::Basic, poll, settle);
             engine->shaderBuildProgress(compiled, cached, expected);
             qInfo("startup shader build: the %s template's world took %d frames, %lld ms and "

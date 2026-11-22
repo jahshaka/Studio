@@ -13,9 +13,10 @@ host row's verdict and law lines equal to the app row's - is card block B, B1; a
      either way.
   P3 EVERY BRANCH READS IT: each named presented-vs-offscreen site reads presentsAsWindow(), and NO isOffscreen() call is
      left in the engine's sources but the target's own fact (OgreVideoReadback.cpp: a window's readback vs a texture's).
-  P4 ONLY THE HOST DECLARES IT: PresentedStandIn is named in Studio's sources by the host's factory alone
-     (createOffscreenEditorViewport) - no product view changes; the selftest's views never take it, so the six cannot move
-     by this.
+  P4 ONLY THE TWO STAND-INS DECLARE IT: PresentedStandIn is named in Studio's sources by the host's factory
+     (createOffscreenEditorViewport) and by the startup gate's warm view (shaderbuildgate.cpp's createOffscreenView of
+     "startup-warmup": it warms what the editor's window draws, SHADER-SYSTEM-1 stage 7a) - no other product view; the
+     selftest's own views never take it.
 Fed a violation first: each rule is checked against a mutated copy that must fail (a lint that cannot fail guards nothing).
 
 Run: presented_predicate.py <source-dir>
@@ -122,10 +123,13 @@ def laws(files):
     decl = sorted(f for f, t in files.items() if f.startswith("src/") and "OffscreenContract::PresentedStandIn" in code_only(t)
                   .replace('""', ""))
     fac = files.get("src/viewport/enginesceneviewport.cpp", "")
-    out.append((decl == ["src/viewport/enginesceneviewport.cpp"] and
+    gate = files.get("src/app/shaderbuildgate.cpp", "")
+    out.append((decl == ["src/app/shaderbuildgate.cpp", "src/viewport/enginesceneviewport.cpp"] and
                 re.search(r"createOffscreenEditorViewport\([^{]*\{[^}]*setOffscreen\(jahshaka::engine::OffscreenContract::"
-                          r"PresentedStandIn\)", fac, re.S) is not None,
-                "P4 only the host's factory declares PresentedStandIn in Studio (%s)" % decl))
+                          r"PresentedStandIn\)", fac, re.S) is not None and
+                re.search(r"createOffscreenView\(\"startup-warmup\",[^;]*OffscreenContract::PresentedStandIn", gate, re.S)
+                is not None and code_only(gate).count("OffscreenContract::PresentedStandIn") == 1,
+                "P4 only the host's factory and the gate's warm view declare PresentedStandIn in Studio (%s)" % decl))
     return out
 
 
