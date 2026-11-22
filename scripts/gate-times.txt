@@ -546,7 +546,7 @@ gi.card_build_late.buildfail 0.91  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice
 gi.card_build_late.corrupt 3.87  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, run 20261122T050124-5f68c1bb6)
 library.statements 7.00  by hand (spec.sh reprice, 2026-11-22)
 desktops.grid_lookup 0.19  solo 2026-11-22 at 0a85a6529 (spec.sh reprice, run 20261122T060833-0a85a6529)
-library.scale 26.25  solo 2026-11-22 at ae0f98ffe (spec.sh reprice, run 20261122T073026-ae0f98ffe)
+library.scale 19.88  solo 2026-11-22 at de9eec3a4 (spec.sh reprice, run 20261122T204542-de9eec3a4-p3327176)
 engine.compute_layer_prune 0.09  by hand (spec.sh reprice, 2026-11-22)
 engine.compute_record_hit 0.01  by hand (spec.sh reprice, 2026-11-22)
 engine.compute_store_chain 0.05  by hand (spec.sh reprice, 2026-11-22)
