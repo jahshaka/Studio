@@ -29,7 +29,10 @@ For more information see the LICENSE file
 //
 // The service is reached through two functions (the shell binds them to PreviewService, a suite to
 // fakes): `read` answers, for the guids it is handed, a stamp ("state|key") of each row that needs a
-// render (the rest absent); `request` renders one and calls `done` once when it completed.
+// render (the rest absent); `request` renders one and calls `done` once when it completed, saying
+// whether it failed TRANSIENTLY (PreviewService::Outcome::transient: the engine not yet up, the renderer
+// busy): such a row is asked again at the next settle - at most once a settle, never in a loop. Any
+// other outcome is remembered: the row is not asked again until its stamp moves.
 
 #include <QHash>
 #include <QObject>
@@ -49,7 +52,7 @@ public:
     static constexpr int kSettleMs = 150;
 
     using ReadFn = std::function<QHash<QString, QString>(const QStringList &guids)>;
-    using RequestFn = std::function<void(const QString &guid, std::function<void()> done)>;
+    using RequestFn = std::function<void(const QString &guid, std::function<void(bool transient)> done)>;
 
     PreviewDemand(ReadFn read, RequestFn request, int cap, QObject *parent = nullptr);
 

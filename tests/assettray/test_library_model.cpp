@@ -489,7 +489,7 @@ int main(int argc, char **argv)
                     for (const QString &g : guids) need.insert(g, QStringLiteral("missing|k1"));
                     return need;
                 },
-                [&](const QString &, std::function<void()> done) { ++requests; done(); }, 8);
+                [&](const QString &, std::function<void(bool)> done) { ++requests; done(false); }, 8);
             QVector<QStringList> told;
             cache.setDemand(TileCache::Kind::Asset, [&](const QStringList &wanted) {
                 told.append(wanted);

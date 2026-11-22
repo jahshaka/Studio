@@ -83,6 +83,23 @@ public:
         /// A newer request of the same row replaced this one while it waited in the writer: not a
         /// failure (the newer one is the row's preview).
         bool superseded = false;
+        /// A failure whose cause can change with NO change to the row: the render demand asks again at
+        /// its next settle (services/previewdemand.h). Every other failure is FINAL: not asked again
+        /// until the row's key moves. THE FAILURES, classified (previewservice.cpp unless named):
+        /// TRANSIENT - "the engine is not running" before a render (:113 model, :169 mesh, :194 material)
+        ///   and a refused borrow (:115, :171, :196: the renderer busy with another render,
+        ///   enginethumbnailrenderer.cpp:115, or no engine, :109). A write past the writer's budget is
+        ///   TRANSIENT BY CONSTRUCTION: the writer re-queues it at the head itself (previewwriter.cpp:149)
+        ///   and it reaches `done` only at the writer's end, when no demand is left.
+        /// FINAL - the row: no library (:215), no such row (:217), no preset or nothing to draw (:206,
+        ///   :220, :224); the definition or its bytes: an Object's stored model gone or unreadable
+        ///   (:108, :109), an image that does not read (:125), a clip bake (:140), a photometric profile
+        ///   (:149), a mesh bake missing or empty (:162, :166), an avatar's definition or model (:182,
+        ///   :183), an EMPTY material definition (:192), no image from a CPU kind (:266); the renderer's
+        ///   own failure to draw this subject (`lastFailure`, :117, :173, :200: asked again when the key
+        ///   moves, never re-run inline each settle); the writer: none this session (:239,
+        ///   previewwriter.cpp:137) and a statement that failed (database.cpp:1634, :1642, :1653, :1664).
+        bool transient = false;
     };
     using Done = std::function<void(const Outcome &)>;
 

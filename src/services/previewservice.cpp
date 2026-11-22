@@ -93,6 +93,8 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
 {
     const auto engineOrNull = [this]() { return mEngine ? mEngine() : std::shared_ptr<Engine>(); };
     const auto say = [out](const QString &why) { *out = failure(why); return QImage(); };
+    // A TRANSIENT failure (previewservice.h "THE FAILURES"): the cause can change with no change to the row.
+    const auto later = [out](const QString &why) { *out = failure(why); out->transient = true; return QImage(); };
     const QSize cpu = size.isEmpty() ? QSize(256, 256) : size;
     const QSize studio = size.isEmpty() ? QSize(512, 512) : size;
 
@@ -108,9 +110,9 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
                                       "or its blob carries no geometry").arg(modelGuid));
         }
         const auto engine = engineOrNull();
-        if (!engine) return say(QStringLiteral("the engine is not running (a model preview is a render)"));
+        if (!engine) return later(QStringLiteral("the engine is not running (a model preview is a render)"));
         auto loan = EngineThumbnailRenderer::borrow(engine, "the model preview");
-        if (!loan) return say(loan.reason());
+        if (!loan) return later(loan.reason());
         const QImage image = loan->renderNode(node, studio);
         if (image.isNull()) return say(loan->lastFailure());
         return image;
@@ -164,9 +166,9 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
         if (!node) return say(QStringLiteral("the mesh's bake holds no geometry"));
         node->update(0.0f);
         const auto engine = engineOrNull();
-        if (!engine) return say(QStringLiteral("the engine is not running (a mesh preview is a render)"));
+        if (!engine) return later(QStringLiteral("the engine is not running (a mesh preview is a render)"));
         auto loan = EngineThumbnailRenderer::borrow(engine, "the mesh preview");
-        if (!loan) return say(loan.reason());
+        if (!loan) return later(loan.reason());
         const QImage image = loan->renderNode(node, studio);
         if (image.isNull()) return say(loan->lastFailure());
         return image;
@@ -189,9 +191,9 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
         const QJsonObject definition = MaterialBundle::read(mDb, guid, project);
         if (definition.isEmpty()) return say(QStringLiteral("the material has no definition to draw"));
         const auto engine = engineOrNull();
-        if (!engine) return say(QStringLiteral("the engine is not running (a material preview is a render)"));
+        if (!engine) return later(QStringLiteral("the engine is not running (a material preview is a render)"));
         auto loan = EngineThumbnailRenderer::borrow(engine, "the material preview");
-        if (!loan) return say(loan.reason());
+        if (!loan) return later(loan.reason());
         MaterialReader reader;
         reader.setProject(project);
         const QImage image = loan->renderMaterial(reader.parseMaterialTyped(definition, mDb), studio);

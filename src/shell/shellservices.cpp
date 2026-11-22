@@ -103,8 +103,9 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
                         need.insert(row.guid, QStringLiteral("%1|%2").arg(QString::fromLatin1(PreviewService::stateName(row.state)), row.key));
                 return need;
             },
-            [previews, project](const QString &guid, std::function<void()> done) {
-                previews->request(project, guid, [done](const PreviewService::Outcome &) { done(); });
+            [previews, project](const QString &guid, std::function<void(bool)> done) {
+                previews->request(project, guid,
+                                  [done](const PreviewService::Outcome &o) { done(!o.ok && o.transient); });
             },
             previews::Writer::kQueueCap, this);
         PreviewDemand *demand = mDemand;

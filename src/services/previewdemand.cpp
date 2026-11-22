@@ -53,7 +53,8 @@ void PreviewDemand::settle()
     mStamps = mRead(mWanted);
     for (const QString &guid : mWanted) {
         const auto stamp = mStamps.constFind(guid);
-        // Once a guid until its state or key moves (a failed render is not asked again for the same).
+        // Once a guid until its state or key moves (a FINAL failure is not asked again for the same; a
+        // transient one was forgotten at its completion).
         if (stamp == mStamps.constEnd() || mAsked.value(guid) == *stamp) continue;
         mPending.append(guid);
     }
@@ -71,9 +72,11 @@ void PreviewDemand::pump()
     ++mInFlight;
     ++mRequested;
     QPointer<PreviewDemand> self(this);
-    mRequest(guid, [self]() {
+    mRequest(guid, [self, guid](bool transient) {
         if (!self) return;
         --self->mInFlight;
+        // A TRANSIENT failure is forgotten: the next settle asks again (once - this settle took it).
+        if (transient) self->mAsked.remove(guid);
         if (!self->mPending.isEmpty() && !self->mPumpScheduled) {
             self->mPumpScheduled = true;
             QMetaObject::invokeMethod(self, [self]() { if (self) self->pump(); }, Qt::QueuedConnection);

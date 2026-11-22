@@ -24,11 +24,14 @@ For more information see the LICENSE file
 //   (7) A NEWER PUBLISH BEFORE ITS SETTLE (the final read's C1): the rows waiting for the PREVIOUS screen are
 //       never requested while the user scrolls on, and the new settle requests only the new screen;
 //   (8) A VIEW HIDDEN AFTER ITS PUBLISH (TileCache::withdrawVisible tells the demand what is still shown:
-//       here nothing): 0 further requests for its rows.
+//       here nothing): 0 further requests for its rows;
+//   (9) a TRANSIENT failure (PreviewService::Outcome::transient) is asked again at the next settle, a FINAL
+//       one is not until its stamp moves, and a row failing transiently never spins: one request a settle.
 // No engine, no database, no display.
 
 #include <QCoreApplication>
 #include <QHash>
+#include <QSet>
 #include <QStringList>
 #include <QVector>
 #include <algorithm>
@@ -55,7 +58,8 @@ int main(int argc, char **argv)
     QHash<QString, int> asked;
     QStringList order;
     bool hold = false;
-    QVector<std::function<void()>> held;
+    QVector<std::function<void(bool)>> held;
+    QSet<QString> failTransient, failFinal;   // rows whose render fails (their stamp stays), and how
 
     PreviewDemand demand(
         [&](const QStringList &guids) {
@@ -67,12 +71,13 @@ int main(int argc, char **argv)
                 if (stamps.contains(g)) need.insert(g, stamps.value(g));
             return need;
         },
-        [&](const QString &guid, std::function<void()> done) {
+        [&](const QString &guid, std::function<void(bool)> done) {
             asked[guid] += 1;
             order << guid;
             if (hold) { held.append(done); return; }
+            if (failTransient.contains(guid) || failFinal.contains(guid)) return done(failTransient.contains(guid));
             stamps.remove(guid);   // drawn: ok now
-            done();
+            done(false);
         },
         kCap);
     // The event loop's turns until nothing moves (bounded: a turn a request at most).
@@ -148,9 +153,9 @@ int main(int argc, char **argv)
     turns();
     CHECK(demand.requested() - requested == kCap, "...a settle at the cap requests nothing more");
     for (int round = 0; round < 10 && !held.isEmpty(); ++round) {
-        const QVector<std::function<void()>> landing = held;
+        const QVector<std::function<void(bool)>> landing = held;
         held.clear();
-        for (const auto &done : landing) done();
+        for (const auto &done : landing) done(false);
         turns();
     }
     int scrolledOut = 0, secondOnce = 0;
@@ -180,9 +185,9 @@ int main(int argc, char **argv)
     demand.want(guidsOf("s", 20, 20));
     demand.runNow();
     for (int round = 0; round < 10 && !held.isEmpty(); ++round) {
-        const QVector<std::function<void()>> landing = held;
+        const QVector<std::function<void(bool)>> landing = held;
         held.clear();
-        for (const auto &done : landing) done();
+        for (const auto &done : landing) done(false);
         turns();
     }
     CHECK(reads == readsBefore && demand.requested() == requested && demand.inFlight() == 0,
@@ -236,6 +241,43 @@ int main(int argc, char **argv)
         turns();
         CHECK(askedOf(shown.mid(1)) == 0, "A VIEW HIDDEN AFTER ITS PUBLISH: 0 further requests for its 19 waiting rows (%d)",
               askedOf(shown.mid(1)));
+    }
+
+    // (9) A TRANSIENT FAILURE IS ASKED AGAIN, ONCE A SETTLE (the final read's W1; the lead's ruling): a render
+    // refused because the cause can change with no change to the row (PreviewService::Outcome::transient: the
+    // engine not yet up, the renderer busy) is requested again at the next publish's settle; a FINAL failure
+    // (an empty definition, a missing bake) is not, until its stamp moves; a row that fails transiently at
+    // every settle never spins: exactly one request a settle.
+    {
+        const QString t = QStringLiteral("t-0000"), f = QStringLiteral("t-0001");
+        failTransient.insert(t);
+        failFinal.insert(f);
+        stamps.insert(t, QStringLiteral("missing|k1"));
+        stamps.insert(f, QStringLiteral("missing|k1"));
+        demand.want({ t, f });
+        demand.runNow();
+        turns();
+        CHECK(asked.value(t) == 1 && asked.value(f) == 1, "both failing rows are requested once at the first settle "
+                                                         "(transient %d, final %d)", asked.value(t), asked.value(f));
+        demand.want({ t, f });   // the next publish
+        demand.runNow();
+        turns();
+        CHECK(asked.value(t) == 2, "A TRANSIENT FAILURE is requested again at the next publish's settle (%d requests)",
+              asked.value(t));
+        CHECK(asked.value(f) == 1, "...a FINAL failure is not, its stamp unmoved (%d request)", asked.value(f));
+        bool oneASettle = true;
+        for (int publish = 0; publish < 5; ++publish) {
+            const int before = asked.value(t);
+            demand.want({ t, f });
+            demand.runNow();
+            turns();
+            oneASettle &= asked.value(t) - before == 1;
+        }
+        CHECK(oneASettle && asked.value(t) == 7 && asked.value(f) == 1,
+              "...and a row failing transiently at every settle never spins: one request a settle (%d over 7 settles; "
+              "the final row %d)", asked.value(t), asked.value(f));
+        failTransient.clear();
+        failFinal.clear();
     }
 
     // (5) AN EMPTY PUBLISH READS NOTHING.
