@@ -1005,7 +1005,6 @@ add_subdirectory(shadow)
 add_subdirectory(planar)
 add_subdirectory(ssr)
 add_subdirectory(rtreflect)
-add_subdirectory(measure_sie)   # MEASURING ARM (SCRIPT-IN-ENGINE-1): reverted with it
 add_subdirectory(hdr)
 add_subdirectory(defaults)
 add_subdirectory(sky)
