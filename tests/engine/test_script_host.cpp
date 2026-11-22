@@ -1237,6 +1237,35 @@ int main()
         headless->destroyScene(handed);
     }
 
+    // 15. THE FRAME's PUBLIC DOOR AND ONE CLOCK WRITER A SCENE (2b b3; ruling 6, the lead's ruling on the stamp): a frame
+    //     steps each scene THIS HOST MADE through its FrameInput part (one submitFrame a frame, stepSerial +1); a scene
+    //     its owner HANDED IN is never stamped (its owner's mirror is its one writer) - a host holding only that makes
+    //     no submit at all. THE CONTROL: the made scene's serial advances by one a frame.
+    {
+        Scene *handed = headless->createScene("clock-handed");
+        unsigned long long handedOnly = 0, withMade = 0, madeSerial = 0;
+        {
+            Host clock;
+            clock.setConsole([](const std::string &) {});
+            registerEngineCommands(clock, headless.get(), bootError, false);
+            Registry &cr = clock.registry();
+            const Value h(cr.hold("scene", std::shared_ptr<Scene>(handed, [](Scene *) {})));
+            const unsigned long long s0 = headless->frameSubmitStatus().submitted;
+            cr.call("engine.frames", {Value(3)});
+            handedOnly = headless->frameSubmitStatus().submitted - s0;
+            const Value made = cr.call("engine.scene.create", {Value("clock-made")}).value;
+            const unsigned long long s1 = headless->frameSubmitStatus().submitted;
+            cr.call("engine.frames", {Value(3)});
+            withMade = headless->frameSubmitStatus().submitted - s1;
+            madeSerial = cr.object<Scene>(made.asInt())->published().stepSerial;
+        }
+        check(handedOnly == 0 && withMade == 3 && madeSerial == 3,
+              "ONE CLOCK WRITER A SCENE: 3 frames over a handed-in scene alone submit nothing (" +
+                  std::to_string(handedOnly) + "); THE CONTROL: with a scene the host made, one submit a frame (" +
+                  std::to_string(withMade) + ") and its serial is 3 (" + std::to_string(madeSerial) + ")");
+        headless->destroyScene(handed);
+    }
+
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
     else std::printf("script.host: PASSED\n");
     return gFail ? 1 : 0;
