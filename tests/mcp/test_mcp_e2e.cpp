@@ -1022,14 +1022,21 @@ int main(int argc, char **argv)
                 "var wide = assets.importFile('%1/implane_wide.png');"
                 "var tall = assets.importFile('%1/implane_tall.png');"
                 "var alpha = assets.importFile('%1/implane_alpha.png', d);"
-                "previews.render(tall);"
-                "JSON.stringify({drawer:d, wide:wide, tall:tall, alpha:alpha})")
+                "var drawn = previews.render(tall);"
+                // An import's tile lands through the one preview writer, after its row: a script that needs
+                // them stored waits by previews.settle() (PREVIEWS-1 stage 2).
+                "var settled = previews.settle();"
+                "JSON.stringify({drawer:d, wide:wide, tall:tall, alpha:alpha, drawn:drawn, settled:settled})")
                 .arg(QStringLiteral(JAHSHAKA_FIXTURES)) },
                          { "label", "browse fixtures" } }));
         CHECK(imported.value("ok").toBool(), "fixtures imported for browse_assets");
         const QJsonObject ids =
             QJsonDocument::fromJson(imported.value("result").toString().toUtf8()).object();
         const int drawerId = ids.value("drawer").toInt();
+        CHECK(ids.value("drawn").toObject().value("ok").toBool() && ids.value("settled").toObject().value("ok").toBool(),
+              qPrintable(QStringLiteral("the fixtures' previews are drawn and every tile landed: render %1, settle %2")
+                             .arg(QString::fromUtf8(QJsonDocument(ids.value("drawn").toObject()).toJson(QJsonDocument::Compact)),
+                                  QString::fromUtf8(QJsonDocument(ids.value("settled").toObject()).toJson(QJsonDocument::Compact)))));
 
         const QJsonObject browsed = callTool(net, url, token, ++id, "browse_assets");
         const QJsonArray content = browsed.value("content").toArray();
@@ -1065,7 +1072,9 @@ int main(int argc, char **argv)
                 || !caption.value("text").toString().contains(QLatin1Char('-')))
                 captionsLineUp = false;
         }
-        CHECK(imageBlocks >= 3, "browse_assets returns a thumbnail image per asset");
+        CHECK(imageBlocks >= 3, qPrintable(QStringLiteral("browse_assets returns a thumbnail image per asset (%1 image blocks; "
+                                                          "its summary %2)").arg(imageBlocks)
+                                               .arg(QString::fromUtf8(QJsonDocument(summary).toJson(QJsonDocument::Compact)))));
         CHECK(captionsLineUp, "every image block is captioned with its asset");
         CHECK(maxEdge <= 128 && maxEdge > 0,
               "every thumbnail is downscaled to the 128 px long edge");

@@ -41,25 +41,17 @@ struct PreviewWait
 {
     int requested = 0;
     int completed = 0;
-    QEventLoop *loop = nullptr;
 };
 
-/// Waits for `wait->completed` to reach `wait->requested`; false when the bound passed first.
-bool waitForPreviews(const std::shared_ptr<PreviewWait> &wait)
+bool waitForWriter(PreviewService *previews, const std::function<bool()> &enough);
+
+/// Waits for `wait->completed` to reach `wait->requested`; false when the bound passed first. THE BOUND
+/// IS THE WRITER's PROGRESS, not this wait's own landing: it restarts at EVERY write the writer completes
+/// (waitForWriter), so writes queued ahead of this verb's own - an import's tiles, a mint - never make a
+/// writer that is landing them read as stalled.
+bool waitForPreviews(PreviewService *previews, const std::shared_ptr<PreviewWait> &wait)
 {
-    if (wait->completed >= wait->requested) return true;
-    QEventLoop loop;
-    QTimer stall;
-    stall.setSingleShot(true);
-    bool stalled = false;
-    QObject::connect(&stall, &QTimer::timeout, &loop, [&] { stalled = true; loop.quit(); });
-    wait->loop = &loop;
-    while (wait->completed < wait->requested && !stalled) {
-        stall.start(kVerbWaitMs);   // restarted at every landing: no landing for kVerbWaitMs = stalled
-        loop.exec(QEventLoop::ExcludeUserInputEvents);
-    }
-    wait->loop = nullptr;
-    return wait->completed >= wait->requested;
+    return waitForWriter(previews, [&wait] { return wait->completed >= wait->requested; });
 }
 
 /// THE WAIT FOR THE WRITER ITSELF: until `enough()` holds, waking at EVERY write the writer completes
@@ -85,8 +77,7 @@ bool waitForWriter(PreviewService *previews, const std::function<bool()> &enough
 /// The completion a waited request reports to.
 void notePreview(const std::shared_ptr<PreviewWait> &wait)
 {
-    ++wait->completed;
-    if (wait->loop) wait->loop->quit();
+    ++wait->completed;   // a write's completion also wakes waitForWriter through the landing notice
 }
 
 QString notLanded(int count)
@@ -239,7 +230,7 @@ QVariantMap PreviewsApi::render(const QString &guid)
         *outcome = o;
         notePreview(wait);
     });
-    if (!waitForPreviews(wait)) {
+    if (!waitForPreviews(previews, wait)) {
         outcome->ok = false;
         outcome->reason = notLanded(1);
     }
@@ -300,7 +291,7 @@ QVariantMap PreviewsApi::renderAll(const QVariantMap &options)
                                       { "reason", QStringLiteral("the preview writer stayed at its cap of %1 for %2 ms: "
                                                                  "the sweep stopped").arg(previews::Writer::kQueueCap)
                                                       .arg(kVerbWaitMs) } });
-    if (!result.cancelled && !waitForPreviews(wait))
+    if (!result.cancelled && !waitForPreviews(previews, wait))
         failures->append(QVariantMap{ { "guid", QString() },
                                       { "reason", notLanded(wait->requested - wait->completed) } });
 
