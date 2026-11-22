@@ -633,9 +633,10 @@ public:
     /// not know: a scene node's use); a dependee nothing uses is absent. The batch form of the V-2 fold's
     /// per-row questions (LARGE-LIBRARY-1), answered from idx_assets_material_copies.
     QHash<QString, bool> fetchUsedOnlyByMaterials(const QStringList &dependees);
-    /// Every dependency edge recorded for `projectGuid`, as dependee →
-    /// dependers (duplicates removed). The batch form of fetchDependers.
-    QHash<QString, QStringList> fetchProjectDependers(const QString &projectGuid);
+    /// The dependency edges recorded for `projectGuid` whose dependee is one of
+    /// `dependees`, as dependee → dependers (duplicates removed). The batch form
+    /// of fetchDependers.
+    QHash<QString, QStringList> fetchProjectDependers(const QString &projectGuid, const QStringList &dependees);
     /// The guids this project pins (project_assets rows), without reading a
     /// catalog row for each. The batch form of isAssetPinnedBy.
     QSet<QString> fetchProjectPinnedGuids(const QString &projectGuid);

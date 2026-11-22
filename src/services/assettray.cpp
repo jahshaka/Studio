@@ -88,7 +88,7 @@ Batch gather(Database *db, const QString &projectGuid, const QVector<AssetRecord
     batch.definitions = db->fetchAssetDataFor(particles);
     if (!textures.isEmpty()) {
         batch.companions = ImageMaterial::companionMaterials(textures);
-        batch.dependers = db->fetchProjectDependers(projectGuid);
+        batch.dependers = db->fetchProjectDependers(projectGuid, textures);
         batch.pinned = db->fetchProjectPinnedGuids(projectGuid);
         // Rule 5 asks which project owns each companion, rule 1 asks whether a
         // parent names an asset at all: one query answers both.

@@ -789,6 +789,23 @@ int main(int argc, char **argv)
               "(2) the drawers' counts by idx_assets_collection_listed, covering");
         CHECK(copiesPlan.contains(QLatin1String("COVERING INDEX idx_assets_material_copies")),
               "(2) a preset's copies by idx_assets_material_copies, covering");
+        // The tray's dependers (fetchProjectDependers, the open project's tray at every listing): asked of the
+        // listed textures, one dependee seek each — never the project's every edge, which read `dependencies`
+        // whole (no project_guid index): RED before, "SCAN dependencies USING INDEX idx_dependencies_dependee",
+        // +98 pages at 10,000 against 1,000 at a project open (spikes/large-library-1/stage2/probe-c0466a549.txt).
+        Database::setQueryLog(true);
+        assettray::list(&db, lib.openProject, QString(), -1, false);
+        QString dependersSql;
+        for (const Database::QueryLogEntry &e : Database::queryLogEntries())
+            if (e.name == QLatin1String("fetchProjectDependers")) dependersSql = e.sql;
+        Database::setQueryLog(false);
+        QStringList dependersValues{ QStringLiteral("'%1'").arg(lib.openProject) };
+        for (const QString &guid : lib.textures.mid(0, 200)) dependersValues << QStringLiteral("'%1'").arg(guid);
+        const QString dependersPlan = planOf(dependersSql, dependersValues);
+        std::printf("   (2) the tray's dependers [%s]\n", qPrintable(dependersPlan));
+        CHECK(!dependersSql.isEmpty() && dependersPlan.contains(QLatin1String("SEARCH dependencies USING INDEX idx_dependencies_dependee (dependee=?)"))
+                  && !dependersPlan.contains(QLatin1String("SCAN")),
+              "(2) the tray's dependers are one dependee seek a listed texture, no scan of the project's edges");
         QFile presetEdit(QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/src/services/presetedit.cpp"));
         const QByteArray presetSource = presetEdit.open(QIODevice::ReadOnly) ? presetEdit.readAll() : QByteArray();
         CHECK(presetSource.contains(kCopiesOfText[0]) && presetSource.contains(kCopiesOfText[1]),

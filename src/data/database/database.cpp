@@ -2579,13 +2579,24 @@ QHash<QString, bool> Database::fetchUsedOnlyByMaterials(const QStringList &depen
     return out;
 }
 
-QHash<QString, QStringList> Database::fetchProjectDependers(const QString &projectGuid)
+QHash<QString, QStringList> Database::fetchProjectDependers(const QString &projectGuid,
+                                                           const QStringList &dependees)
 {
     QHash<QString, QStringList> out;
-    if (projectGuid.isEmpty()) return out;
+    QStringList unique = dependees;
+    unique.removeAll(QString());
+    unique.removeDuplicates();
+    if (projectGuid.isEmpty() || unique.isEmpty()) return out;
     QSqlQuery query;
-    query.prepare("SELECT DISTINCT dependee, depender FROM dependencies WHERE project_guid = ?");
+    // THE ROWS IN HAND, NOT THE PROJECT'S EVERY EDGE (LARGE-LIBRARY-1): `dependencies` has no index on
+    // project_guid, so "every edge of the project" read the table whole — library-sized, at every tray
+    // listing (+98 pages at 10,000 assets against 1,000). Asked of the listed dependees it is one seek of
+    // idx_dependencies_dependee each. (An index on project_guid was refused by its plan comparison: it took
+    // the depender and dependee lookups of seven other statements onto a whole project's edges.)
+    query.prepare("SELECT DISTINCT dependee, depender FROM dependencies WHERE project_guid = ? AND dependee IN (" +
+                  placeholders(unique.size()) + ")");
     query.addBindValue(projectGuid);
+    for (const QString &guid : unique) query.addBindValue(guid);
     executeAndCheckQuery(query, "fetchProjectDependers");
     while (query.next())
         out[query.value(0).toString()].append(query.value(1).toString());
