@@ -93,8 +93,8 @@ int main()
         fx.ssr = 1;
         view->setPostFx(fx);
     }
-    // A STILL PICTURE GATHERS (View::setOffscreenContract; PHOTON-7 7-5: the gather is recorded only for a view whose
-    // chain gathers, and a Live view takes the field's answer)
+    // THE VIEW GATHERS (every view of a ray scene does: ROUTE-ROWS-1; PHOTON-7 7-5: the gather is recorded only
+    // for a view whose chain gathers)
 
     const NodeId floor = addCardedCube(scene, Colour(0.7f, 0.7f, 0.7f), 0.9f);
     enginetest::setNodePosition(scene, floor, Vec3(0.0f, -0.05f, 0.0f));

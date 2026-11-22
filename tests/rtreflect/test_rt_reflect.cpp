@@ -331,9 +331,9 @@ int main(int argc, char **argv)
     // (D4-PHOTON-TIERS): the subject is the rays against one voxel volume.
     gi.cascadeCount = 1;
     gi.cascadeSet[0] = GiParams::GiCascadeDesc{ 14.0f, 128, 0.0f };
-    // (No gather pin since PHOTON-7 7-5 - the gather has no row, and this suite's offscreen view declares no
-    // contract, so its chain takes the field's answer and never gathers: the rays-on / rays-off A/Bs switch the
-    // reflection alone.)
+    // (No gather pin since PHOTON-7 7-5 - the gather has no row. Since ROUTE-ROWS-1 stage 0 this suite's Live view
+    // GATHERS with the rays on and takes the screen integrate with them off: the rays-on / rays-off A/Bs switch the
+    // diffuse producer AS WELL AS the reflection - law 5's own mechanism, a finding homed at 1.2 stage 3.)
     CHECK(s->setGlobalIllumination(gi), "the voxel arm builds over the whole fixture");
 
     // The camera stands BETWEEN the cube and the wall and looks at the wall.

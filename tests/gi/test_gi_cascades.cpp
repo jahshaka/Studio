@@ -34,9 +34,10 @@
 //      worthless if walking tripped it.
 //
 // Its own binary like every GI suite.
-// ITS VIEW IS AN UNDECLARED OFFSCREEN VIEW (no View::setOffscreenContract), whatever the rays: its chain never gathers
-// (ChainDesc::probeGather is a still picture's, PHOTON-7 7-5) and shades through the no-ray route's screen integrate
-// (7-6) - this suite measures the voxel chain, the field, the cones and the probes beneath it, never the gather.
+// ITS VIEW IS A LIVE OFFSCREEN VIEW: since ROUTE-ROWS-1 stage 0 its chain GATHERS where the rays are on (the engine
+// boots them on: every part but `mover`'s rays-off runs) and takes the no-ray route's screen integrate (7-6) where they
+// are off - the route is the scene's, never the view's kind (detail::chainGiRoutes). This suite measures the voxel
+// chain, the field, the cones and the probes beneath it; its parts declare their routes at 1.2 stage 3.
 //
 // SIX ROWS, ONE PROOF EACH (HARNESS-2, 2026-10-29: the one row was priced 50.68 s, over the 45-s quiet law, and timed out at
 // 60 s twice under load). `test_gi_cascades_asan <part>` runs ONE part in its own process - every case keeps its frames and
@@ -56,7 +57,7 @@
 //   mover         case 12, the three poses with the rays off - A2's LAW: a declared mover is lit at the pose it is in
 //                 (motion against rest), and at rest the picture is a fresh build's.
 //   mover_routes  case 12, the corner with the rays ON and a STILL turned by script - at rest each is a fresh build's
-//                 (asserted); the rays-on residue (the non-gathering route's screen integrate, PHOTON-7's leftover) and
+//                 (asserted); the rays-on residue (the gather's since ROUTE-ROWS-1 stage 0; the screen integrate's before) and
 //                 the still's move quantum are printed.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/GiParams.h"
@@ -1357,11 +1358,11 @@ int main(int argc, char **argv)
     // over 8-32 frames after the motion stopped). A2: the region's bricks take k passes IN THE FRAME they are rebuilt (k
     // from the region's largest albedo: PhotonComponent::regionBounce). The RAYS-ON numbers are PRINTED with the frames
     // the picture takes to reach the bar and a code after the motion. WHICH ROUTE THEY MEASURE (PHOTON-7's leftover, 8B's
-    // B5, 2026-10-29 §3574): this view is a Live offscreen view that never gathers (probeGather false), so the rays-on
-    // residue is the NON-GATHERING ROUTE's - the screen integrate's (the irradiance field's temporal or its probe budget),
-    // unmeasured; the gather's history off reads the identical numbers. It is not the gather's temporal hold. Its numbers
-    // of record: 56/255, 500 px >= 10 on the base f9544f67f (the bar at 31 frames, a code at 37); 81/255, 341 px on 8B's
-    // tip (27 / 33). Its row (row mover_routes) asserts only the rest law on that route.
+    // B5, 2026-10-29 §3574): until ROUTE-ROWS-1 stage 0 this Live offscreen view never gathered, so the rays-on residue
+    // of record is the NON-GATHERING ROUTE's - the screen integrate's: 56/255, 500 px >= 10 on the base f9544f67f (the
+    // bar at 31 frames, a code at 37); 81/255, 341 px on 8B's tip (27 / 33). Since stage 0 the rays-on run GATHERS (every
+    // view of a ray scene does), so the residue printed now is the gather's. Its row (row mover_routes) asserts only the
+    // rest law; it is NONDET-1's reproducer (its integrate-route record: the ref nondet-1-repro-base).
     std::printf("\n== case 12: a moving still object is lit at its own pose ==\n");
     {
         struct Pose { const char *name; Vec3 cam; int faces; };
@@ -1382,7 +1383,7 @@ int main(int argc, char **argv)
         // The turner's footprint over the whole motion: a 2 m cube about the vertical, half-diagonal sqrt 2.
         const float reach = 1.41422f;
         // THE RUNS: the MOVER turning at the three poses with the rays off (A2's law, asserted); the corner with the rays on
-        // (printed: the non-gathering route's residue, the frames to the bar and to a code); the corner with a STILL turned by script
+        // (printed: the gather's residue since ROUTE-ROWS-1 stage 0, the frames to the bar and to a code); the corner with a STILL turned by script
         // (printed: the document-to-engine mirror's move quantum - the walk marks a 1-degree-a-frame turn every second
         // frame, so the store holds the still up to a quantum behind: an editor-side agreement, not the renderer's law).
         struct Run { const Pose *pose; int raysOn; bool still; };
@@ -1402,7 +1403,7 @@ int main(int argc, char **argv)
         }
         std::printf("   -- %s, the rays %s --\n", run.still ? "a STILL turned by script (printed: the move quantum)"
                                                           : "a MOVER turning",
-                    raysOn ? "ON (printed: the non-gathering route's residue)" : "OFF (A2's law)");
+                    raysOn ? "ON (printed: the gather's residue)" : "OFF (A2's law)");
         {
             view->setCamera(enginetest::testCameraDescLookAt(pose.cam, Vec3(0.0f, 1.0f, 0.0f)));
             const NodeId turner = enginetest::addTestCube(scene, Colour(0.85f, 0.85f, 0.85f), 0.0f, 0.5f);
@@ -1515,7 +1516,7 @@ int main(int argc, char **argv)
                     if (toBar < 0 && w <= 16 && o == 0u) toBar = int(q) + 1;
                     if (toCode < 0 && w <= 1) toCode = int(q) + 1;
                 }
-                std::printf("   [%s] RAYS ON (the non-gathering route, printed): motion vs rest %d/255, %u px >= 10; the bar reached %d frames "
+                std::printf("   [%s] RAYS ON (the gather since ROUTE-ROWS-1 stage 0, printed): motion vs rest %d/255, %u px >= 10; the bar reached %d frames "
                             "after the motion, a code %d frames after (-1: not within %zu)\n", pose.name, motionMax,
                             motionOver, toBar, toCode, after.size());
             }
