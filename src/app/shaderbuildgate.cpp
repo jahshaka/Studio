@@ -229,6 +229,11 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
         // in the frame's input (U0 3a).
         SceneMirror::FrameView recorderView;   // empty unless the recorder warms (3)
         FramePace pace = FramePace::Streaming;   // the build-up's; a phase's COMPLETE TAIL sets Complete (completeTail)
+        // THE RAY TIER's BUILDS IN FLIGHT AT THE CACHE's BUILD (the card line, completeTail): read in the first frame
+        // whose snapshot says the world's cards are built - a card reader whose build is still in flight then cannot
+        // stamp inside the demand window that build opened.
+        bool cardsBuiltSeen = false;
+        unsigned buildsAtCardBuild = 0u;
         auto frame = [&]() {
             SceneMirror::FrameView fv;
             fv.view = view;
@@ -241,6 +246,10 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             overlay.update(selected ? &gizmo : nullptr, camera->getGlobalPosition(),
                            iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
             gateFrame(engine, pace);
+            if (!cardsBuiltSeen && es->published().gi.cards.built) {
+                cardsBuiltSeen = true;
+                buildsAtCardBuild = engine.published().shaders.rayBuildsInFlight;
+            }
             ++frames;
             poll();
         };
@@ -311,11 +320,20 @@ int warmEditorWorld(Engine &engine, View *view, const EngineHost::WarmUpShape &s
             pace = FramePace::Streaming;
             last = c;
             const GiStatus &gi = es->published().gi;
+            // ...and THE DEMAND THE CARDS WERE DECIDED ON (CardCacheStatus: the cache's frame, the last change, each
+            // reader's first and newest stamp since it - 0 the reflection, 1 the gather - the rest decisions taken, the
+            // readers and the admissions of the last one) with the ray builds in flight at the cache's build: a line
+            // reading "admitted 0" says on its own whether a reader stamped inside the window
             qInfo("startup shader build: the %s world's %s: a Complete tail of %d frames, %lld ms, the longest frame %lld ms;"
-                  " its cards %s, admitted %llu, captured %llu, queued %u, resident %u",
+                  " its cards %s, admitted %llu, captured %llu, queued %u, resident %u; demand: cache frame %llu, changed"
+                  " %llu, first %llu/%llu, newest %llu/%llu, rest decisions %llu (readers %u, admitted %u), ray builds in"
+                  " flight at the cache's build %u",
                   es->name().c_str(), what, tail.frames(), static_cast<long long>(wall.elapsed()),
                   static_cast<long long>(longest), gi.cards.built ? "built" : "NOT BUILT", gi.cards.admitted,
-                  gi.cards.captures, gi.cards.queueLength, gi.cards.cardsResident);
+                  gi.cards.captures, gi.cards.queueLength, gi.cards.cardsResident, gi.cards.cacheFrame,
+                  gi.cards.demandChangeFrame, gi.cards.demandFirst[0], gi.cards.demandFirst[1], gi.cards.demandNewest[0],
+                  gi.cards.demandNewest[1], gi.cards.restDecisions, gi.cards.decisionReaders, gi.cards.decisionAdmitted,
+                  buildsAtCardBuild);
             if (tail.failed())   // the cap, never a silent pass
                 qWarning("FAIL: shader build gate: the %s world's %s Complete tail did not go quiet in %d frames - %s",
                          es->name().c_str(), what, gatesettle::Tail::kCap, settle.describe().c_str());
