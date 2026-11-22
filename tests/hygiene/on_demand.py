@@ -105,8 +105,9 @@ def toy(src):
         run = lambda: subprocess.run(["sh", sh, b, "test_x_asan", exe, "one", "two"],   # noqa: E731
                                      capture_output=True, text=True)
 
-        def stamp(targets):
-            open(os.path.join(b, "BUILT_FROM"), "w").write("studio=aaa\ncontent=1\nstale=0\ntargets=%s\n" % targets)
+        def stamp(targets, stale="0", stale_fork="0"):
+            open(os.path.join(b, "BUILT_FROM"), "w").write("studio=aaa\ncontent=1\nstale=%s\nstale_fork=%s\ntargets=%s\n"
+                                                         % (stale, stale_fork, targets))
 
         def refused(p, word):
             return (p.returncode == 1 and "ON DEMAND: FAILED" in p.stdout and word in p.stdout
@@ -124,6 +125,11 @@ def toy(src):
             stamp(tg)
             p = run()
             want(refused(p, "STALE"), "the stamp claims %s: FAILED as STALE (exit %d: %s)" % (why, p.returncode, p.stdout.strip()))
+        for st, sf, why in (("1", "0", "stale=1 (a file ninja could not see)"), ("0", "1", "stale_fork=1 (a fork file)")):
+            stamp("A,all,test_x_asan", st, sf)
+            p = run()
+            want(refused(p, "last pass was stale"), "the stamp claims its target on a STALE pass, %s: FAILED as STALE (exit %d: %s)"
+                 % (why, p.returncode, p.stdout.strip()))
         stamp("A,all,test_x_asan")
         p = run()
         got = open(ran).read().strip() if os.path.exists(ran) else None

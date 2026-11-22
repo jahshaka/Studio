@@ -22,6 +22,13 @@ if [ ! -x "$exe" ]; then
     echo "ON DEMAND: FAILED - $exe is NOT BUILT (its target is out of the default build): $how"
     exit 1
 fi
+# A STALE PASS (stale= / stale_fork= not 0: a file ninja could not see was touched, the binary built from its old bytes -
+# cmake/BuiltFrom.cmake) claims nothing a row may run: the stamp's own next pass rebuilds it
+st=$(sed -n 's/^stale=//p' "$b/BUILT_FROM"); sf=$(sed -n 's/^stale_fork=//p' "$b/BUILT_FROM")
+if [ "${st:-0}" != 0 ] || [ "${sf:-0}" != 0 ]; then
+    echo "ON DEMAND: FAILED - $exe is STALE: the build's last pass was stale (stale=$st stale_fork=$sf in $b/BUILT_FROM): build again (a fork file: build-ogre.sh first), then: $how"
+    exit 1
+fi
 targets=$(sed -n 's/^targets=//p' "$b/BUILT_FROM")
 case ",$targets," in
     *",$t,"*) ;;

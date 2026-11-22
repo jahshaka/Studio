@@ -840,7 +840,8 @@ jah_no_display(source.display_guard_linked source.display_guard_toy)
 # runs through tests/support/on_demand.sh and names its target in JAH_BUILD_TARGETS, and every CODE row whose command is a
 # script declares JAH_BUILD_TARGETS (jah_builds: `spec.sh test --code` builds by reach, scripts/row_targets.py); toy: on_demand.sh
 # fails by name on a missing stamp, a missing binary and a stamp that does not claim its target (`all` alone, other targets, a
-# name containing its own), and runs a claimed one with its arguments and its exit. CPU only (on_demand.py).
+# name containing its own) or claims it on a STALE pass (stale= / stale_fork= not 0), and runs a claimed one with its arguments
+# and its exit. CPU only (on_demand.py).
 add_test(NAME source.on_demand_rows
          COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/on_demand.py" rows "${CMAKE_SOURCE_DIR}" "${CMAKE_BINARY_DIR}")
 add_test(NAME source.on_demand_toy
