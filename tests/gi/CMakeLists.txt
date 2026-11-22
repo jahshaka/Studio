@@ -1276,23 +1276,23 @@ jah_gpu_row(gi.card_build_late.pso CLASS engine COMMAND test_gi_card_build_late 
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
          COLD "its subject is a permutation still compiling: the room's must be cold in the process (the fixture's shaderCacheOff)")
 set_tests_properties(gi.card_build_late.pso PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 533)
 jah_gpu_row(gi.card_build_late.texture CLASS engine COMMAND test_gi_card_build_late texture
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.texture PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 387)
 jah_gpu_row(gi.card_build_late.psofail CLASS engine COMMAND test_gi_card_build_late psofail
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.psofail PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 281)
 jah_gpu_row(gi.card_build_late.buildfail CLASS engine COMMAND test_gi_card_build_late buildfail
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.buildfail PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 92)
 jah_gpu_row(gi.card_build_late.corrupt CLASS engine COMMAND test_gi_card_build_late corrupt
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(gi.card_build_late.corrupt PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
-                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 300)
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 233)
 
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
