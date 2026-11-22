@@ -22,8 +22,9 @@ QVector<VerbInfo> EngineApi::verbs() const
           "measurements in one process (scripts/perf-ab.py drives these). With `value` it SETS the "
           "arm and answers the value set — the engine LATCHES it at the top of the next frame, so a "
           "frame never sees two values of one arm and the change shows from the next "
-          "editor.frame(); an unknown name or a value outside the arm's range is refused (null, "
-          "the reason in app.lastError()) and changes nothing. Without `value` it READS the value "
+          "editor.frame(); an unknown name, a value outside the arm's range or a TEST arm (a "
+          "fixture's door: shaders.asyncFail, frames.incompleteHold) is refused (null, the reason in "
+          "app.lastError()) and changes nothing. Without `value` it READS the value "
           "the current frame uses. engine.arms() lists every arm with its default, range and what "
           "it changes. Nothing in the product sets an arm: every default is the shipped picture, "
           "and an arm left set is a measurement left running.",
@@ -63,6 +64,12 @@ QVariant EngineApi::arm(const QString &name, const QVariant &value)
         bool armed = false;
         std::string why;
         engine->request([&](jahshaka::engine::Engine &e) {   // a REQUEST (U3 stage 4a): the answer and its reason, read on the engine's side
+            // A TEST ARM IS A FIXTURE's DOOR, never the app's (source.test_arms_unreachable)
+            for (const jahshaka::engine::ArmInfo &a : e.arms())
+                if (a.name == key && a.test) {
+                    why = key + " is a TEST arm (a fixture's door, set through Engine::setArm only): the app cannot set it";
+                    return;
+                }
             armed = e.setArm(key, v);
             if (!armed) why = e.takeLastError();
         });
