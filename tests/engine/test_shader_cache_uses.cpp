@@ -1,13 +1,22 @@
-// engine.shader_cache_uses.{microcode,hlms,compute} (SHADER-SYSTEM-1, the start preflight's F10; the lead's ruling (B),
-// 2026-11-22; NULL Roots, no card, no display) - A CACHE DOES NOT GROW WITHOUT END. Every entry of the three layers that
-// keep what a launch loaded (the microcode map, the Hlms recipes, the compute records) carries the launch it was last used
-// in (irisgl engine/src/EntryUses.h: a sidecar of ours, Ogre's formats unchanged), and a save drops an entry no launch used
-// for 30 launches. One row per layer, each through the layer's real path - a real ShaderCache saving and loading through
-// the fork's GpuProgramManager / HlmsUnlit + HlmsDiskCache / HlmsCompute - over 100 launches:
-//   (1) an entry USED EVERY LAUNCH survives all 100;
-//   (2) an entry used at launch 1 and never again is still there after launch 30's save and GONE after launch 31's;
-//   (3) A DAMAGED SIDECAR PRUNES NOTHING: an entry first used at launch 50 would go at launch 80's save; the sidecar is
-//       damaged just before launch 80, so launch 80 drops nothing (the entry survives) and rewrites a whole table.
+// engine.shader_cache_uses.{microcode,hlms,compute} (SHADER-SYSTEM-1, the start preflight's F10; the prune's law as the lead
+// ruled it after the final read, 2026-11-22; NULL Roots, no card, no display) - AGE ALONE NEVER DROPS AN ENTRY, AND A CACHE
+// STILL DOES NOT GROW WITHOUT END. Every entry of the three layers that keep what a launch loaded (the microcode map, the
+// Hlms recipes, the compute records) carries the launch it was last used in (irisgl engine/src/EntryUses.h: a sidecar of
+// ours, Ogre's formats unchanged); a save evicts only when its layers would pass the size cap, the least recently used
+// first, never this launch's. One row per layer, each through the layer's real path - a real ShaderCache saving and loading
+// through the fork's GpuProgramManager / HlmsUnlit + HlmsDiskCache / HlmsCompute:
+//   (1) UNDER THE BUDGET, 100 LAUNCHES THAT USE NOTHING DROP NOTHING: an entry made at launch 1 is there at launch 102
+//       (an "unused for 30 launches" rule wore the rig's shared caches: every green row is a launch - the final read);
+//   (2) OVER THE BUDGET THE OLDEST GO AND THE JUST-USED STAY: entries last used at launches 1, 3 and 5 (the last made at 2,
+//       before the second), a budget one byte under the layers: the launch-1 entry goes and no other; at the next save
+//       the launch-3 entry goes and the one made earlier but used at 5 stays; with a budget below this launch's own
+//       entries the backstop wipes the directory;
+//   (3) A LAUNCH THAT COMPILED NOTHING AND EVICTED NOTHING WRITES NO LAYER AND NO MANIFEST: after the 100 launches and a
+//       launch that USES a loaded entry, every file the manifest names and the manifest itself keep their bytes and
+//       mtime - the stamp it moved is written to the sidecar alone (fresh_home.sh's promotion hashes the manifest: a
+//       row that grew nothing never replaces a shared rig cache);
+//   (4) A TORN SIDECAR PRUNES NOTHING: one byte of entry-uses.bin flipped, the next launch drops nothing and rewrites a
+//       whole table.
 #include "EnginePrivate.h"
 
 #include <OgreAbiUtils.h>
@@ -27,9 +36,12 @@
 #include <exception>
 #include <fstream>
 #include <functional>
+#include <map>
 #include <memory>
+#include <sstream>
 #include <stdexcept>
 #include <string>
+#include <sys/stat.h>
 #include <unistd.h>
 
 using namespace jahshaka::engine::detail;
@@ -56,6 +68,44 @@ std::string readFile(const std::string &path) {
     std::ifstream f(path, std::ios::binary);
     return std::string(std::istreambuf_iterator<char>(f), std::istreambuf_iterator<char>());
 }
+bool exists(const std::string &path) { struct stat st {}; return ::stat(path.c_str(), &st) == 0; }
+void mkdirs(const std::string &dir) {
+    if (std::system(("mkdir -p '" + dir + "'").c_str()) != 0) throw std::runtime_error("mkdir " + dir);
+}
+
+/// The manifest and every file it names: name -> (bytes, mtime in ns). Two equal snapshots = nothing was written.
+using Snapshot = std::map<std::string, std::pair<std::string, long long>>;
+Snapshot snapshot(const std::string &cacheDir) {
+    Snapshot s;
+    auto take = [&](const std::string &name) {
+        struct stat st {};
+        if (::stat((cacheDir + "/" + name).c_str(), &st) != 0) return;
+        s[name] = { readFile(cacheDir + "/" + name),
+                    (long long)st.st_mtim.tv_sec * 1000000000ll + (long long)st.st_mtim.tv_nsec };
+    };
+    take("cache-manifest.txt");
+    std::istringstream m(readFile(cacheDir + "/cache-manifest.txt"));
+    for (std::string line; std::getline(m, line);) {
+        std::istringstream ls(line);
+        std::string tag, name;
+        ls >> tag >> name;
+        if (tag == "file") take(name);
+    }
+    return s;
+}
+/// The layers' bytes: the sum of the sizes the manifest names (the total the size cap is held against).
+unsigned long long layerBytes(const std::string &cacheDir) {
+    unsigned long long total = 0;
+    std::istringstream m(readFile(cacheDir + "/cache-manifest.txt"));
+    for (std::string line; std::getline(m, line);) {
+        std::istringstream ls(line);
+        std::string tag, name;
+        unsigned long long bytes = 0;
+        ls >> tag >> name >> bytes;
+        if (tag == "file") total += bytes;
+    }
+    return total;
+}
 
 struct Boot {
     std::unique_ptr<Ogre::Root> root;
@@ -73,147 +123,180 @@ struct Boot {
     ~Boot() { programs.reset(); root.reset(); }
 };
 
-/// What a layer's toy does: present(name) reads the cache's state at a launch's start (after the load), use(name)
-/// is that launch's use of an entry (the first use of a new one makes it).
-struct Layer {
-    std::function<void(int launch)> begin;                 // the launch's boot and the cache's load
-    std::function<bool(const char *)> present;
-    std::function<void(const char *)> use;
-    std::function<void()> end;                             // the save and the launch's teardown
+/// One layer's real path over one cache directory, for the life of one toy (a fresh Ogre state each): begin(maxBytes) is
+/// a launch's boot and the cache's load, present(name) reads the cache's state after it, use(name) is that launch's use
+/// of an entry (the first use of a new one makes it), end() the save and the launch's teardown.
+struct Toy {
+    virtual ~Toy() = default;
+    virtual void begin(unsigned long long maxBytes) = 0;
+    virtual bool present(const char *name) = 0;
+    virtual void use(const char *name) = 0;
+    virtual void end() = 0;
 };
+using MakeToy = std::function<std::unique_ptr<Toy>(const std::string &cacheDir)>;
 
-/// The 100 launches and the three laws, the same for every layer.
-void runLaunches(const std::string &dir, Layer &l) {
-    bool aAll = true, bAt31 = false, bAt32 = true, dAt81 = false, tableRebuilt = false;
-    for (int launch = 1; launch <= 100; ++launch) {
-        l.begin(launch);
-        if (launch > 1) aAll = aAll && l.present("A");
-        if (launch == 31) bAt31 = l.present("B");          // launch 30's save kept it
-        if (launch == 32) bAt32 = l.present("B");          // launch 31's save dropped it
-        if (launch == 81) dAt81 = l.present("D");          // launch 80 (a damaged table) dropped nothing
-        l.use("A");
-        if (launch == 1) l.use("B");
-        if (launch == 50) l.use("D");
-        l.end();
-        if (launch == 79) {
-            std::string t = readFile(dir + "/cache/entry-uses.bin");
-            if (t.size() > 20) t[t.size() / 2] ^= 0x5a;     // one byte: the table's checksum no longer holds
-            writeFile(dir + "/cache/entry-uses.bin", t);
-        }
-        if (launch == 80) {
-            const std::string t = readFile(dir + "/cache/entry-uses.bin");
-            UseTable table;
-            tableRebuilt = readUseTable(t.data(), t.size(), table) && !table.empty();
-        }
+constexpr unsigned long long kRoomy = 256ull * 1024ull * 1024ull;   // the app's cap: these toys' layers are bytes
+
+/// The four laws, the same for every layer.
+void runLaws(const std::string &dir, const MakeToy &make) {
+    {   // (1), (3), (4): under the budget
+        const std::string c = dir + "/under";
+        mkdirs(c);
+        std::unique_ptr<Toy> t = make(c);
+        t->begin(kRoomy); t->use("A"); t->use("B"); t->end();       // launch 1 makes A and B
+        const Snapshot made = snapshot(c);
+        for (int launch = 2; launch <= 101; ++launch) { t->begin(kRoomy); t->end(); }   // 100 launches that use nothing
+        const std::string usesBefore = readFile(c + "/entry-uses.bin");
+        t->begin(kRoomy);
+        const bool a = t->present("A"), b = t->present("B");
+        t->use("A");                                                 // launch 102: a loaded entry used, nothing compiled
+        t->end();
+        CHECK(a && b, "(1) under the budget, 100 launches that used nothing dropped nothing (A %d, B %d at launch 102)", a, b);
+        const Snapshot after = snapshot(c);
+        CHECK(!made.empty() && after == made,
+              "(3) 101 launches that compiled nothing left every layer file and the manifest at their bytes and mtime "
+              "(%zu files)", made.size());
+        CHECK(readFile(c + "/entry-uses.bin") != usesBefore, "(3) ...and the stamp launch 102 moved was written: the sidecar alone");
+
+        std::string torn = readFile(c + "/entry-uses.bin");
+        if (torn.size() > 20) torn[torn.size() / 2] ^= 0x5a;          // one byte: the table's checksum no longer holds
+        writeFile(c + "/entry-uses.bin", torn);
+        t->begin(kRoomy); t->use("A"); t->end();
+        t->begin(kRoomy);
+        const bool a2 = t->present("A"), b2 = t->present("B");
+        t->end();
+        CHECK(a2 && b2, "(4) a TORN sidecar pruned nothing (A %d, B %d)", a2, b2);
+        const std::string rebuilt = readFile(c + "/entry-uses.bin");
+        UseTable table;
+        std::uint32_t launch = 0;
+        CHECK(rebuilt != torn && readUseTable(rebuilt.data(), rebuilt.size(), table, launch) && table.size() >= 2u,
+              "(4) ...and a whole table was rewritten (%zu stamps, launch %u)", table.size(), launch);
     }
-    CHECK(aAll, "(1) the entry used every launch is there at every one of 100 launches");
-    CHECK(bAt31 && !bAt32, "(2) the entry used only at launch 1: kept by launch 30's save (%d), gone after launch 31's (%d)",
-          bAt31, !bAt32);
-    CHECK(dAt81, "(3) a DAMAGED table prunes nothing: the entry launch 80's save would have dropped is there at launch 81");
-    CHECK(tableRebuilt, "(3) ...and launch 80 rewrote a whole table");
+    {   // (2): over the budget
+        const std::string c = dir + "/over";
+        mkdirs(c);
+        std::unique_ptr<Toy> t = make(c);
+        t->begin(kRoomy); t->use("A"); t->use("B"); t->end();        // B last used at 1
+        t->begin(kRoomy); t->use("A"); t->use("D"); t->end();        // D made at 2...
+        t->begin(kRoomy); t->use("A"); t->use("C"); t->end();        // C last used at 3
+        t->begin(kRoomy); t->use("A"); t->end();
+        const unsigned long long four = layerBytes(c);
+        t->begin(four - 1u); t->use("A"); t->use("D"); t->end();     // ...and used at 5; one byte over: the oldest goes
+        const unsigned long long five = layerBytes(c);
+        t->begin(five - 1u);
+        const bool b5 = t->present("B"), c5 = t->present("C"), d5 = t->present("D"), a5 = t->present("A");
+        t->use("A");
+        t->end();                                                     // one byte over again
+        CHECK(!b5 && c5 && d5 && a5 && five < four,
+              "(2) one byte over the budget: the entry last used at launch 1 went (%d), those at 3 and 5 and this launch's "
+              "stayed (%d %d %d); the layers %llu -> %llu bytes", !b5, c5, d5, a5, four, five);
+        t->begin(1u);
+        const bool c6 = t->present("C"), d6 = t->present("D"), a6 = t->present("A");
+        t->use("A");
+        t->end();                                                     // a budget below this launch's own entries
+        CHECK(!c6 && d6 && a6,
+              "(2) the next save took the entry last used at 3 (%d) and kept the one MADE before it but used at 5 (%d) and "
+              "this launch's (%d): least recently USED first", !c6, d6, a6);
+        CHECK(!exists(c + "/cache-manifest.txt"),
+              "(2) a budget this launch's own entries pass: the backstop wiped the directory (the manifest is gone)");
+    }
 }
 
 // ---- the microcode layer: the fork's GpuProgramManager map, through a real ShaderCache's load and save ----
-void microcode(const std::string &dir) {
-    std::printf("\n== the microcode layer ==\n");
-    Boot boot(dir + "/microcode-ogre.log");
-    Ogre::GpuProgramManager &gpm = Ogre::GpuProgramManager::getSingleton();
+struct MicrocodeToy final : Toy {
+    std::string dir;
+    Boot boot;
     std::unique_ptr<ShaderCache> cache;
-    auto blob = [&](const char *name) {
-        Ogre::GpuProgramManager::Microcode m = gpm.createMicrocode(16u);
-        std::memset(m->getPtr(), 0, 16u);
-        std::memcpy(m->getPtr(), name, std::strlen(name));
-        return m;
-    };
-    Layer l;
-    l.begin = [&](int) { cache = std::make_unique<ShaderCache>(); cache->configure(dir + "/cache", std::string()); cache->load(boot.root.get()); };
-    l.present = [&](const char *name) {
+    explicit MicrocodeToy(const std::string &cacheDir) : dir(cacheDir), boot(cacheDir + "-ogre.log") {}
+    Ogre::GpuProgramManager &gpm() { return Ogre::GpuProgramManager::getSingleton(); }
+    void begin(unsigned long long maxBytes) override {
+        cache = std::make_unique<ShaderCache>();
+        cache->configure(dir, std::string(), maxBytes);
+        cache->load(boot.root.get());
+    }
+    bool present(const char *name) override {
         Ogre::GpuProgramManager::MicrocodeMap map;
-        gpm.copyMicrocodeCache(map);
+        gpm().copyMicrocodeCache(map);
         for (const auto &e : map)
             if (std::memcmp(e.second->getPtr(), name, std::strlen(name) + 1) == 0) return true;
         return false;
-    };
-    l.use = [&](const char *name) {
+    }
+    void use(const char *name) override {
         const std::string source = std::string("source of ") + name;
         const Ogre::GpuProgramManager::Microcode *hit = nullptr;
-        if (!gpm.getMicrocodeFromCache(source, &hit)) gpm.addMicrocodeToCache(source, blob(name));   // built = used
-    };
-    l.end = [&]() { cache->saveWhole(boot.root.get()); cache->flushWrites(30000u); cache->finishWrites(); cache.reset(); };
-    runLaunches(dir, l);
-}
+        if (gpm().getMicrocodeFromCache(source, &hit)) return;        // a hit is a use
+        Ogre::GpuProgramManager::Microcode m = gpm().createMicrocode(16u);
+        std::memset(m->getPtr(), 0, 16u);
+        std::memcpy(m->getPtr(), name, std::strlen(name));
+        gpm().addMicrocodeToCache(source, m);                         // built = used
+    }
+    void end() override { cache->saveWhole(boot.root.get()); cache->flushWrites(30000u); cache->finishWrites(); cache.reset(); }
+};
 
 // ---- the Hlms layer: a real HlmsUnlit's recipes through HlmsDiskCache, a draw's use by the fork's test door ----
-void hlms(const std::string &dir) {
-    std::printf("\n== the hlms layer ==\n");
-    if (std::system(("mkdir -p '" + dir + "/unlit'").c_str()) != 0) throw std::runtime_error("mkdir");
-    writeFile(dir + "/unlit/VertexShader_vs.glsl", "#version 450\nvoid main() {}\n");
-    Boot boot(dir + "/hlms-ogre.log");
-    Ogre::ArchiveManager &am = Ogre::ArchiveManager::getSingleton();
+struct HlmsToy final : Toy {
+    std::string dir;
+    Boot boot;
     Ogre::ArchiveVec libs;
-    Ogre::Archive *data = am.load(dir + "/unlit", "FileSystem", true);
-    auto *unlit = OGRE_NEW Ogre::HlmsUnlit(data, &libs);
-    boot.root->getHlmsManager()->registerHlms(unlit);
+    Ogre::Archive *data = nullptr;
+    Ogre::HlmsUnlit *unlit = nullptr;
     std::unique_ptr<ShaderCache> cache;
-    auto props = [](const char *name) {
-        Ogre::HlmsPropertyVec p;
-        p.push_back(Ogre::HlmsProperty(Ogre::IdString(std::string("jah_uses_") + name), 1));
-        return p;
-    };
-    Layer l;
-    l.begin = [&](int) {
+    HlmsToy(const std::string &cacheDir, const std::string &templates) : dir(cacheDir), boot(cacheDir + "-ogre.log") {
+        data = Ogre::ArchiveManager::getSingleton().load(templates, "FileSystem", true);
+        unlit = OGRE_NEW Ogre::HlmsUnlit(data, &libs);
+        boot.root->getHlmsManager()->registerHlms(unlit);
+    }
+    void begin(unsigned long long maxBytes) override {
         unlit->reloadFrom(data, &libs);   // a new process holds no recipe until the cache's load restores them
         cache = std::make_unique<ShaderCache>();
-        cache->configure(dir + "/cache", std::string());
+        cache->configure(dir, std::string(), maxBytes);
         cache->load(boot.root.get());
-    };
-    l.present = [&](const char *name) {
+    }
+    bool present(const char *name) override {
         const Ogre::IdString key(std::string("jah_uses_") + name);
         for (const auto &recipe : unlit->getShaderCodeCache())
             for (const Ogre::HlmsProperty &p : recipe.mergedCache.setProperties)
                 if (p.keyName == key) return true;
         return false;
-    };
-    l.use = [&](const char *name) {
-        unlit->_jahTestRecipe(props(name), std::string("void main() { /* ") + name + " */ }\n", true);
-    };
-    l.end = [&]() { cache->saveWhole(boot.root.get()); cache->flushWrites(30000u); cache->finishWrites(); cache.reset(); };
-    runLaunches(dir, l);
-}
+    }
+    void use(const char *name) override {
+        Ogre::HlmsPropertyVec p;
+        p.push_back(Ogre::HlmsProperty(Ogre::IdString(std::string("jah_uses_") + name), 1));
+        unlit->_jahTestRecipe(p, std::string("void main() { /* ") + name + " */ }\n", true);
+    }
+    void end() override { cache->saveWhole(boot.root.get()); cache->flushWrites(30000u); cache->finishWrites(); cache.reset(); }
+};
 
 // ---- the compute layer: the fork's HlmsCompute records through the engine's adapter, a dispatch's hit or build ----
-void compute(const std::string &dir) {
-    std::printf("\n== the compute layer ==\n");
-    if (std::system(("mkdir -p '" + dir + "/media'").c_str()) != 0) throw std::runtime_error("mkdir");
-    for (const char *n : { "A", "B", "D" })
-        writeFile(dir + "/media/JahUses" + n + ".glsl",
-                  std::string("#version 450\n// ") + n + "\nlayout( local_size_x = 1 ) in;\nvoid main() {}\n");
+struct ComputeToy final : Toy {
+    std::string dir, media;
+    int launches = 0;
     std::unique_ptr<Boot> boot;
     std::unique_ptr<ComputeCodeStore> store;
     std::unique_ptr<ShaderCache> cache;
-    Layer l;
-    l.begin = [&](int launch) {
-        boot = std::make_unique<Boot>(dir + "/compute-ogre-" + std::to_string(launch % 2) + ".log");
+    ComputeToy(const std::string &cacheDir, const std::string &mediaDir) : dir(cacheDir), media(mediaDir) {}
+    void begin(unsigned long long maxBytes) override {
+        boot = std::make_unique<Boot>(dir + "-ogre-" + std::to_string(++launches % 2) + ".log");
         Ogre::HlmsCompute *hc = boot->root->getHlmsManager()->getComputeHlms();
         setForkComputeKeyHook(true);
         store = makeForkComputeStore(hc);
         cache = std::make_unique<ShaderCache>();
-        cache->configure(dir + "/cache", std::string());
+        cache->configure(dir, std::string(), maxBytes);
         cache->setComputeStore(store.get());
         cache->load(boot->root.get());
         Ogre::ResourceGroupManager &rgm = Ogre::ResourceGroupManager::getSingleton();
-        rgm.addResourceLocation(dir + "/media", "FileSystem", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME, false);
+        rgm.addResourceLocation(media, "FileSystem", Ogre::ResourceGroupManager::DEFAULT_RESOURCE_GROUP_NAME, false);
         rgm.initialiseAllResourceGroups(true);
         cache->prewarmCompute();   // no compiler running: the records are filed, their code compiles at a parse
-    };
-    l.present = [&](const char *name) {
+    }
+    bool present(const char *name) override {
         std::vector<ComputeRecordPtr> records;
         store->snapshot(records);
         for (const ComputeRecordPtr &r : records)
             if (r->name == std::string("uses/") + name) return true;
         return false;
-    };
-    l.use = [&](const char *name) {
+    }
+    void use(const char *name) override {
         Ogre::HlmsCompute *hc = boot->root->getHlmsManager()->getComputeHlms();
         const std::string jobName = std::string("uses/") + name;
         Ogre::HlmsComputeJob *job = hc->createComputeJob(jobName, jobName, std::string("JahUses") + name, Ogre::StringVector());
@@ -221,8 +304,8 @@ void compute(const std::string &dir) {
         job->setNumThreadGroups(1u, 1u, 1u);
         hc->dispatch(job, nullptr, nullptr);
         hc->destroyComputeJob(jobName);
-    };
-    l.end = [&]() {
+    }
+    void end() override {
         cache->saveWhole(boot->root.get());
         cache->flushWrites(30000u);
         cache->finishWrites();
@@ -231,9 +314,8 @@ void compute(const std::string &dir) {
         store.reset();
         setForkComputeKeyHook(false);
         boot.reset();
-    };
-    runLaunches(dir, l);
-}
+    }
+};
 
 }  // namespace
 
@@ -245,11 +327,25 @@ static int run(const std::string &mode) {
     const char *made = mkdtemp(&tmplPath[0]);
     if (!made) { std::printf("FAIL: no scratch directory\n"); return 1; }
     const std::string dir = made;
-    if (std::system(("mkdir -p '" + dir + "/cache'").c_str()) != 0) return 1;
-    if (mode == "--microcode") microcode(dir);
-    else if (mode == "--hlms") hlms(dir);
-    else if (mode == "--compute") compute(dir);
-    else { std::printf("usage: test_shader_cache_uses --microcode | --hlms | --compute\n"); return 64; }
+    if (mode == "--microcode") {
+        std::printf("\n== the microcode layer ==\n");
+        runLaws(dir, [](const std::string &c) { return std::unique_ptr<Toy>(new MicrocodeToy(c)); });
+    } else if (mode == "--hlms") {
+        std::printf("\n== the hlms layer ==\n");
+        mkdirs(dir + "/unlit");
+        writeFile(dir + "/unlit/VertexShader_vs.glsl", "#version 450\nvoid main() {}\n");
+        runLaws(dir, [&dir](const std::string &c) { return std::unique_ptr<Toy>(new HlmsToy(c, dir + "/unlit")); });
+    } else if (mode == "--compute") {
+        std::printf("\n== the compute layer ==\n");
+        mkdirs(dir + "/media");
+        for (const char *n : { "A", "B", "C", "D" })
+            writeFile(dir + "/media/JahUses" + n + ".glsl",
+                      std::string("#version 450\n// ") + n + "\nlayout( local_size_x = 1 ) in;\nvoid main() {}\n");
+        runLaws(dir, [&dir](const std::string &c) { return std::unique_ptr<Toy>(new ComputeToy(c, dir + "/media")); });
+    } else {
+        std::printf("usage: test_shader_cache_uses --microcode | --hlms | --compute\n");
+        return 64;
+    }
     std::system(("rm -rf '" + dir + "'").c_str());
     std::printf(gFailures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", gFailures);
     return gFailures ? 1 : 0;

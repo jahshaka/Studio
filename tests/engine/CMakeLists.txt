@@ -550,10 +550,11 @@ add_test(NAME engine.shader_cache_keys COMMAND test_shader_cache_keys)
 set_tests_properties(engine.shader_cache_keys PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.shader_cache_keys)
 
-# engine.shader_cache_uses.{microcode,hlms,compute} (SHADER-SYSTEM-1 F10, the lead's ruling (B)) — A CACHE DOES NOT
-# GROW WITHOUT END (test_shader_cache_uses.cpp says why): per layer, through its real path and a real ShaderCache over
-# 100 launches - an entry used every launch survives them all, one used only at launch 1 is gone after launch 31's save,
-# a damaged stamp table prunes nothing and is rewritten whole. NULL Roots: CPU code rows.
+# engine.shader_cache_uses.{microcode,hlms,compute} (SHADER-SYSTEM-1 F10, the prune's law of the final read's rulings) —
+# AGE ALONE NEVER DROPS AN ENTRY (test_shader_cache_uses.cpp says why): per layer, through its real path and a real
+# ShaderCache - 100 launches that use nothing drop nothing; over the budget the least recently used go and the just-used
+# stay, the backstop wipes only past this launch's own entries; a launch that compiled nothing writes no layer and no
+# manifest (the sidecar alone); a torn sidecar prunes nothing and is rewritten whole. NULL Roots: CPU code rows.
 add_executable(test_shader_cache_uses test_shader_cache_uses.cpp)
 set_target_properties(test_shader_cache_uses PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
