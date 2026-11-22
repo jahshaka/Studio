@@ -441,6 +441,17 @@ jah_gpu_row(script.batch_equals_single CLASS engine FRAMES 32
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(script.batch_equals_single PROPERTIES TIMEOUT 60 LABELS "engine")
 
+# script.json — THE SCRIPT VALUE IN JSON, ITS LAWS ON THE CPU (MCP-ON-HOST-1 stage 1; test_script_json.cpp says them):
+# every kind round-trips with its kind, numbers by their bits, strict UTF-8, the text's shape, bytes as {"$bytes"} capped
+# at 1 MiB. The codec alone (jahshaka/engine/ScriptJson.h): no device, a code row.
+add_executable(test_script_json test_script_json.cpp)
+set_target_properties(test_script_json PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_script_json PRIVATE JahshakaEngine)
+add_test(NAME script.json COMMAND test_script_json)
+set_tests_properties(script.json PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(script.json)
+
 # engine.hit_list_law — THE REFLECTION REST's RECORD ALLOWANCE as a pure function (URGENT #157; test_hit_list_law.cpp says
 # the law): a function of the view's target (its hit list's creation capacity) and the rest's batching count, never of
 # how large the list once grew; a list smaller than its creation size caps it. The header only: a CPU code row.
