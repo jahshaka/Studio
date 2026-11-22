@@ -1121,6 +1121,62 @@ int main()
               "carried as bytes, and the next call reaches its command (" + std::to_string(reached) + " reached)" +
                   (r.status == Status::Ok ? "" : "\n      the run: " + r.message) + missed);
     }
+    // 12d. THE SCRIPT's HEAP LIMIT (D1 (b), the class fix: Host::Options::memoryLimit, heapLimit()): every allocation a
+    //      script drives is refused past the host's limit - its own values (a buffer past it), and what the JS engine
+    //      allocates for a conversion: a Proxy whose ownKeys answers an endless list (2^32 - 1 keys, each the one name)
+    //      grows the engine's own key list, counted in that heap, until the limit refuses it - each FAILS that run by
+    //      name ("out of memory") and the host lives on: THE CONTROL, the next run is served (reached = 1). And no host
+    //      is unlimited: the default is DERIVED, 2 x callBounds.bytes + the floor (1168 MiB).
+    {
+        Host::Options four;
+        four.memoryLimit = std::size_t(4) << 20;
+        Host heap(four);
+        heap.setConsole([](const std::string &) {});
+        int reached = 0;
+        heap.registry().add({"test.capped",
+                             {Access::Reads, {object("o", {arg("v", Kind::Array, Value(Value::Array{})).upTo(4)})}, Kind::Int},
+                             "how many numbers (at most 4)"},
+                            [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0]["v"].asArray().size())); });
+        const Result over = heap.run("const big = new Uint8Array(8 << 20);\nhost.check({ok: big.length > 0, what: 'made'});\n",
+                                     "over.js");
+        const Result endless = heap.run(
+            "const keys = new Proxy({}, {get: (t, k) => k === 'length' ? 4294967295 : 'k'});\n"
+            "test.capped(new Proxy({}, {ownKeys: () => keys}));\n",
+            "endless.js");
+        const Result next = heap.run("host.check({ok: test.capped({v: [1, 2]}) === 2, what: 'served'});\n", "next.js");
+        const Host::Options defaults;
+        const std::size_t derived = defaults.heapLimit();
+        check(failedWith(over, "out of memory") && failedWith(endless, "test.capped: argument 1: ") &&
+                  endless.message.find("out of memory") != std::string::npos && next.status == Status::Ok &&
+                  reached == 1 && heap.checksFailed() == 0 && derived == (std::size_t(1168) << 20),
+              "THE HEAP LIMIT: an 8 MiB buffer and an endless ownKeys list each FAIL their run by name under a 4 MiB "
+              "limit; THE CONTROL: the next run is served (" + std::to_string(reached) + " reached); the default is "
+              "derived, " + std::to_string(derived >> 20) + " MiB\n      over: " + over.message.substr(0, 80) +
+                  "\n      endless: " + endless.message.substr(0, 120));
+    }
+    // 12e. THE LIMIT LEAVES THE LARGEST LEGITIMATE CALLS ALONE (the control of 12d, under the DEFAULT limit): a picture
+    //      at the cap made from the script's bytes AND read back beside them (the two terms of the derivation: 1 GiB in
+    //      the script's heap), and a full setTransforms batch (65,536 nodes, the one node of the headless engine named
+    //      in every element) each pass
+    {
+        Host full;
+        full.setConsole([](const std::string &) {});
+        registerEngineCommands(full, headless.get(), bootError, false);
+        const Result r = full.run(
+            "const w = 16384, h = 8192;\n"
+            "const p = engine.picture.create({width: w, height: h, rgba: new Uint8Array(w * h * 4)});\n"
+            "const back = engine.picture.bytes(p.picture);\n"
+            "host.check({ok: back.length === w * h * 4, what: 'a picture at the cap, made and read back'});\n"
+            "const s = engine.scene.create('full-batch'), n = engine.node.create(s), N = 65536;\n"
+            "engine.node.setTransforms(s, {nodes: new Array(N).fill(n), positions: new Array(3 * N).fill(0.5),\n"
+            "                              rotations: new Array(4 * N).fill(0.5), scales: new Array(3 * N).fill(0.5)});\n"
+            "host.check({ok: true, what: 'the full batch'});\n",
+            "full.js");
+        check(r.status == Status::Ok && full.checksRun() == 2 && full.checksFailed() == 0,
+              "UNDER THE DEFAULT LIMIT (" + std::to_string(Host::Options().heapLimit() >> 20) + " MiB) a picture at the "
+              "512 MiB cap made and read back, and a 65,536-node setTransforms batch, each pass" +
+                  (r.status == Status::Ok ? std::string() : "\n      the run: " + r.message));
+    }
 
     // 13. ONE FIELD TABLE PER RECORD (2b b1; records.h): a record's fields named once - the member pointer DERIVES the
     //     parameter (the record's default as each member's), both conversions, and the guard. On this file's records:
