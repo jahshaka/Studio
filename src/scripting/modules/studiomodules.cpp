@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include "scripting/modules/projectapi.h"
 #include "scripting/modules/sceneapi.h"
 #include "scripting/modules/textureapi.h"
+#include "scripting/modules/previewsapi.h"
 #include "scripting/modules/videoapi.h"
 #include "scripting/modules/worldapi.h"
 
@@ -73,6 +74,8 @@ void registerStudioModules(ScriptEngine &engine)
     // The engine's measurement arms (lane TEST-1). Appended: the registry order
     // every generated doc and tool schema already has stays unchanged.
     engine.addModule(new EngineApi(host));
+    // The stored previews (PREVIEWS-1). Appended: the registry order stays unchanged.
+    engine.addModule(new PreviewsApi(host));
     // The materials/material/graph verbs are the materials module's — the
     // shell's module loop calls MaterialsModule::registerApi right after this
     // (audit §6.3.4), keeping the registry order unchanged.

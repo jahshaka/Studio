@@ -1686,7 +1686,10 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
         "(SELECT group_concat(f.role || ':' || f.oid) FROM asset_files f WHERE f.asset_guid = a.guid), "
         "(SELECT p.oid_pin FROM project_assets p WHERE p.project_guid = ? AND p.asset_guid = a.guid), "
         "(SELECT group_concat(d.dependee || ':' || m.oid) FROM dependencies d "
-        " JOIN asset_files m ON m.asset_guid = d.dependee WHERE d.depender = a.guid) "
+        " JOIN asset_files m ON m.asset_guid = d.dependee WHERE d.depender = a.guid), "
+        // PLATFORM FURNITURE, by its stamp, evaluated BY SQLITE: no properties blob crosses into
+        // this process (`instr`, not json_extract: the one quoted token, services/assettray.h rule 4).
+        "instr(COALESCE(a.properties, ''), '\"platform\"') > 0 "
         "FROM assets a LEFT JOIN thumbnails t ON t.guid = a.guid WHERE 1");
     if (projectOnly)
         sql += QStringLiteral(" AND a.guid IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)");
@@ -1720,6 +1723,7 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
         row.files = split(query.value(5));
         row.pin = query.value(6).toString();
         row.members = split(query.value(7));
+        row.platform = query.value(8).toBool();
         rows.append(row);
     }
     return rows;
@@ -2517,44 +2521,6 @@ AssetRecord Database::fetchAsset(const QString &guid)
     }
 
     return AssetRecord();
-}
-
-QVector<Database::AssetThumbnailState> Database::fetchAssetThumbnailStates(bool missingOnly)
-{
-    QSqlQuery query;
-    // `thumbnail IS NOT NULL AND length(thumbnail) > 0` is evaluated BY SQLITE:
-    // the blobs never cross into this process (THUMBS-1 fix round F2).
-    //
-    // PLATFORM FURNITURE IS NOT SWEPT (ATOM P2, 2026-09-22). A row stamped
-    // `{"type": "platform"}` is the APP's own content, pinned or seeded behind
-    // the user's back and shown in no tile grid: the default floor's checker
-    // (services/shippedassets.h, Ownership::Platform) and, since the primitives
-    // became baked library assets, the thirteen shipped meshes — whose tiles are
-    // the PNG icons in `src/data/primitives.h`, and one of which (the Teapot)
-    // has no tile at all. A sweep that considers them renders thirteen
-    // thumbnails nobody displays and then reports a library full of "missing"
-    // rows, which is what `scripting.e2e.thumbnails_order` caught. A thumbnail is
-    // for a row a user can SEE, and that is exactly what the stamp says.
-    //
-    // `instr` and not `json_extract`: no other query in this schema needs the
-    // JSON1 extension, and a build without it would fail this statement — which
-    // would stop EVERY rebuild instead of skipping a few rows. The quoted token
-    // is written by one place and read by two (services/assettray.h rule 4).
-    static const char *kNotPlatform = "instr(COALESCE(properties, ''), '\"platform\"') = 0";
-    query.prepare(missingOnly
-                      ? QStringLiteral("SELECT guid, type, 0 FROM assets "
-                                       "WHERE (thumbnail IS NULL OR length(thumbnail) = 0) AND %1")
-                            .arg(QLatin1String(kNotPlatform))
-                      : QStringLiteral("SELECT guid, type, "
-                                       "(thumbnail IS NOT NULL AND length(thumbnail) > 0) "
-                                       "FROM assets WHERE %1")
-                            .arg(QLatin1String(kNotPlatform)));
-    executeAndCheckQuery(query, "FetchAssetThumbnailStates");
-
-    QVector<AssetThumbnailState> rows;
-    while (query.next())
-        rows.append({ query.value(0).toString(), query.value(1).toInt(), query.value(2).toBool() });
-    return rows;
 }
 
 QMap<QString, qint64> Database::fetchAssetFileSizes()

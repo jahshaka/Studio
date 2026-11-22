@@ -1022,7 +1022,7 @@ int main(int argc, char **argv)
                 "var wide = assets.importFile('%1/implane_wide.png');"
                 "var tall = assets.importFile('%1/implane_tall.png');"
                 "var alpha = assets.importFile('%1/implane_alpha.png', d);"
-                "assets.refreshThumbnail(tall);"
+                "previews.render(tall);"
                 "JSON.stringify({drawer:d, wide:wide, tall:tall, alpha:alpha})")
                 .arg(QStringLiteral(JAHSHAKA_FIXTURES)) },
                          { "label", "browse fixtures" } }));

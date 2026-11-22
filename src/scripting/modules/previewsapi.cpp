@@ -1,0 +1,226 @@
+/**************************************************************************
+This file is part of JahshakaVR, VR Authoring Toolkit
+http://www.jahshaka.com
+Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
+
+This is free software: you may copy, redistribute
+and/or modify it under the terms of the MIT License
+
+For more information see the LICENSE file
+*************************************************************************/
+
+#include "scripting/modules/previewsapi.h"
+
+#include <QCoreApplication>
+#include <QEventLoop>
+#include <QTimer>
+#include <memory>
+
+#include "data/database/database.h"
+#include "data/project.h"
+#include "scripting/modules/moduleshared.h"
+#include "services/previewservice.h"
+#include "services/previewwriter.h"
+#include "services/services.h"
+
+using namespace scriptmod;
+
+namespace {
+
+// THE VERBS' WAIT FOR A LANDED PREVIEW (PREVIEWS-1, the lead's A1 and G2) - in these synchronous
+// verbs' door ONLY: PreviewService::request never waits (PICTURE-REQUEST-1 stage 3 replaces this by
+// a ticket). The run's database batch is stood down first (the commit a top-level DbTransaction
+// makes; it begins again at its next write), or the writer would wait behind it to the run's end.
+// The event loop turns with user input held back (assetshare.cpp's import wait). BOUNDED: the wait
+// ends when every write has landed, or when none has landed for kVerbWaitMs - one write ahead of it
+// under its budget, then its own - with a named failure.
+constexpr int kVerbWaitMs = 2 * previews::Writer::kBudgetMs;
+
+struct PreviewWait
+{
+    int requested = 0;
+    int completed = 0;
+    QEventLoop *loop = nullptr;
+};
+
+/// Waits for `wait->completed` to reach `wait->requested`; false when the bound passed first.
+bool waitForPreviews(ScriptHost &host, const std::shared_ptr<PreviewWait> &wait)
+{
+    if (wait->completed >= wait->requested) return true;
+    if (host.db) host.db->commitBatchNow();
+    QEventLoop loop;
+    QTimer stall;
+    stall.setSingleShot(true);
+    bool stalled = false;
+    QObject::connect(&stall, &QTimer::timeout, &loop, [&] { stalled = true; loop.quit(); });
+    wait->loop = &loop;
+    while (wait->completed < wait->requested && !stalled) {
+        stall.start(kVerbWaitMs);   // restarted at every landing: no landing for kVerbWaitMs = stalled
+        loop.exec(QEventLoop::ExcludeUserInputEvents);
+    }
+    wait->loop = nullptr;
+    return wait->completed >= wait->requested;
+}
+
+/// The completion a waited request reports to.
+void notePreview(const std::shared_ptr<PreviewWait> &wait)
+{
+    ++wait->completed;
+    if (wait->loop) wait->loop->quit();
+}
+
+QString notLanded(int count)
+{
+    return QStringLiteral("%1 preview(s) were drawn but their write did not land within %2 ms (the library "
+                          "stayed locked)").arg(count).arg(kVerbWaitMs);
+}
+
+}   // namespace
+
+QVector<VerbInfo> PreviewsApi::verbs() const
+{
+    return {
+        { "state", "previews.state({scope, type}) -> [{guid, type, state, key, storedKey}]",
+          "Every library row's stored preview against what it depicts, by keys - no render, no decode, one "
+          "catalog statement. `scope` 'library' (default: every row) or 'project' (the open project's pinned "
+          "rows); `type` one assets.list type name. `state`: 'ok' (stored, drawn from the key it has now), "
+          "'stale' (stored from another key, or with none), 'missing' (no picture), 'none' (nothing to draw: a "
+          "type with no preview, a row with no definition, platform furniture). `key` is what the preview "
+          "depicts now (the row's content oids, the open project's pin of it, its members' oids, the preset's "
+          "version and the studio's for a studio-lit preset - never its name); `storedKey` what the stored one "
+          "was drawn from. Mesh and Sky rows read 'none' until their presets arrive (PREVIEWS-1 stages 2 and 4); "
+          "a tile an import stored reads 'stale' until stage 2 keys it; inside a script run a preview a door "
+          "requested reads 'missing' or 'stale' until previews.render or the run's end lands it.",
+          Needs::Document },
+        { "render", "previews.render(guid) -> {ok, reason}",
+          "Draws one row's preview through the preview service and waits for it to be STORED with its key. "
+          "Textures, video frames, pose strips, photometric lobes and icons are drawn on the CPU (headless too); "
+          "materials, models, particle systems and avatars on the engine (with none: {ok:false, reason}). A "
+          "failure changes NOTHING stored and says why; so does a write that does not land within the bound "
+          "(the library stayed locked). Throws for a guid that names no asset.",
+          Needs::Document },
+        { "renderAll", "previews.renderAll({staleOnly, projectOnly, limit}) -> {considered, rendered, skipped, cancelled, failed: [{guid, reason}]}",
+          "Draws many previews, one row a turn with the window painting between them, and waits for them to be "
+          "stored. `staleOnly` (default true) takes the 'missing' and 'stale' rows of previews.state; false "
+          "redraws every drawable row. `projectOnly` (default false): the open project's pinned rows. `limit` "
+          "(default 0 = no limit) caps the requests. `skipped` counts rows with nothing to draw; `cancelled` is "
+          "true when a stop arrived (the app quitting, the script stopped) - what was stored stays stored.",
+          Needs::Document },
+    };
+}
+
+QVariantList PreviewsApi::state(const QVariantMap &options)
+{
+    QVariantList out;
+    PreviewService *previews = host.services ? host.services->previews : nullptr;
+    if (!previews) { fail("previews: there is no preview service in this session"); return out; }
+    const QString refusal = refuseUnknownKeys(QStringLiteral("previews.state"), options,
+                                              { QStringLiteral("scope"), QStringLiteral("type") });
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+    const QString scope = options.value(QStringLiteral("scope"), QStringLiteral("library")).toString();
+    if (scope != QLatin1String("library") && scope != QLatin1String("project")) {
+        fail(QStringLiteral("previews.state: unknown scope '%1' (library | project)").arg(scope));
+        return out;
+    }
+    const bool projectOnly = scope == QLatin1String("project");
+    if (projectOnly && !host.isProjectOpen()) {
+        fail("previews.state: scope 'project' needs an open project");
+        return out;
+    }
+    int type = -1;
+    if (options.contains(QStringLiteral("type"))) {
+        type = assetTypeFromName(options.value(QStringLiteral("type")).toString());
+        if (type < 0) {
+            fail(QStringLiteral("previews.state: unknown type '%1'").arg(options.value(QStringLiteral("type")).toString()));
+            return out;
+        }
+    }
+    for (const PreviewService::Row &row : previews->state(host.project, projectOnly, type)) {
+        out.append(QVariantMap{ { "guid", row.guid },
+                                { "type", assetTypeName(row.type) },
+                                { "state", QString::fromLatin1(PreviewService::stateName(row.state)) },
+                                { "key", row.key },
+                                { "storedKey", row.storedKey } });
+    }
+    return out;
+}
+
+QVariantMap PreviewsApi::render(const QString &guid)
+{
+    QVariantMap out;
+    out["ok"] = false;
+    PreviewService *previews = host.services ? host.services->previews : nullptr;
+    if (!host.db || !previews) { fail("previews: there is no preview service in this session"); return out; }
+    // MISUSE THROWS (SCRIPTING_SPEC §1.6.1): a guid that names no asset is a precondition failure;
+    // why a REAL row's preview could not be made is the answer.
+    if (host.db->fetchAsset(guid).guid.isEmpty()) {
+        fail(QStringLiteral("previews.render: no asset with guid '%1'").arg(guid));
+        return out;
+    }
+    auto wait = std::make_shared<PreviewWait>();
+    wait->requested = 1;
+    auto outcome = std::make_shared<PreviewService::Outcome>();
+    previews->request(host.project, guid, [wait, outcome](const PreviewService::Outcome &o) {
+        *outcome = o;
+        notePreview(wait);
+    });
+    if (!waitForPreviews(host, wait)) {
+        outcome->ok = false;
+        outcome->reason = notLanded(1);
+    }
+    out["ok"] = outcome->ok;
+    if (!outcome->ok) {
+        out["reason"] = outcome->reason;
+        // A REFUSAL, not a throw: the answer IS the return value (app.lastError() has it too).
+        refuse(QStringLiteral("previews.render: %1").arg(outcome->reason));
+    }
+    return out;
+}
+
+QVariantMap PreviewsApi::renderAll(const QVariantMap &options)
+{
+    QVariantMap out;
+    out["considered"] = 0;
+    out["rendered"] = 0;
+    out["skipped"] = 0;
+    out["cancelled"] = false;
+    out["failed"] = QVariantList();
+    PreviewService *previews = host.services ? host.services->previews : nullptr;
+    if (!previews) { fail("previews: there is no preview service in this session"); return out; }
+    const QString refusal = refuseUnknownKeys(QStringLiteral("previews.renderAll"), options,
+                                              { QStringLiteral("staleOnly"), QStringLiteral("projectOnly"),
+                                                QStringLiteral("limit") });
+    if (!refusal.isEmpty()) { fail(refusal); return out; }
+
+    PreviewService::SweepOptions sweep;
+    if (options.contains("staleOnly")) sweep.staleOnly = options.value("staleOnly").toBool();
+    if (options.contains("projectOnly")) sweep.projectOnly = options.value("projectOnly").toBool();
+    if (options.contains("limit")) sweep.limit = options.value("limit").toInt();
+
+    // THE YIELD (THUMBS-1 item 4): one render a row, and a library can hold hundreds. USER INPUT IS
+    // EXCLUDED - a click that re-entered the sweep through a menu would be a second sweep over the
+    // same rows. AND IT IS STOPPABLE: a yield can deliver the window's close, a script can be
+    // stopped; ScriptEngine::stop and the shutdown set the service's stop, checked a row.
+    auto wait = std::make_shared<PreviewWait>();
+    auto rendered = std::make_shared<int>(0);
+    auto failures = std::make_shared<QVariantList>();
+    const auto result = previews->sweep(
+        host.project, sweep,
+        [wait, rendered, failures](const QString &guid, const PreviewService::Outcome &o) {
+            if (o.ok) ++*rendered;
+            else if (!o.nothingToDraw) failures->append(QVariantMap{ { "guid", guid }, { "reason", o.reason } });
+            notePreview(wait);
+        },
+        [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
+    wait->requested = result.requested;
+    if (!result.cancelled && !waitForPreviews(host, wait))
+        failures->append(QVariantMap{ { "guid", QString() },
+                                      { "reason", notLanded(wait->requested - wait->completed) } });
+
+    out["considered"] = result.considered;
+    out["rendered"] = *rendered;
+    out["skipped"] = result.skipped;
+    out["cancelled"] = result.cancelled;
+    out["failed"] = *failures;
+    return out;
+}

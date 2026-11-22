@@ -24,7 +24,7 @@ For more information see the LICENSE file
 // dependency rows link the members. Referenced on-disk textures are copied and
 // registered; embedded textures are not extracted (v1, same bytes-on-disk gap
 // as the widget). No viewer, no dialogs — the thumbnail is the caller's job
-// (assets.refreshThumbnail).
+// (the preview service, services/previewservice.h).
 
 #include <QJsonObject>
 #include <QString>

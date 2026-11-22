@@ -23,7 +23,7 @@
 // name (OgreEngine::viewNameTaken), and this class used to be constructed
 // freely: ThumbnailGenerator kept ONE alive for the whole session from the
 // first material/shader thumbnail, and every TEMPORARY instance after that —
-// the model thumbnail routine, `assets.refreshThumbnail` — then failed to create
+// the model thumbnail routine, the thumbnail verb — then failed to create
 // its View, produced a null image and said nothing. Order-dependent and
 // therefore invisible in a fresh session: fine until the first material
 // thumbnail, broken for every model import afterwards.
@@ -86,7 +86,7 @@ public:
     };
 
     /// Borrow the one renderer. `who` names the caller in the refusal message
-    /// and in the log — "assets.refreshThumbnail", "the import tail" — so a
+    /// and in the log — "the model preview", "the material preview" — so a
     /// failed thumbnail never has to be traced back from a grey tile.
     static Loan borrow(const std::shared_ptr<jahshaka::engine::Engine> &engine, const char *who);
 

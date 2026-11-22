@@ -275,6 +275,7 @@ set(SRCS
     src/scripting/modules/inputapi.cpp
     src/scripting/modules/logapi.cpp
     src/scripting/modules/textureapi.cpp
+    src/scripting/modules/previewsapi.cpp
     src/scripting/modules/videoapi.cpp
     src/scripting/modules/clipboardapi.cpp
     src/scripting/modules/perfapi.cpp
@@ -644,6 +645,7 @@ set(HEADERS
     src/scripting/modules/cameraapi.h
     src/scripting/modules/assetsapi.h
     src/scripting/modules/textureapi.h
+    src/scripting/modules/previewsapi.h
     src/scripting/modules/videoapi.h
     src/modules/materials/api/materialsapi.h
     src/modules/materials/materialsmodule.h

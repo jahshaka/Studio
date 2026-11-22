@@ -63,7 +63,8 @@ browse_assets({ type: "texture", drawer: 3, limit: 12 })
 
 Images are budgeted (a small default, a hard maximum, thumbnails downscaled),
 so ask narrowly. An asset with no stored thumbnail still appears in the rows,
-flagged — `assets.refreshThumbnail(guid)` renders one.
+flagged — `previews.render(guid)` renders one; `previews.state()` says which
+rows are missing or stale.
 
 It adds no capability: everything it filters on, a script can ask for too —
 only the PIXELS need a tool, because a script result is JSON.
@@ -119,16 +120,18 @@ var r = assets.importAndPlace("/path/to/chair.glb",
                               { position: {x: 2, y: 0, z: 0}, drawer: d });
 console.log(r.assetGuid, r.projectGuid, r.nodeId);
 
-// Fix a stale/blank thumbnail — the answer is {ok, reason}, and `reason` says
-// why nothing was stored (no engine, a model whose bytes are gone, a graph with
-// no evaluated material):
-var r = assets.refreshThumbnail(guid);
+// Which previews are stale or missing — keys, no render:
+var stale = previews.state().filter(function (r) { return r.state === "missing" || r.state === "stale"; });
+
+// Fix one — the answer is {ok, reason}, and `reason` says why nothing was
+// stored (no engine, a model whose bytes are gone, a material with no definition):
+var r = previews.render(guid);
 if (!r.ok) console.log(r.reason);
 
-// Repair every grey tile at once (missingOnly by default), yielding between
-// assets so the window stays alive:
-var swept = assets.rebuildThumbnails();
-console.log(swept.rebuilt + " rebuilt, " + swept.failed.length + " could not be");
+// Every missing or stale preview at once (staleOnly by default), yielding
+// between rows so the window stays alive:
+var swept = previews.renderAll();
+console.log(swept.rendered + " rendered, " + swept.failed.length + " could not be");
 ```
 
 ## Verify

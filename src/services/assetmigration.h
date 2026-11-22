@@ -88,7 +88,7 @@ struct RebuildOptions
 /// back as it was: its HOME and origin, its parent, its definition blob, its
 /// creation time and use count. Existing rows with the same guid are left
 /// untouched (INSERT OR IGNORE). Thumbnails are not in a sidecar: they are
-/// regenerated (assets.rebuildThumbnails). FORWARD-ONLY: a sidecar of another
+/// regenerated (previews.renderAll). FORWARD-ONLY: a sidecar of another
 /// format — one that records no home — is not read (`unreadable`).
 RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
                              const RebuildOptions &options = RebuildOptions());

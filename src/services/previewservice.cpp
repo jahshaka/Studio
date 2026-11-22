@@ -58,10 +58,12 @@ previews::KeySource keySourceOf(const Database::PreviewRow &row)
     return source;
 }
 
-/// A MODEL row with no content at all (no file, no pin, no blob): a builtin primitive's Object row
-/// (a template's Floor) - a document thing that never had a model.
+/// NOTHING TO DRAW: platform furniture (the app's own content, shown in no tile grid), or a MODEL row
+/// with no content at all (no file, no pin, no blob) - a builtin primitive's Object row (a
+/// template's Floor), a document thing that never had a model.
 bool nothingToDraw(const Database::PreviewRow &row)
 {
+    if (row.platform) return true;
     const auto type = static_cast<ModelTypes>(row.type);
     const bool model = type == ModelTypes::Object || type == ModelTypes::ParticleSystem;
     return model && row.files.isEmpty() && row.pin.isEmpty() && !row.hasBlob;
@@ -212,8 +214,11 @@ void PreviewService::request(Project *project, const QString &guid, Done done, Q
     if (!previews::presetFor(row.type))
         return finish(failure(QStringLiteral("this asset type (%1) has no preview").arg(row.type), true));
     if (nothingToDraw(row))
-        return finish(failure(QStringLiteral("'%1' stores no model definition (a builtin primitive's row has "
-                                             "nothing to draw)").arg(guid), true));
+        return finish(failure(row.platform
+                                  ? QStringLiteral("'%1' is platform furniture (the app's own content, shown in "
+                                                   "no tile grid): nothing to draw").arg(guid)
+                                  : QStringLiteral("'%1' stores no model definition (a builtin primitive's row "
+                                                   "has nothing to draw)").arg(guid), true));
     // THE KEY AT THE REQUEST, written with the bytes: a definition that moves in flight reads stale.
     const QString key = previews::key(keySourceOf(row), previewenv::kVersion);
     Outcome outcome;

@@ -605,25 +605,6 @@ public:
     /// THE SAME LISTING for any home that is not a project's: Assets (the grid
     /// above), the Materials module's storage, the Avatar module's.
     QVector<AssetRecord> fetchAssetsInHome(assethome::Kind home, int type = -1);
-    /// One catalog row as a maintenance sweep needs it: what it IS and whether
-    /// it has a picture — and not one byte more.
-    struct AssetThumbnailState
-    {
-        QString guid;
-        int type = 0;
-        bool hasThumbnail = false;
-    };
-    /// EVERY asset row, whatever its view filter and whether or not it is
-    /// listed (THUMBS-1's thumbnail repair: a shader graph is an Editor-filter
-    /// row and a library model an AssetsView one, and BOTH show the user a
-    /// tile). `missingOnly` asks SQL for the rows with no thumbnail rather
-    /// than returning every blob for the caller to test.
-    ///
-    /// Deliberately NOT fetchAsset per guid: that selects the thumbnail and
-    /// the properties blob, so walking a 10k library to decide what to redraw
-    /// would hold every PNG in the catalog in memory at once. Never a listing:
-    /// nothing about this query decides what is displayed.
-    QVector<AssetThumbnailState> fetchAssetThumbnailStates(bool missingOnly);
     /// Every row of `projectGuid` filed directly under `parent` (a folder, or
     /// the project guid for the root), optionally one ModelTypes value. No
     /// row is filtered out: the editor tray's rule is services/assettray.h,
@@ -811,6 +792,9 @@ public:
         QStringList files;
         QString pin;
         QStringList members;
+        /// PLATFORM FURNITURE (ATOM P2): the app's own content - the default floor's checker, the
+        /// shipped meshes (services/shippedassets.h) - shown in no tile grid: nothing to draw.
+        bool platform = false;
     };
     QVector<PreviewRow> fetchPreviewRows(const QString &projectGuid, bool projectOnly, int type,
                                          const QStringList &guids = QStringList());

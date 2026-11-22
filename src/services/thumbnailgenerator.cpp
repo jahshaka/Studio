@@ -131,7 +131,7 @@ QImage ThumbnailGenerator::renderEngineRequest(EngineThumbnailRenderer &renderer
 {
     if (request.type == ThumbnailRequestType::ImportedMesh) {
         // THE library node — the stored blob with the asset's fit applied
-        // (services/libraryassetnode.h), the same node `assets.refreshThumbnail`
+        // (services/libraryassetnode.h), the same node the preview service
         // and the Assets page render. This used to read the blob here with a
         // reader of its own and NO fit, so the editor panel's "Refresh
         // thumbnail" drew a mis-declared model at its authored size while

@@ -32,7 +32,7 @@ For more information see the LICENSE file
 // itself (SPECS/IMPORT_DIALOG_SPEC.md §6): the size is BAKED into the asset at
 // import, so the blob alone IS the size every surface shows and every
 // placement uses. Every preview surface (the Assets page's import tail, its
-// viewer, the thumbnail routine and `assets.refreshThumbnail`) still asks this
+// viewer and the preview service) still asks this
 // one function, for the first reason.
 
 #include <QString>

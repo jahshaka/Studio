@@ -186,7 +186,7 @@ public:
 	void showTileRebuild(const QString &guid, const QString &reason);
 	/// Library ▾ → "Rebuild missing thumbnails": the bulk repair for rows whose
 	/// stored thumbnail is absent or undecodable — the same routine per asset
-	/// as `assets.refreshThumbnail`, run over the library one row at a time
+	/// as `previews.render`, run over the library one row at a time
 	/// with the event loop turning between them (THUMBS-1 item 4).
 	/// `afterUpdate`: the automatic run after a format bump rebuilt the user's
 	/// storages (ASSETS-HOME-1) — nobody clicked, so failures go to the log and

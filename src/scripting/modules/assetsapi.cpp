@@ -15,7 +15,6 @@ For more information see the LICENSE file
 #include <QCoreApplication>
 #include <QDir>
 #include <QEventLoop>
-#include <QTimer>
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -66,7 +65,6 @@ For more information see the LICENSE file
 #include "services/assetmetadata.h"
 #include "services/thumbnailmanager.h"
 #include "services/previewservice.h"
-#include "services/previewwriter.h"
 #include "services/videoutils.h"
 #include "data/database/database.h"
 #include "data/guidmanager.h"
@@ -95,48 +93,11 @@ using namespace scriptmod;
 
 namespace {
 
-// THE VERBS' WAIT FOR A LANDED PREVIEW (PREVIEWS-1, the lead's A1 and G2) - in the synchronous verbs'
-// door ONLY: PreviewService::request never waits (PICTURE-REQUEST-1 stage 3 replaces this by a
-// ticket). The run's database batch is stood down first (the commit a top-level DbTransaction makes;
-// it begins again at its next write), or the writer would wait behind it to the run's end. The
-// event loop turns with user input held back (assetshare.cpp's import wait). BOUNDED: the wait ends
-// when every write has landed, or when none has landed for kVerbWaitMs - one write ahead of it under
-// its budget, then its own - with a named failure.
-constexpr int kVerbWaitMs = 2 * previews::Writer::kBudgetMs;
-
-struct PreviewWait
+/// A row's preview asked of the preview service; it lands when its write does (never waited for here:
+/// previews.render is the verb that waits).
+void requestPreview(ScriptHost &host, const QString &guid)
 {
-    int requested = 0;
-    int completed = 0;
-    QEventLoop *loop = nullptr;
-};
-
-/// Waits for `wait->completed` to reach `wait->requested`; false when the bound passed first.
-bool waitForPreviews(ScriptHost &host, const std::shared_ptr<PreviewWait> &wait)
-{
-    if (wait->completed >= wait->requested) return true;
-    if (host.db) host.db->commitBatchNow();
-    QEventLoop loop;
-    QTimer stall;
-    stall.setSingleShot(true);
-    bool stalled = false;
-    QObject::connect(&stall, &QTimer::timeout, &loop, [&] { stalled = true; loop.quit(); });
-    wait->loop = &loop;
-    int seen = wait->completed;
-    while (wait->completed < wait->requested && !stalled) {
-        stall.start(kVerbWaitMs);
-        loop.exec(QEventLoop::ExcludeUserInputEvents);
-        if (wait->completed > seen) { seen = wait->completed; stalled = false; }
-    }
-    wait->loop = nullptr;
-    return wait->completed >= wait->requested;
-}
-
-/// The completion a waited request reports to.
-void notePreview(const std::shared_ptr<PreviewWait> &wait)
-{
-    ++wait->completed;
-    if (wait->loop) wait->loop->quit();
+    if (host.services && host.services->previews) host.services->previews->request(host.project, guid, {});
 }
 
 QString typeName(int type)
@@ -144,26 +105,6 @@ QString typeName(int type)
     return scriptmod::assetTypeName(type);   // shared vocabulary (moduleshared.h)
 }
 
-int typeFromName(const QString &name)
-{
-    const QString n = name.trimmed().toLower();
-    if (n == "material") return static_cast<int>(ModelTypes::Material);
-    if (n == "texture") return static_cast<int>(ModelTypes::Texture);
-    if (n == "video") return static_cast<int>(ModelTypes::Video);
-    if (n == "sky") return static_cast<int>(ModelTypes::Sky);
-    if (n == "object" || n == "model") return static_cast<int>(ModelTypes::Object);
-    if (n == "mesh") return static_cast<int>(ModelTypes::Mesh);
-    if (n == "music") return static_cast<int>(ModelTypes::Music);
-    if (n == "file") return static_cast<int>(ModelTypes::File);
-    if (n == "particles") return static_cast<int>(ModelTypes::ParticleSystem);
-    if (n == "lightprofile" || n == "ies") return static_cast<int>(ModelTypes::LightProfile);
-    if (n == "avatar") return static_cast<int>(ModelTypes::Avatar);
-    if (n == "animation" || n == "clip") return static_cast<int>(ModelTypes::Animation);
-    // SESSION ONLY (MATERIAL_GAPS_SPEC A-1): no store or project listing can
-    // ever contain one, so this name is only ever useful with scope 'session'.
-    if (n == "livetexture" || n == "live") return static_cast<int>(ModelTypes::LiveTexture);
-    return -1;
-}
 
 // The asset's stored bytes, by guid — the CAS resolver, never the retired
 // <root>/<guid>/ view (deep audit 2026-09, area 6). Falls back to the legacy
@@ -429,12 +370,6 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "No LIVE entries means the asset is used by no project, i.e. assets.remove would really delete it. "
           "Reads the catalog only — the project does not have to be open, and the asset does not have to be listed.",
           Needs::Document },
-        { "refreshThumbnail", "assets.refreshThumbnail(guid) -> {ok, reason}",
-          "Rebuilds an asset's thumbnail synchronously and writes it to the database. Objects, particle systems, materials and AVATARS render on the engine (engine required; an avatar renders its own character model); images re-thumbnail from the source file, videos re-grab a first-second frame, animation clips redraw their pose strip, and audio/file rows reset to their type icon (document-only). `ok` is false with `reason` naming WHY nothing was stored — a thumbnail that fails is never silent.",
-          Needs::Document },
-        { "rebuildThumbnails", "assets.rebuildThumbnails({missingOnly, projectOnly, limit}) -> {considered, rebuilt, skipped, cancelled, failed: [{guid, reason}]}",
-          "Rebuilds thumbnails in bulk — the repair pass for rows that are already grey. `missingOnly` (default true) takes only the rows whose stored thumbnail is absent or undecodable; false redraws every asset that has a thumbnail to draw. `projectOnly` (default false) limits it to the open project's pinned assets; `limit` (default 0 = no limit) caps how many are rebuilt. One asset per turn, yielding between them, so the window keeps painting. `skipped` counts the rows with nothing to draw at all (a builtin primitive's row — a template's Floor — stores no model definition), which are not failures; a row whose stored bytes are GONE is a failure with its reason. `cancelled` is true when the sweep was stopped before it finished — the app is quitting, or the script was stopped — and whatever it had already rebuilt is stored. Each asset goes through the same routine as assets.refreshThumbnail.",
-          Needs::Document },
         { "thumbnail", "assets.thumbnail(guid) -> {guid, empty, bytes, width, height, centre: {r, g, b}, coverage}",
           "The thumbnail stored for an asset, as facts rather than pixels: byte size of the PNG blob, its decoded dimensions, the colour of its centre pixel (0-255) and `coverage` — the fraction of the image (0..1) that differs from the background the renderer cleared to, i.e. how much of the tile the subject fills. empty is true when the row carries no image. Document-only — it reads the database, it does not render.",
           Needs::Document },
@@ -590,7 +525,7 @@ QVariantList AssetsApi::list(const QVariantMap &options)
     const QString scope = options.value("scope", "store").toString().toLower();
     int typeFilter = -1;
     if (options.contains("type")) {
-        typeFilter = typeFromName(options.value("type").toString());
+        typeFilter = assetTypeFromName(options.value("type").toString());
         if (typeFilter < 0) { fail(QStringLiteral("assets.list: unknown type '%1'").arg(options.value("type").toString())); return out; }
     }
 
@@ -1146,7 +1081,7 @@ QString AssetsApi::import(const QString &path, const QVariantMap &options)
     // failure (found driving the real UI, where the engine IS up).
     if (host.isEngineReady()
         && host.db->fetchAsset(result.objectGuid).type == static_cast<int>(ModelTypes::Object))
-        refreshThumbnail(result.objectGuid);
+        requestPreview(host, result.objectGuid);
     return result.objectGuid;
 }
 
@@ -1183,7 +1118,7 @@ QString AssetsApi::importFile(const QString &path, int drawerId, const QVariantM
     int typeHint = -1;
     if (options.contains(QStringLiteral("typeHint"))) {
         const QString hint = options.value(QStringLiteral("typeHint")).toString();
-        typeHint = typeFromName(hint);
+        typeHint = assetTypeFromName(hint);
         if (typeHint < 0) {
             fail(QStringLiteral("assets.importFile: unknown typeHint '%1' (object, mesh, texture, "
                                 "material, sky, music, video, particles, lightprofile, file)")
@@ -1203,7 +1138,7 @@ QString AssetsApi::importFile(const QString &path, int drawerId, const QVariantM
     // Meshes get their preview render when the engine is up (like assets.import).
     if (host.isEngineReady() && host.db
         && host.db->fetchAsset(result.objectGuid).type == static_cast<int>(ModelTypes::Object))
-        refreshThumbnail(result.objectGuid);
+        requestPreview(host, result.objectGuid);
     return result.objectGuid;
 }
 
@@ -1804,106 +1739,6 @@ bool AssetsApi::removeFromProject(const QString &guid)
     return true;
 }
 
-QVariantMap AssetsApi::refreshThumbnail(const QString &guid)
-{
-    QVariantMap out;
-    out["ok"] = false;
-    if (!host.db) { fail("assets: not available in this session"); return out; }
-    // MISUSE STILL THROWS (SCRIPTING_SPEC §1.6.1): a guid that names no asset
-    // is a precondition failure, not an answer — unchanged by the new return
-    // shape, which reports why a REAL asset's thumbnail could not be made.
-    if (host.db->fetchAsset(guid).guid.isEmpty()) {
-        fail(QStringLiteral("assets.refreshThumbnail: no asset with guid '%1'").arg(guid));
-        return out;
-    }
-
-    // THE ONE REQUEST (services/previewservice.h), waited for in this door only: the answer is
-    // whether the preview was STORED, not only drawn.
-    PreviewService *previews = host.services ? host.services->previews : nullptr;
-    if (!previews) { fail("assets: there is no preview service in this session"); return out; }
-    auto wait = std::make_shared<PreviewWait>();
-    wait->requested = 1;
-    auto outcome = std::make_shared<PreviewService::Outcome>();
-    previews->request(host.project, guid, [wait, outcome](const PreviewService::Outcome &o) {
-        *outcome = o;
-        notePreview(wait);
-    });
-    if (!waitForPreviews(host, wait)) {
-        outcome->ok = false;
-        outcome->reason = QStringLiteral("the preview was drawn but its write did not land within %1 ms "
-                                         "(the library stayed locked)").arg(kVerbWaitMs);
-    }
-    out["ok"] = outcome->ok;
-    if (!outcome->ok) {
-        out["reason"] = outcome->reason;
-        // A REFUSAL, not a throw: the answer IS the return value, and the
-        // reason travels in it (the caller can still read app.lastError()).
-        refuse(QStringLiteral("assets.refreshThumbnail: %1").arg(outcome->reason));
-    }
-    return out;
-}
-
-QVariantMap AssetsApi::rebuildThumbnails(const QVariantMap &options)
-{
-    QVariantMap out;
-    out["considered"] = 0;
-    out["rebuilt"] = 0;
-    out["skipped"] = 0;
-    out["cancelled"] = false;
-    out["failed"] = QVariantList();
-    if (!host.db) { fail("assets: not available in this session"); return out; }
-
-    for (auto it = options.constBegin(); it != options.constEnd(); ++it) {
-        static const QStringList known{ QStringLiteral("missingOnly"), QStringLiteral("projectOnly"),
-                                        QStringLiteral("limit") };
-        if (!known.contains(it.key())) {
-            fail(QStringLiteral("assets.rebuildThumbnails: unknown option '%1'").arg(it.key()));
-            return out;
-        }
-    }
-
-    PreviewService *previews = host.services ? host.services->previews : nullptr;
-    if (!previews) { fail("assets: there is no preview service in this session"); return out; }
-    PreviewService::SweepOptions sweep;
-    if (options.contains("missingOnly")) sweep.staleOnly = options.value("missingOnly").toBool();
-    if (options.contains("projectOnly")) sweep.projectOnly = options.value("projectOnly").toBool();
-    if (options.contains("limit")) sweep.limit = options.value("limit").toInt();
-
-    // THE YIELD (THUMBS-1 item 4): one engine render per asset, and a library
-    // can hold hundreds. USER INPUT IS EXCLUDED — a click that re-entered the
-    // sweep through a menu would be a second sweep over the same rows.
-    //
-    // AND IT IS STOPPABLE (fix round F1): a yield can deliver the window's
-    // close, and a script can be stopped or time out while this one verb is
-    // still rendering. ScriptEngine::stop and the app's shutdown set the
-    // service's stop, checked per row; `cancelled` comes back in the result
-    // so a caller can tell "nothing left to do" from "we were stopped".
-    auto wait = std::make_shared<PreviewWait>();
-    auto rebuilt = std::make_shared<int>(0);
-    auto failures = std::make_shared<QVariantList>();
-    const auto result = previews->sweep(
-        host.project, sweep,
-        [wait, rebuilt, failures](const QString &guid, const PreviewService::Outcome &o) {
-            if (o.ok) ++*rebuilt;
-            else if (!o.nothingToDraw) failures->append(QVariantMap{ { "guid", guid }, { "reason", o.reason } });
-            notePreview(wait);
-        },
-        [] { QCoreApplication::processEvents(QEventLoop::ExcludeUserInputEvents); });
-    wait->requested = result.requested;
-    if (!result.cancelled && !waitForPreviews(host, wait))
-        failures->append(QVariantMap{ { "guid", QString() },
-                                      { "reason", QStringLiteral("%1 preview(s) were drawn but did not land within %2 ms")
-                                                      .arg(wait->requested - wait->completed).arg(kVerbWaitMs) } });
-
-    QVariantList failed = *failures;
-    out["considered"] = result.considered;
-    out["rebuilt"] = *rebuilt;
-    out["skipped"] = result.skipped;
-    out["cancelled"] = result.cancelled;
-    out["failed"] = failed;
-    return out;
-}
-
 // ---- the Assets PAGE (smoke S4/S5/S7) --------------------------------------
 //
 // Three verbs onto the page the owner was clicking: select the tile an import
@@ -2309,7 +2144,7 @@ QVariantMap AssetsApi::reimport(const QString &guid, const QVariantMap &options)
     out["bakeOid"] = result.bakeOid;
     out["previousBakeOid"] = result.previousBakeOid;
     out["swappedNodes"] = swapped;
-    if (host.isEngineReady()) refreshThumbnail(guid);
+    if (host.isEngineReady()) requestPreview(host, guid);
     return out;
 }
 

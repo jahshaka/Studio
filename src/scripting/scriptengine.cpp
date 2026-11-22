@@ -179,7 +179,7 @@ void ScriptEngine::stop()
     mStopped = true;
     // A VERB THAT LOOPS OVER THE LIBRARY HAS TO HEAR THIS TOO (THUMBS-1 fix
     // round F1). setInterrupted only aborts JAVASCRIPT at its next bytecode
-    // boundary; `assets.rebuildThumbnails` is one verb call that may render
+    // boundary; `previews.renderAll` is one verb call that may render
     // for minutes on the main thread, so the stop has to reach the sweep
     // itself or a stopped script keeps rendering.
     if (mHost.services && mHost.services->previews) mHost.services->previews->requestStop();

@@ -65,6 +65,28 @@ inline QString assetTypeName(int type)
     }
 }
 
+/// The inverse: a type NAME (assets.list, previews.state) to its ModelTypes value; -1 when unknown.
+inline int assetTypeFromName(const QString &name)
+{
+    const QString n = name.trimmed().toLower();
+    if (n == "material") return static_cast<int>(ModelTypes::Material);
+    if (n == "texture") return static_cast<int>(ModelTypes::Texture);
+    if (n == "video") return static_cast<int>(ModelTypes::Video);
+    if (n == "sky") return static_cast<int>(ModelTypes::Sky);
+    if (n == "object" || n == "model") return static_cast<int>(ModelTypes::Object);
+    if (n == "mesh") return static_cast<int>(ModelTypes::Mesh);
+    if (n == "music") return static_cast<int>(ModelTypes::Music);
+    if (n == "file") return static_cast<int>(ModelTypes::File);
+    if (n == "particles") return static_cast<int>(ModelTypes::ParticleSystem);
+    if (n == "lightprofile" || n == "ies") return static_cast<int>(ModelTypes::LightProfile);
+    if (n == "avatar") return static_cast<int>(ModelTypes::Avatar);
+    if (n == "animation" || n == "clip") return static_cast<int>(ModelTypes::Animation);
+    // SESSION ONLY (MATERIAL_GAPS_SPEC A-1): no store or project listing can
+    // ever contain one, so this name is only ever useful with scope 'session'.
+    if (n == "livetexture" || n == "live") return static_cast<int>(ModelTypes::LiveTexture);
+    return -1;
+}
+
 inline QVariantMap vecToJs(const iris::Vec3 &v)
 {
     return { { "x", v.x() }, { "y", v.y() }, { "z", v.z() } };

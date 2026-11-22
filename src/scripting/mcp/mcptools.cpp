@@ -290,7 +290,7 @@ QJsonArray McpTools::listTools() const
               "downscaled to a %3 px long edge, and a %4 KB ceiling on the PNG bytes in "
               "one response. An asset with no stored thumbnail — or one the ceiling cut — "
               "still appears in the rows, flagged, never as a placeholder picture. Use "
-              "assets.refreshThumbnail(guid) to (re)render one.")
+              "previews.render(guid) to (re)render one.")
               .arg(kMaxBrowseLimit).arg(kDefaultBrowseLimit)
               .arg(kThumbnailLongEdge).arg(kBrowseImageBudget / 1024) },
         { "inputSchema", QJsonObject{
@@ -954,7 +954,7 @@ QJsonObject McpTools::browseAssets(const QJsonObject &args)
         if (thumb.isNull()) {
             out["image"] = false;
             // Say WHY there is no picture: "no stored thumbnail" is actionable
-            // (assets.refreshThumbnail), "over budget" is not the same thing.
+            // (previews.render), "over budget" is not the same thing.
             out["imageNote"] = db ? QStringLiteral("no stored thumbnail")
                                   : QStringLiteral("no library in this session");
             ++missing;
