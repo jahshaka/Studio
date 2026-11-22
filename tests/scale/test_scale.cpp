@@ -1105,46 +1105,37 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
     return total;
 }
 
-/// THE CUT'S MINIMALITY (W4's law, the lead's ruling 2026-11-22): no drawn cluster's MEMBER group (the group that would
-/// simplify it further, MeshCluster::group) is one the rule affords - else the cut would have collapsed further. Counted
-/// over every piece's drawn clusters at the view's tolerance (Types.h clusterGroupVerdict, the rule itself). `tooFine`: the
-/// NEGATIVE CONTROL - in each piece, the first drawn cluster produced by a finite affordable group r is replaced by r's
-/// MEMBERS (the cut one level too fine there), which the law must flag. `cut` returns the triangles of the cut checked.
-static size_t cutMinimalityViolations(Env &env, const QList<iris::MeshPtr> &pieces, const iris::Vec3 &pos, float k,
-                                      bool tooFine, size_t &cut)
+/// THE EMPTY TOP'S DISTANCE (W4 (b)): the eye's distance from `pos` past which the rule affords EVERY piece's empty top,
+/// derived from the rule and the shell's own error (scale.levels' comment carries the derivation). Per piece, the top is
+/// the DAG's largest finite error (the bake's errors are monotone up the DAG); a piece with no finite group counts no
+/// distance (its cut can never empty, and the row's CPU-cut law then reads it). `topError` returns the largest top error
+/// in world metres (error x k). Negative = no view.
+static double emptyTopDistance(Env &env, const QList<iris::MeshPtr> &pieces, const iris::Vec3 &pos, float k,
+                               double &topError)
 {
-    cut = 0;
+    topError = 0.0;
     GpuCullRequest req;
-    if (!env.engine->fillCullView(env.view, req)) return ~size_t(0);
-    size_t violations = 0;
+    if (!env.engine->fillCullView(env.view, req)) return -1.0;
+    const ClusterCutView v = cutView(env, req, pos, k, false);
+    if (!(v.tolerance > 0.0f) || !(v.projScaleY > 0.0f) || !(v.viewportHeight > 0.0f)) return -1.0;
+    double need = 0.0;
     for (const iris::MeshPtr &m : pieces) {
         MeshData d;
         if (!SceneMirror::toMeshData(m.data(), d) || d.clusters.empty()) continue;
-        const ClusterCutView v = cutView(env, req, pos, k, false);
-        std::vector<unsigned char> affordable(d.clusterGroups.size(), 0);
-        for (size_t g = 0; g < d.clusterGroups.size(); ++g) affordable[g] = clusterGroupVerdict(d.clusterGroups[g], v) ? 1 : 0;
-        std::vector<unsigned> drawn;
-        clusterCutFromAffordable(d.clusters, affordable, drawn);
-        if (tooFine) {
-            for (unsigned c : drawn) {
-                const int r = d.clusters[c].refined;
-                if (r < 0 || !affordable[size_t(r)]) continue;
-                std::vector<unsigned> finer;
-                for (unsigned x : drawn)
-                    if (d.clusters[x].refined != r) finer.push_back(x);
-                for (size_t x = 0; x < d.clusters.size(); ++x)
-                    if (d.clusters[x].group == r) finer.push_back(unsigned(x));
-                drawn.swap(finer);
-                break;
-            }
-        }
-        for (unsigned c : drawn) {
-            cut += d.clusters[c].indexCount / 3u;
-            const int g = d.clusters[c].group;
-            if (g >= 0 && affordable[size_t(g)]) ++violations;
-        }
+        int top = -1;
+        for (size_t g = 0; g < d.clusterGroups.size(); ++g)
+            if (d.clusterGroups[g].error < kClusterTerminal && (top < 0 || d.clusterGroups[g].error > d.clusterGroups[size_t(top)].error))
+                top = int(g);
+        if (top < 0) continue;
+        const MeshClusterGroup &G = d.clusterGroups[size_t(top)];
+        const double centreFromPos = double(k) * std::sqrt(double(G.centre[0]) * G.centre[0] +
+                                                           double(G.centre[1]) * G.centre[1] + double(G.centre[2]) * G.centre[2]);
+        const double past = centreFromPos + double(G.radius) * k +
+                            double(G.error) * k * double(v.projScaleY) * double(v.viewportHeight) / (2.0 * double(v.tolerance));
+        need = std::max(need, past);
+        topError = std::max(topError, double(G.error) * k);
     }
-    return violations;
+    return need;
 }
 
 // ===========================================================================
@@ -1331,8 +1322,25 @@ static int cutCostMain()
 // within 1.2x" is DELETED: since the empty top (v26: every DAG ends in a top that draws nothing, atom-and-lod.md) the root
 // at an infinite tolerance is 0 triangles by construction, so no cut above 0 could meet it):
 //   (a) the id pass draws the CPU cut at 1 km (within 1.2x: the id pass's own count against the rule's);
-//   (b) THE CUT IS MINIMAL at 1 km: no drawn cluster's member group is one the rule affords (cutMinimalityViolations) -
-//       NEGATIVE CONTROL: the cut forced one level too fine in each piece is flagged;
+//   (b) THE EMPTY TOP IS REACHED - the coarsest end the DAG has (D8, irisgl/import/atomdag/build.cpp: every triangle
+//       mesh's chain closes in an EMPTY TOP, a group that produces nothing, its error max(the largest stored error it
+//       closes over, the piece's level-0 box diagonal)). THE DISTANCE, DERIVED FROM THE RULE: a group g is affordable
+//       when error_g < t F_g / s (Types.h clusterGroupAffordable, allowedWorldError), F_g = 2 max(0, |c_g - e| - r_g s)
+//       / (P11 H) (clusterGroupFootprint), s = the instance's scale, t = the scene's tolerance x the LOD bias; so the top
+//       is afforded once |c_top - e| > r_top s + error_top s P11 H / (2 t). With |c_top - e| >= D - |c_top - pos| for an
+//       eye at D from the instance's position, every piece's top is afforded at
+//         D_top = max over pieces of ( |c_top - pos| + r_top s + error_top s P11 H / (2 t) )   (emptyTopDistance),
+//       the shell's own top errors read from its DAG and P11, H, t from the view's own request (fillCullView). Afforded
+//       tops afford everything under them (the bake's errors are monotone and its spheres nested, Types.h's "WHY IT IS
+//       ONE CUT"), so every cluster's own group is affordable and none is drawn (clusterDrawn): THE CUT IS EMPTY. The
+//       row stands at 1.25 D_top (the strict `<` kept off the float edge; the camera looks at the asset, its far plane
+//       moved past it) on the 1 km pose's ray, and asserts: the CPU cut is 0 triangles (the derivation's own
+//       check), and THE DEVICE draws 0 triangles of the asset (the id pass's own triangle rows, early + late) while its
+//       cut job EVALUATED the instance's clusters (cutEvaluated > 0: the 0 is the cut's, not an instance cull's) and
+//       culled none for covering no pixel centre (cutPixelCulled 0: not the pixel cull's either), with no overflow (the
+//       coarse reserve would draw the last clusters). A device cut that never takes the empty top draws (or
+//       pixel-culls) the last cluster there: red. (The old (b), "no drawn cluster's member group affordable", was true
+//       by construction - the cut is built FROM those verdicts - and is deleted: the final read's F1.)
 //   (c) MONOTONE: the cut's triangle count never rises as the distance grows, over 100 / 250 / 500 / 1000 m (the rule
 //       affords a group when error x s < tolerance x F, and F shrinks as the eye moves away: a group afforded nearer
 //       stays afforded farther, so the cut only coarsens).
@@ -1373,29 +1381,45 @@ static int levelsMain()
     const AtomDrawStatus st = env.scene->atomDrawStatus();
     const size_t cut = cutTriangles(env, shell, at, radius);
     if (prevCut && cut > prevCut) ++rises;
-    size_t minimalCut = 0, tooFineCut = 0;
-    const size_t violations = cutMinimalityViolations(env, shell, at, radius, false, minimalCut);
-    const size_t controlViolations = cutMinimalityViolations(env, shell, at, radius, true, tooFineCut);
     const double drawn = r.tris + r.lateTris;
     std::printf("W4 at 1 km: the id pass draws %.0f tris (early %.0f + late %.0f; overflow %u) | the CPU cut at the "
-                "same pose %zu | minimality: %zu of its clusters' member groups affordable (the cut one level too fine: "
-                "%zu, %zu tris) | the LOD chain's coarsest level %zu (a different structure: the voxeliser's and the "
+                "same pose %zu | the LOD chain's coarsest level %zu (a different structure: the voxeliser's and the "
                 "casters')\n",
-                drawn, r.tris, r.lateTris, st.cutOverflow, cut, violations, controlViolations, tooFineCut,
-                info.coarsestTriangles);
+                drawn, r.tris, r.lateTris, st.cutOverflow, cut, info.coarsestTriangles);
     target("W4", double(info.levels), "levels", "the asset's chain length (longest piece, level 0 included)");
     target("W4", drawn, "tris", "triangles the id pass's CUT draws for the asset at 1 km");
     REQUIRE(cut > 0 && drawn <= 1.2 * double(cut) && drawn * 1.2 >= double(cut),
             "W4: at 1 km the id pass draws %.0f tris, within 1.2x of the CPU cut's %zu", drawn, cut);
-    REQUIRE(violations == 0u && minimalCut > 0u,
-            "W4 (b): at 1 km the cut is MINIMAL - no drawn cluster's member group is affordable (%zu of %zu tris' groups)",
-            violations, minimalCut);
-    REQUIRE(controlViolations > 0u && tooFineCut > minimalCut,
-            "W4 (b) NEGATIVE CONTROL: the cut forced one level too fine is flagged (%zu violations, %zu > %zu tris)",
-            controlViolations, tooFineCut, minimalCut);
     REQUIRE(rises == 0u, "W4 (c): the cut never rises as the distance grows (100 / 250 / 500 / 1000 m: %zu rises)", rises);
     REQUIRE(st.cutOverflow == 0 && st.cutMissing == 0, "W4: the cut fits its stream (%u overflowed, %u missing)",
             st.cutOverflow, st.cutMissing);
+    // (b) THE EMPTY TOP IS REACHED: at 1.25 D_top on the 1 km pose's ray (the derivation: this row's comment)
+    double topError = 0.0;
+    const double dTop = emptyTopDistance(env, shell, at, radius, topError);
+    const double dEmpty = 1.25 * dTop;
+    const iris::Vec3 ray = iris::Vec3(0.0f, 0.05f, 1.0f).normalized();
+    env.camera->farClip = float(2.0 * dEmpty);
+    setCamera(env, at + ray * float(dEmpty), at);
+    frame(env, 10);
+    const IdRead er = readIdPass(env, 30);
+    const AtomDrawStatus est = env.scene->atomDrawStatus();
+    const size_t emptyCut = cutTriangles(env, shell, at, radius);
+    const double emptyDrawn = er.tris + er.lateTris;
+    std::printf("W4 the empty top: D_top %.1f m (the largest top error %.4f m, the tolerance x bias %.4f px), the eye at "
+                "%.1f m: the CPU cut %zu tris | the id pass draws %.0f tris (early %.0f + late %.0f); its cut evaluated "
+                "%u (instance, cluster) pairs, pixel-culled %u clusters, overflow %u, missing %u\n",
+                dTop, topError, double(jahshaka::engine::inspect::scene(env.scene)->pixelTolerance() *
+                                       jahshaka::engine::inspect::scene(env.scene)->lodBias()),
+                dEmpty, emptyCut, emptyDrawn, er.tris, er.lateTris, est.cutEvaluated, est.cutPixelCulled,
+                est.cutOverflow, est.cutMissing);
+    REQUIRE(dTop > 0.0 && emptyCut == 0u,
+            "W4 (b): past D_top (%.1f m, derived from the rule and the shell's top errors) the CPU cut is EMPTY (%zu tris)",
+            dTop, emptyCut);
+    REQUIRE(emptyDrawn == 0.0 && est.cutEvaluated > 0u && est.cutPixelCulled == 0u && est.cutOverflow == 0u &&
+                est.cutMissing == 0u,
+            "W4 (b): at %.1f m THE DEVICE draws 0 tris of the asset (%.0f) while its cut evaluated its clusters (%u pairs), "
+            "pixel-culled none (%u) and overflowed none (%u, %u missing)",
+            dEmpty, emptyDrawn, est.cutEvaluated, est.cutPixelCulled, est.cutOverflow, est.cutMissing);
     // THE 100-LEVEL CASE (brief §4.4): the chain halves until 128 triangles
     // (meshbake.cpp kRatio 0.5, kMinTriangles 128, kMaxLevels 254), so a chain reaches
     // log2(T/128)+1 levels: 17 at 10 M in ONE mesh — and the import splits above 1 M
