@@ -9,12 +9,20 @@
 // name; a faulted registry an error result naming the faults; the engine host made ONCE, at the first engine-reaching
 // tools/call (never by discover / tools/list / api_docs); a fresh realm per run_script; a cancel of the running request:
 // no line for it, no progress after, the next request served; a cancel of a queued one: dropped unanswered; progress
-// increasing, none after the reply.
+// increasing, none after the reply. THE TRANSPORT (mcp/stdio.h): a line far past the cap is delivered `overlong` while the
+// reader's own counter of bytes held never passes kLineCap; and in a FORKED server whose command printf()s, every line
+// on the protocol fd is one JSON-RPC message and stdin's end exits 0 - the control: the same child WITHOUT the fd claim
+// reads foreign lines there.
 #include "jahshaka/engine/Script.h"
 #include "jahshaka/engine/ScriptJson.h"
 #include "mcp/session.h"
+#include "mcp/stdio.h"
 
 #include <cstdio>
+#include <cstdlib>
+#include <fcntl.h>
+#include <sys/wait.h>
+#include <unistd.h>
 #include <memory>
 #include <string>
 #include <vector>
@@ -276,6 +284,99 @@ int main()
         const std::size_t atEof = g.sent.size();
         g.s->receive({toolCall("30", "call", "{\"command\":\"test.loop\",\"args\":{\"n\":1000}}"), false});
         check(g.s->ended() && g.sent.size() == atEof, "stdin's end mid-call cancels it (no line) and ends the session");
+    }
+
+    // 4. THE TRANSPORT
+    {
+        // (a) A LINE FAR PAST THE CAP: 10 x kLineCap bytes and then a request, from a writer child through a pipe
+        int fds[2];
+        check(::pipe(fds) == 0, "a pipe");
+        std::fflush(nullptr);
+        const pid_t writer = ::fork();
+        if (writer == 0) {
+            ::close(fds[0]);
+            const std::string chunk(1 << 20, 'x');
+            for (std::size_t sent = 0; sent < 10 * mcp::kLineCap; sent += chunk.size())
+                if (::write(fds[1], chunk.data(), chunk.size()) < 0) ::_exit(1);
+            const std::string tail = "\n" + req("1", "tools/list") + "\n";
+            ::_exit(::write(fds[1], tail.data(), tail.size()) < 0 ? 1 : 0);
+        }
+        ::close(fds[1]);
+        mcp::LineReader reader(fds[0]);
+        std::vector<mcp::Incoming> lines;
+        while (reader.read(lines, true)) {}
+        ::close(fds[0]);
+        int status = 0;
+        ::waitpid(writer, &status, 0);
+        check(lines.size() == 2 && lines[0].overlong && lines[0].line.empty() && !lines[1].overlong &&
+                  lines[1].line == req("1", "tools/list") && reader.maxBuffered() <= mcp::kLineCap,
+              "a line of " + std::to_string(10 * mcp::kLineCap) + " bytes is delivered OVERLONG and the next line whole; "
+              "the reader's own counter of bytes held peaked at " + std::to_string(reader.maxBuffered()) + " (<= " +
+                  std::to_string(mcp::kLineCap) + "): the discarded bytes were never kept");
+
+        // (b) A FORKED SERVER whose command printf()s: with the fd claim, and without it (the control)
+        const auto serve = [](bool claim, std::vector<std::string> &out) {
+            int in[2], outPipe[2];
+            if (::pipe(in) || ::pipe(outPipe)) return -1;
+            std::fflush(nullptr);
+            const pid_t child = ::fork();
+            if (child == 0) {
+                ::dup2(in[0], 0);
+                ::dup2(outPipe[1], 1);
+                const int devnull = ::open("/dev/null", O_WRONLY);
+                ::dup2(devnull, 2);
+                ::close(in[0]), ::close(in[1]), ::close(outPipe[0]), ::close(outPipe[1]), ::close(devnull);
+                std::string why;
+                const int proto = claim ? mcp::claimProtocolFd(why) : 1;
+                mcp::Session::Doors d;
+                d.version = "test";
+                d.makeHost = [](const Host::Options &o, bool) {
+                    auto h = std::make_unique<Host>(o);
+                    h->registry().add({"test.printf", {Access::Reads, {}, Kind::Null}, "printf()s to stdout."}, [](Call &) {
+                        std::printf("a foreign line on stdout\n");
+                        std::fflush(stdout);
+                        return Value();
+                    });
+                    return h;
+                };
+                mcp::serveStdio(0, proto, std::move(d));
+                std::fflush(nullptr);
+                ::_exit(0);
+            }
+            ::close(in[0]);
+            ::close(outPipe[1]);
+            const std::string requests = req("1", "server/discover") + "\n" +
+                                         toolCall("2", "call", "{\"command\":\"test.printf\"}") + "\n" +
+                                         req("3", "tools/list") + "\n";
+            const bool wrote = ::write(in[1], requests.data(), requests.size()) == ssize_t(requests.size());
+            ::close(in[1]);   // stdin's end
+            mcp::LineReader r(outPipe[0]);
+            std::vector<mcp::Incoming> got;
+            while (r.read(got, true)) {}
+            ::close(outPipe[0]);
+            for (const mcp::Incoming &l : got) out.push_back(l.line);
+            int status = 0;
+            ::waitpid(child, &status, 0);
+            return wrote && WIFEXITED(status) ? WEXITSTATUS(status) : -1;
+        };
+        const auto foreign = [](const std::vector<std::string> &lines) {
+            int n = 0;
+            for (const std::string &l : lines) {
+                Value m;
+                std::string why;
+                n += !(parseJson(l, m, why) && m.kind() == Kind::Object && m["jsonrpc"] == Value("2.0"));
+            }
+            return n;
+        };
+        std::vector<std::string> claimed, unclaimed;
+        const int claimedExit = serve(true, claimed), unclaimedExit = serve(false, unclaimed);
+        check(claimedExit == 0 && claimed.size() == 3 && foreign(claimed) == 0,
+              "a forked server WITH the fd claim: " + std::to_string(claimed.size()) + " lines on the protocol fd, " +
+                  std::to_string(foreign(claimed)) + " foreign (the command's printf went to stderr); stdin's end exit " +
+                  std::to_string(claimedExit));
+        check(unclaimedExit == 0 && foreign(unclaimed) > 0,
+              "the control: the same child WITHOUT the claim puts " + std::to_string(foreign(unclaimed)) +
+                  " foreign line(s) on the protocol fd (> 0)");
     }
 
     if (gFail) std::printf("mcp.session: FAILED (%d)\n", gFail);
