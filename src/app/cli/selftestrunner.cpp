@@ -272,7 +272,12 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
     // The background compiler's counts BEFORE the selftest's own frames: the startup gate's
     // tier sweep draws placeholders on purpose (it builds them), in its own scenes.
     jahshaka::engine::AsyncShaderStats asyncAtStart;
-    if (const auto eng = EngineHost::instance().engine()) asyncAtStart = eng->published().shaders;
+    // ...and the frames the engine has rendered on the STREAMING pace so far (the startup gate's own): the selftest's add none.
+    unsigned long long streamingAtStart = 0;
+    if (const auto eng = EngineHost::instance().engine()) {
+        asyncAtStart = eng->published().shaders;
+        streamingAtStart = eng->published().streamingFrames;
+    }
     window.show();
     app.processEvents();
     // THE SELFTEST OWNS THE LOOP (TESTING-CLEANUP-2 H5). Every frame it hashes is a frame IT asked
@@ -835,6 +840,13 @@ int runEngineSelftest(MainWindow &window, QApplication &app, const QString &outP
         std::fprintf(stderr, "engine-selftest: placeholder draws %llu, pending skips %llu (%s)\n",
                      ph, skips, ph == 0 && skips == 0 ? "PASS" : "FAIL");
         if (ph != 0 || skips != 0) return 1;
+        // THE PICTURES ARE WHOLE FRAMES TOO (COLD-BOOT-1): every frame of the selftest ran on the Complete pace. The pace is
+        // in force until set again (Engine::setFramePace), so a caller that held Streaming and never gave Complete back -
+        // the startup gate did, and B2's lighting arm then built a stage a frame - shows here, whoever it is.
+        const unsigned long long streaming = eng->published().streamingFrames - streamingAtStart;
+        std::fprintf(stderr, "engine-selftest: frames on the Streaming pace %llu (%s)\n", streaming,
+                     streaming == 0 ? "PASS" : "FAIL");
+        if (streaming != 0) return 1;
     }
     if (runFixture) {
         // ...and fixture B's commits waited on no compile either (read D3).

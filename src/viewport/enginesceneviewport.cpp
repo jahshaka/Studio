@@ -158,17 +158,12 @@ EngineSceneViewport::EngineSceneViewport(const std::shared_ptr<Engine> &engine,
             // earned it: framesPresented counts frames already on screen.
             refreshOverlay();
             // WHAT THIS FRAME MAY PUT OFF (OPEN_COVER_SPEC §2.1). Set HERE and
-            // nowhere else for the driver's own ticks: the engine consumes it
-            // in the renderOneFrame this tick is about to make and resets it to
-            // `Complete`, so a tick that does not draw (no enabled view) leaves
-            // nothing behind for somebody else's frame to pick up.
+            // nowhere else for the driver's own ticks; IN FORCE UNTIL SET AGAIN
+            // (Engine::setFramePace), so afterFrame below gives `Complete` back.
             //
-            // AFTER refreshOverlay, and that ordering is load-bearing: the
-            // cover's RISING edge presents its frames inline from inside that
-            // call, and each of those consumes a pace. Setting ours first would
-            // hand this tick's own frame the `Complete` those presents reset to
-            // — one un-streamed frame per cover rise, which is exactly the
-            // frame the whole arm used to land in.
+            // AFTER refreshOverlay: the cover's RISING edge presents its frames
+            // inline from inside that call, and they render on the pace in force
+            // before this tick's (Complete: afterFrame gave it back), never on ours.
             if (mEngine) {
                 // THE PACE IS THE DRIVER FRAME'S, SET ON CHANGE (U3 stage 2 read F3: no record of its own, so a tick
                 // with nothing from the document is a real empty hand-over); lowered after the frame (afterFrame).
