@@ -420,7 +420,7 @@ rtreflect.sphere_glint_energy 1.22  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11
 rtreflect.far_record 0.99  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044005-e4427ba87, 1-min load 1.2; V2 plan 0.2)
 rtreflect.tilted_normal 0.99  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044011-e4427ba87, 1-min load 1.1; V2 plan 0.2)
 rtreflect.hit_area_shadow 1.33  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T050506-e4427ba87, 1-min load 1.6; V2 plan 0.2)
-rtreflect.odd_size 1.07  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044007-e4427ba87, 1-min load 1.2; V2 plan 0.2)
+rtreflect.odd_size 1.53  solo 2026-11-22 at 58433c628 (spec.sh reprice, run 20261122T123329-58433c628)
 rtreflect.walk_world.frozen 11.66  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T050721-e4427ba87, 1-min load 1.4; V2 plan 0.2)
 rtreflect.walk_world.worldA 10.90  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T050721-e4427ba87, 1-min load 1.4; V2 plan 0.2)
 rtreflect.walk_world.worldB 16.71  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T050721-e4427ba87, 1-min load 1.4; V2 plan 0.2)
