@@ -162,6 +162,14 @@ jah_gpu_row(lab.js_no_overlay CLASS engine FRAMES 10
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.js_no_overlay PROPERTIES TIMEOUT 60 LABELS "lab")
 
+# lab.js_log_prefixed (LAB-SCRIPTS-1, the lead's ruling on the audit's L4) — A SCRIPT's OUTPUT CANNOT FAKE THE LAB's LINES:
+# every line it prints reads `LAB JS LOG: ...`; END, RUN, ok: and FAIL: are the lab's alone (js_log_prefixed.sh says
+# the laws). The first frame only.
+jah_gpu_row(lab.js_log_prefixed CLASS engine FRAMES 1
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_log_prefixed.sh $<TARGET_FILE:jahlab> ${CMAKE_CURRENT_BINARY_DIR}/work/js_log_prefixed
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_log_prefixed PROPERTIES TIMEOUT 60 LABELS "lab")
+
 # lab.env_expectation_printed (stage 2) — `jahlab --env-list` prints every environment's law and its closed-form
 # expectation at each dolly stop (22 / 88 / 177 / 354 m), every value a finite number. CPU only.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)

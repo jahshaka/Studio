@@ -56,8 +56,8 @@ else:
     run1, run2 = lines[:ends[0] + 1], lines[ends[0] + 1:ends[1] + 1]
     if not any(l.startswith("LAB JS ok:   a fresh realm: n === 1") for l in run1):
         fails.append("CONTROL: run 1's own check did not pass")
-    if not any(l == "LAB JS marker MARK-2 n 1" for l in run2):
-        fails.append("run 2 did not re-read the file into a fresh realm (no 'LAB JS marker MARK-2 n 1')")
+    if not any(l == "LAB JS LOG: marker MARK-2 n 1" for l in run2):
+        fails.append("run 2 did not re-read the file into a fresh realm (no 'LAB JS LOG: marker MARK-2 n 1')")
     for k, i in enumerate(ends):
         if lines[i] != "LAB JS END rerun.js ok (2 checks, 0 frames)":
             fails.append("run %d ended %r" % (k + 1, lines[i]))

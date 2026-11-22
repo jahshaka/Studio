@@ -180,7 +180,8 @@ const std::vector<VerbDoc> &verbs()
         { "js", "js load <file.js> | js run | js next | js clear", 1, 64,
           "THE ENGINE's SCRIPTS IN THE LAB (LAB-SCRIPTS-1; the engine's script host, jahengine's commands): `load` names "
           "the script (the rest of the line is its path); `run` re-reads it from disk and runs it in a FRESH host to its "
-          "end - its lines printed `LAB JS ...`, then `LAB JS END <file> ok (k checks, f frames)` or `FAILED (n)` (in "
+          "end - its checks printed `LAB JS ok:   ...` / `LAB JS FAIL: ...`, its console's lines `LAB JS LOG: ...` (a "
+          "script can never print the lab's own words), then `LAB JS END <file> ok (k checks, f frames)` or `FAILED (n)` (in "
           "the window a run that failed nothing and checked nothing reads `ran: no checks`); a failed run sets the exit "
           "to 1 and never ends the lab; `next` (Load) loads the next .js of THE SCRIPTS FOLDER - the loaded script's, "
           "else --js-dir's, else <data root>/scripts - in bytewise name order, the list re-read at every press, the "

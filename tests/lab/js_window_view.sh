@@ -7,7 +7,7 @@
 #   (1) the run passes: `LAB JS END demo_spiral.js ok (2 checks, 241 frames)` - 240 frames and the read's one - and the
 #       process exits 0 (the host's verdict, headless: ruling 8);
 #   (2) THE LAB's OWN SHOT AFTER THE RUN SHOWS THE SCRIPT's PICTURE: its centre rectangle's mean equals, exactly, the
-#       mean the script read there (`LAB JS centre r g b a`): the view still shows the script's scene, and the shot reads
+#       mean the script read there (`LAB JS LOG: centre r g b a`): the view still shows the script's scene, and the shot reads
 #       the same frame's bytes (no frame drawn between);
 #   CONTROL: that centre is above zero (a black picture would hold (2) trivially).
 #   (3) THE FRAME LOOP NEVER READS THE SCRIPTS FOLDER (the audit's F4): the lab's `status` counts the folder's reads
@@ -35,7 +35,7 @@ if rc != 0:
 end = re.search(r"^LAB JS END demo_spiral\.js (.*)$", log, re.M)
 if not end or end.group(1) != "ok (2 checks, 241 frames)":
     fails.append("(1) the END line reads %r, not 'ok (2 checks, 241 frames)'" % (end.group(1) if end else None))
-m = re.search(r"^LAB JS centre ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+)$", log, re.M)
+m = re.search(r"^LAB JS LOG: centre ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+) ([-0-9.e]+)$", log, re.M)
 shot = os.path.join(wd, "data", "shots", "after.png")
 if not m:
     fails.append("(2) the script printed no centre mean")

@@ -2350,8 +2350,8 @@ bool Session::jsRun()
     std::printf("LAB JS RUN %s (run %d)\n", file.c_str(), ++mJsRuns);
     std::fflush(stdout);
     mJsError.clear();
-    // THE HOST's LINES, PREFIXED (`LAB JS ok:   ...`, `LAB JS FAIL: ...`, console.log's): each line of a many-line text
-    // (an error's stack) its own; the first FAIL is the overlay's error line
+    // THE HOST's OWN LINES, PREFIXED (`LAB JS ok:   ...`, `LAB JS FAIL: ...`): each line of a many-line text (an error's
+    // stack) its own; the first FAIL is the overlay's error line. The SCRIPT's lines never come here (lab.log, below)
     const auto say = [this](const std::string &text) {
         std::istringstream lines(text);
         std::string l;
@@ -2387,6 +2387,22 @@ bool Session::jsRun()
                             }
                             return c.hold("view", std::shared_ptr<View>(mView, [](View *) {}));
                         });
+    // THE SCRIPT's OWN LINES CANNOT FAKE THE LAB's (the lead's ruling on the audit's L4): drivers act on `LAB JS END`,
+    // and LOADED / RUN / END / ok: / FAIL: are the lab's words. The binding's console.log reaches the same sink as the
+    // host's check lines (Host::print: law(), verdict(), console.log - nothing else), so the run's fresh host first runs
+    // THE LAB's CONSOLE: it replaces the WHOLE `console` object with one whose log calls lab.log - the binding's console
+    // is unreachable from the script after it (no method of it can bypass the prefix), and the host's sink then
+    // carries the host's own lines only. Each line the script prints reads `LAB JS LOG: <text>`.
+    host.registry().add({ "lab.log", { script::Access::Reads, { script::arg("text", script::Kind::String) }, script::Kind::Null },
+                          "The script's console line in the lab (console.log calls it): printed `LAB JS LOG: <text>`, each "
+                          "line of a many-line text its own - never a line of the lab's own words." },
+                        [](script::Call &c) -> script::Value {
+                            std::istringstream lines(c[0].asString());
+                            std::string l;
+                            while (std::getline(lines, l)) std::printf("LAB JS LOG: %s\n", l.c_str());
+                            std::fflush(stdout);
+                            return script::Value();
+                        });
     // WHILE THE SCRIPT HOLDS THE VIEW's FRAMES (the audit's F3): the STRIP says `running` - a child window of its own,
     // drawn and flushed now, never in the engine's frame - and the lab's OVERLAY is hidden: it is geometry (its quads
     // are submitted triangles) and a scripted frame never carries it (sky-particles-overlay-view.md); showJs() after
@@ -2395,7 +2411,8 @@ bool Session::jsRun()
     showJs();
     if (mOverlay) mView->setOverlay(ViewOverlayDesc());
     const unsigned long long frame0 = mEngine->published().frame;
-    const script::Result r = host.run(source.str(), mJsPath);
+    script::Result r = host.run("globalThis.console = {log: (...a) => lab.log(a.map(String).join(\" \"))};", "lab-console.js");
+    if (r.status != script::Status::Failed) r = host.run(source.str(), mJsPath);   // a refused console: the run's fault, said
     // A VIEW LEFT WITH NO SCENE IS GIVEN BACK (the audit's F1): a script that took it and failed (or never bound) before
     // its scene presents NOTHING - X keeps the lab's last frame, frozen, and the overlay's error row is never drawn: the
     // lab's world is shown again, the error on its overlay
