@@ -16,12 +16,21 @@ find_package(Qt6 REQUIRED COMPONENTS Gui OpenGL Widgets Sql Multimedia Concurren
 file(MAKE_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR}/run)
 
 # THE ASSET FIXTURE (PREVIEWS-1 stage 0): a 1 m box centred on the origin, written here at configure so no binary
-# mesh lives in the tree — 8 corners, one normal a face, six outward (counter-clockwise from outside) quads, no
-# material file (the importer's default material). An Object row by `assets.import`; its tile is the ASSET preset's.
+# mesh lives in the tree — 8 corners, one normal a face, six outward (counter-clockwise from outside) quads, and ONE
+# PURE RED material (box.mtl, stage 2): the studio is NEUTRAL by construction (one code to all three channels,
+# previewenvironment.cpp), so a red subject's pixel can never equal a studio pixel - thumbnails.coverage's lower bound
+# rests on it. An Object row by `assets.import`; its tile is the ASSET preset's.
 # (The particle fixture is made by script: scene.addParticles -> node.exportArchive({type: "particleSystem"}) ->
 # assets.import.)
 set(JAH_THUMB_BOX_OBJ "${CMAKE_CURRENT_BINARY_DIR}/fixtures/box.obj")
+file(WRITE "${CMAKE_CURRENT_BINARY_DIR}/fixtures/box.mtl" "# box.mtl - written by tests/thumbnails/CMakeLists.txt (PREVIEWS-1 stage 2)
+newmtl Red
+Kd 1 0 0
+Ka 0 0 0
+Ks 0 0 0
+")
 file(WRITE "${JAH_THUMB_BOX_OBJ}" "# box.obj - written by tests/thumbnails/CMakeLists.txt (PREVIEWS-1)
+mtllib box.mtl
 o Box
 v -0.5 -0.5 -0.5
 v 0.5 -0.5 -0.5
@@ -37,6 +46,7 @@ vn -1 0 0
 vn 1 0 0
 vn 0 -1 0
 vn 0 1 0
+usemtl Red
 f 1//1 4//1 3//1 2//1
 f 5//2 6//2 7//2 8//2
 f 1//3 5//3 8//3 4//3
