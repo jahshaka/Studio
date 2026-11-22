@@ -40,6 +40,8 @@ For more information see the LICENSE file
 //      (previews::sourceOf the catalog row, as PreviewService::state) differs from the stored one. NEGATIVE
 //      CONTROL: the key without the stamp (stage 1's) does not move across the edit - that row would read ok
 //      with the picture of the blob it no longer holds.
+//   j. THE WRITER's STATEMENTS (the query log's "WritePreview" entries): one landed write is exactly four -
+//      BEGIN IMMEDIATE, UPDATE, INSERT OR REPLACE, COMMIT - once each; a read beside it is counted (the control).
 // The waits are on PUBLISHED state (a completion, a drop) with a cap that names the failure.
 
 #include <algorithm>
@@ -391,6 +393,40 @@ int main(int argc, char **argv)
                       && q.value(0).toString().size() == 16,
                   "i: assets.hash holds the stamp of the blob the row now has (16 hex digits)");
         }
+
+        // j. THE WRITER's STATEMENTS, from the existing query log (its "WritePreview" entries, noted under the log's
+        //    mutex on the worker): ONE landed write is exactly four - BEGIN IMMEDIATE, the thumbnail's UPDATE, the
+        //    key's INSERT OR REPLACE, COMMIT - once each, and nothing else is logged while it lands. A writer that
+        //    re-read the row (or read anything) would log a fifth: the instrument's own control below logs one
+        //    read beside a write and must count five.
+        struct Logged
+        {
+            bool landed = false;
+            int total = 0;
+            QString shape;   ///< name|first two words of the SQL|count, sorted
+        };
+        const auto statementsOf = [&](const std::function<void()> &beside) {
+            Database::setQueryLog(true);
+            Probe pj;
+            writer.submit(QStringLiteral("a"), solid(qRgb(3, 4, 5)), QStringLiteral("00000000000000aj"), pj.done());
+            const bool landed = waitFor([&] { return pj.landed.size() == 1; }) && pj.landed.value(0).ok;
+            if (beside) beside();
+            const int total = Database::queryLogStatements();
+            QStringList shape;
+            for (const Database::QueryLogEntry &e : Database::queryLogEntries())
+                shape << QStringLiteral("%1|%2|%3").arg(e.name, e.sql.section(QLatin1Char(' '), 0, 1)).arg(e.count);
+            shape.sort();
+            Database::setQueryLog(false);
+            return Logged{ landed, total, shape.join(QLatin1Char(',')) };
+        };
+        const Logged one = statementsOf({});
+        std::printf("     j: one write logs %d statement(s): %s\n", one.total, qUtf8Printable(one.shape));
+        check(one.landed && one.total == 4
+                  && one.shape == QStringLiteral("WritePreview|BEGIN IMMEDIATE|1,WritePreview|COMMIT|1,"
+                                              "WritePreview|INSERT OR|1,WritePreview|UPDATE assets|1"),
+              "j: ONE landed write is FOUR statements - BEGIN IMMEDIATE, UPDATE, INSERT OR REPLACE, COMMIT - once each");
+        const Logged withRead = statementsOf([&db] { db.fetchAsset(QStringLiteral("a")); });
+        check(withRead.landed && withRead.total == 5, "j: CONTROL - a read of the row beside the write is counted (five)");
     }
 
     // g. The end drains.
@@ -403,6 +439,7 @@ int main(int argc, char **argv)
 
     Database::setAssetThumbnailWritten(nullptr);
     db.closeDatabase();
-    std::printf("previews.writer: %s\n", failures ? "FAILED" : "PASSED");
+    if (failures) std::printf("previews.writer: FAILED (%d)\n", failures);
+    else std::printf("previews.writer: PASSED\n");
     return failures ? 1 : 0;
 }
