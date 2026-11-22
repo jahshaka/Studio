@@ -5,7 +5,8 @@
 //
 //   1. the Texture is rendered: 'ok', key k, its stored picture's facts (assets.thumbnail);
 //   2. the store offline, previews.render answers {ok: false, reason, transient: false} naming the unreadable
-//      image; a material the headless renderer cannot draw is FINAL too (transient false);
+//      image; a material render that the offline store leaves without its preview sphere fails in the renderer
+//      (`lastFailure`): FINAL too (transient false);
 //   3. the stored picture's facts and its storedKey are UNCHANGED - the failure wrote nothing;
 //   4. the store back, a render is 'ok' again;
 //   5. assets.rebuildCatalog REFUSES the live library by name (it would rewrite the open catalog through
@@ -50,12 +51,13 @@ assert(failed.ok === false && failed.reason.indexOf("could not be read") >= 0,
        "previews.render fails with its reason: " + J(failed));
 assert(failed.transient === false, "...a FINAL failure (the definition's bytes unreadable): transient false");
 // THE RENDERER's OWN FAILURE TO DRAW A SUBJECT IS FINAL TOO (the lead's ruling, PreviewService::Outcome::transient):
-// headless the NULL engine IS up (bridge/enginehost.cpp cfg.headless), so a material's render is borrowed and fails
-// at the draw - asked again when its key moves, never re-run at every settle.
+// headless the NULL engine IS up (bridge/enginehost.cpp cfg.headless), so a material's render is borrowed; with the
+// store offline the renderer cannot reach its preview sphere's bake (PrimitiveAssets::mesh resolves it through the
+// store root) and fails at the draw (`lastFailure`) - asked again when its key moves, never re-run at every settle.
 var mat = materials.create("Keeps Final " + Date.now());
 var drawFailed = previews.render(mat);
-assert(drawFailed.ok === false && drawFailed.reason.length > 0 && drawFailed.transient === false,
-       "a material the headless renderer cannot draw: a FINAL failure, transient false: " + J(drawFailed));
+assert(drawFailed.ok === false && drawFailed.reason.indexOf("preview sphere") >= 0 && drawFailed.transient === false,
+       "a material whose preview sphere the offline store cannot give: the renderer's own failure, FINAL: " + J(drawFailed));
 
 // ---- 3. NOTHING CHANGED -----------------------------------------------------------------------
 assert(facts(t) === stored, "the stored picture is UNCHANGED: " + facts(t));
