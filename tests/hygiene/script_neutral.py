@@ -34,6 +34,13 @@ the value type and the registry know nothing of JavaScript, and a second languag
      set no shaderCacheMaxBytes of their own - both take
      inspect::applyHarnessShaderCache (EngineInspect.h), so a cap raised for the fixtures is jahengine's too (a smaller
      cap in a script row would WIPE the fixtures' shared warm cache at its save).
+  N8 THE ENGINE HOLDS NO MCP (MCP-ON-HOST-1 L14): no source or header under irisgl/engine/src or irisgl/engine/include
+     names MCP, JSON-RPC, the protocol's namespace or a socket API in its CODE (comments stripped: a comment may name the
+     spec), and `nm` on the engine archive defines no symbol of the adapter (the `mcp` namespace, a JSON-RPC name) and
+     needs no socket call (socket, bind, listen, accept, connect).
+  N9 THE ADAPTER INCLUDES NO ENGINE HEADER BUT THE HOST's TWO: every file under irisgl/engine/mcp/ includes only
+     jahshaka/engine/Script.h, jahshaka/engine/ScriptJson.h, its own mcp/*.h and system headers (<...>: no Qt, Ogre,
+     JS-engine or jahshaka/ header among them).
 
 usage: script_neutral.py <source-root> <build dir>   (jahengine is <build dir>/bin/jahengine)
 Its self-test runs first, on synthetic files: each rule red on a violation, green on the allowed file.
@@ -192,6 +199,47 @@ def n7_bad(root):
     return bad
 
 
+COMMENT = re.compile(r"//[^\n]*|/\*.*?\*/", re.DOTALL)
+MCP_CODE = re.compile(r"(?i:\bmcp\b|json-?rpc|modelcontextprotocol)|\bsocket\s*\(|sys/socket\.h|netinet/")
+MCP_SYMBOL = re.compile(r" [A-TV-Z] \S*(3mcp|[Jj]son[Rr]pc)|^\s*U (socket|bind|listen|accept4?|connect)$")
+N8_DIRS = ("irisgl/engine/src", "irisgl/engine/include")
+MCP_DIR = "irisgl/engine/mcp"
+HOST_HEADERS = ("jahshaka/engine/Script.h", "jahshaka/engine/ScriptJson.h")
+ANY_INCLUDE = re.compile(r'^\s*#\s*include\s*([<"])([^>"]+)[>"]', re.MULTILINE)
+SYSTEM_FOREIGN = re.compile(r"^(Q[A-Za-z]|qt|Ogre|quickjs|jahshaka/)")
+
+
+def n8_bad(root):
+    """[`file: what`] of every MCP, JSON-RPC or socket name in the engine's code (comments stripped)."""
+    bad = []
+    for d in N8_DIRS:
+        for dd, _, names in os.walk(os.path.join(root, d)):
+            for name in sorted(names):
+                if not name.endswith(SOURCE_EXTS):
+                    continue
+                rel = os.path.relpath(os.path.join(dd, name), root).replace(os.sep, "/")
+                code = COMMENT.sub("", open(os.path.join(dd, name), errors="replace").read())
+                bad += ["%s: %s" % (rel, m.group(0)) for m in MCP_CODE.finditer(code)]
+    return bad
+
+
+def n9_bad(root):
+    """([`file: include`] of every include the adapter may not make, files read)."""
+    bad, files = [], 0
+    for dd, _, names in os.walk(os.path.join(root, MCP_DIR)):
+        for name in sorted(names):
+            if not name.endswith(SOURCE_EXTS):
+                continue
+            files += 1
+            rel = os.path.relpath(os.path.join(dd, name), root).replace(os.sep, "/")
+            for m in ANY_INCLUDE.finditer(open(os.path.join(dd, name), errors="replace").read()):
+                kind, inc = m.group(1), m.group(2).strip()
+                ok = (inc in HOST_HEADERS or re.match(r"^mcp/[^/]+\.h$", inc)) if kind == '"' else not SYSTEM_FOREIGN.match(inc)
+                if not ok:
+                    bad.append("%s: %s%s" % (rel, kind, inc))
+    return bad, files
+
+
 def write(root, rel, text):
     p = os.path.join(root, rel)
     os.makedirs(os.path.dirname(p), exist_ok=True)
@@ -260,6 +308,25 @@ def self_test():
     check(nm_bad(nm, QT_SYMBOL) == ["U _ZN7QStringC1EPKc"] and len(nm_bad(nm, HOST_SYMBOL)) == 2,
           "N3b / N6 read a Qt symbol, the host's namespace and a JS_ function in nm text, never Ogre's, the engine's or a "
           "JSON name (%s %s)" % (nm_bad(nm, QT_SYMBOL), nm_bad(nm, HOST_SYMBOL)))
+    with tempfile.TemporaryDirectory() as t:
+        write(t, "irisgl/engine/src/script/registry.cpp",
+              "// MCP-ON-HOST-1: the adapter calls this (a comment may name it)\nint json = 1; /* mcp */\n")
+        write(t, MCP_DIR + "/session.cpp", '#include "mcp/session.h"\n#include "jahshaka/engine/Script.h"\n'
+                                           '#include "jahshaka/engine/ScriptJson.h"\n#include <poll.h>\n#include <string>\n')
+        clean8, clean9 = n8_bad(t), n9_bad(t)
+        write(t, "irisgl/engine/src/net.cpp", "#include <sys/socket.h>\nnamespace mcp { int s = socket(1, 2, 3); }\n")
+        write(t, "irisgl/engine/include/jahshaka/engine/Rpc.h", "struct JsonRpcReply;\n")
+        write(t, MCP_DIR + "/tools.cpp", '#include "jahshaka/engine/Engine.h"\n#include "script/commands.h"\n'
+                                         '#include <OgreRoot.h>\n#include <QString>\n')
+        check(not clean8 and clean9 == ([], 1) and len(n8_bad(t)) == 4 and len(n9_bad(t)[0]) == 4,
+              "N8 names a socket header, an mcp namespace, a socket call and a JSON-RPC type in the engine's code (a "
+              "comment naming the spec passes); N9 names an engine header, a script/ header, Ogre and Qt in the adapter "
+              "(%s %s)" % (n8_bad(t), n9_bad(t)[0]))
+    nm8 = ("0000 T _ZN8jahshaka6engine3mcp7Session7receiveEv\n                 U socket\n0000 T _ZN8jahshaka6engine6Engine1fEv\n"
+           "                 U _ZN8jahshaka6engine3mcp1gEv\n                 U xcb_connect\n")
+    check(nm_bad(nm8, MCP_SYMBOL) == ["0000 T _ZN8jahshaka6engine3mcp7Session7receiveEv", "U socket"],
+          "N8 reads a defined mcp symbol and a needed socket call in nm text, never the engine's own, an undefined mcp "
+          "reference or xcb_connect (%s)" % nm_bad(nm8, MCP_SYMBOL))
     good = ("engine.frames(n: int >= 0 frames) -> null [changes]\n    Draws n frames.\n"
             "host.check(law: object) -> bool [reads]\n    One law.\n")
     check(not n5_bad(good, 0) and n5_bad("engine.frames(n: int) -> null [changes]\n    \nFAULT: x: no doc\n", 0) ==
@@ -310,6 +377,16 @@ def main():
     check(not bad, "N5 jahengine --list prints %d commands, each with its signature, its access, its arrays bounded "
                    "and its doc (%s)"
           % (n, bad[:4]))
+    bad = n8_bad(root)
+    mcp_nm = []
+    for a in archives:
+        mcp_nm += nm_bad(subprocess.run(["nm", a], capture_output=True, text=True).stdout, MCP_SYMBOL)
+    check(not bad and archives and not mcp_nm,
+          "N8 the engine's code names no MCP, JSON-RPC or socket (%s) and its archive defines no adapter symbol and needs "
+          "no socket call (%d: %s)" % (bad[:4], len(mcp_nm), mcp_nm[:3]))
+    bad, files = n9_bad(root)
+    check(files > 0 and not bad, "N9 the adapter's %d files include no engine header but Script.h and ScriptJson.h (%s)"
+          % (files, bad[:4]))
     bin_dir = os.path.join(sys.argv[2], "bin")
     irisgl = next((n for n in ("libIrisGLd.so", "libIrisGL.so") if os.path.isfile(os.path.join(bin_dir, n))), "libIrisGLd.so")
     for name in ("Jahshaka", "jahlab", irisgl):
