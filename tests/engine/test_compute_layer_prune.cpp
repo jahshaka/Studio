@@ -52,6 +52,7 @@ public:
     std::uint64_t gen = 0;
     std::uint64_t generation() const override { return gen; }
     void snapshot(std::vector<ComputeRecordPtr> &out) const override { out = records; }
+    void usedKeys(std::vector<ComputeKey128> &out) const override { out.clear(); }
     void prewarm(std::vector<ComputeCodeRecord> &&in) override {
         for (ComputeCodeRecord &r : in) records.push_back(std::make_shared<ComputeCodeRecord>(std::move(r)));
         ++gen;
