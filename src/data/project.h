@@ -173,7 +173,7 @@ enum class ModelTypes
     // channels and NO geometry — what Mixamo hands you for a download
     // "without skin". It is its own library type and not an Object because it
     // is not one: every mesh path in the product refuses a zero-mesh file
-    // (iris::MeshNode::loadAsSceneFragment returns null, and nine callers rely
+    // (iris::loadAsSceneFragment returns null, and nine callers rely
     // on that), it has no extent to fit or place, and what a user wants from
     // it — "which of my rigs does this clip fit" — is a question no Object row
     // can answer. The row's `source` is the SOURCE FILE itself (content

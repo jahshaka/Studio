@@ -27,6 +27,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/import/scenebuilder.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -588,7 +589,7 @@ int main(int argc, char **argv)
     // clip through the pivot composition, and asserts the engine reproduces the
     // document's bone matrices for it too.
     {
-        auto fragment = iris::MeshNode::loadAsSceneFragment(
+        auto fragment = iris::loadAsSceneFragment(
             QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/pivot_rig.fbx"),
             [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
                 return iris::PbrMaterial::create();
@@ -672,7 +673,7 @@ int main(int argc, char **argv)
     // length now comes from the file's declared duration, so the pad (still
     // the engine's guard for a genuinely zero-length clip) must stay silent.
     {
-        auto fragment = iris::MeshNode::loadAsSceneFragment(
+        auto fragment = iris::loadAsSceneFragment(
             QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/mixamo_tpose.fbx"),
             [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
                 return iris::PbrMaterial::create();

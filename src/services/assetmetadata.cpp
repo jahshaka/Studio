@@ -124,7 +124,7 @@ QJsonObject AssetMetadata::forModelScene(const iris::ModelSceneInfo &scene, cons
 
     // Clips: name, LENGTH IN SECONDS (a file's ticks are meaningless to a
     // reader; the 25 fps fallback for a file that states none is applied at
-    // the source, the same rule iris::Mesh::extractAnimations keys with), and
+    // the source, the same rule iris::extractAnimations keys with), and
     // how much of the clip is bone work rather than importer pivot bookkeeping.
     QJsonArray animations;
     for (const auto &anim : scene.animations) {

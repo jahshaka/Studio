@@ -26,7 +26,7 @@ namespace iris { struct ClipFileInfo; }
 /// The shape of the problem: an animation-only export is a MODEL file
 /// (.fbx/.dae/.glb/…) that carries a node hierarchy and animation channels and
 /// NO meshes. Every mesh path in the product refuses it —
-/// `iris::MeshNode::loadAsSceneFragment` returns null on `mNumMeshes == 0`
+/// `iris::loadAsSceneFragment` returns null on `mNumMeshes == 0`
 /// (meshnode.cpp) and nine callers rely on that, so the loader must not be
 /// relaxed. Such a file gets its own importer instead, and this file is the
 /// part that can look at one without the document model.

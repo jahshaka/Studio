@@ -12,7 +12,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)
 # format one — ASSIMP_BUILD_ALL_IMPORTERS_BY_DEFAULT is OFF, so dropping either
 # option compiles the importer out and the extension fails at ReadFile,
 # silently, at runtime. Drives the whole chain: raw assimp -> the canonical
-# preset -> MeshNode::loadAsSceneFragment -> AssetHelper -> the ONE import
+# preset -> iris::loadAsSceneFragment -> AssetHelper -> the ONE import
 # pipeline (AssetImportService, the assets.importFile path) -> the engine
 # thumbnail, with pixels. Needs the engine, so a reachable DISPLAY.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia OpenGL)

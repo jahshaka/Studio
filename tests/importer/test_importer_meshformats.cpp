@@ -22,7 +22,7 @@
 //
 // Sections:
 //   1. The allowlist gate + what assimp hands us (raw vs canonical preset).
-//   2. PLY through OUR paths: MeshNode::loadAsSceneFragment (direct load) and
+//   2. PLY through OUR paths: iris::loadAsSceneFragment (direct load) and
 //      AssetHelper::extractTexturesAndMaterialFromMesh (the import parse),
 //      vertex colours reaching the engine-facing MeshData.
 //   3. STL: normals under the canonical preset — including the zero-normal
@@ -56,6 +56,7 @@
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/import/scenebuilder.h"
 #include "irisgl/import/importflags.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "jahshaka/engine/Engine.h"
@@ -134,9 +135,9 @@ int main(int argc, char **argv)
 
     // ================= 2. PLY through our paths =================
     {
-        auto node = iris::MeshNode::loadAsSceneFragment(fixture("colored_quad.ply"),
+        auto node = iris::loadAsSceneFragment(fixture("colored_quad.ply"),
                                                         defaultMaterialFor);
-        CHECK(!node.isNull(), "2: the .ply loads through MeshNode::loadAsSceneFragment");
+        CHECK(!node.isNull(), "2: the .ply loads through iris::loadAsSceneFragment");
         auto meshNode = node.dynamicCast<iris::MeshNode>();
         CHECK(!meshNode.isNull(), "2: ... as a single MeshNode (no bones, one mesh)");
         if (meshNode) {
@@ -265,7 +266,7 @@ int main(int argc, char **argv)
 
         // 3c. Through our load path, both files.
         for (const char *f : { "tetra_normals.stl", "tetra_zeronormals.stl" }) {
-            auto node = iris::MeshNode::loadAsSceneFragment(fixture(f), defaultMaterialFor);
+            auto node = iris::loadAsSceneFragment(fixture(f), defaultMaterialFor);
             auto meshNode = node.dynamicCast<iris::MeshNode>();
             CHECK(!meshNode.isNull(),
                   QString("3c: %1 loads as a MeshNode").arg(f).toUtf8().constData());
@@ -386,7 +387,7 @@ int main(int argc, char **argv)
                 const Colour bg = EngineThumbnailRenderer::backgroundColour();
                 for (const char *f : { "colored_quad.ply", "tetra_normals.stl",
                                        "tetra_zeronormals.stl" }) {
-                    auto node = iris::MeshNode::loadAsSceneFragment(fixture(f), defaultMaterialFor);
+                    auto node = iris::loadAsSceneFragment(fixture(f), defaultMaterialFor);
                     const QImage thumb = renderer.renderNode(node, QSize(96, 96));
                     CHECK(!thumb.isNull() && thumb.size() == QSize(96, 96),
                           QString("6: %1 renders a 96x96 thumbnail").arg(f).toUtf8().constData());

@@ -17,7 +17,7 @@ For more information see the LICENSE file
 struct MaterialPreset;
 
 /// The conversion INTO a PbrMaterial that is not a saved definition: a shipped
-/// PRESET (an IMPORTED mesh's material data is irisgl's: document/materials/meshmaterial.h). (The pre-PBR builtin
+/// PRESET (an IMPORTED mesh's material data is irisgl's: import/meshmaterial.h). (The pre-PBR builtin
 /// shaders, their reserved guids and the legacy `values{}` readers are gone —
 /// FORWARD-ONLY-1: a material that is not stamped `materialType: "pbr"` is
 /// refused by the reader, never converted.)

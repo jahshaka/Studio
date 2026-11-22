@@ -4,7 +4,7 @@
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/material.h"
-#include "irisgl/document/materials/meshmaterial.h"
+#include "irisgl/import/meshmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"

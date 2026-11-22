@@ -7,7 +7,7 @@
 //
 //   1. Round trip. For every fixture: parse with assimp, build the document
 //      the old way (testmesh::fromScene +
-//      Mesh::extractAnimations + MeshNode::loadAsSceneFragment), then bake,
+//      iris::extractAnimations + iris::loadAsSceneFragment), then bake,
 //      serialize, deserialize, and compare — vertex buffers byte for byte,
 //      index buffers byte for byte, bounds, the picking TriMesh, the skeleton
 //      (names, hierarchy, bind matrices), every animation key, and the whole
@@ -320,13 +320,13 @@ static void roundTrip(const QString &relPath)
     const QList<iris::MeshPtr> parsedMeshes =
         testmesh::fromScene(scene);
     const QMap<QString, iris::SkeletalAnimationPtr> parsedAnims =
-        iris::Mesh::extractAnimations(scene, path);
+        iris::extractAnimations(scene, path);
     // The scratch dir is passed to BOTH sides: extractMaterialData WRITES
     // embedded textures, and with no directory it writes them beside the
     // source — which for a fixture means into the repository.
     QTemporaryDir scratch;
     const iris::SceneNodePtr parsedFragment =
-        iris::MeshNode::loadAsSceneFragment(path, scene, testMaterial, scratch.path());
+        iris::loadAsSceneFragment(path, scene, testMaterial, scratch.path());
 
     // The BAKE way: build, serialize, deserialize — nothing kept in memory
     // from the build, so what is compared is what a later process would read.
@@ -2932,7 +2932,7 @@ static void clipBake()
             Assimp::Importer importer;
             const aiScene *scene =
                 iris::readSceneFile(importer, chosen, iris::ImportFlags::ClipNamesOnly, rig.keysOnly());
-            const auto parsed = scene ? iris::Mesh::extractAnimations(scene, chosen)
+            const auto parsed = scene ? iris::extractAnimations(scene, chosen)
                                       : QMap<QString, iris::SkeletalAnimationPtr>();
             bool same = !parsed.isEmpty() && parsed.size() == baked.size();
             int compared = 0;

@@ -123,7 +123,7 @@ inline iris::Mat4 bindMeshSpace(const char *name)
 }
 
 /// The nearest ancestor of `name` that this piece also carries, or null when
-/// the piece carries none — exactly what Mesh::extractSkeleton records for an
+/// the piece carries none — exactly what iris::extractSkeleton records for an
 /// imported piece (the nearest BONE ancestor, pivots skipped).
 inline const char *nearestPresentParent(const PieceSpec &piece, const char *name)
 {

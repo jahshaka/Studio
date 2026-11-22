@@ -1301,7 +1301,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         if (!skel || skel->bones.isEmpty()) continue;
 
         // One glTF node per bone, carrying its BIND local TRS (Bone::binding*,
-        // which Mesh::extractSkeleton fills). The animation channels below are
+        // which iris::extractSkeleton fills). The animation channels below are
         // bone-local and ABSOLUTE, which is glTF's own convention — deliberately
         // not the bind-relative delta form an Ogre skeleton wants; the two live
         // in different places and must not be confused.

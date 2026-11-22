@@ -11,7 +11,7 @@
 // + the rig TEMPLATE skeleton) and the scene-node hierarchy that carries the
 // pose (SceneNode::updateAnimation walks `children` by name — the bone
 // hierarchy IS the scene-node hierarchy for an imported model). buildArmRig
-// builds both, exactly as MeshNode::loadAsSceneFragment's _buildScene would.
+// builds both, exactly as iris::loadAsSceneFragment's _buildScene would.
 
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"

@@ -15,7 +15,7 @@ For more information see the LICENSE file
 // (import/graphicshelper) is not production code any more. It lives here, in
 // the `jah_testmesh` library the suites that include testmesh.h link
 // (tests/CMakeLists.txt), and is the PARSE TWIN the mesh bake's round trip is
-// compared against: the same `new Mesh(aiMesh*)` + Mesh::extractSkeleton over
+// compared against: the same iris::meshFromAiMesh + iris::extractSkeleton over
 // the same choke point (readSceneFile, the canonical preset).
 
 #include "testmesh.h"
@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/import/importflags.h"
+#include "irisgl/import/scenebuilder.h"
 #include "irisgl/import/scenesource.h"
 
 namespace testmesh
@@ -37,8 +38,8 @@ QList<iris::MeshPtr> fromScene(const aiScene *scene)
     if (!scene) return meshes;
     for (unsigned i = 0; i < scene->mNumMeshes; ++i) {
         aiMesh *m = scene->mMeshes[i];
-        auto mesh = iris::MeshPtr(new iris::Mesh(m));
-        if (m->HasBones()) mesh->setSkeleton(iris::Mesh::extractSkeleton(m, scene));
+        auto mesh = iris::meshFromAiMesh(m);
+        if (m->HasBones()) mesh->setSkeleton(iris::extractSkeleton(m, scene));
         meshes.append(mesh);
     }
     return meshes;

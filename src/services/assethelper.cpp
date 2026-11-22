@@ -21,10 +21,11 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/import/scenebuilder.h"
 
 #include "io/scenewriter.h"
 #include "io/assetmanager.h"
-#include "irisgl/document/materials/meshmaterial.h"
+#include "irisgl/import/meshmaterial.h"
 #include "irisgl/core/logger.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -219,7 +220,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         ssource = localSource.data();
     }
     // load mesh as scene
-    auto node = iris::MeshNode::loadAsSceneFragment(filePath, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
+    auto node = iris::loadAsSceneFragment(filePath, [&](iris::MeshPtr mesh, iris::MeshMaterialData& data)
     {
         const auto isFile = [](const QString &p) {
             return !p.isEmpty() && QFileInfo::exists(p) && QFileInfo(p).isFile();
@@ -245,7 +246,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
         }
 
         // No pbrMetallicRoughness in the source: the legacy Blinn fields go
-        // through the shared conversion (irisgl/document/materials/meshmaterial.h) instead of the
+        // through the shared conversion (irisgl/import/meshmaterial.h) instead of the
         // Default.shader CustomMaterial this used to build. An embedded diffuse
         // texture still neutralises the colour — the importer reports a tint AND the
         // baked texture, and multiplying them darkened every embedded-texture

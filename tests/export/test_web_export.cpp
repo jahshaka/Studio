@@ -26,6 +26,7 @@
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "irisgl/import/scenebuilder.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -786,7 +787,7 @@ int main(int argc, char **argv)
     // The block above cannot catch that: it builds its skeleton in code and
     // assigns bindingPos by hand. This one goes through the REAL importer.
     {
-        auto fragment = iris::MeshNode::loadAsSceneFragment(
+        auto fragment = iris::loadAsSceneFragment(
             QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb"),
             [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
                 return iris::PbrMaterial::create();

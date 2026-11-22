@@ -24,7 +24,7 @@
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/core/properties/property.h"
 #include <QFileInfo>
-#include "irisgl/document/materials/meshmaterial.h"
+#include "irisgl/import/meshmaterial.h"
 #include "irisgl/document/assets/shippedmeshes.h"
 #include "irisgl/mirror/scenemirror.h"
 #include "bridge/offscreenrenderscope.h"

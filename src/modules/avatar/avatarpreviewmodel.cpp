@@ -37,7 +37,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
-#include "irisgl/document/materials/meshmaterial.h"
+#include "irisgl/import/meshmaterial.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "services/assethelper.h"
 #include "services/meshbakestore.h"
@@ -295,7 +295,7 @@ AvatarPreviewModel::prepareSubject(const SubjectSource &source)
         return prepared;
     }
     // The ONE material conversion every baked fragment takes
-    // (irisgl/document/materials/meshmaterial.h); the stored definition re-points the textures
+    // (irisgl/import/meshmaterial.h); the stored definition re-points the textures
     // at apply time.
     const auto makeMaterial = [](iris::MeshPtr, iris::MeshMaterialData &data) {
         return iris::MaterialPtr(iris::materialFromMeshData(data));
@@ -360,7 +360,7 @@ bool AvatarPreviewModel::applySubject(const std::shared_ptr<PreparedSubject> &pr
     rescaleSpace();
 
     // Clip list, in the order the fragment carries them, with display names
-    // uniquified the way Mesh::extractAnimations uniquifies raw ones.
+    // uniquified the way iris::extractAnimations uniquifies raw ones.
     QSet<QString> used;
     for (const auto &anim : node->getAnimations()) {
         if (!anim) continue;
