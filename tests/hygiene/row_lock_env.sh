@@ -27,5 +27,17 @@ st=$(sed 's/.*) //' "/proc/$SP/stat" | cut -d' ' -f20)
 cmd=$(env -u JAH_GPU_LOCK_HELD -u DISPLAY JAH_GPU_LOCK="$T/lock" JAH_GPU_PLACE="place:$SP-$st" JAH_GPU_CALLER=$$ "$LOCKSH" --label E env | leaks)
 kill "$SP" 2> /dev/null
 want "$([ -z "$cmd" ] && echo 1)" "(2) a hold started with the call's place and caller: its command sees neither (${cmd:-none})"
+# (3) THE TWO DOORS GIVE ONE ENVIRONMENT (COLD-BOOT-1's feature end, 2026-11-22: under spec.sh test every row ran with NO shared
+# driver cache - the rows run under util.CardLock's hold, JAH_GPU_LOCK_HELD=1, and the lock returned on its nested paths before it
+# exported __GL_SHADER_DISK_CACHE_PATH; shadercache.seed_boot.twin REFUSED "no warm driver cache"): a hold's command sees the same
+# driver cache path and size, and the same VR default, through the lock's own door (rig.sh run), under a holder (the CardLock
+# door: the scope's path) and nested inside a hold (JAH_GPU_HOLD set: the exec path)
+seen() { env -u __GL_SHADER_DISK_CACHE_PATH -u __GL_SHADER_DISK_CACHE_SIZE -u JAHSHAKA_VR -u DISPLAY "$@" "$LOCKSH" --label E \
+             sh -c 'echo "${__GL_SHADER_DISK_CACHE_PATH:-unset} ${__GL_SHADER_DISK_CACHE_SIZE:-unset} ${JAHSHAKA_VR:-unset}"'; }
+own=$(seen -u JAH_GPU_LOCK_HELD JAH_GPU_LOCK="$T/lock" JAH_GPU_NO_SCOPE=1)
+held=$(seen JAH_GPU_LOCK="$T/lock" JAH_GPU_LOCK_HELD=1 JAH_GPU_NO_SCOPE=1)
+nest=$(seen JAH_GPU_LOCK="$T/lock" JAH_GPU_LOCK_HELD=1 JAH_GPU_HOLD=jahgpu-toy)
+want "$(case "$own" in *unset*) ;; *) [ "$own" = "$held" ] && [ "$own" = "$nest" ] && echo 1 ;; esac)" \
+     "(3) the two doors give a hold's command one environment: its own door '$own', under a holder '$held', nested '$nest'"
 echo "tooling.row_lock_env: $([ $fails = 0 ] && echo PASS || echo "FAIL ($fails)")"
 exit $((fails > 0))

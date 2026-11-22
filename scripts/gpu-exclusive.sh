@@ -99,9 +99,19 @@
 # THE CALL's IDENTITY STOPS AT THE HOLD (CARD-QUEUE-1 M1, the second engineer's review: a call's place in a row's environment
 # turned the lock's own rows red): JAH_GPU_PLACE and JAH_GPU_CALLER are read here, for this hold, and REMOVED before the command
 # runs (a nested call included) - the command and every row under it never take the call's place or its caller. The one list
-# of what a hold's command (and so a row) may see of the lock - tooling.row_lock_env reads the next line:
+# of what a hold's command (and so a row) may see of the lock is the "A HOLD's COMMAND SEES:" line below (tooling.row_lock_env reads it).
+# THE ONE ENVIRONMENT OF A HOLD's COMMAND, WHICHEVER DOOR (COLD-BOOT-1's feature end, 2026-11-22: the driver-cache exports below
+# once came AFTER the nested and the held paths, so every row under util.CardLock's hold - every `spec.sh test` row - ran with NO
+# shared driver cache while a `rig.sh run` row had it; tooling.row_lock_env (3)): what the lock SETS is set here, at the top, for
+# every path - the VR default, the driver's shader cache (URGENT #91 + #99, 2026-10-28: /etc/profile.d is not sourced in an
+# agent's shell, and a row's fresh HOME has no driver cache, so every run redid the driver's work; the driver appends GLCache/
+# itself, so the path is the PARENT - the login user's passwd home, never a spelled one, BOX-LOCAL-1 - and the rows share the
+# box's own cache, #97) - and what it PASSES of its own variables is the list on the next line:
 # A HOLD's COMMAND SEES: JAH_GPU_LOCK_HELD JAH_GPU_HOLD JAH_GPU_LOCK JAH_GPU_HOLD_LOG JAH_GPU_RESERVE_S JAH_GPU_PLACE_S JAH_GPU_MEM_MAX JAH_GPU_SWAP_MAX JAH_GPU_NO_SCOPE JAH_GPU_SWEEP_GRACE
 export JAHSHAKA_VR="${JAHSHAKA_VR-0}"
+export __GL_SHADER_DISK_CACHE_SIZE="${__GL_SHADER_DISK_CACHE_SIZE:-8589934592}"
+_ph=$(getent passwd "$(id -u)" | cut -d: -f6)
+export __GL_SHADER_DISK_CACHE_PATH="${__GL_SHADER_DISK_CACHE_PATH:-${_ph:-$HOME}/.cache/nvidia}"
 here="$(cd "$(dirname "$0")" && pwd)"
 card_lock=/tmp/jah-gpu.lock
 holds_log() {   # the hold log's path (the header's THE LOG IS ON DISK): only the card's lock writes the card's log
@@ -330,13 +340,6 @@ if [ "${JAH_GPU_LOCK_HELD:-}" = 1 ]; then   # a holder holds the card (util.Card
     hold_run "jahgpu-n$$-$(date +%s%N)" "${bound[@]}" "$@"
     exit $?
 fi
-# THE DRIVER's SHADER CACHE REACHES EVERY GPU RUN (URGENT #91 + #99, 2026-10-28): /etc/profile.d is not sourced in an agent's
-# shell, and a row's fresh HOME has no driver cache at all, so every run redid the driver's work. Every GPU run passes here.
-export __GL_SHADER_DISK_CACHE_SIZE="${__GL_SHADER_DISK_CACHE_SIZE:-8589934592}"
-# the driver appends GLCache/ itself: the path is the PARENT, so the rows share the box's own cache (#97's diagnosis)
-# - the login user's passwd home, never a spelled one (BOX-LOCAL-1: no box's path in a script)
-_ph=$(getent passwd "$(id -u)" | cut -d: -f6)
-export __GL_SHADER_DISK_CACHE_PATH="${__GL_SHADER_DISK_CACHE_PATH:-${_ph:-$HOME}/.cache/nvidia}"
 exec 9>>"$lock"
 # THE TICKET (URGENT #113): the number and the ticket file under the queue's own lock, so a lower ticket always exists
 # before a higher one is seen
