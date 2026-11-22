@@ -522,7 +522,8 @@ jah_no_display(engine.compute_job_slots)
 # equal inputs hits its record (no parse); the hook's key is the only key; a record whose source does not hash to its
 # program key is not filed; clearShaderCache clears the file memo; equal text with slots of other types never shares a
 # program (F2a); the render system's properties are the key's (F2b); a second launch's prewarmed code serves the first
-# dispatch with no parse. Two NULL Roots in turn: a CPU code row.
+# dispatch with no parse, and one made BEFORE that code is published joins its code job (no parse: the warm boot's
+# atmosphere dispatches). Three NULL Roots in turn: a CPU code row.
 add_executable(test_compute_record_hit test_compute_record_hit.cpp)
 set_target_properties(test_compute_record_hit PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF

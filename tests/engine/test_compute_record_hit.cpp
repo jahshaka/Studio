@@ -17,6 +17,8 @@
 //       of the same job (two records), never the same key over another parse.
 //   (7) THE NEXT LAUNCH: a second Root takes the first's records through jahPrewarmCode - code only, on the async compiler
 //       - and the job's first dispatch builds its PSO with NO parse.
+//   (8) THE JOIN (the final read's item 3a): the same, dispatched BEFORE the prewarmed code is published (its program
+//       enters the code cache only at the code job's publish, on the main thread) - the hit joins the job: NO parse.
 #include <OgreAbiUtils.h>
 #include <OgreGpuProgramManager.h>
 #include <OgreHlmsCompute.h>
@@ -310,6 +312,30 @@ static int run() {
               "(7) the next launch's first dispatch builds its PSO from the prewarmed code: parsed +%llu, PSOs +%llu",
               (unsigned long long)(hc->getJahParsedInFrame() - p0), (unsigned long long)(hc->getJahPsoInFrame() - s0));
         hc->destroyComputeJob("next/a");
+        compiler->setNumThreads(0u);
+        Ogre::HlmsCompute::msJahComputeKeyHook = nullptr;
+    }
+
+    // (8) THE JOIN: the next launch dispatches BEFORE its prewarmed code is published (the atmosphere's synchronous LUT
+    // dispatches on a warm boot: four template parses in the gate's frames, shadercache.app.warm's red). A program enters
+    // the code cache only at the code job's publish, on the main thread; the hit on a record whose job is in flight joins
+    // that job instead of parsing.
+    {
+        Launch l;
+        if (!l.boot(dir, "hit-3.log")) { std::printf("FAIL: the third NULL boot\n"); return 1; }
+        Ogre::HlmsCompute *hc = l.hc;
+        Ogre::HlmsCompute::msJahComputeKeyHook = hook;
+        Ogre::HlmsAsyncCompiler *compiler = l.root->getHlmsManager()->getAsyncCompiler();
+        compiler->setNumThreads(1u, 0);
+        std::vector<Ogre::HlmsCompute::JahCodeRecord> records = handedOver;
+        hc->jahPrewarmCode(records);   // its code job submitted; nothing publishes it before the dispatch below
+        Ogre::HlmsComputeJob *a = makeJob(hc, "join/a", "JahHitA");
+        const Ogre::uint64 p0 = hc->getJahParsedInFrame(), s0 = hc->getJahPsoInFrame();
+        hc->dispatch(a, nullptr, nullptr);
+        CHECK(hc->getJahParsedInFrame() == p0 && hc->getJahPsoInFrame() == s0 + 1u,
+              "(8) a dispatch while the record's code job is in flight JOINS it: parsed +%llu, PSOs +%llu",
+              (unsigned long long)(hc->getJahParsedInFrame() - p0), (unsigned long long)(hc->getJahPsoInFrame() - s0));
+        hc->destroyComputeJob("join/a");
         compiler->setNumThreads(0u);
         Ogre::HlmsCompute::msJahComputeKeyHook = nullptr;
     }
