@@ -768,3 +768,14 @@ target_include_directories(test_ray_view_cache PRIVATE ${CMAKE_SOURCE_DIR}/irisg
 add_test(NAME engine.ray_view_cache COMMAND test_ray_view_cache)
 set_tests_properties(engine.ray_view_cache PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.ray_view_cache)
+
+# engine.ray_input_guard — A RAY JOB WITH A NULL INPUT VIEW REFUSES ITS DISPATCH AND SAYS SO ONCE (GATHER-HANG-1 stage 2;
+# RayInputGuard.h says the law): refused and counted every time, said the first time per job; the forced non-resident
+# input (textureView's image 0 -> the cache's null view -> the job refuses). The headers only: a CPU code row. Red first
+# on the base's silent decline (spikes/gather-hang-1/stage2/guard-red-first.txt).
+add_executable(test_ray_input_guard test_ray_input_guard.cpp)
+set_target_properties(test_ray_input_guard PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_ray_input_guard PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.ray_input_guard COMMAND test_ray_input_guard)
+set_tests_properties(engine.ray_input_guard PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.ray_input_guard)

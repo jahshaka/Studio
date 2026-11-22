@@ -15,7 +15,8 @@
 // THE NaN ARM (argv[1] "nanray": gi.ray_nan_refused; GATHER-HANG-1 stage 2, JAH_RQ_INIT): the same scene, uncut. (4) a
 // healthy scene refuses no ray: rayQuery.raysRefused reads 0 after its frames; (5) the test door rayquery.nanRay
 // (invocation 0 of each job with the hit params traces from a NaN origin, by its bits): the frames END, the counter
-// moves (every such ray refused - an empty query, a miss - never traced), and every texel stays finite. Red on the base:
+// moves (every such ray refused - an empty query, a miss - never traced), every texel stays finite, and a frame is marked
+// INCOMPLETE by the ray input term (PublishedFrame::Completeness bit 5: no rest decision on it). Red on the base:
 // the status field rayQuery.raysRefused and the door do not exist - NEVER an unguarded NaN ray on the card (undefined in
 // the API: a device loss under the shared lock).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
@@ -149,9 +150,12 @@ int main(int argc, char **argv)
         if (!e->setArm("rayquery.nanRay", 1.0)) { std::printf("FAIL: the door rayquery.nanRay\n"); return 1; }
         const int from = frames;
         unsigned long long refused = healthy;
-        for (int f = 0; f < 30 && refused == healthy; ++f) {
+        bool incompleteSeen = false;
+        for (int f = 0; f < 30 && !(refused > healthy && incompleteSeen); ++f) {
             run(1);
             refused = scene->published().rayQuery.raysRefused;
+            const PublishedFrame::Completeness c = scene->published().completeness;
+            incompleteSeen = incompleteSeen || (c.incomplete && (c.terms & 32u) != 0u);
         }
         const bool ok1 = read(mean, finite, zero);
         e->setArm("rayquery.nanRay", 0.0);
@@ -159,6 +163,8 @@ int main(int argc, char **argv)
                     healthy, refused, int(finite));
         check(refused > healthy, "(5) THE NaN DOOR: the frames end and every NaN ray is REFUSED (counted, never traced)");
         check(ok1 && finite, "(5) THE NaN DOOR: every texel of the picture stays finite (by its bits)");
+        check(incompleteSeen, "(5) THE NaN DOOR: a frame with a refused ray is INCOMPLETE (PublishedFrame::Completeness "
+                              "term bit 5: no rest decision on it)");
         std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
         return g_fail ? 1 : 0;
     }
