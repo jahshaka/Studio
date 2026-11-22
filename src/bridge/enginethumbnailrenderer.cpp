@@ -10,6 +10,7 @@
 #include <QDebug>
 #include <QThread>
 #include <QtMath>
+#include <chrono>
 #include <cstring>
 #include <memory>
 #include <utility>
@@ -492,9 +493,17 @@ QImage EngineThumbnailRenderer::render(iris::ScenePtr document, iris::CameraNode
     // THE PICTURE SERVICE (U3 stage 3): the still picture's settle, the stable frames, the readback — one request.
     Image img;
     bool ok = false;
-    takePicture(engine.get(), PictureRequest::stillPicture(view()->scene(), view()), [&](Picture &&p) {
+    // PREVIEWS-1 stage 0 MEASURING ARM (reverted by its own commit): the frames a tile costs against settleCap, and
+    // whether the studio gathers.
+    const PictureRequest armReq = PictureRequest::stillPicture(view()->scene(), view());
+    const auto armT0 = std::chrono::steady_clock::now();
+    takePicture(engine.get(), armReq, [&](Picture &&p) {
         ok = p.ok;
         img = std::move(p.rgba);
+        const double armMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - armT0).count();
+        qInfo("PREVIEWS-1-ARM tile frames=%u settleCap=%u gather.on=%d giAtRest=%d ok=%d ms=%.2f size=%dx%d",
+              p.frames, armReq.settleCap, int(view()->scene()->published().gi.gather.on),
+              int(view()->scene()->published().gi.giAtRest), int(p.ok), armMs, size.width(), size.height());
     });
     view()->setEnabled(false);
 
