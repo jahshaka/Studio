@@ -16,15 +16,20 @@ Qt header. THE LAW, both ways, per line and per measure (tokens, includes):
 THE Qt-FREE TARGET, IrisCore (irisgl/core/CMakeLists.txt), read from the build:
   T1 its compile lines in build.ninja (at least one) name no Qt include directory, no Qt define and no Qt code generator's
      output (an _autogen directory) - so no Qt header can be reached;
-  T2 `nm -C` of its archive lists at least one defined symbol (it read an archive) and names no Qt symbol;
+  T2 `nm -C` of its shared library lists at least one defined symbol (it read a library) and names no Qt symbol;
   T3 no source of it includes, transitively, a header outside irisgl/core/, the standard library and the few platform C
-     headers SYSTEM_HEADERS names (POSIX open/fsync/getpid).
+     headers SYSTEM_HEADERS names (POSIX open/fsync/getpid);
+  T4 ONE COPY OF EVERY STATEFUL SYMBOL (the lead's ruling 2026-11-22: IrisCore is SHARED so that the temp serial, the guid
+     engine and the log sink exist once in a process on every platform): `nm -C --defined-only` of bin/Jahshaka,
+     bin/libIrisGL*.so, bin/jahengine and bin/jahlab defines no STATEFUL symbol (iris::files::, iris::newGuid) - only
+     libIrisCore does (its own count > 0: the control). A static IrisCore pulled into an image is red here.
 THE APP's Qt-CONVERSION HEADER, src/app/qtstd.h: no C++ file under irisgl/ includes it (it lives above the line).
 Run: no_qt_below.py <source-root> <build-dir> [--counts]   (--counts prints the measured lines, never fails: a builder's aid)
 The self-test runs first, always: the stripper's cases, every token and include form counted and its commented and quoted
 copies not, the law both ways, an unheld file, T1-T3 on fixtures, the qtstd.h rule.
 """
 import bisect
+import glob
 import os
 import re
 import subprocess
@@ -188,10 +193,12 @@ def qtstd_includers(files):
     return out
 
 
-# ---- THE Qt-FREE TARGET (T1-T3) ------------------------------------------------------------------------------------
+# ---- THE Qt-FREE TARGET (T1-T4) ------------------------------------------------------------------------------------
 TARGET = 'IrisCore'
 QT_ARG = re.compile(r'/[qQ]t[56]?(?:/|$)|/Qt[A-Z][A-Za-z0-9]*(?:/|$)|/Qt/\d|_autogen(?:/|$)|^-DQT_|^-DQ_')
 QT_SYMBOL = re.compile(r'\bQ[A-Z][a-z]\w*|\bQ_[A-Z_]+|\bQT_\w+|\bqt_\w+')
+STATEFUL = re.compile(r'\biris::files::|\biris::newGuid\b')   # one copy in a process (T4)
+IMAGES = ('Jahshaka', 'libIrisGL*.so', 'jahengine', 'jahlab')    # under <build>/bin: every image that links IrisCore
 DEFINED = re.compile(r'^\s*(?:[0-9a-fA-F]+\s+)?[TtDdBbRrWwVvGgSs]\s+\S')
 STD_HEADERS = set('''algorithm any array atomic barrier bit bitset cassert cctype cerrno cfenv cfloat charconv chrono cinttypes
 climits clocale cmath codecvt compare complex concepts condition_variable coroutine csetjmp csignal cstdarg cstddef cstdint
@@ -205,10 +212,10 @@ SYSTEM_HEADERS = {'fcntl.h', 'unistd.h', 'process.h'}
 
 
 def ninja_target(text, target=TARGET):
-    """([(source, {var: value})], archive path or None) of `target`'s compile blocks and static link line in build.ninja"""
-    blocks, archive, cur = [], None, None
+    """([(source, {var: value})], library path or None) of `target`'s compile blocks and its link line in build.ninja"""
+    blocks, library, cur = [], None, None
     rule_c = re.compile(r'^build ([^:]+?\.o(?:bj)?): CXX_COMPILER__%s_\S*\s+(\S+)' % re.escape(target))
-    rule_a = re.compile(r'^build ([^:]+?): CXX_STATIC_LIBRARY_LINKER__%s_' % re.escape(target))
+    rule_a = re.compile(r'^build ([^:]+?): CXX_(?:STATIC|SHARED)_LIBRARY_LINKER__%s_' % re.escape(target))
     for line in text.split('\n'):
         m = rule_c.match(line)
         if m:
@@ -217,14 +224,14 @@ def ninja_target(text, target=TARGET):
             continue
         m = rule_a.match(line)
         if m:
-            archive, cur = m.group(1), None
+            library, cur = m.group(1), None
             continue
         if cur is not None and line.startswith('  ') and ' =' in line:
             k, _, v = line.strip().partition(' =')
             cur[k] = v.strip()
         elif not line.startswith('  '):
             cur = None
-    return blocks, archive
+    return blocks, library
 
 
 def t1_bad(blocks):
@@ -240,6 +247,12 @@ def t2_read(nm_text):
     """(defined symbol count, [Qt symbol lines]) of `nm -C` text"""
     lines = [l for l in nm_text.split('\n') if l.strip() and not l.endswith(':')]
     return sum(1 for l in lines if DEFINED.match(l)), [l.strip() for l in lines if QT_SYMBOL.search(l)]
+
+
+def t4_bad(defined):
+    """[(image, symbol)] of the STATEFUL symbols `defined` ({image: `nm -C --defined-only` text}) defines"""
+    return [(img, l.strip()) for img, text in sorted(defined.items()) for l in text.split('\n')
+            if DEFINED.match(l) and STATEFUL.search(l)]
 
 
 def t3_bad(sources, core_root, read):
@@ -276,27 +289,43 @@ def t3_bad(sources, core_root, read):
 
 
 def check_target(root, build):
-    """the RED lines of T1-T3, and the controls' counts"""
+    """the RED lines of T1-T4, and the controls' counts (compile lines, defined symbols, stateful symbols of the library)"""
     red = []
     ninja = os.path.join(build, 'build.ninja')
     if not os.path.isfile(ninja):
-        return ['RED  T1: no %s - the row reads a configured tree' % ninja], 0, 0
-    blocks, archive = ninja_target(open(ninja, encoding='utf-8', errors='replace').read())
+        return ['RED  T1: no %s - the row reads a configured tree' % ninja], 0, 0, 0
+    blocks, library = ninja_target(open(ninja, encoding='utf-8', errors='replace').read())
     if not blocks:
         red.append('RED  T1: build.ninja holds no compile line of %s (the target is gone, or renamed)' % TARGET)
     for src, a in t1_bad(blocks):
         red.append('RED  T1: %s compiles %s with %s - a Qt include directory, define or generator on IrisCore'
                    % (TARGET, src, a))
-    ndef = 0
-    apath = os.path.join(build, archive) if archive else None
+    ndef = nstate = 0
+    apath = os.path.join(build, library) if library else None
     if not apath or not os.path.isfile(apath):
-        red.append('RED  T2: %s\'s archive (%s) is not built - build the tree first' % (TARGET, archive))
+        red.append('RED  T2: %s\'s library (%s) is not built - build the tree first' % (TARGET, library))
     else:
         nm = subprocess.run(['nm', '-C', apath], capture_output=True, text=True)
         ndef, qt = t2_read(nm.stdout)
         if nm.returncode != 0 or ndef == 0:
             red.append('RED  T2: nm read no defined symbol from %s (rc %d): the control reads nothing' % (apath, nm.returncode))
         red += ['RED  T2: %s holds a Qt symbol: %s' % (apath, q) for q in qt]
+        # T4: only the library defines a stateful symbol; its own count is the control
+        own = subprocess.run(['nm', '-C', '--defined-only', apath], capture_output=True, text=True).stdout
+        nstate = len(t4_bad({apath: own}))
+        if nstate == 0:
+            red.append('RED  T4: %s defines no stateful symbol (%s): the control reads nothing' % (apath, STATEFUL.pattern))
+        procs = {}
+        for pat in IMAGES:   # the images are large (the app ~0.4 GB): their nm runs side by side
+            found = glob.glob(os.path.join(build, 'bin', pat))
+            if not found:
+                red.append('RED  T4: no bin/%s - every image that links IrisCore is read (build the tree first)' % pat)
+            for img in found:
+                procs[img] = subprocess.Popen(['nm', '-C', '--defined-only', img], stdout=subprocess.PIPE,
+                                              stderr=subprocess.DEVNULL, text=True)
+        defined = {img: p.communicate()[0] for img, p in procs.items()}
+        red += ['RED  T4: %s DEFINES %s - a second copy of a stateful symbol (IrisCore must be the one shared library '
+                'that defines it)' % b for b in t4_bad(defined)]
     core = os.path.join(root, 'irisgl', 'core')
 
     def read(p):
@@ -306,7 +335,7 @@ def check_target(root, build):
             return None
     srcs = [s if os.path.isabs(s) else os.path.normpath(os.path.join(build, s)) for s, _ in blocks]
     red += ['RED  T3: %s:%d includes %s - %s' % b for b in t3_bad(srcs, core, read)]
-    return red, len(blocks), ndef
+    return red, len(blocks), ndef, nstate
 
 
 # ---- the self-test ---------------------------------------------------------------------------------------------------
@@ -316,7 +345,7 @@ NINJA_FIXTURE = '''build irisgl/core/CMakeFiles/IrisCore.dir/geometry/plane.cpp.
   INCLUDES = -I/s/build/generated -I/s/irisgl %s
 build irisgl/CMakeFiles/IrisGL.dir/x.cpp.o: CXX_COMPILER__IrisGL_unscanned_Debug /s/irisgl/x.cpp
   INCLUDES = -isystem /usr/include/x86_64-linux-gnu/qt6/QtCore
-build irisgl/core/libIrisCored.a: CXX_STATIC_LIBRARY_LINKER__IrisCore_Debug irisgl/core/CMakeFiles/IrisCore.dir/geometry/plane.cpp.o
+build bin/libIrisCored.so: CXX_SHARED_LIBRARY_LINKER__IrisCore_Debug irisgl/core/CMakeFiles/IrisCore.dir/geometry/plane.cpp.o
 '''
 
 
@@ -382,8 +411,11 @@ def self_test():
         bad.append('the qtstd.h rule found %r, not irisgl/document/a.cpp alone' % inc)
     # T1: the clean fixture passes, a qt6 -isystem, a QT_ define and an autogen directory each red; IrisGL's own Qt line never
     clean, archive = ninja_target(NINJA_FIXTURE % ('-DIRIS=1', ''))
-    if len(clean) != 1 or t1_bad(clean) or archive != 'irisgl/core/libIrisCored.a':
+    if len(clean) != 1 or t1_bad(clean) or archive != 'bin/libIrisCored.so':
         bad.append('T1 read the clean fixture wrong: %r %r %r' % (clean, t1_bad(clean), archive))
+    if ninja_target(NINJA_FIXTURE.replace('CXX_SHARED_LIBRARY', 'CXX_STATIC_LIBRARY').replace('bin/libIrisCored.so',
+                                                                                                'lib/libIrisCored.a'))[1] != 'lib/libIrisCored.a':
+        bad.append('T1 did not read a static link line')
     for d, i in (('', '-isystem /usr/include/x86_64-linux-gnu/qt6/QtCore'), ('', '-isystem /usr/include/x86_64-linux-gnu/qt6'),
                  ('', '-I/opt/Qt/6.10.0/gcc_64/include'), ('-DQT_CORE_LIB', ''),
                  ('', '-I/s/build/irisgl/core/IrisCore_autogen/include')):
@@ -397,6 +429,15 @@ def self_test():
     if len(t2_read(nm + '                 U QString::QString(char const*)\n')[1]) != 1 or \
             len(t2_read(nm + '0000000000000020 T iris::f(QList<int> const&)\n')[1]) != 1:
         bad.append('T2 did not red a needed or a defined Qt symbol')
+    # T4: a defined stateful symbol in another image reds, an undefined one (the import) and another iris symbol never
+    imgs = {'bin/Jahshaka': '0000 T iris::files::writeAtomic(std::filesystem::path const&)\n                 U iris::newGuid[abi:cxx11]()\n'
+                            '0000 W iris::Signal<>::notify() const\n0000 T iris::text::trim(std::string_view)\n',
+            'bin/libIrisGLd.so': '0000 b iris::files::stagingTempPath(std::filesystem::path const&)::sSerial\n'
+                                 '0000 T iris::newGuid[abi:cxx11]()\n0000 T iris::newGuidance()\n'}
+    got = t4_bad(imgs)
+    if [i for i, _ in got] != ['bin/Jahshaka', 'bin/libIrisGLd.so', 'bin/libIrisGLd.so'] or \
+            any(w in l for _, l in got for w in ('newGuidance', 'notify', 'trim', ' U ')):
+        bad.append('T4 read the images wrong: %r' % got)
     # T3: core/ and the standard library pass; a Qt header, a header outside core/, a missing header each red
     fs = {'/r/irisgl/core/a.cpp': '#include "core/b.h"\n#include <vector>\n', '/r/irisgl/core/b.h': '#include "c.h"\n',
           '/r/irisgl/core/c.h': '#include <cmath>\n', '/r/irisgl/document/d.h': '',
@@ -442,17 +483,18 @@ def main():
         print('%s: FAILED (%d)' % (ROW, len(bad)))
         return 1
     print('ok   the self-test: the stripper (%d cases), the token and include forms, the law both ways, an unheld file, '
-          'a line gone, the qtstd.h rule, T1-T3 on fixtures' % len(STRIP_CASES))
+          'a line gone, the qtstd.h rule, T1-T4 on fixtures' % len(STRIP_CASES))
     red = judge(got, table)
     red += ['RED  %s:%d  %s - src/app/qtstd.h is the app\'s; nothing below the editor includes it' % s
             for s in qtstd_includers(files)]
-    tred, nblocks, ndef = check_target(root, build)
+    tred, nblocks, ndef, nstate = check_target(root, build)
     red += tred
     # the non-zero control, every run: each line prints what it read (a line with a ceiling above 0 that read 0 reds above)
     for name, kind, ct, ci, _ in table:
         toks, incs, n = got[(name, kind)]
         print('line %-22s [%s] %4d files  %5d tokens / %d  %4d includes / %d' % (name, kind, n, len(toks), ct, len(incs), ci))
-    print('%s: %d compile line(s) read, %d defined symbols in its archive' % (TARGET, nblocks, ndef))
+    print('%s: %d compile line(s) read, %d defined symbols in its library, %d stateful symbols defined there alone'
+          % (TARGET, nblocks, ndef, nstate))
     for r in red:
         print(r)
     nred = sum(1 for r in red if r.startswith('RED'))
