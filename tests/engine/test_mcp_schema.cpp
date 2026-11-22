@@ -1,4 +1,4 @@
-// mcp.schema — THE SIGNATURE AS A SCHEMA, ON THE CPU (MCP-ON-HOST-1 stage 1; irisgl/engine/mcp/schema.h says the form).
+// mcp.schema — THE SIGNATURE AS A SCHEMA, ON THE CPU (MCP-ON-HOST-1 stage 1; irisgl/engine/mcp/include/mcp/schema.h says the form).
 // No device: the engine's commands registered with NO engine (as jahengine --list registers them), and a synthetic
 // registry of every Param form.
 // THE LAWS: every Param form maps to its expected text; EVERY registered command maps with no unmapped field to a schema
