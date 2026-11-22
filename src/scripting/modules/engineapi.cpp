@@ -23,8 +23,9 @@ QVector<VerbInfo> EngineApi::verbs() const
           "arm and answers the value set — the engine LATCHES it at the top of the next frame, so a "
           "frame never sees two values of one arm and the change shows from the next "
           "editor.frame(); an unknown name, a value outside the arm's range or a TEST arm (a "
-          "fixture's door: shaders.asyncFail, frames.incompleteHold) is refused (null, the reason in "
-          "app.lastError()) and changes nothing. Without `value` it READS the value "
+          "fixture's door that makes the engine misbehave on purpose: shaders.asyncFail, "
+          "frames.incompleteHold, rays.buildHold, rays.buildHoldIds, rays.buildFail, "
+          "textures.residencyHold) is refused (null, the reason in app.lastError()) and changes nothing. Without `value` it READS the value "
           "the current frame uses. engine.arms() lists every arm with its default, range and what "
           "it changes. Nothing in the product sets an arm: every default is the shipped picture, "
           "and an arm left set is a measurement left running.",

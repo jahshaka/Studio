@@ -2,14 +2,18 @@
 # source.test_arms_unreachable (SHADER-SYSTEM-1, the lead's ruling (b) on COLD-BOOT-1's final read) - A TEST ARM IS A
 # FIXTURE's DOOR: THE APP CANNOT SET ONE.
 #
-# WHY: two arms of the engine's registry exist only to force a state a test cannot otherwise reach - shaders.asyncFail
-# (every object's own permutation FAILS at its request: the fork's HlmsAsyncCompiler::_jahFailRequests) and
-# frames.incompleteHold (every scene's frame is noted incomplete: PublishedFrame::Completeness term bit 4). Set in the app
-# they break its picture on purpose. A fixture sets them through Engine::setArm directly; the app's one door onto the
-# registry is the scripting verb engine.arm (src/scripting/modules/engineapi.cpp), which REFUSES a test arm by name.
+# WHY: six arms of the engine's registry exist only to force a state a test cannot otherwise reach - shaders.asyncFail
+# (every object's own permutation FAILS at its request: the fork's HlmsAsyncCompiler::_jahFailRequests), frames.
+# incompleteHold (every scene's frame is noted incomplete: PublishedFrame::Completeness term bit 4), rays.buildHold and
+# rays.buildHoldIds (a ray build held in flight), rays.buildFail (a ray build forced to fail) and textures.residencyHold
+# (every texture bind awaited). Set in the app they break its picture on purpose. A fixture sets them through
+# Engine::setArm directly; the app's one door onto the registry is the scripting verb engine.arm
+# (src/scripting/modules/engineapi.cpp), which REFUSES a test arm by name.
+# THE RULE THAT TELLS THEM APART: a TEST arm makes the engine MISBEHAVE ON PURPOSE (a failure, a hold, a wait no correct
+# frame has); a MEASURING arm SELECTS BETWEEN TWO CORRECT PATHS (an A/B the lead runs in the app) and stays settable.
 #
 # THE LAW, over the tree with comments stripped:
-#   (1) the kArms rows of shaders.asyncFail and frames.incompleteHold (irisgl/engine/src/OgreFrameMonitor.cpp) end with
+#   (1) the kArms rows of the six (irisgl/engine/src/OgreFrameMonitor.cpp) end with
 #       the TEST flag `true`, and the registry's list() hands it on (`a.test = kArms[i].test`);
 #   (2) in src/, `setArm(` is called only by the verb's file and by jahlab (src/lab/: the lab's own door);
 #   (3) the verb refuses a test arm BEFORE it sets: `.test` is read in engineapi.cpp ahead of its `setArm(`;
@@ -19,7 +23,8 @@
 # usage: test_arms_unreachable.py <source dir>
 import os, re, sys, tempfile
 
-TEST_ARMS = ('ShaderAsyncFail', 'FrameIncompleteHold')
+TEST_ARMS = ('RayBuildHold', 'RayBuildHoldIds', 'RayBuildFail', 'ShaderAsyncFail', 'TextureResidencyHold',
+             'FrameIncompleteHold')
 MONITOR = os.path.join('irisgl', 'engine', 'src', 'OgreFrameMonitor.cpp')
 VERB = os.path.join('src', 'scripting', 'modules', 'engineapi.cpp')
 LAB = os.path.join('src', 'lab') + os.sep
@@ -72,7 +77,11 @@ def check(root):
 
 LAWFUL_MONITOR = '''constexpr ArmDef kArms[] = {
     { ArmId::ReflectMotion, 1.0, 0.0, 1.0, "a measuring arm" },
+    { ArmId::RayBuildHold, 0.0, 0.0, 1.0, "A TEST DOOR", true },
+    { ArmId::RayBuildHoldIds, 0.0, 0.0, 1.0, "A TEST DOOR", true },
+    { ArmId::RayBuildFail, 0.0, 0.0, 1.0, "A TEST DOOR", true },
     { ArmId::ShaderAsyncFail, 0.0, 0.0, 1.0, "A TEST DOOR", true },
+    { ArmId::TextureResidencyHold, 0.0, 0.0, 1.0, "A TEST DOOR", true },
     { ArmId::FrameIncompleteHold, 0.0, 0.0, 1.0, "A TEST DOOR", true },
 };
 void list() { a.test = kArms[i].test; }
@@ -130,7 +139,7 @@ def main():
     for b in bad:
         print('  FAIL: ' + b)
     if not bad:
-        print('  ok: the two TEST arms (%s) carry the flag, the verb refuses them, no other src/ caller sets an arm' %
+        print('  ok: the TEST arms (%s) carry the flag, the verb refuses them, no other src/ caller sets an arm' %
               ', '.join(TEST_ARMS))
     fails += len(bad)
     sys.stdout.flush()
