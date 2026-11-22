@@ -1,7 +1,12 @@
-# source.engine_headers' CEILINGS (tests/hygiene/engine_headers.py H3, H4; H6 at the end): per public header of irisgl/engine/include/jahshaka/engine,
+# source.engine_headers' CEILINGS (tests/hygiene/engine_headers.py H3, H4, H6): per public header of irisgl/engine/include/jahshaka/engine,
 # its LINE count and its FAN-OUT (how many other public headers' include closure reaches it), taken at ENGINE-HEADERS-1
 # stage 1's landing (the split). They only FALL: a value under its line is RED until the line is lowered in the same commit;
 # over is RED. A new public header adds its two lines when it is born (engine_headers.py --counts prints them).
+# H6 (the lead, 2026-11-23): per header of REACH (engine_headers.py), the SOURCE files (.cpp/.mm/.cc of the Studio tree
+# and irisgl, no thirdparty) whose include closure reaches it - the build's width per file, the law both ways. At the
+# re-made split (Studio a1df0658e / irisgl c1f2579e) GiParams.h read 254 and FrameInput.h 245; the split's first form
+# (9fab3ef28 / 900e0ec8) 332 / 321; before the split, Types.h was reached by 286.
+# GENERATED: `engine_headers.py <tree> --write` (the row's header: a conflict here is resolved by regenerating, the diff shown).
 lines Atom.h 338
 fanout Atom.h 0
 lines Camera.h 247
@@ -66,7 +71,7 @@ lines Published.h 392
 fanout Published.h 0
 lines RayQuery.h 330
 fanout RayQuery.h 1
-lines Script.h 387
+lines Script.h 504
 fanout Script.h 1
 lines ScriptJson.h 41
 fanout ScriptJson.h 0
@@ -86,13 +91,9 @@ lines VoxelReader.h 68
 fanout VoxelReader.h 0
 lines Vr.h 777
 fanout Vr.h 1
-# H6 (the lead, 2026-11-23): per header of REACH (engine_headers.py), the SOURCE files (.cpp/.mm/.cc of the Studio tree
-# and irisgl, no thirdparty) whose include closure reaches it - the build's width per file, the law both ways; taken at
-# the re-made split (Studio a1df0658e / irisgl c1f2579e). The split's first form (9fab3ef28 / 900e0ec8) read 332 / 321 x5;
-# before the split, Types.h was reached by 286.
-reach GiParams.h 254
-reach FrameInput.h 245
-reach Monitor.h 246
-reach Sky.h 251
-reach Fog.h 245
-reach Planar.h 245
+reach Fog.h 235
+reach FrameInput.h 235
+reach GiParams.h 248
+reach Monitor.h 236
+reach Planar.h 235
+reach Sky.h 245

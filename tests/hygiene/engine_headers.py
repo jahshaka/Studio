@@ -34,8 +34,14 @@ THE LAWS (over irisgl/engine/include/jahshaka/engine, the public headers; commen
      or src/ - is spelled "irisgl/<dir>/..." (never a bare "core/...", "document/...", "import/..."). The engine's API path
      "jahshaka/engine/..." is its include root's, and is not this law's.
 The self-test runs first, always: one synthetic violation per law on a toy tree must red, the law's both ways for H3, H4 and H6.
-Run: engine_headers.py <source-root> [--counts | --reach <header>]   (--counts prints the ceilings file's lines as measured;
-     --reach the source files that reach a header of REACH; neither fails)
+Run: engine_headers.py <source-root> [--counts | --write | --reach <header>]   (--counts prints the ceilings file's lines as
+     measured; --write rewrites engine_headers_ceilings.txt to them, its comment lines kept, and prints every line it moved;
+     --reach the source files that reach a header of REACH; none of them fails)
+THE CEILINGS ARE GENERATED, NEVER HAND-MERGED (the lead, 2026-11-23: the split's re-read, finding (d)). After a rebase, a merge
+or a replay over the split - and whenever engine_headers_ceilings.txt conflicts - take either side of the file, run
+`engine_headers.py <tree> --write`, and commit THAT diff as its own commit, naming for each moved line the landing or the file
+that moved it (a header's edit for `lines`, a new or deleted source for `reach`). A ceilings conflict is resolved by
+regenerating, the diff shown; never a number merged by hand.
 """
 import os
 import re
@@ -349,6 +355,18 @@ if __name__ == "__main__":
             print("lines %s %d\nfanout %s %d" % (h, n, h, f))
         for h, us in sorted(reach(root)[0].items()):
             print("reach %s %d" % (h, len(us)))
+        sys.exit(0)
+    if "--write" in sys.argv:
+        p = os.path.join(root, "tests", "hygiene", "engine_headers_ceilings.txt")
+        was = open(p).read().splitlines()
+        got = ["lines %s %d\nfanout %s %d" % (h, n, h, f) for h, (n, f) in sorted(measure(root).items())]
+        got = "\n".join(got + ["reach %s %d" % (h, len(us)) for h, us in sorted(reach(root)[0].items())]).split("\n")
+        open(p, "w").write("\n".join([l for l in was if l.startswith("#")] + got) + "\n")
+        old = {tuple(l.split()[:2]): l for l in was if not l.startswith("#") and l.split()}
+        new = {tuple(l.split()[:2]): l for l in got}
+        for k in sorted(set(old) | set(new)):
+            if old.get(k) != new.get(k):
+                print("%-40s -> %s" % (old.get(k, "(none)"), new.get(k, "(deleted)")))
         sys.exit(0)
     if "--reach" in sys.argv:
         print("\n".join(reach(root)[0].get(sys.argv[sys.argv.index("--reach") + 1], [])))
