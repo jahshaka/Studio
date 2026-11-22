@@ -176,16 +176,20 @@ int main()
         "\"description\":\"flat: 3 numbers an item, the length a multiple of 3\",\"default\":null}},"
         "\"required\":[\"count\",\"mode\",\"items\",\"blob\",\"other\",\"others\",\"free\",\"raw\",\"many\",\"pos\"],"
         "\"additionalProperties\":false}},\"required\":[\"thing\",\"opts\"],\"additionalProperties\":false}";
-    const std::string formsGot = schemaText(*reg.find("test.forms"), why);
+    const auto schemaOf = [&](const char *name) {
+        const CommandInfo *c = reg.find(name);
+        return c ? schemaText(*c, why) : std::string("<not registered>");
+    };
+    const std::string formsGot = schemaOf("test.forms");
     CHECK(formsGot == forms, "every Param form maps to its expected text" + (formsGot == forms ? std::string() : "\n  got  " + formsGot +
                                                                                                     "\n  want " + forms));
     const std::string reduce = "{\"type\":\"object\",\"description\":\"reduces\",\"properties\":{\"pic\":{\"type\":\"object\","
                                "\"properties\":{\"w\":{\"type\":\"integer\"}},\"required\":[\"w\"],\"additionalProperties\":false,"
                                "\"description\":\"the target\"}},\"required\":[\"pic\"],\"additionalProperties\":false}";
     const std::string noneText = "{\"type\":\"object\",\"description\":\"nothing\",\"properties\":{},\"additionalProperties\":false}";
-    CHECK(schemaText(*reg.find("test.reduce"), why) == reduce && schemaText(*reg.find("test.none"), why) == noneText,
+    CHECK(schemaOf("test.reduce") == reduce && schemaOf("test.none") == noneText,
           "a target that is no handle is 'the target'; a command with no parameter has empty properties and no required (" +
-              schemaText(*reg.find("test.reduce"), why) + ")");
+              schemaOf("test.reduce") + ")");
 
     // 3. THE ZERO-PASS CONTROL: a field set where its kind has no form is a NAMED fault (never dropped)
     Param counted = arg("c", Kind::Int);
