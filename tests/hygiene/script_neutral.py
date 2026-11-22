@@ -16,6 +16,14 @@ the value type and the registry know nothing of JavaScript, and a second languag
      Its negative controls (the self-test): a second, dummy language added as one file and one line PASSES; the file
      without its line, the line without its file, and a maker named in a command file each FAIL.
 
+  N3b THE ENGINE ARCHIVE HOLDS NO QT: `nm` on <build>/engine/libJahshakaEngine*.a names no Qt symbol, defined or needed (the
+     final read measured it; N3 proves only what jahengine pulls in).
+  N5 THE COMMANDS ARE LISTED (the seed of the generated documentation): `jahengine --list` (no engine booted) exits 0 and
+     prints at least one command, each its signature line and a non-empty doc line, and no FAULT.
+  N6 NOTHING THE APP RUNS CARRIES THE HOST: `nm` on bin/Jahshaka, bin/jahlab and bin/libIrisGLd.so finds no symbol of the
+     script host (jahshaka::engine::script) and none of the JS engine (JS_*): the archive's members are never pulled in
+     until a client calls the host (STUDIO-CLIENT-1).
+
 usage: script_neutral.py <source-root> <build dir>   (jahengine is <build dir>/bin/jahengine)
 Its self-test runs first, on synthetic files: each rule red on a violation, green on the allowed file.
 """
@@ -126,6 +134,29 @@ def n4_bad(root):
     return bad
 
 
+QT_SYMBOL = re.compile(r"\b_ZN?K?\d+Q[A-Z][A-Za-z]")                        # a mangled Qt name: 7QString, 10QByteArray
+HOST_SYMBOL = re.compile(r"N8jahshaka6engine6script\d|\s[A-Za-z]\sJS_[A-Za-z]")   # the host's namespace; a JS_ function
+
+
+def nm_bad(nm_text, pattern):
+    """[symbol line] of `nm` text that `pattern` names."""
+    return [l.strip() for l in nm_text.splitlines() if pattern.search(l)]
+
+
+def n5_bad(list_text, rc):
+    """[fault] of `jahengine --list`'s output: its exit, its count, each command's doc line, a FAULT line."""
+    lines = list_text.splitlines()
+    bad = [] if rc == 0 else ["exit %d" % rc]
+    commands = [i for i, l in enumerate(lines) if l and not l.startswith((" ", "FAULT"))]
+    if not commands:
+        bad.append("no command listed")
+    for i in commands:
+        if i + 1 >= len(lines) or not lines[i + 1].startswith("    ") or not lines[i + 1].strip():
+            bad.append("%s: no doc line" % lines[i].split("(")[0])
+    bad += [l for l in lines if l.startswith("FAULT")]
+    return bad
+
+
 def write(root, rel, text):
     p = os.path.join(root, rel)
     os.makedirs(os.path.dirname(p), exist_ok=True)
@@ -178,6 +209,15 @@ def self_test():
            "  NEEDED               libIrisGLd.so\n  NEEDED               libc.so.6\n"
     check(n3_bad(dump) == ["libQt6Core.so.6", "libIrisGLd.so"], "N3 names a Qt and an IrisGL library in a NEEDED list (%s)"
           % n3_bad(dump))
+    nm = ("0000 T _ZN4Ogre4Root5startEv\n                 U _ZN7QStringC1EPKc\n0000 T _ZN8jahshaka6engine6script4Host3runEv\n"
+          "0000 T JS_NewRuntime\n                 U JSON_parse_thing\n0000 T _ZN8jahshaka6engine6Engine6createEv\n")
+    check(nm_bad(nm, QT_SYMBOL) == ["U _ZN7QStringC1EPKc"] and len(nm_bad(nm, HOST_SYMBOL)) == 2,
+          "N3b / N6 read a Qt symbol, the host's namespace and a JS_ function in nm text, never Ogre's, the engine's or a "
+          "JSON name (%s %s)" % (nm_bad(nm, QT_SYMBOL), nm_bad(nm, HOST_SYMBOL)))
+    good = "engine.frames(n: int >= 0 frames) -> null\n    Draws n frames.\nhost.check(law: object) -> bool\n    One law.\n"
+    check(not n5_bad(good, 0) and n5_bad("engine.frames(n: int) -> null\n    \nFAULT: x: no doc\n", 0) ==
+          ["engine.frames: no doc line", "FAULT: x: no doc"] and n5_bad("", 0) == ["no command listed"],
+          "N5 reads a listing: a command with no doc line, a FAULT and an empty list each fail")
 
 
 def main():
@@ -200,6 +240,26 @@ def main():
     needed = re.findall(r"^\s*NEEDED\s+(\S+)", dump.stdout, re.MULTILINE)
     check(dump.returncode == 0 and needed and not n3_bad(dump.stdout),
           "N3 jahengine's NEEDED list holds no Qt and no IrisGL (%d libraries: %s)" % (len(needed), " ".join(needed)))
+    archives = [os.path.join(sys.argv[2], "engine", n) for n in sorted(os.listdir(os.path.join(sys.argv[2], "engine")))
+                if re.match(r"libJahshakaEngined?\.a$", n)] if os.path.isdir(os.path.join(sys.argv[2], "engine")) else []
+    qt = []
+    for a in archives:
+        qt += nm_bad(subprocess.run(["nm", a], capture_output=True, text=True).stdout, QT_SYMBOL)
+    check(archives and not qt, "N3b the engine archive (%s) names no Qt symbol (%d: %s)"
+          % (" ".join(os.path.basename(a) for a in archives), len(qt), qt[:3]))
+    listing = subprocess.run([jahengine, "--list"], capture_output=True, text=True)
+    bad = n5_bad(listing.stdout, listing.returncode)
+    n = len([l for l in listing.stdout.splitlines() if l and not l.startswith((" ", "FAULT"))])
+    check(not bad, "N5 jahengine --list prints %d commands, each with its signature and its doc (%s)" % (n, bad[:4]))
+    bin_dir = os.path.join(sys.argv[2], "bin")
+    irisgl = next((n for n in ("libIrisGLd.so", "libIrisGL.so") if os.path.isfile(os.path.join(bin_dir, n))), "libIrisGLd.so")
+    for name in ("Jahshaka", "jahlab", irisgl):
+        path = os.path.join(bin_dir, name)
+        if not os.path.isfile(path):
+            check(False, "N6 %s is built (the app's binaries are read)" % path)
+            continue
+        hits = nm_bad(subprocess.run(["nm", path], capture_output=True, text=True).stdout, HOST_SYMBOL)
+        check(not hits, "N6 %s carries no script-host or JS-engine symbol (%d: %s)" % (name, len(hits), hits[:3]))
     if FAILURES:
         print("source.script_neutral: FAILED (%d)" % len(FAILURES))
         return 1

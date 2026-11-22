@@ -152,6 +152,41 @@ Monado row. A row that boots no Vulkan is a plain `add_test` with `jah_no_displa
 declares nothing (its class is `app`, `CLASS vr` for a VR pool). `source.gpu_rows_closure` fails
 the gate on a Vulkan row registered any other way, naming its CMakeLists line.
 
+**AN ENGINE ROW IS A SCRIPT (SCRIPT-IN-ENGINE-1).** A new engine row is a `.js` script run by `jahengine` (the engine's
+own script host: no Studio, no Qt), unless it tests an engine-private internal. The commands, each with its signature
+and doc: `bin/jahengine --list`. The template (`tests/<family>/my_law.js`):
+
+```js
+// <family>.my_law - THE LAW in one sentence; the fixture; its frames.
+const view = engine.view.createOffscreen({name: "mylaw", width: 256, height: 144});
+const scene = engine.scene.create("mylaw");
+engine.view.setScene(view, {scene});
+// ... nodes, meshes, materials, GI: every one a typed handle (a mesh where a node is declared FAILS by name)
+engine.view.declareRoutes(view, {gather: true, store: true});   // a GI / reflection row DECLARES ITS ROUTE (R16)
+engine.frames(30);
+const shot = engine.view.readPixels({view});                     // {picture, width, height}: the picture stays native
+const m = engine.picture.mean(shot.picture, {x0: 0, y0: 0, x1: 256, y1: 144});
+host.check({ok: m[0] > 20, what: "the floor is lit (" + m[0].toFixed(1) + " codes)"});
+```
+
+and ONE registration beside it:
+
+```cmake
+jah_gpu_row(<family>.my_law CLASS engine FRAMES 30
+         COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/my_law.js" --name <family>.my_law [--test-doors]
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(<family>.my_law PROPERTIES TIMEOUT 60 LABELS "engine")
+```
+
+The laws of a script row: every law is a `host.check({ok, what})` - a script that checks nothing FAILS, and so does
+one whose `await`ed work or rejected promise never ran or was never handled; a route declared and never asserted by a
+frame FAILS. The host is STRICT: an unknown command, a misspelt option, a missing argument, a value outside its declared
+choices or range, NaN or infinity, a handle of the wrong kind or a released one each FAIL by name - fix the script,
+never loosen the command. `--test-doors` opens the engine's TEST arms (`engine.arm({name, value})` on one FAILS
+without it). FRAMES is what the script draws (`engine.frames(n)` and each `readPixels` frame). One host serves ONE
+engine (a second engine is a second host). A row's own `.js`, a command it calls (`irisgl/engine/src/script/`) and
+jahengine select it in `gate-scope` by its command line: nothing to list by hand.
+
 ## 4. The rig
 
 - **Your own X display**, `Xvfb :NN -screen 0 1920x1080x24` (NN in 60-99, `/tmp/.X<NN>-lock`

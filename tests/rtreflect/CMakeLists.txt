@@ -212,9 +212,10 @@ set_tests_properties(rtreflect.hit_area_shadow PROPERTIES JAHSHAKA_TEST_FRAMES 1
 # rtreflect.odd_size (PHOTON-7 stage 6 commit 7; an ENGINE SCRIPT since SCRIPT-IN-ENGINE-1) — EVERY PIXEL OF THE REFLECTION IS
 # WRITTEN EVERY FRAME: an odd 257 x 145 view at half-resolution rays, its remainder column and row against their neighbours
 # over a glossy floor's reflection. odd_size.js run by jahengine (the engine's own script host: no C++ fixture, no Qt;
-# --test-doors for its arm reflect.screenOff); its route declared and read back on frame 1. 90 frames.
+# --test-doors for its arm reflect.screenOff; --name: its verdict line names the row); its route declared through
+# engine.view.declareRoutes and judged by every frame. 90 frames.
 jah_gpu_row(rtreflect.odd_size CLASS engine FRAMES 90
-         COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/odd_size.js" --test-doors
+         COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/odd_size.js" --test-doors --name rtreflect.odd_size
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(rtreflect.odd_size PROPERTIES TIMEOUT 60 LABELS "engine")
 
