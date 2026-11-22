@@ -508,10 +508,10 @@ if(Python3_Interpreter_FOUND)
 endif()
 
 # source.ray_views_cached — GATHER-HANG-1 stage 1: every view the ray tier takes of an Ogre texture comes out of its
-# one cache (irisgl/engine/src/RayQueryViewCache.h; engine.ray_view_cache proves the cache's law). The per-frame
-# create-and-retire of fifteen sites was what the card faulted on around a scene change. No code line of the tier's
-# three files or the gather's seam header makes an image view outside the cache's make and our own images' two
-# creates, each at its exact count. Red on the base (24 site lines). See the script's header.
+# one cache (irisgl/engine/src/RayQueryViewCache.h; engine.ray_view_cache proves the cache's law), never a per-frame
+# create-and-retire (fifteen sites before it). No code line of any file under irisgl/engine/src (recursive) makes an
+# image view outside the cache's make and our own images' two creates, each at its exact count (six in all). Red on
+# the base (24 site lines). See the script's header.
 if(Python3_Interpreter_FOUND)
     add_test(NAME source.ray_views_cached
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/ray_views_cached.py" "${CMAKE_SOURCE_DIR}")

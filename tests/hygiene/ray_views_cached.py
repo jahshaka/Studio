@@ -2,24 +2,24 @@
 # source.ray_views_cached — THE RAY TIER's VIEWS OF OGRE TEXTURES COME OUT OF ITS ONE CACHE (GATHER-HANG-1 stage 1).
 #
 # WHAT WAS WRONG. Every ray job made a fresh VkImageView of each Ogre texture it bound, every frame, and retired it:
-# fifteen sites in three files (spikes/gather-hang-1/PREFLIGHT-stage-1.md, table 1). Around a scene change that
-# per-frame create-and-destroy is what the card faulted on (Xid 109 in rq_probe_gather; base 5 faults in 6, the views
-# cached 0 in 6). irisgl/engine/src/RayQueryViewCache.h is the one cache (engine.ray_view_cache proves its law).
+# fifteen sites in three files (spikes/gather-hang-1/PREFLIGHT-stage-1.md, table 1), up to about 420 views made and
+# destroyed a frame. irisgl/engine/src/RayQueryViewCache.h is the one cache (engine.ray_view_cache proves its law).
 #
-# THE RULE: in the ray tier's three files and the gather's seam header, no code line makes an image view
-# (`->createView(`, `.createView(`, `_createView(`, `vkCreateImageView(`) outside the functions named below, each
-# with its exact count:
+# THE RULE: in EVERY source file under irisgl/engine/src (recursively: a new file - a seam split of the ray tier, the
+# surface cache, Photon - is held too), no code line makes an image view (`->createView(`, `.createView(`,
+# `_createView(`, `vkCreateImageView(`) outside the functions named below, each with its exact count (six in all):
 #   RayQueryTier::makeView           2  the cache's make: Ogre's `_createView` (P1/P2) and the layer views (P3/P4)
 #   RayQueryTier::ensureDummyImages  3  the black stand-ins: our own 1x1 images, made once
 #   RayQueryTier::makeStorageImage   1  our own storage images, made once per size
 # A new site is a lookup through RayQueryTier::textureView / GatherHost::gatherView, never a new create.
 #
 # argv[1] = the repo root
+import os
 import re
 import sys
 
-FILES = ("irisgl/engine/src/OgreRayQuery.cpp", "irisgl/engine/src/OgreRayQueryHitSet.cpp",
-         "irisgl/engine/src/OgreScreenProbeGather.cpp", "irisgl/engine/src/ScreenProbeGather.h")
+SRC = "irisgl/engine/src"
+EXTS = (".cpp", ".cc", ".h", ".hpp", ".inl")
 ALLOWED = {"RayQueryTier::makeView": 2, "RayQueryTier::ensureDummyImages": 3, "RayQueryTier::makeStorageImage": 1}
 CREATE = re.compile(r"(->|\.)createView\(|\b_createView\(|\bvkCreateImageView\(")
 # a function definition opens at column 0 and names its qualified name before its parameter list
@@ -52,7 +52,14 @@ def code_lines(text):
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else "."
     bad, counts = [], {name: 0 for name in ALLOWED}
-    for rel in FILES:
+    files = []
+    for top, dirs, names in os.walk(os.path.join(root, SRC)):
+        dirs.sort()
+        files += [os.path.relpath(os.path.join(top, n), root) for n in sorted(names) if n.endswith(EXTS)]
+    if not files:
+        print("source.ray_views_cached: FAIL - no source file under %s/%s" % (root, SRC))
+        return 1
+    for rel in files:
         try:
             text = open("%s/%s" % (root, rel), encoding="utf-8").read()
         except OSError as e:
@@ -78,8 +85,8 @@ def main():
             print("    " + b)
         print("    A view of an Ogre texture is RayQueryTier::textureView(t, kind) / GatherHost::gatherView(t, kind).")
         return 1
-    print("source.ray_views_cached: ok - every view of an Ogre texture in the ray tier comes out of its cache "
-          "(makeView 2, ensureDummyImages 3, makeStorageImage 1)")
+    print("source.ray_views_cached: ok - %d engine source files: every view of an Ogre texture comes out of the ray "
+          "tier's cache (makeView 2, ensureDummyImages 3, makeStorageImage 1)" % len(files))
     return 0
 
 

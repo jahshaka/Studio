@@ -757,9 +757,11 @@ add_test(NAME engine.stillness_history_column COMMAND test_stillness_history_col
 set_tests_properties(engine.stillness_history_column PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.stillness_history_column)
 # engine.ray_view_cache — THE RAY TIER's VIEW CACHE as a pure structure (GATHER-HANG-1 stage 1; RayQueryViewCache.h says
-# the law, test_ray_view_cache.cpp its nine cases): one view per (texture, kind, parameters) on one image, retired once
-# when its image goes (LostResidency, Deleted, another image, close), image 0 refused, one registration per texture.
-# The header only: no device, no Ogre - a CPU code row. Red first on stage 0's arm J1: spikes/gather-hang-1/stage1/.
+# the law, test_ray_view_cache.cpp its thirteen cases): one view per (texture, kind) on one image with one set of
+# parameters, retired once when its image goes (LostResidency, Deleted, another image or other parameters, close),
+# image 0 refused, a failed make caches nothing, one registration per texture. The header only: no device, no Ogre -
+# a CPU code row. Red first: cases 2-5 and 7-9 on stage 0's arm J1 (spikes/gather-hang-1/stage1/), 10-11 on irisgl
+# 4baf20de's orphan (spikes/gather-hang-1/stage1-gaps/).
 add_executable(test_ray_view_cache test_ray_view_cache.cpp)
 set_target_properties(test_ray_view_cache PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
 target_include_directories(test_ray_view_cache PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
