@@ -4,7 +4,7 @@
 # implementation of the wipe: it replaced 27 hand-copied `sh -c "rm -rf …"` fixtures and tests/samples/freshhome.cmake,
 # and it is every pool's and one-script row's default.
 #
-#   fresh_home.sh [--warm [--cache <key>] [--drop-hlms]] [--keep-home] [--reset <dir>]... [--rm <file>]... [--mkdir <dir>]... <home>
+#   fresh_home.sh [--warm [--cache <key>]] [--keep-home] [--reset <dir>]... [--rm <file>]... [--mkdir <dir>]... <home>
 #                 [-- <command> [args...]]
 #   fresh_home.sh --promote [--cache <key>] <home> -- <command> [args...]
 #
@@ -78,12 +78,11 @@
 #                   name>/, replacing that home's previous evidence (one red kept per row). Without a command it is a
 #                   fixture row (a FIXTURES_SETUP home is wiped at its next setup).
 set -eu
-warm=0; keep=0; setup=0; key=""; promote=0; seed=""; drop_hlms=0
+warm=0; keep=0; setup=0; key=""; promote=0; seed=""
 resets=""; rms=""; mkdirs=""
 while [ $# -gt 0 ]; do
     case "$1" in
         --warm)  warm=1; shift ;;
-        --drop-hlms) drop_hlms=1; shift ;;
         --keep-home) keep=1; shift ;;
         --cache) key="${2:-}"; shift 2
                  case "$key" in ""|*[!a-z0-9_]*) echo "fresh_home.sh: --cache needs a key of [a-z0-9_]" >&2; exit 2 ;; esac ;;
@@ -340,26 +339,6 @@ if [ "$warm" = 1 ] && [ -n "$shared" ] && [ -d "$shared" ]; then
         link_cache "$shared"
         exit 0
     ) 9>"$shared.lock" || true
-    # --drop-hlms (with --warm; the warm-up's TOP-UP, TEST-STREAMLINE-1 audit finding 4): the seeded home WITHOUT the hlms
-    # layer - its files unlinked and their manifest lines dropped (a new manifest file: the linked one is never written) -
-    # so the boot regenerates exactly the permutations it uses from the templates (cheap: the microcode and the pipelines
-    # stay warm, keyed on content) and its promotion REPLACES the shared union: the dead permutations of earlier engine
-    # versions go, the old key's reset at a warm boot's cost. A manifest naming a missing file would wipe the whole cache.
-    # THE COMPUTE LAYER GOES WITH IT (COLD-BOOT-1 stage 3): compute.bin holds the compute permutations' code records, the
-    # same kind of union of earlier boots - left out the same way, so the promotion replaces it with what this boot built.
-    # THE STARTUP PASS's RECORD GOES WITH THE LAYER IT DESCRIBES (TEST-STREAMLINE-1, capture.first_recording's red at
-    # ae6713d20): warm-pass.key (src/app/shaderbuildgate.cpp) says "this cache holds what the global pass draws" - the
-    # recording view's NV12 job, the template worlds, the GI compute set - and the app SKIPS the pass on it. Kept beside a
-    # dropped hlms layer it was a false claim: the top-up's tier boots skipped the pass, the replaced union lost every
-    # permutation only the pass makes, and the first row to draw one compiled or loaded it under its law. Unlinked here
-    # (the linked file is the shared cache's: never written), the top-up's first app boot re-runs the pass over the warm
-    # microcode and writes the record again.
-    if [ "$drop_hlms" = 1 ] && [ -f "$home/$cache_rel/cache-manifest.txt" ]; then
-        rm -f "$home/$cache_rel"/hlms.*.bin "$home/$cache_rel/compute.bin" "$home/$cache_rel/warm-pass.key"
-        grep -v '^file hlms\.\|^file compute\.bin ' "$home/$cache_rel/cache-manifest.txt" > "$home/$cache_rel/cache-manifest.txt.new"
-        mv -f "$home/$cache_rel/cache-manifest.txt.new" "$home/$cache_rel/cache-manifest.txt"
-        echo "fresh_home.sh: --drop-hlms: the home's hlms layer, its compute layer and its startup-pass record left out (the boot re-runs the pass and regenerates what it uses)"
-    fi
 fi
 
 # THE SEEDED LIBRARY (TEST-STREAMLINE-1 3a item 5; seed_home.sh): an app home (--warm, the app cache) gets the 17 shipped

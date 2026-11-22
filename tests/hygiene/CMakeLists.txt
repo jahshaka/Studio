@@ -327,7 +327,7 @@ if(Python3_Interpreter_FOUND)
     # TEST-STREAMLINE-1: the whole ran 35.8 s quiet against a CPU row's 10 s): boots - warm at the build's key it answers at
     # once and boots nothing, no stamp / a moved key / a replaced or missing cache read cold, the fake boots, the budget and
     # the bounded wait (URGENT #52, #106); cold - the cold-on runner's rows (#119, #155, the seeds); coldcall - a call's own
-    # bounds (the held card, the deadline, the logs); keys - the key's terms, the top-up, #126's nonce, the path-free stamps;
+    # bounds (the held card, the deadline, the logs); keys - the key's terms, no top-up, #126's nonce, the path-free stamps;
     # inherit - a fresh tree takes its parent's warm caches at an equal key (TEST-STREAMLINE-1 1a); store - THE BOX's WARM STORE
     # (URGENT #193's class, 2026-11-21): one warm per key per box - published by a tree warm at its key, taken by a verified copy
     # by another at the same key, a torn one refused, a second tree waiting on the key's lock (no card), unset = as before.

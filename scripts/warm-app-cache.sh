@@ -21,11 +21,13 @@
 # against (compile_commands.json's JAHSHAKA_OGRE_FORK_COMMIT), the staged Hlms and Photon media (<build>/bin/media, the
 # directories the engine hashes), glslang's build_info.h, the build type, and the GPU (name and driver). sha256 of
 # those, its first 16 hex digits.
-# THE TOP-UP (TEST-STREAMLINE-1 1a (c)): the engine's FULL build id (JAHSHAKA_ENGINE_BUILD_ID) is not in the key but is
-# read: an engine edit that sets a NEW property makes permutations the warm cache lacks, which the first rows would compile
-# under their cap. So an -off boot warm at the key whose <shared>.engine-id names another full id runs once more as a
-# TOP-UP - a warm boot on valid caches (every layer served, only the new permutations compile); its -on boot and the cold
-# rows are NOT re-run (their stamps hold the key).
+# NO TOP-UP (WARM-SHARE-1 ruling 5, MEASURED first: spikes/warm-share/drop-hlms.md): an engine edit that keeps the key boots
+# nothing here. The shared cache is used AS IT IS: its layers are keyed by content (an entry is never served wrong; a template
+# change is re-parsed by Ogre), a permutation it lacks compiles ONCE in the first green row that draws it and is promoted (a
+# row run twice: 12 compiles, then 0), and dead permutations leave by the engine's own size cap (one mechanism, the
+# engine's: DOCS/traps/WORKTREES_AND_FORK.md "THE SHADER CACHE EVICTS BY SIZE"). The top-up it replaces REPLACED the union
+# with the warm-up's own set (PBS recipes 41 -> 0, user Hlms 73 -> 12: every row then compiled its permutations again), and
+# cost 11 boots and ~32 min of queue in two days (one 596.5-s wait for a boot that compiled 0).
 # WARM AT THE KEY = for an -off boot, its stamp (<shared>.warm-key, written after the boot was promoted) names this key
 # AND the shared cache's manifest still carries the layer keys it recorded then (a later promotion at the same key only
 # grows the union; one at another key replaced it) AND the cache passes the engine's own load check - every file its
@@ -48,7 +50,7 @@
 #                    tree's (else exit 3, nothing taken); then each shared cache the parent holds stamped at the key, passing
 #                    its own manifest (#117) and not warm here already, is taken under the parent's shared lock - by hard links
 #                    (the files are never written in place: a promotion renames a new directory over the old), with its
-#                    stamps and its top-up stamp; the -off boot's dump at the key; each cold row the parent primed at the key
+#                    stamps; the -off boot's dump at the key; each cold row the parent primed at the key
 #                    for the same registration (paths aside) and the same media by content, with its private driver cache
 #                    (a *CACHE*PATH* value under the parent's build: COPIED - the driver writes it in place) and its startup seed (a directory beside its working dir
 #                    holding tree-key.txt - its own freshness check still judges it). Prints what it took and what is still
@@ -205,8 +207,6 @@ key_inputs() {
 INPUTS=$(key_inputs) || exit 2
 KEY=$(printf '%s\n' "$INPUTS" | sha256sum | cut -c1-16)
 [ "$KEYONLY" = 1 ] && { echo "$KEY"; exit 0; }
-# the engine's FULL build id, its first 16 hex digits: the top-up's signal (the header)
-ENGINE_ID=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$BUILD/engine/generated/jahshaka_engine_build_id.h")
 layer_keys() {   # the shared cache's per-layer keys (its manifest's last column), sorted, one line
     [ -f "$1/cache-manifest.txt" ] && awk '$1 == "file" { print $NF }' "$1/cache-manifest.txt" | LC_ALL=C sort -u | tr '\n' ' '
 }
@@ -218,9 +218,6 @@ cold_why() {   # <shared> <stamp> [<sets digest>]: empty when warm at the key, e
     elif ! torn=$(python3 -I "$SRC/tests/support/shadercache_check.py" "$1"); then   # its stderr (#132's fallback line) passes
         echo "the shared cache fails its own manifest ($torn) - the engine would boot every row seeded from it cold"
     elif [ $# -ge 3 ] && [ "$(sed -n 3p "$2")" != "$3" ]; then echo "the rows' test tiers changed since (test-boot-sets.txt)"
-    elif [ "${TOPUP_CHECK:-1}" = 1 ] && [ "$(cat "$1.engine-id" 2>/dev/null)" != "$ENGINE_ID" ]; then
-        echo "the engine's code moved since ($(cat "$1.engine-id" 2>/dev/null || echo none) -> $ENGINE_ID; the key holds: a TOP-UP," \
-             "a warm boot that adds the new permutations)"
     fi
 }
 # THE ROWS' TEST TIERS (tests/CMakeLists.txt writes them at configure): the app-off boot boots each once after the self-test
@@ -339,13 +336,12 @@ if [ -n "$INHERIT" ]; then
         if [ $c = app ]; then sh_=.shadercache; st=.warm-key; dk=.driver-key; else sh_=.shadercache-engine; st=.warm-key; dk=.driver-key; fi
         P="$PT/$sh_"; M="$TESTS/$sh_"
         [ -f "$P$st" ] && [ "$(sed -n 1p "$P$st")" = "$KEY" ] && [ "$(sed -n 2p "$P$st")" = "$(layer_keys "$P")" ] || continue
-        if [ -f "$M$st" ] && [ -z "$(TOPUP_CHECK=0 cold_why "$M" "$M$st")" ]; then continue; fi
+        if [ -f "$M$st" ] && [ -z "$(cold_why "$M" "$M$st")" ]; then continue; fi
         ( flock -s -w "${JAH_INHERIT_LOCK_WAIT:-60}" 9 || exit 1   # (the knob: tooling.warm_inherit's held lock, seconds)
           python3 -I "$SRC/tests/support/shadercache_check.py" "$P" > /dev/null || exit 1
           take "$P" "$M" ) 9>"$P.lock" || { echo "warm-app-cache: the parent's $sh_ not taken (its lock, or its manifest)"; continue; }
         cp "$P$st" "$M$st"
         [ -f "$P$dk" ] && [ "$(sed -n 1p "$P$dk")" = "$KEY" ] && cp "$P$dk" "$M$dk"
-        [ -f "$P.engine-id" ] && cp "$P.engine-id" "$M.engine-id"
         got="$got $sh_ ($(du -sh "$M" | cut -f1))"
     done
     [ -f "$TESTS/.warm-walls" ] || { [ -f "$PT/.warm-walls" ] && cp "$PT/.warm-walls" "$TESTS/.warm-walls"; }
@@ -389,7 +385,6 @@ if [ -n "$INHERIT" ]; then
     fi
     [ "$n" -gt 0 ] && got="$got $n cold row(s)"
     echo "warm-app-cache: inherited at $KEY from $PB:${got:- nothing (the parent holds none at this key, or this tree is warm)}"
-    TOPUP_CHECK=1
     left=""; for b in $ALL; do [ -n "$(why_of "$b")" ] && left="$left $b"; done
     echo "warm-app-cache: still to warm here:${left:- nothing}"
     exit 0
@@ -415,12 +410,12 @@ compute_run() {   # RUN and why: the boots this call asked for that are cold, an
 # ---- THE BOX's WARM STORE (URGENT #193's class, the lead's design 2026-11-21: five trees warmed their own copy of the same
 # caches, ~15 min of card each) - ONE WARM PER KEY PER BOX. The store is a directory the CALLER names in JAH_WARM_STORE (box
 # data: the lead's tools set it; this repo names no box path, CODING_RULES § 7); unset, nothing here runs and the tree warms
-# itself as before. <store>/<KEY>/{app,engine}/ holds a cache warm at KEY (cache/, its warm-key and engine-id stamps, and the
+# itself as before. <store>/<KEY>/{app,engine}/ holds a cache warm at KEY (cache/, its warm-key stamp, and the
 # driver-key stamp of its -on boot). Under the key's lock (<store>/<KEY>/.key.lock - a second tree at the key WAITS there,
 # never on the card): a cold -off cache is TAKEN by a verified copy (its manifest checked by the engine's own rule,
 # tests/support/shadercache_check.py; copied to a sibling and renamed in under the tree's own lock, as --inherit takes - never
 # linked: the store is another tree's and another filesystem's), its stamps with it, then JUDGED AGAIN here like any other
-# (a stamp at another sets digest or engine id still reads cold or a top-up and boots). An -on boot's stamp is taken only
+# (a stamp at another sets digest still reads cold and boots). An -on boot's stamp is taken only
 # for the same exe NAME: the driver keeps its per-exe cache in the one user home every tree's run shares (gpu-exclusive.sh
 # exports it; HARNESS-1 measured it keyed on the name). After the boots, a cache warm at KEY is PUBLISHED (a copy renamed in;
 # the newer replaces). THE COLD ROWS ARE NOT IN THE STORE (this first cut): their primes stay each tree's own cold-on boot.
@@ -428,9 +423,8 @@ compute_run() {   # RUN and why: the boots this call asked for that are cold, an
 # published 10-byte toy caches at the REAL key - they drive this script on the real build dir, so they compute its real key, with
 # fake apps and a scratch tests dir). A call that overrides --app, --lab, --tests-dir or --cold-rows - the shape of every toy and
 # of no real warm-up - never reaches a store, UNLESS JAH_WARM_STORE_ALLOW_FAKES=1 says the store is the toy's own scratch (the
-# store's toy part sets both, explicitly). And a publish carries only a cache that passes its manifest AND whose engine-id stamp
-# is this build's (the stamp a real -off boot writes after its promotion); a take needs the store's copy to carry the same
-# stamp. (A size floor was the other candidate - a guess at what a toy is; the call's shape and the build's own stamp are not.)
+# store's toy part sets both, explicitly). And a publish carries only a cache that passes its own manifest. (A size floor was
+# the other candidate - a guess at what a toy is; the call's shape is not.)
 STORE=${JAH_WARM_STORE:-}; SK=""; STORE_LOCKED=""
 if [ -n "$STORE" ] && [ -n "$FAKED" ] && [ "${JAH_WARM_STORE_ALLOW_FAKES:-}" != 1 ]; then
     echo "warm-app-cache: the warm store is NOT used - this call overrides$FAKED (a toy's shape; a store toy sets JAH_WARM_STORE_ALLOW_FAKES=1 with its own scratch store)"
@@ -454,7 +448,7 @@ store_take() {   # the cold -off caches (and their -on stamps) this call asked f
     for b in $RUN; do
         case "$b" in app-off) c=app sh=$APP_SHARED st=$APP_STAMP ;; engine-off) c=engine sh=$ENG_SHARED st=$ENG_STAMP ;; *) continue ;; esac
         S="$SK/$c"
-        [ -d "$S/cache" ] && [ "$(sed -n 1p "$S/warm-key" 2>/dev/null)" = "$KEY" ] && [ -s "$S/engine-id" ] || continue
+        [ -d "$S/cache" ] && [ "$(sed -n 1p "$S/warm-key" 2>/dev/null)" = "$KEY" ] || continue
         python3 -I "$SRC/tests/support/shadercache_check.py" "$S/cache" > /dev/null 2>&1 ||
             { echo "warm-app-cache: the store's $c cache at $KEY fails its own manifest - not taken"; continue; }
         nxt="$sh.store.$$"; rm -rf "$nxt"
@@ -462,7 +456,6 @@ store_take() {   # the cold -off caches (and their -on stamps) this call asked f
         ( flock -w 60 9 || exit 1; rm -rf "$sh.old.$$"; [ -e "$sh" ] && mv "$sh" "$sh.old.$$"; mv "$nxt" "$sh"; rm -rf "$sh.old.$$" ) \
             9>"$sh.lock" || { rm -rf "$nxt"; continue; }
         cp "$S/warm-key" "$st"
-        if [ -f "$S/engine-id" ]; then cp "$S/engine-id" "$sh.engine-id"; else rm -f "$sh.engine-id"; fi
         got="$got $c ($(du -sh "$sh" | cut -f1))"
     done
     for b in $RUN; do
@@ -477,17 +470,14 @@ store_publish() {   # every cache of this tree warm at KEY (and its -on stamp) i
     local c sh st ds S nxt pub=""
     for c in app engine; do
         if [ $c = app ]; then sh=$APP_SHARED st=$APP_STAMP ds=$APP_DSTAMP; else sh=$ENG_SHARED st=$ENG_STAMP ds=$ENG_DSTAMP; fi
-        [ -f "$st" ] && [ -z "$(TOPUP_CHECK=0 cold_why "$sh" "$st")" ] || continue
-        [ "$(cat "$sh.engine-id" 2>/dev/null)" = "$ENGINE_ID" ] ||
-            { echo "warm-app-cache: the $c cache is not published - its engine-id stamp is not this build's ($ENGINE_ID)"; continue; }
+        [ -f "$st" ] && [ -z "$(cold_why "$sh" "$st")" ] || continue
         S="$SK/$c"
-        if cmp -s "$st" "$S/warm-key" && cmp -s "$sh.engine-id" "$S/engine-id"; then   # the store holds these bytes already
+        if cmp -s "$st" "$S/warm-key"; then   # the store holds this warm-up already
             [ -f "$ds" ] && [ "$(sed -n 1p "$ds")" = "$KEY" ] && ! cmp -s "$ds" "$S/driver-key" && cp "$ds" "$S/driver-key" && pub="$pub $c-on"
             continue
         fi
         nxt="$SK/.$c.new.$$"; rm -rf "$nxt"; mkdir -p "$nxt"
-        ( flock -s -w 60 9 || exit 1; cp -a "$sh" "$nxt/cache" && cp "$st" "$nxt/warm-key" &&
-              { [ ! -f "$sh.engine-id" ] || cp "$sh.engine-id" "$nxt/engine-id"; } ) 9>"$sh.lock" || { rm -rf "$nxt"; continue; }
+        ( flock -s -w 60 9 || exit 1; cp -a "$sh" "$nxt/cache" && cp "$st" "$nxt/warm-key" ) 9>"$sh.lock" || { rm -rf "$nxt"; continue; }
         [ -f "$ds" ] && [ "$(sed -n 1p "$ds")" = "$KEY" ] && cp "$ds" "$nxt/driver-key"
         python3 -I "$SRC/tests/support/shadercache_check.py" "$nxt/cache" > /dev/null 2>&1 || { rm -rf "$nxt"; continue; }
         rm -rf "$S.old.$$"; [ -e "$S" ] && mv "$S" "$S.old.$$"; mv "$nxt" "$S"; rm -rf "$S.old.$$"
@@ -517,7 +507,7 @@ fi
 # AN -on BOOT RUNS ON ITS -off BOOT's CACHE: asked for alone while that cache is cold, nothing boots
 for b in $RUN; do
     case "$b" in *-on) off="${b%-on}-off"
-        if [ -n "$(TOPUP_CHECK=0 why_of "$off")" ] && ! case " $RUN " in *" $off "*) true ;; *) false ;; esac; then
+        if [ -n "$(why_of "$off")" ] && ! case " $RUN " in *" $off "*) true ;; *) false ;; esac; then
             echo "warm-app-cache: $b boots on $(what_of "$off"), cold - call --only $off first; nothing booted"
             exit 3
         fi ;;
@@ -644,7 +634,6 @@ boot() {
     else
         printf '%s\n%s\n' "$KEY" "$(layer_keys "$shared")" > "$stamp"
     fi
-    echo "$ENGINE_ID" > "$shared.engine-id"   # the top-up's stamp (the header)
     echo "warm-app-cache: $(what_of "$name") warm at $KEY - the boot ${wall} s (the card's wait ${waited} s), $(du -sh "$shared" | cut -f1)" \
          "($(sed -n 's/^shaders //p' "$shared/cache-manifest.txt") shaders)"
     return 0
@@ -736,12 +725,6 @@ cold_boot() {
     echo "warm-app-cache: $(what_of cold-on) primed at $KEY - ${n} row(s), the boot ${wall} s"
     return 0
 }
-# A TOP-UP REPLACES THE UNION (the stage-1 audit's finding 4, the lead's ruling): an -off boot that runs ONLY because the
-# engine's code moved boots without the shared hlms layer (fresh_home.sh --drop-hlms: the microcode and pipelines warm), so
-# its promotion replaces the union with what this engine uses - the dead permutations of earlier engine versions never pile up
-topup_args() {   # <boot>: " --drop-hlms" when its only why is the top-up
-    case "$(why_of "$1")" in *"a TOP-UP"*) [ -z "$(TOPUP_CHECK=0 why_of "$1")" ] && echo " --drop-hlms" ;; esac
-}
 # THE WARM-UP's BOOTS WRITE THEIR COVERAGE (TEST-STREAMLINE-1 stage 2, the 2a audit's finding 1, the lead's ruling): in a
 # JAH_COVERAGE build each boot's counters go under <build>/coverage/boots/<boot> (scripts/coverage_map.py reads them as the
 # producers of the cached artefacts its class's rows load); in every other build nothing
@@ -756,7 +739,7 @@ for b in $RUN; do
     left=${left#"$b"}; left=${left# }
     # an -on boot after its -off boot in this call: only on the cache that boot promoted
     case "$b" in *-on) off="${b%-on}-off"
-        if [ -n "$(TOPUP_CHECK=0 why_of "$off")" ]; then
+        if [ -n "$(why_of "$off")" ]; then
             echo "warm-app-cache: $b waits for $(what_of "$off") (not promoted by this call's $off boot) - the next call warms both"
             continue
         fi ;;
@@ -764,7 +747,7 @@ for b in $RUN; do
     case "$b" in
         app-off|app-on)
             [ -x "$APPX" ] || { echo "warm-app-cache: no app at $APPX" >&2; exit 2; }
-            H="$TESTS/warm-app-cache-home"; FH_ARGS="--warm$(topup_args app-off)"; EXE="$APPX"
+            H="$TESTS/warm-app-cache-home"; FH_ARGS="--warm"; EXE="$APPX"
             if [ "$b" = app-off ]; then
                 # (the GLSL dump this boot once wrote for source.shaders_spirv_valid is gone, 2026-11-21: the row reads the
                 # engine's own bytes in the microcode caches - NONDET-1 F3; its tier boots' logs go to this call's logs)
@@ -776,7 +759,7 @@ for b in $RUN; do
             fi ;;
         engine-off|engine-on)
             [ -x "$LABX" ] || { echo "warm-app-cache: no lab at $LABX" >&2; exit 2; }
-            H="$TESTS/warm-engine-cache-home"; FH_ARGS="--warm --cache engine$(topup_args engine-off)"; EXE="$LABX"
+            H="$TESTS/warm-engine-cache-home"; FH_ARGS="--warm --cache engine"; EXE="$LABX"
             printf 'frames 4\nquit\n' > "$LABSCRIPT"
             LABCMD=(env "JAHSHAKA_SHADER_CACHE_DIR=$H/.local/share/Jahshaka/shadercache" JAH_TEXTURE_CACHE=0
                     "$LABX" --headless --no-stdin --size 960x540 --data-root "$H/run/lab" --env photon-rough --tier epic

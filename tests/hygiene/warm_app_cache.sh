@@ -8,7 +8,7 @@
 # 6.48-s price line - split by proof): <part> = boots (tooling.warm_app_cache: the four boots' answers, the stamps, the
 # fake boots, the budget and the bounded wait), cold (tooling.warm_cold_rows: the cold-on runner's rows - one at a time, the
 # crashed prime, the seeds), coldcall (tooling.warm_cold_calls: a call's own bounds - the held card, the deadline, the logs)
-# keys (tooling.warm_key: the key's terms, the top-up, the path-free stamps) or inherit (tooling.warm_inherit: a fresh tree
+# keys (tooling.warm_key: the key's terms, no top-up, the path-free stamps) or inherit (tooling.warm_inherit: a fresh tree
 # takes its parent's caches at an equal key); none = all five, a hand run.
 # usage: warm_app_cache.sh <source-dir> <build-dir> [boots|cold|coldcall|keys|inherit]
 set -u
@@ -31,9 +31,6 @@ toy_cache() {
 }
 toy_cache "$T/.shadercache" 1 2
 toy_cache "$T/.shadercache-engine" 1 2
-# THE TOP-UP's STAMP (TEST-STREAMLINE-1 1a (c)): the full engine build id an -off boot last ran at
-EID=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$BUILD/engine/generated/jahshaka_engine_build_id.h")
-echo "$EID" > "$T/.shadercache.engine-id"; echo "$EID" > "$T/.shadercache-engine.engine-id"
 fail=0
 ok() { echo "  ok: $1"; }
 no() { echo "  FAIL: $1"; fail=1; }
@@ -216,34 +213,28 @@ ls "$T/gpu.lock.q" 2> /dev/null | grep -qE '^[0-9]{12}\.s50$' && ok "a boot that
     [ ! -e "$B/tests/.shadercache.driver-key" ] && [ $s -lt 10 ] &&
     ok "the card held past the boot's wait (a tenth of a 10-s budget): exit 75 in $s s, nothing booted" ||
     no "the held card: '$out' rc $rc in $s s"
-# A TOP-UP REPLACES THE UNION (the stage-1 audit's finding 4): an app-off boot whose ONLY why is the engine's moved code boots
-# its home without the shared hlms layer (fresh_home.sh --drop-hlms), so the promoted cache holds only what the boot used -
-# the shared hlms.1.bin of an earlier engine is gone after it (red before: the union kept it). A boot cold for another reason
-# keeps the layer. THE COMPUTE LAYER GOES WITH IT (COLD-BOOT-1 stage 3): compute.bin is the compute permutations' records,
-# the same union of what earlier boots built - dropped by the top-up beside the hlms layer (red before: it was kept).
-# THE PASS's RECORD GOES WITH THE LAYER (capture.first_recording's red at ae6713d20): the shared cache holds the startup
-# pass's record (warm-pass.key); the top-up's boot must find none and run the pass, and the promoted cache carries the record
-# that boot wrote (red before: the record survived the drop, the fake skipped the pass - the real app's union lost the NV12
-# job and every permutation only the pass draws). A boot cold for another reason keeps the layer.
-B2="$T/b2"; mkdir -p "$B2/tests"; touch "$B2/CMakeCache.txt"; toy_cache "$B2/tests/.shadercache" 1 2
+# NO TOP-UP (WARM-SHARE-1 ruling 5; spikes/warm-share/drop-hlms.md: the top-up's --drop-hlms left the PBS recipes 41 -> 0 and
+# every row compiled again): an -off cache warm at the key whose ENGINE BUILD ID moved since its stamp (the engine's code alone
+# changed) is WARM - nothing boots, the shared union keeps every recipe a green row promoted (its hlms and compute layers and
+# the startup pass's record untouched, the same inodes). (red on the old script: "a TOP-UP", a boot whose promotion dropped
+# the hlms and compute layers)
+B2="$T/b2"; mkdir -p "$B2/tests" "$B2/engine/generated" "$B2/bin/media"; touch "$B2/CMakeCache.txt"; toy_cache "$B2/tests/.shadercache" 1 2
+cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B2/engine/generated/"; cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B2/bin/media/" 2>/dev/null
 printf 'pass=an-earlier-boot\n' > "$B2/tests/.shadercache/warm-pass.key"
-printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$B2/tests/.shadercache.warm-key"; echo 0000000000000000 > "$B2/tests/.shadercache.engine-id"
-: > "$T/b2.pass"
-out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$BUILD" --tests-dir "$B2/tests" "${F[@]}" --only app-off); rc=$?
-[ $rc = 0 ] && echo "$out" | grep -q 'a TOP-UP' && echo "$out" | grep -q -- '--drop-hlms: the home.s hlms layer, its compute layer and its startup-pass record left out' &&
-    ! grep -q '^file hlms\.' "$B2/tests/.shadercache/cache-manifest.txt" && grep -q '^file pipeline.cache' "$B2/tests/.shadercache/cache-manifest.txt" &&
-    ! grep -q '^file compute\.bin' "$B2/tests/.shadercache/cache-manifest.txt" &&
-    [ "$(cat "$B2/tests/.shadercache.engine-id")" = "$EID" ] &&
-    ok "a TOP-UP boot (the engine's code moved alone) boots without the hlms and compute layers and REPLACES the union: the old hlms entries and compute records gone, the pipelines kept" ||
-    no "the top-up's union: rc $rc $(echo "$out" | tail -3) / $(tr '\n' ';' < "$B2/tests/.shadercache/cache-manifest.txt")"
-[ "$(head -1 "$T/b2.pass")" = ran ] && [ "$(cat "$B2/tests/.shadercache/warm-pass.key" 2>/dev/null)" = pass=this-boot ] &&
-    ok "the top-up's boot found no startup-pass record and ran the pass; the promoted cache holds the record it wrote" ||
-    no "the top-up's pass: the boots '$(tr '\n' ' ' < "$T/b2.pass")', the shared record '$(cat "$B2/tests/.shadercache/warm-pass.key" 2>/dev/null)'"
+k2=$("$W" "$B2" --key); printf '%s\n%s\n%s\n' "$k2" "k1 k2 " "sets none" > "$B2/tests/.shadercache.warm-key"
+echo 0000000000000000 > "$B2/tests/.shadercache.engine-id"   # (an old tree's leftover stamp: read by nothing now)
+sed -i 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\)/#define JAHSHAKA_ENGINE_BUILD_ID "f\1/' "$B2/engine/generated/jahshaka_engine_build_id.h"
+i2=$(stat -c %i "$B2/tests/.shadercache/hlms.1.bin"); : > "$T/b2.pass"
+out=$(FAKE_PASS_LOG="$T/b2.pass" DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B2" --tests-dir "$B2/tests" "${F[@]}" --only app-off); rc=$?
+[ $rc = 0 ] && [ "$out" = "warm at $k2" ] && [ ! -s "$T/b2.pass" ] && [ "$("$W" "$B2" --key)" = "$k2" ] &&
+    grep -q '^file hlms\.1\.bin' "$B2/tests/.shadercache/cache-manifest.txt" && grep -q '^file compute\.bin' "$B2/tests/.shadercache/cache-manifest.txt" &&
+    [ "$(stat -c %i "$B2/tests/.shadercache/hlms.1.bin")" = "$i2" ] && [ "$(cat "$B2/tests/.shadercache/warm-pass.key")" = pass=an-earlier-boot ] &&
+    ok "NO TOP-UP: the engine's code moved alone (its build id) - warm at the key, nothing booted, the union's hlms and compute layers and the pass record kept (the same inode)" ||
+    no "no top-up: rc $rc '$out' pass [$(tr '\n' ' ' < "$T/b2.pass")] $(tr '\n' ';' < "$B2/tests/.shadercache/cache-manifest.txt")"
 # THE BOOT's OWN WALL (block A, 2026-11-03: "the boot 75 s" was 27.5 s of the card's wait + 47.5 s of boot): another holder keeps
 # the card 2 s past the call's ticket, the toy boot takes ~0 s - the line prints the boot's own wall and the wait beside it (red
 # before: "the boot 3 s")
-B4="$T/b4"; mkdir -p "$B4/tests"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2
-printf '%s\n%s\n%s\n' "$key" "k1 k2 " "$SD" > "$B4/tests/.shadercache.warm-key"; echo 0000000000000000 > "$B4/tests/.shadercache.engine-id"
+B4="$T/b4"; mkdir -p "$B4/tests"; touch "$B4/CMakeCache.txt"; toy_cache "$B4/tests/.shadercache" 1 2   # (cold: no warm-up recorded)
 # (RED ONCE UNDER -j4, 2026-11-03, two races: (1) the walls were whole seconds and the wait floored - "own = wall - wait"
 # read 2 s for a 0.4-s boot when the 2.1 s spanned three second boundaries; both are tenths now; (2) "sleep 0.3" assumed the
 # holder had the lock by then - a loaded box can start the call first (wait 0): the call now starts only once the holder has
@@ -284,7 +275,7 @@ printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/cova
 mkdir -p "$B3/engine/generated" "$B3/bin/media"; cp "$BUILD/engine/generated/jahshaka_engine_build_id.h" "$B3/engine/generated/"
 cp -r "$BUILD/bin/media/Hlms" "$BUILD/bin/media/Photon" "$B3/bin/media/" 2>/dev/null
 DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
-printf '%s\n%s\n%s\n' "$("$W" "$B3" --key)" "k1 k2 " "sets none" > "$B3/tests/.shadercache.warm-key"; echo "$EID" > "$B3/tests/.shadercache.engine-id"
+printf '%s\n%s\n%s\n' "$("$W" "$B3" --key)" "k1 k2 " "sets none" > "$B3/tests/.shadercache.warm-key"
 DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$B3" --tests-dir "$B3/tests" --app "$T/covapp" --lab "$T/covapp" --cold-rows "$T/cold-none" --only app-on > /dev/null 2>&1
 [ "$(cat "$T/b3.prefix" 2>/dev/null)" = "$B3/coverage/boots/app-on" ] && [ -d "$B3/coverage/boots/app-on" ] &&
     ok "a JAH_COVERAGE build's boot writes its profile under coverage/boots/<boot>" || no "the boot's GCOV_PREFIX: '$(cat "$T/b3.prefix" 2>/dev/null)'"
@@ -425,30 +416,23 @@ printf 'y' > "$T/tB/build/bin/media/x/c.png"
 out=$("$W" "$T/tB/build" --check --app "$T/fake-app" --lab "$T/fake-app" --cold-rows "$T/tB/build/tests/rows.txt" --only cold-on); rc=$?
 [ $rc = 3 ] && echo "$out" | grep -q 'p.cold (the staged media rebuilt since)' && ok "...a staged file's content moved: cold-on cold, the row named" ||
     no "a media content change: '$out' rc $rc"
-# THE NARROWED KEY AND THE TOP-UP (TEST-STREAMLINE-1 1a; #126's nonce case on the narrowed key, CPU half): on a toy tree
-# warmed by hand at its key - ONLY the engine's full build id moved: the key holds, the two -off boots read a TOP-UP, the -on
-# boots and the cold rows warm; a byte of the staged Hlms media, a ray-tier SPIR-V header or the shader cache's code id moved:
+# THE NARROWED KEY, NO TOP-UP (TEST-STREAMLINE-1 1a; WARM-SHARE-1 ruling 5; #126's nonce case on the narrowed key, CPU half): on
+# a toy tree warmed by hand at its key - ONLY the engine's full build id moved: the key holds, EVERY boot warm (no top-up); a byte of the staged Hlms media, a ray-tier SPIR-V header or the shader cache's code id moved:
 # the KEY moves, every boot cold (the shader that changed is the one that runs - the card half is block A)
 toy_tree "$T/tK"; KB="$T/tK/build"; KT="$KB/tests"; mkdir -p "$KB/engine/generated/rayquery"; printf 'spv1' > "$KB/engine/generated/rayquery/rq_x_spv.h"
-kk=$("$W" "$KB" --key); kid=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$KB/engine/generated/jahshaka_engine_build_id.h")
+kk=$("$W" "$KB" --key)
 KX=(--app "$T/app" --lab "$T/lab" --cold-rows "$KB/tests/rows.txt" --tests-dir "$KT")
 toy_cache "$KT/.shadercache" 1 2; toy_cache "$KT/.shadercache-engine" 1 2
 printf '%s\n%s\n%s\n' "$kk" "k1 k2 " "sets none" > "$KT/.shadercache.warm-key"; printf '%s\n%s\n' "$kk" "k1 k2 " > "$KT/.shadercache-engine.warm-key"
 printf '%s\n%s\n' "$kk" app > "$KT/.shadercache.driver-key"; printf '%s\n%s\n' "$kk" lab > "$KT/.shadercache-engine.driver-key"
-echo "$kid" > "$KT/.shadercache.engine-id"; echo "$kid" > "$KT/.shadercache-engine.engine-id"
 DISPLAY=:99 JAH_GPU_LOCK_HELD=1 "$W" "$KB" "${KX[@]}" --only cold-on > /dev/null 2>&1
 out=$("$W" "$KB" --check "${KX[@]}"); rc=$?
 [ $rc = 0 ] && [ "$out" = "warm at $kk" ] && ok "the narrowed key's toy tree warm at $kk (every boot)" || no "the toy tree warm: '$out' rc $rc"
 sed -i 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\)/#define JAHSHAKA_ENGINE_BUILD_ID "f\1/' "$KB/engine/generated/jahshaka_engine_build_id.h"
 out=$("$W" "$KB" --check "${KX[@]}"); rc=$?
-[ $rc = 3 ] && [ "$("$W" "$KB" --key)" = "$kk" ] &&
-    echo "$out" | grep -q "the app rows' cache (app-off): the engine's code moved since .*a TOP-UP" &&
-    echo "$out" | grep -q "the engine rows' cache (engine-off): the engine's code moved since .*a TOP-UP" &&
-    ! echo "$out" | grep -qE '\((app-on|engine-on|cold-on)\)' &&
-    ok "an engine edit alone (the full build id): the KEY holds, the two -off boots a TOP-UP, the -on boots and the cold rows warm" ||
+[ $rc = 0 ] && [ "$out" = "warm at $kk" ] && [ "$("$W" "$KB" --key)" = "$kk" ] &&
+    ok "an engine edit alone (the full build id): the KEY holds and every boot reads WARM - no top-up (WARM-SHARE-1 ruling 5)" ||
     no "the engine edit alone: '$out' rc $rc"
-out=$("$W" "$KB" --check "${KX[@]}" --only app-on); rc=$?
-[ $rc = 0 ] && ok "...and an -on boot is not held behind its -off boot's top-up" || no "app-on behind a top-up: '$out' rc $rc"
 nonce() {   # <what> <file> <bytes>: the key moves, every boot cold
     cp "$2" "$T/nonce.bak"; printf '%s' "$3" >> "$2"
     local o r; o=$("$W" "$KB" --check "${KX[@]}"); r=$?
@@ -486,11 +470,10 @@ if want inherit; then
 }
 toy_tree "$T/iP"; toy_tree "$T/iC"; PB="$T/iP/build"; CB="$T/iC/build"; PT="$PB/tests"; CT="$CB/tests"
 IX() { "$W" "$1" --app "$T/app" --lab "$T/lab" --cold-rows "$1/tests/rows.txt" "${@:2}"; }
-pk=$(IX "$PB" --key); pid=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$PB/engine/generated/jahshaka_engine_build_id.h")
+pk=$(IX "$PB" --key)
 rm -rf "$PT/.shadercache"; toy_cache "$PT/.shadercache" 1 2; toy_cache "$PT/.shadercache-engine" 1 2
 printf '%s\n%s\n%s\n' "$pk" "k1 k2 " "sets none" > "$PT/.shadercache.warm-key"; printf '%s\n%s\n' "$pk" "k1 k2 " > "$PT/.shadercache-engine.warm-key"
 printf '%s\n%s\n' "$pk" app > "$PT/.shadercache.driver-key"; printf '%s\n%s\n' "$pk" lab > "$PT/.shadercache-engine.driver-key"
-echo "$pid" > "$PT/.shadercache.engine-id"; echo "$pid" > "$PT/.shadercache-engine.engine-id"
 DISPLAY=:99 JAH_GPU_LOCK_HELD=1 IX "$PB" --only cold-on > /dev/null 2>&1
 mkdir -p "$PT/row/dc" "$PT/row/seed-x"; echo drv > "$PT/row/dc/GLCache.bin"; echo k > "$PT/row/seed-x/tree-key.txt"
 out=$(IX "$PB" --check); rc=$?
@@ -558,11 +541,10 @@ printf '#!/bin/sh\necho "BOOTED $*" >> %s/s-booted\nexec %s "$@"\n' "$T" "$T/fak
 SX() { local b="$1"; shift; DISPLAY=:99 JAH_GPU_LOCK_HELD=1 JAH_WARM_STORE_ALLOW_FAKES=1 "$W" "$b" --app "$T/s-app" --lab "$T/s-app" \
            --cold-rows "$T/cold-none" --only app-off,app-on,engine-off,engine-on "$@"; }
 toy_tree "$T/sP"; PB="$T/sP/build"; PT="$PB/tests"
-pk=$("$W" "$PB" --key); pid=$(sed -n 's/^#define JAHSHAKA_ENGINE_BUILD_ID "\([0-9a-f]\{16\}\).*"$/\1/p' "$PB/engine/generated/jahshaka_engine_build_id.h")
+pk=$("$W" "$PB" --key)
 rm -rf "$PT/.shadercache"; toy_cache "$PT/.shadercache" 1 2; toy_cache "$PT/.shadercache-engine" 1 2
 printf '%s\n%s\n%s\n' "$pk" "k1 k2 " "sets none" > "$PT/.shadercache.warm-key"; printf '%s\n%s\n' "$pk" "k1 k2 " > "$PT/.shadercache-engine.warm-key"
 printf '%s\n%s\n' "$pk" s-app > "$PT/.shadercache.driver-key"; printf '%s\n%s\n' "$pk" s-app > "$PT/.shadercache-engine.driver-key"
-echo "$pid" > "$PT/.shadercache.engine-id"; echo "$pid" > "$PT/.shadercache-engine.engine-id"
 out=$(JAH_WARM_STORE="$ST" SX "$PB"); rc=$?
 [ $rc = 0 ] && [ "$(echo "$out" | head -1)" = "warm at $pk" ] && echo "$out" | grep -q "PUBLISHED to the box's warm store at $pk" &&
     cmp -s "$PT/.shadercache/hlms.1.bin" "$ST/$pk/app/cache/hlms.1.bin" && [ -f "$ST/$pk/engine/cache/cache-manifest.txt" ] &&
@@ -587,7 +569,7 @@ out=$(JAH_WARM_STORE="$ST" SX "$TB" --only engine-off); rc=$?
 echo "$out" | grep -q "the store's engine cache at $pk fails its own manifest - not taken" && [ -e "$T/s-booted" ] &&
     ok "S3: a TORN stored cache is not taken - its boot runs (#117's rule)" || no "S3 torn: '$out' rc $rc"
 rm -rf "$ST/$pk/engine"; cp -a "$PT/.shadercache-engine" "$T/eng.ok"; mkdir -p "$ST/$pk/engine"; cp -a "$T/eng.ok" "$ST/$pk/engine/cache"
-cp "$PT/.shadercache-engine.warm-key" "$ST/$pk/engine/warm-key"; cp "$PT/.shadercache-engine.engine-id" "$ST/$pk/engine/engine-id"
+cp "$PT/.shadercache-engine.warm-key" "$ST/$pk/engine/warm-key"
 toy_tree "$T/sL"; LB="$T/sL/build"; rm -f "$T/s-booted"
 ( exec 8>"$ST/$pk/.key.lock"; flock 8; sleep 1.5 ) & lp=$!
 sleep 0.3
