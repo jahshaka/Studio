@@ -360,6 +360,35 @@ static Covered coldCovered(Database &db, const QString &dbPath, const libraryfix
     return out;
 }
 
+/// PREVIEWS-1 FIX 1: what previews.state's one read (Database::fetchPreviewRows over the whole library) costs on a
+/// cold connection — under the product's default cache, and under one that holds the working set (no page is read
+/// twice) beside a HEADER-ONLY scan of the assets table (length() of a BLOB reads the record header, never its chain).
+struct PreviewPages {
+    Reading state;      ///< fetchPreviewRows, the default cache
+    Reading stateWide;  ///< fetchPreviewRows, a 64-MB cache
+    Reading scanWide;   ///< the assets table's b-tree once, header-only, a 64-MB cache
+};
+
+static PreviewPages coldPreviewPages(Database &db, const QString &dbPath)
+{
+    const auto cold = [&](bool wide, const std::function<void()> &step) {
+        db.closeDatabase();
+        db.initializeDatabase(dbPath);
+        if (wide) QSqlQuery(QSqlDatabase::database()).exec(QStringLiteral("PRAGMA cache_size = -65536"));
+        return around(step);
+    };
+    const auto state = [&db] { db.fetchPreviewRows(QString(), false, -1); };
+    PreviewPages out;
+    out.state = cold(false, state);
+    out.stateWide = cold(true, state);
+    out.scanWide = cold(true, [] {
+        QSqlQuery q(QSqlDatabase::database());
+        q.exec(QStringLiteral("SELECT sum(length(thumbnail) > 0) + sum(length(asset) > 0) FROM assets NOT INDEXED"));
+        while (q.next()) {}
+    });
+    return out;
+}
+
 /// (B): the listings an index cannot serve, on a cold connection — printed with their factor, never asserted.
 struct ResidueRow {
     const char *name;
@@ -749,6 +778,7 @@ int main(int argc, char **argv)
     ColdListing none;
     Covered coveredNone;
     QVector<Reading> residueNone;
+    PreviewPages previewsNone;
     {
         clearStore();
         const QString bare = QStringLiteral("library_statements_bare.db");
@@ -763,6 +793,7 @@ int main(int argc, char **argv)
         none = coldListing(db, bare);
         coveredNone = coldCovered(db, bare, bareLib);
         residueNone = coldResidue(db, bare, bareLib);
+        previewsNone = coldPreviewPages(db, bare);
         db.closeDatabase();
         QFile::remove(bare);
     }
@@ -884,6 +915,41 @@ int main(int argc, char **argv)
         printIndexSizes("1,000 assets");
     }
 
+    // ---- PREVIEWS-1 FIX 1: previews.state READS NO THUMBNAIL CHAIN -------------------------------------------
+    // THE LAW: (the pages previews.state reads) - (the pages a header-only scan of the assets table reads) is EXACTLY
+    // EQUAL with 256-px thumbnails and with none, on a cold connection whose cache holds the working set. Derivation:
+    // the state must know, per row, whether it holds a picture (missing vs stale) and a blob (none), which it reads as
+    // length(thumbnail) and length(asset) from the row's HEADER: one pass of the table's b-tree, the same pass the scan
+    // makes, and no overflow page. Everything else it reads — idx_assets_library for the platform stamp (covering:
+    // guid, properties), thumbnails, asset_files, project_assets, dependencies — the two libraries hold page for page
+    // alike (the same calls grew them; they differ ONLY in their thumbnails). One chain walked (a column stored after
+    // `thumbnail` read from the table: `properties`, `asset`'s content) breaks the equality. RED before (the platform
+    // stamp read as instr(properties) in the main statement): 7,766 against 81
+    // (spikes/previews-1/stage2/fix1-pages-red.txt). The default cache's reading is printed beside it (one page more
+    // with thumbnails: the larger table pushes one page out of the 2-MB cache and it is read again).
+    const PreviewPages previewsWith = coldPreviewPages(db, dbPath);
+    {
+        const PreviewPages &w = previewsWith, &n = previewsNone;
+        CHECK(w.stateWide.pages - w.scanWide.pages == n.stateWide.pages - n.scanWide.pages,
+              "FIX 1: previews.state reads no thumbnail chain — beyond one header-only pass of the assets table it reads "
+              "%lld pages with 256-px thumbnails and %lld with none (cache 64 MB)",
+              static_cast<long long>(w.stateWide.pages - w.scanWide.pages),
+              static_cast<long long>(n.stateWide.pages - n.scanWide.pages));
+        CHECK(w.scanWide.pages > n.scanWide.pages,
+              "FIX 1 POSITIVE CONTROL: the header-only scan does see the inline thumbnails (%lld pages against %lld)",
+              static_cast<long long>(w.scanWide.pages), static_cast<long long>(n.scanWide.pages));
+        std::printf("   previews.state at the product's default cache: %lld pages with thumbnails, %lld with none\n",
+                    static_cast<long long>(w.state.pages), static_cast<long long>(n.state.pages));
+        std::printf("   residue | %-78s | %-8s | %5lld / %5lld pages = %.1fx | %s\n",
+                    "previews.state / previews.counts: the assets table's own b-tree (header-only), at 1,000", "library",
+                    static_cast<long long>(w.scanWide.pages), static_cast<long long>(n.scanWide.pages),
+                    n.scanWide.pages ? double(w.scanWide.pages) / double(n.scanWide.pages) : 0.0,
+                    "database.cpp fetchPreviewRows");
+        std::fflush(stdout);
+        std::printf("   residue (bytes) previews.state's table pass at 1,000: %lld B with thumbnails, %lld B with none\n",
+                    static_cast<long long>(w.scanWide.bytes), static_cast<long long>(n.scanWide.bytes));
+    }
+
     // ---- THE LAW: 1,000 / 50 AGAINST 10,000 / 500 ---------------------------------------------------------
     QVector<Count> small;
     for (const Listing &l : listings(db, lib)) small.append(countOf(l.run));
@@ -936,6 +1002,17 @@ int main(int argc, char **argv)
               static_cast<long long>(perModelLarge.statements - perModelSmall.statements));
     }
     printIndexSizes("10,000 assets");
+    {
+        // FIX 1 AT 10,000: previews.state is the same statements (a sweep's start and a verb), its table pass printed.
+        const PreviewPages big = coldPreviewPages(db, dbPath);
+        CHECK(big.state.statements == previewsWith.state.statements && big.state.statements > 0,
+              "FIX 1: previews.state runs the SAME statements at 10,000 as at 1,000 (%lld and %lld)",
+              static_cast<long long>(big.state.statements), static_cast<long long>(previewsWith.state.statements));
+        std::printf("   residue (bytes) previews.state's table pass at 10,000 with thumbnails: %lld pages = %lld B (default "
+                    "cache: the state reads %lld pages)\n", static_cast<long long>(big.scanWide.pages),
+                    static_cast<long long>(big.scanWide.bytes), static_cast<long long>(big.state.pages));
+        std::fflush(stdout);
+    }
     const QVector<Listing> all = listings(db, lib);
     {
         const qint64 added = int(assettray::libraryList(&db, true).size()) - smallRows;

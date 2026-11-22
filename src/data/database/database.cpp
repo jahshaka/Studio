@@ -1682,6 +1682,25 @@ void Database::announceAssetThumbnailWritten(const QString &guid)
 QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectGuid, bool projectOnly,
                                                          int type, const QStringList &guids)
 {
+    // PLATFORM FURNITURE, by its stamp, evaluated BY SQLITE (`instr`, not json_extract: the one
+    // quoted token, services/assettray.h rule 4) - in its OWN statement: `properties` is stored after
+    // `thumbnail`, so reading it from the TABLE walks each row's thumbnail chain (DOCS/traps/
+    // QT_AND_APP.md "The library at scale"). Over the library it is answered by idx_assets_library
+    // alone (covering: guid, properties); for named guids by their rows (bounded by the request).
+    static const QString kPlatform = QStringLiteral("instr(COALESCE(properties, ''), '\"platform\"') > 0");
+    QSet<QString> platform;
+    {
+        QStringList marks;
+        for (int i = 0; i < guids.size(); ++i) marks << QStringLiteral("?");
+        QSqlQuery furniture;
+        furniture.prepare(guids.isEmpty()
+                              ? QStringLiteral("SELECT guid FROM assets INDEXED BY idx_assets_library WHERE %1").arg(kPlatform)
+                              : QStringLiteral("SELECT guid FROM assets WHERE guid IN (%1) AND %2")
+                                    .arg(marks.join(QLatin1Char(',')), kPlatform));
+        for (const QString &guid : guids) furniture.addBindValue(guid);
+        if (!executeAndCheckQuery(furniture, QStringLiteral("FetchPreviewPlatform"))) return {};
+        while (furniture.next()) platform.insert(furniture.value(0).toString());
+    }
     // The correlated sub-selects are SQLite's per row, inside this ONE statement; the oid lists
     // come back in no promised order (previews::key sorts them).
     QString sql = QStringLiteral(
@@ -1689,10 +1708,7 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
         "(SELECT group_concat(f.role || ':' || f.oid) FROM asset_files f WHERE f.asset_guid = a.guid), "
         "(SELECT p.oid_pin FROM project_assets p WHERE p.project_guid = ? AND p.asset_guid = a.guid), "
         "(SELECT group_concat(d.dependee || ':' || m.oid) FROM dependencies d "
-        " JOIN asset_files m ON m.asset_guid = d.dependee WHERE d.depender = a.guid), "
-        // PLATFORM FURNITURE, by its stamp, evaluated BY SQLITE: no properties blob crosses into
-        // this process (`instr`, not json_extract: the one quoted token, services/assettray.h rule 4).
-        "instr(COALESCE(a.properties, ''), '\"platform\"') > 0 "
+        " JOIN asset_files m ON m.asset_guid = d.dependee WHERE d.depender = a.guid) "
         "FROM assets a LEFT JOIN thumbnails t ON t.guid = a.guid WHERE 1");
     if (projectOnly)
         sql += QStringLiteral(" AND a.guid IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)");
@@ -1726,7 +1742,7 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
         row.files = split(query.value(5));
         row.pin = query.value(6).toString();
         row.members = split(query.value(7));
-        row.platform = query.value(8).toBool();
+        row.platform = platform.contains(row.guid);
         rows.append(row);
     }
     return rows;
