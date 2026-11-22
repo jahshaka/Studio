@@ -2322,15 +2322,19 @@ void Session::showJs()
     if (mOverlay) pushOverlay();
 }
 
+void Session::giveViewBack()
+{
+    if (!mViewLent) return;
+    mView->setScene(nullptr);
+    mView->setBackground(mLabBackground);   // the lab's own again (a record re-applies only a change: set it here)
+    mView->setScene(mScene);
+    mViewLent = false;
+}
+
 void Session::jsClear()
 {
     // THE VIEW GIVEN BACK BEFORE THE HOST ENDS: a host's end may take the objects its run made (the scene the view shows)
-    if (mViewLent) {
-        mView->setScene(nullptr);
-        mView->setBackground(mLabBackground);   // the lab's own again (a record re-applies only a change: set it here)
-        mView->setScene(mScene);
-        mViewLent = false;
-    }
+    giveViewBack();
     mJsHost.reset();
 }
 
@@ -2381,6 +2385,10 @@ bool Session::jsRun()
                         });
     const unsigned long long frame0 = mEngine->published().frame;
     const script::Result r = host.run(source.str(), mJsPath);
+    // A VIEW LEFT WITH NO SCENE IS GIVEN BACK (the audit's F1): a script that took it and failed (or never bound) before
+    // its scene presents NOTHING - X keeps the lab's last frame, frozen, and the overlay's error row is never drawn: the
+    // lab's world is shown again, the error on its overlay
+    if (mViewLent && !mView->scene()) giveViewBack();
     // THE VERDICT (ruling 8): the host's, unchanged - except IN THE WINDOW a run that failed nothing and checked nothing:
     // a script the owner watches is not a test, so its "checked nothing" fault is neither printed nor counted
     std::vector<std::string> verdictLines;

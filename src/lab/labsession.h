@@ -125,6 +125,8 @@ private:
     bool jsRun();
     /// The lab's world back in the window's view (a script was handed it by lab.view()); then the last run's host ends.
     void jsClear();
+    /// The view lent by lab.view() given back: the lab's scene bound again, its background re-applied.
+    void giveViewBack();
     /// THE SCRIPTS FOLDER `js next` walks (labscripts.h): the loaded script's, else --js-dir's, else <data root>/scripts.
     std::string jsFolder() const;
     /// The script's state on the strip and the overlay, now.

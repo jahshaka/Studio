@@ -136,6 +136,15 @@ jah_gpu_row(lab.js_error_survives CLASS engine FRAMES 1
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.js_error_survives PROPERTIES TIMEOUT 60 LABELS "lab")
 
+# lab.js_view_given_back (LAB-SCRIPTS-1, the audit's F1) — A SCRIPT THAT TAKES THE VIEW AND FAILS BEFORE IT BINDS A SCENE
+# GIVES IT BACK: the lab's world is shown again (its shot equal to the one before the run) and the overlay drawn over it
+# (js_world_back.sh scene-less says the laws). On photon-room (low, gi off): the first frame, 2, then 1 + 1 of the lab's.
+jah_gpu_row(lab.js_view_given_back CLASS engine FRAMES 5
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_world_back.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/js_view_given_back scene-less
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_view_given_back PROPERTIES TIMEOUT 60 LABELS "lab")
+
 # lab.env_expectation_printed (stage 2) — `jahlab --env-list` prints every environment's law and its closed-form
 # expectation at each dolly stop (22 / 88 / 177 / 354 m), every value a finite number. CPU only.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
