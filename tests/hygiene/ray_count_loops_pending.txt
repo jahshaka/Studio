@@ -29,3 +29,6 @@ media/Hlms/Jahshaka/JahVoxelGather_cs.glsl	for( uint j = 0u; j < L.partCount; ++
 media/Hlms/Jahshaka/JahVoxelGather_cs.glsl	for( uint o = 0u; o < params.counts.y; ++o )
 src/rayquery/include/jah_voxel_cones.glsl	for( int i = 0; i < n; ++i )
 src/rayquery/include/jah_voxel_cones.glsl	for( int i = 0; i < n; ++i )
+src/rayquery/include/jah_inject_visibility.glsl	for( int it = 0; it < maxSteps && T > 0.0f; ++it )
+src/rayquery/rq_probe_resume.comp	for( uint b = tid; b < blocks; b += 1024u )
+src/rayquery/rq_hit_composite.comp	for( uint j = i; j < last; ++j )

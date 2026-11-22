@@ -64,7 +64,7 @@ INIT_CALL = re.compile(r"\bJAH_RQ_INIT\s*\(")
 FLAGGED = re.compile(r"\bJAH_RQ_PROCEED(?:_PANES|_OPAQUE)?\s*\(([^()]*)\)")
 LAW = 1024
 PENDING = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ray_count_loops_pending.txt")
-kPendingAtMost = 26
+kPendingAtMost = 29   # (26 + the final re-read's three: jah_inject_visibility.glsl:311 maxSteps from p_chainRes (:286, float-steered: F1's kind), rq_probe_resume.comp:245 blocks = uint( r.blocks.w ), rq_hit_composite.comp:160 last <= capacity = uint( p.list.x ) - all three untested)
 # (file under irisgl/engine, the clamp's pattern in its comment-stripped text, how many times, what it is)
 CLAMPED = (
     ("src/rayquery/include/jah_rq_hit_direct.glsl", r"const\s+uint\s+count\s*=\s*jahHitLightCount\s*\(\s*T\s*\)", 2,
