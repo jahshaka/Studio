@@ -722,7 +722,7 @@ bool Database::initializeDatabase(const QString &pathToBlob)
             // connection(): the same handle on the std-only layer, borrowed (NOQT-DATABASE-1 ruling 3).
             QString why;
             db::Error error;
-            *mConnection = db::Connection::borrow(databasereads::systemHandle(db, &why), "editor", &error);
+            *mConnection = db::Connection::borrow(databasereads::systemHandle(db.driver() ? db.driver()->handle() : QVariant(), &why), "editor", &error);
             if (error)
                 irisLog(QStringLiteral("The library's connection could not be borrowed (%1): %2")
                             .arg(why, QString::fromStdString(error.message)));

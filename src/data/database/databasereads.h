@@ -40,6 +40,7 @@ For more information see the LICENSE file
 // traced; a statement a worker connection runs is not counted here.
 
 #include <QString>
+#include <QVariant>
 #include <QtGlobal>
 
 class QSqlDatabase;
@@ -62,9 +63,10 @@ Stats read();
 /// would answer unavailable.
 bool installStatementTrace(const QSqlDatabase &connection);
 
-/// The connection's sqlite3* when it belongs to the system SQLite this build links (the plugin's own
-/// DT_NEEDED, read above), else null with the reason in `why`. Database::connection() borrows it.
-sqlite3 *systemHandle(const QSqlDatabase &connection, QString *why);
+/// An open connection's driver handle (its driver()->handle(); invalid when not open) as the sqlite3*
+/// it is when it belongs to the system SQLite this build links (the plugin's own DT_NEEDED, read
+/// above), else null with the reason in `why`. Database::connection() borrows it.
+sqlite3 *systemHandle(const QVariant &driverHandle, QString *why);
 
 }   // namespace databasereads
 

@@ -71,10 +71,10 @@ int onStatement(unsigned type, void *, void *, void *sql)
 
 }   // namespace
 
-sqlite3 *systemHandle(const QSqlDatabase &connection, QString *why)
+sqlite3 *systemHandle(const QVariant &h, QString *why)
 {
 #if defined(__linux__)
-    if (!connection.isOpen() || !connection.driver()) { *why = QStringLiteral("the library database is not open"); return nullptr; }
+    if (!h.isValid()) { *why = QStringLiteral("the library database is not open"); return nullptr; }
     PluginScan scan;
     dl_iterate_phdr(scanObject, &scan);
     if (!scan.pluginSeen || !scan.needsSystemSqlite) {
@@ -82,8 +82,7 @@ sqlite3 *systemHandle(const QSqlDatabase &connection, QString *why)
                                : QStringLiteral("the qsqlite plugin is not loaded");
         return nullptr;
     }
-    const QVariant h = connection.driver()->handle();
-    if (!h.isValid() || std::strcmp(h.typeName(), "sqlite3*") != 0) {
+    if (std::strcmp(h.typeName(), "sqlite3*") != 0) {
         *why = QStringLiteral("the driver's handle is not an sqlite3*");
         return nullptr;
     }
@@ -91,7 +90,7 @@ sqlite3 *systemHandle(const QSqlDatabase &connection, QString *why)
     if (!db) *why = QStringLiteral("the driver's handle is null");
     return db;
 #else
-    Q_UNUSED(connection);
+    Q_UNUSED(h);
     *why = QStringLiteral("the Qt SQL driver here carries its own SQLite (not the system library this build links)");
     return nullptr;
 #endif
@@ -108,7 +107,7 @@ Stats read()
     return out;
 #else
     const QSqlDatabase main = QSqlDatabase::database(QLatin1String(QSqlDatabase::defaultConnection), false);
-    sqlite3 *db = systemHandle(main, &out.why);
+    sqlite3 *db = systemHandle(main.isOpen() && main.driver() ? main.driver()->handle() : QVariant(), &out.why);
     if (!db) return out;
     int cur = 0, high = 0;
     if (sqlite3_db_status(db, SQLITE_DBSTATUS_CACHE_MISS, &cur, &high, 0) != SQLITE_OK) {
@@ -131,7 +130,7 @@ bool installStatementTrace(const QSqlDatabase &connection)
 {
 #if defined(JAH_HAVE_SQLITE3) && defined(__linux__)
     QString why;
-    sqlite3 *db = systemHandle(connection, &why);
+    sqlite3 *db = systemHandle(connection.isOpen() && connection.driver() ? connection.driver()->handle() : QVariant(), &why);
     if (!db || sqlite3_trace_v2(db, SQLITE_TRACE_STMT, onStatement, nullptr) != SQLITE_OK) return false;
     gTracedHandle.store(db);
     return true;
