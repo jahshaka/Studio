@@ -15,6 +15,7 @@
 #include "script/records.h"            // ONE FIELD TABLE PER RECORD (engine-private): the machinery, on this file's records
 
 #include <cstdio>
+#include <cstdlib>
 #include <limits>
 #include <memory>
 #include <stdexcept>
@@ -1599,6 +1600,39 @@ int main()
         const std::string fresh = twoRuns(true), kept = twoRuns(false);
         check(fresh == "undefined undefined" && kept == "number number",
               "with freshRealmPerRun run 2 sees no global of run 1 (" + fresh + "); without it they survive (" + kept + ")");
+    }
+
+    // 15. THE KEEP-GOING HOOK (MCP-ON-HOST-1 stage 2.5: a caller's cancel): a JS for(;;) stops at the runtime's interrupt
+    //     poll, FAILS "cancelled", and no catch takes it; a command looping on keepGoing stops by name; the loops' own
+    //     counts read > 0 before the cancel (the control: each ran); the host serves the next run whole
+    {
+        Host h;
+        std::vector<std::string> said;
+        h.setConsole([&said](const std::string &l) { said.push_back(l); });
+        int polls = 0;
+        h.setKeepGoing([&polls](double, double) { return ++polls < 50; });
+        const Result spun = h.run("globalThis.count = 0;\ntry { for (;;) ++globalThis.count; } catch (e) { console.log('caught'); }\n",
+                                  "spin.js");
+        const int jsPolls = polls;
+        h.setKeepGoing(nullptr);
+        const Result after = h.run("console.log(String(count));\n", "after.js");
+        const long counted = after.status == Status::Ok && said.size() == 1 ? std::atol(said[0].c_str()) : 0;
+        check(spun.status == Status::Failed && spun.message == "cancelled" && jsPolls == 50 && counted > 0 &&
+                  said.size() == 1,
+              "a JS for(;;) is cancelled by the hook (\"" + spun.message + "\" at poll " + std::to_string(jsPolls) +
+                  "), no catch takes it, it had counted " + std::to_string(counted) + " (> 0), and the next run is served");
+        long spins = 0;
+        h.registry().add({"test.spin", {Access::Reads, {}, Kind::Null}, "loops on the host's keep-going hook"},
+                         [&h, &spins](Call &c) {
+                             while (h.keepGoing(double(spins), 0)) ++spins;
+                             return c.fail("cancelled at spin " + std::to_string(spins));
+                         });
+        polls = 0;
+        h.setKeepGoing([&polls](double, double) { return ++polls <= 1000; });
+        const Result loop = h.call("test.spin", {});
+        check(failedWith(loop, "cancelled at spin 1000") && spins == 1000,
+              "a command looping on keepGoing stops by name when it answers false (" + loop.message + ", " +
+                  std::to_string(spins) + " spins > 0)");
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
