@@ -195,6 +195,14 @@ int main()
     }
 
     lines.clear();
+    run = host.run("console.log(typeof test.add, String(test), 'add' in test);\n"
+                   "try { const f = test.addd; } catch (e) { console.log(e.message); }\n", "read.js");
+    check(run.status == Status::Ok && lines.size() == 2 && lines[0] == "function [object Object] true" &&
+              lines[1] == "test.addd is not a command",
+          "a namespace's commands are its own properties, it prints as an object, and an unknown name FAILS AT ITS READ "
+          "(no call needed): " + (lines.size() == 2 ? lines[0] + " / " + lines[1] : std::string("?")));
+
+    lines.clear();
     run = host.run("console.log(test.notNow(), host.lastError());\n", "refuse.js");
     check(run.status == Status::Ok && lines.size() == 1 && lines[0] == "false test.notNow: not now",
           "a refuse answers falsy in JS and host.lastError() holds its message (" + (lines.empty() ? "" : lines[0]) + ")");
