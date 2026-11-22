@@ -126,7 +126,9 @@ static void sourceOrder(const char *tierPath, const char *gatherPath)
         check(!ss.str().empty(), std::string("5. the source reads: ") + path);
         code += codeOnly(ss.str()) + "\n";
     }
-    struct Job { const char *name; const char *kind; const char *advances[2]; };
+    // `views` (optional): the token before which EVERY view the job binds - its own targets too - is looked up AND
+    // passed through the guard (the final re-read's C1: the gather's own three targets were viewed after its ring)
+    struct Job { const char *name; const char *kind; const char *advances[2]; const char *views = nullptr; };
     // (each advance: the first token of the state the job's frame moves - named at its line in the lane's report)
     const Job jobs[] = {
         { "recordReflect", "a history job", { "rv.ringFrame++", nullptr } },
@@ -140,7 +142,7 @@ static void sourceOrder(const char *tierPath, const char *gatherPath)
         { "gatherCards", "a card job", { "mCardGather[scene]", nullptr } },
         { "gatherVoxelSides", "a history job", { "foldVoxelSideCounts(", "++v.sharesWrites" } },
         { "cardPickBlocking", "a card job", { "executeResourceTransition(", "flushCommands(" } },
-        { "record", "the probe gather (a history job)", { "rebindScene(", nullptr } },
+        { "record", "the probe gather (a history job)", { "rebindScene(", nullptr }, "v.frame % kRing" },
     };
     std::vector<Def> defs = definitions(code, "RayQueryTier");
     for (Def &d : definitions(code, "ScreenProbeGather")) defs.push_back(d);
@@ -176,6 +178,21 @@ static void sourceOrder(const char *tierPath, const char *gatherPath)
         check(!late, who + ": looks up no input view after that state moved");
         if (d.body.find("hitSet.write(") != std::string::npos)
             check(firstCall(d.body, "hitSetInputsMade") < advance, who + ": checks its hit set's inputs before that state");
+        if (j->views) {
+            const size_t ring = d.body.find(j->views);
+            if (ring == std::string::npos) { check(false, who + ": its views token is found (the table is stale)"); continue; }
+            const std::string tail = d.body.substr(ring);
+            check(!hasCall(tail, "gatherView") && !hasCall(tail, "textureView"),
+                  who + ": looks up EVERY view it binds - its own targets too - before " + j->views);
+            const std::string head = d.body.substr(0, ring);
+            size_t last = 0u;
+            for (const char *fn : { "gatherView", "textureView" })
+                for (size_t from = 0u, at; (at = firstCall(head.substr(from), fn)) != std::string::npos; from += at + 1u)
+                    last = std::max(last, from + at);
+            const std::string between = d.body.substr(last, ring - last);
+            check(hasCall(between, "gatherInputsMade") || hasCall(between, "inputsMade"),
+                  who + ": the guard checks its last views before " + j->views);
+        }
     }
     for (const Job &c : jobs) {
         bool found = false;
