@@ -26,6 +26,7 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
 #include "data/project.h"
 #include "ui/ishellview.h"
 #include "services/projectservice.h"
@@ -901,14 +902,14 @@ QVariantMap ProjectApi::exportManifest(const QString &dir)
          host.db->fetchChildAssets(projectGuid, projectGuid, -1))
         if (!record.guid.isEmpty() && !guids.contains(record.guid)) guids.append(record.guid);
     {
-        QSqlQuery pins(QSqlDatabase::database());
-        pins.prepare("SELECT asset_guid FROM project_assets WHERE project_guid = ?");
-        pins.addBindValue(projectGuid);
-        if (pins.exec())
-            while (pins.next()) {
-                const QString pinned = pins.value(0).toString();
-                if (!pinned.isEmpty() && !guids.contains(pinned)) guids.append(pinned);
-            }
+        db::Statement pins(host.db->connection(), "SELECT asset_guid FROM project_assets WHERE project_guid = ?");
+        dbqt::bindText(pins, 1, projectGuid);
+        db::Error error;
+        while (pins.step(&error)) {
+            const QString pinned = dbqt::text(pins, 0);
+            if (!pinned.isEmpty() && !guids.contains(pinned)) guids.append(pinned);
+        }
+        if (error) qWarning("project: the project's pinned assets: %s", qUtf8Printable(dbqt::describe(error)));
     }
     for (int i = 0; i < guids.size(); ++i)   // grows while iterating: transitive closure
         for (const QString &dep : host.db->fetchAssetGUIDAndDependencies(guids.at(i), false))
