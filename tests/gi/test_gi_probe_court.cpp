@@ -73,7 +73,7 @@ static void addRoof(Scene *s)
 
 struct Verdict { int probes = 0, dropped = 0, overBudget = 0; bool byRays = false; };
 
-static Verdict measure(Engine *engine, Scene *s)
+static Verdict measure(Engine *engine, View *view, Scene *s)
 {
     GiParams gi;
     gi.mode = GiMode::VctPccHybrid;
@@ -82,6 +82,9 @@ static Verdict measure(Engine *engine, Scene *s)
     gi.updateBudget = 0;                 // deterministic: no re-captures mid-read
     if (!s->setGlobalIllumination(gi))
         std::printf("   engine error: %s\n", engine->lastError().c_str());
+    // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the row left routes_pending): the view of this ray scene
+    // runs the GATHER (every view does), over the voxel store, paused (budget 0) - asserted on the first frame after it
+    enginetest::declareRoutes(view, s, enginetest::Routes().gather().store().paused(), "gi.probe_court's view");
     enginetest::frames(engine, 10);
     const GiStatus st = s->published().gi;
     Verdict v;
@@ -115,7 +118,7 @@ int main()
         if (roof) addRoof(s);
         enginetest::addDirectionalLight(s, Vec3(-0.3f, -0.8f, -0.5f), 5.0f);
         enginetest::testCameraLookAt(view, Vec3(0.0f, 1.7f, 6.0f), Vec3(0.0f, 1.2f, 0.0f));
-        const Verdict v = measure(engine.get(), s);
+        const Verdict v = measure(engine.get(), view, s);
         engine->destroyScene(s);
         return v;
     };

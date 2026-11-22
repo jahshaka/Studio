@@ -80,6 +80,12 @@ int main()
         enginetest::testCameraLookAt(view, p, Vec3(p.x + 4.0f, 1.2f, p.z - 1.0f));
     };
     look(cam);
+    // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the row left routes_pending): the view of this ray scene
+    // runs the GATHER (every view does), over the voxel store, paused (budget 0: tierGi) - declared at each chain's build
+    // below and asserted on its first frame
+    const auto declare = [&]() {
+        enginetest::declareRoutes(view, scene, enginetest::Routes().gather().store().paused(), "gi.scroll_lag's view");
+    };
 
     // ---- THE TABLE ---------------------------------------------------------------------------------------------
     std::printf("== the scroll counts per tier (giCascadeScrollFrames, from each tier's resolved chain) ==\n");
@@ -90,6 +96,7 @@ int main()
         bool all = true;
         for (const auto &t : tiers) {
             if (!scene->setGlobalIllumination(tierGi(t.q))) { std::printf("   %s: no chain\n", t.name); all = false; continue; }
+            declare();
             run(4);
             const GiStatus st = scene->published().gi;
             std::printf("   %-6s", t.name);
@@ -120,6 +127,7 @@ int main()
         run(2);
         look(Vec3(0.0f, 1.6f, 0.0f));
         CHECK(scene->setGlobalIllumination(tierGi(GiQuality::Epic)), "the Epic chain builds");
+        declare();
         run(12);   // every cascade built where the dolly starts
         e->waitForAsyncShaders();   // the commit's shader built (a wall-clock wait the frames below must not count)
         const GiStatus pre = scene->published().gi;
@@ -173,6 +181,7 @@ int main()
         run(2);
         look(Vec3(0.0f, 1.6f, 0.0f));
         CHECK(scene->setGlobalIllumination(tierGi(GiQuality::Epic)), "the Epic chain builds again");
+        declare();
         run(12);
         e->waitForAsyncShaders();
         const GiStatus pre = scene->published().gi;

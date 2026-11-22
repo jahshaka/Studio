@@ -90,6 +90,9 @@ int main()
         scene->setGlobalIllumination(off);
         run(2);
         const bool ok = scene->setGlobalIllumination(gi);
+        // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the row left routes_pending): the view of this ray
+        // scene runs the GATHER (every view does), over the voxel store, paused (budget 0) - asserted on the next frame
+        enginetest::declareRoutes(view, scene, enginetest::Routes().gather().store().paused(), "gi.light_order's view");
         run(10);
         st = scene->published().gi;
         return ok && scene->giVoxelVolume(0, v);

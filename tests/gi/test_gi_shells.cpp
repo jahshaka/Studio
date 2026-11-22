@@ -59,6 +59,10 @@ int main()
         gi.updateBudget = 0;
         gi.bounces = true;
         if (!scene->setGlobalIllumination(gi)) { std::printf("   %s: the chain did not build\n", t.name); allOk = false; continue; }
+        // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the row left routes_pending): the view of this ray
+        // scene runs the GATHER at every tier (every view does), over the voxel store, paused (budget 0) - asserted on the
+        // tier's first frame
+        enginetest::declareRoutes(view, scene, enginetest::Routes().gather().store().paused(), "gi.shell_ends's view");
         enginetest::frames(e, 6);
         const GiStatus st = scene->published().gi;
         const size_t n = st.cascades.size();

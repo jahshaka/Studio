@@ -204,6 +204,9 @@ int main()
     gi.bounces = true;
     enginetest::testCameraLookAt(view, Vec3(0.0f, 1.6f, 4.0f), Vec3(0.0f, 0.6f, 0.0f));
     if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the chain\n"); return 1; }
+    // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the row left routes_pending): the view of this ray scene
+    // runs the GATHER (every view does), over the voxel store, GI live (budget 1) - asserted on the first frame after it
+    enginetest::declareRoutes(view, scene, enginetest::Routes().gather().store(), "gi.changed_regions's view");
     e->waitForAsyncShaders();
     // SETTLED: the chain at rest and the cards with nothing queued or relit, for 30 frames in a row (cap 900).
     const auto settle = [&](int cap) {

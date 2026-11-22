@@ -74,6 +74,9 @@ int main()
     gi.cards = false;
     gi.bounces = true;
     if (!scene->setGlobalIllumination(gi)) { std::printf("FAIL: the GI builds\n"); return 1; }
+    // THE DECLARED ROUTE (URGENT #146, R16; ROUTE-ROWS-1 stage 1: the row left routes_pending): the view of this ray scene
+    // runs the GATHER (every view does), over the voxel store, GI live (budget 1) - asserted on the first frame after it
+    enginetest::declareRoutes(view, scene, enginetest::Routes().gather().store(), "gi.relight_credit's view");
     e->waitForAsyncShaders();
     int quiet = 0, f0 = 0;
     for (; f0 < 1500 && quiet < 30; ++f0) {
