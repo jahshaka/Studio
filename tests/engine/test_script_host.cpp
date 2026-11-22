@@ -508,6 +508,36 @@ int main()
               "a NAMED handle carries the engine's id; its existence check FAILS a dead or foreign id by name");
         check(failedWith(named(mesh), "is a mesh handle, not a node handle"),
               "a mesh handle where a node is declared FAILS by name (the kind is in the bits, no lookup)");
+        // AN ARRAY OF HANDLES (handles(); 2a a2): every element kind-checked AND asked of its kind's existence check
+        a.add({"test.many", {Access::Reads, {target(handle("scene", "scene")), object("o", {handles("nodes", "node")})},
+                             Kind::Int}, "how many nodes"},
+              [](Call &c) { return Value(std::int64_t(c[1]["nodes"].asArray().size())); });
+        const auto many = [&](Value::Array nodes) {
+            return a.call("test.many", {scene2, Value(Value::Object{{"nodes", Value(std::move(nodes))}})});
+        };
+        check(many({node5, node5, node5}).value == Value(3) &&
+                  failedWith(many({node5, node5, node5, node6}), "test.many: nodes[3]: node 6 is not a node of the scene") &&
+                  failedWith(many({node5, mesh}), "o.nodes[1]: " + std::to_string(mesh.asInt()) +
+                                                      " is a mesh handle, not a node handle"),
+              "an array of handles: three live nodes pass; a DEAD node at nodes[3] FAILS naming nodes[3]; a mesh among "
+              "the nodes FAILS naming its index");
+        {
+            Registry counted;
+            int asked = 0;
+            counted.add({"test.many", {Access::Reads, {target(handle("scene", "scene")), object("o", {handles("nodes", "node")})},
+                                       Kind::Int}, "how many nodes"},
+                        [](Call &c) { return Value(std::int64_t(c[1]["nodes"].asArray().size())); });
+            counted.checkKind("node", [&asked](const Call &, std::uint32_t, std::string &) { ++asked; return true; });
+            const Value s(counted.hold("scene", std::make_shared<int>(0)));
+            Value::Array seven;
+            for (int i = 1; i <= 7; ++i) seven.push_back(Value(counted.name("node", std::uint32_t(i))));
+            const Result r7 = counted.call("test.many", {s, Value(Value::Object{{"nodes", Value(seven)}})});
+            check(r7.value == Value(7) && asked == 7 &&
+                      signatureText(*counted.find("test.many")) ==
+                          "test.many(scene: target scene handle, o: object {nodes: node handle[]}) -> int [reads]",
+                  "the existence check is asked once for EACH of 7 elements (" + std::to_string(asked) +
+                      " asked); the signature prints node handle[]");
+        }
         check(failedWith(a.call("test.mint", {Value(std::int64_t(1) << 32 | 5)}), "does not fit a handle's 32 bits"),
               "an engine id over 2^32 - 1 is refused at minting (2^32 + 5 never becomes 5)");
         check(signatureText(*a.find("test.named")) == "test.named(scene: target scene handle, o: object {node: node handle}) -> int [reads]" &&
