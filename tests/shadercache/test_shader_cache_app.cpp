@@ -92,7 +92,13 @@ QJsonObject markerObject(const QString &out, const QString &marker)
 /// startup gate returned - `after` (app.asyncShaders() once the script's frames left nothing pending) against its
 /// `atGate` (the totals as the gate returned). Graphics permutations and low-level pipelines: 0 each (red before the
 /// gate warmed the editor's sample count, its HUD and its sky-less first state: >= 3 + the HUD,
-/// spikes/shader-system/ss7/gate-measure). The compute counters are printed beside them.
+/// spikes/shader-system/ss7/gate-measure). The compute counters are printed beside them: the scripted editor's view is
+/// SYNCHRONOUS (main.cpp, livecompiles::setAsyncPolicy) and owes every frame whole, so a new scene's per-job convolution
+/// pipelines are joined in its frame (its price, ~0.05 ms) - reported, not barred.
+/// THE LAW's WINDOW is the editor's frames after the gate until nothing is pending. The HUD's two permutations
+/// (Jahshaka/OverlayFill, Fonts/DebugFont) are built at SHUTDOWN in this run (the scene-less frame after the world is
+/// destroyed): nothing the user waits for, so outside the law. A HUD first shown DURING a session (the stats readout
+/// switched on, the "No world open" cover) builds them then: stage 8's line.
 void gateDrawsWhatTheEditorDraws(const char *run, const QJsonObject &after)
 {
     const QJsonObject at = after.value("atGate").toObject();
@@ -489,8 +495,9 @@ int main(int argc, char **argv)
     // The script also asserted save -> files, clear -> no files; it prints its
     // own ok:/FAIL: lines, which the exit code folds in.
     CHECK(cold.value("afterSaveFiles").toInt() > 0, "app.saveShaderCache() wrote files");
-    // THE COMPUTE COUNTER's NEGATIVE CONTROL (SHADER-SYSTEM-1, the start preflight's F7): a cold launch parsed compute
-    // templates in its frames - the counter run 2 bars at 0 is fed, never a constant.
+    // THE COMPUTE COUNTERS, PRINTED. Their negative control is no longer this launch's (F7 read 0 once SHADER-SYSTEM-1
+    // 7a's fixes A-C left a cold launch nothing to parse in a frame): gi.async_arm_cold's law (4) shows the same engine
+    // counter fed (> 0) by a synchronous view's Complete frames - the counter run 2 bars at 0 is never a constant.
     {
         const QJsonObject a = cold.value("async").toObject();
         // ...and the waits a destroyed job's running compile cost the frame (F4: the lead rules the content-keyed
@@ -499,8 +506,6 @@ int main(int argc, char **argv)
                     "(%.1f ms)\n",
                     qlonglong(a.value("computeParsedInFrame").toDouble()), qlonglong(a.value("computePsoInFrame").toDouble()),
                     qlonglong(a.value("computeDestroyWaits").toDouble()), a.value("computeDestroyWaitMs").toDouble());
-        CHECK(a.value("computeParsedInFrame").toDouble() > 0,
-              "run 1 (cold) parsed compute templates in its frames: the counter is fed");
     }
     gateDrawsWhatTheEditorDraws("run 1 (cold)", cold.value("asyncAfterFrames").toObject());
     // EXACTLY ONE FILE SURVIVES A CLEAR, AND IT IS THE LOCK (audit F10).
@@ -606,8 +611,9 @@ int warmLaws(const QString &home, const QString &scripts, const QJsonObject &col
     gateDrawsWhatTheEditorDraws("run 2 (warm)", warm.value("asyncAfterFrames").toObject());
     // THE COMPUTE LAYER (COLD-BOOT-1 stage 3; SHADER-SYSTEM-1 3F): run 1's records are read back, none stale (F1: the
     // prune runs where the compute media is found), and NO compute template is parsed in any frame of the launch - the
-    // gate's and the editor's first 30 (base 22: spikes/cold-boot-1/S1b). Run 1's > 0 is this bar's negative control
-    // (F7). The PSOs built in those frames are REPORTED (F6: the in-frame PSO is stage 7's law).
+    // gate's and the editor's first 30 (base 22: spikes/cold-boot-1/S1b). The bar's negative control is
+    // gi.async_arm_cold's law (4) (the engine's counter fed by a Complete frame). The PSOs built in those frames are
+    // REPORTED (F6: the in-frame PSO is stage 7's law).
     {
         const QJsonObject a0 = warm.value("asyncAtStart").toObject(), a1 = warm.value("asyncAfter30").toObject();
         std::printf("   run 2: compute records loaded %d, stale %d, rejected %d; parsed in a frame %lld (gate) -> %lld "

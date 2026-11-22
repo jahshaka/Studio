@@ -25,6 +25,11 @@
 //  (3) THE ARM LANDS: once the compiler holds nothing, the arm is bound (GiStatus::vctBound) and the frame reads no
 //      deferred dispatch (PublishedFrame::Completeness term 64) within kSettleFrames - the deferred work was retried
 //      whole (the arm rebuilt once nothing is in flight), never dropped.
+//  (4) THE COUNTER's NEGATIVE CONTROL (the cold arm; it replaces shadercache.app.cold's F7, which a cold APP launch no
+//      longer feeds since fixes A-C: SPECS/OPEN_REDS.md): A COMPLETE FRAME OF A SYNCHRONOUS VIEW PARSES WHAT IT LACKS, in
+//      the frame - the same process, a second scene on a synchronous view at another GI quality (other cascade counts:
+//      permutations the run above never built) - so the counter law (2) and shadercache.app.warm bar at 0 is shown fed
+//      (> 0), never a constant.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
 #include <algorithm>
@@ -43,6 +48,8 @@ static int failures = 0;
 static constexpr int kSettleFrames = 10;
 /// The hang guard of the wait for the compiler (never the law's bar: law 3 is counted from the compiler's empty state).
 static constexpr int kFrameCap = 3000;
+/// Law 4's frames: a synchronous view's Complete frames build the arm whole, one GiBuildStage a frame (the law-3 count).
+static constexpr int kControlFrames = 10;
 
 int main(int argc, char **argv)
 {
@@ -111,6 +118,33 @@ int main(int argc, char **argv)
           "a frame (bar 0 each)", as.computeParsedInFrame, as.computePsoInFrame);
     CHECK(settled, "(3) the arm landed: bound and no deferred dispatch owed within %d frames of the compiler's queue "
                    "emptying (%d frames empty, %d frames in all)", kSettleFrames, emptyFrames, f + 1);
+    if (!warm) {
+        View *sv = e->createOffscreenView("arm-sync", 64, 64, Colour(0, 0, 0), OffscreenContract::Live);
+        Scene *ss = e->createScene("arm-sync");
+        bool built = sv && ss;
+        if (built) {
+            sv->setScene(ss);   // synchronous: a fixture's view compiles in its frames unless it asks
+            enginetest::testCameraLookAt(sv, Vec3(0.0f, 2.0f, 5.0f), Vec3(0.0f, 0.5f, 0.0f));
+            const NodeId sfloor = enginetest::addTestCube(ss, Colour(0.6f, 0.6f, 0.6f), 0.0f, 0.9f);
+            built = sfloor && enginetest::addDirectionalLight(ss, Vec3(0.3f, -1.0f, 0.2f), 2.0f) != 0;
+            GiParams lo = gi;
+            lo.quality = GiQuality::Low;
+            built = built && ss->setGlobalIllumination(lo);
+            enginetest::declareRoutes(sv, ss, enginetest::Routes().integrate().cards().store(),
+                                      "gi.async_arm_cold's control view");
+        }
+        const AsyncShaderStats c0 = e->published().shaders;
+        for (int i = 0; built && i < kControlFrames; ++i) enginetest::frames(e, 1);   // the default pace: Complete
+        const AsyncShaderStats c1 = e->published().shaders;
+        const unsigned long long parsed = c1.computeParsedInFrame - c0.computeParsedInFrame;
+        std::printf("    the control: a synchronous view at Low quality, %d Complete frames: %llu compute template(s) "
+                    "parsed and %llu pipeline(s) built in its frames\n", kControlFrames, parsed,
+                    c1.computePsoInFrame - c0.computePsoInFrame);
+        CHECK(built && parsed > 0ull, "(4) CONTROL: a synchronous view's Complete frames parsed %llu compute template(s) "
+                                      "in the frame (above 0: law 2's counter is fed) (%s)", parsed,
+              e->lastError().c_str());
+        if (ss) enginetest::poseRegistry().erase(ss);
+    }
     enginetest::poseRegistry().erase(scene);
     if (failures) std::printf("%s: FAIL (%d)\n", row, failures);
     else std::printf("%s: PASS\n", row);

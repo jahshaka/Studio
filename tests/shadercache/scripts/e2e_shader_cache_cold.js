@@ -5,8 +5,7 @@
 // THE FIRST ACT: read before this script saves anything, so s.save says what the startup gate's own save left on disk.
 var s = app.shaderCache();
 if (!s.enabled) throw new Error("shader cache disabled in a default session");
-// THE COMPUTE COUNTERS' NEGATIVE CONTROL (SHADER-SYSTEM-1, the start preflight's F7): a cold launch parsed compute
-// templates in its frames, so the counter the warm row bars at 0 reads above 0 here.
+// THE COMPUTE COUNTERS at the first act, printed by the driver (their negative control: gi.async_arm_cold law 4).
 s.async = app.asyncShaders();
 // THE GATE DRAWS WHAT THE EDITOR DRAWS (SHADER-SYSTEM-1 stage 7a): the editor's first frames, then frames until nothing is
 // pending; the driver reads what they built in a frame against app.asyncShaders().atGate.
