@@ -99,6 +99,16 @@ want "$([ $r0 = 2 ] && grep -q 'smoke.sh --desktop --env atom-street' "$T/s0.out
 JR=(env PATH="$T/bin:$PATH" JAH_RIG_XDIR="$T/x" JAH_CPUS=0 HOME="$T" JAH_GPU_LOCK="$T/lock7")
 "${JR[@]}" bash "$T/rt/scripts/rig.sh" up > "$T/r7up.out" 2>&1
 r7=$(DISPLAY=:0 "${JR[@]}" bash "$T/rt/scripts/rig.sh" run dg7 -- sh -c 'echo "ran on $DISPLAY"' 2>&1)
+# (7b) A WARM-UP UNDER rig.sh run's HOLD IS REFUSED (WARM-SHARE-1, DEV_ERRORS 63: a hold waited 1952.9 s for a warm-up that
+# needed no card): exit 2, named, the warm-up never run and no hold logged - bare or behind env/bash (red on the old rig.sh: run)
+mkdir -p "$T/w7"; printf '#!/bin/sh
+echo ran >> %s/w7/ran
+' "$T" > "$T/w7/warm-app-cache.sh"; chmod +x "$T/w7/warm-app-cache.sh"
+"${JR[@]}" bash "$T/rt/scripts/rig.sh" run dg7b -- "$T/w7/warm-app-cache.sh" build --check > "$T/r7b1.out" 2>&1; r7b1=$?
+"${JR[@]}" bash "$T/rt/scripts/rig.sh" run dg7b -- env A=1 bash "$T/w7/warm-app-cache.sh" build > "$T/r7b2.out" 2>&1; r7b2=$?
+want "$([ $r7b1 = 2 ] && [ $r7b2 = 2 ] && [ ! -e "$T/w7/ran" ] && grep -q 'a warm-up takes the card itself, per cold boot: run it bare' "$T/r7b1.out" \
+        && grep -q 'a warm-up takes the card itself' "$T/r7b2.out" && ! grep -q 'dg7b' "$T/lock7.holds" 2>/dev/null && echo 1)" \
+     "(7b) rig.sh run of a warm-up (bare, or behind env/bash) REFUSED, exit $r7b1/$r7b2, never run, no hold ($(head -1 "$T/r7b1.out" | cut -c1-100))"
 "${JR[@]}" bash "$T/rt/scripts/rig.sh" down > /dev/null 2>&1
 want "$(grep -qE '^ran on :(6[0-9]|[7-9][0-9])$' <<< "$r7" && ! grep -q 'gpu-lock: DISPLAY=' <<< "$r7" && echo 1)" \
      "(7) rig.sh run under DISPLAY=:0: the command on the rig's display, the lock silent ($(tr '\n' ' ' <<< "$r7" | cut -c1-120))"

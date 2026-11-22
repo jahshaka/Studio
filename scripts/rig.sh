@@ -185,6 +185,14 @@ cmd_run() {
     local c; c=$(cpus) || exit 2
     taskset -c "$c" true 2> /dev/null || die "taskset -c $c fails on this box (JAH_CPUS / the box-local CPUS)"
     local cmd=("$@") a dr=""
+    # A WARM-UP IS NEVER WRAPPED IN A HOLD (WARM-SHARE-1, DEV_ERRORS 63: `rig.sh run ws1-warm -- warm-app-cache.sh ...` waited
+    # 1952.9 s in the card's queue for a warm-up that answered "warm" and booted nothing - its answer needs no card): the warm-up
+    # takes the card ITSELF, per cold boot, and --check / --key answer with none. Refused (2), the command not run.
+    for a in "$@"; do
+        case "$(basename -- "$a")" in warm-app-cache.sh)
+            die "a warm-up takes the card itself, per cold boot: run it bare (env -u DISPLAY $a ...; --check answers without the card) - never under rig.sh run's hold (WARM-SHARE-1)" ;;
+        esac
+    done
     case "$(basename -- "$1")" in
         Jahshaka|jahlab) for a in "$@"; do case "$a" in --data-root|--data-root=*) dr=1 ;; esac; done
                          [ -n "$dr" ] || cmd+=(--data-root "$data") ;;
