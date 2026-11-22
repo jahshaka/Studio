@@ -127,7 +127,7 @@ struct Flip
     int group = -1, depth = 0;
     double t = 0.0;          ///< the flip's tolerance by the product's own footprint (clusterGroupFootprint), px
     double px = 0.0;         ///< switch_px: the attained reading (surface term, dropped islands), px
-    double upper = 0.0;      ///< its certified upper bound, px
+    double upper = 0.0;      ///< its certified upper bound, px - what the no-pop laws judge
     double surface = 0.0, islands = 0.0;
     double literal = 0.0;    ///< the largest literal |proj(p) - proj(q)| over every point sampled, px
     bool counted = false;    ///< some point of the switch projected in the window

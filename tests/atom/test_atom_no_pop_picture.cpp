@@ -153,9 +153,9 @@ int main(int argc, char **argv)
         if (d.clusters[c].group == g) members.insert(uint32_t(c));
         if (d.clusters[c].refined == g) outputs.insert(uint32_t(c));
     }
-    std::printf("   the group %d (depth %d): %zu members -> %zu outputs; the CPU's switch: centre %.4f px at t %.6f, corner "
-                "%.4f px at t %.6f\n", g, d.clusterGroups[size_t(g)].depth, members.size(), outputs.size(), chosen[0].px,
-                chosen[0].t, chosen[1].px, chosen[1].t);
+    std::printf("   the group %d (depth %d): %zu members -> %zu outputs; the CPU's switch: centre %.4f px (upper %.4f) at t "
+                "%.6f, corner %.4f px (upper %.4f) at t %.6f\n", g, d.clusterGroups[size_t(g)].depth, members.size(),
+                outputs.size(), chosen[0].px, chosen[0].upper, chosen[0].t, chosen[1].px, chosen[1].upper, chosen[1].t);
 
     // THE PICTURE
     Rig r;
@@ -187,6 +187,10 @@ int main(int argc, char **argv)
         check(lo.ok && hi.ok && lo.width == hi.width && lo.height == hi.height,
               at + ": both id images read back and settled");
         if (!(lo.ok && hi.ok && lo.width == hi.width && lo.height == hi.height)) continue;
+        // THE SEARCH RADIUS comes from the ATTAINED value ON PURPOSE: it says where the pixels may move, it is no "<= t" law
+        // (those judge the upper bound, test_atom_cut_laws.cpp judge()); the upper bound would only WIDEN it. The upper is
+        // within (1 + kPixelRel) of the value (surfacedistance.h farthest()): at the first run's 0.9608 / 1.3492 px both
+        // ceils are the upper's too (1 / 2), and the line above prints the two.
         const int R = int(std::ceil(chosen[v].px));
         const Judgement j = judgeView(lo, hi, members, outputs, R);
         const size_t changed = j.changed, foreign = j.foreign, coverage = j.coverage, far = j.far, covered = j.covered;

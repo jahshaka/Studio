@@ -42,7 +42,8 @@
 //   atom.no_pop.centre      the centre view, t = 1: switch_px <= t at every flip. Every no-pop row runs the measure's own
 //                           checks first (two parallel planes at d read d; the flush shutter without its dropped-island
 //                           term reads < 1 px, with it its diagonal) and asserts the literal projected pair never passes
-//                           the certified bound.
+//                           the certified bound. EVERY "switch_px <= bar" below is judged on the measure's CERTIFIED UPPER
+//                           bound (Switch::upper; a replaced island's own upper), never its attained value (a lower bound).
 //   atom.no_pop.measure_agrees  the bake's step beside the measure's own world reading, as the bake's stated contract
 //                           (rowMeasureAgrees): the bake misses no term, and is within its own tightness of the measure.
 //   atom.no_pop.corner      the same at the desktop's 45-deg 16:9 corner and at the eye corner. RED by design (plan 3.4).
@@ -464,17 +465,19 @@ static size_t judge(const clusterfix::Fixture &f, const Lens &l, double tol, dou
         if (!x.counted || !(x.t > 0.0)) continue;
         ++counted;
         if (x.literal > x.upper * (1.0 + 1e-9)) ++literalPast;
+        // THE CERTIFIED UPPER BOUND is judged, never the attained value: the true maximum lies in [px, upper], so a green
+        // on `px` could hide a switch up to kPixelRel (+ the floor) past the bar - the dangerous direction.
         const double b = bar > 0.0 ? bar : x.t;
-        if (x.px > b * (1.0 + 1e-6)) ++over;
-        const double ratio = x.px / b;
+        if (x.upper > b * (1.0 + 1e-6)) ++over;
+        const double ratio = x.upper / b;
         if (!worst || ratio > worstRatio) { worst = &x; worstRatio = ratio; }
     }
     if (worst)
-        std::printf("   %-13s %-10s t %4.1f: %3zu flips read, %3zu over %s; the worst group %d (depth %d): switch %.4f px "
-                    "(upper %.4f; surface %.4f, islands %.4f; the largest literal projected pair %.4f) at t %.4f px = "
-                    "%.4f x the bar\n", f.name.c_str(), l.name, tol, counted, over, bar > 0.0 ? "1 px" : "its t", worst->group,
-                    worst->depth, worst->px, worst->upper, worst->surface, worst->islands, worst->literal, worst->t,
-                    worstRatio);
+        std::printf("   %-13s %-10s t %4.1f: %3zu flips read, %3zu over %s (judged on the upper bound); the worst group %d "
+                    "(depth %d): switch upper %.4f px (attained %.4f; surface %.4f, islands %.4f; the largest literal "
+                    "projected pair %.4f) at t %.4f px = %.4f x the bar\n", f.name.c_str(), l.name, tol, counted, over,
+                    bar > 0.0 ? "1 px" : "its t", worst->group, worst->depth, worst->upper, worst->px, worst->surface,
+                    worst->islands, worst->literal, worst->t, worstRatio);
     enginetest::lawLine(enginetest::lawName(tag + ":worst_ratio").c_str(), worstRatio, "x", "<=", 1.0);
     check(counted > 0, tag + ": the sweep reads at least one flip in the window");
     check(literalPast == 0, tag + ": the literal projected pair never passes the certified bound (" +

@@ -367,12 +367,13 @@ inline double diagonalCost(const Island &b, const View *view)
 struct Switch
 {
     Reading aToB, bToA;    ///< (1), each side against the other (B empty: none)
-    double islands = 0.0;  ///< (2), the largest dropped island's cost
+    double islands = 0.0;  ///< (2), the largest dropped island's cost (a replaced island's ATTAINED reading)
+    double islandsUpper = 0.0;  ///< ...its certified upper bound (a replaced island's Reading::upper; a diagonal is exact)
     int dropped = 0;       ///< islands of A with no position in B
     int replaced = 0;      ///< ...of which new surface of B stood nearer than the diagonal
     double surface() const { return std::max(aToB.value, bToA.value); }
     double total() const { return std::max(surface(), islands); }
-    double upper() const { return std::max({ aToB.upper, bToA.upper, islands }); }
+    double upper() const { return std::max({ aToB.upper, bToA.upper, islandsUpper }); }
 };
 inline Switch measure(const std::vector<Tri> &a, const std::vector<Tri> &b, const View *view, double rel, double floor)
 {
@@ -393,12 +394,13 @@ inline Switch measure(const std::vector<Tri> &a, const std::vector<Tri> &b, cons
     if (!fresh.empty()) sf.build(fresh, lo, hi);
     for (const Island &i : islandsApart(a, b)) {
         ++s.dropped;
-        double cost = diagonalCost(i, view);
+        double cost = diagonalCost(i, view), costUpper = cost;
         if (!fresh.empty()) {
             const Reading r = farthest(i.tris, sf, view, rel, floor);
-            if (r.any && r.upper < cost) { cost = r.value; ++s.replaced; }
+            if (r.any && r.upper < cost) { cost = r.value; costUpper = r.upper; ++s.replaced; }
         }
         s.islands = std::max(s.islands, cost);
+        s.islandsUpper = std::max(s.islandsUpper, costUpper);
     }
     return s;
 }
