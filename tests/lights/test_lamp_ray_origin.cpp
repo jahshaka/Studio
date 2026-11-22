@@ -21,6 +21,13 @@
 //       the light's: a 0 there is a speck, never the scene's own dark)
 //   (5) NEGATIVE CONTROL: the 80 m plane cut into 8 x 8 quads of 10 m (the same picture by physics; the test's rounding
 //       at a 10 m triangle's scale) - 0 specks
+//   (6) THE CONTROL THAT READS NON-ZERO (the final read's item 4): the measuring arm rays.originCut 0 (the drawn bound off,
+//       the float bound alone: the base's lift) at the 200 m plane, Atom - the specks COME BACK (> 0; the base read 1,306):
+//       a lamp ray that silently stopped tracing would read 0 here and fail.
+// THE LIFT IS A STATED PROPERTY (the lead's ruling on the final read's point 4(c)): the drawn surface's bound the sun
+// contact and the reflection already take - rayOriginDrawnFootprints x |rayDown| / H x the eye's distance, about 2.2
+// footprints: ~1.7 mm per metre at 1080p and a 45-degree frustum (17 cm at 100 m; ~2.6 mm/m per VR eye). An occluder
+// thinner than that lying on the receiver casts no Forward+ lamp shadow (DOCS/traps/engine/scene-lights-and-shadows.md).
 // Plus the route: the scene traces on this machine (rayTracingResolved) in the ray arms.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -147,10 +154,13 @@ int main()
     };
     const auto remesh = [&](MeshId m) { return s->detachMesh(plane) && s->attachMesh(plane, m, mat); };
 
-    Footprint a1, a2, a3, a3b, a4, a5;
+    Footprint a1, a2, a3, a3b, a4, a5, a6;
     if (!shoot("(1) rays on, 80 m plane, Atom", a1)) return 1;
     const bool traced = s->rayTracingResolved();
     if (!remesh(plane200) || !shoot("(2) rays on, 200 m plane, Atom", a2)) return 1;
+    if (!engine->setArm("rays.originCut", 0.0)) { std::printf("FAIL: the arm rays.originCut\n"); return 1; }
+    if (!shoot("(6) rays on, 200 m plane, Atom, rays.originCut 0 (the float bound alone)", a6)) return 1;
+    engine->setArm("rays.originCut", 1.0);
     s->setAtomDrawEnabled(false);
     if (!shoot("(3) rays on, 200 m plane, stock", a3b)) return 1;
     if (!remesh(plane80) || !shoot("(3) rays on, 80 m plane, stock", a3)) return 1;
@@ -165,6 +175,8 @@ int main()
           "(4) control, rays off: the footprint is lit (darkest %d >= 64) and holds no exactly-0 pixel (%d)", a4.darkest,
           a4.specks);
     CHECK(a5.specks == 0, "(5) control, 10 m quads: no exactly-0 pixel (%d)", a5.specks);
+    CHECK(a6.specks > 0, "(6) control, the drawn bound off (rays.originCut 0) at 200 m: the specks come back (%d > 0; "
+          "the base 1,306) - the lamp ray traces", a6.specks);
     CHECK(a1.specks == 0, "(1) THE LAW, 80 m plane, Atom: no lamp ray hits the plane it starts on - %d specks", a1.specks);
     CHECK(a2.specks == 0, "(2) THE LAW, 200 m plane, Atom: %d specks", a2.specks);
     CHECK(a3.specks == 0, "(3) THE LAW, 80 m plane, the stock path: %d specks", a3.specks);

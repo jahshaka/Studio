@@ -33,7 +33,8 @@ set_tests_properties(lights.falloff PROPERTIES JAHSHAKA_TEST_FRAMES 54)
 # diagnosis spikes/black-specks/DIAGNOSIS.md): a two-triangle plane, a non-shadowing point light 0.3 m from it, no
 # ambient, GI off; no pixel of the light's footprint reads exactly 0 with the ray tier on - an 80 m and a 200 m plane,
 # the Atom and the stock draw path - its negative controls the ray tier off and the plane in 10 m quads. Red first on
-# the base (24 specks at 80 m: spikes/gather-hang-1/stage3/). Frames: 6 pictures x 8, counted with its price at its first run.
+# the base (24 specks at 80 m: spikes/gather-hang-1/stage3/); its non-zero control rays.originCut 0 at 200 m (> 0).
+# Frames: 7 pictures x 8.
 add_executable(test_lamp_ray_origin test_lamp_ray_origin.cpp)
 set_target_properties(test_lamp_ray_origin PROPERTIES
     AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
@@ -49,4 +50,4 @@ add_dependencies(test_lamp_ray_origin JahshakaEngineMedia)
 jah_gpu_row(lights.lamp_ray_origin CLASS engine COMMAND test_lamp_ray_origin
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(lights.lamp_ray_origin PROPERTIES TIMEOUT 60 LABELS "engine")
-set_tests_properties(lights.lamp_ray_origin PROPERTIES JAHSHAKA_TEST_FRAMES 48)
+set_tests_properties(lights.lamp_ray_origin PROPERTIES JAHSHAKA_TEST_FRAMES 56)
