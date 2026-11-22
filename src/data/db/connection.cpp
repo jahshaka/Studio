@@ -144,7 +144,7 @@ Connection Connection::open(const std::string &path, const Options &options, Err
     Connection c;
     c.mState->name = options.name;
     c.mState->owner = std::this_thread::get_id();
-    if (!checkVersion(kMinimumVersion, e)) {
+    if (!checkVersion(options.minimumVersion, e)) {
         if (e) e->message = c.mState->name + ": " + e->message;
         return c;
     }
@@ -168,12 +168,12 @@ Connection Connection::open(const std::string &path, const Options &options, Err
     return c;
 }
 
-Connection Connection::borrow(sqlite3 *handle, std::string name, Error *e)
+Connection Connection::borrow(sqlite3 *handle, std::string name, Error *e, int minimumVersion)
 {
     Connection c;
     c.mState->name = std::move(name);
     c.mState->owner = std::this_thread::get_id();
-    if (!checkVersion(kMinimumVersion, e)) {
+    if (!checkVersion(minimumVersion, e)) {
         if (e) e->message = c.mState->name + ": " + e->message;
         return c;
     }

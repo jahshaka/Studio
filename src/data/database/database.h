@@ -83,7 +83,9 @@ public:
         // probe.out, cases 4-5). The BEGIN waits for another writer's one row at most (the busy
         // timeout). A BEGIN THAT FAILS WRITES NOTHING: the scope REFUSES every write on this
         // connection until it ends - SQLite's query_only on the connection (a raw exec() fails
-        // too) and Database::executeAndCheckQuery returning false unexecuted - it still counts as
+        // too) and Database::executeAndCheckQuery returning false (unexecuted on a Database's own
+        // connection, the one its funnel walks; a side connection's write runs and fails in SQLite,
+        // query_only, still refused but logged as a failure) - it still counts as
         // the outermost guard (a nested one rides it and never begins a sub-unit), it is logged
         // ONCE here with the lock's holder, and commit() answers false. Reads still run.
         tx.emplace(conn, "a DbTransaction unit");

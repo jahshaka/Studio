@@ -43,7 +43,7 @@ constexpr int kEditorBusyMs = 5000;
 /// The SQLite library this process calls, as sqlite3_libversion_number() (3.46.1 = 3046001).
 int libraryVersion();
 
-/// Refuses, by name, a library older than `minimum`. open() and borrow() ask it with kMinimumVersion.
+/// Refuses, by name, a library older than `minimum`. open() and borrow() ask it with their floor (kMinimumVersion).
 bool checkVersion(int minimum, Error *e);
 
 struct Options
@@ -52,6 +52,7 @@ struct Options
     int busyMs = 0;          ///< sqlite3_busy_timeout: how long a locked file is waited for
     bool wal = false;        ///< journal_mode WAL + synchronous NORMAL
     std::string name;        ///< the connection's name in every error and holder line
+    int minimumVersion = kMinimumVersion;   ///< the floor open() refuses below (db.layer raises it to prove the refusal)
 };
 
 class Connection
@@ -70,9 +71,12 @@ public:
     /// Uses a handle someone else opened and will close (the Qt driver's, until the Database
     /// opens its own: ruling 3); the borrowed handle is never closed here. EVERY BORROWER OF ONE
     /// HANDLE SHARES ONE STATE (its transaction depth, its refusal, its holder): two borrowers of
-    /// one connection are one connection. A null handle, or a library below kMinimumVersion,
-    /// returns a connection with no handle and fills `e`.
-    static Connection borrow(sqlite3 *handle, std::string name, Error *e);
+    /// one connection are one connection. A null handle, or a library below `minimumVersion`,
+    /// returns a connection with no handle and fills `e`. A BORROWER MUST NOT OUTLIVE THE HANDLE's
+    /// OWNER: the state is keyed by the handle's address, so a borrow alive after Qt closes its
+    /// connection reads freed memory or lends its state to a new handle at that address (no reach
+    /// today: Database::closeDatabase ends its own borrow first; the borrow goes at stage 3).
+    static Connection borrow(sqlite3 *handle, std::string name, Error *e, int minimumVersion = kMinimumVersion);
 
     bool isOpen() const;
     const std::string &name() const;

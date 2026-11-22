@@ -21,8 +21,8 @@ For more information see the LICENSE file
 //      A's reason and A's first write (ruling 6); B's failed BEGIN refuses its writes and its commit says false;
 //   7. A CRASH MID-TRANSACTION: a child begins, writes and _exits; the file is whole and the write absent,
 //      beside a committed child's write that is present;
-//   8. the version floor (ruling 8): a minimum above the library's is refused by name; borrow() works on a
-//      handle someone else opened and refuses none.
+//   8. the version floor (ruling 8): a minimum above the library's is refused by name, THROUGH open() and THROUGH
+//      borrow(); borrow() works on a handle someone else opened and refuses none.
 
 #include "data/database/dbqt.h"
 #include "data/db/connection.h"
@@ -133,6 +133,14 @@ int main()
         const bool refused = !db::checkVersion(db::libraryVersion() + 1, &e);
         check(refused && e && contains(e.message, "older than the library needs"),
               "a minimum above the library's is REFUSED by name: " + e.message);
+        // ...and open() APPLIES its floor (ruling 8): a floor above the library is refused THROUGH open().
+        db::Options raised;
+        raised.name = "floor";
+        raised.minimumVersion = db::libraryVersion() + 1;
+        db::Error oe;
+        db::Connection c = db::Connection::open(kFile, raised, &oe);
+        check(!c.isOpen() && contains(oe.message, "floor: ") && contains(oe.message, "older than the library needs"),
+              "open() refuses a library below its floor, by name: " + oe.message);
     }
 
     db::Connection a = openNamed("A");
@@ -299,6 +307,11 @@ int main()
             db::Connection lent = db::Connection::borrow(raw, "lent", &e);
             check(lent.isOpen() && !e && countOf(lent, "kept") == 1, "a borrowed handle runs statements");
         }
+        // ...and borrow() APPLIES its floor (ruling 8, choice C): the same handle refused THROUGH borrow().
+        db::Error be;
+        db::Connection floored = db::Connection::borrow(raw, "floored", &be, db::libraryVersion() + 1);
+        check(!floored.isOpen() && contains(be.message, "floored: ") && contains(be.message, "older than the library needs"),
+              "borrow() refuses a library below its floor, by name: " + be.message);
         db::Connection none = db::Connection::borrow(nullptr, "nothing", &e);
         check(!none.isOpen() && e && contains(e.message, "nothing: no handle to borrow"),
               "borrow(nullptr) is refused by name: " + e.message);

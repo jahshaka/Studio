@@ -31,7 +31,7 @@
 #      - THE MEMBERS PANEL LISTS ONCE: the first entry to Materials (a restored tab) and a material opened from the
 #        custom drawer each list the Members panel's home pictures ONCE (fetchAssetsInHome.type2 == 1: its
 #        materialmembers::unused) - an open used to show the same document three times and re-ask the panel twice
-#        more (5 at the entry, 4 an open; NOQT-DATABASE-1);
+#        more (measured on the parent's page: 5 at the entry, 3 at an open from the drawer; NOQT-DATABASE-1);
 #      - NEGATIVE CONTROL: a step made N+1 on purpose grows with the library (the comparer sees growth).
 #      PRINTED, never barred: the logged counts by name (the workers' tile reads among them: ruled call 3 — only the
 #      default connection is traced), the ms, the heartbeat's worst gap, and RESIDUE (B): the first entry to
