@@ -730,6 +730,27 @@ public:
     enum class ThumbnailTable { Assets, Projects };
     static QHash<QString, QByteArray> readThumbnailBytes(const QString &dbPath, ThumbnailTable table,
                                                          const QStringList &guids);
+    /// THE PREVIEW WRITER's library half (PREVIEWS-1; the thread and the queue are
+    /// services/previewwriter.h). openPreviewConnection opens `connectionName` to `dbPath` on the
+    /// CALLING thread with SQLite's busy timeout at `busyTimeoutMs` and the library's durability
+    /// pragmas; the caller closes it and removes the name. writePreview stores one preview —
+    /// `assets.thumbnail` and the `thumbnails` row {guid, hash = key, last_written} — in ONE
+    /// transaction (BEGIN IMMEDIATE .. COMMIT), or nothing: an empty PNG, a missing row or any
+    /// statement's failure rolls back; `busy` says the lock was not had within the timeout.
+    static bool openPreviewConnection(QSqlDatabase *conn, const QString &dbPath,
+                                      const QString &connectionName, int busyTimeoutMs,
+                                      QString *errorOut);
+    struct PreviewWrite
+    {
+        bool ok = false;
+        bool busy = false;
+        QString reason;   ///< empty when ok
+    };
+    static PreviewWrite writePreview(QSqlDatabase conn, const QString &guid, const QByteArray &png,
+                                     const QString &key);
+    /// The thumbnail hook (setAssetThumbnailWritten) for a write made off this connection; called
+    /// on the UI thread by whoever made it.
+    static void announceAssetThumbnailWritten(const QString &guid);
     /// The library file this connection opened (what readThumbnailBytes is handed).
     QString filePath() const;
     QByteArray fetchAssetData(const QString &guid) const;

@@ -1572,6 +1572,87 @@ QHash<QString, QByteArray> Database::readThumbnailBytes(const QString &dbPath, T
     return out;
 }
 
+// ---- THE PREVIEW WRITER's library half (PREVIEWS-1; services/previewwriter.h) ----------------
+
+bool Database::openPreviewConnection(QSqlDatabase *conn, const QString &dbPath,
+                                     const QString &connectionName, int busyTimeoutMs,
+                                     QString *errorOut)
+{
+    *conn = QSqlDatabase::addDatabase(Constants::DB_DRIVER, connectionName);
+    conn->setDatabaseName(dbPath);
+    conn->setConnectOptions(QStringLiteral("QSQLITE_BUSY_TIMEOUT=%1").arg(busyTimeoutMs));
+    if (!conn->open()) {
+        if (errorOut) *errorOut = conn->lastError().text();
+        return false;
+    }
+    applyDurabilityPragmas(*conn);
+    return true;
+}
+
+namespace {
+/// SQLITE_BUSY (5) or SQLITE_LOCKED (6), extended codes included: the lock was not had in time.
+bool lockedOut(const QSqlError &error)
+{
+    const int code = error.nativeErrorCode().toInt();
+    return (code & 0xff) == 5 || (code & 0xff) == 6;
+}
+}   // namespace
+
+Database::PreviewWrite Database::writePreview(QSqlDatabase conn, const QString &guid,
+                                              const QByteArray &png, const QString &key)
+{
+    PreviewWrite out;
+    if (png.isEmpty()) {
+        out.reason = QStringLiteral("the picture encoded to no bytes (an empty PNG is never stored)");
+        return out;
+    }
+    QSqlQuery query(conn);
+    const auto failed = [&](const QString &step) {
+        out.busy = lockedOut(query.lastError());
+        out.reason = out.busy
+            ? QStringLiteral("the library stayed locked past the writer's budget (%1)").arg(step)
+            : QStringLiteral("%1 failed: %2").arg(step, query.lastError().text());
+        QSqlQuery rollback(conn);
+        rollback.exec(QStringLiteral("ROLLBACK"));
+        return out;
+    };
+    // IMMEDIATE: the lock is taken here or not at all, so the wait is the busy timeout's, once.
+    noteQuery(QStringLiteral("WritePreview"), QStringLiteral("BEGIN IMMEDIATE"));
+    if (!query.exec(QStringLiteral("BEGIN IMMEDIATE"))) {
+        out.busy = lockedOut(query.lastError());
+        out.reason = out.busy
+            ? QStringLiteral("the library stayed locked past the writer's budget")
+            : QStringLiteral("the preview's transaction could not begin: %1").arg(query.lastError().text());
+        return out;
+    }
+    query.prepare(QStringLiteral("UPDATE assets SET thumbnail = ? WHERE guid = ?"));
+    query.addBindValue(png);
+    query.addBindValue(guid);
+    noteQuery(QStringLiteral("WritePreview"), query.lastQuery());
+    if (!query.exec()) return failed(QStringLiteral("the thumbnail's write"));
+    if (query.numRowsAffected() != 1) {
+        QSqlQuery rollback(conn);
+        rollback.exec(QStringLiteral("ROLLBACK"));
+        out.reason = QStringLiteral("no asset with guid '%1' is in the library").arg(guid);
+        return out;
+    }
+    query.prepare(QStringLiteral("INSERT OR REPLACE INTO thumbnails (guid, hash, last_written) "
+                                 "VALUES (?, ?, CURRENT_TIMESTAMP)"));
+    query.addBindValue(guid);
+    query.addBindValue(key);
+    noteQuery(QStringLiteral("WritePreview"), query.lastQuery());
+    if (!query.exec()) return failed(QStringLiteral("the key's write"));
+    noteQuery(QStringLiteral("WritePreview"), QStringLiteral("COMMIT"));
+    if (!query.exec(QStringLiteral("COMMIT"))) return failed(QStringLiteral("the commit"));
+    out.ok = true;
+    return out;
+}
+
+void Database::announceAssetThumbnailWritten(const QString &guid)
+{
+    if (thumbnailWrittenHook()) thumbnailWrittenHook()(guid);
+}
+
 QString Database::filePath() const
 {
     return db.databaseName();
