@@ -875,6 +875,10 @@ int main()
             "console.log(caught(() => test.capped({v: [1], w: huge})));\n"
             "console.log(caught(() => engine.node.setTransforms(" + scene + ", {nodes: huge})));\n"
             "console.log(caught(() => engine.node.setTransforms(" + scene + ", {nodes: Array(65537).fill(1)})));\n"
+            "let deep = 0, deepObject = {};\n"
+            "for (let i = 0; i < 100000; ++i) { deep = [deep]; deepObject = {a: deepObject}; }\n"
+            "console.log(caught(() => test.capped({v: deep})));\n"
+            "console.log(caught(() => test.capped(deepObject)));\n"
             "console.log(test.capped({v: [1, 2, 3, 4]}));\n",
             "capped.js");
         const char *want[] = {"test.capped: argument 1: o.v holds 4000000000 elements, at most 4",
@@ -883,15 +887,54 @@ int main()
                               "test.capped: o has no member 'w'",
                               "engine.node.setTransforms: argument 2: transforms.nodes holds 4000000000 elements, at most 65536",
                               "engine.node.setTransforms: argument 2: transforms.nodes holds 65537 elements, at most 65536",
+                              "test.capped: o.v[0] must be number (it is array)",
+                              "test.capped: o has no member 'a'",
                               "4"};
         std::string missed;
-        for (std::size_t i = 0; i < 7; ++i)
+        for (std::size_t i = 0; i < 9; ++i)
             if (i >= said.size() || said[i].rfind(want[i], 0) != 0)
                 missed += "\n      want " + std::string(want[i]) + " <- " + (i < said.size() ? said[i] : std::string("(no line)"));
-        check(r.status == Status::Ok && said.size() == 7 && missed.empty() && reached == 1,
-              "AN ARRAY OF LENGTH 4e9 (and one past its maximum, and one the declaration does not take) FAILS that call by "
-              "name before a single element is converted, and the host lives on: the next call reaches its command (" +
-                  std::to_string(reached) + " reached)" + missed);
+        check(r.status == Status::Ok && said.size() == 9 && missed.empty() && reached == 1,
+              "AN ARRAY OF LENGTH 4e9 (and one past its maximum, one the declaration does not take, and values nested "
+              "100,000 deep) FAILS that call by name before a single element is converted or a level entered past the "
+              "declaration, and the host lives on: the next call reaches its command (" + std::to_string(reached) +
+                  " reached)" + missed);
+    }
+    // 12b. THE CALLER's BOUNDS (Host::Options::callBounds, ValueBounds): the most elements an array may hold, the deepest
+    //      nesting and the most bytes - a host that states small ones FAILS each by name, and lives on (THE CONTROL)
+    {
+        Host::Options small;
+        small.callBounds.elements = 2;
+        small.callBounds.depth = 1;
+        small.callBounds.bytes = 256;
+        Host tight(small);
+        std::vector<std::string> said;
+        tight.setConsole([&said](const std::string &l) { said.push_back(l); });
+        int reached = 0;
+        tight.registry().add({"test.capped",
+                              {Access::Reads, {object("o", {arg("v", Kind::Array, Value(Value::Array{})).upTo(4)})}, Kind::Int},
+                              "how many numbers (at most 4)"},
+                             [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0]["v"].asArray().size())); });
+        tight.registry().add({"test.text", {Access::Reads, {object("o", {arg("s", Kind::String)})}, Kind::Int}, "its length"},
+                             [&reached](Call &c) { ++reached; return Value(std::int64_t(c[0]["s"].asString().size())); });
+        const Result r = tight.run(
+            "const caught = (f) => { try { f(); return 'no failure'; } catch (e) { return e.message; } };\n"
+            "console.log(caught(() => test.capped({v: [1, 2, 3]})));\n"
+            "console.log(caught(() => test.capped({v: [1]})));\n"
+            "console.log(caught(() => test.text({s: 'x'.repeat(300)})));\n"
+            "console.log(test.capped({}), test.text({s: 'x'}));\n",
+            "tight.js");
+        const char *want[] = {"test.capped: argument 1: o.v holds 3 elements, past the 2 one array may hold",
+                              "test.capped: argument 1: o.v[0] is nested deeper than 1",
+                              "test.text: argument 1: o.s would take the value past its 256 bytes",
+                              "0 1"};
+        std::string missed;
+        for (std::size_t i = 0; i < 4; ++i)
+            if (i >= said.size() || said[i].rfind(want[i], 0) != 0)
+                missed += "\n      want " + std::string(want[i]) + " <- " + (i < said.size() ? said[i] : std::string("(no line)"));
+        check(r.status == Status::Ok && said.size() == 4 && missed.empty() && reached == 2,
+              "THE CALLER's BOUNDS: an array past its elements, a value past its depth and a string past its bytes each "
+              "FAIL by name; the next calls reach their commands (" + std::to_string(reached) + " reached)" + missed);
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
