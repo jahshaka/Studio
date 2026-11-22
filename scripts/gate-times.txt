@@ -606,3 +606,5 @@ source.script_neutral 2.84  solo 2026-11-22 at 6bde2bf50 (spec.sh reprice, run 2
 tooling.runlog_facts 0.17  solo 2026-11-22 at 3cc4126e9 (spec.sh reprice, run 20261122T150737-3cc4126e9-p2397850)
 engine.draw_order 1.67  by hand (spec.sh reprice, 2026-11-22)
 source.no_qt_below 0.51  solo 2026-11-22 at edf852712 (spec.sh reprice, run 20261122T165907-edf852712-p2676091)
+engine.ray_view_cache 0.00  solo 2026-11-21 at ee481e8a8 (spec.sh reprice, run 20261121T005501-ee481e8a8)
+source.ray_views_cached 0.06  solo 2026-11-21 at ee481e8a8 (spec.sh reprice, run 20261121T005502-ee481e8a8)

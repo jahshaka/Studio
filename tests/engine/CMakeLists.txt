@@ -756,3 +756,13 @@ target_link_libraries(test_stillness_history_column PRIVATE JahshakaEngine)
 add_test(NAME engine.stillness_history_column COMMAND test_stillness_history_column)
 set_tests_properties(engine.stillness_history_column PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.stillness_history_column)
+# engine.ray_view_cache — THE RAY TIER's VIEW CACHE as a pure structure (GATHER-HANG-1 stage 1; RayQueryViewCache.h says
+# the law, test_ray_view_cache.cpp its nine cases): one view per (texture, kind, parameters) on one image, retired once
+# when its image goes (LostResidency, Deleted, another image, close), image 0 refused, one registration per texture.
+# The header only: no device, no Ogre - a CPU code row. Red first on stage 0's arm J1: spikes/gather-hang-1/stage1/.
+add_executable(test_ray_view_cache test_ray_view_cache.cpp)
+set_target_properties(test_ray_view_cache PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_ray_view_cache PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src)
+add_test(NAME engine.ray_view_cache COMMAND test_ray_view_cache)
+set_tests_properties(engine.ray_view_cache PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.ray_view_cache)

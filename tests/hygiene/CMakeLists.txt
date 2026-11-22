@@ -507,6 +507,18 @@ if(Python3_Interpreter_FOUND)
     jah_no_display(source.member_init)
 endif()
 
+# source.ray_views_cached — GATHER-HANG-1 stage 1: every view the ray tier takes of an Ogre texture comes out of its
+# one cache (irisgl/engine/src/RayQueryViewCache.h; engine.ray_view_cache proves the cache's law). The per-frame
+# create-and-retire of fifteen sites was what the card faulted on around a scene change. No code line of the tier's
+# three files or the gather's seam header makes an image view outside the cache's make and our own images' two
+# creates, each at its exact count. Red on the base (24 site lines). See the script's header.
+if(Python3_Interpreter_FOUND)
+    add_test(NAME source.ray_views_cached
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/ray_views_cached.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.ray_views_cached PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.ray_views_cached)
+endif()
+
 # source.notices_coverage — NOTICES-1: every vendored component under
 # thirdparty/ and irisgl/thirdparty/ is claimed by app/notices.json, every
 # entry's notice file exists and reads like a licence, and no entry points at
