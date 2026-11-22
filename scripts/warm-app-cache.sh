@@ -602,11 +602,13 @@ boot() {
          "the card's wait at most ${WAIT} s)"
     local t0 rc wall skipped waited
     t0=$(now_ns)
+    # THE HOLD's LABEL NAMES THE KEY IT WARMS (WARM-SHARE-1 S2): a miss is a hold "warm-app-cache (<boot>) at <key>" in the hold
+    # log, a hit is none - the saving MEASURED, never predicted (the key: the rig KEY until the engine prints its identity)
     # THE DRIVER's CACHE OFF for this boot (URGENT #100): every pipeline is compiled into the engine's VkPipelineCache,
     # which every exe loads - a driver-cache hit would leave it out of it
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
           __GL_SHADER_DISK_CACHE=0 nice -n 10 env JAH_GPU_CALLER=$$ "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" "${SHORT[@]}" \
-          --label "warm-app-cache ($name)" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
+          --label "warm-app-cache ($name) at $KEY" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
     rc=$?
     [ $rc = 75 ] && held "$log" "$name" "$name $rest"
     wall=$(tenths_since "$t0")
@@ -650,7 +652,7 @@ driver_boot() {
     t0=$(now_ns)
     ( cd "$BUILD/bin" && HOME="$home" JAHSHAKA_DATA_ROOT="$home/.local/share/Jahshaka" QT_QPA_PLATFORM=xcb \
           env -u __GL_SHADER_DISK_CACHE nice -n 10 env JAH_GPU_CALLER=$$ "$SRC/scripts/gpu-exclusive.sh" --wait-max "$WAIT" "${SHORT[@]}" \
-          --label "warm-app-cache ($name)" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
+          --label "warm-app-cache ($name) at $KEY" env $(cov_env "$name") sh "$SRC/tests/support/fresh_home.sh" $FH_ARGS "$home" -- "$@" ) > "$log" 2>&1
     rc=$?
     [ $rc = 75 ] && held "$log" "$name" "$name $rest"
     wall=$(tenths_since "$t0")
@@ -692,7 +694,7 @@ cold_boot() {
          "(${prices##*/}${unpriced:+; unpriced:$unpriced}): $names"
     t0=$(date +%s)
     ( H="$TESTS/warm-cold-home"; rm -rf "$H"; mkdir -p "$H"
-      HOME="$H" JAH_COLD_ONLY="$names" JAH_COLD_WAIT="$WAIT" env -u __GL_SHADER_DISK_CACHE $(cov_env cold-on) nice -n 10 \
+      HOME="$H" JAH_WARM_KEY="$KEY" JAH_COLD_ONLY="$names" JAH_COLD_WAIT="$WAIT" env -u __GL_SHADER_DISK_CACHE $(cov_env cold-on) nice -n 10 \
           bash "$SRC/tests/support/warm_cold_rows.sh" "$COLDROWS" "$deadline" "$LOGS/cold-on"; rc=$?; rm -rf "$H"; exit $rc ) > "$log" 2>&1
     rc=$?
     wall=$(( $(date +%s) - t0 ))

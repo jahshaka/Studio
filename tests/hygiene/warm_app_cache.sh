@@ -269,6 +269,11 @@ bw=$(echo "$ln" | sed -n "s/.*the boot \([0-9]*\)\.\([0-9]\) s (the card's wait 
 [ $rc = 0 ] && [ -e "$T/held4" ] && [ -n "$bw" ] && [ "${bw#* }" -ge 10 ] && [ "$(( 10#${bw% *} + 10#${bw#* } ))" -le "$(( cw + 1 ))" ] &&
     ok "the boot's printed wall is its own, the card's wait beside it, in tenths: boot ${bw% *} + wait ${bw#* } <= the call's wall $cw (+1)" ||
     no "the boot's wall: rc $rc '$ln', the call's wall $cw tenths (the holder's mark: $([ -e "$T/held4" ] && echo set || echo NOT set))"
+# THE HOLD's LABEL CARRIES THE KEY IT WARMS (WARM-SHARE-1 S2: a hit - no hold - and a miss - a hold at that key - are read from
+# the hold log; red before: "warm-app-cache (app-off)", no key)
+grep -q "	warm-app-cache (app-off) at $key	" "$T/gpu4.lock.holds" &&
+    ok "the warm-up's hold is logged with the key it warms: 'warm-app-cache (app-off) at $key'" ||
+    no "the hold's label: $(cut -f6 "$T/gpu4.lock.holds" 2>/dev/null | sort -u | tr '\n' '|')"
 # A COVERAGE BUILD's BOOT WRITES ITS PROFILE UNDER coverage/boots/<boot> (the 2a audit's finding 1; red before: nothing set it)
 B3="$T/b3"; mkdir -p "$B3/tests"; printf 'JAH_COVERAGE:BOOL=ON\n' > "$B3/CMakeCache.txt"; toy_cache "$B3/tests/.shadercache" 1 2
 printf '#!/bin/sh\necho "$GCOV_PREFIX" > %s/b3.prefix\nexit 0\n' "$T" > "$T/covapp"; chmod +x "$T/covapp"

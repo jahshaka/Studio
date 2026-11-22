@@ -78,7 +78,7 @@ while IFS= read -r -u 3 line; do
     done
     w=$(( left - ${JAH_COLD_MIN_LEFT:-30} )); [ "$w" -ge 1 ] || w=1; [ "$w" -le "$WAITMAX" ] || w=$WAITMAX
     log="$LOGS/$row.log"; t0=$(date +%s)
-    ( cd "$wd" && exec env "${unsets[@]}" "${sets[@]}" JAH_COLD_PRIME=1 "$LOCK" --wait-max "$w" --label "warm-app-cache (cold-on: $row)" \
+    ( cd "$wd" && exec env "${unsets[@]}" "${sets[@]}" JAH_COLD_PRIME=1 "$LOCK" --wait-max "$w" --label "warm-app-cache (cold-on: $row)${JAH_WARM_KEY:+ at $JAH_WARM_KEY}" \
           bash -c 'b=$(( $1 - $(date +%s) )); [ "$b" -ge 1 ] || b=1; shift; exec timeout --kill-after=10 "$b" "$@"' \
           cold-bound "$DEADLINE" "${cmd[@]}" ) < /dev/null > "$log" 2>&1
     rc=$?
