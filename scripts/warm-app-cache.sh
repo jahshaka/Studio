@@ -478,6 +478,7 @@ store_take() {   # the cold -off caches (and their -on stamps) this call asked f
     local b c sh st ds x S nxt got=""
     for b in $RUN; do
         case "$b" in app-off) c=app sh=$APP_SHARED st=$APP_STAMP ;; engine-off) c=engine sh=$ENG_SHARED st=$ENG_STAMP ;; *) continue ;; esac
+        [ -n "$(cache_why "$b")" ] || continue   # warm at the key (only the pass record stale): the tree's own union stays
         S="$SK/$c"
         [ -d "$S/cache" ] && [ "$(sed -n 1p "$S/warm-key" 2>/dev/null)" = "$KEY" ] || continue
         python3 -I "$SRC/tests/support/shadercache_check.py" "$S/cache" > /dev/null 2>&1 ||
@@ -531,7 +532,22 @@ fi
 echo "cold at $KEY: $why"
 FIRST_WHY=$why
 [ "$CHECK" = 1 ] && exit 3
-if store_open "$BUDGET"; then
+# THE STORE IS OPENED ONLY FOR A BOOT COLD BY ITS CACHE (TE-WARM-WHY's final read, the lead's ruling 2026-11-22): a cache warm at
+# the key whose ONLY why is the startup pass's record needs no store - taking the store's copy would REPLACE the tree's grown
+# union with the store's older one (measured: 1189 -> 804, 1141 -> 804, 1103 -> 973 shaders) and hold the key's lock through the
+# refresh boot; a cache warm at the key never takes from the store (the law before (D)); the cold rows are never the store's
+store_needed() {
+    local b
+    for b in $RUN; do
+        case "$b" in
+            app-off) [ -n "$(cache_why app-off)" ] && return 0 ;;
+            cold-on) ;;
+            *) return 0 ;;
+        esac
+    done
+    return 1
+}
+if store_needed && store_open "$BUDGET"; then
     store_take
     compute_run
     if [ -z "$RUN" ]; then

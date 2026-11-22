@@ -710,6 +710,32 @@ out=$(FAKE_PASS_ID=$p9b FAKE_PASS_LOG="$T/s9.pass" JAH_WARM_STORE="$ST9" SX "$RB
     grep -q "^pass=$p9b|" "$RB9/tests/.shadercache/warm-pass.key" && [ "$(SX "$RB9" --only app-off,app-on --check)" = "warm at $pk" ] &&
     ok "S9: a store copy at the key carries its publisher's pass record - taken, then ONE app-off boot ran the pass, the record this build's, warm" ||
     no "S9 the store's pass record: rc $rc booted [$(cat "$T/s-booted" 2>/dev/null | tr '\n' ' ')] pass [$(tr '\n' ' ' < "$T/s9.pass")] '$(echo "$out" | grep -iE "taken|record|cold at|warm at" | head -4 | tr '\n' '|')'"
+# S10 A CACHE WARM AT THE KEY NEVER TAKES FROM THE STORE (TE-WARM-WHY's final read, VERDICT BACK, the lead's ruling 2026-11-22):
+# a tree warm at the key whose ONLY why is a stale pass record, the store at the same key holding a DIFFERENT (older) cache - the
+# refresh runs on the tree's OWN union: nothing TAKEN, the store's key lock never taken (held here by another process all through:
+# a call that opened the store would wait on it and say so), ONE app-off boot, the local hlms and compute files the same inodes,
+# the record this build's. (red on 94461a5cb: the store's copy TAKEN over the tree's union after the lock's wait - the class
+# WARM-SHARE-1 ruling 5 deleted; measured on the box: 1189 -> 804 shaders)
+p10a=aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa; p10b=bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb
+ST10="$T/store10"; mkdir -p "$ST10/$pk/app"
+toy_cache "$ST10/$pk/app/cache" 7 9; printf 'pass=%s|media=m|cache=c\n' "$p10a" > "$ST10/$pk/app/cache/warm-pass.key"
+printf '%s\n%s\n%s\n' "$pk" "k1 k2 " "sets none" > "$ST10/$pk/app/warm-key"
+toy_tree "$T/sW"; WB="$T/sW/build"; WT="$WB/tests"; mkdir -p "$WB/generated"
+printf '#define JAH_STARTUP_PASS_CODE_ID "%s"\n' "$p10b" > "$WB/generated/jah_startup_pass_id.h"
+rm -rf "$WT/.shadercache"; toy_cache "$WT/.shadercache" 1 2; printf 'pass=%s|media=m|cache=c\n' "$p10a" > "$WT/.shadercache/warm-pass.key"
+printf '%s\n%s\n%s\n' "$pk" "k1 k2 " "sets none" > "$WT/.shadercache.warm-key"
+iH=$(stat -c %i "$WT/.shadercache/hlms.1.bin"); iC=$(stat -c %i "$WT/.shadercache/compute.bin")
+rm -f "$T/k10.held" "$T/s-booted"; : > "$T/s10.pass"
+( exec 8>"$ST10/$pk/.key.lock"; flock 8; : > "$T/k10.held"; sleep 4 ) & kp=$!
+for _ in $(seq 50); do [ -e "$T/k10.held" ] && break; sleep 0.1; done
+out=$(FAKE_PASS_ID=$p10b FAKE_PASS_LOG="$T/s10.pass" JAH_WARM_STORE="$ST10" SX "$WB" --only app-off --budget 20 2>&1); rc=$?
+wait $kp 2>/dev/null
+[ $rc = 0 ] && ! echo "$out" | grep -q "TAKEN" && ! echo "$out" | grep -q "being warmed by another tree" &&
+    [ "$(grep -c BOOTED "$T/s-booted" 2>/dev/null)" = 1 ] && [ "$(cat "$T/s10.pass")" = ran ] &&
+    [ "$(stat -c %i "$WT/.shadercache/hlms.1.bin")" = "$iH" ] && [ "$(stat -c %i "$WT/.shadercache/compute.bin")" = "$iC" ] &&
+    ! grep -q '^shaders 9' "$WT/.shadercache/cache-manifest.txt" && grep -q "^pass=$p10b|" "$WT/.shadercache/warm-pass.key" &&
+    ok "S10: a cache warm at the key with only a stale pass record - no take, no key lock, ONE refresh boot on the tree's own union (the same inodes)" ||
+    no "S10 the warm tree and the store: rc $rc booted [$(cat "$T/s-booted" 2>/dev/null | tr '\n' ' ')] pass [$(tr '\n' ' ' < "$T/s10.pass")] '$(echo "$out" | grep -iE "taken|lock|warmed by|cold at|warm at" | head -4 | tr '\n' '|')'"
 fi
 echo "tooling.warm_app_cache ($PART): $([ $fail = 0 ] && echo PASS || echo FAIL)"
 exit $fail
