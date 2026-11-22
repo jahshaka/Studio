@@ -5,7 +5,17 @@
 // INPUT: RayQueryTier::textureView hands the cache image 0 for a texture that is not resident; the cache answers a null
 // view and caches and registers nothing, and the job that binds it refuses - before the guard it was viewed on the
 // manager's blank image and traced as the input.
+// AND THE ORDER IN THE SOURCE (argv[1] = irisgl/engine/src/OgreRayQuery.cpp; stage 2 item 6b): every ray job of the
+// tier calls the guard BEFORE the state its frame advances, looks up no view of a texture after that state moved, and
+// a job that writes the hit set checks the hit set's inputs (hitSetInputsMade) before it too - a job that refused after
+// advancing would leave its next frame reading a state that never happened. Each job's ADVANCE is named below, a token
+// of the state its frame moves (a ring, a history, a registration, a frame's layouts); a token not found is a FAIL (the
+// table is stale, never skipped). Red first on the base, where no job of the tier called the guard
+// (spikes/gather-hang-1/stage2/guard-jobs-red-first.txt).
+#include <algorithm>
 #include <cstdio>
+#include <fstream>
+#include <sstream>
 #include <string>
 
 #ifndef JAH_RAY_INPUT_GUARD_UNDER_TEST   // (spikes/gather-hang-1/stage2 runs these cases on the base's silent decline as the red)
@@ -21,8 +31,101 @@ using jahshaka::engine::detail::RayViewKind;
 
 static int gFail = 0;
 static void check(bool ok, const char *what) { std::printf("%s: %s\n", ok ? "ok" : "FAIL", what); if (!ok) ++gFail; }
+static void check(bool ok, const std::string &what) { check(ok, what.c_str()); }
 
-int main()
+// The source with its comments and the contents of its string and character literals blanked (a comment or a log line
+// that names the guard is not a call of it).
+static std::string codeOnly(const std::string &s)
+{
+    std::string out(s);
+    enum { Code, Line, Block, Str, Chr } st = Code;
+    for (size_t i = 0; i < s.size(); ++i) {
+        const char c = s[i], n = i + 1 < s.size() ? s[i + 1] : '\0';
+        switch (st) {
+        case Code:
+            if (c == '/' && n == '/') { st = Line; out[i] = ' '; }
+            else if (c == '/' && n == '*') { st = Block; out[i] = ' '; }
+            else if (c == '"') st = Str;
+            else if (c == '\'') st = Chr;
+            break;
+        case Line: if (c == '\n') st = Code; else out[i] = ' '; break;
+        case Block:
+            out[i] = c == '\n' ? '\n' : ' ';
+            if (c == '*' && n == '/') { out[++i] = ' '; st = Code; }
+            break;
+        case Str: case Chr:
+            if (c == '\\') { out[i] = ' '; if (i + 1 < s.size()) out[++i] = ' '; }
+            else if (c == (st == Str ? '"' : '\'')) st = Code;
+            else out[i] = ' ';
+            break;
+        }
+    }
+    return out;
+}
+
+// The body of `RayQueryTier::<name>(...) {...}` (its definition: the parameter list followed by '{'), or empty.
+static std::string bodyOf(const std::string &code, const std::string &name)
+{
+    const std::string head = "RayQueryTier::" + name + "(";
+    for (size_t at = code.find(head); at != std::string::npos; at = code.find(head, at + 1)) {
+        size_t i = at + head.size();
+        for (int depth = 1; i < code.size() && depth > 0; ++i) depth += code[i] == '(' ? 1 : code[i] == ')' ? -1 : 0;
+        while (i < code.size() && (code[i] == ' ' || code[i] == '\n' || code[i] == '\t')) ++i;
+        if (i >= code.size() || code[i] != '{') continue;   // a call or a declaration
+        const size_t open = i;
+        for (int depth = 0; i < code.size(); ++i) {
+            depth += code[i] == '{' ? 1 : code[i] == '}' ? -1 : 0;
+            if (depth == 0) return code.substr(open, i + 1 - open);
+        }
+    }
+    return std::string();
+}
+
+static void sourceOrder(const char *path)
+{
+    std::ifstream f(path);
+    std::stringstream ss;
+    ss << f.rdbuf();
+    const std::string code = codeOnly(ss.str());
+    check(!code.empty(), std::string("5. the source reads: ") + path);
+    struct Job { const char *name; const char *kind; const char *advances[2]; };
+    // (each advance: the first token of the state the job's frame moves - named at its line in the lane's report)
+    const Job jobs[] = {
+        { "recordReflect", "a history job", { "rv.ringFrame++", nullptr } },
+        { "recordMotion", "a reading job", { "mReflects[key]", nullptr } },
+        { "recordAreaVis", "a history job", { "areaVisFrame(", nullptr } },
+        { "recordSunContact", "a reading job", { "sv.params[ring]", nullptr } },
+        { "recordHitComposite", "a history job", { "hv.params[ring].mapped", nullptr } },
+        { "traceGlassEscape", "a reading job", { "ev.frame % kReflectRing", nullptr } },
+        { "prepareHitList", "a reading job", { "createUavBuffer(", "vkCmdFillBuffer(" } },
+        { "traceCardMovers", "a card job", { "mCardLamps[scene]", nullptr } },
+        { "gatherCards", "a card job", { "mCardGather[scene]", nullptr } },
+        { "gatherVoxelSides", "a history job", { "foldVoxelSideCounts(", "++v.sharesWrites" } },
+        { "cardPickBlocking", "a card job", { "executeResourceTransition(", "flushCommands(" } },
+    };
+    for (const Job &j : jobs) {
+        const std::string body = bodyOf(code, j.name);
+        const std::string who = std::string("5. ") + j.name + " (" + j.kind + ")";
+        if (body.empty()) { check(false, who + ": its definition is found"); continue; }
+        size_t advance = std::string::npos;
+        bool tokens = true;
+        for (const char *t : j.advances) {
+            if (!t) continue;
+            const size_t at = body.find(t);
+            tokens = tokens && at != std::string::npos;
+            advance = std::min(advance, at);
+        }
+        if (!tokens) { check(false, who + ": every advance token is found (the table is stale)"); continue; }
+        const size_t guard = body.find("inputsMade(");
+        check(guard < advance, who + ": calls the guard before the state its frame advances");
+        check(body.find("textureView(", advance) == std::string::npos,
+              who + ": looks up no texture view after that state moved");
+        if (body.find("hitSet.write(") != std::string::npos)
+            check(body.find("hitSetInputsMade(") < advance, who + ": checks its hit set's inputs before that state");
+    }
+}
+
+int main(int argc, char **argv)
 {
     {   // 1. every view made: admitted, nothing counted, nothing said
         Guard g;
@@ -77,6 +180,9 @@ int main()
         check(again != 0u && g.admit("probe gather", { vSky, again }, &say) && say.empty(),
               "4. resident again: the view is made and the job is admitted");
     }
-    std::printf("%s\n", gFail ? "engine.ray_input_guard: FAILED" : "engine.ray_input_guard: PASSED");
+    check(argc > 1, "5. the tier's source is given (argv[1])");
+    if (argc > 1) sourceOrder(argv[1]);
+    if (gFail) std::printf("engine.ray_input_guard: FAILED (%d)\n", gFail);
+    else std::printf("engine.ray_input_guard: PASSED\n");
     return gFail ? 1 : 0;
 }
