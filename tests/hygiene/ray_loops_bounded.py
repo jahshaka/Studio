@@ -18,7 +18,11 @@
 #       (ScreenProbeGather.h kRayQueryStepLaw / kRayQueryStepBound) holds the same numbers;
 #   (4) A CUT RAY ANSWERS AS OCCLUDED (the lead's ruling (B)): JAH_RQ_LOOP_BEGIN_ raises its `cut` flag at the bound,
 #       JAH_RQ_PROCEED_TRANSMIT sets its T to 0 on it, and every call of JAH_RQ_PROCEED, _PANES and _OPAQUE names a
-#       `cut` flag that its caller READS again within the next 12 code lines (the flag never left unread).
+#       `cut` flag that its caller READS again within the next 12 code lines (the flag never left unread);
+#   (5) EVERY RAY's INPUTS ARE DEFINED (the lead's calls 2-3): `jahRqInit(` appears only in the seam's own #define and
+#       ONCE in jah_rq_alpha.glsl's #define JAH_RQ_INIT, which tests the ray by jahRqRayDefined (finite3 / finite1 - the
+#       bits, never x == x - tMin >= 0, tMin <= tMax) and initialises an empty query (cull mask 0) otherwise, counted;
+#       and there are as many JAH_RQ_INIT( calls as ray query loops.
 # The row prints the loops it found through the counted family (the four JAH_RQ_PROCEED forms' call sites).
 # A NEGATIVE CONTROL runs first: synthetic trees with a raw loop, a family head with no cut, a bound a door can raise
 # and a mirror that differs (each red), a raw loop inside a comment and the lawful shape (green).
@@ -41,6 +45,8 @@ SRC_EXTS = (".comp", ".glsl", ".vert", ".frag")
 MEDIA_EXTS = (".glsl", ".any")
 PROCEED = re.compile(r"\bjahRqProceed\s*\(")
 FAMILY = re.compile(r"\b(JAH_RQ_PROCEED(?:_TRANSMIT|_PANES|_OPAQUE)?)\s*\(")
+INIT = re.compile(r"\bjahRqInit\s*\(")
+INIT_CALL = re.compile(r"\bJAH_RQ_INIT\s*\(")
 FLAGGED = re.compile(r"\bJAH_RQ_PROCEED(?:_PANES|_OPAQUE)?\s*\(([^()]*)\)")
 LAW = 1024
 
@@ -72,6 +78,7 @@ def check(root):
     if read == 0:
         return ["no shader file under %s" % os.path.join(root, ENGINE)], []
     good = 0
+    inits_good, init_calls = 0, 0
     for rel, text in texts.items():
         define = None   # the #define a continued line belongs to
         for n, line in enumerate(text.split("\n"), 1):
@@ -84,6 +91,14 @@ def check(root):
                 else:
                     bad.append("(1) %s:%d%s: a ray query loop outside the counted form: %s"
                                % (rel, n, " (in #define %s)" % define if define else "", line.strip().rstrip("\\").strip()))
+            if INIT.search(line) and not (rel == SEAM and define == "jahRqInit"):
+                if rel == ALPHA and define == "JAH_RQ_INIT":
+                    inits_good += 1
+                else:
+                    bad.append("(5) %s:%d%s: a ray query initialised outside JAH_RQ_INIT (its inputs untested): %s"
+                               % (rel, n, " (in #define %s)" % define if define else "", line.strip().rstrip("\\").strip()))
+            if INIT_CALL.search(line) and not re.match(r"\s*#\s*define\b", line) and not (rel == ALPHA and define):
+                init_calls += 1
             fm = FAMILY.search(line)
             if fm and not re.match(r"\s*#\s*define\b", line) and not (rel == ALPHA and define):
                 loops.append("%s:%d %s" % (rel, n, fm.group(1)))
@@ -96,6 +111,11 @@ def check(root):
                                    "as occluded)" % (rel, n, fm.group(1), flag))
             if not line.rstrip().endswith("\\"):
                 define = None
+    if inits_good != 1:
+        bad.append("(5) %s: want exactly ONE jahRqInit(, in #define JAH_RQ_INIT (found %d)" % (ALPHA, inits_good))
+    if init_calls != len(loops):
+        bad.append("(5) %d JAH_RQ_INIT( calls for %d ray query loops (every loop's ray through the guard)"
+                   % (init_calls, len(loops)))
     if good != 1:
         bad.append("(1) %s: want exactly ONE jahRqProceed(, in #define JAH_RQ_LOOP_BEGIN_ (found %d)" % (ALPHA, good))
     alpha = texts.get(ALPHA, "")
@@ -117,6 +137,17 @@ def check(root):
                                or re.fullmatch(r".*\?\s*kJahRqStepBound\s*:\s*min\s*\(.*\bkJahRqStepBound\b.*\)\s*", r)
                                for r in rets):
             bad.append("(2) %s: a jahRqStepBoundNow() may answer above kJahRqStepBound: return %s" % (ALPHA, "; ".join(rets)))
+    init = macro(alpha, "JAH_RQ_INIT") or ""
+    defined = re.search(r"bool\s+jahRqRayDefined\s*\([^)]*\)\s*\{(.*?)\n\}", alpha, flags=re.S)
+    body = defined.group(1) if defined else ""
+    if not (re.search(r"jahRqOk_\s*=\s*jahRqRayDefined\s*\(", init) and re.search(r"jahRqOk_\s*\?\s*uint\s*\(\s*mask\s*\)\s*:\s*0u", init)
+            and "jahRqRefusedCount" in init):
+        bad.append("(5) %s: JAH_RQ_INIT does not test its ray by jahRqRayDefined, count a refusal and init an empty "
+                   "query (cull mask 0)" % ALPHA)
+    if not (re.search(r"finite3\s*\(\s*origin\s*\)", body) and re.search(r"finite3\s*\(\s*dir\s*\)", body)
+            and re.search(r"finite1\s*\(\s*tMin\s*\)", body) and re.search(r"finite1\s*\(\s*tMax\s*\)", body)
+            and re.search(r"tMin\s*>=\s*0\.0", body) and re.search(r"tMin\s*<=\s*tMax", body)):
+        bad.append("(5) %s: jahRqRayDefined does not test origin, dir, tMin, tMax by their bits and tMin in [0, tMax]" % ALPHA)
     law = re.search(r"const\s+uint\s+kJahRqStepLaw\s*=\s*(\d+)u\s*;", alpha)
     if not law or int(law.group(1)) != LAW or not re.search(
             r"const\s+uint\s+kJahRqStepBound\s*=\s*4u\s*\*\s*kJahRqStepLaw\s*;", alpha):
@@ -134,8 +165,20 @@ def check(root):
     return bad, loops
 
 
-LAWFUL_SEAM = "#define jahRqProceed( q ) rayQueryProceedEXT( q )\n#define jahRqTerminate( q ) rayQueryTerminateEXT( q )\n"
-LAWFUL_ALPHA = '''const uint kJahRqStepLaw = 1024u;
+LAWFUL_SEAM = "#define jahRqInit( q, a, f, m, o, t0, d, t1 ) rayQueryInitializeEXT( q, a, f, m, o, t0, d, t1 )\n" \
+    "#define jahRqProceed( q ) rayQueryProceedEXT( q )\n#define jahRqTerminate( q ) rayQueryTerminateEXT( q )\n"
+LAWFUL_ALPHA = '''bool jahRqRayDefined( vec3 origin, float tMin, vec3 dir, float tMax )
+{
+	return finite3( origin ) && finite3( dir ) && finite1( tMin ) && finite1( tMax ) && tMin >= 0.0 && tMin <= tMax;
+}
+#define JAH_RQ_INIT( q, tlas, flags, mask, origin, tMin, dir, tMax ) \\
+	{ \\
+		const bool jahRqOk_ = jahRqRayDefined( origin, tMin, dir, tMax ); \\
+		if( !jahRqOk_ ) \\
+			jahRqRefusedCount(); \\
+		jahRqInit( q, tlas, flags, jahRqOk_ ? uint( mask ) : 0u, origin, tMin, dir, tMax ); \\
+	}
+const uint kJahRqStepLaw = 1024u;
 const uint kJahRqStepBound = 4u * kJahRqStepLaw;
 uint jahRqStepBoundNow()
 {
@@ -171,7 +214,7 @@ uint jahRqStepBoundNow()
 	}
 '''
 LAWFUL_MIRROR = "constexpr uint32_t kRayQueryStepLaw = 1024u;\nconstexpr uint32_t kRayQueryStepBound = 4u * kRayQueryStepLaw;\n"
-LAWFUL_JOB = "void main()\n{\n\tJahRq q;\n\tbool cut;\n\tJAH_RQ_PROCEED( q, cut )\n\tif( cut )\n\t\treturn;\n}\n"
+LAWFUL_JOB = "void main()\n{\n\tJahRq q;\n\tJAH_RQ_INIT( q, tlas, 0u, 0xFFu, o, 0.0, d, 1.0 )\n\tbool cut;\n\tJAH_RQ_PROCEED( q, cut )\n\tif( cut )\n\t\treturn;\n}\n"
 
 
 def synthetic(**over):
@@ -198,6 +241,9 @@ def self_test():
             "return b == 0u ? kJahRqStepBound : min( b, kJahRqStepBound );", "return b == 0u ? kJahRqStepBound : b;")}, True),
         ("a cut flag never read", {"src__rayquery__rq_job.comp": LAWFUL_JOB.replace("\tif( cut )\n\t\treturn;\n", "")}, True),
         ("a transmit that keeps its T on a cut", {ALPHA.replace("/", "__"): LAWFUL_ALPHA.replace("( T ) = 0.0;", "( T ) = ( T );")},
+         True),
+        ("a ray initialised raw", {"src__rayquery__rq_job.comp": LAWFUL_JOB.replace("JAH_RQ_INIT(", "jahRqInit(")}, True),
+        ("a guard that lets a negative tMin through", {ALPHA.replace("/", "__"): LAWFUL_ALPHA.replace(" && tMin >= 0.0", "")},
          True),
         ("a mirror that differs", {MIRROR.replace("/", "__"): LAWFUL_MIRROR.replace("1024u", "2048u")}, True),
         ("a raw loop inside a comment", {"src__rayquery__rq_quiet.comp": "/* " + raw + " */\n// while( jahRqProceed( q ) )\n"},
@@ -228,7 +274,7 @@ def main():
         print("  FAIL: " + b)
     if not bad:
         print("  ok: one jahRqProceed(, in JAH_RQ_LOOP_BEGIN_, cut at kJahRqStepBound = 4096 (the law 1024); the host's "
-              "mirror equal; every cut answered as occluded; %d ray query loops through the counted family:" % len(loops))
+              "mirror equal; every cut answered as occluded; every ray through JAH_RQ_INIT; %d ray query loops through the counted family:" % len(loops))
         for l in loops:
             print("    " + l)
     fails += len(bad)

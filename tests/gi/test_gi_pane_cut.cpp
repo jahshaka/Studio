@@ -12,6 +12,12 @@
 // The cut arm of gi.pane_stack (test_gi_pane_stack.cpp: the same slabs, T = 0.9 as the pane word stores it), its own
 // file because its view declares its route (CODING_RULES section 6) and the stack's two arms are still on the ratchet.
 // Red on the base: the status field rayQuery.proceedStepsMax and the door rayquery.stepBound do not exist.
+// THE NaN ARM (argv[1] "nanray": gi.ray_nan_refused; GATHER-HANG-1 stage 2, JAH_RQ_INIT): the same scene, uncut. (4) a
+// healthy scene refuses no ray: rayQuery.raysRefused reads 0 after its frames; (5) the test door rayquery.nanRay
+// (invocation 0 of each job with the hit params traces from a NaN origin, by its bits): the frames END, the counter
+// moves (every such ray refused - an empty query, a miss - never traced), and every texel stays finite. Red on the base:
+// the status field rayQuery.raysRefused and the door do not exist - NEVER an unguarded NaN ray on the card (undefined in
+// the API: a device loss under the shared lock).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "../support/enginetesthelpers.h"
@@ -54,8 +60,10 @@ double oneCodeAt(double L)
 }
 }   // namespace
 
-int main()
+int main(int argc, char **argv)
 {
+    const std::string mode = argc > 1 ? argv[1] : "cut";
+    if (mode != "cut" && mode != "nanray") { std::printf("FAIL: the mode is cut or nanray, not '%s'\n", mode.c_str()); return 2; }
     std::string err;
     auto engine = Engine::create(enginetest::testEngineConfig("test-gi-pane-cut-ogre.log"), err);
     if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return 1; }
@@ -101,7 +109,8 @@ int main()
     scene->setAmbientSh(sh);
     if (!enginetest::rayReflectionOnly(e)) { std::printf("FAIL: the arm reflect.screenOff\n"); return 1; }
     if (!e->setArm("reflect.window", 1.0)) { std::printf("FAIL: the arm reflect.window\n"); return 1; }
-    enginetest::declareRoutes(view, scene, enginetest::Routes().reflection(), "gi.pane_stack_cut's view");
+    enginetest::declareRoutes(view, scene, enginetest::Routes().reflection(),
+                              mode == "cut" ? "gi.pane_stack_cut's view" : "gi.ray_nan_refused's view");
     enginetest::testCameraLookAt(view, Vec3(0.0f, 0.45f, 0.25f), Vec3(0.0f, 0.0f, -0.05f));
     e->waitForAsyncShaders();
     const auto settle = [&]() { e->waitForAsyncShaders(); run(8); };
@@ -127,6 +136,32 @@ int main()
         mean = n ? sum / double(n) : 0.0;
         return n > 0;
     };
+    if (mode == "nanray") {
+        // (4) a healthy scene refuses no ray; (5) the NaN door
+        settle();
+        double mean = 0.0;
+        bool finite = false, zero = false;
+        const bool ok0 = read(mean, finite, zero) && finite;
+        const unsigned long long healthy = scene->published().rayQuery.raysRefused;
+        std::printf("== the healthy scene: the floor's mean %.6f, the rays refused %llu (%d frames)\n", mean, healthy, frames);
+        check(ok0 && mean > 0.01, "(4) the scene renders: the mirror reflects the ceiling through the panes");
+        check(healthy == 0ull, "(4) A HEALTHY SCENE REFUSES NO RAY: rayQuery.raysRefused reads 0");
+        if (!e->setArm("rayquery.nanRay", 1.0)) { std::printf("FAIL: the door rayquery.nanRay\n"); return 1; }
+        const int from = frames;
+        unsigned long long refused = healthy;
+        for (int f = 0; f < 30 && refused == healthy; ++f) {
+            run(1);
+            refused = scene->published().rayQuery.raysRefused;
+        }
+        const bool ok1 = read(mean, finite, zero);
+        e->setArm("rayquery.nanRay", 0.0);
+        std::printf("== the NaN door: %d frames ended, the rays refused %llu -> %llu, every texel finite %d\n", frames - from,
+                    healthy, refused, int(finite));
+        check(refused > healthy, "(5) THE NaN DOOR: the frames end and every NaN ray is REFUSED (counted, never traced)");
+        check(ok1 && finite, "(5) THE NaN DOOR: every texel of the picture stays finite (by its bits)");
+        std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+        return g_fail ? 1 : 0;
+    }
     // (1) THE HOLE
     for (NodeId n : slabs) scene->setNodeVisible(n, false);
     settle();
