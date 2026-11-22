@@ -12,7 +12,8 @@ For more information see the LICENSE file
 #include "services/ogresamples.h"
 
 #include "data/settingsmanager.h"
-#include "services/filewriteatomic.h"
+#include "app/qtstd.h"
+#include "core/files.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -214,7 +215,8 @@ bool writeConfig(const QString &dir, int width, int height, bool fullscreen, QSt
             .arg(height);
 
     const QString path = QDir(dir).absoluteFilePath(QStringLiteral("ogre.cfg"));
-    if (!FileWrite::writeFileAtomic(path, cfg.toUtf8())) {
+    const QByteArray bytes = cfg.toUtf8();
+    if (!iris::files::writeAtomic(qtstd::toPath(path), qtstd::toView(bytes))) {
         if (error) *error = QStringLiteral("could not write %1").arg(path);
         return false;
     }

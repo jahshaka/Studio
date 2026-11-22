@@ -39,7 +39,8 @@ For more information see the LICENSE file
 #include "jahshaka/engine/Pictures.h"
 #include "modules/capture/mp4faststart.h"
 #include "services/livevideo.h"
-#include "services/filewriteatomic.h"
+#include "app/qtstd.h"
+#include "core/files.h"
 #include "viewport/ieditorviewport.h"
 
 namespace {
@@ -206,12 +207,12 @@ VideoRecorder::VideoRecorder(IEditorViewport *viewport, std::function<QString()>
 bool VideoRecorder::publish(const QString &fastStartError, bool notify)
 {
     mFastStartRunning = false;
-    QString renameError;
+    std::string renameError;
     if (fastStartError.isEmpty()) {
         // ONE rename(2) THAT REPLACES (RENAME-ATOMIC-1): the destination is
         // nothing until the instant it is the whole, playable file.
-        if (!FileWrite::atomicRename(mPartialPath, mFinalPath, &renameError)) {
-            if (notify) fail(QStringLiteral("the recording could not be moved into place: %1").arg(renameError));
+        if (!iris::files::atomicRename(qtstd::toPath(mPartialPath), qtstd::toPath(mFinalPath), &renameError)) {
+            if (notify) fail(QStringLiteral("the recording could not be moved into place: %1").arg(qtstd::toQString(renameError)));
             return false;
         }
         removeOffThread({ mRawPath });
@@ -219,8 +220,8 @@ bool VideoRecorder::publish(const QString &fastStartError, bool notify)
         // The encoder's own file is complete and plays; only the index is at
         // the end. Published as it is, and said so — never a lost recording.
         removeOffThread({ mPartialPath });
-        if (!FileWrite::atomicRename(mRawPath, mFinalPath, &renameError)) {
-            if (notify) fail(QStringLiteral("the recording could not be moved into place: %1").arg(renameError));
+        if (!iris::files::atomicRename(qtstd::toPath(mRawPath), qtstd::toPath(mFinalPath), &renameError)) {
+            if (notify) fail(QStringLiteral("the recording could not be moved into place: %1").arg(qtstd::toQString(renameError)));
             return false;
         }
         mWarning = QStringLiteral("saved without fast-start (%1)").arg(fastStartError);
@@ -625,7 +626,7 @@ void VideoRecorder::startFastStart()
             QFile::remove(partial);
             return error.isEmpty() ? QStringLiteral("fast-start failed") : error;
         }
-        FileWrite::fsyncPath(partial);
+        iris::files::fsyncPath(qtstd::toPath(partial));
         return QString();
     }));
 }

@@ -36,7 +36,8 @@ For more information see the LICENSE file
 #include "data/database/database.h"   // DbTransaction
 #include "data/project.h"          // ModelTypes — the asset `type` column
 #include "services/assetstorepaths.h"
-#include "services/filewriteatomic.h"
+#include "app/qtstd.h"
+#include "core/files.h"
 
 namespace AssetCas
 {
@@ -89,7 +90,7 @@ bool storeObject(const QString &srcPath, const QString &root,
     // could also destroy a good object outright.
     //
     // Both close the same way: stage into a sibling temp, then one rename
-    // (FileWrite::stagingTempPath + FileWrite::atomicRename — the same tail
+    // (iris::files::stagingTempPath + iris::files::atomicRename — the same tail
     // sidecars, store.json and the baked maps now share; deep audit area 6).
     // rename(2) is atomic within a filesystem and REPLACES an existing target,
     // so the remove disappears too. The temp must be in the destination's own
@@ -98,7 +99,7 @@ bool storeObject(const QString &srcPath, const QString &root,
     //
     // The staging step itself is NOT a byte write (hardlink first, copy only
     // as the fallback), which is why storeObject drives the pieces rather than
-    // calling writeFileAtomic.
+    // calling iris::files::writeAtomic.
     //
     // (Found while building this: Qt 6.10 on Linux already gets QFile::copy
     // atomic by accident — it opens the destination with O_TMPFILE and linkat()s
@@ -106,7 +107,7 @@ bool storeObject(const QString &srcPath, const QString &root,
     // fast path, not a contract: it needs a filesystem that supports O_TMPFILE,
     // and QFile::copy on macOS and Windows has no such property. The guarantee
     // is ours now, on every platform.)
-    const QString tmpPath = FileWrite::stagingTempPath(dstPath);
+    const QString tmpPath = qtstd::fromPath(iris::files::stagingTempPath(qtstd::toPath(dstPath)));
     QFile::remove(tmpPath);   // a leftover from a dead run that had our pid
 
     bool staged = false;
@@ -130,11 +131,14 @@ bool storeObject(const QString &srcPath, const QString &root,
         // the exact failure the rename exists to prevent. The directory entry
         // is deliberately NOT fsynced: losing the rename loses the object, and
         // a missing object is a re-ingest, not a corruption.
-        FileWrite::fsyncPath(tmpPath);
+        iris::files::fsyncPath(qtstd::toPath(tmpPath));
         noteDeviceWait();
     }
 
-    return FileWrite::atomicRename(tmpPath, dstPath, errorOut);
+    std::string renameError;
+    if (iris::files::atomicRename(qtstd::toPath(tmpPath), qtstd::toPath(dstPath), &renameError)) return true;
+    if (errorOut) *errorOut = qtstd::toQString(renameError);
+    return false;
 }
 
 // --- The two-phase ingest (FSYNC-1; contract in the header) ---------------
@@ -176,7 +180,7 @@ bool stage(const QString &root, Staged &file)
     // The temp is named for the OID, not for the final path: the extension is
     // the store's to decide (commitStaged), and the rename that publishes this
     // must stay inside one directory.
-    const QString tmpPath = FileWrite::stagingTempPath(dir + QLatin1Char('/') + file.oid.toLower());
+    const QString tmpPath = qtstd::fromPath(iris::files::stagingTempPath(qtstd::toPath(dir + QLatin1Char('/') + file.oid.toLower())));
     QFile::remove(tmpPath);
 #ifdef Q_OS_UNIX
     // Hardlink first: same filesystem = ~0 extra bytes, instant, and nothing to
@@ -205,7 +209,7 @@ void flushStaged(QVector<Staged> &files)
     // an object's CONTENT is a corruption, which is what this prevents).
     for (Staged &file : files)
         if (file.copied && !file.tmpPath.isEmpty()) {
-            FileWrite::fsyncPath(file.tmpPath);
+            iris::files::fsyncPath(qtstd::toPath(file.tmpPath));
             noteDeviceWait();
         }
 }
@@ -271,7 +275,11 @@ bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
                                "content (%3) — a torn write from an interrupted run")
                     .arg(dst.size()).arg(file.size).arg(dstPath));
         // The bytes are already durable (flushStaged); this is the publish.
-        if (!FileWrite::atomicRename(file.tmpPath, dstPath, errorOut)) return false;
+        std::string renameError;
+        if (!iris::files::atomicRename(qtstd::toPath(file.tmpPath), qtstd::toPath(dstPath), &renameError)) {
+            if (errorOut) *errorOut = qtstd::toQString(renameError);
+            return false;
+        }
         file.tmpPath.clear();
     } else {
         // The staging thread found this content under a DIFFERENT extension
@@ -616,9 +624,12 @@ bool writeSidecar(QSqlDatabase conn, const QString &root, const QString &guid,
     // parse (assetmigration.cpp's guid.isEmpty() guard), so the failure mode is
     // a re-write, never a wrong row.
     const QString path = AssetStorePaths::sidecarPathIn(root, guid);
-    return FileWrite::writeFileAtomic(
-        path, QJsonDocument(sidecar).toJson(QJsonDocument::Indented), errorOut,
-        FileWrite::Durability::Derived);
+    const QByteArray bytes = QJsonDocument(sidecar).toJson(QJsonDocument::Indented);
+    std::string error;
+    if (iris::files::writeAtomic(qtstd::toPath(path), qtstd::toView(bytes), iris::files::Durability::Derived, &error))
+        return true;
+    if (errorOut) *errorOut = qtstd::toQString(error);
+    return false;
 }
 
 QString resolveFile(QSqlDatabase conn, const QString &root,
@@ -711,8 +722,12 @@ bool writeStoreInfo(const QString &root, QString *errorOut)
     // Atomic: store.json carries the storeId every relocated root is
     // identified by — truncating it in place is how a crash mid-write turns a
     // populated store into an unrecognized one.
-    return FileWrite::writeFileAtomic(
-        path, QJsonDocument(info).toJson(QJsonDocument::Indented), errorOut);
+    const QByteArray bytes = QJsonDocument(info).toJson(QJsonDocument::Indented);
+    std::string error;
+    if (iris::files::writeAtomic(qtstd::toPath(path), qtstd::toView(bytes), iris::files::Durability::Flush, &error))
+        return true;
+    if (errorOut) *errorOut = qtstd::toQString(error);
+    return false;
 }
 
 bool readStoreInfo(const QString &root, QString *storeIdOut, int *formatVersionOut)

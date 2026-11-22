@@ -11,7 +11,8 @@ For more information see the LICENSE file
 #include "pieceemitter.h"
 
 #include "services/apppaths.h"
-#include "services/filewriteatomic.h"
+#include "app/qtstd.h"
+#include "core/files.h"
 
 #include <QCryptographicHash>
 #include <QDir>
@@ -858,7 +859,8 @@ QString PieceEmitter::write(const QString &dir, const QString &source, bool vert
 	// its piece registry by name and would throw if the bytes ever differed,
 	// and a rewrite would also churn the mtime the shader cache watches.
 	if (QFileInfo::exists(path)) return path;
-	if (!FileWrite::writeFileAtomic(path, source.toUtf8())) return {};
+	const QByteArray bytes = source.toUtf8();
+	if (!iris::files::writeAtomic(qtstd::toPath(path), qtstd::toView(bytes))) return {};
 	return path;
 }
 

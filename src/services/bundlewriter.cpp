@@ -10,7 +10,8 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/bundlewriter.h"
-#include "services/filewriteatomic.h"
+#include "app/qtstd.h"
+#include "core/files.h"
 
 #include <QCoreApplication>
 #include <QDir>
@@ -133,11 +134,11 @@ ExportResult writeBundle(BundleStage stage, const QString &destPath, const Write
     // old file until the instant it is the new one. It used to be removed
     // first and the .partial renamed in after (QFile::rename refuses to
     // overwrite), which left a window with no file at all — and a rename that
-    // failed inside it lost the user's file for good. FileWrite::atomicRename
+    // failed inside it lost the user's file for good. iris::files::atomicRename
     // is the house's one atomic publish; it removes the .partial on failure.
-    QString renameError;
-    if (!FileWrite::atomicRename(partial, destPath, &renameError))
-        return fail(QStringLiteral("the archive could not be moved into place: %1").arg(renameError));
+    std::string renameError;
+    if (!iris::files::atomicRename(qtstd::toPath(partial), qtstd::toPath(destPath), &renameError))
+        return fail(QStringLiteral("the archive could not be moved into place: %1").arg(qtstd::toQString(renameError)));
 
     result.path = destPath;
     result.kind = stage.kind;

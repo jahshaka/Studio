@@ -26,7 +26,8 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "data/assethomekind.h"
 #include "services/assetstorepaths.h"
-#include "services/filewriteatomic.h"
+#include "app/qtstd.h"
+#include "core/files.h"
 
 const char *AssetStoreService::kSettingKey = "assets/storeRoot";
 const char *AssetStoreService::kStoreIdKey = "assets/storeId";
@@ -157,16 +158,19 @@ bool copyFileAtomic(const QString &srcPath, const QString &dstPath, QString *err
         if (errorOut) *errorOut = QStringLiteral("cannot create %1").arg(QFileInfo(dstPath).absolutePath());
         return false;
     }
-    const QString tmpPath = FileWrite::stagingTempPath(dstPath);
+    const QString tmpPath = qtstd::fromPath(iris::files::stagingTempPath(qtstd::toPath(dstPath)));
     QFile::remove(tmpPath);
     if (!QFile::copy(srcPath, tmpPath)) {
         QFile::remove(tmpPath);
         if (errorOut) *errorOut = QStringLiteral("copy failed: %1 -> %2").arg(srcPath, dstPath);
         return false;
     }
-    FileWrite::fsyncPath(tmpPath);
+    iris::files::fsyncPath(qtstd::toPath(tmpPath));
     AssetCas::noteDeviceWait();   // the store-move's own wait counts too
-    return FileWrite::atomicRename(tmpPath, dstPath, errorOut);
+    std::string renameError;
+    if (iris::files::atomicRename(qtstd::toPath(tmpPath), qtstd::toPath(dstPath), &renameError)) return true;
+    if (errorOut) *errorOut = qtstd::toQString(renameError);
+    return false;
 }
 } // namespace
 

@@ -11,7 +11,8 @@ For more information see the LICENSE file
 #include "graphbaker.h"
 #include "irisgl/core/colorjson.h"
 
-#include "services/filewriteatomic.h"
+#include "app/qtstd.h"
+#include "core/files.h"
 
 #include <QColor>
 #include <QJsonArray>
@@ -20,6 +21,7 @@ For more information see the LICENSE file
 #include <QDir>
 #include <QElapsedTimer>
 #include <QFileInfo>
+#include <QBuffer>
 #include <QImage>
 #include <QMutex>
 #include <QSet>
@@ -251,6 +253,16 @@ GraphBaker::CompiledGraph GraphBaker::compile(NodeGraph* graph, BakeProgram::Tex
 // ------------------------------------------------------------- the live split
 
 namespace {
+
+// A baked map: the PNG encoded into memory, then the one atomic write (iris::files) - a crash leaves the old map or the new,
+// never half of one. A failed encode writes nothing.
+void writePngAtomic(const QString &filePath, const QImage &image)
+{
+	QByteArray png;
+	QBuffer buffer(&png);
+	if (buffer.open(QIODevice::WriteOnly) && image.save(&buffer, "PNG"))
+		iris::files::writeAtomic(qtstd::toPath(filePath), qtstd::toView(png));
+}
 
 /// Every op of the subtree under `root` (inclusive), each once.
 QVector<int> subtreeOps(const BakeProgram& p, int root)
@@ -778,7 +790,7 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiledIn, cons
 						p[3] = alphaBaked ? toByte(alphaState->cs->program.evaluate(ctx, scratch).x) : 255;
 					}
 				});
-				FileWrite::writeFileAtomic(filePath, [&](QFile &f) { return image.save(&f, "PNG"); });
+				writePngAtomic(filePath, image);
 			}
 			emitMap("baseColorMap", fileName);
 			// the map holds the color; leaving baseColor set would multiply
@@ -827,7 +839,7 @@ GraphBaker::Result GraphBaker::runCompiled(const CompiledGraph& compiledIn, cons
 						}
 					}
 				});
-				FileWrite::writeFileAtomic(filePath, [&](QFile &f) { return image.save(&f, "PNG"); });
+				writePngAtomic(filePath, image);
 			}
 			emitMap(slot.mapKey, fileName);
 			applyMapFactorRules(slot.mapKey);

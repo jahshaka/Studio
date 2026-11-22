@@ -34,7 +34,7 @@ For more information see the LICENSE file
 
 namespace {
 
-/// A staging temp, by the shape `FileWrite::stagingTempPath` writes
+/// A staging temp, by the shape `iris::files::stagingTempPath` writes
 /// ("<final>.tmp-<pid>-<serial>") — the same test `assetgc` makes.
 bool isStagingTemp(const QString &fileName)
 {

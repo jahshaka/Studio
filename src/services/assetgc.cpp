@@ -101,7 +101,7 @@ QVariantMap Report::toMap() const
 
 namespace
 {
-// FileWrite::stagingTempPath's shape: "<final>.tmp-<pid>-<serial>".
+// iris::files::stagingTempPath's shape: "<final>.tmp-<pid>-<serial>".
 bool isStagingTemp(const QString &fileName)
 {
     return fileName.contains(QLatin1String(".tmp-"));
