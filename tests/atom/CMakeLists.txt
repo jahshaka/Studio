@@ -177,15 +177,41 @@ jah_gpu_row(atom.cluster_occlusion CLASS engine FRAMES 145 COMMAND test_atom_clu
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(atom.cluster_occlusion PROPERTIES TIMEOUT 60 LABELS "engine")
 
+# atom.decode_parity.{materials,normal_map,point,spot,area} (ATOM-TESTS-BACK-1 stage 3; test_atom_decode_parity.cpp says the
+# law and the class) - THE DECODE IS STOCK PBS: one scene's cells with the visibility buffer's door open (the decode) and shut
+# (stock PBS), in linear radiance |decode - stock| <= eps G + q outside "a pixel whose 3 x 3 id-image neighbourhood holds
+# another word" (eps 1/256 px, the decode's sub-pixel snap; q one fp16 quantum of the target); GI off, route `none` declared
+# on frame 1, shadows off (a NAMED GAP: the decode's shadow receive path waits for the caster cut's item). One row per
+# proof (the lead, 2026-11-22): every row builds the same scene and counts its own cells.
+# atom.decode_parity.normal_map and .area are RED by design (SPECS/OPEN_REDS.md, homed at plan 3.6, causes unexplained):
+# the normal-mapped cell's same four pixels over the bound under every lamp (worst 1.92 q, 12.2 eps); the area lamp's 422 px
+# (worst 24.54 q, 128 eps at (589, 169)).
+add_executable(test_atom_decode_parity test_atom_decode_parity.cpp)
+jah_atom_engine_target(test_atom_decode_parity)
+# FRAMES: 4 to boot the scene + 8 an arm (two pictures, each still at its second read 2 frames apart: the first run's 4 / 4).
+foreach(_arm_frames materials=12 normal_map=28 point=12 spot=12 area=12)
+    string(REPLACE "=" ";" _af "${_arm_frames}")
+    list(GET _af 0 _arm)
+    list(GET _af 1 _frames)
+    jah_gpu_row(atom.decode_parity.${_arm} CLASS engine FRAMES ${_frames} COMMAND test_atom_decode_parity ${_arm}
+             WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_tests_properties(atom.decode_parity.${_arm} PROPERTIES TIMEOUT 60 LABELS "engine")
+endforeach()
+
 # atom.masked_coverage (RE-REGISTERED by ATOM-TESTS-BACK-1 stage 3; its device read restored by irisgl 53d6c217) — THE MASK'S
 # PYRAMID KEEPS LEVEL 0'S COVERAGE: the device's pyramid read back against bit_i = round(S_i) - round(S_(i-1)) level by level
 # (a 1-texel checker bit for bit; a non-power-of-two hash pattern), and the id pass's coverage of the checker at 1x / 2x / 4x /
 # 8x minification = level 0's 1/2 within one texel (DOCS/traps/engine/atom-and-lod.md, CUT-OUTS).
 add_executable(test_atom_masked_coverage test_atom_masked_coverage.cpp)
 jah_atom_engine_target(test_atom_masked_coverage)
-jah_gpu_row(atom.masked_coverage CLASS engine FRAMES 64 COMMAND test_atom_masked_coverage
+jah_gpu_row(atom.masked_coverage CLASS engine FRAMES 88 COMMAND test_atom_masked_coverage
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
-set_tests_properties(atom.masked_coverage PROPERTIES TIMEOUT 60 LABELS "engine")
+# atom.masked_coverage.clamp - the mask's coverage equals the material's own alpha test, its sampler's address mode included,
+# at every texel centre of a CLAMP quad with UVs to 1.5. RED by design (SPECS/OPEN_REDS.md, homed at plan 3.6): the mask
+# wraps (jah_alpha_mask.glsl:95) where the slot clamps - covered 0.33333 against the law's 0.66667, 192 of 576 cells.
+jah_gpu_row(atom.masked_coverage.clamp CLASS engine FRAMES 28 COMMAND test_atom_masked_coverage clamp
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(atom.masked_coverage atom.masked_coverage.clamp PROPERTIES TIMEOUT 60 LABELS "engine")
 
 # atom.cut_overflow_whole / atom.still_does_nothing (ATOM-TESTS-BACK-1 stage 4; test_atom_cut_overflow.cpp says the laws) —
 # COUNTS, NEVER MS: the test door at 1/8 of the scene's ask draws every instance whole (coarse from the reserve, nothing
