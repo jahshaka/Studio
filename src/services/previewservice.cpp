@@ -49,17 +49,6 @@ QString storeFileFor(const QString &guid)
     return AssetCas::resolveSource(QSqlDatabase::database(), AssetStorePaths::root(), guid);
 }
 
-previews::KeySource keySourceOf(const Database::PreviewRow &row)
-{
-    previews::KeySource source;
-    source.guid = row.guid;
-    source.type = row.type;
-    source.files = row.files;
-    source.pin = row.pin;
-    source.members = row.members;
-    return source;
-}
-
 /// NOTHING TO DRAW: platform furniture (the app's own content, shown in no tile grid), or a MODEL row
 /// with no content at all (no file, no pin, no blob) - a builtin primitive's Object row (a
 /// template's Floor), a document thing that never had a model.
@@ -222,7 +211,7 @@ void PreviewService::request(Project *project, const QString &guid, Done done, Q
                                   : QStringLiteral("'%1' stores no model definition (a builtin primitive's row "
                                                    "has nothing to draw)").arg(guid), true));
     // THE KEY AT THE REQUEST, written with the bytes: a definition that moves in flight reads stale.
-    const QString key = previews::key(keySourceOf(row), previewenv::kVersion);
+    const QString key = previews::key(previews::sourceOf(row), previewenv::kVersion);
     Outcome outcome;
     const QImage image = renderPicture(project, guid, row.type, size, &outcome);
     if (image.isNull()) {
@@ -270,7 +259,7 @@ QVector<PreviewService::Row> PreviewService::state(Project *project, bool projec
         r.type = row.type;
         r.storedKey = row.storedKey;
         if (previews::presetFor(row.type) && !nothingToDraw(row)) {
-            r.key = previews::key(keySourceOf(row), previewenv::kVersion);
+            r.key = previews::key(previews::sourceOf(row), previewenv::kVersion);
             r.state = !row.hasBytes ? State::Missing : (row.storedKey == r.key ? State::Ok : State::Stale);
         }
         out.append(r);

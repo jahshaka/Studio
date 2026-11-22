@@ -24,6 +24,9 @@ For more information see the LICENSE file
 //   - the OPEN PROJECT's pin of the row (`project_assets.oid_pin`): a tile is drawn pin-first;
 //   - its MEMBERS' content: dependee:oid of every `dependencies` edge's `asset_files` row (the
 //     textures a material samples, the mesh an Object draws);
+//   - the stamp of the row's own BLOB (`assets.hash`, Database::blobStamp): an IN-PLACE edit of the
+//     blob (Database::updateAssetAsset: a node's material, a sky's settings, a library save's cache)
+//     moves it, so a picture requested before the edit and stored after it reads stale, never ok;
 //   - the PRESET's version, and previewenv's version for a preset the studio lights.
 // NOT the name: a rename changes no picture. NOT the guid — except for a row with no content of
 // its own (no file, no pin): an Object whose definition is its blob, fixed at import, keys on its
@@ -55,7 +58,22 @@ struct KeySource
     QStringList files;     ///< "role:oid" of the row's own asset_files rows
     QString pin;           ///< the open project's oid_pin of the row; empty when none
     QStringList members;   ///< "dependee:oid" of its members' asset_files rows
+    QString blob;          ///< the stamp of the row's blob (`assets.hash`); empty when it has none
 };
+
+/// The key's inputs from a catalog row (Database::PreviewRow: the service and its rows read one mapping).
+template <class Row>
+KeySource sourceOf(const Row &row)
+{
+    KeySource source;
+    source.guid = row.guid;
+    source.type = row.type;
+    source.files = row.files;
+    source.pin = row.pin;
+    source.members = row.members;
+    source.blob = row.blobStamp;
+    return source;
+}
 
 /// The key, 16 lowercase hex digits; empty when the type has no preset. Pure: no catalog, no clock.
 QString key(const KeySource &source, int previewenvVersion);

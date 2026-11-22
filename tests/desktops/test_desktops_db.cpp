@@ -223,6 +223,51 @@ int main(int argc, char **argv)
         QDir("rt-export").removeRecursively();
     }
 
+    // --- THE BLOB's STAMP THROUGH AN ARCHIVE (PREVIEWS-1: assets.hash is a preview-key input): the export
+    //     carries the source row's column; an IMPORTED row's is the stamp of the blob the import WROTE — never
+    //     the archive's, because the import re-serialises an Object's and a Material's blob (and rewrites a
+    //     collided guid in it), so the exporter's stamp would name bytes the row does not hold.
+    {
+        CHECK(db.createProject("guid-st", "Stamp"), "a project whose Object rides an archive");
+        const QByteArray compact = QByteArrayLiteral("{\"name\":\"stamped\",\"children\":[]}");
+        {
+            QSqlQuery q;
+            q.prepare("INSERT INTO assets (guid, type, name, project_guid) VALUES ('obj-st', ?, 'obj', 'guid-st')");
+            q.addBindValue(static_cast<int>(ModelTypes::Object));
+            q.exec();
+        }
+        CHECK(db.updateAssetAsset("obj-st", compact), "the Object's blob is written through the edit door");
+        const QString exported = Database::blobStamp(compact);
+        QDir().mkpath("st-export");
+        CHECK(Database::writeExportCatalog(QStringLiteral("st-export"), db.readExportCatalog("guid-st"), nullptr),
+              "the archive's catalog is written");
+        QString archived;
+        {
+            QSqlDatabase arc = QSqlDatabase::addDatabase("QSQLITE", "st-arc");
+            arc.setDatabaseName("st-export/guid-st.db");
+            arc.open();
+            QSqlQuery q(arc);
+            if (q.exec("SELECT hash FROM assets WHERE guid = 'obj-st'") && q.next()) archived = q.value(0).toString();
+            arc.close();
+        }
+        QSqlDatabase::removeDatabase("st-arc");
+        CHECK(!exported.isEmpty() && archived == exported, "the export carries the source row's stamp");
+        QSqlQuery gone;
+        gone.exec("DELETE FROM assets WHERE guid = 'obj-st'");   // so the import inserts it (a known guid is skipped)
+        QString worldName;
+        QMap<QString, QString> guidMap;
+        CHECK(db.importProject(QStringLiteral("st-export/guid-st"), "guid-st-2", worldName, guidMap), "the archive imports");
+        QSqlQuery row;
+        const bool found = row.exec("SELECT hash, asset FROM assets WHERE guid = 'obj-st'") && row.next();
+        const QString stamp = found ? row.value(0).toString() : QString();
+        const QByteArray written = found ? row.value(1).toByteArray() : QByteArray();
+        CHECK(found && written != compact && !written.isEmpty(),
+              "the import wrote the Object's blob re-serialised (its bytes are not the archive's)");
+        CHECK(stamp == Database::blobStamp(written) && stamp != exported,
+              "the imported row's assets.hash is the stamp of the blob it holds, not the archive's");
+        QDir("st-export").removeRecursively();
+    }
+
     // --- A DELETED PROJECT TAKES ITS OWN ROWS WITH IT (ASSETS-SCOPE-1 fix round
     //     F2): a material made in it, the material's member picture (with its
     //     stored-file mapping) and a scene node's row are the project's own and

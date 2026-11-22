@@ -1300,10 +1300,10 @@ QString Database::createAssetEntry(
 	query.prepare(
 		"INSERT INTO assets"
 		" (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
-		" last_updated, guid, properties, author, asset, license, tags, view_filter, origin,"
+		" last_updated, guid, properties, author, asset, hash, license, tags, view_filter, origin,"
 		" times_used)"
 		" VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
-		" datetime(), :guid, :properties, :author, :asset, :license, :tags, :view_filter, :origin,"
+		" datetime(), :guid, :properties, :author, :asset, :hash, :license, :tags, :view_filter, :origin,"
 		" 0)"
 	);
 
@@ -1319,6 +1319,7 @@ QString Database::createAssetEntry(
 	query.bindValue(":properties", properties);
 	query.bindValue(":author", author.isEmpty() ? getAuthorName() : author);
 	query.bindValue(":asset", asset);
+	query.bindValue(":hash", blobStamp(asset));
 	query.bindValue(":license", license);
 	query.bindValue(":tags", tags);
 	query.bindValue(":view_filter", home.stored());
@@ -1704,7 +1705,8 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
     // The correlated sub-selects are SQLite's per row, inside this ONE statement; the oid lists
     // come back in no promised order (previews::key sorts them).
     QString sql = QStringLiteral(
-        "SELECT a.guid, a.type, length(a.thumbnail) > 0, length(a.asset) > 0, t.hash, "
+        // a.hash (the blob's stamp) is stored BEFORE the thumbnail: read from the row's local page.
+        "SELECT a.guid, a.type, length(a.thumbnail) > 0, length(a.asset) > 0, t.hash, a.hash, "
         "(SELECT group_concat(f.role || ':' || f.oid) FROM asset_files f WHERE f.asset_guid = a.guid), "
         "(SELECT p.oid_pin FROM project_assets p WHERE p.project_guid = ? AND p.asset_guid = a.guid), "
         "(SELECT group_concat(d.dependee || ':' || m.oid) FROM dependencies d "
@@ -1739,9 +1741,10 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
         row.hasBytes = query.value(2).toBool();
         row.hasBlob = query.value(3).toBool();
         row.storedKey = query.value(4).toString();
-        row.files = split(query.value(5));
-        row.pin = query.value(6).toString();
-        row.members = split(query.value(7));
+        row.blobStamp = query.value(5).toString();
+        row.files = split(query.value(6));
+        row.pin = query.value(7).toString();
+        row.members = split(query.value(8));
         row.platform = platform.contains(row.guid);
         rows.append(row);
     }
@@ -2445,10 +2448,17 @@ bool Database::updateAssetThumbnail(const QString &guid, const QByteArray &thumb
 bool Database::updateAssetAsset(const QString &guid, const QByteArray &asset)
 {
 	QSqlQuery query;
-	query.prepare("UPDATE assets SET asset = ? WHERE guid = ?");
+	query.prepare("UPDATE assets SET asset = ?, hash = ? WHERE guid = ?");
 	query.addBindValue(asset);
+	query.addBindValue(blobStamp(asset));
 	query.addBindValue(guid);
 	return executeAndCheckQuery(query, "UpdateAssetAsset");
+}
+
+QString Database::blobStamp(const QByteArray &asset)
+{
+	if (asset.isEmpty()) return QString();
+	return QString::fromLatin1(QCryptographicHash::hash(asset, QCryptographicHash::Sha256).left(8).toHex());
 }
 
 bool Database::updateSceneThumbnail(const QString & guid, const QByteArray &thumbnail)
@@ -4362,7 +4372,6 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         insertImportAssetQuery.bindValue(":last_updated", asset.lastUpdated);
         insertImportAssetQuery.bindValue(":author", asset.author);
         insertImportAssetQuery.bindValue(":license", asset.license);
-        insertImportAssetQuery.bindValue(":hash", asset.hash);
         insertImportAssetQuery.bindValue(":version", asset.version);
         insertImportAssetQuery.bindValue(":parent", remapParent(asset.parent));
         insertImportAssetQuery.bindValue(":tags", asset.tags);
@@ -4388,6 +4397,9 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
             insertImportAssetQuery.bindValue(":asset", asset.asset);
         }
 
+        // THE STAMP OF THE BLOB WRITTEN HERE, never the archive's: the remap above rewrites an Object's
+        // and a Material's blob (its guids), so the exporter's stamp would name bytes this row lacks.
+        insertImportAssetQuery.bindValue(":hash", blobStamp(asset.asset));
         insertImportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
         insertImportAssetQuery.bindValue(":view_filter", asset.view_filter);
 

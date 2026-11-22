@@ -61,6 +61,7 @@ QString key(const KeySource &source, int previewenvVersion)
     text += "\nfiles " + files.join(QLatin1Char(',')).toUtf8();
     text += "\npin " + source.pin.toUtf8();
     text += "\nmembers " + members.join(QLatin1Char(',')).toUtf8();
+    text += "\nblob " + source.blob.toUtf8();
     return QString::fromLatin1(
         QCryptographicHash::hash(text, QCryptographicHash::Sha256).left(8).toHex());
 }

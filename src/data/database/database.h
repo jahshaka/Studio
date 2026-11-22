@@ -569,7 +569,13 @@ public:
     /// The two writers above succeed only when they wrote exactly ONE row.
     static bool wroteOneProjectRow(const QSqlQuery &query, const QString &projectGuid);
     bool updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail);
+    /// THE ONE IN-PLACE EDIT OF A ROW's BLOB: writes `asset` AND its stamp (blobStamp) into
+    /// `assets.hash` in one statement - the stamp is a preview-key input (PREVIEWS-1), so an edit
+    /// of the blob moves the key with no read of the blob at a listing.
     bool updateAssetAsset(const QString &guid, const QByteArray &asset);
+    /// `assets.hash`: the first 8 bytes of the blob's SHA-256, 16 hex digits; null for no blob.
+    /// Written wherever a row's blob is written (the mint, the edit door, an archive's import).
+    static QString blobStamp(const QByteArray &asset);
     bool updateSceneThumbnail(const QString &guid, const QByteArray &asset);
     bool updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags);
     bool updateAssetProperties(const QString &guid, const QByteArray &asset);
@@ -789,6 +795,7 @@ public:
         bool hasBytes = false;
         bool hasBlob = false;
         QString storedKey;
+        QString blobStamp;   ///< `assets.hash` (Database::blobStamp): moves with an in-place blob edit
         QStringList files;
         QString pin;
         QStringList members;

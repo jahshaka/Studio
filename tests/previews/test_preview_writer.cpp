@@ -34,6 +34,12 @@ For more information see the LICENSE file
 //   h. THE LOCK IS HELD FOR THE ROW ONLY, read as an ORDER: the writer stamps one serial when a picture's
 //      encode ends and when its transaction begins; each write's encode is before its BEGIN (an encode
 //      moved inside the transaction reverses them - red by construction, no race).
+//   i. THE IN-PLACE EDIT RACE, DRIVEN (the lead's ruling: the blob's stamp is a KEY INPUT, never a mark): a
+//      preview whose key was taken BEFORE Database::updateAssetAsset rewrote an Object's blob, and stored
+//      AFTER it (the writer waiting behind the UI's edit transaction), reads STALE: the key computed now
+//      (previews::sourceOf the catalog row, as PreviewService::state) differs from the stored one. NEGATIVE
+//      CONTROL: the key without the stamp (stage 1's) does not move across the edit - that row would read ok
+//      with the picture of the blob it no longer holds.
 // The waits are on PUBLISHED state (a completion, a drop) with a cap that names the failure.
 
 #include <algorithm>
@@ -55,6 +61,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "irisgl/core/logger.h"
+#include "services/previewkey.h"
 #include "services/previewwriter.h"
 
 namespace {
@@ -335,6 +342,55 @@ int main(int argc, char **argv)
         check(ph.landed.value(0).encodedAt > 0 && ph.landed.value(0).encodedAt < ph.landed.value(0).begunAt
                   && ph.landed.value(1).encodedAt < ph.landed.value(1).begunAt,
               "h: THE LOCK FOR THE ROW ONLY - each picture's encode ENDED before its transaction BEGAN");
+
+        // i. The in-place edit race.
+        const QString race = QStringLiteral("race");
+        {
+            QSqlQuery q;
+            q.prepare(QStringLiteral("INSERT INTO assets (guid, type, name) VALUES (?, ?, ?)"));
+            q.addBindValue(race);
+            q.addBindValue(int(ModelTypes::Object));
+            q.addBindValue(race);
+            q.exec();
+        }
+        check(db.updateAssetAsset(race, QByteArrayLiteral("{\"node\": \"before the edit\"}")),
+              "i: an Object row's blob is written through the edit door");
+        const auto keyNow = [&](bool withStamp) {
+            const QVector<Database::PreviewRow> rows = db.fetchPreviewRows(QString(), false, -1, { race });
+            if (rows.isEmpty()) return QString();
+            previews::KeySource source = previews::sourceOf(rows.first());
+            if (!withStamp) source.blob.clear();
+            return previews::key(source, 1);
+        };
+        const QString atRequest = keyNow(true), atRequestUnstamped = keyNow(false);
+        Probe pi;
+        {
+            DbTransaction edit(QSqlDatabase::database());
+            check(edit.isActive(), "i: the UI's edit takes the write lock");
+            check(writer.submit(race, solid(qRgb(9, 9, 9)), atRequest, pi.done()),
+                  "i: the preview drawn from the blob before the edit is submitted under it");
+            QCoreApplication::processEvents();
+            check(pi.landed.isEmpty(), "i: ...and waits behind the edit");
+            check(db.updateAssetAsset(race, QByteArrayLiteral("{\"node\": \"after the edit\"}")),
+                  "i: the edit rewrites the blob in place");
+            check(edit.commit(), "i: the edit commits");
+        }
+        check(waitFor([&] { return pi.landed.size() == 1; }) && pi.landed.value(0).ok
+                  && storedKey(race) == atRequest,
+              "i: the preview landed AFTER the edit, under the key taken before it");
+        check(!atRequest.isEmpty() && keyNow(true) != storedKey(race),
+              "i: THE RACE: the row reads STALE (the blob's stamp moved its key), never ok with the old picture");
+        check(keyNow(false) == atRequestUnstamped,
+              "i: NEGATIVE CONTROL - without the stamp the key does not move across the edit (it would read ok)");
+        {
+            QSqlQuery q;
+            q.prepare(QStringLiteral("SELECT hash FROM assets WHERE guid = ?"));
+            q.addBindValue(race);
+            check(q.exec() && q.next()
+                      && q.value(0).toString() == Database::blobStamp(QByteArrayLiteral("{\"node\": \"after the edit\"}"))
+                      && q.value(0).toString().size() == 16,
+                  "i: assets.hash holds the stamp of the blob the row now has (16 hex digits)");
+        }
     }
 
     // g. The end drains.

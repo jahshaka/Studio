@@ -79,6 +79,9 @@ int main()
     previews::KeySource other = base;
     other.pin = QStringLiteral("8888");
     check(previews::key(s, env) != previews::key(other, env), "two different pins, two keys");
+    s = base;
+    s.blob = QStringLiteral("0123456789abcdef");
+    check(previews::key(s, env) != k, "the blob's stamp (an in-place edit of the row's blob) moves the key");
     check(previews::key(base, env + 1) != k, "previewenv's version moves a material's key");
     s = base;
     s.type = int(ModelTypes::Object);   // the ASSET preset over the same content
