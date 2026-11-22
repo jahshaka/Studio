@@ -650,3 +650,5 @@ lab.js_watched_no_checks 0.96  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, ru
 lab.js_run_twice 1.59  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T035802-18777f7e3-p2217191)
 lab.js_scene_held 1.04  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T035805-18777f7e3-p2218061)
 frame.stillness_monitor 0.57  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T030556-18777f7e3-p3115299)
+hdr.bloom_isotropic 2.40  ARCHIVED, an interim line (archive/tests/hdr/ROWS.txt, held at 163d90223; registered again by ROUTE-ROWS-1, the lead's ruling 2026-11-04) - re-priced from its own solo run at the feature end
+hdr.display_encode 1.88  ARCHIVED, an interim line (archive/tests/hdr/ROWS.txt, held at 163d90223; registered again by ROUTE-ROWS-1, the lead's ruling 2026-11-04) - re-priced from its own solo run at the feature end
