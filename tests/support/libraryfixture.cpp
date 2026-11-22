@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include <QUuid>
 #include <QVector>
+#include <QtConcurrent/QtConcurrentMap>
 
 #include "data/assethomekind.h"
 #include "data/constants.h"
@@ -32,6 +33,8 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "services/assetcas.h"
+#include "services/assetstorepaths.h"
+#include "services/meshbakestore.h"
 #include "services/memberstamp.h"
 
 namespace libraryfixture {
@@ -218,6 +221,14 @@ bool row(Database *db, const QString &guid, const QString &name, ModelTypes type
 
 QByteArray sourceBytes(const QString &guid) { return QByteArrayLiteral("libraryfixture source ") + guid.toUtf8(); }
 
+/// A model's source: a real OBJ (a tetrahedron), distinct per model by its comment line, so it parses and bakes
+/// as an import's does and every model has a store object of its own.
+QByteArray objBytes(const QString &guid)
+{
+    return QByteArrayLiteral("# libraryfixture model ") + guid.toUtf8()
+           + QByteArrayLiteral("\nv 0 0 0\nv 1 0 0\nv 0 1 0\nv 0 0 1\nf 1 2 3\nf 1 2 4\nf 1 3 4\nf 2 3 4\n");
+}
+
 }   // namespace
 
 bool grow(Database *db, const QString &storeRoot, int assets, int projects, Library &lib, const Options &options,
@@ -239,6 +250,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
     };
 
     DbBatch batch(db);
+    QVector<MeshBakeStore::BakeTarget> bakes;   // the models' sources, baked after the rows
     const bool first = lib.projects.isEmpty();
     if (first) lib.drawer = db->createCollection(QStringLiteral("Fixture drawer"));
 
@@ -319,17 +331,17 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                 const QString meshGuid = nextGuid(lib);
                 const QString name = QStringLiteral("model_%1").arg(tag);
                 const QString file = name + QStringLiteral(".obj");
-                const QByteArray props = json({ { "import", meshImport(oidOf(sourceBytes(guid))) },
-                                                { "metadata", meshMetadata(sourceBytes(guid).size(), file) } });
+                const QByteArray source = objBytes(guid);
+                const QByteArray props = json({ { "import", meshImport(oidOf(source)) },
+                                                { "metadata", meshMetadata(source.size(), file) } });
                 if (!row(db, guid, name, ModelTypes::Object, QString(), assethome::assets(), assethome::Origin::Import,
                          thumb(i), props, objectNode(guid, meshGuid, name), error)
                     || !row(db, meshGuid, file, ModelTypes::Mesh, guid, assethome::assets(), assethome::Origin::Import,
                             QByteArray(), QByteArray(), QByteArray(), error)
-                    || !storeObject(storeRoot, sources, { guid, meshGuid }, QStringLiteral("source"), file,
-                                    sourceBytes(guid), &oid, error)
-                    || !storeObject(storeRoot, sources, { guid, meshGuid }, QStringLiteral("bake"),
-                                    oid.left(16) + QStringLiteral(".jmb"), sourceBytes(meshGuid), nullptr, error))
+                    || !storeObject(storeRoot, sources, { guid, meshGuid }, QStringLiteral("source"), file, source,
+                                    &oid, error))
                     return false;
+                bakes.append({ AssetStorePaths::objectPathIn(storeRoot, oid, QStringLiteral("obj")), guid, false });
                 db->createDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Mesh), guid,
                                      meshGuid);
                 lib.objects << guid;
@@ -338,6 +350,19 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                 ++lib.assets;
             }
         }
+    }
+
+    // THE MODELS' BAKES ARE THE REAL ONES — the bake sweep's own three steps (MeshBakeStore::prepareBake on this
+    // connection, runBake on the pool's threads, commitBake here), under each model's import settings — so a
+    // generated library boots with nothing for the sweep to rebuild. On the pool: a bake is ~10 ms of CPU.
+    {
+        QVector<MeshBakeStore::BakeJob> jobs;
+        for (const MeshBakeStore::BakeTarget &target : std::as_const(bakes))
+            jobs.append(MeshBakeStore::prepareBake(QSqlDatabase::database(), storeRoot, target));
+        QVector<MeshBakeStore::BakeResult> results = QtConcurrent::blockingMapped(
+            jobs, [](const MeshBakeStore::BakeJob &job) { return MeshBakeStore::runBake(job, nullptr); });
+        for (MeshBakeStore::BakeResult &result : results)
+            if (!MeshBakeStore::commitBake(QSqlDatabase::database(), storeRoot, result, error)) return false;
     }
 
     if (first) for (int i = 0; i < 5 && i < lib.textures.size(); ++i) db->addFavorite(lib.textures.at(i));

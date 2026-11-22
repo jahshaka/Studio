@@ -91,6 +91,7 @@ For more information see the LICENSE file
 #include "services/assettray.h"
 #include "services/assetcas.h"
 #include "services/memberstamp.h"
+#include "services/meshbakestore.h"
 #include "services/projectassets.h"
 #include "../support/libraryfixture.h"
 
@@ -653,6 +654,12 @@ int main(int argc, char **argv)
     std::printf("   generated in %lld ms, %lld thumbnail bytes\n", static_cast<long long>(timer.elapsed()),
                 static_cast<long long>(lib.thumbnailBytes));
     theGenerator(db, lib, 1000);
+    // A generated model is a real import's: its source parses and its bake is current, so the boot's bake sweep
+    // (MeshBakeStore::startBackgroundRebuild plans with modelBakesNeeded) finds NOTHING to rebuild. A fake
+    // model made the sweep "rebuild" every model at every boot, its failures landing on the UI thread.
+    CHECK(MeshBakeStore::modelBakesNeeded(QSqlDatabase::database(), store).isEmpty(),
+          "the generated library's %d models have current bakes: the bake sweep has nothing to rebuild",
+          int(lib.objects.size()));
 
     // ---- M1: THE TWO NUMBERS ----------------------------------------------------------------------------
     const ColdListing with = coldListing(db, dbPath);
