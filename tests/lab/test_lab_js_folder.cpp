@@ -4,6 +4,8 @@
 // files added between two presses are seen at the next one, a deleted file is gone (the current one included: the press
 // goes to the name that follows it); (3) the order is BYTEWISE (`B.js` before `a.js`), only `.js` files count; (4) after
 // the last comes the first; each pick says `<i> of <n>: <name>`.
+// (5) A *.js entry whose status cannot be read - a DANGLING link, as an editor's lock file `.#x.js` is - is neither listed
+// nor stops the walk: every script beside it is still seen (the audit's F7).
 // CONTROL: a press on a folder with one script picks it (a walk that never picks would pass (1) alone).
 #include <cstdio>
 #include <cstdlib>
@@ -24,6 +26,8 @@ int main()
     const std::string dir = made;
     lab::ScriptPick p = lab::nextScript(dir, "");
     check(!p.ok && p.message == "no scripts in " + dir, "(1) an empty folder says `" + p.message + "`");
+    // (5) the editor's lock file: a link to a file that is not there (emacs's `.#name` -> user@host.pid)
+    check(::symlink("nobody@nowhere.0", (dir + "/.#b.js").c_str()) == 0, "(5) a dangling .#b.js is made");
     touch(dir, "b.js");
     p = lab::nextScript(dir, "");
     check(p.ok && p.name == "b.js" && p.message == "1 of 1: b.js", "control: one script is picked (" + p.message + ")");
@@ -40,7 +44,7 @@ int main()
     check(p.ok && p.message == "3 of 3: c.js", "(2) a deleted script is gone, the current one too: after b.js is " + p.message);
     check(lab::scriptPlace(dir, "a.js") == "2 of 3: a.js" && lab::scriptPlace(dir, "gone.js") == "gone.js",
           "a script's place is read as the folder is now");
-    for (const char *n : { "a.js", "c.js", "B.js", "notes.txt" }) std::remove((dir + "/" + n).c_str());
+    for (const char *n : { "a.js", "c.js", "B.js", "notes.txt", ".#b.js" }) std::remove((dir + "/" + n).c_str());
     ::rmdir(dir.c_str());
     std::printf("%s\n", gFail ? ("lab.js_folder: FAILED (" + std::to_string(gFail) + ")").c_str() : "lab.js_folder: PASSED");
     return gFail ? 1 : 0;
