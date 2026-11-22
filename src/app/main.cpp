@@ -545,6 +545,7 @@ int main(int argc, char *argv[])
             end.compiledInBackground = g.compiledInBackground;
             end.placeholderDraws = g.placeholderDraws;
             end.computeJoins = g.computeJoins;
+            end.at = std::chrono::steady_clock::now();
             livecompiles::noteGateEnd(end);
         }
         livecompiles::arm([weak = std::weak_ptr<jahshaka::engine::Engine>(engine)]() {

@@ -26,6 +26,7 @@
 #include <QtGlobal>
 
 #include <atomic>
+#include <chrono>
 #include <functional>
 
 namespace livecompiles
@@ -52,6 +53,9 @@ struct State
         /// ...and the BACKGROUND path's (the interactive editor's): a gate gap there is a background compile, a
         /// placeholder draw or a Complete frame's join, never an in-frame build.
         unsigned long long compiledInBackground = 0, placeholderDraws = 0, computeJoins = 0;
+        /// When the gate returned: the editor's first presented frame is said against it (the owner's rule - the
+        /// editor shows its view AT ONCE).
+        std::chrono::steady_clock::time_point at{};
         bool noted = false;
     } gateEnd;
 };

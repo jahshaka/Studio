@@ -724,6 +724,7 @@ private:
     /// Re-entrancy guard: presentCovered refreshes first, and refreshOverlay
     /// presents on a rising edge.
     bool mPresentingCover = false;
+    bool mFirstPresentSaid = false;   ///< the window's first presented frame, said once against the gate's return
     /// What the last INLINE covered present actually put on screen, and at what
     /// target size. Presenting the same thing again costs a full frame of the
     /// scene and shows the user nothing new.

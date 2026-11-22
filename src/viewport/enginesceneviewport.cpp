@@ -1056,6 +1056,15 @@ void EngineSceneViewport::showEvent(QShowEvent *e)
     // nothing. presentCovered draws TWO frames, because a Vulkan present is
     // queued and the first is not yet on screen (M3).
     if (!unbound) presentCovered();
+    // THE TIME TO THE FIRST PICTURE (the owner's rule: the editor shows its view at once), said once: the window's first
+    // presented frames against the startup gate's return.
+    if (!mFirstPresentSaid && view() && view()->presentsAsWindow() && livecompiles::gateEnd().noted) {
+        mFirstPresentSaid = true;
+        const auto ms = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now() -
+                                                                              livecompiles::gateEnd().at).count();
+        qInfo("editor viewport: its window's first frames presented %lld ms after the startup gate returned",
+              static_cast<long long>(ms));
+    }
 }
 
 iris::SceneNodePtr EngineSceneViewport::pickAt(const QPointF &point, bool selectRootObject,
