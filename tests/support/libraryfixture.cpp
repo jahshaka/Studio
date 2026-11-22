@@ -39,6 +39,14 @@ namespace {
 
 QString newGuid() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
 
+/// The library's next row guid: a name-based uuid of the running count, so two libraries grown by the same
+/// calls hold the same guids in the same order — they differ only where `Options` makes them differ.
+QString nextGuid(Library &lib)
+{
+    static const QUuid space = QUuid::fromString(QStringLiteral("{6b1f3a52-8c1e-4f0e-9a51-1a2b3c4d5e6f}"));
+    return QUuid::createUuidV5(space, QString::number(lib.guids++)).toString(QUuid::WithoutBraces);
+}
+
 /// A flat colour with a gentle ramp and 1 bit of noise in its red channel: a PNG of a real picture's order of
 /// bytes (deterministic by `seed`; ~42 KB at 326 x 256 on average, the reference import's three are 27-39 KB).
 QByteArray noisyPng(int width, int height, int seed)
@@ -238,7 +246,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
         for (int k = 0; k < 100; ++k) {
             const int i = lib.assets++;
             const QString tag = QStringLiteral("%1").arg(i, 5, 10, QLatin1Char('0'));
-            const QString guid = newGuid();
+            const QString guid = nextGuid(lib);
             QString oid;
             if (k < 46) {   // the user's own picture
                 const QString name = QStringLiteral("tex_%1.png").arg(tag);
@@ -252,14 +260,14 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                 if (lib.textures.size() % 4 == 0) db->switchAssetCollection(lib.drawer, guid);
                 lib.textures << guid;
             } else if (k < 60) {   // an Assets-home material and the picture picked into it
-                const QString texGuid = newGuid();
+                const QString texGuid = nextGuid(lib);
                 const QString matName = QStringLiteral("mat_%1").arg(tag);
                 const QByteArray definition = QJsonDocument(QJsonObject{
                     { "materialType", "pbr" }, { "name", matName },
                     { "values", QJsonObject{ { "baseColorMap", texGuid } } }, { "version", 3 } })
                                                   .toJson(QJsonDocument::Compact);
                 if (!row(db, guid, matName, ModelTypes::Material, QString(), assethome::assets(),
-                         assethome::Origin::ExplicitSave, QByteArray(), QByteArray(), definition, error)
+                         assethome::Origin::ExplicitSave, thumb(i), QByteArray(), definition, error)
                     || !storeObject(storeRoot, sources, { guid }, QStringLiteral("source"),
                                     QStringLiteral("material.json"), definition + guid.toUtf8(), nullptr, error))
                     return false;
@@ -280,14 +288,14 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                 ++k;   // the picture is the block's next asset
                 ++lib.assets;
             } else if (k < 80) {   // the Materials module's own material and the picture picked into it
-                const QString texGuid = newGuid();
+                const QString texGuid = nextGuid(lib);
                 const QString name = QStringLiteral("home_mat_%1").arg(tag);
                 const QByteArray definition = QJsonDocument(QJsonObject{
                     { "materialType", "pbr" }, { "name", name },
                     { "values", QJsonObject{ { "baseColorMap", texGuid } } }, { "version", 3 } })
                                                   .toJson(QJsonDocument::Compact);
                 if (!row(db, guid, name, ModelTypes::Material, QString(), assethome::materials(),
-                         assethome::Origin::Create, QByteArray(), QByteArray(), definition, error)
+                         assethome::Origin::Create, thumb(i), QByteArray(), definition, error)
                     || !storeObject(storeRoot, sources, { guid }, QStringLiteral("source"),
                                     QStringLiteral("material.json"), definition + guid.toUtf8(), nullptr, error))
                     return false;
@@ -308,14 +316,13 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
                 ++k;
                 ++lib.assets;
             } else {   // a model: the Object and its Mesh member, one source and one bake shared by both
-                const QString meshGuid = newGuid();
+                const QString meshGuid = nextGuid(lib);
                 const QString name = QStringLiteral("model_%1").arg(tag);
                 const QString file = name + QStringLiteral(".obj");
                 const QByteArray props = json({ { "import", meshImport(oidOf(sourceBytes(guid))) },
                                                 { "metadata", meshMetadata(sourceBytes(guid).size(), file) } });
-                // No thumbnail: the reference import writes none for a model (its tile is rendered later).
                 if (!row(db, guid, name, ModelTypes::Object, QString(), assethome::assets(), assethome::Origin::Import,
-                         QByteArray(), props, objectNode(guid, meshGuid, name), error)
+                         thumb(i), props, objectNode(guid, meshGuid, name), error)
                     || !row(db, meshGuid, file, ModelTypes::Mesh, guid, assethome::assets(), assethome::Origin::Import,
                             QByteArray(), QByteArray(), QByteArray(), error)
                     || !storeObject(storeRoot, sources, { guid, meshGuid }, QStringLiteral("source"), file,
@@ -338,7 +345,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
     SceneWriter writer;
     const QByteArray sceneBlob = writer.getSceneObject(QString(), iris::Scene::create(), nullptr);
     for (int p = 0; p < projects; ++p) {
-        const QString guid = newGuid();
+        const QString guid = nextGuid(lib);
         const QByteArray tile = options.thumbnails ? tilePool().at(lib.projects.size() % tilePool().size()) : QByteArray();
         if (!db->createProject(guid, QStringLiteral("Fixture project %1").arg(lib.projects.size(), 4, 10, QLatin1Char('0')),
                                sceneBlob, tile)) {
@@ -352,7 +359,7 @@ bool grow(Database *db, const QString &storeRoot, int assets, int projects, Libr
     if (first && !lib.projects.isEmpty()) {
         lib.openProject = lib.projects.first();
         for (int i = 0; i < 20; ++i) {
-            const QString guid = newGuid();
+            const QString guid = nextGuid(lib);
             if (!row(db, guid, QStringLiteral("own_%1.png").arg(i), ModelTypes::Texture, QString(),
                      assethome::project(lib.openProject), assethome::Origin::Create, thumb(i), QByteArray(), QByteArray(),
                      error))

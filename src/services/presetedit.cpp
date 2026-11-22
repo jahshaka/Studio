@@ -13,10 +13,12 @@ For more information see the LICENSE file
 
 #include <QObject>
 #include <QSqlDatabase>
+#include <QSqlError>
 #include <QSqlQuery>
 
 #include "commands/presetcopycommand.h"
 #include "data/database/database.h"
+#include "irisgl/core/logger.h"
 #include "data/project.h"
 #include "services/editgate.h"
 #include "services/materialbundle.h"
@@ -49,11 +51,18 @@ QStringList copiesOf(Database *db, const QString &masterGuid)
     QStringList out;
     if (!db || masterGuid.isEmpty()) return out;
     // EVERY MATERIAL ROW, not a library listing: a copy is its project's OWN
-    // row (ASSETS-SCOPE-1), which no library listing contains.
+    // row (ASSETS-SCOPE-1), which no library listing contains. Read from the
+    // partial index over the material rows (Database::createIndexes), never the
+    // table: a material carries a rendered tile, so a table read walks every
+    // row's thumbnail (LARGE-LIBRARY-1). The index is named, and the type is a
+    // literal, because a partial index serves only a WHERE that states its own.
     QSqlQuery query(QSqlDatabase::database());
-    query.prepare("SELECT guid, properties FROM assets WHERE type = ? ORDER BY rowid");
-    query.addBindValue(static_cast<int>(ModelTypes::Material));
-    if (!query.exec()) return out;
+    query.prepare(QStringLiteral("SELECT guid, properties FROM assets INDEXED BY idx_assets_material_copies "
+                                 "WHERE type = %1 ORDER BY rowid").arg(static_cast<int>(ModelTypes::Material)));
+    if (!query.exec()) {
+        irisLog(QStringLiteral("presets: the copies of %1 could not be read: %2").arg(masterGuid, query.lastError().text()));
+        return out;
+    }
     while (query.next())
         if (MaterialBundle::presetMasterOf(query.value(1).toByteArray()) == masterGuid)
             out << query.value(0).toString();

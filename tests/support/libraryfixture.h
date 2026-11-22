@@ -21,11 +21,14 @@ For more information see the LICENSE file
 //   AssetCas::stage + commitStaged (a DISTINCT store object and its files / asset_files rows per asset),
 //   AssetCas::writePin, createProject (a scene blob SceneWriter writes at this build's format version, a
 //   tile-sized thumbnail).
+// THE ROWS ARE DETERMINISTIC: every row guid is name-based on the library's running count, so two libraries
+// grown by the same calls differ only where `Options` says (the bytes law compares one with thumbnails and
+// one without).
 //
 // THE MIX, per 100 assets (the spec's call 4, INFERRED as typical):
 //   Assets home     46 textures (the user's imports; 1 in 4 in a drawer), 7 materials each holding ONE
 //                   picked (stamped) texture of the Assets home, those 7 stamped textures, 10 models
-//                   (an Object, no thumbnail, and its Mesh member);
+//                   (an Object and its Mesh member);
 //   Materials home  10 materials (the Materials module's own storage: its custom drawer), each holding one
 //                   picked (stamped) texture minted in that home, and those 10 textures.
 // The first `grow` also writes a drawer, 5 favourites and THE OPEN PROJECT (`Library::openProject`): 20
@@ -34,8 +37,10 @@ For more information see the LICENSE file
 //
 // Thumbnails come from pools encoded once (64 asset pictures 256 px high, 8 project tiles at the size a
 // windowed save writes, `Constants::TILE_SIZE * 2`: a headless save writes none), with low-amplitude noise
-// so their bytes are a real picture's order (the reference torus thumbnail: 39,434 B). A model gets none,
-// as the reference import's. `Options::thumbnails = false` writes none at all.
+// so their bytes are a real picture's order (the reference torus thumbnail: 39,434 B). Textures, materials
+// and models all get one, as a WINDOWED session writes them (a material's rendered tile: effectspage.cpp
+// onShaderThumbnail; a model's: the Assets page's render) — the headless reference has none for the last
+// two, a stated gap of the column comparison. `Options::thumbnails = false` writes none at all.
 
 #include <QString>
 #include <QStringList>
@@ -62,6 +67,7 @@ struct Library {
     QStringList projects;         ///< every project, the open one first
     int assets = 0;               ///< library assets written (the mix's rows; the open project's own not)
     qint64 thumbnailBytes = 0;    ///< the asset thumbnail bytes written
+    quint64 guids = 0;            ///< row guids issued: they are name-based on this count (deterministic)
 };
 
 /// Appends `assets` (a multiple of 100) library assets and `projects` projects to the OPEN library `db`,

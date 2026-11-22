@@ -36,6 +36,25 @@ For more information see the LICENSE file
 //   * THE V-2 RULE, batched (materialmembers::hiddenAsMembers): a stamped picture folds only while it is
 //     used and every user is a material; one a scene node uses (a depender the catalog does not know), one
 //     a model uses, and one nothing uses stay tiles, and an unstamped one is never folded.
+//   * STAGE 1b, THE COVERING INDEXES (Database::createIndexes):
+//     (1) THEY RESET NO LIBRARY: a library written with the previous index set, opened by this build, keeps
+//         its generation (PRAGMA user_version) and passes the schema check (schemaMatchesFresh: tables'
+//         columns only), keeps its rows, and gains the new indexes at createAllTables; the retired one goes.
+//     (2) THE PLANNER USES THEM: EXPLAIN QUERY PLAN of the Assets page's listing, the drawers' counts and
+//         a preset's copies names each covering index.
+//     (3) THEIR COST, printed: each index's size at 1,000 and 10,000; the pages written and statements run
+//         by a properties update, a rename and 100 imported assets, with the previous set and with this one;
+//         the first open of an existing 10,000-asset library that has to build them (ms, pages).
+//     (4) THE BYTES LAW: each of those three statements reads, on a cold connection at 1,000 assets, EXACTLY
+//         the pages it reads in the same library with no thumbnail. Derivation: a covering index answers
+//         the statement from its own pages, which hold no thumbnail byte; the two libraries are grown by
+//         the same calls and differ ONLY in their thumbnails (the generator's rows are deterministic), so
+//         their indexes are built from the same entries in the same order and are page for page the same
+//         size. One table page read — a thumbnail chain walked — breaks the equality. RED before 1b: the
+//         listing 6,562 pages against 222 (29.6x; spikes/large-library-1/stage1/red-first-1b.txt).
+//     THE RESIDUE (B), printed, NEVER asserted: the listings that select a column an index cannot
+//     reasonably carry, or that are project-scaled, read the thumbnail chains of their rows — they need the
+//     thumbnail bytes out of the assets row, which is a migration: the owner's question.
 //   * THE GENERATOR (tests/support/libraryfixture.h) writes the library the laws run on; its rows are
 //     checked here by what the listings see of them. `--generate <db> <store> <assets> <projects>` writes
 //     one library and exits (the column comparison's input; stage 2's roots).
@@ -51,17 +70,28 @@ For more information see the LICENSE file
 #include <QFile>
 #include <QProcess>
 #include <QProcessEnvironment>
+#include <QRegularExpression>
 #include <QSqlDatabase>
+#include <QSqlError>
 #include <QSqlQuery>
+#include <QThread>
 #include <QUuid>
 #include <cstdio>
+#include <cstring>
 #include <functional>
+
+#include "data/database/casschema.h"
+#if defined(JAH_HAVE_SQLITE3)
+#include <QSqlDriver>
+#include <sqlite3.h>
+#endif
 
 #include "data/database/database.h"
 #include "data/database/databasereads.h"
 #include "services/assettray.h"
 #include "services/assetcas.h"
 #include "services/memberstamp.h"
+#include "services/projectassets.h"
 #include "../support/libraryfixture.h"
 
 static int failures = 0;
@@ -232,6 +262,226 @@ static void theRule(Database &db)
           "V-2 in the tray: the folding picture is hidden, the node's picture listed, and both with the members shown");
 }
 
+// ---- STAGE 1b ----------------------------------------------------------------------------------------------
+static const char *const kNewIndexes[] = { "idx_assets_library", "idx_assets_collection_listed", "idx_assets_material_copies" };
+
+/// The index set of the build before 1b: the three dropped, the one widened back.
+static void previousIndexSet()
+{
+    QSqlQuery q(QSqlDatabase::database());
+    for (const char *name : kNewIndexes) q.exec(QStringLiteral("DROP INDEX IF EXISTS %1").arg(QLatin1String(name)));
+    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_assets_collection ON assets (collection)"));
+}
+
+static QStringList indexNames()
+{
+    QStringList out;
+    QSqlQuery q(QSqlDatabase::database());
+    q.exec(QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'index'"));
+    while (q.next()) out << q.value(0).toString();
+    return out;
+}
+
+/// The covering indexes are built by the library's worker when the library already has rows: wait for
+/// their PUBLISHED state (sqlite_master names all of them), bounded. The wall it took, or -1.
+static qint64 waitForIndexes(int boundMs = 20000)
+{
+    QElapsedTimer t;
+    t.start();
+    while (t.elapsed() < boundMs) {
+        const QStringList names = indexNames();
+        bool all = true;
+        for (const char *name : kNewIndexes) all &= names.contains(QLatin1String(name));
+        if (all && !names.contains(QStringLiteral("idx_assets_collection"))) return t.elapsed();
+        QThread::msleep(5);
+    }
+    return -1;
+}
+
+static qint64 scalar(const QString &sql)
+{
+    QSqlQuery q(QSqlDatabase::database());
+    return q.exec(sql) && q.next() ? q.value(0).toLongLong() : -1;
+}
+
+/// The pages this connection's pager wrote (SQLITE_DBSTATUS_CACHE_WRITE), the write half of databaseReads.
+static qint64 pagesWritten()
+{
+#if defined(JAH_HAVE_SQLITE3)
+    const QVariant h = QSqlDatabase::database().driver()->handle();
+    if (!h.isValid() || std::strcmp(h.typeName(), "sqlite3*") != 0) return -1;
+    int cur = 0, high = 0;
+    sqlite3_db_status(*static_cast<sqlite3 *const *>(h.constData()), SQLITE_DBSTATUS_CACHE_WRITE, &cur, &high, 0);
+    return cur;
+#else
+    return -1;
+#endif
+}
+
+/// `sql` with each `?` / `:name` placeholder replaced by the next of `values`, for EXPLAIN QUERY PLAN.
+static QString planOf(QString sql, const QStringList &values)
+{
+    int next = 0;
+    static const QRegularExpression placeholder(QStringLiteral("\\?|:[A-Za-z_]+"));
+    QRegularExpressionMatch m;
+    while ((m = placeholder.match(sql)).hasMatch()) sql.replace(m.capturedStart(), m.capturedLength(), values.value(next++));
+    QSqlQuery q(QSqlDatabase::database());
+    QString plan;
+    if (q.exec(QStringLiteral("EXPLAIN QUERY PLAN ") + sql))
+        while (q.next()) plan += q.value(3).toString() + QStringLiteral(" ; ");
+    return plan;
+}
+
+/// A preset's copies, the statement of presetedit.cpp copiesOf with its type (that file is not in this row's
+/// closure; the row checks the text is still the one there).
+static const char *const kCopiesOfText[] = { "SELECT guid, properties FROM assets INDEXED BY idx_assets_material_copies ",
+                                             "WHERE type = %1 ORDER BY rowid" };
+static QString copiesOfSql()
+{
+    return QStringLiteral("SELECT guid, properties FROM assets INDEXED BY idx_assets_material_copies WHERE type = %1 ORDER BY rowid")
+        .arg(static_cast<int>(ModelTypes::Material));
+}
+
+static void copiesOfRun()
+{
+    QSqlQuery q(QSqlDatabase::database());
+    q.exec(copiesOfSql());   // with the previous index set (no such index) it fails, as presetedit's would: read the table
+    if (q.lastError().isValid()) {
+        q.exec(QStringLiteral("SELECT guid, properties FROM assets WHERE type = %1 ORDER BY rowid").arg(int(ModelTypes::Material)));
+    }
+    while (q.next()) {}
+}
+
+/// The three statements the covering indexes serve, each on a cold connection.
+struct Covered {
+    Reading listing;   ///< fetchAssetsForAssetView: the Assets page (libraryList members on)
+    Reading counts;    ///< countAssetsInCollections: the drawers' counts
+    Reading copies;    ///< presetedit copiesOf
+};
+
+static Covered coldCovered(Database &db, const QString &dbPath, const libraryfixture::Library &lib)
+{
+    const auto cold = [&](const std::function<void()> &step) {
+        db.closeDatabase();
+        db.initializeDatabase(dbPath);
+        return around(step);
+    };
+    Covered out;
+    out.listing = cold([&] { db.fetchAssetsForAssetView(); });
+    out.counts = cold([&] { db.countAssetsInCollections({ lib.drawer }); });
+    out.copies = cold([&] { copiesOfRun(); });
+    return out;
+}
+
+/// (B): the listings an index cannot serve, on a cold connection — printed with their factor, never asserted.
+struct ResidueRow {
+    const char *name;
+    const char *where;
+    const char *scale;
+    std::function<void(Database &, const libraryfixture::Library &)> run;
+};
+
+static QVector<ResidueRow> residueRows()
+{
+    using L = const libraryfixture::Library &;
+    return {
+        { "the Materials custom drawer (fetchAssetsInHome: asset, properties)", "database.cpp fetchAssetsInHome", "library",
+          [](Database &d, L l) { assettray::customDrawer(&d, l.openProject); } },
+        { "the open project's tray (assettray::list)", "services/assettray.cpp list", "project",
+          [](Database &d, L l) { assettray::list(&d, l.openProject, QString(), -1, false); } },
+        { "fetchProjectPinnedAssets (by-guid join: properties, view_filter, tags, listed)", "database.cpp fetchProjectPinnedAssets",
+          "project", [](Database &d, L l) { d.fetchProjectPinnedAssets(l.openProject); } },
+        { "fetchChildAssets (properties)", "database.cpp fetchChildAssets", "project",
+          [](Database &d, L l) { d.fetchChildAssets(l.openProject, l.openProject, -1); } },
+        { "fetchAssetsByType (asset)", "database.cpp fetchAssetsByType", "project",
+          [](Database &d, L l) { d.fetchAssetsByType(static_cast<int>(ModelTypes::Texture), l.openProject); } },
+        { "fetchFavorites (listed, by guid)", "database.cpp fetchFavorites", "favourites",
+          [](Database &d, L) { d.fetchFavorites(); } },
+        { "a project open's session rows (readSessionRows, Texture: a scan by type, asset)", "services/projectassets.cpp readSessionRows",
+          "library", [](Database &, L l) {
+              int queries = 0;
+              ProjectAssets::readSessionRows(QSqlDatabase::database(), QDir::currentPath(), l.openProject,
+                                             static_cast<int>(ModelTypes::Texture), &queries);
+          } },
+    };
+}
+
+static QVector<Reading> coldResidue(Database &db, const QString &dbPath, const libraryfixture::Library &lib)
+{
+    QVector<Reading> out;
+    for (const ResidueRow &r : residueRows()) {
+        db.closeDatabase();
+        db.initializeDatabase(dbPath);
+        out.append(around([&] { r.run(db, lib); }));
+    }
+    return out;
+}
+
+/// (1): a library written with the previous index set keeps its generation, its rows and its schema check.
+static void theOldLibraryKeeps()
+{
+    const QString path = QStringLiteral("library_statements_old.db");
+    const QString store = QDir::currentPath() + QStringLiteral("/library_statements_old_store");
+    QFile::remove(path);
+    QDir(store).removeRecursively();
+    Database db;
+    db.initializeDatabase(path);
+    db.createAllTables();
+    libraryfixture::Library lib;
+    QString error;
+    libraryfixture::grow(&db, store, 100, 2, lib, {}, &error);
+    previousIndexSet();
+    const qint64 rows = scalar(QStringLiteral("SELECT COUNT(*) FROM assets"));
+    db.closeDatabase();
+
+    db.initializeDatabase(path);   // what librarygeneration::checkAndWipe reads before it decides
+    const qint64 generation = scalar(QStringLiteral("PRAGMA user_version"));
+    const bool columnsMatch = db.schemaMatchesFresh();
+    CHECK(generation == CasSchema::kUserVersion && columnsMatch,
+          "(1) a library with the previous index set keeps its generation (%lld = %d) and passes the schema check: "
+          "nothing resets it", static_cast<long long>(generation), CasSchema::kUserVersion);
+    db.createAllTables();   // ShellLifecycle::openLibrary
+    CHECK(waitForIndexes() >= 0, "(1) the library's worker builds the indexes over its rows");
+    const QStringList names = indexNames();
+    bool all = true;
+    for (const char *name : kNewIndexes) all &= names.contains(QLatin1String(name));
+    CHECK(all && names.contains(QStringLiteral("idx_assets_parent")) && !names.contains(QStringLiteral("idx_assets_collection")),
+          "(1) ...it gains the three indexes at the open, keeps idx_assets_parent, and the retired idx_assets_collection is gone");
+    CHECK(scalar(QStringLiteral("SELECT COUNT(*) FROM assets")) == rows && db.schemaMatchesFresh(),
+          "(1) ...with every one of its %lld rows, and the schema check still passes", static_cast<long long>(rows));
+    db.closeDatabase();
+    QFile::remove(path);
+    QDir(store).removeRecursively();
+    QDir(store + QStringLiteral("-sources")).removeRecursively();
+}
+
+static void printIndexSizes(const char *label)
+{
+    QStringList parts;
+    QSqlQuery q(QSqlDatabase::database());
+    if (q.exec(QStringLiteral("SELECT name, SUM(pgsize) FROM dbstat WHERE name LIKE 'idx_assets%' OR name = 'assets' "
+                              "GROUP BY name ORDER BY name")))
+        while (q.next()) parts << QStringLiteral("%1 %2 B").arg(q.value(0).toString()).arg(q.value(1).toLongLong());
+    std::printf("   (3) sizes at %s: %s\n", label, qPrintable(parts.join(QStringLiteral(", "))));
+}
+
+/// (3): what the hot writers write — a properties update, a rename, 100 imported assets.
+static void printWriteCost(Database &db, const QString &store, libraryfixture::Library &lib, const char *label)
+{
+    const auto cost = [&](const std::function<void()> &step) {
+        const qint64 w0 = pagesWritten(), t0 = traced();
+        step();
+        return QStringLiteral("%1 pages written, %2 statements").arg(pagesWritten() - w0).arg(traced() - t0);
+    };
+    const QString target = lib.textures.at(lib.textures.size() / 2);
+    const QString a = cost([&] { db.updateAssetProperties(target, db.fetchAsset(target).properties + " "); });
+    const QString b = cost([&] { db.updateAssetMetadata(target, QStringLiteral("renamed %1").arg(lib.assets), QByteArray()); });
+    QString error;
+    const QString c = cost([&] { libraryfixture::grow(&db, store, 100, 0, lib, {}, &error); });
+    std::printf("   (3) writes, %s: a properties update %s; a rename %s; 100 imported assets %s\n", label, qPrintable(a),
+                qPrintable(b), qPrintable(c));
+}
+
 /// `--generate`: one library, written and closed.
 static int generateOnly(const QStringList &args)
 {
@@ -370,6 +620,8 @@ int main(int argc, char **argv)
     };
     QString error;
     ColdListing none;
+    Covered coveredNone;
+    QVector<Reading> residueNone;
     {
         clearStore();
         const QString bare = QStringLiteral("library_statements_bare.db");
@@ -382,6 +634,8 @@ int main(int argc, char **argv)
         CHECK(libraryfixture::grow(&db, store, 1000, 50, bareLib, options, &error) && bareLib.thumbnailBytes == 0,
               "the generator wrote 1,000 assets with no thumbnail%s%s", error.isEmpty() ? "" : ": ", qPrintable(error));
         none = coldListing(db, bare);
+        coveredNone = coldCovered(db, bare, bareLib);
+        residueNone = coldResidue(db, bare, bareLib);
         db.closeDatabase();
         QFile::remove(bare);
     }
@@ -408,6 +662,59 @@ int main(int argc, char **argv)
           "M1: the listing's scan runs the same statements with and without thumbnails (%lld)",
           static_cast<long long>(with.membersOn.statements));
 
+    // ---- 1b (4): THE BYTES LAW, and (2) the plans ----------------------------------------------------------
+    {
+        const Covered c = coveredNone, w = coldCovered(db, dbPath, lib);
+        const auto law = [](const char *name, const Reading &with, const Reading &bare) {
+            CHECK(with.pages == bare.pages, "(4) %s reads the same pages with 256-px thumbnails as with none: %lld = %lld "
+                  "(%lld B and %lld B)", name, static_cast<long long>(with.pages), static_cast<long long>(bare.pages),
+                  static_cast<long long>(with.bytes), static_cast<long long>(bare.bytes));
+        };
+        law("the Assets page's listing (fetchAssetsForAssetView)", w.listing, c.listing);
+        law("the drawers' counts (countAssetsInCollections)", w.counts, c.counts);
+        law("a preset's copies (presetedit copiesOf)", w.copies, c.copies);
+
+        Database::setQueryLog(true);
+        db.fetchAssetsForAssetView();
+        QString listingSql;
+        for (const Database::QueryLogEntry &e : Database::queryLogEntries())
+            if (e.name == QLatin1String("FetchAssets")) listingSql = e.sql;
+        Database::setQueryLog(false);
+        const QString listingPlan = planOf(listingSql, { QString::number(assethome::StoredAssets) });
+        // countAssetsInCollections runs its statement raw (the log never sees it): its text, checked below.
+        static const char kCountsText[] = "SELECT COUNT(*) FROM assets WHERE listed = 1 AND collection IN (";
+        const QString countsPlan = planOf(QString::fromLatin1(kCountsText) + QStringLiteral("?)"), { QString::number(lib.drawer) });
+        QFile databaseSource(QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/src/data/database/database.cpp"));
+        CHECK(databaseSource.open(QIODevice::ReadOnly) && databaseSource.readAll().contains(kCountsText),
+              "(2) the counts statement planned is database.cpp's own text");
+        const QString copiesPlan = planOf(copiesOfSql(), {});
+        std::printf("   (2) plans: listing [%s]; counts [%s]; copies [%s]\n", qPrintable(listingPlan), qPrintable(countsPlan),
+                    qPrintable(copiesPlan));
+        CHECK(listingPlan.contains(QLatin1String("COVERING INDEX idx_assets_library"))
+                  && listingPlan.contains(QLatin1String("MEMBER_OF USING COVERING INDEX sqlite_autoindex_assets_1 (guid=?)"))
+                  && !listingPlan.contains(QLatin1String("SCAN")),
+              "(2) the Assets page's listing is answered by idx_assets_library, its member test by one guid probe a row, no scan");
+        CHECK(countsPlan.contains(QLatin1String("COVERING INDEX idx_assets_collection_listed")),
+              "(2) the drawers' counts by idx_assets_collection_listed, covering");
+        CHECK(copiesPlan.contains(QLatin1String("COVERING INDEX idx_assets_material_copies")),
+              "(2) a preset's copies by idx_assets_material_copies, covering");
+        QFile presetEdit(QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/src/services/presetedit.cpp"));
+        const QByteArray presetSource = presetEdit.open(QIODevice::ReadOnly) ? presetEdit.readAll() : QByteArray();
+        CHECK(presetSource.contains(kCopiesOfText[0]) && presetSource.contains(kCopiesOfText[1]),
+              "(2) the copies statement measured is presetedit.cpp's own text");
+
+        // THE RESIDUE (B): printed with its factor, never asserted (the owner's question).
+        const QVector<Reading> r = coldResidue(db, dbPath, lib);
+        std::printf("   residue: needs the thumbnail out of the row (the owner's question) — cold pages at 1,000, with / none:\n");
+        const QVector<ResidueRow> rows = residueRows();
+        for (int i = 0; i < rows.size(); ++i)
+            std::printf("   residue | %-78s | %-8s | %5lld / %5lld pages = %.1fx | %s\n", rows.at(i).name, rows.at(i).scale,
+                        static_cast<long long>(r.at(i).pages), static_cast<long long>(residueNone.at(i).pages),
+                        residueNone.at(i).pages ? double(r.at(i).pages) / double(residueNone.at(i).pages) : 0.0,
+                        rows.at(i).where);
+        printIndexSizes("1,000 assets");
+    }
+
     // ---- THE LAW: 1,000 / 50 AGAINST 10,000 / 500 ---------------------------------------------------------
     QVector<Count> small;
     for (const Listing &l : listings(db, lib)) small.append(countOf(l.run));
@@ -432,6 +739,7 @@ int main(int argc, char **argv)
     std::printf("   grown in %lld ms, %lld thumbnail bytes in all\n", static_cast<long long>(timer.elapsed()),
                 static_cast<long long>(lib.thumbnailBytes));
     theGenerator(db, lib, 10000);
+    printIndexSizes("10,000 assets");
     const QVector<Listing> all = listings(db, lib);
     {
         const qint64 added = int(assettray::libraryList(&db, true).size()) - smallRows;
@@ -456,6 +764,33 @@ int main(int argc, char **argv)
     }
 
     theRule(db);
+
+    // ---- 1b (3): THE WRITE COST, and the first open of a 10,000-asset library that must build the indexes ----
+    printWriteCost(db, store, lib, "this build's indexes");
+    previousIndexSet();
+    printWriteCost(db, store, lib, "the previous index set");
+    db.closeDatabase();
+    db.initializeDatabase(dbPath);
+    {
+        const databasereads::Stats r0 = databasereads::read();
+        QElapsedTimer build;
+        build.start();
+        db.createAllTables();   // ShellLifecycle::openLibrary, on the UI thread
+        const qint64 uiMs = build.elapsed();
+        const databasereads::Stats r1 = databasereads::read();
+        // While the worker builds, the Assets page's listing is answered from the indexes already there.
+        const int listed = int(db.fetchAssetsForAssetView().size());
+        const qint64 workerMs = waitForIndexes();
+        std::printf("   (3) the first open of a %d-asset library with the previous index set: the UI thread's createAllTables "
+                    "%lld ms and %lld pages read; the covering indexes published by the library worker %lld ms after it\n",
+                    lib.assets, static_cast<long long>(uiMs), static_cast<long long>(r1.pages - r0.pages),
+                    static_cast<long long>(workerMs));
+        CHECK(workerMs >= 0, "(3) ...the three indexes exist after it, the retired one gone");
+        CHECK(listed == int(db.fetchAssetsForAssetView().size()) && listed > 0,
+              "(3) ...and the Assets page lists the same %d rows while they build as after", listed);
+    }
+
+    theOldLibraryKeeps();
 
     db.closeDatabase();
     QFile::remove(dbPath);

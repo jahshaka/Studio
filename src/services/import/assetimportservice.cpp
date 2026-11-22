@@ -152,7 +152,7 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
                   // ONE HOME: an unlisted row of another home is not this
                   // import's to take (ASSETS-HOME-1, no cross-home rows).
                   "AND A.view_filter = ? "
-                  "AND " + Database::memberSubquery(QStringLiteral("A.guid")) + " "
+                  "AND " + Database::memberSubquery(QStringLiteral("A")) + " "
                   "ORDER BY A.date_created DESC, A.rowid DESC LIMIT 1");
     match.addBindValue(oid);
     match.addBindValue(request.home.stored());

@@ -92,6 +92,7 @@ if(SQLite3_FOUND)
     target_link_libraries(test_library_statements PRIVATE SQLite::SQLite3)
     target_compile_definitions(test_library_statements PRIVATE JAH_HAVE_SQLITE3=1)
 endif()
+target_compile_definitions(test_library_statements PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 set_tests_properties(library.statements PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAH_DB_STATEMENT_TRACE=1")
 
 # bundle.writer — EXPORT-THREAD-1: the share file's writer (services/bundlewriter.*) on a worker

@@ -125,14 +125,14 @@ int main(int argc, char **argv)
         QStringList names;
         while (q.next()) names << q.value(0).toString();
         for (const char *want : { "idx_assets_parent", "idx_assets_project_guid", "idx_assets_view_filter_listed",
-                                  "idx_assets_collection", "idx_projects_tiles" })
+                                  "idx_assets_collection_listed", "idx_projects_tiles" })
             CHECK(names.contains(QString::fromLatin1(want)), "the schema carries %s", want);
         CHECK(planUses(QStringLiteral("SELECT guid FROM assets WHERE project_guid = 'x'"), QStringLiteral("idx_assets_project_guid")),
               "a project_guid predicate is planned on its index");
         CHECK(planUses(QStringLiteral("SELECT guid FROM assets WHERE parent = 'x' AND project_guid = 'y'"),
                        QStringLiteral("idx_assets_")),
               "the tray's parent/project predicate is planned on an index");
-        CHECK(planUses(QStringLiteral("SELECT guid FROM assets WHERE collection = 3"), QStringLiteral("idx_assets_collection")),
+        CHECK(planUses(QStringLiteral("SELECT guid FROM assets WHERE collection = 3"), QStringLiteral("idx_assets_collection_listed")),
               "a drawer predicate is planned on its index");
         CHECK(planUses(QStringLiteral("SELECT guid FROM projects WHERE desktop = 2"), QStringLiteral("idx_projects_tiles")),
               "a desktop predicate is planned on its index");

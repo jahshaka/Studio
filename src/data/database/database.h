@@ -586,14 +586,14 @@ public:
     /// `record.parent`, which is what assettray::listAll does.
     QVector<AssetRecord> fetchChildAssetsIn(const QStringList &parents, const QString &projectGuid,
                                             int filter = -1);
-    /// THE MEMBERSHIP RULE as a SQL fragment: `column NOT IN (the rows whose
-    /// parent is another ASSET)` — an import's Mesh and Texture members, which
+    /// THE MEMBERSHIP RULE as a SQL fragment for the assets row aliased `alias`:
+    /// its parent is not another ASSET — an import's Mesh and Texture members, which
     /// ride their Object and are never library tiles of their own. The Assets
     /// page grid and the import's re-listing check AND it in (a member row must
     /// never be re-listed into a listing that hides it). It is the SAME
     /// question the editor tray asks in services/assettray.h, so the two
     /// listings cannot disagree. Definition + rationale: database.cpp.
-    static QString memberSubquery(const QString &column);
+    static QString memberSubquery(const QString &alias);
 
     /// A PROJECT'S OWN ROW (ASSETS-SCOPE-1) — THE ONE PREDICATE: `view_filter`
     /// Editor, a project guid, and not a MEMBER of somebody else's row (an

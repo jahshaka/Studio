@@ -35,6 +35,7 @@ For more information see the LICENSE file
 #include <QSet>
 #include <QSqlRecord>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QMessageBox>
 #include <QObject>
 #include <QRegularExpression>
@@ -47,6 +48,7 @@ For more information see the LICENSE file
 #include <mutex>
 #include <thread>
 #include <unordered_map>
+#include <utility>
 #include <vector>
 
 namespace
@@ -575,6 +577,17 @@ public:
     /// How often the worker looks at the -wal's size (a stat; no I/O wait).
     static constexpr int kPollMs = 500;
 
+    /// Statements the worker runs on its own connection before its next look at the -wal: the covering
+    /// indexes an existing library must build over its rows (Database::createIndexes), off the UI thread.
+    void build(const QStringList &statements)
+    {
+        {
+            std::lock_guard<std::mutex> lock(mMutex);
+            mPending << statements;
+        }
+        mWake.notify_all();
+    }
+
 private:
     void run()
     {
@@ -588,8 +601,24 @@ private:
         const QString wal = mPath + QStringLiteral("-wal");
         std::unique_lock<std::mutex> lock(mMutex);
         while (!mStop) {
-            mWake.wait_for(lock, std::chrono::milliseconds(kPollMs), [this] { return mStop; });
+            mWake.wait_for(lock, std::chrono::milliseconds(kPollMs), [this] { return mStop || !mPending.isEmpty(); });
             if (mStop) break;
+            if (!mPending.isEmpty()) {
+                const QStringList statements = std::exchange(mPending, QStringList());
+                lock.unlock();
+                QElapsedTimer timer;
+                timer.start();
+                for (const QString &sql : statements) {
+                    QSqlQuery index(scoped.db);
+                    if (!index.exec(sql))
+                        irisLog(QStringLiteral("library: an index could not be built (%1): %2")
+                                    .arg(sql.left(80), index.lastError().text()));
+                }
+                irisLog(QStringLiteral("library: %1 index statement(s) run on the library worker in %2 ms")
+                            .arg(statements.size()).arg(timer.elapsed()));
+                lock.lock();
+                continue;
+            }
             // A -wal is not truncated by a checkpoint (the next writer rewinds
             // it), so its SIZE stays past the threshold afterwards: a new
             // checkpoint is owed only once something was written since the last.
@@ -614,6 +643,7 @@ private:
     std::condition_variable mWake;
     bool mStop = false;
     QDateTime mLastCheckpointed;
+    QStringList mPending;
 };
 
 /// One worker per open library Database (normally exactly one in the app; a
@@ -633,6 +663,15 @@ void startCheckpointer(const Database *owner, const QString &path)
 {
     std::lock_guard<std::mutex> lock(checkpointersLock());
     checkpointers()[owner] = std::make_unique<WalCheckpointer>(path);
+}
+/// Hands `statements` to `owner`'s worker; false when it has none (the library is not in WAL mode).
+bool buildOnWorker(const Database *owner, const QStringList &statements)
+{
+    std::lock_guard<std::mutex> lock(checkpointersLock());
+    auto it = checkpointers().find(owner);
+    if (it == checkpointers().end()) return false;
+    it->second->build(statements);
+    return true;
 }
 void stopCheckpointer(const Database *owner)
 {
@@ -1043,11 +1082,28 @@ void Database::createIndexes()
     // `collection` and the Desktop's `desktop` each scanned every row. Part of
     // the schema the bootstrap writes (IF NOT EXISTS: the same statement makes a
     // fresh file and finishes one that predates it — no migration, nothing read).
+    //
+    // THE COVERING INDEXES (LARGE-LIBRARY-1 stage 1b): an asset row stores its `thumbnail` BLOB before
+    // asset, tags, properties, view_filter, origin and listed, so a statement that reads one of those from
+    // the TABLE walks the row's thumbnail overflow chain (measured: the Assets page's one-statement listing
+    // read 26.9 MB at 1,000 assets with 256-px thumbnails, 0.9 MB without). Each index below answers its
+    // statement from the index alone — no table page — so what it reads does not grow with the pictures:
+    //   idx_assets_library            the Assets page (fetchAssetsForAssetView): its predicate, its order
+    //                                 (name), every column it selects and the `parent` its member test
+    //                                 probes by guid (memberSubquery);
+    //   idx_assets_collection_listed  the drawers' counts (countAssetsInCollections);
+    //   idx_assets_material_copies    a preset's copies (presetedit copiesOf), PARTIAL over the material rows
+    //                                 and named by that statement (INDEXED BY): a plain index on `type` took
+    //                                 13 other statements' plans (the library has no planner statistics, so
+    //                                 `type = ?` rates as selective as a guid) onto every row of a type.
+    // An index is not part of the schema check (schemaMatchesFresh compares tables' columns): adding,
+    // widening or dropping one resets no library. The one it widens is dropped (forward-only).
+    static_assert(static_cast<int>(ModelTypes::Material) == 1,
+                  "idx_assets_material_copies (and presetedit copiesOf) name the Material type's stored value");
     static const char *const kIndexes[] = {
         "CREATE INDEX IF NOT EXISTS idx_assets_parent ON assets (parent)",
         "CREATE INDEX IF NOT EXISTS idx_assets_project_guid ON assets (project_guid)",
         "CREATE INDEX IF NOT EXISTS idx_assets_view_filter_listed ON assets (view_filter, listed)",
-        "CREATE INDEX IF NOT EXISTS idx_assets_collection ON assets (collection)",
         // THE DESKTOP'S TILE COLUMNS, COVERING (TC2-LIBRARY-CREATE-READ, 2026-10-10; replaces the
         // bare `desktop` index): a project row carries its scene and its ~190 KB thumbnail, so each
         // row fills a leaf page of its own and ANY scan of the table — the tile listing, the name
@@ -1061,6 +1117,34 @@ void Database::createIndexes()
         QSqlQuery index;
         index.prepare(QString::fromLatin1(statement));
         executeAndCheckQuery(index, "CreateIndex");
+    }
+
+    // THE COVERING ONES, BUILT OFF THE UI THREAD WHEN THEY COST A SCAN. Over an empty table an index is
+    // free (a fresh library, a suite's throwaway file): made here. Over an existing library's rows its
+    // CREATE reads every row — the properties it carries sit behind each row's thumbnail, so a 10,000-asset
+    // library is read whole (measured: 114,256 pages, 468 MB, on the first open) — and that runs on the
+    // library's worker connection (the WAL checkpointer above), not on the thread that opens the shell.
+    // Until it commits the listings plan on the indexes already there: the same rows, more pages. A UI
+    // write meanwhile waits for the builder's write lock, once. The index each one replaces is dropped
+    // after it exists. (No WAL, no worker: built here.)
+    static const char *const kCovering[] = {
+        "CREATE INDEX IF NOT EXISTS idx_assets_collection_listed ON assets (collection, listed)",
+        "DROP INDEX IF EXISTS idx_assets_collection",   // retired: -> idx_assets_collection_listed
+        "CREATE INDEX IF NOT EXISTS idx_assets_library ON assets "
+        "(view_filter, listed, name, guid, parent, type, collection, project_guid, author, license, tags, properties)",
+        "CREATE INDEX IF NOT EXISTS idx_assets_material_copies ON assets (guid, properties) WHERE type = 1",
+    };
+    QStringList covering;
+    for (const char *statement : kCovering) covering << QString::fromLatin1(statement);
+    QSqlQuery any;
+    const bool empty = !any.exec(QStringLiteral("SELECT 1 FROM assets LIMIT 1")) || !any.next();
+    any.finish();
+    if (empty || !buildOnWorker(this, covering)) {
+        for (const QString &statement : std::as_const(covering)) {
+            QSqlQuery index;
+            index.prepare(statement);
+            executeAndCheckQuery(index, "CreateIndex");
+        }
     }
 }
 
@@ -2361,11 +2445,16 @@ QMap<QString, qint64> Database::fetchAssetFileSizes()
 // the model it instantiates, so "Create Avatar" deleted the character from the
 // grid) is gone with it: a referenced model's parent is its folder, not the
 // avatar.
-QString Database::memberSubquery(const QString &column)
+//
+// ONE PROBE PER ROW (LARGE-LIBRARY-1 stage 1b): the row's own `parent` looked up
+// by guid — "my parent is an asset" — never a walk of the whole table to collect
+// every member first (`guid NOT IN (SELECT M.guid ... JOIN assets P ...)` was
+// a SCAN of every row, whose leaf pages a library's thumbnails fill). The same
+// answers: a NULL parent or a folder's guid names no asset, so the row stays.
+QString Database::memberSubquery(const QString &alias)
 {
-    return QStringLiteral("%1 NOT IN (SELECT M.guid FROM assets M "
-                          "JOIN assets P ON P.guid = M.parent)")
-        .arg(column);
+    return QStringLiteral("NOT EXISTS (SELECT 1 FROM assets MEMBER_OF WHERE MEMBER_OF.guid = %1.parent)")
+        .arg(alias);
 }
 
 // ---------------------------------------------------------------------------
@@ -2516,7 +2605,7 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
         // longer a library tile — this is THE grid query and the source of
         // assets.list({scope: 'store'}).
         "AND A.listed = 1 "
-        "AND " + memberSubquery(QStringLiteral("A.guid")) + " "
+        "AND " + memberSubquery(QStringLiteral("A")) + " "
         "ORDER BY A.name DESC"
     );
     query.bindValue(":view_filter", static_cast<int>(assethome::StoredAssets));

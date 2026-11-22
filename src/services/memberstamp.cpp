@@ -105,7 +105,7 @@ QString stampedTextureFor(Database *db, const QString &oid)
                   "JOIN assets A ON A.guid = AF.asset_guid "
                   "WHERE AF.oid = ? AND AF.role = 'source' AND A.type = ? "
                   "AND A.listed = 1 "
-                  "AND " + Database::memberSubquery(QStringLiteral("A.guid")) + " "
+                  "AND " + Database::memberSubquery(QStringLiteral("A")) + " "
                   // The row that FIRST brought the picture in: makeUnique re-ingests
                   // the same bytes under a second stamped row (a material's private
                   // copy), and the user's import must claim the original, not that.
