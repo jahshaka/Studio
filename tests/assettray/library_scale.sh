@@ -23,6 +23,8 @@
 #        == P: the grid builds in slices that run only when a verb turns the event loop, and a script holds the loop
 #        for its whole run (scriptrunner.cpp), so how far the build got is not the script's to settle — every
 #        project is a tile or waiting for one, exactly once;
+#      - every step SUCCEEDED (no lastError; open, list and create read the library): a step failing the same way
+#        at both sizes would pass the equality;
 #      - THE FIRST ENTRY TO MATERIALS FILLS THE CUSTOM DRAWER ONCE: the first session saved the open project's tab
 #        set with a Materials-home material open (one made by materials.create), so the entry restores it (EffectsPage::showEvent) — the drawer's
 #        listing runs once, never from the show path and again from the space's entry;
@@ -127,6 +129,13 @@ for s in order:
     if s != "boot":
         ok(a[s].get("nonGuidThumbnailSelects") == "0" and b[s].get("nonGuidThumbnailSelects") == "0",
            f"{s}: every thumbnail select keyed by guid (listings select none)")
+# EVERY STEP SUCCEEDED (a step that failed the same way at both sizes would pass the equality): no error, and the
+# steps that must read the library read it.
+for r, steps_ in (("a", a), ("b", b)):
+    for s in order[1:]:
+        if s not in steps_: continue
+        ok(steps_[s].get("lastError") == "null" and (s not in ("open", "list", "create") or int(steps_[s]["statements"]) > 0),
+           f"root {r} {s}: the step succeeded (lastError {steps_[s].get('lastError')}, {steps_[s]['statements']} statements)")
 # THE FIRST ENTRY TO MATERIALS FILLS THE CUSTOM DRAWER ONCE, the saved tab set restored (EffectsPage::showEvent):
 # the drawer's listing (fetchAssetsInHome) runs once in the step, never from the show path and again from the
 # space's entry (residue (B)'s read paid twice).
