@@ -439,6 +439,22 @@ add_test(NAME script.host COMMAND test_script_host WORKING_DIRECTORY "${CMAKE_CU
 set_tests_properties(script.host PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(script.host)
 
+# script.view_ownership (SCRIPT-IN-ENGINE-1 2b b2) - THE OWNERSHIP LAW's views half (a view needs a device): a view a
+# script's command made is destroyed at its host's end; a view the host's owner handed in survives it and is not the
+# script's to destroy. The read: a view's name is unique among live views. No frame drawn.
+add_executable(test_script_view_ownership test_script_view_ownership.cpp)
+set_target_properties(test_script_view_ownership PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_include_directories(test_script_view_ownership PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_script_view_ownership PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_script_view_ownership PRIVATE JahshakaEngine)
+add_dependencies(test_script_view_ownership JahshakaEngineMedia)
+jah_gpu_row(script.view_ownership CLASS engine FRAMES 0 COMMAND test_script_view_ownership
+            WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(script.view_ownership PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # script.batch_equals_single (SCRIPT-IN-ENGINE-1 2a a4) — ONE engine.node.setTransforms CALL PUTS N NODES WHERE N
 # engine.node.setTransform CALLS PUT THEM: twin scenes of 64 cubes (+ one set back to the identity, every part left out),
 # placed each way, their pictures byte-equal; the control: the cubes are drawn. A script run by jahengine. 32 frames.
