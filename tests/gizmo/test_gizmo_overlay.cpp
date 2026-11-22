@@ -330,6 +330,15 @@ int main(int argc, char **argv)
                                                       Colour(0.1f, 0.1f, 0.1f), jahshaka::engine::OffscreenContract::Live);
         depthView->setScene(target);
         const iris::Vec3 savedPos = cam->getLocalPos();
+        // ONE GIZMO ON THE SCENE (GIZMO-ORDER-1). The claim is about one gizmo's
+        // parts, but the suite's own `overlay` is still up on `target` from :186,
+        // where its pick ray ran through the origin: ITS ball is the hovered part,
+        // drawn yellow, at the very place and depth of this block's white ball. That
+        // tie was decided by which overlay was created later (the VAO counter) - the
+        // creation-order dependence GIZMO-ORDER-1 removes; with stated orders the
+        // hovered ball (4) wins it. So the other gizmo is hidden for this block and
+        // put back as it was after it.
+        overlay.update(nullptr, iris::Vec3(), iris::Vec3(), iris::Vec3());
         GizmoOverlay depthOverlay(target);
         const auto centreFrom = [&](const iris::Vec3 &eyePos) {
             cam->setLocalPos(eyePos);
@@ -370,6 +379,7 @@ int main(int argc, char **argv)
         engine->destroyView(depthView);
         gizmo.setPickView(iris::CameraNodePtr(), 0.0f, 0.0f);
         gizmo.updateSize(cam);
+        overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));   // as at :186
     }
 
     // ------------------------------------------------------------------
