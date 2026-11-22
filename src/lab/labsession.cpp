@@ -2374,11 +2374,15 @@ bool Session::jsRun()
                           "view handle. `js clear` (or the next run) shows the lab's world again." },
                         [this](script::Call &c) -> script::Value {
                             if (!mViewLent) {
-                                // detached, and cleared with the view's own colour: the lab world's background (its
-                                // document's sky fallback) is the lab's, never the script's scene's
+                                // detached, cleared with the view's own colour and graded by the DEFAULT post-fx
+                                // (a script view's, as jahengine's): the lab world's background (its document's sky
+                                // fallback) and its post chain (exposure, meter, hdr, the offscreen opt-in) are the
+                                // lab's, never the script's - the same script gives the same picture in any lab world
+                                // (the audit's F2); the mirror pushes the world's grade again on the lab's next frame
                                 mView->setScene(nullptr);
                                 mLabBackground = mView->pushedBackground();
                                 mView->setBackground(kViewClear);
+                                mView->setPostFx(PostFxDesc());
                                 mViewLent = true;
                             }
                             return c.hold("view", std::shared_ptr<View>(mView, [](View *) {}));

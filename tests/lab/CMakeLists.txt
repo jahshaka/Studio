@@ -145,6 +145,15 @@ jah_gpu_row(lab.js_view_given_back CLASS engine FRAMES 5
     WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(lab.js_view_given_back PROPERTIES TIMEOUT 60 LABELS "lab")
 
+# lab.js_world_neutral (LAB-SCRIPTS-1, the audit's F2) — A SCRIPT's PICTURE DOES NOT DEPEND ON THE LAB's WORLD: the demo's
+# 240th frame is the same picture on an empty world and on photon-room (js_world_neutral.sh says the law). Two labs of
+# the first frame, the demo's 240 and its read.
+jah_gpu_row(lab.js_world_neutral CLASS engine FRAMES 484
+    COMMAND bash ${CMAKE_CURRENT_SOURCE_DIR}/js_world_neutral.sh $<TARGET_FILE:jahlab>
+            ${CMAKE_CURRENT_BINARY_DIR}/work/js_world_neutral
+    WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(lab.js_world_neutral PROPERTIES TIMEOUT 60 LABELS "lab")
+
 # lab.env_expectation_printed (stage 2) — `jahlab --env-list` prints every environment's law and its closed-form
 # expectation at each dolly stop (22 / 88 / 177 / 354 m), every value a finite number. CPU only.
 find_package(Python3 REQUIRED COMPONENTS Interpreter)
