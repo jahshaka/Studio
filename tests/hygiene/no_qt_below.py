@@ -21,7 +21,7 @@ THE Qt-FREE TARGET, IrisCore (irisgl/core/CMakeLists.txt), read from the build:
      headers SYSTEM_HEADERS names (POSIX open/fsync/getpid);
   T4 ONE COPY OF EVERY STATEFUL SYMBOL (the lead's ruling 2026-11-22: IrisCore is SHARED so that the temp serial, the guid
      engine and the log sink exist once in a process on every platform): `nm -C --defined-only` of bin/Jahshaka,
-     bin/libIrisGL*.so, bin/jahengine and bin/jahlab defines no STATEFUL symbol (iris::files::, iris::newGuid) - only
+     bin/libIrisGL*.so, bin/jahengine and bin/jahlab defines no STATEFUL symbol (iris::files::, iris::newGuid, iris::log::) - only
      libIrisCore does (its own count > 0: the control). A static IrisCore pulled into an image is red here.
 THE APP's Qt-CONVERSION HEADER, src/app/qtstd.h: no C++ file under irisgl/ includes it (it lives above the line).
 Run: no_qt_below.py <source-root> <build-dir> [--counts]   (--counts prints the measured lines, never fails: a builder's aid)
@@ -197,7 +197,9 @@ def qtstd_includers(files):
 TARGET = 'IrisCore'
 QT_ARG = re.compile(r'/[qQ]t[56]?(?:/|$)|/Qt[A-Z][A-Za-z0-9]*(?:/|$)|/Qt/\d|_autogen(?:/|$)|^-DQT_|^-DQ_')
 QT_SYMBOL = re.compile(r'\bQ[A-Z][a-z]\w*|\bQ_[A-Z_]+|\bQT_\w+|\bqt_\w+')
-STATEFUL = re.compile(r'\biris::files::|\biris::newGuid\b')   # one copy in a process (T4)
+# one copy in a process (T4): the file primitives, the guid engine, and the log - every iris::log:: symbol but its two
+# TYPES (a type holds no state, and a sink's std::function handler names Severity in every image that installs a sink)
+STATEFUL = re.compile(r'\biris::files::|\biris::newGuid\b|\biris::log::(?!Severity\b|Sink\b)')
 IMAGES = ('Jahshaka', 'libIrisGL*.so', 'jahengine', 'jahlab')    # under <build>/bin: every image that links IrisCore
 DEFINED = re.compile(r'^\s*(?:[0-9a-fA-F]+\s+)?[TtDdBbRrWwVvGgSs]\s+\S')
 STD_HEADERS = set('''algorithm any array atomic barrier bit bitset cassert cctype cerrno cfenv cfloat charconv chrono cinttypes
@@ -431,12 +433,21 @@ def self_test():
         bad.append('T2 did not red a needed or a defined Qt symbol')
     # T4: a defined stateful symbol in another image reds, an undefined one (the import) and another iris symbol never
     imgs = {'bin/Jahshaka': '0000 T iris::files::writeAtomic(std::filesystem::path const&)\n                 U iris::newGuid[abi:cxx11]()\n'
-                            '0000 W iris::Signal<>::notify() const\n0000 T iris::text::trim(std::string_view)\n',
+                            '0000 W iris::Signal<>::notify() const\n0000 T iris::text::trim(std::string_view)\n'
+                            # the log: a sink's std::function handler names the log's Severity TYPE in every image that
+                            # installs a sink (never red); its functions and its state, defined in another image, red
+                            '0000 W std::_Function_handler<void (iris::log::Severity, std::basic_string_view<char, '
+                            'std::char_traits<char> >), JahLog::absorbIrisLog()::{lambda(iris::log::Severity, '
+                            'std::basic_string_view<char, std::char_traits<char> >)#1}>::_M_invoke(std::_Any_data const&, '
+                            'iris::log::Severity&&, std::basic_string_view<char, std::char_traits<char> >&&)\n'
+                            '                 U iris::log::warn(std::basic_string_view<char, std::char_traits<char> >)\n',
             'bin/libIrisGLd.so': '0000 b iris::files::stagingTempPath(std::filesystem::path const&)::sSerial\n'
-                                 '0000 T iris::newGuid[abi:cxx11]()\n0000 T iris::newGuidance()\n'}
+                                 '0000 T iris::newGuid[abi:cxx11]()\n0000 T iris::newGuidance()\n'
+                                 '0000 T iris::log::info(std::basic_string_view<char, std::char_traits<char> >)\n'
+                                 '0000 t iris::log::(anonymous namespace)::state()\n'}
     got = t4_bad(imgs)
-    if [i for i, _ in got] != ['bin/Jahshaka', 'bin/libIrisGLd.so', 'bin/libIrisGLd.so'] or \
-            any(w in l for _, l in got for w in ('newGuidance', 'notify', 'trim', ' U ')):
+    if [i for i, _ in got] != ['bin/Jahshaka'] + ['bin/libIrisGLd.so'] * 4 or \
+            any(w in l for _, l in got for w in ('newGuidance', 'notify', 'trim', ' U ', '_Function_handler')):
         bad.append('T4 read the images wrong: %r' % got)
     # T3: core/ and the standard library pass; a Qt header, a header outside core/, a missing header each red
     fs = {'/r/irisgl/core/a.cpp': '#include "core/b.h"\n#include <vector>\n', '/r/irisgl/core/b.h': '#include "c.h"\n',
