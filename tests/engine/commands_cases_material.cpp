@@ -216,6 +216,14 @@ void casesMaterial(Fixture &f)
           "engine.texture.create makes a texture, engine.material.setTexture binds it to a slot and null clears it (" +
               tex.message + bind.message + clear.message + ")");
     const unsigned id1 = load1.value.isNull() ? 0 : Call::idOf(load1.value), id2 = load2.value.isNull() ? 0 : Call::idOf(load2.value);
+    // A FILE THAT IS NOT THERE: what the engine answers today (the lead's question, measured)
+    const Result noFile = h.call("engine.texture.load", {scene, obj({{"path", Value("q_no_such_image.tga")}, {"srgb", Value(true)}})});
+    const Result noDecal = h.call("engine.texture.loadDecal", {scene, obj({{"path", Value("q_no_such_image.tga")}, {"kind", Value("diffuse")}})});
+    std::printf("Q: a missing file: engine.texture.load %s (%s) / loadDecal %s (%s)\n", noFile.status == Status::Refused ? "REFUSED" : "answers",
+                noFile.message.c_str(), noDecal.status == Status::Refused ? "REFUSED" : "answers", noDecal.message.c_str());
+    check(noFile.status == Status::Refused && noFile.value == Value(0) && noFile.message.find("q_no_such_image.tga") != std::string::npos &&
+              noDecal.status == Status::Refused && noDecal.value == Value(0) && noDecal.message.find("q_no_such_image.tga") != std::string::npos,
+          "a file that is not there is REFUSED by name by engine.texture.load and loadDecal (" + noFile.message + "; " + noDecal.message + ")");
     const Result drop1 = id1 ? h.call("engine.texture.destroy", {scene, load1.value}) : Result{};
     check(id1 && id2 && id1 != id2 && drop1.value == Value(true) && s->texturePresence(id1) == Scene::Presence::Absent &&
               s->texturePresence(id2) == Scene::Presence::Present,
