@@ -701,4 +701,4 @@ app.qtstd 0.00  solo 2026-11-23 at 00e078ad0 (spec.sh reprice, run 20261123T1732
 document.property_rows 0.27  solo 2026-11-23 at 00e078ad0 (spec.sh reprice, run 20261123T173254-00e078ad0-p933183)
 document.fragment_codecs 0.01  solo 2026-11-23 at 00e078ad0 (spec.sh reprice, run 20261123T173253-00e078ad0-p932606)
 engine.png_pixels 0.02  solo 2026-11-23 at b317ae3c8 (spec.sh reprice, run 20261123T175800-b317ae3c8-p2052663)
-db.failed_opens 0.17  solo 2026-11-23 at f4b0c3f88 (spec.sh reprice, run 20261123T173343-f4b0c3f88-p975905)
+db.failed_opens 0.31  solo 2026-11-23 at fb37316ae (spec.sh reprice, run 20261123T174916-fb37316ae-p1870969)
