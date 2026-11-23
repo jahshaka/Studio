@@ -200,26 +200,71 @@ private:
     inline static BatchYieldHook sBatchYield = BatchYieldHook();
 };
 
+/// THE FUNNEL's CURSOR (NOQT-DATABASE-1 stage 2, the lead's ruling A): ONE statement of the Database's, run by
+/// Database::executeAndCheckQuery — which takes its FIRST step and applies the funnel's laws there (the query
+/// log, the refusal in a failed unit, the batch at the first write, the sync accounting, a failure said by
+/// name) — and read by next(), which hands that step's row first. Std only, and no Qt look-alike: its binds
+/// and column reads are the layer's, by kind (db::Statement's; the Qt kinds through dbqt.h).
+/// A FAILED READ IS NEVER A SHORT RESULT: a step that fails, the first or a later one, is said by the
+/// statement's name and leaves failed() true; a write, a count and an "is there a row" read ask it.
+/// IT CANNOT OUTLIVE WHAT IT WAS OPENED IN: once its connection is reset or closed, or the transaction it
+/// was opened inside (the connection's guard depth at its construction) has ended, its next step is REFUSED
+/// by name and the cursor is FAILED.
+class DbQuery : public db::Statement
+{
+public:
+    DbQuery(db::Connection &connection, std::string_view sql);
+
+    /// The next row (the funnel's first step's, then one step each); false at the end and when FAILED.
+    bool next();
+    bool failed() const { return mFailed; }
+    /// Why it failed (code 0 while it has not).
+    const db::Error &error() const { return mError; }
+    const std::string &sql() const { return mSql; }
+    db::Connection &connection() const { return mConnection; }
+
+private:
+    friend class Database;
+    /// The funnel's first step, said under `name` when it fails.
+    bool start(std::string name);
+    /// One step: a row, the end, or FAILED (said by name).
+    bool advance();
+    /// FAILED without a step: `e` said by name.
+    void fail(const db::Error &e);
+    using db::Statement::step;    // the cursor's steps are the funnel's: start() and next()
+    using db::Statement::reset;
+
+    db::Connection &mConnection;
+    const db::Connection::State *mOpenedOn;   ///< the connection's state at construction
+    int mOpenedAtDepth;                       ///< its transaction guards at construction
+    std::string mSql;
+    std::string mName;
+    bool mStarted = false;
+    bool mPending = false;   ///< start() found a row next() has not handed out
+    bool mDone = false;
+    bool mFailed = false;
+    db::Error mError;
+};
+
 // Every project-scoped function takes the project guid explicitly — the data
 // layer no longer reads the app's ambient current project (SCRIPTING_SPEC
 // §1.6.1 / APP_ARCHITECTURE_AUDIT §2.5; callers pass
 // Globals::project->getProjectGuid() until the hub dissolves).
-// Also note there are some general functions such as deleteRecord(...) that can delete a record
-// from any table however there will always exist the explicit function which is preferred
-// The general variants are better for use with in memory databases and followup queries
 class Database
 {
 public:
     Database();
     ~Database();
 
-    bool executeAndCheckQuery(QSqlQuery&, const QString&);
+    /// THE FUNNEL: every statement the Database runs on its own connection (and the archive reads of an
+    /// import) passes here once, before its rows are read (DbQuery). False when it was refused or failed.
+    bool executeAndCheckQuery(DbQuery &query, const QString &name);
 
     // ---- THE QUERY LOG (D11-LIBRARY-SCALE) ----------------------------------
     // A diagnostic, OFF by default and statics only (the funnel's rule): every
-    // statement through executeAndCheckQuery — AND ONLY THOSE: the ~30 raw
-    // QSqlQuery::exec() sites in the catalog are invisible to it (none of them is
-    // a listing a panel reads) — counted by name, and every one whose column list
+    // statement through executeAndCheckQuery — AND ONLY THOSE: the catalog's raw
+    // db::Statement reads are invisible to it (none of them is a listing a panel
+    // reads) — counted by name, and every one whose column list
     // SELECTS A THUMBNAIL recorded with whether it is keyed by guid
     // (`guid = ?` / `guid IN (...)`). `app.queryLog` reads it; the proof that no
     // listing carries a thumbnail BLOB is "every thumbnail select is by guid".
@@ -514,7 +559,6 @@ public:
     QStringList deleteAssetAndDependencies(const QString &guid, bool *ok = nullptr,
                                            bool force = false,
                                            QVector<PendingAssetScrub> *deferred = nullptr);
-    bool deleteRecord(const QString &table, const QString &row, const QVariant &value);
 
     // UPDATE ===============================================================================
     bool renameProject(const QString &guid, const QString &newName);
@@ -538,8 +582,8 @@ public:
                                const QString &folder);
     bool updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail, const QString &projectGuid);
     bool updateProjectBlob(const QByteArray &sceneBlob, const QString &projectGuid);
-    /// The two writers above succeed only when they wrote exactly ONE row.
-    static bool wroteOneProjectRow(const QSqlQuery &query, const QString &projectGuid);
+    /// The two writers above succeed only when they wrote exactly ONE row (`rows`: the statement's changes()).
+    static bool wroteOneProjectRow(int rows, const QString &projectGuid);
     bool updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail);
     /// THE ONE IN-PLACE EDIT OF A ROW's BLOB: writes `asset` AND its stamp (blobStamp) into
     /// `assets.hash` in one statement - the stamp is a preview-key input (PREVIEWS-1), so an edit
@@ -671,8 +715,9 @@ public:
     /// as its name). This is what `assets.pins` answers and what the Assets
     /// page's delete confirmation counts.
     QVector<AssetPinRecord> fetchAssetPins(const QString &guid);
-    /// How many projects pin this asset — the count without the names.
-    int countAssetPins(const QString &guid);
+    /// How many projects pin this asset — the count without the names. `readOk` is CLEARED when the count could
+    /// not be read (0 is then no answer: the delete paths treat it as pinned); left as it is otherwise.
+    int countAssetPins(const QString &guid, bool *readOk = nullptr);
     /// Does THIS project pin THIS asset? The row's existence, not its content:
     /// a DB-only asset (a material with no stored bytes) is pinned with an
     /// EMPTY oid, so AssetCas::pinnedOid cannot answer this question.
@@ -796,9 +841,11 @@ public:
 
     QStringList fetchFolderNameByParent(const QString &guid);
     QStringList fetchAssetNameByParent(const QString &guid);
-    QStringList fetchFolderAndChildFolders(const QString &guid);
-    QStringList fetchChildFolderAssets(const QString &guid);
-    QStringList fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf = true);
+    /// The closure reads of the two deletes below: `readOk` (optional) is CLEARED when a read failed - a failed
+    /// read is never a shorter closure (NOQT-DATABASE-1 stage 2) - and left as it is otherwise.
+    QStringList fetchFolderAndChildFolders(const QString &guid, bool *readOk = nullptr);
+    QStringList fetchChildFolderAssets(const QString &guid, bool *readOk = nullptr);
+    QStringList fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf = true, bool *readOk = nullptr);
     QStringList fetchAssetAndAllDependencies(const QString &guid);
     /// THE CLOSURE'S BATCHED READS (D11-LIBRARY-SCALE): the catalog edges of
     /// many dependers in one statement per chunk (depender -> its dependees, in
@@ -813,16 +860,11 @@ public:
     bool fetchAssetRowBlobs(const QString &guid, QByteArray *asset, QByteArray *properties);
     QVector<DependencyRecord> fetchAssetDependencies(const AssetRecord &record);
     QStringList fetchAssetDependeesByType(const QString &guid, const ModelTypes&);
-    QStringList fetchAssetAndDependencies(const QString &guid);
-    /// STATIC because they always were one in fact — each runs a query on the
-    /// default connection and touches no member. (The comment here CLAIMED
-    /// static since the debt sweep while the declarations stayed plain members;
-    /// lane DBPTR-1 made it true. It matters: `AssetModelPanel::addFavorites`
-    /// calls fetchObjectMesh through `handle`, which is filled by a setter, so
-    /// a plain member call there is undefined the moment the handle is null —
-    /// the very class this lane closes. As statics such a call is merely
-    /// pointless.)
-    static QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);
+    QStringList fetchAssetAndDependencies(const QString &guid, bool *readOk = nullptr);
+    /// A member on this library's connection (NOQT-DATABASE-1 stage 2: it was static on the Qt default
+    /// connection). Its callers hold the library: `AssetModelPanel::addFavorites` reaches it only for a
+    /// favourite its `handle` listed (populateFavorites returns nothing with no handle).
+    QString fetchObjectMesh(const QString &guid, const int ertype, const int eetype);
 
     QStringList hasMultipleDependers(const QString &guid);
     bool hasDependencies(const QString &guid);
@@ -844,6 +886,9 @@ public:
     struct ExportCatalog
     {
         bool found = false;             ///< the project row exists
+        /// A read that FAILED, by its statement's name (said in the log by it): the archive is then not written,
+        /// never written short of rows. Empty when every read ran.
+        QString failure;
         QString name, version, lastWritten, lastAccessed, guid;
         QByteArray scene, thumbnail;
         QVector<AssetRecord> assets;    ///< the project's rows + its pinned library rows
@@ -873,8 +918,6 @@ public:
 	QString getAuthorName();
     bool switchAssetCollection(const int, const QString&);
 
-	bool checkIfRecordExists(const QString &record, const QVariant &value, const QString &table, bool perProject = false, const QString &projectGuid = QString());
-    bool checkIfDependencyExists(const QString &depender, const ModelTypes &type);
 	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
     bool checkIfProjectVersionSupported(const QString& pathToDb);
 
@@ -958,7 +1001,7 @@ private:
     /// The write funnel's half: the instance whose connection runs `query` opens its batch; false
     /// when that BEGIN failed (the write is then refused). A static walk of the registry:
     /// executeAndCheckQuery never touches `this`.
-    static bool beginBatchAtWrite(const QSqlQuery &query);
+    static bool beginBatchAtWrite(const DbQuery &query);
     /// Commits the batch transaction if it is live, leaving the SCOPE open.
     /// The stand-down path and the outermost endBatch both go through it.
     bool commitBatchTransaction();

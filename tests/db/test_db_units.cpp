@@ -20,13 +20,17 @@ For more information see the LICENSE file
 //   4. a unit never committed leaves the library's logical content exactly as it was (a dump of
 //      every table's rows compared), beside a committed unit that changes it;
 //   5. a process killed between two statements of a unit leaves the library whole and the unit
-//      absent, beside a killed process whose unit committed first.
+//      absent, beside a killed process whose unit committed first;
+//   6. the funnel's cursor: a read that fails on its SECOND step is FAILED and said by name, never a short result;
+//   7. a cursor's step after the transaction it was opened in has ended is refused by name (FAILED);
+//   8. an import's archive that cannot be opened read-only is refused by name before any read, and never created.
 
 #include <QApplication>
 #include <QFile>
 
 #include <csignal>
 #include <cstdio>
+#include <optional>
 #include <string>
 #include <sys/wait.h>
 #include <unistd.h>
@@ -35,6 +39,7 @@ For more information see the LICENSE file
 #include "data/db/connection.h"
 #include "data/db/statement.h"
 #include "data/db/transaction.h"
+#include "services/jahlog.h"
 
 namespace {
 
@@ -254,6 +259,70 @@ int main(int argc, char **argv)
         check(folders(side, QStringLiteral("done-1")) == 1 && folders(side, QStringLiteral("done-2")) == 1,
               QStringLiteral("CONTROL: the unit committed before the kill is present (both rows)"));
         check(folders(side, QStringLiteral("mid-1")) == 0, QStringLiteral("the unit killed between its statements is ABSENT"));
+    }
+
+    // 6. THE FUNNEL's CURSOR: A READ THAT FAILS ON ITS SECOND STEP IS FAILED, NEVER A SHORT RESULT (the lead's
+    //    ruling A, condition 2). abs() of the smallest integer raises "integer overflow" when SQLite reaches row 2.
+    {
+        db::Error e;
+        database.connection().exec("CREATE TEMP TABLE steps(v INTEGER); INSERT INTO steps VALUES (1), (2)", &e);
+        {
+            DbQuery whole(database.connection(), "SELECT v FROM steps ORDER BY v");
+            int rows = 0;
+            if (database.executeAndCheckQuery(whole, QStringLiteral("unitsWhole")))
+                while (whole.next()) ++rows;
+            check(rows == 2 && !whole.failed(), QStringLiteral("CONTROL: the same rows read whole: %1 rows, not failed").arg(rows));
+        }
+        const quint64 mark = JahLog::mark(QStringLiteral("db.units case 6"));
+        DbQuery broken(database.connection(),
+                       "SELECT v, CASE WHEN v = 2 THEN abs(-9223372036854775807 - 1) ELSE v END FROM steps");   // rowid order: one row a step (an ORDER BY would sort, and so compute, every row first)
+        const bool ran = database.executeAndCheckQuery(broken, QStringLiteral("unitsSecondStep"));
+        int rows = 0;
+        while (broken.next()) ++rows;
+        check(ran && rows == 1, QStringLiteral("CONTROL: the first step ran and handed ONE row (%1) before the failure").arg(rows));
+        check(broken.failed() && QString::fromStdString(broken.error().message).contains(QStringLiteral("overflow")),
+              QStringLiteral("a read that fails on its SECOND step is FAILED, never a short result: failed %1, '%2'")
+                  .arg(broken.failed()).arg(QString::fromStdString(broken.error().message)));
+        check(JahLog::since(mark).filter(QStringLiteral("unitsSecondStep query failed to execute")).size() == 1,
+              QStringLiteral("...and the failure is said ONCE, by the statement's name"));
+        check(!broken.next() && broken.failed(), QStringLiteral("a failed cursor stays failed and hands no more rows"));
+    }
+
+    // 7. THE CURSOR CANNOT OUTLIVE THE TRANSACTION IT WAS OPENED IN (condition 3): its next step after that unit
+    //    ended is REFUSED by name and the cursor is FAILED.
+    {
+        std::optional<db::Transaction> unit;
+        unit.emplace(database.connection(), "the test's unit");
+        DbQuery inside(database.connection(), "SELECT v FROM steps ORDER BY v");
+        database.executeAndCheckQuery(inside, QStringLiteral("unitsInside"));
+        const bool first = inside.next();
+        check(first && inside.int64(0) == 1, QStringLiteral("CONTROL: inside its unit the cursor reads its first row"));
+        db::Error e;
+        unit->commit(&e);
+        unit.reset();
+        const bool after = inside.next();
+        check(!after && inside.failed()
+                  && QString::fromStdString(inside.error().message).contains(QStringLiteral("outlived the transaction")),
+              QStringLiteral("a step after its unit ended is refused by name: '%1'")
+                  .arg(QString::fromStdString(inside.error().message)));
+    }
+
+    // 8. AN ARCHIVE THAT CANNOT BE OPENED READ-ONLY IS REFUSED BY NAME BEFORE ANY READ (the import's archive
+    //    connection is the layer's from stage 2; a read-write open used to CREATE a missing one, empty).
+    {
+        const QString missing = QStringLiteral("db_units_missing_archive");
+        QFile::remove(missing + QStringLiteral(".db"));
+        const quint64 mark = JahLog::mark(QStringLiteral("db.units case 8"));
+        QString world;
+        QMap<QString, QString> guids;
+        const bool imported = database.importProject(missing, QStringLiteral("units-import"), world, guids);
+        const QStringList said = JahLog::since(mark).filter(QStringLiteral("Couldn't open the import database!"));
+        check(!imported && said.size() == 1 && said.first().contains(QStringLiteral("ProjectImport")),
+              QStringLiteral("a missing archive is refused by name before any read: %1")
+                  .arg(said.isEmpty() ? QStringLiteral("(nothing said)") : said.first()));
+        check(!QFile::exists(missing + QStringLiteral(".db")), QStringLiteral("...and no archive file was created"));
+        check(JahLog::since(mark).filter(QStringLiteral("query failed to execute")).isEmpty(),
+              QStringLiteral("...and no statement ran on it"));
     }
 
     database.closeDatabase();

@@ -34,7 +34,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
-#include <QSqlRecord>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QMessageBox>
@@ -244,11 +243,11 @@ void Database::standDownBatchFor(const db::Connection &connection)
     commitBatchTransaction();
 }
 
-bool Database::beginBatchAtWrite(const QSqlQuery &query)
+bool Database::beginBatchAtWrite(const DbQuery &query)
 {
     bool live = true;
     for (Database *instance : liveDatabases())
-        if (instance->db.driver() == query.driver()) live = instance->resumeBatchIfNeeded() && live;
+        if (instance->mConnection->state() == query.connection().state()) live = instance->resumeBatchIfNeeded() && live;
     return live;
 }
 
@@ -375,9 +374,94 @@ int Database::queryLogStatements()
 
 void Database::setAssetThumbnailWritten(GuidHook hook) { thumbnailWrittenHook() = std::move(hook); }
 
-bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
+// ---- the funnel's cursor (database.h) ---------------------------------------
+
+namespace {
+/// A failed step of the funnel, LOUD and at warn level: a failed query here silently no-ops a user action (the
+/// 2026-09-03 defect: every asset delete at shutdown failed and the log said so at [info]).
+void sayFailed(const std::string &name, const db::Connection &connection, const db::Error &error)
 {
-    if (queryLogState().on) noteQuery(name, query.lastQuery());
+    QString reason = dbqt::describe(error);
+    if (reason.isEmpty()) reason = QStringLiteral("(no error text)");
+    if (!connection.isOpen())
+        reason += QStringLiteral(" [the database connection is CLOSED — this query ran after teardown; nothing was "
+                                 "written]");
+    JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+        QString("%1 query failed to execute! %2").arg(QString::fromStdString(name), reason));
+}
+}   // namespace
+
+DbQuery::DbQuery(db::Connection &connection, std::string_view sql)
+    : db::Statement(connection, sql), mConnection(connection), mOpenedOn(connection.state()),
+      mOpenedAtDepth(connection.guards()), mSql(sql)
+{
+}
+
+void DbQuery::fail(const db::Error &e)
+{
+    mFailed = true;
+    mDone = true;
+    mPending = false;
+    mError = e;
+    sayFailed(mName, mConnection, e);
+}
+
+bool DbQuery::advance()
+{
+    if (mDone) return false;
+    // WHAT IT WAS OPENED IN (condition 3 of the ruling): never a step on a connection that is gone or after
+    // the transaction it was opened inside has ended - refused by name, the cursor FAILED.
+    db::Error e;
+    if (mConnection.state() != mOpenedOn || !mConnection.isOpen()) {
+        e.code = 21;   // SQLITE_MISUSE
+        e.message = mName + ": the cursor's connection was reset or closed under it";
+        e.statement = mSql;
+        fail(e);
+        return false;
+    }
+    if (mConnection.guards() < mOpenedAtDepth) {
+        e.code = 21;   // SQLITE_MISUSE
+        e.message = mName + ": the cursor outlived the transaction it was opened in";
+        e.statement = mSql;
+        fail(e);
+        return false;
+    }
+    if (step(&e)) return true;
+    mDone = true;
+    if (e) fail(e);
+    return false;
+}
+
+bool DbQuery::start(std::string name)
+{
+    mName = std::move(name);
+    mStarted = true;
+    mPending = advance();
+    return !mFailed;
+}
+
+bool DbQuery::next()
+{
+    if (!mStarted) {   // a cursor the funnel never ran: a programming error, said once by name
+        db::Error e;
+        e.code = 21;   // SQLITE_MISUSE
+        e.message = "a statement read before the funnel ran it";
+        e.statement = mSql;
+        mStarted = true;
+        fail(e);
+        return false;
+    }
+    if (mPending) {
+        mPending = false;
+        return true;
+    }
+    return advance();
+}
+
+bool Database::executeAndCheckQuery(DbQuery &query, const QString &name)
+{
+    const QString sql = QString::fromStdString(query.sql());
+    if (queryLogState().on) noteQuery(name, sql);
     // THE SYNC ACCOUNTING (editor.undoState().dbCommits). A write with no
     // transaction open is its own transaction: one journal, one fdatasync.
     // Inside a batch or a guard it costs nothing until the commit, which
@@ -389,46 +473,38 @@ bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
     // THE BATCH BEGINS AT ITS FIRST WRITE (PREVIEWS-1), never at a read: an IMMEDIATE batch holds
     // the library's write lock, so a scope that only READS (a script run that lists) takes no lock
     // and leaves the preview writer free; its reads autocommit, each released when finished. Found
-    // through the registry by the query's driver, never through `this` (see above).
-    const bool write = isWriteStatement(query.lastQuery());
+    // through the registry by the query's connection, never through `this` (see above).
+    const bool write = isWriteStatement(sql);
     // A FAILED UNIT WRITES NOTHING (database.h, DbTransaction): its scope refuses every write on
-    // its connection, unexecuted - said once, by the transaction, at its BEGIN. The connection's
-    // own state says so (the registry walk: never `this`).
-    if (write)
-        for (Database *instance : liveDatabases())
-            if (instance->db.driver() == query.driver() && instance->mConnection->refusesWrites()) return false;
+    // its connection, unexecuted - said once, by the transaction, at its BEGIN (so not again here: the
+    // cursor is FAILED quietly). The connection's own state says so (the registry walk: never `this`).
+    if (write && query.connection().refusesWrites()) {
+        query.mStarted = query.mDone = query.mFailed = true;
+        query.mName = name.toStdString();
+        query.mError.code = 21;   // SQLITE_MISUSE
+        query.mError.message = query.mName + ": refused - the unit of writes on this connection could not begin";
+        query.mError.statement = query.sql();
+        return false;
+    }
     // THE BATCH IS A SCOPE OF INDEPENDENT GESTURES, NOT ONE UNIT: a batch BEGIN that fails refuses
     // THIS write by name, and the next write tries the BEGIN again.
     if (write && !DbTransaction::anyGuardLive() && !beginBatchAtWrite(query)) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QStringLiteral("'%1' was REFUSED: the database batch could not begin (the next write tries again)")
                 .arg(name));
+        query.mStarted = query.mDone = query.mFailed = true;
+        query.mName = name.toStdString();
+        query.mError.code = 21;   // SQLITE_MISUSE
+        query.mError.message = query.mName + ": refused - the database batch could not begin";
+        query.mError.statement = query.sql();
         return false;
     }
     const bool unbatchedWrite = !DbTransaction::anyGuardLive()
                                 && !DbTransaction::anyBatchLive()
                                 && write;
 
-    if (!query.exec()) {
-        // LOUD, and at warn level: a failed query here silently no-ops a user
-        // action (the 2026-09-03 defect: every asset delete at shutdown failed
-        // and the log said so at [info], indistinguishable from chatter).
-        QString reason = query.lastError().text();
-        if (reason.isEmpty()) reason = QStringLiteral("(no driver error text)");
-
-        // The SQLite driver reports a CLOSED connection as the thoroughly
-        // misleading "Parameter count mismatch": prepare() failed quietly (its
-        // only complaint is a qWarning), so exec() compares the bind values
-        // against a null statement's zero placeholders. Say what actually
-        // happened, or the next reader goes hunting for a bad query string.
-        if (!db.isOpen())
-            reason += QStringLiteral(" [the database connection is CLOSED — this query ran "
-                                     "after teardown; nothing was written]");
-
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
-            QString("%1 query failed to execute! %2").arg(name, reason));
-        return false;
-    }
+    // The first step: its failure is said by name (sayFailed: LOUD, the connection's closing named).
+    if (!query.start(name.toStdString())) return false;
 
     if (unbatchedWrite) DbTransaction::noteCommit();
     return true;
@@ -803,16 +879,14 @@ void Database::closeDatabase()
 
 bool Database::checkIfTableExists(const QString &tableName)
 {
-    QSqlQuery query;
-    query.prepare("SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?");
-    query.addBindValue(tableName);
+    db::Statement query(connection(), "SELECT COUNT(*) FROM sqlite_master WHERE type = 'table' AND name = ?");
+    dbqt::bindText(query, 1, tableName);
 
-    if (query.exec()) {
-        if (query.first()) return query.value(0).toBool();
-    }
-    else {
+    db::Error error;
+    if (query.step(&error)) return query.int64(0) != 0;
+    if (error) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
-            QString("There was an error checking if table %1 exists)").arg(tableName, query.lastError().text())
+            QString("There was an error checking if table %1 exists: %2").arg(tableName, dbqt::describe(error))
         );
     }
 
@@ -821,20 +895,18 @@ bool Database::checkIfTableExists(const QString &tableName)
 
 bool Database::checkIfColumnExists(const QString &tableName, const QString &columnName)
 {
-    QSqlQuery query;
     // PRAGMA doesn't take bound parameters; table names here are compile-time constants
-    query.prepare(QString("PRAGMA table_info(%1)").arg(tableName));
+    db::Statement query(connection(), dbqt::utf8(QString("PRAGMA table_info(%1)").arg(tableName)));
 
-    if (query.exec()) {
-        while (query.next()) {
-            // table_info columns: cid, name, type, notnull, dflt_value, pk
-            if (query.value(1).toString().compare(columnName, Qt::CaseInsensitive) == 0) return true;
-        }
+    db::Error error;
+    while (query.step(&error)) {
+        // table_info columns: cid, name, type, notnull, dflt_value, pk
+        if (dbqt::text(query, 1).compare(columnName, Qt::CaseInsensitive) == 0) return true;
     }
-    else {
+    if (error) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("There was an error checking if column %1.%2 exists! %3")
-                .arg(tableName, columnName, query.lastError().text())
+                .arg(tableName, columnName, dbqt::describe(error))
         );
     }
 
@@ -847,72 +919,59 @@ bool Database::checkIfColumnExists(const QString &tableName, const QString &colu
 // updated a row. Positional SQL takes positional binds, in statement order.
 bool Database::updateGlobalDependencyDepender(const int &ertype, const QString & depender, const QString & dependee)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE dependencies SET depender = ? WHERE depender_type = ? AND dependee = ?");
+    DbQuery query(connection(), "UPDATE dependencies SET depender = ? WHERE depender_type = ? AND dependee = ?");
 
-    query.addBindValue(depender);
-    query.addBindValue(ertype);
-    query.addBindValue(dependee);
+    dbqt::bindText(query, 1, depender);
+    query.bindInt(2, ertype);
+    dbqt::bindText(query, 3, dependee);
 
     return executeAndCheckQuery(query, "updateGlobalDependencyDepender");
 }
 
 bool Database::updateGlobalDependencyDependee(const int & ertype, const QString & depender, const QString & dependee)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE dependencies SET dependee = ? WHERE depender_type = ? AND depender = ?");
+    DbQuery query(connection(), "UPDATE dependencies SET dependee = ? WHERE depender_type = ? AND depender = ?");
 
-    query.addBindValue(dependee);
-    query.addBindValue(ertype);
-    query.addBindValue(depender);
+    dbqt::bindText(query, 1, dependee);
+    query.bindInt(2, ertype);
+    dbqt::bindText(query, 3, depender);
 
     return executeAndCheckQuery(query, "updateGlobalDependencyDependee");
 }
 
 QString Database::getDependencyByType(const int &ertype, const QString &depender)
 {
-	QSqlQuery query;
-	query.prepare("SELECT dependee FROM dependencies WHERE depender_type = ? AND depender = ?");
-	query.addBindValue(ertype);
-	query.addBindValue(depender);
+	db::Statement query(connection(), "SELECT dependee FROM dependencies WHERE depender_type = ? AND depender = ?");
+	query.bindInt(1, ertype);
+	dbqt::bindText(query, 2, depender);
 
-	if (query.exec()) {
-		if (query.first()) {
-			return query.value(0).toString();
-		}
-	}
-	else {
-		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the dependee id! " + query.lastError().text());
-	}
+	db::Error error;
+	if (query.step(&error)) return dbqt::text(query, 0);
+	if (error) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the dependee id! " + dbqt::describe(error));
 
 	return QString();
 }
 
 bool Database::createProjectsTable() {
-    QSqlQuery query;
-    query.prepare(projectsTableSchema);
+    DbQuery query(connection(), dbqt::utf8(projectsTableSchema));
     return executeAndCheckQuery(query, "CreateProjectsTable");
 }
 
 bool Database::createThumbnailsTable() {
-    QSqlQuery query;
-    query.prepare(thumbnailsTableSchema);
+    DbQuery query(connection(), dbqt::utf8(thumbnailsTableSchema));
     return executeAndCheckQuery(query, "CreateThumbnailsTable");
 }
 
 bool Database::createCollectionsTable()
 {
     if (!checkIfTableExists("collections")) {
-        QSqlQuery query;
-        query.prepare(collectionsTableSchema);
+        DbQuery query(connection(), dbqt::utf8(collectionsTableSchema));
         
         if (executeAndCheckQuery(query, "CreateCollectionsTable")) {
-            QSqlQuery defaultCollQuery;
-            defaultCollQuery.prepare(
+            DbQuery defaultCollQuery(connection(),
                 "INSERT INTO collections (name, date_created, collection_id) "
-                "VALUES (:name, datetime(), 0)"
-            );
-            defaultCollQuery.bindValue(":name", "Uncategorized");
+                "VALUES (:name, datetime(), 0)");
+            dbqt::bindText(defaultCollQuery, ":name", QStringLiteral("Uncategorized"));
             return executeAndCheckQuery(defaultCollQuery, "InsertDefaultCollection");
         }
         
@@ -930,36 +989,31 @@ bool Database::createCollectionsTable()
  *	3. polygon count
  */
 bool Database::createAssetsTable() {
-	QSqlQuery query;
-	query.prepare(assetsTableSchema);
+	DbQuery query(connection(), dbqt::utf8(assetsTableSchema));
     return executeAndCheckQuery(query, "CreateAssetsTable");
 }
 
 bool Database::createDependenciesTable()
 {
-    QSqlQuery query;
-    query.prepare(dependenciesTableSchema);
+    DbQuery query(connection(), dbqt::utf8(dependenciesTableSchema));
     return executeAndCheckQuery(query, "CreateDependenciesTable");
 }
 
 bool Database::createAuthorTable()
 {
-    QSqlQuery query;
-    query.prepare(authorTableSchema);
+    DbQuery query(connection(), dbqt::utf8(authorTableSchema));
     return executeAndCheckQuery(query, "CreateAuthorTable");
 }
 
 bool Database::createFoldersTable()
 {
-    QSqlQuery query;
-    query.prepare(foldersTableSchema);
+    DbQuery query(connection(), dbqt::utf8(foldersTableSchema));
     return executeAndCheckQuery(query, "CreateFoldersTable");
 }
 
 bool Database::createFavoritesTable()
 {
-    QSqlQuery query;
-    query.prepare(favoritesTableSchema);
+    DbQuery query(connection(), dbqt::utf8(favoritesTableSchema));
     return executeAndCheckQuery(query, "CreateFavoritesTable");
 }
 
@@ -988,39 +1042,35 @@ void Database::createCasTables()
     // files (oid → size/ext/refcount) + asset_files (guid → content mapping)
     // + refcount triggers + PRAGMA user_version. Additive and idempotent —
     // pre-CAS binaries ignore these tables completely.
-    QSqlQuery filesTable;
-    filesTable.prepare(CasSchema::kFilesTable);
+    DbQuery filesTable(connection(), CasSchema::kFilesTable);
     executeAndCheckQuery(filesTable, "CreateFilesTable");
 
-    QSqlQuery assetFilesTable;
-    assetFilesTable.prepare(CasSchema::kAssetFilesTable);
+    DbQuery assetFilesTable(connection(), CasSchema::kAssetFilesTable);
     executeAndCheckQuery(assetFilesTable, "CreateAssetFilesTable");
 
-    QSqlQuery oidIndex;
-    oidIndex.prepare(CasSchema::kAssetFilesOidIndex);
+    DbQuery oidIndex(connection(), CasSchema::kAssetFilesOidIndex);
     executeAndCheckQuery(oidIndex, "CreateAssetFilesOidIndex");
 
-    QSqlQuery incTrigger;
-    incTrigger.prepare(CasSchema::kRefcountInsertTrigger);
+    DbQuery incTrigger(connection(), CasSchema::kRefcountInsertTrigger);
     executeAndCheckQuery(incTrigger, "CreateRefcountInsertTrigger");
 
-    QSqlQuery decTrigger;
-    decTrigger.prepare(CasSchema::kRefcountDeleteTrigger);
+    DbQuery decTrigger(connection(), CasSchema::kRefcountDeleteTrigger);
     executeAndCheckQuery(decTrigger, "CreateRefcountDeleteTrigger");
 
     // Reference-with-pin (phase 4): projects reference library assets and
     // pin the content they were built with.
-    QSqlQuery projectAssetsTable;
-    projectAssetsTable.prepare(CasSchema::kProjectAssetsTable);
+    DbQuery projectAssetsTable(connection(), CasSchema::kProjectAssetsTable);
     executeAndCheckQuery(projectAssetsTable, "CreateProjectAssetsTable");
 
-    QSqlQuery versionQuery;
-    versionQuery.exec("PRAGMA user_version");
     int current = 0;
-    if (versionQuery.next()) current = versionQuery.value(0).toInt();
+    {
+        db::Statement versionQuery(connection(), "PRAGMA user_version");
+        db::Error error;
+        if (versionQuery.step(&error)) current = int(versionQuery.int64(0));
+    }
     if (current != CasSchema::kUserVersion) {
-        QSqlQuery setVersion;
-        setVersion.exec(QStringLiteral("PRAGMA user_version = %1").arg(CasSchema::kUserVersion));
+        db::Error error;
+        connection().exec("PRAGMA user_version = " + std::to_string(CasSchema::kUserVersion), &error);
     }
 }
 
@@ -1153,9 +1203,12 @@ void Database::createIndexes()
     // row behind its thumbnail on THIS (the opening) thread — named so a row sees it, and still built.
     const QStringList needed = indexStatementsNeeded(db);
     if (needed.isEmpty()) return;
-    QSqlQuery any;
-    const bool empty = !any.exec(QStringLiteral("SELECT 1 FROM assets LIMIT 1")) || !any.next();
-    any.finish();
+    bool empty = true;
+    {   // finalized before the writes below
+        db::Statement any(connection(), "SELECT 1 FROM assets LIMIT 1");
+        db::Error error;
+        empty = !any.step(&error);
+    }
     if (!empty) {
         mIndexStatementsAtOpen = int(needed.size());
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: DEFECT — %1 index statement(s) run over an existing library's rows on the "
@@ -1163,8 +1216,7 @@ void Database::createIndexes()
                                                               .arg(needed.size()));
     }
     for (const QString &statement : needed) {
-        QSqlQuery index;
-        index.prepare(statement);
+        DbQuery index(connection(), dbqt::utf8(statement));
         executeAndCheckQuery(index, "CreateIndex");
     }
 }
@@ -1202,20 +1254,18 @@ bool Database::prepareIndexes(const QString &path, QString *error)
 // exactly once, in one place.
 bool Database::setProjectLocation(const QString &guid, const QString &location)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE projects SET location = :location WHERE guid = :guid");
-    query.bindValue(":location", location.isEmpty() ? QVariant() : QVariant(location));
-    query.bindValue(":guid", guid);
+    DbQuery query(connection(), "UPDATE projects SET location = :location WHERE guid = :guid");
+    dbqt::bindText(query, ":location", location.isEmpty() ? QString() : location);
+    dbqt::bindText(query, ":guid", guid);
     return executeAndCheckQuery(query, "SetProjectLocation");
 }
 
 QString Database::projectLocation(const QString &guid)
 {
-    QSqlQuery query;
-    query.prepare("SELECT location FROM projects WHERE guid = ?");
-    query.addBindValue(guid);
-    if (executeAndCheckQuery(query, "ProjectLocation") && query.first())
-        return query.value(0).toString();
+    DbQuery query(connection(), "SELECT location FROM projects WHERE guid = ?");
+    dbqt::bindText(query, 1, guid);
+    if (executeAndCheckQuery(query, "ProjectLocation") && query.next())
+        return dbqt::text(query, 0);
     return QString();
 }
 
@@ -1226,33 +1276,29 @@ bool Database::createProject(
     const QByteArray &thumbnail
 )
 {
-    QSqlQuery query;
-    query.prepare(
+    DbQuery query(connection(),
         "INSERT INTO projects (name, scene, thumbnail, version, date_created, last_accessed, last_written, guid) "
-        "VALUES (:name, :scene, :thumbnail, :version, datetime(), datetime(), datetime(), :guid)"
-    );
-    query.bindValue(":name", projectName);
-    query.bindValue(":scene", sceneBlob);
-    query.bindValue(":thumbnail", thumbnail);
-    query.bindValue(":version", Constants::CONTENT_VERSION);
-    query.bindValue(":guid", guid);
+        "VALUES (:name, :scene, :thumbnail, :version, datetime(), datetime(), datetime(), :guid)");
+    dbqt::bindText(query, ":name", projectName);
+    dbqt::bindBytes(query, ":scene", sceneBlob);
+    dbqt::bindBytes(query, ":thumbnail", thumbnail);
+    dbqt::bindText(query, ":version", Constants::CONTENT_VERSION);
+    dbqt::bindText(query, ":guid", guid);
 
     return executeAndCheckQuery(query, "CreateProject");
 }
 
 bool Database::createFolder(const QString &folderName, const QString &parentFolder, const QString &guid, const QString &projectGuid, bool visible)
 {
-    QSqlQuery query;
-    query.prepare(
+    DbQuery query(connection(),
         "INSERT INTO folders (name, parent, version, date_created, last_updated, project_guid, guid, visible) "
-        "VALUES (:name, :parent, :version, datetime(), datetime(), :project_guid, :guid, :visible)"
-    );
-    query.bindValue(":name", folderName);
-    query.bindValue(":parent", parentFolder);
-    query.bindValue(":version", Constants::CONTENT_VERSION);
-    query.bindValue(":project_guid", projectGuid);
-    query.bindValue(":guid", guid);
-    query.bindValue(":visible", visible);
+        "VALUES (:name, :parent, :version, datetime(), datetime(), :project_guid, :guid, :visible)");
+    dbqt::bindText(query, ":name", folderName);
+    dbqt::bindText(query, ":parent", parentFolder);
+    dbqt::bindText(query, ":version", Constants::CONTENT_VERSION);
+    dbqt::bindText(query, ":project_guid", projectGuid);
+    dbqt::bindText(query, ":guid", guid);
+    query.bindInt(":visible", visible);
     return executeAndCheckQuery(query, "CreateFolder");
 }
 
@@ -1289,12 +1335,11 @@ QString Database::ensureFolder(const QString &folderName, const QString &project
 
     {
         // Block-scoped: the read is finished before the write below (source.no_live_read_at_write).
-        QSqlQuery query;
-        query.prepare("SELECT guid FROM folders WHERE name = ? AND project_guid = ? LIMIT 1");
-        query.addBindValue(folderName);
-        query.addBindValue(projectGuid);
+        DbQuery query(connection(), "SELECT guid FROM folders WHERE name = ? AND project_guid = ? LIMIT 1");
+        dbqt::bindText(query, 1, folderName);
+        dbqt::bindText(query, 2, projectGuid);
         if (executeAndCheckQuery(query, "ensureFolder") && query.next())
-            return query.value(0).toString();
+            return dbqt::text(query, 0);
     }
 
     const QString guid = QString::fromStdString(iris::newGuid());
@@ -1328,39 +1373,36 @@ QString Database::createAssetEntry(
 		return QString();
 	}
 
-	QSqlQuery query;
-	query.prepare(
+	DbQuery query(connection(),
 		"INSERT INTO assets"
 		" (name, thumbnail, parent, type, project_guid, collection, version, date_created,"
 		" last_updated, guid, properties, author, asset, hash, license, tags, view_filter, origin,"
 		" times_used)"
 		" VALUES (:name, :thumbnail, :parent, :type, :project_guid, 0, :version, datetime(),"
 		" datetime(), :guid, :properties, :author, :asset, :hash, :license, :tags, :view_filter, :origin,"
-		" 0)"
-	);
+		" 0)");
 
-	query.bindValue(":name", assetName);
-	query.bindValue(":thumbnail", thumbnail);
-	query.bindValue(":parent", parentFolder);
-	query.bindValue(":type", type);
+	dbqt::bindText(query, ":name", assetName);
+	dbqt::bindBytes(query, ":thumbnail", thumbnail);
+	dbqt::bindText(query, ":parent", parentFolder);
+	query.bindInt(":type", type);
 	// A non-project home stores NULL, never '' (the listings test NULL-ness).
-	query.bindValue(":project_guid", home.isProject() ? QVariant(home.projectGuid)
-	                                                  : QVariant(QMetaType(QMetaType::QString)));
-	query.bindValue(":version", Constants::CONTENT_VERSION);
-	query.bindValue(":guid", guid);
-	query.bindValue(":properties", properties);
-	query.bindValue(":author", author.isEmpty() ? getAuthorName() : author);
-	query.bindValue(":asset", asset);
-	query.bindValue(":hash", blobStamp(asset));
-	query.bindValue(":license", license);
-	query.bindValue(":tags", tags);
-	query.bindValue(":view_filter", home.stored());
-	query.bindValue(":origin", assethome::originName(origin));
+	dbqt::bindText(query, ":project_guid", home.isProject() ? home.projectGuid : QString());
+	dbqt::bindText(query, ":version", Constants::CONTENT_VERSION);
+	dbqt::bindText(query, ":guid", guid);
+	dbqt::bindBytes(query, ":properties", properties);
+	dbqt::bindText(query, ":author", author.isEmpty() ? getAuthorName() : author);
+	dbqt::bindBytes(query, ":asset", asset);
+	dbqt::bindText(query, ":hash", blobStamp(asset));
+	dbqt::bindText(query, ":license", license);
+	dbqt::bindBytes(query, ":tags", tags);
+	query.bindInt(":view_filter", home.stored());
+	dbqt::bindText(query, ":origin", assethome::originName(origin));
 
 	if (executeAndCheckQuery(query, "CreateAssetEntry")) {
 		return guid;
 	}
-	if (errorOut) *errorOut = query.lastError().text();
+	if (errorOut) *errorOut = dbqt::describe(query.error());
 	return QString();
 }
 
@@ -1372,45 +1414,40 @@ bool Database::setAssetHome(const QString &guid, const assethome::Home &home,
 		if (errorOut) *errorOut = refused;
 		return false;
 	}
-	QSqlQuery query;
-	query.prepare("UPDATE assets SET view_filter = ?, project_guid = ?, origin = ? WHERE guid = ?");
-	query.addBindValue(home.stored());
-	query.addBindValue(home.isProject() ? QVariant(home.projectGuid)
-	                                    : QVariant(QMetaType(QMetaType::QString)));
-	query.addBindValue(assethome::originName(origin));
-	query.addBindValue(guid);
+	DbQuery query(connection(), "UPDATE assets SET view_filter = ?, project_guid = ?, origin = ? WHERE guid = ?");
+	query.bindInt(1, home.stored());
+	dbqt::bindText(query, 2, home.isProject() ? home.projectGuid : QString());
+	dbqt::bindText(query, 3, assethome::originName(origin));
+	dbqt::bindText(query, 4, guid);
 	const bool ok = executeAndCheckQuery(query, "SetAssetHome");
 	if (ok) refreshSidecar(guid);   // home + origin are sidecar fields (I2)
-	else if (errorOut) *errorOut = query.lastError().text();
+	else if (errorOut) *errorOut = dbqt::describe(query.error());
 	return ok;
 }
 
 bool Database::updateProjectDesktop(const QString &guid, int desktop)
 {
-	QSqlQuery query;
-	query.prepare("UPDATE projects SET desktop = ? WHERE guid = ?");
-	query.addBindValue(desktop);
-	query.addBindValue(guid);
+	DbQuery query(connection(), "UPDATE projects SET desktop = ? WHERE guid = ?");
+	query.bindInt(1, desktop);
+	dbqt::bindText(query, 2, guid);
 	return executeAndCheckQuery(query, "UpdateProjectDesktop");
 }
 
 bool Database::updateProjectPosition(const QString &guid, float x, float y)
 {
-	QSqlQuery query;
-	query.prepare("UPDATE projects SET desktop_x = ?, desktop_y = ? WHERE guid = ?");
-	query.addBindValue(x);
-	query.addBindValue(y);
-	query.addBindValue(guid);
+	DbQuery query(connection(), "UPDATE projects SET desktop_x = ?, desktop_y = ? WHERE guid = ?");
+	query.bindReal(1, x);
+	query.bindReal(2, y);
+	dbqt::bindText(query, 3, guid);
 	return executeAndCheckQuery(query, "UpdateProjectPosition");
 }
 
 bool Database::updateProjectSliderPos(const QString &guid, int row, int index)
 {
-	QSqlQuery query;
-	query.prepare("UPDATE projects SET slider_row = ?, slider_index = ? WHERE guid = ?");
-	query.addBindValue(row);
-	query.addBindValue(index);
-	query.addBindValue(guid);
+	DbQuery query(connection(), "UPDATE projects SET slider_row = ?, slider_index = ? WHERE guid = ?");
+	query.bindInt(1, row);
+	query.bindInt(2, index);
+	dbqt::bindText(query, 3, guid);
 	return executeAndCheckQuery(query, "UpdateProjectSliderPos");
 }
 
@@ -1438,18 +1475,18 @@ bool Database::createDependency(
     const QString &dependee,
     const QString &projectGuid)
 {
-    QSqlQuery query;
     auto guid = QString::fromStdString(iris::newGuid());
-    query.prepare(
+    DbQuery query(connection(),
 		"INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
-		"VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
-	);
-    query.bindValue(":depender_type", dependerType);
-    query.bindValue(":dependee_type", dependeeType);
-    if (!projectGuid.isEmpty()) query.bindValue(":project_guid", projectGuid);
-    query.bindValue(":depender", depender);
-    query.bindValue(":dependee", dependee);
-    query.bindValue(":id", guid);
+		"VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)");
+    query.bindInt(":depender_type", dependerType);
+    query.bindInt(":dependee_type", dependeeType);
+    // An INTRINSIC edge (no project) stores NULL - bound explicitly: the layer refuses an unbound parameter.
+    if (!projectGuid.isEmpty()) dbqt::bindText(query, ":project_guid", projectGuid);
+    else query.bindNull(":project_guid");
+    dbqt::bindText(query, ":depender", depender);
+    dbqt::bindText(query, ":dependee", dependee);
+    dbqt::bindText(query, ":id", guid);
 
     const bool ok = executeAndCheckQuery(query, "insertGlobalDependency");
     notifyDependencies(ok, projectGuid);
@@ -1467,23 +1504,20 @@ bool Database::addFavorite(const QString &guid)
     // or a re-import. NO PICTURE IS COPIED HERE (PREVIEWS-1): the favourites
     // panel paints the asset's own tile by guid; the `thumbnail` column stays in
     // the schema (a column change resets the library) and is written by nobody.
-    QSqlQuery query;
-    query.prepare(
+    DbQuery query(connection(),
         "INSERT OR REPLACE INTO favorites (asset_guid, name, date_created, version) "
-        "VALUES (:asset_guid, :name, datetime(), :version)"
-    );
-    query.bindValue(":asset_guid", guid);
-    query.bindValue(":name", asset.name);
-    query.bindValue(":version", Constants::CONTENT_VERSION);
+        "VALUES (:asset_guid, :name, datetime(), :version)");
+    dbqt::bindText(query, ":asset_guid", guid);
+    dbqt::bindText(query, ":name", asset.name);
+    dbqt::bindText(query, ":version", Constants::CONTENT_VERSION);
 
     return executeAndCheckQuery(query, "insertFavorite");
 }
 
 bool Database::removeFavorite(const QString &guid)
 {
-    QSqlQuery query;
-    query.prepare("DELETE FROM favorites WHERE asset_guid = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "DELETE FROM favorites WHERE asset_guid = ?");
+    dbqt::bindText(query, 1, guid);
 
     return executeAndCheckQuery(query, "removeFavorite");
 }
@@ -1493,19 +1527,17 @@ QVector<FolderRecord> Database::fetchCrumbTrail(const QString &guid, const QStri
 	std::function<void(QVector<FolderRecord>&, const QString&)> fetchFolders
 		= [&](QVector<FolderRecord> &folders, const QString &guid) -> void
 	{
-		QSqlQuery query;
-		query.prepare("SELECT guid, parent, name FROM folders WHERE guid = ? AND project_guid = ?");
-		query.addBindValue(guid);
-		query.addBindValue(projectGuid);
+		DbQuery query(connection(), "SELECT guid, parent, name FROM folders WHERE guid = ? AND project_guid = ?");
+		dbqt::bindText(query, 1, guid);
+		dbqt::bindText(query, 2, projectGuid);
 		executeAndCheckQuery(query, "fetchCrumbTrail");
 
 		QStringList parentFolder;
 		while (query.next()) {
 			FolderRecord data;
-			QSqlRecord record = query.record();
-			data.guid = record.value(0).toString();
-			data.parent = record.value(1).toString();
-			data.name = record.value(2).toString();
+			data.guid = dbqt::text(query, 0);
+			data.parent = dbqt::text(query, 1);
+			data.name = dbqt::text(query, 2);
 
 			parentFolder.push_back(data.parent);
 			folders.push_back(data);
@@ -1531,23 +1563,19 @@ QVector<FolderRecord> Database::fetchCrumbTrail(const QString &guid, const QStri
 
 QVector<FolderRecord> Database::fetchChildFolders(const QString &parent, const QString &projectGuid)
 {
-	QSqlQuery query;
-	query.prepare("SELECT guid, parent, name, count, visible FROM folders WHERE parent = ? AND project_guid = ?");
-	query.addBindValue(parent);
-	query.addBindValue(projectGuid);
+	DbQuery query(connection(), "SELECT guid, parent, name, count, visible FROM folders WHERE parent = ? AND project_guid = ?");
+	dbqt::bindText(query, 1, parent);
+	dbqt::bindText(query, 2, projectGuid);
 	executeAndCheckQuery(query, "FetchChildFolders");
 
 	QVector<FolderRecord> folderData;
 	while (query.next()) {
         FolderRecord data;
-		QSqlRecord record = query.record();
-		for (int i = 0; i < record.count(); i++) {
-			data.guid = record.value(0).toString();
-			data.parent = record.value(1).toString();
-			data.name = record.value(2).toString();
-			data.count = record.value(3).toInt();
-			data.visible = record.value(4).toBool();
-		}
+		data.guid = dbqt::text(query, 0);
+		data.parent = dbqt::text(query, 1);
+		data.name = dbqt::text(query, 2);
+		data.count = int(query.int64(3));
+		data.visible = query.int64(4) != 0;
 
 		folderData.push_back(data);
 	}
@@ -1559,16 +1587,15 @@ FolderRecord Database::fetchFolder(const QString &guid)
 {
     FolderRecord data;
     if (guid.isEmpty()) return data;
-    QSqlQuery query;
-    query.prepare("SELECT guid, parent, name, project_guid, visible FROM folders WHERE guid = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "SELECT guid, parent, name, project_guid, visible FROM folders WHERE guid = ?");
+    dbqt::bindText(query, 1, guid);
     executeAndCheckQuery(query, "fetchFolder");
     if (query.next()) {
-        data.guid = query.value(0).toString();
-        data.parent = query.value(1).toString();
-        data.name = query.value(2).toString();
-        data.projectGuid = query.value(3).toString();
-        data.visible = query.value(4).toBool();
+        data.guid = dbqt::text(query, 0);
+        data.parent = dbqt::text(query, 1);
+        data.name = dbqt::text(query, 2);
+        data.projectGuid = dbqt::text(query, 3);
+        data.visible = (query.int64(4) != 0);
     }
     return data;
 }
@@ -1584,14 +1611,14 @@ static QHash<QString, QByteArray> fetchThumbnailBytes(Database *db, const char *
     QStringList marks;
     marks.reserve(guids.size());
     for (int i = 0; i < guids.size(); ++i) marks << QStringLiteral("?");
-    QSqlQuery query;
-    query.prepare(QStringLiteral("SELECT guid, thumbnail FROM %1 WHERE guid IN (%2)")
-                      .arg(QString::fromLatin1(table), marks.join(QLatin1Char(','))));
-    for (const QString &guid : guids) query.addBindValue(guid);
+    DbQuery query(db->connection(), dbqt::utf8(QStringLiteral("SELECT guid, thumbnail FROM %1 WHERE guid IN (%2)")
+                      .arg(QString::fromLatin1(table), marks.join(QLatin1Char(',')))));
+    int bindAt = 0;
+    for (const QString &guid : guids) dbqt::bindText(query, ++bindAt, guid);
     if (!db->executeAndCheckQuery(query, name)) return out;
     while (query.next()) {
-        const QByteArray bytes = query.value(1).toByteArray();
-        if (!bytes.isEmpty()) out.insert(query.value(0).toString(), bytes);
+        const QByteArray bytes = dbqt::bytes(query, 1);
+        if (!bytes.isEmpty()) out.insert(dbqt::text(query, 0), bytes);
     }
     return out;
 }
@@ -1726,14 +1753,14 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
     {
         QStringList marks;
         for (int i = 0; i < guids.size(); ++i) marks << QStringLiteral("?");
-        QSqlQuery furniture;
-        furniture.prepare(guids.isEmpty()
+        DbQuery furniture(connection(), dbqt::utf8(guids.isEmpty()
                               ? QStringLiteral("SELECT guid FROM assets INDEXED BY idx_assets_library WHERE %1").arg(kPlatform)
                               : QStringLiteral("SELECT guid FROM assets WHERE guid IN (%1) AND %2")
-                                    .arg(marks.join(QLatin1Char(',')), kPlatform));
-        for (const QString &guid : guids) furniture.addBindValue(guid);
+                                    .arg(marks.join(QLatin1Char(',')), kPlatform)));
+        int bindAt = 0;
+        for (const QString &guid : guids) dbqt::bindText(furniture, ++bindAt, guid);
         if (!executeAndCheckQuery(furniture, QStringLiteral("FetchPreviewPlatform"))) return {};
-        while (furniture.next()) platform.insert(furniture.value(0).toString());
+        while (furniture.next()) platform.insert(dbqt::text(furniture, 0));
     }
     // The correlated sub-selects are SQLite's per row, inside this ONE statement; the oid lists
     // come back in no promised order (previews::key sorts them).
@@ -1754,30 +1781,30 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
         sql += QStringLiteral(" AND a.guid IN (%1)").arg(marks.join(QLatin1Char(',')));
     }
     sql += QStringLiteral(" ORDER BY a.rowid");
-    QSqlQuery query;
-    query.prepare(sql);
-    query.addBindValue(projectGuid);
-    if (projectOnly) query.addBindValue(projectGuid);
-    if (type >= 0) query.addBindValue(type);
-    for (const QString &guid : guids) query.addBindValue(guid);
+    DbQuery query(connection(), dbqt::utf8(sql));
+    int bindAt = 0;
+    dbqt::bindText(query, ++bindAt, projectGuid);
+    if (projectOnly) dbqt::bindText(query, ++bindAt, projectGuid);
+    if (type >= 0) query.bindInt(++bindAt, type);
+    for (const QString &guid : guids) dbqt::bindText(query, ++bindAt, guid);
     QVector<PreviewRow> rows;
     if (!executeAndCheckQuery(query, QStringLiteral("FetchPreviewRows"))) return rows;
-    const auto split = [](const QVariant &v) {
-        QStringList list = v.toString().split(QLatin1Char(','), Qt::SkipEmptyParts);
+    const auto split = [](const QString &v) {
+        QStringList list = v.split(QLatin1Char(','), Qt::SkipEmptyParts);
         list.removeDuplicates();   // an edge stamped in two projects names its member twice
         return list;
     };
     while (query.next()) {
         PreviewRow row;
-        row.guid = query.value(0).toString();
-        row.type = query.value(1).toInt();
-        row.hasBytes = query.value(2).toBool();
-        row.hasBlob = query.value(3).toBool();
-        row.storedKey = query.value(4).toString();
-        row.blobStamp = query.value(5).toString();
-        row.files = split(query.value(6));
-        row.pin = query.value(7).toString();
-        row.members = split(query.value(8));
+        row.guid = dbqt::text(query, 0);
+        row.type = int(query.int64(1));
+        row.hasBytes = query.int64(2) != 0;
+        row.hasBlob = query.int64(3) != 0;
+        row.storedKey = dbqt::text(query, 4);
+        row.blobStamp = dbqt::text(query, 5);
+        row.files = split(dbqt::text(query, 6));
+        row.pin = dbqt::text(query, 7);
+        row.members = split(dbqt::text(query, 8));
         row.platform = platform.contains(row.guid);
         rows.append(row);
     }
@@ -1796,50 +1823,28 @@ QHash<QString, QByteArray> Database::fetchProjectThumbnailBytes(const QStringLis
 
 void Database::updateAuthorInfo(const QString &author_name)
 {
-	QSqlQuery query1;
-	query1.prepare("DELETE FROM author");
+	DbQuery query1(connection(), "DELETE FROM author");
 	executeAndCheckQuery(query1, "wipeTable");
 
-	QSqlQuery query2;
-	query2.prepare("INSERT INTO author (name, date_created, default_license) VALUES (:name, datetime(), :default_license)");
-	query2.bindValue(":name", author_name);
-	query2.bindValue(":default_license", "CCBY");
+	DbQuery query2(connection(), "INSERT INTO author (name, date_created, default_license) VALUES (:name, datetime(), :default_license)");
+	dbqt::bindText(query2, ":name", author_name);
+	dbqt::bindText(query2, ":default_license", QStringLiteral("CCBY"));
 	executeAndCheckQuery(query2, "insertAuthorName");
 }
 
 bool Database::isAuthorInfoPresent()
 {
-	QSqlQuery query;
-	query.prepare("SELECT COUNT(*) FROM author");
-	executeAndCheckQuery(query, "authorCount");
-
-	if (query.exec()) {
-		if (query.first()) {
-			return query.value(0).toBool();
-		}
-	}
-	else {
-		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the author count! " + query.lastError().text());
-	}
-
-	return false;
+	// ONE execution (it ran the funnel AND a second raw exec of the same statement until stage 2); a failure is
+	// said by the funnel.
+	DbQuery query(connection(), "SELECT COUNT(*) FROM author");
+	return executeAndCheckQuery(query, "authorCount") && query.next() && query.int64(0) != 0;
 }
 
 QString Database::getAuthorName()
 {
-	QSqlQuery query;
-	query.prepare("SELECT name FROM author LIMIT 1");
-	executeAndCheckQuery(query, "getAuthorName");
-
-	if (query.exec()) {
-		if (query.first()) {
-			return query.value(0).toString();
-		}
-	}
-	else {
-		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the author count! " + query.lastError().text());
-	}
-
+	// ONE execution (it ran the funnel AND a second raw exec of the same statement until stage 2).
+	DbQuery query(connection(), "SELECT name FROM author LIMIT 1");
+	if (executeAndCheckQuery(query, "getAuthorName") && query.next()) return dbqt::text(query, 0);
 	return QString();
 }
 
@@ -1850,14 +1855,12 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
     DbTransaction tx(db);
     const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
-    QSqlQuery query;
-    query.prepare("DELETE FROM projects WHERE guid = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "DELETE FROM projects WHERE guid = ?");
+    dbqt::bindText(query, 1, guid);
     bool q = executeAndCheckQuery(query, "DeleteProject");
 
-    QSqlQuery dquery;
-    dquery.prepare("DELETE FROM dependencies WHERE project_guid = ?");
-    dquery.addBindValue(guid);
+    DbQuery dquery(connection(), "DELETE FROM dependencies WHERE project_guid = ?");
+    dbqt::bindText(dquery, 1, guid);
     bool d = executeAndCheckQuery(dquery, "DeleteDependencies");
 
     // The project's CAS pins die with it (deep audit 2026-09, area 6: 32 of
@@ -1872,18 +1875,16 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
     // unreclaimable. Collected BEFORE the pins go.
     QStringList unlistedPins;
     {
-        QSqlQuery uquery;
-        uquery.prepare("SELECT PA.asset_guid FROM project_assets PA "
+        DbQuery uquery(connection(), "SELECT PA.asset_guid FROM project_assets PA "
                        "JOIN assets A ON A.guid = PA.asset_guid "
                        "WHERE PA.project_guid = ? AND A.listed = 0");
-        uquery.addBindValue(guid);
+        dbqt::bindText(uquery, 1, guid);
         if (executeAndCheckQuery(uquery, "FetchUnlistedProjectPins"))
-            while (uquery.next()) unlistedPins << uquery.value(0).toString();
+            while (uquery.next()) unlistedPins << dbqt::text(uquery, 0);
     }
 
-    QSqlQuery pquery;
-    pquery.prepare("DELETE FROM project_assets WHERE project_guid = ?");
-    pquery.addBindValue(guid);
+    DbQuery pquery(connection(), "DELETE FROM project_assets WHERE project_guid = ?");
+    dbqt::bindText(pquery, 1, guid);
     bool p = executeAndCheckQuery(pquery, "DeleteProjectPins");
 
     if (!(d && q && p)) return false;   // tx rolls back — no half-deleted project
@@ -1917,19 +1918,18 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
     // isProjectOwned, in SQL: Editor, this project, not a member of a row that
     // is not this project's own, and no pin left.
     {
-        QSqlQuery oquery;
-        oquery.prepare("SELECT A.guid FROM assets A "
+        DbQuery oquery(connection(), "SELECT A.guid FROM assets A "
                        "WHERE A.view_filter = ? AND A.project_guid = ? "
                        "AND NOT EXISTS (SELECT 1 FROM assets P WHERE P.guid = A.parent "
                        "                AND NOT (P.view_filter = ? AND P.project_guid = ?)) "
                        "AND NOT EXISTS (SELECT 1 FROM project_assets PA WHERE PA.asset_guid = A.guid)");
-        oquery.addBindValue(static_cast<int>(assethome::StoredProject));
-        oquery.addBindValue(guid);
-        oquery.addBindValue(static_cast<int>(assethome::StoredProject));
-        oquery.addBindValue(guid);
+        oquery.bindInt(1, static_cast<int>(assethome::StoredProject));
+        dbqt::bindText(oquery, 2, guid);
+        oquery.bindInt(3, static_cast<int>(assethome::StoredProject));
+        dbqt::bindText(oquery, 4, guid);
         QStringList owned;
         if (executeAndCheckQuery(oquery, "FetchUnpinnedProjectRows"))
-            while (oquery.next()) owned << oquery.value(0).toString();
+            while (oquery.next()) owned << dbqt::text(oquery, 0);
         else
             reaped = false;
         for (const QString &row : std::as_const(owned))
@@ -1949,8 +1949,7 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
 
 bool Database::destroyTable(const QString &table)
 {
-	QSqlQuery query;
-	query.prepare(QString("DROP TABLE IF EXISTS %1").arg(table));
+	DbQuery query(connection(), dbqt::utf8(QString("DROP TABLE IF EXISTS %1").arg(table)));
 	return executeAndCheckQuery(query, QString("DropAssetTable[%1]").arg(table));
 }
 
@@ -2003,17 +2002,15 @@ bool Database::sidecarBelongsHere(const QString &guid)
 
     if (QFileInfo::exists(AssetStorePaths::sidecarPathIn(root, guid))) return true;
 
-    QSqlQuery query(db);
-    query.prepare("SELECT AF.oid, F.ext FROM asset_files AF "
-                  "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ?");
-    query.addBindValue(guid);
-    if (!query.exec()) return false;
-    while (query.next()) {
-        if (QFileInfo::exists(AssetStorePaths::objectPathIn(
-                root, query.value(0).toString(), query.value(1).toString())))
+    db::Statement query(connection(), "SELECT AF.oid, F.ext FROM asset_files AF "
+                                      "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ?");
+    dbqt::bindText(query, 1, guid);
+    db::Error error;
+    while (query.step(&error)) {
+        if (QFileInfo::exists(AssetStorePaths::objectPathIn(root, dbqt::text(query, 0), dbqt::text(query, 1))))
             return true;
     }
-    return false;
+    return false;   // no object of it here, or the read failed: either way not proven ours
 }
 
 void Database::refreshSidecar(const QString &guid)
@@ -2034,13 +2031,12 @@ void Database::dropSidecar(const QString &guid)
 bool Database::setAssetListed(const QString &guid, bool listed)
 {
     if (guid.isEmpty() || !db.isOpen()) return false;
-    QSqlQuery query;
-    query.prepare("UPDATE assets SET listed = ? WHERE guid = ?");
-    query.addBindValue(listed ? 1 : 0);
-    query.addBindValue(guid);
+    DbQuery query(connection(), "UPDATE assets SET listed = ? WHERE guid = ?");
+    query.bindInt(1, listed ? 1 : 0);
+    dbqt::bindText(query, 2, guid);
     if (!executeAndCheckQuery(query, "SetAssetListed")) return false;
     // An UPDATE that matched no row is not a success — the guid names nothing.
-    if (query.numRowsAffected() == 0) return false;
+    if (connection().changes() == 0) return false;
     // The sidecar records library visibility too, so a rebuildCatalog does not
     // resurrect an unlisted row as a library tile (invariant I2).
     if (sidecarBelongsHere(guid)) refreshSidecar(guid);
@@ -2050,11 +2046,10 @@ bool Database::setAssetListed(const QString &guid, bool listed)
 bool Database::isAssetListed(const QString &guid)
 {
     if (guid.isEmpty() || !db.isOpen()) return false;
-    QSqlQuery query;
-    query.prepare("SELECT listed FROM assets WHERE guid = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "SELECT listed FROM assets WHERE guid = ?");
+    dbqt::bindText(query, 1, guid);
     if (!executeAndCheckQuery(query, "IsAssetListed") || !query.next()) return false;
-    return query.value(0).toInt() != 0;
+    return int(query.int64(0)) != 0;
 }
 
 QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
@@ -2063,24 +2058,23 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
     if (guid.isEmpty() || !db.isOpen()) return pins;
     if (!checkIfTableExists("project_assets")) return pins;
 
-    QSqlQuery query;
     // LEFT JOIN: a pin whose project row is gone is still a real row in the
     // catalog — it keeps its object alive against the GC — so it is still
     // REPORTED here, flagged dead and named for a human instead of showing a
     // raw guid on the Assets page's "Used by" row (code review 2026-09-10).
     // What it is NOT is a project using the asset: countAssetPins ignores it,
     // so it cannot veto a delete, and assets.gc reaps it.
-    query.prepare("SELECT PA.project_guid, P.name, P.guid IS NOT NULL FROM project_assets PA "
+    DbQuery query(connection(), "SELECT PA.project_guid, P.name, P.guid IS NOT NULL FROM project_assets PA "
                   "LEFT JOIN projects P ON P.guid = PA.project_guid "
                   "WHERE PA.asset_guid = ? ORDER BY P.name");
-    query.addBindValue(guid);
+    dbqt::bindText(query, 1, guid);
     if (!executeAndCheckQuery(query, "FetchAssetPins")) return pins;
 
     while (query.next()) {
         AssetPinRecord pin;
-        pin.projectGuid = query.value(0).toString();
-        pin.projectName = query.value(1).toString();
-        pin.live = query.value(2).toBool();
+        pin.projectGuid = dbqt::text(query, 0);
+        pin.projectName = dbqt::text(query, 1);
+        pin.live = (query.int64(2) != 0);
         if (!pin.live) pin.projectName = QObject::tr("(deleted project)");
         else if (pin.projectName.isEmpty()) pin.projectName = pin.projectGuid;
         pins.push_back(pin);
@@ -2091,18 +2085,16 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid)
 bool Database::unpinAsset(const QString &projectGuid, const QString &assetGuid)
 {
     if (!checkIfTableExists("project_assets")) return true;
-    QSqlQuery query;
-    query.prepare("DELETE FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
-    query.addBindValue(projectGuid);
-    query.addBindValue(assetGuid);
+    DbQuery query(connection(), "DELETE FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+    dbqt::bindText(query, 1, projectGuid);
+    dbqt::bindText(query, 2, assetGuid);
     return executeAndCheckQuery(query, "UnpinAsset");
 }
 
-int Database::countAssetPins(const QString &guid)
+int Database::countAssetPins(const QString &guid, bool *readOk)
 {
     if (guid.isEmpty() || !db.isOpen()) return 0;
     if (!checkIfTableExists("project_assets")) return 0;
-    QSqlQuery query;
     // LIVE projects only (code review 2026-09-10). This number is the VETO:
     // it decides whether a library delete deletes or merely unlists, whether
     // the project panel removes a pin, and what the confirmation dialog says.
@@ -2111,22 +2103,24 @@ int Database::countAssetPins(const QString &guid)
     // project used undeletable through the normal path, forever. The dead row
     // itself is not silently dropped: fetchAssetPins still reports it and
     // assets.gc's deadPins class reaps it.
-    query.prepare("SELECT COUNT(*) FROM project_assets PA "
+    DbQuery query(connection(), "SELECT COUNT(*) FROM project_assets PA "
                   "JOIN projects P ON P.guid = PA.project_guid "
                   "WHERE PA.asset_guid = ?");
-    query.addBindValue(guid);
-    if (!executeAndCheckQuery(query, "CountAssetPins") || !query.next()) return 0;
-    return query.value(0).toInt();
+    dbqt::bindText(query, 1, guid);
+    if (!executeAndCheckQuery(query, "CountAssetPins") || !query.next()) {
+        if (readOk) *readOk = false;   // a FAILED count, never "no pins": the delete paths read it as a veto
+        return 0;
+    }
+    return int(query.int64(0));
 }
 
 bool Database::isAssetPinnedBy(const QString &projectGuid, const QString &assetGuid)
 {
     if (projectGuid.isEmpty() || assetGuid.isEmpty() || !db.isOpen()) return false;
     if (!checkIfTableExists("project_assets")) return false;
-    QSqlQuery query;
-    query.prepare("SELECT 1 FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
-    query.addBindValue(projectGuid);
-    query.addBindValue(assetGuid);
+    DbQuery query(connection(), "SELECT 1 FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
+    dbqt::bindText(query, 1, projectGuid);
+    dbqt::bindText(query, 2, assetGuid);
     return executeAndCheckQuery(query, "IsAssetPinnedBy") && query.next();
 }
 
@@ -2248,21 +2242,18 @@ bool Database::deleteAssetRow(const QString &guid, bool force,
     // when the connection is already in one).
     const bool ownsTransaction = tx.isActive();
 
-    QSqlQuery query;
-    query.prepare("DELETE FROM assets WHERE guid = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "DELETE FROM assets WHERE guid = ?");
+    dbqt::bindText(query, 1, guid);
 
     // The catalog's content mapping and any project pins go with the row
     // (phase 4): the asset_files delete trigger decrements files.refcount,
     // which is what assets.gc (later) reaps by.
-    QSqlQuery dropFiles;
-    dropFiles.prepare("DELETE FROM asset_files WHERE asset_guid = ?");
-    dropFiles.addBindValue(guid);
+    DbQuery dropFiles(connection(), "DELETE FROM asset_files WHERE asset_guid = ?");
+    dbqt::bindText(dropFiles, 1, guid);
     bool ok = executeAndCheckQuery(dropFiles, "DeleteAssetFiles");
 
-    QSqlQuery dropPins;
-    dropPins.prepare("DELETE FROM project_assets WHERE asset_guid = ?");
-    dropPins.addBindValue(guid);
+    DbQuery dropPins(connection(), "DELETE FROM project_assets WHERE asset_guid = ?");
+    dbqt::bindText(dropPins, 1, guid);
     ok = executeAndCheckQuery(dropPins, "DeleteAssetPins") && ok;
 
     ok = executeAndCheckQuery(query, "DeleteAsset") && ok;
@@ -2308,112 +2299,95 @@ bool Database::deleteCollection(const int &collectionId)
     QStringList placeholders;
     for (int i = 0; i < subtree.size(); ++i) placeholders << "?";
 
-    QSqlQuery reassign;
-    reassign.prepare("UPDATE assets SET collection = 0, last_updated = datetime() "
-                     "WHERE collection IN (" + placeholders.join(", ") + ")");
-    for (const int id : subtree) reassign.addBindValue(id);
+    DbQuery reassign(connection(), dbqt::utf8("UPDATE assets SET collection = 0, last_updated = datetime() "
+                     "WHERE collection IN (" + placeholders.join(", ") + ")"));
+    int bindAt = 0;
+    for (const int id : subtree) reassign.bindInt(++bindAt, id);
     if (!executeAndCheckQuery(reassign, "DeleteCollectionReassignAssets")) return false;
 
-    QSqlQuery query;
-    query.prepare("DELETE FROM collections WHERE collection_id IN (" + placeholders.join(", ") + ")");
-    for (const int id : subtree) query.addBindValue(id);
+    DbQuery query(connection(), dbqt::utf8("DELETE FROM collections WHERE collection_id IN (" + placeholders.join(", ") + ")"));
+    bindAt = 0;
+    for (const int id : subtree) query.bindInt(++bindAt, id);
     if (!executeAndCheckQuery(query, "DeleteCollection")) return false;
     return tx.commit();
 }
 
 bool Database::deleteFolder(const QString &guid)
 {
-    QSqlQuery query;
-    query.prepare("DELETE FROM folders WHERE guid = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "DELETE FROM folders WHERE guid = ?");
+    dbqt::bindText(query, 1, guid);
     return executeAndCheckQuery(query, "DeleteFolder");
 }
 
 bool Database::deleteDependency(const QString &dependee)
 {
-    QSqlQuery query;
-    query.prepare("DELETE FROM dependencies WHERE dependee = ?");
-    query.addBindValue(dependee);
+    DbQuery query(connection(), "DELETE FROM dependencies WHERE dependee = ?");
+    dbqt::bindText(query, 1, dependee);
     const bool ok = executeAndCheckQuery(query, "deleteDependency");
-    notifyDependencies(ok && query.numRowsAffected() > 0, QString());
+    notifyDependencies(ok && connection().changes() > 0, QString());
     return ok;
 }
 
 bool Database::deleteDependency(const QString &depender, const QString &dependee)
 {
-    QSqlQuery query;
-    query.prepare("DELETE FROM dependencies WHERE depender = ? AND dependee = ?");
-    query.addBindValue(depender);
-    query.addBindValue(dependee);
+    DbQuery query(connection(), "DELETE FROM dependencies WHERE depender = ? AND dependee = ?");
+    dbqt::bindText(query, 1, depender);
+    dbqt::bindText(query, 2, dependee);
     const bool ok = executeAndCheckQuery(query, "deleteDependency");
-    notifyDependencies(ok && query.numRowsAffected() > 0, QString());
+    notifyDependencies(ok && connection().changes() > 0, QString());
     return ok;
 }
 
 bool Database::removeDependenciesByType(const QString &depender, const ModelTypes &type)
 {
-    QSqlQuery query;
-    query.prepare("DELETE FROM dependencies WHERE depender = ? AND dependee_type = ?");
-    query.addBindValue(depender);
-    query.addBindValue(static_cast<int>(type));
+    DbQuery query(connection(), "DELETE FROM dependencies WHERE depender = ? AND dependee_type = ?");
+    dbqt::bindText(query, 1, depender);
+    query.bindInt(2, static_cast<int>(type));
 
     const bool ok = executeAndCheckQuery(query, "RemoveDependenciesByType");
-    notifyDependencies(ok && query.numRowsAffected() > 0, QString());
+    notifyDependencies(ok && connection().changes() > 0, QString());
     return ok;
-}
-
-bool Database::deleteRecord(const QString &table, const QString &row, const QVariant &value)
-{
-    QSqlQuery query;
-    query.prepare("DELETE FROM " + table + " WHERE " + row + " = ?");
-    query.addBindValue(value);
-    return executeAndCheckQuery(query, "DeleteRecord[" + table + ", " + row + "]");
 }
 
 bool Database::renameProject(const QString &guid, const QString &newName)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE projects SET name = ? WHERE guid = ?");
-    query.addBindValue(newName);
-    query.addBindValue(guid);
+    DbQuery query(connection(), "UPDATE projects SET name = ? WHERE guid = ?");
+    dbqt::bindText(query, 1, newName);
+    dbqt::bindText(query, 2, guid);
     return executeAndCheckQuery(query, "RenameProject");
 }
 
 bool Database::renameFolder(const QString &guid, const QString &newName)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE folders SET name = ? WHERE guid = ?");
-    query.addBindValue(newName);
-    query.addBindValue(guid);
+    DbQuery query(connection(), "UPDATE folders SET name = ? WHERE guid = ?");
+    dbqt::bindText(query, 1, newName);
+    dbqt::bindText(query, 2, guid);
     return executeAndCheckQuery(query, "RenameFolder");
 }
 
 bool Database::renameCollection(const int &collectionId, const QString &newName)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE collections SET name = ? WHERE collection_id = ?");
-    query.addBindValue(newName);
-    query.addBindValue(collectionId);
+    DbQuery query(connection(), "UPDATE collections SET name = ? WHERE collection_id = ?");
+    dbqt::bindText(query, 1, newName);
+    query.bindInt(2, collectionId);
     return executeAndCheckQuery(query, "RenameCollection");
 }
 
 bool Database::setAssetParent(const QString &guid, const QString &parent)
 {
     if (guid.isEmpty()) return false;
-    QSqlQuery query;
-    query.prepare("UPDATE assets SET parent = ?, last_updated = datetime() WHERE guid = ?");
-    query.addBindValue(parent);
-    query.addBindValue(guid);
+    DbQuery query(connection(), "UPDATE assets SET parent = ?, last_updated = datetime() WHERE guid = ?");
+    dbqt::bindText(query, 1, parent);
+    dbqt::bindText(query, 2, guid);
     return executeAndCheckQuery(query, "SetAssetParent");
 }
 
 bool Database::setFolderParent(const QString &guid, const QString &parent)
 {
     if (guid.isEmpty()) return false;
-    QSqlQuery query;
-    query.prepare("UPDATE folders SET parent = ?, last_updated = datetime() WHERE guid = ?");
-    query.addBindValue(parent);
-    query.addBindValue(guid);
+    DbQuery query(connection(), "UPDATE folders SET parent = ?, last_updated = datetime() WHERE guid = ?");
+    dbqt::bindText(query, 1, parent);
+    dbqt::bindText(query, 2, guid);
     return executeAndCheckQuery(query, "SetFolderParent");
 }
 
@@ -2421,35 +2395,32 @@ bool Database::setProjectAssetFolder(const QString &projectGuid, const QString &
                                      const QString &folder)
 {
     if (projectGuid.isEmpty() || assetGuid.isEmpty()) return false;
-    QSqlQuery query;
-    query.prepare("UPDATE project_assets SET folder = ? "
+    DbQuery query(connection(), "UPDATE project_assets SET folder = ? "
                   "WHERE project_guid = ? AND asset_guid = ?");
-    query.bindValue(0, folder.isEmpty() ? QVariant() : QVariant(folder));
-    query.bindValue(1, projectGuid);
-    query.bindValue(2, assetGuid);
+    dbqt::bindText(query, 1, folder.isEmpty() ? QString() : folder);
+    dbqt::bindText(query, 2, projectGuid);
+    dbqt::bindText(query, 3, assetGuid);
     if (!executeAndCheckQuery(query, "SetProjectAssetFolder")) return false;
-    return query.numRowsAffected() > 0;
+    return connection().changes() > 0;
 }
 
 bool Database::updateProject(const QByteArray &sceneBlob, const QByteArray &thumbnail, const QString &projectGuid)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE projects SET scene = ?, last_written = datetime(), thumbnail = ? WHERE guid = ?");
-    query.addBindValue(sceneBlob);
-    query.addBindValue(thumbnail);
-    query.addBindValue(projectGuid);
-    return executeAndCheckQuery(query, "UpdateProject") && wroteOneProjectRow(query, projectGuid);
+    DbQuery query(connection(), "UPDATE projects SET scene = ?, last_written = datetime(), thumbnail = ? WHERE guid = ?");
+    dbqt::bindBytes(query, 1, sceneBlob);
+    dbqt::bindBytes(query, 2, thumbnail);
+    dbqt::bindText(query, 3, projectGuid);
+    return executeAndCheckQuery(query, "UpdateProject") && wroteOneProjectRow(connection().changes(), projectGuid);
 }
 
 // Blob-only update: keeps the existing thumbnail (headless saves have no
 // viewport to screenshot and must not clear the tile image).
 bool Database::updateProjectBlob(const QByteArray &sceneBlob, const QString &projectGuid)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE projects SET scene = ?, last_written = datetime() WHERE guid = ?");
-    query.addBindValue(sceneBlob);
-    query.addBindValue(projectGuid);
-    return executeAndCheckQuery(query, "UpdateProjectBlob") && wroteOneProjectRow(query, projectGuid);
+    DbQuery query(connection(), "UPDATE projects SET scene = ?, last_written = datetime() WHERE guid = ?");
+    dbqt::bindBytes(query, 1, sceneBlob);
+    dbqt::bindText(query, 2, projectGuid);
+    return executeAndCheckQuery(query, "UpdateProjectBlob") && wroteOneProjectRow(connection().changes(), projectGuid);
 }
 
 // A SAVE THAT WROTE NO ROW IS A FAILED SAVE (STUDIO-HYGIENE-1). The two
@@ -2457,9 +2428,8 @@ bool Database::updateProjectBlob(const QByteArray &sceneBlob, const QString &pro
 // whose WHERE matches nothing succeeds — so a save of a project whose row was
 // gone reported "saved", the undo stack was marked clean, and the close did not
 // ask. One row, by the guid, is the only success.
-bool Database::wroteOneProjectRow(const QSqlQuery &query, const QString &projectGuid)
+bool Database::wroteOneProjectRow(int rows, const QString &projectGuid)
 {
-    const int rows = query.numRowsAffected();
     if (rows == 1) return true;
     JahLog::write(JahLog::legacy, JahLog::Level::Error, QStringLiteral("the save of project %1 wrote %2 rows (one was expected)")
                                                           .arg(projectGuid).arg(rows));
@@ -2468,10 +2438,9 @@ bool Database::wroteOneProjectRow(const QSqlQuery &query, const QString &project
 
 bool Database::updateAssetThumbnail(const QString &guid, const QByteArray &thumbnail)
 {
-	QSqlQuery query;
-	query.prepare("UPDATE assets SET thumbnail = ? WHERE guid = ?");
-	query.addBindValue(thumbnail);
-	query.addBindValue(guid);
+	DbQuery query(connection(), "UPDATE assets SET thumbnail = ? WHERE guid = ?");
+	dbqt::bindBytes(query, 1, thumbnail);
+	dbqt::bindText(query, 2, guid);
 	const bool ok = executeAndCheckQuery(query, "UpdateAssetThumbnail");
 	// Every cached tile of this asset is stale now (D11-LIBRARY-SCALE).
 	if (ok && thumbnailWrittenHook()) thumbnailWrittenHook()(guid);
@@ -2480,11 +2449,10 @@ bool Database::updateAssetThumbnail(const QString &guid, const QByteArray &thumb
 
 bool Database::updateAssetAsset(const QString &guid, const QByteArray &asset)
 {
-	QSqlQuery query;
-	query.prepare("UPDATE assets SET asset = ?, hash = ? WHERE guid = ?");
-	query.addBindValue(asset);
-	query.addBindValue(blobStamp(asset));
-	query.addBindValue(guid);
+	DbQuery query(connection(), "UPDATE assets SET asset = ?, hash = ? WHERE guid = ?");
+	dbqt::bindBytes(query, 1, asset);
+	dbqt::bindText(query, 2, blobStamp(asset));
+	dbqt::bindText(query, 3, guid);
 	return executeAndCheckQuery(query, "UpdateAssetAsset");
 }
 
@@ -2496,22 +2464,20 @@ QString Database::blobStamp(const QByteArray &asset)
 
 bool Database::updateSceneThumbnail(const QString & guid, const QByteArray &thumbnail)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE projects SET thumbnail = ? WHERE guid = ?");
-    query.addBindValue(thumbnail);
+    DbQuery query(connection(), "UPDATE projects SET thumbnail = ? WHERE guid = ?");
+    dbqt::bindBytes(query, 1, thumbnail);
     // The guid parameter was previously ignored in favour of the ambient
     // current-project read; the only caller passes the current project guid.
-    query.addBindValue(guid);
+    dbqt::bindText(query, 2, guid);
     return executeAndCheckQuery(query, "updateSceneThumbnail");
 }
 
 bool Database::updateAssetMetadata(const QString &guid, const QString &name, const QByteArray &tags)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE assets SET name = ?, tags = ?, last_updated = datetime() WHERE guid = ?");
-    query.addBindValue(name);
-    query.addBindValue(tags);
-    query.addBindValue(guid);
+    DbQuery query(connection(), "UPDATE assets SET name = ?, tags = ?, last_updated = datetime() WHERE guid = ?");
+    dbqt::bindText(query, 1, name);
+    dbqt::bindBytes(query, 2, tags);
+    dbqt::bindText(query, 3, guid);
     const bool ok = executeAndCheckQuery(query, "updateAssetMetadata");
     if (ok) refreshSidecar(guid);   // name + tags are sidecar fields (I2)
     return ok;
@@ -2519,10 +2485,9 @@ bool Database::updateAssetMetadata(const QString &guid, const QString &name, con
 
 bool Database::updateAssetProperties(const QString &guid, const QByteArray &asset)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE assets SET properties = ? WHERE guid = ?");
-    query.addBindValue(asset);
-    query.addBindValue(guid);
+    DbQuery query(connection(), "UPDATE assets SET properties = ? WHERE guid = ?");
+    dbqt::bindBytes(query, 1, asset);
+    dbqt::bindText(query, 2, guid);
     const bool ok = executeAndCheckQuery(query, "UpdateAssetProperties");
     // The lazy metadata backfill lands here too — it is a catalog mutation
     // like any other, and the sidecar records `properties` verbatim.
@@ -2532,7 +2497,6 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
 
 AssetRecord Database::fetchAsset(const QString &guid)
 {
-    QSqlQuery query;
     // project_guid is selected (AVATAR_ASSET_SPEC lane): the column decides
     // whether a row is a LIBRARY asset or one owned by a project, and this
     // read is what every "is this mine?" caller uses. It was omitted, so
@@ -2547,42 +2511,42 @@ AssetRecord Database::fetchAsset(const QString &guid)
     // caught. APPENDED, so every positional index below is untouched; the row
     // already carries the thumbnail BLOB, so one more blob is not a new class
     // of cost.
-    query.prepare("SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid, listed, asset, origin, times_used FROM assets WHERE guid = ? ");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "SELECT name, thumbnail, guid, parent, type, properties, view_filter, date_created, collection, tags, project_guid, listed, asset, origin, times_used FROM assets WHERE guid = ? ");
+    dbqt::bindText(query, 1, guid);
     // ONE exec. This used to run executeAndCheckQuery AND `query.exec()`, so
     // every by-guid read — the most called query in the catalog — cost two
     // round trips and two statement preparations (small-items round B).
     if (executeAndCheckQuery(query, "fetchAsset")) {
-        if (query.first()) {
+        if (query.next()) {
             AssetRecord data;
-            data.name = query.value(0).toString();
-            data.thumbnail = query.value(1).toByteArray();
-            data.guid = query.value(2).toString();
-            data.parent = query.value(3).toString();
-            data.type = query.value(4).toInt();
-            data.properties = query.value(5).toByteArray();
-            data.view_filter = query.value(6).toInt();
-            data.dateCreated = query.value(7).toDateTime();
-            data.collection = query.value(8).toInt();
+            data.name = dbqt::text(query, 0);
+            data.thumbnail = dbqt::bytes(query, 1);
+            data.guid = dbqt::text(query, 2);
+            data.parent = dbqt::text(query, 3);
+            data.type = int(query.int64(4));
+            data.properties = dbqt::bytes(query, 5);
+            data.view_filter = int(query.int64(6));
+            data.dateCreated = dbqt::dateTime(query, 7);
+            data.collection = int(query.int64(8));
             // The tag blob rides along (assets.tags / assets.setTags /
             // assets.metadata's `tags`): every writer of tags has to preserve
             // the NAME and every writer of the name has to preserve the TAGS —
             // updateAssetMetadata writes both columns in one statement — so
             // "read the row, change one field, write both" needs the row to
             // actually carry them.
-            data.tags = query.value(9).toByteArray();
-            data.projectGuid = query.value(10).toString();
+            data.tags = dbqt::bytes(query, 9);
+            data.projectGuid = dbqt::text(query, 10);
             // Library visibility: fetchAsset is the BY-GUID read, so it
             // answers for unlisted rows too — it just reports which it is.
-            data.listed = query.value(11).toInt() != 0;
-            data.asset = query.value(12).toByteArray();
-            data.origin = query.value(13).toString();
-            data.timesUsed = query.value(14).toInt();
+            data.listed = int(query.int64(11)) != 0;
+            data.asset = dbqt::bytes(query, 12);
+            data.origin = dbqt::text(query, 13);
+            data.timesUsed = int(query.int64(14));
             return data;
         }
     }
     else {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the asset! " + query.lastError().text());
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the asset! " + dbqt::describe(query.error()));
     }
 
     return AssetRecord();
@@ -2590,15 +2554,14 @@ AssetRecord Database::fetchAsset(const QString &guid)
 
 QMap<QString, qint64> Database::fetchAssetFileSizes()
 {
-    QSqlQuery query;
-    query.prepare(
+    DbQuery query(connection(),
         "SELECT af.asset_guid, SUM(f.size) FROM asset_files af "
         "JOIN files f ON f.oid = af.oid GROUP BY af.asset_guid");
     executeAndCheckQuery(query, "FetchAssetFileSizes");
 
     QMap<QString, qint64> sizes;
     while (query.next())
-        sizes.insert(query.value(0).toString(), query.value(1).toLongLong());
+        sizes.insert(dbqt::text(query, 0), query.int64(1));
     return sizes;
 }
 
@@ -2664,12 +2627,12 @@ QHash<QString, QString> Database::fetchAssetOwners(const QStringList &guids)
     unique.removeDuplicates();
     if (unique.isEmpty()) return out;
 
-    QSqlQuery query;
-    query.prepare("SELECT guid, project_guid FROM assets WHERE guid IN (" +
-                  placeholders(unique.size()) + ")");
-    for (const QString &guid : unique) query.addBindValue(guid);
+    DbQuery query(connection(), dbqt::utf8("SELECT guid, project_guid FROM assets WHERE guid IN (" +
+                  placeholders(unique.size()) + ")"));
+    int bindAt = 0;
+    for (const QString &guid : unique) dbqt::bindText(query, ++bindAt, guid);
     executeAndCheckQuery(query, "fetchAssetOwners");
-    while (query.next()) out.insert(query.value(0).toString(), query.value(1).toString());
+    while (query.next()) out.insert(dbqt::text(query, 0), dbqt::text(query, 1));
     return out;
 }
 
@@ -2681,12 +2644,12 @@ QHash<QString, QByteArray> Database::fetchAssetDataFor(const QStringList &guids)
     unique.removeDuplicates();
     if (unique.isEmpty()) return out;
 
-    QSqlQuery query;
-    query.prepare("SELECT guid, asset FROM assets WHERE guid IN (" +
-                  placeholders(unique.size()) + ")");
-    for (const QString &guid : unique) query.addBindValue(guid);
+    DbQuery query(connection(), dbqt::utf8("SELECT guid, asset FROM assets WHERE guid IN (" +
+                  placeholders(unique.size()) + ")"));
+    int bindAt = 0;
+    for (const QString &guid : unique) dbqt::bindText(query, ++bindAt, guid);
     executeAndCheckQuery(query, "fetchAssetDataFor");
-    while (query.next()) out.insert(query.value(0).toString(), query.value(1).toByteArray());
+    while (query.next()) out.insert(dbqt::text(query, 0), dbqt::bytes(query, 1));
     return out;
 }
 
@@ -2698,7 +2661,6 @@ QHash<QString, bool> Database::fetchUsedOnlyByMaterials(const QStringList &depen
     unique.removeDuplicates();
     if (unique.isEmpty()) return out;
 
-    QSqlQuery query;
     // ONE ROW PER USED DEPENDEE, unscoped as hasMultipleDependers asks it: is EVERY depender a material?
     // A depender the catalog does not know (a scene node's id) or of another type is not. The question is
     // answered by idx_assets_material_copies (partial over the material rows, covering: Database::
@@ -2706,14 +2668,15 @@ QHash<QString, bool> Database::fetchUsedOnlyByMaterials(const QStringList &depen
     // neighbours (LARGE-LIBRARY-1: 48 pages more at 1,000 with tiles than without). The index is named (the
     // planner takes the primary key unprompted; the boot builds it before the shell opens the library), and
     // the type is a literal, because a partial index serves only a WHERE that states its own.
-    query.prepare(QStringLiteral("SELECT D.dependee, MIN(EXISTS (SELECT 1 FROM assets M INDEXED BY "
+    DbQuery query(connection(), dbqt::utf8(QStringLiteral("SELECT D.dependee, MIN(EXISTS (SELECT 1 FROM assets M INDEXED BY "
                                  "idx_assets_material_copies WHERE M.guid = D.depender AND M.type = %1)) "
                                  "FROM dependencies D WHERE D.dependee IN (%2) GROUP BY D.dependee")
                       .arg(static_cast<int>(ModelTypes::Material))
-                      .arg(placeholders(unique.size())));
-    for (const QString &guid : unique) query.addBindValue(guid);
+                      .arg(placeholders(unique.size()))));
+    int bindAt = 0;
+    for (const QString &guid : unique) dbqt::bindText(query, ++bindAt, guid);
     executeAndCheckQuery(query, "fetchUsedOnlyByMaterials");
-    while (query.next()) out.insert(query.value(0).toString(), query.value(1).toInt() != 0);
+    while (query.next()) out.insert(dbqt::text(query, 0), int(query.int64(1)) != 0);
     return out;
 }
 
@@ -2725,19 +2688,19 @@ QHash<QString, QStringList> Database::fetchProjectDependers(const QString &proje
     unique.removeAll(QString());
     unique.removeDuplicates();
     if (projectGuid.isEmpty() || unique.isEmpty()) return out;
-    QSqlQuery query;
     // THE ROWS IN HAND, NOT THE PROJECT'S EVERY EDGE (LARGE-LIBRARY-1): `dependencies` has no index on
     // project_guid, so "every edge of the project" read the table whole — library-sized, at every tray
     // listing (+98 pages at 10,000 assets against 1,000). Asked of the listed dependees it is one seek of
     // idx_dependencies_dependee each. (An index on project_guid was refused by its plan comparison: it took
     // the depender and dependee lookups of seven other statements onto a whole project's edges.)
-    query.prepare("SELECT DISTINCT dependee, depender FROM dependencies WHERE project_guid = ? AND dependee IN (" +
-                  placeholders(unique.size()) + ")");
-    query.addBindValue(projectGuid);
-    for (const QString &guid : unique) query.addBindValue(guid);
+    DbQuery query(connection(), dbqt::utf8("SELECT DISTINCT dependee, depender FROM dependencies WHERE project_guid = ? AND dependee IN (" +
+                  placeholders(unique.size()) + ")"));
+    int bindAt = 0;
+    dbqt::bindText(query, ++bindAt, projectGuid);
+    for (const QString &guid : unique) dbqt::bindText(query, ++bindAt, guid);
     executeAndCheckQuery(query, "fetchProjectDependers");
     while (query.next())
-        out[query.value(0).toString()].append(query.value(1).toString());
+        out[dbqt::text(query, 0)].append(dbqt::text(query, 1));
     return out;
 }
 
@@ -2745,11 +2708,10 @@ QSet<QString> Database::fetchProjectFolderGuids(const QString &projectGuid)
 {
     QSet<QString> out;
     if (projectGuid.isEmpty()) return out;
-    QSqlQuery query;
-    query.prepare("SELECT guid FROM folders WHERE project_guid = ?");
-    query.addBindValue(projectGuid);
+    DbQuery query(connection(), "SELECT guid FROM folders WHERE project_guid = ?");
+    dbqt::bindText(query, 1, projectGuid);
     executeAndCheckQuery(query, "fetchProjectFolderGuids");
-    while (query.next()) out.insert(query.value(0).toString());
+    while (query.next()) out.insert(dbqt::text(query, 0));
     return out;
 }
 
@@ -2757,11 +2719,10 @@ QSet<QString> Database::fetchProjectPinnedGuids(const QString &projectGuid)
 {
     QSet<QString> out;
     if (projectGuid.isEmpty()) return out;
-    QSqlQuery query;
-    query.prepare("SELECT asset_guid FROM project_assets WHERE project_guid = ?");
-    query.addBindValue(projectGuid);
+    DbQuery query(connection(), "SELECT asset_guid FROM project_assets WHERE project_guid = ?");
+    dbqt::bindText(query, 1, projectGuid);
     executeAndCheckQuery(query, "fetchProjectPinnedGuids");
-    while (query.next()) out.insert(query.value(0).toString());
+    while (query.next()) out.insert(dbqt::text(query, 0));
     return out;
 }
 
@@ -2769,25 +2730,23 @@ QHash<QString, QString> Database::fetchProjectPinFolders(const QString &projectG
 {
     QHash<QString, QString> out;
     if (projectGuid.isEmpty()) return out;
-    QSqlQuery query;
-    query.prepare("SELECT asset_guid, folder FROM project_assets "
+    DbQuery query(connection(), "SELECT asset_guid, folder FROM project_assets "
                   "WHERE project_guid = ? AND folder IS NOT NULL AND folder <> ''");
-    query.addBindValue(projectGuid);
+    dbqt::bindText(query, 1, projectGuid);
     executeAndCheckQuery(query, "fetchProjectPinFolders");
-    while (query.next()) out.insert(query.value(0).toString(), query.value(1).toString());
+    while (query.next()) out.insert(dbqt::text(query, 0), dbqt::text(query, 1));
     return out;
 }
 
 QVector<AssetRecord> Database::fetchAssetsForAssetView()
 {
-    QSqlQuery query;
     // Phase 0 (ASSET_PIPELINE_SPEC §1.2): the asset JSON BLOB is deliberately
     // NOT selected — no grid consumer reads it, and dragging it in loaded
     // every library row's node JSON into memory on each grid refresh.
     // NO THUMBNAIL (D11-LIBRARY-SCALE): a listing names rows; the tile cache
     // reads a row's picture by guid when a view paints it (ui/controls/
     // tilecache.h). This query fed 10,000 BLOBs into every Library build.
-    query.prepare(
+    DbQuery query(connection(),dbqt::utf8(
         "SELECT A.name, A.guid, C.collection_id, A.type, A.collection, A.properties, "
         "A.author, A.license, A.tags, A.project_guid, A.view_filter "
         "FROM assets A "
@@ -2801,24 +2760,23 @@ QVector<AssetRecord> Database::fetchAssetsForAssetView()
         // assets.list({scope: 'store'}).
         "AND A.listed = 1 "
         "AND " + memberSubquery(QStringLiteral("A")) + " "
-        "ORDER BY A.name DESC"
-    );
-    query.bindValue(":view_filter", static_cast<int>(assethome::StoredAssets));
+        "ORDER BY A.name DESC"));
+    query.bindInt(":view_filter", static_cast<int>(assethome::StoredAssets));
     executeAndCheckQuery(query, "FetchAssets");
 
     QVector<AssetRecord> tileData;
     while (query.next()) {
         AssetRecord data;
-        data.name = query.value(0).toString();
-        data.guid = query.value(1).toString();
-        data.type = query.value(3).toInt();
-        data.collection = query.value(4).toInt();
-        data.properties = query.value(5).toByteArray();
-        data.author = query.value(6).toString();
-        data.license = query.value(7).toString();
-        data.tags = query.value(8).toByteArray();
-        data.projectGuid = query.value(9).toString();
-        data.view_filter = query.value(10).toInt();
+        data.name = dbqt::text(query, 0);
+        data.guid = dbqt::text(query, 1);
+        data.type = int(query.int64(3));
+        data.collection = int(query.int64(4));
+        data.properties = dbqt::bytes(query, 5);
+        data.author = dbqt::text(query, 6);
+        data.license = dbqt::text(query, 7);
+        data.tags = dbqt::bytes(query, 8);
+        data.projectGuid = dbqt::text(query, 9);
+        data.view_filter = int(query.int64(10));
         data.listed = true;
         tileData.push_back(data);
     }
@@ -2840,21 +2798,21 @@ QVector<AssetRecord> Database::fetchChildAssets(const QString &parent, const QSt
     if (filter > 0) assetsQuery.append("AND type = ? ");
     assetsQuery.append("ORDER BY A.name DESC");
 
-    QSqlQuery query;
-    query.prepare(assetsQuery);
-    query.addBindValue(parent);
-    query.addBindValue(projectGuid);
-    if (filter > 0) query.addBindValue(filter);
+    DbQuery query(connection(), dbqt::utf8(assetsQuery));
+    int bindAt = 0;
+    dbqt::bindText(query, ++bindAt, parent);
+    dbqt::bindText(query, ++bindAt, projectGuid);
+    if (filter > 0) query.bindInt(++bindAt, filter);
     executeAndCheckQuery(query, "fetchChildAssets");
 
     QVector<AssetRecord> tileData;
     while (query.next()) {
         AssetRecord data;
-        data.name = query.value(0).toString();
-        data.guid = query.value(1).toString();
-        data.parent = query.value(2).toString();
-        data.type = query.value(3).toInt();
-        data.properties = query.value(4).toByteArray();
+        data.name = dbqt::text(query, 0);
+        data.guid = dbqt::text(query, 1);
+        data.parent = dbqt::text(query, 2);
+        data.type = int(query.int64(3));
+        data.properties = dbqt::bytes(query, 4);
         data.projectGuid = projectGuid;
         tileData.push_back(data);
     }
@@ -2887,20 +2845,20 @@ QVector<AssetRecord> Database::fetchChildAssetsIn(const QStringList &parents,
     // folder's rows exactly as fetchChildAssets would have handed them over.
     assetsQuery.append("ORDER BY A.name DESC");
 
-    QSqlQuery query;
-    query.prepare(assetsQuery);
-    for (const QString &parent : parents) query.addBindValue(parent);
-    query.addBindValue(projectGuid);
-    if (filter > 0) query.addBindValue(filter);
+    DbQuery query(connection(), dbqt::utf8(assetsQuery));
+    int bindAt = 0;
+    for (const QString &parent : parents) dbqt::bindText(query, ++bindAt, parent);
+    dbqt::bindText(query, ++bindAt, projectGuid);
+    if (filter > 0) query.bindInt(++bindAt, filter);
     executeAndCheckQuery(query, "fetchChildAssetsIn");
 
     while (query.next()) {
         AssetRecord data;
-        data.name = query.value(0).toString();
-        data.guid = query.value(1).toString();
-        data.parent = query.value(2).toString();
-        data.type = query.value(3).toInt();
-        data.properties = query.value(4).toByteArray();
+        data.name = dbqt::text(query, 0);
+        data.guid = dbqt::text(query, 1);
+        data.parent = dbqt::text(query, 2);
+        data.type = int(query.int64(3));
+        data.properties = dbqt::bytes(query, 4);
         data.projectGuid = projectGuid;
         tileData.push_back(data);
     }
@@ -2915,28 +2873,27 @@ QVector<AssetRecord> Database::fetchProjectPinnedAssets(const QString &projectGu
     // ONE JOIN, not a fetchAsset per pin (small-items round B): a project with
     // 30 pins cost 31 queries here, and the editor tray reads this on every
     // edge write and every search keystroke.
-    QSqlQuery query;
     // A LISTING: no thumbnail column (D11-LIBRARY-SCALE).
-    query.prepare("SELECT A.name, A.guid, A.parent, A.type, A.properties, "
+    DbQuery query(connection(), "SELECT A.name, A.guid, A.parent, A.type, A.properties, "
                   "A.view_filter, A.date_created, A.collection, A.tags, A.project_guid, A.listed "
                   "FROM project_assets PA JOIN assets A ON A.guid = PA.asset_guid "
                   "WHERE PA.project_guid = ?");
-    query.addBindValue(projectGuid);
+    dbqt::bindText(query, 1, projectGuid);
     executeAndCheckQuery(query, "fetchProjectPinnedAssets");
 
     while (query.next()) {
         AssetRecord record;
-        record.name = query.value(0).toString();
-        record.guid = query.value(1).toString();
-        record.parent = query.value(2).toString();
-        record.type = query.value(3).toInt();
-        record.properties = query.value(4).toByteArray();
-        record.view_filter = query.value(5).toInt();
-        record.dateCreated = query.value(6).toDateTime();
-        record.collection = query.value(7).toInt();
-        record.tags = query.value(8).toByteArray();
-        record.projectGuid = query.value(9).toString();
-        record.listed = query.value(10).toInt() != 0;
+        record.name = dbqt::text(query, 0);
+        record.guid = dbqt::text(query, 1);
+        record.parent = dbqt::text(query, 2);
+        record.type = int(query.int64(3));
+        record.properties = dbqt::bytes(query, 4);
+        record.view_filter = int(query.int64(5));
+        record.dateCreated = dbqt::dateTime(query, 6);
+        record.collection = int(query.int64(7));
+        record.tags = dbqt::bytes(query, 8);
+        record.projectGuid = dbqt::text(query, 9);
+        record.listed = int(query.int64(10)) != 0;
         if (!record.guid.isEmpty()) records.push_back(record);
     }
     return records;
@@ -2946,12 +2903,11 @@ QStringList Database::fetchDependers(const QString &dependee, const QString &pro
 {
     QStringList out;
     if (dependee.isEmpty() || projectGuid.isEmpty()) return out;
-    QSqlQuery query;
-    query.prepare("SELECT DISTINCT depender FROM dependencies WHERE dependee = ? AND project_guid = ?");
-    query.addBindValue(dependee);
-    query.addBindValue(projectGuid);
+    DbQuery query(connection(), "SELECT DISTINCT depender FROM dependencies WHERE dependee = ? AND project_guid = ?");
+    dbqt::bindText(query, 1, dependee);
+    dbqt::bindText(query, 2, projectGuid);
     executeAndCheckQuery(query, "fetchDependers");
-    while (query.next()) out << query.value(0).toString();
+    while (query.next()) out << dbqt::text(query, 0);
     return out;
 }
 
@@ -2960,20 +2916,19 @@ QVector<DependencyRecord> Database::fetchNodeDependencies(const QString &depende
 {
     QVector<DependencyRecord> out;
     if (depender.isEmpty() || projectGuid.isEmpty()) return out;
-    QSqlQuery query;
-    query.prepare("SELECT depender_type, dependee_type, project_guid, depender, dependee, id "
+    DbQuery query(connection(), "SELECT depender_type, dependee_type, project_guid, depender, dependee, id "
                   "FROM dependencies WHERE depender = ? AND project_guid = ?");
-    query.addBindValue(depender);
-    query.addBindValue(projectGuid);
+    dbqt::bindText(query, 1, depender);
+    dbqt::bindText(query, 2, projectGuid);
     executeAndCheckQuery(query, "fetchNodeDependencies");
     while (query.next()) {
         DependencyRecord record;
-        record.dependerType = query.value(0).toInt();
-        record.dependeeType = query.value(1).toInt();
-        record.projectGuid = query.value(2).toString();
-        record.depender = query.value(3).toString();
-        record.dependee = query.value(4).toString();
-        record.id = query.value(5).toString();
+        record.dependerType = int(query.int64(0));
+        record.dependeeType = int(query.int64(1));
+        record.projectGuid = dbqt::text(query, 2);
+        record.depender = dbqt::text(query, 3);
+        record.dependee = dbqt::text(query, 4);
+        record.id = dbqt::text(query, 5);
         out.append(record);
     }
     return out;
@@ -2991,23 +2946,19 @@ QVector<AssetRecord> Database::fetchAssetsFromParent(const QString & guid)
 
 QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString &projectGuid)
 {
-    QSqlQuery query;
     // A LISTING: no thumbnail column (D11-LIBRARY-SCALE).
-    query.prepare("SELECT guid, type, name, asset FROM assets WHERE type = ? AND project_guid = ?");
-    query.addBindValue(type);
-    query.addBindValue(projectGuid);
+    DbQuery query(connection(), "SELECT guid, type, name, asset FROM assets WHERE type = ? AND project_guid = ?");
+    query.bindInt(1, type);
+    dbqt::bindText(query, 2, projectGuid);
     executeAndCheckQuery(query, "fetchAssetsByType");
 
     QVector<AssetRecord> tileData;
     while (query.next()) {
         AssetRecord data;
-        QSqlRecord record = query.record();
-        for (int i = 0; i < record.count(); i++) {
-            data.guid = record.value(0).toString();
-            data.type = record.value(1).toInt();
-            data.name = record.value(2).toString();
-            data.asset = record.value(3).toByteArray();
-        }
+        data.guid = dbqt::text(query, 0);
+        data.type = int(query.int64(1));
+        data.name = dbqt::text(query, 2);
+        data.asset = dbqt::bytes(query, 3);
 
         tileData.push_back(data);
     }
@@ -3017,7 +2968,6 @@ QVector<AssetRecord> Database::fetchAssetsByType(const int &type, const QString 
 
 QVector<AssetRecord> Database::fetchAssetsInHome(assethome::Kind home, int type)
 {
-	QSqlQuery query;
 	// A STORAGE'S LISTING (the Materials module's Custom drawer reads its own,
 	// the Avatar module its own): unlisted rows out. The
 	// TYPE is a predicate (D11-LIBRARY-SCALE): the drawer wants materials, and
@@ -3026,9 +2976,10 @@ QVector<AssetRecord> Database::fetchAssetsInHome(assethome::Kind home, int type)
 	QString sql = QStringLiteral("SELECT guid, type, name, asset, properties FROM assets "
 	                             "WHERE view_filter = ? AND listed = 1");
 	if (type >= 0) sql += QStringLiteral(" AND type = ?");
-	query.prepare(sql);
-	query.addBindValue(assethome::Home{ home, QString() }.stored());
-	if (type >= 0) query.addBindValue(type);
+	DbQuery query(connection(), dbqt::utf8(sql));
+	int bindAt = 0;
+	query.bindInt(++bindAt, assethome::Home{ home, QString() }.stored());
+	if (type >= 0) query.bindInt(++bindAt, type);
 	// Named by its type for the query log's view (a storage's drawer and the Members panel's pictures are
 	// different readers of one statement: library.scale counts the drawer's fills).
 	executeAndCheckQuery(query, QStringLiteral("fetchAssetsInHome.type%1").arg(type));
@@ -3036,13 +2987,13 @@ QVector<AssetRecord> Database::fetchAssetsInHome(assethome::Kind home, int type)
 	QVector<AssetRecord> tileData;
 	while (query.next()) {
 		AssetRecord data;
-		data.guid = query.value(0).toString();
-		data.type = query.value(1).toInt();
-		data.name = query.value(2).toString();
-		data.asset = query.value(3).toByteArray();
+		data.guid = dbqt::text(query, 0);
+		data.type = int(query.int64(1));
+		data.name = dbqt::text(query, 2);
+		data.asset = dbqt::bytes(query, 3);
 		// The row's own facts (a project's copy of a preset is one —
 		// the Custom drawer folds it, PRESET-FOLD-1).
-		data.properties = query.value(4).toByteArray();
+		data.properties = dbqt::bytes(query, 4);
 		data.view_filter = assethome::Home{ home, QString() }.stored();
 		data.listed = true;
 		tileData.push_back(data);
@@ -3056,15 +3007,14 @@ int Database::createCollection(const QString &collectionName, const int parent)
     // parent -1 = top level; anything else must be an existing drawer.
     if (parent != -1 && fetchCollectionSubtree(parent).isEmpty()) return -1;
 
-    QSqlQuery query;
-    query.prepare("INSERT INTO " + Constants::DB_COLLECT_TABLE +
+    DbQuery query(connection(), dbqt::utf8("INSERT INTO " + Constants::DB_COLLECT_TABLE +
         " (name, date_created, parent)" +
-        " VALUES (:name, datetime(), :parent)");
-    query.bindValue(":name", collectionName);
-    query.bindValue(":parent", parent);
+        " VALUES (:name, datetime(), :parent)"));
+    dbqt::bindText(query, ":name", collectionName);
+    query.bindInt(":parent", parent);
 
     if (!executeAndCheckQuery(query, "CreateCollection")) return -1;
-    return query.lastInsertId().toInt();
+    return int(connection().lastInsertRowid());
 }
 
 bool Database::setCollectionParent(const int collectionId, const int parent)
@@ -3080,19 +3030,17 @@ bool Database::setCollectionParent(const int collectionId, const int parent)
         if (fetchCollectionSubtree(parent).isEmpty()) return false;   // no such parent
     }
 
-    QSqlQuery query;
-    query.prepare("UPDATE collections SET parent = ? WHERE collection_id = ?");
-    query.addBindValue(parent);
-    query.addBindValue(collectionId);
+    DbQuery query(connection(), "UPDATE collections SET parent = ? WHERE collection_id = ?");
+    query.bindInt(1, parent);
+    query.bindInt(2, collectionId);
     return executeAndCheckQuery(query, "SetCollectionParent");
 }
 
 bool Database::switchAssetCollection(const int id, const QString &guid)
 {
-    QSqlQuery query;
-    query.prepare("UPDATE " + Constants::DB_ASSETS_TABLE + " SET collection = ?, last_updated = datetime() WHERE guid = ?");
-    query.addBindValue(id);
-    query.addBindValue(guid);
+    DbQuery query(connection(), dbqt::utf8("UPDATE " + Constants::DB_ASSETS_TABLE + " SET collection = ?, last_updated = datetime() WHERE guid = ?"));
+    query.bindInt(1, id);
+    dbqt::bindText(query, 2, guid);
 
     const bool ok = executeAndCheckQuery(query, "switchAssetCollection");
     if (ok) refreshSidecar(guid);   // collection is a sidecar field (I2)
@@ -3101,24 +3049,19 @@ bool Database::switchAssetCollection(const int id, const QString &guid)
 
 QByteArray Database::fetchAssetData(const QString &guid) const
 {
-	QSqlQuery query;
-	query.prepare("SELECT asset FROM assets WHERE guid = ?");
-	query.addBindValue(guid);
+	db::Statement query(*mConnection, "SELECT asset FROM assets WHERE guid = ?");
+	dbqt::bindText(query, 1, guid);
 
-	if (query.exec()) {
-		if (query.first()) return query.value(0).toByteArray();
-	}
-	else {
-		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the material blob! " + query.lastError().text());
-	}
+	db::Error error;
+	if (query.step(&error)) return dbqt::bytes(query, 0);
+	if (error) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the material blob! " + dbqt::describe(error));
 
 	return QByteArray();
 }
 
 QVector<AssetRecord> Database::fetchFavorites()
 {
-    QSqlQuery query;
-    query.prepare(
+    DbQuery query(connection(),
         // LIBRARY LISTING: an unlisted asset is not a favourite tile either.
         // `A.listed IS NULL` keeps the LEFT JOIN's tolerance of a favourite
         // whose asset row is gone — that row was always shown, broken or not.
@@ -3133,13 +3076,10 @@ QVector<AssetRecord> Database::fetchFavorites()
     QVector<AssetRecord> tileData;
     while (query.next()) {
         AssetRecord data;
-        QSqlRecord record = query.record();
-        for (int i = 0; i < record.count(); i++) {
-            data.guid = record.value(0).toString();
-            data.name = record.value(1).toString();
-            data.dateCreated = record.value(2).toDateTime();
-            data.type = record.value(3).toInt();
-        }
+        data.guid = dbqt::text(query, 0);
+        data.name = dbqt::text(query, 1);
+        data.dateCreated = dbqt::dateTime(query, 2);
+        data.type = int(query.int64(3));
 
         tileData.push_back(data);
     }
@@ -3149,20 +3089,16 @@ QVector<AssetRecord> Database::fetchFavorites()
 
 QVector<AssetRecord> Database::fetchFilteredAssets(const QString &guid, const int &type)
 {
-	QSqlQuery query;
-	query.prepare("SELECT name, guid FROM assets WHERE project_guid = ? AND type = ?");
-	query.addBindValue(guid);
-	query.addBindValue(type);
+	DbQuery query(connection(), "SELECT name, guid FROM assets WHERE project_guid = ? AND type = ?");
+	dbqt::bindText(query, 1, guid);
+	query.bindInt(2, type);
 	executeAndCheckQuery(query, "fetchFilteredAssets");
 
 	QVector<AssetRecord> tileData;
 	while (query.next()) {
         AssetRecord data;
-		QSqlRecord record = query.record();
-		for (int i = 0; i < record.count(); i++) {
-			data.name = record.value(0).toString();
-			data.guid = record.value(1).toString();
-		}
+		data.name = dbqt::text(query, 0);
+		data.guid = dbqt::text(query, 1);
 
 		tileData.push_back(data);
 	}
@@ -3172,17 +3108,16 @@ QVector<AssetRecord> Database::fetchFilteredAssets(const QString &guid, const in
 
 QVector<CollectionRecord> Database::fetchCollections()
 {
-    QSqlQuery query;
-    query.prepare("SELECT name, collection_id, COALESCE(parent, -1) FROM " + Constants::DB_COLLECT_TABLE +
-                  " ORDER BY name, date_created DESC");
+    DbQuery query(connection(), dbqt::utf8("SELECT name, collection_id, COALESCE(parent, -1) FROM " + Constants::DB_COLLECT_TABLE +
+                  " ORDER BY name, date_created DESC"));
     executeAndCheckQuery(query, "fetchCollections");
 
     QVector<CollectionRecord> tileData;
     while (query.next()) {
         CollectionRecord data;
-        data.name = query.value(0).toString();
-        data.id = query.value(1).toInt();
-        data.parent = query.value(2).toInt();
+        data.name = dbqt::text(query, 0);
+        data.id = int(query.int64(1));
+        data.parent = int(query.int64(2));
         tileData.push_back(data);
     }
 
@@ -3220,20 +3155,17 @@ int Database::countAssetsInCollections(const QVector<int> &collectionIds)
     QStringList placeholders;
     for (int i = 0; i < collectionIds.size(); ++i) placeholders << "?";
 
-    QSqlQuery query;
     // LIBRARY LISTING: the confirmation counts what the user can SEE in the
     // drawer. (Unlisted rows move to Uncategorized with the rest — they are
     // just not part of a count offered to a human.)
-    query.prepare("SELECT COUNT(*) FROM assets WHERE listed = 1 AND collection IN ("
-                  + placeholders.join(", ") + ")");
-    for (const int id : collectionIds) query.addBindValue(id);
+    db::Statement query(connection(), dbqt::utf8("SELECT COUNT(*) FROM assets WHERE listed = 1 AND collection IN ("
+                                                 + placeholders.join(", ") + ")"));
+    int bindAt = 0;
+    for (const int id : collectionIds) query.bindInt(++bindAt, id);
 
-    if (query.exec()) {
-        if (query.first()) return query.value(0).toInt();
-    }
-    else {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "countAssetsInCollections query failed! " + query.lastError().text());
-    }
+    db::Error error;
+    if (query.step(&error)) return int(query.int64(0));
+    if (error) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "countAssetsInCollections query failed! " + dbqt::describe(error));
 
     return 0;
 }
@@ -3252,33 +3184,32 @@ static const char *kProjectTileColumns =
     "SELECT name, guid, desktop, desktop_x, desktop_y, "
     "slider_row, slider_index FROM projects ";
 
-static ProjectTileData readProjectTile(const QSqlRecord &record)
+static ProjectTileData readProjectTile(const DbQuery &row)
 {
     ProjectTileData data;
-    data.name       = record.value(0).toString();
-    data.guid       = record.value(1).toString();
-    data.desktop    = record.value(2).toInt();
-    data.hasPosition = !record.value(3).isNull() && !record.value(4).isNull();
+    data.name       = dbqt::text(row, 0);
+    data.guid       = dbqt::text(row, 1);
+    data.desktop    = int(row.int64(2));
+    data.hasPosition = !row.isNull(3) && !row.isNull(4);
     if (data.hasPosition) {
-        data.posX = record.value(3).toFloat();
-        data.posY = record.value(4).toFloat();
+        data.posX = float(row.real(3));
+        data.posY = float(row.real(4));
     }
-    data.hasSliderPos = !record.value(5).isNull() && !record.value(6).isNull();
+    data.hasSliderPos = !row.isNull(5) && !row.isNull(6);
     if (data.hasSliderPos) {
-        data.sliderRow   = record.value(5).toInt();
-        data.sliderIndex = record.value(6).toInt();
+        data.sliderRow   = int(row.int64(5));
+        data.sliderIndex = int(row.int64(6));
     }
     return data;
 }
 
 QVector<ProjectTileData> Database::fetchProjectsNamed(const QString &name)
 {
-    QSqlQuery query;
-    query.prepare(QString::fromLatin1(kProjectTileColumns) + "WHERE name = ?");
-    query.addBindValue(name);
+    DbQuery query(connection(), std::string(kProjectTileColumns) + "WHERE name = ?");
+    dbqt::bindText(query, 1, name);
     executeAndCheckQuery(query, "fetchProjectsNamed");
     QVector<ProjectTileData> rows;
-    while (query.next()) rows.push_back(readProjectTile(query.record()));
+    while (query.next()) rows.push_back(readProjectTile(query));
     return rows;
 }
 
@@ -3287,13 +3218,12 @@ QString Database::nextFreeProjectName(const QString &wanted, const QString &exce
     const QString base = wanted.trimmed();
     if (base.isEmpty()) return base;
     QSet<QString> taken;
-    QSqlQuery query;
     // `IS NOT`, never `<>`: a null QString binds SQL NULL, and `guid <> NULL`
     // is NULL for every row — the rule then saw no project at all.
-    query.prepare("SELECT name FROM projects WHERE guid IS NOT ?");
-    query.addBindValue(exceptGuid);
+    DbQuery query(connection(), "SELECT name FROM projects WHERE guid IS NOT ?");
+    dbqt::bindText(query, 1, exceptGuid);
     if (executeAndCheckQuery(query, "nextFreeProjectName"))
-        while (query.next()) taken.insert(query.value(0).toString().trimmed().toCaseFolded());
+        while (query.next()) taken.insert(dbqt::text(query, 0).trimmed().toCaseFolded());
     if (!taken.contains(base.toCaseFolded())) return base;
 
     // IS `base` A COPY THIS RULE MADE? Only then does its number continue the
@@ -3328,39 +3258,31 @@ QVector<ProjectTileData> Database::fetchProjects(int desktop)
     // fetches. The rowid is the insertion order and never changes on a save,
     // so within one second the later-CREATED project comes first, every time.
     // desktop <= 0 = every desktop;
-    QSqlQuery query;
-    if (desktop > 0) {
-        query.prepare(QString::fromLatin1(kProjectTileColumns) +
-                      "WHERE desktop = ? ORDER BY last_written DESC, rowid DESC");
-        query.addBindValue(desktop);
-    }
-    else {
-        query.prepare(QString::fromLatin1(kProjectTileColumns) +
-                      "ORDER BY last_written DESC, rowid DESC");
-    }
+    DbQuery query(connection(), std::string(kProjectTileColumns)
+                                    + (desktop > 0 ? "WHERE desktop = ? ORDER BY last_written DESC, rowid DESC"
+                                                   : "ORDER BY last_written DESC, rowid DESC"));
+    if (desktop > 0) query.bindInt(1, desktop);
     executeAndCheckQuery(query, "FetchProjects");
 
     QVector<ProjectTileData> tileData;
-    while (query.next()) tileData.push_back(readProjectTile(query.record()));
+    while (query.next()) tileData.push_back(readProjectTile(query));
     return tileData;
 }
 
 bool Database::fetchProjectTile(const QString &guid, ProjectTileData *out)
 {
-    QSqlQuery query;
-    query.prepare(QString::fromLatin1(kProjectTileColumns) + "WHERE guid = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), std::string(kProjectTileColumns) + "WHERE guid = ?");
+    dbqt::bindText(query, 1, guid);
     executeAndCheckQuery(query, "fetchProjectTile");
     if (!query.next()) return false;
-    if (out) *out = readProjectTile(query.record());
+    if (out) *out = readProjectTile(query);
     return true;
 }
 
 bool Database::hasProjectRow(const QString &guid, bool *readOk)
 {
-    QSqlQuery query;
-    query.prepare("SELECT 1 FROM projects WHERE guid = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "SELECT 1 FROM projects WHERE guid = ?");
+    dbqt::bindText(query, 1, guid);
     const bool ok = executeAndCheckQuery(query, "hasProjectRow");
     if (readOk) *readOk = ok;
     return ok && query.next();
@@ -3368,12 +3290,11 @@ bool Database::hasProjectRow(const QString &guid, bool *readOk)
 
 QStringList Database::fetchProjectGuids(int desktop)
 {
-    QSqlQuery query;
-    query.prepare("SELECT guid FROM projects WHERE desktop = ?");
-    query.addBindValue(desktop);
+    DbQuery query(connection(), "SELECT guid FROM projects WHERE desktop = ?");
+    query.bindInt(1, desktop);
     executeAndCheckQuery(query, "fetchProjectGuids");
     QStringList guids;
-    while (query.next()) guids.append(query.value(0).toString());
+    while (query.next()) guids.append(dbqt::text(query, 0));
     return guids;
 }
 
@@ -3384,99 +3305,101 @@ Database::ExportCatalog Database::readExportCatalog(const QString &projectGuid)
     // (reference-with-pin, phase 4), their outgoing edges and the project's
     // folders — as values the worker writes into the archive's own file.
     ExportCatalog out;
-    QSqlQuery query;
-    query.prepare("SELECT name, scene, thumbnail, version, last_written, last_accessed, guid FROM projects WHERE guid = ?");
-    query.addBindValue(projectGuid);
-    if (!query.exec()) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error fetching a row to be exported " + query.lastError().text());
-        return out;
+    {
+        db::Statement query(connection(), "SELECT name, scene, thumbnail, version, last_written, last_accessed, guid "
+                                          "FROM projects WHERE guid = ?");
+        dbqt::bindText(query, 1, projectGuid);
+        db::Error error;
+        if (!query.step(&error)) {
+            if (error) {
+                JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error fetching a row to be exported " + dbqt::describe(error));
+                out.failure = QStringLiteral("exportProjectRow");
+            }
+            return out;
+        }
+        out.found = true;
+        out.name = dbqt::text(query, 0);
+        out.scene = dbqt::bytes(query, 1);
+        out.thumbnail = dbqt::bytes(query, 2);
+        out.version = dbqt::text(query, 3);
+        // Our own column, already the one format (written by datetime()), carried
+        // as TEXT into the archive's .db — which nothing ever reads back: an import
+        // stamps the import moment (importProject).
+        out.lastWritten = dbqt::text(query, 4);
+        out.lastAccessed = dbqt::text(query, 5);
+        out.guid = dbqt::text(query, 6);
     }
-    if (!query.next()) return out;
-    out.found = true;
-    out.name = query.value(0).toString();
-    out.scene = query.value(1).toByteArray();
-    out.thumbnail = query.value(2).toByteArray();
-    out.version = query.value(3).toString();
-    // Our own column, already the one format (written by datetime()), carried
-    // as TEXT into the archive's .db — which nothing ever reads back: an import
-    // stamps the import moment (importProject).
-    out.lastWritten = query.value(4).toString();
-    out.lastAccessed = query.value(5).toString();
-    out.guid = query.value(6).toString();
 
-    QSqlQuery selectAssetQuery;
-    selectAssetQuery.prepare(
+    DbQuery selectAssetQuery(connection(),
         "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, "
         "license, hash, version, parent, tags, properties, asset, thumbnail, view_filter FROM assets "
         "WHERE project_guid = ? "
-        "   OR guid IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)"
-    );
+        "   OR guid IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)");
     // Reference-with-pin (phase 4): pinned LIBRARY assets (project_guid empty)
     // are project members too and must ride along in the archive snapshot.
-    selectAssetQuery.addBindValue(projectGuid);
-    selectAssetQuery.addBindValue(projectGuid);
+    dbqt::bindText(selectAssetQuery, 1, projectGuid);
+    dbqt::bindText(selectAssetQuery, 2, projectGuid);
     executeAndCheckQuery(selectAssetQuery, "selectAssetQuery");
     while (selectAssetQuery.next()) {
         AssetRecord data;
-        data.guid = selectAssetQuery.value(0).toString();
-        data.type = selectAssetQuery.value(1).toInt();
-        data.name = selectAssetQuery.value(2).toString();
-        data.collection = selectAssetQuery.value(3).toInt();
-        data.timesUsed = selectAssetQuery.value(4).toInt();
-        data.projectGuid = selectAssetQuery.value(5).toString();
-        data.dateCreated = selectAssetQuery.value(6).toDateTime();
-        data.lastUpdated = selectAssetQuery.value(7).toDateTime();
-        data.author = selectAssetQuery.value(8).toString();
-        data.license = selectAssetQuery.value(9).toString();
-        data.hash = selectAssetQuery.value(10).toString();
-        data.version = selectAssetQuery.value(11).toString();
-        data.parent = selectAssetQuery.value(12).toString();
-        data.tags = selectAssetQuery.value(13).toByteArray();
-        data.properties = selectAssetQuery.value(14).toByteArray();
-        data.asset = selectAssetQuery.value(15).toByteArray();
-        data.thumbnail = selectAssetQuery.value(16).toByteArray();
-        data.view_filter = selectAssetQuery.value(17).toInt();
+        data.guid = dbqt::text(selectAssetQuery, 0);
+        data.type = int(selectAssetQuery.int64(1));
+        data.name = dbqt::text(selectAssetQuery, 2);
+        data.collection = int(selectAssetQuery.int64(3));
+        data.timesUsed = int(selectAssetQuery.int64(4));
+        data.projectGuid = dbqt::text(selectAssetQuery, 5);
+        data.dateCreated = dbqt::dateTime(selectAssetQuery, 6);
+        data.lastUpdated = dbqt::dateTime(selectAssetQuery, 7);
+        data.author = dbqt::text(selectAssetQuery, 8);
+        data.license = dbqt::text(selectAssetQuery, 9);
+        data.hash = dbqt::text(selectAssetQuery, 10);
+        data.version = dbqt::text(selectAssetQuery, 11);
+        data.parent = dbqt::text(selectAssetQuery, 12);
+        data.tags = dbqt::bytes(selectAssetQuery, 13);
+        data.properties = dbqt::bytes(selectAssetQuery, 14);
+        data.asset = dbqt::bytes(selectAssetQuery, 15);
+        data.thumbnail = dbqt::bytes(selectAssetQuery, 16);
+        data.view_filter = int(selectAssetQuery.int64(17));
         out.assets.push_back(data);
     }
+    if (selectAssetQuery.failed()) out.failure = QStringLiteral("selectAssetQuery");
 
-    QSqlQuery selectDep;
-    selectDep.prepare(
+    DbQuery selectDep(connection(),
 		"SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies "
 		"WHERE project_guid = ? "
-		"   OR depender IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)"
-	);
-    selectDep.addBindValue(projectGuid);
-    selectDep.addBindValue(projectGuid);
+		"   OR depender IN (SELECT asset_guid FROM project_assets WHERE project_guid = ?)");
+    dbqt::bindText(selectDep, 1, projectGuid);
+    dbqt::bindText(selectDep, 2, projectGuid);
     executeAndCheckQuery(selectDep, "selectDep");
     while (selectDep.next()) {
         DependencyRecord record;
-        record.dependerType = selectDep.value(0).toInt();
-        record.dependeeType = selectDep.value(1).toInt();
-        record.projectGuid = selectDep.value(2).toString();
-        record.depender = selectDep.value(3).toString();
-        record.dependee = selectDep.value(4).toString();
-        record.id = selectDep.value(5).toString();
+        record.dependerType = int(selectDep.int64(0));
+        record.dependeeType = int(selectDep.int64(1));
+        record.projectGuid = dbqt::text(selectDep, 2);
+        record.depender = dbqt::text(selectDep, 3);
+        record.dependee = dbqt::text(selectDep, 4);
+        record.id = dbqt::text(selectDep, 5);
         out.dependencies.append(record);
     }
+    if (selectDep.failed()) out.failure = QStringLiteral("selectDep");
 
-    QSqlQuery selectFolder;
-    selectFolder.prepare(
-		"SELECT guid, name, parent, count, project_guid, date_created, last_updated, visible FROM folders WHERE project_guid = ?"
-	);
-    selectFolder.addBindValue(projectGuid);
+    DbQuery selectFolder(connection(),
+		"SELECT guid, name, parent, count, project_guid, date_created, last_updated, visible FROM folders WHERE project_guid = ?");
+    dbqt::bindText(selectFolder, 1, projectGuid);
     executeAndCheckQuery(selectFolder, "selectFolder");
     while (selectFolder.next()) {
         FolderRecord record;
-        record.guid = selectFolder.value(0).toString();
-        record.name = selectFolder.value(1).toString();
-        record.parent = selectFolder.value(2).toString();
-        record.count = selectFolder.value(3).toInt();
-        record.projectGuid = selectFolder.value(4).toString();
-        record.dateCreated = selectFolder.value(5).toDateTime();
-        record.lastUpdated = selectFolder.value(6).toDateTime();
-        record.visible = selectFolder.value(7).toBool();
+        record.guid = dbqt::text(selectFolder, 0);
+        record.name = dbqt::text(selectFolder, 1);
+        record.parent = dbqt::text(selectFolder, 2);
+        record.count = int(selectFolder.int64(3));
+        record.projectGuid = dbqt::text(selectFolder, 4);
+        record.dateCreated = dbqt::dateTime(selectFolder, 5);
+        record.lastUpdated = dbqt::dateTime(selectFolder, 6);
+        record.visible = (selectFolder.int64(7) != 0);
         out.folders.append(record);
     }
+    if (selectFolder.failed()) out.failure = QStringLiteral("selectFolder");
     return out;
 }
 
@@ -3494,6 +3417,8 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
         if (errorOut) *errorOut = why;
         return false;
     };
+    if (!catalog.failure.isEmpty())
+        return failed(QStringLiteral("the catalog's read '%1' failed (the log names why)").arg(catalog.failure));
     if (!catalog.found) return failed(QStringLiteral("the project row was not found"));
     // ScopedConnection: a uniquely named side connection, closed and
     // unregistered on every path (the export used to leak a fixed-name one).
@@ -3668,38 +3593,14 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
     // close + unregister: ~ScopedConnection
 }
 
-bool Database::checkIfRecordExists(const QString & record, const QVariant &value, const QString &table, bool perProject, const QString &projectGuid)
-{
-	QSqlQuery query;
-	QString queryString = "SELECT EXISTS (SELECT 1 FROM %1 WHERE %2 = ? ";
-	if (!perProject) queryString.append("AND project_guid = ? ");
-	queryString.append("LIMIT 1)");
-	query.prepare(queryString.arg(table).arg(record));
-	query.addBindValue(value);
-	if (!perProject) query.addBindValue(projectGuid);
-
-	if (query.exec()) {
-		if (query.first()) return query.value(0).toBool();
-	}
-	else {
-		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error fetching a record" + query.lastError().text());
-	}
-
-	return false;
-}
-
 bool Database::checkIfDependencyExists(const QString& depender, const QString& dependee)
 {
-	QSqlQuery query;
-	query.prepare(QString("SELECT 1 from dependencies WHERE depender = ? and dependee = ?"));
-	query.addBindValue(depender);
-	query.addBindValue(dependee);
-	if (query.exec()) {
-		if (query.first()) return query.value(0).toBool();
-	}
-	else {
-			JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error fetching a record " + query.lastError().text());
-	}
+	db::Statement query(connection(), "SELECT 1 from dependencies WHERE depender = ? and dependee = ?");
+	dbqt::bindText(query, 1, depender);
+	dbqt::bindText(query, 2, dependee);
+	db::Error error;
+	if (query.step(&error)) return query.int64(0) != 0;
+	if (error) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error fetching a record " + dbqt::describe(error));
 	return false;
 }
 
@@ -3710,15 +3611,13 @@ bool Database::checkIfProjectVersionSupported(const QString &pathToDb)
 
 QStringList Database::fetchFolderNameByParent(const QString &guid)
 {
-	QSqlQuery query;
-	query.prepare("SELECT name FROM folders WHERE parent = ?");
-	query.addBindValue(guid);
+	DbQuery query(connection(), "SELECT name FROM folders WHERE parent = ?");
+	dbqt::bindText(query, 1, guid);
 	executeAndCheckQuery(query, "fetchFolderNameByParent");
 
 	QStringList folders;
 	while (query.next()) {
-		QSqlRecord record = query.record();
-		folders.append(record.value(0).toString());
+		folders.append(dbqt::text(query, 0));
 	}
 
 	return folders;
@@ -3726,36 +3625,33 @@ QStringList Database::fetchFolderNameByParent(const QString &guid)
 
 QStringList Database::fetchAssetNameByParent(const QString &guid)
 {
-    QSqlQuery query;
-    query.prepare("SELECT name FROM assets WHERE parent = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "SELECT name FROM assets WHERE parent = ?");
+    dbqt::bindText(query, 1, guid);
     executeAndCheckQuery(query, "FetchAssetNameByParent");
 
     QStringList assets;
     while (query.next()) {
-        QSqlRecord record = query.record();
-        assets.append(record.value(0).toString());
+        assets.append(dbqt::text(query, 0));
     }
 
     return assets;
 }
 
-QStringList Database::fetchFolderAndChildFolders(const QString &guid)
+QStringList Database::fetchFolderAndChildFolders(const QString &guid, bool *readOk)
 {
 	std::function<void(QStringList&, const QString&)> fetchFolders
 		= [&](QStringList &folders, const QString &guid) -> void
 	{
-		QSqlQuery query;
-		query.prepare("SELECT guid FROM folders WHERE parent = ?");
-		query.addBindValue(guid);
-		executeAndCheckQuery(query, "fetchFolderAndDependencies");
+		DbQuery query(connection(), "SELECT guid FROM folders WHERE parent = ?");
+		dbqt::bindText(query, 1, guid);
+		const bool ran = executeAndCheckQuery(query, "fetchFolderAndDependencies");
 
 		QStringList subFolders;
 		while (query.next()) {
-			QSqlRecord record = query.record();
-			subFolders.append(record.value(0).toString());
-			folders.append(record.value(0).toString());
+			subFolders.append(dbqt::text(query, 0));
+			folders.append(dbqt::text(query, 0));
 		}
+		if (readOk && (!ran || query.failed())) *readOk = false;
 
 		for (const QString &folder : subFolders) {
 			fetchFolders(folders, folder);
@@ -3769,59 +3665,53 @@ QStringList Database::fetchFolderAndChildFolders(const QString &guid)
 	return folders;
 }
 
-QStringList Database::fetchChildFolderAssets(const QString &guid)
+QStringList Database::fetchChildFolderAssets(const QString &guid, bool *readOk)
 {
-	QSqlQuery query;
-	query.prepare("SELECT guid FROM assets WHERE parent = ?");
-	query.addBindValue(guid);
-	executeAndCheckQuery(query, "fetchChildFolderAssets");
+	DbQuery query(connection(), "SELECT guid FROM assets WHERE parent = ?");
+	dbqt::bindText(query, 1, guid);
+	const bool ran = executeAndCheckQuery(query, "fetchChildFolderAssets");
 
 	QStringList assets;
 	while (query.next()) {
-		QString data;
-		QSqlRecord record = query.record();
-		assets.append(record.value(0).toString());
+		assets.append(dbqt::text(query, 0));
 	}
+	if (readOk && (!ran || query.failed())) *readOk = false;
 
 	return assets;
 }
 
 QStringList Database::fetchAssetDependeesByType(const QString & guid, const ModelTypes &type)
 {
-    QSqlQuery query;
-    query.prepare(
+    DbQuery query(connection(),
         "SELECT assets.guid FROM dependencies "
         "INNER JOIN assets ON dependencies.dependee = assets.guid "
         "WHERE depender = ? AND dependee_type = ?");
-    query.addBindValue(guid);
-    query.addBindValue(static_cast<int>(type));
+    dbqt::bindText(query, 1, guid);
+    query.bindInt(2, static_cast<int>(type));
     executeAndCheckQuery(query, "fetchAssetDependeesByType");
 
     QStringList dependencies;
     while (query.next()) {
-        QSqlRecord record = query.record();
-        dependencies.append(record.value(0).toString());
+        dependencies.append(dbqt::text(query, 0));
     }
     return dependencies;
 }
 
-QStringList Database::fetchAssetAndDependencies(const QString &guid)
+QStringList Database::fetchAssetAndDependencies(const QString &guid, bool *readOk)
 {
-	QSqlQuery query;
-	query.prepare(
+	DbQuery query(connection(),
 		"SELECT assets.name, assets.guid FROM dependencies "
 		"INNER JOIN assets ON dependencies.dependee = assets.guid "
-		"WHERE depender = ?"
-	);
-	query.addBindValue(guid);
-	executeAndCheckQuery(query, "fetchAssetAndDependencies");
+		"WHERE depender = ?");
+	dbqt::bindText(query, 1, guid);
+	const bool ran = executeAndCheckQuery(query, "fetchAssetAndDependencies");
 
 	QStringList dependencies;
 	dependencies.append(fetchAsset(guid).name);
 	while (query.next()) {
-		QSqlRecord record = query.record();
-		dependencies.append(record.value(0).toString());
+		dependencies.append(dbqt::text(query, 0));
 	}
+	if (readOk && (!ran || query.failed())) *readOk = false;
 
 	// Backwards — the forward loop skipped the element that shifted into the
 	// vacated index (deep audit 2026-09, area 6; same shape in the two
@@ -3836,22 +3726,20 @@ QStringList Database::fetchAssetAndDependencies(const QString &guid)
 }
 
 
-QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf)
+QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid, bool appendSelf, bool *readOk)
 {
-	QSqlQuery query;
-	query.prepare(
+	DbQuery query(connection(),
         "SELECT assets.guid FROM dependencies INNER JOIN assets ON "
-        "dependencies.dependee = assets.guid WHERE depender = ?"
-    );
-	query.addBindValue(guid);
-	executeAndCheckQuery(query, "fetchAssetGUIDAndDependencies");
+        "dependencies.dependee = assets.guid WHERE depender = ?");
+	dbqt::bindText(query, 1, guid);
+	const bool ran = executeAndCheckQuery(query, "fetchAssetGUIDAndDependencies");
 
 	QStringList dependencies;
     if (appendSelf) dependencies.append(guid);
 	while (query.next()) {
-		QSqlRecord record = query.record();
-		dependencies.append(record.value(0).toString());
+		dependencies.append(dbqt::text(query, 0));
 	}
+	if (readOk && (!ran || query.failed())) *readOk = false;
 
 	return dependencies;
 }
@@ -3882,7 +3770,6 @@ QHash<QString, QStringList> Database::fetchDependencyEdges(const QStringList &de
     QHash<QString, QStringList> out;
     for (int at = 0; at < dependers.size(); at += kInChunk) {
         const QStringList chunk = dependers.mid(at, kInChunk);
-        QSqlQuery query;
         QString sql = QStringLiteral("SELECT D.depender, assets.guid FROM dependencies D "
                                      "INNER JOIN assets ON D.dependee = assets.guid "
                                      "WHERE D.depender IN (%1)").arg(inMarks(int(chunk.size())));
@@ -3891,15 +3778,16 @@ QHash<QString, QStringList> Database::fetchDependencyEdges(const QStringList &de
                                   "INNER JOIN assets O ON O.guid = M.parent "
                                   "WHERE M.guid IN (%1) AND M.type = ? AND O.type = ?")
                        .arg(inMarks(int(chunk.size())));
-        query.prepare(sql);
-        for (const QString &guid : chunk) query.addBindValue(guid);
+        DbQuery query(connection(), dbqt::utf8(sql));
+        int bindAt = 0;
+        for (const QString &guid : chunk) dbqt::bindText(query, ++bindAt, guid);
         if (withMemberObjects) {
-            for (const QString &guid : chunk) query.addBindValue(guid);
-            query.addBindValue(static_cast<int>(ModelTypes::Mesh));
-            query.addBindValue(static_cast<int>(ModelTypes::Object));
+            for (const QString &guid : chunk) dbqt::bindText(query, ++bindAt, guid);
+            query.bindInt(++bindAt, static_cast<int>(ModelTypes::Mesh));
+            query.bindInt(++bindAt, static_cast<int>(ModelTypes::Object));
         }
         if (!executeAndCheckQuery(query, "fetchDependencyEdges")) continue;
-        while (query.next()) out[query.value(0).toString()].append(query.value(1).toString());
+        while (query.next()) out[dbqt::text(query, 0)].append(dbqt::text(query, 1));
     }
     return out;
 }
@@ -3909,19 +3797,19 @@ QVector<AssetRecord> Database::fetchAssetHeaders(const QStringList &guids)
     QVector<AssetRecord> out;
     for (int at = 0; at < guids.size(); at += kInChunk) {
         const QStringList chunk = guids.mid(at, kInChunk);
-        QSqlQuery query;
-        query.prepare(QStringLiteral("SELECT guid, name, type, parent, view_filter, project_guid FROM assets "
-                                     "WHERE guid IN (%1)").arg(inMarks(int(chunk.size()))));
-        for (const QString &guid : chunk) query.addBindValue(guid);
+        DbQuery query(connection(), dbqt::utf8(QStringLiteral("SELECT guid, name, type, parent, view_filter, project_guid FROM assets "
+                                     "WHERE guid IN (%1)").arg(inMarks(int(chunk.size())))));
+        int bindAt = 0;
+        for (const QString &guid : chunk) dbqt::bindText(query, ++bindAt, guid);
         if (!executeAndCheckQuery(query, "fetchAssetHeaders")) continue;
         while (query.next()) {
             AssetRecord row;
-            row.guid = query.value(0).toString();
-            row.name = query.value(1).toString();
-            row.type = query.value(2).toInt();
-            row.parent = query.value(3).toString();
-            row.view_filter = query.value(4).toInt();
-            row.projectGuid = query.value(5).toString();
+            row.guid = dbqt::text(query, 0);
+            row.name = dbqt::text(query, 1);
+            row.type = int(query.int64(2));
+            row.parent = dbqt::text(query, 3);
+            row.view_filter = int(query.int64(4));
+            row.projectGuid = dbqt::text(query, 5);
             out.append(row);
         }
     }
@@ -3930,12 +3818,11 @@ QVector<AssetRecord> Database::fetchAssetHeaders(const QStringList &guids)
 
 bool Database::fetchAssetRowBlobs(const QString &guid, QByteArray *asset, QByteArray *properties)
 {
-    QSqlQuery query;
-    query.prepare("SELECT asset, properties FROM assets WHERE guid = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "SELECT asset, properties FROM assets WHERE guid = ?");
+    dbqt::bindText(query, 1, guid);
     if (!executeAndCheckQuery(query, "fetchAssetRowBlobs") || !query.next()) return false;
-    if (asset) *asset = query.value(0).toByteArray();
-    if (properties) *properties = query.value(1).toByteArray();
+    if (asset) *asset = dbqt::bytes(query, 0);
+    if (properties) *properties = dbqt::bytes(query, 1);
     return true;
 }
 
@@ -3963,26 +3850,23 @@ QStringList Database::fetchAssetAndAllDependencies(const QString & guid)
 
 QVector<DependencyRecord> Database::fetchAssetDependencies(const AssetRecord &record)
 {
-    QSqlQuery query;
-    query.prepare(
+    DbQuery query(connection(),
         "SELECT D.depender_type, D.dependee_type, D.depender, D.dependee, D.id, D.project_guid "
         "FROM dependencies D INNER JOIN assets ON "
-        "D.dependee = assets.guid WHERE depender = ? AND depender_type = ?"
-    );
-    query.addBindValue(record.guid);
-    query.addBindValue(record.type);
+        "D.dependee = assets.guid WHERE depender = ? AND depender_type = ?");
+    dbqt::bindText(query, 1, record.guid);
+    query.bindInt(2, record.type);
     executeAndCheckQuery(query, "FetchAssetDependencies");
 
     QVector<DependencyRecord> dependencies;
     while (query.next()) {
         DependencyRecord dr;
-        QSqlRecord record = query.record();
-        dr.dependerType = record.value(0).toInt();
-        dr.dependeeType = record.value(1).toInt();
-        dr.depender = record.value(2).toString();
-        dr.dependee = record.value(3).toString();
-        dr.id = record.value(4).toString();
-        dr.projectGuid = record.value(5).toString();
+        dr.dependerType = int(query.int64(0));
+        dr.dependeeType = int(query.int64(1));
+        dr.depender = dbqt::text(query, 2);
+        dr.dependee = dbqt::text(query, 3);
+        dr.id = dbqt::text(query, 4);
+        dr.projectGuid = dbqt::text(query, 5);
         dependencies.append(dr);
     }
 
@@ -4006,10 +3890,13 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok,
 	DbTransaction tx(db);
 	const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
+	// A CLOSURE READ THAT FAILED is reported (the delete did not fully complete), never a shorter closure; a pin
+	// count that could not be read is a VETO (the asset is unlisted, never deleted).
+	bool reads = true;
 	// Get all child folders
-	for (const auto &folder : fetchFolderAndChildFolders(guid)) {
+	for (const auto &folder : fetchFolderAndChildFolders(guid, &reads)) {
 		// For every folder, fetch assets inside
-		for (const auto &asset : fetchChildFolderAssets(folder)) {
+		for (const auto &asset : fetchChildFolderAssets(folder, &reads)) {
 			// THE PIN LAW, member by member (code review 2026-09-10 — this
 			// path never learned it): an asset a project still pins is
 			// UNLISTED by deleteAsset, not deleted, and then NOTHING else
@@ -4017,11 +3904,12 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok,
 			// this returns, and the pinned project still renders them) and
 			// not its dependency EDGES (that project resolves its textures
 			// through them). Identical to deleteAssetAndDependencies.
-			const bool unlisted = countAssetPins(asset) > 0;
+			bool pinsRead = true;
+			const bool unlisted = countAssetPins(asset, &pinsRead) > 0 || !pinsRead;
 
 			// For every asset, find their dependencies
 			if (!unlisted) {
-				for (const auto &dep : fetchAssetAndDependencies(asset)) {
+				for (const auto &dep : fetchAssetAndDependencies(asset, &reads)) {
 					files.append(dep);
 				}
 			}
@@ -4029,7 +3917,7 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok,
 			allOk = deleteAssetRow(asset, /*force*/ false, &scrubs) && allOk;
 			if (unlisted) continue;
 
-            for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
+            for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false, &reads)) {
                 allOk = deleteDependency(asset, dep) && allOk;
             }
 		}
@@ -4039,6 +3927,7 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok,
 		// nothing about a project's use of it lives in the folder tree.
 		allOk = deleteFolder(folder) && allOk;
 	}
+	allOk = reads && allOk;
 
 	const bool committed = tx.commit();
 	allOk = committed && allOk;
@@ -4080,16 +3969,19 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 	DbTransaction tx(db);
 	const bool ownsTransaction = tx.isActive();   // nested: the caller's commit is the delete's
 
+	// A closure read that failed / a pin count that could not be read: as deleteFolderAndDependencies.
+	bool reads = true;
 	// For every asset, find their dependencies
-	for (const auto &asset : fetchAssetGUIDAndDependencies(guid)) {
+	for (const auto &asset : fetchAssetGUIDAndDependencies(guid, true, &reads)) {
 		// A member a project still pins is UNLISTED, not deleted (see
 		// deleteAsset). Then NOTHING else about it may go: not its dependency
 		// EDGES (the pinned project resolves its textures through them) and
 		// not its FILES (the caller unlinks whatever this returns).
-		const bool unlisted = !force && countAssetPins(asset) > 0;
+		bool pinsRead = true;
+		const bool unlisted = !force && (countAssetPins(asset, &pinsRead) > 0 || !pinsRead);
 
 		if (!unlisted) {
-			for (const auto &dep : fetchAssetAndDependencies(asset)) {
+			for (const auto &dep : fetchAssetAndDependencies(asset, &reads)) {
 				files.append(dep);
 			}
 		}
@@ -4097,10 +3989,11 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 		allOk = deleteAssetRow(asset, force, &scrubs) && allOk;
 		if (unlisted) continue;
 
-        for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false)) {
+        for (const auto &dep : fetchAssetGUIDAndDependencies(asset, false, &reads)) {
             allOk = deleteDependency(asset, dep) && allOk;
         }
 	}
+	allOk = reads && allOk;
 
 	const bool committed = tx.commit();
 	allOk = committed && allOk;
@@ -4131,20 +4024,16 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 
 QString Database::fetchObjectMesh(const QString &guid, const int ertype, const int eetype)
 {
-	QSqlQuery query;
-	query.prepare("SELECT dependee FROM dependencies WHERE depender = ? AND depender_type = ? AND dependee_type = ?");
-	query.addBindValue(guid);
-	query.addBindValue(ertype);
-	query.addBindValue(eetype);
+	db::Statement query(connection(), "SELECT dependee FROM dependencies WHERE depender = ? AND depender_type = ? AND dependee_type = ?");
+	dbqt::bindText(query, 1, guid);
+	query.bindInt(2, ertype);
+	query.bindInt(3, eetype);
 
-	if (query.exec()) {
-		if (query.first()) {
-			return query.value(0).toString();
-		}
-	}
-	else {
+	db::Error error;
+	if (query.step(&error)) return dbqt::text(query, 0);
+	if (error) {
 		JahLog::write(JahLog::legacy, JahLog::Level::Warning,
-			"There was an error fetching a guid" + query.lastError().text()
+			"There was an error fetching a guid" + dbqt::describe(error)
 		);
 	}
 
@@ -4153,7 +4042,6 @@ QString Database::fetchObjectMesh(const QString &guid, const int ertype, const i
 
 QStringList Database::hasMultipleDependers(const QString &guid)
 {
-    QSqlQuery query;
     // DISTINCT, because the question is "WHO uses this", not "how many edge
     // rows name it" (fix round F3). One user can hold more than one edge to
     // the same asset — a bundle whose definition exists at two scopes has an
@@ -4163,14 +4051,13 @@ QStringList Database::hasMultipleDependers(const QString &guid)
     // with". Without it a texture ONE material uses read "used by 2" the
     // moment that material was edited from a project drawer, and Make unique
     // lit up inviting a duplicate nobody needs.
-    query.prepare("SELECT DISTINCT depender FROM dependencies WHERE dependee = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "SELECT DISTINCT depender FROM dependencies WHERE dependee = ?");
+    dbqt::bindText(query, 1, guid);
     executeAndCheckQuery(query, "HasMultipleDependers");
 
     QStringList dependers;
     while (query.next()) {
-        QSqlRecord record = query.record();
-        dependers.append(record.value(0).toString());
+        dependers.append(dbqt::text(query, 0));
     }
     return dependers;
 }
@@ -4182,12 +4069,11 @@ bool Database::hasDependencies(const QString &guid)
     // again (the pattern SMALL-ITEMS B removed from fetchAsset). The second run
     // is what produced the answer, so the first was pure cost on a path the
     // asset panels call per item while populating a drawer.
-    QSqlQuery query;
-    query.prepare("SELECT COUNT(*) FROM dependencies WHERE depender = ?");
-    query.addBindValue(guid);
+    DbQuery query(connection(), "SELECT COUNT(*) FROM dependencies WHERE depender = ?");
+    dbqt::bindText(query, 1, guid);
     if (!executeAndCheckQuery(query, "HasDependencies")) return false;
-    if (!query.first()) return false;
-    return query.value(0).toBool();
+    if (!query.next()) return false;
+    return (query.int64(0) != 0);
 }
 
 // The PROJECT archive half of .jaf — replaced by the envelope format in lane JAF-READER-1.
@@ -4198,11 +4084,17 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     // fresh guid), which meant every project import leaked a DISTINCT
     // registration for the process's life — the connection list grew without
     // bound and each entry held its temp .db open (deep audit 2026-09, area 6).
-    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("ProjectImport"),
-                            inFilePath + ".db");
-    QSqlDatabase &dbe = scoped.db;
-    if (!dbe.open()) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("Couldn't open the import database! %1").arg(dbe.lastError().text()));
+    // THE ARCHIVE's CATALOG, READ ONLY, on the layer (NOQT-DATABASE-1 stage 2: its reads pass the funnel): a
+    // connection of this call, closed at its end; an archive that cannot be opened read-only - a missing file
+    // included, which a read-write open used to CREATE empty - is refused by name before any read.
+    db::Options archiveOptions;
+    archiveOptions.readOnly = true;
+    archiveOptions.busyMs = db::kEditorBusyMs;
+    archiveOptions.name = "ProjectImport";
+    db::Error archiveError;
+    db::Connection dbe = db::Connection::open((inFilePath + ".db").toStdString(), archiveOptions, &archiveError);
+    if (!dbe.isOpen()) {
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("Couldn't open the import database! %1").arg(dbqt::describe(archiveError)));
         return false;
     }
 
@@ -4210,28 +4102,28 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     // import leaves nothing behind, and per-row autocommit fsyncs are gone.
     DbTransaction tx(db);
 
-    QSqlQuery query(dbe);
     // NO STAMP IS READ FROM THE ARCHIVE (D0, lead decision): an import is a
     // WRITE into this library, so the row is stamped with the import moment
     // by datetime() below — whatever form an older build wrote into the
     // archive, nothing here reads it.
-    query.prepare("SELECT name, scene, thumbnail, version, guid FROM projects");
-
-    if (query.exec()) {
-        query.next();
+    QString sceneName, sceneVersion, oldSceneGuid;
+    QByteArray sceneBlob, sceneThumb;
+    {   // read whole: no statement left active
+        db::Statement query(dbe, "SELECT name, scene, thumbnail, version, guid FROM projects");
+        db::Error error;
+        if (query.step(&error)) {
+            sceneName = dbqt::text(query, 0);
+            sceneBlob = dbqt::bytes(query, 1);
+            sceneThumb = dbqt::bytes(query, 2);
+            sceneVersion = dbqt::text(query, 3);
+            oldSceneGuid = dbqt::text(query, 4);
+        } else if (error) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                "There was an error fetching a record to be imported " + dbqt::describe(error)
+            );
+        }
     }
-    else {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
-            "There was an error fetching a record to be imported " + query.lastError().text()
-        );
-    }
-
-    auto sceneName = worldName = query.value(0).toString();
-    auto sceneBlob = query.value(1).toByteArray();
-    auto sceneThumb = query.value(2).toByteArray();
-    auto sceneVersion = query.value(3).toString();
-    auto oldSceneGuid = query.value(4).toString();
-    query.finish();   // read whole: no statement left active (source.no_live_read_at_write)
+    worldName = sceneName;
 
     // AN ARCHIVE SCENE THAT IS NOT A JSON OBJECT IS REFUSED (STUDIO-HYGIENE-1). The guid remap below
     // round-trips the blob through QJsonDocument, and a blob that does not parse came out of it EMPTY:
@@ -4258,8 +4150,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
     QVector<AssetRecord> assetList;
 
-    QSqlQuery selectAssetQuery(dbe);
-    selectAssetQuery.prepare(
+    DbQuery selectAssetQuery(dbe,
         "SELECT guid, type, name, collection, times_used, project_guid, date_created, last_updated, author, "
         "license, hash, version, parent, tags, properties, asset, thumbnail FROM assets"
     );
@@ -4272,15 +4163,15 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     // folder names its parent folder's, so both need the map (below).
     QMap<QString, QString> folderGuids; /* old x new guid */
     {
-        QSqlQuery folderIds(dbe);
-        folderIds.prepare("SELECT guid FROM folders");
+        DbQuery folderIds(dbe, "SELECT guid FROM folders");
         executeAndCheckQuery(folderIds, "selectFolderIds");
         // A FOLDER KEEPS ITS GUID (ARCHIVE-GUIDS-1): a known folder is reused,
         // an unknown one is created under the archive's own id.
         while (folderIds.next()) {
-            const QString folderGuid = folderIds.value(0).toString();
+            const QString folderGuid = dbqt::text(folderIds, 0);
             folderGuids.insert(folderGuid, folderGuid);
         }
+        if (folderIds.failed()) return false;   // the archive's reads feed the writes (below)
     }
 
     // EVERY PARENT IS REMAPPED (lane L13). The `parent` column holds the
@@ -4301,10 +4192,9 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     };
 
     while (selectAssetQuery.next()) {
-        QSqlRecord record = query.record();
         AssetRecord data;
 
-        auto guid = selectAssetQuery.value(0).toString();
+        auto guid = dbqt::text(selectAssetQuery, 0);
         // ROWS KEEP THEIR GUIDS (ARCHIVE-GUIDS-1; bundles audit G1, the general
         // fix — the clipboard resolver's policy). The importer used to mint a
         // fresh guid for every row and rewrite it by text-replace in the scene
@@ -4322,14 +4212,14 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         //     ids in practice): a fresh guid, every reference rewritten as
         //     before — the only case left in `assetGuids`/`outGuids`, so a
         //     caller's `map.value(guid, guid)` reads identity for the rest.
-        const int archivedType = selectAssetQuery.value(1).toInt();
+        const int archivedType = int(selectAssetQuery.int64(1));
         QString newGuid = guid;
         {
-            QSqlQuery here;
-            here.prepare("SELECT type FROM assets WHERE guid = ?");
-            here.addBindValue(guid);
-            if (here.exec() && here.next()) {
-                if (here.value(0).toInt() == archivedType) {
+            db::Statement here(connection(), "SELECT type FROM assets WHERE guid = ?");
+            dbqt::bindText(here, 1, guid);
+            db::Error error;
+            if (here.step(&error)) {
+                if (int(here.int64(0)) == archivedType) {
                     if (knownGuids) knownGuids->insert(guid);
                     continue;                              // the same asset, already here
                 }
@@ -4340,31 +4230,32 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         }
         data.guid = newGuid;
         data.type = archivedType;
-        data.name = selectAssetQuery.value(2).toString();
-        data.collection = selectAssetQuery.value(3).toInt();
-        data.timesUsed = selectAssetQuery.value(4).toInt();
-        data.projectGuid = selectAssetQuery.value(5).toString();
-        data.dateCreated = selectAssetQuery.value(6).toDateTime();
-        data.lastUpdated = selectAssetQuery.value(7).toDateTime();
-        data.author = selectAssetQuery.value(8).toString();
-        data.license = selectAssetQuery.value(9).toString();
-        data.hash = selectAssetQuery.value(10).toString();
-        data.version = selectAssetQuery.value(11).toString();
-        data.parent = selectAssetQuery.value(12).toString();
-        data.tags = selectAssetQuery.value(13).toByteArray();
-        data.properties = selectAssetQuery.value(14).toByteArray();
-        data.asset = selectAssetQuery.value(15).toByteArray();
-        data.thumbnail = selectAssetQuery.value(16).toByteArray();
+        data.name = dbqt::text(selectAssetQuery, 2);
+        data.collection = int(selectAssetQuery.int64(3));
+        data.timesUsed = int(selectAssetQuery.int64(4));
+        data.projectGuid = dbqt::text(selectAssetQuery, 5);
+        data.dateCreated = dbqt::dateTime(selectAssetQuery, 6);
+        data.lastUpdated = dbqt::dateTime(selectAssetQuery, 7);
+        data.author = dbqt::text(selectAssetQuery, 8);
+        data.license = dbqt::text(selectAssetQuery, 9);
+        data.hash = dbqt::text(selectAssetQuery, 10);
+        data.version = dbqt::text(selectAssetQuery, 11);
+        data.parent = dbqt::text(selectAssetQuery, 12);
+        data.tags = dbqt::bytes(selectAssetQuery, 13);
+        data.properties = dbqt::bytes(selectAssetQuery, 14);
+        data.asset = dbqt::bytes(selectAssetQuery, 15);
+        data.thumbnail = dbqt::bytes(selectAssetQuery, 16);
 		data.view_filter = assethome::StoredProject;
         assetList.push_back(data);
     }
+    // THE ARCHIVE's READS FEED THE WRITES BELOW: a read that failed fails the import (its unit rolls back), never a
+    // project imported short of rows (each failure was said by its name).
+    if (selectAssetQuery.failed()) return false;
 
-    QSqlQuery query3;
-    query3.prepare(
+    DbQuery query3(connection(),
         "INSERT INTO projects "
         "(name, scene, thumbnail, version, last_written, last_accessed, guid) "
-        "VALUES (:name, :scene, :thumbnail, :version, datetime(), datetime(), :guid)"
-    );
+        "VALUES (:name, :scene, :thumbnail, :version, datetime(), datetime(), :guid)");
 
     QString docToString = parsedScene.toJson(QJsonDocument::Compact);
 
@@ -4377,38 +4268,36 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
     sceneBlob = updatedDoc.toJson();
 
-    query3.bindValue(":name", sceneName);
-    query3.bindValue(":scene", sceneBlob);
-    query3.bindValue(":thumbnail", sceneThumb);
-    query3.bindValue(":version", sceneVersion);
-    query3.bindValue(":guid", newSceneGuid);
+    dbqt::bindText(query3, ":name", sceneName);
+    dbqt::bindBytes(query3, ":scene", sceneBlob);
+    dbqt::bindBytes(query3, ":thumbnail", sceneThumb);
+    dbqt::bindText(query3, ":version", sceneVersion);
+    dbqt::bindText(query3, ":guid", newSceneGuid);
 
     executeAndCheckQuery(query3, "insertSceneGlobal");
 
     for (auto &asset : assetList) {
-        QSqlQuery insertImportAssetQuery;
-        insertImportAssetQuery.prepare(
+        DbQuery insertImportAssetQuery(connection(),
             "INSERT INTO assets"
             " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
             " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter, origin)"
             " VALUES(:guid, :type, :name, :collection, :times_used, :project_guid, :date_created, :last_updated, :author,"
-            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, 'import')"
-        );
+            " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter, 'import')");
 
-        insertImportAssetQuery.bindValue(":guid", asset.guid);
-        insertImportAssetQuery.bindValue(":type", asset.type);
-        insertImportAssetQuery.bindValue(":name", asset.name);
-        insertImportAssetQuery.bindValue(":collection", asset.collection);
-        insertImportAssetQuery.bindValue(":times_used", asset.timesUsed);
-        insertImportAssetQuery.bindValue(":project_guid", newSceneGuid);
-        insertImportAssetQuery.bindValue(":date_created", asset.dateCreated);
-        insertImportAssetQuery.bindValue(":last_updated", asset.lastUpdated);
-        insertImportAssetQuery.bindValue(":author", asset.author);
-        insertImportAssetQuery.bindValue(":license", asset.license);
-        insertImportAssetQuery.bindValue(":version", asset.version);
-        insertImportAssetQuery.bindValue(":parent", remapParent(asset.parent));
-        insertImportAssetQuery.bindValue(":tags", asset.tags);
-        insertImportAssetQuery.bindValue(":properties", asset.properties);
+        dbqt::bindText(insertImportAssetQuery, ":guid", asset.guid);
+        insertImportAssetQuery.bindInt(":type", asset.type);
+        dbqt::bindText(insertImportAssetQuery, ":name", asset.name);
+        insertImportAssetQuery.bindInt(":collection", asset.collection);
+        insertImportAssetQuery.bindInt(":times_used", asset.timesUsed);
+        dbqt::bindText(insertImportAssetQuery, ":project_guid", newSceneGuid);
+        dbqt::bindTime(insertImportAssetQuery, ":date_created", asset.dateCreated);
+        dbqt::bindTime(insertImportAssetQuery, ":last_updated", asset.lastUpdated);
+        dbqt::bindText(insertImportAssetQuery, ":author", asset.author);
+        dbqt::bindText(insertImportAssetQuery, ":license", asset.license);
+        dbqt::bindText(insertImportAssetQuery, ":version", asset.version);
+        dbqt::bindText(insertImportAssetQuery, ":parent", remapParent(asset.parent));
+        dbqt::bindBytes(insertImportAssetQuery, ":tags", asset.tags);
+        dbqt::bindBytes(insertImportAssetQuery, ":properties", asset.properties);
 
         if (asset.type == static_cast<int>(ModelTypes::Object) ||
             asset.type == static_cast<int>(ModelTypes::Material))
@@ -4424,37 +4313,37 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
             QJsonDocument updatedDoc = QJsonDocument::fromJson(docToString.toUtf8());
             asset.asset = updatedDoc.toJson();
-            insertImportAssetQuery.bindValue(":asset", asset.asset);
+            dbqt::bindBytes(insertImportAssetQuery, ":asset", asset.asset);
         }
         else {
-            insertImportAssetQuery.bindValue(":asset", asset.asset);
+            dbqt::bindBytes(insertImportAssetQuery, ":asset", asset.asset);
         }
 
         // THE STAMP OF THE BLOB WRITTEN HERE, never the archive's: the remap above rewrites an Object's
         // and a Material's blob (its guids), so the exporter's stamp would name bytes this row lacks.
-        insertImportAssetQuery.bindValue(":hash", blobStamp(asset.asset));
-        insertImportAssetQuery.bindValue(":thumbnail", asset.thumbnail);
-        insertImportAssetQuery.bindValue(":view_filter", asset.view_filter);
+        dbqt::bindText(insertImportAssetQuery, ":hash", blobStamp(asset.asset));
+        dbqt::bindBytes(insertImportAssetQuery, ":thumbnail", asset.thumbnail);
+        insertImportAssetQuery.bindInt(":view_filter", asset.view_filter);
 
         executeAndCheckQuery(insertImportAssetQuery, "insertImportAssetQuery");
     }
 
     QVector<DependencyRecord> dependenciesToImport;
 
-    QSqlQuery selectDep(dbe);
-    selectDep.prepare("SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies");
+    DbQuery selectDep(dbe, "SELECT depender_type, dependee_type, project_guid, depender, dependee, id FROM dependencies");
     executeAndCheckQuery(selectDep, "selectDep");
 
     while (selectDep.next()) {
         DependencyRecord record;
-        record.dependerType = selectDep.value(0).toInt();
-        record.dependeeType = selectDep.value(1).toInt();
-        record.projectGuid = selectDep.value(2).toString();
-        record.depender = selectDep.value(3).toString();
-        record.dependee = selectDep.value(4).toString();
-        record.id = selectDep.value(5).toString();
+        record.dependerType = int(selectDep.int64(0));
+        record.dependeeType = int(selectDep.int64(1));
+        record.projectGuid = dbqt::text(selectDep, 2);
+        record.depender = dbqt::text(selectDep, 3);
+        record.dependee = dbqt::text(selectDep, 4);
+        record.id = dbqt::text(selectDep, 5);
         dependenciesToImport.append(record);
     }
+    if (selectDep.failed()) return false;
 
     for (const auto &dep : dependenciesToImport) {
         // AN EDGE THAT IS ALREADY HERE IS NOT INSERTED TWICE (a known row's
@@ -4462,27 +4351,24 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         {
             const QString d1 = assetGuids.value(dep.depender, dep.depender);
             const QString d2 = assetGuids.value(dep.dependee, dep.dependee);
-            QSqlQuery have;
-            if (dep.projectGuid.isEmpty())
-                have.prepare("SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? AND project_guid IS NULL LIMIT 1");
-            else
-                have.prepare("SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? AND project_guid = ? LIMIT 1");
-            have.addBindValue(d1);
-            have.addBindValue(d2);
-            if (!dep.projectGuid.isEmpty()) have.addBindValue(newSceneGuid);
-            if (have.exec() && have.next()) continue;
+            db::Statement have(connection(), dep.projectGuid.isEmpty()
+                ? "SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? AND project_guid IS NULL LIMIT 1"
+                : "SELECT 1 FROM dependencies WHERE depender = ? AND dependee = ? AND project_guid = ? LIMIT 1");
+            dbqt::bindText(have, 1, d1);
+            dbqt::bindText(have, 2, d2);
+            if (!dep.projectGuid.isEmpty()) dbqt::bindText(have, 3, newSceneGuid);
+            db::Error error;
+            if (have.step(&error)) continue;
         }
-        QSqlQuery importDep;
-        importDep.prepare(
+        DbQuery importDep(connection(),
             "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
-            "VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
-        );
+            "VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)");
 
         auto depender = assetGuids.value(dep.depender);
         auto dependee = assetGuids.value(dep.dependee);
 
-        importDep.bindValue(":depender_type", dep.dependerType);
-        importDep.bindValue(":dependee_type", dep.dependeeType);
+        importDep.bindInt(":depender_type", dep.dependerType);
+        importDep.bindInt(":dependee_type", dep.dependeeType);
         // AN INTRINSIC EDGE STAYS INTRINSIC (bundles audit G2/G5). An edge
         // with NO project stamp is a fact about the ASSET — a bundle's own
         // membership, derived from its definition — and stamping it with the
@@ -4490,58 +4376,56 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         // delete that project later and the bundle loses its closure while
         // its rows stay, so the next add-to-project pins a bare material and
         // the next archive ships it without its textures.
-        if (dep.projectGuid.isEmpty()) importDep.bindValue(":project_guid", QVariant(QMetaType(QMetaType::QString)));
-        else                           importDep.bindValue(":project_guid", newSceneGuid);
-        importDep.bindValue(":depender", !depender.isEmpty() ? depender : dep.depender);
-        importDep.bindValue(":dependee", !dependee.isEmpty() ? dependee : dep.dependee);
-        importDep.bindValue(":id", QString::fromStdString(iris::newGuid()));
+        if (dep.projectGuid.isEmpty()) importDep.bindNull(":project_guid");
+        else                           dbqt::bindText(importDep, ":project_guid", newSceneGuid);
+        dbqt::bindText(importDep, ":depender", !depender.isEmpty() ? depender : dep.depender);
+        dbqt::bindText(importDep, ":dependee", !dependee.isEmpty() ? dependee : dep.dependee);
+        dbqt::bindText(importDep, ":id", QString::fromStdString(iris::newGuid()));
 
         executeAndCheckQuery(importDep, "importDep");
     }
 
     QVector<FolderRecord> foldersToImport;
 
-    QSqlQuery selectFolder(dbe);
-    selectFolder.prepare("SELECT guid, name, parent, count, project_guid, date_created, last_updated, visible FROM folders");
+    DbQuery selectFolder(dbe, "SELECT guid, name, parent, count, project_guid, date_created, last_updated, visible FROM folders");
     executeAndCheckQuery(selectFolder, "selectFolder");
 
     while (selectFolder.next()) {
         FolderRecord record;
-        record.guid = selectFolder.value(0).toString();
-        record.name = selectFolder.value(1).toString();
-        record.parent = selectFolder.value(2).toString();
-        record.count = selectFolder.value(3).toInt();
-        record.projectGuid = selectFolder.value(4).toString();
-        record.dateCreated = selectFolder.value(5).toDateTime();
+        record.guid = dbqt::text(selectFolder, 0);
+        record.name = dbqt::text(selectFolder, 1);
+        record.parent = dbqt::text(selectFolder, 2);
+        record.count = int(selectFolder.int64(3));
+        record.projectGuid = dbqt::text(selectFolder, 4);
+        record.dateCreated = dbqt::dateTime(selectFolder, 5);
         // Columns 6 and 7 (the SELECT above). `visible` used to read column 6
         // — last_updated, a timestamp, i.e. true — so every hidden folder the
         // editor keeps for its own rows (Systems, Presets) came back VISIBLE
         // in an imported project, next to the user's own.
-        record.lastUpdated = selectFolder.value(6).toDateTime();
-        record.visible = selectFolder.value(7).toBool();
+        record.lastUpdated = dbqt::dateTime(selectFolder, 6);
+        record.visible = selectFolder.int64(7) != 0;
         foldersToImport.append(record);
     }
+    if (selectFolder.failed()) return false;
 
     for (const auto &folder : foldersToImport) {
-        QSqlQuery importFolder;
-        importFolder.prepare(
+        DbQuery importFolder(connection(),
             "INSERT INTO folders (guid, name, parent, count, project_guid, date_created, last_updated, visible) "
-            "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)"
-        );
+            "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)");
 
-        importFolder.bindValue(":guid", folderGuids.value(folder.guid, QString::fromStdString(iris::newGuid())));
-        importFolder.bindValue(":name", folder.name);
-        importFolder.bindValue(":parent", remapParent(folder.parent));
-        importFolder.bindValue(":count", folder.count);
-        importFolder.bindValue(":project_guid", newSceneGuid);
-        importFolder.bindValue(":date_created", folder.dateCreated);
-        importFolder.bindValue(":last_updated", folder.lastUpdated);
-        importFolder.bindValue(":visible", folder.visible);
+        dbqt::bindText(importFolder, ":guid", folderGuids.value(folder.guid, QString::fromStdString(iris::newGuid())));
+        dbqt::bindText(importFolder, ":name", folder.name);
+        dbqt::bindText(importFolder, ":parent", remapParent(folder.parent));
+        importFolder.bindInt(":count", folder.count);
+        dbqt::bindText(importFolder, ":project_guid", newSceneGuid);
+        dbqt::bindTime(importFolder, ":date_created", folder.dateCreated);
+        dbqt::bindTime(importFolder, ":last_updated", folder.lastUpdated);
+        importFolder.bindInt(":visible", folder.visible);
 
         executeAndCheckQuery(importFolder, "importFolder");
     }
 
-    // close + unregister: ~ScopedConnection
+    // the archive's connection closes with this scope
     return tx.commit();
 }
 

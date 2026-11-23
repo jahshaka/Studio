@@ -13,7 +13,7 @@ irisgl/engine     | qt    |      0 |        0 | irisgl/engine                   
 src/app           | qtsql |      0 |        0 | src/app                                       # NOQT-DATABASE-1: stays 0
 src/bridge        | qtsql |      0 |        0 | src/bridge                                    # NOQT-DATABASE-1: stays 0
 src/commands      | qtsql |     10 |        2 | src/commands                                  # NOQT-DATABASE-1: 0 at its end
-src/data          | qtsql |    230 |        8 | src/data                                      # NOQT-DATABASE-1: 0 at its end
+src/data          | qtsql |     61 |        7 | src/data                                      # NOQT-DATABASE-1: 0 at its end
 src/export        | qtsql |      0 |        0 | src/export                                    # NOQT-DATABASE-1: 0 at its end
 src/io            | qtsql |     11 |        4 | src/io                                        # NOQT-DATABASE-1: 0 at its end
 src/lab           | qtsql |      0 |        0 | src/lab                                       # NOQT-DATABASE-1: stays 0

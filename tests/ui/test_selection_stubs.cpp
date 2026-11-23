@@ -68,12 +68,6 @@ bool Database::updateGlobalDependencyDependee(const int &, const QString &, cons
     return false;
 }
 
-bool Database::checkIfRecordExists(const QString &, const QVariant &, const QString &, bool,
-                                   const QString &)
-{
-    return false;
-}
-
 void SceneWriter::writeParticleData(QJsonObject &, iris::ParticleSystemNodePtr)
 {
 }
