@@ -1088,15 +1088,29 @@ def data_set(test, roots, _memo=None, hashed=True):
             if tok == "<root>" and rel[len("<root>/"):].startswith(HARNESS_DIRS):
                 continue                     # a harness wrapper: never data
             if tok == "<build>" and rel.startswith(SEEDHOME + "/"):
-                # THE SEEDED TEMPLATE IS KEYED BY ITS STAMP (REPRICE-1, the lead's ruling 2026-11-23): its bytes carry the
+                # THE SEEDED TEMPLATE IS KEYED BY ITS STAMP (REPRICE-1, the lead's rulings 2026-11-23): its bytes carry the
                 # seed boot's wall clock and random guids (CODING_RULES § 6: nothing a record keys on may), so the template
-                # is hashed by <build>/tests/.seedhome/seed-key - seed_home.sh's key over everything that decides what the
-                # library holds. No stamp (or no template file) is NO TEMPLATE: a problem, the hash None, never served.
+                # is hashed by <build>/tests/.seedhome/seed-key - the seed key it was made at (tests/support/seed_home.sh
+                # `key`: the seeding binary's content identity, BUILT_FROM `content=`, and the vendored assimp pin). A
+                # template made at ANOTHER key than this build's (its binary's sources moved since: the final read's stale
+                # template), no stamp, no template file, or no key here (an unsettled build) is NO TEMPLATE: a problem,
+                # the hash None, never served.
+                if not hashed:
+                    continue                 # (the data edges only: a build file is never one)
                 stamp = cur["<build>"] + SEEDHOME[len("<build>"):] + "/seed-key"
-                if not (os.path.isfile(stamp) and os.path.exists(path)):
-                    problems.append(f"no template: {rel if os.path.isfile(stamp) else SEEDHOME + '/seed-key'} is absent "
+                if "<seed key>" not in memo:
+                    k = subprocess.run(["sh", os.path.join(cur["<root>"] or "", "tests", "support", "seed_home.sh"), "key",
+                                        cur["<build>"] + "/tests"], capture_output=True, text=True)
+                    memo["<seed key>"] = k.stdout.strip() if k.returncode == 0 else ""
+                have = open(stamp, errors="replace").readline().strip() if os.path.isfile(stamp) else ""
+                if not (have and os.path.exists(path)):
+                    problems.append(f"no template: {rel if have else SEEDHOME + '/seed-key'} is absent "
                                     "(the warm-up's seed_home.sh make)")
-                elif hashed:
+                elif have != memo["<seed key>"]:
+                    problems.append("no template: the template was made at another seed key than this build's "
+                                    + ("(the build names no settled content: build it)" if not memo["<seed key>"] else
+                                       "(the seeding binary's sources moved since: the warm-up's seed_home.sh make re-makes it)"))
+                else:
                     with open(stamp, "rb") as fh:
                         files[rel] = "seed-key:" + _sha256(fh.read())
                     sources[rel] = "argument"

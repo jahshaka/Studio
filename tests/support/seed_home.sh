@@ -16,12 +16,15 @@
 #                    writes its library in place) into a data root that holds no library yet, ONLY when its stamp is the
 #                    build's seed key; otherwise nothing is copied and the boot seeds as it always did (said). A stale
 #                    template is never served: a moved key means another seed.
-#   seed_home.sh key <tests dir>                THE SEED KEY (the 3a audit's finding 4): a hash over EVERYTHING that decides
-#                    what a seeded library holds - <tests>/seed-key-inputs.txt (tests/CMakeLists.txt): the bake producer
-#                    (kFormatVersion's file and every bake-producing source), the assimp pin, and by CONTENT the 17 shipped
-#                    source meshes, the seed table, the seed and import code, the library DB's schema and the assimp patch
-#                    stack - paths relative to the source tree (no tree's spelling in a key). Nothing when the list is
-#                    missing (a tree configured before it: no template, the boots seed).
+#   seed_home.sh key <tests dir>                THE SEED KEY: what made the library - THE BINARY THAT SEEDS IT, by the
+#                    build's own content identity (<build>/BUILT_FROM `content=`: every tracked and untracked file of Studio,
+#                    irisgl and the fork by git's blob id, cmake/built_from.py - so the importer that mints the guids
+#                    (assetimporters.cpp), the guid form (irisgl/core/guid.cpp), the store, every source of the app is in it,
+#                    no hand list to go stale: REPRICE-1's final read), and what that content leaves out - the vendored
+#                    assimp's pin - plus <tests>/seed-key-inputs.txt's lines (tests/CMakeLists.txt: the bake producer, the
+#                    shipped meshes and the seed code by content; inside `content` now, kept by the list). NOTHING - no key,
+#                    no template made or copied - when the list is missing, or the stamp is missing, unsettled (content ?)
+#                    or STALE (a binary not built from that content).
 #
 # A HOME MADE FROM THE TEMPLATE boots with its 17 rows, their sources and their bakes already in the store: seedAll plans
 # every row SEEDED and creates none, no line - and it checks each row's STORED SOURCE against the shipped bytes (a row
@@ -33,15 +36,21 @@ lib_files="JahLibrary.db AssetStore"
 seed_key() {   # <tests dir>: the seed key, or nothing
     inputs="$1/seed-key-inputs.txt"
     [ -f "$inputs" ] || return 0
+    bf="$1/../BUILT_FROM"
+    built=$(sed -n 's/^content=\([0-9a-f]\{16\}\)$/\1/p' "$bf" 2>/dev/null | head -1)
+    { [ -n "$built" ] && grep -qx 'stale=0' "$bf" && grep -qx 'stale_fork=0' "$bf"; } || return 0
     root=$(sed -n 's/^root //p' "$inputs" | head -1)
-    while read -r kind val; do
-        case "$kind" in
-            producer) echo "producer $val" ;;
-            git)      echo "git $val $(git -C "$root/$val" rev-parse HEAD 2>/dev/null || echo none)" ;;
-            file)     if [ -f "$root/$val" ]; then echo "file $val $(sha256sum < "$root/$val" | cut -c1-64)"
-                      else echo "file $val missing"; fi ;;
-        esac
-    done < "$inputs" | sha256sum | cut -c1-64
+    {
+        echo "built $built"
+        while read -r kind val; do
+            case "$kind" in
+                producer) echo "producer $val" ;;
+                git)      echo "git $val $(git -C "$root/$val" rev-parse HEAD 2>/dev/null || echo none)" ;;
+                file)     if [ -f "$root/$val" ]; then echo "file $val $(sha256sum < "$root/$val" | cut -c1-64)"
+                          else echo "file $val missing"; fi ;;
+            esac
+        done < "$inputs"
+    } | sha256sum | cut -c1-64
 }
 case "$cmd" in
 key)
@@ -50,7 +59,7 @@ key)
 make)
     app=${2:?seed_home.sh make <Jahshaka> <tests dir>}; t=${3:?seed_home.sh make <Jahshaka> <tests dir>}
     want=$(seed_key "$t")
-    [ -n "$want" ] || { echo "seed_home: no seed key inputs at $t/seed-key-inputs.txt (configure the tree) - no template made"; exit 1; }
+    [ -n "$want" ] || { echo "seed_home: no seed key (no $t/seed-key-inputs.txt - configure the tree - or the build's BUILT_FROM names no settled content: build it) - no template made"; exit 1; }
     (
         flock -w 120 9 || { echo "seed_home: the template's lock was not had in 120 s - no template made"; exit 1; }
         have=$(cat "$t/.seedhome/seed-key" 2>/dev/null | head -1)

@@ -8,7 +8,9 @@
 #      template's objects by content hash, unchanged by the boot;
 #   3. the control: a home with no template seeds the 17 at its boot;
 #   4. A CHANGED SHIPPED SOURCE (audit F4): the seed key moves - the template is not copied (said), that home seeds, and
-#      the next make re-makes the template;
+#      the next make re-makes the template; 4b. THE SEEDING BINARY's sources moved (its BUILT_FROM `content=`: REPRICE-1's
+#      final read - the importer that mints the guids was in no hand list) move the key too, and an UNSETTLED build (stale)
+#      has no key: no template made;
 #   5. THE APP's OWN CHECK (audit F4): a home whose stored Cube source is not the shipped mesh re-seeds that row at its
 #      boot, by name - a template that slipped past its stamp still yields this build's meshes.
 # LAW: a seed is made once per input (the seed key), never per launch, and never serves another input's meshes.
@@ -28,6 +30,7 @@ sed -n 's/^file //p' "$btests/seed-key-inputs.txt" | while read -r f; do
 done
 nmesh=$(grep -c '^file app/.*\.obj$' "$s/build/tests/seed-key-inputs.txt")
 T="$s/build/tests"
+cp "$btests/../BUILT_FROM" "$s/build/BUILT_FROM"   # (the binary that seeds is the build's own app: its content identity)
 printf 'console.log("ok: booted"); 0\n' > "$s/boot.js"
 boot() {   # <home>: the NULL headless app on <home>'s data root; its output in <home>.log
     mkdir -p "$1/run"
@@ -72,6 +75,14 @@ grep -q "seed: 17 shipped meshes imported and baked" "$T/h3.log"
 check $? "4. ...that home's boot seeds the 17"
 sh "$seedsh" make "$app" "$T" | grep -q "the template made at the seed key $k1 (17 shipped meshes"
 check $? "4. ...and the next make re-makes the template at the new key"
+sed -i 's/^content=.*/content=0123456789abcdef/' "$s/build/BUILT_FROM"
+k2=$(sh "$seedsh" key "$T")
+[ -n "$k2" ] && [ "$k2" != "$k1" ]
+check $? "4b. the seeding binary's content moved (BUILT_FROM content=) moves the seed key"
+sed -i 's/^stale=0$/stale=1/' "$s/build/BUILT_FROM"
+[ -z "$(sh "$seedsh" key "$T")" ] && sh "$seedsh" make "$app" "$T" | grep -q "no seed key .* no template made"
+check $? "4b. ...and an UNSETTLED build (stale=1) has no key: no template made, said"
+cp "$btests/../BUILT_FROM" "$s/build/BUILT_FROM"
 
 sh "$fh" --setup --warm "$T/h4" > /dev/null 2>&1
 cube=$(sha256sum < "$src/app/content/primitives/cube.obj" | cut -c1-64)
