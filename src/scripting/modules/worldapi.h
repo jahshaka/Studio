@@ -176,7 +176,7 @@ private:
                            const WorldModeCommand::Snapshot &before);
     /// One undo step for one looks-stack edit; `before` is the array as it was.
     void pushLooksUndo(const QString &text, const iris::ScenePtr &scene,
-                       const QJsonArray &before);
+                       const iris::Value &before);
     /// One stack entry in the shape world.looks() reports.
     static QVariantMap lookState(const QJsonObject &entry);
     /// The index of `id` in `stack`, or -1.

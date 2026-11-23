@@ -11,6 +11,8 @@ For more information see the LICENSE file
 
 #include "ui/panels/propertywidgets/panelundo.h"
 
+#include "app/qtstdgui.h"
+
 #include "commands/nodeeditcommand.h"
 #include "commands/scenepropertycommand.h"
 #include "commands/setnodepropertycommand.h"
@@ -66,20 +68,28 @@ rowundo::Binding NodeRows::operator()(const QString &key,
     rowundo::Binding b;
     b.key = key;                     // the property filter's row key (rowundo.h)
     b.guard = mGuard;
-    b.read = [nodeFn, key]() -> QVariant {
+    // THE NODE's EDGE (NOQT-DOCUMENT-1 stage 4, walk 1): the row reads the node's value as the QVariant it was, and
+    // writes back through the conversion by the property's kind (qtstd::toNodeValue). The widget made a value of
+    // that kind, so the write is not refused (its answer is not read); the step records the two Values.
+    const std::string name = key.toStdString();
+    b.read = [nodeFn, name]() -> QVariant {
         auto node = nodeFn();
-        return node ? node->getPropertyValue(key) : QVariant();
+        return node ? qtstd::nodeVariant(*node, name) : QVariant();
     };
-    b.write = [nodeFn, key, toDocument](const QVariant &value) {
+    b.write = [nodeFn, name, toDocument](const QVariant &value) {
         auto node = nodeFn();
         if (!node) return;
-        node->setPropertyValue(key, toDocument ? toDocument(value) : value);
+        if (const auto v = qtstd::toNodeValue(*node, name, toDocument ? toDocument(value) : value))
+            node->setPropertyValue(name, *v);
     };
-    b.commit = [nodeFn, servicesFn, key](const QVariant &before, const QVariant &after) {
+    b.commit = [nodeFn, servicesFn, name](const QVariant &before, const QVariant &after) {
         auto node = nodeFn();
         StudioServices *services = servicesFn();
         if (!node || !services || !services->undo) return;
-        services->undo->push(new SetNodePropertyCommand(node, key, before, after));
+        const auto was = qtstd::toNodeValue(*node, name, before);
+        const auto now = qtstd::toNodeValue(*node, name, after);
+        services->undo->push(new SetNodePropertyCommand(node, name, was ? *was : iris::Value(),
+                                                        now ? *now : iris::Value()));
     };
     return b;
 }

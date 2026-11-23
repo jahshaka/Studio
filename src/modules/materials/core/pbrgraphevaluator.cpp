@@ -118,10 +118,11 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 			// did; a field with no row (the scroll's U / V) takes the Number.
 			const std::string name = key.toStdString();
 			const QVariant number(values[key].toDouble());
-			iris::Value value(number.toDouble());
+			std::optional<iris::Value> value = iris::Value(number.toDouble());
 			for (const iris::Property *prop : material->properties())
 				if (prop->name == name) { value = qtstd::toRowValue(prop->type, number); break; }
-			material->setValue(name, value);
+			// A number converts for every numeric kind (a refusal cannot happen here: the file holds numbers).
+			if (value) material->setValue(name, *value);
 		}
 	}
 

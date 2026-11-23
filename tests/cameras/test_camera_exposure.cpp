@@ -652,9 +652,9 @@ void partB()
     // moves between the two measurements below is the bloom.
     doc.camera->exposureMode = iris::CameraExposureMode::Manual;
     doc.camera->exposure = doc.scene->exposure;   // STOPS, both of them now
-    doc.camera->postOverrides = QJsonObject();
+    doc.camera->postOverrides = iris::Value(iris::Value::Object{});
     const double bloomyWorld = shoot(mirror, view, doc.camera, true);
-    CHECK(doc.camera->setPostOverride(QStringLiteral("bloom"), false),
+    CHECK(doc.camera->setPostOverride("bloom", false),
           "bloom is an override key the document accepts");
     const double bloomOffCamera = shoot(mirror, view, doc.camera, true);
     std::printf("    bloomy world %.2f -> camera with bloom OFF %.2f\n",
@@ -665,10 +665,10 @@ void partB()
 
     // ...and the other way: a clean world, one blooming camera.
     doc.scene->bloomEnabled = false;
-    doc.camera->clearPostOverride(QStringLiteral("bloom"));
+    doc.camera->clearPostOverride("bloom");
     const double cleanWorld = shoot(mirror, view, doc.camera, true);
-    doc.camera->setPostOverride(QStringLiteral("bloom"), true);
-    doc.camera->setPostOverride(QStringLiteral("bloomThreshold"), 0.02);
+    doc.camera->setPostOverride("bloom", true);
+    doc.camera->setPostOverride("bloomThreshold", 0.02);
     const double bloomOnCamera = shoot(mirror, view, doc.camera, true);
     std::printf("    clean world %.2f -> camera with bloom ON %.2f\n",
                 cleanWorld, bloomOnCamera);
@@ -684,7 +684,7 @@ void partB()
     // assertion and ruinous in the editor. Found while building this phase;
     // this is the assertion that keeps it fixed.
     {
-        doc.camera->setPostOverride(QStringLiteral("bloom"), false);
+        doc.camera->setPostOverride("bloom", false);
         // Settle first: turning the override ON is legitimately one rebuild.
         for (int i = 0; i < 3; ++i) {
             mirror.sync();
@@ -704,13 +704,13 @@ void partB()
         CHECK(before == after,
               "STEADY STATE: a camera whose override changes an ENABLE FLAG rebuilds the "
               "compositor ZERO times per frame (%u -> %u)", before, after);
-        doc.camera->clearPostOverride(QStringLiteral("bloom"));
+        doc.camera->clearPostOverride("bloom");
     }
 
     // ---- B3 again, now that overrides exist: clearing goes back -----------
     doc.scene->bloomEnabled = true;
     doc.camera->exposureMode = iris::CameraExposureMode::Inherit;
-    doc.camera->postOverrides = QJsonObject();
+    doc.camera->postOverrides = iris::Value(iris::Value::Object{});
     unsigned long long backHash = 0;
     const double back = shoot(mirror, view, doc.camera, true, &backHash, 0,
                               "B3 back to inherit");
@@ -730,10 +730,10 @@ void partB()
 
     doc.camera->exposureMode = iris::CameraExposureMode::Manual;
     doc.camera->exposure = 4.0f;
-    doc.camera->setPostOverride(QStringLiteral("hdr"), true);
-    doc.camera->setPostOverride(QStringLiteral("bloom"), true);
-    doc.camera->setPostOverride(QStringLiteral("bloomThreshold"), 0.01);
-    doc.camera->setPostOverride(QStringLiteral("ssao"), true);
+    doc.camera->setPostOverride("hdr", true);
+    doc.camera->setPostOverride("bloom", true);
+    doc.camera->setPostOverride("bloomThreshold", 0.01);
+    doc.camera->setPostOverride("ssao", true);
     unsigned long long loud = 0;
     shoot(mirror, plain, doc.camera, false, &loud, 18);
     CHECK(neutral == loud,
@@ -742,7 +742,7 @@ void partB()
 
     // The document still holds every override — the guarantee is the engine's
     // one place, not a mirror that quietly declined to push.
-    CHECK(doc.camera->hasPostOverride(QStringLiteral("ssao")),
+    CHECK(doc.camera->hasPostOverride("ssao"),
           "…and the camera still carries its overrides (the guard is the engine's, not a "
           "silent refusal to store)");
 
@@ -766,7 +766,7 @@ void partC()
     // Defaults are "as if this block did not exist".
     CHECK(cam->exposureMode == iris::CameraExposureMode::Inherit,
           "a new camera inherits the world's exposure");
-    CHECK(cam->postOverrides.isEmpty(), "a new camera overrides nothing");
+    CHECK(cam->postOverrides.asObject().empty(), "a new camera overrides nothing");
 
     // Every key the document declares is reachable through the reflection
     // layer, and a null clears it — which is how "inherit" is expressible.
@@ -775,37 +775,37 @@ void partC()
     CHECK(count > 0, "the override key table is not empty (%d keys)", count);
     bool allRoundTrip = true;
     for (int i = 0; i < count; ++i) {
-        const QString key = QString::fromLatin1(table[i].id);
+        const std::string key = table[i].id;
         // A Stack key (POST_LOOKS_SPEC.md §4.1 — `looks`) holds a whole array,
         // so the value that round-trips it is a list. An EMPTY one is a real
         // override and is exactly the interesting case: it means "this camera
         // has no looks" over a world that has some, which is a third state a
         // boolean could not carry.
-        const QVariant value =
+        const iris::Value value =
             table[i].type == iris::CameraPostKeyType::Stack
-                ? QVariant(QVariantList())
+                ? iris::Value(iris::Value::Array{})
                 : (table[i].type == iris::CameraPostKeyType::Number
-                       ? QVariant(1.25)
-                       : (key == QLatin1String("smaa") ? QVariant(-1) : QVariant(1)));
-        if (!cam->setPropertyValue(QStringLiteral("postFx.") + key, value)) allRoundTrip = false;
-        if (!cam->getPropertyValue(QStringLiteral("postFx.") + key).isValid()) allRoundTrip = false;
-        if (!cam->setPropertyValue(QStringLiteral("postFx.") + key, QVariant())) allRoundTrip = false;
-        if (cam->getPropertyValue(QStringLiteral("postFx.") + key).isValid()) allRoundTrip = false;
+                       ? iris::Value(1.25)
+                       : (key == "smaa" ? iris::Value(-1) : iris::Value(1)));
+        if (!cam->setPropertyValue("postFx." + key, value)) allRoundTrip = false;
+        if (cam->getPropertyValue("postFx." + key).isNull()) allRoundTrip = false;
+        if (!cam->setPropertyValue("postFx." + key, iris::Value())) allRoundTrip = false;
+        if (!cam->getPropertyValue("postFx." + key).isNull()) allRoundTrip = false;
     }
     CHECK(allRoundTrip,
           "every override key sets, reads back and CLEARS through node.setProperty");
 
     // The two refusals the table cannot express.
-    CHECK(!cam->setPostOverride(QStringLiteral("exposure"), 1.0),
+    CHECK(!cam->setPostOverride("exposure", 1.0),
           "a camera's exposure is its own block, not an override slot");
-    CHECK(!cam->setPostOverride(QStringLiteral("smaa"), 2),
+    CHECK(!cam->setPostOverride("smaa", 2),
           "a camera may not pick an SMAA PRESET (that is a shader recompile)");
-    CHECK(cam->setPostOverride(QStringLiteral("smaa"), -1),
+    CHECK(cam->setPostOverride("smaa", -1),
           "…but it may switch SMAA off, which is compositor shape and free");
 
     // The exposure window stays ordered, whichever end is written first.
-    cam->setPropertyValue(QStringLiteral("exposureMin"), 2.0f);
-    cam->setPropertyValue(QStringLiteral("exposureMax"), -2.0f);
+    cam->setPropertyValue("exposureMin", 2.0f);
+    cam->setPropertyValue("exposureMax", -2.0f);
     CHECK(cam->exposureMin <= cam->exposureMax,
           "the auto-exposure window stays ordered (%.2f..%.2f)",
           double(cam->exposureMin), double(cam->exposureMax));

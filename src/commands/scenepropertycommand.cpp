@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "commands/scenepropertycommand.h"
+#include "app/qtstd.h"
 #include "irisgl/document/qt/colour.h"
 
 #include <QPointer>
@@ -237,9 +238,10 @@ QVector<sceneprops::Field> buildFields()
     }
 
     // ---- Post Process: the looks stack ------------------------------------
-    add("looks", [](const ScenePtr &s) { return QVariant(s->looks); },
+    // The stack crosses as the QJsonArray it always was here (the panel's QVariant); the document holds a Value.
+    add("looks", [](const ScenePtr &s) { return QVariant(qtstd::toQJsonValue(s->looks).toArray()); },
         [](const ScenePtr &s, const QVariant &v) {
-            s->looks = iris::normalizeLookStack(v.toJsonArray());
+            s->looks = iris::normalizeLookStack(qtstd::toValue(QJsonValue(v.toJsonArray())));
         });
 
     // ---- Post Process: the continuous parameters --------------------------

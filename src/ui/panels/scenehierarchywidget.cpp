@@ -1493,7 +1493,7 @@ void SceneHierarchyWidget::setItemVisible(QTreeWidgetItem *item, bool visible)
 	if (macro) undo->stack()->beginMacro(visible ? tr("Show Objects") : tr("Hide Objects"));
 	for (const auto &node : nodes) {
 		if (node->isVisible() == visible) continue;
-		if (undo) undo->push(new SetNodePropertyCommand(node, QStringLiteral("visible"), !visible, visible));
+		if (undo) undo->push(new SetNodePropertyCommand(node, "visible", !visible, visible));
 		else node->setVisible(visible);
 	}
 	if (macro) undo->stack()->endMacro();
@@ -1588,7 +1588,7 @@ void SceneHierarchyWidget::setItemLocked(QTreeWidgetItem *item, bool locked)
     if (macro) undo->stack()->beginMacro(locked ? tr("Lock Objects") : tr("Unlock Objects"));
     for (const auto &node : nodes) {
         if (node->isPickable() == !locked) continue;
-        if (undo) undo->push(new SetNodePropertyCommand(node, QStringLiteral("pickable"),
+        if (undo) undo->push(new SetNodePropertyCommand(node, "pickable",
                                                         locked, !locked));
         else node->setPickable(!locked);
     }

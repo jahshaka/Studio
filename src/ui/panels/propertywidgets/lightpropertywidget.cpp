@@ -412,12 +412,11 @@ void LightPropertyWidget::lightChannelsChanged(quint32 mask)
     // (LightDesc::operator== compares the mask) and pushes it. `lightMask` is a reflected
     // key (SceneNode::setPropertyValue takes both spellings of the 32 bits), so
     // this records the same command node.setLightMask pushes.
-    const QVariant before = lightNode->getPropertyValue(QStringLiteral("lightMask"));
+    const iris::Value before = lightNode->getPropertyValue("lightMask");
     lightNode->setLightMask(mask);
-    const QVariant after = lightNode->getPropertyValue(QStringLiteral("lightMask"));
+    const iris::Value after = lightNode->getPropertyValue("lightMask");
     if (before == after || !services || !services->undo) return;
-    services->undo->push(new SetNodePropertyCommand(lightNode, QStringLiteral("lightMask"),
-                                                    before, after));
+    services->undo->push(new SetNodePropertyCommand(lightNode, "lightMask", before, after));
 }
 
 // --- Asset bindings -------------------------------------------------------

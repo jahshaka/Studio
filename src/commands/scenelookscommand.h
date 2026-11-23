@@ -23,7 +23,7 @@ For more information see the LICENSE file
 // Every looks verb pushes one of these, so a script's `world.addLook` is one
 // step in the editor's undo stack exactly as the panel's Add button is.
 
-#include <QJsonArray>
+#include "irisgl/core/value.h"
 #include <QString>
 
 #include <functional>
@@ -37,7 +37,7 @@ public:
     /// `before` must be captured BEFORE the edit; the state as it stands now is
     /// captured here, so construct and push this after applying.
     SceneLooksCommand(const QString &text, const iris::ScenePtr &scene,
-                      const QJsonArray &before);
+                      const iris::Value &before);
 
     void undo() override;
     void redo() override;
@@ -47,11 +47,11 @@ public:
     void setRefresh(std::function<void()> refresh) { mRefresh = std::move(refresh); }
 
 private:
-    void apply(const QJsonArray &stack);
+    void apply(const iris::Value &stack);
 
     iris::SceneWPtr mScene;
-    QJsonArray mBefore;
-    QJsonArray mAfter;
+    iris::Value mBefore;
+    iris::Value mAfter;
     std::function<void()> mRefresh;
     bool mFirstRedo = true;
 };

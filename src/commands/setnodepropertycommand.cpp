@@ -16,11 +16,11 @@ For more information see the LICENSE file
 #include "services/sceneeditservice.h"
 #include "services/services.h"
 
-SetNodePropertyCommand::SetNodePropertyCommand(iris::SceneNodePtr node, const QString &key,
-                                               const QVariant &oldValue, const QVariant &newValue)
-    : sceneNode(node), propertyKey(key), oldValue(oldValue), newValue(newValue)
+SetNodePropertyCommand::SetNodePropertyCommand(iris::SceneNodePtr node, std::string key,
+                                               iris::Value oldValue, iris::Value newValue)
+    : sceneNode(std::move(node)), propertyKey(std::move(key)), oldValue(std::move(oldValue)), newValue(std::move(newValue))
 {
-    setText(QStringLiteral("set %1").arg(key));
+    setText(QStringLiteral("set %1").arg(QString::fromStdString(propertyKey)));
 }
 
 // position/rotation/scale are reflected properties too, so a write through this
@@ -29,13 +29,12 @@ SetNodePropertyCommand::SetNodePropertyCommand(iris::SceneNodePtr node, const QS
 // setting two dozen particle scalars would otherwise fire two dozen viewport
 // refreshes for edits no gizmo cares about. `services` is null in headless runs
 // (the StudioCommand contract).
-void SetNodePropertyCommand::apply(const QVariant &value)
+void SetNodePropertyCommand::apply(const iris::Value &value)
 {
     if (!sceneNode) return;
+    // The replay ignores the answer, as before: both Values are the node's own recorded state.
     sceneNode->setPropertyValue(propertyKey, value);
-    const bool moved = propertyKey == QLatin1String("position")
-                       || propertyKey == QLatin1String("rotation")
-                       || propertyKey == QLatin1String("scale");
+    const bool moved = movesTheNode();
     if (moved && services && services->sceneEdit) services->sceneEdit->notifyTransformChanged();
 }
 
@@ -44,9 +43,7 @@ void SetNodePropertyCommand::apply(const QVariant &value)
 /// change a SCENE_STATIC classification, and must not pay a subtree walk.
 bool SetNodePropertyCommand::movesTheNode() const
 {
-    return propertyKey == QLatin1String("position")
-           || propertyKey == QLatin1String("rotation")
-           || propertyKey == QLatin1String("scale");
+    return propertyKey == "position" || propertyKey == "rotation" || propertyKey == "scale";
 }
 
 void SetNodePropertyCommand::undo()

@@ -132,10 +132,9 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			break;
 		case iris::PropertyType::Color:
 			// "#rrggbb" is read at THE EDITOR's EDGE (the spec's RULED 3): QColor
-			// parses it, the adapter carries it (an unparseable text reads as the
-			// invalid colour, whose shape is black's: the next save writes the
-			// "#000000" it wrote before).
-			mat->setValue(prop->name, iris::colourToValue(iris::toSrgbColor(QColor(val.toString()))));
+			// parses it, the adapter carries it; an unparseable text is the invalid
+			// colour, as before (a colour property's Null).
+			mat->setValue(prop->name, iris::colourRowValue(iris::toSrgbColor(QColor(val.toString()))));
 			break;
 		case iris::PropertyType::Bool:
 			mat->setValue(prop->name, iris::Value(val.toBool()));

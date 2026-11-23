@@ -114,9 +114,9 @@ Built buildGlint(unsigned seed, bool bake)
     lamp->setName(QStringLiteral("glint-lamp"));
     b.built().doc->getRootNode()->addChild(lamp);
     lamp->setLocalPos(V(0.0f, 1.67f, 0.0f));
-    lamp->setPropertyValue(QStringLiteral("intensity"), 3.0f);
-    lamp->setPropertyValue(QStringLiteral("distance"), 10.0f);
-    lamp->setPropertyValue(QStringLiteral("sourceRadius"), 0.1f);
+    lamp->setPropertyValue("intensity", 3.0f);
+    lamp->setPropertyValue("distance", 10.0f);
+    lamp->setPropertyValue("sourceRadius", 0.1f);
     return b.finish();
 }
 void stopGlint(double, iris::Vec3 &eye, iris::Vec3 &target)

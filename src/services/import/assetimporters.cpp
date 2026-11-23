@@ -748,8 +748,13 @@ bool MaterialImporter::convert(const ImportRequest &request, const QString &stag
             // bytes to import and no identity: the material arrives without it.
         } else {
             // THE EDGE's one conversion by the row's kind (qtstd::toRowValue): what
-            // Qt cannot convert is refused, the row keeping its default.
-            material->setValue(prop->name, qtstd::toRowValue(prop->type, normalised[key].toVariant()));
+            // Qt cannot convert is refused, the row keeping its default - and the
+            // import SAYS SO, by name, in its own warnings (the lead's C2): a
+            // malformed file is accepted, never silently.
+            const auto value = qtstd::toRowValue(prop->type, normalised[key].toVariant());
+            if (!value || !material->setValue(prop->name, *value))
+                out.warnings.append(QStringLiteral("material \"%1\": '%2' could not be read (%3) - the row keeps its default")
+                                        .arg(materialName, key, normalised[key].toVariant().toString()));
         }
     }
 

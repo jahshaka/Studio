@@ -39,10 +39,10 @@ Built buildArea(unsigned seed, bool bake)
     light->setName(QStringLiteral("area"));
     b.built().doc->getRootNode()->addChild(light);
     light->setLocalPos(V(0.0f, 3.0f, -1.5f));
-    light->setPropertyValue(QStringLiteral("rectWidth"), 2.0f);
-    light->setPropertyValue(QStringLiteral("rectHeight"), 1.0f);
-    light->setPropertyValue(QStringLiteral("intensity"), 6.0f);
-    light->setPropertyValue(QStringLiteral("distance"), 12.0f);
+    light->setPropertyValue("rectWidth", 2.0f);
+    light->setPropertyValue("rectHeight", 1.0f);
+    light->setPropertyValue("intensity", 6.0f);
+    light->setPropertyValue("distance", 12.0f);
     return b.finish();
 }
 

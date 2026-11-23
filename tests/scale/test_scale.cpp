@@ -392,8 +392,8 @@ static void lightListArms(Env &env)
         l->setName(name);
         l->setLocalPos(pos);
         env.doc->getRootNode()->addChild(l);
-        l->setPropertyValue(QStringLiteral("intensity"), intensity);
-        l->setPropertyValue(QStringLiteral("distance"), range);
+        l->setPropertyValue("intensity", intensity);
+        l->setPropertyValue("distance", range);
         return l;
     };
     auto settle = [&] {
@@ -426,7 +426,7 @@ static void lightListArms(Env &env)
             r.over = st.cascades[0].lightsOverBudget;
             r.capacity = st.cascades[0].lightCapacity;
         }
-        key->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+        key->setPropertyValue("intensity", 0.0f);
         key->markChanged(iris::NodeChange::Params);
         settle();
         GiVoxelStats off = env.scene->giVoxelStats(0);
@@ -542,10 +542,10 @@ static void lightListArms(Env &env)
         area->setName(QStringLiteral("area"));
         area->setLocalPos(iris::Vec3(0.0f, 2.0f, -1.5f));
         env.doc->getRootNode()->addChild(area);
-        area->setPropertyValue(QStringLiteral("intensity"), areaI);
-        area->setPropertyValue(QStringLiteral("distance"), 10.0f);
-        area->setPropertyValue(QStringLiteral("rectWidth"), rectW);
-        area->setPropertyValue(QStringLiteral("rectHeight"), rectH);
+        area->setPropertyValue("intensity", areaI);
+        area->setPropertyValue("distance", 10.0f);
+        area->setPropertyValue("rectWidth", rectW);
+        area->setPropertyValue("rectHeight", rectH);
         auto spot = [&](const QString &name, float x) {
             auto l = iris::LightNode::create();
             l->setLightType(iris::LightType::Spot);
@@ -554,9 +554,9 @@ static void lightListArms(Env &env)
             // a light shines along its -Y (the document convention): a +90 degree roll aims it +x
             l->setLocalRot(iris::Quat::fromEulerAngles(0.0f, 0.0f, 90.0f));
             env.doc->getRootNode()->addChild(l);
-            l->setPropertyValue(QStringLiteral("intensity"), 0.5f);
-            l->setPropertyValue(QStringLiteral("distance"), 8.0f);
-            l->setPropertyValue(QStringLiteral("spotCutOff"), 30.0f);
+            l->setPropertyValue("intensity", 0.5f);
+            l->setPropertyValue("distance", 8.0f);
+            l->setPropertyValue("spotCutOff", 30.0f);
         };
         if (spots) {
             // 7 m outside the box's +x / -x faces (inside the 8 m range).
@@ -567,7 +567,7 @@ static void lightListArms(Env &env)
         settle();
         const GiStatus st = env.scene->published().gi;
         const GiVoxelStats on = env.scene->giVoxelStats(0);
-        area->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+        area->setPropertyValue("intensity", 0.0f);
         area->markChanged(iris::NodeChange::Params);
         settle();
         const GiVoxelStats off = env.scene->giVoxelStats(0);
@@ -636,11 +636,11 @@ static void lightListArms(Env &env)
         const GiStatus st = env.scene->published().gi;
         const GiVoxelStats base = env.scene->giVoxelStats(0);
         auto toggleMoves = [&](iris::LightNodePtr l, float I) {
-            l->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+            l->setPropertyValue("intensity", 0.0f);
             l->markChanged(iris::NodeChange::Params);
             settle();
             const GiVoxelStats off = env.scene->giVoxelStats(0);
-            l->setPropertyValue(QStringLiteral("intensity"), I);
+            l->setPropertyValue("intensity", I);
             l->markChanged(iris::NodeChange::Params);
             settle();
             return off.lightDigest != base.lightDigest;
@@ -682,7 +682,7 @@ static void lightListArms(Env &env)
         if (c0.built) {
             const unsigned long long rel0 = c0.relights;
             const unsigned resident = c0.cardsResident;
-            key->setPropertyValue(QStringLiteral("intensity"), 6.01f);
+            key->setPropertyValue("intensity", 6.01f);
             key->markChanged(iris::NodeChange::Params);
             for (int f = 0; f < 600; ++f) {
                 frame(env, 1);
@@ -703,7 +703,7 @@ static void lightListArms(Env &env)
         } else {
             CardSample on;
             const bool okOn = env.scene->readCardAt(Vec3(0.0f, 0.1f, -1.5f), Vec3(0, 1, 0), on) && on.ok;
-            key->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+            key->setPropertyValue("intensity", 0.0f);
             key->markChanged(iris::NodeChange::Params);
             settle();
             for (int f = 0; f < 600 && env.scene->published().gi.cards.queueLength > 0; ++f) frame(env, 1);
@@ -792,16 +792,16 @@ static int lightsMain()
                                                     eye.z() - 1.75f + 0.5f * float(i / 8))
                                        : iris::Vec3(40.0f + float(i % 4) * 3.0f, 3.0f, float(i / 4) * 3.0f - 4.5f));
             env.doc->getRootNode()->addChild(l);
-            l->setPropertyValue(QStringLiteral("intensity"), 0.25f);
-            l->setPropertyValue(QStringLiteral("distance"), nearFillers ? 3.0f : 4.0f);
+            l->setPropertyValue("intensity", 0.25f);
+            l->setPropertyValue("distance", nearFillers ? 3.0f : 4.0f);
         }
         auto key = iris::LightNode::create();
         key->setLightType(iris::LightType::Point);
         key->setName("key");
         key->setLocalPos(iris::Vec3(0.0f, 2.0f, -1.5f));
         env.doc->getRootNode()->addChild(key);
-        key->setPropertyValue(QStringLiteral("intensity"), 6.0f);
-        key->setPropertyValue(QStringLiteral("distance"), 10.0f);
+        key->setPropertyValue("intensity", 6.0f);
+        key->setPropertyValue("distance", 10.0f);
         env.doc->getRootNode()->applyStaticDefaults();
         setCamera(env, eye, iris::Vec3(0, 1, -2));
         auto settle = [&] {
@@ -820,7 +820,7 @@ static int lightsMain()
         out.ok = true;
         if (toggle) {
             const GiVoxelStats on = env.scene->giVoxelStats(0);
-            key->setPropertyValue(QStringLiteral("intensity"), 0.0f);
+            key->setPropertyValue("intensity", 0.0f);
             key->markChanged(iris::NodeChange::Params);
             settle();
             const GiVoxelStats off = env.scene->giVoxelStats(0);
@@ -910,8 +910,8 @@ static int lightsCostMain()
             l->setName(QStringLiteral("cluster%1").arg(i));
             l->setLocalPos(iris::Vec3(eye.x() + 3.0f * std::cos(a), 3.0f, eye.z() + 3.0f * std::sin(a)));
             env.doc->getRootNode()->addChild(l);
-            l->setPropertyValue(QStringLiteral("intensity"), 0.5f);
-            l->setPropertyValue(QStringLiteral("distance"), 30.0f);
+            l->setPropertyValue("intensity", 0.5f);
+            l->setPropertyValue("distance", 30.0f);
         }
         for (int f = 0; f < 600; ++f) {
             frame(env, 1);
@@ -983,7 +983,7 @@ static void geometryDoc(Env &env)
     sun->setLightType(iris::LightType::Directional);
     sun->setLocalRot(iris::Quat::fromEulerAngles(-50.0f, 30.0f, 0.0f));
     env.doc->getRootNode()->addChild(sun);
-    sun->setPropertyValue(QStringLiteral("intensity"), 2.0f);
+    sun->setPropertyValue("intensity", 2.0f);
 }
 
 /// The id pass's drawn triangles and GPU ms, and the decode's GPU ms, over `frames`
@@ -2354,7 +2354,7 @@ static void buildLattice(Env &env)
     lamp->setLightType(iris::LightType::Point);
     lamp->setLocalPos(iris::Vec3(0, 12, 0));
     env.doc->getRootNode()->addChild(lamp);
-    lamp->setPropertyValue(QStringLiteral("distance"), 40.0f);
+    lamp->setPropertyValue("distance", 40.0f);
     env.doc->getRootNode()->applyStaticDefaults();
     setCamera(env, iris::Vec3(0, 12, 30), iris::Vec3(0, 8, 0));
     for (int f = 0; f < 900; ++f) { frame(env, 1); if (f > 30 && env.scene->published().gi.giAtRest) break; }

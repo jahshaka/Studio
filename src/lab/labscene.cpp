@@ -454,15 +454,15 @@ void addSkyAndLights(const iris::ScenePtr &doc, bool wantSun)
         sun->setName(QStringLiteral("Directional Light"));
         sun->setLocalPos(kSunPosition);
         sun->setLocalRot(iris::Quat::fromEulerAngles(kSunPitchDegrees, 0, 0));
-        sun->setPropertyValue(QStringLiteral("intensity"), 1.0f);
+        sun->setPropertyValue("intensity", 1.0f);
     }
     auto sky = iris::LightNode::create();
     sky->setLightType(iris::LightType::Sky);
     doc->getRootNode()->addChild(sky);
     sky->setName(QStringLiteral("Sky Light"));
     sky->setLocalPos(iris::Vec3(-4, 4, 0));
-    sky->setPropertyValue(QStringLiteral("intensity"), 1.0f);
-    sky->setPropertyValue(QStringLiteral("lightColor"), QColor(255, 255, 255));
+    sky->setPropertyValue("intensity", 1.0f);
+    sky->setPropertyValue("lightColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
 
     doc->skyType = iris::SkyType::REALISTIC;
     doc->setSkyRealistic(iris::SkyRealistic::defaults());

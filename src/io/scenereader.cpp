@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "irisgl/document/qt/colour.h"
 #include "irisgl/document/qt/colorjson.h"
 #include "app/qtstd.h"
+#include "app/qtstdgui.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/looks.h"
@@ -686,7 +687,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // unknown look id (a document from a newer build), the same look twice, a
     // parameter out of range or missing — is handled in ONE place, the
     // document's own validator, which every write path also goes through.
-    scene->looks = iris::normalizeLookStack(sceneObj.value("looks").toArray());
+    scene->looks = iris::normalizeLookStack(qtstd::toValue(QJsonValue(sceneObj.value("looks").toArray())));
 
     // Planar reflections: absent means "follow the world mode" on all three
     // (-1 / 0 / -1), which is what every document written before this feature
@@ -1560,8 +1561,11 @@ iris::CameraNodePtr SceneReader::createCamera(QJsonObject& nodeObj)
     // and the panel use, so the file cannot express anything they cannot.
     {
         const QJsonObject overrides = nodeObj["postOverrides"].toObject();
+        // Through the camera's edge (qtstd::toPostValue: the file's text accepted exactly as before); a key or a
+        // value the build cannot hold is dropped BY LAW (the setter's false is the sanitising).
         for (auto it = overrides.constBegin(); it != overrides.constEnd(); ++it)
-            cameraNode->setPostOverride(it.key(), it.value().toVariant());
+            if (const auto v = qtstd::toPostValue(it.key().toStdString(), it.value().toVariant()))
+                cameraNode->setPostOverride(it.key().toStdString(), *v);
     }
 
     return cameraNode;
@@ -1757,10 +1761,9 @@ iris::MaterialPtr SceneReader::readPbrMaterial(const QJsonObject& matObj)
 			break;
 		case iris::PropertyType::Color:
 			// "#rrggbb" is read at THE EDITOR's EDGE (the spec's RULED 3): QColor
-			// parses it, the adapter carries it (an unparseable text reads as the
-			// invalid colour, whose shape is black's: the next save writes the
-			// "#000000" it wrote before).
-			mat->setValue(prop->name, iris::colourToValue(iris::toSrgbColor(QColor(val.toString()))));
+			// parses it, the adapter carries it; an unparseable text is the invalid
+			// colour, as before (a colour property's Null).
+			mat->setValue(prop->name, iris::colourRowValue(iris::toSrgbColor(QColor(val.toString()))));
 			break;
 		case iris::PropertyType::Bool:
 			mat->setValue(prop->name, iris::Value(val.toBool()));

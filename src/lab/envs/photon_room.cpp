@@ -50,8 +50,8 @@ void roomShell(Builder &b, const iris::MeshPtr &unit, const iris::PbrMaterialPtr
     lamp->setName(QStringLiteral("lamp"));
     b.built().doc->getRootNode()->addChild(lamp);
     lamp->setLocalPos(V(0, 6, 0));
-    lamp->setPropertyValue(QStringLiteral("intensity"), iris::lens::kDefaultLampIntensity);
-    lamp->setPropertyValue(QStringLiteral("distance"), 20.0f);
+    lamp->setPropertyValue("intensity", iris::lens::kDefaultLampIntensity);
+    lamp->setPropertyValue("distance", 20.0f);
 }
 
 namespace {

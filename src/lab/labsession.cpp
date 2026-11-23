@@ -432,7 +432,7 @@ bool Session::load(std::string &error)
             if (n->getSceneNodeType() == iris::SceneNodeType::Light &&
                 std::static_pointer_cast<iris::LightNode>(n)->lightType == iris::LightType::Directional) {
                 n->setLocalRot(mJlab.sunRot);
-                n->setPropertyValue(QStringLiteral("intensity"), mJlab.sunIntensity);
+                n->setPropertyValue("intensity", mJlab.sunIntensity);
                 return true;
             }
             for (const iris::SceneNodePtr &c : n->children()) if (sun(c)) return true;
@@ -1633,7 +1633,7 @@ bool Session::lamp(const Command &c)
         char *end = nullptr;
         const double v = std::strtod(c.args[2].c_str(), &end);
         if (!end || *end || v < 0.0) { labFail("LAB REFUSED lamp: '%s' is not an intensity\n", c.args[2].c_str()); return false; }
-        found->setPropertyValue(QStringLiteral("intensity"), float(v));
+        found->setPropertyValue("intensity", float(v));
         return true;
     }
     if (c.args[1] == "position") {

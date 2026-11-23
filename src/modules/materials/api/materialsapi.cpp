@@ -1590,6 +1590,12 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     // Texture ASSETS this call binds to a slot (by guid) — pinned into the
     // project once every key has been accepted (below).
     QStringList boundTextures;
+    // THE CALL IS ATOMIC (the lead's C3, NOQT-DOCUMENT-1 stage 4): every key is VALIDATED first - its row, its
+    // conversion by the row's kind, a map's asset - and only then is anything written: a refusal of ANY key means
+    // NOTHING of the call reached the material (a FILE given for a map row is imported into the library on the
+    // way, by content: that import is the library's, not the material's, and is kept).
+    struct Write { std::string name; iris::Value before, after; };
+    std::vector<Write> writes;
 
     for (auto it = expanded.constBegin(); it != expanded.constEnd(); ++it) {
         const QString &key = it.key();
@@ -1661,9 +1667,9 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                 // and to fail later at the image probe with only a log line. Refused here, before
                 // anything is written or pushed.
                 if (record.type != static_cast<int>(ModelTypes::Texture))
-                    return fail(QStringLiteral("material.set: '%1' is not an image asset (its type is %2) "
+                    return fail(QStringLiteral("material.set: '%1' is not an image asset (it is a %2) "
                                                "— a map row ('%3') takes an image")
-                                    .arg(ref, QString::number(record.type), key));
+                                    .arg(ref, assetTypeName(record.type), key));
                 // The pinned bytes in a project (resolvePinned falls back to the
                 // library source itself), the library source otherwise.
                 QSqlDatabase conn = QSqlDatabase::database();
@@ -1747,12 +1753,23 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
         // (qtstd::toRowValue: Qt's own calls) before the command is pushed, so its replay is never
         // refused; what Qt cannot convert is refused here, by name (the lead's ruling: a value is
         // refused, never silently moved - "abc" is not 0).
-        const iris::Value value = mapBound ? mapValue : qtstd::toRowValue(kind, newValue);
-        if (value.isNull())
-            return fail(QStringLiteral("material.set: %1: '%2' is not a %3")
-                            .arg(key, newValue.toString(), propertyTypeName(kind)));
-        host.services->undo->push(new ChangeMaterialPropertyCommand(material, name, oldValue, value));
+        const std::optional<iris::Value> value = mapBound ? std::optional<iris::Value>(mapValue)
+                                                          : qtstd::toRowValue(kind, newValue);
+        if (!value) {
+            // The input named by its kind and a short form (a list or an object has no useful toString).
+            const QString given = newValue.typeId() == QMetaType::QVariantList ? QStringLiteral("a list")
+                                : newValue.typeId() == QMetaType::QVariantMap  ? QStringLiteral("an object")
+                                : !newValue.isValid() || newValue.isNull()     ? QStringLiteral("null")
+                                : QStringLiteral("'%1'").arg(newValue.toString().left(40));
+            return fail(QStringLiteral("material.set: %1: %2 is not a %3 — nothing of this call was applied")
+                            .arg(key, given, propertyTypeName(kind)));
+        }
+        writes.push_back({ name, oldValue, *value });
     }
+
+    // Every key was accepted: now the writes, one undo step each, in the call's order.
+    for (const Write &w : writes)
+        host.services->undo->push(new ChangeMaterialPropertyCommand(material, w.name, w.before, w.after));
 
     // A MATERIAL SLOT BOUND BY GUID PINS THE IMAGE (lane L13): a scene now
     // uses it, so the project must carry it — as a BINDING, like the decal,

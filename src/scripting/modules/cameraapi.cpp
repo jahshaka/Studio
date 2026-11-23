@@ -272,11 +272,14 @@ QString applySettings(const iris::CameraNodePtr &cam, const QVariantMap &params,
                 return QStringLiteral("%1: no node with id '%2' to focus on").arg(verb, targetId);
         }
 
-        const QVariant before = cam->getPropertyValue(key);
-        if (!cam->setPropertyValue(key, value))
+        // THE EDGE (walk 1): converted by the row's kind (Qt's own call); what Qt cannot convert is refused here.
+        const std::string name = key.toStdString();
+        const iris::Value before = cam->getPropertyValue(name);
+        const std::optional<iris::Value> next = qtstd::toNodeValue(*cam, name, value);
+        if (!next || !cam->setPropertyValue(name, *next))
             return QStringLiteral("%1: '%2' was refused").arg(verb, key);
         if (undo)
-            undo->push(new SetNodePropertyCommand(cam, key, before, cam->getPropertyValue(key)));
+            undo->push(new SetNodePropertyCommand(cam, name, before, cam->getPropertyValue(name)));
     }
     return QString();
 }
@@ -870,7 +873,7 @@ QVariant worldPostValue(const iris::ScenePtr &scene, const QString &key)
     // and never will be — looks are an art choice and are deliberately not
     // tiered — so the world's value for it is the scene's own looks array.
     if (key == QLatin1String("looks"))
-        return iris::normalizeLookStack(scene->looks).toVariantList();
+        return qtstd::toVariant(iris::normalizeLookStack(scene->looks));
     if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key))
         return p->get ? QVariant(p->get(scene)) : QVariant();
     if (const worldmodes::Row *r = worldmodes::row(key))
@@ -913,7 +916,7 @@ QVariantMap CameraApi::postFx(const QString &id, const QVariant &options)
     // VALIDATE THE WHOLE BLOCK BEFORE WRITING ANY OF IT: a call that names one
     // good key and one bad one must not leave the camera half-changed.
     for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
-        if (!iris::cameraPostKey(it.key())) {
+        if (!iris::cameraPostKey(it.key().toStdString())) {
             const bool isExposure = it.key().startsWith(QLatin1String("exposure"));
             fail(isExposure
                      ? QStringLiteral("camera.postFx: '%1' is not an override — a camera's "
@@ -930,13 +933,16 @@ QVariantMap CameraApi::postFx(const QString &id, const QVariant &options)
     for (auto it = params.constBegin(); it != params.constEnd(); ++it) {
         const QString key = it.key();
         const QVariant value = normalizeJs(it.value());
-        const QString property = QStringLiteral("postFx.") + key;
-        const QVariant before = cam->getPropertyValue(property);
+        const std::string name = key.toStdString();
+        const std::string property = "postFx." + name;
+        const iris::Value before = cam->getPropertyValue(property);
+        // THE CAMERA's EDGE (walk 1): by the key's type, Qt's own calls (qtstd::toPostValue).
+        const std::optional<iris::Value> next = qtstd::toPostValue(name, value);
         // A NULL CLEARS. "Inherit" has to be sayable through the same door that
         // overrides, or a script could only ever turn overrides on.
-        if (!value.isValid() || value.isNull()) {
-            if (!cam->clearPostOverride(key)) continue;   // was not overridden: nothing to record
-        } else if (!cam->setPostOverride(key, value)) {
+        if (next && next->isNull()) {
+            if (!cam->clearPostOverride(name)) continue;   // was not overridden: nothing to record
+        } else if (!next || !cam->setPostOverride(name, *next)) {
             if (key == QLatin1String("smaa")) {
                 fail("camera.postFx: a camera may switch SMAA OFF (-1) but not to another "
                      "PRESET — the preset is a shader recompile, so a per-camera one would "
@@ -958,6 +964,7 @@ QVariantMap CameraApi::postFx(const QString &id, const QVariant &options)
     const iris::CameraPostKey *table = iris::cameraPostKeys(count);
     for (int i = 0; i < count; ++i) {
         const QString key = QString::fromLatin1(table[i].id);
+        const std::string name = table[i].id;
         // A Stack key has no scalar reading (postOverride returns invalid for
         // it by contract), so its presence is asked directly. An override to
         // the EMPTY stack is a real override and reads as one — that is the
@@ -965,9 +972,8 @@ QVariantMap CameraApi::postFx(const QString &id, const QVariant &options)
         // inherits the world's".
         const bool isStack = table[i].type == iris::CameraPostKeyType::Stack;
         const QVariant own = isStack
-            ? (cam->hasPostOverride(key) ? QVariant(cam->postOverrideStack(key).toVariantList())
-                                         : QVariant())
-            : cam->postOverride(key);
+            ? (cam->hasPostOverride(name) ? qtstd::toVariant(cam->postOverrideStack(name)) : QVariant())
+            : qtstd::toNodeVariant(*cam, "postFx." + name, cam->postOverride(name));
         if (own.isValid()) overrides.insert(key, own);
         const QVariant world = worldPostValue(scene, key);
         resolved.insert(key, own.isValid() ? own : world);
@@ -991,10 +997,12 @@ QVariantMap CameraApi::clearPostOverride(const QString &id, const QVariant &row)
     if (!normalized.isValid() || normalized.isNull()) {
         // No row named: clear the lot. "Put this camera back on the world" is
         // one action a user takes, and asking for it key by key is not it.
-        keys = cam->postOverrides.keys();
+        if (cam->postOverrides.kind() == iris::Kind::Object)
+            for (const iris::Value::Member &m : cam->postOverrides.asObject()) keys << QString::fromStdString(m.first);
+        keys.sort();   // the order QJsonObject's keys() gave (the ids are ASCII): the verb's answer unchanged
     } else {
         const QString key = normalized.toString();
-        if (!iris::cameraPostKey(key)) {
+        if (!iris::cameraPostKey(key.toStdString())) {
             fail(QStringLiteral("camera.clearPostOverride: unknown override '%1' (known: %2)")
                      .arg(key, postKeyNames()));
             return out;
@@ -1005,11 +1013,11 @@ QVariantMap CameraApi::clearPostOverride(const QString &id, const QVariant &row)
     UndoService *undo = host.services ? host.services->undo : nullptr;
     QVariantList cleared;
     for (const QString &key : keys) {
-        const QString property = QStringLiteral("postFx.") + key;
-        const QVariant before = cam->getPropertyValue(property);
-        if (!cam->clearPostOverride(key)) continue;
+        const std::string property = "postFx." + key.toStdString();
+        const iris::Value before = cam->getPropertyValue(property);
+        if (!cam->clearPostOverride(key.toStdString())) continue;
         cleared << key;
-        if (undo) undo->push(new SetNodePropertyCommand(cam, property, before, QVariant()));
+        if (undo) undo->push(new SetNodePropertyCommand(cam, property, before, iris::Value()));
     }
     out["id"] = cam->getGUID();
     out["cleared"] = cleared;

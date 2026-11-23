@@ -295,7 +295,7 @@ static void compareFragment(const iris::SceneNodePtr &parsed, const iris::SceneN
 static iris::MaterialPtr testMaterial(iris::MeshPtr, iris::MeshMaterialData &data)
 {
     auto mat = iris::PbrMaterial::create();
-    mat->setValue("baseColor", iris::colourToValue(data.diffuseColor));
+    mat->setValue("baseColor", iris::colourRowValue(data.diffuseColor));
     return iris::MaterialPtr(mat);
 }
 

@@ -4211,7 +4211,7 @@ QVariantMap WorldApi::postFx(const QVariantMap &params)
 // different notions of a valid stack.
 
 void WorldApi::pushLooksUndo(const QString &text, const iris::ScenePtr &scene,
-                             const QJsonArray &before)
+                             const iris::Value &before)
 {
     if (!host.services || !host.services->undo) return;
     host.services->undo->push(new SceneLooksCommand(text, scene, before));
@@ -4247,7 +4247,7 @@ QVariantList WorldApi::looks()
     QVariantList out;
     auto scene = sceneOrFail(QStringLiteral("world.looks"));
     if (!scene) return out;
-    const QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    const QJsonArray stack = qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray();
     for (const QJsonValue &v : stack) out.append(lookState(v.toObject()));
     return out;
 }
@@ -4303,7 +4303,7 @@ QVariantMap WorldApi::addLook(const QString &id, const QVariantMap &params, int 
                  .arg(id, known.join(QStringLiteral(", "))));
         return out;
     }
-    QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    QJsonArray stack = qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray();
     if (lookIndexOf(stack, id) >= 0) {
         // ONE INSTANCE PER LOOK (§7 R2). Refused loudly rather than silently
         // ignored: a script that adds the same look twice has a bug, and the
@@ -4330,11 +4330,11 @@ QVariantMap WorldApi::addLook(const QString &id, const QVariantMap &params, int 
         }
         given.insert(it.key(), it.value().toDouble());
     }
-    const QJsonArray before = scene->looks;
-    const QJsonObject entry = iris::makeLookEntry(*def, given, true);
+    const iris::Value before = scene->looks;
+    const QJsonObject entry = qtstd::toQJsonValue(iris::makeLookEntry(*def, qtstd::toValue(QJsonValue(given)), true)).toObject();
     if (index < 0 || index > stack.size()) stack.append(entry);
     else stack.insert(index, entry);
-    scene->looks = stack;
+    scene->looks = iris::normalizeLookStack(qtstd::toValue(QJsonValue(stack)));
     pushLooksUndo(QStringLiteral("Add Look"), scene, before);
     return lookState(entry);
 }
@@ -4343,12 +4343,12 @@ bool WorldApi::removeLook(const QString &id)
 {
     auto scene = sceneOrFail(QStringLiteral("world.removeLook"));
     if (!scene) return false;
-    QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    QJsonArray stack = qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray();
     const int at = lookIndexOf(stack, id);
     if (at < 0) return false;
-    const QJsonArray before = scene->looks;
+    const iris::Value before = scene->looks;
     stack.removeAt(at);
-    scene->looks = stack;
+    scene->looks = iris::normalizeLookStack(qtstd::toValue(QJsonValue(stack)));
     pushLooksUndo(QStringLiteral("Remove Look"), scene, before);
     return true;
 }
@@ -4357,16 +4357,16 @@ bool WorldApi::moveLook(const QString &id, int index)
 {
     auto scene = sceneOrFail(QStringLiteral("world.moveLook"));
     if (!scene) return false;
-    QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    QJsonArray stack = qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray();
     const int at = lookIndexOf(stack, id);
     if (at < 0) return false;
     const int to = qBound(0, index, stack.size() - 1);
     if (to == at) return true;
-    const QJsonArray before = scene->looks;
+    const iris::Value before = scene->looks;
     const QJsonValue entry = stack.at(at);
     stack.removeAt(at);
     stack.insert(to, entry);
-    scene->looks = stack;
+    scene->looks = iris::normalizeLookStack(qtstd::toValue(QJsonValue(stack)));
     pushLooksUndo(QStringLiteral("Reorder Looks"), scene, before);
     return true;
 }
@@ -4377,7 +4377,7 @@ QVariantMap WorldApi::setLook(const QString &id, const QVariantMap &params)
     auto scene = sceneOrFail(QStringLiteral("world.setLook"));
     if (!scene) return out;
     const iris::LookDef *def = iris::lookDef(id);
-    QJsonArray stack = iris::normalizeLookStack(scene->looks);
+    QJsonArray stack = qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray();
     const int at = def ? lookIndexOf(stack, id) : -1;
     if (at < 0) {
         fail(QStringLiteral("world.setLook: '%1' is not in the scene's stack — "
@@ -4401,12 +4401,12 @@ QVariantMap WorldApi::setLook(const QString &id, const QVariantMap &params)
         }
         values.insert(it.key(), it.value().toDouble());
     }
-    const QJsonArray before = scene->looks;
+    const iris::Value before = scene->looks;
     // makeLookEntry re-clamps and re-fills, so the stored entry is canonical
     // however partial the call was.
-    entry = iris::makeLookEntry(*def, values, enabled);
+    entry = qtstd::toQJsonValue(iris::makeLookEntry(*def, qtstd::toValue(QJsonValue(values)), enabled)).toObject();
     stack.replace(at, entry);
-    scene->looks = stack;
+    scene->looks = iris::normalizeLookStack(qtstd::toValue(QJsonValue(stack)));
     pushLooksUndo(QStringLiteral("Change Look"), scene, before);
     return lookState(entry);
 }

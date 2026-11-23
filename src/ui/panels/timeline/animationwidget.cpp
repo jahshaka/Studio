@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/timeline/animationwidget.h"
+#include "app/qtstdgui.h"
 #include "services/editgate.h"
 #include "ui_animationwidget.h"
 #include <QMenu>
@@ -487,7 +488,7 @@ void AnimationWidget::addPropertyKey(QAction *action)
     info.index = index;
     // The cached Property carries the value the node had when it was SELECTED;
     // the key must carry what it holds now.
-    info.value = node->getPropertyValue(propName);
+    info.value = qtstd::nodeVariant(*node, animProp->name);
 
     bool createdTrack = false;
     QString error;

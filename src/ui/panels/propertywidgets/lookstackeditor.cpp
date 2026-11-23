@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "ui/controls/labelwidget.h"
 
 #include "services/editgate.h"
+#include "app/qtstd.h"
 
 namespace lookstack
 {
@@ -33,7 +34,7 @@ void build(AccordianBladeWidget *blade, const QJsonArray &raw,
            const std::function<void()> &gestureEnd)
 {
     if (!blade || !writeStack) return;
-    const QJsonArray stack = iris::normalizeLookStack(raw);
+    const QJsonArray stack = qtstd::toQJsonValue(iris::normalizeLookStack(qtstd::toValue(QJsonValue(raw)))).toArray();
 
     // THE EDIT GATE, ONCE FOR BOTH PANELS (owner, ledger §423;
     // services/editgate.h). Every row this editor builds writes the stack
@@ -178,7 +179,7 @@ void build(AccordianBladeWidget *blade, const QJsonArray &raw,
                          const iris::LookDef *def = iris::lookDef(id);
                          if (!def) return;
                          QJsonArray next = stack;
-                         next.append(iris::makeLookEntry(*def));
+                         next.append(qtstd::toQJsonValue(iris::makeLookEntry(*def)));
                          write(next, true);
                      });
 }

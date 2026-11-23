@@ -372,32 +372,30 @@ int main(int argc, char **argv)
                   qPrintable(QString("%1: getProperties() advertises %2 (missing: %3)")
                                  .arg(what).arg(keys.join(", ")).arg(missing.join(", "))));
         };
-        auto roundTrip = [](iris::SceneNodePtr n, const QString &key, const QVariant &v,
+        auto roundTrip = [](iris::SceneNodePtr n, const std::string &key, const iris::Value &v,
                             const QString &what) {
             const bool set = n->setPropertyValue(key, v);
-            const QVariant back = n->getPropertyValue(key);
-            CHECK(set && back.isValid() && back.toString() == v.toString(),
-                  qPrintable(QString("%1: %2 round-trips (wrote %3, read %4)")
-                                 .arg(what).arg(key).arg(v.toString()).arg(back.toString())));
+            const iris::Value back = n->getPropertyValue(key);
+            CHECK(set && !back.isNull() && back == v,
+                  qPrintable(QString("%1: %2 round-trips").arg(what).arg(QString::fromStdString(key))));
         };
-        auto readOnly = [](iris::SceneNodePtr n, const QString &key, const QVariant &v,
+        auto readOnly = [](iris::SceneNodePtr n, const std::string &key, const iris::Value &v,
                            const QString &what) {
-            const QVariant before = n->getPropertyValue(key);
+            const iris::Value before = n->getPropertyValue(key);
             const bool set = n->setPropertyValue(key, v);
-            CHECK(!set && n->getPropertyValue(key).isValid() &&
-                      n->getPropertyValue(key).toString() == before.toString(),
-                  qPrintable(QString("%1: %2 is readable but refuses writes").arg(what).arg(key)));
+            CHECK(!set && !n->getPropertyValue(key).isNull() && n->getPropertyValue(key) == before,
+                  qPrintable(QString("%1: %2 is readable but refuses writes").arg(what).arg(QString::fromStdString(key))));
         };
 
         // SceneNode
         auto plain = iris::SceneNode::create();
         advertises(plain, { "name", "visible", "castShadow", "pickable" }, "SceneNode");
-        roundTrip(plain, "name", QString("renamed"), "SceneNode");
+        roundTrip(plain, "name", iris::Value("renamed"), "SceneNode");
         roundTrip(plain, "visible", false, "SceneNode");
         roundTrip(plain, "castShadow", false, "SceneNode");
         roundTrip(plain, "pickable", false, "SceneNode");
-        CHECK(!plain->getPropertyValue("noSuchProperty").isValid(),
-              "SceneNode: unknown property reads as an invalid QVariant");
+        CHECK(plain->getPropertyValue("noSuchProperty").isNull(),
+              "SceneNode: unknown property reads as a Null");
         CHECK(!plain->setPropertyValue("noSuchProperty", 1),
               "SceneNode: unknown property refuses writes");
 
@@ -415,17 +413,17 @@ int main(int argc, char **argv)
         roundTrip(refLight, "shadowMapResolution", 1024, "LightNode");
         roundTrip(refLight, "doubleSided", true, "LightNode");
         roundTrip(refLight, "iconSize", 1.5f, "LightNode");
-        CHECK(!refLight->getPropertyValue("shadowAlpha").isValid() &&
-              !refLight->getPropertyValue("shadowColor").isValid() &&
-              !refLight->getPropertyValue("shadowBias").isValid(),
+        CHECK(refLight->getPropertyValue("shadowAlpha").isNull() &&
+              refLight->getPropertyValue("shadowColor").isNull() &&
+              refLight->getPropertyValue("shadowBias").isNull(),
               "LightNode: the three dead shadow properties are gone, not merely hidden");
         // The area approximation's switch and its mask are GONE (PHOTON-7 7-0: every area
         // light is LTC on every path).
-        CHECK(!refLight->getPropertyValue("accurate").isValid() &&
-              !refLight->getPropertyValue("lightTexture").isValid() &&
-              !refLight->getPropertyValue("lightTexturePath").isValid(),
+        CHECK(refLight->getPropertyValue("accurate").isNull() &&
+              refLight->getPropertyValue("lightTexture").isNull() &&
+              refLight->getPropertyValue("lightTexturePath").isNull(),
               "LightNode: the area approximation's 'accurate' and its mask rows are gone");
-        CHECK(refLight->getPropertyValue("intensity").isValid(),
+        CHECK(!refLight->getPropertyValue("intensity").isNull(),
               "LightNode: the pre-existing keys still resolve");
 
         // MeshNode — meshPath/meshIndex are deliberately read-only
@@ -438,9 +436,9 @@ int main(int argc, char **argv)
         refMesh->meshPath = QStringLiteral(":assets/models/sky.obj");
         advertises(refMesh, { "meshPath", "meshIndex", "faceCullingMode", "name" }, "MeshNode");
         roundTrip(refMesh, "faceCullingMode", int(iris::FaceCullingMode::Front), "MeshNode");
-        readOnly(refMesh, "meshPath", QString("/somewhere/else.obj"), "MeshNode");
+        readOnly(refMesh, "meshPath", iris::Value("/somewhere/else.obj"), "MeshNode");
         readOnly(refMesh, "meshIndex", 7, "MeshNode");
-        CHECK(refMesh->getPropertyValue("meshPath").toString() == QString(":assets/models/sky.obj"),
+        CHECK(refMesh->getPropertyValue("meshPath") == iris::Value(":assets/models/sky.obj"),
               "MeshNode: meshPath reads the loaded path");
 
         // CameraNode
@@ -474,7 +472,7 @@ int main(int argc, char **argv)
         roundTrip(refParticles, "dissipateInv", true, "ParticleSystemNode");
         roundTrip(refParticles, "randomRotation", false, "ParticleSystemNode");
         roundTrip(refParticles, "blendMode", false, "ParticleSystemNode");
-        readOnly(refParticles, "texture", QString("/some/other.png"), "ParticleSystemNode");
+        readOnly(refParticles, "texture", iris::Value("/some/other.png"), "ParticleSystemNode");
 
         plain.reset(); refLight.reset(); refMesh.reset(); refCam.reset();
         refParticles.reset();

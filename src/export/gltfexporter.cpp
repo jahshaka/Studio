@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/quat.h"
+#include "app/qtstd.h"
 #include "irisgl/document/qt/colour.h"
 #include "irisgl/core/math/vec.h"
 #include "export/gltfexporter.h"
@@ -1548,7 +1549,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // exists. Only ENABLED entries: a look switched off is not part of the
         // picture, and a viewer would have no way to know that.
         QJsonArray looks;
-        for (const QJsonValue &v : iris::normalizeLookStack(scene->looks)) {
+        for (const QJsonValue &v : qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray()) {
             const QJsonObject entry = v.toObject();
             if (!entry.value(QStringLiteral("enabled")).toBool(true)) continue;
             QJsonObject out;

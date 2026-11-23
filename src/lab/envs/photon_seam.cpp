@@ -96,8 +96,8 @@ Built buildSeam(unsigned seed, bool bake)
     lamp->setName(QStringLiteral("lamp"));
     b.built().doc->getRootNode()->addChild(lamp);
     lamp->setLocalPos(V(-16.5f, 17.0f, 5.0f));
-    lamp->setPropertyValue(QStringLiteral("intensity"), iris::lens::kDefaultLampIntensity);
-    lamp->setPropertyValue(QStringLiteral("distance"), 6.0f);
+    lamp->setPropertyValue("intensity", iris::lens::kDefaultLampIntensity);
+    lamp->setPropertyValue("distance", 6.0f);
     return b.finish();
 }
 

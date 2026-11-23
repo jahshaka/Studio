@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/camerapostfxpropertywidget.h"
+#include "app/qtstdgui.h"
 
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -214,8 +215,10 @@ void CameraPostFxPropertyWidget::rebuild()
     const iris::CameraPostKey *table = iris::cameraPostKeys(count);
     for (int i = 0; i < count; ++i) {
         const QString key = QString::fromLatin1(table[i].id);
+        const std::string name = table[i].id;
         const QString label = labelFor(key);
-        const QVariant own = camera->postOverride(key);
+        // The override as the QVariant it always was here (a Number a double, a Toggle / Enum an int, absent invalid).
+        const QVariant own = qtstd::toNodeVariant(*camera, "postFx." + name, camera->postOverride(name));
 
         if (!rowAvailable(key)) {
             // Shown so the section is a complete account of the chain, disabled
@@ -234,11 +237,11 @@ void CameraPostFxPropertyWidget::rebuild()
             // camera's own" opens the same stack editor the World panel uses,
             // seeded with whatever the world currently has (so turning the
             // override on does not change the picture by itself).
-            const bool overridden = camera->hasPostOverride(key);
-            const QJsonArray own = camera->postOverrideStack(key);
+            const bool overridden = camera->hasPostOverride(name);
+            const QJsonArray own = qtstd::toQJsonValue(camera->postOverrideStack(name)).toArray();
             const iris::ScenePtr scene = sceneOf(camera);
             const QJsonArray worldStack =
-                scene ? iris::normalizeLookStack(scene->looks) : QJsonArray();
+                scene ? qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray() : QJsonArray();
 
             auto *combo = this->addComboBox(QStringLiteral("Looks"));
             combo->addItem(QStringLiteral("Inherit (%1)")
@@ -262,10 +265,9 @@ void CameraPostFxPropertyWidget::rebuild()
                                              if (choice == QLatin1String("inherit")) return QVariant();
                                              if (choice == QLatin1String("none"))
                                                  return QVariant(QJsonArray().toVariantList());
-                                             if (camera && camera->hasPostOverride(key) &&
-                                                 !camera->postOverrideStack(key).isEmpty())
-                                                 return QVariant(
-                                                     camera->postOverrideStack(key).toVariantList());
+                                             if (camera && camera->hasPostOverride(key.toStdString()) &&
+                                                 !camera->postOverrideStack(key.toStdString()).asArray().empty())
+                                                 return qtstd::toVariant(camera->postOverrideStack(key.toStdString()));
                                              // Seed from the world, so switching to
                                              // "own" is a starting point rather than
                                              // a blank page.
@@ -283,11 +285,12 @@ void CameraPostFxPropertyWidget::rebuild()
                         if (!camera) return;
                         if (!rebuildPanel && !looksScrubbing) {
                             looksScrubbing = true;
-                            looksBefore = camera->postOverrideStack(key);
+                            looksBefore = qtstd::toQJsonValue(camera->postOverrideStack(key.toStdString())).toArray();
                         }
-                        const QJsonArray before =
-                            looksScrubbing ? looksBefore : camera->postOverrideStack(key);
-                        camera->setPostOverride(key, next.toVariantList());
+                        const QJsonArray before = looksScrubbing
+                            ? looksBefore : qtstd::toQJsonValue(camera->postOverrideStack(key.toStdString())).toArray();
+                        // The editor's own stack (an Array: the key's kind): its answer is not read.
+                        camera->setPostOverride(key.toStdString(), qtstd::toValue(QJsonValue(next)));
                         if (rebuildPanel) {
                             // Structural: one step, then the rows follow.
                             looksScrubbing = false;
@@ -345,7 +348,7 @@ void CameraPostFxPropertyWidget::rebuild()
             field->setToolTip(tooltipFor(key, sceneTracesRays()));
             connect(field, &DragFloatWidget::valueChanged, this, [this, key, minV, maxV](double v) {
                 if (!camera) return;
-                camera->setPostOverride(key, qBound(minV, v, maxV));
+                camera->setPostOverride(key.toStdString(), iris::Value(qBound(minV, v, maxV)));   // a Number: the key's kind
                 applied(false);
             });
             continue;
@@ -409,11 +412,11 @@ void CameraPostFxPropertyWidget::rebuild()
 void CameraPostFxPropertyWidget::pushLooks(const QString &key, const QJsonArray &before)
 {
     if (!camera || !services || !services->undo) return;
-    const QVariant after(camera->postOverrideStack(key).toVariantList());
-    const QVariant was(before.toVariantList());
+    // Both in the validator's canonical form, so equal stacks compare equal (Value == reads members in order).
+    const iris::Value after = camera->postOverrideStack(key.toStdString());
+    const iris::Value was = iris::normalizeLookStack(qtstd::toValue(QJsonValue(before)));
     if (was == after) return;
-    services->undo->push(new SetNodePropertyCommand(camera, QStringLiteral("postFx.") + key,
-                                                    was, after));
+    services->undo->push(new SetNodePropertyCommand(camera, "postFx." + key.toStdString(), was, after));
 }
 
 void CameraPostFxPropertyWidget::applied(bool rebuildPanel)

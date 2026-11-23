@@ -86,7 +86,16 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
             else if (property->type == iris::PropertyType::Texture)
                 pbr->setValue(property->name, textureRef(values.value(key).toString()));
             else
-                pbr->setValue(property->name, qtstd::toRowValue(property->type, values.value(key).toVariant()));
+            {
+                // A value the row cannot take keeps the row's default, and is NAMED in the session
+                // log's warnings (the lead's C2: never silently).
+                const auto value = qtstd::toRowValue(property->type, values.value(key).toVariant());
+                if (!value || !pbr->setValue(property->name, *value))
+                    JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                                  QStringLiteral("asset helper: '%1' of the material on '%2' could not be read (%3); "
+                                                 "the row keeps its default")
+                                      .arg(key, node->getName(), values.value(key).toVariant().toString()));
+            }
         }
         std::static_pointer_cast<iris::MeshNode>(node)->setMaterial(pbr);
     }

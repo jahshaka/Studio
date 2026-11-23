@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/scenetemplatebuilder.h"
+#include "app/qtstdgui.h"
 #include "irisgl/document/qt/colour.h"
 
 #include <QColor>
@@ -160,7 +161,7 @@ iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
     // (SPECS/DIRTY_SET_MIRROR_SPEC.md; lead review R2 #10). The first sync of a
     // new scene is a full walk, so nothing depends on it today — which is
     // exactly why it would rot silently.
-    dlight->setPropertyValue(QStringLiteral("intensity"), 1.0f);
+    dlight->setPropertyValue("intensity", 1.0f);
     dlight->icon = iris::Texture2D::load(":/icons/light.png");
     dlight->markChanged(iris::NodeChange::Params);
 
@@ -180,8 +181,8 @@ iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
     // old template's second light stood at (-4, 4, 0); the marker for the light
     // that replaces it stands in the same place.
     skylight->setLocalPos(iris::Vec3(-4, 4, 0));
-    skylight->setPropertyValue(QStringLiteral("intensity"), 1.0f);
-    skylight->setPropertyValue(QStringLiteral("lightColor"), QColor(255, 255, 255));
+    skylight->setPropertyValue("intensity", 1.0f);
+    skylight->setPropertyValue("lightColor", qtstd::colourValue(QColor(255, 255, 255)));
     skylight->icon = iris::Texture2D::load(":/icons/light.png");
     skylight->markChanged(iris::NodeChange::Params);
 

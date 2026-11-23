@@ -157,6 +157,7 @@ int main()
     testColourCodec();
     std::printf("\ncases %d (> 0)\n", cases);
     if (cases == 0) ++failures;
-    std::printf("app.qtstd: %s\n", failures ? "FAILED" : "PASSED");
+    if (failures) std::printf("app.qtstd: FAILED (%d)\n", failures);
+    else std::printf("app.qtstd: PASSED\n");
     return failures ? 1 : 0;
 }

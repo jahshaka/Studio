@@ -212,9 +212,9 @@ int main(int argc, char **argv)
         node->setMobility(iris::Mobility::Static);
 
         QUndoStack stack;
-        push(stack, new SetNodePropertyCommand(node, QStringLiteral("position"),
-                                               QVariant::fromValue(QVector3D(0, 0, 0)),
-                                               QVariant::fromValue(QVector3D(0, 3, 0))),
+        push(stack, new SetNodePropertyCommand(node, "position",
+                                               iris::vec3ToValue(iris::Vec3(0, 0, 0)),
+                                               iris::vec3ToValue(iris::Vec3(0, 3, 0))),
              &services);
         CHECK(!node->staticHint(), "setProperty(position): demoted, like any other move");
         stack.undo();

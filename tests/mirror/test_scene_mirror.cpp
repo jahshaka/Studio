@@ -520,7 +520,7 @@ int main(int argc, char **argv)
             case iris::PropertyType::Int:
             case iris::PropertyType::List:   reloaded->setValue(prop->name, iris::Value(val.toInt())); break;
             case iris::PropertyType::Color:
-                reloaded->setValue(prop->name, iris::colourToValue(iris::toSrgbColor(QColor(val.toString()))));
+                reloaded->setValue(prop->name, iris::colourRowValue(iris::toSrgbColor(QColor(val.toString()))));
                 break;
             case iris::PropertyType::Bool:   reloaded->setValue(prop->name, iris::Value(val.toBool())); break;
             case iris::PropertyType::Texture:
@@ -811,7 +811,7 @@ int main(int argc, char **argv)
             point->shadowMap.shadowType = t;
             CHECK(SceneMirror::toLightDesc(point.get()).castShadows, "a point light casts at every Shadow Type");
         }
-        CHECK(!point->setPropertyValue(QStringLiteral("shadowMapType"), 0) &&
+        CHECK(!point->setPropertyValue("shadowMapType", 0) &&
                   point->shadowMap.shadowType == iris::ShadowMapType::VerySoft,
               "shadowMapType 0 (the deleted None) is refused, the filter kept");
 

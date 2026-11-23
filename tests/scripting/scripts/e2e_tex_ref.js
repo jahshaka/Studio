@@ -96,10 +96,15 @@ function arm1(staged, loc, root) {
     // the asset, and the row keeps the asset it had (it used to be bound and to fail later at the
     // image probe, with only a log line).
     assert(placed.assetGuid && placed.assetGuid.length > 10, "the model's asset guid (" + placed.assetGuid + ")");
+    // AND THE CALL IS ATOMIC (the lead's C3): a good key in the same call as the refused one is NOT applied
+    // (`alpha` sorts BEFORE `baseColorMap`, so the verb meets the good key first).
+    var alphaBefore = material.get(w.cube).alpha;
     var refusal = "";
-    try { material.set(w.cube, { baseColorMap: placed.assetGuid }); } catch (e) { refusal = String(e); }
+    try { material.set(w.cube, { alpha: 0.25, baseColorMap: placed.assetGuid }); } catch (e) { refusal = String(e); }
     assert(refusal.indexOf("is not an image asset") >= 0 && refusal.indexOf(placed.assetGuid) >= 0,
            "material.set refuses a model asset as a map, by name: " + refusal);
+    assert(material.get(w.cube).alpha === alphaBefore && alphaBefore !== 0.25,
+           "...and NOTHING of the call was applied: alpha is still " + material.get(w.cube).alpha);
     assert(material.get(w.cube).textureAssets.baseColorMap === w.cubeGuids.baseColorMap,
            "...and the row keeps the image it had (" + material.get(w.cube).textureAssets.baseColorMap + ")");
     // A particle emitter with an image bound by guid.

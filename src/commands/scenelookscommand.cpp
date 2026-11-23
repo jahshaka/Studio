@@ -14,14 +14,14 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scene.h"
 
 SceneLooksCommand::SceneLooksCommand(const QString &text, const iris::ScenePtr &scene,
-                                     const QJsonArray &before)
+                                     const iris::Value &before)
     : mScene(scene), mBefore(before)
 {
     setText(text);
     if (scene) mAfter = scene->looks;
 }
 
-void SceneLooksCommand::apply(const QJsonArray &stack)
+void SceneLooksCommand::apply(const iris::Value &stack)
 {
     auto scene = mScene.lock();
     if (!scene) return;

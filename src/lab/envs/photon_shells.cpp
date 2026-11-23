@@ -76,8 +76,8 @@ Built buildShells(unsigned seed, bool bake)
     lamp->setName(QStringLiteral("lamp"));
     b.built().doc->getRootNode()->addChild(lamp);
     lamp->setLocalPos(V(-7, 1, 7));
-    lamp->setPropertyValue(QStringLiteral("intensity"), iris::lens::kDefaultLampIntensity);
-    lamp->setPropertyValue(QStringLiteral("distance"), 1.5f);
+    lamp->setPropertyValue("intensity", iris::lens::kDefaultLampIntensity);
+    lamp->setPropertyValue("distance", 1.5f);
     return b.finish();
 }
 

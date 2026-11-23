@@ -1093,18 +1093,26 @@ QVariant NodeApi::property(const QString &id, const QString &key)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.property"));
     if (!node) return QVariant();
-    const QVariant value = node->getPropertyValue(key);
-    if (!value.isValid()) {
+    const std::string name = key.toStdString();
+    const iris::Value value = node->getPropertyValue(name);
+    // A Null with a row is a colour row's NONE (the invalid colour: an unset fade); a Null with no row: no such name.
+    if (value.isNull() && qtstd::rowType(*node, name) == iris::PropertyType::None) {
         fail(QStringLiteral("node.property: '%1' has no property '%2' — this node reflects: %3")
                  .arg(node->getName(), key, propertyKeys(node).join(QStringLiteral(", "))));
         return QVariant();
     }
-    if (key == QLatin1String("faceCullingMode")) return cullModeName(value.toInt());
-    if (key == QLatin1String("mobility")) return mobilityRowName(value.toInt());
-    switch (value.typeId()) {
-    case QMetaType::QVector3D: return vecToJs(iris::fromQt(value.value<QVector3D>()));
-    case QMetaType::QColor:    return colorToJs(value.value<QColor>());
-    default:                   return value;
+    if (key == QLatin1String("faceCullingMode")) return cullModeName(int(value.asNumber()));
+    if (key == QLatin1String("mobility")) return mobilityRowName(int(value.asNumber()));
+    // BY THE ROW (NOQT-DOCUMENT-1 stage 4, walk 13; RULED C), where it switched on the QVariant's type: a vector
+    // row's {x,y,z}, a colour row's hex, everything else as the QVariant the node handed out before.
+    switch (qtstd::rowType(*node, name)) {
+    case iris::PropertyType::Vec3: {
+        iris::Vec3 v;
+        iris::vec3FromValue(value, v);
+        return vecToJs(v);
+    }
+    case iris::PropertyType::Color: return colorToJs(qtstd::toQColor(value));
+    default:                        return qtstd::toNodeVariant(*node, name, value);
     }
 }
 
@@ -1113,11 +1121,12 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
     auto node = nodeOrFail(id, QStringLiteral("node.setProperty"));
     if (!node) return false;
     const QVariant value = normalizeJs(rawValue);
+    const std::string name = key.toStdString();
 
-    // The current value tells us the target type — JS maps/strings convert to
-    // the vector/colour the document field expects.
-    const QVariant current = node->getPropertyValue(key);
-    if (!current.isValid())
+    // The current value tells us the property exists — and, through its ROW
+    // (RULED C), the kind a JS map or string converts to.
+    const iris::Value current = node->getPropertyValue(name);
+    if (current.isNull() && qtstd::rowType(*node, name) == iris::PropertyType::None)
         return fail(QStringLiteral("node.setProperty: '%1' has no property '%2' — this node "
                                    "reflects: %3 (node.properties('%4') gives their types, "
                                    "current values and which are writable)")
@@ -1144,27 +1153,33 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
                             .arg(value.toString(), mobilityNames().join(QStringLiteral(", "))));
         converted = m;
     }
-    switch (current.typeId()) {
-    case QMetaType::QVector3D:
-        converted = QVariant::fromValue(iris::toQt(vecFromJs(value, iris::fromQt(current.value<QVector3D>()))));
+    switch (qtstd::rowType(*node, name)) {
+    case iris::PropertyType::Vec3: {
+        iris::Vec3 now;
+        iris::vec3FromValue(current, now);
+        const iris::Vec3 v = vecFromJs(value, now);
+        converted = QVariant::fromValue(QVector3D(v.x(), v.y(), v.z()));
         break;
-    case QMetaType::QColor: {
+    }
+    case iris::PropertyType::Color: {
         // F8: an unparseable colour used to keep the old value and return true.
         bool ok = false;
-        const QColor colour = colorFromJs(value, current.value<QColor>(), &ok);
+        const QColor colour = colorFromJs(value, qtstd::toQColor(current), &ok);
         if (!ok)
             return fail(QStringLiteral("node.setProperty: %1 (property '%2')")
                             .arg(colorHelp(value), key));
         converted = QVariant::fromValue(colour);
         break;
     }
-    case QMetaType::Float:
-    case QMetaType::Double:
-        converted = value.toFloat();
-        break;
     default:
         break;
     }
+    // THE EDGE (walk 1): the value converted to the property's kind with Qt's own call; what Qt cannot convert is
+    // refused BY NAME here (the lead's ruling: "abc" is not a light mask of 0).
+    const std::optional<iris::Value> next = qtstd::toNodeValue(*node, name, converted);
+    if (!next)
+        return fail(QStringLiteral("node.setProperty: '%1' cannot hold '%2' (node '%3')")
+                        .arg(key, value.toString(), node->getName()));
 
     // The write happens FIRST so a refusal is still reported honestly and never
     // leaves an undo entry behind; the command is then pushed to record it
@@ -1172,14 +1187,14 @@ bool NodeApi::setProperty(const QString &id, const QString &key, const QVariant 
     // setter is idempotent (they are plain field assignments), so applying the
     // same value twice is a no-op, and this keeps one code path for "did the
     // node accept it?".
-    if (!node->setPropertyValue(key, converted))
+    if (!node->setPropertyValue(name, *next))
         return fail(QStringLiteral("node.setProperty: '%1' rejected property '%2' — the key "
                                    "exists but is read-only through reflection "
                                    "(node.properties('%3') reports writable:false for it; a "
                                    "mesh's geometry and an emitter's image have their own verbs)")
                         .arg(node->getName(), key, id));
     if (host.services && host.services->undo)
-        host.services->undo->push(new SetNodePropertyCommand(node, key, current, converted));
+        host.services->undo->push(new SetNodePropertyCommand(node, name, current, *next));
     return true;
 }
 

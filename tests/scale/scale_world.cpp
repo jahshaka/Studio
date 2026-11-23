@@ -1,6 +1,7 @@
 // THE SCALE FIXTURES — see scale_world.h for what they are and why they are built
 // this way.
 #include "scale_world.h"
+#include "app/qtstdgui.h"
 #include "irisgl/document/qt/colour.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 
@@ -662,13 +663,13 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
         sun->setLocalPos(iris::Vec3(4, 4, 0));
         sun->setLocalRot(iris::Quat::fromEulerAngles(-50.0f, 30.0f, 0.0f));
         doc->getRootNode()->addChild(sun);
-        sun->setPropertyValue(QStringLiteral("intensity"), 1.0f);
+        sun->setPropertyValue("intensity", 1.0f);
         world.sun = sun;
         auto sky = iris::LightNode::create();
         sky->setLightType(iris::LightType::Sky);
         sky->setName("Sky Light");
         doc->getRootNode()->addChild(sky);
-        sky->setPropertyValue(QStringLiteral("intensity"), 1.0f);
+        sky->setPropertyValue("intensity", 1.0f);
     }
 
     // THE INSTANCES: a jittered grid centred on the origin, the meshes cycled,
@@ -712,10 +713,10 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
                                   float(i / lside) * spec.lightGrid - lhalf));
         if (spot) l->setLocalRot(iris::Quat::fromEulerAngles(-90.0f, 0.0f, 0.0f));
         doc->getRootNode()->addChild(l);
-        l->setPropertyValue(QStringLiteral("intensity"), 2.0f);
-        l->setPropertyValue(QStringLiteral("distance"), 15.0f);
-        l->setPropertyValue(QStringLiteral("lightColor"),
-                            QColor(255, 200 + (i * 7) % 55, 160 + (i * 13) % 95));
+        l->setPropertyValue("intensity", 2.0f);
+        l->setPropertyValue("distance", 15.0f);
+        l->setPropertyValue("lightColor",
+                            qtstd::colourValue(QColor(255, 200 + (i * 7) % 55, 160 + (i * 13) % 95)));
         world.lights.push_back(l);
     }
     doc->getRootNode()->applyStaticDefaults();

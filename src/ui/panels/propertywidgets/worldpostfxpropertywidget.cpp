@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldpostfxpropertywidget.h"
+#include "app/qtstd.h"
 #include "ui/panels/propertywidgets/panelrefresh.h"
 #include <QPointer>
 
@@ -278,7 +279,7 @@ void WorldPostFxPropertyWidget::refreshRows()
     }
 
     if (looksHeading) {
-        const QJsonArray stack = iris::normalizeLookStack(scene->looks);
+        const QJsonArray stack = qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray();
         looksHeading->setText(stack.isEmpty() ? tr("none")
                                               : tr("%1 in the stack").arg(stack.size()));
     }
@@ -291,17 +292,18 @@ void WorldPostFxPropertyWidget::rebuildLooks()
     looksSection->clearPanel();
 
     lookstack::build(
-        looksSection, iris::normalizeLookStack(scene->looks),
+        looksSection, qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks)).toArray(),
         [this](const QJsonArray &next, bool structural) {
             if (!scene) return;
-            const QJsonArray before = looksScrubbing ? looksBefore : scene->looks;
+            // The panel speaks the QJsonArray its rows and its undo step always carried; the document a Value.
+            const QJsonArray before = looksScrubbing ? looksBefore : qtstd::toQJsonValue(scene->looks).toArray();
             if (!structural && !looksScrubbing) {
                 // A scrub has started: remember where it started, and let the
                 // editor stream values until it says the gesture ended.
                 looksScrubbing = true;
-                looksBefore = scene->looks;
+                looksBefore = qtstd::toQJsonValue(scene->looks).toArray();
             }
-            scene->looks = iris::normalizeLookStack(next);
+            scene->looks = iris::normalizeLookStack(qtstd::toValue(QJsonValue(next)));
             applied();
             if (structural) {
                 // Adding, removing, reordering or switching a look changes which
@@ -324,7 +326,7 @@ void WorldPostFxPropertyWidget::commitLooks(const QJsonArray &before, const QStr
 {
     if (!scene) return;
     panelundo::pushSceneEdit(services, scene, QStringLiteral("looks"), text, QVariant(before),
-                             QVariant(scene->looks), [this]() {
+                             QVariant(qtstd::toQJsonValue(scene->looks).toArray()), [this]() {
                                  refreshRows();
                                  rebuildLooks();
                              });

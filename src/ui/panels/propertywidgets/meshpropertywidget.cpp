@@ -164,12 +164,11 @@ void MeshPropertyWidget::onLightChannelsChanged(quint32 mask)
     // Straight to the document: the mirror pushes the mask onto the node's Item
     // on the next sync, change-guarded like every other flag. `lightMask` is a
     // reflected key, so the step is the one node.setLightMask records.
-    const QVariant before = meshNode->getPropertyValue(QStringLiteral("lightMask"));
+    const iris::Value before = meshNode->getPropertyValue("lightMask");
     meshNode->setLightMask(mask);
-    const QVariant after = meshNode->getPropertyValue(QStringLiteral("lightMask"));
+    const iris::Value after = meshNode->getPropertyValue("lightMask");
     if (before == after || !services || !services->undo) return;
-    services->undo->push(new SetNodePropertyCommand(meshNode, QStringLiteral("lightMask"),
-                                                    before, after));
+    services->undo->push(new SetNodePropertyCommand(meshNode, "lightMask", before, after));
 }
 
 void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)

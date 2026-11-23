@@ -217,7 +217,7 @@ void SceneWriter::writeScene(QJsonObject& projectObj, iris::ScenePtr scene)
     // stack is written as an empty array rather than omitted: absent and empty
     // mean the same to the reader, and writing it keeps a diff between two
     // saves honest.
-    sceneObj["looks"] = iris::normalizeLookStack(scene->looks);
+    sceneObj["looks"] = qtstd::toQJsonValue(iris::normalizeLookStack(scene->looks));
 
     // Planar reflections (PLANAR_REFLECTIONS_SPEC §6). Budget -1, resolution 0
     // and shadows -1 all mean "follow the world mode"; anything else is an
@@ -1085,8 +1085,9 @@ void SceneWriter::writeCameraData(QJsonObject& sceneNodeObject, iris::CameraNode
     // there ARE any: an empty object in every camera of every file would be
     // noise, and "absent" already means the only thing it could mean (inherit
     // everything). The reader tolerates both.
-    if (!cameraNode->postOverrides.isEmpty())
-        sceneNodeObject["postOverrides"] = cameraNode->postOverrides;
+    // A QJsonObject orders its keys itself: the bytes QJsonDocument writes are the ones it wrote.
+    if (cameraNode->postOverrides.kind() == iris::Kind::Object && !cameraNode->postOverrides.asObject().empty())
+        sceneNodeObject["postOverrides"] = qtstd::toQJsonValue(cameraNode->postOverrides);
 }
 
 QString SceneWriter::getSceneNodeTypeName(iris::SceneNodeType nodeType)

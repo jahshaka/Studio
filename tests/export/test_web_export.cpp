@@ -5,6 +5,7 @@
 // runs offscreen like the document suite.
 
 #include "irisgl/core/math/quat.h"
+#include "app/qtstd.h"
 #include "irisgl/document/qt/colour.h"
 
 #include "../support/testmesh.h"
@@ -83,7 +84,7 @@ int main(int argc, char **argv)
         off["id"] = QStringLiteral("posterize");
         off["enabled"] = false;
         stack.append(off);
-        scene->looks = iris::normalizeLookStack(stack);
+        scene->looks = iris::normalizeLookStack(qtstd::toValue(QJsonValue(stack)));
     }
 
     // textured PBR cube (tests tangents, texture transform, metal/rough pack)

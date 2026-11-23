@@ -18,6 +18,7 @@ RENDER = re.compile(r"\.(png|jpg|jpeg|xwd|ppm|exr)$", re.I)
 # THE FIXTURE INPUTS (the spec's list): images a row READS, never one it wrote — tests/samples/data/tornado_reference.jpg
 # until Part B decides it (an old-picture reference: forward-only)
 FIXTURE_INPUTS = [
+    "tests/log/not_an_image.png",          # log.iris_forwarded's trigger: TEXT named .png, which the image probe refuses
     "tests/mcp/fixtures/truncated.png",
     "tests/scripting/fixtures/cutout_checker.png",
     "tests/scripting/fixtures/implane_alpha.png",

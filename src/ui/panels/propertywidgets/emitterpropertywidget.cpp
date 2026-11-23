@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/emitterpropertywidget.h"
+#include "app/qtstdgui.h"
 #include "ui/panels/propertyrows.h"
 #include "data/project.h"
 
@@ -87,7 +88,7 @@ QVariantMap snapshotOf(const iris::ParticleSystemNodePtr &ps)
     QVariantMap state;
     if (!ps) return state;
     for (const char *k : kEmitterKeys)
-        state.insert(QLatin1String(k), ps->getPropertyValue(QLatin1String(k)));
+        state.insert(QLatin1String(k), qtstd::nodeVariant(*ps, k));
 
     QVariantList colour;
     for (const iris::ParticleColourKey &k : ps->colourKeys)
@@ -105,12 +106,15 @@ void restoreOnto(const iris::ParticleSystemNodePtr &ps, const QVariantMap &state
     if (!ps || state.isEmpty()) return;
     // `preset` FIRST and on its own: applying it stamps the recipe, and every
     // key after it puts back what the user actually had.
-    ps->setPropertyValue(QStringLiteral("preset"), state.value(QStringLiteral("preset")));
+    // Each value back through the node's edge (by its row's kind): the snapshot's own values, so not refused.
+    if (const auto v = qtstd::toNodeValue(*ps, "preset", state.value(QStringLiteral("preset"))))
+        ps->setPropertyValue("preset", *v);
     for (auto it = state.constBegin(); it != state.constEnd(); ++it) {
         if (it.key() == QLatin1String("preset") || it.key() == QLatin1String("colourKeys") ||
             it.key() == QLatin1String("scaleKeys"))
             continue;
-        ps->setPropertyValue(it.key(), it.value());
+        const std::string name = it.key().toStdString();
+        if (const auto v = qtstd::toNodeValue(*ps, name, it.value())) ps->setPropertyValue(name, *v);
     }
     QVector<iris::ParticleColourKey> colour;
     for (const QVariant &v : state.value(QStringLiteral("colourKeys")).toList()) {
@@ -325,7 +329,7 @@ EmitterPropertyWidget::EmitterPropertyWidget()
             Q_UNUSED(wasAbsolute)
             if (services && services->undo)
                 services->undo->push(new SetNodePropertyCommand(
-                    ps, QStringLiteral("lifeError"), beforeAbsolute, QVariant(ps->lifeError)));
+                    ps, "lifeError", iris::Value(double(beforeAbsolute.toFloat())), iris::Value(double(ps->lifeError))));
         };
         rowundo::bind(lifeFactor, b);
     }
@@ -340,7 +344,7 @@ EmitterPropertyWidget::EmitterPropertyWidget()
             ps->setSpeedError(after.toFloat());
             if (services && services->undo)
                 services->undo->push(new SetNodePropertyCommand(
-                    ps, QStringLiteral("speedError"), beforeAbsolute, QVariant(ps->speedError)));
+                    ps, "speedError", iris::Value(double(beforeAbsolute.toFloat())), iris::Value(double(ps->speedError))));
         };
         rowundo::bind(speedFactor, b);
     }
@@ -382,7 +386,8 @@ EmitterPropertyWidget::~EmitterPropertyWidget() = default;
 void EmitterPropertyWidget::set(const char *field, const QVariant &value)
 {
     if (mLoading || !ps) return;
-    ps->setPropertyValue(QString::fromLatin1(field), value);
+    // THE EDGE (walk 1): the widget's value by the row's kind; a row's own widget value is never refused.
+    if (const auto v = qtstd::toNodeValue(*ps, field, value)) ps->setPropertyValue(field, *v);
 }
 
 rowundo::Binding EmitterPropertyWidget::row(const char *key,
