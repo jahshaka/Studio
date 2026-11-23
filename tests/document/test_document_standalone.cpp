@@ -43,7 +43,12 @@ static bool allowed(const std::string &path, bool *ours)
 {
     const std::string base = path.substr(path.rfind('/') + 1);
     const char *own[] = {"libIrisDocument", "libIrisCore"};
-    const char *runtime[] = {"libstdc++.so", "libm.so", "libgcc_s.so", "libc.so", "ld-linux", "linux-vdso"};
+    // THE C / C++ RUNTIME BY NAME (the audit): glibc's own split libraries and the sanitizer runtimes a preload brings
+    // (scripts/sanitize.sh exports LD_PRELOAD=liblsan for an lsan-labelled row) are the runtime too, so neither reds this
+    // row; any other object - Qt, IrisGL, OgreNext, the engine - is named and reds
+    const char *runtime[] = {"libstdc++.so", "libm.so", "libgcc_s.so", "libc.so", "ld-linux", "linux-vdso",
+                             "libpthread.so", "libdl.so", "librt.so", "libmvec.so", "libasan.so", "liblsan.so",
+                             "libtsan.so", "libubsan.so"};
     for (const char *p : own)
         if (base.rfind(p, 0) == 0) { *ours = true; return true; }
     for (const char *p : runtime)
@@ -132,6 +137,7 @@ int main()
     CHECK(ok && overridesBack.find("bloom") && overridesBack == scene->worldOverrides,
           "the World overrides written, parsed and read back equal");
 
-    std::printf(failures ? "RESULT: %d FAILURE(S)\n" : "RESULT: PASS\n", failures);
+    if (failures) std::printf("document.standalone: FAILED (%d)\n", failures);
+    else std::printf("document.standalone: PASSED\n");
     return failures ? 1 : 0;
 }
