@@ -261,6 +261,24 @@ void casesStatus(Fixture &f)
           "engine.frameSubmitStatus answers the engine's (submitted " +
               (sub.status == Status::Ok ? std::to_string(sub.value["submitted"].asInt()) : sub.message) +
               " > 0: the frames stepped the host's scene); engine.shaderCacheStats answers its record");
+    // THE SHADOW RESOLUTION's READER (the tail, item 7; the lead's ruling 2026-11-23: no second copy of it): the atlas as
+    // the engine BUILT it is ShadowStatus::resolution (OgreShadow.cpp shadowStatus: mShadowResolution), answered by
+    // engine.published({select: ["shadow"]}); the headless engine builds no atlas - live false, resolution 0 (Stats.h:
+    // "every number below is then zero") - so its value after engine.light.setShadowResolution(4096) is a CARD case
+    {
+        const Result sh = e.call("engine.published", {sel({"shadow"})});
+        const ShadowStatus &own = f.engine->published().shadow;
+        ShadowStatus shBack;
+        std::string shWhy;
+        const bool shRead = sh.status == Status::Ok && sh.value.asObject().size() == 1 &&
+                            Record<ShadowStatus>::table().fromValue(sh.value["shadow"], shBack, "", shWhy);
+        check(shRead && toValue(shBack) == sh.value["shadow"] && sh.value["shadow"] == toValue(own) &&
+                  shBack.requestedBudget > 0 && !shBack.live && shBack.resolution == 0,
+              "engine.published({select: [shadow]}) answers the engine's ShadowStatus - the shadow resolution's reader - "
+              "round-tripping through its table and equal to the engine's own (requestedBudget " +
+                  std::to_string(shBack.requestedBudget) + " > 0: THE CONTROL); on the headless engine live false and "
+                  "resolution " + std::to_string(shBack.resolution) + " (no atlas: the value is a card case) " + sh.message + shWhy);
+    }
     const Result on = e.call("engine.monitor.set", {Value("review")});
     e.call("engine.frames", {Value(3)});
     const Result off = e.call("engine.monitor.set", {Value("off")});
