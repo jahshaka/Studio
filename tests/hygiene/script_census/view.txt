@@ -1,6 +1,7 @@
 engine.view.createOffscreen Engine::createOffscreenView
 engine.view.setScene View::setScene
 engine.view.setPostFx View::setPostFx
+engine.view.setPostFxArms View::setPostFx
 engine.view.setCamera View::setCamera
 engine.view.lookAt View::setCamera
 engine.view.resize View::resize
