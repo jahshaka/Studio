@@ -113,6 +113,9 @@ tree and the build's registration, each with its name in the failure line:
      set Streaming with "the engine resets it" and every later law of theirs ran Streaming unasked (gi.screen_bind's (4) and
      (6), gi.async_arm_cold's Complete-frame control). A test source (tests/**, its comments and strings blanked) that calls
      setFramePace(FramePace::Streaming) is RED; the guard (tests/support/enginetesthelpers.h) sets it and gives Complete back.
+     STRICT (the final read of the pace fix, 2026-11-23): ANY call of setFramePace( in a test's code outside the guard's header is
+     RED - an alias, the enum's integer, `FramePace :: Streaming` spaced, a variable or a ternary slipped past the literal; no test
+     sets a pace by hand (none did at the rule's tightening).
 And tests/support/fresh_home.sh behaves (a green run wipes, a red run keeps its evidence, concurrent warm runs).
 
 Run: testing_rules.py <source-dir> <build-dir>
@@ -591,12 +594,12 @@ def _bash_script(path, first_line=None):
     return bool(_BASH_SHEBANG.match(first_line))
 
 
-R20_STREAMING = re.compile(r"setFramePace\s*\(\s*(?:[\w:]*::)?FramePace::Streaming\s*\)")
+R20_STREAMING = re.compile(r"\bsetFramePace\s*\(")   # (strict: any pace set by hand, whatever its argument's spelling)
 R20_GUARD = "tests/support/enginetesthelpers.h"
 
 
 def r20_bad(files):
-    """R20: [path:line] of every setFramePace(FramePace::Streaming) in a test's CODE outside the guard's own header.
+    """R20: [path:line] of every setFramePace( call in a test's CODE outside the guard's own header.
     `files`: {relative path: text}."""
     return ["%s:%d" % (f, t[:m.start()].count("\n") + 1) for f, t in sorted(files.items()) if f != R20_GUARD
             for m in R20_STREAMING.finditer(_r10_blank(t))]
@@ -883,11 +886,15 @@ def the_rules_catch():
           "R19 flags a bash-shebang script handed to sh or dash (at any place in the argv), never one under bash, a POSIX "
           "script under sh, a -c string or a script run by its own shebang")
     check(r20_bad({"tests/a.cpp": "x;\n    e->setFramePace(FramePace::Streaming);\n",
-                   "tests/b.cpp": "// e->setFramePace(FramePace::Streaming);\nconst enginetest::StreamingPace s(e);\n"
+                   "tests/b.cpp": "// e->setFramePace(FramePace::Streaming);\nconst enginetest::StreamingPace s(e);\n",
+                   "tests/c.cpp": "using P = jahshaka::engine::FramePace;\ne->setFramePace(P::Streaming);\n"
+                                  "e->setFramePace(static_cast<FramePace>(1));\ne->setFramePace( FramePace :: Streaming );\n"
+                                  "e->setFramePace(pace);\ne->setFramePace(fast ? FramePace::Streaming : FramePace::Complete);\n"
                                   "e->setFramePace(FramePace::Complete);\n",
-                   R20_GUARD: "engine->setFramePace(FramePace::Streaming);\n"}) == ["tests/a.cpp:2"],
-          "R20 flags a test's setFramePace(FramePace::Streaming) in code, never one in a comment, the guard, a Complete "
-          "or the guard's own header")
+                   R20_GUARD: "engine->setFramePace(FramePace::Streaming);\n"})
+          == ["tests/a.cpp:2", "tests/c.cpp:2", "tests/c.cpp:3", "tests/c.cpp:4", "tests/c.cpp:5", "tests/c.cpp:6", "tests/c.cpp:7"],
+          "R20 flags EVERY setFramePace( in a test's code - the literal, an alias, the enum's integer, spaced, a variable, a "
+          "ternary, a Complete - never one in a comment or in the guard's own header")
     bare = 'add_test(NAME a.b COMMAND x)\nset_tests_properties(a.b PROPERTIES\n    RUN_SERIAL TRUE)'
     other = '# RUN_SERIAL: x.y compiles shaders\nadd_test(NAME x.y COMMAND x)\n' + bare
     check(r4_bad("t", bare, set()) == ["t:3 (a.b)"] and not r4_bad("t", "# RUN_SERIAL: it compiles shaders\n" + bare, set())
