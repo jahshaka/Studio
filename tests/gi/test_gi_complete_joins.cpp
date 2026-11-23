@@ -9,15 +9,22 @@
 // frame head): on a frame that owes its picture requestAsync answers ready and dispatch() JOINS the request in flight
 // (AsyncShaderStats::computeJoins) - every site inherits it (source.compute_pace_one_place).
 // THE SCRIPT: a floor, a box, a shadowing sun, an atmosphere sky and the voxel GI at High with bounces, in a 64 x 64
-// offscreen Live view on the rig's shared cache, every frame on the default COMPLETE pace, kFrames frames, twice in one
-// process: R, the REFERENCE - a SYNCHRONOUS view (nothing is ever put off: every frame's picture is the one it owes);
+// offscreen Live view on the rig's shared cache, THE RAYS OFF, every frame on the default COMPLETE pace, kFrames frames,
+// twice in one process: R, the REFERENCE - a SYNCHRONOUS view (nothing is ever put off: every frame's picture is the one
+// it owes);
 // S, the SLOW SERVICE - an ASYNCHRONOUS view with every background compile held kServiceSlowMs before it runs (the test
 // door shaders.serviceSlow: a loaded box or a cold driver, made on demand).
+// WHY THE RAYS ARE OFF (TRAIN-4, over ROUTE-ROWS-1 stage 0): the subject is the COMPUTE pace rule, the screen integrate one
+// of its sites; in a scene that traces every view gathers (GiChainRules.h), and the gather's builds are the ray tier's,
+// under ANOTHER rule - P1's door (RayAheadDoor.h): a running ray build is never joined by a scene on the service, at any
+// pace, while a synchronous scene joins it - so on a ray scene S would draw its Complete frames without the gather that R
+// joined: the door's difference, not this law's. With the rays off the screen integrate is the route; the declaration
+// (asserted on frame 1) says the cards are not built then, as every rays-off row declares.
 // THE SITES THE SCENE REACHES (the red run's deferred jobs, spikes/shader-system/ss7/r2c/red-LastTest.log): the GI's arm
 // and record (VCT/*, Photon/*), Atom's culls in the workspace (Jahshaka/Cull*, HzbBuild), the screen integrate
 // (Jahshaka/ScreenIntegrate), the convolution (its clones: joins), the atmosphere's tables. NOT REACHED: the voxel
-// commit (a cascade scroll: the camera never moves) and the surface cache's relight (the red run's log names no relight
-// job) - listed, not assumed; both ask the same fork function (requestAsync).
+// commit (a cascade scroll: the camera never moves) and the surface cache's relight and accumulation (no cards with the
+// rays off) - listed, not assumed; both ask the same fork function (requestAsync).
 // THE LAWS: (1) S's last frame is R's last frame, exact display codes. RED before R2 (c): 2478 pixels differ (S's frames
 // put 700 dispatches off). (2) S's frames put no compute dispatch off: the published computeDeferred did not move and no
 // frame read term 64 (a compute dispatch deferred). RED before: 700, 7 frames.
@@ -40,8 +47,13 @@ static int failures = 0;
 
 /// The frames each run draws: the arm's build is on frame 1 (a Complete frame builds it whole), its record every frame.
 static constexpr int kFrames = 8;
-/// The door's hold on each background compile (ms): longer than a frame, so a deferral would be seen.
-static constexpr double kServiceSlowMs = 100.0;
+/// The door's hold on each background compile (ms): an INJECTED SLOWNESS whose only job is to be longer than a dispatch -
+/// a request still in flight when its own frame dispatches it (requested and dispatched in the same frame). THE LAW NEVER
+/// RESTS ON ITS LENGTH: the CONTROL (S joined > 0) is what proves S was late, and it FAILS THE ROW when it reads 0 (a
+/// CHECK, never skipped). A loaded box makes a hold longer, never shorter: the direction is safe. It was the row's cost: at 100 ms S
+/// joined 112 requests (r2c/green-LastTest.log), 11.2 s of holds against the row's 13.12 s solo run - over an engine
+/// fixture's 10-s class budget (the joins one after another: INFERRED from those totals, not timed apart).
+static constexpr double kServiceSlowMs = 10.0;
 /// Term 64 of PublishedFrame::Completeness: a compute dispatch deferred (Types.h).
 static constexpr unsigned kTermDeferred = 64u;
 
@@ -58,6 +70,7 @@ static Run runOnce(bool slowAsync)
     auto engine = Engine::create(cfg, err);
     if (!engine) { std::printf("FAIL: engine (%s)\n", err.c_str()); return r; }
     Engine *e = engine.get();
+    e->setRayTracing(false);   // the compute pace rule's subject, the screen integrate a site of it (the header: WHY)
     View *view = e->createOffscreenView("joins", 64, 64, Colour(0, 0, 0), OffscreenContract::Live);
     Scene *scene = e->createScene("joins");
     if (!view || !scene) { std::printf("FAIL: view/scene (%s)\n", e->lastError().c_str()); return r; }
@@ -82,9 +95,9 @@ static Run runOnce(bool slowAsync)
     gi.bounces = true;
     ok = ok && scene->setGlobalIllumination(gi);
     if (!ok) { std::printf("FAIL: the scene (%s)\n", e->lastError().c_str()); return r; }
-    // THE SITES THIS SCENE REACHES (declared, asserted on frame 1): the screen integrate (a Live offscreen view), the
-    // cards' relight and card-to-card accumulation (the surface cache), the store; the voxel GI's arm and record.
-    enginetest::declareRoutes(view, scene, enginetest::Routes().integrate().cards().store(),
+    // THE SITES THIS SCENE REACHES (declared, asserted on frame 1): the screen integrate (the rays off: the scene does
+    // not trace), the store; the voxel GI's arm and record.
+    enginetest::declareRoutes(view, scene, enginetest::Routes().integrate().store(),
                               slowAsync ? "gi.complete_joins S's view" : "gi.complete_joins R's view");
     if (slowAsync) e->setArm("shaders.serviceSlow", kServiceSlowMs);
     const AsyncShaderStats before = e->published().shaders;
