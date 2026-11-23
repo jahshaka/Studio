@@ -14,6 +14,8 @@
 //     (F10: -0.0, 1e20, 2^53 + 1, a denormal...).
 // (3) THE OVERRIDE MAP AS A SET (F12): sameMembers sees the same pins in two orders as equal, a changed or a missing pin
 //     as a difference; the world-mode snapshot's map starts as an empty Object.
+// (4) THE READERS (the audit's F18): numberOr / boolOr / stringOr / intOr / objectOr / arrayOr equal QJsonValue's own
+//     to<T>(d) on the same parsed input, for 13 inputs (every kind a file holds, and an absent member).
 // CONTROLS: fragments checked > 0; texts compared > 0; Value == itself DOES see the order (the reason for (3)).
 // CPU only: the document's own types, no engine, no display. Qt6::Core is the reference and the edge.
 #include "app/qtstd.h"
@@ -28,6 +30,7 @@
 #include <QJsonObject>
 
 #include <cstdio>
+#include <cstring>
 #include <string>
 
 static int failures = 0;
@@ -438,8 +441,37 @@ static void testOverrideOrder()
           "a default world-mode snapshot's map is an EMPTY OBJECT (as the QJsonObject was), never a Null");
 }
 
+/// The audit's F18: valueshapes.h's six readers set EVERY codec's defaults: each equals QJsonValue's own to<T>(d) - Qt,
+/// live, in this process - on the same parsed input, for every kind a file can hold and for an absent member.
+static void testReaders()
+{
+    std::printf("\n-- F18: numberOr / boolOr / stringOr / intOr / objectOr / arrayOr against QJsonValue's own --\n");
+    const char *inputs[] = { "3", "3.5", "-0.0", "2147483648", "1e300", "\"3\"", "true", "null", "[]", "{}", "[1,\"a\"]",
+                             "{\"x\":1}", nullptr /* absent */ };
+    int cases = 0;
+    for (const char *in : inputs) {
+        const QByteArray text = in ? QByteArray("{\"k\":") + in + "}" : QByteArray("{}");
+        const QJsonObject parsed = QJsonDocument::fromJson(text).object();
+        const QJsonValue q = parsed.value("k");
+        const iris::Value v = qtstd::fromQJsonObject(parsed);
+        const std::string what = std::string(in ? in : "(absent)");
+        const double n = iris::numberOr(v, "k", 42.5), qn = q.toDouble(42.5);
+        CHECK(std::memcmp(&n, &qn, sizeof n) == 0, what + ": numberOr == toDouble(42.5), bit for bit");
+        CHECK(iris::boolOr(v, "k", true) == q.toBool(true) && iris::boolOr(v, "k", false) == q.toBool(false),
+              what + ": boolOr == toBool(d), both defaults");
+        CHECK(iris::stringOr(v, "k", "dflt") == q.toString(QStringLiteral("dflt")).toStdString(),
+              what + ": stringOr == toString(\"dflt\")");
+        CHECK(iris::intOr(v, "k", -7) == q.toInt(-7), what + ": intOr == toInt(-7) (" + std::to_string(q.toInt(-7)) + ")");
+        CHECK(qtstd::toQJsonObject(iris::objectOr(v, "k")) == q.toObject(), what + ": objectOr == toObject()");
+        CHECK(qtstd::toQJsonValue(iris::arrayOr(v, "k")).toArray() == q.toArray(), what + ": arrayOr == toArray()");
+        ++cases;
+    }
+    CHECK(cases == 13, "control: 13 inputs, every kind a file can hold and an absent member");
+}
+
 int main()
 {
+    testReaders();
     testOverrideOrder();
     testParsedNumbers();
     testFragments();

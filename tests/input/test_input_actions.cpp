@@ -197,6 +197,31 @@ int main(int argc, char **argv)
         map.load(ini.keyValues());
         CHECK(map.bindings(InputAction::Move).size() == 8, "an empty settings file keeps defaults");
     }
+    {
+        // BACK TO DEFAULTS THROUGH THE DOCUMENT's VIEW (NOQT-DOCUMENT-1 stage 4, the audit's F18): SettingsStore's
+        // KeyValues::contains / remove, reached by InputMap::clearPersisted and load, on a file: every input/ row
+        // goes, a key the input map does not own stays.
+        const QString path = dir.filePath("clear.ini");
+        {
+            SettingsStore ini(path);
+            ini.setValue("other/kept", 7);
+            InputMap map;
+            map.bind(InputAction::Jump, { { Qt::Key_Return, 0, 0 } });
+            map.save(ini.keyValues());
+            CHECK(ini.keyValues().contains("input/Jump") && ini.keyValues().contains("other/kept"),
+                  "control: the saved rows and the other key are in the store (contains)");
+            InputMap::clearPersisted(ini.keyValues());
+            CHECK(ini.flush(), "the clear flushes");
+        }
+        SettingsStore ini(path);
+        CHECK(!ini.keyValues().contains("input/Jump") && !ini.keyValues().contains("input/Move") &&
+              !ini.keyValues().value("input/Jump"), "clearPersisted removed every input/ row from the FILE");
+        CHECK(ini.value("other/kept").toInt() == 7, "...and kept the key it does not own");
+        InputMap map;
+        map.load(ini.keyValues());
+        CHECK(map.bindings(InputAction::Jump).size() == 1 && map.bindings(InputAction::Jump)[0].key != Qt::Key_Return,
+              "a load after the clear gives the defaults back (Jump is not Return)");
+    }
 
     // ---- latch vs held: THE gate row --------------------------------------
     {
