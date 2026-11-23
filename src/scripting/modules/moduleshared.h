@@ -17,7 +17,7 @@ For more information see the LICENSE file
 // "#rrggbb" strings or {r,g,b} maps with 0..1 channels — D10's one encoding).
 
 #include "irisgl/core/math/quat.h"
-#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/document/qt/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include <QColor>
 #include <QVector3D>
@@ -32,7 +32,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 

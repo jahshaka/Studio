@@ -1,8 +1,8 @@
 #ifndef PROPERTIES_H
 #define PROPERTIES_H
 
-#include "irisgl/core/math/qtinterop.h"
-#include "irisgl/core/colorjson.h"
+#include "irisgl/document/qt/qtinterop.h"
+#include "irisgl/document/qt/colorjson.h"
 #include "irisgl/core/math/vec.h"
 #include <QVariant>
 #include <QColor>

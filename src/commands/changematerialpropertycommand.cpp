@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "commands/changematerialpropertycommand.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 #include "irisgl/document/materials/material.h"
 
 

@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "io/cascadesetformat.h"
-#include "irisgl/core/colorjson.h"
+#include "irisgl/document/qt/colorjson.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/looks.h"

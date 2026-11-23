@@ -34,7 +34,7 @@ For more information see the LICENSE file
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 
 #include "services/services.h"
 #include "services/undoservice.h"

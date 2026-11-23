@@ -22,7 +22,7 @@
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 #include <QFileInfo>
 #include "irisgl/import/meshmaterial.h"
 #include "irisgl/document/assets/shippedmeshes.h"

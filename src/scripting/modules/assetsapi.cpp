@@ -54,7 +54,7 @@ For more information see the LICENSE file
 #include "jahshaka/engine/Mesh.h"
 #include "data/constants.h"
 #include "irisgl/document/scenegraph/scene.h"
-#include "irisgl/core/colorjson.h"
+#include "irisgl/document/qt/colorjson.h"
 #include "data/primitives.h"
 #include "data/settingsmanager.h"
 #include "services/assethelper.h"

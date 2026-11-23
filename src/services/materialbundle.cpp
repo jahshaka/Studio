@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/materialbundle.h"
-#include "irisgl/core/colorjson.h"
+#include "irisgl/document/qt/colorjson.h"
 
 #include <QColor>
 #include <QDir>

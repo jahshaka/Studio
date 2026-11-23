@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/material.h"
 #include "irisgl/document/assets/livetextures.h"
 #include "irisgl/document/assets/texture2d.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 
 namespace exportwalk {
 

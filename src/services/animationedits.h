@@ -36,7 +36,7 @@ For more information see the LICENSE file
 #include <QVariant>
 
 #include "irisgl/irisglfwd.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 
 namespace iris {
 class PropertyAnim;

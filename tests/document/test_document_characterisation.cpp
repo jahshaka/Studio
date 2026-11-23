@@ -42,7 +42,7 @@
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/skeleton.h"
 #include "irisgl/document/scenegraph/shadowmap.h"

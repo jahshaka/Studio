@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "pbrgraphevaluator.h"
-#include "irisgl/core/colorjson.h"
+#include "irisgl/document/qt/colorjson.h"
 #include <QFileInfo>
 
 #include <QJsonArray>

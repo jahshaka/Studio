@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/document/qt/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include "modules/materials/api/materialsapi.h"
 
@@ -54,7 +54,7 @@ For more information see the LICENSE file
 #include "services/services.h"
 #include "services/undoservice.h"
 #include "irisgl/core/irisutils.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"

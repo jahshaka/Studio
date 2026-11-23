@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/document/qt/qtinterop.h"
 #include "services/previewservice.h"
 #include "services/previewwriter.h"
 #include "bridge/enginehost.h"
@@ -29,7 +29,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 #include "zip.h"
 
 #include <QStackedLayout>

@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "irisgl/core/math/vec.h"
-#include "irisgl/core/colorjson.h"
+#include "irisgl/document/qt/colorjson.h"
 #include "test.h"
 #include "../models/library.h"
 #include "../core/texturemanager.h"

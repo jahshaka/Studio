@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QSharedPointer>
 #include <QIcon>
 #include "irisgl/irisglfwd.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 #include <QElapsedTimer>
 #include "irisgl/document/scenegraph/simulationclock.h"
 

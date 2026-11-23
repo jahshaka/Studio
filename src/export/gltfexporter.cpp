@@ -49,7 +49,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/import/materialhelper.h"
 #include "irisgl/document/scenegraph/skybake.h"
-#include "irisgl/core/properties/property.h"
+#include "irisgl/document/qt/property.h"
 
 namespace {
 

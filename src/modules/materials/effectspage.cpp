@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "services/apppaths.h"
 #include "ui/style/panelmetrics.h"
-#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/document/qt/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include "io/ziphelper.h"
 #include "modules/materials/effectspage.h"

@@ -36,7 +36,7 @@ Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
 #include "irisgl/core/math/vec.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/mat4.h"
-#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/document/qt/qtinterop.h"
 #include "irisgl/core/math/trs.h"
 
 #include <cstdio>

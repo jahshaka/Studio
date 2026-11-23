@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/vec.h"
-#include "irisgl/core/colorjson.h"
+#include "irisgl/document/qt/colorjson.h"
 #include "scripting/modules/worldapi.h"
 #include "jahshaka/engine/Stillness.h"
 #include "services/apppaths.h"

@@ -9,8 +9,8 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/core/math/qtinterop.h"
-#include "irisgl/core/colorjson.h"
+#include "irisgl/document/qt/qtinterop.h"
+#include "irisgl/document/qt/colorjson.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/looks.h"

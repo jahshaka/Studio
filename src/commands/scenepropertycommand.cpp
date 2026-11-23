@@ -21,7 +21,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QVector3D>
 
-#include "irisgl/core/math/qtinterop.h"
+#include "irisgl/document/qt/qtinterop.h"
 #include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "services/vrworld.h"

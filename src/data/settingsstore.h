@@ -44,7 +44,7 @@
 // a QSettings read here would be exactly the wait this store removes (the
 // suite reads the file back as bytes for that reason).
 
-#include "irisgl/core/keyvaluestore.h"
+#include "irisgl/document/qt/keyvaluestore.h"
 
 #include <QMap>
 #include <QString>
