@@ -697,3 +697,6 @@ core.log 0.11  solo 2026-11-23 at cc360096d (spec.sh reprice, run 20261123T15563
 bake.dag_stats_result 0.06  solo 2026-11-23 at cc360096d (spec.sh reprice, run 20261123T155633-cc360096d-p907624)
 log.iris_forwarded 3.42  solo 2026-11-23 at cc360096d (spec.sh reprice, run 20261123T155634-cc360096d-p908005)
 log.iris_forwarded.fresh_home 0.02  solo 2026-11-23 at cc360096d (spec.sh reprice, run 20261123T155634-cc360096d-p908005)
+app.qtstd 0.00  solo 2026-11-23 at 00e078ad0 (spec.sh reprice, run 20261123T173252-00e078ad0-p932222)
+document.property_rows 0.27  solo 2026-11-23 at 00e078ad0 (spec.sh reprice, run 20261123T173254-00e078ad0-p933183)
+document.fragment_codecs 0.01  solo 2026-11-23 at 00e078ad0 (spec.sh reprice, run 20261123T173253-00e078ad0-p932606)
