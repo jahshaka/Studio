@@ -1171,10 +1171,10 @@ int main(int argc, char **argv)
                 owner.setProjectGuid(QStringLiteral("p19g"));
                 const iris::MeshNodePtr node = iris::MeshNode::create();
                 db.createDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture),
-                                    node->getGUID(), QStringLiteral("t19g"), QStringLiteral("p19g"));
+                                    QString::fromStdString(node->getGUID()), QStringLiteral("t19g"), QStringLiteral("p19g"));
                 const auto edges = [&]() {
                     return countWhere("SELECT COUNT(*) FROM dependencies WHERE depender = ? AND dependee = ?",
-                                      { node->getGUID(), QStringLiteral("t19g") });
+                                      { QString::fromStdString(node->getGUID()), QStringLiteral("t19g") });
                 };
                 ResetMaterialCommand reset(&db, &owner, node, iris::MaterialPtr(), { QStringLiteral("t19g") }, {});
                 gDeny = Deny{ 8 };
