@@ -426,7 +426,7 @@ int main()
         e->waitForAsyncShaders();
         run(40);
         const AreaVisStatus st = s3->published().areaVis;
-        const PublishedEngineFrame::ViewFrames route = lv->published();
+        const ViewFrames route = lv->published();
         // the ray tier's own residency (OgreRayQuery.cpp recordAreaVis: the trace's images at the trace's size, the
         // product at the target's) - a second producer's images on top of it would double it. WHY THE ROUTE IS ASSERTED
         // TOO: the two producers' residency formulas are the SAME bytes (128 B a trace texel + 8 B a target pixel: the
