@@ -681,3 +681,4 @@ script.commands 0.01  solo 2026-11-23 at 525ae6018 (spec.sh reprice, run 2026112
 script.radiance_picture 1.00  solo 2026-11-23 at 1100cec94 (spec.sh reprice, run 20261123T115254-1100cec94-p3086031)
 engine.setters_refuse 0.05  solo 2026-11-23 at b16be7b43 (spec.sh reprice, run 20261123T113159-b16be7b43-p1570657)
 engine.setters_refuse.posted 0.02  solo 2026-11-23 at b16be7b43 (spec.sh reprice, run 20261123T113159-b16be7b43-p1570953)
+mirror.final_refusal 0.03  solo 2026-11-23 at 0f2e17629 (spec.sh reprice, run 20261123T121455-0f2e17629-p4108878)
