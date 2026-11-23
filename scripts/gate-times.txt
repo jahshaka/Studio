@@ -55,7 +55,7 @@ chain.hzb 1.12  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: so
 claude.chat 3.38  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044405-e4427ba87, 1-min load 1.4; V2 plan 0.2)
 cloud_2d.energy 2.54  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T043559-e4427ba87, 1-min load 1.5; V2 plan 0.2)
 commands.structural_undo 0.06  solo 2026-11-23 at 2a9ea8063 (spec.sh reprice, run 20261123T034402-2a9ea8063-p959478)
-decals.engine 2.58  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T043602-e4427ba87, 1-min load 1.5; V2 plan 0.2)
+decals.engine 3.14  solo 2026-11-23 at a363b02b7 (spec.sh reprice, run 20261123T163816-a363b02b7-p2671815)
 defaults.exposure_plane 1.41  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T045151-e4427ba87, 1-min load 1.7; V2 plan 0.2)
 desktops.db 0.05  by hand (spec.sh reprice, 2026-11-22)
 devprocess.kernel_journal 0.01  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044737-e4427ba87, 1-min load 1.4; V2 plan 0.2)
