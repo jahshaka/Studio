@@ -99,7 +99,9 @@ int main(int argc, char **argv)
                               (std::string(row) + "'s view").c_str());
 
     const auto frame = [&]() {
-        e->setFramePace(FramePace::Streaming);   // consumed by the next frame (the engine resets it to Complete after it)
+        // this frame on the Streaming pace, Complete given back after it (the engine holds a pace until set again): law
+        // (4)'s control frames below are Complete, as their text says
+        const enginetest::StreamingPace streaming(e);
         enginetest::frames(e, 1);
     };
     int f = 0, emptyFrames = 0, termFrames = 0;

@@ -91,8 +91,10 @@ int main()
     unsigned char wrong[3] = { 0, 0, 0 };
     bool landed = false, readOk = true;
     for (; f < kFrameCap; ++f) {
-        e->setFramePace(FramePace::Streaming);   // consumed by the next frame (the engine resets it to Complete after it)
-        enginetest::frames(e, 1);
+        {   // this frame on the Streaming pace, Complete given back after it (the engine holds a pace until set again)
+            const enginetest::StreamingPace streaming(e);
+            enginetest::frames(e, 1);
+        }
         const PublishedFrame &pub = scene->published();
         const AsyncShaderStats as = e->published().shaders;
         const unsigned outstanding = as.pending - std::min(as.pending, as.rayBuildsInFlight);

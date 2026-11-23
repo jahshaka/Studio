@@ -400,7 +400,9 @@ int main()
         e->setArm("gi.screenShaderCold", 1.0);
         unsigned lastRest = s1->published().areaVis.restFrames, deferred = 0u, aged = 0u, after = 0u;
         for (int k = 0; k < 40 && !(deferred && after >= 2u); ++k) {
-            e->setFramePace(FramePace::Streaming);   // consumed by the next frame (the engine resets it to Complete after)
+            // this frame on the Streaming pace, Complete given back after it (the engine holds a pace until set again):
+            // laws (4) and (6) after (5) run on Complete, as they did before the re-derivation
+            const enginetest::StreamingPace streaming(e);
             run(1);
             const AreaVisStatus st = s1->published().areaVis;
             if (!st.running && st.reason == "its shaders build in the background") {
@@ -422,7 +424,7 @@ int main()
             fresh->setAsyncShaders(true);
             enginetest::testCameraLookAt(fresh, eye, at);
             for (int k = 0; k < 3; ++k) {
-                e->setFramePace(FramePace::Streaming);   // the integrate still building on this frame: never joined
+                const enginetest::StreamingPace streaming(e);   // the integrate still building on this frame: never joined
                 run(1);
                 ImageF pic;
                 if (fresh->readPixelsHdr(pic))

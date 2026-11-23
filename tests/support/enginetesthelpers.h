@@ -420,6 +420,18 @@ template <class E> void frames(E &&e, int n, const FrameInput *rec = nullptr)
 }
 /// The same with the record by reference — a suite's temporary record.
 template <class E> void frames(E &&e, int n, const FrameInput &rec) { frames(std::forward<E>(e), n, &rec); }
+/// THE STREAMING PACE, SCOPED (SHADER-SYSTEM-1 7.0's final read, reader 25: four rows set Streaming and never gave
+/// Complete back, their comments saying the engine resets it - it does not). Engine::setFramePace holds a pace for every
+/// frame until it is set again (Engine.h), and frames() above never touches it. While a StreamingPace lives the frames
+/// run Streaming (a compile may land a frame later); at its end Complete - every test's pace outside such a stretch and
+/// the engine's own default - so a later law never inherits a pace it did not ask for.
+struct StreamingPace {
+    Engine *engine = nullptr;
+    explicit StreamingPace(Engine *e) : engine(e) { if (engine) engine->setFramePace(FramePace::Streaming); }
+    ~StreamingPace() { if (engine) engine->setFramePace(FramePace::Complete); }
+    StreamingPace(const StreamingPace &) = delete;
+    StreamingPace &operator=(const StreamingPace &) = delete;
+};
 /// n frames that step no scene (the harness's still world).
 template <class E> void frozenFrames(E &&e, int n, const FrameInput *rec = nullptr)
 {
