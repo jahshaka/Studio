@@ -516,7 +516,7 @@ frame.clock_integration 0.85  solo 2026-11-21 at a0599eab9 (spec.sh reprice, run
 frame.particles_per_scene 0.91  solo 2026-11-21 at a0599eab9 (spec.sh reprice, run 20261121T163427-a0599eab9)
 frame.particles_once_a_frame 0.87  solo 2026-11-21 at a0599eab9 (spec.sh reprice, run 20261121T163429-a0599eab9)
 particles.ring_full_handles 0.01  solo 2026-11-21 at f836a0c1f (spec.sh reprice, run 20261121T223441-f836a0c1f)
-tooling.row_lock_env 0.23  solo (alone in its own ctest call, 2026-11-22, load 4.8, at d62a78a30: its three doors case (3))
+tooling.row_lock_env 0.36  solo 2026-11-23 at e9f6ef794 (spec.sh reprice, run 20261123T221350-e9f6ef794-p1900700)
 engine.rough_lobe_transport 0.04  by hand (spec.sh reprice, 2026-11-21)
 source.rough_lobe_transport 0.02  by hand (spec.sh reprice, 2026-11-21)
 gi.walk_rough.law 1.84  by hand (spec.sh reprice, 2026-11-21)
