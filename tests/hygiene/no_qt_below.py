@@ -24,6 +24,16 @@ THE Qt-FREE TARGET, IrisCore (irisgl/core/CMakeLists.txt), read from the build:
      bin/libIrisGL*.so, bin/jahengine and bin/jahlab defines no STATEFUL symbol (iris::files::, iris::newGuid, iris::log::, the
      node-id counter iris::nextNodeId and its sNextNodeId: NOQT-DOCUMENT-1 stage 6) - only
      libIrisCore does (its own count > 0: the control). A static IrisCore pulled into an image is red here.
+THE Qt-FREE DOCUMENT, IrisDocument (irisgl/document/CMakeLists.txt; NOQT-DOCUMENT-1 stage 6), read from the build:
+  T1 as IrisCore's: its compile lines name no Qt include directory, define or code generator's output;
+  T2 its shared library NEEDS no Qt library (`readelf -d`), and `nm -C -D` of it lists at least one defined symbol and names
+     no Qt symbol;
+  T4 ONE COPY OF THE DOCUMENT's PROCESS-WIDE STATE: `nm -C --defined-only` of every image above defines no DATA symbol of
+     the node graph (iris::graph::), the live textures, the shipped meshes, Texture2D::sProbe, Material::sGlobalRevision,
+     InputSystem::instance's or Bullet's thread counter (btThreads.cpp's gThreadCounter: Bullet's archives are linked into
+     libIrisDocument alone) - only libIrisDocument does (its own count > 0: the control; a copy relocation in the app is a
+     definition and reds); and the document is a SHARED library (built static, every image would hold its own copy).
+     (The node-id counter is IrisCore's: its T4 above.)
 THE APP's Qt-CONVERSION HEADER, src/app/qtstd.h: no C++ file under irisgl/ includes it (it lives above the line).
 Run: no_qt_below.py <source-root> <build-dir> [--counts]   (--counts prints the measured lines, never fails: a builder's aid)
 The self-test runs first, always: the stripper's cases, every token and include form counted and its commented and quoted
@@ -217,6 +227,15 @@ thread tuple type_traits typeindex typeinfo unordered_map unordered_set utility 
 # the platform's own C headers a core source may need: POSIX open/fsync/getpid (core/files.cpp), Windows' _getpid
 SYSTEM_HEADERS = {'fcntl.h', 'unistd.h', 'process.h'}
 
+# THE DOCUMENT (T1, T2, T4 of IrisDocument): its state is DATA (a table, a mutex, a counter, a static local's guard) - a
+# symbol whose name STARTS with one of these, of a data kind (not code, not read-only, not an alias, not a typeinfo)
+DOC_TARGET = 'IrisDocument'
+DOC_STATEFUL = re.compile(r'^(?:guard variable for )?(?:iris::graph::|iris::LiveTextures::|iris::ShippedMeshes::'
+                          r'|iris::Texture2D::sProbe\b|iris::Material::sGlobalRevision\b'
+                          r'|iris::InputSystem::instance\(\)::sInstance\b|gThreadCounter$)')
+DATA = re.compile(r'^\s*(?:[0-9a-fA-F]+\s+)?([BbDdGgSsVvu])\s+(.+?)\s*$')
+QT_NEEDED = re.compile(r'\(NEEDED\)\s+Shared library: \[(?:lib)?[Qq]t')
+
 
 def ninja_target(text, target=TARGET):
     """([(source, {var: value})], library path or None) of `target`'s compile blocks and its link line in build.ninja"""
@@ -343,6 +362,74 @@ def check_target(root, build):
     srcs = [s if os.path.isabs(s) else os.path.normpath(os.path.join(build, s)) for s, _ in blocks]
     red += ['RED  T3: %s:%d includes %s - %s' % b for b in t3_bad(srcs, core, read)]
     return red, len(blocks), ndef, nstate
+
+
+def doc_state(text):
+    """[(kind, symbol)] of the document's state in `nm -C --defined-only` text"""
+    out = []
+    for l in text.split('\n'):
+        m = DATA.match(l)
+        if m and DOC_STATEFUL.search(m.group(2)):
+            out.append((m.group(1), m.group(2)))
+    return out
+
+
+def t4_doc_bad(defined, library):
+    """the RED lines of IrisDocument's T4 over {image: `nm -C --defined-only` text}, and the control (the library's own
+    state count)"""
+    red, own = [], 0
+    for img, text in sorted(defined.items()):
+        state = doc_state(text)
+        if img == library:
+            own = len(state)
+        else:
+            red += ['RED  T4: %s DEFINES %s (%s) - a second copy of the document\'s state (libIrisDocument must be the one '
+                    'image that defines it)' % (img, s, k) for k, s in state]
+    return red, own
+
+
+def t2_needed_qt(readelf_text):
+    """[the NEEDED lines] of `readelf -d` text that name a Qt library"""
+    return [l.strip() for l in readelf_text.split('\n') if QT_NEEDED.search(l)]
+
+
+def check_document(build):
+    """the RED lines of IrisDocument's T1, T2, T4, and the controls (compile lines, exported symbols, state symbols)"""
+    red = []
+    ninja = os.path.join(build, 'build.ninja')
+    if not os.path.isfile(ninja):
+        return ['RED  T1: no %s - the row reads a configured tree' % ninja], 0, 0, 0
+    blocks, library = ninja_target(open(ninja, encoding='utf-8', errors='replace').read(), DOC_TARGET)
+    if not blocks:
+        red.append('RED  T1: build.ninja holds no compile line of %s (the target is gone, or renamed)' % DOC_TARGET)
+    red += ['RED  T1: %s compiles %s with %s - a Qt include directory, define or generator on IrisDocument'
+            % (DOC_TARGET, src, a) for src, a in t1_bad(blocks)]
+    lib = os.path.join(build, library) if library else None
+    if not lib or not os.path.isfile(lib):
+        return red + ['RED  T2: %s\'s library (%s) is not built - build the tree first' % (DOC_TARGET, library)], \
+            len(blocks), 0, 0
+    if not library.endswith('.so'):
+        red.append('RED  T4: %s is built as %s, not a shared library: every image that links it holds its own copy of the '
+                   'document\'s state' % (DOC_TARGET, library))
+    re_d = subprocess.run(['readelf', '-d', lib], capture_output=True, text=True)
+    red += ['RED  T2: %s NEEDS a Qt library: %s' % (lib, n) for n in t2_needed_qt(re_d.stdout)]
+    nm = subprocess.run(['nm', '-C', '-D', lib], capture_output=True, text=True)
+    ndef, qt = t2_read(nm.stdout)
+    if nm.returncode != 0 or ndef == 0:
+        red.append('RED  T2: nm -D read no defined symbol from %s (rc %d): the control reads nothing' % (lib, nm.returncode))
+    red += ['RED  T2: %s names a Qt symbol: %s' % (lib, q) for q in qt]
+    procs = {lib: subprocess.Popen(['nm', '-C', '--defined-only', lib], stdout=subprocess.PIPE, stderr=subprocess.DEVNULL,
+                                   text=True)}
+    for pat in IMAGES:
+        for img in glob.glob(os.path.join(build, 'bin', pat)):
+            procs[img] = subprocess.Popen(['nm', '-C', '--defined-only', img], stdout=subprocess.PIPE,
+                                          stderr=subprocess.DEVNULL, text=True)
+    defined = {img: p.communicate()[0] for img, p in procs.items()}
+    tred, own = t4_doc_bad(defined, lib)
+    red += tred
+    if own == 0:
+        red.append('RED  T4: %s defines none of the document\'s state: the control reads nothing' % lib)
+    return red, len(blocks), ndef, own
 
 
 # ---- the self-test ---------------------------------------------------------------------------------------------------
@@ -472,6 +559,38 @@ def self_test():
     fs['/r/irisgl/core/c.h'] = '#include <QMap>\n'
     if [g[2] for g in t3_bad(['/r/irisgl/core/a.cpp'], '/r/irisgl/core', rd)] != ['<QMap>']:
         bad.append('T3 did not follow a core header to its Qt include')
+    # THE DOCUMENT: T1 reads IrisDocument's own blocks (IrisCore's reader never sees them), a Qt -isystem on it reds
+    doc_ninja = (NINJA_FIXTURE.replace('IrisCore', 'IrisDocument').replace('irisgl/core/', 'irisgl/document/')
+                 .replace('geometry/plane.cpp', 'scenegraph/scene.cpp'))
+    blocks, lib = ninja_target(doc_ninja % ('-DIRIS_DOCUMENT_BUILD', ''), DOC_TARGET)
+    if len(blocks) != 1 or t1_bad(blocks) or lib != 'bin/libIrisDocumentd.so' \
+            or blocks[0][0] != '/s/irisgl/document/scenegraph/scene.cpp' or ninja_target(doc_ninja % ('', ''))[0]:
+        bad.append('the document\'s T1 read its fixture wrong: %r %r' % (blocks, lib))
+    if len(t1_bad(ninja_target(doc_ninja % ('', '-isystem /usr/include/x86_64-linux-gnu/qt6/QtCore'), DOC_TARGET)[0])) != 1:
+        bad.append('the document\'s T1 did not red a Qt -isystem')
+    # T2: a NEEDED Qt library reds, the standard ones never
+    elf = (' 0x0000000000000001 (NEEDED)             Shared library: [libIrisCored.so]\n'
+           ' 0x0000000000000001 (NEEDED)             Shared library: [libstdc++.so.6]\n')
+    if t2_needed_qt(elf) or len(t2_needed_qt(elf + ' 0x0000000000000001 (NEEDED)             Shared library: '
+                                                   '[libQt6Core.so.6]\n')) != 1:
+        bad.append('the document\'s T2 read NEEDED wrong')
+    # T4: the library's own state passes; the state in another image, a copy relocation in the app, Bullet's counter in a
+    # second image each red; code, read-only data, an alias and a typeinfo never count
+    lib = 'bin/libIrisDocumentd.so'
+    clean = {lib: '0000 b iris::graph::(anonymous namespace)::gOwnerChunks\n0000 B iris::Texture2D::sProbe[abi:cxx11]\n'
+                  '0000 D iris::Material::sGlobalRevision\n0000 b guard variable for iris::LiveTextures::table[abi:cxx11]()::t\n'
+                  '0000 b gThreadCounter\n0000 T iris::graph::setOwner(long long)\n',
+             'bin/libIrisGLd.so': '0000 T iris::Mesh::build()\n0000 r iris::graph::(anonymous namespace)::kJournalCap\n'
+                                  '0000 V typeinfo for iris::graph::DocNode\n0000 a iris::graph::DocNode::DocNode()\n',
+             'bin/Jahshaka': '0000 W iris::LiveTextures::size() const\n0000 D gThreadCounterOther\n'}
+    red, own = t4_doc_bad(clean, lib)
+    if red or own != 5:
+        bad.append('the document\'s T4 read the clean images wrong: %r %d' % (red, own))
+    for img, line, why in (('bin/libIrisGLd.so', '0000 b iris::graph::(anonymous namespace)::gOwnerChunks\n', 'a second table'),
+                           ('bin/Jahshaka', '0000 B iris::Material::sGlobalRevision\n', 'a copy relocation'),
+                           ('bin/libIrisGLd.so', '0000 b gThreadCounter\n', 'a second Bullet')):
+        if len(t4_doc_bad(dict(clean, **{img: clean[img] + line}), lib)[0]) != 1:
+            bad.append('the document\'s T4 did not red %s (%s)' % (why, line.strip()))
     return bad
 
 
@@ -504,18 +623,22 @@ def main():
         print('%s: FAILED (%d)' % (ROW, len(bad)))
         return 1
     print('ok   the self-test: the stripper (%d cases), the token and include forms, the law both ways, an unheld file, '
-          'a line gone, the qtstd.h rule, T1-T4 on fixtures' % len(STRIP_CASES))
+          'a line gone, the qtstd.h rule, T1-T4 on fixtures, the document\'s T1, T2 and T4' % len(STRIP_CASES))
     red = judge(got, table)
     red += ['RED  %s:%d  %s - src/app/qtstd.h is the app\'s; nothing below the editor includes it' % s
             for s in qtstd_includers(files)]
     tred, nblocks, ndef, nstate = check_target(root, build)
     red += tred
+    dred, dblocks, ddef, dstate = check_document(build)
+    red += dred
     # the non-zero control, every run: each line prints what it read (a line with a ceiling above 0 that read 0 reds above)
     for name, kind, ct, ci, _ in table:
         toks, incs, n = got[(name, kind)]
         print('line %-22s [%s] %4d files  %5d tokens / %d  %4d includes / %d' % (name, kind, n, len(toks), ct, len(incs), ci))
     print('%s: %d compile line(s) read, %d defined symbols in its library, %d stateful symbols defined there alone'
           % (TARGET, nblocks, ndef, nstate))
+    print('%s: %d compile line(s) read, %d dynamic symbols defined by its library, %d state symbols defined there alone'
+          % (DOC_TARGET, dblocks, ddef, dstate))
     for r in red:
         print(r)
     nred = sum(1 for r in red if r.startswith('RED'))

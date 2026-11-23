@@ -7,19 +7,18 @@
 # reach the gameplay input state instead — and when it is stopped, nothing
 # about the editor's shortcuts changes. That is why inputmap.cpp is compiled
 # in here: the stub viewport in the test calls iris::gameplayClaimsKey, the
-# same function both real viewports call.
+# same function both real viewports call: the test links the document library (IrisDocument) for it.
 find_package(Qt6 REQUIRED COMPONENTS Widgets Test)
 add_executable(test_shortcut_registry test_shortcut_registry.cpp
     ${CMAKE_SOURCE_DIR}/src/services/shortcutregistry.cpp
     ${CMAKE_SOURCE_DIR}/src/viewport/snapsettings.cpp
-    ${CMAKE_SOURCE_DIR}/irisgl/document/input/inputmap.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp)
 set_target_properties(test_shortcut_registry PROPERTIES AUTOMOC ON CXX_STANDARD 17)
 target_include_directories(test_shortcut_registry PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/src
     ${CMAKE_SOURCE_DIR}/irisgl)
-target_link_libraries(test_shortcut_registry PRIVATE Qt6::Widgets Qt6::Test IrisCore)   # IrisCore: iris::Value (the settings seam's std interface, NOQT-DOCUMENT-1 stage 4)
+target_link_libraries(test_shortcut_registry PRIVATE Qt6::Widgets Qt6::Test IrisDocument)   # IrisDocument: the input map (and IrisCore's iris::Value with it)
 add_test(NAME shortcuts.registry COMMAND test_shortcut_registry
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 jah_ship_row(shortcuts.registry)   # THE SHIP SET (TEST-CUT-1)

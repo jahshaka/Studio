@@ -974,7 +974,7 @@ jah_builds(JahshakaEngineMedia ROWS source.compute_size_keys)                  #
 jah_builds(JahStartupPassId ROWS source.startup_pass_closure)                  # <build>/startup-pass-files.txt
 jah_builds(JahshakaEngine JahshakaScript Jahshaka IrisGL jahengine ROWS source.script_neutral)   # nm on each
 jah_builds(jahengine ROWS source.script_census)                                # jahengine --list --test-doors (+ the sources)
-jah_builds(IrisCore ROWS source.no_qt_below)                                   # nm on IrisCore's archive (+ build.ninja)
+jah_builds(IrisCore IrisDocument ROWS source.no_qt_below)                      # nm / readelf on IrisCore's and IrisDocument's libraries (+ build.ninja)
 jah_builds(JahshakaEngineBuildId ROWS source.script_build_id)                  # the build's generated build-id header (its B3)
 jah_builds(JahshakaEngineBuildId ROWS source.ray_spirv_id)   # the build-id header, and the ray *_spv.h its edge makes first (+ build.ninja)
 jah_builds(none ROWS source.compute_pace_one_place)            # the engine's sources only

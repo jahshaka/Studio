@@ -49,6 +49,19 @@ add_test(NAME document.ptr_laws COMMAND test_ptr_laws WORKING_DIRECTORY ${CMAKE_
 set_tests_properties(document.ptr_laws PROPERTIES LABELS "document" TIMEOUT 60)
 jah_no_display(document.ptr_laws)
 
+# document.standalone — THE DOCUMENT WITH NOTHING ELSE (NOQT-DOCUMENT-1 stage 6; test_document_standalone.cpp says the
+# laws): a program that links IrisDocument ALONE builds and edits a document, draws node ids from the process's one counter
+# with its own reserveNodeId(), and round-trips the document's Value-shaped parts through IrisCore's JSON; every library
+# loaded into it is libIrisDocument, libIrisCore or the C / C++ runtime (no Qt, no IrisGL, no OgreNext). CPU only.
+# Its include path names the engine's include/ for Ids.h alone (header-only: no engine library is linked).
+add_executable(test_document_standalone test_document_standalone.cpp)
+set_target_properties(test_document_standalone PROPERTIES AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
+target_include_directories(test_document_standalone PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_document_standalone PRIVATE IrisDocument)
+add_test(NAME document.standalone COMMAND test_document_standalone WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.standalone PROPERTIES LABELS "document" TIMEOUT 60)
+jah_no_display(document.standalone)
+
 # document.property_rows — THE STRICT DOCUMENT AND THE CONVERTING EDGE (NOQT-DOCUMENT-1 stage 4; test_property_rows.cpp says
 # the laws): every row of every node class and of PbrMaterial round-trips its own Value and refuses every other kind
 # with nothing moved; a QVariant through qtstd::toRowValue leaves what Qt's own call gives, and what Qt cannot convert is
