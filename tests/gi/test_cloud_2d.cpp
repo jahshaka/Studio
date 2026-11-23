@@ -34,7 +34,6 @@
 #include <string>
 #include <vector>
 
-#include "irisgl/core/color.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/assets/texture2d.h"

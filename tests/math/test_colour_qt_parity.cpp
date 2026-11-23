@@ -8,7 +8,9 @@
 //     editor's edge both ways (iris::toQColor / iris::toSrgbColor) - the same QColor back;
 //   * 100,000 seeded floats in 0..1 (plus 0 and 1): fromRgbF's 16-bit store and its F accessors;
 //   * the invalid state: what it reads (alpha 1, colour 0) and that it round-trips;
-//   * linearOf: the decode of the 8-bit value the picker showed (core/color.h's table) - equal on both.
+//   * linearOf: the decode of the 8-bit value the picker showed (core/color.h's table) - equal on both;
+//   * == and != over Rgb pairs and the two invalid forms - equal on both; and THE ONE NAMED DIFFERENCE pinned by name:
+//     same channels, a different Qt spec (an HSV white): Qt unequal, the type equal (srgbcolor.h's third limit).
 // name() and the "#rrggbb" parse are NOT carried by the type (no caller in the document, the mirror or the importer:
 // the lead's ruling 2026-11-23): they stay QColor's, at the editor's edge.
 #include <QColor>
@@ -108,9 +110,47 @@ int main()
         CHECK(same(iris::SrgbColor(), QColor()), "the invalid colour reads what QColor's does (alpha 1, colour 0) and "
                                                  "round-trips the edge");
     }
+    // ---- equality: the type's == against QColor's, over Rgb pairs and the two invalid forms ---------------------
+    {
+        std::mt19937 rng(0xe9a1u);
+        std::uniform_int_distribution<int> byte(0, 255);
+        int bad = 0;
+        for (int i = 0; i < 4096; ++i) {
+            const int r = byte(rng), g = byte(rng), b = byte(rng), a = byte(rng);
+            const int k = i % 5;   // 0: the same colour; 1-4: one channel one step apart
+            const int r2 = k == 1 ? (r + 1) % 256 : r, g2 = k == 2 ? (g + 1) % 256 : g, b2 = k == 3 ? (b + 1) % 256 : b,
+                      a2 = k == 4 ? (a + 1) % 256 : a;
+            ++compared;
+            const bool ours = iris::SrgbColor(r, g, b, a) == iris::SrgbColor(r2, g2, b2, a2);
+            const bool qts = QColor(r, g, b, a) == QColor(r2, g2, b2, a2);
+            const bool oursNe = iris::SrgbColor(r, g, b, a) != iris::SrgbColor(r2, g2, b2, a2);
+            if (ours != qts || oursNe == ours) {
+                if (!bad++) std::printf("    first difference: (%d,%d,%d,%d) vs (%d,%d,%d,%d)\n", r, g, b, a, r2, g2, b2, a2);
+            }
+        }
+        ++compared;
+        if ((iris::SrgbColor() == iris::SrgbColor(-1, 0, 0)) != (QColor() == QColor(-1, 0, 0))) ++bad;
+        ++compared;
+        if ((iris::SrgbColor() == iris::SrgbColor()) != (QColor() == QColor())) ++bad;
+        CHECK(bad == 0, "equality: 4,096 Rgb pairs (equal, one channel one step apart) and the two invalid forms: "
+                        "== and != answer what QColor's == answers");
+    }
+    // ---- THE NAMED DIFFERENCE (the type's third limit, srgbcolor.h): QColor's == also compares the SPEC; the type has
+    // no spec. The picker builds HSV colours (colorview.cpp), so a colour re-picked to exactly white was, in QColor,
+    // unequal to QColor(255, 255, 255); in the type it is equal - the answer a saved and reopened scene always gave.
+    {
+        const QColor hsvWhite = QColor::fromHsv(0, 0, 255);
+        const QColor rgbWhite(255, 255, 255);
+        ++compared;
+        CHECK(hsvWhite.rgba64() == rgbWhite.rgba64() && hsvWhite != rgbWhite,
+              "the named difference, Qt's side: an HSV white and an Rgb white have the same channels and are UNEQUAL");
+        ++compared;
+        CHECK(iris::toSrgbColor(hsvWhite) == iris::SrgbColor(255, 255, 255),
+              "the named difference, the type's side: the same channels are EQUAL (the type carries no spec)");
+    }
     // ---- the control -----------------------------------------------------------------------------------------
     std::printf("    values compared: %ld\n", compared);
-    CHECK(compared == 258 + 65536 + 5 + 100000 + 1 + 1, "the control: every value above was compared");
+    CHECK(compared == 258 + 65536 + 5 + 100000 + 1 + 1 + 4096 + 2 + 2, "the control: every value above was compared");
 
     if (failures) std::printf("\ncore.colour_qt_parity: FAILED (%d)\n", failures);
     else std::printf("\ncore.colour_qt_parity: PASSED\n");

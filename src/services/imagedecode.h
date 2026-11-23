@@ -80,8 +80,9 @@ inline std::shared_ptr<iris::Texture2D> loadCubeMap(const QString &negZ, const Q
         if (faces[i].width() != size || faces[i].height() != size)
             faces[i] = faces[i].scaled(size, size, Qt::IgnoreAspectRatio, Qt::SmoothTransformation);
         out[i] = toImage(faces[i]);
+        faces[i] = QImage();   // the decoded face is released as soon as its copy exists: two copies at most, never three
     }
-    return iris::Texture2D::createCubeMap(out);
+    return iris::Texture2D::createCubeMap(std::move(out));   // the six buffers become the texture's
 }
 
 }   // namespace imagedecode

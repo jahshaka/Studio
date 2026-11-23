@@ -77,7 +77,12 @@ WATCHED=(document/assets/mesh.cpp
          # bake carries ClipFileInfo (names, numbers, the pose-strip poses) —
          # what these two files compute is serialized.
          import/modelsceneinfo.cpp
-         import/clipfileinfo.cpp)
+         import/clipfileinfo.cpp
+         # NOQT-DOCUMENT-1 stage 3 (the audit's finding 1): a baked material colour is written as the 8-bit values
+         # iris::SrgbColor's rounding gives (meshbake.cpp writeColor: red()..alpha(), from colours srgbOf makes) - the
+         # rounding and the sRGB encode that decide those bytes live in these two headers, neither hashed.
+         document/srgbcolor.h
+         core/color.h)
 
 failures=0
 

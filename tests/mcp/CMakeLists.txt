@@ -13,8 +13,9 @@ find_package(Qt6 REQUIRED COMPONENTS Core Gui Network)
 # fixtures/truncated.png is the first 60 bytes of a real PNG: signature and
 # IHDR intact, no pixel data. It has to be a file the DOCUMENT accepts and the
 # ENGINE refuses, which is a narrow target —
-#   * a text file named .png is rejected by Texture2D::load's QImageReader
-#     header probe, so it never reaches the engine at all; and
+#   * a text file named .png is rejected by the app's readable-image probe (the QImageReader
+#     header probe src/services/imagedecode.h installs: Texture2D::load answers NULL), so it never reaches the
+#     engine at all; and
 #   * Ogre's FreeImage codec reads ~90 formats (xpm, webp, psd, raw…), so an
 #     exotic-but-valid image is not refused either.
 # A truncated PNG passes the header probe and fails the decode — which is also

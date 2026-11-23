@@ -113,17 +113,40 @@ int main(int argc, char **argv)
     auto tex = iris::Texture2D::load(notAFile);
     CHECK(tex && tex->source == notAFile, "uninstalled probe: load() records the path, even of no file");
 
-    // --- Cubemap from six held faces (Studio's imagedecode.h decodes the files): the document checks the faces
+    // --- Cubemap from six held faces (Studio's imagedecode.h decodes the files), MOVED in: the document checks the
+    // faces and keeps their buffers - the face a producer hands over IS the face the cube holds (no copy).
+    const auto sixFaces = [](iris::Image (&out)[6]) {
+        for (int i = 0; i < 6; ++i) out[i] = iris::Image::filled(8, 8, std::uint8_t(40 * i), 20, 20, 255);
+    };
     iris::Image faces[6];
-    for (int i = 0; i < 6; ++i) faces[i] = iris::Image::filled(8, 8, std::uint8_t(40 * i), 20, 20, 255);
-    auto cube = iris::Texture2D::createCubeMap(faces);
-    CHECK(cube && cube->isCubeMap() && cube->getWidth() == 8 && cube->cubeFaces() &&
+    sixFaces(faces);
+    const std::uint8_t *handedFace = faces[5].rgba.data();
+    auto cube = iris::Texture2D::createCubeMap(std::move(faces));
+    CHECK(cube && cube->isCubeMap() && cube->getWidth() == 8 && cube->getHeight() == 8 && cube->cubeFaces() &&
           cube->cubeFaces()[5].rgba[0] == 200,
-          "cubemap: six held 8x8 faces make a cube that keeps them, in order");
+          "cubemap: six held 8x8 faces make a cube that keeps them, in order, and reports their size");
+    CHECK(cube && cube->cubeFaces()[5].rgba.data() == handedFace,
+          "cubemap: the -Z face's buffer IS the one handed in (moved, not copied)");
+    sixFaces(faces);
     faces[3] = iris::Image();
-    CHECK(!iris::Texture2D::createCubeMap(faces), "cubemap: a null face refuses the cube (validation kept)");
+    CHECK(!iris::Texture2D::createCubeMap(std::move(faces)), "cubemap: a null face refuses the cube (validation kept)");
+    sixFaces(faces);
     faces[3] = iris::Image::filled(4, 4, 0, 0, 0, 255);
-    CHECK(!iris::Texture2D::createCubeMap(faces), "cubemap: faces of different sizes refuse the cube");
+    CHECK(!iris::Texture2D::createCubeMap(std::move(faces)), "cubemap: faces of different sizes refuse the cube");
+
+    // --- A live texture's frame, MOVED in: the frame a producer writes IS the frame the texture holds (a video
+    // pays no copy at the document's door), and the generation moves.
+    {
+        auto live = iris::Texture2D::createLive(QStringLiteral("characterisation-live"), QStringLiteral("live"), 4, 2, false);
+        iris::Image frame = iris::Image::filled(4, 2, 1, 2, 3, 255);
+        const std::uint8_t *handed = frame.rgba.data();
+        const auto before = live ? live->liveGeneration() : 0;
+        CHECK(live && live->writeLive(std::move(frame)) && live->liveGeneration() == before + 1 &&
+              live->liveImage().rgba.data() == handed,
+              "live texture: the written frame's buffer IS the one handed in (moved, not copied)");
+        CHECK(live && !live->writeLive(iris::Image::filled(2, 2, 0, 0, 0, 255)),
+              "live texture: a different size is refused");
+    }
 
     // --- Document traversal works: this is what SceneMirror will walk
     int count = 0;

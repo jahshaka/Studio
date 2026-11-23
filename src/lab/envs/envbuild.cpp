@@ -313,7 +313,7 @@ iris::PbrMaterialPtr Builder::cutout(float r, float g, float b, float roughness,
                             if (u * u + v * v <= 1.0f) img.rgba[(size_t(y) * size_t(res) + size_t(x)) * 4u + 3u] = 255;
                         }
                 }
-            tex->writeLive(img);
+            tex->writeLive(std::move(img));
         }
     }
     if (tex) mat->setBaseColorMap(tex);

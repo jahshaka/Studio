@@ -1,4 +1,4 @@
-// samples.resave_bytes — the JS half (tests/samples/resave_bytes.sh says the law). Two phases, one per --headless
+// samples.resave_bytes — the JS half (tests/samples/resave_bytes.py says the law). Two phases, one per --headless
 // process; the wrapper prepends `var PHASE = "...", ARCHIVES = [...], GUIDS = {...};` and the python half reads the
 // saved blobs out of the library between them (no verb hands a script a scene blob: the projects row is the record).
 //   import: each shipped archive imported (project.importArchive: its rows, its models baked), opened and saved
