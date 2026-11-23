@@ -342,7 +342,7 @@ source.fork_stamp 0.10  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261
 source.gate_scope_rules 2.24  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T035515-18777f7e3-p1916884)
 source.gpu_rows_closure 0.14  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T035518-18777f7e3-p1921416)
 source.material_page_identity 0.00  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T035520-18777f7e3-p1926157)
-source.member_init 8.67  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T035521-18777f7e3-p1926786)
+source.member_init 7.99  solo 2026-11-23 at 5c4404e39 (spec.sh reprice, run 20261123T083051-5c4404e39-p1031904)
 source.no_fixed_gi_volume 0.08  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T035534-18777f7e3-p1957090)
 source.no_glsl_path 0.10  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T035535-18777f7e3-p1961741)
 source.no_raw_transaction 0.03  solo 2026-11-23 at 18777f7e3 (spec.sh reprice, run 20261123T035541-18777f7e3-p1994113)
