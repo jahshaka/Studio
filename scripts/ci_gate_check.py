@@ -280,9 +280,9 @@ def why_not(rec, fact, row, reach, a_fork, tip_fork, cfg=None, env=None):
         # a lint reads the whole tree, so only a record of THIS tree answers it (2026-10-14: seven unpriced rows passed R2 by a
         # served record of an older tree); at the same tree it is the same answer (URGENT FIX LIST #20)
         return "a lint reads the whole tree: served only by a record of this very tree"
-    if not gate_graph.config_equal(rec.get("config"), cfg):
-        return "its build configuration differs (or is unknown): %s vs this build's %s" % (
-            (rec.get("config") or {}).get("build_type"), (cfg or {}).get("build_type"))
+    cw = gate_graph.config_why(rec.get("config"), cfg)   # (the differing term, named: never the build type when it is equal)
+    if cw:
+        return cw
     why = env_differs(rec, fact, env or {})
     if why:
         return why
@@ -324,8 +324,9 @@ def red_stands(rec, fact, reach, cfg, env=None):
         r = reach.of(rec["tip"]["studio"])
         if r is None or rec.get("suite") in r:
             return f"a red of an ancestor's tree, and {rec['tip']['studio'][:9]}..{reach.tip[:9]} reaches it (the fix may be in it)"
-    if not gate_graph.config_equal(rec.get("config"), cfg):
-        return "its build configuration differs (or is unknown)"
+    cw = gate_graph.config_why(rec.get("config"), cfg)
+    if cw:
+        return cw
     why = env_differs(rec, fact, env or {})
     if why:
         return why

@@ -844,7 +844,14 @@ def _cache_entries(build):
             for line in f:
                 m = re.match(r"^([A-Za-z_][A-Za-z0-9_.+-]*):([A-Z]+)=(.*)$", line.rstrip("\n"))
                 if m:
-                    out[m.group(1)] = (m.group(2), m.group(3))
+                    t, v = m.group(2), m.group(3)
+                    # A PROBE WHOSE NAME CARRIED '=' (quickjs-ng's check_c_compiler_flag(-Wformat=2 COMPILER_SUPPORTS_Wformat=2),
+                    # a vendored tree): CMake's own reload of the cache re-reads `X=2:INTERNAL=1` as an UNINITIALIZED X whose value
+                    # is "2:INTERNAL=1" - it is an INTERNAL probe result, never a configure-line switch (the census of 2026-11-23:
+                    # its arrival made 315 of 429 run-named records "differ" from every build after it)
+                    if t == "UNINITIALIZED" and re.match(r"^[^:]*:INTERNAL=", v):
+                        t = "INTERNAL"
+                    out[m.group(1)] = (t, v)
     except OSError:
         return None
     return out
@@ -1159,10 +1166,78 @@ def build_config(build, cache=None):
            "generator": (c.get("CMAKE_GENERATOR") or ("", ""))[1] or None,
            "compiler": (c.get("CMAKE_CXX_COMPILER") or ("", ""))[1] or None,
            "linker": (c.get("CMAKE_LINKER_TYPE") or ("", ""))[1] or None}
-    full = {"keys": keys, "options": opts}
+    cfg["compile"] = compile_digest(build, c)
+    full = {"keys": keys, "options": opts, "compile": cfg["compile"]}
     cfg["options"] = opts
     cfg["hash"] = _sha256(_canon_json(full).encode())
     return cfg, None
+
+
+def compile_digest(build, cache=None):
+    """WHAT THE COMPILER WAS TOLD (the lead's ruling 2026-11-23: the cache's CMAKE_*_FLAGS are not the flags a probe, an
+    add_compile_options or a target_compile_definitions adds): one sha256 over the sorted, distinct compile lines of the build's
+    own compile database (<build>/compile_commands.json) - each line its compiler's name and every argument but the output, the
+    source and the dependency-file switches, with the tree's source root and build dir (each spelling) written <src> and <build>
+    (no tree's name in it: #175's class). None without a database (a record made so is never equal: config_why). Hashed once per
+    configure: kept in <build>/BUILT_FROM.compile beside the stamp, keyed by the database's mtime and size."""
+    import json as _json
+    import shlex as _shlex
+    db = os.path.join(build, "compile_commands.json")
+    try:
+        st = os.stat(db)
+    except OSError:
+        return None
+    stamp = os.path.join(build, "BUILT_FROM.compile")
+    key = f"{st.st_mtime_ns} {st.st_size}"
+    try:
+        k1, k2, d = open(stamp).read().split()
+        if f"{k1} {k2}" == key:
+            return d
+    except (OSError, ValueError):
+        pass
+    c = _cache_entries(build) if cache is None else cache
+    roots = build_roots(build, c) or {}
+    subs = []
+    for tag, ps in (("<build>", (roots.get("build"), roots.get("cur_build"), build)),
+                    ("<src>", (roots.get("root"), roots.get("cur_root")))):
+        for p in ps:
+            if p:
+                for q in {p, os.path.realpath(p)}:
+                    subs.append((q.rstrip("/"), tag))
+    subs.sort(key=lambda x: -len(x[0]))
+    lines = set()
+    try:
+        entries = _json.load(open(db))
+    except (OSError, ValueError):
+        return None
+    for e in entries:
+        args = e.get("arguments") or _shlex.split(e.get("command") or "")
+        if not args:
+            continue
+        src, out, skip, kept = e.get("file") or "", [os.path.basename(args[0])], False, args[1:]
+        for i, a in enumerate(kept):
+            if skip:
+                skip = False
+                continue
+            if a in ("-o", "-MF", "-MT", "-MQ"):
+                skip = True
+                continue
+            if a in ("-MD", "-MMD") or a == src or (src and os.path.basename(a) == os.path.basename(src) and a.endswith(src[-40:])):
+                continue
+            for p, tag in subs:
+                a = a.replace(p, tag)
+            # a define whose value is a commit (BENCH_GIT_COMMIT="69615d93": the configure's provenance, keyed by the record's
+            # tip already) is no configuration - its value written <commit>, or every reconfigure re-keys every record
+            a = re.sub(r'^(-D\w+=)("?)[0-9a-f]{7,40}\2$', r"\1<commit>", a)
+            out.append(a)
+        lines.add(" ".join(out))
+    d = _sha256("\n".join(sorted(lines)).encode())
+    try:
+        open(stamp + ".tmp", "w").write(f"{key} {d}\n")
+        os.replace(stamp + ".tmp", stamp)
+    except OSError:
+        pass
+    return d
 
 
 # AN OPTION WHOSE OFF IS THE DEFAULT BUILD, BYTE FOR BYTE (TEST-STREAMLINE-1 stage 2): at OFF it is not a configuration -
@@ -1175,7 +1250,7 @@ def _config_parts(c):
     """(the flags and switches CMake builds with, the options) of a CMakeCache's entries - build_config's two halves."""
     keys = {k: v for k, (t, v) in c.items() if k in _CONFIG_KEYS or k.endswith("_FLAGS_" + (c.get("CMAKE_BUILD_TYPE") or ("", ""))[1].upper())}
     opts = {k: v for k, (t, v) in c.items()
-            if (t == "UNINITIALIZED" or re.match(r"^(JAH|ENABLE|DISABLE|WITH|USE)_", k)) and k not in keys
+            if t != "INTERNAL" and (t == "UNINITIALIZED" or re.match(r"^(JAH|ENABLE|DISABLE|WITH|USE)_", k)) and k not in keys
             and not (k in _OFF_IS_THE_DEFAULT and str(v).upper() in ("OFF", "0", "FALSE", "NO", ""))}
     return keys, opts
 
@@ -1194,21 +1269,41 @@ def _switches(opts):
 
 
 def config_equal(rec_cfg, cfg):
-    """Is a record's build configuration this build's? `cfg`: build_config's, with `keys` (config_keys) beside it. Equal
-    hashes are equal; otherwise THE FLAGS are proved equal from the record's own hash (its hash over this build's flags and
-    the record's stored options must reproduce it) and THE SWITCHES compared (_switches: a tree's paths are not its
-    configuration). A record without a hash or its options is unknown - never equal."""
-    rh = (rec_cfg or {}).get("hash")
+    """Is a record's build configuration this build's? (config_why says None.)"""
+    return config_why(rec_cfg, cfg) is None
+
+
+def config_why(rec_cfg, cfg):
+    """None when a record's build configuration is this build's, else THE DIFFERING TERM, named (never the build type when it is
+    equal: the census of 2026-11-23 read "Debug vs this build's Debug" for a probe entry). `cfg`: build_config's, with `keys`
+    (config_keys) beside it. THE COMPILE DIGEST first (compile_digest: what the compiler was told) - a record without one is
+    unknown, never equal (made before the digest: the box re-proves it once, the lead's ruling, fail closed); then equal hashes
+    are equal; otherwise THE FLAGS are proved equal from the record's own hash (its hash over this build's flags, the record's
+    stored options and its digest must reproduce it) and THE SWITCHES compared (_switches: a tree's paths are not its
+    configuration; INTERNAL probe results are not switches). A record without a hash or its options is unknown."""
+    rc = rec_cfg or {}
+    rh = rc.get("hash")
     if not rh or not cfg or not cfg.get("hash"):
-        return False
+        return "its build configuration is unknown (no configuration hash)"
+    if not rc.get("compile"):
+        return "its build configuration is unknown: the record has no compile digest (made before it, or with no compile database)"
+    if not cfg.get("compile"):
+        return "this build has no compile database (compile_commands.json): no record's configuration can be proved equal"
+    if rc["compile"] != cfg["compile"]:
+        return (f"the compile lines differ (what the compiler was told: compile_commands.json digest {rc['compile'][:12]} vs this "
+                f"build's {cfg['compile'][:12]})")
     if rh == cfg["hash"]:
-        return True
-    ro = (rec_cfg or {}).get("options")
+        return None
+    ro = rc.get("options")
     if not isinstance(ro, dict) or cfg.get("keys") is None:
-        return False
-    if _sha256(_canon_json({"keys": cfg["keys"], "options": ro}).encode()) != rh:
-        return False                                   # the flags differ
-    return _switches(ro) == _switches(cfg.get("options"))
+        return "its build configuration is unknown (the record keeps no options)"
+    if _sha256(_canon_json({"keys": cfg["keys"], "options": ro, "compile": rc["compile"]}).encode()) != rh:
+        return "the cache's flags differ (" + ", ".join(sorted(cfg["keys"]))[:160] + ": one of them)"
+    a, b = _switches(ro), _switches(cfg.get("options"))
+    diff = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))
+    if diff:
+        return "a switch differs: " + "; ".join(f"{k} {a.get(k)!r} vs this build's {b.get(k)!r}" for k in diff[:4])
+    return None
 
 
 def row_facts(build, hashed=True):
