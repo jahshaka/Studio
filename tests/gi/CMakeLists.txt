@@ -1395,6 +1395,18 @@ jah_gpu_row(gi.route_landing.capture CLASS engine COMMAND test_gi_card_build_lat
 set_tests_properties(gi.route_landing.capture PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 1000)
 
+# gi.route_landing.ahead_picture (SHADER-SYSTEM-1 stage 7, item 3): THE AHEAD PASS CHANGES NO PICTURE - the room with a Sky
+# Light, World fog and a blended pane in view (a leaked stand-in is invisible in a closed grey room and visible where users
+# build: the blended pass's fog sky-visibility stand-in); both ray routes held (the gather owed: its ahead pass runs every
+# frame) until the service is empty and the picture still; frame A with the ahead pass running, B with the measuring arm
+# shaders.aheadPassOff on, A' with it off again, ONE process: A == B == A' exactly. RED with the ahead pass's stand-ins
+# left bound for the real pass.
+# COLD by design (the fixture owns its state). A new row: priced from its solo run, never SHIP.
+jah_gpu_row(gi.route_landing.ahead_picture CLASS engine COMMAND test_gi_card_build_late ahead_picture
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+         COLD "the fixture owns its state: the room's permutations unbuilt in the process (shaderCacheOff), no warm-up boot holds them")
+set_tests_properties(gi.route_landing.ahead_picture PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 1065)
 
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,

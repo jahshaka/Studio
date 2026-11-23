@@ -67,9 +67,8 @@
 //               stage 7, P3; row gi.route_landing.gather; COLD: the room's permutations must be unbuilt in the process):
 //               the gather's build held while the room draws - (0) THE CONTROLS: while held, ahead passes prepared and
 //               permutations requested (both above 0) and the frames INCOMPLETE by bit 2; (1) NOT HERE: the picture
-//               with the ahead pass running equals it off is NOT a row: with both routes held it holds byte for byte, but
-//               its red cannot be shown in this room (the stand-ins carry no light: spikes/shader-system/ss7/p3/item3/);
-//               (2)
+//               with the ahead pass running equals it off - ahead_picture's law (this room's picture with the reflection
+//               running never held still across an A/B/A compare: spikes/shader-system/ss7/p3/hold2-green.log); (2)
 //               released once the background compiler is quiet: over the landing frame and kLandingWatch
 //               frames after it, 0 graphics permutations built in a frame, 0 placeholder draws, 0 pending skips - RED
 //               before P3 (30 pending skips: the room's draw skipped every frame, the picture cut to black;
@@ -104,6 +103,20 @@
 //               card), so a capture permutation that depended on the view would be asked again at the landing and this
 //               law would be RED WITH the slot; (2) at rest, 0 slot passes over kRestWatch frames (no cost at rest). RED
 //               without the slot: the capture pass's PBS pair first asked at the landing.
+//   ahead_picture - THE AHEAD PASS CHANGES NO PICTURE (SHADER-SYSTEM-1 stage 7, item 3; row gi.route_landing.ahead_picture):
+//               THE ROOM HAS A SKY LIGHT, WORLD FOG AND A BLENDED PANE IN VIEW (the lead's ruling 2026-11-23): in the
+//               closed grey room a stand-in left bound for the real pass is INVISIBLE - the stand-ins carry no light and
+//               the screen-GI pass compiles the ambient out either way (spikes/shader-system/ss7/p3/item3/, the arm read
+//               A == B there) - and VISIBLE where users build: the gather owed, the blended pass takes the fog's
+//               sky-visibility stand-in (OgreFog.cpp beginAheadPass; R8, no light) where its absence leaves the fog's sky
+//               share whole. COLD by design (shaderCacheOff: the fixture owns its state). Both ray routes held (the gather
+//               owed: its ahead pass runs every frame) until the service is empty and the HELD picture still (two equal
+//               frames in a row, bounded: kAheadStillCap) - the stillness control is on the HELD state (measured still: 8
+//               identical frames, spikes/shader-system/ss7/p3/item3/diag.log), never at rest, where the glossy floor
+//               still moves by 1 code (the finding homed at plan item 1.10, OPEN_REDS) - then frame A with the ahead pass
+//               running, frame B with the measuring arm shaders.aheadPassOff on, frame A' with it off again, ONE process:
+//               A == B == A' exactly (the read-back codes). RED with a scratch arm that leaves the ahead pass's stand-ins
+//               bound for the real pass (spikes/shader-system/ss7/p3/item3/red-once/).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/GiParams.h"
@@ -162,6 +175,14 @@ const int kLandingWatch = 30, kLandingBound = 4, kQuietCap = 1500, kRestWatch = 
 /// read ON 763 against OFF 505, +258; the greens ON - OFF -95, -14, +38, -50, -72 (spikes/shader-system/ss7/p3/order/ and
 /// slot/order-*.log)
 const int kOrderCap = 6000, kOrderTail = 30, kOrderBound = 132;
+/// THE AHEAD PICTURE ROW (COLD): the bound on the frames until the HELD picture is still (the service empty, then two equal
+/// frames in a row) - the slowest of THREE cold runs + twice their spread, the order row's rule: 928, 935, 971 frames
+/// (spikes/shader-system/ss7/p3/item3/cold-*.log; spread 43) -> 971 + 86 = 1057 (when the row was warm, this room's
+/// first boot with none of its permutations saved hit that row's 2100 cap: the cold case this row now is); and the frames
+/// each arm state draws before
+/// its frame is read (the arm acts at the next frame's ahead pass; the read-back is the frame just drawn: 2 leaves one
+/// frame of margin)
+const int kAheadStillCap = 1057, kArmFrames = 2;
 /// The explicit node ids (both scenes the same: residentHash is over (node id, card index))
 const NodeId kFirstId = 1ull << 40;
 
@@ -314,10 +335,10 @@ int main(int argc, char **argv)
     const std::string mode = argc > 1 ? argv[1] : "late";
     const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt",
                                              "window", "failwait", "silent", "complete", "landing_gather",
-                                             "landing_order", "landing_capture" };
+                                             "landing_order", "landing_capture", "ahead_picture" };
     if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
         std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt, window, failwait, "
-                    "silent, complete, landing_gather, landing_order or landing_capture, not '%s'\n",
+                    "silent, complete, landing_gather, landing_order, landing_capture or ahead_picture, not '%s'\n",
                     mode.c_str());
         return 2;
     }
@@ -396,7 +417,8 @@ int main(int argc, char **argv)
     // loads the room's permutations ready (every green row's run promotes its cache: tests/support/fresh_home.sh); so is
     // .failwait's placeholder
     const std::string log = "test-gi-card-build-late-" + mode + "-ogre.log";
-    const bool cold = mode == "pso" || mode == "failwait" || mode == "landing_gather" || mode == "landing_capture";
+    const bool cold = mode == "pso" || mode == "failwait" || mode == "landing_gather" || mode == "landing_capture" ||
+                      mode == "ahead_picture";
     auto engine = Engine::create(cold ? enginetest::testEngineConfig(log, enginetest::EngineOverrides().shaderCacheOff())
                                       : enginetest::testEngineConfig(log),
                                  err);
@@ -532,6 +554,86 @@ int main(int argc, char **argv)
         std::snprintf(w, sizeof(w), "(2) at rest (after %d frames): %llu slot passes over %d frames (0)", took,
                       cards().requestOnlyPasses - restPasses, kRestWatch);
         check(took >= 0 && cards().requestOnlyPasses == restPasses, w);
+        drop(e, r);
+        std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+        return g_fail ? 1 : 0;
+    }
+
+    // ---- .ahead_picture: the ahead pass changes no picture (item 3): A / arm on B / arm off A', one process, exact --------
+    if (mode == "ahead_picture") {
+        e->setArm("rays.buildHold", kHoldForever);
+        e->setArm("rays.buildHoldIds", kReaderBuilds);   // the gather owed: its ahead pass runs every frame
+        Room r = buildRoom(e, "route_ahead_picture");
+        if (!r.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+        {   // THE SKY LIGHT, THE WORLD FOG, A BLENDED PANE across the view (gi.fog_sealed's sky and fog)
+            float sh[27] = { 0 };
+            sh[0] = sh[1] = sh[2] = 0.3f;
+            r.scene->setAmbientSh(sh);
+            FogDesc fog;
+            fog.enabled = true;
+            fog.colour = Colour(1.0f, 1.0f, 1.0f);
+            fog.density = 0.25f;
+            r.scene->setFog(fog);
+            PbrParams pane;
+            pane.albedo = Colour(0.8f, 0.8f, 0.8f);
+            pane.roughness = 0.1f;
+            pane.alphaMode = PbrAlphaMode::Blend;
+            pane.alpha = 0.5f;
+            if (!slab(r.scene, kFirstId + 100u, Vec3(0.1f, 1.2f, 0.6f), Vec3(2.0f, 1.6f, 0.02f),
+                      r.scene->createPbrMaterial(pane))) {
+                std::printf("FAIL: the pane: %s\n", e->lastError().c_str());
+                return 1;
+            }
+        }
+        const auto shot = [&](uint64_t &h) {
+            Image img;
+            if (!r.view->readPixels(img) || img.rgba.empty()) return false;
+            h = 1469598103934665603ull;   // FNV-1a over the codes
+            for (unsigned char c : img.rgba) { h ^= c; h *= 1099511628211ull; }
+            return true;
+        };
+        // THE HOLD: the service empty, then the picture still (two equal frames in a row), bounded
+        int f = 0, still = 0;
+        uint64_t last = 0, h = 0;
+        unsigned long long aheadAt = 0;
+        bool read = true;
+        for (; f < kAheadStillCap && still < 2; ++f) {
+            enginetest::frames(e, 1);
+            ++frames;
+            const AsyncShaderStats a = e->published().shaders;
+            if (f <= kHeldPastBuild || a.pending != a.rayBuildsInFlight) continue;
+            read = read && shot(h);
+            still = h == last ? still + 1 : 0;
+            last = h;
+        }
+        aheadAt = e->published().shaders.aheadPasses;
+        uint64_t A = 0, B = 0, A2 = 0;
+        enginetest::frames(e, kArmFrames);
+        frames += kArmFrames;
+        read = read && shot(A);
+        const unsigned long long aheadA = e->published().shaders.aheadPasses;
+        e->setArm("shaders.aheadPassOff", 1.0);
+        enginetest::frames(e, kArmFrames);
+        frames += kArmFrames;
+        read = read && shot(B);
+        const unsigned long long aheadB0 = e->published().shaders.aheadPasses;
+        enginetest::frames(e, kArmFrames);
+        frames += kArmFrames;
+        const unsigned long long aheadB1 = e->published().shaders.aheadPasses;
+        e->setArm("shaders.aheadPassOff", 0.0);
+        enginetest::frames(e, kArmFrames);
+        frames += kArmFrames;
+        read = read && shot(A2);
+        const unsigned long long aheadA2 = e->published().shaders.aheadPasses;
+        char w[400];
+        std::snprintf(w, sizeof(w), "(0) the controls: the picture still after %d frames (cap %d), read back; the ahead pass "
+                      "ran with the arm off (%llu passes over A's frames, > 0; %llu over A''s, > 0) and not with it on (%llu "
+                      "over %d of B's frames, 0)", f, kAheadStillCap, aheadA - aheadAt, aheadA2 - aheadB1,
+                      aheadB1 - aheadB0, kArmFrames);
+        check(read && still >= 2 && aheadA > aheadAt && aheadA2 > aheadB1 && aheadB1 == aheadB0, w);
+        std::snprintf(w, sizeof(w), "(1) A == B == A' exactly: %016llx / %016llx / %016llx", (unsigned long long)A,
+                      (unsigned long long)B, (unsigned long long)A2);
+        check(A == B && B == A2, w);
         drop(e, r);
         std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
         return g_fail ? 1 : 0;
