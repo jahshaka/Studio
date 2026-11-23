@@ -710,7 +710,10 @@ public:
     /// Does THIS project pin THIS asset? The row's existence, not its content:
     /// a DB-only asset (a material with no stored bytes) is pinned with an
     /// EMPTY oid, so AssetCas::pinnedOid cannot answer this question.
-    bool isAssetPinnedBy(const QString &projectGuid, const QString &assetGuid);
+    /// A FAILED READ (a closed library, a failed probe or step) answers false AND clears `readOk`: a caller that
+    /// unpins or overwrites on "not pinned" passes `readOk` and refuses on it; a caller that passes none gets false,
+    /// which it may only ever KEEP on (refuse, add a pin, show) - never unpin, delete or write the library over.
+    bool isAssetPinnedBy(const QString &projectGuid, const QString &assetGuid, bool *readOk = nullptr);
     /// Drop ONE project's pin on an asset (project_assets row). True when the row
     /// went or was never there; false on a database error.
     bool unpinAsset(const QString &projectGuid, const QString &assetGuid);

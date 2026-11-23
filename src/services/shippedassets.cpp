@@ -220,7 +220,15 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
         // A BINDING: the scene refers to the image (a material slot, an emitter,
         // a sky face), exactly like a decal's map or a light's IES profile — so
         // the pin and the session entry, and never a companion material.
-        out.newlyPinned = !db->isAssetPinnedBy(projectGuid, guid);
+        // "Newly pinned" is what an undo UNPINS (ResetMaterialCommand): a read that failed never claims a pin the
+        // project already had - the pin is REFUSED by name before it is written (NOQT-DATABASE-1 stage 2).
+        bool read = true;
+        out.newlyPinned = !db->isAssetPinnedBy(projectGuid, guid, &read);
+        if (!read) {
+            out.error = QStringLiteral("whether this project already holds '%1' could not be read - nothing was pinned")
+                            .arg(guid);
+            return out;
+        }
         const ProjectAssets::Result pinned =
             ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Binding);
         if (!pinned.ok()) {

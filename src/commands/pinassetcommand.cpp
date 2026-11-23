@@ -34,7 +34,15 @@ void PinAssetCommand::redo()
     // on a project holding an older pin (or its own copy-on-written one)
     // would silently upgrade it. The project's membership is not this
     // command's to change; only its ABSENCE is.
-    if (mDb->isAssetPinnedBy(mProjectGuid, mAssetGuid)) return;
+    // A READ THAT FAILED IS NOT ABSENCE (NOQT-DATABASE-1 stage 2): the redo is REFUSED by name and records nothing
+    // to undo - else it would re-pin a held pin to the library's version and its undo would unpin it.
+    bool read = true;
+    if (mDb->isAssetPinnedBy(mProjectGuid, mAssetGuid, &read)) return;
+    if (!read) {
+        qWarning("Add to project REFUSED for '%s': whether the project already holds it could not be read - nothing "
+                 "was pinned", qUtf8Printable(mAssetGuid));
+        return;
+    }
 
     // A BINDING, not a Direct add: something in the scene refers to this
     // asset, which is exactly what AddKind::Binding means (a Direct add of a

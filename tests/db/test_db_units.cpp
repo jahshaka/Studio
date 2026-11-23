@@ -25,12 +25,18 @@ For more information see the LICENSE file
 //   7. a cursor's step after the transaction it was opened in has ended is refused by name (FAILED);
 //   8. an import's archive that cannot be opened read-only is refused by name before any read, and never created;
 //   9. ...nor a step inside the NEXT unit at the same depth (the unit's serial, not its depth: the audit's W1);
-//  10. an import whose insert failed answers false and leaves nothing (its unit rolls back: the audit's W3).
+//  10. an import whose insert failed answers false and leaves nothing (its unit rolls back: the audit's W3);
+//  11. "is it pinned here" that could not be read (a failed probe, a closed library) is no answer: readOk cleared.
 
 #include <QApplication>
 #include <QFile>
+#include <QSqlDatabase>
+#include <QSqlDriver>
+
+#include <sqlite3.h>
 
 #include <csignal>
+#include <cstring>
 #include <cstdio>
 #include <optional>
 #include <string>
@@ -397,7 +403,32 @@ int main(int argc, char **argv)
         QFile::remove(archive + QStringLiteral(".db"));
     }
 
+    // 11. "IS IT PINNED HERE" THAT COULD NOT BE READ IS NO ANSWER (NOQT-DATABASE-1 stage 2, the isAssetPinnedBy
+    //     limit): a failed table probe (an SQLite authorizer, test-side, denying sqlite_master on the library's
+    //     handle) and a closed library (below) answer false WITH readOk cleared - beside a pin that reads true.
+    {
+        db::Error e;
+        database.connection().exec("INSERT INTO project_assets (project_guid, asset_guid, oid_pin) VALUES ('p11', 'a11', '')", &e);
+        bool read = true;
+        const bool pinned = database.isAssetPinnedBy(QStringLiteral("p11"), QStringLiteral("a11"), &read);
+        check(pinned && read, QStringLiteral("11: CONTROL: a pin reads true (pinned %1, read %2)").arg(pinned).arg(read));
+        sqlite3 *raw = *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+        sqlite3_set_authorizer(raw, [](void *, int action, const char *table, const char *, const char *, const char *) {
+            const bool master = table && (std::strcmp(table, "sqlite_master") == 0 || std::strcmp(table, "sqlite_schema") == 0);
+            return action == SQLITE_READ && master ? SQLITE_DENY : SQLITE_OK;
+        }, nullptr);
+        read = true;
+        const bool probed = database.isAssetPinnedBy(QStringLiteral("p11"), QStringLiteral("a11"), &read);
+        sqlite3_set_authorizer(raw, nullptr, nullptr);
+        check(!probed && !read, QStringLiteral("11: a FAILED probe answers no read (pinned %1, read %2)").arg(probed).arg(read));
+    }
+
     database.closeDatabase();
+    {
+        bool read = true;
+        const bool closed = database.isAssetPinnedBy(QStringLiteral("p11"), QStringLiteral("a11"), &read);
+        check(!closed && !read, QStringLiteral("11: a CLOSED library answers no read (pinned %1, read %2)").arg(closed).arg(read));
+    }
     removeFile();
     qInstallMessageHandler(nullptr);
     if (failures) {

@@ -430,8 +430,16 @@ QVector<Unused> reapExclusiveMembers(Database *db, const QString &materialGuid)
         while (query.step(&e)) children << dbqt::text(query, 0);
     }
     for (const QString &child : children) {
-        if (!db->hasMultipleDependers(child).isEmpty()) continue;   // somebody uses it
-        if (!assetdelete::livePins(db, child).isEmpty()) continue;  // a project holds it
+        // A FAILED READ KEEPS THE MAP (NOQT-DATABASE-1 stage 2): remove() below (keepShared) never asks who USES the
+        // map itself, so "nobody uses it" from a failed read here would delete a map in use.
+        bool read = true;
+        if (!db->hasMultipleDependers(child, &read).isEmpty()) continue;   // somebody uses it
+        if (!assetdelete::livePins(db, child, &read).isEmpty()) continue;  // a project holds it
+        if (!read) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QStringLiteral("members: the baked map '%1' is kept - who uses or pins it could not be read").arg(child));
+            continue;
+        }
         const AssetRecord row = db->fetchAsset(child);
         Unused entry;
         entry.guid = child;
@@ -503,8 +511,12 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
     // THE COPY'S HOME (ASSETS-SCOPE-1): the open project's when that project
     // holds the material (the swap below is its copy-on-write), else the
     // material's own — never a library tile minted for a project's edit.
+    // A READ THAT FAILED IS NOT "THE LIBRARY's" (NOQT-DATABASE-1 stage 2): it would mint the copy in the library and
+    // write the project's swap over the LIBRARY's definition - refused by name before the first write.
+    bool read = true;
     const bool projectHolds = project && !project->getProjectGuid().isEmpty()
-                              && db->isAssetPinnedBy(project->getProjectGuid(), materialGuid);
+                              && db->isAssetPinnedBy(project->getProjectGuid(), materialGuid, &read);
+    if (!read) return fail(QStringLiteral("whether this project holds the material could not be read - nothing was made"));
     const assethome::Home home = projectHolds ? assethome::project(project->getProjectGuid())
                                               : assethome::of(db, materialGuid);
     DbBatch batch(db);
@@ -559,11 +571,10 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
     // A PROJECT'S EDIT STAYS THE PROJECT'S (the owner's model, §12 Q2): when
     // the open project holds this material, the swap is a copy-on-write and
     // the library original keeps the shared texture.
-    const bool projectOwns = project && !project->getProjectGuid().isEmpty()
-                             && db->isAssetPinnedBy(project->getProjectGuid(), materialGuid);
+    // (The answer read above, before the first write: the same question.)
     const auto written = MaterialBundle::write(
         db, project, materialGuid, definition,
-        projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
+        projectHolds ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
     if (!written.ok) {
         db->deleteAsset(newGuid, /*force=*/true);
         return fail(written.error);

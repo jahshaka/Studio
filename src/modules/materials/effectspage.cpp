@@ -414,9 +414,17 @@ QVariantMap EffectsPage::openMaterialTab(const QString &guid, const QString &sco
 		// left — and a material opened then would be opened, and SAVED, as a
 		// copy of a project that is not there.
 		const bool sceneOpen = mSceneOpenProbe && mSceneOpenProbe();
+		// A READ THAT FAILED IS NOT "THE LIBRARY's" (NOQT-DATABASE-1 stage 2): such a tab's save would write the
+		// library's definition over - the open is refused by name (an empty answer, as a refused scope above).
+		bool read = true;
 		const bool pinned = sceneOpen && dataBase && mProject
 		                    && !mProject->getProjectGuid().isEmpty()
-		                    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), guid);
+		                    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), guid, &read);
+		if (!read) {
+			qWarning("materials: '%s' was NOT opened - whether the project holds it could not be read",
+			         qUtf8Printable(guid));
+			return QVariantMap();
+		}
 		origin = pinned ? shaderInfo::Origin::Project : shaderInfo::Origin::Library;
 	}
 	return tabInfo(openDocument(guid, origin));
@@ -679,10 +687,16 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 			// "does the project pin it?", so a material the project held
 			// could never be edited as the library's, and the same guid
 			// meant two things in one window.
+			bool read = true;
 			const bool projectOwns =
 			    doc->info.origin == shaderInfo::Origin::Project
 			    && mProject && !mProject->getProjectGuid().isEmpty()
-			    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID);
+			    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID, &read);
+			// A READ THAT FAILED IS REFUSED UNDER ITS OWN NAME (NOQT-DATABASE-1 stage 2), never as "no longer holds".
+			if (!read) {
+				reportSaveRefused(doc, tr("whether this project holds it could not be read - nothing was written"));
+				return;
+			}
 			// A PROJECT'S COPY THAT IS NO LONGER THE PROJECT'S IS NOT THE
 			// LIBRARY'S (fix round F1). The pin can go while the tab is open —
 			// the project drawer's Delete, the editor tray's, `assets.
@@ -2613,7 +2627,10 @@ void EffectsPage::configureConnections()
 			// `materials.edit` as much as by this page's save. The tab is the
 			// thing being copied, not a stale window onto a deleted row.
 			if (!MaterialBundle::shippedPresetName(doc->info.GUID).isEmpty()) continue;
-			if (!dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID))
+			// A READ THAT FAILED KEEPS THE TAB (NOQT-DATABASE-1 stage 2): forgetMaterial closes it WITHOUT a save,
+			// its pending autosave stopped - unsaved edits lost on a guess. Only a pin truly gone closes it.
+			bool read = true;
+			if (!dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID, &read) && read)
 				gone << doc->info.GUID;
 		}
 		for (const QString &guid : gone) forgetMaterial(guid, Gone::ProjectCopy);

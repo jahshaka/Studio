@@ -2121,15 +2121,22 @@ int Database::countAssetPins(const QString &guid, bool *readOk)
     return int(query.int64(0));
 }
 
-bool Database::isAssetPinnedBy(const QString &projectGuid, const QString &assetGuid)
+bool Database::isAssetPinnedBy(const QString &projectGuid, const QString &assetGuid, bool *readOk)
 {
-    if (projectGuid.isEmpty() || assetGuid.isEmpty() || !db.isOpen()) return false;
-    // A failed probe answers what this read's own failure answers (false): it has no failure channel.
-    if (checkIfTableExists("project_assets") != TableProbe::Exists) return false;
+    if (projectGuid.isEmpty() || assetGuid.isEmpty()) return false;
+    // A CLOSED LIBRARY, A FAILED PROBE OR A FAILED STEP IS NO ANSWER (the header): false, `readOk` cleared.
+    const TableProbe probe = db.isOpen() ? checkIfTableExists("project_assets") : TableProbe::Failed;
+    if (probe != TableProbe::Exists) {
+        if (readOk && probe == TableProbe::Failed) *readOk = false;
+        return false;
+    }
     DbQuery query(connection(), "SELECT 1 FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
     dbqt::bindText(query, 1, projectGuid);
     dbqt::bindText(query, 2, assetGuid);
-    return executeAndCheckQuery(query, "IsAssetPinnedBy") && query.next();
+    const bool ran = executeAndCheckQuery(query, "IsAssetPinnedBy");
+    if (ran && query.next()) return true;
+    if (readOk && (!ran || query.failed())) *readOk = false;
+    return false;
 }
 
 bool Database::deleteAsset(const QString &guid, bool force)

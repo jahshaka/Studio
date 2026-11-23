@@ -64,7 +64,12 @@ QString foreignCopyRefusal(Database *db, const QString &guid, const QString &pro
     if (!db || guid.isEmpty()) return QString();
     const QString master = presetMasterOf(db->fetchAsset(guid).properties);
     if (master.isEmpty()) return QString();
-    const QVector<AssetPinRecord> pins = db->fetchAssetPins(guid);
+    // A FAILED READ IS NOT "NOBODY HOLDS IT" (NOQT-DATABASE-1 stage 2): refused by name.
+    bool read = true;
+    const QVector<AssetPinRecord> pins = db->fetchAssetPins(guid, &read);
+    if (!read)
+        return QObject::tr("'%1' here is a copy of the shipped preset, and which project holds it could not be read: "
+                           "it was not added").arg(shippedPresetName(master));
     if (pins.isEmpty()) return QString();
     QString owner;
     for (const AssetPinRecord &pin : pins) {

@@ -33,6 +33,10 @@ public:
     static void updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject definition,
                                    Database *db);
     static QByteArray makeBlobFromPixmap(const QPixmap &pixmap);
+    /// The asset and its whole dependency closure. A READ THAT FAILS ENDS IT SHORT, UNSAID (no failure channel): a
+    /// caller may only ever KEEP on a short closure - its callers pin, re-pin, list or export fewer members
+    /// (projectassets, assetsapi) or unpin fewer (assetdelete::removeFromProject, where a missing depender only
+    /// makes a member look held from outside); none deletes or unpins on it (NOQT-DATABASE-1 stage 2's limit).
     static QStringList fetchAssetAndAllDependencies(const QString &guid, Database *db);
     static ModelTypes getAssetTypeFromExtension(const QString &fileSuffix);
     /// modelStats (optional): filled with AssetMetadata::forModelScene counts

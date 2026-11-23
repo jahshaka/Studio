@@ -781,6 +781,50 @@ int main(int argc, char **argv)
                   QStringLiteral("14.1: ...the failed row is COUNTED and NAMED (%1: %2)").arg(rebuilt.failedRows)
                       .arg(rebuilt.failedGuids.join(QLatin1Char(','))).toUtf8().constData());
         }
+        // 15. THE LEAD's THREE MORE SITES (the reader's deepening). 15a: the material's BAKED-MAP REAP
+        //     (materialmembers::reapExclusiveMembers) never deletes a map whose USERS could not be read - a TEMP VIEW
+        //     shadowing `dependencies` raises only on the user's own edge, which the users read (by dependee)
+        //     reaches and the delete's own edge read (by depender) does not.
+        {
+            db::Error e;
+            libraryRow(QStringLiteral("m15"), true);
+            libraryRow(QStringLiteral("c15"), true);
+            libraryRow(QStringLiteral("u15"), true);
+            conn.exec("UPDATE assets SET parent = 'm15' WHERE guid = 'c15'", &e);
+            conn.exec("INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
+                      "VALUES (1, 2, NULL, 'u15', 'c15', 'e15')", &e);
+            materialmembers::reapExclusiveMembers(&db, QStringLiteral("m15"));
+            CHECK(alive(QStringLiteral("c15")), "15a: CONTROL: a baked map another asset uses survives the reap");
+            conn.exec("CREATE TEMP VIEW dependencies AS SELECT * FROM main.dependencies "
+                      "WHERE CASE WHEN depender = 'u15' THEN abs(-9223372036854775807 - 1) ELSE 1 END", &e);
+            bool usersRead = true;
+            db.hasMultipleDependers(QStringLiteral("c15"), &usersRead);
+            CHECK(!usersRead, "15a: CONTROL: the map's users read is made to fail");
+            materialmembers::reapExclusiveMembers(&db, QStringLiteral("m15"));
+            conn.exec("DROP VIEW temp.dependencies", &e);
+            CHECK(alive(QStringLiteral("c15")), "15a: a baked map whose users could not be read SURVIVES the reap");
+        }
+        // 15b: THE FOREIGN-COPY REFUSAL (MaterialBundle::foreignCopyRefusal) never lets a project take another
+        //      project's preset copy because who holds it could not be read (the projects reads denied).
+        {
+            db::Error e;
+            libraryRow(QStringLiteral("f15copy"), true);
+            conn.exec("UPDATE assets SET properties = CAST('{\"presetMaster\": \"00000000-0000-0000-0000-000000002024\"}' "
+                      "AS BLOB) WHERE guid = 'f15copy'", &e);
+            project(QStringLiteral("f15-p"));
+            pin(QStringLiteral("f15-p"), QStringLiteral("f15copy"));
+            const QString held = MaterialBundle::foreignCopyRefusal(&db, QStringLiteral("f15copy"), QStringLiteral("f15-q"));
+            CHECK(!held.isEmpty(), QStringLiteral("15b: CONTROL: another project's copy is refused: '%1'").arg(held)
+                                       .toUtf8().constData());
+            gDeny = Deny{ 2 };
+            sqlite3_set_authorizer(raw, denyReads, nullptr);
+            const QString unread = MaterialBundle::foreignCopyRefusal(&db, QStringLiteral("f15copy"), QStringLiteral("f15-q"));
+            sqlite3_set_authorizer(raw, nullptr, nullptr);
+            CHECK(unread.contains(QStringLiteral("could not be read")),
+                  QStringLiteral("15b: a copy whose holders could not be read is REFUSED by name: '%1'").arg(unread)
+                      .toUtf8().constData());
+        }
+
         // (2) A CLOSED LIBRARY's pin reads are NO ANSWER, never "no pins". LAST in this test: a second Database
         //     takes Qt's DEFAULT connection name and so closes the first one's handle (stage 3 removes that).
         {

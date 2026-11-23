@@ -786,9 +786,13 @@ bool MaterialsApi::regenerate(const QString &shaderGuid)
     QJsonObject rebaked = build.definition;
     // keep the identity keys the stored definition carried
     if (definition.contains("name")) rebaked["name"] = definition["name"];
+    // A FAILED READ NEVER WRITES THE LIBRARY's DEFINITION OVER (NOQT-DATABASE-1 stage 2): refused by name.
+    bool read = true;
     const bool projectOwns =
         host.project && !host.project->getProjectGuid().isEmpty()
-        && host.db->isAssetPinnedBy(host.project->getProjectGuid(), shaderGuid);
+        && host.db->isAssetPinnedBy(host.project->getProjectGuid(), shaderGuid, &read);
+    if (!read) return fail(QStringLiteral("materials.regenerate: whether this project holds '%1' could not be read - "
+                                          "nothing was written").arg(shaderGuid));
     const auto written = MaterialBundle::write(
         host.db, host.project, shaderGuid, rebaked,
         projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
@@ -1062,9 +1066,16 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
         QJsonObject values = definition["values"].toObject();
         values[slot] = textureGuid;
         definition["values"] = values;
+        // A FAILED READ NEVER WRITES THE LIBRARY's DEFINITION OVER (NOQT-DATABASE-1 stage 2): refused by name.
+        bool read = true;
         const bool projectOwns =
             host.project && !host.project->getProjectGuid().isEmpty()
-            && host.db->isAssetPinnedBy(host.project->getProjectGuid(), materialGuid);
+            && host.db->isAssetPinnedBy(host.project->getProjectGuid(), materialGuid, &read);
+        if (!read) {
+            fail(QStringLiteral("materials.addTexture: whether this project holds '%1' could not be read - the "
+                                "material was not written").arg(materialGuid));
+            return QString();
+        }
         const auto written = MaterialBundle::write(
             host.db, host.project, materialGuid, definition,
             projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
@@ -2740,9 +2751,13 @@ bool GraphApi::save()
     // guid. It works with NO project open, which the old route could not.
     const auto build = materials::buildDefinition(graph, mAssetGuid, host.db, host.project);
     if (!build.ok()) return fail(QStringLiteral("graph.save: %1").arg(build.error));
+    // A FAILED READ NEVER WRITES THE LIBRARY's DEFINITION OVER (NOQT-DATABASE-1 stage 2): refused by name.
+    bool read = true;
     const bool projectOwns =
         host.project && !host.project->getProjectGuid().isEmpty()
-        && host.db->isAssetPinnedBy(host.project->getProjectGuid(), mAssetGuid);
+        && host.db->isAssetPinnedBy(host.project->getProjectGuid(), mAssetGuid, &read);
+    if (!read) return fail(QStringLiteral("graph.save: whether this project holds '%1' could not be read - nothing was "
+                                          "written").arg(mAssetGuid));
     const auto written = MaterialBundle::write(
         host.db, host.project, mAssetGuid, build.definition,
         projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);

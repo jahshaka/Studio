@@ -1465,8 +1465,14 @@ void AssetWidget::deleteItem()
 	// law unlisted the library tile and left the project untouched — the
 	// opposite of the click. The project-side remove drops the project's pins
 	// (assets.removeFromProject — the same service); the library keeps the row.
+	// A FAILED READ NEVER DECIDES THIS DELETE (NOQT-DATABASE-1 stage 2): a pin count, a closure or a users read
+	// that failed refuses the click by name - never "unpinned, single asset: delete it and its dependencies".
+	bool read = true;
+	const auto refusedOnRead = [this]() {
+		toast()->showToast(tr("Delete"), tr("Who holds or uses this asset could not be read - nothing was deleted"), 3000);
+	};
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_ASSET && project &&
-	    db->countAssetPins(item->data(MODEL_GUID_ROLE).toString()) > 0) {
+	    db->countAssetPins(item->data(MODEL_GUID_ROLE).toString(), &read) > 0) {
 		const auto outcome = assetdelete::removeFromProject(
 			db, item->data(MODEL_GUID_ROLE).toString(), project->getProjectGuid());
 		if (!outcome.ok) qWarning("project panel: %s", qPrintable(outcome.error));
@@ -1474,12 +1480,13 @@ void AssetWidget::deleteItem()
 		populateAssetTree(false);
 		return;
 	}
+	if (!read) { refusedOnRead(); return; }
 
 	// Delete asset and dependencies (a legacy project-scoped row, never pinned)
 	if (item->data(MODEL_ITEM_TYPE).toInt() == MODEL_ASSET) {
 		QStringList dependentAssets;
 		for (const auto &files :
-             db->fetchAssetGUIDAndDependencies(item->data(MODEL_GUID_ROLE).toString()))
+             db->fetchAssetGUIDAndDependencies(item->data(MODEL_GUID_ROLE).toString(), true, &read))
         {
 			dependentAssets.append(files);
 		}
@@ -1492,12 +1499,13 @@ void AssetWidget::deleteItem()
         QStringList assetWithDeps;
 
         for (const auto &asset : dependentAssets) {
-            auto dependers = db->hasMultipleDependers(asset);
+            auto dependers = db->hasMultipleDependers(asset, &read);
             if (dependers.count() > 1) {
                 otherDependers.append(dependers);
                 assetWithDeps.append(asset);
             }
         }
+        if (!read) { refusedOnRead(); return; }
 
         // Don't warn if it's a single asset, just break stuff
         if (assetWithDeps.isEmpty()) {
