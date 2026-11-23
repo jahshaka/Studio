@@ -576,6 +576,16 @@ class NinjaGraph:
                                 for e in self.rev.get(c, ()):
                                     if e in self.exes:
                                         if o in self.closure(e, c): exes.add(e)
+                                    elif self.kind.get(e) == "shared":
+                                        # A SHARED LIBRARY LINKING THIS ONE (libIrisGL over libIrisDocument, NOQT-DOCUMENT-1
+                                        # stage 6) is no reach of its own: its executables load `c` and are judged by c's
+                                        # closure like any other. Pushed onto the blind walk instead, every executable of it
+                                        # was added unchecked - and only when the archive's consumers came in the order
+                                        # that met `c` before `e` (a set's, by Python's per-process string hash): a Bullet
+                                        # flag change selected 365 rows under some hash seeds, 326 under others
+                                        # (spikes/noqt-document-1/s6/gate-selection/).
+                                        for ex in self.rev.get(e, ()):
+                                            if ex in self.exes and o in self.closure(ex, c): exes.add(ex)
                                     elif e not in seen:
                                         seen.add(e); stack.append(e)
                             else:
