@@ -1020,7 +1020,7 @@ bool Database::createFavoritesTable()
     return executeAndCheckQuery(query, "CreateFavoritesTable");
 }
 
-void Database::createAllTables(bool stampGeneration)
+bool Database::createAllTables(bool stampGeneration)
 {
     DbTransaction tx(connection());
     // A FAILED PROBE CREATES NOTHING: the unit is not committed and says so.
@@ -1042,14 +1042,17 @@ void Database::createAllTables(bool stampGeneration)
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             "Database::createAllTables: a table probe could not be read - the schema unit was NOT committed, the "
             "library's tables are as they were.");
-        return;
+        return false;
     }
     createCasTables(stampGeneration);
     createIndexes();   // after every table, the CAS ones included: the list indexes asset_files too
     // A FAILED UNIT WRITES NOTHING (DbTransaction): a library whose tables did not commit is said by name.
-    if (!tx.commit())
+    if (!tx.commit()) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             "Database::createAllTables: the schema transaction was NOT committed - the library's tables are as they were.");
+        return false;
+    }
+    return true;
 }
 
 void Database::createCasTables(bool stamp)
@@ -1958,30 +1961,35 @@ bool Database::destroyTable(const QString &table)
 	return executeAndCheckQuery(query, QString("DropAssetTable[%1]").arg(table));
 }
 
-void Database::wipeDatabase()
+bool Database::wipeDatabase()
 {
 	DbTransaction tx(connection());
-	destroyTable("projects");
-	destroyTable("thumbnails");
-	destroyTable("collections");
-	destroyTable("assets");
-	destroyTable("dependencies");
-	destroyTable("author");
-	destroyTable("folders");
-	// The tables the CAS and the favourites view added (deep audit 2026-09,
-	// area 6: "wipe" left the entire content catalog behind, so the rebuilt
-	// database opened onto files/asset_files/project_assets rows naming assets
-	// that no longer existed — pins and refcounts for a library that was gone).
-	// asset_files BEFORE files: its refcount triggers live on that table and
-	// must go with it.
-	destroyTable("favorites");
-	destroyTable("asset_files");
-	destroyTable("files");
-	destroyTable("project_assets");
+	bool dropped = true;
+	for (const char *table : { "projects", "thumbnails", "collections", "assets", "dependencies", "author", "folders",
+	                           // The tables the CAS and the favourites view added (deep audit 2026-09, area 6: "wipe"
+	                           // left the entire content catalog behind, so the rebuilt database opened onto
+	                           // files/asset_files/project_assets rows naming assets that no longer existed - pins
+	                           // and refcounts for a library that was gone). asset_files BEFORE files: its refcount
+	                           // triggers live on that table and must go with it.
+	                           "favorites", "asset_files", "files", "project_assets" })
+		dropped = destroyTable(QString::fromLatin1(table)) && dropped;
 	// A FAILED UNIT WRITES NOTHING (DbTransaction): a wipe that did not commit is said by name.
-	if (!tx.commit())
+	if (!dropped || !tx.commit()) {
 		JahLog::write(JahLog::legacy, JahLog::Level::Warning,
 		    "Database::wipeDatabase: the wipe was NOT committed - every table is as it was.");
+		return false;
+	}
+	return true;
+}
+
+bool Database::clearGeneration()
+{
+	db::Error error;
+	connection().exec("PRAGMA user_version = 0", &error);
+	if (error)
+		JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+		    QString("the library's generation could not be cleared (%1)").arg(dbqt::describe(error)));
+	return !error;
 }
 
 bool Database::sidecarBelongsHere(const QString &guid)

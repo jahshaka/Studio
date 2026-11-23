@@ -350,13 +350,16 @@ public:
     bool createAuthorTable();
     bool createFoldersTable();
     bool createFavoritesTable();
-    /// `stampGeneration` false (the library reset's step 4, the confirm's F7): the tables only - the generation is
-    /// stamped by the caller once the reset is whole (librarygeneration::checkAndWipe), so a reset that fails leaves
-    /// the library's generation as it was and the next boot retries.
-    void createAllTables(bool stampGeneration = true);
+    /// `stampGeneration` false (the library reset's step 4): the tables only - the generation is stamped by the
+    /// reset's last step once it is whole (libraryreset::finishCatalog), so a reset that fails leaves the library NOT
+    /// this build's and the next boot retries. False, said in the log, when the unit did not commit.
+    bool createAllTables(bool stampGeneration = true);
     /// `PRAGMA user_version` = this build's generation (CasSchema::kUserVersion), never on a version read that
     /// failed; false, said in the log, when it could not be read or written.
     bool stampGeneration();
+    /// `PRAGMA user_version` = 0: the library is NOT this build's until a reset stamps it whole (the reset's FIRST
+    /// write, libraryreset::markPending; the second confirm's finding 1). False, said in the log, when not written.
+    bool clearGeneration();
     void createIndexes();
     /// The index statements createIndexes ran over an EXISTING library's rows on the opening thread (its DEFECT
     /// case; 0 when the boot's gate prepared them): the boot's result (services/bootreport.h `indexAtOpen`).
@@ -441,7 +444,8 @@ public:
     /// for the caller to apply after ITS commit (as deleteFolderAndDependencies).
     bool deleteProject(const QString &guid, QVector<PendingAssetScrub> *deferred = nullptr);
 	bool destroyTable(const QString &table);
-	void wipeDatabase();
+	/// Every table dropped, in one unit; false, said in the log, when it did not commit (every table as it was).
+	bool wipeDatabase();
     /// LIBRARY DELETE KEEPS PROJECT PINS (owner, 2026-09-09).
     ///
     /// An asset a project PINS is not deleted by a library delete: the row is

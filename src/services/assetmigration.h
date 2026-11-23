@@ -83,6 +83,10 @@ struct RebuildOptions
     /// restoring them — a format bump re-derives them from the stored sources
     /// (MeshBakeStore's background rebuild), never reads an old build's.
     bool dropDerived = false;
+    /// Stamp the generation with the schema (a recovery into a fresh file). FALSE in a library reset (the second
+    /// confirm's finding 1): the reset stamps only once it is whole, so a reset failing after this rebuild committed
+    /// is read as not this build's at the next boot and retried.
+    bool stampGeneration = true;
 };
 
 /// Reconstruct catalog rows (assets + files + asset_files + project_assets

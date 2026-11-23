@@ -307,15 +307,16 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
     const QVector<QJsonObject> sidecars = restorable(storeRoot, options, &report);
     const bool keepPins = options.homes.isEmpty() || options.homes.contains(assethome::Kind::Project);
 
-    // ONE UNIT (the layer's door: source.no_raw_transaction), named as the lock's holder - the schema and its
-    // generation stamp INSIDE it (the confirm's F7): a rebuild that does not commit leaves nothing, the stamp included.
+    // ONE UNIT (the layer's door: source.no_raw_transaction), named as the lock's holder - the schema (and, for a
+    // recovery, its generation stamp) INSIDE it (the confirm's F7): a rebuild that does not commit leaves nothing. A
+    // library reset's rebuild stamps nothing (options.stampGeneration false): the reset stamps once whole.
     db::Transaction unit(conn, "the catalog rebuild");
     // A fresh recovery DB needs the assets and dependencies tables too (IF NOT EXISTS: an existing one answers
     // nothing).
     db::Error schemaError;
     conn.exec(CasSchema::kAssetsTableForRebuild, &schemaError);
     conn.exec(CasSchema::kDependenciesTableForRebuild, &schemaError);
-    AssetCas::ensureCasSchema(conn);
+    AssetCas::ensureCasSchema(conn, options.stampGeneration);
     QSet<QString> restored;
     // EVERY ROW's ANSWER IS READ (the audit's finding 1): a sidecar one of whose rows failed is COUNTED and NAMED,
     // and the rebuild is then not ok - a catalog missing a row must never look whole to the sweep after it.
@@ -451,7 +452,7 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
     }
 
     // A REBUILD WITH A FAILED ROW COMMITS NOTHING (the confirm's F7): its unit rolls back, so the catalog is as it was
-    // before it and nothing is stamped - a later boot reads the store again. (The counts above are then what was
+    // before it and nothing is stamped. (The counts above are then what was
     // written before the rollback.)
     report.elapsedMs = timer.elapsed();
     if (report.failedRows > 0) {

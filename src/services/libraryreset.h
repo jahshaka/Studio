@@ -142,6 +142,23 @@ inline bool sweepAllowedAfter(bool rebuildOk, int failedRows, bool committed)
 void keepAfterRebuild(Database *db, const QString &storeRoot, const AssetMigration::RebuildReport &rebuilt,
                       const AssetMigration::RebuildOptions &options, Result &result);
 
+/// THE RESET's FIRST WRITE (libraryresetkeep.cpp; the second confirm's finding 1): the library's generation set to 0,
+/// so a reset cut short anywhere after it is read as not this build's at the next boot and finished there. False,
+/// with `result.error`, when it could not be written - the reset then removes nothing.
+bool markPending(Database *db, Result &result);
+
+/// THE RESET's CATALOG STEPS, after its file steps (libraryresetkeep.cpp, so db.failed_opens runs them in their real
+/// order): 4. the tables dropped and created again, unstamped; 4b. the kept storages rebuilt unstamped from their
+/// sidecars and collected (keepAfterRebuild; a store with no sidecar folder has nothing to rebuild); 5. ONLY when no
+/// step before failed, the bootstrap (a refused reset seeds nothing: the store stays as the refusal left it); 6. ONLY
+/// a whole reset is stamped this build's. Sets `result.ok`.
+void finishCatalog(Database *db, SettingsManager *settings, const QString &storeRoot, const Keep &keep,
+                   bool seedPresets, Result &result);
+
+/// STEP 5's BODY (libraryreset.cpp): the store's identity, the first-run preset seed (`seedPresets`, a launch's rule)
+/// and the primitives; a primitive seed error into `result.error`.
+void bootstrap(Database *db, SettingsManager *settings, const QString &storeRoot, bool seedPresets, Result &result);
+
 /// Why a reset must not run right now, or empty when it may.
 ///
 /// THE THREE WRITERS THAT OWN BYTES WE ARE ABOUT TO DELETE: a threaded import
@@ -164,7 +181,9 @@ QString refusalReason(const PreviewService *previews = nullptr);
 /// THE RESET. `keep` names the user's storages that survive it (above); with
 /// none kept it is the whole first-launch reset described here.
 ///
-///   1. counts what is there (the numbers above);
+///   1. counts what is there (the numbers above), then marks the library NOT
+///      this build's (markPending: generation 0) - its first write; from here
+///      a reset cut short is finished by the next boot;
 ///   2. removes every project FOLDER — each one resolved through
 ///      `folderForProject`, so a project the user filed on another drive is
 ///      taken by its recorded location, not by a guess — plus the leftovers
@@ -183,14 +202,15 @@ QString refusalReason(const PreviewService *previews = nullptr);
 ///      it belongs to somebody else;
 ///   4. drops the tables (`Database::wipeDatabase`) and CREATES THEM AGAIN,
 ///      so the NEXT BOOT's schema check (Database::schemaMatchesFresh) finds
-///      exactly this build's tables - UNSTAMPED: the generation is the
-///      caller's to stamp once the reset is whole (checkAndWipe), so a reset
-///      that fails is retried at the next boot;
-///   5. re-runs the fresh-install bootstrap: the store's identity
+///      exactly this build's tables - UNSTAMPED, and the kept storages are
+///      rebuilt (finishCatalog);
+///   5. ONLY when nothing before failed, re-runs the fresh-install bootstrap: the store's identity
 ///      (`AssetStoreService::bootstrapFromSettings`, which writes a new
 ///      store.json) and the first-run preset seed under the same rule a
 ///      launch uses (a DRIVEN session — a suite, a script, an MCP client —
-///      seeds nothing, exactly as `MainWindow` does not seed one).
+///      seeds nothing, exactly as `MainWindow` does not seed one);
+///   6. ONLY a whole reset is stamped this build's (every caller: the boot's
+///      checkAndWipe and Clear Database alike).
 ///
 /// `seedPresets` false skips step 5's seed: the caller is about to RESTART,
 /// the child will seed at its own launch, and a seeder started in a process

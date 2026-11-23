@@ -326,7 +326,7 @@ bool commitStaged(db::Connection &conn, const QString &root, const QString &guid
     return true;
 }
 
-void ensureCasSchema(db::Connection &conn)
+void ensureCasSchema(db::Connection &conn, bool stampGeneration)
 {
     // Each statement as it always ran: on its own, its failure unread (an existing schema answers "already
     // exists" to nothing here: every statement is IF NOT EXISTS).
@@ -335,6 +335,8 @@ void ensureCasSchema(db::Connection &conn)
                              CasSchema::kRefcountInsertTrigger, CasSchema::kRefcountDeleteTrigger,
                              CasSchema::kProjectAssetsTable })
         conn.exec(sql, &e);
+    // A RESET's REBUILD CREATES ITS SCHEMA UNSTAMPED (the second confirm's finding 1): the reset stamps once whole.
+    if (!stampGeneration) return;
 
     // PRAGMA user_version arrives with the CAS (spec §3.1.3) — informational
     // at this phase; never lowered.

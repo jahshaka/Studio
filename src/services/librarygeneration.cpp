@@ -135,16 +135,13 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
             return QDir(location).filePath(QStringLiteral("Projects/") + guid);
         },
         /*seedPresets*/ false, keep);
-    // ONLY A WHOLE RESET IS STAMPED THIS BUILD's (the confirm's F7; the reset creates its tables unstamped): a reset
-    // that failed leaves the generation it found, so the next boot reads the library as older and retries.
-    const bool stamped = wiped.ok && library.stampGeneration();
+    // ONLY A WHOLE RESET IS STAMPED THIS BUILD's, by the reset's own last step (libraryreset::finishCatalog): a reset
+    // that failed anywhere leaves the library at generation 0, so the next boot resets it again.
     library.closeDatabase();
-    result.outcome = stamped ? Outcome::Wiped : Outcome::Failed;
+    result.outcome = wiped.ok ? Outcome::Wiped : Outcome::Failed;
     result.keptRows = wiped.kept.rows;
     result.unreadable = wiped.kept.unreadable;
     if (!wiped.ok) result.reason = wiped.error;
-    else if (!stamped) result.reason = QStringLiteral("the library was reset, but its generation could not be stamped "
-                                                      "(the log says why) - the next start resets it again");
     JahLog::write(JahLog::legacy, JahLog::Level::Warning, wiped.ok ? QStringLiteral("library: RESET (%1) — no migrations exist; %2 storage rows "
                                                                                 "rebuilt from their sidecars, %3 sidecars of an older format "
                                                                                 "not read")

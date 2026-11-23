@@ -157,7 +157,7 @@ void add(ClassReport &report, const QString &id, const QString &path,
 
 } // namespace
 
-Report collect(db::Connection &conn, const QString &root, bool force)
+Report collect(db::Connection &conn, const QString &root, bool force, PendingReset pending)
 {
     Report report;
     report.root = root;
@@ -177,6 +177,19 @@ Report collect(db::Connection &conn, const QString &root, bool force)
         || !tableExists(conn, "assets")) {
         report.error = QStringLiteral("this database has no content catalog (files/asset_files/assets)");
         return report;
+    }
+    // A RESET NOT YET WHOLE (generation 0, assetgc.h), forced or not: only that reset's own sweep passes.
+    if (pending == PendingReset::Refuse) {
+        db::Statement version(conn, "PRAGMA user_version");
+        db::Error e;
+        const bool read = version.step(&e);
+        if (!read || version.int64(0) == 0) {
+            report.error = read ? QStringLiteral("refusing to sweep %1: the library's reset is not finished (its "
+                                                 "generation is 0) - the next start finishes it").arg(root)
+                                : QStringLiteral("refusing to sweep %1: the library's generation could not be read (%2)")
+                                      .arg(root, dbqt::describe(e));
+            return report;
+        }
     }
 
     // --- Property (2): refuse a store this catalog does not recognize ------
@@ -362,9 +375,9 @@ Report collect(db::Connection &conn, const QString &root, bool force)
     return report;
 }
 
-Report sweep(db::Connection &conn, const QString &root, bool dryRun, bool force)
+Report sweep(db::Connection &conn, const QString &root, bool dryRun, bool force, PendingReset pending)
 {
-    Report report = collect(conn, root, force);
+    Report report = collect(conn, root, force, pending);
     report.dryRun = dryRun;
     // ONE WARNING A SWEEP naming what it keeps unread (the lead's ruling (A): a fixable error, not a toast).
     if (report.ok && !dryRun && !report.unreadableSidecars.items.isEmpty()) {

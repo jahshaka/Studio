@@ -43,8 +43,9 @@ QString hashFile(const QString &path);
 bool storeObject(const QString &srcPath, const QString &root,
                  const QString &oid, const QString &ext, QString *errorOut);
 
-/// Ensure the CAS tables/triggers/user_version exist on this connection.
-void ensureCasSchema(db::Connection &conn);
+/// Ensure the CAS tables/triggers/user_version exist on this connection. `stampGeneration` false (a library reset's
+/// rebuild): the tables only - the reset stamps the generation once it is whole.
+void ensureCasSchema(db::Connection &conn, bool stampGeneration = true);
 
 // --- The two-phase ingest (FSYNC-1) ---------------------------------------
 //

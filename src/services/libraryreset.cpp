@@ -23,8 +23,6 @@ For more information see the LICENSE file
 #include "data/db/statement.h"
 #include "io/assetrefs.h"
 #include "data/project.h"
-#include "services/assetgc.h"
-#include "services/assetmigration.h"
 #include "services/assetstore.h"
 #include "services/assetstorepaths.h"
 #include "services/import/importbatchrunner.h"
@@ -115,14 +113,6 @@ QVariantMap Removed::toMap() const
     return out;
 }
 
-QSet<assethome::Kind> Keep::homes() const
-{
-    QSet<assethome::Kind> out;
-    if (assets) out << assethome::Kind::Assets << assethome::Kind::AvatarLibrary;
-    if (materials) out << assethome::Kind::MaterialsLibrary;
-    return out;
-}
-
 QVariantMap Kept::toMap() const
 {
     QVariantMap out;
@@ -176,6 +166,12 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     countFiles(AssetStorePaths::objectsDir(), &result.removed.objects, &result.removed.staging);
     countFiles(AssetStorePaths::sidecarDir(), &result.removed.sidecars, &result.removed.staging);
     result.removed.thumbnails = thumbnailCount(db);
+
+    // ---- THE FIRST WRITE: THE LIBRARY IS NOT THIS BUILD's UNTIL THE RESET IS WHOLE ----------
+    // (the second confirm's finding 1): generation 0 before anything is removed, so a reset cut short ANYWHERE after
+    // this - a crash, a folder not removed, a refused rebuild - is finished by the next boot (every step is
+    // idempotent). Not written: refused, nothing removed.
+    if (!markPending(db, result)) return result;
 
     // ---- 2. THE PROJECT FOLDERS ------------------------------------------
     // By each project's OWN recorded location (`projects.location`, SMALL-UI-A:
@@ -272,41 +268,15 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     // (path, mtime, size), and the next library will reuse those paths.
     ThumbnailManager::clearCache();
 
-    // ---- 4. THE CATALOG: DROP THE TABLES, AND CREATE THEM AGAIN ----------
-    // The second half is the one the old button left to a restart that never
-    // happened — `wipeDatabase` DROPs, so a session that carried on ran on a
-    // database with no tables in it at all.
-    // UNSTAMPED (the confirm's F7): the generation is stamped by the caller once the reset is whole
-    // (librarygeneration::checkAndWipe), so a reset that fails - a row the rebuild could not write - leaves it as it
-    // was and the next boot retries. (A Clear Database runs on a library that is already this build's.)
-    db->wipeDatabase();
-    db->createAllTables(/*stampGeneration*/ false);
+    // ---- 4 TO 6: THE CATALOG, THE KEPT STORAGES, THE BOOTSTRAP, THE STAMP (libraryresetkeep.cpp) ----------
+    // `wipeDatabase` DROPs and the tables are created again in the same step - the old button left that to a restart
+    // that never happened, so a session that carried on ran on a database with no tables in it at all.
+    finishCatalog(db, settings, storeRoot, keep, seedPresets, result);
+    return result;
+}
 
-    // ---- 4b. THE KEPT STORAGES, REBUILT FROM THEIR SIDECARS --------------
-    // Never from the old tables (forward-only: nothing reads an old schema):
-    // the content-addressed objects and their sidecars ARE the storage, and
-    // the rebuild re-derives the rows under THIS build's schema. Then the
-    // collector takes what no kept row names — the projects' and the
-    // platform's objects, their sidecars — so a kept store holds exactly its
-    // storages and nothing else.
-    //
-    // ON THE CALLING (UI) THREAD, deliberately: the button's reset is followed
-    // by a restart and the bump's runs before any window exists, so nothing is
-    // waiting on a frame while it works.
-    if (keep.any() && !storeRoot.isEmpty() && QDir(storeRoot).exists()) {
-        // The rebuild writes through its OWN connection: the main one must hold
-        // no transaction (a script run's gesture batch would hold the write
-        // lock) — the batch commits and stands down (it begins again at its next write).
-        db->commitBatchNow();
-        AssetMigration::RebuildOptions options;
-        options.homes = keep.homes();
-        options.dropDerived = keep.dropDerived;
-        // ONLY AFTER A WHOLE REBUILD: the decision and its action, keepAfterRebuild (its own file: db.failed_opens
-        // runs it for every rebuild answer).
-        keepAfterRebuild(db, storeRoot, AssetMigration::rebuildCatalog(db->filePath(), storeRoot, options), options,
-                         result);
-    }
-
+void bootstrap(Database *db, SettingsManager *settings, const QString &storeRoot, bool seedPresets, Result &result)
+{
     // ---- 5. THE FRESH-INSTALL BOOTSTRAP ----------------------------------
     // The store's own identity first: the root is recreated (it is the default
     // one, or a custom one that still exists). With nothing kept it gets a NEW
@@ -350,9 +320,6 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, "library reset: primitive seed: " + line);
         if (result.error.isEmpty()) result.error = line;
     }
-
-    result.ok = result.error.isEmpty();
-    return result;
 }
 
 }   // namespace libraryreset

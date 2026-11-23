@@ -127,15 +127,24 @@ struct Report
     QVariantMap toMap() const;
 };
 
+/// A CATALOG WHOSE GENERATION IS 0 IS A RESET NOT YET WHOLE (NOQT-DATABASE-1 stage 2, the second confirm's finding 1:
+/// the reset clears it first and stamps it last; the next boot finishes it). Every sweep, FORCED OR NOT, refuses it by
+/// name - over the catalog a refused reset left, the kept store would be swept as garbage - except the one sweep that
+/// reset makes itself after a whole rebuild (libraryreset::keepAfterRebuild: `ThisReset`). A generation that cannot be
+/// read refuses the same way.
+enum class PendingReset { Refuse, ThisReset };
+
 /// Find every reapable artifact WITHOUT touching the store. `conn` is the
 /// catalog, `root` the store root (explicit, so a rehearsal against a copied
 /// library never goes near the live one — same contract as AssetMigration).
-Report collect(db::Connection &conn, const QString &root, bool force = false);
+Report collect(db::Connection &conn, const QString &root, bool force = false,
+               PendingReset pending = PendingReset::Refuse);
 
 /// collect(), then — when `dryRun` is false — unlink exactly what it found.
 /// The database rows for reaped objects (`files`) go with them, inside one
 /// transaction that is committed only if the row deletes succeed.
-Report sweep(db::Connection &conn, const QString &root, bool dryRun, bool force = false);
+Report sweep(db::Connection &conn, const QString &root, bool dryRun, bool force = false,
+             PendingReset pending = PendingReset::Refuse);
 
 /// Stale-staging cut-off: a `.tmp-<pid>-<n>` sibling younger than this may
 /// belong to an import running right now.

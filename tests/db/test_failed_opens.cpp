@@ -24,28 +24,43 @@ For more information see the LICENSE file
 //   3. the library reset's step after its rebuild (the audit's finding 1): the REAL libraryreset::keepAfterRebuild
 //      for every rebuild answer - the kept store is collected only after a rebuild that is ok, failed no row and
 //      committed, and otherwise the reset fails with the rebuild's reason (what it DID, the sweep recorded);
-//   4. a reset that failed stamps nothing (the confirm's F7): the library keeps its generation, so the next boot
-//      retries; only a reset that answered ok is stamped this build's (the stamp read back from the file).
+//   4. THE RESET's REAL ORDER (the second confirm's finding 1): a reset whose rebuild COMMITS and whose LATER step
+//      fails (the bootstrap's primitive seed) leaves the library NOT this build's (user_version 0, read back from the
+//      file), so the next checkAndWipe reaches the reset again; only a whole reset is stamped (the control);
+//   5. A REFUSED CLEAR DATABASE (a current library, a kept storage, a rebuild refused for a row it could not write)
+//      seeds NOTHING after the refusal and is left NOT this build's: the kept sidecar and its object survive the
+//      reset's own forced sweep (it never ran) and an ordinary sweep after it (the empty catalog's refusal holds);
+//      beside a store with no sidecar folder at all, whose reset is whole (a retry after a crash finishes).
 //
-// THE LINK, test-side only: libraryreset::reset is a RECORDER here (the reset's own closure is the
-// whole import and seed machinery; what this row proves is the DECISION to call it), AssetGc::sweep and
-// AssetMigration::keptObjects are recorders (case 3), and SceneReader's two source collectors answer empty
-// lists (readPlan calls them only for a scene that was found).
+// THE LINK, test-side only: libraryreset::reset is a RECORDER that runs the reset's REAL catalog steps
+// (libraryreset::finishCatalog, libraryresetkeep.cpp: the wipe, the real rebuild, keepAfterRebuild, the real sweep,
+// the stamp) on the throwaway library - only its file steps (1-3) and its refusal prelude are the product's
+// libraryreset.cpp, not linked here (the seeder's and the importer's machinery); libraryreset::bootstrap (step 5's
+// body) is a recorder that does what the primitives seed does to the catalog (one platform row) and can answer an
+// error; SceneReader's two source collectors answer empty lists (readPlan calls them only for a scene that was found).
+// A row the rebuild cannot write is a TEMP TRIGGER the test puts on the rebuild's OWN connection as it opens
+// (sqlite3_auto_extension, registered only around that call).
 
 #include <QApplication>
 #include <QDir>
 #include <QFile>
+#include <QJsonArray>
+#include <QJsonDocument>
 #include <QJsonObject>
 
 #include <cstdio>
 #include <string>
 
+#include <sqlite3.h>
+
+#include "data/assethomekind.h"
 #include "data/database/database.h"
 #include "data/db/connection.h"
 #include "data/db/statement.h"
 #include "io/scenereader.h"
 #include "services/assetgc.h"
 #include "services/assetmigration.h"
+#include "services/assetstorepaths.h"
 #include "services/librarygeneration.h"
 #include "services/libraryreset.h"
 #include "services/openreads.h"
@@ -54,8 +69,8 @@ namespace {
 
 int failures = 0;
 int gResets = 0;
-bool gResetRefuses = false;   // the recorder answers a reset refused for a row it could not rebuild (case 4)
-int gSweeps = 0;              // the store's sweeps the reset's step after its rebuild ran (case 3)
+int gBootstraps = 0;            // step 5's runs (the recorder below)
+bool gBootstrapError = false;   // the recorder answers a primitive seed error (case 4)
 
 void check(bool ok, const QString &what)
 {
@@ -89,36 +104,92 @@ void exec(const QString &path, const std::string &sql)
     check(!e, QStringLiteral("setup: %1 %2").arg(QString::fromStdString(sql), QString::fromStdString(e.message)));
 }
 
+/// The library's generation as the next boot reads it (-1: unread).
+int generationOf(const QString &path)
+{
+    db::Options o;
+    o.name = "failed-opens-generation";
+    db::Error e;
+    db::Connection c = db::Connection::open(path.toStdString(), o, &e);
+    db::Statement s(c, "PRAGMA user_version");
+    return s.step(&e) ? int(s.int64(0)) : -1;
+}
+
+/// A fresh store at `root` (its sidecar folder made when `withSidecars`), made the process's store.
+void freshStore(const QString &root, bool withSidecars)
+{
+    QDir(root).removeRecursively();
+    QDir().mkpath(withSidecars ? QDir(root).filePath(QStringLiteral("sidecar")) : root);
+    AssetStorePaths::setRootOverride(root);
+}
+
+/// A KEPT asset in the store: a Materials-library sidecar the rebuild places, and its one object. Answers the object.
+QString keptAsset(const QString &root, const QString &guid, const QString &oid)
+{
+    const QString object = AssetStorePaths::objectPathIn(root, oid, QStringLiteral("png"));
+    QDir().mkpath(QFileInfo(object).absolutePath());
+    {
+        QFile f(object);
+        check(f.open(QIODevice::WriteOnly) && f.write("kept bytes") > 0, QStringLiteral("setup: the object of %1").arg(guid));
+    }
+    QJsonObject file;
+    file[QStringLiteral("oid")] = oid;
+    file[QStringLiteral("ext")] = QStringLiteral("png");
+    file[QStringLiteral("role")] = QStringLiteral("source");
+    file[QStringLiteral("name")] = QStringLiteral("kept.png");
+    QJsonObject sidecar;
+    sidecar[QStringLiteral("formatVersion")] = 3;
+    sidecar[QStringLiteral("guid")] = guid;
+    sidecar[QStringLiteral("name")] = guid;
+    sidecar[QStringLiteral("type")] = 1;
+    sidecar[QStringLiteral("home")] = assethome::kindName(assethome::Kind::MaterialsLibrary);
+    sidecar[QStringLiteral("origin")] = QStringLiteral("create");
+    sidecar[QStringLiteral("files")] = QJsonArray{ file };
+    QFile f(AssetStorePaths::sidecarPathIn(root, guid));
+    check(f.open(QIODevice::WriteOnly) && f.write(QJsonDocument(sidecar).toJson()) > 0,
+          QStringLiteral("setup: the sidecar of %1").arg(guid));
+    return object;
+}
+
+/// THE INJECTION: a row the rebuild cannot write. The rebuild opens its OWN connection (AssetMigration's openOwn), so
+/// the trigger is put on every connection opened while this is registered (sqlite3_auto_extension), as it opens.
+int poisonOnOpen(sqlite3 *handle, char **, const sqlite3_api_routines *)
+{
+    sqlite3_exec(handle, "CREATE TEMP TRIGGER poison BEFORE INSERT ON main.assets WHEN NEW.guid = 'cd-poisoned' "
+                         "BEGIN SELECT RAISE(ABORT, 'injected: this row is refused'); END", nullptr, nullptr, nullptr);
+    return SQLITE_OK;
+}
+
+/// The reset's catalog steps, run on `db` over `storeRoot` - THE PRODUCT's, in its order (markPending, then
+/// libraryreset::finishCatalog).
+void catalogSteps(Database *db, const QString &storeRoot, const libraryreset::Keep &keep, libraryreset::Result &result)
+{
+    if (libraryreset::markPending(db, result))   // the reset's first write (its file steps 2-3 follow it there)
+        libraryreset::finishCatalog(db, nullptr, storeRoot, keep, /*seedPresets*/ false, result);
+}
+
 }   // namespace
 
 // ---- the recorders (above) ------------------------------------------------------------------------
 namespace libraryreset {
 QString refusalReason(const PreviewService *) { return QString(); }
-Result reset(Database *, SettingsManager *, const QString &, const std::function<QString(const QString &)> &, bool,
-             const Keep &)
+Result reset(Database *db, SettingsManager *, const QString &, const std::function<QString(const QString &)> &, bool,
+             const Keep &keep)
 {
     ++gResets;
     Result result;
-    result.ok = !gResetRefuses;
-    if (gResetRefuses)
-        result.error = QStringLiteral("the kept storages could not be rebuilt: 1 stored item(s) could not be rebuilt (f7)");
+    catalogSteps(db, AssetStorePaths::root(), keep, result);
     return result;
 }
-}   // namespace libraryreset
-
-// THE STORE's TWO, for case 3: the reset's step after its rebuild calls these (the sweep is what it DID).
-namespace AssetGc {
-Report sweep(db::Connection &, const QString &, bool, bool)
+/// Step 5's body: what the primitives seed does to the catalog - one platform row - and an error when asked.
+void bootstrap(Database *db, SettingsManager *, const QString &, bool, Result &result)
 {
-    ++gSweeps;
-    Report report;
-    report.ok = true;
-    return report;
+    ++gBootstraps;
+    db::Error e;
+    db->connection().exec("INSERT INTO assets (guid, name, type, view_filter) VALUES ('primitive-cube', 'Cube', 5, 0)", &e);
+    if (gBootstrapError && result.error.isEmpty()) result.error = QStringLiteral("primitive seed: injected");
 }
-}   // namespace AssetGc
-namespace AssetMigration {
-QSet<QString> keptObjects(const QString &, const RebuildOptions &) { return {}; }
-}   // namespace AssetMigration
+}   // namespace libraryreset
 
 QStringList SceneReader::collectMeshSources(const QJsonObject &) { return {}; }
 QStringList SceneReader::collectClipSources(const QJsonObject &) { return {}; }
@@ -128,6 +199,8 @@ int main(int argc, char **argv)
     qputenv("QT_QPA_PLATFORM", "offscreen");
     QApplication app(argc, argv);
     const QString here = QDir::currentPath();
+    // THE STORE IS THE TEST's OWN, before anything can reach the reset (it removes and collects a store).
+    freshStore(QDir(here).filePath(QStringLiteral("failed_opens_store")), /*withSidecars*/ true);
 
     // =======================================================================
     // 1. THE GENERATION CHECK (finding 6).
@@ -222,16 +295,30 @@ int main(int argc, char **argv)
 
     // =======================================================================
     // 3. THE RESET's STEP AFTER ITS REBUILD (finding 1; the confirm's W3): the REAL step, libraryreset::
-    //    keepAfterRebuild, handed every rebuild answer, the sweep a recorder - what the reset DID for each: the kept
-    //    store is collected (and the kept counts taken) ONLY after a rebuild that is ok, failed no row and committed;
-    //    otherwise nothing is collected and the reset fails with the rebuild's own reason.
+    //    keepAfterRebuild, handed every rebuild answer, the REAL sweep over a store holding one object no row names -
+    //    what the reset DID for each: the kept store is collected (that object gone, the kept counts taken) ONLY after
+    //    a rebuild that is ok, failed no row and committed; otherwise nothing is collected and the reset fails with
+    //    the rebuild's own reason.
     // =======================================================================
     {
-        Database unopened;   // the recorder never touches its connection
+        const QString root = QDir(here).filePath(QStringLiteral("failed_opens_store3"));
+        freshStore(root, /*withSidecars*/ true);
+        const QString path = QDir(here).filePath(QStringLiteral("failed_opens_keep.db"));
+        makeLibrary(path);
+        Database library;
+        library.initializeDatabase(path);
+        const QString stray = AssetStorePaths::objectPathIn(root, QStringLiteral("aa30000000000000000000000000000000000000"),
+                                                            QStringLiteral("png"));
+        QDir().mkpath(QFileInfo(stray).absolutePath());
         int allowed = 0;
         for (const bool ok : { false, true })
             for (const int failedRows : { 0, 1 })
                 for (const bool committed : { false, true }) {
+                    {
+                        QFile f(stray);
+                        if (!f.open(QIODevice::WriteOnly) || f.write("no row names these bytes") <= 0)
+                            check(false, QStringLiteral("3: setup: the stray object could not be written"));
+                    }
                     AssetMigration::RebuildReport rebuilt;
                     rebuilt.ok = ok;
                     rebuilt.failedRows = failedRows;
@@ -239,52 +326,134 @@ int main(int argc, char **argv)
                     rebuilt.assets = 3;
                     rebuilt.error = QStringLiteral("the rebuild's own reason");
                     libraryreset::Result result;
-                    gSweeps = 0;
-                    libraryreset::keepAfterRebuild(&unopened, here, rebuilt, AssetMigration::RebuildOptions(), result);
+                    libraryreset::keepAfterRebuild(&library, root, rebuilt, AssetMigration::RebuildOptions(), result);
                     const bool law = ok && failedRows == 0 && committed;
-                    allowed += gSweeps;
-                    check(gSweeps == (law ? 1 : 0) && result.kept.rows == (law ? 3 : 0)
+                    const bool swept = !QFile::exists(stray);
+                    allowed += swept ? 1 : 0;
+                    check(swept == law && result.kept.rows == (law ? 3 : 0)
                               && (law ? result.error.isEmpty() : result.error.contains(QStringLiteral("the rebuild's own reason"))),
-                          QStringLiteral("3: rebuild ok %1, failed rows %2, committed %3: swept %4 time(s), kept rows %5, "
-                                         "error '%6'").arg(ok).arg(failedRows).arg(committed).arg(gSweeps)
+                          QStringLiteral("3: rebuild ok %1, failed rows %2, committed %3: swept %4, kept rows %5, "
+                                         "error '%6'").arg(ok).arg(failedRows).arg(committed).arg(swept)
                               .arg(result.kept.rows).arg(result.error));
                 }
         check(allowed == 1, QStringLiteral("3: CONTROL: exactly one rebuild answer sweeps (%1)").arg(allowed));
+        library.closeDatabase();
+        removeLibrary(path);
     }
 
     // =======================================================================
-    // 4. A RESET THAT FAILED STAMPS NOTHING (the confirm's F7): the library keeps the generation it had, so the next
-    //    boot reads it as older and retries - and only a reset that answered ok is stamped this build's (the stamp
-    //    read back from the file, the reset's answer the recorder's).
+    // 4. THE RESET's REAL ORDER: A LATER STEP FAILING AFTER A REBUILD THAT COMMITTED (the second confirm's finding 1).
+    //    An older library over a store with one kept asset: the rebuild commits it, then the bootstrap's primitive
+    //    seed fails - the library must read NOT this build's (0) and the next boot must reach the reset again, which,
+    //    whole, is stamped this build's (the control). The stamp read back from the file.
     // =======================================================================
     {
-        const auto generationOf = [](const QString &path) {
-            db::Options o;
-            o.name = "failed-opens-generation";
-            db::Error e;
-            db::Connection c = db::Connection::open(path.toStdString(), o, &e);
-            db::Statement s(c, "PRAGMA user_version");
-            return s.step(&e) ? int(s.int64(0)) : -1;
-        };
+        const QString root = QDir(here).filePath(QStringLiteral("failed_opens_store4"));
+        freshStore(root, /*withSidecars*/ true);
+        keptAsset(root, QStringLiteral("cd-kept4"), QStringLiteral("bb40000000000000000000000000000000000000"));
         const int older = librarygeneration::generation() - 1;
-        const QString library = QDir(here).filePath(QStringLiteral("failed_opens_f7.db"));
+        const QString library = QDir(here).filePath(QStringLiteral("failed_opens_order.db"));
         makeLibrary(library);
         exec(library, "PRAGMA user_version = " + std::to_string(older));
         gResets = 0;
-        gResetRefuses = true;
-        const librarygeneration::Result refused = librarygeneration::checkAndWipe(library, here, nullptr);
-        gResetRefuses = false;
-        check(gResets == 1 && refused.outcome == librarygeneration::Outcome::Failed && generationOf(library) == older,
-              QStringLiteral("4: a reset REFUSED for a row it could not rebuild stamps nothing (resets %1, outcome %2, "
-                             "generation %3, was %4)").arg(gResets).arg(int(refused.outcome)).arg(generationOf(library)).arg(older));
-        gResets = 0;
-        const librarygeneration::Result wiped = librarygeneration::checkAndWipe(library, here, nullptr);
-        check(gResets == 1 && wiped.outcome == librarygeneration::Outcome::Wiped
-                  && generationOf(library) == librarygeneration::generation(),
-              QStringLiteral("4: a reset that answered ok IS stamped this build's (resets %1, outcome %2, generation %3, "
-                             "this build %4)").arg(gResets).arg(int(wiped.outcome)).arg(generationOf(library))
+        gBootstrapError = true;
+        const librarygeneration::Result failed = librarygeneration::checkAndWipe(library, here, nullptr);
+        gBootstrapError = false;
+        check(gResets == 1 && failed.outcome == librarygeneration::Outcome::Failed
+                  && failed.reason.contains(QStringLiteral("primitive seed: injected")),
+              QStringLiteral("4: CONTROL: the reset ran and FAILED at its later step (resets %1, outcome %2, '%3')")
+                  .arg(gResets).arg(int(failed.outcome)).arg(failed.reason));
+        check(generationOf(library) == 0,
+              QStringLiteral("4: a reset that failed AFTER its rebuild committed leaves the library NOT this build's "
+                             "(generation %1, want 0; this build %2)").arg(generationOf(library))
                   .arg(librarygeneration::generation()));
+        gResets = 0;
+        const librarygeneration::Result retried = librarygeneration::checkAndWipe(library, here, nullptr);
+        check(gResets == 1 && retried.outcome == librarygeneration::Outcome::Wiped,
+              QStringLiteral("4: ...so the next boot reaches the reset again (resets %1, outcome %2, '%3')")
+                  .arg(gResets).arg(int(retried.outcome)).arg(retried.reason));
+        check(generationOf(library) == librarygeneration::generation() && retried.keptRows == 1,
+              QStringLiteral("4: CONTROL: the whole reset IS stamped this build's (generation %1, kept rows %2)")
+                  .arg(generationOf(library)).arg(retried.keptRows));
         removeLibrary(library);
+    }
+
+    // =======================================================================
+    // 5. A REFUSED CLEAR DATABASE ENDS IN NO DELETE (the second confirm's finding 1). A CURRENT library, Assets and
+    //    Materials kept, a store holding a kept asset and one whose row the rebuild cannot write: the rebuild is
+    //    refused; the reset seeds nothing after the refusal and leaves the library NOT this build's; the kept
+    //    sidecar and its object survive the reset (its own forced sweep never ran) and an ordinary sweep after it.
+    // =======================================================================
+    {
+        const QString root = QDir(here).filePath(QStringLiteral("failed_opens_store5"));
+        freshStore(root, /*withSidecars*/ true);
+        const QString keptObject = keptAsset(root, QStringLiteral("cd-kept"), QStringLiteral("cc50000000000000000000000000000000000000"));
+        keptAsset(root, QStringLiteral("cd-poisoned"), QStringLiteral("dd50000000000000000000000000000000000000"));
+        const QString keptSidecar = AssetStorePaths::sidecarPathIn(root, QStringLiteral("cd-kept"));
+        const QString path = QDir(here).filePath(QStringLiteral("failed_opens_clear.db"));
+        makeLibrary(path);
+        Database library;
+        library.initializeDatabase(path);
+        libraryreset::Keep keep;
+        keep.assets = true;
+        keep.materials = true;
+        libraryreset::Result result;
+        gBootstraps = 0;
+        sqlite3_auto_extension(reinterpret_cast<void (*)()>(poisonOnOpen));
+        catalogSteps(&library, root, keep, result);
+        sqlite3_cancel_auto_extension(reinterpret_cast<void (*)()>(poisonOnOpen));
+        check(!result.ok && result.error.contains(QStringLiteral("cd-poisoned")),
+              QStringLiteral("5: CONTROL: the rebuild was refused for the row it could not write (ok %1, '%2')")
+                  .arg(result.ok).arg(result.error));
+        check(gBootstraps == 0, QStringLiteral("5: a refused reset SEEDS NOTHING after the refusal (bootstraps %1)").arg(gBootstraps));
+        check(QFile::exists(keptSidecar) && QFile::exists(keptObject),
+              QStringLiteral("5: the kept sidecar and its object survive the refused reset (sidecar %1, object %2)")
+                  .arg(QFile::exists(keptSidecar)).arg(QFile::exists(keptObject)));
+        const AssetGc::Report ordinary = AssetGc::sweep(library.connection(), root, /*dryRun*/ false, /*force*/ false);
+        check(QFile::exists(keptSidecar) && QFile::exists(keptObject),
+              QStringLiteral("5: ...and an ORDINARY sweep after it (ok %1, '%2'; sidecar %3, object %4)")
+                  .arg(ordinary.ok).arg(ordinary.error).arg(QFile::exists(keptSidecar)).arg(QFile::exists(keptObject)));
+        // ...and a FORCED one (a user's assets.gc({force:true})): the pending reset refuses it by name.
+        const AssetGc::Report forced = AssetGc::sweep(library.connection(), root, /*dryRun*/ false, /*force*/ true);
+        check(!forced.ok && forced.error.contains(QStringLiteral("reset is not finished"))
+                  && QFile::exists(keptSidecar) && QFile::exists(keptObject),
+              QStringLiteral("5: ...and a FORCED sweep is refused while the reset is pending (ok %1, '%2'; sidecar %3, "
+                             "object %4)").arg(forced.ok).arg(forced.error).arg(QFile::exists(keptSidecar))
+                  .arg(QFile::exists(keptObject)));
+        library.closeDatabase();
+        check(generationOf(path) == 0,
+              QStringLiteral("5: ...and the library is left NOT this build's, so the next boot retries the reset "
+                             "(generation %1, want 0)").arg(generationOf(path)));
+        removeLibrary(path);
+
+        // A STORE WITH NO SIDECAR FOLDER (a Clear Database that kept nothing, crashed before its seed; the retry at
+        // the next boot keeps Assets and Materials): nothing to rebuild is no failure - the reset is whole.
+        const QString bare = QDir(here).filePath(QStringLiteral("failed_opens_store5b"));
+        freshStore(bare, /*withSidecars*/ false);
+        const QString path5b = QDir(here).filePath(QStringLiteral("failed_opens_bare.db"));
+        makeLibrary(path5b);
+        Database bareLibrary;
+        bareLibrary.initializeDatabase(path5b);
+        libraryreset::Result whole;
+        gBootstraps = 0;
+        catalogSteps(&bareLibrary, bare, keep, whole);
+        check(whole.ok && gBootstraps == 1 && generationOf(path5b) == librarygeneration::generation(),
+              QStringLiteral("5b: a kept reset over a store with no sidecar folder is WHOLE (ok %1 '%2', bootstraps %3, "
+                             "generation %4)").arg(whole.ok).arg(whole.error).arg(gBootstraps).arg(generationOf(path5b)));
+        // CONTROL for the guard: a library a whole reset stamped IS swept when forced (the stray object goes).
+        const QString stray = AssetStorePaths::objectPathIn(bare, QStringLiteral("ee50000000000000000000000000000000000000"),
+                                                            QStringLiteral("png"));
+        QDir().mkpath(QFileInfo(stray).absolutePath());
+        {
+            QFile f(stray);
+            check(f.open(QIODevice::WriteOnly) && f.write("stray") == 5, QStringLiteral("5b: the stray object is written"));
+        }
+        const AssetGc::Report swept = AssetGc::sweep(bareLibrary.connection(), bare, /*dryRun*/ false, /*force*/ true);
+        check(swept.ok && !QFile::exists(stray),
+              QStringLiteral("5b: CONTROL: a whole library's forced sweep runs (ok %1, '%2', stray left %3)")
+                  .arg(swept.ok).arg(swept.error).arg(QFile::exists(stray)));
+        bareLibrary.closeDatabase();
+        removeLibrary(path5b);
     }
 
     std::printf(failures ? "\n%d FAILURES\n" : "\nall failed-open assertions passed\n", failures);
