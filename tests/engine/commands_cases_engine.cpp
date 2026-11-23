@@ -1,12 +1,15 @@
 // script.commands - THE ENGINE FAMILY's CASES (SCRIPT-IN-ENGINE-1 stage 2; test_script_commands.cpp runs them, in its
 // fixed order): the engine-wide commands' declared domains refused by name on the null engine, every engine-wide one
 // refused for an OUTSIDE client (Commands::engineWide) and reaching the engine otherwise, the answers' tables in order
-// and round-tripping, and what the headless engine answers (each case prints what it read).
+// and round-tripping, and what the headless engine answers (each case prints what it read); engine.frames' keep-going poll
+// at each frame boundary (MCP-ON-HOST-1 stage 3: a caller's cancel).
 #include "script_commands.h"
 #include "script/records_engine.h"
 #include "jahshaka/engine/Lights.h"
 
 #include <cstdio>
+#include <utility>
+#include <vector>
 
 namespace scriptcommands {
 
@@ -126,6 +129,23 @@ void casesEngine(Fixture &f)
     const std::string said = take1.value.kind() == Kind::String ? take1.value.asString() : take1.message;
     check(refusedNow && said.find("setDecal: unknown node") != std::string::npos && take2.value == Value(""),
           "engine.takeLastError answers the engine's last refusal (" + said + ") and clears it: the second take answers \"\"");
+    // THE CANCEL POLL (MCP-ON-HOST-1 stage 3; engine.frames, commands_engine.cpp): the keep-going hook is asked at each
+    // frame boundary - a hook that answers false once `done` reaches 3 stops engine.frames(10) there, by name, having seen
+    // done = 0, 1, 2, 3 of 10; the hook is REMOVED after (the fixture's host is shared by the families after this one)
+    {
+        std::vector<std::pair<double, double>> saw;
+        h.setKeepGoing([&saw](double done, double total) {
+            saw.emplace_back(done, total);
+            return done < 3;
+        });
+        const Result cancelled = h.call("engine.frames", {Value(10)});
+        h.setKeepGoing(nullptr);
+        const std::vector<std::pair<double, double>> want{{0, 10}, {1, 10}, {2, 10}, {3, 10}};
+        check(failedWith(cancelled, "engine.frames: cancelled at frame 3 of 10") && saw == want,
+              "engine.frames polls the keep-going hook at each frame boundary: cancelled at frame 3 of 10 (" +
+                  cancelled.message + "), the hook asked " + std::to_string(saw.size()) + " times (THE CONTROL: > 0), "
+                  "done = 0, 1, 2, 3 of 10");
+    }
     // THE PLACEHOLDERS' DOOR ACTS in a door-open host (on, then back off: it is engine-wide and outlives the host)
     {
         Host run;
