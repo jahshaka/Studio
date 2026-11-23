@@ -674,44 +674,46 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 	// row's own file. `MaterialBundle::write` derives the membership edges
 	// from it and refuses any path that slipped through.
 	{
+		// WHOSE VERSION (the owner's model, spec 12 Q2): the DRAWER the
+		// material was opened from decides. A Projects tile is edited as
+		// the project's own — its pin moves, the library original does
+		// not; a Custom tile publishes to the library. This used to ask
+		// "does the project pin it?", so a material the project held
+		// could never be edited as the library's, and the same guid
+		// meant two things in one window.
+		// READ BEFORE THE BUILD (NOQT-DATABASE-1 stage 2): buildDefinition's bake writes member rows, and a save
+		// refused after it was not "nothing written".
+		bool read = true;
+		const bool projectOwns =
+		    doc->info.origin == shaderInfo::Origin::Project
+		    && mProject && !mProject->getProjectGuid().isEmpty()
+		    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID, &read);
+		// A READ THAT FAILED IS REFUSED UNDER ITS OWN NAME (NOQT-DATABASE-1 stage 2), never as "no longer holds".
+		if (!read) {
+			reportSaveRefused(doc, tr("whether this project holds it could not be read - nothing was written"));
+			return;
+		}
+		// A PROJECT'S COPY THAT IS NO LONGER THE PROJECT'S IS NOT THE
+		// LIBRARY'S (fix round F1). The pin can go while the tab is open —
+		// the project drawer's Delete, the editor tray's, `assets.
+		// removeFromProject`, a project closed under a hidden page — and
+		// the test above then answers false, which used to send the write
+		// STRAIGHT ON to the library original: the user's edits to one
+		// project's copy landing on the material every other project takes
+		// its copies from. A scope cannot be substituted; the save is
+		// refused and said out loud.
+		if (doc->info.origin == shaderInfo::Origin::Project && !projectOwns) {
+			reportSaveRefused(doc, tr("this project no longer holds it, and a "
+			                          "project's copy is never written to the "
+			                          "library original"));
+			return;
+		}
 		const auto build = materials::buildDefinition(doc->graph, doc->info.GUID,
 		                                              dataBase, mProject);
 		if (!build.ok()) {
-			JahLog::write(JahLog::legacy, JahLog::Level::Error, "saveShader: " + build.error);
+			if (!doc->saveRefused) JahLog::write(JahLog::legacy, JahLog::Level::Error, "saveShader: " + build.error);
 			reportSaveRefused(doc, build.error);
 		} else {
-			// WHOSE VERSION (the owner's model, spec 12 Q2): the DRAWER the
-			// material was opened from decides. A Projects tile is edited as
-			// the project's own — its pin moves, the library original does
-			// not; a Custom tile publishes to the library. This used to ask
-			// "does the project pin it?", so a material the project held
-			// could never be edited as the library's, and the same guid
-			// meant two things in one window.
-			bool read = true;
-			const bool projectOwns =
-			    doc->info.origin == shaderInfo::Origin::Project
-			    && mProject && !mProject->getProjectGuid().isEmpty()
-			    && dataBase->isAssetPinnedBy(mProject->getProjectGuid(), doc->info.GUID, &read);
-			// A READ THAT FAILED IS REFUSED UNDER ITS OWN NAME (NOQT-DATABASE-1 stage 2), never as "no longer holds".
-			if (!read) {
-				reportSaveRefused(doc, tr("whether this project holds it could not be read - nothing was written"));
-				return;
-			}
-			// A PROJECT'S COPY THAT IS NO LONGER THE PROJECT'S IS NOT THE
-			// LIBRARY'S (fix round F1). The pin can go while the tab is open —
-			// the project drawer's Delete, the editor tray's, `assets.
-			// removeFromProject`, a project closed under a hidden page — and
-			// the test above then answers false, which used to send the write
-			// STRAIGHT ON to the library original: the user's edits to one
-			// project's copy landing on the material every other project takes
-			// its copies from. A scope cannot be substituted; the save is
-			// refused and said out loud.
-			if (doc->info.origin == shaderInfo::Origin::Project && !projectOwns) {
-				reportSaveRefused(doc, tr("this project no longer holds it, and a "
-				                          "project's copy is never written to the "
-				                          "library original"));
-				return;
-			}
 			const auto written = MaterialBundle::write(
 			    dataBase, mProject, doc->info.GUID, build.definition,
 			    projectOwns ? MaterialBundle::Scope::Project

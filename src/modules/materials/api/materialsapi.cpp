@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include <QFileInfo>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QSet>
 
 #include "scripting/modules/moduleshared.h"
 #include "data/constants.h"
@@ -781,18 +782,19 @@ bool MaterialsApi::regenerate(const QString &shaderGuid)
     if (!graph->getMasterNode())
         return fail("materials.regenerate: the graph has no master node");
 
-    const auto build = materials::buildDefinition(graph, shaderGuid, host.db, host.project);
-    if (!build.ok()) return fail(QStringLiteral("materials.regenerate: %1").arg(build.error));
-    QJsonObject rebaked = build.definition;
-    // keep the identity keys the stored definition carried
-    if (definition.contains("name")) rebaked["name"] = definition["name"];
-    // A FAILED READ NEVER WRITES THE LIBRARY's DEFINITION OVER (NOQT-DATABASE-1 stage 2): refused by name.
+    // A FAILED READ NEVER WRITES THE LIBRARY's DEFINITION OVER (NOQT-DATABASE-1 stage 2): refused by name - and
+    // BEFORE the build (the confirm's F4), whose bake writes the member rows.
     bool read = true;
     const bool projectOwns =
         host.project && !host.project->getProjectGuid().isEmpty()
         && host.db->isAssetPinnedBy(host.project->getProjectGuid(), shaderGuid, &read);
     if (!read) return fail(QStringLiteral("materials.regenerate: whether this project holds '%1' could not be read - "
                                           "nothing was written").arg(shaderGuid));
+    const auto build = materials::buildDefinition(graph, shaderGuid, host.db, host.project);
+    if (!build.ok()) return fail(QStringLiteral("materials.regenerate: %1").arg(build.error));
+    QJsonObject rebaked = build.definition;
+    // keep the identity keys the stored definition carried
+    if (definition.contains("name")) rebaked["name"] = definition["name"];
     const auto written = MaterialBundle::write(
         host.db, host.project, shaderGuid, rebaked,
         projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
@@ -994,6 +996,18 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
         return QString();
     }
 
+    // WHETHER THIS PROJECT HOLDS THE MATERIAL, read BEFORE the work (NOQT-DATABASE-1 stage 2, the confirm's F1 and
+    // F4): the pin below and the definition's scope both follow from it, and a read that failed refuses the call by
+    // name - nothing imported, stamped, pinned or written (it said "nothing was written" after an import before).
+    bool read = true;
+    const bool projectOwns = host.project && !host.project->getProjectGuid().isEmpty()
+                             && host.db->isAssetPinnedBy(host.project->getProjectGuid(), materialGuid, &read);
+    if (!read) {
+        fail(QStringLiteral("materials.addTexture: whether this project holds '%1' could not be read - nothing was "
+                            "imported or written").arg(materialGuid));
+        return QString();
+    }
+
     // EITHER A GUID ALREADY IN THE LIBRARY, OR A PATH FROM ANYWHERE ON DISK —
     // and a path is IMPORTED at that moment (owner, spec 0/Q1: "adding a
     // texture to a material would import it into the project"). By CONTENT, so
@@ -1008,12 +1022,18 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
         }
         textureGuid = pathOrGuid;
         // Already an asset: a project that holds the material should hold its
-        // member too.
-        if (host.project && !host.project->getProjectGuid().isEmpty()
-            && host.db->isAssetPinnedBy(host.project->getProjectGuid(), materialGuid)
-            && !host.db->isAssetPinnedBy(host.project->getProjectGuid(), textureGuid))
-            ProjectAssets::addToProject(textureGuid, host.db, host.project,
-                                        ProjectAssets::AddKind::Binding);
+        // member too. "Does it already" unread is no "no" (F1: addToProject re-pins at the library's version).
+        if (projectOwns) {
+            const bool held = host.db->isAssetPinnedBy(host.project->getProjectGuid(), textureGuid, &read);
+            if (!read) {
+                fail(QStringLiteral("materials.addTexture: whether this project holds the texture '%1' could not be "
+                                    "read - nothing was written").arg(textureGuid));
+                return QString();
+            }
+            if (!held)
+                ProjectAssets::addToProject(textureGuid, host.db, host.project,
+                                            ProjectAssets::AddKind::Binding);
+        }
     } else {
         // THE MATERIAL'S HOME decides whose row the picture is (F1): a
         // library material's picture stays a library row with a project open.
@@ -1066,16 +1086,7 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
         QJsonObject values = definition["values"].toObject();
         values[slot] = textureGuid;
         definition["values"] = values;
-        // A FAILED READ NEVER WRITES THE LIBRARY's DEFINITION OVER (NOQT-DATABASE-1 stage 2): refused by name.
-        bool read = true;
-        const bool projectOwns =
-            host.project && !host.project->getProjectGuid().isEmpty()
-            && host.db->isAssetPinnedBy(host.project->getProjectGuid(), materialGuid, &read);
-        if (!read) {
-            fail(QStringLiteral("materials.addTexture: whether this project holds '%1' could not be read - the "
-                                "material was not written").arg(materialGuid));
-            return QString();
-        }
+        // (whose version: `projectOwns`, read before the import - a failed read never reaches here)
         const auto written = MaterialBundle::write(
             host.db, host.project, materialGuid, definition,
             projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);
@@ -1801,8 +1812,20 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     // project open records it) that the project does not pin yet: addToProject
     // re-pins to the library's CURRENT version, which would silently upgrade an
     // older pin.
+    //
+    // "IS IT PINNED HERE" UNREAD IS NO "NO" (NOQT-DATABASE-1 stage 2, the confirm's F1): every bound texture's pin is
+    // read before this block's first write, and a failure refuses it by name - no edge, no pin (the slot itself is
+    // already set above, as an undoable edit).
     if (!boundTextures.isEmpty() && host.db && host.isProjectOpen()) {
         const QString projectGuid = host.project->getProjectGuid();
+        QSet<QString> held;
+        for (const QString &textureGuid : boundTextures) {
+            bool read = true;
+            if (host.db->isAssetPinnedBy(projectGuid, textureGuid, &read)) held.insert(textureGuid);
+            if (!read)
+                return fail(QStringLiteral("material.set: whether this project holds the texture '%1' could not be read - "
+                                           "the slot is set, its use and its pin were not recorded").arg(textureGuid));
+        }
         for (const QString &textureGuid : boundTextures) {
             const AssetRecord row = host.db->fetchAsset(textureGuid);
             // The panel writes ONE edge per node+texture: delete before create,
@@ -1811,7 +1834,7 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
             host.db->createDependency(static_cast<int>(ModelTypes::Object),
                                       static_cast<int>(ModelTypes::Texture),
                                       nodeId, textureGuid, projectGuid);
-            if (host.db->isAssetPinnedBy(projectGuid, textureGuid)) continue;
+            if (held.contains(textureGuid)) continue;
             // A row the project does not own (a storage's, the platform's) is
             // used by PINNING it; a project's own row needs no pin.
             if (row.guid.isEmpty() || row.home().isProject()) continue;
@@ -2749,15 +2772,16 @@ bool GraphApi::save()
     // a final-bake trigger: the maps land as MEMBER textures in the store, not
     // as loose PNGs under the project folder, and the definition names them by
     // guid. It works with NO project open, which the old route could not.
-    const auto build = materials::buildDefinition(graph, mAssetGuid, host.db, host.project);
-    if (!build.ok()) return fail(QStringLiteral("graph.save: %1").arg(build.error));
-    // A FAILED READ NEVER WRITES THE LIBRARY's DEFINITION OVER (NOQT-DATABASE-1 stage 2): refused by name.
+    // A FAILED READ NEVER WRITES THE LIBRARY's DEFINITION OVER (NOQT-DATABASE-1 stage 2): refused by name - and
+    // BEFORE the build (the confirm's F4), whose bake writes the member rows.
     bool read = true;
     const bool projectOwns =
         host.project && !host.project->getProjectGuid().isEmpty()
         && host.db->isAssetPinnedBy(host.project->getProjectGuid(), mAssetGuid, &read);
     if (!read) return fail(QStringLiteral("graph.save: whether this project holds '%1' could not be read - nothing was "
                                           "written").arg(mAssetGuid));
+    const auto build = materials::buildDefinition(graph, mAssetGuid, host.db, host.project);
+    if (!build.ok()) return fail(QStringLiteral("graph.save: %1").arg(build.error));
     const auto written = MaterialBundle::write(
         host.db, host.project, mAssetGuid, build.definition,
         projectOwns ? MaterialBundle::Scope::Project : MaterialBundle::Scope::Library);

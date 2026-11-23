@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "irisgl/document/materials/material.h"
 #include "irisgl/document/scenegraph/meshnode.h"
+#include "services/jahlog.h"
 #include "services/projectassets.h"
 #include "services/projectmembership.h"
 
@@ -67,10 +68,20 @@ void ResetMaterialCommand::redo()
 
     // The default's own pins, back after an undo took them (the first redo
     // runs right after the default was built, which pinned them already).
+    // A READ THAT FAILED IS NO "NOT PINNED" (NOQT-DATABASE-1 stage 2, the confirm's F1): addToProject would re-pin
+    // the texture at the LIBRARY's version over a version the project made its own - that pin is left, said by name.
     if (!newlyPinnedLive) {
-        for (const QString &texture : newlyPinned)
-            if (!db->isAssetPinnedBy(projectGuid, texture))
-                ProjectAssets::addToProject(texture, db, project, ProjectAssets::AddKind::Binding);
+        for (const QString &texture : newlyPinned) {
+            bool read = true;
+            if (db->isAssetPinnedBy(projectGuid, texture, &read)) continue;
+            if (!read) {
+                JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                    QStringLiteral("Reset Material: whether this project holds '%1' could not be read - its pin was not "
+                                   "restored").arg(texture));
+                continue;
+            }
+            ProjectAssets::addToProject(texture, db, project, ProjectAssets::AddKind::Binding);
+        }
         newlyPinnedLive = true;
     }
 

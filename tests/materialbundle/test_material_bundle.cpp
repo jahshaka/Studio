@@ -56,7 +56,9 @@
 #include "services/assetgc.h"
 #include "services/assetmigration.h"
 #include "data/database/casschema.h"
+#include "commands/resetmaterialcommand.h"
 #include "services/projectassets.h"
+#include "irisgl/document/scenegraph/meshnode.h"
 #include <QSqlDriver>
 #include <sqlite3.h>
 #include <cstring>
@@ -911,6 +913,31 @@ int main(int argc, char **argv)
                                               assethome::Origin::ExplicitSave);
             };
 
+            // 17.1 (F1) ResetMaterialCommand's redo after an undo: "is it pinned here" unread is no "no".
+            {
+                texture(QStringLiteral("t17r"));
+                const QString library = AssetCas::sourceOid(conn, QStringLiteral("t17r"));
+                db.createProject(QStringLiteral("p17r"), QStringLiteral("p17r"));
+                Project owner;
+                owner.setProjectGuid(QStringLiteral("p17r"));
+                AssetCas::writePin(conn, QStringLiteral("p17r"), QStringLiteral("t17r"), library);   // the default's pin
+                ResetMaterialCommand reset(&db, &owner, iris::MeshNode::create(), iris::MaterialPtr(),
+                                           { QStringLiteral("t17r") }, { QStringLiteral("t17r") });
+                reset.undo();
+                CHECK(!db.isAssetPinnedBy(QStringLiteral("p17r"), QStringLiteral("t17r")),
+                      "17.1: CONTROL: the undo took the default's pin back");
+                const QString own = painted(QStringLiteral("t17r"), owner);
+                CHECK(!own.isEmpty() && own != library && pinOf(QStringLiteral("p17r"), QStringLiteral("t17r")) == own,
+                      "17.1: CONTROL: the project then holds its OWN version of the texture");
+                gDeny = Deny{ 4 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                reset.redo();
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                const QString after = pinOf(QStringLiteral("p17r"), QStringLiteral("t17r"));
+                CHECK(after == own, QStringLiteral("17.1: a redo whose pin read failed leaves the project's own version "
+                                                   "(pin %1, own %2, library %3)").arg(after, own, library)
+                                        .toUtf8().constData());
+            }
 
             // 17.2 (F2) the pin's OID unread is no "no pin": MaterialBundle::write (the 1.5-s autosave) and
             //      ProjectAssets::updatePinToLatest never write the library's version over the project's own.
