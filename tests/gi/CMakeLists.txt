@@ -1371,15 +1371,30 @@ set_tests_properties(gi.route_landing.gather PROPERTIES ENVIRONMENT "QT_QPA_PLAT
 
 # gi.route_landing.order (SHADER-SYSTEM-1 stage 7; the owner 2026-11-23: "faster loading over correctness when loading in
 # shaders"): THE FRAME's OWN REQUESTS ARE SERVED FIRST - a cold room with both ray routes held (the ahead pass and the
-# request-only hit decode running), two engines in one process: the room's held
-# picture arrives with P3 ON no later than with it OFF (+ a stated bound, frames); ON's ahead class ran jobs, OFF's none;
-# the two pictures the same codes. RED before the ahead class (the ahead placeholders pushed to the front of the one
-# queue). COLD: its subject is the room's permutations still unbuilt. A new row: priced from its solo run, never SHIP.
+# request-only hit decode running), two engines in one process. THE LAW IS A COUNT: with P3 ON, 0 ahead-class jobs taken
+# by the service while the frame's own queue held a job (the fork's count in its take, exact), its control ON's ahead class
+# ran jobs (> 0) and OFF's none; the two held pictures the same codes. The time-to-picture (ON against OFF + 132 frames) is
+# REPORTED beside, never the verdict. RED with the take serving the ahead class first (a scratch arm: the count > 0). COLD:
+# its subject is the room's permutations still unbuilt. A new row: priced from its solo run, never SHIP.
 jah_gpu_row(gi.route_landing.order CLASS engine COMMAND test_gi_card_build_late landing_order
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
          COLD "its subject is the order the room's permutations are built in, from unbuilt: cold in the process (the fixture's shaderCacheOff)")
 set_tests_properties(gi.route_landing.order PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 1350)
+
+# gi.route_landing.capture (SHADER-SYSTEM-1 stage 7, item 2 (A)): THE CARD CAPTURE's PERMUTATIONS ARE ASKED BEFORE THE
+# LANDING THAT COMPLETES THE FRAME - the first cards are captured only then (an arrival needs an open demand window, opened
+# by the completion serial's edge; a held route keeps the frame incomplete). Both ray routes held until the service is
+# empty, the reflection released and drawn, the service empty again, then the gather released: its landing completes the
+# frame, and over it and 30 frames the service is asked for 0 GRAPHICS permutations (compute printed beside); controls: the
+# gather drawn within 4 frames, the cards captured (> 0); at rest 0 slot passes. RED without the slot: the capture pass's
+# PBS pair first asked at the landing. COLD. A new row: priced from its solo run, never SHIP.
+jah_gpu_row(gi.route_landing.capture CLASS engine COMMAND test_gi_card_build_late landing_capture
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+         COLD "its subject is the capture pass's permutations still unbuilt: the room's must be cold in the process (the fixture's shaderCacheOff)")
+set_tests_properties(gi.route_landing.capture PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 1000)
+
 
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,

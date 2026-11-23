@@ -66,26 +66,44 @@
 //   landing_gather - A ROUTE JOINS A FRAME ONLY WHEN ITS PIPELINE AND ITS LANDED SET ARE BOTH BUILT (SHADER-SYSTEM-1
 //               stage 7, P3; row gi.route_landing.gather; COLD: the room's permutations must be unbuilt in the process):
 //               the gather's build held while the room draws - (0) THE CONTROLS: while held, ahead passes prepared and
-//               permutations requested (both above 0) and the frames INCOMPLETE by bit 2; (1) NOT HERE: the frame
-//               with the measuring arm shaders.aheadPassOff on equal to it off is OWED (this room's picture never held
-//               still across an A/B/A compare: spikes/shader-system/ss7/p3/hold2-green.log, no verdict); (2) released once the background compiler is quiet: over the landing frame and kLandingWatch
+//               permutations requested (both above 0) and the frames INCOMPLETE by bit 2; (1) NOT HERE: the picture
+//               with the ahead pass running equals it off is NOT a row: with both routes held it holds byte for byte, but
+//               its red cannot be shown in this room (the stand-ins carry no light: spikes/shader-system/ss7/p3/item3/);
+//               (2)
+//               released once the background compiler is quiet: over the landing frame and kLandingWatch
 //               frames after it, 0 graphics permutations built in a frame, 0 placeholder draws, 0 pending skips - RED
 //               before P3 (30 pending skips: the room's draw skipped every frame, the picture cut to black;
 //               spikes/shader-system/ss7/p3/hold1-red.log; b8-hold/RESULT.md); the permutations REQUESTED at the landing
-//               printed (OPEN: the hit decode's PBS twins and the GI's bounce injection are still asked for there); (3)
+//               printed (this landing completes the frame: the cards' first captures - landing_capture's law - and the
+//               GI's bounce injection are asked for there); (3)
 //               THE CONTROL: the gather is DRAWN within kLandingBound frames of its release; (4) at rest, ZERO COST: 0
 //               ahead passes and 0 requests over kRestWatch frames.
 //   landing_order - THE FRAME's OWN REQUESTS ARE SERVED FIRST (SHADER-SYSTEM-1 stage 7; the owner, 2026-11-23: "faster
 //               loading over correctness when loading in shaders"; row gi.route_landing.order; COLD): the room built
 //               COLD with the reflection and the gather held (both owed: the ahead pass and the request-only hit decode
-//               run); TWO ENGINES
-//               in one process, P3 ON first, then OFF (the arm shaders.aheadPassOff; OFF runs second, on a driver warmed
-//               by ON: the law is the stricter for ON) - (0) THE CONTROLS: ON's ahead class ran jobs (above 0), OFF's ran
-//               none; (1) TIME-TO-PICTURE: the first frame from which the room's picture is its held final picture, exact
-//               (a hash of the read-back codes every frame) - ON's no later than OFF's + kOrderBound frames. RED before the
-//               ahead class (the ahead placeholders pushed URGENT to the front of the one queue, ahead of the room's own:
-//               spikes/shader-system/ss7/p3/order/); (2) the two final pictures are the same codes (the ahead requests
-//               change no picture).
+//               run); TWO ENGINES in one process, P3 ON first, then OFF (the arm shaders.aheadPassOff) - (0) THE
+//               CONTROLS: ON's ahead class ran jobs (above 0), OFF's ran none; (1) THE ORDER, BY COUNT: with P3 ON, 0
+//               ahead-class jobs taken by the service while the frame's own queue held a job (AsyncShaderStats::
+//               aheadOverOwn: the fork counts it in the take, under the queue's lock - exact, it cannot flake); RED with a
+//               scratch take that serves the ahead class first (spikes/shader-system/ss7/p3/order/red-once/); (2) the two
+//               final pictures are the same codes (the ahead requests change no picture). REPORTED BESIDE, never the
+//               verdict: TIME-TO-PICTURE, the first frame from which the room's picture is its held final picture, exact
+//               (a hash of the read-back codes every frame), ON against OFF + kOrderBound frames.
+//   landing_capture - THE CARD CAPTURE's PERMUTATIONS ARE ASKED BEFORE THE LANDING THAT COMPLETES THE FRAME
+//               (SHADER-SYSTEM-1 stage 7, item 2 (A); row gi.route_landing.capture; COLD). The first cards are captured
+//               only at that landing: an arrival needs an open demand window (OgreSurfaceCache.cpp refreshResidency), the
+//               window opens on the completion serial's edge (PhotonGi's demand change), and a held route keeps the frame
+//               incomplete (OgreScene::noteFrameCompleteness, term 4) - a landing that leaves the other route held
+//               captures nothing (spikes/shader-system/ss7/p3/slot/). THE SEQUENCE: both ray routes held until the service
+//               is empty (the request-only capture slot asks, in the ahead class, while a card reader is owed); the
+//               reflection released and drawn, the service empty again; then the GATHER released - (0) THE CONTROLS: the
+//               gather drawn within kLandingBound frames, the cards captured (above 0) over the watch, and the slot ran
+//               (passes above 0) before the landing; (1) over the landing and kLandingWatch frames, 0 GRAPHICS
+//               permutations requested (AsyncShaderStats::submittedGraphics; compute printed beside). THE SLOT's
+//               ASSUMPTION IS PROVED HERE: it asks by the item's renderables alone (its key, its aim at the item's first
+//               card), so a capture permutation that depended on the view would be asked again at the landing and this
+//               law would be RED WITH the slot; (2) at rest, 0 slot passes over kRestWatch frames (no cost at rest). RED
+//               without the slot: the capture pass's PBS pair first asked at the landing.
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/GiParams.h"
@@ -139,9 +157,10 @@ const int kRestCap = 1500;
 const int kLandingWatch = 30, kLandingBound = 4, kQuietCap = 1500, kRestWatch = 30;
 /// THE ORDER ROW: the cap on a run's frames until its service is quiet (a bound on the fixture: a cold room's frames are
 /// ~2 ms), the frames past the service's quiet a run keeps drawing (the picture's last change after the last job lands),
-/// and the bound on ON's time-to-picture over OFF's (frames): twice the same arm's spread over FIVE solo runs (OFF 534,
-/// 505, 481, 468, 505: 66 frames) - the red-first run (the ahead class removed) read ON 763 against OFF 505, +258; the
-/// greens ON - OFF -95, -14, +38, -50, -72 (spikes/shader-system/ss7/p3/order/ and slot/order-*.log)
+/// and the REPORTED bound on ON's time-to-picture over OFF's (frames; the row's verdict is the order's count): twice the
+/// same arm's spread over FIVE solo runs (OFF 534, 505, 481, 468, 505: 66 frames) - the run with the ahead class removed
+/// read ON 763 against OFF 505, +258; the greens ON - OFF -95, -14, +38, -50, -72 (spikes/shader-system/ss7/p3/order/ and
+/// slot/order-*.log)
 const int kOrderCap = 6000, kOrderTail = 30, kOrderBound = 132;
 /// The explicit node ids (both scenes the same: residentHash is over (node id, card index))
 const NodeId kFirstId = 1ull << 40;
@@ -295,17 +314,18 @@ int main(int argc, char **argv)
     const std::string mode = argc > 1 ? argv[1] : "late";
     const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt",
                                              "window", "failwait", "silent", "complete", "landing_gather",
-                                             "landing_order" };
+                                             "landing_order", "landing_capture" };
     if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
         std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt, window, failwait, "
-                    "silent, complete, landing_gather or landing_order, not '%s'\n", mode.c_str());
+                    "silent, complete, landing_gather, landing_order or landing_capture, not '%s'\n",
+                    mode.c_str());
         return 2;
     }
     std::string err;
     // ---- .landing_order: the frame's own requests first; time-to-picture with P3 on no later than off -------------
     if (mode == "landing_order") {
         struct OrderRun { bool ok = false; int pictureFrame = -1, frames = 0; unsigned long long aheadRun = 0, promoted = 0;
-                          unsigned long long skips = 0, placeholders = 0; uint64_t finalHash = 0; };
+                          unsigned long long overOwn = 0, skips = 0, placeholders = 0; uint64_t finalHash = 0; };
         const auto runOrder = [&](bool aheadOff) {
             OrderRun o;
             const std::string olog = std::string("test-gi-card-build-late-landing-order-") + (aheadOff ? "off" : "on") +
@@ -341,12 +361,14 @@ int main(int argc, char **argv)
             for (int f = int(hashes.size()) - 1; f >= 0 && hashes[size_t(f)] == o.finalHash; --f) o.pictureFrame = f + 1;
             o.aheadRun = end.aheadRun - at.aheadRun;
             o.promoted = end.aheadPromoted - at.aheadPromoted;
+            o.overOwn = end.aheadOverOwn - at.aheadOverOwn;
             o.skips = end.pendingSkips - at.pendingSkips;
             o.placeholders = end.placeholderDraws - at.placeholderDraws;
             o.ok = quietAt >= 0;
-            std::printf("   P3 %s: the service quiet at frame %d; the held picture from frame %d (of %d); ahead-class jobs %llu, "
-                        "promoted %llu; pending skips %llu, placeholder draws %llu\n", aheadOff ? "OFF" : "ON ", quietAt + 1,
-                        o.pictureFrame, o.frames, o.aheadRun, o.promoted, o.skips, o.placeholders);
+            std::printf("   P3 %s: the service quiet at frame %d; the held picture from frame %d (of %d); ahead-class jobs %llu "
+                        "(%llu taken past an own job), promoted %llu; pending skips %llu, placeholder draws %llu\n",
+                        aheadOff ? "OFF" : "ON ", quietAt + 1, o.pictureFrame, o.frames, o.aheadRun, o.overOwn, o.promoted,
+                        o.skips, o.placeholders);
             drop(e, r);
             engine.reset();
             return o;
@@ -356,9 +378,14 @@ int main(int argc, char **argv)
         std::snprintf(w, sizeof(w), "(0) the controls: both runs reached a quiet service; ON's ahead class ran %llu jobs (> 0), "
                       "OFF's %llu (0)", on.aheadRun, off.aheadRun);
         check(on.ok && off.ok && on.aheadRun > 0ull && off.aheadRun == 0ull, w);
-        std::snprintf(w, sizeof(w), "(1) TIME-TO-PICTURE: the room's held picture from frame %d with P3 ON, %d with it OFF "
-                      "(bound: ON <= OFF + %d)", on.pictureFrame, off.pictureFrame, kOrderBound);
-        check(on.pictureFrame > 0 && off.pictureFrame > 0 && on.pictureFrame <= off.pictureFrame + kOrderBound, w);
+        std::snprintf(w, sizeof(w), "(1) THE ORDER: with P3 ON, %llu ahead-class jobs taken by the service while the frame's "
+                      "own queue held a job (0)", on.overOwn);
+        check(on.ok && on.overOwn == 0ull, w);
+        // REPORTED, never the verdict: the time-to-picture against its bound (a run's frames vary with the box)
+        std::printf("   (reported) TIME-TO-PICTURE: the room's held picture from frame %d with P3 ON, %d with it OFF (bound "
+                    "ON <= OFF + %d: %s)\n", on.pictureFrame, off.pictureFrame, kOrderBound,
+                    on.pictureFrame > 0 && off.pictureFrame > 0 && on.pictureFrame <= off.pictureFrame + kOrderBound
+                        ? "within" : "OVER");
         std::snprintf(w, sizeof(w), "(2) the two held pictures are the same codes (%016llx / %016llx)",
                       (unsigned long long)on.finalHash, (unsigned long long)off.finalHash);
         check(on.finalHash == off.finalHash, w);
@@ -369,7 +396,7 @@ int main(int argc, char **argv)
     // loads the room's permutations ready (every green row's run promotes its cache: tests/support/fresh_home.sh); so is
     // .failwait's placeholder
     const std::string log = "test-gi-card-build-late-" + mode + "-ogre.log";
-    const bool cold = mode == "pso" || mode == "failwait" || mode == "landing_gather";
+    const bool cold = mode == "pso" || mode == "failwait" || mode == "landing_gather" || mode == "landing_capture";
     auto engine = Engine::create(cold ? enginetest::testEngineConfig(log, enginetest::EngineOverrides().shaderCacheOff())
                                       : enginetest::testEngineConfig(log),
                                  err);
@@ -436,6 +463,75 @@ int main(int argc, char **argv)
         std::snprintf(w, sizeof(w), "(4) at rest (after %d frames): over %d frames %llu ahead passes, %llu requests", took,
                       kRestWatch, restAfter.aheadPasses - rest.aheadPasses, restAfter.submitted - rest.submitted);
         check(took >= 0 && restAfter.aheadPasses == rest.aheadPasses && restAfter.submitted == rest.submitted, w);
+        drop(e, r);
+        std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
+        return g_fail ? 1 : 0;
+    }
+
+    // ---- .landing_capture: the card capture's permutations asked before the landing that completes the frame (item 2 (A))
+    if (mode == "landing_capture") {
+        e->setArm("rays.buildHold", kHoldForever);
+        e->setArm("rays.buildHoldIds", kReaderBuilds);   // both readers owed: the request-only slot runs
+        Room r = buildRoom(e, "route_landing_capture");
+        if (!r.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return 1; }
+        const auto shaders = [&]() { return e->published().shaders; };
+        const auto cards = [&]() { return r.scene->published().gi.cards; };
+        // THE HOLD: until the SERVICE is empty (pending counts the ray builds in flight: OgreEngine::asyncShaderStats)
+        int f = 0;
+        for (; f < kQuietCap; ++f) {
+            enginetest::frames(e, 1);
+            ++frames;
+            const AsyncShaderStats a = shaders();
+            if (f > kHeldPastBuild && a.pending == a.rayBuildsInFlight) break;
+        }
+        // THE REFLECTION RELEASED (the gather stays held: the frame stays incomplete, nothing is captured), until its
+        // build has landed and the service is empty again
+        e->setArm("rays.buildHoldIds", 32.0);
+        int g = 0;
+        for (; g < kQuietCap; ++g) {
+            enginetest::frames(e, 1);
+            ++frames;
+            const AsyncShaderStats a = shaders();
+            if (g > kLandingBound && a.pending == 1u && a.rayBuildsInFlight == 1u) break;
+        }
+        const AsyncShaderStats before = shaders();
+        const CardCacheStatus held = cards();
+        const bool heldIncomplete = (r.scene->published().completeness.terms & 4u) != 0u;
+        std::printf("   the hold: the service empty after %d frames; the reflection landed and the service empty again after "
+                    "%d more (still incomplete by bit 2: %d); before the gather's release: %llu cards captured, %llu slot "
+                    "passes, %u capture keys built\n", f, g, int(heldIncomplete), held.captures, held.requestOnlyPasses,
+                    held.requestOnlyKeysBuilt);
+        // THE GATHER RELEASED: its landing completes the frame - the demand window opens, the first cards are captured
+        e->setArm("rays.buildHold", 0.0);
+        int drawnAt = -1;
+        for (int k = 0; k < kLandingWatch; ++k) {
+            enginetest::frames(e, 1);
+            ++frames;
+            if (drawnAt < 0 && r.scene->published().gi.gather.running) drawnAt = k + 1;
+        }
+        const AsyncShaderStats after = shaders();
+        const unsigned long long captured = cards().captures - held.captures;
+        char w[400];
+        std::snprintf(w, sizeof(w), "(0) the controls: the hold reached an empty service twice (%d, %d frames; cap %d), the "
+                      "frame incomplete and 0 cards captured before the landing (%llu), the slot ran before it (%llu passes "
+                      "> 0); the gather drawn %d frames after its release (bound %d); the landing's card captures %llu (> 0)",
+                      f, g, kQuietCap, held.captures, held.requestOnlyPasses, drawnAt, kLandingBound, captured);
+        check(f < kQuietCap && g < kQuietCap && heldIncomplete && held.captures == 0ull && held.requestOnlyPasses > 0ull &&
+                  drawnAt > 0 && drawnAt <= kLandingBound && captured > 0ull, w);
+        std::snprintf(w, sizeof(w), "(1) the landing and %d frames after it: %llu GRAPHICS permutations requested (0); "
+                      "printed beside: %llu compute requests, %llu pending skips, %llu placeholder draws", kLandingWatch,
+                      after.submittedGraphics - before.submittedGraphics,
+                      (after.submitted - before.submitted) - (after.submittedGraphics - before.submittedGraphics),
+                      after.pendingSkips - before.pendingSkips, after.placeholderDraws - before.placeholderDraws);
+        check(after.submittedGraphics == before.submittedGraphics, w);
+        // AT REST: the slot costs nothing (no reader owed)
+        const int took = toRest(e, r.scene, frames);
+        const unsigned long long restPasses = cards().requestOnlyPasses;
+        enginetest::frames(e, kRestWatch);
+        frames += kRestWatch;
+        std::snprintf(w, sizeof(w), "(2) at rest (after %d frames): %llu slot passes over %d frames (0)", took,
+                      cards().requestOnlyPasses - restPasses, kRestWatch);
+        check(took >= 0 && cards().requestOnlyPasses == restPasses, w);
         drop(e, r);
         std::printf("\n%s (%d failures, %d frames)\n", g_fail ? "FAIL" : "PASS", g_fail, frames);
         return g_fail ? 1 : 0;
