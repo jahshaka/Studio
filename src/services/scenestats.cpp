@@ -52,7 +52,7 @@ void walk(const iris::SceneNodePtr &node, bool visible, SceneGeometry &out)
     }
     // The subtree is walked either way: a hidden parent's children are part of
     // the scene, they are simply part of the hidden half of it.
-    const QList<iris::SceneNodePtr> kids = node->children();
+    const std::vector<iris::SceneNodePtr> kids = node->children();
     for (const iris::SceneNodePtr &child : kids) walk(child, shown, out);
 }
 

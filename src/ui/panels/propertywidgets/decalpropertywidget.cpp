@@ -109,25 +109,25 @@ void DecalPropertyWidget::setSceneNode(std::shared_ptr<iris::SceneNode> sceneNod
     metalness->setValue(decalNode->metalness);
     roughness->setValue(decalNode->roughness);
     ignoreAlpha->setValue(decalNode->ignoreAlphaDiffuse);
-    image->textureGuid = decalNode->textureGuid;
-    image->setTexture(decalNode->resolvedTexturePath);
-    normalImage->textureGuid = decalNode->normalGuid;
-    normalImage->setTexture(decalNode->resolvedNormalPath);
-    emissiveImage->textureGuid = decalNode->emissiveGuid;
-    emissiveImage->setTexture(decalNode->resolvedEmissivePath);
+    image->textureGuid = QString::fromStdString(decalNode->textureGuid);
+    image->setTexture(QString::fromStdString(decalNode->resolvedTexturePath));
+    normalImage->textureGuid = QString::fromStdString(decalNode->normalGuid);
+    normalImage->setTexture(QString::fromStdString(decalNode->resolvedNormalPath));
+    emissiveImage->textureGuid = QString::fromStdString(decalNode->emissiveGuid);
+    emissiveImage->setTexture(QString::fromStdString(decalNode->resolvedEmissivePath));
     loading = false;
 }
 
-void DecalPropertyWidget::bindMap(const QString &guid, QString &guidField, QString &pathField)
+void DecalPropertyWidget::bindMap(const QString &guid, std::string &guidField, std::string &pathField)
 {
-    guidField = guid;
+    guidField = guid.toStdString();
     pathField.clear();
     if (guid.isEmpty() || !db || !project || project->getProjectGuid().isEmpty()) return;
     // BINDING membership: binding an image to a decal must NOT mint the
     // companion PBR material a direct add would (ProjectAssets::AddKind).
     ProjectAssets::addToProject(guid, db, project, ProjectAssets::AddKind::Binding);
-    pathField = services && services->resolvePinned ? services->resolvePinned(project->getProjectGuid(), guid)
-                                                    : QString();
+    pathField = services && services->resolvePinned ? services->resolvePinned(project->getProjectGuid(), guid).toStdString()
+                                                    : std::string();
 }
 
 // One map rebind, undoable. The service owns the dependency ROW (it knows the
@@ -137,16 +137,16 @@ void DecalPropertyWidget::bindMap(const QString &guid, QString &guidField, QStri
 void DecalPropertyWidget::bindKind(DecalMapKind kind, const QString &guid, const QString &text)
 {
     if (loading || !decalNode) return;
-    QString *guidField = kind == DecalMapKind::Normal     ? &decalNode->normalGuid
+    std::string *guidField = kind == DecalMapKind::Normal     ? &decalNode->normalGuid
                        : kind == DecalMapKind::Emissive   ? &decalNode->emissiveGuid
                                                           : &decalNode->textureGuid;
-    const QString before = *guidField;
+    const QString before = QString::fromStdString(*guidField);
     if (before == guid) return;
 
     if (!services || !services->sceneEdit) {
         // No service (headless hosts, the panel suites): keep the node and the
         // resolved path in step by hand, exactly as this row always did.
-        QString *pathField = kind == DecalMapKind::Normal   ? &decalNode->resolvedNormalPath
+        std::string *pathField = kind == DecalMapKind::Normal   ? &decalNode->resolvedNormalPath
                            : kind == DecalMapKind::Emissive ? &decalNode->resolvedEmissivePath
                                                             : &decalNode->resolvedTexturePath;
         bindMap(guid, *guidField, *pathField);

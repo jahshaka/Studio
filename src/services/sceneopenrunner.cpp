@@ -85,11 +85,15 @@ void SceneOpenRunner::runWorker()
         mReads.plan(conn.db(), &mModelPaths, &clips);
         mRebuild = MeshBakeStore::staleJobsFor(conn.db(), mReads.root, mModelPaths + clips);
         if (mRebuild.isEmpty() || mAborted.load()) {
-            readBakes(conn.db());
-            finishWorker();
+            if (!readBakes(conn.db())) finishWorker();
             return;
         }
     }
+    rebuildThenRead();
+}
+
+void SceneOpenRunner::rebuildThenRead()
+{
     // THE STALE BAKES FIRST (D1): rebuilt here, committed on the UI thread (the
     // catalog's writer), then this runner reads on a fresh worker.
     auto results = std::make_shared<QVector<MeshBakeStore::BakeResult>>();
@@ -112,13 +116,12 @@ void SceneOpenRunner::runWorker()
         mRebuild.clear();
         mFuture = QtConcurrent::run([this]() {
             openreads::ReadConnection read(mReads.dbPath);
-            readBakes(read.db());
-            finishWorker();
+            if (!readBakes(read.db())) finishWorker();
         });
     }, Qt::QueuedConnection);
 }
 
-void SceneOpenRunner::readBakes(db::Connection &conn)
+bool SceneOpenRunner::readBakes(db::Connection &conn)
 {
     {
         LoadTimeline::Accumulate plan(QStringLiteral("worker:plan"));
@@ -140,6 +143,16 @@ void SceneOpenRunner::readBakes(db::Connection &conn)
         }, Qt::QueuedConnection);
     }
     LoadTimeline::add(QStringLiteral("worker:bakeHits"), 0.0, mPrewarm->bakedCount());
+    // A BAKE THE READ REFUSED (N3: its header matched, its payload's checksum did not) goes back on THIS open's
+    // stale path, once a model (takeRefused): re-baked from its source when the source is on disk, then read again
+    // (rebuildThenRead). A second refusal is named and is a miss.
+    if (mAborted.load()) return false;
+    const QStringList refused = MeshBakeStore::takeRefused(mPlan, *mPrewarm);
+    if (refused.isEmpty()) return false;
+    mRebuild = MeshBakeStore::staleJobsFor(conn, mReads.root, refused);
+    if (mRebuild.isEmpty()) return false;
+    rebuildThenRead();
+    return true;
 }
 
 void SceneOpenRunner::finishWorker()

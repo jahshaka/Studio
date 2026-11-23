@@ -29,6 +29,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/rowundo.h"
 
 #include <QSignalBlocker>
+#include <algorithm>
 
 namespace {
 // Combo rows in display order -> scene->shadowResolution values. 0 = Auto.
@@ -97,7 +98,7 @@ int WorldShadowPropertyWidget::derivedFromLights() const
     // SceneMirror's policy, verbatim: area lights cannot cast, and the largest
     // remaining request wins.
     int best = 0;
-    for (const auto &l : scene->lights) {
+    for (const auto &[lKey, l] : scene->lights) {
         // A Sky Light cannot cast either — it has no place to cast FROM.
         if (!l || l->lightType == iris::LightType::Area ||
             l->lightType == iris::LightType::Sky) continue;
@@ -266,7 +267,7 @@ void WorldShadowPropertyWidget::refreshRows()
     // both rows (iris::Scene::sunLight / secondaryDirectionals).
     if (sunRow) {
         auto sun = scene->sunLight();
-        const QString reason = scene->sunReason();
+        const QString reason = QString::fromStdString(scene->sunReason());
         if (!sun) {
             sunRow->setText(QStringLiteral("No sun in this scene — objects are lit by the lamps "
                                            "and the sky. That is a perfectly ordinary scene; "
@@ -283,7 +284,7 @@ void WorldShadowPropertyWidget::refreshRows()
     }
     if (secondaryRow) {
         const auto others = scene->secondaryDirectionals();
-        if (others.isEmpty()) {
+        if (others.empty()) {
             PropertyRows::setPanelVisible(secondaryRow, false);
         } else {
             QStringList names;

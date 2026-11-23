@@ -543,7 +543,7 @@ bool ProjectService::save(const QString &guid, SaveReason reason, QString *whyOu
         const auto edit = PlayBack::documentEditPose(
             scene, { viewport ? viewport->playBack() : nullptr, mPlayerHost ? mPlayerHost->playBack() : nullptr });
         if (!edit.pose.isEmpty()) {
-            played = editpose::swapIn(scene->nodes.values(), edit.pose, edit.wholeDocument ? &spawned : nullptr);
+            played = editpose::swapIn(scene->nodes, edit.pose, edit.wholeDocument ? &spawned : nullptr);
             writer.setOmittedNodes(spawned);
         }
         blob = writer.getSceneObject(projectFolderFor(guid), scene,

@@ -75,7 +75,7 @@ bool add(const iris::SceneNodePtr &from, const iris::SceneNodePtr &to, const QSt
                                                 "(node.physics(id, {type: \"rigidbody\"}))")
                                      .arg(n->getName()));
     }
-    const QString toGuid = to->getGUID();
+    const QString toGuid = QString::fromStdString(to->getGUID());
     for (const iris::ConstraintProperty &c : from->physicsProperty.constraints) {
         if (c.constraintTo == toGuid && c.constraintType == row->type)
             return refuse(error, QStringLiteral("'%1' already has a %2 constraint to '%3'")
@@ -85,7 +85,7 @@ bool add(const iris::SceneNodePtr &from, const iris::SceneNodePtr &to, const QSt
     const QVector<iris::ConstraintProperty> was = from->physicsProperty.constraints;
     QVector<iris::ConstraintProperty> next = was;
     iris::ConstraintProperty c;
-    c.constraintFrom = from->getGUID();
+    c.constraintFrom = QString::fromStdString(from->getGUID());
     c.constraintTo = toGuid;
     c.constraintType = row->type;
     next.append(c);

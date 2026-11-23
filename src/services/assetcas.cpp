@@ -20,6 +20,7 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
+#include <QMutex>
 #include <QSet>
 #include <QVector>
 #include <atomic>
@@ -56,12 +57,35 @@ QString hashFile(const QString &path)
     return QString::fromLatin1(hash.result().toHex());   // lowercase hex
 }
 
+namespace {
+QMutex sCorruptLock;
+QSet<QString> sCorrupt;   // object paths a reader refused (markCorrupt)
+
+void clearCorrupt(const QString &objectPath)
+{
+    QMutexLocker locked(&sCorruptLock);
+    sCorrupt.remove(QFileInfo(objectPath).absoluteFilePath());
+}
+}   // namespace
+
+void markCorrupt(const QString &objectPath)
+{
+    QMutexLocker locked(&sCorruptLock);
+    sCorrupt.insert(QFileInfo(objectPath).absoluteFilePath());
+}
+
+bool isMarkedCorrupt(const QString &objectPath)
+{
+    QMutexLocker locked(&sCorruptLock);
+    return !sCorrupt.isEmpty() && sCorrupt.contains(QFileInfo(objectPath).absoluteFilePath());
+}
+
 bool storeObject(const QString &srcPath, const QString &root,
                  const QString &oid, const QString &ext, QString *errorOut)
 {
     const QString dstPath = AssetStorePaths::objectPathIn(root, oid, ext);
     const bool    existed = QFileInfo::exists(dstPath);
-    if (existed && QFileInfo(dstPath).size() == QFileInfo(srcPath).size())
+    if (existed && QFileInfo(dstPath).size() == QFileInfo(srcPath).size() && !isMarkedCorrupt(dstPath))
         return true;   // the dedup: this content is already stored
 
     if (!QDir().mkpath(QFileInfo(dstPath).absolutePath())) {
@@ -141,7 +165,10 @@ bool storeObject(const QString &srcPath, const QString &root,
     }
 
     std::string renameError;
-    if (iris::files::atomicRename(qtstd::toPath(tmpPath), qtstd::toPath(dstPath), &renameError)) return true;
+    if (iris::files::atomicRename(qtstd::toPath(tmpPath), qtstd::toPath(dstPath), &renameError)) {
+        clearCorrupt(dstPath);   // the refused object is replaced
+        return true;
+    }
     if (errorOut) *errorOut = qtstd::toQString(renameError);
     return false;
 }
@@ -173,7 +200,7 @@ bool stage(const QString &root, Staged &file)
     const auto existing = QDir(dir).entryInfoList({ file.oid.toLower() + QStringLiteral(".*"),
                                                     file.oid.toLower() }, QDir::Files);
     for (const QFileInfo &candidate : existing) {
-        if (candidate.size() != file.size) continue;
+        if (candidate.size() != file.size || isMarkedCorrupt(candidate.absoluteFilePath())) continue;
         file.present = true;
         return true;
     }
@@ -277,12 +304,16 @@ bool commitStaged(db::Connection &conn, const QString &root, const QString &guid
 
     const QString dstPath = AssetStorePaths::objectPathIn(root, file.oid, ext);
     const QFileInfo dst(dstPath);
-    if (dst.exists() && dst.size() == file.size) {
+    const bool refused = isMarkedCorrupt(dstPath);
+    if (dst.exists() && dst.size() == file.size && !refused) {
         // Already stored under the name the store uses. Whatever we staged (if
         // anything) is redundant.
         if (!file.tmpPath.isEmpty()) { QFile::remove(file.tmpPath); file.tmpPath.clear(); }
     } else if (!file.tmpPath.isEmpty()) {
-        if (dst.exists())
+        if (refused)
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QStringLiteral("asset store: replacing an object a reader refused as corrupt (%1)").arg(dstPath));
+        else if (dst.exists())
             JahLog::write(JahLog::legacy, JahLog::Level::Warning,
                 QStringLiteral("asset store: replacing a %1-byte object that claims %2 bytes of "
                                "content (%3) — a torn write from an interrupted run")
@@ -294,6 +325,7 @@ bool commitStaged(db::Connection &conn, const QString &root, const QString &guid
             return false;
         }
         file.tmpPath.clear();
+        if (refused) clearCorrupt(dstPath);
     } else {
         // The staging thread found this content under a DIFFERENT extension
         // than the store records, or the object vanished between the two

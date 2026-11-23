@@ -46,6 +46,7 @@
 #include "export/previewlauncher.h"
 
 #include "../support/documentgraph.h"
+#include <algorithm>
 static int failures = 0;
 #define CHECK(cond, msg)                                                     \
     do {                                                                     \
@@ -205,11 +206,11 @@ int main(int argc, char **argv)
         std::fprintf(f, "\n0\n0 100 400 800 1024 1024 800 400 100 0 0 0 0 0 0 0 0 0 0\n");
         std::fclose(f);
     }
-    spot->iesProfilePath = iesPath;
+    spot->iesProfilePath = iesPath.toStdString();
 
     // A POINT light with a profile is the honest loss: three has no IES point
     // light, so it must export unprofiled AND say so.
-    point->iesProfilePath = iesPath;
+    point->iesProfilePath = iesPath.toStdString();
 
     auto area = iris::LightNode::create();
     area->setName("area");

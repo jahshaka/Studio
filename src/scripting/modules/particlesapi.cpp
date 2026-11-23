@@ -116,14 +116,14 @@ iris::ParticleSystemNodePtr ParticlesApi::emitterOrFail(const QString &id, const
 
 QStringList ParticlesApi::presets()
 {
-    return iris::ParticleSystemNode::presetNames();
+    return qtstd::toQStringList(iris::ParticleSystemNode::presetNames());
 }
 
 bool ParticlesApi::preset(const QString &id, const QString &name)
 {
     auto ps = emitterOrFail(id, QStringLiteral("particles.preset"));
     if (!ps) return false;
-    const QStringList known = iris::ParticleSystemNode::presetNames();
+    const QStringList known = qtstd::toQStringList(iris::ParticleSystemNode::presetNames());
     // Unknown names would silently fall through to Custom and wipe the emitter,
     // which is a nasty way to learn you typed "smoke2".
     const bool ok = std::any_of(known.begin(), known.end(), [&](const QString &k) {
@@ -132,7 +132,7 @@ bool ParticlesApi::preset(const QString &id, const QString &name)
     if (!ok)
         return fail(QStringLiteral("particles.preset: unknown preset '%1' (try: %2)")
                         .arg(name, known.join(", ")));
-    ps->applyPreset(iris::ParticleSystemNode::presetFromName(name));
+    ps->applyPreset(iris::ParticleSystemNode::presetFromName(name.toStdString()));
     return true;
 }
 
@@ -142,11 +142,11 @@ QVariantMap ParticlesApi::describe(const QString &id)
     if (!ps) return QVariantMap();
 
     QVariantMap m;
-    m["id"] = ps->getGUID();
+    m["id"] = QString::fromStdString(ps->getGUID());
     m["name"] = QString::fromStdString(ps->getName());
-    m["preset"] = iris::ParticleSystemNode::presetName(ps->preset);
-    m["shape"] = iris::ParticleSystemNode::shapeName(ps->shape);
-    m["orientation"] = iris::ParticleSystemNode::orientationName(ps->orientation);
+    m["preset"] = QString::fromStdString(iris::ParticleSystemNode::presetName(ps->preset));
+    m["shape"] = QString::fromStdString(iris::ParticleSystemNode::shapeName(ps->shape));
+    m["orientation"] = QString::fromStdString(iris::ParticleSystemNode::orientationName(ps->orientation));
     m["rate"] = ps->particlesPerSecond;
     m["speed"] = ps->speed;
     m["speedError"] = ps->speedError;
@@ -176,7 +176,7 @@ QVariantMap ParticlesApi::describe(const QString &id)
     m["emitColourEnd"] = colorToJs(iris::toQColor(ps->emitColourEnd));
     m["texture"] = ps->texture ? ps->texture->getSource() : QString();
     // The IMAGE'S ASSET (TEX-REF-1): what a saved scene stores for `texture`.
-    m["textureGuid"] = ps->textureGuid;
+    m["textureGuid"] = QString::fromStdString(ps->textureGuid);
     m["colourKeys"] = colourKeys(id);
     m["scaleKeys"] = scaleKeys(id);
     // ADDENDUM A-4: the four affectors the renderer always had.
@@ -199,16 +199,16 @@ bool ParticlesApi::setColourRamp(const QString &id, const QString &assetGuid)
     // FADE rows and this ramp all write particle colour, in affector order —
     // the last one silently wins. Refusing here, by name, is the difference
     // between a rule and a trap (MATERIAL_GAPS_SPEC A-4).
-    if (!guid.isEmpty() && !ps->colourKeys.isEmpty())
+    if (!guid.isEmpty() && !ps->colourKeys.empty())
         return fail(QStringLiteral("particles.setColourRamp: this emitter already has colour "
                                    "KEYS, and both write particle colour — clear them first "
                                    "(particles.setColourKeys(id, []))"));
 
     if (guid.isEmpty()) {
-        if (host.db && host.project && !ps->colourRampGuid.isEmpty() &&
+        if (host.db && host.project && !ps->colourRampGuid.empty() &&
             !host.project->getProjectGuid().isEmpty())
-            host.db->deleteDependency(ps->getGUID(), ps->colourRampGuid);
-        ps->setColourRamp(QString(), QString());
+            host.db->deleteDependency(QString::fromStdString(ps->getGUID()), QString::fromStdString(ps->colourRampGuid));
+        ps->setColourRamp(QString().toStdString(), QString().toStdString());
         return true;
     }
     if (!host.db || host.db->fetchAsset(guid).guid.isEmpty())
@@ -221,19 +221,19 @@ bool ParticlesApi::setColourRamp(const QString &id, const QString &assetGuid)
     // image, so no companion PBR material is minted — the shared rule the decal
     // and light bindings follow.
     ProjectAssets::addToProject(guid, host.db, host.project, ProjectAssets::AddKind::Binding);
-    const QString was = ps->colourRampGuid;
-    if (!was.isEmpty() && was != guid) host.db->deleteDependency(ps->getGUID(), was);
-    host.db->deleteDependency(ps->getGUID(), guid);
+    const QString was = QString::fromStdString(ps->colourRampGuid);
+    if (!was.isEmpty() && was != guid) host.db->deleteDependency(QString::fromStdString(ps->getGUID()), was);
+    host.db->deleteDependency(QString::fromStdString(ps->getGUID()), guid);
     host.db->createDependency(static_cast<int>(ModelTypes::ParticleSystem),
                               static_cast<int>(ModelTypes::Texture),
-                              ps->getGUID(), guid, host.project->getProjectGuid());
+                              QString::fromStdString(ps->getGUID()), guid, host.project->getProjectGuid());
     const QString path = AssetCas::resolvePinned(host.db->connection(),
                                                  AssetStorePaths::root(),
                                                  host.project->getProjectGuid(), guid);
     if (path.isEmpty())
         return fail(QStringLiteral("particles.setColourRamp: could not resolve the bytes of '%1'")
                         .arg(guid));
-    ps->setColourRamp(guid, path);
+    ps->setColourRamp(guid.toStdString(), path.toStdString());
     return true;
 }
 
@@ -241,7 +241,7 @@ QVariantMap ParticlesApi::colourRamp(const QString &id)
 {
     auto ps = emitterOrFail(id, QStringLiteral("particles.colourRamp"));
     if (!ps) return QVariantMap();
-    return QVariantMap{ { "guid", ps->colourRampGuid }, { "path", ps->colourRampImage } };
+    return QVariantMap{ { "guid", QString::fromStdString(ps->colourRampGuid) }, { "path", QString::fromStdString(ps->colourRampImage) } };
 }
 
 QVariantList ParticlesApi::colourKeys(const QString &id)
@@ -264,7 +264,7 @@ bool ParticlesApi::setColourKeys(const QString &id, const QVariant &keys)
         return fail(QStringLiteral("particles.setColourKeys: at most 6 keys (got %1) — "
                                    "the renderer's interpolator has 6 stages")
                         .arg(list.size()));
-    QVector<iris::ParticleColourKey> out;
+    std::vector<iris::ParticleColourKey> out;
     for (const QVariant &v : list) {
         const QVariantMap m = normalizeJs(v).toMap();
         iris::ParticleColourKey k;
@@ -275,7 +275,7 @@ bool ParticlesApi::setColourKeys(const QString &id, const QVariant &keys)
         k.g = m.value("g", 1.0).toFloat();
         k.b = m.value("b", 1.0).toFloat();
         k.a = m.value("a", 1.0).toFloat();
-        out.append(k);
+        out.push_back(k);
     }
     std::stable_sort(out.begin(), out.end(),
                      [](const iris::ParticleColourKey &a, const iris::ParticleColourKey &b) {
@@ -304,13 +304,13 @@ bool ParticlesApi::setScaleKeys(const QString &id, const QVariant &keys)
         return fail(QStringLiteral("particles.setScaleKeys: at most 6 keys (got %1) — "
                                    "the renderer's interpolator has 6 stages")
                         .arg(list.size()));
-    QVector<iris::ParticleScaleKey> out;
+    std::vector<iris::ParticleScaleKey> out;
     for (const QVariant &v : list) {
         const QVariantMap m = normalizeJs(v).toMap();
         iris::ParticleScaleKey k;
         k.time  = m.value("time", 0.0).toFloat();
         k.scale = std::max(0.0f, m.value("scale", 1.0).toFloat());
-        out.append(k);
+        out.push_back(k);
     }
     std::stable_sort(out.begin(), out.end(),
                      [](const iris::ParticleScaleKey &a, const iris::ParticleScaleKey &b) {

@@ -178,11 +178,11 @@ editpose::EditPose<PlayBackNodeTransform> PlayBack::documentEditPose(const iris:
 
 void PlayBack::restoreNodeTransforms()
 {
-	for (auto node : scene->nodes) {
+	for (auto[nodeKey, node] : scene->nodes) {
 		// Only nodes that were present when play started have an original to go
 		// back to; operator[] would have handed a node added mid-play a
 		// default-constructed transform — a ZERO scale, i.e. an invisible node.
-		const auto trans = nodeTransforms.constFind(node->guid);
+		const auto trans = nodeTransforms.constFind(QString::fromStdString(node->guid));
 		if (trans == nodeTransforms.constEnd()) continue;
 		node->setLocalPos(trans->pos);
 		node->setLocalRot(trans->rot);

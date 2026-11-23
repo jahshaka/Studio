@@ -100,7 +100,7 @@ int main(int argc, char **argv)
         QList<iris::SceneNodePtr> kids;
         auto scene = sceneWithChildren(3, kids);
         auto middle = kids[1];
-        const QString guid = middle->getGUID();
+        const QString guid = QString::fromStdString(middle->getGUID());
         const qint64 nodeId = middle->getNodeId();
 
         QUndoStack stack;
@@ -257,13 +257,13 @@ int main(int argc, char **argv)
         fragment.siblingIndex = 1;
 
         auto replacement = iris::SceneNode::create();
-        replacement->setGUID(QStringLiteral("captured-guid"));
+        replacement->setGUID((QStringLiteral("captured-guid")).toStdString());
         teststubs::nextRebuild = replacement;
 
         // A live node whose guid does NOT match the snapshot: the command is
         // holding something that is no longer what it took out.
         auto stale = iris::SceneNode::create();
-        stale->setGUID(QStringLiteral("some-other-guid"));
+        stale->setGUID((QStringLiteral("some-other-guid")).toStdString());
         CHECK(!structuralundo::liveIsUsable(stale, fragment),
               "reinstate: a live node whose identity drifted is refused");
 
@@ -277,7 +277,7 @@ int main(int argc, char **argv)
 
         // ...and the live path is preferred when the live node IS the one.
         auto good = iris::SceneNode::create();
-        good->setGUID(QStringLiteral("captured-guid"));
+        good->setGUID((QStringLiteral("captured-guid")).toStdString());
         CHECK(structuralundo::liveIsUsable(good, fragment),
               "reinstate: a matching, detached live node is usable");
     }
@@ -305,7 +305,7 @@ int main(int argc, char **argv)
         // The panel's own shape: APPLY, then record what changed (the command's
         // first redo() is a no-op for exactly that reason).
         const QVariant before = sceneprops::get(scene, QStringLiteral("sunLight"));
-        sceneprops::set(scene, QStringLiteral("sunLight"), QVariant(second->getGUID()));
+        sceneprops::set(scene, QStringLiteral("sunLight"), QVariant(QString::fromStdString(second->getGUID())));
         stack.push(new ScenePropertyCommand(QStringLiteral("Pin Sun Light"), scene,
                                             QStringLiteral("sunLight"), before,
                                             sceneprops::get(scene, QStringLiteral("sunLight"))));
@@ -313,7 +313,7 @@ int main(int argc, char **argv)
         CHECK(scene->sunLightGuid == second->getGUID(), "sun pin: the scene names the light");
         CHECK(scene->sunLight() == second, "sun pin: ...and it resolves as the sun");
         stack.undo();
-        CHECK(scene->sunLightGuid.isEmpty(), "sun pin: undo drops the pin");
+        CHECK(scene->sunLightGuid.empty(), "sun pin: undo drops the pin");
         CHECK(scene->sunLight() == sun, "sun pin: ...and the priority order decides again");
         stack.redo();
         CHECK(scene->sunLight() == second, "sun pin: redo pins it again");
@@ -349,7 +349,7 @@ int main(int argc, char **argv)
         CHECK(scene->getActiveCamera() == first,
               "camera add/undo: undoing the second add leaves the first armed");
         stack.undo();
-        CHECK(scene->getActiveCameraGuid().isEmpty(),
+        CHECK(scene->getActiveCameraGuid().empty(),
               "camera add/undo: undoing the FIRST add takes its camera out of the scene, and "
               "Scene::removeNode clears the choice with it");
         stack.redo();
@@ -367,14 +367,14 @@ int main(int argc, char **argv)
         // pasted or duplicated GROUP that carries a camera is an add of that
         // camera too — with nothing armed, the first camera found arms.
         push(stack, new DeleteSceneNodeCommand(scene->getRootNode(), first), &services);
-        CHECK(scene->getActiveCameraGuid().isEmpty(),
+        CHECK(scene->getActiveCameraGuid().empty(),
               "deleting the armed camera clears the choice and promotes nobody");
         stack.undo();
         CHECK(scene->getActiveCamera() == first,
               "camera delete/undo: the pick comes back WITH the node (rule 2's symmetry) — "
               "never one camera and no shot by way of Ctrl+Z");
         stack.redo();
-        CHECK(scene->getActiveCameraGuid().isEmpty(), "camera delete/redo: cleared again");
+        CHECK(scene->getActiveCameraGuid().empty(), "camera delete/redo: cleared again");
         auto group = iris::SceneNode::create();
         group->setName((QStringLiteral("Group")).toStdString());
         auto nested = iris::CameraNode::create();

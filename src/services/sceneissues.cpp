@@ -406,7 +406,7 @@ void SceneIssues::checkNode(iris::SceneNode *node)
         }
         if (!missing.isEmpty()) {
             c.texture.kind = QStringLiteral("texture.missing");
-            c.texture.node = node->getGUID();
+            c.texture.node = QString::fromStdString(node->getGUID());
             c.texture.nodeName = QString::fromStdString(node->getName());
             c.texture.message = (missing.size() == 1
                 ? tr("\"%1\" uses a texture file that is missing: %2.")
@@ -419,9 +419,9 @@ void SceneIssues::checkNode(iris::SceneNode *node)
         // AN EMITTER'S IMAGE, the same rule (TEX-REF-1): a billboard image the
         // scene names by guid and the store could not resolve.
         auto *ps = static_cast<iris::ParticleSystemNode *>(node);
-        if (!ps->textureGuid.isEmpty() && !ps->texture) {
+        if (!ps->textureGuid.empty() && !ps->texture) {
             c.texture.kind = QStringLiteral("texture.missing");
-            c.texture.node = ps->getGUID();
+            c.texture.node = QString::fromStdString(ps->getGUID());
             c.texture.nodeName = QString::fromStdString(ps->getName());
             c.texture.message = tr("\"%1\" uses a texture file that is missing: Particle "
                                    "Image (asset %2: not in this library's store).")
@@ -572,14 +572,14 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
     {
         const auto dirs = scene->directionalLights();
         if (dirs.size() >= 2) {
-            const int best = dirs.first()->forwardShadingPriority;
+            const int best = dirs.front()->forwardShadingPriority;
             const auto sun = scene->sunLight();
             for (const auto &light : dirs) {
                 if (light == sun) continue;
                 if (light->forwardShadingPriority != best) continue;
                 SceneIssue issue;
                 issue.kind = QStringLiteral("sun.tie");
-                issue.node = light->getGUID();
+                issue.node = QString::fromStdString(light->getGUID());
                 issue.nodeName = QString::fromStdString(light->getName());
                 issue.message =
                     tr("\"%1\" and \"%2\" are both set to forward shading priority %3, so only "
@@ -612,7 +612,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                 if (!light->isVisibleInScene()) continue;   // hidden is the fix
                 SceneIssue issue;
                 issue.kind = QStringLiteral("sky.duplicate");
-                issue.node = light->getGUID();
+                issue.node = QString::fromStdString(light->getGUID());
                 issue.nodeName = QString::fromStdString(light->getName());
                 issue.message =
                     tr("\"%1\" is a second Sky Light. Only \"%2\" sets the sky's gain — a "
@@ -638,11 +638,11 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         const bool traces = machineRayTracing() == 1 && scene->rayTracing != iris::RayTracingMode::Off;
         if (!traces && scene->giMode == iris::GiMode::OFF && mUnmappedLamps) {
             const QStringList unmapped = mUnmappedLamps();
-            for (const auto &light : scene->lights) {
+            for (const auto &[lightKey, light] : scene->lights) {
                 if (!light || !unmapped.contains(light->getGUID())) continue;
                 SceneIssue issue;
                 issue.kind = QStringLiteral("lamps.unshadowed");
-                issue.node = light->getGUID();
+                issue.node = QString::fromStdString(light->getGUID());
                 issue.nodeName = QString::fromStdString(light->getName());
                 issue.message = tr("\"%1\" has no shadow map (the scene has more lamps than shadow maps), and with "
                                    "Global Illumination off and no ray tracing nothing else shadows it: its light "

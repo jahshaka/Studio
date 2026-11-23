@@ -116,23 +116,23 @@ void restoreOnto(const iris::ParticleSystemNodePtr &ps, const QVariantMap &state
         const std::string name = it.key().toStdString();
         if (const auto v = qtstd::toNodeValue(*ps, name, it.value())) ps->setPropertyValue(name, *v);
     }
-    QVector<iris::ParticleColourKey> colour;
+    std::vector<iris::ParticleColourKey> colour;
     for (const QVariant &v : state.value(QStringLiteral("colourKeys")).toList()) {
         const QVariantList f = v.toList();
         if (f.size() != 5) continue;
         iris::ParticleColourKey k;
         k.time = f[0].toFloat(); k.r = f[1].toFloat(); k.g = f[2].toFloat();
         k.b = f[3].toFloat();    k.a = f[4].toFloat();
-        colour.append(k);
+        colour.push_back(k);
     }
     ps->setColourKeys(colour);
-    QVector<iris::ParticleScaleKey> scale;
+    std::vector<iris::ParticleScaleKey> scale;
     for (const QVariant &v : state.value(QStringLiteral("scaleKeys")).toList()) {
         const QVariantList f = v.toList();
         if (f.size() != 2) continue;
         iris::ParticleScaleKey k;
         k.time = f[0].toFloat(); k.scale = f[1].toFloat();
-        scale.append(k);
+        scale.push_back(k);
     }
     ps->setScaleKeys(scale);
 }
@@ -154,7 +154,7 @@ EmitterPropertyWidget::EmitterPropertyWidget()
              QStringLiteral("What is born, and where."));
 
     preset = addComboBox("Preset");
-    for (const QString &name : iris::ParticleSystemNode::presetNames())
+    for (const QString &name : qtstd::toQStringList(iris::ParticleSystemNode::presetNames()))
         preset->addItem(prettyPreset(name), name);
     preset->getWidget()->setToolTip(QStringLiteral(
         "A whole recipe in one click — rate, velocity, lifetime, size, cone, forces, "
@@ -433,7 +433,7 @@ void EmitterPropertyWidget::onPresetChanged(const QString &name)
     // would put back that recipe's numbers, not the ones the user had tuned).
     const iris::ParticleSystemNodePtr node = ps;
     const QVariantMap before = snapshotOf(node);
-    node->applyPreset(iris::ParticleSystemNode::presetFromName(preset->getCurrentItemData()));
+    node->applyPreset(iris::ParticleSystemNode::presetFromName(preset->getCurrentItemData().toStdString()));
     refresh();
     pushWideEdit(node, tr("Emitter Preset"), before, snapshotOf(node));
 }
@@ -448,8 +448,8 @@ void EmitterPropertyWidget::pushColourKeys()
                      [](const ParticleRampStop &a, const ParticleRampStop &b) {
                          return a.time < b.time;
                      });
-    QVector<iris::ParticleColourKey> keys;
-    for (const ParticleRampStop &s : stops) keys.append(fromStop(s));
+    std::vector<iris::ParticleColourKey> keys;
+    for (const ParticleRampStop &s : stops) keys.push_back(fromStop(s));
     node->setColourKeys(keys);
     // The ramp is not a reflected key (it is a list, and the renderer reads it
     // whole), so the step carries the emitter's whole editable state — the same
@@ -467,10 +467,10 @@ void EmitterPropertyWidget::pushScaleKeys()
                      [](const ParticleScaleStop &a, const ParticleScaleStop &b) {
                          return a.time < b.time;
                      });
-    QVector<iris::ParticleScaleKey> keys;
+    std::vector<iris::ParticleScaleKey> keys;
     for (const ParticleScaleStop &s : stops) {
         iris::ParticleScaleKey k; k.time = s.time; k.scale = s.scale;
-        keys.append(k);
+        keys.push_back(k);
     }
     node->setScaleKeys(keys);
     pushWideEdit(node, tr("Particle Scale Ramp"), before, snapshotOf(node));
@@ -490,9 +490,9 @@ void EmitterPropertyWidget::refresh()
     if (!ps) return;
     mLoading = true;
 
-    preset->setCurrentItemData(iris::ParticleSystemNode::presetName(ps->preset));
-    shape->setCurrentItemData(iris::ParticleSystemNode::shapeName(ps->shape));
-    orientation->setCurrentItemData(iris::ParticleSystemNode::orientationName(ps->orientation));
+    preset->setCurrentItemData(QString::fromStdString(iris::ParticleSystemNode::presetName(ps->preset)));
+    shape->setCurrentItemData(QString::fromStdString(iris::ParticleSystemNode::shapeName(ps->shape)));
+    orientation->setCurrentItemData(QString::fromStdString(iris::ParticleSystemNode::orientationName(ps->orientation)));
 
     emissionRate->setValue(ps->particlesPerSecond);
     particleLife->setValue(ps->lifeLength);
@@ -570,20 +570,20 @@ void EmitterPropertyWidget::onBillboardImageChanged(const QString &path, const Q
     if (!services || !services->sceneEdit) {
         // No service (headless hosts, the panel suites): keep the node's own
         // texture in step, exactly as this row always did.
-        if (!path.isEmpty()) node->setTexture(iris::Texture2D::load(path), guid);
+        if (!path.isEmpty()) node->setTexture(iris::Texture2D::load(path), guid.toStdString());
         return;
     }
     // THE UNDO RESTORES THE IMAGE AND THE ASSET IT WAS (TEX-REF-1): the old
     // texture handle and its guid, as they were — an empty pair clears the
     // image, which is what the row showed before anything was bound.
     const iris::Texture2DPtr beforeTexture = node->texture;
-    const QString beforeGuid = node->textureGuid;
+    const QString beforeGuid = QString::fromStdString(node->textureGuid);
     SceneEditService *edit = services->sceneEdit;
     if (!edit->setParticleTexture(node, guid)) return;
     panelundo::pushEdit(services, tr("Particle Image"),
                         [edit, node, guid]() { edit->setParticleTexture(node, guid); },
                         [node, beforeTexture, beforeGuid]() {
-                            node->setTexture(beforeTexture, beforeGuid);
+                            node->setTexture(beforeTexture, beforeGuid.toStdString());
                         });
 }
 

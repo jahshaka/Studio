@@ -40,6 +40,7 @@ For more information see the LICENSE file
 #include "jahshaka/engine/PostFx.h"
 #include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/Vr.h"
+#include <algorithm>
 
 using namespace jahshaka::engine;
 
@@ -1923,10 +1924,10 @@ QVariant VrApi::hover()
     QVariantMap out;
     out[QStringLiteral("hand")] =
         h.hand == VrHandRight ? QStringLiteral("right") : QStringLiteral("left");
-    out[QStringLiteral("id")] = h.node->getGUID();
+    out[QStringLiteral("id")] = QString::fromStdString(h.node->getGUID());
     out[QStringLiteral("name")] = QString::fromStdString(h.node->getName());
-    out[QStringLiteral("rootId")] = h.picked ? ScenePicker::pickRoot(h.picked)->getGUID()
-                                             : h.node->getGUID();
+    out[QStringLiteral("rootId")] = QString::fromStdString(h.picked ? ScenePicker::pickRoot(h.picked)->getGUID()
+                                                                    : h.node->getGUID());
     out[QStringLiteral("x")] = double(h.point.x());
     out[QStringLiteral("y")] = double(h.point.y());
     out[QStringLiteral("z")] = double(h.point.z());

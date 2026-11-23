@@ -69,6 +69,7 @@ For more information see the LICENSE file
 #include "commands/scenepropertycommand.h"
 #include "services/jahlog.h"
 #include "services/shippedassets.h"
+#include "irisgl/document/mapvalue.h"
 
 using namespace scriptmod;
 
@@ -1064,7 +1065,7 @@ bool WorldApi::gi(const QVariantMap &params)
             }
             set.append(iris::Vec3(float(half), float(res), float(step)));
         }
-        scene->giCascadeSet = set;
+        scene->giCascadeSet.assign(set.cbegin(), set.cend());
     }
     // THE PROBE CAPTURE SIZE (owner decision 2026-09-13 Q4). A Photon tier row
     // like mode and quality: an explicit value PINS it against the tier. 0 is
@@ -1927,7 +1928,7 @@ QVariantMap WorldApi::atomCutProbe(const QVariantMap &params)
     // THE NAMES ARE THE DOCUMENT'S: one reverse map from the mirror (appapi's renderStats pattern).
     QHash<jahshaka::engine::NodeId, QString> docNames;
     if (SceneMirror *mirror = host.viewport ? host.viewport->sceneMirror() : nullptr) {
-        for (const iris::SceneNodePtr &n : std::as_const(doc->nodes)) {
+        for (const auto &[nKey, n] : doc->nodes) {
             if (!n) continue;
             if (const jahshaka::engine::NodeId id = mirror->engineNode(n.get())) docNames.insert(id, QString::fromStdString(n->getName()));
         }
@@ -2698,9 +2699,9 @@ QVariantMap WorldApi::shadowStatus()
     // which is a measurement.
     {
         auto sun = scene->sunLight();
-        out[QStringLiteral("sun")] = sun ? sun->getGUID() : QString();
+        out[QStringLiteral("sun")] = sun ? QString::fromStdString(sun->getGUID()) : QString();
         QVariantList secondaries;
-        for (const auto &l : scene->secondaryDirectionals()) secondaries.append(l->getGUID());
+        for (const auto &l : scene->secondaryDirectionals()) secondaries.append(QString::fromStdString(l->getGUID()));
         out[QStringLiteral("secondaryDirectionals")] = secondaries;
     }
     if (!st.available) {
@@ -2826,23 +2827,23 @@ QString WorldApi::sunLight(const QVariant &light)
     // (world.sun() is the same answer with its reasoning attached.)
     if (!light.isValid()) {
         auto sun = scene->sunLight();
-        return sun ? sun->getGUID() : QString();
+        return sun ? QString::fromStdString(sun->getGUID()) : QString();
     }
 
     // "auto" is the EXPLICIT way to say "unpin, let the priority decide" — the
     // same write as null, spelled for a reader.
     const QString id = light.isNull() ? QString() : light.toString();
     if (id.compare(QLatin1String("auto"), Qt::CaseInsensitive) == 0) {
-        if (!scene->sunLightGuid.isEmpty())
+        if (!scene->sunLightGuid.empty())
             pushSunPinUndo(QStringLiteral("Automatic Sun"), scene, QString());
         auto sun = scene->sunLight();
-        return sun ? sun->getGUID() : QString();
+        return sun ? QString::fromStdString(sun->getGUID()) : QString();
     }
     if (id.isEmpty()) {
-        if (!scene->sunLightGuid.isEmpty())
+        if (!scene->sunLightGuid.empty())
             pushSunPinUndo(QStringLiteral("Unpin Sun Light"), scene, QString());
         auto sun = scene->sunLight();
-        return sun ? sun->getGUID() : QString();
+        return sun ? QString::fromStdString(sun->getGUID()) : QString();
     }
 
     auto node = findNodeByGuid(scene->getRootNode(), id);
@@ -2863,7 +2864,7 @@ QString WorldApi::sunLight(const QVariant &light)
 
     if (scene->sunLightGuid != id)
         pushSunPinUndo(QStringLiteral("Pin Sun Light"), scene, id);
-    return scene->sunLightGuid;
+    return QString::fromStdString(scene->sunLightGuid);
 }
 
 // THE SUN, with its reasoning attached (SUN_AND_LIGHT_DEFAULTS Q1/Q1d).
@@ -2873,10 +2874,10 @@ QVariantMap WorldApi::sun()
     if (!scene) return QVariantMap();
     auto sun = scene->sunLight();
     QVariantMap out;
-    out[QStringLiteral("light")] = sun ? sun->getGUID() : QString();
+    out[QStringLiteral("light")] = sun ? QString::fromStdString(sun->getGUID()) : QString();
     out[QStringLiteral("name")] = sun ? QString::fromStdString(sun->getName()) : QString();
-    out[QStringLiteral("explicit")] = !scene->sunLightGuid.isEmpty();
-    out[QStringLiteral("reason")] = scene->sunReason();
+    out[QStringLiteral("explicit")] = !scene->sunLightGuid.empty();
+    out[QStringLiteral("reason")] = QString::fromStdString(scene->sunReason());
     out[QStringLiteral("priority")] = sun ? sun->forwardShadingPriority : -1;
     out[QStringLiteral("castsShadows")] = bool(sun);   // every light casts (PHOTON-7 10-4 R9: None is deleted)
     // The direction the sun TRAVELS, in world space — what the realistic sky's
@@ -2889,7 +2890,7 @@ QVariantMap WorldApi::sun()
     }
     QVariantList secondaries;
     for (const auto &l : scene->secondaryDirectionals())
-        secondaries.append(QVariantMap{ { QStringLiteral("light"), l->getGUID() },
+        secondaries.append(QVariantMap{ { QStringLiteral("light"), QString::fromStdString(l->getGUID()) },
                                         { QStringLiteral("name"), QString::fromStdString(l->getName()) },
                                         { QStringLiteral("priority"), l->forwardShadingPriority } });
     out[QStringLiteral("secondaries")] = secondaries;
@@ -2919,14 +2920,14 @@ QVariantMap WorldApi::skyLight()
     auto scene = sceneOrFail(QStringLiteral("world.skyLight"));
     if (!scene) return out;
     const auto light = scene->skyLight();
-    out[QStringLiteral("light")] = light ? light->getGUID() : QString();
+    out[QStringLiteral("light")] = light ? QString::fromStdString(light->getGUID()) : QString();
     out[QStringLiteral("name")] = light ? QString::fromStdString(light->getName()) : QString();
     out[QStringLiteral("intensity")] = light ? double(light->intensity) : 0.0;
     out[QStringLiteral("tint")] = light ? colorToJs(iris::toQColor(light->color)) : QVariant();
-    out[QStringLiteral("reason")] = scene->skyLightReason();
-    const int typeIndex = qBound(0, int(scene->skyType), scene->skyTypeToStr.size() - 1);
-    out[QStringLiteral("skyType")] = scene->skyTypeToStr.at(typeIndex);
-    out[QStringLiteral("count")] = scene->skyLights().size();
+    out[QStringLiteral("reason")] = QString::fromStdString(scene->skyLightReason());
+    const int typeIndex = qBound(0, int(scene->skyType), int(scene->skyTypeToStr.size()) - 1);
+    out[QStringLiteral("skyType")] = QString::fromStdString(scene->skyTypeToStr.at(typeIndex));
+    out[QStringLiteral("count")] = qsizetype(scene->skyLights().size());   // the QVariant it always was
     return out;
 }
 
@@ -2994,7 +2995,7 @@ QVariantMap WorldApi::ambience(const QVariantMap &params)
         const QString refusal = refuseUnknownKeys(QStringLiteral("world.ambience"), params, known);
         if (!refusal.isEmpty()) { fail(refusal); return out; }
         // VALIDATED BEFORE ANYTHING IS WRITTEN.
-        QString music = scene->ambientMusicGuid;
+        QString music = QString::fromStdString(scene->ambientMusicGuid);
         if (params.contains(QStringLiteral("music"))) {
             music = params.value(QStringLiteral("music")).toString().trimmed();
             if (!music.isEmpty()) {
@@ -3030,7 +3031,7 @@ QVariantMap WorldApi::ambience(const QVariantMap &params)
         out = player->state();
     }
     out.remove(QStringLiteral("guid"));
-    out[QStringLiteral("music")] = scene->ambientMusicGuid;
+    out[QStringLiteral("music")] = QString::fromStdString(scene->ambientMusicGuid);
     out[QStringLiteral("volume")] = double(scene->ambientMusicVolume);
     return out;
 }
@@ -3088,13 +3089,13 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
                                         "or \"\" to clear it"));
                     return out;
                 }
-                c.weatherMapGuid = guid;
+                c.weatherMapGuid = guid.toStdString();
                 weatherPath = path;
             }
         }
         c = iris::CloudLayer::clamped(c);
         QVariantMap value = qtstd::toVariantMap(c.toJson());
-        if (!c.weatherMapGuid.isEmpty() && !weatherPath.isEmpty())
+        if (!c.weatherMapGuid.empty() && !weatherPath.isEmpty())
             value.insert(QStringLiteral("weatherPath"), weatherPath);
         WorldEdit edit(scene, { QStringLiteral("clouds") });
         sceneprops::set(scene, QStringLiteral("clouds"), value);
@@ -3108,7 +3109,7 @@ QVariantMap WorldApi::clouds(const QVariantMap &params)
     out[QStringLiteral("direction")] = double(c.direction);
     out[QStringLiteral("altitude")] = double(c.altitude);
     out[QStringLiteral("shadow")] = double(c.shadow);
-    out[QStringLiteral("weatherMap")] = c.weatherMapGuid;
+    out[QStringLiteral("weatherMap")] = QString::fromStdString(c.weatherMapGuid);
     out[QStringLiteral("drawsOver")] = scene->skyType != iris::SkyType::EQUIRECTANGULAR &&
                                        scene->skyType != iris::SkyType::CUBEMAP;
     if (host.isEngineReady() && host.viewport) {
@@ -3250,7 +3251,7 @@ QVariantMap WorldApi::sunContact(const QVariantMap &params)
         if (params.contains(QStringLiteral("resolution"))) {
             iris::SunContactResolution r = iris::SunContactResolution::Auto;
             if (!iris::SunContact::resolutionFromName(
-                    params.value(QStringLiteral("resolution")).toString(), r)) {
+                    (params.value(QStringLiteral("resolution")).toString()).toStdString(), r)) {
                 fail(QStringLiteral("world.sunContact: 'resolution' must be \"auto\", \"full\" or \"half\""));
                 return out;
             }
@@ -3304,7 +3305,7 @@ QString WorldApi::rayTracing(const QString &mode)
     if (!scene) return QString();
     if (!mode.isEmpty()) {
         iris::RayTracingMode wanted = iris::RayTracingMode::Auto;
-        if (!iris::rayTracingModeFromName(mode, wanted)) {
+        if (!iris::rayTracingModeFromName(mode.toStdString(), wanted)) {
             // REFUSED, never guessed: a typo that silently meant "auto" would
             // be a scene that quietly stopped saying what it was authored for.
             fail(QStringLiteral("world.rayTracing: '%1' is not a state "
@@ -3727,7 +3728,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         scene->skyColor = iris::toSrgbColor(c);
         QJsonObject def;
         def.insert("skyColor", qtstd::colorToJson(iris::toSrgbColor(c)));
-        scene->skyData.insert("SingleColor", qtstd::fromQJsonObject(def));
+        scene->skyData.insert_or_assign("SingleColor", qtstd::fromQJsonObject(def));
         scene->skyType = iris::SkyType::SINGLE_COLOR;
     } else if (t == "gradient") {
         struct { const char *key; iris::SrgbColor *field; } stops[] = {
@@ -3752,7 +3753,7 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         def.insert("gradientMid", qtstd::colorToJson(scene->gradientMid));
         def.insert("gradientBot", qtstd::colorToJson(scene->gradientBot));
         def.insert("gradientOffset", double(scene->gradientOffset));
-        scene->skyData.insert("Gradient", qtstd::fromQJsonObject(def));
+        scene->skyData.insert_or_assign("Gradient", qtstd::fromQJsonObject(def));
         scene->skyType = iris::SkyType::GRADIENT;
     } else if (t == "realistic") {
         // ONE WRITER (SKY-WRITE-1): read the current dials, apply what the call
@@ -3792,12 +3793,12 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
         scene->setSkyTexture(iris::Texture2D::load(path));
         QJsonObject def;
         def.insert("equiSkyGuid", guid);
-        scene->skyData.insert("Equirectangular", qtstd::fromQJsonObject(def));
+        scene->skyData.insert_or_assign("Equirectangular", qtstd::fromQJsonObject(def));
         scene->skyType = iris::SkyType::EQUIRECTANGULAR;
         // dependency bookkeeping, exactly like the sky panel
-        host.db->removeDependenciesByType(scene->skyGuid, ModelTypes::Texture);
+        host.db->removeDependenciesByType(QString::fromStdString(scene->skyGuid), ModelTypes::Texture);
         host.db->createDependency(static_cast<int>(ModelTypes::Sky), static_cast<int>(ModelTypes::Texture),
-                                  scene->skyGuid, guid, host.project->getProjectGuid());
+                                  QString::fromStdString(scene->skyGuid), guid, host.project->getProjectGuid());
     } else if (t == "cubemap") {
         if (!requireProject()) return false;
         static const char *faces[] = { "front", "back", "left", "right", "top", "bottom" };
@@ -3827,13 +3828,13 @@ bool WorldApi::sky(const QString &type, const QVariantMap &params)
             paths.value("left"), paths.value("right")));
         QJsonObject def;
         for (const char *face : faces) def.insert(face, guids.value(face));
-        scene->skyData.insert("Cubemap", qtstd::fromQJsonObject(def));
+        scene->skyData.insert_or_assign("Cubemap", qtstd::fromQJsonObject(def));
         scene->skyType = iris::SkyType::CUBEMAP;
-        host.db->removeDependenciesByType(scene->skyGuid, ModelTypes::Texture);
+        host.db->removeDependenciesByType(QString::fromStdString(scene->skyGuid), ModelTypes::Texture);
         for (const char *face : faces) {
             if (!guids.value(face).isEmpty())
                 host.db->createDependency(static_cast<int>(ModelTypes::Sky), static_cast<int>(ModelTypes::Texture),
-                                          scene->skyGuid, guids.value(face), host.project->getProjectGuid());
+                                          QString::fromStdString(scene->skyGuid), guids.value(face), host.project->getProjectGuid());
         }
     } else {
         return fail(QStringLiteral("world.sky: unknown type '%1' (none, color, gradient, realistic, equirectangular, cubemap)").arg(type));
@@ -3946,14 +3947,14 @@ QVariantMap WorldApi::get()
                              { "tier", worldmodes::photonTierName(worldmodes::photonTier(scene)) } };
     out["photon"] = photonState(scene);
     QVariantMap sky;
-    const int typeIndex = qBound(0, int(scene->skyType), scene->skyTypeToStr.size() - 1);
-    sky["type"] = scene->skyTypeToStr.at(typeIndex);
-    sky["data"] = qtstd::toVariantMap(scene->skyData.value(scene->skyTypeToStr.at(typeIndex)));
+    const int typeIndex = qBound(0, int(scene->skyType), int(scene->skyTypeToStr.size()) - 1);
+    sky["type"] = QString::fromStdString(scene->skyTypeToStr.at(typeIndex));
+    sky["data"] = qtstd::toVariantMap(iris::valueOr(scene->skyData, scene->skyTypeToStr.at(typeIndex)));
     if (scene->skyType == iris::SkyType::SINGLE_COLOR) sky["color"] = colorToJs(iris::toQColor(scene->skyColor));
     // The sun PIN (which directional light is the sun), empty = automatic. The
     // sky's own sun dials and its steering switch are gone (D15) — world.sun()
     // is where the sun's direction is read now.
-    sky["sunLight"] = scene->sunLightGuid;
+    sky["sunLight"] = QString::fromStdString(scene->sunLightGuid);
     out["sky"] = sky;
     return out;
 }

@@ -54,7 +54,7 @@ void AmbienceService::ensurePlayer()
 
 void AmbienceService::sync(const iris::ScenePtr &scene)
 {
-    const QString guid = scene ? scene->ambientMusicGuid : QString();
+    const QString guid = scene ? QString::fromStdString(scene->ambientMusicGuid) : QString();
     if (guid.isEmpty()) {
         if (!mGuid.isEmpty()) stop();
         return;

@@ -1336,7 +1336,7 @@ void SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets(QStringList 
 		fileNames.append(db->fetchAsset(guid).name);
 	}
 
-	db->removeDependenciesByType(scene->skyGuid, ModelTypes::Texture);
+	db->removeDependenciesByType(QString::fromStdString(scene->skyGuid), ModelTypes::Texture);
 
 	skyPropView->skyTypeChanged(static_cast<int>(iris::SkyType::CUBEMAP));
 	for (int i = 0; i < 6; i++) {

@@ -365,9 +365,9 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     std::function<void(iris::SceneNodePtr &)> rewrite = [&](iris::SceneNodePtr &n) {
         if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             auto meshNode = std::static_pointer_cast<iris::MeshNode>(n);
-            if (QFileInfo(meshNode->meshPath).fileName() == sourceInfo.fileName())
-                meshNode->meshPath = out.meshGuid;
-            meshNode->setGUID(out.mainGuid);
+            if (QFileInfo(QString::fromStdString(meshNode->meshPath)).fileName() == sourceInfo.fileName())
+                meshNode->meshPath = out.meshGuid.toStdString();
+            meshNode->setGUID(out.mainGuid.toStdString());
             // EVERY MAP ROW NAMES ITS MEMBER ASSET (TEX-REF-1): the row keeps
             // the extracted file it renders from and gains the member Texture
             // row's guid (the member list is unique by file name), so the blob

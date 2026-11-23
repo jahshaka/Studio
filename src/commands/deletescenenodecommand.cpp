@@ -73,7 +73,7 @@ void DeleteSceneNodeCommand::undo()
     // settle re-promotes a demotion that was not a transform write.
     if (services && services->sceneEdit) services->sceneEdit->completeLandedContent(sceneNode);
     if (!unarmedCameraGuid.isEmpty())
-        if (auto scene = sceneNode->getScene()) scene->setActiveCamera(unarmedCameraGuid);
+        if (auto scene = sceneNode->getScene()) scene->setActiveCamera(unarmedCameraGuid.toStdString());
     if (services && services->sceneEdit) services->sceneEdit->notifyNodeInserted(sceneNode);
     if (services && services->selection) services->selection->select(sceneNode);
 }
@@ -96,7 +96,7 @@ void DeleteSceneNodeCommand::redo()
     }
     if (sceneNode)
         if (auto scene = sceneNode->getScene()) {
-            const QString armed = scene->getActiveCameraGuid();
+            const QString armed = QString::fromStdString(scene->getActiveCameraGuid());
             unarmedCameraGuid.clear();
             if (!armed.isEmpty()) {
                 std::function<bool(const iris::SceneNodePtr &)> carries =

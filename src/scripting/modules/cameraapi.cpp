@@ -111,7 +111,7 @@ QVariantMap settingsToJs(const iris::CameraNodePtr &cam)
 {
     QVariantMap out;
     if (!cam) return out;
-    out["id"] = cam->getGUID();
+    out["id"] = QString::fromStdString(cam->getGUID());
     out["name"] = QString::fromStdString(cam->getName());
     out["angle"] = cam->angle;                 // vertical degrees
     out["focalLength"] = cam->focalLength();   // the same angle, in mm
@@ -133,7 +133,7 @@ QVariantMap settingsToJs(const iris::CameraNodePtr &cam)
     out["dofEnabled"] = cam->dofEnabled;
     out["focusMode"] = focusModeName(cam->focusMode);
     out["focusDistance"] = cam->focusDistance;
-    out["focusTarget"] = cam->focusTarget;
+    out["focusTarget"] = QString::fromStdString(cam->focusTarget);
     out["fStop"] = cam->fStop;
     // CAMERA_LENS_SPEC §3 P2.
     out["focusOffset"] = cam->focusOffset;
@@ -979,7 +979,7 @@ QVariantMap CameraApi::postFx(const QString &id, const QVariant &options)
         resolved.insert(key, own.isValid() ? own : world);
         available.insert(key, postKeyAvailable(key));
     }
-    out["id"] = cam->getGUID();
+    out["id"] = QString::fromStdString(cam->getGUID());
     out["overrides"] = overrides;
     out["resolved"] = resolved;
     out["available"] = available;
@@ -1019,7 +1019,7 @@ QVariantMap CameraApi::clearPostOverride(const QString &id, const QVariant &row)
         cleared << key;
         if (undo) undo->push(new SetNodePropertyCommand(cam, property, before, iris::Value()));
     }
-    out["id"] = cam->getGUID();
+    out["id"] = QString::fromStdString(cam->getGUID());
     out["cleared"] = cleared;
     return out;
 }
@@ -1147,8 +1147,8 @@ QVariantMap CameraApi::screenshot(const QString &id, const QString &path,
     auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
                                                              : iris::ScenePtr();
     const bool substituting = scene && scene->isPlaying();
-    const QString savedActive = scene ? scene->getActiveCameraGuid() : QString();
-    if (substituting) scene->setActiveCamera(id);
+    const QString savedActive = scene ? QString::fromStdString(scene->getActiveCameraGuid()) : QString();
+    if (substituting) scene->setActiveCamera(id.toStdString());
 
     // BORROWING THE VIEWPORT IS NOW SAFE, and this is where that was proved.
     // Building this verb (2026-09-05) found that setEditorCamera resyncs the
@@ -1166,7 +1166,7 @@ QVariantMap CameraApi::screenshot(const QString &id, const QString &path,
     host.viewport->setEditorCamera(cam);
     const QImage img = host.viewport->takeScreenshot(width, height, grade);
     host.viewport->setEditorCamera(saved);
-    if (substituting) scene->setActiveCamera(savedActive);
+    if (substituting) scene->setActiveCamera(savedActive.toStdString());
 
     if (img.isNull()) { fail("camera.screenshot: the viewport returned no image"); return out; }
 

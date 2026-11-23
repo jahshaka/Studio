@@ -751,7 +751,7 @@ SceneTreeWidget::DropHint SceneHierarchyWidget::dropHintAt(const QList<iris::Sce
         // promises an edit and performs none (filing an unfiled node at the
         // root level) is noise.
         for (const auto &n : dragged)
-            if (isFolderable(n) && !n->folderPath.isEmpty()) return Hint::ToRoot;
+            if (isFolderable(n) && !n->folderPath.empty()) return Hint::ToRoot;
         return Hint::None;
     }
     if (rowOut) *rowOut = row;
@@ -780,7 +780,7 @@ SceneTreeWidget::DropHint SceneHierarchyWidget::dropHintAt(const QList<iris::Sce
                        rect.bottom() - pos.y() < rect.height() / 4);
     if (edge && isFolderable(target)) {
         for (const auto &n : dragged) if (isFolderable(n) && n != target) {
-            if (folderOut) *folderOut = scenefolders::normalize(target->folderPath);
+            if (folderOut) *folderOut = scenefolders::normalize(QString::fromStdString(target->folderPath));
             return Hint::ToRoot;   // "beside", drawn as a line — the folder is in folderOut
         }
     }
@@ -821,7 +821,7 @@ void SceneHierarchyWidget::moveNodesToFolder(const QList<iris::SceneNodePtr> &no
         bool changed = false;
         for (const auto &n : nodes) {
             if (!isFolderable(n)) continue;
-            if (scenefolders::normalize(n->folderPath) == target) continue;
+            if (scenefolders::normalize(QString::fromStdString(n->folderPath)) == target) continue;
             scenefolders::setNodeFolder(scene, n, target);
             changed = true;
         }
@@ -847,7 +847,7 @@ void SceneHierarchyWidget::newFolderFromSelection()
     // The new folder is created NEXT TO whatever the selection is already in,
     // so folder-ising things that live in "Props" gives "Props/<new>".
     QString parent;
-    if (!members.isEmpty()) parent = scenefolders::normalize(members.first()->folderPath);
+    if (!members.isEmpty()) parent = scenefolders::normalize(QString::fromStdString(members.first()->folderPath));
 
     const QString name = askFolderName(members.isEmpty() ? tr("New Folder")
                                                          : tr("Group In New Folder"),
@@ -1006,7 +1006,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
             QAction *paste = menu.addAction(tr("Paste"));
             connect(paste, &QAction::triggered, this, [this, clip]() {
                 ClipboardPasteOptions options;
-                options.parentGuid = scene->getRootNode()->getGUID();   // the World itself
+                options.parentGuid = QString::fromStdString(scene->getRootNode()->getGUID());   // the World itself
                 const auto result = clip->paste(options);
                 if (!result.missing.isEmpty() && shell)
                     QMessageBox::warning(this, tr("Paste"),
@@ -1142,7 +1142,7 @@ void SceneHierarchyWidget::sceneTreeCustomContextMenu(const QPoint& pos)
                 // right-clicked row is the anchor the user pointed at).
                 ClipboardPasteOptions options;
                 if (auto parent = node->getParent()) {
-                    options.parentGuid = parent->getGUID();
+                    options.parentGuid = QString::fromStdString(parent->getGUID());
                     const int after = node->siblingIndex();
                     options.index = after >= 0 ? after + 1 : -1;
                 }
@@ -1440,7 +1440,7 @@ void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
         auto childTreeItem = createTreeItems(childNode);
         QTreeWidgetItem *host = parentTreeItem;
         if (rootLevel) {
-            const QString folder = scenefolders::normalize(childNode->folderPath);
+            const QString folder = scenefolders::normalize(QString::fromStdString(childNode->folderPath));
             if (!folder.isEmpty())
                 if (auto *folderRow = folderItemFor(folder)) host = folderRow;
         }
@@ -1625,7 +1625,7 @@ void SceneHierarchyWidget::insertChild(iris::SceneNodePtr childNode)
     // A root-level node that carries a folder belongs under the folder ROW, not
     // under the world row (§6b) — this is the incremental twin of populateTree.
     if (scene && parentNode == scene->getRootNode()) {
-        const QString folder = scenefolders::normalize(childNode->folderPath);
+        const QString folder = scenefolders::normalize(QString::fromStdString(childNode->folderPath));
         if (!folder.isEmpty())
             if (auto *folderRow = folderItemFor(folder)) parentTreeItem = folderRow;
     }

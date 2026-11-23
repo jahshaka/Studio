@@ -75,7 +75,8 @@ void RemoveAnimationCommand::undo()
 {
     auto node = mNode.lock();
     if (!node || !mAnim) return;
-    if (!node->getAnimations().contains(mAnim)) node->addAnimation(mAnim);
+    const auto &anims = node->getAnimations();
+        if (std::find(anims.begin(), anims.end(), mAnim) == anims.end()) node->addAnimation(mAnim);
     if (mWasActive) node->setAnimation(mAnim);
 }
 

@@ -99,8 +99,8 @@ QStringList SessionMarkers::sceneStats(const iris::ScenePtr &scene)
 
     int meshes = 0, lights = 0, cameras = 0, particles = 0, decals = 0, empties = 0;
     QSet<QString> materials;
-    for (auto it = scene->nodes.constBegin(); it != scene->nodes.constEnd(); ++it) {
-        const iris::SceneNodePtr &node = it.value();
+    for (auto it = scene->nodes.cbegin(); it != scene->nodes.cend(); ++it) {
+        const iris::SceneNodePtr &node = it->second;
         if (!node) continue;
         switch (node->getSceneNodeType()) {
         case iris::SceneNodeType::Mesh: {
@@ -108,7 +108,7 @@ QStringList SessionMarkers::sceneStats(const iris::ScenePtr &scene)
             // The material identity is what a "did the scene get heavier"
             // reading wants, and a mesh node is where one lives.
             if (auto mesh = std::static_pointer_cast<iris::MeshNode>(node))
-                if (mesh->getMaterial()) materials.insert(mesh->getGUID());
+                if (mesh->getMaterial()) materials.insert(QString::fromStdString(mesh->getGUID()));
             break;
         }
         case iris::SceneNodeType::Light:          ++lights; break;

@@ -43,6 +43,7 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QSignalBlocker>
 #include <QTimer>
+#include "irisgl/document/mapvalue.h"
 
 namespace {
 // Sky texture references are asset guids: resolve them through the CAS (the
@@ -115,7 +116,7 @@ void SkyPropertyWidget::setScene(std::shared_ptr<iris::Scene> scene)
     if (!!scene) {
         this->scene = scene;
         binding = Binding::Scene;
-        skyGuid = scene->skyGuid;
+        skyGuid = QString::fromStdString(scene->skyGuid);
         currentSky = scene->skyType;
         skyTypeChanged(static_cast<int>(scene->skyType));
     } else {
@@ -145,7 +146,7 @@ iris::ScenePtr SkyPropertyWidget::liveScene() const
 QJsonObject SkyPropertyWidget::storedDefinition(iris::SkyType type) const
 {
     if (binding == Binding::Scene)
-        return scene ? qtstd::toQJsonObject(scene->skyData.value(skyDataKey(type))) : QJsonObject();
+        return scene ? qtstd::toQJsonObject(iris::valueOr(scene->skyData, skyDataKey(type).toStdString())) : QJsonObject();
     // The asset's stored blob is only the definition for the type it was SAVED
     // as: switching an asset to a different sky type starts from that type's
     // defaults, exactly as the asset panel always did.
@@ -515,7 +516,7 @@ void SkyPropertyWidget::updateAssetAndKeys()
 			if (currentSky == iris::SkyType::REALISTIC)
 				scene->setSkyRealistic(iris::Scene::skyRealisticFromJson(qtstd::fromQJsonObject(skyProperties)));
 			else
-				scene->skyData.insert(skyDataKey(currentSky), qtstd::fromQJsonObject(skyProperties));
+				scene->skyData.insert_or_assign(skyDataKey(currentSky).toStdString(), qtstd::fromQJsonObject(skyProperties));
 		}
 		return;
 	}

@@ -76,7 +76,6 @@
 #include <QUndoStack>
 #include "irisgl/mirror/scenemirror.h"
 #include "viewport/editordata.h"
-#include "irisgl/document/physics/environment.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "viewport/recordingview.h"
@@ -102,6 +101,8 @@
 #include "jahshaka/engine/Skeleton.h"
 #include "jahshaka/engine/Stats.h"
 #include "jahshaka/engine/Vr.h"
+#include "irisgl/document/mapvalue.h"
+#include <algorithm>
 
 
 
@@ -1471,7 +1472,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
         const QJsonObject skyDefinition = QJsonDocument::fromJson(mDatabase->fetchAssetData(skyGuid)).object();
         const QJsonObject skyProperties = QJsonDocument::fromJson(mDatabase->fetchAsset(skyGuid).properties).object();
         const int skyTypeIndex = skyProperties.value("sky").toObject().value("type").toInt();
-        mScene->skyData.insert(mScene->skyTypeToStr[skyTypeIndex], qtstd::fromQJsonObject(skyDefinition));
+        mScene->skyData.insert_or_assign(mScene->skyTypeToStr[skyTypeIndex], qtstd::fromQJsonObject(skyDefinition));
         mScene->skyType = static_cast<iris::SkyType>(skyTypeIndex);
         emit mEvents.changeSkyFromAssetWidget(skyTypeIndex);
     }
@@ -2411,7 +2412,7 @@ bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
 
     // ---- entering ---------------------------------------------------------
     if (camera) {
-        if (!mScene || !mScene->cameras.contains(camera->getGUID())) return false;
+        if (!mScene || !mScene->cameras.count(camera->getGUID())) return false;
         mPilot = camera;
         mPilotStartPos = camera->getLocalPos();
         mPilotStartRot = camera->getLocalRot();
@@ -3451,10 +3452,10 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
     // waiting for a rainy day.
     QHash<quint64, QString> guidOf;
     if (mMirror && !!mScene) {
-        for (const auto &l : mScene->lights) {
+        for (const auto &[lKey, l] : mScene->lights) {
             if (!l) continue;
             const jahshaka::engine::NodeId id = mMirror->engineNode(l.get());
-            if (id) guidOf.insert(quint64(id), l->getGUID());
+            if (id) guidOf.insert(quint64(id), QString::fromStdString(l->getGUID()));
         }
     }
     for (const jahshaka::engine::ShadowMapInfo &m : st.mapped) {
@@ -3536,7 +3537,7 @@ IEditorViewport::RigStatsInfo EngineSceneViewport::rigStats() const
 QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
 {
     if (!mMirror || !mEngineScene || !mScene) return QString();
-    auto node = mScene->nodes.value(nodeGuid);
+    auto node = iris::valueOr(mScene->nodes, nodeGuid.toStdString());
     if (!node) return QString();
     const auto material = mMirror->engineMaterial(node.get());
     if (!material) return QString();

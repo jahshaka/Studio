@@ -60,6 +60,7 @@ For more information see the LICENSE file
 #include "ui/style/panelmetrics.h"
 #include "ui/style/stylesheet.h"
 #include "viewport/ieditorviewport.h"
+#include <algorithm>
 
 /// Where the EDITOR docks' layout lives. Deliberately not "windowState": that
 /// key is the OUTER window's, written by QMainWindow::saveState, and the two
@@ -1451,7 +1452,7 @@ void EditorDocks::exportNode(const iris::SceneNodePtr &node, ModelTypes modelTyp
 
     // The node's library row (when it has one) refreshes its preview through THE ONE REQUEST
     // (services/previewservice.h); a node with no row is refused by name and changes nothing.
-    if (services && services->previews) services->previews->request(project, node->getGUID(), {});
+    if (services && services->previews) services->previews->request(project, QString::fromStdString(node->getGUID()), {});
 
     QDateTime currentDateTime = QDateTime::currentDateTimeUtc();
 

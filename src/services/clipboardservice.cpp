@@ -11,6 +11,7 @@ For more information see the LICENSE file
 
 #include "services/clipboardservice.h"
 #include "services/editgate.h"
+#include "app/qtstd.h"
 
 #include <QClipboard>
 #include <QDateTime>
@@ -580,7 +581,7 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
         // uses — the node domain's implementation, unchanged (spec §8).
         if (auto node = sceneEdit->insertFragment(fragment, parent, index, &setGuidMap)) {
             pastedNodes.append(node);
-            result.pasted.append(node->getGUID());
+            result.pasted.append(QString::fromStdString(node->getGUID()));
             if (index >= 0) ++index;   // keep the payload's order in the tree
         }
     }
@@ -588,7 +589,7 @@ ClipboardPasteResult ClipboardService::paste(const ClipboardPasteOptions &option
     // already re-pointed and a second lookup of a FRESH guid finds nothing —
     // the map is keyed on the originals).
     if (pastedNodes.size() > 1)
-        for (const auto &node : pastedNodes) node->remapNodeReferences(setGuidMap);
+        for (const auto &node : pastedNodes) node->remapNodeReferences(qtstd::toStdStringMap(setGuidMap));
     if (macro) undo->stack()->endMacro();
 
     if (selection && !pastedNodes.isEmpty()) selection->select(pastedNodes);

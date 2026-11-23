@@ -53,6 +53,7 @@ For more information see the LICENSE file
 #include "irisgl/import/materialhelper.h"
 #include "irisgl/document/scenegraph/skybake.h"
 #include "irisgl/document/properties/property.h"
+#include <algorithm>
 
 namespace {
 
@@ -848,7 +849,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
             QImage faces[6];
             bool ok = true;
             for (int i = 0; i < 6 && ok; ++i) {
-                faces[i] = QImage(scene->skyBoxTextures[i]);
+                faces[i] = QImage(QString::fromStdString(scene->skyBoxTextures[i]));
                 ok = !faces[i].isNull();
             }
             if (ok) stitched = stitchCubemapToEquirect(faces);
@@ -996,7 +997,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         writeTrs(n, node);
 
         QJsonObject jah;
-        jah["guid"] = node->getGUID();
+        jah["guid"] = QString::fromStdString(node->getGUID());
         if (!node->isVisible()) jah["visible"] = false;
         // Planar reflections (PLANAR_REFLECTIONS_SPEC.md §9). glTF has no
         // reflection extension, so the INTENT rides our extras convention and
@@ -1012,9 +1013,9 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // unlinked scratch avatar writes nothing, like every other extra here.
         if (node->isLinkedAvatar()) {
             QJsonObject avatarObj;
-            avatarObj["asset"] = node->avatarLink.asset;
-            avatarObj["version"] = node->avatarLink.version;
-            avatarObj["name"] = node->avatarLink.name;
+            avatarObj["asset"] = QString::fromStdString(node->avatarLink.asset);
+            avatarObj["version"] = QString::fromStdString(node->avatarLink.version);
+            avatarObj["name"] = QString::fromStdString(node->avatarLink.name);
             QJsonArray clipNames;
             std::function<void(const iris::SceneNodePtr &)> names =
                 [&](const iris::SceneNodePtr &n) {
@@ -1174,8 +1175,8 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 //
                 // Point lights are the honest loss: three has no IES point
                 // light, so the profile is recorded and dropped.
-                if (!light->iesProfilePath.isEmpty()) {
-                    const IesProfile profile = IesProfile::parse(light->iesProfilePath);
+                if (!light->iesProfilePath.empty()) {
+                    const IesProfile profile = IesProfile::parse(QString::fromStdString(light->iesProfilePath));
                     if (!profile.ok) {
                         c.warnings.append(QStringLiteral("light '%1': %2")
                                               .arg(node->getName(), profile.error));
@@ -1183,12 +1184,12 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                         QJsonArray lut;
                         for (float v : profile.attenuationLut()) lut.append(double(v));
                         QJsonObject ies;
-                        ies["name"] = QFileInfo(light->iesProfilePath).fileName();
+                        ies["name"] = QFileInfo(QString::fromStdString(light->iesProfilePath)).fileName();
                         ies["lut"] = lut;
                         shimJah["iesProfile"] = ies;
                     } else {
                         QJsonObject ies;
-                        ies["name"] = QFileInfo(light->iesProfilePath).fileName();
+                        ies["name"] = QFileInfo(QString::fromStdString(light->iesProfilePath)).fileName();
                         ies["dropped"] = QStringLiteral("no IES point light in three.js");
                         shimJah["iesProfile"] = ies;
                         c.warnings.append(
@@ -1277,9 +1278,9 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 const QImage img = loadDocumentImage(path, c);
                 if (!img.isNull()) d[QLatin1String(key)] = imageToDataUri(img, false);   // PNG always: the alpha channel IS the decal mask
             };
-            embedMap(decal->resolvedTexturePath, "image");
-            embedMap(decal->resolvedNormalPath, "normalImage");
-            embedMap(decal->resolvedEmissivePath, "emissiveImage");
+            embedMap(QString::fromStdString(decal->resolvedTexturePath), "image");
+            embedMap(QString::fromStdString(decal->resolvedNormalPath), "normalImage");
+            embedMap(QString::fromStdString(decal->resolvedEmissivePath), "emissiveImage");
             jah["decal"] = d;
         }
 
@@ -1581,7 +1582,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     jahScene["rayTracing"] = QString::fromLatin1(iris::rayTracingModeName(scene->rayTracing));
     if (scene->giMode != iris::GiMode::OFF)
         jahScene["gi"] = QStringLiteral("engine-only (mode %1)").arg(int(scene->giMode));
-    if (!scene->ambientMusicGuid.isEmpty() && !musicPath.isEmpty()) {
+    if (!scene->ambientMusicGuid.empty() && !musicPath.isEmpty()) {
         QJsonObject audio;
         audio["file"] = QFileInfo(musicPath).fileName();
         audio["volume"] = double(scene->ambientMusicVolume);

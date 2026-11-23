@@ -107,8 +107,8 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
         // materialises a QList and refcounts every child, and this loop called
         // it twice per step — an O(n^2) rebuild of the sibling list to walk it
         // once.
-        QList<iris::SceneNodePtr> kids = node->children();
-        for (int i = 0; i < kids.count() && i < children.size(); ++i) {
+        std::vector<iris::SceneNodePtr> kids = node->children();
+        for (int i = 0; i < int(kids.size()) && i < children.size(); ++i) {
             if (!children[i].toObject().isEmpty())
                 updateNodeMaterial(kids[i], children[i].toObject(), db);
         }

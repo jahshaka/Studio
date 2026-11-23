@@ -41,7 +41,6 @@ For more information see the LICENSE file
 #include "services/undoservice.h"
 #include "services/sceneeditservice.h"
 #include "services/materialdefaults.h"
-#include "irisgl/document/scenegraph/meshnode.h"
 #include "commands/changematerialpropertycommand.h"
 
 #include "io/scenewriter.h"
@@ -119,7 +118,7 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     if (!newMaterial) {
         meshNode = newNode;
         material.reset();
-        meshNodeGuid = newNode->getGUID();
+        meshNodeGuid = QString::fromStdString(newNode->getGUID());
         snapshotTextures();
         clearShownRows();
         return;
@@ -131,7 +130,7 @@ void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     clearShownRows();
     meshNode = newNode;
     material = newMaterial;
-    meshNodeGuid = meshNode->getGUID();
+    meshNodeGuid = QString::fromStdString(meshNode->getGUID());
     snapshotTextures();
 
     setupShaderSelector();
@@ -194,7 +193,7 @@ bool MaterialPropertyWidget::rebindTo(const std::shared_ptr<iris::MeshNode> &nod
 
     meshNode = node;
     material = mat;
-    meshNodeGuid = node->getGUID();
+    meshNodeGuid = QString::fromStdString(node->getGUID());
     snapshotTextures();
     materialPropWidget->rebind(base);
     if (detailPropWidget) detailPropWidget->rebind(details);
@@ -353,8 +352,8 @@ void MaterialPropertyWidget::materialChanged(int index)
         QJsonObject node;
         SceneWriter::writeSceneNode(node, meshNode);
 
-        db->updateAssetAsset(meshNode->getGUID(), QJsonDocument(node).toJson());
-        db->removeDependenciesByType(meshNode->getGUID(), ModelTypes::Material);
+        db->updateAssetAsset(QString::fromStdString(meshNode->getGUID()), QJsonDocument(node).toJson());
+        db->removeDependenciesByType(QString::fromStdString(meshNode->getGUID()), ModelTypes::Material);
         db->createDependency(
             static_cast<int>(ModelTypes::Object),
             static_cast<int>(ModelTypes::Material),

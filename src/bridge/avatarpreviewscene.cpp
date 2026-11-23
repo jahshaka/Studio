@@ -87,7 +87,13 @@ void AvatarPreviewScene::bindModel(avatar::AvatarPreviewModel *model)
     // the wire that brings it back for the overlay and for avatar.bones().
     SceneMirror *const source = mirror();
     model->setPoseSource([source](QHash<QString, iris::Mat4> &out) {
-        return source->boneWorldTransforms(out);
+        // The editor's edge: the mirror answers in the bones' own UTF-8 names; the preview keys by QString. On
+        // demand (avatar.bones(), the overlay's refresh), never per frame.
+        std::unordered_map<std::string, iris::Mat4> world;
+        out.clear();
+        if (!source->boneWorldTransforms(world)) return false;
+        for (const auto &[name, m] : world) out.insert(QString::fromStdString(name), m);
+        return true;
     });
 }
 

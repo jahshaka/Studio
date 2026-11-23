@@ -153,7 +153,7 @@ iris::MeshPtr EngineAssetScene::previewSphere()
 iris::SceneNodePtr EngineAssetScene::subject() const
 {
     if (!mDocument->rootNode->hasChildren()) return iris::SceneNodePtr();
-    auto last = mDocument->rootNode->children().last();
+    auto last = mDocument->rootNode->children().back();
     return last->isBuiltIn ? iris::SceneNodePtr() : last;
 }
 

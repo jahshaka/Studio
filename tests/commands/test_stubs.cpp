@@ -67,7 +67,7 @@ SceneFragment SceneEditService::captureFragment(const iris::SceneNodePtr &node) 
     // Identity only — enough for liveIsUsable's check, and it keeps the suite
     // out of the serializer. The REAL capture is proven end-to-end by
     // scripting.e2e.fragments, which runs the app's own writer and reader.
-    fragment.node.insert(QStringLiteral("guid"), node->getGUID());
+    fragment.node.insert(QStringLiteral("guid"), QString::fromStdString(node->getGUID()));
     fragment.nodeIds.append(node->getNodeId());
     return fragment;
 }

@@ -25,6 +25,8 @@ For more information see the LICENSE file
 
 #include <algorithm>
 
+#include "app/qtstd.h"
+
 #include "services/assetcas.h"
 #include "services/assetclosure.h"
 #include "services/assetstorepaths.h"
@@ -171,9 +173,9 @@ QStringList SceneEditService::waitingSources(const iris::SceneNodePtr &root) con
         if (!node) return;
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             const auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
-            if (!meshNode->getMesh() && !meshNode->meshPath.isEmpty()
-                && !meshNode->meshPath.startsWith(QLatin1Char(':'))) {
-                const QString path = resolver.resolveAssetPath(meshNode->meshPath);
+            if (!meshNode->getMesh() && !meshNode->meshPath.empty()
+                && meshNode->meshPath.front() != ':') {
+                const QString path = resolver.resolveAssetPath(QString::fromStdString(meshNode->meshPath));
                 if (!path.isEmpty() && !out.contains(path)) out.append(path);
             }
         }
@@ -196,8 +198,9 @@ int SceneEditService::rebindPendingClips(const QSet<QString> &assetGuids, const 
     int bound = 0;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
         if (!node) return;
-        QList<iris::AnimationPtr> anims = node->getAnimations();
-        if (node->getAnimation() && !anims.contains(node->getAnimation())) anims.append(node->getAnimation());
+        std::vector<iris::AnimationPtr> anims = node->getAnimations();
+        if (node->getAnimation() && std::find(anims.begin(), anims.end(), node->getAnimation()) == anims.end())
+            anims.push_back(node->getAnimation());
         bool changed = false;
         for (const iris::AnimationPtr &anim : anims) {
             if (!anim || !anim->hasSkeletalAnimation()) continue;
@@ -246,8 +249,8 @@ int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
     QVector<iris::SceneNodePtr> meshless;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
         if (!node) return;
-        QList<iris::AnimationPtr> anims = node->getAnimations();
-        if (node->getAnimation()) anims.append(node->getAnimation());
+        std::vector<iris::AnimationPtr> anims = node->getAnimations();
+        if (node->getAnimation()) anims.push_back(node->getAnimation());
         for (const iris::AnimationPtr &anim : anims) {
             if (!anim || !anim->hasSkeletalAnimation()) continue;
             const iris::SkeletalAnimationPtr skel = anim->getSkeletalAnimation();
@@ -258,8 +261,8 @@ int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
         }
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
             const auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
-            if (!meshNode->getMesh() && !meshNode->meshPath.isEmpty()
-                && !meshNode->meshPath.startsWith(QLatin1Char(':')))
+            if (!meshNode->getMesh() && !meshNode->meshPath.empty()
+                && meshNode->meshPath.front() != ':')
                 meshless.append(node);
         }
         for (const iris::SceneNodePtr &child : node->children()) walk(child);
@@ -268,9 +271,9 @@ int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
     int completed = rebindPendingClips(clipGuids, root);
     for (const iris::SceneNodePtr &node : meshless) {
         const auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
-        const QString path = source(meshNode->meshPath);
+        const QString path = source(QString::fromStdString(meshNode->meshPath));
         if (path.isEmpty() || MeshBakeStore::bakePending(path)) continue;
-        const iris::BakedModelPtr baked = MeshBakeStore::load(db->connection(), path, meshNode->meshPath);
+        const iris::BakedModelPtr baked = MeshBakeStore::load(db->connection(), path, QString::fromStdString(meshNode->meshPath));
         if (!baked || meshNode->meshIndex < 0 || meshNode->meshIndex >= baked->meshes.size()) continue;
         meshNode->setMesh(baked->meshes.at(meshNode->meshIndex));
         ++completed;
@@ -462,14 +465,14 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     auto node = iris::ParticleSystemNode::create();
     node->setName((preset == iris::ParticlePreset::Custom
                        ? QStringLiteral("Particle System")
-                       : iris::ParticleSystemNode::presetName(preset).left(1).toUpper() +
-                             iris::ParticleSystemNode::presetName(preset).mid(1)).toStdString());
+                       : QString::fromStdString(iris::ParticleSystemNode::presetName(preset)).left(1).toUpper() +
+                             QString::fromStdString(iris::ParticleSystemNode::presetName(preset)).mid(1)).toStdString());
     // The recipe first: it resets every authoring field, so anything set here
     // afterwards (the texture, below) survives and anything set before does not.
     if (preset != iris::ParticlePreset::Custom) node->applyPreset(preset);
 
     auto nodeGuid = QString::fromStdString(iris::newGuid());
-    node->setGUID(nodeGuid);
+    node->setGUID(nodeGuid.toStdString());
     // The "Systems" folder and the emitter's ParticleSystem row belong to a
     // PROJECT: with none open (a headless script, the startup placeholder)
     // they used to land in the library stamped with an empty project guid, one
@@ -521,7 +524,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     if (!image.guid.isEmpty()) setParticleTexture(node, image.guid);
     // No project to pin into: the emitter draws the shipped file, which has no
     // asset identity — nothing is saved, as the comment above says.
-    else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path), QString());
+    else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path), QString().toStdString());
     if (!image.error.isEmpty())
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, "addParticleSystem: the default particle image was not bound - " + image.error);
 
@@ -754,7 +757,7 @@ iris::DecalNodePtr SceneEditService::addDecal(const QString &textureGuid,
     // Object->Texture dependency row below has something to hang off (the
     // export walkers and the packaging closure read it).
     const QString nodeGuid = QString::fromStdString(iris::newGuid());
-    node->setGUID(nodeGuid);
+    node->setGUID(nodeGuid.toStdString());
     if (db && project && !project->getProjectGuid().isEmpty()) {
         QJsonObject props;
         props["type"] = "builtin";
@@ -796,8 +799,8 @@ bool SceneEditService::setDecalMap(const iris::DecalNodePtr &decal, DecalMapKind
 {
     if (!decal) return false;
 
-    QString *guidField = nullptr;
-    QString *pathField = nullptr;
+    std::string *guidField = nullptr;
+    std::string *pathField = nullptr;
     switch (kind) {
     case DecalMapKind::Diffuse:
         guidField = &decal->textureGuid;  pathField = &decal->resolvedTexturePath;  break;
@@ -807,23 +810,22 @@ bool SceneEditService::setDecalMap(const iris::DecalNodePtr &decal, DecalMapKind
         guidField = &decal->emissiveGuid; pathField = &decal->resolvedEmissivePath; break;
     }
 
-    const QString oldGuid = *guidField;
-    *guidField = textureGuid;
+    const QString oldGuid = QString::fromStdString(*guidField);
+    *guidField = textureGuid.toStdString();
     pathField->clear();
 
     // A dependency row is (node, asset) — not (node, asset, slot). Two kinds
     // bound to the SAME image share one row, so the old guid's row may only be
     // dropped once no other kind still holds it.
     const auto stillBound = [&decal](const QString &guid) {
-        return !guid.isEmpty() && (decal->textureGuid == guid ||
-                                   decal->normalGuid == guid ||
-                                   decal->emissiveGuid == guid);
+        const std::string g = guid.toStdString();
+        return !g.empty() && (decal->textureGuid == g || decal->normalGuid == g || decal->emissiveGuid == g);
     };
 
     if (textureGuid.isEmpty()) {
         if (db && project && !oldGuid.isEmpty() && !project->getProjectGuid().isEmpty() &&
             !stillBound(oldGuid))
-            db->deleteDependency(decal->getGUID(), oldGuid);
+            db->deleteDependency(QString::fromStdString(decal->getGUID()), oldGuid);
         return true;
     }
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
@@ -833,18 +835,18 @@ bool SceneEditService::setDecalMap(const iris::DecalNodePtr &decal, DecalMapKind
     // lights lane landed — LIGHTS_COMPLETION_SPEC D4 / ProjectAssets::AddKind).
     ProjectAssets::addToProject(textureGuid, db, project, ProjectAssets::AddKind::Binding);
     if (!oldGuid.isEmpty() && oldGuid != textureGuid && !stillBound(oldGuid))
-        db->deleteDependency(decal->getGUID(), oldGuid);
+        db->deleteDependency(QString::fromStdString(decal->getGUID()), oldGuid);
     // Delete-then-create: `dependencies` has no unique key on (depender,
     // dependee), so re-binding the same image (or binding it to a second kind)
     // would otherwise stack duplicate rows the export closure walks twice.
-    db->deleteDependency(decal->getGUID(), textureGuid);
+    db->deleteDependency(QString::fromStdString(decal->getGUID()), textureGuid);
     db->createDependency(static_cast<int>(ModelTypes::Object),
                          static_cast<int>(ModelTypes::Texture),
-                         decal->getGUID(), textureGuid, project->getProjectGuid());
+                         QString::fromStdString(decal->getGUID()), textureGuid, project->getProjectGuid());
 
     *pathField = AssetCas::resolvePinned(
         db->connection(), AssetStorePaths::root(),
-        project->getProjectGuid(), textureGuid);
+        project->getProjectGuid(), textureGuid).toStdString();
     return true;
 }
 
@@ -852,23 +854,23 @@ bool SceneEditService::setParticleTexture(const iris::ParticleSystemNodePtr &emi
                                           const QString &textureGuid)
 {
     if (!emitter) return false;
-    if (textureGuid.isEmpty()) { emitter->setTexture(iris::Texture2DPtr(), QString()); return true; }
+    if (textureGuid.isEmpty()) { emitter->setTexture(iris::Texture2DPtr(), QString().toStdString()); return true; }
     if (!db || !project || project->getProjectGuid().isEmpty()) return false;
 
     // BINDING membership, never a direct add: an emitter REFERS to an existing
     // image, so no companion PBR material is minted for it — the same rule the
     // decal and light-profile bindings follow.
     ProjectAssets::addToProject(textureGuid, db, project, ProjectAssets::AddKind::Binding);
-    db->removeDependenciesByType(emitter->getGUID(), ModelTypes::Texture);
+    db->removeDependenciesByType(QString::fromStdString(emitter->getGUID()), ModelTypes::Texture);
     db->createDependency(static_cast<int>(ModelTypes::ParticleSystem),
                          static_cast<int>(ModelTypes::Texture),
-                         emitter->getGUID(), textureGuid, project->getProjectGuid());
+                         QString::fromStdString(emitter->getGUID()), textureGuid, project->getProjectGuid());
 
     const QString path = AssetCas::resolvePinned(
         db->connection(), AssetStorePaths::root(),
         project->getProjectGuid(), textureGuid);
     if (path.isEmpty()) return false;
-    emitter->setTexture(iris::Texture2D::load(path), textureGuid);
+    emitter->setTexture(iris::Texture2D::load(path), textureGuid.toStdString());
     return !!emitter->texture;
 }
 
@@ -885,7 +887,7 @@ void SceneEditService::addAssetParticleSystem(bool ignore, iris::Vec3 position, 
 
     auto particleNode = iris::ParticleSystemNode::create();
 
-    particleNode->setGUID(pDefs["guid"].toString());
+    particleNode->setGUID(pDefs["guid"].toString().toStdString());
     particleNode->setPPS((float) pDefs["particlesPerSecond"].toDouble(1.0f));
     particleNode->setParticleScale((float) pDefs["particleScale"].toDouble(1.0f));
     particleNode->setDissipation(pDefs["dissipate"].toBool());
@@ -908,13 +910,13 @@ void SceneEditService::addAssetParticleSystem(bool ignore, iris::Vec3 position, 
                 project->getProjectGuid(), textureGuid);
             particleNode->setTexture(texPath.isEmpty() ? iris::Texture2DPtr()
                                                        : iris::Texture2D::load(texPath),
-                                     textureGuid);
+                                     textureGuid.toStdString());
         }
     }
     particleNode->setVisible(pDefs["visible"].toBool(true));
 
     particleNode->setPickable(true);
-    particleNode->setGUID(guid);
+    particleNode->setGUID(guid.toStdString());
     particleNode->setName(assetName.toStdString());
     particleNode->setLocalPos(position);
 
@@ -1026,7 +1028,7 @@ bool SceneEditService::deleteNode(iris::SceneNodePtr node)
     // delete becomes permanent, so undo no longer resurrects a node whose DB
     // asset is gone (SCRIPTING_SPEC §1.2).
     auto cmd = new DeleteSceneNodeCommand(node->getParent(), node,
-                                          node->isBuiltIn ? db : nullptr, node->getGUID());
+                                          node->isBuiltIn ? db : nullptr, QString::fromStdString(node->getGUID()));
     undo->push(cmd);
     return true;
 }
@@ -1147,14 +1149,14 @@ void regenerateGuids(const iris::SceneNodePtr &root, QHash<QString, QString> *gu
     QHash<QString, QString> guidMap;
     std::function<void(const iris::SceneNodePtr &)> assign = [&](const iris::SceneNodePtr &n) {
         const QString fresh = QString::fromStdString(iris::newGuid());
-        guidMap.insert(n->getGUID(), fresh);
-        n->setGUID(fresh);
+        guidMap.insert(QString::fromStdString(n->getGUID()), fresh);
+        n->setGUID(fresh.toStdString());
         const int kids = n->childCount();
         for (int i = 0; i < kids; ++i)
             if (iris::SceneNode *c = n->childAt(i)) assign(c->weak_from_this().lock());
     };
     assign(root);
-    root->remapNodeReferences(guidMap);
+    root->remapNodeReferences(qtstd::toStdStringMap(guidMap));
     if (guidMapOut) guidMapOut->insert(guidMap);
 }
 
@@ -1245,14 +1247,14 @@ SceneEditService::deleteNodes(const QList<iris::SceneNodePtr> &nodes)
     QList<iris::SceneNodePtr> input;
     for (const auto &node : nodes) {
         if (!node) continue;
-        if (node->isRootNode()) { result.skipped.append(node->getGUID()); continue; }
+        if (node->isRootNode()) { result.skipped.append(QString::fromStdString(node->getGUID())); continue; }
         input.append(node);
     }
 
     QList<iris::SceneNodePtr> targets;
     for (const auto &node : effectiveSet(input)) {
         // A node the document marks non-removable is skipped and reported too.
-        if (!node->isRemovable()) { result.skipped.append(node->getGUID()); continue; }
+        if (!node->isRemovable()) { result.skipped.append(QString::fromStdString(node->getGUID())); continue; }
         targets.append(node);
     }
     if (targets.isEmpty()) return result;
@@ -1267,7 +1269,7 @@ SceneEditService::deleteNodes(const QList<iris::SceneNodePtr> &nodes)
     const bool macro = targets.size() > 1 && undo && undo->stack();
     if (macro) undo->stack()->beginMacro(QObject::tr("Delete %1 objects").arg(targets.size()));
     for (const auto &node : targets) {
-        const QString guid = node->getGUID();
+        const QString guid = QString::fromStdString(node->getGUID());
         if (deleteNode(node)) result.deleted.append(guid);
         else                  result.skipped.append(guid);
     }
@@ -1739,7 +1741,7 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     if (project && !project->getProjectGuid().isEmpty()) {
         for (const auto &meshNode : meshes)
             undo->push(new MaterialUseEdgeCommand(db, project->getProjectGuid(),
-                                                  meshNode->getGUID(), assetGuid));
+                                                  QString::fromStdString(meshNode->getGUID()), assetGuid));
     }
 
     undo->stack()->endMacro();

@@ -1951,7 +1951,7 @@ QVariantMap AppApi::renderStats()
             QHash<jahshaka::engine::NodeId, QString> docNames;
             if (SceneMirror *mirror = host.viewport->sceneMirror(); mirror && doc) {
                 docNames.reserve(doc->nodes.size());
-                for (const iris::SceneNodePtr &n : std::as_const(doc->nodes)) {
+                for (const auto &[nKey, n] : doc->nodes) {
                     if (!n) continue;
                     const jahshaka::engine::NodeId id = mirror->engineNode(n.get());
                     if (id) docNames.insert(id, QString::fromStdString(n->getName()));

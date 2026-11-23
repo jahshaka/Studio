@@ -332,6 +332,9 @@ QString freshBakeAmong(const QString &root, const QVector<BakeRow> &newestFirst,
         const QFileInfo info(path);
         if (!info.exists()) continue;
         if (row.size >= 0 && info.size() != row.size) continue;
+        // A READ REFUSED THIS OBJECT's payload (its checksum: N3): its header still matches, so the header-only
+        // check alone would call it fresh forever. One set lookup, no payload read.
+        if (AssetCas::isMarkedCorrupt(path)) continue;
         if (!iris::MeshBake::headerMatches(path, fingerprint)) continue;
         return path;
     }
@@ -404,6 +407,8 @@ iris::BakedModelPtr load(db::Connection &conn, const QString &sourcePath, const 
         iris::MeshBake::Model model = iris::MeshBake::read(item.bakePath, item.bakeFingerprint);
         if (model.valid)
             result = std::make_shared<const iris::MeshBake::Model>(std::move(model));
+        else   // its header matched (planFor), so the PAYLOAD is corrupt: the next stale pass re-bakes it (N3)
+            AssetCas::markCorrupt(item.bakePath);
     }
     // THE HIT/MISS SPLIT (app.openStats()), reported to the SAME census the
     // prewarm worker reports to (irisgl/import/parsecensus.h) — an open reads
@@ -775,6 +780,33 @@ bool commitBake(db::Connection &conn, const QString &root, BakeResult &result, Q
     QVector<AssetCas::Staged> leftover{ result.staged };
     AssetCas::discardStaged(leftover);
     return ok;
+}
+
+namespace {
+QMutex sRequeuedLock;
+QSet<QString> sRequeued;   // the models takeRefused sent back once (the process's lifetime)
+}   // namespace
+
+QStringList takeRefused(const QVector<iris::PrewarmItem> &plan, iris::MeshPrewarm &prewarm)
+{
+    QStringList refused;
+    for (const iris::PrewarmItem &item : plan) {
+        if (item.bakePath.isEmpty() || prewarm.baked(item.path) || !prewarm.contains(item.path)) continue;
+        {
+            QMutexLocker locked(&sRequeuedLock);
+            if (sRequeued.contains(item.path)) {   // ONCE: a re-bake refused again is a miss, never a loop
+                JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                              QStringLiteral("mesh bake: %1: its re-bake was refused again - not retried, the model "
+                                             "stays missing").arg(item.path));
+                continue;
+            }
+            sRequeued.insert(item.path);
+        }
+        AssetCas::markCorrupt(item.bakePath);
+        prewarm.forget(item.path);
+        refused.append(item.path);
+    }
+    return refused;
 }
 
 QVector<BakeJob> staleJobsFor(db::Connection &conn, const QString &root, const QStringList &paths)

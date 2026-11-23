@@ -32,6 +32,7 @@ For more information see the LICENSE file
 #include "ui/style/stylesheet.h"
 #include "viewport/enginerenderdriver.h"
 #include "viewport/ieditorviewport.h"
+#include "irisgl/document/mapvalue.h"
 
 ViewController::ViewController(QObject *parent) : QObject(parent)
 {
@@ -155,7 +156,7 @@ void ViewController::rebuildCamerasMenu()
             [this]() { if (mViewport) mViewport->pilotCamera(iris::CameraNodePtr()); });
 
     auto scene = mViewport ? mViewport->getScene() : iris::ScenePtr();
-    if (!scene || scene->cameras.isEmpty()) {
+    if (!scene || scene->cameras.empty()) {
         QAction *none = mCamerasMenu->addAction(tr("No scene cameras"));
         none->setEnabled(false);
         return;
@@ -164,7 +165,7 @@ void ViewController::rebuildCamerasMenu()
     // By NAME, and stable: a QHash's order is not, and a menu that reshuffles
     // between opens is unusable.
     QVector<iris::CameraNodePtr> cameras;
-    for (const auto &cam : scene->cameras) if (cam) cameras.push_back(cam);
+    for (const auto &[camKey, cam] : scene->cameras) if (cam) cameras.push_back(cam);
     std::sort(cameras.begin(), cameras.end(),
               [](const iris::CameraNodePtr &a, const iris::CameraNodePtr &b) {
                   if (a->getName() != b->getName()) return a->getName() < b->getName();
@@ -176,12 +177,12 @@ void ViewController::rebuildCamerasMenu()
         action->setCheckable(true);
         action->setChecked(piloted == cam);
         group->addAction(action);
-        const QString guid = cam->getGUID();
+        const QString guid = QString::fromStdString(cam->getGUID());
         connect(action, &QAction::triggered, this, [this, guid]() {
             if (!mViewport) return;
             auto sc = mViewport->getScene();
             if (!sc) return;
-            if (auto target = sc->cameras.value(guid)) mViewport->pilotCamera(target);
+            if (auto target = iris::valueOr(sc->cameras, guid.toStdString())) mViewport->pilotCamera(target);
         });
     }
 }

@@ -77,7 +77,6 @@ For more information see the LICENSE file
 #include "viewport/flystep.h"
 #include "bridge/enginethumbnailrenderer.h"
 #include "viewport/ieditorviewport.h"
-#include "bridge/enginehost.h"
 #include "io/assetmanager.h"
 #include "io/materialreader.h"
 #include "io/scenereader.h"
@@ -89,6 +88,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "services/assetdelete.h"
 #include "services/livetextures.h"
+#include <algorithm>
 
 using namespace scriptmod;
 
@@ -1593,7 +1593,7 @@ QString AssetsApi::addToScene(const QString &guid, const QVariantMap &options)
         fail("assets.addToScene: the asset could not be instantiated");
         return QString();
     }
-    return node->getGUID();
+    return QString::fromStdString(node->getGUID());
 }
 
 // AI_SURFACE_PROGRAM_SPEC lane D #7 — the other half of the F1 story.

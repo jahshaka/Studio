@@ -23,10 +23,10 @@ iris::MeshNodePtr SceneNodeHelper::createBasicMeshNode(
     iris::MeshNodePtr node = iris::MeshNode::create();
     // THE BAKED ASSET, and the seed path as the document's reference to it.
     node->setMesh(PrimitiveAssets::mesh(meshSeed, db));
-    node->meshPath = meshSeed;
+    node->meshPath = meshSeed.toStdString();
     node->meshIndex = 0;
     node->setName(meshName.toStdString());
-    node->setGUID(meshGuid);
+    node->setGUID(meshGuid.toStdString());
     node->isBuiltIn = true;
     return node;
 }

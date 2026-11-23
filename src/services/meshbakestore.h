@@ -203,6 +203,13 @@ bool commitBake(db::Connection &conn, const QString &root, BakeResult &result, Q
 /// is on disk. Database thread.
 QVector<BakeJob> staleJobsFor(db::Connection &conn, const QString &root, const QStringList &paths);
 
+/// AFTER AN OPEN's BAKE READ (N3): the models whose bake the READ refused though its header matched the plan - a
+/// corrupt payload (its checksum). Each bake object is marked corrupt (AssetCas::markCorrupt: staleJobsFor now
+/// re-queues it when its source is on disk, and the re-bake replaces the object) and `prewarm` forgets the model so
+/// a second read loads the re-bake. ONCE per model: a model whose re-bake is refused AGAIN is named in the log and left
+/// out (no loop). Empty when every planned bake loaded.
+QStringList takeRefused(const QVector<iris::PrewarmItem> &plan, iris::MeshPrewarm &prewarm);
+
 /// Runs `jobs` on a worker while THIS (the database) thread pumps — user input
 /// excluded, the open's own prewarm shape — then commits them. `progress(i, n)`
 /// runs on this thread as each job starts. Returns how many failed.

@@ -77,8 +77,9 @@ For more information see the LICENSE file
 #include "irisgl/document/physics/physicshelper.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 
-#include "io/materialreader.h"
 #include "services/jahlog.h"
+#include "irisgl/document/mapvalue.h"
+#include <algorithm>
 
 // THE READER-DEFAULTS LAW (render audit I-5, lane READER-DEFAULTS-1) — ONE
 // DEFINITION OF EVERY DEFAULT, AND IT IS THE CONSTRUCTOR'S.
@@ -307,13 +308,13 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // function true (the giUpdateBudget / giPccGrid / giTier branches below all
     // ask). const makes that impossible rather than merely unfashionable.
     const QJsonObject sceneObj = projectObj["scene"].toObject();
-	scene->skyGuid = sceneObj.value("skyGuid").toString();
+	scene->skyGuid = (sceneObj.value("skyGuid").toString()).toStdString();
 	// THE SUN PIN (SUN_AND_LIGHT_DEFAULTS Q1): which directional light is the
 	// sun. Empty = automatic. The `skyDrivesSun` key beside it is GONE (D15):
 	// the sky follows the sun, never the other way round, so an old file's
 	// steering switch is simply not read and its sky takes its sun from the
 	// same directional light the pin names.
-	scene->sunLightGuid = sceneObj.value("sunLight").toString();
+	scene->sunLightGuid = (sceneObj.value("sunLight").toString()).toStdString();
 	// THE SUN DISC (SKY_LIGHT_SPEC §3): visible by default, excluded from probe
 	// captures by default, drawn at iris::kDefaultSunDiscSize degrees across.
 	// Absent keys read as those defaults, so a file written before the disc
@@ -334,7 +335,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// reader-defaults trap this file's header records).
 	{
 		iris::RayTracingMode rt = iris::RayTracingMode::Auto;
-		if (iris::rayTracingModeFromName(sceneObj.value("rayTracing").toString(), rt))
+		if (iris::rayTracingModeFromName((sceneObj.value("rayTracing").toString()).toStdString(), rt))
 			scene->rayTracing = rt;
 	}
 	// THE PROJECT'S VR SETTINGS (lane VR-WORLD-1), GENERATED FROM THE TABLE
@@ -356,14 +357,14 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	// HARD SUN CONTACT SHADOWS (PHOTON-RAYS-1): an absent block is the
 	// constructor's row, OFF (the reader-defaults law, fromJson's own).
 	scene->sunContact = iris::SunContact::fromJson(qtstd::fromQJsonObject(sceneObj.value("sunContact").toObject()));
-	if (!scene->clouds.weatherMapGuid.isEmpty()) {
-		const QString weather = resolveAssetPath(scene->clouds.weatherMapGuid);
+	if (!scene->clouds.weatherMapGuid.empty()) {
+		const QString weather = resolveAssetPath(QString::fromStdString(scene->clouds.weatherMapGuid));
 		if (QFileInfo(weather).isFile())
 			scene->cloudWeatherMap = iris::Texture2D::load(weather);
 	}
 	// The music is DATA here; the editor's AmbienceService starts it once the
 	// opened scene is the live one (audit D8) — a reader plays nothing.
-	scene->ambientMusicGuid = sceneObj.value("ambientMusicGuid").toString();
+	scene->ambientMusicGuid = (sceneObj.value("ambientMusicGuid").toString()).toStdString();
 	scene->ambientMusicVolume = qBound(0.0f,
 	    float(sceneObj.value("ambientMusicVolume").toDouble(scene->ambientMusicVolume)), 100.0f);
 
@@ -375,12 +376,12 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	    sceneObj.value("skyType").toInt(static_cast<int>(scene->skyType)));
 	QJsonObject skyDataDef = sceneObj.value("skyData").toObject();
 	for (const auto &key : skyDataDef.keys()) {
-		scene->skyData.insert(key, qtstd::fromQJsonObject(skyDataDef.value(key).toObject()));
+		scene->skyData.insert_or_assign(key.toStdString(), qtstd::fromQJsonObject(skyDataDef.value(key).toObject()));
 	}
 
 	switch (scene->skyType) {
         case iris::SkyType::SINGLE_COLOR: {
-			scene->skyColor = qtstd::colorFromJson(qtstd::toQJsonObject(scene->skyData.value("SingleColor")).value("skyColor").toObject());
+			scene->skyColor = qtstd::colorFromJson(qtstd::toQJsonObject(iris::valueOr(scene->skyData, "SingleColor")).value("skyColor").toObject());
 			break;
 		}
 
@@ -398,19 +399,19 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 			// file's keys are simply not read; it opens at the defaults. No
 			// migration exists.
 			scene->setSkyRealistic(
-				iris::Scene::skyRealisticFromJson(scene->skyData.value("Realistic")));
+				iris::Scene::skyRealisticFromJson(iris::valueOr(scene->skyData, "Realistic")));
 			break;
 		}
 
 		case iris::SkyType::EQUIRECTANGULAR: {
-			QString textureGuid = qtstd::toQJsonObject(scene->skyData.value("Equirectangular")).value("equiSkyGuid").toString();
+			QString textureGuid = qtstd::toQJsonObject(iris::valueOr(scene->skyData, "Equirectangular")).value("equiSkyGuid").toString();
 			auto image = resolveAssetPath(textureGuid);
 			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image));
 			break;
 		}
 
         case iris::SkyType::CUBEMAP: {
-			const QJsonObject cubeDefs = qtstd::toQJsonObject(scene->skyData.value("Cubemap"));
+			const QJsonObject cubeDefs = qtstd::toQJsonObject(iris::valueOr(scene->skyData, "Cubemap"));
 			auto front = resolveAssetPath(cubeDefs["front"].toString());
 			auto back = resolveAssetPath(cubeDefs["back"].toString());
 			auto left = resolveAssetPath(cubeDefs["left"].toString());
@@ -440,7 +441,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		}
 
         case iris::SkyType::GRADIENT: {
-			const QJsonObject gradientDefinition = qtstd::toQJsonObject(scene->skyData.value("Gradient"));
+			const QJsonObject gradientDefinition = qtstd::toQJsonObject(iris::valueOr(scene->skyData, "Gradient"));
 
 			scene->gradientTop = qtstd::colorFromJson(gradientDefinition.value("gradientTop").toObject());
 			scene->gradientMid = qtstd::colorFromJson(gradientDefinition.value("gradientMid").toObject());
@@ -730,7 +731,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // has and what the whole scene graph is expressed relative to.
     {
         const QString rootGuid = rootNode["guid"].toString();
-        if (!rootGuid.isEmpty()) scene->getRootNode()->setGUID(rootGuid);
+        if (!rootGuid.isEmpty()) scene->getRootNode()->setGUID(rootGuid.toStdString());
         const QString rootName = rootNode["name"].toString();
         if (!rootName.isEmpty()) scene->getRootNode()->setName(rootName.toStdString());
         readAnimationData(rootNode, scene->getRootNode());
@@ -775,7 +776,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // hand out of the file, or a scene from a build where the guid meant
     // something else — falls back to the free viewer instead of arming play
     // with a camera that does not exist.
-    scene->setActiveCamera(sceneObj.value("activeCamera").toString());
+    scene->setActiveCamera((sceneObj.value("activeCamera").toString()).toStdString());
 
     // The play mode (AVATAR_LOCOMOTION_SPEC §8.5). Tolerant by design: a key
     // that is absent (every scene older than Stage 3) or that names a mode this
@@ -867,7 +868,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     // scene.find returning an empty id) sailed straight past it. Minting is the
     // only repair that can work: the identity was never written down.
     const QString storedGuid = nodeObj["guid"].toString();
-    sceneNode->setGUID(storedGuid.isEmpty() ? QString::fromStdString(iris::newGuid()) : storedGuid);
+    sceneNode->setGUID(storedGuid.isEmpty() ? iris::newGuid() : storedGuid.toStdString());
     // EVERY FALLBACK BELOW IS THE NODE'S OWN CURRENT VALUE, i.e. the
     // constructor's (the reader-defaults law, I-5): absent and fresh must mean
     // the same node.
@@ -906,7 +907,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 
     iris::Mobility mobility = iris::Mobility::Auto;
     if (nodeObj.contains(QLatin1String("mobility"))) {
-        if (!iris::mobilityFromName(nodeObj["mobility"].toString(), mobility)) {
+        if (!iris::mobilityFromName(nodeObj["mobility"].toString().toStdString(), mobility)) {
             qWarning("SceneReader: node '%s' carries an unknown mobility '%s' — resolving it "
                      "automatically instead.",
                      sceneNode->getName().c_str(),
@@ -924,7 +925,7 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         const QString owner = attachment["owner"].toString();
         const QString socket = attachment["socket"].toString();
         if (!owner.isEmpty() && !socket.isEmpty())
-            sceneNode->setSocketAttachment(owner, socket);
+            sceneNode->setSocketAttachment(owner.toStdString(), socket.toStdString());
     }
 
     // COLLISION CONTENT (AVATAR_LOCOMOTION_SPEC §6.3 option C). ABSENT means
@@ -968,9 +969,9 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         // avatar (an `avatar.spawn` on a plain Object guid) — both load as
         // exactly what they always were. When present, the recorded VERSION is
         // what the load-time re-resolve compares against the project's pin.
-        sceneNode->avatarLink.asset = a["asset"].toString();
-        sceneNode->avatarLink.version = a["version"].toString();
-        sceneNode->avatarLink.name = a["name"].toString();
+        sceneNode->avatarLink.asset = (a["asset"].toString()).toStdString();
+        sceneNode->avatarLink.version = (a["version"].toString()).toStdString();
+        sceneNode->avatarLink.name = (a["name"].toString()).toStdString();
     }
 
     // THE LOCOMOTION STATE MACHINE (AVATAR_LOCOMOTION_SPEC §7). The roles a
@@ -1245,7 +1246,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
 
         if (source.startsWith(":")) {
             meshNode->setMesh(mesh);
-			meshNode->meshPath = source;
+			meshNode->meshPath = source.toStdString();
             // A ":"-prefixed source IS a built-in primitive (addBuiltinPrimitive's
             // meshes). The flag was only ever set at creation and lost on reopen,
             // so the ground's outline exclusion (enginesceneviewport.cpp) silently
@@ -1253,10 +1254,10 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
             meshNode->isBuiltIn = true;
         } else {
             meshNode->setMesh(mesh);
-			meshNode->meshPath = nodeObj["mesh"].toString();
+			meshNode->meshPath = (nodeObj["mesh"].toString()).toStdString();
         }
 
-        meshNode->setGUID(meshGUID);
+        meshNode->setGUID(meshGUID.toStdString());
 		meshNode->setVisible(nodeObj["visible"].toBool(meshNode->isVisible()));
         meshNode->meshIndex = meshIndex;
     }
@@ -1297,13 +1298,13 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
     // the bone comes back.
     const QJsonArray socketArray = nodeObj["sockets"].toArray();
     if (!socketArray.isEmpty()) {
-        QList<iris::Socket> sockets;
+        std::vector<iris::Socket> sockets;
         for (const auto &raw : socketArray) {
             const QJsonObject socketObj = raw.toObject();
             iris::Socket socket;
-            socket.name = socketObj["name"].toString();
-            socket.boneName = socketObj["bone"].toString();
-            if (socket.name.isEmpty()) continue;
+            socket.name = (socketObj["name"].toString()).toStdString();
+            socket.boneName = (socketObj["bone"].toString()).toStdString();
+            if (socket.name.empty()) continue;
             socket.position = readVector3(socketObj["position"].toObject());
             const QJsonObject rot = socketObj["rotation"].toObject();
             socket.rotation = iris::Quat(float(rot["scalar"].toDouble(1.0)),
@@ -1313,7 +1314,7 @@ iris::MeshNodePtr SceneReader::createMesh(QJsonObject& nodeObj)
             if (socketObj.contains("scale"))
                 socket.scale = readVector3(socketObj["scale"].toObject());
             socket.builtIn = socketObj["builtIn"].toBool(socket.builtIn);
-            sockets.append(socket);
+            sockets.push_back(socket);
         }
         meshNode->setSockets(sockets);
     }
@@ -1375,10 +1376,10 @@ iris::LightNodePtr SceneReader::createLight(QJsonObject& nodeObj)
     // photometric scale are runtime state, re-derived from the store on every
     // load exactly like the sky's texture (the renderer opens FILES, and the
     // library owns where they live).
-    lightNode->iesProfileGuid = nodeObj["iesProfile"].toString();
-    lightNode->iesProfilePath = resolveAssetPath(lightNode->iesProfileGuid);
+    lightNode->iesProfileGuid = (nodeObj["iesProfile"].toString()).toStdString();
+    lightNode->iesProfilePath = resolveAssetPath(QString::fromStdString(lightNode->iesProfileGuid)).toStdString();
     lightNode->iesNormalisation =
-        LightBindings::normalisationFor(lightNode->iesProfileGuid, handle);
+        LightBindings::normalisationFor(QString::fromStdString(lightNode->iesProfileGuid), handle);
     // THE SKY LIGHT's SOURCE (R5b): the dome's guids are the fact; its six faces are loaded here, from the store.
     if (nodeObj.value("skySource").toString() == QLatin1String("cubemap")) {
         lightNode->skySource = iris::SkyLightSource::Cubemap;
@@ -1442,9 +1443,9 @@ iris::DecalNodePtr SceneReader::createDecal(QJsonObject& nodeObj)
 {
     auto decalNode = iris::DecalNode::create();
 
-    decalNode->textureGuid  = nodeObj["decalTexture"].toString();
-    decalNode->normalGuid   = nodeObj["decalNormal"].toString();
-    decalNode->emissiveGuid = nodeObj["decalEmissive"].toString();
+    decalNode->textureGuid  = (nodeObj["decalTexture"].toString()).toStdString();
+    decalNode->normalGuid   = (nodeObj["decalNormal"].toString()).toStdString();
+    decalNode->emissiveGuid = (nodeObj["decalEmissive"].toString()).toStdString();
     // Fallbacks are DecalNode's own member initialisers (the reader-defaults law).
     decalNode->width  = (float) nodeObj["width"].toDouble(decalNode->width);
     decalNode->height = (float) nodeObj["height"].toDouble(decalNode->height);
@@ -1458,9 +1459,9 @@ iris::DecalNodePtr SceneReader::createDecal(QJsonObject& nodeObj)
     // Bytes: pin-first through the CAS, exactly like material maps. A guid that
     // no longer resolves leaves the path empty — the node still loads, draws its
     // wire box and projects nothing, rather than failing the whole scene load.
-    decalNode->resolvedTexturePath  = resolveAssetPath(decalNode->textureGuid);
-    decalNode->resolvedNormalPath   = resolveAssetPath(decalNode->normalGuid);
-    decalNode->resolvedEmissivePath = resolveAssetPath(decalNode->emissiveGuid);
+    decalNode->resolvedTexturePath  = resolveAssetPath(QString::fromStdString(decalNode->textureGuid)).toStdString();
+    decalNode->resolvedNormalPath   = resolveAssetPath(QString::fromStdString(decalNode->normalGuid)).toStdString();
+    decalNode->resolvedEmissivePath = resolveAssetPath(QString::fromStdString(decalNode->emissiveGuid)).toStdString();
 
     return decalNode;
 }
@@ -1526,7 +1527,7 @@ iris::CameraNodePtr SceneReader::createCamera(QJsonObject& nodeObj)
     }
     cameraNode->focusDistance =
         std::max(0.0f, (float) nodeObj["focusDistance"].toDouble(cameraNode->focusDistance));
-    cameraNode->focusTarget   = nodeObj["focusTarget"].toString();
+    cameraNode->focusTarget   = (nodeObj["focusTarget"].toString()).toStdString();
     cameraNode->fStop         = std::max(0.0f, (float) nodeObj["fStop"].toDouble(cameraNode->fStop));
     // CAMERA_LENS_SPEC §3 P2, the focus block — absent keys keep the
     // constructor's defaults, which is what every pre-P2 file means, and the
@@ -1578,8 +1579,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
 
     // Same rule as readSceneNode's: an empty guid is not an identity.
     const QString storedParticleGuid = nodeObj["guid"].toString();
-    particleNode->setGUID(storedParticleGuid.isEmpty() ? QString::fromStdString(iris::newGuid())
-                                                       : storedParticleGuid);
+    particleNode->setGUID(storedParticleGuid.isEmpty() ? iris::newGuid() : storedParticleGuid.toStdString());
     // THE FALLBACKS ARE THE EMITTER'S OWN AUTHORING DEFAULTS
     // (ParticleSystemNode::resetAuthoringDefaults — the reader-defaults law,
     // I-5). SIX of these disagreed with it and every one of them is visible:
@@ -1620,13 +1620,13 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
     // The three enums: absent leaves the emitter's own value rather than
     // repeating its spelling here (the reader-defaults law).
     if (nodeObj.contains("shape"))
-        particleNode->shape = iris::ParticleSystemNode::shapeFromName(nodeObj["shape"].toString());
+        particleNode->shape = iris::ParticleSystemNode::shapeFromName(nodeObj["shape"].toString().toStdString());
     if (nodeObj.contains("orientation"))
         particleNode->orientation =
-            iris::ParticleSystemNode::orientationFromName(nodeObj["orientation"].toString());
+            iris::ParticleSystemNode::orientationFromName(nodeObj["orientation"].toString().toStdString());
     if (nodeObj.contains("preset"))
         particleNode->preset =
-            iris::ParticleSystemNode::presetFromName(nodeObj["preset"].toString());
+            iris::ParticleSystemNode::presetFromName(nodeObj["preset"].toString().toStdString());
     particleNode->coneAngle        = (float) nodeObj["coneAngle"].toDouble(particleNode->coneAngle);
     particleNode->turbulence       = (float) nodeObj["turbulence"].toDouble(particleNode->turbulence);
     particleNode->rotationSpeedMin =
@@ -1658,7 +1658,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         particleNode->colourFade2 = qtstd::colorFromJson(nodeObj["colourFade2"].toObject());
     particleNode->colourFadeSwitch  =
         (float) nodeObj["colourFadeSwitch"].toDouble(particleNode->colourFadeSwitch);
-    particleNode->colourRampGuid    = nodeObj["colourRampGuid"].toString();
+    particleNode->colourRampGuid    = (nodeObj["colourRampGuid"].toString()).toStdString();
     particleNode->scaleRate         = (float) nodeObj["scaleRate"].toDouble(particleNode->scaleRate);
     particleNode->scaleRateMultiply =
         nodeObj["scaleRateMultiply"].toBool(particleNode->scaleRateMultiply);
@@ -1670,7 +1670,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         k.time = (float) o["time"].toDouble(k.time);
         k.r = (float) o["r"].toDouble(k.r); k.g = (float) o["g"].toDouble(k.g);
         k.b = (float) o["b"].toDouble(k.b); k.a = (float) o["a"].toDouble(k.a);
-        particleNode->colourKeys.append(k);
+        particleNode->colourKeys.push_back(k);
     }
     particleNode->scaleKeys.clear();
     for (const QJsonValue &v : nodeObj["scaleKeys"].toArray()) {
@@ -1678,7 +1678,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         iris::ParticleScaleKey k;
         k.time  = (float) o["time"].toDouble(k.time);
         k.scale = (float) o["scale"].toDouble(k.scale);
-        particleNode->scaleKeys.append(k);
+        particleNode->scaleKeys.push_back(k);
     }
 
     // THE IMAGE BY ITS ASSET (TEX-REF-1): the guid is bound whether or not the
@@ -1689,7 +1689,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         const QString texturePath = handle ? resolveAssetPath(textureGuid) : QString();
         particleNode->setTexture(texturePath.isEmpty() ? iris::Texture2DPtr()
                                                        : iris::Texture2D::load(texturePath),
-                                 textureGuid);
+                                 textureGuid.toStdString());
     }
 	particleNode->setVisible(nodeObj["visible"].toBool(particleNode->isVisible()));
 

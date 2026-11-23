@@ -538,7 +538,7 @@ iris::ImportTransform AvatarApi::rigImportTransform(const iris::SceneNodePtr &ch
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
         if (!n || !meshGuid.isEmpty()) return;
         if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            const QString candidate = std::static_pointer_cast<iris::MeshNode>(n)->meshPath;
+            const QString candidate = QString::fromStdString(std::static_pointer_cast<iris::MeshNode>(n)->meshPath);
             // A ":"-prefixed path is a built-in primitive, not a library row.
             if (!candidate.isEmpty() && !candidate.startsWith(QLatin1Char(':')))
                 meshGuid = candidate;
@@ -993,12 +993,12 @@ QVariantList AvatarApi::addSockets(const QString &nodeId)
     if (!created.isEmpty() && host.services && host.services->undo) {
         QVector<QPair<iris::MeshNodePtr, iris::Socket>> sockets;
         for (const auto &row : created)
-            if (const iris::Socket *s = row.first->findSocket(row.second))
+            if (const iris::Socket *s = row.first->findSocket(row.second.toStdString()))
                 sockets.append({ row.first, *s });
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("avatar sockets"),
             [sockets]() { for (const auto &row : sockets) row.first->addSocket(row.second); },
-            [created]() { for (const auto &row : created) row.first->removeSocket(row.second); }));
+            [created]() { for (const auto &row : created) row.first->removeSocket(row.second.toStdString()); }));
     }
 
     for (const auto &mapping : report) {
@@ -1224,9 +1224,9 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
     // called its root node ("Armature", "RootNode", "Scene" — never the
     // character's name).
     if (linked) {
-        node->avatarLink.asset = assetGuid;
-        node->avatarLink.version = definitionVersion;
-        node->avatarLink.name = definition.name;
+        node->avatarLink.asset = assetGuid.toStdString();
+        node->avatarLink.version = definitionVersion.toStdString();
+        node->avatarLink.name = definition.name.toStdString();
         if (!definition.name.isEmpty()) {
             node->setName(definition.name.toStdString());
             // THE OUTLINER ALREADY HAS THE ROW (S9, R2 repro: a freshly
@@ -1257,17 +1257,17 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
         QString absolutePath;
         const QString clipGuid = resolveClipAsset("avatar.spawn(clips)",
                                                   clip.toString(), &absolutePath);
-        if (clipGuid.isEmpty()) return node->getGUID();
+        if (clipGuid.isEmpty()) return QString::fromStdString(node->getGUID());
         QVariantMap ignored;
         if (!attachClipsFromFile("avatar.spawn(clips)", node, absolutePath, clipGuid,
                                  QString(), ignored))
-            return node->getGUID();
+            return QString::fromStdString(node->getGUID());
     }
     if (options.contains(QStringLiteral("locomotionAsset"))) {
         const QVariant raw = scriptmod::normalizeJs(options.value(QStringLiteral("locomotionAsset")));
-        setLocomotionAsset(node->getGUID(), raw.toMap());
+        setLocomotionAsset(QString::fromStdString(node->getGUID()), raw.toMap());
     }
-    return node->getGUID();
+    return QString::fromStdString(node->getGUID());
 }
 
 // ---------------------------------------------------------------------------
@@ -1573,7 +1573,8 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
                 auto n = weakHost.lock();
                 if (!n) return;
                 for (const auto &clip : added)
-                    if (!n->getAnimations().contains(clip)) n->addAnimation(clip);
+                    if (std::find(n->getAnimations().begin(), n->getAnimations().end(), clip) == n->getAnimations().end())
+                        n->addAnimation(clip);
                 if (auto c = weakChar.lock())
                     if (auto *loco = c->locomotion()) loco->refreshClips(c, walk, run);
             },
@@ -1588,7 +1589,7 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
 
     out["asset"] = assetGuid;
     out["file"] = shown;
-    out["node"] = hostNode->getGUID();
+    out["node"] = QString::fromStdString(hostNode->getGUID());
     out["added"] = addedNames.size();
     out["clips"] = addedNames;
     out["match"] = QVariantMap{ { "channels", scored[best].channels },
@@ -1899,7 +1900,7 @@ QVariantList AvatarApi::list()
             if (child->hasAvatarComponent()) {
                 const iris::AvatarLocomotionState &s = child->avatar()->state();
                 out.append(QVariantMap{
-                    { "id", child->getGUID() },
+                    { "id", QString::fromStdString(child->getGUID()) },
                     { "name", QString::fromStdString(child->getName()) },
                     { "possessed", child->getGUID() == possessedGuid },
                     { "speed", double(s.speed) },
@@ -2277,7 +2278,7 @@ bool AvatarApi::requireOpenAsset(const char *verb)
 
 QString AvatarApi::linkedAssetOf(const iris::SceneNodePtr &node) const
 {
-    return node ? node->avatarLink.asset : QString();
+    return node ? QString::fromStdString(node->avatarLink.asset) : QString();
 }
 
 QVariantList AvatarApi::library(const QVariantMap &options)
@@ -3377,8 +3378,8 @@ bool AvatarApi::applyDefinition(const iris::SceneNodePtr &node,
     // The asset guid is the caller's (the linked spawn sets it, a refresh
     // already matched on it); what this routine owns is WHICH VERSION the
     // instance is now made of.
-    node->avatarLink.version = version;
-    node->avatarLink.name = definition.name;
+    node->avatarLink.version = version.toStdString();
+    node->avatarLink.name = definition.name.toStdString();
     return true;
 }
 
@@ -3392,18 +3393,18 @@ QVariantList AvatarApi::instances(const QString &assetGuid)
     QVector<iris::SceneNodePtr> found;
     collectLinkedInstances(scene->getRootNode(), found);
     for (const auto &node : found) {
-        if (!assetGuid.isEmpty() && node->avatarLink.asset != assetGuid) continue;
-        const QString pinned = AvatarAssets::projectVersion(host.db, node->avatarLink.asset, host.project);
+        if (!assetGuid.isEmpty() && node->avatarLink.asset != assetGuid.toStdString()) continue;
+        const QString pinned = AvatarAssets::projectVersion(host.db, QString::fromStdString(node->avatarLink.asset), host.project);
         out.append(QVariantMap{
-            { "node", node->getGUID() },
+            { "node", QString::fromStdString(node->getGUID()) },
             { "name", QString::fromStdString(node->getName()) },
-            { "asset", node->avatarLink.asset },
-            { "version", node->avatarLink.version },
+            { "asset", QString::fromStdString(node->avatarLink.asset) },
+            { "version", QString::fromStdString(node->avatarLink.version) },
             // STALE = the project's pin has moved since this instance resolved.
             // A scene loaded from a file written before a module save reads
             // stale until it re-resolves, which is what the load-time pass and
             // this verb both exist for.
-            { "stale", !pinned.isEmpty() && pinned != node->avatarLink.version },
+            { "stale", !pinned.isEmpty() && pinned.toStdString() != node->avatarLink.version },
         });
     }
     return out;
@@ -3433,7 +3434,7 @@ QVariantMap AvatarApi::refreshInstances(const QString &assetGuid)
     for (const auto &node : found) {
         if (node->avatarLink.asset != assetGuid) continue;
         if (applyDefinition(node, definition, version, &warnings))
-            refreshed.append(node->getGUID());
+            refreshed.append(QString::fromStdString(node->getGUID()));
     }
     QVariantList warningList;
     for (const QString &warning : warnings) warningList.append(warning);

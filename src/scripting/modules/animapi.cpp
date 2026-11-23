@@ -244,7 +244,7 @@ iris::AnimationPtr AnimApi::find(const iris::SceneNodePtr &node, const QString &
     // as an index, so scripts see indices).
     bool isNumber = false;
     const int index = name.toInt(&isNumber);
-    if (isNumber && index >= 0 && index < animations.count())
+    if (isNumber && index >= 0 && index < int(animations.size()))
         return animations[index];
     return iris::AnimationPtr();
 }
@@ -284,7 +284,7 @@ QString AnimApi::create(const QString &id, const QString &name)
     if (!node) return QString();
 
     const QString animName = name.isEmpty()
-            ? QStringLiteral("Animation%1").arg(node->getAnimations().count() + 1)
+            ? QStringLiteral("Animation%1").arg(node->getAnimations().size() + 1)
             : name;
     auto anim = iris::Animation::create(animName);
     node->addAnimation(anim);

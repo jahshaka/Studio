@@ -398,7 +398,7 @@ void AnimationWidget::addAnimation()
     if (editgate::refuse()) return;
 
     GetNameDialog dialog;
-    auto defaultName = QString("Animation%1").arg(node->getAnimations().count()+1);
+    auto defaultName = QString("Animation%1").arg(node->getAnimations().size() + 1);
     dialog.setName(defaultName);
     dialog.setWindowTitle("New Animation Name");
     if (dialog.exec() == QDialog::Rejected)

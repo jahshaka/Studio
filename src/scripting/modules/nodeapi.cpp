@@ -679,7 +679,7 @@ QString NodeApi::folder(const QString &id)
 {
     auto node = nodeOrFail(id, QStringLiteral("node.folder"));
     if (!node) return QString();
-    return node->getFolderPath();
+    return QString::fromStdString(node->getFolderPath());
 }
 
 QVariantMap NodeApi::mobility(const QString &id)
@@ -718,7 +718,7 @@ QString NodeApi::duplicate(const QString &id)
         fail(QStringLiteral("node.duplicate: '%1' is not duplicable").arg(node->getName()));
         return QString();
     }
-    return copy->getGUID();
+    return QString::fromStdString(copy->getGUID());
 }
 
 QString NodeApi::rename(const QString &id, const QString &name)
@@ -837,7 +837,7 @@ QString NodeApi::deserialize(const QVariantMap &fragmentMap, const QString &pare
         fail(QStringLiteral("node.deserialize: the fragment could not be rebuilt"));
         return QString();
     }
-    return node->getGUID();
+    return QString::fromStdString(node->getGUID());
 }
 
 namespace {
@@ -1052,7 +1052,7 @@ QString mobilityRowName(int value)
 int mobilityRowValue(const QString &name)
 {
     iris::Mobility m = iris::Mobility::Auto;
-    if (!iris::mobilityFromName(name, m)) return -1;
+    if (!iris::mobilityFromName(name.toStdString(), m)) return -1;
     return int(m);
 }
 } // namespace
@@ -1232,11 +1232,11 @@ QVariantList NodeApi::components(const QString &id)
     QSet<QString> selected;
     if (host.services && host.services->selection)
         for (const auto &sel : host.services->selection->selectedSet())
-            if (sel) selected.insert(sel->getGUID());
+            if (sel) selected.insert(QString::fromStdString(sel->getGUID()));
 
     for (const nodecomponents::Part &part : nodecomponents::partsOf(node)) {
         out.append(QVariantMap{
-            { "id", part.node->getGUID() },
+            { "id", QString::fromStdString(part.node->getGUID()) },
             { "name", QString::fromStdString(part.node->getName()) },
             { "type", nodeTypeName(part.node->getSceneNodeType()) },
             { "depth", part.depth },
@@ -1244,7 +1244,7 @@ QVariantList NodeApi::components(const QString &id)
             // outliner's eye and padlock edit (the lock IS `pickable`).
             { "visible", part.node->isVisible() },
             { "locked", !part.node->isPickable() },
-            { "selected", selected.contains(part.node->getGUID()) },
+            { "selected", selected.contains(QString::fromStdString(part.node->getGUID())) },
         });
     }
     return out;
@@ -1298,9 +1298,9 @@ QVariant NodeApi::avatar(const QString &id)
     }
 
     return QVariantMap{
-        { "asset", node->avatarLink.asset },
-        { "version", node->avatarLink.version },
-        { "name", node->avatarLink.name },
+        { "asset", QString::fromStdString(node->avatarLink.asset) },
+        { "version", QString::fromStdString(node->avatarLink.version) },
+        { "name", QString::fromStdString(node->avatarLink.name) },
         { "linked", node->isLinkedAvatar() },
         { "activeClip", activeClip },
         { "clips", clips },
@@ -1339,7 +1339,7 @@ bool NodeApi::setLightProfile(const QString &id, const QString &assetGuid)
     auto light = lightOrFail(id, QStringLiteral("node.setLightProfile"));
     if (!light) return false;
     QString error;
-    const QString was = light->iesProfileGuid;
+    const QString was = QString::fromStdString(light->iesProfileGuid);
     if (!LightBindings::bindProfile(light, assetGuid.trimmed(), host.db, host.project, &error))
         return fail(QStringLiteral("node.setLightProfile: %1").arg(error));
     Database *db = host.db;
@@ -1388,11 +1388,11 @@ QVariant NodeApi::lightProfile(const QString &id)
     if (!light) return QVariant();
     // The renderer's own rule, reported rather than hidden: only spot and point
     // lights carry a profile (shadowed or not).
-    const bool applies = !light->iesProfileGuid.isEmpty() &&
+    const bool applies = !light->iesProfileGuid.empty() &&
                          (light->lightType == iris::LightType::Spot ||
                           light->lightType == iris::LightType::Point);
-    return QVariantMap{ { "guid", light->iesProfileGuid },
-                        { "path", light->iesProfilePath },
+    return QVariantMap{ { "guid", QString::fromStdString(light->iesProfileGuid) },
+                        { "path", QString::fromStdString(light->iesProfilePath) },
                         { "normalisation", light->iesNormalisation },
                         { "applies", applies } };
 }
@@ -1417,7 +1417,7 @@ bool NodeApi::setDecalTexture(const QString &id, const QString &assetGuid)
         return fail(QStringLiteral("node.setDecalTexture: no asset with guid '%1'").arg(guid));
     // THE one binding path — the panel's picker and the asset-bin drop call the
     // same service method (dependency row + AddKind::Binding pin + CAS resolve).
-    const QString was = decal->textureGuid;
+    const QString was = QString::fromStdString(decal->textureGuid);
     if (!host.services || !host.services->sceneEdit ||
         !host.services->sceneEdit->setDecalTexture(decal, guid))
         return fail(QStringLiteral("node.setDecalTexture: could not bind '%1'").arg(guid));
@@ -1432,8 +1432,8 @@ QVariant NodeApi::decalTexture(const QString &id)
 {
     auto decal = decalOrFail(id, QStringLiteral("node.decalTexture"));
     if (!decal) return QVariant();
-    return QVariantMap{ { "guid", decal->textureGuid },
-                        { "path", decal->resolvedTexturePath } };
+    return QVariantMap{ { "guid", QString::fromStdString(decal->textureGuid) },
+                        { "path", QString::fromStdString(decal->resolvedTexturePath) } };
 }
 
 bool NodeApi::setDecalMaps(const QString &id, const QVariant &maps)
@@ -1459,9 +1459,9 @@ bool NodeApi::setDecalMaps(const QString &id, const QVariant &maps)
         const QString guid = in.value(QLatin1String(k.key)).toString().trimmed();
         if (!guid.isEmpty() && host.db && host.db->fetchAsset(guid).guid.isEmpty())
             return fail(QStringLiteral("node.setDecalMaps: no asset with guid '%1'").arg(guid));
-        const QString was = k.kind == DecalMapKind::Diffuse  ? decal->textureGuid
-                          : k.kind == DecalMapKind::Normal   ? decal->normalGuid
-                                                             : decal->emissiveGuid;
+        const QString was = QString::fromStdString(k.kind == DecalMapKind::Diffuse  ? decal->textureGuid
+                                                  : k.kind == DecalMapKind::Normal ? decal->normalGuid
+                                                                                   : decal->emissiveGuid);
         changes.append({ k.kind, guid, was });
     }
     for (const auto &key : in.keys()) {
@@ -1501,9 +1501,9 @@ QVariant NodeApi::decalMaps(const QString &id)
         return QVariantMap{ { "guid", guid }, { "path", path } };
     };
     return QVariantMap{
-        { "diffuse",  pair(decal->textureGuid, decal->resolvedTexturePath) },
-        { "normal",   pair(decal->normalGuid, decal->resolvedNormalPath) },
-        { "emissive", pair(decal->emissiveGuid, decal->resolvedEmissivePath) },
+        { "diffuse",  pair(QString::fromStdString(decal->textureGuid), QString::fromStdString(decal->resolvedTexturePath)) },
+        { "normal",   pair(QString::fromStdString(decal->normalGuid), QString::fromStdString(decal->resolvedNormalPath)) },
+        { "emissive", pair(QString::fromStdString(decal->emissiveGuid), QString::fromStdString(decal->resolvedEmissivePath)) },
     };
 }
 
@@ -1525,7 +1525,7 @@ bool NodeApi::setParticleTexture(const QString &id, const QString &assetGuid)
     // previous binding is read back from the dependency row the service writes.
     const QString was = host.db ? host.db->getDependencyByType(
                                       static_cast<int>(ModelTypes::ParticleSystem),
-                                      emitter->getGUID())
+                                      QString::fromStdString(emitter->getGUID()))
                                 : QString();
     if (!host.services || !host.services->sceneEdit ||
         !host.services->sceneEdit->setParticleTexture(emitter, guid))
@@ -1814,8 +1814,8 @@ static QVariantMap socketToJs(const iris::Socket &socket, const iris::MeshNodePt
                               const iris::ScenePtr &scene)
 {
     QVariantMap out;
-    out["name"] = socket.name;
-    out["bone"] = socket.boneName;
+    out["name"] = QString::fromStdString(socket.name);
+    out["bone"] = QString::fromStdString(socket.boneName);
     out["position"] = vecToJs(socket.position);
     out["rotation"] = QVariantMap{ { "x", socket.rotation.x() }, { "y", socket.rotation.y() },
                                    { "z", socket.rotation.z() }, { "scalar", socket.rotation.scalar() } };
@@ -1826,9 +1826,9 @@ static QVariantMap socketToJs(const iris::Socket &socket, const iris::MeshNodePt
     out["resolves"] = owner && owner->hasBone(socket.boneName);
     int riders = 0;
     if (scene && owner) {
-        const auto it = scene->socketAttachments.constFind(owner->getGUID());
-        if (it != scene->socketAttachments.constEnd())
-            for (const auto &rider : it.value())
+        const auto it = scene->socketAttachments.find(owner->getGUID());
+        if (it != scene->socketAttachments.cend())
+            for (const auto &rider : it->second)
                 if (!!rider && rider->socketName == socket.name) ++riders;
     }
     out["riders"] = riders;
@@ -1851,8 +1851,8 @@ QVariantMap NodeApi::addSocket(const QString &id, const QVariantMap &params)
     }
 
     iris::Socket socket;
-    socket.name = params.value(QStringLiteral("name")).toString();
-    socket.boneName = params.value(QStringLiteral("bone")).toString();
+    socket.name = (params.value(QStringLiteral("name")).toString()).toStdString();
+    socket.boneName = (params.value(QStringLiteral("bone")).toString()).toStdString();
     socket.position = vecFromJs(params.value(QStringLiteral("position")), iris::Vec3(0, 0, 0));
     bool rotOk = true;
     if (params.contains(QStringLiteral("rotation")))
@@ -1868,33 +1868,33 @@ QVariantMap NodeApi::addSocket(const QString &id, const QVariantMap &params)
     socket.scale = vecFromJs(params.value(QStringLiteral("scale")), iris::Vec3(1, 1, 1));
     socket.builtIn = params.value(QStringLiteral("builtIn"), false).toBool();
 
-    QString error;
+    std::string error;
     if (!mesh->addSocket(socket, &error)) {
-        fail(QStringLiteral("node.addSocket: %1").arg(error));
+        fail(QStringLiteral("node.addSocket: %1").arg(QString::fromStdString(error)));
         return out;
     }
-    const QString socketName = socket.name;
+    const QString socketName = QString::fromStdString(socket.name);
     recordNodeEdit(QStringLiteral("add socket"),
                    [mesh, socket]() { if (!mesh->findSocket(socket.name)) mesh->addSocket(socket); },
-                   [mesh, socketName]() { mesh->removeSocket(socketName); });
+                   [mesh, socketName]() { mesh->removeSocket(socketName.toStdString()); });
 
     auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
                                                              : iris::ScenePtr();
-    return socketToJs(*mesh->findSocket(socketName), mesh, scene);
+    return socketToJs(*mesh->findSocket(socketName.toStdString()), mesh, scene);
 }
 
 bool NodeApi::removeSocket(const QString &id, const QString &socketName)
 {
     auto mesh = meshOrFail(id, QStringLiteral("node.removeSocket"));
     if (!mesh) return false;
-    const iris::Socket *existing = mesh->findSocket(socketName);
+    const iris::Socket *existing = mesh->findSocket(socketName.toStdString());
     if (!existing)
         return fail(QStringLiteral("node.removeSocket: '%1' has no socket named '%2'")
                         .arg(mesh->getName(), socketName));
     const iris::Socket copy = *existing;
-    mesh->removeSocket(socketName);
+    mesh->removeSocket(socketName.toStdString());
     recordNodeEdit(QStringLiteral("remove socket"),
-                   [mesh, socketName]() { mesh->removeSocket(socketName); },
+                   [mesh, socketName]() { mesh->removeSocket(socketName.toStdString()); },
                    [mesh, copy]() { if (!mesh->findSocket(copy.name)) mesh->addSocket(copy); });
     return true;
 }
@@ -1919,25 +1919,25 @@ bool NodeApi::attachToSocket(const QString &id, const QString &ownerId, const QS
                                                              : iris::ScenePtr();
     if (!scene) return fail(QStringLiteral("node.attachToSocket: no scene is open"));
 
-    const QString wasOwner = node->socketOwnerGuid;
-    const QString wasSocket = node->socketName;
+    const QString wasOwner = QString::fromStdString(node->socketOwnerGuid);
+    const QString wasSocket = QString::fromStdString(node->socketName);
     // The pose the node holds right now, so an undo puts it back where it was
     // instead of leaving it frozen on the bone it was resolved to.
     const iris::Vec3 wasPos = node->getLocalPos();
     const iris::Quat wasRot = node->getLocalRot();
 
-    QString error;
-    if (!scene->attachToSocket(node, ownerId, socketName, &error))
-        return fail(QStringLiteral("node.attachToSocket: %1").arg(error));
+    std::string error;
+    if (!scene->attachToSocket(node, ownerId.toStdString(), socketName.toStdString(), &error))
+        return fail(QStringLiteral("node.attachToSocket: %1").arg(QString::fromStdString(error)));
 
     recordNodeEdit(QStringLiteral("attach to socket"),
                    [scene, node, ownerId, socketName]() {
-                       scene->attachToSocket(node, ownerId, socketName);
+                       scene->attachToSocket(node, ownerId.toStdString(), socketName.toStdString());
                    },
                    [scene, node, wasOwner, wasSocket, wasPos, wasRot]() {
                        scene->detachFromSocket(node);
                        if (!wasOwner.isEmpty() && !wasSocket.isEmpty())
-                           scene->attachToSocket(node, wasOwner, wasSocket);
+                           scene->attachToSocket(node, wasOwner.toStdString(), wasSocket.toStdString());
                        else {
                            node->setLocalPos(wasPos);
                            node->setLocalRot(wasRot);
@@ -1953,15 +1953,15 @@ bool NodeApi::detachFromSocket(const QString &id)
     auto scene = (host.services && host.services->sceneEdit) ? host.services->sceneEdit->scene()
                                                              : iris::ScenePtr();
     if (!scene) return fail(QStringLiteral("node.detachFromSocket: no scene is open"));
-    const QString wasOwner = node->socketOwnerGuid;
-    const QString wasSocket = node->socketName;
+    const QString wasOwner = QString::fromStdString(node->socketOwnerGuid);
+    const QString wasSocket = QString::fromStdString(node->socketName);
     if (!scene->detachFromSocket(node))
         return fail(QStringLiteral("node.detachFromSocket: '%1' is not riding a socket")
                         .arg(node->getName()));
     recordNodeEdit(QStringLiteral("detach from socket"),
                    [scene, node]() { scene->detachFromSocket(node); },
                    [scene, node, wasOwner, wasSocket]() {
-                       scene->attachToSocket(node, wasOwner, wasSocket);
+                       scene->attachToSocket(node, wasOwner.toStdString(), wasSocket.toStdString());
                    });
     return true;
 }
