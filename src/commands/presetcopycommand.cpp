@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "commands/presetcopycommand.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 
 #include <QJsonDocument>
 #include <QSqlDatabase>
@@ -162,7 +162,7 @@ void PresetCopyCommand::undo()
         // meshes keep it - the re-dress below would hand them a master the catalog did not restore.
         if (!tx.commit()) {
             mError = QObject::tr("the catalog refused the undo of the copy");
-            irisLog(QStringLiteral("the undo of the preset copy %1 was NOT committed: nothing changed").arg(mCopyGuid));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("the undo of the preset copy %1 was NOT committed: nothing changed").arg(mCopyGuid));
             return;
         }
     }

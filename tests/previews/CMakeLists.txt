@@ -49,6 +49,9 @@ set(_previews_db_closure
     ${CMAKE_SOURCE_DIR}/src/services/rigsignature.cpp
     ${CMAKE_SOURCE_DIR}/src/services/iesprofile.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetcas.cpp
+    # the legacy log lines are the session log's (JahLog: a leaf service + its settings reader; NOQT-CORE-1 E2)
+    ${CMAKE_SOURCE_DIR}/src/services/jahlog.cpp
+    ${CMAKE_SOURCE_DIR}/src/data/settingsstore.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstorepaths.cpp
     ${CMAKE_SOURCE_DIR}/src/services/videoutils.cpp
     ${CMAKE_SOURCE_DIR}/src/io/assetmanager.cpp

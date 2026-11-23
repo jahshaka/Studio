@@ -44,7 +44,7 @@ For more information see the LICENSE file
 // include/assimp/Importer.hpp` — bypassing assimp's own include directory.
 // ENGINEERING_DEBT_SPEC item 5, shape 3.)
 #include "irisgl/core/irisutils.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "zip.h"
 
 #include "data/constants.h"
@@ -718,8 +718,8 @@ void ProjectManager::addTile(const QString &guid)
     }
     dynamicGrid->insertTileAtHead(record, isOpenProjectTile(guid));
     checkForEmptyState();
-    irisLog(QStringLiteral("desktop: tile added — %1 on desktop %2 (%3 tile(s))")
-                .arg(guid).arg(currentDesktop).arg(dynamicGrid->originalItems.size()));
+    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("desktop: tile added — %1 on desktop %2 (%3 tile(s))")
+                                                          .arg(guid).arg(currentDesktop).arg(dynamicGrid->originalItems.size()));
 }
 
 void ProjectManager::removeTile(const QString &guid)
@@ -772,10 +772,10 @@ void ProjectManager::enterDesktop()
     for (const QString &guid : std::as_const(removed)) removeTile(guid);
     for (const QString &guid : std::as_const(added)) addTile(guid);
     ++outOfStepEntries;
-    irisLog(QStringLiteral("desktop: tile set out of step on entry — added %1, removed %2 "
-                           "(a path changed the library without its tile verb): %3")
-                .arg(added.size()).arg(removed.size())
-                .arg((added + removed).join(QLatin1Char(' '))));
+    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("desktop: tile set out of step on entry — added %1, removed %2 "
+                                                                     "(a path changed the library without its tile verb): %3")
+                                                          .arg(added.size()).arg(removed.size())
+                                                          .arg((added + removed).join(QLatin1Char(' '))));
 }
 
 void ProjectManager::populateDesktop()
@@ -826,9 +826,9 @@ void ProjectManager::buildGridSlice(int generation)
     // prove the grid is built once per DESKTOP CHANGE and never for one
     // project's, what one build costs on the UI thread (the sum of its slices),
     // and how many thumbnails it decoded there (none: the tile cache's pool).
-    irisLog(QStringLiteral("desktop: grid built — %1 tile(s) on desktop %2 in %3 ms, %4 decode(s), %5 slice(s)")
-                .arg(lastBuildTiles).arg(currentDesktop).arg(lastBuildMs).arg(lastBuildDecodes)
-                .arg(lastBuildSlices));
+    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("desktop: grid built — %1 tile(s) on desktop %2 in %3 ms, %4 decode(s), %5 slice(s)")
+                                                          .arg(lastBuildTiles).arg(currentDesktop).arg(lastBuildMs).arg(lastBuildDecodes)
+                                                          .arg(lastBuildSlices));
 }
 
 void ProjectManager::finishGridBuild()

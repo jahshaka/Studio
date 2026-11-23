@@ -22,7 +22,7 @@ For more information see the LICENSE file
 
 #include "services/loadtimeline.h"
 #include "services/meshbakestore.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "services/assetstorepaths.h"
 #include "services/openreads.h"
 #include <QSqlDatabase>
@@ -108,7 +108,7 @@ void SceneOpenRunner::runWorker()
         for (MeshBakeStore::BakeResult &result : *results) {
             QString error;
             if (!MeshBakeStore::commitBake(conn, root, result, &error))
-                irisLog(QStringLiteral("open: a stale bake could not be rebuilt (%1)").arg(error));
+                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("open: a stale bake could not be rebuilt (%1)").arg(error));
         }
         mRebuild.clear();
         mFuture = QtConcurrent::run([this]() {

@@ -18,7 +18,7 @@ For more information see the LICENSE file
 
 #include "commands/presetcopycommand.h"
 #include "data/database/database.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "data/project.h"
 #include "services/editgate.h"
 #include "services/materialbundle.h"
@@ -61,7 +61,7 @@ QStringList copiesOf(Database *db, const QString &masterGuid)
     query.prepare(QStringLiteral("SELECT guid, properties FROM assets INDEXED BY idx_assets_material_copies "
                                  "WHERE type = %1 ORDER BY rowid").arg(static_cast<int>(ModelTypes::Material)));
     if (!query.exec()) {
-        irisLog(QStringLiteral("presets: the copies of %1 could not be read: %2").arg(masterGuid, query.lastError().text()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("presets: the copies of %1 could not be read: %2").arg(masterGuid, query.lastError().text()));
         return out;
     }
     while (query.next())

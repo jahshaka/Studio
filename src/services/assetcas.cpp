@@ -30,7 +30,7 @@ For more information see the LICENSE file
 #include <unistd.h>   // link(2) — hardlink migration, preflight §3.3
 #endif
 
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "data/database/casschema.h"
 #include "data/database/database.h"   // DbTransaction
 #include "data/project.h"          // ModelTypes — the asset `type` column
@@ -73,7 +73,7 @@ bool storeObject(const QString &srcPath, const QString &root,
         // function cannot produce one any more — see below). It used to be
         // repaired in silence, which is how a store could carry corrupt
         // objects for weeks; say so.
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QStringLiteral("asset store: replacing a %1-byte object that claims %2 bytes of "
                            "content (%3) — a torn write from an interrupted run")
                 .arg(QFileInfo(dstPath).size()).arg(QFileInfo(srcPath).size()).arg(dstPath));
@@ -283,7 +283,7 @@ bool commitStaged(QSqlDatabase conn, const QString &root, const QString &guid,
         if (!file.tmpPath.isEmpty()) { QFile::remove(file.tmpPath); file.tmpPath.clear(); }
     } else if (!file.tmpPath.isEmpty()) {
         if (dst.exists())
-            iris::Logger::getSingleton()->warn(
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
                 QStringLiteral("asset store: replacing a %1-byte object that claims %2 bytes of "
                                "content (%3) — a torn write from an interrupted run")
                     .arg(dst.size()).arg(file.size).arg(dstPath));

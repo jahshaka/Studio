@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include <QUuid>
 
 #include "data/database/database.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 
 namespace previews {
 namespace {
@@ -117,8 +117,8 @@ void Writer::run()
         QSqlDatabase conn;
         const bool open = Database::openPreviewConnection(&conn, mPath, name, mBudgetMs, &openError);
         if (!open)
-            irisLog(QStringLiteral("previews: the writer could not open %1 (%2) — no preview is stored this session")
-                        .arg(mPath, openError));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("previews: the writer could not open %1 (%2) — no preview is stored this session")
+                                                                  .arg(mPath, openError));
 
         std::unique_lock<std::mutex> lock(mMutex);
         for (;;) {
@@ -151,8 +151,8 @@ void Writer::run()
                 const QString why = write.reason;
                 if (item.drops == 0) {
                     item.firstDropMs = mClock.elapsed();
-                    irisLog(QStringLiteral("previews: the write of %1 waits behind the library's lock (%2); "
-                                           "it re-queues at the head until it lands").arg(item.guid, why));
+                    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("previews: the write of %1 waits behind the library's lock (%2); "
+                                                                                     "it re-queues at the head until it lands").arg(item.guid, why));
                 }
                 ++item.drops;
                 if (mDropHook) {
@@ -189,11 +189,11 @@ void Writer::run()
             landed.encodedAt = item.encodedAt;
             landed.waitedMs = item.drops > 0 ? mClock.elapsed() - item.firstDropMs : 0;
             if (item.drops > 0)
-                irisLog(QStringLiteral("previews: the write of %1 %2 after %3 tries, %4 ms behind the lock")
-                            .arg(item.guid, write.ok ? QStringLiteral("landed") : QStringLiteral("failed"))
-                            .arg(item.drops + 1).arg(landed.waitedMs));
+                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("previews: the write of %1 %2 after %3 tries, %4 ms behind the lock")
+                                                                      .arg(item.guid, write.ok ? QStringLiteral("landed") : QStringLiteral("failed"))
+                                                                      .arg(item.drops + 1).arg(landed.waitedMs));
             if (!write.ok)
-                irisLog(QStringLiteral("previews: the preview of %1 was not stored: %2").arg(item.guid, write.reason));
+                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("previews: the preview of %1 was not stored: %2").arg(item.guid, write.reason));
             Done done = std::move(item.done);
             --mPending;
             post(mAlive, [landed, done]() {

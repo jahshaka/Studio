@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "io/sceneformat.h"   // the scene version gate the import shares with the open
 #include "irisgl/irisglfwd.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "irisgl/core/guid.h"
 #include "io/assetmanager.h"
 #include "services/assethelper.h"
@@ -400,7 +400,7 @@ bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
     // THE BATCH IS A SCOPE OF INDEPENDENT GESTURES, NOT ONE UNIT: a batch BEGIN that fails refuses
     // THIS write by name, and the next write tries the BEGIN again.
     if (write && !DbTransaction::anyGuardLive() && !beginBatchAtWrite(query)) {
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QStringLiteral("'%1' was REFUSED: the database batch could not begin (the next write tries again)")
                 .arg(name));
         return false;
@@ -425,7 +425,7 @@ bool Database::executeAndCheckQuery(QSqlQuery &query, const QString& name)
             reason += QStringLiteral(" [the database connection is CLOSED — this query ran "
                                      "after teardown; nothing was written]");
 
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("%1 query failed to execute! %2").arg(name, reason));
         return false;
     }
@@ -448,7 +448,7 @@ bool Database::endBatch()
         // the guard is unwinding through a teardown it never asked for
         // (closeDatabase). Absorb one and say nothing.
         if (batchScopesAbandoned > 0) { --batchScopesAbandoned; return true; }
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             "Database::endBatch() with no batch open — an unbalanced DbBatch.");
         return false;
     }
@@ -471,7 +471,7 @@ bool Database::resumeBatchIfNeeded()
         DbTransaction::noteBatchLive(true);
         return true;
     }
-    iris::Logger::getSingleton()->warn(
+    JahLog::write(JahLog::legacy, JahLog::Level::Warning,
         QStringLiteral("The database batch could NOT BEGIN (%1)").arg(dbqt::describe(batchTx->beginError())));
     batchTx.reset();   // its refusal ends with it: this write is refused, the next tries again
     return false;
@@ -489,7 +489,7 @@ bool Database::commitBatchTransaction()
         announceBatchCommit(true);
         return true;
     }
-    iris::Logger::getSingleton()->warn(
+    JahLog::write(JahLog::legacy, JahLog::Level::Warning,
         QStringLiteral("The database batch FAILED to commit — the gesture's rows were rolled back (%1)")
             .arg(dbqt::describe(error)));
     announceBatchCommit(false);
@@ -609,9 +609,9 @@ private:
     {
         ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("WalCheckpoint"), mPath);
         if (!scoped.db.open()) {
-            irisLog(QStringLiteral("library: the WAL checkpoint worker could not open %1 (%2) — "
-                                   "the -wal grows until the library closes")
-                        .arg(mPath, scoped.db.lastError().text()));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library: the WAL checkpoint worker could not open %1 (%2) — "
+                                                                             "the -wal grows until the library closes")
+                                                                  .arg(mPath, scoped.db.lastError().text()));
             return;
         }
         const QString wal = mPath + QStringLiteral("-wal");
@@ -630,8 +630,8 @@ private:
             lock.unlock();
             QSqlQuery checkpoint(scoped.db);
             if (!checkpoint.exec(QStringLiteral("PRAGMA wal_checkpoint(PASSIVE)")))
-                irisLog(QStringLiteral("library: WAL checkpoint failed: %1")
-                            .arg(checkpoint.lastError().text()));
+                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library: WAL checkpoint failed: %1")
+                                                                      .arg(checkpoint.lastError().text()));
             checkpoint.finish();
             lock.lock();
         }
@@ -685,28 +685,28 @@ static bool applyDurabilityPragmas(QSqlDatabase &conn)
     // error: on a filesystem without shared memory (or a read-only file) the
     // statement succeeds and answers "delete". Read what it answered.
     if (!pragma.exec(QStringLiteral("PRAGMA journal_mode = WAL")))
-        irisLog(QString("could not put the library in WAL mode: %1").arg(pragma.lastError().text()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("could not put the library in WAL mode: %1").arg(pragma.lastError().text()));
     else if (!pragma.next() || pragma.value(0).toString().compare(QStringLiteral("wal"), Qt::CaseInsensitive) != 0)
-        irisLog(QString("the library did not enter WAL mode (answered '%1'); it stays at its previous journal mode")
-                    .arg(pragma.next() ? pragma.value(0).toString() : pragma.value(0).toString()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("the library did not enter WAL mode (answered '%1'); it stays at its previous journal mode")
+                                                              .arg(pragma.next() ? pragma.value(0).toString() : pragma.value(0).toString()));
     bool wal = false;
     if (pragma.exec(QStringLiteral("PRAGMA journal_mode")) && pragma.next())
         wal = pragma.value(0).toString().compare(QStringLiteral("wal"), Qt::CaseInsensitive) == 0;
     if (!pragma.exec(QStringLiteral("PRAGMA synchronous = NORMAL")))
-        irisLog(QString("could not set the library's synchronous mode: %1")
-                    .arg(pragma.lastError().text()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("could not set the library's synchronous mode: %1")
+                                                              .arg(pragma.lastError().text()));
     // The checkpoint is the worker's (see WalCheckpointer above): this
     // connection — the UI thread's — never runs one inside a commit.
     if (wal && !pragma.exec(QStringLiteral("PRAGMA wal_autocheckpoint = 0")))
-        irisLog(QString("could not hand the library's checkpoints to the worker: %1")
-                    .arg(pragma.lastError().text()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("could not hand the library's checkpoints to the worker: %1")
+                                                              .arg(pragma.lastError().text()));
     return wal;
 }
 
 bool Database::initializeDatabase(const QString &pathToBlob)
 {
     if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) {
-        irisLog("DB driver not present!");
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "DB driver not present!");
         return false;
     }
 
@@ -718,25 +718,25 @@ bool Database::initializeDatabase(const QString &pathToBlob)
     static const bool traceStatements = qEnvironmentVariable("JAH_DB_STATEMENT_TRACE") == QLatin1String("1");
 
     if (db.isValid()) {
-        if (!db.open()) irisLog(QString("Couldn't open a database connection! %1").arg(db.lastError().text()));
+        if (!db.open()) JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("Couldn't open a database connection! %1").arg(db.lastError().text()));
         // connection(): the same handle on the std-only layer, borrowed (NOQT-DATABASE-1 ruling 3).
         // Where it cannot be borrowed the library does NOT open: every transaction and the batch run
         // on the layer, and a library that opened would refuse every write.
         QString borrowError;
         if (db.isOpen() && !borrowConnection(db.driver() ? db.driver()->handle() : QVariant(), &borrowError)) {
-            irisLog(borrowError);
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, borrowError);
             db.close();
             return false;
         }
         // At the open, before the pragmas: the boot's statements are counted too.
         if (db.isOpen() && traceStatements && !databasereads::installStatementTrace(db))
-            irisLog(QStringLiteral("JAH_DB_STATEMENT_TRACE=1, but the statement trace could not be registered "
-                                   "(app.databaseReads says why)"));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("JAH_DB_STATEMENT_TRACE=1, but the statement trace could not be registered "
+                                                                             "(app.databaseReads says why)"));
         if (db.isOpen() && applyDurabilityPragmas(db)) startCheckpointer(this, pathToBlob);
         return db.isOpen();
     }
     else {
-        irisLog(QString("The database connection is invalid! %1").arg(db.lastError().text()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("The database connection is invalid! %1").arg(db.lastError().text()));
     }
 
     return false;
@@ -811,7 +811,7 @@ bool Database::checkIfTableExists(const QString &tableName)
         if (query.first()) return query.value(0).toBool();
     }
     else {
-        irisLog(
+        JahLog::write(JahLog::legacy, JahLog::Level::Log,
             QString("There was an error checking if table %1 exists)").arg(tableName, query.lastError().text())
         );
     }
@@ -832,7 +832,7 @@ bool Database::checkIfColumnExists(const QString &tableName, const QString &colu
         }
     }
     else {
-        irisLog(
+        JahLog::write(JahLog::legacy, JahLog::Level::Log,
             QString("There was an error checking if column %1.%2 exists! %3")
                 .arg(tableName, columnName, query.lastError().text())
         );
@@ -882,7 +882,7 @@ QString Database::getDependencyByType(const int &ertype, const QString &depender
 		}
 	}
 	else {
-		irisLog("There was an error getting the dependee id! " + query.lastError().text());
+		JahLog::write(JahLog::legacy, JahLog::Level::Log, "There was an error getting the dependee id! " + query.lastError().text());
 	}
 
 	return QString();
@@ -978,7 +978,7 @@ void Database::createAllTables()
     createIndexes();   // after every table, the CAS ones included: the list indexes asset_files too
     // A FAILED UNIT WRITES NOTHING (DbTransaction): a library whose tables did not commit is said by name.
     if (!tx.commit())
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             "Database::createAllTables: the schema transaction was NOT committed - the library's tables are as they were.");
 }
 
@@ -1067,8 +1067,8 @@ bool Database::schemaMatchesFresh()
         while (matches && tables.next()) {
             const QString table = tables.value(0).toString();
             if (columnsOf(db, table) != columnsOf(fresh, table)) {
-                irisLog(QStringLiteral("library schema: table '%1' differs from this build's")
-                            .arg(table));
+                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library schema: table '%1' differs from this build's")
+                                                                      .arg(table));
                 matches = false;
             }
         }
@@ -1158,9 +1158,9 @@ void Database::createIndexes()
     any.finish();
     if (!empty) {
         mIndexStatementsAtOpen = int(needed.size());
-        irisLog(QStringLiteral("library: DEFECT — %1 index statement(s) run over an existing library's rows on the "
-                               "opening thread; the boot builds them before the shell opens it (Database::prepareIndexes)")
-                    .arg(needed.size()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library: DEFECT — %1 index statement(s) run over an existing library's rows on the "
+                                                                         "opening thread; the boot builds them before the shell opens it (Database::prepareIndexes)")
+                                                              .arg(needed.size()));
     }
     for (const QString &statement : needed) {
         QSqlQuery index;
@@ -1324,7 +1324,7 @@ QString Database::createAssetEntry(
 	const QString refused = assethome::refusal(home, origin);
 	if (!refused.isEmpty()) {
 		if (errorOut) *errorOut = refused;
-		irisLog(QStringLiteral("createAssetEntry refused '%1': %2").arg(assetName, refused));
+		JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("createAssetEntry refused '%1': %2").arg(assetName, refused));
 		return QString();
 	}
 
@@ -1608,7 +1608,7 @@ QHash<QString, QByteArray> Database::readThumbnailBytes(const QString &dbPath, T
         ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("TileRead"), dbPath);
         scoped.db.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
         if (!scoped.db.open()) {
-            irisLog(QStringLiteral("tile read: cannot open %1 (%2)").arg(dbPath, scoped.db.lastError().text()));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("tile read: cannot open %1 (%2)").arg(dbPath, scoped.db.lastError().text()));
             return out;
         }
         QStringList marks;
@@ -1621,7 +1621,7 @@ QHash<QString, QByteArray> Database::readThumbnailBytes(const QString &dbPath, T
         for (const QString &guid : guids) query.addBindValue(guid);
         noteQuery(name, query.lastQuery());
         if (!query.exec()) {
-            irisLog(QStringLiteral("tile read: %1 failed (%2)").arg(name, query.lastError().text()));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("tile read: %1 failed (%2)").arg(name, query.lastError().text()));
             return out;
         }
         while (query.next()) {
@@ -1819,7 +1819,7 @@ bool Database::isAuthorInfoPresent()
 		}
 	}
 	else {
-		irisLog("There was an error getting the author count! " + query.lastError().text());
+		JahLog::write(JahLog::legacy, JahLog::Level::Log, "There was an error getting the author count! " + query.lastError().text());
 	}
 
 	return false;
@@ -1837,7 +1837,7 @@ QString Database::getAuthorName()
 		}
 	}
 	else {
-		irisLog("There was an error getting the author count! " + query.lastError().text());
+		JahLog::write(JahLog::legacy, JahLog::Level::Log, "There was an error getting the author count! " + query.lastError().text());
 	}
 
 	return QString();
@@ -1936,8 +1936,8 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
             reaped = deleteAssetRow(row, /*force*/ true, &scrubs) && reaped;
     }
     if (!reaped) {
-        irisLog(QString("deleteProject('%1'): an orphaned unlisted or project-owned asset could not be reaped — "
-                        "the whole project delete was rolled back.").arg(guid));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("deleteProject('%1'): an orphaned unlisted or project-owned asset could not be reaped — "
+                                                                  "the whole project delete was rolled back.").arg(guid));
         return false;   // ~DbTransaction rolls back; nothing was scrubbed
     }
 
@@ -1976,7 +1976,7 @@ void Database::wipeDatabase()
 	destroyTable("project_assets");
 	// A FAILED UNIT WRITES NOTHING (DbTransaction): a wipe that did not commit is said by name.
 	if (!tx.commit())
-		iris::Logger::getSingleton()->warn(
+		JahLog::write(JahLog::legacy, JahLog::Level::Warning,
 		    "Database::wipeDatabase: the wipe was NOT committed - every table is as it was.");
 }
 
@@ -2154,7 +2154,7 @@ int Database::flushPendingAssetDeletes()
     // did. Keep the queue: the only caller after a close is a later reopen,
     // and a lost queue is a row that outlives its node for ever.
     if (!db.isOpen()) {
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("%1 deferred asset delete(s) could not be flushed: the database "
                     "connection is CLOSED. The rows remain.")
                 .arg(pendingAssetDeletes.size()));
@@ -2184,7 +2184,7 @@ int Database::flushPendingAssetDeletes()
     if (!tx.commit()) {
         // The guard rolled back: no row went, so no sidecar and no session
         // registration may go either. Requeue and try at the next flush.
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("The deferred asset-delete flush FAILED to commit — %1 row(s) kept.")
                 .arg(batch.size()));
         pendingAssetDeletes = batch + pendingAssetDeletes;
@@ -2217,7 +2217,7 @@ bool Database::deleteAssetRow(const QString &guid, bool force,
     // in-memory catalog: doing both is how a no-op delete looked like a real
     // one until the next restart brought the asset back.
     if (!db.isOpen()) {
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("DeleteAsset refused for '%1': the database connection is CLOSED. "
                     "Nothing was deleted (asset row, content mapping and project pins all "
                     "remain).").arg(guid));
@@ -2285,7 +2285,7 @@ bool Database::deleteAssetRow(const QString &guid, bool force,
         else applyAssetScrubs({ scrub });
     }
     else {
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("deleteAsset('%1') FAILED — the asset was not removed from the library.")
                 .arg(guid));
     }
@@ -2461,8 +2461,8 @@ bool Database::wroteOneProjectRow(const QSqlQuery &query, const QString &project
 {
     const int rows = query.numRowsAffected();
     if (rows == 1) return true;
-    irisLog(QStringLiteral("the save of project %1 wrote %2 rows (one was expected)")
-                .arg(projectGuid).arg(rows));
+    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("the save of project %1 wrote %2 rows (one was expected)")
+                                                          .arg(projectGuid).arg(rows));
     return false;
 }
 
@@ -2582,7 +2582,7 @@ AssetRecord Database::fetchAsset(const QString &guid)
         }
     }
     else {
-        irisLog("There was an error getting the asset! " + query.lastError().text());
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "There was an error getting the asset! " + query.lastError().text());
     }
 
     return AssetRecord();
@@ -3109,7 +3109,7 @@ QByteArray Database::fetchAssetData(const QString &guid) const
 		if (query.first()) return query.value(0).toByteArray();
 	}
 	else {
-		irisLog("There was an error getting the material blob! " + query.lastError().text());
+		JahLog::write(JahLog::legacy, JahLog::Level::Log, "There was an error getting the material blob! " + query.lastError().text());
 	}
 
 	return QByteArray();
@@ -3232,7 +3232,7 @@ int Database::countAssetsInCollections(const QVector<int> &collectionIds)
         if (query.first()) return query.value(0).toInt();
     }
     else {
-        irisLog("countAssetsInCollections query failed! " + query.lastError().text());
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "countAssetsInCollections query failed! " + query.lastError().text());
     }
 
     return 0;
@@ -3388,7 +3388,7 @@ Database::ExportCatalog Database::readExportCatalog(const QString &projectGuid)
     query.prepare("SELECT name, scene, thumbnail, version, last_written, last_accessed, guid FROM projects WHERE guid = ?");
     query.addBindValue(projectGuid);
     if (!query.exec()) {
-        irisLog("There was an error fetching a row to be exported " + query.lastError().text());
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "There was an error fetching a row to be exported " + query.lastError().text());
         return out;
     }
     if (!query.next()) return out;
@@ -3490,7 +3490,7 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
     // statement accounting (Database::executeAndCheckQuery's statics are the
     // UI thread's), so each statement is checked in place.
     const auto failed = [errorOut](const QString &why) {
-        irisLog(QStringLiteral("export catalog: %1").arg(why));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("export catalog: %1").arg(why));
         if (errorOut) *errorOut = why;
         return false;
     };
@@ -3682,7 +3682,7 @@ bool Database::checkIfRecordExists(const QString & record, const QVariant &value
 		if (query.first()) return query.value(0).toBool();
 	}
 	else {
-		irisLog("There was an error fetching a record" + query.lastError().text());
+		JahLog::write(JahLog::legacy, JahLog::Level::Log, "There was an error fetching a record" + query.lastError().text());
 	}
 
 	return false;
@@ -3698,7 +3698,7 @@ bool Database::checkIfDependencyExists(const QString& depender, const QString& d
 		if (query.first()) return query.value(0).toBool();
 	}
 	else {
-			irisLog("There was an error fetching a record " + query.lastError().text());
+			JahLog::write(JahLog::legacy, JahLog::Level::Log, "There was an error fetching a record " + query.lastError().text());
 	}
 	return false;
 }
@@ -4050,7 +4050,7 @@ QStringList Database::deleteFolderAndDependencies(const QString &guid, bool *ok,
 	}
 
 	if (!allOk)
-		iris::Logger::getSingleton()->warn(
+		JahLog::write(JahLog::legacy, JahLog::Level::Warning,
 			QString("deleteFolderAndDependencies('%1') did NOT fully complete — some rows "
 			        "survive in the library.").arg(guid));
 	if (ok) *ok = allOk;
@@ -4112,7 +4112,7 @@ QStringList Database::deleteAssetAndDependencies(const QString & guid, bool *ok,
 	}
 
 	if (!allOk)
-		iris::Logger::getSingleton()->warn(
+		JahLog::write(JahLog::legacy, JahLog::Level::Warning,
 			QString("deleteAssetAndDependencies('%1') did NOT fully complete — the asset "
 			        "and/or its dependency rows survive in the library.").arg(guid));
 	if (ok) *ok = allOk;
@@ -4143,7 +4143,7 @@ QString Database::fetchObjectMesh(const QString &guid, const int ertype, const i
 		}
 	}
 	else {
-		irisLog(
+		JahLog::write(JahLog::legacy, JahLog::Level::Log,
 			"There was an error fetching a guid" + query.lastError().text()
 		);
 	}
@@ -4202,7 +4202,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
                             inFilePath + ".db");
     QSqlDatabase &dbe = scoped.db;
     if (!dbe.open()) {
-        irisLog(QString("Couldn't open the import database! %1").arg(dbe.lastError().text()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("Couldn't open the import database! %1").arg(dbe.lastError().text()));
         return false;
     }
 
@@ -4221,7 +4221,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         query.next();
     }
     else {
-        irisLog(
+        JahLog::write(JahLog::legacy, JahLog::Level::Log,
             "There was an error fetching a record to be imported " + query.lastError().text()
         );
     }
@@ -4601,10 +4601,10 @@ bool Database::checkIfVersionSupported(const QString &pathToDb, const QString &t
         // still names it is what makes Qt print "connection is still in use".
         bool usable = true;
         if (!importConnection.isValid()) {
-            irisLog(QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
             usable = false;
         } else if (!importConnection.open()) {
-            irisLog(QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
             usable = false;
         }
 

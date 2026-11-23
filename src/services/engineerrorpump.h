@@ -51,8 +51,7 @@ For more information see the LICENSE file
 // kMaxLogsPerWindow lines are written per window and the rest are counted and
 // reported as one summary line. app.engineErrors() still lists them all.
 //
-// Logged through iris::Logger::warn — NOT irisLog(), which is hardwired to
-// [info] (irisgl/core/logger.cpp).
+// Logged into the session log's `engine` category at Warning (JahLog).
 //
 // UI THREAD ONLY, and unsynchronised on purpose. Both call sites are the frame
 // loop, which is the Engine's own thread-affinity rule anyway (Engine.h), and a

@@ -37,7 +37,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "irisgl/import/meshbake.h"
 #include "irisgl/import/parsecensus.h"
 
@@ -233,7 +233,7 @@ bool recordBake(QSqlDatabase conn, const QString &root, const QString &sourceOid
     for (const QString &ownerGuid : owners) {
         QString casError;
         AssetCas::writeSidecar(conn, root, ownerGuid, &casError);
-        if (!casError.isEmpty()) irisLog("mesh bake: " + casError);
+        if (!casError.isEmpty()) JahLog::write(JahLog::legacy, JahLog::Level::Log, "mesh bake: " + casError);
     }
     return true;
 }
@@ -845,7 +845,7 @@ int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, in
         QString error;
         if (!commitBake(conn, root, result, &error)) {
             ++failed;
-            irisLog(QStringLiteral("mesh bake: a stale bake could not be rebuilt (%1)").arg(error));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: a stale bake could not be rebuilt (%1)").arg(error));
         }
     }
     return failed;
@@ -933,7 +933,7 @@ void startBackgroundRebuild(std::shared_ptr<std::atomic<int>> planned)
         if (sBackgroundStop.load() || !read) return;
         planned->store(int(jobs.size()));
         if (jobs.isEmpty()) return;
-        irisLog(QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
         for (const BakeJob &job : jobs) {
             if (sBackgroundStop.load()) return;
             auto result = std::make_shared<BakeResult>(runBake(job, &sBackgroundStop));
@@ -944,11 +944,11 @@ void startBackgroundRebuild(std::shared_ptr<std::atomic<int>> planned)
                 if (result->error == QStringLiteral("cancelled")) {
                     QVector<AssetCas::Staged> leftover{ result->staged };
                     AssetCas::discardStaged(leftover);
-                    irisLog(QStringLiteral("mesh bake: a background rebuild was cancelled (a reset or a quit)"));
+                    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: a background rebuild was cancelled (a reset or a quit)"));
                     return;
                 }
                 if (!commitBake(QSqlDatabase::database(), root, *result, &error))
-                    irisLog(QStringLiteral("mesh bake: background rebuild failed (%1)").arg(error));
+                    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: background rebuild failed (%1)").arg(error));
             }, Qt::QueuedConnection);
         }
     });
@@ -1143,7 +1143,7 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
                 QVector<AssetCas::Staged> leftover{ result.staged };
                 AssetCas::discardStaged(leftover);
             }
-            irisLog(QStringLiteral("mesh bake: %1 bake(s) not committed: %2").arg(jobs.size()).arg(dropped));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: %1 bake(s) not committed: %2").arg(jobs.size()).arg(dropped));
             QVector<LandedBake> lost = targets;
             for (LandedBake &row : lost) row.ok = false;
             for (int i = 0; i < sListeners.size();) {
@@ -1162,8 +1162,8 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
             if (!commitBake(conn, root, results[i], &error)) {
                 ++failed;
                 failedPaths.insert(jobs.at(i).path);
-                irisLog(QStringLiteral("mesh bake: '%1' could not be baked (%2)")
-                            .arg(QFileInfo(jobs.at(i).path).fileName(), error));
+                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: '%1' could not be baked (%2)")
+                                                                      .arg(QFileInfo(jobs.at(i).path).fileName(), error));
             }
         }
         clear();
@@ -1209,8 +1209,8 @@ int bakeLandedAsync(const QStringList &guids)
     QVector<LandedBake> targets;
     for (const BakeTarget &row : rows)
         if (baking.contains(row.path)) targets.append({ row.assetGuid, row.path, true });
-    irisLog(QStringLiteral("mesh bake: %1 import bake(s) started for %2 landed row(s)")
-                .arg(jobs.size()).arg(targets.size()));
+    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: %1 import bake(s) started for %2 landed row(s)")
+                                                          .arg(jobs.size()).arg(targets.size()));
     bakeAsync(jobs, targets, DoneFn());
     return jobs.size();
 }

@@ -15,7 +15,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/project.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "services/ambienceservice.h"
 #include "services/assetcas.h"
 #include "services/assetservice.h"
@@ -86,7 +86,7 @@ ShellServices::ShellServices(const Deps &deps, QObject *parent) : QObject(parent
         db->setImportPictureSink([previews, project](const QString &guid, const QImage &picture) {
             previews->store(project, guid, picture, [guid](const PreviewService::Outcome &outcome) {
                 if (!outcome.ok && !outcome.superseded && !outcome.nothingToDraw)
-                    irisLog(QStringLiteral("import: no preview stored for %1 - %2").arg(guid, outcome.reason));
+                    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("import: no preview stored for %1 - %2").arg(guid, outcome.reason));
             });
         });
     }

@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/settingkeys.h"
 #include "data/settingsmanager.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "services/apppaths.h"
 #include "services/assetstore.h"
 #include "services/libraryreset.h"
@@ -128,11 +128,11 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
     result.keptRows = wiped.kept.rows;
     result.unreadable = wiped.kept.unreadable;
     if (!wiped.ok) result.reason = wiped.error;
-    irisLog(wiped.ok ? QStringLiteral("library: RESET (%1) — no migrations exist; %2 storage rows "
-                                      "rebuilt from their sidecars, %3 sidecars of an older format "
-                                      "not read")
-                           .arg(result.reason).arg(wiped.kept.rows).arg(wiped.kept.unreadable)
-                     : QStringLiteral("library: the reset failed: %1").arg(wiped.error));
+    JahLog::write(JahLog::legacy, JahLog::Level::Log, wiped.ok ? QStringLiteral("library: RESET (%1) — no migrations exist; %2 storage rows "
+                                                                                "rebuilt from their sidecars, %3 sidecars of an older format "
+                                                                                "not read")
+                                                                     .arg(result.reason).arg(wiped.kept.rows).arg(wiped.kept.unreadable)
+                                                               : QStringLiteral("library: the reset failed: %1").arg(wiped.error));
     sLast = result;
     return result;
 }

@@ -31,7 +31,7 @@ For more information see the LICENSE file
 #include <QVBoxLayout>
 
 #include "app/firstrun.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "services/assetshare.h"
 #include "services/previewservice.h"
@@ -1475,7 +1475,7 @@ void EditorDocks::exportNode(const iris::SceneNodePtr &node, ModelTypes modelTyp
     if (!result.ok()) {
         // TOLD, not only logged — this was a silent void (the project export's
         // shape, exportSceneAsZip).
-        irisLog(QStringLiteral("Export failed: %1").arg(result.error));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("Export failed: %1").arg(result.error));
         if (!FirstRun::isDrivenSession())
             QMessageBox::warning(mWindow, tr("Export failed"),
                                  tr("%1 could not be exported: %2").arg(node->getName(), result.error));

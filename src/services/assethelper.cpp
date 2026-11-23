@@ -26,7 +26,7 @@ For more information see the LICENSE file
 #include "io/scenewriter.h"
 #include "io/assetmanager.h"
 #include "irisgl/import/meshmaterial.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/assetmetadata.h"
@@ -66,8 +66,8 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
         const QJsonObject values =
             isPbrBlob ? materialDefinition.value("values").toObject() : QJsonObject();
         if (!isPbrBlob && !materialDefinition.isEmpty())
-            irisLog(QStringLiteral("asset helper: refused a non-pbr material definition on '%1'")
-                        .arg(node->getName()));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("asset helper: refused a non-pbr material definition on '%1'")
+                                                                  .arg(node->getName()));
 
         auto pbr = iris::PbrMaterial::create();
         for (const iris::Property* property : pbr->properties()) {

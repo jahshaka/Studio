@@ -75,6 +75,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 
 #include "io/materialreader.h"
+#include "services/jahlog.h"
 
 // THE READER-DEFAULTS LAW (render audit I-5, lane READER-DEFAULTS-1) — ONE
 // DEFINITION OF EVERY DEFAULT, AND IT IS THE CONSTRUCTOR'S.
@@ -1908,9 +1909,9 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
                 animationss = iris::MeshBake::clipAnimations(
                     *baked, MeshBakeStore::transformFor(filePath, assetGuid).keysOnly(), filePath);
             } else {
-                irisLog(QStringLiteral("scene reader: the clip '%1' has no current clip bake — its "
-                                       "animation is missing from this open")
-                            .arg(handle->fetchAsset(assetGuid).name));
+                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("scene reader: the clip '%1' has no current clip bake — its "
+                                                                                 "animation is missing from this open")
+                                                                      .arg(handle->fetchAsset(assetGuid).name));
             }
             meshes.insert(cacheKey, meshList);
             assimpScenes.insert(cacheKey);
@@ -1928,12 +1929,12 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
         // returns before its bake lands, and a node placed meanwhile gets its geometry when it does
         // (SceneEditService's landed listener; a failed bake raises the issue there).
         if (MeshBakeStore::bakePending(filePath)) {
-            irisLog(QStringLiteral("scene reader: '%1' is being baked — its geometry arrives when the "
-                                   "bake lands").arg(QFileInfo(filePath).fileName()));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("scene reader: '%1' is being baked — its geometry arrives when the "
+                                                                             "bake lands").arg(QFileInfo(filePath).fileName()));
         } else {
             if (!missingModelPaths.contains(filePath)) missingModelPaths.append(filePath);
-            irisLog(QStringLiteral("scene reader: '%1' has no current mesh bake — the model is missing "
-                                   "from this open (re-import it)").arg(QFileInfo(filePath).fileName()));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("scene reader: '%1' has no current mesh bake — the model is missing "
+                                                                             "from this open (re-import it)").arg(QFileInfo(filePath).fileName()));
         }
 
         meshes.insert(cacheKey, meshList);
@@ -1986,10 +1987,10 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(const QString &asse
                                   ? handle->fetchAsset(assetGuid).name : QString();
     const auto miss = [&](const QString &why) {
         missingClipRefs.append({ animName, assetGuid, assetName, nodeName, why });
-        irisLog(QStringLiteral("scene reader: the clip '%1' on '%2' (asset %3) is missing: %4 — "
-                               "the node keeps its bind pose")
-                    .arg(animName, nodeName,
-                         assetGuid.isEmpty() ? QStringLiteral("none") : assetGuid, why));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("scene reader: the clip '%1' on '%2' (asset %3) is missing: %4 — "
+                                                                         "the node keeps its bind pose")
+                                                              .arg(animName, nodeName,
+                                                                   assetGuid.isEmpty() ? QStringLiteral("none") : assetGuid, why));
         return iris::SkeletalAnimationPtr();
     };
 
@@ -2017,8 +2018,8 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(const QString &asse
             auto placeholder = iris::SkeletalAnimation::create();
             placeholder->name = animName;
             placeholder->assetGuid = assetGuid;
-            irisLog(QStringLiteral("scene reader: the clip '%1' on '%2' waits for its model's bake — "
-                                   "bound when it lands").arg(animName, nodeName));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("scene reader: the clip '%1' on '%2' waits for its model's bake — "
+                                                                             "bound when it lands").arg(animName, nodeName));
             return placeholder;
         }
         return miss(QStringLiteral("the asset has no current bake holding its clips"));

@@ -108,6 +108,7 @@ For more information see the LICENSE file
 #include "widgets/memberspanel.h"
 #include "modules/materials/materialdocument.h"
 #include "ui/style/themeroles.h"
+#include "services/jahlog.h"
 #include <QTabBar>
 
 namespace materials
@@ -670,7 +671,7 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 		const auto build = materials::buildDefinition(doc->graph, doc->info.GUID,
 		                                              dataBase, mProject);
 		if (!build.ok()) {
-			irisLog("saveShader: " + build.error);
+			JahLog::write(JahLog::legacy, JahLog::Level::Log, "saveShader: " + build.error);
 			reportSaveRefused(doc, build.error);
 		} else {
 			// WHOSE VERSION (the owner's model, spec 12 Q2): the DRAWER the
@@ -704,7 +705,7 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 			    projectOwns ? MaterialBundle::Scope::Project
 			                : MaterialBundle::Scope::Library);
 			if (!written.ok) {
-				irisLog("saveShader: " + written.error);
+				JahLog::write(JahLog::legacy, JahLog::Level::Log, "saveShader: " + written.error);
 				// A REFUSED SAVE IS TOLD, not logged. This runs on the 1.5 s
 				// autosave, so a refusal the user cannot see means they keep
 				// working on a graph nothing is writing down — an hour of
@@ -1583,7 +1584,7 @@ void EffectsPage::loadGraphFromTemplate(NodeGraphPreset preset, const QString &n
 	// "New from Gold" would quietly make an empty material. Say it, then fall
 	// back so the gesture still produces something editable.
 	if (found && !refused.isEmpty()) {
-		irisLog("loadGraphFromTemplate: the shipped preset '" + shipped.name
+		JahLog::write(JahLog::legacy, JahLog::Level::Log, "loadGraphFromTemplate: the shipped preset '" + shipped.name
 		        + "' was refused: " + refused);
 		reportGraphRefused(preset.guid.isEmpty() ? preset.name : preset.guid, refused);
 	}
@@ -2744,7 +2745,7 @@ void EffectsPage::configureConnections()
 		if (guid.isEmpty() || !mProject || mProject->getProjectGuid().isEmpty()) return;
 		const auto added = ProjectAssets::addToProject(guid, dataBase, mProject,
 		                                              ProjectAssets::AddKind::Direct);
-		if (!added.ok()) { irisLog("add to project: " + added.error); return; }
+		if (!added.ok()) { JahLog::write(JahLog::legacy, JahLog::Level::Log, "add to project: " + added.error); return; }
 		refreshShaderGraph();
 		tabWidget->setCurrentIndex((int)ShaderWorkspace::Projects);
 		if (auto *pinned = selectCorrectItemFromDrop(guid))
@@ -2830,7 +2831,7 @@ void EffectsPage::renameMaterial(const QString &guid, const QString &wanted)
     if (!assettags::rename(dataBase, guid, newName)) {
         // Refused: put the tile's label back, or the drawer would show a name
         // the catalog does not have.
-        irisLog("rename: '" + newName + "' was refused");
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "rename: '" + newName + "' was refused");
         item->setData(Qt::DisplayRole, oldName);
         return;
     }
@@ -2863,7 +2864,7 @@ void EffectsPage::renameMaterial(const QString &guid, const QString &wanted)
                 dataBase, mProject, guid, definition,
                 projectScope ? MaterialBundle::Scope::Project
                              : MaterialBundle::Scope::Library);
-            if (!written.ok) irisLog("rename: " + written.error);
+            if (!written.ok) JahLog::write(JahLog::legacy, JahLog::Level::Log, "rename: " + written.error);
         }
     }
 

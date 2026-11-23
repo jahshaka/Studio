@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QSqlQuery>
 
 #include "app/firstrun.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "data/database/database.h"
 #include "io/assetrefs.h"
 #include "data/project.h"
@@ -358,7 +358,7 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     PrimitiveAssets::clearCache();
     const QStringList seedErrors = PrimitiveAssets::seedAll(db).errors;
     for (const QString &line : seedErrors) {
-        irisLog("library reset: primitive seed: " + line);
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "library reset: primitive seed: " + line);
         if (result.error.isEmpty()) result.error = line;
     }
 

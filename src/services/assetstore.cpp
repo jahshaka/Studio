@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/database/database.h"
 #include "data/settingsmanager.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "services/assetcas.h"
 #include "data/assethomekind.h"
 #include "services/assetstorepaths.h"
@@ -57,7 +57,7 @@ void AssetStoreService::bootstrapFromSettings(SettingsManager *settings)
     if (!AssetCas::readStoreInfo(active, &storeId, &formatVersion)) return;
     const QString remembered = settings->getValue(kStoreIdKey, QString()).toString();
     if (!remembered.isEmpty() && !storeId.isEmpty() && remembered != storeId) {
-        iris::Logger::getSingleton()->warn(
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("asset store: %1 now holds a DIFFERENT store (%2, was %3) — the library's "
                     "rows may not describe the files under it")
                 .arg(active, storeId, remembered));

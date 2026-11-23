@@ -19,7 +19,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/primitives.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/import/meshbake.h"
 #include "services/assetcas.h"
@@ -88,14 +88,14 @@ iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db)
     const QString source = storedSource(QSqlDatabase::database(), AssetStorePaths::root(),
                                        db, guid);
     if (source.isEmpty()) {
-        irisLog("primitive: '" + QString::fromLatin1(def->name)
-                + "' is not seeded in this library — nothing to draw");
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "primitive: '" + QString::fromLatin1(def->name)
+                                                          + "' is not seeded in this library — nothing to draw");
         return iris::MeshPtr();
     }
     iris::BakedModelPtr baked = MeshBakeStore::load(source, guid);
     if (!baked || baked->meshes.isEmpty()) {
-        irisLog("primitive: '" + QString::fromLatin1(def->name)
-                + "' has no readable bake — nothing to draw");
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "primitive: '" + QString::fromLatin1(def->name)
+                                                          + "' has no readable bake — nothing to draw");
         return iris::MeshPtr();
     }
     iris::MeshPtr made = baked->meshes.first();

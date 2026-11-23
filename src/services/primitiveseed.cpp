@@ -40,7 +40,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/primitives.h"
 #include "irisgl/core/irisutils.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/import/assetimportservice.h"
@@ -191,8 +191,8 @@ Plan planSeed(const primitives::Def &def, Database *db)
     // changed) would draw the OLD mesh with a bake that reads fresh against its own old source - so it is dropped below
     // like a row with no bytes, and imported again from the shipped file. Said once, by name.
     if (!have.isEmpty() && !storedIsShipped(def, have)) {
-        irisLog(QStringLiteral("seed: '%1' holds a stored source that is not the shipped mesh - re-seeded")
-                    .arg(QString::fromLatin1(def.name)));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("seed: '%1' holds a stored source that is not the shipped mesh - re-seeded")
+                                                              .arg(QString::fromLatin1(def.name)));
         plan.reseeded = true;
         have.clear();
     }
@@ -353,9 +353,9 @@ SeedResult seedAll(Database *db)
     // THE FIRST BOOT'S COST, a reading and not a guess (SHIPPED-BAKES-1): the
     // worker's wall for the whole list; the UI thread waited for it and built none.
     if (out.created > 0)
-        irisLog(QStringLiteral("seed: %1 shipped meshes imported and baked on a worker in %2 ms")
-                    .arg(out.created)
-                    .arg(out.workerMs, 0, 'f', 1));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("seed: %1 shipped meshes imported and baked on a worker in %2 ms")
+                                                              .arg(out.created)
+                                                              .arg(out.workerMs, 0, 'f', 1));
     return out;
 }
 

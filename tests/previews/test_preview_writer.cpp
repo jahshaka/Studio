@@ -48,7 +48,6 @@ For more information see the LICENSE file
 #include <algorithm>
 #include <cstdio>
 #include <functional>
-#include <mutex>
 
 #include <QCoreApplication>
 #include <QElapsedTimer>
@@ -69,10 +68,10 @@ For more information see the LICENSE file
 #include <QJsonObject>
 
 #include "data/database/database.h"
-#include "irisgl/core/logger.h"
 #include "services/assetmigration.h"
 #include "services/previewkey.h"
 #include "services/previewwriter.h"
+#include "services/jahlog.h"
 
 namespace {
 
@@ -270,13 +269,10 @@ int main(int argc, char **argv)
         previews::Writer writer(path, budgetMs);
         QStringList drops;
         writer.setDropHook([&drops](const QString &guid, const QString &reason) { drops.append(guid + QLatin1Char(':') + reason); });
-        QStringList lines;   // appended on the writer's thread: guarded
-        std::mutex linesLock;
-        iris::Logger::setSink([&lines, &linesLock](int, const QString &text) {
-            if (!text.startsWith(QStringLiteral("previews:"))) return;
-            std::lock_guard<std::mutex> hold(linesLock);
-            lines.append(text);
-        });
+        // THE WRITER's LINES, read from the session log's ring after the mark (JahLog::since: written on the writer's
+        // thread under the log's own lock).
+        const quint64 linesFrom = JahLog::mark(QStringLiteral("previews.writer: case e"));
+        const auto previewLines = [linesFrom] { return JahLog::since(linesFrom).filter(QStringLiteral("legacy: previews:")); };
 
         // (i) one write, four drops at least: two lines.
         QSqlQuery ui;
@@ -292,7 +288,7 @@ int main(int argc, char **argv)
         check(pe.landed.value(0).ok && pe.landed.value(0).drops >= 4 && storedKey(QStringLiteral("e")) == QStringLiteral("00000000000000e1"),
               "e: it landed, its drops counted");
         {
-            std::lock_guard<std::mutex> hold(linesLock);   // the writer is idle now: read the lines
+            const QStringList lines = previewLines();   // the writer is idle now: read the lines
             const int waits = int(std::count_if(lines.begin(), lines.end(), [](const QString &l) { return l.contains(QStringLiteral("waits behind")); }));
             const int landedLines = int(std::count_if(lines.begin(), lines.end(), [](const QString &l) { return l.contains(QStringLiteral("landed after")); }));
             std::printf("     %d drops -> %d 'waits' line(s), %d 'landed' line(s)\n", int(drops.size()), waits, landedLines);
@@ -329,7 +325,6 @@ int main(int argc, char **argv)
         check(pnew.landed.value(1).ok && storedKey(QStringLiteral("e")) == QStringLiteral("00000000000000e4")
                   && decodesTo(storedBytes(QStringLiteral("e")), qRgb(4, 4, 4)),
               "e: the newer is stored, bytes and key");
-        iris::Logger::setSink(nullptr);
     }
 
     // h. The encode runs outside the writer's transaction: an ORDER of recorded events, never a race.

@@ -290,8 +290,8 @@ public:
 };
 
 /// Installs the iris::Logger → `legacy` forwarder (fork F5-A: absorb at the
-/// SINK, so all ~72 irisLog call sites gain timestamps, categories, routing and
-/// rotation without touching one of them). Studio-side because irisgl must not
+/// SINK, so IrisGL's own irisLog lines gain timestamps, categories, routing and
+/// rotation; Studio's lines write `legacy` directly). Studio-side because irisgl must not
 /// depend on Studio: this is the only place the two meet.
 void absorbIrisLogger();
 

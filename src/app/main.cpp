@@ -60,7 +60,6 @@ For more information see the LICENSE file
 #include "ui/pages/assetview.h"
 #include <QTimer>
 #include "irisgl/core/irisutils.h"
-#include "irisgl/core/logger.h"
 #include "ui/dialogs/softwareupdatedialog.h"
 #include "ui/controls/tooltip.h"
 #include "app/versionsplashscreen.h"
@@ -336,8 +335,9 @@ int main(int argc, char *argv[])
     // the slow-frame warning, the watchdog's stall line, SceneMirror's skeleton
     // diagnostics. It CHAINS to the previous handler, so stderr is unchanged.
     JahLog::installQtMessageHandler();
-    // And this is fork F5-A: every irisLog() call site gains a timestamp, a
-    // category and rotation without one of them being edited.
+    // And this is fork F5-A: IrisGL's own irisLog() lines (the document and the
+    // importer: Studio's write JahLog directly) reach the session log's `legacy`
+    // category, until IrisCore's own log replaces them (NOQT-CORE-1 stage 2).
     JahLog::absorbIrisLogger();
 
     // THE BAKE SEAM (SHIPPED-BAKES-1, services/assetmetadata.h): a library
@@ -392,7 +392,7 @@ int main(int argc, char *argv[])
             || gen.outcome == librarygeneration::Outcome::Failed) {
             std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n",
                          qUtf8Printable(gen.reason));
-            irisLog(QStringLiteral("library: REFUSED — %1").arg(gen.reason));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library: REFUSED — %1").arg(gen.reason));
             // ON SCREEN for a person (D6); never a modal on a driven/rig run.
             if (!FirstRun::isDrivenSession(cli))
                 QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
@@ -521,7 +521,7 @@ int main(int argc, char *argv[])
             if (!error.isEmpty()) {
                 const QString reason = QObject::tr("the library's indexes could not be built (%1)").arg(error);
                 std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n", qUtf8Printable(reason));
-                irisLog(QStringLiteral("library: REFUSED — %1").arg(reason));
+                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library: REFUSED — %1").arg(reason));
                 if (!FirstRun::isDrivenSession(cli))
                     QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
                                           QObject::tr("The library cannot be opened: %1.").arg(reason));
@@ -530,8 +530,8 @@ int main(int argc, char *argv[])
             }
             indexGate.built = statements;
             indexGate.ms = built.elapsed();
-            irisLog(QStringLiteral("library: %1 index statement(s) built before the shell opened it in %2 ms "
-                                   "(one time)").arg(statements).arg(indexGate.ms));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library: %1 index statement(s) built before the shell opened it in %2 ms "
+                                                                             "(one time)").arg(statements).arg(indexGate.ms));
         }
     }
 

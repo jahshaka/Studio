@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "ui/panels/presets/skypresets.h"
 #include "ui_skypresets.h"
 
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "services/shippedassets.h"
 #include "ui/style/stylesheet.h"
 
@@ -72,7 +72,7 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     // so in the log rather than hand a null (or, before lane DBPTR-1, an
     // uninitialised) handle to the import pipeline.
     if (!db || !project) {
-        irisLog("sky preset: no project library open");
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "sky preset: no project library open");
         return;
     }
 
@@ -80,7 +80,7 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     const QStringList guids =
         ShippedAssets::pinSkyPreset(item->data(Qt::UserRole).toString(), db, project, &error);
     if (guids.size() != 6) {
-        irisLog("sky preset: " + error);
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "sky preset: " + error);
         return;
     }
     emit changeSceneCubemap(guids);

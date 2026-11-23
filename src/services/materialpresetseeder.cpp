@@ -231,11 +231,11 @@ void MaterialPresetSeeder::importMapsThenRows()
         // clean — the same picture named '…/materials/../../shadergraph/x.jpg'
         // by a map slot and '…/shadergraph/x.jpg' by the graph hashed twice —
         // and a gap between them is the symptom of that class returning.
-        irisLog(QStringLiteral("preset seed: %1 map file(s) prepared, %2 imported through "
-                               "the pipeline, %3 stamped as members in %4 ms%5")
-                    .arg(mPrepared.mapOwners.size()).arg(mRunner->requests().size())
-                    .arg(mStamped).arg(mStampMs)
-                    .arg(cancelled ? QStringLiteral(" (cancelled)") : QString()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("preset seed: %1 map file(s) prepared, %2 imported through "
+                                                                         "the pipeline, %3 stamped as members in %4 ms%5")
+                                                              .arg(mPrepared.mapOwners.size()).arg(mRunner->requests().size())
+                                                              .arg(mStamped).arg(mStampMs)
+                                                              .arg(cancelled ? QStringLiteral(" (cancelled)") : QString()));
         mRunner->deleteLater();
         mRunner = nullptr;
         seedNextRow();
@@ -261,16 +261,16 @@ void MaterialPresetSeeder::seedNextRow()
     turn.start();
     QString error;
     if (MaterialPresetAssets::ensureSeeded(name, mDb, &error, &mPrepared).isEmpty())
-        irisLog("preset seed: '" + name + "' was not seeded - " + error);
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "preset seed: '" + name + "' was not seeded - " + error);
     else
         ++mSeeded;
     mRowMs += turn.elapsed();
     mWorstTurnMs = std::max<qint64>(mWorstTurnMs, turn.elapsed());
 
     if (mPending.isEmpty())
-        irisLog(QStringLiteral("preset seed: %1 bundle(s) seeded — %2 ms of UI thread in the row "
-                               "pass, worst turn %3 ms; %4 ms hashing on the worker; %5 ms wall")
-                    .arg(mSeeded).arg(mRowMs).arg(mWorstTurnMs).arg(mHashMs)
-                    .arg(mTimer.elapsed()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("preset seed: %1 bundle(s) seeded — %2 ms of UI thread in the row "
+                                                                         "pass, worst turn %3 ms; %4 ms hashing on the worker; %5 ms wall")
+                                                              .arg(mSeeded).arg(mRowMs).arg(mWorstTurnMs).arg(mHashMs)
+                                                              .arg(mTimer.elapsed()));
     QTimer::singleShot(0, this, [this]() { seedNextRow(); });
 }

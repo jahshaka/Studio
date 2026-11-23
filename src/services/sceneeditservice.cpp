@@ -76,7 +76,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 #include "data/database/database.h"
 #include "irisgl/core/guid.h"
 #include "data/materialpreset.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "services/assetmetadata.h"
 #include "services/nodenaming.h"
 #include "services/imagematerial.h"
@@ -154,8 +154,8 @@ SceneEditService::SceneEditService(Database *db,
             for (const QString &path : waitingSources(root))
                 if (failedPaths.contains(path) && !failed.contains(path)) failed.append(path);
         }
-        irisLog(QStringLiteral("mesh bake landed: %1 row(s); %2 clip(s) and mesh(es) completed; %3 failed in use")
-                    .arg(rows.size()).arg(completed).arg(failed.size()));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake landed: %1 row(s); %2 clip(s) and mesh(es) completed; %3 failed in use")
+                                                              .arg(rows.size()).arg(completed).arg(failed.size()));
         if (!failed.isEmpty()) SceneIssues::instance().raiseMissingModels(failed);
     });
 }
@@ -523,7 +523,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     // asset identity — nothing is saved, as the comment above says.
     else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path), QString());
     if (!image.error.isEmpty())
-        irisLog("addParticleSystem: the default particle image was not bound - " + image.error);
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, "addParticleSystem: the default particle image was not bound - " + image.error);
 
     addNodeToScene(node);
     return node;
@@ -642,7 +642,7 @@ void SceneEditService::addMaterialMesh(bool ignore, iris::Vec3 position, const Q
                     .arg(fileSuns.first()->forwardShadingPriority);
     }
     if (!mLastPlacementNote.isEmpty())
-        irisLog(QStringLiteral("placement: %1: %2").arg(node->getName(), mLastPlacementNote));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("placement: %1: %2").arg(node->getName(), mLastPlacementNote));
 }
 
 iris::MeshNodePtr SceneEditService::addImagePlane(const QString &textureGuid,
@@ -1487,7 +1487,7 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
             // does not ship: the material is still applied, from the shipped
             // values, because refusing to paint the mesh would be the worse
             // answer — there is simply no row to pin.
-            irisLog("applyMaterial: '" + presetOrGuid + "' was not seeded - " + error);
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, "applyMaterial: '" + presetOrGuid + "' was not seeded - " + error);
             return applyResolvedMaterial(presetOrGuid, target);
         }
     }

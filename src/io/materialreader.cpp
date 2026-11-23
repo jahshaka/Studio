@@ -39,7 +39,7 @@ For more information see the LICENSE file
 
 // iris includes
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "irisgl/core/irisutils.h"
 #include "modules/materials/core/materialhelper.h"
 
@@ -95,7 +95,7 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Data
 	// caller gets the default PbrMaterial and the log names the refusal.
 	Q_UNUSED(db);
 	Q_UNUSED(loadTextures);
-	irisLog(QStringLiteral("material reader: refused a material with materialType '%1' "
+	JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("material reader: refused a material with materialType '%1' "
 	                       "(only \"pbr\" is read) — it loads as the default material")
 	            .arg(matObject.value(QStringLiteral("materialType")).toString()));
 	auto mat = iris::PbrMaterial::create();

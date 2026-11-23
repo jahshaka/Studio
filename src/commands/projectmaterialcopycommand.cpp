@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 
 #include "commands/projectmaterialcopycommand.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 
 #include <QJsonDocument>
 #include <QObject>
@@ -116,6 +116,6 @@ void ProjectMaterialCopyCommand::undo()
     // A FAILED UNIT WRITES NOTHING (DbTransaction): said, never dropped silently.
     if (!tx.commit()) {
         mError = QObject::tr("the catalog refused the undo of the copy");
-        irisLog(QStringLiteral("the undo of the project material copy %1 was NOT committed: nothing changed").arg(mCopyGuid));
+        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("the undo of the project material copy %1 was NOT committed: nothing changed").arg(mCopyGuid));
     }
 }

@@ -92,9 +92,9 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/database/databasereads.h"
-#include "irisgl/core/logger.h"
 #include "services/assettray.h"
 #include "services/assetcas.h"
+#include "services/jahlog.h"
 #include "services/memberstamp.h"
 #include "services/meshbakestore.h"
 #include "services/projectassets.h"
@@ -546,10 +546,11 @@ static void theBootGate()
         previousIndexSet();
         db.closeDatabase();
     };
-    QStringList defects;
-    iris::Logger::setSink([&defects](int, const QString &text) {
-        if (text.contains(QLatin1String("DEFECT"))) defects << text;
-    });
+    // THE DEFECT LINE, CAPTURED FROM THE SESSION LOG's RING (JahLog::mark / since: database.cpp writes it there).
+    const quint64 defectsFrom = JahLog::mark(QStringLiteral("library.statements: the gate's defect capture"));
+    const auto defects = [defectsFrom] {
+        return JahLog::since(defectsFrom).filter(QStringLiteral("library: DEFECT"));
+    };
 
     upgraded();
     const int before = Database::indexStatementsToRun(path);
@@ -562,9 +563,9 @@ static void theBootGate()
         Database db;
         db.initializeDatabase(path);
         const int atOpen = indexStatementsAtOpen(db);
-        CHECK(atOpen == 0 && defects.isEmpty(),
+        CHECK(atOpen == 0 && defects().isEmpty(),
               "GATE: a PREPARED library's open runs 0 index statements (%d) and says no defect (%d)", atOpen,
-              int(defects.size()));
+              int(defects().size()));
         db.closeDatabase();
     }
 
@@ -573,12 +574,11 @@ static void theBootGate()
         Database db;
         db.initializeDatabase(path);
         const int atOpen = indexStatementsAtOpen(db);
-        CHECK(atOpen == 4 && defects.size() == 1,
+        CHECK(atOpen == 4 && defects().size() == 1,
               "GATE NEGATIVE CONTROL: the same library opened UNPREPARED runs its %d index statements on the opening "
-              "thread and says DEFECT (%d)", atOpen, int(defects.size()));
+              "thread and says DEFECT (%d)", atOpen, int(defects().size()));
         db.closeDatabase();
     }
-    iris::Logger::setSink({});
 
     upgraded();
     QFile(path).setPermissions(QFileDevice::ReadOwner | QFileDevice::ReadGroup);

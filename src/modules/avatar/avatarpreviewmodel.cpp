@@ -25,7 +25,6 @@ For more information see the LICENSE file
 
 
 #include "irisgl/core/geometry/aabb.h"
-#include "irisgl/core/logger.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/skeletalanimation.h"

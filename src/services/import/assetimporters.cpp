@@ -47,7 +47,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "irisgl/import/materialhelper.h"
 #include "irisgl/import/meshbake.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 
 namespace {
 
@@ -286,7 +286,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
             out.files.append({ bakePath, out.mainGuid, iris::MeshBake::casRole(), bakeName });
             out.files.append({ bakePath, out.meshGuid, iris::MeshBake::casRole(), bakeName });
         } else if (!bakeError.isEmpty()) {
-            irisLog("import: " + bakeError + " (the open path will parse instead)");
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, "import: " + bakeError + " (the open path will parse instead)");
         }
     }
 
@@ -663,7 +663,7 @@ bool AnimationImporter::convert(const ImportRequest &request, const QString &sta
         if (iris::MeshBake::writeClip(bakePath, clip, &bakeError))
             out.files.append({ bakePath, out.mainGuid, iris::MeshBake::casRole(), bakeName });
         else
-            irisLog("import: " + bakeError + " (the clip's readers rebuild it from the source)");
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, "import: " + bakeError + " (the clip's readers rebuild it from the source)");
     }
 
     StagedRow row;

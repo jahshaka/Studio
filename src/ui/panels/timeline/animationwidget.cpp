@@ -24,7 +24,7 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/propertyanim.h"
 #include "irisgl/document/animation/animableproperty.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/meshnode.h"
@@ -501,7 +501,7 @@ void AnimationWidget::addPropertyKey(QAction *action)
         static QSet<QString> reported;
         if (!reported.contains(animProp->name)) {
             reported.insert(animProp->name);
-            irisLog(QString("AnimationWidget: %1 — key ignored").arg(error));
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("AnimationWidget: %1 — key ignored").arg(error));
         }
         return;
     }

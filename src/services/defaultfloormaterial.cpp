@@ -13,7 +13,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/project.h"
-#include "irisgl/core/logger.h"
+#include "services/jahlog.h"
 #include "services/shippedassets.h"
 
 namespace defaultfloormaterial {
@@ -59,8 +59,8 @@ QString pinTile(Database *db, Project *project, QString *tileGuid, bool *tileNew
             // The floor still renders (the shipped file); what is lost is the
             // guid on save, so say why instead of saving a scene that reopens
             // untextured with nothing in the log.
-            irisLog("defaultfloormaterial: the floor tile could not be pinned into the project - "
-                    + tile.error);
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, "defaultfloormaterial: the floor tile could not be pinned into the project - "
+                                                              + tile.error);
         }
     }
 
