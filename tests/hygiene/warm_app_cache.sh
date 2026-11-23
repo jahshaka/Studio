@@ -669,7 +669,7 @@ if want store; then
 # answers "warm" - BY HARD LINKS (one inode, no copy); S2 another tree at the SAME key, cold, TAKES them - warm with no boot
 # (its fake app never runs), its files the store's own inodes, and a write the engine's way (by rename) leaves the store's
 # bytes as they were; S3 a TORN stored cache is not taken - that boot runs; S4 with
-# JAH_WARM_STORE unset nothing is read or written there (as before); S5 the key's lock held by another tree: this call WAITS on
+# JAH_WARM_STORE unset a call that would boot cold is REFUSED (B13) and with --no-store nothing is read or written there (as before); S5 the key's lock held by another tree: this call WAITS on
 # it (said, no card) and takes after it; S6 another key takes nothing; S7 a toy-shaped call under an inherited store writes nothing;
 # S8 ONE FILESYSTEM (the owner, 2026-11-22: the box's store beside the trees): a store on another filesystem is NOT taken from
 # (said, the tree boots) and a shared cache on another is NOT linked into a home by fresh_home.sh (said) - never a copy
@@ -724,9 +724,13 @@ sN 1 "$ST"
     ok "S2c: the serve takes NO lock - a second tree at the key warm while another holds the card, nothing booted, no hold logged" ||
     no "S2c the serve's lock: rc $rc still-held $still booted [$(cat "$T/s-booted" 2>/dev/null)] holds [$(cat "$T/gpuN.lock.holds" 2>/dev/null)] '$(echo "$out" | tail -2)'"
 toy_tree "$T/sU"; UB="$T/sU/build"; rm -f "$T/s-booted"
-out=$(env -u JAH_WARM_STORE bash -c "$(declare -f SX); W='$W'; T='$T'; SX '$UB' --only engine-off" 2>&1); rc=$?
-[ -e "$T/s-booted" ] && ! echo "$out" | grep -q "store" && ok "S4: JAH_WARM_STORE unset - no store read or written, the cold tree boots as before" ||
-    no "S4 unset: '$out' rc $rc"
+out0=$(env -u JAH_WARM_STORE bash -c "$(declare -f SX); W='$W'; T='$T'; SX '$UB' --only engine-off" 2>&1); rc0=$?
+booted0=$([ -e "$T/s-booted" ] && echo y || echo n)
+out=$(env -u JAH_WARM_STORE bash -c "$(declare -f SX); W='$W'; T='$T'; SX '$UB' --only engine-off --no-store" 2>&1); rc=$?
+[ $rc0 = 2 ] && [ $booted0 = n ] && echo "$out0" | grep -q "REFUSED (exit 2) - this call would boot cold" && echo "$out0" | grep -q -- "--no-store" \
+    && [ -e "$T/s-booted" ] && ! echo "$out" | grep -q "store" \
+    && ok "S4: JAH_WARM_STORE unset - a call that would boot cold is REFUSED (exit 2, the lines to run named; the errors audit B13); with --no-store no store is read or written and the cold tree boots as before" ||
+    no "S4 unset: rc $rc0 booted $booted0 '$out0' // rc $rc '$out'"
 printf '9876543210' > "$ST/$pk/engine/cache/hlms.1.bin.t"; mv "$ST/$pk/engine/cache/hlms.1.bin.t" "$ST/$pk/engine/cache/hlms.1.bin"   # (by rename: its inode is the publisher's too)
 toy_tree "$T/sT"; TB="$T/sT/build"; rm -f "$T/s-booted"
 out=$(JAH_WARM_STORE="$ST" SX "$TB" --only engine-off); rc=$?
