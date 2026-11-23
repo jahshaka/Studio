@@ -244,6 +244,14 @@ cp = dict(gg.build_config(parent)[0], keys=gg.config_keys(parent))
 cases[:] = [(n, r, cp, w) for n, r, _c, w in cases]
 cases.append(("a record made BEFORE the probe and this rule (its cache without the entry) against this build's cache WITH it "
               "(COMPILER_SUPPORTS_Wformat:UNINITIALIZED=2:INTERNAL=1): EQUAL - the census's 315 stand again", recd, cp, True))
+# ...AND THE OTHER DIRECTION (the confirm read of 2d9a18552: 19,627 records of the last 20 days STORED the probe among their options -
+# the old key read the mis-read line as a switch): such a record (its options with COMPILER_SUPPORTS_Wformat "2:INTERNAL=1", hashed
+# so) against this build, which types the line INTERNAL and keeps it out of its options - EQUAL, by _switches' drop (red with that
+# drop removed: spikes/audit-fixes/red-once/gate.serve_red-stored-probe.txt)
+st_opts = dict(cl["options"], COMPILER_SUPPORTS_Wformat="2:INTERNAL=1")
+st_rec = {"hash": gg._sha256(gg._canon_json({"keys": gg.config_keys(lane), "options": st_opts}).encode()), "options": st_opts}
+cases.append(("a record that STORED the probe among its options (the old key) against a build that types it INTERNAL: EQUAL",
+              st_rec, cp, True))
 open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache + "JAH_COVERAGE:BOOL=OFF\n")
 v_ = gg.build_config(lane)[0]
 cases.append(("the option at OFF (the default build, byte for byte): EQUAL - its arrival re-keys no record", {"hash": v_["hash"], "options": v_["options"]}, cp, True))
