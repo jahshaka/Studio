@@ -8,7 +8,7 @@ engine.scene.setAmbient(scene, {upper: [0.55, 0.6, 0.7], lower: [0.12, 0.1, 0.08
 const cube = engine.node.create(scene);
 engine.node.attachMesh(scene, cube, {
     mesh: engine.mesh.unitCube(scene),
-    material: engine.material.createPbr(scene, {albedo: [0.9, 0.5, 0.2], roughness: 0.6, emissive: [0.5, 0.18, 0.04]})});
+    material: engine.material.createPbr(scene, {albedo: [0.9, 0.5, 0.2, 1], roughness: 0.6, emissive: [0.5, 0.18, 0.04, 1]})});
 engine.node.setTransform(scene, cube, {position: [0, 0, 0], scale: [2, 2, 2]});
 engine.view.lookAt(view, {eye: [4, 3, 5], target: [0, 0, 0]});
 engine.frames(3);
