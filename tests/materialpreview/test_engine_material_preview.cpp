@@ -7,6 +7,7 @@
 // a green material must show green; the background colour must reach the
 // corner pixel; release() must detach cleanly.
 #include <QApplication>
+#include "irisgl/document/qt/colour.h"
 #include <QColor>
 #include <QDir>
 #include <QImage>
@@ -108,7 +109,7 @@ int main(int argc, char **argv)
 
         // ---- 1. a red PbrMaterial (what the graph evaluator emits) on the sphere ----
         auto red = iris::PbrMaterial::create();
-        red->setBaseColor(QColor(220, 30, 30));
+        red->setBaseColor(iris::SrgbColor(220, 30, 30));
         preview.setMaterial(red);
         Image img = render(preview, *engine, view);
         show("red PbrMaterial on the sphere", img, CX, CY);
@@ -123,7 +124,7 @@ int main(int argc, char **argv)
 
         // ---- 3. a green material replaces the red one ----
         auto green = iris::PbrMaterial::create();
-        green->setBaseColor(QColor(25, 210, 30));
+        green->setBaseColor(iris::SrgbColor(25, 210, 30));
         preview.setMaterial(green);
         img = render(preview, *engine, view);
         show("green PbrMaterial on the cube", img, CX, CY);
@@ -263,7 +264,7 @@ int main(int argc, char **argv)
             // same claim, on a surface that can carry it.
             auto makeMat = [](float coat, float coatRough, int brdf) {
                 auto m = iris::PbrMaterial::create();
-                m->setBaseColor(QColor(120, 120, 125));
+                m->setBaseColor(iris::SrgbColor(120, 120, 125));
                 m->setMetallicFactor(0.0f);
                 m->setRoughnessFactor(0.25f);
                 m->setClearCoat(coat);

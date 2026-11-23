@@ -20,6 +20,7 @@
 // NO BRIGHTNESS SLIDER exists or is used: the layer's radiance is the physics of
 // the slab (JahCloudLayer_ps.glsl), and nothing here tunes it to a picture.
 #include <QGuiApplication>
+#include "irisgl/document/qt/colour.h"
 #include <QImage>
 
 #include "../support/testmesh.h"
@@ -107,7 +108,7 @@ struct Rig {
         ground->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
         ground->setLocalScale(iris::Vec3(400.0f, 1.0f, 400.0f));
         auto mat = iris::PbrMaterial::create();
-        mat->setBaseColor(QColor(128, 128, 128));
+        mat->setBaseColor(iris::SrgbColor(128, 128, 128));
         mat->setRoughnessFactor(1.0f);
         mat->setMetallicFactor(0.0f);
         ground->setMaterial(mat);
@@ -257,7 +258,7 @@ int caseEnergy() {
     // pi times brighter than the sun it stands in (x3.1 or x0.32 here).
     {
         r.doc->skyType = iris::SkyType::SINGLE_COLOR;
-        r.doc->skyColor = QColor(0, 0, 0);
+        r.doc->skyColor = iris::SrgbColor(0, 0, 0);
         r.clouds(true, 0.0f, 1.0f);
         r.sunAt(90.0f, 0.0f);
         r.settle();

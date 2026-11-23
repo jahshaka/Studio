@@ -49,6 +49,20 @@ add_test(NAME document.ptr_laws COMMAND test_ptr_laws WORKING_DIRECTORY ${CMAKE_
 set_tests_properties(document.ptr_laws PROPERTIES LABELS "document" TIMEOUT 60)
 jah_no_display(document.ptr_laws)
 
+# document.sky_bake_parity — the gradient sky's bytes against the Qt-typed bake it replaced (NOQT-DOCUMENT-1 stage 3):
+# iris::bakeGradientSky (an iris::Image from SrgbColor stops) equals the old QColor/QImage implementation, kept in the
+# test as the reference, byte for byte over seeded stops, offsets and sizes. Qt6::Gui is the reference only.
+add_executable(test_sky_bake_parity test_sky_bake_parity.cpp)
+set_target_properties(test_sky_bake_parity PROPERTIES AUTOMOC OFF)
+target_include_directories(test_sky_bake_parity PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_sky_bake_parity PRIVATE IrisGL Qt6::Gui)
+add_test(NAME document.sky_bake_parity COMMAND test_sky_bake_parity WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.sky_bake_parity PROPERTIES LABELS "document" TIMEOUT 60)
+jah_no_display(document.sky_bake_parity)
+
 # physics.mt_determinism (archived: archive/tests/physics) / physics.step_cost (archived: archive/tests/physics) / physics.step_overlap (archived: archive/tests/physics) — THE PHYSICS STEP ON BULLET'S MULTI-THREADED WORLD
 # (ENGINE-UPGRADE-U4 stage 6, decisions 20/21/23). A pile of boxes dropped in layers, stepped by the document at the
 # fixed step, frames counted; Bullet's own scheduler bound on the test's thread (its game thread) at the box's share.

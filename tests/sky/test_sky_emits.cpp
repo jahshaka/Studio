@@ -26,6 +26,7 @@
 // MEASURED (2026-10-27): the orange reference's ground 0.1423 0.0371 0.0039 and the dome's the same; the backdrop's 0.
 // A fixture (the engine and the mirror, one 96 x 96 offscreen view; 10 s budget). Counted in frames.
 #include <QDir>
+#include "irisgl/document/qt/colour.h"
 #include <QGuiApplication>
 #include <QImage>
 
@@ -101,7 +102,7 @@ int main(int argc, char **argv) {
 
     auto doc = iris::Scene::create();
     doc->skyType = iris::SkyType::SINGLE_COLOR;
-    doc->skyColor = kSky;
+    doc->skyColor = iris::toSrgbColor(kSky);
     doc->sunDiscVisible = false;
     doc->fogEnabled = false;
     doc->hdrEnabled = false;
@@ -112,7 +113,7 @@ int main(int argc, char **argv) {
         ground->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
         ground->setLocalScale(iris::Vec3(400.0f, 1.0f, 400.0f));
         auto mat = iris::PbrMaterial::create();
-        mat->setBaseColor(QColor(128, 128, 128));
+        mat->setBaseColor(iris::SrgbColor(128, 128, 128));
         mat->setRoughnessFactor(1.0f);
         mat->setMetallicFactor(0.0f);
         ground->setMaterial(mat);
@@ -122,7 +123,7 @@ int main(int argc, char **argv) {
     auto skyLight = iris::LightNode::create();
     skyLight->setName("Sky Light");
     skyLight->lightType = iris::LightType::Sky;
-    skyLight->color = QColor(255, 255, 255);
+    skyLight->color = iris::SrgbColor(255, 255, 255);
 
     std::unique_ptr<SceneMirror> mirror(new SceneMirror(escene));
     mirror->setLightWires(false);
@@ -201,7 +202,7 @@ int main(int argc, char **argv) {
         // the reference: no Sky Light under a uniform ORANGE World sky - what an orange dome must light the ground as
         const QColor kDome(220, 120, 40);
         if (skyLight->getParent()) doc->getRootNode()->removeChild(skyLight);
-        doc->skyColor = kDome;
+        doc->skyColor = iris::toSrgbColor(kDome);
         Reading orange;
         const bool s3 = settle(orange);
         // the dome: the World sky blue again, a white Sky Light of 1 whose source is six orange faces
@@ -214,7 +215,7 @@ int main(int argc, char **argv) {
             paths[i] = QDir(dir).filePath(QStringLiteral("face%1.png").arg(i));
             face.save(paths[i]);
         }
-        doc->skyColor = kSky;
+        doc->skyColor = iris::toSrgbColor(kSky);
         skyLight->intensity = 1.0f;
         skyLight->skySource = iris::SkyLightSource::Cubemap;
         skyLight->skyCubeTexture = imagedecode::loadCubeMap(paths[0], paths[1], paths[2], paths[3], paths[4],
@@ -249,7 +250,7 @@ int main(int argc, char **argv) {
         // to photograph: the ambient AND the reflection go, the ground 0. RED before the fix: the capture's
         // "nothing to photograph" branch kept the dome's convolved cube bound under SkyMode::NoSky.
         doc->skyType = iris::SkyType::NONE;
-        groundMat->setBaseColor(QColor(255, 255, 255));
+        groundMat->setBaseColor(iris::SrgbColor(255, 255, 255));
         groundMat->setMetallicFactor(1.0f);
         groundMat->setRoughnessFactor(0.3f);
         skyLight->setVisible(true);
@@ -272,7 +273,7 @@ int main(int argc, char **argv) {
         // nothing - the SH read still in flight must die with it, or it lands the dragged sky's ambient under the
         // backdrop. The ground (the matte one again) must be 0 and stay 0.
         doc->skyType = iris::SkyType::SINGLE_COLOR;
-        groundMat->setBaseColor(QColor(128, 128, 128));
+        groundMat->setBaseColor(iris::SrgbColor(128, 128, 128));
         groundMat->setMetallicFactor(0.0f);
         groundMat->setRoughnessFactor(1.0f);
         skyLight->setVisible(true);

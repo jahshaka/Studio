@@ -1,6 +1,7 @@
 // THE SCALE FIXTURES — see scale_world.h for what they are and why they are built
 // this way.
 #include "scale_world.h"
+#include "irisgl/document/qt/colour.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 
 #include "../support/proceduralshell.h"
@@ -631,8 +632,8 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     // realistic sky with the sun following it, the Sky Light's fill.
     doc->skyType = iris::SkyType::REALISTIC;
     doc->setSkyRealistic(iris::SkyRealistic::defaults());
-    doc->skyColor = QColor(96, 96, 96);
-    doc->fogColor = QColor(96, 96, 96);
+    doc->skyColor = iris::SrgbColor(96, 96, 96);
+    doc->fogColor = iris::SrgbColor(96, 96, 96);
     worldmodes::setMode(doc, worldmodes::Mode(int(spec.tier)));
     worldmodes::setPhoton(doc, true, spec.tier);
 

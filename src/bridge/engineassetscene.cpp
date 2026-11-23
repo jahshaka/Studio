@@ -1,4 +1,5 @@
 #include "irisgl/core/math/quat.h"
+#include "irisgl/document/qt/colour.h"
 #include "irisgl/core/math/vec.h"
 #include "bridge/engineassetscene.h"
 
@@ -68,7 +69,7 @@ void EngineAssetScene::buildDocument()
     auto dlight = iris::LightNode::create();
     dlight->setLightType(iris::LightType::Directional);
     dlight->setName("ae98cx7u");
-    dlight->color = QColor(255, 255, 240);
+    dlight->color = iris::SrgbColor(255, 255, 240);
     dlight->setLocalRot(iris::Quat::fromEulerAngles(45, 45, 0));
     dlight->intensity = 0.76f;
     dlight->setShadowMapType(iris::ShadowMapType::Soft);
@@ -79,7 +80,7 @@ void EngineAssetScene::buildDocument()
     plight->setLightType(iris::LightType::Point);
     plight->setName("ae98cx7u");
     plight->setLocalPos(iris::Vec3(0, 0, -3));
-    plight->color = QColor(210, 210, 255);
+    plight->color = iris::SrgbColor(210, 210, 255);
     // 5.5 at 3 m from the asset (IMAGE-1): the inverse square law gives the
     // asset the light the old 0.47 gave it under the retired near-flat curve
     // (0.47 x 1.28 at 3 m with the default range), so a thumbnail keeps its fill.
@@ -94,7 +95,7 @@ void EngineAssetScene::buildDocument()
     mCamera->lookAt(iris::Vec3(0, 0.5f, 0));
     mDocument->setCamera(mCamera);
 
-    mDocument->setSkyColor(QColor(25, 25, 25));
+    mDocument->setSkyColor(iris::SrgbColor(25, 25, 25));
     // A PREVIEW HAS NO SUN DISC (SKY_LIGHT_SPEC.md round-2 review item 9). Every
     // preview document carries a colour sky, which is a REAL sky now — so it
     // bakes a strip, six reflection faces and an IBL convolution, and would draw
@@ -105,7 +106,7 @@ void EngineAssetScene::buildDocument()
     // SKY_LIGHT_SPEC.md §5. This preview lights its ENGINE scene directly
     // through Engine::setAmbient and never calls buildEnvironment, so the
     // document write reached nothing and always had.)
-    mDocument->fogColor = QColor(25, 25, 25);
+    mDocument->fogColor = iris::SrgbColor(25, 25, 25);
     mDocument->fogEnabled = false;
 
     mCamera->update(0);
@@ -224,7 +225,7 @@ iris::SceneNodePtr EngineAssetScene::setMaterialSubject(iris::MaterialPtr materi
 
 void EngineAssetScene::setSkyColor(const QColor &c)
 {
-    mDocument->setSkyColor(c);
+    mDocument->setSkyColor(iris::toSrgbColor(c));
 }
 
 bool EngineAssetScene::groundPlaneShown(float *height) const
@@ -240,20 +241,20 @@ void EngineAssetScene::setBackdrop(unsigned int id)
     switch (id) {
     case 1:
         mDocument->fogEnabled = false;
-        mDocument->setSkyColor(QColor(25, 25, 25));
+        mDocument->setSkyColor(iris::SrgbColor(25, 25, 25));
         mGroundPlane = false;
         mShadows = false;
         break;
     case 2:
         mDocument->fogEnabled = false;
-        mDocument->setSkyColor(QColor(82, 82, 82));
+        mDocument->setSkyColor(iris::SrgbColor(82, 82, 82));
         mGroundPlane = false;
         mShadows = false;
         break;
     case 3:
-        mDocument->setSkyColor(QColor(25, 25, 25));
+        mDocument->setSkyColor(iris::SrgbColor(25, 25, 25));
         mDocument->fogEnabled = true;          // exponential, at the document default density
-        mDocument->fogColor = QColor(25, 25, 25);
+        mDocument->fogColor = iris::SrgbColor(25, 25, 25);
         mGroundPlane = true;
         mShadows = true;
         break;
@@ -438,7 +439,7 @@ void EngineAssetScene::prepareOffscreen(View *shot, int width, int height)
 QImage EngineAssetScene::renderImage(int width, int height)
 {
     if (!mDocument) return QImage();
-    const QColor c = mDocument->skyColor;
+    const QColor c = iris::toQColor(mDocument->skyColor);
     return renderOffscreen("assets-shot", width, height,
                            Colour(c.redF(), c.greenF(), c.blueF(), 1.0f), mShadows);
 }

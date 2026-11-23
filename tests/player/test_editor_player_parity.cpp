@@ -46,6 +46,7 @@
 //
 // Plus the shape contract itself: playerView->postFx() == editorView->postFx().
 #include "irisgl/core/math/quat.h"
+#include "irisgl/document/qt/colour.h"
 
 #include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"
@@ -179,7 +180,7 @@ int main(int argc, char **argv)
     // Every World-panel dial that buildEnvironment owns is moved OFF its default
     // so that a path which skips buildEnvironment cannot accidentally agree.
     auto doc = iris::Scene::create();
-    doc->setSkyColor(QColor(30, 40, 70));
+    doc->setSkyColor(iris::SrgbColor(30, 40, 70));
     // STRONGLY TINTED AMBIENT, which is now a Sky Light (SKY_LIGHT_SPEC.md §2):
     // the tint multiplies the sky's own integral, so a red-tinted skylight over
     // a blue sky is still a value buildEnvironment owns and a path that skips
@@ -188,12 +189,12 @@ int main(int argc, char **argv)
         auto skyLight = iris::LightNode::create();
         skyLight->setLightType(iris::LightType::Sky);
         skyLight->setName("Sky Light");
-        skyLight->color = QColor(220, 60, 40);
+        skyLight->color = iris::SrgbColor(220, 60, 40);
         skyLight->intensity = 2.0f;
         doc->rootNode->addChild(skyLight);
     }
     doc->fogEnabled     = true;                   // fog is the environment's, not the sky's
-    doc->fogColor       = QColor(40, 220, 120);
+    doc->fogColor       = iris::SrgbColor(40, 220, 120);
     doc->fogDensity     = 0.06f;
     doc->hdrEnabled     = true;                   // THE symptom: filmic tonemap + auto exposure
     // AUTO, EXPLICITLY (EXPOSURE-1): the editor's default is MANUAL now, and
@@ -213,7 +214,7 @@ int main(int argc, char **argv)
     auto light = iris::LightNode::create();
     light->setLightType(iris::LightType::Directional);
     light->setName("sun");
-    light->color = QColor(255, 255, 255);
+    light->color = iris::SrgbColor(255, 255, 255);
     light->intensity = 3.0f;                      // bright enough to clip without a tonemap
     light->setLocalRot(iris::Quat::fromEulerAngles(-55, 25, 0));
     doc->getRootNode()->addChild(light);
@@ -222,7 +223,7 @@ int main(int argc, char **argv)
     cube->setName("cube");
     cube->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto grey = iris::PbrMaterial::create();
-    grey->setBaseColor(QColor(230, 230, 230));
+    grey->setBaseColor(iris::SrgbColor(230, 230, 230));
     cube->setMaterial(grey);
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document");
     const float r = cube->getMeshRadius();
@@ -239,7 +240,7 @@ int main(int argc, char **argv)
     floor->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
     {
         auto mirrorMat = iris::PbrMaterial::create();
-        mirrorMat->setBaseColor(QColor(30, 30, 34));
+        mirrorMat->setBaseColor(iris::SrgbColor(30, 30, 34));
         floor->setMaterial(mirrorMat);
     }
     floor->setLocalScale(iris::Vec3(8, 1, 8));

@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/qt/colour.h"
 #include "modules/avatar/avatarspace.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -67,15 +68,15 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
 
     // Materials, shared by role.
     auto floorTile = iris::PbrMaterial::create();     // BLACK, glossy (owner flip)
-    floorTile->setBaseColor(QColor(6, 6, 9));
+    floorTile->setBaseColor(iris::SrgbColor(6, 6, 9));
     floorTile->setMetallicFactor(0.1f);
     floorTile->setRoughnessFactor(0.08f);             // the reflection carries the look
 
     auto floorLines = iris::PbrMaterial::create();    // GREY lines (owner flip)
-    floorLines->setBaseColor(QColor(126, 130, 140));
+    floorLines->setBaseColor(iris::SrgbColor(126, 130, 140));
     floorLines->setMetallicFactor(0.0f);
     floorLines->setRoughnessFactor(0.9f);
-    floorLines->setEmissiveColor(QColor(126, 130, 140));
+    floorLines->setEmissiveColor(iris::SrgbColor(126, 130, 140));
     floorLines->setEmissiveIntensity(0.22f);          // legible from every angle
 
     // WALL TILES: a MID GREY that is LIT, not a white sheet that emits (owner
@@ -91,13 +92,13 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     // a large surface is the one thing an LDR chain cannot roll off; the
     // key light itself is set in AvatarPreviewModel::buildDocument.
     auto wallTile = iris::PbrMaterial::create();
-    wallTile->setBaseColor(QColor(150, 152, 158));
+    wallTile->setBaseColor(iris::SrgbColor(150, 152, 158));
     wallTile->setMetallicFactor(0.0f);
     wallTile->setRoughnessFactor(0.6f);               // lit by the ceiling panel, never self-lit
 
     auto wallSeam = iris::PbrMaterial::create();      // the seam light, a clean line
-    wallSeam->setBaseColor(QColor(255, 255, 255));
-    wallSeam->setEmissiveColor(QColor(228, 236, 255));
+    wallSeam->setBaseColor(iris::SrgbColor(255, 255, 255));
+    wallSeam->setEmissiveColor(iris::SrgbColor(228, 236, 255));
     // 0.55, not 1.6: the seam is the brightest thing in the room and has to
     // read as a light, but a 1.6 emitter is 60% of the way past white before
     // any lighting is added — it clamped to 255/255/255, and so did its image
@@ -107,8 +108,8 @@ iris::SceneNodePtr buildModernRoom(const iris::ScenePtr &scene)
     wallSeam->setRoughnessFactor(1.0f);
 
     auto ceiling = iris::PbrMaterial::create();       // soft light panel
-    ceiling->setBaseColor(QColor(246, 248, 251));
-    ceiling->setEmissiveColor(QColor(255, 255, 255));
+    ceiling->setBaseColor(iris::SrgbColor(246, 248, 251));
+    ceiling->setEmissiveColor(iris::SrgbColor(255, 255, 255));
     ceiling->setEmissiveIntensity(0.30f);
     ceiling->setRoughnessFactor(0.8f);
 

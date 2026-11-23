@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/apppaths.h"
+#include "irisgl/document/qt/colour.h"
 #include "scripting/modules/assetsapi.h"
 
 #include <QCryptographicHash>
@@ -1299,16 +1300,16 @@ QString AssetsApi::createSky(const QVariantMap &options)
         // The sky panel's FRESH colour sky (skypropertywidget's default): one
         // default, whichever door minted the row.
         if (!colour("color", QColor(72, 72, 72), &c)) return QString();
-        definition.insert(QStringLiteral("skyColor"), iris::colorToJson(c));
+        definition.insert(QStringLiteral("skyColor"), iris::colorToJson(iris::toSrgbColor(c)));
     } else if (t == QLatin1String("gradient")) {
         type = iris::SkyType::GRADIENT;
         QColor top, mid, bottom;
         if (!colour("top", QColor(255, 146, 138), &top) || !colour("mid", QColor(Qt::white), &mid)
             || !colour("bottom", QColor(64, 128, 255), &bottom))
             return QString();
-        definition.insert(QStringLiteral("gradientTop"), iris::colorToJson(top));
-        definition.insert(QStringLiteral("gradientMid"), iris::colorToJson(mid));
-        definition.insert(QStringLiteral("gradientBot"), iris::colorToJson(bottom));
+        definition.insert(QStringLiteral("gradientTop"), iris::colorToJson(iris::toSrgbColor(top)));
+        definition.insert(QStringLiteral("gradientMid"), iris::colorToJson(iris::toSrgbColor(mid)));
+        definition.insert(QStringLiteral("gradientBot"), iris::colorToJson(iris::toSrgbColor(bottom)));
         definition.insert(QStringLiteral("gradientOffset"),
                           options.value(QStringLiteral("offset"), 0.73).toDouble());
     } else if (t == QLatin1String("equirectangular") || t == QLatin1String("equirect")) {

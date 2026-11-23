@@ -38,6 +38,7 @@
 // Runs with QT_QPA_PLATFORM=offscreen and a reachable DISPLAY (Vulkan).
 
 #include <QGuiApplication>
+#include "irisgl/document/qt/colour.h"
 #include <functional>
 
 #include "../support/testmesh.h"
@@ -427,7 +428,7 @@ struct Doc {
         // backlit subject (D4's premise) under the sky that lights it.
         {
             auto subject = iris::PbrMaterial::create();
-            subject->setBaseColor(QColor(150, 150, 150));   // linear 0.305
+            subject->setBaseColor(iris::SrgbColor(150, 150, 150));   // linear 0.305
             meshNode->setMaterial(subject);
         }
         scene->getRootNode()->addChild(meshNode);
@@ -442,7 +443,7 @@ struct Doc {
         // measures bloom on vs off against a 2.0 threshold). 163 grey decodes to
         // 0.376 — the same backdrop radiance this fixture always had, said in
         // the colour space the renderer now speaks.
-        scene->skyColor = QColor(163, 163, 163);
+        scene->skyColor = iris::SrgbColor(163, 163, 163);
         // THE AMBIENT is that sky's own light (PHOTON-7 10-3 R5: the Sky Light
         // is one gain on the sky itself, and the sky emits what it shows). This
         // fixture used to hold its ambient at 0.31 of a 0.376 backdrop with a

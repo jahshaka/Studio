@@ -10,6 +10,7 @@
 // absolute and therefore depend on the device's clock state — the ctest rows run under the
 // GPU-timing lock, and a number quoted in a report states whether the clocks were locked.
 #include "scale_world.h"
+#include "irisgl/document/qt/colour.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 #include "../support/gesture.h"
 
@@ -364,7 +365,7 @@ static void lightListArms(Env &env)
         env.doc = iris::Scene::create();
         env.mirror->setSource(env.doc);
         env.doc->skyType = iris::SkyType::SINGLE_COLOR;
-        env.doc->skyColor = QColor(0, 0, 0);
+        env.doc->skyColor = iris::SrgbColor(0, 0, 0);
         worldmodes::setMode(env.doc, worldmodes::Mode::High);
         worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
         BakeInfo bi;
@@ -762,7 +763,7 @@ static int lightsMain()
         env.doc = iris::Scene::create();
         env.mirror->setSource(env.doc);
         env.doc->skyType = iris::SkyType::SINGLE_COLOR;
-        env.doc->skyColor = QColor(0, 0, 0);
+        env.doc->skyColor = iris::SrgbColor(0, 0, 0);
         worldmodes::setMode(env.doc, worldmodes::Mode::High);
         worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
         auto slab = [&](const char *name, iris::Vec3 pos, iris::Vec3 scale, QColor col) {
@@ -975,7 +976,7 @@ static void geometryDoc(Env &env)
     env.doc = iris::Scene::create();
     env.mirror->setSource(env.doc);
     env.doc->skyType = iris::SkyType::SINGLE_COLOR;
-    env.doc->skyColor = QColor(60, 60, 70);
+    env.doc->skyColor = iris::SrgbColor(60, 60, 70);
     worldmodes::setMode(env.doc, worldmodes::Mode::High);
     worldmodes::setPhoton(env.doc, false, worldmodes::PhotonTier::High);
     auto sun = iris::LightNode::create();
@@ -1927,7 +1928,7 @@ static void farDoc(Env &env, worldmodes::PhotonTier tier)
     env.doc = iris::Scene::create();
     env.mirror->setSource(env.doc);
     env.doc->skyType = iris::SkyType::SINGLE_COLOR;
-    env.doc->skyColor = QColor(0, 0, 0);
+    env.doc->skyColor = iris::SrgbColor(0, 0, 0);
     env.doc->fogEnabled = false;
     worldmodes::setMode(env.doc, worldmodes::Mode(int(tier)));
     worldmodes::setPhoton(env.doc, true, tier);

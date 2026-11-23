@@ -18,6 +18,18 @@ set_tests_properties(math.parity PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATF
 # No Vulkan, no app process, no allocation the suite does not own.
 jah_lsan_lane(math.parity)
 
+# core.colour_qt_parity — iris::SrgbColor against QColor, bit for bit (NOQT-DOCUMENT-1 stage 3, ruling 3): the
+# document's stored colour must answer exactly what QColor did, or a saved scene's bytes move. Qt6::Gui is the
+# REFERENCE only, as for math.parity; the type under test is header-only.
+add_executable(test_colour_qt_parity test_colour_qt_parity.cpp)
+set_target_properties(test_colour_qt_parity PROPERTIES AUTOMOC OFF)
+target_include_directories(test_colour_qt_parity PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/irisgl)
+target_link_libraries(test_colour_qt_parity PRIVATE Qt6::Gui)
+add_test(NAME core.colour_qt_parity COMMAND test_colour_qt_parity WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(core.colour_qt_parity PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     LABELS "document")
+jah_no_display(core.colour_qt_parity)
+
 # ---------------------------------------------------------------------------
 # DISPLAY-FREE, AND PROVEN (TEST_GATE_AUDIT.md §4.5). Every suite named here
 # claims — in its own comment, or by running --headless, or by building nothing

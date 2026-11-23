@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/scenetemplatebuilder.h"
+#include "irisgl/document/qt/colour.h"
 
 #include <QColor>
 #include <cmath>
@@ -206,8 +207,8 @@ iris::ScenePtr build(SceneTemplate kind, Database *db, Project *project)
     // fog colour reads from it (96 grey — owner pick 1, SKY_LIGHT_SPEC §9.1
     // option ii: srgb(96) decoded and integrated over the hemisphere is 0.117
     // of radiance against the old flat path's 0.120).
-    scene->skyColor = QColor(96, 96, 96);
-    scene->fogColor = QColor(96, 96, 96);
+    scene->skyColor = iris::SrgbColor(96, 96, 96);
+    scene->fogColor = iris::SrgbColor(96, 96, 96);
     // THE EXPONENTIAL HEIGHT FOG ON (SKY-DEFAULTS-1; the owner's Unreal Basic
     // level): the world's medium at iris::HeightFog's dials — Unreal's density
     // and falloff, from 100 m, so the floor is untouched and the far world, the
@@ -228,7 +229,7 @@ bool isDefaultSun(const iris::LightNodePtr &light)
     const float aligned = std::fabs(iris::Quat::dotProduct(light->getLocalRot().normalized(), want));
     return std::fabs(p.x() - kSunPosition[0]) < 1e-4f && std::fabs(p.y() - kSunPosition[1]) < 1e-4f
         && std::fabs(p.z() - kSunPosition[2]) < 1e-4f && std::fabs(aligned - 1.0f) < 1e-5f
-        && std::fabs(light->intensity - 1.0f) < 1e-6f && light->color == QColor(255, 255, 255)
+        && std::fabs(light->intensity - 1.0f) < 1e-6f && light->color == iris::SrgbColor(255, 255, 255)
         && light->forwardShadingPriority == 0;
 }
 

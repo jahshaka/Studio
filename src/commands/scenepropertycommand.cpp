@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "commands/scenepropertycommand.h"
+#include "irisgl/document/qt/colour.h"
 
 #include <QPointer>
 #include "services/editgate.h"
@@ -43,10 +44,10 @@ QVariant captureSky(const ScenePtr &s)
     for (auto it = s->skyData.constBegin(); it != s->skyData.constEnd(); ++it)
         data.insert(it.key(), it.value());
     m["skyData"] = data;
-    m["skyColor"] = s->skyColor;
-    m["gradientTop"] = s->gradientTop;
-    m["gradientMid"] = s->gradientMid;
-    m["gradientBot"] = s->gradientBot;
+    m["skyColor"] = iris::toQColor(s->skyColor);
+    m["gradientTop"] = iris::toQColor(s->gradientTop);
+    m["gradientMid"] = iris::toQColor(s->gradientMid);
+    m["gradientBot"] = iris::toQColor(s->gradientBot);
     m["gradientOffset"] = s->gradientOffset;
     // THE REALISTIC DIALS ARE ALREADY IN `skyData["Realistic"]` (SKY-WRITE-1).
     // They used to be captured a SECOND time as six more keys beside it, which
@@ -65,10 +66,10 @@ void applySky(const ScenePtr &s, const QVariant &value)
     s->skyData.clear();
     for (auto it = data.constBegin(); it != data.constEnd(); ++it)
         s->skyData.insert(it.key(), it.value().toObject());
-    s->skyColor = m.value("skyColor").value<QColor>();
-    s->gradientTop = m.value("gradientTop").value<QColor>();
-    s->gradientMid = m.value("gradientMid").value<QColor>();
-    s->gradientBot = m.value("gradientBot").value<QColor>();
+    s->skyColor = iris::toSrgbColor(m.value("skyColor").value<QColor>());
+    s->gradientTop = iris::toSrgbColor(m.value("gradientTop").value<QColor>());
+    s->gradientMid = iris::toSrgbColor(m.value("gradientMid").value<QColor>());
+    s->gradientBot = iris::toSrgbColor(m.value("gradientBot").value<QColor>());
     s->gradientOffset = m.value("gradientOffset").toFloat();
     // ...and back out of the block that was just restored, through the one
     // writer, so the typed fields the renderer reads and the JSON the panels
@@ -173,8 +174,8 @@ QVector<sceneprops::Field> buildFields()
     // ---- Fog section ------------------------------------------------------
     add("fogEnabled", [](const ScenePtr &s) { return QVariant(s->fogEnabled); },
         [](const ScenePtr &s, const QVariant &v) { s->fogEnabled = v.toBool(); });
-    add("fogColor", [](const ScenePtr &s) { return QVariant(s->fogColor); },
-        [](const ScenePtr &s, const QVariant &v) { s->fogColor = v.value<QColor>(); });
+    add("fogColor", [](const ScenePtr &s) { return QVariant(iris::toQColor(s->fogColor)); },
+        [](const ScenePtr &s, const QVariant &v) { s->fogColor = iris::toSrgbColor(v.value<QColor>()); });
     add("fogDensity", [](const ScenePtr &s) { return QVariant(s->fogDensity); },
         [](const ScenePtr &s, const QVariant &v) { s->fogDensity = v.toFloat(); });
     add("fogHeightDensity", [](const ScenePtr &s) { return QVariant(s->fogHeightDensity); },

@@ -42,6 +42,7 @@
 //    hold five meshes and twenty Items.
 
 #include <QVector>
+#include "irisgl/document/qt/colour.h"
 
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"
@@ -238,7 +239,7 @@ inline Character buildCharacter(const QString &name)
         mn->setName(QString::fromLatin1(pieces()[i].name));
         mn->setMesh(meshes[i]);                     // clones the rig template per node
         auto mat = iris::PbrMaterial::create();
-        mat->setBaseColor(QColor(220, 60, 60));
+        mat->setBaseColor(iris::SrgbColor(220, 60, 60));
         mn->setMaterial(mat);
         c.root->addChild(mn, false);                // identity local: every piece at the root
         c.pieces.append(mn);

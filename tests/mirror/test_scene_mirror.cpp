@@ -5,6 +5,7 @@
 // operation the editor performs: move a parent, hide, show, remove.
 // No window; runs with DISPLAY reachable (Vulkan). QT_QPA_PLATFORM=offscreen.
 #include "irisgl/core/math/quat.h"
+#include "irisgl/document/qt/colour.h"
 
 #include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"
@@ -117,7 +118,7 @@ int main(int argc, char **argv)
     meshNode->setName("cube");
     meshNode->setMesh(testmesh::load(":assets/models/cube.obj"));
     auto orange = iris::PbrMaterial::create();
-    orange->setBaseColor(QColor(204, 76, 51));   // the document decides the colour
+    orange->setBaseColor(iris::SrgbColor(204, 76, 51));   // the document decides the colour
     meshNode->setMaterial(orange);
     CHECK(!!meshNode->getMesh(), "cube.obj loaded into the document (no GL)");
     const float r = meshNode->getMeshRadius();
@@ -274,7 +275,7 @@ int main(int argc, char **argv)
     meshNode2->setMesh(testmesh::load(":assets/models/cube.obj"));
     meshNode2->setLocalScale(iris::Vec3(s, s, s));
     auto pbr = iris::PbrMaterial::create();
-    pbr->setBaseColor(QColor(30, 80, 230));      // blue-ish
+    pbr->setBaseColor(iris::SrgbColor(30, 80, 230));      // blue-ish
     pbr->setMetallicFactor(0.0f);
     pbr->setRoughnessFactor(0.7f);
     meshNode2->setMaterial(pbr);
@@ -285,13 +286,13 @@ int main(int argc, char **argv)
     view->readPixels(img); show("document PbrMaterial", img);
     CHECK(centre(img).b > centre(img).r, "centre takes the document material's colour (blue)");
     // Edit the material in the document (what the property panel does) -> engine follows.
-    pbr->setBaseColor(QColor(230, 60, 20));
+    pbr->setBaseColor(iris::SrgbColor(230, 60, 20));
     mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("material edited -> red", img);
     CHECK(isMaterial(centre(img)), "runtime material edit reached the engine");
     // The RESTING material the blocks below put back on the cube: green.
     auto resting = iris::PbrMaterial::create();
-    resting->setBaseColor(QColor(20, 200, 40));
+    resting->setBaseColor(iris::SrgbColor(20, 200, 40));
     meshNode2->setMaterial(resting);
     mirror.sync(); enginetest::frames(engine, 2);
 
@@ -300,14 +301,14 @@ int main(int argc, char **argv)
         const QString pngPath = QDir::temp().filePath("jahshaka_mirror_test_green.png");
         QImage tex(32, 32, QImage::Format_RGBA8888); tex.fill(QColor(20, 230, 40)); tex.save(pngPath);
         auto textured = iris::PbrMaterial::create();
-        textured->setBaseColor(QColor(255, 255, 255));                 // white tint: the texture decides
+        textured->setBaseColor(iris::SrgbColor(255, 255, 255));                 // white tint: the texture decides
         textured->setBaseColorMap(iris::Texture2D::load(pngPath));     // deferred: no GL, path recorded
         meshNode2->setMaterial(textured);
         mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("diffuse texture (green)", img);
         CHECK(centre(img).g > centre(img).r * 1.5f && centre(img).g > centre(img).b * 1.5f, "document texture colours the cube");
         textured->setBaseColorMap(iris::Texture2DPtr());
-        textured->setBaseColor(QColor(230, 60, 20));
+        textured->setBaseColor(iris::SrgbColor(230, 60, 20));
         mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img); show("texture removed", img);
         CHECK(isMaterial(centre(img)), "removing the texture goes back to the material colour");
@@ -440,7 +441,7 @@ int main(int argc, char **argv)
               "Glass (alphaMode 3) renders through a different transparency path than Blend/Fade");
         mirror.setLightWires(true);
         doc->skyType = iris::SkyType::SINGLE_COLOR;
-        doc->skyColor = QColor(0, 0, 255);           // restore the suite's blue clear colour
+        doc->skyColor = iris::SrgbColor(0, 0, 255);           // restore the suite's blue clear colour
         doc->setSkyTexture(iris::Texture2DPtr());
         mirror.sync(mirrorframe::sky(view));
         for (int i = 0; i < 6; ++i) QFile::remove(facePaths[i]);
@@ -557,7 +558,7 @@ int main(int argc, char **argv)
     // light 4 gave it under the retired near-flat curve.
     point->intensity = 135.0f;
     point->distance = 20.0f;
-    point->color = QColor(255, 255, 255);
+    point->color = iris::SrgbColor(255, 255, 255);
     point->setLocalPos(iris::Vec3(4.0f, 1.0f, 2.5f));   // camera-right of the cube
     doc->getRootNode()->addChild(point);
     mirror.sync(); enginetest::frames(engine, 2);
@@ -613,14 +614,14 @@ int main(int argc, char **argv)
     // MainWindow pushes the Preferences outline colour onto scene->outlineColor;
     // the mirror reads it (fallback: the legacy yellow when never set).
     auto countRed = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.g < 0.3f && c.b < 0.3f) ++n; } return n; };
-    doc->setOutlineColor(QColor(255, 0, 0));
+    doc->setOutlineColor(iris::SrgbColor(255, 0, 0));
     mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     const int redOutline = countRed(img);
     std::printf("    outline colour preference: %d red pixels, %d yellow\n", redOutline, countYellow(img));
     CHECK(redOutline > 10, "outline uses the document's outlineColor preference");
     CHECK(countYellow(img) == 0, "the default yellow is replaced by the preference");
-    doc->setOutlineColor(QColor());   // invalid = preference never set
+    doc->setOutlineColor(iris::SrgbColor());   // invalid = preference never set
     mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img);
     CHECK(countYellow(img) > 10, "an unset preference falls back to the legacy yellow");
@@ -673,7 +674,7 @@ int main(int argc, char **argv)
     }
 
     doc->getRootNode()->removeChild(meshNode2);
-    point->color = QColor(255, 0, 255);              // magenta wires
+    point->color = iris::SrgbColor(255, 0, 255);              // magenta wires
     point->setLocalPos(iris::Vec3(0.0f, 0.0f, 0.0f));  // in the middle of the frame
     point->distance = 0.35f;                          // rings are drawn at radius = range now
     auto countMagenta = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.r > 0.8f && c.b > 0.8f && c.g < 0.3f) ++n; } return n; };
@@ -766,15 +767,15 @@ int main(int argc, char **argv)
         // discipline, one push earlier in syncLightWires).
         {
             auto countGreen = [&](const Image &im) { int n = 0; for (unsigned y = 0; y < im.height; ++y) for (unsigned x = 0; x < im.width; ++x) { const Colour c = im.at(x, y); if (c.g > 0.7f && c.r < 0.4f && c.b < 0.4f) ++n; } return n; };
-            const QColor wasColour = point->color;
-            point->color = QColor(0, 255, 0);
+            const QColor wasColour = iris::toQColor(point->color);
+            point->color = iris::SrgbColor(0, 255, 0);
             mirror.sync(); enginetest::frames(engine, 2);
             view->readPixels(img);
             std::printf("    recoloured light wires: %d green px, %d magenta px\n",
                         countGreen(img), countMagenta(img));
             CHECK(countGreen(img) > 0 && countMagenta(img) == 0,
                   "editing the light's colour repaints its wires (magenta rings are gone)");
-            point->color = wasColour;
+            point->color = iris::toSrgbColor(wasColour);
             mirror.sync(); enginetest::frames(engine, 2);
             view->readPixels(img);
         }
@@ -862,7 +863,7 @@ int main(int argc, char **argv)
         area->intensity = 4.0f;
         area->distance = 20.0f;
         area->rectWidth = 2.0f; area->rectHeight = 2.0f;
-        area->color = QColor(255, 255, 255);
+        area->color = iris::SrgbColor(255, 255, 255);
         area->setLocalPos(iris::Vec3(0.0f, 1.2f, 0.0f));   // just above the cube, facing down
         doc->getRootNode()->addChild(area);
         mirror.sync(); enginetest::frames(engine, 2);
@@ -872,7 +873,7 @@ int main(int argc, char **argv)
         CHECK(litLtc > unlit + 0.1f, "document area light (LTC) lights the cube");
 
         // The helper wire is the emitting rectangle (wire kind 3) + icon billboard.
-        area->color = QColor(255, 0, 255);                 // magenta wires
+        area->color = iris::SrgbColor(255, 0, 255);                 // magenta wires
         mirror.setLightWires(true);
         mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
@@ -913,7 +914,7 @@ int main(int argc, char **argv)
         auto sun = iris::LightNode::create();
         sun->lightType = iris::LightType::Directional;   // identity = shines down -Y
         sun->intensity = 1.0f;
-        sun->color = QColor(255, 255, 255);
+        sun->color = iris::SrgbColor(255, 255, 255);
         sun->setLocalPos(iris::Vec3(0, 5, 0));
         doc->getRootNode()->addChild(sun);
 
@@ -1017,7 +1018,7 @@ int main(int argc, char **argv)
 
     // ---- flat sky colour from the document becomes the background ----
     doc->skyType = iris::SkyType::SINGLE_COLOR;
-    doc->skyColor = QColor(200, 30, 200);
+    doc->skyColor = iris::SrgbColor(200, 30, 200);
     mirror.sync(mirrorframe::sky(view));
     mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("document sky colour", img);
@@ -1061,9 +1062,9 @@ int main(int argc, char **argv)
     // ---- gradient sky: baked to an equirect ramp (top colour up, bottom colour down) ----
     {
         doc->skyType = iris::SkyType::GRADIENT;
-        doc->gradientTop = QColor(255, 0, 0);
-        doc->gradientMid = QColor(0, 255, 0);
-        doc->gradientBot = QColor(0, 0, 255);
+        doc->gradientTop = iris::SrgbColor(255, 0, 0);
+        doc->gradientMid = iris::SrgbColor(0, 255, 0);
+        doc->gradientBot = iris::SrgbColor(0, 0, 255);
         doc->gradientOffset = 0.5f;
         mirror.sync(mirrorframe::sky(view));
         cam->setLocalRot(iris::Quat::fromAxisAndAngle(iris::Vec3(1, 0, 0), 89.0f));   // look up
@@ -1227,7 +1228,7 @@ int main(int argc, char **argv)
         docSkyLight->setName("Sky Light");
         docSkyLight->lightType = iris::LightType::Sky;
         docSkyLight->intensity = 1.0f;
-        docSkyLight->color = QColor(255, 255, 255);
+        docSkyLight->color = iris::SrgbColor(255, 255, 255);
         doc->getRootNode()->addChild(docSkyLight);
         auto matte = iris::PbrMaterial::create();
         matte->setValue("baseColor", QColor(255, 255, 255));
@@ -1345,7 +1346,7 @@ int main(int argc, char **argv)
         // what proves the green above was the cube's IBL is that changing the
         // sky to a BLUE one turns the same cube pixel blue.
         doc->skyType = iris::SkyType::SINGLE_COLOR;
-        doc->skyColor = QColor(0, 0, 255);
+        doc->skyColor = iris::SrgbColor(0, 0, 255);
         doc->setSkyTexture(iris::Texture2DPtr());
         mirror.sync(mirrorframe::sky(view));
         mirror.sync(); settleEnvironment(engine, target, "blue colour sky");
@@ -1384,9 +1385,9 @@ int main(int argc, char **argv)
     // workspaceGeneration counts.
     {
         doc->skyType = iris::SkyType::GRADIENT;
-        doc->gradientTop = QColor(30, 60, 220);
-        doc->gradientMid = QColor(120, 160, 255);
-        doc->gradientBot = QColor(230, 120, 40);
+        doc->gradientTop = iris::SrgbColor(30, 60, 220);
+        doc->gradientMid = iris::SrgbColor(120, 160, 255);
+        doc->gradientBot = iris::SrgbColor(230, 120, 40);
         doc->gradientOffset = 0.0f;
         // A chrome cube in near-darkness: everything it shows is the reflection
         // cubemap, so a re-convolution shows up as a changed pixel.
@@ -1435,7 +1436,7 @@ int main(int argc, char **argv)
               "...and the pixels are byte-identical (no reflection re-convolution blink)");
         // Restore for what follows.
         doc->skyType = iris::SkyType::SINGLE_COLOR;
-        doc->skyColor = QColor(0, 0, 255);
+        doc->skyColor = iris::SrgbColor(0, 0, 255);
         doc->setSkyTexture(iris::Texture2DPtr());
         meshNode->setMaterial(orange);
         doc->getRootNode()->removeChild(meshNode);
@@ -1495,7 +1496,7 @@ int main(int argc, char **argv)
         auto subject = iris::MeshNode::create();
         subject->setName("subject");
         auto red = iris::PbrMaterial::create();
-        red->setBaseColor(QColor(230, 60, 20));
+        red->setBaseColor(iris::SrgbColor(230, 60, 20));
         red->setMetallicFactor(0.0f);
         red->setRoughnessFactor(0.6f);
         subject->setMaterial(red);
@@ -1595,7 +1596,7 @@ int main(int argc, char **argv)
             floor2->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
             floor2->setLocalScale(iris::Vec3(4, 4, 4));
             auto white = iris::PbrMaterial::create();
-            white->setBaseColor(QColor(240, 240, 240));
+            white->setBaseColor(iris::SrgbColor(240, 240, 240));
             white->setRoughnessFactor(0.9f);
             floor2->setMaterial(white);
             wdoc->getRootNode()->addChild(floor2);
@@ -1666,7 +1667,7 @@ int main(int argc, char **argv)
         gfloor->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
         gfloor->setLocalScale(iris::Vec3(4, 4, 4));
         auto gmat = iris::PbrMaterial::create();
-        gmat->setBaseColor(QColor(220, 220, 220));
+        gmat->setBaseColor(iris::SrgbColor(220, 220, 220));
         gfloor->setMaterial(gmat);
         gdoc->getRootNode()->addChild(gfloor);
         // Two lights, because the mirror's VCT signature covers EVERY light, and
@@ -1784,7 +1785,7 @@ int main(int argc, char **argv)
             const iris::MaterialPtr originalMat = previewTarget->getMaterial();
 
             auto borrowed = iris::PbrMaterial::create();
-            borrowed->setBaseColor(QColor(12, 240, 33));
+            borrowed->setBaseColor(iris::SrgbColor(12, 240, 33));
             borrowed->setRoughnessFactor(0.11f);
 
             const auto settle = [&](int frames) {
@@ -1838,7 +1839,7 @@ int main(int argc, char **argv)
             // A FRESH material, because arm A has already taught the engine
             // about `borrowed`: re-using it would prove nothing.
             auto borrowed2 = iris::PbrMaterial::create();
-            borrowed2->setBaseColor(QColor(240, 12, 200));
+            borrowed2->setBaseColor(iris::SrgbColor(240, 12, 200));
             borrowed2->setRoughnessFactor(0.83f);
 
             drain();
@@ -1863,7 +1864,7 @@ int main(int argc, char **argv)
             drain();
             const quint64 beforeC = mirror.target()->published().gi.schedulerResolves;
             if (auto pbr = std::dynamic_pointer_cast<iris::PbrMaterial>(originalMat))
-                pbr->setBaseColor(QColor(200, 30, 30));
+                pbr->setBaseColor(iris::SrgbColor(200, 30, 30));
             settle(20);
             CHECK(mirror.target()->published().gi.schedulerResolves == beforeC + 1,
                   "GI preview: a COMMITTED material edit after the preview still re-solves, once");
@@ -2276,7 +2277,7 @@ int main(int argc, char **argv)
         // No Sky Light: only the directional lights this scene, so the floor's
         // luminance is the sun's alone.
         sdoc->skyType = iris::SkyType::SINGLE_COLOR; // no sky bake in the picture
-        sdoc->skyColor = QColor(0, 0, 255);
+        sdoc->skyColor = iris::SrgbColor(0, 0, 255);
 
         auto floorMat = iris::PbrMaterial::create();
         floorMat->setValue("baseColor", QColor(220, 220, 220));
@@ -2296,7 +2297,7 @@ int main(int argc, char **argv)
         // Deliberately BELOW saturation: a blown-out floor reads 255 at every
         // sun angle and would make the pixel assertion below meaningless.
         sunLight->intensity = 0.9f;
-        sunLight->color = QColor(255, 255, 255);
+        sunLight->color = iris::SrgbColor(255, 255, 255);
         sunLight->setLocalPos(iris::Vec3(0, 5, 0));
         // A deliberately WRONG starting rotation: the coupling has to be what
         // puts the light where the sun is, not the authored value.
@@ -2375,24 +2376,25 @@ int main(int argc, char **argv)
     // stop, last row = the bottom stop, the middle stop at `offset`) so the two
     // callers cannot silently disagree again.
     {
-        const QColor top(255, 0, 0), mid(0, 255, 0), bot(0, 0, 255);
-        const QImage strip = iris::bakeGradientSky(top, mid, bot, 0.5f, 4, 256);
-        CHECK(!strip.isNull() && strip.width() == 4 && strip.height() == 256,
+        const iris::SrgbColor top(255, 0, 0), mid(0, 255, 0), bot(0, 0, 255);
+        const iris::Image strip = iris::bakeGradientSky(top, mid, bot, 0.5f, 4, 256);
+        CHECK(!strip.isNull() && strip.width == 4 && strip.height == 256,
               "gradient bake: 4x256 equirect strip");
-        CHECK(strip.format() == QImage::Format_RGBA8888,
-              "gradient bake: RGBA8888, so constBits() is a straight upload");
-        const QColor first = strip.pixelColor(0, 0);
-        const QColor last  = strip.pixelColor(0, 255);
-        const QColor middle = strip.pixelColor(0, 128);
+        CHECK(strip.rgba.size() == size_t(4) * 256 * 4,
+              "gradient bake: 8-bit RGBA, packed, so its bytes are a straight upload");
+        const auto px = [&strip](int x, int y) { return strip.rgba.data() + (size_t(y) * size_t(strip.width) + size_t(x)) * 4; };
+        const unsigned char *first = px(0, 0);
+        const unsigned char *last  = px(0, 255);
+        const unsigned char *middle = px(0, 128);
         std::printf("    gradient bake rows: top %d,%d,%d  mid %d,%d,%d  bottom %d,%d,%d\n",
-                    first.red(), first.green(), first.blue(),
-                    middle.red(), middle.green(), middle.blue(),
-                    last.red(), last.green(), last.blue());
-        CHECK(first.red() > 250 && first.green() < 5 && first.blue() < 5,
+                    first[0], first[1], first[2],
+                    middle[0], middle[1], middle[2],
+                    last[0], last[1], last[2]);
+        CHECK(first[0] > 250 && first[1] < 5 && first[2] < 5,
               "gradient bake: row 0 is the ZENITH stop");
-        CHECK(last.blue() > 250 && last.red() < 5 && last.green() < 5,
+        CHECK(last[2] > 250 && last[0] < 5 && last[1] < 5,
               "gradient bake: the last row is the nadir stop");
-        CHECK(middle.green() > 250 && middle.red() < 8 && middle.blue() < 8,
+        CHECK(middle[1] > 250 && middle[0] < 8 && middle[2] < 8,
               "gradient bake: offset 0.5 puts the middle stop at the equator");
         // Degenerate offsets are clamped, never divided by zero.
         CHECK(!iris::bakeGradientSky(top, mid, bot, 0.0f).isNull() &&
@@ -2514,7 +2516,7 @@ int main(int argc, char **argv)
               "no-material: it wears the default surface (the same picture as the document's default material)");
         // ...and the comparison can tell surfaces apart: a red material reads differently.
         auto red = iris::PbrMaterial::create();
-        red->setBaseColor(QColor(220, 30, 30));
+        red->setBaseColor(iris::SrgbColor(220, 30, 30));
         bare->setMaterial(red);
         for (int i = 0; i < 3; ++i) { cm3.sync(); enginetest::frames(engine, 1); }
         Image withRed;

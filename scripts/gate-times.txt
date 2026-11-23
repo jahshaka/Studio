@@ -690,3 +690,5 @@ script.reflector_attach_quiet 1.61  solo 2026-11-23 at db9b4b84e (spec.sh repric
 document.ptr_laws 0.01  by hand (spec.sh reprice, 2026-11-23)
 samples.resave_bytes 11.24  by hand (spec.sh reprice, 2026-11-23)
 samples.resave_bytes.fresh_home 0.03  by hand (spec.sh reprice, 2026-11-23)
+core.colour_qt_parity 0.08  by hand (spec.sh reprice, 2026-11-23)
+document.sky_bake_parity 0.02  by hand (spec.sh reprice, 2026-11-23)

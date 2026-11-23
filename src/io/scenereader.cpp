@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "io/cascadesetformat.h"
+#include "irisgl/document/qt/colour.h"
 #include "irisgl/document/qt/colorjson.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
@@ -454,7 +455,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // colour is not the constructor's (250,250,250) — so an absent key keeps
     // what the Scene was born with instead of blanking it.
     {
-        const QColor fogColor = iris::colorFromJson(sceneObj.value("fogColor").toObject());
+        const iris::SrgbColor fogColor = iris::colorFromJson(sceneObj.value("fogColor").toObject());
         if (fogColor.isValid()) scene->fogColor = fogColor;
     }
     scene->fogEnabled = sceneObj.value("fogEnabled").toBool(scene->fogEnabled);

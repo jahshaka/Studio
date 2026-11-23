@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/fogpropertywidget.h"
+#include "irisgl/document/qt/colour.h"
 #include "ui/controls/texturepickerwidget.h"
 #include "irisgl/document/scenegraph/scene.h"
 
@@ -86,7 +87,7 @@ void FogPropertyWidget::refreshRows()
     // construction to the window's close, so an undo repaints numbers rather
     // than destroying and re-wiring the controls (debt L6's clearLayout half).
     loading = true;
-    fogColor->setColorValue(scene->fogColor);
+    fogColor->setColorValue(iris::toQColor(scene->fogColor));
     for (const ParamSlider &ps : paramSliders) {
         const worldmodes::ParamRow *p = worldmodes::fogParam(ps.id);
         if (p && ps.slider) ps.slider->setValue(float(p->get(scene)));

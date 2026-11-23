@@ -1,4 +1,5 @@
 #include "envbuild.h"
+#include "irisgl/document/qt/colour.h"
 
 #include "../labscene.h"
 
@@ -278,7 +279,7 @@ iris::PbrMaterialPtr Builder::emitter(float intensity)
 iris::PbrMaterialPtr Builder::pureEmitter(float intensity)
 {
     iris::PbrMaterialPtr mat = material(0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
-    mat->setSpecularColor(QColor::fromRgbF(0.0, 0.0, 0.0));
+    mat->setSpecularColor(iris::toSrgbColor(QColor::fromRgbF(0.0, 0.0, 0.0)));
     mat->setValue("emissiveColor", QColor::fromRgbF(1.0, 1.0, 1.0));
     mat->setValue("emissiveIntensity", intensity);
     mHash.addData(QByteArray("pure-emitter"));

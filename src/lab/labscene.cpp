@@ -1,4 +1,5 @@
 #include "labscene.h"
+#include "irisgl/document/qt/colour.h"
 
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/math/mat4.h"
@@ -81,7 +82,7 @@ QJsonArray lightsOf(const iris::SceneNodePtr &root)
                 o["name"] = l->getName();
                 o["type"] = int(l->lightType);
                 o["intensity"] = double(l->intensity);
-                o["color"] = l->color.name();
+                o["color"] = iris::toQColor(l->color).name();
                 o["distance"] = double(l->distance);
                 o["spotCutOff"] = double(l->spotCutOff);
                 o["spotCutOffSoftness"] = double(l->spotCutOffSoftness);
@@ -119,7 +120,7 @@ int attachLights(const iris::SceneNodePtr &root, const QJsonArray &lights)
         l->setName(o["name"].toString());
         l->setLightType(iris::LightType(o["type"].toInt()));
         l->intensity = float(o["intensity"].toDouble());
-        l->color = QColor(o["color"].toString());
+        l->color = iris::toSrgbColor(QColor(o["color"].toString()));
         l->distance = float(o["distance"].toDouble());
         l->spotCutOff = float(o["spotCutOff"].toDouble());
         l->spotCutOffSoftness = float(o["spotCutOffSoftness"].toDouble());
@@ -465,8 +466,8 @@ void addSkyAndLights(const iris::ScenePtr &doc, bool wantSun)
 
     doc->skyType = iris::SkyType::REALISTIC;
     doc->setSkyRealistic(iris::SkyRealistic::defaults());
-    doc->skyColor = QColor(96, 96, 96);
-    doc->fogColor = QColor(96, 96, 96);
+    doc->skyColor = iris::SrgbColor(96, 96, 96);
+    doc->fogColor = iris::SrgbColor(96, 96, 96);
     doc->heightFog = iris::HeightFog();
     doc->heightFog.enabled = true;
 }

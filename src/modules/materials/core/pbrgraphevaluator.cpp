@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 #include "pbrgraphevaluator.h"
 #include "irisgl/document/qt/colorjson.h"
+#include "irisgl/document/qt/colour.h"
 #include <QFileInfo>
 
 #include <QJsonArray>
@@ -55,7 +56,7 @@ iris::PbrMaterialPtr PbrGraphEvaluator::materialFromValues(const QJsonObject& va
 		if (colorKeys.contains(key))
 			material->setValue(key, values[key].toObject().isEmpty()
 			                            ? QVariant(QColor())
-			                            : QVariant(iris::colorFromJson(values[key].toObject())));
+			                            : QVariant(iris::toQColor(iris::colorFromJson(values[key].toObject()))));
 		else if (mapKeys.contains(key)) {
 			// A stored map is the texture's ASSET GUID (a baked map is a
 			// member Texture row of the bundle); the resolver turns it into the

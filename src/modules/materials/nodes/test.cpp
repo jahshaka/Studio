@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "irisgl/core/math/vec.h"
+#include "irisgl/document/qt/colour.h"
 #include "irisgl/document/qt/colorjson.h"
 #include "test.h"
 #include "../models/library.h"
@@ -635,10 +636,10 @@ ColorPickerNode::ColorPickerNode()
 
 QJsonValue ColorPickerNode::serializeWidgetValue(int widgetIndex)
 {
-	return iris::colorToJson(colorWidget->getColor());
+	return iris::colorToJson(iris::toSrgbColor(colorWidget->getColor()));
 }
 
 void ColorPickerNode::deserializeWidgetValue(QJsonValue val, int widgetIndex)
 {
-	colorWidget->setColor(iris::colorFromJson(val.toObject(), Qt::black));
+	colorWidget->setColor(iris::toQColor(iris::colorFromJson(val.toObject(), iris::toSrgbColor(QColor(Qt::black)))));
 }

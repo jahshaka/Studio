@@ -5,6 +5,7 @@
 // runs offscreen like the document suite.
 
 #include "irisgl/core/math/quat.h"
+#include "irisgl/document/qt/colour.h"
 
 #include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"
@@ -91,7 +92,7 @@ int main(int argc, char **argv)
     cube->setMesh(testmesh::load(":assets/models/cube.obj"));
     CHECK(!!cube->getMesh(), "cube.obj loaded into the document");
     auto pbr = iris::PbrMaterial::create();
-    pbr->setBaseColor(QColor(200, 40, 40));
+    pbr->setBaseColor(iris::SrgbColor(200, 40, 40));
     // Per-axis tiling + a rotated offset (MATERIAL_UV_NODES_SPEC phase 2): the
     // exporter has to translate OUR transform (rotation in degrees about the
     // texture CENTRE, counter-clockwise) into glTF's (radians about the
@@ -101,7 +102,7 @@ int main(int argc, char **argv)
     pbr->setTextureScale(2.0f, 3.0f);
     pbr->setTextureOffset(0.25f, 0.0f);
     pbr->setTextureRotation(90.0f);
-    pbr->setEmissiveColor(QColor(0, 255, 0));
+    pbr->setEmissiveColor(iris::SrgbColor(0, 255, 0));
     pbr->setEmissiveIntensity(3.0f);
     {
         // a real roughness map on disk so the channel-pack path runs
@@ -172,7 +173,7 @@ int main(int argc, char **argv)
     skyLight->setName("Sky Light");
     skyLight->setLightType(iris::LightType::Sky);
     skyLight->intensity = 1.25f;
-    skyLight->color = QColor(200, 220, 255);
+    skyLight->color = iris::SrgbColor(200, 220, 255);
     scene->rootNode->addChild(skyLight);
 
     // lights: point + spot (+softness) + area
@@ -223,12 +224,12 @@ int main(int argc, char **argv)
 
     // environment: gradient sky + fog
     scene->skyType = iris::SkyType::GRADIENT;
-    scene->gradientTop = QColor(10, 20, 80);
-    scene->gradientMid = QColor(120, 140, 200);
-    scene->gradientBot = QColor(240, 230, 200);
+    scene->gradientTop = iris::SrgbColor(10, 20, 80);
+    scene->gradientMid = iris::SrgbColor(120, 140, 200);
+    scene->gradientBot = iris::SrgbColor(240, 230, 200);
     scene->gradientOffset = 0.5f;
     scene->fogEnabled = true;
-    scene->fogColor = QColor(180, 180, 190);
+    scene->fogColor = iris::SrgbColor(180, 180, 190);
     scene->fogDensity = 0.02f;
     scene->fogHeightDensity = 0.05f;
     scene->fogHeightFalloff = 0.4f;

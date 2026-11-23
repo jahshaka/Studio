@@ -19,6 +19,7 @@
 //
 // Headless: offscreen Views, no widget, no database.
 #include "irisgl/core/math/quat.h"
+#include "irisgl/document/qt/colour.h"
 
 #include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"
@@ -54,7 +55,7 @@ public:
         : EnginePreviewScene(engine, "probe", sceneworkers::Tier::MainThread)
     {
         mDocument = iris::Scene::create();
-        mDocument->setSkyColor(QColor(20, 20, 20));
+        mDocument->setSkyColor(iris::SrgbColor(20, 20, 20));
         // Ambient is a Sky Light now (SKY_LIGHT_SPEC.md §2). This preview lights
         // its ENGINE scene directly, so the document value was always dead here
         // — but a Sky Light is what the document would carry.
@@ -68,7 +69,7 @@ public:
 
         auto light = iris::LightNode::create();
         light->setLightType(iris::LightType::Directional);
-        light->color = QColor(255, 255, 255);
+        light->color = iris::SrgbColor(255, 255, 255);
         light->intensity = 1.0f;
         light->setLocalRot(iris::Quat::fromEulerAngles(45, 45, 0));
         mDocument->rootNode->addChild(light);
@@ -76,7 +77,7 @@ public:
         auto cube = iris::MeshNode::create();
         cube->setMesh(testmesh::load(":assets/models/cube.obj"));
         auto mat = iris::PbrMaterial::create();
-        mat->setBaseColor(QColor(230, 40, 40));
+        mat->setBaseColor(iris::SrgbColor(230, 40, 40));
         cube->setMaterial(mat);
         mDocument->rootNode->addChild(cube);
 

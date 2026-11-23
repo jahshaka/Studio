@@ -1,4 +1,5 @@
 #include "irisgl/core/math/mat4.h"
+#include "irisgl/document/qt/colour.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "bridge/avatarpreviewscene.h"
@@ -308,7 +309,7 @@ void AvatarPreviewScene::prepareOffscreen(View *shot, int width, int height)
 QImage AvatarPreviewScene::renderImage(int width, int height)
 {
     if (!mModel || !mModel->document()) return QImage();
-    const QColor c = mModel->document()->skyColor;
+    const QColor c = iris::toQColor(mModel->document()->skyColor);
     return renderOffscreen("avatar-shot", width, height,
                            Colour(float(c.redF()), float(c.greenF()), float(c.blueF()), 1.0f), false);
 }

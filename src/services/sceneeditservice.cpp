@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/mat3.h"
+#include "irisgl/document/qt/colour.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"
@@ -422,7 +423,7 @@ void SceneEditService::addSkyLight()
     node->icon = iris::Texture2D::load(":/icons/light.png");
     node->setName("Sky Light");
     node->intensity = 1.0f;
-    node->color = QColor(255, 255, 255);
+    node->color = iris::SrgbColor(255, 255, 255);
     addNodeToScene(node);
 }
 

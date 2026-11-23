@@ -9,6 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "nodepropertiespanel.h"
+#include "irisgl/document/qt/colour.h"
 #include "irisgl/document/qt/colorjson.h"
 
 #include <QCheckBox>
@@ -360,10 +361,10 @@ void NodePropertiesPanel::rebuildNodeEditors()
 	if (type == "color") {
 		auto swatch = new ColorPickerWidget;
 		swatch->setFixedHeight(22);
-		swatch->setColor(iris::colorFromJson(value.toObject(), Qt::black));
+		swatch->setColor(iris::toQColor(iris::colorFromJson(value.toObject(), iris::toSrgbColor(QColor(Qt::black)))));
 		mColorSwatch = swatch;
 		connect(swatch, &ColorPickerWidget::onColorChanged, this, [this](QColor color) {
-			writeValue(iris::colorToJson(color));
+			writeValue(iris::colorToJson(iris::toSrgbColor(color)));
 		});
 		addRow(tr("Color"), swatch);
 		return;
@@ -556,7 +557,7 @@ void NodePropertiesPanel::refreshFromNode()
 		}
 	}
 	else if (type == "color" && mColorSwatch != nullptr) {
-		mColorSwatch->setColor(iris::colorFromJson(value.toObject(), Qt::black));
+		mColorSwatch->setColor(iris::toQColor(iris::colorFromJson(value.toObject(), iris::toSrgbColor(QColor(Qt::black)))));
 	}
 	else if (type == "uv" && mNumberBoxes.size() >= 5) {
 		auto obj = value.toObject();

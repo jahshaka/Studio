@@ -19,6 +19,7 @@
 //    pixels": the studio has a dim floor half, so darkness is not a subject.
 //    Green against a neutral environment is separable at any exposure.
 #include <QCryptographicHash>
+#include "irisgl/document/qt/colour.h"
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QColor>
@@ -85,7 +86,7 @@ static int failures = 0;
 static iris::MaterialPtr pbr(QColor base, float metallic, float roughness)
 {
     auto m = iris::PbrMaterial::create();
-    m->setBaseColor(base);
+    m->setBaseColor(iris::toSrgbColor(base));
     m->setMetallicFactor(metallic);
     m->setRoughnessFactor(roughness);
     return std::static_pointer_cast<iris::Material>(m);
@@ -95,10 +96,10 @@ static iris::MaterialPtr pbr(QColor base, float metallic, float roughness)
 static iris::MaterialPtr marker()
 {
     auto m = iris::PbrMaterial::create();
-    m->setBaseColor(QColor(0, 0, 0));
+    m->setBaseColor(iris::SrgbColor(0, 0, 0));
     m->setMetallicFactor(0.0f);
     m->setRoughnessFactor(1.0f);
-    m->setEmissiveColor(QColor(0, 255, 0));
+    m->setEmissiveColor(iris::SrgbColor(0, 255, 0));
     m->setEmissiveIntensity(1.0f);
     return std::static_pointer_cast<iris::Material>(m);
 }

@@ -6,6 +6,7 @@
 // at the centre; a second material colour must show; the RTT preview must
 // match the view; release() must detach cleanly.
 #include "../support/previewdump.h"
+#include "irisgl/document/qt/colour.h"
 #include "../support/thumbnailgrade.h"
 
 #include "../support/testmesh.h"
@@ -123,7 +124,7 @@ int main(int argc, char **argv)
         auto cube = iris::SceneNode::create();
         cube->setName("model");
         auto red = iris::PbrMaterial::create();
-        red->setBaseColor(QColor(204, 40, 30));
+        red->setBaseColor(iris::SrgbColor(204, 40, 30));
         auto body = iris::MeshNode::create();
         body->setName("cube");
         body->setMesh(testmesh::load(":assets/models/cube.obj"));
@@ -213,7 +214,7 @@ int main(int argc, char **argv)
 
         // ---- 3. a second material on the preview sphere ----
         auto green = iris::PbrMaterial::create();
-        green->setBaseColor(QColor(30, 200, 40));
+        green->setBaseColor(iris::SrgbColor(30, 200, 40));
         auto ball = assets.setMaterialSubject(std::static_pointer_cast<iris::Material>(green));
         assets.resetCamera();
         CHECK(!!ball && assets.subject() == ball, "the material ball replaced the cube as the subject");
@@ -242,7 +243,7 @@ int main(int argc, char **argv)
         giant->setName("giant");
         giant->setMesh(testmesh::load(":assets/models/cube.obj"));
         auto blue = iris::PbrMaterial::create();
-        blue->setBaseColor(QColor(30, 60, 220));
+        blue->setBaseColor(iris::SrgbColor(30, 60, 220));
         giant->setMaterial(blue);
         giant->setLocalScale(iris::Vec3(200.0f, 200.0f, 200.0f));
         const iris::AABB gbox = preview::worldBoundingBox(giant);
@@ -412,7 +413,7 @@ int main(int argc, char **argv)
 
             // Back to the flat preview background for whatever runs next.
             doc->skyType = iris::SkyType::SINGLE_COLOR;
-            doc->skyColor = QColor(25, 25, 25);
+            doc->skyColor = iris::SrgbColor(25, 25, 25);
             render(assets, *engine, view, 2);
         }
 

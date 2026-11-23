@@ -14,6 +14,7 @@
 // The control is the same scene with a material that has no piece — its
 // pixels must not move at all.
 #include <QApplication>
+#include "irisgl/document/qt/colour.h"
 #include <QColor>
 #include <QDir>
 #include <QTemporaryDir>
@@ -100,7 +101,7 @@ iris::PbrMaterialPtr pulsingMaterial(const QString &dir, QString *pathOut)
     if (pathOut) *pathOut = path;
 
     auto material = iris::PbrMaterial::create();
-    material->setBaseColor(QColor::fromRgbF(0.5, 0.5, 0.5));
+    material->setBaseColor(iris::toSrgbColor(QColor::fromRgbF(0.5, 0.5, 0.5)));
     material->setRoughnessFactor(0.6f);
     material->setMetallicFactor(0.0f);
     material->setCustomPiecePixel(path);
@@ -172,7 +173,7 @@ int main(int argc, char **argv)
 
     // ---- the control FIRST: a plain material must not move ------------------
     auto plain = iris::PbrMaterial::create();
-    plain->setBaseColor(QColor::fromRgbF(0.6, 0.3, 0.2));
+    plain->setBaseColor(iris::toSrgbColor(QColor::fromRgbF(0.6, 0.3, 0.2)));
     plain->setRoughnessFactor(0.6f);
     preview.setMaterial(plain);
     const int still = spread(preview, *engine, view, 24);
@@ -229,7 +230,7 @@ int main(int argc, char **argv)
     // ---- and back: dropping the piece stops the motion ----------------------
     animated->setCustomPiecePixel(QString());
     auto stopped = iris::PbrMaterial::create();
-    stopped->setBaseColor(QColor::fromRgbF(0.6, 0.3, 0.2));
+    stopped->setBaseColor(iris::toSrgbColor(QColor::fromRgbF(0.6, 0.3, 0.2)));
     stopped->setRoughnessFactor(0.6f);
     preview.setMaterial(stopped);
     const int stoppedSpread = spread(preview, *engine, view, 24);

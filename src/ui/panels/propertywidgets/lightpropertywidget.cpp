@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/controls/accordionbladewidget.h"
+#include "irisgl/document/qt/colour.h"
 #include "ui/panels/propertyrows.h"
 #include <QWidget>
 #include <QDebug>
@@ -309,7 +310,7 @@ void LightPropertyWidget::setSceneNode(std::shared_ptr<iris::SceneNode> sceneNod
         loading = true;
 
         //apply properties to ui
-        lightColor->setColorValue(lightNode->color);
+        lightColor->setColorValue(iris::toQColor(lightNode->color));
         intensity->setValue(lightNode->intensity);
         distance->setValue(lightNode->distance);
         sourceRadius->setValue(lightNode->sourceRadius);

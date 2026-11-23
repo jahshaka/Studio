@@ -128,6 +128,7 @@
 // offscreen and QT_QPA_PLATFORM=offscreen, so nothing is ever shown.
 
 #include <QGuiApplication>
+#include "irisgl/document/qt/colour.h"
 
 #include "../support/testmesh.h"
 #include <QByteArray>
@@ -437,7 +438,7 @@ static void loadSharedAssets()
 {
     gCube = testmesh::load(":assets/models/cube.obj");
     auto mat = iris::PbrMaterial::create();
-    mat->setBaseColor(QColor(204, 96, 51));
+    mat->setBaseColor(iris::SrgbColor(204, 96, 51));
     gMaterial = mat;
 }
 

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "services/outlinesettings.h"
+#include "irisgl/document/qt/colour.h"
 
 #include "data/settingsmanager.h"
 #include "irisgl/document/scenegraph/scene.h"
@@ -96,8 +97,8 @@ void apply(iris::Scene *scene)
 {
     if (!scene) return;
     scene->setOutlineWidth(width());
-    scene->setOutlineColor(color());
-    scene->setOutlinePrimaryColor(primaryColor());
+    scene->setOutlineColor(iris::toSrgbColor(color()));
+    scene->setOutlinePrimaryColor(iris::toSrgbColor(primaryColor()));
 }
 
 } // namespace outlinesettings

@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/mat4.h"
+#include "irisgl/document/qt/colour.h"
 #include "irisgl/core/math/vec.h"
 #include "modules/avatar/avatarpreviewmodel.h"
 
@@ -122,7 +123,7 @@ void AvatarPreviewModel::buildDocument()
     mPanelLight->setLightType(iris::LightType::Area);
     mPanelLight->setName("avatar-panel");
     mPanelLight->name = "avatar-panel";
-    mPanelLight->color = QColor(255, 250, 244);
+    mPanelLight->color = iris::SrgbColor(255, 250, 244);
     // 0.75, not 1.25 (owner smoke S10, 2026-09-11). A ceiling panel lights a
     // VERTICAL wall with the cosine of its own downward emission, so the wall
     // is dark where it meets the ceiling and brightest where it meets the
@@ -152,7 +153,7 @@ void AvatarPreviewModel::buildDocument()
     mCamera->lookAt(iris::Vec3(0, 1.1f, 0));
     mDocument->setCamera(mCamera);
 
-    mDocument->setSkyColor(QColor(28, 30, 36));
+    mDocument->setSkyColor(iris::SrgbColor(28, 30, 36));
     // A PREVIEW HAS NO SUN DISC (SKY_LIGHT_SPEC.md round-2 review item 9). Every
     // preview document carries a colour sky, which is a REAL sky now — so it
     // bakes a strip, six reflection faces and an IBL convolution, and would draw

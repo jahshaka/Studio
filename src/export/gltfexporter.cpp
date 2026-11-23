@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/quat.h"
+#include "irisgl/document/qt/colour.h"
 #include "irisgl/core/math/vec.h"
 #include "export/gltfexporter.h"
 #include "services/imagedecode.h"
@@ -333,7 +334,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     const UvTransform uvScale{ pbr->textureScale, pbr->textureScaleV,
                                pbr->textureOffsetU, pbr->textureOffsetV,
                                pbr->textureRotation };
-    const QColor bc = pbr->baseColor;
+    const QColor bc = iris::toQColor(pbr->baseColor);
     const float bf = pbr->baseColorFactor;
     // Translucent (2) and Additive (4) carry alpha into baseColorFactor.A
     // (three's AdditiveBlending is SrcAlpha/One, so alpha scales the glow —
@@ -425,7 +426,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // A METALLIC material takes none of this: its glTF is byte-identical to
     // what it was before workflows existed.
     if (pbr->workflow != 0) {
-        const QColor bc = pbr->baseColor;
+        const QColor bc = iris::toQColor(pbr->baseColor);
         const float diffuse[4] = { float(bc.redF()) * pbr->baseColorFactor,
                                    float(bc.greenF()) * pbr->baseColorFactor,
                                    float(bc.blueF()) * pbr->baseColorFactor,
@@ -434,9 +435,9 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
         // (Specular-as-Fresnel) has no kS to speak of — the specular VALUE is
         // the F0 — so F0 is what goes in, which is the same quantity the
         // conversion's dielectric-vs-metal test is written against.
-        QColor spec = pbr->specularColor;
+        QColor spec = iris::toQColor(pbr->specularColor);
         if (pbr->workflow == 2) {
-            spec = pbr->useFresnelColor ? pbr->fresnelColor : QColor();
+            spec = pbr->useFresnelColor ? iris::toQColor(pbr->fresnelColor) : QColor();
             if (!spec.isValid()) {
                 // F0 from the IOR, the renderer's own formula.
                 const float ior = std::max(1.0f, pbr->ior);
@@ -490,7 +491,7 @@ int convertPbrMaterial(Ctx &c, iris::PbrMaterial *pbr, iris::FaceCullingMode cul
     // editor pretends to honour. Bake AO into the base colour at import
     // otherwise; that works on both targets.
 
-    const QColor ec = pbr->emissiveColor;
+    const QColor ec = iris::toQColor(pbr->emissiveColor);
     const float ei = pbr->emissiveIntensity;
     const bool emissiveOn = ei > 0.0f && (ec.redF() + ec.greenF() + ec.blueF()) > 0.0;
     if (emissiveOn) {
@@ -814,13 +815,13 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
     switch (scene->skyType) {
     case iris::SkyType::SINGLE_COLOR:
         sky["type"] = "color";
-        sky["color"] = scene->skyColor.name();
+        sky["color"] = iris::toQColor(scene->skyColor).name();
         break;
     case iris::SkyType::GRADIENT:
         sky["type"] = "equirect";
         sky["source"] = "gradient";
-        sky["image"] = imageToDataUri(iris::bakeGradientSky(scene->gradientTop, scene->gradientMid,
-                                                           scene->gradientBot, scene->gradientOffset)
+        sky["image"] = imageToDataUri(imagedecode::toQImage(iris::bakeGradientSky(scene->gradientTop, scene->gradientMid,
+                                                                                  scene->gradientBot, scene->gradientOffset))
                                           .convertToFormat(QImage::Format_RGB888), false);
         break;
     case iris::SkyType::EQUIRECTANGULAR: {
@@ -829,7 +830,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
         const QString src = scene->skyTexture ? scene->skyTexture->source : QString();
         const QImage img = loadDocumentImage(src, c);
         if (!img.isNull()) sky["image"] = imageToDataUri(img, true);
-        else { sky["type"] = "color"; sky["color"] = scene->skyColor.name();
+        else { sky["type"] = "color"; sky["color"] = iris::toQColor(scene->skyColor).name();
                c.warnings.append(QStringLiteral("equirect sky image missing: %1").arg(src)); }
         break;
     }
@@ -852,7 +853,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
             if (ok) stitched = stitchCubemapToEquirect(faces);
         }
         if (!stitched.isNull()) sky["image"] = imageToDataUri(stitched, true);
-        else { sky["type"] = "color"; sky["color"] = scene->skyColor.name();
+        else { sky["type"] = "color"; sky["color"] = iris::toQColor(scene->skyColor).name();
                c.warnings.append(QStringLiteral("cubemap sky faces missing — exported flat colour")); }
         break;
     }
@@ -892,7 +893,7 @@ QJsonObject buildSkyExtras(const iris::ScenePtr &scene, Ctx &c, const GltfExport
     case iris::SkyType::MATERIAL:
     default:
         sky["type"] = "color";
-        sky["color"] = scene->skyColor.name();
+        sky["color"] = iris::toQColor(scene->skyColor).name();
         break;
     }
     return sky;
@@ -1101,7 +1102,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 QJsonObject area;
                 area["width"] = double(light->rectWidth);
                 area["height"] = double(light->rectHeight);
-                area["color"] = light->color.name();
+                area["color"] = iris::toQColor(light->color).name();
                 area["intensity"] = double(light->intensity * kLightIntensityScale);
                 area["doubleSided"] = light->doubleSided;
                 QJsonObject shim = orientationShimNode(node->getName() + ".orient");
@@ -1484,7 +1485,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         // height layer and breakthrough have no three.js equivalent at all, so
         // they are exported for information only.
         QJsonObject fog;
-        fog["color"] = scene->fogColor.name();
+        fog["color"] = iris::toQColor(scene->fogColor).name();
         fog["density"] = double(scene->fogDensity);
         fog["exp2Density"] = 0.83255461 * double(scene->fogDensity);
         if (scene->fogHeightDensity > 0.0f) {
@@ -1567,7 +1568,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
     if (const auto sky = scene->skyLight()) {
         QJsonObject skyLight;
         skyLight["intensity"] = double(sky->intensity);
-        skyLight["tint"] = sky->color.name();
+        skyLight["tint"] = iris::toQColor(sky->color).name();
         jahScene["skyLight"] = skyLight;
     }
     jahScene["antiAliasing"] = scene->antiAliasing;

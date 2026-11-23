@@ -60,6 +60,7 @@
 // The scene FILE format's retired-node-type table (header-only, no reader).
 #include "io/sceneformat.h"
 #include "services/imagedecode.h"
+#include "irisgl/document/qt/colour.h"
 
 #include "../support/documentgraph.h"
 static int failures = 0;
@@ -1061,7 +1062,7 @@ int main(int argc, char **argv)
             QVariant origRow;
             for (auto prop : pbr->properties())
                 if (prop->name == QLatin1String("baseColor")) origRow = prop->getValue();
-            CHECK(pbr->baseColor == QColor(200, 20, 20) && std::fabs(pbr->roughnessFactor - 0.7f) < 1e-6f &&
+            CHECK(pbr->baseColor == iris::SrgbColor(200, 20, 20) && std::fabs(pbr->roughnessFactor - 0.7f) < 1e-6f &&
                   origRow.value<QColor>() == QColor(200, 20, 20),
                   "dup: editing the copy leaves the original's fields and rows untouched");
         }

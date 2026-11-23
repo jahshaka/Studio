@@ -14,6 +14,7 @@
 // builds both, exactly as iris::loadAsSceneFragment's _buildScene would.
 
 #include "irisgl/core/math/mat4.h"
+#include "irisgl/document/qt/colour.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
@@ -93,7 +94,7 @@ inline iris::MeshNodePtr buildArmNode(const iris::MeshPtr &mesh, const QString &
     arm->setName(name);
     arm->setMesh(mesh);
     auto mat = iris::PbrMaterial::create();
-    mat->setBaseColor(QColor(255, 0, 0));
+    mat->setBaseColor(iris::SrgbColor(255, 0, 0));
     arm->setMaterial(mat);
 
     auto jointRoot = iris::SceneNode::create();
