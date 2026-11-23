@@ -825,6 +825,52 @@ int main(int argc, char **argv)
                       .toUtf8().constData());
         }
 
+        // 16. AN UNREADABLE SIDECAR IS NEVER "NO ASSET" (the lead's ruling (A)): a forced sweep over a store holding a
+        //     sidecar that is not JSON (the catalog has no row for it, as after a rebuild that could not read it)
+        //     KEEPS that sidecar and every unreferenced or stray object - its own cannot be told apart - and names it.
+        //     The control: a good orphan IS swept by an earlier sweep of the same store.
+        {
+            const QString gcRoot = scratchDir.filePath("gc16_store");
+            QDir().mkpath(QDir(gcRoot).filePath("sidecar"));
+            db::Options o;
+            o.name = "gc16";
+            db::Error e;
+            db::Connection gc = db::Connection::open(scratchDir.filePath("gc16.db").toStdString(), o, &e);
+            gc.exec(CasSchema::kAssetsTableForRebuild, &e);
+            AssetCas::ensureCasSchema(gc);
+            const auto object = [&gcRoot](const QString &oid) {
+                const QString path = AssetStorePaths::objectPathIn(gcRoot, oid, QStringLiteral("png"));
+                QDir().mkpath(QFileInfo(path).absolutePath());
+                QFile f(path);
+                f.open(QIODevice::WriteOnly);
+                f.write("bytes");
+                return path;
+            };
+            const QString orphan = object(QStringLiteral("aa16000000000000000000000000000000000000"));
+            const AssetGc::Report first = AssetGc::sweep(gc, gcRoot, /*dryRun*/ false, /*force*/ true);
+            CHECK(first.ok && !QFile::exists(orphan),
+                  QStringLiteral("16: CONTROL: a good orphan IS swept (ok %1, '%2')").arg(first.ok).arg(first.error)
+                      .toUtf8().constData());
+            const QString kept = object(QStringLiteral("bb16000000000000000000000000000000000000"));
+            const QString sidecarPath = QDir(gcRoot).filePath("sidecar/k16.json");
+            {
+                QFile f(sidecarPath);
+                f.open(QIODevice::WriteOnly);
+                f.write("this sidecar is not JSON {");
+            }
+            const AssetGc::Report second = AssetGc::sweep(gc, gcRoot, /*dryRun*/ false, /*force*/ true);
+            CHECK(QFile::exists(kept) && QFile::exists(sidecarPath),
+                  QStringLiteral("16: an object of an UNREADABLE sidecar, and the sidecar, SURVIVE a forced sweep (object %1, "
+                                 "sidecar %2)").arg(QFile::exists(kept)).arg(QFile::exists(sidecarPath)).toUtf8().constData());
+            CHECK(second.ok && second.unreadableSidecars.items.size() == 1
+                      && second.unreadableSidecars.items.first().id == QLatin1String("k16"),
+                  QStringLiteral("16: ...and the sweep NAMES it (%1 unreadable: '%2')")
+                      .arg(second.unreadableSidecars.items.size())
+                      .arg(second.unreadableSidecars.items.isEmpty() ? QString()
+                                                                    : second.unreadableSidecars.items.first().reason)
+                      .toUtf8().constData());
+        }
+
         // (2) A CLOSED LIBRARY's pin reads are NO ANSWER, never "no pins". LAST in this test: a second Database
         //     takes Qt's DEFAULT connection name and so closes the first one's handle (stage 3 removes that).
         {

@@ -16,10 +16,14 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonDocument>
+#include <QJsonObject>
+#include <QJsonParseError>
 #include <QSet>
 #include <QVariantList>
 
 #include "services/assetstorepaths.h"
+#include "services/jahlog.h"
 #include "data/database/database.h"   // DbTransaction
 #include "data/database/dbqt.h"
 #include "data/db/statement.h"
@@ -81,6 +85,7 @@ QVariantMap Report::toMap() const
     classes["strayObjects"] = strayObjects.toMap();
     classes["straySidecars"] = straySidecars.toMap();
     classes["deadPins"] = deadPins.toMap();
+    classes["unreadableSidecars"] = unreadableSidecars.toMap();   // kept: not in the counts below
 
     QVariantMap map;
     map["ok"] = ok;
@@ -281,10 +286,32 @@ Report collect(db::Connection &conn, const QString &root, bool force)
                 if (info.suffix().toLower() != QLatin1String("json")) continue;
                 const QString guid = info.completeBaseName();
                 if (assetGuids.contains(guid)) continue;
+                // AN UNREADABLE SIDECAR IS NEVER "NO ASSET" (the lead's ruling (A)): one that cannot be read is
+                // KEPT and named - it may be a kept asset a rebuild could not read, and its objects are inside it.
+                QFile file(info.absoluteFilePath());
+                QJsonParseError parse;
+                const QJsonDocument doc = file.open(QIODevice::ReadOnly) ? QJsonDocument::fromJson(file.readAll(), &parse)
+                                                                         : QJsonDocument();
+                const QString why = !file.isOpen() ? QStringLiteral("it could not be read (%1)").arg(file.errorString())
+                                  : parse.error != QJsonParseError::NoError
+                                      ? QStringLiteral("it is not JSON (%1)").arg(parse.errorString())
+                                  : !doc.isObject() || doc.object().value(QStringLiteral("guid")).toString().isEmpty()
+                                      ? QStringLiteral("it is not a sidecar (no guid)")
+                                      : QString();
+                if (!why.isEmpty()) {
+                    add(report.unreadableSidecars, guid, info.absoluteFilePath(), info.size(),
+                        why + QStringLiteral(": kept, with every unreferenced object - its own cannot be told apart"));
+                    continue;
+                }
                 add(report.straySidecars, guid, info.absoluteFilePath(), info.size(),
                     QStringLiteral("no assets row carries this guid"));
             }
         }
+    }
+    // ...AND WHILE ONE IS KEPT, SO IS EVERY OBJECT the two object classes listed (their owner may be it).
+    if (!report.unreadableSidecars.items.isEmpty()) {
+        report.unreferencedObjects = ClassReport();
+        report.strayObjects = ClassReport();
     }
 
     // --- (f) pins naming a project that no longer exists -------------------
@@ -317,6 +344,15 @@ Report sweep(db::Connection &conn, const QString &root, bool dryRun, bool force)
 {
     Report report = collect(conn, root, force);
     report.dryRun = dryRun;
+    // ONE WARNING A SWEEP naming what it keeps unread (the lead's ruling (A): a fixable error, not a toast).
+    if (report.ok && !dryRun && !report.unreadableSidecars.items.isEmpty()) {
+        QStringList files;
+        for (const Item &item : report.unreadableSidecars.items) files << item.path;
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QStringLiteral("assets.gc: %1 sidecar(s) could not be read and are KEPT, with every unreferenced object of "
+                           "the store (their own cannot be told apart) - fix or remove: %2")
+                .arg(files.size()).arg(files.join(QStringLiteral(", "))));
+    }
     if (!report.ok || dryRun) return report;
 
     QElapsedTimer timer;

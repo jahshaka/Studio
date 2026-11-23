@@ -103,6 +103,10 @@ struct Report
     ClassReport strayObjects;
     ClassReport straySidecars;
     ClassReport deadPins;
+    /// KEPT, never swept (NOQT-DATABASE-1 stage 2, the lead's ruling (A)): sidecars with no assets row that cannot
+    /// be READ (not JSON, not an object, no guid, a read error). Their own objects cannot be told apart, so while
+    /// any is listed the sweep keeps it AND every object of the two object classes (which are then empty).
+    ClassReport unreadableSidecars;
 
     /// Informational only, never acted on: files rows whose refcount does not
     /// match the asset_files rows that name them. A non-zero count means the
