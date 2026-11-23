@@ -29,7 +29,8 @@ For more information see the LICENSE file
 //  11. "is it pinned here" that could not be read (a failed probe, a closed library) is no answer: readOk cleared;
 //  12. an import's archive whose PROJECT ROW cannot be read is refused by name - never an empty, unnamed world;
 //  13. "does it have dependencies" that could not be read is no answer: readOk cleared;
-//  14. where a project's pins are filed, unread, is no answer: readOk cleared.
+//  14. where a project's pins are filed, unread, is no answer: readOk cleared;
+//  15. the boot's schema check over live columns it could not read answers "cannot judge" (matches), never "differs".
 
 #include <QApplication>
 #include <QFile>
@@ -51,6 +52,7 @@ For more information see the LICENSE file
 #include "data/db/statement.h"
 #include "data/db/transaction.h"
 #include "services/jahlog.h"
+#include "tests/db/dbseam.h"
 
 namespace {
 
@@ -497,6 +499,27 @@ int main(int argc, char **argv)
         database.fetchProjectPinFolders(QStringLiteral("p14"), &read);
         sqlite3_set_authorizer(raw, nullptr, nullptr);
         check(!read, QStringLiteral("14: a FAILED read of the pins' folders is no answer (read %1)").arg(read));
+    }
+
+    // 15. THE LIVE COLUMNS UNREAD ARE NO VERDICT (NOQT-DATABASE-1 stage 3, step 1: the boot's schema check resets a
+    //     library it judges different - so a columns read that FAILED answers "cannot judge", never "differs"): the
+    //     table-info reads denied on the library's own handle, beside a library that matches and one that truly differs.
+    {
+        check(database.schemaMatchesFresh(), QStringLiteral("15: CONTROL: a fresh library matches this build's schema"));
+        dbseam::deny(database.connection(), [](int action, const char *what) {
+            return action == dbseam::kPragma || (action == dbseam::kRead && what && std::strncmp(what, "pragma_", 7) == 0);
+        });
+        const bool unread = database.schemaMatchesFresh();
+        dbseam::clear(database.connection());
+        check(unread, QStringLiteral("15: a library whose columns could NOT be read is never judged different (answer %1)")
+                          .arg(unread));
+        db::Error e;
+        database.connection().exec("ALTER TABLE favorites ADD COLUMN stage3_extra INTEGER", &e);
+        check(!e && !database.schemaMatchesFresh(),
+              QStringLiteral("15: CONTROL: a table with a column this build does not make differs %1")
+                  .arg(QString::fromStdString(e.message)));
+        database.connection().exec("ALTER TABLE favorites DROP COLUMN stage3_extra", &e);
+        check(!e && database.schemaMatchesFresh(), QStringLiteral("15: CONTROL: the column dropped, it matches again"));
     }
 
     database.closeDatabase();

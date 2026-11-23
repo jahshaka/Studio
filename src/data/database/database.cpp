@@ -1116,49 +1116,55 @@ bool Database::stampGeneration()
 // with what a fresh library actually is.
 bool Database::schemaMatchesFresh()
 {
-    const QString probeName = QStringLiteral("SchemaProbe-%1").arg(quintptr(this));
-    bool matches = true;
-    {
-        QSqlDatabase fresh = QSqlDatabase::addDatabase(Constants::DB_DRIVER, probeName);
-        fresh.setDatabaseName(QStringLiteral(":memory:"));
-        if (!fresh.open()) {
-            fresh = QSqlDatabase();
-            QSqlDatabase::removeDatabase(probeName);
-            return true;   // cannot build the reference: never wipe on a guess
-        }
-        const QStringList statements = {
-            projectsTableSchema, thumbnailsTableSchema, collectionsTableSchema,
-            assetsTableSchema, dependenciesTableSchema, authorTableSchema,
-            foldersTableSchema, favoritesTableSchema,
-            QString::fromLatin1(CasSchema::kFilesTable),
-            QString::fromLatin1(CasSchema::kAssetFilesTable),
-            QString::fromLatin1(CasSchema::kProjectAssetsTable),
-        };
-        for (const QString &sql : statements) QSqlQuery(fresh).exec(sql);
+    // NEVER WIPE ON A GUESS: a reference that cannot be built, or a column list that cannot be read on either side,
+    // answers "cannot judge" - the library is kept (it matches), and the reason is said by name.
+    const auto cannotJudge = [](const char *what, const db::Error &e) {
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QStringLiteral("library schema: %1 could not be read (%2) - the library is not judged, never reset on a guess")
+                .arg(QLatin1String(what), dbqt::describe(e)));
+        return true;
+    };
+    db::Options options;
+    options.name = "SchemaProbe";
+    db::Error error;
+    db::Connection fresh = db::Connection::open(":memory:", options, &error);
+    if (!fresh.isOpen()) return cannotJudge("the reference schema", error);
+    const QStringList statements = {
+        projectsTableSchema, thumbnailsTableSchema, collectionsTableSchema,
+        assetsTableSchema, dependenciesTableSchema, authorTableSchema,
+        foldersTableSchema, favoritesTableSchema,
+        QString::fromLatin1(CasSchema::kFilesTable),
+        QString::fromLatin1(CasSchema::kAssetFilesTable),
+        QString::fromLatin1(CasSchema::kProjectAssetsTable),
+    };
+    for (const QString &sql : statements)
+        if (!fresh.exec(dbqt::utf8(sql), &error)) return cannotJudge("the reference schema", error);
 
-        const auto columnsOf = [](const QSqlDatabase &conn, const QString &table) {
-            QStringList out;
-            QSqlQuery q(conn);
-            // PRAGMA takes no bound parameters; the names come from sqlite_master.
-            if (q.exec(QStringLiteral("PRAGMA table_info(%1)").arg(table)))
-                while (q.next()) out << q.value(1).toString().toLower();
-            out.sort();
-            return out;
-        };
-        QSqlQuery tables(fresh);
-        tables.exec(QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'table'"));
-        while (matches && tables.next()) {
-            const QString table = tables.value(0).toString();
-            if (columnsOf(db, table) != columnsOf(fresh, table)) {
-                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library schema: table '%1' differs from this build's")
-                                                                      .arg(table));
-                matches = false;
-            }
-        }
-        fresh.close();
+    /// A table's column names, sorted; false when the read failed (a table that does not exist reads no columns).
+    const auto columnsOf = [](db::Connection &conn, const std::string &table, QStringList *out, db::Error *e) {
+        db::Statement q(conn, "SELECT name FROM pragma_table_info(?)");
+        q.bindText(1, table);
+        while (q.step(e)) *out << QString::fromStdString(q.text(0)).toLower();
+        out->sort();
+        return !*e;
+    };
+    std::vector<std::string> tables;
+    {
+        db::Statement q(fresh, "SELECT name FROM sqlite_master WHERE type = 'table'");
+        while (q.step(&error)) tables.push_back(q.text(0));
+        if (error) return cannotJudge("the reference's tables", error);
     }
-    QSqlDatabase::removeDatabase(probeName);
-    return matches;
+    for (const std::string &table : tables) {
+        QStringList live, reference;
+        if (!columnsOf(connection(), table, &live, &error)) return cannotJudge("the library's columns", error);
+        if (!columnsOf(fresh, table, &reference, &error)) return cannotJudge("the reference's columns", error);
+        if (live != reference) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library schema: table '%1' differs from this build's")
+                                                                  .arg(QString::fromStdString(table)));
+            return false;
+        }
+    }
+    return true;
 }
 
 namespace {
