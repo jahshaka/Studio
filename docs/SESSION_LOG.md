@@ -18,7 +18,6 @@ Design and rationale: `SPECS/SESSION_LOG_SPEC.md`. The verb reference is generat
 logs/jahshaka-2026.09.06-14.22.31-10412.log        the session log
 logs/jahshaka-2026.09.06-14.22.31-10412-ogre.log   Ogre's own log, SAME run
 logs/latest.log -> the newest session log          (latest.txt on Windows)
-logs/jahshaka.log                                  the legacy iris::Logger file
 ```
 
 `tail -f build-linux/bin/logs/latest.log` is the one command to watch a running editor.

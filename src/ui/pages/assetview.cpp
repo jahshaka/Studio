@@ -2827,7 +2827,7 @@ void AssetView::deleteAssetFromLibrary(const QString &guid)
 	if (!outcome.ok) {
 		QMessageBox::warning(this, tr("Delete Failed!"),
 		    tr("The library database refused the delete; the asset is still catalogued. "
-		       "See jahshaka.log for the failing query."), QMessageBox::Ok);
+		       "See the session log for the failing query."), QMessageBox::Ok);
 		return;
 	}
 

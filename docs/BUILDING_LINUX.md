@@ -176,7 +176,6 @@ current one:
 build-linux/bin/logs/jahshaka-2026.09.06-14.22.31-10412.log        the session log
 build-linux/bin/logs/jahshaka-2026.09.06-14.22.31-10412-ogre.log   Ogre's own log, same session
 build-linux/bin/logs/latest.log -> the newest session log
-build-linux/bin/logs/jahshaka.log                                  legacy iris::Logger file
 ```
 
 `tail -f build-linux/bin/logs/latest.log` is the one command to watch a running editor. The

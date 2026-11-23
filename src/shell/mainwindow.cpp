@@ -32,8 +32,6 @@ For more information see the LICENSE file
 #include "irisgl/document/animation/keyframeset.h"
 #include "irisgl/document/animation/keyframeanimation.h"
 #include "irisgl/document/animation/animation.h"
-#include "irisgl/core/logger.h"
-#include "services/jahlog.h"
 #include "services/sessionmarkers.h"
 #include "services/services.h"
 #include "services/framemonitor.h"
@@ -195,22 +193,6 @@ MainWindow::MainWindow(QWidget *parent) : QMainWindow(parent), ui(new Ui::MainWi
     // for why the old device-pixel-ratio multiply is gone).
     ThemeManager::applyWindowFont(this);
 
-    // The legacy iris::Logger file now lives UNDER THE SESSION-LOG ROOT with
-    // everything else (SESSION_LOG_SPEC §6). Two things changed:
-    //   * the release build no longer writes ~/Documents/jahshaka.log — a
-    //     user-visible file in a user-owned folder, for a developer artifact;
-    //   * both builds land beside the session log, so "send me your logs" is
-    //     one directory.
-    // The records themselves are already in the session file under `legacy`
-    // (fork F5-A, absorbed at the sink); this file survives for one release so
-    // nothing that greps it breaks on the same day.
-    {
-        const QString logDir = JahLog::paths().value(QStringLiteral("dir")).toString();
-        const QString legacyLog =
-            logDir.isEmpty() ? IrisUtils::getAbsoluteAssetPath("jahshaka.log")
-                             : QDir(logDir).filePath(QStringLiteral("jahshaka.log"));
-        iris::Logger::getSingleton()->init(legacyLog);
-    }
 #ifdef QT_DEBUG
     setWindowTitle(QString("Jahshaka %1 - %2").arg(Constants::CONTENT_VERSION).arg("Developer Build"));
 #else
