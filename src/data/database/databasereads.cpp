@@ -57,7 +57,9 @@ int scanObject(struct dl_phdr_info *info, size_t, void *data)
 #endif
 
 std::atomic<qint64> gStatements{0};
-std::atomic<bool> gTraced{false};
+// THE CONNECTION THE TRACE IS ON (the audit's W2): `traced` is true only while it is installed on a live
+// connection - cleared by removeStatementTrace at that library's close, never left over from an earlier one.
+std::atomic<const void *> gTracedOn{nullptr};
 bool gOwnStatement = false;   // `read`'s own PRAGMA, on the UI thread that runs it
 
 void onStatement(std::string_view sql)
@@ -114,7 +116,7 @@ Stats read()
     }
     out.available = true;
     out.pages = cur;
-    out.traced = gTraced.load();
+    out.traced = gTracedOn.load() != nullptr;
     out.statements = gStatements.load();
     gOwnStatement = true;
     QSqlQuery q(main);
@@ -128,8 +130,15 @@ bool installStatementTrace(db::Connection &connection)
 {
     if (!connection.isOpen()) return false;
     connection.trace(onStatement);
-    gTraced.store(true);
+    gTracedOn.store(connection.state());
     return true;
+}
+
+void removeStatementTrace(db::Connection &connection)
+{
+    if (!connection.isOpen() || gTracedOn.load() != connection.state()) return;
+    connection.trace({});
+    gTracedOn.store(nullptr);
 }
 
 }   // namespace databasereads

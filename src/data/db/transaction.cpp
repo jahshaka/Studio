@@ -23,6 +23,7 @@ Transaction::Transaction(Connection &connection, std::string_view why) : mConnec
         return;
     }
     mOutermost = mConnection->depth == 0;
+    if (mOutermost) ++mConnection->unit;   // a new unit, whatever its BEGIN answers
     ++mConnection->depth;
     mCounted = true;
     if (!mOutermost) return;   // nested: it rides the outer transaction

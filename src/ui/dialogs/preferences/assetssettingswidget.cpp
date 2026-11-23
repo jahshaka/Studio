@@ -128,7 +128,8 @@ void AssetsSettingsWidget::refresh()
     watcher->setFuture(QtConcurrent::run([root, dbPath]() {
         QVariantMap st;
         {   // THE WORKER's OWN READ-ONLY CONNECTION, OPENED BY THE LAYER (NOQT-DATABASE-1 stage 2: statusOn reads
-            // a db::Connection); none for an empty path (statusOn then counts nothing missing).
+            // a db::Connection). ONE THAT NEVER OPENED IS SAID (the audit's W5): its missing count is no count,
+            // never "nothing missing".
             db::Connection conn;
             if (!dbPath.isEmpty()) {
                 db::Options options;
@@ -139,6 +140,7 @@ void AssetsSettingsWidget::refresh()
                 conn = db::Connection::open(dbPath.toStdString(), options, &error);
             }
             st = AssetStoreService::statusOn(conn, root);
+            if (!conn.isOpen()) st.insert(QStringLiteral("unread"), true);
         }
         if (st.value(QStringLiteral("online")).toBool()) {
             const QStorageInfo storage(root);
@@ -156,7 +158,9 @@ void AssetsSettingsWidget::applyStatus(const QVariantMap &st)
             ? QLocale().formattedDataSize(st.value(QStringLiteral("bytesAvailable")).toLongLong())
             : QStringLiteral("—"));
         const int missing = st.value(QStringLiteral("missing")).toInt();
-        mStatus->setText(missing > 0
+        mStatus->setText(st.value(QStringLiteral("unread")).toBool()
+            ? QStringLiteral("online — the library could not be read, so missing assets were not counted")
+            : missing > 0
             ? QStringLiteral("online — %1 library asset(s) have no folder in this store").arg(missing)
             : QStringLiteral("online"));
     }

@@ -62,6 +62,9 @@ Stats read();
 /// Registers the statement trace on `connection` (the Database's own); false (nothing registered) when it is
 /// not open.
 bool installStatementTrace(db::Connection &connection);
+/// Removes it from `connection` when it is the one the trace is on (the library's close): `traced` then
+/// reads false until another library installs it.
+void removeStatementTrace(db::Connection &connection);
 
 /// An open connection's driver handle (its driver()->handle(); invalid when not open) as the sqlite3*
 /// it is when it belongs to the system SQLite this build links (the plugin's own DT_NEEDED, read

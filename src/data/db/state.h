@@ -19,6 +19,7 @@ For more information see the LICENSE file
 
 #include <sqlite3.h>
 
+#include <cstdint>
 #include <functional>
 #include <string>
 #include <string_view>
@@ -34,6 +35,7 @@ struct Connection::State
     std::string file;               ///< the main database's file; empty for a temp or memory database
     std::thread::id owner;          ///< the thread that opened or borrowed it
     int depth = 0;                  ///< live Transaction guards on this connection
+    std::uint64_t unit = 0;         ///< the serial of the outermost unit: a new one each time one opens
     bool holding = false;           ///< this connection's outermost Transaction holds the write lock
     bool firstWriteNamed = false;   ///< the held transaction's first write is in the holder line
     bool refusing = false;          ///< the outermost Transaction's BEGIN failed: query_only until it ends

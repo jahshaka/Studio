@@ -23,7 +23,9 @@ For more information see the LICENSE file
 //      absent, beside a killed process whose unit committed first;
 //   6. the funnel's cursor: a read that fails on its SECOND step is FAILED and said by name, never a short result;
 //   7. a cursor's step after the transaction it was opened in has ended is refused by name (FAILED);
-//   8. an import's archive that cannot be opened read-only is refused by name before any read, and never created.
+//   8. an import's archive that cannot be opened read-only is refused by name before any read, and never created;
+//   9. ...nor a step inside the NEXT unit at the same depth (the unit's serial, not its depth: the audit's W1);
+//  10. an import whose insert failed answers false and leaves nothing (its unit rolls back: the audit's W3).
 
 #include <QApplication>
 #include <QFile>
@@ -323,6 +325,76 @@ int main(int argc, char **argv)
         check(!QFile::exists(missing + QStringLiteral(".db")), QStringLiteral("...and no archive file was created"));
         check(JahLog::since(mark).filter(QStringLiteral("query failed to execute")).isEmpty(),
               QStringLiteral("...and no statement ran on it"));
+    }
+
+    // 9. ...AND NOT INTO THE NEXT ONE AT THE SAME DEPTH (the audit's W1): a cursor opened inside a unit that ended,
+    //    stepped after a NEW unit opened on the connection (the depth back where it was), is refused by name.
+    {
+        std::optional<db::Transaction> unit;
+        unit.emplace(database.connection(), "the test's first unit");
+        DbQuery inside(database.connection(), "SELECT v FROM steps ORDER BY v");
+        database.executeAndCheckQuery(inside, QStringLiteral("unitsAcrossUnits"));
+        const bool first = inside.next();
+        check(first && inside.int64(0) == 1, QStringLiteral("CONTROL: inside its unit the cursor reads its first row"));
+        db::Error e;
+        unit->commit(&e);
+        unit.reset();
+        unit.emplace(database.connection(), "the test's second unit");
+        check(database.connection().guards() == 1, QStringLiteral("CONTROL: the second unit stands at the first one's depth (%1)")
+                                                        .arg(database.connection().guards()));
+        const bool after = inside.next();
+        check(!after && inside.failed()
+                  && QString::fromStdString(inside.error().message).contains(QStringLiteral("outlived the transaction")),
+              QStringLiteral("a step inside the NEXT unit at the same depth is refused by name: '%1'")
+                  .arg(QString::fromStdString(inside.error().message)));
+        unit.reset();
+    }
+
+    // 10. AN IMPORT WHOSE INSERT FAILED IS NO IMPORT (the audit's W3): a project archive whose asset row this
+    //     library refuses (a TEMP trigger raising on it) answers false and leaves no project row - beside the same
+    //     archive imported whole once the trigger is gone (the control).
+    {
+        const QString archive = QStringLiteral("db_units_w3_archive");
+        QFile::remove(archive + QStringLiteral(".db"));
+        {
+            db::Options o;
+            o.name = "w3-archive";
+            db::Error e;
+            db::Connection a = db::Connection::open((archive + QStringLiteral(".db")).toStdString(), o, &e);
+            a.exec("CREATE TABLE projects (name TEXT, scene BLOB, thumbnail BLOB, version TEXT, guid TEXT);"
+                   "CREATE TABLE assets (guid TEXT, type INTEGER, name TEXT, collection INTEGER, times_used INTEGER, "
+                   "project_guid TEXT, date_created TEXT, last_updated TEXT, author TEXT, license TEXT, hash TEXT, "
+                   "version TEXT, parent TEXT, tags BLOB, properties BLOB, asset BLOB, thumbnail BLOB);"
+                   "CREATE TABLE dependencies (depender_type INTEGER, dependee_type INTEGER, project_guid TEXT, "
+                   "depender TEXT, dependee TEXT, id TEXT);"
+                   "CREATE TABLE folders (guid TEXT, name TEXT, parent TEXT, count INTEGER, project_guid TEXT, "
+                   "date_created TEXT, last_updated TEXT, visible INTEGER);"
+                   "INSERT INTO projects VALUES ('W3', CAST('{\"formatVersion\": 2}' AS BLOB), NULL, '0.9', 'w3-old');"
+                   "INSERT INTO assets (guid, type, name, project_guid, parent) VALUES ('w3-asset', 2, 'w3', 'w3-old', 'w3-old')",
+                   &e);
+            check(!e, QStringLiteral("10: the archive is written %1").arg(QString::fromStdString(e.message)));
+        }
+        const auto projectRows = [&database](const char *guid) {
+            db::Statement s(database.connection(), "SELECT count(*) FROM projects WHERE guid = ?");
+            s.bindText(1, guid);
+            db::Error e;
+            return s.step(&e) ? int(s.int64(0)) : -1;
+        };
+        db::Error e;
+        database.connection().exec("CREATE TEMP TRIGGER w3poison BEFORE INSERT ON main.assets WHEN NEW.guid = 'w3-asset' "
+                                   "BEGIN SELECT RAISE(ABORT, 'injected: this row is refused'); END", &e);
+        QString world;
+        QMap<QString, QString> guids;
+        const bool refused = database.importProject(archive, QStringLiteral("w3-poisoned"), world, guids);
+        check(!refused && projectRows("w3-poisoned") == 0,
+              QStringLiteral("10: an import whose asset insert failed answers false and leaves no project row (answer %1, rows %2)")
+                  .arg(refused).arg(projectRows("w3-poisoned")));
+        database.connection().exec("DROP TRIGGER temp.w3poison", &e);
+        const bool imported = database.importProject(archive, QStringLiteral("w3-control"), world, guids);
+        check(imported && projectRows("w3-control") == 1,
+              QStringLiteral("10: CONTROL: the same archive imports whole without the trigger (answer %1, rows %2)")
+                  .arg(imported).arg(projectRows("w3-control")));
+        QFile::remove(archive + QStringLiteral(".db"));
     }
 
     database.closeDatabase();

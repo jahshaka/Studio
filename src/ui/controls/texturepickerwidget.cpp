@@ -71,15 +71,20 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 	const QMap<int, QVariant> roleDataMap = AssetDrag::roles(event->mimeData());
 
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+		// A DROP WITH NO RESOLVER LEAVES THE SLOT AS IT IS (the audit's W4): `services` is null until the panel's
+		// setServices reaches this row (an accordion's picker is built without it) and its resolver is unset with no
+		// library (shell/shellservices.cpp) - such a drop used to CLEAR the slot, silently.
+		if (!services || !services->resolvePinned) {
+			event->ignore();
+			return;
+		}
 		textureGuid = roleDataMap.value(3).toString();
 		// The dropped row's BYTES, through the store (the project's pin, else the
 		// library source). It used to join the project folder with the row's
 		// display name — a file no project folder holds since the store landed,
 		// so a dropped texture reached the material as a path to nothing (plan
 		// item 15c removed the last files that join could find).
-		changeMap(services && services->resolvePinned
-		              ? services->resolvePinned(project ? project->getProjectGuid() : QString(), textureGuid)
-		              : QString());
+		changeMap(services->resolvePinned(project ? project->getProjectGuid() : QString(), textureGuid));
 	}
 
 	event->acceptProposedAction();

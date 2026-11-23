@@ -1116,6 +1116,20 @@ int main(int argc, char **argv)
     theBootGate();
 
     db.closeDatabase();
+    // THE TRACE IS THE LIVE LIBRARY's (the audit's W2): once the library that installed it closed, a default
+    // connection no Database opened (none traced it) reads `traced` false - never the flag of an earlier one.
+    {
+        {
+            QSqlDatabase bare = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"));
+            bare.setDatabaseName(dbPath);
+            const bool opened = bare.open();
+            const databasereads::Stats s = databasereads::read();
+            CHECK(opened && s.available, "W2: CONTROL: a bare default connection is read (available %d)", s.available ? 1 : 0);
+            CHECK(!s.traced, "W2: ...and it reads traced FALSE after the traced library closed (traced %d)", s.traced ? 1 : 0);
+            bare.close();
+        }
+        QSqlDatabase::removeDatabase(QLatin1String(QSqlDatabase::defaultConnection));
+    }
     QFile::remove(dbPath);
     clearStore();
     if (failures) std::printf("library.statements: FAILED (%d)\n", failures);

@@ -396,7 +396,7 @@ void sayFailed(const std::string &name, const db::Connection &connection, const 
 
 DbQuery::DbQuery(db::Connection &connection, std::string_view sql)
     : db::Statement(connection, sql), mConnection(connection), mOpenedOn(connection.state()),
-      mOpenedAtDepth(connection.guards()), mSql(sql)
+      mOpenedAtDepth(connection.guards()), mOpenedInUnit(connection.unit()), mSql(sql)
 {
 }
 
@@ -422,7 +422,7 @@ bool DbQuery::advance()
         fail(e);
         return false;
     }
-    if (mConnection.guards() < mOpenedAtDepth) {
+    if (mConnection.guards() < mOpenedAtDepth || (mOpenedAtDepth > 0 && mConnection.unit() != mOpenedInUnit)) {
         e.code = 21;   // SQLITE_MISUSE
         e.message = mName + ": the cursor outlived the transaction it was opened in";
         e.statement = mSql;
@@ -873,6 +873,7 @@ void Database::closeDatabase()
     // The checkpoint worker's connection goes FIRST, so the library's own close
     // is the last one and checkpoints whatever the -wal still holds.
     stopCheckpointer(this);
+    databasereads::removeStatementTrace(*mConnection);   // `traced` is the live library's (W2)
     *mConnection = db::Connection();   // the borrow ends before its owner closes the handle
     const QString name = db.connectionName();
     if (db.isOpen()) db.close();
@@ -1323,23 +1324,6 @@ bool Database::createFolder(const QString &folderName, const QString &parentFold
     return executeAndCheckQuery(query, "CreateFolder");
 }
 
-// FIND THE PROJECT'S FOLDER BY NAME, OR MAKE IT — and answer with the guid
-// either way (small-items round B). The editor keeps two hidden folders per
-// project, Systems (one row per particle emitter) and Presets (one row per
-// applied material preset), and both writers did this:
-//
-//     auto fguid = QString::fromStdString(iris::newGuid());
-//     if (!db->checkIfRecordExists("name", "Systems", "folders", ...))
-//         db->createFolder("Systems", ..., fguid, ...);
-//     db->createAssetEntry(..., fguid, ...);          // the row's parent
-//
-// which is right exactly once. On every later call the folder already exists,
-// createFolder is skipped, and the row is still filed under the FRESH guid —
-// a folder nothing owns. Every emitter after the first and every preset after
-// the first ended up in a folder that is not in the folders table and not
-// reachable from the asset panel: the row exists, resolves by guid and is
-// invisible. One helper, one query, no fresh guid unless a folder is really
-// created.
 bool Database::isProjectOwned(const AssetRecord &row)
 {
     if (row.guid.isEmpty() || row.view_filter != assethome::StoredProject || row.projectGuid.isEmpty())
@@ -1840,25 +1824,6 @@ QString Database::filePath() const
 QHash<QString, QByteArray> Database::fetchProjectThumbnailBytes(const QStringList &guids)
 {
     return fetchThumbnailBytes(this, "projects", guids, QStringLiteral("fetchProjectThumbnailBytes"));
-}
-
-void Database::updateAuthorInfo(const QString &author_name)
-{
-	DbQuery query1(connection(), "DELETE FROM author");
-	executeAndCheckQuery(query1, "wipeTable");
-
-	DbQuery query2(connection(), "INSERT INTO author (name, date_created, default_license) VALUES (:name, datetime(), :default_license)");
-	dbqt::bindText(query2, ":name", author_name);
-	dbqt::bindText(query2, ":default_license", QStringLiteral("CCBY"));
-	executeAndCheckQuery(query2, "insertAuthorName");
-}
-
-bool Database::isAuthorInfoPresent()
-{
-	// ONE execution (it ran the funnel AND a second raw exec of the same statement until stage 2); a failure is
-	// said by the funnel.
-	DbQuery query(connection(), "SELECT COUNT(*) FROM author");
-	return executeAndCheckQuery(query, "authorCount") && query.next() && query.int64(0) != 0;
 }
 
 QString Database::getAuthorName()
@@ -4212,6 +4177,13 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
 
     QMap<QString, QString> assetGuids; /* old x new guid */
 
+    // A WRITE THAT FAILED FAILS THE IMPORT (the audit's W3): its unit rolls back, nothing of it is left, and the
+    // caller hears why - never a project committed short of the row that failed (the failure said by its name).
+    const auto failedWrite = [whyOut](const QString &what) {
+        if (whyOut) *whyOut = QStringLiteral("the import could not write %1 (the log names the statement)").arg(what);
+        return false;
+    };
+
     // THE FOLDERS' old -> new map, minted BEFORE any row is written: an asset
     // filed in a folder names the folder's guid in its `parent` column, and a
     // folder names its parent folder's, so both need the map (below).
@@ -4280,6 +4252,8 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
                 newGuid = QString::fromStdString(iris::newGuid());     // a collision: fresh, remapped
                 assetGuids.insert(guid, newGuid);
                 outGuids.insert(guid, newGuid);
+            } else if (error) {
+                return failedWrite(QStringLiteral("'%1' (whether this library holds it could not be read)").arg(guid));
             }
         }
         data.guid = newGuid;
@@ -4328,7 +4302,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     dbqt::bindText(query3, ":version", sceneVersion);
     dbqt::bindText(query3, ":guid", newSceneGuid);
 
-    executeAndCheckQuery(query3, "insertSceneGlobal");
+    if (!executeAndCheckQuery(query3, "insertSceneGlobal")) return failedWrite(QStringLiteral("its project row"));
 
     for (auto &asset : assetList) {
         DbQuery insertImportAssetQuery(connection(),
@@ -4379,7 +4353,8 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         dbqt::bindBytes(insertImportAssetQuery, ":thumbnail", asset.thumbnail);
         insertImportAssetQuery.bindInt(":view_filter", asset.view_filter);
 
-        executeAndCheckQuery(insertImportAssetQuery, "insertImportAssetQuery");
+        if (!executeAndCheckQuery(insertImportAssetQuery, "insertImportAssetQuery"))
+            return failedWrite(QStringLiteral("the asset '%1'").arg(asset.guid));
     }
 
     QVector<DependencyRecord> dependenciesToImport;
@@ -4413,6 +4388,7 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
             if (!dep.projectGuid.isEmpty()) dbqt::bindText(have, 3, newSceneGuid);
             db::Error error;
             if (have.step(&error)) continue;
+            if (error) return failedWrite(QStringLiteral("an edge of '%1' (whether it is here could not be read)").arg(d1));
         }
         DbQuery importDep(connection(),
             "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
@@ -4436,7 +4412,8 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         dbqt::bindText(importDep, ":dependee", !dependee.isEmpty() ? dependee : dep.dependee);
         dbqt::bindText(importDep, ":id", QString::fromStdString(iris::newGuid()));
 
-        executeAndCheckQuery(importDep, "importDep");
+        if (!executeAndCheckQuery(importDep, "importDep"))
+            return failedWrite(QStringLiteral("an edge of '%1'").arg(dep.depender));
     }
 
     QVector<FolderRecord> foldersToImport;
@@ -4463,6 +4440,15 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
     if (selectFolder.failed()) return false;
 
     for (const auto &folder : foldersToImport) {
+        // A KNOWN FOLDER IS REUSED, never inserted again (ARCHIVE-GUIDS-1): its row is already here. (It was
+        // "reused" by an INSERT that failed on its guid and was ignored - a failure W3 now reads.)
+        {
+            db::Statement here(connection(), "SELECT 1 FROM folders WHERE guid = ?");
+            dbqt::bindText(here, 1, folder.guid);
+            db::Error error;
+            if (here.step(&error)) continue;
+            if (error) return failedWrite(QStringLiteral("the folder '%1' (whether it is here could not be read)").arg(folder.name));
+        }
         DbQuery importFolder(connection(),
             "INSERT INTO folders (guid, name, parent, count, project_guid, date_created, last_updated, visible) "
             "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)");
@@ -4476,7 +4462,8 @@ bool Database::importProject(const QString &inFilePath, const QString &newSceneG
         dbqt::bindTime(importFolder, ":last_updated", folder.lastUpdated);
         importFolder.bindInt(":visible", folder.visible);
 
-        executeAndCheckQuery(importFolder, "importFolder");
+        if (!executeAndCheckQuery(importFolder, "importFolder"))
+            return failedWrite(QStringLiteral("the folder '%1'").arg(folder.name));
     }
 
     // the archive's connection closes with this scope

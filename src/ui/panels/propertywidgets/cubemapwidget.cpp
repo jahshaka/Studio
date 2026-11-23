@@ -264,13 +264,16 @@ void CubeMapButton::dropEvent(QDropEvent* event)
 
 	// extend getting guid to filepicker dialog...
 	if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
+		// A DROP WITH NO RESOLVER LEAVES THE FACE AS IT IS (the audit's W4; texturepickerwidget.cpp says when).
+		if (!parent->services || !parent->services->resolvePinned) {
+			event->ignore();
+			return;
+		}
 		textureGuid = roleDataMap.value(3).toString();
 		// The dropped row's bytes through the store, not the project folder +
 		// its display name (a file nothing puts there — plan item 15c).
-		setImage(parent->services && parent->services->resolvePinned
-		             ? parent->services->resolvePinned(parent->project ? parent->project->getProjectGuid() : QString(),
-		                                               textureGuid)
-		             : QString());
+		setImage(parent->services->resolvePinned(parent->project ? parent->project->getProjectGuid() : QString(),
+		                                         textureGuid));
 	}
 
 	event->acceptProposedAction();

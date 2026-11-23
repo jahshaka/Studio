@@ -195,8 +195,8 @@ private:
 /// A FAILED READ IS NEVER A SHORT RESULT: a step that fails, the first or a later one, is said by the
 /// statement's name and leaves failed() true; a write, a count and an "is there a row" read ask it.
 /// IT CANNOT OUTLIVE WHAT IT WAS OPENED IN: once its connection is reset or closed, or the transaction it
-/// was opened inside (the connection's guard depth at its construction) has ended, its next step is REFUSED
-/// by name and the cursor is FAILED.
+/// was opened inside has ended (the guard depth fell below its construction's, or the connection's unit serial
+/// moved: a NEW unit at the same depth is not its unit), its next step is REFUSED by name and the cursor is FAILED.
 class DbQuery : public db::Statement
 {
 public:
@@ -224,6 +224,7 @@ private:
     db::Connection &mConnection;
     const db::Connection::State *mOpenedOn;   ///< the connection's state at construction
     int mOpenedAtDepth;                       ///< its transaction guards at construction
+    std::uint64_t mOpenedInUnit;              ///< the connection's unit serial at construction (W1: not a depth)
     std::string mSql;
     std::string mName;
     bool mStarted = false;
@@ -906,8 +907,6 @@ public:
 	QString getDependencyByType(const int &type, const QString &depender);
 
     // MISC
-	void updateAuthorInfo(const QString &author_name);
-	bool isAuthorInfoPresent();
 	QString getAuthorName();
     bool switchAssetCollection(const int, const QString&);
 

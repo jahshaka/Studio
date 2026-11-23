@@ -88,6 +88,9 @@ public:
     int changes() const;
     /// Live Transaction guards on this connection (0: the next one is the outermost).
     int guards() const;
+    /// The serial of the outermost unit opened on this connection: it moves each time a Transaction opens with
+    /// none live, so a unit that ended and a new one at the same depth are told apart.
+    std::uint64_t unit() const;
     /// The outermost Transaction's BEGIN failed and its scope still stands: writes are refused.
     bool refusesWrites() const;
     /// THE STATEMENT TRACE (stage 2; the library.statements counts): `onStatement` is called with the text of

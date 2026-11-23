@@ -119,9 +119,15 @@ bool checkVersion(int minimum, Error *e)
 }
 
 /// An owned handle is closed and forgotten (its State must not touch it again); a borrowed one is its owner's.
+/// Its TRACE goes first (the audit's W2): close_v2 may leave a zombie handle behind an unfinalized statement, and
+/// that statement's late step would call the trace with this State, which is about to be freed.
 static void closeOwned(Connection::State *s)
 {
     if (!s || !s->owned || !s->handle) return;
+    if (s->trace) {
+        sqlite3_trace_v2(s->handle, 0, nullptr, nullptr);
+        s->trace = nullptr;
+    }
     sqlite3_close_v2(s->handle);
     s->handle = nullptr;
 }
@@ -254,6 +260,8 @@ std::int64_t Connection::lastInsertRowid() const { return isOpen() ? sqlite3_las
 int Connection::changes() const { return isOpen() ? sqlite3_changes(mState->handle) : 0; }
 
 int Connection::guards() const { return mState ? mState->depth : 0; }
+
+std::uint64_t Connection::unit() const { return mState ? mState->unit : 0; }
 
 bool Connection::refusesWrites() const { return mState && mState->refusing; }
 
