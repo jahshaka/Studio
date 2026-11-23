@@ -684,3 +684,4 @@ engine.setters_refuse.posted 0.02  solo 2026-11-23 at b16be7b43 (spec.sh reprice
 mirror.final_refusal 0.03  solo 2026-11-23 at 0f2e17629 (spec.sh reprice, run 20261123T121455-0f2e17629-p4108878)
 mirror.final_refusal_asan 0.08  solo 2026-11-23 at c76b4bb7e (spec.sh reprice, run 20261123T125003-c76b4bb7e-p880501)
 source.script_names 0.02  solo 2026-11-23 at abfb0cc29 (spec.sh reprice, run 20261123T135532-abfb0cc29-p1527534)
+source.script_census 0.14  solo 2026-11-23 at ab0d7e8bd (spec.sh reprice, run 20261123T141502-ab0d7e8bd-p2278543)
