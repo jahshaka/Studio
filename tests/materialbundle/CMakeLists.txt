@@ -8,6 +8,7 @@
 find_package(Qt6 REQUIRED COMPONENTS Widgets Sql Multimedia)
 add_executable(test_material_bundle test_material_bundle.cpp
     ${CMAKE_SOURCE_DIR}/src/services/materialbundle.cpp
+    ${CMAKE_SOURCE_DIR}/src/modules/materials/core/bakedmembers.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/database.cpp
     ${CMAKE_SOURCE_DIR}/src/data/database/databasereads.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetdelete.cpp

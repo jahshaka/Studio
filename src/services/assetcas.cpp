@@ -408,15 +408,50 @@ bool ingestFile(db::Connection &conn, const QString &root, const QString &srcPat
     return true;
 }
 
+namespace {
+/// THE ONE ORDER that names an asset's library version among its files: the 'source' row first.
+constexpr const char *kSourceFirst = "CASE role WHEN 'source' THEN 0 ELSE 1 END, name";
+}   // namespace
+
 QString sourceOid(db::Connection &conn, const QString &guid, bool *readOk)
 {
-    db::Statement query(conn, "SELECT oid FROM asset_files WHERE asset_guid = ? "
-                              "ORDER BY CASE role WHEN 'source' THEN 0 ELSE 1 END, name");
+    db::Statement query(conn, dbqt::utf8(QStringLiteral("SELECT oid FROM asset_files WHERE asset_guid = ? ORDER BY %1")
+                                             .arg(QString::fromLatin1(kSourceFirst))));
     dbqt::bindText(query, 1, guid);
     db::Error e;
     if (query.step(&e)) return dbqt::text(query, 0);
     if (e && readOk) *readOk = false;   // a failed read is no "no bytes"
     return QString();
+}
+
+QHash<QString, MemberPin> memberPins(db::Connection &conn, const QString &projectGuid, const QStringList &guids,
+                                     bool *readOk)
+{
+    QHash<QString, MemberPin> out;
+    if (guids.isEmpty()) return out;
+    QString marks;
+    for (int i = 0; i < guids.size(); ++i) marks += i ? QStringLiteral(",?") : QStringLiteral("?");
+    // The library version is sourceOid's own choice (kSourceFirst), never a second transcription of it.
+    db::Statement query(conn, dbqt::utf8(QStringLiteral(
+        "SELECT A.guid, PA.asset_guid IS NOT NULL, PA.oid_pin, "
+        "(SELECT AF.oid FROM asset_files AF WHERE AF.asset_guid = A.guid ORDER BY %1 LIMIT 1) "
+        "FROM assets A LEFT JOIN project_assets PA ON PA.asset_guid = A.guid AND PA.project_guid = ? "
+        "WHERE A.guid IN (%2)").arg(QString::fromLatin1(kSourceFirst), marks)));
+    dbqt::bindText(query, 1, projectGuid);
+    for (int i = 0; i < guids.size(); ++i) dbqt::bindText(query, i + 2, guids.at(i));
+    db::Error e;
+    while (query.step(&e)) {
+        MemberPin row;
+        row.held = query.int64(1) != 0;
+        row.pin = dbqt::text(query, 2);
+        row.source = dbqt::text(query, 3);
+        out.insert(dbqt::text(query, 0), row);
+    }
+    if (e) {   // a short answer is no answer: a member it missed would be pinned at the library's version
+        if (readOk) *readOk = false;
+        return {};
+    }
+    return out;
 }
 
 bool moveSourcePointer(db::Connection &conn, const QString &guid, const QString &oid,

@@ -16,6 +16,7 @@ find_package(Qt6 REQUIRED COMPONENTS Widgets Core )
 set(SRCS
 	${SRCS}
 	#main.cpp
+	src/modules/materials/core/bakedmembers.cpp
 	src/modules/materials/core/bakeprogram.cpp
 	src/modules/materials/core/graphbaker.cpp
 	src/modules/materials/core/materialhelper.cpp
@@ -73,6 +74,7 @@ set(SRCS
 
 set(HEADERS
 	${HEADERS}
+	src/modules/materials/core/bakedmembers.h
 	src/modules/materials/core/bakeprogram.h
 	src/modules/materials/core/graphbaker.h
 	src/modules/materials/core/materialhelper.h

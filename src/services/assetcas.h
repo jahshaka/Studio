@@ -21,7 +21,9 @@ For more information see the LICENSE file
 // an object that already exists is simply reused — the dedup.
 
 #include "data/db/connection.h"
+#include <QHash>
 #include <QString>
+#include <QStringList>
 #include <QVector>
 
 namespace AssetCas
@@ -171,6 +173,19 @@ bool moveSourcePointer(db::Connection &conn, const QString &guid, const QString 
 /// at right now, independent of any project's pin. Empty when it has none —
 /// or when the read FAILED, which `readOk` (when given) tells apart: cleared.
 QString sourceOid(db::Connection &conn, const QString &guid, bool *readOk = nullptr);
+
+/// One member's answer to "what does this project hold of it" (memberPins).
+struct MemberPin
+{
+    bool held = false;   ///< the project has a pin row for it
+    QString pin;         ///< that row's oid ('' for none, or a DB-only asset's pin)
+    QString source;      ///< the library's version (sourceOid's answer)
+};
+/// EVERY member's pin in `projectGuid` and its library version, in ONE statement (NOQT-DATABASE-1 stage 2, the
+/// second confirm's W5: the material autosave asked three reads a member). A guid with no row is absent from the
+/// answer. A read that failed answers NOTHING and clears `readOk` - never a short list read as "not pinned".
+QHash<QString, MemberPin> memberPins(db::Connection &conn, const QString &projectGuid, const QStringList &guids,
+                                     bool *readOk);
 
 /// Resolve an asset's PRIMARY ('source'-role) file to an absolute path;
 /// `nameOut` (optional) receives its display name. Falls back to the single

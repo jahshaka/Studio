@@ -60,6 +60,7 @@
 #include "commands/resetmaterialcommand.h"
 #include "services/projectassets.h"
 #include "services/memberstamp.h"
+#include "modules/materials/core/bakedmembers.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include <QSqlDriver>
 #include <sqlite3.h>
@@ -134,6 +135,9 @@ static int denyReads(void *, int action, const char *table, const char *column, 
         && std::strcmp(column, "depender_type") == 0)
         return SQLITE_DENY;
     if (gDeny.mode == 11 && gDeny.inSelect && std::strcmp(table, "assets") == 0 && column && std::strcmp(column, "properties") == 0)
+        return SQLITE_DENY;
+    // mode 12: `assets.parent` inside a SELECT (a bake's "does this slot have its row").
+    if (gDeny.mode == 12 && gDeny.inSelect && std::strcmp(table, "assets") == 0 && column && std::strcmp(column, "parent") == 0)
         return SQLITE_DENY;
     return SQLITE_OK;
 }
@@ -399,7 +403,7 @@ int main(int argc, char **argv)
         // A MEMBER's own sidecar names its PARENT — what makes a baked map the
         // inside of its material after a rebuild, instead of a loose tile.
         // (A real baked member is minted with `parent` = the material by
-        // materials::bakedMemberRow; this is that row's shape.)
+        // materials::bakedMemberRows; this is that row's shape.)
         {
             db.createAssetEntry("tex-member", "roughnessMap.png",
                                 static_cast<int>(ModelTypes::Texture),
@@ -1299,6 +1303,72 @@ int main(int argc, char **argv)
                 CHECK(retried.ok() && db.isAssetPinnedBy(QStringLiteral("p22"), m22)
                           && db.isAssetPinnedBy(QStringLiteral("p22"), QStringLiteral("t22")),
                       "22: CONTROL: the same add, every pin allowed, pins both");
+            }
+
+            // 23. A BAKE's MEMBER ROWS ARE ALL OR NONE (the second confirm's finding 2; materials::bakedMemberRows): two
+            //     baked slots mint two rows and a re-bake keeps their guids; a bake whose slot read fails (mode 12: the
+            //     rows' `parent` unread inside a SELECT) writes NOTHING; one whose SECOND slot's row is refused (a
+            //     trigger) rolls the FIRST slot's new row back - never a definition half-written.
+            {
+                const QString m23 = material(QStringLiteral("m23"), QString());
+                const QMap<QString, QString> maps{
+                    { QStringLiteral("baseColorMap"), writeTempFile(scratchDir, QStringLiteral("b23.png"), "base 23") },
+                    { QStringLiteral("normalMap"), writeTempFile(scratchDir, QStringLiteral("n23.png"), "normal 23") } };
+                const auto rowsOf = [&]() {
+                    return countWhere("SELECT COUNT(*) FROM assets WHERE parent = ?", { m23 });
+                };
+                const materials::BakedMembers first = materials::bakedMemberRows(&db, m23, maps);
+                const materials::BakedMembers again = materials::bakedMemberRows(&db, m23, maps);
+                CHECK(first.ok() && first.guidForSlot.size() == 2 && again.guidForSlot == first.guidForSlot && rowsOf() == 2,
+                      QStringLiteral("23: CONTROL: two slots mint two rows, a re-bake keeps their guids (rows %1; '%2')")
+                          .arg(rowsOf()).arg(first.error).toUtf8().constData());
+
+                const QString m23b = material(QStringLiteral("m23b"), QString());
+                gDeny = Deny{ 12 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const materials::BakedMembers unread = materials::bakedMemberRows(&db, m23b, maps);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(!unread.ok() && unread.error.contains(QStringLiteral("could not be read"))
+                          && countWhere("SELECT COUNT(*) FROM assets WHERE parent = ?", { m23b }) == 0,
+                      QStringLiteral("23: a bake whose slots could not be read writes NO row ('%1')").arg(unread.error)
+                          .toUtf8().constData());
+
+                const QString m23c = material(QStringLiteral("m23c"), QString());
+                db::Error e;
+                conn.exec(("CREATE TEMP TRIGGER refuse23 BEFORE INSERT ON main.assets WHEN NEW.name = 'normalMap.png' "
+                           "AND NEW.parent = '" + m23c.toStdString() + "' "
+                           "BEGIN SELECT RAISE(ABORT, 'injected: this row is refused'); END").c_str(), &e);
+                const materials::BakedMembers refused = materials::bakedMemberRows(&db, m23c, maps);
+                conn.exec("DROP TRIGGER temp.refuse23", &e);
+                const int left = countWhere("SELECT COUNT(*) FROM assets WHERE parent = ?", { m23c });
+                CHECK(!refused.ok() && left == 0 && refused.guidForSlot.isEmpty(),
+                      QStringLiteral("23: a bake whose second row was refused rolls the first back (rows %1; '%2')")
+                          .arg(left).arg(refused.error).toUtf8().constData());
+            }
+
+            // 24. EVERY MEMBER's PIN IN ONE STATEMENT (the second confirm's W5; AssetCas::memberPins, the autosave's read):
+            //     a pinned member answers held with its pin, an unpinned one its library version only, a guid with no
+            //     row nothing; a read that failed (mode 5: the pin's oid) answers NOTHING and clears readOk.
+            {
+                texture(QStringLiteral("t24a"));
+                texture(QStringLiteral("t24b"));
+                const QString sourceA = AssetCas::sourceOid(conn, QStringLiteral("t24a"));
+                AssetCas::writePin(conn, QStringLiteral("p24"), QStringLiteral("t24a"), sourceA);
+                bool read = true;
+                const QHash<QString, AssetCas::MemberPin> pins = AssetCas::memberPins(
+                    conn, QStringLiteral("p24"), { QStringLiteral("t24a"), QStringLiteral("t24b"), QStringLiteral("no-row-24") }, &read);
+                const AssetCas::MemberPin a = pins.value(QStringLiteral("t24a")), b = pins.value(QStringLiteral("t24b"));
+                CHECK(read && pins.size() == 2 && a.held && a.pin == sourceA && a.source == sourceA && !b.held
+                          && b.pin.isEmpty() && b.source == AssetCas::sourceOid(conn, QStringLiteral("t24b")) && !b.source.isEmpty(),
+                      QStringLiteral("24: one statement answers each member's pin and library version (rows %1)").arg(pins.size())
+                          .toUtf8().constData());
+                gDeny = Deny{ 5 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const QHash<QString, AssetCas::MemberPin> unread = AssetCas::memberPins(
+                    conn, QStringLiteral("p24"), { QStringLiteral("t24a"), QStringLiteral("t24b") }, &read);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(!read && unread.isEmpty(), QStringLiteral("24: a read that failed answers nothing and clears readOk (rows %1)")
+                                                     .arg(unread.size()).toUtf8().constData());
             }
 
             // 17.6 (F6) A SIDECAR THAT PARSES BUT THAT THE REBUILD SKIPS (no home in this format, no origin) keeps every

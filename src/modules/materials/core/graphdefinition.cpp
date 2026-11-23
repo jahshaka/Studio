@@ -15,15 +15,12 @@ For more information see the LICENSE file
 #include <QJsonArray>
 
 #include "data/database/database.h"
-#include "data/database/dbqt.h"
-#include "data/db/statement.h"
-#include "irisgl/core/guid.h"
 #include "data/project.h"
+#include "bakedmembers.h"
 #include "graphbaker.h"
 #include "materialhelper.h"
 #include "pbrgraphevaluator.h"
 #include "pieceemitter.h"
-#include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/materialbundle.h"
 #include "../graph/nodegraph.h"
@@ -50,64 +47,6 @@ QString bakeStagingDir(const QString &materialGuid)
 }
 
 } // namespace
-
-QString bakedMemberRow(Database *db, const QString &materialGuid, const QString &slot,
-                       const QString &filePath, QString *errorOut, bool *readFailed)
-{
-    const auto fail = [errorOut](const QString &message) {
-        if (errorOut) *errorOut = message;
-        return QString();
-    };
-    if (!db || materialGuid.isEmpty() || slot.isEmpty()) return fail(QStringLiteral("no material"));
-    if (!QFileInfo::exists(filePath)) return fail(QStringLiteral("the bake wrote no file"));
-
-    const QString name = slot + QStringLiteral(".png");
-
-    // ONE ROW PER SLOT PER MATERIAL, forever. A re-bake moves that row's
-    // source pointer instead of minting a second row — the guid a definition
-    // (and every scene node wearing a copy of its values) names must not
-    // change because the material was saved again.
-    QString guid;
-    {
-        db::Statement query(db->connection(), "SELECT guid FROM assets WHERE parent = ? AND name = ? AND type = ?");
-        dbqt::bindText(query, 1, materialGuid);
-        dbqt::bindText(query, 2, name);
-        query.bindInt(3, static_cast<int>(ModelTypes::Texture));
-        db::Error e;
-        if (query.step(&e)) guid = dbqt::text(query, 0);
-        // A READ THAT FAILED IS NO "NO ROW YET" (NOQT-DATABASE-1 stage 2): a second baked-map row would be minted and
-        // the definition's guid would move on every save. Refused by name.
-        else if (e) {
-            if (readFailed) *readFailed = true;
-            return fail(QStringLiteral("whether '%1' already has its %2 map could not be read (%3)")
-                            .arg(materialGuid, slot, dbqt::describe(e)));
-        }
-    }
-    if (guid.isEmpty()) {
-        guid = QString::fromStdString(iris::newGuid());
-        // `parent` = the MATERIAL (M-A, the one relation that is right for a
-        // baked map: it is born inside exactly one material and is never
-        // shared), which is what makes both browsers hide it already. AND
-        // ITS HOME IS THE MATERIAL'S (ASSETS-SCOPE-1): a project's material
-        // bakes project rows, a library material library rows.
-        const assethome::Home home = assethome::of(db, materialGuid);
-        db->createAssetEntry(guid, name, static_cast<int>(ModelTypes::Texture),
-                             materialGuid, home, assethome::bornInside(home));
-    }
-
-    db::Connection &conn = db->connection();
-    const QString root = AssetStorePaths::root();
-    QString oid, error;
-    if (!AssetCas::ingestFile(conn, root, filePath, guid, QStringLiteral("source"), name,
-                              &oid, &error))
-        return fail(error.isEmpty() ? QStringLiteral("the store refused the baked map") : error);
-    // The bytes changed, so the row's own pointer has to move: ingestFile's
-    // INSERT OR IGNORE on (guid, role, name) would leave it on the old oid.
-    if (!AssetCas::moveSourcePointer(conn, guid, oid, name, &error))
-        return fail(error.isEmpty() ? QStringLiteral("could not publish the baked map") : error);
-    AssetCas::writeSidecar(conn, root, guid, nullptr);
-    return guid;
-}
 
 DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
                                 Database *db, Project *project, bool bake)
@@ -151,29 +90,31 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
 
     QJsonObject values = baked.eval.values;
 
-    // (2) EVERY MAP VALUE BECOMES A GUID.
+    // (2) EVERY MAP VALUE BECOMES A GUID. A BAKED map: its pixels are ours, so they become member rows - ALL OR NONE
+    // (bakedmembers.h: every slot's row read before the first write, the writes one unit; a failure refuses the
+    // build, never a definition half its maps moved).
+    QMap<QString, QString> bakedFiles;
+    for (auto it = baked.maps.constBegin(); it != baked.maps.constEnd(); ++it)
+        bakedFiles.insert(it.key(), QDir(opts.outputDir).filePath(QFileInfo(it.value().toString()).fileName()));
+    const BakedMembers members = bakedMemberRows(db, materialGuid, bakedFiles);
+    if (!members.ok()) {
+        out.error = members.error;
+        return out;
+    }
     QJsonObject bakeMaps;
-    for (auto it = baked.maps.constBegin(); it != baked.maps.constEnd(); ++it) {
-        // A BAKED map: its pixels are ours, so they become a member row.
-        const QString file = QDir(opts.outputDir).filePath(QFileInfo(it.value().toString()).fileName());
-        QString error;
-        bool readFailed = false;
-        const QString memberGuid = bakedMemberRow(db, materialGuid, it.key(), file, &error, &readFailed);
-        if (readFailed) {   // never a slot dropped from the definition because a read failed: the build is refused
-            out.error = error;
-            return out;
-        }
+    for (auto it = bakedFiles.constBegin(); it != bakedFiles.constEnd(); ++it) {
+        const QString memberGuid = members.guidForSlot.value(it.key());
         if (memberGuid.isEmpty()) {
-            // A slot we cannot store is a slot the material does not carry —
-            // never a path left behind for another machine to fail on.
+            // A slot the bake wrote no file for is a slot the material does not carry - never a path left behind for
+            // another machine to fail on.
             values.remove(it.key());
-            out.unsupportedNodes.append(QStringLiteral("%1 <- bake (%2)").arg(it.key(), error));
             continue;
         }
         values[it.key()] = memberGuid;
         bakeMaps[it.key()] = memberGuid;
         out.bakedMembers.append(memberGuid);
     }
+    out.unsupportedNodes += members.dropped;
     for (auto it = baked.passthrough.constBegin(); it != baked.passthrough.constEnd(); ++it) {
         // A PASSTHROUGH map: the user's own image, bound directly. It is
         // already an asset — name it.

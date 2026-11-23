@@ -616,15 +616,16 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
         bool read = true;
         const bool holds = db->isAssetPinnedBy(projectGuid, guid, &read);
         if (!read) return fail(QStringLiteral("whether this project holds the material could not be read - nothing was written"));
-        for (const QString &member : holds ? memberGuids(stored) : QStringList()) {
-            if (db->fetchAsset(member).guid.isEmpty()) continue;
-            const QString pinned = AssetCas::pinnedOid(conn, projectGuid, member, &read);
-            const QString latest = AssetCas::sourceOid(conn, member, &read);
-            const bool emptyPin = pinned.isEmpty() && latest.isEmpty() && db->isAssetPinnedBy(projectGuid, member, &read);
-            if (!read)
-                return fail(QStringLiteral("the pin of its member '%1' could not be read - nothing was written").arg(member));
-            if (!pinned.isEmpty() || emptyPin) continue;
-            if (!AssetCas::writePin(conn, projectGuid, member, latest))
+        // EVERY MEMBER's ROW, THIS PROJECT's PIN AND ITS LIBRARY VERSION IN ONE STATEMENT (the second confirm's W5): it
+        // runs on every 1.5-s autosave - three reads a member was one statement a member more than the loop needed.
+        const QStringList members = holds ? memberGuids(stored) : QStringList();
+        const QHash<QString, AssetCas::MemberPin> pins = AssetCas::memberPins(conn, projectGuid, members, &read);
+        if (!read) return fail(QStringLiteral("the pins of its members could not be read - nothing was written"));
+        for (const QString &member : members) {
+            const auto it = pins.constFind(member);
+            if (it == pins.constEnd()) continue;   // a guid the catalog does not know names nothing to pin
+            if (!it->pin.isEmpty() || (it->held && it->source.isEmpty())) continue;
+            if (!AssetCas::writePin(conn, projectGuid, member, it->source))
                 return fail(QStringLiteral("its member '%1' could not be pinned - nothing was written").arg(member));
         }
     }
