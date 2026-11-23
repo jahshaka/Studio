@@ -60,7 +60,8 @@ _SCRIPTFAIL = re.compile(r"([^/\s]+\.js:\d+: Error: .*)$")
 OUTPUT_CAP = 262144
 # THE ROW's LAST LINES IN ITS RECORD (the errors audit 2026-11-23 B7; CORRECTIONS 96: "show me the number" of a PASSING row needed a
 # re-run - its log was a red's only): every record carries `tail`, the row's last TAIL_LINES lines (each cut at 400 chars), green
-# or red, past OUTPUT_CAP too
+# or red, past OUTPUT_CAP too. Its bound: 40 x 400 = 16,000 characters a record before JSON escaping (2.3-5.2 KB typical,
+# measured 2026-11-23 by the final read; its commit's "~4 KB at most" was wrong). Nothing keys on `tail`.
 TAIL_LINES = 40
 # THE LAW LINE (tests/support/lawline.h): `LAW <name> <value> <unit> [<op> <bar>]` - collected past OUTPUT_CAP too
 _LAW = re.compile(r"^\s*LAW\s+([A-Za-z0-9_.:+\-]+)\s+(\S+)\s+(\S+)(?:\s+(<=|<|>=|>|==)\s+(\S+))?\s*$")
