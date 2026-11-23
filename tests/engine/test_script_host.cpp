@@ -230,6 +230,19 @@ int main()
     check(reg.call("test.add", {Value(3.0), more(4)}).value == Value(7), "an integral number (3.0) is an integer");
     check(failedWith(reg.call("test.add", {Value(3.7)}), "a must be an integer"),
           "3.7 for an integer FAILS (never truncated to 3)");
+    // ONE NUMBER TEXT (NOQT-CORE-1 stage 3, option B: the JSON codec writes an integral Number as Qt does, "1", so a
+    // Number's KIND no longer survives a round trip through text): the law that replaces it is the registry's - a
+    // script's 1 and 1.0 reach a Number parameter ALIKE (an Int given where a Number is declared conforms, the command
+    // sees a Number), and a fractional Number given where an Int is declared is refused by name (the 3.7 case above).
+    Registry numberReg;
+    numberReg.add({"test.numberKind", {Access::Reads, {arg("x", Kind::Number)}, Kind::String}, "the kind the command sees"},
+                [](Call &c) { return Value(std::string(kindName(c[0].kind())) + " " + std::to_string(c[0].asNumber())); });
+    const Result asInt = numberReg.call("test.numberKind", {Value(2)}), asNumber = numberReg.call("test.numberKind", {Value(2.0)});
+    check(asInt.status == Status::Ok && asNumber.status == Status::Ok && asInt.value == asNumber.value &&
+              asInt.value == Value("number 2.000000"),
+          "an Int (2) and a Number (2.0) given for a Number parameter reach the command ALIKE, as a Number (" +
+              (asInt.value.kind() == Kind::String ? asInt.value.asString() : std::string("?")) + " / " +
+              (asNumber.value.kind() == Kind::String ? asNumber.value.asString() : std::string("?")) + ")");
     check(failedWith(reg.call("test.add", {Value(1), more(2), Value(3)}), "3 arguments given, it takes 2"),
           "a surplus argument FAILS");
     check(failedWith(reg.call("test.add", {Value("2")}), "a must be int"), "a string for an integer FAILS");

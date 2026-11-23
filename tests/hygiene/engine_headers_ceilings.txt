@@ -71,7 +71,7 @@ lines Published.h 394
 fanout Published.h 0
 lines RayQuery.h 330
 fanout RayQuery.h 1
-lines Script.h 548
+lines Script.h 499
 fanout Script.h 1
 lines ScriptJson.h 45
 fanout ScriptJson.h 0

@@ -9,8 +9,8 @@ the value type and the registry know nothing of JavaScript, and a second languag
      a call) is read past; a member call `foo.JS_NewObject(` or `x.js_free(`, a bare `js_free(`, and the same name in
      any source outside tests/ are not (LAB-SCRIPTS-1, the lead's rulings).
   N2 THE HOST's NEUTRAL FILES INCLUDE NOTHING BUT THE STANDARD LIBRARY AND THEMSELVES: jahshaka/engine/Script.h,
-     jahshaka/engine/ScriptJson.h and src/script/{registry.cpp, host.cpp, Language.h, json.cpp} include no Qt, Ogre or
-     JS-engine header.
+     jahshaka/engine/ScriptJson.h, src/script/{registry.cpp, host.cpp, Language.h, json.cpp} and the value they name,
+     irisgl/core/value.{h,cpp} (NOQT-CORE-1 stage 3), include no Qt, Ogre or JS-engine header.
   N3 jahengine LINKS THE ENGINE AND NO QT: its NEEDED list (`objdump -p`) names no Qt library and no IrisGL (the document
      library that carries Qt today); the JS engine and the engine are static inside it, and libIrisCore - the Qt-free core
      the engine links (NOQT-CORE-1), shared, one copy in a process - is the one library of ours it NEEDS.
@@ -76,7 +76,9 @@ NEUTRAL = ("irisgl/engine/include/jahshaka/engine/Script.h", "irisgl/engine/src/
            "irisgl/engine/src/script/host.cpp", "irisgl/engine/src/script/Language.h",
            "irisgl/engine/src/script/LanguageTable.inc",
            # the value in JSON (MCP-ON-HOST-1): std only, moved whole into the core library by NOQT-CORE-1
-           "irisgl/engine/include/jahshaka/engine/ScriptJson.h", "irisgl/engine/src/script/json.cpp")
+           "irisgl/engine/include/jahshaka/engine/ScriptJson.h", "irisgl/engine/src/script/json.cpp",
+           # the value itself, the core's (NOQT-CORE-1 stage 3: moved out of Script.h / registry.cpp)
+           "irisgl/core/value.h", "irisgl/core/value.cpp")
 FOREIGN_INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]\s*(Q[A-Za-z]|qt|Ogre|quickjs|[^>"]*/(Q[A-Za-z]|Ogre))', re.MULTILINE)
 
 
@@ -373,8 +375,8 @@ def main():
     bad = n1_bad(root)
     check(not bad, "N1 the JS engine is named only by irisgl/engine/src/script/js_*.cpp (%d others: %s)" % (len(bad), bad[:8]))
     bad = n2_bad(root)
-    check(not bad, "N2 Script.h, ScriptJson.h, registry.cpp, host.cpp, json.cpp, Language.h and LanguageTable.inc include "
-                   "no Qt, Ogre or JS-engine header (%s)" % bad[:8])
+    check(not bad, "N2 Script.h, ScriptJson.h, registry.cpp, host.cpp, json.cpp, Language.h, LanguageTable.inc and the core's "
+                   "value.{h,cpp} include no Qt, Ogre or JS-engine header (%s)" % bad[:8])
     bad = n4_bad(root)
     check(not bad, "N4 every language is one source file and one table line (%s)" % bad[:8])
     bad = n7_bad(root)
