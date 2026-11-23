@@ -119,10 +119,9 @@ int main()
     CHECK(!notObject.set("x", Value(1)) && !notObject.erase("x") && text(notObject) == "[1]",
           "set and erase on a value that is not an object answer false and change nothing");
     Value ab(Value::Object{}), ba(Value::Object{});
-    ab.set("a", Value(1)), ab.set("b", Value(2));
-    ba.set("b", Value(2)), ba.set("a", Value(1));
+    const bool setAll = ab.set("a", Value(1)) && ab.set("b", Value(2)) && ba.set("b", Value(2)) && ba.set("a", Value(1));
     std::string prettyAb, prettyBa;
-    CHECK(json::writePretty(ab, prettyAb, why) && json::writePretty(ba, prettyBa, why) && prettyAb == prettyBa &&
+    CHECK(setAll && json::writePretty(ab, prettyAb, why) && json::writePretty(ba, prettyBa, why) && prettyAb == prettyBa &&
               text(ab) != text(ba),
           "members set in two different orders write the SAME pretty bytes (sorted by name, the saved form); the compact "
           "text keeps each object's own order (" + text(ab) + " / " + text(ba) + ")");
@@ -150,9 +149,13 @@ int main()
           "an integral double past 2^63 round-trips: written " + text(Value(past63a)) + " and " + text(Value(past63b)) +
               ", read back the same double (" + why + ")");
     const Value pastInt64 = read("9223372036854775808", why);
-    CHECK(why.empty() && pastInt64.kind() == Kind::Number && pastInt64.asNumber() == 9223372036854775808.0 &&
+    const std::string pastWhy = why;
+    const Value belowInt64 = read("-9223372036854775809", why);
+    CHECK(pastWhy.empty() && why.empty() && pastInt64.kind() == Kind::Number && pastInt64.asNumber() == 9223372036854775808.0 &&
+              belowInt64.kind() == Kind::Number && belowInt64.asNumber() == -9223372036854775808.0 &&
               refused(std::string(400, '9'), "outside a double's range", why),
-          "an integer literal past int64 reads as the Number nearest it (2^63); one past a double's range is refused (" + why + ")");
+          "an integer literal past int64 either way reads as the Number nearest it (2^63; -9223372036854775809 -> -2^63); one "
+          "past a double's range is refused (" + why + ")");
     // THE TEXT's INTEGER (the audit's worth-a-look 1): an integral double in (2^53, 2^63] is written in its shortest digits and
     // reads back an Int holding THE TEXT's integer - equal to the double as a number, not the double's exact integer:
     // 2^60 = 1152921504606846976 is written "1152921504606847000", and reads back Int 1152921504606847000.
