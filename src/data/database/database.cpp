@@ -1020,7 +1020,7 @@ bool Database::createFavoritesTable()
     return executeAndCheckQuery(query, "CreateFavoritesTable");
 }
 
-void Database::createAllTables()
+void Database::createAllTables(bool stampGeneration)
 {
     DbTransaction tx(connection());
     // A FAILED PROBE CREATES NOTHING: the unit is not committed and says so.
@@ -1044,7 +1044,7 @@ void Database::createAllTables()
             "library's tables are as they were.");
         return;
     }
-    createCasTables();
+    createCasTables(stampGeneration);
     createIndexes();   // after every table, the CAS ones included: the list indexes asset_files too
     // A FAILED UNIT WRITES NOTHING (DbTransaction): a library whose tables did not commit is said by name.
     if (!tx.commit())
@@ -1052,7 +1052,7 @@ void Database::createAllTables()
             "Database::createAllTables: the schema transaction was NOT committed - the library's tables are as they were.");
 }
 
-void Database::createCasTables()
+void Database::createCasTables(bool stamp)
 {
     // Content-addressed store catalog (ASSET_PIPELINE_SPEC §3.1.3, phase 2):
     // files (oid → size/ext/refcount) + asset_files (guid → content mapping)
@@ -1078,6 +1078,11 @@ void Database::createCasTables()
     DbQuery projectAssetsTable(connection(), CasSchema::kProjectAssetsTable);
     executeAndCheckQuery(projectAssetsTable, "CreateProjectAssetsTable");
 
+    if (stamp) stampGeneration();
+}
+
+bool Database::stampGeneration()
+{
     int current = 0;
     {
         db::Statement versionQuery(connection(), "PRAGMA user_version");
@@ -1086,14 +1091,17 @@ void Database::createCasTables()
         if (!versionQuery.step(&error)) {
             JahLog::write(JahLog::legacy, JahLog::Level::Warning,
                 QString("the library's generation could not be read (%1) - it was not stamped").arg(dbqt::describe(error)));
-            return;
+            return false;
         }
         current = int(versionQuery.int64(0));
     }
-    if (current != CasSchema::kUserVersion) {
-        db::Error error;
-        connection().exec("PRAGMA user_version = " + std::to_string(CasSchema::kUserVersion), &error);
-    }
+    if (current == CasSchema::kUserVersion) return true;
+    db::Error error;
+    connection().exec("PRAGMA user_version = " + std::to_string(CasSchema::kUserVersion), &error);
+    if (error)
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QString("the library's generation could not be stamped (%1)").arg(dbqt::describe(error)));
+    return !error;
 }
 
 // THE SCHEMA CHECK (FORWARD-ONLY-1). A library whose tables are not exactly

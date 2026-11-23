@@ -44,11 +44,13 @@ jah_no_display(db.units)
 
 # db.failed_opens — A FAILED READ AT AN OPEN REFUSES THE OPEN BY NAME (NOQT-DATABASE-1 stage 2, the audit's findings
 # 6 and 7): the startup generation check never resets a library whose user_version could not be read, and a project
-# open never opens an empty world from a scene read that failed. The REAL checkAndWipe and readPlan on throwaway
-# files; the reset is a recorder and SceneReader's source collectors empty lists, in the test (its header says why).
+# open never opens an empty world from a scene read that failed. The REAL checkAndWipe, readPlan and the reset's
+# step after its rebuild (libraryresetkeep.cpp) on throwaway files; the reset, the store's sweep and SceneReader's
+# source collectors are recorders in the test (its header says why).
 # database.cpp's link closure with the session rows' (as tests/materialbundle). CPU, seconds.
 add_executable(test_failed_opens test_failed_opens.cpp
     ${CMAKE_SOURCE_DIR}/src/services/librarygeneration.cpp
+    ${CMAKE_SOURCE_DIR}/src/services/libraryresetkeep.cpp
     ${CMAKE_SOURCE_DIR}/src/services/openreads.cpp
     ${CMAKE_SOURCE_DIR}/src/services/assetstore.cpp
     ${CMAKE_SOURCE_DIR}/src/data/settingsmanager.cpp

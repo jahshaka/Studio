@@ -338,10 +338,18 @@ void ensureCasSchema(db::Connection &conn)
 
     // PRAGMA user_version arrives with the CAS (spec §3.1.3) — informational
     // at this phase; never lowered.
+    // A FAILED READ NEVER STAMPS (NOQT-DATABASE-1 stage 2, the sweep's h; as Database::createCasTables): a library
+    // whose generation is unknown is not made this build's.
     int current = 0;
     {
         db::Statement versionQuery(conn, "PRAGMA user_version");
-        if (versionQuery.step(&e)) current = int(versionQuery.int64(0));
+        db::Error read;
+        if (!versionQuery.step(&read)) {
+            qWarning("ensureCasSchema: the library's generation could not be read (%s) - it was not stamped",
+                     qUtf8Printable(dbqt::describe(read)));
+            return;
+        }
+        current = int(versionQuery.int64(0));
     }
     if (current != CasSchema::kUserVersion)
         conn.exec("PRAGMA user_version = " + std::to_string(CasSchema::kUserVersion), &e);

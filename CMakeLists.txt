@@ -394,6 +394,7 @@ set(SRCS
     src/services/assetmetadata.cpp
     src/services/libraryassetnode.cpp
     src/services/libraryreset.cpp
+    src/services/libraryresetkeep.cpp
     src/services/librarygeneration.cpp
     src/services/rigsignature.cpp
     src/services/animationfile.cpp

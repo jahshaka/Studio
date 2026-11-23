@@ -276,8 +276,11 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     // The second half is the one the old button left to a restart that never
     // happened — `wipeDatabase` DROPs, so a session that carried on ran on a
     // database with no tables in it at all.
+    // UNSTAMPED (the confirm's F7): the generation is stamped by the caller once the reset is whole
+    // (librarygeneration::checkAndWipe), so a reset that fails - a row the rebuild could not write - leaves it as it
+    // was and the next boot retries. (A Clear Database runs on a library that is already this build's.)
     db->wipeDatabase();
-    db->createAllTables();
+    db->createAllTables(/*stampGeneration*/ false);
 
     // ---- 4b. THE KEPT STORAGES, REBUILT FROM THEIR SIDECARS --------------
     // Never from the old tables (forward-only: nothing reads an old schema):
@@ -298,24 +301,10 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
         AssetMigration::RebuildOptions options;
         options.homes = keep.homes();
         options.dropDerived = keep.dropDerived;
-        const AssetMigration::RebuildReport rebuilt =
-            AssetMigration::rebuildCatalog(db->filePath(), storeRoot, options);
-        // ONLY AFTER A WHOLE REBUILD (sweepAllowedAfter): else the reset fails by name, the store as it is.
-        if (!sweepAllowedAfter(rebuilt.ok, rebuilt.failedRows, rebuilt.committed)) {
-            if (result.error.isEmpty())
-                result.error = QStringLiteral("the kept storages could not be rebuilt: %1 - the store was left as "
-                                              "it is (nothing collected)").arg(rebuilt.error);
-        } else {
-            result.kept.rows = rebuilt.assets;
-            result.kept.edges = rebuilt.edges;
-            result.kept.unreadable = rebuilt.unreadable;
-            result.kept.objects = AssetMigration::keptObjects(storeRoot, options).size();
-            const AssetGc::Report collected =
-                AssetGc::sweep(db->connection(), storeRoot, /*dryRun*/ false, /*force*/ true);
-            if (!collected.ok && result.error.isEmpty() && !collected.error.isEmpty())
-                result.error = QStringLiteral("the store could not be collected: %1")
-                                   .arg(collected.error);
-        }
+        // ONLY AFTER A WHOLE REBUILD: the decision and its action, keepAfterRebuild (its own file: db.failed_opens
+        // runs it for every rebuild answer).
+        keepAfterRebuild(db, storeRoot, AssetMigration::rebuildCatalog(db->filePath(), storeRoot, options), options,
+                         result);
     }
 
     // ---- 5. THE FRESH-INSTALL BOOTSTRAP ----------------------------------

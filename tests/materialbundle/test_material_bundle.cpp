@@ -786,14 +786,52 @@ int main(int argc, char **argv)
                            "BEGIN SELECT RAISE(ABORT, 'injected: this row is refused'); END", &e);
             }
             const AssetMigration::RebuildReport rebuilt = AssetMigration::rebuildCatalog(rebuildDb, rebuildRoot);
-            CHECK(rebuilt.assets == 1, QStringLiteral("14.1: CONTROL: the good row was rebuilt (%1)").arg(rebuilt.assets)
+            CHECK(rebuilt.assets == 1, QStringLiteral("14.1: CONTROL: the good row was written before the rollback (%1)").arg(rebuilt.assets)
                                            .toUtf8().constData());
             CHECK(!rebuilt.ok, QStringLiteral("14.1: a rebuild with a FAILED row is not ok (ok %1, error '%2')")
                                    .arg(rebuilt.ok).arg(rebuilt.error).toUtf8().constData());
             CHECK(rebuilt.failedRows == 1 && rebuilt.failedGuids == QStringList{ QStringLiteral("r1-poisoned") }
-                      && rebuilt.error.contains(QStringLiteral("r1-poisoned")) && rebuilt.committed,
+                      && rebuilt.error.contains(QStringLiteral("r1-poisoned")) && !rebuilt.committed,
                   QStringLiteral("14.1: ...the failed row is COUNTED and NAMED (%1: %2)").arg(rebuilt.failedRows)
                       .arg(rebuilt.failedGuids.join(QLatin1Char(','))).toUtf8().constData());
+            // 17.7 (the confirm's F7): A REBUILD WITH A FAILED ROW COMMITS NOTHING AND STAMPS NOTHING - the catalog as it
+            //      was before it (no row, the generation unread-as-written: 0), so a later boot reads it again.
+            {
+                db::Options o;
+                o.name = "rebuild-after";
+                db::Error e;
+                db::Connection after = db::Connection::open(rebuildDb.toStdString(), o, &e);
+                db::Statement rows(after, "SELECT count(*) FROM assets");
+                const int left = rows.step(&e) ? int(rows.int64(0)) : -1;
+                db::Statement version(after, "PRAGMA user_version");
+                const int stamped = version.step(&e) ? int(version.int64(0)) : -1;
+                CHECK(left == 0 && stamped == 0,
+                      QStringLiteral("17.7: a rebuild with a failed row leaves the catalog as it was: rows %1 (0), generation %2 (0)")
+                          .arg(left).arg(stamped).toUtf8().constData());
+            }
+            // 17.7h (the sweep's h): ensureCasSchema whose generation READ fails stamps nothing (the read of
+            //       `PRAGMA user_version` denied by the authorizer, its write not).
+            {
+                db::Error e;
+                conn.exec("PRAGMA user_version = 3", &e);
+                const auto generation = [&conn]() {
+                    db::Statement s(conn, "PRAGMA user_version");
+                    db::Error read;
+                    return s.step(&read) ? int(s.int64(0)) : -1;
+                };
+                sqlite3_set_authorizer(raw, [](void *, int action, const char *pragma, const char *value, const char *, const char *) {
+                    return action == SQLITE_PRAGMA && pragma && std::strcmp(pragma, "user_version") == 0 && !value
+                               ? SQLITE_DENY : SQLITE_OK;
+                }, nullptr);
+                AssetCas::ensureCasSchema(conn);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                const int after = generation();
+                AssetCas::ensureCasSchema(conn);
+                const int stampedAfter = generation();
+                CHECK(after == 3 && stampedAfter == CasSchema::kUserVersion,
+                      QStringLiteral("17.7h: a generation that could not be read is not stamped (%1, was 3); CONTROL: read, "
+                                     "it is (%2)").arg(after).arg(stampedAfter).toUtf8().constData());
+            }
         }
         // 15. THE LEAD's THREE MORE SITES (the reader's deepening). 15a: the material's BAKED-MAP REAP
         //     (materialmembers::reapExclusiveMembers) never deletes a map whose USERS could not be read - a TEMP VIEW

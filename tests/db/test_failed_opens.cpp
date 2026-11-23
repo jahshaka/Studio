@@ -21,13 +21,16 @@ For more information see the LICENSE file
 //      is REFUSED by name — never `found` false with no refusal, which opens an empty world the next
 //      save writes over the scene — beside a scene that reads (found) and a guid with no row ("no such
 //      scene": found false, no refusal, as before);
-//   3. the library reset's sweep after its rebuild (the audit's finding 1): libraryreset::sweepAllowedAfter's
-//      whole truth table - the kept store is collected only after a rebuild that is ok, failed no row and
-//      committed (the call site, libraryreset.cpp, is that one line).
+//   3. the library reset's step after its rebuild (the audit's finding 1): the REAL libraryreset::keepAfterRebuild
+//      for every rebuild answer - the kept store is collected only after a rebuild that is ok, failed no row and
+//      committed, and otherwise the reset fails with the rebuild's reason (what it DID, the sweep recorded);
+//   4. a reset that failed stamps nothing (the confirm's F7): the library keeps its generation, so the next boot
+//      retries; only a reset that answered ok is stamped this build's (the stamp read back from the file).
 //
 // THE LINK, test-side only: libraryreset::reset is a RECORDER here (the reset's own closure is the
-// whole import and seed machinery; what this row proves is the DECISION to call it), and SceneReader's
-// two source collectors answer empty lists (readPlan calls them only for a scene that was found).
+// whole import and seed machinery; what this row proves is the DECISION to call it), AssetGc::sweep and
+// AssetMigration::keptObjects are recorders (case 3), and SceneReader's two source collectors answer empty
+// lists (readPlan calls them only for a scene that was found).
 
 #include <QApplication>
 #include <QDir>
@@ -41,6 +44,8 @@ For more information see the LICENSE file
 #include "data/db/connection.h"
 #include "data/db/statement.h"
 #include "io/scenereader.h"
+#include "services/assetgc.h"
+#include "services/assetmigration.h"
 #include "services/librarygeneration.h"
 #include "services/libraryreset.h"
 #include "services/openreads.h"
@@ -49,6 +54,8 @@ namespace {
 
 int failures = 0;
 int gResets = 0;
+bool gResetRefuses = false;   // the recorder answers a reset refused for a row it could not rebuild (case 4)
+int gSweeps = 0;              // the store's sweeps the reset's step after its rebuild ran (case 3)
 
 void check(bool ok, const QString &what)
 {
@@ -92,10 +99,26 @@ Result reset(Database *, SettingsManager *, const QString &, const std::function
 {
     ++gResets;
     Result result;
-    result.ok = true;
+    result.ok = !gResetRefuses;
+    if (gResetRefuses)
+        result.error = QStringLiteral("the kept storages could not be rebuilt: 1 stored item(s) could not be rebuilt (f7)");
     return result;
 }
 }   // namespace libraryreset
+
+// THE STORE's TWO, for case 3: the reset's step after its rebuild calls these (the sweep is what it DID).
+namespace AssetGc {
+Report sweep(db::Connection &, const QString &, bool, bool)
+{
+    ++gSweeps;
+    Report report;
+    report.ok = true;
+    return report;
+}
+}   // namespace AssetGc
+namespace AssetMigration {
+QSet<QString> keptObjects(const QString &, const RebuildOptions &) { return {}; }
+}   // namespace AssetMigration
 
 QStringList SceneReader::collectMeshSources(const QJsonObject &) { return {}; }
 QStringList SceneReader::collectClipSources(const QJsonObject &) { return {}; }
@@ -198,22 +221,70 @@ int main(int argc, char **argv)
     }
 
     // =======================================================================
-    // 3. THE RESET's SWEEP AFTER ITS REBUILD (finding 1's decision, libraryreset::sweepAllowedAfter): its whole
-    //    truth table - the kept store is collected ONLY after a rebuild that is ok, failed no row and committed.
+    // 3. THE RESET's STEP AFTER ITS REBUILD (finding 1; the confirm's W3): the REAL step, libraryreset::
+    //    keepAfterRebuild, handed every rebuild answer, the sweep a recorder - what the reset DID for each: the kept
+    //    store is collected (and the kept counts taken) ONLY after a rebuild that is ok, failed no row and committed;
+    //    otherwise nothing is collected and the reset fails with the rebuild's own reason.
     // =======================================================================
     {
+        Database unopened;   // the recorder never touches its connection
         int allowed = 0;
         for (const bool ok : { false, true })
             for (const int failedRows : { 0, 1 })
                 for (const bool committed : { false, true }) {
-                    const bool sweep = libraryreset::sweepAllowedAfter(ok, failedRows, committed);
+                    AssetMigration::RebuildReport rebuilt;
+                    rebuilt.ok = ok;
+                    rebuilt.failedRows = failedRows;
+                    rebuilt.committed = committed;
+                    rebuilt.assets = 3;
+                    rebuilt.error = QStringLiteral("the rebuild's own reason");
+                    libraryreset::Result result;
+                    gSweeps = 0;
+                    libraryreset::keepAfterRebuild(&unopened, here, rebuilt, AssetMigration::RebuildOptions(), result);
                     const bool law = ok && failedRows == 0 && committed;
-                    allowed += sweep ? 1 : 0;
-                    check(sweep == law, QStringLiteral("3: rebuild ok %1, failed rows %2, committed %3: the sweep %4")
-                                            .arg(ok).arg(failedRows).arg(committed)
-                                            .arg(sweep ? QStringLiteral("RUNS") : QStringLiteral("is refused")));
+                    allowed += gSweeps;
+                    check(gSweeps == (law ? 1 : 0) && result.kept.rows == (law ? 3 : 0)
+                              && (law ? result.error.isEmpty() : result.error.contains(QStringLiteral("the rebuild's own reason"))),
+                          QStringLiteral("3: rebuild ok %1, failed rows %2, committed %3: swept %4 time(s), kept rows %5, "
+                                         "error '%6'").arg(ok).arg(failedRows).arg(committed).arg(gSweeps)
+                              .arg(result.kept.rows).arg(result.error));
                 }
-        check(allowed == 1, QStringLiteral("3: CONTROL: exactly one row of the table sweeps (%1)").arg(allowed));
+        check(allowed == 1, QStringLiteral("3: CONTROL: exactly one rebuild answer sweeps (%1)").arg(allowed));
+    }
+
+    // =======================================================================
+    // 4. A RESET THAT FAILED STAMPS NOTHING (the confirm's F7): the library keeps the generation it had, so the next
+    //    boot reads it as older and retries - and only a reset that answered ok is stamped this build's (the stamp
+    //    read back from the file, the reset's answer the recorder's).
+    // =======================================================================
+    {
+        const auto generationOf = [](const QString &path) {
+            db::Options o;
+            o.name = "failed-opens-generation";
+            db::Error e;
+            db::Connection c = db::Connection::open(path.toStdString(), o, &e);
+            db::Statement s(c, "PRAGMA user_version");
+            return s.step(&e) ? int(s.int64(0)) : -1;
+        };
+        const int older = librarygeneration::generation() - 1;
+        const QString library = QDir(here).filePath(QStringLiteral("failed_opens_f7.db"));
+        makeLibrary(library);
+        exec(library, "PRAGMA user_version = " + std::to_string(older));
+        gResets = 0;
+        gResetRefuses = true;
+        const librarygeneration::Result refused = librarygeneration::checkAndWipe(library, here, nullptr);
+        gResetRefuses = false;
+        check(gResets == 1 && refused.outcome == librarygeneration::Outcome::Failed && generationOf(library) == older,
+              QStringLiteral("4: a reset REFUSED for a row it could not rebuild stamps nothing (resets %1, outcome %2, "
+                             "generation %3, was %4)").arg(gResets).arg(int(refused.outcome)).arg(generationOf(library)).arg(older));
+        gResets = 0;
+        const librarygeneration::Result wiped = librarygeneration::checkAndWipe(library, here, nullptr);
+        check(gResets == 1 && wiped.outcome == librarygeneration::Outcome::Wiped
+                  && generationOf(library) == librarygeneration::generation(),
+              QStringLiteral("4: a reset that answered ok IS stamped this build's (resets %1, outcome %2, generation %3, "
+                             "this build %4)").arg(gResets).arg(int(wiped.outcome)).arg(generationOf(library))
+                  .arg(librarygeneration::generation()));
+        removeLibrary(library);
     }
 
     std::printf(failures ? "\n%d FAILURES\n" : "\nall failed-open assertions passed\n", failures);

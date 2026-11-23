@@ -60,6 +60,7 @@ For more information see the LICENSE file
 #include <functional>
 
 #include "data/assethomekind.h"
+#include "services/assetmigration.h"
 
 class Database;
 class SettingsManager;
@@ -134,6 +135,13 @@ inline bool sweepAllowedAfter(bool rebuildOk, int failedRows, bool committed)
     return rebuildOk && failedRows == 0 && committed;
 }
 
+/// THE RESET's STEP AFTER ITS REBUILD (libraryresetkeep.cpp): a whole rebuild (sweepAllowedAfter) takes the kept
+/// counts into `result` and collects the store (AssetGc::sweep, forced); any other answer collects NOTHING and fails
+/// the reset with the rebuild's own reason. In a file of its own so db.failed_opens runs the real step, the sweep a
+/// recorder, for every rebuild answer.
+void keepAfterRebuild(Database *db, const QString &storeRoot, const AssetMigration::RebuildReport &rebuilt,
+                      const AssetMigration::RebuildOptions &options, Result &result);
+
 /// Why a reset must not run right now, or empty when it may.
 ///
 /// THE THREE WRITERS THAT OWN BYTES WE ARE ABOUT TO DELETE: a threaded import
@@ -175,7 +183,9 @@ QString refusalReason(const PreviewService *previews = nullptr);
 ///      it belongs to somebody else;
 ///   4. drops the tables (`Database::wipeDatabase`) and CREATES THEM AGAIN,
 ///      so the NEXT BOOT's schema check (Database::schemaMatchesFresh) finds
-///      exactly this build's tables;
+///      exactly this build's tables - UNSTAMPED: the generation is the
+///      caller's to stamp once the reset is whole (checkAndWipe), so a reset
+///      that fails is retried at the next boot;
 ///   5. re-runs the fresh-install bootstrap: the store's identity
 ///      (`AssetStoreService::bootstrapFromSettings`, which writes a new
 ///      store.json) and the first-run preset seed under the same rule a

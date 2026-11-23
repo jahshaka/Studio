@@ -350,7 +350,13 @@ public:
     bool createAuthorTable();
     bool createFoldersTable();
     bool createFavoritesTable();
-    void createAllTables();
+    /// `stampGeneration` false (the library reset's step 4, the confirm's F7): the tables only - the generation is
+    /// stamped by the caller once the reset is whole (librarygeneration::checkAndWipe), so a reset that fails leaves
+    /// the library's generation as it was and the next boot retries.
+    void createAllTables(bool stampGeneration = true);
+    /// `PRAGMA user_version` = this build's generation (CasSchema::kUserVersion), never on a version read that
+    /// failed; false, said in the log, when it could not be read or written.
+    bool stampGeneration();
     void createIndexes();
     /// The index statements createIndexes ran over an EXISTING library's rows on the opening thread (its DEFECT
     /// case; 0 when the boot's gate prepared them): the boot's result (services/bootreport.h `indexAtOpen`).
@@ -363,7 +369,7 @@ public:
     /// assets), so the boot runs it on a worker before any window exists, the splash saying so.
     static int indexStatementsToRun(const QString &path);
     static bool prepareIndexes(const QString &path, QString *error);
-    void createCasTables();
+    void createCasTables(bool stampGeneration = true);
     /// True when every table this build creates exists here with exactly the
     /// same columns. False = a library from an older build (FORWARD-ONLY-1:
     /// no migrations; main() wipes it through libraryreset).
