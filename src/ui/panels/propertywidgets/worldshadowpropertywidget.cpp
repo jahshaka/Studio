@@ -376,7 +376,7 @@ void WorldShadowPropertyWidget::onQualityChanged(int row)
     // which is why this is a combo and not a slider.
     panelundo::runWorldModeEdit(services, scene, tr("Shadow Quality"),
         [this, resolution]() {
-            worldmodes::setRowValue(scene, QStringLiteral("shadowResolution"), resolution);
+            worldmodes::setRowValue(scene, (QStringLiteral("shadowResolution")).toStdString(), resolution);
         },
         [this]() {
             refreshRows();

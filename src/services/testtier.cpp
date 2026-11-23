@@ -25,7 +25,7 @@ namespace worldmodes {
 void applyTestTier(const iris::ScenePtr &scene)
 {
     if (!scene || !testtier::active()) return;
-    const Mode m = modeFromName(testtier::name());
+    const Mode m = modeFromName(testtier::name().toStdString());
     // A PINNED ROW STAYS (below) — setMode included. setMode skips every pinned World row, but
     // it drops a giMode pin (a World Mode pick resets the technique — WORLD-MODE-1's identity),
     // and its `photon` row writes through setPhoton, whose OFF drops a giMode pin too (the
@@ -56,7 +56,7 @@ void applyTestTier(const iris::ScenePtr &scene)
     kept.tier = scene->giTier;
     kept.bounces = scene->giBounces;
     if (photonPinned) {
-        for (const QString &id : photonRowIds())
+        for (const QString &id : qtstd::toQStringList(photonRowIds()))
             if (const iris::Value *pin = scene->worldOverrides.find(id.toStdString())) kept.pins.insert(id, qtstd::toQJsonValue(*pin));
     }
     setMode(scene, m);
@@ -104,7 +104,7 @@ void applyTestTier(const iris::ScenePtr &scene)
     for (const Feature &f : kFeatures) {
         const QString rowId = QLatin1String(f.rowId);
         if (testtier::needs(QLatin1String(f.need)) || scene->worldOverrides.find(rowId.toStdString())) continue;
-        setRowValue(scene, rowId, f.off, false);
+        setRowValue(scene, rowId.toStdString(), f.off, false);
     }
 }
 

@@ -165,9 +165,9 @@ int main(int argc, char **argv)
         CHECK(jumpRow && jumpRow->kind() == iris::Kind::Array && jumpRow->asArray().size() == 1
                   && jumpRow->asArray()[0].asString() == std::to_string(int(Qt::Key_Return)),
               "a button key is stored as its key code's number");
-        // A row the document cannot decode (a NAME, as rows were written before) leaves the action as it was.
+        // A row the document cannot decode (corrupt, foreign) never unbinds the action: it keeps what it has.
         InputMap named;
-        (void)named.fromValue(iris::Value(iris::Value::Object{ { "Jump", iris::Value(iris::Value::Array{ iris::Value("Return") }) } }));
+        (void)named.fromValue(iris::Value(iris::Value::Object{ { "Jump", iris::Value(iris::Value::Array{ iris::Value("NotAKey") }) } }));
         CHECK(named.bindings(InputAction::Jump).size() == 1 && named.bindings(InputAction::Jump)[0].key == Qt::Key_Space,
               "an action whose every row fails to decode keeps its binding (Space), never unbinds");
 

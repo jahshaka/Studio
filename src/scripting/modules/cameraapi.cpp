@@ -874,9 +874,9 @@ QVariant worldPostValue(const iris::ScenePtr &scene, const QString &key)
     // tiered — so the world's value for it is the scene's own looks array.
     if (key == QLatin1String("looks"))
         return qtstd::toVariant(iris::normalizeLookStack(scene->looks));
-    if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key))
+    if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key.toStdString()))
         return p->get ? QVariant(p->get(scene)) : QVariant();
-    if (const worldmodes::Row *r = worldmodes::row(key))
+    if (const worldmodes::Row *r = worldmodes::row(key.toStdString()))
         return QVariant(worldmodes::resolved(scene, *r));
     return QVariant();
 }
@@ -886,9 +886,9 @@ QVariant worldPostValue(const iris::ScenePtr &scene, const QString &key)
 /// be AUTHORED so files are forward-compatible, but the verb says so.
 bool postKeyAvailable(const QString &key)
 {
-    const worldmodes::ParamRow *p = worldmodes::postFxParam(key);
-    const QString rowId = p ? p->ownerRowId : key;
-    const worldmodes::Row *r = worldmodes::row(rowId);
+    const worldmodes::ParamRow *p = worldmodes::postFxParam(key.toStdString());
+    const QString rowId = p ? QString::fromStdString(p->ownerRowId) : key;
+    const worldmodes::Row *r = worldmodes::row(rowId.toStdString());
     return r ? r->available : true;
 }
 

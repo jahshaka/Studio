@@ -3542,6 +3542,10 @@ static int roundTripRow()
         const iris::MeshBake::Clip self = iris::MeshBake::deserializeClip(iris::MeshBake::serializeClip(bad), cfp);
         CHECK_LOUD(!self.valid && self.refusal == "a node's parent index is out of range",
                    "a node that is its own parent is REFUSED by name");
+        bad.info.nodeParents.last() = -2;   // below the root's -1
+        const iris::MeshBake::Clip below = iris::MeshBake::deserializeClip(iris::MeshBake::serializeClip(bad), cfp);
+        CHECK_LOUD(!below.valid && below.refusal == "a node's parent index is out of range",
+                   "a node whose parent index is below -1 (the root's) is REFUSED by name");
     }
 
     std::printf("info: %d check(s)\n", checks);

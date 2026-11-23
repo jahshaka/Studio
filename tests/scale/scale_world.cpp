@@ -742,7 +742,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
                 "first sync+frame %.0f ms, settle %d frames (atRest %d) | cascades %zu, rss %.0f MB\n",
                 spec.instances, meshes.size(), spec.spacing, spec.spacing * float(side - 1), spec.groundSize,
                 double(env.camera->farClip), spec.lights, spec.lightGrid,
-                qPrintable(worldmodes::photonTierName(spec.tier)),
+                worldmodes::photonTierName(spec.tier).c_str(),
                 spec.materials ? qPrintable(QString::number(spec.materials)) : "per-instance", spec.textures,
                 world.bakeOrReadMs, world.meshes.empty() || world.meshes[0].fromCache ? "cache" : "baked",
                 world.documentMs, world.firstSyncMs, f, int(gi.giAtRest), gi.cascades.size(),

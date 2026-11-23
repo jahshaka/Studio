@@ -249,14 +249,14 @@ QVector<sceneprops::Field> buildFields()
     // Generated from the registry, so a new parameter is undoable the day it
     // is declared — and clamped by the registry's own range on the way back in.
     for (const worldmodes::ParamRow &p : worldmodes::postFxParams()) {
-        const QString id = p.id;
+        const QString id = QString::fromStdString(p.id);
         f.append({ QStringLiteral("postFx.") + id,
                    [id](const ScenePtr &s) -> QVariant {
-                       const worldmodes::ParamRow *r = worldmodes::postFxParam(id);
+                       const worldmodes::ParamRow *r = worldmodes::postFxParam(id.toStdString());
                        return (r && r->get) ? QVariant(r->get(s)) : QVariant();
                    },
                    [id](const ScenePtr &s, const QVariant &v) {
-                       const worldmodes::ParamRow *r = worldmodes::postFxParam(id);
+                       const worldmodes::ParamRow *r = worldmodes::postFxParam(id.toStdString());
                        if (r && r->set) r->set(s, qBound(r->minValue, v.toDouble(), r->maxValue));
                    } });
     }

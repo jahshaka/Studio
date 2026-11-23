@@ -25,7 +25,7 @@ WorldModeCommand::Snapshot WorldModeCommand::capture(const iris::ScenePtr &scene
     snap.cascadeSet = scene->giCascadeSet;
     snap.cascadeInstanceCap = scene->giCascadeInstanceCap;
     for (const worldmodes::Row &r : worldmodes::rows())
-        if (r.get) snap.rowValues.insert(r.id, r.get(scene));
+        if (r.get) snap.rowValues.insert(QString::fromStdString(r.id), r.get(scene));
     return snap;
 }
 
@@ -52,7 +52,7 @@ void WorldModeCommand::apply(const Snapshot &snap)
     // things that know how a row reaches its backing field.
     for (const worldmodes::Row &r : worldmodes::rows()) {
         if (!r.set) continue;
-        const auto it = snap.rowValues.constFind(r.id);
+        const auto it = snap.rowValues.constFind(QString::fromStdString(r.id));
         if (it != snap.rowValues.constEnd()) r.set(scene, it.value());
     }
     // Then the bookkeeping, verbatim. Restoring the pin map through

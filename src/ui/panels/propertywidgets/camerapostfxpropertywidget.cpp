@@ -45,16 +45,16 @@ iris::ScenePtr sceneOf(const std::shared_ptr<iris::CameraNode> &camera)
 /// forward-compatible — but the panel must not pretend it does anything.
 bool rowAvailable(const QString &key)
 {
-    const worldmodes::ParamRow *p = worldmodes::postFxParam(key);
-    const QString rowId = p ? p->ownerRowId : key;
-    const worldmodes::Row *r = worldmodes::row(rowId);
+    const worldmodes::ParamRow *p = worldmodes::postFxParam(key.toStdString());
+    const QString rowId = p ? QString::fromStdString(p->ownerRowId) : key;
+    const worldmodes::Row *r = worldmodes::row(rowId.toStdString());
     return r ? r->available : true;
 }
 
 QString labelFor(const QString &key)
 {
-    if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key)) return p->label;
-    if (const worldmodes::Row *r = worldmodes::row(key)) return r->label;
+    if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key.toStdString())) return QString::fromStdString(p->label);
+    if (const worldmodes::Row *r = worldmodes::row(key.toStdString())) return QString::fromStdString(r->label);
     // The looks stack has no World Mode row and never will: looks are an art
     // choice, not a scalability tier (POST_LOOKS_SPEC §7 R10).
     if (key == QLatin1String("looks")) return QStringLiteral("Looks");
@@ -63,8 +63,8 @@ QString labelFor(const QString &key)
 
 QString tooltipFor(const QString &key, bool sceneTracesRays)
 {
-    if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key)) return p->doc;
-    if (const worldmodes::Row *r = worldmodes::row(key)) return worldmodes::rowCost(*r, sceneTracesRays);
+    if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key.toStdString())) return QString::fromStdString(p->doc);
+    if (const worldmodes::Row *r = worldmodes::row(key.toStdString())) return QString::fromStdString(worldmodes::rowCost(*r, sceneTracesRays));
     return QString();
 }
 
@@ -109,14 +109,14 @@ QString CameraPostFxPropertyWidget::inheritedText(const QString &key) const
 {
     const iris::ScenePtr scene = sceneOf(camera);
     if (!scene) return QStringLiteral("world");
-    if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key))
+    if (const worldmodes::ParamRow *p = worldmodes::postFxParam(key.toStdString()))
         return p->get ? QString::number(p->get(scene), 'f', p->decimals) : QStringLiteral("world");
-    if (const worldmodes::Row *r = worldmodes::row(key)) {
+    if (const worldmodes::Row *r = worldmodes::row(key.toStdString())) {
         const int v = worldmodes::resolved(scene, *r);
         if (r->type == worldmodes::RowType::Bool) return v ? QStringLiteral("on") : QStringLiteral("off");
-        const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, sceneTracesRays());
+        const std::vector<worldmodes::ComboItem> items = worldmodes::comboItems(*r, scene, sceneTracesRays());
         const int i = worldmodes::comboIndexOf(items, v);
-        if (i >= 0) return items[i].label;
+        if (i >= 0) return QString::fromStdString(items[i].label);
         return QString::number(v);
     }
     return QStringLiteral("world");
@@ -325,7 +325,7 @@ void CameraPostFxPropertyWidget::rebuild()
                                          [this, key](const QVariant &on) -> QVariant {
                                              if (!on.toBool()) return QVariant();
                                              const worldmodes::ParamRow *p =
-                                                 worldmodes::postFxParam(key);
+                                                 worldmodes::postFxParam(key.toStdString());
                                              const iris::ScenePtr scene = sceneOf(camera);
                                              return QVariant((p && p->get && scene) ? p->get(scene)
                                                                                     : 0.0);
@@ -335,7 +335,7 @@ void CameraPostFxPropertyWidget::rebuild()
                 rowundo::bind(box, b);
             }
 
-            const worldmodes::ParamRow *p = worldmodes::postFxParam(key);
+            const worldmodes::ParamRow *p = worldmodes::postFxParam(key.toStdString());
             const double minV = p ? p->minValue : 0.0, maxV = p ? p->maxValue : 1.0;
             const double step = p ? p->perPixelStep : 0.02;
             const int decimals = p ? p->decimals : 2;
@@ -374,12 +374,12 @@ void CameraPostFxPropertyWidget::rebuild()
                 "A camera can turn SMAA off, but the PRESET (and MSAA) stay world-level: "
                 "both are shader recompiles, so a per-camera value would hitch on every cut."));
         } else {
-            const worldmodes::Row *r = worldmodes::row(key);
+            const worldmodes::Row *r = worldmodes::row(key.toStdString());
             int current = 0;
             if (r) {
-                const QVector<worldmodes::ComboItem> items =
+                const std::vector<worldmodes::ComboItem> items =
                     worldmodes::comboItems(*r, sceneOf(camera), sceneTracesRays());
-                for (const worldmodes::ComboItem &item : items) combo->addItem(item.label, item.value);
+                for (const worldmodes::ComboItem &item : items) combo->addItem(QString::fromStdString(item.label), item.value);
                 if (own.isValid()) {
                     const int i = worldmodes::comboIndexOf(items, own.toInt());
                     if (i >= 0) current = i + 1;

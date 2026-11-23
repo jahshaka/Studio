@@ -10,6 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/worldmodespropertywidget.h"
+#include "app/qtstd.h"
 #include "ui/panels/propertywidgets/panelrefresh.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -77,7 +78,7 @@ void WorldModesPropertyWidget::build()
     // picking the mode the scene was on is an index change from Custom, and
     // currentIndexChanged fires the reset.
     modeSelector = this->addComboBox("World Mode");
-    for (const QString &n : worldmodes::modeNames()) modeSelector->addItem(titled(n));
+    for (const QString &n : qtstd::toQStringList(worldmodes::modeNames())) modeSelector->addItem(titled(n));
     PropertyRows::identify(modeSelector, QStringLiteral("world.mode"),
                            { QStringLiteral("quality"), QStringLiteral("tier"),
                              QStringLiteral("scalability") });
@@ -109,24 +110,24 @@ void WorldModesPropertyWidget::build()
             // Declared, not yet implemented (POST_CHAIN_SPEC §9.2). Shown so the
             // tier table is honest about what a mode WILL mean, disabled so it
             // cannot be set to something the renderer would ignore.
-            auto *lbl = this->addLabel(r.label, QStringLiteral("not available yet"));
-            if (lbl) lbl->setToolTip(worldmodes::rowCost(r, rays));
+            auto *lbl = this->addLabel(QString::fromStdString(r.label), QStringLiteral("not available yet"));
+            if (lbl) lbl->setToolTip(QString::fromStdString(worldmodes::rowCost(r, rays)));
             identifyRow(lbl, r);
             rowControls.append(nullptr);
             continue;
         }
 
         if (r.type == worldmodes::RowType::Bool) {
-            auto *box = this->addCheckBox(r.label, false);
-            box->setToolTip(worldmodes::rowCost(r, rays));
+            auto *box = this->addCheckBox(QString::fromStdString(r.label), false);
+            box->setToolTip(QString::fromStdString(worldmodes::rowCost(r, rays)));
             identifyRow(box, r);
             const int index = i;
             connect(box, &CheckBoxWidget::valueChanged, this, [this, index](bool on) {
                 const auto &table = worldmodes::rows();
                 if (loading || !scene || index >= table.size()) return;
-                const QString id = table[index].id;
+                const QString id = QString::fromStdString(table[index].id);
                 runUndoable(tr("Set %1").arg(table[index].label),
-                            [this, id, on]() { worldmodes::setRowValue(scene, id, on ? 1 : 0); });
+                            [this, id, on]() { worldmodes::setRowValue(scene, id.toStdString(), on ? 1 : 0); });
             });
             rowControls.append(box);
             continue;
@@ -134,17 +135,17 @@ void WorldModesPropertyWidget::build()
 
         // Enum and Int rows both present as a combo: every Int row we have is a
         // small budget (0..8 planes), and a combo makes the tier values legible.
-        auto *combo = this->addComboBox(r.label);
+        auto *combo = this->addComboBox(QString::fromStdString(r.label));
         if (r.type == worldmodes::RowType::Enum) {
-            const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
+            const std::vector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
             for (int i = 0; i < items.size(); ++i) {
-                combo->addItem(items[i].label, items[i].value);
+                combo->addItem(QString::fromStdString(items[i].label), items[i].value);
             }
         } else {
             for (int v = r.minValue; v <= r.maxValue; ++v)
                 combo->addItem(QString::number(v), v);
         }
-        combo->setToolTip(worldmodes::rowCost(r, rays));
+        combo->setToolTip(QString::fromStdString(worldmodes::rowCost(r, rays)));
         identifyRow(combo, r);
         connect(combo, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
                 this, &WorldModesPropertyWidget::onRowChanged);
@@ -172,7 +173,7 @@ void WorldModesPropertyWidget::build()
 void WorldModesPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row &r)
 {
     if (!row) return;
-    QStringList keywords{ r.group };
+    QStringList keywords{ QString::fromStdString(r.group) };
     // CURATED SYNONYMS (PROPERTY_FILTER_SPEC D5), beside the row, deleted with
     // it: the short names people actually type for rows whose label spells the
     // thing out in full.
@@ -194,7 +195,7 @@ void WorldModesPropertyWidget::identifyRow(QWidget *row, const worldmodes::Row &
                  << QStringLiteral("center weighted");
     else if (r.id == QLatin1String("photon"))
         keywords << QStringLiteral("gi") << QStringLiteral("global illumination");
-    PropertyRows::identify(row, QStringLiteral("world.override:") + r.id, keywords);
+    PropertyRows::identify(row, QStringLiteral("world.override:") + QString::fromStdString(r.id), keywords);
 }
 
 void WorldModesPropertyWidget::refreshRows()
@@ -204,7 +205,7 @@ void WorldModesPropertyWidget::refreshRows()
 
     // The HONEST mode (WORLD-MODE-1): Custom while Photon has left the picked tier.
     const worldmodes::Mode currentMode = worldmodes::mode(scene);
-    const QStringList names = worldmodes::modeNames();
+    const QStringList names = qtstd::toQStringList(worldmodes::modeNames());
     if (QComboBox *box = modeSelector->getWidget()) {
         const QSignalBlocker quiet(box);
         if (currentMode == worldmodes::Mode::Custom) {
@@ -224,12 +225,12 @@ void WorldModesPropertyWidget::refreshRows()
         const worldmodes::Row &r = rows[i];
         QWidget *control = rowControls[i];
         if (!control) continue;
-        control->setToolTip(worldmodes::rowCost(r, rays));
+        control->setToolTip(QString::fromStdString(worldmodes::rowCost(r, rays)));
         const int value = worldmodes::resolved(scene, r);
         const bool pinned = worldmodes::source(scene, r) == QLatin1String("override");
         // A pinned row says so in its label: without the marker "why did Epic
         // not change my MSAA" is unanswerable from the panel.
-        const QString label = pinned ? r.label + QStringLiteral(" *") : r.label;
+        const QString label = QString::fromStdString(pinned ? r.label + " *" : r.label);
 
         if (auto *box = qobject_cast<CheckBoxWidget *>(control)) {
             box->setLabel(label);
@@ -241,10 +242,10 @@ void WorldModesPropertyWidget::refreshRows()
                 // The OFFERED entries follow the scene on this machine (the SSR
                 // row at a ray tier: "Off" and a disabled "Traced"), so they are
                 // re-listed, not re-labelled.
-                const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
+                const std::vector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, rays);
                 combo->clear();
                 for (int i = 0; i < items.size(); ++i) {
-                    combo->addItem(items[i].label, items[i].value);
+                    combo->addItem(QString::fromStdString(items[i].label), items[i].value);
                 }
                 const int index = worldmodes::comboIndexOf(items, value);
                 combo->setCurrentIndex(index >= 0 ? index : 0);
@@ -298,10 +299,10 @@ void WorldModesPropertyWidget::runUndoable(const QString &text,
 void WorldModesPropertyWidget::onModeChanged(int row)
 {
     if (!scene) return;
-    const QStringList names = worldmodes::modeNames();
+    const QStringList names = qtstd::toQStringList(worldmodes::modeNames());
     if (row < 0 || row >= names.size()) return;   // the "Custom" entry is not pickable
     bool ok = false;
-    const worldmodes::Mode m = worldmodes::modeFromName(names[row], &ok);
+    const worldmodes::Mode m = worldmodes::modeFromName(names[row].toStdString(), &ok);
     if (!ok) return;
     runUndoable(tr("World Mode: %1").arg(titled(names[row])),
                 [this, m]() { worldmodes::setMode(scene, m); });
@@ -323,7 +324,7 @@ void WorldModesPropertyWidget::onRowChanged(int)
         // THE ENTRY CHOSEN — the combo lists comboItems in order, so its index
         // is the entry's — through the one path the verbs take
         // (worldmodes::applyComboItem): the SSR row's Traced drops its pin.
-        const QVector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, sceneTracesRays());
+        const std::vector<worldmodes::ComboItem> items = worldmodes::comboItems(r, scene, sceneTracesRays());
         const int at = box->currentIndex();
         if (at < 0 || at >= items.size() || items[at].value != box->currentData().toInt()) return;
         const worldmodes::ComboItem item = items[at];
@@ -335,7 +336,7 @@ void WorldModesPropertyWidget::onRowChanged(int)
     bool ok = false;
     const int value = box->currentData().toInt(&ok);
     if (!ok) return;
-    const QString id = r.id;
+    const QString id = QString::fromStdString(r.id);
     runUndoable(tr("Set %1").arg(r.label),
-                [this, id, value]() { worldmodes::setRowValue(scene, id, value); });
+                [this, id, value]() { worldmodes::setRowValue(scene, id.toStdString(), value); });
 }

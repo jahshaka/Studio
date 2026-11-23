@@ -46,11 +46,11 @@ FogPropertyWidget::FogPropertyWidget()
     // the sky now makes.)
     for (const worldmodes::ParamRow &p : worldmodes::fogParams()) {
         ParamSlider ps;
-        ps.id = p.id;
-        ps.slider = this->addFloatValueSlider(p.label, float(p.minValue), float(p.maxValue));
+        ps.id = QString::fromStdString(p.id);
+        ps.slider = this->addFloatValueSlider(QString::fromStdString(p.label), float(p.minValue), float(p.maxValue));
         ps.slider->setDecimals(p.decimals);
-        ps.slider->setToolTip(p.doc);
-        rowundo::bind(ps.slider, rows(worldmodes::fogParamSceneKey(p), p.label));
+        ps.slider->setToolTip(QString::fromStdString(p.doc));
+        rowundo::bind(ps.slider, rows(QString::fromStdString(worldmodes::fogParamSceneKey(p)), QString::fromStdString(p.label)));
         paramSliders.append(ps);
     }
 
@@ -89,7 +89,7 @@ void FogPropertyWidget::refreshRows()
     loading = true;
     fogColor->setColorValue(iris::toQColor(scene->fogColor));
     for (const ParamSlider &ps : paramSliders) {
-        const worldmodes::ParamRow *p = worldmodes::fogParam(ps.id);
+        const worldmodes::ParamRow *p = worldmodes::fogParam(ps.id.toStdString());
         if (p && ps.slider) ps.slider->setValue(float(p->get(scene)));
     }
     fogEnabled->setValue(scene->fogEnabled);
@@ -105,7 +105,7 @@ void FogPropertyWidget::applyEnabledStates()
     // the realistic sky, whose own scattering colours the fog.
     fogColor->setEnabled(scene->fogEnabled && worldmodes::fogColourAuthored(scene));
     for (const ParamSlider &ps : paramSliders) {
-        const worldmodes::ParamRow *p = worldmodes::fogParam(ps.id);
+        const worldmodes::ParamRow *p = worldmodes::fogParam(ps.id.toStdString());
         if (p && ps.slider) ps.slider->setEnabled(p->enabled ? p->enabled(scene) : true);
     }
 }

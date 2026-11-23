@@ -23,11 +23,11 @@ failures=0
 
 # 1. THE READER drops the key on the line after it reads the map.
 if grep -A2 'scene->worldOverrides = qtstd::fromQJsonObject(sceneObj.value("worldOverrides").toObject());' src/io/scenereader.cpp \
-       | grep -q 'scene->worldOverrides.erase(worldmodes::photonRowId().toStdString());'; then
+       | grep -q 'scene->worldOverrides.erase(worldmodes::photonRowId());'; then
     echo "source.photon_never_pinned: ok — the reader deletes a 'photon' pin on read"
 else
     echo "source.photon_never_pinned: FAIL — src/io/scenereader.cpp reads worldOverrides without"
-    echo "    deleting the 'photon' key (scene->worldOverrides.erase(worldmodes::photonRowId().toStdString()))"
+    echo "    deleting the 'photon' key (scene->worldOverrides.erase(worldmodes::photonRowId()))"
     failures=1
 fi
 
@@ -37,8 +37,8 @@ setter_report=$(python3 - irisgl/document/scenegraph/worldmodes.cpp <<'PYEOF'
 import re, sys
 src = open(sys.argv[1]).read()
 bad = []
-for sig in (r"bool setRowValue\(const iris::ScenePtr &scene, const QString &id",
-            r"void pinRowValue\(const iris::ScenePtr &scene, const QString &id"):
+for sig in (r"bool setRowValue\(const iris::ScenePtr &scene, const std::string &id",
+            r"void pinRowValue\(const iris::ScenePtr &scene, const std::string &id"):
     m = re.search(r"^" + sig + r"[^)]*\)\s*\{", src, re.M)
     if not m:
         bad.append("no definition matching /%s/" % sig); continue

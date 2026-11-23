@@ -13,6 +13,7 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/panelrefresh.h"
 #include "ui/panels/propertyrows.h"
 #include "ui/panels/propertywidgets/worldgipropertywidget.h"
+#include "app/qtstd.h"
 #include "services/editgate.h"
 
 #include "irisgl/document/scenegraph/scene.h"
@@ -119,7 +120,7 @@ void WorldGiPropertyWidget::rebuild()
 
     const bool on = worldmodes::photonEnabled(scene);
     const worldmodes::PhotonTier tier = worldmodes::photonTier(scene);
-    const QStringList deviations = worldmodes::photonDeviations(scene);
+    const QStringList deviations = qtstd::toQStringList(worldmodes::photonDeviations(scene));
 
     // ---- 1. THE SWITCH ------------------------------------------------------
     photonSwitch = this->addCheckBox(QStringLiteral("Photon"), on);
@@ -141,7 +142,7 @@ void WorldGiPropertyWidget::rebuild()
     tierSelector = this->addComboBox(QStringLiteral("Quality"));
     PropertyRows::identify(tierSelector, QStringLiteral("world.photonTier"),
                            { QStringLiteral("gi"), QStringLiteral("photon") });
-    const QStringList tierNames = worldmodes::photonTierNames();
+    const QStringList tierNames = qtstd::toQStringList(worldmodes::photonTierNames());
     tierSelector->addItem(QStringLiteral("Low"));
     tierSelector->addItem(QStringLiteral("Medium"));
     tierSelector->addItem(QStringLiteral("High"));
@@ -160,7 +161,7 @@ void WorldGiPropertyWidget::rebuild()
     // scene" (it was Instant Radiosity, deleted), Epic as "dynamic reflection
     // probes" (deleted with R2) — which is the defect render audit A5 names.
     QString tierTip = tr("How much machinery Photon uses, and what each tier actually runs:\n\n")
-                      + worldmodes::photonTierSummary()
+                      + QString::fromStdString(worldmodes::photonTierSummary())
                       + tr("\n\nNew scenes start at Epic.");
     if (!deviations.isEmpty())
         tierTip += tr("\n\nCUSTOM: %1 %2 been set by hand and no longer follow the tier. They stay "
@@ -275,13 +276,13 @@ void WorldGiPropertyWidget::rebuild()
     // world.modeTable make: "VCT + rays" wherever probeGridByRays holds for
     // THIS scene on THIS machine), the tooltips the registry rows' own texts.
     const bool tracesRays = sceneView && sceneView->isInitialized() && sceneView->sceneTracesRays();
-    if (const worldmodes::Row *modeRow = worldmodes::row(QStringLiteral("giMode")))
+    if (const worldmodes::Row *modeRow = worldmodes::row((QStringLiteral("giMode")).toStdString()))
         for (const worldmodes::EnumOption &o : modeRow->options)
-            modeSelector->addItem(worldmodes::optionLabel(*modeRow, o, scene, tracesRays));
+            modeSelector->addItem(QString::fromStdString(worldmodes::optionLabel(*modeRow, o, scene, tracesRays)));
     modeSelector->setCurrentIndex(giRowFor(scene->giMode));
     auto rowTip = [tracesRays](const char *id) {
-        const worldmodes::Row *r = worldmodes::row(QString::fromLatin1(id));
-        return r ? worldmodes::rowCost(*r, tracesRays) : QString();
+        const worldmodes::Row *r = worldmodes::row(QString::fromLatin1(id).toStdString());
+        return r ? QString::fromStdString(worldmodes::rowCost(*r, tracesRays)) : QString();
     };
     modeSelector->setToolTip(rowTip("giMode"));
     connect(modeSelector, QOverload<int>::of(&ComboBoxWidget::currentIndexChanged),
@@ -478,9 +479,9 @@ void WorldGiPropertyWidget::hideEvent(QHideEvent *event)
 bool WorldGiPropertyWidget::advancedResettable() const
 {
     if (!scene) return false;
-    bool anyPin = !worldmodes::photonDeviations(scene).isEmpty();
-    for (const QString &id : worldmodes::photonRowIds())
-        anyPin = anyPin || scene->worldOverrides.find(id.toStdString());
+    bool anyPin = !worldmodes::photonDeviations(scene).empty();
+    for (const std::string &id : worldmodes::photonRowIds())
+        anyPin = anyPin || scene->worldOverrides.find(id);
     return anyPin;
 }
 
@@ -511,7 +512,7 @@ void WorldGiPropertyWidget::refreshPins()
     if (tierSelector && tierSelector->getWidget()) {
         QComboBox *combo = tierSelector->getWidget();
         const int tiers = worldmodes::photonTierNames().size();
-        const bool custom = !worldmodes::photonDeviations(scene).isEmpty();
+        const bool custom = !worldmodes::photonDeviations(scene).empty();
         const QSignalBlocker quiet(combo);   // a display change, not a pick
         if (custom) {
             if (combo->count() == tiers) combo->addItem(QStringLiteral("Custom"));
@@ -580,7 +581,7 @@ void WorldGiPropertyWidget::editPhotonRow(const QString &id, int value, const QS
     if (atomic) beginPhotonEdit();
     // Through the registry: the write AND the pin, so a later tier switch
     // does not silently undo the edit (worldmodes.h's one invariant).
-    worldmodes::setRowValue(scene, id, value);
+    worldmodes::setRowValue(scene, id.toStdString(), value);
     refreshPins();
     if (atomic) endPhotonEdit(text);
 }
@@ -632,10 +633,10 @@ void WorldGiPropertyWidget::onPhotonToggled(bool on)
 void WorldGiPropertyWidget::onTierChanged(int row)
 {
     if (!scene) return;
-    const QStringList names = worldmodes::photonTierNames();
+    const QStringList names = qtstd::toQStringList(worldmodes::photonTierNames());
     if (row < 0 || row >= names.size()) return;   // the "Custom" entry is not pickable
     bool ok = false;
-    const worldmodes::PhotonTier t = worldmodes::photonTierFromName(names[row], &ok);
+    const worldmodes::PhotonTier t = worldmodes::photonTierFromName(names[row].toStdString(), &ok);
     if (!ok) return;
     editRegistry(tr("Photon Quality: %1").arg(names[row]), [this, t]() {
         worldmodes::setPhoton(scene, worldmodes::photonEnabled(scene), t);
@@ -658,7 +659,7 @@ void WorldGiPropertyWidget::modeChanged(int row)
     // it is the Photon technique pin: it survives tier switches until reset.
     editRegistry(tr("Photon Technique"), [this, mode]() {
         scene->giMode = mode;
-        worldmodes::pinRowValue(scene, QStringLiteral("giMode"), int(scene->giMode));
+        worldmodes::pinRowValue(scene, (QStringLiteral("giMode")).toStdString(), int(scene->giMode));
     });
 }
 
@@ -668,7 +669,7 @@ void WorldGiPropertyWidget::onQualityChanged(int row)
     const int quality = qBound(0, row, 3);
     editRegistry(tr("Photon Quality Detail"), [this, quality]() {
         scene->giQuality = static_cast<iris::GiQuality>(quality);
-        worldmodes::pinRowValue(scene, QStringLiteral("giQuality"), int(scene->giQuality));
+        worldmodes::pinRowValue(scene, (QStringLiteral("giQuality")).toStdString(), int(scene->giQuality));
     });
 }
 
@@ -692,7 +693,7 @@ void WorldGiPropertyWidget::onDdgiToggled(bool on)
     if (!scene) return;
     editRegistry(on ? tr("Irradiance Field On") : tr("Irradiance Field Off"), [this, on]() {
         scene->giDdgi = on ? 1 : 0;
-        worldmodes::pinRowValue(scene, QStringLiteral("giDdgi"), scene->giDdgi);
+        worldmodes::pinRowValue(scene, (QStringLiteral("giDdgi")).toStdString(), scene->giDdgi);
     });   // the intensity rows only exist while the field is on
 }
 

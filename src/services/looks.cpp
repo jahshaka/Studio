@@ -186,7 +186,7 @@ QString validate()
         }
     }
     for (const LookUi &l : table())
-        if (!iris::lookDef(l.id))
+        if (!iris::lookDef(l.id.toStdString()))
             return QStringLiteral("presentation row '%1' names no document look").arg(l.id);
     return QString();
 }
