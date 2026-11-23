@@ -663,6 +663,14 @@ jah_gpu_row(script.radiance_picture CLASS engine FRAMES 60
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(script.radiance_picture PROPERTIES TIMEOUT 60 LABELS "engine")
 
+# script.trace_rays_mask (SCRIPT-IN-ENGINE-1 2f, the train's card: P4's red, the lead's ruling) — engine.gi.traceRays's
+# INSTANCE MASK IS ITS BITS: a ray down onto a floor 5 m below hits at 5 m with mask 31 (within a millimetre), and misses
+# with mask 0 (the control). A script run by jahengine. 4 frames.
+jah_gpu_row(script.trace_rays_mask CLASS engine FRAMES 4
+         COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/script_trace_rays_mask.js" --name script.trace_rays_mask
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(script.trace_rays_mask PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # script.json — THE SCRIPT VALUE IN JSON, ITS LAWS ON THE CPU (MCP-ON-HOST-1 stage 1; test_script_json.cpp says them):
 # every kind round-trips with its kind, numbers by their bits, strict UTF-8, the text's shape, bytes as {"$bytes"} capped
 # at 1 MiB. The codec alone (jahshaka/engine/ScriptJson.h): no device, a code row.

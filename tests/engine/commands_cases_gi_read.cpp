@@ -47,6 +47,12 @@ Value nums(std::initializer_list<double> v)
     return Value(std::move(a));
 }
 
+/// One ray (12 numbers) down from y 5 whose instance mask is `mask`
+Value rayWithMask(double mask)
+{
+    return nums({0, 5, 0, 0, 0, -1, 0, 100, mask, 0, 0, 0});
+}
+
 }  // namespace
 
 void casesGiRead(Fixture &f)
@@ -82,6 +88,13 @@ void casesGiRead(Fixture &f)
              "trace.rays holds 13 numbers, not a multiple of 12"},
             {"engine.gi.traceRays", Value(Value::Object{{"rays", Value(std::move(tooMany))}}),
              "trace.rays holds 786444 elements, at most 786432"},
+            // THE MASK IS BITS (the train's card, P4): an unsigned integer 0..255, judged before the engine is asked
+            {"engine.gi.traceRays", Value(Value::Object{{"rays", rayWithMask(0.5)}}),
+             "trace.rays[8] (ray 0's instance mask) must be an integer 0..255 (0.5 is not): its bits are the mask"},
+            {"engine.gi.traceRays", Value(Value::Object{{"rays", rayWithMask(256)}}),
+             "trace.rays[8] (ray 0's instance mask) must be an integer 0..255 (256 is not): its bits are the mask"},
+            {"engine.gi.traceRays", Value(Value::Object{{"rays", rayWithMask(-1)}}),
+             "trace.rays[8] (ray 0's instance mask) must be an integer 0..255 (-1 is not): its bits are the mask"},
         };
         std::string missed;
         for (const auto &d : cases) {
@@ -94,7 +107,10 @@ void casesGiRead(Fixture &f)
                  {"engine.gi.voxelStats", Value(3)},
                  {"engine.gi.voxelLight", Value(Value::Object{{"cascade", Value(0)}, {"lo", nums({0, 0, 0})}, {"hi", nums({1, 1, 1})}})},
                  {"engine.gi.readCardAt", at},
-                 {"engine.gi.traceRays", Value(Value::Object{{"rays", Value(Value::Array(12, Value(1.0)))}})}}) {
+                 {"engine.gi.traceRays", Value(Value::Object{{"rays", Value(Value::Array(12, Value(1.0)))}})},
+                 // the mask's accepted ends reach the body (the engine's absence answers them)
+                 {"engine.gi.traceRays", Value(Value::Object{{"rays", rayWithMask(0)}})},
+                 {"engine.gi.traceRays", Value(Value::Object{{"rays", rayWithMask(255)}})}}) {
             const Result r = f.none.call(command, {ns, arg});
             if (!failedWith(r, "the engine did not start")) reached += std::string("\n      ") + command + ": " + r.message;
         }
@@ -105,7 +121,8 @@ void casesGiRead(Fixture &f)
         check(missed.empty() && reached.empty(),
               "THE GI READERS' DECLARED DOMAIN, each refused by name on the null engine (" + std::to_string(std::size(cases)) +
                   " cases: the cascade 0..3, the box's corners, the point's vectors, a ray batch's stride and its 65,536 "
-                  "rays); THE CONTROL: the nine readers in their domain reach the body (no engine there)" + missed + reached);
+                  "rays, a ray's instance mask an integer 0..255: its bits); THE CONTROL: the nine readers in their domain "
+                  "reach the body (no engine there), the mask's ends 0 and 255 too" + missed + reached);
     }
 
     // 2. THE ANSWERS' TABLES: every record in declaration order; the default and a record with every field changed
