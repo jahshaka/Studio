@@ -18,7 +18,10 @@ THE LAWS:
      hash: THE TWO HASHES ARE EQUAL (the MCP door draws what the script door draws);
   E4 the server exits 0 at stdin's end (L13).
 It PRINTS the PNG's bytes and the alpha's min and max. ITS SELF-TEST FIRST: the decoder on PNGs this file writes with
-each of the five filters (a decode equal to the source), and one flipped byte of a copy refused by its CRC.
+each of the five filters, in colour types 6 and 2 (a decode equal to the source; type 2's with alpha 255), and one flipped
+byte of a copy refused by its CRC. ANY fault (a dead server, a line that is not JSON, a malformed answer) is a named FAIL and
+the last line is always the verdict; on a failure both children's own output (the server's stderr, the script run's
+stdout and stderr) is printed before it.
 Run: mcp_engine_session.py <jahengine> [--self-test]
 """
 import base64
@@ -106,23 +109,26 @@ def decode_png(png):
     return bytes(out), w, h, colour
 
 
-def encode_png(rgba, w, h, filters):
-    """THE SELF-TEST's writer: an RGBA PNG whose row y is filtered by filters[y % len(filters)]."""
-    stride, raw, prev = w * 4, bytearray(), bytes(w * 4)
+def encode_png(rgba, w, h, filters, colour=6):
+    """THE SELF-TEST's writer: a PNG of colour type 6 (RGBA) or 2 (RGB: the alpha dropped, as the engine's codec writes an
+    all-opaque picture) whose row y is filtered by filters[y % len(filters)]."""
+    bpp = 4 if colour == 6 else 3
+    pixels = rgba if colour == 6 else bytes(v for i, v in enumerate(rgba) if i % 4 != 3)
+    stride, raw, prev = w * bpp, bytearray(), bytes(w * bpp)
     for y in range(h):
-        line, f = rgba[y * stride:(y + 1) * stride], filters[y % len(filters)]
+        line, f = pixels[y * stride:(y + 1) * stride], filters[y % len(filters)]
         raw.append(f)
         for i in range(stride):
-            a = line[i - 4] if i >= 4 else 0
+            a = line[i - bpp] if i >= bpp else 0
             b = prev[i]
-            c = prev[i - 4] if i >= 4 else 0
+            c = prev[i - bpp] if i >= bpp else 0
             pred = (0, a, b, (a + b) // 2, paeth(a, b, c))[f]
             raw.append((line[i] - pred) & 255)
         prev = line
 
     def chunk(kind, data):
         return struct.pack(">I", len(data)) + kind + data + struct.pack(">I", zlib.crc32(kind + data))
-    return (SIGNATURE + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, 6, 0, 0, 0)) +
+    return (SIGNATURE + chunk(b"IHDR", struct.pack(">IIBBBBB", w, h, 8, colour, 0, 0, 0)) +
             chunk(b"IDAT", zlib.compress(bytes(raw))) + chunk(b"IEND", b""))
 
 
@@ -137,6 +143,16 @@ def self_test():
     mixed = encode_png(rgba, w, h, [0, 1, 2, 3, 4])
     if decode_png(mixed)[0] != rgba:
         faults.append("five filters mixed: the decode differs from the source")
+    # COLOUR TYPE 2 (RGB, 3 bytes a pixel): the type the engine writes for an all-opaque picture - its decode is the source
+    # with every alpha 255
+    opaque = bytes(255 if i % 4 == 3 else v for i, v in enumerate(rgba))
+    try:
+        rgb = decode_png(encode_png(opaque, w, h, [0, 1, 2, 3, 4], colour=2))
+        if rgb[3] != 2 or rgb[0] != opaque:
+            faults.append(f"colour type 2 (five filters mixed): the decode differs from the source with alpha 255 "
+                          f"(type {rgb[3]})")
+    except (ValueError, zlib.error) as e:
+        faults.append(f"colour type 2 (five filters mixed): refused: {e}")
     flipped = bytearray(mixed)
     flipped[8 + 8 + 3] ^= 1   # a byte of IHDR's width
     try:
@@ -147,7 +163,8 @@ def self_test():
             faults.append(f"THE CONTROL: a flipped IHDR byte refused for another reason: {e}")
     for f in faults:
         say(f"FAIL: self-test: {f}")
-    say(f"self-test: the decoder over the five filters and one flipped byte: {'clean' if not faults else 'RED'}")
+    say(f"self-test: the decoder over the five filters, colour types 6 and 2, and one flipped byte: "
+        f"{'clean' if not faults else 'RED'}")
     return len(faults)
 
 
@@ -292,29 +309,61 @@ def main():
                 f"E2: the PNG decodes ({pw} x {ph}, colour type {colour}) to engine.picture.bytes EXACTLY")
         except (ValueError, zlib.error) as e:
             law(False, f"E2: the PNG decodes: {e}")
-    except RuntimeError as e:
-        law(False, f"the session: {e}")
+    except Exception as e:   # ANY fault of the session (a dead server's broken pipe, a line that is not JSON, a malformed
+        law(False, f"the session: {type(e).__name__}: {e}")   # answer) is a named FAIL; E3 and E4 still run
         mcp_hash = None
-    rc = s.end()
+    try:
+        rc = s.end()
+    except Exception as e:
+        rc = f"{type(e).__name__}: {e}"
     law(rc == 0, f"E4: the server exits {rc} at stdin's end (0 owed)")
 
     js = os.path.join(root, "same_calls.js")
     with open(js, "w") as f:
         f.write(SCRIPT)
-    run = subprocess.run([jahengine, "--script", js, "--name", ROW + ".script"], capture_output=True, text=True, env=env,
-                         cwd=root)
+    script_out = script_err = ""
     script_hash = None
-    for line in run.stdout.splitlines():
-        if line.startswith("SCRIPT HASH "):
-            script_hash = line.split()[-1]
-    law(run.returncode == 0 and script_hash is not None,
-        f"the same calls as a script ran to their verdict (exit {run.returncode}; its last line: "
-        f"{(run.stdout.strip().splitlines() or ['(none)'])[-1]})")
+    try:
+        run = subprocess.run([jahengine, "--script", js, "--name", ROW + ".script"], capture_output=True, text=True,
+                             errors="replace", env=env, cwd=root)
+        script_out, script_err = run.stdout, run.stderr
+        for line in script_out.splitlines():
+            if line.startswith("SCRIPT HASH "):
+                script_hash = line.split()[-1]
+        law(run.returncode == 0 and script_hash is not None,
+            f"the same calls as a script ran to their verdict (exit {run.returncode}; its last line: "
+            f"{(script_out.strip().splitlines() or ['(none)'])[-1]})")
+    except Exception as e:
+        law(False, f"the same calls as a script: {type(e).__name__}: {e}")
     law(mcp_hash is not None and mcp_hash == script_hash,
         f"E3: THE TWO HASHES ARE EQUAL: the MCP session's {mcp_hash}, the script's {script_hash}")
+    if failures:   # K2: a red at the card check has both children's own words to read (a killed row keeps what it printed)
+        tail(f"the server's stderr ({s.err.name})", read_text(s.err.name))
+        tail("the script run's stdout", script_out)
+        tail("the script run's stderr", script_err)
     say(f"{ROW}: {'PASSED' if not failures else f'FAILED ({failures})'}")
     return 1 if failures else 0
 
 
+def read_text(path):
+    try:
+        with open(path, errors="replace") as f:
+            return f.read()
+    except OSError as e:
+        return f"(unreadable: {e})"
+
+
+def tail(what, text, n=40):
+    lines = text.splitlines()
+    say(f"--- {what}: its last {min(n, len(lines))} of {len(lines)} lines ---")
+    for line in lines[-n:]:
+        say("    " + line)
+
+
 if __name__ == "__main__":
-    sys.exit(main())
+    try:
+        sys.exit(main())
+    except Exception as e:   # K1: never a traceback as the last line - the verdict line is the row's last, always
+        say(f"FAIL: the driver stopped on {type(e).__name__}: {e}")
+        say(f"{ROW}: FAILED (1)")
+        sys.exit(1)
