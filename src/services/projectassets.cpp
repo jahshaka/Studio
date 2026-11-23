@@ -26,18 +26,19 @@ For more information see the LICENSE file
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
+#include "services/jahlog.h"
 #include "services/materialbundle.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
 namespace {
 
-QString sourceOidOf(db::Connection &conn, const QString &guid)
+QString sourceOidOf(db::Connection &conn, const QString &guid, bool *readOk)
 {
     // ONE implementation (AssetCas::sourceOid): the library's current source
     // oid is the "what version is this?" answer, and the avatar module asks it
     // too. A second transcription of the same ORDER BY is a place for the two
     // to disagree about which row is the source.
-    return AssetCas::sourceOid(conn, guid);
+    return AssetCas::sourceOid(conn, guid, readOk);
 }
 
 bool sessionHas(const QString &guid)
@@ -82,10 +83,21 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
 
     // The membership = the asset plus its dependency closure, each pinned at
     // its CURRENT source content. No files move; no rows clone.
+    // EVERY MEMBER's VERSION IS READ BEFORE THE FIRST PIN (NOQT-DATABASE-1 stage 2): a read that failed is no "no
+    // bytes" - it would write an EMPTY pin over a real one. Refused by name, nothing pinned.
     const QStringList members = AssetHelper::fetchAssetAndAllDependencies(guid, db);
+    QStringList oids;
     for (const QString &member : members) {
-        AssetCas::writePin(conn, projectGuid, member, sourceOidOf(conn, member));
-        result.pinnedGuids.append(member);
+        bool read = true;
+        oids << sourceOidOf(conn, member, &read);
+        if (!read) {
+            result.error = QStringLiteral("the library version of '%1' could not be read - nothing was added").arg(member);
+            return result;
+        }
+    }
+    for (int i = 0; i < members.size(); ++i) {
+        AssetCas::writePin(conn, projectGuid, members.at(i), oids.at(i));
+        result.pinnedGuids.append(members.at(i));
     }
 
     // Session registrations — the ORIGINAL guids, bytes CAS-resolved through
@@ -325,18 +337,30 @@ bool ProjectAssets::updatePinToLatest(const QString &guid, Database *db, Project
     // And an EMPTY source oid never overwrites a real pin: an empty oid means
     // "a DB-only asset" (assetcas.h), so writing one over a pin that names
     // bytes is how a pinned member silently became unpinned.
+    //
+    // READ FIRST, WRITE AFTER (NOQT-DATABASE-1 stage 2, the confirm's F2): a member's pin or library version that
+    // could not be read is no "no pin" and no "no bytes" - the update is refused by name before its first write.
     const QString projectGuid = project->getProjectGuid();
-    bool ok = true;
     const QStringList closure = AssetHelper::fetchAssetAndAllDependencies(guid, db);
+    QVector<QPair<QString, QString>> moves;   // (member, the library's version)
     for (const QString &member : closure) {
-        const QString latest = sourceOidOf(conn, member);
+        bool read = true;
+        const QString latest = sourceOidOf(conn, member, &read);
+        const QString pinned = AssetCas::pinnedOid(conn, projectGuid, member, &read);
+        if (!read) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QStringLiteral("Update from Library of '%1' REFUSED: the pin or the library version of '%2' could not be read - "
+                               "nothing was written").arg(guid, member));
+            return false;
+        }
         const bool isSubject = (member == guid);
-        if (!isSubject && !AssetCas::pinnedOid(conn, projectGuid, member).isEmpty())
-            continue;   // the project's own version of a member stays
-        if (latest.isEmpty() && !AssetCas::pinnedOid(conn, projectGuid, member).isEmpty())
-            continue;   // never turn a real pin into "no bytes"
-        ok = AssetCas::writePin(conn, projectGuid, member, latest) && ok;
+        if (!isSubject && !pinned.isEmpty()) continue;   // the project's own version of a member stays
+        if (latest.isEmpty() && !pinned.isEmpty()) continue;   // never turn a real pin into "no bytes"
+        moves.append({ member, latest });
     }
+    bool ok = true;
+    for (const auto &move : std::as_const(moves))
+        ok = AssetCas::writePin(conn, projectGuid, move.first, move.second) && ok;
     return ok;
 }
 

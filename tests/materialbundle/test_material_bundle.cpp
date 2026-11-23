@@ -56,6 +56,7 @@
 #include "services/assetgc.h"
 #include "services/assetmigration.h"
 #include "data/database/casschema.h"
+#include "services/projectassets.h"
 #include <QSqlDriver>
 #include <sqlite3.h>
 #include <cstring>
@@ -98,17 +99,23 @@ static QString textureRow(Database &db, const QString &guid, const QString &name
 // sqlite_master denied (the table probes); mode 2: reads of `projects` denied INSIDE A SELECT (a pin count), its
 // DELETE untouched; mode 3: sqlite_master's reads denied from the GC's 7th statement on (its pin-table probe:
 // tableExists x3, COUNT x2, the mapped oids, then the probe).
+// mode 4: every read of `project_assets` INSIDE A SELECT denied ("is it pinned here", the pin's oid), its writes
+// untouched; mode 5: only the pin's OID (`project_assets.oid_pin`) inside a SELECT ("is it pinned" still reads).
 struct Deny { int mode = 0; int selects = 0; bool inSelect = false; int probesDenied = 0; };
 static Deny gDeny;
-static int denyReads(void *, int action, const char *table, const char *, const char *, const char *)
+static int denyReads(void *, int action, const char *table, const char *column, const char *, const char *)
 {
     if (action == SQLITE_SELECT) { gDeny.inSelect = true; ++gDeny.selects; return SQLITE_OK; }
     if (action == SQLITE_INSERT || action == SQLITE_UPDATE || action == SQLITE_DELETE) gDeny.inSelect = false;
     if (action != SQLITE_READ || !table) return SQLITE_OK;
     const bool master = std::strcmp(table, "sqlite_master") == 0 || std::strcmp(table, "sqlite_schema") == 0;
+    const bool pins = std::strcmp(table, "project_assets") == 0;
     if (gDeny.mode == 1 && master) return SQLITE_DENY;
     if (gDeny.mode == 2 && gDeny.inSelect && std::strcmp(table, "projects") == 0) return SQLITE_DENY;
     if (gDeny.mode == 3 && master && gDeny.selects >= 7) { ++gDeny.probesDenied; return SQLITE_DENY; }
+    if (gDeny.mode == 4 && gDeny.inSelect && pins) return SQLITE_DENY;
+    if (gDeny.mode == 5 && gDeny.inSelect && pins && column && std::strcmp(column, "oid_pin") == 0) return SQLITE_DENY;
+    if (gDeny.mode == 6 && gDeny.inSelect && std::strcmp(table, "asset_files") == 0) return SQLITE_DENY;
     return SQLITE_OK;
 }
 
@@ -869,6 +876,127 @@ int main(int argc, char **argv)
                       .arg(second.unreadableSidecars.items.isEmpty() ? QString()
                                                                     : second.unreadableSidecars.items.first().reason)
                       .toUtf8().constData());
+        }
+
+        // 17. THE CONFIRM's FINDINGS (stage 2's fix round, builder B3): a FAILED PIN READ never moves a project's own
+        //     version (F1, F2), and a sidecar that parses but that the rebuild cannot place is never "no asset" (F6).
+        //     The injection as in 14: mode 4 denies every read of `project_assets` inside a SELECT, mode 5 only its
+        //     `oid_pin` (so "is it pinned here" still reads and the pin's OID does not).
+        {
+            const QDir paintedDir(scratchDir.filePath(QStringLiteral("painted")));
+            QDir().mkpath(paintedDir.path());
+            const auto texture = [&](const QString &guid) {
+                const QString name = guid + QStringLiteral(".png");
+                return textureRow(db, guid, name, storeRoot,
+                                  writeTempFile(scratchDir, name, (guid + QStringLiteral(" library")).toUtf8()));
+            };
+            // the project's OWN version (copy-on-write): new bytes under the same file name, only its pin moves.
+            const auto painted = [&](const QString &guid, Project &owner) {
+                QString err;
+                return ProjectAssets::copyOnWrite(
+                    guid, writeTempFile(paintedDir, guid + QStringLiteral(".png"), (guid + QStringLiteral(" painted")).toUtf8()),
+                    &db, &owner, &err);
+            };
+            const auto pinOf = [&conn](const QString &projectGuid, const QString &guid) {
+                return AssetCas::pinnedOid(conn, projectGuid, guid);
+            };
+            const auto material = [&](const QString &guid, const QString &member) {
+                QJsonObject values;
+                values[QStringLiteral("baseColorMap")] = member;
+                QJsonObject def;
+                def[QStringLiteral("materialType")] = QStringLiteral("pbr");
+                def[QStringLiteral("values")] = values;
+                QString err;
+                return MaterialBundle::create(&db, guid, def, assethome::assets(), QByteArray(), &err,
+                                              assethome::Origin::ExplicitSave);
+            };
+
+
+            // 17.2 (F2) the pin's OID unread is no "no pin": MaterialBundle::write (the 1.5-s autosave) and
+            //      ProjectAssets::updatePinToLatest never write the library's version over the project's own.
+            {
+                texture(QStringLiteral("t17w"));
+                const QString library = AssetCas::sourceOid(conn, QStringLiteral("t17w"));
+                const QString m17w = material(QStringLiteral("m17w"), QStringLiteral("t17w"));
+                db.createProject(QStringLiteral("p17w"), QStringLiteral("p17w"));
+                Project owner;
+                owner.setProjectGuid(QStringLiteral("p17w"));
+                AssetCas::writePin(conn, QStringLiteral("p17w"), m17w, AssetCas::sourceOid(conn, m17w));
+                const QString own = painted(QStringLiteral("t17w"), owner);
+                CHECK(!m17w.isEmpty() && !own.isEmpty() && own != library,
+                      "17.2: CONTROL: a material the project holds, its member painted by the project");
+                QJsonObject values;
+                values[QStringLiteral("baseColorMap")] = QStringLiteral("t17w");
+                values[QStringLiteral("roughness")] = 0.3;
+                QJsonObject def;
+                def[QStringLiteral("materialType")] = QStringLiteral("pbr");
+                def[QStringLiteral("values")] = values;
+                gDeny = Deny{ 5 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const MaterialBundle::WriteResult written =
+                    MaterialBundle::write(&db, &owner, m17w, def, MaterialBundle::Scope::Project);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                const QString after = pinOf(QStringLiteral("p17w"), QStringLiteral("t17w"));
+                CHECK(after == own, QStringLiteral("17.2: a write whose member's pin could not be read leaves the project's own "
+                                                   "version (pin %1, own %2; write ok %3 '%4')")
+                                        .arg(after, own).arg(written.ok).arg(written.error).toUtf8().constData());
+                CHECK(!written.ok && written.error.contains(QStringLiteral("could not be read")),
+                      QStringLiteral("17.2: ...and the write is REFUSED by name: '%1'").arg(written.error).toUtf8().constData());
+
+                // (the sweep's site n) whether the project holds the MATERIAL, unread: the write is refused whole - the
+                // project's pin of the material does not move (its unit rolled back).
+                const QString materialPin = pinOf(QStringLiteral("p17w"), m17w);
+                gDeny = Deny{ 4 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const MaterialBundle::WriteResult unheld =
+                    MaterialBundle::write(&db, &owner, m17w, def, MaterialBundle::Scope::Project);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(!unheld.ok && unheld.error.contains(QStringLiteral("holds the material could not be read"))
+                          && pinOf(QStringLiteral("p17w"), m17w) == materialPin,
+                      QStringLiteral("17.2n: a write whose 'does the project hold it' could not be read is refused whole "
+                                     "(ok %1, '%2', the material's pin %3)")
+                          .arg(unheld.ok).arg(unheld.error)
+                          .arg(pinOf(QStringLiteral("p17w"), m17w) == materialPin ? QStringLiteral("kept")
+                                                                                   : QStringLiteral("MOVED"))
+                          .toUtf8().constData());
+
+                // (the sweep's site j) a pin that could not be read resolves NOTHING - never the library's bytes.
+                CHECK(!AssetCas::resolvePinned(conn, storeRoot, QStringLiteral("p17w"), QStringLiteral("t17w")).isEmpty(),
+                      "17.2j: CONTROL: the project's version resolves");
+                gDeny = Deny{ 5 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const QString unresolved = AssetCas::resolvePinned(conn, storeRoot, QStringLiteral("p17w"), QStringLiteral("t17w"));
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(unresolved.isEmpty(), QStringLiteral("17.2j: a pin read that FAILED resolves nothing (got '%1')")
+                                                .arg(unresolved).toUtf8().constData());
+
+                // (the sweep's site a) a member's library version unread: addToProject adds NOTHING - never an empty pin
+                // over a real one.
+                gDeny = Deny{ 6 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const ProjectAssets::Result added =
+                    ProjectAssets::addToProject(m17w, &db, &owner, ProjectAssets::AddKind::Direct);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                const QString afterAdd = pinOf(QStringLiteral("p17w"), QStringLiteral("t17w"));
+                CHECK(!afterAdd.isEmpty() && added.error.contains(QStringLiteral("could not be read")),
+                      QStringLiteral("17.2a: an add whose library versions could not be read pins nothing (member pin '%1', "
+                                     "'%2')").arg(afterAdd, added.error).toUtf8().constData());
+
+                texture(QStringLiteral("t17u"));
+                const QString m17u = material(QStringLiteral("m17u"), QStringLiteral("t17u"));
+                AssetCas::writePin(conn, QStringLiteral("p17w"), m17u, AssetCas::sourceOid(conn, m17u));
+                const QString ownU = painted(QStringLiteral("t17u"), owner);
+                gDeny = Deny{ 5 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const bool updated = ProjectAssets::updatePinToLatest(m17u, &db, &owner);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                const QString afterU = pinOf(QStringLiteral("p17w"), QStringLiteral("t17u"));
+                CHECK(afterU == ownU && !updated,
+                      QStringLiteral("17.2: an update whose member's pin could not be read is REFUSED and leaves the project's "
+                                     "own version (pin %1, own %2; answer %3)")
+                          .arg(afterU, ownU).arg(updated).toUtf8().constData());
+            }
+
         }
 
         // (2) A CLOSED LIBRARY's pin reads are NO ANSWER, never "no pins". LAST in this test: a second Database

@@ -398,13 +398,14 @@ bool ingestFile(db::Connection &conn, const QString &root, const QString &srcPat
     return true;
 }
 
-QString sourceOid(db::Connection &conn, const QString &guid)
+QString sourceOid(db::Connection &conn, const QString &guid, bool *readOk)
 {
     db::Statement query(conn, "SELECT oid FROM asset_files WHERE asset_guid = ? "
                               "ORDER BY CASE role WHEN 'source' THEN 0 ELSE 1 END, name");
     dbqt::bindText(query, 1, guid);
     db::Error e;
     if (query.step(&e)) return dbqt::text(query, 0);
+    if (e && readOk) *readOk = false;   // a failed read is no "no bytes"
     return QString();
 }
 
@@ -688,13 +689,14 @@ bool writePin(db::Connection &conn, const QString &projectGuid,
 }
 
 QString pinnedOid(db::Connection &conn, const QString &projectGuid,
-                  const QString &assetGuid)
+                  const QString &assetGuid, bool *readOk)
 {
     db::Statement query(conn, "SELECT oid_pin FROM project_assets WHERE project_guid = ? AND asset_guid = ?");
     dbqt::bindText(query, 1, projectGuid);
     dbqt::bindText(query, 2, assetGuid);
     db::Error e;
     if (query.step(&e)) return dbqt::text(query, 0);
+    if (e && readOk) *readOk = false;   // a failed read is no "no pin"
     return QString();
 }
 
@@ -702,7 +704,11 @@ QString resolvePinned(db::Connection &conn, const QString &root,
                       const QString &projectGuid, const QString &guid,
                       QString *nameOut)
 {
-    const QString pin = pinnedOid(conn, projectGuid, guid);
+    // A PIN THAT COULD NOT BE READ RESOLVES NOTHING (NOQT-DATABASE-1 stage 2): the library's bytes are not the
+    // project's version, and an edit started from them would be written over the project's own.
+    bool read = true;
+    const QString pin = pinnedOid(conn, projectGuid, guid, &read);
+    if (!read) return QString();
     if (!pin.isEmpty()) {
         db::Statement query(conn, "SELECT F.ext, AF.name FROM files F "
                                   "LEFT JOIN asset_files AF ON AF.oid = F.oid AND AF.asset_guid = ? "

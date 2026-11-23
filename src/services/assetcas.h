@@ -167,8 +167,9 @@ bool moveSourcePointer(db::Connection &conn, const QString &guid, const QString 
                        const QString &name, QString *errorOut);
 
 /// The asset's current LIBRARY 'source' oid — the version the library points
-/// at right now, independent of any project's pin. Empty when it has none.
-QString sourceOid(db::Connection &conn, const QString &guid);
+/// at right now, independent of any project's pin. Empty when it has none —
+/// or when the read FAILED, which `readOk` (when given) tells apart: cleared.
+QString sourceOid(db::Connection &conn, const QString &guid, bool *readOk = nullptr);
 
 /// Resolve an asset's PRIMARY ('source'-role) file to an absolute path;
 /// `nameOut` (optional) receives its display name. Falls back to the single
@@ -185,14 +186,17 @@ QString resolveSource(db::Connection &conn, const QString &root,
 bool writePin(db::Connection &conn, const QString &projectGuid,
               const QString &assetGuid, const QString &oid);
 
-/// The pinned oid for (project, asset); empty when no pin row exists.
+/// The pinned oid for (project, asset); empty when no pin row exists (or the
+/// pin is a DB-only asset's) — or when the read FAILED, which `readOk` (when
+/// given) tells apart: cleared. A writer that would move a pin reads it here.
 QString pinnedOid(db::Connection &conn, const QString &projectGuid,
-                  const QString &assetGuid);
+                  const QString &assetGuid, bool *readOk = nullptr);
 
 /// Project-context resolution: the PINNED bytes when a pin exists and the
 /// object is present, else the asset's current source (a project asset
 /// created before pinning, or a pin whose object was purged). `nameOut`
-/// receives the display name. Empty when the asset has no bytes anywhere.
+/// receives the display name. Empty when the asset has no bytes anywhere, and
+/// when the pin could not be READ (never the library's bytes in its place).
 QString resolvePinned(db::Connection &conn, const QString &root,
                       const QString &projectGuid, const QString &guid,
                       QString *nameOut = nullptr);

@@ -717,7 +717,8 @@ void EffectsPage::saveShader(MaterialDocument *doc)
 			    projectOwns ? MaterialBundle::Scope::Project
 			                : MaterialBundle::Scope::Library);
 			if (!written.ok) {
-				JahLog::write(JahLog::legacy, JahLog::Level::Error, "saveShader: " + written.error);
+				// ONCE PER REFUSAL RUN, not every 1.5 s (NOQT-DATABASE-1 stage 2): `saveRefused` holds until a save lands.
+				if (!doc->saveRefused) JahLog::write(JahLog::legacy, JahLog::Level::Error, "saveShader: " + written.error);
 				// A REFUSED SAVE IS TOLD, not logged. This runs on the 1.5 s
 				// autosave, so a refusal the user cannot see means they keep
 				// working on a graph nothing is writing down — an hour of

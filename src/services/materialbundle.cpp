@@ -599,15 +599,26 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
     // version this project chose. An empty source oid never overwrites a real
     // pin either: "empty" means a DB-only asset, and writing one over bytes is
     // how a pinned member silently became unpinned.
-    if (project && !project->getProjectGuid().isEmpty()
-        && db->isAssetPinnedBy(project->getProjectGuid(), guid)) {
+    //
+    // AND A READ THAT FAILED IS NONE OF THOSE ANSWERS (NOQT-DATABASE-1 stage 2, the confirm's F2): whether the
+    // project holds the material, a member's pin, its library version - a failure REFUSES the write by name and
+    // its unit rolls back whole (on the autosave: said once, by the page). Never the library's version, or an
+    // empty one, written over the project's own.
+    if (project && !project->getProjectGuid().isEmpty()) {
         const QString projectGuid = project->getProjectGuid();
-        for (const QString &member : memberGuids(stored)) {
+        bool read = true;
+        const bool holds = db->isAssetPinnedBy(projectGuid, guid, &read);
+        if (!read) return fail(QStringLiteral("whether this project holds the material could not be read - nothing was written"));
+        for (const QString &member : holds ? memberGuids(stored) : QStringList()) {
             if (db->fetchAsset(member).guid.isEmpty()) continue;
-            if (!AssetCas::pinnedOid(conn, projectGuid, member).isEmpty()) continue;
-            const QString latest = AssetCas::sourceOid(conn, member);
-            if (latest.isEmpty() && db->isAssetPinnedBy(projectGuid, member)) continue;
-            AssetCas::writePin(conn, projectGuid, member, latest);
+            const QString pinned = AssetCas::pinnedOid(conn, projectGuid, member, &read);
+            const QString latest = AssetCas::sourceOid(conn, member, &read);
+            const bool emptyPin = pinned.isEmpty() && latest.isEmpty() && db->isAssetPinnedBy(projectGuid, member, &read);
+            if (!read)
+                return fail(QStringLiteral("the pin of its member '%1' could not be read - nothing was written").arg(member));
+            if (!pinned.isEmpty() || emptyPin) continue;
+            if (!AssetCas::writePin(conn, projectGuid, member, latest))
+                return fail(QStringLiteral("its member '%1' could not be pinned - nothing was written").arg(member));
         }
     }
 
