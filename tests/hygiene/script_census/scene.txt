@@ -1,0 +1,12 @@
+engine.scene.create Engine::createScene
+engine.scene.destroy Engine::destroyScene
+engine.scene.setAmbient Scene::setAmbient
+engine.scene.setSky Scene::setSky
+engine.scene.setEnvironmentLight Scene::setEnvironmentLight
+engine.scene.setAmbientSh Scene::setAmbientSh
+engine.scene.setFog Scene::setFog
+engine.scene.setShadowSettings Scene::setShadowSettings
+engine.scene.setLodBias Scene::setLodBias
+engine.mesh.unitCube Scene::createMesh
+engine.mesh.create Scene::createMesh
+engine.mesh.destroy Scene::destroyMesh
