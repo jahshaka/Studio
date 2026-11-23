@@ -170,7 +170,9 @@ def main(root):
         check(bool(red) and a in files.get(f, ""), "the lint is fed a violation of %s (%s) and reds" % (law, f))
     for ok, what in laws(files):
         check(ok, what)
-    print("source.presented_predicate: %s" % ("FAILED (%d)" % len(FAIL) if FAIL else "all ok"))
+    # THE VERDICT LINE (CODING_RULES 4: a suite's last line is `<name>: PASSED` or `<name>: FAILED (<n>)`, a non-zero exit
+    # on failure)
+    print("source.presented_predicate: %s" % ("FAILED (%d)" % len(FAIL) if FAIL else "PASSED"), flush=True)
     return 1 if FAIL else 0
 
 
