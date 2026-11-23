@@ -56,6 +56,17 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
     if (!db)    { out.error = QStringLiteral("no database"); return out; }
     if (materialGuid.isEmpty()) { out.error = QStringLiteral("no material guid"); return out; }
 
+    // THE SAVED DEFINITION, READ FIRST - before the emitter, the bake and the bake's member rows write anything (the
+    // third confirm's finding 3): the rows no graph can say are carried from it (below), and one that could not be
+    // read is no "none" - the save would write the material without them. Refused by name, nothing written.
+    bool previousRead = true;
+    const QJsonObject previous =
+        MaterialBundle::read(db, materialGuid, project, &previousRead).value(QStringLiteral("values")).toObject();
+    if (!previousRead) {
+        out.error = QStringLiteral("the saved definition of '%1' could not be read - nothing was saved").arg(materialGuid);
+        return out;
+    }
+
     // WHAT THE BAKER READS: a guid resolves to a path. WHAT WE STORE: the
     // guid. The map from one to the other is the graph's own texture nodes.
     QHash<QString, QString> guidForPath;
@@ -193,16 +204,6 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
         if (!hasTextureNode) carry += kUvRows;
         if (graph->settings.blendMode == BlendMode::Refractive) carry += kRefractiveRows;
 
-        // A PREVIOUS DEFINITION THAT COULD NOT BE READ IS NO "NONE" (B4's sweep): the save would write the material
-        // without the rows no graph can say. Refused by name.
-        bool previousRead = true;
-        const QJsonObject previous =
-            MaterialBundle::read(db, materialGuid, project, &previousRead)
-                .value(QStringLiteral("values")).toObject();
-        if (!previousRead) {
-            out.error = QStringLiteral("the saved definition of '%1' could not be read - nothing was saved").arg(materialGuid);
-            return out;
-        }
         for (const QString &key : carry) {
             if (values.contains(key) || !previous.contains(key)) continue;
             values[key] = previous.value(key);
