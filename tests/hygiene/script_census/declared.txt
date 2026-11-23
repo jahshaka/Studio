@@ -1,0 +1,9 @@
+Engine::create jahengine's boot: the host is made over an engine that exists; a script never creates one
+Scene::createDocumentNode the document's (its mirror makes a document node): no engine command
+Engine::captureSnapshot 484 leaves read once by its one caller (a C++ capture), never a script's
+Scene::setRayTracing the ray switch: a rays-off route (CODING_RULES 1); NO-RAY-CUT-1 stage 2 deletes it
+Engine::setRayTracing the ray switch: a rays-off route (CODING_RULES 1); NO-RAY-CUT-1 stage 2 deletes it
+Engine::rayTracing the ray switch's read: NO-RAY-CUT-1 stage 2 deletes it
+Engine::createView takes a NativeWindowHandle (Engine.h): a script has none; the lab hands its view in by lab.view()
+Engine::setFreeRunning nothing to act on without a render thread: jahengine's host is lockstep only
+Engine::setFramePace nothing to act on without a render thread: jahengine's host is lockstep only

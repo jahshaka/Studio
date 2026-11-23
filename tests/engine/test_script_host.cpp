@@ -12,6 +12,7 @@
 #include "jahshaka/engine/Script.h"
 #include "enginetesthelpers.h"         // the headless (NULL) engine's config: no Qt, no card, no display
 #include "script/RouteDeclaration.h"   // the route declaration's judgement (engine-private, pure)
+#include "script/commands.h"           // the engine's command state and kinds (engine-private): E0's cases
 #include "script/records.h"            // ONE FIELD TABLE PER RECORD (engine-private): the machinery, on this file's records
 
 #include <algorithm>
@@ -23,7 +24,9 @@
 #include <stdexcept>
 #include <string>
 #include "jahshaka/engine/FrameInput.h"
+#include "jahshaka/engine/GiParams.h"
 #include "jahshaka/engine/Ids.h"
+#include "jahshaka/engine/Lights.h"
 #include "jahshaka/engine/Materials.h"
 #include "jahshaka/engine/Math.h"
 #include "jahshaka/engine/Published.h"
@@ -59,12 +62,24 @@ struct Outer {
     std::optional<int> maybe;
     std::shared_ptr<const Inner> shared;
 };
+struct Textured {   // (E0: a record carrying engine ids - Field::handle)
+    TextureId tex = 0;
+    std::vector<NodeId> nodes;
+    float x = 1.0f;
+};
 }  // namespace tr
 namespace jahshaka { namespace engine { namespace script {
 JAH_ENUM_NAMES(tr::Mode, {{tr::Mode::Off, "off"}, {tr::Mode::Fast, "fast"}, {tr::Mode::Slow, "slow"}});
 JAH_ENUM_NAMES(tr::Partial, {{tr::Partial::Named, "named"}, {tr::Partial::AlsoNamed, "alsoNamed"}});
 JAH_RECORD_COUNT(tr::Inner, 2);
 JAH_RECORD_COUNT(tr::Outer, 16);
+JAH_RECORD_COUNT(tr::Textured, 3);
+const Table<tr::Textured> &Record<tr::Textured>::table()
+{
+    static const Table<tr::Textured> t({field("tex", &tr::Textured::tex).handle(kTexture),
+                                        field("nodes", &tr::Textured::nodes).upTo(4).handle(kNode), field("x", &tr::Textured::x)});
+    return t;
+}
 const Table<tr::Inner> &Record<tr::Inner>::table()
 {
     static const Table<tr::Inner> t({field("level", &tr::Inner::level).range(0, 9), field("at", &tr::Inner::at)});
@@ -1737,7 +1752,7 @@ int main()
         const Value arm(Value::Object{{"name", Value("anything")}, {"value", Value(1.0)}});
         const Result refusedArm = outside.call("engine.arm", {arm});
         const Result localArm = local.call("engine.arm", {arm});
-        check(failedWith(refusedArm, "arms are engine-wide: this host serves an outside client") &&
+        check(failedWith(refusedArm, "engine.arm: engine-wide: this host serves an outside client") &&
                   failedWith(localArm, "the engine did not start"),
               "a host for an outside client refuses engine.arm by name (" + refusedArm.message +
                   "); an ordinary host's goes past it (" + localArm.message + ")");
@@ -1821,6 +1836,149 @@ int main()
                       std::to_string(ratio) + "x (under 8: n log n ~4.5, a quadratic cost ~16), in this thread's CPU time (" +
                       std::to_string(small) + " s, " + std::to_string(large) + " s)");
         }
+    }
+
+    // 19. THE BATCH's BASE (SCRIPT-IN-ENGINE-1 E0), on the headless engine: (a) THE TEXTURE KINDS - a texture handle is
+    //     checked by Scene::texturePresence: a destroyed texture FAILS by name, a decal image's handle where a texture is
+    //     declared FAILS by its kind (one read per kind); (b) A HANDLE MEMBER (Field::handle) resolves its id, null and a
+    //     literal 0 are none, a dead one FAILS by its member, and the record answers it as the same handle; (c) THE PAUSE
+    //     IS PUBLISHED (GiStatus::updateBudget: the route judgement's word); (d) THE DECAL SLICE COMES BACK - a decal
+    //     image a host loaded in a scene its owner handed in, left at the host's end, is destroyed there: the atlas's used
+    //     count is where it was before the host; (e) WHAT IS HANDED IN, GUARDED - a handed-in scene its owner destroyed
+    //     FAILS by name at the next call (never read). THE CONTROLS: a live texture passes; the slice was taken while the
+    //     host lived; a scene left at the default budget is not paused.
+    {
+        Host t;
+        t.setConsole([](const std::string &) {});
+        const Commands k = makeEngineCommands(t, headless.get(), bootError, false);
+        Registry &xr = t.registry();
+        xr.add({"test.texture", {Access::Reads, {target(handle("scene", kScene)), target(handle("texture", kTexture))}, Kind::Int},
+                "the texture handle's id"},
+               [](Call &c) { return Value(std::int64_t(Call::idOf(c[1]))); });
+        xr.add({"test.textured", {Access::Reads, {target(handle("scene", kScene)), Record<tr::Textured>::table().param("rec")},
+                                  Kind::Object},
+                "the record's ids as read, and the record answered"},
+               [](Call &c) -> Value {
+                   tr::Textured rec;
+                   std::string why;
+                   if (!Record<tr::Textured>::table().fromValue(c[1], rec, "", why)) return c.fail(why);
+                   Value::Array nodes;
+                   for (const NodeId n : rec.nodes) nodes.push_back(Value(std::int64_t(n)));
+                   return Value(Value::Object{{"tex", Value(std::int64_t(rec.tex))}, {"nodes", Value(std::move(nodes))},
+                                              {"answer", Record<tr::Textured>::table().toValue(rec, &c)}});
+               });
+        xr.add({"test.loadDecal", {Access::Files, {target(handle("scene", kScene)), arg("path", Kind::String)}, Kind::Int,
+                                   kDecalTexture},
+                "a decal image loaded into the scene and RECORDED as this host's (as Q's engine.texture.loadDecal will)"},
+               [k](Call &c) -> Value {
+                   Scene *s = k.scene(c, c[0]);
+                   if (!s) return Value();
+                   const TextureId id = s->loadDecalTexture(c[1].asString(), DecalMap::Diffuse);
+                   if (!id) return c.refuse(k.st->engine->lastError());
+                   noteMade(*k.st, s, MadeKind::DecalTexture, id);
+                   return c.name(kDecalTexture, id);
+               });
+        const Value sh = xr.call("engine.scene.create", {Value("e0")}).value;
+        Scene *s = xr.object<Scene>(sh.asInt());
+        const std::vector<unsigned char> px(2 * 2 * 4, 200);
+        const TextureId tex = s ? s->createTexture(2, 2, px.data(), false) : 0;
+        const TextureId tex2 = s ? s->createTexture(2, 2, px.data(), false) : 0;
+        const Value texH(xr.name(kTexture, tex)), tex2H(xr.name(kTexture, tex2));
+        const Result liveTex = xr.call("test.texture", {sh, texH});
+        std::printf("E0: the headless engine's textures: createTexture %u, %u (%s)\n", tex, tex2,
+                    tex && tex2 ? "it answers" : s->name().c_str());
+        // (d) the decal image: a 4x4 TGA written beside the row (loadDecalTexture takes a path; test_decals.cpp's way)
+        const char *tga = "e0_decal.tga";
+        if (FILE *f = std::fopen(tga, "wb")) {
+            unsigned char hdr[18] = {0, 0, 2, 0, 0, 0, 0, 0, 0, 0, 0, 0, 4, 0, 4, 0, 32, 0x28};
+            std::fwrite(hdr, 1, sizeof hdr, f);
+            const std::vector<unsigned char> bgra(4 * 4 * 4, 128);
+            std::fwrite(bgra.data(), 1, bgra.size(), f);
+            std::fclose(f);
+        }
+        Scene *handedDecals = headless->createScene("e0-handed");
+        const auto used = [&]() {
+            headless->renderOneFrame();
+            return handedDecals->published().decalAtlasUsed[int(DecalMap::Diffuse)];
+        };
+        const unsigned before = used();
+        unsigned during = 0;
+        Value decalH;
+        {
+            Host run;
+            run.setConsole([](const std::string &) {});
+            const Commands rk = makeEngineCommands(run, headless.get(), bootError, false);
+            run.registry().add({"test.loadDecal", {Access::Files, {target(handle("scene", kScene)), arg("path", Kind::String)},
+                                                   Kind::Int, kDecalTexture},
+                                "a decal image loaded and recorded as this host's"},
+                               [rk](Call &c) -> Value {
+                                   Scene *x = rk.scene(c, c[0]);
+                                   if (!x) return Value();
+                                   const TextureId id = x->loadDecalTexture(c[1].asString(), DecalMap::Diffuse);
+                                   if (!id) return c.refuse(rk.st->engine->lastError());
+                                   noteMade(*rk.st, x, MadeKind::DecalTexture, id);
+                                   return c.name(kDecalTexture, id);
+                               });
+            const Value h(run.registry().hold("scene", std::shared_ptr<Scene>(handedDecals, [](Scene *) {})));
+            const Result loaded = run.call("test.loadDecal", {h, Value(tga)});
+            std::printf("E0: the headless engine's decal atlas: loadDecalTexture %s (%s)\n",
+                        loaded.status == Status::Ok ? "answers" : "does not answer", loaded.message.c_str());
+            during = used();
+        }
+        const unsigned after = used();
+        check(before + 1 == during && after == before,
+              "(d) THE DECAL SLICE COMES BACK: a decal image a host loaded in a handed-in scene and left is destroyed at "
+              "the host's end - the atlas's used slices " + std::to_string(before) + " before the host, " +
+                  std::to_string(during) + " while it lived (THE CONTROL: taken), " + std::to_string(after) + " after");
+        // (a) the texture kinds: decalH names a decal image of the scene `e0` (Q's door, here the test's)
+        decalH = xr.call("test.loadDecal", {sh, Value(tga)}).value;
+        const Result asTexture = xr.call("test.texture", {sh, decalH});
+        s->destroyTexture(tex);
+        const Result dead = xr.call("test.texture", {sh, texH});
+        check(liveTex.status == Status::Ok && liveTex.value == Value(std::int64_t(tex)) &&
+                  failedWith(dead, "test.texture: texture: texture " + std::to_string(tex) +
+                                       " is not a texture of scene 'e0' (another scene's, or destroyed)") &&
+                  !decalH.isNull() && failedWith(asTexture, "is a decalTexture handle, not a texture handle"),
+              "(a) THE TEXTURE KINDS: a destroyed texture FAILS by name (" + dead.message + "); a decal image's handle "
+              "where a texture is declared FAILS by its kind (" + asTexture.message + "); THE CONTROL: the live one "
+              "passed");
+        // (b) the handle member
+        const Value node = xr.call("engine.node.create", {sh}).value;
+        const auto textured = [&](Value::Object rec) { return xr.call("test.textured", {sh, Value(std::move(rec))}); };
+        const Result filled = textured({{"tex", tex2H}, {"nodes", Value(Value::Array{node})}});
+        const Result empty = textured({}), zero = textured({{"tex", Value(0)}});
+        const Result deadMember = textured({{"tex", texH}});
+        check(filled.status == Status::Ok && filled.value["tex"] == Value(std::int64_t(tex2)) &&
+                  filled.value["nodes"] == Value(Value::Array{Value(std::int64_t(Call::idOf(node)))}) &&
+                  filled.value["answer"]["tex"] == tex2H && filled.value["answer"]["nodes"] == Value(Value::Array{node}) &&
+                  empty.value["tex"] == Value(0) && empty.value["answer"]["tex"].isNull() && zero.value["tex"] == Value(0) &&
+                  failedWith(deadMember, "test.textured: tex: texture " + std::to_string(tex) + " is not a texture"),
+              "(b) A HANDLE MEMBER resolves its id (" + std::to_string(tex2) + ", and a node array's), null and a literal "
+              "0 read none, a destroyed one FAILS by its member (" + deadMember.message + "), and the record answers the "
+              "same handles");
+        // (c) the published pause
+        GiParams paused;
+        paused.updateBudget = 0;
+        const bool tookPause = s->setGlobalIllumination(paused);
+        Scene *plain = headless->createScene("e0-unpaused");
+        headless->renderOneFrame();
+        const int pausedBudget = s->published().gi.updateBudget, plainBudget = plain->published().gi.updateBudget;
+        check(pausedBudget == 0 && plainBudget == 1,
+              "(c) THE PAUSE IS PUBLISHED: a scene given updateBudget 0 publishes 0 (" + std::to_string(pausedBudget) +
+                  ", setGlobalIllumination " + (tookPause ? "took it" : "refused it") + "); THE CONTROL: a scene at the "
+                  "default publishes 1 (" + std::to_string(plainBudget) + ")");
+        headless->destroyScene(plain);
+        // (e) a handed-in scene its owner destroyed
+        Scene *gone = headless->createScene("e0-gone");
+        const Value goneH(xr.hold("scene", std::shared_ptr<Scene>(gone, [](Scene *) {})));
+        const bool liveCall = xr.call("engine.node.create", {goneH}).status == Status::Ok;
+        headless->destroyScene(gone);
+        const Result afterGone = xr.call("engine.node.create", {goneH});
+        check(liveCall && failedWith(afterGone, "engine.node.create: the scene this handle names was destroyed by the "
+                                                "host's owner"),
+              "(e) WHAT IS HANDED IN, GUARDED: a call on a handed-in scene its owner destroyed FAILS by name (" +
+                  afterGone.message + "); THE CONTROL: the call answered while it lived");
+        headless->destroyScene(handedDecals);
     }
 
     if (gFail) std::printf("script.host: FAILED (%d)\n", gFail);
