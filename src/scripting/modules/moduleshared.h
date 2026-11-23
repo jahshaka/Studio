@@ -18,7 +18,6 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/quat.h"
 #include "irisgl/document/qt/colour.h"
-#include "irisgl/document/qt/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include <QColor>
 #include <QVector3D>

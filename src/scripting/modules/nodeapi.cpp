@@ -9,7 +9,6 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/document/qt/qtinterop.h"
 #include "app/qtstd.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/locomotion.h"

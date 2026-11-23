@@ -7,7 +7,8 @@
 find_package(Qt6 REQUIRED COMPONENTS Gui)
 add_executable(test_math_parity test_math_parity.cpp)
 set_target_properties(test_math_parity PROPERTIES AUTOMOC OFF)
-target_include_directories(test_math_parity PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/irisgl)   # the house spelling "irisgl/core/..."; irisgl's own headers spell "core/..."
+target_include_directories(test_math_parity PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)   # the house spelling "irisgl/core/..."; irisgl's own headers spell "core/..."; src/: the conversions are app/qtstdgui.h's (NOQT-DOCUMENT-1 stage 4)
 target_link_libraries(test_math_parity PRIVATE Qt6::Gui)
 add_test(NAME math.parity COMMAND test_math_parity
          WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})

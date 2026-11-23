@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QVector3D>
 
-#include "irisgl/document/qt/qtinterop.h"
+#include "app/qtstdgui.h"
 #include "irisgl/document/scenegraph/looks.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "services/vrworld.h"
@@ -33,8 +33,8 @@ namespace {
 
 using iris::ScenePtr;
 
-QVariant vec(const iris::Vec3 &v) { return QVariant::fromValue(iris::toQt(v)); }
-iris::Vec3 vec(const QVariant &v) { return iris::fromQt(v.value<QVector3D>()); }
+QVariant vec(const iris::Vec3 &v) { return QVariant::fromValue(qtstd::toQt(v)); }
+iris::Vec3 vec(const QVariant &v) { return qtstd::fromQt(v.value<QVector3D>()); }
 
 /// The sky block, whole (see the header for why it is one value).
 QVariant captureSky(const ScenePtr &s)

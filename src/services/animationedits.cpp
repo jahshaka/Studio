@@ -9,7 +9,6 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/document/qt/qtinterop.h"
 #include "irisgl/core/math/vec.h"
 #include "services/animationedits.h"
 #include "app/qtstdgui.h"
@@ -176,7 +175,7 @@ bool setKeyframe(const iris::AnimationPtr &anim, const PropertyInfo &prop,
         putKey(frames[0].keyFrame, time, val.toFloat());
         break;
     case iris::PropertyType::Vec3: {
-        const iris::Vec3 v = iris::fromQt(val.value<QVector3D>());
+        const iris::Vec3 v = qtstd::fromQt(val.value<QVector3D>());
         putKey(frames[0].keyFrame, time, v.x());
         putKey(frames[1].keyFrame, time, v.y());
         putKey(frames[2].keyFrame, time, v.z());
@@ -268,7 +267,7 @@ QVariant sampleTrack(const iris::AnimationPtr &anim, const QString &property, do
     case 1:
         return frames[0].keyFrame->getValueAt(time);
     case 3:
-        return iris::toQt(iris::Vec3(frames[0].keyFrame->getValueAt(time),
+        return qtstd::toQt(iris::Vec3(frames[0].keyFrame->getValueAt(time),
                                      frames[1].keyFrame->getValueAt(time),
                                      frames[2].keyFrame->getValueAt(time)));
     case 4: {

@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/document/qt/qtinterop.h"
+#include "app/qtstdgui.h"
 #include "services/previewservice.h"
 #include "services/previewwriter.h"
 #include "bridge/enginehost.h"
@@ -1286,7 +1286,7 @@ void AssetView::openTile(const QString &guid)
 		// asset with no stored camera block keeps the framing its load
 		// computed (smoke S5: the defaults put the camera inside big models).
 		const auto restoreCamera = [&]() {
-			viewer->orientCamera(iris::fromQt(pos), iris::fromQt(rot), distObj);
+			viewer->orientCamera(qtstd::fromQt(pos), qtstd::fromQt(rot), distObj);
 		};
 		if (type == ModelTypes::Object || type == ModelTypes::ParticleSystem) {
 			// The model file IS the asset's source-role object.

@@ -36,7 +36,7 @@ Copyright (c) 2016-2026 EXEDOS LLC (www.exedos.com)
 #include "irisgl/core/math/vec.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/mat4.h"
-#include "irisgl/document/qt/qtinterop.h"
+#include "app/qtstdgui.h"
 #include "irisgl/core/math/trs.h"
 
 #include <cstdio>
@@ -477,19 +477,19 @@ int main()
         // qtinterop: the boundary every UI, QVariant and serializer site now
         // crosses. It has to be an exact identity in both directions.
         {
-            chk3("interop.v3", qv, iris::fromQt(iris::toQt(iv)));
-            chk3("interop.v3.qt", iris::toQt(iv), iv);
-            chk4("interop.v4", qv4, iris::fromQt(iris::toQt(iv4)));
-            chk4("interop.v4.qt", iris::toQt(iv4), iv4);
-            chk("interop.v2.x", iris::toQt(iv2).x(), qv2.x());
-            chk("interop.v2.y", iris::toQt(iv2).y(), qv2.y());
-            chkq("interop.quat", qq, iris::fromQt(iris::toQt(iq)));
-            chkq("interop.quat.qt", iris::toQt(iq), iq);
-            chkm("interop.mat4", qm, iris::fromQt(iris::toQt(im)));
-            chkm("interop.mat4.qt", iris::toQt(im), im);
-            chkm3("interop.mat3", iris::toQt(ie.toRotationMatrix()), ie.toRotationMatrix());
+            chk3("interop.v3", qv, qtstd::fromQt(qtstd::toQt(iv)));
+            chk3("interop.v3.qt", qtstd::toQt(iv), iv);
+            chk4("interop.v4", qv4, qtstd::fromQt(qtstd::toQt(iv4)));
+            chk4("interop.v4.qt", qtstd::toQt(iv4), iv4);
+            chk("interop.v2.x", qtstd::toQt(iv2).x(), qv2.x());
+            chk("interop.v2.y", qtstd::toQt(iv2).y(), qv2.y());
+            chkq("interop.quat", qq, qtstd::fromQt(qtstd::toQt(iq)));
+            chkq("interop.quat.qt", qtstd::toQt(iq), iq);
+            chkm("interop.mat4", qm, qtstd::fromQt(qtstd::toQt(im)));
+            chkm("interop.mat4.qt", qtstd::toQt(im), im);
+            chkm3("interop.mat3", qtstd::toQt(ie.toRotationMatrix()), ie.toRotationMatrix());
             chkm3("interop.mat3.back", qe.toRotationMatrix(),
-                  iris::fromQt(qe.toRotationMatrix()));
+                  qtstd::fromQt(qe.toRotationMatrix()));
         }
 
         // ---------------------------------------------------------------------
