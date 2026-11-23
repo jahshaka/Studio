@@ -1784,7 +1784,11 @@ bool Session::monitor(const Command &c)
     if (!out) { labFail("LAB FAILED monitor: cannot write %s\n", qPrintable(path)); return false; }
     const unsigned tee = mEngine->openMonitorTee();
     if (!tee) { std::fclose(out); labFail("LAB FAILED monitor: the engine opened no monitor tee\n"); return false; }
-    const bool ours = mEngine->published().monitor.level == MonitorLevel::Off;
+    // THE LEVEL AS THE HOST LAST SET IT (Engine::frameMonitor), never the published frame's: on the calling thread a
+    // request applies at the call, and the published record says so only after the next frame - a second `monitor`
+    // right after the first read the first one's Review there, never switched the monitor on and got no record
+    // (spikes/lab-scripts-1/repro-monitor/)
+    const bool ours = mEngine->frameMonitor() == MonitorLevel::Off;
     if (ours) {
         mEngine->request([](Engine &e) { e.setFrameMonitor(MonitorLevel::Review); });
         frame();   // the monitor's first frame (the request applied at the call, no drain): not measured - the filter below keeps the measured frames only
