@@ -25,10 +25,10 @@ For more information see the LICENSE file
 namespace {
 
 /// The row's `properties` JSON, as an object.
-QJsonObject propertiesOf(Database *db, const QString &guid)
+QJsonObject propertiesOf(Database *db, const QString &guid, bool *readOk)
 {
     if (!db) return QJsonObject();
-    return QJsonDocument::fromJson(db->fetchAsset(guid).properties).object();
+    return QJsonDocument::fromJson(db->fetchAsset(guid, readOk).properties).object();
 }
 
 } // namespace
@@ -108,7 +108,14 @@ void PresetCopyCommand::redo()
     // THE LINK BACK TO THE MASTER, on the row rather than in the definition:
     // it is a fact about this row in this library, it must survive every
     // later definition write, and it is what `presetedit::masterOf` reads.
-    QJsonObject props = propertiesOf(mDb, mCopyGuid);
+    // A FAILED READ IS NEVER WRITTEN BACK (B4's sweep): the copy's properties would be replaced whole.
+    bool propsRead = true;
+    QJsonObject props = propertiesOf(mDb, mCopyGuid, &propsRead);
+    if (!propsRead) {
+        mError = QObject::tr("the copy's row could not be read - the copy was not made");
+        mCopyGuid = mintedBefore;
+        return;   // the unit rolls back
+    }
     props.insert(MaterialBundle::kPresetMasterKey, mMaster);
     mDb->updateAssetProperties(mCopyGuid, QJsonDocument(props).toJson());
 

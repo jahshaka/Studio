@@ -202,20 +202,33 @@ QString AssetImportService::claimStampedMemberForUser(const ImportRequest &reque
     // module material's or a preset's map is not moved into Assets — the import
     // mints the user's own row on the same bytes (one object, two homes), so
     // no storage ever depends on a row another storage clears.
-    if (db->fetchAsset(guid).home() != request.home) return QString();
+    // A FAILED READ IS NO ANSWER HERE EITHER (B4's sweep): a normal import would mint the duplicate.
+    bool read = true;
+    const AssetRecord row = db->fetchAsset(guid, &read);
+    if (!read) {
+        if (readOk) *readOk = false;
+        return QString();
+    }
+    if (row.home() != request.home) return QString();
     // A row whose object is no longer in the store cannot serve this import;
     // a normal import brings the bytes back under a new row rather than
     // handing out a guid that resolves to nothing (the same guard
     // ShippedAssets::importTextureContent applies to its own by-content hit).
-    if (AssetCas::resolveSource(db->connection(), AssetStorePaths::root(), guid).isEmpty())
+    if (AssetCas::resolveSource(db->connection(), AssetStorePaths::root(), guid, nullptr, &read).isEmpty()) {
+        if (!read && readOk) *readOk = false;
         return QString();
+    }
 
     // THE USER'S INTENT OUTRANKS THE ORIGIN (V-2, read from the import side):
     // the row is theirs from now on — a tile in the tray and on the Assets
     // page. Nothing else about it moves: the material's definition still names
     // this guid, so the bundle still lists it as a member, and every project
     // pin, dependency row and scene reference is untouched.
-    if (!memberstamp::unstamp(db, guid)) return QString();
+    // an unstamp that could not read the row is no claim (B4's sweep): refused, never a second row minted
+    if (!memberstamp::unstamp(db, guid)) {
+        if (readOk) *readOk = false;
+        return QString();
+    }
     return guid;
 }
 

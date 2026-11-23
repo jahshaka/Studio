@@ -106,7 +106,7 @@ static QString textureRow(Database &db, const QString &guid, const QString &name
 // tableExists x3, COUNT x2, the mapped oids, then the probe).
 // mode 4: every read of `project_assets` INSIDE A SELECT denied ("is it pinned here", the pin's oid), its writes
 // untouched; mode 5: only the pin's OID (`project_assets.oid_pin`) inside a SELECT ("is it pinned" still reads).
-struct Deny { int mode = 0; int selects = 0; bool inSelect = false; int probesDenied = 0; };
+struct Deny { int mode = 0; int selects = 0; bool inSelect = false; int probesDenied = 0; int filesSelect = -1; };
 static Deny gDeny;
 static int denyReads(void *, int action, const char *table, const char *column, const char *, const char *)
 {
@@ -139,6 +139,13 @@ static int denyReads(void *, int action, const char *table, const char *column, 
     // mode 12: `assets.parent` inside a SELECT (a bake's "does this slot have its row").
     if (gDeny.mode == 12 && gDeny.inSelect && std::strcmp(table, "assets") == 0 && column && std::strcmp(column, "parent") == 0)
         return SQLITE_DENY;
+    // mode 13: `files` inside the FIRST SELECT that reads it, once (a pinned object's own row; the source read after
+    // it is let through); mode 14: `folders` inside a SELECT.
+    if (gDeny.mode == 13 && gDeny.inSelect && std::strcmp(table, "files") == 0) {
+        if (gDeny.filesSelect < 0) gDeny.filesSelect = gDeny.selects;
+        if (gDeny.filesSelect == gDeny.selects) return SQLITE_DENY;
+    }
+    if (gDeny.mode == 14 && gDeny.inSelect && std::strcmp(table, "folders") == 0) return SQLITE_DENY;
     return SQLITE_OK;
 }
 
@@ -1369,6 +1376,111 @@ int main(int argc, char **argv)
                 sqlite3_set_authorizer(raw, nullptr, nullptr);
                 CHECK(!read && unread.isEmpty(), QStringLiteral("24: a read that failed answers nothing and clears readOk (rows %1)")
                                                      .arg(unread.size()).toUtf8().constData());
+            }
+
+            // 25. THE LEAD's DESTRUCTIVE SWEEP ROWS (B4's sweep, SWEEP-B4.tsv): a failed read decides no overwrite, no
+            //     write of half the edges, no foreign copy, no library bytes for the project's, no second folder.
+            {
+                // 25e (the E-family): a row's properties written back from a read that FAILED would replace them whole.
+                //      memberstamp::stamp with the row's properties unread (mode 11) writes NOTHING; its metadata stays.
+                texture(QStringLiteral("t25e"));
+                db.updateAssetProperties(QStringLiteral("t25e"), QByteArray("{\"metadata\":{\"kind\":\"image\"}}"));
+                bool rowRead = true;
+                db.fetchAsset(QStringLiteral("t25e"), &rowRead);
+                CHECK(rowRead, "25e: CONTROL: the row reads (readOk kept)");
+                gDeny = Deny{ 11 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                db.fetchAsset(QStringLiteral("t25e"), &rowRead);
+                const bool stamped = memberstamp::stamp(&db, QStringLiteral("t25e"), QStringLiteral("m25e"));
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                const QJsonObject props = QJsonDocument::fromJson(db.fetchAsset(QStringLiteral("t25e")).properties).object();
+                CHECK(!rowRead, "25e: fetchAsset's failed read clears readOk");
+                CHECK(!stamped && props.contains(QStringLiteral("metadata")) && !props.contains(QStringLiteral("member")),
+                      QStringLiteral("25e: a stamp whose properties could not be read writes NOTHING (answer %1, props %2)")
+                          .arg(stamped).arg(QString::fromUtf8(QJsonDocument(props).toJson(QJsonDocument::Compact)))
+                          .toUtf8().constData());
+
+                // 25f (materialbundle.cpp:65): another project's preset copy whose own row could not be read is refused.
+                libraryRow(QStringLiteral("f25copy"), true);
+                db::Error setE;
+                conn.exec("UPDATE assets SET properties = CAST('{\"presetMaster\": \"00000000-0000-0000-0000-000000002024\"}' "
+                          "AS BLOB) WHERE guid = 'f25copy'", &setE);
+                project(QStringLiteral("f25-p"));
+                pin(QStringLiteral("f25-p"), QStringLiteral("f25copy"));
+                gDeny = Deny{ 11 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const QString foreign = MaterialBundle::foreignCopyRefusal(&db, QStringLiteral("f25copy"), QStringLiteral("f25-q"));
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(foreign.contains(QStringLiteral("could not be read")),
+                      QStringLiteral("25f: a copy whose own row could not be read is REFUSED by name: '%1'").arg(foreign)
+                          .toUtf8().constData());
+
+                // 25w (materialbundle.cpp:223): a write whose member's row could not be read is REFUSED whole - never
+                //      committed with that member's edge missing.
+                texture(QStringLiteral("t25w"));
+                const QString m25w = material(QStringLiteral("m25w"), QStringLiteral("t25w"));
+                const auto edge = [&]() {
+                    return countWhere("SELECT COUNT(*) FROM dependencies WHERE depender = ? AND dependee = ?",
+                                      { m25w, QStringLiteral("t25w") });
+                };
+                const int edgesBefore = edge();
+                QJsonObject values;
+                values[QStringLiteral("baseColorMap")] = QStringLiteral("t25w");
+                values[QStringLiteral("roughness")] = 0.6;
+                QJsonObject def;
+                def[QStringLiteral("materialType")] = QStringLiteral("pbr");
+                def[QStringLiteral("values")] = values;
+                gDeny = Deny{ 11 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const MaterialBundle::WriteResult w25 = MaterialBundle::write(&db, nullptr, m25w, def, MaterialBundle::Scope::Library);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(edgesBefore == 1, QStringLiteral("25w: CONTROL: the member's edge is there (%1)").arg(edgesBefore)
+                                            .toUtf8().constData());
+                CHECK(!w25.ok && edge() == 1,
+                      QStringLiteral("25w: a write whose member's row could not be read is REFUSED, its edge kept (ok %1, "
+                                     "edges %2; '%3')").arg(w25.ok).arg(edge()).arg(w25.error).toUtf8().constData());
+
+                // 25j (assetcas.cpp:739): the pin READ, its object's row read FAILED (mode 13: the first SELECT over
+                //      `files`, once) - nothing resolved, never the library's bytes for the project's version.
+                texture(QStringLiteral("t25j"));
+                db.createProject(QStringLiteral("p25j"), QStringLiteral("p25j"));
+                Project owner25;
+                owner25.setProjectGuid(QStringLiteral("p25j"));
+                const QString own25 = painted(QStringLiteral("t25j"), owner25);
+                const QString projectPath = AssetCas::resolvePinned(conn, storeRoot, QStringLiteral("p25j"), QStringLiteral("t25j"));
+                CHECK(!own25.isEmpty() && projectPath.contains(own25), "25j: CONTROL: the project's own version resolves");
+                gDeny = Deny{ 13 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                bool pinRead = true;
+                const QString unresolved =
+                    AssetCas::resolvePinned(conn, storeRoot, QStringLiteral("p25j"), QStringLiteral("t25j"), nullptr, &pinRead);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(unresolved.isEmpty() && !pinRead,
+                      QStringLiteral("25j: a pinned object whose row could not be read resolves NOTHING (got '%1', readOk %2)")
+                          .arg(unresolved).arg(pinRead).toUtf8().constData());
+
+                // 25r (graphdefinition.cpp:255's read): MaterialBundle::read whose definition could not be read answers
+                //      nothing and clears readOk (the graph save then refuses: by reading, the bake does not link here).
+                bool defRead = true;
+                MaterialBundle::read(&db, m25w, nullptr, &defRead);
+                CHECK(defRead, "25r: CONTROL: the definition reads");
+                gDeny = Deny{ 6 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const QJsonObject unreadDef = MaterialBundle::read(&db, m25w, nullptr, &defRead);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(!defRead && unreadDef.isEmpty(), "25r: a definition whose store row could not be read clears readOk");
+
+                // 25d (database.cpp:1354): ensureFolder whose folder read failed (mode 14) creates NO second folder.
+                db.createProject(QStringLiteral("p25d"), QStringLiteral("p25d"));
+                const QString systems = db.ensureFolder(QStringLiteral("Systems"), QStringLiteral("p25d"), false);
+                gDeny = Deny{ 14 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const QString second = db.ensureFolder(QStringLiteral("Systems"), QStringLiteral("p25d"), false);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                const int folders = countWhere("SELECT COUNT(*) FROM folders WHERE name = 'Systems' AND project_guid = 'p25d'");
+                CHECK(!systems.isEmpty() && second.isEmpty() && folders == 1,
+                      QStringLiteral("25d: a folder read that failed mints no second folder (answered '%1', folders %2)")
+                          .arg(second).arg(folders).toUtf8().constData());
             }
 
             // 17.6 (F6) A SIDECAR THAT PARSES BUT THAT THE REBUILD SKIPS (no home in this format, no origin) keeps every

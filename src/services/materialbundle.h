@@ -104,7 +104,9 @@ const QSet<QString> &textureSlots();
 /// PIN-first when `project` is given, so a project reads the version it was
 /// built with — then the row's `asset` blob (an image companion minted before
 /// this lane, a DB-only row). Empty when the guid names no material.
-QJsonObject read(Database *db, const QString &guid, Project *project = nullptr);
+/// `readOk` (when given) is CLEARED by a read of the catalog that failed: the empty answer is then no "no material"
+/// (B4's sweep: a save that carries rows from it refuses).
+QJsonObject read(Database *db, const QString &guid, Project *project = nullptr, bool *readOk = nullptr);
 
 /// WHOSE version of the definition a write publishes.
 enum class Scope

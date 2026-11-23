@@ -62,10 +62,13 @@ QString presetMasterOf(const QByteArray &rowProperties)
 QString foreignCopyRefusal(Database *db, const QString &guid, const QString &projectGuid)
 {
     if (!db || guid.isEmpty()) return QString();
-    const QString master = presetMasterOf(db->fetchAsset(guid).properties);
-    if (master.isEmpty()) return QString();
-    // A FAILED READ IS NOT "NOBODY HOLDS IT" (NOQT-DATABASE-1 stage 2): refused by name.
+    // A FAILED READ IS NOT "NOBODY HOLDS IT" (NOQT-DATABASE-1 stage 2): refused by name - the copy's own row (B4's
+    // sweep) as much as its holders.
     bool read = true;
+    const QString master = presetMasterOf(db->fetchAsset(guid, &read).properties);
+    if (!read)
+        return QStringLiteral("whether '%1' is another project's copy could not be read - refused").arg(guid);
+    if (master.isEmpty()) return QString();
     const QVector<AssetPinRecord> pins = db->fetchAssetPins(guid, &read);
     if (!read)
         return QObject::tr("'%1' here is a copy of the shipped preset, and which project holds it could not be read: "
@@ -219,7 +222,9 @@ bool reconcileEdges(Database *db, const QString &guid, const QJsonObject &defini
 
     bool ok = true;
     for (const QString &member : memberGuids(definition)) {
-        const auto record = db->fetchAsset(member);
+        bool read = true;
+        const auto record = db->fetchAsset(member, &read);
+        if (!read) return false;   // never committed with this member's edge missing (B4's sweep): its unit rolls back
         // A guid the catalog does not know names nothing to depend on.
         if (record.guid.isEmpty()) continue;
         ok = db->createDependency(static_cast<int>(ModelTypes::Material),
@@ -280,7 +285,7 @@ QJsonObject normaliseColours(const QJsonObject &definition)
     return out;
 }
 
-QJsonObject read(Database *db, const QString &guid, Project *project)
+QJsonObject read(Database *db, const QString &guid, Project *project, bool *readOk)
 {
     if (!db || guid.isEmpty()) return QJsonObject();
 
@@ -290,10 +295,15 @@ QJsonObject read(Database *db, const QString &guid, Project *project)
     // D-2: the definition is a store object. PIN-FIRST in a project, so a
     // project renders the version it was built with (F11).
     QString path;
+    bool read = true;
     if (project && !project->getProjectGuid().isEmpty())
-        path = AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid);
+        path = AssetCas::resolvePinned(conn, root, project->getProjectGuid(), guid, nullptr, &read);
     else
-        path = AssetCas::resolveSource(conn, root, guid);
+        path = AssetCas::resolveSource(conn, root, guid, nullptr, &read);
+    if (!read) {
+        if (readOk) *readOk = false;
+        return QJsonObject();
+    }
 
     if (!path.isEmpty()) {
         QFile file(path);
@@ -305,7 +315,7 @@ QJsonObject read(Database *db, const QString &guid, Project *project)
 
     // No stored definition: the row's blob. An image companion minted before
     // this lane, and any row a reader reaches before its first save.
-    return parseDefinition(db->fetchAssetData(guid));
+    return parseDefinition(db->fetchAssetData(guid, readOk));
 }
 
 namespace {
@@ -583,8 +593,11 @@ WriteResult writeImpl(Database *db, Project *project, const QString &guid,
     // A project's own membership needs no second edge set: `addToProject`
     // walks the closure at add time and the pins are what an archive reads,
     // and the pins are written below.
-    reconcileEdges(db, guid, stored,
-                   scope == Scope::Library || !project ? QString() : project->getProjectGuid());
+    // ITS ANSWER IS READ (B4's sweep): an edge set written short - a member's row unread, a write refused - refuses the
+    // definition whole; a missing use edge lets a reap take a map this material still names.
+    if (!reconcileEdges(db, guid, stored,
+                        scope == Scope::Library || !project ? QString() : project->getProjectGuid()))
+        return fail(QStringLiteral("its members' edges could not be read or written - nothing was written"));
 
     // EVERY MEMBER THE DEFINITION NAMES IS PINNED (F8). A baked map is minted
     // during the write itself, and the ordinary order is "add the material to

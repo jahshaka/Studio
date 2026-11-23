@@ -51,12 +51,14 @@ QHash<QString, iris::MeshPtr> &cache()
 /// The row exists and its source bytes are in the store: the path to them.
 /// (The seed half has its own copy — one function, two translation units, and it
 /// is four lines: the alternative is a third TU for it.)
-QString storedSource(db::Connection &conn, const QString &root, Database *db, const QString &guid)
+/// `readOk` CLEARED by a read that failed: its '' is then no "not seeded" (B4's sweep: the seed would force-delete
+/// the platform row and import it again).
+QString storedSource(db::Connection &conn, const QString &root, Database *db, const QString &guid, bool *readOk)
 {
     if (!db) return QString();
-    const AssetRecord row = db->fetchAsset(guid);
+    const AssetRecord row = db->fetchAsset(guid, readOk);
     if (row.guid.isEmpty() && row.name.isEmpty()) return QString();
-    return AssetCas::resolveSource(conn, root, guid);
+    return AssetCas::resolveSource(conn, root, guid, nullptr, readOk);
 }
 
 }   // namespace
@@ -84,8 +86,14 @@ iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db)
     // document, dock or verb asks here the rows are there; a binary that never
     // seeds (a preview-only test, a tool) gets an honest null instead of a link
     // dependency on the importer.
+    bool read = true;
     const QString source = storedSource(db->connection(), AssetStorePaths::root(),
-                                       db, guid);
+                                       db, guid, &read);
+    if (!read) {
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "primitive: '" + QString::fromLatin1(def->name)
+                                                          + "' could not be read from the library - nothing to draw");
+        return iris::MeshPtr();
+    }
     if (source.isEmpty()) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, "primitive: '" + QString::fromLatin1(def->name)
                                                           + "' is not seeded in this library — nothing to draw");
@@ -117,7 +125,9 @@ bool allSeeded(Database *db)
     const QString root = AssetStorePaths::root();
     for (const primitives::Def &def : primitives::all()) {
         if (!def.guid) continue;
-        const QString source = storedSource(conn, root, db, QString::fromLatin1(def.guid));
+        bool read = true;   // an unread row is not "seeded": the seed is asked, and refuses by name
+        const QString source = storedSource(conn, root, db, QString::fromLatin1(def.guid), &read);
+        if (!read) return false;
         if (source.isEmpty()) return false;
         if (!MeshBakeStore::isFresh(conn, root, source, QString::fromLatin1(def.guid)))
             return false;

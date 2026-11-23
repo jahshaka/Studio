@@ -135,12 +135,14 @@ bool storedIsShipped(const primitives::Def &def, const QString &storedPath)
 }
 
 /// The row exists and its source bytes are in the store: the path to them.
-QString storedSource(db::Connection &conn, const QString &root, Database *db, const QString &guid)
+/// `readOk` CLEARED by a read that failed: its '' is then no "not seeded" (B4's sweep: the seed would force-delete
+/// the platform row and import it again).
+QString storedSource(db::Connection &conn, const QString &root, Database *db, const QString &guid, bool *readOk)
 {
     if (!db) return QString();
-    const AssetRecord row = db->fetchAsset(guid);
+    const AssetRecord row = db->fetchAsset(guid, readOk);
     if (row.guid.isEmpty() && row.name.isEmpty()) return QString();
-    return AssetCas::resolveSource(conn, root, guid);
+    return AssetCas::resolveSource(conn, root, guid, nullptr, readOk);
 }
 
 }   // namespace
@@ -184,7 +186,13 @@ Plan planSeed(const primitives::Def &def, Database *db)
     // (kFormatVersion, the BAKE KEY) leaves the row and its source in place with
     // a bake this build cannot read, and the seed is the one place that knows
     // how to rebuild it without waiting for a sweep.
-    QString have = storedSource(conn, root, db, plan.guid);
+    bool read = true;
+    QString have = storedSource(conn, root, db, plan.guid, &read);
+    if (!read) {
+        plan.error = QStringLiteral("whether '%1' is seeded could not be read - nothing was changed")
+                         .arg(QString::fromLatin1(def.name));
+        return plan;
+    }
     // A SEEDED ROW HOLDS THE SHIPPED BYTES, OR IT IS RE-SEEDED (TEST-STREAMLINE-1 3a audit F4): a row whose stored source
     // is not the mesh this build ships (a library from a template, or one an older build seeded, after a shipped mesh
     // changed) would draw the OLD mesh with a bake that reads fresh against its own old source - so it is dropped below
@@ -289,7 +297,11 @@ QString commitSeed(Plan &plan, Database *db, QString *errorOut)
     // carries — services/assettray.h rule 4; the home kept it out of every
     // listing already). A primitive is offered by its TILE and by
     // `scene.addPrimitive`; it is not one of the user's imports.
-    const AssetRecord row = db->fetchAsset(plan.guid);
+    bool read = true;
+    const AssetRecord row = db->fetchAsset(plan.guid, &read);
+    if (!read)   // never written back from a failed read (B4's sweep): the row's import record would go
+        return failed(QStringLiteral("the seed of '%1' landed, but its row could not be read to mark it")
+                          .arg(QString::fromLatin1(plan.def->name)));
     QJsonObject props = QJsonDocument::fromJson(row.properties).object();
     props.insert(QStringLiteral("type"), QStringLiteral("platform"));
     db->updateAssetProperties(plan.guid, QJsonDocument(props).toJson());

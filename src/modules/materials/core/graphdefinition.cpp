@@ -193,9 +193,16 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
         if (!hasTextureNode) carry += kUvRows;
         if (graph->settings.blendMode == BlendMode::Refractive) carry += kRefractiveRows;
 
+        // A PREVIOUS DEFINITION THAT COULD NOT BE READ IS NO "NONE" (B4's sweep): the save would write the material
+        // without the rows no graph can say. Refused by name.
+        bool previousRead = true;
         const QJsonObject previous =
-            MaterialBundle::read(db, materialGuid, project)
+            MaterialBundle::read(db, materialGuid, project, &previousRead)
                 .value(QStringLiteral("values")).toObject();
+        if (!previousRead) {
+            out.error = QStringLiteral("the saved definition of '%1' could not be read - nothing was saved").arg(materialGuid);
+            return out;
+        }
         for (const QString &key : carry) {
             if (values.contains(key) || !previous.contains(key)) continue;
             values[key] = previous.value(key);

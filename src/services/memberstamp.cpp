@@ -24,10 +24,11 @@ namespace {
 const QLatin1String kMemberKey("member");
 const QLatin1String kOriginKey("memberOf");
 
-QJsonObject propertiesOf(Database *db, const QString &guid)
+/// `readOk` (when given) CLEARED by a read that failed: never written back as if it were the row's (B4's sweep).
+QJsonObject propertiesOf(Database *db, const QString &guid, bool *readOk = nullptr)
 {
-    if (!db) return QJsonObject();
-    return QJsonDocument::fromJson(db->fetchAsset(guid).properties).object();
+    if (!db) { if (readOk) *readOk = false; return QJsonObject(); }
+    return QJsonDocument::fromJson(db->fetchAsset(guid, readOk).properties).object();
 }
 
 }   // namespace
@@ -61,7 +62,9 @@ QByteArray stamped(const QByteArray &properties, const QString &materialGuid)
 bool stamp(Database *db, const QString &textureGuid, const QString &materialGuid)
 {
     if (!db || textureGuid.isEmpty()) return false;
-    QJsonObject props = propertiesOf(db, textureGuid);
+    bool read = true;
+    QJsonObject props = propertiesOf(db, textureGuid, &read);
+    if (!read) return false;   // a row's properties written back from a failed read would replace them whole
     if (props.value(kMemberKey).toBool()
         && !props.value(kOriginKey).toString().isEmpty())
         return true;   // already somebody's member; an origin never moves
@@ -74,7 +77,9 @@ bool stamp(Database *db, const QString &textureGuid, const QString &materialGuid
 bool unstamp(Database *db, const QString &guid)
 {
     if (!db || guid.isEmpty()) return false;
-    QJsonObject props = propertiesOf(db, guid);
+    bool read = true;
+    QJsonObject props = propertiesOf(db, guid, &read);
+    if (!read) return false;
     // BOTH KEYS, and nothing else in the row's properties: the reverse edit of
     // `stamp`. A row with neither key is already the user's — say yes and
     // write nothing (this runs on every import of content the library has).

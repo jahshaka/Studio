@@ -617,6 +617,10 @@ public:
 
     // FETCH ================================================================================
     AssetRecord fetchAsset(const QString &guid);
+    /// The same read, a failure told apart (NOQT-DATABASE-1 stage 2, B4's sweep: the E-family): `readOk` is CLEARED
+    /// when the read FAILED - its empty record is then no "no such row", and a caller that would write the row's
+    /// fields back (a read-modify-write of `properties`) refuses.
+    AssetRecord fetchAsset(const QString &guid, bool *readOk);
     QVector<AssetRecord> fetchAssetsForAssetView();
     /// Stored bytes per asset (sum of its linked CAS objects' sizes), for the
     /// Assets page's list view Size column. guid → bytes; assets with no
@@ -840,7 +844,8 @@ public:
                                          const QStringList &guids = QStringList());
     /// The library file this connection opened (what readThumbnailBytes is handed).
     QString filePath() const;
-    QByteArray fetchAssetData(const QString &guid) const;
+    /// `readOk` (when given) is CLEARED by a read that failed: its empty answer is then no "no blob".
+    QByteArray fetchAssetData(const QString &guid, bool *readOk = nullptr) const;
 
     QStringList fetchFolderNameByParent(const QString &guid);
     QStringList fetchAssetNameByParent(const QString &guid);

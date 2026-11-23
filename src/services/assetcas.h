@@ -191,8 +191,11 @@ QHash<QString, MemberPin> memberPins(db::Connection &conn, const QString &projec
 /// `nameOut` (optional) receives its display name. Falls back to the single
 /// file when no row carries the source role. Empty when the asset has no
 /// stored bytes.
+/// `readOk` (when given) is CLEARED by a read that FAILED: its empty answer is then no "no bytes" (a caller that
+/// would import the bytes again, or re-seed, refuses).
 QString resolveSource(db::Connection &conn, const QString &root,
-                      const QString &guid, QString *nameOut = nullptr);
+                      const QString &guid, QString *nameOut = nullptr,
+                      bool *readOk = nullptr);
 
 // --- Reference-with-pin (phase 4, spec §3.1.5) -----------------------------
 
@@ -219,10 +222,11 @@ QString pinnedOid(db::Connection &conn, const QString &projectGuid,
 /// object is present, else the asset's current source (a project asset
 /// created before pinning, or a pin whose object was purged). `nameOut`
 /// receives the display name. Empty when the asset has no bytes anywhere, and
-/// when the pin could not be READ (never the library's bytes in its place).
+/// when the pin, or its object's row, could not be READ (never the library's bytes in its place) - `readOk`
+/// (when given) then CLEARED.
 QString resolvePinned(db::Connection &conn, const QString &root,
                       const QString &projectGuid, const QString &guid,
-                      QString *nameOut = nullptr);
+                      QString *nameOut = nullptr, bool *readOk = nullptr);
 
 /// Write <root>/sidecar/<guid>.json — the catalog-rebuild record (invariant
 /// I2): identity, organization, metadata and the file manifest.

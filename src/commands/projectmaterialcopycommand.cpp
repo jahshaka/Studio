@@ -90,7 +90,13 @@ void ProjectMaterialCopyCommand::redo()
         return;
     }
     if (!mMaster.isEmpty()) {
-        QJsonObject props = QJsonDocument::fromJson(mDb->fetchAsset(mCopyGuid).properties).object();
+        // A FAILED READ IS NEVER WRITTEN BACK (B4's sweep): the copy's properties would be replaced whole.
+        bool propsRead = true;
+        QJsonObject props = QJsonDocument::fromJson(mDb->fetchAsset(mCopyGuid, &propsRead).properties).object();
+        if (!propsRead) {
+            mError = QObject::tr("the copy's row could not be read - the copy was not made");
+            return;
+        }
         props.insert(MaterialBundle::kPresetMasterKey, mMaster);
         mDb->updateAssetProperties(mCopyGuid, QJsonDocument(props).toJson());
     }

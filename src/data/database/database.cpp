@@ -1356,6 +1356,8 @@ QString Database::ensureFolder(const QString &folderName, const QString &project
         dbqt::bindText(query, 2, projectGuid);
         if (executeAndCheckQuery(query, "ensureFolder") && query.next())
             return dbqt::text(query, 0);
+        // A FAILED READ IS NO "NOT THERE YET" (B4's sweep): a second folder of the name would be minted.
+        if (query.failed()) return QString();
     }
 
     const QString guid = QString::fromStdString(iris::newGuid());
@@ -2545,6 +2547,11 @@ bool Database::updateAssetProperties(const QString &guid, const QByteArray &asse
 
 AssetRecord Database::fetchAsset(const QString &guid)
 {
+    return fetchAsset(guid, nullptr);
+}
+
+AssetRecord Database::fetchAsset(const QString &guid, bool *readOk)
+{
     // project_guid is selected (AVATAR_ASSET_SPEC lane): the column decides
     // whether a row is a LIBRARY asset or one owned by a project, and this
     // read is what every "is this mine?" caller uses. It was omitted, so
@@ -2593,7 +2600,8 @@ AssetRecord Database::fetchAsset(const QString &guid)
             return data;
         }
     }
-    else {
+    if (query.failed()) {   // the exec, or the step: no "no such row"
+        if (readOk) *readOk = false;
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the asset! " + dbqt::describe(query.error()));
     }
 
@@ -3096,14 +3104,17 @@ bool Database::switchAssetCollection(const int id, const QString &guid)
     return ok;
 }
 
-QByteArray Database::fetchAssetData(const QString &guid) const
+QByteArray Database::fetchAssetData(const QString &guid, bool *readOk) const
 {
 	db::Statement query(*mConnection, "SELECT asset FROM assets WHERE guid = ?");
 	dbqt::bindText(query, 1, guid);
 
 	db::Error error;
 	if (query.step(&error)) return dbqt::bytes(query, 0);
-	if (error) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the material blob! " + dbqt::describe(error));
+	if (error) {
+		if (readOk) *readOk = false;
+		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the material blob! " + dbqt::describe(error));
+	}
 
 	return QByteArray();
 }

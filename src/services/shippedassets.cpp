@@ -145,7 +145,14 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
     // without its objects) cannot serve a scene; a fresh import brings the
     // bytes back under a new row rather than handing out a guid that
     // resolves to nothing.
-    if (!guid.isEmpty() && AssetCas::resolveSource(conn, root, guid).isEmpty()) guid.clear();
+    if (!guid.isEmpty() && AssetCas::resolveSource(conn, root, guid, nullptr, &read).isEmpty()) {
+        if (!read) {   // a failed read is no "its bytes are gone" (B4's sweep): a second row would be minted
+            out.error = QStringLiteral("whether the library's '%1' still has its bytes could not be read - nothing "
+                                       "was imported").arg(displayName);
+            return out;
+        }
+        guid.clear();
+    }
 
     if (guid.isEmpty()) {
         // THE ONE PIPELINE. The image importer names the row after the file
@@ -215,9 +222,11 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
     // One read, and a write only when the marker is missing: this runs when a
     // scene is built, not per frame.
     if (ownership == Ownership::Platform && !guid.isEmpty()) {
-        const AssetRecord row = db->fetchAsset(guid);
+        bool read = true;
+        const AssetRecord row = db->fetchAsset(guid, &read);
         QJsonObject props = QJsonDocument::fromJson(row.properties).object();
-        if (props.value(QStringLiteral("type")).toString().isEmpty()) {
+        // the marker is written only over properties that were READ (B4's sweep): never a failed read's {} over them
+        if (read && props.value(QStringLiteral("type")).toString().isEmpty()) {
             props.insert(QStringLiteral("type"), QStringLiteral("platform"));
             db->updateAssetProperties(guid, QJsonDocument(props).toJson());
         }

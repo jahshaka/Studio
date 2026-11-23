@@ -1913,8 +1913,10 @@ void AssetView::loadWaveform(const QString &guid, const QString &filePath)
 			if (waveformGuid == guid) waveform->clear();
 			return;
 		}
-		QJsonObject props = QJsonDocument::fromJson(db->fetchAsset(guid).properties).object();
-		if (!props.contains("waveform")) {
+		// persisted only over properties that were READ (B4's sweep): never a failed read's {} written over them
+		bool read = true;
+		QJsonObject props = QJsonDocument::fromJson(db->fetchAsset(guid, &read).properties).object();
+		if (read && !props.contains("waveform")) {
 			props["waveform"] = AudioPeaks::toJson(peaks);
 			db->updateAssetProperties(guid, QJsonDocument(props).toJson());
 		}
@@ -2210,8 +2212,10 @@ void AssetView::backfillMetadata(const QString &guid, int assetType)
 
 		// Persist on the UI thread (it owns the SQLite connection), guarded
 		// so a concurrent backfill (verb, second selection) wins only once.
-		QJsonObject props = QJsonDocument::fromJson(db->fetchAsset(guid).properties).object();
-		if (!props.contains("metadata")) {
+		// persisted only over properties that were READ (B4's sweep): never a failed read's {} written over them
+		bool read = true;
+		QJsonObject props = QJsonDocument::fromJson(db->fetchAsset(guid, &read).properties).object();
+		if (read && !props.contains("metadata")) {
 			props["metadata"] = meta;
 			db->updateAssetProperties(guid, QJsonDocument(props).toJson());
 		}

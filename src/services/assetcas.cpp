@@ -502,7 +502,7 @@ bool moveSourcePointer(db::Connection &conn, const QString &guid, const QString 
 }
 
 QString resolveSource(db::Connection &conn, const QString &root,
-                      const QString &guid, QString *nameOut)
+                      const QString &guid, QString *nameOut, bool *readOk)
 {
     db::Statement query(conn, "SELECT AF.name, AF.oid, F.ext FROM asset_files AF "
                               "LEFT JOIN files F ON AF.oid = F.oid WHERE AF.asset_guid = ? "
@@ -516,6 +516,7 @@ QString resolveSource(db::Connection &conn, const QString &root,
             return path;
         }
     }
+    if (e && readOk) *readOk = false;   // a failed read is no "no bytes"
     // No asset_files row (a DB-only asset) or an object that is not on disk
     // (offline root, purged store): nothing to resolve. The pre-CAS per-guid
     // folders are not read (FORWARD-ONLY-1).
@@ -759,13 +760,16 @@ QString pinnedOid(db::Connection &conn, const QString &projectGuid,
 
 QString resolvePinned(db::Connection &conn, const QString &root,
                       const QString &projectGuid, const QString &guid,
-                      QString *nameOut)
+                      QString *nameOut, bool *readOk)
 {
     // A PIN THAT COULD NOT BE READ RESOLVES NOTHING (NOQT-DATABASE-1 stage 2): the library's bytes are not the
     // project's version, and an edit started from them would be written over the project's own.
     bool read = true;
     const QString pin = pinnedOid(conn, projectGuid, guid, &read);
-    if (!read) return QString();
+    if (!read) {
+        if (readOk) *readOk = false;
+        return QString();
+    }
     if (!pin.isEmpty()) {
         db::Statement query(conn, "SELECT F.ext, AF.name FROM files F "
                                   "LEFT JOIN asset_files AF ON AF.oid = F.oid AND AF.asset_guid = ? "
@@ -780,8 +784,13 @@ QString resolvePinned(db::Connection &conn, const QString &root,
                 return path;
             }
         }
+        // ...AND ITS OBJECT's ROW UNREAD IS NO "PURGED" (B4's sweep): the library's bytes are not the project's.
+        if (e) {
+            if (readOk) *readOk = false;
+            return QString();
+        }
     }
-    return resolveSource(conn, root, guid, nameOut);
+    return resolveSource(conn, root, guid, nameOut, readOk);
 }
 
 bool writeStoreInfo(const QString &root, QString *errorOut)
