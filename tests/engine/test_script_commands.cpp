@@ -7,6 +7,7 @@
 // (commands_cases_<family>.cpp), each on the same fixture: a host on no engine and one on the headless (NULL) engine.
 #include "script_commands.h"
 #include "enginetesthelpers.h"   // the headless (NULL) engine's config: no Qt, no card, no display
+#include "script/records_shared.h"   // the enums two families share
 
 #include <cstdio>
 #include <memory>
@@ -51,6 +52,21 @@ int main()
           "at least the 31 stage 2 started from" + (bare.empty() ? std::string() : " - bare:" + bare));
     check(checked > 0, "THE CONTROL: the commands were counted (" + std::to_string(checked) + ")");
 
+    // 1b. THE ENUMS TWO FAMILIES SHARE (records_shared.h): every enumerator named, once, by its own name
+    {
+        const auto count = [](const auto &names) { return names.size(); };
+        const bool all = count(EnumNames<GiMode>::all()) == 3 && count(EnumNames<GiQuality>::all()) == 4 &&
+                         count(EnumNames<GiToggle>::all()) == 3 && count(EnumNames<GiStaleReason>::all()) == 11 &&
+                         count(EnumNames<GiRegionKind>::all()) == kGiRegionKindCount - 1;
+        bool answered = true;
+        for (unsigned k = 1; k < kGiRegionKindCount; ++k)
+            answered = answered && toValue(GiRegionKind(k)).kind() == Kind::String;
+        answered = answered && toValue(GiStaleReason::Camera) == Value("camera") && toValue(GiMode::VctPccHybrid) == Value("vctPccHybrid");
+        check(all && answered, "THE SHARED ENUMS (records_shared.h): GiMode, GiQuality, GiToggle, GiStaleReason and GiRegionKind "
+                               "name every enumerator (" + std::to_string(EnumNames<GiRegionKind>::all().size()) +
+                                   " region kinds of " + std::to_string(kGiRegionKindCount - 1) + ")");
+    }
+
     // 2. A TEST DOOR IS REFUSED AT RUN TIME without --test-doors, and answers with it (the registry's switch, set by the
     //    engine's registration from its testDoors argument)
     Host opened;
@@ -77,7 +93,12 @@ int main()
         Host headless;
         headless.setConsole([](const std::string &) {});
         const Commands live = makeEngineCommands(headless, engine.get(), bootError, false);
-        Fixture f{none, headless, live, engine.get()};
+        Host::Options outsideOptions;
+        outsideOptions.outsideClient = true;
+        Host outside(outsideOptions);
+        outside.setConsole([](const std::string &) {});
+        registerEngineCommands(outside, nullptr, "no engine: an outside client's host", false);
+        Fixture f{none, headless, live, engine.get(), outside};
         casesScene(f);
         casesNode(f);
         casesLight(f);

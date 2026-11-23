@@ -18,11 +18,14 @@ using namespace jahshaka::engine::script;
 /// HEADLESS (NULL) ENGINE (no card, no display: a command's effect where that engine answers it) - with its command
 /// state `live` (a case's own test-local command reaches the made records and the helpers through it). `engine` is the
 /// headless engine; null when it did not boot (its boot line is then the row's first FAIL: a case says so and skips).
+/// `outside`: a host for an OUTSIDE client (Host::Options::outsideClient) on no engine - an engine-wide setter's
+/// refusal (Commands::engineWide) is asked there.
 struct Fixture {
     Host &none;
     Host &headless;
     const Commands &live;
     Engine *engine;
+    Host &outside;
 };
 
 /// One law judged: `ok:` / `FAIL:` and its text (a FAIL fails the row); a call that FAILED with `part` in its message.
