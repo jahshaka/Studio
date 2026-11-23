@@ -41,7 +41,7 @@ For more information see the LICENSE file
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
 #include "services/apppaths.h"
-#include "irisgl/document/qt/property.h"
+#include "irisgl/document/properties/property.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
 #include "irisgl/document/scenegraph/meshnode.h"

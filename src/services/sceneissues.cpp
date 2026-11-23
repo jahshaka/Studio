@@ -28,7 +28,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/material.h"
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/math/mat4.h"
-#include "irisgl/document/qt/property.h"
+#include "irisgl/document/properties/property.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/assets/mesh.h"

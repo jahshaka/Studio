@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QBuffer>
 #include <QAtomicInt>
 
-#include "irisgl/document/qt/property.h"
+#include "irisgl/document/properties/property.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/meshnode.h"

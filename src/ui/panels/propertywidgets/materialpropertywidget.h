@@ -21,7 +21,7 @@ For more information see the LICENSE file
 // inline (RowPtr::get needs the row's type, like any other use of it).
 #include "ui/controls/comboboxwidget.h"
 #include "irisgl/document/materials/material.h"
-#include "irisgl/document/qt/property.h"
+#include "irisgl/document/properties/property.h"
 
 namespace iris {
     class SceneNode;

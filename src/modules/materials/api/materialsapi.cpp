@@ -53,7 +53,7 @@ For more information see the LICENSE file
 #include "viewport/ieditorviewport.h"
 #include "services/services.h"
 #include "services/undoservice.h"
-#include "irisgl/document/qt/property.h"
+#include "irisgl/document/properties/property.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/meshnode.h"

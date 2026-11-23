@@ -31,7 +31,7 @@
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/document/qt/property.h"
+#include "irisgl/document/properties/property.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/Materials.h"

@@ -79,7 +79,7 @@ For more information see the LICENSE file
 #include "io/assetmanager.h"
 #include "io/builtinmaterials.h"
 #include "irisgl/document/materials/pbrmaterial.h"
-#include "irisgl/document/qt/property.h"
+#include "irisgl/document/properties/property.h"
 #include "io/scenewriter.h"
 #include "services/subscriber.h"
 #include "data/materialpreset.h"

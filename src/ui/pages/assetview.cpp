@@ -29,7 +29,7 @@ For more information see the LICENSE file
 
 #include "services/apppaths.h"
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/document/qt/property.h"
+#include "irisgl/document/properties/property.h"
 #include "zip.h"
 
 #include <QStackedLayout>
