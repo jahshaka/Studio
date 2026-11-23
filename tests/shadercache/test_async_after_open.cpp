@@ -71,11 +71,11 @@ namespace {
 QString treeKey()
 {
     QCryptographicHash h(QCryptographicHash::Sha256);
-    const QFileInfo bin(QStringLiteral(JAHSHAKA_BINARY));
+    const QFileInfo bin(QString::fromUtf8(JAHSHAKA_BINARY));
     // the tree's shader key, from its one definition (an empty answer - the script missing or the build unread - makes
     // every seed stale: re-made, never trusted)
     QProcess key;
-    key.start(QStringLiteral("bash"), {QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/scripts/warm-app-cache.sh"),
+    key.start(QStringLiteral("bash"), {QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/scripts/warm-app-cache.sh"),
                                        QFileInfo(bin.absolutePath()).absolutePath(), QStringLiteral("--key")});
     const bool keyed = key.waitForFinished(60000) && key.exitStatus() == QProcess::NormalExit && key.exitCode() == 0;
     const QByteArray shaderKey = keyed ? key.readAllStandardOutput().trimmed() : QByteArray();
@@ -84,7 +84,7 @@ QString treeKey()
     // THE STAGED MEDIA BY CONTENT under its media-relative path - the pass key's own term (jahshaka::engine::mediaDigest;
     // it hashed each file's ABSOLUTE path here, so no tree's seed could serve another, #154)
     h.addData("media " + QByteArray::fromStdString(jahshaka::engine::mediaDigest((bin.absolutePath() + QStringLiteral("/media")).toStdString())) + "\n");
-    QFile built(QStringLiteral(JAHSHAKA_OGRE_INSTALL) + QStringLiteral("/BUILT_FROM"));
+    QFile built(QString::fromUtf8(JAHSHAKA_OGRE_INSTALL) + QStringLiteral("/BUILT_FROM"));
     if (built.open(QIODevice::ReadOnly)) h.addData(built.readAll());
     // THE GLOBAL PASS's CODE (URGENT #139; TEST-STREAMLINE-1 point 3): the app's pass re-runs over a seed whose recorded
     // key is not its own, so the seed is stale exactly when that key's Studio half moves - JAH_STARTUP_PASS_CODE_ID (the
@@ -103,7 +103,7 @@ QString readStamp(const QString &path)
 
 QJsonObject runApp(const QString &home, const QString &outDir)
 {
-    const QString script = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
+    const QString script = QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) +
                            QStringLiteral("/tests/shadercache/scripts/e2e_async_after_open.js");
     QFile in(script);
     if (!in.open(QIODevice::ReadOnly)) { std::printf("FAIL: no script\n"); ++failures; return {}; }
@@ -122,7 +122,7 @@ QJsonObject runApp(const QString &home, const QString &outDir)
     app.setProcessEnvironment(env);
     app.setWorkingDirectory(home + "/run");
     app.setProcessChannelMode(QProcess::MergedChannels);
-    app.start(QStringLiteral(JAHSHAKA_BINARY), QStringList() << "--script" << wrapped);
+    app.start(QString::fromUtf8(JAHSHAKA_BINARY), QStringList() << "--script" << wrapped);
     if (!app.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); ++failures; return {}; }
     if (!app.waitForFinished(500000)) {
         std::printf("FAIL: app did not exit\n"); ++failures; app.kill(); app.waitForFinished(5000);
@@ -224,7 +224,7 @@ bool seedLaunch(const QString &seedHome, const QString &carry)
     app.setWorkingDirectory(seedHome + "/run");
     app.setProcessChannelMode(QProcess::MergedChannels);
     // (JAH_SEED_FAKE_APP: the key self-test's toy app, which compiles nothing and touches no card)
-    app.start(qEnvironmentVariable("JAH_SEED_FAKE_APP", QStringLiteral(JAHSHAKA_BINARY)), QStringList() << "--script" << script);
+    app.start(qEnvironmentVariable("JAH_SEED_FAKE_APP", QString::fromUtf8(JAHSHAKA_BINARY)), QStringList() << "--script" << script);
     if (!app.waitForStarted(20000) || !app.waitForFinished(500000)) { app.kill(); app.waitForFinished(5000); return false; }
     return app.exitCode() == 0;
 }
@@ -267,7 +267,7 @@ int keySelfTest()
           "the pass key moves with its code id, its media and the cache fingerprint, and with nothing else (no commit term)");
     // THE BUILD's LIST (cmake/startup_pass_id.py writes it at build time; source.startup_pass_closure holds it to the
     // compiler's own deps - completeness is that row's): it exists and names the pass's own source
-    QFile list(QFileInfo(QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).absolutePath()).absolutePath() +
+    QFile list(QFileInfo(QFileInfo(QString::fromUtf8(JAHSHAKA_BINARY)).absolutePath()).absolutePath() +
                QStringLiteral("/startup-pass-files.txt"));
     const QString names = list.open(QIODevice::ReadOnly) ? QString::fromUtf8(list.readAll()) : QString();
     CHECK(names.contains(QStringLiteral("src/app/shaderbuildgate.cpp\n")), "the build's pass list names shaderbuildgate.cpp");
@@ -303,7 +303,7 @@ int keySelfTest()
     {   // THE LAUNCH's PRICE of the media term (the app hashes its staged media at every launch's gate): measured, printed
         QElapsedTimer m; m.start();
         const std::string d = jahshaka::engine::mediaDigest(
-            (QFileInfo(QStringLiteral(JAHSHAKA_BINARY)).absolutePath() + QStringLiteral("/media")).toStdString());
+            (QFileInfo(QString::fromUtf8(JAHSHAKA_BINARY)).absolutePath() + QStringLiteral("/media")).toStdString());
         std::printf("    the build's staged media digest %s in %lld ms (the app pays it once a launch)\n", d.substr(0, 16).c_str(),
                     static_cast<long long>(m.elapsed()));
     }

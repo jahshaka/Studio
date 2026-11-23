@@ -22,7 +22,7 @@ For more information see the LICENSE file
 
 #include "services/audiopeaks.h"
 
-static const char *FIXTURES = JAHSHAKA_TEST_SOURCE_DIR "/tests/scripting/fixtures";
+static const std::string FIXTURES = std::string(JAHSHAKA_TEST_SOURCE_DIR) + "/tests/scripting/fixtures";
 
 static int failures = 0;
 #define CHECK(cond, msg)                                                     \
@@ -72,7 +72,7 @@ int main(int argc, char **argv)
     QTemporaryDir tmp;
 
     // ---- the committed fixture (8000 Hz mono, 50 ms) ----
-    const QString tinyWav = QString(FIXTURES) + "/tiny.wav";
+    const QString tinyWav = QString::fromStdString(FIXTURES) + "/tiny.wav";
     const auto tiny = AudioPeaks::computeFromWav(tinyWav);
     CHECK(wellFormed(tiny), "tiny.wav parses to well-formed peaks");
     CHECK(AudioPeaks::compute(tinyWav).buckets() == tiny.buckets(),

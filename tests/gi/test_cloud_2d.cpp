@@ -104,7 +104,7 @@ struct Rig {
         // THE GROUND: a matte grey plane far wider than the view, nothing on it.
         auto ground = iris::MeshNode::create();
         ground->setName("ground");
-        ground->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
+        ground->setMesh(testmesh::load((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/plane.obj"))));
         ground->setLocalScale(iris::Vec3(400.0f, 1.0f, 400.0f));
         auto mat = iris::PbrMaterial::create();
         mat->setBaseColor(QColor(128, 128, 128));

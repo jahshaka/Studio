@@ -1504,8 +1504,8 @@ int main(int argc, char **argv)
         // this camera: a solid cube fills a large square, while the flat XZ
         // plane is seen edge-on and covers almost nothing. No radius
         // normalisation — the node's scale never changes, only its mesh.
-        const QString kCube  = QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj");
-        const QString kPlane = QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj");
+        const QString kCube  = (QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/cube.obj"));
+        const QString kPlane = (QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/plane.obj"));
         // SILHOUETTE area, not lit area: anything that is not the blue clear
         // colour. Shading varies with the mesh's normals, coverage does not —
         // and coverage is what a mesh swap changes.
@@ -1591,7 +1591,7 @@ int main(int argc, char **argv)
             wlight->setLocalPos(iris::Vec3(0.0f, 8.0f, 0.0f));
             wdoc->getRootNode()->addChild(wlight);
             auto floor2 = iris::MeshNode::create();
-            floor2->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
+            floor2->setMesh(testmesh::load((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/plane.obj"))));
             floor2->setLocalScale(iris::Vec3(4, 4, 4));
             auto white = iris::PbrMaterial::create();
             white->setBaseColor(QColor(240, 240, 240));
@@ -1662,7 +1662,7 @@ int main(int argc, char **argv)
         gdoc->giUpdateBudget = 1;
         auto gfloor = iris::MeshNode::create();
         gfloor->setName("floor");
-        gfloor->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
+        gfloor->setMesh(testmesh::load((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/plane.obj"))));
         gfloor->setLocalScale(iris::Vec3(4, 4, 4));
         auto gmat = iris::PbrMaterial::create();
         gmat->setBaseColor(QColor(220, 220, 220));
@@ -2045,7 +2045,7 @@ int main(int argc, char **argv)
         ldoc->giUpdateBudget = 1;
         auto lfloor = iris::MeshNode::create();
         lfloor->setName("lamp-floor");
-        lfloor->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
+        lfloor->setMesh(testmesh::load((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/plane.obj"))));
         lfloor->setLocalScale(iris::Vec3(4, 4, 4));
         lfloor->setMaterial(iris::PbrMaterial::create());
         ldoc->getRootNode()->addChild(lfloor, false);
@@ -2548,7 +2548,7 @@ int main(int argc, char **argv)
         sun4->intensity = 1.0f;
         sun4->setLocalPos(iris::Vec3(0.0f, 6.0f, 20.0f));
         sdoc4->getRootNode()->addChild(sun4);
-        const QString gltf = QStringLiteral(JAHSHAKA_SOURCE_DIR "/tests/importer/fixtures/double_sided_quads.gltf");
+        const QString gltf = (QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/tests/importer/fixtures/double_sided_quads.gltf"));
         const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("cull-mode-1-fixture"));
         const iris::MeshBake::Model baked =
             iris::MeshBake::deserialize(iris::MeshBake::serialize(iris::MeshBake::buildFromFile(gltf, fp)), fp);

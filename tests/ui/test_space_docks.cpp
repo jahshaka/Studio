@@ -131,7 +131,7 @@ void expectEditorPanels(McpClient &mcp, const char *what)
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    seedSettings(QStringLiteral(JAHSHAKA_BINARY));
+    seedSettings(QString::fromUtf8(JAHSHAKA_BINARY));
     // RUN 1 STARTS FROM THE DEFAULT LAYOUT (lane SPACE-2). The suite's data
     // root is PERSISTENT — that is the whole point of run 2, which reads what
     // run 1's exit stored — so without this the first run inherits the layout
@@ -140,7 +140,7 @@ int main(int argc, char **argv)
     // written: a stored "console alone" layout survived the fix). Run 2 is the
     // one that must NOT wipe: it is the restart.
     for (const QString &ini : testsupport::settingsFilesForSpawnedApp(
-             QStringLiteral(JAHSHAKA_BINARY))) {
+             QString::fromUtf8(JAHSHAKA_BINARY))) {
         QSettings settings(ini, QSettings::IniFormat);
         settings.remove(QStringLiteral("viewportDockState"));
         settings.sync();

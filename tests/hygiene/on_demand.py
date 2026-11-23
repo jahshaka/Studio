@@ -165,19 +165,29 @@ def spawner(src):
         open(os.path.join(b, "build.ninja"), "w").write(
             "rule CXX_COMPILER__t\n  command = c\nrule CXX_EXECUTABLE_LINKER__t\n  command = l\nrule phony\n"
             "build x.o: CXX_COMPILER__test_x_Debug /s/x.cpp\n  DEFINES = -DJAHSHAKA_BINARY=\\\"%s\\\" -DOTHER=1\n"
+            "build z.o: CXX_COMPILER__test_z_Debug /s/z.cpp\n"
+            "  DEFINES = -DJAHSHAKA_BINARY=\"jahtest::path(\\\"JAHSHAKA_BINARY\\\")\" -DOTHER=1\n"
             "build y.o: CXX_COMPILER__test_y_Debug /s/y.cpp\n  DEFINES = -DOTHER=1\n"
             "build a.o: CXX_COMPILER__App_Debug /s/a.cpp\n  DEFINES = -DOTHER=1\n"
             "build tests/test_x: CXX_EXECUTABLE_LINKER__test_x_Debug x.o\n"
             "build tests/test_y: CXX_EXECUTABLE_LINKER__test_y_Debug y.o\n"
+            "build tests/test_z: CXX_EXECUTABLE_LINKER__test_z_Debug z.o\n"
             "build bin/App: CXX_EXECUTABLE_LINKER__App_Debug a.o\n"
-            "build test_x: phony tests/test_x\nbuild test_y: phony tests/test_y\nbuild App: phony bin/App\n"
-            "build all: phony App test_x test_y\n" % app)
+            "build test_x: phony tests/test_x\nbuild test_y: phony tests/test_y\nbuild test_z: phony tests/test_z\n"
+            "build App: phony bin/App\nbuild all: phony App test_x test_y test_z\n" % app)
+        # THE PATH-FREE FORM (the build-speed audit D1): test_z's define is jahtest::path("JAHSHAKA_BINARY"), its value the
+        # tree's generated TU's row (tests/CMakeLists.txt jah_scope_path_defines)
+        os.makedirs(os.path.join(b, "generated"))
+        open(os.path.join(b, "generated", "jah_test_paths.cpp"), "w").write(
+            'const Row kRows[] = {\n    {"JAHSHAKA_BINARY", "%s"},\n};\n' % app)
         nj = row_targets.Ninja(b)
         nj._parse(os.path.join(b, "build.ninja"))
         own = lambda exe: row_targets.own_targets({"command": [os.path.join(b, "tests", exe)], "properties": []}, nj)[0]  # noqa: E731
-        x, y = own("test_x"), own("test_y")
+        x, y, z = own("test_x"), own("test_y"), own("test_z")
         want(x == {"test_x", "App"} and y == {"test_y"}, "an executable compiled with JAHSHAKA_BINARY=<the app> needs the app's "
              "target with its own; one without the define needs its own alone (%s %s)" % (sorted(x), sorted(y)))
+        want(z == {"test_z", "App"}, "an executable compiled with the PATH-FREE JAHSHAKA_BINARY (jahtest::path, its value the "
+             "generated TU's) needs the app's target too (%s)" % sorted(z))
     finally:
         shutil.rmtree(w, ignore_errors=True)
 

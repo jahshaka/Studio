@@ -322,13 +322,13 @@ int main(int argc, char **argv)
     // photon-7r merge's tree, so it is deleted.
     // AFTER the wipe (the archive.responsive (archived: archive/tests/archive) ordering lesson): unseeded, the
     // modal donate dialog meets app.quit() and the process never exits.
-    testsupport::seedSettingsForSpawnedApp(QStringLiteral(JAHSHAKA_BINARY));
+    testsupport::seedSettingsForSpawnedApp(QString::fromUtf8(JAHSHAKA_BINARY));
 
     // The fixtures are the pair tests/avatar generates from the shipped
     // Skeletal Animation sample: a rigged character and an animation-only clip
     // file that shares its joint names.
-    const QString rig = QStringLiteral(JAHSHAKA_MANNEQUIN_DAE);
-    const QString walk = QStringLiteral(JAHSHAKA_BETA_WALK_DAE);
+    const QString rig = QString::fromUtf8(JAHSHAKA_MANNEQUIN_DAE);
+    const QString walk = QString::fromUtf8(JAHSHAKA_BETA_WALK_DAE);
     CHECK(QFileInfo::exists(rig), "the rigged fixture is present");
     CHECK(QFileInfo::exists(walk), "the animation-only fixture is present");
     if (!QFileInfo::exists(rig)) return 1;

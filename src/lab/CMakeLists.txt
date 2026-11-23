@@ -40,7 +40,9 @@ target_include_directories(jahlab PRIVATE
     ${CMAKE_SOURCE_DIR}
     ${CMAKE_SOURCE_DIR}/irisgl
     ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
-target_compile_definitions(jahlab PRIVATE
+# THE TREE's PATHS ON THE ONE TU THAT READS THEM (the build-speed audit D1: target-wide, they put this tree's path on all 24
+# of jahlab's compile lines - every one a ccache miss in every other tree; enginehost.cpp's precedent, CMakeLists.txt)
+set_property(SOURCE labsession.cpp APPEND PROPERTY COMPILE_DEFINITIONS
     JAHLAB_OGRE_PLUGIN_DIR_DEFAULT="${OGRE_NEXT_PLUGIN_DIR}"
     JAHLAB_OGRE_MEDIA_DIR_DEFAULT="${JAHSHAKA_MEDIA_DIR}/")
 # the engine's script host is an archive of its own (SCRIPT-IN-ENGINE-1 2b): jahlab is a client of it, as jahengine is

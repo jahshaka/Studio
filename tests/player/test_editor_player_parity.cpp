@@ -236,7 +236,7 @@ int main(int argc, char **argv)
     // belong to whichever SCENE armed last.
     auto floor = iris::MeshNode::create();
     floor->setName("mirror floor");
-    floor->setMesh(testmesh::load(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/plane.obj")));
+    floor->setMesh(testmesh::load((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/plane.obj"))));
     {
         auto mirrorMat = iris::PbrMaterial::create();
         mirrorMat->setBaseColor(QColor(30, 30, 34));

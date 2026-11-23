@@ -26,7 +26,7 @@ import subprocess
 import sys
 
 HERE = os.path.dirname(os.path.abspath(__file__))
-_VERSION = 3
+_VERSION = 4   # 4: JAHSHAKA_BINARY read through jahtest::path (the build-speed audit D1)
 
 
 def _names(v):
@@ -74,13 +74,15 @@ class Ninja:
 
     def _parse(self, path):
         sys.path.insert(0, HERE)
-        from gate_graph import _find_unescaped, _split_ninja
+        from gate_graph import _find_unescaped, _split_ninja, test_path_value
         ins_of, phony, linked, spawns, cur = {}, {}, [], {}, None
         for line in open(path, errors="replace").read().replace("$\n", "").split("\n"):
             if line.startswith("  DEFINES") and cur and "JAHSHAKA_BINARY=" in line:
-                m = re.search(r'JAHSHAKA_BINARY=\\?"?([^\s"\\]+)', line)
-                if m:
-                    spawns[cur] = m.group(1)          # an object of an executable that launches the app at this path
+                m = re.search(r'JAHSHAKA_BINARY=\\?"?(jahtest::path\(\\*"JAHSHAKA_BINARY\\*"\)|[^\s"\\]+)', line)
+                # (the path-free form reads its value from the tree's generated TU: the build-speed audit D1)
+                v = test_path_value(os.path.dirname(path), m.group(1).replace("\\", "")) if m else None
+                if v:
+                    spawns[cur] = v                   # an object of an executable that launches the app at this path
                 continue
             if not line.startswith("build "):
                 cur = None if line and not line.startswith(" ") else cur

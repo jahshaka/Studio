@@ -368,7 +368,7 @@ static void lightListArms(Env &env)
         worldmodes::setMode(env.doc, worldmodes::Mode::High);
         worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
         BakeInfo bi;
-        if (!cube) cube = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"), "cube", &bi);
+        if (!cube) cube = bakedMesh((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/cube.obj")), "cube", &bi);
         auto slab = [&](const char *name, iris::Vec3 pos, iris::Vec3 scale, QColor col) {
             auto n = iris::MeshNode::create();
             n->setName(name);
@@ -747,7 +747,7 @@ static int lightsMain()
     if (!boot(env, "test-scale-lights-ogre.log")) return 1;
     const iris::Vec3 eye(0.0f, 2.0f, 1.0f);
     BakeInfo bi;
-    iris::MeshPtr cube = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"), "cube", &bi);
+    iris::MeshPtr cube = bakedMesh((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/cube.obj")), "cube", &bi);
     if (cube.isNull()) { REQUIRE(false, "the cube mesh"); return 1; }
     struct Reading {
         bool ok = false;
@@ -1968,7 +1968,7 @@ static int farFieldMain()
     Env env;
     if (!boot(env, "test-scale-far-field-ogre.log")) return 1;
     BakeInfo bi;
-    iris::MeshPtr cube = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"), "cube", &bi);
+    iris::MeshPtr cube = bakedMesh((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/cube.obj")), "cube", &bi);
     const float dists[] = { 10, 20, 40, 60, 80, 120, 160, 210, 300, 400, 480 };
     const int n = int(sizeof(dists) / sizeof(dists[0]));
     const double kLit = 0.02;
@@ -2336,7 +2336,7 @@ static void buildLattice(Env &env)
     worldmodes::setMode(env.doc, worldmodes::Mode::High);
     worldmodes::setPhoton(env.doc, true, worldmodes::PhotonTier::High);
     BakeInfo bi;
-    iris::MeshPtr cube = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"), "cube", &bi);
+    iris::MeshPtr cube = bakedMesh((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/cube.obj")), "cube", &bi);
     for (int y = 0; y < 20; ++y)
         for (int z = 0; z < 20; ++z)
             for (int x = 0; x < 20; ++x) {

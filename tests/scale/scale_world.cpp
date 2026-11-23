@@ -91,7 +91,7 @@ static QString g_cacheOverride;
 QString cacheRoot()
 {
     const QByteArray env = qgetenv("JAH_SCALE_ASSET_CACHE");
-    return env.isEmpty() ? QStringLiteral(SCALE_ASSET_CACHE_ROOT) : QString::fromLocal8Bit(env);
+    return env.isEmpty() ? QString::fromUtf8(SCALE_ASSET_CACHE_ROOT) : QString::fromLocal8Bit(env);
 }
 
 QString cacheDir()
@@ -534,7 +534,7 @@ void shutdown(Env &env)
 static std::vector<std::pair<QString, QString>> worldMeshSources()
 {
     std::vector<std::pair<QString, QString>> out;
-    const QDir prim(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives"));
+    const QDir prim((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives")));
     for (const QString &f : prim.entryList({ "*.obj" }, QDir::Files, QDir::Name)) {
         if (f == QLatin1String("endlessplane.obj") || f == QLatin1String("plane.obj")) continue;
         out.push_back({ prim.filePath(f), QFileInfo(f).baseName() });
@@ -621,7 +621,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     }
     BakeInfo groundInfo;
     iris::MeshPtr groundMesh =
-        bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/tests/meshbake/fixtures/flat_grid_100m.obj"), "ground", &groundInfo);
+        bakedMesh((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/tests/meshbake/fixtures/flat_grid_100m.obj")), "ground", &groundInfo);
     if (groundMesh.isNull()) { std::printf("FAIL: the ground mesh\n"); return false; }
     world.bakeOrReadMs = msSince(t0);
 
@@ -649,7 +649,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
         g->setShadowCastingEnabled(false);
         auto mat = iris::PbrMaterial::create();
         mat->setValue("baseColor", QColor(255, 255, 255));
-        mat->setValue("baseColorMap", QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/textures/tile.png"));
+        mat->setValue("baseColorMap", (QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/textures/tile.png")));
         mat->setValue("roughness", 0.9f);
         mat->setValue("metallic", 0.0f);
         g->setMaterial(mat);

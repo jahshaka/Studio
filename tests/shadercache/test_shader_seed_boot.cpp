@@ -79,7 +79,7 @@ Launch runApp(const QString &app, const QString &home, const QString *seedEnv)
     p.setProcessEnvironment(env);
     p.setWorkingDirectory(home + "/run");
     p.setProcessChannelMode(QProcess::MergedChannels);
-    const QString script = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) + "/tests/shadercache/scripts/e2e_shader_seed.js";
+    const QString script = QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + "/tests/shadercache/scripts/e2e_shader_seed.js";
     QElapsedTimer t;
     t.start();
     p.start(app, { QStringLiteral("--script"), script });
@@ -152,7 +152,7 @@ int main(int argc, char **argv)
     QCoreApplication qapp(argc, argv);
     const QStringList args = qapp.arguments();
     const bool twinRow = args.contains(QStringLiteral("--twin"));
-    QString app = QStringLiteral(JAHSHAKA_BINARY);
+    QString app = QString::fromUtf8(JAHSHAKA_BINARY);
     const int appAt = args.indexOf(QStringLiteral("--app"));
     if (appAt > 0 && appAt + 1 < args.size()) app = args.at(appAt + 1);
     const QString root = QDir::current().absoluteFilePath(QStringLiteral("e2e-seed-boot"));
@@ -183,7 +183,7 @@ int main(int argc, char **argv)
         // THE SEED, BY THE SHIP'S PRODUCER, from the cache the twin's clean quit saved.
         QProcess mk;
         mk.setProcessChannelMode(QProcess::MergedChannels);
-        mk.start(QStringLiteral("sh"), { QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) + "/scripts/shadercache/make-seed.sh",
+        mk.start(QStringLiteral("sh"), { QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + "/scripts/shadercache/make-seed.sh",
                                          root + "/twin/.local/share/Jahshaka/shadercache", seed });
         mk.waitForFinished(30000);
         std::printf("   %s", mk.readAll().constData());

@@ -113,7 +113,7 @@ bool quitApp(QProcess &jahshaka, McpClient &mcp)
 
 void setTheme(const QString &id)
 {
-    for (const QString &ini : testsupport::settingsFilesForSpawnedApp(QStringLiteral(JAHSHAKA_BINARY))) {
+    for (const QString &ini : testsupport::settingsFilesForSpawnedApp(QString::fromUtf8(JAHSHAKA_BINARY))) {
         QSettings s(ini, QSettings::IniFormat);
         if (id.isEmpty()) s.remove(QStringLiteral("appearance/theme"));
         else s.setValue(QStringLiteral("appearance/theme"), id);
@@ -126,7 +126,7 @@ void setTheme(const QString &id)
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    seedSettings(QStringLiteral(JAHSHAKA_BINARY));
+    seedSettings(QString::fromUtf8(JAHSHAKA_BINARY));
 
     // ======================= 1. Qlementine: the tour ===========================
     setTheme(QString());   // no key: the default theme

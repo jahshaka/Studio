@@ -788,7 +788,7 @@ int main(int argc, char **argv)
     // assigns bindingPos by hand. This one goes through the REAL importer.
     {
         auto fragment = iris::loadAsSceneFragment(
-            QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/avatar/fixtures/rig2.glb"),
+            (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/tests/avatar/fixtures/rig2.glb")),
             [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
                 return iris::PbrMaterial::create();
             },

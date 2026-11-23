@@ -35,7 +35,7 @@ static const int kExitBudgetMs = 30000;
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    seedSettings(QStringLiteral(JAHSHAKA_BINARY));
+    seedSettings(QString::fromUtf8(JAHSHAKA_BINARY));
 
     QProcess jahshaka;
     QString token;
@@ -195,7 +195,7 @@ int main(int argc, char **argv)
         std::printf("-- early quit: a doomed --mcp-port must still exit in order\n");
         QProcess doomed;
         doomed.setProcessChannelMode(QProcess::MergedChannels);
-        doomed.start(QStringLiteral(JAHSHAKA_BINARY), QStringList{ QStringLiteral("--mcp-port=1") });
+        doomed.start(QString::fromUtf8(JAHSHAKA_BINARY), QStringList{ QStringLiteral("--mcp-port=1") });
         const bool started = doomed.waitForStarted(15000);
         CHECK(started, "the doomed run started");
         const bool finished = started && doomed.waitForFinished(kExitBudgetMs);
@@ -254,7 +254,7 @@ int main(int argc, char **argv)
             std::printf("-- CLI exit: %s must still tear down in order\n", c.what);
             QProcess p;
             p.setProcessChannelMode(QProcess::MergedChannels);
-            p.start(QStringLiteral(JAHSHAKA_BINARY), c.args);
+            p.start(QString::fromUtf8(JAHSHAKA_BINARY), c.args);
             const bool started = p.waitForStarted(15000);
             CHECK(started, "the run started");
             const bool finished = started && p.waitForFinished(kExitBudgetMs);

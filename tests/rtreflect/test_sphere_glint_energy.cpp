@@ -121,7 +121,7 @@ static double widen(double alpha, double s, double mu, double &aW)   // s = the 
 
 int main()
 {
-    const std::string path = JAH_FORK_HLMS_PBS_ANY "/JahBrdf_piece_all.any";
+    const std::string path = (std::string(JAH_FORK_HLMS_PBS_ANY) + "/JahBrdf_piece_all.any");
     if (!readShipped(path)) { std::printf("FAIL: the fork's JahBrdf (k and the table) unreadable: %s\n", path.c_str()); return 1; }
     std::printf("-- the shipped k %.3f and its 32 x 32 table of mu T (read from %s)\n", gK, path.c_str());
     const double rs[2] = { 0.05, 0.2 }, mus[2] = { 0.6, 0.9 }, ss[3] = { 0.01, 0.04, 0.1 };

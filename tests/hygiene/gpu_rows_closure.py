@@ -174,7 +174,12 @@ def read_harnesses(build, app):
         at = cmd.find("-DJAHSHAKA_BINARY=")
         if at < 0:
             continue
-        value = cmd[at + len("-DJAHSHAKA_BINARY="):].split(" ", 1)[0].strip("\\\"'")
+        value = cmd[at + len("-DJAHSHAKA_BINARY="):].split(" ", 1)[0].replace("\\", "").strip("\"'")
+        # (the path-free form, jahtest::path("JAHSHAKA_BINARY"), reads its value from the tree's generated TU: the
+        # build-speed audit D1 - scripts/gate_graph.py test_path_value)
+        sys.path.insert(0, os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "..", "scripts"))
+        import gate_graph
+        value = gate_graph.test_path_value(build, value) or ""
         if os.path.realpath(value) != want:
             continue                        # e.g. tests/tooling's /bin/false harness
         m = _HARNESS_OBJ.search(e.get("output") or cmd)

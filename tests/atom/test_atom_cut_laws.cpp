@@ -558,7 +558,7 @@ static void rowNoPopCentre()
 /// 0 when the line is not there (the row then fails, naming it).
 static double bakeTightness(std::string &line)
 {
-    FILE *fp = std::fopen(JAHSHAKA_TEST_SOURCE_DIR "/irisgl/import/atomdag/measure.cpp", "r");
+    FILE *fp = std::fopen((std::string(JAHSHAKA_TEST_SOURCE_DIR) + "/irisgl/import/atomdag/measure.cpp").c_str(), "r");
     if (!fp) return 0.0;
     char buf[512];
     double c = 0.0;

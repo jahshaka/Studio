@@ -595,7 +595,7 @@ int main(int argc, char **argv)
     // document's bone matrices for it too.
     {
         auto fragment = iris::loadAsSceneFragment(
-            QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/pivot_rig.fbx"),
+            (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/tests/skeletal/fixtures/pivot_rig.fbx")),
             [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
                 return iris::PbrMaterial::create();
             },
@@ -679,7 +679,7 @@ int main(int argc, char **argv)
     // the engine's guard for a genuinely zero-length clip) must stay silent.
     {
         auto fragment = iris::loadAsSceneFragment(
-            QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/skeletal/fixtures/mixamo_tpose.fbx"),
+            (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/tests/skeletal/fixtures/mixamo_tpose.fbx")),
             [](iris::MeshPtr, iris::MeshMaterialData &) -> iris::MaterialPtr {
                 return iris::PbrMaterial::create();
             },

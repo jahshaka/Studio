@@ -32,7 +32,7 @@ QJsonObject runApp(const QString &home, const QString &script)
     app.setProcessEnvironment(env);
     app.setWorkingDirectory(home + "/run");
     app.setProcessChannelMode(QProcess::MergedChannels);
-    app.start(QStringLiteral(JAHSHAKA_BINARY), QStringList() << "--script" << script);
+    app.start(QString::fromUtf8(JAHSHAKA_BINARY), QStringList() << "--script" << script);
     if (!app.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); ++failures; return {}; }
     if (!app.waitForFinished(300000)) {
         std::printf("FAIL: app did not exit\n"); ++failures; app.kill(); app.waitForFinished(5000);
@@ -76,7 +76,7 @@ int main(int argc, char **argv)
     QDir(home).removeRecursively();            // a cold cache, an empty library
     QDir().mkpath(home + "/run");
     QDir().mkpath(home + "/cache");
-    const QString script = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
+    const QString script = QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) +
                            QStringLiteral("/tests/shadercache/scripts/e2e_live_compiles.js");
 
     const QJsonObject cold = runApp(home, script);

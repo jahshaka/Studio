@@ -81,7 +81,7 @@ static int failures = 0;
 
 static QString fixture(const char *name)
 {
-    return QString(JAHSHAKA_TEST_SOURCE_DIR "/tests/importer/fixtures/") + name;
+    return (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/tests/importer/fixtures/")) + name;
 }
 
 static bool nearly(float a, float b, float eps = 1e-3f) { return std::fabs(a - b) < eps; }

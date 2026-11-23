@@ -139,7 +139,7 @@ int main(int argc, char **argv)
     proc.setProcessEnvironment(env);
     proc.setWorkingDirectory(home + "/run");
     proc.setProcessChannelMode(QProcess::MergedChannels);
-    proc.start(QStringLiteral(JAHSHAKA_BINARY),
+    proc.start(QString::fromUtf8(JAHSHAKA_BINARY),
                QStringList() << "--script" << QStringLiteral(JAH_TEST_SCRIPT));
     if (!proc.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); return 1; }
     if (!proc.waitForFinished(300000)) {
@@ -475,7 +475,7 @@ int main(int argc, char **argv)
         // stops on a modal prompt.
         qputenv("JAHSHAKA_DATA_ROOT", (quitHome + "/.local/share/Jahshaka").toUtf8());
         QDir().mkpath(quitHome + "/.local/share/Jahshaka");
-        seedSettings(QStringLiteral(JAHSHAKA_BINARY));
+        seedSettings(QString::fromUtf8(JAHSHAKA_BINARY));
 
         QProcess app2;
         QProcessEnvironment env2 = QProcessEnvironment::systemEnvironment();

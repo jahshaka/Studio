@@ -983,7 +983,7 @@ int main(int argc, char **argv)
         // policy. Loaded from the source tree because IrisGL's own qrc carries
         // only the 12-triangle cube.
         iris::MeshPtr dense =
-            testmesh::load(QString(JAHSHAKA_SOURCE_DIR "/app/content/primitives/hp_sphere.obj"));
+            testmesh::load((QString::fromUtf8(JAHSHAKA_SOURCE_DIR) + QStringLiteral("/app/content/primitives/hp_sphere.obj")));
         CHECK(!dense.isNull(), "(f) the dense fixture mesh loaded");
         if (!dense.isNull()) {
             // its CLUSTER DAG and its level table (the DAG's uniform cuts), as the importer bakes them

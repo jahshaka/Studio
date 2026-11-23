@@ -285,6 +285,14 @@ if(Python3_Interpreter_FOUND)
     set_tests_properties(source.shaders_spirv_valid PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling" JAH_BOOTS "app-off;engine-off")
     jah_no_display(source.shaders_spirv_valid)
     jah_no_warm_store(source.shaders_spirv_valid)
+    # source.test_paths_free (the build-speed audit D1) — NO TREE PATH ON A TEST's COMPILE LINE: no -D value of a test
+    # target's compile line (compile_commands.json, objects under <build>/tests/) names the tree; the paths are read at run
+    # time from one generated TU (tests/CMakeLists.txt jah_scope_path_defines; test_paths_free.py says the law and controls).
+    add_test(NAME source.test_paths_free
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/test_paths_free.py" "${CMAKE_SOURCE_DIR}"
+                     "${CMAKE_BINARY_DIR}")
+    set_tests_properties(source.test_paths_free PROPERTIES TIMEOUT 60 LABELS "hygiene;tooling")
+    jah_no_display(source.test_paths_free)
     # gate.serve_red (URGENT #54) — A RED AT THE SAME INPUT IS SERVED-RED, NEVER RE-RUN: ci_gate_check.py serve's
     # decision on synthetic records (a red result at this tree with equal configuration / declaration / data hashes is
     # served-red; an ancestor's red runs; a PASS serves as before; NOTRUN / NOADMIT are not results). No build, no git.
@@ -927,7 +935,7 @@ jah_no_display(source.scene_time_one_meaning)
 # WHAT EACH SCRIPT ROW HERE NEEDS BUILT (jah_builds, tests/CMakeLists.txt; build by reach): every one read for what its script
 # runs or reads of the build (ENGINE-HEADERS-1 stage 0, 2026-11-22).
 # nothing the build makes - the sources, its own toys, ctest's listing, compile_commands.json, configure outputs:
-jah_builds(none ROWS source.no_glsl_path source.fork_stamp source.no_raw_transaction source.no_ui_folder_delete
+jah_builds(none ROWS source.test_paths_free source.no_glsl_path source.fork_stamp source.no_raw_transaction source.no_ui_folder_delete
     source.one_asset_name_write source.one_save_door source.one_undo_push source.db_pointers_initialised
     source.panel_rows_guarded source.bake_key_guard source.no_engine_transform_reads source.one_readfile
     source.assimp_import_only source.one_material_resolve source.photon_never_pinned source.material_page_identity

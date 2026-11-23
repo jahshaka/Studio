@@ -75,11 +75,11 @@ static void quitAndAssertExit(QProcess &jahshaka, McpClient &mcp, const char *la
 int main(int argc, char **argv)
 {
     QCoreApplication app(argc, argv);
-    seedSettings(QStringLiteral(JAHSHAKA_BINARY));
+    seedSettings(QString::fromUtf8(JAHSHAKA_BINARY));
 
     const QString cwd = QDir::currentPath();
     const QString fixture =
-        QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/tests/importer/fixtures/mislabeled_embedded.glb");
+        (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/tests/importer/fixtures/mislabeled_embedded.glb"));
     CHECK(QFileInfo::exists(fixture), "GLB fixture present");
 
     // A many-file batch: enough runway that app.quit() lands mid-batch even

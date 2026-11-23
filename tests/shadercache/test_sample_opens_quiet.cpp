@@ -31,10 +31,9 @@ int main(int argc, char **argv)
     proc.setProcessEnvironment(env);
     proc.setWorkingDirectory(home + "/run");
     proc.setProcessChannelMode(QProcess::MergedChannels);
-    proc.start(QStringLiteral(JAHSHAKA_BINARY),
+    proc.start(QString::fromUtf8(JAHSHAKA_BINARY),
                QStringList() << "--script"
-                             << QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR
-                                               "/tests/shadercache/scripts/e2e_sample_opens_quiet.js"));
+                             << (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/tests/shadercache/scripts/e2e_sample_opens_quiet.js")));
     if (!proc.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); return 1; }
     if (!proc.waitForFinished(1700000)) {
         std::printf("FAIL: app did not exit\n"); proc.kill(); proc.waitForFinished(5000); return 1;

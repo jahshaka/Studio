@@ -164,7 +164,7 @@ int main(int argc, char **argv)
         env.insert(QStringLiteral("JAHSHAKA_NO_DEVICE_LOSS_DIALOG"), QStringLiteral("1"));
         jahshaka.setProcessEnvironment(env);
     }
-    jahshaka.start(QStringLiteral(JAHSHAKA_BINARY),
+    jahshaka.start(QString::fromUtf8(JAHSHAKA_BINARY),
                    { QStringLiteral("--mcp-port=%1").arg(port) });
     if (!jahshaka.waitForStarted(15000)) {
         printf("FAIL: could not start %s\n", JAHSHAKA_BINARY);
@@ -1027,7 +1027,7 @@ int main(int argc, char **argv)
                 // them stored waits by previews.settle() (PREVIEWS-1 stage 2).
                 "var settled = previews.settle();"
                 "JSON.stringify({drawer:d, wide:wide, tall:tall, alpha:alpha, drawn:drawn, settled:settled})")
-                .arg(QStringLiteral(JAHSHAKA_FIXTURES)) },
+                .arg(QString::fromUtf8(JAHSHAKA_FIXTURES)) },
                          { "label", "browse fixtures" } }));
         CHECK(imported.value("ok").toBool(), "fixtures imported for browse_assets");
         const QJsonObject ids =
@@ -1167,7 +1167,7 @@ int main(int argc, char **argv)
                 "var c = scene.addPrimitive('cube');"
                 "material.set(c, {baseColorMap: '%1'});"
                 "editor.frame(3);"
-                "'done'").arg(QStringLiteral(JAHSHAKA_BAD_TEXTURE)) },
+                "'done'").arg(QString::fromUtf8(JAHSHAKA_BAD_TEXTURE)) },
                          { "label", "break a texture" } }));
         CHECK(broke.value("ok").toBool(),
               "the script SUCCEEDS — the engine refuses, it does not throw");
@@ -1238,7 +1238,7 @@ int main(int argc, char **argv)
             "material.apply(g, mat);"
             "var tile = assets.list({scope:'project', type:'texture', query:'Tile.png'})[0].guid;"
             "JSON.stringify({ g: g, mat: mat, tex: tex, tile: tile })")
-            .arg(QStringLiteral(JAHSHAKA_FIXTURES)), "a textured library material on the floor"));
+            .arg(QString::fromUtf8(JAHSHAKA_FIXTURES)), "a textured library material on the floor"));
         const QString mat = setup.value("mat").toString(), tex = setup.value("tex").toString();
         const QString tile = setup.value("tile").toString();
         CHECK(!mat.isEmpty() && !tex.isEmpty() && !tile.isEmpty(),

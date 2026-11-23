@@ -328,7 +328,7 @@ int main(int argc, char **argv)
     // runs in that home any more).
     // The settings are seeded INSIDE the data root (never the developer's shared settings file), after that wipe: an
     // unseeded home meets the modal donate dialog at quit and hangs until the exit budget runs out.
-    seedSettings(QStringLiteral(JAHSHAKA_BINARY));
+    seedSettings(QString::fromUtf8(JAHSHAKA_BINARY));
 
     // THE FIXTURE IS World Background (2026-09-07): it has to be a world with
     // MODEL assets, because the export half asserts that mesh bakes exist on
@@ -339,7 +339,7 @@ int main(int argc, char **argv)
     // objects); the Grand Showroom that replaced the old Showroom fixture is
     // built from primitives, imports instantly and bakes nothing.
     const QString sample =
-        QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/scenes/World Background.zip");
+        (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/scenes/World Background.zip"));
     CHECK(QFileInfo::exists(sample), "World Background sample archive present");
 
     const QString outZip = QDir::current().filePath(QStringLiteral("archive-roundtrip.zip"));

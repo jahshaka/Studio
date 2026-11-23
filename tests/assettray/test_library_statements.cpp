@@ -886,7 +886,7 @@ int main(int argc, char **argv)
         // countAssetsInCollections runs its statement raw (the log never sees it): its text, checked below.
         static const char kCountsText[] = "SELECT COUNT(*) FROM assets WHERE listed = 1 AND collection IN (";
         const QString countsPlan = planOf(QString::fromLatin1(kCountsText) + QStringLiteral("?)"), { QString::number(lib.drawer) });
-        QFile databaseSource(QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/src/data/database/database.cpp"));
+        QFile databaseSource((QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/src/data/database/database.cpp")));
         CHECK(databaseSource.open(QIODevice::ReadOnly) && databaseSource.readAll().contains(kCountsText),
               "(2) the counts statement planned is database.cpp's own text");
         const QString copiesPlan = planOf(copiesOfSql(), {});
@@ -917,7 +917,7 @@ int main(int argc, char **argv)
         CHECK(!dependersSql.isEmpty() && dependersPlan.contains(QLatin1String("SEARCH dependencies USING INDEX idx_dependencies_dependee (dependee=?)"))
                   && !dependersPlan.contains(QLatin1String("SCAN")),
               "(2) the tray's dependers are one dependee seek a listed texture, no scan of the project's edges");
-        QFile presetEdit(QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/src/services/presetedit.cpp"));
+        QFile presetEdit((QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/src/services/presetedit.cpp")));
         const QByteArray presetSource = presetEdit.open(QIODevice::ReadOnly) ? presetEdit.readAll() : QByteArray();
         CHECK(presetSource.contains(kCopiesOfText[0]) && presetSource.contains(kCopiesOfText[1]),
               "(2) the copies statement measured is presetedit.cpp's own text");
@@ -1028,7 +1028,7 @@ int main(int argc, char **argv)
         const QString bakePlan = planOf(QStringLiteral("SELECT AF.oid, F.ext, F.size FROM asset_files AF LEFT JOIN files F ON "
                                                        "AF.oid = F.oid WHERE AF.role = 'bake' AND AF.name = ? ORDER BY AF.rowid DESC"),
                                         { QStringLiteral("'x.jmb'") });
-        QFile bakeSource(QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/src/services/meshbakestore.cpp"));
+        QFile bakeSource((QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/src/services/meshbakestore.cpp")));
         CHECK(bakeSource.open(QIODevice::ReadOnly) && bakeSource.readAll().contains("\"WHERE AF.role = '%1' AND AF.name = ? ORDER BY AF.rowid DESC\")")
                   && bakePlan.contains(QLatin1String("USING INDEX idx_asset_files_bake (name=?)")) && !bakePlan.contains(QLatin1String("SCAN")),
               "R5: a model's bake is found by one seek of idx_asset_files_bake (planFor's own text) [%s]", qPrintable(bakePlan));

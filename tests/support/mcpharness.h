@@ -523,7 +523,7 @@ inline bool spawn(QProcess &jahshaka, quint16 port, QString *tokenOut, QByteArra
         env.insert(QStringLiteral("JAHSHAKA_NO_DEVICE_LOSS_DIALOG"), QStringLiteral("1"));
         jahshaka.setProcessEnvironment(env);
     }
-    jahshaka.start(QStringLiteral(JAHSHAKA_BINARY),
+    jahshaka.start(QString::fromUtf8(JAHSHAKA_BINARY),
                    QStringList{ QStringLiteral("--mcp-port=%1").arg(port) } + extraArgs);
     if (!jahshaka.waitForStarted(15000)) return false;
     QElapsedTimer timer;

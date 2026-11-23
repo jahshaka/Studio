@@ -54,6 +54,23 @@ def _split_ninja(s):
     return out
 
 
+_TEST_PATH_ROW = re.compile(r'\{"([A-Za-z_][A-Za-z_0-9]*)", "((?:[^"\\]|\\.)*)"\}')
+
+
+def test_path_value(build, raw):
+    """A test define's VALUE as the tree gives it: `raw` is the -D's text after `NAME=` (quotes and escapes stripped by the
+    caller); a path-free `jahtest::path("NAME")` (tests/CMakeLists.txt jah_scope_path_defines, the build-speed audit D1) reads
+    NAME's row of <build>/generated/jah_test_paths.cpp - None when the build has no such row; any other text is itself."""
+    m = re.match(r'jahtest::path\(\\*"([A-Za-z_][A-Za-z_0-9]*)\\*"\)', raw)
+    if not m:
+        return raw
+    try:
+        rows = dict(_TEST_PATH_ROW.findall(open(os.path.join(build, "generated", "jah_test_paths.cpp"), errors="replace").read()))
+    except OSError:
+        return None
+    return rows.get(m.group(1))
+
+
 def _find_unescaped(s, token):
     """Index of `token` in s that is not preceded by a `$` escape, or -1."""
     i = 0

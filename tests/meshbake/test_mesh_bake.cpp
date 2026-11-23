@@ -115,7 +115,7 @@ static int checks = 0;
 
 static QString fixture(const QString &name)
 {
-    return QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/") + name;
+    return (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/")) + name;
 }
 
 // ---------------------------------------------------------------------------
@@ -579,7 +579,7 @@ static void theKey()
 
     // 6b. THE ALGORITHM. producerHashOf is the same hash CMake computed, or the
     // rest of this section proves nothing about the real key.
-    const QString irisRoot = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR "/irisgl");
+    const QString irisRoot = (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/irisgl"));
     QStringList realPaths;
     for (const QString &rel : hashed) realPaths.append(irisRoot + QLatin1Char('/') + rel);
     const QString recomputed = iris::MeshBake::producerHashOf(realPaths);

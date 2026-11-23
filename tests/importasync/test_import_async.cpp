@@ -114,7 +114,7 @@ int main(int argc, char **argv)
     QSqlDatabase conn = QSqlDatabase::database();
 
     const QString glb =
-        QString(JAHSHAKA_TEST_SOURCE_DIR "/tests/importer/fixtures/mislabeled_embedded.glb");
+        (QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) + QStringLiteral("/tests/importer/fixtures/mislabeled_embedded.glb"));
     CHECK(QFileInfo::exists(glb), "GLB fixture present");
     const QString png1 = writeUniquePng(cwd + "/tex_batch.png");
 

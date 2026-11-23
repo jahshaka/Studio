@@ -247,7 +247,7 @@ QJsonObject runApp(const QString &home, const QString &script, const QStringList
     app.setProcessChannelMode(QProcess::MergedChannels);
     QElapsedTimer launch;   // printed per launch (the row's price is its launches: TESTING-SPEED-B3)
     launch.start();
-    app.start(QStringLiteral(JAHSHAKA_BINARY), QStringList() << extraArgs << "--script" << script);
+    app.start(QString::fromUtf8(JAHSHAKA_BINARY), QStringList() << extraArgs << "--script" << script);
     if (!app.waitForStarted(20000)) { std::printf("FAIL: app did not start\n"); ++failures; return {}; }
     QByteArray all;
     // THE HARNESS's KILL (shadercache.app.killed): SIGKILL the moment the app prints `killOn` - no quit, no save, no
@@ -397,7 +397,7 @@ int main(int argc, char **argv)
     gPartMarker = home + "/part-" + mode.mid(2);
     QFile::remove(gPartMarker + QStringLiteral(".green"));
     { QFile st(gPartMarker + QStringLiteral(".started")); if (st.open(QIODevice::WriteOnly | QIODevice::Truncate)) st.write("started\n"); }
-    const QString scripts = QStringLiteral(JAHSHAKA_TEST_SOURCE_DIR) +
+    const QString scripts = QString::fromUtf8(JAHSHAKA_TEST_SOURCE_DIR) +
                             QStringLiteral("/tests/shadercache/scripts/");
     int rc = -1;
 
@@ -533,7 +533,7 @@ int main(int argc, char **argv)
             QProcessEnvironment env = QProcessEnvironment::systemEnvironment();
             env.remove(QStringLiteral("DISPLAY"));
             print.setProcessEnvironment(env);
-            print.start(QStringLiteral(JAHSHAKA_BINARY), { QStringLiteral("--print-shader-identity") });
+            print.start(QString::fromUtf8(JAHSHAKA_BINARY), { QStringLiteral("--print-shader-identity") });
             const bool ran = print.waitForFinished(20000) && print.exitCode() == 0;
             QString printed;
             for (const QString &l : QString::fromUtf8(print.readAllStandardOutput()).split(QLatin1Char('\n')))
