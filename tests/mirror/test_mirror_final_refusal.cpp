@@ -167,8 +167,8 @@ int main(int argc, char **argv)
 
         // THE FALLBACK READS NO FREED NODE (the confirm's D1): a lamp naming a missing .ies pushed, then removed and FREED
         // before the next sync - its refusal arrives at that sync's top, before the mirror releases the entry; the
-        // fallback was built while the node lived and reads nothing of it (a use-after-free here is shown under
-        // AddressSanitizer: the red-once arm). THE CONTROL: the sync completes and the row goes on
+        // fallback was built while the node lived and reads nothing of it (a use-after-free here is shown by the
+        // sanitizer twin, mirror.final_refusal_asan). THE CONTROL: the sync completes and the row goes on
         {
             auto doomed = iris::LightNode::create();
             doomed->setName("doomed");
@@ -184,7 +184,10 @@ int main(int argc, char **argv)
             mirror.sync();
             enginetest::frozenFrames(e, 1);
         }
-        check(true, "A FREED LAMP's REFUSAL: the sync that reads it completes (AddressSanitizer is the arm that sees a read)");
+        // (this plain row only DRIVES the path: a read of a freed block does not fail here - the sanitizer twin
+        // mirror.final_refusal_asan, the same source under AddressSanitizer, is the row that goes red on it)
+        check(true, "A FREED LAMP's REFUSAL: the sync that reads it completes (mirror.final_refusal_asan is the row that "
+                    "sees a read of the freed node)");
     }
     e->destroyScene(target);
     std::printf("%s\n", gFailures == 0 ? "mirror.final_refusal: PASSED" : ("mirror.final_refusal: FAILED (" +
