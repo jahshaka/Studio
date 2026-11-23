@@ -1,4 +1,5 @@
 engine.published Engine::published
+engine.scene.published Scene::published
 engine.view.published View::published
 engine.monitor.set Engine::setFrameMonitor
 engine.monitor.popRecords Engine::popMonitorRecords

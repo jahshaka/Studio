@@ -112,6 +112,19 @@ void casesStatus(Fixture &f)
 {
     // 1. THE TABLES: every record the status commands answer (the nested ones are walked through their outer records'
     //    leaves, and judged in order on their own)
+    tableLaws<PublishedFrame>("PublishedFrame");
+    tableLaws<PublishedFrame::RiderTag>("PublishedFrame::RiderTag");
+    tableLaws<PublishedFrame::Facts>("PublishedFrame::Facts");
+    tableLaws<PublishedFrame::Facts::Share>("PublishedFrame::Facts::Share");
+    tableLaws<PublishedFrame::Facts::NodeClips>("PublishedFrame::Facts::NodeClips");
+    tableLaws<PublishedFrame::Facts::Clip>("PublishedFrame::Facts::Clip");
+    tableLaws<PublishedFrame::Completion>("PublishedFrame::Completion");
+    tableLaws<PublishedFrame::Atmosphere>("PublishedFrame::Atmosphere");
+    tableLaws<PublishedFrame::Completeness>("PublishedFrame::Completeness");
+    tableLaws<PublishedFrame::AtomHidden>("PublishedFrame::AtomHidden");
+    tableLaws<PublishedFrame::NodeCount>("PublishedFrame::NodeCount");
+    tableLaws<PublishedFrame::RigPoses>("PublishedFrame::RigPoses");
+    tableLaws<PublishedFrame::NodePose>("PublishedFrame::NodePose");
     tableLaws<ViewFrames>("ViewFrames");
     tableLaws<PublishedEngineFrame>("PublishedEngineFrame");
     tableLaws<PublishedEngineFrame::FrameError>("PublishedEngineFrame::FrameError");
@@ -262,6 +275,33 @@ void casesStatus(Fixture &f)
               std::to_string(recs.status == Status::Ok ? recs.value.asArray().size() : 0) + " record(s) and popEvents " +
               std::to_string(evs.status == Status::Ok ? evs.value.asArray().size() : 0) +
               " event(s); the queue is EMPTY after its pop (the second pop answers none)");
+    // THE SCENE's PUBLISHED FRAME round-trips as the engine wrote it; and the GI engine.gi.set gives is READ BACK through
+    // the script's own command: engine.gi.set is DIRECT (Scene::setGlobalIllumination: its refusal synchronous), so the
+    // published GiStatus carries it and giApplied - the RECORD ROUTE's field, written only by the FrameInput drain's
+    // part.gi branch (OgreEngine.cpp:3462-3471: the app's mirror) - stays null (the lead's ruling, 2026-11-23)
+    {
+        const Result gi = e.call("engine.gi.set",
+                                 {sc.value, Value(Value::Object{{"mode", Value("vct")}, {"quality", Value("low")},
+                                                                {"updateBudget", Value(3)},
+                                                                {"cascades", Value(Value::Array{Value(Value::Object{
+                                                                    {"halfSize", Value(8.0)}, {"resolution", Value(32)}})})}})});
+        e.call("engine.frames", {Value(1)});
+        const Result sp = e.call("engine.scene.published", {sc.value, Value(Value::Object{})});
+        PublishedFrame pf;
+        const bool spRead = sp.status == Status::Ok && Record<PublishedFrame>::table().fromValue(sp.value, pf, "", why);
+        check(spRead && toValue(pf) == sp.value && pf.frame > 0,
+              "engine.scene.published answers the scene's published frame (frame " + std::to_string(pf.frame) +
+                  ") and it round-trips through its table " + sp.message + why);
+        const Result ga = e.call("engine.scene.published", {sc.value, sel({"gi", "giApplied"})});
+        const bool read = ga.status == Status::Ok && ga.value.kind() == Kind::Object;
+        const Value budget = read ? ga.value["gi"]["updateBudget"] : Value();
+        const Value applied = read ? ga.value["giApplied"] : Value();
+        const long long got = budget.kind() == Kind::Int ? budget.asInt() : -1;
+        check(gi.value == Value(true) && got == 3 && read && applied.kind() == Kind::Null,
+              "engine.gi.set (vct, low, updateBudget 3), then engine.scene.published's gi.updateBudget reads " +
+                  std::to_string(got) + " (3: the direct setter reached the engine - THE CONTROL, above zero) and giApplied "
+                  "is NULL (the record route's field: a script's GI never shows there) (" + gi.message + ga.message + ")");
+    }
     const Result atom = e.call("engine.scene.atomDrawStatus", {sc.value});
     AtomDrawStatus atomBack;
     check(atom.status == Status::Ok && Record<AtomDrawStatus>::table().fromValue(atom.value, atomBack, "", why) &&

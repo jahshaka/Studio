@@ -39,7 +39,7 @@
 // what the scene's view ran).
 
 const W = 64, H = 64;
-const ALBEDO = [0.8, 0.5, 0.25], AMBIENT = [8, 12, 26], ROUGHNESS = 1;
+const ALBEDO = [0.8, 0.5, 0.25, 1], AMBIENT = [8, 12, 26], ROUGHNESS = 1;
 
 // THE NORMALISED DISNEY DIFFUSE's DIRECTIONAL ALBEDO by midpoint quadrature of (4): the light's cosine c in n steps
 // (weight 2c, the cosine-weighted mean), its azimuth in 2n; the view at cos v in the x-y plane
