@@ -327,7 +327,7 @@ void TileCache::flush()
     const Source source = found != mSources.constEnd() ? *found : Source();
     QVector<Decoded> jobs;
     jobs.reserve(batch.size());
-    for (const Request &r : batch) jobs.append({ r, QByteArray(), QImage(), false });
+    for (const Request &r : batch) jobs.append({ r, QByteArray(), QImage(), false, false });
     // The next batch reads on the next turn, while this one reads and decodes.
     if (!mQueue.isEmpty()) scheduleFlush();
 
@@ -339,9 +339,14 @@ void TileCache::flush()
         land(watcher->result());
     });
     watcher->setFuture(QtConcurrent::run(mPool, [jobs, guids, source]() mutable {
-        const QHash<QString, QByteArray> bytes = source ? source(guids) : QHash<QString, QByteArray>();
+        const std::optional<QHash<QString, QByteArray>> bytes =
+            source ? source(guids) : std::optional<QHash<QString, QByteArray>>(QHash<QString, QByteArray>());
         for (Decoded &job : jobs) {
-            job.png = bytes.value(job.request.guid);
+            if (!bytes) {
+                job.unread = true;
+                continue;
+            }
+            job.png = bytes->value(job.request.guid);
             job.sourced = !job.png.isEmpty();
             QImage full;
             if (job.sourced && full.loadFromData(job.png, "PNG"))
@@ -361,6 +366,8 @@ void TileCache::land(const QVector<Decoded> &batch)
     mSourced += int(sourced.size());
     for (const Decoded &job : batch) {
         mQueued.remove(job.request.key);
+        // UNREAD IS NOT MISSING: no mark, no tile, no repaint - the next paint that wants it asks again.
+        if (job.unread) continue;
         if (job.tile.isNull()) {
             mMissing.insert(job.request.key);
         } else {

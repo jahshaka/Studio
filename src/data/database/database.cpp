@@ -1680,39 +1680,44 @@ static QHash<QString, QByteArray> fetchThumbnailBytes(Database *db, const char *
     return out;
 }
 
-QHash<QString, QByteArray> Database::readThumbnailBytes(const QString &dbPath, ThumbnailTable table,
-                                                       const QStringList &guids)
+std::optional<QHash<QString, QByteArray>> Database::readThumbnailBytes(const QString &dbPath, ThumbnailTable table,
+                                                                      const QStringList &guids)
 {
     QHash<QString, QByteArray> out;
     if (guids.isEmpty() || dbPath.isEmpty()) return out;
     const bool projects = table == ThumbnailTable::Projects;
     const QString name = projects ? QStringLiteral("fetchProjectThumbnailBytes")
                                   : QStringLiteral("fetchAssetThumbnailBytes");
-    {
-        ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("TileRead"), dbPath);
-        scoped.db.setConnectOptions(QStringLiteral("QSQLITE_OPEN_READONLY;QSQLITE_BUSY_TIMEOUT=5000"));
-        if (!scoped.db.open()) {
-            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("tile read: cannot open %1 (%2)").arg(dbPath, scoped.db.lastError().text()));
-            return out;
-        }
-        QStringList marks;
-        marks.reserve(guids.size());
-        for (int i = 0; i < guids.size(); ++i) marks << QStringLiteral("?");
-        QSqlQuery query(scoped.db);
-        query.prepare(QStringLiteral("SELECT guid, thumbnail FROM %1 WHERE guid IN (%2)")
-                          .arg(projects ? QStringLiteral("projects") : QStringLiteral("assets"),
-                               marks.join(QLatin1Char(','))));
-        for (const QString &guid : guids) query.addBindValue(guid);
-        noteQuery(name, query.lastQuery());
-        if (!query.exec()) {
-            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("tile read: %1 failed (%2)").arg(name, query.lastError().text()));
-            return out;
-        }
-        while (query.next()) {
-            const QByteArray bytes = query.value(1).toByteArray();
-            if (!bytes.isEmpty()) out.insert(query.value(0).toString(), bytes);
-        }
+    // A READ THAT FAILED IS UNREAD, NEVER "NO PICTURE": the tile cache would mark every guid of the batch missing
+    // for good, and the preview demand would render a picture for a row that has one.
+    const auto unread = [&](const db::Error &e) -> std::optional<QHash<QString, QByteArray>> {
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QStringLiteral("tile read: %1 could not be read (%2) - the batch is unread, never 'no picture'")
+                .arg(name, dbqt::describe(e)));
+        return std::nullopt;
+    };
+    db::Options options;
+    options.name = "TileRead";
+    options.readOnly = true;
+    options.busyMs = db::kEditorBusyMs;
+    db::Error error;
+    db::Connection connection = db::Connection::open(dbPath.toStdString(), options, &error);
+    if (!connection.isOpen()) return unread(error);
+    QStringList marks;
+    marks.reserve(guids.size());
+    for (int i = 0; i < guids.size(); ++i) marks << QStringLiteral("?");
+    const QString sql = QStringLiteral("SELECT guid, thumbnail FROM %1 WHERE guid IN (%2)")
+                            .arg(projects ? QStringLiteral("projects") : QStringLiteral("assets"),
+                                 marks.join(QLatin1Char(',')));
+    db::Statement query(connection, dbqt::utf8(sql));
+    int bindAt = 0;
+    for (const QString &guid : guids) dbqt::bindText(query, ++bindAt, guid);
+    noteQuery(name, sql);
+    while (query.step(&error)) {
+        const QByteArray bytes = dbqt::bytes(query, 1);
+        if (!bytes.isEmpty()) out.insert(dbqt::text(query, 0), bytes);
     }
+    if (error) return unread(error);
     return out;
 }
 

@@ -27,6 +27,7 @@ For more information see the LICENSE file
 #include <QVector>
 
 #include <functional>
+#include <optional>
 
 class QThreadPool;
 
@@ -80,7 +81,10 @@ public:
     /// The bytes of `guids` (absent = no thumbnail). Called ON THE CACHE'S POOL, with
     /// at most kBatch guids, possibly two batches at once: it opens its own read
     /// connection (Database::readThumbnailBytes) and touches nothing of the UI thread's.
-    using Source = std::function<QHash<QString, QByteArray>(const QStringList &guids)>;
+    /// NO ANSWER (std::nullopt) = the read FAILED: the batch is UNREAD - never "no thumbnail" (a missing
+    /// mark is final, and the preview demand renders a picture for it): it is dropped from the queue
+    /// unmarked and asked again at the next paint that wants it.
+    using Source = std::function<std::optional<QHash<QString, QByteArray>>(const QStringList &guids)>;
 
     static constexpr int kBatch = 48;
     static constexpr int kBudgetKB = 128 * 1024;
@@ -175,6 +179,7 @@ private:
         QByteArray png;
         QImage tile;
         bool sourced = false;   ///< the Source answered bytes for it
+        bool unread = false;    ///< the Source's read failed: neither a tile nor missing
     };
 
     static QString keyOf(Kind kind, const QString &guid, const Spec &spec);

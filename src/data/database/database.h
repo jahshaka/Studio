@@ -784,8 +784,9 @@ public:
     /// bytes of a Desktop of 500 projects (~190 KB a picture) are never read on the UI thread.
     /// Logged in the query log under the old names (fetchAssetThumbnailBytes / fetchProjectThumbnailBytes).
     enum class ThumbnailTable { Assets, Projects };
-    static QHash<QString, QByteArray> readThumbnailBytes(const QString &dbPath, ThumbnailTable table,
-                                                         const QStringList &guids);
+    /// No answer (std::nullopt) = the read FAILED (said by name): the batch is UNREAD, never "no picture".
+    static std::optional<QHash<QString, QByteArray>> readThumbnailBytes(const QString &dbPath, ThumbnailTable table,
+                                                                        const QStringList &guids);
     /// THE PREVIEW WRITER's library half (PREVIEWS-1; the thread and the queue are
     /// services/previewwriter.h). openPreviewConnection opens `connectionName` to `dbPath` on the
     /// CALLING thread with SQLite's busy timeout at `busyTimeoutMs` and the library's durability

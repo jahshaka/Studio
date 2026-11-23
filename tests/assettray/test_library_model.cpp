@@ -385,9 +385,34 @@ int main(int argc, char **argv)
             std::sort(wantA.begin(), wantA.end());
             CHECK(seen.size() == 2 && second == wantA, "...the older batch A second");
         }
-        cache.setSource(TileCache::Kind::Asset, [libraryFile](const QStringList &g) {
-            return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Assets, g);
-        });
+        // UNREAD IS NEVER MISSING (NOQT-DATABASE-1 stage 3, step 1): a batch whose read FAILED leaves its rows
+        // neither tiled nor marked missing (a missing mark is final), and the next ask reads them again - beside
+        // the same rows read for real, which land as tiles.
+        {
+            const QStringList unreadRows = rowGuids(500, 3);
+            cache.clear();
+            cache.setSource(TileCache::Kind::Asset, [](const QStringList &) {
+                return std::optional<QHash<QString, QByteArray>>();
+            });
+            ask(unreadRows, 0);
+            CHECK(cache.drain(20000), "unread: the failed batch drains");
+            int missing = 0, held = 0;
+            for (const QString &g : unreadRows) {
+                missing += cache.isMissing(TileCache::Kind::Asset, g, spec) ? 1 : 0;
+                held += cache.peek(TileCache::Kind::Asset, g, spec).isNull() ? 0 : 1;
+            }
+            CHECK(missing == 0 && held == 0, "unread: a FAILED read marks no row missing and holds no tile (missing %d, "
+                                             "held %d of %lld)", missing, held, static_cast<long long>(unreadRows.size()));
+            cache.setSource(TileCache::Kind::Asset, [libraryFile](const QStringList &g) {
+                return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Assets, g);
+            });
+            ask(unreadRows, 0);
+            CHECK(cache.drain(20000), "unread: the second ask drains");
+            held = 0;
+            for (const QString &g : unreadRows) held += cache.peek(TileCache::Kind::Asset, g, spec).isNull() ? 0 : 1;
+            CHECK(held == int(unreadRows.size()), "unread: CONTROL: asked again, the rows read for real land as tiles (%d)",
+                  held);
+        }
 
         // A VIEW and its watcher: an icon grid over 2,000 rows, offscreen.
         LibraryModel queueModel;

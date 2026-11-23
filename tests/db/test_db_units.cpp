@@ -31,7 +31,8 @@ For more information see the LICENSE file
 //  13. "does it have dependencies" that could not be read is no answer: readOk cleared;
 //  14. where a project's pins are filed, unread, is no answer: readOk cleared;
 //  15. the boot's schema check over live columns it could not read answers "cannot judge" (matches), never "differs";
-//  16. the present indexes unread build nothing: the boot's gate answers -1, the open's report reads -1.
+//  16. the present indexes unread build nothing: the boot's gate answers -1, the open's report reads -1;
+//  17. a tile read that failed answers no answer (unread), never an empty one ("no picture").
 
 #include <QApplication>
 #include <QFile>
@@ -556,6 +557,29 @@ int main(int argc, char **argv)
         check(database.indexStatementsAtOpen() == -1,
               QStringLiteral("16: the open's present indexes unread: nothing built, the report reads -1 (%1)")
                   .arg(database.indexStatementsAtOpen()));
+    }
+
+    // 17. A TILE READ THAT FAILED IS UNREAD, NEVER "NO PICTURE" (stage 3, step 1: the tile cache marks a guid the read
+    //     did not answer as missing for good, and the preview demand renders one for it): a file it cannot read
+    //     answers no answer at all - beside the library's own file, whose row with a picture is answered.
+    {
+        db::Error e;
+        database.connection().exec("INSERT INTO assets (guid, name, thumbnail) VALUES ('t17', 't17', x'0102')", &e);
+        const std::optional<QHash<QString, QByteArray>> read =
+            Database::readThumbnailBytes(QString::fromLatin1(kFile), Database::ThumbnailTable::Assets, { QStringLiteral("t17") });
+        check(!e && read && read->value(QStringLiteral("t17")) == QByteArray("\x01\x02", 2),
+              QStringLiteral("17: CONTROL: the library's row with a picture is answered (%1 rows)").arg(read ? read->size() : -1));
+        const QString garbage = QStringLiteral("db_units_garbage17.db");
+        {
+            QFile f(garbage);
+            f.open(QIODevice::WriteOnly);
+            f.write(QByteArray(8192, 'x'));
+        }
+        const std::optional<QHash<QString, QByteArray>> unread =
+            Database::readThumbnailBytes(garbage, Database::ThumbnailTable::Assets, { QStringLiteral("t17") });
+        QFile::remove(garbage);
+        check(!unread, QStringLiteral("17: a file it cannot read answers NO answer (unread), never an empty one (%1)")
+                           .arg(unread ? QStringLiteral("an answer of %1 rows").arg(unread->size()) : QStringLiteral("none")));
     }
 
     database.closeDatabase();
