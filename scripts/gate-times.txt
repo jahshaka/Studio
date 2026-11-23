@@ -318,7 +318,7 @@ shadercache.app.cold 25.01  solo 2026-11-23 at 4ead1fce8 (spec.sh reprice, run 2
 shadercache.app.warm 14.57  solo 2026-11-23 at 4ead1fce8 (spec.sh reprice, run 20261123T084128-4ead1fce8-p1253357)
 shadercache.app.clean 0.01  solo 2026-11-23 at 4ead1fce8 (spec.sh reprice, run 20261123T084128-4ead1fce8-p1253357)
 shadercache.startup_pass_key 0.44  solo 2026-11-23 at 4ead1fce8 (spec.sh reprice, run 20261123T084114-4ead1fce8-p1246513)
-shadercache.app.cleared 14.60  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T051559-e4427ba87, 1-min load 1.5; V2 plan 0.2)
+shadercache.app.cleared 23.80  by hand (spec.sh reprice, 2026-11-23)
 shadergraph.emitter_parity 1.48  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T051638-e4427ba87, 1-min load 1.5; V2 plan 0.2)
 shadow.cutout_caster 15.63  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T051640-e4427ba87, 1-min load 1.9; V2 plan 0.2)
 shadow.pane_lamp 1.16  jahshaka-raul RTX 5060 Ti 615.71.09, 2026-11-21 at e4427ba87: solo (alone in its own ctest call) (run 20261121T044025-e4427ba87, 1-min load 1.1; V2 plan 0.2)
