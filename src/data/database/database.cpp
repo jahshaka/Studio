@@ -1291,7 +1291,9 @@ int Database::indexStatementsToRun(const QString &path, QString *refusal)
     if (check.isOpen()) needed = indexStatementsNeeded(check, &error);
     if (error) {
         // A FAILED READ NEVER DECIDES A DEFAULT: the boot is refused by name, as a failed build is (main.cpp).
-        if (refusal) *refusal =QStringLiteral("the library's indexes could not be read: %1").arg(dbqt::describe(error));
+        if (refusal)
+            *refusal = error.busy() ? QStringLiteral("the library is in use by another process: start again when it is free")
+                                    : QStringLiteral("the library's indexes could not be read: %1").arg(dbqt::describe(error));
         return -1;
     }
     if (refusal) refusal->clear();
@@ -1836,6 +1838,8 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
         for (const QString &guid : guids) dbqt::bindText(furniture, ++bindAt, guid);
         if (!executeAndCheckQuery(furniture, QStringLiteral("FetchPreviewPlatform"))) return {};
         while (furniture.next()) platform.insert(dbqt::text(furniture, 0));
+        // A READ CUT SHORT IS NO ANSWER (its failure already said by name, the funnel's): never a short list.
+        if (furniture.failed()) return {};
     }
     // The correlated sub-selects are SQLite's per row, inside this ONE statement; the oid lists
     // come back in no promised order (previews::key sorts them).
@@ -1883,6 +1887,9 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
         row.platform = platform.contains(row.guid);
         rows.append(row);
     }
+    // A LATER ROW's FAILED STEP: no rows, never the rows before it (the counts and states read from them would
+    // be short); the failure was said by name at its step.
+    if (query.failed()) return {};
     return rows;
 }
 

@@ -138,8 +138,14 @@ void TileCache::publishVisible(int token, const QStringList &guids)
     it->order = guids;
     it->guids = QSet<QString>(guids.cbegin(), guids.cend());
     // AN UNREAD KEY IS ASKED AGAIN HERE, at a publish (a scroll, a resize, a show), never at a paint.
+    askUnreadAgain(it->kind, it->guids, token);
+    tellDemand(it->kind, token);
+}
+
+void TileCache::askUnreadAgain(Kind kind, const QSet<QString> &shown, int token)
+{
     for (auto u = mUnread.begin(); u != mUnread.end();) {
-        if (u->kind != it->kind || !it->guids.contains(u->guid) || mQueued.contains(u.key())) { ++u; continue; }
+        if (u->kind != kind || !shown.contains(u->guid) || mQueued.contains(u.key())) { ++u; continue; }
         Request again = *u;
         again.token = token;
         mQueued.insert(again.key);
@@ -147,7 +153,6 @@ void TileCache::publishVisible(int token, const QStringList &guids)
         u = mUnread.erase(u);
         scheduleFlush();
     }
-    tellDemand(it->kind, token);
 }
 
 void TileCache::withdrawVisible(int token)
@@ -396,6 +401,11 @@ void TileCache::land(const QVector<Decoded> &batch)
         ready.append({ job.request.kind, job.request.guid });
     }
     for (const auto &r : ready) emit tileReady(r.first, r.second);
+    // THE LIBRARY READS AGAIN (the reader's point b): a batch that landed real reads asks every shown view's unread
+    // keys once more - the blanks fill with no scroll or resize.
+    if (!batch.isEmpty() && !batch.first().unread && !mUnread.isEmpty())
+        for (auto v = mViews.cbegin(); v != mViews.cend(); ++v)
+            if (v->known) askUnreadAgain(v->kind, v->guids, v.key());
 }
 
 bool TileCache::drain(int timeoutMs)

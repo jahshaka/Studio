@@ -189,6 +189,8 @@ private:
     void tellDemand(Kind kind, int first);
     void flush();
     void land(const QVector<Decoded> &batch);
+    /// The unread keys of `kind` whose guid `shown` holds, queued again for `token` (a publish; a batch that read).
+    void askUnreadAgain(Kind kind, const QSet<QString> &shown, int token);
 
     QCache<QString, QPixmap> mEntries{ kBudgetKB };
     QSet<QString> mMissing;

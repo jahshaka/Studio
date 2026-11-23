@@ -510,9 +510,11 @@ int main(int argc, char *argv[])
         const QString libraryPath = AppPaths::inDataRoot(Constants::JAH_DATABASE);
         // A FAILED BUILD, AND A GATE THAT COULD NOT READ WHAT TO BUILD, REFUSE THE BOOT BY NAME (exit 4): a failed read
         // never decides a default (a shell opening a library whose indexes nobody could read).
-        const auto refuse = [&cli](const QString &reason) {
+        const auto refuse = [&cli, &splash](const QString &reason) {
             std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n", qUtf8Printable(reason));
             JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: REFUSED — %1").arg(reason));
+            // The frameless stay-on-top splash would sit over the centred box (a frozen splash over a hidden dialog).
+            splash.close();
             if (!FirstRun::isDrivenSession(cli))
                 QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
                                       QObject::tr("The library cannot be opened: %1.").arg(reason));

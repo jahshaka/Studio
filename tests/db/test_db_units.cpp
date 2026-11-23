@@ -34,7 +34,8 @@ For more information see the LICENSE file
 //  16. the present indexes unread build nothing: the boot's gate answers -1 and REFUSES the boot by name, the open's
 //      report reads -1;
 //  17. a tile read that failed, or has no library, answers no answer (unread), never an empty one ("no picture"); a
-//      failure streak is said once, and ended by its count.
+//      failure streak is said once, and ended by its count;
+//  18. the preview rows read short (a later row's step failed) answer no rows, never a cut list.
 
 #include <QApplication>
 #include <QFile>
@@ -604,6 +605,30 @@ int main(int argc, char **argv)
         check(warned == 1 && ended.size() == 1 && ended.first().contains(QStringLiteral("after 3 failed batch(es) (2 repeat(s)")),
               QStringLiteral("17: three failures say ONE warning (%1), and the read after them ends the streak by its count "
                              "(%2)").arg(warned).arg(ended.join(QLatin1Char('|'))));
+    }
+
+    // 18. THE PREVIEW ROWS CUT SHORT ARE NO ANSWER (stage 3, step 1: fetchPreviewRows read to its loop's end and
+    //     answered what it had): a read that fails on a LATER row answers no rows, said by name - beside the same
+    //     listing read whole. The failure: a TEMP VIEW shadowing asset_files raises on one asset's files (the scan
+    //     is in rowid order, one row a step, so the rows before it were already handed out).
+    {
+        db::Error e;
+        database.connection().exec("INSERT INTO assets (guid, name, type) VALUES ('p18a', 'p18a', 1), ('p18b', 'p18b', 1);"
+                                   "INSERT INTO asset_files (asset_guid, role, oid) VALUES ('p18a', 'source', 'o18a'), "
+                                   "('p18b', 'source', 'o18b')", &e);
+        const QVector<Database::PreviewRow> whole = database.fetchPreviewRows(QString(), false, -1);
+        int named = 0;
+        for (const Database::PreviewRow &row : whole) named += row.guid.startsWith(QStringLiteral("p18")) ? 1 : 0;
+        check(!e && named == 2, QStringLiteral("18: CONTROL: the listing read whole names both rows (%1 of %2) %3")
+                                    .arg(named).arg(whole.size()).arg(QString::fromStdString(e.message)));
+        database.connection().exec("CREATE TEMP VIEW asset_files AS SELECT asset_guid, role, "
+                                   "CASE WHEN asset_guid = 'p18b' THEN abs(-9223372036854775807 - 1) ELSE oid END AS oid "
+                                   "FROM main.asset_files", &e);
+        const QVector<Database::PreviewRow> cut = database.fetchPreviewRows(QString(), false, -1);
+        db::Error dropped;
+        database.connection().exec("DROP VIEW temp.asset_files", &dropped);
+        check(!e && cut.isEmpty(), QStringLiteral("18: a listing that failed on a later row answers NO rows, never a short "
+                                                  "list (%1 rows) %2").arg(cut.size()).arg(QString::fromStdString(e.message)));
     }
 
     database.closeDatabase();

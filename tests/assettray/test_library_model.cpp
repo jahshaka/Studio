@@ -424,6 +424,30 @@ int main(int argc, char **argv)
                                                   "land as tiles (%d)", held);
             cache.closeView(view);
         }
+        // THE LIBRARY READS AGAIN (the reader's point b): a shown view's unread rows are asked again when a LATER batch
+        // reads for real - no publish from the test after the failure.
+        {
+            const QStringList shownRows = rowGuids(520, 3), goodRows = rowGuids(530, 2);
+            cache.clear();
+            const int view = cache.openView(TileCache::Kind::Asset);
+            cache.publishVisible(view, shownRows);
+            cache.setSource(TileCache::Kind::Asset, [](const QStringList &) {
+                return std::optional<QHash<QString, QByteArray>>();
+            });
+            ask(shownRows, view);
+            CHECK(cache.drain(20000), "unread again: the failed batch drains");
+            cache.setSource(TileCache::Kind::Asset, [libraryFile](const QStringList &g) {
+                return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Assets, g);
+            });
+            ask(goodRows, 0);
+            CHECK(cache.drain(20000), "unread again: a batch that reads, and what it asks again, drain");
+            int held = 0;
+            for (const QString &g : shownRows) held += cache.peek(TileCache::Kind::Asset, g, spec).isNull() ? 0 : 1;
+            CHECK(held == int(shownRows.size()), "unread again: a batch that read asks the shown view's unread rows again, "
+                                                 "and they land as tiles with no publish (%d of %lld)", held,
+                  static_cast<long long>(shownRows.size()));
+            cache.closeView(view);
+        }
 
         // A VIEW and its watcher: an icon grid over 2,000 rows, offscreen.
         LibraryModel queueModel;
