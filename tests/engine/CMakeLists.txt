@@ -601,6 +601,15 @@ jah_gpu_row(script.batch_equals_single CLASS engine FRAMES 32
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(script.batch_equals_single PROPERTIES TIMEOUT 60 LABELS "engine")
 
+# script.radiance_picture (SCRIPT-IN-ENGINE-1 stage 2 B1; RULED 6 and 10) — THE RADIANCE PICTURE READS THE SCENE's
+# LINEAR RADIANCE: a Lambert patch under a uniform ambient reads albedo x ambient within the half float's rounding
+# (2^-11 relative), the patch above zero (the control), frame 16 equal to frame 60 (the settle's bound). A script run by
+# jahengine (readPixels' content "radiance", engine.radiance.mean). 60 frames.
+jah_gpu_row(script.radiance_picture CLASS engine FRAMES 60
+         COMMAND jahengine --script "${CMAKE_CURRENT_SOURCE_DIR}/script_radiance_picture.js" --name script.radiance_picture
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(script.radiance_picture PROPERTIES TIMEOUT 60 LABELS "engine")
+
 # script.json — THE SCRIPT VALUE IN JSON, ITS LAWS ON THE CPU (MCP-ON-HOST-1 stage 1; test_script_json.cpp says them):
 # every kind round-trips with its kind, numbers by their bits, strict UTF-8, the text's shape, bytes as {"$bytes"} capped
 # at 1 MiB. The codec alone (jahshaka/engine/ScriptJson.h): no device, a code row.

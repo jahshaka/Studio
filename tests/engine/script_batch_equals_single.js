@@ -12,7 +12,7 @@
 const W = 192, H = 108, N = 64;
 
 function twin(name) {
-    const view = engine.view.createOffscreen({name, width: W, height: H, background: [0.02, 0.02, 0.03]});
+    const view = engine.view.createOffscreen({name, width: W, height: H, background: [0.02, 0.02, 0.03, 1]});
     const scene = engine.scene.create(name);
     engine.view.setScene(view, {scene});
     engine.scene.setAmbient(scene, {upper: [0.6, 0.6, 0.65], lower: [0.1, 0.08, 0.06]});
