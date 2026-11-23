@@ -23,7 +23,6 @@
 #include <string>
 #include <utility>
 #include <vector>
-#include "jahshaka/engine/Math.h"
 
 class SceneMirror;
 namespace jahshaka { namespace engine { class Engine; class Scene; class View; namespace script { class Host; } } }
