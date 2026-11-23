@@ -71,7 +71,7 @@ lines Published.h 394
 fanout Published.h 0
 lines RayQuery.h 330
 fanout RayQuery.h 1
-lines Script.h 526
+lines Script.h 537
 fanout Script.h 1
 lines ScriptJson.h 45
 fanout ScriptJson.h 0
@@ -93,7 +93,7 @@ lines Vr.h 777
 fanout Vr.h 1
 reach Fog.h 246
 reach FrameInput.h 246
-reach GiParams.h 259
+reach GiParams.h 272
 reach Monitor.h 247
 reach Planar.h 246
-reach Sky.h 256
+reach Sky.h 269
