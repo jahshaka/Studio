@@ -17,6 +17,10 @@
 // pending on the background compiler, its environment landed, and no low-level pipeline built for kQuietFrames frames in
 // a row; kSettleCap is its hang guard (never a bar).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Fog.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 #include <cstdio>
 using namespace jahshaka::engine;

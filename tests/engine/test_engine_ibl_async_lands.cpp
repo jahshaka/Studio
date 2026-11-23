@@ -42,6 +42,7 @@
 //      drained the whole stream whenever a scene had a convolution pending (the gate's ~957 ms, twelve presets'
 //      textures in one frame).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
 #include "jahshaka/engine/Monitor.h"
 #include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/Shaders.h"

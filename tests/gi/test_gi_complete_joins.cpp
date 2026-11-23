@@ -24,6 +24,11 @@
 // CONTROL (the zero-pass rule for (1)): S's frames joined at least one in-flight request (computeJoins > 0) - the door
 // did make the service late, so (1) is not a run where everything had landed anyway (green: 112 joins).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 #include <cstdio>
 #include <string>

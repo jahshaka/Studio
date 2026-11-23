@@ -123,6 +123,9 @@
 //               bound for the real pass (spikes/shader-system/ss7/p3/item3/red-once/).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Fog.h"
+#include "jahshaka/engine/GiCards.h"
+#include "jahshaka/engine/Pictures.h"
 #include "jahshaka/engine/GiParams.h"
 #include "jahshaka/engine/GiStatus.h"
 #include "jahshaka/engine/Materials.h"

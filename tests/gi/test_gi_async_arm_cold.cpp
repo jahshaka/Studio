@@ -31,6 +31,10 @@
 //      permutations the run above never built) - so the counter law (2) and shadercache.app.warm bar at 0 is shown fed
 //      (> 0), never a constant.
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/GiParams.h"
+#include "jahshaka/engine/Monitor.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
 #include "../support/enginetesthelpers.h"
 #include <algorithm>
 #include <cstdio>

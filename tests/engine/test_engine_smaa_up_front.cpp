@@ -22,6 +22,10 @@
 // app cache (the engine log's "SMAA presets" line).
 // `picture` (engine.smaa_preset_picture): A PRESET CHANGE REACHES THE PICTURE (pictureMode below).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Materials.h"
+#include "jahshaka/engine/Pictures.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
 #include "../support/enginetesthelpers.h"
 #include <cstdio>
 #include <cstring>

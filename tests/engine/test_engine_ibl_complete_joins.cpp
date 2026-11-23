@@ -19,6 +19,9 @@
 //      clones, never requested - else (1) proves nothing.
 //  PRINTED, NOT A LAW: B's joins and the time they waited (computeJoins / computeJoinMs).
 #include "jahshaka/engine/Engine.h"
+#include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
+#include "jahshaka/engine/Sky.h"
 #include "../support/enginetesthelpers.h"
 #include <cstdio>
 using namespace jahshaka::engine;

@@ -58,6 +58,7 @@
 #include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/Shaders.h"
 #include "jahshaka/engine/Sky.h"
+#include "jahshaka/engine/Overlay.h"
 
 using namespace jahshaka::engine;
 

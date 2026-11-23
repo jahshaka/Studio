@@ -73,6 +73,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/worldmodes.h"
 #include "services/sessionheader.h"
 #include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
 
 
 // Hints that a dedicated GPU should be used whenever possible
