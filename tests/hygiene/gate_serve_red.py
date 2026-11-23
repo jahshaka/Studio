@@ -8,7 +8,6 @@ served-red while that row is red at the same commit, run once it is not or at a 
 usage: gate_serve_red.py <source dir>"""
 import os
 import sys
-import json  # noqa: E402  (the toy compile databases)
 
 src = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.join(src, "scripts"))
@@ -43,12 +42,12 @@ ENV = fp()
 
 
 def rec(verdict, cfg="cfg", decl="d", data="h", env=ENV):
-    return {"suite": "gi.row", "verdict": verdict, "failLine": "FAIL: the law", "tip": {"studio": "a" * 40}, "config": {"hash": cfg, "compile": "c"},
+    return {"suite": "gi.row", "verdict": verdict, "failLine": "FAIL: the law", "tip": {"studio": "a" * 40}, "config": {"hash": cfg},
             "declaration": {"hash": decl}, "data_hash": data, "run": "run-1", "seconds": 3.0, "tier": "lane", "env": env}
 
 
 FACT = {"declaration": {"hash": "d"}, "data_hash": "h", "labels": ["gi"]}
-CFG = {"hash": "cfg", "build_type": "Debug", "compile": "c"}
+CFG = {"hash": "cfg", "build_type": "Debug"}
 fails = []
 
 
@@ -201,18 +200,6 @@ else:
 open(data, "w").write("two")
 if gg.data_set(row, roots, {})["hash"] == hashes[0][0]:
     fails.append("a real data argument's change does not move the row's data hash")
-def mkdb(b_, r_, commit, extra=(), edit=lambda line: line):
-    """A toy compile_commands.json: two C++ targets sharing the build-wide arguments, each with its own include directory; `extra`
-    more lines; `edit` applied to every line. The digest's stamp removed (each case its own state: the final read's B3)."""
-    base = '/usr/bin/c++ -DFOO=1 -DBENCH_GIT_COMMIT="%s" -std=c++20 -O0 -g -I%s/src %s -o %s.o -c %s/src/%s.cpp'
-    lines = [base % (commit, r_, inc, n, r_, n) for n, inc in (("a", "-I%s/tests/a" % r_), ("b", "-I%s/generated" % b_))]
-    lines = [edit(x) for x in lines] + list(extra)
-    open(os.path.join(b_, "compile_commands.json"), "w").write(json.dumps(
-        [{"directory": b_, "file": x.split(" -c ")[1], "command": x} for x in lines]))
-    if os.path.exists(os.path.join(b_, "BUILT_FROM.compile")):
-        os.remove(os.path.join(b_, "BUILT_FROM.compile"))
-
-
 # A RECORD SERVES ANOTHER TREE AT EQUAL INPUT (URGENT #154): #129's guard put the tree's own path into every build's options
 # (JAH_CONFIGURED_SOURCE_DIR) and configure_file writes it into a row's script, so a lane's records served no tree but its own -
 # a landing at the very tip the lane had proved planned 329 rows. Two toy trees, one commit: the configuration and the data equal.
@@ -226,11 +213,9 @@ for tree in ("lane", "parent"):
         "CMAKE_HOME_DIRECTORY:INTERNAL=%s\nCMAKE_CACHEFILE_DIR:INTERNAL=%s\nCMAKE_BUILD_TYPE:STRING=Debug\n"
         "CMAKE_CXX_FLAGS:STRING=-pipe\nDISABLE_BREAKPAD:UNINITIALIZED=ON\nJAH_CONFIGURED_SOURCE_DIR:INTERNAL=%s\n"
         "JAH_XVFB:FILEPATH=/usr/bin/Xvfb\n%s" % (r_, b_, r_, "JAH_LAB_OLD_MODEL:FILEPATH=/data/old.fbx\n" if tree == "parent" else ""))
-    # THE COMPILE DATABASE (what the compiler was told build-wide; the lead's rulings 2026-11-23): two targets, each tree's own paths
-    mkdb(b_, r_, "606a8c85" if tree == "lane" else "69615d93")
 lane, parent = os.path.join(t, "lane", "build-linux"), os.path.join(t, "parent", "build-linux")
 cl, cp = gg.build_config(lane)[0], dict(gg.build_config(parent)[0], keys=gg.config_keys(parent))
-recd = {"hash": cl["hash"], "options": cl["options"], "compile": cl.get("compile")}
+recd = {"hash": cl["hash"], "options": cl["options"]}
 cases = [("a lane's record, its tree's path the only difference (and a stale location in the parent's cache): EQUAL", recd, cp, True),
          ("the same record without its options: unknown, never equal", {"hash": cl["hash"]}, cp, False)]
 base_cache = open(os.path.join(lane, "CMakeCache.txt")).read()
@@ -240,47 +225,28 @@ def variant(line, name):
     """The lane's record had its cache carried `line` (the last entry of a name wins)."""
     open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache + line + "\n")
     v = gg.build_config(lane)[0]
-    cases.append((name, {"hash": v["hash"], "options": v["options"], "compile": v.get("compile")}, cp, False))
+    cases.append((name, {"hash": v["hash"], "options": v["options"]}, cp, False))
+    open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache)   # (each case its own clean state: the final read's B3)
 
 
 variant("DISABLE_BREAKPAD:UNINITIALIZED=OFF", "a switch differs (DISABLE_BREAKPAD OFF; the flags equal): NOT equal")
 sw_rec = cases[-1][1]
 variant("CMAKE_CXX_FLAGS:STRING=-O2", "the flags differ (CMAKE_CXX_FLAGS -O2): NOT equal")
 variant("JAH_COVERAGE:BOOL=ON", "THE COVERAGE BUILD (JAH_COVERAGE ON; TEST-STREAMLINE-1 stage 2): NOT equal - it never serves the Debug tree")
+variant("CMAKE_BUILD_TYPE:STRING=Release", "a real switch: the build type (Release vs Debug): NOT equal")
+variant("JAH_TOY_SWITCH:UNINITIALIZED=ON", "a real -D on the configure line (JAH_TOY_SWITCH ON): NOT equal")
 # A PROBE ENTRY IS NO SWITCH (the census of 2026-11-23: quickjs-ng's COMPILER_SUPPORTS_Wformat=2 probe, re-read by CMake as an
-# UNINITIALIZED entry "2:INTERNAL=1", made 315 of 429 records "differ"): the record's cache WITHOUT it, this build's WITH it - EQUAL
-# (red on the old key); WHAT THE COMPILER WAS TOLD decides instead: a define or an -O level changed in the compile database - NOT equal
+# UNINITIALIZED entry whose value is "2:INTERNAL=1", made 315 of 429 records "differ"; gate_graph.misread_internal, the lead's
+# ruling): this build's cache WITH it, the record's WITHOUT it (every record made before it) - EQUAL, served again (red on
+# photon-7's key, and with the predicate removed: spikes/audit-fixes/red-once/gate.serve_red-switches.txt)
 open(os.path.join(parent, "CMakeCache.txt"), "a").write("COMPILER_SUPPORTS_Wformat:UNINITIALIZED=2:INTERNAL=1\n")
 cp = dict(gg.build_config(parent)[0], keys=gg.config_keys(parent))
 cases[:] = [(n, r, cp, w) for n, r, _c, w in cases]
-cases.append(("a new PROBE entry in this build's cache alone (COMPILER_SUPPORTS_Wformat:UNINITIALIZED=2:INTERNAL=1): EQUAL", recd, cp, True))
-lane_root = os.path.join(t, "lane")
-
-
-def cvariant(name, want, **kw):
-    """The lane's record made at a compile database `kw` changed (mkdb's extra / edit), its cache the base's (B3: no switch left by
-    an earlier case); the database and its stamp put back after."""
-    open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache)
-    mkdb(lane, lane_root, "606a8c85", **kw)
-    v = gg.build_config(lane)[0]
-    cases.append((name, {"hash": v["hash"], "options": v["options"], "compile": v.get("compile")}, cp, want))
-    mkdb(lane, lane_root, "606a8c85")
-
-
-cvariant("ONE TARGET's extra include directory and define (a lane's new test target: per-target, the reach's - scripts/gate-scope.py "
-         "'a target this command changes'): EQUAL", True,
-         extra=['/usr/bin/c++ -DFOO=1 -DBENCH_GIT_COMMIT="606a8c85" -DNEWROW=1 -std=c++20 -O0 -g -I%s/src -I%s/tests/new -o n.o '
-                '-c %s/tests/new/n.cpp' % (lane_root, lane_root, lane_root)])
-cvariant("a GLOBAL define changed on every compile line (FOO 1 -> 2): NOT equal", False, edit=lambda x: x.replace("-DFOO=1", "-DFOO=2"))
-cvariant("the -O level changed on every compile line (-O0 -> -O2): NOT equal", False, edit=lambda x: x.replace("-O0", "-O2"))
-cvariant("a LANGUAGE whose lines share no argument (two C lines): its digest unreadable - never equal (fail closed)", False,
-         extra=["/usr/bin/cc -DX=1 -o p.o -c %s/src/p.c" % lane_root, "/usr/bin/cc -DY=1 -o q.o -c %s/src/q.c" % lane_root])
-cases.append(("a record with NO compile digest (made before it): unknown, never equal (fail closed)",
-              {"hash": recd["hash"], "options": recd["options"]}, cp, False))
-recd["compile"] = cl.get("compile")
+cases.append(("a record made BEFORE the probe and this rule (its cache without the entry) against this build's cache WITH it "
+              "(COMPILER_SUPPORTS_Wformat:UNINITIALIZED=2:INTERNAL=1): EQUAL - the census's 315 stand again", recd, cp, True))
 open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache + "JAH_COVERAGE:BOOL=OFF\n")
 v_ = gg.build_config(lane)[0]
-cases.append(("the option at OFF (the default build, byte for byte): EQUAL - its arrival re-keys no record", {"hash": v_["hash"], "options": v_["options"], "compile": v_.get("compile")}, cp, True))
+cases.append(("the option at OFF (the default build, byte for byte): EQUAL - its arrival re-keys no record", {"hash": v_["hash"], "options": v_["options"]}, cp, True))
 open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache)
 why_ = gg.config_why(sw_rec, cp) if hasattr(gg, "config_why") else None
 print(("ok   " if why_ and "a switch differs: DISABLE_BREAKPAD" in why_ else "FAIL ") + "config_why names the differing term (the switch "
