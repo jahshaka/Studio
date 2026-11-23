@@ -149,7 +149,14 @@ void MaterialPresetSeeder::importMapsThenRows()
     for (const auto &entry : mPrepared.mapOwners) {
         const QString oid = mPrepared.mapOids.value(entry.first);
         if (oid.isEmpty()) continue;
-        if (!ShippedAssets::libraryTextureFor(mDb, oid, assethome::platform()).isEmpty()) continue;
+        bool read = true;
+        if (!ShippedAssets::libraryTextureFor(mDb, oid, assethome::platform(), QString(), &read).isEmpty()) continue;
+        if (!read) {   // NOQT-DATABASE-1 stage 2: never a second row for a picture the library may hold - skipped, said
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QStringLiteral("preset seed: whether the library already holds '%1' could not be read - not imported")
+                    .arg(entry.first));
+            continue;
+        }
         // ONE PICTURE, ONE ROW — INSIDE THIS BATCH TOO (SEED-STAMP-1,
         // measured). The library test above is asked BEFORE anything is
         // imported, so two shipped files with the same BYTES both answered

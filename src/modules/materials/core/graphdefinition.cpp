@@ -52,7 +52,7 @@ QString bakeStagingDir(const QString &materialGuid)
 } // namespace
 
 QString bakedMemberRow(Database *db, const QString &materialGuid, const QString &slot,
-                       const QString &filePath, QString *errorOut)
+                       const QString &filePath, QString *errorOut, bool *readFailed)
 {
     const auto fail = [errorOut](const QString &message) {
         if (errorOut) *errorOut = message;
@@ -75,6 +75,13 @@ QString bakedMemberRow(Database *db, const QString &materialGuid, const QString 
         query.bindInt(3, static_cast<int>(ModelTypes::Texture));
         db::Error e;
         if (query.step(&e)) guid = dbqt::text(query, 0);
+        // A READ THAT FAILED IS NO "NO ROW YET" (NOQT-DATABASE-1 stage 2): a second baked-map row would be minted and
+        // the definition's guid would move on every save. Refused by name.
+        else if (e) {
+            if (readFailed) *readFailed = true;
+            return fail(QStringLiteral("whether '%1' already has its %2 map could not be read (%3)")
+                            .arg(materialGuid, slot, dbqt::describe(e)));
+        }
     }
     if (guid.isEmpty()) {
         guid = QString::fromStdString(iris::newGuid());
@@ -150,7 +157,12 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
         // A BAKED map: its pixels are ours, so they become a member row.
         const QString file = QDir(opts.outputDir).filePath(QFileInfo(it.value().toString()).fileName());
         QString error;
-        const QString memberGuid = bakedMemberRow(db, materialGuid, it.key(), file, &error);
+        bool readFailed = false;
+        const QString memberGuid = bakedMemberRow(db, materialGuid, it.key(), file, &error, &readFailed);
+        if (readFailed) {   // never a slot dropped from the definition because a read failed: the build is refused
+            out.error = error;
+            return out;
+        }
         if (memberGuid.isEmpty()) {
             // A slot we cannot store is a slot the material does not carry —
             // never a path left behind for another machine to fail on.

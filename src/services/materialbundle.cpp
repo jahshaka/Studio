@@ -371,6 +371,13 @@ QJsonObject adoptForeignMembers(Database *db, const QString &materialGuid,
                 renamed = true;
                 continue;
             }
+            // A READ THAT FAILED IS NO "NOT COPIED YET" (NOQT-DATABASE-1 stage 2): a second copy would be minted.
+            if (e) {
+                if (errorOut)
+                    *errorOut = QStringLiteral("whether this material already has its copy of '%1' could not be read "
+                                               "(%2)").arg(member, dbqt::describe(e));
+                return QJsonObject();
+            }
         }
         const QString copy = QString::fromStdString(iris::newGuid());
         QJsonObject props = QJsonDocument::fromJson(row.properties).object();

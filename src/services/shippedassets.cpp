@@ -54,7 +54,7 @@ namespace {
 /// home never names a row another home owns (a Clear Database that keeps one
 /// storage and clears another would leave it pointing at nothing).
 QString libraryTextureForOn(db::Connection &conn, const QString &oid, const QString &projectGuid,
-                            const assethome::Home &home)
+                            const assethome::Home &home, bool *readOk)
 {
     db::Statement query(conn, dbqt::utf8(QStringLiteral(
                       "SELECT AF.asset_guid FROM asset_files AF "
@@ -73,16 +73,17 @@ QString libraryTextureForOn(db::Connection &conn, const QString &oid, const QStr
     if (home.isProject()) dbqt::bindText(query, 5, home.projectGuid);
     db::Error e;
     if (query.step(&e)) return dbqt::text(query, 0);
+    if (e && readOk) *readOk = false;   // a failed read is no "not here": a second row would be minted
     return QString();
 }
 
 } // namespace
 
 QString libraryTextureFor(Database *db, const QString &oid, const assethome::Home &home,
-                          const QString &projectGuid)
+                          const QString &projectGuid, bool *readOk)
 {
     if (oid.isEmpty() || !db) return QString();
-    return libraryTextureForOn(db->connection(), oid, projectGuid, home);
+    return libraryTextureForOn(db->connection(), oid, projectGuid, home, readOk);
 }
 
 namespace {
@@ -133,7 +134,13 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
         out.error = QStringLiteral("a project's picture needs an open project");
         return out;
     }
-    QString guid = libraryTextureForOn(conn, oid, projectGuid, home);
+    bool read = true;
+    QString guid = libraryTextureForOn(conn, oid, projectGuid, home, &read);
+    if (!read) {   // NOQT-DATABASE-1 stage 2: refused by name, never a duplicate row
+        out.error = QStringLiteral("whether the library already holds '%1' could not be read - nothing was imported")
+                        .arg(displayName);
+        return out;
+    }
     // A row whose object is no longer in the store (purged, a store moved
     // without its objects) cannot serve a scene; a fresh import brings the
     // bytes back under a new row rather than handing out a guid that

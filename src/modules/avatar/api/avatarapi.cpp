@@ -1291,7 +1291,7 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
 // rides an archive, and the character's roles re-match on the spot because
 // AvatarLocomotion::refreshClips watches the clip set.
 
-QString AvatarApi::assetForContent(const QString &path) const
+QString AvatarApi::assetForContent(const QString &path, bool *readOk) const
 {
     if (!host.db) return QString();
     const QString oid = AssetCas::hashFile(path);
@@ -1311,7 +1311,10 @@ QString AvatarApi::assetForContent(const QString &path) const
     query.bindInt(3, static_cast<int>(ModelTypes::Object));
     db::Error error;
     if (query.step(&error)) return dbqt::text(query, 0);
-    if (error) qWarning("avatar: the row of a clip's content: %s", qUtf8Printable(dbqt::describe(error)));
+    if (error) {
+        qWarning("avatar: the row of a clip's content: %s", qUtf8Printable(dbqt::describe(error)));
+        if (readOk) *readOk = false;   // no "never seen": a second row for the same bytes would be imported
+    }
     return QString();
 }
 
@@ -1354,7 +1357,13 @@ QString AvatarApi::resolveClipAsset(const char *verb, const QString &pathOrAsset
         // file's sha256 IS the identity: an existing row backed by these bytes
         // is reused, and the import below only runs for bytes the library has
         // never seen.
-        const QString existing = assetForContent(info.absoluteFilePath());
+        bool read = true;
+        const QString existing = assetForContent(info.absoluteFilePath(), &read);
+        if (!read) {
+            record(QStringLiteral("%1: whether the library already holds '%2' could not be read - nothing was imported")
+                       .arg(v, info.fileName()));
+            return QString();
+        }
         if (!existing.isEmpty()) {
             guid = existing;
         } else {

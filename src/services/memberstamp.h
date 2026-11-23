@@ -93,8 +93,9 @@ bool unstamp(Database *db, const QString &guid);
 /// these bytes already in the library as somebody's member texture?" — because
 /// a stamped row is INVISIBLE to the user, and minting a second row over the
 /// same object for content they cannot see is exactly the duplicate the bundle
-/// design exists to prevent.
-QString stampedTextureFor(Database *db, const QString &oid);
+/// design exists to prevent. `readOk` (optional) is CLEARED when the read
+/// failed: "" is then no answer.
+QString stampedTextureFor(Database *db, const QString &oid, bool *readOk = nullptr);
 
 }   // namespace memberstamp
 

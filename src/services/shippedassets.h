@@ -134,8 +134,9 @@ Pinned importTexture(const QString &sourcePath, const QString &displayName,
 /// hands a file to the import pipeline: the store dedups BYTES, but the
 /// pipeline would still mint a second Texture ROW for content the library
 /// already has under one.
+/// `readOk` (optional) is CLEARED when the read failed: "" is then no answer.
 QString libraryTextureFor(Database *db, const QString &oid, const assethome::Home &home,
-                          const QString &projectGuid = QString());
+                          const QString &projectGuid = QString(), bool *readOk = nullptr);
 
 /// The shipped cube-sky presets (app/content/skies/alternative/<dir>/).
 struct SkyPreset

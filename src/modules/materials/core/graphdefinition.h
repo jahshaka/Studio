@@ -68,8 +68,10 @@ DefinitionBuild buildDefinition(NodeGraph *graph, const QString &materialGuid,
 
 /// The member Texture row for `slot` of `materialGuid`, found or minted:
 /// `parent` = the material, one row per slot forever, its source pointer moved
-/// to the new bytes on every re-bake. Empty on failure.
+/// to the new bytes on every re-bake. Empty on failure; `readFailed` (optional)
+/// set when the failure is a read of the catalog (the build is then refused
+/// whole, never the slot dropped).
 QString bakedMemberRow(Database *db, const QString &materialGuid, const QString &slot,
-                       const QString &filePath, QString *errorOut = nullptr);
+                       const QString &filePath, QString *errorOut = nullptr, bool *readFailed = nullptr);
 
 } // namespace materials

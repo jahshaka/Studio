@@ -148,7 +148,9 @@ private:
     /// row the user can never see. The source oid comes from the staged
     /// import record — prepare() stamps one for every import, on the worker
     /// thread, so this never reads the source file again.
-    QString relistUnlistedMatch(const ImportRequest &request, const StagedAsset &staged);
+    /// `readOk` (optional) is CLEARED when a read failed: "" is then no answer (the import is refused, never a
+    /// duplicate row minted).
+    QString relistUnlistedMatch(const ImportRequest &request, const StagedAsset &staged, bool *readOk = nullptr);
 
     /// THE MEMBER THE USER IMPORTS THEMSELVES (IMPORT-INTENT-1, the bundle
     /// spec's F14). An import the USER asked for whose bytes are already in
@@ -161,7 +163,8 @@ private:
     /// Empty for every other import — a Material-intent one (the picker, the
     /// seed: they may not undo their own stamp), content no stamped row
     /// holds, or a row whose bytes are no longer in the store.
-    QString claimStampedMemberForUser(const ImportRequest &request, const StagedAsset &staged);
+    /// `readOk` as relistUnlistedMatch's.
+    QString claimStampedMemberForUser(const ImportRequest &request, const StagedAsset &staged, bool *readOk = nullptr);
 
     AssetImporterBase *pickImporter(const ImportRequest &request, QString *error) const;
     bool commitStagedAsset(const ImportRequest &request, StagedAsset &staged,

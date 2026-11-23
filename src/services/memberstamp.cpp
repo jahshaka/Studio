@@ -90,7 +90,7 @@ bool unstamp(Database *db, const QString &guid)
     return true;
 }
 
-QString stampedTextureFor(Database *db, const QString &oid)
+QString stampedTextureFor(Database *db, const QString &oid, bool *readOk)
 {
     if (!db || oid.isEmpty()) return QString();
     db::Connection &conn = db->connection();
@@ -116,6 +116,7 @@ QString stampedTextureFor(Database *db, const QString &oid)
         const QString guid = dbqt::text(query, 0);
         if (isStamped(db, guid)) return guid;
     }
+    if (e && readOk) *readOk = false;   // a failed read is no "no member holds it"
     return QString();
 }
 

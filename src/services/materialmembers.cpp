@@ -505,8 +505,16 @@ QString makeUnique(Database *db, Project *project, const QString &materialGuid,
     // an import member or a BAKED map born inside another material, and
     // copying that parent produced a row hidden from every listing
     // (Database::memberSubquery drops it) and reachable by nothing.
+    // "IS THE PARENT AN ASSET" UNREAD IS NO "NO" (NOQT-DATABASE-1 stage 2): the copy would be filed under an asset,
+    // hidden from every listing - refused by name before the first write.
     QString parent = texture.parent;
-    if (!parent.isEmpty() && !db->fetchAsset(parent).guid.isEmpty()) parent.clear();
+    if (!parent.isEmpty()) {
+        db::Statement asset(conn, "SELECT 1 FROM assets WHERE guid = ?");
+        dbqt::bindText(asset, 1, parent);
+        db::Error e;
+        if (asset.step(&e)) parent.clear();
+        else if (e) return fail(QStringLiteral("where '%1' is filed could not be read - nothing was made").arg(texture.name));
+    }
 
     // THE COPY'S HOME (ASSETS-SCOPE-1): the open project's when that project
     // holds the material (the swap below is its copy-on-write), else the

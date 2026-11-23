@@ -58,6 +58,7 @@
 #include "data/database/casschema.h"
 #include "commands/resetmaterialcommand.h"
 #include "services/projectassets.h"
+#include "services/memberstamp.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include <QSqlDriver>
 #include <sqlite3.h>
@@ -124,6 +125,8 @@ static int denyReads(void *, int action, const char *table, const char *column, 
     if (gDeny.mode == 7 && gDeny.inSelect && std::strcmp(table, "assets") == 0 && column && std::strcmp(column, "listed") == 0)
         return SQLITE_DENY;
     if (gDeny.mode == 8 && gDeny.inSelect && std::strcmp(table, "dependencies") == 0) return SQLITE_DENY;
+    if (gDeny.mode == 9 && gDeny.inSelect && std::strcmp(table, "asset_files") == 0 && column && std::strcmp(column, "role") == 0)
+        return SQLITE_DENY;
     return SQLITE_OK;
 }
 
@@ -1157,6 +1160,49 @@ int main(int argc, char **argv)
                 CHECK(afterRedo == 1 && edges() == 1,
                       QStringLiteral("19g: an edge whose existence could not be read is neither duplicated nor taken by the undo "
                                      "(after redo %1, after undo %2; 1 and 1)").arg(afterRedo).arg(edges()).toUtf8().constData());
+            }
+
+            // 20. A DUPLICATE IS NEVER MINTED ON A FAILED READ (the sweep's b and k). 20b: a Materials-storage material
+            //     naming an Assets picture adopts its OWN copy once; a later write whose "my copy already" read fails
+            //     (mode 9: asset_files.role unread inside a SELECT) is REFUSED - no second copy.
+            {
+                texture(QStringLiteral("t20"));
+                QJsonObject values;
+                values[QStringLiteral("baseColorMap")] = QStringLiteral("t20");
+                QJsonObject def;
+                def[QStringLiteral("materialType")] = QStringLiteral("pbr");
+                def[QStringLiteral("values")] = values;
+                QString err;
+                const QString m20 = MaterialBundle::create(&db, QStringLiteral("m20"), def, assethome::materials(), QByteArray(),
+                                                           &err, assethome::Origin::Create);
+                const auto copies = [&]() {
+                    return countWhere("SELECT COUNT(*) FROM assets WHERE parent = ? AND type = ?",
+                                      { m20, static_cast<int>(ModelTypes::Texture) });
+                };
+                const int before = copies();
+                values[QStringLiteral("roughness")] = 0.4;
+                def[QStringLiteral("values")] = values;
+                gDeny = Deny{ 9 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const MaterialBundle::WriteResult written =
+                    MaterialBundle::write(&db, nullptr, m20, def, MaterialBundle::Scope::Library);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(!m20.isEmpty() && before == 1, QStringLiteral("20b: CONTROL: the material adopted its own copy once (%1)")
+                                                         .arg(before).toUtf8().constData());
+                CHECK(!written.ok && written.error.contains(QStringLiteral("could not be read")) && copies() == before,
+                      QStringLiteral("20b: a write whose 'my copy already' read failed is REFUSED, no second copy (copies %1, "
+                                     "was %2; '%3')").arg(copies()).arg(before).arg(written.error).toUtf8().constData());
+
+                // 20k: memberstamp::stampedTextureFor - "a member already holds these bytes" unread is no answer.
+                bool stampRead = true;
+                const QString t20oid = AssetCas::sourceOid(conn, QStringLiteral("t20"));
+                memberstamp::stampedTextureFor(&db, t20oid, &stampRead);
+                CHECK(!t20oid.isEmpty() && stampRead, "20k: CONTROL: read, the answer keeps readOk");
+                gDeny = Deny{ 6 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                memberstamp::stampedTextureFor(&db, t20oid, &stampRead);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(!stampRead, "20k: a failed 'is it already a member' read clears readOk");
             }
 
             // 17.6 (F6) A SIDECAR THAT PARSES BUT THAT THE REBUILD SKIPS (no home in this format, no origin) keeps every

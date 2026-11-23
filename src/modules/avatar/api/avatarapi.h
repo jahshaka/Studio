@@ -326,7 +326,8 @@ private:
     /// recorded).
     /// The library row already backed by this file's BYTES (content-addressed
     /// store), or empty. What keeps a clip from being imported twice (S9).
-    QString assetForContent(const QString &path) const;
+    /// `readOk` (optional) is CLEARED when the catalog read failed: "" is then no answer.
+    QString assetForContent(const QString &path, bool *readOk = nullptr) const;
     QString resolveClipAsset(const char *verb, const QString &pathOrAssetGuid,
                              QString *absolutePathOut);
     /// Parses `absolutePath` for skeletal clips, scores them against the

@@ -101,7 +101,7 @@ QString humanSize(qint64 bytes)
 }  // namespace
 
 QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
-                                                const StagedAsset &staged)
+                                                const StagedAsset &staged, bool *readOk)
 {
     if (!db) return QString();
     db::Connection &conn = db->connection();
@@ -116,8 +116,11 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
     {
         db::Statement any(conn, "SELECT COUNT(*) FROM assets WHERE listed = 0");
         db::Error e;
-        if (!any.step(&e) || any.int64(0) == 0)
-            return QString();   // none unlisted, or the count unread: a normal import
+        if (!any.step(&e)) {   // the count unread is no "none": a normal import would mint a duplicate row
+            if (readOk) *readOk = false;
+            return QString();
+        }
+        if (any.int64(0) == 0) return QString();   // none unlisted: a normal import
     }
 
     // The source oid is ALREADY known: prepare() stamps it into the
@@ -162,14 +165,17 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
         dbqt::bindText(match, 1, oid);
         match.bindInt(2, request.home.stored());
         db::Error e;
-        if (!match.step(&e)) return QString();
+        if (!match.step(&e)) {
+            if (e && readOk) *readOk = false;   // a failed read is no "no match"
+            return QString();
+        }
         guid = dbqt::text(match, 0);
     }
     return db->setAssetListed(guid, true) ? guid : QString();
 }
 
 QString AssetImportService::claimStampedMemberForUser(const ImportRequest &request,
-                                                      const StagedAsset &staged)
+                                                      const StagedAsset &staged, bool *readOk)
 {
     if (!db) return QString();
     // WHO ASKED. A material's own import may not undo the stamp it is about to
@@ -190,7 +196,7 @@ QString AssetImportService::claimStampedMemberForUser(const ImportRequest &reque
     const QString oid = staged.importRecord.value(QStringLiteral("sourceOid")).toString();
     if (oid.isEmpty()) return QString();
 
-    const QString guid = memberstamp::stampedTextureFor(db, oid);
+    const QString guid = memberstamp::stampedTextureFor(db, oid, readOk);
     if (guid.isEmpty()) return QString();
     // ONLY A MEMBER OF THE IMPORT'S OWN HOME (ASSETS-HOME-1): a Materials-
     // module material's or a preset's map is not moved into Assets — the import
@@ -504,7 +510,19 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
     // may touch the database (prepare runs on a worker), so this is where the
     // check that stops a duplicate row lives — once, for both entry points.
     // The staged convert is thrown away; correctness beats the wasted work.
-    if (const QString relisted = relistUnlistedMatch(request, staged); !relisted.isEmpty()) {
+    // A READ THAT FAILED IS NO "NOT HERE" (NOQT-DATABASE-1 stage 2): the import would mint a second row for bytes the
+    // library already holds. Refused by name, before the first write; the staged bytes thrown away.
+    bool contentRead = true;
+    const auto unread = [&]() {
+        ImportResult back;
+        back.error = QStringLiteral("whether the library already holds '%1' could not be read - nothing was imported")
+                         .arg(QFileInfo(request.sourcePath).fileName());
+        AssetCas::discardStaged(staged.stagedBytes);
+        return back;
+    };
+    const QString relisted = relistUnlistedMatch(request, staged, &contentRead);
+    if (!contentRead) return unread();
+    if (!relisted.isEmpty()) {
         ImportResult back;
         back.assetGuid = relisted;
         back.warnings = result.warnings;
@@ -540,7 +558,9 @@ ImportResult AssetImportService::commit(PreparedImport &prepared,
     // answer. Same shape as the re-listing above: one row for one picture,
     // the staged convert thrown away, and the import still lands where it was
     // asked to land.
-    if (const QString mine = claimStampedMemberForUser(request, staged); !mine.isEmpty()) {
+    const QString mine = claimStampedMemberForUser(request, staged, &contentRead);
+    if (!contentRead) return unread();
+    if (!mine.isEmpty()) {
         ImportResult back;
         back.assetGuid = mine;
         back.warnings = result.warnings;
