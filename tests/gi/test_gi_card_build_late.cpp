@@ -83,11 +83,15 @@
 //               run); TWO ENGINES in one process, P3 ON first, then OFF (the arm shaders.aheadPassOff) - (0) THE
 //               CONTROLS: ON's ahead class ran jobs (above 0), OFF's ran none; (1) THE ORDER, BY COUNT: with P3 ON, 0
 //               ahead-class jobs taken by the service while the frame's own queue held a job (AsyncShaderStats::
-//               aheadOverOwn: the fork counts it in the take, under the queue's lock - exact, it cannot flake); RED with a
-//               scratch take that serves the ahead class first (spikes/shader-system/ss7/p3/order/red-once/); (2) the two
-//               final pictures are the same codes (the ahead requests change no picture). REPORTED BESIDE, never the
-//               verdict: TIME-TO-PICTURE, the first frame from which the room's picture is its held final picture, exact
-//               (a hash of the read-back codes every frame), ON against OFF + kOrderBound frames.
+//               aheadOverOwn: the fork counts it in the take, under the queue's lock - exact, it cannot flake); it is 0
+//               BY CONSTRUCTION of the take (an ahead job is taken only when the own queue is empty), so it guards the
+//               take's ORDER against an edit of those lines, never a behaviour; RED with a scratch take that serves the
+//               ahead class first (spikes/shader-system/ss7/p3/order/red-once/); (2) the two final pictures are the same
+//               codes (the ahead requests change no picture); (3) THE OWNER's LAW, ASSERTED: the room's own picture
+//               arrives no later with P3 on - TIME-TO-PICTURE, the first frame from which the room's picture is its held
+//               final picture, exact (a hash of the read-back codes every frame), ON <= OFF + kOrderBound frames (the
+//               bound's derivation at kOrderBound); RED with the ahead class removed (every request in the frame's own
+//               queue: ON 763 against OFF 505; spikes/shader-system/ss7/p3/order/red-once/).
 //   landing_capture - THE CARD CAPTURE's PERMUTATIONS ARE ASKED BEFORE THE LANDING THAT COMPLETES THE FRAME
 //               (SHADER-SYSTEM-1 stage 7, item 2 (A); row gi.route_landing.capture; COLD). The first cards are captured
 //               only at that landing: an arrival needs an open demand window (OgreSurfaceCache.cpp refreshResidency), the
@@ -170,10 +174,11 @@ const int kRestCap = 1500;
 const int kLandingWatch = 30, kLandingBound = 4, kQuietCap = 1500, kRestWatch = 30;
 /// THE ORDER ROW: the cap on a run's frames until its service is quiet (a bound on the fixture: a cold room's frames are
 /// ~2 ms), the frames past the service's quiet a run keeps drawing (the picture's last change after the last job lands),
-/// and the REPORTED bound on ON's time-to-picture over OFF's (frames; the row's verdict is the order's count): twice the
-/// same arm's spread over FIVE solo runs (OFF 534, 505, 481, 468, 505: 66 frames) - the run with the ahead class removed
-/// read ON 763 against OFF 505, +258; the greens ON - OFF -95, -14, +38, -50, -72 (spikes/shader-system/ss7/p3/order/ and
-/// slot/order-*.log)
+/// and the ASSERTED bound on ON's time-to-picture over OFF's (frames; law (3)): ON and OFF are two cold runs of one room in
+/// one process, so ON - OFF moves by the run-to-run spread of the time-to-picture itself; the bound is twice the same
+/// arm's spread over FIVE solo runs (OFF 534, 505, 481, 468, 505: max - min = 66 frames) - the run with the ahead class
+/// removed read ON 763 against OFF 505, +258 (about four spreads past it); the greens ON - OFF -95, -14, +38, -50, -72
+/// (spikes/shader-system/ss7/p3/order/ and slot/order-*.log)
 const int kOrderCap = 6000, kOrderTail = 30, kOrderBound = 132;
 /// THE AHEAD PICTURE ROW (COLD): the bound on the frames until the HELD picture is still (the service empty, then two equal
 /// frames in a row) - the slowest of THREE cold runs + twice their spread, the order row's rule: 928, 935, 971 frames
@@ -402,14 +407,13 @@ int main(int argc, char **argv)
         std::snprintf(w, sizeof(w), "(1) THE ORDER: with P3 ON, %llu ahead-class jobs taken by the service while the frame's "
                       "own queue held a job (0)", on.overOwn);
         check(on.ok && on.overOwn == 0ull, w);
-        // REPORTED, never the verdict: the time-to-picture against its bound (a run's frames vary with the box)
-        std::printf("   (reported) TIME-TO-PICTURE: the room's held picture from frame %d with P3 ON, %d with it OFF (bound "
-                    "ON <= OFF + %d: %s)\n", on.pictureFrame, off.pictureFrame, kOrderBound,
-                    on.pictureFrame > 0 && off.pictureFrame > 0 && on.pictureFrame <= off.pictureFrame + kOrderBound
-                        ? "within" : "OVER");
         std::snprintf(w, sizeof(w), "(2) the two held pictures are the same codes (%016llx / %016llx)",
                       (unsigned long long)on.finalHash, (unsigned long long)off.finalHash);
         check(on.finalHash == off.finalHash, w);
+        std::snprintf(w, sizeof(w), "(3) THE OWNER's LAW: the room's held picture from frame %d with P3 ON, %d with it OFF "
+                      "(ON <= OFF + %d)", on.pictureFrame, off.pictureFrame, kOrderBound);
+        check(on.ok && off.ok && on.pictureFrame > 0 && off.pictureFrame > 0 &&
+                  on.pictureFrame <= off.pictureFrame + kOrderBound, w);
         std::printf("\n%s (%d failures)\n", g_fail ? "FAIL" : "PASS", g_fail);
         return g_fail ? 1 : 0;
     }

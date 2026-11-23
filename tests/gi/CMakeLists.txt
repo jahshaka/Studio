@@ -1371,11 +1371,13 @@ set_tests_properties(gi.route_landing.gather PROPERTIES ENVIRONMENT "QT_QPA_PLAT
 
 # gi.route_landing.order (SHADER-SYSTEM-1 stage 7; the owner 2026-11-23: "faster loading over correctness when loading in
 # shaders"): THE FRAME's OWN REQUESTS ARE SERVED FIRST - a cold room with both ray routes held (the ahead pass and the
-# request-only hit decode running), two engines in one process. THE LAW IS A COUNT: with P3 ON, 0 ahead-class jobs taken
-# by the service while the frame's own queue held a job (the fork's count in its take, exact), its control ON's ahead class
-# ran jobs (> 0) and OFF's none; the two held pictures the same codes. The time-to-picture (ON against OFF + 132 frames) is
-# REPORTED beside, never the verdict. RED with the take serving the ahead class first (a scratch arm: the count > 0). COLD:
-# its subject is the room's permutations still unbuilt. A new row: priced from its solo run, never SHIP.
+# request-only hit decode running), two engines in one process. TWO LAWS: (1) THE ORDER, a count: with P3 ON, 0 ahead-class
+# jobs taken by the service while the frame's own queue held a job (the fork's count in its take, exact; 0 by the take's
+# construction, so it guards those lines against an edit), its control ON's ahead class ran jobs (> 0) and OFF's none;
+# (3) THE OWNER's LAW, the time: the room's held picture with P3 ON no later than OFF + 132 frames (twice the OFF spread of
+# five solo runs); and (2) the two held pictures the same codes. RED with the take serving the ahead class first (the
+# count > 0) and with the ahead class removed (ON 763 against OFF 505: the time). COLD: its subject is the room's
+# permutations still unbuilt. A new row: priced from its solo run, never SHIP.
 jah_gpu_row(gi.route_landing.order CLASS engine COMMAND test_gi_card_build_late landing_order
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
          COLD "its subject is the order the room's permutations are built in, from unbuilt: cold in the process (the fixture's shaderCacheOff)")
