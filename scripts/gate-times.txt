@@ -627,7 +627,7 @@ mcp.schema 0.01  solo 2026-11-22 at b1af7c9bc (spec.sh reprice, run 20261122T165
 script.view_ownership 1.81  by hand (spec.sh reprice, 2026-11-22)
 tooling.warm_short 5.04  solo 2026-11-23 at ca48a809a (spec.sh reprice, run 20261123T004653-ca48a809a-p2440154)
 source.engine_headers 0.35  by hand (spec.sh reprice, 2026-11-23)
-core.text 0.03  solo 2026-11-22 at 877441811 (spec.sh reprice, run 20261122T184720-877441811-p1509873)
+core.text 0.04  solo 2026-11-23 at 3e49c9d43 (spec.sh reprice, run 20261123T024714-3e49c9d43-p2449185)
 core.files 0.05  solo 2026-11-23 at 669300d92 (spec.sh reprice, run 20261123T024712-669300d92-p2442592)
 core.signal 0.00  solo 2026-11-22 at 877441811 (spec.sh reprice, run 20261122T184722-877441811-p1509989)
 core.bound 0.03  solo 2026-11-23 at ee28e468e (spec.sh reprice, run 20261123T024613-ee28e468e-p2414886)
