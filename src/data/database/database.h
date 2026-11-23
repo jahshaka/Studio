@@ -935,7 +935,8 @@ public:
 	bool updateGlobalDependencyDepender(const int &type, const QString &depender, const QString &dependee);
 	bool updateGlobalDependencyDependee(const int &type, const QString &depender, const QString &dependee);
 
-	QString getDependencyByType(const int &type, const QString &depender);
+	/// `readOk` (when given) is CLEARED by a read that failed: its '' is then no "no dependee".
+	QString getDependencyByType(const int &type, const QString &depender, bool *readOk = nullptr);
 
     // MISC
 	QString getAuthorName();

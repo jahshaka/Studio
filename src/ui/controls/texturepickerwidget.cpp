@@ -84,7 +84,13 @@ void TexturePickerWidget::dropEvent(QDropEvent *event)
 		// display name — a file no project folder holds since the store landed,
 		// so a dropped texture reached the material as a path to nothing (plan
 		// item 15c removed the last files that join could find).
-		changeMap(services->resolvePinned(project ? project->getProjectGuid() : QString(), textureGuid));
+		// A DROP THAT RESOLVES TO NO BYTES - a read that failed among them - LEAVES THE SLOT AS IT IS, never cleared.
+		const QString path = services->resolvePinned(project ? project->getProjectGuid() : QString(), textureGuid);
+		if (path.isEmpty()) {
+			event->ignore();
+			return;
+		}
+		changeMap(path);
 	}
 
 	event->acceptProposedAction();

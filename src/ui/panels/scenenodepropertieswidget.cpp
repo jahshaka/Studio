@@ -1332,8 +1332,11 @@ void SceneNodePropertiesWidget::acceptCubemapTexturesFromSkyPresets(QStringList 
 {
 	QStringList fileNames;
 
+	// A FACE's ROW UNREAD CHANGES NOTHING (the sweep's WEAK rows): the sky keeps its faces and its edges.
 	for (auto guid : guids) {
-		fileNames.append(db->fetchAsset(guid).name);
+		bool read = true;
+		fileNames.append(db->fetchAsset(guid, &read).name);
+		if (!read) return;
 	}
 
 	db->removeDependenciesByType(QString::fromStdString(scene->skyGuid), ModelTypes::Texture);

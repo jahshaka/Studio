@@ -219,7 +219,13 @@ Plan planSeed(const primitives::Def &def, Database *db)
     // A ROW WITH NO BYTES is not a seed, it is a leftover: a half-done seed, or
     // a store that moved without its objects. Nothing is owed to it (the crud
     // law) and the reserved guid must be free for the import below to take.
-    const AssetRecord stale = db->fetchAsset(plan.guid);
+    bool staleRead = true;
+    const AssetRecord stale = db->fetchAsset(plan.guid, &staleRead);
+    if (!staleRead) {   // a leftover unread is no "none": the reserved guid's import would meet it
+        plan.error = QStringLiteral("whether '%1' left a row behind could not be read - nothing was changed")
+                         .arg(QString::fromLatin1(def.name));
+        return plan;
+    }
     if (!stale.guid.isEmpty() || !stale.name.isEmpty()) db->deleteAsset(plan.guid, /*force=*/true);
 
     plan.staging = std::make_shared<QTemporaryDir>();

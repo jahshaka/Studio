@@ -272,8 +272,14 @@ void CubeMapButton::dropEvent(QDropEvent* event)
 		textureGuid = roleDataMap.value(3).toString();
 		// The dropped row's bytes through the store, not the project folder +
 		// its display name (a file nothing puts there — plan item 15c).
-		setImage(parent->services->resolvePinned(parent->project ? parent->project->getProjectGuid() : QString(),
-		                                         textureGuid));
+		// A DROP THAT RESOLVES TO NO BYTES - a read that failed among them - LEAVES THE FACE AS IT IS, never cleared.
+		const QString path = parent->services->resolvePinned(parent->project ? parent->project->getProjectGuid() : QString(),
+		                                                     textureGuid);
+		if (path.isEmpty()) {
+			event->ignore();
+			return;
+		}
+		setImage(path);
 	}
 
 	event->acceptProposedAction();

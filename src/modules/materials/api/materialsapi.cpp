@@ -1826,7 +1826,12 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
                                            "the slot is set, its use and its pin were not recorded").arg(textureGuid));
         }
         for (const QString &textureGuid : boundTextures) {
-            const AssetRecord row = host.db->fetchAsset(textureGuid);
+            // A ROW UNREAD DECIDES NOTHING (the sweep's row 136: its edge and its pin would follow a read that failed).
+            bool rowRead = true;
+            const AssetRecord row = host.db->fetchAsset(textureGuid, &rowRead);
+            if (!rowRead)
+                return fail(QStringLiteral("material.set: the texture '%1' could not be read - the slot is set, its use and "
+                                           "its pin were not recorded").arg(textureGuid));
             // The panel writes ONE edge per node+texture: delete before create,
             // so re-binding the same image does not stack rows.
             host.db->deleteDependency(nodeId, textureGuid);

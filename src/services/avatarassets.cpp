@@ -121,7 +121,15 @@ void AvatarAssets::reconcileDependencies(const QString &guid,
     // the Avatar storage — a fact about the avatar, carried by its sidecar so a
     // rebuild restores it (ASSETS-HOME-1); stamped only for a project's own.
     Q_UNUSED(project);
-    const assethome::Home home = db->fetchAsset(guid).home();
+    // A ROW UNREAD DECIDES NOTHING (the sweep's WEAK rows): the edges' project stamp, or whether a member exists,
+    // from a read that failed would write edges stamped wrong or leave one out - nothing is reconciled, said.
+    const auto unread = [&guid](const QString &what) {
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QStringLiteral("avatar %1: %2 could not be read - its dependencies were not reconciled").arg(guid, what));
+    };
+    bool read = true;
+    const assethome::Home home = db->fetchAsset(guid, &read).home();
+    if (!read) return unread(QStringLiteral("its row"));
     const QString projectGuid = home.isProject() ? home.projectGuid : QString();
 
     // The definition IS the dependency list: whatever it names now is what the
@@ -137,7 +145,8 @@ void AvatarAssets::reconcileDependencies(const QString &guid,
     }
     for (const QString &missing : wanted) {
         if (!keep.contains(missing)) continue;
-        const auto record = db->fetchAsset(missing);
+        const auto record = db->fetchAsset(missing, &read);
+        if (!read) return unread(QStringLiteral("the row of '%1'").arg(missing));
         if (record.guid.isEmpty()) continue;   // a guid nothing in the catalog knows
         db->createDependency(static_cast<int>(ModelTypes::Avatar), record.type, guid, missing,
                              projectGuid);

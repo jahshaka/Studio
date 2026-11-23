@@ -1524,10 +1524,16 @@ bool NodeApi::setParticleTexture(const QString &id, const QString &assetGuid)
     auto emitter = std::static_pointer_cast<iris::ParticleSystemNode>(node);
     // The emitter carries no guid field (only the loaded Texture2D), so the
     // previous binding is read back from the dependency row the service writes.
+    // THE PREVIOUS BINDING UNREAD IS NO "none" (the sweep's WEAK row): the undo would CLEAR the image it should
+    // restore - the edit is refused, nothing changed.
+    bool wasRead = true;
     const QString was = host.db ? host.db->getDependencyByType(
                                       static_cast<int>(ModelTypes::ParticleSystem),
-                                      QString::fromStdString(emitter->getGUID()))
+                                      QString::fromStdString(emitter->getGUID()), &wasRead)
                                 : QString();
+    if (!wasRead)
+        return fail(QStringLiteral("node.setParticleTexture: the emitter's current image could not be read - nothing "
+                                   "was changed"));
     if (!host.services || !host.services->sceneEdit ||
         !host.services->sceneEdit->setParticleTexture(emitter, guid))
         return fail(QStringLiteral("node.setParticleTexture: could not bind '%1'").arg(guid));

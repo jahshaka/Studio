@@ -283,12 +283,16 @@ bool file(Database *db, const QString &projectGuid, const QString &guid, const Q
     if (isFolderOf(db, projectGuid, guid))
         return db->setFolderParent(guid, rootOr(projectGuid, target));
 
-    bool wrote = false;
     // A row can be BOTH pinned and project-owned (an archive import pins the
-    // project's own rows): write both, so the two never disagree.
-    if (db->isAssetPinnedBy(projectGuid, guid))
+    // project's own rows): write both, so the two never disagree - and READ BOTH FIRST: a read that failed files
+    // nothing (never one half of the two).
+    bool read = true;
+    const bool pinned = db->isAssetPinnedBy(projectGuid, guid, &read);
+    const AssetRecord row = read ? db->fetchAsset(guid, &read) : AssetRecord();
+    if (!read) return false;
+    bool wrote = false;
+    if (pinned)
         wrote = db->setProjectAssetFolder(projectGuid, guid, target);
-    const AssetRecord row = db->fetchAsset(guid);
     if (!row.guid.isEmpty() && row.projectGuid == projectGuid)
         wrote = db->setAssetParent(guid, rootOr(projectGuid, target)) || wrote;
     return wrote;

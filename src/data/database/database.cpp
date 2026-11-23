@@ -837,7 +837,7 @@ bool Database::updateGlobalDependencyDependee(const int & ertype, const QString 
     return executeAndCheckQuery(query, "updateGlobalDependencyDependee");
 }
 
-QString Database::getDependencyByType(const int &ertype, const QString &depender)
+QString Database::getDependencyByType(const int &ertype, const QString &depender, bool *readOk)
 {
 	db::Statement query(connection(), "SELECT dependee FROM dependencies WHERE depender_type = ? AND depender = ?");
 	query.bindInt(1, ertype);
@@ -845,7 +845,10 @@ QString Database::getDependencyByType(const int &ertype, const QString &depender
 
 	db::Error error;
 	if (query.step(&error)) return dbqt::text(query, 0);
-	if (error) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the dependee id! " + dbqt::describe(error));
+	if (error.code) {   // looked at only when the caller asked (readOk): else the layer guard holds it
+		if (readOk && error) *readOk = false;
+		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the dependee id! " + dbqt::describe(error));
+	}
 
 	return QString();
 }
