@@ -11,3 +11,5 @@ engine.validation Engine::validation
 engine.publishRenderStats Engine::publishRenderStats
 engine.publishShadowStatus Engine::publishShadowStatus
 engine.rayQueryAvailable Engine::rayQueryAvailable
+engine.frames Engine::renderOneFrame
+engine.arm Engine::setArm

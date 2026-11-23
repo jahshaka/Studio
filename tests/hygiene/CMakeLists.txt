@@ -914,6 +914,18 @@ add_test(NAME source.script_names
 set_tests_properties(source.script_names PROPERTIES TIMEOUT 60 LABELS "hygiene")
 jah_no_display(source.script_names)
 
+# source.script_census (SCRIPT-IN-ENGINE-1 2f, the train's tail; the lead's rulings 2026-11-23): THE ENGINE's COMMAND SET IS
+# COUNTED BY AN EXPLICIT MAP - every line of tests/hygiene/script_census/<family>.txt names a REGISTERED command (the
+# build's jahengine --list --test-doors) and a public verb of Engine.h its family file acts on (a call, or the
+# FrameInputScene field a submitScene verb writes); the verbs the public fixtures, enginetesthelpers.h and src/lab call
+# that no map line names and declared.txt does not declare ARE waiting.txt, exactly (its length is THE CEILING, 28: it
+# only falls). script_census.py says the rules. Its self-test first, on its own toy tree.
+add_test(NAME source.script_census
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/script_census.py" "${CMAKE_SOURCE_DIR}"
+                 "${CMAKE_BINARY_DIR}")
+set_tests_properties(source.script_census PROPERTIES TIMEOUT 60 LABELS "hygiene")
+jah_no_display(source.script_census)
+
 # source.brick_list_bounded (NONDET-1 fix items D; READ-8 R8-1..R8-3): THE FEEDBACK'S DATA-DRIVEN READS ARE BOUNDED IN THE
 # SHADER - every read of the GPU-written brick list by the group index (the bounce, the copy-back, the directional steps
 # 0 and 1, the ray tier's sides gather) returns at or past the list's length and at a brick (or texel) past the volume;
@@ -961,6 +973,7 @@ jah_builds(JahshakaEngineMedia JahshakaEngineBuildId ROWS tooling.warm_app_cache
 jah_builds(JahshakaEngineMedia ROWS source.compute_size_keys)                  # <build>/bin/media, the staged media
 jah_builds(JahStartupPassId ROWS source.startup_pass_closure)                  # <build>/startup-pass-files.txt
 jah_builds(JahshakaEngine JahshakaScript Jahshaka IrisGL jahengine ROWS source.script_neutral)   # nm on each
+jah_builds(jahengine ROWS source.script_census)                                # jahengine --list --test-doors (+ the sources)
 jah_builds(IrisCore ROWS source.no_qt_below)                                   # nm on IrisCore's archive (+ build.ninja)
 jah_builds(JahshakaEngineBuildId ROWS source.script_build_id)                  # the build's generated build-id header (its B3)
 jah_builds(JahshakaEngineBuildId ROWS source.ray_spirv_id)   # the build-id header, and the ray *_spv.h its edge makes first (+ build.ninja)

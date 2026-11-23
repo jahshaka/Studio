@@ -17,3 +17,4 @@ engine.view.routes View::published
 engine.view.routes Scene::published
 engine.view.readPixels View::readPixels
 engine.view.readPixels View::readPixelsHdr
+engine.view.destroy Engine::destroyView commands_engine.cpp

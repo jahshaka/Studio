@@ -9,3 +9,32 @@ Engine::setFreeRunning nothing to act on without a render thread: jahengine's ho
 Engine::setFramePace nothing to act on without a render thread: jahengine's host is lockstep only
 Engine::latchSnapshot lockstep latches every frame as it returns (RenderThread.cpp:323, :341) and a process without a render thread reads the newest (SyncGetters.h:43-45): nothing for a script to latch; a render-thread boot of the host would give it a meaning: then it is wrapped
 Scene::setEnvironment no caller: census.tsv (no fixture, test helper or the lab calls it); wrapped (EnvironmentDesc tabled) when one does
+Engine::isAlive the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Engine::isHeadless the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Engine::lastError the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Engine::request the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Engine::scenePresence the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Engine::serial the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Engine::submitFrame the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Engine::frameMonitor the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Scene::name the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Scene::serial the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Scene::nodePresence the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Scene::meshPresence the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Scene::materialPresence the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Scene::texturePresence the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Scene::decalTexturePresence the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+View::name the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+View::scene the host's plumbing: handles, liveness, errors and the frame, read by every command; no effect of its own
+Engine::openMonitorTee the lab's (stage 3, the lab batch): wrapped or declared there
+Engine::closeMonitorTee the lab's (stage 3, the lab batch): wrapped or declared there
+Engine::popMonitorTee the lab's (stage 3, the lab batch): wrapped or declared there
+Scene::armAtomCutProbe the lab's (stage 3, the lab batch): wrapped or declared there
+Scene::atomCutProbe the lab's (stage 3, the lab batch): wrapped or declared there
+Scene::disarmAtomCutProbe the lab's (stage 3, the lab batch): wrapped or declared there
+Scene::giVoxelSideShares the lab's (stage 3, the lab batch): wrapped or declared there
+Scene::setPhotonView the lab's (stage 3, the lab batch): wrapped or declared there
+View::pushedPostFx the lab's (stage 3, the lab batch): wrapped or declared there
+View::setBackground the lab's (stage 3, the lab batch): wrapped or declared there
+View::setHelpersVisible the lab's (stage 3, the lab batch): wrapped or declared there
+View::setOverlay the lab's (stage 3, the lab batch): wrapped or declared there

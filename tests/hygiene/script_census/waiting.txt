@@ -1,0 +1,34 @@
+# THE WAITING SET (source.script_census law C3): the public verbs a public fixture, enginetesthelpers.h or src/lab calls that
+# no command wraps and declared.txt does not declare. ITS LENGTH IS THE CEILING (28, set once by the train's tail, the lead's
+# ruling 2026-11-23): it ONLY FALLS - a verb wrapped or declared leaves this file in the same commit; a 29th is red.
+# The 22 of the spec (stage 2, NOT WRAPPED: with TESTS-AS-SCRIPTS-1 after ENGINE-HEADERS-1 stage 3):
+Scene::setPixelTolerance waiting: TESTS-AS-SCRIPTS-1
+Scene::giFieldAtlas a test-only GI reader: TESTS-AS-SCRIPTS-1
+Engine::hzbStatus a test-only GI reader: TESTS-AS-SCRIPTS-1
+Engine::readHzbLevel a test-only GI reader: TESTS-AS-SCRIPTS-1
+Engine::voxelReaderParity a test-only GI reader: TESTS-AS-SCRIPTS-1
+Scene::readCardFaceDemand a test-only GI reader: TESTS-AS-SCRIPTS-1
+Scene::giFeedbackBricks a test-only GI reader: TESTS-AS-SCRIPTS-1
+Engine::giLaw a test-only GI reader: TESTS-AS-SCRIPTS-1
+Scene::giHalfStoreWords a test-only GI reader: TESTS-AS-SCRIPTS-1
+Scene::takeGiBrickMask a test-only GI reader: TESTS-AS-SCRIPTS-1
+Engine::cardReadParity a test-only GI reader: TESTS-AS-SCRIPTS-1
+Engine::environmentCones a test-only GI reader: TESTS-AS-SCRIPTS-1
+Scene::meshVaoShape a test-only GI reader: TESTS-AS-SCRIPTS-1
+Scene::rayTracingResolved a test-only GI reader: TESTS-AS-SCRIPTS-1
+Scene::readCardTexel a test-only GI reader: TESTS-AS-SCRIPTS-1
+Scene::requestGiVoxelDigests a test-only GI reader: TESTS-AS-SCRIPTS-1
+Scene::refreshGlobalIllumination waiting: TESTS-AS-SCRIPTS-1
+Scene::setGiTuning waiting: TESTS-AS-SCRIPTS-1
+Engine::setShadowMapBudget waiting: TESTS-AS-SCRIPTS-1
+View::setOffscreenContract waiting: TESTS-AS-SCRIPTS-1
+View::readReflectionHdr waiting: TESTS-AS-SCRIPTS-1
+Engine::processShaderCompileErrors waiting: TESTS-AS-SCRIPTS-1
+# + the six a public fixture calls with no command (measured by the tail at the stacked tip: 101 public fixture sources, not
+#   the ground read's 81): TESTS-AS-SCRIPTS-1's / the lab batch's
+Scene::detachMesh a fixture's verb with no command: TESTS-AS-SCRIPTS-1 / the lab batch
+Scene::nodeWorldPose a fixture's verb with no command: TESTS-AS-SCRIPTS-1 / the lab batch
+Scene::setHeightFog a fixture's verb with no command: TESTS-AS-SCRIPTS-1 / the lab batch
+Scene::setMaterialCustomPiece a fixture's verb with no command: TESTS-AS-SCRIPTS-1 / the lab batch
+Scene::setNodeDrawOrder a fixture's verb with no command: TESTS-AS-SCRIPTS-1 / the lab batch
+Scene::setShaderTime a fixture's verb with no command: TESTS-AS-SCRIPTS-1 / the lab batch

@@ -1,4 +1,4 @@
 engine.gi.set Scene::setGlobalIllumination
 engine.gi.setPlacementPin Scene::setGiPlacementPin
 engine.gi.refreshLighting Scene::refreshGiLighting
-engine.gi.setSunContact Scene::setSunContact
+engine.gi.setSunContact Scene::setSunContact field:sunContact
