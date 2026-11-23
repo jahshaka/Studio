@@ -533,7 +533,7 @@ int main()
               "declaration's check; a multiple for another count of nodes: the command's)");
         check(failedWith(batch({{"nodes", Value(nodes)}, {"positions", Value(nanAt7)}}),
                          "transforms.positions[7] is not a finite number") &&
-                  failedWith(batch({{"nodes", Value(withDead)}}), "engine.node.setTransforms: nodes[3]: node " +
+                  failedWith(batch({{"nodes", Value(withDead)}}), "engine.node.setTransforms: transforms.nodes[3]: node " +
                                                                       std::to_string(Call::idOf(dead)) + " is not a node") &&
                   failedWith(batch({{"nodes", Value(tooMany)}}), "transforms.nodes holds 65537 elements, at most 65536"),
               "setTransforms: a NaN at positions[7], a dead node at nodes[3] and 65,537 nodes each FAIL by name");
@@ -775,7 +775,7 @@ int main()
         const Value node5 = a.call("test.mint", {Value(5)}).value, node6 = a.call("test.mint", {Value(6)}).value;
         const Value mesh(a.name("mesh", 5));
         const auto named = [&](const Value &n) { return a.call("test.named", {scene2, Value(Value::Object{{"node", n}})}); };
-        check(named(node5).value == Value(5) && failedWith(named(node6), "test.named: node: node 6 is not a node of the scene"),
+        check(named(node5).value == Value(5) && failedWith(named(node6), "test.named: o.node: node 6 is not a node of the scene"),
               "a NAMED handle carries the engine's id; its existence check FAILS a dead or foreign id by name");
         check(failedWith(named(mesh), "is a mesh handle, not a node handle"),
               "a mesh handle where a node is declared FAILS by name (the kind is in the bits, no lookup)");
@@ -787,7 +787,7 @@ int main()
             return a.call("test.many", {scene2, Value(Value::Object{{"nodes", Value(std::move(nodes))}})});
         };
         check(many({node5, node5, node5}).value == Value(3) &&
-                  failedWith(many({node5, node5, node5, node6}), "test.many: nodes[3]: node 6 is not a node of the scene") &&
+                  failedWith(many({node5, node5, node5, node6}), "test.many: o.nodes[3]: node 6 is not a node of the scene") &&
                   failedWith(many({node5, mesh}), "o.nodes[1]: " + std::to_string(mesh.asInt()) +
                                                       " is a mesh handle, not a node handle"),
               "an array of handles: three live nodes pass; a DEAD node at nodes[3] FAILS naming nodes[3]; a mesh among "
@@ -2003,7 +2003,7 @@ int main()
                   filled.value["nodes"] == Value(Value::Array{Value(std::int64_t(Call::idOf(node)))}) &&
                   filled.value["answer"]["tex"] == tex2H && filled.value["answer"]["nodes"] == Value(Value::Array{node}) &&
                   empty.value["tex"] == Value(0) && empty.value["answer"]["tex"].isNull() && zero.value["tex"] == Value(0) &&
-                  failedWith(deadMember, "test.textured: tex: texture " + std::to_string(tex) + " is not a texture"),
+                  failedWith(deadMember, "test.textured: rec.tex: texture " + std::to_string(tex) + " is not a texture"),
               "(b) A HANDLE MEMBER resolves its id (" + std::to_string(tex2) + ", and a node array's), null and a literal "
               "0 read none, a destroyed one FAILS by its member (" + deadMember.message + "), and the record answers the "
               "same handles");
@@ -2082,7 +2082,7 @@ int main()
                   mixed.status == Status::Ok && mixed.value["ids"].asArray()[0] == Value(std::int64_t(live)) &&
                   mixed.value["ids"].asArray()[2] == Value(0) && mixed.value["answer"]["faces"].asArray()[0] == liveH &&
                   mixed.value["answer"]["faces"].asArray()[1].isNull() &&
-                  failedWith(deadFace, "test.faced: faces[2]: texture " + std::to_string(dead) + " is not a texture"),
+                  failedWith(deadFace, "test.faced: rec.faces[2]: texture " + std::to_string(dead) + " is not a texture"),
               "(a) A HANDLE ARRAY OF FIXED LENGTH (faces[6]) registers (its default six nones), all-none round-trips, null "
               "and 0 per element are none, a live face resolves and answers its handle, a dead one FAILS by its index (" +
                   deadFace.message + ")");

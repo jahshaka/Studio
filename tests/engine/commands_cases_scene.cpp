@@ -327,7 +327,9 @@ void casesScene(Fixture &f)
                                    {scene, Value(Value::Object{{"mode", Value("cubemap")}, {"faces", Value(Value::Array{texH, texH, h, texH, texH, texH})}})});
         };
         const Result stale = sky(deadH), foreign = sky(foreignH), kind = sky(mesh);
-        check(failedWith(stale, "faces[2]: texture " + std::to_string(dead) + " is not a texture of scene 'p-scene'") &&
+        // (the stale handle's failure carries its RECORD PATH, sky.faces[2], as the kind check's does: E0's worth a look 1)
+        check(failedWith(stale, "engine.scene.setSky: sky.faces[2]: texture " + std::to_string(dead) +
+                                    " is not a texture of scene 'p-scene'") &&
                   failedWith(foreign, "faces[2]: " + std::to_string(foreignH.asInt()) + " is no texture handle of this host") &&
                   failedWith(kind, "is a mesh handle, not a texture handle"),
               "A SKY's TEXTURE HANDLE: a destroyed texture (" + stale.message + "), another host's (" + foreign.message +
