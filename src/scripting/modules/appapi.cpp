@@ -703,7 +703,8 @@ QVector<VerbInfo> AppApi::verbs() const
           "started; `outcome` what the startup check did — \"noLibrary\" (a first launch), "
           "\"current\", \"wiped\" (an older library: there are no migrations, it was reset KEEPING "
           "the user's Assets, Materials and Avatars — rebuilt from their sidecars, `keptRows` of "
-          "them; `unreadable` sidecars of a format that records no home were not read — and "
+          "them; `unreadable` sidecars the rebuild could not read or place were not read into the "
+          "library and were left in the store, each named in the session log — and "
           "project folders outside the data root are left on disk, only unlisted; the GUI said "
           "so once), \"refused\" (never seen here: that process exits) or \"failed\". "
           "Read-only.",

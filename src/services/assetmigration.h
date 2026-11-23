@@ -22,6 +22,7 @@ For more information see the LICENSE file
 //     Materials and the Avatar storage (ASSETS-HOME-1, data/assethomekind.h);
 //   - everything is idempotent: run twice = same store, zero new objects.
 
+#include <QJsonObject>
 #include <QSet>
 #include <QString>
 #include <QStringList>
@@ -99,6 +100,12 @@ RebuildReport rebuildCatalog(const QString &dbPath, const QString &storeRoot,
 /// The oids a rebuild with `options` keeps alive (every file and pin of every
 /// sidecar it would restore) — what a selective reset must not delete.
 QSet<QString> keptObjects(const QString &storeRoot, const RebuildOptions &options);
+
+/// WHY A REBUILD CANNOT PLACE this parsed sidecar (no guid, no home in this
+/// format, no origin, the home's door refuses its origin), or empty when it
+/// can. The one answer: the rebuild skips such a sidecar as `unreadable`, and
+/// the store's sweep (AssetGc) KEEPS it and every object it lists.
+QString unplacedReason(const QJsonObject &sidecar);
 } // namespace AssetMigration
 
 #endif // ASSETMIGRATION_H

@@ -16,12 +16,14 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QFile>
 #include <QFileInfo>
+#include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QJsonParseError>
 #include <QSet>
 #include <QVariantList>
 
+#include "services/assetmigration.h"
 #include "services/assetstorepaths.h"
 #include "services/jahlog.h"
 #include "data/database/database.h"   // DbTransaction
@@ -86,6 +88,7 @@ QVariantMap Report::toMap() const
     classes["straySidecars"] = straySidecars.toMap();
     classes["deadPins"] = deadPins.toMap();
     classes["unreadableSidecars"] = unreadableSidecars.toMap();   // kept: not in the counts below
+    classes["unplacedSidecars"] = unplacedSidecars.toMap();       // kept: not in the counts below
 
     QVariantMap map;
     map["ok"] = ok;
@@ -269,6 +272,7 @@ Report collect(db::Connection &conn, const QString &root, bool force)
     }
 
     // --- (c) sidecars naming no asset row ----------------------------------
+    QSet<QString> listedByUnplaced;   // the oids the kept, unplaced sidecars list (below)
     {
         const QDir sidecarDir(QDir(root).filePath(QStringLiteral("sidecar")));
         if (sidecarDir.exists()) {
@@ -303,6 +307,17 @@ Report collect(db::Connection &conn, const QString &root, bool force)
                         why + QStringLiteral(": kept, with every unreferenced object - its own cannot be told apart"));
                     continue;
                 }
+                // ...AND ONE THAT PARSES BUT THAT A REBUILD CANNOT PLACE (the confirm's F6) is a kept asset the
+                // rebuild skipped: KEPT, named with the rebuild's own reason, and every object it lists kept too.
+                const QString unplaced = AssetMigration::unplacedReason(doc.object());
+                if (!unplaced.isEmpty()) {
+                    add(report.unplacedSidecars, guid, info.absoluteFilePath(), info.size(),
+                        QStringLiteral("a rebuild cannot place it (%1): kept, with the objects it lists").arg(unplaced));
+                    for (const char *list : { "files", "pins" })
+                        for (const QJsonValue &entry : doc.object().value(QLatin1String(list)).toArray())
+                            listedByUnplaced.insert(entry.toObject().value(QStringLiteral("oid")).toString().toLower());
+                    continue;
+                }
                 add(report.straySidecars, guid, info.absoluteFilePath(), info.size(),
                     QStringLiteral("no assets row carries this guid"));
             }
@@ -312,6 +327,13 @@ Report collect(db::Connection &conn, const QString &root, bool force)
     if (!report.unreadableSidecars.items.isEmpty()) {
         report.unreferencedObjects = ClassReport();
         report.strayObjects = ClassReport();
+    }
+    // An unplaced sidecar keeps exactly the objects it lists.
+    for (ClassReport *objects : { &report.unreferencedObjects, &report.strayObjects }) {
+        ClassReport left;
+        for (const Item &item : std::as_const(objects->items))
+            if (!listedByUnplaced.contains(item.id)) add(left, item.id, item.path, item.bytes, item.reason);
+        *objects = left;
     }
 
     // --- (f) pins naming a project that no longer exists -------------------
@@ -352,6 +374,13 @@ Report sweep(db::Connection &conn, const QString &root, bool dryRun, bool force)
             QStringLiteral("assets.gc: %1 sidecar(s) could not be read and are KEPT, with every unreferenced object of "
                            "the store (their own cannot be told apart) - fix or remove: %2")
                 .arg(files.size()).arg(files.join(QStringLiteral(", "))));
+    }
+    if (report.ok && !dryRun && !report.unplacedSidecars.items.isEmpty()) {
+        QStringList named;
+        for (const Item &item : report.unplacedSidecars.items) named << item.path + QStringLiteral(" (") + item.reason + QLatin1Char(')');
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QStringLiteral("assets.gc: %1 sidecar(s) a rebuild cannot place are KEPT, with the objects they list: %2")
+                .arg(named.size()).arg(named.join(QStringLiteral(", "))));
     }
     if (!report.ok || dryRun) return report;
 

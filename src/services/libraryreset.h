@@ -110,7 +110,7 @@ struct Kept
     int rows = 0;         ///< catalog rows rebuilt from sidecars
     int objects = 0;      ///< stored objects those rows still name
     int edges = 0;        ///< intrinsic dependency edges restored
-    int unreadable = 0;   ///< sidecars of another format (no recorded home), not read
+    int unreadable = 0;   ///< sidecars a rebuild could not read or place: not in the catalog, KEPT in the store
 
     QVariantMap toMap() const;
 };

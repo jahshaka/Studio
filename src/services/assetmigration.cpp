@@ -161,6 +161,24 @@ bool wanted(const assethome::Home &home, const RebuildOptions &options)
 }
 
 bool isDerivedRole(const QString &role) { return role == QLatin1String("bake"); }
+}   // namespace
+
+QString unplacedReason(const QJsonObject &sidecar)
+{
+    if (sidecar.value("guid").toString().isEmpty()) return QStringLiteral("no guid");
+    assethome::Home home;
+    if (!sidecarHome(sidecar, &home))
+        return QStringLiteral("no home in this format (formatVersion %1)").arg(sidecar.value("formatVersion").toInt());
+    // THE ONE DOOR'S RULE, HERE TOO (ASSETS-HOME-1): a rebuild is not a second way into a home. A sidecar whose
+    // (home, origin) the door would refuse is not restored.
+    assethome::Origin origin;
+    if (!assethome::originFromName(sidecar.value("origin").toString(), &origin))
+        return QStringLiteral("no origin in this format");
+    return assethome::refusal(home, origin);
+}
+
+namespace
+{
 
 /// Every sidecar a rebuild with `options` restores — parsed, tombstones and
 /// unreadable ones out, with the counts.
@@ -193,26 +211,12 @@ QVector<QJsonObject> restorable(const QString &storeRoot, const RebuildOptions &
             continue;
         }
         const QJsonObject sidecar = doc.object();
-        if (sidecar.value("guid").toString().isEmpty()) { unreadable(QStringLiteral("no guid")); continue; }
+        // ONE ANSWER TO "CAN THE REBUILD PLACE IT" (unplacedReason): the sweep reads the same one.
+        const QString unplaced = unplacedReason(sidecar);
+        if (!unplaced.isEmpty()) { unreadable(unplaced); continue; }
         assethome::Home home;
-        if (!sidecarHome(sidecar, &home)) {
-            unreadable(QStringLiteral("no home in this format (formatVersion %1)")
-                           .arg(sidecar.value("formatVersion").toInt()));
-            continue;
-        }
+        sidecarHome(sidecar, &home);
         if (!wanted(home, options)) { if (report) ++report->otherHomes; continue; }
-        // THE ONE DOOR'S RULE, HERE TOO (ASSETS-HOME-1): a rebuild is not a
-        // second way into a home. A sidecar whose (home, origin) the door would
-        // refuse is not restored — counted, named, logged.
-        {
-            assethome::Origin origin;
-            if (!assethome::originFromName(sidecar.value("origin").toString(), &origin)) {
-                unreadable(QStringLiteral("no origin in this format"));
-                continue;
-            }
-            const QString refused = assethome::refusal(home, origin);
-            if (!refused.isEmpty()) { unreadable(refused); continue; }
-        }
         // AN UNLISTED ROW lives only for the projects that pin it (a library
         // delete those projects vetoed). A rebuild that restores no project has
         // no pin to keep it for: it is dropped, and the collector takes its

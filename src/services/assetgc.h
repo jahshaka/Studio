@@ -107,6 +107,10 @@ struct Report
     /// be READ (not JSON, not an object, no guid, a read error). Their own objects cannot be told apart, so while
     /// any is listed the sweep keeps it AND every object of the two object classes (which are then empty).
     ClassReport unreadableSidecars;
+    /// KEPT, never swept (the confirm's F6): sidecars with no assets row that parse but that a rebuild cannot PLACE
+    /// (AssetMigration::unplacedReason: no home in this format, no origin, the door's refusal), each named with that
+    /// reason. Every object one of them lists (its files and pins) is kept out of the two object classes.
+    ClassReport unplacedSidecars;
 
     /// Informational only, never acted on: files rows whose refcount does not
     /// match the asset_files rows that name them. A non-zero count means the

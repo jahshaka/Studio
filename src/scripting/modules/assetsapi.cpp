@@ -477,6 +477,9 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "strayObjects (files under objects/ the catalog never recorded, plus staging temps abandoned for over an hour), "
           "straySidecars (sidecar/<guid>.json naming no asset) and "
           "deadPins (project_assets rows naming a project that no longer exists — catalog rows rather than files, so they free no bytes here; an object a dead pin was the last reference to becomes an unreferencedObjects item on the NEXT sweep). "
+          "Two classes are KEPT, never swept, and listed: unreadableSidecars (a sidecar with no asset that cannot be read: "
+          "it and every unreferenced object stay, its own cannot be told apart) and unplacedSidecars (one that parses but "
+          "that a catalog rebuild cannot place, named with the rebuild's reason: it and the objects it lists stay). "
           "DRY RUN BY DEFAULT: the report lists exactly what a real run would delete, per class, with paths and byte totals. "
           "Live content is never collected — reachability is read from the asset_files rows and the project_assets pins, not from the refcount cache (a copy-on-write edit's object is referenced ONLY by its project's pin), and the sweep refuses a store this catalog does not recognize unless {force: true}. "
           "{root} sweeps an explicit store root instead of the active one.",

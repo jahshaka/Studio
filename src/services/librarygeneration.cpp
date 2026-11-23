@@ -164,21 +164,15 @@ QString noticeText(const Result &result)
 {
     // ONE LINE FOR WHAT HAPPENED TO THE USER'S STORAGES (the lead, 2026-10-05):
     // what was cleared, and that a later update keeps them.
-    QString storages;
-    if (result.keptRows == 0 && result.unreadable > 0)
-        storages = QStringLiteral("Your Assets and Materials from the previous build were cleared "
-                                  "too: that build did not record where they belong. From this "
-                                  "build on, an update keeps your Assets, Materials and Avatars.");
-    else
-        storages = QStringLiteral("Your Assets, Materials and Avatars were kept (%1 items "
-                                  "rebuilt); their bakes and thumbnails are rebuilt in the "
-                                  "background. Later updates keep them the same way.")
-                       .arg(result.keptRows);
-    // ANY RECORD NOT READ IS SAID, also in a mixed update (some kept, some not).
-    if (result.unreadable > 0 && result.keptRows > 0)
-        storages += QStringLiteral(" %1 stored item(s) could not be read and were not kept; the "
-                                   "session log (the logs folder in the app's data folder) names "
-                                   "each file.").arg(result.unreadable);
+    QString storages = QStringLiteral("Your Assets, Materials and Avatars were kept (%1 items "
+                                      "rebuilt); their bakes and thumbnails are rebuilt in the "
+                                      "background. Later updates keep them the same way.")
+                           .arg(result.keptRows);
+    // ANY RECORD NOT READ IS SAID: it is left in the store, never deleted (the confirm's F6).
+    if (result.unreadable > 0)
+        storages += QStringLiteral(" %1 stored item(s) could not be read; they were left in the "
+                                   "store, not in your library, and the session log (the logs "
+                                   "folder in the app's data folder) names each file.").arg(result.unreadable);
     return QStringLiteral("Your library was updated for this build: projects from the previous "
                           "build were removed (project folders stored outside the app's data "
                           "folder were left on disk, no longer listed). ") + storages;

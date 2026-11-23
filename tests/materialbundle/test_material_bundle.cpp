@@ -114,7 +114,10 @@ static int denyReads(void *, int action, const char *table, const char *column, 
     const bool pins = std::strcmp(table, "project_assets") == 0;
     if (gDeny.mode == 1 && master) return SQLITE_DENY;
     if (gDeny.mode == 2 && gDeny.inSelect && std::strcmp(table, "projects") == 0) return SQLITE_DENY;
-    if (gDeny.mode == 3 && master && gDeny.selects >= 7) { ++gDeny.probesDenied; return SQLITE_DENY; }
+    if (gDeny.mode == 3 && master && gDeny.selects >= 7) {
+        if (gDeny.selects == 7) ++gDeny.probesDenied;   // the pin-table probe's OWN denials (not the dead-pin probes')
+        return SQLITE_DENY;
+    }
     if (gDeny.mode == 4 && gDeny.inSelect && pins) return SQLITE_DENY;
     if (gDeny.mode == 5 && gDeny.inSelect && pins && column && std::strcmp(column, "oid_pin") == 0) return SQLITE_DENY;
     if (gDeny.mode == 6 && gDeny.inSelect && std::strcmp(table, "asset_files") == 0) return SQLITE_DENY;
@@ -751,7 +754,9 @@ int main(int argc, char **argv)
             CHECK(gDeny.probesDenied > 0, QStringLiteral("14.5: CONTROL: the pin-table probe was denied (%1; %2 selects; gc '%3')")
                                                .arg(gDeny.probesDenied).arg(gDeny.selects).arg(gc.error)
                                                .toUtf8().constData());
-            CHECK(!gc.ok || !listed, "14.5: a pin-only object is never listed unreferenced from a failed pin-table probe");
+            CHECK(!gc.ok && gc.error.contains(QStringLiteral("a read of the catalog failed")) && !listed,
+                  QStringLiteral("14.5: a failed pin-table probe REFUSES the sweep by name, the pin-only object never listed "
+                                 "(ok %1, '%2', listed %3)").arg(gc.ok).arg(gc.error).arg(listed).toUtf8().constData());
         }
 
         // (1) THE REBUILD COUNTS ITS FAILED ROWS: one sidecar's insert RAISEs (a trigger on a fresh catalog).
@@ -1064,6 +1069,74 @@ int main(int argc, char **argv)
                       "18: Reset Material's redo still pins the texture its undo took back");
             }
 
+            // 17.6 (F6) A SIDECAR THAT PARSES BUT THAT THE REBUILD SKIPS (no home in this format, no origin) keeps every
+            //      object it lists through a forced sweep - beside a deleted asset's sidecar (one the rebuild places),
+            //      which is collected with its object (the control).
+            {
+                const QString gcRoot = scratchDir.filePath(QStringLiteral("gc17_store"));
+                QDir().mkpath(QDir(gcRoot).filePath(QStringLiteral("sidecar")));
+                db::Options o;
+                o.name = "gc17";
+                db::Error e;
+                db::Connection gc = db::Connection::open(scratchDir.filePath(QStringLiteral("gc17.db")).toStdString(), o, &e);
+                gc.exec(CasSchema::kAssetsTableForRebuild, &e);
+                AssetCas::ensureCasSchema(gc);
+                const auto object = [&gcRoot](const char *oid) {
+                    const QString path = AssetStorePaths::objectPathIn(gcRoot, QString::fromLatin1(oid), QStringLiteral("png"));
+                    QDir().mkpath(QFileInfo(path).absolutePath());
+                    QFile f(path);
+                    f.open(QIODevice::WriteOnly);
+                    f.write("bytes");
+                    return path;
+                };
+                const auto sidecar = [&gcRoot](const char *guid, QJsonObject body, const char *oid) {
+                    body[QStringLiteral("guid")] = QString::fromLatin1(guid);
+                    QJsonObject file;
+                    file[QStringLiteral("oid")] = QString::fromLatin1(oid);
+                    file[QStringLiteral("ext")] = QStringLiteral("png");
+                    file[QStringLiteral("role")] = QStringLiteral("source");
+                    file[QStringLiteral("name")] = QStringLiteral("x.png");
+                    body[QStringLiteral("files")] = QJsonArray{ file };
+                    const QString path = QDir(gcRoot).filePath(QStringLiteral("sidecar/%1.json").arg(QString::fromLatin1(guid)));
+                    QFile f(path);
+                    f.open(QIODevice::WriteOnly);
+                    f.write(QJsonDocument(body).toJson());
+                    return path;
+                };
+                QJsonObject placed;
+                placed[QStringLiteral("formatVersion")] = 3;
+                placed[QStringLiteral("home")] = assethome::kindName(assethome::Kind::MaterialsLibrary);
+                placed[QStringLiteral("origin")] = QStringLiteral("create");
+                QJsonObject noHome;
+                noHome[QStringLiteral("formatVersion")] = 2;
+                QJsonObject noOrigin = placed;
+                noOrigin.remove(QStringLiteral("origin"));
+                const char *goneOid = "cc17000000000000000000000000000000000000";
+                const char *oldOid = "dd17000000000000000000000000000000000000";
+                const char *originOid = "ee17000000000000000000000000000000000000";
+                const QString goneObject = object(goneOid), goneSidecar = sidecar("gone17", placed, goneOid);
+                const QString oldObject = object(oldOid), oldSidecar = sidecar("old17", noHome, oldOid);
+                const QString originObject = object(originOid), originSidecar = sidecar("noorigin17", noOrigin, originOid);
+                const AssetGc::Report swept = AssetGc::sweep(gc, gcRoot, /*dryRun*/ false, /*force*/ true);
+                CHECK(swept.ok && !QFile::exists(goneObject) && !QFile::exists(goneSidecar),
+                      QStringLiteral("17.6: CONTROL: a deleted asset's sidecar and its object ARE collected (ok %1, '%2')")
+                          .arg(swept.ok).arg(swept.error).toUtf8().constData());
+                CHECK(QFile::exists(oldObject) && QFile::exists(oldSidecar) && QFile::exists(originObject)
+                          && QFile::exists(originSidecar),
+                      QStringLiteral("17.6: sidecars the rebuild cannot place, and the objects they list, SURVIVE a forced "
+                                     "sweep (no home: object %1 sidecar %2; no origin: object %3 sidecar %4)")
+                          .arg(QFile::exists(oldObject)).arg(QFile::exists(oldSidecar))
+                          .arg(QFile::exists(originObject)).arg(QFile::exists(originSidecar)).toUtf8().constData());
+                QStringList named;
+                for (const AssetGc::Item &item : swept.unplacedSidecars.items) named << item.id + QStringLiteral(": ") + item.reason;
+                named.sort();
+                CHECK(named.size() == 2 && named.at(0).startsWith(QStringLiteral("noorigin17: "))
+                          && named.at(0).contains(QStringLiteral("no origin in this format"))
+                          && named.at(1).startsWith(QStringLiteral("old17: "))
+                          && named.at(1).contains(QStringLiteral("no home in this format")),
+                      QStringLiteral("17.6: ...each NAMED with the rebuild's own reason: %1").arg(named.join(QStringLiteral(" | ")))
+                          .toUtf8().constData());
+            }
         }
 
         // (2) A CLOSED LIBRARY's pin reads are NO ANSWER, never "no pins". LAST in this test: a second Database

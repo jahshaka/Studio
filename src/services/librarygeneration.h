@@ -30,8 +30,9 @@ For more information see the LICENSE file
 // (AssetMigration::rebuildCatalog — never a read of the old tables); their
 // bakes are dropped and re-derived from their sources, their thumbnails redrawn.
 // Projects, the platform's seeds and the derived caches are cleared. A sidecar
-// that records no home (a library older than generation 5) is not read, so
-// such a library is cleared whole — once. Project folders filed outside the
+// the rebuild cannot place (AssetMigration::unplacedReason) is not read into
+// the catalog and is KEPT in the store with the objects it lists, each named
+// in the log. Project folders filed outside the
 // data root are left on disk — only unlisted. The reset REFUSES when another
 // instance holds the data root (the `<db>.lock` QLockFile). The GUI shows a
 // one-time notice that says what was cleared and what was kept.
@@ -58,7 +59,7 @@ struct Result
     int generationOnDisk = 0;   ///< PRAGMA user_version found (0 = none)
     QString reason;             ///< why it was wiped / refused / failed
     int keptRows = 0;           ///< storage rows rebuilt from their sidecars
-    int unreadable = 0;         ///< sidecars of an older format, not read (cleared)
+    int unreadable = 0;         ///< sidecars a rebuild could not read or place (kept in the store, not in the library)
 };
 
 /// This build's generation (= CasSchema::userVersion()).
