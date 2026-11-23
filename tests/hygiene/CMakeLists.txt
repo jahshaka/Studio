@@ -953,7 +953,7 @@ jah_builds(none ROWS source.no_glsl_path source.fork_stamp source.no_raw_transac
     source.panel_rows_guarded source.bake_key_guard source.no_engine_transform_reads source.one_readfile
     source.assimp_import_only source.one_material_resolve source.photon_never_pinned source.material_page_identity
     source.no_live_read_at_write source.no_raw_sheets source.shader_cache_key source.bake_key_versioned
-    source.gpu_table_strides source.code_rows gate.serve_red source.testing_rules source.row_budget source.timeout_cap
+    source.gpu_table_strides source.code_rows gate.serve_red source.row_budget source.timeout_cap
     tooling.gpu_lock_fifo tooling.row_lock_env tooling.gpu_lock_sweep tooling.gpu_lock_holds tooling.gpu_lock_mark
     tooling.evidence_cap source.debug_hot_loops tooling.width_pair.plan tooling.width_pair.judge tooling.width_pair.refuse
     tooling.width_pair.bars tooling.width_pair.gain tooling.width_pair.reds tooling.width_pair.log tooling.width_pair.budget
@@ -979,4 +979,6 @@ jah_builds(JahshakaEngineBuildId ROWS source.script_build_id)                  #
 jah_builds(JahshakaEngineBuildId ROWS source.ray_spirv_id)   # the build-id header, and the ray *_spv.h its edge makes first (+ build.ninja)
 jah_builds(none ROWS source.compute_pace_one_place)            # the engine's sources only
 # the whole default build: every test binary ctest runs (readelf), the build's whole dependency graph (its deps log)
-jah_builds(all ROWS source.display_guard_linked gate.selection gate.reach_cache source.gate_scope_rules)
+# (source.testing_rules: R5 classifies the compiled rows by the deps log - on a by-reach build a test binary not yet built
+# read as "no subject selects it": core.json, core.log, db.failed_opens at RIG-DEBUGINFOD-1 2f171e759, green on the whole build)
+jah_builds(all ROWS source.display_guard_linked gate.selection gate.reach_cache source.gate_scope_rules source.testing_rules)
