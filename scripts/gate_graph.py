@@ -1173,13 +1173,27 @@ def build_config(build, cache=None):
     return cfg, None
 
 
+COMMIT_DEFINES = ("BENCH_GIT_COMMIT", "JAHSHAKA_OGRE_FORK_COMMIT")   # a configure's provenance, keyed by a record's tip already
+_JOINED = ("-isystem", "-iquote", "-idirafter", "-include", "-imacros", "-x", "-Xclang", "--param", "-target", "-arch")
+
+
+def _language(compiler):
+    b = os.path.basename(compiler)
+    return "CXX" if "++" in b or b.endswith("xx") else "C" if re.search(r"(^|-)(cc|gcc|clang)(-[\d.]+)?$", b) else b
+
+
 def compile_digest(build, cache=None):
-    """WHAT THE COMPILER WAS TOLD (the lead's ruling 2026-11-23: the cache's CMAKE_*_FLAGS are not the flags a probe, an
-    add_compile_options or a target_compile_definitions adds): one sha256 over the sorted, distinct compile lines of the build's
-    own compile database (<build>/compile_commands.json) - each line its compiler's name and every argument but the output, the
-    source and the dependency-file switches, with the tree's source root and build dir (each spelling) written <src> and <build>
-    (no tree's name in it: #175's class). None without a database (a record made so is never equal: config_why). Hashed once per
-    configure: kept in <build>/BUILT_FROM.compile beside the stamp, keyed by the database's mtime and size."""
+    """WHAT THE COMPILER WAS TOLD BUILD-WIDE (the lead's rulings 2026-11-23, the final read's B1): per LANGUAGE (C, C++, any other
+    the database has), the arguments COMMON TO EVERY compile line of that language in <build>/compile_commands.json - the -O level,
+    -g, the sanitizers, -std, the global -D set, the -f/-m machine flags; order-normalised; the tree's source root and build dir
+    written <src> / <build> in every spelling; COMMIT_DEFINES' values written <commit> - one sha256 over them. A PER-TARGET flag,
+    define or include directory is NOT here: the CMake file that sets it is a build-system file the reach already takes to every
+    row its target builds (scripts/gate-scope.py, "a target this command changes": target_*(), set_target_properties(), a helper
+    on it, and a target named through a foreach variable), so a lane that adds one test target is never keyed apart from its
+    parent on every row. None (fail closed: config_why) without a database, or when a language's common set is EMPTY. Hashed
+    once per configure: <build>/BUILT_FROM.compile keeps "<mtime_ns> <size> <version> <digest>", the version a hash of THIS
+    function's own source (B2: a stamp of another normalisation is never read)."""
+    import inspect as _inspect
     import json as _json
     import shlex as _shlex
     db = os.path.join(build, "compile_commands.json")
@@ -1187,13 +1201,14 @@ def compile_digest(build, cache=None):
         st = os.stat(db)
     except OSError:
         return None
+    ver = _sha256(_inspect.getsource(compile_digest).encode())[:12]
     stamp = os.path.join(build, "BUILT_FROM.compile")
-    key = f"{st.st_mtime_ns} {st.st_size}"
+    key = f"{st.st_mtime_ns} {st.st_size} {ver}"
     try:
-        k1, k2, d = open(stamp).read().split()
-        if f"{k1} {k2}" == key:
-            return d
-    except (OSError, ValueError):
+        w = open(stamp).read().split()
+        if len(w) == 4 and " ".join(w[:3]) == key:
+            return None if w[3] == "none" else w[3]
+    except OSError:
         pass
     c = _cache_entries(build) if cache is None else cache
     roots = build_roots(build, c) or {}
@@ -1205,7 +1220,7 @@ def compile_digest(build, cache=None):
                 for q in {p, os.path.realpath(p)}:
                     subs.append((q.rstrip("/"), tag))
     subs.sort(key=lambda x: -len(x[0]))
-    lines = set()
+    common = {}
     try:
         entries = _json.load(open(db))
     except (OSError, ValueError):
@@ -1214,26 +1229,33 @@ def compile_digest(build, cache=None):
         args = e.get("arguments") or _shlex.split(e.get("command") or "")
         if not args:
             continue
-        src, out, skip, kept = e.get("file") or "", [os.path.basename(args[0])], False, args[1:]
-        for i, a in enumerate(kept):
-            if skip:
-                skip = False
-                continue
+        src, out, skip = e.get("file") or "", set(), False
+        rest = args[1:]
+        k = 0
+        while k < len(rest):
+            a = rest[k]
             if a in ("-o", "-MF", "-MT", "-MQ"):
-                skip = True
+                k += 2
                 continue
-            if a in ("-MD", "-MMD") or a == src or (src and os.path.basename(a) == os.path.basename(src) and a.endswith(src[-40:])):
+            if a in ("-c", "-MD", "-MMD") or a == src:
+                k += 1
                 continue
+            if a in _JOINED and k + 1 < len(rest):
+                a = a + " " + rest[k + 1]
+                k += 1
             for p, tag in subs:
                 a = a.replace(p, tag)
-            # a define whose value is a commit (BENCH_GIT_COMMIT="69615d93": the configure's provenance, keyed by the record's
-            # tip already) is no configuration - its value written <commit>, or every reconfigure re-keys every record
-            a = re.sub(r'^(-D\w+=)("?)[0-9a-f]{7,40}\2$', r"\1<commit>", a)
-            out.append(a)
-        lines.add(" ".join(out))
-    d = _sha256("\n".join(sorted(lines)).encode())
+            a = re.sub(r'^(-D(?:%s)=)("?)[^"]*\2$' % "|".join(COMMIT_DEFINES), r"\1<commit>", a)
+            out.add(a)
+            k += 1
+        lang = _language(args[0])
+        common[lang] = out if lang not in common else (common[lang] & out)
+    if not common or any(not v for v in common.values()):
+        d = None
+    else:
+        d = _sha256(_canon_json({k: sorted(v) for k, v in common.items()}).encode())
     try:
-        open(stamp + ".tmp", "w").write(f"{key} {d}\n")
+        open(stamp + ".tmp", "w").write(f"{key} {d or 'none'}\n")
         os.replace(stamp + ".tmp", stamp)
     except OSError:
         pass
@@ -1288,10 +1310,11 @@ def config_why(rec_cfg, cfg):
     if not rc.get("compile"):
         return "its build configuration is unknown: the record has no compile digest (made before it, or with no compile database)"
     if not cfg.get("compile"):
-        return "this build has no compile database (compile_commands.json): no record's configuration can be proved equal"
+        return ("this build's compile digest cannot be read (no compile_commands.json, or a language whose lines share no "
+                "argument): no record's configuration can be proved equal")
     if rc["compile"] != cfg["compile"]:
-        return (f"the compile lines differ (what the compiler was told: compile_commands.json digest {rc['compile'][:12]} vs this "
-                f"build's {cfg['compile'][:12]})")
+        return (f"the build-wide compile arguments differ (what every compile line was told - the -O level, -g, -std, the global "
+                f"defines: digest {rc['compile'][:12]} vs this build's {cfg['compile'][:12]})")
     if rh == cfg["hash"]:
         return None
     ro = rc.get("options")

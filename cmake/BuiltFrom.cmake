@@ -29,6 +29,10 @@ if(CMAKE_SCRIPT_MODE_FILE)
     # (spec.py CheckMark, URGENT #153; the pre-commit hook refuses a COMMIT under it the same way) names a live pid that is not an
     # ancestor of this build -> the stamp is removed (nothing claims what this pass built) and the build fails, naming the check.
     # The check's own builds (its prebuild, a nested call) run under its pid and go on.
+    # A LATE REFUSAL, BY RULING (the lead, 2026-11-23, on the final read's L1): this step is every pass's LAST, so the binaries under
+    # the running check are already rebuilt when it fires - the check voids itself by its own reading (.ninja_log); this refusal
+    # makes the builder hear it at once and lets no stamp claim that build. A first-step guard (a target every target depends on,
+    # run on every build) was judged more machinery than the fault deserves.
     execute_process(COMMAND git rev-parse --absolute-git-dir WORKING_DIRECTORY "${SRC}" OUTPUT_VARIABLE _jah_gd
                     OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET RESULT_VARIABLE _jah_grc)
     if(_jah_grc EQUAL 0 AND EXISTS "${_jah_gd}/jah-check.pid")
@@ -42,7 +46,9 @@ cat "$1"]=] sh "${_jah_gd}/jah-check.pid" OUTPUT_VARIABLE _jah_live OUTPUT_STRIP
             file(REMOVE "${OUT}")
             message(FATAL_ERROR "BUILT_FROM: REFUSED - a spec.sh test check runs in this tree (its mark ${_jah_gd}/jah-check.pid: "
                                 "${_jah_live}); a build now voids it (DEV_ERRORS 70, the errors audit B5). Nothing is stamped: build "
-                                "after it ends (`spec.sh test <SPEC> --list` says when a check runs).")
+                                "after it ends (`spec.sh test <SPEC> --list` says when a check runs). A STALE mark (that pid is not a "
+                                "spec.sh check: a reused pid of a check that died) is removed by the tree's own lane: check `ps -p <pid> "
+                                "-o args`, then rm ${_jah_gd}/jah-check.pid")
         endif()
     endif()
     # _jah_head(<dir> <out sha> <out dirty>)
