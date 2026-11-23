@@ -15,7 +15,7 @@ at every command edit. jahengine/ is its own executable, outside the list by con
      includes only jahshaka/engine/*.h (an existing public header), script/*, the standard library (<name>, no extension),
      and - in src/script/js_*.cpp only - the JS engine (quickjs.h); in jahengine/main.cpp only, the MCP adapter's public
      headers (mcp/*.h under irisgl/engine/mcp/include: MCP-ON-HOST-1 - a library outside the engine whose own includes
-     are held to Script.h and ScriptJson.h). Its control: the files scanned and their includes > 0.
+     are held to Script.h and the core's codec, core/json.h). Its control: the files scanned and their includes > 0.
   B3 THE ID IS THE BUILD's COMPUTATION, AND A SCRIPT EDIT LEAVES IT: EngineBuildId.cmake is run with the build's own
      arguments, its source list remapped onto a scratch copy of every input plus every script source: (a) the copy's ID
      equals the build's generated header (the build is current: this IS its computation); (b) a comment appended to the
@@ -67,7 +67,7 @@ SCRIPT_PUBLIC = re.compile(r"^irisgl/engine/include/jahshaka/engine/Script\w*\.h
 
 
 def b1_bad(sources, root):
-    """[the listed files under a script directory, or a public header of the host's (Script.h, ScriptJson.h)]."""
+    """[the listed files under a script directory, or a public header of the host's (Script.h)]."""
     rels = [os.path.relpath(os.path.realpath(s), os.path.realpath(root)).replace(os.sep, "/") for s in sources]
     return [r for r in rels if any(r == d or r.startswith(d + "/") for d in SCRIPT_DIRS) or SCRIPT_PUBLIC.match(r)]
 
@@ -133,11 +133,11 @@ def self_test():
           "B1 reads the build's own EngineBuildId.cmake command line (its list, its script, its cmake)")
     check(b1_bad(["/r/irisgl/engine/src/OgreEngine.cpp", "/r/irisgl/engine/src/script/registry.cpp",
                   "/r/irisgl/engine/jahengine/main.cpp", "/r/irisgl/engine/src/scripted.cpp",
-                  "/r/irisgl/engine/include/jahshaka/engine/ScriptJson.h", "/r/irisgl/engine/include/jahshaka/engine/Engine.h"],
+                  "/r/irisgl/engine/include/jahshaka/engine/Script.h", "/r/irisgl/engine/include/jahshaka/engine/Engine.h"],
                  "/r") ==
           ["irisgl/engine/src/script/registry.cpp", "irisgl/engine/jahengine/main.cpp",
-           "irisgl/engine/include/jahshaka/engine/ScriptJson.h"],
-          "B1 names a script source, jahengine and the host's public header (ScriptJson.h) in the list, never an engine "
+           "irisgl/engine/include/jahshaka/engine/Script.h"],
+          "B1 names a script source, jahengine and the host's public header (Script.h) in the list, never an engine "
           "file that merely starts with 'script' nor Engine.h")
     with tempfile.TemporaryDirectory() as t:
         write(t, PUBLIC + "/Engine.h", "")

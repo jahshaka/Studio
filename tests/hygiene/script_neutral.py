@@ -9,8 +9,8 @@ the value type and the registry know nothing of JavaScript, and a second languag
      a call) is read past; a member call `foo.JS_NewObject(` or `x.js_free(`, a bare `js_free(`, and the same name in
      any source outside tests/ are not (LAB-SCRIPTS-1, the lead's rulings).
   N2 THE HOST's NEUTRAL FILES INCLUDE NOTHING BUT THE STANDARD LIBRARY AND THEMSELVES: jahshaka/engine/Script.h,
-     jahshaka/engine/ScriptJson.h, src/script/{registry.cpp, host.cpp, Language.h, json.cpp} and the value they name,
-     irisgl/core/value.{h,cpp} (NOQT-CORE-1 stage 3), include no Qt, Ogre or JS-engine header.
+     src/script/{registry.cpp, host.cpp, Language.h} and the value and codec they name, irisgl/core/value.{h,cpp} and
+     irisgl/core/json.{h,cpp} (NOQT-CORE-1 stage 3: moved into the core), include no Qt, Ogre or JS-engine header.
   N3 jahengine LINKS THE ENGINE AND NO QT: its NEEDED list (`objdump -p`) names no Qt library and no IrisGL (the document
      library that carries Qt today); the JS engine and the engine are static inside it, and libIrisCore - the Qt-free core
      the engine links (NOQT-CORE-1), shared, one copy in a process - is the one library of ours it NEEDS.
@@ -43,7 +43,8 @@ the value type and the registry know nothing of JavaScript, and a second languag
      spec), and `nm` on the engine archive defines no symbol of the adapter (the `mcp` namespace, a JSON-RPC name) and
      needs no socket call (socket, bind, listen, accept, connect).
   N9 THE ADAPTER INCLUDES NO ENGINE HEADER BUT THE HOST's TWO: every file under irisgl/engine/mcp/ includes only
-     jahshaka/engine/Script.h, jahshaka/engine/ScriptJson.h, its own mcp/*.h and system headers (<...>: no Qt, Ogre,
+     jahshaka/engine/Script.h, the core's codec and value (core/json.h, core/value.h: NOQT-CORE-1 stage 3), its own
+     mcp/*.h and system headers (<...>: no Qt, Ogre,
      JS-engine or jahshaka/ header among them).
 
 usage: script_neutral.py <source-root> <build dir>   (jahengine is <build dir>/bin/jahengine)
@@ -75,10 +76,9 @@ def names_js_engine(text, test_source=False):
 NEUTRAL = ("irisgl/engine/include/jahshaka/engine/Script.h", "irisgl/engine/src/script/registry.cpp",
            "irisgl/engine/src/script/host.cpp", "irisgl/engine/src/script/Language.h",
            "irisgl/engine/src/script/LanguageTable.inc",
-           # the value in JSON (MCP-ON-HOST-1): std only, moved whole into the core library by NOQT-CORE-1
-           "irisgl/engine/include/jahshaka/engine/ScriptJson.h", "irisgl/engine/src/script/json.cpp",
-           # the value itself, the core's (NOQT-CORE-1 stage 3: moved out of Script.h / registry.cpp)
-           "irisgl/core/value.h", "irisgl/core/value.cpp")
+           # the value and its JSON, the core's (NOQT-CORE-1 stage 3: moved out of Script.h, registry.cpp and the
+           # host's json.cpp / ScriptJson.h, MCP-ON-HOST-1's)
+           "irisgl/core/value.h", "irisgl/core/value.cpp", "irisgl/core/json.h", "irisgl/core/json.cpp")
 FOREIGN_INCLUDE = re.compile(r'^\s*#\s*include\s*[<"]\s*(Q[A-Za-z]|qt|Ogre|quickjs|[^>"]*/(Q[A-Za-z]|Ogre))', re.MULTILINE)
 
 
@@ -219,7 +219,7 @@ MCP_CODE = re.compile(r"(?i:\bmcp\b|json-?rpc|modelcontextprotocol)|\bsocket\s*\
 MCP_SYMBOL = re.compile(r" [A-TV-Z] \S*(3mcp|[Jj]son[Rr]pc)|^\s*U (socket|bind|listen|accept4?|connect)$")
 N8_DIRS = ("irisgl/engine/src", "irisgl/engine/include")
 MCP_DIR = "irisgl/engine/mcp"
-HOST_HEADERS = ("jahshaka/engine/Script.h", "jahshaka/engine/ScriptJson.h")
+HOST_HEADERS = ("jahshaka/engine/Script.h", "core/json.h", "core/value.h")
 ANY_INCLUDE = re.compile(r'^\s*#\s*include\s*([<"])([^>"]+)[>"]', re.MULTILINE)
 SYSTEM_FOREIGN = re.compile(r"^(Q[A-Za-z]|qt|Ogre|quickjs|jahshaka/)")
 
@@ -277,8 +277,8 @@ def self_test():
         write(t, NEUTRAL[0], "#include <QString>\n#include \"quickjs.h\"\n#include <OgreRoot.h>\n")
         write(t, NEUTRAL[1], "#include <QtCore/QVariant>\n")
         check(len(n2_bad(t)) == 4, "N2 names a Qt, a JS-engine and an Ogre include in the neutral files (%s)" % n2_bad(t))
-        write(t, "irisgl/engine/src/script/json.cpp", "#include <charconv>\n#include <QJsonDocument>\n")
-        check(len(n2_bad(t)) == 5 and n2_bad(t)[4].startswith("irisgl/engine/src/script/json.cpp: #include <QJ"),
+        write(t, "irisgl/core/json.cpp", "#include <charconv>\n#include <QJsonDocument>\n")
+        check(len(n2_bad(t)) == 5 and n2_bad(t)[4].startswith("irisgl/core/json.cpp: #include <QJ"),
               "N2 names a Qt include in the JSON codec (%s)" % n2_bad(t)[4:])
         write(t, "src/x/fwd.h", "struct JSContext;\nvoid f(JSContext *c); // JSON stays\n")
         check(n1_bad(t)[-1:] == ["src/x/fwd.h"] and not names_js_engine("JSON.stringify(x); // a JSONL file"),
@@ -338,7 +338,7 @@ def self_test():
         write(t, "irisgl/engine/src/script/registry.cpp",
               "// MCP-ON-HOST-1: the adapter calls this (a comment may name it)\nint json = 1; /* mcp */\n")
         write(t, MCP_DIR + "/session.cpp", '#include "mcp/session.h"\n#include "jahshaka/engine/Script.h"\n'
-                                           '#include "jahshaka/engine/ScriptJson.h"\n#include <poll.h>\n#include <string>\n')
+                                           '#include "core/json.h"\n#include <poll.h>\n#include <string>\n')
         clean8, clean9 = n8_bad(t), n9_bad(t)
         write(t, "irisgl/engine/src/net.cpp", "#include <sys/socket.h>\nnamespace mcp { int s = socket(1, 2, 3); }\n")
         write(t, "irisgl/engine/include/jahshaka/engine/Rpc.h", "struct JsonRpcReply;\n")
@@ -375,8 +375,8 @@ def main():
     bad = n1_bad(root)
     check(not bad, "N1 the JS engine is named only by irisgl/engine/src/script/js_*.cpp (%d others: %s)" % (len(bad), bad[:8]))
     bad = n2_bad(root)
-    check(not bad, "N2 Script.h, ScriptJson.h, registry.cpp, host.cpp, json.cpp, Language.h, LanguageTable.inc and the core's "
-                   "value.{h,cpp} include no Qt, Ogre or JS-engine header (%s)" % bad[:8])
+    check(not bad, "N2 Script.h, registry.cpp, host.cpp, Language.h, LanguageTable.inc and the core's value.{h,cpp} and "
+                   "json.{h,cpp} include no Qt, Ogre or JS-engine header (%s)" % bad[:8])
     bad = n4_bad(root)
     check(not bad, "N4 every language is one source file and one table line (%s)" % bad[:8])
     bad = n7_bad(root)
@@ -411,7 +411,7 @@ def main():
           "N8 the engine's code names no MCP, JSON-RPC or socket (%s) and its archive defines no adapter symbol and needs "
           "no socket call (%d: %s)" % (bad[:4], len(mcp_nm), mcp_nm[:3]))
     bad, files = n9_bad(root)
-    check(files > 0 and not bad, "N9 the adapter's %d files include no engine header but Script.h and ScriptJson.h (%s)"
+    check(files > 0 and not bad, "N9 the adapter's %d files include no engine header but Script.h and the core's core/json.h (%s)"
           % (files, bad[:4]))
     bin_dir = os.path.join(sys.argv[2], "bin")
     irisgl = next((n for n in ("libIrisGLd.so", "libIrisGL.so") if os.path.isfile(os.path.join(bin_dir, n))), "libIrisGLd.so")

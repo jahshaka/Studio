@@ -1,11 +1,11 @@
-// script.json — THE SCRIPT VALUE IN JSON, ITS LAWS ON THE CPU (MCP-ON-HOST-1 stage 1; jahshaka/engine/ScriptJson.h says
-// them). No device, no engine: the codec alone (it moves to the core library with the value: NOQT-CORE-1).
+// core.json — THE ONE JSON CODEC, ITS LAWS ON THE CPU (MCP-ON-HOST-1 stage 1 as script.json; irisgl/core/json.h says
+// them). No device, no engine: the codec alone, in the core library with the value (NOQT-CORE-1 stage 3: moved).
 // THE LAWS: every kind round-trips value -> text -> value WITH ITS KIND (a Number stays a Number: "1.0"); 0.1 + 0.2 and
 // -0.0 by their bits; 2^53 + 1 and INT64_MIN exact as Int; an integer past int64 and a number past a double refused; NaN
 // and infinity never written (the path named); strict UTF-8 both ways (`\u` pairs joined, a lone surrogate refused);
 // control characters and `\n` written escaped; a duplicate member, nesting past 64, trailing text, a BOM and an empty
 // input refused (line and column named); bytes as {"$bytes": base64} both ways, capped at 1 MiB by name.
-#include "jahshaka/engine/ScriptJson.h"
+#include "irisgl/core/json.h"
 
 #include <cstdint>
 #include <cstdio>
@@ -13,7 +13,8 @@
 #include <limits>
 #include <string>
 
-using namespace jahshaka::engine::script;
+using namespace iris;
+using namespace iris::json;
 
 static int gFail = 0;
 static void check(bool ok, const std::string &what)
@@ -52,27 +53,27 @@ static std::uint64_t bits(double d)
 static std::string text(const Value &v)
 {
     std::string out, why;
-    return toJson(v, out, why) ? out : "<refused: " + why + ">";
+    return json::write(v, out, why) ? out : "<refused: " + why + ">";
 }
 /// The value `t` reads as; `why` empty when it read.
 static Value read(const std::string &t, std::string &why)
 {
     Value v;
     why.clear();
-    if (!parseJson(t, v, why) && why.empty()) why = "<refused with no reason>";
+    if (!json::parse(t, v, why) && why.empty()) why = "<refused with no reason>";
     return v;
 }
 static bool refused(const std::string &t, const std::string &part, std::string &why)
 {
     Value v;
     why.clear();
-    return !parseJson(t, v, why) && why.find(part) != std::string::npos;
+    return !json::parse(t, v, why) && why.find(part) != std::string::npos;
 }
 static bool writeRefused(const Value &v, const std::string &part, std::string &why)
 {
     std::string out;
     why.clear();
-    return !toJson(v, out, why) && out.empty() && why.find(part) != std::string::npos;
+    return !json::write(v, out, why) && out.empty() && why.find(part) != std::string::npos;
 }
 
 int main()
@@ -176,8 +177,8 @@ int main()
           "the $bytes text is strict base64 (" + why + ")");
     CHECK(writeRefused(Value(Value::Object{{"$bytes", Value("AA==")}}), "has a member named \"$bytes\"", why),
           "an object with a member $bytes FAILS to write (it would read back as bytes) (" + why + ")");
-    const Value::Bytes mib(kJsonBytesCap, 7);
-    Value::Bytes over(kJsonBytesCap + 1, 7);
+    const Value::Bytes mib(kBytesCap, 7);
+    Value::Bytes over(kBytesCap + 1, 7);
     const std::string mibText = text(Value::bytes(mib));
     // 1 MiB = 3 x 349525 + 1: the cap's text ends in the one byte's group "Bw=="; one byte more makes it "Bwc="
     const std::string overText = mibText.substr(0, mibText.size() - 6) + "Bwc=\"}";
@@ -188,7 +189,7 @@ int main()
               refused(overText, "1048577 bytes: over the 1 MiB", why),
           "1 MiB + 1 bytes are refused by name both ways (" + why + ")");
 
-    if (gFail) std::printf("script.json: FAILED (%d)\n", gFail);
-    else std::printf("script.json: PASSED\n");
+    if (gFail) std::printf("core.json: FAILED (%d)\n", gFail);
+    else std::printf("core.json: PASSED\n");
     return gFail ? 1 : 0;
 }

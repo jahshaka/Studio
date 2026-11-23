@@ -682,16 +682,7 @@ jah_gpu_row(script.reflector_attach_quiet CLASS engine FRAMES 10
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(script.reflector_attach_quiet PROPERTIES TIMEOUT 60 LABELS "engine")
 
-# script.json — THE SCRIPT VALUE IN JSON, ITS LAWS ON THE CPU (MCP-ON-HOST-1 stage 1; test_script_json.cpp says them):
-# every kind round-trips with its kind, numbers by their bits, strict UTF-8, the text's shape, bytes as {"$bytes"} capped
-# at 1 MiB. The codec alone (jahshaka/engine/ScriptJson.h): no device, a code row.
-add_executable(test_script_json test_script_json.cpp)
-set_target_properties(test_script_json PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
-    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
-target_link_libraries(test_script_json PRIVATE JahshakaScript)
-add_test(NAME script.json COMMAND test_script_json)
-set_tests_properties(script.json PROPERTIES TIMEOUT 60 LABELS "engine")
-jah_no_display(script.json)
+# (script.json - the codec's laws - moved with the codec into the core library: tests/core's core.json, NOQT-CORE-1 stage 3)
 
 # mcp.schema — THE SIGNATURE AS A SCHEMA, ON THE CPU (MCP-ON-HOST-1 stage 1; test_mcp_schema.cpp says the laws): every
 # Param form to its expected text, every registered command (no engine) to a structurally valid schema with no unmapped
@@ -700,6 +691,7 @@ add_executable(test_mcp_schema test_mcp_schema.cpp)
 set_target_properties(test_mcp_schema PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_link_libraries(test_mcp_schema PRIVATE JahshakaEngineMcp)
+target_include_directories(test_mcp_schema PRIVATE ${CMAKE_SOURCE_DIR})   # "irisgl/core/json.h" (source.engine_headers H5)
 add_test(NAME mcp.schema COMMAND test_mcp_schema)
 set_tests_properties(mcp.schema PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(mcp.schema)
@@ -711,6 +703,7 @@ add_executable(test_mcp_session test_mcp_session.cpp)
 set_target_properties(test_mcp_session PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
     BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
 target_link_libraries(test_mcp_session PRIVATE JahshakaEngineMcp JahshakaEngine)
+target_include_directories(test_mcp_session PRIVATE ${CMAKE_SOURCE_DIR})   # "irisgl/core/json.h" (source.engine_headers H5)
 add_test(NAME mcp.session COMMAND test_mcp_session)
 set_tests_properties(mcp.session PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(mcp.session)

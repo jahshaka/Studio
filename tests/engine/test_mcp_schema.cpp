@@ -7,7 +7,7 @@
 // spikes/mcp-on-host/START-PREFLIGHT.md (f); a field set where its kind has no form is a NAMED fault, never dropped (the
 // zero-pass control: a synthetic one reads >= 1); and the generator accounts for every field Param and Signature have.
 #include "jahshaka/engine/Script.h"
-#include "jahshaka/engine/ScriptJson.h"
+#include "irisgl/core/json.h"
 #include "mcp/schema.h"
 
 #include <cstdio>
@@ -50,7 +50,7 @@ static std::string schemaText(const CommandInfo &info, std::string &why)
     why.clear();
     if (!mcp::argumentSchema(info, s, why)) return "<fault: " + why + ">";
     std::string text;
-    if (!toJson(s, text, why)) return "<codec: " + why + ">";
+    if (!iris::json::write(s, text, why)) return "<codec: " + why + ">";
     return text;
 }
 
@@ -223,7 +223,7 @@ int main()
         ++checked;
         Value s, back;
         std::string w, text, again;
-        bool ok = mcp::argumentSchema(*c, s, w) && toJson(s, text, w) && parseJson(text, back, w) && toJson(back, again, w) &&
+        bool ok = mcp::argumentSchema(*c, s, w) && iris::json::write(s, text, w) && iris::json::parse(text, back, w) && iris::json::write(back, again, w) &&
                   again == text && structural(s, c->name, w) && s["description"] == Value(c->doc);
         if (ok) ++mapped;
         else if (firstBad.empty()) firstBad = c->name + ": " + w;
@@ -239,7 +239,7 @@ int main()
     //    above(0), resolution 16..256, stepCells 0..128: commands_gi.cpp)
     const auto doc = [&](const char *name) {
         std::string t, w;
-        toJson(Value(host.registry().find(name)->doc), t, w);
+        iris::json::write(Value(host.registry().find(name)->doc), t, w);
         return t;
     };
     const char *names[] = {"engine.frames", "engine.node.setTransform", "engine.gi.set"};

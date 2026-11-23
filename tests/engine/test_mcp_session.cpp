@@ -14,7 +14,7 @@
 // on the protocol fd is one JSON-RPC message and stdin's end exits 0 - the control: the same child WITHOUT the fd claim
 // reads foreign lines there.
 #include "jahshaka/engine/Script.h"
-#include "jahshaka/engine/ScriptJson.h"
+#include "irisgl/core/json.h"
 #include "mcp/session.h"
 #include "mcp/stdio.h"
 
@@ -98,7 +98,7 @@ struct Rig {
             sent.push_back(line);
             Value v;
             std::string why;
-            parseJson(line, v, why);
+            iris::json::parse(line, v, why);
             parsed.push_back(v);
         };
         d.log = [this](const std::string &line) { logged.push_back(line); };
@@ -371,7 +371,7 @@ int main()
             for (const std::string &l : lines) {
                 Value m;
                 std::string why;
-                n += !(parseJson(l, m, why) && m.kind() == Kind::Object && m["jsonrpc"] == Value("2.0"));
+                n += !(iris::json::parse(l, m, why) && m.kind() == Kind::Object && m["jsonrpc"] == Value("2.0"));
             }
             return n;
         };

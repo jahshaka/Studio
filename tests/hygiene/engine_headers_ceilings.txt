@@ -72,9 +72,7 @@ fanout Published.h 0
 lines RayQuery.h 330
 fanout RayQuery.h 1
 lines Script.h 499
-fanout Script.h 1
-lines ScriptJson.h 45
-fanout ScriptJson.h 0
+fanout Script.h 0
 lines Shaders.h 269
 fanout Shaders.h 2
 lines Skeleton.h 158
