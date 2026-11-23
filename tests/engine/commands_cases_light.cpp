@@ -5,6 +5,9 @@
 #include "script_commands.h"
 #include "script/records_light.h"
 
+#include <cstdio>
+#include <filesystem>
+
 namespace scriptcommands {
 
 namespace {
@@ -136,12 +139,27 @@ void casesLight(Fixture &f)
                                  "(a `files` command), never by engine.light.set") && noLight,
               "LEAST PRIVILEGE FOR PATHS: engine.light.set FAILS on a non-empty IES path by name (" + pathed.message +
                   "), no light kept");
+        // a ring profile written beside the row (test_engine's writeRingIesFile lobe), by its absolute path
+        const std::string ring = (std::filesystem::current_path() / "script_commands_p_ring.ies").string();
+        if (FILE *file = std::fopen(ring.c_str(), "wb")) {
+            std::fprintf(file, "IESNA:LM-63-1995\n[TEST] synthetic ring lobe\nTILT=NONE\n1 1000 1 19 1 1 2 0 0 0\n1 1 0\n"
+                               "0 10 20 30 40 50 60 70 80 90 100 110 120 130 140 150 160 170 180\n0\n"
+                               "0 100 400 800 1024 1024 800 400 100 0 0 0 0 0 0 0 0 0 0\n");
+            std::fclose(file);
+        }
         const Result set = f.headless.call("engine.light.set", {scene, node, Value(Value::Object{{"type", Value("spot")}})});
         const Result profiled =
+            f.headless.call("engine.light.setIesProfile", {scene, node, Value(Value::Object{{"path", Value(ring)}})});
+        // a profile the engine cannot assign FAILS in its words, and the host's record keeps the profile it had
+        const Result missing =
             f.headless.call("engine.light.setIesProfile", {scene, node, Value(Value::Object{{"path", Value("/no/such.ies")}})});
         const Result again = f.headless.call("engine.light.set", {scene, node, Value(Value::Object{{"intensity", Value(2.0)}})});
         const LightDesc *kept = f.live.kept<LightDesc>(raw, KeptKind::Light, Call::idOf(node));
-        const bool keptPath = kept && kept->iesProfilePath == "/no/such.ies" && kept->intensity == 2.0f;
+        const bool keptPath = kept && kept->iesProfilePath == ring && kept->intensity == 2.0f;
+        check(failedWith(missing, "engine.light.setIesProfile: Scene::setLight: light profile not found: /no/such.ies") &&
+                  keptPath,
+              "A MISSING IES PROFILE FAILS in the engine's words (" + missing.message + "); the host's record keeps the "
+              "profile it had (" + (kept ? kept->iesProfilePath : std::string("none")) + ")");
         const Result removed = f.headless.call("engine.light.remove", {scene, node});
         const bool gone = f.live.kept<LightDesc>(raw, KeptKind::Light, Call::idOf(node)) == nullptr;
         const Result after =
@@ -157,6 +175,7 @@ void casesLight(Fixture &f)
               "by the next engine.light.set (the host's record: '" + (kept ? kept->iesProfilePath : std::string("none")) +
                   "'), removed with the record (then setIesProfile FAILS: " + after.message +
                   "; a second remove is refused: " + twice.message + "); the shadow side set");
+        std::remove(ring.c_str());
     }
 
     // 5. THE HANDLES: a destroyed node, another host's node handle and a handle of the wrong kind each FAIL by name;
