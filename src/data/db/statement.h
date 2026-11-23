@@ -49,7 +49,8 @@ public:
     Statement &bindBlob(std::string_view name, const void *data, std::size_t size);
     Statement &bindNull(std::string_view name);
 
-    /// A row? false at the end (e cleared) or on an error (e filled).
+    /// A row? false at the end (e cleared) or on an error (e filled). A READ's error marks the connection until the
+    /// error is tested; a WRITE's first step is refused while a mark stands (THE LAYER GUARD, connection.h).
     bool step(Error *e);
     /// THE STATEMENT RUN TO ITS END (a write; a statement whose rows are not read: a PRAGMA, a write with
     /// RETURNING - its rows are stepped through and DISCARDED). True when it finished without an error; a
@@ -70,6 +71,8 @@ public:
 private:
     int indexOf(std::string_view name);
     void bound(int i, int rc);
+    /// A step's failure handed back (false): a READ's marks its connection (THE LAYER GUARD, connection.h).
+    bool failed(Error failure, Error *e);
 
     Connection::State *mConnection = nullptr;
     sqlite3_stmt *mStatement = nullptr;

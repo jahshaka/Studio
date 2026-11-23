@@ -14,7 +14,8 @@ For more information see the LICENSE file
 
 namespace db {
 
-Transaction::Transaction(Connection &connection, std::string_view why) : mConnection(connection.state())
+Transaction::Transaction(Connection &connection, std::string_view why, Kind kind)
+    : mConnection(connection.state()), mKind(kind)
 {
     detail::assertOwner(mConnection);
     if (!connection.isOpen()) {
@@ -23,13 +24,19 @@ Transaction::Transaction(Connection &connection, std::string_view why) : mConnec
         return;
     }
     mOutermost = mConnection->depth == 0;
-    if (mOutermost) ++mConnection->unit;   // a new unit, whatever its BEGIN answers
+    if (mOutermost) {
+        ++mConnection->unit;   // a new unit, whatever its BEGIN answers
+        mConnection->outermostIsScope = kind == Kind::Scope;
+        mConnection->unitFailed = false;
+        mConnection->unitRefusal.clear();
+    }
     ++mConnection->depth;
     mCounted = true;
     if (!mOutermost) return;   // nested: it rides the outer transaction
     // IMMEDIATE: the write lock is taken HERE, so no other connection commits inside this unit and
     // its snapshot never goes stale (a DEFERRED read-then-write fails its first write with 517
-    // SQLITE_BUSY_SNAPSHOT once another connection committed: PREVIEWS-1).
+    // SQLITE_BUSY_SNAPSHOT once another connection committed: PREVIEWS-1). A BEGIN IMMEDIATE is a WRITE to the
+    // layer guard: under a failed read's standing mark it is refused here, and the unit refuses all it holds.
     Error e;
     if (connection.exec("BEGIN IMMEDIATE", &e)) {
         mActive = true;
@@ -53,6 +60,16 @@ void Transaction::end()
 {
     detail::releaseLock(mConnection);
     mActive = false;
+    unitEnded();
+}
+
+void Transaction::unitEnded()
+{
+    // THE LAYER GUARD: an outermost UNIT's end ends a failed read's mark it held; a SCOPE's mark is the gesture
+    // scope's (Connection::gestureScope).
+    if (mKind == Kind::Unit) detail::clearMark(mConnection);
+    mConnection->unitFailed = false;
+    mConnection->unitRefusal.clear();
 }
 
 bool Transaction::commit(Error *e)
@@ -63,6 +80,11 @@ bool Transaction::commit(Error *e)
     }
     if (mRefusing || !mActive) {
         if (e) *e = mBeginError.code ? mBeginError : detail::refusal(mConnection, "the transaction is over", "COMMIT");
+        rollback();
+        return false;
+    }
+    if (mKind == Kind::Unit && mConnection->unitFailed) {   // a write of the unit was refused: it fails whole
+        if (e) *e = detail::refusal(mConnection, mConnection->unitRefusal + " - the unit was rolled back", "COMMIT");
         rollback();
         return false;
     }
@@ -84,6 +106,7 @@ void Transaction::rollback()
         mRefusing = false;
         mConnection->refusing = false;
         sqlite3_exec(mConnection->handle, "PRAGMA query_only = OFF", nullptr, nullptr, nullptr);
+        unitEnded();
         return;
     }
     if (!mActive) return;

@@ -116,7 +116,8 @@ QString AssetImportService::relistUnlistedMatch(const ImportRequest &request,
     {
         db::Statement any(conn, "SELECT COUNT(*) FROM assets WHERE listed = 0");
         db::Error e;
-        if (!any.step(&e)) {   // the count unread is no "none": a normal import would mint a duplicate row
+        const bool counted = any.step(&e);
+        if (e || !counted) {   // the count unread is no "none" (the error tested first: the look)
             if (readOk) *readOk = false;
             return QString();
         }

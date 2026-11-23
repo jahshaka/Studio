@@ -40,14 +40,14 @@ void Statement::bound(int i, int rc)
         if (i > 0 && std::size_t(i) < mBound.size()) mBound[std::size_t(i)] = true;
         return;
     }
-    if (!mError) mError = detail::error(mConnection, rc, mSql);
+    if (!mError.code) mError = detail::error(mConnection, rc, mSql);
 }
 
 int Statement::indexOf(std::string_view name)
 {
     if (!mStatement) return 0;
     const int i = sqlite3_bind_parameter_index(mStatement, std::string(name).c_str());
-    if (i == 0 && !mError)
+    if (i == 0 && !mError.code)
         mError = detail::refusal(mConnection, "the statement has no parameter " + std::string(name), mSql);
     return i;
 }
@@ -117,22 +117,34 @@ Statement &Statement::bindNull(std::string_view name)
     return *this;
 }
 
+bool Statement::failed(Error failure, Error *e)
+{
+    // THE LAYER GUARD's MARK: a READ that failed (a statement whose prepare failed counts as one: nothing says it
+    // would have written) marks its connection; the Error handed back carries the flag looking sets.
+    if (!mStatement || sqlite3_stmt_readonly(mStatement)) detail::markFailedRead(mConnection, failure, mSql);
+    if (e) *e = failure;
+    return false;
+}
+
 bool Statement::step(Error *e)
 {
     detail::assertOwner(mConnection);
-    if (mError) {
-        if (e) *e = mError;
-        return false;
-    }
+    if (mError.code) return failed(mError, e);
     if (!mStarted) {
         for (std::size_t i = 1; i < mBound.size(); ++i) {
             if (mBound[i]) continue;
             const char *name = sqlite3_bind_parameter_name(mStatement, int(i));
-            if (e) {
-                *e = detail::refusal(mConnection, "parameter " + (name ? std::string(name) : "?" + std::to_string(i))
-                                                      + " was never bound", mSql);
+            return failed(detail::refusal(mConnection, "parameter " + (name ? std::string(name) : "?" + std::to_string(i))
+                                                           + " was never bound", mSql),
+                          e);
+        }
+        // THE LAYER GUARD's REFUSAL: a write while a failed read's mark stands (or the library is pending a reset).
+        if (!sqlite3_stmt_readonly(mStatement)) {
+            Error refused;
+            if (detail::refuseWrite(mConnection, mSql, &refused)) {
+                if (e) *e = refused;
+                return false;
             }
-            return false;
         }
         mStarted = true;
         detail::noteWrite(mConnection, mStatement);
@@ -146,14 +158,13 @@ bool Statement::step(Error *e)
         if (e) *e = Error();
         return false;
     }
-    if (e) *e = detail::error(mConnection, rc, mSql);
-    return false;
+    return failed(detail::error(mConnection, rc, mSql), e);
 }
 
 bool Statement::run(Error *e)
 {
     Error local;
-    if (mStarted && !mError) {
+    if (mStarted && !mError.code) {
         local = detail::refusal(mConnection, "the statement already ran (reset() runs it again)", mSql);
         if (e) *e = local;
         return false;

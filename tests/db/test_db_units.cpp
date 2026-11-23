@@ -36,7 +36,8 @@ For more information see the LICENSE file
 //  17. a tile read that failed, or has no library, answers no answer (unread), never an empty one ("no picture"); a
 //      failure streak is said once, and ended by its count;
 //  18. the preview rows read short (a later row's step failed) answer no rows, never a cut list;
-//  19. the editor's connection is WAL with no checkpoint inside its commits (wal_autocheckpoint 0).
+//  19. the editor's connection is WAL with no checkpoint inside its commits (wal_autocheckpoint 0);
+//  20. the suites' helper (testsql.h) counts every failed statement and never answers a cut list.
 
 #include <QApplication>
 #include <QDir>
@@ -58,6 +59,7 @@ For more information see the LICENSE file
 #include "data/db/transaction.h"
 #include "services/jahlog.h"
 #include "tests/db/dbseam.h"
+#include "tests/support/testsql.h"
 
 namespace {
 
@@ -646,6 +648,28 @@ int main(int argc, char **argv)
         database.connection().exec("DROP VIEW temp.asset_files", &dropped);
         check(!e && cut.isEmpty(), QStringLiteral("18: a listing that failed on a later row answers NO rows, never a short "
                                                   "list (%1 rows) %2").arg(cut.size()).arg(QString::fromStdString(e.message)));
+    }
+
+    // 20. THE SUITES' HELPER NEVER HIDES A FAILED STATEMENT (tests/support/testsql.h, the reader's ruling): a denied
+    //     read answers its empty value AND counts; a read cut on a LATER row answers NO rows (never the ones before
+    //     it) and counts; CONTROL a readable column answers its rows and counts nothing.
+    {
+        const int before = testsql::failures();
+        const QStringList all = testsql::column(database.connection(), QStringLiteral("SELECT name FROM folders"));
+        check(!all.isEmpty() && testsql::failures() == before,
+              QStringLiteral("20: CONTROL: a readable column answers its %1 rows, nothing counted").arg(all.size()));
+        dbseam::denyReadsOf(database.connection(), "folders");
+        const QStringList denied = testsql::column(database.connection(), QStringLiteral("SELECT name FROM folders"));
+        dbseam::clear(database.connection());
+        check(denied.isEmpty() && testsql::failures() == before + 1,
+              QStringLiteral("20: a denied read answers no rows AND counts (%1)").arg(testsql::failures() - before));
+        const QStringList cut = testsql::column(database.connection(),
+            QStringLiteral("SELECT CASE WHEN rowid = (SELECT max(rowid) FROM folders) THEN abs(-9223372036854775807 - 1) "
+                           "ELSE name END FROM folders"));
+        check(all.size() > 1 && cut.isEmpty() && testsql::failures() == before + 2,
+              QStringLiteral("20: a read that failed on a LATER row answers NO rows, never a cut list, and counts (%1)")
+                  .arg(testsql::failures() - before));
+        testsql::failureCount() = before;   // the case's own failures: not this suite's verdict
     }
 
     database.closeDatabase();

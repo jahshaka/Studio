@@ -29,7 +29,12 @@ namespace db {
 class Transaction
 {
 public:
-    Transaction(Connection &connection, std::string_view why);
+    /// THE LAYER GUARD (connection.h): a UNIT fails whole when one of its writes is refused (its commit answers
+    /// false and rolls back; the failed read's mark ends with it); a SCOPE (the Database's gesture batch: a scope of
+    /// independent gestures, never one unit) refuses that write and every later one to the gesture scope's end,
+    /// and still commits what it holds.
+    enum class Kind { Unit, Scope };
+    Transaction(Connection &connection, std::string_view why, Kind kind = Kind::Unit);
     ~Transaction();
     Transaction(const Transaction &) = delete;
     Transaction &operator=(const Transaction &) = delete;
@@ -42,8 +47,11 @@ public:
 
 private:
     void end();
+    /// The outermost transaction is over: the guard's unit state (and a unit's held mark) ends.
+    void unitEnded();
 
     Connection::State *mConnection = nullptr;
+    Kind mKind = Kind::Unit;
     bool mOutermost = false;
     bool mActive = false;      ///< the outermost BEGIN succeeded and the unit is not over
     bool mRefusing = false;    ///< the outermost BEGIN failed: query_only until the scope ends

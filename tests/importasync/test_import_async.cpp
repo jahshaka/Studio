@@ -666,6 +666,7 @@ int main(int argc, char **argv)
         CHECK(countRows(conn, "SELECT COUNT(*) FROM assets") == rowsBefore, "7: ...and no second row was minted");
     }
 
+    failures += testsql::failures();   // the suite's own statements that failed count
     std::printf(failures ? "FAILED: %d check(s)\n" : "ALL CHECKS PASSED\n", failures);
     return failures ? 1 : 0;
 }

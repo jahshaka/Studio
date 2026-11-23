@@ -41,6 +41,15 @@ struct Connection::State
     bool wal = false;               ///< open()'s journal_mode = WAL was answered "wal"
     bool observed = false;          ///< opened after observeStatements: traced under its name
     std::function<void(std::string_view)> trace;   ///< Connection::trace's callback; SQLite holds `this`
+
+    // THE LAYER GUARD (connection.h): the one mark of a failed read nobody looked at, and where it is held.
+    std::shared_ptr<bool> mark;     ///< the unlooked failed read's flag (it stands while *mark is false)
+    std::string markText;           ///< "<its statement>: <SQLite's text>", for the refusal
+    bool outermostIsScope = false;  ///< the outermost Transaction is a SCOPE (the gesture batch), not a unit
+    bool unitFailed = false;        ///< a write of the open UNIT was refused: its commit answers false, rolled back
+    std::string unitRefusal;        ///< that refusal's text
+    int gestureScopes = 0;          ///< Connection::gestureScope depth: a mark is held to the scope's end
+    std::string pending;            ///< refuseWrites: every write refused by this name, never consumed
 };
 
 namespace detail {
@@ -57,6 +66,15 @@ void holdLock(Connection::State *s, std::string_view why);
 void releaseLock(Connection::State *s);
 /// Debug: the connection is used on the thread that owns it (the threading law).
 void assertOwner(const Connection::State *s);
+/// THE LAYER GUARD: a READ that failed with `e` (on statement `sql`) marks `s` - unless an unlooked mark already
+/// stands (never replaced) - and `e` carries the flag that looking sets.
+void markFailedRead(Connection::State *s, Error &e, std::string_view sql);
+/// THE LAYER GUARD: a WRITE of `sql` about to run on `s`. True = REFUSED (`*e` the refusal by name): the library
+/// is pending a reset, or a failed read's mark stands; the mark is then held (an open unit fails whole; a scope
+/// holds it to its end) or consumed (a bare autocommit write).
+bool refuseWrite(Connection::State *s, std::string_view sql, Error *e);
+/// The mark goes (an outermost unit ended; a gesture scope ended).
+void clearMark(Connection::State *s);
 
 }   // namespace detail
 }   // namespace db

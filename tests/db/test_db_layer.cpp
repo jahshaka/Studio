@@ -219,7 +219,7 @@ int main()
         db::Statement w(a, "SELECT :x");
         w.bindText(":nope", "1");
         const bool wran = w.step(&e);
-        check(!wran && contains(e.message, ":nope"), "a bind to a name the statement lacks is refused: " + e.message);
+        check(!wran && e && contains(e.message, ":nope"), "a bind to a name the statement lacks is refused: " + e.message);
     }
 
     // 3. changes() and lastInsertRowid().
@@ -240,7 +240,7 @@ int main()
         db::Statement s(a, "SELECT * FROM nowhere");
         db::Error e;
         const bool ran = s.step(&e);
-        check(!ran && e.code == 1 /* SQLITE_ERROR */ && contains(e.message, "A: ") && contains(e.message, "no such table")
+        check(!ran && e && e.code == 1 /* SQLITE_ERROR */ && contains(e.message, "A: ") && contains(e.message, "no such table")
                   && e.statement == "SELECT * FROM nowhere",
               "a failed statement names its connection, SQLite's message and itself: " + e.message);
     }

@@ -415,6 +415,7 @@ int main(int argc, char **argv)
         }
     }
 
+    failures += testsql::failures();   // the suite's own statements that failed count
     std::printf(failures ? "\nFAILED: %d checks\n" : "\nall checks passed\n", failures);
     return failures ? 1 : 0;
 }

@@ -111,6 +111,45 @@ void assertOwner(const Connection::State *s)
     (void)s;
 }
 
+static bool markStands(const Connection::State *s) { return s && s->mark && !*s->mark; }
+
+void markFailedRead(Connection::State *s, Error &e, std::string_view sql)
+{
+    if (!s || !e.code) return;
+    e.looked = std::make_shared<bool>(false);
+    if (markStands(s)) return;   // an unlooked mark is never replaced by a newer failure
+    s->mark = e.looked;
+    s->markText = std::string(sql) + ": " + e.message;
+}
+
+void clearMark(Connection::State *s)
+{
+    if (!s) return;
+    s->mark.reset();
+    s->markText.clear();
+}
+
+bool refuseWrite(Connection::State *s, std::string_view sql, Error *e)
+{
+    if (!s) return false;
+    if (!s->pending.empty()) {   // never consumed: the session ends
+        if (e) *e = refusal(s, "write refused: the library is pending a reset (generation 0): " + s->pending, sql);
+        return true;
+    }
+    if (!markStands(s)) return false;
+    const std::string why = "write refused: an earlier read failed and nobody looked: " + s->markText;
+    if (e) *e = refusal(s, why, sql);
+    if (s->depth > 0 && !s->outermostIsScope) {
+        // AN OPEN UNIT FAILS WHOLE: its commit answers false and rolls back; the mark is held to its end.
+        s->unitFailed = true;
+        if (s->unitRefusal.empty()) s->unitRefusal = why;
+    } else if (s->depth == 0 && s->gestureScopes == 0) {
+        clearMark(s);   // a bare autocommit write: ONE refusal consumes it
+    }
+    // else: a gesture scope (the batch) holds it - every write to the scope's end is refused
+    return true;
+}
+
 }   // namespace detail
 
 int libraryVersion() { return sqlite3_libversion_number(); }
@@ -224,6 +263,26 @@ bool Connection::wal() const { return isOpen() && mState->wal; }
 
 bool Connection::observed() const { return isOpen() && mState->observed; }
 
+void Connection::gestureScope(bool open)
+{
+    if (!mState) return;
+    if (open) {
+        ++mState->gestureScopes;
+        return;
+    }
+    if (mState->gestureScopes > 0 && --mState->gestureScopes == 0) detail::clearMark(mState.get());
+}
+
+void Connection::refuseWrites(std::string why)
+{
+    if (mState) mState->pending = std::move(why);
+}
+
+bool Connection::marked() const
+{
+    return mState && mState->mark && !*mState->mark;
+}
+
 bool observeStatements(StatementObserver observer)
 {
     std::lock_guard<std::mutex> lock(gObserverMutex);
@@ -272,6 +331,12 @@ bool Connection::exec(std::string_view sql, Error *e)
         }
         at = tail ? tail : end;
         if (!statement) continue;   // whitespace or a comment
+        // THE LAYER GUARD sees a direct write too (a raw exec passes no funnel): a BEGIN IMMEDIATE is a write
+        // (sqlite3_stmt_readonly), so a unit opened under a standing mark is refused at its own BEGIN.
+        if (!sqlite3_stmt_readonly(statement) && detail::refuseWrite(mState.get(), text, e)) {
+            sqlite3_finalize(statement);
+            return false;
+        }
         detail::noteWrite(mState.get(), statement);
         while ((rc = sqlite3_step(statement)) == SQLITE_ROW) {}
         if (rc != SQLITE_DONE) {

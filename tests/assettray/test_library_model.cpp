@@ -629,6 +629,7 @@ int main(int argc, char **argv)
     Database::setAssetThumbnailWritten(nullptr);
     db.closeDatabase();
     QFile::remove(dbPath);
+    failures += testsql::failures();   // the suite's own statements that failed count
     std::printf(failures ? "library.model: %d FAILURES\n" : "library.model: all checks passed\n", failures);
     return failures ? 1 : 0;
 }

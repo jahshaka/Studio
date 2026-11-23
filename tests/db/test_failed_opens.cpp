@@ -61,6 +61,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/db/connection.h"
 #include "data/db/state.h"
+#include "services/jahlog.h"
 #include "data/db/statement.h"
 #include "io/scenereader.h"
 #include "services/assetgc.h"
@@ -546,6 +547,14 @@ int main(int argc, char **argv)
             sqlite3_set_authorizer(libraryHandle(library), nullptr, nullptr);
             gRefuse = 0;
             gBootstrapError = false;
+            // A PENDING LIBRARY WRITES NOTHING MORE (the layer guard, the lead's ruling): a foreign write after a failed
+            // reset is refused by name; after a whole one it goes (the control).
+            const quint64 from = JahLog::mark(QStringLiteral("db.failed_opens: case 7's foreign write"));
+            const bool foreign = library.createFolder(QStringLiteral("foreign-7"), QString(), QStringLiteral("f7"), QString());
+            const bool refusedByName = !JahLog::since(from).filter(QStringLiteral("pending a reset")).isEmpty();
+            check(name.isEmpty() ? foreign : (!foreign && refusedByName),
+                  QStringLiteral("7: %1: a foreign write after it %2").arg(name.isEmpty() ? QStringLiteral("CONTROL") : name,
+                                 foreign ? QStringLiteral("WROTE") : QStringLiteral("was refused by name")));
             library.closeDatabase();
             removeLibrary(path);
             check(name.isEmpty() ? (result.ok && !result.pending)

@@ -2488,6 +2488,7 @@ static int cutCurveLaw()
     CHECK_LOUD(monotone, msg);
     std::snprintf(msg, sizeof(msg), "the curve ends at the empty top (top cut %lld triangles == 0)", top);
     CHECK_LOUD(top == 0, msg);
+    failures += testsql::failures();   // the suite's own statements that failed count
     if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
     else          std::printf("ALL %d CHECKS PASSED\n", checks);
     return failures ? 1 : 0;
@@ -3535,6 +3536,7 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--cards")) {
         std::printf("== 8. surface cards ==\n");
         surfaceCards();
+        failures += testsql::failures();   // the suite's own statements that failed count
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
@@ -3544,6 +3546,7 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--primitives-baked")) {
         std::printf("== 11. every shipped mesh is a baked library asset ==\n");
         primitivesBaked();
+        failures += testsql::failures();   // the suite's own statements that failed count
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
@@ -3551,6 +3554,7 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--rebake-generation")) {
         std::printf("== 12. the next generation wins ==\n");
         rebakeGeneration();
+        failures += testsql::failures();   // the suite's own statements that failed count
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
@@ -3621,6 +3625,7 @@ int main(int argc, char **argv)
         std::printf("== 15. the bake does not depend on its threads ==\n");
         bakeDeterminism(argc > 2 ? QString::fromLocal8Bit(argv[2]) : QString(),
                         argc > 3 ? QString::fromLocal8Bit(argv[3]) : QString());
+        failures += testsql::failures();   // the suite's own statements that failed count
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
@@ -3628,6 +3633,7 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--async-landing")) {
         std::printf("== 18. the import bakes' landing ==\n");
         asyncLanding();
+        failures += testsql::failures();   // the suite's own statements that failed count
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
@@ -3635,6 +3641,7 @@ int main(int argc, char **argv)
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--hemisphere-winding")) {
         std::printf("== 13. winding against declared normals ==\n");
         windingAgreesWithNormals();
+        failures += testsql::failures();   // the suite's own statements that failed count
         if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
         else          std::printf("ALL %d CHECKS PASSED\n", checks);
         return failures ? 1 : 0;
@@ -3664,6 +3671,7 @@ int main(int argc, char **argv)
     std::printf("== 17. the clip bake and the describe block ==\n");
     clipBake();
 
+    failures += testsql::failures();   // the suite's own statements that failed count
     if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
     else          std::printf("ALL %d CHECKS PASSED\n", checks);
     return failures ? 1 : 0;

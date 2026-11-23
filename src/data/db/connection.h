@@ -20,6 +20,21 @@ For more information see the LICENSE file
 // thread that opened it (asserted in Debug at every statement and transaction).
 // Only one BEGIN IMMEDIATE holds a file at a time, by SQLite's own lock; a connection that
 // meets it waits its busy timeout and then answers a busy() Error naming the holder.
+//
+// THE LAYER GUARD (NOQT-DATABASE-1 stage 3, the lead's ruling): A FAILED READ NEVER DECIDES A WRITE UNSEEN.
+//   - THE MARK: a READ statement (sqlite3_stmt_readonly; a statement whose prepare failed counts as one) whose step
+//     answers an ERROR - "no row" is an answer, never a failure - marks its connection with its statement and
+//     SQLite's text. The Error it answered carries the mark's flag: TESTING that Error (its truth test; DbQuery's
+//     failed() / error(); run()'s answer) is LOOKING, and looking clears the mark. A log line never looks. An unlooked
+//     mark is never replaced by a newer failure.
+//   - THE REFUSAL: the next WRITE on that connection (a Statement's first step, an exec() - a BEGIN IMMEDIATE is a
+//     write) while the mark stands is REFUSED BY NAME ("write refused: an earlier read failed and nobody looked:
+//     <statement>: <SQLite's text>"). Inside an open UNIT (a Transaction) the unit fails whole - its commit answers
+//     false and rolls back - and the mark is held until the outermost unit ends; inside a GESTURE SCOPE (the
+//     script run's batch: gestureScope) every write to the scope's end is refused and the mark ends with the scope;
+//     a bare autocommit write consumes it: ONE refusal.
+//   - A PENDING LIBRARY: refuseWrites(why) refuses EVERY write by that name from then on, never consumed (a failed
+//     reset over a library at generation 0: its session ends).
 
 #include "data/db/error.h"
 
@@ -80,6 +95,13 @@ public:
     bool wal() const;
     /// Opened after observeStatements: its statements reach the observer under its name.
     bool observed() const;
+    /// THE LAYER GUARD (above): a GESTURE SCOPE opens and closes (counted; the Database's script-run batch): while
+    /// one is open a failed read's mark is held to its end and every write meanwhile refused; the last close clears it.
+    void gestureScope(bool open);
+    /// THE LAYER GUARD: every write on this connection refused by `why` from now on (a pending library).
+    void refuseWrites(std::string why);
+    /// A failed read's mark stands (nobody looked yet).
+    bool marked() const;
 
     /// Runs SQL with no binds and no rows (pragmas, DDL; several statements allowed).
     bool exec(std::string_view sql, Error *e);

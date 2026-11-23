@@ -455,6 +455,7 @@ int main(int argc, char **argv)
 
     Database::setAssetThumbnailWritten(nullptr);
     db.closeDatabase();
+    failures += testsql::failures();   // the suite's own statements that failed count
     if (failures) std::printf("previews.writer: FAILED (%d)\n", failures);
     else std::printf("previews.writer: PASSED\n");
     return failures ? 1 : 0;

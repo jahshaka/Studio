@@ -47,16 +47,21 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
     Result result;
     if (!QFile::exists(dbPath)) { sLast = result; return result; }
 
+    // A BUSY LIBRARY says so as the index gate does (main.cpp): another process holds it; anything else is unreadable.
+    const auto unreadable = [&dbPath](const char *what, const db::Error &e) {
+        return e.busy() ? QStringLiteral("the library is in use by another process: start again when it is free")
+                        : QStringLiteral("the library%1 could not be read (%2); it was left as it is - check the file %3 (a "
+                                         "disk or permission fault, or a file that is not a Jahshaka library)")
+                              .arg(QLatin1String(what), dbqt::describe(e), dbPath);
+    };
     Database library;
-    QString openError;
+    db::Error openError;
     if (!library.initializeDatabase(dbPath, &openError)) {
         // AN EXISTING LIBRARY THAT CANNOT BE OPENED IS NO GENERATION EITHER (NOQT-DATABASE-1 stage 3: the layer's open
         // reads the file, so a file that is not a library fails HERE - the generation read below used to): never
         // "current" on a guess and never a reset - the open is REFUSED by name, the file left as it is.
         result.outcome = Outcome::Refused;
-        result.reason = QStringLiteral("the library could not be read (%1); it was left as it is - check the file %2 (a "
-                                       "disk or permission fault, or a file that is not a Jahshaka library)")
-                            .arg(openError, dbPath);
+        result.reason = unreadable("", openError);
         sLast = result;
         return result;
     }
@@ -67,9 +72,7 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
         db::Error e;
         if (!version.step(&e)) {
             result.outcome = Outcome::Refused;
-            result.reason = QStringLiteral("the library's generation could not be read (%1); it was left as it is - "
-                                           "check the file %2 (a disk or permission fault, or a file that is not "
-                                           "a Jahshaka library)").arg(dbqt::describe(e), dbPath);
+            result.reason = unreadable("'s generation", e);
             library.closeDatabase();
             sLast = result;
             return result;

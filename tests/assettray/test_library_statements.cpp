@@ -1114,6 +1114,7 @@ int main(int argc, char **argv)
     }
     QFile::remove(dbPath);
     clearStore();
+    failures += testsql::failures();   // the suite's own statements that failed count
     if (failures) std::printf("library.statements: FAILED (%d)\n", failures);
     else std::printf("library.statements: PASSED\n");
     return failures ? 1 : 0;

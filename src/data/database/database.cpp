@@ -378,7 +378,7 @@ bool DbQuery::advance()
     }
     if (step(&e)) return true;
     mDone = true;
-    if (e) fail(e);
+    if (e.code) fail(e);   // never the truth test: the funnel's own check is no look (the layer guard)
     return false;
 }
 
@@ -464,7 +464,9 @@ bool Database::executeAndCheckQuery(DbQuery &query, const QString &name)
 
 void Database::beginBatch()
 {
-    ++batchOpenCount;   // the SCOPE; its transaction begins at the scope's first write
+    // the SCOPE; its transaction begins at the scope's first write. THE LAYER GUARD's GESTURE SCOPE too: a failed
+    // read nobody looked at refuses every write of the run to its end (the lead's ruling, stage 3).
+    if (batchOpenCount++ == 0) mConnection->gestureScope(true);
 }
 
 bool Database::endBatch()
@@ -479,7 +481,9 @@ bool Database::endBatch()
         return false;
     }
     if (--batchOpenCount > 0) return true;   // the outermost level owns the commit
-    return commitBatchTransaction();
+    const bool committed = commitBatchTransaction();
+    mConnection->gestureScope(false);   // the run's end: a held mark ends with it
+    return committed;
 }
 
 bool Database::resumeBatchIfNeeded()
@@ -492,7 +496,7 @@ bool Database::resumeBatchIfNeeded()
     if (mConnection->guards() > 0) return true;
     // IMMEDIATE, like DbTransaction's (database.h): no other connection commits inside the batch;
     // and the lock's holder is NAMED for any connection that meets it (NOQT-DATABASE-1 ruling 6).
-    batchTx = std::make_unique<db::Transaction>(*mConnection, "the editor's gesture batch");
+    batchTx = std::make_unique<db::Transaction>(*mConnection, "the editor's gesture batch", db::Transaction::Kind::Scope);
     if (!batchTx->beginError()) {
         DbTransaction::noteBatchLive(true);
         return true;
@@ -709,7 +713,7 @@ void stopCheckpointer(const Database *owner)
 }
 }   // namespace
 
-bool Database::initializeDatabase(const QString &pathToBlob, QString *errorOut)
+bool Database::initializeDatabase(const QString &pathToBlob, db::Error *errorOut)
 {
     // THE STATEMENT COUNT's DOOR (LARGE-LIBRARY-1, data/database/databasereads.h): read once per process, and the
     // observer set at the process's FIRST open (the boot check's, main.cpp, before IndexCheck and SchemaProbe
@@ -731,7 +735,7 @@ bool Database::initializeDatabase(const QString &pathToBlob, QString *errorOut)
     if (!mConnection->isOpen()) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("Couldn't open a database connection! %1").arg(dbqt::describe(error)));
-        if (errorOut) *errorOut = dbqt::describe(error);
+        if (errorOut) *errorOut = error;
         return false;
     }
     mPath = pathToBlob;
@@ -755,6 +759,7 @@ void Database::closeDatabase()
         // still going to unwind through endBatch() and must not be told it is
         // unbalanced for a close it did not perform (round 2, H5).
         batchScopesAbandoned += batchOpenCount;
+        if (batchOpenCount > 0) mConnection->gestureScope(false);
         batchOpenCount = 0;
     }
 
@@ -777,7 +782,9 @@ Database::TableProbe Database::checkIfTableExists(const QString &tableName)
     dbqt::bindText(query, 1, tableName);
 
     db::Error error;
-    if (query.step(&error)) return query.int64(0) != 0 ? TableProbe::Exists : TableProbe::Absent;
+    const bool row = query.step(&error);
+    // THE LOOK (the layer guard): the error is tested before the answer - this caller answers Failed by type.
+    if (!error && row) return query.int64(0) != 0 ? TableProbe::Exists : TableProbe::Absent;
     // A COUNT always answers a row: no row is a failed read, never "absent".
     JahLog::write(JahLog::legacy, JahLog::Level::Warning,
         QString("There was an error checking if table %1 exists: %2").arg(tableName, dbqt::describe(error)));
@@ -2044,7 +2051,8 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid, bool *read
                   "LEFT JOIN projects P ON P.guid = PA.project_guid "
                   "WHERE PA.asset_guid = ? ORDER BY P.name");
     dbqt::bindText(query, 1, guid);
-    if (!executeAndCheckQuery(query, "FetchAssetPins")) {
+    const bool pinsRan = executeAndCheckQuery(query, "FetchAssetPins");
+    if (query.failed() || !pinsRan) {   // failed() first: the look (the layer guard)
         if (readOk) *readOk = false;
         return pins;
     }
@@ -2095,7 +2103,8 @@ int Database::countAssetPins(const QString &guid, bool *readOk)
                   "JOIN projects P ON P.guid = PA.project_guid "
                   "WHERE PA.asset_guid = ?");
     dbqt::bindText(query, 1, guid);
-    if (!executeAndCheckQuery(query, "CountAssetPins") || !query.next()) {
+    const bool countRan = executeAndCheckQuery(query, "CountAssetPins");
+    if (query.failed() || !countRan || !query.next()) {   // failed() first: the look (the layer guard)
         if (readOk) *readOk = false;   // a FAILED count, never "no pins": the delete paths read it as a veto
         return 0;
     }
@@ -2116,7 +2125,7 @@ bool Database::isAssetPinnedBy(const QString &projectGuid, const QString &assetG
     dbqt::bindText(query, 2, assetGuid);
     const bool ran = executeAndCheckQuery(query, "IsAssetPinnedBy");
     if (ran && query.next()) return true;
-    if (readOk && (!ran || query.failed())) *readOk = false;
+    if (readOk && (query.failed() || !ran)) *readOk = false;   // failed() first: the look (the layer guard)
     return false;
 }
 
@@ -2556,9 +2565,11 @@ AssetRecord Database::fetchAsset(const QString &guid, bool *readOk)
             return data;
         }
     }
-    if (query.failed()) {   // the exec, or the step: no "no such row"
-        if (readOk) *readOk = false;
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the asset! " + dbqt::describe(query.error()));
+    // The exec, or the step: no "no such row". THE CALLER LOOKS only when it asked (readOk): a caller that did not
+    // is the layer guard's to hold - its next write is refused (connection.h). The log line never looks.
+    if (query.mFailed) {
+        if (readOk && query.failed()) *readOk = false;
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the asset! " + dbqt::describe(query.mError));
     }
 
     return AssetRecord();
@@ -2747,7 +2758,7 @@ QHash<QString, QString> Database::fetchProjectPinFolders(const QString &projectG
     dbqt::bindText(query, 1, projectGuid);
     const bool ran = executeAndCheckQuery(query, "fetchProjectPinFolders");
     while (query.next()) out.insert(dbqt::text(query, 0), dbqt::text(query, 1));
-    if (readOk && (!ran || query.failed())) *readOk = false;
+    if (readOk && (query.failed() || !ran)) *readOk = false;   // failed() first: the look (the layer guard)
     return out;
 }
 
@@ -3067,8 +3078,8 @@ QByteArray Database::fetchAssetData(const QString &guid, bool *readOk) const
 
 	db::Error error;
 	if (query.step(&error)) return dbqt::bytes(query, 0);
-	if (error) {
-		if (readOk) *readOk = false;
+	if (error.code) {   // looked at only when the caller asked (readOk): else the layer guard holds it
+		if (readOk && error) *readOk = false;
 		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error getting the material blob! " + dbqt::describe(error));
 	}
 
@@ -3663,7 +3674,7 @@ QStringList Database::fetchFolderAndChildFolders(const QString &guid, bool *read
 			subFolders.append(dbqt::text(query, 0));
 			folders.append(dbqt::text(query, 0));
 		}
-		if (readOk && (!ran || query.failed())) *readOk = false;
+		if (readOk && (query.failed() || !ran)) *readOk = false;   // failed() first: the look (the layer guard)
 
 		for (const QString &folder : subFolders) {
 			fetchFolders(folders, folder);
@@ -3687,7 +3698,7 @@ QStringList Database::fetchChildFolderAssets(const QString &guid, bool *readOk)
 	while (query.next()) {
 		assets.append(dbqt::text(query, 0));
 	}
-	if (readOk && (!ran || query.failed())) *readOk = false;
+	if (readOk && (query.failed() || !ran)) *readOk = false;   // failed() first: the look (the layer guard)
 
 	return assets;
 }
@@ -3723,7 +3734,7 @@ QStringList Database::fetchAssetAndDependencies(const QString &guid, bool *readO
 	while (query.next()) {
 		dependencies.append(dbqt::text(query, 0));
 	}
-	if (readOk && (!ran || query.failed())) *readOk = false;
+	if (readOk && (query.failed() || !ran)) *readOk = false;   // failed() first: the look (the layer guard)
 
 	// Backwards — the forward loop skipped the element that shifted into the
 	// vacated index (deep audit 2026-09, area 6; same shape in the two
@@ -3751,7 +3762,7 @@ QStringList Database::fetchAssetGUIDAndDependencies(const QString &guid, bool ap
 	while (query.next()) {
 		dependencies.append(dbqt::text(query, 0));
 	}
-	if (readOk && (!ran || query.failed())) *readOk = false;
+	if (readOk && (query.failed() || !ran)) *readOk = false;   // failed() first: the look (the layer guard)
 
 	return dependencies;
 }
@@ -4071,7 +4082,7 @@ QStringList Database::hasMultipleDependers(const QString &guid, bool *readOk)
     while (query.next()) {
         dependers.append(dbqt::text(query, 0));
     }
-    if (readOk && (!ran || query.failed())) *readOk = false;
+    if (readOk && (query.failed() || !ran)) *readOk = false;   // failed() first: the look (the layer guard)
     return dependers;
 }
 
@@ -4085,7 +4096,8 @@ bool Database::hasDependencies(const QString &guid, bool *readOk)
     DbQuery query(connection(), "SELECT COUNT(*) FROM dependencies WHERE depender = ?");
     dbqt::bindText(query, 1, guid);
     // A COUNT ALWAYS ANSWERS A ROW: no row is a FAILED read, never "no dependencies" (the confirm's F3).
-    if (!executeAndCheckQuery(query, "HasDependencies") || !query.next()) {
+    const bool countRan = executeAndCheckQuery(query, "HasDependencies");
+    if (query.failed() || !countRan || !query.next()) {   // failed() first: the look (the layer guard)
         if (readOk) *readOk = false;
         return false;
     }

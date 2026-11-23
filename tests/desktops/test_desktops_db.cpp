@@ -236,7 +236,7 @@ int main(int argc, char **argv)
         const QString stamp = testsql::text(db.connection(), QStringLiteral("SELECT hash FROM assets WHERE guid = 'obj-st'"));
         const QByteArray written =
             testsql::bytes(db.connection(), QStringLiteral("SELECT asset FROM assets WHERE guid = 'obj-st'"));
-        const bool found = !stamp.isNull();
+        const bool found = testsql::integer(db.connection(), QStringLiteral("SELECT COUNT(*) FROM assets WHERE guid = 'obj-st'")) == 1;
         CHECK(found && written != compact && !written.isEmpty(),
               "the import wrote the Object's blob re-serialised (its bytes are not the archive's)");
         CHECK(stamp == Database::blobStamp(written) && stamp != exported,
@@ -328,6 +328,7 @@ int main(int argc, char **argv)
     db.closeDatabase();
     QFile::remove(dbPath);
 
+    failures += testsql::failures();   // the suite's own statements that failed count
     if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }
     printf("all desktops DB checks passed\n");
     return 0;

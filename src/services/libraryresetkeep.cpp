@@ -97,9 +97,14 @@ void finishCatalog(Database *db, SettingsManager *settings, const QString &store
                                                "says why)");
         }
     }
-    // A FAILED RESET OVER A PENDING LIBRARY SAYS SO, in one sentence from one place (the third confirm's finding 2).
-    if (!result.error.isEmpty() && result.pending)
+    // A FAILED RESET OVER A PENDING LIBRARY SAYS SO, in one sentence from one place (the third confirm's finding 2),
+    // AND WRITES NOTHING MORE (the layer guard, the lead's ruling: a script that catches the refusal and carries on
+    // writes nothing): every write on its connection is refused by name from here - the reset's own writes are all
+    // behind it; the next start's retry opens a connection of its own.
+    if (!result.error.isEmpty() && result.pending) {
         result.error = QStringLiteral("%1 - %2").arg(result.error, unfinishedText());
+        db->connection().refuseWrites(result.error.toStdString());
+    }
     result.ok = result.error.isEmpty();
 }
 

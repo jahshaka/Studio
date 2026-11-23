@@ -203,9 +203,18 @@ public:
 
     /// The next row (the funnel's first step's, then one step each); false at the end and when FAILED.
     bool next();
-    bool failed() const { return mFailed; }
-    /// Why it failed (code 0 while it has not).
-    const db::Error &error() const { return mError; }
+    /// Did it fail? Asking IS LOOKING (the layer guard: a failed read's mark on the connection is acknowledged).
+    bool failed() const
+    {
+        if (mFailed && mError.looked) *mError.looked = true;
+        return mFailed;
+    }
+    /// Why it failed (code 0 while it has not); reading it is looking, as failed().
+    const db::Error &error() const
+    {
+        if (mError.looked) *mError.looked = true;
+        return mError;
+    }
     const std::string &sql() const { return mSql; }
     db::Connection &connection() const { return mConnection; }
 
@@ -279,7 +288,7 @@ public:
     // MANAGE ===============================================================================
     /// Opens the library's file on connection() (the layer's, named "editor"); false, with the named error in the
     /// log (and in `errorOut` when given), when it cannot be opened.
-    bool initializeDatabase(const QString &pathToBlob, QString *errorOut = nullptr);
+    bool initializeDatabase(const QString &pathToBlob, db::Error *errorOut = nullptr);
     void closeDatabase();
 
     // ---- ONE GESTURE, ONE COMMIT (CLOSE-2 item 1) -------------------------

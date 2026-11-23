@@ -242,10 +242,11 @@ int main(int argc, char **argv)
         {
             DbTransaction tx(db.connection());
             funnel = db.updateAssetAsset(QStringLiteral("t4"), QByteArrayLiteral("{\"half\":1}"));
-            raw = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'behind-stale' WHERE guid = 't4'"));
+            db::Error refused;   // the case's own: expected to be refused
+            raw = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'behind-stale' WHERE guid = 't4'"), &refused);
             {
                 DbTransaction inner(db.connection());
-                nested = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'nested' WHERE guid = 'u1'"))
+                nested = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'nested' WHERE guid = 'u1'"), &refused)
                          && inner.commit();
             }
             committed = tx.commit();
@@ -281,7 +282,8 @@ int main(int argc, char **argv)
             DbTransaction tx(db.connection());   // its BEGIN times out at 50 ms
             testsql::exec(other, QStringLiteral("COMMIT"));   // the lock is free before the scope writes
             funnel = db.updateAssetAsset(QStringLiteral("t4"), QByteArrayLiteral("{\"half\":2}"));
-            raw = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'half-a-unit' WHERE guid = 't4'"));
+            db::Error refused;   // the case's own: expected to be refused
+            raw = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'half-a-unit' WHERE guid = 't4'"), &refused);
             committed = tx.commit();
         }
         check(!warnings.filter(QStringLiteral("could NOT BEGIN")).isEmpty(), "5: the BEGIN failed (timed out), by name");
@@ -300,6 +302,7 @@ int main(int argc, char **argv)
 
     qInstallMessageHandler(nullptr);
     db.closeDatabase();
+    failures += testsql::failures();   // the suite's own statements that failed count
     std::printf("previews.ui_writes: %s\n", failures ? "FAILED" : "PASSED");
     return failures ? 1 : 0;
 }

@@ -215,6 +215,7 @@ int main(int argc, char **argv)
 
     // --- Material-asset data heal (PBR data-loss audit) ---------------------
     db.closeDatabase();
+    failures += testsql::failures();   // the suite's own statements that failed count
     if (failures) { printf("%d FAILURE(S)\n", failures); return 1; }
     printf("all drawers db checks passed\n");
     return 0;
