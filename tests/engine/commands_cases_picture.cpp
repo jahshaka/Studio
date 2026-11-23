@@ -305,6 +305,14 @@ void casesPicture(Fixture &f)
                   walkPng(small.value["png"].asBytes()).width == 10,
               "maxEdge passes at exactly 16 and 2048; a 20 x 2 picture at 16 answers its ENCODED size 10 x 1 (" +
                   at16.message + at2048.message + small.message + ")");
+        // maxEdge ABSENT is the declared default 1024 (callNamed: the outside client's path): a 2000 x 1 picture answers
+        // 1000 x 1 (s = 2; a default of 2048 would answer 2000)
+        const std::vector<unsigned char> line(2000 * 4, 9);
+        const Result made2000 = e.call("engine.picture.create", {made(2000, 1, bytesOf(line.data(), line.size()))});
+        const Result byDefault = e.callNamed("engine.picture.png", {{"picture", made2000.value["picture"]}});
+        e.call("engine.picture.release", {made2000.value["picture"]});
+        check(byDefault.status == Status::Ok && byDefault.value["width"] == Value(1000) && byDefault.value["height"] == Value(1),
+              "maxEdge absent takes the declared default 1024: a 2000 x 1 picture answers 1000 x 1 (" + byDefault.message + ")");
         // A WHOLE PNG's FRAME (pngComplete, encodePng's last check): the real PNG passes; its signature and IHDR alone (a
         // save that failed after them leaves just that: Ogre's codec ignores the save's answer), the PNG without its IEND,
         // and the signature alone are refused
@@ -329,7 +337,8 @@ void casesPicture(Fixture &f)
         h.call("engine.picture.release", {onNone.value["picture"]});
         check(failedWith(ofRadiance, "is a radiance handle, not a picture handle") &&
                   failedWith(low, "engine.picture.png: maxEdge 15 is outside 16..2048 px") &&
-                  failedWith(high, "maxEdge 2049 is outside 16..2048 px") && failedWith(stale, "engine.picture.png: picture:") &&
+                  failedWith(high, "maxEdge 2049 is outside 16..2048 px") && failedWith(stale, "engine.picture.png: picture: the picture handle") &&
+                  stale.message.find("is stale") != std::string::npos &&
                   failedWith(noEngine, "engine.picture.png: the engine did not start"),
               "engine.picture.png's domain FAILS by name: a radiance handle (" + ofRadiance.message + "), maxEdge 15 and "
               "2049 (" + low.message + "), a released picture (" + stale.message + "), no engine (" + noEngine.message + ")");

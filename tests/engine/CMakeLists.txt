@@ -708,6 +708,25 @@ add_test(NAME mcp.session COMMAND test_mcp_session)
 set_tests_properties(mcp.session PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(mcp.session)
 
+# engine.png_pixels — THE PNG IS THE HELD PICTURE, PIXEL FOR PIXEL (MCP-ON-HOST-1 stage 3, the lead's ruling on its reader's
+# G1; test_png_pixels.cpp says the laws): on the headless (NULL) engine encodePng's PNG is DECODED by the row's own decoder
+# (the system zlib's inflate, the five filters undone), never by the codec that encoded: an asymmetric 4 x 4 (colour type 6)
+# and its all-opaque twin (type 2) equal their held RGBA, a downscaled picture equals boxDownscale's output. No card, no
+# display: a code row. zlib links THIS test target only (nothing of the product links it).
+find_package(ZLIB REQUIRED)
+add_executable(test_png_pixels test_png_pixels.cpp)
+set_target_properties(test_png_pixels PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_png_pixels PRIVATE JahshakaEngine ZLIB::ZLIB)
+target_include_directories(test_png_pixels PRIVATE ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_png_pixels PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_png_pixels JahshakaEngineMedia)
+add_test(NAME engine.png_pixels COMMAND test_png_pixels WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.png_pixels PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.png_pixels)
+
 # engine.hit_list_law — THE REFLECTION REST's RECORD ALLOWANCE as a pure function (URGENT #157; test_hit_list_law.cpp says
 # the law): a function of the view's target (its hit list's creation capacity) and the rest's batching count, never of
 # how large the list once grew; a list smaller than its creation size caps it. The header only: a CPU code row.
