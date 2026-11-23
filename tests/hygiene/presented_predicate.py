@@ -72,6 +72,9 @@ STUDIO_TARGET_FACTS = {
     "src/app/cli/selftestrunner.cpp": "the selftest's own check that its on-screen window backend took (a target fact)",
 }
 TARGET_FACT = {"irisgl/engine/src/OgreVideoReadback.cpp"}   # isOffscreen() as the TARGET's fact (window vs texture)
+# ...and ONE SITE, never its whole file (the lead, 2026-11-23): a script command that ANSWERS the target's fact to its
+# caller; it decides nothing in the engine (engine.view.isOffscreen) - any other isOffscreen() call in that file is read
+TARGET_FACT_SITES = {"irisgl/engine/src/script/commands_view.cpp": "return Value(v->isOffscreen());"}
 
 
 def code_only(text):
@@ -113,9 +116,9 @@ def laws(files):
     for f, text, what in SITES:
         out.append((text in files.get(f, ""), "P3 %s reads presentsAsWindow() (%s)" % (what, f)))
     left = sorted(f for f, t in files.items() if f.startswith("irisgl/engine/src/") and f not in TARGET_FACT
-                  and re.search(r"\bisOffscreen\(\)", code_only(t)))
-    out.append((not left, "P3 no isOffscreen() call left in the engine's sources but the target's fact %s (left: %s)"
-                % (sorted(TARGET_FACT), left)))
+                  and re.search(r"\bisOffscreen\(\)", code_only(t).replace(TARGET_FACT_SITES.get(f, "\0"), "", 1)))
+    out.append((not left, "P3 no isOffscreen() call left in the engine's sources but the target's fact %s and its one "
+                "answering site %s (left: %s)" % (sorted(TARGET_FACT), sorted(TARGET_FACT_SITES), left)))
     sleft = sorted(f for f, t in files.items() if f.startswith("src/") and f not in STUDIO_TARGET_FACTS
                    and re.search(r"\bisOffscreen\(\)", re.sub(r"bool isOffscreen\(\) const", "", code_only(t))))
     out.append((not sleft, "P3 no isOffscreen() route read left in Studio's sources but the named target facts %s (left: %s)"
@@ -156,6 +159,9 @@ def main(root):
         ("P4", "src/viewport/recordingview.cpp", "OffscreenContract::StillPicture", "OffscreenContract::PresentedStandIn"),
         ("P3", "src/modules/vr/vrapi.cpp", "v->presentsAsWindow() && v->scene() == eyes->scene()",
          "!v->isOffscreen() && v->scene() == eyes->scene()"),
+        # a SECOND, DECIDING call in the file whose one answering site is excepted (TARGET_FACT_SITES)
+        ("P3", "irisgl/engine/src/script/commands_view.cpp", "v->setShadows(c[1].asBool());",
+         "if (!v->isOffscreen()) v->setShadows(c[1].asBool());"),
     ]
     for law, f, a, b in muts:
         m = dict(files)
