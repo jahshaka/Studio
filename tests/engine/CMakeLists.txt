@@ -734,6 +734,18 @@ add_test(NAME engine.png_pixels COMMAND test_png_pixels WORKING_DIRECTORY "${CMA
 set_tests_properties(engine.png_pixels PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(engine.png_pixels)
 
+# mcp.engine_session (MCP-ON-HOST-1 stage 3) — AN OUTSIDE CLIENT SEES THE ENGINE's PICTURE OVER MCP, EXACTLY:
+# `jahengine --mcp` with DISPLAY removed builds rtreflect.odd_size's scene by named calls (without its test arm and its
+# route declaration), draws 89 frames and reads the 90th; the picture tool's PNG decodes (the driver's own decoder: colour
+# types 2 and 6) to engine.picture.bytes exactly, and `jahengine --script` running the same calls hashes the same picture;
+# the server exits 0 at stdin's end. It prints the PNG's bytes and the alpha's min / max. mcp_engine_session.py says the
+# laws (its decoder's self-test first). Two boots of 90 frames.
+jah_gpu_row(mcp.engine_session CLASS engine FRAMES 180
+         COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/mcp_engine_session.py" $<TARGET_FILE:jahengine>
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(mcp.engine_session PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_builds(jahengine ROWS mcp.engine_session)
+
 # engine.hit_list_law — THE REFLECTION REST's RECORD ALLOWANCE as a pure function (URGENT #157; test_hit_list_law.cpp says
 # the law): a function of the view's target (its hit list's creation capacity) and the rest's batching count, never of
 # how large the list once grew; a list smaller than its creation size caps it. The header only: a CPU code row.
