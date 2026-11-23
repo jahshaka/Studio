@@ -196,17 +196,22 @@ QVector<VerbInfo> AppApi::verbs() const
           "`available` false (zeros, `why` says) where the Qt driver carries its own SQLite, "
           "which this build may not call into.",
           Needs::Document },
-        { "bootReport", "app.bootReport() -> {seed: {created, reseeded, errors, workerMs}, indexGate: {built, ms}, "
-                        "indexAtOpen, staleRebuilds, available}",
+        { "bootReport", "app.bootReport({joinSweep}) -> {seed: {planned, created, reseeded, errors, workerMs}, "
+                        "indexGate: {built, ms}, indexAtOpen, sweep, staleRebuilds, available}",
           "WHAT THIS PROCESS's BOOT DID TO THE LIBRARY, as results (services/bootreport.h; a tool reads THESE, never a "
-          "log line): `seed` the shipped meshes' seed at the library's open - rows imported and baked (`created`), "
-          "rows whose stored source was not the shipped mesh and were re-seeded (`reseeded`, by name), one line a "
-          "failed row (`errors`), the worker's wall (`workerMs`); `indexGate` the one-time index build before the "
-          "shell opened the library (statements `built`, its `ms`; 0 and 0 on a prepared library); `indexAtOpen` "
-          "the index statements run over an existing library's rows on the opening thread (a defect: 0); "
-          "`staleRebuilds` the stale bakes the background sweep planned to rebuild, -1 until the sweep's worker "
-          "has planned (or when no sweep runs: JAHSHAKA_BAKE_SWEEP=0) - read it again after a verb turns the loop "
-          "rather than take a -1 for a 0. `available` false (and nothing else) in a host with no shell.",
+          "log line): `seed` the shipped meshes' seed at the library's open - the seed table's rows it planned "
+          "(`planned`: every shipped mesh), rows imported and baked (`created`: `planned` on an empty library, 0 on a "
+          "seeded one), rows whose stored source was not the shipped mesh and were re-seeded (`reseeded`, by name), "
+          "one line a failed row (`errors`), the worker's wall (`workerMs`) - the BOOT's: an app.resetLibrary "
+          "re-seeds without changing it; `indexGate` the one-time index build before the shell opened the library "
+          "(statements `built`, its `ms`; 0 and 0 on a prepared library); `indexAtOpen` the index statements run over "
+          "an existing library's rows on the opening thread (a defect: 0); `sweep` the background bake sweep's plan - "
+          "'planned' (then `staleRebuilds` is the stale bakes it planned to rebuild), 'off' (no sweep runs: "
+          "JAHSHAKA_BAKE_SWEEP=0, no open library), 'unread' (its connection never opened), 'stopped' (a reset or a "
+          "quit cut the plan), 'silent' (its worker ended without saying: a defect), 'planning' (not done yet), "
+          "'notStarted'; `staleRebuilds` is -1 unless 'planned'. {joinSweep: true} first JOINS the plan: it returns "
+          "when the worker has published one of those terminal states (its bound is the worker's own end, never a "
+          "clock). `available` false (and nothing else) in a host with no shell.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
           "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "
@@ -930,19 +935,23 @@ QVariantMap AppApi::databaseReads()
              { QStringLiteral("why"), r.why } };
 }
 
-QVariantMap AppApi::bootReport()
+QVariantMap AppApi::bootReport(const QVariantMap &options)
 {
     const BootReport *r = host.services ? host.services->boot : nullptr;
     if (!r) return { { QStringLiteral("available"), false } };
+    const SweepPlan::State sweep = options.value(QStringLiteral("joinSweep")).toBool() ? r->sweep->join()
+                                                                                         : r->sweep->state();
     return { { QStringLiteral("available"), true },
-             { QStringLiteral("seed"), QVariantMap{ { QStringLiteral("created"), r->seed.created },
+             { QStringLiteral("seed"), QVariantMap{ { QStringLiteral("planned"), r->seed.planned },
+                                                    { QStringLiteral("created"), r->seed.created },
                                                     { QStringLiteral("reseeded"), r->seed.reseeded },
                                                     { QStringLiteral("errors"), r->seed.errors },
                                                     { QStringLiteral("workerMs"), r->seed.workerMs } } },
              { QStringLiteral("indexGate"), QVariantMap{ { QStringLiteral("built"), r->indexGate.built },
                                                          { QStringLiteral("ms"), r->indexGate.ms } } },
              { QStringLiteral("indexAtOpen"), r->indexAtOpen },
-             { QStringLiteral("staleRebuilds"), r->staleRebuilds->load() } };
+             { QStringLiteral("sweep"), QString::fromLatin1(SweepPlan::name(sweep)) },
+             { QStringLiteral("staleRebuilds"), sweep == SweepPlan::State::Planned ? r->sweep->rebuilds() : -1 } };
 }
 
 QVariantMap AppApi::openStats(const QVariantMap &options)

@@ -3,10 +3,11 @@
 # item 5 + its audit F4; the reader's P6; tests/support/seed_home.sh says the mechanism). The NULL headless app: no display,
 # no card. A toy tree (a CMakeCache.txt, tests/seed-key-inputs.txt = the build's list, its root a scratch COPY of the
 # listed sources so a case can change one):
-#   1. the warm-up's step: ONE boot makes the template, its seed's result 17 shipped meshes; again at the key, nothing;
+#   1. the warm-up's step: ONE boot makes the template, its seed's result every planned row; again at the key, nothing;
 #   2. fresh_home.sh --warm (the real one) COPIES the template into a home: its boot CREATES NOTHING (the seed's result
 #      `created` 0), its store the template's objects by content hash, unchanged by the boot;
-#   3. the control (of 2's zero): a home with no template seeds the 17 at its boot (`created` 17);
+#   3. the control (of 2's zero): a home with no template seeds every row it planned (`created` == `planned` > 0, the
+#      report's ONE count of the shipped meshes), and the seed key lists that many sources;
 #   4. A CHANGED SHIPPED SOURCE (audit F4): the seed key moves - the template is not copied (said), that home seeds, and
 #      the next make re-makes the template;
 #   5. THE APP's OWN CHECK (audit F4): a home whose stored Cube source is not the shipped mesh re-seeds that row at its
@@ -35,6 +36,7 @@ var seed = app.bootReport().seed;
 var names = [];
 for (var i = 0; i < seed.reseeded.length; ++i) names.push(seed.reseeded[i]);
 console.log("seed.created " + seed.created);
+console.log("seed.planned " + seed.planned);
 console.log("seed.reseeded " + names.join(","));
 0
 JS
@@ -44,12 +46,13 @@ boot() {   # <home>: the NULL headless app on <home>'s data root; its results (s
           "$app" --headless --script "$s/boot.js" ) > "$1.out" 2> "$1.log"
 }
 created() { sed -n 's/^seed\.created \([0-9][0-9]*\)$/\1/p' "$1.out" | head -1; }    # <home>: its seed's `created`
+planned() { sed -n 's/^seed\.planned \([0-9][0-9]*\)$/\1/p' "$1.out" | head -1; }    # <home>: the rows its seed planned
 reseeded() { sed -n 's/^seed\.reseeded //p' "$1.out" | head -1; }                      # <home>: its re-seeded names
 objects() { ( cd "$1" 2>/dev/null && find AssetStore/objects -type f | sort ); }
 
 out=$(sh "$seedsh" make "$app" "$T"); rc=$?
-echo "$out" | grep -q "the template made at the seed key .* (17 shipped meshes, one NULL headless boot)" && [ "$nmesh" = 17 ]
-check $? "1. the warm-up's step: ONE boot makes the template, its seed's result 17 shipped meshes; the key lists the 17 sources ($nmesh) (exit $rc)"
+echo "$out" | grep -q "the template made at the seed key .* ([0-9]* shipped meshes, one NULL headless boot)"
+check $? "1. the warm-up's step: ONE boot makes the template (its seed's result: every planned row) (exit $rc)"
 [ -f "$T/.seedhome/data/JahLibrary.db" ] && [ "$(head -1 "$T/.seedhome/seed-key")" = "$(sh "$seedsh" key "$T")" ]
 check $? "1. ...stamped with the build's seed key"
 sh "$seedsh" make "$app" "$T" | grep -q "the template is at the seed key .* (nothing to make)"
@@ -62,13 +65,16 @@ check $? "2. fresh_home.sh --warm copied the template's library into the home"
 check $? "2. ...the template's objects, by content hash ($(objects "$T/.seedhome/data" | wc -l) files)"
 boot "$T/h1"
 [ "$(created "$T/h1")" = 0 ]
-check $? "2. its boot CREATES NOTHING: seed.created $(created "$T/h1") (the 17 rows found seeded; case 3 is this zero's control)"
+check $? "2. its boot CREATES NOTHING: seed.created $(created "$T/h1") (every row found seeded; case 3 is this zero's control)"
 [ "$(objects "$T/h1/.local/share/Jahshaka")" = "$(objects "$T/.seedhome/data")" ]
 check $? "2. ...and after the boot its store still holds exactly the template's objects (nothing re-baked)"
 
 mkdir -p "$s/h2"; boot "$s/h2"
-[ "$(created "$s/h2")" = 17 ]
-check $? "3. the control: a home with no template seeds the 17 at its boot: seed.created $(created "$s/h2")"
+P=$(planned "$s/h2")   # THE ONE COUNT of the shipped meshes: the rows the seed planned (app.bootReport().seed.planned)
+[ -n "$P" ] && [ "$P" -gt 0 ] && [ "$(created "$s/h2")" = "$P" ]
+check $? "3. the control: a home with no template seeds every planned row at its boot: seed.created $(created "$s/h2") of seed.planned ${P:-none}"
+[ "$nmesh" = "$P" ] && [ "$(planned "$T/h1")" = "$P" ]
+check $? "3. ...the seed key lists every planned row's source ($nmesh of $P), and the template's home plans the same $(planned "$T/h1")"
 
 k0=$(sh "$seedsh" key "$T")
 printf '# a shipped mesh edited\n' >> "$s/src/app/content/primitives/cube.obj"
@@ -79,9 +85,9 @@ out=$(sh "$fh" --setup --warm "$T/h3" 2>&1)
 [ ! -e "$T/h3/.local/share/Jahshaka/JahLibrary.db" ] && echo "$out" | grep -q "at another seed key than the build's - not copied"
 check $? "4. ...the template is not copied, said"
 boot "$T/h3"
-[ "$(created "$T/h3")" = 17 ]
-check $? "4. ...that home's boot seeds the 17: seed.created $(created "$T/h3")"
-sh "$seedsh" make "$app" "$T" | grep -q "the template made at the seed key $k1 (17 shipped meshes"
+[ "$(created "$T/h3")" = "$P" ]
+check $? "4. ...that home's boot seeds every planned row: seed.created $(created "$T/h3") of $P"
+sh "$seedsh" make "$app" "$T" | grep -q "the template made at the seed key $k1 ($P shipped meshes"
 check $? "4. ...and the next make re-makes the template at the new key"
 
 sh "$fh" --setup --warm "$T/h4" > /dev/null 2>&1

@@ -566,6 +566,9 @@ static void theBootGate()
         CHECK(atOpen == 0 && defects().isEmpty(),
               "GATE: a PREPARED library's open runs 0 index statements (%d) and says no defect (%d)", atOpen,
               int(defects().size()));
+        CHECK(db.indexStatementsAtOpen() == 0,
+              "GATE: ...and its RESULT (Database::indexStatementsAtOpen, the boot report's indexAtOpen) reads 0 (%d)",
+              db.indexStatementsAtOpen());
         db.closeDatabase();
     }
 
@@ -577,6 +580,9 @@ static void theBootGate()
         CHECK(atOpen == 4 && defects().size() == 1,
               "GATE NEGATIVE CONTROL: the same library opened UNPREPARED runs its %d index statements on the opening "
               "thread and says DEFECT (%d)", atOpen, int(defects().size()));
+        CHECK(db.indexStatementsAtOpen() == 4,
+              "GATE NEGATIVE CONTROL: ...and its RESULT (Database::indexStatementsAtOpen, the boot report's indexAtOpen) "
+              "reads ABOVE zero: 4 (%d)", db.indexStatementsAtOpen());
         db.closeDatabase();
     }
 

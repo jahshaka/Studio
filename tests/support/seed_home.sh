@@ -10,8 +10,9 @@
 #                    missing or stamped with another SEED KEY than the build's (`key` below), ONE boot of the NULL headless
 #                    app on an empty data root (no
 #                    display, no card, ~3 s) - its library (JahLibrary.db + AssetStore) IS the template, its seed's
-#                    RESULT checked (the boot's script prints app.bootReport().seed.created on stdout: every shipped
-#                    mesh, or no template), stamped with the key and swapped in whole under <tests>/.seedhome.lock.
+#                    RESULT checked (the boot's script prints app.bootReport().seed's `created` and `planned` on
+#                    stdout: every planned row created, or no template), stamped with the key and swapped in whole
+#                    under <tests>/.seedhome.lock.
 #                    At the key already: nothing, said. Exit 1 when the boot or its seed failed (no template, said).
 #   seed_home.sh copy <tests dir> <data root>   fresh_home.sh --warm's step: the template COPIED (never linked - a home
 #                    writes its library in place) into a data root that holds no library yet, ONLY when its stamp is the
@@ -61,17 +62,19 @@ make)
         tmp="$t/.seedhome.make.$$"
         rm -rf "$tmp"; mkdir -p "$tmp/run"
         # THE SEED's RESULT, printed by the boot's script on stdout (app.bootReport(): a tool never reads a log line)
-        printf 'console.log("seed.created " + app.bootReport().seed.created); 0\n' > "$tmp/report.js"
+        printf 'var s = app.bootReport().seed; console.log("seed.created " + s.created); console.log("seed.planned " + s.planned); 0\n' \
+            > "$tmp/report.js"
         # THE NULL HEADLESS BOOT: no display (a CPU boot by construction), its own HOME and data root, nothing of the tree's
         ( cd "$tmp/run" && env -u DISPLAY -u WAYLAND_DISPLAY HOME="$tmp" JAHSHAKA_DATA_ROOT="$tmp/data" JAHSHAKA_VR=0 \
               "$app" --headless --script "$tmp/report.js" ) > "$tmp/boot.out" 2> "$tmp/boot.log"
         rc=$?
         n=$(sed -n 's/^seed\.created \([0-9][0-9]*\)$/\1/p' "$tmp/boot.out" | head -1)
-        # EVERY SHIPPED MESH, OR NO TEMPLATE: an empty data root seeds each row of the seed table (its meshes are the
-        # key's `file app/...` lines); a boot that answers fewer is not a template.
-        want_n=$(grep -c '^file app/' "$t/seed-key-inputs.txt")
-        if [ "$rc" != 0 ] || [ -z "$n" ] || [ "$n" != "$want_n" ] || [ ! -f "$tmp/data/JahLibrary.db" ]; then
-            echo "seed_home: the template's boot failed (exit $rc, seed.created '${n:-none}' of $want_n shipped meshes) - no template made; its log:"
+        # EVERY PLANNED ROW, OR NO TEMPLATE: an empty data root creates each row the seed planned (the report's own
+        # count of the seed table: one count of one thing); a boot that answers fewer, or plans none, is not a template.
+        want_n=$(sed -n 's/^seed\.planned \([0-9][0-9]*\)$/\1/p' "$tmp/boot.out" | head -1)
+        if [ "$rc" != 0 ] || [ -z "$n" ] || [ -z "$want_n" ] || [ "$want_n" = 0 ] || [ "$n" != "$want_n" ] \
+            || [ ! -f "$tmp/data/JahLibrary.db" ]; then
+            echo "seed_home: the template's boot failed (exit $rc, seed.created '${n:-none}' of seed.planned '${want_n:-none}') - no template made; its log:"
             tail -5 "$tmp/boot.log" | sed 's/^/  | /'
             rm -rf "$tmp"; exit 1
         fi

@@ -339,6 +339,7 @@ SeedResult seedAll(Database *db)
         for (Plan &plan : plans) runSeed(plan, db);
     }, UiThreadWait::Pump::None);
     SeedResult out;
+    out.planned = int(plans.size());
     out.workerMs = double(took.nsecsElapsed()) / 1.0e6;
 
     for (Plan &plan : plans) {

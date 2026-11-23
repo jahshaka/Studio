@@ -50,6 +50,7 @@ class QTemporaryDir;
 #include "irisgl/import/importsettings.h"
 
 class Database;
+class SweepPlan;
 
 namespace MeshBakeStore
 {
@@ -217,9 +218,10 @@ int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, in
 /// THE LIBRARY'S BACKGROUND SWEEP: every stale bake in the store, one at a
 /// time, on a lowest-priority thread, each committed as it lands. Started
 /// once a library is open; idempotent. stop joins (shutdown, a reset).
-/// `planned` receives the count of stale bakes the sweep planned (0 included), stored by the worker once its
-/// plan is complete (never when a stop cut it): the boot's result (services/bootreport.h). Never null.
-void startBackgroundRebuild(std::shared_ptr<std::atomic<int>> planned);
+/// `plan` (services/bootreport.h, the boot's result; never null) gets a TERMINAL state on every way out: Off on
+/// each early return here, then the worker's Planned with its count, Unread, Stopped - or Silent from its exit
+/// guard if it ever ends without one - so a reader joins it and is never left at "not yet".
+void startBackgroundRebuild(std::shared_ptr<SweepPlan> plan);
 void stopBackgroundRebuild();
 bool backgroundRebuildRunning();
 

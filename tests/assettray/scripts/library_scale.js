@@ -78,12 +78,10 @@ if (MODE === "law") {
         line("import " + g + " lastError=" + app.lastError());
     }
 }
-// THE BOOT's FACTS, AS RESULTS (app.bootReport(): the shell never reads a log line). `staleRebuilds` is written by the
-// bake sweep's worker once its plan is complete (-1 before): read again until it is published, BOUNDED by a count of
-// polls - the bound hit prints -1 and the shell names it "the sweep never planned", never a 0.
-var report = app.bootReport();
-var polls = 0;
-while (report.staleRebuilds < 0 && polls < 20000) { ++polls; report = app.bootReport(); }
+// THE BOOT's FACTS, AS RESULTS (app.bootReport(): the shell never reads a log line). The bake sweep's plan is JOINED
+// ({joinSweep}): the verb returns when the sweep's worker has published a terminal state (planned with its count, off,
+// unread, stopped, silent) - its bound is the worker's own end, an event, never a count or a clock.
+var report = app.bootReport({ joinSweep: true });
 line("report gateBuilt=" + report.indexGate.built + " gateMs=" + report.indexGate.ms + " indexAtOpen=" + report.indexAtOpen
-     + " staleRebuilds=" + report.staleRebuilds + " polls=" + polls);
+     + " sweep=" + report.sweep + " staleRebuilds=" + report.staleRebuilds);
 line("end");

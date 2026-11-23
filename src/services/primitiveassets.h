@@ -90,6 +90,7 @@ QString ensureSeeded(const primitives::Def &def, Database *db, QString *errorOut
 /// a tool reads.
 struct SeedResult
 {
+    int planned = 0;           ///< the seed table's rows this call planned (every shipped mesh: what `created` reaches on an empty library)
     int created = 0;           ///< rows this call imported and baked
     QStringList reseeded;      ///< rows whose stored source was not the shipped mesh, re-seeded (by name)
     QStringList errors;        ///< one line per failed row: "<name>: <why>"

@@ -18,9 +18,12 @@
 #      - boot, open, create and the Desktop: bytes(B) - bytes(A) <= 50 B an added asset (450,000 B);
 #      - no thumbnail select is ever a listing's (every one keyed by guid), in either session;
 #      - the gate costs nothing on a prepared library (indexGate.built 0), no index is built on the opening thread
-#        (indexAtOpen 0), the bake sweep rebuilds nothing (staleRebuilds 0, read once the sweep has PLANNED: a bounded
-#        count of polls, -1 at the bound = "the sweep never planned", a FAIL; the generator's models carry their
+#        (indexAtOpen 0), the bake sweep rebuilds nothing (sweep 'planned', staleRebuilds 0: the script JOINS the
+#        plan - app.bootReport({joinSweep}) returns when the sweep's worker has published a terminal state, its
+#        bound the worker's own end - and any other state is a FAIL by its name; the generator's models carry their
 #        real bakes) - every one a RESULT the session's script prints from app.bootReport(), never a log line;
+#      - THE SWEEP OFF IS READ AS OFF: root A's first session runs with JAHSHAKA_BAKE_SWEEP=0 and its join answers
+#        'off' at once (never a hang, never a 0);
 #      - gridStats: outOfStep 0, lastBuildMaxSliceTiles <= sliceTiles, lastBuildDecodes 0, and tiles + pendingTiles
 #        == P: the grid builds in slices that run only when a verb turns the event loop, and a script holds the loop
 #        for its whole run (scriptrunner.cpp), so how far the build got is not the script's to settle — every
@@ -70,16 +73,21 @@ OPEN_A=$(sed -n 's/.*open project \([0-9a-f-]*\).*/\1/p' gen-a.log | head -1)
 OPEN_B=$(sed -n 's/.*open project \([0-9a-f-]*\).*/\1/p' gen-b.log | head -1)
 TEXTURE_A=$(sed -n 's/^generate: texture \([0-9a-f-]*\) .*/\1/p' gen-a.log | head -1)
 
-run() {   # $1 = root, $2 = mode, $3 = open guid, $4 = png or empty
+run() {   # $1 = root, $2 = mode, $3 = open guid, $4 = png or empty, $5 = the bake sweep (1 on, 0 off; default on)
     { printf 'var MODE = "%s";\nvar OPEN = "%s";\nvar PNG = "%s";\n' "$2" "$3" "$4"; cat "$JS"; } > "$2-$1.js"
-    JAH_DB_STATEMENT_TRACE=1 "$APP" "$MODEFLAG" --data-root "$PWD/root-$1" --script "$PWD/$2-$1.js" > "$2-$1.log" 2>&1
+    JAH_DB_STATEMENT_TRACE=1 JAHSHAKA_BAKE_SWEEP="${5:-1}" "$APP" "$MODEFLAG" --data-root "$PWD/root-$1" --script "$PWD/$2-$1.js" \
+        > "$2-$1.log" 2>&1
+}
+sweep() {   # $1 = a session's output: its "SCALE report" line's sweep state (the joined plan's terminal state)
+    sed -n 's/^SCALE report .*\bsweep=\([a-zA-Z]*\).*/\1/p' "$1" | head -1
 }
 report() {   # $1 = a session's output, $2 = a field of its script's "SCALE report" line (app.bootReport(): a RESULT)
     sed -n "s/^SCALE report .*\b$2=\(-\{0,1\}[0-9][0-9]*\).*/\1/p" "$1" | head -1
 }
 for r in a b; do
     open=$OPEN_A; [ "$r" = b ] && open=$OPEN_B
-    run "$r" first "$open" ""
+    off=1; [ "$r" = a ] && off=0   # root A's first session: the sweep OFF (its join must answer 'off')
+    run "$r" first "$open" "" "$off"
     check $? "root $r's FIRST session ended 0"
     if grep -aq "^SCALE unavailable" "first-$r.log"; then
         echo "SKIP: app.databaseReads is unavailable here ($(sed -n 's/^SCALE unavailable //p' first-$r.log | head -1))"; exit 77
@@ -101,11 +109,13 @@ for r in a b; do
     [ "$(report "first-$r.log" indexAtOpen)" = 0 ] && [ "$(report "law-$r.log" indexAtOpen)" = 0 ]
     check $? "root $r: no index was built on the opening thread (indexAtOpen $(report "first-$r.log" indexAtOpen) and $(report "law-$r.log" indexAtOpen))"
     for m in first law; do
-        n=$(report "$m-$r.log" staleRebuilds)
-        if [ "${n:--1}" = -1 ]; then
-            check 1 "root $r's $m session: the sweep never planned (staleRebuilds -1 after $(report "$m-$r.log" polls) polls)"
+        s=$(sweep "$m-$r.log"); n=$(report "$m-$r.log" staleRebuilds)
+        if [ "$r$m" = afirst ]; then
+            [ "$s" = off ]; check $? "root a's first session (JAHSHAKA_BAKE_SWEEP=0): the joined sweep answers 'off' (${s:-no report line})"
+        elif [ "$s" != planned ]; then
+            check 1 "root $r's $m session: the sweep's plan ended '${s:-no report line}', not 'planned'"
         else
-            [ "$n" = 0 ]; check $? "root $r's $m session: the bake sweep rebuilds nothing (staleRebuilds $n after $(report "$m-$r.log" polls) polls; the generated models carry their real bakes)"
+            [ "$n" = 0 ]; check $? "root $r's $m session: the bake sweep rebuilds nothing (planned, staleRebuilds $n; the generated models carry their real bakes)"
         fi
     done
 done
@@ -121,9 +131,9 @@ c.commit()
 PY
 run a control "$OPEN_A" ""
 check $? "root a's CONTROL session (its bake rows dropped) ended 0"
-n=$(report control-a.log staleRebuilds)
-[ "${n:-0}" -gt 0 ]
-check $? "CONTROL: with root a's bake rows dropped the sweep plans ABOVE zero (staleRebuilds ${n:-none} after $(report control-a.log polls) polls)"
+s=$(sweep control-a.log); n=$(report control-a.log staleRebuilds)
+[ "$s" = planned ] && [ "${n:-0}" -gt 0 ]
+check $? "CONTROL: with root a's bake rows dropped the sweep plans ABOVE zero (sweep '${s:-no report line}', staleRebuilds ${n:-none})"
 
 python3 -I - law-a.log law-b.log "${ASSETS[a]}" "${ASSETS[b]}" "${PROJECTS[a]}" "${PROJECTS[b]}" > compare.txt <<'PY'
 import json, re, sys

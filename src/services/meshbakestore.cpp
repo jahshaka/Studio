@@ -37,6 +37,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
+#include "services/bootreport.h"
 #include "services/jahlog.h"
 #include "irisgl/import/meshbake.h"
 #include "irisgl/import/parsecensus.h"
@@ -888,16 +889,19 @@ QThreadPool *backgroundPool()
 }
 }   // namespace
 
-void startBackgroundRebuild(std::shared_ptr<std::atomic<int>> planned)
+void startBackgroundRebuild(std::shared_ptr<SweepPlan> plan)
 {
-    if (backgroundRebuildRunning() || !QCoreApplication::instance()) return;
+    // EVERY WAY OUT SAYS WHICH (the plan is a result a reader joins: services/bootreport.h).
+    if (backgroundRebuildRunning() || !QCoreApplication::instance()) { plan->finish(SweepPlan::State::Off); return; }
     // JAHSHAKA_BAKE_SWEEP=0: no library sweep (a suite that proves the OPEN
     // rebuilds its own stale bakes needs the sweep out of the race).
     if (qEnvironmentVariableIsSet("JAHSHAKA_BAKE_SWEEP")
-        && qEnvironmentVariableIntValue("JAHSHAKA_BAKE_SWEEP") == 0)
+        && qEnvironmentVariableIntValue("JAHSHAKA_BAKE_SWEEP") == 0) {
+        plan->finish(SweepPlan::State::Off);
         return;
+    }
     const QSqlDatabase main = QSqlDatabase::database();
-    if (!main.isOpen()) return;
+    if (!main.isOpen()) { plan->finish(SweepPlan::State::Off); return; }
     const QString dbPath = main.databaseName();
     const QString root = AssetStorePaths::root();
     sBackgroundStop.store(false);
@@ -907,7 +911,10 @@ void startBackgroundRebuild(std::shared_ptr<std::atomic<int>> planned)
     // window's constructor, at every boot, to find nothing stale. The catalog is per thread, so
     // the worker reads through its OWN read connection to the same file; only the commits come
     // back to this (the database) thread, as before.
-    sBackground = QtConcurrent::run(backgroundPool(), [dbPath, root, planned]() {
+    plan->start();
+    sBackground = QtConcurrent::run(backgroundPool(), [dbPath, root, plan]() {
+        // THE WORKER's EXIT ALWAYS ANSWERS: a way out that published nothing is Silent, never a join left waiting.
+        struct ExitSays { std::shared_ptr<SweepPlan> plan; ~ExitSays() { plan->finishIfPlanning(); } } exitSays{ plan };
         QVector<BakeJob> jobs;
         bool read = false;   // the plan read the library (a connection that never opened planned nothing)
         {
@@ -930,8 +937,9 @@ void startBackgroundRebuild(std::shared_ptr<std::atomic<int>> planned)
             }
             QSqlDatabase::removeDatabase(name);
         }
-        if (sBackgroundStop.load() || !read) return;
-        planned->store(int(jobs.size()));
+        if (sBackgroundStop.load()) { plan->finish(SweepPlan::State::Stopped); return; }
+        if (!read) { plan->finish(SweepPlan::State::Unread); return; }
+        plan->finish(SweepPlan::State::Planned, int(jobs.size()));
         if (jobs.isEmpty()) return;
         JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
         for (const BakeJob &job : jobs) {
