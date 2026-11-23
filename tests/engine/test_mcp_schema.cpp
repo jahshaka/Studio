@@ -234,8 +234,9 @@ int main()
               (firstBad.empty() ? std::string() : "; first fault " + firstBad) + ")");
 
     // 5. THE THREE REAL SIGNATURES, BYTE FOR BYTE (START-PREFLIGHT.md (f); <doc> the command's own doc). engine.gi.set's
-    //    text is the preflight's PLUS the bounds SCRIPT-IN-ENGINE-1 2a declared where the preflight found them lost
-    //    (commands_gi.cpp: cascades upTo(4), halfSize above(0), resolution 16..256, stepCells 0..128)
+    //    text is SCRIPT-IN-ENGINE-1 2c's: the WHOLE GiParams from its table (fields_gi.cpp: every member at the record's
+    //    default, the engine's bounds declared), its cascade table in the command's form `cascades` (upTo(4), halfSize
+    //    above(0), resolution 16..256, stepCells 0..128: commands_gi.cpp)
     const auto doc = [&](const char *name) {
         std::string t, w;
         toJson(Value(host.registry().find(name)->doc), t, w);
@@ -255,16 +256,42 @@ int main()
             "{\"type\":\"number\"},\"minItems\":3,\"maxItems\":3,\"default\":[1.0,1.0,1.0]}},\"additionalProperties\":false}},"
             "\"required\":[\"scene\",\"node\",\"transform\"],\"additionalProperties\":false}",
         "{\"type\":\"object\",\"description\":" + doc(names[2]) +
-            ",\"properties\":{\"scene\":{\"type\":\"integer\",\"minimum\":1,\"description\":\"a scene handle (target)\"},"
-            "\"params\":{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"off\",\"vct\","
-            "\"vctPccHybrid\"]},\"quality\":{\"type\":\"string\",\"enum\":[\"low\",\"medium\",\"high\",\"epic\"],\"default\":"
-            "\"medium\"},\"bounces\":{\"type\":\"boolean\",\"default\":true},\"cascades\":{\"type\":\"array\",\"items\":{\"type\":"
-            "\"object\",\"properties\":{\"halfSize\":{\"type\":\"number\",\"exclusiveMinimum\":0.0,\"description\":\"m\"},"
-            "\"resolution\":{\"type\":\"integer\",\"minimum\":16,\"maximum\":256,\"description\":\"cells\"},\"stepCells\":"
-            "{\"type\":\"number\",\"minimum\":0.0,\"maximum\":128.0,\"description\":\"cells\",\"default\":0.0}},"
-            "\"required\":[\"halfSize\",\"resolution\"],\"additionalProperties\":false},\"maxItems\":4}},"
-            "\"required\":[\"mode\",\"cascades\"],"
-            "\"additionalProperties\":false}},\"required\":[\"scene\",\"params\"],\"additionalProperties\":false}"};
+            ",\"properties\":{\"scene\":{\"type\":\"integer\",\"minimum\":1,\"description\":\"a scene handle (target)\"},\"pa"
+            "rams\":{\"type\":\"object\",\"properties\":{\"mode\":{\"type\":\"string\",\"enum\":[\"off\",\"vct\",\"vctPccHybr"
+            "id\"],\"default\":\"off\"},\"quality\":{\"type\":\"string\",\"enum\":[\"low\",\"medium\",\"high\",\"epic\"],\"de"
+            "fault\":\"medium\"},\"testProbeRegionMin\":{\"type\":\"array\",\"items\":{\"type\":\"number\",\"format\":\"float"
+            "\",\"description\":\"single precision: past a float's range FAILS, m\"},\"minItems\":3,\"maxItems\":3,\"default\""
+            ":[0.0,0.0,0.0]},\"testProbeRegionMax\":{\"type\":\"array\",\"items\":{\"type\":\"number\",\"format\":\"float\",\""
+            "description\":\"single precision: past a float's range FAILS, m\"},\"minItems\":3,\"maxItems\":3,\"default\":[0."
+            "0,0.0,0.0]},\"testProbeGridFitMax\":{\"type\":\"number\",\"format\":\"float\",\"description\":\"single precision"
+            ": past a float's range FAILS, m\",\"default\":-1.0},\"bounces\":{\"type\":\"boolean\",\"default\":true},\"pccPro"
+            "besX\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":8,\"default\":3},\"pccProbesY\":{\"type\":\"integer\",\"m"
+            "inimum\":1,\"maximum\":8,\"default\":2},\"pccProbesZ\":{\"type\":\"integer\",\"minimum\":1,\"maximum\":8,\"defau"
+            "lt\":3},\"probeHdr\":{\"type\":\"string\",\"enum\":[\"auto\",\"off\",\"on\"],\"default\":\"auto\"},\"probeShadow"
+            "s\":{\"type\":\"string\",\"enum\":[\"auto\",\"off\",\"on\"],\"default\":\"auto\"},\"probeCaptureSize\":{\"type\""
+            ":\"integer\",\"minimum\":0,\"maximum\":1024,\"description\":\"px\",\"default\":0},\"probeOverlap\":{\"type\":\"n"
+            "umber\",\"minimum\":0.01,\"format\":\"float\",\"description\":\"single precision: past a float's range FAILS\",\""
+            "default\":1.25},\"probeSnapDeviation\":{\"type\":\"number\",\"minimum\":0.0,\"format\":\"float\",\"description\""
+            ":\"single precision: past a float's range FAILS\",\"default\":0.05000000074505806},\"probeSnapSidesMin\":{\"type"
+            "\":\"number\",\"minimum\":0.0,\"format\":\"float\",\"description\":\"single precision: past a float's range FAIL"
+            "S\",\"default\":0.25},\"probeSnapSidesMax\":{\"type\":\"number\",\"minimum\":0.0,\"format\":\"float\",\"descript"
+            "ion\":\"single precision: past a float's range FAILS\",\"default\":0.25},\"updateBudget\":{\"type\":\"integer\","
+            "\"minimum\":0,\"maximum\":2147483647,\"description\":\"probes/frame\",\"default\":1},\"ddgi\":{\"type\":\"string"
+            "\",\"enum\":[\"auto\",\"off\",\"on\"],\"default\":\"off\"},\"cascades\":{\"type\":\"array\",\"items\":{\"type\":"
+            "\"object\",\"properties\":{\"halfSize\":{\"type\":\"number\",\"exclusiveMinimum\":0.0,\"description\":\"m\"},\"r"
+            "esolution\":{\"type\":\"integer\",\"minimum\":16,\"maximum\":256,\"description\":\"cells\"},\"stepCells\":{\"typ"
+            "e\":\"number\",\"minimum\":0.0,\"maximum\":128.0,\"description\":\"cells\",\"default\":0.0}},\"required\":[\"hal"
+            "fSize\",\"resolution\"],\"additionalProperties\":false},\"maxItems\":4,\"default\":[]},\"cascadeInstanceCap\":{\""
+            "type\":\"integer\",\"minimum\":0,\"maximum\":2147483647,\"default\":0},\"cascadeVoxelLod\":{\"type\":\"boolean\""
+            ",\"default\":true},\"dragMoverChannel\":{\"type\":\"boolean\",\"default\":false},\"cards\":{\"type\":\"boolean\""
+            ",\"default\":true},\"cardBudgetTexels\":{\"type\":\"integer\",\"minimum\":0,\"maximum\":2147483647,\"description"
+            "\":\"texels/frame\",\"default\":0}},\"additionalProperties\":false,\"default\":{\"mode\":\"off\",\"quality\":\"m"
+            "edium\",\"testProbeRegionMin\":[0.0,0.0,0.0],\"testProbeRegionMax\":[0.0,0.0,0.0],\"testProbeGridFitMax\":-1.0,\""
+            "bounces\":true,\"pccProbesX\":3,\"pccProbesY\":2,\"pccProbesZ\":3,\"probeHdr\":\"auto\",\"probeShadows\":\"auto\""
+            ",\"probeCaptureSize\":0,\"probeOverlap\":1.25,\"probeSnapDeviation\":0.05000000074505806,\"probeSnapSidesMin\":0"
+            ".25,\"probeSnapSidesMax\":0.25,\"updateBudget\":1,\"ddgi\":\"off\",\"cascades\":[],\"cascadeInstanceCap\":0,\"ca"
+            "scadeVoxelLod\":true,\"dragMoverChannel\":false,\"cards\":true,\"cardBudgetTexels\":0}}},\"required\":[\"scene\""
+            "],\"additionalProperties\":false}"};
     for (int i = 0; i < 3; ++i) {
         const std::string got = schemaText(*host.registry().find(names[i]), why);
         CHECK(got == want[i], std::string(names[i]) + "'s schema equals the preflight's text byte for byte" +
