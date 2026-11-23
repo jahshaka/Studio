@@ -1,0 +1,3 @@
+engine.atom.setDraw Scene::setAtomDrawEnabled
+engine.atom.setOcclusion Scene::setAtomOcclusionEnabled
+engine.atom.setView Scene::setAtomView
