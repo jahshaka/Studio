@@ -169,6 +169,12 @@ void casesStatus(Fixture &f)
     const auto reached = [](const Result &r) { return failedWith(r, "the engine did not start"); };
     const Result level = h.call("engine.monitor.set", {Value("loud")});
     const Result outside = f.outside.call("engine.monitor.set", {Value("review")});
+    const Result outRecords = f.outside.call("engine.monitor.popRecords", {});
+    const Result outEvents = f.outside.call("engine.monitor.popEvents", {});
+    check(failedWith(outRecords, "engine.monitor.popRecords: engine-wide: this host serves an outside client") &&
+              failedWith(outEvents, "engine.monitor.popEvents: engine-wide: this host serves an outside client"),
+          "THE MONITOR's ONE QUEUE IS ENGINE-WIDE: an outside client's host cannot pop the owner's records or events (" +
+              outRecords.message + ")");
     check(failedWith(level, "engine.monitor.set: level 'loud' is not one of \"off\"|\"review\"") &&
               failedWith(outside, "engine.monitor.set: engine-wide: this host serves an outside client") &&
               reached(h.call("engine.monitor.set", {Value("review")})),
@@ -182,6 +188,31 @@ void casesStatus(Fixture &f)
         names += std::string(" ") + n;
     }
     check(all, "with no engine each engine-wide read reaches its body and FAILS saying why:" + names);
+
+    // 2b. A VIEW's ROW AND ITS EXPOSURE (no view on the headless engine: their EFFECT is a card case of the train): a
+    //     stand-in view carries each call to its laws - select refuses an unknown member by name, a scene handle where
+    //     a view is declared FAILS by kind; THE CONTROL: in their domain they reach the body
+    {
+        alignas(std::max_align_t) static unsigned char standIn[4096];
+        const Value view(h.registry().hold(kView, std::shared_ptr<View>(reinterpret_cast<View *>(standIn), [](View *) {})));
+        const Value scene(h.registry().hold(kScene, std::shared_ptr<Scene>(reinterpret_cast<Scene *>(standIn), [](Scene *) {})));
+        const auto sel1 = [](const char *n) {
+            return Value(Value::Object{{"select", Value(Value::Array{Value(n)})}});
+        };
+        const Result nope = h.call("engine.view.published", {view, sel1("nope")});
+        const Result kind = h.call("engine.view.published", {scene, Value(Value::Object{})});
+        const Result kindX = h.call("engine.view.exposureScale", {scene});
+        check(failedWith(nope, "engine.view.published: options.select[0] 'nope' is not one of") &&
+                  failedWith(kind, "is a scene handle, not a view handle") &&
+                  failedWith(kindX, "engine.view.exposureScale: view:") &&
+                  reached(h.call("engine.view.published", {view, sel1("routeGather")})) &&
+                  reached(h.call("engine.view.exposureScale", {view})),
+              "engine.view.published: an unknown member FAILS by name (" + nope.message + "), a scene handle where a view "
+              "is declared FAILS (" + kind.message + "), and engine.view.exposureScale's too; THE CONTROL: both reach "
+              "their body with a view");
+        h.registry().release(view.asInt());
+        h.registry().release(scene.asInt());
+    }
 
     // 3. ON THE HEADLESS ENGINE: the reads answer their records, the engine's own published frame round-trips
     if (!f.engine) return;
@@ -224,9 +255,10 @@ void casesStatus(Fixture &f)
     const Result evs = e.call("engine.monitor.popEvents", {});
     const Result again = e.call("engine.monitor.popRecords", {});
     check(on.status == Status::Ok && off.status == Status::Ok && recs.status == Status::Ok && recs.value.kind() == Kind::Array &&
-              evs.status == Status::Ok && evs.value.kind() == Kind::Array && again.status == Status::Ok &&
-              again.value.asArray().empty(),
-          "the monitor on the headless engine: set review, three frames, set off, popRecords answers " +
+              !recs.value.asArray().empty() && evs.status == Status::Ok && evs.value.kind() == Kind::Array &&
+              !evs.value.asArray().empty() && again.status == Status::Ok && again.value.asArray().empty(),
+          "the monitor on the headless engine: set review, three frames, set off, popRecords answers (above zero: THE "
+          "CONTROL) " +
               std::to_string(recs.status == Status::Ok ? recs.value.asArray().size() : 0) + " record(s) and popEvents " +
               std::to_string(evs.status == Status::Ok ? evs.value.asArray().size() : 0) +
               " event(s); the queue is EMPTY after its pop (the second pop answers none)");
