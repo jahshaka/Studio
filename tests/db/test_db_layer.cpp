@@ -21,10 +21,10 @@ For more information see the LICENSE file
 //      A's reason and A's first write (ruling 6); B's failed BEGIN refuses its writes and its commit says false;
 //   7. A CRASH MID-TRANSACTION: a child begins, writes and _exits; the file is whole and the write absent,
 //      beside a committed child's write that is present;
-//   8. the version floor (ruling 8): a minimum above the library's is refused by name, THROUGH open() and THROUGH
-//      borrow(); borrow() works on a handle someone else opened and refuses none;
+//   8. the version floor (ruling 8): a minimum above the library's is refused by name THROUGH open(); a connection
+//      with no handle answers a named error;
 //   9. the statement trace (stage 2): every statement on its connection, once per execution, none on another;
-//      shared by a handle's borrowers; removed by an empty function and by the last borrower's end;
+//      removed by an empty function; REFUSED on an observed connection (case 13);
 //  10. run(): to the end, false with the failing step's error (a later row's included), once per reset();
 //  11. the WAL answer kept: wal() true on a file, false where WAL is refused (':memory:');
 //  12. walAutocheckpoint 0 is 0 on the connection (unset: SQLite's 1000);
@@ -36,7 +36,6 @@ For more information see the LICENSE file
 #include "data/db/statement.h"
 #include "data/db/transaction.h"
 
-#include <sqlite3.h>   // the test opens the handle borrow() is given (case 8)
 
 #include <sys/wait.h>
 #include <unistd.h>
@@ -241,7 +240,7 @@ int main()
         db::Statement s(a, "SELECT * FROM nowhere");
         db::Error e;
         const bool ran = s.step(&e);
-        check(!ran && e.code == SQLITE_ERROR && contains(e.message, "A: ") && contains(e.message, "no such table")
+        check(!ran && e.code == 1 /* SQLITE_ERROR */ && contains(e.message, "A: ") && contains(e.message, "no such table")
                   && e.statement == "SELECT * FROM nowhere",
               "a failed statement names its connection, SQLite's message and itself: " + e.message);
     }
@@ -315,32 +314,18 @@ int main()
         check(countOf(c, "committed") == 1, "CONTROL: the committed child's write is PRESENT");
     }
 
-    // 8b. borrow(): a handle someone else opened (as the Database borrows Qt's).
+    // 8b. A CONNECTION WITH NO HANDLE (the borrow is gone with stage 3: a connection is opened, never lent): its
+    //     statement answers a named error.
     {
-        sqlite3 *raw = nullptr;
-        sqlite3_open(kFile, &raw);
+        db::Connection none;
         db::Error e;
-        {
-            db::Connection lent = db::Connection::borrow(raw, "lent", &e);
-            check(lent.isOpen() && !e && countOf(lent, "kept") == 1, "a borrowed handle runs statements");
-        }
-        // ...and borrow() APPLIES its floor (ruling 8, choice C): the same handle refused THROUGH borrow().
-        db::Error be;
-        db::Connection floored = db::Connection::borrow(raw, "floored", &be, db::libraryVersion() + 1);
-        check(!floored.isOpen() && contains(be.message, "floored: ") && contains(be.message, "older than the library needs"),
-              "borrow() refuses a library below its floor, by name: " + be.message);
-        db::Connection none = db::Connection::borrow(nullptr, "nothing", &e);
-        check(!none.isOpen() && e && contains(e.message, "nothing: no handle to borrow"),
-              "borrow(nullptr) is refused by name: " + e.message);
         db::Statement s(none, "SELECT 1");
         const bool ran = s.step(&e);
         check(!ran && contains(e.message, "no handle"), "a statement on no handle answers a named error: " + e.message);
-        check(sqlite3_close(raw) == SQLITE_OK, "the borrowed handle is still its owner's to close");
     }
 
     // 9. THE STATEMENT TRACE (stage 2): it sees every statement run on the connection it is installed on, once per
-    //    execution, and none run on another connection; a borrower of the same handle shares it; removed, it sees
-    //    nothing more; the last borrower's end removes it from a handle that lives on.
+    //    execution, and none run on another connection; removed, it sees nothing more.
     {
         db::Connection a = openNamed("A");
         db::Connection b = openNamed("B");
@@ -366,20 +351,6 @@ int main()
         a.trace({});
         countOf(a, "kept");
         check(seen.size() == 4, "a removed trace sees nothing more: " + std::to_string(seen.size()));
-
-        sqlite3 *raw = nullptr;
-        sqlite3_open(kFile, &raw);
-        std::size_t lent = 0;
-        {
-            db::Connection first = db::Connection::borrow(raw, "first", &e);
-            db::Connection second = db::Connection::borrow(raw, "second", &e);
-            first.trace([&lent](std::string_view) { ++lent; });
-            countOf(second, "kept");
-            check(lent == 1, "a trace installed through one borrower sees the other's statement: " + std::to_string(lent));
-        }
-        sqlite3_exec(raw, "SELECT 1", nullptr, nullptr, nullptr);   // the State is gone: its trace must be too
-        check(lent == 1, "the last borrower's end removes its trace from the live handle: " + std::to_string(lent));
-        sqlite3_close(raw);
     }
 
     // 10. run() (stage 2, the lead's ruling A): a statement run TO ITS END - a failing write answers false and names
@@ -481,6 +452,15 @@ int main()
                   + std::to_string(byName["obsB"]) + ")");
         check(a.observed() && !before.observed() && byName.count("beforeObserver") == 0,
               "13: a connection opened before the observer is not observed");
+        // THE OBSERVER's SLOT IS NEVER TAKEN (the reader's note 1): trace() on an observed connection is refused, and
+        // its statements still count under its name - beside the unobserved connection, whose trace() is taken.
+        const bool replaced = a.trace([](std::string_view) {});
+        const bool removed = a.trace({});
+        countOf(a, "kept");
+        check(!replaced && !removed && byName["obsA"] == aOpen + 3,
+              "13: trace() on an observed connection is REFUSED and its count goes on (obsA " + std::to_string(byName["obsA"])
+                  + ")");
+        check(before.trace({}), "13: CONTROL: trace() on an unobserved connection is taken");
     }
 
     // 14. THE PAGER's COUNTS (stage 3: databasereads' page reads and the suites' page writes, through the layer): a

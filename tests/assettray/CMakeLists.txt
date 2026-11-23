@@ -80,18 +80,11 @@ jah_d11_suite(test_library_model library.model test_library_model.cpp
     ${CMAKE_SOURCE_DIR}/src/services/previewdemand.cpp)
 jah_ship_row(library.model)   # THE SHIP SET (TEST-CUT-1)
 
-# library.statements — LARGE-LIBRARY-1 stage 1: the library's statements, counted by SQLite's own
-# statement trace on the default connection (data/database/databasereads.h), do not grow with the
-# library; the trace's negative controls. THE STATED LIMIT (ruled call 3): only the default connection
-# is traced — a per-asset query moved onto a worker connection would not be seen. The trace needs the
-# SYSTEM SQLite the Qt driver uses, linked as the app links it (the Studio CMakeLists.txt's SQLite3 block).
+# library.statements — LARGE-LIBRARY-1 stage 1: the library's statements, counted by the layer's statement
+# observer per connection NAME (data/database/databasereads.h; NOQT-DATABASE-1 stage 3), do not grow with the
+# library; the trace's negative controls. The editor's statements count under "editor", a worker's under its own.
 jah_d11_suite(test_library_statements library.statements test_library_statements.cpp
     ${CMAKE_SOURCE_DIR}/tests/support/libraryfixture.cpp)
-find_package(SQLite3 QUIET)
-if(SQLite3_FOUND)
-    target_link_libraries(test_library_statements PRIVATE SQLite::SQLite3)
-    target_compile_definitions(test_library_statements PRIVATE JAH_HAVE_SQLITE3=1)
-endif()
 target_compile_definitions(test_library_statements PRIVATE JAHSHAKA_TEST_SOURCE_DIR="${CMAKE_SOURCE_DIR}")
 set_tests_properties(library.statements PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen;JAH_DB_STATEMENT_TRACE=1")
 

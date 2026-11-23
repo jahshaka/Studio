@@ -32,14 +32,13 @@
 #include <QImage>
 #include <QRandomGenerator>
 #include <QSemaphore>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QThread>
 #include <QTimer>
 #include <QtConcurrent>
 #include <cstdio>
 
 #include "data/database/database.h"
+#include "../support/testsql.h"
 #include "services/assetcas.h"
 #include "services/assethelper.h"
 #include "services/assetstorepaths.h"
@@ -55,11 +54,9 @@
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); else { std::printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
-static int countRows(QSqlDatabase conn, const QString &sql)
+static int countRows(db::Connection &conn, const QString &sql)
 {
-    QSqlQuery q(conn);
-    q.exec(sql);
-    return q.next() ? q.value(0).toInt() : -1;
+    return int(testsql::integer(conn, sql));
 }
 
 static int countObjects(const QString &root)
@@ -111,7 +108,7 @@ int main(int argc, char **argv)
     CHECK(db.initializeDatabase(dbPath), "fresh database opened");
     db.createAllTables();
     AssetStorePaths::setRootOverride(root);
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db.connection();
 
     const QString glb =
         QString(JAHSHAKA_TEST_SOURCE_DIR "/tests/importer/fixtures/mislabeled_embedded.glb");
@@ -414,24 +411,23 @@ int main(int argc, char **argv)
         };
         QVector<Seen> seen;
         {
-            QSqlDatabase probe = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("sink-probe"));
-            probe.setDatabaseName(dbPath);
-            CHECK(probe.open(), "4b: a second connection to the library");
-            db.setImportPictureSink([&seen, probe](const QString &guid, const QImage &picture) {
+            db::Connection probe = testsql::open(dbPath, "sink-probe");
+            CHECK(probe.isOpen(), "4b: a second connection to the library");
+            db.setImportPictureSink([&seen, &probe](const QString &guid, const QImage &picture) {
                 Seen s;
                 s.guid = guid;
                 s.picture = !picture.isNull();
-                QSqlQuery row(probe);
-                row.prepare(QStringLiteral("SELECT length(thumbnail) FROM assets WHERE guid = ?"));
-                row.addBindValue(guid);
-                if (row.exec() && row.next()) {
-                    s.committedRow = true;
-                    s.emptyTile = row.value(0).isNull() || row.value(0).toInt() == 0;
+                {
+                    db::Statement row(probe, "SELECT length(thumbnail) FROM assets WHERE guid = ?");
+                    dbqt::bindText(row, 1, guid);
+                    db::Error e;
+                    if (row.step(&e)) {
+                        s.committedRow = true;
+                        s.emptyTile = row.isNull(0) || row.int64(0) == 0;
+                    }
                 }
-                QSqlQuery file(probe);
-                file.prepare(QStringLiteral("SELECT 1 FROM asset_files WHERE asset_guid = ? AND role = 'source'"));
-                file.addBindValue(guid);
-                s.committedFile = file.exec() && file.next();
+                s.committedFile = testsql::integer(probe, QStringLiteral("SELECT 1 FROM asset_files WHERE asset_guid = ? "
+                                                                         "AND role = 'source'"), guid) == 1;
                 seen.append(s);
             });
             AssetImportService service(&db, nullptr);
@@ -447,9 +443,7 @@ int main(int argc, char **argv)
                   "4b: ...AFTER the commit: another connection sees the row and its source file");
             CHECK(!seen.isEmpty() && seen.first().emptyTile,
                   "4b: ...and the import's transaction wrote NO tile (the one writer stores it, with its key)");
-            probe.close();
         }
-        QSqlDatabase::removeDatabase(QStringLiteral("sink-probe"));
     }
 
     // ---- 5. the completion tail: THE COMMITTED ASSET, queued per turn ------

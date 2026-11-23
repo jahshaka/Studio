@@ -48,8 +48,15 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
     if (!QFile::exists(dbPath)) { sLast = result; return result; }
 
     Database library;
-    if (!library.initializeDatabase(dbPath)) {
-        result.outcome = Outcome::Current;   // nothing readable to judge: never wipe on a guess
+    QString openError;
+    if (!library.initializeDatabase(dbPath, &openError)) {
+        // AN EXISTING LIBRARY THAT CANNOT BE OPENED IS NO GENERATION EITHER (NOQT-DATABASE-1 stage 3: the layer's open
+        // reads the file, so a file that is not a library fails HERE - the generation read below used to): never
+        // "current" on a guess and never a reset - the open is REFUSED by name, the file left as it is.
+        result.outcome = Outcome::Refused;
+        result.reason = QStringLiteral("the library could not be read (%1); it was left as it is - check the file %2 (a "
+                                       "disk or permission fault, or a file that is not a Jahshaka library)")
+                            .arg(openError, dbPath);
         sLast = result;
         return result;
     }

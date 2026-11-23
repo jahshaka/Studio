@@ -44,16 +44,13 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QImage>
-#include <QSqlDatabase>
-#include <QSqlError>
-#include <QSqlQuery>
-#include <QSqlRecord>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QVariant>
 
 #include "data/database/database.h"
 #include "services/previewwriter.h"
+#include "../support/testsql.h"
 
 namespace {
 
@@ -82,65 +79,43 @@ bool waitFor(const std::function<bool()> &done)
     return true;
 }
 
+/// The suite's UI connection (the Database's: main sets it once it is open).
+db::Connection *gLibrary = nullptr;
+
 void addAsset(const QString &guid, int listed = 1)
 {
-    QSqlQuery q;
-    q.prepare(QStringLiteral("INSERT INTO assets (guid, type, name, listed) VALUES (?, 1, ?, ?)"));
-    q.addBindValue(guid);
-    q.addBindValue(guid);
-    q.addBindValue(listed);
-    q.exec();
+    testsql::run(*gLibrary, QStringLiteral("INSERT INTO assets (guid, type, name, listed) VALUES (?, 1, ?, ?)"), guid,
+                 guid, listed);
 }
 
 QString storedKey(const QString &guid)
 {
-    QSqlQuery q;
-    q.prepare(QStringLiteral("SELECT hash FROM thumbnails WHERE guid = ?"));
-    q.addBindValue(guid);
-    return q.exec() && q.next() ? q.value(0).toString() : QString();
+    return testsql::text(*gLibrary, QStringLiteral("SELECT hash FROM thumbnails WHERE guid = ?"), guid);
 }
 
 QString nameOf(const QString &guid)
 {
-    QSqlQuery q;
-    q.prepare(QStringLiteral("SELECT name FROM assets WHERE guid = ?"));
-    q.addBindValue(guid);
-    return q.exec() && q.next() ? q.value(0).toString() : QString();
-}
-
-QByteArray digestOf(QSqlDatabase conn)
-{
-    QCryptographicHash hash(QCryptographicHash::Sha256);
-    QStringList tables;
-    {
-        QSqlQuery t(conn);
-        t.exec(QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"));
-        while (t.next()) tables << t.value(0).toString();
-    }
-    for (const QString &table : tables) {
-        QSqlQuery q(conn);
-        q.exec(QStringLiteral("SELECT * FROM \"%1\" ORDER BY rowid").arg(table));
-        hash.addData(table.toUtf8());
-        while (q.next())
-            for (int c = 0; c < q.record().count(); ++c) hash.addData(q.value(c).toByteArray() + '\x1f');
-    }
-    return hash.result();
+    return testsql::text(*gLibrary, QStringLiteral("SELECT name FROM assets WHERE guid = ?"), guid);
 }
 
 /// Every table's every row, hashed: "byte-equal" for the whole library - read on a FRESH connection
-/// of its own (the UI connection's own view is the stale snapshot under test).
+/// of its own (the UI connection's own view is the stale snapshot under test). Each value by its quote().
 QByteArray libraryDigest(const QString &path)
 {
-    QByteArray digest;
-    {
-        QSqlDatabase fresh = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("digest"));
-        fresh.setDatabaseName(path);
-        fresh.open();
-        digest = digestOf(fresh);
-        fresh.close();
+    QCryptographicHash hash(QCryptographicHash::Sha256);
+    db::Connection fresh = testsql::open(path, "digest", /*readOnly*/ true);
+    const QStringList tables =
+        testsql::column(fresh, QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'table' ORDER BY name"));
+    for (const QString &table : tables) {
+        const QStringList columns =
+            testsql::column(fresh, QStringLiteral("SELECT 'quote(\"' || name || '\")' FROM pragma_table_info(?) ORDER BY cid"),
+                            table);
+        hash.addData(table.toUtf8());
+        for (const QString &row : testsql::column(fresh, QStringLiteral("SELECT %1 FROM \"%2\" ORDER BY rowid")
+                                                             .arg(columns.join(QStringLiteral(" || '\x1f' || ")), table)))
+            hash.addData(row.toUtf8());
     }
-    QSqlDatabase::removeDatabase(QStringLiteral("digest"));
-    return digest;
+    return hash.result();
 }
 
 QImage solid(QRgb colour)
@@ -176,6 +151,7 @@ int main(int argc, char **argv)
     const QString path = dir.filePath(QStringLiteral("JahLibrary.db"));
     Database db;
     check(db.initializeDatabase(path), "a temp library opens");
+    gLibrary = &db.connection();
     db.createAllTables();
     for (const char *g : { "t1", "p1", "t2", "p2", "p3", "u1", "p4", "t4", "p5" }) addAsset(QString::fromLatin1(g));
     addAsset(QStringLiteral("gone"), 0);
@@ -193,10 +169,9 @@ int main(int argc, char **argv)
             const QString before = nameOf(QStringLiteral("t1"));   // the read: a finished statement
             check(previewLandsOrWaits(writer, QStringLiteral("p1"), QStringLiteral("00000000000000p1"), drops, &landed),
                   "1: the preview landed or waited behind the transaction");
-            QSqlQuery w;
-            wrote = w.exec(QStringLiteral("UPDATE assets SET name = 'tx-wrote' WHERE guid = 't1'"));
-            if (!wrote) std::printf("     1: the write failed: %s (native %s)\n", qUtf8Printable(w.lastError().text()),
-                                    qUtf8Printable(w.lastError().nativeErrorCode()));
+            db::Error we;
+            wrote = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'tx-wrote' WHERE guid = 't1'"), &we);
+            if (!wrote) std::printf("     1: the write failed: %s\n", qUtf8Printable(dbqt::describe(we)));
             committed = tx.commit();
             Q_UNUSED(before);
         }
@@ -231,26 +206,22 @@ int main(int argc, char **argv)
     // 3. The import claim's statement sequence: live reads (the negative control), then scoped ones.
     {
         bool landed = false;
-        QSqlQuery any;
-        any.exec(QStringLiteral("SELECT COUNT(*) FROM assets WHERE listed = 0"));
-        any.next();
-        QSqlQuery match;
-        match.exec(QStringLiteral("SELECT guid FROM assets WHERE listed = 0 LIMIT 1"));
-        match.next();
+        db::Error e;
+        // LIVE: each stepped ONCE and left un-reset (a statement holds its snapshot until reset or finalized).
+        db::Statement any(db.connection(), "SELECT COUNT(*) FROM assets WHERE listed = 0");
+        any.step(&e);
+        db::Statement match(db.connection(), "SELECT guid FROM assets WHERE listed = 0 LIMIT 1");
+        match.step(&e);
         check(previewLandsOrWaits(writer, QStringLiteral("p4"), QStringLiteral("00000000000000p4"), drops, &landed) && landed,
               "3: a preview lands while the claim's two reads are live");
         const bool liveWrote = db.setAssetListed(QStringLiteral("gone"), true);
         check(!liveWrote, "3: NEGATIVE CONTROL - with the reads LIVE the write fails at once (517): the hazard is real");
-        any.finish();
-        match.finish();
+        any.reset();
+        match.reset();
         QString guid;
         {
-            QSqlQuery scopedAny;
-            scopedAny.exec(QStringLiteral("SELECT COUNT(*) FROM assets WHERE listed = 0"));
-            scopedAny.next();
-            QSqlQuery scopedMatch;
-            scopedMatch.exec(QStringLiteral("SELECT guid FROM assets WHERE listed = 0 LIMIT 1"));
-            if (scopedMatch.next()) guid = scopedMatch.value(0).toString();
+            testsql::integer(db.connection(), QStringLiteral("SELECT COUNT(*) FROM assets WHERE listed = 0"));
+            guid = testsql::text(db.connection(), QStringLiteral("SELECT guid FROM assets WHERE listed = 0 LIMIT 1"));
         }
         check(previewLandsOrWaits(writer, QStringLiteral("p4"), QStringLiteral("00000000000000p6"), drops, &landed) && landed,
               "3: a preview lands after the scoped reads");
@@ -260,9 +231,9 @@ int main(int argc, char **argv)
     // 4. A stale live read: the transaction behind it fails loudly.
     {
         bool landed = false;
-        QSqlQuery stale;
-        stale.exec(QStringLiteral("SELECT name FROM assets WHERE guid = 'u1' LIMIT 1"));
-        stale.next();
+        db::Error staleError;
+        db::Statement stale(db.connection(), "SELECT name FROM assets WHERE guid = 'u1' LIMIT 1");
+        stale.step(&staleError);   // LIVE: stepped once, not reset
         check(previewLandsOrWaits(writer, QStringLiteral("p5"), QStringLiteral("00000000000000p5"), drops, &landed) && landed,
               "4: a preview lands while a read is live");
         warnings.clear();
@@ -271,16 +242,15 @@ int main(int argc, char **argv)
         {
             DbTransaction tx(db.connection());
             funnel = db.updateAssetAsset(QStringLiteral("t4"), QByteArrayLiteral("{\"half\":1}"));
-            QSqlQuery w;
-            raw = w.exec(QStringLiteral("UPDATE assets SET name = 'behind-stale' WHERE guid = 't4'"));
+            raw = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'behind-stale' WHERE guid = 't4'"));
             {
                 DbTransaction inner(db.connection());
-                QSqlQuery n;
-                nested = n.exec(QStringLiteral("UPDATE assets SET name = 'nested' WHERE guid = 'u1'")) && inner.commit();
+                nested = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'nested' WHERE guid = 'u1'"))
+                         && inner.commit();
             }
             committed = tx.commit();
         }
-        stale.finish();
+        stale.reset();
         const bool named = !warnings.filter(QStringLiteral("could NOT BEGIN")).isEmpty()
                            && !warnings.filter(QStringLiteral("stale snapshot")).isEmpty();
         for (const QString &w : warnings) std::printf("     4: warned: %s\n", qUtf8Printable(w));
@@ -291,8 +261,8 @@ int main(int argc, char **argv)
         bool next = false;
         {
             DbTransaction tx(db.connection());
-            QSqlQuery w;
-            next = w.exec(QStringLiteral("UPDATE assets SET name = 'after' WHERE guid = 't4'")) && tx.commit();
+            next = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'after' WHERE guid = 't4'"))
+                   && tx.commit();
         }
         check(next && nameOf(QStringLiteral("t4")) == QStringLiteral("after"),
               "4: the next transaction on the connection works (the refusal ended with its scope)");
@@ -301,41 +271,29 @@ int main(int argc, char **argv)
 
     // 5. A BEGIN that times out behind another writer: nothing written, even after it lets go.
     {
-        QSqlQuery shortWait;
-        shortWait.exec(QStringLiteral("PRAGMA busy_timeout = 50"));
-        QSqlDatabase other = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("other"));
-        other.setDatabaseName(path);
-        other.open();
-        {
-            QSqlQuery hold(other);
-            check(hold.exec(QStringLiteral("BEGIN IMMEDIATE")), "5: another connection holds the write lock");
-        }
+        testsql::exec(db.connection(), QStringLiteral("PRAGMA busy_timeout = 50"));
+        db::Connection other = testsql::open(path, "other");
+        check(testsql::exec(other, QStringLiteral("BEGIN IMMEDIATE")), "5: another connection holds the write lock");
         const QByteArray before = libraryDigest(path);
         bool committed = true, funnel = true, raw = true;
         warnings.clear();
         {
             DbTransaction tx(db.connection());   // its BEGIN times out at 50 ms
-            {
-                QSqlQuery release(other);
-                release.exec(QStringLiteral("COMMIT"));   // the lock is free before the scope writes
-            }
+            testsql::exec(other, QStringLiteral("COMMIT"));   // the lock is free before the scope writes
             funnel = db.updateAssetAsset(QStringLiteral("t4"), QByteArrayLiteral("{\"half\":2}"));
-            QSqlQuery w;
-            raw = w.exec(QStringLiteral("UPDATE assets SET name = 'half-a-unit' WHERE guid = 't4'"));
+            raw = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'half-a-unit' WHERE guid = 't4'"));
             committed = tx.commit();
         }
         check(!warnings.filter(QStringLiteral("could NOT BEGIN")).isEmpty(), "5: the BEGIN failed (timed out), by name");
         check(!committed && !funnel && !raw, "5: every write of the scope is refused although the lock is free");
         check(libraryDigest(path) == before, "5: A FAILED UNIT WRITES NOTHING - every table is byte-equal after it");
-        other.close();
-        other = QSqlDatabase();
-        QSqlDatabase::removeDatabase(QStringLiteral("other"));
-        shortWait.exec(QStringLiteral("PRAGMA busy_timeout = 5000"));
+        other = db::Connection();
+        testsql::exec(db.connection(), QStringLiteral("PRAGMA busy_timeout = 5000"));
         bool next = false;
         {
             DbTransaction tx(db.connection());
-            QSqlQuery w;
-            next = w.exec(QStringLiteral("UPDATE assets SET name = 'after-5' WHERE guid = 't4'")) && tx.commit();
+            next = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'after-5' WHERE guid = 't4'"))
+                   && tx.commit();
         }
         check(next && nameOf(QStringLiteral("t4")) == QStringLiteral("after-5"), "5: the next transaction works");
     }

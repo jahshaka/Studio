@@ -10,13 +10,12 @@
 #include <QDir>
 #include <QFile>
 #include <QRegularExpression>
-#include <QSqlQuery>
-#include <QSqlError>
 #include <cmath>
 #include <cstdio>
 
 #include "data/database/database.h"
 #include "data/project.h"
+#include "../support/testsql.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 
@@ -45,8 +44,7 @@ int main(int argc, char **argv)
     //     The schema check (Database::schemaMatchesFresh, run by main() before
     //     anything opens the library) names it; main() then wipes it.
     {
-        QSqlQuery q;
-        bool ok = q.exec(
+        bool ok = testsql::exec(db.connection(),
             "CREATE TABLE projects ("
             "    name VARCHAR(64), last_accessed DATETIME, last_written DATETIME,"
             "    date_created DATETIME DEFAULT CURRENT_TIMESTAMP, version VARCHAR(8),"
@@ -54,7 +52,7 @@ int main(int argc, char **argv)
             "    thumbnail BLOB, scene BLOB)");
         CHECK(ok, "a pre-desktops projects table created");
         CHECK(!db.schemaMatchesFresh(), "the schema check REFUSES a pre-desktops library");
-        CHECK(q.exec("DROP TABLE projects"), "...and it is dropped (the wipe's job)");
+        CHECK(testsql::exec(db.connection(), "DROP TABLE projects"), "...and it is dropped (the wipe's job)");
     }
     db.createAllTables();
     CHECK(db.schemaMatchesFresh(), "a fresh library matches this build's schema");
@@ -65,8 +63,7 @@ int main(int argc, char **argv)
               db.checkIfColumnExists("projects", "slider_index"),
           "the fresh schema has the slider columns (they were ALTER-only before)");
     {
-        QSqlQuery q;
-        CHECK(q.exec("INSERT INTO projects (name, last_written, guid) VALUES "
+        CHECK(testsql::exec(db.connection(), "INSERT INTO projects (name, last_written, guid) VALUES "
                      "('Legacy A', datetime('now', '-1 hour'), 'guid-a'),"
                      "('Legacy B', datetime('now', '-2 hour'), 'guid-b')"),
               "two projects inserted with no desktop given");
@@ -175,13 +172,10 @@ int main(int argc, char **argv)
     //     orders by as TEXT ('T' > ' ', so every imported project sorted first).
     {
         const QRegularExpression shape(QStringLiteral("^\\d{4}-\\d{2}-\\d{2} \\d{2}:\\d{2}:\\d{2}$"));
-        auto columns = [](const QString &guid) {
-            QSqlQuery q;
-            q.prepare("SELECT last_written, last_accessed FROM projects WHERE guid = ?");
-            q.addBindValue(guid);
-            q.exec();
-            q.next();
-            return QStringList{ q.value(0).toString(), q.value(1).toString() };
+        auto columns = [&db](const QString &guid) {
+            return QStringList{
+                testsql::text(db.connection(), QStringLiteral("SELECT last_written FROM projects WHERE guid = ?"), guid),
+                testsql::text(db.connection(), QStringLiteral("SELECT last_accessed FROM projects WHERE guid = ?"), guid) };
         };
         CHECK(db.createProject("guid-rt", "Round Trip"), "a project to round-trip");
         const QStringList before = columns("guid-rt");
@@ -195,21 +189,11 @@ int main(int argc, char **argv)
         // archive an older build wrote in the ISO form imports all the same,
         // stamped with the import moment.
         {
-            QSqlDatabase arc = QSqlDatabase::addDatabase("QSQLITE", "rt-arc");
-            arc.setDatabaseName("rt-export/guid-rt.db");
-            arc.open();
-            QSqlQuery q(arc);
-            q.exec("UPDATE projects SET last_written = '2018-04-18T05:49:43.000', "
-                   "last_accessed = '2018-04-18T05:49:43.000'");
-            arc.close();
+            db::Connection arc = testsql::open(QStringLiteral("rt-export/guid-rt.db"), "rt-arc");
+            testsql::exec(arc, "UPDATE projects SET last_written = '2018-04-18T05:49:43.000', "
+                               "last_accessed = '2018-04-18T05:49:43.000'");
         }
-        QSqlDatabase::removeDatabase("rt-arc");
-        const QString importMoment = [] {
-            QSqlQuery q;
-            q.exec("SELECT datetime()");
-            q.next();
-            return q.value(0).toString();
-        }();
+        const QString importMoment = testsql::text(db.connection(), QStringLiteral("SELECT datetime()"));
         QString worldName;
         QMap<QString, QString> guidMap;
         CHECK(db.importProject(QStringLiteral("rt-export/guid-rt"), "guid-rt-2", worldName, guidMap),
@@ -230,12 +214,9 @@ int main(int argc, char **argv)
     {
         CHECK(db.createProject("guid-st", "Stamp"), "a project whose Object rides an archive");
         const QByteArray compact = QByteArrayLiteral("{\"name\":\"stamped\",\"children\":[]}");
-        {
-            QSqlQuery q;
-            q.prepare("INSERT INTO assets (guid, type, name, project_guid) VALUES ('obj-st', ?, 'obj', 'guid-st')");
-            q.addBindValue(static_cast<int>(ModelTypes::Object));
-            q.exec();
-        }
+        testsql::run(db.connection(), QStringLiteral("INSERT INTO assets (guid, type, name, project_guid) VALUES "
+                                                     "('obj-st', ?, 'obj', 'guid-st')"),
+                     static_cast<int>(ModelTypes::Object));
         CHECK(db.updateAssetAsset("obj-st", compact), "the Object's blob is written through the edit door");
         const QString exported = Database::blobStamp(compact);
         QDir().mkpath("st-export");
@@ -243,24 +224,19 @@ int main(int argc, char **argv)
               "the archive's catalog is written");
         QString archived;
         {
-            QSqlDatabase arc = QSqlDatabase::addDatabase("QSQLITE", "st-arc");
-            arc.setDatabaseName("st-export/guid-st.db");
-            arc.open();
-            QSqlQuery q(arc);
-            if (q.exec("SELECT hash FROM assets WHERE guid = 'obj-st'") && q.next()) archived = q.value(0).toString();
-            arc.close();
+            db::Connection arc = testsql::open(QStringLiteral("st-export/guid-st.db"), "st-arc", /*readOnly*/ true);
+            archived = testsql::text(arc, QStringLiteral("SELECT hash FROM assets WHERE guid = 'obj-st'"));
         }
-        QSqlDatabase::removeDatabase("st-arc");
         CHECK(!exported.isEmpty() && archived == exported, "the export carries the source row's stamp");
-        QSqlQuery gone;
-        gone.exec("DELETE FROM assets WHERE guid = 'obj-st'");   // so the import inserts it (a known guid is skipped)
+        // so the import inserts it (a known guid is skipped)
+        testsql::exec(db.connection(), "DELETE FROM assets WHERE guid = 'obj-st'");
         QString worldName;
         QMap<QString, QString> guidMap;
         CHECK(db.importProject(QStringLiteral("st-export/guid-st"), "guid-st-2", worldName, guidMap), "the archive imports");
-        QSqlQuery row;
-        const bool found = row.exec("SELECT hash, asset FROM assets WHERE guid = 'obj-st'") && row.next();
-        const QString stamp = found ? row.value(0).toString() : QString();
-        const QByteArray written = found ? row.value(1).toByteArray() : QByteArray();
+        const QString stamp = testsql::text(db.connection(), QStringLiteral("SELECT hash FROM assets WHERE guid = 'obj-st'"));
+        const QByteArray written =
+            testsql::bytes(db.connection(), QStringLiteral("SELECT asset FROM assets WHERE guid = 'obj-st'"));
+        const bool found = !stamp.isNull();
         CHECK(found && written != compact && !written.isEmpty(),
               "the import wrote the Object's blob re-serialised (its bytes are not the archive's)");
         CHECK(stamp == Database::blobStamp(written) && stamp != exported,
@@ -304,12 +280,8 @@ int main(int argc, char **argv)
         for (const char *g : { "own-mat", "own-tex", "own-shared", "lib-obj", "lib-member" })
             AssetCas::writePin(db.connection(), "guid-own", g, QString());
         AssetCas::writePin(db.connection(), "guid-other", "own-shared", QString());
-        auto filesOf = [](const QString &g) {
-            QSqlQuery q;
-            q.prepare("SELECT COUNT(*) FROM asset_files WHERE asset_guid = ?");
-            q.addBindValue(g);
-            q.exec(); q.next();
-            return q.value(0).toInt();
+        auto filesOf = [&db](const QString &g) {
+            return int(testsql::integer(db.connection(), QStringLiteral("SELECT COUNT(*) FROM asset_files WHERE asset_guid = ?"), g));
         };
         CHECK(filesOf("own-tex") == 1, "the owned picture has its stored-file mapping");
         CHECK(db.deleteProject("guid-own"), "the owning project is deleted");
@@ -332,9 +304,8 @@ int main(int argc, char **argv)
     {
         CHECK(db.createProject("guid-tie-1", "Tie One"), "the first same-second create");
         CHECK(db.createProject("guid-tie-2", "Tie Two"), "the second same-second create");
-        QSqlQuery q;
-        CHECK(q.exec("UPDATE projects SET last_written = '2099-01-01 00:00:00', desktop = 4 "
-                     "WHERE guid IN ('guid-tie-1', 'guid-tie-2')"),
+        CHECK(testsql::exec(db.connection(), "UPDATE projects SET last_written = '2099-01-01 00:00:00', desktop = 4 "
+                                             "WHERE guid IN ('guid-tie-1', 'guid-tie-2')"),
               "both stamped with one second (on a desktop of their own)");
         bool stable = true;
         for (int i = 0; i < 20; ++i) {
@@ -347,7 +318,7 @@ int main(int argc, char **argv)
         CHECK(all.size() >= 2 && all[0].guid == "guid-tie-2" && all[1].guid == "guid-tie-1",
               "...and the all-desktops fetch (the same one query) agrees");
         // A later SAVE of the older one wins its own second outright.
-        CHECK(q.exec("UPDATE projects SET last_written = '2099-01-01 00:00:01' WHERE guid = 'guid-tie-1'"),
+        CHECK(testsql::exec(db.connection(), "UPDATE projects SET last_written = '2099-01-01 00:00:01' WHERE guid = 'guid-tie-1'"),
               "the older one written a second later");
         const auto after = db.fetchProjects(4);
         CHECK(after.size() == 2 && after[0].guid == "guid-tie-1",

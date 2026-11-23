@@ -46,14 +46,13 @@ For more information see the LICENSE file
 #include <QMutex>
 #include <QThread>
 #include <QPixmap>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 #include <algorithm>
 #include <QUuid>
 #include <cstdio>
 
 #include "data/database/database.h"
 #include "data/project.h"
+#include "../support/testsql.h"
 #include "services/assetcas.h"
 #include "services/assettray.h"
 #include "services/previewdemand.h"
@@ -81,12 +80,13 @@ static QByteArray png(int i)
     return bytes;
 }
 
-static bool planUses(const QString &sql, const QString &index)
+static bool planUses(db::Connection &c, const QString &sql, const QString &index)
 {
-    QSqlQuery q;
-    if (!q.exec(QStringLiteral("EXPLAIN QUERY PLAN ") + sql)) return false;
+    db::Statement q(c, (QStringLiteral("EXPLAIN QUERY PLAN ") + sql).toStdString());
+    db::Error e;
     QString plan;
-    while (q.next()) plan += q.value(3).toString() + QLatin1Char(' ');
+    while (q.step(&e)) plan += dbqt::text(q, 3) + QLatin1Char(' ');
+    if (e) return false;
     std::printf("   plan [%s]: %s\n", qPrintable(sql.left(60)), qPrintable(plan));
     return plan.contains(index);
 }
@@ -129,21 +129,18 @@ int main(int argc, char **argv)
 
     // ---- THE INDEXES (§3.5) -------------------------------------------------
     {
-        QSqlQuery q;
-        q.exec(QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'index'"));
-        QStringList names;
-        while (q.next()) names << q.value(0).toString();
+        const QStringList names = testsql::column(db.connection(), QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'index'"));
         for (const char *want : { "idx_assets_parent", "idx_assets_project_guid", "idx_assets_view_filter_listed",
                                   "idx_assets_collection_listed", "idx_projects_tiles" })
             CHECK(names.contains(QString::fromLatin1(want)), "the schema carries %s", want);
-        CHECK(planUses(QStringLiteral("SELECT guid FROM assets WHERE project_guid = 'x'"), QStringLiteral("idx_assets_project_guid")),
+        CHECK(planUses(db.connection(), QStringLiteral("SELECT guid FROM assets WHERE project_guid = 'x'"), QStringLiteral("idx_assets_project_guid")),
               "a project_guid predicate is planned on its index");
-        CHECK(planUses(QStringLiteral("SELECT guid FROM assets WHERE parent = 'x' AND project_guid = 'y'"),
+        CHECK(planUses(db.connection(), QStringLiteral("SELECT guid FROM assets WHERE parent = 'x' AND project_guid = 'y'"),
                        QStringLiteral("idx_assets_")),
               "the tray's parent/project predicate is planned on an index");
-        CHECK(planUses(QStringLiteral("SELECT guid FROM assets WHERE collection = 3"), QStringLiteral("idx_assets_collection_listed")),
+        CHECK(planUses(db.connection(), QStringLiteral("SELECT guid FROM assets WHERE collection = 3"), QStringLiteral("idx_assets_collection_listed")),
               "a drawer predicate is planned on its index");
-        CHECK(planUses(QStringLiteral("SELECT guid FROM projects WHERE desktop = 2"), QStringLiteral("idx_projects_tiles")),
+        CHECK(planUses(db.connection(), QStringLiteral("SELECT guid FROM projects WHERE desktop = 2"), QStringLiteral("idx_projects_tiles")),
               "a desktop predicate is planned on its index");
     }
 

@@ -11,7 +11,7 @@ For more information see the LICENSE file
 
 // db.units (NOQT-DATABASE-1 stage 2, the transaction core) — the REAL Database's units of writes on
 // the std-only layer, on a throwaway library of its own:
-//   1. where the layer cannot borrow the driver's SQLite the library does NOT open: a named error;
+//   1. a library that cannot be opened is refused, said by name (the open is the layer's: stage 3);
 //   2. a unit whose BEGIN fails REFUSES its writes: the funnel refuses them unexecuted, the BEGIN's
 //      warning names the lock's holder, its commit answers false; the next scope writes again;
 //   3. the gesture batch STANDS DOWN for a unit on its connection (the batch-commit listener fires
@@ -35,12 +35,12 @@ For more information see the LICENSE file
 //      report reads -1;
 //  17. a tile read that failed, or has no library, answers no answer (unread), never an empty one ("no picture"); a
 //      failure streak is said once, and ended by its count;
-//  18. the preview rows read short (a later row's step failed) answer no rows, never a cut list.
+//  18. the preview rows read short (a later row's step failed) answer no rows, never a cut list;
+//  19. the editor's connection is WAL with no checkpoint inside its commits (wal_autocheckpoint 0).
 
 #include <QApplication>
+#include <QDir>
 #include <QFile>
-#include <QSqlDatabase>
-#include <QSqlDriver>
 
 #include <sqlite3.h>
 
@@ -173,17 +173,34 @@ int main(int argc, char **argv)
     removeFile();
     qInstallMessageHandler(collect);
     Database database;
-    check(database.initializeDatabase(QString::fromLatin1(kFile)), QStringLiteral("CONTROL: the library opens (the borrow holds)"));
-    check(database.connection().isOpen(), QStringLiteral("CONTROL: connection() is the borrowed handle"));
+    check(database.initializeDatabase(QString::fromLatin1(kFile)), QStringLiteral("CONTROL: the library opens"));
+    check(database.connection().isOpen() && database.filePath() == QString::fromLatin1(kFile),
+          QStringLiteral("CONTROL: connection() is open on the library's file (%1)").arg(database.filePath()));
     database.createAllTables();
 
-    // 1. NO BORROW, NO LIBRARY.
+    // 1. A LIBRARY THAT CANNOT BE OPENED IS REFUSED, SAID BY NAME (stage 3: the open is the layer's): a directory is no
+    //    library - initializeDatabase answers false, the log names the connection and SQLite's reason, no handle left.
     {
         Database other;
-        QString error;
-        const bool borrowed = other.borrowConnection(QVariant(), &error);
-        check(!borrowed && error.contains(QStringLiteral("this build cannot open the library until NOQT-DATABASE-1 stage 3")),
-              QStringLiteral("a handle the layer cannot borrow is a named refusal: ") + error);
+        const QString notAFile = QStringLiteral("db_units_not_a_file");
+        QDir().mkpath(notAFile);
+        const quint64 from = JahLog::mark(QStringLiteral("db.units: case 1"));
+        const bool opened = other.initializeDatabase(notAFile);
+        const QStringList said = JahLog::since(from).filter(QStringLiteral("Couldn't open a database connection! editor: "));
+        QDir().rmdir(notAFile);
+        check(!opened && !other.connection().isOpen() && other.filePath().isEmpty() && said.size() == 1,
+              QStringLiteral("1: a library that cannot be opened is refused by name: %1").arg(said.join(QLatin1Char('|'))));
+    }
+
+    // 19. THE EDITOR's DURABILITY (stage 3, the reader's note 4): WAL answered, and NO checkpoint inside its commits
+    //     (wal_autocheckpoint 0: the worker's) - the option's default would be SQLite's 1000.
+    {
+        db::Statement autocheckpoint(database.connection(), "PRAGMA wal_autocheckpoint");
+        db::Error e;
+        const int pages = autocheckpoint.step(&e) ? int(autocheckpoint.int64(0)) : -1;
+        check(database.connection().wal() && pages == 0,
+              QStringLiteral("19: the editor's connection is WAL (%1) with no checkpoint in its commits: wal_autocheckpoint %2")
+                  .arg(database.connection().wal()).arg(pages));
     }
 
     // 2. A UNIT WHOSE BEGIN FAILS REFUSES ITS WRITES.
@@ -422,7 +439,7 @@ int main(int argc, char **argv)
         bool read = true;
         const bool pinned = database.isAssetPinnedBy(QStringLiteral("p11"), QStringLiteral("a11"), &read);
         check(pinned && read, QStringLiteral("11: CONTROL: a pin reads true (pinned %1, read %2)").arg(pinned).arg(read));
-        sqlite3 *raw = *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+        sqlite3 *raw = database.connection().state()->handle;
         sqlite3_set_authorizer(raw, [](void *, int action, const char *table, const char *, const char *, const char *) {
             const bool master = table && (std::strcmp(table, "sqlite_master") == 0 || std::strcmp(table, "sqlite_schema") == 0);
             return action == SQLITE_READ && master ? SQLITE_DENY : SQLITE_OK;
@@ -472,7 +489,7 @@ int main(int argc, char **argv)
                                    "VALUES (1, 2, NULL, 'f3-depender', 'f3-dependee', 'f3-edge')", &e);
         check(database.hasDependencies(QStringLiteral("f3-depender")),
               QStringLiteral("13: CONTROL: an asset with an edge has dependencies"));
-        sqlite3 *raw = *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+        sqlite3 *raw = database.connection().state()->handle;
         sqlite3_set_authorizer(raw, [](void *, int action, const char *table, const char *, const char *, const char *) {
             return action == SQLITE_READ && table && std::strcmp(table, "dependencies") == 0 ? SQLITE_DENY : SQLITE_OK;
         }, nullptr);
@@ -496,7 +513,7 @@ int main(int argc, char **argv)
         const QHash<QString, QString> filed = database.fetchProjectPinFolders(QStringLiteral("p14"), &read);
         check(read && filed.value(QStringLiteral("a14")) == QLatin1String("f14"),
               QStringLiteral("14: CONTROL: a filed pin reads its folder (%1)").arg(filed.value(QStringLiteral("a14"))));
-        sqlite3 *raw = *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+        sqlite3 *raw = database.connection().state()->handle;
         sqlite3_set_authorizer(raw, [](void *, int action, const char *table, const char *, const char *, const char *) {
             return action == SQLITE_READ && table && std::strcmp(table, "project_assets") == 0 ? SQLITE_DENY : SQLITE_OK;
         }, nullptr);

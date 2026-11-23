@@ -9,14 +9,15 @@
 // Framework-free; non-zero exit on failure.
 #include <QApplication>
 #include <QFile>
-#include <QSqlQuery>
-#include <QSqlError>
 #include <cstdio>
 
 #include "data/database/database.h"
 #include "data/project.h"
+#include "../support/testsql.h"
 
 static int failures = 0;
+/// The suite's library connection (main sets it once the Database is open): its own statements run on it.
+static db::Connection *gLibrary = nullptr;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
 // find a collection by id in a fetch result; -2 parent means "not found"
@@ -29,11 +30,9 @@ static CollectionRecord findCollection(const QVector<CollectionRecord> &colls, i
 
 static int collectionOfAsset(const QString &guid)
 {
-    QSqlQuery q;
-    q.prepare("SELECT collection FROM assets WHERE guid = ?");
-    q.addBindValue(guid);
-    q.exec();
-    return q.next() ? q.value(0).toInt() : -999;
+    const std::int64_t collection =
+        testsql::integer(*gLibrary, QStringLiteral("SELECT collection FROM assets WHERE guid = ?"), guid);
+    return collection < 0 ? -999 : int(collection);
 }
 
 int main(int argc, char **argv)
@@ -46,43 +45,39 @@ int main(int argc, char **argv)
 
     Database db;
     CHECK(db.initializeDatabase(dbPath), "throwaway database opened");
+    gLibrary = &db.connection();
 
     // FSYNC-2: the library opens in WAL with synchronous=NORMAL, so a catalog
     // write never makes its thread wait for the device. That thread is the UI
-    // thread (every Database method rides the default connection), and at the
+    // thread (every Database method rides the library's connection), and at the
     // SQLite defaults one commit measured 707 ms of frozen window on this box.
     // Integrity is untouched — WAL recovers to a transaction boundary from any
     // crash; what it gives up is the last few seconds of catalog writes after a
     // POWER CUT, which the store's sidecars can rebuild (database.cpp).
     {
-        QSqlQuery pragma;
-        pragma.exec(QStringLiteral("PRAGMA journal_mode"));
-        const QString mode = pragma.next() ? pragma.value(0).toString().toLower() : QString();
+        const QString mode = testsql::text(db.connection(), QStringLiteral("PRAGMA journal_mode")).toLower();
         CHECK(mode == QStringLiteral("wal"), "the library database is in WAL mode");
-        QSqlQuery sync;
-        sync.exec(QStringLiteral("PRAGMA synchronous"));
         // 0 = OFF, 1 = NORMAL, 2 = FULL.
-        const int level = sync.next() ? sync.value(0).toInt() : -1;
+        const std::int64_t level = testsql::integer(db.connection(), QStringLiteral("PRAGMA synchronous"));
         CHECK(level == 1, "... at synchronous = NORMAL");
     }
 
     // --- FORWARD-ONLY-1: a PRE-DRAWERS library is REFUSED by the schema
     //     check, never migrated (main() wipes it).
     {
-        QSqlQuery q;
-        bool ok = q.exec(
+        const bool ok = testsql::exec(db.connection(),
             "CREATE TABLE collections ("
             "    name VARCHAR(128), date_created DATETIME DEFAULT CURRENT_TIMESTAMP,"
             "    collection_id INTEGER PRIMARY KEY)");
         CHECK(ok, "a pre-drawers collections table created");
         CHECK(!db.schemaMatchesFresh(), "the schema check REFUSES a pre-drawers library");
-        CHECK(q.exec("DROP TABLE collections"), "...and it is dropped (the wipe's job)");
+        CHECK(testsql::exec(db.connection(), "DROP TABLE collections"), "...and it is dropped (the wipe's job)");
     }
     db.createAllTables();
     CHECK(db.checkIfColumnExists("collections", "parent"), "the fresh schema has the parent column");
     {
-        QSqlQuery q;
-        const bool ok = q.exec("INSERT INTO collections (name, date_created) VALUES ('Legacy Props', datetime())");
+        const bool ok = testsql::exec(db.connection(),
+                                      "INSERT INTO collections (name, date_created) VALUES ('Legacy Props', datetime())");
         CHECK(ok, "a collection inserted with no parent given");
         auto colls = db.fetchCollections();
         CHECK(colls.size() == 2, "the seeded Uncategorized and the new one are listed");
@@ -210,13 +205,12 @@ int main(int argc, char **argv)
     // The orphan-proofing on the grid query: an asset pointing at a dead
     // collection id must still be returned (LEFT JOIN, not INNER).
     {
-        QSqlQuery q;
-        q.exec(QString("UPDATE assets SET collection = 987654 WHERE guid = '%1'").arg(swordGuid));
+        testsql::run(db.connection(), QStringLiteral("UPDATE assets SET collection = 987654 WHERE guid = ?"), swordGuid);
         bool seen = false;
         for (const auto &rec : db.fetchAssetsForAssetView())
             if (rec.guid == swordGuid) seen = true;
         CHECK(seen, "asset with orphaned collection still listed (LEFT JOIN)");
-        q.exec(QString("UPDATE assets SET collection = 0 WHERE guid = '%1'").arg(swordGuid));
+        testsql::run(db.connection(), QStringLiteral("UPDATE assets SET collection = 0 WHERE guid = ?"), swordGuid);
     }
 
     // --- Material-asset data heal (PBR data-loss audit) ---------------------

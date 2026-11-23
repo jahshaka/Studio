@@ -34,9 +34,6 @@ For more information see the LICENSE file
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSet>
-#include <QSqlDriver>
-#include <QSqlError>
-#include <QSqlQuery>
 #include <QDateTime>
 #include <QElapsedTimer>
 #include <QMessageBox>
@@ -213,15 +210,8 @@ bool Database::beginBatchAtWrite(const DbQuery &query)
 
 Database::~Database()
 {
-    // Release whatever registration this instance still holds. The dtor used to
-    // be empty, so a stack Database (main()'s schema check, every DB suite)
-    // left `qt_sql_default_connection` registered on an early return or an
-    // exception path, and the next initializeDatabase() printed Qt's
-    // "duplicate connection name" warning (STABILITY_PROGRAM_SPEC §1.7a).
-    //
-    // Safe to run unconditionally: an instance that never called
-    // initializeDatabase() holds a default-constructed QSqlDatabase whose
-    // connectionName() is empty, and closeDatabase() no-ops on that.
+    // The batch, the deferred deletes, the checkpointer and the connection, closed in their order (closeDatabase);
+    // safe unconditionally: an instance that never opened holds a connection with no handle.
     closeDatabase();
 
     auto &live = liveDatabases();
@@ -495,7 +485,7 @@ bool Database::endBatch()
 bool Database::resumeBatchIfNeeded()
 {
     if (batchOpenCount == 0 || batchTx) return true;
-    if (!db.isOpen()) return true;
+    if (!mConnection->isOpen()) return true;
     // Never while somebody else owns a transaction on this connection: the
     // batch is the thing that YIELDS, it never takes. Per CONNECTION (H2) —
     // a guard on an export's own connection is not an owner of ours.
@@ -719,88 +709,43 @@ void stopCheckpointer(const Database *owner)
 }
 }   // namespace
 
-/// True when the connection is in WAL mode (the checkpoint worker only exists then).
-static bool applyDurabilityPragmas(QSqlDatabase &conn)
+bool Database::initializeDatabase(const QString &pathToBlob, QString *errorOut)
 {
-    QSqlQuery pragma(conn);
-    // SQLite reports a REFUSED journal mode by its RETURN VALUE, not by an
-    // error: on a filesystem without shared memory (or a read-only file) the
-    // statement succeeds and answers "delete". Read what it answered.
-    if (!pragma.exec(QStringLiteral("PRAGMA journal_mode = WAL")))
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("could not put the library in WAL mode: %1").arg(pragma.lastError().text()));
-    else if (!pragma.next() || pragma.value(0).toString().compare(QStringLiteral("wal"), Qt::CaseInsensitive) != 0)
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("the library did not enter WAL mode (answered '%1'); it stays at its previous journal mode")
-                                                              .arg(pragma.next() ? pragma.value(0).toString() : pragma.value(0).toString()));
-    bool wal = false;
-    if (pragma.exec(QStringLiteral("PRAGMA journal_mode")) && pragma.next())
-        wal = pragma.value(0).toString().compare(QStringLiteral("wal"), Qt::CaseInsensitive) == 0;
-    if (!pragma.exec(QStringLiteral("PRAGMA synchronous = NORMAL")))
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("could not set the library's synchronous mode: %1")
-                                                              .arg(pragma.lastError().text()));
-    // The checkpoint is the worker's (see WalCheckpointer above): this
-    // connection — the UI thread's — never runs one inside a commit.
-    if (wal && !pragma.exec(QStringLiteral("PRAGMA wal_autocheckpoint = 0")))
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("could not hand the library's checkpoints to the worker: %1")
-                                                              .arg(pragma.lastError().text()));
-    return wal;
-}
+    // THE STATEMENT COUNT's DOOR (LARGE-LIBRARY-1, data/database/databasereads.h): read once per process, and the
+    // observer set at the process's FIRST open (the boot check's, main.cpp, before IndexCheck and SchemaProbe
+    // open), so every connection after it is counted under its name; unset, nothing is set and nothing is paid.
+    static const bool traceStatements = qEnvironmentVariable("JAH_DB_STATEMENT_TRACE") == QLatin1String("1");
+    if (traceStatements) databasereads::observe();
 
-bool Database::initializeDatabase(const QString &pathToBlob)
-{
-    if (!QSqlDatabase::isDriverAvailable(Constants::DB_DRIVER)) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "DB driver not present!");
+    // THE EDITOR's CONNECTION, the layer's own (NOQT-DATABASE-1 stage 3): moved into *mConnection, so every service
+    // and cursor that holds it by reference keeps its address. Its durability (FSYNC-2, above): WAL - its ANSWER
+    // read, a refused WAL is the previous mode - synchronous NORMAL, and no checkpoint inside its commits (the
+    // worker's: WalCheckpointer), which runs only when WAL was answered.
+    db::Options options;
+    options.name = kEditorConnection;
+    options.busyMs = db::kEditorBusyMs;
+    options.wal = true;
+    options.walAutocheckpoint = 0;
+    db::Error error;
+    *mConnection = db::Connection::open(pathToBlob.toStdString(), options, &error);
+    if (!mConnection->isOpen()) {
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QString("Couldn't open a database connection! %1").arg(dbqt::describe(error)));
+        if (errorOut) *errorOut = dbqt::describe(error);
         return false;
     }
-
-    db = QSqlDatabase::addDatabase(Constants::DB_DRIVER);
-    db.setDatabaseName(pathToBlob);
-
-    // THE STATEMENT TRACE's DOOR (LARGE-LIBRARY-1, data/database/databasereads.h): read once per
-    // process; unset, nothing is registered and nothing is paid.
-    static const bool traceStatements = qEnvironmentVariable("JAH_DB_STATEMENT_TRACE") == QLatin1String("1");
-
-    if (db.isValid()) {
-        if (!db.open()) JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("Couldn't open a database connection! %1").arg(db.lastError().text()));
-        // connection(): the same handle on the std-only layer, borrowed (NOQT-DATABASE-1 ruling 3).
-        // Where it cannot be borrowed the library does NOT open: every transaction and the batch run
-        // on the layer, and a library that opened would refuse every write.
-        QString borrowError;
-        if (db.isOpen() && !borrowConnection(db.driver() ? db.driver()->handle() : QVariant(), &borrowError)) {
-            JahLog::write(JahLog::legacy, JahLog::Level::Warning, borrowError);
-            db.close();
-            return false;
-        }
-        // At the open, before the pragmas: the boot's statements are counted too.
-        if (db.isOpen() && traceStatements && !databasereads::installStatementTrace(*mConnection))
-            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("JAH_DB_STATEMENT_TRACE=1, but the statement trace could not be registered "
-                                                                             "(app.databaseReads says why)"));
-        if (db.isOpen() && applyDurabilityPragmas(db)) startCheckpointer(this, pathToBlob);
-        return db.isOpen();
-    }
-    else {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("The database connection is invalid! %1").arg(db.lastError().text()));
-    }
-
-    return false;
-}
-
-bool Database::borrowConnection(const QVariant &driverHandle, QString *errorOut)
-{
-    QString why;
-    db::Error error;
-    *mConnection = db::Connection::borrow(databasereads::systemHandle(driverHandle, &why), kEditorConnection, &error);
-    if (!error) return true;
-    *errorOut = QStringLiteral("this build cannot open the library until NOQT-DATABASE-1 stage 3 (the layer cannot "
-                               "borrow the Qt driver's SQLite: %1; %2)")
-                    .arg(why.isEmpty() ? QStringLiteral("the handle is not the system SQLite's") : why,
-                         QString::fromStdString(error.message));
-    return false;
+    mPath = pathToBlob;
+    if (mConnection->wal()) startCheckpointer(this, pathToBlob);
+    else JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+             QStringLiteral("the library did not enter WAL mode; it stays at its previous journal mode (no checkpoint "
+                            "worker: the library's own connection checkpoints)"));
+    return true;
 }
 
 void Database::closeDatabase()
 {
     // A BATCH NEVER OUTLIVES THE CONNECTION (CLOSE-2). Closing with one open
-    // would roll the gesture's rows back inside the driver's teardown, and
+    // would roll the gesture's rows back inside the connection's close, and
     // the flush below would then run inside a transaction nobody owns. The
     // SCOPE is dropped as well: whoever holds the DbBatch is unwinding
     // through a close, and its endBatch() must not find a stale depth.
@@ -819,29 +764,11 @@ void Database::closeDatabase()
     // row can only be written while there is a connection to write it with.
     flushPendingAssetDeletes();
 
-    // ORDER IS LOAD-BEARING. This used to read the name AFTER invalidating the
-    // handle:
-    //     db = QSqlDatabase();
-    //     QSqlDatabase::removeDatabase(db.connectionName());   // reads ""
-    // `db = QSqlDatabase()` resets connectionName() to the empty string, and
-    // removeDatabase("") is a silent no-op — so the connection was never
-    // actually unregistered and the next addDatabase() printed
-    //     qt.sql.qsqldatabase: QSqlDatabasePrivate::addDatabase: duplicate
-    //     connection name 'qt_sql_default_connection', old connection removed
-    // on every boot (STABILITY_PROGRAM_SPEC §1.7a: main()'s schema check opens the default
-    // connection at main.cpp:139, ShellLifecycle::openLibrary opens it again).
-    // Capture the name first; every QSqlDatabase copy must be gone before
-    // removeDatabase or Qt warns that the connection is still in use, which is
-    // why `db` is invalidated in between.
     // The checkpoint worker's connection goes FIRST, so the library's own close
     // is the last one and checkpoints whatever the -wal still holds.
     stopCheckpointer(this);
-    databasereads::removeStatementTrace(*mConnection);   // `traced` is the live library's (W2)
-    *mConnection = db::Connection();   // the borrow ends before its owner closes the handle
-    const QString name = db.connectionName();
-    if (db.isOpen()) db.close();
-    db = QSqlDatabase(); // important that we make an invalid object
-    if (!name.isEmpty()) QSqlDatabase::removeDatabase(name);
+    *mConnection = db::Connection();
+    mPath.clear();
 }
 
 Database::TableProbe Database::checkIfTableExists(const QString &tableName)
@@ -1860,7 +1787,7 @@ QVector<Database::PreviewRow> Database::fetchPreviewRows(const QString &projectG
 
 QString Database::filePath() const
 {
-    return db.databaseName();
+    return mPath;
 }
 
 QHash<QString, QByteArray> Database::fetchProjectThumbnailBytes(const QStringList &guids)
@@ -2038,7 +1965,7 @@ bool Database::sidecarBelongsHere(const QString &guid)
     // Two proofs are accepted: this store already HAS a sidecar for the guid
     // (it was written here), or this catalog records content for the guid
     // whose objects are present under this root (it was ingested here).
-    if (guid.isEmpty() || !db.isOpen()) return false;
+    if (guid.isEmpty() || !mConnection->isOpen()) return false;
     const QString root = AssetStorePaths::root();
     // An OFFLINE store must not be resurrected as an empty local directory by
     // a rename either: writeSidecar mkpaths its way to the file.
@@ -2074,7 +2001,7 @@ void Database::dropSidecar(const QString &guid)
 
 bool Database::setAssetListed(const QString &guid, bool listed)
 {
-    if (guid.isEmpty() || !db.isOpen()) return false;
+    if (guid.isEmpty() || !mConnection->isOpen()) return false;
     DbQuery query(connection(), "UPDATE assets SET listed = ? WHERE guid = ?");
     query.bindInt(1, listed ? 1 : 0);
     dbqt::bindText(query, 2, guid);
@@ -2089,7 +2016,7 @@ bool Database::setAssetListed(const QString &guid, bool listed)
 
 bool Database::isAssetListed(const QString &guid)
 {
-    if (guid.isEmpty() || !db.isOpen()) return false;
+    if (guid.isEmpty() || !mConnection->isOpen()) return false;
     DbQuery query(connection(), "SELECT listed FROM assets WHERE guid = ?");
     dbqt::bindText(query, 1, guid);
     if (!executeAndCheckQuery(query, "IsAssetListed") || !query.next()) return false;
@@ -2101,7 +2028,7 @@ QVector<AssetPinRecord> Database::fetchAssetPins(const QString &guid, bool *read
     QVector<AssetPinRecord> pins;
     if (guid.isEmpty()) return pins;
     // A CLOSED LIBRARY OR A FAILED PROBE IS NO ANSWER, never "no pins" (the audit's finding 2).
-    const TableProbe probe = db.isOpen() ? checkIfTableExists("project_assets") : TableProbe::Failed;
+    const TableProbe probe = mConnection->isOpen() ? checkIfTableExists("project_assets") : TableProbe::Failed;
     if (probe != TableProbe::Exists) {
         if (readOk && probe == TableProbe::Failed) *readOk = false;
         return pins;
@@ -2151,7 +2078,7 @@ int Database::countAssetPins(const QString &guid, bool *readOk)
 {
     if (guid.isEmpty()) return 0;
     // A CLOSED LIBRARY OR A FAILED PROBE IS A FAILED COUNT, never "no pins" (the audit's finding 2).
-    const TableProbe probe = db.isOpen() ? checkIfTableExists("project_assets") : TableProbe::Failed;
+    const TableProbe probe = mConnection->isOpen() ? checkIfTableExists("project_assets") : TableProbe::Failed;
     if (probe != TableProbe::Exists) {
         if (readOk && probe == TableProbe::Failed) *readOk = false;
         return 0;
@@ -2179,7 +2106,7 @@ bool Database::isAssetPinnedBy(const QString &projectGuid, const QString &assetG
 {
     if (projectGuid.isEmpty() || assetGuid.isEmpty()) return false;
     // A CLOSED LIBRARY, A FAILED PROBE OR A FAILED STEP IS NO ANSWER (the header): false, `readOk` cleared.
-    const TableProbe probe = db.isOpen() ? checkIfTableExists("project_assets") : TableProbe::Failed;
+    const TableProbe probe = mConnection->isOpen() ? checkIfTableExists("project_assets") : TableProbe::Failed;
     if (probe != TableProbe::Exists) {
         if (readOk && probe == TableProbe::Failed) *readOk = false;
         return false;
@@ -2216,7 +2143,7 @@ int Database::flushPendingAssetDeletes()
     // A closed connection cannot delete anything — and must not look like it
     // did. Keep the queue: the only caller after a close is a later reopen,
     // and a lost queue is a row that outlives its node for ever.
-    if (!db.isOpen()) {
+    if (!mConnection->isOpen()) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("%1 deferred asset delete(s) could not be flushed: the database "
                     "connection is CLOSED. The rows remain.")
@@ -2279,7 +2206,7 @@ bool Database::deleteAssetRow(const QString &guid, bool force,
     // A delete that cannot run must NOT report success and must NOT scrub the
     // in-memory catalog: doing both is how a no-op delete looked like a real
     // one until the next restart brought the asset back.
-    if (!db.isOpen()) {
+    if (!mConnection->isOpen()) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("DeleteAsset refused for '%1': the database connection is CLOSED. "
                     "Nothing was deleted (asset row, content mapping and project pins all "

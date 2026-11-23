@@ -6,7 +6,7 @@
 // thread. This asserts the landed split:
 //
 //   plan   (UI)    the DB reads. They cannot move: every Database method rides
-//                  the implicit default QSqlDatabase connection, which belongs
+//                  the library's one connection (the layer's), which belongs
 //                  to the thread that opened it. There is NO per-thread
 //                  connection here, deliberately — ImportBatchRunner and
 //                  SceneOpenRunner both hop DB work back to the UI thread and

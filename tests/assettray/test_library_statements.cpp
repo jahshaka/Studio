@@ -10,13 +10,15 @@ For more information see the LICENSE file
 *************************************************************************/
 
 // library.statements — THE LIBRARY'S STATEMENT COUNT DOES NOT GROW WITH THE LIBRARY (LARGE-LIBRARY-1
-// stage 1), on the REAL Database over a throwaway SQLite file, counted by SQLite's own statement trace
-// (data/database/databasereads.h: every statement the default connection runs, raw SQL included).
+// stage 1), on the REAL Database over a throwaway SQLite file, counted by the layer's statement observer
+// (data/database/databasereads.h: every statement a connection runs, raw SQL included, per connection NAME:
+// the editor's "editor", each worker's its own - NOQT-DATABASE-1 stage 3, ruled call 5).
 //
 //   * THE TRACE ITSELF, and its negative controls: a `fetchAsset` loop of N grows the traced count and
-//     the query log's by N; a raw QSqlQuery loop of N grows only the traced count; a trigger's
+//     the query log's by N; a raw db::Statement loop of N grows only the traced count; a trigger's
 //     sub-statement and the read's own PRAGMA are not counted; with JAH_DB_STATEMENT_TRACE unset (a
-//     child run of this binary) `traced` is false and `statements` 0 — nothing is registered.
+//     child run of this binary) `traced` is false and `statements` 0 — nothing is registered; a connection
+//     opened before the observer is not traced, and says so.
 //   * M1, THE FIRST MEASUREMENT (printed, never barred): the pages the Library listing reads on a cold
 //     connection at 1,000 assets, with 256-px thumbnails and with none — members off (the page's default,
 //     the fold included) and members on (the listing's scan alone). Does a listing read each row's thumbnail
@@ -63,8 +65,8 @@ For more information see the LICENSE file
 //     checked here by what the listings see of them. `--generate <db> <store> <assets> <projects>` writes
 //     one library and exits (the column comparison's input; stage 2's roots).
 //
-// THE STATED LIMIT (ruled call 3): only the default connection is traced; a per-asset query moved onto
-// a worker connection would not be seen here.
+// THE COUNT IS PER CONNECTION NAME (NOQT-DATABASE-1 stage 3, ruled call 5): the listings' laws read the editor's
+// ("editor"); a worker connection's statements count under its own name (the sweep's "SweepPlan" below).
 // Headless (offscreen); never touches the user's JahLibrary.db. The row's ENVIRONMENT sets
 // JAH_DB_STATEMENT_TRACE=1 (tests/assettray/CMakeLists.txt).
 
@@ -75,9 +77,6 @@ For more information see the LICENSE file
 #include <QProcess>
 #include <QProcessEnvironment>
 #include <QRegularExpression>
-#include <QSqlDatabase>
-#include <QSqlError>
-#include <QSqlQuery>
 #include <QThread>
 #include <QUuid>
 #include <cstdio>
@@ -85,13 +84,9 @@ For more information see the LICENSE file
 #include <functional>
 
 #include "data/database/casschema.h"
-#if defined(JAH_HAVE_SQLITE3)
-#include <QSqlDriver>
-#include <sqlite3.h>
-#endif
-
 #include "data/database/database.h"
 #include "data/database/databasereads.h"
+#include "../support/testsql.h"
 #include "services/assettray.h"
 #include "services/assetcas.h"
 #include "services/jahlog.h"
@@ -110,7 +105,12 @@ static int failures = 0;
 
 static QString newGuid() { return QUuid::createUuid().toString(QUuid::WithoutBraces); }
 
-static qint64 traced() { return databasereads::read().statements; }
+/// THE LIBRARY THIS PART OF THE RUN READS: the open Database's connection (its address never moves across a close
+/// and reopen of that Database). Each part sets it when it opens its Database.
+static db::Connection *gLibrary = nullptr;
+
+/// The statements counted under the editor's name ("editor": every Database of the process, as the app's count).
+static qint64 traced() { return databasereads::statementsOf(Database::kEditorConnection); }
 
 /// THE CHILD: the same Database opened with the env unset. Prints one line the parent parses.
 static int envUnsetControl(const QString &dbPath)
@@ -120,7 +120,7 @@ static int envUnsetControl(const QString &dbPath)
     if (!db.initializeDatabase(dbPath)) { std::printf("control: open failed\n"); return 2; }
     db.createAllTables();
     for (int i = 0; i < 10; ++i) db.fetchAsset(newGuid());
-    const databasereads::Stats r = databasereads::read();
+    const databasereads::Stats r = databasereads::read(db.connection());
     std::printf("control available=%d traced=%d statements=%lld\n", r.available ? 1 : 0, r.traced ? 1 : 0,
                 static_cast<long long>(r.statements));
     db.closeDatabase();
@@ -128,7 +128,7 @@ static int envUnsetControl(const QString &dbPath)
     return 0;
 }
 
-/// What the default connection did around one step: the pages its pager read from the file and the
+/// What the library's connection did around one step: the pages its pager read from the file and the
 /// statements it ran.
 struct Reading {
     qint64 pages = 0;
@@ -138,9 +138,9 @@ struct Reading {
 
 static Reading around(const std::function<void()> &step)
 {
-    const databasereads::Stats a = databasereads::read();
+    const databasereads::Stats a = databasereads::read(*gLibrary);
     step();
-    const databasereads::Stats b = databasereads::read();
+    const databasereads::Stats b = databasereads::read(*gLibrary);
     return { b.pages - a.pages, (b.pages - a.pages) * b.pageSize, b.statements - a.statements };
 }
 
@@ -174,7 +174,7 @@ static void printM1(const char *label, const ColdListing &l, qint64 thumbnailByt
 
 /// One listing's statements, counted both ways.
 struct Count {
-    qint64 traced = 0;          ///< every statement the default connection ran (SQLite's trace)
+    qint64 traced = 0;          ///< every statement the editor's connection ran (counted under its name)
     int logged = 0;             ///< the query log's count (executeAndCheckQuery), the tile reads excluded
     int thumbnailSelects = 0;   ///< logged statements that select a thumbnail column (the tile reads excluded)
     int tileReads = 0;          ///< fetchAssetThumbnailBytes / fetchProjectThumbnailBytes
@@ -274,38 +274,27 @@ static const char *const kNewIndexes[] = { "idx_assets_library", "idx_assets_col
 /// The index set of the build before 1b: the three dropped, the one widened back.
 static void previousIndexSet()
 {
-    QSqlQuery q(QSqlDatabase::database());
-    for (const char *name : kNewIndexes) q.exec(QStringLiteral("DROP INDEX IF EXISTS %1").arg(QLatin1String(name)));
-    q.exec(QStringLiteral("CREATE INDEX IF NOT EXISTS idx_assets_collection ON assets (collection)"));
+    for (const char *name : kNewIndexes)
+        testsql::exec(*gLibrary, QStringLiteral("DROP INDEX IF EXISTS %1").arg(QLatin1String(name)));
+    testsql::exec(*gLibrary, QStringLiteral("CREATE INDEX IF NOT EXISTS idx_assets_collection ON assets (collection)"));
 }
 
 static QStringList indexNames()
 {
-    QStringList out;
-    QSqlQuery q(QSqlDatabase::database());
-    q.exec(QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'index'"));
-    while (q.next()) out << q.value(0).toString();
-    return out;
+    return testsql::column(*gLibrary, QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'index'"));
 }
 
 static qint64 scalar(const QString &sql)
 {
-    QSqlQuery q(QSqlDatabase::database());
-    return q.exec(sql) && q.next() ? q.value(0).toLongLong() : -1;
+    return testsql::integer(*gLibrary, sql);
 }
 
-/// The pages this connection's pager wrote (SQLITE_DBSTATUS_CACHE_WRITE), the write half of databaseReads.
+/// The pages this connection's pager wrote (db::pagerStats' cacheWrites), the write half of databaseReads; -1 when
+/// the pager's counts were not had.
 static qint64 pagesWritten()
 {
-#if defined(JAH_HAVE_SQLITE3)
-    const QVariant h = QSqlDatabase::database().driver()->handle();
-    if (!h.isValid() || std::strcmp(h.typeName(), "sqlite3*") != 0) return -1;
-    int cur = 0, high = 0;
-    sqlite3_db_status(*static_cast<sqlite3 *const *>(h.constData()), SQLITE_DBSTATUS_CACHE_WRITE, &cur, &high, 0);
-    return cur;
-#else
-    return -1;
-#endif
+    const db::PagerStats pager = db::pagerStats(*gLibrary);
+    return pager.ok ? pager.cacheWrites : -1;
 }
 
 /// `sql` with each `?` / `:name` placeholder replaced by the next of `values`, for EXPLAIN QUERY PLAN.
@@ -315,10 +304,10 @@ static QString planOf(QString sql, const QStringList &values)
     static const QRegularExpression placeholder(QStringLiteral("\\?|:[A-Za-z_]+"));
     QRegularExpressionMatch m;
     while ((m = placeholder.match(sql)).hasMatch()) sql.replace(m.capturedStart(), m.capturedLength(), values.value(next++));
-    QSqlQuery q(QSqlDatabase::database());
+    db::Statement q(*gLibrary, (QStringLiteral("EXPLAIN QUERY PLAN ") + sql).toStdString());
+    db::Error e;
     QString plan;
-    if (q.exec(QStringLiteral("EXPLAIN QUERY PLAN ") + sql))
-        while (q.next()) plan += q.value(3).toString() + QStringLiteral(" ; ");
+    while (q.step(&e)) plan += dbqt::text(q, 3) + QStringLiteral(" ; ");
     return plan;
 }
 
@@ -334,9 +323,7 @@ static QString copiesOfSql()
 
 static void copiesOfRun()
 {
-    QSqlQuery q(QSqlDatabase::database());
-    q.exec(copiesOfSql());
-    while (q.next()) {}
+    testsql::column(*gLibrary, copiesOfSql());
 }
 
 /// The three statements the covering indexes serve, each on a cold connection.
@@ -379,7 +366,7 @@ static PreviewPages coldPreviewPages(Database &db, const QString &dbPath, const 
     const auto cold = [&](bool wide, const std::function<void()> &step) {
         db.closeDatabase();
         db.initializeDatabase(dbPath);
-        if (wide) QSqlQuery(QSqlDatabase::database()).exec(QStringLiteral("PRAGMA cache_size = -65536"));
+        if (wide) testsql::exec(*gLibrary, QStringLiteral("PRAGMA cache_size = -65536"));
         return around(step);
     };
     const auto state = [&db] { db.fetchPreviewRows(QString(), false, -1); };
@@ -387,27 +374,19 @@ static PreviewPages coldPreviewPages(Database &db, const QString &dbPath, const 
     out.state = cold(false, state);
     out.stateWide = cold(true, state);
     out.scanWide = cold(true, [] {
-        QSqlQuery q(QSqlDatabase::database());
-        q.exec(QStringLiteral("SELECT sum(length(thumbnail) > 0) + sum(length(asset) > 0) FROM assets NOT INDEXED"));
-        while (q.next()) {}
+        testsql::column(*gLibrary, QStringLiteral("SELECT sum(length(thumbnail) > 0) + sum(length(asset) > 0) FROM assets NOT INDEXED"));
     });
     out.projectWide = cold(true, [&db, &openProject] { db.fetchPreviewRows(openProject, true, -1); });
     out.projectScanWide = cold(true, [&openProject] {
-        QSqlQuery q(QSqlDatabase::database());
-        q.prepare(QStringLiteral("SELECT length(a.thumbnail) > 0, length(a.asset) > 0 FROM assets a WHERE 1 AND a.guid IN "
-                                 "(SELECT asset_guid FROM project_assets WHERE project_guid = ?) ORDER BY a.rowid"));
-        q.addBindValue(openProject);
-        q.exec();
-        while (q.next()) {}
+        testsql::column(*gLibrary, QStringLiteral("SELECT length(a.thumbnail) > 0, length(a.asset) > 0 FROM assets a WHERE 1 "
+                                                  "AND a.guid IN (SELECT asset_guid FROM project_assets WHERE project_guid "
+                                                  "= ?) ORDER BY a.rowid"), openProject);
     });
     out.projectChainWide = cold(true, [&openProject] {
-        QSqlQuery q(QSqlDatabase::database());
-        q.prepare(QStringLiteral("SELECT length(a.thumbnail) > 0, instr(COALESCE(a.properties, ''), '\"platform\"') > 0 "
-                                 "FROM assets a WHERE 1 AND a.guid IN "
-                                 "(SELECT asset_guid FROM project_assets WHERE project_guid = ?) ORDER BY a.rowid"));
-        q.addBindValue(openProject);
-        q.exec();
-        while (q.next()) {}
+        testsql::column(*gLibrary, QStringLiteral("SELECT length(a.thumbnail) > 0, instr(COALESCE(a.properties, ''), "
+                                                  "'\"platform\"') > 0 FROM assets a WHERE 1 AND a.guid IN "
+                                                  "(SELECT asset_guid FROM project_assets WHERE project_guid = ?) ORDER BY "
+                                                  "a.rowid"), openProject);
     });
     return out;
 }
@@ -458,26 +437,23 @@ static QVector<Reading> coldResidue(Database &db, const QString &dbPath, const l
 
 /// THE SWEEP'S PLANNING ON ITS OWN CONNECTION (LARGE-LIBRARY-1 R5): MeshBakeStore::modelBakesNeeded as the boot's
 /// bake sweep runs it — a read-only connection of its own (meshbakestore.cpp startBackgroundRebuild) — its
-/// statements counted by an SQLite statement trace this row registers on THAT connection's handle (the app's
-/// trace, databasereads, is the default connection's only: the ruled limit). `perModel` true runs the single-row
+/// statements counted under THAT connection's name by the process's observer (databasereads: per name, ruled call
+/// 5). `perModel` true runs the single-row
 /// planner (MeshBakeStore::planFor) once per model instead: the negative control, N statements and more.
 struct SweepPlan { qint64 statements = -1; int needed = -1; qint64 ms = 0; };
 static SweepPlan sweepPlan(const QString &dbPath, const QString &store, const QStringList &perModel = {})
 {
     SweepPlan out;
-    // The sweep's own kind of connection (read-only, opened by the layer), its statements counted by the layer's
-    // trace on THAT connection (a trigger's `--` sub-statements excluded, as the app's count does).
+    // The sweep's own kind of connection (read-only, opened by the layer), its statements counted under its name by
+    // the observer (a trigger's `--` sub-statements excluded, as the app's count does).
     db::Options options;
     options.readOnly = true;
     options.busyMs = db::kEditorBusyMs;
     options.name = "SweepPlan";
     db::Error error;
     db::Connection conn = db::Connection::open(dbPath.toStdString(), options, &error);
-    if (!conn.isOpen()) return out;
-    qint64 counter = 0;
-    conn.trace([&counter](std::string_view sql) {
-        if (!(sql.size() >= 2 && sql[0] == '-' && sql[1] == '-')) ++counter;
-    });
+    if (!conn.isOpen() || !conn.observed()) return out;   // counted under its NAME by the process's observer
+    const qint64 counted = databasereads::statementsOf("SweepPlan");
     QElapsedTimer t;
     t.start();
     if (perModel.isEmpty()) {
@@ -489,8 +465,7 @@ static SweepPlan sweepPlan(const QString &dbPath, const QString &store, const QS
                 ++out.needed;
     }
     out.ms = t.elapsed();
-    out.statements = counter;
-    conn.trace({});
+    out.statements = databasereads::statementsOf("SweepPlan") - counted;
     return out;
 }
 
@@ -527,6 +502,7 @@ static void theBootGate()
         QDir(store).removeRecursively();
         Database db;
         db.initializeDatabase(path);
+        gLibrary = &db.connection();
         db.createAllTables();
         libraryfixture::Library lib;
         QString error;
@@ -550,6 +526,7 @@ static void theBootGate()
     {
         Database db;
         db.initializeDatabase(path);
+        gLibrary = &db.connection();
         const int atOpen = indexStatementsAtOpen(db);
         CHECK(atOpen == 0 && defects().isEmpty(),
               "GATE: a PREPARED library's open runs 0 index statements (%d) and says no defect (%d)", atOpen,
@@ -564,6 +541,7 @@ static void theBootGate()
     {
         Database db;
         db.initializeDatabase(path);
+        gLibrary = &db.connection();
         const int atOpen = indexStatementsAtOpen(db);
         CHECK(atOpen == 4 && defects().size() == 1,
               "GATE NEGATIVE CONTROL: the same library opened UNPREPARED runs its %d index statements on the opening "
@@ -595,6 +573,7 @@ static void theOldLibraryKeeps()
     QDir(store).removeRecursively();
     Database db;
     db.initializeDatabase(path);
+    gLibrary = &db.connection();
     db.createAllTables();
     libraryfixture::Library lib;
     QString error;
@@ -630,11 +609,9 @@ static void theOldLibraryKeeps()
 
 static void printIndexSizes(const char *label)
 {
-    QStringList parts;
-    QSqlQuery q(QSqlDatabase::database());
-    if (q.exec(QStringLiteral("SELECT name, SUM(pgsize) FROM dbstat WHERE name LIKE 'idx_assets%' OR name = 'assets' "
-                              "GROUP BY name ORDER BY name")))
-        while (q.next()) parts << QStringLiteral("%1 %2 B").arg(q.value(0).toString()).arg(q.value(1).toLongLong());
+    const QStringList parts = testsql::column(*gLibrary, QStringLiteral("SELECT name || ' ' || SUM(pgsize) || ' B' FROM dbstat "
+                                                                        "WHERE name LIKE 'idx_assets%' OR name = 'assets' "
+                                                                        "GROUP BY name ORDER BY name"));
     std::printf("   (3) sizes at %s: %s\n", label, qPrintable(parts.join(QStringLiteral(", "))));
 }
 
@@ -663,6 +640,7 @@ static int generateOnly(const QStringList &args)
     QFile::remove(dbPath);
     Database db;
     if (!db.initializeDatabase(dbPath)) { std::printf("generate: open failed\n"); return 2; }
+    gLibrary = &db.connection();
     db.createAllTables();
     libraryfixture::Library lib;
     QString error;
@@ -704,11 +682,17 @@ static void theGenerator(Database &db, const libraryfixture::Library &lib, int a
           "the Materials home holds the %d generated materials", int(lib.homeMaterials.size()));
 }
 
-static void theTrace(Database &db)
+static void theTrace(Database &db, db::Connection &early)
 {
-    const databasereads::Stats first = databasereads::read();
+    const databasereads::Stats first = databasereads::read(db.connection());
     CHECK(first.available, "databaseReads is available here (%s)", qPrintable(first.why));
-    CHECK(first.traced, "the statement trace is registered on the default connection (JAH_DB_STATEMENT_TRACE=1)");
+    CHECK(first.traced, "the editor's connection is traced under its name (JAH_DB_STATEMENT_TRACE=1)");
+    // A CONNECTION OPENED BEFORE THE OBSERVER (the reader's note 2) is not counted, and SAYS so - never a count of 0
+    // passed off as "nothing ran".
+    const databasereads::Stats before = databasereads::read(early);
+    CHECK(early.isOpen() && before.available && !before.traced && before.statements == 0
+              && before.why.contains(QStringLiteral("opened before the statement observer")),
+          "a connection opened before the observer reads UNTRACED, said by name: '%s'", qPrintable(before.why));
     CHECK(first.statements > 0, "the open and the schema's statements were counted (%lld)",
           static_cast<long long>(first.statements));
     CHECK(traced() == first.statements, "a read of the count runs nothing that is counted (its own PRAGMA)");
@@ -724,25 +708,24 @@ static void theTrace(Database &db)
     Database::setQueryLog(true);
     t0 = traced();
     for (int i = 0; i < n; ++i) {
-        QSqlQuery raw(QSqlDatabase::database());
-        raw.prepare(QStringLiteral("SELECT COUNT(*) FROM sqlite_master WHERE name = ?"));
-        raw.addBindValue(newGuid());
-        raw.exec();
+        db::Statement raw(db.connection(), "SELECT COUNT(*) FROM sqlite_master WHERE name = ?");
+        dbqt::bindText(raw, 1, newGuid());
+        db::Error e;
+        raw.step(&e);
     }
-    CHECK(traced() - t0 == n, "NEGATIVE CONTROL: a raw QSqlQuery loop of %d grows the traced count by %d (%lld)", n, n,
+    CHECK(traced() - t0 == n, "NEGATIVE CONTROL: a raw db::Statement loop of %d grows the traced count by %d (%lld)", n, n,
           static_cast<long long>(traced() - t0));
     CHECK(Database::queryLogStatements() == 0, "...and the query log's not at all (%d)", Database::queryLogStatements());
     Database::setQueryLog(false);
 
     // A trigger's sub-statement is not a statement anyone asked for: one INSERT that fires one is ONE.
-    QSqlQuery q(QSqlDatabase::database());
-    q.exec(QStringLiteral("CREATE TEMP TABLE trace_a (x INTEGER)"));
-    q.exec(QStringLiteral("CREATE TEMP TABLE trace_b (x INTEGER)"));
-    q.exec(QStringLiteral("CREATE TEMP TRIGGER trace_t AFTER INSERT ON trace_a BEGIN INSERT INTO trace_b VALUES (new.x); END"));
+    testsql::exec(db.connection(), QStringLiteral("CREATE TEMP TABLE trace_a (x INTEGER)"));
+    testsql::exec(db.connection(), QStringLiteral("CREATE TEMP TABLE trace_b (x INTEGER)"));
+    testsql::exec(db.connection(),
+                  QStringLiteral("CREATE TEMP TRIGGER trace_t AFTER INSERT ON trace_a BEGIN INSERT INTO trace_b VALUES (new.x); END"));
     t0 = traced();
-    q.exec(QStringLiteral("INSERT INTO trace_a VALUES (1)"));
-    q.exec(QStringLiteral("SELECT COUNT(*) FROM trace_b"));
-    const bool fired = q.next() && q.value(0).toInt() == 1;
+    testsql::exec(db.connection(), QStringLiteral("INSERT INTO trace_a VALUES (1)"));
+    const bool fired = testsql::integer(db.connection(), QStringLiteral("SELECT COUNT(*) FROM trace_b")) == 1;
     CHECK(fired && traced() - t0 == 2, "an INSERT whose trigger fired counts once, not twice (2 statements: %lld)",
           static_cast<long long>(traced() - t0));
 }
@@ -777,11 +760,16 @@ int main(int argc, char **argv)
 
     const QString dbPath = QStringLiteral("library_statements_test.db");
     QFile::remove(dbPath);
+    // A connection opened BEFORE the process's first Database open, which is where the observer is set.
+    db::Connection early = testsql::open(QStringLiteral("library_statements_early.db"), "early");
     Database db;
     CHECK(db.initializeDatabase(dbPath), "throwaway database opened");
+    gLibrary = &db.connection();
     db.createAllTables();
 
-    theTrace(db);
+    theTrace(db, early);
+    early = db::Connection();
+    QFile::remove(QStringLiteral("library_statements_early.db"));
     db.closeDatabase();
     QFile::remove(dbPath);
 
@@ -987,16 +975,13 @@ int main(int argc, char **argv)
     QVector<Count> small;
     for (const Listing &l : listings(db, lib)) small.append(countOf(l.run));
     // THE LAW's NEGATIVE CONTROLS (acceptance 4): two listings made N+1 on purpose — one fetchAsset per listed
-    // row, one raw QSqlQuery per listed row — must differ between the sizes by exactly the rows added.
+    // row, one raw db::Statement per listed row — must differ between the sizes by exactly the rows added.
     const auto perRowLogged = [&db] {
         for (const AssetRecord &r : assettray::libraryList(&db, true)) db.fetchAsset(r.guid);
     };
     const auto perRowRaw = [&db] {
         for (const AssetRecord &r : assettray::libraryList(&db, true)) {
-            QSqlQuery raw(QSqlDatabase::database());
-            raw.prepare(QStringLiteral("SELECT type FROM assets WHERE guid = ?"));
-            raw.addBindValue(r.guid);
-            raw.exec();
+            testsql::integer(db.connection(), QStringLiteral("SELECT type FROM assets WHERE guid = ?"), r.guid);
         }
     };
     const int smallRows = int(assettray::libraryList(&db, true).size());
@@ -1115,20 +1100,17 @@ int main(int argc, char **argv)
     theOldLibraryKeeps();
     theBootGate();
 
-    db.closeDatabase();
-    // THE TRACE IS THE LIVE LIBRARY's (the audit's W2): once the library that installed it closed, a default
-    // connection no Database opened (none traced it) reads `traced` false - never the flag of an earlier one.
+    // THE TRACE IS THE LIVE LIBRARY's (the audit's W2): once the library closed, its connection reads `traced`
+    // false and no pages - never the flag of the open one.
     {
-        {
-            QSqlDatabase bare = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"));
-            bare.setDatabaseName(dbPath);
-            const bool opened = bare.open();
-            const databasereads::Stats s = databasereads::read();
-            CHECK(opened && s.available, "W2: CONTROL: a bare default connection is read (available %d)", s.available ? 1 : 0);
-            CHECK(!s.traced, "W2: ...and it reads traced FALSE after the traced library closed (traced %d)", s.traced ? 1 : 0);
-            bare.close();
-        }
-        QSqlDatabase::removeDatabase(QLatin1String(QSqlDatabase::defaultConnection));
+        const databasereads::Stats open = databasereads::read(db.connection());
+        db.closeDatabase();
+        const databasereads::Stats closed = databasereads::read(db.connection());
+        CHECK(open.available && open.traced, "W2: CONTROL: the open library is read and traced (available %d, traced %d)",
+              open.available ? 1 : 0, open.traced ? 1 : 0);
+        CHECK(!closed.available && !closed.traced,
+              "W2: ...and it reads traced FALSE after the traced library closed (available %d, traced %d: '%s')",
+              closed.available ? 1 : 0, closed.traced ? 1 : 0, qPrintable(closed.why));
     }
     QFile::remove(dbPath);
     clearStore();

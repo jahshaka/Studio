@@ -37,13 +37,12 @@
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
-#include <QSqlError>
-#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <cstdio>
 
 #include "data/database/database.h"
+#include "data/db/state.h"
+#include "data/db/statement.h"
 #include "data/constants.h"
 #include "data/project.h"
 #include "services/assetcas.h"
@@ -62,20 +61,28 @@
 #include "services/memberstamp.h"
 #include "modules/materials/core/bakedmembers.h"
 #include "irisgl/document/scenegraph/meshnode.h"
-#include <QSqlDriver>
 #include <sqlite3.h>
 #include <cstring>
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
+/// The suite's library connection (main sets it once the Database is open): its own counts read on it.
+static db::Connection *gLibrary = nullptr;
+
 static int countWhere(const QString &sql, const QVariantList &binds = {})
 {
-    QSqlQuery q;
-    q.prepare(sql);
-    for (const auto &b : binds) q.addBindValue(b);
-    if (!q.exec()) { printf("info: query error: %s\n", qPrintable(q.lastError().text())); return -1; }
-    return q.next() ? q.value(0).toInt() : -1;
+    db::Statement q(*gLibrary, sql.toStdString());
+    int at = 0;
+    for (const QVariant &b : binds) {   // by KIND (dbqt.h)
+        if (b.typeId() == QMetaType::QByteArray) dbqt::bindBytes(q, ++at, b.toByteArray());
+        else if (b.typeId() == QMetaType::QString) dbqt::bindText(q, ++at, b.toString());
+        else q.bindInt(++at, b.toLongLong());
+    }
+    db::Error e;
+    if (q.step(&e)) return int(q.int64(0));
+    if (e) printf("info: query error: %s\n", qPrintable(dbqt::describe(e)));
+    return -1;
 }
 
 static QString writeTempFile(const QDir &dir, const QString &name, const QByteArray &bytes)
@@ -165,6 +172,7 @@ int main(int argc, char **argv)
     QFile::remove(dbPath);
     Database db;
     CHECK(db.initializeDatabase(dbPath), "throwaway database opened");
+    gLibrary = &db.connection();
     db.createAllTables();
 
     db::Connection &conn = db.connection();
@@ -695,12 +703,12 @@ int main(int argc, char **argv)
 
     // =======================================================================
     // 14. THE AUDIT's FINDINGS 1-5 (stage 2): a FAILED READ never decides a delete. THE INJECTION, test-side only:
-    //     an SQLite AUTHORIZER the test installs on the library's own handle (the Qt driver's, which the layer
-    //     borrows until stage 3) DENIES a table's reads at prepare - the statement fails by name, the product
-    //     unchanged; a persistent TRIGGER that RAISEs on one row's insert; a library that is CLOSED.
+    //     an SQLite AUTHORIZER the test installs on the library's own handle (the layer's connection) DENIES a
+    //     table's reads at prepare - the statement fails by name, the product unchanged; a persistent TRIGGER that
+    //     RAISEs on one row's insert; a library that is CLOSED.
     // =======================================================================
     {
-        sqlite3 *raw = *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+        sqlite3 *raw = db.connection().state()->handle;
         const auto alive = [&db](const QString &guid) { return !db.fetchAsset(guid).guid.isEmpty(); };
         const auto libraryRow = [&db](const QString &guid, bool listed) {
             db.createAssetEntry(guid, guid, static_cast<int>(ModelTypes::Texture), QString(), assethome::materials(),

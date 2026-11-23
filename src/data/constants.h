@@ -42,7 +42,6 @@ namespace Constants
     extern int     UI_FONT_SIZE;
     extern int     MIN_JAF_VERSION;
 
-    extern QString DB_DRIVER;
     extern QString DB_ROOT_TABLE;
 
     extern QString DB_PROJECTS_TABLE;

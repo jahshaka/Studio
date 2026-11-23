@@ -50,8 +50,6 @@ For more information see the LICENSE file
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
-#include <QSqlDriver>
 
 #include <cstdio>
 #include <cstring>
@@ -62,6 +60,7 @@ For more information see the LICENSE file
 #include "data/assethomekind.h"
 #include "data/database/database.h"
 #include "data/db/connection.h"
+#include "data/db/state.h"
 #include "data/db/statement.h"
 #include "io/scenereader.h"
 #include "services/assetgc.h"
@@ -166,10 +165,10 @@ int poisonOnOpen(sqlite3 *handle, char **, const sqlite3_api_routines *)
     return SQLITE_OK;
 }
 
-/// The library's raw handle (the editor's connection is still Qt's default one until stage 3): the test's authorizer.
-sqlite3 *libraryHandle()
+/// The library's raw handle (the Database's own connection, the layer's): the test's authorizer.
+sqlite3 *libraryHandle(Database &library)
 {
-    return *static_cast<sqlite3 *const *>(QSqlDatabase::database().driver()->handle().constData());
+    return library.connection().state()->handle;
 }
 
 /// THE TEST's REFUSALS on the library's own handle (case 7): 1 = every DROP TABLE (the wipe); 2 = a WRITE of
@@ -540,11 +539,11 @@ int main(int argc, char **argv)
             result.error = earlier;
             gRefuse = refuse;
             gBootstrapError = seedError;
-            sqlite3_set_authorizer(libraryHandle(), refuseOnLibrary, nullptr);
+            sqlite3_set_authorizer(libraryHandle(library), refuseOnLibrary, nullptr);
             if (poison) sqlite3_auto_extension(reinterpret_cast<void (*)()>(poisonOnOpen));
             catalogSteps(&library, root, keep, result);
             if (poison) sqlite3_cancel_auto_extension(reinterpret_cast<void (*)()>(poisonOnOpen));
-            sqlite3_set_authorizer(libraryHandle(), nullptr, nullptr);
+            sqlite3_set_authorizer(libraryHandle(library), nullptr, nullptr);
             gRefuse = 0;
             gBootstrapError = false;
             library.closeDatabase();

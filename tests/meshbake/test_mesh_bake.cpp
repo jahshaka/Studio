@@ -46,15 +46,14 @@
 
 #include "../support/testmesh.h"
 #include "irisgl/document/qt/colour.h"
+#include "../support/testsql.h"
 #include "../support/proceduralshell.h"
 #include <QDir>
 #include <QFile>
 #include <QFileInfo>
-#include <QSqlDatabase>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlQuery>
 #include <QRegularExpression>
 #include <QElapsedTimer>
 #include <algorithm>
@@ -698,7 +697,6 @@ static void storeIntegration()
     CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")),
                "fixture database opened");
     db.createAllTables();
-    QSqlDatabase qconn = QSqlDatabase::database();   // the test's own statements (stage 3 moves them)
     db::Connection &conn = db.connection();          // the services'
     AssetCas::ensureCasSchema(conn);
 
@@ -719,12 +717,8 @@ static void storeIntegration()
     // is what makes it reachable (and reapable) through the ordinary
     // asset_files reachability the GC already implements.
     const auto bakeRowsFor = [&](const QString &guid) {
-        QSqlQuery q(qconn);
-        q.prepare("SELECT oid, name FROM asset_files WHERE asset_guid = ? AND role = 'bake'");
-        q.addBindValue(guid);
-        QStringList rows;
-        if (q.exec()) while (q.next()) rows.append(q.value(0).toString() + "|" + q.value(1).toString());
-        return rows;
+        return testsql::column(conn, QStringLiteral("SELECT oid || '|' || name FROM asset_files WHERE asset_guid = ? "
+                                                    "AND role = 'bake'"), guid);
     };
     const QStringList objectRows = bakeRowsFor(result.assetGuid);
     const QStringList meshRows = bakeRowsFor(result.meshGuid);
@@ -838,11 +832,9 @@ static void storeIntegration()
                                             iris::MeshBake::fileNameFor(sourceOid),
                                             nullptr, &casError) && ingested;
         }
-        QSqlQuery drop(qconn);
-        drop.prepare("DELETE FROM asset_files WHERE role = ? AND oid = ?");
-        drop.addBindValue(iris::MeshBake::casRole());
-        drop.addBindValue(freshOid);
-        CHECK(ingested && drop.exec(), "the library was rewound to the previous generation");
+        CHECK(ingested && testsql::run(conn, QStringLiteral("DELETE FROM asset_files WHERE role = ? AND oid = ?"),
+                                       iris::MeshBake::casRole(), freshOid),
+              "the library was rewound to the previous generation");
 
         CHECK_LOUD(!MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath),
                    "a bake from the previous key is not fresh for this build");
@@ -905,19 +897,13 @@ static void storeIntegration()
     // model under a non-'source' role, so an Object-row-driven sweep sees no
     // model at all and reports a library with no bakes as fully baked.
     {
-        QSqlQuery reshape(qconn);
-        reshape.prepare("UPDATE asset_files SET role = 'file' WHERE asset_guid = ? AND role = 'source'");
-        reshape.addBindValue(result.assetGuid);
-        CHECK_LOUD(reshape.exec(), "reshaped the Object row to the archive-import shape");
-        QSqlQuery rename(qconn);
-        rename.prepare("UPDATE assets SET name = 'scaled_two_meshes' WHERE guid = ?");
-        rename.addBindValue(result.assetGuid);
-        rename.exec();
+        CHECK_LOUD(testsql::run(conn, QStringLiteral("UPDATE asset_files SET role = 'file' WHERE asset_guid = ? AND "
+                                                     "role = 'source'"), result.assetGuid),
+                   "reshaped the Object row to the archive-import shape");
+        testsql::run(conn, QStringLiteral("UPDATE assets SET name = 'scaled_two_meshes' WHERE guid = ?"), result.assetGuid);
 
         // Drop the bake so the sweep has something to find.
-        QSqlQuery drop(qconn);
-        drop.prepare("DELETE FROM asset_files WHERE role = 'bake'");
-        drop.exec();
+        testsql::exec(conn, "DELETE FROM asset_files WHERE role = 'bake'");
         MeshBakeStore::clear();
 
         const QStringList needing =
@@ -1365,7 +1351,6 @@ static void primitivesBaked()
     CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")),
                "fixture database opened");
     db.createAllTables();
-    QSqlDatabase qconn = QSqlDatabase::database();   // the test's own statements (stage 3 moves them)
     db::Connection &conn = db.connection();          // the services'
     AssetCas::ensureCasSchema(conn);
 
@@ -1486,7 +1471,6 @@ static void rebakeGeneration()
     CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")),
                "fixture database opened");
     db.createAllTables();
-    QSqlDatabase qconn = QSqlDatabase::database();   // the test's own statements (stage 3 moves them)
     db::Connection &conn = db.connection();          // the services'
     AssetCas::ensureCasSchema(conn);
 
@@ -1503,19 +1487,15 @@ static void rebakeGeneration()
     }
 
     const auto bakeRows = [&](const QString &guid) {
-        QSqlQuery q(qconn);
-        q.prepare("SELECT oid, name FROM asset_files WHERE asset_guid = ? AND role = 'bake'");
-        q.addBindValue(guid);
+        db::Statement q(conn, "SELECT oid, name FROM asset_files WHERE asset_guid = ? AND role = 'bake'");
+        dbqt::bindText(q, 1, guid);
+        db::Error e;
         QVector<QPair<QString, QString>> rows;
-        if (q.exec()) while (q.next())
-            rows.append({ q.value(0).toString(), q.value(1).toString() });
+        while (q.step(&e)) rows.append({ dbqt::text(q, 0), dbqt::text(q, 1) });
         return rows;
     };
     const auto refcountOf = [&](const QString &oid) {
-        QSqlQuery q(qconn);
-        q.prepare("SELECT refcount FROM files WHERE oid = ?");
-        q.addBindValue(oid);
-        return (q.exec() && q.next()) ? q.value(0).toInt() : -1;
+        return int(testsql::integer(conn, QStringLiteral("SELECT refcount FROM files WHERE oid = ?"), oid));
     };
 
     auto rows = bakeRows(imported.assetGuid);
@@ -1552,18 +1532,13 @@ static void rebakeGeneration()
                                    QStringLiteral("bake"), QStringLiteral("stale-generation.jmb"),
                                    &staleOid, &casError),
               "the stale generation was ingested as a bake object");
-        QSqlQuery drop(qconn);
-        drop.prepare("DELETE FROM asset_files WHERE asset_guid = ? AND role = 'bake' AND name = ?");
-        drop.addBindValue(owner);
-        drop.addBindValue(bakeName);
-        CHECK(drop.exec(), "the current generation's row was removed");
-        QSqlQuery rename(qconn);
-        rename.prepare("UPDATE asset_files SET name = ? WHERE asset_guid = ? AND role = 'bake' "
-                       "AND name = ?");
-        rename.addBindValue(bakeName);
-        rename.addBindValue(owner);
-        rename.addBindValue(QStringLiteral("stale-generation.jmb"));
-        CHECK(rename.exec(), "…and the planted one took its key");
+        CHECK(testsql::run(conn, QStringLiteral("DELETE FROM asset_files WHERE asset_guid = ? AND role = 'bake' AND name = ?"),
+                           owner, bakeName),
+              "the current generation's row was removed");
+        CHECK(testsql::run(conn, QStringLiteral("UPDATE asset_files SET name = ? WHERE asset_guid = ? AND role = 'bake' "
+                                                "AND name = ?"),
+                           bakeName, owner, QStringLiteral("stale-generation.jmb")),
+              "…and the planted one took its key");
     }
     rows = bakeRows(imported.assetGuid);
     CHECK_LOUD(rows.size() == 1 && rows.first().first == staleOid
@@ -1603,11 +1578,7 @@ static void rebakeGeneration()
     // AND THE SUPERSEDED OBJECT IS REAPABLE: nothing links it any more, which is
     // what hands it to `assets.gc` (the refcount triggers are AFTER INSERT and
     // AFTER DELETE on asset_files — an UPDATE would have left it inflated).
-    QSqlQuery stillLinked(qconn);
-    stillLinked.prepare("SELECT COUNT(*) FROM asset_files WHERE oid = ?");
-    stillLinked.addBindValue(staleOid);
-    int links = -1;
-    if (stillLinked.exec() && stillLinked.next()) links = stillLinked.value(0).toInt();
+    const int links = int(testsql::integer(conn, QStringLiteral("SELECT COUNT(*) FROM asset_files WHERE oid = ?"), staleOid));
     CHECK_LOUD(links == 0, qUtf8Printable(QStringLiteral("no asset_files row links the superseded "
                                                          "object any more (got %1)").arg(links)));
     CHECK_LOUD(refcountOf(staleOid) <= 0,
@@ -3143,7 +3114,6 @@ static void asyncLanding()
     Database db;
     CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")), "fixture database opened");
     db.createAllTables();
-    QSqlDatabase qconn = QSqlDatabase::database();   // the test's own statements (stage 3 moves them)
     db::Connection &conn = db.connection();          // the services'
     AssetCas::ensureCasSchema(conn);
 
@@ -3159,8 +3129,7 @@ static void asyncLanding()
 
     // A STALE BAKE: the bake rows go (every owner), so a landing has something to build.
     const auto dropBakes = [&]() {
-        QSqlQuery q(qconn);
-        q.exec(QStringLiteral("DELETE FROM asset_files WHERE role = 'bake'"));
+        testsql::exec(conn, QStringLiteral("DELETE FROM asset_files WHERE role = 'bake'"));
         MeshBakeStore::clear();
     };
     const auto pumpUntilLanded = [&]() {

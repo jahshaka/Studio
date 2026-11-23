@@ -53,9 +53,6 @@ For more information see the LICENSE file
 #include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QImage>
-#include <QSqlDatabase>
-#include <QSqlError>
-#include <QSqlQuery>
 #include <QStringList>
 #include <QTemporaryDir>
 #include <QRandomGenerator>
@@ -68,6 +65,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 
 #include "data/database/database.h"
+#include "../support/testsql.h"
 #include "services/assetmigration.h"
 #include "services/previewkey.h"
 #include "services/previewwriter.h"
@@ -95,33 +93,29 @@ bool waitFor(const std::function<bool()> &done)
     return true;
 }
 
+/// The suite's library connection (main sets it once the Database is open): the UI side's own statements.
+db::Connection *gLibrary = nullptr;
+
 void addAsset(const QString &guid, const QByteArray &thumbnail)
 {
-    QSqlQuery q;
-    q.prepare(QStringLiteral("INSERT INTO assets (guid, type, name, thumbnail) VALUES (?, 1, ?, ?)"));
-    q.addBindValue(guid);
-    q.addBindValue(guid);
-    q.addBindValue(thumbnail);
-    q.exec();
+    testsql::run(*gLibrary, QStringLiteral("INSERT INTO assets (guid, type, name, thumbnail) VALUES (?, 1, ?, ?)"),
+                 guid, guid, thumbnail);
 }
 
 QByteArray storedBytes(const QString &guid)
 {
-    QSqlQuery q;
-    q.prepare(QStringLiteral("SELECT thumbnail FROM assets WHERE guid = ?"));
-    q.addBindValue(guid);
-    return q.exec() && q.next() ? q.value(0).toByteArray() : QByteArray();
+    return testsql::bytes(*gLibrary, QStringLiteral("SELECT thumbnail FROM assets WHERE guid = ?"), guid);
 }
 
 QString storedKey(const QString &guid, bool *hasRow = nullptr, bool *stamped = nullptr)
 {
-    QSqlQuery q;
-    q.prepare(QStringLiteral("SELECT hash, last_written FROM thumbnails WHERE guid = ?"));
-    q.addBindValue(guid);
-    const bool row = q.exec() && q.next();
+    db::Statement q(*gLibrary, "SELECT hash, last_written FROM thumbnails WHERE guid = ?");
+    dbqt::bindText(q, 1, guid);
+    db::Error e;
+    const bool row = q.step(&e);
     if (hasRow) *hasRow = row;
-    if (stamped) *stamped = row && !q.value(1).isNull();
-    return row ? q.value(0).toString() : QString();
+    if (stamped) *stamped = row && !q.isNull(1);
+    return row ? dbqt::text(q, 0) : QString();
 }
 
 QImage solid(QRgb colour)
@@ -157,6 +151,7 @@ int main(int argc, char **argv)
     const QString path = dir.filePath(QStringLiteral("JahLibrary.db"));
     Database db;
     check(db.initializeDatabase(path), "a temp library opens");
+    gLibrary = &db.connection();
     db.createAllTables();
 
     QStringList announced;
@@ -165,13 +160,12 @@ int main(int argc, char **argv)
     const QByteArray old = QByteArrayLiteral("OLD-TILE-BYTES");
     for (const char *g : { "a", "b", "c", "d", "e", "e2", "f", "g", "h" }) addAsset(QString::fromLatin1(g), old);
 
-    // f, first: the UI connection's busy timeout (Qt's QSQLITE default when no option is given).
+    // f, first: the UI connection's busy timeout (db::kEditorBusyMs).
     {
-        QSqlQuery q;
-        const int uiTimeout = q.exec(QStringLiteral("PRAGMA busy_timeout")) && q.next() ? q.value(0).toInt() : -1;
+        const int uiTimeout = int(testsql::integer(db.connection(), QStringLiteral("PRAGMA busy_timeout")));
         std::printf("     the UI connection's busy timeout: %d ms (the writer's budget %d ms)\n", uiTimeout,
                     previews::Writer::kBudgetMs);
-        check(uiTimeout == 5000, "f: the UI connection waits 5000 ms for a lock (Qt's QSQLITE default), never fails at once");
+        check(uiTimeout == 5000, "f: the UI connection waits 5000 ms for a lock (kEditorBusyMs), never fails at once");
     }
 
     {
@@ -214,24 +208,21 @@ int main(int argc, char **argv)
               "b: NEGATIVE CONTROL - the unguarded writer (updateAssetThumbnail, empty bytes) blanks the tile");
 
         // c. Submitted while the UI holds the write lock.
-        QSqlQuery ui;
-        check(ui.exec(QStringLiteral("BEGIN IMMEDIATE")), "c: the UI connection takes the write lock");
-        ui.exec(QStringLiteral("UPDATE assets SET name = 'held' WHERE guid = 'c'"));
+        check(testsql::exec(db.connection(), QStringLiteral("BEGIN IMMEDIATE")), "c: the UI connection takes the write lock");
+        testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'held' WHERE guid = 'c'"));
         Probe pc;
         const bool returned = writer.submit(QStringLiteral("c"), solid(qRgb(0, 255, 0)), QStringLiteral("00000000000000c1"), pc.done());
         check(returned, "c: submit RETURNS on the thread that holds the lock");
         QCoreApplication::processEvents();
         check(pc.landed.isEmpty() && storedKey(QStringLiteral("c")).isEmpty(), "c: ...and has not landed");
-        check(ui.exec(QStringLiteral("COMMIT")), "c: the UI commits");
+        check(testsql::exec(db.connection(), QStringLiteral("COMMIT")), "c: the UI commits");
         check(waitFor([&] { return pc.landed.size() == 1; }), "c: the write completes after it");
         QString heldName;
         {
             // FINISHED once read: an active SELECT holds a WAL read snapshot on the UI connection, and a
             // write from a connection whose snapshot the writer has since moved past fails AT ONCE with
             // SQLITE_BUSY_SNAPSHOT (517) - no busy wait (measured here, the row's first run).
-            QSqlQuery name;
-            if (name.exec(QStringLiteral("SELECT name FROM assets WHERE guid = 'c'")) && name.next())
-                heldName = name.value(0).toString();
+            heldName = testsql::text(db.connection(), QStringLiteral("SELECT name FROM assets WHERE guid = 'c'"));
         }
         check(pc.landed.value(0).ok && storedKey(QStringLiteral("c")) == QStringLiteral("00000000000000c1")
                   && heldName == QStringLiteral("held"),
@@ -254,10 +245,10 @@ int main(int argc, char **argv)
         Probe pf;
         for (int i = 0; i < 20; ++i)
             writer.submit(QStringLiteral("f"), solid(qRgb(i, i, i)), QStringLiteral("00000000000000%1").arg(i, 2, 10, QLatin1Char('0')), pf.done());
-        QSqlQuery uiWrite;
-        const bool uiWrote = uiWrite.exec(QStringLiteral("UPDATE assets SET name = 'ui-during-drain' WHERE guid = 'g'"));
-        if (!uiWrote) std::printf("     the UI write's error: %s (native %s)\n", qUtf8Printable(uiWrite.lastError().text()),
-                                  qUtf8Printable(uiWrite.lastError().nativeErrorCode()));
+        db::Error uiError;
+        const bool uiWrote = testsql::exec(db.connection(), QStringLiteral("UPDATE assets SET name = 'ui-during-drain' "
+                                                                           "WHERE guid = 'g'"), &uiError);
+        if (!uiWrote) std::printf("     the UI write's error: %s\n", qUtf8Printable(dbqt::describe(uiError)));
         check(uiWrote,
               "f: a UI write while 20 previews drain lands, unrefused");
         check(waitFor([&] { return pf.landed.size() == 20; }), "f: the 20 complete");
@@ -275,15 +266,14 @@ int main(int argc, char **argv)
         const auto previewLines = [linesFrom] { return JahLog::since(linesFrom).filter(QStringLiteral("legacy: previews:")); };
 
         // (i) one write, four drops at least: two lines.
-        QSqlQuery ui;
-        check(ui.exec(QStringLiteral("BEGIN IMMEDIATE")), "e: the UI holds the lock");
+        check(testsql::exec(db.connection(), QStringLiteral("BEGIN IMMEDIATE")), "e: the UI holds the lock");
         Probe pe;
         writer.submit(QStringLiteral("e"), solid(qRgb(10, 20, 30)), QStringLiteral("00000000000000e1"), pe.done());
         check(waitFor([&] { return drops.size() >= 4; }), "e: past its budget the write is DROPPED, again and again, each told");
         check(drops.value(0).startsWith(QStringLiteral("e:")) && drops.value(0).contains(QStringLiteral("budget")),
               "e: the drop names its guid and its reason (the budget)");
         check(pe.landed.isEmpty(), "e: nothing landed while locked out");
-        check(ui.exec(QStringLiteral("COMMIT")), "e: the UI lets go");
+        check(testsql::exec(db.connection(), QStringLiteral("COMMIT")), "e: the UI lets go");
         check(waitFor([&] { return pe.landed.size() == 1; }), "e: the re-queued write completes");
         check(pe.landed.value(0).ok && pe.landed.value(0).drops >= 4 && storedKey(QStringLiteral("e")) == QStringLiteral("00000000000000e1"),
               "e: it landed, its drops counted");
@@ -299,19 +289,19 @@ int main(int argc, char **argv)
 
         // (ii) two guids, both locked out: submit order.
         drops.clear();
-        check(ui.exec(QStringLiteral("BEGIN IMMEDIATE")), "e: the UI holds the lock again");
+        check(testsql::exec(db.connection(), QStringLiteral("BEGIN IMMEDIATE")), "e: the UI holds the lock again");
         Probe pboth;
         writer.submit(QStringLiteral("e"), solid(qRgb(1, 1, 1)), QStringLiteral("00000000000000e2"), pboth.done());
         writer.submit(QStringLiteral("e2"), solid(qRgb(2, 2, 2)), QStringLiteral("00000000000000f2"), pboth.done());
         check(waitFor([&] { return !drops.isEmpty(); }), "e: the first is dropped");
-        check(ui.exec(QStringLiteral("COMMIT")), "e: the UI lets go");
+        check(testsql::exec(db.connection(), QStringLiteral("COMMIT")), "e: the UI lets go");
         check(waitFor([&] { return pboth.landed.size() == 2; }), "e: both complete");
         check(pboth.landedKeys == QStringList({ QStringLiteral("00000000000000e2"), QStringLiteral("00000000000000f2") }),
               "e: re-queued at the HEAD - two guids complete in submit order");
 
         // (iii) one guid twice while locked out: the newer supersedes the waiting one.
         drops.clear();
-        check(ui.exec(QStringLiteral("BEGIN IMMEDIATE")), "e: the UI holds the lock a third time");
+        check(testsql::exec(db.connection(), QStringLiteral("BEGIN IMMEDIATE")), "e: the UI holds the lock a third time");
         Probe pnew;
         writer.submit(QStringLiteral("e"), solid(qRgb(3, 3, 3)), QStringLiteral("00000000000000e3"), pnew.done());
         check(waitFor([&] { return !drops.isEmpty(); }), "e: the older is waiting (dropped once)");
@@ -320,7 +310,7 @@ int main(int argc, char **argv)
         check(!pnew.landed.value(0).ok && pnew.landed.value(0).key == QStringLiteral("00000000000000e3")
                   && pnew.landed.value(0).reason.contains(QStringLiteral("superseded")) && pnew.landed.value(0).superseded,
               "e: BOUNDED PER GUID - the waiting write is superseded by name, never a second one waiting");
-        check(ui.exec(QStringLiteral("COMMIT")), "e: the UI lets go");
+        check(testsql::exec(db.connection(), QStringLiteral("COMMIT")), "e: the UI lets go");
         check(waitFor([&] { return pnew.landed.size() == 2; }), "e: the newer completes");
         check(pnew.landed.value(1).ok && storedKey(QStringLiteral("e")) == QStringLiteral("00000000000000e4")
                   && decodesTo(storedBytes(QStringLiteral("e")), qRgb(4, 4, 4)),
@@ -350,14 +340,8 @@ int main(int argc, char **argv)
 
         // i. The in-place edit race.
         const QString race = QStringLiteral("race");
-        {
-            QSqlQuery q;
-            q.prepare(QStringLiteral("INSERT INTO assets (guid, type, name) VALUES (?, ?, ?)"));
-            q.addBindValue(race);
-            q.addBindValue(int(ModelTypes::Object));
-            q.addBindValue(race);
-            q.exec();
-        }
+        testsql::run(db.connection(), QStringLiteral("INSERT INTO assets (guid, type, name) VALUES (?, ?, ?)"), race,
+                     int(ModelTypes::Object), race);
         check(db.updateAssetAsset(race, QByteArrayLiteral("{\"node\": \"before the edit\"}")),
               "i: an Object row's blob is written through the edit door");
         const auto keyNow = [&](bool withStamp) {
@@ -388,12 +372,8 @@ int main(int argc, char **argv)
         check(keyNow(false) == atRequestUnstamped,
               "i: NEGATIVE CONTROL - without the stamp the key does not move across the edit (it would read ok)");
         {
-            QSqlQuery q;
-            q.prepare(QStringLiteral("SELECT hash FROM assets WHERE guid = ?"));
-            q.addBindValue(race);
-            check(q.exec() && q.next()
-                      && q.value(0).toString() == Database::blobStamp(QByteArrayLiteral("{\"node\": \"after the edit\"}"))
-                      && q.value(0).toString().size() == 16,
+            const QString hash = testsql::text(db.connection(), QStringLiteral("SELECT hash FROM assets WHERE guid = ?"), race);
+            check(hash == Database::blobStamp(QByteArrayLiteral("{\"node\": \"after the edit\"}")) && hash.size() == 16,
                   "i: assets.hash holds the stamp of the blob the row now has (16 hex digits)");
         }
 
@@ -422,13 +402,9 @@ int main(int argc, char **argv)
             check(written && report.error.isEmpty() && report.assets == 1, "i2: the sidecar rebuild restores the Object row");
             QString stamp;
             {
-                QSqlDatabase conn = QSqlDatabase::addDatabase(QStringLiteral("QSQLITE"), QStringLiteral("i2-read"));
-                conn.setDatabaseName(rebuiltPath);
-                QSqlQuery q(conn);
-                if (conn.open() && q.exec(QStringLiteral("SELECT hash FROM assets WHERE guid = 'rebuilt'")) && q.next())
-                    stamp = q.value(0).toString();
+                db::Connection rebuilt = testsql::open(rebuiltPath, "i2-read", /*readOnly*/ true);
+                stamp = testsql::text(rebuilt, QStringLiteral("SELECT hash FROM assets WHERE guid = 'rebuilt'"));
             }
-            QSqlDatabase::removeDatabase(QStringLiteral("i2-read"));
             std::printf("     i2: the rebuilt row's assets.hash = '%s'\n", qUtf8Printable(stamp));
             check(stamp.size() == 16 && stamp == Database::blobStamp(QJsonDocument(blob).toJson(QJsonDocument::Compact)),
                   "i2: assets.hash holds the stamp of the blob the rebuild restored (16 hex digits)");

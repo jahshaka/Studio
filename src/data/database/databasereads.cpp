@@ -11,134 +11,82 @@ For more information see the LICENSE file
 
 #include "data/database/databasereads.h"
 #include "data/db/connection.h"
+#include "data/db/statement.h"
 
-#include <QSqlDatabase>
-#include <QSqlDriver>
-#include <QSqlQuery>
-#include <QVariant>
-
-#include <atomic>
-#include <cstring>
+#include <map>
+#include <mutex>
 #include <string_view>
-
-#if defined(JAH_HAVE_SQLITE3)
-#include <sqlite3.h>
-#endif
-#if defined(__linux__)
-#include <elf.h>
-#include <link.h>
-#endif
 
 namespace databasereads {
 namespace {
 
-#if defined(__linux__)
-/// Does the loaded qsqlite plugin NEED the system libsqlite3 (its DT_NEEDED, read from the mapped
-/// dynamic section)? Then the handle it hands out belongs to the library this TU links.
-struct PluginScan { bool pluginSeen = false; bool needsSystemSqlite = false; };
-int scanObject(struct dl_phdr_info *info, size_t, void *data)
+/// The per-name counts, fed by the observer on each connection's own thread.
+struct Counts
 {
-    auto *scan = static_cast<PluginScan *>(data);
-    if (!info->dlpi_name || !std::strstr(info->dlpi_name, "libqsqlite")) return 0;
-    scan->pluginSeen = true;
-    for (int i = 0; i < info->dlpi_phnum; ++i) {
-        if (info->dlpi_phdr[i].p_type != PT_DYNAMIC) continue;
-        const auto *dyn = reinterpret_cast<const ElfW(Dyn) *>(info->dlpi_addr + info->dlpi_phdr[i].p_vaddr);
-        const char *strtab = nullptr;
-        for (const ElfW(Dyn) *d = dyn; d->d_tag != DT_NULL; ++d)
-            if (d->d_tag == DT_STRTAB) strtab = reinterpret_cast<const char *>(d->d_un.d_ptr);
-        if (!strtab) break;
-        for (const ElfW(Dyn) *d = dyn; d->d_tag != DT_NULL; ++d)
-            if (d->d_tag == DT_NEEDED && std::strstr(strtab + d->d_un.d_val, "libsqlite3"))
-                scan->needsSystemSqlite = true;
-    }
-    return 1;
+    std::mutex mutex;
+    std::map<std::string, qint64, std::less<>> byName;
+};
+
+Counts &counts()
+{
+    static Counts c;
+    return c;
 }
-#endif
 
-std::atomic<qint64> gStatements{0};
-// THE CONNECTION THE TRACE IS ON (the audit's W2): `traced` is true only while it is installed on a live
-// connection - cleared by removeStatementTrace at that library's close, never left over from an earlier one.
-std::atomic<const void *> gTracedOn{nullptr};
-bool gOwnStatement = false;   // `read`'s own PRAGMA, on the UI thread that runs it
+thread_local bool tOwnStatement = false;   // `read`'s own PRAGMA, on the thread that runs it
 
-void onStatement(std::string_view sql)
+void onStatement(std::string_view name, std::string_view sql)
 {
-    if (gOwnStatement) return;
+    // The observer RUNS NO STATEMENT (it is called inside SQLite's own step): it counts and returns.
+    if (tOwnStatement) return;
     if (sql.size() >= 2 && sql[0] == '-' && sql[1] == '-') return;   // a trigger's sub-statement
-    gStatements.fetch_add(1, std::memory_order_relaxed);
+    Counts &c = counts();
+    std::lock_guard<std::mutex> lock(c.mutex);
+    ++c.byName[std::string(name)];
 }
 
 }   // namespace
 
-sqlite3 *systemHandle(const QVariant &h, QString *why)
+bool observe()
 {
-#if defined(__linux__)
-    if (!h.isValid()) { *why = QStringLiteral("the library database is not open"); return nullptr; }
-    PluginScan scan;
-    dl_iterate_phdr(scanObject, &scan);
-    if (!scan.pluginSeen || !scan.needsSystemSqlite) {
-        *why = scan.pluginSeen ? QStringLiteral("the qsqlite plugin carries its own SQLite")
-                               : QStringLiteral("the qsqlite plugin is not loaded");
-        return nullptr;
-    }
-    if (std::strcmp(h.typeName(), "sqlite3*") != 0) {
-        *why = QStringLiteral("the driver's handle is not an sqlite3*");
-        return nullptr;
-    }
-    sqlite3 *db = *static_cast<sqlite3 *const *>(h.constData());
-    if (!db) *why = QStringLiteral("the driver's handle is null");
-    return db;
-#else
-    Q_UNUSED(h);
-    *why = QStringLiteral("the Qt SQL driver here carries its own SQLite (not the system library this build links)");
-    return nullptr;
-#endif
+    return db::observeStatements(onStatement);
 }
 
-Stats read()
+qint64 statementsOf(const std::string &name)
+{
+    Counts &c = counts();
+    std::lock_guard<std::mutex> lock(c.mutex);
+    const auto it = c.byName.find(name);
+    return it == c.byName.end() ? 0 : it->second;
+}
+
+Stats read(db::Connection &connection)
 {
     Stats out;
-#if !defined(JAH_HAVE_SQLITE3)
-    out.why = QStringLiteral("this build links no system SQLite (CMake found no SQLite3)");
-    return out;
-#elif !defined(__linux__)
-    out.why = QStringLiteral("the Qt SQL driver here carries its own SQLite (not the system library this build links)");
-    return out;
-#else
-    const QSqlDatabase main = QSqlDatabase::database(QLatin1String(QSqlDatabase::defaultConnection), false);
-    sqlite3 *db = systemHandle(main.isOpen() && main.driver() ? main.driver()->handle() : QVariant(), &out.why);
-    if (!db) return out;
-    int cur = 0, high = 0;
-    if (sqlite3_db_status(db, SQLITE_DBSTATUS_CACHE_MISS, &cur, &high, 0) != SQLITE_OK) {
-        out.why = QStringLiteral("sqlite3_db_status refused");
+    const db::PagerStats pager = db::pagerStats(connection);
+    if (!pager.ok) {
+        out.why = connection.isOpen() ? QStringLiteral("SQLite refused the connection's pager counts")
+                                      : QStringLiteral("the library database is not open");
         return out;
     }
     out.available = true;
-    out.pages = cur;
-    out.traced = gTracedOn.load() != nullptr;
-    out.statements = gStatements.load();
-    gOwnStatement = true;
-    QSqlQuery q(main);
-    if (q.exec(QStringLiteral("PRAGMA page_size")) && q.next()) out.pageSize = q.value(0).toInt();
-    gOwnStatement = false;
+    out.pages = pager.cacheMisses;
+    out.traced = connection.observed();
+    if (out.traced) {
+        out.statements = statementsOf(connection.name());
+    } else {
+        out.why = QStringLiteral("connection '%1' was opened before the statement observer (or with "
+                                 "JAH_DB_STATEMENT_TRACE unset): its statements are not counted")
+                      .arg(QString::fromStdString(connection.name()));
+    }
+    tOwnStatement = true;
+    {
+        db::Statement pageSize(connection, "PRAGMA page_size");
+        db::Error e;
+        if (pageSize.step(&e)) out.pageSize = int(pageSize.int64(0));
+    }
+    tOwnStatement = false;
     return out;
-#endif
-}
-
-bool installStatementTrace(db::Connection &connection)
-{
-    if (!connection.isOpen()) return false;
-    connection.trace(onStatement);
-    gTracedOn.store(connection.state());
-    return true;
-}
-
-void removeStatementTrace(db::Connection &connection)
-{
-    if (!connection.isOpen() || gTracedOn.load() != connection.state()) return;
-    connection.trace({});
-    gTracedOn.store(nullptr);
 }
 
 }   // namespace databasereads

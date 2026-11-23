@@ -14,7 +14,6 @@ For more information see the LICENSE file
 
 #include <QHash>
 #include <QSet>
-#include <QSqlDatabase>   // stage 3's side connections (openPreviewConnection, writePreview) and the borrowed default
 #include <QJsonArray>
 #include <QCryptographicHash>
 
@@ -163,7 +162,7 @@ public:
     /// it — one transaction, one fdatasync). It is what makes "one gesture,
     /// one commit" an assertion instead of a stopwatch reading. Process-wide
     /// and approximate by design: it counts what goes through this layer, so a
-    /// raw QSqlQuery::exec() somewhere else is invisible to it.
+    /// raw db::Statement write that passes no funnel is invisible to it.
     static quint64 commitCount() { return sCommits; }
     static void noteCommit() { ++sCommits; }
 
@@ -278,10 +277,9 @@ public:
     static void setAssetThumbnailWritten(GuidHook hook);
 
     // MANAGE ===============================================================================
-    bool initializeDatabase(const QString &pathToBlob);
-    /// connection() on the open handle (`driverHandle`: the Qt driver's handle()); false with a named
-    /// error - and initializeDatabase then refuses to open the library - where it cannot be borrowed.
-    bool borrowConnection(const QVariant &driverHandle, QString *errorOut);
+    /// Opens the library's file on connection() (the layer's, named "editor"); false, with the named error in the
+    /// log (and in `errorOut` when given), when it cannot be opened.
+    bool initializeDatabase(const QString &pathToBlob, QString *errorOut = nullptr);
     void closeDatabase();
 
     // ---- ONE GESTURE, ONE COMMIT (CLOSE-2 item 1) -------------------------
@@ -948,8 +946,8 @@ public:
     /// is unit-testable without a database file (deep audit 2026-09, area 6).
     static bool jafVersionAccepted(const QString &version);
 
-    /// The library's connection on the std-only layer (src/data/db/, NOQT-DATABASE-1): the handle
-    /// under Qt's default connection, BORROWED until the Database opens its own (ruling 3). No
+    /// The library's connection on the std-only layer (src/data/db/, NOQT-DATABASE-1), opened by
+    /// initializeDatabase into this one object (its address never moves: services and cursors hold it). No
     /// handle before initializeDatabase or after closeDatabase: a statement on it answers a named error.
     /// Its name is kEditorConnection (MeshBakeStore's shared settings cache is filled by its lookups only).
     db::Connection &connection() { return *mConnection; }
@@ -995,9 +993,9 @@ private:
     QString favoritesTableSchema;
 
 
-    QSqlDatabase db;
     int mIndexStatementsAtOpen = 0;   ///< indexStatementsAtOpen
-    std::unique_ptr<db::Connection> mConnection;   ///< connection(); borrowed from `db`
+    std::unique_ptr<db::Connection> mConnection;   ///< connection(): opened and closed by MOVE-ASSIGNMENT into it
+    QString mPath;                                 ///< filePath(): the open library's file, empty when closed
     ImportPictureSink importPictureSink;   ///< setImportPictureSink
 
     /// The gesture batch (see beginBatch). `batchOpenCount` is the counted

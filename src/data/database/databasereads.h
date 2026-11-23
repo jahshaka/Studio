@@ -14,62 +14,47 @@ For more information see the LICENSE file
 
 // WHAT THE LIBRARY DATABASE READ ON THE REQUEST PATH (TESTING-CLEANUP-2; app.databaseReads).
 //
-// SQLite's own pager counts the pages it reads from the file per connection
-// (SQLITE_DBSTATUS_CACHE_MISS) whether anyone asks or not; this reads that count off the UI
-// thread's DEFAULT connection (the library's request path: worker connections are not in it, so
-// a reading taken around one verb is what that verb read, whenever it is taken). Nothing here
-// runs unless the verb is called: the product never asks.
+// SQLite's own pager counts the pages it reads from the file per connection (db::pagerStats' cacheMisses) whether
+// anyone asks or not; `read` reads that count off the connection it is handed (the verb hands it its Database's:
+// the library's request path - a reading taken around one verb is what that verb read on it). Nothing here runs
+// unless asked: the product never asks.
 //
-// THE SAME SQLITE, OR NONE. The connection's handle belongs to the SQLite the Qt driver uses. This
-// TU is linked to the SYSTEM SQLite (CMake's SQLite3) and calls it directly — so it answers only
-// when the loaded qsqlite plugin is itself linked to that system library (Linux distribution Qt:
-// read from the plugin's own dynamic section). Where qsqlite carries its own SQLite (the Qt
-// installer's macOS and Windows builds) a call into ours with its handle would be undefined
-// behaviour: `available` is false there, and the counted suites skip saying so.
-
-//
-// THE STATEMENT TRACE (LARGE-LIBRARY-1). The query log (Database::setQueryLog) sees only the statements
-// that pass `executeAndCheckQuery`; raw SQL — `checkIfTableExists`, a service's own QSqlQuery — and the
-// boot are invisible to it. The layer's statement trace (db::Connection::trace) fires once per
-// statement EXECUTION on its connection, whoever runs it: `installStatementTrace` registers it on a
-// connection, and `read` reports the count of every statement the traced connections ran
-// (`statements`; a trigger's sub-statements — text starting `--` — are not counted, and `read`'s own
-// `PRAGMA page_size` is not either). Database::initializeDatabase calls it ONLY when the process was
-// started with JAH_DB_STATEMENT_TRACE=1 (read once): unset, no callback is registered and nothing is
-// paid — `traced` false, `statements` 0. THE STATED LIMIT: only the DEFAULT (UI-thread) connection is
-// traced; a statement a worker connection runs is not counted here.
+// THE STATEMENT COUNT, PER CONNECTION NAME (LARGE-LIBRARY-1; NOQT-DATABASE-1 stage 3, ruled call 5). The query log
+// (Database::setQueryLog) sees only the statements that pass `executeAndCheckQuery`; raw statements and the boot
+// are invisible to it. `observe` sets the layer's one process-wide statement observer (db::observeStatements): every
+// connection opened after it - the editor's and every side connection - counts each statement EXECUTION under its
+// Options.name (a trigger's sub-statements - text starting `--` - are not counted, nor `read`'s own
+// `PRAGMA page_size`). The Database calls `observe` at its FIRST initializeDatabase of the process, ONLY when the
+// process was started with JAH_DB_STATEMENT_TRACE=1 (read once): unset, nothing is set and nothing is paid. Two
+// Databases open under one name ("editor": the boot check's and the shell's) count as one, as the old global count
+// did; the workers' names are printed per name, never summed (statementsOf).
 
 #include <QString>
-#include <QVariant>
 #include <QtGlobal>
 
-struct sqlite3;
+#include <string>
+
 namespace db { class Connection; }
 
 namespace databasereads {
 
 struct Stats {
-    bool available = false;   ///< the driver's SQLite is the one this TU calls
-    QString why;              ///< when not available: the reason, printed by the caller
-    qint64 pages = 0;         ///< pages the default connection's pager read from the file
+    bool available = false;   ///< the connection is open and SQLite answered its pager's counts
+    QString why;              ///< not available, or not traced: the reason, printed by the caller
+    qint64 pages = 0;         ///< pages the connection's pager read from the file
     int pageSize = 0;         ///< the file's page size
-    bool traced = false;      ///< the statement trace is registered on the default connection
-    qint64 statements = 0;    ///< statements the traced connections ran since the process started
+    bool traced = false;      ///< the connection was opened after the observer: its statements are counted
+    qint64 statements = 0;    ///< statements run under the connection's NAME since the observer was set (traced only)
 };
 
-Stats read();
+/// The measuring door (the Database's, JAH_DB_STATEMENT_TRACE=1): the per-name counter as the layer's observer.
+/// False when another observer was already set (the first one stands).
+bool observe();
 
-/// Registers the statement trace on `connection` (the Database's own); false (nothing registered) when it is
-/// not open.
-bool installStatementTrace(db::Connection &connection);
-/// Removes it from `connection` when it is the one the trace is on (the library's close): `traced` then
-/// reads false until another library installs it.
-void removeStatementTrace(db::Connection &connection);
+Stats read(db::Connection &connection);
 
-/// An open connection's driver handle (its driver()->handle(); invalid when not open) as the sqlite3*
-/// it is when it belongs to the system SQLite this build links (the plugin's own DT_NEEDED, read
-/// above), else null with the reason in `why`. Database::connection() borrows it.
-sqlite3 *systemHandle(const QVariant &driverHandle, QString *why);
+/// Statements run under `name` since the observer was set (0 for a name nothing ran under).
+qint64 statementsOf(const std::string &name);
 
 }   // namespace databasereads
 

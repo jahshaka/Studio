@@ -931,7 +931,10 @@ QVariantMap AppApi::queryLog(const QVariantMap &options)
 
 QVariantMap AppApi::databaseReads()
 {
-    const databasereads::Stats r = databasereads::read();
+    // THE SESSION's LIBRARY (its Database's connection: the request path); no library, nothing to read.
+    databasereads::Stats r;
+    if (host.db) r = databasereads::read(host.db->connection());
+    else r.why = QStringLiteral("no library is open in this session");
     return { { QStringLiteral("pages"), r.pages },
              { QStringLiteral("pageSize"), r.pageSize },
              { QStringLiteral("bytes"), r.pages * qint64(r.pageSize) },

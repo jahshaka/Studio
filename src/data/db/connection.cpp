@@ -27,10 +27,6 @@ namespace {
 std::mutex gHoldersMutex;
 std::map<std::string, std::string> gHolders;
 
-// THE BORROWED HANDLES: one state per handle, shared by every borrower while any of them lives.
-std::mutex gBorrowedMutex;
-std::map<sqlite3 *, std::weak_ptr<Connection::State>> gBorrowed;
-
 // THE STATEMENT OBSERVER (observeStatements): set once; read by every open() after it.
 std::mutex gObserverMutex;
 StatementObserver gObserver;
@@ -130,12 +126,12 @@ bool checkVersion(int minimum, Error *e)
     return false;
 }
 
-/// An owned handle is closed and forgotten (its State must not touch it again); a borrowed one is its owner's.
+/// The handle is closed and forgotten (its State must not touch it again).
 /// Its TRACE goes first (the audit's W2): close_v2 may leave a zombie handle behind an unfinalized statement, and
 /// that statement's late step would call the trace with this State, which is about to be freed.
 static void closeOwned(Connection::State *s)
 {
-    if (!s || !s->owned || !s->handle) return;
+    if (!s || !s->handle) return;
     if (s->trace) {
         sqlite3_trace_v2(s->handle, 0, nullptr, nullptr);
         s->trace = nullptr;
@@ -189,15 +185,14 @@ Connection Connection::open(const std::string &path, const Options &options, Err
         return c;
     }
     c.mState->handle = handle;
-    c.mState->owned = true;
     c.mState->file = fileOf(handle);
     sqlite3_extended_result_codes(handle, 1);
     sqlite3_busy_timeout(handle, options.busyMs);
     // THE OBSERVER FIRST, so the open's own pragmas are counted under the connection's name.
     if (const StatementObserver observer = currentObserver()) {
-        c.mState->observed = true;
         const std::string name = options.name;
         c.trace([observer, name](std::string_view sql) { observer(name, sql); });
+        c.mState->observed = true;   // after its own trace: from here trace() is refused
     }
     if (options.wal) {
         // SQLite reports a REFUSED journal mode by its ANSWER, not by an error (a filesystem with no shared memory, a
@@ -219,34 +214,6 @@ Connection Connection::open(const std::string &path, const Options &options, Err
             pragmas += "; PRAGMA wal_autocheckpoint = " + std::to_string(options.walAutocheckpoint);
         if (!c.exec(pragmas, e)) return Connection();
     }
-    if (e) *e = Error();
-    return c;
-}
-
-Connection Connection::borrow(sqlite3 *handle, std::string name, Error *e, int minimumVersion)
-{
-    Connection c;
-    c.mState->name = std::move(name);
-    c.mState->owner = std::this_thread::get_id();
-    if (!checkVersion(minimumVersion, e)) {
-        if (e) e->message = c.mState->name + ": " + e->message;
-        return c;
-    }
-    if (!handle) {
-        if (e) *e = detail::refusal(c.mState.get(), "no handle to borrow", {});
-        return c;
-    }
-    std::lock_guard<std::mutex> lock(gBorrowedMutex);
-    std::weak_ptr<State> &shared = gBorrowed[handle];
-    if (std::shared_ptr<State> live = shared.lock()) {
-        c.mState = std::move(live);   // the handle's one state (its first borrower's name and thread)
-    } else {
-        c.mState->handle = handle;
-        c.mState->file = fileOf(handle);
-        shared = c.mState;
-    }
-    for (auto it = gBorrowed.begin(); it != gBorrowed.end();)   // a handle no borrower holds any more
-        it = it->second.expired() ? gBorrowed.erase(it) : std::next(it);
     if (e) *e = Error();
     return c;
 }
@@ -328,13 +295,14 @@ std::uint64_t Connection::unit() const { return mState ? mState->unit : 0; }
 
 bool Connection::refusesWrites() const { return mState && mState->refusing; }
 
-void Connection::trace(std::function<void(std::string_view sql)> onStatement)
+bool Connection::trace(std::function<void(std::string_view sql)> onStatement)
 {
     detail::assertOwner(mState.get());
-    if (!isOpen()) return;
+    if (!isOpen() || mState->observed) return false;   // the observer's slot is never taken over
     mState->trace = std::move(onStatement);
     if (mState->trace) sqlite3_trace_v2(mState->handle, SQLITE_TRACE_STMT, traceStatement, mState.get());
     else sqlite3_trace_v2(mState->handle, 0, nullptr, nullptr);
+    return true;
 }
 
 }   // namespace db

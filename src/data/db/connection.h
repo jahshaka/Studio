@@ -17,7 +17,7 @@ For more information see the LICENSE file
 // (transaction.h) and a named error (error.h). Std only; the ONE place that calls sqlite3_*.
 //
 // THE THREADING LAW: one connection per thread, never shared. A connection belongs to the
-// thread that opened or borrowed it (asserted in Debug at every statement and transaction).
+// thread that opened it (asserted in Debug at every statement and transaction).
 // Only one BEGIN IMMEDIATE holds a file at a time, by SQLite's own lock; a connection that
 // meets it waits its busy timeout and then answers a busy() Error naming the holder.
 
@@ -44,7 +44,7 @@ constexpr int kEditorBusyMs = 5000;
 /// The SQLite library this process calls, as sqlite3_libversion_number() (3.46.1 = 3046001).
 int libraryVersion();
 
-/// Refuses, by name, a library older than `minimum`. open() and borrow() ask it with their floor (kMinimumVersion).
+/// Refuses, by name, a library older than `minimum`. open() asks it with its floor (kMinimumVersion).
 bool checkVersion(int minimum, Error *e);
 
 struct Options
@@ -72,15 +72,6 @@ public:
 
     /// Opens (and owns) the file. A failure returns a connection with no handle and fills `e`.
     static Connection open(const std::string &path, const Options &options, Error *e);
-    /// Uses a handle someone else opened and will close (the Qt driver's, until the Database
-    /// opens its own: ruling 3); the borrowed handle is never closed here. EVERY BORROWER OF ONE
-    /// HANDLE SHARES ONE STATE (its transaction depth, its refusal, its holder): two borrowers of
-    /// one connection are one connection. A null handle, or a library below `minimumVersion`,
-    /// returns a connection with no handle and fills `e`. A BORROWER MUST NOT OUTLIVE THE HANDLE's
-    /// OWNER: the state is keyed by the handle's address, so a borrow alive after Qt closes its
-    /// connection reads freed memory or lends its state to a new handle at that address (no reach
-    /// today: Database::closeDatabase ends its own borrow first; the borrow goes at stage 3).
-    static Connection borrow(sqlite3 *handle, std::string name, Error *e, int minimumVersion = kMinimumVersion);
 
     bool isOpen() const;
     const std::string &name() const;
@@ -101,12 +92,12 @@ public:
     std::uint64_t unit() const;
     /// The outermost Transaction's BEGIN failed and its scope still stands: writes are refused.
     bool refusesWrites() const;
-    /// THE STATEMENT TRACE (stage 2; the library.statements counts): `onStatement` is called with the text of
-    /// EVERY statement run on this connection, once per execution, at its first step (SQLite's
-    /// SQLITE_TRACE_STMT; a trigger's sub-statements arrive as their `--` comment text). The trace is the
-    /// handle's: every borrower of one handle shares it. An empty function removes it; so does the end of
-    /// the connection (the last borrower's, for a borrowed handle).
-    void trace(std::function<void(std::string_view sql)> onStatement);
+    /// THE STATEMENT TRACE (stage 2): `onStatement` is called with the text of EVERY statement run on this
+    /// connection, once per execution, at its first step (SQLite's SQLITE_TRACE_STMT; a trigger's sub-statements
+    /// arrive as their `--` comment text). An empty function removes it; so does the end of the connection.
+    /// REFUSED (false, nothing changed) on an OBSERVED connection: the observer holds the connection's one trace
+    /// slot, and replacing or removing it would take the connection's statements out of its name's count.
+    bool trace(std::function<void(std::string_view sql)> onStatement);
 
     struct State;   // the layer's own (connection.cpp, statement.cpp, transaction.cpp)
     State *state() const { return mState.get(); }
@@ -119,12 +110,15 @@ private:
 /// every connection opened after it is traced from inside open() - its own pragmas counted - and each statement
 /// it runs reaches `observer` with the connection's Options.name (Connection::trace's rules: once per execution, a
 /// trigger's sub-statements as their `--` text). Called on the connection's own thread. A second call is ignored
-/// (false).
+/// (false). THE OBSERVER RUNS NO STATEMENT: it is called inside SQLite's own step, and one would re-enter it. Set
+/// it before the connections it should count open (the Database's door: its first initializeDatabase); whether a
+/// connection is counted is its observed(), never "an observer is set".
 using StatementObserver = std::function<void(std::string_view name, std::string_view sql)>;
 bool observeStatements(StatementObserver observer);
 
 /// THE PAGER's COUNTS of an open connection (SQLite's db_status, its current values): pages read from the file
-/// (cache misses) and pages written. `ok` false on a connection with no handle or a status SQLite refused.
+/// (cache misses) and pages written. `ok` false on a connection with no handle or a status SQLite refused: every
+/// caller tests `ok` before either number.
 struct PagerStats
 {
     std::int64_t cacheMisses = 0;

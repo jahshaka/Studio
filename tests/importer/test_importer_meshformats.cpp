@@ -41,13 +41,12 @@
 #include <QImage>
 #include <QJsonDocument>
 #include <QJsonObject>
-#include <QSqlDatabase>
-#include <QSqlQuery>
 #include <QTemporaryDir>
 #include <cmath>
 #include <cstdio>
 #include <memory>
 
+#include "../support/testsql.h"
 #include "assimp/Importer.hpp"
 #include "assimp/postprocess.h"
 #include "assimp/scene.h"
@@ -302,7 +301,6 @@ int main(int argc, char **argv)
         CHECK(db.initializeDatabase(dbPath), "4: fresh database opened");
         db.createAllTables();
         AssetStorePaths::setRootOverride(root);
-        QSqlDatabase conn = QSqlDatabase::database();
 
         AssetImportService service(&db, nullptr);
         for (const char *f : { "colored_quad.ply", "tetra_normals.stl" }) {
@@ -316,11 +314,8 @@ int main(int argc, char **argv)
                       .arg(f, result.ok() ? QStringLiteral("ok") : result.error)
                       .toUtf8().constData());
             if (!result.ok()) continue;
-            QSqlQuery q(conn);
-            q.prepare("SELECT type FROM assets WHERE guid = ?");
-            q.addBindValue(result.assetGuid);
-            q.exec();
-            CHECK(q.next() && q.value(0).toInt() == static_cast<int>(ModelTypes::Object),
+            CHECK(testsql::integer(db.connection(), QStringLiteral("SELECT type FROM assets WHERE guid = ?"), result.assetGuid)
+                      == static_cast<int>(ModelTypes::Object),
                   QString("4: %1 lands as an Object row").arg(f).toUtf8().constData());
             CHECK(!result.meshGuid.isEmpty(),
                   QString("4: %1 gets a Mesh member row").arg(f).toUtf8().constData());

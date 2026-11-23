@@ -29,11 +29,10 @@ namespace db {
 
 struct Connection::State
 {
-    sqlite3 *handle = nullptr;
-    bool owned = false;             ///< open() closes it; a borrowed handle is its owner's
+    sqlite3 *handle = nullptr;      ///< open()'s; closed by the Connection that owns this state
     std::string name;
     std::string file;               ///< the main database's file; empty for a temp or memory database
-    std::thread::id owner;          ///< the thread that opened or borrowed it
+    std::thread::id owner;          ///< the thread that opened it
     int depth = 0;                  ///< live Transaction guards on this connection
     std::uint64_t unit = 0;         ///< the serial of the outermost unit: a new one each time one opens
     bool holding = false;           ///< this connection's outermost Transaction holds the write lock
@@ -42,13 +41,6 @@ struct Connection::State
     bool wal = false;               ///< open()'s journal_mode = WAL was answered "wal"
     bool observed = false;          ///< opened after observeStatements: traced under its name
     std::function<void(std::string_view)> trace;   ///< Connection::trace's callback; SQLite holds `this`
-
-    /// A borrowed handle outlives its last borrower: its trace, which points here, is removed first.
-    /// (An owned handle is closed, and `handle` cleared, by the Connection before this runs.)
-    ~State()
-    {
-        if (handle && trace) sqlite3_trace_v2(handle, 0, nullptr, nullptr);
-    }
 };
 
 namespace detail {
