@@ -508,7 +508,20 @@ int main(int argc, char *argv[])
     BootReport::IndexGate indexGate;   // recorded into the boot's report once the window exists (below)
     {
         const QString libraryPath = AppPaths::inDataRoot(Constants::JAH_DATABASE);
-        const int statements = QFile::exists(libraryPath) ? Database::indexStatementsToRun(libraryPath) : 0;
+        // A FAILED BUILD, AND A GATE THAT COULD NOT READ WHAT TO BUILD, REFUSE THE BOOT BY NAME (exit 4): a failed read
+        // never decides a default (a shell opening a library whose indexes nobody could read).
+        const auto refuse = [&cli](const QString &reason) {
+            std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n", qUtf8Printable(reason));
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: REFUSED — %1").arg(reason));
+            if (!FirstRun::isDrivenSession(cli))
+                QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
+                                      QObject::tr("The library cannot be opened: %1.").arg(reason));
+            JahLog::stop(QStringLiteral("library index gate refused, exit code 4"));
+            return 4;
+        };
+        QString unread;
+        const int statements = QFile::exists(libraryPath) ? Database::indexStatementsToRun(libraryPath, &unread) : 0;
+        if (statements < 0) return refuse(unread);
         if (statements > 0) {
             splash.showBusy(QObject::tr("Preparing the library (one time)\u2026"));
             QElapsedTimer built;
@@ -523,16 +536,7 @@ int main(int argc, char *argv[])
             if (!watcher.isFinished()) wait.exec();
             const QString error = watcher.result();
             splash.showBusy(QString());
-            if (!error.isEmpty()) {
-                const QString reason = QObject::tr("the library's indexes could not be built (%1)").arg(error);
-                std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n", qUtf8Printable(reason));
-                JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: REFUSED — %1").arg(reason));
-                if (!FirstRun::isDrivenSession(cli))
-                    QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
-                                          QObject::tr("The library cannot be opened: %1.").arg(reason));
-                JahLog::stop(QStringLiteral("library index build failed, exit code 4"));
-                return 4;
-            }
+            if (!error.isEmpty()) return refuse(QObject::tr("the library's indexes could not be built (%1)").arg(error));
             indexGate.built = statements;
             indexGate.ms = built.elapsed();
             JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library: %1 index statement(s) built before the shell opened it in %2 ms "

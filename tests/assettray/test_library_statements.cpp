@@ -541,10 +541,10 @@ static void theBootGate()
     };
 
     upgraded();
-    const int before = Database::indexStatementsToRun(path);
+    const int before = Database::indexStatementsToRun(path, nullptr);
     QString error;
     const bool built = Database::prepareIndexes(path, &error);
-    CHECK(before == 4 && built && error.isEmpty() && Database::indexStatementsToRun(path) == 0,
+    CHECK(before == 4 && built && error.isEmpty() && Database::indexStatementsToRun(path, nullptr) == 0,
           "GATE: an upgraded library needs %d index statements (the three covering CREATEs and the retired DROP: 4); "
           "the gate builds them and then it needs none%s%s", before, error.isEmpty() ? "" : ": ", qPrintable(error));
     {
@@ -1097,14 +1097,14 @@ int main(int argc, char **argv)
         // THE ONE-TIME COST, printed, never barred: the boot's gate over this library (warm: the file was just
         // written; a cold first read is its bytes from the disk). Each statement its own transaction: the write
         // lock is released between them, and no window exists while it runs.
-        const int statements = Database::indexStatementsToRun(dbPath);
+        const int statements = Database::indexStatementsToRun(dbPath, nullptr);
         QElapsedTimer build;
         build.start();
         QString why;
         const bool ok = Database::prepareIndexes(dbPath, &why);
         std::printf("   (3) the boot's one-time index build of a %d-asset library with the previous index set: %d statements "
                     "in %lld ms (warm)\n", lib.assets, statements, static_cast<long long>(build.elapsed()));
-        CHECK(ok && statements == 4 && Database::indexStatementsToRun(dbPath) == 0,
+        CHECK(ok && statements == 4 && Database::indexStatementsToRun(dbPath, nullptr) == 0,
               "(3) ...the three indexes exist after it, the retired one gone%s%s", why.isEmpty() ? "" : ": ", qPrintable(why));
         db.initializeDatabase(dbPath);
         const int atOpen = indexStatementsAtOpen(db);

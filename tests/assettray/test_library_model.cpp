@@ -386,16 +386,25 @@ int main(int argc, char **argv)
             CHECK(seen.size() == 2 && second == wantA, "...the older batch A second");
         }
         // UNREAD IS NEVER MISSING (NOQT-DATABASE-1 stage 3, step 1): a batch whose read FAILED leaves its rows
-        // neither tiled nor marked missing (a missing mark is final), and the next ask reads them again - beside
-        // the same rows read for real, which land as tiles.
+        // neither tiled nor marked missing (a missing mark is final); A PAINT NEVER ASKS IT AGAIN (the reader's point
+        // 6b: three more paints, still ONE Source call) - the next PUBLISH of a view showing them does, and the rows
+        // read for real land as tiles.
         {
             const QStringList unreadRows = rowGuids(500, 3);
             cache.clear();
-            cache.setSource(TileCache::Kind::Asset, [](const QStringList &) {
+            QAtomicInt failedCalls = 0;
+            cache.setSource(TileCache::Kind::Asset, [&failedCalls](const QStringList &) {
+                failedCalls.fetchAndAddOrdered(1);
                 return std::optional<QHash<QString, QByteArray>>();
             });
             ask(unreadRows, 0);
             CHECK(cache.drain(20000), "unread: the failed batch drains");
+            for (int paint = 0; paint < 3; ++paint) {
+                ask(unreadRows, 0);
+                CHECK(cache.drain(20000), "unread: paint %d drains", paint + 1);
+            }
+            CHECK(failedCalls.loadAcquire() == 1, "unread: three more paints over unread rows read NOTHING again: %d Source "
+                                                  "call(s) in all, want 1", failedCalls.loadAcquire());
             int missing = 0, held = 0;
             for (const QString &g : unreadRows) {
                 missing += cache.isMissing(TileCache::Kind::Asset, g, spec) ? 1 : 0;
@@ -406,12 +415,14 @@ int main(int argc, char **argv)
             cache.setSource(TileCache::Kind::Asset, [libraryFile](const QStringList &g) {
                 return Database::readThumbnailBytes(libraryFile, Database::ThumbnailTable::Assets, g);
             });
-            ask(unreadRows, 0);
-            CHECK(cache.drain(20000), "unread: the second ask drains");
+            const int view = cache.openView(TileCache::Kind::Asset);
+            cache.publishVisible(view, unreadRows);
+            CHECK(cache.drain(20000), "unread: the publish's asks drain");
             held = 0;
             for (const QString &g : unreadRows) held += cache.peek(TileCache::Kind::Asset, g, spec).isNull() ? 0 : 1;
-            CHECK(held == int(unreadRows.size()), "unread: CONTROL: asked again, the rows read for real land as tiles (%d)",
-                  held);
+            CHECK(held == int(unreadRows.size()), "unread: CONTROL: a publish asks them again, and the rows read for real "
+                                                  "land as tiles (%d)", held);
+            cache.closeView(view);
         }
 
         // A VIEW and its watcher: an icon grid over 2,000 rows, offscreen.

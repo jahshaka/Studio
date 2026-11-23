@@ -137,6 +137,16 @@ void TileCache::publishVisible(int token, const QStringList &guids)
     it->known = true;
     it->order = guids;
     it->guids = QSet<QString>(guids.cbegin(), guids.cend());
+    // AN UNREAD KEY IS ASKED AGAIN HERE, at a publish (a scroll, a resize, a show), never at a paint.
+    for (auto u = mUnread.begin(); u != mUnread.end();) {
+        if (u->kind != it->kind || !it->guids.contains(u->guid) || mQueued.contains(u.key())) { ++u; continue; }
+        Request again = *u;
+        again.token = token;
+        mQueued.insert(again.key);
+        mQueue.append(again);
+        u = mUnread.erase(u);
+        scheduleFlush();
+    }
     tellDemand(it->kind, token);
 }
 
@@ -204,7 +214,7 @@ QPixmap TileCache::tile(Kind kind, const QString &guid, const Spec &spec, int to
     }
     const QString key = keyOf(kind, guid, spec);
     if (const QPixmap *hit = mEntries.object(key)) return *hit;
-    if (mMissing.contains(key)) return QPixmap();
+    if (mMissing.contains(key) || mUnread.contains(key)) return QPixmap();
     if (mQueued.contains(key)) {
         // A tokenless ask makes a queued request always wanted.
         if (!token)
@@ -246,6 +256,8 @@ void TileCache::invalidate(Kind kind, const QString &guid)
         if (key.startsWith(prefix)) mEntries.remove(key);
     for (auto it = mMissing.begin(); it != mMissing.end();)
         it = it->startsWith(prefix) ? mMissing.erase(it) : std::next(it);
+    for (auto it = mUnread.begin(); it != mUnread.end();)
+        it = it.key().startsWith(prefix) ? mUnread.erase(it) : std::next(it);
     for (auto it = mHashes.begin(); it != mHashes.end();)
         it = it.key().startsWith(prefix) ? mHashes.erase(it) : std::next(it);
     // A request already queued for the old bytes is left alone: it reads the
@@ -270,6 +282,7 @@ void TileCache::clear()
     // (The views' tokens and sets stay: they are the views', not the pictures'.)
     mEntries.clear();
     mMissing.clear();
+    mUnread.clear();
     mHashes.clear();
     mQueue.clear();
     mQueued.clear();
@@ -366,8 +379,11 @@ void TileCache::land(const QVector<Decoded> &batch)
     mSourced += int(sourced.size());
     for (const Decoded &job : batch) {
         mQueued.remove(job.request.key);
-        // UNREAD IS NOT MISSING: no mark, no tile, no repaint - the next paint that wants it asks again.
-        if (job.unread) continue;
+        // UNREAD IS NOT MISSING: no mark, no tile, no repaint - the next publish of a view showing it asks again.
+        if (job.unread) {
+            mUnread.insert(job.request.key, job.request);
+            continue;
+        }
         if (job.tile.isNull()) {
             mMissing.insert(job.request.key);
         } else {

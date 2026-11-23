@@ -31,8 +31,10 @@ For more information see the LICENSE file
 //  13. "does it have dependencies" that could not be read is no answer: readOk cleared;
 //  14. where a project's pins are filed, unread, is no answer: readOk cleared;
 //  15. the boot's schema check over live columns it could not read answers "cannot judge" (matches), never "differs";
-//  16. the present indexes unread build nothing: the boot's gate answers -1, the open's report reads -1;
-//  17. a tile read that failed answers no answer (unread), never an empty one ("no picture").
+//  16. the present indexes unread build nothing: the boot's gate answers -1 and REFUSES the boot by name, the open's
+//      report reads -1;
+//  17. a tile read that failed, or has no library, answers no answer (unread), never an empty one ("no picture"); a
+//      failure streak is said once, and ended by its count.
 
 #include <QApplication>
 #include <QFile>
@@ -531,23 +533,29 @@ int main(int argc, char **argv)
     {
         db::Error e;
         database.connection().exec("DROP INDEX idx_assets_parent", &e);
-        const int missing = Database::indexStatementsToRun(QString::fromLatin1(kFile));
+        QString readable = QStringLiteral("(not set)");
+        const int missing = Database::indexStatementsToRun(QString::fromLatin1(kFile), &readable);
         QString why;
         const bool built = Database::prepareIndexes(QString::fromLatin1(kFile), &why);
-        const int after = Database::indexStatementsToRun(QString::fromLatin1(kFile));
-        check(!e && missing == 1 && built && after == 0,
-              QStringLiteral("16: CONTROL: one index missing is counted (%1), built (%2 %3), then none (%4)")
-                  .arg(missing).arg(built).arg(why).arg(after));
+        const int after = Database::indexStatementsToRun(QString::fromLatin1(kFile), nullptr);
+        check(!e && missing == 1 && readable.isEmpty() && built && after == 0,
+              QStringLiteral("16: CONTROL: one index missing is counted (%1, the boot goes on: refusal '%2'), built (%3 %4), "
+                             "then none (%5)").arg(missing).arg(readable).arg(built).arg(why).arg(after));
         const QString garbage = QStringLiteral("db_units_garbage.db");
         {
             QFile f(garbage);
             f.open(QIODevice::WriteOnly);
             f.write(QByteArray(8192, 'x'));
         }
-        const int unreadGate = Database::indexStatementsToRun(garbage);
+        QString refusal;
+        const int unreadGate = Database::indexStatementsToRun(garbage, &refusal);
         QFile::remove(garbage);
         check(unreadGate == -1, QStringLiteral("16: the gate over a file it cannot read answers -1, never a count to build (%1)")
                                     .arg(unreadGate));
+        // THE BOOT's DECISION (the reader's point 2): main.cpp refuses the boot (exit 4) on this text, by name.
+        check(refusal.startsWith(QStringLiteral("the library's indexes could not be read: "))
+                  && refusal.contains(QStringLiteral("not a database")),
+              QStringLiteral("16: the boot's decision over an unread gate is REFUSE, naming SQLite's text: '%1'").arg(refusal));
         dbseam::deny(database.connection(), [](int action, const char *what) {
             return action == dbseam::kRead && what
                 && (std::strcmp(what, "sqlite_master") == 0 || std::strcmp(what, "sqlite_schema") == 0);
@@ -580,6 +588,22 @@ int main(int argc, char **argv)
         QFile::remove(garbage);
         check(!unread, QStringLiteral("17: a file it cannot read answers NO answer (unread), never an empty one (%1)")
                            .arg(unread ? QStringLiteral("an answer of %1 rows").arg(unread->size()) : QStringLiteral("none")));
+        // NO LIBRARY (the reader's point 7): an empty path is unread too, never "no picture".
+        const std::optional<QHash<QString, QByteArray>> none =
+            Database::readThumbnailBytes(QString(), Database::ThumbnailTable::Assets, { QStringLiteral("t17") });
+        check(!none, QStringLiteral("17: no library (an empty path) answers NO answer (%1)")
+                         .arg(none ? QStringLiteral("an answer of %1 rows").arg(none->size()) : QStringLiteral("none")));
+        // SAID ONCE A STREAK (the reader's point 6a): a fresh streak of three failures says ONE warning; the read that
+        // succeeds after it ends the streak, saying the count.
+        Database::readThumbnailBytes(QString::fromLatin1(kFile), Database::ThumbnailTable::Assets, { QStringLiteral("t17") });
+        const quint64 from = JahLog::mark(QStringLiteral("db.units: case 17's streak"));
+        for (int i = 0; i < 3; ++i) Database::readThumbnailBytes(QString(), Database::ThumbnailTable::Assets, { QStringLiteral("t17") });
+        const int warned = int(JahLog::since(from).filter(QStringLiteral("tile read: fetchAssetThumbnailBytes could not be read")).size());
+        Database::readThumbnailBytes(QString::fromLatin1(kFile), Database::ThumbnailTable::Assets, { QStringLiteral("t17") });
+        const QStringList ended = JahLog::since(from).filter(QStringLiteral("tile read: reads again after"));
+        check(warned == 1 && ended.size() == 1 && ended.first().contains(QStringLiteral("after 3 failed batch(es) (2 repeat(s)")),
+              QStringLiteral("17: three failures say ONE warning (%1), and the read after them ends the streak by its count "
+                             "(%2)").arg(warned).arg(ended.join(QLatin1Char('|'))));
     }
 
     database.closeDatabase();

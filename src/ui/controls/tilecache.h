@@ -83,7 +83,7 @@ public:
     /// connection (Database::readThumbnailBytes) and touches nothing of the UI thread's.
     /// NO ANSWER (std::nullopt) = the read FAILED: the batch is UNREAD - never "no thumbnail" (a missing
     /// mark is final, and the preview demand renders a picture for it): it is dropped from the queue
-    /// unmarked and asked again at the next paint that wants it.
+    /// unmarked, no paint asks it again, and the next publish of a view showing it does.
     using Source = std::function<std::optional<QHash<QString, QByteArray>>(const QStringList &guids)>;
 
     static constexpr int kBatch = 48;
@@ -192,6 +192,9 @@ private:
 
     QCache<QString, QPixmap> mEntries{ kBudgetKB };
     QSet<QString> mMissing;
+    /// key -> its request: a batch whose read FAILED. A paint never asks it again (a hover would open the library
+    /// per repaint); the next PUBLISH of a view that shows its guid does (the reader's point 6b).
+    QHash<QString, Request> mUnread;
     QHash<QString, size_t> mHashes;  // key -> the supplied bytes' hash
     QSet<QString> mQueued;          // keys queued or decoding
     QVector<Request> mQueue;

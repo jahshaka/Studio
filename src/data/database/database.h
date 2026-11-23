@@ -371,7 +371,9 @@ public:
     /// false with the failed statement and SQLite's reason. Over an existing library the build reads every
     /// row (the covering indexes carry the columns stored behind each row's thumbnail: 468 MB at 10,000
     /// assets), so the boot runs it on a worker before any window exists, the splash saying so.
-    static int indexStatementsToRun(const QString &path);
+    /// -1 when the library's indexes could not be READ: `refusal` then says why ("the library's indexes could not
+    /// be read: <SQLite's text>"), and the boot is refused by it (empty when it answered a count).
+    static int indexStatementsToRun(const QString &path, QString *refusal);
     static bool prepareIndexes(const QString &path, QString *error);
     void createCasTables(bool stampGeneration = true);
     /// True when every table this build creates exists here with exactly the

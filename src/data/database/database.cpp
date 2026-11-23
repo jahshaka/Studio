@@ -1283,18 +1283,18 @@ db::Connection openLibrarySide(const QString &path, const char *name, db::Error 
 }
 }   // namespace
 
-int Database::indexStatementsToRun(const QString &path)
+int Database::indexStatementsToRun(const QString &path, QString *refusal)
 {
     db::Error error;
     db::Connection check = openLibrarySide(path, "IndexCheck", &error);
     QStringList needed;
     if (check.isOpen()) needed = indexStatementsNeeded(check, &error);
     if (error) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
-            QStringLiteral("library: the indexes it has could not be read before the shell opens it (%1) - the boot builds "
-                           "none").arg(dbqt::describe(error)));
+        // A FAILED READ NEVER DECIDES A DEFAULT: the boot is refused by name, as a failed build is (main.cpp).
+        if (refusal) *refusal =QStringLiteral("the library's indexes could not be read: %1").arg(dbqt::describe(error));
         return -1;
     }
+    if (refusal) refusal->clear();
     return int(needed.size());
 }
 
@@ -1680,29 +1680,39 @@ static QHash<QString, QByteArray> fetchThumbnailBytes(Database *db, const char *
     return out;
 }
 
+namespace {
+/// THE TILE READ's FAILURE STREAK (the reader's point 6a): a library that cannot be read is said ONCE - the streak's
+/// first failure - and the next read that succeeds ends the streak, saying how many repeats went unsaid. Any thread
+/// (the tile cache's pool).
+std::atomic<int> gTileReadFailures{ 0 };
+}   // namespace
+
 std::optional<QHash<QString, QByteArray>> Database::readThumbnailBytes(const QString &dbPath, ThumbnailTable table,
                                                                       const QStringList &guids)
 {
     QHash<QString, QByteArray> out;
-    if (guids.isEmpty() || dbPath.isEmpty()) return out;
+    if (guids.isEmpty()) return out;
     const bool projects = table == ThumbnailTable::Projects;
     const QString name = projects ? QStringLiteral("fetchProjectThumbnailBytes")
                                   : QStringLiteral("fetchAssetThumbnailBytes");
     // A READ THAT FAILED IS UNREAD, NEVER "NO PICTURE": the tile cache would mark every guid of the batch missing
-    // for good, and the preview demand would render a picture for a row that has one.
-    const auto unread = [&](const db::Error &e) -> std::optional<QHash<QString, QByteArray>> {
-        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
-            QStringLiteral("tile read: %1 could not be read (%2) - the batch is unread, never 'no picture'")
-                .arg(name, dbqt::describe(e)));
+    // for good, and the preview demand would render a picture for a row that has one. NO LIBRARY (an empty path)
+    // is unread too (the reader's point 7).
+    const auto unread = [&](const QString &why) -> std::optional<QHash<QString, QByteArray>> {
+        if (gTileReadFailures.fetch_add(1) == 0)
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QStringLiteral("tile read: %1 could not be read (%2) - the batch is unread, never 'no picture'; its "
+                               "repeats are not said until a read succeeds").arg(name, why));
         return std::nullopt;
     };
+    if (dbPath.isEmpty()) return unread(QStringLiteral("no library file"));
     db::Options options;
     options.name = "TileRead";
     options.readOnly = true;
     options.busyMs = db::kEditorBusyMs;
     db::Error error;
     db::Connection connection = db::Connection::open(dbPath.toStdString(), options, &error);
-    if (!connection.isOpen()) return unread(error);
+    if (!connection.isOpen()) return unread(dbqt::describe(error));
     QStringList marks;
     marks.reserve(guids.size());
     for (int i = 0; i < guids.size(); ++i) marks << QStringLiteral("?");
@@ -1717,7 +1727,10 @@ std::optional<QHash<QString, QByteArray>> Database::readThumbnailBytes(const QSt
         const QByteArray bytes = dbqt::bytes(query, 1);
         if (!bytes.isEmpty()) out.insert(dbqt::text(query, 0), bytes);
     }
-    if (error) return unread(error);
+    if (error) return unread(dbqt::describe(error));
+    if (const int failed = gTileReadFailures.exchange(0); failed > 0)
+        JahLog::write(JahLog::legacy, JahLog::Level::Log,
+            QStringLiteral("tile read: reads again after %1 failed batch(es) (%2 repeat(s) not said)").arg(failed).arg(failed - 1));
     return out;
 }
 

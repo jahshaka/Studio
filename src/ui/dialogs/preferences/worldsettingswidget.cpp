@@ -42,6 +42,9 @@ For more information see the LICENSE file
 #include <QButtonGroup>
 #include <QMessageBox>
 
+#include <functional>
+#include <memory>
+
 #include "services/framemonitor.h"
 #include "services/framepacing.h"
 #include "services/outlinesettings.h"
@@ -1022,9 +1025,16 @@ void WorldSettingsWidget::configureDatabaseWidget()
 		// event loop below, and the app would close before the box was read.
 		std::function<void()> sessionClose;
 		const auto afterRun = host->afterRun;
-		if (afterRun) host->afterRun = [&sessionClose](std::function<void()> fn) { sessionClose = std::move(fn); };
-		const QVariantMap result = api.quietly([&] { return api.resetLibrary(options); });
-		host->afterRun = afterRun;
+		QVariantMap result;
+		{
+			// RESTORED ON EVERY WAY OUT OF THE VERB (the reader's point 1): one that throws must not leave the
+			// host's hook pointing at this scope's `sessionClose`.
+			const std::unique_ptr<void, std::function<void(void *)>> restore(host, [host, afterRun](void *) {
+				host->afterRun = afterRun;
+			});
+			if (afterRun) host->afterRun = [&sessionClose](std::function<void()> fn) { sessionClose = std::move(fn); };
+			result = api.quietly([&] { return api.resetLibrary(options); });
+		}
 		if (result.value(QStringLiteral("ok")).toBool()
 		    && result.value(QStringLiteral("restarted")).toBool()) {
 			// THE PREFERENCES DIALOG IS MODAL (MainWindow shows it with exec()),
