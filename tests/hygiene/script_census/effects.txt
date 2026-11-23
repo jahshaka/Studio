@@ -1,0 +1,9 @@
+engine.decal.set Scene::setDecal
+engine.decal.remove Scene::removeDecal
+engine.particles.set Scene::setParticleSystem
+engine.particles.setColourRamp Scene::setParticleSystem
+engine.particles.remove Scene::removeParticleSystem
+engine.billboards.create Scene::createBillboardSet
+engine.billboards.set Scene::setBillboards
+engine.planar.set Scene::setPlanarReflections
+engine.planar.setReflector Scene::setNodePlanarReflector
