@@ -363,6 +363,7 @@ public:
     void createIndexes();
     /// The index statements createIndexes ran over an EXISTING library's rows on the opening thread (its DEFECT
     /// case; 0 when the boot's gate prepared them): the boot's result (services/bootreport.h `indexAtOpen`).
+    /// -1: the present indexes could not be read, and none was built (said by name).
     int indexStatementsAtOpen() const { return mIndexStatementsAtOpen; }
     /// THE BOOT'S INDEX GATE (LARGE-LIBRARY-1; main.cpp, before the shell opens the library): how many of the
     /// library's index statements `path`'s library still needs (0: prepared, nothing to build), and their

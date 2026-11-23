@@ -30,7 +30,8 @@ For more information see the LICENSE file
 //  12. an import's archive whose PROJECT ROW cannot be read is refused by name - never an empty, unnamed world;
 //  13. "does it have dependencies" that could not be read is no answer: readOk cleared;
 //  14. where a project's pins are filed, unread, is no answer: readOk cleared;
-//  15. the boot's schema check over live columns it could not read answers "cannot judge" (matches), never "differs".
+//  15. the boot's schema check over live columns it could not read answers "cannot judge" (matches), never "differs";
+//  16. the present indexes unread build nothing: the boot's gate answers -1, the open's report reads -1.
 
 #include <QApplication>
 #include <QFile>
@@ -520,6 +521,41 @@ int main(int argc, char **argv)
                   .arg(QString::fromStdString(e.message)));
         database.connection().exec("ALTER TABLE favorites DROP COLUMN stage3_extra", &e);
         check(!e && database.schemaMatchesFresh(), QStringLiteral("15: CONTROL: the column dropped, it matches again"));
+    }
+
+    // 16. THE PRESENT INDEXES UNREAD BUILD NOTHING (stage 3, step 1: a failed read of the schema made every CREATE
+    //     "needed"): the boot's gate over a file it cannot read answers -1 (said), never a count to build; the open's
+    //     createIndexes with sqlite_master denied builds nothing and reports -1 - beside a library missing ONE index,
+    //     which the gate counts (1) and builds (then 0).
+    {
+        db::Error e;
+        database.connection().exec("DROP INDEX idx_assets_parent", &e);
+        const int missing = Database::indexStatementsToRun(QString::fromLatin1(kFile));
+        QString why;
+        const bool built = Database::prepareIndexes(QString::fromLatin1(kFile), &why);
+        const int after = Database::indexStatementsToRun(QString::fromLatin1(kFile));
+        check(!e && missing == 1 && built && after == 0,
+              QStringLiteral("16: CONTROL: one index missing is counted (%1), built (%2 %3), then none (%4)")
+                  .arg(missing).arg(built).arg(why).arg(after));
+        const QString garbage = QStringLiteral("db_units_garbage.db");
+        {
+            QFile f(garbage);
+            f.open(QIODevice::WriteOnly);
+            f.write(QByteArray(8192, 'x'));
+        }
+        const int unreadGate = Database::indexStatementsToRun(garbage);
+        QFile::remove(garbage);
+        check(unreadGate == -1, QStringLiteral("16: the gate over a file it cannot read answers -1, never a count to build (%1)")
+                                    .arg(unreadGate));
+        dbseam::deny(database.connection(), [](int action, const char *what) {
+            return action == dbseam::kRead && what
+                && (std::strcmp(what, "sqlite_master") == 0 || std::strcmp(what, "sqlite_schema") == 0);
+        });
+        database.createIndexes();
+        dbseam::clear(database.connection());
+        check(database.indexStatementsAtOpen() == -1,
+              QStringLiteral("16: the open's present indexes unread: nothing built, the report reads -1 (%1)")
+                  .arg(database.indexStatementsAtOpen()));
     }
 
     database.closeDatabase();

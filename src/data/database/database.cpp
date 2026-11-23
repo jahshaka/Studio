@@ -1216,13 +1216,16 @@ const char *const kIndexStatements[] = {
 };
 
 /// The statements of kIndexStatements `conn`'s library still needs: a CREATE whose index it lacks, a DROP of one
-/// it still has. One read of its schema.
-QStringList indexStatementsNeeded(const QSqlDatabase &conn)
+/// it still has. One read of its schema. A read that FAILED answers nothing with `error` filled - never "every
+/// index is missing".
+QStringList indexStatementsNeeded(db::Connection &conn, db::Error *error)
 {
     QSet<QString> present;
-    QSqlQuery schema(conn);
-    if (schema.exec(QStringLiteral("SELECT name FROM sqlite_master WHERE type = 'index'")))
-        while (schema.next()) present.insert(schema.value(0).toString());
+    {
+        db::Statement schema(conn, "SELECT name FROM sqlite_master WHERE type = 'index'");
+        while (schema.step(error)) present.insert(QString::fromStdString(schema.text(0)));
+        if (*error) return {};
+    }
     QStringList out;
     for (const char *statement : kIndexStatements) {
         const QString sql = QString::fromLatin1(statement);
@@ -1240,13 +1243,22 @@ void Database::createIndexes()
     // library this runs nothing; over a fresh library's empty tables it builds them at once. An existing
     // library's rows reaching here unprepared is a DEFECT of the caller — its index build would read every
     // row behind its thumbnail on THIS (the opening) thread — named so a row sees it, and still built.
-    const QStringList needed = indexStatementsNeeded(db);
+    // THE PRESENT INDEXES UNREAD BUILD NOTHING: said by name, and the boot's report reads -1 (unread), never a run of
+    // every CREATE over a library whose schema could not be read.
+    db::Error unread;
+    const QStringList needed = indexStatementsNeeded(connection(), &unread);
+    if (unread) {
+        mIndexStatementsAtOpen = -1;
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QStringLiteral("library: the indexes it has could not be read (%1) - none was built").arg(dbqt::describe(unread)));
+        return;
+    }
     if (needed.isEmpty()) return;
     bool empty = true;
     {   // finalized before the writes below
         db::Statement any(connection(), "SELECT 1 FROM assets LIMIT 1");
         db::Error error;
-        empty = !any.step(&error);
+        empty = !any.step(&error) && !error;   // a failed read is not "empty": the DEFECT is said
     }
     if (!empty) {
         mIndexStatementsAtOpen = int(needed.size());
@@ -1260,26 +1272,47 @@ void Database::createIndexes()
     }
 }
 
+namespace {
+/// A side connection of the library's own file (busy: the editor's wait), named for its holder line and its count.
+db::Connection openLibrarySide(const QString &path, const char *name, db::Error *error)
+{
+    db::Options options;
+    options.name = name;
+    options.busyMs = db::kEditorBusyMs;
+    return db::Connection::open(path.toStdString(), options, error);
+}
+}   // namespace
+
 int Database::indexStatementsToRun(const QString &path)
 {
-    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("IndexCheck"), path);
-    if (!scoped.db.open()) return 0;
-    return int(indexStatementsNeeded(scoped.db).size());
+    db::Error error;
+    db::Connection check = openLibrarySide(path, "IndexCheck", &error);
+    QStringList needed;
+    if (check.isOpen()) needed = indexStatementsNeeded(check, &error);
+    if (error) {
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QStringLiteral("library: the indexes it has could not be read before the shell opens it (%1) - the boot builds "
+                           "none").arg(dbqt::describe(error)));
+        return -1;
+    }
+    return int(needed.size());
 }
 
 bool Database::prepareIndexes(const QString &path, QString *error)
 {
-    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("IndexBuild"), path);
-    if (!scoped.db.open()) {
-        if (error) *error = scoped.db.lastError().text();
+    db::Error e;
+    db::Connection build = openLibrarySide(path, "IndexBuild", &e);
+    QStringList needed;
+    if (build.isOpen()) needed = indexStatementsNeeded(build, &e);
+    if (e) {
+        if (error) *error = dbqt::describe(e);
         return false;
     }
     // Each statement its own transaction: the write lock is released between them.
-    for (const QString &statement : indexStatementsNeeded(scoped.db)) {
-        QSqlQuery index(scoped.db);
-        if (!index.exec(statement)) {
-            if (error) *error = QStringLiteral("%1: %2").arg(statement.section(QLatin1Char(' '), 0, 5),
-                                                              index.lastError().text());
+    for (const QString &statement : needed) {
+        db::Statement index(build, dbqt::utf8(statement));
+        if (!index.run(&e)) {
+            if (error) *error = QStringLiteral("%1: %2").arg(statement.section(QLatin1Char(' '), 0, 5), dbqt::describe(e));
             return false;
         }
     }
