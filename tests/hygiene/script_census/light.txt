@@ -1,0 +1,4 @@
+engine.light.set Scene::setLight
+engine.light.setIesProfile Scene::setLight
+engine.light.remove Scene::removeLight
+engine.light.setShadowResolution Engine::setShadowResolution
