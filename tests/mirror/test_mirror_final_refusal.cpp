@@ -131,10 +131,8 @@ int main(int argc, char **argv)
         QImage(4, 1, QImage::Format_RGBA8888).save(dir + "/final_refusal_ramp.png");
         QImage(2, 2, QImage::Format_RGBA8888).save(dir + "/final_refusal_texture.png");
         if (QFile bad(dir + "/final_refusal_broken.png"); bad.open(QIODevice::WriteOnly)) bad.write("\x89PNG\r\n\x1a\n not an image");
-        auto broken = iris::Texture2D::create(QImage());
-        broken->source = dir + "/final_refusal_broken.png";
-        auto good = iris::Texture2D::create(QImage());
-        good->source = dir + "/final_refusal_texture.png";
+        auto broken = iris::Texture2D::load(dir + "/final_refusal_broken.png");
+        auto good = iris::Texture2D::load(dir + "/final_refusal_texture.png");
         auto ramped = iris::ParticleSystemNode::create();
         ramped->setName("ramped");
         ramped->colourRampImage = dir + "/final_refusal_ramp.png";
