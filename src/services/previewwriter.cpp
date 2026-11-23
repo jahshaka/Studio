@@ -15,8 +15,6 @@ For more information see the LICENSE file
 
 #include <QBuffer>
 #include <QCoreApplication>
-#include <QSqlDatabase>
-#include <QUuid>
 
 #include "data/database/database.h"
 #include "services/jahlog.h"
@@ -111,11 +109,11 @@ bool Writer::submit(const QString &guid, const QImage &image, const QString &key
 
 void Writer::run()
 {
-    const QString name = QStringLiteral("PreviewWriter-%1").arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
     QString openError;
     {
-        QSqlDatabase conn;
-        const bool open = Database::openPreviewConnection(&conn, mPath, name, mBudgetMs, &openError);
+        // ITS NAME, ONE for every writer: the holder line a busy error prints and the per-name statement count.
+        db::Connection conn;
+        const bool open = Database::openPreviewConnection(&conn, mPath, "PreviewWriter", mBudgetMs, &openError);
         if (!open)
             JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("previews: the writer could not open %1 (%2) — no preview is stored this session")
                                                                   .arg(mPath, openError));
@@ -203,9 +201,7 @@ void Writer::run()
             lock.lock();
         }
         lock.unlock();
-        if (conn.isOpen()) conn.close();
-    }
-    QSqlDatabase::removeDatabase(name);
+    }   // the connection closes with its value, on this thread
 }
 
 }   // namespace previews

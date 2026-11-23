@@ -42,7 +42,6 @@ For more information see the LICENSE file
 #include <QMessageBox>
 #include <QObject>
 #include <QRegularExpression>
-#include <QUuid>
 
 #include <algorithm>
 #include <atomic>
@@ -53,48 +52,6 @@ For more information see the LICENSE file
 #include <unordered_map>
 #include <utility>
 #include <vector>
-
-namespace
-{
-// RAII for a NAMED side connection — the export/import bundle writers each
-// registered one and then unregistered it only on their success path, so
-// every failed export left a live QSqlDatabase entry behind (deep audit
-// 2026-09, area 6: four such leaks; the next call with the same hard-coded
-// name got Qt's "duplicate connection name" warning and, worse, REUSED the
-// stale connection still pointing at the previous temp file). Same shape as
-// assetmigration.cpp's ScopedConnection; the name is unique per instance so
-// two of these can never collide across threads either.
-//
-// Order matters in the destructor: close, then drop OUR handle (a live copy
-// is what makes removeDatabase print "connection is still in use"), then
-// unregister.
-class ScopedConnection
-{
-public:
-    ScopedConnection(const QString &driver, const QString &prefix, const QString &dbPath)
-        : name(QStringLiteral("%1-%2").arg(prefix,
-              QUuid::createUuid().toString(QUuid::WithoutBraces)))
-    {
-        db = QSqlDatabase::addDatabase(driver, name);
-        db.setDatabaseName(dbPath);
-    }
-
-    ~ScopedConnection()
-    {
-        if (db.isOpen()) db.close();
-        db = QSqlDatabase();
-        QSqlDatabase::removeDatabase(name);
-    }
-
-    ScopedConnection(const ScopedConnection &) = delete;
-    ScopedConnection &operator=(const ScopedConnection &) = delete;
-
-    QSqlDatabase db;
-
-private:
-    QString name;
-};
-} // namespace
 
 namespace {
 /// Every live Database, for the batch stand-down hook (see the constructor).
@@ -686,11 +643,16 @@ public:
 private:
     void run()
     {
-        ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("WalCheckpoint"), mPath);
-        if (!scoped.db.open()) {
+        // ITS OWN CONNECTION, opened and used on this thread (the layer's threading law), named for the holder line.
+        db::Options options;
+        options.name = "WalCheckpoint";
+        options.busyMs = db::kEditorBusyMs;
+        db::Error error;
+        db::Connection connection = db::Connection::open(mPath.toStdString(), options, &error);
+        if (!connection.isOpen()) {
             JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: the WAL checkpoint worker could not open %1 (%2) — "
                                                                              "the -wal grows until the library closes")
-                                                                  .arg(mPath, scoped.db.lastError().text()));
+                                                                  .arg(mPath, dbqt::describe(error)));
             return;
         }
         const QString wal = mPath + QStringLiteral("-wal");
@@ -707,11 +669,12 @@ private:
             if (written == mLastCheckpointed) continue;
             mLastCheckpointed = written;
             lock.unlock();
-            QSqlQuery checkpoint(scoped.db);
-            if (!checkpoint.exec(QStringLiteral("PRAGMA wal_checkpoint(PASSIVE)")))
-                JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: WAL checkpoint failed: %1")
-                                                                      .arg(checkpoint.lastError().text()));
-            checkpoint.finish();
+            {
+                db::Statement checkpoint(connection, "PRAGMA wal_checkpoint(PASSIVE)");
+                if (!checkpoint.run(&error))
+                    JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: WAL checkpoint failed: %1")
+                                                                          .arg(dbqt::describe(error)));
+            }
             lock.lock();
         }
     }
@@ -1738,31 +1701,30 @@ std::optional<QHash<QString, QByteArray>> Database::readThumbnailBytes(const QSt
 
 // ---- THE PREVIEW WRITER's library half (PREVIEWS-1; services/previewwriter.h) ----------------
 
-bool Database::openPreviewConnection(QSqlDatabase *conn, const QString &dbPath,
-                                     const QString &connectionName, int busyTimeoutMs,
-                                     QString *errorOut)
+bool Database::openPreviewConnection(db::Connection *conn, const QString &dbPath, const std::string &name,
+                                     int busyTimeoutMs, QString *errorOut)
 {
-    *conn = QSqlDatabase::addDatabase(Constants::DB_DRIVER, connectionName);
-    conn->setDatabaseName(dbPath);
-    conn->setConnectOptions(QStringLiteral("QSQLITE_BUSY_TIMEOUT=%1").arg(busyTimeoutMs));
-    if (!conn->open()) {
-        if (errorOut) *errorOut = conn->lastError().text();
-        return false;
-    }
-    applyDurabilityPragmas(*conn);
-    return true;
+    db::Options options;
+    options.name = name;
+    options.busyMs = busyTimeoutMs;
+    options.wal = true;
+    options.walAutocheckpoint = 0;   // the library's checkpoints are the worker's (WalCheckpointer)
+    db::Error error;
+    *conn = db::Connection::open(dbPath.toStdString(), options, &error);
+    if (conn->isOpen()) return true;
+    if (errorOut) *errorOut = dbqt::describe(error);
+    return false;
 }
 
 namespace {
 /// SQLITE_BUSY (5) or SQLITE_LOCKED (6), extended codes included: the lock was not had in time.
-bool lockedOut(const QSqlError &error)
+bool lockedOut(const db::Error &error)
 {
-    const int code = error.nativeErrorCode().toInt();
-    return (code & 0xff) == 5 || (code & 0xff) == 6;
+    return error.busy() || (error.code & 0xff) == 6;
 }
 }   // namespace
 
-Database::PreviewWrite Database::writePreview(QSqlDatabase conn, const QString &guid,
+Database::PreviewWrite Database::writePreview(db::Connection &conn, const QString &guid,
                                               const QByteArray &png, const QString &key)
 {
     PreviewWrite out;
@@ -1770,44 +1732,47 @@ Database::PreviewWrite Database::writePreview(QSqlDatabase conn, const QString &
         out.reason = QStringLiteral("the picture encoded to no bytes (an empty PNG is never stored)");
         return out;
     }
-    QSqlQuery query(conn);
+    db::Error error;
     const auto failed = [&](const QString &step) {
-        out.busy = lockedOut(query.lastError());
+        out.busy = lockedOut(error);
         out.reason = out.busy
             ? QStringLiteral("the library stayed locked past the writer's budget (%1)").arg(step)
-            : QStringLiteral("%1 failed: %2").arg(step, query.lastError().text());
-        QSqlQuery rollback(conn);
-        rollback.exec(QStringLiteral("ROLLBACK"));
-        return out;
+            : QStringLiteral("%1 failed: %2").arg(step, dbqt::describe(error));
+        return out;   // the unit rolls back at its scope's end
     };
-    // IMMEDIATE: the lock is taken here or not at all, so the wait is the busy timeout's, once.
+    // IMMEDIATE (the door's): the lock is taken here or not at all, so the wait is the busy timeout's, once.
     noteQuery(QStringLiteral("WritePreview"), QStringLiteral("BEGIN IMMEDIATE"));
-    if (!query.exec(QStringLiteral("BEGIN IMMEDIATE"))) {
-        out.busy = lockedOut(query.lastError());
+    db::Transaction unit(conn, "the preview writer");
+    if (unit.beginError().code) {
+        error = unit.beginError();
+        out.busy = lockedOut(error);
         out.reason = out.busy
             ? QStringLiteral("the library stayed locked past the writer's budget")
-            : QStringLiteral("the preview's transaction could not begin: %1").arg(query.lastError().text());
+            : QStringLiteral("the preview's transaction could not begin: %1").arg(dbqt::describe(error));
         return out;
     }
-    query.prepare(QStringLiteral("UPDATE assets SET thumbnail = ? WHERE guid = ?"));
-    query.addBindValue(png);
-    query.addBindValue(guid);
-    noteQuery(QStringLiteral("WritePreview"), query.lastQuery());
-    if (!query.exec()) return failed(QStringLiteral("the thumbnail's write"));
-    if (query.numRowsAffected() != 1) {
-        QSqlQuery rollback(conn);
-        rollback.exec(QStringLiteral("ROLLBACK"));
+    {
+        db::Statement thumbnail(conn, "UPDATE assets SET thumbnail = ? WHERE guid = ?");
+        dbqt::bindBytes(thumbnail, 1, png);
+        dbqt::bindText(thumbnail, 2, guid);
+        noteQuery(QStringLiteral("WritePreview"), QStringLiteral("UPDATE assets SET thumbnail = ? WHERE guid = ?"));
+        if (!thumbnail.run(&error)) return failed(QStringLiteral("the thumbnail's write"));
+    }
+    if (conn.changes() != 1) {
         out.reason = QStringLiteral("no asset with guid '%1' is in the library").arg(guid);
         return out;
     }
-    query.prepare(QStringLiteral("INSERT OR REPLACE INTO thumbnails (guid, hash, last_written) "
-                                 "VALUES (?, ?, CURRENT_TIMESTAMP)"));
-    query.addBindValue(guid);
-    query.addBindValue(key);
-    noteQuery(QStringLiteral("WritePreview"), query.lastQuery());
-    if (!query.exec()) return failed(QStringLiteral("the key's write"));
+    {
+        static const char *const kKey = "INSERT OR REPLACE INTO thumbnails (guid, hash, last_written) "
+                                        "VALUES (?, ?, CURRENT_TIMESTAMP)";
+        db::Statement stamp(conn, kKey);
+        dbqt::bindText(stamp, 1, guid);
+        dbqt::bindText(stamp, 2, key);
+        noteQuery(QStringLiteral("WritePreview"), QString::fromLatin1(kKey));
+        if (!stamp.run(&error)) return failed(QStringLiteral("the key's write"));
+    }
     noteQuery(QStringLiteral("WritePreview"), QStringLiteral("COMMIT"));
-    if (!query.exec(QStringLiteral("COMMIT"))) return failed(QStringLiteral("the commit"));
+    if (!unit.commit(&error)) return failed(QStringLiteral("the commit"));
     out.ok = true;
     return out;
 }
@@ -3544,25 +3509,25 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
     if (!catalog.failure.isEmpty())
         return failed(QStringLiteral("the catalog's read '%1' failed (the log names why)").arg(catalog.failure));
     if (!catalog.found) return failed(QStringLiteral("the project row was not found"));
-    // ScopedConnection: a uniquely named side connection, closed and
-    // unregistered on every path (the export used to leak a fixed-name one).
-    ScopedConnection scoped(Constants::DB_DRIVER, QStringLiteral("SceneExport"),
-                            QDir(outDir).filePath(catalog.guid + ".db"));
-    QSqlDatabase &dbe = scoped.db;
-    if (!dbe.open()) return failed(QStringLiteral("could not open the export database: %1")
-                                       .arg(dbe.lastError().text()));
-    const auto run = [&](QSqlQuery &q, const char *what) {
-        if (q.exec()) return true;
-        failed(QStringLiteral("%1: %2").arg(QLatin1String(what), q.lastError().text()));
+    // THE ARCHIVE's OWN FILE: a connection opened, written and closed on this thread (it closes with its value).
+    db::Options options;
+    options.name = "SceneExport";
+    db::Error error;
+    db::Connection dbe = db::Connection::open(QDir(outDir).filePath(catalog.guid + ".db").toStdString(), options, &error);
+    if (!dbe.isOpen()) return failed(QStringLiteral("could not open the export database: %1").arg(dbqt::describe(error)));
+    const auto run = [&](db::Statement &q, const char *what) {
+        const bool ok = q.run(&error);
+        q.reset();   // the next row binds and runs it again
+        if (ok) return true;
+        failed(QStringLiteral("%1: %2").arg(QLatin1String(what), dbqt::describe(error)));
         return false;
     };
 
-    // One transaction for the whole bundle, like its three siblings: an atomic
-    // export file and one fsync instead of one per row.
-    dbe.transaction();
+    // One unit for the whole bundle, like its three siblings: an atomic
+    // export file and one fsync instead of one per row (it rolls back at scope end unless committed).
+    db::Transaction unit(dbe, "the archive's export");
 
-    QSqlQuery query2(dbe);
-    query2.prepare("CREATE TABLE IF NOT EXISTS projects ("
+    db::Statement query2(dbe, "CREATE TABLE IF NOT EXISTS projects ("
                    "    name              VARCHAR(64),"
                    "    thumbnail         BLOB,"
                    "    last_accessed     DATETIME,"
@@ -3576,19 +3541,18 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
                    ")");
     if (!run(query2, "createExportGlobalDb")) return false;
 
-    QSqlQuery query3(dbe);
-    query3.prepare(
+    db::Statement query3(dbe,
         "INSERT INTO projects "
         "(name, scene, thumbnail, version, last_written, last_accessed, guid) "
         "VALUES (:name, :scene, :thumbnail, :version, :last_written, :last_accessed, :guid)"
     );
-    query3.bindValue(":name",           catalog.name);
-    query3.bindValue(":scene",          catalog.scene);
-    query3.bindValue(":thumbnail",      catalog.thumbnail);
-    query3.bindValue(":version",        catalog.version);
-    query3.bindValue(":last_written",   catalog.lastWritten);
-    query3.bindValue(":last_accessed",  catalog.lastAccessed);
-    query3.bindValue(":guid",           catalog.guid);
+    dbqt::bindText(query3, ":name",           catalog.name);
+    dbqt::bindBytes(query3, ":scene",         catalog.scene);
+    dbqt::bindBytes(query3, ":thumbnail",     catalog.thumbnail);
+    dbqt::bindText(query3, ":version",        catalog.version);
+    dbqt::bindText(query3, ":last_written",   catalog.lastWritten);
+    dbqt::bindText(query3, ":last_accessed",  catalog.lastAccessed);
+    dbqt::bindText(query3, ":guid",           catalog.guid);
     if (!run(query3, "insertSceneGlobal")) return false;
 
     // NO `listed` COLUMN HERE, deliberately (lead call 2026-09-10). This is
@@ -3598,8 +3562,7 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
     // library tiles — there is no library visibility for them to carry. The
     // ASSET archive (createBlobFromAsset, on assetsTableSchema) does carry
     // it.
-    QSqlQuery createAssetsTableQuery(dbe);
-    createAssetsTableQuery.prepare(
+    db::Statement createAssetsTableQuery(dbe,
         "CREATE TABLE IF NOT EXISTS assets ("
         "    guid              VARCHAR(32),"
         "	 type			   INTEGER,"
@@ -3622,8 +3585,7 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
         ")");
     if (!run(createAssetsTableQuery, "createExportGlobalDb")) return false;
 
-    QSqlQuery dependenciesCreateSchema(dbe);
-    dependenciesCreateSchema.prepare(
+    db::Statement dependenciesCreateSchema(dbe,
         "CREATE TABLE IF NOT EXISTS dependencies ("
         "	 depender_type  INTEGER,"
         "	 dependee_type  INTEGER,"
@@ -3634,8 +3596,7 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
         ")");
     if (!run(dependenciesCreateSchema, "createExportDependencies")) return false;
 
-    QSqlQuery folderCreateSchema(dbe);
-    folderCreateSchema.prepare(
+    db::Statement folderCreateSchema(dbe,
         "CREATE TABLE IF NOT EXISTS folders ("
         "    guid              VARCHAR(32) PRIMARY KEY,"
         "    parent            VARCHAR(32),"
@@ -3650,8 +3611,8 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
         ")");
     if (!run(folderCreateSchema, "folderCreateSchema")) return false;
 
-    QSqlQuery insertAsset(dbe);
-    insertAsset.prepare(
+    // One prepared statement a table, its binds by KIND (dbqt.h), run and reset a row.
+    db::Statement insertAsset(dbe,
         "INSERT INTO assets"
         " (guid, type, name, collection, times_used, project_guid, date_created, last_updated, author,"
         " license, hash, version, parent, tags, properties, asset, thumbnail, view_filter)"
@@ -3659,62 +3620,59 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
         " :license, :hash, :version, :parent, :tags, :properties, :asset, :thumbnail, :view_filter)"
     );
     for (const auto &asset : catalog.assets) {
-        insertAsset.bindValue(":guid", asset.guid);
-        insertAsset.bindValue(":type", asset.type);
-        insertAsset.bindValue(":name", asset.name);
-        insertAsset.bindValue(":collection", asset.collection);
-        insertAsset.bindValue(":times_used", asset.timesUsed);
-        insertAsset.bindValue(":project_guid", asset.projectGuid);
-        insertAsset.bindValue(":date_created", asset.dateCreated);
-        insertAsset.bindValue(":last_updated", asset.lastUpdated);
-        insertAsset.bindValue(":author", asset.author);
-        insertAsset.bindValue(":license", asset.license);
-        insertAsset.bindValue(":hash", asset.hash);
-        insertAsset.bindValue(":version", asset.version);
-        insertAsset.bindValue(":parent", asset.parent);
-        insertAsset.bindValue(":tags", asset.tags);
-        insertAsset.bindValue(":properties", asset.properties);
-        insertAsset.bindValue(":asset", asset.asset);
-        insertAsset.bindValue(":thumbnail", asset.thumbnail);
-        insertAsset.bindValue(":view_filter", asset.view_filter);
+        dbqt::bindText(insertAsset, ":guid", asset.guid);
+        insertAsset.bindInt(":type", asset.type);
+        dbqt::bindText(insertAsset, ":name", asset.name);
+        insertAsset.bindInt(":collection", asset.collection);
+        insertAsset.bindInt(":times_used", asset.timesUsed);
+        dbqt::bindText(insertAsset, ":project_guid", asset.projectGuid);
+        dbqt::bindTime(insertAsset, ":date_created", asset.dateCreated);
+        dbqt::bindTime(insertAsset, ":last_updated", asset.lastUpdated);
+        dbqt::bindText(insertAsset, ":author", asset.author);
+        dbqt::bindText(insertAsset, ":license", asset.license);
+        dbqt::bindText(insertAsset, ":hash", asset.hash);
+        dbqt::bindText(insertAsset, ":version", asset.version);
+        dbqt::bindText(insertAsset, ":parent", asset.parent);
+        dbqt::bindBytes(insertAsset, ":tags", asset.tags);
+        dbqt::bindBytes(insertAsset, ":properties", asset.properties);
+        dbqt::bindBytes(insertAsset, ":asset", asset.asset);
+        dbqt::bindBytes(insertAsset, ":thumbnail", asset.thumbnail);
+        insertAsset.bindInt(":view_filter", asset.view_filter);
         if (!run(insertAsset, "insertExportAssetQuery")) return false;
     }
 
-    QSqlQuery exportDep(dbe);
-    exportDep.prepare(
+    db::Statement exportDep(dbe,
         "INSERT INTO dependencies (depender_type, dependee_type, project_guid, depender, dependee, id) "
         "VALUES (:depender_type, :dependee_type, :project_guid, :depender, :dependee, :id)"
     );
     for (const auto &dep : catalog.dependencies) {
-        exportDep.bindValue(":depender_type", dep.dependerType);
-        exportDep.bindValue(":dependee_type", dep.dependeeType);
-        exportDep.bindValue(":project_guid", dep.projectGuid);
-        exportDep.bindValue(":depender", dep.depender);
-        exportDep.bindValue(":dependee", dep.dependee);
-        exportDep.bindValue(":id", dep.id);
+        exportDep.bindInt(":depender_type", dep.dependerType);
+        exportDep.bindInt(":dependee_type", dep.dependeeType);
+        dbqt::bindText(exportDep, ":project_guid", dep.projectGuid);
+        dbqt::bindText(exportDep, ":depender", dep.depender);
+        dbqt::bindText(exportDep, ":dependee", dep.dependee);
+        dbqt::bindText(exportDep, ":id", dep.id);
         if (!run(exportDep, "exportDep")) return false;
     }
 
-    QSqlQuery exportFolder(dbe);
-    exportFolder.prepare(
+    db::Statement exportFolder(dbe,
         "INSERT INTO folders (guid, name, parent, count, project_guid, date_created, last_updated, visible) "
         "VALUES (:guid, :name, :parent, :count, :project_guid, :date_created, :last_updated, :visible)"
     );
     for (const auto &folder : catalog.folders) {
-        exportFolder.bindValue(":guid", folder.guid);
-        exportFolder.bindValue(":name", folder.name);
-        exportFolder.bindValue(":parent", folder.parent);
-        exportFolder.bindValue(":count", folder.count);
-        exportFolder.bindValue(":project_guid", folder.projectGuid);
-        exportFolder.bindValue(":date_created", folder.dateCreated);
-        exportFolder.bindValue(":last_updated", folder.lastUpdated);
-        exportFolder.bindValue(":visible", folder.visible);
+        dbqt::bindText(exportFolder, ":guid", folder.guid);
+        dbqt::bindText(exportFolder, ":name", folder.name);
+        dbqt::bindText(exportFolder, ":parent", folder.parent);
+        exportFolder.bindInt(":count", folder.count);
+        dbqt::bindText(exportFolder, ":project_guid", folder.projectGuid);
+        dbqt::bindTime(exportFolder, ":date_created", folder.dateCreated);
+        dbqt::bindTime(exportFolder, ":last_updated", folder.lastUpdated);
+        exportFolder.bindInt(":visible", folder.visible ? 1 : 0);
         if (!run(exportFolder, "exportFolder")) return false;
     }
 
-    if (!dbe.commit()) return failed(QStringLiteral("commit: %1").arg(dbe.lastError().text()));
+    if (!unit.commit(&error)) return failed(QStringLiteral("commit: %1").arg(dbqt::describe(error)));
     return true;
-    // close + unregister: ~ScopedConnection
 }
 
 bool Database::checkIfDependencyExists(const QString& depender, const QString& dependee, bool *readOk)
@@ -4211,10 +4169,6 @@ bool Database::hasDependencies(const QString &guid, bool *readOk)
 bool Database::importProject(const QString &inFilePath, const QString &newSceneGuid, QString &worldName, QMap<QString, QString> &outGuids, QSet<QString> *knownGuids, QString *whyOut)
 {
     if (whyOut) whyOut->clear();
-    // ScopedConnection: the connection name was already unique per call (a
-    // fresh guid), which meant every project import leaked a DISTINCT
-    // registration for the process's life — the connection list grew without
-    // bound and each entry held its temp .db open (deep audit 2026-09, area 6).
     // THE ARCHIVE's CATALOG, READ ONLY, on the layer (NOQT-DATABASE-1 stage 2: its reads pass the funnel): a
     // connection of this call, closed at its end; an archive that cannot be opened read-only - a missing file
     // included, which a read-write open used to CREATE empty - is refused by name before any read.
@@ -4622,43 +4576,26 @@ bool Database::jafVersionAccepted(const QString &version)
 
 bool Database::checkIfVersionSupported(const QString &pathToDb, const QString &table_name)
 {
-    bool result = false;
-
-    // A UNIQUE, same-thread connection (was the hard-coded name
-    // "NodeImportConnection"): the import pipeline's version probe now runs
-    // on ImportBatchRunner's worker thread — a fixed name would collide with
-    // the jaf commit path's connection of the same name on the UI thread,
-    // and QSqlDatabase connections must be created and used on one thread.
-    // Scoped so the QSqlDatabase/QSqlQuery handles die before removeDatabase.
-    const QString connectionName =
-        QStringLiteral("JafVersionProbe-%1").arg(QUuid::createUuid().toString(QUuid::Id128));
-    {
-        QSqlDatabase importConnection =
-            QSqlDatabase::addDatabase(Constants::DB_DRIVER, connectionName);
-        importConnection.setDatabaseName(pathToDb);
-
-        // The early exits fall THROUGH to the removeDatabase below rather than
-        // calling it here: removing a connection while a live QSqlDatabase copy
-        // still names it is what makes Qt print "connection is still in use".
-        bool usable = true;
-        if (!importConnection.isValid()) {
-            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("The database connection is invalid! %1").arg(importConnection.lastError().text()));
-            usable = false;
-        } else if (!importConnection.open()) {
-            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("Couldn't open a database connection! %1").arg(importConnection.lastError().text()));
-            usable = false;
-        }
-
-        if (usable) {
-            QSqlQuery selectAssetQuery(importConnection);
-            selectAssetQuery.prepare(QString("SELECT  version FROM %1 LIMIT 1").arg(table_name));
-            if (selectAssetQuery.exec() && selectAssetQuery.first())
-                result = jafVersionAccepted(selectAssetQuery.value(0).toString());
-
-            importConnection.close();
-        }
+    // THE ARCHIVE's OWN FILE, read-only, on the calling thread (the import pipeline's worker or the UI thread: a
+    // connection is its opener's). A file or a version that cannot be read is "not supported", said by name.
+    db::Options options;
+    options.name = "JafVersionProbe";
+    options.readOnly = true;
+    db::Error error;
+    db::Connection archive = db::Connection::open(pathToDb.toStdString(), options, &error);
+    QString version;
+    bool read = false;
+    if (archive.isOpen()) {
+        db::Statement query(archive, dbqt::utf8(QStringLiteral("SELECT version FROM %1 LIMIT 1").arg(table_name)));
+        read = query.step(&error);
+        if (read) version = dbqt::text(query, 0);
     }
-    QSqlDatabase::removeDatabase(connectionName);
-    return result;
+    if (!read) {
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+            QStringLiteral("the archive's version could not be read (%1) - it is not supported")
+                .arg(error.code ? dbqt::describe(error) : QStringLiteral("no row in '%1'").arg(table_name)));
+        return false;
+    }
+    return jafVersionAccepted(version);
 }
 

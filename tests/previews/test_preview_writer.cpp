@@ -202,7 +202,7 @@ int main(int argc, char **argv)
         check(!writer.submit(QStringLiteral("a"), QImage(), QStringLiteral("00000000000000bb"), pb.done(), &why)
                   && !why.isEmpty(), "b: a null image is refused at submit, with its reason");
         const Database::PreviewWrite empty =
-            Database::writePreview(QSqlDatabase::database(), QStringLiteral("a"), QByteArray(), QStringLiteral("00000000000000cc"));
+            Database::writePreview(db.connection(), QStringLiteral("a"), QByteArray(), QStringLiteral("00000000000000cc"));
         check(!empty.ok && !empty.reason.isEmpty(), "b: an empty PNG is refused at the write, with its reason");
         QCoreApplication::processEvents();
         check(pb.landed.isEmpty(), "b: the refused submit has no completion");
