@@ -434,7 +434,7 @@ if(JAHSHAKA_ASAN)
         PUBLIC ${CMAKE_SOURCE_DIR}/irisgl/engine/include
         PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${JAHSHAKA_ENGINE_BUILD_ID_DIR})
     # IrisCore as the real library links it (NOQT-CORE-1): the caches' file I/O and core/threadbudget.h's include root.
-    target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES} IrisCore)   # (qjs is the script host's: JahshakaScript)
+    target_link_libraries(JahshakaEngineAsan PRIVATE OgreNext ${X11_LIBRARIES} PUBLIC IrisCore)   # (qjs is the script host's: JahshakaScript); IrisCore PUBLIC: Ids.h's node ids are IrisCore's (NOQT-DOCUMENT-1 stage 6)
     # Same shader-cache fingerprint terms as the real library (irisgl/engine/
     # CMakeLists.txt) — OgreShaderCache.cpp will not compile without them. The
     # engine BUILD ID now arrives as a generated header on the include path
@@ -537,6 +537,7 @@ jah_no_display(engine.reflect_chain_shape)
 add_executable(test_route_declarations test_route_declarations.cpp)
 set_target_properties(test_route_declarations PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF)
 target_include_directories(test_route_declarations PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_route_declarations PRIVATE IrisCore)   # Ids.h's node ids are IrisCore's (core/ids.h: NOQT-DOCUMENT-1 stage 6)
 add_test(NAME engine.route_declarations.forget COMMAND test_route_declarations forget)
 add_test(NAME engine.route_declarations.exit COMMAND test_route_declarations exit)
 set_tests_properties(engine.route_declarations.forget engine.route_declarations.exit PROPERTIES TIMEOUT 60 LABELS "engine")
@@ -1029,6 +1030,7 @@ set_target_properties(test_frame_clock PROPERTIES
     RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 target_include_directories(test_frame_clock PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src
     ${CMAKE_SOURCE_DIR}/irisgl/engine/include)
+target_link_libraries(test_frame_clock PRIVATE IrisCore)   # Ids.h's node ids are IrisCore's (core/ids.h: NOQT-DOCUMENT-1 stage 6)
 foreach(_pair "clock_once;clock-once" "two_scenes;two-scenes" "particle_scale;particle-scale" "clock_drawn_only;drawn-only")
     list(GET _pair 0 _row)
     list(GET _pair 1 _flag)
