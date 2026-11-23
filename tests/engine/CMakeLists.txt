@@ -309,6 +309,23 @@ jah_gpu_row(sky.ibl_complete_joins CLASS engine FRAMES 4
          COMMAND test_engine_ibl_complete_joins
          WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(sky.ibl_complete_joins PROPERTIES TIMEOUT 60 LABELS "engine")
+# engine.placeholders_door (SHADER-SYSTEM-1 7.0, the landing's red gi.card_build_late.pso) - THE PLACEHOLDERS-ONLY TEST DOOR
+# REACHES THE COMPILER FROM ANY CALL ORDER: set before any view, the compiler holds it after a view and a frame; off after
+# the setter(false); the control, set with the view existing (test_engine_placeholders_door.cpp). 4 frames.
+add_executable(test_engine_placeholders_door test_engine_placeholders_door.cpp)
+set_target_properties(test_engine_placeholders_door PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_placeholders_door PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_placeholders_door PRIVATE JahshakaEngine)
+add_dependencies(test_engine_placeholders_door JahshakaEngineMedia)
+jah_gpu_row(engine.placeholders_door CLASS engine FRAMES 4
+         COMMAND test_engine_placeholders_door
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.placeholders_door PROPERTIES TIMEOUT 60 LABELS "engine")
 # engine.error_door — THE HOST'S ERROR DOOR NEVER TOUCHES THE FRAME'S SINK (ENGINE-UPGRADE-U3 decisions 44 + 49): the D1
 # proof as an engine fixture (the app rows cannot boot under TSan); free-running, 300 refused messages, the host's door
 # read every frame — and in the TSan arm, zero reports.
