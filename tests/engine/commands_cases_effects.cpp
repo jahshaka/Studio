@@ -295,10 +295,11 @@ void casesEffects(Fixture &f)
                            {"affectors", Value(Value::Array{obj({{"kind", Value("linearForce")}}), obj({{"kind", Value("colourRamp")}})})}});
     const Result p1 = h.call("engine.particles.set", {s, n, sys});
     std::printf("Q: the headless engine's particles: set %s\n", p1.status == Status::Ok ? "answers" : p1.message.c_str());
-    // (the MISSING IMAGE's case is the train's: it needs SIE-P's e1 - the setter answering false for a ramp image
-    // that is not there, OgreParticles.cpp:750-756 drops it today - its text in SPECS/state/SIE-Q.md, "for the tail")
     const Result wrongKind = ramp(0, tga), pastEnd = ramp(2, tga);
     const Result rampSet = ramp(1, tga);
+    // A RAMP IMAGE THAT IS NOT THERE (the tail, riding on SIE-P's e1: Scene::setParticleSystem refuses it ATOMICALLY,
+    // nothing changed): the command FAILS in the engine's words naming the file, and the host's record keeps the ramp it had
+    const Result missing = ramp(1, "q_no_such_ramp.png");
     const auto keptPath = [&]() {
         const ParticleSystemDesc *k = f.live.kept<ParticleSystemDesc>(sc, KeptKind::ParticleSystem, Call::idOf(n));
         return k && k->affectors.size() > 1 ? k->affectors[1].colourRampPath : std::string("(no record)");
@@ -309,10 +310,12 @@ void casesEffects(Fixture &f)
     check(failedWith(noSystem, "carries no particle system this host set") && p1.value == Value(true) &&
               failedWith(wrongKind, "ramp.affector 0 is a \"linearForce\" affector, not a \"colourRamp\"") &&
               failedWith(pastEnd, "ramp.affector 2: the node's system has 2 affectors") &&
-              rampSet.value == Value(true) && afterRamp == tga && p2.value == Value(true) && afterSet == tga,
+              rampSet.value == Value(true) && failedWith(missing, "q_no_such_ramp.png") && afterRamp == tga &&
+              p2.value == Value(true) && afterSet == tga,
           "RULED 9: setColourRamp FAILS before this host set a system, on a non-ramp affector and past the list, and "
           "sets the ramp on the host's own record (" + afterRamp + "), which a later "
-          "engine.particles.set keeps (" + afterSet + ")");
+          "engine.particles.set keeps (" + afterSet + "); a ramp image that is not there FAILS with the engine's words "
+          "naming the file (" + missing.message + ") and the record keeps the ramp it had");
     const Result premoved = h.call("engine.particles.remove", {s, n});
     const Result afterRemove = ramp(1, tga);
     check(premoved.value == Value(true) && failedWith(afterRemove, "carries no particle system this host set"),
