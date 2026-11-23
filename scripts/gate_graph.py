@@ -836,6 +836,14 @@ _CONFIG_KEYS = ("CMAKE_BUILD_TYPE", "CMAKE_GENERATOR", "CMAKE_C_COMPILER", "CMAK
                 "CMAKE_POSITION_INDEPENDENT_CODE", "CMAKE_JOB_POOL_LINK")
 
 
+def misread_internal(value):
+    """IS AN UNINITIALIZED CACHE VALUE A MIS-READ INTERNAL ENTRY? THE PREDICATE: its value itself parses as `<text with no ':'>:INTERNAL=
+    <anything>`. CMake's own round trip of a probe variable whose name carries '=' writes it so (quickjs-ng, a vendored tree:
+    check_c_compiler_flag(-Wformat=2 COMPILER_SUPPORTS_Wformat=2) -> `COMPILER_SUPPORTS_Wformat:UNINITIALIZED=2:INTERNAL=1`): a probe
+    result, never a configure-line switch (the census of 2026-11-23: its arrival made 315 of 429 run-named records "differ")."""
+    return re.match(r"^[^:]*:INTERNAL=", str(value)) is not None
+
+
 def _cache_entries(build):
     """{name: (type, value)} of <build>/CMakeCache.txt, or None without one."""
     out = {}
@@ -845,11 +853,7 @@ def _cache_entries(build):
                 m = re.match(r"^([A-Za-z_][A-Za-z0-9_.+-]*):([A-Z]+)=(.*)$", line.rstrip("\n"))
                 if m:
                     t, v = m.group(2), m.group(3)
-                    # A PROBE WHOSE NAME CARRIED '=' (quickjs-ng's check_c_compiler_flag(-Wformat=2 COMPILER_SUPPORTS_Wformat=2),
-                    # a vendored tree): CMake's own reload of the cache re-reads `X=2:INTERNAL=1` as an UNINITIALIZED X whose value
-                    # is "2:INTERNAL=1" - it is an INTERNAL probe result, never a configure-line switch (the census of 2026-11-23:
-                    # its arrival made 315 of 429 run-named records "differ" from every build after it)
-                    if t == "UNINITIALIZED" and re.match(r"^[^:]*:INTERNAL=", v):
+                    if t == "UNINITIALIZED" and misread_internal(v):
                         t = "INTERNAL"
                     out[m.group(1)] = (t, v)
     except OSError:
@@ -1166,100 +1170,10 @@ def build_config(build, cache=None):
            "generator": (c.get("CMAKE_GENERATOR") or ("", ""))[1] or None,
            "compiler": (c.get("CMAKE_CXX_COMPILER") or ("", ""))[1] or None,
            "linker": (c.get("CMAKE_LINKER_TYPE") or ("", ""))[1] or None}
-    cfg["compile"] = compile_digest(build, c)
-    full = {"keys": keys, "options": opts, "compile": cfg["compile"]}
+    full = {"keys": keys, "options": opts}
     cfg["options"] = opts
     cfg["hash"] = _sha256(_canon_json(full).encode())
     return cfg, None
-
-
-COMMIT_DEFINES = ("BENCH_GIT_COMMIT", "JAHSHAKA_OGRE_FORK_COMMIT")   # a configure's provenance, keyed by a record's tip already
-_JOINED = ("-isystem", "-iquote", "-idirafter", "-include", "-imacros", "-x", "-Xclang", "--param", "-target", "-arch")
-
-
-def _language(compiler):
-    b = os.path.basename(compiler)
-    return "CXX" if "++" in b or b.endswith("xx") else "C" if re.search(r"(^|-)(cc|gcc|clang)(-[\d.]+)?$", b) else b
-
-
-def compile_digest(build, cache=None):
-    """WHAT THE COMPILER WAS TOLD BUILD-WIDE (the lead's rulings 2026-11-23, the final read's B1): per LANGUAGE (C, C++, any other
-    the database has), the arguments COMMON TO EVERY compile line of that language in <build>/compile_commands.json - the -O level,
-    -g, the sanitizers, -std, the global -D set, the -f/-m machine flags; order-normalised; the tree's source root and build dir
-    written <src> / <build> in every spelling; COMMIT_DEFINES' values written <commit> - one sha256 over them. A PER-TARGET flag,
-    define or include directory is NOT here: the CMake file that sets it is a build-system file the reach already takes to every
-    row its target builds (scripts/gate-scope.py, "a target this command changes": target_*(), set_target_properties(), a helper
-    on it, and a target named through a foreach variable), so a lane that adds one test target is never keyed apart from its
-    parent on every row. None (fail closed: config_why) without a database, or when a language's common set is EMPTY. Hashed
-    once per configure: <build>/BUILT_FROM.compile keeps "<mtime_ns> <size> <version> <digest>", the version a hash of THIS
-    function's own source (B2: a stamp of another normalisation is never read)."""
-    import inspect as _inspect
-    import json as _json
-    import shlex as _shlex
-    db = os.path.join(build, "compile_commands.json")
-    try:
-        st = os.stat(db)
-    except OSError:
-        return None
-    ver = _sha256(_inspect.getsource(compile_digest).encode())[:12]
-    stamp = os.path.join(build, "BUILT_FROM.compile")
-    key = f"{st.st_mtime_ns} {st.st_size} {ver}"
-    try:
-        w = open(stamp).read().split()
-        if len(w) == 4 and " ".join(w[:3]) == key:
-            return None if w[3] == "none" else w[3]
-    except OSError:
-        pass
-    c = _cache_entries(build) if cache is None else cache
-    roots = build_roots(build, c) or {}
-    subs = []
-    for tag, ps in (("<build>", (roots.get("build"), roots.get("cur_build"), build)),
-                    ("<src>", (roots.get("root"), roots.get("cur_root")))):
-        for p in ps:
-            if p:
-                for q in {p, os.path.realpath(p)}:
-                    subs.append((q.rstrip("/"), tag))
-    subs.sort(key=lambda x: -len(x[0]))
-    common = {}
-    try:
-        entries = _json.load(open(db))
-    except (OSError, ValueError):
-        return None
-    for e in entries:
-        args = e.get("arguments") or _shlex.split(e.get("command") or "")
-        if not args:
-            continue
-        src, out, skip = e.get("file") or "", set(), False
-        rest = args[1:]
-        k = 0
-        while k < len(rest):
-            a = rest[k]
-            if a in ("-o", "-MF", "-MT", "-MQ"):
-                k += 2
-                continue
-            if a in ("-c", "-MD", "-MMD") or a == src:
-                k += 1
-                continue
-            if a in _JOINED and k + 1 < len(rest):
-                a = a + " " + rest[k + 1]
-                k += 1
-            for p, tag in subs:
-                a = a.replace(p, tag)
-            a = re.sub(r'^(-D(?:%s)=)("?)[^"]*\2$' % "|".join(COMMIT_DEFINES), r"\1<commit>", a)
-            out.add(a)
-            k += 1
-        lang = _language(args[0])
-        common[lang] = out if lang not in common else (common[lang] & out)
-    if not common or any(not v for v in common.values()):
-        d = None
-    else:
-        d = _sha256(_canon_json({k: sorted(v) for k, v in common.items()}).encode())
-    try:
-        open(stamp + ".tmp", "w").write(f"{key} {d or 'none'}\n")
-        os.replace(stamp + ".tmp", stamp)
-    except OSError:
-        pass
-    return d
 
 
 # AN OPTION WHOSE OFF IS THE DEFAULT BUILD, BYTE FOR BYTE (TEST-STREAMLINE-1 stage 2): at OFF it is not a configuration -
@@ -1285,9 +1199,10 @@ def config_keys(build):
 
 def _switches(opts):
     """The options that CONFIGURE a build: every option but a LOCATION (a value that is an absolute path - a tool, a data set,
-    the tree's own spelling). URGENT #154: #129's guard put JAH_CONFIGURED_SOURCE_DIR (the tree's path) into every build's
-    options, so a record served no tree but its own - a landing at the very tip a lane had proved re-planned 329 rows."""
-    return {k: v for k, v in (opts or {}).items() if not str(v).startswith("/")}
+    the tree's own spelling) and a mis-read INTERNAL probe (misread_internal: a record made before the rule stored it as an
+    option). URGENT #154: #129's guard put JAH_CONFIGURED_SOURCE_DIR (the tree's path) into every build's options, so a record
+    served no tree but its own - a landing at the very tip a lane had proved re-planned 329 rows."""
+    return {k: v for k, v in (opts or {}).items() if not str(v).startswith("/") and not misread_internal(v)}
 
 
 def config_equal(rec_cfg, cfg):
@@ -1297,30 +1212,24 @@ def config_equal(rec_cfg, cfg):
 
 def config_why(rec_cfg, cfg):
     """None when a record's build configuration is this build's, else THE DIFFERING TERM, named (never the build type when it is
-    equal: the census of 2026-11-23 read "Debug vs this build's Debug" for a probe entry). `cfg`: build_config's, with `keys`
-    (config_keys) beside it. THE COMPILE DIGEST first (compile_digest: what the compiler was told) - a record without one is
-    unknown, never equal (made before the digest: the box re-proves it once, the lead's ruling, fail closed); then equal hashes
-    are equal; otherwise THE FLAGS are proved equal from the record's own hash (its hash over this build's flags, the record's
-    stored options and its digest must reproduce it) and THE SWITCHES compared (_switches: a tree's paths are not its
-    configuration; INTERNAL probe results are not switches). A record without a hash or its options is unknown."""
+    equal: the census of 2026-11-23 read "Debug vs this build's Debug" for a probe entry). THE KEY (the lead's ruling 2026-11-23,
+    the third and last): the cache's flags (CMAKE_BUILD_TYPE, CMAKE_<LANG>_FLAGS*, the compiler, the generator: config_keys) and
+    its non-INTERNAL switches (_switches); a build-wide flag reaches the compiler only through those, through a CMake file (the
+    REACH: scripts/gate-scope.py, "a target this command changes" and add_compile_options) or through the compiler and the
+    environment (the record's ENVIRONMENT term). Equal hashes are equal; otherwise THE FLAGS are proved equal from the record's
+    own hash (its hash over this build's flags and the record's stored options must reproduce it) and THE SWITCHES compared - a
+    mis-read INTERNAL probe is no switch on either side, so a record made before this rule stands again. A record without a
+    hash or its options is unknown."""
     rc = rec_cfg or {}
     rh = rc.get("hash")
     if not rh or not cfg or not cfg.get("hash"):
         return "its build configuration is unknown (no configuration hash)"
-    if not rc.get("compile"):
-        return "its build configuration is unknown: the record has no compile digest (made before it, or with no compile database)"
-    if not cfg.get("compile"):
-        return ("this build's compile digest cannot be read (no compile_commands.json, or a language whose lines share no "
-                "argument): no record's configuration can be proved equal")
-    if rc["compile"] != cfg["compile"]:
-        return (f"the build-wide compile arguments differ (what every compile line was told - the -O level, -g, -std, the global "
-                f"defines: digest {rc['compile'][:12]} vs this build's {cfg['compile'][:12]})")
     if rh == cfg["hash"]:
         return None
     ro = rc.get("options")
     if not isinstance(ro, dict) or cfg.get("keys") is None:
         return "its build configuration is unknown (the record keeps no options)"
-    if _sha256(_canon_json({"keys": cfg["keys"], "options": ro, "compile": rc["compile"]}).encode()) != rh:
+    if _sha256(_canon_json({"keys": cfg["keys"], "options": ro}).encode()) != rh:
         return "the cache's flags differ (" + ", ".join(sorted(cfg["keys"]))[:160] + ": one of them)"
     a, b = _switches(ro), _switches(cfg.get("options"))
     diff = sorted(k for k in set(a) | set(b) if a.get(k) != b.get(k))
