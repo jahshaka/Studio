@@ -178,6 +178,18 @@ jah_gpu_row(<family>.my_law CLASS engine FRAMES 31   # 30 + readPixels' own fram
 set_tests_properties(<family>.my_law PROPERTIES TIMEOUT 60 LABELS "engine")
 ```
 
+**THE COMMANDS' TAGS AND SHAPES (SCRIPT-IN-ENGINE-1 stage 2).** Each line of `bin/jahengine --list` ends in the command's
+ACCESS TAG: `[reads]` changes nothing the engine holds; `[changes]` a setting a scene author could ship; `[files]` reads or
+writes a path (a texture or decal image, an IES profile, a ramp, the shader cache); `[test]` a MEASURING ARM, refused by
+name unless the row runs `jahengine --test-doors`. Many nodes move in ONE call: `engine.node.setTransforms(scene, {nodes,
+positions, rotations, scales})` (flat arrays: 3 / 4 / 3 numbers a node). What a script makes it may free by name -
+`engine.node.destroy`, `engine.mesh.destroy`, `engine.material.destroy`, `engine.texture.destroy` / `destroyDecal`,
+`engine.view.destroy`, `engine.scene.destroy` - and the host frees whatever is left at its end. A colour is four numbers
+(r g b a) in every command. A RADIANCE picture: `engine.view.readPixels({view, content: "radiance"})` on a view whose post
+chain asked `hdrReadback` answers `{radiance, width, height}` - the scene's linear radiance before the tonemap, held natively,
+read in place by `engine.radiance.mean` / `hash` / `columnStep` and freed by `engine.radiance.release`; a law on it admits
+BOTH half floats that bracket its closed form (the card's rounding is not a law: `tests/engine/script_radiance_picture.js`).
+
 The laws of a script row: every law is a `host.check({ok, what})` - a script that checks nothing FAILS, and so does
 one whose `await`ed work or rejected promise never ran or was never handled; a route declared and never asserted by a
 frame FAILS. The host is STRICT: an unknown command, a misspelt option, a missing argument, a value outside its declared
