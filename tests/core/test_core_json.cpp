@@ -107,6 +107,26 @@ int main()
               read("{\"b\":1,\"a\":2}", why).asObject()[0].first == "b",
           "an object keeps its members' order both ways");
 
+    // 1b. AN OBJECT's MEMBERS EDITED (Value::set / erase: the document's overrides, NOQT-CORE-1 stage 3)
+    Value doc(Value::Object{{"b", Value(1)}, {"a", Value(2)}});
+    const bool setNew = doc.set("c", Value("new")), setOld = doc.set("b", Value(10));
+    CHECK(setNew && setOld && text(doc) == "{\"b\":10,\"a\":2,\"c\":\"new\"}",
+          "set: a new member is appended, an existing one replaced IN PLACE (insertion order kept: " + text(doc) + ")");
+    const bool goneB = doc.erase("b"), goneZ = doc.erase("z");
+    CHECK(goneB && !goneZ && text(doc) == "{\"a\":2,\"c\":\"new\"}",
+          "erase: a present member goes (true), an absent one is no change (false) (" + text(doc) + ")");
+    Value notObject(Value::Array{Value(1)});
+    CHECK(!notObject.set("x", Value(1)) && !notObject.erase("x") && text(notObject) == "[1]",
+          "set and erase on a value that is not an object answer false and change nothing");
+    Value ab(Value::Object{}), ba(Value::Object{});
+    ab.set("a", Value(1)), ab.set("b", Value(2));
+    ba.set("b", Value(2)), ba.set("a", Value(1));
+    std::string prettyAb, prettyBa;
+    CHECK(json::writePretty(ab, prettyAb, why) && json::writePretty(ba, prettyBa, why) && prettyAb == prettyBa &&
+              text(ab) != text(ba),
+          "members set in two different orders write the SAME pretty bytes (sorted by name, the saved form); the compact "
+          "text keeps each object's own order (" + text(ab) + " / " + text(ba) + ")");
+
     // 2. NUMBERS BY THEIR BITS
     const double sum = 0.1 + 0.2, negZero = -0.0;
     const Value sumBack = read(text(Value(sum)), why), zeroBack = read(text(Value(negZero)), why);
@@ -119,7 +139,29 @@ int main()
     CHECK(p53Back.kind() == Kind::Int && p53Back.asInt() == p53 && lowBack.kind() == Kind::Int && lowBack.asInt() == lowest &&
               read(text(Value(p53)), why).asInt() == p53 && read(text(Value(lowest)), why).asInt() == lowest,
           "2^53+1 and INT64_MIN are exact as Int both ways");
-    CHECK(refused("9223372036854775808", "outside a 64-bit integer", why), "an integer past int64 is refused (" + why + ")");
+    // WHAT WE WRITE WE READ (the audit's F1): an integral double past 2^63 written in its fixed form (Qt writes the same text:
+    // 12345678901234567890.0 -> "12345678901234567000") reads back as the Number it was - an integer literal past int64 is the
+    // Number nearest it (from_chars: the one double the writer and Qt wrote), never refused. What is still refused: a literal
+    // past a DOUBLE's range (below: "1e400", and an integer literal of 400 digits), and an underflow.
+    const double past63a = 12345678901234567890.0, past63b = 1.2345678901234568e20;
+    const Value backA = read(text(Value(past63a)), why), backB = read(text(Value(past63b)), why);
+    CHECK(text(Value(past63a)) == "12345678901234567000" && backA.kind() == Kind::Number && bits(backA.asNumber()) == bits(past63a) &&
+              backB.kind() == Kind::Number && bits(backB.asNumber()) == bits(past63b),
+          "an integral double past 2^63 round-trips: written " + text(Value(past63a)) + " and " + text(Value(past63b)) +
+              ", read back the same double (" + why + ")");
+    const Value pastInt64 = read("9223372036854775808", why);
+    CHECK(why.empty() && pastInt64.kind() == Kind::Number && pastInt64.asNumber() == 9223372036854775808.0 &&
+              refused(std::string(400, '9'), "outside a double's range", why),
+          "an integer literal past int64 reads as the Number nearest it (2^63); one past a double's range is refused (" + why + ")");
+    // THE TEXT's INTEGER (the audit's worth-a-look 1): an integral double in (2^53, 2^63] is written in its shortest digits and
+    // reads back an Int holding THE TEXT's integer - equal to the double as a number, not the double's exact integer:
+    // 2^60 = 1152921504606846976 is written "1152921504606847000", and reads back Int 1152921504606847000.
+    const double p60 = 1152921504606846976.0;
+    const Value p60Back = read(text(Value(p60)), why);
+    CHECK(text(Value(p60)) == "1152921504606847000" && p60Back.kind() == Kind::Int &&
+              p60Back.asInt() == std::int64_t(1152921504606847000LL) && p60Back == Value(p60),
+          "2^60 as a double is written " + text(Value(p60)) + " and reads back an Int holding the text's integer, equal to "
+          "the double as a number (an Int read from text is the TEXT's integer)");
     CHECK(refused("1e400", "outside a double's range", why), "a number past a double's range is refused (" + why + ")");
     const Value tiny = read("4.9e-324", why);
     CHECK(refused("1e-400", "outside a double's range", why) && refused("-1e-400", "outside a double's range", why) &&

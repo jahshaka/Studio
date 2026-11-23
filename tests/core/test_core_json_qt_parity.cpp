@@ -57,7 +57,10 @@ int main(int argc, char **argv)
                               p53 + 1.0 /* rounds to 2^53 */, p53 + 2.0, 1.5e17, 12345678901234567890.0, 1e21, 1e22, 1e300,
                               std::numeric_limits<double>::max(), -std::numeric_limits<double>::max(),
                               std::numeric_limits<double>::min(), std::numeric_limits<double>::denorm_min(),
-                              -std::numeric_limits<double>::denorm_min(), 0.05000000074505806, 128.0, 1234567.0, 3.14159};
+                              -std::numeric_limits<double>::denorm_min(), 0.05000000074505806, 128.0, 1234567.0, 3.14159,
+                              // THE TIE ON BOTH SIDES (the audit's F2): a POSITIVE-exponent tie (22 bytes fixed and exponent
+                              // alike) and a NEGATIVE value at a tie (9 bytes either way)
+                              1.2345678901234568e21, -0.000125};
     int compared = 0, equal = 0;
     for (double d : numbers) {
         QJsonArray qa;
@@ -133,6 +136,19 @@ int main(int argc, char **argv)
     if (qc != oc) std::printf("   DIFFERS Compact: Qt %s / ours %s\n", qc.c_str(), oc.c_str());
     check(qi == oi && qc == oc && qTopA == oTopA && qTopO == oTopO,
           "3. the empty containers, nested and at the top, Indented and Compact, as Qt writes them (" + oc + ")");
+
+    // 3b. THE MEMBERS' ORDER BEYOND ASCII (the audit's worth-a-look 4): Qt sorts by UTF-16 code units, so an astral character
+    // (U+1F600: the surrogate D83D) sorts BEFORE U+FF01 though its UTF-8 bytes (F0..) sort after (EF..): ours must follow
+    const std::string zKey = "z", eAcute = "\xc3\xa9", fullwidth = "\xef\xbc\x81", astral = "\xf0\x9f\x98\x80";
+    QJsonObject qn;
+    for (const std::string &k : {zKey, eAcute, fullwidth, astral}) qn[QString::fromStdString(k)] = 1;
+    const iris::Value names(iris::Value::Object{{fullwidth, iris::Value(1)}, {astral, iris::Value(1)}, {zKey, iris::Value(1)},
+                                                {eAcute, iris::Value(1)}});
+    const std::string qnI = qt(QJsonDocument(qn), QJsonDocument::Indented), onI = ours(names, true, why);
+    if (qnI != onI) std::printf("   DIFFERS the member order:\n--- Qt\n%s--- ours\n%s---\n", qnI.c_str(), onI.c_str());
+    check(qnI == onI && onI.find(astral) < onI.find(fullwidth),
+          "3b. members named beyond ASCII (z, \xc3\xa9, U+FF01, U+1F600) are written in Qt's UTF-16 order (the astral "
+          "character before U+FF01)");
 
     // 4. THE LIBRARY's BLOBS
     int blobs = 0, same = 0;

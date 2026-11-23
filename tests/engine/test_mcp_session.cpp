@@ -227,6 +227,15 @@ int main()
               "32 MiB heap limit and the completion bounds");
         const Value pic = g.one(toolCall("10", "picture", "{\"pictures\":[1]}"));
         check(pic["result"]["isError"] == Value(true), "picture is an error result until stage 3");
+        // AN ANSWER JSON CANNOT CARRY (the codec refuses NaN by name: core/json.h): through the SESSION, a clean error result
+        // naming the value's path - never a `null` in place of a number, never a broken line on the wire
+        const Value nan = g.one(toolCall("11", "run_script", "{\"script\":\"0 / 0\"}"));
+        const Value &said = nan["result"]["structuredContent"]["error"];
+        check(nan["result"]["isError"] == Value(true) && said.kind() == Kind::String &&
+                  said.asString().find("the answer cannot be carried:") == 0 &&
+                  said.asString().find("is not a finite number") != std::string::npos,
+              "a script completing on NaN answers a clean error result through the session (" +
+                  (said.kind() == Kind::String ? said.asString() : g.sent.back()) + ")");
     }
     {
         Rig g;
