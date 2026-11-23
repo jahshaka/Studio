@@ -1,0 +1,9 @@
+engine.node.create Scene::createNode
+engine.node.destroy Scene::removeNode
+engine.node.attachMesh Scene::attachMesh
+engine.node.setTransform Scene::setNodeTransform
+engine.node.setTransforms Scene::setNodeTransform
+engine.node.setVisible Scene::setNodeVisible
+engine.node.setMovable Scene::setNodeMovable
+engine.node.setHelper Scene::setNodeHelper
+engine.node.setFaceCull Scene::setNodeFaceCull
