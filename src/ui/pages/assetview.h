@@ -18,7 +18,6 @@ For more information see the LICENSE file
 #include "ui/style/columnedpage.h"
 
 #include "irisgl/document/assets/mesh.h"
-#include "irisgl/core/irisutils.h"
 #include "services/import/importtypes.h"
 
 class QSplitter;

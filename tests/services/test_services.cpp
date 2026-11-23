@@ -28,6 +28,7 @@ For more information see the LICENSE file
 #include <future>
 #include <thread>
 
+#include "services/apppaths.h"
 #include "services/bootreport.h"
 #include "services/selectionservice.h"
 #include "services/uistep.h"
@@ -380,6 +381,40 @@ void testFolderRemovalCap()
     }
 }
 
+// THE TWO PATH DOORS (NOQT-CORE-1 stage 2, in place of IrisUtils): AppPaths::shipped(rel) is the old
+// getAbsoluteAssetPath's text exactly (applicationDirPath + separator + rel, cleaned: a leading slash on `rel` is
+// cleaned away, never "//"), and AppPaths::inDataRoot(name) is the old join(dataRoot(), name)'s text exactly
+// ("<root>/<name>", cleaned, no trailing slash). Each is checked against the deleted helper's expression AND against
+// the literal path it must give. Forces this process's data root (the unsaved case after it forces its own).
+void testPathDoors()
+{
+    const QString app = QDir(QCoreApplication::applicationDirPath()).absolutePath();
+    const auto oldShipped = [](const QString &rel) {    // irisutils.h's getAbsoluteAssetPath, verbatim
+        return QDir::cleanPath(QDir(QCoreApplication::applicationDirPath()).absolutePath() + QDir::separator() + rel);
+    };
+    for (const QString &rel : { QStringLiteral("app/icons/icons8-file-72.png"), QStringLiteral("/app/icons/x.png"),
+                                QStringLiteral("app/content/../content/materials") })
+        CHECK(AppPaths::shipped(rel) == oldShipped(rel),
+              qPrintable(QStringLiteral("paths: shipped(\"%1\") is the old helper's text (%2)").arg(rel, AppPaths::shipped(rel))));
+    CHECK(AppPaths::shipped(QStringLiteral("/app/icons/x.png")) == app + QStringLiteral("/app/icons/x.png"),
+          "paths: shipped() cleans a leading slash's doubled separator away");
+    CHECK(AppPaths::shipped(QStringLiteral("app/content/../content/materials")) == app + QStringLiteral("/app/content/materials"),
+          "paths: shipped() cleans a '..'");
+    QTemporaryDir root;
+    AppPaths::initialize(root.path());
+    const QString base = QDir::cleanPath(root.path());
+    const auto oldJoin = [](const QString &a, const QString &b) {   // irisutils.h's join(a, b), verbatim
+        return QDir::cleanPath(a + QStringLiteral("/") + b + QStringLiteral("/"));
+    };
+    for (const QString &name : { QStringLiteral("JahLibrary.db"), QStringLiteral("assets/store/") })
+        CHECK(AppPaths::inDataRoot(name) == oldJoin(AppPaths::dataRoot(), name),
+              qPrintable(QStringLiteral("paths: inDataRoot(\"%1\") is the old join's text (%2)").arg(name, AppPaths::inDataRoot(name))));
+    CHECK(AppPaths::inDataRoot(QStringLiteral("JahLibrary.db")) == base + QStringLiteral("/JahLibrary.db"),
+          "paths: inDataRoot() is <the forced root>/<name>");
+    CHECK(AppPaths::inDataRoot(QStringLiteral("assets/store/")) == base + QStringLiteral("/assets/store"),
+          "paths: inDataRoot() keeps no trailing slash");
+}
+
 // WHO ANSWERS AN UNSAVED WORLD (services/closeunsaved.h decideUnsaved, the lead's ruling 2026-11-21): the box is a
 // person's unless nobody is at the screen. A forced data root alone (an app launched with --data-root, no script,
 // no MCP client) is a person's session: it is driven, but not scripted, and its close over unsaved changes ASKS.
@@ -441,6 +476,7 @@ int main(int argc, char *argv[])
     testEditPose();
     testDocumentEditPose();
     testFolderRemovalCap();
+    testPathDoors();
     testUnsavedDecision();
     std::printf(failures ? "FAILURES: %d\n" : "ALL PASS\n", failures);
     return failures ? 1 : 0;

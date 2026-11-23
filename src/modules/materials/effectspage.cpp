@@ -89,7 +89,6 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "services/assethelper.h"
-#include "irisgl/core/irisutils.h"
 #include "io/assetmanager.h"
 #include "ui/dialogs/progressdialog.h"
 #include "ui/dialogs/toast.h"

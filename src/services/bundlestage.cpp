@@ -28,7 +28,6 @@ For more information see the LICENSE file
 #include "data/project.h"
 #include "io/assetrefs.h"
 #include "io/clipboardformat.h"
-#include "irisgl/core/irisutils.h"
 #include "scripting/modules/moduleshared.h"
 #include "services/assetcas.h"
 #include "services/assetclosure.h"

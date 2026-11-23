@@ -17,7 +17,7 @@ For more information see the LICENSE file
 
 #include "data/constants.h"
 #include "io/materialpresetreader.h"
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 
 namespace MaterialPresets {
 
@@ -26,7 +26,7 @@ const QVector<MaterialPreset> &all()
     static const QVector<MaterialPreset> loaded = [] {
         QVector<MaterialPreset> out;
         MaterialPresetReader reader;
-        const QDir dir(IrisUtils::getAbsoluteAssetPath("app/content/materials"));
+        const QDir dir(AppPaths::shipped("app/content/materials"));
         for (const auto &file : dir.entryInfoList(QStringList(QStringLiteral("*.material")),
                                                   QDir::Files, QDir::Name)) {
             auto preset = reader.readMaterialPreset(file.absoluteFilePath());

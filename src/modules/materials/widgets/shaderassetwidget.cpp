@@ -25,7 +25,6 @@ For more information see the LICENSE file
 #include <QTimer>
 
 
-#include "irisgl/core/irisutils.h"
 #include "../core/materialhelper.h"
 #include "../models/properties.h"
 #include <QStandardPaths>

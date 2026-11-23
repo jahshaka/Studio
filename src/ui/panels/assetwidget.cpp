@@ -44,7 +44,6 @@ For more information see the LICENSE file
 
 #include <algorithm>
 
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/particlesystemnode.h" 
 #include "irisgl/document/scenegraph/scene.h" 
 #include "zip.h"

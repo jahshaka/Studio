@@ -14,7 +14,6 @@
 #include "viewport/freecamerapolicy.h"
 #include "viewport/previewframing.h"
 #include "viewport/previeworbit.h"
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/scene.h"

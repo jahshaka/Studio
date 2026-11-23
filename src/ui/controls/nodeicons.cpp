@@ -13,7 +13,7 @@ For more information see the LICENSE file
 
 #include <QHash>
 
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 
 namespace {
 
@@ -24,7 +24,7 @@ QIcon buildIcon(const QString &relativePath)
 {
     QIcon icon;
     if (relativePath.isEmpty()) return icon;
-    const QString path = IrisUtils::getAbsoluteAssetPath(relativePath);
+    const QString path = AppPaths::shipped(relativePath);
     icon.addPixmap(path, QIcon::Normal);
     icon.addPixmap(path, QIcon::Selected);
     return icon;

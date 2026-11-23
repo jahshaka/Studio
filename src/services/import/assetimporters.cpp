@@ -40,7 +40,7 @@ For more information see the LICENSE file
 #include "services/iesprofile.h"
 #include "services/thumbnailmanager.h"
 #include "services/videoutils.h"
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "irisgl/document/qt/property.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"
@@ -71,10 +71,10 @@ QImage thumbnailImageFor(int type, const QString &filePath)
             return frame.width() >= frame.height()
                        ? frame.scaledToWidth(256, Qt::SmoothTransformation)
                        : frame.scaledToHeight(256, Qt::SmoothTransformation);
-        return QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-video.png"));
+        return QImage(AppPaths::shipped("app/icons/icons8-file-video.png"));
     }
     case ModelTypes::Music:
-        return QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
+        return QImage(AppPaths::shipped("app/icons/icons8-file-music.png"));
     default:
         return QImage();
     }

@@ -34,7 +34,6 @@ For more information see the LICENSE file
 #include "services/assetcas.h"
 #include "services/assetclosure.h"
 #include "io/assetrefs.h"
-#include "irisgl/core/irisutils.h"
 #include "services/assetstorepaths.h"
 #include "services/clipboardresolver.h"
 #include "services/meshbakestore.h"

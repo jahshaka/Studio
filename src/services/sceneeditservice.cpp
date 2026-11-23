@@ -42,7 +42,7 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include <QTextStream>
 
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/physics/environment.h"
@@ -514,7 +514,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     // before that a fresh row per add.) With no project open there is nothing
     // to pin into: the emitter renders the shipped file and nothing is saved.
     const ShippedAssets::Pinned image = ShippedAssets::pinTexture(
-        IrisUtils::getAbsoluteAssetPath("app/images/default_particle.jpg"),
+        AppPaths::shipped("app/images/default_particle.jpg"),
         QStringLiteral("Glowing Particle.jpg"), db, project,
         // The user added the emitter and this is the picture it draws: content
         // the project HAS, and a tray tile like any other image in the scene.

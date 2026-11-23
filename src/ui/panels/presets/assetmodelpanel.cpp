@@ -21,7 +21,7 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QMessageBox>
 
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 
 #include "data/constants.h"
 #include "data/primitives.h"
@@ -94,7 +94,7 @@ void AssetModelPanel::addDefaultItems()
         item->setData(MODEL_MESH_ROLE, QString::fromLatin1(def.mesh));
         item->setData(MODEL_GUID_ROLE, QString::fromLatin1(def.guid));
 
-        item->setIcon(QIcon(IrisUtils::getAbsoluteAssetPath(QString::fromLatin1(def.icon))));
+        item->setIcon(QIcon(AppPaths::shipped(QString::fromLatin1(def.icon))));
 
         listView->addItem(item);
     }

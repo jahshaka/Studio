@@ -43,7 +43,6 @@ For more information see the LICENSE file
 // reached into the vendored tree by absolute path — `irisgl/thirdparty/assimp/
 // include/assimp/Importer.hpp` — bypassing assimp's own include directory.
 // ENGINEERING_DEBT_SPEC item 5, shape 3.)
-#include "irisgl/core/irisutils.h"
 #include "services/jahlog.h"
 #include "zip.h"
 
@@ -879,7 +878,7 @@ bool ProjectManager::checkForEmptyState()
 // openable by name without a second list to forget.
 static QStringList sampleDirectories()
 {
-    const QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+    const QDir dir(AppPaths::shipped(Constants::SAMPLES_FOLDER));
     return { dir.absolutePath(), dir.absoluteFilePath(QStringLiteral("ogre")) };
 }
 
@@ -1099,7 +1098,7 @@ QDialog *ProjectManager::prepareSampleBrowser()
     // he calls its removal.
     samples.insert("preview/showroom2.png",  "Showroom 2");
 
-    QDir dir(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+    QDir dir(AppPaths::shipped(Constants::SAMPLES_FOLDER));
     QListWidget *sampleList = buildSampleList(samples, dir.absolutePath());
 
     // ---- the second tab: our ports of Ogre-Next's demo scenes -------------

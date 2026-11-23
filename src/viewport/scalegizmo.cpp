@@ -17,7 +17,6 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/intersectionhelper.h"
 #include "irisgl/core/math/mathhelper.h"
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/assets/vertexlayout.h"
 #include "irisgl/document/scenegraph/cameranode.h"

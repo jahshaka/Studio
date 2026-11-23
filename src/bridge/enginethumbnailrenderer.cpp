@@ -14,7 +14,6 @@
 #include <memory>
 #include <utility>
 
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/scenegraph/scene.h"
 #include "irisgl/document/scenegraph/scenenode.h"

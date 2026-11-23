@@ -10,7 +10,6 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "ui/panels/propertywidgets/cubemapwidget.h"
-#include "irisgl/core/irisutils.h"
 #include "data/project.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"

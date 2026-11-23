@@ -24,7 +24,6 @@ For more information see the LICENSE file
 #include "bridge/enginehost.h"
 #include "data/project.h"
 #include "data/settingsmanager.h"
-#include "irisgl/core/irisutils.h"
 #include "io/assetmanager.h"
 #include "services/assetstorepaths.h"
 #include "services/loadtimeline.h"

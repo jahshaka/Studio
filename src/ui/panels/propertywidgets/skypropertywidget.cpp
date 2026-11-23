@@ -14,7 +14,6 @@ For more information see the LICENSE file
 #include "irisgl/document/qt/colorjson.h"
 #include "ui/panels/propertyrows.h"
 #include "data/project.h"
-#include "irisgl/core/irisutils.h"
 
 #include "ui/controls/colorvaluewidget.h"
 #include "ui/controls/colorpickerwidget.h"

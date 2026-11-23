@@ -27,7 +27,6 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include "services/imagematerial.h"
 #include "services/materialbundle.h"
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 
 namespace {

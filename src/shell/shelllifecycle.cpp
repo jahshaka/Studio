@@ -29,7 +29,6 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/database/database.h"
 #include "data/settingsmanager.h"
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/shippedmeshes.h"
 #include "scripting/scriptengine.h"
 #include "scripting/claude/claudeassistant.h"
@@ -69,8 +68,7 @@ void ShellLifecycle::setParts(const Parts &parts)
 
 Database *ShellLifecycle::openLibrary()
 {
-    const QString path = IrisUtils::join(
-        AppPaths::dataRoot(), Constants::JAH_DATABASE
+    const QString path = AppPaths::inDataRoot(Constants::JAH_DATABASE
     );
 
     // Library lock (ASSET_PIPELINE preflight §6.2): held for the app's

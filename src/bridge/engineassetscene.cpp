@@ -13,7 +13,6 @@
 #include "services/defaultfloormaterial.h"
 #include "viewport/previewframing.h"
 #include "viewport/previeworbit.h"
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/shippedmeshes.h"
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/geometry/boundingsphere.h"

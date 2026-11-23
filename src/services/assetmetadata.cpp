@@ -36,7 +36,6 @@ For more information see the LICENSE file
 #include "services/assetstorepaths.h"
 #include <QSqlDatabase>
 #include "data/project.h"
-#include "irisgl/core/irisutils.h"
 #include "services/videoutils.h"
 
 namespace {

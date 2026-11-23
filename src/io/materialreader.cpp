@@ -40,7 +40,6 @@ For more information see the LICENSE file
 // iris includes
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "services/jahlog.h"
-#include "irisgl/core/irisutils.h"
 #include "modules/materials/core/materialhelper.h"
 
 MaterialReader::MaterialReader(TextureSource texSrc)

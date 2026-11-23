@@ -27,7 +27,7 @@ For more information see the LICENSE file
 #include "ui/dialogs/preferencesdialog.h"
 #include "ui/dialogs/preferences/worldsettingswidget.h"
 
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/qt/property.h"
 #include "zip.h"
@@ -410,7 +410,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
     assetFileViewer = new QWidget;
     fileIconLabel = new QLabel;
     fileIconLabel->setAlignment(Qt::AlignCenter);
-    fileIconLabel->setPixmap(QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png")));
+    fileIconLabel->setPixmap(QPixmap(AppPaths::shipped("app/icons/icons8-file-72.png")));
     fileNameLabel = new QLabel;
     fileNameLabel->setAlignment(Qt::AlignCenter);
     fileNameLabel->setStyleSheet(StyleSheet::AssetViewPreviewTitle());
@@ -622,7 +622,7 @@ AssetView::AssetView(Database *handle, QWidget *parent, IAssetViewer *previewVie
 	auto emptyLabel = new QLabel("You have no assets in your library.");
 	auto emptyIcon = new QLabel;
 	emptyIcon->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
-	emptyIcon->setPixmap(IrisUtils::getAbsoluteAssetPath("/app/icons/icons8-empty-box-50.png"));
+	emptyIcon->setPixmap(AppPaths::shipped("/app/icons/icons8-empty-box-50.png"));
 	emptyLabel->setAlignment(Qt::AlignVCenter | Qt::AlignHCenter);
 	emptyLabel->setStyleSheet(StyleSheet::AssetViewEmptyLibraryLabel());
 	ThemeRoles::setTextSize(emptyLabel, 16);

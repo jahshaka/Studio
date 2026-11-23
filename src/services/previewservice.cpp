@@ -23,7 +23,7 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "io/materialreader.h"
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "services/jahlog.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/import/meshbake.h"
@@ -126,7 +126,7 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
         return thumb->thumb;
     }
     case ModelTypes::Music:
-        return QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-music.png"));
+        return QImage(AppPaths::shipped("app/icons/icons8-file-music.png"));
     case ModelTypes::Video:
         // The first-second frame; VideoUtils falls back to the film icon when decode fails.
         return VideoUtils::thumbnailFor(storeFileFor(guid)).toImage();
@@ -141,7 +141,7 @@ QImage PreviewService::renderPicture(Project *project, const QString &guid, int 
         return strip;
     }
     case ModelTypes::File:
-        return QImage(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-72.png"));
+        return QImage(AppPaths::shipped("app/icons/icons8-file-72.png"));
     case ModelTypes::LightProfile: {
         // The candela lobe: two .ies files look identical as names and completely different as light.
         const IesProfile profile = IesProfile::parse(storeFileFor(guid));

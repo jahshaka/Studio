@@ -87,7 +87,6 @@ For more information see the LICENSE file
 #include "services/surfaceplacement.h"
 #include "services/selectionservice.h"
 #include "services/services.h"
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "services/assetdelete.h"
 #include "services/livetextures.h"

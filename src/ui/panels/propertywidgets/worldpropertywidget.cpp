@@ -13,7 +13,6 @@ For more information see the LICENSE file
 #include "ui/panels/propertywidgets/worldpropertywidget.h"
 
 #include "irisgl/document/scenegraph/scene.h"
-#include "irisgl/core/irisutils.h"
 
 #include "data/project.h"
 #include "data/database/database.h"

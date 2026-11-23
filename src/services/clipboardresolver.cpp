@@ -23,7 +23,6 @@ For more information see the LICENSE file
 #include "data/database/database.h"
 #include "data/project.h"
 #include "io/assetrefs.h"
-#include "irisgl/core/irisutils.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/projectassets.h"

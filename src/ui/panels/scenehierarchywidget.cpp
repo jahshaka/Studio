@@ -33,7 +33,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/particlesystemnode.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/decalnode.h"
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "ui/controls/nodeicons.h"
 #include "ui/ishellview.h"
 #include "services/services.h"
@@ -926,8 +926,8 @@ QTreeWidgetItem *SceneHierarchyWidget::folderItemFor(const QString &path)
     item->setFlags((item->flags() | Qt::ItemIsEditable | Qt::ItemIsDropEnabled) &
                    ~Qt::ItemIsDragEnabled);
     QIcon icon;
-    icon.addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-folder-72.png"), QIcon::Normal);
-    icon.addPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-folder-72.png"), QIcon::Selected);
+    icon.addPixmap(AppPaths::shipped("app/icons/icons8-folder-72.png"), QIcon::Normal);
+    icon.addPixmap(AppPaths::shipped("app/icons/icons8-folder-72.png"), QIcon::Selected);
     item->setIcon(0, icon);
     parent->addChild(item);
     folderItemList.insert(p, item);

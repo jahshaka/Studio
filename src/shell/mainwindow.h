@@ -95,7 +95,6 @@ enum class SceneNodeType;
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "irisgl/document/scenegraph/shadowmap.h"
 #include "services/surfaceplacement.h"
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/assets/texture2d.h"
 
 class Database;

@@ -17,7 +17,6 @@ For more information see the LICENSE file
 #include "irisgl/irisgl.h"
 #include "irisgl/document/scenegraph/scenenode.h"
 #include "irisgl/document/scenegraph/cameranode.h"
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/scenegraph/meshnode.h"
 #include "services/services.h"
 #include "services/editgate.h"

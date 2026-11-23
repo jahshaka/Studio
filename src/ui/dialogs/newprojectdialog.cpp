@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include <QFontDatabase>
 #include <QShowEvent>
 
-#include "irisgl/core/irisutils.h"
 #include "data/settingsmanager.h"
 #include "services/apppaths.h"
 #include "ui/style/stylesheet.h"

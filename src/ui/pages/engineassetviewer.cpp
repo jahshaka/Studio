@@ -29,7 +29,6 @@
 #include "io/materialreader.h"
 #include "services/materialbundle.h"
 #include "ui/dialogs/progressdialog.h"
-#include "irisgl/core/irisutils.h"
 #include "irisgl/document/qt/property.h"
 #include "irisgl/document/animation/animation.h"
 #include "irisgl/document/animation/skeletalanimation.h"

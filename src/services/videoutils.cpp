@@ -22,7 +22,7 @@ For more information see the LICENSE file
 #include <QVideoFrame>
 #include <QVideoSink>
 
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 
 bool VideoUtils::canUseMultimedia()
 {
@@ -124,5 +124,5 @@ QPixmap VideoUtils::thumbnailFor(const QString &filePath)
                                   : frame.scaledToHeight(256, Qt::SmoothTransformation);
         return QPixmap::fromImage(scaled);
     }
-    return QPixmap(IrisUtils::getAbsoluteAssetPath("app/icons/icons8-file-video.png"));
+    return QPixmap(AppPaths::shipped("app/icons/icons8-file-video.png"));
 }

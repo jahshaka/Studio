@@ -177,7 +177,7 @@ set(JAH_PROPERTIES_COLUMN_SOURCES
     ${CMAKE_SOURCE_DIR}/thirdparty/qtawesome/QtAwesomeAnim.cpp)
 
 # THE STAGED ICONS, REACHABLE FROM A TEST BINARY (COMPONENTS-1). Every icon in
-# this app is resolved against applicationDirPath (IrisUtils::getAbsoluteAssetPath)
+# this app is resolved against applicationDirPath (AppPaths::shipped)
 # and a tests/ui binary does not live in bin/, where the icons are staged — so
 # a suite that asserts anything about an icon would be asserting about null
 # pixmaps. Made HERE, at configure, rather than by the suite at run time: a

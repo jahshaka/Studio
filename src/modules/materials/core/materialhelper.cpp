@@ -24,6 +24,7 @@ For more information see the LICENSE file
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "../models/libraryv1.h"
 #include "../nodes/test.h"
+#include "services/apppaths.h"
 
 /*
 EFFECT SHADER FORMAT (v2, post MATERIALS_EVALUATOR phase 5)
@@ -58,7 +59,7 @@ bool MaterialHelper::materialHasEffect(QJsonObject matObj)
 // provides asset path for shadergraph assets
 QString MaterialHelper::assetPath(QString relPath)
 {
-	return IrisUtils::getAbsoluteAssetPath(QString("app") + QDir::separator() + QString("shadergraph") + QDir::separator() + relPath);
+	return AppPaths::shipped(QString("app") + QDir::separator() + QString("shadergraph") + QDir::separator() + relPath);
 }
 
 int MaterialHelper::resolveAppRelativeTextures(NodeGraph* graph, TextureBinding binding,

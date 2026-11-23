@@ -39,7 +39,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/database/database.h"
 #include "data/primitives.h"
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "services/jahlog.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
@@ -75,7 +75,7 @@ QString shippedFile(const primitives::Def &def, QTemporaryDir &holder, QString *
     // .qrc files its target lists. The product always has the resource; a suite that links
     // no .qrc reads the same bytes from the app folder, and the bytes are what the
     // object id is made of, so the two routes cannot produce different content.
-    const QString onDisk = IrisUtils::getAbsoluteAssetPath(
+    const QString onDisk = AppPaths::shipped(
         seed.startsWith(QLatin1Char(':')) ? QStringLiteral("app") + seed.mid(1) : seed);
     if (!seed.startsWith(QLatin1Char(':'))) {
         if (QFileInfo(onDisk).isFile()) return onDisk;
@@ -111,7 +111,7 @@ QString shippedFile(const primitives::Def &def, QTemporaryDir &holder, QString *
 QByteArray shippedBytes(const primitives::Def &def, QString *errorOut)
 {
     const QString seed = QString::fromLatin1(def.mesh);
-    const QString onDisk = IrisUtils::getAbsoluteAssetPath(
+    const QString onDisk = AppPaths::shipped(
         seed.startsWith(QLatin1Char(':')) ? QStringLiteral("app") + seed.mid(1) : seed);
     const QString path = seed.startsWith(QLatin1Char(':')) && QFileInfo::exists(seed) ? seed : onDisk;
     QFile f(path);

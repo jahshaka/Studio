@@ -60,7 +60,6 @@ For more information see the LICENSE file
 #include "services/librarygeneration.h"
 #include "ui/pages/assetview.h"
 #include <QTimer>
-#include "irisgl/core/irisutils.h"
 #include "ui/dialogs/softwareupdatedialog.h"
 #include "ui/controls/tooltip.h"
 #include "app/versionsplashscreen.h"
@@ -391,7 +390,7 @@ int main(int argc, char *argv[])
     // that instance's files.
     {
         const librarygeneration::Result gen = librarygeneration::checkAndWipe(
-            IrisUtils::join(AppPaths::dataRoot(), Constants::JAH_DATABASE), AppPaths::dataRoot(),
+            AppPaths::inDataRoot(Constants::JAH_DATABASE), AppPaths::dataRoot(),
             SettingsManager::getDefaultManager());
         if (gen.outcome == librarygeneration::Outcome::Refused
             || gen.outcome == librarygeneration::Outcome::Failed) {
@@ -507,7 +506,7 @@ int main(int argc, char *argv[])
     // FAILS (a full disk, a read-only file) is a boot error, said, never a shell on a half-indexed library.
     BootReport::IndexGate indexGate;   // recorded into the boot's report once the window exists (below)
     {
-        const QString libraryPath = IrisUtils::join(AppPaths::dataRoot(), Constants::JAH_DATABASE);
+        const QString libraryPath = AppPaths::inDataRoot(Constants::JAH_DATABASE);
         const int statements = QFile::exists(libraryPath) ? Database::indexStatementsToRun(libraryPath) : 0;
         if (statements > 0) {
             splash.showBusy(QObject::tr("Preparing the library (one time)\u2026"));

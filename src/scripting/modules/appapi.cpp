@@ -67,7 +67,6 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "services/ogresamples.h"
 #include "services/testtier.h"
-#include "irisgl/core/irisutils.h"
 #include <QAbstractButton>
 #include <QApplication>
 #include <QDir>
@@ -1276,7 +1275,7 @@ QVariantList AppApi::ogreSamples()
     // headless run — and answering it there is the point, because the honest
     // answer everywhere but a comparison tree is "not built".
     QVariantList out;
-    const QDir scenes(IrisUtils::getAbsoluteAssetPath(Constants::SAMPLES_FOLDER));
+    const QDir scenes(AppPaths::shipped(Constants::SAMPLES_FOLDER));
     for (const ogresamples::Entry &e : ogresamples::catalog()) {
         QVariantMap m;
         m.insert("name", e.name);

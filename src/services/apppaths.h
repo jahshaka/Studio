@@ -121,6 +121,22 @@ inline QString dataRoot()
     return s.root;
 }
 
+/// `name` inside the data root, cleaned ("<dataRoot>/<name>"): the library
+/// database, a store folder. One spelling of the rule for every caller.
+inline QString inDataRoot(const QString &name)
+{
+    return detail::cleaned(dataRoot() + QLatin1Char('/') + name);
+}
+
+/// A SHIPPED file - media installed beside the binary - by its path relative to
+/// the application's directory ("app/icons/x.png"), absolute and cleaned. A
+/// leading slash on `rel` is cleaned away as the doubled separator it makes.
+/// Not the data root: shipped files never move with --data-root.
+inline QString shipped(const QString &rel)
+{
+    return QDir::cleanPath(QDir(QCoreApplication::applicationDirPath()).absolutePath() + QDir::separator() + rel);
+}
+
 /// True when `--data-root` or `JAHSHAKA_DATA_ROOT` chose the root. The
 /// settings file follows the root ONLY in this case — an un-overridden run
 /// keeps its historical location (applicationDirPath under QT_DEBUG,

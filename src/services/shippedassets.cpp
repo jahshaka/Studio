@@ -22,7 +22,7 @@ For more information see the LICENSE file
 
 #include "data/database/database.h"
 #include "data/project.h"
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "services/assetcas.h"
 #include "services/assetstorepaths.h"
 #include "services/import/assetimportservice.h"
@@ -293,7 +293,7 @@ QVector<SkyPreset> skyPresets()
     for (const Row &row : rows) {
         SkyPreset preset;
         preset.name = QLatin1String(row.name);
-        preset.directory = IrisUtils::getAbsoluteAssetPath(
+        preset.directory = AppPaths::shipped(
             QStringLiteral("app/content/skies/alternative/%1").arg(QLatin1String(row.dir)));
         preset.extension = QLatin1String(row.ext);
         out << preset;

@@ -21,7 +21,6 @@ For more information see the LICENSE file
 #include <QPointer>
 #include <QMessageBox>
 
-#include "irisgl/core/irisutils.h"
 
 #include "data/constants.h"
 #include "io/materialpresetreader.h"

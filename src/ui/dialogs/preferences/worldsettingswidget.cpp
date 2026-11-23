@@ -16,7 +16,6 @@ For more information see the LICENSE file
 #include "services/apppaths.h"
 #include "services/loadingcover.h"
 
-#include "irisgl/core/irisutils.h"
 
 // (the widget builds its UI in code — the retired worldsettings.ui used to
 // bring these in through its generated header)

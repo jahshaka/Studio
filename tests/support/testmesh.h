@@ -35,7 +35,7 @@ For more information see the LICENSE file
 #include <QList>
 #include <QString>
 
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/shippedmeshes.h"
 #include "irisgl/import/importsettings.h"
@@ -67,7 +67,7 @@ inline iris::MeshPtr load(const QString &resourcePath, const QString &appRelativ
     if (QFileInfo::exists(resourcePath))
         meshes = parseFile(resourcePath);
     if (meshes.isEmpty() && !appRelativePath.isEmpty()) {
-        const QString onDisk = IrisUtils::getAbsoluteAssetPath(appRelativePath);
+        const QString onDisk = AppPaths::shipped(appRelativePath);
         if (QFileInfo(onDisk).isFile())
             meshes = parseFile(onDisk);
     }

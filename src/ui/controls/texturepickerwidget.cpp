@@ -19,7 +19,6 @@ For more information see the LICENSE file
 #include <QSqlDatabase>
 #include "services/thumbnailmanager.h"
 #include "ui/controls/assetpickerwidget.h"
-#include "irisgl/core/irisutils.h"
 #include <QMimeData>
 #include <QDrag>
 #include <QStandardItemModel>

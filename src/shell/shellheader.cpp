@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include <QPushButton>
 #include <QUrl>
 
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "thirdparty/qtawesome/QtAwesome.h"
 #include "ui/style/stylesheet.h"
 #include "ui/style/thememanager.h"
@@ -92,9 +92,9 @@ void ShellHeader::build(QGridLayout *layout, QtAwesome *icons,
 
     QString header_image_path;
 #ifdef QT_DEBUG
-    header_image_path = IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudiodevheader.png");
+    header_image_path = AppPaths::shipped("app/images/jahshakastudiodevheader.png");
 #else
-    header_image_path = IrisUtils::getAbsoluteAssetPath("app/images/jahshakastudioheader.svg");
+    header_image_path = AppPaths::shipped("app/images/jahshakastudioheader.svg");
 #endif
     // Classic paints the logo via a stylesheet image; under Qlementine that
     // getter is neutralized, so set a real pixmap instead (sheet-free).

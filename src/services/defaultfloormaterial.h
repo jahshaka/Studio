@@ -37,7 +37,7 @@ For more information see the LICENSE file
 #include <QColor>
 #include <QString>
 
-#include "irisgl/core/irisutils.h"
+#include "services/apppaths.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 
 #include "irisgl/irisglfwd.h"
@@ -101,7 +101,7 @@ inline QColor specularColor() { return QColor(0, 0, 0); }
 /// The shipped checker the tile row is minted from.
 inline QString shippedTilePath()
 {
-    return IrisUtils::getAbsoluteAssetPath("app/content/textures/tile.png");
+    return AppPaths::shipped("app/content/textures/tile.png");
 }
 
 /// THE VALUES, written onto a fresh material with `tilePath` as its base-colour
