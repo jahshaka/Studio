@@ -539,7 +539,7 @@ sky.ibl_async_lands 1.71  solo 2026-11-22 at cb2af2b02 (spec.sh reprice, run 202
 app.window_answers 22.92  by hand (spec.sh reprice, 2026-11-22)
 gi.card_build_late.late 4.05  solo 2026-11-22 at 32c9e87a3 (spec.sh reprice, run 20261122T042555-32c9e87a3)
 gi.card_build_late.unasked 2.33  solo 2026-11-22 at 32c9e87a3 (spec.sh reprice, run 20261122T042600-32c9e87a3)
-gi.card_build_late.pso 6.13  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, run 20261122T050108-5f68c1bb6)
+gi.card_build_late.pso 7.19  solo 2026-11-23 at bb46f0c24 (spec.sh reprice, run 20261123T101715-bb46f0c24-p750012)
 gi.card_build_late.texture 3.52  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, run 20261122T050114-5f68c1bb6)
 gi.card_build_late.psofail 3.23  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, run 20261122T050118-5f68c1bb6)
 gi.card_build_late.buildfail 0.91  solo 2026-11-22 at 5f68c1bb6 (spec.sh reprice, run 20261122T050122-5f68c1bb6)
