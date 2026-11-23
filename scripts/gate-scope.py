@@ -236,7 +236,8 @@ OGRE_SCENE_FUNCTIONS = {
                            "setNodeVisibleUnder", "setNodeVisibleImpl")},
     # SCRIPT-IN-ENGINE-1 S1: the existence reads the script host's handle check asks (Scene::nodePresence ...): read by
     # the engine's script commands only - the host's own row and every row whose command runs jahengine
-    **{f: ["script.", "*engine-scripts"] for f in ("nodePresence", "meshPresence", "materialPresence")},
+    **{f: ["script.", "*engine-scripts"] for f in ("nodePresence", "meshPresence", "materialPresence", "texturePresence",
+                                                   "decalTexturePresence")},
     "particleVisibilityBits": ["particles", "engine"],
     **{f: ["gi", "atom", "engine"] for f in ("writeIsSceneMovement", "setNodeMovable", "nodeMovable", "mobilityStatus")},
     # ENGINE-UPGRADE-U3 stage 2 read 12(b): the running mobility / rig / particle counts the snapshot carries
