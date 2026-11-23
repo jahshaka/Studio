@@ -540,6 +540,26 @@ add_test(NAME script.host COMMAND test_script_host WORKING_DIRECTORY "${CMAKE_CU
 set_tests_properties(script.host PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(script.host)
 
+# script.commands — THE ENGINE COMMANDS' FAMILY CASES, ON THE CPU (SCRIPT-IN-ENGINE-1 stage 2; test_script_commands.cpp says
+# its generic laws, script_commands.h the fixture): every family registered for real (validate empty, every command tagged
+# and documented, >= 31), a test door refused at run time, then ONE CASES FILE A FAMILY (each its builder's own: the batch
+# never meets in one test file) on a host with no engine and one on ONE headless (NULL) engine. No card, no display.
+add_executable(test_script_commands test_script_commands.cpp
+    commands_cases_scene.cpp commands_cases_node.cpp commands_cases_light.cpp commands_cases_material.cpp
+    commands_cases_effects.cpp commands_cases_view.cpp commands_cases_picture.cpp commands_cases_gi.cpp
+    commands_cases_gi_read.cpp commands_cases_engine.cpp commands_cases_atom.cpp commands_cases_status.cpp)
+set_target_properties(test_script_commands PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_script_commands PRIVATE JahshakaScript)
+target_include_directories(test_script_commands PRIVATE ${CMAKE_SOURCE_DIR}/irisgl/engine/src ${CMAKE_SOURCE_DIR}/tests/support)
+target_compile_definitions(test_script_commands PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_script_commands JahshakaEngineMedia)
+add_test(NAME script.commands COMMAND test_script_commands WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(script.commands PROPERTIES TIMEOUT 60 LABELS "engine")
+jah_no_display(script.commands)
+
 # script.view_ownership (SCRIPT-IN-ENGINE-1 2b b2) - THE OWNERSHIP LAW's views half (a view needs a device): a view a
 # script's command made is destroyed at its host's end; a view the host's owner handed in survives it and is not the
 # script's to destroy. The read: a view's name is unique among live views. No frame drawn.
