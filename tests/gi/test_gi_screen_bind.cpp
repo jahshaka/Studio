@@ -35,9 +35,14 @@
 //       producers for one view paid both every frame). (Until stage 0 this view took the no-ray route and the law named
 //       the no-ray producer: that premise was deleted with the contract's GI meaning.)
 //   (5) A DISPATCH THAT NEVER RAN (the door gi.screenShaderCold: the three jobs' permutations built in the background,
-//       the views compiling in the background), mid-rest: a deferred trace neither ages nor flips the area history -
+//       the views compiling in the background), mid-rest, ON THE STREAMING PACE: a deferred trace neither ages nor flips
+//       the area history -
 //       the first frame that traces again is one rest frame past the last that did; a new view whose integrate still builds reads its targets as the
-//       chain seeded them (zero): every pixel finite.
+//       chain seeded them (zero): every pixel finite. THE PACE, RE-DERIVED (SHADER-SYSTEM-1 7.0; THE ONE ASYNC-SHADER
+//       RULE, the lead's ruling 2026-11-22: a compile a scene's frames need may land a frame later ONLY on a frame that
+//       does not owe the whole picture; R2 (c), HlmsCompute::_jahSetFrameOwesPicture at the frame head): a deferral
+//       exists only on the Streaming pace, so (5)'s frames run on it; and THE OTHER HALF IS A LAW: on the COMPLETE pace
+//       the same door defers NO frame and the dispatch JOINS the build in flight (AsyncShaderStats::computeJoins > 0).
 //   (6) A FRAME THE GATHER DECLINES (the door gi.screenBindMissing reaches the ray tier's gather too): a still picture
 //       of a ray scene at rest draws the frame the gather declined as the frame before (the last gather registered);
 //       and a gathering view whose gather never ran draws no sky ambient - its floor within 2 % under a sky ten times
@@ -52,6 +57,7 @@
 #include "jahshaka/engine/Mesh.h"
 #include "jahshaka/engine/Pictures.h"
 #include "jahshaka/engine/Published.h"
+#include "jahshaka/engine/Shaders.h"
 #include "../support/enginetesthelpers.h"
 #include <algorithm>
 #include <cmath>
@@ -365,11 +371,36 @@ int main()
         if (settle(300) < 0) std::printf("   (5) NOT at rest before the cold shaders\n");
         restart();
         run(3);
-        // the frames the door holds the three jobs' shaders cold: each deferred frame (the status's reason) adds no rest
-        // frame - the first frame that traces again is ONE rest frame past the last one that traced
+        // THE COMPLETE PACE (the ruling's other half): the door on, three frames on the default (Complete) pace - no frame
+        // defers (the status never reads the deferral's reason) and the dispatch JOINS the build in flight
+        {
+            const unsigned long long j0 = e->published().shaders.computeJoins;
+            e->setArm("gi.screenShaderCold", 1.0);
+            unsigned completeDeferred = 0u;
+            for (int k = 0; k < 3; ++k) {
+                run(1);
+                if (!s1->published().areaVis.running &&
+                    s1->published().areaVis.reason == "its shaders build in the background")
+                    ++completeDeferred;
+            }
+            const unsigned long long joins = e->published().shaders.computeJoins - j0;
+            e->setArm("gi.screenShaderCold", 0.0);
+            e->waitForAsyncShaders();
+            std::printf("   (5) the Complete pace with the door on: %u deferred frame(s), %llu join(s)\n", completeDeferred,
+                        joins);
+            CHECK(completeDeferred == 0u && joins > 0ull,
+                  "(5) on the COMPLETE pace the door defers no frame: the dispatch joins the build in flight (the one rule)");
+            if (settle(300) < 0) std::printf("   (5) NOT at rest again after the Complete pace's door\n");
+            restart();
+            run(3);
+        }
+        // the frames the door holds the three jobs' shaders cold, ON THE STREAMING PACE (the only pace a deferral exists
+        // on): each deferred frame (the status's reason) adds no rest frame - the first frame that traces again is ONE rest
+        // frame past the last one that traced
         e->setArm("gi.screenShaderCold", 1.0);
         unsigned lastRest = s1->published().areaVis.restFrames, deferred = 0u, aged = 0u, after = 0u;
         for (int k = 0; k < 40 && !(deferred && after >= 2u); ++k) {
+            e->setFramePace(FramePace::Streaming);   // consumed by the next frame (the engine resets it to Complete after)
             run(1);
             const AreaVisStatus st = s1->published().areaVis;
             if (!st.running && st.reason == "its shaders build in the background") {
@@ -391,6 +422,7 @@ int main()
             fresh->setAsyncShaders(true);
             enginetest::testCameraLookAt(fresh, eye, at);
             for (int k = 0; k < 3; ++k) {
+                e->setFramePace(FramePace::Streaming);   // the integrate still building on this frame: never joined
                 run(1);
                 ImageF pic;
                 if (fresh->readPixelsHdr(pic))
