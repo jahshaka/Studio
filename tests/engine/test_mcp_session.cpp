@@ -70,7 +70,7 @@ static Value::Bytes fakePng(std::int64_t handle)
 static std::string base64Of(const Value::Bytes &bytes)
 {
     std::string text, why;
-    toJson(Value::bytes(bytes), text, why);
+    iris::json::write(Value::bytes(bytes), text, why);
     return text.substr(11, text.size() - 13);
 }
 
