@@ -1369,6 +1369,18 @@ jah_gpu_row(gi.route_landing.gather CLASS engine COMMAND test_gi_card_build_late
 set_tests_properties(gi.route_landing.gather PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
                      TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 1100)
 
+# gi.route_landing.order (SHADER-SYSTEM-1 stage 7; the owner 2026-11-23: "faster loading over correctness when loading in
+# shaders"): THE FRAME's OWN REQUESTS ARE SERVED FIRST - a cold room with both ray routes held (the ahead pass and the
+# request-only hit decode running), two engines in one process: the room's held
+# picture arrives with P3 ON no later than with it OFF (+ a stated bound, frames); ON's ahead class ran jobs, OFF's none;
+# the two pictures the same codes. RED before the ahead class (the ahead placeholders pushed to the front of the one
+# queue). COLD: its subject is the room's permutations still unbuilt. A new row: priced from its solo run, never SHIP.
+jah_gpu_row(gi.route_landing.order CLASS engine COMMAND test_gi_card_build_late landing_order
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+         COLD "its subject is the order the room's permutations are built in, from unbuilt: cold in the process (the fixture's shaderCacheOff)")
+set_tests_properties(gi.route_landing.order PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen"
+                     TIMEOUT 60 LABELS "engine" JAHSHAKA_TEST_FRAMES 1350)
+
 # gi.fog_shaft / gi.fog_sealed (PHOTON-7 10-4, R11; L9) - A MEDIUM IS LIT BY WHAT REACHES IT: a black room, the World
 # fog the picture's only light, a sun through a roof opening - the opening lights the fog, the roof closed leaves it dark,
 # a pane passes (1 - alpha) of the shaft; and the sealed room with the sun and a Sky Light dark at the ray tier, its control

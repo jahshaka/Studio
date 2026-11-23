@@ -75,6 +75,17 @@
 //               printed (OPEN: the hit decode's PBS twins and the GI's bounce injection are still asked for there); (3)
 //               THE CONTROL: the gather is DRAWN within kLandingBound frames of its release; (4) at rest, ZERO COST: 0
 //               ahead passes and 0 requests over kRestWatch frames.
+//   landing_order - THE FRAME's OWN REQUESTS ARE SERVED FIRST (SHADER-SYSTEM-1 stage 7; the owner, 2026-11-23: "faster
+//               loading over correctness when loading in shaders"; row gi.route_landing.order; COLD): the room built
+//               COLD with the reflection and the gather held (both owed: the ahead pass and the request-only hit decode
+//               run); TWO ENGINES
+//               in one process, P3 ON first, then OFF (the arm shaders.aheadPassOff; OFF runs second, on a driver warmed
+//               by ON: the law is the stricter for ON) - (0) THE CONTROLS: ON's ahead class ran jobs (above 0), OFF's ran
+//               none; (1) TIME-TO-PICTURE: the first frame from which the room's picture is its held final picture, exact
+//               (a hash of the read-back codes every frame) - ON's no later than OFF's + kOrderBound frames. RED before the
+//               ahead class (the ahead placeholders pushed URGENT to the front of the one queue, ahead of the room's own:
+//               spikes/shader-system/ss7/p3/order/); (2) the two final pictures are the same codes (the ahead requests
+//               change no picture).
 // A fixture (the engine alone, one small offscreen view). Counted in frames.
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/GiParams.h"
@@ -126,6 +137,12 @@ const int kRestCap = 1500;
 /// published status's frame of lag), the cap on the hold's wait for a quiet background compiler, and the frames watched
 /// at rest for the zero cost
 const int kLandingWatch = 30, kLandingBound = 4, kQuietCap = 1500, kRestWatch = 30;
+/// THE ORDER ROW: the cap on a run's frames until its service is quiet (a bound on the fixture: a cold room's frames are
+/// ~2 ms), the frames past the service's quiet a run keeps drawing (the picture's last change after the last job lands),
+/// and the bound on ON's time-to-picture over OFF's (frames): twice the same arm's spread between two runs (OFF 505 and
+/// 534: 29 frames), rounded up - the red-first run (the ahead class removed) read ON 763 against OFF 505, +258; the green
+/// ON 439 against OFF 534 (spikes/shader-system/ss7/p3/order/)
+const int kOrderCap = 6000, kOrderTail = 30, kOrderBound = 60;
 /// The explicit node ids (both scenes the same: residentHash is over (node id, card index))
 const NodeId kFirstId = 1ull << 40;
 
@@ -277,13 +294,77 @@ int main(int argc, char **argv)
 {
     const std::string mode = argc > 1 ? argv[1] : "late";
     const std::vector<std::string> modes = { "late", "pso", "texture", "unasked", "psofail", "buildfail", "corrupt",
-                                             "window", "failwait", "silent", "complete", "landing_gather" };
+                                             "window", "failwait", "silent", "complete", "landing_gather",
+                                             "landing_order" };
     if (std::find(modes.begin(), modes.end(), mode) == modes.end()) {
         std::printf("FAIL: the mode is late, pso, texture, unasked, psofail, buildfail, corrupt, window, failwait, "
-                    "silent or complete, not '%s'\n", mode.c_str());
+                    "silent, complete, landing_gather or landing_order, not '%s'\n", mode.c_str());
         return 2;
     }
     std::string err;
+    // ---- .landing_order: the frame's own requests first; time-to-picture with P3 on no later than off -------------
+    if (mode == "landing_order") {
+        struct OrderRun { bool ok = false; int pictureFrame = -1, frames = 0; unsigned long long aheadRun = 0, promoted = 0;
+                          unsigned long long skips = 0, placeholders = 0; uint64_t finalHash = 0; };
+        const auto runOrder = [&](bool aheadOff) {
+            OrderRun o;
+            const std::string olog = std::string("test-gi-card-build-late-landing-order-") + (aheadOff ? "off" : "on") +
+                                     "-ogre.log";
+            auto engine = Engine::create(
+                enginetest::testEngineConfig(olog, enginetest::EngineOverrides().shaderCacheOff().realDestroy()), err);
+            if (!engine) { std::printf("FAIL: engine: %s\n", err.c_str()); return o; }
+            Engine *e = engine.get();
+            e->setRayTracing(true);
+            e->setFramePace(FramePace::Streaming);
+            e->setArm("rays.buildHold", kHoldForever);
+            e->setArm("rays.buildHoldIds", kReaderBuilds);   // both routes owed: the ahead pass AND the request-only decode
+            if (aheadOff) e->setArm("shaders.aheadPassOff", 1.0);
+            Room r = buildRoom(e, aheadOff ? "route_landing_order_off" : "route_landing_order_on");
+            if (!r.scene) { std::printf("FAIL: the room: %s\n", e->lastError().c_str()); return o; }
+            const AsyncShaderStats at = e->published().shaders;
+            std::vector<uint64_t> hashes;
+            int quietAt = -1;
+            for (int f = 0; f < kOrderCap && (quietAt < 0 || f < quietAt + kOrderTail); ++f) {
+                enginetest::frames(e, 1);
+                Image img;
+                if (!r.view->readPixels(img) || img.rgba.empty()) { std::printf("FAIL: the read-back\n"); return o; }
+                uint64_t h = 1469598103934665603ull;   // FNV-1a over the codes
+                for (unsigned char c : img.rgba) { h ^= c; h *= 1099511628211ull; }
+                hashes.push_back(h);
+                const AsyncShaderStats a = e->published().shaders;
+                // the SERVICE quiet (pending counts the ray builds in flight: OgreEngine.cpp's asyncShaderStats)
+                if (quietAt < 0 && f > 10 && a.pending == a.rayBuildsInFlight) quietAt = f;
+            }
+            const AsyncShaderStats end = e->published().shaders;
+            o.frames = int(hashes.size());
+            o.finalHash = hashes.empty() ? 0ull : hashes.back();
+            for (int f = int(hashes.size()) - 1; f >= 0 && hashes[size_t(f)] == o.finalHash; --f) o.pictureFrame = f + 1;
+            o.aheadRun = end.aheadRun - at.aheadRun;
+            o.promoted = end.aheadPromoted - at.aheadPromoted;
+            o.skips = end.pendingSkips - at.pendingSkips;
+            o.placeholders = end.placeholderDraws - at.placeholderDraws;
+            o.ok = quietAt >= 0;
+            std::printf("   P3 %s: the service quiet at frame %d; the held picture from frame %d (of %d); ahead-class jobs %llu, "
+                        "promoted %llu; pending skips %llu, placeholder draws %llu\n", aheadOff ? "OFF" : "ON ", quietAt + 1,
+                        o.pictureFrame, o.frames, o.aheadRun, o.promoted, o.skips, o.placeholders);
+            drop(e, r);
+            engine.reset();
+            return o;
+        };
+        const OrderRun on = runOrder(false), off = runOrder(true);
+        char w[320];
+        std::snprintf(w, sizeof(w), "(0) the controls: both runs reached a quiet service; ON's ahead class ran %llu jobs (> 0), "
+                      "OFF's %llu (0)", on.aheadRun, off.aheadRun);
+        check(on.ok && off.ok && on.aheadRun > 0ull && off.aheadRun == 0ull, w);
+        std::snprintf(w, sizeof(w), "(1) TIME-TO-PICTURE: the room's held picture from frame %d with P3 ON, %d with it OFF "
+                      "(bound: ON <= OFF + %d)", on.pictureFrame, off.pictureFrame, kOrderBound);
+        check(on.pictureFrame > 0 && off.pictureFrame > 0 && on.pictureFrame <= off.pictureFrame + kOrderBound, w);
+        std::snprintf(w, sizeof(w), "(2) the two held pictures are the same codes (%016llx / %016llx)",
+                      (unsigned long long)on.finalHash, (unsigned long long)off.finalHash);
+        check(on.finalHash == off.finalHash, w);
+        std::printf("\n%s (%d failures)\n", g_fail ? "FAIL" : "PASS", g_fail);
+        return g_fail ? 1 : 0;
+    }
     // .pso IS a permutation still compiling: its row is COLD (its CMake line) and boots with no shader cache - a warm one
     // loads the room's permutations ready (every green row's run promotes its cache: tests/support/fresh_home.sh); so is
     // .failwait's placeholder
