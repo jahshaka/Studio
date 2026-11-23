@@ -397,10 +397,16 @@ ClipboardResolveReport ClipboardResolver::run(const Envelope &envelope, bool com
             bool alreadyMissing = false;
             for (const auto &m : report.missing) if (m.guid == needed) { alreadyMissing = true; break; }
             if (alreadyMissing) continue;
-            if (assetrefs::isGuidValue(needed) && !db->fetchAsset(needed).guid.isEmpty()) {
+            bool read = true;
+            if (assetrefs::isGuidValue(needed) && !db->fetchAsset(needed, &read).guid.isEmpty()) {
                 report.known.append(needed);
                 toPin.append(needed);
                 continue;
+            }
+            if (!read) {   // a row UNREAD is no "absent" (the reader's WEAK row): the paste refuses by name, pins nothing
+                report.error = QStringLiteral("whether '%1' is in this library could not be read - the paste pinned "
+                                              "nothing (the payload's own rows already landed stay)").arg(needed);
+                return report;
             }
             ClipboardMissing hole;
             hole.guid = needed;

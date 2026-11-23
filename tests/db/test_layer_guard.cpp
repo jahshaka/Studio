@@ -26,7 +26,10 @@ For more information see the LICENSE file
 //      failed, then deleteDependency and createDependency: BOTH refused, no second edge; the batch's earlier write
 //      kept; the next batch clean;
 //  10. a PENDING library (refuseWrites): every write refused by name, never consumed; a read still answers; another
-//      connection to the file - the next start's retry - writes.
+//      connection to the file - the next start's retry - writes;
+//  11. a unit inside a script run does not end the run's hold: the run's later bare write is refused too;
+//  12. a unit that only read (failed, unlooked) and committed leaves the mark: the write after it is refused;
+//  13. a write that failed to prepare is no read: it marks nothing.
 
 #include <QApplication>
 #include <QFile>
@@ -249,7 +252,51 @@ int main(int argc, char **argv)
         const bool clean = database.createDependency(1, 2, "node9", "tex9b", QString());
         database.endBatch();
         check(clean, "9: the NEXT batch is clean: the mark ended with the run");
+
+        // 11. A UNIT INSIDE THE RUN DOES NOT END THE RUN's HOLD (the reader's FIX 1a): a failed read, then a
+        //     DbTransaction (it stands the batch down and is refused at its BEGIN), then a bare write of the same run:
+        //     REFUSED; the run's end clears it.
+        database.beginBatch();
+        dbseam::denyReadsOf(database.connection(), "assets");
+        database.fetchAsset(QStringLiteral("tex9"));   // unlooked
+        dbseam::clear(database.connection());
+        bool unitWrote = true;
+        {
+            DbTransaction unit(database.connection());
+            unitWrote = database.createFolder(QStringLiteral("unit-11"), QString(), QStringLiteral("u11"), QString())
+                        && unit.commit();
+        }
+        const bool afterUnit = database.createFolder(QStringLiteral("after-11"), QString(), QStringLiteral("a11"), QString());
+        database.endBatch();
+        check(!unitWrote && !afterUnit, "11: in a run, the unit after an unlooked failed read is refused AND the run's "
+                                        "later bare write is refused too (unit " + std::to_string(unitWrote) + ", after "
+                                        + std::to_string(afterUnit) + ")");
+        check(database.createFolder(QStringLiteral("next-11"), QString(), QStringLiteral("n11"), QString()),
+              "11: the run's end cleared it: the next write goes");
         database.closeDatabase();
+    }
+
+    // 12. A UNIT THAT ONLY READ (and failed, unlooked) AND COMMITTED DOES NOT CLEAR THE MARK (the reader's FIX 1b): the
+    //     caller acts on that read after the unit - its write is refused.
+    {
+        bool committed = false;
+        {
+            db::Transaction unit(c, "a unit that only reads");
+            failedReadUnlooked(c);
+            committed = unit.commit(&e);
+        }
+        db::Error refused;
+        const bool wrote = insert(c, "after-12", &refused);
+        check(committed && !wrote && contains(refused.message, "write refused"),
+              "12: a unit that read-failed and committed leaves the mark: the write after it is refused: " + refused.message);
+    }
+
+    // 13. A WRITE THAT FAILS TO PREPARE IS NO READ (the reader's CHEAP item): it marks nothing - the next, unrelated
+    //     write goes (classified by its first keyword, nothing prepared to ask).
+    {
+        db::Statement broken(c, "INSERT INTO nowhere VALUES (1)");
+        broken.step(&e);   // not tested: no look
+        check(!c.marked() && insert(c, "after-13", &e), "13: a write that failed to prepare marks nothing: the next write goes");
     }
 
     // 10. A PENDING LIBRARY: EVERY WRITE REFUSED BY NAME, NEVER CONSUMED; THE NEXT START's CONNECTION WRITES.

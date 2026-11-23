@@ -909,7 +909,7 @@ QVariantMap ProjectApi::exportManifest(const QString &dir)
             const QString pinned = dbqt::text(pins, 0);
             if (!pinned.isEmpty() && !guids.contains(pinned)) guids.append(pinned);
         }
-        if (error) qWarning("project: the project's pinned assets: %s", qUtf8Printable(dbqt::describe(error)));
+        if (error.code) qWarning("project: the project's pinned assets: %s", qUtf8Printable(dbqt::describe(error)));
     }
     for (int i = 0; i < guids.size(); ++i)   // grows while iterating: transitive closure
         for (const QString &dep : host.db->fetchAssetGUIDAndDependencies(guids.at(i), false))

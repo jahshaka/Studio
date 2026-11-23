@@ -81,7 +81,7 @@ QVector<ExportContentSource::Entry> CasContentSource::filesForAsset(const QStrin
         if (!QFileInfo::exists(e.path)) continue;   // offline/purged object
         entries.append(e);
     }
-    if (error) qWarning("export: the catalog's files of %s: %s", qUtf8Printable(guid), qUtf8Printable(dbqt::describe(error)));
+    if (error.code) qWarning("export: the catalog's files of %s: %s", qUtf8Printable(guid), qUtf8Printable(dbqt::describe(error)));
     return entries;
 }
 

@@ -1015,7 +1015,12 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
     // impossible.
     QString textureGuid;
     if (!MaterialBundle::looksLikePath(pathOrGuid)) {
-        const AssetRecord texRow = host.db->fetchAsset(pathOrGuid);
+        bool texRead = true;
+        const AssetRecord texRow = host.db->fetchAsset(pathOrGuid, &texRead);
+        if (!texRead) {   // a row UNREAD is no "not a texture" (the reader's WEAK row): refused for the true reason
+            fail(QStringLiteral("materials.addTexture: '%1' could not be read - nothing was changed").arg(pathOrGuid));
+            return QString();
+        }
         if (texRow.type != static_cast<int>(ModelTypes::Texture)) {
             fail(QStringLiteral("materials.addTexture: '%1' is not a texture").arg(pathOrGuid));
             return QString();

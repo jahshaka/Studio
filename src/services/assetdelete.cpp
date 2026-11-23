@@ -242,6 +242,7 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         return out;
     }
     bool ok = true;
+    QString unreadMember;   // a member's row that could not be read: the refusal names it (never "a pin refused")
     for (const QString &member : toUnpin) {
         if (!db->unpinAsset(projectGuid, member)) { ok = false; continue; }
         ++out.pinCount;
@@ -255,7 +256,13 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         // the LAST pin lets go of it there is nowhere left for it to be,
         // WHOEVER let go (fix round F3: the owner may have left first and a
         // project that pinned it by guid — a cross-project paste — last).
-        const AssetRecord m = member == guid ? record : db->fetchAsset(member);
+        bool memberRead = true;
+        const AssetRecord m = member == guid ? record : db->fetchAsset(member, &memberRead);
+        if (!memberRead) {
+            ok = false;
+            if (unreadMember.isEmpty()) unreadMember = member;
+            continue;
+        }
         if (!m.guid.isEmpty() && (!m.listed || db->isProjectOwned(m))
             && pinnedElsewhere.value(member) == 0) {
             if (db->deleteAsset(member, /*force*/ true)) out.unlisted = true;
@@ -263,7 +270,11 @@ Outcome removeFromProject(Database *db, const QString &guid, const QString &proj
         }
     }
     out.ok = ok;
-    if (!ok) out.error = QStringLiteral("the database refused to drop a pin on '%1'").arg(guid);
+    if (!ok)
+        out.error = unreadMember.isEmpty()
+            ? QStringLiteral("the database refused to drop a pin on '%1'").arg(guid)
+            : QStringLiteral("the remove of '%1' from the project: the row of '%2' could not be read (the log names the "
+                             "read) - its reap was not decided").arg(guid, unreadMember);
     if (!toUnpin.isEmpty()) ProjectMembership::instance()->announce(projectGuid);
     return out;
 }

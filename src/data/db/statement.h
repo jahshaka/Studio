@@ -25,6 +25,10 @@ struct sqlite3_stmt;
 
 namespace db {
 
+/// Does `sql` WRITE, by its first keyword (INSERT, UPDATE, DELETE, REPLACE, CREATE, DROP, ALTER)? For a statement
+/// nothing was prepared for (the layer guard's classification of a failed prepare) and the funnel's commit accounting.
+bool isWriteSql(std::string_view sql);
+
 /// One prepared statement: prepared on construction, finalized on destruction, forward only.
 /// PARAMETERS are numbered from 1 (SQL's own `?NNN`), or named (`:name`, SQLite's syntax);
 /// COLUMNS from 0. Text is UTF-8; an empty text binds '' and an empty blob x'' (never NULL:

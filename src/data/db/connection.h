@@ -25,12 +25,14 @@ For more information see the LICENSE file
 //   - THE MARK: a READ statement (sqlite3_stmt_readonly; a statement whose prepare failed counts as one) whose step
 //     answers an ERROR - "no row" is an answer, never a failure - marks its connection with its statement and
 //     SQLite's text. The Error it answered carries the mark's flag: TESTING that Error (its truth test; DbQuery's
-//     failed() / error(); run()'s answer) is LOOKING, and looking clears the mark. A log line never looks. An unlooked
-//     mark is never replaced by a newer failure.
+//     failed() / error(); run()'s answer) is LOOKING, and looking clears the mark. A log line never looks (it reads
+//     `.code`: source.db_error_looks). An unlooked mark is never replaced by a newer failure. AN ERROR IS TESTED ON
+//     ITS CONNECTION's THREAD (the threading law above): the flag is a plain bool, shared by nothing else.
 //   - THE REFUSAL: the next WRITE on that connection (a Statement's first step, an exec() - a BEGIN IMMEDIATE is a
 //     write) while the mark stands is REFUSED BY NAME ("write refused: an earlier read failed and nobody looked:
 //     <statement>: <SQLite's text>"). Inside an open UNIT (a Transaction) the unit fails whole - its commit answers
-//     false and rolls back - and the mark is held until the outermost unit ends; inside a GESTURE SCOPE (the
+//     false and rolls back - and a mark the unit refused under ends with it unless a gesture scope holds it (a mark
+//     the unit never refused under - a read that failed with nothing written after it - stands); inside a GESTURE SCOPE (the
 //     script run's batch: gestureScope) every write to the scope's end is refused and the mark ends with the scope;
 //     a bare autocommit write consumes it: ONE refusal.
 //   - A PENDING LIBRARY: refuseWrites(why) refuses EVERY write by that name from then on, never consumed (a failed

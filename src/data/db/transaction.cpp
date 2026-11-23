@@ -65,9 +65,10 @@ void Transaction::end()
 
 void Transaction::unitEnded()
 {
-    // THE LAYER GUARD: an outermost UNIT's end ends a failed read's mark it held; a SCOPE's mark is the gesture
-    // scope's (Connection::gestureScope).
-    if (mKind == Kind::Unit) detail::clearMark(mConnection);
+    // THE LAYER GUARD: an outermost UNIT's end ends a failed read's mark ONLY when the unit CONSUMED it (it refused a
+    // write under it) and no gesture scope holds it (a unit inside a script run never ends the run's hold); a mark the
+    // unit never refused under - a read that failed with no write after it - stands for the caller's next write.
+    if (mKind == Kind::Unit && mConnection->unitFailed && mConnection->gestureScopes == 0) detail::clearMark(mConnection);
     mConnection->unitFailed = false;
     mConnection->unitRefusal.clear();
 }

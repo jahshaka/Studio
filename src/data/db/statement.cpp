@@ -12,7 +12,20 @@ For more information see the LICENSE file
 #include "data/db/statement.h"
 #include "data/db/state.h"
 
+#include <cctype>
+
 namespace db {
+
+bool isWriteSql(std::string_view sql)
+{
+    std::size_t at = 0;
+    while (at < sql.size() && std::isspace(static_cast<unsigned char>(sql[at]))) ++at;
+    std::string head;   // the first seven characters, upper-cased (the funnel's accounting read them so)
+    for (; at < sql.size() && head.size() < 7; ++at) head += char(std::toupper(static_cast<unsigned char>(sql[at])));
+    for (const std::string_view verb : { "INSERT", "UPDATE", "DELETE", "REPLACE", "CREATE", "DROP", "ALTER" })
+        if (std::string_view(head).substr(0, verb.size()) == verb) return true;
+    return false;
+}
 
 Statement::Statement(Connection &connection, std::string_view sql)
     : mConnection(connection.state()), mSql(sql)
@@ -119,9 +132,11 @@ Statement &Statement::bindNull(std::string_view name)
 
 bool Statement::failed(Error failure, Error *e)
 {
-    // THE LAYER GUARD's MARK: a READ that failed (a statement whose prepare failed counts as one: nothing says it
-    // would have written) marks its connection; the Error handed back carries the flag looking sets.
-    if (!mStatement || sqlite3_stmt_readonly(mStatement)) detail::markFailedRead(mConnection, failure, mSql);
+    // THE LAYER GUARD's MARK: a READ that failed marks its connection; the Error handed back carries the flag looking
+    // sets. A statement whose prepare failed has nothing to ask: its first keyword says whether it would have written
+    // (a write that failed to prepare is no read: its own answer is its caller's).
+    const bool read = mStatement ? sqlite3_stmt_readonly(mStatement) != 0 : !isWriteSql(mSql);
+    if (read) detail::markFailedRead(mConnection, failure, mSql);
     if (e) *e = failure;
     return false;
 }

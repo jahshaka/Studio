@@ -204,6 +204,12 @@ if(Python3_Interpreter_FOUND)
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_live_read_at_write.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.no_live_read_at_write PROPERTIES TIMEOUT 60 LABELS "hygiene")
     jah_no_display(source.no_live_read_at_write)
+    # source.db_error_looks — NOQT-DATABASE-1 stage 3 (the layer guard): a truth test of a db::Error IS the look that
+    # clears a failed read's mark; a branch that only LOGS reads `.code`, never the truth test (a log never looks).
+    add_test(NAME source.db_error_looks
+             COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/db_error_looks.py" "${CMAKE_SOURCE_DIR}")
+    set_tests_properties(source.db_error_looks PROPERTIES TIMEOUT 60 LABELS "hygiene")
+    jah_no_display(source.db_error_looks)
     add_test(NAME source.no_raw_sheets
              COMMAND ${Python3_EXECUTABLE} -I "${CMAKE_CURRENT_SOURCE_DIR}/no_raw_sheets.py" "${CMAKE_SOURCE_DIR}")
     set_tests_properties(source.no_raw_sheets PROPERTIES TIMEOUT 60 LABELS "hygiene")
@@ -952,7 +958,7 @@ jah_builds(none ROWS source.no_glsl_path source.fork_stamp source.no_raw_transac
     source.one_asset_name_write source.one_save_door source.one_undo_push source.db_pointers_initialised
     source.panel_rows_guarded source.bake_key_guard source.no_engine_transform_reads source.one_readfile
     source.assimp_import_only source.one_material_resolve source.photon_never_pinned source.material_page_identity
-    source.no_live_read_at_write source.no_raw_sheets source.shader_cache_key source.bake_key_versioned
+    source.no_live_read_at_write source.db_error_looks source.no_raw_sheets source.shader_cache_key source.bake_key_versioned
     source.gpu_table_strides source.code_rows gate.serve_red source.row_budget source.timeout_cap
     tooling.gpu_lock_fifo tooling.row_lock_env tooling.gpu_lock_sweep tooling.gpu_lock_holds tooling.gpu_lock_mark
     tooling.evidence_cap source.debug_hot_loops tooling.width_pair.plan tooling.width_pair.judge tooling.width_pair.refuse

@@ -218,23 +218,6 @@ Database::~Database()
     live.erase(std::remove(live.begin(), live.end(), this), live.end());
 }
 
-namespace {
-/// Does this statement WRITE? Only the first keyword is looked at, which is
-/// all SQLite needs to decide whether an autocommit transaction is opened for
-/// it — and the only reason we ask is the durable-commit accounting.
-bool isWriteStatement(const QString &sql)
-{
-    const QString head = sql.trimmed().left(7).toUpper();
-    return head.startsWith(QLatin1String("INSERT"))
-           || head.startsWith(QLatin1String("UPDATE"))
-           || head.startsWith(QLatin1String("DELETE"))
-           || head.startsWith(QLatin1String("REPLACE"))
-           || head.startsWith(QLatin1String("CREATE"))
-           || head.startsWith(QLatin1String("DROP"))
-           || head.startsWith(QLatin1String("ALTER"));
-}
-}   // namespace
-
 // ---- the query log (D11-LIBRARY-SCALE; the contract is in database.h) ------
 
 namespace {
@@ -424,7 +407,7 @@ bool Database::executeAndCheckQuery(DbQuery &query, const QString &name)
     // the library's write lock, so a scope that only READS (a script run that lists) takes no lock
     // and leaves the preview writer free; its reads autocommit, each released when finished. Found
     // through the registry by the query's connection, never through `this` (see above).
-    const bool write = isWriteStatement(sql);
+    const bool write = db::isWriteSql(query.sql());   // the first keyword (the layer's one test)
     // A FAILED UNIT WRITES NOTHING (database.h, DbTransaction): its scope refuses every write on
     // its connection, unexecuted - said once, by the transaction, at its BEGIN (so not again here: the
     // cursor is FAILED quietly). The connection's own state says so (the registry walk: never `this`).
@@ -801,7 +784,7 @@ bool Database::checkIfColumnExists(const QString &tableName, const QString &colu
         // table_info columns: cid, name, type, notnull, dflt_value, pk
         if (dbqt::text(query, 1).compare(columnName, Qt::CaseInsensitive) == 0) return true;
     }
-    if (error) {
+    if (error.code) {
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("There was an error checking if column %1.%2 exists! %3")
                 .arg(tableName, columnName, dbqt::describe(error))
@@ -1001,7 +984,7 @@ bool Database::stampGeneration()
     if (current == CasSchema::kUserVersion) return true;
     db::Error error;
     connection().exec("PRAGMA user_version = " + std::to_string(CasSchema::kUserVersion), &error);
-    if (error)
+    if (error.code)
         JahLog::write(JahLog::legacy, JahLog::Level::Warning,
             QString("the library's generation could not be stamped (%1)").arg(dbqt::describe(error)));
     return !error;
@@ -1849,7 +1832,7 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
         dbqt::bindText(uquery, 1, guid);
         const bool ran = executeAndCheckQuery(uquery, "FetchUnlistedProjectPins");
         while (ran && uquery.next()) unlistedPins << dbqt::text(uquery, 0);
-        if (!ran || uquery.failed()) {
+        if (uquery.failed() || !ran) {   // failed() first: the look (the layer guard)
             JahLog::write(JahLog::legacy, JahLog::Level::Error, QString("deleteProject('%1'): its unlisted pinned rows could not be read - "
                                                                       "the project delete was rolled back.").arg(guid));
             return false;   // ~DbTransaction rolls back
@@ -1907,7 +1890,7 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
         QStringList owned;
         const bool ran = executeAndCheckQuery(oquery, "FetchUnpinnedProjectRows");
         while (ran && oquery.next()) owned << dbqt::text(oquery, 0);
-        if (!ran || oquery.failed()) reaped = false;   // a list cut short is a failed reap: rolled back below
+        if (oquery.failed() || !ran) reaped = false;   // failed() first: the look;   // a list cut short is a failed reap: rolled back below
         for (const QString &row : std::as_const(owned))
             reaped = deleteAssetRow(row, /*force*/ true, &scrubs) && reaped;
     }
@@ -1954,7 +1937,7 @@ bool Database::clearGeneration()
 {
 	db::Error error;
 	connection().exec("PRAGMA user_version = 0", &error);
-	if (error)
+	if (error.code)
 		JahLog::write(JahLog::legacy, JahLog::Level::Warning,
 		    QString("the library's generation could not be cleared (%1)").arg(dbqt::describe(error)));
 	return !error;
@@ -3195,7 +3178,7 @@ int Database::countAssetsInCollections(const QVector<int> &collectionIds)
 
     db::Error error;
     if (query.step(&error)) return int(query.int64(0));
-    if (error) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "countAssetsInCollections query failed! " + dbqt::describe(error));
+    if (error.code) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "countAssetsInCollections query failed! " + dbqt::describe(error));
 
     return 0;
 }
@@ -4057,7 +4040,7 @@ QString Database::fetchObjectMesh(const QString &guid, const int ertype, const i
 
 	db::Error error;
 	if (query.step(&error)) return dbqt::text(query, 0);
-	if (error) {
+	if (error.code) {
 		JahLog::write(JahLog::legacy, JahLog::Level::Warning,
 			"There was an error fetching a guid" + dbqt::describe(error)
 		);
