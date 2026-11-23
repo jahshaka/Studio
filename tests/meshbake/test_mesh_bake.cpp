@@ -2064,6 +2064,50 @@ static int lockedPositionsKept()
                                            { "rough sheet (96 x 96, UV charts)", dagroot::roughSheet() } });
 }
 
+/// `--dag-stats-result` (the row bake.dag_stats_result, NOQT-CORE-1 stage 2): THE CLUSTER DAG's STATS ARE A RESULT OF
+/// THE BAKE (a tool reads them on the Model, never from the bake's log line): a bake of scaled_two_meshes.glb carries ONE
+/// ClusterDagStats a mesh, each describing the DAG its own mesh carries (clusters and groups equal to the mesh's
+/// clusterDag) with its time measured (msTotal > 0 for a mesh with a DAG); a READ of that bake's blob carries none (the
+/// stats describe the run, never serialized). CONTROL: at least one mesh has a DAG (clusters > 0).
+static int dagStatsResult()
+{
+    const QString path = fixture(QStringLiteral("tests/importer/fixtures/scaled_two_meshes.glb"));
+    const QString fp = iris::MeshBake::fingerprintFor(QStringLiteral("0123456789abcdef").repeated(4));
+    QTemporaryDir scratch;
+    const iris::MeshBake::Model m = iris::MeshBake::buildFromFile(path, fp, scratch.path());
+    CHECK_LOUD(m.valid && !m.meshes.isEmpty(), "scaled_two_meshes.glb bakes");
+    if (!m.valid || m.meshes.isEmpty()) { std::printf("FAILED: %d of %d check(s)\n", failures, checks); return 1; }
+    char msg[200];
+    std::snprintf(msg, sizeof(msg), "one ClusterDagStats a mesh (%zu stats, %d meshes)", m.dagStats.size(),
+                  int(m.meshes.size()));
+    CHECK_LOUD(m.dagStats.size() == size_t(m.meshes.size()), msg);
+    int withDag = 0, unequal = 0, untimed = 0;
+    for (size_t i = 0; i < m.dagStats.size() && i < size_t(m.meshes.size()); ++i) {
+        const iris::MeshBake::ClusterDagStats &st = m.dagStats[i];
+        const iris::MeshClusterDag &dag = m.meshes.at(int(i))->clusterDag;
+        std::printf("   mesh %zu: stats %d clusters, %d groups, %.3f ms; its DAG %d clusters, %d groups\n", i, st.clusters,
+                    st.groups, st.msTotal, int(dag.clusters.size()), int(dag.groups.size()));
+        if (st.clusters != int(dag.clusters.size()) || st.groups != int(dag.groups.size())) ++unequal;
+        if (st.clusters > 0) {
+            ++withDag;
+            if (!(st.msTotal > 0.0)) ++untimed;
+        }
+    }
+    std::snprintf(msg, sizeof(msg), "the control: a mesh with a DAG (%d)", withDag);
+    CHECK_LOUD(withDag > 0, msg);
+    std::snprintf(msg, sizeof(msg), "each mesh's stats are its own DAG's (%d unequal)", unequal);
+    CHECK_LOUD(unequal == 0, msg);
+    std::snprintf(msg, sizeof(msg), "each DAG's time is measured (%d with msTotal 0)", untimed);
+    CHECK_LOUD(untimed == 0, msg);
+    const iris::MeshBake::Model read = iris::MeshBake::deserialize(iris::MeshBake::serialize(m), fp);
+    std::snprintf(msg, sizeof(msg), "a read of the blob carries no stats (valid %d, %zu stats)", int(read.valid),
+                  read.dagStats.size());
+    CHECK_LOUD(read.valid && read.dagStats.empty(), msg);
+    if (failures) std::printf("FAILED: %d of %d check(s)\n", failures, checks);
+    else          std::printf("ALL %d CHECKS PASSED\n", checks);
+    return failures ? 1 : 0;
+}
+
 /// `--dag-levels <model> <out.tsv> [threads] [--mesh i,j]`: THE DAG PER MESH AND PER LEVEL (the lead's measuring tool,
 /// rewritten for ATOM-2's builder): every mesh of the file through the bake's own DAG build; per level the groups
 /// formed (reductions / not simplified / carried / the empty top), the level-d surface's triangles (the uniform cut
@@ -3232,6 +3276,7 @@ int main(int argc, char **argv)
     }
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-reaches-root")) return dagReachesRoot();
     if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--locked-positions-kept")) return lockedPositionsKept();
+    if (argc > 1 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-stats-result")) return dagStatsResult();
     if (argc > 3 && QString::fromLocal8Bit(argv[1]) == QStringLiteral("--dag-levels")) {
         // [threads] [--mesh i,j,...]
         int threads = 4;

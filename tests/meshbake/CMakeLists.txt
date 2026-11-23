@@ -141,6 +141,15 @@ set_tests_properties(bake.dag_reaches_root PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
 jah_no_display(bake.dag_reaches_root)
 
+# bake.dag_stats_result (NOQT-CORE-1 stage 2): THE CLUSTER DAG's STATS ARE A RESULT OF THE BAKE (a tool never reads a log
+# line: the scale row reads Model::dagStats) - one stats a mesh, each its own mesh's DAG, its time measured; a read of
+# the blob carries none. A CPU row: FRAMES 0.
+add_test(NAME bake.dag_stats_result COMMAND $<TARGET_FILE:test_mesh_bake> --dag-stats-result
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(bake.dag_stats_result PROPERTIES
+    ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "meshbake" JAHSHAKA_TEST_FRAMES 0)
+jah_no_display(bake.dag_stats_result)
+
 # meshbake.archive_bakes.import / .rebuild / .missing (FORWARD-ONLY-1 item 1): an ARCHIVE IMPORT bakes every model it
 # brings (archives carry no bakes), so a fresh library that imports the shipped samples opens them from bakes with ZERO
 # parses; with the bakes gone the open rebuilds them from their sources; with the sources gone too the world opens with
