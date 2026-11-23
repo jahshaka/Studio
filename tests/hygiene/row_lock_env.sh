@@ -39,5 +39,14 @@ held=$(seen JAH_GPU_LOCK="$T/lock" JAH_GPU_LOCK_HELD=1 JAH_GPU_NO_SCOPE=1)
 nest=$(seen JAH_GPU_LOCK="$T/lock" JAH_GPU_LOCK_HELD=1 JAH_GPU_HOLD=jahgpu-toy)
 want "$(case "$own" in *unset*) ;; *) [ "$own" = "$held" ] && [ "$own" = "$nest" ] && echo 1 ;; esac)" \
      "(3) the two doors give a hold's command one environment: its own door '$own', under a holder '$held', nested '$nest'"
+# (4) NO HOLD's COMMAND REACHES A DEBUGINFOD SERVER (RIG-DEBUGINFOD-1, URGENT #233: the box's login shells set DEBUGINFOD_URLS and
+# nsys under a card hold fetched 41 symbol files through it): started with the variable set, a hold's command sees it UNSET through
+# all three doors (rig.sh run's own `env -u` needs a live display this row has not; it passes through this same lock)
+dbg() { env "$@" DEBUGINFOD_URLS=https://debuginfod.invalid "$LOCKSH" --label E sh -c 'echo "${DEBUGINFOD_URLS-unset}"'; }
+d_own=$(dbg -u JAH_GPU_LOCK_HELD -u DISPLAY JAH_GPU_LOCK="$T/lock" JAH_GPU_NO_SCOPE=1)
+d_held=$(dbg -u DISPLAY JAH_GPU_LOCK="$T/lock" JAH_GPU_LOCK_HELD=1 JAH_GPU_NO_SCOPE=1)
+d_nest=$(dbg -u DISPLAY JAH_GPU_LOCK="$T/lock" JAH_GPU_LOCK_HELD=1 JAH_GPU_HOLD=jahgpu-toy)
+want "$([ "$d_own $d_held $d_nest" = "unset unset unset" ] && echo 1)" \
+     "(4) a hold started with DEBUGINFOD_URLS set: its command sees it unset through each door ('$d_own' '$d_held' '$d_nest')"
 echo "tooling.row_lock_env: $([ $fails = 0 ] && echo PASS || echo "FAIL ($fails)")"
 exit $((fails > 0))
