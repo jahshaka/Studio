@@ -1473,8 +1473,16 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
         // `material.apply` and the tray's double-click. A DROP from the library
         // is not this door (MATERIAL-DROP-1, the owner 2026-09-28): it always
         // makes a fresh, pristine copy — dropMaterial.
+        // A READ THAT FAILED IS NO "NO COPY" (NOQT-DATABASE-1 stage 2): the shipped master would be worn in place of
+        // the project's own copy - refused, said by name.
+        bool read = true;
         const QString mine = presetedit::projectCopyOf(
-            db, project, MaterialPresetAssets::guidFor(presetOrGuid));
+            db, project, MaterialPresetAssets::guidFor(presetOrGuid), &read);
+        if (!read) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                "applyMaterial: '" + presetOrGuid + "' was NOT applied - whether this project has its own copy could not be read");
+            return false;
+        }
         if (!mine.isEmpty()) return applyMaterialAsset(mine, target);
         // ONE IMPORTER AT A TIME (see MaterialPresetSeeder::finishNow): a
         // drop that beats the launch seed takes the job over rather than

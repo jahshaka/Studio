@@ -1867,14 +1867,22 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
     // pins has nothing left to serve — and, being invisible, nothing could
     // ever delete it again while its asset_files rows kept its bytes
     // unreclaimable. Collected BEFORE the pins go.
+    // A LIST THAT COULD NOT BE READ IS NO "NONE" (NOQT-DATABASE-1 stage 2, the sweep's f): the delete would commit
+    // and leave every unlisted row it missed unpinned and undeletable - refused (rolled back) by name, before the
+    // pins go.
     QStringList unlistedPins;
     {
         DbQuery uquery(connection(), "SELECT PA.asset_guid FROM project_assets PA "
                        "JOIN assets A ON A.guid = PA.asset_guid "
                        "WHERE PA.project_guid = ? AND A.listed = 0");
         dbqt::bindText(uquery, 1, guid);
-        if (executeAndCheckQuery(uquery, "FetchUnlistedProjectPins"))
-            while (uquery.next()) unlistedPins << dbqt::text(uquery, 0);
+        const bool ran = executeAndCheckQuery(uquery, "FetchUnlistedProjectPins");
+        while (ran && uquery.next()) unlistedPins << dbqt::text(uquery, 0);
+        if (!ran || uquery.failed()) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Error, QString("deleteProject('%1'): its unlisted pinned rows could not be read - "
+                                                                      "the project delete was rolled back.").arg(guid));
+            return false;   // ~DbTransaction rolls back
+        }
     }
 
     DbQuery pquery(connection(), "DELETE FROM project_assets WHERE project_guid = ?");
@@ -1926,10 +1934,9 @@ bool Database::deleteProject(const QString &guid, QVector<PendingAssetScrub> *de
         oquery.bindInt(3, static_cast<int>(assethome::StoredProject));
         dbqt::bindText(oquery, 4, guid);
         QStringList owned;
-        if (executeAndCheckQuery(oquery, "FetchUnpinnedProjectRows"))
-            while (oquery.next()) owned << dbqt::text(oquery, 0);
-        else
-            reaped = false;
+        const bool ran = executeAndCheckQuery(oquery, "FetchUnpinnedProjectRows");
+        while (ran && oquery.next()) owned << dbqt::text(oquery, 0);
+        if (!ran || oquery.failed()) reaped = false;   // a list cut short is a failed reap: rolled back below
         for (const QString &row : std::as_const(owned))
             reaped = deleteAssetRow(row, /*force*/ true, &scrubs) && reaped;
     }
@@ -3626,14 +3633,17 @@ bool Database::writeExportCatalog(const QString &outDir, const ExportCatalog &ca
     // close + unregister: ~ScopedConnection
 }
 
-bool Database::checkIfDependencyExists(const QString& depender, const QString& dependee)
+bool Database::checkIfDependencyExists(const QString& depender, const QString& dependee, bool *readOk)
 {
 	db::Statement query(connection(), "SELECT 1 from dependencies WHERE depender = ? and dependee = ?");
 	dbqt::bindText(query, 1, depender);
 	dbqt::bindText(query, 2, dependee);
 	db::Error error;
 	if (query.step(&error)) return query.int64(0) != 0;
-	if (error) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error fetching a record " + dbqt::describe(error));
+	if (error) {
+		JahLog::write(JahLog::legacy, JahLog::Level::Warning, "There was an error fetching a record " + dbqt::describe(error));
+		if (readOk) *readOk = false;   // a failed read is no "no edge"
+	}
 	return false;
 }
 

@@ -71,14 +71,16 @@ QString masterOf(Database *db, const QString &guid);
 /// catalog has no index for it, so this is a walk of the material rows —
 /// meant for a test and for the "which of these is mine?" question, never for
 /// a per-frame path.
-QStringList copiesOf(Database *db, const QString &masterGuid);
+/// `readOk` (optional) is CLEARED when the walk could not be read: the empty answer is then no answer.
+QStringList copiesOf(Database *db, const QString &masterGuid, bool *readOk = nullptr);
 
 /// THIS PROJECT'S OWN COPY of the shipped preset `masterGuid` — the one it
 /// PINS — or an empty string. It is what "Wood PBR" means inside a project
 /// that has edited it, so the apply and the hover preview resolve a preset
 /// through here: dropping the shipped tile again must not put a SECOND "Wood
-/// PBR" in the project beside the user's own.
-QString projectCopyOf(Database *db, Project *project, const QString &masterGuid);
+/// PBR" in the project beside the user's own. `readOk` (optional) is CLEARED
+/// when the copies or their pins could not be read: "" is then no answer.
+QString projectCopyOf(Database *db, Project *project, const QString &masterGuid, bool *readOk = nullptr);
 
 /// WHY AN EDIT OF `guid` CANNOT HAPPEN AT ALL, in the user's words, or an
 /// empty string when it can. Today there is exactly one reason: a shipped

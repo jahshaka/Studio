@@ -45,7 +45,7 @@ QString masterOf(Database *db, const QString &guid)
     return MaterialBundle::presetMasterOf(db->fetchAsset(guid).properties);
 }
 
-QStringList copiesOf(Database *db, const QString &masterGuid)
+QStringList copiesOf(Database *db, const QString &masterGuid, bool *readOk)
 {
     QStringList out;
     if (!db || masterGuid.isEmpty()) return out;
@@ -65,18 +65,19 @@ QStringList copiesOf(Database *db, const QString &masterGuid)
             out << dbqt::text(query, 0);
     if (e) {   // a short list of copies is never the answer: none, said
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("presets: the copies of %1 could not be read: %2").arg(masterGuid, dbqt::describe(e)));
+        if (readOk) *readOk = false;
         return {};
     }
     return out;
 }
 
-QString projectCopyOf(Database *db, Project *project, const QString &masterGuid)
+QString projectCopyOf(Database *db, Project *project, const QString &masterGuid, bool *readOk)
 {
     if (!db || !project || project->getProjectGuid().isEmpty()) return QString();
     if (MaterialBundle::shippedPresetName(masterGuid).isEmpty()) return QString();
     const QString projectGuid = project->getProjectGuid();
-    for (const QString &candidate : copiesOf(db, masterGuid))
-        if (db->isAssetPinnedBy(projectGuid, candidate)) return candidate;
+    for (const QString &candidate : copiesOf(db, masterGuid, readOk))
+        if (db->isAssetPinnedBy(projectGuid, candidate, readOk)) return candidate;
     return QString();
 }
 
@@ -131,7 +132,16 @@ Target forEdit(Database *db, Project *project, const QString &guid,
     // whichever row the catalog listed first — so the edit could land on a copy
     // no mesh wears. ANSWERED, not copied: the project's material IS the copy.
     {
-        const QString mine = projectCopyOf(db, project, guid);
+        // ...AND A READ THAT FAILED IS NO "NOT YET" (NOQT-DATABASE-1 stage 2, the sweep's e): a second copy would be
+        // minted and pinned beside the project's own. Refused by name, nothing written.
+        bool read = true;
+        const QString mine = projectCopyOf(db, project, guid, &read);
+        if (!read) {
+            target.master = guid;
+            target.error = QObject::tr("whether this project already has its copy of '%1' could not be read - nothing "
+                                       "was copied").arg(MaterialBundle::shippedPresetName(guid));
+            return target;
+        }
         if (!mine.isEmpty()) {
             target.guid = mine;
             target.master = guid;

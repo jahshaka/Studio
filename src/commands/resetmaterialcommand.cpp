@@ -94,8 +94,17 @@ void ResetMaterialCommand::redo()
 
     // ...and the default's textures are recorded as used, remembering which of
     // those edges THIS redo made, so undo takes back exactly those.
+    // An edge whose existence could not be read is neither created nor recorded (the sweep's g): undo deletes the
+    // edges this redo records BY PAIR, and a duplicate recorded over an edge that was there took that edge with it.
     for (const QString &texture : defaultTextures) {
-        if (db->checkIfDependencyExists(nodeGuid, texture)) continue;
+        bool read = true;
+        if (db->checkIfDependencyExists(nodeGuid, texture, &read)) continue;
+        if (!read) {
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning,
+                QStringLiteral("Reset Material: whether '%1' already uses '%2' could not be read - that use was not "
+                               "recorded").arg(nodeGuid, texture));
+            continue;
+        }
         db->createDependency(static_cast<int>(ModelTypes::Object),
                              static_cast<int>(ModelTypes::Texture), nodeGuid, texture, projectGuid);
         createdDefaultEdges.append(texture);

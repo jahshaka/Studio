@@ -121,6 +121,9 @@ static int denyReads(void *, int action, const char *table, const char *column, 
     if (gDeny.mode == 4 && gDeny.inSelect && pins) return SQLITE_DENY;
     if (gDeny.mode == 5 && gDeny.inSelect && pins && column && std::strcmp(column, "oid_pin") == 0) return SQLITE_DENY;
     if (gDeny.mode == 6 && gDeny.inSelect && std::strcmp(table, "asset_files") == 0) return SQLITE_DENY;
+    if (gDeny.mode == 7 && gDeny.inSelect && std::strcmp(table, "assets") == 0 && column && std::strcmp(column, "listed") == 0)
+        return SQLITE_DENY;
+    if (gDeny.mode == 8 && gDeny.inSelect && std::strcmp(table, "dependencies") == 0) return SQLITE_DENY;
     return SQLITE_OK;
 }
 
@@ -1105,6 +1108,55 @@ int main(int argc, char **argv)
                 CHECK(pinOf(QStringLiteral("p18"), QStringLiteral("t18r")) == AssetCas::sourceOid(conn, QStringLiteral("t18r"))
                           && db.isAssetPinnedBy(QStringLiteral("p18"), QStringLiteral("t18r")),
                       "18: Reset Material's redo still pins the texture its undo took back");
+            }
+
+            // 19f (the sweep's f) A PROJECT DELETE WHOSE UNLISTED-PIN LIST COULD NOT BE READ is refused whole (mode 7:
+            //     `assets.listed` unread inside a SELECT, which only that list reads) - never committed with the
+            //     unlisted row it missed left unpinned and undeletable.
+            {
+                libraryRow(QStringLiteral("t19f"), false);
+                project(QStringLiteral("p19f"));
+                pin(QStringLiteral("p19f"), QStringLiteral("t19f"));
+                gDeny = Deny{ 7 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const bool deleted = db.deleteProject(QStringLiteral("p19f"));
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                bool projectRead = true;
+                const bool projectLeft = db.hasProjectRow(QStringLiteral("p19f"), &projectRead);
+                CHECK(!deleted && projectLeft && projectRead && db.isAssetPinnedBy(QStringLiteral("p19f"), QStringLiteral("t19f")),
+                      QStringLiteral("19f: a project delete whose unlisted pins could not be read is ROLLED BACK (answer %1, "
+                                     "project left %2, its pin left %3)")
+                          .arg(deleted).arg(projectLeft).arg(db.isAssetPinnedBy(QStringLiteral("p19f"), QStringLiteral("t19f")))
+                          .toUtf8().constData());
+                CHECK(db.deleteProject(QStringLiteral("p19f")) && !alive(QStringLiteral("t19f")),
+                      "19f: CONTROL: read, the same delete lands and reaps its unlisted row");
+            }
+
+            // 19g (the sweep's g) RESET MATERIAL's redo, "does the node already use the default's texture" unread:
+            //     nothing created or recorded - its undo (deleting what the redo recorded, by pair) then leaves the
+            //     edge that was there.
+            {
+                texture(QStringLiteral("t19g"));
+                db.createProject(QStringLiteral("p19g"), QStringLiteral("p19g"));
+                Project owner;
+                owner.setProjectGuid(QStringLiteral("p19g"));
+                const iris::MeshNodePtr node = iris::MeshNode::create();
+                db.createDependency(static_cast<int>(ModelTypes::Object), static_cast<int>(ModelTypes::Texture),
+                                    node->getGUID(), QStringLiteral("t19g"), QStringLiteral("p19g"));
+                const auto edges = [&]() {
+                    return countWhere("SELECT COUNT(*) FROM dependencies WHERE depender = ? AND dependee = ?",
+                                      { node->getGUID(), QStringLiteral("t19g") });
+                };
+                ResetMaterialCommand reset(&db, &owner, node, iris::MaterialPtr(), { QStringLiteral("t19g") }, {});
+                gDeny = Deny{ 8 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                reset.redo();
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                const int afterRedo = edges();
+                reset.undo();
+                CHECK(afterRedo == 1 && edges() == 1,
+                      QStringLiteral("19g: an edge whose existence could not be read is neither duplicated nor taken by the undo "
+                                     "(after redo %1, after undo %2; 1 and 1)").arg(afterRedo).arg(edges()).toUtf8().constData());
             }
 
             // 17.6 (F6) A SIDECAR THAT PARSES BUT THAT THE REBUILD SKIPS (no home in this format, no origin) keeps every

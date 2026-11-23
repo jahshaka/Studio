@@ -920,7 +920,8 @@ public:
 	QString getAuthorName();
     bool switchAssetCollection(const int, const QString&);
 
-	bool checkIfDependencyExists(const QString& depender, const QString& dependee);
+	/// `readOk` (optional) is CLEARED when the read failed: false is then no answer.
+	bool checkIfDependencyExists(const QString& depender, const QString& dependee, bool *readOk = nullptr);
     bool checkIfProjectVersionSupported(const QString& pathToDb);
 
     /// Is a project archive's recorded CONTENT_VERSION string ("0.9.1b",
