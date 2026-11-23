@@ -79,7 +79,9 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
 /// companion material (a re-add of the same image must not mint a second
 /// material). Per project since ASSETS-SCOPE-1: a companion is its project's
 /// own row, so another project's companion is no answer for this one.
-bool hasCompanionMaterial(Database *db, const QString &textureGuid, const QString &projectGuid);
+/// `readOk` is CLEARED by a read that failed (NOQT-DATABASE-1 stage 2, the second confirm's finding 3): its false is
+/// then no "none" - the caller refuses rather than mint a second companion.
+bool hasCompanionMaterial(Database *db, const QString &textureGuid, const QString &projectGuid, bool *readOk);
 
 /// The AUTO-MINTED companions of a texture: Material rows STAMPED
 /// `companionOf: <textureGuid>` by createMaterialAsset — the stamp is the

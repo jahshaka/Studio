@@ -100,7 +100,9 @@ QString stampedTextureFor(Database *db, const QString &oid, bool *readOk)
     // material picker's import uses (ShippedAssets::libraryTextureFor): an
     // imported model's embedded copy of the same image is a 'texture'-role
     // file of an Object, not a texture a material may name.
-    db::Statement query(conn, dbqt::utf8("SELECT AF.asset_guid FROM asset_files AF "
+    // EACH ROW's STAMP IS READ BY THE SAME STATEMENT (the second confirm's W3): a per-row read whose failure answered
+    // "not a member" made the import mint the duplicate this function exists to prevent.
+    db::Statement query(conn, dbqt::utf8("SELECT AF.asset_guid, A.properties FROM asset_files AF "
                   "JOIN assets A ON A.guid = AF.asset_guid "
                   "WHERE AF.oid = ? AND AF.role = 'source' AND A.type = ? "
                   "AND A.listed = 1 "
@@ -112,10 +114,8 @@ QString stampedTextureFor(Database *db, const QString &oid, bool *readOk)
     dbqt::bindText(query, 1, oid);
     query.bindInt(2, static_cast<int>(ModelTypes::Texture));
     db::Error e;
-    while (query.step(&e)) {
-        const QString guid = dbqt::text(query, 0);
-        if (isStamped(db, guid)) return guid;
-    }
+    while (query.step(&e))
+        if (isStamped(dbqt::bytes(query, 1))) return dbqt::text(query, 0);
     if (e && readOk) *readOk = false;   // a failed read is no "no member holds it"
     return QString();
 }

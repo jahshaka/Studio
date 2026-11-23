@@ -2828,10 +2828,16 @@ bool EditorApi::dragAsset(const QString &guid, double x, double y, const QVarian
         type = row.guid.isEmpty() ? static_cast<int>(ModelTypes::Material) : row.type;
     // WHERE THE TILE CAME FROM (MATERIAL-DROP-1): the tray that holds it.
     const QString projectGuid = host.project ? host.project->getProjectGuid() : QString();
+    // AN UNREAD PIN IS NO "FROM THE LIBRARY" (NOQT-DATABASE-1 stage 2, the second confirm's W3): without `from`, the
+    // origin is the project's pin - a read that failed refuses the drag by name.
+    bool pinRead = true;
+    const bool pinned = !options.contains(QStringLiteral("from")) && host.db && !projectGuid.isEmpty()
+                        && host.db->isAssetPinnedBy(projectGuid, guid, &pinRead);
+    if (!pinRead)
+        return fail(QStringLiteral("editor.dragAsset: whether this project holds '%1' could not be read - pass "
+                                   "{from: 'library' | 'project'}").arg(guid));
     const QString from = options.value(QStringLiteral("from"),
-                                       host.db && !projectGuid.isEmpty()
-                                               && host.db->isAssetPinnedBy(projectGuid, guid)
-                                           ? QStringLiteral("project") : QStringLiteral("library"))
+                                       pinned ? QStringLiteral("project") : QStringLiteral("library"))
                              .toString().toLower();
     if (from != QLatin1String("library") && from != QLatin1String("project"))
         return fail(QStringLiteral("editor.dragAsset: from must be 'library' or 'project', not '%1'")

@@ -157,9 +157,9 @@ QString createMaterialAsset(const QString &textureGuid, Database *db,
     return materialGuid;
 }
 
-bool hasCompanionMaterial(Database *db, const QString &textureGuid, const QString &projectGuid)
+bool hasCompanionMaterial(Database *db, const QString &textureGuid, const QString &projectGuid, bool *readOk)
 {
-    if (!db) return false;
+    if (!db) { if (readOk) *readOk = false; return false; }
     db::Statement query(db->connection(), "SELECT 1 FROM dependencies D JOIN assets A ON A.guid = D.depender "
                   "WHERE D.dependee = ? AND D.depender_type = ? "
                   "AND ((A.project_guid = ? AND A.view_filter = ?) "
@@ -172,7 +172,9 @@ bool hasCompanionMaterial(Database *db, const QString &textureGuid, const QStrin
     query.bindInt(4, static_cast<int>(assethome::StoredProject));
     dbqt::bindText(query, 5, projectGuid);
     db::Error e;
-    return query.step(&e);
+    if (query.step(&e)) return true;
+    if (e && readOk) *readOk = false;   // a failed read is no "no companion"
+    return false;
 }
 
 QHash<QString, QStringList> companionMaterials(Database *db, const QStringList &textureGuids)

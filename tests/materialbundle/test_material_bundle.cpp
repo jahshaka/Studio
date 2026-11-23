@@ -33,6 +33,7 @@
 #include <QColor>
 #include <QDir>
 #include <QFile>
+#include <QImage>
 #include <QJsonArray>
 #include <QJsonDocument>
 #include <QJsonObject>
@@ -126,6 +127,13 @@ static int denyReads(void *, int action, const char *table, const char *column, 
         return SQLITE_DENY;
     if (gDeny.mode == 8 && gDeny.inSelect && std::strcmp(table, "dependencies") == 0) return SQLITE_DENY;
     if (gDeny.mode == 9 && gDeny.inSelect && std::strcmp(table, "asset_files") == 0 && column && std::strcmp(column, "role") == 0)
+        return SQLITE_DENY;
+    // mode 10: `dependencies.depender_type` inside a SELECT (an image's "does the project hold a companion"); mode 11:
+    // `assets.properties` inside a SELECT (a row's own "is it a member" read).
+    if (gDeny.mode == 10 && gDeny.inSelect && std::strcmp(table, "dependencies") == 0 && column
+        && std::strcmp(column, "depender_type") == 0)
+        return SQLITE_DENY;
+    if (gDeny.mode == 11 && gDeny.inSelect && std::strcmp(table, "assets") == 0 && column && std::strcmp(column, "properties") == 0)
         return SQLITE_DENY;
     return SQLITE_OK;
 }
@@ -1046,17 +1054,24 @@ int main(int argc, char **argv)
                 CHECK(unresolved.isEmpty(), QStringLiteral("17.2j: a pin read that FAILED resolves nothing (got '%1')")
                                                 .arg(unresolved).toUtf8().constData());
 
-                // (the sweep's site a) a member's library version unread: addToProject adds NOTHING - never an empty pin
-                // over a real one.
+                // (the sweep's site a; re-derived for the second confirm's W4) a member's library version unread:
+                // addToProject adds NOTHING - never an empty pin. On a material and member the project does NOT hold yet
+                // (a held pin is kept by ensurePin whatever the read said, so only an unheld one can show a pin written).
+                texture(QStringLiteral("t17a"));
+                const QString m17a = material(QStringLiteral("m17a"), QStringLiteral("t17a"));
+                CHECK(!m17a.isEmpty() && !db.isAssetPinnedBy(QStringLiteral("p17w"), m17a)
+                          && !db.isAssetPinnedBy(QStringLiteral("p17w"), QStringLiteral("t17a")),
+                      "17.2a: CONTROL: neither the material nor its member is pinned by the project yet");
                 gDeny = Deny{ 6 };
                 sqlite3_set_authorizer(raw, denyReads, nullptr);
                 const ProjectAssets::Result added =
-                    ProjectAssets::addToProject(m17w, &db, &owner, ProjectAssets::AddKind::Direct);
+                    ProjectAssets::addToProject(m17a, &db, &owner, ProjectAssets::AddKind::Direct);
                 sqlite3_set_authorizer(raw, nullptr, nullptr);
-                const QString afterAdd = pinOf(QStringLiteral("p17w"), QStringLiteral("t17w"));
-                CHECK(!afterAdd.isEmpty() && added.error.contains(QStringLiteral("could not be read")),
-                      QStringLiteral("17.2a: an add whose library versions could not be read pins nothing (member pin '%1', "
-                                     "'%2')").arg(afterAdd, added.error).toUtf8().constData());
+                const bool anyPinned = db.isAssetPinnedBy(QStringLiteral("p17w"), m17a)
+                                    || db.isAssetPinnedBy(QStringLiteral("p17w"), QStringLiteral("t17a"));
+                CHECK(!anyPinned && added.error.contains(QStringLiteral("could not be read")),
+                      QStringLiteral("17.2a: an add whose library versions could not be read pins NOTHING (a pin written %1, "
+                                     "'%2')").arg(anyPinned).arg(added.error).toUtf8().constData());
 
                 texture(QStringLiteral("t17u"));
                 const QString m17u = material(QStringLiteral("m17u"), QStringLiteral("t17u"));
@@ -1203,6 +1218,87 @@ int main(int argc, char **argv)
                 memberstamp::stampedTextureFor(&db, t20oid, &stampRead);
                 sqlite3_set_authorizer(raw, nullptr, nullptr);
                 CHECK(!stampRead, "20k: a failed 'is it already a member' read clears readOk");
+
+                // 20k2 (the second confirm's W3): the row's OWN "is it a member" read - a stamped texture whose
+                //      properties read fails (mode 11) is no "not a member": readOk cleared, nothing answered.
+                texture(QStringLiteral("t20s"));
+                memberstamp::stamp(&db, QStringLiteral("t20s"), m20);
+                const QString t20sOid = AssetCas::sourceOid(conn, QStringLiteral("t20s"));
+                bool memberRead = true;
+                const QString held = memberstamp::stampedTextureFor(&db, t20sOid, &memberRead);
+                CHECK(held == QStringLiteral("t20s") && memberRead,
+                      QStringLiteral("20k2: CONTROL: the stamped texture answers ('%1')").arg(held).toUtf8().constData());
+                gDeny = Deny{ 11 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const QString unread = memberstamp::stampedTextureFor(&db, t20sOid, &memberRead);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(!memberRead && unread.isEmpty(),
+                      QStringLiteral("20k2: a member whose own properties could not be read clears readOk (readOk %1, '%2')")
+                          .arg(memberRead).arg(unread).toUtf8().constData());
+            }
+
+            // 21. AN IMAGE's COMPANION IS NEVER MINTED TWICE ON A FAILED READ (the second confirm's finding 3): a texture
+            //     added Direct gets its companion material once; a second add whose "does the project already hold a
+            //     companion" read fails (mode 10) is REFUSED by name before its first pin - no second companion.
+            {
+                // a decodable picture: the companion is made from the image itself (its alpha probe)
+                const QString picture = scratchDir.filePath(QStringLiteral("t21.png"));
+                QImage pixels(4, 4, QImage::Format_RGB32);
+                pixels.fill(QColor(200, 120, 40));
+                CHECK(pixels.save(picture, "PNG"), "21: CONTROL: the picture is written");
+                textureRow(db, QStringLiteral("t21"), QStringLiteral("t21.png"), storeRoot, picture);
+                db.createProject(QStringLiteral("p21"), QStringLiteral("p21"));
+                Project owner;
+                owner.setProjectGuid(QStringLiteral("p21"));
+                const auto companions = [&]() {
+                    return countWhere("SELECT COUNT(DISTINCT depender) FROM dependencies WHERE dependee = ? AND depender_type = ?",
+                                      { QStringLiteral("t21"), static_cast<int>(ModelTypes::Material) });
+                };
+                const ProjectAssets::Result first =
+                    ProjectAssets::addToProject(QStringLiteral("t21"), &db, &owner, ProjectAssets::AddKind::Direct);
+                const int before = companions();
+                CHECK(first.ok() && before == 1,
+                      QStringLiteral("21: CONTROL: an image added to a project gets ONE companion (%1; '%2')")
+                          .arg(before).arg(first.error).toUtf8().constData());
+                gDeny = Deny{ 10 };
+                sqlite3_set_authorizer(raw, denyReads, nullptr);
+                const ProjectAssets::Result again =
+                    ProjectAssets::addToProject(QStringLiteral("t21"), &db, &owner, ProjectAssets::AddKind::Direct);
+                sqlite3_set_authorizer(raw, nullptr, nullptr);
+                CHECK(companions() == before && !again.ok() && again.error.contains(QStringLiteral("could not be read")),
+                      QStringLiteral("21: an add whose companion read failed mints NO second companion and is refused by name "
+                                     "(companions %1, was %2; ok %3 '%4')")
+                          .arg(companions()).arg(before).arg(again.ok()).arg(again.error).toUtf8().constData());
+            }
+
+            // 22. ADD TO A PROJECT IS ALL OR NONE (the second confirm's W1): a closure whose LAST member's pin is refused
+            //     (a trigger raising on that pin's INSERT) pins NOTHING - never the members before it, which
+            //     PinAssetCommand's undo (it records only an answer that is ok) would never unpin.
+            {
+                texture(QStringLiteral("t22"));
+                const QString m22 = material(QStringLiteral("m22"), QStringLiteral("t22"));
+                db.createProject(QStringLiteral("p22"), QStringLiteral("p22"));
+                Project owner;
+                owner.setProjectGuid(QStringLiteral("p22"));
+                const QStringList closure = AssetHelper::fetchAssetAndAllDependencies(m22, &db);
+                CHECK(closure.size() == 2, QStringLiteral("22: CONTROL: the material's closure is two rows (%1)")
+                                               .arg(closure.join(QLatin1Char(','))).toUtf8().constData());
+                db::Error e;
+                conn.exec(("CREATE TEMP TRIGGER refuse22 BEFORE INSERT ON main.project_assets WHEN NEW.project_guid = 'p22' "
+                           "AND NEW.asset_guid = '" + closure.last().toStdString() + "' "
+                           "BEGIN SELECT RAISE(ABORT, 'injected: this pin is refused'); END").c_str(), &e);
+                const ProjectAssets::Result added = ProjectAssets::addToProject(m22, &db, &owner, ProjectAssets::AddKind::Direct);
+                conn.exec("DROP TRIGGER temp.refuse22", &e);
+                const bool firstPinned = db.isAssetPinnedBy(QStringLiteral("p22"), closure.first());
+                CHECK(!added.ok() && !firstPinned && added.pinnedGuids.isEmpty(),
+                      QStringLiteral("22: an add whose last pin failed pins NOTHING (ok %1, the first member pinned %2, "
+                                     "answered pinned '%3'; '%4')")
+                          .arg(added.ok()).arg(firstPinned).arg(added.pinnedGuids.join(QLatin1Char(','))).arg(added.error)
+                          .toUtf8().constData());
+                const ProjectAssets::Result retried = ProjectAssets::addToProject(m22, &db, &owner, ProjectAssets::AddKind::Direct);
+                CHECK(retried.ok() && db.isAssetPinnedBy(QStringLiteral("p22"), m22)
+                          && db.isAssetPinnedBy(QStringLiteral("p22"), QStringLiteral("t22")),
+                      "22: CONTROL: the same add, every pin allowed, pins both");
             }
 
             // 17.6 (F6) A SIDECAR THAT PARSES BUT THAT THE REBUILD SKIPS (no home in this format, no origin) keeps every

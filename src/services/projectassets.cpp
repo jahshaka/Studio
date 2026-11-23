@@ -99,13 +99,35 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
             return result;
         }
     }
-    for (int i = 0; i < members.size(); ++i) {
-        if (!AssetCas::ensurePin(conn, projectGuid, members.at(i), oids.at(i))) {
-            result.error = QStringLiteral("'%1' could not be pinned - the members after it were not added").arg(members.at(i));
+    // AN IMAGE's COMPANION (below) IS DECIDED BEFORE THE FIRST PIN TOO (the second confirm's finding 3): "does the
+    // project already hold one" unread is no "no" - a second companion would be minted and pinned. Refused by name.
+    const bool companionWanted = kind == AddKind::Direct && static_cast<ModelTypes>(record.type) == ModelTypes::Texture;
+    bool companionHeld = false;
+    if (companionWanted) {
+        bool read = true;
+        companionHeld = ImageMaterial::hasCompanionMaterial(db, guid, projectGuid, &read);
+        if (!read) {
+            result.error = QStringLiteral("whether this project already holds the material of '%1' could not be read - "
+                                          "nothing was added").arg(record.name);
             return result;
         }
-        result.pinnedGuids.append(members.at(i));
     }
+    // ALL THE PINS OR NONE (the second confirm's W1): ONE unit, so a pin refused partway leaves no earlier member
+    // pinned - nothing the caller (PinAssetCommand records only an answer that is ok) would ever take back.
+    {
+        DbTransaction pins(conn);
+        for (int i = 0; i < members.size(); ++i) {
+            if (!AssetCas::ensurePin(conn, projectGuid, members.at(i), oids.at(i))) {
+                result.error = QStringLiteral("'%1' could not be pinned - nothing was added").arg(members.at(i));
+                return result;   // the unit rolls back at its end
+            }
+        }
+        if (!pins.commit()) {
+            result.error = QStringLiteral("the project's pins could not be committed - nothing was added");
+            return result;
+        }
+    }
+    result.pinnedGuids = members;
 
     // Session registrations — the ORIGINAL guids, bytes CAS-resolved through
     // the fresh pins (identical to what the readers will resolve).
@@ -123,9 +145,7 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
     // either, and re-adding the same image is a no-op (a Material THIS
     // project holds already depends on the texture). The recursive addToProject cannot loop:
     // the companion is a Material, and Materials never auto-create.
-    if (kind == AddKind::Direct
-        && static_cast<ModelTypes>(record.type) == ModelTypes::Texture
-        && !ImageMaterial::hasCompanionMaterial(db, guid, projectGuid)) {
+    if (companionWanted && !companionHeld) {
         const QString materialGuid = ImageMaterial::createMaterialAsset(
             guid, db, project, assethome::project(projectGuid));
         if (!materialGuid.isEmpty()) {
