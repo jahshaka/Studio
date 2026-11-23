@@ -1561,6 +1561,9 @@ bool Session::stillness(const Command &c)
     spec.fovYDegrees = mCamera.node()->angle;
     StillnessRun run(*mEngine, *mScene, *mView);
     if (!run.begin(spec, err)) { labFail("LAB REFUSED %s\n", err.c_str()); return false; }
+    // SYNCHRONOUS ON THE HOST THREAD, BY PREMISE (Stillness.cpp, its restore): the frames below pump the window's input
+    // but no line of the lab can start a monitor capture inside the run (a key or a strip click runs its line, and none
+    // runs `monitor`) - the restore would take one for the run's own and switch it off.
     const double t0 = msSinceStart();
     Vec3 eye, target;
     while (!mQuit && run.nextPose(eye, target)) {

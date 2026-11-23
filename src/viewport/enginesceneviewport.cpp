@@ -591,6 +591,9 @@ bool EngineSceneViewport::runStillness(const jahshaka::engine::StillnessSpec &sp
     }
     jahshaka::engine::StillnessRun run(*mEngine, *mEngineScene, *view());
     if (!run.begin(spec, err)) return false;
+    // SYNCHRONOUS ON THE HOST THREAD, BY PREMISE (Stillness.cpp, its restore): no event is pumped between the frames
+    // below, so no host call can start a frame-monitor capture inside the run - the restore would take it for the
+    // run's own and switch it off. Making this loop asynchronous breaks that premise first.
     jahshaka::engine::Vec3 eye, target;
     while (run.nextPose(eye, target)) {
         EditorCameraPose pose;

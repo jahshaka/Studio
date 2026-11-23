@@ -95,6 +95,15 @@ for (var w = 0; w < 2; ++w) {
 assert(typeof r.tsv === "string" && r.tsv.length > 0, "the TSV path: " + r.tsv);
 assert(r.path.directEqual.length >= 1, "the path check read the cascades: " + JSON.stringify(r.path));
 
+// THE RUN LEAVES THE MONITOR AS IT FOUND IT (LAB-SCRIPTS-1's feature end, the lead's ruling): no capture ran before it,
+// so after it nothing records - the capture service idle AND the engine's own monitor off (its level the host's record,
+// its listeners the applied state: before the fix the run switched it on from inside a request and its restore never
+// switched it off - the app left recording after world.stillness).
+var st0 = perf.status();
+assert(st0.recording === false && st0.engine.level === "off" && st0.engine.attachedListeners === 0,
+       "after an uncaptured run nothing records: " + JSON.stringify({recording: st0.recording, level: st0.engine.level,
+                                                                     listeners: st0.engine.attachedListeners}));
+
 // THE DOOR BESIDE A HOST'S CAPTURE (PHOTON-2 round 2, G7): a perf.capture running before the run is never refused nor
 // stopped - the door reads its own copy of the records (the tee), leaves the monitor at the level it found, and its
 // cost line counts the run's frames only (a tail frame it renders while a record is owed is not the run's work).

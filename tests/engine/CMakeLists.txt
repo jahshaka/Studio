@@ -266,6 +266,25 @@ jah_gpu_row(frame.monitor_pop CLASS engine FRAMES 280
 set_tests_properties(frame.monitor_pop PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_tsan_render(engine.error_door frame.monitor_pop)
 
+# frame.stillness_monitor (LAB-SCRIPTS-1's feature end, the lead's ruling (b)) — A STILLNESS RUN LEAVES THE FRAME MONITOR AT
+# THE LEVEL IT FOUND in the app's shape (render thread, host records): the host's record and the applied level equal
+# before, during and after a run, twice in one session, and a host's capture left running (test_engine_stillness_monitor.cpp
+# says the laws). An empty scene's 3 frames, then three runs' frames.
+add_executable(test_engine_stillness_monitor test_engine_stillness_monitor.cpp)
+set_target_properties(test_engine_stillness_monitor PROPERTIES
+    AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17 CXX_STANDARD_REQUIRED ON
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_compile_definitions(test_engine_stillness_monitor PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}"
+    JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+target_link_libraries(test_engine_stillness_monitor PRIVATE JahshakaEngine)
+add_dependencies(test_engine_stillness_monitor JahshakaEngineMedia)
+jah_gpu_row(frame.stillness_monitor CLASS engine FRAMES 19
+         COMMAND test_engine_stillness_monitor
+         WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(frame.stillness_monitor PROPERTIES TIMEOUT 60 LABELS "engine")
+
 jah_tsan_render(frame.drag_latency frame.interpolation)   # the free-running fixtures: the host reads published() against a publishing render thread (decision 54)
 
 # THE GPU SCENE'S TABLES (lane GPU-SCENE-1; ENGINE V2's V2-2 pulled forward into
