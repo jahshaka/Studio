@@ -1914,9 +1914,10 @@ void AssetView::loadWaveform(const QString &guid, const QString &filePath)
 			return;
 		}
 		// persisted only over properties that were READ (B4's sweep): never a failed read's {} written over them
-		bool read = true;
-		QJsonObject props = QJsonDocument::fromJson(db->fetchAsset(guid, &read).properties).object();
-		if (read && !props.contains("waveform")) {
+		// ...nor an unreadable blob's {} (the third answer): the cache's write is skipped
+		const Database::StoredProperties stored = db->fetchAssetProperties(guid);
+		if (stored.isObject() && !stored.object.contains("waveform")) {
+			QJsonObject props = stored.object;
 			props["waveform"] = AudioPeaks::toJson(peaks);
 			db->updateAssetProperties(guid, QJsonDocument(props).toJson());
 		}
@@ -2213,9 +2214,10 @@ void AssetView::backfillMetadata(const QString &guid, int assetType)
 		// Persist on the UI thread (it owns the SQLite connection), guarded
 		// so a concurrent backfill (verb, second selection) wins only once.
 		// persisted only over properties that were READ (B4's sweep): never a failed read's {} written over them
-		bool read = true;
-		QJsonObject props = QJsonDocument::fromJson(db->fetchAsset(guid, &read).properties).object();
-		if (read && !props.contains("metadata")) {
+		// ...nor an unreadable blob's {} (the third answer): the cache's write is skipped
+		const Database::StoredProperties stored = db->fetchAssetProperties(guid);
+		if (stored.isObject() && !stored.object.contains("metadata")) {
+			QJsonObject props = stored.object;
 			props["metadata"] = meta;
 			db->updateAssetProperties(guid, QJsonDocument(props).toJson());
 		}

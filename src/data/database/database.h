@@ -15,6 +15,7 @@ For more information see the LICENSE file
 #include <QHash>
 #include <QSet>
 #include <QJsonArray>
+#include <QJsonObject>
 #include <QCryptographicHash>
 
 #include <functional>
@@ -631,6 +632,22 @@ public:
     /// when the read FAILED - its empty record is then no "no such row", and a caller that would write the row's
     /// fields back (a read-modify-write of `properties`) refuses.
     AssetRecord fetchAsset(const QString &guid, bool *readOk);
+    /// A row's stored `properties` AS AN OBJECT, with THREE answers (the lead's ruling after NOQT-DATABASE-1 stage 3's
+    /// audit): bytes that are not a JSON object are neither {} nor a failed read - a read-modify-write that met them as
+    /// {} wrote its own keys over the row's whole stored properties. Every read-modify-write of `properties` asks here
+    /// and writes only on Object: on NotAnObject it refuses (a command: `unreadablePropertiesText`) or skips (a marker or
+    /// a cache), and this read has already said so by name. An empty blob (a row with none) is an empty Object.
+    struct StoredProperties {
+        enum class State { Object, NotAnObject, ReadFailed };
+        State state = State::ReadFailed;
+        QJsonObject object;   ///< the row's properties (State::Object only)
+        bool isObject() const { return state == State::Object; }
+    };
+    StoredProperties fetchAssetProperties(const QString &guid);
+    /// The same parse of a row's `properties` bytes already in hand (an AssetRecord read before): Object or NotAnObject.
+    static StoredProperties parseProperties(const QByteArray &bytes, const QString &guid);
+    /// "the asset <guid>'s stored properties are not readable: nothing was changed" - the refusal's one text.
+    static QString unreadablePropertiesText(const QString &guid);
     QVector<AssetRecord> fetchAssetsForAssetView();
     /// Stored bytes per asset (sum of its linked CAS objects' sizes), for the
     /// Assets page's list view Size column. guid → bytes; assets with no

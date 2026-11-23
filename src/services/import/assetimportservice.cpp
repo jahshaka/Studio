@@ -862,8 +862,11 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
     out.sourcePath = sourcePath;
 
     // MERGED over the stored record, key by key: a caller sends only what it is
-    // changing, exactly as the dialog does when a user touches one field.
-    QJsonObject props = QJsonDocument::fromJson(record.properties).object();
+    // changing, exactly as the dialog does when a user touches one field. Over an unreadable blob (the third answer)
+    // the merge would write its keys over the row's whole stored properties: refused by name before any work.
+    const Database::StoredProperties stored = Database::parseProperties(record.properties, guid);
+    if (!stored.isObject()) return fail(Database::unreadablePropertiesText(guid));
+    QJsonObject props = stored.object;
     QJsonObject importRecord = props.value(QStringLiteral("import")).toObject();
     QJsonObject merged = importRecord.value(QStringLiteral("settings")).toObject();
     for (auto it = settings.constBegin(); it != settings.constEnd(); ++it)

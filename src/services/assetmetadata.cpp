@@ -364,7 +364,9 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
     const AssetRecord record = db->fetchAsset(guid);
     if (record.guid.isEmpty()) return QJsonObject();
 
-    QJsonObject props = QJsonDocument::fromJson(record.properties).object();
+    // An unreadable blob (the third answer) is described but never written over: the cache's write is skipped below.
+    const Database::StoredProperties stored = Database::parseProperties(record.properties, guid);
+    QJsonObject props = stored.object;
     if (props.contains("metadata")) return props["metadata"].toObject();
 
     const QString root = storeRoot.isEmpty() ? storeRootPath() : storeRoot;
@@ -378,7 +380,7 @@ QJsonObject AssetMetadata::ensure(Database *db, const QString &guid, const QStri
     if (meta["kind"].toString() == "video" && !meta.contains("duration")) return meta;
 
     props["metadata"] = meta;
-    db->updateAssetProperties(guid, QJsonDocument(props).toJson());
+    if (stored.isObject()) db->updateAssetProperties(guid, QJsonDocument(props).toJson());
     return meta;
 }
 

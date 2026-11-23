@@ -24,13 +24,6 @@ namespace {
 const QLatin1String kMemberKey("member");
 const QLatin1String kOriginKey("memberOf");
 
-/// `readOk` (when given) CLEARED by a read that failed: never written back as if it were the row's (B4's sweep).
-QJsonObject propertiesOf(Database *db, const QString &guid, bool *readOk = nullptr)
-{
-    if (!db) { if (readOk) *readOk = false; return QJsonObject(); }
-    return QJsonDocument::fromJson(db->fetchAsset(guid, readOk).properties).object();
-}
-
 }   // namespace
 
 namespace memberstamp {
@@ -38,7 +31,7 @@ namespace memberstamp {
 bool isStamped(Database *db, const QString &guid)
 {
     if (!db || guid.isEmpty()) return false;
-    return propertiesOf(db, guid).value(kMemberKey).toBool();
+    return db->fetchAssetProperties(guid).object.value(kMemberKey).toBool();
 }
 
 bool isStamped(const QByteArray &properties)
@@ -62,9 +55,11 @@ QByteArray stamped(const QByteArray &properties, const QString &materialGuid)
 bool stamp(Database *db, const QString &textureGuid, const QString &materialGuid)
 {
     if (!db || textureGuid.isEmpty()) return false;
-    bool read = true;
-    QJsonObject props = propertiesOf(db, textureGuid, &read);
-    if (!read) return false;   // a row's properties written back from a failed read would replace them whole
+    // A MARKER's WRITE SKIPS unless the row's properties READ AS AN OBJECT: a failed read's {} or an unreadable blob's
+    // {} written back would replace them whole (B4's sweep; the third answer).
+    const Database::StoredProperties stored = db->fetchAssetProperties(textureGuid);
+    if (!stored.isObject()) return false;
+    QJsonObject props = stored.object;
     if (props.value(kMemberKey).toBool()
         && !props.value(kOriginKey).toString().isEmpty())
         return true;   // already somebody's member; an origin never moves
@@ -77,9 +72,9 @@ bool stamp(Database *db, const QString &textureGuid, const QString &materialGuid
 bool unstamp(Database *db, const QString &guid)
 {
     if (!db || guid.isEmpty()) return false;
-    bool read = true;
-    QJsonObject props = propertiesOf(db, guid, &read);
-    if (!read) return false;
+    const Database::StoredProperties stored = db->fetchAssetProperties(guid);
+    if (!stored.isObject()) return false;   // as `stamp`: nothing is written over properties that did not read
+    QJsonObject props = stored.object;
     // BOTH KEYS, and nothing else in the row's properties: the reverse edit of
     // `stamp`. A row with neither key is already the user's — say yes and
     // write nothing (this runs on every import of content the library has).

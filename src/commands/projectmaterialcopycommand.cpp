@@ -90,13 +90,16 @@ void ProjectMaterialCopyCommand::redo()
         return;
     }
     if (!mMaster.isEmpty()) {
-        // A FAILED READ IS NEVER WRITTEN BACK (B4's sweep): the copy's properties would be replaced whole.
-        bool propsRead = true;
-        QJsonObject props = QJsonDocument::fromJson(mDb->fetchAsset(mCopyGuid, &propsRead).properties).object();
-        if (!propsRead) {
-            mError = QObject::tr("the copy's row could not be read - the copy was not made");
+        // A FAILED READ IS NEVER WRITTEN BACK (B4's sweep), NOR AN UNREADABLE BLOB (the third answer): the copy's
+        // properties would be replaced whole. Refused by name.
+        const Database::StoredProperties stored = mDb->fetchAssetProperties(mCopyGuid);
+        if (!stored.isObject()) {
+            mError = stored.state == Database::StoredProperties::State::NotAnObject
+                         ? Database::unreadablePropertiesText(mCopyGuid)
+                         : QObject::tr("the copy's row could not be read - the copy was not made");
             return;
         }
+        QJsonObject props = stored.object;
         props.insert(MaterialBundle::kPresetMasterKey, mMaster);
         mDb->updateAssetProperties(mCopyGuid, QJsonDocument(props).toJson());
     }

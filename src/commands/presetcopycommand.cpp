@@ -22,17 +22,6 @@ For more information see the LICENSE file
 #include "services/materialbundle.h"
 #include "services/projectassets.h"
 
-namespace {
-
-/// The row's `properties` JSON, as an object.
-QJsonObject propertiesOf(Database *db, const QString &guid, bool *readOk)
-{
-    if (!db) return QJsonObject();
-    return QJsonDocument::fromJson(db->fetchAsset(guid, readOk).properties).object();
-}
-
-} // namespace
-
 PresetCopyCommand::PresetCopyCommand(Database *db, Project *project, Redress redress,
                                      const QString &master)
     : QUndoCommand(QObject::tr("Edit material")),
@@ -108,14 +97,17 @@ void PresetCopyCommand::redo()
     // THE LINK BACK TO THE MASTER, on the row rather than in the definition:
     // it is a fact about this row in this library, it must survive every
     // later definition write, and it is what `presetedit::masterOf` reads.
-    // A FAILED READ IS NEVER WRITTEN BACK (B4's sweep): the copy's properties would be replaced whole.
-    bool propsRead = true;
-    QJsonObject props = propertiesOf(mDb, mCopyGuid, &propsRead);
-    if (!propsRead) {
-        mError = QObject::tr("the copy's row could not be read - the copy was not made");
+    // A FAILED READ IS NEVER WRITTEN BACK (B4's sweep), NOR AN UNREADABLE BLOB (the third answer): the copy's
+    // properties would be replaced whole. Refused by name.
+    const Database::StoredProperties stored = mDb->fetchAssetProperties(mCopyGuid);
+    if (!stored.isObject()) {
+        mError = stored.state == Database::StoredProperties::State::NotAnObject
+                     ? Database::unreadablePropertiesText(mCopyGuid)
+                     : QObject::tr("the copy's row could not be read - the copy was not made");
         mCopyGuid = mintedBefore;
         return;   // the unit rolls back
     }
+    QJsonObject props = stored.object;
     props.insert(MaterialBundle::kPresetMasterKey, mMaster);
     mDb->updateAssetProperties(mCopyGuid, QJsonDocument(props).toJson());
 

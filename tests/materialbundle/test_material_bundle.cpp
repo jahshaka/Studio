@@ -56,7 +56,9 @@
 #include "services/assetgc.h"
 #include "services/assetmigration.h"
 #include "data/database/casschema.h"
+#include "commands/presetcopycommand.h"
 #include "commands/resetmaterialcommand.h"
+#include "data/database/dbqt.h"
 #include "services/projectassets.h"
 #include "services/memberstamp.h"
 #include "modules/materials/core/bakedmembers.h"
@@ -1486,6 +1488,88 @@ int main(int argc, char **argv)
                 CHECK(!systems.isEmpty() && second.isEmpty() && folders == 1,
                       QStringLiteral("25d: a folder read that failed mints no second folder (answered '%1', folders %2)")
                           .arg(second).arg(folders).toUtf8().constData());
+            }
+
+            // 26. THE THIRD ANSWER (the lead's ruling after stage 3's audit): a row's `properties` whose bytes are NOT
+            //     A JSON OBJECT are neither {} nor a failed read. A read-modify-write that parsed them as {} wrote its
+            //     own keys over the row's whole stored properties. Every one now asks Database::fetchAssetProperties,
+            //     which answers NotAnObject: a marker's write SKIPS (26a: the member stamp, and its reverse), the
+            //     preset copy REFUSES by name (26b); nothing is written. The bytes are set by the test, as SQL.
+            {
+                const auto setRaw = [&](const QString &guid, const QByteArray &bytes) {
+                    db::Statement set(conn, "UPDATE assets SET properties = ? WHERE guid = ?");
+                    dbqt::bindBytes(set, 1, bytes);
+                    dbqt::bindText(set, 2, guid);
+                    db::Error e;
+                    return set.run(&e);
+                };
+                // 26a: two kinds of unreadable bytes (not JSON; JSON that is not an object): the stamp and the unstamp
+                //      answer no and write nothing - the bytes are the row's still.
+                const QByteArray blobs[] = { QByteArray("not json {"), QByteArray("[1, 2]") };
+                for (int i = 0; i < 2; ++i) {
+                    const QString guid = QStringLiteral("t26a%1").arg(i);
+                    texture(guid);
+                    const bool set = setRaw(guid, blobs[i]);
+                    const bool stamped = memberstamp::stamp(&db, guid, QStringLiteral("m26a"));
+                    const bool unstamped = memberstamp::unstamp(&db, guid);
+                    const QByteArray after = db.fetchAsset(guid).properties;
+                    CHECK(set && !stamped && !unstamped && after == blobs[i],
+                          QStringLiteral("26a: a stamp over properties that are not a JSON object writes NOTHING (set %1, "
+                                         "stamp %2, unstamp %3; the row holds '%4', was '%5')")
+                              .arg(set).arg(stamped).arg(unstamped).arg(QString::fromUtf8(after))
+                              .arg(QString::fromUtf8(blobs[i])).toUtf8().constData());
+                }
+                // 26a CONTROL: a well-formed blob is stamped as before, its other keys kept.
+                texture(QStringLiteral("t26c"));
+                setRaw(QStringLiteral("t26c"), QByteArray("{\"metadata\":{\"kind\":\"image\"}}"));
+                const bool stampedWell = memberstamp::stamp(&db, QStringLiteral("t26c"), QStringLiteral("m26a"));
+                const QJsonObject well = QJsonDocument::fromJson(db.fetchAsset(QStringLiteral("t26c")).properties).object();
+                CHECK(stampedWell && well.value(QStringLiteral("member")).toBool()
+                          && well.value(QStringLiteral("memberOf")).toString() == QStringLiteral("m26a")
+                          && well.contains(QStringLiteral("metadata")),
+                      QStringLiteral("26a: CONTROL: a well-formed blob is stamped, its metadata kept (%1)")
+                          .arg(QString::fromUtf8(QJsonDocument(well).toJson(QJsonDocument::Compact))).toUtf8().constData());
+                // ...and an EMPTY blob (a row with no properties: nothing stored to destroy) is an empty object, stamped.
+                texture(QStringLiteral("t26e"));
+                setRaw(QStringLiteral("t26e"), QByteArray());
+                const bool stampedEmpty = memberstamp::stamp(&db, QStringLiteral("t26e"), QStringLiteral("m26a"));
+                CHECK(stampedEmpty && memberstamp::isStamped(&db, QStringLiteral("t26e")),
+                      "26a: CONTROL: an empty blob reads as an empty object and is stamped");
+
+                // 26b: the preset copy whose freshly minted row's properties are unreadable (a TEMP trigger the test
+                //      sets on that project's insert) REFUSES by name and its unit rolls back: no copy row.
+                texture(QStringLiteral("t26b"));
+                const QString master = material(QStringLiteral("m26b"), QStringLiteral("t26b"));
+                const auto copiesIn = [&](const QString &projectGuid) {
+                    return countWhere(QStringLiteral("SELECT COUNT(*) FROM assets WHERE project_guid = ?"), { projectGuid });
+                };
+                // CONTROL: over well-formed properties the copy lands and names its master.
+                db.createProject(QStringLiteral("p26b"), QStringLiteral("p26b"));
+                Project landed;
+                landed.setProjectGuid(QStringLiteral("p26b"));
+                PresetCopyCommand control(&db, &landed, [](const QString &) {}, master);
+                control.redo();
+                const int linked = countWhere(QStringLiteral("SELECT COUNT(*) FROM assets WHERE project_guid = ? AND "
+                                                             "json_extract(properties, '$.presetMaster') = ?"),
+                                              { QStringLiteral("p26b"), master });
+                CHECK(!master.isEmpty() && control.error().isEmpty() && copiesIn(QStringLiteral("p26b")) == 1 && linked == 1,
+                      QStringLiteral("26b: CONTROL: the copy lands and names its master (error '%1', copies %2, linked %3)")
+                          .arg(control.error()).arg(copiesIn(QStringLiteral("p26b"))).arg(linked).toUtf8().constData());
+                db.createProject(QStringLiteral("p26u"), QStringLiteral("p26u"));
+                Project refusedIn;
+                refusedIn.setProjectGuid(QStringLiteral("p26u"));
+                db::Error trig;
+                conn.exec("CREATE TEMP TRIGGER t26_unreadable AFTER INSERT ON assets WHEN NEW.project_guid = 'p26u' "
+                          "BEGIN UPDATE assets SET properties = CAST('not json {' AS BLOB) WHERE rowid = NEW.rowid; END", &trig);
+                const bool armed = !trig.code;
+                PresetCopyCommand refused(&db, &refusedIn, [](const QString &) {}, master);
+                refused.redo();
+                conn.exec("DROP TRIGGER t26_unreadable", &trig);
+                CHECK(armed && refused.error().contains(QStringLiteral("stored properties are not readable"))
+                          && copiesIn(QStringLiteral("p26u")) == 0,
+                      QStringLiteral("26b: a preset copy over unreadable properties is REFUSED by name, nothing kept "
+                                     "(armed %1, error '%2', copies %3)")
+                          .arg(armed).arg(refused.error()).arg(copiesIn(QStringLiteral("p26u"))).toUtf8().constData());
             }
 
             // 17.6 (F6) A SIDECAR THAT PARSES BUT THAT THE REBUILD SKIPS (no home in this format, no origin) keeps every

@@ -222,11 +222,11 @@ Pinned importTextureContent(const QString &sourcePath, const QString &displayNam
     // One read, and a write only when the marker is missing: this runs when a
     // scene is built, not per frame.
     if (ownership == Ownership::Platform && !guid.isEmpty()) {
-        bool read = true;
-        const AssetRecord row = db->fetchAsset(guid, &read);
-        QJsonObject props = QJsonDocument::fromJson(row.properties).object();
-        // the marker is written only over properties that were READ (B4's sweep): never a failed read's {} over them
-        if (read && props.value(QStringLiteral("type")).toString().isEmpty()) {
+        // the marker is written only over properties that were READ (B4's sweep) AS AN OBJECT (the third answer):
+        // never a failed read's or an unreadable blob's {} over them
+        const Database::StoredProperties stored = db->fetchAssetProperties(guid);
+        QJsonObject props = stored.object;
+        if (stored.isObject() && props.value(QStringLiteral("type")).toString().isEmpty()) {
             props.insert(QStringLiteral("type"), QStringLiteral("platform"));
             db->updateAssetProperties(guid, QJsonDocument(props).toJson());
         }

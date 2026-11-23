@@ -308,7 +308,10 @@ QString commitSeed(Plan &plan, Database *db, QString *errorOut)
     if (!read)   // never written back from a failed read (B4's sweep): the row's import record would go
         return failed(QStringLiteral("the seed of '%1' landed, but its row could not be read to mark it")
                           .arg(QString::fromLatin1(plan.def->name)));
-    QJsonObject props = QJsonDocument::fromJson(row.properties).object();
+    // ...nor over an unreadable blob (the third answer): refused by name, as the failed read is.
+    const Database::StoredProperties stored = Database::parseProperties(row.properties, plan.guid);
+    if (!stored.isObject()) return failed(Database::unreadablePropertiesText(plan.guid));
+    QJsonObject props = stored.object;
     props.insert(QStringLiteral("type"), QStringLiteral("platform"));
     db->updateAssetProperties(plan.guid, QJsonDocument(props).toJson());
     return plan.guid;

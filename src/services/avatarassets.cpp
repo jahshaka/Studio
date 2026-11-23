@@ -377,8 +377,9 @@ QString AvatarAssets::save(const QString &guid, Scope scope,
                  qUtf8Printable(record.name), definition.name.c_str());
     // The metadata block describes the DEFINITION, so it is stale the moment
     // one is saved; drop it and let the lazy backfill recompute on demand.
-    {
-        QJsonObject props = QJsonDocument::fromJson(record.properties).object();
+    // Never over an unreadable blob (the third answer: said by name at the parse): the drop is skipped.
+    if (const Database::StoredProperties stored = Database::parseProperties(record.properties, guid); stored.isObject()) {
+        QJsonObject props = stored.object;
         props.remove(QStringLiteral("metadata"));
         db->updateAssetProperties(guid, QJsonDocument(props).toJson());
     }

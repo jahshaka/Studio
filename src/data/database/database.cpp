@@ -2561,6 +2561,38 @@ AssetRecord Database::fetchAsset(const QString &guid, bool *readOk)
     return AssetRecord();
 }
 
+Database::StoredProperties Database::fetchAssetProperties(const QString &guid)
+{
+    bool read = true;
+    const QByteArray bytes = fetchAsset(guid, &read).properties;
+    if (!read) return StoredProperties();   // ReadFailed: fetchAsset said it
+    return parseProperties(bytes, guid);
+}
+
+Database::StoredProperties Database::parseProperties(const QByteArray &bytes, const QString &guid)
+{
+    StoredProperties out;
+    if (bytes.trimmed().isEmpty()) {   // a row with no properties (or no row): nothing stored to destroy
+        out.state = StoredProperties::State::Object;
+        return out;
+    }
+    QJsonParseError parse;
+    const QJsonDocument doc = QJsonDocument::fromJson(bytes, &parse);
+    if (parse.error != QJsonParseError::NoError || !doc.isObject()) {
+        out.state = StoredProperties::State::NotAnObject;
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, unreadablePropertiesText(guid));
+        return out;
+    }
+    out.state = StoredProperties::State::Object;
+    out.object = doc.object();
+    return out;
+}
+
+QString Database::unreadablePropertiesText(const QString &guid)
+{
+    return QStringLiteral("the asset %1's stored properties are not readable: nothing was changed").arg(guid);
+}
+
 QMap<QString, qint64> Database::fetchAssetFileSizes()
 {
     DbQuery query(connection(),

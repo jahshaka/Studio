@@ -95,14 +95,14 @@ ImportMeshTail::Outcome ImportMeshTail::run(Database *db, IAssetViewer *viewer,
     if (db) {
         // Camera/orbit properties merged WITHOUT clobbering the pipeline's
         // "metadata"/"import" blocks (ASSETS_AUDIT.md finding 5).
-        bool read = true;
-        QJsonObject properties =
-            QJsonDocument::fromJson(db->fetchAsset(guid, &read).properties).object();
+        const Database::StoredProperties stored = db->fetchAssetProperties(guid);
+        QJsonObject properties = stored.object;
         const QJsonObject cameraProps = viewer->getSceneProperties();
         for (auto it = cameraProps.constBegin(); it != cameraProps.constEnd(); ++it)
             properties[it.key()] = it.value();
-        // never over a failed read (B4's sweep): the pipeline's metadata and import record would be replaced
-        if (read) db->updateAssetProperties(guid, QJsonDocument(properties).toJson());
+        // never over a failed read (B4's sweep) nor an unreadable blob (the third answer: said by name at the read):
+        // the pipeline's metadata and import record would be replaced
+        if (stored.isObject()) db->updateAssetProperties(guid, QJsonDocument(properties).toJson());
         else qWarning("import viewer: the row's properties could not be read - its camera was not saved");
     }
 
