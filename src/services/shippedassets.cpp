@@ -73,7 +73,7 @@ QString libraryTextureForOn(db::Connection &conn, const QString &oid, const QStr
     if (home.isProject()) dbqt::bindText(query, 5, home.projectGuid);
     db::Error e;
     if (query.step(&e)) return dbqt::text(query, 0);
-    if (e && readOk) *readOk = false;   // a failed read is no "not here": a second row would be minted
+    if (readOk && e) *readOk = false;   // a failed read is no "not here": a second row would be minted
     return QString();
 }
 

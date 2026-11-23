@@ -452,7 +452,7 @@ QString sourceOid(db::Connection &conn, const QString &guid, bool *readOk)
     dbqt::bindText(query, 1, guid);
     db::Error e;
     if (query.step(&e)) return dbqt::text(query, 0);
-    if (e && readOk) *readOk = false;   // a failed read is no "no bytes"
+    if (readOk && e) *readOk = false;   // a failed read is no "no bytes"
     return QString();
 }
 
@@ -479,8 +479,8 @@ QHash<QString, MemberPin> memberPins(db::Connection &conn, const QString &projec
         row.source = dbqt::text(query, 3);
         out.insert(dbqt::text(query, 0), row);
     }
-    if (e) {   // a short answer is no answer: a member it missed would be pinned at the library's version
-        if (readOk) *readOk = false;
+    if (e.code) {   // a short answer is no answer: a member it missed would be pinned at the library's version
+        if (readOk && e) *readOk = false;   // the look only when asked: unasked, the mark stands for the guard
         return {};
     }
     return out;
@@ -548,7 +548,7 @@ QString resolveSource(db::Connection &conn, const QString &root,
             return path;
         }
     }
-    if (e && readOk) *readOk = false;   // a failed read is no "no bytes"
+    if (readOk && e) *readOk = false;   // a failed read is no "no bytes"
     // No asset_files row (a DB-only asset) or an object that is not on disk
     // (offline root, purged store): nothing to resolve. The pre-CAS per-guid
     // folders are not read (FORWARD-ONLY-1).
@@ -786,7 +786,7 @@ QString pinnedOid(db::Connection &conn, const QString &projectGuid,
     dbqt::bindText(query, 2, assetGuid);
     db::Error e;
     if (query.step(&e)) return dbqt::text(query, 0);
-    if (e && readOk) *readOk = false;   // a failed read is no "no pin"
+    if (readOk && e) *readOk = false;   // a failed read is no "no pin"
     return QString();
 }
 
@@ -817,8 +817,8 @@ QString resolvePinned(db::Connection &conn, const QString &root,
             }
         }
         // ...AND ITS OBJECT's ROW UNREAD IS NO "PURGED" (B4's sweep): the library's bytes are not the project's.
-        if (e) {
-            if (readOk) *readOk = false;
+        if (e.code) {
+            if (readOk && e) *readOk = false;   // the look only when asked: unasked, the mark stands for the guard
             return QString();
         }
     }

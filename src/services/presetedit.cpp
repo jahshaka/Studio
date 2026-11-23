@@ -63,9 +63,9 @@ QStringList copiesOf(Database *db, const QString &masterGuid, bool *readOk)
     while (query.step(&e))
         if (MaterialBundle::presetMasterOf(dbqt::bytes(query, 1)) == masterGuid)
             out << dbqt::text(query, 0);
-    if (e) {   // a short list of copies is never the answer: none, said
+    if (e.code) {   // a short list of copies is never the answer: none, said
         JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("presets: the copies of %1 could not be read: %2").arg(masterGuid, dbqt::describe(e)));
-        if (readOk) *readOk = false;
+        if (readOk && e) *readOk = false;   // the look only when asked: unasked, the mark stands for the guard
         return {};
     }
     return out;

@@ -14,6 +14,12 @@ THE LIMITS, said (A GREEN IS NOT "NO LOG-ONLY LOOK ANYWHERE"): the row sees ONE 
 It does NOT see: the `else` of `if (!e)` (where that form's log sits); a compound condition; a ternary, `return e ? ...`;
 an Error tested inside a helper or lambda it was passed to; an `auto` copy or any variable not declared `db::Error x`
 in the same file (matched by name only); a struct member; a log branch that also counts (`++` reads as a decision).
+RULE 2, THE LOOK ONLY WHEN ASKED (the final read's note 1): in a function with an out-parameter `bool *<..ok..|read..>`
+and its own `db::Error` / `DbQuery`, every look (a truth test of the Error in an `if (` / `&&` / `||` / `!` / `?` /
+`return` context; a DbQuery's `failed()` / `error()`) is written `<param> && <the look>` (an opening parenthesis
+between them allowed): its own decisions read `.code` / `mFailed`. Its limits: a function head is matched by a regex
+(a head spread over lines with braces in a default argument is not seen); a look outside that shape is red even
+when the parameter was tested a line before; an Error passed to a helper is not followed. CONTROL: the functions judged.
 Prints `ok:`/`FAIL:` lines; the last line is the verdict. argv[1] = the source root.
 """
 import os
@@ -54,15 +60,89 @@ def judge(path):
     return judged, hits
 
 
+# RULE 2 - THE LOOK ONLY WHEN ASKED (the final read's note 1, NOQT-DATABASE-1 stage 3's fix round): a function that takes
+# an OPTIONAL out-parameter `bool *<..ok..|read..>` and tests its own db::Error (or its DbQuery's failed()/error()) when
+# the caller passed none LOOKS FOR the caller: the mark is cleared, the caller is not told and its next write is not
+# refused. So every look in such a function is `<param> && <the look>`; its own decisions read `.code` / `mFailed`.
+OUT_PARAM = re.compile(r'\bbool\s*\*\s*(\w*(?:[oO]k|[rR]ead)\w*)')
+FUNC = re.compile(r'^(?!\s*(?:if|else|for|while|switch|return|case|do)\b)[^\n;{}#=]*?\b(\w+)\s*\(([^;{}]*?)\)\s*'
+                  r'(?:const\s*)?(?:override\s*)?\{', re.M)
+
+
+def strip_comments(src):
+    src = re.sub(r'//[^\n]*', '', src)
+    return re.sub(r'/\*.*?\*/', lambda m: re.sub(r'[^\n]', ' ', m.group(0)), src, flags=re.S)
+
+
+def body_end(src, open_at):
+    depth = 0
+    for i in range(open_at, len(src)):
+        if src[i] == '{':
+            depth += 1
+        elif src[i] == '}':
+            depth -= 1
+            if depth == 0:
+                return i
+    return len(src)
+
+
+def judge_unasked(path):
+    src = strip_comments(open(path, encoding='utf-8', errors='replace').read())
+    line_of = lambda p: src.count('\n', 0, p) + 1
+    functions, hits = 0, []
+    for f in FUNC.finditer(src):
+        if f.group(1) in ('if', 'for', 'while', 'switch', 'catch'):
+            continue
+        out = OUT_PARAM.search(f.group(2))
+        if not out:
+            continue
+        param = out.group(1)
+        start = f.end() - 1
+        body = src[start:body_end(src, start) + 1]
+        errors = set(re.findall(r'db::Error\s+(\w+)\s*[;{=(]', body))
+        queries = set(re.findall(r'\bDbQuery\s+(\w+)\s*\(', body))
+        if not errors and not queries:
+            continue
+        functions += 1
+        looks = []
+        for e in errors:
+            looks += [m.start(1) for m in re.finditer(
+                r'(?:\bif\s*\(|&&|\|\||\bwhile\s*\(|\breturn\b|[(,=]\s*!|^\s*!)\s*!?\s*(\b' + e + r'\b)(?!\s*(?:\.|->|\(|\[|=[^=]))',
+                body, re.M)]
+            looks += [m.start(1) for m in re.finditer(r'(\b' + e + r')\s*(?:&&|\|\||\?)', body)]
+        for q in queries:
+            looks += [m.start(1) for m in re.finditer(r'(\b' + q + r')\s*\.\s*(?:failed|error)\s*\(\s*\)', body)]
+        for at in sorted(set(looks)):
+            guarded = re.search(r'\b' + param + r'\s*&&\s*\(?\s*!?\s*$', body[max(0, at - 60):at])
+            if not guarded:
+                hits.append(f"{path}:{line_of(start + at)}: `{f.group(1)}` (out-parameter `{param}`): "
+                            f"{body[at:at + 40].split(chr(10))[0].strip()}")
+    return functions, hits
+
+
 def main():
     root = sys.argv[1] if len(sys.argv) > 1 else '.'
     judged, hits = 0, []
+    functions, unasked = 0, []
     for base, _, names in os.walk(os.path.join(root, 'src')):
         for name in sorted(names):
             if name.endswith(('.cpp', '.h')):
                 n, h = judge(os.path.join(base, name))
                 judged += n
                 hits += [x.replace(root.rstrip('/') + '/', '') for x in h]
+                n, h = judge_unasked(os.path.join(base, name))
+                functions += n
+                unasked += [x.replace(root.rstrip('/') + '/', '') for x in h]
+    print(f"ok:   {functions} functions with an optional read-out parameter and their own Error judged (CONTROL: above "
+          f"zero)" if functions else
+          "FAIL: no function with a read-out parameter and its own Error was judged - rule 2 saw nothing (CONTROL)")
+    if unasked:
+        print(f"FAIL: {len(unasked)} look(s) made when the caller did not ask - the mark is cleared for a caller that is "
+              f"not told; write `<param> && <the look>` and decide on `.code` / `mFailed`:")
+        for h in unasked:
+            print("  " + h)
+    else:
+        print("ok:   every look in such a function is made only when its caller asked")
     print(f"ok:   {judged} truth tests of a db::Error judged (CONTROL: above zero)" if judged else
           "FAIL: no truth test of a db::Error was judged - the reader saw nothing (CONTROL)")
     if hits:
@@ -72,7 +152,7 @@ def main():
             print("  " + h)
     else:
         print("ok:   no log-only look")
-    failed = len(hits) + (0 if judged else 1)
+    failed = len(hits) + (0 if judged else 1) + len(unasked) + (0 if functions else 1)
     print(f"source.db_error_looks: {'FAILED (%d)' % failed if failed else 'PASSED'}")
     sys.stdout.flush()
     return 1 if failed else 0

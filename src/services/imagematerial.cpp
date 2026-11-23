@@ -173,7 +173,7 @@ bool hasCompanionMaterial(Database *db, const QString &textureGuid, const QStrin
     dbqt::bindText(query, 5, projectGuid);
     db::Error e;
     if (query.step(&e)) return true;
-    if (e && readOk) *readOk = false;   // a failed read is no "no companion"
+    if (readOk && e) *readOk = false;   // a failed read is no "no companion"
     return false;
 }
 

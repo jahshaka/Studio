@@ -116,7 +116,7 @@ QString stampedTextureFor(Database *db, const QString &oid, bool *readOk)
     db::Error e;
     while (query.step(&e))
         if (isStamped(dbqt::bytes(query, 1))) return dbqt::text(query, 0);
-    if (e && readOk) *readOk = false;   // a failed read is no "no member holds it"
+    if (readOk && e) *readOk = false;   // a failed read is no "no member holds it"
     return QString();
 }
 

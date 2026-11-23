@@ -35,12 +35,15 @@ For more information see the LICENSE file
 #include <QFile>
 
 #include <cstdio>
+#include <functional>
 #include <string>
+#include <tuple>
 
 #include "data/database/database.h"
 #include "data/db/connection.h"
 #include "data/db/statement.h"
 #include "data/db/transaction.h"
+#include "services/assetcas.h"
 #include "tests/db/dbseam.h"
 
 namespace {
@@ -273,6 +276,49 @@ int main(int argc, char **argv)
                                         + std::to_string(afterUnit) + ")");
         check(database.createFolder(QStringLiteral("next-11"), QString(), QStringLiteral("n11"), QString()),
               "11: the run's end cleared it: the next write goes");
+        // 14. THROUGH THE REAL DOOR (the final read's note 1): AssetCas' three readers (sourceOid, resolveSource,
+        //     pinnedOid) asked with NO readOk - AvatarAssets::save's own `resolveSource(conn, root, guid, &name)` and the
+        //     59 other one-argument calls - whose statement FAILS leave the mark: the next write on the connection is
+        //     REFUSED by name. (Before: the reader tested its own Error first - testing is the look - the mark was cleared
+        //     and the write went.) AND THE CALLER THAT ASKS IS TOLD: readOk cleared, the look made, its write goes.
+        {
+            db::Connection &conn = database.connection();
+            const QString root = QStringLiteral("db_layer_guard_store");
+            const auto unaskedThenWrite = [&](const char *which, const std::function<QString()> &read, const QString &folder) {
+                dbseam::denyReadsOf(conn, which);
+                const QString answer = read();
+                dbseam::clear(conn);
+                const bool marked = conn.marked();
+                const bool wrote = database.createFolder(folder, QString(), folder, QString());
+                return std::make_tuple(answer.isEmpty(), marked, wrote);
+            };
+            QString name;
+            const auto [s0, s1, s2] = unaskedThenWrite("asset_files", [&] {
+                return AssetCas::resolveSource(conn, root, QStringLiteral("avatar14"), &name);   // AvatarAssets::save's call
+            }, QStringLiteral("f14-resolve"));
+            check(s0 && s1 && !s2, "14: resolveSource asked with no readOk, its read failed: the mark stands and the next "
+                                   "write is REFUSED (empty " + std::to_string(s0) + ", marked " + std::to_string(s1)
+                                   + ", wrote " + std::to_string(s2) + ")");
+            const auto [o0, o1, o2] = unaskedThenWrite("asset_files", [&] {
+                return AssetCas::sourceOid(conn, QStringLiteral("avatar14"));
+            }, QStringLiteral("f14-oid"));
+            check(o0 && o1 && !o2, "14: sourceOid asked with no readOk: the mark stands, the write REFUSED (marked "
+                                   + std::to_string(o1) + ", wrote " + std::to_string(o2) + ")");
+            const auto [p0, p1, p2] = unaskedThenWrite("project_assets", [&] {
+                return AssetCas::pinnedOid(conn, QStringLiteral("p14"), QStringLiteral("avatar14"));
+            }, QStringLiteral("f14-pin"));
+            check(p0 && p1 && !p2, "14: pinnedOid asked with no readOk: the mark stands, the write REFUSED (marked "
+                                   + std::to_string(p1) + ", wrote " + std::to_string(p2) + ")");
+            // THE OTHER END: a caller that ASKS is told (readOk cleared) and that is its look - its write goes.
+            bool readOk = true;
+            dbseam::denyReadsOf(conn, "asset_files");
+            AssetCas::resolveSource(conn, root, QStringLiteral("avatar14"), nullptr, &readOk);
+            dbseam::clear(conn);
+            const bool askedWrote = database.createFolder(QStringLiteral("f14-asked"), QString(), QStringLiteral("f14-asked"),
+                                                          QString());
+            check(!readOk && !conn.marked() && askedWrote, "14: CONTROL: asked, the caller is told (readOk cleared), the look "
+                                                           "is made and its write goes (wrote " + std::to_string(askedWrote) + ")");
+        }
         database.closeDatabase();
     }
 

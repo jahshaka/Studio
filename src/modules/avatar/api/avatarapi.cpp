@@ -1312,9 +1312,9 @@ QString AvatarApi::assetForContent(const QString &path, bool *readOk) const
     query.bindInt(3, static_cast<int>(ModelTypes::Object));
     db::Error error;
     if (query.step(&error)) return dbqt::text(query, 0);
-    if (error) {
+    if (error.code) {
         qWarning("avatar: the row of a clip's content: %s", qUtf8Printable(dbqt::describe(error)));
-        if (readOk) *readOk = false;   // no "never seen": a second row for the same bytes would be imported
+        if (readOk && error) *readOk = false;   // no "never seen": a second row for the same bytes would be imported
     }
     return QString();
 }
