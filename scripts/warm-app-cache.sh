@@ -43,6 +43,8 @@
 #                    Xvfb (60-99, 1920x1080x24, killed by its recorded pid); prints each boot's wall and the cache's size;
 #                    exits 0 when every boot passed (a failed boot's log kept under <tests-dir>/.evidence by fresh_home).
 #   --check          the answer alone, never a boot: exit 0 warm, 3 cold.
+#   --no-store       boot cold with no warm store named, on purpose (a box with none). Without it, a call that would boot a cache
+#                    cold with JAH_WARM_STORE unset is REFUSED (exit 2) with the line to run (the errors audit B13).
 #   --rig            a DISPLAY that is not a rig (outside :60-:99 - :0 is the OWNER's) is set aside and the tree's rig taken;
 #                    without it such a DISPLAY is REFUSED (exit 2) before any boot (URGENT #195; scripts/display-guard.sh).
 #   --inherit <b>    A FRESH TREE TAKES ITS PARENT's COLD-ROW PRIMES AT AN EQUAL KEY (TEST-STREAMLINE-1 1a; `spec.sh new` calls
@@ -146,12 +148,13 @@
 # <each cold boot's why>" (exit 3 under --check; else their boots, in order).
 set -u
 BUILD=""; INHERIT=""; CHECK=0; KEYONLY=0; COLDKEYONLY=0; TESTS=""; APP=""; LAB=""; ONLY=""; BUDGET=1170; COLDROWS=""
-ARGV=("$0" "$@"); TAKE_RIG=0; FAKED=""   # (URGENT #195: the call as given, for the refusal's safe line)
+ARGV=("$0" "$@"); TAKE_RIG=0; FAKED=""; NOSTORE=0   # (URGENT #195: the call as given, for the refusal's safe line)
 while [ $# -gt 0 ]; do
     case "$1" in
         --check) CHECK=1; shift ;;
         --rig) TAKE_RIG=1; shift ;;
         --key) KEYONLY=1; shift ;;
+        --no-store) NOSTORE=1; shift ;;
         --cold-key) KEYONLY=1; COLDKEYONLY=1; shift ;;
         --tests-dir) TESTS="${2:?--tests-dir needs a directory}"; FAKED="$FAKED --tests-dir"; shift 2 ;;
         --app) APP="${2:?--app needs an executable}"; FAKED="$FAKED --app"; shift 2 ;;
@@ -607,6 +610,16 @@ store_needed() {
     done
     return 1
 }
+# A COLD BOOT NEVER RUNS WITH NO STORE NAMED BY ACCIDENT (the errors audit 2026-11-23 B13; URGENT #215's second half: a hand
+# warm-up with JAH_WARM_STORE unset booted cold for 81 s while another tree had warmed the key): a call that could take from a
+# store (not a toy's shape - or one that says it is a store toy, JAH_WARM_STORE_ALLOW_FAKES=1) and would boot a cache cold, with
+# no store named, is REFUSED (exit 2) with the line to run; `--no-store` says so on purpose (a box with no store, a cold warm-up
+# wanted). The store's path is box data this repo never names (CODING_RULES § 7): the lead tools name it.
+if [ -z "${JAH_WARM_STORE:-}" ] && [ "$NOSTORE" != 1 ] && { [ -z "$FAKED" ] || [ "${JAH_WARM_STORE_ALLOW_FAKES:-}" = 1 ]; } \
+   && store_needed; then
+    echo "warm-app-cache: REFUSED (exit 2) - this call would boot cold ($FIRST_WHY) with NO warm store named (JAH_WARM_STORE unset), so a cache another tree warmed at $KEY is never taken. Name the box's store - the lead tools' \`cache.sh status <tree>\` prints the line with it: JAH_WARM_STORE=<the box's warm store> ${ARGV[*]} - or, a box with none or a cold warm-up on purpose: ${ARGV[*]} --no-store" >&2
+    exit 2
+fi
 if store_needed && store_open "$BUDGET"; then
     store_take
     compute_run
