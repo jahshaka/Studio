@@ -38,7 +38,7 @@
 // Runs with QT_QPA_PLATFORM=offscreen and a reachable DISPLAY (Vulkan).
 
 #include <QGuiApplication>
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include <functional>
 
 #include "../support/testmesh.h"

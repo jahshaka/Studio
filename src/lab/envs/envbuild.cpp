@@ -1,5 +1,6 @@
 #include "envbuild.h"
-#include "irisgl/document/qt/colour.h"
+#include "irisgl/document/properties/valueshapes.h"
+#include "irisgl/document/srgbcolor.h"
 
 #include "../labscene.h"
 
@@ -256,7 +257,7 @@ iris::MeshPtr Builder::mesh(const Arrays &a)
 iris::PbrMaterialPtr Builder::material(float r, float g, float b, float roughness, float metallic)
 {
     auto mat = iris::PbrMaterial::create();
-    mat->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor::fromRgbF(r, g, b))));
+    mat->setValue("baseColor", iris::colourToValue(iris::SrgbColor::fromRgbF(r, g, b)));
     mat->setValue("roughness", roughness);
     mat->setValue("metallic", metallic);
     const float v[4] = { r, g, b, roughness };
@@ -269,7 +270,7 @@ iris::PbrMaterialPtr Builder::material(float r, float g, float b, float roughnes
 iris::PbrMaterialPtr Builder::emitter(float intensity)
 {
     iris::PbrMaterialPtr mat = material(1.0f, 1.0f, 1.0f, 0.9f, 0.0f);
-    mat->setValue("emissiveColor", iris::colourToValue(iris::toSrgbColor(QColor::fromRgbF(1.0, 1.0, 1.0))));
+    mat->setValue("emissiveColor", iris::colourToValue(iris::SrgbColor::fromRgbF(1.0f, 1.0f, 1.0f)));
     mat->setValue("emissiveIntensity", intensity);
     mHash.addData(QByteArray("emitter"));
     hashFloats(mHash, &intensity, 1);
@@ -279,8 +280,8 @@ iris::PbrMaterialPtr Builder::emitter(float intensity)
 iris::PbrMaterialPtr Builder::pureEmitter(float intensity)
 {
     iris::PbrMaterialPtr mat = material(0.0f, 0.0f, 0.0f, 1.0f, 0.0f);
-    mat->setSpecularColor(iris::toSrgbColor(QColor::fromRgbF(0.0, 0.0, 0.0)));
-    mat->setValue("emissiveColor", iris::colourToValue(iris::toSrgbColor(QColor::fromRgbF(1.0, 1.0, 1.0))));
+    mat->setSpecularColor(iris::SrgbColor::fromRgbF(0.0f, 0.0f, 0.0f));
+    mat->setValue("emissiveColor", iris::colourToValue(iris::SrgbColor::fromRgbF(1.0f, 1.0f, 1.0f)));
     mat->setValue("emissiveIntensity", intensity);
     mHash.addData(QByteArray("pure-emitter"));
     hashFloats(mHash, &intensity, 1);

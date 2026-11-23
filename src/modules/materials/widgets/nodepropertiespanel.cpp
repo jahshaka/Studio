@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "nodepropertiespanel.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include "app/qtstd.h"
 
 #include <QCheckBox>
@@ -361,10 +361,10 @@ void NodePropertiesPanel::rebuildNodeEditors()
 	if (type == "color") {
 		auto swatch = new ColorPickerWidget;
 		swatch->setFixedHeight(22);
-		swatch->setColor(iris::toQColor(qtstd::colorFromJson(value.toObject(), iris::toSrgbColor(QColor(Qt::black)))));
+		swatch->setColor(qtstd::toQColor(qtstd::colorFromJson(value.toObject(), qtstd::toSrgbColor(QColor(Qt::black)))));
 		mColorSwatch = swatch;
 		connect(swatch, &ColorPickerWidget::onColorChanged, this, [this](QColor color) {
-			writeValue(qtstd::colorToJson(iris::toSrgbColor(color)));
+			writeValue(qtstd::colorToJson(qtstd::toSrgbColor(color)));
 		});
 		addRow(tr("Color"), swatch);
 		return;
@@ -557,7 +557,7 @@ void NodePropertiesPanel::refreshFromNode()
 		}
 	}
 	else if (type == "color" && mColorSwatch != nullptr) {
-		mColorSwatch->setColor(iris::toQColor(qtstd::colorFromJson(value.toObject(), iris::toSrgbColor(QColor(Qt::black)))));
+		mColorSwatch->setColor(qtstd::toQColor(qtstd::colorFromJson(value.toObject(), qtstd::toSrgbColor(QColor(Qt::black)))));
 	}
 	else if (type == "uv" && mNumberBoxes.size() >= 5) {
 		auto obj = value.toObject();

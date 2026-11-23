@@ -11,7 +11,6 @@ For more information see the LICENSE file
 
 #include "services/scenetemplatebuilder.h"
 #include "app/qtstdgui.h"
-#include "irisgl/document/qt/colour.h"
 
 #include <QColor>
 #include <cmath>

@@ -46,7 +46,7 @@
 //
 // Plus the shape contract itself: playerView->postFx() == editorView->postFx().
 #include "irisgl/core/math/quat.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 
 #include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"

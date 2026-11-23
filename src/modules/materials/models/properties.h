@@ -2,7 +2,6 @@
 #define PROPERTIES_H
 
 #include "app/qtstdgui.h"
-#include "irisgl/document/qt/colour.h"
 #include "app/qtstd.h"
 #include "irisgl/core/math/vec.h"
 #include <QVariant>
@@ -225,7 +224,7 @@ struct ColorProperty : public Property
     QJsonObject serialize() override
     {
         auto obj = Property::serialize();
-        obj["value"] = qtstd::colorToJson(iris::toSrgbColor(value));
+        obj["value"] = qtstd::colorToJson(qtstd::toSrgbColor(value));
 
         return obj;
     }
@@ -234,7 +233,7 @@ struct ColorProperty : public Property
     {
         // THE READER-DEFAULTS LAW: an absent value reads as the constructor's
         // default (an unset QColor), never as a colour nobody wrote.
-        value = iris::toQColor(qtstd::colorFromJson(obj["value"].toObject(), iris::toSrgbColor(ColorProperty().value)));
+        value = qtstd::toQColor(qtstd::colorFromJson(obj["value"].toObject(), qtstd::toSrgbColor(ColorProperty().value)));
     }
 };
 

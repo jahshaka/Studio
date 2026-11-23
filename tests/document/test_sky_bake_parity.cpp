@@ -13,7 +13,7 @@
 #include <random>
 
 #include "irisgl/document/scenegraph/skybake.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", msg); \
@@ -68,8 +68,8 @@ int main()
             bot(byte(rng), byte(rng), byte(rng));
         const float offset = i < int(sizeof offsets / sizeof offsets[0]) ? offsets[i] : unit(rng);
         const int w = 1 + i % 5, h = 2 + (i * 37) % 300;
-        const iris::Image got = iris::bakeGradientSky(iris::toSrgbColor(top), iris::toSrgbColor(mid),
-                                                      iris::toSrgbColor(bot), offset, w, h);
+        const iris::Image got = iris::bakeGradientSky(qtstd::toSrgbColor(top), qtstd::toSrgbColor(mid),
+                                                      qtstd::toSrgbColor(bot), offset, w, h);
         const QImage want = referenceBake(top, mid, bot, offset, w, h);
         ++cases;
         const bool sized = !got.isNull() && got.width == want.width() && got.height == want.height();

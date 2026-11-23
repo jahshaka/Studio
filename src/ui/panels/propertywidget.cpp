@@ -271,7 +271,7 @@ void PropertyWidget::addColorProperty(iris::Property *prop)
     auto colorWidget = addColorPicker(qtstd::toQString(colorProp->displayName));
 
     colorWidget->index = prop->id;
-    colorWidget->setColorValue(iris::toQColor(colorProp->value));
+    colorWidget->setColorValue(qtstd::toQColor(colorProp->value));
     addRow(colorWidget);
     const int slot = takeSlot(prop, colorWidget);   // see addFloatProperty
     rowByName.insert(qtstd::toQString(prop->name), colorWidget);
@@ -584,7 +584,7 @@ void PropertyWidget::rebind(const std::vector<iris::Property *> &props)
                 static_cast<HFloatSliderWidget *>(row)->setValue(float(static_cast<iris::IntProperty *>(prop)->value));
                 break;
             case iris::PropertyType::Color:
-                static_cast<ColorValueWidget *>(row)->setColorValue(iris::toQColor(static_cast<iris::ColorProperty *>(prop)->value));
+                static_cast<ColorValueWidget *>(row)->setColorValue(qtstd::toQColor(static_cast<iris::ColorProperty *>(prop)->value));
                 break;
             case iris::PropertyType::Bool:
                 static_cast<CheckBoxWidget *>(row)->setValue(static_cast<iris::BoolProperty *>(prop)->value);

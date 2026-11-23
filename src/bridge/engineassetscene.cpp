@@ -1,5 +1,5 @@
 #include "irisgl/core/math/quat.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include "irisgl/core/math/vec.h"
 #include "bridge/engineassetscene.h"
 
@@ -224,7 +224,7 @@ iris::SceneNodePtr EngineAssetScene::setMaterialSubject(iris::MaterialPtr materi
 
 void EngineAssetScene::setSkyColor(const QColor &c)
 {
-    mDocument->setSkyColor(iris::toSrgbColor(c));
+    mDocument->setSkyColor(qtstd::toSrgbColor(c));
 }
 
 bool EngineAssetScene::groundPlaneShown(float *height) const
@@ -438,7 +438,7 @@ void EngineAssetScene::prepareOffscreen(View *shot, int width, int height)
 QImage EngineAssetScene::renderImage(int width, int height)
 {
     if (!mDocument) return QImage();
-    const QColor c = iris::toQColor(mDocument->skyColor);
+    const QColor c = qtstd::toQColor(mDocument->skyColor);
     return renderOffscreen("assets-shot", width, height,
                            Colour(c.redF(), c.greenF(), c.blueF(), 1.0f), mShadows);
 }

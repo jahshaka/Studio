@@ -11,11 +11,12 @@
 #include "irisgl/core/value.h"
 #include "irisgl/document/properties/property.h"
 #include "irisgl/document/properties/valueshapes.h"
-#include "irisgl/document/qt/colour.h"
 #include "irisgl/document/scenegraph/cameranode.h"
 #include "irisgl/document/scenegraph/scenenode.h"
+#include "irisgl/document/srgbcolor.h"
 
 #include <QColor>
+#include <QRgba64>
 #include <QMatrix3x3>
 #include <QMatrix4x4>
 #include <QQuaternion>
@@ -33,10 +34,30 @@
 
 namespace qtstd {
 
+/// THE COLOUR's QT EDGE (NOQT-DOCUMENT-1 stage 3; here since stage 6, the document's qt/ folder deleted): iris::SrgbColor
+/// <-> QColor, bit for bit for a valid colour (the 16-bit channels pass through as they are); every INVALID colour crosses
+/// as THE invalid colour (QColor() / SrgbColor(), alpha 1 - an out-of-range QColor(-1, ...) keeps an alpha of 0 that is not
+/// carried); and a QColor's SPEC does not cross (an HSV colour arrives as its channels: equal to the Rgb colour of the same
+/// channels, which in Qt it was not - srgbcolor.h's third named limit). A QColor outside 0..1 (Qt's ExtendedRgb) arrives
+/// through QColor::rgba64(), Qt's own clamp. The editor's widgets, its property rows and its file codecs speak QColor; the
+/// document stores SrgbColor.
+inline QColor toQColor(const iris::SrgbColor &c)
+{
+    if (!c.isValid()) return QColor();
+    return QColor::fromRgba64(c.red16(), c.green16(), c.blue16(), c.alpha16());
+}
+
+inline iris::SrgbColor toSrgbColor(const QColor &c)
+{
+    if (!c.isValid()) return iris::SrgbColor();
+    const QRgba64 v = c.rgba64();
+    return iris::SrgbColor::fromRgba64(v.red(), v.green(), v.blue(), v.alpha());
+}
+
 /// A QColor as a colour PROPERTY's Value (valueshapes.h colourRowValue): its Object shape; THE invalid QColor a Null.
-inline iris::Value colourValue(const QColor &c) { return iris::colourRowValue(iris::toSrgbColor(c)); }
+inline iris::Value colourValue(const QColor &c) { return iris::colourRowValue(qtstd::toSrgbColor(c)); }
 /// The QColor a colour Value holds (a Null, an empty object or a non-object: the invalid QColor).
-inline QColor toQColor(const iris::Value &v) { return iris::toQColor(iris::colourFromValue(v)); }
+inline QColor toQColor(const iris::Value &v) { return qtstd::toQColor(iris::colourFromValue(v)); }
 
 /// A QVector3D as an Array of three Numbers, and back (anything else: the zero vector, as QVariant::value<QVector3D>).
 inline iris::Value vec3Value(const QVector3D &v) { return iris::vec3ToValue(iris::Vec3(v.x(), v.y(), v.z())); }

@@ -1,5 +1,9 @@
 #include "labscene.h"
-#include "irisgl/document/qt/colour.h"
+#include "irisgl/document/properties/valueshapes.h"
+#include "irisgl/document/srgbcolor.h"
+
+#include <QColor>
+#include <QRgba64>
 
 #include "irisgl/core/geometry/aabb.h"
 #include "irisgl/core/math/mat4.h"
@@ -83,7 +87,11 @@ QJsonArray lightsOf(const iris::SceneNodePtr &root)
                 o["name"] = QString::fromStdString(l->getName());
                 o["type"] = int(l->lightType);
                 o["intensity"] = double(l->intensity);
-                o["color"] = iris::toQColor(l->color).name();
+                // the lab's file spells a colour as Qt's "#rrggbb" (jahlab takes nothing of src/: the editor's edge,
+                // app/qtstdgui.h, is not its): the 16-bit channels as they are; an invalid colour is QColor()'s text
+                o["color"] = (l->color.isValid() ? QColor::fromRgba64(l->color.red16(), l->color.green16(), l->color.blue16(),
+                                                                      l->color.alpha16())
+                                                 : QColor()).name();
                 o["distance"] = double(l->distance);
                 o["spotCutOff"] = double(l->spotCutOff);
                 o["spotCutOffSoftness"] = double(l->spotCutOffSoftness);
@@ -121,7 +129,10 @@ int attachLights(const iris::SceneNodePtr &root, const QJsonArray &lights)
         l->setName(o["name"].toString().toStdString());
         l->setLightType(iris::LightType(o["type"].toInt()));
         l->intensity = float(o["intensity"].toDouble());
-        l->color = iris::toSrgbColor(QColor(o["color"].toString()));
+        const QColor colour(o["color"].toString());   // a text QColor cannot read is THE invalid colour
+        const QRgba64 c64 = colour.rgba64();
+        l->color = colour.isValid() ? iris::SrgbColor::fromRgba64(c64.red(), c64.green(), c64.blue(), c64.alpha())
+                                    : iris::SrgbColor();
         l->distance = float(o["distance"].toDouble());
         l->spotCutOff = float(o["spotCutOff"].toDouble());
         l->spotCutOffSoftness = float(o["spotCutOffSoftness"].toDouble());
@@ -428,7 +439,7 @@ bool addBasicWorld(const iris::ScenePtr &doc, const QString &binDir, const QStri
     floor->defaultFloor = true;
     {
         auto m = iris::PbrMaterial::create();
-        m->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
+        m->setValue("baseColor", iris::colourToValue(iris::SrgbColor(255, 255, 255)));
         m->setValue("baseColorMap",
                     iris::Material::textureRef(QDir(binDir).filePath(QStringLiteral("app/content/textures/tile.png")).toStdString(), std::string()));
         m->setValue("textureScale", 25.0f);
@@ -436,7 +447,7 @@ bool addBasicWorld(const iris::ScenePtr &doc, const QString &binDir, const QStri
         m->setValue("metallic", 0.0f);
         m->setValue("workflow", 1);
         m->setValue("ior", 1.0f);
-        m->setValue("specularColor", iris::colourToValue(iris::toSrgbColor(QColor(0, 0, 0))));
+        m->setValue("specularColor", iris::colourToValue(iris::SrgbColor(0, 0, 0)));
         floor->setMaterial(m);
     }
     doc->getRootNode()->addChild(floor);
@@ -463,7 +474,7 @@ void addSkyAndLights(const iris::ScenePtr &doc, bool wantSun)
     sky->setName((QStringLiteral("Sky Light")).toStdString());
     sky->setLocalPos(iris::Vec3(-4, 4, 0));
     sky->setPropertyValue("intensity", 1.0f);
-    sky->setPropertyValue("lightColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
+    sky->setPropertyValue("lightColor", iris::colourToValue(iris::SrgbColor(255, 255, 255)));
 
     doc->skyType = iris::SkyType::REALISTIC;
     doc->setSkyRealistic(iris::SkyRealistic::defaults());

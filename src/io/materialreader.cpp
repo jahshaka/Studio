@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include "app/qtstd.h"
 #include <QJsonArray>
 
@@ -131,7 +131,7 @@ iris::PbrMaterialPtr MaterialReader::parsePbrMaterial(QJsonObject matObject, Dat
 			// "#rrggbb" is read at THE EDITOR's EDGE (the spec's RULED 3): QColor
 			// parses it, the adapter carries it; an unparseable text is the invalid
 			// colour, as before (a colour property's Null).
-			mat->setValue(prop->name, iris::colourRowValue(iris::toSrgbColor(QColor(val.toString()))));
+			mat->setValue(prop->name, iris::colourRowValue(qtstd::toSrgbColor(QColor(val.toString()))));
 			break;
 		case iris::PropertyType::Bool:
 			mat->setValue(prop->name, iris::Value(val.toBool()));

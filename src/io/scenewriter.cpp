@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 #include "app/qtstd.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
@@ -864,7 +864,7 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
         // "#rrggbb" is THE EDITOR's EDGE (the spec's RULED 3): the type has no
         // name(); QColor writes it, from the row's colour through the adapter.
         if (prop->type == iris::PropertyType::Color) {
-			valuesObj[key] = iris::toQColor(static_cast<const iris::ColorProperty *>(prop)->value).name();
+			valuesObj[key] = qtstd::toQColor(static_cast<const iris::ColorProperty *>(prop)->value).name();
         }
 
         if (prop->type == iris::PropertyType::Texture) {

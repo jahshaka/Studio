@@ -2,7 +2,6 @@
 // this way.
 #include "scale_world.h"
 #include "app/qtstdgui.h"
-#include "irisgl/document/qt/colour.h"
 #include "jahshaka/engine/EngineInspect.h"   // the engine\'s record of what the fixture pushed (U3 stage 2)
 
 #include "../support/proceduralshell.h"
@@ -562,7 +561,7 @@ static iris::PbrMaterialPtr worldMaterial(int i, const std::vector<QString> &tex
 {
     auto mat = iris::PbrMaterial::create();
     const int c = i * 37;
-    mat->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(90 + c % 160, 90 + (c / 3) % 160, 90 + (c / 7) % 160))));
+    mat->setValue("baseColor", iris::colourToValue(qtstd::toSrgbColor(QColor(90 + c % 160, 90 + (c / 3) % 160, 90 + (c / 7) % 160))));
     mat->setValue("roughness", 0.35f + 0.5f * float((i * 13) % 10) / 10.0f);
     mat->setValue("metallic", (i % 11) == 0 ? 1.0f : 0.0f);
     if (!texFiles.empty()) mat->setValue("baseColorMap", iris::Value(texFiles[size_t(i) % texFiles.size()].toStdString()));
@@ -646,7 +645,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
         g->setLocalScale(iris::Vec3(k, 1.0f, k));
         g->setShadowCastingEnabled(false);
         auto mat = iris::PbrMaterial::create();
-        mat->setValue("baseColor", iris::colourToValue(iris::toSrgbColor(QColor(255, 255, 255))));
+        mat->setValue("baseColor", iris::colourToValue(qtstd::toSrgbColor(QColor(255, 255, 255))));
         mat->setValue("baseColorMap", iris::Value(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/textures/tile.png").toStdString()));
         mat->setValue("roughness", 0.9f);
         mat->setValue("metallic", 0.0f);

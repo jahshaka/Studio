@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "scripting/modules/particlesapi.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 
 #include <algorithm>
 
@@ -172,16 +172,16 @@ QVariantMap ParticlesApi::describe(const QString &id)
     m["burstRepeatDelay"] = ps->burstRepeatDelay;
     m["startDelay"] = ps->startDelay;
     m["quota"] = ps->maxParticles;
-    m["emitColourStart"] = colorToJs(iris::toQColor(ps->emitColourStart));
-    m["emitColourEnd"] = colorToJs(iris::toQColor(ps->emitColourEnd));
+    m["emitColourStart"] = colorToJs(qtstd::toQColor(ps->emitColourStart));
+    m["emitColourEnd"] = colorToJs(qtstd::toQColor(ps->emitColourEnd));
     m["texture"] = ps->texture ? QString::fromStdString(ps->texture->getSource()) : QString();
     // The IMAGE'S ASSET (TEX-REF-1): what a saved scene stores for `texture`.
     m["textureGuid"] = QString::fromStdString(ps->textureGuid);
     m["colourKeys"] = colourKeys(id);
     m["scaleKeys"] = scaleKeys(id);
     // ADDENDUM A-4: the four affectors the renderer always had.
-    m["colourFade1"] = colorToJs(iris::toQColor(ps->colourFade1));
-    m["colourFade2"] = colorToJs(iris::toQColor(ps->colourFade2));
+    m["colourFade1"] = colorToJs(qtstd::toQColor(ps->colourFade1));
+    m["colourFade2"] = colorToJs(qtstd::toQColor(ps->colourFade2));
     m["colourFadeSwitch"] = ps->colourFadeSwitch;
     m["colourRamp"] = colourRamp(id);
     m["scaleRate"] = ps->scaleRate;

@@ -271,7 +271,7 @@ static Expect qtGives(iris::PropertyType t, const QVariant &in)
         // A QColor-typed INVALID QColor is the none (a Null, as the old setter stored it); a QVariant Qt cannot
         // read as a colour is refused.
         e.refused = !c.isValid() && in.metaType() != QMetaType::fromType<QColor>();
-        e.field = iris::colourRowValue(iris::toSrgbColor(c));
+        e.field = iris::colourRowValue(qtstd::toSrgbColor(c));
         break;
     }
     case iris::PropertyType::Vec3: {

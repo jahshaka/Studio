@@ -24,7 +24,8 @@ jah_lsan_lane(math.parity)
 # REFERENCE only, as for math.parity; the type under test is header-only.
 add_executable(test_colour_qt_parity test_colour_qt_parity.cpp)
 set_target_properties(test_colour_qt_parity PROPERTIES AUTOMOC OFF)
-target_include_directories(test_colour_qt_parity PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/irisgl)
+target_include_directories(test_colour_qt_parity PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/src ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)   # src/: the colour's Qt edge is app/qtstdgui.h's (NOQT-DOCUMENT-1 stage 6), as math.parity's
 target_link_libraries(test_colour_qt_parity PRIVATE Qt6::Gui)
 add_test(NAME core.colour_qt_parity COMMAND test_colour_qt_parity WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
 set_tests_properties(core.colour_qt_parity PROPERTIES TIMEOUT 60 ENVIRONMENT "QT_QPA_PLATFORM=offscreen"

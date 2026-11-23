@@ -6,7 +6,7 @@
 
 #include "irisgl/core/math/quat.h"
 #include "app/qtstd.h"
-#include "irisgl/document/qt/colour.h"
+#include "app/qtstdgui.h"
 
 #include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"
