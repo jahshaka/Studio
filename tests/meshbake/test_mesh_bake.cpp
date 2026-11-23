@@ -3301,7 +3301,7 @@ static void refusedBakeRequeued()
     Database db;
     CHECK_LOUD(db.initializeDatabase(QDir(home.path()).filePath("assets.db")), "fixture database opened");
     db.createAllTables();
-    QSqlDatabase conn = QSqlDatabase::database();
+    db::Connection &conn = db.connection();   // the services'
     AssetCas::ensureCasSchema(conn);
     Project project;
     AssetImportService service(&db, &project);
@@ -3338,7 +3338,7 @@ static void refusedBakeRequeued()
     CHECK_LOUD(!MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath), "after the refusal the bake is not fresh");
     const QVector<MeshBakeStore::BakeJob> jobs = MeshBakeStore::staleJobsFor(conn, storeRoot.path(), refused);
     CHECK_LOUD(jobs.size() == 1, "THE STALE PATH RE-QUEUES IT from its source (one job)");
-    MeshBakeStore::rebuildPumped(jobs, std::function<void(int, int)>());
+    MeshBakeStore::rebuildPumped(conn, jobs, std::function<void(int, int)>());
     CHECK_LOUD(MeshBakeStore::isFresh(conn, storeRoot.path(), sourcePath), "the re-bake landed: fresh again");
     prewarm.parse(MeshBakeStore::planFor(conn, storeRoot.path(), sourcePath));
     const iris::BakedModelPtr back = prewarm.baked(sourcePath);

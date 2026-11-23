@@ -233,7 +233,7 @@ iris::MeshPrewarmPtr ProjectRunner::prewarmModelsPumped(openreads::Reads &reads)
 	// once a model (takeRefused): re-baked from its source when the source is on disk, then read again (a second
 	// refusal is named and is a miss).
 	if (!requeue.isEmpty()) {
-		MeshBakeStore::rebuildPumped(requeue, std::function<void(int, int)>());
+		MeshBakeStore::rebuildPumped(mDb->connection(), requeue, std::function<void(int, int)>());
 		runPumped([&]() { readModels(refused, nullptr, nullptr); });
 	}
 	LoadTimeline::add(QStringLiteral("worker:bakeHits"), 0.0, prewarm->bakedCount());
