@@ -67,3 +67,29 @@ jah_document_graph(test_mirror_final_refusal)
 add_test(NAME mirror.final_refusal COMMAND test_mirror_final_refusal WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
 set_tests_properties(mirror.final_refusal PROPERTIES ENVIRONMENT "QT_QPA_PLATFORM=offscreen" TIMEOUT 60 LABELS "mirror")
 jah_no_display(mirror.final_refusal)
+
+# mirror.final_refusal_asan — ITS SANITIZER TWIN (the confirm 3's E1, the lead's ruling): the same source and the mirror
+# built with AddressSanitizer as its own target - the freed-lamp case (the confirm's D1: a fallback reading a document
+# node that left and was freed) reads a freed block WITHOUT failing in the plain row; this twin is what goes red. The
+# shape is skeletal.share_asan's (tests/skeletal/CMakeLists.txt:58-72): out of the default build, run through on_demand.sh;
+# `long`: a feature's end and LONG, never the code loop (CODING_RULES § 5). The engine and IrisGL stay plain: the read
+# is in this target's own objects (scenemirror.cpp), the free anywhere (the runtime intercepts every free).
+if(JAHSHAKA_ASAN)
+    add_executable(test_mirror_final_refusal_asan test_mirror_final_refusal.cpp ${CMAKE_SOURCE_DIR}/irisgl/mirror/scenemirror.cpp)
+    set_target_properties(test_mirror_final_refusal_asan PROPERTIES
+        AUTOMOC OFF AUTOUIC OFF AUTORCC OFF CXX_STANDARD 17
+        RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    target_include_directories(test_mirror_final_refusal_asan PRIVATE ${CMAKE_SOURCE_DIR} ${CMAKE_SOURCE_DIR}/src
+        ${CMAKE_SOURCE_DIR}/irisgl ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+    target_link_libraries(test_mirror_final_refusal_asan PRIVATE IrisGL Qt6::Gui)
+    jah_document_graph(test_mirror_final_refusal_asan)
+    target_compile_options(test_mirror_final_refusal_asan PRIVATE -fsanitize=address -fno-omit-frame-pointer)
+    target_link_options(test_mirror_final_refusal_asan PRIVATE -fsanitize=address)
+    jah_on_demand(test_mirror_final_refusal_asan)   # out of the default build: built by the rows that run it (tests/CMakeLists.txt)
+    _jah_on_demand_run(test_mirror_final_refusal_asan _run)
+    add_test(NAME mirror.final_refusal_asan COMMAND ${_run} WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+    set_property(TEST mirror.final_refusal_asan PROPERTY JAH_BUILD_TARGETS ${_run_TARGET})
+    set_tests_properties(mirror.final_refusal_asan PROPERTIES TIMEOUT 60 LABELS "mirror;long"
+        ENVIRONMENT "QT_QPA_PLATFORM=offscreen;${JAH_ASAN_ENGINE_OPTIONS}")
+    jah_no_display(mirror.final_refusal_asan)
+endif()
