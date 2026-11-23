@@ -234,6 +234,9 @@ OGRE_SCENE_FUNCTIONS = {
                            "releaseNode", "node", "track", "nodeWorldPose", "nodeWorldPoseDrawn", "itemVisibilityFlags",
                            "applyNodeVisibilityFlags", "inheritedShown", "applyShownSubtree", "setNodeVisible",
                            "setNodeVisibleUnder", "setNodeVisibleImpl")},
+    # SCRIPT-IN-ENGINE-1 2e e1: the node setters' one refusal (engine.setters_refuse) and the VR node lists'
+    "unknownNode": _NODES + ["vr"],
+    "unknownVrNode": ["vr", "engine"],
     # SCRIPT-IN-ENGINE-1 S1: the existence reads the script host's handle check asks (Scene::nodePresence ...): read by
     # the engine's script commands only - the host's own row and every row whose command runs jahengine
     **{f: ["script.", "*engine-scripts"] for f in ("nodePresence", "meshPresence", "materialPresence", "texturePresence",
