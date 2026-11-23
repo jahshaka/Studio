@@ -704,3 +704,4 @@ engine.png_pixels 0.02  solo 2026-11-23 at 3c36d2053 (spec.sh reprice, run 20261
 db.failed_opens 0.31  solo 2026-11-23 at 3c36d2053 (spec.sh reprice, run 20261123T211047-3c36d2053-p3517278)
 mcp.engine_session 5.19  solo 2026-11-23 at 86b75f99d (spec.sh reprice, run 20261123T195316-86b75f99d-p321482)
 bake.round_trip 0.45  solo 2026-11-23 at a23e4cce9 (spec.sh reprice, run 20261123T220146-a23e4cce9-p1398604)
+db.layer_guard 0.08  solo 2026-11-23 at df2b0e71c (spec.sh reprice, run 20261123T200046-df2b0e71c-p787886)
