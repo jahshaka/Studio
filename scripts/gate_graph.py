@@ -977,6 +977,7 @@ HARNESS_DIRS = ("scripts/", "tests/support/")
 # .fresh_home's `--rm <build>/tests/scripting/material_share.jbundle`, a file its consumers write, hashed as its data: every
 # run rewrote the hash, the row was never served, and `spec.sh test --all` stopped NO PROGRESS planning it again.
 OUTPUT_FLAGS = ("--rm", "--reset", "--mkdir")
+SEEDHOME = "<build>/tests/.seedhome"           # the warm-up's seeded template library (tests/support/seed_home.sh): data_set
 DATA_PRUNE = {".git", "__pycache__", ".cache", "build", "build-linux", "node_modules"}
 DATA_WALK_MAX = 20000                          # files one walked directory may hold before it is UNKNOWN (said, never cut)
 
@@ -1086,6 +1087,20 @@ def data_set(test, roots, _memo=None, hashed=True):
             path = cur[tok] + rel[len(tok):]
             if tok == "<root>" and rel[len("<root>/"):].startswith(HARNESS_DIRS):
                 continue                     # a harness wrapper: never data
+            if tok == "<build>" and rel.startswith(SEEDHOME + "/"):
+                # THE SEEDED TEMPLATE IS KEYED BY ITS STAMP (REPRICE-1, the lead's ruling 2026-11-23): its bytes carry the
+                # seed boot's wall clock and random guids (CODING_RULES § 6: nothing a record keys on may), so the template
+                # is hashed by <build>/tests/.seedhome/seed-key - seed_home.sh's key over everything that decides what the
+                # library holds. No stamp (or no template file) is NO TEMPLATE: a problem, the hash None, never served.
+                stamp = cur["<build>"] + SEEDHOME[len("<build>"):] + "/seed-key"
+                if not (os.path.isfile(stamp) and os.path.exists(path)):
+                    problems.append(f"no template: {rel if os.path.isfile(stamp) else SEEDHOME + '/seed-key'} is absent "
+                                    "(the warm-up's seed_home.sh make)")
+                elif hashed:
+                    with open(stamp, "rb") as fh:
+                        files[rel] = "seed-key:" + _sha256(fh.read())
+                    sources[rel] = "argument"
+                continue
             if os.path.isdir(path):
                 # a DIRECTORY ARGUMENT: walked when it is a source dir (never the tree root, never a build dir)
                 if tok == "<root>" and rel not in ("<root>", "<root>/") and not any(

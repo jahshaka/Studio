@@ -276,6 +276,39 @@ else:
 open(os.path.join(t, "parent", "build-linux", "tests", "s", "row.js"), "a").write("var MORE = 1;\n")
 if gg.data_set(rowj("parent"), gg.build_roots(parent), {})["hash"] == dh[0]:
     fails.append("a configured copy's real change does not move the data hash")
+# THE SEEDED TEMPLATE IS KEYED BY ITS STAMP (REPRICE-1, the lead's ruling 2026-11-23): core.guid reads the warm-up's template
+# library (<build>/tests/.seedhome/data/JahLibrary.db), whose bytes carry the seed boot's wall clock and random guids - every
+# re-seed at one seed key moved its data hash (train-3 at ee28e468e: 71d0ff9235fc, then 84907a1667ef). Two seeds at ONE key
+# hash ONE; two keys hash TWO; no stamp is "no template", never served (red on photon-7 b71613aa2's code:
+# spikes/audit-fixes/red-once/gate.serve_red-seedhome.txt)
+sr, sb = os.path.join(t, "seed"), os.path.join(t, "seed", "build-linux")
+os.makedirs(os.path.join(sb, "tests", ".seedhome", "data")); os.makedirs(os.path.join(sr, "src"))
+open(os.path.join(sr, "src", "table.h"), "w").write("the shipped table")
+open(os.path.join(sb, "CMakeCache.txt"), "w").write("CMAKE_HOME_DIRECTORY:INTERNAL=%s\nCMAKE_CACHEFILE_DIR:INTERNAL=%s\n" % (sr, sb))
+sdb, skey = os.path.join(sb, "tests", ".seedhome", "data", "JahLibrary.db"), os.path.join(sb, "tests", ".seedhome", "seed-key")
+srow = {"name": "core.seeded", "properties": [], "command": ["/usr/bin/python3", sdb, os.path.join(sr, "src", "table.h")]}
+
+
+def seeded(stamp, lib):
+    """The template as one seed boot left it (`stamp` None: no stamp) -> data_set's (hash, why)."""
+    open(sdb, "w").write(lib)
+    if stamp is None:
+        os.path.exists(skey) and os.remove(skey)
+    else:
+        open(skey, "w").write(stamp)
+    d = gg.data_set(srow, gg.build_roots(sb), {})
+    return d["hash"], d["why"], sorted(d["files"])
+
+
+s1, s2 = seeded("K1\n17 shipped meshes\n", "created 01:53:31 guid 5f8f7450"), seeded("K1\n17 shipped meshes\n", "created 02:06:08 guid 0455c473")
+s3, s4 = seeded("K2\n17 shipped meshes\n", "created 02:06:08 guid 0455c473"), seeded(None, "created 02:06:08 guid 0455c473")
+for name, ok_ in (("two seeds at ONE key (their wall clock and guids differ): ONE data hash (both its files in it: %s)" % s1[2],
+                  s1[0] is not None and s1[0] == s2[0] and len(s1[2]) == 2),
+                  ("two KEYS (one library's bytes): TWO data hashes", s3[0] is not None and s3[0] != s2[0]),
+                  ("NO STAMP: no hash - 'no template', never served: " + str(s4[1]), s4[0] is None and "no template" in str(s4[1]))):
+    print(("ok   " if ok_ else "FAIL ") + "the seeded template: " + name)
+    if not ok_:
+        fails.append("the seeded template: " + name)
 shutil.rmtree(t, ignore_errors=True)
 print("gate.serve_red:", "FAIL (%d)" % len(fails) if fails else "PASS")
 sys.exit(1 if fails else 0)
