@@ -42,10 +42,10 @@ void KeyFrameWidget::deleteContextKey()
     if (!anim)
         return;
 
-    auto propAnim = anim->getPropertyAnim(contextKey.propertyName);
+    auto propAnim = anim->getPropertyAnim(contextKey.propertyName.toStdString());
     if (propAnim != nullptr) {
         if (contextKey.keyType == DopeKeyType::FloatKey) {
-            auto frame = propAnim->getKeyFrame(contextKey.subPropertyName);
+            auto frame = propAnim->getKeyFrame(contextKey.subPropertyName.toStdString());
             frame->removeKey(contextKey.floatKey);
 
             labelWidget->recalcPropertySummaryKeys(contextKey.propertyName);

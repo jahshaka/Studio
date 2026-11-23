@@ -547,7 +547,7 @@ void SkyPropertyWidget::setEquiMap(const QString &guid)
 	equiSkyDefinition.insert("equiSkyGuid", guid);
     auto image = resolveSkyAssetFile(services, project, guid);
     if (equiTexture) equiTexture->setTexture(QFileInfo(image).isFile() ? image : QString());
-    if (auto live = liveScene()) live->setSkyTexture(iris::Texture2D::load(image));
+    if (auto live = liveScene()) live->setSkyTexture(iris::Texture2D::load(image.toStdString()));
 	updateAssetAndKeys();
 }
 

@@ -103,6 +103,7 @@ For more information see the LICENSE file
 
 #include "irisgl/document/physics/environment.h"
 #include "irisgl/document/input/inputmap.h"
+#include "app/keynames.h"
 
 #include "modules/moduleregistry.h"
 #include "services/playerservice.h"
@@ -1251,7 +1252,7 @@ bool MainWindow::closeWorld(bool reopenInPlace, CloseUnsaved unsaved, QString *w
         // Put every body and avatar back where Play found it — the
         // Environment's own restore (recursive, exact),
         // not the top-level-only matrix copy this used to be.
-        if (!scene->getPhysicsEnvironment()->nodeTransforms.isEmpty())
+        if (!scene->getPhysicsEnvironment()->nodeTransforms.empty())
             scene->getPhysicsEnvironment()->restoreNodeTransformations(scene->getRootNode());
         // (The auto-save is settleUnsaved's, above: it runs BEFORE the teardown, and its failure refuses the close.)
 
@@ -1760,10 +1761,10 @@ void MainWindow::refreshGameplayShortcutRows()
 {
     if (!shortcutRegistry) return;
     const iris::InputMap &map = iris::InputSystem::instance().map();
-    shortcutRegistry->setFixedText("gameplay.move",   map.displayText(iris::InputAction::Move));
-    shortcutRegistry->setFixedText("gameplay.look",   map.displayText(iris::InputAction::Look));
-    shortcutRegistry->setFixedText("gameplay.jump",   map.displayText(iris::InputAction::Jump));
-    shortcutRegistry->setFixedText("gameplay.sprint", map.displayText(iris::InputAction::Sprint));
+    shortcutRegistry->setFixedText("gameplay.move",   keynames::displayText(map, iris::InputAction::Move));
+    shortcutRegistry->setFixedText("gameplay.look",   keynames::displayText(map, iris::InputAction::Look));
+    shortcutRegistry->setFixedText("gameplay.jump",   keynames::displayText(map, iris::InputAction::Jump));
+    shortcutRegistry->setFixedText("gameplay.sprint", keynames::displayText(map, iris::InputAction::Sprint));
 }
 
 

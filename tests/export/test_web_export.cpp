@@ -112,7 +112,7 @@ int main(int argc, char **argv)
         rough.fill(QColor(128, 128, 128));
         const QString roughPath = tmp.filePath("rough.png");
         rough.save(roughPath);
-        pbr->setRoughnessMap(iris::Texture2D::load(roughPath));
+        pbr->setRoughnessMap(iris::Texture2D::load(roughPath.toStdString()));
         pbr->roughnessFactor = 1.0f;
         pbr->roughnessLowerBound = 0.2f;
         pbr->roughnessUpperBound = 0.8f;

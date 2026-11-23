@@ -365,7 +365,7 @@ bool AvatarPreviewModel::applySubject(const std::shared_ptr<PreparedSubject> &pr
     for (const auto &anim : node->getAnimations()) {
         if (!anim) continue;
         Clip clip;
-        clip.raw = anim->getName();
+        clip.raw = QString::fromStdString(anim->getName());
         clip.source = mFilePath;
         clip.skel = anim->getSkeletalAnimation();
         // Root motion is a policy of the PREVIEW, not of the file: the clip

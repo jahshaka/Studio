@@ -82,13 +82,13 @@ bool add(const iris::SceneNodePtr &from, const iris::SceneNodePtr &to, const QSt
                                      .arg(from->getName(), key, to->getName()));
     }
 
-    const QVector<iris::ConstraintProperty> was = from->physicsProperty.constraints;
-    QVector<iris::ConstraintProperty> next = was;
+    const std::vector<iris::ConstraintProperty> was = from->physicsProperty.constraints;
+    std::vector<iris::ConstraintProperty> next = was;
     iris::ConstraintProperty c;
-    c.constraintFrom = QString::fromStdString(from->getGUID());
-    c.constraintTo = toGuid;
+    c.constraintFrom = from->getGUID();
+    c.constraintTo = toGuid.toStdString();
     c.constraintType = row->type;
-    next.append(c);
+    next.push_back(c);
 
     // Whole-list assignment both ways, so the push's immediate redo() is
     // idempotent (NodeEditCommand's contract).
@@ -105,7 +105,7 @@ QVariantList describe(const iris::SceneNodePtr &node)
     QVariantList out;
     if (!node) return out;
     for (const iris::ConstraintProperty &c : node->physicsProperty.constraints)
-        out.append(QVariantMap{ { QStringLiteral("to"), c.constraintTo },
+        out.append(QVariantMap{ { QStringLiteral("to"), QString::fromStdString(c.constraintTo) },
                                 { QStringLiteral("type"), nameOf(c.constraintType) } });
     return out;
 }

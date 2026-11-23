@@ -320,22 +320,22 @@ QJsonObject AssetMetadata::forAvatarFile(const QString &filePath)
     file.close();
 
     iris::AvatarDefinition def;
-    QString error;
+    std::string error;
     if (!iris::avatarDefinitionFromJson(qtstd::fromQJsonObject(obj), def, &error)) {
         // A row whose definition will not parse still gets a block, for the
         // same reason a bad .ies does: otherwise the lazy backfill re-parses
         // it on every inspection. The refusal is carried so the UI can SAY
         // what is wrong instead of showing a nameless tile.
-        meta["error"] = error;
+        meta["error"] = QString::fromStdString(error);
         return meta;
     }
-    meta["name"] = def.name;
-    meta["model"] = def.modelAsset;
-    meta["rigId"] = def.rig.rigId;
+    meta["name"] = QString::fromStdString(def.name);
+    meta["model"] = QString::fromStdString(def.modelAsset);
+    meta["rigId"] = QString::fromStdString(def.rig.rigId);
     meta["bones"] = def.rig.bones;
-    meta["defaultClip"] = def.defaultClip;
+    meta["defaultClip"] = QString::fromStdString(def.defaultClip);
     QJsonArray clips;
-    for (const auto &clip : def.clips) clips.append(clip.name);
+    for (const auto &clip : def.clips) clips.append(QString::fromStdString(clip.name));
     meta["clips"] = clips;
     return meta;
 }

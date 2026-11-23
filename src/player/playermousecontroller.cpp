@@ -175,7 +175,7 @@ void PlayerMouseController::doObjectPicking(
 
     if (pickedNode->isPhysicsBody) {
         scene->getPhysicsEnvironment()->createPickingConstraint(iris::PickingHandleType::MouseButton,
-                                                                QString::fromStdString(pickedNode->getGUID()),
+                                                                pickedNode->getGUID(),
                                                                 iris::PhysicsHelper::btVector3FromVec3(hitList.last().hitPoint),
                                                                 segStart,
                                                                 segEnd);

@@ -52,6 +52,7 @@
 #include <memory>
 #include <string>
 #include <vector>
+#include <cstdint>
 
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) std::printf("ok:   %s\n", std::string(msg).c_str()); \
@@ -133,7 +134,7 @@ static std::string fields(const iris::PbrMaterial &m)
                   m.alphaCutoff, m.refractionStrength, m.alphaMode, m.clearCoat, m.clearCoatRoughness, m.ior,
                   m.shadingModel, m.workflow, m.anisotropy, int(m.useFresnelColor), int(m.separateFresnel),
                   m.textureVelocityU, m.brdf, int(m.receiveShadows), int(m.emissiveAsLightmap), m.textureVelocityV,
-                  m.detail[0].weight, m.customPiecePixel.toStdString().c_str(), m.customPieceVertex.toStdString().c_str(),
+                  m.detail[0].weight, m.customPiecePixel.c_str(), m.customPieceVertex.c_str(),
                   int(m.textures.size()));
     std::string out = b;
     for (int l = 0; l < iris::PbrMaterial::kDetailLayers; ++l) {
@@ -142,7 +143,7 @@ static std::string fields(const iris::PbrMaterial &m)
                       d.normalWeight);
         out += b;
     }
-    for (const QString &row : iris::PbrMaterial::mapRowNames()) out += " " + std::to_string(m.addressFor(row));
+    for (const std::string &row : iris::PbrMaterial::mapRowNames()) out += " " + std::to_string(m.addressFor(row));
     return out;
 }
 

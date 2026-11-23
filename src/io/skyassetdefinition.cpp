@@ -77,7 +77,7 @@ bool applyToScene(const iris::ScenePtr &scene, iris::SkyType type,
             }
         }
         if (image.isEmpty()) return false;
-        scene->setSkyTexture(iris::Texture2D::load(image));
+        scene->setSkyTexture(iris::Texture2D::load(image.toStdString()));
         return true;
     }
 

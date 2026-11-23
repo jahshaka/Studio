@@ -81,7 +81,7 @@ iris::PropertyAnim *makePropertyAnim(iris::PropertyType type, const QString &nam
         return nullptr;
     }
 
-    anim->setName(name);
+    anim->setName(name.toStdString());
     return anim;
 }
 
@@ -133,16 +133,16 @@ iris::PropertyAnim *trackFor(const iris::AnimationPtr &anim, const PropertyInfo 
 
     const int channels = channelCount(prop.type);
 
-    if (anim->hasPropertyAnim(prop.name)) {
-        auto *existing = anim->getPropertyAnim(prop.name);
+    if (anim->hasPropertyAnim(prop.name.toStdString())) {
+        auto *existing = anim->getPropertyAnim(prop.name.toStdString());
         if (!existing)
             return setError(QStringLiteral("property '%1' has an empty track").arg(prop.name));
         // A track built for a different shape (a Float track for what the
         // document now reports as a Vec3) would be indexed out of range below.
         const auto frames = existing->getKeyFrames();
-        if (frames.count() != channels)
+        if (int(frames.size()) != channels)
             return setError(QStringLiteral("property '%1' has a %2-channel track but needs %3")
-                                .arg(prop.name).arg(frames.count()).arg(channels));
+                                .arg(prop.name).arg(frames.size()).arg(channels));
         for (const auto &frame : frames) {
             if (!frame.keyFrame)
                 return setError(QStringLiteral("property '%1' has an incomplete track").arg(prop.name));
@@ -200,9 +200,9 @@ bool setKeyframe(const iris::AnimationPtr &anim, const PropertyInfo &prop,
 
 int removeKeyframe(const iris::AnimationPtr &anim, const QString &property, double time)
 {
-    if (!anim || !anim->hasPropertyAnim(property))
+    if (!anim || !anim->hasPropertyAnim(property.toStdString()))
         return 0;
-    auto *track = anim->getPropertyAnim(property);
+    auto *track = anim->getPropertyAnim(property.toStdString());
     if (!track) return 0;
 
     int removed = 0;
@@ -231,9 +231,9 @@ int removeKeyframe(const iris::AnimationPtr &anim, const QString &property, doub
 
 bool removeTrack(const iris::AnimationPtr &anim, const QString &property)
 {
-    if (!anim || !anim->hasPropertyAnim(property))
+    if (!anim || !anim->hasPropertyAnim(property.toStdString()))
         return false;
-    anim->removePropertyAnim(property);
+    anim->removePropertyAnim(property.toStdString());
     anim->calculateAnimationLength();
     return true;
 }
@@ -250,9 +250,9 @@ bool removeAnimation(const iris::SceneNodePtr &node, const iris::AnimationPtr &a
 
 QVariant sampleTrack(const iris::AnimationPtr &anim, const QString &property, double time)
 {
-    if (!anim || !anim->hasPropertyAnim(property))
+    if (!anim || !anim->hasPropertyAnim(property.toStdString()))
         return QVariant();
-    auto *track = anim->getPropertyAnim(property);
+    auto *track = anim->getPropertyAnim(property.toStdString());
     if (!track) return QVariant();
 
     const auto frames = track->getKeyFrames();
@@ -263,7 +263,7 @@ QVariant sampleTrack(const iris::AnimationPtr &anim, const QString &property, do
 
     // The channel count IS the type (PropertyAnim carries no tag), and reading
     // the channels directly keeps this free of downcasts.
-    switch (frames.count()) {
+    switch (frames.size()) {
     case 1:
         return frames[0].keyFrame->getValueAt(time);
     case 3:
@@ -290,14 +290,14 @@ TrackSnapshot snapshotTrack(const iris::AnimationPtr &anim, const QString &prope
 {
     TrackSnapshot snap;
     snap.property = property;
-    if (!anim || !anim->hasPropertyAnim(property)) return snap;
-    auto *track = anim->getPropertyAnim(property);
+    if (!anim || !anim->hasPropertyAnim(property.toStdString())) return snap;
+    auto *track = anim->getPropertyAnim(property.toStdString());
     if (!track) return snap;
 
     snap.exists = true;
     for (const auto &info : track->getKeyFrames()) {
         ChannelSnapshot channel;
-        channel.name = info.name;
+        channel.name = QString::fromStdString(info.name);
         if (info.keyFrame) {
             for (const auto *key : info.keyFrame->keys) {
                 KeySnapshot k;
@@ -322,8 +322,8 @@ bool restoreTrack(const iris::AnimationPtr &anim, const TrackSnapshot &snap)
 
     // Whatever is there now goes first, in both directions: restoring a
     // snapshot is "make the track be exactly this", not "merge into it".
-    if (anim->hasPropertyAnim(snap.property))
-        anim->removePropertyAnim(snap.property);
+    if (anim->hasPropertyAnim(snap.property.toStdString()))
+        anim->removePropertyAnim(snap.property.toStdString());
 
     if (snap.exists) {
         // The channel COUNT is the track's type — PropertyAnim carries no tag
@@ -338,8 +338,8 @@ bool restoreTrack(const iris::AnimationPtr &anim, const TrackSnapshot &snap)
         auto *fresh = makePropertyAnim(type, snap.property);
         if (!fresh) return false;
         const auto frames = fresh->getKeyFrames();
-        if (frames.count() != snap.channels.count()) { delete fresh; return false; }
-        for (int c = 0; c < frames.count(); ++c) {
+        if (int(frames.size()) != snap.channels.count()) { delete fresh; return false; }
+        for (int c = 0; c < int(frames.size()); ++c) {
             auto *frame = frames[c].keyFrame;
             if (!frame) continue;
             for (const auto &k : snap.channels[c].keys) {

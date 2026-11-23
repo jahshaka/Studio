@@ -93,7 +93,7 @@ inline iris::MeshPtr seed(const QString &seedKey)
 /// Stand the fixture parse in for the app's seeded library behind the seam.
 inline void installShippedResolver()
 {
-    iris::ShippedMeshes::setResolver([](const QString &key) { return seed(key); });
+    iris::ShippedMeshes::setResolver([](const std::string &key) { return seed(QString::fromStdString(key)); });
 }
 
 }   // namespace testmesh

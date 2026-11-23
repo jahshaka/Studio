@@ -307,7 +307,7 @@ void testDocumentEditPose()
     player.serial = 2;
     editor.pose.insert("body", entry(5));   // ...so it holds the pose before any Play
     player.pose.insert("body", entry(-3));  // ...and the Player's snapshot is the editor's PLAY pose
-    const QHash<QString, PoseEntry> none;
+    const std::unordered_map<std::string, PoseEntry> none;   // the environment's shape
 
     auto edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &player, &editor }, 1, &none);
     CHECK(edit.wholeDocument && edit.pose.value("body").pos == iris::Vec3(0, 5, 0),
@@ -317,8 +317,8 @@ void testDocumentEditPose()
     CHECK(edit.wholeDocument && edit.pose.value("body").pos == iris::Vec3(0, -3, 0),
           "editpose: the Player's run alone - its snapshot (the editor's run is stopped)");
     player.doc = 2;
-    QHash<QString, PoseEntry> simulated;
-    simulated.insert("body", entry(9));
+    std::unordered_map<std::string, PoseEntry> simulated;
+    simulated.insert_or_assign("body", entry(9));
     edit = editpose::documentEditPose<PoseEntry, RunStandIn>({ &editor, &player }, 1, &simulated);
     CHECK(!edit.wholeDocument && edit.pose.size() == 1 && edit.pose.value("body").pos == iris::Vec3(0, 9, 0),
           "editpose: no run on this document - Simulate's held bodies, and not a whole document (nothing is spawned)");

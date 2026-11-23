@@ -9,6 +9,8 @@
 #include <QApplication>
 #include <QKeyEvent>
 #include <QKeySequence>
+
+#include "app/keynames.h"
 #include "data/settingsstore.h"
 #include <QShortcut>
 #include <QTemporaryDir>
@@ -207,7 +209,7 @@ int main(int argc, char **argv)
         const iris::InputMap &map = iris::InputSystem::instance().map();
         reg.addFixed("gameplay.move", "Move (play mode)", "Gameplay", "W / S / A / D");
         reg.addFixed("gameplay.jump", "Jump (play mode)", "Gameplay", "Space");
-        CHECK(reg.setFixedText("gameplay.move", map.displayText(iris::InputAction::Move)),
+        CHECK(reg.setFixedText("gameplay.move", keynames::displayText(map, iris::InputAction::Move)),
               "a fixed row can be re-labelled from the live InputMap");
         // The expected string is the SHIPPED DEFAULT BINDING, re-pinned
         // 2026-09-09: Move gained the arrow keys beside W/A/S/D when the

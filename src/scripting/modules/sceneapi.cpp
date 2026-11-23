@@ -743,7 +743,7 @@ QVariant SceneApi::playMode(const QVariant &mode)
     const QVariant value = normalizeJs(mode);
     if (value.isValid() && !value.isNull() && !value.toString().isEmpty()) {
         iris::ScenePlayMode parsed = iris::ScenePlayMode::Explorer;
-        if (!iris::playModeFromName(value.toString(), parsed)) {
+        if (!iris::playModeFromName(value.toString().toStdString(), parsed)) {
             fail(QStringLiteral("scene.playMode: '%1' is not a play mode "
                                 "(known: explorer, third-person, camera)").arg(value.toString()));
             return QVariant();

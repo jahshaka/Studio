@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "scripting/modules/inputapi.h"
 
 #include "irisgl/document/input/inputmap.h"
+#include "app/keynames.h"
 #include "ui/ishellview.h"
 
 using iris::InputAction;
@@ -94,15 +95,15 @@ QVariantList InputApi::bindings()
     QVariantList out;
     for (InputAction a : InputMap::allActions()) {
         QVariantMap row;
-        row.insert(QStringLiteral("action"),  InputMap::actionName(a));
+        row.insert(QStringLiteral("action"),  QString::fromStdString(InputMap::actionName(a)));
         row.insert(QStringLiteral("type"),    typeName(a));
         row.insert(QStringLiteral("latched"), InputMap::isLatched(a));
         row.insert(QStringLiteral("mouse"),   InputMap::usesMouse(a));
         QVariantList keys;
         for (const auto &b : map.bindings(a))
-            keys.append(InputMap::keyName(b.key));
+            keys.append(keynames::keyName(b.key));
         row.insert(QStringLiteral("keys"), keys);
-        row.insert(QStringLiteral("display"), map.displayText(a));
+        row.insert(QStringLiteral("display"), keynames::displayText(map, a));
         out.append(row);
     }
     return out;
@@ -111,12 +112,12 @@ QVariantList InputApi::bindings()
 bool InputApi::bind(const QString &action, const QVariant &binding)
 {
     InputAction a;
-    if (!InputMap::actionFromName(action, a))
+    if (!InputMap::actionFromName(action.toStdString(), a))
         return fail(QStringLiteral("input.bind: no such action '%1' — the set is Move, Look, "
                                    "Jump, Sprint and it is closed").arg(action));
 
     const bool axis = InputMap::typeOf(a) == InputActionType::Axis2D;
-    QVector<InputKeyBinding> keys;
+    std::vector<InputKeyBinding> keys;
 
     if (!binding.isValid() || binding.isNull()) {
         // explicit unbind
@@ -129,26 +130,27 @@ bool InputApi::bind(const QString &action, const QVariant &binding)
         for (const auto &slot : kAxisSlots) {
             const QString name = m.value(QString::fromLatin1(slot.name)).toString();
             if (name.isEmpty()) continue;
-            const int key = InputMap::keyFromName(name);
+            const int key = keynames::keyFromName(name);
             if (key == 0)
                 return fail(QStringLiteral("input.bind: '%1' names no key").arg(name));
-            keys.append(InputKeyBinding{ key, slot.x, slot.y });
+            keys.push_back(InputKeyBinding{ key, slot.x, slot.y });
         }
     } else {
         QString name = binding.toString();
         if (name.isEmpty()) name = binding.toMap().value(QStringLiteral("key")).toString();
         if (!name.isEmpty()) {
-            const int key = InputMap::keyFromName(name);
+            const int key = keynames::keyFromName(name);
             if (key == 0)
                 return fail(QStringLiteral("input.bind: '%1' names no key").arg(name));
-            keys.append(InputKeyBinding{ key, 0.f, 0.f });
+            keys.push_back(InputKeyBinding{ key, 0.f, 0.f });
         }
     }
 
-    QString conflictAction, conflictKey;
+    std::string conflictAction;
+    int conflictKey = 0;
     if (!InputSystem::instance().bind(a, keys, &conflictAction, &conflictKey))
         return fail(QStringLiteral("input.bind: '%1' is already bound to %2 — unbind it there "
-                                   "first").arg(conflictKey, conflictAction));
+                                   "first").arg(keynames::keyName(conflictKey), QString::fromStdString(conflictAction)));
     refreshShortcutRows();
     return true;
 }

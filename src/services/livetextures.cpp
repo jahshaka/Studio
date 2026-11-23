@@ -39,7 +39,7 @@ QString LiveTextureCatalog::create(const QString &name, int width, int height, b
         return refuse(QStringLiteral("a live texture is limited to 8192 x 8192"));
 
     const QString guid = QString::fromStdString(iris::newGuid());
-    iris::Texture2DPtr tex = iris::LiveTextures::create(guid, name, width, height, mipmaps);
+    iris::Texture2DPtr tex = iris::LiveTextures::create(guid.toStdString(), name.toStdString(), width, height, mipmaps);
     if (!tex) return refuse(QStringLiteral("the live texture could not be created"));
 
     Record r;
@@ -58,7 +58,7 @@ bool LiveTextureCatalog::write(const QString &guid, iris::Image &rgba, QString *
         if (error) *error = message;
         return false;
     };
-    iris::Texture2DPtr tex = iris::LiveTextures::find(guid);
+    iris::Texture2DPtr tex = iris::LiveTextures::find(guid.toStdString());
     if (!tex) return refuse(QStringLiteral("no live texture '%1'").arg(guid));
     if (rgba.isNull()) return refuse(QStringLiteral("the image is empty"));
     if (rgba.width != tex->getWidth() || rgba.height != tex->getHeight())
@@ -72,13 +72,13 @@ bool LiveTextureCatalog::write(const QString &guid, iris::Image &rgba, QString *
 
 bool LiveTextureCatalog::exists(const QString &guid)
 {
-    return !!iris::LiveTextures::find(guid);
+    return !!iris::LiveTextures::find(guid.toStdString());
 }
 
 QVariantMap LiveTextureCatalog::info(const QString &guid)
 {
     QVariantMap out;
-    iris::Texture2DPtr tex = iris::LiveTextures::find(guid);
+    iris::Texture2DPtr tex = iris::LiveTextures::find(guid.toStdString());
     if (!tex) return out;
     QString name;
     for (const Record &r : rows()) if (r.guid == guid) name = r.name;
@@ -94,7 +94,7 @@ QVariantMap LiveTextureCatalog::info(const QString &guid)
 
 bool LiveTextureCatalog::destroy(const QString &guid)
 {
-    if (!iris::LiveTextures::destroy(guid)) return false;
+    if (!iris::LiveTextures::destroy(guid.toStdString())) return false;
     for (int i = 0; i < rows().size(); ++i)
         if (rows()[i].guid == guid) { rows().remove(i); break; }
     // The AssetManager mirror row, if this session still has one. Nothing else
@@ -111,10 +111,10 @@ QVector<LiveTextureCatalog::Record> LiveTextureCatalog::list()
 
 QString LiveTextureCatalog::refFor(const QString &guid)
 {
-    return iris::LiveTextures::refFor(guid);
+    return QString::fromStdString(iris::LiveTextures::refFor(guid.toStdString()));
 }
 
 QString LiveTextureCatalog::guidOfRef(const QString &ref)
 {
-    return iris::LiveTextures::guidOf(ref);
+    return QString::fromStdString(iris::LiveTextures::guidOf(ref.toStdString()));
 }

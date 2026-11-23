@@ -165,8 +165,8 @@ void PlayBack::saveNodeTransforms()
 	// environment's held copy, which the run's physics start below overwrites): Stop and a save during the run both
 	// mean the edited pose (player/editpose.h playStartSnapshot).
 	const auto env = scene->getPhysicsEnvironment();
-	nodeTransforms = editpose::playStartSnapshot<PlayBackNodeTransform>(
-		scene->nodes, env ? env->nodeTransforms : QHash<QString, iris::Environment::SavedLocal>());
+	static const std::unordered_map<std::string, iris::Environment::SavedLocal> none;   // no simulation: nothing held
+	nodeTransforms = editpose::playStartSnapshot<PlayBackNodeTransform>(scene->nodes, env ? env->nodeTransforms : none);
 }
 
 editpose::EditPose<PlayBackNodeTransform> PlayBack::documentEditPose(const iris::ScenePtr &document,

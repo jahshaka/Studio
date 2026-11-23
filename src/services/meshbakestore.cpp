@@ -42,6 +42,7 @@ For more information see the LICENSE file
 #include "services/jahlog.h"
 #include "irisgl/import/meshbake.h"
 #include "irisgl/import/parsecensus.h"
+#include <algorithm>
 
 namespace
 {
@@ -794,10 +795,13 @@ QStringList takeRefused(const QVector<iris::PrewarmItem> &plan, iris::MeshPrewar
         if (item.bakePath.isEmpty() || prewarm.baked(item.path) || !prewarm.contains(item.path)) continue;
         {
             QMutexLocker locked(&sRequeuedLock);
-            if (sRequeued.contains(item.path)) {   // ONCE: a re-bake refused again is a miss, never a loop
+            if (sRequeued.contains(item.path)) {   // ONCE PER MODEL PER PROCESS: a miss, never a loop
                 JahLog::write(JahLog::legacy, JahLog::Level::Warning,
-                              QStringLiteral("mesh bake: %1: its re-bake was refused again - not retried, the model "
-                                             "stays missing").arg(item.path));
+                              AssetCas::isMarkedCorrupt(item.bakePath)
+                                  ? QStringLiteral("mesh bake: %1: a re-bake is already under way (another open sent it "
+                                                   "back): this open shows the model missing").arg(item.path)
+                                  : QStringLiteral("mesh bake: %1: its re-bake was refused again - not retried, the model "
+                                                   "stays missing").arg(item.path));
                 continue;
             }
             sRequeued.insert(item.path);

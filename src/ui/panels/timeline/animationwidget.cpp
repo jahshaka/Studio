@@ -320,7 +320,7 @@ void AnimationWidget::refreshAnimationList()
     ui->animList->clear();
     auto animList = QStringList();
     for (auto anim : node->getAnimations()) {
-        animList.append(anim->getName());
+        animList.append(QString::fromStdString(anim->getName()));
     }
 
     ui->animList->addItems(animList);
@@ -405,7 +405,7 @@ void AnimationWidget::addAnimation()
         return;
 
     auto name = dialog.getName();
-    animation = iris::Animation::create(name);
+    animation = iris::Animation::create(name.toStdString());
 
     node->addAnimation(animation);
     node->setAnimation(animation);

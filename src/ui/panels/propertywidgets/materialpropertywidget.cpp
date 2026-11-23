@@ -202,7 +202,7 @@ bool MaterialPropertyWidget::rebindTo(const std::shared_ptr<iris::MeshNode> &nod
         // which would rebuild the panel and rewrite the project's dependency
         // rows — this is a refill, not a pick.
         const QSignalBlocker block(materialSelector);
-        materialSelector->setCurrentItemData(material->getGuid());
+        materialSelector->setCurrentItemData(QString::fromStdString(material->getGuid()));
     }
     return true;
 }
@@ -328,8 +328,8 @@ void MaterialPropertyWidget::materialChanged(int index)
     // what it had.
     if (!picked) { setupShaderSelector(); addResetRow(); setWidgetProperties(); return; }
 
-    picked->setName(pickedName);
-    picked->setGuid(guid);
+    picked->setName(pickedName.toStdString());
+    picked->setGuid(guid.toStdString());
     material = picked;
     // The shown material just changed, so the texture-row snapshot describes
     // the wrong material until it is retaken.
@@ -384,7 +384,7 @@ void MaterialPropertyWidget::setupShaderSelector()
         if (!asset || asset->type != ModelTypes::Material) continue;
         materialSelector->addItem(QFileInfo(asset->fileName).baseName(), asset->assetGuid);
     }
-    if (material) materialSelector->setCurrentItemData(material->getGuid());
+    if (material) materialSelector->setCurrentItemData(QString::fromStdString(material->getGuid()));
 
     connect(materialSelector, SIGNAL(currentIndexChanged(int)), this, SLOT(materialChanged(int)));
 }

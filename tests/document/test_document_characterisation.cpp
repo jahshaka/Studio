@@ -66,6 +66,7 @@
 
 #include "../support/documentgraph.h"
 #include <cstdint>
+#include "irisgl/document/mapvalue.h"
 static int failures = 0;
 #define CHECK(cond, msg) do { if (cond) printf("ok:   %s\n", msg); else { printf("FAIL: %s\n", msg); ++failures; } } while (0)
 
@@ -113,7 +114,7 @@ int main(int argc, char **argv)
     // recorded as it is - the engine's own load is the verdict. (The installed arm is checked at the end of main.)
     CHECK(iris::Texture2D::readableProbe() == nullptr, "no readable-image probe is installed in this process yet");
     const QString notAFile = QStringLiteral("/nowhere/not-a-file.png");
-    auto tex = iris::Texture2D::load(notAFile);
+    auto tex = iris::Texture2D::load(notAFile.toStdString());
     CHECK(tex && tex->source == notAFile, "uninstalled probe: load() records the path, even of no file");
 
     // --- Cubemap from six held faces (Studio's imagedecode.h decodes the files), MOVED in: the document checks the
@@ -143,7 +144,7 @@ int main(int argc, char **argv)
     // zero fill). The conversion is Qt's own: equal to convertToFormat(RGBA8888) for the two formats
     // QVideoFrame::toImage gives (RGB32, ARGB32_Premultiplied: spikes/noqt-document-1/s5/toimage-format.txt).
     {
-        auto live = iris::Texture2D::createLive(QStringLiteral("characterisation-live"), QStringLiteral("live"), 4, 2, false);
+        auto live = iris::Texture2D::createLive((QStringLiteral("characterisation-live")).toStdString(), (QStringLiteral("live")).toStdString(), 4, 2, false);
         const std::uint8_t *born = live ? live->liveImage().rgba.data() : nullptr;
         QImage first(4, 2, QImage::Format_RGB32);
         first.fill(QColor(10, 20, 30));
@@ -293,13 +294,13 @@ int main(int argc, char **argv)
         auto env = physScene->getPhysicsEnvironment();
         env->initializePhysicsWorldFromScene(physScene->getRootNode());
         CHECK(true, "A1.4: a non-mesh node with a mesh-shaped physics body does not crash");
-        CHECK(env->hashBodies.contains("a14-light-hull")
-                  && env->hashBodies.contains("a14-empty-trimesh")
-                  && env->hashBodies.contains("a14-camera-compound")
-                  && env->hashBodies.contains("a14-meshnode-no-mesh"),
+        CHECK(env->hashBodies.count("a14-light-hull")
+                  && env->hashBodies.count("a14-empty-trimesh")
+                  && env->hashBodies.count("a14-camera-compound")
+                  && env->hashBodies.count("a14-meshnode-no-mesh"),
               "A1.4: every degraded body still exists in the world (constraints and "
               "transform sync keep resolving)");
-        CHECK(env->hashBodies.contains("a14-light-sphere"),
+        CHECK(env->hashBodies.count("a14-light-sphere"),
               "A1.4: the mesh-free shapes still build on a non-mesh node");
 
         // it still simulates: the degraded bodies collide with nothing, the
@@ -1045,8 +1046,8 @@ int main(int argc, char **argv)
         source->setMesh(testmesh::load(":assets/models/cube.obj"));
         source->faceCullingMode = iris::FaceCullingMode::None;
         auto pbr = iris::PbrMaterial::create();
-        pbr->setName(QStringLiteral("Red Paint"));
-        pbr->setGuid(QStringLiteral("11111111-2222-3333-4444-555555555555"));
+        pbr->setName((QStringLiteral("Red Paint")).toStdString());
+        pbr->setGuid((QStringLiteral("11111111-2222-3333-4444-555555555555")).toStdString());
         pbr->setValue("baseColor", iris::colourToValue(iris::SrgbColor(200, 20, 20)));
         pbr->setValue("metallic", iris::Value(double(0.25f)));
         pbr->setValue("roughness", iris::Value(double(0.7f)));
@@ -1059,7 +1060,7 @@ int main(int argc, char **argv)
         pbr->setValue("baseColorMap", iris::Value(texPath.toStdString()));
         pbr->setValue("detail0Blend", iris::Value(4));
         pbr->setValue("normalMapAddress", iris::Value(1));
-        CHECK(pbr->textures.contains(QStringLiteral("u_baseColorMap")),
+        CHECK(pbr->textures.count((QStringLiteral("u_baseColorMap")).toStdString()),
               "dup: the original carries a base colour map");
         source->setMaterial(pbr);
 
@@ -1079,13 +1080,13 @@ int main(int argc, char **argv)
             CHECK(dupMat->alphaMode == 2 && std::fabs(dupMat->alpha - 0.8f) < 1e-6f &&
                   std::fabs(dupMat->textureScale - 3.0f) < 1e-6f &&
                   std::fabs(dupMat->textureScaleV - 2.0f) < 1e-6f &&
-                  dupMat->detail[0].blend == 4 && dupMat->addressFor(QStringLiteral("normalMap")) == 1,
+                  dupMat->detail[0].blend == 4 && dupMat->addressFor((QStringLiteral("normalMap")).toStdString()) == 1,
                   "dup: opacity, UV tiling, detail blend and address modes are the original's");
             CHECK(dupMat->getName() == pbr->getName() && dupMat->getGuid() == pbr->getGuid() &&
                   dupMat->renderLayer == pbr->renderLayer,
                   "dup: the name, the source guid and the render layer travel");
-            CHECK(dupMat->textures.contains(QStringLiteral("u_baseColorMap")) &&
-                  dupMat->textures.value(QStringLiteral("u_baseColorMap"))->source == texPath,
+            CHECK(dupMat->textures.count((QStringLiteral("u_baseColorMap")).toStdString()) &&
+                  iris::valueOr(dupMat->textures, std::string("u_baseColorMap"))->source == texPath,
                   "dup: the base colour map travels (the same file)");
             // THE ROWS: what the panel shows and what SceneWriter saves. Equal
             // in name, order and value — and distinct objects.
@@ -1136,18 +1137,18 @@ int main(int argc, char **argv)
         QImage px(4, 4, QImage::Format_RGBA8888);
         px.fill(Qt::red);
         CHECK(px.save(realPng), "probe: a real 4x4 png is written");
-        CHECK(iris::Texture2D::load(textPng) != nullptr,
+        CHECK(iris::Texture2D::load(textPng.toStdString()) != nullptr,
               "probe: BEFORE the install, the text file's path is recorded (the uninstalled arm)");
         CHECK(imagedecode::installProbe(), "probe: Studio's probe installs");
         CHECK(iris::Texture2D::readableProbe() == &imagedecode::readable, "probe: it is the installed probe");
         CHECK(imagedecode::installProbe(), "probe: installing the SAME probe again is accepted (a no-op)");
-        CHECK(iris::Texture2D::load(textPng) == nullptr,
+        CHECK(iris::Texture2D::load(textPng.toStdString()) == nullptr,
               "probe: a text file named .png answers NULL (no readable image)");
-        auto real = iris::Texture2D::load(realPng);
+        auto real = iris::Texture2D::load(realPng.toStdString());
         CHECK(real && real->source == realPng, "probe: a real png's path is recorded");
         auto pbrProbe = iris::PbrMaterial::create();
         pbrProbe->setValue("baseColorMap", iris::Value(textPng.toStdString()));
-        CHECK(!pbrProbe->textures.value(QStringLiteral("u_baseColorMap")),
+        CHECK(!iris::valueOr(pbrProbe->textures, (QStringLiteral("u_baseColorMap")).toStdString()),
               "probe: PbrMaterial::loadTexture keeps its null for an unreadable file (ruling 1b)");
     }
 

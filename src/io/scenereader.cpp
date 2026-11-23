@@ -360,7 +360,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 	if (!scene->clouds.weatherMapGuid.empty()) {
 		const QString weather = resolveAssetPath(QString::fromStdString(scene->clouds.weatherMapGuid));
 		if (QFileInfo(weather).isFile())
-			scene->cloudWeatherMap = iris::Texture2D::load(weather);
+			scene->cloudWeatherMap = iris::Texture2D::load(weather.toStdString());
 	}
 	// The music is DATA here; the editor's AmbienceService starts it once the
 	// opened scene is the live one (audit D8) — a reader plays nothing.
@@ -406,7 +406,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
 		case iris::SkyType::EQUIRECTANGULAR: {
 			QString textureGuid = qtstd::toQJsonObject(iris::valueOr(scene->skyData, "Equirectangular")).value("equiSkyGuid").toString();
 			auto image = resolveAssetPath(textureGuid);
-			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image));
+			if (QFileInfo(image).isFile()) scene->setSkyTexture(iris::Texture2D::load(image.toStdString()));
 			break;
 		}
 
@@ -784,7 +784,7 @@ iris::ScenePtr SceneReader::readScene(QJsonObject& projectObj)
     // scenes already had — rather than refusing to open the file.
     {
         iris::ScenePlayMode mode = iris::ScenePlayMode::Explorer;
-        if (iris::playModeFromName(sceneObj.value("playMode").toString(), mode))
+        if (iris::playModeFromName((sceneObj.value("playMode").toString()).toStdString(), mode))
             scene->setPlayMode(mode);
     }
 
@@ -994,18 +994,18 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
         for (int i = 0; i < iris::kClipRoleCount; ++i) {
             const auto role = iris::ClipRole(i);
             const QString key = QLatin1String(iris::clipRoleName(role));
-            if (rolesObj.contains(key)) roles.set(role, rolesObj[key].toString());
+            if (rolesObj.contains(key)) roles.set(role, rolesObj[key].toString().toStdString());
         }
         loco->markRolesFromFile(roles, l["default"].toBool(true));
         if (l.contains(QLatin1String("asset"))) {
             iris::LocomotionAsset asset;
-            QString err;
+            std::string err;
             if (iris::locomotionAssetFromJson(qtstd::fromQJsonObject(l["asset"].toObject()), asset, &err)) {
                 loco->setAssetPreservingDefaultFlag(asset, &err);
             } else {
                 qWarning("SceneReader: node '%s' has an invalid locomotion asset (%s) — "
                          "falling back to the generated default",
-                         sceneNode->getName().c_str(), qUtf8Printable(err));
+                         sceneNode->getName().c_str(), err.c_str());
                 loco->setDefaultAsset(roles, mp.walkSpeed, mp.runSpeed);
             }
         } else {
@@ -1045,13 +1045,13 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
 			QJsonObject constraintObject = constraint.toObject();
 
 			iris::ConstraintProperty constraintProp;
-			constraintProp.constraintFrom = constraintObject.value("constraintFrom").toString();
-			constraintProp.constraintTo = constraintObject.value("constraintTo").toString();
+			constraintProp.constraintFrom = (constraintObject.value("constraintFrom").toString()).toStdString();
+			constraintProp.constraintTo = (constraintObject.value("constraintTo").toString()).toStdString();
 			constraintProp.constraintType = static_cast<iris::PhysicsConstraintType>(
 			    constraintObject.value("constraintType")
 			        .toInt(static_cast<int>(constraintProp.constraintType)));
 
-			sceneNode->physicsProperty.constraints.append(constraintProp);
+			sceneNode->physicsProperty.constraints.push_back(constraintProp);
 		}
 	}
 
@@ -1076,7 +1076,7 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
         auto animObj = animVal.toObject();
 
         auto name = animObj["name"].toString();
-        auto animation = iris::Animation::create(name);
+        auto animation = iris::Animation::create(name.toStdString());
         // TWO REAL DISAGREEMENTS, found by the no-argument half of the
         // reader-defaults lint (READER-DEFAULTS-2): a clip whose file
         // carries no `length` read 0 against the constructor's 1 second
@@ -1099,7 +1099,7 @@ void SceneReader::readAnimationData(QJsonObject& nodeObj,iris::SceneNodePtr scen
             else
                 propAnim = new iris::ColorPropertyAnim();
 
-            propAnim->setName(name);
+            propAnim->setName(name.toStdString());
 
             auto keyFrameList = propObj["keyFrames"].toArray();
             int index = 0;
@@ -1688,7 +1688,7 @@ iris::ParticleSystemNodePtr SceneReader::createParticleSystem(QJsonObject& nodeO
         const QString textureGuid = nodeObj.value(QStringLiteral("texture")).toString();
         const QString texturePath = handle ? resolveAssetPath(textureGuid) : QString();
         particleNode->setTexture(texturePath.isEmpty() ? iris::Texture2DPtr()
-                                                       : iris::Texture2D::load(texturePath),
+                                                       : iris::Texture2D::load(texturePath.toStdString()),
                                  textureGuid.toStdString());
     }
 	particleNode->setVisible(nodeObj["visible"].toBool(particleNode->isVisible()));
@@ -1823,7 +1823,7 @@ void SceneReader::restoreCustomPieces(iris::PbrMaterialPtr mat, const QJsonObjec
 	// THE GUID FIRST, whatever the read finds: a scene opened while its graph
 	// material is missing must keep naming it, or the next save drops the key
 	// and the pieces never come back once the asset does.
-	mat->setGuid(graphGuid);
+	mat->setGuid(graphGuid.toStdString());
 	if (!handle) return;
 	const QJsonObject definition = MaterialBundle::read(handle, graphGuid, project);
 	if (definition.isEmpty()) return;   // SceneIssues names the missing asset

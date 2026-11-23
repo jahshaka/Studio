@@ -1284,7 +1284,8 @@ QVariant NodeApi::avatar(const QString &id)
         if (!n) return;
         for (const auto &anim : n->getAnimations()) {
             if (!anim || !anim->hasSkeletalAnimation()) continue;
-            if (!clips.contains(anim->getName())) clips.append(anim->getName());
+            const QString clipName = QString::fromStdString(anim->getName());
+            if (!clips.contains(clipName)) clips.append(clipName);
         }
         for (int i = 0; i < n->childCount(); ++i)
             if (auto *c = n->childAt(i)) walk(c->weak_from_this().lock());
@@ -1294,7 +1295,7 @@ QVariant NodeApi::avatar(const QString &id)
         const auto &weights = loco->weights();
         float best = 0.0f;
         for (const auto &weight : weights)
-            if (weight.weight > best) { best = weight.weight; activeClip = weight.clip; }
+            if (weight.weight > best) { best = weight.weight; activeClip = QString::fromStdString(weight.clip); }
     }
 
     return QVariantMap{
@@ -1547,7 +1548,7 @@ QVariant NodeApi::particleTexture(const QString &id)
         return QVariant();
     }
     auto ps = std::static_pointer_cast<iris::ParticleSystemNode>(node);
-    return QVariantMap{ { "path", ps->texture ? ps->texture->getSource() : QString() } };
+    return QVariantMap{ { "path", ps->texture ? QString::fromStdString(ps->texture->getSource()) : QString() } };
 }
 
 // --- Physics (AI_SURFACE_PROGRAM_SPEC lane D #14) --------------------------

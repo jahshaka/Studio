@@ -22,6 +22,7 @@ For more information see the LICENSE file
 #include "irisgl/document/scenegraph/scenenode.h"
 
 #include "ui/panels/timeline/animationwidget.h"
+#include "irisgl/document/mapvalue.h"
 
 
 class KeyFrameGroup
@@ -68,7 +69,7 @@ void KeyFrameLabelTreeWidget::setActiveAnimation(iris::AnimationPtr animation)
 {
     ui->treeWidget->clear();
     if (!!animation) {
-        for(auto prop : animation->properties) {
+        for (const auto &[propName, prop] : animation->properties) {
             // add prop to tree
             addPropertyToTree(prop);
         }
@@ -90,7 +91,7 @@ void KeyFrameLabelTreeWidget::addProperty(QString propName)
     // track for a name that is not there, and addPropertyToTree dereferences
     // whatever it is handed.
     auto anim = node ? node->getAnimation() : iris::AnimationPtr();
-    auto prop = anim ? anim->properties.value(propName, nullptr) : nullptr;
+    auto prop = anim ? iris::valueOr(anim->properties, propName.toStdString(), nullptr) : nullptr;
     if (!prop)
         return;
     addPropertyToTree(prop);
@@ -105,12 +106,12 @@ void KeyFrameLabelTreeWidget::addPropertyToTree(iris::PropertyAnim *prop)
 {
     auto frames = prop->getKeyFrames();
     auto treeItem = new QTreeWidgetItem();
-    treeItem->setText(0,prop->getName());
+    treeItem->setText(0,QString::fromStdString(prop->getName()));
 
     if (frames.size() == 1) {
         KeyFrameData frameData;
         frameData.keyFrame = frames[0].keyFrame;
-        frameData.propertyName = prop->getName();
+        frameData.propertyName = QString::fromStdString(prop->getName());
         frameData.subPropertyName = "";
 
         treeItem->setData(0,Qt::UserRole,QVariant::fromValue(frameData));
@@ -118,19 +119,19 @@ void KeyFrameLabelTreeWidget::addPropertyToTree(iris::PropertyAnim *prop)
 
         KeyFrameData frameData;
         frameData.keyFrame = nullptr;
-        frameData.propertyName = prop->getName();
+        frameData.propertyName = QString::fromStdString(prop->getName());
         frameData.subPropertyName = "";
         calculateSummaryKeys(prop, frameData);
         treeItem->setData(0,Qt::UserRole,QVariant::fromValue(frameData));
 
         for (auto frame : frames) {
             auto childItem = new QTreeWidgetItem();
-            childItem->setText(0,frame.name);
+            childItem->setText(0,QString::fromStdString(frame.name));
 
             KeyFrameData frameData;
             frameData.keyFrame = frame.keyFrame;
-            frameData.propertyName = prop->getName();
-            frameData.subPropertyName = frame.name;
+            frameData.propertyName = QString::fromStdString(prop->getName());
+            frameData.subPropertyName = QString::fromStdString(frame.name);
 
             childItem->setData(0, Qt::UserRole, QVariant::fromValue(frameData));
             treeItem->addChild(childItem);
@@ -242,7 +243,7 @@ void KeyFrameLabelTreeWidget::calculateSummaryKeys(iris::PropertyAnim *prop, Key
             auto& summaryKeys = keyFrameData.summaryKeys;
             if (!summaryKeys.contains(key->time)) {
                 SummaryKey sumKey;
-                sumKey.propertyName = prop->getName();
+                sumKey.propertyName = QString::fromStdString(prop->getName());
                 sumKey.keys.append(key);
                 summaryKeys.insert(key->time, sumKey);
             } else {
@@ -255,7 +256,7 @@ void KeyFrameLabelTreeWidget::calculateSummaryKeys(iris::PropertyAnim *prop, Key
 void KeyFrameLabelTreeWidget::recalcPropertySummaryKeys(QString name)
 {
     auto anim = node ? node->getAnimation() : iris::AnimationPtr();
-    auto prop = anim ? anim->getPropertyAnim(name) : nullptr;
+    auto prop = anim ? anim->getPropertyAnim(name.toStdString()) : nullptr;
     if (!prop)
         return;
     auto frameData = getPropertyKeyFrameData(name);

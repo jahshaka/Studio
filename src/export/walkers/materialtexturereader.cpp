@@ -35,10 +35,10 @@ QVector<TextureSlot> materialTextureSlots(iris::Material *material)
     // that named it would carry a path to nothing. Every walker that asks this
     // question is asking WHICH FILES TRAVEL WITH THE PROJECT, and the honest
     // answer for pixels that only exist while the app runs is "none".
-    for (auto it = material->textures.constBegin(); it != material->textures.constEnd(); ++it) {
-        if (!it.value() || it.value()->source.isEmpty()) continue;
-        if (iris::LiveTextures::isLiveRef(it.value()->source)) continue;
-        found.append({ it.key(), it.value()->source });
+    for (auto it = material->textures.cbegin(); it != material->textures.cend(); ++it) {
+        if (!it->second || it->second->source.empty()) continue;
+        if (iris::LiveTextures::isLiveRef(it->second->source)) continue;
+        found.append({ QString::fromStdString(it->first), QString::fromStdString(it->second->source) });
     }
 
     // Texture-typed PROPERTY rows, for anything the slot map above missed. A
@@ -48,7 +48,7 @@ QVector<TextureSlot> materialTextureSlots(iris::Material *material)
     for (iris::Property *prop : material->properties()) {
         if (!prop || prop->type != iris::PropertyType::Texture) continue;
         const QString path = qtstd::toQString(static_cast<const iris::TextureProperty *>(prop)->value);
-        if (path.isEmpty() || seen(path) || iris::LiveTextures::isLiveRef(path)) continue;
+        if (path.isEmpty() || seen(path) || iris::LiveTextures::isLiveRef(path.toStdString())) continue;
         found.append({ qtstd::toQString(prop->name), path });
     }
     return found;
@@ -57,10 +57,10 @@ QVector<TextureSlot> materialTextureSlots(iris::Material *material)
 QString textureSlotSource(iris::Material *material, const char *slot)
 {
     if (!material) return QString();
-    auto it = material->textures.constFind(slot);
-    if (it != material->textures.constEnd() && it.value() &&
-        !iris::LiveTextures::isLiveRef(it.value()->source))
-        return it.value()->source;
+    auto it = material->textures.find(slot);
+    if (it != material->textures.cend() && it->second &&
+        !iris::LiveTextures::isLiveRef(it->second->source))
+        return QString::fromStdString(it->second->source);
     return QString();
 }
 

@@ -41,6 +41,7 @@ For more information see the LICENSE file
 #include "jahshaka/engine/Engine.h"
 #include "jahshaka/engine/Published.h"
 #include "jahshaka/engine/Vr.h"
+#include "irisgl/document/mapvalue.h"
 
 namespace {
 
@@ -380,15 +381,15 @@ void SceneIssues::checkNode(iris::SceneNode *node)
         if (material) {
             c.material = std::weak_ptr(material);
             c.materialRevision = material->revision();
-            for (auto it = material->textures.constBegin(); it != material->textures.constEnd(); ++it) {
-                if (!it.value()) continue;
-                const QString &path = it.value()->source;
+            for (auto it = material->textures.cbegin(); it != material->textures.cend(); ++it) {
+                if (!it->second) continue;
+                const QString &path = QString::fromStdString(it->second->source);
                 if (path.isEmpty() || path.startsWith(QLatin1Char(':')) ||
-                    iris::LiveTextures::isLiveRef(path))
+                    iris::LiveTextures::isLiveRef(path.toStdString()))
                     continue;
                 c.paths << path;
                 if (textureExists(path)) continue;
-                missing << tr("%1 (%2)").arg(textureSlotName(it.key()), QFileInfo(path).fileName());
+                missing << tr("%1 (%2)").arg(textureSlotName(QString::fromStdString(it->first)), QFileInfo(path).fileName());
             }
             // A ROW THAT NAMES AN ASSET THE STORE COULD NOT RESOLVE (TEX-REF-1):
             // the reader keeps the guid with no file bound, so the next save
@@ -398,7 +399,7 @@ void SceneIssues::checkNode(iris::SceneNode *node)
                 if (!prop || prop->type != iris::PropertyType::Texture) continue;
                 const QString guid = qtstd::toQString(material->textureGuid(prop->name));
                 const QString slot = QStringLiteral("u_") + qtstd::toQString(prop->name);
-                if (guid.isEmpty() || material->textures.value(slot))
+                if (guid.isEmpty() || iris::valueOr(material->textures, slot.toStdString()))
                     continue;
                 missing << tr("%1 (asset %2: not in this library's store)")
                                .arg(textureSlotName(slot), guid);

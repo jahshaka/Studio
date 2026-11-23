@@ -66,7 +66,7 @@ RemovePropertyCommand::RemovePropertyCommand(const iris::AnimationPtr &anim, con
 
 RemoveAnimationCommand::RemoveAnimationCommand(const iris::SceneNodePtr &node,
                                                const iris::AnimationPtr &anim, bool wasActive)
-    : StudioCommand(QObject::tr("Remove animation (%1)").arg(anim ? anim->getName() : QString())),
+    : StudioCommand(QObject::tr("Remove animation (%1)").arg(anim ? QString::fromStdString(anim->getName()) : QString())),
       mNode(std::weak_ptr(node)), mAnim(anim), mWasActive(wasActive)
 {
 }

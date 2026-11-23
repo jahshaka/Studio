@@ -119,7 +119,7 @@ QVariant WorldCloudsPropertyWidget::withField(const std::function<void(iris::Clo
     c = iris::CloudLayer::clamped(c);
     QVariantMap m = qtstd::toVariantMap(c.toJson());
     if (scene->cloudWeatherMap && !c.weatherMapGuid.empty())
-        m.insert(QStringLiteral("weatherPath"), scene->cloudWeatherMap->source);
+        m.insert(QStringLiteral("weatherPath"), QString::fromStdString(scene->cloudWeatherMap->source));
     return m;
 }
 
@@ -164,7 +164,7 @@ void WorldCloudsPropertyWidget::refreshRows()
     altitude->setValue(c.altitude);
     shadow->setValue(c.shadow);
     weather->setTexture(scene->cloudWeatherMap && !c.weatherMapGuid.empty()
-                            ? scene->cloudWeatherMap->source : QString());
+                            ? QString::fromStdString(scene->cloudWeatherMap->source) : QString());
     // OVER AN IMAGE SKY THE ROWS ARE DISABLED AND SAY WHY: a photograph carries
     // its own clouds, and the layer is never drawn over one.
     const bool over = drawsOver(*scene);

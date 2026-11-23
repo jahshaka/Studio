@@ -39,6 +39,7 @@
 #include "modules/materials/core/graphbaker.h"
 #include "modules/materials/core/pbrgraphevaluator.h"
 #include "../support/testmesh.h"
+#include <algorithm>
 
 using namespace jahshaka::engine;
 static int failures = 0;
@@ -227,7 +228,7 @@ int main(int argc, char **argv)
             CHECK(baked.maps.contains("baseColorMap"), "baked-map: math chain baked a baseColorMap PNG");
 
             auto bakedMaterial = PbrGraphEvaluator::materialFromValues(baked.eval.values);
-            CHECK(!!bakedMaterial && bakedMaterial->textures.contains("u_baseColorMap"),
+            CHECK(!!bakedMaterial && bakedMaterial->textures.count("u_baseColorMap"),
                   "baked-map: material carries the baked map");
             preview.setMaterial(bakedMaterial);
             img = render(preview, *engine, view, 8);

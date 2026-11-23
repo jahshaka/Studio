@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include <QSet>
 
 #include "irisgl/document/materials/pbrmaterial.h"
+#include "app/qtstd.h"
 
 namespace assetrefs {
 
@@ -42,7 +43,7 @@ const QStringList &nodeAssetKeys()
 const QStringList &materialAssetKeys()
 {
     static const QStringList kKeys = [] {
-        QStringList keys = QStringList(iris::PbrMaterial::mapRowNames());
+        QStringList keys = qtstd::toQStringList(iris::PbrMaterial::mapRowNames());
         // Not a Property row and therefore not in mapRowNames: the shader
         // asset a generated Hlms piece was emitted from (scenewriter.cpp's
         // "GENERATED SHADER PIECES" block). `customPiece`/`customPieceVertex`

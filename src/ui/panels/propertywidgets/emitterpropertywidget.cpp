@@ -539,7 +539,7 @@ void EmitterPropertyWidget::refresh()
         scaleStops.append(ParticleScaleStop{ k.time, k.scale });
     scaleRamp->setStops(scaleStops);
 
-    if (ps->texture) billboardImage->setTexture(ps->texture->getSource());
+    if (ps->texture) billboardImage->setTexture(QString::fromStdString(ps->texture->getSource()));
 
     updateShapeRows();
     mLoading = false;
@@ -570,7 +570,7 @@ void EmitterPropertyWidget::onBillboardImageChanged(const QString &path, const Q
     if (!services || !services->sceneEdit) {
         // No service (headless hosts, the panel suites): keep the node's own
         // texture in step, exactly as this row always did.
-        if (!path.isEmpty()) node->setTexture(iris::Texture2D::load(path), guid.toStdString());
+        if (!path.isEmpty()) node->setTexture(iris::Texture2D::load(path.toStdString()), guid.toStdString());
         return;
     }
     // THE UNDO RESTORES THE IMAGE AND THE ASSET IT WAS (TEX-REF-1): the old

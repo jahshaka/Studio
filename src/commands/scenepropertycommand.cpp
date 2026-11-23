@@ -115,7 +115,7 @@ QVector<sceneprops::Field> buildFields()
     // pixels would leave the renderer showing the other map.
     add("clouds", [](const ScenePtr &s) {
             QVariantMap m = qtstd::toVariantMap(s->clouds.toJson());
-            if (s->cloudWeatherMap) m.insert("weatherPath", s->cloudWeatherMap->source);
+            if (s->cloudWeatherMap) m.insert("weatherPath", QString::fromStdString(s->cloudWeatherMap->source));
             return QVariant(m);
         },
         [](const ScenePtr &s, const QVariant &v) {
@@ -125,7 +125,7 @@ QVector<sceneprops::Field> buildFields()
             if (s->clouds.weatherMapGuid.empty() || path.isEmpty())
                 s->cloudWeatherMap.reset();
             else if (!s->cloudWeatherMap || s->cloudWeatherMap->source != path)
-                s->cloudWeatherMap = iris::Texture2D::load(path);
+                s->cloudWeatherMap = iris::Texture2D::load(path.toStdString());
         });
     // THE HEIGHT FOG (SKY-DEFAULTS-1), whole — one gesture or one
     // world.heightFog call is one step.

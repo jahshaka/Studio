@@ -512,7 +512,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         for (int i = 0; i < iris::kClipRoleCount; ++i) {
             const auto role = iris::ClipRole(i);
             if (loco->roles().has(role))
-                rolesObj[QLatin1String(iris::clipRoleName(role))] = loco->roles().get(role);
+                rolesObj[QLatin1String(iris::clipRoleName(role))] = QString::fromStdString(loco->roles().get(role));
         }
         locoObj["roles"] = rolesObj;
         if (!loco->asset().isEmpty())
@@ -566,8 +566,8 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
 
 		for (const auto &constraint : sceneNode->physicsProperty.constraints) {
 			QJsonObject constraintProp;
-			constraintProp.insert("constraintFrom", constraint.constraintFrom);
-			constraintProp.insert("constraintTo", constraint.constraintTo);
+			constraintProp.insert("constraintFrom", QString::fromStdString(constraint.constraintFrom));
+			constraintProp.insert("constraintTo", QString::fromStdString(constraint.constraintTo));
 			constraintProp.insert("constraintType", static_cast<int>(constraint.constraintType));
 
 			constraintProperties.append(constraintProp);
@@ -599,25 +599,23 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
     auto animations = sceneNode->getAnimations();
     QJsonArray animListObj;
 
-    if (!!activeAnim)
-        sceneNodeObj["activeAnimation"] = int(std::find(animations.begin(), animations.end(), activeAnim) - animations.begin());
-    else
-        sceneNodeObj["activeAnimation"] = -1;
+    // QList::indexOf's answer: the index, or -1 when the active clip is not in the list (never size(): F19)
+    const auto at = std::find(animations.begin(), animations.end(), activeAnim);
+    sceneNodeObj["activeAnimation"] = (!activeAnim || at == animations.end()) ? -1 : int(at - animations.begin());
 
 
     // todo: add all animations
     for (auto anim : animations) {
         QJsonObject animObj;
-        animObj["name"] = anim->getName();
+        animObj["name"] = QString::fromStdString(anim->getName());
         animObj["length"] = anim->getLength();
         animObj["loop"] = anim->getLooping();
 
         auto animPropListObj = QJsonArray();
 
-        for (auto propName: anim->properties.keys()) {
-            auto prop = anim->properties[propName];
+        for (const auto &[propKey, prop] : anim->properties) {   // the map's (byte) order
             auto propObj = QJsonObject();
-            propObj["name"] = propName;
+            propObj["name"] = QString::fromStdString(propKey);
 
             auto keyFrames = prop->getKeyFrames();
             if(keyFrames.size()==1)
@@ -632,7 +630,7 @@ void SceneWriter::writeAnimationData(QJsonObject& sceneNodeObj,iris::SceneNodePt
                 auto keyFrameObj = QJsonObject();
 
                 auto keyFrame = animInfo.keyFrame;
-                keyFrameObj["name"] = animInfo.name;
+                keyFrameObj["name"] = QString::fromStdString(animInfo.name);
 
                 auto keysListObj = QJsonArray();
                 for (auto key : keyFrame->keys) {
@@ -827,7 +825,7 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 	// the readers read "pbr" and refuse everything else (FORWARD-ONLY-1).
 	if (!!std::dynamic_pointer_cast<iris::PbrMaterial>(mat)) {
 		matObj["materialType"] = "pbr";
-		if (!mat->getName().isEmpty()) matObj["name"] = mat->getName();
+		if (!mat->getName().empty()) matObj["name"] = QString::fromStdString(mat->getName());
 	}
 	else {
 		// Some other Material subclass - record the parameters, but there is no
@@ -878,7 +876,7 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 			// state the reader already handles perfectly: the material comes
 			// back with no map and its base colour, which is exactly what a
 			// live texture that is gone should look like.
-			if (iris::LiveTextures::isLiveRef(qtstd::toQString(static_cast<const iris::TextureProperty *>(prop)->value))) {
+			if (iris::LiveTextures::isLiveRef((qtstd::toQString(static_cast<const iris::TextureProperty *>(prop)->value)).toStdString())) {
 				valuesObj[key] = QString();
 				continue;
 			}
@@ -913,8 +911,8 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 		// WHENEVER THE MATERIAL NAMES ITS SOURCE, pieces bound or not: a material
 		// whose graph is missing right now has no pieces, and dropping the key
 		// for that would lose them for good when the asset comes back.
-		if (!pbr->getGuid().isEmpty())
-			valuesObj["customPieceGraph"] = pbr->getGuid();
+		if (!pbr->getGuid().empty())
+			valuesObj["customPieceGraph"] = QString::fromStdString(pbr->getGuid());
 	}
 
 	matObj["values"] = valuesObj;

@@ -720,9 +720,9 @@ void PropertyWidget::applyRowConstraints()
         // model's greying behind: Lit -> Unlit -> Distortion left the Normal
         // Map dead, i.e. the one row Distortion is authored through
         // (caught by ui.material_panel, 2026-09-09).
-        const QVector<QString> &unlitRows = iris::PbrMaterial::rowsUnusedWhenUnlit();
-        const QVector<QString> &distortRows = iris::PbrMaterial::rowsUnusedWhenDistortion();
-        const QVector<QString> &forbidden = distortion ? distortRows : unlitRows;
+        const QStringList unlitRows = qtstd::toQStringList(iris::PbrMaterial::rowsUnusedWhenUnlit());
+        const QStringList distortRows = qtstd::toQStringList(iris::PbrMaterial::rowsUnusedWhenDistortion());
+        const QStringList &forbidden = distortion ? distortRows : unlitRows;
         const QString why = distortion
             ? tr("Not used by the Distortion shading model — the object draws nothing of "
                  "itself, it warps what is behind it. Use the Normal Map as the displacement "
@@ -760,9 +760,9 @@ void PropertyWidget::applyRowConstraints()
         const QString whySpecular =
             tr("Not used by a Specular workflow — the specular map and fresnel replace "
                "metalness. The value is kept and returns with the workflow.");
-        for (const QString &name : iris::PbrMaterial::rowsUnusedWhenMetallic())
+        for (const QString &name : qtstd::toQStringList(iris::PbrMaterial::rowsUnusedWhenMetallic()))
             constrain(name, !metallic, whyMetallic);
-        for (const QString &name : iris::PbrMaterial::rowsUnusedWhenSpecular())
+        for (const QString &name : qtstd::toQStringList(iris::PbrMaterial::rowsUnusedWhenSpecular()))
             constrain(name, metallic, whySpecular);
         // F0 comes from EITHER the IOR or the colour, never both.
         bool haveUseFresnel = false;

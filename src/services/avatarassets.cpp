@@ -128,7 +128,7 @@ void AvatarAssets::reconcileDependencies(const QString &guid,
     // closure (pins, archive walkers, gc) must see. Edges it no longer names go
     // — otherwise a clip removed in the module keeps riding every export
     // forever, and the removal looks like it did nothing.
-    const QStringList wanted = definition.dependencyGuids();
+    const QStringList wanted = qtstd::toQStringList(definition.dependencyGuids());
     QSet<QString> keep(wanted.begin(), wanted.end());
 
     for (const QString &existing : db->fetchAssetGUIDAndDependencies(guid, false)) {
@@ -170,12 +170,12 @@ QString AvatarAssets::create(const QString &objectGuid, Scope scope, Database *d
                           .arg(meta.value(QStringLiteral("bones")).toInt()));
 
     iris::AvatarDefinition definition;
-    definition.name = nameOverride.trimmed().isEmpty() ? record.name : nameOverride.trimmed();
-    definition.modelAsset = objectGuid;
-    definition.rig.rigId = meta.value(QStringLiteral("rigId")).toString();
+    definition.name = (nameOverride.trimmed().isEmpty() ? record.name : nameOverride.trimmed()).toStdString();
+    definition.modelAsset = objectGuid.toStdString();
+    definition.rig.rigId = (meta.value(QStringLiteral("rigId")).toString()).toStdString();
     definition.rig.bones = meta.value(QStringLiteral("bones")).toInt();
     for (const auto &v : meta.value(QStringLiteral("boneNames")).toArray())
-        definition.rig.boneNames.append(v.toString());
+        definition.rig.boneNames.push_back(v.toString().toStdString());
 
     // The model's OWN clips, named by the one display rule: a Mixamo character
     // download ships a clip literally called "mixamo.com", and the avatar's
@@ -191,19 +191,19 @@ QString AvatarAssets::create(const QString &objectGuid, Scope scope, Database *d
             unique = display + QStringLiteral(" %1").arg(suffix);
         used.insert(unique);
         iris::AvatarClipEntry entry;
-        entry.asset = objectGuid;       // an in-file clip references the model itself
-        entry.rawName = raw;
-        entry.name = unique;
+        entry.asset = objectGuid.toStdString();       // an in-file clip references the model itself
+        entry.rawName = raw.toStdString();
+        entry.name = unique.toStdString();
         // A ZERO-LENGTH clip must not loop (Animation::getSampleTime is a fmod,
         // so length 0 samples at NaN) — Mixamo ships one in every character
         // download, and it is usually the FIRST one, i.e. the default.
         entry.looping = clip.value(QStringLiteral("length")).toDouble() > 0.0;
-        definition.clips.append(entry);
+        definition.clips.push_back(entry);
     }
-    if (!definition.clips.isEmpty()) definition.defaultClip = definition.clips.first().name;
+    if (!definition.clips.empty()) definition.defaultClip = definition.clips.front().name;
 
     const QString guid = QString::fromStdString(iris::newGuid());
-    const QString fileName = definitionFileName(definition.name);
+    const QString fileName = definitionFileName(QString::fromStdString(definition.name));
     QString stagingPath = stageDefinition(definition, fileName, errorOut);
     if (stagingPath.isEmpty()) return QString();
     const QString stagingDir = QFileInfo(stagingPath).absolutePath();
@@ -226,7 +226,7 @@ QString AvatarAssets::create(const QString &objectGuid, Scope scope, Database *d
     const assethome::Home home = scope == Scope::Project
                                      ? assethome::project(project->getProjectGuid())
                                      : assethome::avatars();
-    db->createAssetEntry(guid, definition.name, static_cast<int>(ModelTypes::Avatar), QString(),
+    db->createAssetEntry(guid, QString::fromStdString(definition.name), static_cast<int>(ModelTypes::Avatar), QString(),
                          home, assethome::Origin::Create,
                          QString(), QString(), record.thumbnail, QByteArray(), QByteArray(),
                          QByteArray());
@@ -290,7 +290,7 @@ AvatarAssets::Loaded AvatarAssets::load(const QString &guid, Scope scope, Databa
     const QJsonObject obj = QJsonDocument::fromJson(file.readAll()).object();
     file.close();
 
-    QString parseError;
+    std::string parseError;
     if (!iris::avatarDefinitionFromJson(qtstd::fromQJsonObject(obj), out.definition, &parseError)) {
         out.error = QStringLiteral("'%1': %2").arg(record.name, parseError);
         return out;
@@ -318,15 +318,15 @@ QString AvatarAssets::save(const QString &guid, Scope scope,
     // nothing could find an asset by it) is refused HERE, before a byte is
     // stored. The definition and its asset never carry two names; the avatar
     // keeps the name it had, and the caller is told why (STUDIO-HYGIENE-1).
-    const bool renames = !definition.name.isEmpty() && definition.name != record.name;
+    const bool renames = !definition.name.empty() && definition.name != record.name;
     if (renames) {
-        if (const QString why = assettags::nameRefusal(guid, definition.name); !why.isEmpty())
+        if (const QString why = assettags::nameRefusal(guid, QString::fromStdString(definition.name)); !why.isEmpty())
             return refuse(QStringLiteral("the avatar keeps its name '%1': %2").arg(record.name, why));
     }
 
     QString name;
     AssetCas::resolveSource(db->connection(), AssetStorePaths::root(), guid, &name);
-    if (name.isEmpty()) name = definitionFileName(definition.name);
+    if (name.isEmpty()) name = definitionFileName(QString::fromStdString(definition.name));
 
     QString stagingPath = stageDefinition(definition, name, errorOut);
     if (stagingPath.isEmpty()) return QString();
@@ -362,10 +362,10 @@ QString AvatarAssets::save(const QString &guid, Scope scope,
     // renaming the thing, not by a second gesture on the tile. Its law was
     // checked before the store (above); a write that still fails is the
     // database's, and said.
-    if (renames && !assettags::rename(db, guid, definition.name))
+    if (renames && !assettags::rename(db, guid, QString::fromStdString(definition.name)))
         qWarning("avatar save: the definition of '%s' is stored, but its asset row could not be "
                  "renamed to '%s' (the database refused the write)",
-                 qUtf8Printable(record.name), qUtf8Printable(definition.name));
+                 qUtf8Printable(record.name), definition.name.c_str());
     // The metadata block describes the DEFINITION, so it is stale the moment
     // one is saved; drop it and let the lazy backfill recompute on demand.
     {

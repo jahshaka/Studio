@@ -173,7 +173,7 @@ iris::MeshPtr EngineMaterialPreviewScene::meshFor(PreviewMesh mesh)
     // The BAKED mesh, by seed key (irisgl/document/assets/shippedmeshes.h);
     // `mMeshes` holds it for the dock's life. Null (no library seeded yet) is
     // asked again next time.
-    slot = iris::ShippedMeshes::mesh(meshSeed(mesh));
+    slot = iris::ShippedMeshes::mesh(meshSeed(mesh).toStdString());
     return slot;
 }
 

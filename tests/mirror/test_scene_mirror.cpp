@@ -302,7 +302,7 @@ int main(int argc, char **argv)
         QImage tex(32, 32, QImage::Format_RGBA8888); tex.fill(QColor(20, 230, 40)); tex.save(pngPath);
         auto textured = iris::PbrMaterial::create();
         textured->setBaseColor(iris::SrgbColor(255, 255, 255));                 // white tint: the texture decides
-        textured->setBaseColorMap(iris::Texture2D::load(pngPath));     // deferred: no GL, path recorded
+        textured->setBaseColorMap(iris::Texture2D::load(pngPath.toStdString()));     // deferred: no GL, path recorded
         meshNode2->setMaterial(textured);
         mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("diffuse texture (green)", img);
@@ -469,7 +469,7 @@ int main(int argc, char **argv)
         saved->setValue("alpha", 0.5f);
         saved->setValue("alphaCutoff", 0.7f);
         saved->setValue("baseColorMap", iris::Value(pngPath.toStdString()));
-        CHECK(saved->textures.contains("u_baseColorMap"), "setValue bound the base colour map");
+        CHECK(saved->textures.count("u_baseColorMap"), "setValue bound the base colour map");
 
         // Serialise exactly as SceneWriter::writeSceneNodeMaterial does: a values
         // object built from mat->properties() by PropertyType, textures as
@@ -530,7 +530,7 @@ int main(int argc, char **argv)
             default: break;
             }
         }
-        CHECK(reloaded->textures.contains("u_baseColorMap"),
+        CHECK(reloaded->textures.count("u_baseColorMap"),
               "reloaded material has its base colour map");
         CHECK(std::fabs(reloaded->roughnessLowerBound - 0.2f) < 1e-4f &&
               std::fabs(reloaded->roughnessUpperBound - 0.5f) < 1e-4f, "roughness bounds round-tripped");
@@ -735,7 +735,7 @@ int main(int argc, char **argv)
             for (int y = 4; y < 12; ++y) for (int x = 4; x < 12; ++x) ic.setPixelColor(x, y, QColor(255, 255, 255, 255));
             ic.save(iconPath);
         }
-        point->icon = iris::Texture2D::load(iconPath);
+        point->icon = iris::Texture2D::load(iconPath.toStdString());
         mirror.sync(); enginetest::frames(engine, 2);
         view->readPixels(img);
         std::printf("    document icon file: %d white pixels\n", countWhite(img));
@@ -1199,7 +1199,7 @@ int main(int argc, char **argv)
             return sum;
         };
         const auto skyShOf = [&](const QString &path, float sh[27]) {
-            doc->setSkyTexture(iris::Texture2D::load(path));
+            doc->setSkyTexture(iris::Texture2D::load(path.toStdString()));
             doc->skyType = iris::SkyType::EQUIRECTANGULAR;
             mirror.sync(mirrorframe::sky(view));
             enginetest::frames(engine, 3);
@@ -1229,7 +1229,7 @@ int main(int argc, char **argv)
         // AND its light go to 0 together (the sky emits what it shows), and hidden
         // - no Sky Light - the gain is 1: the sky as authored, lighting the cube
         // exactly as the white intensity-1 Sky Light did.
-        doc->setSkyTexture(iris::Texture2D::load(redSkyPath));
+        doc->setSkyTexture(iris::Texture2D::load(redSkyPath.toStdString()));
         doc->skyType = iris::SkyType::EQUIRECTANGULAR;
         mirror.sync(mirrorframe::sky(view));
         auto docSkyLight = iris::LightNode::create();
@@ -1292,7 +1292,7 @@ int main(int argc, char **argv)
         // The two hemispheres are separate colours end to end: move the red
         // BELOW the horizon (a different file, or Texture2D's path cache would
         // hand back the old image) and the top-lit face must fall dark.
-        doc->setSkyTexture(iris::Texture2D::load(flipSkyPath));
+        doc->setSkyTexture(iris::Texture2D::load(flipSkyPath.toStdString()));
         mirror.sync(mirrorframe::sky(view));
         mirror.sync();
         settleEnv(3);
@@ -1327,7 +1327,7 @@ int main(int argc, char **argv)
             eq.fill(QColor(0, 255, 0));                    // a uniformly green world
             eq.save(eqPath);
         }
-        doc->setSkyTexture(iris::Texture2D::load(eqPath));
+        doc->setSkyTexture(iris::Texture2D::load(eqPath.toStdString()));
         doc->skyType = iris::SkyType::EQUIRECTANGULAR;
         mirror.sync(mirrorframe::sky(view));
         // A mirror-metal cube in near-darkness: everything it shows is reflection.
