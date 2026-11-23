@@ -42,7 +42,7 @@
 //    hold five meshes and twenty Items.
 
 #include <QVector>
-#include "app/qtstdgui.h"
+#include "irisgl/document/srgbcolor.h"
 
 #include "irisgl/core/math/mat4.h"
 #include "irisgl/core/math/quat.h"

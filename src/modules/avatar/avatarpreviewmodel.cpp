@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/mat4.h"
-#include "app/qtstdgui.h"
+#include "irisgl/document/srgbcolor.h"
 #include "irisgl/core/math/vec.h"
 #include "modules/avatar/avatarpreviewmodel.h"
 

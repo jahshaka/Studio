@@ -45,7 +45,6 @@
 #include <QCryptographicHash>
 
 #include "../support/testmesh.h"
-#include "app/qtstdgui.h"
 #include "../support/testsql.h"
 #include "../support/proceduralshell.h"
 #include <QDir>

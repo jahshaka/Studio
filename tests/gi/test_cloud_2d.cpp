@@ -20,7 +20,8 @@
 // NO BRIGHTNESS SLIDER exists or is used: the layer's radiance is the physics of
 // the slab (JahCloudLayer_ps.glsl), and nothing here tunes it to a picture.
 #include <QGuiApplication>
-#include "app/qtstdgui.h"
+#include "irisgl/document/srgbcolor.h"
+#include <QColor>
 #include <QImage>
 
 #include "../support/testmesh.h"

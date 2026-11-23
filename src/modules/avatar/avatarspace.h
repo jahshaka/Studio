@@ -31,6 +31,8 @@ For more information see the LICENSE file
 
 #include "irisglfwd.h"
 
+#include <QString>
+
 namespace avatar {
 
 enum class SpaceMode { Grid, Modern };

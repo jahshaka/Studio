@@ -19,7 +19,7 @@
 //
 // Headless: offscreen Views, no widget, no database.
 #include "irisgl/core/math/quat.h"
-#include "app/qtstdgui.h"
+#include "irisgl/document/srgbcolor.h"
 
 #include "../support/testmesh.h"
 #include "irisgl/core/math/vec.h"
