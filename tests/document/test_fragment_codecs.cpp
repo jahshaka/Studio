@@ -429,6 +429,10 @@ static void testOverrideOrder()
     const iris::Value nested1(iris::Value::Object{{"x", a}, {"y", iris::Value(iris::Value::Array{a, b})}});
     const iris::Value nested2(iris::Value::Object{{"y", iris::Value(iris::Value::Array{b, a})}, {"x", b}});
     CHECK(iris::sameMembers(nested1, nested2), "...recursively, through nested Objects and Arrays (an Array in its order)");
+    // F17: with DUPLICATE names one pass plus the size would call these equal ({x, x} against {x, y}).
+    const iris::Value dupA(iris::Value::Object{{"x", iris::Value(1)}, {"x", iris::Value(1)}});
+    const iris::Value dupB(iris::Value::Object{{"x", iris::Value(1)}, {"y", iris::Value(2)}});
+    CHECK(!iris::sameMembers(dupA, dupB) && !iris::sameMembers(dupB, dupA), "...checked BOTH ways: {x, x} is not {x, y}");
     CHECK(WorldModeCommand::Snapshot().overrides.kind() == iris::Kind::Object &&
               WorldModeCommand::Snapshot().overrides.asObject().empty(),
           "a default world-mode snapshot's map is an EMPTY OBJECT (as the QJsonObject was), never a Null");

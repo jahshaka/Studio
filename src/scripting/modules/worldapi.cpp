@@ -12,6 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/qt/colour.h"
 #include "app/qtstd.h"
+#include "app/qtstdgui.h"
 #include "scripting/modules/worldapi.h"
 #include "jahshaka/engine/Stillness.h"
 #include "services/apppaths.h"
