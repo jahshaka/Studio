@@ -1022,7 +1022,7 @@ QString MaterialsApi::addTexture(const QString &materialGuid, const QString &pat
         }
         textureGuid = pathOrGuid;
         // Already an asset: a project that holds the material should hold its
-        // member too. "Does it already" unread is no "no" (F1: addToProject re-pins at the library's version).
+        // member too. "Does it already" unread is no "no" (NOQT-DATABASE-1 stage 2, the confirm's F1).
         if (projectOwns) {
             const bool held = host.db->isAssetPinnedBy(host.project->getProjectGuid(), textureGuid, &read);
             if (!read) {
@@ -1809,9 +1809,8 @@ bool MaterialApi::set(const QString &nodeId, const QVariantMap &values)
     //
     // Only a LIBRARY image (a project's own rows are members already — the view
     // filter tells them apart; project_guid does not, an import made with a
-    // project open records it) that the project does not pin yet: addToProject
-    // re-pins to the library's CURRENT version, which would silently upgrade an
-    // older pin.
+    // project open records it) that the project does not pin yet; a pin it
+    // holds stays as the project took it.
     //
     // "IS IT PINNED HERE" UNREAD IS NO "NO" (NOQT-DATABASE-1 stage 2, the confirm's F1): every bound texture's pin is
     // read before this block's first write, and a failure refuses it by name - no edge, no pin (the slot itself is

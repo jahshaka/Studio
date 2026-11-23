@@ -62,7 +62,9 @@ public:
     enum class AddKind { Direct, Binding };
 
     /// Pin `guid` (and its dependency closure) into the project and register
-    /// the session AssetManager entries from CAS-resolved bytes. Idempotent.
+    /// the session AssetManager entries from CAS-resolved bytes. Idempotent:
+    /// a member the project already pins KEEPS its pin (never moved to the
+    /// library's version — updatePinToLatest is that gesture).
     static Result addToProject(const QString &guid, Database *db, Project *project,
                                AddKind kind);
 

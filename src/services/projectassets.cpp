@@ -83,6 +83,10 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
 
     // The membership = the asset plus its dependency closure, each pinned at
     // its CURRENT source content. No files move; no rows clone.
+    // A MEMBER THIS PROJECT ALREADY PINS KEEPS ITS PIN (AssetCas::ensurePin): it is either the version the project
+    // took or the project's own copy-on-write edit. This was an upsert to the library's version, so a same-project
+    // paste, an avatar clip load or a binding re-adding a closure silently reverted the user's edited texture.
+    // Moving a pin to the library's version is ONE gesture's: Update from Library (updatePinToLatest).
     // EVERY MEMBER's VERSION IS READ BEFORE THE FIRST PIN (NOQT-DATABASE-1 stage 2): a read that failed is no "no
     // bytes" - it would write an EMPTY pin over a real one. Refused by name, nothing pinned.
     const QStringList members = AssetHelper::fetchAssetAndAllDependencies(guid, db);
@@ -96,7 +100,10 @@ ProjectAssets::Result ProjectAssets::addToProject(const QString &guid, Database 
         }
     }
     for (int i = 0; i < members.size(); ++i) {
-        AssetCas::writePin(conn, projectGuid, members.at(i), oids.at(i));
+        if (!AssetCas::ensurePin(conn, projectGuid, members.at(i), oids.at(i))) {
+            result.error = QStringLiteral("'%1' could not be pinned - the members after it were not added").arg(members.at(i));
+            return result;
+        }
         result.pinnedGuids.append(members.at(i));
     }
 

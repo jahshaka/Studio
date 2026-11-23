@@ -186,6 +186,13 @@ QString resolveSource(db::Connection &conn, const QString &root,
 bool writePin(db::Connection &conn, const QString &projectGuid,
               const QString &assetGuid, const QString &oid);
 
+/// Pin (project, asset) at `oid` ONLY when the project does not pin it yet:
+/// an existing pin — the version the project took, or its own copy-on-write
+/// edit — is KEPT. What "add to a project" means; moving a pin is writePin's,
+/// through the gestures that ask for it (ProjectAssets::updatePinToLatest).
+bool ensurePin(db::Connection &conn, const QString &projectGuid,
+               const QString &assetGuid, const QString &oid);
+
 /// The pinned oid for (project, asset); empty when no pin row exists (or the
 /// pin is a DB-only asset's) — or when the read FAILED, which `readOk` (when
 /// given) tells apart: cleared. A writer that would move a pin reads it here.

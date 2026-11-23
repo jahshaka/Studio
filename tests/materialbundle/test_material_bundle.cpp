@@ -1024,6 +1024,46 @@ int main(int argc, char **argv)
                           .arg(afterU, ownU).arg(updated).toUtf8().constData());
             }
 
+            // 18. ADDING TO A PROJECT NEVER REVERTS THE PROJECT's OWN VERSION (the lead's ruling on B3's finding; every
+            //     read succeeds here): a project paints a texture (copy-on-write), then adds a material whose closure
+            //     holds that texture - the way a same-project paste, an avatar clip load or a binding re-adds it. The
+            //     texture's pin must stay the project's own. "Update from Library" still moves it (the explicit door).
+            {
+                texture(QStringLiteral("t18"));
+                const QString library = AssetCas::sourceOid(conn, QStringLiteral("t18"));
+                const QString m18 = material(QStringLiteral("m18"), QStringLiteral("t18"));
+                db.createProject(QStringLiteral("p18"), QStringLiteral("p18"));
+                Project owner;
+                owner.setProjectGuid(QStringLiteral("p18"));
+                const ProjectAssets::Result first = ProjectAssets::addToProject(QStringLiteral("t18"), &db, &owner,
+                                                                                ProjectAssets::AddKind::Binding);
+                const QString own = painted(QStringLiteral("t18"), owner);
+                CHECK(first.ok() && !own.isEmpty() && own != library && pinOf(QStringLiteral("p18"), QStringLiteral("t18")) == own,
+                      "18: CONTROL: the project holds its OWN painted version of the texture");
+                const ProjectAssets::Result again = ProjectAssets::addToProject(m18, &db, &owner, ProjectAssets::AddKind::Direct);
+                const QString kept = pinOf(QStringLiteral("p18"), QStringLiteral("t18"));
+                CHECK(again.ok() && again.pinnedGuids.contains(QStringLiteral("t18")) && kept == own,
+                      QStringLiteral("18: adding a closure that holds it KEEPS the project's own version (pin %1, own %2, "
+                                     "library %3)").arg(kept, own, library).toUtf8().constData());
+                CHECK(pinOf(QStringLiteral("p18"), m18) == AssetCas::sourceOid(conn, m18),
+                      "18: CONTROL: the material itself, new to the project, is pinned at the library's version");
+                const bool updated = ProjectAssets::updatePinToLatest(QStringLiteral("t18"), &db, &owner);
+                CHECK(updated && pinOf(QStringLiteral("p18"), QStringLiteral("t18")) == library,
+                      "18: Update from Library (the explicit door) still MOVES the pin to the library's version");
+                // Reset Material's redo after an undo still PINS the default's texture it took back (at the library's
+                // version: the project had no pin of it).
+                texture(QStringLiteral("t18r"));
+                AssetCas::writePin(conn, QStringLiteral("p18"), QStringLiteral("t18r"),
+                                   AssetCas::sourceOid(conn, QStringLiteral("t18r")));
+                ResetMaterialCommand reset(&db, &owner, iris::MeshNode::create(), iris::MaterialPtr(),
+                                           { QStringLiteral("t18r") }, { QStringLiteral("t18r") });
+                reset.undo();
+                reset.redo();
+                CHECK(pinOf(QStringLiteral("p18"), QStringLiteral("t18r")) == AssetCas::sourceOid(conn, QStringLiteral("t18r"))
+                          && db.isAssetPinnedBy(QStringLiteral("p18"), QStringLiteral("t18r")),
+                      "18: Reset Material's redo still pins the texture its undo took back");
+            }
+
         }
 
         // (2) A CLOSED LIBRARY's pin reads are NO ANSWER, never "no pins". LAST in this test: a second Database

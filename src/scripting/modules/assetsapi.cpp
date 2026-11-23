@@ -304,7 +304,8 @@ QVector<VerbInfo> AssetsApi::verbs() const
           "Adds a library asset to the open project and returns its guid — THE SAME GUID: this is "
           "reference-with-pin, not a copy. The project gets a `project_assets` row pinning the "
           "asset (and its dependency closure) at the content it has RIGHT NOW, so the project "
-          "keeps rendering exactly those bytes even after the library asset is re-imported; a "
+          "keeps rendering exactly those bytes even after the library asset is re-imported; a member "
+          "the project already pins KEEPS its pin (adding never moves one); a "
           "project-side edit is copy-on-write (new content, this project's pin moves, the library "
           "untouched) and `assets.updateFromLibrary` re-pins to the library's current version. "
           "No files are copied and no rows are cloned. NOT undoable.",

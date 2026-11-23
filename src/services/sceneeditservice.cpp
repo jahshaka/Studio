@@ -1696,8 +1696,7 @@ bool SceneEditService::applyMaterialAsset(const QString &assetGuid, iris::SceneN
     // Only a LIBRARY row (a project's own rows are members already — the
     // view filter tells them apart; the row's project_guid does not, an import
     // made with a project open records it) that the project does not pin yet:
-    // addToProject re-pins to the library's CURRENT version, which would
-    // silently upgrade an older pin.
+    // the pin command's undo takes only a pin it made.
     //
     // AND IT IS INSIDE THE MACRO NOW, as a COMMAND (the audit's F5, phase 3).
     // It was a bare service call after `endMacro`, so undoing an apply left

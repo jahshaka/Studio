@@ -30,12 +30,12 @@ void PinAssetCommand::redo()
     mPinnedByUs = false;
     if (!mDb || mAssetGuid.isEmpty() || mProjectGuid.isEmpty()) return;
     // ALREADY A MEMBER = NOTHING TO DO, AND NOTHING TO UNDO. `addToProject`
-    // is idempotent, but it re-pins to the library's CURRENT version — which
-    // on a project holding an older pin (or its own copy-on-written one)
-    // would silently upgrade it. The project's membership is not this
-    // command's to change; only its ABSENCE is.
+    // keeps a pin the project holds, but this command's UNDO unpins what it
+    // pinned: a held pin (an older version, or the project's own copy-on-
+    // written one) is not this command's to take. The project's membership
+    // is not this command's to change; only its ABSENCE is.
     // A READ THAT FAILED IS NOT ABSENCE (NOQT-DATABASE-1 stage 2): the redo is REFUSED by name and records nothing
-    // to undo - else it would re-pin a held pin to the library's version and its undo would unpin it.
+    // to undo - else its undo would unpin a pin the project held.
     bool read = true;
     if (mDb->isAssetPinnedBy(mProjectGuid, mAssetGuid, &read)) return;
     if (!read) {

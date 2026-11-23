@@ -68,8 +68,8 @@ void ResetMaterialCommand::redo()
 
     // The default's own pins, back after an undo took them (the first redo
     // runs right after the default was built, which pinned them already).
-    // A READ THAT FAILED IS NO "NOT PINNED" (NOQT-DATABASE-1 stage 2, the confirm's F1): addToProject would re-pin
-    // the texture at the LIBRARY's version over a version the project made its own - that pin is left, said by name.
+    // A READ THAT FAILED IS NO "NOT PINNED" (NOQT-DATABASE-1 stage 2, the confirm's F1): whether this redo owes the
+    // pin is unknown - it is left, said by name.
     if (!newlyPinnedLive) {
         for (const QString &texture : newlyPinned) {
             bool read = true;

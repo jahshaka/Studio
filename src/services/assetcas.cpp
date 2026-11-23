@@ -688,6 +688,18 @@ bool writePin(db::Connection &conn, const QString &projectGuid,
     return upsert.run(&e);
 }
 
+bool ensurePin(db::Connection &conn, const QString &projectGuid,
+               const QString &assetGuid, const QString &oid)
+{
+    db::Statement insert(conn, "INSERT INTO project_assets (project_guid, asset_guid, oid_pin) VALUES (?, ?, ?) "
+                               "ON CONFLICT(project_guid, asset_guid) DO NOTHING");
+    dbqt::bindText(insert, 1, projectGuid);
+    dbqt::bindText(insert, 2, assetGuid);
+    dbqt::bindText(insert, 3, oid);
+    db::Error e;
+    return insert.run(&e);
+}
+
 QString pinnedOid(db::Connection &conn, const QString &projectGuid,
                   const QString &assetGuid, bool *readOk)
 {
