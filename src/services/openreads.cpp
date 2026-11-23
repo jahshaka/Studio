@@ -72,10 +72,22 @@ void readPlan(db::Connection &conn, Project *project, Reads &reads)
     QByteArray blob;
     {
         LoadTimeline::Accumulate blobRead(QStringLiteral("db:sceneBlob"));
+        // A SCENE READ THAT FAILED IS A REFUSED OPEN (NOQT-DATABASE-1 stage 2, the audit's finding 7), never "no
+        // scene": an empty world from it would be written over the row by the next save. A row that is not there
+        // (the read answered: no row) is still "not found".
+        if (!conn.isOpen()) {
+            reads.refusal = QStringLiteral("its scene could not be read (the library's read connection did not open; "
+                                           "the log says why)");
+            return;
+        }
         db::Statement query(conn, "SELECT scene FROM projects WHERE guid = ?");
         dbqt::bindText(query, 1, reads.projectGuid);
         db::Error e;
         if (query.step(&e)) blob = dbqt::bytes(query, 0);
+        else if (e) {
+            reads.refusal = QStringLiteral("its scene could not be read (%1)").arg(dbqt::describe(e));
+            return;
+        }
     }
     if (!blob.isEmpty()) {
         LoadTimeline::Accumulate json(QStringLiteral("worker:sceneJson"));

@@ -47,7 +47,8 @@ enum class Outcome
     NoLibrary,   ///< no database file: a first launch
     Current,     ///< this build's generation and columns: nothing to do
     Wiped,       ///< an older library, wiped
-    Refused,     ///< a NEWER library (never wiped), or an older one another instance holds
+    Refused,     ///< a NEWER library (never wiped), an older one another instance holds, or one whose
+                 ///< generation could not be read (never wiped on a guess)
     Failed       ///< the wipe ran and failed (the app refuses to start on it)
 };
 

@@ -17,6 +17,7 @@ For more information see the LICENSE file
 #include "data/constants.h"
 #include "data/database/casschema.h"
 #include "data/database/database.h"
+#include "data/database/dbqt.h"
 #include "data/db/statement.h"
 #include "data/settingkeys.h"
 #include "data/settingsmanager.h"
@@ -53,9 +54,20 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
         return result;
     }
     {
+        // A GENERATION THAT CANNOT BE READ IS NO GENERATION (NOQT-DATABASE-1 stage 2, the audit's finding 6): never
+        // "0, older, reset" - the open is REFUSED by name and the library is left exactly as it is.
         db::Statement version(library.connection(), "PRAGMA user_version");
         db::Error e;
-        if (version.step(&e)) result.generationOnDisk = int(version.int64(0));
+        if (!version.step(&e)) {
+            result.outcome = Outcome::Refused;
+            result.reason = QStringLiteral("the library's generation could not be read (%1); it was left as it is - "
+                                           "check the file %2 (a disk or permission fault, or a file that is not "
+                                           "a Jahshaka library)").arg(dbqt::describe(e), dbPath);
+            library.closeDatabase();
+            sLast = result;
+            return result;
+        }
+        result.generationOnDisk = int(version.int64(0));
     }
     const bool columnsMatch = library.schemaMatchesFresh();
     if (result.generationOnDisk == generation() && columnsMatch) {
