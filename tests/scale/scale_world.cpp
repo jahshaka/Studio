@@ -6,7 +6,6 @@
 
 #include "../support/proceduralshell.h"
 
-#include "irisgl/core/logger.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/assets/texture2d.h"
 #include "irisgl/document/materials/pbrmaterial.h"
@@ -164,26 +163,24 @@ static void fillInfo(BakeInfo &info, const QList<iris::MeshPtr> &meshes)
     }
 }
 
-/// Captures the bake's own "cluster DAG ... N ms" log line — the DAG stage's time
-/// as the bake measured it, without a second DAG build.
-struct DagLogTap {
+/// The DAG stage's time as the bake measured it (its own stats on the Model: a tool never reads a log line), summed
+/// over the pieces that got a DAG; each such piece printed with the bake's own figures (clusters, groups, depth, the
+/// lock's retries and the groups it made TERMINAL — W4's reading, V2-P0A).
+static double dagMsOf(const iris::MeshBake::Model &m, const QString &sourcePath)
+{
     double ms = 0.0;
-    DagLogTap()
-    {
-        iris::Logger::setSink([this](int, const QString &text) {
-            static const QRegularExpression re(QStringLiteral("cluster DAG .*; ([0-9.]+) ms"));
-            const auto m = re.match(text);
-            if (m.hasMatch()) {
-                ms += m.captured(1).toDouble();
-                // THE BAKE'S OWN DAG LINE, per piece (clusters, groups, depth, the lock's
-                // retries and the groups it made TERMINAL — W4's reading, V2-P0A).
-                std::printf("   %s\n", qPrintable(text));
-                std::fflush(stdout);
-            }
-        });
+    for (size_t i = 0; i < m.dagStats.size(); ++i) {
+        const iris::MeshBake::ClusterDagStats &st = m.dagStats[i];
+        if (st.clusters <= 0) continue;
+        ms += st.msTotal;
+        std::printf("   cluster DAG %s (mesh %zu): %d clusters, %d groups, depth %d; %.1f ms (leaves %.1f, groups %.1f, "
+                    "reduce %.1f); ladder: %d reductions, %d carried, %d retries, %d pieces pruned\n",
+                    qPrintable(QFileInfo(sourcePath).fileName()), i, st.clusters, st.groups, st.depth, st.msTotal,
+                    st.msLeaves, st.msGroups, st.msReduce, st.reductions, st.carried, st.retries, st.prunedPieces);
     }
-    ~DagLogTap() { iris::Logger::setSink(nullptr); }
-};
+    std::fflush(stdout);
+    return ms;
+}
 
 static QList<iris::MeshPtr> bakeOrRead(const QString &sourcePath, const QString &name, const QString &oid,
                                        BakeInfo *infoOut, bool forceBake)
@@ -224,11 +221,10 @@ static QList<iris::MeshPtr> bakeOrRead(const QString &sourcePath, const QString 
         // (clear_refs 5) — a tool baking four shells in turn then records each one's.
         { std::ofstream clear("/proc/self/clear_refs"); clear << "5"; }
         {
-            DagLogTap tap;
             const auto t0 = Clock::now();
             m = iris::MeshBake::buildFromFile(sourcePath, fp, extract);
             info.bakeMs = msSince(t0);
-            info.dagMs = tap.ms;
+            info.dagMs = dagMsOf(m, sourcePath);
         }
         info.peakRssKb = peakRssKb();
         QDir(extract).removeRecursively();

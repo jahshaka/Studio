@@ -67,7 +67,7 @@ struct BakeInfo {
     QString blobPath;
     bool    fromCache = false;
     double  bakeMs = 0.0;       ///< MeshBake::buildFromFile, wall clock (0 from the cache)
-    double  dagMs = 0.0;        ///< the cluster-DAG stage alone (the bake's own log line)
+    double  dagMs = 0.0;        ///< the cluster-DAG stage alone (the bake's own stats: Model::dagStats)
     double  readMs = 0.0;       ///< deserialize from the cache
     qint64  blobBytes = 0;
     /// THE IMPORT SPLITS A LARGE MESH: assimp's SplitLargeMeshes (in the

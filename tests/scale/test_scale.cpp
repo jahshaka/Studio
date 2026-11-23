@@ -17,7 +17,6 @@
 #include "bridge/sceneworkerthreads.h"
 #include "jahshaka/engine/GpuSubstrate.h"
 
-#include "irisgl/core/logger.h"
 #include "irisgl/document/assets/mesh.h"
 #include "irisgl/document/materials/pbrmaterial.h"
 #include "irisgl/document/scenegraph/cameranode.h"
