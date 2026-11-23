@@ -676,3 +676,4 @@ gi.route_landing.ahead_picture 2.74  by hand (ctest -V in hold ss7-b11-ahead2, C
 sky.atmosphere_deferred_layout 1.25  by hand (spec.sh reprice, 2026-11-23)
 shadercache.app.cold_gate_gap 0.01  by hand (spec.sh reprice, 2026-11-23)
 shadercache.app.warm_gate_gap 0.01  by hand (spec.sh reprice, 2026-11-23)
+script.commands 0.01  solo 2026-11-23 at 525ae6018 (spec.sh reprice, run 20261123T101244-525ae6018-p472807)
