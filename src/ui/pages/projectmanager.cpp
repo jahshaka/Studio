@@ -772,7 +772,7 @@ void ProjectManager::enterDesktop()
     for (const QString &guid : std::as_const(removed)) removeTile(guid);
     for (const QString &guid : std::as_const(added)) addTile(guid);
     ++outOfStepEntries;
-    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("desktop: tile set out of step on entry — added %1, removed %2 "
+    JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("desktop: tile set out of step on entry — added %1, removed %2 "
                                                                      "(a path changed the library without its tile verb): %3")
                                                           .arg(added.size()).arg(removed.size())
                                                           .arg((added + removed).join(QLatin1Char(' '))));

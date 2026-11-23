@@ -80,7 +80,7 @@ void SkyPresets::applyCubeSky(QListWidgetItem* item)
     const QStringList guids =
         ShippedAssets::pinSkyPreset(item->data(Qt::UserRole).toString(), db, project, &error);
     if (guids.size() != 6) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Log, "sky preset: " + error);
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "sky preset: " + error);
         return;
     }
     emit changeSceneCubemap(guids);

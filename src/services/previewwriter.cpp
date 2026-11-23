@@ -117,7 +117,7 @@ void Writer::run()
         QSqlDatabase conn;
         const bool open = Database::openPreviewConnection(&conn, mPath, name, mBudgetMs, &openError);
         if (!open)
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("previews: the writer could not open %1 (%2) — no preview is stored this session")
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("previews: the writer could not open %1 (%2) — no preview is stored this session")
                                                                   .arg(mPath, openError));
 
         std::unique_lock<std::mutex> lock(mMutex);
@@ -193,7 +193,7 @@ void Writer::run()
                                                                       .arg(item.guid, write.ok ? QStringLiteral("landed") : QStringLiteral("failed"))
                                                                       .arg(item.drops + 1).arg(landed.waitedMs));
             if (!write.ok)
-                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("previews: the preview of %1 was not stored: %2").arg(item.guid, write.reason));
+                JahLog::write(JahLog::legacy, JahLog::Level::Error, QStringLiteral("previews: the preview of %1 was not stored: %2").arg(item.guid, write.reason));
             Done done = std::move(item.done);
             --mPending;
             post(mAlive, [landed, done]() {

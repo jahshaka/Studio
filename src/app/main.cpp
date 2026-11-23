@@ -392,7 +392,7 @@ int main(int argc, char *argv[])
             || gen.outcome == librarygeneration::Outcome::Failed) {
             std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n",
                          qUtf8Printable(gen.reason));
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library: REFUSED — %1").arg(gen.reason));
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: REFUSED — %1").arg(gen.reason));
             // ON SCREEN for a person (D6); never a modal on a driven/rig run.
             if (!FirstRun::isDrivenSession(cli))
                 QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
@@ -521,7 +521,7 @@ int main(int argc, char *argv[])
             if (!error.isEmpty()) {
                 const QString reason = QObject::tr("the library's indexes could not be built (%1)").arg(error);
                 std::fprintf(stderr, "Jahshaka: the library cannot be opened: %s\n", qUtf8Printable(reason));
-                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("library: REFUSED — %1").arg(reason));
+                JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("library: REFUSED — %1").arg(reason));
                 if (!FirstRun::isDrivenSession(cli))
                     QMessageBox::critical(nullptr, QObject::tr("Jahshaka"),
                                           QObject::tr("The library cannot be opened: %1.").arg(reason));

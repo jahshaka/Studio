@@ -108,7 +108,7 @@ void SceneOpenRunner::runWorker()
         for (MeshBakeStore::BakeResult &result : *results) {
             QString error;
             if (!MeshBakeStore::commitBake(conn, root, result, &error))
-                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("open: a stale bake could not be rebuilt (%1)").arg(error));
+                JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("open: a stale bake could not be rebuilt (%1)").arg(error));
         }
         mRebuild.clear();
         mFuture = QtConcurrent::run([this]() {

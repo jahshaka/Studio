@@ -261,7 +261,7 @@ void MaterialPresetSeeder::seedNextRow()
     turn.start();
     QString error;
     if (MaterialPresetAssets::ensureSeeded(name, mDb, &error, &mPrepared).isEmpty())
-        JahLog::write(JahLog::legacy, JahLog::Level::Log, "preset seed: '" + name + "' was not seeded - " + error);
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "preset seed: '" + name + "' was not seeded - " + error);
     else
         ++mSeeded;
     mRowMs += turn.elapsed();

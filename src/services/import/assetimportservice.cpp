@@ -663,7 +663,7 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
         // degrades to a no-op, the rows below stay uncommitted and this cleanup
         // silently returns to being the no-op the audit found — say so instead.
         if (!tx.isActive() && !committed)
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, "import rollback: no transaction of our own to roll back — "
+            JahLog::write(JahLog::legacy, JahLog::Level::Error, "import rollback: no transaction of our own to roll back — "
                                                               "object cleanup may be reading uncommitted rows");
         tx.rollback();   // idempotent; a no-op if commit() already unwound
         // Whatever prepare() staged and this commit never published is a temp
@@ -780,7 +780,7 @@ bool AssetImportService::commitStagedAsset(const ImportRequest &request, StagedA
             sidecarFailure = casError.isEmpty() ? guid : casError;
     }
     if (!sidecarFailure.isEmpty()) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Log, "import post-commit: " + sidecarFailure);
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "import post-commit: " + sidecarFailure);
         result.error = QStringLiteral("imported, but its record in the store (sidecar) could not "
                                       "be written (%1) — it would not survive Clear Database or "
                                       "an update").arg(sidecarFailure);
@@ -989,7 +989,7 @@ AssetImportService::Reimported AssetImportService::reimport(const QString &guid,
     QString casError;
     AssetCas::writeSidecar(conn, root, guid, &casError);
     if (!meshGuid.isEmpty()) AssetCas::writeSidecar(conn, root, meshGuid, &casError);
-    if (!casError.isEmpty()) JahLog::write(JahLog::legacy, JahLog::Level::Log, "reimport: " + casError);
+    if (!casError.isEmpty()) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "reimport: " + casError);
     return out;
 }
 

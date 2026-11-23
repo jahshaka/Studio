@@ -523,7 +523,7 @@ iris::ParticleSystemNodePtr SceneEditService::addParticleSystem(iris::ParticlePr
     // asset identity — nothing is saved, as the comment above says.
     else if (!image.path.isEmpty()) node->setTexture(iris::Texture2D::load(image.path), QString());
     if (!image.error.isEmpty())
-        JahLog::write(JahLog::legacy, JahLog::Level::Log, "addParticleSystem: the default particle image was not bound - " + image.error);
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "addParticleSystem: the default particle image was not bound - " + image.error);
 
     addNodeToScene(node);
     return node;
@@ -1487,7 +1487,7 @@ bool SceneEditService::applyMaterial(const QString &presetOrGuid, iris::SceneNod
             // does not ship: the material is still applied, from the shipped
             // values, because refusing to paint the mesh would be the worse
             // answer — there is simply no row to pin.
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, "applyMaterial: '" + presetOrGuid + "' was not seeded - " + error);
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, "applyMaterial: '" + presetOrGuid + "' was not seeded - " + error);
             return applyResolvedMaterial(presetOrGuid, target);
         }
     }

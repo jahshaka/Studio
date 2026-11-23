@@ -59,7 +59,7 @@ QString pinTile(Database *db, Project *project, QString *tileGuid, bool *tileNew
             // The floor still renders (the shipped file); what is lost is the
             // guid on save, so say why instead of saving a scene that reopens
             // untextured with nothing in the log.
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, "defaultfloormaterial: the floor tile could not be pinned into the project - "
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, "defaultfloormaterial: the floor tile could not be pinned into the project - "
                                                               + tile.error);
         }
     }

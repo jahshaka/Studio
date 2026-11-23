@@ -1909,7 +1909,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
                 animationss = iris::MeshBake::clipAnimations(
                     *baked, MeshBakeStore::transformFor(filePath, assetGuid).keysOnly(), filePath);
             } else {
-                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("scene reader: the clip '%1' has no current clip bake — its "
+                JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("scene reader: the clip '%1' has no current clip bake — its "
                                                                                  "animation is missing from this open")
                                                                       .arg(handle->fetchAsset(assetGuid).name));
             }
@@ -1933,7 +1933,7 @@ void SceneReader::extractAssetsFromAssimpScene(QString filePath, const QString &
                                                                              "bake lands").arg(QFileInfo(filePath).fileName()));
         } else {
             if (!missingModelPaths.contains(filePath)) missingModelPaths.append(filePath);
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("scene reader: '%1' has no current mesh bake — the model is missing "
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("scene reader: '%1' has no current mesh bake — the model is missing "
                                                                              "from this open (re-import it)").arg(QFileInfo(filePath).fileName()));
         }
 
@@ -1987,7 +1987,7 @@ iris::SkeletalAnimationPtr SceneReader::getSkeletalAnimation(const QString &asse
                                   ? handle->fetchAsset(assetGuid).name : QString();
     const auto miss = [&](const QString &why) {
         missingClipRefs.append({ animName, assetGuid, assetName, nodeName, why });
-        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("scene reader: the clip '%1' on '%2' (asset %3) is missing: %4 — "
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("scene reader: the clip '%1' on '%2' (asset %3) is missing: %4 — "
                                                                          "the node keeps its bind pose")
                                                               .arg(animName, nodeName,
                                                                    assetGuid.isEmpty() ? QStringLiteral("none") : assetGuid, why));

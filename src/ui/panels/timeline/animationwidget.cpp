@@ -501,7 +501,7 @@ void AnimationWidget::addPropertyKey(QAction *action)
         static QSet<QString> reported;
         if (!reported.contains(animProp->name)) {
             reported.insert(animProp->name);
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, QString("AnimationWidget: %1 — key ignored").arg(error));
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QString("AnimationWidget: %1 — key ignored").arg(error));
         }
         return;
     }

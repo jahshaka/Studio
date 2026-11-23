@@ -128,7 +128,7 @@ Result checkAndWipe(const QString &dbPath, const QString &dataRoot, SettingsMana
     result.keptRows = wiped.kept.rows;
     result.unreadable = wiped.kept.unreadable;
     if (!wiped.ok) result.reason = wiped.error;
-    JahLog::write(JahLog::legacy, JahLog::Level::Log, wiped.ok ? QStringLiteral("library: RESET (%1) — no migrations exist; %2 storage rows "
+    JahLog::write(JahLog::legacy, JahLog::Level::Warning, wiped.ok ? QStringLiteral("library: RESET (%1) — no migrations exist; %2 storage rows "
                                                                                 "rebuilt from their sidecars, %3 sidecars of an older format "
                                                                                 "not read")
                                                                      .arg(result.reason).arg(wiped.kept.rows).arg(wiped.kept.unreadable)

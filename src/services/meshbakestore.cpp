@@ -233,7 +233,7 @@ bool recordBake(QSqlDatabase conn, const QString &root, const QString &sourceOid
     for (const QString &ownerGuid : owners) {
         QString casError;
         AssetCas::writeSidecar(conn, root, ownerGuid, &casError);
-        if (!casError.isEmpty()) JahLog::write(JahLog::legacy, JahLog::Level::Log, "mesh bake: " + casError);
+        if (!casError.isEmpty()) JahLog::write(JahLog::legacy, JahLog::Level::Warning, "mesh bake: " + casError);
     }
     return true;
 }
@@ -845,7 +845,7 @@ int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, in
         QString error;
         if (!commitBake(conn, root, result, &error)) {
             ++failed;
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: a stale bake could not be rebuilt (%1)").arg(error));
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("mesh bake: a stale bake could not be rebuilt (%1)").arg(error));
         }
     }
     return failed;
@@ -948,7 +948,7 @@ void startBackgroundRebuild(std::shared_ptr<std::atomic<int>> planned)
                     return;
                 }
                 if (!commitBake(QSqlDatabase::database(), root, *result, &error))
-                    JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: background rebuild failed (%1)").arg(error));
+                    JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("mesh bake: background rebuild failed (%1)").arg(error));
             }, Qt::QueuedConnection);
         }
     });
@@ -1143,7 +1143,7 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
                 QVector<AssetCas::Staged> leftover{ result.staged };
                 AssetCas::discardStaged(leftover);
             }
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: %1 bake(s) not committed: %2").arg(jobs.size()).arg(dropped));
+            JahLog::write(JahLog::legacy, JahLog::Level::Error, QStringLiteral("mesh bake: %1 bake(s) not committed: %2").arg(jobs.size()).arg(dropped));
             QVector<LandedBake> lost = targets;
             for (LandedBake &row : lost) row.ok = false;
             for (int i = 0; i < sListeners.size();) {
@@ -1162,7 +1162,7 @@ void landAsync(const QVector<BakeJob> &jobs, const QVector<LandedBake> &targets,
             if (!commitBake(conn, root, results[i], &error)) {
                 ++failed;
                 failedPaths.insert(jobs.at(i).path);
-                JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("mesh bake: '%1' could not be baked (%2)")
+                JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("mesh bake: '%1' could not be baked (%2)")
                                                                       .arg(QFileInfo(jobs.at(i).path).fileName(), error));
             }
         }

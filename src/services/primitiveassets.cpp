@@ -88,13 +88,13 @@ iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db)
     const QString source = storedSource(QSqlDatabase::database(), AssetStorePaths::root(),
                                        db, guid);
     if (source.isEmpty()) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Log, "primitive: '" + QString::fromLatin1(def->name)
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "primitive: '" + QString::fromLatin1(def->name)
                                                           + "' is not seeded in this library — nothing to draw");
         return iris::MeshPtr();
     }
     iris::BakedModelPtr baked = MeshBakeStore::load(source, guid);
     if (!baked || baked->meshes.isEmpty()) {
-        JahLog::write(JahLog::legacy, JahLog::Level::Log, "primitive: '" + QString::fromLatin1(def->name)
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, "primitive: '" + QString::fromLatin1(def->name)
                                                           + "' has no readable bake — nothing to draw");
         return iris::MeshPtr();
     }

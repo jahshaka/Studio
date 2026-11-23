@@ -1475,7 +1475,7 @@ void EditorDocks::exportNode(const iris::SceneNodePtr &node, ModelTypes modelTyp
     if (!result.ok()) {
         // TOLD, not only logged — this was a silent void (the project export's
         // shape, exportSceneAsZip).
-        JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("Export failed: %1").arg(result.error));
+        JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("Export failed: %1").arg(result.error));
         if (!FirstRun::isDrivenSession())
             QMessageBox::warning(mWindow, tr("Export failed"),
                                  tr("%1 could not be exported: %2").arg(node->getName(), result.error));

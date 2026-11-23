@@ -66,7 +66,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
         const QJsonObject values =
             isPbrBlob ? materialDefinition.value("values").toObject() : QJsonObject();
         if (!isPbrBlob && !materialDefinition.isEmpty())
-            JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("asset helper: refused a non-pbr material definition on '%1'")
+            JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("asset helper: refused a non-pbr material definition on '%1'")
                                                                   .arg(node->getName()));
 
         auto pbr = iris::PbrMaterial::create();

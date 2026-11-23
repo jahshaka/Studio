@@ -95,7 +95,7 @@ iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject matObject, Data
 	// caller gets the default PbrMaterial and the log names the refusal.
 	Q_UNUSED(db);
 	Q_UNUSED(loadTextures);
-	JahLog::write(JahLog::legacy, JahLog::Level::Log, QStringLiteral("material reader: refused a material with materialType '%1' "
+	JahLog::write(JahLog::legacy, JahLog::Level::Warning, QStringLiteral("material reader: refused a material with materialType '%1' "
 	                       "(only \"pbr\" is read) — it loads as the default material")
 	            .arg(matObject.value(QStringLiteral("materialType")).toString()));
 	auto mat = iris::PbrMaterial::create();
