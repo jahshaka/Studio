@@ -6,7 +6,7 @@
 // at the centre; a second material colour must show; the RTT preview must
 // match the view; release() must detach cleanly.
 #include "../support/previewdump.h"
-#include "app/qtstdgui.h"
+#include "irisgl/document/srgbcolor.h"
 #include "../support/thumbnailgrade.h"
 
 #include "../support/testmesh.h"

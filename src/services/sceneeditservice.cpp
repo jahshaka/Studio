@@ -10,7 +10,7 @@ For more information see the LICENSE file
 *************************************************************************/
 
 #include "irisgl/core/math/mat3.h"
-#include "app/qtstdgui.h"
+#include "irisgl/document/srgbcolor.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "services/sceneeditservice.h"

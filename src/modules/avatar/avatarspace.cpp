@@ -9,7 +9,7 @@ and/or modify it under the terms of the MIT License
 For more information see the LICENSE file
 *************************************************************************/
 #include "irisgl/core/math/vec.h"
-#include "app/qtstdgui.h"
+#include "irisgl/document/srgbcolor.h"
 #include "modules/avatar/avatarspace.h"
 
 #include "irisgl/document/scenegraph/scene.h"

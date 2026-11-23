@@ -128,7 +128,7 @@
 // offscreen and QT_QPA_PLATFORM=offscreen, so nothing is ever shown.
 
 #include <QGuiApplication>
-#include "app/qtstdgui.h"
+#include "irisgl/document/srgbcolor.h"
 
 #include "../support/testmesh.h"
 #include <QByteArray>

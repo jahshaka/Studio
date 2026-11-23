@@ -14,7 +14,7 @@
 // builds both, exactly as iris::loadAsSceneFragment's _buildScene would.
 
 #include "irisgl/core/math/mat4.h"
-#include "app/qtstdgui.h"
+#include "irisgl/document/srgbcolor.h"
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
