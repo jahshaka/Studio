@@ -687,3 +687,4 @@ source.script_names 0.02  solo 2026-11-23 at abfb0cc29 (spec.sh reprice, run 202
 source.script_census 0.14  solo 2026-11-23 at ab0d7e8bd (spec.sh reprice, run 20261123T141502-ab0d7e8bd-p2278543)
 script.trace_rays_mask 1.56  solo 2026-11-23 at 7f540899b (spec.sh reprice, run 20261123T154520-7f540899b-p272170)
 script.reflector_attach_quiet 1.61  solo 2026-11-23 at db9b4b84e (spec.sh reprice, run 20261123T161129-db9b4b84e-p1518933)
+document.ptr_laws 0.01  by hand (spec.sh reprice, 2026-11-23)

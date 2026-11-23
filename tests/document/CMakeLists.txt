@@ -35,6 +35,20 @@ set_tests_properties(document.characterisation PROPERTIES
     ENVIRONMENT "QT_QPA_PLATFORM=offscreen" LABELS "document" TIMEOUT 60)
 jah_no_display(document.characterisation)
 
+# document.ptr_laws — THE SELF-HANDLE LAW (NOQT-DOCUMENT-1 stage 2, law 1): a SceneNode no shared_ptr owns answers a
+# NULL self-handle, never a throw (weak_from_this().lock(), never shared_from_this()). CPU only: the document's own
+# store, no engine, no display.
+add_executable(test_ptr_laws test_ptr_laws.cpp)
+set_target_properties(test_ptr_laws PROPERTIES AUTOMOC OFF)
+target_include_directories(test_ptr_laws PRIVATE ${CMAKE_SOURCE_DIR}
+    ${CMAKE_SOURCE_DIR}/src
+    ${CMAKE_SOURCE_DIR}/irisgl
+    ${CMAKE_SOURCE_DIR}/irisgl/thirdparty/bullet3/src)
+target_link_libraries(test_ptr_laws PRIVATE IrisGL)
+add_test(NAME document.ptr_laws COMMAND test_ptr_laws WORKING_DIRECTORY ${CMAKE_CURRENT_BINARY_DIR})
+set_tests_properties(document.ptr_laws PROPERTIES LABELS "document" TIMEOUT 60)
+jah_no_display(document.ptr_laws)
+
 # physics.mt_determinism (archived: archive/tests/physics) / physics.step_cost (archived: archive/tests/physics) / physics.step_overlap (archived: archive/tests/physics) — THE PHYSICS STEP ON BULLET'S MULTI-THREADED WORLD
 # (ENGINE-UPGRADE-U4 stage 6, decisions 20/21/23). A pile of boxes dropped in layers, stepped by the document at the
 # fixed step, frames counted; Bullet's own scheduler bound on the test's thread (its game thread) at the box's share.
