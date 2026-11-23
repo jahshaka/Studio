@@ -54,6 +54,7 @@ For more information see the LICENSE file
 #include <functional>
 #include <memory>
 
+#include "services/bootreport.h"
 #include "services/closeunsaved.h"
 
 class AssetView;
@@ -110,6 +111,9 @@ public:
     /// THE LIBRARY, OPENED: the lock, the database, the tile cache's sources,
     /// the shipped seeds and the background bake rebuild. Returns the database.
     Database *openLibrary();
+    /// THE BOOT's FACTS (services/bootreport.h): the seed, the index facts and the sweep's plan, recorded by
+    /// openLibrary; the index gate's by main.cpp. The one report of the process; StudioServices points here.
+    BootReport *bootReport() { return &mBoot; }
 
     void setParts(const Parts &parts);
     /// A non-owning watch on the process's Engine (step 6 proves it died).
@@ -133,6 +137,7 @@ private:
     Parts mParts;
     CloseUnsaved mCloseUnsaved = CloseUnsaved::Ask;
     Database *mDb = nullptr;
+    BootReport mBoot;
     bool mBackgroundStopped = false;
     std::weak_ptr<jahshaka::engine::Engine> mEngineWatch;
 };

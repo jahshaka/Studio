@@ -16,6 +16,7 @@ For more information see the LICENSE file
 #include "services/livecompiles.h"
 #include "app/notices.h"
 #include "services/services.h"
+#include "services/bootreport.h"
 #include "services/projectservice.h"
 #include "scripting/modules/appapi.h"
 #include <QJsonArray>
@@ -194,6 +195,18 @@ QVector<VerbInfo> AppApi::verbs() const
           "true); without it `traced` is false and `statements` 0. The large-library rows read both. "
           "`available` false (zeros, `why` says) where the Qt driver carries its own SQLite, "
           "which this build may not call into.",
+          Needs::Document },
+        { "bootReport", "app.bootReport() -> {seed: {created, reseeded, errors, workerMs}, indexGate: {built, ms}, "
+                        "indexAtOpen, staleRebuilds, available}",
+          "WHAT THIS PROCESS's BOOT DID TO THE LIBRARY, as results (services/bootreport.h; a tool reads THESE, never a "
+          "log line): `seed` the shipped meshes' seed at the library's open - rows imported and baked (`created`), "
+          "rows whose stored source was not the shipped mesh and were re-seeded (`reseeded`, by name), one line a "
+          "failed row (`errors`), the worker's wall (`workerMs`); `indexGate` the one-time index build before the "
+          "shell opened the library (statements `built`, its `ms`; 0 and 0 on a prepared library); `indexAtOpen` "
+          "the index statements run over an existing library's rows on the opening thread (a defect: 0); "
+          "`staleRebuilds` the stale bakes the background sweep planned to rebuild, -1 until the sweep's worker "
+          "has planned (or when no sweep runs: JAHSHAKA_BAKE_SWEEP=0) - read it again after a verb turns the loop "
+          "rather than take a -1 for a 0. `available` false (and nothing else) in a host with no shell.",
           Needs::Document },
         { "heartbeat", "app.heartbeat(intervalMs=250) -> bool",
           "Starts (or, with 0, stops) a main-thread heartbeat probe: a timer that ticks on the UI thread and "
@@ -915,6 +928,21 @@ QVariantMap AppApi::databaseReads()
              { QStringLiteral("traced"), r.traced },
              { QStringLiteral("available"), r.available },
              { QStringLiteral("why"), r.why } };
+}
+
+QVariantMap AppApi::bootReport()
+{
+    const BootReport *r = host.services ? host.services->boot : nullptr;
+    if (!r) return { { QStringLiteral("available"), false } };
+    return { { QStringLiteral("available"), true },
+             { QStringLiteral("seed"), QVariantMap{ { QStringLiteral("created"), r->seed.created },
+                                                    { QStringLiteral("reseeded"), r->seed.reseeded },
+                                                    { QStringLiteral("errors"), r->seed.errors },
+                                                    { QStringLiteral("workerMs"), r->seed.workerMs } } },
+             { QStringLiteral("indexGate"), QVariantMap{ { QStringLiteral("built"), r->indexGate.built },
+                                                         { QStringLiteral("ms"), r->indexGate.ms } } },
+             { QStringLiteral("indexAtOpen"), r->indexAtOpen },
+             { QStringLiteral("staleRebuilds"), r->staleRebuilds->load() } };
 }
 
 QVariantMap AppApi::openStats(const QVariantMap &options)

@@ -5,6 +5,8 @@
 //   MODE "law":   a RETURNING user's session: the boot, then the steps, each read around by app.databaseReads
 //                 (TRACED statements and pages of the default connection) with the query log on (the named view:
 //                 the workers' tile reads are printed by name in it).
+//   MODE "control": the boot alone, on root A with its bake rows dropped - the sweep's zero's control (its report).
+// Every mode ends with the boot's report (app.bootReport(): its results, never a log line) and "end".
 function reads() { return app.databaseReads(); }
 function line(text) { console.log("SCALE " + text); }
 
@@ -76,4 +78,12 @@ if (MODE === "law") {
         line("import " + g + " lastError=" + app.lastError());
     }
 }
+// THE BOOT's FACTS, AS RESULTS (app.bootReport(): the shell never reads a log line). `staleRebuilds` is written by the
+// bake sweep's worker once its plan is complete (-1 before): read again until it is published, BOUNDED by a count of
+// polls - the bound hit prints -1 and the shell names it "the sweep never planned", never a 0.
+var report = app.bootReport();
+var polls = 0;
+while (report.staleRebuilds < 0 && polls < 20000) { ++polls; report = app.bootReport(); }
+line("report gateBuilt=" + report.indexGate.built + " gateMs=" + report.indexGate.ms + " indexAtOpen=" + report.indexAtOpen
+     + " staleRebuilds=" + report.staleRebuilds + " polls=" + polls);
 line("end");

@@ -1156,10 +1156,12 @@ void Database::createIndexes()
     QSqlQuery any;
     const bool empty = !any.exec(QStringLiteral("SELECT 1 FROM assets LIMIT 1")) || !any.next();
     any.finish();
-    if (!empty)
+    if (!empty) {
+        mIndexStatementsAtOpen = int(needed.size());
         irisLog(QStringLiteral("library: DEFECT — %1 index statement(s) run over an existing library's rows on the "
                                "opening thread; the boot builds them before the shell opens it (Database::prepareIndexes)")
                     .arg(needed.size()));
+    }
     for (const QString &statement : needed) {
         QSqlQuery index;
         index.prepare(statement);

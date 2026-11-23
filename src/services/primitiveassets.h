@@ -86,10 +86,19 @@ iris::MeshPtr mesh(const QString &nameOrSeedPath, Database *db);
 /// does not, so a preview-only binary can resolve without it). `db` is required.
 QString ensureSeeded(const primitives::Def &def, Database *db, QString *errorOut = nullptr);
 
-/// Seed and bake EVERY row of the list. Returns how many rows this call
-/// created; `errors` collects one line per failure. Idempotent and cheap on a
-/// library that already holds them (one catalog query each).
-int seedAll(Database *db, QStringList *errors = nullptr);
+/// WHAT ONE seedAll DID: a RESULT a caller records (the boot's report: services/bootreport.h), never a log line
+/// a tool reads.
+struct SeedResult
+{
+    int created = 0;           ///< rows this call imported and baked
+    QStringList reseeded;      ///< rows whose stored source was not the shipped mesh, re-seeded (by name)
+    QStringList errors;        ///< one line per failed row: "<name>: <why>"
+    double workerMs = 0.0;     ///< the worker's wall for the whole list
+};
+
+/// Seed and bake EVERY row of the list. Idempotent and cheap on a library that
+/// already holds them (one catalog query each).
+SeedResult seedAll(Database *db);
 
 /// Is every seed row present with a bake this build can read? The honest
 /// "nothing left to seed" answer for a suite and for the first-run predicate.

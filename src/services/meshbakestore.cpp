@@ -888,7 +888,7 @@ QThreadPool *backgroundPool()
 }
 }   // namespace
 
-void startBackgroundRebuild()
+void startBackgroundRebuild(std::shared_ptr<std::atomic<int>> planned)
 {
     if (backgroundRebuildRunning() || !QCoreApplication::instance()) return;
     // JAHSHAKA_BAKE_SWEEP=0: no library sweep (a suite that proves the OPEN
@@ -907,8 +907,9 @@ void startBackgroundRebuild()
     // window's constructor, at every boot, to find nothing stale. The catalog is per thread, so
     // the worker reads through its OWN read connection to the same file; only the commits come
     // back to this (the database) thread, as before.
-    sBackground = QtConcurrent::run(backgroundPool(), [dbPath, root]() {
+    sBackground = QtConcurrent::run(backgroundPool(), [dbPath, root, planned]() {
         QVector<BakeJob> jobs;
+        bool read = false;   // the plan read the library (a connection that never opened planned nothing)
         {
             const QString name = QStringLiteral("BakeSweep-%1")
                                      .arg(QUuid::createUuid().toString(QUuid::WithoutBraces));
@@ -923,12 +924,15 @@ void startBackgroundRebuild()
                         BakeJob job = prepareBake(conn, root, target);
                         if (!job.path.isEmpty()) jobs.append(job);
                     }
+                    read = true;
                     conn.close();
                 }
             }
             QSqlDatabase::removeDatabase(name);
         }
-        if (jobs.isEmpty() || sBackgroundStop.load()) return;
+        if (sBackgroundStop.load() || !read) return;
+        planned->store(int(jobs.size()));
+        if (jobs.isEmpty()) return;
         irisLog(QStringLiteral("mesh bake: rebuilding %1 stale bake(s) in the background").arg(jobs.size()));
         for (const BakeJob &job : jobs) {
             if (sBackgroundStop.load()) return;

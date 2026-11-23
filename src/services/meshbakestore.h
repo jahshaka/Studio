@@ -217,7 +217,9 @@ int rebuildPumped(const QVector<BakeJob> &jobs, const std::function<void(int, in
 /// THE LIBRARY'S BACKGROUND SWEEP: every stale bake in the store, one at a
 /// time, on a lowest-priority thread, each committed as it lands. Started
 /// once a library is open; idempotent. stop joins (shutdown, a reset).
-void startBackgroundRebuild();
+/// `planned` receives the count of stale bakes the sweep planned (0 included), stored by the worker once its
+/// plan is complete (never when a stop cut it): the boot's result (services/bootreport.h). Never null.
+void startBackgroundRebuild(std::shared_ptr<std::atomic<int>> planned);
 void stopBackgroundRebuild();
 bool backgroundRebuildRunning();
 

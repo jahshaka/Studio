@@ -601,6 +601,7 @@ void MainWindow::setupServices()
     serviceDeps.scene = [this]() { return scene; };
     serviceLayer = new ShellServices(serviceDeps, this);
     services = serviceLayer->aggregate();
+    services->boot = lifecycle->bootReport();
     undoService = serviceLayer->undo();
     selectionService = serviceLayer->selection();
     playbackService = serviceLayer->playback();

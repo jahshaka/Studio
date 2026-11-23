@@ -40,6 +40,8 @@ For more information see the LICENSE file
 #include "shell/mainwindow.h"
 #include "data/database/database.h"
 #include "services/apppaths.h"
+#include "services/bootreport.h"
+#include "services/services.h"
 #include "app/cli/clioptions.h"
 #include "app/firstrun.h"
 #include "ui/dialogs/donatedialog.h"
@@ -498,6 +500,7 @@ int main(int argc, char *argv[])
     // build and no statement can name an index that is not there yet. A library that has them costs one
     // read of its schema; a fresh one builds them over its empty tables at its first open. A build that
     // FAILS (a full disk, a read-only file) is a boot error, said, never a shell on a half-indexed library.
+    BootReport::IndexGate indexGate;   // recorded into the boot's report once the window exists (below)
     {
         const QString libraryPath = IrisUtils::join(AppPaths::dataRoot(), Constants::JAH_DATABASE);
         const int statements = QFile::exists(libraryPath) ? Database::indexStatementsToRun(libraryPath) : 0;
@@ -525,8 +528,10 @@ int main(int argc, char *argv[])
                 JahLog::stop(QStringLiteral("library index build failed, exit code 4"));
                 return 4;
             }
+            indexGate.built = statements;
+            indexGate.ms = built.elapsed();
             irisLog(QStringLiteral("library: %1 index statement(s) built before the shell opened it in %2 ms "
-                                   "(one time)").arg(statements).arg(built.elapsed()));
+                                   "(one time)").arg(statements).arg(indexGate.ms));
         }
     }
 
@@ -535,6 +540,7 @@ int main(int argc, char *argv[])
     // This is all to make SceneViewWidget's initializeGL trigger OR a way to force the UI to
     // update when hidden, either way we want the Desktop to be the opening widget (iKlsR)
     MainWindow window;
+    window.studioServices()->boot->indexGate = indexGate;
 
     // THE STARTUP SHADER BUILD RUNS HERE, behind the splash (owner decision,
     // 2026-09-04). MainWindow's constructor has started the engine, created the

@@ -158,6 +158,7 @@ struct Plan
     QString guid;
     QString error;
     bool seeded = false;                       ///< the row and its bytes were already there
+    bool reseeded = false;                     ///< its stored source was not the shipped mesh: imported again
     QVector<MeshBakeStore::BakeJob> staleJobs;  ///< a seeded row's stale bake, to rebuild
     std::shared_ptr<QTemporaryDir> staging;    ///< owns a ":/" seed's copy until the commit
     ImportRequest request;
@@ -192,6 +193,7 @@ Plan planSeed(const primitives::Def &def, Database *db)
     if (!have.isEmpty() && !storedIsShipped(def, have)) {
         irisLog(QStringLiteral("seed: '%1' holds a stored source that is not the shipped mesh - re-seeded")
                     .arg(QString::fromLatin1(def.name)));
+        plan.reseeded = true;
         have.clear();
     }
     if (!have.isEmpty()) {
@@ -308,7 +310,7 @@ QString ensureSeeded(const primitives::Def &def, Database *db, QString *errorOut
     return commitSeed(plan, db, errorOut);
 }
 
-int seedAll(Database *db, QStringList *errors)
+SeedResult seedAll(Database *db)
 {
     // THE WHOLE LIST IN THREE PASSES (VERB-IMPORT-OFF-UI-1): plan every row on the
     // database thread, run every import's parse + BAKE (and every stale rebuild)
@@ -336,25 +338,25 @@ int seedAll(Database *db, QStringList *errors)
     UiThreadWait::run([&]() {
         for (Plan &plan : plans) runSeed(plan, db);
     }, UiThreadWait::Pump::None);
-    const double workerMs = double(took.nsecsElapsed()) / 1.0e6;
+    SeedResult out;
+    out.workerMs = double(took.nsecsElapsed()) / 1.0e6;
 
-    int created = 0;
     for (Plan &plan : plans) {
         QString error;
         if (commitSeed(plan, db, &error).isEmpty()) {
-            if (errors)
-                *errors << QStringLiteral("%1: %2").arg(QString::fromLatin1(plan.def->name), error);
+            out.errors << QStringLiteral("%1: %2").arg(QString::fromLatin1(plan.def->name), error);
             continue;
         }
-        if (!plan.seeded) ++created;
+        if (plan.reseeded) out.reseeded << QString::fromLatin1(plan.def->name);
+        if (!plan.seeded) ++out.created;
     }
     // THE FIRST BOOT'S COST, a reading and not a guess (SHIPPED-BAKES-1): the
     // worker's wall for the whole list; the UI thread waited for it and built none.
-    if (created > 0)
+    if (out.created > 0)
         irisLog(QStringLiteral("seed: %1 shipped meshes imported and baked on a worker in %2 ms")
-                    .arg(created)
-                    .arg(workerMs, 0, 'f', 1));
-    return created;
+                    .arg(out.created)
+                    .arg(out.workerMs, 0, 'f', 1));
+    return out;
 }
 
 

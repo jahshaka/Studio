@@ -7,8 +7,8 @@
 #      50 projects) and root B (10,000, 500) — its time printed apart, never a law — and both get the PREVIOUS
 #      index set (this build's covering and bake indexes dropped), as a library an earlier build wrote.
 #   2. THE FIRST SESSION per root: the shipped primitives' seed and the boot's ONE-TIME INDEX GATE (main.cpp:
-#      Database::prepareIndexes on a worker before the shell opens the library). Asserted: the gate ran (its line,
-#      its ms printed), the session ended 0. Its boot is printed, never barred: a library's first session is not
+#      Database::prepareIndexes on a worker before the shell opens the library). Asserted: the gate ran (its RESULT,
+#      app.bootReport().indexGate: statements built > 0, its ms printed), the session ended 0. Its boot is printed, never barred: a library's first session is not
 #      the boot the owner's sentence is about.
 #   3. THE SECOND SESSION per root — A RETURNING USER'S: the boot, open the generated project (the tray's listing is
 #      inside it), assets.list, assets.list({members}), assets.selected, the first entry to Materials, the Desktop,
@@ -17,8 +17,10 @@
 #      - per step, the boot included, TRACED statements(B) == statements(A);
 #      - boot, open, create and the Desktop: bytes(B) - bytes(A) <= 50 B an added asset (450,000 B);
 #      - no thumbnail select is ever a listing's (every one keyed by guid), in either session;
-#      - the gate costs nothing on a prepared library (no gate line), no DEFECT is said, the bake sweep rebuilds
-#        nothing (the generator's models carry their real bakes);
+#      - the gate costs nothing on a prepared library (indexGate.built 0), no index is built on the opening thread
+#        (indexAtOpen 0), the bake sweep rebuilds nothing (staleRebuilds 0, read once the sweep has PLANNED: a bounded
+#        count of polls, -1 at the bound = "the sweep never planned", a FAIL; the generator's models carry their
+#        real bakes) - every one a RESULT the session's script prints from app.bootReport(), never a log line;
 #      - gridStats: outOfStep 0, lastBuildMaxSliceTiles <= sliceTiles, lastBuildDecodes 0, and tiles + pendingTiles
 #        == P: the grid builds in slices that run only when a verb turns the event loop, and a script holds the loop
 #        for its whole run (scriptrunner.cpp), so how far the build got is not the script's to settle — every
@@ -72,6 +74,9 @@ run() {   # $1 = root, $2 = mode, $3 = open guid, $4 = png or empty
     { printf 'var MODE = "%s";\nvar OPEN = "%s";\nvar PNG = "%s";\n' "$2" "$3" "$4"; cat "$JS"; } > "$2-$1.js"
     JAH_DB_STATEMENT_TRACE=1 "$APP" "$MODEFLAG" --data-root "$PWD/root-$1" --script "$PWD/$2-$1.js" > "$2-$1.log" 2>&1
 }
+report() {   # $1 = a session's output, $2 = a field of its script's "SCALE report" line (app.bootReport(): a RESULT)
+    sed -n "s/^SCALE report .*\b$2=\(-\{0,1\}[0-9][0-9]*\).*/\1/p" "$1" | head -1
+}
 for r in a b; do
     open=$OPEN_A; [ "$r" = b ] && open=$OPEN_B
     run "$r" first "$open" ""
@@ -79,8 +84,8 @@ for r in a b; do
     if grep -aq "^SCALE unavailable" "first-$r.log"; then
         echo "SKIP: app.databaseReads is unavailable here ($(sed -n 's/^SCALE unavailable //p' first-$r.log | head -1))"; exit 77
     fi
-    gate=$(grep -a "index statement(s) built before the shell opened it" "first-$r.log" | head -1)
-    [ -n "$gate" ]; check $? "root $r's first boot ran the one-time index gate before the shell: ${gate#*library: }"
+    gate=$(report "first-$r.log" gateBuilt); gate_ms=$(report "first-$r.log" gateMs)
+    [ "${gate:-0}" -gt 0 ]; check $? "root $r's first boot ran the one-time index gate before the shell: ${gate:-none} statement(s) in ${gate_ms:-none} ms"
     echo "   root $r first session: $(grep -a '^SCALE step=boot' "first-$r.log" | sed 's/^SCALE //') (printed, never barred)"
     grep -aq "^SCALE tabs saved .* lastError=null" "first-$r.log"
     check $? "root $r's first session saved the open project's tab set with a Materials-home material open in it"
@@ -91,13 +96,34 @@ for r in a b; do
     check $? "root $r: the custom drawer shows the first session's second material (the open-from-drawer step's input)"
     grep -aq "^SCALE restored ok" "law-$r.log"
     check $? "root $r: the first entry restored the saved tab set, its material's tile in the drawer ($(sed -n 's/^SCALE restored //p' "law-$r.log" | cut -c1-80))"
-    ! grep -aq "index statement(s) built before the shell opened it" "law-$r.log"
-    check $? "root $r's returning boot: the gate runs nothing on a prepared library"
-    ! grep -aq "library: DEFECT" "first-$r.log" "law-$r.log"
-    check $? "root $r: no index was built on the opening thread (no DEFECT)"
-    ! grep -aq "mesh bake: rebuilding" "first-$r.log" "law-$r.log"
-    check $? "root $r: the bake sweep rebuilds nothing (the generated models carry their real bakes)"
+    [ "$(report "law-$r.log" gateBuilt)" = 0 ]
+    check $? "root $r's returning boot: the gate runs nothing on a prepared library (indexGate.built $(report "law-$r.log" gateBuilt); the first boot's above is its control)"
+    [ "$(report "first-$r.log" indexAtOpen)" = 0 ] && [ "$(report "law-$r.log" indexAtOpen)" = 0 ]
+    check $? "root $r: no index was built on the opening thread (indexAtOpen $(report "first-$r.log" indexAtOpen) and $(report "law-$r.log" indexAtOpen))"
+    for m in first law; do
+        n=$(report "$m-$r.log" staleRebuilds)
+        if [ "${n:--1}" = -1 ]; then
+            check 1 "root $r's $m session: the sweep never planned (staleRebuilds -1 after $(report "$m-$r.log" polls) polls)"
+        else
+            [ "$n" = 0 ]; check $? "root $r's $m session: the bake sweep rebuilds nothing (staleRebuilds $n after $(report "$m-$r.log" polls) polls; the generated models carry their real bakes)"
+        fi
+    done
 done
+
+# THE CONTROL OF THE SWEEP's ZERO (CODING_RULES § 6): root A with every recorded bake row dropped. The boot's seed rebuilds
+# its own 17 primitives' bakes before the sweep starts (synchronously: shelllifecycle.cpp openLibrary), so what the sweep
+# then plans is the generated models' bakes: staleRebuilds must read ABOVE zero, or the zeros above prove nothing.
+python3 -I - "$PWD/root-a/JahLibrary.db" <<'PY'
+import sqlite3, sys
+c = sqlite3.connect(sys.argv[1])
+c.execute("DELETE FROM asset_files WHERE role = 'bake'")
+c.commit()
+PY
+run a control "$OPEN_A" ""
+check $? "root a's CONTROL session (its bake rows dropped) ended 0"
+n=$(report control-a.log staleRebuilds)
+[ "${n:-0}" -gt 0 ]
+check $? "CONTROL: with root a's bake rows dropped the sweep plans ABOVE zero (staleRebuilds ${n:-none} after $(report control-a.log polls) polls)"
 
 python3 -I - law-a.log law-b.log "${ASSETS[a]}" "${ASSETS[b]}" "${PROJECTS[a]}" "${PROJECTS[b]}" > compare.txt <<'PY'
 import json, re, sys

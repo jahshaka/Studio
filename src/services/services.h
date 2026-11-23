@@ -41,6 +41,7 @@ class PreviewDemand;
 class AssetService;
 class AmbienceService;
 class PerfSampler;
+struct BootReport;
 
 #include "irisgl/core/signal.h"
 
@@ -74,6 +75,9 @@ struct StudioServices
     /// The session log's periodic performance sampler (SESSION_LOG_SPEC §8-R3).
     /// Behind log.perf / log.sample; null in hosts with no shell.
     PerfSampler      *perfSampler = nullptr;
+    /// THE BOOT's FACTS as results (services/bootreport.h; app.bootReport()). Owned by the shell's lifecycle;
+    /// null in hosts with no shell.
+    BootReport       *boot       = nullptr;
 
     /// UI event bus (sky-asset updates between panels). Owned by the shell;
     /// was the Globals::eventSubscriber static (Phase 4 injected it).

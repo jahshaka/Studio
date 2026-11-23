@@ -1353,10 +1353,11 @@ static void primitivesBaked()
     PrimitiveAssets::clearCache();
     CHECK_LOUD(!PrimitiveAssets::allSeeded(&db), "a fresh library has seeded nothing");
 
-    QStringList errors;
     QElapsedTimer timer;
     timer.start();
-    const int created = PrimitiveAssets::seedAll(&db, &errors);
+    const PrimitiveAssets::SeedResult first = PrimitiveAssets::seedAll(&db);
+    const QStringList &errors = first.errors;
+    const int created = first.created;
     const double seedMs = double(timer.nsecsElapsed()) / 1e6;
     for (const QString &line : errors) std::printf("info: seed error: %s\n", qUtf8Printable(line));
     CHECK_LOUD(errors.isEmpty(), "the seed reported no failure");
@@ -1425,8 +1426,9 @@ static void primitivesBaked()
     // here is the whole idempotence claim, and it is also what a second launch
     // of the app on the same library does.
     PrimitiveAssets::clearCache();
-    QStringList again;
-    const int secondPass = PrimitiveAssets::seedAll(&db, &again);
+    const PrimitiveAssets::SeedResult second = PrimitiveAssets::seedAll(&db);
+    const QStringList &again = second.errors;
+    const int secondPass = second.created;
     CHECK_LOUD(secondPass == 0 && again.isEmpty(),
                qUtf8Printable(QStringLiteral("a second seed of the same library creates nothing "
                                              "(%1 created, %2 error(s))")

@@ -356,8 +356,7 @@ Result reset(Database *db, SettingsManager *settings, const QString &projectsRoo
     // The held meshes go with the catalog they came from: the objects those
     // MeshPtrs were read from have just been deleted.
     PrimitiveAssets::clearCache();
-    QStringList seedErrors;
-    PrimitiveAssets::seedAll(db, &seedErrors);
+    const QStringList seedErrors = PrimitiveAssets::seedAll(db).errors;
     for (const QString &line : seedErrors) {
         irisLog("library reset: primitive seed: " + line);
         if (result.error.isEmpty()) result.error = line;

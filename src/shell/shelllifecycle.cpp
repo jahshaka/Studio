@@ -82,6 +82,7 @@ Database *ShellLifecycle::openLibrary()
 	if (mDb->initializeDatabase(path)) {
 		mDb->createAllTables();
 	}
+	mBoot.indexAtOpen = mDb->indexStatementsAtOpen();
 	// THE TILE CACHE READS BY GUID (D11-LIBRARY-SCALE): listings carry no
 	// thumbnail, so the cache's batches read the pictures a view paints — ON ITS
 	// POOL, through a read connection of their own to this file (TC2-LIBRARY-
@@ -108,10 +109,9 @@ Database *ShellLifecycle::openLibrary()
     // (primitiveseed.cpp: a join, not a pump — we are inside MainWindow's
     // constructor). A library that already holds them pays one catalog query
     // per row.
-    QStringList seedErrors;
-    const int seeded = PrimitiveAssets::seedAll(mDb, &seedErrors);
-    if (seeded > 0) irisLog(QStringLiteral("primitives: baked %1 shipped meshes").arg(seeded));
-    for (const QString &line : seedErrors) irisLog("primitive seed: " + line);
+    mBoot.seed = PrimitiveAssets::seedAll(mDb);
+    if (mBoot.seed.created > 0) irisLog(QStringLiteral("primitives: baked %1 shipped meshes").arg(mBoot.seed.created));
+    for (const QString &line : std::as_const(mBoot.seed.errors)) irisLog("primitive seed: " + line);
     // EVERY SHIPPED MESH THE APP DRAWS IS ONE OF THOSE ROWS (SHIPPED-BAKES-1):
     // the preview docks' subjects, the avatar room's cube and the VR controller
     // models ask for theirs by seed key through IrisGL's seam, and get the bake.
@@ -121,7 +121,7 @@ Database *ShellLifecycle::openLibrary()
     // STALE BAKES, IN THE BACKGROUND (FORWARD-ONLY-1 D1): a build that changed
     // the bake's producer rebuilds every stale bake from its own source, at the
     // lowest priority; an open rebuilds the ones it needs first, itself.
-    MeshBakeStore::startBackgroundRebuild();
+    MeshBakeStore::startBackgroundRebuild(mBoot.staleRebuilds);
     return mDb;
 }
 

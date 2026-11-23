@@ -711,6 +711,7 @@ set(HEADERS
     src/ui/dialogs/preferences/perfsettingswidget.h
     src/ui/dialogs/preferences/assetssettingswidget.h
     src/services/services.h
+    src/services/bootreport.h
     src/services/assetimporter.h
     src/services/assetmetadata.h
     src/services/libraryassetnode.h

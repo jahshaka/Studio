@@ -319,6 +319,9 @@ public:
     bool createFavoritesTable();
     void createAllTables();
     void createIndexes();
+    /// The index statements createIndexes ran over an EXISTING library's rows on the opening thread (its DEFECT
+    /// case; 0 when the boot's gate prepared them): the boot's result (services/bootreport.h `indexAtOpen`).
+    int indexStatementsAtOpen() const { return mIndexStatementsAtOpen; }
     /// THE BOOT'S INDEX GATE (LARGE-LIBRARY-1; main.cpp, before the shell opens the library): how many of the
     /// library's index statements `path`'s library still needs (0: prepared, nothing to build), and their
     /// build on the calling thread through a connection of its own — each statement its own transaction —
@@ -932,6 +935,7 @@ private:
 
 
     QSqlDatabase db;
+    int mIndexStatementsAtOpen = 0;   ///< indexStatementsAtOpen
     std::unique_ptr<db::Connection> mConnection;   ///< connection(); borrowed from `db`
     ImportPictureSink importPictureSink;   ///< setImportPictureSink
 
