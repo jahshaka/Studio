@@ -160,14 +160,20 @@ def judge(root, listing):
         fixtures.append(strip(read(hp)))
     lab = [strip(read(p)) for p in glob.glob(os.path.join(root, 'src', 'lab', '**', '*.*'), recursive=True)
            if p.endswith(('.cpp', '.h'))]
-    fix_v, lab_v = set(), set()
-    for c, verbs in api.items():
-        for v in verbs:
-            rx = callrx(v)
-            if any(rx.search(t) for t in fixtures):
-                fix_v.add('%s::%s' % (c, v))
-            if any(rx.search(t) for t in lab):
-                lab_v.add('%s::%s' % (c, v))
+    # every name the texts CALL (`->name(` / `.name(`) or qualify (`Scene|View|Engine::name`), gathered once - callrx's
+    # forms, one pass a text instead of one regex a verb
+    called = re.compile(r'(?:->|\.)\s*([A-Za-z_]\w*)\s*\(|\b(?:Scene|View|Engine)::([A-Za-z_]\w*)\b')
+
+    def names(texts):
+        out = set()
+        for t in texts:
+            for m in called.finditer(t):
+                out.add(m.group(1) or m.group(2))
+        return out
+
+    fix_n, lab_n = names(fixtures), names(lab)
+    fix_v = {'%s::%s' % (c, v) for c, verbs in api.items() for v in verbs if v in fix_n}
+    lab_v = {'%s::%s' % (c, v) for c, verbs in api.items() for v in verbs if v in lab_n}
     uncovered = (fix_v | lab_v) - set(mapped) - set(declared)
     for cv in sorted(uncovered - set(waiting)):
         faults.append('C3 %s is called by %s and neither mapped, declared nor waiting: map it (a command) or declare it with '
