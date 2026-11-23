@@ -8,6 +8,7 @@ served-red while that row is red at the same commit, run once it is not or at a 
 usage: gate_serve_red.py <source dir>"""
 import os
 import sys
+import json  # noqa: E402  (the toy compile databases)
 
 src = sys.argv[1] if len(sys.argv) > 1 else os.path.join(os.path.dirname(__file__), "..", "..")
 sys.path.insert(0, os.path.join(src, "scripts"))
@@ -42,12 +43,12 @@ ENV = fp()
 
 
 def rec(verdict, cfg="cfg", decl="d", data="h", env=ENV):
-    return {"suite": "gi.row", "verdict": verdict, "failLine": "FAIL: the law", "tip": {"studio": "a" * 40}, "config": {"hash": cfg},
+    return {"suite": "gi.row", "verdict": verdict, "failLine": "FAIL: the law", "tip": {"studio": "a" * 40}, "config": {"hash": cfg, "compile": "c"},
             "declaration": {"hash": decl}, "data_hash": data, "run": "run-1", "seconds": 3.0, "tier": "lane", "env": env}
 
 
 FACT = {"declaration": {"hash": "d"}, "data_hash": "h", "labels": ["gi"]}
-CFG = {"hash": "cfg", "build_type": "Debug"}
+CFG = {"hash": "cfg", "build_type": "Debug", "compile": "c"}
 fails = []
 
 
@@ -213,9 +214,13 @@ for tree in ("lane", "parent"):
         "CMAKE_HOME_DIRECTORY:INTERNAL=%s\nCMAKE_CACHEFILE_DIR:INTERNAL=%s\nCMAKE_BUILD_TYPE:STRING=Debug\n"
         "CMAKE_CXX_FLAGS:STRING=-pipe\nDISABLE_BREAKPAD:UNINITIALIZED=ON\nJAH_CONFIGURED_SOURCE_DIR:INTERNAL=%s\n"
         "JAH_XVFB:FILEPATH=/usr/bin/Xvfb\n%s" % (r_, b_, r_, "JAH_LAB_OLD_MODEL:FILEPATH=/data/old.fbx\n" if tree == "parent" else ""))
+    # THE COMPILE DATABASE (what the compiler was told; the lead's ruling 2026-11-23): each tree's own paths, a commit define
+    open(os.path.join(b_, "compile_commands.json"), "w").write(json.dumps([{"directory": b_, "file": r_ + "/src/a.cpp",
+        "command": '/usr/bin/c++ -DFOO=1 -DBENCH_GIT_COMMIT="%s" -I%s/src -I%s/generated -O0 -g -o x.o -c %s/src/a.cpp'
+                   % ("606a8c85" if tree == "lane" else "69615d93", r_, b_, r_)}]))
 lane, parent = os.path.join(t, "lane", "build-linux"), os.path.join(t, "parent", "build-linux")
 cl, cp = gg.build_config(lane)[0], dict(gg.build_config(parent)[0], keys=gg.config_keys(parent))
-recd = {"hash": cl["hash"], "options": cl["options"]}
+recd = {"hash": cl["hash"], "options": cl["options"], "compile": cl.get("compile")}
 cases = [("a lane's record, its tree's path the only difference (and a stale location in the parent's cache): EQUAL", recd, cp, True),
          ("the same record without its options: unknown, never equal", {"hash": cl["hash"]}, cp, False)]
 base_cache = open(os.path.join(lane, "CMakeCache.txt")).read()
@@ -225,16 +230,45 @@ def variant(line, name):
     """The lane's record had its cache carried `line` (the last entry of a name wins)."""
     open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache + line + "\n")
     v = gg.build_config(lane)[0]
-    cases.append((name, {"hash": v["hash"], "options": v["options"]}, cp, False))
+    cases.append((name, {"hash": v["hash"], "options": v["options"], "compile": v.get("compile")}, cp, False))
 
 
 variant("DISABLE_BREAKPAD:UNINITIALIZED=OFF", "a switch differs (DISABLE_BREAKPAD OFF; the flags equal): NOT equal")
 variant("CMAKE_CXX_FLAGS:STRING=-O2", "the flags differ (CMAKE_CXX_FLAGS -O2): NOT equal")
 variant("JAH_COVERAGE:BOOL=ON", "THE COVERAGE BUILD (JAH_COVERAGE ON; TEST-STREAMLINE-1 stage 2): NOT equal - it never serves the Debug tree")
+# A PROBE ENTRY IS NO SWITCH (the census of 2026-11-23: quickjs-ng's COMPILER_SUPPORTS_Wformat=2 probe, re-read by CMake as an
+# UNINITIALIZED entry "2:INTERNAL=1", made 315 of 429 records "differ"): the record's cache WITHOUT it, this build's WITH it - EQUAL
+# (red on the old key); WHAT THE COMPILER WAS TOLD decides instead: a define or an -O level changed in the compile database - NOT equal
+open(os.path.join(parent, "CMakeCache.txt"), "a").write("COMPILER_SUPPORTS_Wformat:UNINITIALIZED=2:INTERNAL=1\n")
+cp = dict(gg.build_config(parent)[0], keys=gg.config_keys(parent))
+cases[:] = [(n, r, cp, w) for n, r, _c, w in cases]
+cases.append(("a new PROBE entry in this build's cache alone (COMPILER_SUPPORTS_Wformat:UNINITIALIZED=2:INTERNAL=1): EQUAL", recd, cp, True))
+cdb = os.path.join(lane, "compile_commands.json"); cdb0 = open(cdb).read()
+
+
+def cvariant(old, new, name):
+    """The lane's record was made with `new` in place of `old` in its compile database."""
+    open(cdb, "w").write(cdb0.replace(old, new))
+    os.utime(cdb, ns=(1, 1))   # (a fresh mtime key: the digest's cache is keyed by mtime and size)
+    v = gg.build_config(lane)[0]
+    cases.append((name, {"hash": v["hash"], "options": v["options"], "compile": v.get("compile")}, cp, False))
+    open(cdb, "w").write(cdb0)
+
+
+cvariant("-DFOO=1", "-DFOO=2", "a DEFINE changed in the compile database (FOO 1 -> 2; the cache's flags equal): NOT equal")
+cvariant("-O0", "-O2", "an -O level changed in the compile database (-O0 -> -O2): NOT equal")
+cases.append(("a record with NO compile digest (made before it): unknown, never equal (fail closed)",
+              {"hash": recd["hash"], "options": recd["options"]}, cp, False))
+recd["compile"] = cl.get("compile")
 open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache + "JAH_COVERAGE:BOOL=OFF\n")
 v_ = gg.build_config(lane)[0]
-cases.append(("the option at OFF (the default build, byte for byte): EQUAL - its arrival re-keys no record", {"hash": v_["hash"], "options": v_["options"]}, cp, True))
+cases.append(("the option at OFF (the default build, byte for byte): EQUAL - its arrival re-keys no record", {"hash": v_["hash"], "options": v_["options"], "compile": v_.get("compile")}, cp, True))
 open(os.path.join(lane, "CMakeCache.txt"), "w").write(base_cache)
+why_ = gg.config_why({"hash": "x", "options": {"DISABLE_BREAKPAD": "OFF"}, "compile": cl.get("compile")}, dict(cp, hash="y")) \
+    if hasattr(gg, "config_why") else None
+print(("ok   " if why_ and "Debug" not in why_ else "FAIL ") + "config_why names the differing term, never the equal build type: " + str(why_))
+if not why_ or "Debug" in why_:
+    fails.append("config_why: " + str(why_))
 for name, rc_, cfg_, want_ in cases:
     got_ = gg.config_equal(rc_, cfg_)
     print(("ok   " if got_ == want_ else "FAIL ") + "config_equal: " + name)
