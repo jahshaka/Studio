@@ -577,6 +577,26 @@ add_test(NAME script.commands COMMAND test_script_commands WORKING_DIRECTORY "${
 set_tests_properties(script.commands PROPERTIES TIMEOUT 60 LABELS "engine")
 jah_no_display(script.commands)
 
+# engine.setters_refuse / engine.setters_refuse.posted — THE ENGINE's SETTERS REFUSE BY NAME
+# (SCRIPT-IN-ENGINE-1 2e e1; OPEN_REDS:44; test_setters_refuse.cpp says the laws). C++ on purpose (the script host shields
+# scripts; only C++ reaches the engine's own path - the mirror's). ONE headless (NULL) engine a row, no card, no display:
+# the ten node setters, the VR node lists, a missing IES profile and colour ramp in lockstep; the ten POSTED
+# (EngineConfig::hostRecords) published as refusals.
+add_executable(test_setters_refuse test_setters_refuse.cpp)
+set_target_properties(test_setters_refuse PROPERTIES CXX_STANDARD 17 AUTOMOC OFF AUTOUIC OFF AUTORCC OFF
+    RUNTIME_OUTPUT_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}"
+    BUILD_RPATH "${OGRE_NEXT_PREFIX}/lib" INSTALL_RPATH "${OGRE_NEXT_PREFIX}/lib")
+target_link_libraries(test_setters_refuse PRIVATE JahshakaEngine)
+target_compile_definitions(test_setters_refuse PRIVATE
+    JAHSHAKA_TEST_PLUGIN_DIR="${OGRE_NEXT_PLUGIN_DIR}" JAHSHAKA_TEST_MEDIA_DIR="${JAHSHAKA_MEDIA_DIR}/")
+add_dependencies(test_setters_refuse JahshakaEngineMedia)
+add_test(NAME engine.setters_refuse COMMAND test_setters_refuse setters WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+add_test(NAME engine.setters_refuse.posted COMMAND test_setters_refuse posted WORKING_DIRECTORY "${CMAKE_CURRENT_BINARY_DIR}")
+set_tests_properties(engine.setters_refuse engine.setters_refuse.posted PROPERTIES
+    TIMEOUT 60 LABELS "engine")
+jah_no_display(engine.setters_refuse)
+jah_no_display(engine.setters_refuse.posted)
+
 # script.view_ownership (SCRIPT-IN-ENGINE-1 2b b2) - THE OWNERSHIP LAW's views half (a view needs a device): a view a
 # script's command made is destroyed at its host's end; a view the host's owner handed in survives it and is not the
 # script's to destroy. The read: a view's name is unique among live views. No frame drawn.
