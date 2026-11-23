@@ -113,15 +113,16 @@ struct Rig {
             });
             // THE PICTURE TOOL's ONE COMMAND (L5: the adapter names engine.picture.png, so the fake answers THAT name):
             // handle 1 -> 100 bytes, 2 -> 200, 3 -> 786,432 (0.75 MiB), 4 -> 1,048,577 (one byte past the 1 MiB a value
-            // carries), 5 FAILS "not a picture", 6 -> 1,048,576 (exactly the 1 MiB), 7 -> 1; byte i = (i * 31 + handle) & 255
+            // carries), 5 FAILS "not a picture", 6 -> 1,048,576 (exactly the 1 MiB), 7 -> 1; byte i = (i * 31 + handle) & 255;
+            // its width = the maxEdge it got (the declared default 1024 when the tool passed none)
             r.add({"engine.picture.png",
                    {Access::Reads, {target(arg("picture", Kind::Int)), arg("maxEdge", Kind::Int, Value(1024))}, Kind::Object},
                    "The fake picture's PNG bytes."},
                   [](Call &c) -> Value {
                       const std::int64_t h = c[0].asInt();
                       if (h < 1 || h > 7 || h == 5) return c.fail("not a picture");
-                      return Value(Value::Object{{"png", Value::bytes(fakePng(h))}, {"width", Value(h)},
-                                                 {"height", Value(1)}});
+                      // its width answers the maxEdge it was CALLED with: the tool's pass-through is read
+                      return Value(Value::Object{{"png", Value::bytes(fakePng(h))}, {"width", c[1]}, {"height", Value(1)}});
                   });
             if (faulty) r.add({"test.bare", {Access::Reads, {}, Kind::Null}, ""}, [](Call &) { return Value(); });
             return h;
@@ -158,6 +159,12 @@ static std::string errorOf(const Value &m)
 {
     const Value &e = m["result"]["structuredContent"]["error"];
     return e.kind() == Kind::String ? e.asString() : std::string();
+}
+/// `v`'s elements; none when it is no array (the same: a wrong kind reads as a FAIL, never as a crash).
+static const Value::Array &arrayOf(const Value &v)
+{
+    static const Value::Array none;
+    return v.kind() == Kind::Array ? v.asArray() : none;
 }
 static std::int64_t code(const Value &m) { return m["error"]["code"].kind() == Kind::Int ? m["error"]["code"].asInt() : 0; }
 
@@ -335,7 +342,7 @@ int main()
     {
         Rig g;
         const Value two = g.one(toolCall("12", "picture", "{\"pictures\":[1,2]}"));
-        const Value::Array &content = two["result"]["content"].asArray();
+        const Value::Array &content = arrayOf(two["result"]["content"]);
         int images = 0;
         for (const Value &c : content) images += c["type"] == Value("image");
         const Value &listed = two["result"]["structuredContent"]["pictures"];
@@ -348,7 +355,7 @@ int main()
               "(a) picture [1, 2]: image, image, text in that order, each image the codec's base64 of its PNG, the structured "
               "sizes 100 and 200 (THE CONTROL: " + std::to_string(images) + " image items, > 0)");
         const auto noImage = [](const Value &m) {
-            for (const Value &c : m["result"]["content"].asArray())
+            for (const Value &c : arrayOf(m["result"]["content"]))
                 if (c["type"] == Value("image")) return false;
             return true;
         };
@@ -361,8 +368,41 @@ int main()
         const Value big = g.one(toolCall("14", "picture", "{\"pictures\":[4]}"));
         const std::string bigWhy = errorOf(big);
         check(big["result"]["isError"] == Value(true) && noImage(big) &&
-                  bigWhy.find("1048577 bytes: over the 1 MiB (1048576) a value carries as bytes") != std::string::npos,
-              "(c) a PNG of 1,048,577 bytes is refused at the carriage in the codec's words: " + bigWhy);
+                  bigWhy == "picture: pictures[0] (handle 4): its PNG is 1048577 bytes: over the 1 MiB (1048576) cap",
+              "(c) a PNG of 1,048,577 bytes is refused at the carriage (the codec's writer decides), named as the PNG it is: " +
+                  bigWhy);
+        // THE TOOL's OWN LAWS: four handles (the upper end) ride as four images; [], five, a non-integer, a non-integer
+        // maxEdge and an unknown member are refused by name; maxEdge is PASSED THROUGH (the fake answers width = the
+        // maxEdge it got: 37) and ABSENT stays absent (the command's declared 1024)
+        const Value four = g.one(toolCall("21", "picture", "{\"pictures\":[1,1,2,2]}"));
+        int fourImages = 0;
+        for (const Value &c : arrayOf(four["result"]["content"])) fourImages += c["type"] == Value("image");
+        const struct { const char *args, *words; } refused[] = {
+            {"{\"pictures\":[]}", "picture: pictures must be an array of 1 to 4 integers (picture handles)"},
+            {"{\"pictures\":[1,1,1,1,1]}", "picture: pictures must be an array of 1 to 4 integers (picture handles)"},
+            {"{\"pictures\":[1.5]}", "picture: pictures must be an array of 1 to 4 integers (picture handles)"},
+            {"{\"pictures\":[1],\"maxEdge\":\"x\"}", "picture: maxEdge must be an integer"},
+            {"{\"pictures\":[1],\"extra\":1}", "picture: no argument 'extra'"}};
+        std::string missed;
+        int id = 22;
+        for (const auto &x : refused) {
+            const Value r = g.one(toolCall(std::to_string(id++), "picture", x.args));
+            if (r["result"]["isError"] != Value(true) || !noImage(r) || errorOf(r) != x.words)
+                missed += "\n      " + std::string(x.args) + " <- " + errorOf(r);
+        }
+        const Value edge37 = g.one(toolCall("27", "picture", "{\"pictures\":[1],\"maxEdge\":37}"));
+        const Value edgeAbsent = g.one(toolCall("28", "picture", "{\"pictures\":[1]}"));
+        const Value &w37 = arrayOf(edge37["result"]["structuredContent"]["pictures"]).empty()
+                               ? Value()
+                               : arrayOf(edge37["result"]["structuredContent"]["pictures"])[0]["width"];
+        const Value &wAbsent = arrayOf(edgeAbsent["result"]["structuredContent"]["pictures"]).empty()
+                                   ? Value()
+                                   : arrayOf(edgeAbsent["result"]["structuredContent"]["pictures"])[0]["width"];
+        check(!four["result"].find("isError") && fourImages == 4 && missed.empty() && w37 == Value(37) &&
+                  wAbsent == Value(1024),
+              "the tool's own laws: [1, 1, 2, 2] rides as " + std::to_string(fourImages) + " images; [], five handles, 1.5, "
+              "maxEdge \"x\" and an unknown member are refused by name; maxEdge 37 reaches the command as 37, absent as "
+              "its declared 1024" + missed);
         const Value sum = g.one(toolCall("15", "picture", "{\"pictures\":[3,3,3]}"));
         const std::string sumWhy = errorOf(sum);
         check(sum["result"]["isError"] == Value(true) && noImage(sum) &&
@@ -375,9 +415,9 @@ int main()
         const Value atSum = g.one(toolCall("19", "picture", "{\"pictures\":[6,6]}"));
         const Value overSum = g.one(toolCall("20", "picture", "{\"pictures\":[6,6,7]}"));
         const std::string overWhy = errorOf(overSum);
-        check(!atCap["result"].find("isError") && atCap["result"]["content"].asArray().size() == 2 &&
-                  !atSum["result"].find("isError") && atSum["result"]["content"].asArray().size() == 3 &&
-                  atSum["result"]["content"].asArray()[1]["data"] == Value(base64Of(fakePng(6))) &&
+        check(!atCap["result"].find("isError") && arrayOf(atCap["result"]["content"]).size() == 2 &&
+                  !atSum["result"].find("isError") && arrayOf(atSum["result"]["content"]).size() == 3 &&
+                  arrayOf(atSum["result"]["content"])[1]["data"] == Value(base64Of(fakePng(6))) &&
                   overSum["result"]["isError"] == Value(true) && noImage(overSum) &&
                   overWhy.find("2097153 bytes of PNG, over the 2 MiB (2097152)") != std::string::npos,
               "the caps at EXACTLY the cap: one PNG of 1,048,576 bytes and two summing 2,097,152 ride; 2,097,153 is "
@@ -403,7 +443,7 @@ int main()
         const Value &declared = schema["properties"]["maxEdge"];
         const Value list = g.one(req("17", "tools/list"));
         Value tool;
-        for (const Value &t : list["result"]["tools"].asArray())
+        for (const Value &t : arrayOf(list["result"]["tools"]))
             if (t["name"] == Value("picture")) tool = t["inputSchema"]["properties"]["maxEdge"];
         check(mapped && declared["minimum"] == tool["minimum"] && declared["maximum"] == tool["maximum"] &&
                   declared["default"] == tool["default"] && declared["minimum"] == Value(16) &&
