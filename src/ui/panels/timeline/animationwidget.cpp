@@ -203,7 +203,7 @@ void AnimationWidget::setSceneNode(iris::SceneNodePtr node)
     }
     else {
         clearPropertiesMenu();
-        animation.clear();
+        animation.reset();
         ui->sceneNodeName->setText("");
 
         // disable ui

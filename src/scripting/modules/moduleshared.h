@@ -361,7 +361,7 @@ inline iris::SceneNodePtr findNodeByGuid(const iris::SceneNodePtr &node, const Q
     const int n = node->childCount();
     for (int i = 0; i < n; ++i) {
         if (iris::SceneNode *c = node->childAt(i)) {
-            auto hit = findNodeByGuid(c->sharedFromThis(), guid);
+            auto hit = findNodeByGuid(c->weak_from_this().lock(), guid);
             if (hit) return hit;
         }
     }
@@ -430,7 +430,7 @@ inline QVariantMap lightToJs(const iris::SceneNodePtr &node)
 {
     QVariantMap m;
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Light) return m;
-    auto light = node.staticCast<iris::LightNode>();
+    auto light = std::static_pointer_cast<iris::LightNode>(node);
     m["lightType"] = lightTypeName(light->lightType);
     m["color"] = colorToJs(light->color);
     m["intensity"] = light->intensity;
@@ -474,9 +474,9 @@ inline QVariantMap materialSummaryToJs(const iris::SceneNodePtr &node)
 {
     QVariantMap m;
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return m;
-    auto material = node.staticCast<iris::MeshNode>()->getMaterial();
+    auto material = std::static_pointer_cast<iris::MeshNode>(node)->getMaterial();
     if (!material) return m;
-    if (auto pbr = material.dynamicCast<iris::PbrMaterial>()) {
+    if (auto pbr = std::dynamic_pointer_cast<iris::PbrMaterial>(material)) {
         static const char *kAlphaModes[] = { "opaque", "cutout", "blend", "glass",
                                              "additive", "modulate", "refractive" };
         m["class"] = QStringLiteral("pbr");

@@ -1938,7 +1938,7 @@ QVariantMap AppApi::renderStats()
                 docNames.reserve(doc->nodes.size());
                 for (const iris::SceneNodePtr &n : std::as_const(doc->nodes)) {
                     if (!n) continue;
-                    const jahshaka::engine::NodeId id = mirror->engineNode(n.data());
+                    const jahshaka::engine::NodeId id = mirror->engineNode(n.get());
                     if (id) docNames.insert(id, n->getName());
                 }
             }

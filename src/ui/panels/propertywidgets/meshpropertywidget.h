@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define MESHPROPERTYWIDGET_H
 
 #include <QWidget>
-#include <QSharedPointer>
+#include <memory>
 
 #include "irisgl/irisglfwd.h"
 #include "ui/controls/accordionbladewidget.h"
@@ -46,7 +46,7 @@ protected slots:
     void onLightChannelsChanged(quint32 mask);
 
 private:
-    QSharedPointer<iris::MeshNode> meshNode;
+    std::shared_ptr<iris::MeshNode> meshNode;
     StudioServices *services = nullptr;
     /// Populating the rows for a newly selected mesh (see rowundo's guard).
     bool loading = false;

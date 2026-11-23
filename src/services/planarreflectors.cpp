@@ -20,7 +20,7 @@ namespace planarreflectors {
 
 void set(const iris::SceneNodePtr &node, bool enabled, IEditorViewport *viewport, QObject *owner, Done done)
 {
-    if (node.isNull()) {
+    if (!node) {
         if (done) done(false, QObject::tr("No object selected."));
         return;
     }

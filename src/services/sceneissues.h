@@ -68,7 +68,7 @@ For more information see the LICENSE file
 #include <QSet>
 #include <QString>
 #include <QStringList>
-#include <QWeakPointer>
+#include <memory>
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
@@ -229,14 +229,14 @@ private:
     /// a dead or departed node is dropped, never followed.
     struct NodeCheck
     {
-        QWeakPointer<iris::SceneNode> node;
-        QWeakPointer<iris::Material> material;
+        std::weak_ptr<iris::SceneNode> node;
+        std::weak_ptr<iris::Material> material;
         quint32 materialRevision = 0;
         QStringList paths;             ///< the texture files the check asked about
         SceneIssue texture;            ///< its texture.missing line (id empty = none)
     };
     QHash<const iris::SceneNode *, NodeCheck> mChecks;
-    QWeakPointer<iris::Scene> mCheckedScene;
+    std::weak_ptr<iris::Scene> mCheckedScene;
     /// This checker's cursor on the write journal, with its WRITTEN half (every non-transform document write) —
     /// one reader among the mirrors and the physics worlds, never a second record (ENGINE-UPGRADE-1's one journal).
     iris::graph::WriteJournalReader mJournal{ true };

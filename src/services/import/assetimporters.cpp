@@ -108,7 +108,7 @@ static QJsonObject importSummaryOf(const iris::SceneNodePtr &root, const QString
             if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
                 ++meshes;
                 ++scales[QString::number(double(s), 'g', 4)];
-                if (auto m = n.staticCast<iris::MeshNode>()->getMaterial()) {
+                if (auto m = std::static_pointer_cast<iris::MeshNode>(n)->getMaterial()) {
                     for (auto *prop : m->properties()) {
                         if (!prop || prop->name != QLatin1String("alphaMode")) continue;
                         const int mode = prop->getValue().toInt();
@@ -362,7 +362,7 @@ bool MeshImporter::convert(const ImportRequest &request, const QString &stagingD
     // and gains its member asset's guid (below).
     std::function<void(iris::SceneNodePtr &)> rewrite = [&](iris::SceneNodePtr &n) {
         if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            auto meshNode = n.staticCast<iris::MeshNode>();
+            auto meshNode = std::static_pointer_cast<iris::MeshNode>(n);
             if (QFileInfo(meshNode->meshPath).fileName() == sourceInfo.fileName())
                 meshNode->meshPath = out.meshGuid;
             meshNode->setGUID(out.mainGuid);

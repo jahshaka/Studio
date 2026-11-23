@@ -115,10 +115,10 @@ int main(int argc, char **argv)
     std::printf("    translation gizmo: %d draw items, scale %.2f\n", items.size(), gizmo.getGizmoScale());
     CHECK(items.size() == 4, "translation gizmo describes 4 handles");
     for (int i = 0; i < items.size(); ++i) {
-        MeshData md; const bool ok = SceneMirror::toMeshData(items[i].mesh.data(), md);
+        MeshData md; const bool ok = SceneMirror::toMeshData(items[i].mesh.get(), md);
         const iris::Vec3 p = items[i].transform.column(3).toVector3D(), sx = items[i].transform.column(0).toVector3D();
         std::printf("    item %d: mesh=%p ok=%d verts=%zu tris=%zu pos=(%.2f %.2f %.2f) colScaleX=%.2f colour=%d,%d,%d\n", i,
-                    (void*)items[i].mesh.data(), ok, md.vertexCount(), md.triangleCount(), p.x(), p.y(), p.z(), sx.length(),
+                    (void*)items[i].mesh.get(), ok, md.vertexCount(), md.triangleCount(), p.x(), p.y(), p.z(), sx.length(),
                     items[i].colour.red(), items[i].colour.green(), items[i].colour.blue());
     }
     overlay.update(&gizmo, cam->getGlobalPosition(), iris::Vec3(0, 0, -1), iris::Vec3(0, 0, -1));
@@ -220,7 +220,7 @@ int main(int argc, char **argv)
         float closest = 1e9f;
         for (const GizmoDrawItem &item : items) {
             MeshData md;
-            if (!SceneMirror::toMeshData(item.mesh.data(), md)) continue;
+            if (!SceneMirror::toMeshData(item.mesh.get(), md)) continue;
             float far2 = 0.0f;
             for (size_t v = 0; v < md.vertexCount(); ++v) {
                 const float x = md.positions[v * 3], y = md.positions[v * 3 + 1],
@@ -459,7 +459,7 @@ int main(int argc, char **argv)
     {
         auto ri = rot.drawItems(cam->getGlobalPosition(), iris::Vec3(0,0,-1), iris::Vec3(0,0,-1));
         for (int i = 0; i < ri.size(); ++i) {
-            MeshData md; const bool ok = SceneMirror::toMeshData(ri[i].mesh.data(), md);
+            MeshData md; const bool ok = SceneMirror::toMeshData(ri[i].mesh.get(), md);
             float mx = 0; for (size_t v = 0; v < md.vertexCount(); ++v) mx = std::max(mx, std::abs(md.positions[v*3]));
             std::printf("    ring %d: ok=%d verts=%zu tris=%zu scaleX=%.2f maxX=%.2f colour=%d,%d,%d\n", i, ok, md.vertexCount(), md.triangleCount(),
                         ri[i].transform.column(0).toVector3D().length(), mx, ri[i].colour.red(), ri[i].colour.green(), ri[i].colour.blue());

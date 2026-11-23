@@ -17,7 +17,7 @@ For more information see the LICENSE file
 #include <QListWidgetItem>
 #include <QPointer>
 #include <QVBoxLayout>
-#include <QSharedPointer>
+#include <memory>
 #include <QVector>
 
 #include "ui/panels/propertyrows.h"
@@ -81,8 +81,8 @@ public:
      * @param sceneNode
      */
 
-    void setScene(QSharedPointer<iris::Scene> scene);
-    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setScene(std::shared_ptr<iris::Scene> scene);
+    void setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode);
 
     /// Which tab is showing. A pick brings Selection to the front; the root
     /// (`editor.select(rootId)`, the scene open) brings World to the front; a
@@ -282,11 +282,11 @@ private:
     /// mount re-bound (F1, second reader 2026-09-15). A bound blade is kept
     /// live afterwards by the worldSettingsChanged fan-out and
     /// refreshFromDocument, never by re-binding.
-    void bindScene(const QSharedPointer<iris::Scene> &scene);
+    void bindScene(const std::shared_ptr<iris::Scene> &scene);
     /// Drops the memo so the next mount re-binds — for the setters that feed
     /// the world blades something other than the scene (the viewport, the
     /// library, the project, the undo stack).
-    void invalidateWorldBinding() { worldBoundScene.clear(); }
+    void invalidateWorldBinding() { worldBoundScene.reset(); }
     /// The World-tab section that shows sceneprops `key`, or null (see the
     /// .cpp for the enumeration); and the re-read of every section an
     /// external write made stale.
@@ -298,7 +298,7 @@ private:
     /// what differs from what it holds now (see mount()).
     void applyMountDiff();
     /// The scene the World tab binds to, whatever is selected.
-    QSharedPointer<iris::Scene> worldScene() const;
+    std::shared_ptr<iris::Scene> worldScene() const;
 
     /// Re-runs the CURRENT tab's filter over the blades that tab has mounted.
     /// Called at the end of every applyTab (so a pick, an undo and a tab switch
@@ -346,7 +346,7 @@ private:
     /// A show's settlement is already posted (flushPendingMountAfterShow).
     bool showFlushQueued = false;
     /// The scene the world blades are currently pointed at (see bindScene).
-    QSharedPointer<iris::Scene> worldBoundScene;
+    std::shared_ptr<iris::Scene> worldBoundScene;
     /// Sections an external sceneprops write made stale, re-read once per
     /// event-loop turn (or on the next question — flushPendingMount).
     QSet<QWidget *> staleWorldSections;
@@ -367,7 +367,7 @@ private:
     /// The "nothing selected" line the Selection tab shows (a permanent child,
     /// adopted like a blade).
     class QLabel *emptySelectionLabel = nullptr;
-    QSharedPointer<iris::SceneNode> sceneNode;
+    std::shared_ptr<iris::SceneNode> sceneNode;
 
 public:
     WorldPropertyWidget *getWorldPropertyWidget() const { return worldPropView; }
@@ -404,7 +404,7 @@ private:
     ComponentsPropertyWidget* componentsPropView = nullptr;
     PhysicsPropertyWidget *physicsPropView;
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
 
     Database *db = nullptr;   // was uninitialized: the ctor forwards it to panels before setDatabase()
     IEditorViewport *sceneView = nullptr;   // was uninitialized: read before setSceneView() on some paths

@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include <QPoint>
 #include <QSet>
-#include <QSharedPointer>
+#include <memory>
 #include "viewport/cameracontrollerbase.h"
 
 namespace iris

@@ -60,7 +60,7 @@ class CameraPostFxPropertyWidget : public AccordianBladeWidget
 
 public:
     CameraPostFxPropertyWidget();
-    void setSceneNode(QSharedPointer<iris::SceneNode> node);
+    void setSceneNode(std::shared_ptr<iris::SceneNode> node);
     /// The live viewport, so an edit is visible immediately. Nullable.
     void setSceneView(IEditorViewport *sceneView);
     /// The undo stack (debt L6). Every row here is a reflected camera property
@@ -82,7 +82,7 @@ private:
     /// label ("on", "off", "1.50", "not available").
     QString inheritedText(const QString &key) const;
 
-    QSharedPointer<iris::CameraNode> camera;
+    std::shared_ptr<iris::CameraNode> camera;
     IEditorViewport *sceneView = nullptr;
     /// Whether the scene traces rays on this machine — the fact a row's text
     /// and the technique's name are computed from (worldmodes::rowCost).

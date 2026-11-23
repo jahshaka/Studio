@@ -1021,7 +1021,7 @@ bool EditorApi::resolveNodeArgument(const QVariant &id, const QString &verb,
         auto node = findNodeByGuid(scene->getRootNode(), guid);
         if (!node) return fail(QStringLiteral("%1: no node with id '%2'").arg(verb, guid));
         bool seen = false;
-        for (const auto &n : out) if (n.data() == node.data()) { seen = true; break; }
+        for (const auto &n : out) if (n.get() == node.get()) { seen = true; break; }
         if (!seen) out.append(node);
     }
     // D6: the World root never travels in a multi. On its own it is a normal
@@ -1045,7 +1045,7 @@ void preOrderNodes(const iris::SceneNodePtr &node, QList<iris::SceneNodePtr> &ou
     const int kids = node->childCount();
     for (int i = 0; i < kids; ++i)
         if (iris::SceneNode *child = node->childAt(i))
-            preOrderNodes(child->sharedFromThis(), out);
+            preOrderNodes(child->weak_from_this().lock(), out);
 }
 
 } // namespace
@@ -1073,8 +1073,8 @@ QList<iris::SceneNodePtr> EditorApi::rangeInVisibleOrder(const iris::SceneNodePt
     preOrderNodes(scene->getRootNode(), order);
     int i = -1, j = -1;
     for (int k = 0; k < order.size(); ++k) {
-        if (order[k].data() == a.data()) i = k;
-        if (order[k].data() == b.data()) j = k;
+        if (order[k].get() == a.get()) i = k;
+        if (order[k].get() == b.get()) j = k;
     }
     if (i < 0 || j < 0) return out;
     if (i > j) std::swap(i, j);
@@ -1133,7 +1133,7 @@ void outlinerRowsOf(const iris::SceneNodePtr &node, const iris::SceneNodePtr &ro
     for (int i = 0; i < kids; ++i) {
         iris::SceneNode *raw = node->childAt(i);
         if (!raw) continue;
-        const iris::SceneNodePtr child = raw->sharedFromThis();
+        const iris::SceneNodePtr child = raw->weak_from_this().lock();
         if (child->isAttached() && node != root) continue;   // an asset's own part
         outlinerRowsOf(child, root, out);
     }
@@ -1238,7 +1238,7 @@ QVariantList EditorApi::selectRange(const QString &fromId, const QString &toId)
     // The clicked end is the primary, exactly as it is in the tree (D2).
     QList<iris::SceneNodePtr> ordered;
     ordered.append(to);
-    for (const auto &n : range) if (n.data() != to.data()) ordered.append(n);
+    for (const auto &n : range) if (n.get() != to.get()) ordered.append(n);
     host.services->selection->select(ordered);
     for (const auto &n : host.services->selection->selectedSet())
         if (n) out.append(n->getGUID());
@@ -1558,7 +1558,7 @@ QVariantMap EditorApi::setOutline(const QVariantMap &change)
     // Onto the live document immediately — the mirror reads the scene every
     // frame, so this is what makes the change visible without closing a dialog.
     if (host.services && host.services->sceneEdit)
-        outlinesettings::apply(host.services->sceneEdit->scene().data());
+        outlinesettings::apply(host.services->sceneEdit->scene().get());
     return outlineState();
 }
 
@@ -1836,7 +1836,7 @@ QVariantMap EditorApi::pip()
     if (host.viewport->pipEnabled() && !host.viewport->isGameView() &&
         host.services && host.services->selection) {
         auto sel = host.services->selection->selected();
-        auto cam = sel ? sel.dynamicCast<iris::CameraNode>() : iris::CameraNodePtr();
+        auto cam = sel ? std::dynamic_pointer_cast<iris::CameraNode>(sel) : iris::CameraNodePtr();
         if (cam && cam != host.viewport->pilotedCamera()) showing = cam->getGUID();
     }
     out["camera"] = showing;

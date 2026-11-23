@@ -58,7 +58,7 @@ int walkNode(const iris::SceneNodePtr &node, const NodeVisitor &visit)
     for (int i = 0; i < kids; ++i) {
         iris::SceneNode *child = node->childAt(i);
         if (!child) continue;
-        const iris::SceneNodePtr ptr = child->sharedFromThis();
+        const iris::SceneNodePtr ptr = child->weak_from_this().lock();
         if (shouldSkipForExport(ptr)) continue;
         const int h = walkNode(ptr, visit);
         if (h >= 0) childHandles.append(h);
@@ -76,7 +76,7 @@ QVector<int> walkScene(const iris::ScenePtr &scene, const NodeVisitor &visit)
     for (int i = 0; i < kids; ++i) {
         iris::SceneNode *child = scene->rootNode->childAt(i);
         if (!child) continue;
-        const iris::SceneNodePtr ptr = child->sharedFromThis();
+        const iris::SceneNodePtr ptr = child->weak_from_this().lock();
         if (shouldSkipForExport(ptr)) continue;
         const int h = walkNode(ptr, visit);
         if (h >= 0) roots.append(h);
@@ -99,8 +99,8 @@ SceneInventory collectInventory(const iris::ScenePtr &scene)
         switch (classifyNode(node)) {
         case NodeKind::Mesh: {
             ++inv.meshNodes;
-            auto *meshNode = static_cast<iris::MeshNode *>(node.data());
-            iris::Material *mat = meshNode->getMaterial().data();
+            auto *meshNode = static_cast<iris::MeshNode *>(node.get());
+            iris::Material *mat = meshNode->getMaterial().get();
             if (mat && !inv.materials.contains(mat)) {
                 inv.materials.append(mat);
                 for (const TextureSlot &slot : materialTextureSlots(mat))
@@ -112,7 +112,7 @@ SceneInventory collectInventory(const iris::ScenePtr &scene)
         case NodeKind::Camera:         ++inv.cameras; break;
         case NodeKind::ParticleSystem: {
             ++inv.particleSystems;
-            auto *ps = static_cast<iris::ParticleSystemNode *>(node.data());
+            auto *ps = static_cast<iris::ParticleSystemNode *>(node.get());
             if (ps->texture) addTextureSource(ps->texture->source);
             break;
         }
@@ -121,7 +121,7 @@ SceneInventory collectInventory(const iris::ScenePtr &scene)
             // A decal's image is a real texture dependency: packaging and the
             // raw exporter must carry it even though nothing renders it as a
             // material map.
-            auto *decal = static_cast<iris::DecalNode *>(node.data());
+            auto *decal = static_cast<iris::DecalNode *>(node.get());
             addTextureSource(decal->resolvedTexturePath);
             addTextureSource(decal->resolvedNormalPath);
             addTextureSource(decal->resolvedEmissivePath);

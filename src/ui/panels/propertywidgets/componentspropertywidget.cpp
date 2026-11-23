@@ -159,7 +159,7 @@ void ComponentsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
     // entirely — clears it, so a deleted model's subtree is not held alive by
     // a hidden section and no stale row is repainted on every later pick.
     if (!sceneNode)
-        subject.clear();
+        subject.reset();
     else if (!(holdsNode(sceneNode) && subject->childCount() > 0))
         subject = subjectFor(sceneNode);
 

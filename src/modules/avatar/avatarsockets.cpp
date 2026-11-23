@@ -96,7 +96,7 @@ const QStringList &builtInNames()
 
 QString mapBone(const iris::SkeletonPtr &skeleton, const QString &socketName)
 {
-    if (skeleton.isNull() || skeleton->bones.isEmpty()) return QString();
+    if (!skeleton || skeleton->bones.isEmpty()) return QString();
     const QStringList &candidates = candidatesFor(socketName);
     if (candidates.isEmpty()) return QString();
 
@@ -105,7 +105,7 @@ QString mapBone(const iris::SkeletonPtr &skeleton, const QString &socketName)
     // the rig's bone order, which is arbitrary.
     QHash<QString, QString> byNormalized;
     for (const iris::BonePtr &bone : skeleton->bones) {
-        if (bone.isNull()) continue;
+        if (!bone) continue;
         const QString key = normalize(bone->name);
         // First bone wins a collision: `mixamorig:Head` before a stray `head`
         // helper further down the list.
@@ -121,12 +121,12 @@ QString mapBone(const iris::SkeletonPtr &skeleton, const QString &socketName)
 QVector<Mapping> installBuiltIns(const iris::MeshNodePtr &node)
 {
     QVector<Mapping> report;
-    const iris::SkeletonPtr skeleton = node.isNull() ? iris::SkeletonPtr() : node->getSkeleton();
+    const iris::SkeletonPtr skeleton = !node ? iris::SkeletonPtr() : node->getSkeleton();
 
     for (const QString &socketName : builtInNames()) {
         Mapping mapping;
         mapping.socket = socketName;
-        if (node.isNull()) { report.append(mapping); continue; }
+        if (!node) { report.append(mapping); continue; }
 
         if (const iris::Socket *existing = node->findSocket(socketName)) {
             // Already there — the user's (or a previous install's) offset stays.
@@ -161,15 +161,15 @@ namespace {
 /// Every skinned mesh in the subtree, depth-first, the root included.
 void collectRiggedMeshes(const iris::SceneNodePtr &node, QVector<iris::MeshNodePtr> &out)
 {
-    if (node.isNull()) return;
+    if (!node) return;
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto mesh = node.staticCast<iris::MeshNode>();
+        auto mesh = std::static_pointer_cast<iris::MeshNode>(node);
         if (mesh->hasSkeleton()) out.append(mesh);
     }
     const int kids = node->childCount();
     for (int i = 0; i < kids; ++i)
         if (iris::SceneNode *c = node->childAt(i))
-            collectRiggedMeshes(c->sharedFromThis(), out);
+            collectRiggedMeshes(c->weak_from_this().lock(), out);
 }
 
 }   // namespace

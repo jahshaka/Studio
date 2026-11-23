@@ -72,7 +72,7 @@ signals:
 
 public:
     WorldGiPropertyWidget();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     /// The services aggregate, for the undo stack. Nullable (headless hosts,
     /// the panel suite without a stack): the edits still apply, just without
     /// an undo step.
@@ -135,7 +135,7 @@ protected:
 
 private:
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     StudioServices *services = nullptr;
     IEditorViewport *sceneView = nullptr;
     WorldModeCommand::Snapshot editBefore;

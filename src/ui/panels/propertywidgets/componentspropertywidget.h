@@ -47,7 +47,7 @@ For more information see the LICENSE file
 
 #include <QHash>
 #include <QPointer>
-#include <QSharedPointer>
+#include <memory>
 #include <QStringList>
 
 #include "irisgl/irisglfwd.h"

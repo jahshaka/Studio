@@ -22,11 +22,6 @@ For more information see the LICENSE file
 
 #include "data/project.h"
 
-// AssetMaterial values hold the hydrated material behind a saved .material
-// asset. PBR materials only exist behind the Material base (PbrMaterial is not
-// a CustomMaterial), so the variant payload is the base pointer.
-Q_DECLARE_METATYPE(iris::MaterialPtr)
-
 struct Asset {
     ModelTypes          type = ModelTypes::Undefined;
     QString             path;
@@ -37,8 +32,7 @@ struct Asset {
     // AssetManager OWNS every registered Asset (see assetmanager.cpp). The
     // destructor is virtual because the list is a QVector<Asset*> of derived
     // types: deleting through the base without it is undefined behaviour, and
-    // for the payload-carrying subclasses it would also skip the QVariant that
-    // pins a whole SceneNodePtr subtree.
+    // for the payload-carrying subclasses it would also skip their payload.
     virtual ~Asset() = default;
 
     virtual QVariant    getValue() = 0;

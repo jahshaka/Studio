@@ -88,7 +88,7 @@ static iris::MaterialPtr pbr(QColor base, float metallic, float roughness)
     m->setBaseColor(base);
     m->setMetallicFactor(metallic);
     m->setRoughnessFactor(roughness);
-    return m.staticCast<iris::Material>();
+    return std::static_pointer_cast<iris::Material>(m);
 }
 
 /// The silhouette material: green whatever the light does to it.
@@ -100,7 +100,7 @@ static iris::MaterialPtr marker()
     m->setRoughnessFactor(1.0f);
     m->setEmissiveColor(QColor(0, 255, 0));
     m->setEmissiveIntensity(1.0f);
-    return m.staticCast<iris::Material>();
+    return std::static_pointer_cast<iris::Material>(m);
 }
 
 /// One preview render at a given view size, as an 8-bit image.

@@ -31,10 +31,10 @@ namespace {
 void walk(const iris::SceneNodePtr &node, const std::function<void(iris::SceneNode *)> &fn)
 {
     if (!node) return;
-    fn(node.data());
+    fn(node.get());
     const int kids = node->childCount();
     for (int i = 0; i < kids; ++i)
-        if (iris::SceneNode *c = node->childAt(i)) walk(c->sharedFromThis(), fn);
+        if (iris::SceneNode *c = node->childAt(i)) walk(c->weak_from_this().lock(), fn);
 }
 
 } // namespace

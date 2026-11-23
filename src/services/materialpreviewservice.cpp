@@ -51,14 +51,14 @@ QString MaterialPreviewService::nodeGuid() const
 bool MaterialPreviewService::canPreview(const QString &presetOrGuid)
 {
     if (!mSceneEdit || presetOrGuid.isEmpty()) return false;
-    if (presetOrGuid == mResolvedSource) return !mResolved.isNull();
+    if (presetOrGuid == mResolvedSource) return !!mResolved;
     // Resolving to answer the question is the point: the answer IS the
     // material, and the gesture that asked will want it a moment later.
     mResolved = mSceneEdit->resolveMaterial(presetOrGuid,
                                             mFromLibrary ? SceneEditService::MaterialOrigin::Library
                                                          : SceneEditService::MaterialOrigin::Project);
     mResolvedSource = presetOrGuid;
-    return !mResolved.isNull();
+    return !!mResolved;
 }
 
 void MaterialPreviewService::setLibraryOrigin(bool fromLibrary)
@@ -98,7 +98,7 @@ bool MaterialPreviewService::begin(const iris::SceneNodePtr &node, const QString
 
     if (!canPreview(presetOrGuid)) { restore(); return false; }
 
-    auto meshNode = node.staticCast<iris::MeshNode>();
+    auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
     // A MESH WEARING NO MATERIAL GETS NO PREVIEW (code review, F8): the mirror
     // draws it in the default surface so it is hoverable, but MeshNode::
     // setMaterial dereferences what it is handed, and "put the original back"

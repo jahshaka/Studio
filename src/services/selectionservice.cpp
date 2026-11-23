@@ -75,7 +75,7 @@ bool SelectionService::isSelected(const iris::SceneNodePtr &node) const
 {
     if (!node) return false;
     for (const auto &n : mSelection)
-        if (n.data() == node.data()) return true;
+        if (n.get() == node.get()) return true;
     return false;
 }
 
@@ -102,7 +102,7 @@ void SelectionService::select(const QList<iris::SceneNodePtr> &nodes)
     for (const auto &n : nodes) {
         if (!n) continue;
         bool seen = false;
-        for (const auto &u : unique) if (u.data() == n.data()) { seen = true; break; }
+        for (const auto &u : unique) if (u.get() == n.get()) { seen = true; break; }
         if (!seen) unique.append(n);
     }
 
@@ -120,12 +120,12 @@ void SelectionService::select(const QList<iris::SceneNodePtr> &nodes)
 bool SelectionService::add(iris::SceneNodePtr node)
 {
     if (mInSelect || !node) return false;
-    if (!mSelection.isEmpty() && mSelection.first().data() == node.data()) return false;
+    if (!mSelection.isEmpty() && mSelection.first().get() == node.get()) return false;
     Guard guard(mInSelect);
 
     QList<iris::SceneNodePtr> tail;
     for (const auto &n : mSelection)
-        if (n.data() != node.data()) tail.append(n);
+        if (n.get() != node.get()) tail.append(n);
 
     mSelection.clear();
     mSelection.append(node);                       // last added = primary
@@ -145,23 +145,23 @@ bool SelectionService::remove(iris::SceneNodePtr node)
     const iris::SceneNodePtr oldPrimary = selected();
     QList<iris::SceneNodePtr> rest;
     for (const auto &n : mSelection)
-        if (n.data() != node.data()) rest.append(n);
+        if (n.get() != node.get()) rest.append(n);
 
     // D2: removing the primary promotes THE TOPMOST REMAINING row, not the
     // most recently added — the same "topmost" the owner's Shift rule anchors
     // on, so the two never disagree. The tail is already in document order, so
     // this is its head.
     mSelection = sortDocumentOrder(rest);
-    if (!mSelection.isEmpty() && oldPrimary.data() != node.data()) {
+    if (!mSelection.isEmpty() && oldPrimary.get() != node.get()) {
         // The primary survived: put it back in front.
         QList<iris::SceneNodePtr> reordered;
         reordered.append(oldPrimary);
         for (const auto &n : mSelection)
-            if (n.data() != oldPrimary.data()) reordered.append(n);
+            if (n.get() != oldPrimary.get()) reordered.append(n);
         mSelection = reordered;
     }
 
-    if (selected().data() != oldPrimary.data()) emit selectionChanged(selected());
+    if (selected().get() != oldPrimary.get()) emit selectionChanged(selected());
     emit selectionSetChanged(mSelection);
     return true;
 }

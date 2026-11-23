@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include <QJsonObject>
 #include <QWidget>
-#include <QSharedPointer>
+#include <memory>
 #include "ui/controls/accordionbladewidget.h"
 #include "irisgl/document/scenegraph/lightnode.h"
 #include "ui/panels/propertywidgets/panelundo.h"
@@ -51,7 +51,7 @@ public:
      * to a LightNode and stored in lightNode, otherwise lightNode is reset to null
      * @param sceneNode
      */
-    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode);
 
     /// The undo stack (debt L6). Every row on this blade writes a REFLECTED
     /// light property, so each becomes one SetNodePropertyCommand — the same
@@ -86,7 +86,7 @@ private:
 
 private:
 
-    QSharedPointer<iris::LightNode> lightNode;
+    std::shared_ptr<iris::LightNode> lightNode;
     StudioServices *services = nullptr;
     /// Populating the rows for a newly selected light is not a user edit (the
     /// sliders emit from setValue) — see rowundo::Binding::guard.

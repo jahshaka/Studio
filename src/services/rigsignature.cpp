@@ -46,7 +46,7 @@ QVector<ClipScore> scoreClips(const QMap<QString, iris::SkeletalAnimationPtr> &a
 {
     QVector<ClipScore> scored;
     for (auto it = anims.constBegin(); it != anims.constEnd(); ++it) {
-        if (it.value().isNull()) continue;
+        if (!it.value()) continue;
         ClipScore s;
         s.raw = it.key();
         s.skel = it.value();

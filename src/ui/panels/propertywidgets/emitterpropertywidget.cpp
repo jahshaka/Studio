@@ -540,13 +540,13 @@ void EmitterPropertyWidget::refresh()
     mLoading = false;
 }
 
-void EmitterPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
+void EmitterPropertyWidget::setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode)
 {
     if (!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::ParticleSystem) {
-        ps = sceneNode.staticCast<iris::ParticleSystemNode>();
+        ps = std::static_pointer_cast<iris::ParticleSystemNode>(sceneNode);
         refresh();
     } else {
-        ps.clear();
+        ps.reset();
     }
 }
 

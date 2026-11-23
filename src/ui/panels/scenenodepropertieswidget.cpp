@@ -424,13 +424,13 @@ void SceneNodePropertiesWidget::applyMountDiff()
 // scene, so the panel went on showing — and re-binding — a scene the viewport
 // had already cleared. Now a close clears the panel, and the world blades are
 // bound exactly ONCE per scene (F1/F3, second reader 2026-09-15).
-void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
+void SceneNodePropertiesWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     if (this->scene == scene) return;
     this->scene = scene;
     // A CLOSED SCENE HAS NO SELECTION either: the node this panel was showing
     // belongs to the document that is going away.
-    if (!scene) this->sceneNode.clear();
+    if (!scene) this->sceneNode.reset();
     bindScene(scene);
     applyTab();
 }
@@ -447,7 +447,7 @@ void SceneNodePropertiesWidget::setScene(QSharedPointer<iris::Scene> scene)
 // tabs; a selection raises Selection, the root (a verb, a scene open) raises
 // World, and the panel's one layout holds whichever blade set the CURRENT tab
 // calls for.
-void SceneNodePropertiesWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
+void SceneNodePropertiesWidget::setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode)
 {
     const bool isRoot = !!sceneNode && sceneNode->isRootNode();
     // The ROOT IS NOT A SELECTION in this column any more: it names the World
@@ -492,11 +492,11 @@ void SceneNodePropertiesWidget::setPropertiesTab(Tab tab)
     emit propertiesTabChanged(currentTab);
 }
 
-QSharedPointer<iris::Scene> SceneNodePropertiesWidget::worldScene() const
+std::shared_ptr<iris::Scene> SceneNodePropertiesWidget::worldScene() const
 {
     if (!!scene) return scene;
     if (!!sceneNode) return sceneNode->getScene();
-    return QSharedPointer<iris::Scene>();
+    return std::shared_ptr<iris::Scene>();
 }
 
 // THE COLUMN IS OUT OF DATE — AND THAT IS ALL A SELECTION SAYS (ADD-1, 2026-09-15).
@@ -943,7 +943,7 @@ void SceneNodePropertiesWidget::applyRowFilter()
 
 // THE EXPENSIVE HALF, run once per scene (see the header). Five of these
 // panels rebuild every row they own from the scene inside their setScene.
-void SceneNodePropertiesWidget::bindScene(const QSharedPointer<iris::Scene> &scene)
+void SceneNodePropertiesWidget::bindScene(const std::shared_ptr<iris::Scene> &scene)
 {
     if (worldBoundScene == scene) return;
     worldBoundScene = scene;
@@ -1188,7 +1188,7 @@ void SceneNodePropertiesWidget::setAssetItem(QListWidgetItem *item)
         return;                       // not an asset this column edits
     }
     // The asset is what is picked: it owns the Selection tab until a node is.
-    this->sceneNode.clear();
+    this->sceneNode.reset();
     const bool moved = currentTab != Tab::Selection;
     currentTab = Tab::Selection;
     applyTab();

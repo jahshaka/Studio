@@ -146,7 +146,7 @@ static void fillInfo(BakeInfo &info, const QList<iris::MeshPtr> &meshes)
     info.coarsestTriangles = 0;
     info.level7Triangles = 0;
     for (const iris::MeshPtr &mesh : meshes) {
-        if (mesh.isNull()) continue;
+        if (!mesh) continue;
         const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
         info.triangles += ib ? size_t(ib->dataSize) / sizeof(unsigned) / 3u : 0u;
         info.levels = std::max(info.levels, int(mesh->lodIndices.size()) + 1);
@@ -603,7 +603,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     for (const auto &src : worldMeshSources()) {
         BakeInfo info;
         iris::MeshPtr m = bakedMesh(src.first, src.second, &info);
-        if (m.isNull()) { std::printf("FAIL: world mesh %s\n", qPrintable(src.second)); return false; }
+        if (!m) { std::printf("FAIL: world mesh %s\n", qPrintable(src.second)); return false; }
         meshes.push_back(m);
         extents.push_back(std::max(1e-3f, meshExtent(m)));
         world.meshes.push_back(info);
@@ -622,7 +622,7 @@ bool buildWorld(Env &env, const WorldSpec &spec, World &world, int settleCap)
     BakeInfo groundInfo;
     iris::MeshPtr groundMesh =
         bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/tests/meshbake/fixtures/flat_grid_100m.obj"), "ground", &groundInfo);
-    if (groundMesh.isNull()) { std::printf("FAIL: the ground mesh\n"); return false; }
+    if (!groundMesh) { std::printf("FAIL: the ground mesh\n"); return false; }
     world.bakeOrReadMs = msSince(t0);
 
     // ---- the document --------------------------------------------------------

@@ -20,7 +20,7 @@ For more information see the LICENSE file
 #include "ui/style/stylesheet.h"
 #include <QPainter>
 #include <QMimeData>
-#include <QSharedPointer>
+#include <memory>
 #include <QGraphicsEffect>
 #include <QAction>
 #include <QMenu>

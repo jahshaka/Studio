@@ -197,7 +197,7 @@ struct GizmoPickView
     float width = 0.0f;
     float height = 0.0f;
     float devicePixelRatio = 1.0f;
-    bool isValid() const { return !camera.isNull() && width >= 2.0f && height >= 2.0f; }
+    bool isValid() const { return !!camera && width >= 2.0f && height >= 2.0f; }
 };
 
 class Gizmo
@@ -416,7 +416,7 @@ public:
 	/// its handle hit tests — against an IDENTITY transform at the world
 	/// origin, with whatever scale was last set — and would otherwise report a
 	/// handle under a ray that points at nothing at all.
-	bool hasSelectedNode() const { return !selectedNode.isNull(); }
+	bool hasSelectedNode() const { return !!selectedNode; }
 	/// The nodes a drag moves TOGETHER (EDITOR_MULTISELECT_SPEC §2.4) — the
 	/// D5-reduced selection set. An empty or single-entry list restores the
 	/// single-node behaviour exactly.

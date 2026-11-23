@@ -134,7 +134,7 @@ int main(int argc, char **argv)
     doc->getRootNode()->addChild(light);
 
     MeshData md;
-    CHECK(SceneMirror::toMeshData(meshNode->getMesh().data(), md), "iris::Mesh -> MeshData");
+    CHECK(SceneMirror::toMeshData(meshNode->getMesh().get(), md), "iris::Mesh -> MeshData");
     std::printf("    cube.obj: %zu vertices, %zu triangles, normals=%s uvs=%s\n",
                 md.vertexCount(), md.triangleCount(), md.normals.empty() ? "no" : "yes", md.uvs.empty() ? "no" : "yes");
 
@@ -143,7 +143,7 @@ int main(int argc, char **argv)
     mirror.setSource(doc);
     const int n = mirror.sync();
     CHECK(n == 3, "sync mirrored 3 document nodes (parent, cube, light)");
-    CHECK(mirror.engineNode(meshNode.data()) != 0, "cube has an engine node");
+    CHECK(mirror.engineNode(meshNode.get()) != 0, "cube has an engine node");
     enginetest::frames(engine, 3);
     Image img;
     CHECK(view->readPixels(img), "readPixels");
@@ -184,8 +184,8 @@ int main(int argc, char **argv)
         const iris::Vec3 eye(2.2f, 1.8f, 2.6f);
         const iris::Vec3 through = eye + (iris::Vec3(0, 0, 0) - eye) * 3.0f;
         auto picksCube = [&]() {
-            for (const auto &hit : iris::picking::raycastMeshes(doc.data(), eye, through, 0, false))
-                if (hit.node.data() == meshNode.data()) return true;
+            for (const auto &hit : iris::picking::raycastMeshes(doc.get(), eye, through, 0, false))
+                if (hit.node.get() == meshNode.get()) return true;
             return false;
         };
         auto step = [&](const char *tag) {
@@ -263,7 +263,7 @@ int main(int argc, char **argv)
     // VISITS what changed, not what exists — "how many nodes are still
     // mirrored" is the entry map, which is what this line always meant.
     CHECK(mirror.mirroredNodeCount() == 3, "3 nodes remain (parent, other, light)");
-    CHECK(mirror.engineNode(meshNode.data()) == 0, "removed node has no engine node");
+    CHECK(mirror.engineNode(meshNode.get()) == 0, "removed node has no engine node");
     enginetest::frames(engine, 2);
     view->readPixels(img); show("removed", img);
     CHECK(isBlue(centre(img)), "removed node renders nothing");
@@ -279,7 +279,7 @@ int main(int argc, char **argv)
     meshNode2->setMaterial(pbr);
     doc->getRootNode()->addChild(meshNode2);
     PbrParams pp;
-    CHECK(SceneMirror::toPbrParams(pbr.data(), pp), "PbrMaterial -> PbrParams");
+    CHECK(SceneMirror::toPbrParams(pbr.get(), pp), "PbrMaterial -> PbrParams");
     mirror.sync(); enginetest::frames(engine, 2);
     view->readPixels(img); show("document PbrMaterial", img);
     CHECK(centre(img).b > centre(img).r, "centre takes the document material's colour (blue)");
@@ -416,7 +416,7 @@ int main(int argc, char **argv)
         const float fadeLum = centreLum(img);
         glassMat->setValue("alphaMode", 3);                      // Glass
         PbrParams gp;
-        CHECK(SceneMirror::toPbrParams(glassMat.data(), gp) && gp.alphaMode == PbrAlphaMode::Glass,
+        CHECK(SceneMirror::toPbrParams(glassMat.get(), gp) && gp.alphaMode == PbrAlphaMode::Glass,
               "document alphaMode 3 maps to PbrAlphaMode::Glass");
         mirror.sync(); enginetest::frames(engine, 3);
         view->readPixels(img); show("glass (transparent)", img);
@@ -527,7 +527,7 @@ int main(int argc, char **argv)
         CHECK(reloaded->alphaMode == 2 && std::fabs(reloaded->alpha - 0.5f) < 1e-4f &&
               std::fabs(reloaded->alphaCutoff - 0.7f) < 1e-4f, "alpha mode/value/cutoff round-tripped");
         PbrParams rp;
-        CHECK(SceneMirror::toPbrParams(reloaded.data(), rp), "reloaded PbrMaterial -> PbrParams");
+        CHECK(SceneMirror::toPbrParams(reloaded.get(), rp), "reloaded PbrMaterial -> PbrParams");
         CHECK(rp.alphaMode == PbrAlphaMode::Blend && std::fabs(rp.alpha - 0.5f) < 1e-4f,
               "alpha mode + value reach the engine params");
         CHECK(std::fabs(rp.roughness - 0.5f) < 1e-4f, "roughness 0.9 clamped into bounds [0.2, 0.5]");
@@ -799,7 +799,7 @@ int main(int argc, char **argv)
         // and the document refuses a value outside the three.
         for (iris::ShadowMapType t : { iris::ShadowMapType::Hard, iris::ShadowMapType::Soft, iris::ShadowMapType::VerySoft }) {
             point->shadowMap.shadowType = t;
-            CHECK(SceneMirror::toLightDesc(point.data()).castShadows, "a point light casts at every Shadow Type");
+            CHECK(SceneMirror::toLightDesc(point.get()).castShadows, "a point light casts at every Shadow Type");
         }
         CHECK(!point->setPropertyValue(QStringLiteral("shadowMapType"), 0) &&
                   point->shadowMap.shadowType == iris::ShadowMapType::VerySoft,
@@ -835,13 +835,13 @@ int main(int argc, char **argv)
         fromJson->rectHeight = (float)j["rectHeight"].toDouble(1.0f);
         fromJson->doubleSided = j["doubleSided"].toBool(false);
         fromJson->shadowMap.shadowType = iris::ShadowMapType::Soft;   // hostile: must be ignored
-        const LightDesc ad = SceneMirror::toLightDesc(fromJson.data());
+        const LightDesc ad = SceneMirror::toLightDesc(fromJson.get());
         CHECK(ad.type == LightType::Area, "document area light maps to LightType::Area");
         CHECK(std::abs(ad.rectWidth - 2.0f) < 1e-5f && std::abs(ad.rectHeight - 0.5f) < 1e-5f,
               "rect size flows through toLightDesc");
         CHECK(ad.doubleSided, "doubleSided flows through toLightDesc");
         CHECK(!ad.castShadows, "area lights never cast shadows, whatever Shadow Type says");
-        auto dup = fromJson->createDuplicate().staticCast<iris::LightNode>();
+        auto dup = std::static_pointer_cast<iris::LightNode>(fromJson->createDuplicate());
         CHECK(dup->rectWidth == fromJson->rectWidth && dup->doubleSided,
               "duplicate keeps the area-light fields");
 
@@ -993,7 +993,7 @@ int main(int argc, char **argv)
         mirror.setLightWires(false);
 
         // Duplicate keeps every field, and the type.
-        auto dup = decal->createDuplicate().staticCast<iris::DecalNode>();
+        auto dup = std::static_pointer_cast<iris::DecalNode>(decal->createDuplicate());
         CHECK(dup->getSceneNodeType() == iris::SceneNodeType::Decal &&
               dup->textureGuid == decal->textureGuid && dup->width == decal->width &&
               dup->depth == decal->depth,
@@ -1335,7 +1335,7 @@ int main(int argc, char **argv)
         mirror.sync(); settleEnvironment(engine, target, "equirect IBL");
         view->readPixels(img); show("metal cube, equirect IBL", img);
         const Colour c = centre(img);
-        CHECK(mirror.engineNode(meshNode.data()) != 0, "the chrome cube is mirrored");
+        CHECK(mirror.engineNode(meshNode.get()) != 0, "the chrome cube is mirrored");
         CHECK(c.g > 0.25f && c.g > c.r * 1.5f && c.g > c.b * 1.5f,
               "a metal cube reflects the equirect sky's colour (IBL)");
         // Control: SWAP the sky — the reflections follow it. A colour sky is a
@@ -1558,7 +1558,7 @@ int main(int argc, char **argv)
         enginetest::frames(engine, 3);
         view->readPixels(img); show("subject = no mesh", img);
         CHECK(stillMirrored == 2, "mesh detach: the node is still mirrored (light + subject)");
-        CHECK(mirror.engineNode(subject.data()) != 0, "mesh detach: its engine node survives");
+        CHECK(mirror.engineNode(subject.get()) != 0, "mesh detach: its engine node survives");
         CHECK(litPixels(img) == 0, "mesh detach: nothing renders once the mesh is cleared");
 
         // Re-attaching after a detach must work (the entry is reused).
@@ -1861,7 +1861,7 @@ int main(int argc, char **argv)
             // is actually keyed on.)
             drain();
             const quint64 beforeC = mirror.target()->published().gi.schedulerResolves;
-            if (auto pbr = originalMat.dynamicCast<iris::PbrMaterial>())
+            if (auto pbr = std::dynamic_pointer_cast<iris::PbrMaterial>(originalMat))
                 pbr->setBaseColor(QColor(200, 30, 30));
             settle(20);
             CHECK(mirror.target()->published().gi.schedulerResolves == beforeC + 1,
@@ -1895,7 +1895,7 @@ int main(int argc, char **argv)
 
         // (1) NOT mirrored yet: no engine geometry for this document at all, and
         // picking does not need any.
-        auto pre = iris::picking::raycastMeshes(pdoc.data(), a, b);
+        auto pre = iris::picking::raycastMeshes(pdoc.get(), a, b);
         CHECK(!pre.isEmpty() && pre.first().node == cube,
               "picking: an unmirrored document finds the cube, with a triangle index");
         CHECK(!pre.isEmpty() && pre.first().triangleIndex >= 0,
@@ -1906,7 +1906,7 @@ int main(int argc, char **argv)
         pmirror.setSource(pdoc);
         pmirror.sync();
         enginetest::frames(engine, 1);
-        auto post = iris::picking::raycastMeshes(pdoc.data(), a, b);
+        auto post = iris::picking::raycastMeshes(pdoc.get(), a, b);
         CHECK(!post.isEmpty() && post.first().node == cube,
               "picking: a mirrored document finds the same cube");
         CHECK(!post.isEmpty() && pre.size() == post.size() &&
@@ -1917,33 +1917,33 @@ int main(int argc, char **argv)
         // last updateSceneGraph — a node moved since was tested at its old place):
         // moved and picked with NO frame in between, it is found where it IS.
         cube->setLocalPos(iris::Vec3(6, 0, 0));
-        CHECK(!iris::picking::raycastMeshes(pdoc.data(), iris::Vec3(6, 0, 20), iris::Vec3(6, 0, -20)).isEmpty(),
+        CHECK(!iris::picking::raycastMeshes(pdoc.get(), iris::Vec3(6, 0, 20), iris::Vec3(6, 0, -20)).isEmpty(),
               "picking: a node moved this frame is hit at its NEW place (no frame rendered)");
-        CHECK(iris::picking::raycastMeshes(pdoc.data(), a, b).isEmpty(),
+        CHECK(iris::picking::raycastMeshes(pdoc.get(), a, b).isEmpty(),
               "picking: ...and not at its old one");
         cube->setLocalPos(iris::Vec3(0, 0, 0));
 
         // A ray that misses finds nothing through either phase.
         const iris::Vec3 mA(50, 50, 20), mB(50, 50, -20);
-        CHECK(iris::picking::raycastMeshes(pdoc.data(), mA, mB).isEmpty(),
+        CHECK(iris::picking::raycastMeshes(pdoc.get(), mA, mB).isEmpty(),
               "picking: a ray past the geometry hits nothing");
 
         // `pickable` is honoured exactly, on the candidate.
         cube->setPickable(false);
         pmirror.sync();
         enginetest::frames(engine, 1);
-        CHECK(iris::picking::raycastMeshes(pdoc.data(), a, b).isEmpty(),
+        CHECK(iris::picking::raycastMeshes(pdoc.get(), a, b).isEmpty(),
               "picking: an unpickable node is not a hit");
-        CHECK(!iris::picking::raycastMeshes(pdoc.data(), a, b, 0, true).isEmpty(),
+        CHECK(!iris::picking::raycastMeshes(pdoc.get(), a, b, 0, true).isEmpty(),
               "picking: ...unless the caller asks for unpickable nodes too");
         cube->setPickable(true);
 
         // pickingGroups stays an ALL-test on the candidates.
         cube->pickingGroups = 0x3;
         pmirror.sync();
-        CHECK(!iris::picking::raycastMeshes(pdoc.data(), a, b, 0x1).isEmpty(),
+        CHECK(!iris::picking::raycastMeshes(pdoc.get(), a, b, 0x1).isEmpty(),
               "picking: pickingGroups 0x3 satisfies a 0x1 mask");
-        CHECK(iris::picking::raycastMeshes(pdoc.data(), a, b, 0x4).isEmpty(),
+        CHECK(iris::picking::raycastMeshes(pdoc.get(), a, b, 0x4).isEmpty(),
               "picking: ...and not a 0x4 one");
         cube->pickingGroups = 0;
 
@@ -1971,8 +1971,8 @@ int main(int argc, char **argv)
         SceneMirror lmirror(target);
         lmirror.setSource(ldoc);
         lmirror.sync();
-        const auto cubeNode = lmirror.engineNode(cube.data());
-        const auto lampNode = lmirror.engineNode(lamp.data());
+        const auto cubeNode = lmirror.engineNode(cube.get());
+        const auto lampNode = lmirror.engineNode(lamp.get());
         CHECK(cubeNode != 0 && lampNode != 0, "channels: both nodes reached the engine");
         enginetest::frames(engine, 1);   // the snapshot moves at a frame's close (U3 stage 2b)
         CHECK(jahshaka::engine::inspect::scene(target)->nodeLightMask(cubeNode) == 0xFFFFFFFFu,
@@ -2134,7 +2134,7 @@ int main(int argc, char **argv)
         smirror.setSource(sdoc);
         smirror.sync();
         enginetest::frames(engine, 1);
-        CHECK(smirror.engineNode(pre.data()) != 0 && smirror.engineNode(post.data()) != 0,
+        CHECK(smirror.engineNode(pre.get()) != 0 && smirror.engineNode(post.get()) != 0,
               "static: both nodes reached the engine");
 
         // Now switch one that ALREADY has an Item: the Item has to travel.
@@ -2186,8 +2186,8 @@ int main(int argc, char **argv)
         mmirror.setSource(mdoc);
         mmirror.sync();
         enginetest::frames(engine, 1);
-        const NodeId stillId = mmirror.engineNode(still.data());
-        const NodeId riderId = mmirror.engineNode(rider.data());
+        const NodeId stillId = mmirror.engineNode(still.get());
+        const NodeId riderId = mmirror.engineNode(rider.get());
         CHECK(stillId != 0 && riderId != 0, "mobility: both nodes reached the engine");
         CHECK(!jahshaka::engine::inspect::scene(target)->nodeMovable(stillId) && !jahshaka::engine::inspect::scene(target)->nodeMovable(riderId),
               "mobility: a still scene pushes NOTHING as movable");
@@ -2436,7 +2436,7 @@ int main(int argc, char **argv)
             sdoc2->getRootNode()->addChild(n2, false);
             copies.append(n2);
         }
-        bool allShared = !shared.isNull();
+        bool allShared = !!shared;
         for (const auto &n2 : copies) if (n2->getMesh() != shared) allShared = false;
         CHECK(allShared, "document: 16 nodes on one mesh asset hold ONE iris::Mesh");
 
@@ -2488,7 +2488,7 @@ int main(int argc, char **argv)
         cm3.setSource(sdoc3);
         cm3.sync();
         cm3.sync(mirrorframe::environment(cv3));
-        CHECK(cm3.engineNode(bare.data()) != 0, "no-material: the node has an engine node");
+        CHECK(cm3.engineNode(bare.get()) != 0, "no-material: the node has an engine node");
         for (int i = 0; i < 3; ++i) { cm3.sync(); enginetest::frames(engine, 1); }
         cv3->readPixels(img); show("no material", img);
         const Colour c3 = centre(img);
@@ -2560,8 +2560,8 @@ int main(int argc, char **argv)
         std::function<void(const iris::SceneNodePtr &)> find = [&](const iris::SceneNodePtr &n) {
             if (!n) return;
             if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                if (n->getName() == QStringLiteral("two_sided_quad")) twoSided = n.staticCast<iris::MeshNode>();
-                if (n->getName() == QStringLiteral("one_sided_quad")) oneSided = n.staticCast<iris::MeshNode>();
+                if (n->getName() == QStringLiteral("two_sided_quad")) twoSided = std::static_pointer_cast<iris::MeshNode>(n);
+                if (n->getName() == QStringLiteral("one_sided_quad")) oneSided = std::static_pointer_cast<iris::MeshNode>(n);
             }
             for (const iris::SceneNodePtr &c : n->children()) find(c);
         };

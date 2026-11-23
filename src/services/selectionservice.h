@@ -47,14 +47,9 @@ For more information see the LICENSE file
 #include <QList>
 #include <QObject>
 
-// THE NODE TYPE IN FULL, not the forward declaration (COMPONENTS-1). The
-// signals below carry `iris::SceneNodePtr` across a moc boundary, and moc emits
-// metatype machinery for them: in a translation unit where this header is
-// mocced while `iris::SceneNode` is still incomplete, Qt's automatic
-// QSharedPointer<T> metatype is instantiated first and scenenode.h's own
-// Q_DECLARE_METATYPE, parsed later in the same unit, is then a "specialization
-// after instantiation" — a build that fails by the ORDER of two unrelated moc
-// files. Including the real header makes the declaration unconditional.
+// The signals below carry `iris::SceneNodePtr` (a std::shared_ptr) by direct
+// connection only: no QVariant and no queued connection carries it, so Qt needs
+// no metatype declaration of it.
 #include "irisgl/document/scenegraph/scenenode.h"
 
 class SelectionService : public QObject

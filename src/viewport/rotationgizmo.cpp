@@ -824,8 +824,8 @@ QVector<GizmoDrawItem> RotationGizmo::drawItems(iris::Vec3 rayPos, iris::Vec3 ra
 			const QColor axisColour = handles[i]->getHandleColor();
 			iris::Mat4 t = handles[i]->ringFrame();
 			t.scale(getGizmoScale() * handles[i]->handleScale);
-			if (!hubMeshes[i].isNull()) items.append({ hubMeshes[i], t, axisColour });
-			if (!arrowMeshes[i].isNull()) items.append({ arrowMeshes[i], t, axisColour });
+			if (!!hubMeshes[i]) items.append({ hubMeshes[i], t, axisColour });
+			if (!!arrowMeshes[i]) items.append({ arrowMeshes[i], t, axisColour });
 		}
 		return items;
 	}

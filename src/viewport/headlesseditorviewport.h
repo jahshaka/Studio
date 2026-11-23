@@ -106,7 +106,7 @@ public:
     void begin() override {}
     void end() override {}
     bool isInitialized() override { return true; }
-    void cleanup() override { mScene.clear(); }
+    void cleanup() override { mScene.reset(); }
 
 private:
     QWidget *mWidget = nullptr;

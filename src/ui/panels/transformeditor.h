@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QWidget>
-#include <QSharedPointer>
+#include <memory>
 
 #include <functional>
 
@@ -41,7 +41,7 @@ public:
      *  sets active scene node
      * @param sceneNode
      */
-    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode);
     /// Undo pushes go through the services (Phase 4: was UiManager's statics).
     void setServices(StudioServices *s) { services = s; }
 
@@ -106,7 +106,7 @@ private:
     /// pushed the same way (rewind, then push) so it captures the pre-edit
     /// SCENE_STATIC classification.
     void writeTransform(DragSpinBox *box,
-                        const std::function<void(const QSharedPointer<iris::SceneNode> &)> &write);
+                        const std::function<void(const std::shared_ptr<iris::SceneNode> &)> &write);
 
     /// ONE SCALE CHANNEL, written the one way the whole app writes one
     /// (iris::scalelock::apply): the node's lock, or Shift held during THIS
@@ -119,11 +119,11 @@ private:
     void refreshLockButton();
 
     StudioServices *services = nullptr;
-    QSharedPointer<iris::SceneNode> sceneNode;
+    std::shared_ptr<iris::SceneNode> sceneNode;
     /// The node the value slots may WRITE — `sceneNode`, or nothing while a
     /// script run owns the document (services/editgate.h).
-    QSharedPointer<iris::SceneNode> editableNode() const;
-    QSharedPointer<iris::SceneNode> defaultStateNode;
+    std::shared_ptr<iris::SceneNode> editableNode() const;
+    std::shared_ptr<iris::SceneNode> defaultStateNode;
 
     DragSpinBox* xpos = nullptr; DragSpinBox* ypos = nullptr; DragSpinBox* zpos = nullptr;
     DragSpinBox* xrot = nullptr; DragSpinBox* yrot = nullptr; DragSpinBox* zrot = nullptr;

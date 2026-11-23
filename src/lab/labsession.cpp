@@ -315,7 +315,7 @@ void Session::nameEngineNodes()
 {
     mNodeNames.clear();
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
-        if (const NodeId id = mMirror->engineNode(n.data())) mNodeNames.push_back({ (unsigned long long)id, n->getName() });
+        if (const NodeId id = mMirror->engineNode(n.get())) mNodeNames.push_back({ (unsigned long long)id, n->getName() });
         for (const iris::SceneNodePtr &c : n->children()) walk(c);
     };
     walk(mDoc->getRootNode());
@@ -430,7 +430,7 @@ bool Session::load(std::string &error)
     if (mJlab.hasSun) {
         std::function<bool(const iris::SceneNodePtr &)> sun = [&](const iris::SceneNodePtr &n) {
             if (n->getSceneNodeType() == iris::SceneNodeType::Light &&
-                n.staticCast<iris::LightNode>()->lightType == iris::LightType::Directional) {
+                std::static_pointer_cast<iris::LightNode>(n)->lightType == iris::LightType::Directional) {
                 n->setLocalRot(mJlab.sunRot);
                 n->setPropertyValue(QStringLiteral("intensity"), mJlab.sunIntensity);
                 return true;
@@ -869,7 +869,7 @@ bool Session::exec(const Command &c)
                 clips += int(n->getAnimations().size());
                 for (int i = 0; i < n->childCount(); ++i) walk(n->childAt(i));
             };
-            walk(mDoc->getRootNode().data());
+            walk(mDoc->getRootNode().get());
             // A VERB THAT MOVES NOTHING FAILS (URGENT #110: gi.rest_oracle_mover passed for a day on `play on` in an
             // environment with no animation - "0 nodes" printed, nothing moved): a row that wants an object to move
             // uses `slide`, and nothing here is a silent no-op
@@ -1290,14 +1290,14 @@ bool Session::exec(const Command &c)
         j.gi = mGi; j.occlusion = mOcclusion; j.draw = mDraw; j.overlay = mOverlay;
         std::function<iris::SceneNodePtr(const iris::SceneNodePtr &)> sun = [&](const iris::SceneNodePtr &n) {
             if (n->getSceneNodeType() == iris::SceneNodeType::Light &&
-                n.staticCast<iris::LightNode>()->lightType == iris::LightType::Directional) return n;
+                std::static_pointer_cast<iris::LightNode>(n)->lightType == iris::LightType::Directional) return n;
             for (const iris::SceneNodePtr &ch : n->children()) if (auto s = sun(ch)) return s;
             return iris::SceneNodePtr();
         };
         if (auto s = sun(mDoc->getRootNode())) {
             j.hasSun = true;
             j.sunRot = s->getLocalRot();
-            j.sunIntensity = s.staticCast<iris::LightNode>()->intensity;
+            j.sunIntensity = std::static_pointer_cast<iris::LightNode>(s)->intensity;
         }
         QString path = a0.empty() ? QDir(mOpt.dataRoot).filePath(QStringLiteral("jlab/") +
                                                                   (mJlab.env.isEmpty() ? QFileInfo(mJlab.file).completeBaseName()
@@ -1431,7 +1431,7 @@ bool Session::exec(const Command &c)
     } else if (c.verb == "lights") {
         std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
             if (n->getSceneNodeType() == iris::SceneNodeType::Light) {
-                const iris::LightNodePtr l = n.staticCast<iris::LightNode>();
+                const iris::LightNodePtr l = std::static_pointer_cast<iris::LightNode>(n);
                 const iris::Vec3 p = n->getGlobalPosition();
                 std::printf("LAB LIGHT %s type %d at %.4f,%.4f,%.4f intensity %.4g range %.4g sourceRadius %.4g\n",
                             qPrintable(n->getName()), int(l->lightType), p.x(), p.y(), p.z(), l->intensity, l->distance,
@@ -1624,7 +1624,7 @@ bool Session::lamp(const Command &c)
     iris::LightNodePtr found;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
         if (!found && n->getSceneNodeType() == iris::SceneNodeType::Light && n->getName().toStdString() == c.args[0])
-            found = n.staticCast<iris::LightNode>();
+            found = std::static_pointer_cast<iris::LightNode>(n);
         for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
     };
     walk(mDoc->getRootNode());
@@ -1716,12 +1716,12 @@ bool Session::material(const Command &c)
     iris::MeshNodePtr found;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
         if (!found && n->getSceneNodeType() == iris::SceneNodeType::Mesh && n->getName().toStdString() == c.args[0])
-            found = n.staticCast<iris::MeshNode>();
+            found = std::static_pointer_cast<iris::MeshNode>(n);
         for (const iris::SceneNodePtr &ch : n->children()) walk(ch);
     };
     walk(mDoc->getRootNode());
     if (!found) { labFail("LAB REFUSED material: no mesh named '%s'\n", c.args[0].c_str()); return false; }
-    const iris::PbrMaterialPtr mat = found->getMaterial().dynamicCast<iris::PbrMaterial>();
+    const iris::PbrMaterialPtr mat = std::dynamic_pointer_cast<iris::PbrMaterial>(found->getMaterial());
     if (!mat) { labFail("LAB REFUSED material: '%s' wears no PBR material\n", c.args[0].c_str()); return false; }
     if (c.args[1] == "colour") {
         iris::Vec3 rgb, unused;

@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define FOGPROPERTYWIDGET_H
 
 #include <QWidget>
-#include <QSharedPointer>
+#include <memory>
 #include <QVector>
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/panels/propertywidgets/panelundo.h"
@@ -43,7 +43,7 @@ class FogPropertyWidget: public AccordianBladeWidget
 
 public:
     FogPropertyWidget();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     /// The undo stack, for the rows (debt L6). Nullable: without it every row
     /// still writes the document, it just records no step — which is what
     /// headless hosts and the panel suites do.
@@ -59,7 +59,7 @@ private:
     /// Greys the rows that are dead weight right now (see the definition).
     void applyEnabledStates();
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     StudioServices *services = nullptr;
     /// Guards the population above: HFloatSliderWidget::setValue EMITS
     /// valueChanged, so filling the rows would otherwise write every value

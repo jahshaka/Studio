@@ -34,7 +34,7 @@ namespace {
 
 /// The camera the selection is on, and the SCENE it belongs to — the world half
 /// of every "inherits" answer below.
-iris::ScenePtr sceneOf(const QSharedPointer<iris::CameraNode> &camera)
+iris::ScenePtr sceneOf(const std::shared_ptr<iris::CameraNode> &camera)
 {
     return camera ? camera->getScene() : iris::ScenePtr();
 }
@@ -73,9 +73,9 @@ CameraPostFxPropertyWidget::CameraPostFxPropertyWidget()
 {
 }
 
-void CameraPostFxPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> node)
+void CameraPostFxPropertyWidget::setSceneNode(std::shared_ptr<iris::SceneNode> node)
 {
-    camera = node.dynamicCast<iris::CameraNode>();
+    camera = std::dynamic_pointer_cast<iris::CameraNode>(node);
     rebuild();
 }
 

@@ -917,7 +917,7 @@ int main(int argc, char **argv)
     { RenderStats warm; enginetest::renderStats(engine, warm); }
 
     loadSharedAssets();
-    CHECK(!gCube.isNull(), "shared cube mesh loaded (no GL)");
+    CHECK(!!gCube, "shared cube mesh loaded (no GL)");
 
     std::printf("\n== correctness probe: a document edit really is engine-visible ==\n");
     {
@@ -984,8 +984,8 @@ int main(int argc, char **argv)
         // only the 12-triangle cube.
         iris::MeshPtr dense =
             testmesh::load(QString(JAHSHAKA_SOURCE_DIR "/app/content/primitives/hp_sphere.obj"));
-        CHECK(!dense.isNull(), "(f) the dense fixture mesh loaded");
-        if (!dense.isNull()) {
+        CHECK(!!dense, "(f) the dense fixture mesh loaded");
+        if (!!dense) {
             // its CLUSTER DAG and its level table (the DAG's uniform cuts), as the importer bakes them
             iris::MeshBake::buildClusterDag(dense);
             iris::MeshBake::buildLevelTable(dense);
@@ -1148,8 +1148,8 @@ int main(int argc, char **argv)
                 unsigned lastRecords = 0;
                 const auto st = runLoop(LoopBudget{ 3, 10, 200, 1200.0 }, [&](int, Recorder &rec) {
                     for (int i = 0; i < K; ++i) {
-                        iris::SceneNode *w = (k < 2 && i < int(s.dynamic.size())) ? s.dynamic[std::size_t(i)].data()
-                                                                                 : s.all[std::size_t(i)].data();
+                        iris::SceneNode *w = (k < 2 && i < int(s.dynamic.size())) ? s.dynamic[std::size_t(i)].get()
+                                                                                 : s.all[std::size_t(i)].get();
                         w->setLocalPos(w->getLocalPos());
                     }
                     const auto t0 = Clock::now();

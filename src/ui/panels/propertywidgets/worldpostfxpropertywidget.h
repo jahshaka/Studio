@@ -62,7 +62,7 @@ class WorldPostFxPropertyWidget : public AccordianBladeWidget
 
 public:
     WorldPostFxPropertyWidget();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     /// The live viewport, so an edit is visible immediately. Nullable.
     void setSceneView(IEditorViewport *sceneView);
     /// The undo stack (debt L6): an on/off row is one WorldModeCommand (value
@@ -108,7 +108,7 @@ private:
         RowPtr<DragFloatWidget> field;
     };
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     IEditorViewport *sceneView = nullptr;
     /// Whether the scene traces rays on this machine — the fact a row's text
     /// and the technique's name are computed from (worldmodes::rowCost).

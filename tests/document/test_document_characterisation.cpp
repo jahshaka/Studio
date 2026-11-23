@@ -112,7 +112,7 @@ int main(int argc, char **argv)
 
     // --- Cubemap: previously returned null with no context (silently dropping the sky)
     auto cube = iris::Texture2D::createCubeMap(":assets/models/sky.obj", ":x", ":x", ":x", ":x", ":x");
-    CHECK(cube.isNull(), "cubemap with unreadable faces still returns null (validation kept)");
+    CHECK(!cube, "cubemap with unreadable faces still returns null (validation kept)");
 
     // --- Document traversal works: this is what SceneMirror will walk
     int count = 0;
@@ -835,11 +835,11 @@ int main(int argc, char **argv)
         CHECK(probe.open(QIODevice::ReadOnly) && probe.read(200).indexOf("mtllib") < 0,
               "fixture: the resource exists and its first 200 bytes hold no format keyword");
         auto mesh = testmesh::load(res);
-        CHECK(!mesh.isNull() && mesh->numVerts > 0,
+        CHECK(!!mesh && mesh->numVerts > 0,
               "an OBJ resource with 300+ bytes of leading comments LOADS (extension hint)");
         auto node = iris::MeshNode::create();
         node->setMesh(testmesh::load(res));
-        CHECK(!node->getMesh().isNull(),
+        CHECK(!!node->getMesh(),
               "...through MeshNode::setMesh too — the default scene's ground path");
     }
 
@@ -888,7 +888,7 @@ int main(int argc, char **argv)
     {
         // B8.1: a skeleton is no longer a strong-pointer cycle — dropping the
         // last reference frees every bone.
-        QWeakPointer<iris::Bone> observed;
+        std::weak_ptr<iris::Bone> observed;
         {
             auto skel = iris::Skeleton::create();
             auto root = iris::Bone::create("root");
@@ -898,7 +898,7 @@ int main(int argc, char **argv)
             observed = root;
             CHECK(tip->parent() == root, "bone: parent() reads the weak back-link");
         }
-        CHECK(observed.isNull(), "bone: the skeleton is freed when its last reference drops (no parent/child cycle)");
+        CHECK(observed.expired(), "bone: the skeleton is freed when its last reference drops (no parent/child cycle)");
 
         // B5.1: a MeshNode is born with meshIndex 0, not whatever the stack held.
         auto fresh = iris::MeshNode::create();
@@ -1003,13 +1003,13 @@ int main(int argc, char **argv)
               "dup: the original carries a base colour map");
         source->setMaterial(pbr);
 
-        auto dupNode = source->duplicate().dynamicCast<iris::MeshNode>();
+        auto dupNode = std::dynamic_pointer_cast<iris::MeshNode>(source->duplicate());
         CHECK(!!dupNode, "dup: a mesh node duplicates to a mesh node");
-        auto dupMat = dupNode ? dupNode->getMaterial().dynamicCast<iris::PbrMaterial>()
+        auto dupMat = dupNode ? std::dynamic_pointer_cast<iris::PbrMaterial>(dupNode->getMaterial())
                               : iris::PbrMaterialPtr();
         CHECK(!!dupMat, "dup: the copy's material is a PbrMaterial (was a blank base Material)");
         if (dupMat) {
-            CHECK(dupMat.data() != pbr.data(), "dup: the copy has its OWN material, not the same pointer");
+            CHECK(dupMat.get() != pbr.get(), "dup: the copy has its OWN material, not the same pointer");
             CHECK(dupMat->baseColor == pbr->baseColor &&
                   std::fabs(dupMat->metallicFactor - 0.25f) < 1e-6f &&
                   std::fabs(dupMat->roughnessFactor - 0.7f) < 1e-6f &&
@@ -1060,7 +1060,7 @@ int main(int argc, char **argv)
 
         // A material-less mesh node still duplicates (the Stage 2 crash guard).
         auto bare = iris::MeshNode::create();
-        auto bareCopy = bare->duplicate().dynamicCast<iris::MeshNode>();
+        auto bareCopy = std::dynamic_pointer_cast<iris::MeshNode>(bare->duplicate());
         CHECK(bareCopy && !bareCopy->getMaterial(), "dup: a mesh node with no material duplicates to one with none");
     }
 

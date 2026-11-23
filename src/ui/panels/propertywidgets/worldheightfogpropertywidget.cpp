@@ -84,7 +84,7 @@ QVariant WorldHeightFogPropertyWidget::withField(const std::function<void(iris::
     return iris::HeightFog::clamped(h).toJson().toVariantMap();
 }
 
-void WorldHeightFogPropertyWidget::setScene(QSharedPointer<iris::Scene> s)
+void WorldHeightFogPropertyWidget::setScene(std::shared_ptr<iris::Scene> s)
 {
     scene = s;
     refreshRows();

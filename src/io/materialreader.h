@@ -19,7 +19,7 @@ For more information see the LICENSE file
 #include <QJsonObject>
 #include <QJsonValueRef>
 #include <QJsonDocument>
-#include <QSharedPointer>
+#include <memory>
 
 #include "irisgl/irisglfwd.h"
 #include "io/assetiobase.h"

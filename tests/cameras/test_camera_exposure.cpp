@@ -812,7 +812,7 @@ void partC()
     // A duplicate is the SAME camera, overrides and all.
     cam->exposureMode = iris::CameraExposureMode::Manual;
     cam->exposure = -1.5f;
-    auto copy = cam->createDuplicate().staticCast<iris::CameraNode>();
+    auto copy = std::static_pointer_cast<iris::CameraNode>(cam->createDuplicate());
     CHECK(copy->exposureMode == iris::CameraExposureMode::Manual &&
               std::fabs(copy->exposure - (-1.5f)) < 1e-6f &&
               copy->postOverrides == cam->postOverrides,

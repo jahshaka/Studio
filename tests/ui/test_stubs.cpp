@@ -85,7 +85,7 @@ QJsonObject MaterialBundle::read(Database *, const QString &guid, Project *)
 iris::MaterialPtr MaterialReader::parseMaterialTyped(QJsonObject definition, Database *, bool)
 {
     if (definition.isEmpty()) return iris::MaterialPtr();
-    return iris::PbrMaterial::create().staticCast<iris::Material>();
+    return std::static_pointer_cast<iris::Material>(iris::PbrMaterial::create());
 }
 
 #include "services/sceneeditservice.h"

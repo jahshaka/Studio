@@ -111,7 +111,7 @@ void SkyPropertyWidget::setDatabase(Database *db)
     this->db = db;
 }
 
-void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void SkyPropertyWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
@@ -120,7 +120,7 @@ void SkyPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
         currentSky = scene->skyType;
         skyTypeChanged(static_cast<int>(scene->skyType));
     } else {
-        this->scene.clear();
+        this->scene.reset();
     }
 }
 
@@ -416,7 +416,7 @@ void SkyPropertyWidget::commitSky(const QVariant &before, const QString &text)
                              sceneprops::get(live, QStringLiteral("sky")), [self]() {
                                  // The rows ARE the sky: repaint them from the
                                  // document the undo just restored.
-                                 if (self && !self->scene.isNull())
+                                 if (self && !!self->scene)
                                      self->skyTypeChanged(int(self->scene->skyType));
                              });
 }

@@ -132,8 +132,8 @@ static bool sameBytes(const char *a, int aSize, const char *b, int bSize)
 static void compareMesh(const iris::MeshPtr &parsed, const iris::MeshPtr &baked,
                         const QString &label)
 {
-    CHECK(!parsed.isNull() && !baked.isNull(), qUtf8Printable(label + ": both meshes exist"));
-    if (parsed.isNull() || baked.isNull()) return;
+    CHECK(!!parsed && !!baked, qUtf8Printable(label + ": both meshes exist"));
+    if (!parsed || !baked) return;
 
     CHECK(parsed->numVerts == baked->numVerts, qUtf8Printable(label + ": numVerts"));
     CHECK(parsed->numFaces == baked->numFaces, qUtf8Printable(label + ": numFaces"));
@@ -167,8 +167,8 @@ static void compareMesh(const iris::MeshPtr &parsed, const iris::MeshPtr &baked,
 
     const iris::IndexBufferPtr pi = parsed->getIndexBuffer();
     const iris::IndexBufferPtr bi = baked->getIndexBuffer();
-    CHECK(pi.isNull() == bi.isNull(), qUtf8Printable(label + ": index buffer presence"));
-    if (!pi.isNull() && !bi.isNull())
+    CHECK(!pi == !bi, qUtf8Printable(label + ": index buffer presence"));
+    if (!!pi && !!bi)
         CHECK(sameBytes(pi->data, pi->dataSize, bi->data, bi->dataSize),
               qUtf8Printable(label + ": index bytes identical"));
 
@@ -191,8 +191,8 @@ static void compareMesh(const iris::MeshPtr &parsed, const iris::MeshPtr &baked,
 
     const iris::SkeletonPtr ps = parsed->getSkeleton();
     const iris::SkeletonPtr bs = baked->getSkeleton();
-    CHECK(ps.isNull() == bs.isNull(), qUtf8Printable(label + ": skeleton presence"));
-    if (!ps.isNull() && !bs.isNull()) {
+    CHECK(!ps == !bs, qUtf8Printable(label + ": skeleton presence"));
+    if (!!ps && !!bs) {
         CHECK(ps->bones.size() == bs->bones.size(), qUtf8Printable(label + ": bone count"));
         bool same = ps->bones.size() == bs->bones.size();
         for (int b = 0; same && b < ps->bones.size(); ++b) {
@@ -204,8 +204,8 @@ static void compareMesh(const iris::MeshPtr &parsed, const iris::MeshPtr &baked,
                    && x->localMatrix == y->localMatrix
                    && x->bindingPos == y->bindingPos && x->bindingRot == y->bindingRot
                    && x->bindingScale == y->bindingScale
-                   && x->parentBone.isNull() == y->parentBone.isNull()
-                   && (x->parentBone.isNull() || x->parent()->name == y->parent()->name)
+                   && x->parentBone.expired() == y->parentBone.expired()
+                   && (x->parentBone.expired() || x->parent()->name == y->parent()->name)
                    && x->childBones.size() == y->childBones.size();
         }
         CHECK(same, qUtf8Printable(label + ": every bone identical (names, bind, hierarchy)"));
@@ -248,8 +248,8 @@ static void compareAnimations(const QMap<QString, iris::SkeletalAnimationPtr> &p
 static void compareFragment(const iris::SceneNodePtr &parsed, const iris::SceneNodePtr &baked,
                             const QString &label, int depth = 0)
 {
-    CHECK(parsed.isNull() == baked.isNull(), qUtf8Printable(label + ": node presence"));
-    if (parsed.isNull() || baked.isNull()) return;
+    CHECK(!parsed == !baked, qUtf8Printable(label + ": node presence"));
+    if (!parsed || !baked) return;
 
     CHECK(parsed->getSceneNodeType() == baked->getSceneNodeType(),
           qUtf8Printable(label + ": node type"));
@@ -271,16 +271,16 @@ static void compareFragment(const iris::SceneNodePtr &parsed, const iris::SceneN
 
     if (parsed->getSceneNodeType() == iris::SceneNodeType::Mesh &&
         baked->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto p = parsed.staticCast<iris::MeshNode>();
-        auto b = baked.staticCast<iris::MeshNode>();
+        auto p = std::static_pointer_cast<iris::MeshNode>(parsed);
+        auto b = std::static_pointer_cast<iris::MeshNode>(baked);
         CHECK(p->meshIndex == b->meshIndex, qUtf8Printable(label + ": meshIndex"));
         CHECK(p->meshPath == b->meshPath, qUtf8Printable(label + ": meshPath"));
-        CHECK(p->rootBone.isNull() == b->rootBone.isNull(),
+        CHECK(!p->rootBone == !b->rootBone,
               qUtf8Printable(label + ": rootBone link"));
-        CHECK(p->getMaterial().isNull() == b->getMaterial().isNull(),
+        CHECK(!p->getMaterial() == !b->getMaterial(),
               qUtf8Printable(label + ": material presence"));
         CHECK(p->hasSkeleton() == b->hasSkeleton(), qUtf8Printable(label + ": node skeleton"));
-        if (!p->getMesh().isNull() && !b->getMesh().isNull())
+        if (!!p->getMesh() && !!b->getMesh())
             compareMesh(p->getMesh(), b->getMesh(), label + " mesh");
     }
 
@@ -363,7 +363,7 @@ static void roundTrip(const QString &relPath)
         for (int i = 0; identical && i < built.meshes.size(); ++i) {
             const iris::MeshPtr &a = built.meshes.at(i);
             const iris::MeshPtr &b = read.meshes.at(i);
-            if (a.isNull() || b.isNull()) { identical = false; break; }
+            if (!a || !b) { identical = false; break; }
             identical = a->cards.size() == b->cards.size()
                         && a->cardCoverage == b->cardCoverage;
             totalCards += int(a->cards.size());
@@ -1069,7 +1069,7 @@ static void surfaceCards()
         timer.start();
         const iris::MeshPtr mesh = testmesh::load(path);
         const double loadMs = double(timer.nsecsElapsed()) / 1e6;
-        if (mesh.isNull()) {
+        if (!mesh) {
             std::printf("FAIL: could not load %s\n", subject.path);
             ++failures;
             continue;
@@ -1116,10 +1116,10 @@ static void surfaceCards()
         // The cards are built HERE now: nothing builds them at creation since
         // ATOM P2 deleted Mesh::loadMesh, and a primitive's real cards are its
         // BAKE's (meshbake.primitives_baked (archived: archive/tests/meshbake)).
-        if (!cube.isNull()) iris::MeshBake::buildCards(cube, iris::kDefaultMaxCards);
-        CHECK_LOUD(!cube.isNull() && cube->cards.size() == 6,
+        if (!!cube) iris::MeshBake::buildCards(cube, iris::kDefaultMaxCards);
+        CHECK_LOUD(!!cube && cube->cards.size() == 6,
                    "the cube gets exactly six cards — the 6-face box, not two per face");
-        if (!cube.isNull() && cube->cards.size() == 6) {
+        if (!!cube && cube->cards.size() == 6) {
             bool oneEach = true;
             bool exact = true;
             QVector<int> perAxis(iris::MeshCard::kAxisCount, 0);
@@ -1153,7 +1153,7 @@ static void surfaceCards()
         const QString path = fixture(QStringLiteral("app/content/primitives/torus.obj"));
         const iris::MeshPtr first = testmesh::load(path);
         const iris::MeshPtr second = testmesh::load(path);
-        bool same = !first.isNull() && !second.isNull()
+        bool same = !!first && !!second
                     && first->cards.size() == second->cards.size()
                     && first->cardCoverage == second->cardCoverage;
         for (int i = 0; same && i < first->cards.size(); ++i) {
@@ -1168,7 +1168,7 @@ static void surfaceCards()
 
         // And the GENERATOR is idempotent: asking twice must replace the list,
         // never append to it.
-        if (!first.isNull()) {
+        if (!!first) {
             iris::MeshBake::buildCards(first, iris::kDefaultMaxCards);
             const int before = int(first->cards.size());
             iris::MeshBake::buildCards(first, iris::kDefaultMaxCards);
@@ -1181,7 +1181,7 @@ static void surfaceCards()
     {
         const QString path = fixture(QStringLiteral("app/content/primitives/star.obj"));
         const iris::MeshPtr mesh = testmesh::load(path);
-        if (!mesh.isNull()) {
+        if (!!mesh) {
             iris::MeshBake::buildCards(mesh, 0);
             CHECK_LOUD(mesh->cards.isEmpty() && mesh->cardCoverage == 0.0f,
                        "maxCards 0 authors no cards at all — and says so, rather than a box");
@@ -1213,7 +1213,7 @@ static void surfaceCards()
         if (rigged.valid && !rigged.meshes.isEmpty()) {
             bool anySkinned = false, skinnedHaveNoCards = true;
             for (const iris::MeshPtr &mesh : rigged.meshes) {
-                if (mesh.isNull() || mesh->getSkeleton().isNull()) continue;
+                if (!mesh || !mesh->getSkeleton()) continue;
                 anySkinned = true;
                 if (!mesh->cards.isEmpty()) skinnedHaveNoCards = false;
             }
@@ -1383,7 +1383,7 @@ static void primitivesBaked()
               qUtf8Printable(name + ": the row is marked platform furniture"));
 
         const iris::MeshPtr mesh = PrimitiveAssets::mesh(name, &db);
-        CHECK_LOUD(!mesh.isNull(),
+        CHECK_LOUD(!!mesh,
                    qUtf8Printable(name + ": the baked asset resolves to a mesh"));
         if (!mesh) continue;
 
@@ -1622,7 +1622,7 @@ static void windingAgreesWithNormals()
                                  ? fixture(QStringLiteral("app") + seed.mid(1))
                                  : fixture(seed);
         const iris::MeshPtr mesh = testmesh::load(path, QString());
-        CHECK_LOUD(!mesh.isNull(), qUtf8Printable(name + ": the shipped mesh parses"));
+        CHECK_LOUD(!!mesh, qUtf8Printable(name + ": the shipped mesh parses"));
         if (!mesh) continue;
 
         // Positions and normals out of the vertex buffers, then the geometric
@@ -1957,7 +1957,7 @@ Dag build(const iris::MeshPtr &mesh, Arm arm, iris::MeshBake::ClusterDagStats *s
         size_t nv = 0; int pc = 3;
         const float *p = positionsOf(mesh, &nv, &pc);
         const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
-        const size_t ni = (!ib.isNull() && ib->data) ? size_t(ib->dataSize) / sizeof(unsigned) : 0u;
+        const size_t ni = (!!ib && ib->data) ? size_t(ib->dataSize) / sizeof(unsigned) : 0u;
         // the bake's own floor: a mesh under two leaves gets no DAG in any arm (draws level 0)
         if (p && ni / 3 >= 256) stockBuild(p, nv, size_t(pc) * sizeof(float), reinterpret_cast<const unsigned *>(ib->data), ni, d);
     } else {
@@ -2105,7 +2105,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
         if (!only.isEmpty() && !only.contains(i)) continue;
         const iris::MeshPtr &m = meshes.at(i);
         const iris::IndexBufferPtr ib = m->getIndexBuffer();
-        const long long l0 = (!ib.isNull() && ib->data) ? (long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0;
+        const long long l0 = (!!ib && ib->data) ? (long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0;
         l0All += l0;
         // THE VERTEX BYTES (D9's memory rule): every per-vertex float buffer, raw, before the build grows them; the
         // card-soup class = the meshes most of whose islands are under 12 triangles (stage 0's census)
@@ -2124,7 +2124,7 @@ static int dagLevels(const QString &path, const QString &outPath, int threads, c
             size_t nvp = 0;
             int pc = 3;
             const float *pp = cutcurve::positionsOf(m, &nvp, &pc);
-            if (pp && !ib.isNull() && ib->data) {
+            if (pp && !!ib && ib->data) {
                 const std::vector<unsigned> b(reinterpret_cast<const unsigned *>(ib->data),
                                               reinterpret_cast<const unsigned *>(ib->data) + size_t(ib->dataSize) / sizeof(unsigned));
                 const iris::atomdag::Islands is = iris::atomdag::findIslands(pp, pc, nvp, b);
@@ -2358,7 +2358,7 @@ static int cutCurveTool(const QString &path, const QString &meshesArg, const QSt
         if (it.index < 0 || it.index >= meshes.size()) { std::printf("FAIL: mesh %d out of range\n", it.index); return 1; }
         const iris::MeshPtr &m = meshes.at(it.index);
         const iris::IndexBufferPtr ib = m->getIndexBuffer();
-        const long long l0 = (!ib.isNull() && ib->data) ? (long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0;
+        const long long l0 = (!!ib && ib->data) ? (long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0;
         iris::MeshBake::ClusterDagStats st;
         double ms = 0.0;
         const Dag d = build(m, arm, &st, &ms);
@@ -2458,7 +2458,7 @@ static int dagDepths(const QStringList &paths)
             if (dag.clusters.isEmpty()) {
                 const iris::IndexBufferPtr ib = m->getIndexBuffer();
                 const unsigned long long t =
-                    (!ib.isNull() && ib->data) ? (unsigned long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0ull;
+                    (!!ib && ib->data) ? (unsigned long long)(size_t(ib->dataSize) / sizeof(unsigned) / 3u) : 0ull;
                 noDagTriangles += t;
                 level0 += t;
                 ++meshesNoDag;

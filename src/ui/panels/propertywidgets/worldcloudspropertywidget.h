@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef WORLDCLOUDSPROPERTYWIDGET_H
 #define WORLDCLOUDSPROPERTYWIDGET_H
 
-#include <QSharedPointer>
+#include <memory>
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/panels/propertywidgets/panelundo.h"
 
@@ -36,7 +36,7 @@ class WorldCloudsPropertyWidget : public AccordianBladeWidget
 
 public:
     WorldCloudsPropertyWidget();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     void setServices(StudioServices *s) { services = s; }
     /// The weather-map picker resolves an asset guid to the project's pin.
     void setProject(Project *p) { project = p; }
@@ -51,7 +51,7 @@ private:
     QVariant withField(const std::function<void(iris::CloudLayer &)> &edit) const;
     void onWeatherPicked(const QString &value, const QString &guid);
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     StudioServices *services = nullptr;
     Project *project = nullptr;
     bool loading = false;

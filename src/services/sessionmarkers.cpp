@@ -107,7 +107,7 @@ QStringList SessionMarkers::sceneStats(const iris::ScenePtr &scene)
             ++meshes;
             // The material identity is what a "did the scene get heavier"
             // reading wants, and a mesh node is where one lives.
-            if (auto mesh = node.staticCast<iris::MeshNode>())
+            if (auto mesh = std::static_pointer_cast<iris::MeshNode>(node))
                 if (mesh->getMaterial()) materials.insert(mesh->getGUID());
             break;
         }

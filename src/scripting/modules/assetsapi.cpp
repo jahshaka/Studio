@@ -751,7 +751,7 @@ QVariantList AssetsApi::meshLods(const QString &guid)
     if (!baked) return out;   // no usable bake: an empty list, not an error
     for (int m = 0; m < baked->meshes.size(); ++m) {
         const iris::MeshPtr &mesh = baked->meshes.at(m);
-        if (mesh.isNull()) continue;
+        if (!mesh) continue;
         const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
         const int baseTriangles = (ib && ib->dataSize > 0)
                                       ? ib->dataSize / int(sizeof(unsigned) * 3) : 0;
@@ -817,7 +817,7 @@ QVariantList AssetsApi::meshCards(const QString &guid)
     static const char *kAxisNames[] = { "+X", "-X", "+Y", "-Y", "+Z", "-Z" };
     for (int m = 0; m < baked->meshes.size(); ++m) {
         const iris::MeshPtr &mesh = baked->meshes.at(m);
-        if (mesh.isNull()) continue;
+        if (!mesh) continue;
         for (int c = 0; c < mesh->cards.size(); ++c) {
             const iris::MeshCard &card = mesh->cards.at(c);
             QVariantMap row;

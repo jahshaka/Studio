@@ -133,7 +133,7 @@ bool triangleNormal(const ScenePick &pick, const iris::Vec3 &direction, iris::Ve
 {
     if (!pick.node || pick.triangleIndex < 0) return false;
     if (pick.node->getSceneNodeType() != iris::SceneNodeType::Mesh) return false;
-    const auto meshNode = pick.node.staticCast<iris::MeshNode>();
+    const auto meshNode = std::static_pointer_cast<iris::MeshNode>(pick.node);
     const auto mesh = meshNode->getMesh();
     if (!mesh || !mesh->getTriMesh() ||
         pick.triangleIndex >= mesh->getTriMesh()->triangles.size())
@@ -313,7 +313,7 @@ VrInteraction::Hover VrInteraction::pick(unsigned hand, const VrHandState &state
     // GEOMETRIC pick depends on and nothing else.
     const unsigned long long writes = iris::graph::transformWrites();
     const bool sameRay =
-        mMemo.valid && mMemo.scene == doc.data() && mMemo.hand == hand &&
+        mMemo.valid && mMemo.scene == doc.get() && mMemo.hand == hand &&
         mMemo.writes == writes &&
         mMemo.px == state.aim.position.x && mMemo.py == state.aim.position.y &&
         mMemo.pz == state.aim.position.z && mMemo.rx == state.aim.rotation.x &&
@@ -345,7 +345,7 @@ VrInteraction::Hover VrInteraction::pick(unsigned hand, const VrHandState &state
         const ScenePick best = ScenePicker::nearest(hits);
         mMemo = PickMemo();
         mMemo.valid = true;
-        mMemo.scene = doc.data();
+        mMemo.scene = doc.get();
         mMemo.hand = hand;
         mMemo.writes = writes;
         mMemo.px = state.aim.position.x;

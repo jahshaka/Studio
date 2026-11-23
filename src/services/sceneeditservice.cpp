@@ -113,7 +113,7 @@ namespace { void regenerateGuids(const iris::SceneNodePtr &root,
 // with a piece, so an ordinary material is untouched.
 static void stampPieceSource(const iris::MaterialPtr &mat, const QString &assetGuid)
 {
-    auto pbr = mat.dynamicCast<iris::PbrMaterial>();
+    auto pbr = std::dynamic_pointer_cast<iris::PbrMaterial>(mat);
     if (!pbr || assetGuid.isEmpty()) return;
     if (pbr->customPiecePixel.isEmpty() && pbr->customPieceVertex.isEmpty()) return;
     pbr->setGuid(assetGuid);
@@ -170,8 +170,8 @@ QStringList SceneEditService::waitingSources(const iris::SceneNodePtr &root) con
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
         if (!node) return;
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            const auto meshNode = node.staticCast<iris::MeshNode>();
-            if (meshNode->getMesh().isNull() && !meshNode->meshPath.isEmpty()
+            const auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
+            if (!meshNode->getMesh() && !meshNode->meshPath.isEmpty()
                 && !meshNode->meshPath.startsWith(QLatin1Char(':'))) {
                 const QString path = resolver.resolveAssetPath(meshNode->meshPath);
                 if (!path.isEmpty() && !out.contains(path)) out.append(path);
@@ -257,8 +257,8 @@ int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
             }
         }
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            const auto meshNode = node.staticCast<iris::MeshNode>();
-            if (meshNode->getMesh().isNull() && !meshNode->meshPath.isEmpty()
+            const auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
+            if (!meshNode->getMesh() && !meshNode->meshPath.isEmpty()
                 && !meshNode->meshPath.startsWith(QLatin1Char(':')))
                 meshless.append(node);
         }
@@ -267,7 +267,7 @@ int SceneEditService::completeLandedContent(const iris::SceneNodePtr &root)
     walk(root);
     int completed = rebindPendingClips(clipGuids, root);
     for (const iris::SceneNodePtr &node : meshless) {
-        const auto meshNode = node.staticCast<iris::MeshNode>();
+        const auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
         const QString path = source(meshNode->meshPath);
         if (path.isEmpty() || MeshBakeStore::bakePending(path)) continue;
         const iris::BakedModelPtr baked = MeshBakeStore::load(path, meshNode->meshPath);
@@ -542,7 +542,7 @@ int SceneEditService::refreshAssetMeshes(const QString &meshGuid, const QString 
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &node) {
         if (!node) return;
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            auto meshNode = node.staticCast<iris::MeshNode>();
+            auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
             if (meshNode->meshPath == meshGuid) {
                 iris::MeshPtr mesh;
                 if (baked && meshNode->meshIndex >= 0
@@ -610,7 +610,7 @@ void SceneEditService::addMaterialMesh(bool ignore, iris::Vec3 position, const Q
     QList<iris::LightNodePtr> fileSuns;
     std::function<void(const iris::SceneNodePtr &)> findSuns = [&](const iris::SceneNodePtr &n) {
         if (n->getSceneNodeType() == iris::SceneNodeType::Light) {
-            auto light = n.staticCast<iris::LightNode>();
+            auto light = std::static_pointer_cast<iris::LightNode>(n);
             if (light->lightType == iris::LightType::Directional) fileSuns.append(light);
         }
         for (const auto &c : n->children()) findSuns(c);
@@ -930,7 +930,7 @@ void SceneEditService::addNodeToActiveNode(iris::SceneNodePtr sceneNode)
 
     // apply default material
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+        auto meshNode = std::static_pointer_cast<iris::MeshNode>(sceneNode);
 
         if (!meshNode->getMaterial()) {
             // The engine viewport authors PBR only.
@@ -1004,7 +1004,7 @@ void SceneEditService::addNodeToScene(iris::SceneNodePtr sceneNode, bool ignore)
 
     // apply default material to mesh nodes if there is none
     if (sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+        auto meshNode = std::static_pointer_cast<iris::MeshNode>(sceneNode);
         if (!meshNode->getMaterial()) {
             // The engine viewport authors PBR only.
             meshNode->setMaterial(iris::PbrMaterial::create());
@@ -1075,7 +1075,7 @@ QString SceneEditService::renameNode(const iris::SceneNodePtr &node, const QStri
 
     // Unique among the SIBLINGS, excluding the node itself: renaming "Cube2"
     // to "Cube2" is a no-op, not a request for "Cube3".
-    const QString given = nodenaming::uniqueSiblingName(node->getParent(), wanted, node.data());
+    const QString given = nodenaming::uniqueSiblingName(node->getParent(), wanted, node.get());
     const QString before = node->getName();
     if (given == before) return given;
 
@@ -1151,7 +1151,7 @@ void regenerateGuids(const iris::SceneNodePtr &root, QHash<QString, QString> *gu
         n->setGUID(fresh);
         const int kids = n->childCount();
         for (int i = 0; i < kids; ++i)
-            if (iris::SceneNode *c = n->childAt(i)) assign(c->sharedFromThis());
+            if (iris::SceneNode *c = n->childAt(i)) assign(c->weak_from_this().lock());
     };
     assign(root);
     root->remapNodeReferences(guidMap);
@@ -1181,7 +1181,7 @@ iris::SceneNodePtr SceneEditService::insertFragment(const SceneFragment &fragmen
         [&clearFloor](const iris::SceneNodePtr &n) {
             if (n->getSceneNodeType() == iris::SceneNodeType::Mesh)
             {
-                const iris::MeshNodePtr floor = n.staticCast<iris::MeshNode>();
+                const iris::MeshNodePtr floor = std::static_pointer_cast<iris::MeshNode>(n);
                 floor->defaultFloor = false;
                 // The mirror reads `defaultFloor` for the Player's floor
                 // switch; a hand-written reflected field has to say so.
@@ -1214,12 +1214,12 @@ QList<iris::SceneNodePtr> SceneEditService::effectiveSet(const QList<iris::Scene
         bool ancestorSelected = false;
         for (auto p = node->getParent(); !!p; p = p->getParent()) {
             for (const auto &other : nodes)
-                if (!!other && other.data() == p.data()) { ancestorSelected = true; break; }
+                if (!!other && other.get() == p.get()) { ancestorSelected = true; break; }
             if (ancestorSelected) break;
         }
         if (ancestorSelected) continue;
         bool seen = false;
-        for (const auto &o : out) if (o.data() == node.data()) { seen = true; break; }
+        for (const auto &o : out) if (o.get() == node.get()) { seen = true; break; }
         if (!seen) out.append(node);
     }
     return SelectionService::sortDocumentOrder(out);
@@ -1318,7 +1318,7 @@ SceneEditService::duplicateNodes(const QList<iris::SceneNodePtr> &nodes)
     iris::SceneNodePtr primarySource;
     for (const auto &n : nodes) {
         if (!n) continue;
-        for (const auto &t : targets) if (t.data() == n.data()) { primarySource = t; break; }
+        for (const auto &t : targets) if (t.get() == n.get()) { primarySource = t; break; }
         if (primarySource) break;
     }
 
@@ -1340,7 +1340,7 @@ SceneEditService::duplicateNodes(const QList<iris::SceneNodePtr> &nodes)
     iris::SceneNodePtr primaryCopy;
     QList<iris::SceneNodePtr> rest;
     for (const auto &pair : made) {
-        if (primarySource && pair.first.data() == primarySource.data()) primaryCopy = pair.second;
+        if (primarySource && pair.first.get() == primarySource.get()) primaryCopy = pair.second;
         else rest.append(pair.second);
     }
     if (primaryCopy) copies.append(primaryCopy);
@@ -1374,7 +1374,7 @@ void collectMeshNodes(const iris::SceneNodePtr &node, QList<iris::MeshNodePtr> &
 {
     if (!node) return;
     if (node->sceneNodeType == iris::SceneNodeType::Mesh)
-        out.append(node.staticCast<iris::MeshNode>());
+        out.append(std::static_pointer_cast<iris::MeshNode>(node));
     for (const auto &child : node->children()) collectMeshNodes(child, out);
 }
 
@@ -1827,7 +1827,7 @@ bool SceneEditService::resetMaterial(iris::SceneNodePtr node)
     QStringList defaultTextures, newlyPinned;
     auto material = materialdefaults::create(node, db, project, &defaultTextures, &newlyPinned);
     if (!material) return false;
-    undo->push(new ResetMaterialCommand(db, project, node.staticCast<iris::MeshNode>(),
+    undo->push(new ResetMaterialCommand(db, project, std::static_pointer_cast<iris::MeshNode>(node),
                                         material, defaultTextures, newlyPinned));
     emit materialApplied(QStringLiteral("PBR"));
     return true;
@@ -1844,7 +1844,7 @@ QString SceneEditService::createMaterialFromNode(iris::SceneNodePtr node, const 
         return refuse(QStringLiteral("the node is not a mesh node"));
     if (!db || !project || project->getProjectGuid().isEmpty())
         return refuse(QStringLiteral("no project is open"));
-    const auto mesh = node.staticCast<iris::MeshNode>();
+    const auto mesh = std::static_pointer_cast<iris::MeshNode>(node);
     if (!mesh->getMaterial()) return refuse(QStringLiteral("the node has no material"));
     const QString projectGuid = project->getProjectGuid();
 

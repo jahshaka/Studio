@@ -144,7 +144,7 @@ void WorldCloudsPropertyWidget::onWeatherPicked(const QString &value, const QStr
                              QVariant(m), [this]() { refreshRows(); });
 }
 
-void WorldCloudsPropertyWidget::setScene(QSharedPointer<iris::Scene> s)
+void WorldCloudsPropertyWidget::setScene(std::shared_ptr<iris::Scene> s)
 {
     scene = s;
     refreshRows();

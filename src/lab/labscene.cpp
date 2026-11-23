@@ -75,7 +75,7 @@ QJsonArray lightsOf(const iris::SceneNodePtr &root)
         for (int i = 0; i < kids.size(); ++i) {
             const iris::SceneNodePtr &c = kids[i];
             if (c->getSceneNodeType() == iris::SceneNodeType::Light) {
-                auto l = c.staticCast<iris::LightNode>();
+                auto l = std::static_pointer_cast<iris::LightNode>(c);
                 QJsonObject o;
                 o["parent"] = path;
                 o["name"] = l->getName();
@@ -230,7 +230,7 @@ unsigned long long trianglesOf(const iris::SceneNodePtr &n, int &meshes)
 {
     unsigned long long t = 0;
     if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto m = n.staticCast<iris::MeshNode>();
+        auto m = std::static_pointer_cast<iris::MeshNode>(n);
         if (m->getMesh()) { t += (unsigned long long)std::max(0, m->getMesh()->numFaces); ++meshes; }
     }
     for (const iris::SceneNodePtr &c : n->children()) t += trianglesOf(c, meshes);
@@ -339,7 +339,7 @@ iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, Loa
     QSet<QString> cutoutMaps, twoSidedOpaqueMaps;
     iris::SceneNodePtr node = MeshBake::buildFragment(model, path, [&tex, &twoSided, &r, &cutoutMaps, &twoSidedOpaqueMaps](
                                                                        iris::MeshPtr mesh, iris::MeshMaterialData &d) {
-        if (d.twoSided && mesh) twoSided.insert(mesh.data());
+        if (d.twoSided && mesh) twoSided.insert(mesh.get());
         if (d.alphaMode == 1) { ++r.cutoutMeshes; cutoutMaps.insert(d.diffuseTexture); }
         else if (d.alphaMode == 0 && d.twoSided) { ++r.twoSidedOpaqueMeshes; twoSidedOpaqueMaps.insert(d.diffuseTexture); }
         iris::MeshMaterialData resolved = d;
@@ -355,8 +355,8 @@ iris::SceneNodePtr loadModel(const QString &pathIn, const QString &dataRoot, Loa
     r.texturesMs = tex.ms;
     std::function<void(const iris::SceneNodePtr &)> cull = [&](const iris::SceneNodePtr &n) {
         if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            auto m = n.staticCast<iris::MeshNode>();
-            if (m->getMesh() && twoSided.contains(m->getMesh().data())) {
+            auto m = std::static_pointer_cast<iris::MeshNode>(n);
+            if (m->getMesh() && twoSided.contains(m->getMesh().get())) {
                 m->setFaceCullingMode(iris::FaceCullingMode::None);
                 ++r.twoSidedNodes;
             }
@@ -393,7 +393,7 @@ bool hasDirectional(const iris::SceneNodePtr &n)
 {
     if (!n) return false;
     if (n->getSceneNodeType() == iris::SceneNodeType::Light &&
-        n.staticCast<iris::LightNode>()->lightType == iris::LightType::Directional)
+        std::static_pointer_cast<iris::LightNode>(n)->lightType == iris::LightType::Directional)
         return true;
     for (const iris::SceneNodePtr &c : n->children())
         if (hasDirectional(c)) return true;
@@ -417,7 +417,7 @@ bool addBasicWorld(const iris::ScenePtr &doc, const QString &binDir, const QStri
         error = QStringLiteral("the floor cube: %1").arg(fr.error.isEmpty() ? QStringLiteral("not one mesh") : fr.error);
         return false;
     }
-    auto floor = floorFrag.staticCast<iris::MeshNode>();
+    auto floor = std::static_pointer_cast<iris::MeshNode>(floorFrag);
     floor->setName(QStringLiteral("Floor"));
     floor->setLocalScale(iris::Vec3(kFloorSize * 0.5f, kFloorThickness * 0.5f, kFloorSize * 0.5f));
     floor->setLocalPos(iris::Vec3(0, -kFloorThickness * 0.5f, 0));
@@ -477,7 +477,7 @@ bool worldBounds(const iris::ScenePtr &doc, iris::Vec3 &mn, iris::Vec3 &mx)
     bool any = false;
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
         if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            auto m = n.staticCast<iris::MeshNode>();
+            auto m = std::static_pointer_cast<iris::MeshNode>(n);
             if (m->getMesh() && !m->defaultFloor) {
                 const iris::AABB b = m->getMesh()->getAABB();
                 const iris::Mat4 w = n->getGlobalTransform();

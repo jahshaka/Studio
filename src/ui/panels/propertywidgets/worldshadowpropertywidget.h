@@ -60,7 +60,7 @@ class WorldShadowPropertyWidget : public AccordianBladeWidget
 
 public:
     WorldShadowPropertyWidget();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     /// The live viewport, for the applied-resolution readback. Nullable
     /// (headless): without it the widget shows what the document asked for.
     void setSceneView(IEditorViewport *sceneView);
@@ -93,7 +93,7 @@ private:
     /// scene's shadow-casting lights (the mirror's own policy), or 0 if none.
     int derivedFromLights() const;
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     IEditorViewport *sceneView = nullptr;
     StudioServices *services = nullptr;
     bool loading = false;

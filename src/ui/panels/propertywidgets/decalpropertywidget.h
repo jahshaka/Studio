@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define DECALPROPERTYWIDGET_H
 
 #include <QWidget>
-#include <QSharedPointer>
+#include <memory>
 
 #include "irisgl/irisglfwd.h"
 #include "ui/controls/accordionbladewidget.h"
@@ -51,7 +51,7 @@ public:
     void setProject(Project *project);
     void setServices(StudioServices *services) { this->services = services; }
 
-    void setSceneNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode);
 
 protected slots:
     void onImageChanged(const QString &path, const QString &guid);
@@ -73,7 +73,7 @@ private:
     /// material is minted for a decal image). Shared by the three pickers.
     void bindMap(const QString &guid, QString &guidField, QString &pathField);
 
-    QSharedPointer<iris::DecalNode> decalNode;
+    std::shared_ptr<iris::DecalNode> decalNode;
     Database *db = nullptr;
     Project *project = nullptr;
     StudioServices *services = nullptr;

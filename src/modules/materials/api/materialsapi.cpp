@@ -133,7 +133,7 @@ QStringList writableMaterialKeys(const iris::MaterialPtr &material)
     // The union, deduplicated: the six slots are declared rows on today's
     // PbrMaterial, but material.set accepts them either way, and a key listed
     // twice in an error message reads as a bug in the message.
-    if (!material.dynamicCast<iris::PbrMaterial>().isNull()) keys << kPbrMapKeys;
+    if (!!std::dynamic_pointer_cast<iris::PbrMaterial>(material)) keys << kPbrMapKeys;
     keys.removeDuplicates();
     return keys;
 }
@@ -1460,7 +1460,7 @@ iris::MeshNodePtr MaterialApi::meshNodeOrFail(const QString &nodeId, const QStri
         fail(QStringLiteral("%1: '%2' is not a mesh node").arg(verb, nodeId));
         return iris::MeshNodePtr();
     }
-    return node.staticCast<iris::MeshNode>();
+    return std::static_pointer_cast<iris::MeshNode>(node);
 }
 
 bool MaterialApi::apply(const QString &nodeId, const QString &presetOrGuid)
@@ -1852,7 +1852,7 @@ QVariantList MaterialApi::detail(const QString &nodeId)
     QVariantList out;
     auto meshNode = meshNodeOrFail(nodeId, QStringLiteral("material.detail"));
     if (!meshNode) return out;
-    auto pbr = meshNode->getMaterial().dynamicCast<iris::PbrMaterial>();
+    auto pbr = std::dynamic_pointer_cast<iris::PbrMaterial>(meshNode->getMaterial());
     if (!pbr) { fail("material.detail: the node has no PBR material"); return out; }
     const auto &names = iris::PbrMaterial::detailBlendNames();
     for (int i = 0; i < iris::PbrMaterial::kDetailLayers; ++i) {
@@ -1883,7 +1883,7 @@ QVariantMap MaterialApi::properties(const QString &nodeId)
     // "CustomMaterial" was a third answer here until HLMS_ADOPTION P4b. It
     // cannot come back: the class is gone and a legacy material converts at
     // load, so a script asking what it is holding gets PbrMaterial.
-    out["class"] = !material.dynamicCast<iris::PbrMaterial>().isNull()
+    out["class"] = !!std::dynamic_pointer_cast<iris::PbrMaterial>(material)
                        ? QStringLiteral("PbrMaterial")
                        : QStringLiteral("Material");
 
@@ -1914,7 +1914,7 @@ QVariantMap MaterialApi::get(const QString &nodeId)
     // outside, that a graph material actually reached the renderer as a live
     // surface rather than a baked one. Reported read-only, and absent when
     // there is none.
-    if (auto *pbr = dynamic_cast<iris::PbrMaterial *>(material.data())) {
+    if (auto *pbr = dynamic_cast<iris::PbrMaterial *>(material.get())) {
         if (!pbr->customPiecePixel.isEmpty()) out["customPiecePixel"] = pbr->customPiecePixel;
         if (!pbr->customPieceVertex.isEmpty()) out["customPieceVertex"] = pbr->customPieceVertex;
         // The animated UV fold's scroll (TORNADO-1), read-only like the pieces.

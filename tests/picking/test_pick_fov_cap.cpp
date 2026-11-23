@@ -335,7 +335,7 @@ int main(int argc, char **argv)
         CHECK(authored->framingAspect() == 0.0f,
               "a camera is born UNHELD — every authored camera keeps its lens");
         authored->setFramingAspect(kHold);
-        auto copy = authored->createDuplicate().staticCast<iris::CameraNode>();
+        auto copy = std::static_pointer_cast<iris::CameraNode>(authored->createDuplicate());
         CHECK(copy && copy->framingAspect() == 0.0f,
               "a duplicate does NOT inherit the hold (it is a host's statement, not the document's)");
     }

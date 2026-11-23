@@ -35,7 +35,7 @@ class WorldAaPropertyWidget : public AccordianBladeWidget
 
 public:
     WorldAaPropertyWidget();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     /// The live viewport, for the achieved-count readback. Nullable (legacy
     /// viewport / headless): without it the widget simply shows the request.
     void setSceneView(IEditorViewport *sceneView);
@@ -53,7 +53,7 @@ private:
     void build();
     void refreshRows();
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     IEditorViewport *sceneView = nullptr;
     StudioServices *services = nullptr;
     bool loading = false;

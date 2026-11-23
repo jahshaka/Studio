@@ -43,7 +43,7 @@ For more information see the LICENSE file
 //     thing this file exists to stop. Recorded as such, not forgotten.
 
 #include <QWidget>
-#include <QSharedPointer>
+#include <memory>
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/controls/bladerow.h"
 #include "ui/panels/propertywidgets/panelundo.h"
@@ -82,7 +82,7 @@ public:
     Subscriber *eventBus = nullptr;
 
     /// BINDS TO THE OPEN SCENE (the World panel's Sky section).
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     /// Whether the section is showing the SCENE's sky (not a library asset) —
     /// the only binding a write to the scene's `sky` key can make stale.
     bool showsSceneSky() const { return binding == Binding::Scene; }
@@ -160,7 +160,7 @@ private:
 
     Database *db = nullptr;
     StudioServices *services = nullptr;
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     Binding binding = Binding::Scene;
     iris::SkyType currentSky = iris::SkyType::SINGLE_COLOR;
     QString skyGuid;              ///< Asset binding: the library row being edited

@@ -40,7 +40,7 @@ QString uniqueSiblingName(const iris::SceneNodePtr &parent, const QString &desir
 
     QSet<QString> taken;
     for (const auto &child : parent->children())
-        if (!!child && child.data() != except) taken.insert(child->getName());
+        if (!!child && child.get() != except) taken.insert(child->getName());
 
     // NOT TAKEN = NOT RENAMED. A paste into a parent that has no node of this
     // name keeps the name; the suffix disambiguates, it does not brand.

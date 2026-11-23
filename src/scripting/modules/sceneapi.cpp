@@ -354,7 +354,7 @@ QVariantList SceneApi::nodes(const QVariant &options)
         out.append(row);
         if (cutOff) return;
         for (int i = 0; i < kids; ++i)
-            if (iris::SceneNode *c = node->childAt(i)) walk(c->sharedFromThis(), level + 1);
+            if (iris::SceneNode *c = node->childAt(i)) walk(c->weak_from_this().lock(), level + 1);
     };
     walk(start, 0);
     return out;
@@ -370,7 +370,7 @@ QVariant SceneApi::find(const QString &name)
         const int kids = node->childCount();
         for (int i = 0; i < kids; ++i)
             if (iris::SceneNode *c = node->childAt(i))
-                if (auto hit = walk(c->sharedFromThis())) return hit;
+                if (auto hit = walk(c->weak_from_this().lock())) return hit;
         return iris::SceneNodePtr();
     };
     auto hit = walk(scene->getRootNode());
@@ -405,7 +405,7 @@ QVariantList SceneApi::raycast(const QVariant &origin, const QVariant &direction
     const bool includeUnpickable =
         options.value(QStringLiteral("includeUnpickable"), false).toBool();
 
-    auto hits = iris::picking::raycastMeshes(scene.data(), a, a + dir * maxDistance,
+    auto hits = iris::picking::raycastMeshes(scene.get(), a, a + dir * maxDistance,
                                              0, includeUnpickable);
     std::sort(hits.begin(), hits.end(), [](const iris::MeshPick &l,
                                            const iris::MeshPick &r) {
@@ -677,7 +677,7 @@ QString SceneApi::addCamera(const QVariantMap &options)
         // one Ctrl+Z (or the run's macro) takes the whole thing back — leaving a
         // half-configured camera behind is better than a silently missing one.
         const QString error = camerashared::applySettings(
-            node.staticCast<iris::CameraNode>(), settings.toMap(),
+            std::static_pointer_cast<iris::CameraNode>(node), settings.toMap(),
             host.services->sceneEdit->scene(), host.services->undo,
             QStringLiteral("scene.addCamera"));
         if (!error.isEmpty()) { fail(error); return QString(); }
@@ -698,7 +698,7 @@ QVariantList SceneApi::cameras()
         if (node->getSceneNodeType() == iris::SceneNodeType::Camera) {
             QVariantMap row = nodeToJs(node);
             const QVariantMap block =
-                camerashared::settingsToJs(node.staticCast<iris::CameraNode>());
+                camerashared::settingsToJs(std::static_pointer_cast<iris::CameraNode>(node));
             for (auto it = block.constBegin(); it != block.constEnd(); ++it)
                 if (!row.contains(it.key())) row[it.key()] = it.value();
             row["active"] = (scene->getActiveCameraGuid() == node->getGUID());
@@ -706,7 +706,7 @@ QVariantList SceneApi::cameras()
         }
         const int kids = node->childCount();
         for (int i = 0; i < kids; ++i)
-            if (iris::SceneNode *c = node->childAt(i)) walk(c->sharedFromThis());
+            if (iris::SceneNode *c = node->childAt(i)) walk(c->weak_from_this().lock());
     };
     walk(scene->getRootNode());
     return out;

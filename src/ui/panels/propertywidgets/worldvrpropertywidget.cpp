@@ -28,14 +28,14 @@ WorldVrPropertyWidget::WorldVrPropertyWidget()
 {
 }
 
-void WorldVrPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void WorldVrPropertyWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
         build();
         refreshRows();
     } else {
-        this->scene.clear();
+        this->scene.reset();
     }
 }
 

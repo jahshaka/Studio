@@ -1312,7 +1312,7 @@ bool MainWindow::closeWorld(bool reopenInPlace, CloseUnsaved unsaved, QString *w
     removeScene();
 
     scene->cleanup();
-    scene.clear();
+    scene.reset();
     teardown.stop();
 
     // R4: the document's nodes are gone from the staging manager now, and
@@ -1394,7 +1394,7 @@ SceneHierarchyWidget *MainWindow::hierarchyPanel() const
     return docks ? docks->hierarchy() : nullptr;
 }
 
-void MainWindow::setScene(QSharedPointer<iris::Scene> scene)
+void MainWindow::setScene(std::shared_ptr<iris::Scene> scene)
 {
     // EVERY BIND CLEARS THE ISSUE STORE (CLEANUP-1 item 7). The scanner only
     // forgets the two kinds it owns, so an `editor.raiseIssue` of any other
@@ -1796,7 +1796,7 @@ void MainWindow::updateSceneSettings()
 	// (services/outlinesettings.h). The page used to hand over two member
 	// variables it had parsed itself, so a value written by anything other than
 	// the page — a verb, a fresh install's default — was invisible here.
-	if (projectService->isSceneOpen() || !!scene) outlinesettings::apply(scene.data());
+	if (projectService->isSceneOpen() || !!scene) outlinesettings::apply(scene.get());
 
 	// SAVE IS ALWAYS OFFERED, AND ENABLED WHENEVER THERE IS A WORLD TO SAVE
 	// (owner, 2026-09-18). It used to be hidden whenever `auto_save` was on —

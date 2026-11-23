@@ -53,7 +53,7 @@ inline void collect(const iris::SceneNodePtr &node, int depth, QVector<Part> &ou
     for (int i = 0; i < kids; ++i) {
         iris::SceneNode *raw = node->childAt(i);
         if (!raw) continue;
-        const iris::SceneNodePtr child = raw->sharedFromThis();
+        const iris::SceneNodePtr child = raw->weak_from_this().lock();
         out.append(Part{ child, depth });
         collect(child, depth + 1, out);
     }

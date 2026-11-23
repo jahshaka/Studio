@@ -18,7 +18,7 @@ For more information see the LICENSE file
 #include <QMouseEvent>
 #include <vector>
 #include <QVector2D>
-#include <QSharedPointer>
+#include <memory>
 #include "irisgl/irisglfwd.h"
 #include "ui/panels/timeline/keyframelabeltreewidget.h"
 

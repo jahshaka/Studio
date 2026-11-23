@@ -106,7 +106,7 @@ bool LightBindings::bindProfile(const iris::LightNodePtr &light, const QString &
     return true;
 }
 
-QSharedPointer<iris::Texture2D> LightBindings::loadSkyCube(const QJsonObject &faces,
+std::shared_ptr<iris::Texture2D> LightBindings::loadSkyCube(const QJsonObject &faces,
                                                            const std::function<QString(const QString &)> &resolve)
 {
     // createCubeMap's argument order is front, back, TOP, BOTTOM, left, right (skyassets' note: the wrong order rotates
@@ -116,10 +116,10 @@ QSharedPointer<iris::Texture2D> LightBindings::loadSkyCube(const QJsonObject &fa
     for (int i = 0; i < 6; ++i) {
         const QString guid = faces.value(QLatin1String(roles[i])).toString();
         sides[i] = guid.isEmpty() ? QString() : resolve(guid);
-        if (sides[i].isEmpty() || !QFileInfo::exists(sides[i])) return QSharedPointer<iris::Texture2D>();
+        if (sides[i].isEmpty() || !QFileInfo::exists(sides[i])) return std::shared_ptr<iris::Texture2D>();
     }
     QImage info(sides[0]);
-    if (info.isNull()) return QSharedPointer<iris::Texture2D>();
+    if (info.isNull()) return std::shared_ptr<iris::Texture2D>();
     return iris::Texture2D::createCubeMap(sides[0], sides[1], sides[2], sides[3], sides[4], sides[5], &info);
 }
 

@@ -21,7 +21,7 @@ For more information see the LICENSE file
 #include <QListWidgetItem>
 #include <QDrag>
 #include <QToolBar>
-#include <QSharedPointer>
+#include <memory>
 #include <QLabel>
 #include <QCheckBox>
 #include <QMenu>
@@ -320,7 +320,7 @@ private:
     void setupFileMenu();
 
     void removeScene();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
 
     /// The window state changed: immersive fullscreen (ViewController) watches
     /// the state it does not own and puts the chrome back.
@@ -450,7 +450,7 @@ private:
 	/// setupServices can hand it to PlayerService (verb-coverage audit F1).
 	class EnginePlayerView* playerBackend = nullptr;
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
 
     SettingsManager* settings;
     PreferencesDialog* prefsDialog;

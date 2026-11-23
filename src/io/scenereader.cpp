@@ -14,7 +14,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include "irisgl/document/scenegraph/looks.h"
-#include <QSharedPointer>
+#include <memory>
 #include "io/assetiobase.h"
 #include <QDir>
 #include <QFile>
@@ -807,7 +807,7 @@ iris::SceneNodePtr SceneReader::readFragment(const SceneFragment &fragment)
                 ++i;
                 const int kids = n->childCount();
                 for (int c = 0; c < kids; ++c)
-                    if (iris::SceneNode *child = n->childAt(c)) replay(child->sharedFromThis());
+                    if (iris::SceneNode *child = n->childAt(c)) replay(child->weak_from_this().lock());
             };
         replay(node);
     }
@@ -834,15 +834,15 @@ iris::SceneNodePtr SceneReader::readSceneNode(QJsonObject& nodeObj)
     QString nodeType = nodeObj["type"].toString("empty");
 
     if (nodeType == "mesh") {
-        sceneNode = createMesh(nodeObj).staticCast<iris::SceneNode>();
+        sceneNode = std::static_pointer_cast<iris::SceneNode>(createMesh(nodeObj));
     } else if (nodeType == "light") {
-        sceneNode = createLight(nodeObj).staticCast<iris::SceneNode>();
+        sceneNode = std::static_pointer_cast<iris::SceneNode>(createLight(nodeObj));
     } else if (nodeType == "particle system") {
-        sceneNode = createParticleSystem(nodeObj).staticCast<iris::SceneNode>();
+        sceneNode = std::static_pointer_cast<iris::SceneNode>(createParticleSystem(nodeObj));
     } else if (nodeType == "decal") {
-        sceneNode = createDecal(nodeObj).staticCast<iris::SceneNode>();
+        sceneNode = std::static_pointer_cast<iris::SceneNode>(createDecal(nodeObj));
     } else if (nodeType == "camera") {
-        sceneNode = createCamera(nodeObj).staticCast<iris::SceneNode>();
+        sceneNode = std::static_pointer_cast<iris::SceneNode>(createCamera(nodeObj));
     } else {
         sceneNode = iris::SceneNode::create();
     }

@@ -92,13 +92,13 @@ void DecalPropertyWidget::setProject(Project *proj)
     if (emissiveImage) emissiveImage->project = proj;
 }
 
-void DecalPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
+void DecalPropertyWidget::setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode)
 {
     if (!sceneNode || sceneNode->getSceneNodeType() != iris::SceneNodeType::Decal) {
         decalNode.reset();
         return;
     }
-    decalNode = sceneNode.staticCast<iris::DecalNode>();
+    decalNode = std::static_pointer_cast<iris::DecalNode>(sceneNode);
 
     // Loading guard: setValue/setTexture fire the same signals the user's edits
     // do, and without this the first selection writes the widget defaults back

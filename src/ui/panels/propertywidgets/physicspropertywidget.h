@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define PHYSICSPROPERTYWIDGET_H
 
 #include <QWidget>
-#include <QSharedPointer>
+#include <memory>
 
 #include "irisgl/irisglfwd.h"
 #include "ui/controls/accordionbladewidget.h"

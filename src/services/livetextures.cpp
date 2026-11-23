@@ -72,7 +72,7 @@ bool LiveTextureCatalog::write(const QString &guid, const QImage &rgba, QString 
 
 bool LiveTextureCatalog::exists(const QString &guid)
 {
-    return !iris::LiveTextures::find(guid).isNull();
+    return !!iris::LiveTextures::find(guid);
 }
 
 QVariantMap LiveTextureCatalog::info(const QString &guid)

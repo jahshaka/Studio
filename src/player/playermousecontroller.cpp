@@ -142,7 +142,7 @@ void PlayerMouseController::onMouseUp(Qt::MouseButton button)
     CameraControllerBase::onMouseUp(button);
     if (button == Qt::LeftButton && _isPlaying) {
         //scene->getPhysicsEnvironment()->removeConstraintFromWorld()
-        this->pickedNode.clear();
+        this->pickedNode.reset();
         scene->getPhysicsEnvironment()->cleanupPickingConstraint(iris::PickingHandleType::MouseButton);
     }
 }
@@ -164,7 +164,7 @@ void PlayerMouseController::doObjectPicking(
     });
 
     if (hitList.size() == 0) {
-        this->pickedNode.clear();
+        this->pickedNode.reset();
         return;
     }
     auto pickedNode = hitList.last().hitNode;
@@ -184,7 +184,7 @@ void PlayerMouseController::doObjectPicking(
     }
 }
 
-void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>& sceneNode,
+void PlayerMouseController::doScenePicking(const std::shared_ptr<iris::SceneNode>& sceneNode,
                                      const iris::Vec3& segStart,
                                      const iris::Vec3& segEnd,
                                      QList<PickingResult>& hitList)
@@ -192,7 +192,7 @@ void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>
     if ((sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh) &&
          sceneNode->isPickable())
     {
-        auto meshNode = sceneNode.staticCast<iris::MeshNode>();
+        auto meshNode = std::static_pointer_cast<iris::MeshNode>(sceneNode);
         auto mesh = meshNode->getMesh();
         if (mesh != nullptr) {
             auto triMesh = meshNode->getMesh()->getTriMesh();
@@ -222,7 +222,7 @@ void PlayerMouseController::doScenePicking(const QSharedPointer<iris::SceneNode>
     const int kids = sceneNode->childCount();
     for (int i = 0; i < kids; ++i)
         if (iris::SceneNode *c = sceneNode->childAt(i))
-            doScenePicking(c->sharedFromThis(), segStart, segEnd, hitList);
+            doScenePicking(c->weak_from_this().lock(), segStart, segEnd, hitList);
 }
 
 iris::Vec3 PlayerMouseController::screenSpaceToWoldSpace(const QPointF& pos, float depth)

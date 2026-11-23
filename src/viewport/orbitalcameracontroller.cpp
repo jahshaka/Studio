@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
 #include <QPoint>
-#include <QSharedPointer>
+#include <memory>
 #include <QtMath>
 #include <cmath>
 

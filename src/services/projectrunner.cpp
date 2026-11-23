@@ -123,7 +123,7 @@ void ProjectRunner::stageBind(bool playMode)
 {
 	LoadTimeline::mark(QStringLiteral("setScene"));
 	auto scene = mPendingScene;
-	mPendingScene.clear();
+	mPendingScene.reset();
 	mHost->bindWorld(scene, std::move(mPendingEditorData), playMode);
 }
 
@@ -657,7 +657,7 @@ void ProjectRunner::startCreateRun(const QString &guid, const QString &filename,
     slices.append({ QStringLiteral("Binding the scene…"), 60, [this]() {
         LoadTimeline::mark(QStringLiteral("setScene"));
         auto created = mPendingScene;
-        mPendingScene.clear();
+        mPendingScene.reset();
         mHost->bindNewWorld(created);
     } });
     slices.append({ QStringLiteral("Building the asset panel…"), 75, [this]() {

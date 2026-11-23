@@ -296,12 +296,12 @@ void LightPropertyWidget::wireRows()
             this, &LightPropertyWidget::lightChannelsChanged);
 }
 
-void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
+void LightPropertyWidget::setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode)
 {
     //this->sceneNode = sceneNode;
     if(!!sceneNode && sceneNode->getSceneNodeType()==iris::SceneNodeType::Light)
     {
-        lightNode = sceneNode.staticCast<iris::LightNode>();
+        lightNode = std::static_pointer_cast<iris::LightNode>(sceneNode);
 
         // Populating, not editing: the sliders and the pickers emit from their
         // setters, and without this the first click on a light would write its
@@ -396,7 +396,7 @@ void LightPropertyWidget::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode
     }
     else
     {
-        lightNode.clear();
+        lightNode.reset();
         refreshBindingRows();
     }
 }
@@ -540,7 +540,7 @@ void LightPropertyWidget::refreshSunRows()
 
     auto scene = lightNode->getScene();
     auto sun = scene ? scene->sunLight() : iris::LightNodePtr();
-    const bool isSun = sun && sun.data() == lightNode.data();
+    const bool isSun = sun && sun.get() == lightNode.get();
     // FOLLOWS ATMOSPHERE IS THE SUN'S: it tints THE SUN's direct light, and a
     // secondary directional is not the sun — it draws no disc and the sky is
     // not lit by it, so the row on one would say nothing true (round-2 review

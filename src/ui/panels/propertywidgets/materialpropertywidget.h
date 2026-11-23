@@ -100,7 +100,7 @@ private:
     void clearShownRows();
     /// Points the rows already on screen at another mesh's material, when they
     /// can show it (ADD-1). False means "rebuild" and is always safe.
-    bool rebindTo(const QSharedPointer<iris::MeshNode> &node, const iris::MaterialPtr &mat);
+    bool rebindTo(const std::shared_ptr<iris::MeshNode> &node, const iris::MaterialPtr &mat);
     /// The base / "detail*" split of a material's property list, by the
     /// document's own naming rule.
     static void splitRows(const iris::MaterialPtr &mat,
@@ -117,7 +117,7 @@ private:
     /// canRebind as "this node has no default to reset to", and that question
     /// is only answerable about a button still on the panel (ADD-1 review F7).
     RowPtr<QPushButton> resetButton;
-    QSharedPointer<iris::MeshNode> meshNode;
+    std::shared_ptr<iris::MeshNode> meshNode;
     /// Both are destroyed by clearShownRows and rebuilt by the full path; null
     /// between the two (they were uninitialised members reading as garbage on
     /// the first pick of a session — nothing dereferenced them before the

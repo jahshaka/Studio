@@ -127,8 +127,8 @@ void PlayBack::update(iris::Viewport& viewport, float dt)
 	// has simply never been readable. Now it reports the TRANSITION — each
 	// distinct controller/camera pair once, and once more when it clears.
 	{
-		iris::CameraNode *ctrlCam = camController->getCamera().data();
-		iris::CameraNode *sceneCam = playCamera(scene).data();
+		iris::CameraNode *ctrlCam = camController->getCamera().get();
+		iris::CameraNode *sceneCam = playCamera(scene).get();
 		if (ctrlCam != sceneCam) {
 			if (!mMismatchLatched || mMismatchController != ctrlCam
 			    || mMismatchScene != sceneCam) {
@@ -172,7 +172,7 @@ void PlayBack::saveNodeTransforms()
 editpose::EditPose<PlayBackNodeTransform> PlayBack::documentEditPose(const iris::ScenePtr &document,
                                                                      std::initializer_list<const PlayBack *> runs)
 {
-	const auto env = document ? document->getPhysicsEnvironment() : QSharedPointer<iris::Environment>();
+	const auto env = document ? document->getPhysicsEnvironment() : std::shared_ptr<iris::Environment>();
 	return editpose::documentEditPose<PlayBackNodeTransform>(runs, document, env ? &env->nodeTransforms : nullptr);
 }
 

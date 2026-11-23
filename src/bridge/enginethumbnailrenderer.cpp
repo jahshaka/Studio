@@ -410,7 +410,7 @@ QImage EngineThumbnailRenderer::renderMaterial(iris::MaterialPtr material, QSize
     }
     auto node = iris::MeshNode::create();
     node->setMesh(mSphere);
-    node->setMaterial(material ? material : iris::PbrMaterial::create().staticCast<iris::Material>());
+    node->setMaterial(material ? material : std::static_pointer_cast<iris::Material>(iris::PbrMaterial::create()));
 
     iris::CameraNodePtr cam;
     auto document = studioDocument(cam);

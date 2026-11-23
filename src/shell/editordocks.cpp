@@ -1417,8 +1417,8 @@ void EditorDocks::showSelection(iris::SceneNodePtr sceneNode)
     // themselves build nothing when nothing changed — the column re-points
     // its blades (0.26 ms) instead of re-showing them — so the counter below
     // records honestly how many of these fan-outs really moved the primary.
-    const bool primaryChanged = lastAppliedSelection.toStrongRef() != sceneNode;
-    lastAppliedSelection = sceneNode.toWeakRef();
+    const bool primaryChanged = lastAppliedSelection.lock() != sceneNode;
+    lastAppliedSelection = std::weak_ptr(sceneNode);
     selcost::noteSelection(primaryChanged);
     { selcost::Scope s(selcost::Viewport);   sceneView->setSelectedNode(sceneNode); }
     { selcost::Scope s(selcost::Properties); sceneNodePropertiesWidget->setSceneNode(sceneNode); }

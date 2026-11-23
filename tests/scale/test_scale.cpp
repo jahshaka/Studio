@@ -748,7 +748,7 @@ static int lightsMain()
     const iris::Vec3 eye(0.0f, 2.0f, 1.0f);
     BakeInfo bi;
     iris::MeshPtr cube = bakedMesh(QStringLiteral(JAHSHAKA_SOURCE_DIR "/app/content/primitives/cube.obj"), "cube", &bi);
-    if (cube.isNull()) { REQUIRE(false, "the cube mesh"); return 1; }
+    if (!cube) { REQUIRE(false, "the cube mesh"); return 1; }
     struct Reading {
         bool ok = false;
         int inRange = -1, injected = -1, capacity = -1;
@@ -1112,7 +1112,7 @@ static size_t cutTriangles(Env &env, const QList<iris::MeshPtr> &pieces, const i
     size_t total = 0;
     for (const iris::MeshPtr &m : pieces) {
         MeshData d;
-        if (!SceneMirror::toMeshData(m.data(), d) || d.clusters.empty()) continue;
+        if (!SceneMirror::toMeshData(m.get(), d) || d.clusters.empty()) continue;
         std::vector<unsigned> drawn;
         total += clusterCut(d.clusterGroups, d.clusters, cutView(env, req, pos, k, root), drawn);
     }
@@ -1135,7 +1135,7 @@ static double emptyTopDistance(Env &env, const QList<iris::MeshPtr> &pieces, con
     double need = 0.0;
     for (const iris::MeshPtr &m : pieces) {
         MeshData d;
-        if (!SceneMirror::toMeshData(m.data(), d) || d.clusters.empty()) continue;
+        if (!SceneMirror::toMeshData(m.get(), d) || d.clusters.empty()) continue;
         int top = -1;
         for (size_t g = 0; g < d.clusterGroups.size(); ++g)
             if (d.clusterGroups[g].error < kClusterTerminal && (top < 0 || d.clusterGroups[g].error > d.clusterGroups[size_t(top)].error))
@@ -1504,7 +1504,7 @@ static int residencyMain()
         size_t verts = 0, levelIdx = 0, clusterIdx = 0;
         for (const iris::MeshPtr &m : shell) {
             MeshData md;
-            if (!SceneMirror::toMeshData(m.data(), md)) continue;
+            if (!SceneMirror::toMeshData(m.get(), md)) continue;
             verts += md.positions.size() / 3;
             levelIdx += md.indices.size();
             for (const auto &l : md.lodIndices) levelIdx += l.size();
@@ -2685,7 +2685,7 @@ static int latticeOwedMain()
         const iris::Vec3 p0 = cubeNode->getLocalPos();
         int dragMovers = 0;
         const auto drag = collect(env, [&] {
-            const jahshaka::engine::NodeId held = env.mirror->engineNode(cubeNode.data());
+            const jahshaka::engine::NodeId held = env.mirror->engineNode(cubeNode.get());
             for (int f = 0; f < 60; ++f) {
                 enginetest::gesture(env.engine.get(), env.scene, { held });   // the hand is on it (U0 3c)
                 cubeNode->setLocalPos(p0 + iris::Vec3(0.05f * float(f), 0, 0));

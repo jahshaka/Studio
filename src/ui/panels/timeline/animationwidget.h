@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include <QWidget>
 #include <QTime>
-#include <QSharedPointer>
+#include <memory>
 #include <QIcon>
 #include "irisgl/irisglfwd.h"
 #include "irisgl/document/qt/property.h"

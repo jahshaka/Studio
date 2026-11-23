@@ -62,7 +62,7 @@ void GizmoOverlay::update(Gizmo *gizmo, const iris::Vec3 &rayPos, const iris::Ve
         if (!slot.material)
             slot.material = scenecmd::newUnlitMaterial(mTarget, Colour(1, 1, 1), false);   // on top
         if (!slot.node || !slot.material) continue;
-        iris::Mesh *src = item.mesh.data();
+        iris::Mesh *src = item.mesh.get();
         if (slot.source != src) {
             MeshId m = meshFor(src);
             if (m) { scenecmd::call(mTarget, &jahshaka::engine::Scene::attachMesh, slot.node, m, slot.material); slot.mesh = m; slot.source = src; }

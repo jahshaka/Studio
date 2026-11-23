@@ -240,7 +240,7 @@ int main(int argc, char **argv)
     size_t rigged = 0, streamed = 0;
     for (const multipiece::Character &c : cast)
         for (const iris::MeshNodePtr &piece : c.pieces) {
-            const NodeId n = mirror.engineNode(piece.data());
+            const NodeId n = mirror.engineNode(piece.get());
             if (!n || !jahshaka::engine::inspect::scene(es)->hasSkeleton(n)) continue;
             ++rigged;
             streamed += es->published().streamedBonesOf(n);

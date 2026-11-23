@@ -178,7 +178,7 @@ void EngineAssetScene::setSubject(iris::SceneNodePtr node, bool viewed, bool isO
     }
 
     if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = node.staticCast<iris::MeshNode>();
+        auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
         if (!meshNode->getMaterial()) meshNode->setMaterial(iris::PbrMaterial::create());
     }
 

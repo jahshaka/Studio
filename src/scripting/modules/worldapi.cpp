@@ -1927,7 +1927,7 @@ QVariantMap WorldApi::atomCutProbe(const QVariantMap &params)
     if (SceneMirror *mirror = host.viewport ? host.viewport->sceneMirror() : nullptr) {
         for (const iris::SceneNodePtr &n : std::as_const(doc->nodes)) {
             if (!n) continue;
-            if (const jahshaka::engine::NodeId id = mirror->engineNode(n.data())) docNames.insert(id, n->getName());
+            if (const jahshaka::engine::NodeId id = mirror->engineNode(n.get())) docNames.insert(id, n->getName());
         }
     }
     std::vector<const jahshaka::engine::AtomCutProbeObject *> order;
@@ -2845,7 +2845,7 @@ QString WorldApi::sunLight(const QVariant &light)
 
     auto node = findNodeByGuid(scene->getRootNode(), id);
     if (!node) { fail(QStringLiteral("world.sunLight: no node with id '%1'").arg(id)); return QString(); }
-    auto lightNode = node.dynamicCast<iris::LightNode>();
+    auto lightNode = std::dynamic_pointer_cast<iris::LightNode>(node);
     if (!lightNode) {
         fail(QStringLiteral("world.sunLight: node '%1' is not a light").arg(id));
         return QString();

@@ -793,8 +793,8 @@ int main(int argc, char **argv)
                 return iris::PbrMaterial::create();
             },
             nullptr, nullptr, tmp.path());
-        CHECK(!fragment.isNull(), "the generated rig fixture imports");
-        if (!fragment.isNull()) {
+        CHECK(!!fragment, "the generated rig fixture imports");
+        if (!!fragment) {
             auto rigScene = iris::Scene::create();
             rigScene->rootNode->addChild(fragment);
             const auto gr = GltfExporter::exportScene(rigScene, "Rig");

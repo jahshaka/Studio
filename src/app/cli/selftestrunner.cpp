@@ -46,7 +46,7 @@ iris::MeshNodePtr findDefaultGround(const iris::ScenePtr &scene)
     if (!scene || !scene->getRootNode()) return iris::MeshNodePtr();
     for (const auto &child : scene->getRootNode()->children()) {
         if (!child || child->getSceneNodeType() != iris::SceneNodeType::Mesh) continue;
-        auto mesh = child.staticCast<iris::MeshNode>();
+        auto mesh = std::static_pointer_cast<iris::MeshNode>(child);
         if (mesh->defaultFloor) return mesh;
     }
     return iris::MeshNodePtr();

@@ -181,7 +181,7 @@ void PhysicsPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
         physicsTypeSelector->setCurrentText(physicsTypes.value(static_cast<int>(sceneNode->physicsProperty.type)));
         loading = false;
     } else {
-        this->sceneNode.clear();
+        this->sceneNode.reset();
     }
 }
 

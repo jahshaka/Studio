@@ -164,8 +164,8 @@ void PlayerVr::end()
     mOwnsSession = false;
     mPlacePending = false;
     restoreMirrorView();
-    mCamera.clear();
-    mDocument.clear();
+    mCamera.reset();
+    mDocument.reset();
     // The session's locomotion overrides go with the session (VR-WORLD-1) —
     // with THIS session's, never with somebody else's.
     if (owned) vrworld::release();
@@ -231,7 +231,7 @@ void PlayerVr::step(float dt, const iris::CameraNodePtr &camera)
         // `resolve()` serving a dead copy of a project that may since have been
         // edited. Idempotent, and the editor host does the same in its own
         // "ended from somewhere else" branch.
-        mDocument.clear();
+        mDocument.reset();
         vrworld::release();
         return;
     }

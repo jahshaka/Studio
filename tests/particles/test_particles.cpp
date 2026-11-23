@@ -147,7 +147,7 @@ int main(int argc, char **argv)
         ps->dissipate = false;
         ps->randomRotation = false;
 
-        ParticleSystemDesc d = mapper.toParticleDesc(ps.data(), 0);
+        ParticleSystemDesc d = mapper.toParticleDesc(ps.get(), 0);
         CHECK(d.emitters.size() == 1, "one emitter per node");
         const ParticleEmitterDesc &e = d.emitters[0];
         CHECK(e.rate == 90.0f, "particlesPerSecond -> emission rate");
@@ -164,7 +164,7 @@ int main(int argc, char **argv)
         {
             // POST_LOOKS 4b: the flag crosses the boundary as a topology bit.
             ps->distortion = true;
-            const ParticleSystemDesc dd = mapper.toParticleDesc(ps.data(), 0);
+            const ParticleSystemDesc dd = mapper.toParticleDesc(ps.get(), 0);
             CHECK(dd.distortion, "distortion -> ParticleSystemDesc::distortion");
             ps->distortion = false;
         }
@@ -194,14 +194,14 @@ int main(int argc, char **argv)
         // FRACTION, which is what the slider always meant and is now frame-rate
         // independent by construction.
         ps->dissipate = true;
-        d = mapper.toParticleDesc(ps.data(), 0);
+        d = mapper.toParticleDesc(ps.get(), 0);
         const ParticleAffectorDesc *scale = nullptr;
         for (const ParticleAffectorDesc &a : d.affectors)
             if (a.kind == ParticleAffectorDesc::Kind::ScaleKeys) scale = &a;
         CHECK(scale && scale->keyCount == 2 && scale->scaleKeys[0] == 1.0f && scale->scaleKeys[1] == 0.0f,
               "dissipate -> a scale ramp 1 -> 0 over the particle's life");
         ps->dissipateInv = true;
-        d = mapper.toParticleDesc(ps.data(), 0);
+        d = mapper.toParticleDesc(ps.get(), 0);
         scale = nullptr;
         for (const ParticleAffectorDesc &a : d.affectors)
             if (a.kind == ParticleAffectorDesc::Kind::ScaleKeys) scale = &a;
@@ -211,7 +211,7 @@ int main(int argc, char **argv)
         // randomRotation: a random start angle, and now a real spin too.
         ps->randomRotation = true;
         ps->rotationSpeedMin = -20.0f; ps->rotationSpeedMax = 45.0f;
-        d = mapper.toParticleDesc(ps.data(), 0);
+        d = mapper.toParticleDesc(ps.get(), 0);
         const ParticleAffectorDesc *rot = nullptr;
         for (const ParticleAffectorDesc &a : d.affectors)
             if (a.kind == ParticleAffectorDesc::Kind::Rotator) rot = &a;
@@ -220,7 +220,7 @@ int main(int argc, char **argv)
 
         // The fire preset is a whole desc, and it is HDR by design.
         ps->applyPreset(iris::ParticlePreset::Fire);
-        d = mapper.toParticleDesc(ps.data(), 0);
+        d = mapper.toParticleDesc(ps.get(), 0);
         const ParticleAffectorDesc *col = nullptr;
         for (const ParticleAffectorDesc &a : d.affectors)
             if (a.kind == ParticleAffectorDesc::Kind::ColourKeys) col = &a;
@@ -255,7 +255,7 @@ int main(int argc, char **argv)
         ps->useAdditive = true;
         ps->dissipate = false;          // constant size
         ps->maxParticles = 1024;
-        ps->texture.clear();            // untextured white quads: brightest possible
+        ps->texture.reset();            // untextured white quads: brightest possible
         doc->getRootNode()->addChild(ps);
         CHECK(ps->maxParticles == 1024, "maxParticles is authored, not guessed");
 
@@ -277,7 +277,7 @@ int main(int argc, char **argv)
         };
         const int n = mirror.sync();
         CHECK(n == 1, "sync mirrored the emitter node");
-        const NodeId eng = mirror.engineNode(ps.data());
+        const NodeId eng = mirror.engineNode(ps.get());
         CHECK(eng != 0, "emitter has an engine node");
         CHECK(target->published().particlesOf(eng) == 0, "nothing is alive before the first frame");
 
@@ -333,7 +333,7 @@ int main(int argc, char **argv)
         // Removing the node from the document removes the engine visual.
         doc->getRootNode()->removeChild(ps);
         mirror.sync();
-        CHECK(mirror.engineNode(ps.data()) == 0, "removed emitter has no engine node");
+        CHECK(mirror.engineNode(ps.get()) == 0, "removed emitter has no engine node");
         stepped(2);
         view->readPixels(img);
         CHECK(countBright(img) == 0, "removed emitter renders nothing");
@@ -346,7 +346,7 @@ int main(int argc, char **argv)
         for (int i = 0; i < 10; ++i) {
             auto churn = iris::ParticleSystemNode::create();
             churn->maxParticles = 1024;
-            churn->texture.clear();
+            churn->texture.reset();
             doc->getRootNode()->addChild(churn);
             mirror.sync();
             enginetest::frames(engine, 1);

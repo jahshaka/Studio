@@ -538,7 +538,7 @@ iris::ImportTransform AvatarApi::rigImportTransform(const iris::SceneNodePtr &ch
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
         if (!n || !meshGuid.isEmpty()) return;
         if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            const QString candidate = n.staticCast<iris::MeshNode>()->meshPath;
+            const QString candidate = std::static_pointer_cast<iris::MeshNode>(n)->meshPath;
             // A ":"-prefixed path is a built-in primitive, not a library row.
             if (!candidate.isEmpty() && !candidate.startsWith(QLatin1Char(':')))
                 meshGuid = candidate;
@@ -935,14 +935,14 @@ namespace
 /// do not canonicalize (fail-soft, two unmapped rows).
 bool subtreeHasRig(const iris::SceneNodePtr &node)
 {
-    if (node.isNull()) return false;
+    if (!node) return false;
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh &&
-        node.staticCast<iris::MeshNode>()->hasSkeleton())
+        std::static_pointer_cast<iris::MeshNode>(node)->hasSkeleton())
         return true;
     const int kids = node->childCount();
     for (int i = 0; i < kids; ++i)
         if (iris::SceneNode *c = node->childAt(i))
-            if (subtreeHasRig(c->sharedFromThis())) return true;
+            if (subtreeHasRig(c->weak_from_this().lock())) return true;
     return false;
 }
 }   // namespace
@@ -965,7 +965,7 @@ QVariantList AvatarApi::addSockets(const QString &nodeId)
     // head chain is not something a caller can be asked to know.
     QVector<avatar::sockets::Mapping> report;
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto mesh = node.staticCast<iris::MeshNode>();
+        auto mesh = std::static_pointer_cast<iris::MeshNode>(node);
         if (!mesh->hasSkeleton()) {
             record(QStringLiteral("avatar.addSockets: '%1' has no rig — nothing to map "
                                   "(node.boneNames lists a node's bones)").arg(node->getName()));
@@ -1200,17 +1200,17 @@ QString AvatarApi::spawn(const QString &assetGuid, const QVariantMap &options)
         if (env->isSimulating()) env->addAvatarToWorld(node);
 
     if (host.services->undo) {
-        auto weak = node.toWeakRef();
+        auto weak = std::weak_ptr(node);
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("avatar component"),
             [weak, movement, loco]() {
-                if (auto n = weak.toStrongRef()) {
+                if (auto n = weak.lock()) {
                     n->setAvatarComponent(movement);
                     n->setLocomotionComponent(loco);
                 }
             },
             [weak]() {
-                if (auto n = weak.toStrongRef()) {
+                if (auto n = weak.lock()) {
                     n->setAvatarComponent(iris::AvatarMovementPtr());
                     n->setLocomotionComponent(iris::AvatarLocomotionPtr());
                 }
@@ -1421,7 +1421,7 @@ void collectNodeNames(const iris::SceneNodePtr &node, QSet<QString> &out)
     out.insert(node->getName());
     const int n = node->childCount();
     for (int i = 0; i < n; ++i)
-        if (auto *child = node->childAt(i)) collectNodeNames(child->sharedFromThis(), out);
+        if (auto *child = node->childAt(i)) collectNodeNames(child->weak_from_this().lock(), out);
 }
 
 /// The node a clip is attached to: the character's EXISTING clip host when it
@@ -1435,11 +1435,11 @@ iris::SceneNodePtr clipHostFor(const iris::SceneNodePtr &character)
         [&](const iris::SceneNodePtr &n) -> iris::SceneNodePtr {
         if (!n) return iris::SceneNodePtr();
         for (const auto &anim : n->getAnimations())
-            if (!anim.isNull() && anim->hasSkeletalAnimation()) return n;
+            if (!!anim && anim->hasSkeletalAnimation()) return n;
         const int kids = n->childCount();
         for (int i = 0; i < kids; ++i)
             if (auto *c = n->childAt(i))
-                if (auto hit = find(c->sharedFromThis())) return hit;
+                if (auto hit = find(c->weak_from_this().lock())) return hit;
         return iris::SceneNodePtr();
     };
     auto host = find(character);
@@ -1502,7 +1502,7 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     auto hostNode = clipHostFor(character);
     QSet<QString> used;
     for (const auto &anim : hostNode->getAnimations())
-        if (!anim.isNull()) used.insert(anim->getName());
+        if (!!anim) used.insert(anim->getName());
 
     QVariantList addedNames;
     QList<iris::AnimationPtr> added;
@@ -1512,7 +1512,7 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
         // the scene persists {assetGuid, name} and resolves it through the store.
         auto clip = iris::Animation::createFromSkeletalAnimation(
             iris::SkeletalAnimation::referencedAs(s.skel, assetGuid));
-        if (clip.isNull()) continue;
+        if (!clip) continue;
         // The same display-name rule the preview uses: every Mixamo clip is
         // literally called "mixamo.com", so a junk name becomes the FILE's base
         // name — which is what makes "Walking.fbx" bind the walk role.
@@ -1552,8 +1552,8 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
     }
 
     if (host.services && host.services->undo) {
-        auto weakHost = hostNode.toWeakRef();
-        auto weakChar = character.toWeakRef();
+        auto weakHost = std::weak_ptr(hostNode);
+        auto weakChar = std::weak_ptr(character);
         const float walk = character->avatar()
                                ? character->avatar()->params().walkSpeed : 2.0f;
         const float run = character->avatar()
@@ -1561,18 +1561,18 @@ bool AvatarApi::attachClipsFromFile(const char *verb, const iris::SceneNodePtr &
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("load animation clip"),
             [weakHost, weakChar, added, walk, run]() {
-                auto n = weakHost.toStrongRef();
+                auto n = weakHost.lock();
                 if (!n) return;
                 for (const auto &clip : added)
                     if (!n->getAnimations().contains(clip)) n->addAnimation(clip);
-                if (auto c = weakChar.toStrongRef())
+                if (auto c = weakChar.lock())
                     if (auto *loco = c->locomotion()) loco->refreshClips(c, walk, run);
             },
             [weakHost, weakChar, added, walk, run]() {
-                auto n = weakHost.toStrongRef();
+                auto n = weakHost.lock();
                 if (!n) return;
                 for (const auto &clip : added) n->deleteAnimation(clip);
-                if (auto c = weakChar.toStrongRef())
+                if (auto c = weakChar.lock())
                     if (auto *loco = c->locomotion()) loco->refreshClips(c, walk, run);
             }));
     }
@@ -1776,11 +1776,11 @@ QVariantMap AvatarApi::setMovement(const QString &nodeId, const QVariantMap &val
     if (auto *loco = node->locomotion()) loco->refreshDefaultAsset(after.walkSpeed, after.runSpeed);
 
     if (host.services && host.services->undo) {
-        auto weak = node.toWeakRef();
+        auto weak = std::weak_ptr(node);
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("avatar movement"),
-            [weak, after]() { if (auto n = weak.toStrongRef()) if (auto *m = n->avatar()) m->setParams(after); },
-            [weak, before]() { if (auto n = weak.toStrongRef()) if (auto *m = n->avatar()) m->setParams(before); }));
+            [weak, after]() { if (auto n = weak.lock()) if (auto *m = n->avatar()) m->setParams(after); },
+            [weak, before]() { if (auto n = weak.lock()) if (auto *m = n->avatar()) m->setParams(before); }));
     }
     return paramsToJs(after);
 }
@@ -1886,7 +1886,7 @@ QVariantList AvatarApi::list()
         for (int i = 0; i < kids; ++i) {
             iris::SceneNode *raw = node->childAt(i);
             if (!raw) continue;
-            auto child = raw->sharedFromThis();
+            auto child = raw->weak_from_this().lock();
             if (child->hasAvatarComponent()) {
                 const iris::AvatarLocomotionState &s = child->avatar()->state();
                 out.append(QVariantMap{
@@ -2072,15 +2072,15 @@ bool AvatarApi::setLocomotionAsset(const QString &nodeId, const QVariantMap &val
         return record(QStringLiteral("avatar.setLocomotionAsset: %1").arg(err));
 
     if (host.services && host.services->undo) {
-        auto weak = node.toWeakRef();
+        auto weak = std::weak_ptr(node);
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("locomotion asset"),
             [weak, asset]() {
-                if (auto n = weak.toStrongRef())
+                if (auto n = weak.lock())
                     if (auto *l = n->locomotion()) { QString e; l->setAsset(asset, &e); }
             },
             [weak, before, wasDefault]() {
-                if (auto n = weak.toStrongRef())
+                if (auto n = weak.lock())
                     if (auto *l = n->locomotion()) {
                         // The FLAG travels with the asset: undoing back to the
                         // generated default has to restore "this is the
@@ -2195,15 +2195,15 @@ bool AvatarApi::setClipRole(const QString &nodeId, const QString &role, const QS
     const QString before = loco->roles().get(r);
     loco->setClipRole(r, clip);
     if (host.services && host.services->undo) {
-        auto weak = node.toWeakRef();
+        auto weak = std::weak_ptr(node);
         host.services->undo->push(new NodeEditCommand(
             QStringLiteral("clip role"),
             [weak, r, clip]() {
-                if (auto n = weak.toStrongRef())
+                if (auto n = weak.lock())
                     if (auto *l = n->locomotion()) l->setClipRole(r, clip);
             },
             [weak, r, before]() {
-                if (auto n = weak.toStrongRef())
+                if (auto n = weak.lock())
                     if (auto *l = n->locomotion()) l->setClipRole(r, before);
             }));
     }
@@ -2254,7 +2254,7 @@ void collectLinkedInstances(const iris::SceneNodePtr &node, QVector<iris::SceneN
     if (node->hasAvatarComponent() && node->isLinkedAvatar()) out.append(node);
     const int n = node->childCount();
     for (int i = 0; i < n; ++i)
-        if (auto *child = node->childAt(i)) collectLinkedInstances(child->sharedFromThis(), out);
+        if (auto *child = node->childAt(i)) collectLinkedInstances(child->weak_from_this().lock(), out);
 }
 
 }   // namespace
@@ -3344,12 +3344,12 @@ bool AvatarApi::applyDefinition(const iris::SceneNodePtr &node,
                 if (!n) return;
                 QList<iris::AnimationPtr> doomed;
                 for (const auto &anim : n->getAnimations())
-                    if (!anim.isNull() && anim->hasSkeletalAnimation()
+                    if (!!anim && anim->hasSkeletalAnimation()
                         && !wanted.contains(anim->getName()))
                         doomed.append(anim);
                 for (const auto &anim : doomed) n->deleteAnimation(anim);
                 for (int i = 0; i < n->childCount(); ++i)
-                    if (auto *c = n->childAt(i)) prune(c->sharedFromThis());
+                    if (auto *c = n->childAt(i)) prune(c->weak_from_this().lock());
             };
         prune(node);
     }

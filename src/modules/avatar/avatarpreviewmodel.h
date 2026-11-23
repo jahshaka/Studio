@@ -205,7 +205,7 @@ public:
         /// has to be scaled by (see loadAnimation).
         iris::ImportTransform xf;
         QString error;
-        bool ok() const { return error.isEmpty() && !node.isNull(); }
+        bool ok() const { return error.isEmpty() && !!node; }
     };
     /// THREAD-SAFE: builds the fragment out of `source.baked`. Never touches
     /// this object (it is static); the result is inert until `applySubject`.
@@ -231,7 +231,7 @@ public:
                        QString *error = nullptr, ClipLoadReport *report = nullptr,
                        const QString &displayName = QString());
     void clear();
-    bool isLoaded() const { return !mFragment.isNull(); }
+    bool isLoaded() const { return !!mFragment; }
     /// Every scene-node name under the loaded fragment — the set a clip's
     /// channels are joined against (the clip -> bone join is by NAME). Read by
     /// `avatar.animations`, which answers "does this library clip fit the

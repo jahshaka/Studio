@@ -35,7 +35,7 @@ For more information see the LICENSE file
 // snapshot is (it rebuilds the track from data, it does not merge into it).
 
 #include <QString>
-#include <QWeakPointer>
+#include <memory>
 
 #include "commands/studiocommand.h"
 #include "irisgl/irisglfwd.h"
@@ -111,7 +111,7 @@ public:
     void redo() override;
 
 private:
-    QWeakPointer<iris::SceneNode> mNode;
+    std::weak_ptr<iris::SceneNode> mNode;
     iris::AnimationPtr mAnim;
     bool mWasActive = false;
 };

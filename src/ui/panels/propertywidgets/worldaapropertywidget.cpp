@@ -44,14 +44,14 @@ WorldAaPropertyWidget::WorldAaPropertyWidget()
 {
 }
 
-void WorldAaPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void WorldAaPropertyWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
         build();
         refreshRows();
     } else {
-        this->scene.clear();
+        this->scene.reset();
     }
 }
 

@@ -1434,7 +1434,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
             return;
         }
         if (node && node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            auto meshNode = node.staticCast<iris::MeshNode>();
+            auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
             // Bytes resolve pin-first through the CAS — the flat
             // projectFolder join this branch used pointed at a folder the
             // pin world no longer populates (the drop was dead code).
@@ -1446,7 +1446,7 @@ void EngineSceneViewport::dropEvent(QDropEvent *event)
                                                   textureGuid);
             }
             if (texPath.isEmpty()) return;
-            if (auto pbr = meshNode->getMaterial().dynamicCast<iris::PbrMaterial>()) {
+            if (auto pbr = std::dynamic_pointer_cast<iris::PbrMaterial>(meshNode->getMaterial())) {
                 // The PBR repair: baseColorMap, undoable like the panel edit —
                 // the row binds the dropped image's file AND its asset, and the
                 // undo restores the row's previous pair (TEX-REF-1).
@@ -1813,12 +1813,12 @@ bool EngineSceneViewport::snapDragToVertexUnderCursor()
         if (!h.node || h.triangleIndex < 0) continue;
         bool own = false;                       // never snap to the dragged subtree
         for (auto n = h.node; n; n = n->getParent())
-            if (n.data() == mSelectedNode.data()) { own = true; break; }
+            if (n.get() == mSelectedNode.get()) { own = true; break; }
         if (own) continue;
         if (!best.node || h.distanceFromCameraSqrd < best.distanceFromCameraSqrd) best = h;
     }
     if (!best.node) return false;
-    auto meshNode = best.node.staticCast<iris::MeshNode>();
+    auto meshNode = std::static_pointer_cast<iris::MeshNode>(best.node);
     auto mesh = meshNode->getMesh();
     if (!mesh || !mesh->getTriMesh() ||
         best.triangleIndex >= mesh->getTriMesh()->triangles.size())
@@ -1895,7 +1895,7 @@ void EngineSceneViewport::setScene(iris::ScenePtr scene)
     // be stopped before the document underneath it is swapped.
     if (mPlaying || (mPlayback && mPlayback->isScenePlaying())) stopPlayingScene();
     mScene = scene;
-    mSelectedNode.clear();
+    mSelectedNode.reset();
     // After clearScene() the engine scene is gone but the view survives;
     // rebuild the scene-scoped objects now (mirror/overlay pick up mScene).
     if (scene && view() && !mEngineScene) ensureEngineScene();
@@ -2069,7 +2069,7 @@ void EngineSceneViewport::beginPlayDragOverPhysics()
 void EngineSceneViewport::endPlayDragOverPhysics()
 {
     if (mPlayDragBodies.isEmpty()) return;
-    iris::Environment *env = mScene ? mScene->getPhysicsEnvironment().data() : nullptr;
+    iris::Environment *env = mScene ? mScene->getPhysicsEnvironment().get() : nullptr;
     for (const iris::SceneNodePtr &n : mPlayDragBodies) {
         if (!n) continue;
         n->disablePhysicsTransform = false;
@@ -2155,11 +2155,11 @@ void EngineSceneViewport::pushGizmoGroup()
     // by the gizmo.
     bool primaryInGroup = false;
     for (const auto &n : effective)
-        if (mSelectedNode && n.data() == mSelectedNode.data()) { primaryInGroup = true; break; }
+        if (mSelectedNode && n.get() == mSelectedNode.get()) { primaryInGroup = true; break; }
     if (!primaryInGroup && mSelectedNode) {
         for (auto p = mSelectedNode->getParent(); !!p; p = p->getParent()) {
             bool found = false;
-            for (const auto &n : effective) if (n.data() == p.data()) { found = true; break; }
+            for (const auto &n : effective) if (n.get() == p.get()) { found = true; break; }
             if (found) { mGizmo->setSelectedNode(p); break; }
         }
     }
@@ -2404,7 +2404,7 @@ bool EngineSceneViewport::pilotCamera(iris::CameraNodePtr camera)
             // node's current one — TransformSceneNodeCommand wants a full TRS.
             const iris::Vec3 scale = mPilot->getLocalScale();
             mServices->undo->push(new TransformSceneNodeCommand(
-                mPilot.staticCast<iris::SceneNode>(),
+                std::static_pointer_cast<iris::SceneNode>(mPilot),
                 mPilotStartPos, mPilotStartRot, scale, endPos, endRot, scale));
         }
         mPilot.reset();
@@ -2509,11 +2509,11 @@ void EngineSceneViewport::syncPip()
     if (!mMirror) { view()->setPip(jahshaka::engine::ViewPipDesc{}); return; }
     iris::CameraNodePtr cam;
     if (mPipEnabled && !mGameView && !mPlaying) {
-        cam = mSelectedNode.dynamicCast<iris::CameraNode>();
+        cam = std::dynamic_pointer_cast<iris::CameraNode>(mSelectedNode);
         if (cam && cam == mPilot) cam.reset();
     }
     jahshaka::engine::ViewPipDesc pip;
-    pip.enabled = !cam.isNull();
+    pip.enabled = !!cam;
     if (pip.enabled) {
         // Bottom right, with a margin, sized as a fraction of the WIDTH. The
         // height follows the camera's aspect so the inset is the shape of the
@@ -2770,7 +2770,7 @@ void EngineSceneViewport::syncFrame(float dtOverride, bool recordable)
             jahshaka::engine::FrameInputGesture gesture;
             gesture.active = mGizmo && mGizmo->isDragging();
             if (gesture.active && mSelectedNode && mMirror)
-                if (const jahshaka::engine::NodeId id = mMirror->engineNode(mSelectedNode.data()))
+                if (const jahshaka::engine::NodeId id = mMirror->engineNode(mSelectedNode.get()))
                     gesture.nodes.push_back(id);
             jahshaka::engine::FrameInputScene part;
             part.scene = mEngineScene;
@@ -2932,8 +2932,8 @@ bool EngineSceneViewport::planarReflectorAccepted(iris::SceneNodePtr node) const
 {
     // "No engine to ask" answers true: a caller must not report a failure it
     // cannot see (headless runs, the document-only stand-in viewport).
-    if (!mMirror || node.isNull() || !view() || !view()->scene()) return true;
-    const jahshaka::engine::NodeId id = mMirror->engineNode(node.data());
+    if (!mMirror || !node || !view() || !view()->scene()) return true;
+    const jahshaka::engine::NodeId id = mMirror->engineNode(node.get());
     if (!id) return true;   // not mirrored yet — the next sync decides
     return view()->scene()->published().factsBlock().isPlanarReflector(id);   // the facts (U3 stage 3)
 }
@@ -3451,10 +3451,10 @@ IEditorViewport::ShadowStatusInfo EngineSceneViewport::shadowStatus() const
     // an index that has to stay honest through every node removal is a bug
     // waiting for a rainy day.
     QHash<quint64, QString> guidOf;
-    if (mMirror && !mScene.isNull()) {
+    if (mMirror && !!mScene) {
         for (const auto &l : mScene->lights) {
-            if (l.isNull()) continue;
-            const jahshaka::engine::NodeId id = mMirror->engineNode(l.data());
+            if (!l) continue;
+            const jahshaka::engine::NodeId id = mMirror->engineNode(l.get());
             if (id) guidOf.insert(quint64(id), l->getGUID());
         }
     }
@@ -3539,7 +3539,7 @@ QString EngineSceneViewport::dumpMaterial(const QString &nodeGuid) const
     if (!mMirror || !mEngineScene || !mScene) return QString();
     auto node = mScene->nodes.value(nodeGuid);
     if (!node) return QString();
-    const auto material = mMirror->engineMaterial(node.data());
+    const auto material = mMirror->engineMaterial(node.get());
     if (!material) return QString();
     std::string dump;
     if (mEngine) mEngine->request([&](jahshaka::engine::Engine &) { dump = mEngineScene->dumpMaterial(material); });   // a REQUEST (U3 stage 3)
@@ -4943,8 +4943,8 @@ void EngineSceneViewport::clearScene()
         view()->setBackground(Colour(0.10f, 0.11f, 0.14f));
     }
     if (mEngineScene && mEngine) { mEngine->destroyScene(mEngineScene); mEngineScene = nullptr; }
-    mScene.clear();
-    mSelectedNode.clear();
+    mScene.reset();
+    mSelectedNode.reset();
     // No world bound: the cover says so (and the next bind starts from here).
     // Whatever load was in flight is over — a close is not a load, and leaving
     // the flag set would caption the NoScene cover "Loading world…" for ever.
@@ -5049,7 +5049,7 @@ bool EngineSceneViewport::snapNodeToFloor(const iris::SceneNodePtr &node)
         if (!h.node) continue;
         bool own = false;                       // ignore the selection's own subtree
         for (auto n = h.node; n; n = n->getParent())
-            if (n.data() == node.data()) { own = true; break; }
+            if (n.get() == node.get()) { own = true; break; }
         if (own) continue;
         if (!found || h.hitPoint.y() > targetY) { targetY = h.hitPoint.y(); found = true; }
     }

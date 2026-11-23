@@ -1014,11 +1014,11 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 [&](const iris::SceneNodePtr &n) {
                     if (!n) return;
                     for (const auto &anim : n->getAnimations())
-                        if (!anim.isNull() && anim->hasSkeletalAnimation()
+                        if (!!anim && anim->hasSkeletalAnimation()
                             && !clipNames.contains(QJsonValue(anim->getName())))
                             clipNames.append(anim->getName());
                     for (int i = 0; i < n->childCount(); ++i)
-                        if (auto *child = n->childAt(i)) names(child->sharedFromThis());
+                        if (auto *child = n->childAt(i)) names(child->weak_from_this().lock());
                 };
             names(node);
             avatarObj["clips"] = clipNames;
@@ -1031,19 +1031,19 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
         using exportwalk::NodeKind;
         const NodeKind kind = exportwalk::classifyNode(node);
         if (kind == NodeKind::Mesh) {
-            auto *meshNode = static_cast<iris::MeshNode *>(node.data());
+            auto *meshNode = static_cast<iris::MeshNode *>(node.get());
             iris::MeshPtr mesh = meshNode->getMesh();
             if (mesh) {
                 int meshIdx = -1;
-                const int matIdx = materialFor(c, meshNode->getMaterial().data(),
+                const int matIdx = materialFor(c, meshNode->getMaterial().get(),
                                                meshNode->getFaceCullingMode());
-                const QPair<iris::Mesh *, int> meshKey(mesh.data(), matIdx);
+                const QPair<iris::Mesh *, int> meshKey(mesh.get(), matIdx);
                 auto found = c.meshIndex.constFind(meshKey);
                 if (found != c.meshIndex.constEnd()) {
                     meshIdx = found.value();
                 } else {
                     MeshBuffers mb;
-                    if (extractMeshBuffers(mesh.data(), mb)) {
+                    if (extractMeshBuffers(mesh.get(), mb)) {
                         if (mb.normals.empty()) generateNormals(mb);
                         generateTangents(mb);
                         QJsonObject prim;
@@ -1082,7 +1082,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 if (meshIdx >= 0) n["mesh"] = meshIdx;
             }
         } else if (kind == NodeKind::Light) {
-            auto *light = static_cast<iris::LightNode *>(node.data());
+            auto *light = static_cast<iris::LightNode *>(node.get());
             // A SKY LIGHT IS NOT A NODE IN A glTF FILE (round-2 review item 3).
             // It has no position, no direction and no punctual type; it is the
             // scene's ambient, and it rides in the `jah` scene extras where the
@@ -1202,7 +1202,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             // CAMERAS_SPEC phase 1 (the CameraNode constructor sets
             // SceneNodeType::Camera), so this cast is as safe as every other
             // kind's in this walk.
-            auto *cam = static_cast<iris::CameraNode *>(node.data());
+            auto *cam = static_cast<iris::CameraNode *>(node.get());
             QJsonObject gc;
             gc["name"] = n["name"];
             if (cam->isPerspective) {
@@ -1225,7 +1225,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             n["camera"] = c.cameras.size() - 1;
             res.cameraCount++;
         } else if (kind == NodeKind::ParticleSystem) {
-            auto *ps = static_cast<iris::ParticleSystemNode *>(node.data());
+            auto *ps = static_cast<iris::ParticleSystemNode *>(node.get());
             QJsonObject p;
             p["particlesPerSecond"] = double(ps->particlesPerSecond);
             p["speed"] = double(ps->speed);
@@ -1253,7 +1253,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
             // affects everything inside the box, animated receivers included).
             // So the document round-trips and the viewer ignores it; the web
             // target must NOT claim decal parity.
-            auto *decal = static_cast<iris::DecalNode *>(node.data());
+            auto *decal = static_cast<iris::DecalNode *>(node.get());
             QJsonObject d;
             d["width"] = double(decal->width);
             d["height"] = double(decal->height);
@@ -1392,7 +1392,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                 [&](const iris::SceneNodePtr &n) {
                     if (!n) return;
                     for (const auto &anim : n->getAnimations()) {
-                        if (anim.isNull() || !anim->hasSkeletalAnimation()) continue;
+                        if (!anim || !anim->hasSkeletalAnimation()) continue;
                         const auto skelAnim = anim->getSkeletalAnimation();
                         if (!skelAnim) continue;
                         // The NODE's display name wins: it is what the scene
@@ -1402,7 +1402,7 @@ GltfExporter::Result GltfExporter::exportScene(const iris::ScenePtr &scene, cons
                         if (!anims.contains(name)) anims.insert(name, skelAnim);
                     }
                     for (int i = 0; i < n->childCount(); ++i)
-                        if (auto *child = n->childAt(i)) gather(child->sharedFromThis());
+                        if (auto *child = n->childAt(i)) gather(child->weak_from_this().lock());
                 };
             gather(clipRoot);
         }

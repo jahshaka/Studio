@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define SCENEREADER_H
 
 #include <memory>
-#include <QSharedPointer>
+#include <memory>
 #include "io/assetiobase.h"
 #include "io/sceneformat.h"
 #include "io/missingclipref.h"

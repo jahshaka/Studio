@@ -15,7 +15,7 @@ For more information see the LICENSE file
 #include "irisgl/core/math/vec.h"
 #include "irisgl/irisglfwd.h"
 #include <QPoint>
-#include <QSharedPointer>
+#include <memory>
 #include <QKeyEvent>
 #include "viewport/cameracontrollerbase.h"
 

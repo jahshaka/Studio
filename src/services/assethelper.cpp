@@ -80,7 +80,7 @@ void AssetHelper::updateNodeMaterial(iris::SceneNodePtr &node, QJsonObject defin
             else
                 pbr->setValue(property->name, values.value(property->name).toVariant());
         }
-        node.staticCast<iris::MeshNode>()->setMaterial(pbr);
+        std::static_pointer_cast<iris::MeshNode>(node)->setMaterial(pbr);
     }
 
     QJsonArray children = definition["children"].toArray();
@@ -294,7 +294,7 @@ iris::SceneNodePtr AssetHelper::extractTexturesAndMaterialFromMesh(
 
     std::function<void(iris::SceneNodePtr&)> getUsedTexture = [&](iris::SceneNodePtr &node) -> void {
         if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-            auto n = node.staticCast<iris::MeshNode>();
+            auto n = std::static_pointer_cast<iris::MeshNode>(node);
             // Base MaterialPtr, no downcast: `properties` lives on iris::Material
             // and the material may now be a PbrMaterial (imported GLB) as well
             // as the legacy CustomMaterial.

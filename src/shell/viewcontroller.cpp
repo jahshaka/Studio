@@ -149,7 +149,7 @@ void ViewController::rebuildCamerasMenu()
                                                   : iris::CameraNodePtr();
     QAction *explorer = mCamerasMenu->addAction(tr("Viewport"));
     explorer->setCheckable(true);
-    explorer->setChecked(piloted.isNull());
+    explorer->setChecked(!piloted);
     group->addAction(explorer);
     connect(explorer, &QAction::triggered, this,
             [this]() { if (mViewport) mViewport->pilotCamera(iris::CameraNodePtr()); });

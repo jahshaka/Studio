@@ -111,7 +111,7 @@ iris::ParticleSystemNodePtr ParticlesApi::emitterOrFail(const QString &id, const
                  .arg(verb, node->getName(), nodeTypeName(node->getSceneNodeType())));
         return iris::ParticleSystemNodePtr();
     }
-    return node.staticCast<iris::ParticleSystemNode>();
+    return std::static_pointer_cast<iris::ParticleSystemNode>(node);
 }
 
 QStringList ParticlesApi::presets()

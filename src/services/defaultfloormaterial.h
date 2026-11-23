@@ -155,7 +155,7 @@ iris::PbrMaterialPtr create(Database *db, Project *project, QString *tileGuid = 
 inline bool isDefaultFloor(const iris::SceneNodePtr &node)
 {
     return node && node->getSceneNodeType() == iris::SceneNodeType::Mesh
-           && node.staticCast<iris::MeshNode>()->defaultFloor;
+           && std::static_pointer_cast<iris::MeshNode>(node)->defaultFloor;
 }
 
 }   // namespace defaultfloormaterial

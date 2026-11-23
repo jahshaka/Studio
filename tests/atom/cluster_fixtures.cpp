@@ -66,13 +66,13 @@ bool bake(Fixture &f, iris::MeshPtr mesh, const std::string &name, const iris::M
     f = Fixture();
     f.name = name;
     f.mesh = mesh;
-    if (mesh.isNull()) return false;
+    if (!mesh) return false;
     // The DAG is always rebuilt: the stats (and the provenance or the group records,
     // when asked) are what the suites read, and the build is deterministic; the level
     // table is its uniform cuts (ATOM-2 D10), rebuilt from it.
     iris::MeshBake::buildClusterDag(mesh, &f.stats, options);
     iris::MeshBake::buildLevelTable(mesh);
-    if (!SceneMirror::toMeshData(mesh.data(), f.data)) return false;
+    if (!SceneMirror::toMeshData(mesh.get(), f.data)) return false;
     f.triangles = f.data.indices.size() / 3;
     float lo[3] = { 1e30f, 1e30f, 1e30f }, hi[3] = { -1e30f, -1e30f, -1e30f };
     for (size_t v = 0; v + 2 < f.data.positions.size(); v += 3)

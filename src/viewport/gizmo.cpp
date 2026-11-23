@@ -262,7 +262,7 @@ void Gizmo::setSelectedNode(iris::SceneNodePtr node)
 
 void Gizmo::clearSelectedNode()
 {
-	selectedNode.clear();
+	selectedNode.reset();
 }
 
 void Gizmo::setGroup(const QList<iris::SceneNodePtr> &nodes)
@@ -318,7 +318,7 @@ void Gizmo::applyGroupDelta()
 		qFuzzyIsNull(s0.z()) ? 1.0f : selectedNode->getLocalScale().z() / s0.z());
 
 	for (const MemberStart &m : groupStart) {
-		if (!m.node || m.node.data() == selectedNode.data()) continue;   // the subclass wrote the primary
+		if (!m.node || m.node.get() == selectedNode.get()) continue;   // the subclass wrote the primary
 
 		// pos = pivot + ΔR · (s ∘ (start − pivot)) + Δpos
 		//   translate: ΔR = I, s = 1  -> start + Δpos

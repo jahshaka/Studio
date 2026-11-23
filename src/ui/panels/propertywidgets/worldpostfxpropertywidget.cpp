@@ -34,7 +34,7 @@ WorldPostFxPropertyWidget::WorldPostFxPropertyWidget()
 {
 }
 
-void WorldPostFxPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void WorldPostFxPropertyWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
@@ -42,7 +42,7 @@ void WorldPostFxPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
         refreshRows();
         rebuildLooks();
     } else {
-        this->scene.clear();
+        this->scene.reset();
     }
 }
 

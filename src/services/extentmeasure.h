@@ -124,7 +124,7 @@ inline Extent measureNode(const iris::SceneNodePtr &node)
         const int kids = n->childCount();
         for (int i = 0; i < kids; ++i) walk(n->childAt(i));
     };
-    walk(node.data());
+    walk(node.get());
 
     if (!any) return out;
     out.x = maxv[0] - minv[0];

@@ -138,17 +138,17 @@ int main(int argc, char **argv)
     {
         auto node = iris::loadAsSceneFragment(fixture("colored_quad.ply"),
                                                         defaultMaterialFor);
-        CHECK(!node.isNull(), "2: the .ply loads through iris::loadAsSceneFragment");
-        auto meshNode = node.dynamicCast<iris::MeshNode>();
-        CHECK(!meshNode.isNull(), "2: ... as a single MeshNode (no bones, one mesh)");
+        CHECK(!!node, "2: the .ply loads through iris::loadAsSceneFragment");
+        auto meshNode = std::dynamic_pointer_cast<iris::MeshNode>(node);
+        CHECK(!!meshNode, "2: ... as a single MeshNode (no bones, one mesh)");
         if (meshNode) {
             auto mesh = meshNode->getMesh();
-            CHECK(!mesh.isNull(), "2: the document mesh is built");
-            CHECK(!meshNode->getMaterial().isNull(),
+            CHECK(!!mesh, "2: the document mesh is built");
+            CHECK(!!meshNode->getMaterial(),
                   "2: a material is created even though the file declares none");
 
             MeshData md;
-            CHECK(SceneMirror::toMeshData(mesh.data(), md), "2: toMeshData succeeds");
+            CHECK(SceneMirror::toMeshData(mesh.get(), md), "2: toMeshData succeeds");
             const size_t nv = md.positions.size() / 3;
             CHECK(nv == 4, "2: 4 vertices reach MeshData");
             CHECK(md.indices.size() == 6, "2: two triangles reach MeshData");
@@ -217,7 +217,7 @@ int main(int argc, char **argv)
         QJsonObject stats;
         auto imported = AssetHelper::extractTexturesAndMaterialFromMesh(
             fixture("colored_quad.ply"), texNames, texPaths, hasEmbedded, &stats, tmp.path());
-        CHECK(!imported.isNull(), "2: the .ply imports through AssetHelper (the pipeline's parse)");
+        CHECK(!!imported, "2: the .ply imports through AssetHelper (the pipeline's parse)");
         CHECK(texPaths.isEmpty() && !hasEmbedded, "2: ... with no textures to discover");
     }
 
@@ -268,14 +268,14 @@ int main(int argc, char **argv)
         // 3c. Through our load path, both files.
         for (const char *f : { "tetra_normals.stl", "tetra_zeronormals.stl" }) {
             auto node = iris::loadAsSceneFragment(fixture(f), defaultMaterialFor);
-            auto meshNode = node.dynamicCast<iris::MeshNode>();
-            CHECK(!meshNode.isNull(),
+            auto meshNode = std::dynamic_pointer_cast<iris::MeshNode>(node);
+            CHECK(!!meshNode,
                   QString("3c: %1 loads as a MeshNode").arg(f).toUtf8().constData());
             if (!meshNode) continue;
-            CHECK(!meshNode->getMaterial().isNull(),
+            CHECK(!!meshNode->getMaterial(),
                   QString("3c: %1 gets the default material").arg(f).toUtf8().constData());
             MeshData md;
-            CHECK(SceneMirror::toMeshData(meshNode->getMesh().data(), md),
+            CHECK(SceneMirror::toMeshData(meshNode->getMesh().get(), md),
                   QString("3c: %1 toMeshData").arg(f).toUtf8().constData());
             const size_t nv = md.positions.size() / 3;
             bool shadeable = nv > 0 && md.normals.size() == nv * 3;

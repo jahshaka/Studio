@@ -65,7 +65,7 @@ public:
                             QString *errorOut = nullptr);
     /// The six faces loaded as one cube texture (Texture2D::createCubeMap), each guid resolved by `resolve`; null when
     /// any face is missing (all six or nothing - a cube with a hole is no dome).
-    static QSharedPointer<iris::Texture2D> loadSkyCube(const QJsonObject &faces,
+    static std::shared_ptr<iris::Texture2D> loadSkyCube(const QJsonObject &faces,
                                                         const std::function<QString(const QString &)> &resolve);
 };
 

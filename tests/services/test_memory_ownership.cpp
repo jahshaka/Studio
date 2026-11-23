@@ -8,12 +8,12 @@
 //
 //   1. AssetManager::clearAssetList() called QVector::clear() and nothing
 //      else. Every project open therefore leaked its whole session asset list
-//      (~80 allocations for the Showroom sample), and because a model asset's
-//      payload QVariant holds a SceneNodePtr, each leaked Asset pinned a whole
-//      mesh subtree for the life of the process. `Asset` also had no virtual
-//      destructor, so even a `delete` through the base would have skipped it.
-//      Observed here through a QWeakPointer that MUST expire, and through a
-//      destructor counter on a subclass that only a virtual dtor can reach.
+//      (~80 allocations for the Showroom sample), and an asset that holds a
+//      SceneNodePtr pinned a whole mesh subtree for the life of the process.
+//      `Asset` also had no virtual destructor, so even a `delete` through the
+//      base would have skipped it. Observed here through a weak pointer that
+//      MUST expire, and through a destructor counter on a subclass that only a
+//      virtual dtor can reach.
 //
 //   2. ThumbnailManager cached a heap `QImage*` per thumbnail in a static
 //      QHash that never dropped an entry ("todo: find a way to remove unused
@@ -37,7 +37,7 @@
 #include <QGuiApplication>
 #include <QImage>
 #include <QTemporaryDir>
-#include <QWeakPointer>
+#include <memory>
 #include <cstdio>
 
 #include "irisgl/irisglfwd.h"
@@ -67,14 +67,14 @@ static int sDestroyed = 0;
 struct CountedAsset : public AssetNodeObject
 {
     ~CountedAsset() override { ++sDestroyed; }
+    iris::SceneNodePtr payload;   // the subtree this asset pins
 };
 
 /// Registers one "project session": a handful of assets, each pinning a real
-/// SceneNode subtree through its payload QVariant, exactly like the model
-/// assets an open's session registration (ProjectAssets::registerSessionRow) creates.
-static QVector<QWeakPointer<iris::SceneNode>> openSession(int count)
+/// SceneNode subtree through its payload.
+static QVector<std::weak_ptr<iris::SceneNode>> openSession(int count)
 {
-    QVector<QWeakPointer<iris::SceneNode>> watches;
+    QVector<std::weak_ptr<iris::SceneNode>> watches;
     for (int i = 0; i < count; ++i) {
         // A real two-level subtree, which is what a model asset actually pins.
         // This used to have to be a SINGLE node: while iris::SceneNode::parent
@@ -88,24 +88,24 @@ static QVector<QWeakPointer<iris::SceneNode>> openSession(int count)
         root->setName(QStringLiteral("asset%1").arg(i));
         auto part = iris::MeshNode::create();
         part->setName(QStringLiteral("asset%1-part").arg(i));
-        root->addChild(part.staticCast<iris::SceneNode>());
-        watches.append(part.toWeakRef());
+        root->addChild(std::static_pointer_cast<iris::SceneNode>(part));
+        watches.append(std::weak_ptr(part));
 
         auto asset = std::make_unique<CountedAsset>();
         asset->assetGuid = QStringLiteral("guid-%1").arg(i);
         asset->fileName = QStringLiteral("asset%1.obj").arg(i);
         asset->path = QStringLiteral("/nowhere/asset%1.obj").arg(i);
-        asset->setValue(QVariant::fromValue(root.staticCast<iris::SceneNode>()));
+        asset->payload = root;
         AssetManager::addAsset(std::move(asset));
 
-        watches.append(root.toWeakRef());
+        watches.append(std::weak_ptr(root));
     }
     return watches;
 }
 
-static bool allExpired(const QVector<QWeakPointer<iris::SceneNode>> &watches)
+static bool allExpired(const QVector<std::weak_ptr<iris::SceneNode>> &watches)
 {
-    for (const auto &w : watches) if (!w.isNull()) return false;
+    for (const auto &w : watches) if (!w.expired()) return false;
     return true;
 }
 
@@ -127,7 +127,7 @@ static void testAssetListOwnership()
     CHECK(AssetManager::getAssets().count() == baseline, "close #1 returned the count to baseline");
     CHECK(sDestroyed == 6, "close #1 DESTROYED all six assets (virtual ~Asset reached)");
     CHECK(allExpired(firstOpen),
-          "close #1 released every pinned SceneNodePtr (the payload QVariant died with the asset)");
+          "close #1 released every pinned SceneNodePtr (the payload died with the asset)");
 
     // ---- open #2 / close #2: the same, twice, is the shape the audit named --
     sDestroyed = 0;
@@ -175,22 +175,22 @@ static void testRemoveAssets()
 
 struct GraphWatches
 {
-    QWeakPointer<iris::Scene>     scene;
-    QWeakPointer<iris::SceneNode> root;
-    QWeakPointer<iris::SceneNode> mid;
-    QWeakPointer<iris::SceneNode> leaf;
-    QWeakPointer<iris::SceneNode> mesh;
-    QWeakPointer<iris::SceneNode> light;
+    std::weak_ptr<iris::Scene>     scene;
+    std::weak_ptr<iris::SceneNode> root;
+    std::weak_ptr<iris::SceneNode> mid;
+    std::weak_ptr<iris::SceneNode> leaf;
+    std::weak_ptr<iris::SceneNode> mesh;
+    std::weak_ptr<iris::SceneNode> light;
 
     bool allExpired() const
     {
-        return scene.isNull() && root.isNull() && mid.isNull()
-            && leaf.isNull() && mesh.isNull() && light.isNull();
+        return scene.expired() && root.expired() && mid.expired()
+            && leaf.expired() && mesh.expired() && light.expired();
     }
     bool allAlive() const
     {
-        return !scene.isNull() && !root.isNull() && !mid.isNull()
-            && !leaf.isNull() && !mesh.isNull() && !light.isNull();
+        return !scene.expired() && !root.expired() && !mid.expired()
+            && !leaf.expired() && !mesh.expired() && !light.expired();
     }
 };
 
@@ -200,30 +200,30 @@ struct GraphWatches
 static GraphWatches buildWorld(const iris::ScenePtr &scene)
 {
     GraphWatches w;
-    w.scene = scene.toWeakRef();
+    w.scene = std::weak_ptr(scene);
 
     auto root = scene->getRootNode();
-    w.root = root.toWeakRef();
+    w.root = std::weak_ptr(root);
 
     auto mid = iris::SceneNode::create();
     mid->setName(QStringLiteral("mid"));
     root->addChild(mid);
-    w.mid = mid.toWeakRef();
+    w.mid = std::weak_ptr(mid);
 
     auto leaf = iris::SceneNode::create();
     leaf->setName(QStringLiteral("leaf"));
     mid->addChild(leaf);
-    w.leaf = leaf.toWeakRef();
+    w.leaf = std::weak_ptr(leaf);
 
     auto mesh = iris::MeshNode::create();
     mesh->setName(QStringLiteral("mesh"));
-    leaf->addChild(mesh.staticCast<iris::SceneNode>());
-    w.mesh = mesh.toWeakRef();
+    leaf->addChild(std::static_pointer_cast<iris::SceneNode>(mesh));
+    w.mesh = std::weak_ptr(mesh);
 
     auto light = iris::LightNode::create();
     light->setName(QStringLiteral("light"));
-    mid->addChild(light.staticCast<iris::SceneNode>());
-    w.light = light.toWeakRef();
+    mid->addChild(std::static_pointer_cast<iris::SceneNode>(light));
+    w.light = std::weak_ptr(light);
 
     return w;
 }
@@ -238,9 +238,9 @@ static void testSceneGraphOwnership()
         auto scene = iris::Scene::create();
         open = buildWorld(scene);
 
-        auto mid  = open.mid.toStrongRef();
-        auto leaf = open.leaf.toStrongRef();
-        auto mesh = open.mesh.toStrongRef();
+        auto mid  = open.mid.lock();
+        auto leaf = open.leaf.lock();
+        auto mesh = open.mesh.lock();
 
         CHECK(open.allAlive(), "the world is alive while it is open");
         CHECK(leaf->getParent() == mid, "getParent() locks the real parent");
@@ -270,22 +270,22 @@ static void testSceneGraphOwnership()
         // cleanup() releases the scene's own two strong halves — the root of
         // the tree and the `nodes`/`lights`/`meshes` registries — so the whole
         // subtree is gone before the ScenePtr itself is even dropped.
-        CHECK(closed.root.isNull() && closed.mid.isNull() && closed.leaf.isNull()
-                  && closed.mesh.isNull() && closed.light.isNull(),
+        CHECK(closed.root.expired() && closed.mid.expired() && closed.leaf.expired()
+                  && closed.mesh.expired() && closed.light.expired(),
               "cleanup() alone destroyed every node in the world");
         CHECK(scene->nodes.isEmpty() && scene->lights.isEmpty() && scene->meshes.isEmpty(),
               "...and emptied the registries that used to keep them (`nodes` was never cleared)");
-        CHECK(!closed.scene.isNull(), "the scene object itself is still the caller's to hold");
+        CHECK(!closed.scene.expired(), "the scene object itself is still the caller's to hold");
     }
     CHECK(closed.allExpired(), "and it goes when the last ScenePtr does");
 
     // ---- a node held past its scene is safe, not stale ----
     {
         iris::SceneNodePtr survivor;
-        QWeakPointer<iris::Scene> sceneWatch;
+        std::weak_ptr<iris::Scene> sceneWatch;
         {
             auto scene = iris::Scene::create();
-            sceneWatch = scene.toWeakRef();
+            sceneWatch = std::weak_ptr(scene);
             auto mid = iris::SceneNode::create();
             scene->getRootNode()->addChild(mid);
             survivor = iris::SceneNode::create();
@@ -293,10 +293,10 @@ static void testSceneGraphOwnership()
             CHECK(!!survivor->getScene() && !!survivor->getParent(),
                   "the survivor is attached while the world is open");
         }
-        CHECK(sceneWatch.isNull(), "the scene died even though one of its nodes is still held");
-        CHECK(survivor->getScene().isNull(),
+        CHECK(sceneWatch.expired(), "the scene died even though one of its nodes is still held");
+        CHECK(!survivor->getScene(),
               "the orphan's getScene() is null, not a stale pointer");
-        CHECK(survivor->getParent().isNull(), "...and so is its getParent()");
+        CHECK(!survivor->getParent(), "...and so is its getParent()");
         CHECK(!survivor->hasScene() && !survivor->hasParent(),
               "hasScene()/hasParent() report the expiry too");
     }
@@ -304,22 +304,22 @@ static void testSceneGraphOwnership()
     // ---- removing a subtree releases it ----
     {
         auto scene = iris::Scene::create();
-        QWeakPointer<iris::SceneNode> branch, twig;
+        std::weak_ptr<iris::SceneNode> branch, twig;
         {
             auto mid = iris::SceneNode::create();
             scene->getRootNode()->addChild(mid);
-            branch = mid.toWeakRef();
+            branch = std::weak_ptr(mid);
             auto leaf = iris::SceneNode::create();
             mid->addChild(leaf);
-            twig = leaf.toWeakRef();
+            twig = std::weak_ptr(leaf);
             CHECK(scene->nodes.count() == 3, "the branch registered with the scene");
             mid->removeFromParent();
             CHECK(scene->nodes.count() == 1,
                   "removeFromParent() unregistered the whole branch, not just its top");
-            CHECK(!branch.isNull() && !twig.isNull(),
+            CHECK(!branch.expired() && !twig.expired(),
                   "...and the branch is still alive while this block holds it");
         }
-        CHECK(branch.isNull() && twig.isNull(),
+        CHECK(branch.expired() && twig.expired(),
               "a detached branch dies with the last handle to it");
     }
 }

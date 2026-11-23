@@ -127,7 +127,7 @@ void MeshPropertyWidget::onCullModeChanged(const QString& cullMode)
 
 void MeshPropertyWidget::onPlanarReflectorChanged(bool enabled)
 {
-    if (loading || meshNode.isNull()) return;
+    if (loading || !meshNode) return;
     auto node = meshNode;
     IEditorViewport *view = sceneView;
     // THE RENDERER'S ANSWER ARRIVES ON ITS COMPLETION (ENGINE-UPGRADE-U3 decision 50): the panel never waits a frame.
@@ -157,7 +157,7 @@ void MeshPropertyWidget::onPlanarReflectorChanged(bool enabled)
 
 void MeshPropertyWidget::onLightChannelsChanged(quint32 mask)
 {
-    if (loading || meshNode.isNull()) return;
+    if (loading || !meshNode) return;
     // The edit gate (ledger §423): the channel grid writes the node and records
     // the step afterwards, so the refusal belongs before the write.
     if (editgate::refuse()) return;
@@ -175,7 +175,7 @@ void MeshPropertyWidget::onLightChannelsChanged(quint32 mask)
 void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!!sceneNode && sceneNode->sceneNodeType == iris::SceneNodeType::Mesh) {
-        this->meshNode = sceneNode.staticCast<iris::MeshNode>();
+        this->meshNode = std::static_pointer_cast<iris::MeshNode>(sceneNode);
         loading = true;
         // `loading` is rowundo's guard, so setValue() here cannot look like a
         // user edit (CheckBoxWidget::setValue emits valueChanged).
@@ -204,6 +204,6 @@ void MeshPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 		}
 		loading = false;
     } else {
-        this->meshNode.clear();
+        this->meshNode.reset();
     }
 }

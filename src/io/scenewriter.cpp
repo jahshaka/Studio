@@ -358,7 +358,7 @@ SceneFragment SceneWriter::captureFragment(const iris::SceneNodePtr &node)
             fragment.nodeIds.append(n->getNodeId());
             const int kids = n->childCount();
             for (int i = 0; i < kids; ++i)
-                if (iris::SceneNode *c = n->childAt(i)) collectIds(c->sharedFromThis());
+                if (iris::SceneNode *c = n->childAt(i)) collectIds(c->weak_from_this().lock());
         };
     collectIds(node);
 
@@ -524,23 +524,23 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
     //todo: write data specific to node type
     switch (sceneNode->sceneNodeType) {
         case iris::SceneNodeType::Mesh:
-            writeMeshData(sceneNodeObj, sceneNode.staticCast<iris::MeshNode>());
+            writeMeshData(sceneNodeObj, std::static_pointer_cast<iris::MeshNode>(sceneNode));
         break;
         case iris::SceneNodeType::Light:
-            writeLightData(sceneNodeObj, sceneNode.staticCast<iris::LightNode>());
+            writeLightData(sceneNodeObj, std::static_pointer_cast<iris::LightNode>(sceneNode));
         break;
         case iris::SceneNodeType::ParticleSystem:
-            writeParticleData(sceneNodeObj, sceneNode.staticCast<iris::ParticleSystemNode>());
+            writeParticleData(sceneNodeObj, std::static_pointer_cast<iris::ParticleSystemNode>(sceneNode));
         break;
         case iris::SceneNodeType::Decal:
-            writeDecalData(sceneNodeObj, sceneNode.staticCast<iris::DecalNode>());
+            writeDecalData(sceneNodeObj, std::static_pointer_cast<iris::DecalNode>(sceneNode));
         break;
         // CAMERAS_SPEC §3. Reachable only since the CameraNode constructor
         // started setting its own type: before that a scene-graph camera was
         // written as an `empty` and reopened as a plain SceneNode, silently
         // losing the camera.
         case iris::SceneNodeType::Camera:
-            writeCameraData(sceneNodeObj, sceneNode.staticCast<iris::CameraNode>());
+            writeCameraData(sceneNodeObj, std::static_pointer_cast<iris::CameraNode>(sceneNode));
         break;
         default: break;
     }
@@ -586,7 +586,7 @@ void SceneWriter::writeSceneNode(QJsonObject& sceneNodeObj, iris::SceneNodePtr s
         if (!child) continue;
         if (omitted && omitted->contains(child->getGUID())) continue;   // spawned during Play (setOmittedNodes)
         QJsonObject childNodeObj;
-        writeSceneNode(childNodeObj, child->sharedFromThis(), omitted);
+        writeSceneNode(childNodeObj, child->weak_from_this().lock(), omitted);
         childrenArray.append(childNodeObj);
     }
 
@@ -826,7 +826,7 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 
 	// materialType discriminates which Material subclass to rebuild on load;
 	// the readers read "pbr" and refuse everything else (FORWARD-ONLY-1).
-	if (!!mat.dynamicCast<iris::PbrMaterial>()) {
+	if (!!std::dynamic_pointer_cast<iris::PbrMaterial>(mat)) {
 		matObj["materialType"] = "pbr";
 		if (!mat->getName().isEmpty()) matObj["name"] = mat->getName();
 	}
@@ -907,7 +907,7 @@ void SceneWriter::writeSceneNodeMaterial(QJsonObject& matObj, iris::MaterialPtr 
 	// re-emits from the definition (LIVE-PERSIST-1). The cache file NAMES this
 	// block used to write were a lookup key into a per-user cache, and that
 	// lookup is what let a scene whose graph never travelled look live.
-	if (auto pbr = mat.dynamicCast<iris::PbrMaterial>()) {
+	if (auto pbr = std::dynamic_pointer_cast<iris::PbrMaterial>(mat)) {
 		// THE UV SCROLL (TORNADO-1): the animated UV fold's velocity, graph-owned
 		// like the pieces; absent when the material does not scroll.
 		if (pbr->textureVelocityU != 0.0f || pbr->textureVelocityV != 0.0f)

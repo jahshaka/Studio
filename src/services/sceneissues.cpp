@@ -259,7 +259,7 @@ void SceneIssues::startTextureRestat()
 void SceneIssues::forgetWalks()
 {
     mChecks.clear();
-    mCheckedScene.clear();
+    mCheckedScene.reset();
 }
 
 int SceneIssues::clearKind(const QString &kind)
@@ -371,13 +371,13 @@ void SceneIssues::checkNode(iris::SceneNode *node)
         return;
     }
     NodeCheck c;
-    c.node = node->sharedFromThis().toWeakRef();
+    c.node = std::weak_ptr(node->weak_from_this().lock());
     QStringList missing;
     if (type == iris::SceneNodeType::Mesh) {
         auto *meshNode = static_cast<iris::MeshNode *>(node);
         const iris::MaterialPtr material = meshNode->getMaterial();
         if (material) {
-            c.material = material.toWeakRef();
+            c.material = std::weak_ptr(material);
             c.materialRevision = material->revision();
             for (auto it = material->textures.constBegin(); it != material->textures.constEnd(); ++it) {
                 if (!it.value()) continue;
@@ -436,7 +436,7 @@ void SceneIssues::checkNode(iris::SceneNode *node)
         if (indexOf(c.texture.id) >= 0) update(c.texture.id, c.texture.message);
         else raise(c.texture);
     }
-    if (c.material.isNull() && c.texture.id.isEmpty()) mChecks.remove(node);
+    if (c.material.expired() && c.texture.id.isEmpty()) mChecks.remove(node);
     else mChecks.insert(node, c);
 }
 
@@ -482,7 +482,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             mScansSinceRecheck = 0;
             startTextureRestat();
         }
-        const iris::Scene *const here = scene.data();
+        const iris::Scene *const here = scene.get();
         QSet<const iris::SceneNode *> visited;
         std::function<void(iris::SceneNode *)> walk = [&](iris::SceneNode *n) {
             if (!n || visited.contains(n)) return;
@@ -491,13 +491,13 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             const int kids = n->childCount();
             for (int i = 0; i < kids; ++i) walk(n->childAt(i));
         };
-        const auto inScene = [here](iris::SceneNode *n) { return n && n->getScene().data() == here; };
-        if (mCheckedScene.toStrongRef() != scene || !complete) {
+        const auto inScene = [here](iris::SceneNode *n) { return n && n->getScene().get() == here; };
+        if (mCheckedScene.lock() != scene || !complete) {
             // A NEW SCENE, or a write the journal cannot name (an engine-owned
             // node): the one whole walk.
             forgetWalks();
             mStats.fullWalk = true;
-            walk(scene->getRootNode().data());
+            walk(scene->getRootNode().get());
             mCheckedScene = scene;
             mMaterialsSeen = iris::Material::globalRevision();
             mFlippedPaths.clear();
@@ -505,7 +505,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             // A node in ANOTHER document (a thumbnail's, a preview's) is not
             // ours and is skipped; one in NO document has left ours, with its
             // subtree.
-            const auto departed = [](iris::SceneNode *n) { return n && n->getScene().isNull(); };
+            const auto departed = [](iris::SceneNode *n) { return n && !n->getScene(); };
             for (iris::SceneNode *n : moved) {
                 if (inScene(n)) walk(n);
                 else if (departed(n)) forgetSubtree(n);
@@ -519,7 +519,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             // Destroyed since their write: their entries hold dead weak refs.
             if (gone) {
                 for (auto it = mChecks.begin(); it != mChecks.end();) {
-                    if (it->node.isNull()) it = mChecks.erase(it);
+                    if (it->node.expired()) it = mChecks.erase(it);
                     else ++it;
                 }
             }
@@ -528,9 +528,9 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
             if (materials != mMaterialsSeen) {
                 mMaterialsSeen = materials;
                 for (auto it = mChecks.cbegin(); it != mChecks.cend(); ++it) {
-                    const iris::MaterialPtr m = it->material.toStrongRef();
+                    const iris::MaterialPtr m = it->material.lock();
                     if (m && m->revision() != it->materialRevision) {
-                        if (iris::SceneNodePtr n = it->node.toStrongRef()) again << n;
+                        if (iris::SceneNodePtr n = it->node.lock()) again << n;
                     }
                 }
             }
@@ -538,15 +538,15 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
                 for (auto it = mChecks.cbegin(); it != mChecks.cend(); ++it)
                     for (const QString &path : it->paths)
                         if (mFlippedPaths.contains(path)) {
-                            if (iris::SceneNodePtr n = it->node.toStrongRef()) again << n;
+                            if (iris::SceneNodePtr n = it->node.lock()) again << n;
                             break;
                         }
                 mFlippedPaths.clear();
             }
             for (const iris::SceneNodePtr &n : std::as_const(again)) {
-                if (visited.contains(n.data()) || !inScene(n.data())) continue;
-                visited.insert(n.data());
-                checkNode(n.data());
+                if (visited.contains(n.get()) || !inScene(n.get())) continue;
+                visited.insert(n.get());
+                checkNode(n.get());
             }
         }
     }
@@ -637,7 +637,7 @@ int SceneIssues::scan(const iris::ScenePtr &scene)
         if (!traces && scene->giMode == iris::GiMode::OFF && mUnmappedLamps) {
             const QStringList unmapped = mUnmappedLamps();
             for (const auto &light : scene->lights) {
-                if (light.isNull() || !unmapped.contains(light->getGUID())) continue;
+                if (!light || !unmapped.contains(light->getGUID())) continue;
                 SceneIssue issue;
                 issue.kind = QStringLiteral("lamps.unshadowed");
                 issue.node = light->getGUID();

@@ -27,7 +27,7 @@ void swallow(const iris::SceneNodePtr &node, bool includePoints, bool &any,
     if (!node) return;
     bool contributed = false;
     if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-        auto meshNode = node.staticCast<iris::MeshNode>();
+        auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
         if (meshNode->getMesh()) {
             const iris::AABB local = meshNode->getMesh()->getAABB();
             const iris::Vec3 lo = local.getMin(), hi = local.getMax();

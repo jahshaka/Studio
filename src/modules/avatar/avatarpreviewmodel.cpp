@@ -84,7 +84,7 @@ float measureCharacterHeight(const iris::SceneNodePtr &node)
     float minY = std::numeric_limits<float>::max();
     float maxY = -std::numeric_limits<float>::max();
     bool any = false;
-    mergeHeight(node.data(), minY, maxY, any);
+    mergeHeight(node.get(), minY, maxY, any);
     if (!any) return 0.0f;
     const float height = maxY - minY;
     return height > 0.0f ? height : 0.0f;
@@ -427,7 +427,7 @@ void AvatarPreviewModel::collectRig()
     std::function<void(const iris::SceneNodePtr &)> scanMeshes =
         [&](const iris::SceneNodePtr &node) {
             if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                auto meshNode = node.staticCast<iris::MeshNode>();
+                auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
                 if (auto mesh = meshNode->getMesh()) {
                     ++mMeshCount;
                     mVertexCount += mesh->numVerts;
@@ -451,7 +451,7 @@ void AvatarPreviewModel::collectRig()
             QString nextAncestor = boneAncestor;
             if (boneNames.contains(node->name)) {
                 BoneNode bone;
-                bone.node = node.data();
+                bone.node = node.get();
                 bone.name = node->name;
                 bone.parent = boneAncestor;
                 mBoneNodes.append(bone);
@@ -494,14 +494,14 @@ QString AvatarPreviewModel::rootMotionChannel(const iris::SkeletalAnimationPtr &
     // position key). For a Mixamo rig that is `mixamorig:Hips`, whose position
     // channel carries the whole locomotion of the clip.
     QVector<iris::SceneNode *> queue;
-    queue.append(mFragment.data());
+    queue.append(mFragment.get());
     for (int i = 0; i < queue.size(); ++i) {
         auto *node = queue[i];
         const auto it = skel->boneAnimations.constFind(node->name);
-        if (it != skel->boneAnimations.constEnd() && !it.value().isNull() &&
+        if (it != skel->boneAnimations.constEnd() && !!it.value() &&
             it.value()->posKeys->keys.size() > 1)
             return node->name;
-        for (const auto &child : node->children()) queue.append(child.data());
+        for (const auto &child : node->children()) queue.append(child.get());
     }
     return QString();
 }
@@ -544,7 +544,7 @@ iris::AnimationPtr AvatarPreviewModel::buildClipAnimation(const iris::SkeletalAn
     inPlace->assetGuid = skel->assetGuid;
     inPlace->declaredLength = skel->declaredLength;
     inPlace->boneAnimations = skel->boneAnimations;
-    inPlace->boneAnimations[rootChannel] = QSharedPointer<iris::BoneAnimation>(stripped);
+    inPlace->boneAnimations[rootChannel] = std::shared_ptr<iris::BoneAnimation>(stripped);
     return finish(iris::Animation::createFromSkeletalAnimation(inPlace));
 }
 
@@ -835,7 +835,7 @@ QVector<iris::Vec3> AvatarPreviewModel::rigPoints() const
         [&](const iris::SceneNodePtr &node) {
             if (!node) return;
             if (node->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                auto meshNode = node.staticCast<iris::MeshNode>();
+                auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
                 if (auto mesh = meshNode->getMesh())
                     if (mesh->hasSkeleton()) skeletons.append(mesh->getSkeleton());
             }

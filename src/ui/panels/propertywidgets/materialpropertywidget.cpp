@@ -105,19 +105,19 @@ void MaterialPropertyWidget::snapshotTextures()
 void MaterialPropertyWidget::setSceneNode(iris::SceneNodePtr sceneNode)
 {
     if (!(!!sceneNode && sceneNode->getSceneNodeType() == iris::SceneNodeType::Mesh)) {
-        meshNode.clear();
-        material.clear();
+        meshNode.reset();
+        material.reset();
         snapshotTextures();
         clearShownRows();
         return;
     }
 
-    const auto newNode = sceneNode.staticCast<iris::MeshNode>();
+    const auto newNode = std::static_pointer_cast<iris::MeshNode>(sceneNode);
     const iris::MaterialPtr newMaterial = newNode->getMaterial();
 
     if (!newMaterial) {
         meshNode = newNode;
-        material.clear();
+        material.reset();
         meshNodeGuid = newNode->getGUID();
         snapshotTextures();
         clearShownRows();
@@ -163,7 +163,7 @@ void MaterialPropertyWidget::splitRows(const iris::MaterialPtr &mat,
     }
 }
 
-bool MaterialPropertyWidget::rebindTo(const QSharedPointer<iris::MeshNode> &node,
+bool MaterialPropertyWidget::rebindTo(const std::shared_ptr<iris::MeshNode> &node,
                                       const iris::MaterialPtr &mat)
 {
     if (!materialPropWidget || !materialSelector) return false;

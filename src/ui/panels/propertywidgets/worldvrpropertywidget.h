@@ -47,7 +47,7 @@ class WorldVrPropertyWidget : public AccordianBladeWidget
 
 public:
     WorldVrPropertyWidget();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     /// The undo stack. Nullable (headless hosts and the panel suites).
     void setServices(StudioServices *s) { services = s; }
 
@@ -67,7 +67,7 @@ private:
         RowPtr<CheckBoxWidget> flag;     ///< Flag rows (a switch)
     };
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     StudioServices *services = nullptr;
     bool loading = false;
     QVector<RowWidgets> rows;

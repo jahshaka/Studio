@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef MOBILITYPROPERTYWIDGET_H
 #define MOBILITYPROPERTYWIDGET_H
 
-#include <QSharedPointer>
+#include <memory>
 #include <QWidget>
 
 #include "irisgl/irisglfwd.h"

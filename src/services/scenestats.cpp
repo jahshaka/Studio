@@ -27,7 +27,7 @@ namespace {
 quint64 trianglesOf(const iris::SceneNodePtr &node)
 {
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return 0;
-    const auto meshNode = node.staticCast<iris::MeshNode>();
+    const auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
     if (!meshNode) return 0;
     const iris::MeshPtr mesh = meshNode->getMesh();
     if (!mesh) return 0;

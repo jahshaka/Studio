@@ -149,7 +149,7 @@ inline void walk(const iris::SceneNodePtr &node, const std::function<void(const 
     fn(node);
     const int kids = node->childCount();
     for (int i = 0; i < kids; ++i)
-        if (iris::SceneNode *c = node->childAt(i)) walk(c->sharedFromThis(), fn);
+        if (iris::SceneNode *c = node->childAt(i)) walk(c->weak_from_this().lock(), fn);
 }
 
 /// `path` and every ancestor of it, root-first.

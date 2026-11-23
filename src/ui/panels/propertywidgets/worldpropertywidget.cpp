@@ -219,14 +219,14 @@ void WorldPropertyWidget::setGroundPlaneAction(QAction *action)
     });
 }
 
-void WorldPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void WorldPropertyWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
         refreshRows();
     }
 	else {
-        this->scene.clear();
+        this->scene.reset();
     }
 }
 

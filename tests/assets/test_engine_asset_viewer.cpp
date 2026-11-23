@@ -214,7 +214,7 @@ int main(int argc, char **argv)
         // ---- 3. a second material on the preview sphere ----
         auto green = iris::PbrMaterial::create();
         green->setBaseColor(QColor(30, 200, 40));
-        auto ball = assets.setMaterialSubject(green.staticCast<iris::Material>());
+        auto ball = assets.setMaterialSubject(std::static_pointer_cast<iris::Material>(green));
         assets.resetCamera();
         CHECK(!!ball && assets.subject() == ball, "the material ball replaced the cube as the subject");
         CHECK(!cube->hasParent(), "the previous subject left the document");

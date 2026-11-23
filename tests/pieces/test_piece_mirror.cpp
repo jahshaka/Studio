@@ -182,9 +182,9 @@ int main(int argc, char **argv)
     // ---- the subject: a graph material carrying a piece ---------------------
     QString piecePath;
     auto animated = pulsingMaterial(tmp.path(), &piecePath);
-    CHECK(!animated.isNull(), "the emitter produced a piece for the pulsating graph");
+    CHECK(!!animated, "the emitter produced a piece for the pulsating graph");
     CHECK(!piecePath.isEmpty(), "...and wrote it to the cache directory");
-    if (animated.isNull()) return 1;
+    if (!animated) return 1;
 
     preview.setMaterial(animated);
     const int moving = spread(preview, *engine, view, 36);

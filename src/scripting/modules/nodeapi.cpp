@@ -1241,7 +1241,7 @@ QVariantList NodeApi::components(const QString &id)
 static iris::SkeletonPtr skeletonOf(const iris::SceneNodePtr &node)
 {
     if (!node || node->getSceneNodeType() != iris::SceneNodeType::Mesh) return iris::SkeletonPtr();
-    return node.staticCast<iris::MeshNode>()->getSkeleton();
+    return std::static_pointer_cast<iris::MeshNode>(node)->getSkeleton();
 }
 
 QVariant NodeApi::boneNames(const QString &id)
@@ -1268,11 +1268,11 @@ QVariant NodeApi::avatar(const QString &id)
     std::function<void(const iris::SceneNodePtr &)> walk = [&](const iris::SceneNodePtr &n) {
         if (!n) return;
         for (const auto &anim : n->getAnimations()) {
-            if (anim.isNull() || !anim->hasSkeletalAnimation()) continue;
+            if (!anim || !anim->hasSkeletalAnimation()) continue;
             if (!clips.contains(anim->getName())) clips.append(anim->getName());
         }
         for (int i = 0; i < n->childCount(); ++i)
-            if (auto *c = n->childAt(i)) walk(c->sharedFromThis());
+            if (auto *c = n->childAt(i)) walk(c->weak_from_this().lock());
     };
     walk(node);
     if (auto *loco = node->locomotion()) {
@@ -1300,7 +1300,7 @@ QString NodeApi::skinningMode(const QString &id)
     // (GPU_SKINNING_SPEC §6). A rig the engine refuses renders unskinned at bind
     // pose, and the engine says so on its log — the document still has a rig, so
     // this reports what the document asked for.
-    return skeletonOf(node).isNull() ? QStringLiteral("none") : QStringLiteral("gpu");
+    return !skeletonOf(node) ? QStringLiteral("none") : QStringLiteral("gpu");
 }
 
 // --- Light asset bindings (LIGHTS_COMPLETION_SPEC phases 3 and 5) ----------
@@ -1316,7 +1316,7 @@ iris::LightNodePtr NodeApi::lightOrFail(const QString &id, const QString &verb)
         fail(QStringLiteral("%1: '%2' is not a light").arg(verb, node->getName()));
         return iris::LightNodePtr();
     }
-    return node.staticCast<iris::LightNode>();
+    return std::static_pointer_cast<iris::LightNode>(node);
 }
 
 bool NodeApi::setLightProfile(const QString &id, const QString &assetGuid)
@@ -1390,7 +1390,7 @@ iris::DecalNodePtr NodeApi::decalOrFail(const QString &id, const QString &verb)
         fail(QStringLiteral("%1: '%2' is not a decal").arg(verb, node->getName()));
         return iris::DecalNodePtr();
     }
-    return node.staticCast<iris::DecalNode>();
+    return std::static_pointer_cast<iris::DecalNode>(node);
 }
 
 bool NodeApi::setDecalTexture(const QString &id, const QString &assetGuid)
@@ -1505,7 +1505,7 @@ bool NodeApi::setParticleTexture(const QString &id, const QString &assetGuid)
     // Same one binding path the decal and light textures use: a dependency row,
     // an AddKind::Binding pin, and a CAS resolve. Never a copy into the project
     // folder, never a companion material.
-    auto emitter = node.staticCast<iris::ParticleSystemNode>();
+    auto emitter = std::static_pointer_cast<iris::ParticleSystemNode>(node);
     // The emitter carries no guid field (only the loaded Texture2D), so the
     // previous binding is read back from the dependency row the service writes.
     const QString was = host.db ? host.db->getDependencyByType(
@@ -1531,7 +1531,7 @@ QVariant NodeApi::particleTexture(const QString &id)
                  .arg(node->getName()));
         return QVariant();
     }
-    auto ps = node.staticCast<iris::ParticleSystemNode>();
+    auto ps = std::static_pointer_cast<iris::ParticleSystemNode>(node);
     return QVariantMap{ { "path", ps->texture ? ps->texture->getSource() : QString() } };
 }
 
@@ -1792,7 +1792,7 @@ iris::MeshNodePtr NodeApi::meshOrFail(const QString &id, const QString &verb)
                  .arg(verb, node->getName()));
         return iris::MeshNodePtr();
     }
-    return node.staticCast<iris::MeshNode>();
+    return std::static_pointer_cast<iris::MeshNode>(node);
 }
 
 static QVariantMap socketToJs(const iris::Socket &socket, const iris::MeshNodePtr &owner,
@@ -1814,7 +1814,7 @@ static QVariantMap socketToJs(const iris::Socket &socket, const iris::MeshNodePt
         const auto it = scene->socketAttachments.constFind(owner->getGUID());
         if (it != scene->socketAttachments.constEnd())
             for (const auto &rider : it.value())
-                if (!rider.isNull() && rider->socketName == socket.name) ++riders;
+                if (!!rider && rider->socketName == socket.name) ++riders;
     }
     out["riders"] = riders;
     return out;

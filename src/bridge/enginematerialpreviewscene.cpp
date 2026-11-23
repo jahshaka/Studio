@@ -189,7 +189,7 @@ void EngineMaterialPreviewScene::rebuildSubject()
     // here instead of fixed. The mirror re-attaches on a mesh change now, so
     // the preview keeps one node for its whole life.
     if (mSubject && mSubject->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto node = mSubject.staticCast<iris::MeshNode>();
+        auto node = std::static_pointer_cast<iris::MeshNode>(mSubject);
         node->setMesh(mesh);
         node->setFaceCullingMode(previewCull(mMesh));
         if (mMaterial) node->setMaterial(mMaterial);
@@ -217,7 +217,7 @@ void EngineMaterialPreviewScene::setMaterial(iris::MaterialPtr material)
     if (!material) return;
     mMaterial = material;
     if (mSubject && mSubject->sceneNodeType == iris::SceneNodeType::Mesh)
-        mSubject.staticCast<iris::MeshNode>()->setMaterial(material);
+        std::static_pointer_cast<iris::MeshNode>(mSubject)->setMaterial(material);
 }
 
 bool EngineMaterialPreviewScene::setPreviewMesh(PreviewMesh mesh)

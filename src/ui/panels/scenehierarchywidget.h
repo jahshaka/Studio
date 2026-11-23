@@ -99,10 +99,10 @@ public:
     explicit SceneHierarchyWidget(QWidget *parent = 0);
     ~SceneHierarchyWidget();
 
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     void setShell(IShellView *shellView);
 
-    void setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode);
+    void setSelectedNode(std::shared_ptr<iris::SceneNode> sceneNode);
 
     /**
      * @brief Inserts item into tree under the parent
@@ -228,14 +228,14 @@ protected:
     /// Can this node be FILED at all? Folders organise the root level, so only
     /// a direct child of the world root can be in one (§6b, Unreal semantics).
     bool isFolderable(const iris::SceneNodePtr &node) const;
-    void populateTree(QTreeWidgetItem* parentNode,QSharedPointer<iris::SceneNode> sceneNode);
+    void populateTree(QTreeWidgetItem* parentNode,std::shared_ptr<iris::SceneNode> sceneNode);
 
     QTreeWidgetItem* createTreeItems(iris::SceneNodePtr node);
 
     // maps scene nodes to their widgetitems
     // Keyed by iris::SceneNode::nodeId, which is qint64 (it was `long`, i.e.
     // 32-bit on Windows LLP64).
-    QMap<qint64, QSharedPointer<iris::SceneNode>> nodeList;
+    QMap<qint64, std::shared_ptr<iris::SceneNode>> nodeList;
     QMap<qint64, QTreeWidgetItem*> treeItemList;
 
     /// The dragged selection, captured on DragEnter. Multi-select made this a
@@ -296,8 +296,8 @@ protected:
 
 private:
     Ui::SceneHierarchyWidget *ui;
-    QSharedPointer<iris::Scene> scene;
-    QSharedPointer<iris::SceneNode> selectedNode;
+    std::shared_ptr<iris::Scene> scene;
+    std::shared_ptr<iris::SceneNode> selectedNode;
     IShellView *shell = nullptr;
 
     /// The Add Constraint menu's one action: physicsconstraints::add, the

@@ -74,14 +74,14 @@ int WorldShadowPropertyWidget::atlasMegabytes(int resolution)
     return int(qRound(4.0 * 3.5 * double(resolution) * double(resolution) / (1024.0 * 1024.0)));
 }
 
-void WorldShadowPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void WorldShadowPropertyWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
         build();
         refreshRows();
     } else {
-        this->scene.clear();
+        this->scene.reset();
     }
 }
 
@@ -98,7 +98,7 @@ int WorldShadowPropertyWidget::derivedFromLights() const
     int best = 0;
     for (const auto &l : scene->lights) {
         // A Sky Light cannot cast either — it has no place to cast FROM.
-        if (l.isNull() || l->lightType == iris::LightType::Area ||
+        if (!l || l->lightType == iris::LightType::Area ||
             l->lightType == iris::LightType::Sky) continue;
         best = std::max(best, l->shadowMap.resolution);
     }

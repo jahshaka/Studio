@@ -109,7 +109,7 @@ SceneHierarchyWidget::SceneHierarchyWidget(QWidget *parent) :
     ui->sceneTree->setStyleSheet(StyleSheet::SceneHierarchyTree());
 }
 
-void SceneHierarchyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void SceneHierarchyWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     //todo: cleanly remove previous scene
     this->scene = scene;
@@ -205,7 +205,7 @@ void SceneHierarchyWidget::setShell(IShellView *shellView)
     connect(ui->deleteBtn, &QAbstractButton::clicked, this, [this]() { deleteNode(); });
 }
 
-void SceneHierarchyWidget::setSelectedNode(QSharedPointer<iris::SceneNode> sceneNode)
+void SceneHierarchyWidget::setSelectedNode(std::shared_ptr<iris::SceneNode> sceneNode)
 {
     selectedNode = sceneNode;
     // THE EDITOR'S SELECTION IS NOW THIS, whoever made it (a viewport pick, a
@@ -318,8 +318,8 @@ SceneHierarchyWidget::nodesInVisibleRange(const iris::SceneNodePtr &a,
     const QList<iris::SceneNodePtr> rows = visibleNodeRows();
     int i = -1, j = -1;
     for (int k = 0; k < rows.size(); ++k) {
-        if (rows[k].data() == a.data()) i = k;
-        if (rows[k].data() == b.data()) j = k;
+        if (rows[k].get() == a.get()) i = k;
+        if (rows[k].get() == b.get()) j = k;
     }
     if (i < 0 || j < 0) return out;
     if (i > j) std::swap(i, j);
@@ -369,7 +369,7 @@ void SceneHierarchyWidget::applyShiftRange(const iris::SceneNodePtr &clicked, bo
     // current, and the properties panel has to follow the mouse.
     QList<iris::SceneNodePtr> ordered;
     ordered.append(clicked);
-    for (const auto &n : members) if (n.data() != clicked.data()) ordered.append(n);
+    for (const auto &n : members) if (n.get() != clicked.get()) ordered.append(n);
 
     paintSelection(ordered);              // paint it now; the guard stops the echo
     announceSet(ordered);
@@ -494,7 +494,7 @@ void SceneHierarchyWidget::treeSelectionChanged()
     // The clicked/current row is the PRIMARY.
     QList<iris::SceneNodePtr> ordered;
     if (set.contains(node)) ordered.append(node);
-    for (const auto &n : set) if (n.data() != node.data()) ordered.append(n);
+    for (const auto &n : set) if (n.get() != node.get()) ordered.append(n);
     if (ordered.isEmpty()) return;
 
     announceSet(ordered);
@@ -632,7 +632,7 @@ bool SceneHierarchyWidget::eventFilter(QObject *watched, QEvent *event)
                 while (!stream.atEnd()) stream >> roleDataMap;
                 if (roleDataMap.value(0).toInt() == static_cast<int>(ModelTypes::Texture)) {
                     shell->services()->sceneEdit->setDecalTexture(
-                        target.staticCast<iris::DecalNode>(), roleDataMap.value(3).toString());
+                        std::static_pointer_cast<iris::DecalNode>(target), roleDataMap.value(3).toString());
                     dropEventPtr->acceptProposedAction();
                     return true;
                 }
@@ -1280,7 +1280,7 @@ void SceneHierarchyWidget::addConstraint(const iris::SceneNodePtr &from, const i
 void SceneHierarchyWidget::deleteNode()
 {
     shell->deleteSelection();
-    selectedNode.clear();
+    selectedNode.reset();
 }
 
 void SceneHierarchyWidget::duplicateNode()
@@ -1421,7 +1421,7 @@ bool SceneHierarchyWidget::isAssetPart(const iris::SceneNodePtr &node) const
 }
 
 void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
-                                        QSharedPointer<iris::SceneNode> sceneNode)
+                                        std::shared_ptr<iris::SceneNode> sceneNode)
 {
     // Folders group the ROOT LEVEL only (§6b): a child of the world root is
     // shown under its folder row, everything deeper is shown under its parent
@@ -1433,7 +1433,7 @@ void SceneHierarchyWidget::populateTree(QTreeWidgetItem* parentTreeItem,
     for (int i = 0; i < kids; ++i) {
         iris::SceneNode *raw = sceneNode->childAt(i);
         if (!raw) continue;
-        const iris::SceneNodePtr childNode = raw->sharedFromThis();
+        const iris::SceneNodePtr childNode = raw->weak_from_this().lock();
         // The asset's own parts are not scene rows (see isAssetPart): skip the
         // row AND the subtree under it.
         if (isAssetPart(childNode)) { nodeList.insert(childNode->getNodeId(), childNode); continue; }
@@ -1544,7 +1544,7 @@ void SceneHierarchyWidget::_attachAllChildren(iris::SceneNodePtr node)
 		iris::SceneNode *child = node->childAt(i);
 		if (!child) continue;
 		child->setAttached(true);
-		attachAllChildren(child->sharedFromThis());
+		attachAllChildren(child->weak_from_this().lock());
 	}
 }
 

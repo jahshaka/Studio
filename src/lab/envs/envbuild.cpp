@@ -262,7 +262,7 @@ iris::PbrMaterialPtr Builder::material(float r, float g, float b, float roughnes
     const float v[4] = { r, g, b, roughness };
     hashFloats(mHash, v, 4);
     if (metallic != 0.0f) hashFloats(mHash, &metallic, 1);   // a dielectric hashes as it always did
-    mMatFacts.push_back({ mat.data(), MatFacts{ roughness, metallic } });
+    mMatFacts.push_back({ mat.get(), MatFacts{ roughness, metallic } });
     return mat;
 }
 
@@ -321,7 +321,7 @@ iris::PbrMaterialPtr Builder::cutout(float r, float g, float b, float roughness,
     mat->setAlphaMode(1);
     mat->setAlphaCutoff(0.5f);
     for (auto &f : mMatFacts)
-        if (f.first == mat.data()) f.second.cutout = true;
+        if (f.first == mat.get()) f.second.cutout = true;
     mHash.addData(QByteArray("cutout"));
     mHash.addData(QByteArray::number(cells));
     return mat;
@@ -356,7 +356,7 @@ int Builder::instance(const iris::MeshPtr &m, const QString &name, const QString
     o.name = name;
     o.role = role;
     for (const auto &f : mMatFacts)
-        if (f.first == mat.data()) {
+        if (f.first == mat.get()) {
             o.roughness = f.second.roughness;
             o.metallic = f.second.metallic;
             o.cutout = f.second.cutout;

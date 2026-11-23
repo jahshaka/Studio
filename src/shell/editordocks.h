@@ -45,7 +45,7 @@ For more information see the LICENSE file
 #include <QVariantList>
 #include <QVariantMap>
 #include <QVector>
-#include <QWeakPointer>
+#include <memory>
 
 #include "irisgl/irisglfwd.h"
 #include "data/project.h"
@@ -295,7 +295,7 @@ private:
     /// the selection really change" count behind `editor.selectionCost()`.
     /// Weak: it is an identity, never dereferenced, and a deleted node must not
     /// be kept alive (or confused with a new one at the same address).
-    QWeakPointer<iris::SceneNode> lastAppliedSelection;
+    std::weak_ptr<iris::SceneNode> lastAppliedSelection;
     /// What the editor's chrome looked like before immersive fullscreen hid it.
     QVector<bool> preFullscreenWidgets;
 };

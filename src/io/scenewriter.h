@@ -14,7 +14,7 @@ For more information see the LICENSE file
 
 #include "irisgl/core/math/quat.h"
 #include "irisgl/core/math/vec.h"
-#include <QSharedPointer>
+#include <memory>
 #include "io/assetiobase.h"
 #include "io/sceneformat.h"
 #include <QDir>

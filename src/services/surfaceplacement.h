@@ -116,7 +116,7 @@ inline Bounds parentSpaceBounds(const iris::SceneNodePtr &node)
         };
     // The node's OWN local transform is the first step of the walk, so the
     // bounds come out in the frame its position is written in.
-    walk(node.data(), iris::Mat4());
+    walk(node.get(), iris::Mat4());
 
     if (!any) return out;
     out.min = iris::Vec3(mn[0], mn[1], mn[2]);

@@ -6,7 +6,7 @@
 #include "irisgl/core/math/vec.h"
 #include <QObject>
 #include <QPointF>
-#include <QSharedPointer>
+#include <memory>
 
 #include <initializer_list>
 

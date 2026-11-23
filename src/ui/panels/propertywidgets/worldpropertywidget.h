@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #define WORLDPROPERTYWIDGET_H
 
 #include <QWidget>
-#include <QSharedPointer>
+#include <memory>
 #include "irisgl/irisglfwd.h"
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/panels/propertywidgets/panelundo.h"
@@ -36,7 +36,7 @@ class WorldPropertyWidget: public AccordianBladeWidget
 public:
     WorldPropertyWidget();
 
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
 	void setDatabase(Database*);
     /// The undo stack, for the rows (debt L6). Nullable — the rows still write
     /// the document without it.
@@ -53,7 +53,7 @@ public:
 private:
     /// Re-reads every row from the document in place (selection, and undo).
     void refreshRows();
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     StudioServices *services = nullptr;
     /// Populating the rows, not showing an edit (see rowundo::Binding::guard).
     bool loading = false;

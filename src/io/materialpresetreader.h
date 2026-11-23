@@ -12,7 +12,7 @@ For more information see the LICENSE file
 #ifndef MATERIALREADER_H
 #define MATERIALREADER_H
 
-#include <QSharedPointer>
+#include <memory>
 #include "io/assetiobase.h"
 
 namespace iris {

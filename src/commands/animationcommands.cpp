@@ -67,13 +67,13 @@ RemovePropertyCommand::RemovePropertyCommand(const iris::AnimationPtr &anim, con
 RemoveAnimationCommand::RemoveAnimationCommand(const iris::SceneNodePtr &node,
                                                const iris::AnimationPtr &anim, bool wasActive)
     : StudioCommand(QObject::tr("Remove animation (%1)").arg(anim ? anim->getName() : QString())),
-      mNode(node.toWeakRef()), mAnim(anim), mWasActive(wasActive)
+      mNode(std::weak_ptr(node)), mAnim(anim), mWasActive(wasActive)
 {
 }
 
 void RemoveAnimationCommand::undo()
 {
-    auto node = mNode.toStrongRef();
+    auto node = mNode.lock();
     if (!node || !mAnim) return;
     if (!node->getAnimations().contains(mAnim)) node->addAnimation(mAnim);
     if (mWasActive) node->setAnimation(mAnim);
@@ -81,7 +81,7 @@ void RemoveAnimationCommand::undo()
 
 void RemoveAnimationCommand::redo()
 {
-    auto node = mNode.toStrongRef();
+    auto node = mNode.lock();
     if (!node || !mAnim) return;
     // animedits::removeAnimation is a no-op when the clip is already gone,
     // which is what makes push()'s immediate replay harmless.

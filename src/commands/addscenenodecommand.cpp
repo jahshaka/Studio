@@ -96,7 +96,7 @@ void AddSceneNodeCommand::redo()
             [&](const iris::SceneNodePtr &n) -> bool {
                 if (!n) return false;
                 if (n->sceneNodeType == iris::SceneNodeType::Camera)
-                    return scene->armCameraIfNoneActive(n.staticCast<iris::CameraNode>());
+                    return scene->armCameraIfNoneActive(std::static_pointer_cast<iris::CameraNode>(n));
                 for (const auto &c : n->children())
                     if (armFirst(c)) return true;
                 return false;

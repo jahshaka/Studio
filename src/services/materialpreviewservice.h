@@ -89,7 +89,7 @@ public:
     /// with none.
     bool end();
 
-    bool active() const { return !mNode.isNull(); }
+    bool active() const { return !!mNode; }
 
     /// A PREVIEW STARTED BY THE VERB LIVES NO LONGER THAN THE RUN THAT STARTED IT
     /// (code review, F3). A drag has a leave and a drop; `material.preview` has

@@ -16,7 +16,7 @@ For more information see the LICENSE file
 #include <QKeyEvent>
 #include <QSet>
 #include <Qt>
-#include <QSharedPointer>
+#include <memory>
 #include "irisgl/irisglfwd.h"
 
 namespace iris
@@ -155,7 +155,7 @@ protected:
     /// The fly belongs to a wearer for now (setFlySuppressed). Only the fly.
     bool flySuppressed = false;
 
-    QSharedPointer<iris::CameraNode> camera;
+    std::shared_ptr<iris::CameraNode> camera;
 
 	SettingsManager* settings;
 

@@ -213,7 +213,7 @@ inline float extentOf(const iris::MeshPtr &mesh)
     size_t nv = 0; int pc = 3;
     const float *p = cutcurve::positionsOf(mesh, &nv, &pc);
     const iris::IndexBufferPtr ib = mesh->getIndexBuffer();
-    if (!p || ib.isNull() || !ib->data) return 0.0f;
+    if (!p || !ib || !ib->data) return 0.0f;
     const unsigned *idx = reinterpret_cast<const unsigned *>(ib->data);
     float lo[3] = { FLT_MAX, FLT_MAX, FLT_MAX }, hi[3] = { -FLT_MAX, -FLT_MAX, -FLT_MAX };
     for (size_t i = 0; i < size_t(ib->dataSize) / sizeof(unsigned); ++i)

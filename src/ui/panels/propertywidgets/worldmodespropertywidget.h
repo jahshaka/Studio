@@ -45,7 +45,7 @@ class WorldModesPropertyWidget : public AccordianBladeWidget
 
 public:
     WorldModesPropertyWidget();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     /// The live viewport, so an edit is applied immediately. Nullable.
     void setSceneView(IEditorViewport *sceneView);
     /// The services aggregate, for the undo stack. Nullable (headless hosts).
@@ -76,7 +76,7 @@ private:
     /// thirteen chances to get it wrong (see WorldModeCommand).
     void runUndoable(const QString &text, const std::function<void()> &edit);
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     IEditorViewport *sceneView = nullptr;
     /// Whether the scene traces rays on this machine — the fact a row's text
     /// and the technique's name are computed from (worldmodes::rowCost).

@@ -101,9 +101,9 @@ static Rig makeArm(float degrees = -90.0f)
 static MeshData armMeshData(const iris::MeshPtr &mesh)
 {
     MeshData d;
-    SceneMirror::toMeshData(mesh.data(), d);
+    SceneMirror::toMeshData(mesh.get(), d);
     std::vector<float> bi, bw;
-    SceneMirror::toSkinData(mesh.data(), bi, bw);
+    SceneMirror::toSkinData(mesh.get(), bi, bw);
     d.blendIndices.resize(bi.size());
     for (size_t i = 0; i < bi.size(); ++i) d.blendIndices[i] = (unsigned char)(int)bi[i];
     d.blendWeights = bw;
@@ -600,8 +600,8 @@ int main(int argc, char **argv)
                 return iris::PbrMaterial::create();
             },
             nullptr, nullptr, QString());
-        CHECK(!fragment.isNull(), "the FBX pivot fixture loads");
-        if (!fragment.isNull()) {
+        CHECK(!!fragment, "the FBX pivot fixture loads");
+        if (!!fragment) {
             auto fbxDoc = iris::Scene::create();
             fbxDoc->getRootNode()->addChild(fragment);
             const auto rest = iris::ClipExtractor::captureRest(fragment);
@@ -609,21 +609,21 @@ int main(int argc, char **argv)
             std::function<iris::MeshNodePtr(const iris::SceneNodePtr &)> findSkinned =
                 [&](const iris::SceneNodePtr &n) -> iris::MeshNodePtr {
                     if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                        auto m = n.staticCast<iris::MeshNode>();
-                        if (!m->getSkeleton().isNull()) return m;
+                        auto m = std::static_pointer_cast<iris::MeshNode>(n);
+                        if (!!m->getSkeleton()) return m;
                     }
                     for (const auto &c : n->children()) if (auto r = findSkinned(c)) return r;
                     return iris::MeshNodePtr();
                 };
             auto meshNode = findSkinned(fragment);
-            CHECK(!meshNode.isNull(), "the FBX fixture has a skinned mesh node");
+            CHECK(!!meshNode, "the FBX fixture has a skinned mesh node");
 
             iris::AnimationPtr walk;
             for (const auto &a : fragment->getAnimations())
                 if (a && a->hasSkeletalAnimation() && a->getLength() > 0.0f) walk = a;
-            CHECK(!walk.isNull(), "the FBX fixture's real clip is there");
+            CHECK(!!walk, "the FBX fixture's real clip is there");
 
-            if (!meshNode.isNull() && !walk.isNull()) {
+            if (!!meshNode && !!walk) {
                 walk->setLooping(false);
                 fragment->setAnimation(walk);
 
@@ -684,16 +684,16 @@ int main(int argc, char **argv)
                 return iris::PbrMaterial::create();
             },
             nullptr, nullptr, QString());
-        CHECK(!fragment.isNull(), "the Mixamo T-pose fixture loads");
-        if (!fragment.isNull()) {
+        CHECK(!!fragment, "the Mixamo T-pose fixture loads");
+        if (!!fragment) {
             auto tDoc = iris::Scene::create();
             tDoc->getRootNode()->addChild(fragment);
             const auto rest = iris::ClipExtractor::captureRest(fragment);
             std::function<iris::MeshNodePtr(const iris::SceneNodePtr &)> findSkinned =
                 [&](const iris::SceneNodePtr &n) -> iris::MeshNodePtr {
                     if (n->getSceneNodeType() == iris::SceneNodeType::Mesh) {
-                        auto m = n.staticCast<iris::MeshNode>();
-                        if (!m->getSkeleton().isNull()) return m;
+                        auto m = std::static_pointer_cast<iris::MeshNode>(n);
+                        if (!!m->getSkeleton()) return m;
                     }
                     for (const auto &c : n->children()) if (auto r = findSkinned(c)) return r;
                     return iris::MeshNodePtr();
@@ -702,8 +702,8 @@ int main(int argc, char **argv)
             iris::AnimationPtr tpose;
             for (const auto &a : fragment->getAnimations())
                 if (a && a->hasSkeletalAnimation()) tpose = a;
-            CHECK(!meshNode.isNull() && !tpose.isNull(), "...with its skinned mesh and its clip");
-            if (!meshNode.isNull() && !tpose.isNull()) {
+            CHECK(!!meshNode && !!tpose, "...with its skinned mesh and its clip");
+            if (!!meshNode && !!tpose) {
                 SkeletonDesc tRig;
                 SceneMirror::toSkeletonDesc(meshNode->getSkeleton(), tRig);
                 MeshData tmd = armMeshData(meshNode->getMesh());

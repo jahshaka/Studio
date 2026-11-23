@@ -69,13 +69,13 @@ FogPropertyWidget::FogPropertyWidget()
     }
 }
 
-void FogPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void FogPropertyWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
         refreshRows();
     } else {
-        this->scene.clear();
+        this->scene.reset();
     }
 }
 

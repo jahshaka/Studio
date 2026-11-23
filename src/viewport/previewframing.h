@@ -36,7 +36,7 @@ inline iris::AABB worldBoundingBox(const iris::SceneNodePtr &node)
 {
     iris::AABB aabb;
     if (node->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = node.staticCast<iris::MeshNode>();
+        auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
         if (meshNode->getMesh()) {
             const iris::AABB local = meshNode->getMesh()->getAABB();
             const iris::Vec3 mn = local.getMin(), mx = local.getMax();
@@ -136,7 +136,7 @@ inline float subjectRadius(const iris::SceneNodePtr &node, const iris::AABB &bou
     const iris::Vec3 centre = haveBox ? bounds.getCenter() : iris::Vec3(0, 0, 0);
     float tight = 0.0f;
     if (node && node->sceneNodeType == iris::SceneNodeType::Mesh) {
-        auto meshNode = node.staticCast<iris::MeshNode>();
+        auto meshNode = std::static_pointer_cast<iris::MeshNode>(node);
         if (meshNode->getMesh()) {
             if (iris::TriMesh *tri = meshNode->getMesh()->getTriMesh()) {
                 const iris::Mat4 xf = meshNode->getGlobalTransform();

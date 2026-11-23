@@ -53,7 +53,7 @@ void ScenePicker::pickMeshes(iris::ScenePtr scene, const iris::Vec3 &segStart, c
     // They are the same point for a perspective click and differ for an
     // orthographic one, which is why the conversion is here and not shared.
     for (const iris::MeshPick &m :
-         iris::picking::raycastMeshes(scene.data(), segStart, segEnd, 0, forcePickable)) {
+         iris::picking::raycastMeshes(scene.get(), segStart, segEnd, 0, forcePickable)) {
         ScenePick p;
         p.node = m.node;
         p.hitPoint = m.hitPoint;
@@ -82,7 +82,7 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &se
             if (light->isPickable() &&
                 iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, light->getGlobalPosition(),
                                                               sphereRadius, t, hitPoint)) {
-                ScenePick p; p.node = light.staticCast<iris::SceneNode>(); p.hitPoint = hitPoint;
+                ScenePick p; p.node = std::static_pointer_cast<iris::SceneNode>(light); p.hitPoint = hitPoint;
                 p.distanceFromCameraSqrd = (hitPoint - cameraPos).lengthSquared();
                 hits.append(p);
             }
@@ -93,7 +93,7 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &se
             if (decal->isPickable() &&
                 iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, decal->getGlobalPosition(),
                                                               sphereRadius, t, hitPoint)) {
-                ScenePick p; p.node = decal.staticCast<iris::SceneNode>(); p.hitPoint = hitPoint;
+                ScenePick p; p.node = std::static_pointer_cast<iris::SceneNode>(decal); p.hitPoint = hitPoint;
                 p.distanceFromCameraSqrd = (hitPoint - cameraPos).lengthSquared();
                 hits.append(p);
             }
@@ -124,7 +124,7 @@ QList<ScenePick> ScenePicker::pickAll(iris::ScenePtr scene, const iris::Vec3 &se
             if (iris::Vec3::dotProduct(centre - segStart, rayDir) < 0.0f) continue;
             if (iris::IntersectionHelper::raySphereIntersects(segStart, rayDir, centre,
                                                               sphereRadius, t, hitPoint)) {
-                ScenePick p; p.node = camera.staticCast<iris::SceneNode>(); p.hitPoint = hitPoint;
+                ScenePick p; p.node = std::static_pointer_cast<iris::SceneNode>(camera); p.hitPoint = hitPoint;
                 p.distanceFromCameraSqrd = (hitPoint - cameraPos).lengthSquared();
                 hits.append(p);
             }

@@ -503,7 +503,7 @@ iris::CameraNodePtr CameraApi::cameraOrFail(const QString &id, const QString &ve
                  .arg(verb, node->getName(), nodeTypeName(node->getSceneNodeType())));
         return iris::CameraNodePtr();
     }
-    return node.staticCast<iris::CameraNode>();
+    return std::static_pointer_cast<iris::CameraNode>(node);
 }
 
 QVariantMap CameraApi::settings(const QString &id, const QVariant &options)

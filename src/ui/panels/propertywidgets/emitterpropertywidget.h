@@ -31,7 +31,7 @@ For more information see the LICENSE file
 //     read and written so old scenes round-trip, it simply has no row.
 
 #include <QWidget>
-#include <QSharedPointer>
+#include <memory>
 #include "irisgl/irisglfwd.h"
 
 #include "ui/controls/accordionbladewidget.h"

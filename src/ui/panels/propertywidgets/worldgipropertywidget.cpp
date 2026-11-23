@@ -90,13 +90,13 @@ WorldGiPropertyWidget::WorldGiPropertyWidget()
 {
 }
 
-void WorldGiPropertyWidget::setScene(QSharedPointer<iris::Scene> scene)
+void WorldGiPropertyWidget::setScene(std::shared_ptr<iris::Scene> scene)
 {
     if (!!scene) {
         this->scene = scene;
         rebuild();
     } else {
-        this->scene.clear();
+        this->scene.reset();
     }
 }
 

@@ -263,7 +263,7 @@ void TransformEditor::onResetBtnClicked()
     }
 }
 
-void TransformEditor::setSceneNode(QSharedPointer<iris::SceneNode> sceneNode)
+void TransformEditor::setSceneNode(std::shared_ptr<iris::SceneNode> sceneNode)
 {
     this->sceneNode = defaultStateNode = sceneNode;
     // A NEW SELECTION ALWAYS GETS THE CANONICAL TRIPLE (round 2): the memo is
@@ -362,9 +362,9 @@ void TransformEditor::refreshUi()
 // every slot below inert in exactly the way an empty selection already does —
 // and it is asked here rather than at the undo push because these rows write
 // the node live through a scrub and record the step only when it ends.
-QSharedPointer<iris::SceneNode> TransformEditor::editableNode() const
+std::shared_ptr<iris::SceneNode> TransformEditor::editableNode() const
 {
-    if (editgate::refuse()) return QSharedPointer<iris::SceneNode>();
+    if (editgate::refuse()) return std::shared_ptr<iris::SceneNode>();
     return sceneNode;
 }
 
@@ -452,7 +452,7 @@ void TransformEditor::onScrubFinished(bool cancelled)
 void TransformEditor::writeTransform(DragSpinBox *box,
                                      const std::function<void(const iris::SceneNodePtr &)> &write)
 {
-    const QSharedPointer<iris::SceneNode> node = editableNode();
+    const std::shared_ptr<iris::SceneNode> node = editableNode();
     if (!node) return;                     // empty selection, or a script owns the document
 
     const bool typed = !(box && box->isScrubbing());
@@ -535,7 +535,7 @@ void TransformEditor::zPosChanged(double value)
  */
 void TransformEditor::applyRotationFromFields()
 {
-    const QSharedPointer<iris::SceneNode> sceneNode = editableNode();
+    const std::shared_ptr<iris::SceneNode> sceneNode = editableNode();
     if (!sceneNode) return;
     sceneNode->setLocalRot(iris::Quat::fromEulerAngles(
         iris::Vec3(float(xrot->value()), float(yrot->value()), float(zrot->value()))));

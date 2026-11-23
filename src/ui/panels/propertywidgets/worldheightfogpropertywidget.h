@@ -13,7 +13,7 @@ For more information see the LICENSE file
 #ifndef WORLDHEIGHTFOGPROPERTYWIDGET_H
 #define WORLDHEIGHTFOGPROPERTYWIDGET_H
 
-#include <QSharedPointer>
+#include <memory>
 #include <functional>
 #include "ui/controls/accordionbladewidget.h"
 #include "ui/panels/propertywidgets/panelundo.h"
@@ -34,7 +34,7 @@ class WorldHeightFogPropertyWidget : public AccordianBladeWidget
 
 public:
     WorldHeightFogPropertyWidget();
-    void setScene(QSharedPointer<iris::Scene> scene);
+    void setScene(std::shared_ptr<iris::Scene> scene);
     void setServices(StudioServices *s) { services = s; }
 
 public slots:
@@ -45,7 +45,7 @@ private:
     /// The whole block with ONE field changed, as the "heightFog" key stores it.
     QVariant withField(const std::function<void(iris::HeightFog &)> &edit) const;
 
-    QSharedPointer<iris::Scene> scene;
+    std::shared_ptr<iris::Scene> scene;
     StudioServices *services = nullptr;
     bool loading = false;
     panelundo::SceneRows rows;
